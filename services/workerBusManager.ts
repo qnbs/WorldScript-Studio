@@ -87,7 +87,8 @@ async function doInitWorkerBus(): Promise<void> {
       poolId: 'inference',
       capabilities: ['inference.text', 'inference.embed'],
       options: {
-        maxWorkers: MAX_WORKERS_INFERENCE,
+        // QNBS-v3: [Capped below MAX_WORKERS_INFERENCE — each replica loads its own transformers.js pipeline (no cross-replica cache sharing), so 4 concurrent workers could mean 4x the model memory footprint under a burst.]
+        maxWorkers: Math.min(2, MAX_WORKERS_INFERENCE),
         minWorkers: MIN_WORKERS,
         idleTimeoutMs: WORKER_IDLE_TIMEOUT_MS,
         workerScript: inferenceUrl,

@@ -1,99 +1,96 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// QNBS-v3: Self-resolving MockWorker — when postMessage is called it immediately fires
-//          all registered 'message' handlers with a configurable response. This avoids
-//          async timing issues with concurrent Promise.all batches in embedBatch.
-let mockResponse: { ok: boolean; result?: number[]; error?: string } = {
-  ok: true,
-  result: [0.5, 0.5],
-};
+// QNBS-v3: [localEmbeddingService now routes through WorkerBus v2 — mock ensureInferencePool() instead of the global Worker constructor.]
 
-let postMessageCalls: Array<{ messageId: string; input: string; task: string }> = [];
+const { mockEnqueue, mockEnsureInferencePool } = vi.hoisted(() => ({
+  mockEnqueue: vi.fn(),
+  mockEnsureInferencePool: vi.fn(),
+}));
 
-class MockWorker {
-  private handlers: Array<(e: MessageEvent) => void> = [];
+vi.mock('../../services/workerBusManager', () => ({
+  ensureInferencePool: mockEnsureInferencePool,
+}));
 
-  addEventListener(_type: string, handler: (e: MessageEvent) => void) {
-    this.handlers.push(handler);
-  }
+const { clearEmbeddingCache, cosineSimilarity, embedBatch, embedText } = await import(
+  '../../services/ai/localEmbeddingService'
+);
 
-  removeEventListener(_type: string, handler: (e: MessageEvent) => void) {
-    const idx = this.handlers.indexOf(handler);
-    if (idx >= 0) this.handlers.splice(idx, 1);
-  }
-
-  postMessage(msg: { messageId: string; input: string; task: string }) {
-    postMessageCalls.push(msg);
-    // QNBS-v3: Respond synchronously so Promise.all batches resolve without microtask tricks.
-    const response = { ...mockResponse, messageId: msg.messageId };
-    const event = { data: response } as MessageEvent;
-    for (const handler of [...this.handlers]) {
-      handler(event);
-    }
-  }
-
-  terminate() {}
+function makeHandle(result: Promise<unknown>) {
+  return { taskId: 't1', result, progress: (async function* () {})(), cancel: vi.fn() };
 }
 
-vi.stubGlobal('Worker', MockWorker);
+function makeBus() {
+  return { enqueue: mockEnqueue };
+}
 
-import {
-  _resetWorkerForTest,
-  cosineSimilarity,
-  embedBatch,
-  embedText,
-} from '../../services/ai/localEmbeddingService';
+let requestCalls: Array<{ task: string; modelId: string; input: string }> = [];
+let nextResult: number[] = [0.5, 0.5];
 
 beforeEach(() => {
-  _resetWorkerForTest();
-  mockResponse = { ok: true, result: [0.5, 0.5] };
-  postMessageCalls = [];
-});
-
-afterEach(() => {
-  _resetWorkerForTest();
+  vi.clearAllMocks();
+  clearEmbeddingCache();
+  requestCalls = [];
+  nextResult = [0.5, 0.5];
+  mockEnsureInferencePool.mockResolvedValue(makeBus());
+  mockEnqueue.mockImplementation((_taskType: string, payload: unknown) => {
+    requestCalls.push(payload as { task: string; modelId: string; input: string });
+    return makeHandle(Promise.resolve(nextResult));
+  });
 });
 
 // ─── embedText ──────────────────────────────────────────────────────────────
 
 describe('embedText', () => {
-  it('returns a Float32Array for a successful worker response', async () => {
-    mockResponse = { ok: true, result: [0.5, 0.5] };
+  it('returns a Float32Array for a successful task result', async () => {
+    nextResult = [0.5, 0.5];
     const vec = await embedText('Hello world');
     expect(vec).toBeInstanceOf(Float32Array);
     expect(vec.length).toBe(2);
   });
 
   it('L2-normalises the returned vector (magnitude ≈ 1)', async () => {
-    mockResponse = { ok: true, result: [3, 4] }; // magnitude = 5 → normalised to [0.6, 0.8]
+    nextResult = [3, 4]; // magnitude = 5 → normalised to [0.6, 0.8]
     const vec = await embedText('Normalise me');
     const magnitude = Math.sqrt(vec[0]! ** 2 + vec[1]! ** 2);
     expect(magnitude).toBeCloseTo(1, 5);
   });
 
-  it('throws when worker returns ok:false with error message', async () => {
-    mockResponse = { ok: false, error: 'OOM' };
+  it('propagates the error message when the task rejects', async () => {
+    mockEnqueue.mockReturnValue(makeHandle(Promise.reject(new Error('OOM'))));
     await expect(embedText('fail case')).rejects.toThrow('OOM');
   });
 
-  it('throws with generic message when error field is absent', async () => {
-    mockResponse = { ok: false };
-    await expect(embedText('fail case 2')).rejects.toThrow('embedding failed');
+  it('throws WorkerBus v2 unavailable without enqueuing when the pool is unavailable', async () => {
+    mockEnsureInferencePool.mockResolvedValue(null);
+    await expect(embedText('fail case 2')).rejects.toThrow('WorkerBus v2 unavailable');
+    expect(mockEnqueue).not.toHaveBeenCalled();
   });
 
   it('truncates input silently when text exceeds 512 chars', async () => {
     await embedText('a'.repeat(600));
-    expect(postMessageCalls[0]?.input.length).toBe(512);
+    expect(requestCalls[0]?.input.length).toBe(512);
   });
 
   it('does not truncate input at exactly 512 chars', async () => {
     await embedText('b'.repeat(512));
-    expect(postMessageCalls[0]?.input.length).toBe(512);
+    expect(requestCalls[0]?.input.length).toBe(512);
   });
 
-  it('sends feature-extraction task to worker', async () => {
+  it('enqueues inference.embed with the feature-extraction task and inference.embed capability', async () => {
     await embedText('test');
-    expect(postMessageCalls[0]?.task).toBe('feature-extraction');
+    expect(requestCalls[0]?.task).toBe('feature-extraction');
+    expect(mockEnqueue).toHaveBeenCalledWith(
+      'inference.embed',
+      expect.anything(),
+      expect.objectContaining({ capabilities: ['inference.embed'] }),
+    );
+  });
+
+  it('returns the cached vector on a second call for the same text without re-enqueuing', async () => {
+    const first = await embedText('cache me');
+    const second = await embedText('cache me');
+    expect(second).toBe(first);
+    expect(mockEnqueue).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -101,7 +98,7 @@ describe('embedText', () => {
 
 describe('embedBatch', () => {
   it('returns an array of Float32Arrays, one per input', async () => {
-    mockResponse = { ok: true, result: [0.5, 0.5] };
+    nextResult = [0.5, 0.5];
     const results = await embedBatch(['a', 'b', 'c']);
     expect(results).toHaveLength(3);
     for (const vec of results) {
@@ -110,16 +107,16 @@ describe('embedBatch', () => {
   });
 
   it('returns correct count for 9 texts (spans two micro-batches of 8+1)', async () => {
-    mockResponse = { ok: true, result: [0.1, 0.2] };
+    nextResult = [0.1, 0.2];
     const texts = Array.from({ length: 9 }, (_, i) => `text-${i}`);
     const results = await embedBatch(texts);
     expect(results).toHaveLength(9);
   });
 
-  it('sends exactly N worker messages for N input texts', async () => {
-    mockResponse = { ok: true, result: [0.1, 0.2] };
+  it('sends exactly N enqueue calls for N input texts', async () => {
+    nextResult = [0.1, 0.2];
     await embedBatch(['x', 'y', 'z']);
-    expect(postMessageCalls).toHaveLength(3);
+    expect(requestCalls).toHaveLength(3);
   });
 
   it('returns empty array for empty input', async () => {
