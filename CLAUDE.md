@@ -107,8 +107,9 @@ locales/          → i18n source JSON — 19 locales (de/en/es/fr/it/ar/he/el/j
 tests/            → unit/ (Vitest) + e2e/ (Playwright); shared E2E helpers in tests/e2e/helpers.ts
 types/            → Supplemental TypeScript definitions (duckdb-wasm-worker.d.ts, tauri-plugins.d.ts)
 types.ts          → Core shared interfaces and types (root level)
-workers/          → inference.worker.ts (@huggingface/transformers v3), duckdbWorker.ts (DuckDB-WASM)
-                     v2/ → WorkerBus v2 workers: inference.worker.ts, duckdb.worker.ts, webllm.worker.ts (P1-1, @mlc-ai/web-llm)
+workers/          → plugin.worker.ts (sandboxed plugin execution, P0-2)
+                     v2/ → sole worker generation since ADR-0015: inference.worker.ts (@huggingface/transformers v3),
+                     duckdb.worker.ts (DuckDB-WASM), webllm.worker.ts (P1-1, @mlc-ai/web-llm)
 infra/low-end-ci/ → Local CI stack: Forgejo + act + systemd units + bash scripts
 scripts/          → Build/deploy helpers (sync-deploy-base, cf-pages-deploy, graphify-update, etc.)
 ```
@@ -188,7 +189,7 @@ Wrap each major view root with `components/ui/ViewErrorBoundary.tsx` — provide
 
 ### DuckDB Analytics
 
-`workers/duckdbWorker.ts` off main thread (OPFS → in-memory fallback). `duckdbClient.ts`: singleton, init retry 3× backoff. Schema: 10 tables + 5 views incl. `rag_chunks` (FLOAT[384]). Gate all paths behind `enableDuckDbAnalytics`. Dual-write via `duckdbListenerLoader.ts` (dynamically imported). `ragVectorMigration.ts`: FLOAT[64]→FLOAT[384] upgrade. `useDuckDb.ts` 30s timeout; `useAnalytics.ts` parallelizes 4 queries.
+`workers/v2/duckdb.worker.ts` off main thread via the shared WorkerBus v2 `duckdb` pool (OPFS → in-memory fallback, ADR-0015). `duckdbClient.ts`: adapter over `ensureDuckDbPool()`/`bus.enqueue()`, auto-reinits on a respawned worker's "not initialized" error. Schema: 10 tables + 5 views incl. `rag_chunks` (FLOAT[384]). Gate all paths behind `enableDuckDbAnalytics`. Dual-write via `duckdbListenerLoader.ts` (dynamically imported). `ragVectorMigration.ts`: FLOAT[64]→FLOAT[384] upgrade. `useDuckDb.ts` 30s timeout; `useAnalytics.ts` parallelizes 4 queries.
 
 ### Logging
 
@@ -218,7 +219,7 @@ Real-time P2P via Yjs + `packages/collab-transport`. Signaling AES-256-GCM/PBKDF
 
 ### WorkerBus v2 (`packages/worker-bus`)
 
-Central orchestration layer for all background tasks. Key files: `workerBus.ts` (orchestrator, priority queue + circuit breakers), `workerPool.ts` (auto-scaling `MIN`→`MAX_WORKERS_INFERENCE`, idle timeout), `taskQueue.ts` (heap: `critical > high > normal > low > background`), `circuitBreaker.ts` (per-worker health gate), `deadLetterQueue.ts`, `protocolHandler.ts` (typed postMessage + version negotiation), `workerBootstrap.ts` (`registerTaskHandler` inside worker scripts, `WorkerHandlerContext.progress.emit`).
+Central orchestration layer for all background tasks — since ADR-0015, the **sole** worker generation (no more v1/v2 duplication). Key files: `workerBus.ts` (orchestrator, priority queue + circuit breakers, `hasPool()`/`terminatePool()` for scoped pool lifecycle), `workerPool.ts` (auto-scaling `MIN`→`MAX_WORKERS_INFERENCE`, idle timeout), `taskQueue.ts` (priority queue: `critical > high > normal > low` — no `background` tier), `circuitBreaker.ts` (per-worker health gate), `deadLetterQueue.ts`, `protocolHandler.ts` (typed postMessage + version negotiation, currently unused by the live `runTask()` path — not wired up), `workerBootstrap.ts` (`registerTaskHandler` inside worker scripts; handlers receive `WorkerHandlerContext.emitProgress(stage, progress, message?)`, a flat function, not `context.progress.emit(...)`).
 
 **All constants** re-exported from `constants.ts`. **Schemas** (Zod) in `schemas.ts` gate cross-thread messages. After changes: `pnpm exec vitest run tests/unit/workerBus`.
 
@@ -405,7 +406,8 @@ Feature-specific implementation patterns (Plot Board, ProForge Pipeline, scene-l
 
 See `AUDIT.md` and `TODO.md`. Key items:
 - `app/listenerMiddleware.ts` — redux-undo `StateWithHistory` typing at boundaries.
-- `workers/inference.worker.ts` — `@huggingface/transformers` v3 path alias in `tsconfig.json`; if alias breaks, restore `@ts-expect-error`.
+- `workers/v2/inference.worker.ts` (v1 deleted, ADR-0015) — `@huggingface/transformers` v3 path alias in `tsconfig.json`; if alias breaks, restore `@ts-expect-error`.
+- **`WorkerBus.runTask()` doesn't enforce `timeoutMs`** — confirmed via inspection, no timer on either the bus or worker-side rejects a hung task. Pre-existing, tracked in ADR-0015/TODO.md, not yet fixed.
 - **DS-5:** Delete legacy bridge block from `index.css` — deferred until DS-1 verified in production.
 - **B-1 (IDB encryption):** Passphrase UX complete (`IdbUnlockModal`, `PassphraseModal`). Actual IDB read/write integration for stores is Phase 4 (service-layer only currently).
 - **B-2 (Voice WASM):** Engine + download UI shipped. Remaining: E2E integration test coverage.

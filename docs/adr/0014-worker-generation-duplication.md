@@ -1,6 +1,6 @@
 # ADR 0014 — Two live worker generations (v1 and WorkerBus v2)
 
-- **Status:** Accepted (documented as known debt — consolidation explicitly out of scope this sprint)
+- **Status:** Superseded by [[0015-worker-generation-consolidation]] — migrated 2026-07-29
 - **Date:** 2026-07-29
 - **Deciders:** Maintainer + Claude Code
 - **Context tags:** workers, architecture, tech-debt

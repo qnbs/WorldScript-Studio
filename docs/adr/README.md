@@ -15,6 +15,12 @@ than editing history.
 | [0007](0007-plugin-sandbox-model.md) | Plugin Sandbox Model | Accepted |
 | [0008](0008-local-first-data-model.md) | Local-first data model: Yjs document as source of truth | Accepted |
 | [0009](0009-xstate-workflow-orchestration.md) | XState for complex workflow orchestration (Redux + RTK Query + XState) | Accepted |
+| [0010](0010-languagetool-self-hosted.md) | Self-hosted LanguageTool grammar checking via the editor overlay | Accepted |
+| [0011](0011-ai-heuristic-fallbacks.md) | AI heuristic fallbacks via a registry + provider-layer seam | Accepted |
+| [0012](0012-local-server-connectivity-tauri-http.md) | Local AI server connectivity: route localhost HTTP through the Tauri HTTP plugin | Accepted |
+| [0013](0013-csp-wasm-and-blob-frames.md) | CSP `'wasm-unsafe-eval'` and `frame-src blob:` | Accepted |
+| [0014](0014-worker-generation-duplication.md) | Two live worker generations (v1 and WorkerBus v2) | Superseded by 0015 |
+| [0015](0015-worker-generation-consolidation.md) | Worker-generation consolidation: v1 retired, WorkerBus v2 is the sole generation | Accepted |
 
 **Format:** Context → Decision → Consequences (incl. rejected alternatives). Keep each ADR to one
 decision. Link related records with `[[slug]]`.
