@@ -232,6 +232,11 @@ describe('CSP correctness — no ungehashtes (unhashed) inline <script> in index
     expect(inlineScriptContents(fakeHtml)).toEqual(['doSomething();']);
   });
 
+  it('detects an inline script whose closing tag has only whitespace before >', () => {
+    const fakeHtml = '<body><script>doSomething();</script ></body>';
+    expect(inlineScriptContents(fakeHtml)).toEqual(['doSomething();']);
+  });
+
   it('does not mistake an unrelated <scripts> tag name for a script open tag', () => {
     const fakeHtml = '<body><scripts>not a script</scripts></body>';
     expect(inlineScriptContents(fakeHtml)).toEqual([]);

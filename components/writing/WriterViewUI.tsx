@@ -112,9 +112,12 @@ const WriterViewUI: FC = () => {
             aria-label={
               isProForgeActive ? t('proforge.toggle.deactivate') : t('proforge.toggle.activate')
             }
+            // QNBS-v3: desktop counterpart of the mobile ProForge/VC-panel contrast fix below —
+            // bg-accent/20 + text-ring-focus (a semi-transparent accent) was the same sub-4.5:1
+            // sepia failure, just via a different token pairing; use the vetted nav-active pair.
             className={`text-xs px-2 py-1 rounded border transition-colors ${
               isProForgeActive
-                ? 'bg-[var(--sc-accent)]/20 border-[var(--sc-ring-focus)]/40 text-[var(--sc-ring-focus)]'
+                ? 'bg-[var(--nav-background-active)] border-[var(--sc-accent)]/40 text-[var(--nav-text-active)]'
                 : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)]'
             }`}
           >
@@ -145,7 +148,7 @@ const WriterViewUI: FC = () => {
           type="button"
           onClick={() => setFocusMode((f) => !f)}
           title={focusMode ? t('writer.focusMode.exit') : t('writer.focusMode.enter')}
-          className={`text-xs px-2 py-1 rounded border transition-colors ${focusMode ? 'bg-[var(--sc-accent)]/20 border-[var(--sc-ring-focus)]/40 text-[var(--sc-ring-focus)]' : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)]'}`}
+          className={`text-xs px-2 py-1 rounded border transition-colors ${focusMode ? 'bg-[var(--nav-background-active)] border-[var(--sc-accent)]/40 text-[var(--nav-text-active)]' : 'border-[var(--sc-border-subtle)] text-[var(--sc-text-muted)] hover:text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-raised)]'}`}
         >
           {focusMode
             ? `⊠ ${t('writer.focusMode.exitLabel')}`
