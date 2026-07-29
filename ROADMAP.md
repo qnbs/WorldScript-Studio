@@ -42,10 +42,12 @@ sequence below both shipped in v1.24.0/v1.24.1 — see the RELEASED sections):
 ## v1.24.2 — CSP / Crypto / Doc-Truth Hardening (PR #284 OPEN, 2026-07-29)
 
 **Status:** Code complete, CI green (all 4 required checks pass), **not yet merged or tagged** —
-tag creation and GitHub Release publishing are maintainer actions. See [`CHANGELOG.md`](CHANGELOG.md)
-`[1.24.2]`, [`AUDIT.md`](AUDIT.md) "Audit 2026-07-29 — CSP / Crypto / Truth" for the full finding
-table and post-mortem, and [`docs/audit/WS-RUN-LOG-2026-07-29.md`](docs/audit/WS-RUN-LOG-2026-07-29.md)
-for the per-workstream execution record.
+tag creation and GitHub Release publishing are maintainer actions. Entry kept under
+`CHANGELOG.md`'s `[Unreleased]` section (not a dated heading) until the tag exists. See
+[`CHANGELOG.md`](CHANGELOG.md), [`AUDIT.md`](AUDIT.md) "Audit 2026-07-29 — CSP / Crypto / Truth"
+for the full finding table and post-mortem, and
+[`docs/audit/WS-RUN-LOG-2026-07-29.md`](docs/audit/WS-RUN-LOG-2026-07-29.md) for the
+per-workstream execution record.
 
 - CSP functional-truth restored: `'wasm-unsafe-eval'` had been missing on all 5 deployment surfaces
   for two months, silently blocking the entire advertised local-inference stack (WebLLM, ONNX

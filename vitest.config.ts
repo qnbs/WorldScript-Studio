@@ -80,6 +80,7 @@ export default defineConfig({
       // P1 target: L85/B75/F80 — next ratchet after verification.
       // RATCHET RULE: After 3 consecutive green CI runs on both Node versions, increase each threshold
       // by 1 point (max 5 points per quarter). Document the new baseline in this comment.
+      // QNBS-v3 (CodeRabbit): raising these enforces the new, stricter CI floor going forward — any PR that drops coverage below L79/F72/B65/S77 now fails the quality gate instead of silently regressing under the old L74/F67/B60/S72 bar.
       thresholds: {
         lines: 79,
         functions: 72,
