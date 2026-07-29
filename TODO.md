@@ -30,12 +30,14 @@ Status: 🔄 in progress | ⬜ open | ✅ done
   migrations (`services/duckdb/duckdbClient.ts`, `services/ai/localNlpService.ts`,
   `services/ai/localEmbeddingService.ts`), then remove the v1 worker files. Until then, any worker-
   level fix (CSP, protocol, error handling) must be checked against **both** generations.
-- ⬜ **Pre-existing, unrelated E2E a11y finding surfaced during this sprint's CI runs** —
-  `tests/e2e/a11y.spec.ts` "writer version control panel has no serious axe violations" fails
+- ✅ **Pre-existing, unrelated E2E a11y finding surfaced during this sprint's CI runs** —
+  `tests/e2e/a11y.spec.ts` "writer version control panel has no serious axe violations" failed
   deterministically (`color-contrast` 4.47 vs. 4.5 required, `--sc-accent` `#92400e` over its own
-  `/20`-opacity background `#e0cab0`) on both `chromium` and `Mobile Chrome`. Confirmed unrelated
-  to the CSP/crypto sprint (no CSS/Tailwind/component files touched by that work). Not a required
-  status check today, so it didn't block merge — needs a design-token fix as its own small PR.
+  `/20`-opacity background `#e0cab0`). Confirmed unrelated to the CSP/crypto sprint, but small and
+  well-scoped, so fixed directly rather than deferred: `components/writing/WriterViewUI.tsx`'s
+  active-toggle classes reused `--sc-accent` for both background tint and text instead of the
+  already-vetted `--nav-background-active`/`--nav-text-active` token pair; switched all 3
+  occurrences (Writer VC desktop/mobile + mobile ProForge, same shared pattern).
 - ⬜ **Tag `v1.24.2` + publish the GitHub Release** — maintainer action (STOP-AND-ASK per this
   sprint's own hard rules); the version-bump commit is in, the tag/release is not.
 
