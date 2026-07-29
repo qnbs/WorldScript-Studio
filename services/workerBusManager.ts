@@ -46,6 +46,27 @@ export async function initWorkerBus(): Promise<void> {
   }
 }
 
+// QNBS-v3: [Shared with reRegisterDuckDbPool() below so a pool removed via terminatePool() gets re-registered with identical options, not a drifted copy.]
+async function duckDbPoolOptions() {
+  const { WORKER_IDLE_TIMEOUT_MS } = await import('@domain/worker-bus');
+  return {
+    // QNBS-v3: DuckDB is single-writer — minWorkers 0 keeps the thread alive only while in use.
+    maxWorkers: 1,
+    minWorkers: 0,
+    idleTimeoutMs: WORKER_IDLE_TIMEOUT_MS,
+    workerScript: new URL('../workers/v2/duckdb.worker.ts', import.meta.url).href,
+    capabilities: ['db.duckdb'] as const,
+    labels: { pool: 'duckdb', version: 'v2' },
+  };
+}
+
+/** Re-register the 'duckdb' pool if it was removed via terminatePool() — a no-op if it's already present. */
+async function reRegisterDuckDbPool(bus: WorkerBus): Promise<void> {
+  if (bus.hasPool('duckdb')) return;
+  const options = await duckDbPoolOptions();
+  bus.registerPool('duckdb', options.capabilities, options);
+}
+
 async function doInitWorkerBus(): Promise<void> {
   try {
     const {
@@ -78,7 +99,6 @@ async function doInitWorkerBus(): Promise<void> {
     // QNBS-v3: new URL(path, import.meta.url) lets Vite emit the worker script as a proper
     //          asset URL. The .ts extension is allowed — Vite transforms it during build.
     const inferenceUrl = new URL('../workers/v2/inference.worker.ts', import.meta.url).href;
-    const duckdbUrl = new URL('../workers/v2/duckdb.worker.ts', import.meta.url).href;
     // QNBS-v3: P1-1 — dedicated WebLLM (WebGPU) worker. Separate pool keeps @mlc-ai/web-llm out
     //          of the transformers.js worker bundle and isolates the GPU lifecycle.
     const webllmUrl = new URL('../workers/v2/webllm.worker.ts', import.meta.url).href;
@@ -97,18 +117,11 @@ async function doInitWorkerBus(): Promise<void> {
       },
     });
 
+    const duckdbOptions = await duckDbPoolOptions();
     registry.register({
       poolId: 'duckdb',
-      // QNBS-v3: DuckDB is single-writer — minWorkers 0 keeps the thread alive only while in use.
-      capabilities: ['db.duckdb'],
-      options: {
-        maxWorkers: 1,
-        minWorkers: 0,
-        idleTimeoutMs: WORKER_IDLE_TIMEOUT_MS,
-        workerScript: duckdbUrl,
-        capabilities: ['db.duckdb'],
-        labels: { pool: 'duckdb', version: 'v2' },
-      },
+      capabilities: duckdbOptions.capabilities,
+      options: duckdbOptions,
     });
 
     // QNBS-v3: P1-1 — WebLLM pool. maxWorkers:1 (single heavy GPU consumer; tab-leader election
@@ -173,7 +186,12 @@ export async function ensureWebLlmPool(): Promise<WorkerBus | null> {
  * must not silently break analytics. Returns null only if init failed.
  */
 export async function ensureDuckDbPool(): Promise<WorkerBus | null> {
-  if (_bus === null) await initWorkerBus();
+  if (_bus === null) {
+    await initWorkerBus();
+    return _bus;
+  }
+  // QNBS-v3: [terminatePool('duckdb') can remove the pool while the bus itself stays alive — re-register it here instead of assuming a non-null bus always has every pool.]
+  await reRegisterDuckDbPool(_bus);
   return _bus;
 }
 

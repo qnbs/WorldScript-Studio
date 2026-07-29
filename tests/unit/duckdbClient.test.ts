@@ -113,6 +113,71 @@ describe('duckdbClient.query', () => {
       expect.objectContaining({ retryPolicy: { maxRetries: 0 } }),
     );
   });
+
+  describe('auto-reinit on "DuckDB not initialized"', () => {
+    // QNBS-v3: [Regression coverage for the idle-respawn/crash-restart gap — a fresh duckdb pool
+    //          worker has no `connection` until INIT runs again on it.]
+    it('re-inits once and retries the original query, then succeeds', async () => {
+      let queryCallCount = 0;
+      mockEnqueue.mockImplementation((taskType: string) => {
+        if (taskType === 'db.duckdb.query') {
+          queryCallCount++;
+          if (queryCallCount === 1) {
+            return makeHandle(Promise.reject(new Error('DuckDB not initialized')));
+          }
+          return makeHandle(Promise.resolve([{ n: 1 }]));
+        }
+        if (taskType === 'db.duckdb.init') {
+          return makeHandle(Promise.resolve({ ok: true }));
+        }
+        throw new Error(`unexpected taskType ${taskType}`);
+      });
+
+      const res = await duckdbClient.query('SELECT 1 AS n');
+
+      expect(res).toEqual(expect.objectContaining({ ok: true, rows: [{ n: 1 }] }));
+      expect(queryCallCount).toBe(2);
+      const initCalls = mockEnqueue.mock.calls.filter(([t]) => t === 'db.duckdb.init');
+      expect(initCalls).toHaveLength(1);
+    });
+
+    it('attempts exactly one reinit — does not loop when the retry also fails', async () => {
+      mockEnqueue.mockImplementation((taskType: string) => {
+        if (taskType === 'db.duckdb.query') {
+          return makeHandle(Promise.reject(new Error('DuckDB not initialized')));
+        }
+        if (taskType === 'db.duckdb.init') {
+          return makeHandle(Promise.resolve({ ok: true }));
+        }
+        throw new Error(`unexpected taskType ${taskType}`);
+      });
+
+      const res = await duckdbClient.query('SELECT 1');
+
+      expect(res).toEqual(expect.objectContaining({ ok: false, error: 'DuckDB not initialized' }));
+      const initCalls = mockEnqueue.mock.calls.filter(([t]) => t === 'db.duckdb.init');
+      expect(initCalls).toHaveLength(1);
+    });
+
+    it('does not reinit-retry unrelated error messages', async () => {
+      mockEnqueue.mockReturnValue(makeHandle(Promise.reject(new Error('syntax error'))));
+
+      const res = await duckdbClient.query('garbage');
+
+      expect(res).toEqual(expect.objectContaining({ ok: false, error: 'syntax error' }));
+      const initCalls = mockEnqueue.mock.calls.filter(([t]) => t === 'db.duckdb.init');
+      expect(initCalls).toHaveLength(0);
+    });
+
+    it('does not recursively reinit when INIT itself fails with "DuckDB not initialized"', async () => {
+      mockEnqueue.mockReturnValue(makeHandle(Promise.reject(new Error('DuckDB not initialized'))));
+
+      await duckdbClient.init();
+
+      const initCalls = mockEnqueue.mock.calls.filter(([t]) => t === 'db.duckdb.init');
+      expect(initCalls).toHaveLength(1);
+    });
+  });
 });
 
 describe('duckdbClient.exec', () => {

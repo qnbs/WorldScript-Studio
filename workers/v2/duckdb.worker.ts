@@ -1,15 +1,15 @@
 /// <reference lib="webworker" />
-// QNBS-v3: WorkerBus v2 DuckDB worker. Wraps legacy duckdbWorker.ts logic
-//          in the typed bootstrap protocol.
+// QNBS-v3: [Sole DuckDB worker generation post-consolidation (docs/adr/0014); formerly wrapped the now-deleted legacy workers/duckdbWorker.ts.]
 
+import type { AsyncDuckDB, AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 import {
   registerTaskHandler,
   type WorkerHandlerContext,
 } from '../../packages/worker-bus/src/workerBootstrap';
 
 let duckdbModule: typeof import('@duckdb/duckdb-wasm') | null = null;
-let db: import('@duckdb/duckdb-wasm').AsyncDuckDB | null = null;
-let connection: import('@duckdb/duckdb-wasm').AsyncDuckDBConnection | null = null;
+let db: AsyncDuckDB | null = null;
+let connection: AsyncDuckDBConnection | null = null;
 
 async function getDuckDb() {
   if (!duckdbModule) {
@@ -29,7 +29,7 @@ async function isOPFSSupported(): Promise<boolean> {
   }
 }
 
-// QNBS-v3 (F-09): self-hosted, same-origin DuckDB-WASM assets — see workers/duckdbWorker.ts for the full rationale (unpinned CDN URL, supply-chain trust, already CSP-dead code).
+// QNBS-v3 (F-09): [Self-hosted, same-origin DuckDB-WASM assets — replaces an unpinned CDN URL that was already CSP-dead (supply-chain trust); see docs/adr/0013-csp-wasm-and-blob-frames.md.]
 const DUCKDB_ASSET_BASE = `${import.meta.env.BASE_URL}duckdb/`;
 const SELF_HOSTED_BUNDLES = {
   mvp: {
@@ -58,7 +58,7 @@ export async function initDuckDb(
   const useOpfs = await isOPFSSupported();
   if (useOpfs) {
     // QNBS-v3: [Tracked separately from `connection` so a failed ATTACH can close this partial connection instead of leaking it.]
-    let opfsConnection: import('@duckdb/duckdb-wasm').AsyncDuckDBConnection | null = null;
+    let opfsConnection: AsyncDuckDBConnection | null = null;
     try {
       const { DuckDBDataProtocol } = await getDuckDb();
       const opfsRoot = await navigator.storage.getDirectory();
@@ -98,19 +98,50 @@ export async function initDuckDb(
   db = newDb;
 }
 
+interface DuckDbQueryResult {
+  toArray(): Array<{ toJSON(): Record<string, unknown> }>;
+}
+
+interface PreparableConnection {
+  prepare(sql: string): Promise<{
+    query(...params: unknown[]): Promise<DuckDbQueryResult>;
+    close(): Promise<void>;
+  }>;
+}
+
+// QNBS-v3: [tsgo doesn't resolve AsyncDuckDBConnection.prepare() through this package's nested
+//          `export *` chain (present and correct in @duckdb/duckdb-wasm's own .d.ts, verified
+//          directly) — a narrow structural type sidesteps the gap, the same class of tsgo/external-
+//          package resolution issue CLAUDE.md documents for the transformers.js path alias.]
+function asPreparable(conn: AsyncDuckDBConnection): PreparableConnection {
+  return conn as unknown as PreparableConnection;
+}
+
+// QNBS-v3: [Bind via a prepared statement when params are present — a raw connection.query(sql) silently drops them, leaving an unbound query and a SQL-injection surface.]
+async function runSql(sql: string, params?: readonly unknown[]): Promise<DuckDbQueryResult> {
+  if (!connection) throw new Error('DuckDB not initialized');
+  if (params && params.length > 0) {
+    const stmt = await asPreparable(connection).prepare(sql);
+    try {
+      return await stmt.query(...params);
+    } finally {
+      await stmt.close();
+    }
+  }
+  return connection.query(sql);
+}
+
 export async function handleQuery(ctx: WorkerHandlerContext): Promise<unknown> {
   const { payload } = ctx;
-  const req = payload as { sql?: string };
-  if (!connection) throw new Error('DuckDB not initialized');
-  const result = await connection.query(req.sql ?? '');
+  const req = payload as { sql?: string; params?: readonly unknown[] };
+  const result = await runSql(req.sql ?? '', req.params);
   return result.toArray().map((row: { toJSON(): Record<string, unknown> }) => row.toJSON());
 }
 
 export async function handleExec(ctx: WorkerHandlerContext): Promise<unknown> {
   const { payload } = ctx;
-  const req = payload as { sql?: string };
-  if (!connection) throw new Error('DuckDB not initialized');
-  await connection.query(req.sql ?? '');
+  const req = payload as { sql?: string; params?: readonly unknown[] };
+  await runSql(req.sql ?? '', req.params);
   return { ok: true };
 }
 

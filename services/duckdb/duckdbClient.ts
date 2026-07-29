@@ -43,6 +43,7 @@ async function send(
   sql?: string,
   params?: readonly unknown[],
   signal?: AbortSignal,
+  isReinitRetry = false,
 ): Promise<DuckDbResponse> {
   const messageId = generateMessageId();
   const start = Date.now();
@@ -95,7 +96,23 @@ async function send(
   } catch (err) {
     const latencyMs = Date.now() - start;
     if (signal?.aborted) return { messageId, ok: false, error: 'Aborted', latencyMs };
-    return { messageId, ok: false, error: errorMessage(err), latencyMs };
+    const message = errorMessage(err);
+    // QNBS-v3: [The duckdb pool's worker can idle-terminate (minWorkers:0) or crash-restart; a
+    //          freshly spawned worker's module state has no `connection` until INIT runs again.
+    //          Transparently re-init once and retry, instead of surfacing a confusing "not
+    //          initialized" error for what looks like a routine idle-timeout respawn.]
+    if (
+      !isReinitRetry &&
+      type !== 'INIT' &&
+      type !== 'SHUTDOWN' &&
+      message === 'DuckDB not initialized'
+    ) {
+      const reinit = await send('INIT', undefined, undefined, signal, true);
+      if (reinit.ok) {
+        return send(type, sql, params, signal, true);
+      }
+    }
+    return { messageId, ok: false, error: message, latencyMs };
   }
 }
 
