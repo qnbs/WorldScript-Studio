@@ -8,6 +8,10 @@
       "automergeType": "pr",
       "platformAutomerge": true,
       "matchPackageNames": ["*"]
+    },
+    {
+      "groupName": "storybook",
+      "matchPackageNames": ["@storybook/**"]
     }
   ]
 }
