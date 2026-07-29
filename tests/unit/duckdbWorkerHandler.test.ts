@@ -145,6 +145,24 @@ describe('duckdb.worker handlers', () => {
       expect(mockConnect).toHaveBeenCalledTimes(2);
     });
 
+    it('still falls back and emits the original OPFS error when close() itself rejects', async () => {
+      const opfsClose = vi.fn().mockRejectedValue(new Error('close also failed'));
+      const opfsQuery = vi.fn().mockRejectedValue(new Error('ATTACH failed'));
+      mockConnect
+        .mockResolvedValueOnce({ query: opfsQuery, close: opfsClose })
+        .mockResolvedValueOnce(mockConnection());
+      mockRegisterFileHandle.mockResolvedValue(undefined);
+      stubOpfsDirectory(vi.fn().mockResolvedValue({}));
+      const emitProgress = vi.fn();
+
+      await expect(initDuckDb(emitProgress)).resolves.toBeUndefined();
+
+      expect(opfsClose).toHaveBeenCalled();
+      // The original ATTACH error reaches emitProgress, not the close() failure.
+      expect(emitProgress).toHaveBeenCalledWith('opfs-fallback', 1, 'ATTACH failed');
+      expect(mockConnect).toHaveBeenCalledTimes(2);
+    });
+
     it('does not emit opfs-fallback when OPFS is simply unsupported (no navigator.storage)', async () => {
       mockConnect.mockResolvedValue(mockConnection());
       stubNoOpfs();
