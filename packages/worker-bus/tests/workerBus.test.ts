@@ -209,6 +209,30 @@ describe('WorkerBus', () => {
     expect(pool).toBeUndefined();
   });
 
+  it('terminatePool terminates and removes only the named pool, leaving others intact', async () => {
+    bus.registerPool('other', ['db.duckdb'], {
+      maxWorkers: 1,
+      minWorkers: 1,
+      idleTimeoutMs: 120_000,
+      workerScript: '/other.worker.js',
+      capabilities: ['db.duckdb'],
+      labels: {},
+    });
+    const pools = (bus as unknown as { pools: Map<string, WorkerPool> }).pools;
+    const terminateAllSpy = vi.spyOn(pools.get('fake')!, 'terminateAll');
+    vi.spyOn(pools.get('other')!, 'acquire').mockReturnValue(new Promise(() => {}));
+
+    await bus.terminatePool('fake');
+
+    expect(terminateAllSpy).toHaveBeenCalled();
+    expect(pools.get('fake')).toBeUndefined();
+    expect(pools.get('other')).toBeDefined();
+  });
+
+  it('terminatePool is a no-op for an unknown pool id', async () => {
+    await expect(bus.terminatePool('does-not-exist')).resolves.toBeUndefined();
+  });
+
   it('progress callback receives emitted progress', async () => {
     const progressUpdates: Array<{ stage: string; progress: number }> = [];
     let capturedTaskId = '';

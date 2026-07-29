@@ -165,6 +165,18 @@ export async function ensureWebLlmPool(): Promise<WorkerBus | null> {
 }
 
 /**
+ * Ensure the DuckDB worker pool is available, initializing the WorkerBus on demand.
+ * QNBS-v3: mirrors ensureWebLlmPool()'s decoupling from `enableWorkerBusV2` — DuckDB analytics
+ * defaults on and was never gated by that flag in the v1 worker it replaces
+ * (docs/adr/0014-worker-generation-duplication.md), so toggling an experimental infra flag off
+ * must not silently break analytics. Returns null only if init failed.
+ */
+export async function ensureDuckDbPool(): Promise<WorkerBus | null> {
+  if (_bus === null) await initWorkerBus();
+  return _bus;
+}
+
+/**
  * Shut down the WorkerBus v2 and terminate all worker threads.
  * Called when the feature flag is disabled or the app unmounts.
  */

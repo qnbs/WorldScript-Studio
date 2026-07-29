@@ -195,6 +195,21 @@ export class WorkerBus {
     this.progress.clear();
   }
 
+  /**
+   * Terminate all workers in a single named pool without shutting down the rest of the bus.
+   * QNBS-v3: unlike shutdown() (tears down every pool), this only affects `poolId` — added so
+   * duckdbClient's terminate()/shutdown() can stop the DuckDB worker without also killing
+   * in-flight inference/webllm/plugin work on the shared bus (docs/adr/0014-worker-generation-
+   * duplication.md's migration follow-up). The pool is removed from the registry; a later task
+   * routed to its capabilities fails with NO_POOL until the bus re-registers it.
+   */
+  async terminatePool(poolId: string): Promise<void> {
+    const pool = this.pools.get(poolId);
+    if (!pool) return;
+    await pool.terminateAll();
+    this.pools.delete(poolId);
+  }
+
   // ---------------------------------------------------------------------------
   // Internal
   // ---------------------------------------------------------------------------
