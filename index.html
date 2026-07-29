@@ -47,7 +47,13 @@
     <!-- ── Security: Content Security Policy ─────────────── -->
     <!--
       CSP-Strategie:
-      - script-src: nur eigene Skripte (Vite ES modules, kein inline nötig)
+      - script-src: eigene Skripte (Vite ES modules) + 'wasm-unsafe-eval' — REQUIRED for
+        WebAssembly.compile/instantiate, used by WebLLM, ONNX Runtime Web, Transformers.js,
+        DuckDB-WASM, Whisper-STT, and Kokoro-TTS (the local-inference stack). NOT the broader
+        unsafe-eval keyword, which is forbidden; wasm-unsafe-eval only lifts the WASM restriction.
+        No inline script (moved to index.tsx as of ADR-0013 — see docs/adr/0013-csp-wasm-and-blob-frames.md).
+      - frame-src: 'self' blob: — Binder-PDF-preview and ManuscriptResearchSplit iframes render
+        from Blob URLs (IndexedDB-backed assets, no same-origin static file to point at instead).
       - style-src: eigene + unsafe-inline (React inline-styles) — keine Fremd-Font-CDN mehr,
         CJK/Greek sind über @fontsource self-hosted (siehe index.tsx)
       - font-src: self + data: — keine Fremd-Font-CDN mehr nötig (self-hosted, siehe index.tsx)
@@ -73,12 +79,13 @@
     <meta http-equiv="Content-Security-Policy"
           content="
             default-src 'self';
-            script-src  'self';
+            script-src  'self' 'wasm-unsafe-eval';
             style-src   'self' 'unsafe-inline';
             font-src    'self' data:;
             img-src     'self' data: blob:;
             connect-src 'self' https: http://localhost:11434 http://127.0.0.1:11434 http://localhost:1234 http://127.0.0.1:1234 http://localhost:8000 http://127.0.0.1:8000 wss://y-webrtc-signaling.fly.dev wss://signaling.yjs.dev;
             worker-src  'self' blob:;
+            frame-src   'self' blob:;
             manifest-src 'self';
             object-src  'none';
             base-uri    'self';
@@ -92,8 +99,9 @@
     <title>WorldScript Studio</title>
 </head>
   <body>
-    <!-- QNBS-v3: Disable Aurora on low-end hardware (≤4 logical CPUs) to prevent GPU/battery drain; prefers-reduced-data handled in CSS. -->
-    <script>if(navigator.hardwareConcurrency<=4)document.documentElement.classList.add('aurora-disabled');</script>
+    <!-- QNBS-v3: Aurora low-end-hardware disable moved to index.tsx (ADR-0013) — an inline
+         script element here would need the unsafe-inline keyword or a hash in script-src; a
+         same-origin module keeps script-src minimal. -->
     <div class="noise-overlay"></div>
     <div class="aurora-container">
       <div class="aurora-blob blob-1"></div>
