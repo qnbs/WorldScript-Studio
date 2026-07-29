@@ -55,6 +55,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   turned green by `|| true`. Fixed the invocation and moved the non-blocking behavior to
   step-level `continue-on-error: true`, which still surfaces genuine failures in the Actions UI.
 - **F-13 — coverage ratchet raised** to CI-measured values (L79/F72/B65/S77, from L74/F67/B60/S72).
+- **Pre-existing a11y color-contrast failure (out of scope, fixed proactively).** The CI a11y
+  E2E gate caught `WriterViewUI.tsx`'s Writer/ProForge version-control and Focus Mode toggles
+  using `--sc-accent`-derived text on a tinted `--sc-accent` background — 4.47:1 on the sepia
+  theme, below WCAG AA's 4.5:1. All 4 occurrences (2 desktop, 2 mobile, across two different
+  broken token combos) now use the pre-vetted `--nav-background-active`/`--nav-text-active`
+  pair already used for nav active-states elsewhere.
 
 ### Documentation
 
