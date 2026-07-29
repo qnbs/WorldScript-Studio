@@ -97,6 +97,11 @@ describe('analyzeSentiment', () => {
       expect.objectContaining({ capabilities: ['inference.text'] }),
     );
   });
+
+  it('omits the inferenceOptions key entirely when none is passed (exactOptionalPropertyTypes)', async () => {
+    await analyzeSentiment('test');
+    expect(Object.hasOwn(requestCalls[0] ?? {}, 'inferenceOptions')).toBe(false);
+  });
 });
 
 // ─── summarizeText ────────────────────────────────────────────────────────────

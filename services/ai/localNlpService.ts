@@ -20,14 +20,18 @@ async function requestInference(
 ): Promise<string> {
   const bus = await ensureInferencePool();
   if (!bus) throw new Error('WorkerBus v2 unavailable');
+  // QNBS-v3: Omit inferenceOptions key (not `: undefined`) — exactOptionalPropertyTypes rejects
+  //          an explicit undefined against the optional payload field.
+  const payload = {
+    task,
+    modelId,
+    input,
+    ...(inferenceOptions !== undefined ? { inferenceOptions } : {}),
+  };
   const handle = bus.enqueue<
     { task: string; modelId: string; input: string; inferenceOptions?: Record<string, unknown> },
     string
-  >(
-    'inference.text',
-    { task, modelId, input, inferenceOptions },
-    { capabilities: ['inference.text'] },
-  );
+  >('inference.text', payload, { capabilities: ['inference.text'] });
   return handle.result;
 }
 
