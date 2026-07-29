@@ -4,10 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // QNBS-v3: vi.hoisted ensures these references are available inside the vi.mock factory
 //          which is hoisted before all imports.
-const { mockShutdown, mockRegisterPool, mockInstall, MockWorkBus, MockRegistry } = vi.hoisted(
-  () => {
+const { mockShutdown, mockRegisterPool, mockHasPool, mockInstall, MockWorkBus, MockRegistry } =
+  vi.hoisted(() => {
     const mockShutdown = vi.fn().mockResolvedValue(undefined);
     const mockRegisterPool = vi.fn();
+    // QNBS-v3: [Defaults to true (pool present) so existing tests that don't care about
+    //          re-registration behavior are unaffected; the dedicated ensureDuckDbPool tests
+    //          override this per-case.]
+    const mockHasPool = vi.fn(() => true);
     const mockInstall = vi.fn();
 
     // QNBS-v3: Regular function (not arrow) so new MockWorkBus() works as a constructor.
@@ -15,6 +19,7 @@ const { mockShutdown, mockRegisterPool, mockInstall, MockWorkBus, MockRegistry }
     const MockWorkBus = vi.fn(function (this: Record<string, unknown>) {
       this['shutdown'] = mockShutdown;
       this['registerPool'] = mockRegisterPool;
+      this['hasPool'] = mockHasPool;
       this['enqueue'] = vi.fn();
       this['cancel'] = vi.fn(() => true);
       this['getTelemetry'] = vi.fn(() => ({
@@ -39,9 +44,8 @@ const { mockShutdown, mockRegisterPool, mockInstall, MockWorkBus, MockRegistry }
       this['install'] = mockInstall;
     });
 
-    return { mockShutdown, mockRegisterPool, mockInstall, MockWorkBus, MockRegistry };
-  },
-);
+    return { mockShutdown, mockRegisterPool, mockHasPool, mockInstall, MockWorkBus, MockRegistry };
+  });
 
 vi.mock('@domain/worker-bus', () => ({
   WorkerBus: MockWorkBus,
@@ -69,6 +73,8 @@ describe('workerBusManager', () => {
     MockRegistry.mockClear();
     mockShutdown.mockClear();
     mockRegisterPool.mockClear();
+    mockHasPool.mockClear();
+    mockHasPool.mockReturnValue(true);
     mockInstall.mockClear();
   });
 
@@ -142,5 +148,46 @@ describe('workerBusManager', () => {
     const { initWorkerBus, getLegacyAdapter } = await import('../../services/workerBusManager');
     await initWorkerBus();
     expect(getLegacyAdapter()).not.toBeNull();
+  });
+
+  describe('ensureDuckDbPool', () => {
+    it('initializes the bus when not yet running', async () => {
+      const { ensureDuckDbPool, isWorkerBusReady } = await import(
+        '../../services/workerBusManager'
+      );
+      const bus = await ensureDuckDbPool();
+      expect(bus).not.toBeNull();
+      expect(isWorkerBusReady()).toBe(true);
+    });
+
+    it('does not re-register the pool when it is already present', async () => {
+      const { initWorkerBus, ensureDuckDbPool } = await import('../../services/workerBusManager');
+      await initWorkerBus();
+      mockRegisterPool.mockClear();
+      mockHasPool.mockReturnValue(true);
+
+      await ensureDuckDbPool();
+
+      expect(mockHasPool).toHaveBeenCalledWith('duckdb');
+      expect(mockRegisterPool).not.toHaveBeenCalled();
+    });
+
+    it('re-registers the duckdb pool when the bus is alive but the pool was removed', async () => {
+      // QNBS-v3: [Simulates the gap terminatePool('duckdb') can leave — the bus stays non-null
+      //          but the pool is gone; ensureDuckDbPool must not just trust `_bus !== null`.]
+      const { initWorkerBus, ensureDuckDbPool } = await import('../../services/workerBusManager');
+      await initWorkerBus();
+      mockRegisterPool.mockClear();
+      mockHasPool.mockReturnValue(false);
+
+      const bus = await ensureDuckDbPool();
+
+      expect(bus).not.toBeNull();
+      expect(mockRegisterPool).toHaveBeenCalledWith(
+        'duckdb',
+        expect.arrayContaining(['db.duckdb']),
+        expect.objectContaining({ workerScript: expect.stringContaining('duckdb.worker') }),
+      );
+    });
   });
 });

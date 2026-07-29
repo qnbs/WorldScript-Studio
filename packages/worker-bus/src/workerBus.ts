@@ -32,6 +32,8 @@ export class WorkerBus {
   private readonly dlq: DeadLetterQueue;
   private readonly progress = new ProgressEmitter();
   private readonly tokens = new Map<string, CancellationToken>();
+  // QNBS-v3: [Tracks which pool each in-flight task is running on, so terminatePool() can cancel exactly the affected tasks instead of leaving their result promises hanging forever.]
+  private readonly taskPools = new Map<string, string>();
   private readonly listeners = new Set<BusEventListener>();
   private running = false;
   private pumpScheduled = false;
@@ -47,6 +49,11 @@ export class WorkerBus {
     this.dlq = new DeadLetterQueue(options.deadLetterCapacity ?? 64);
     this.running = true;
     this.schedulePump();
+  }
+
+  // QNBS-v3: [Lets callers (e.g. ensureDuckDbPool()) detect a pool removed via terminatePool() and re-register it, instead of assuming a non-null bus always has every pool.]
+  hasPool(poolId: string): boolean {
+    return this.pools.has(poolId);
   }
 
   registerPool(
@@ -202,10 +209,14 @@ export class WorkerBus {
    * in-flight inference/webllm/plugin work on the shared bus (docs/adr/0014-worker-generation-
    * duplication.md's migration follow-up). The pool is removed from the registry; a later task
    * routed to its capabilities fails with NO_POOL until the bus re-registers it.
+   * QNBS-v3: [Cancels every in-flight task routed to this pool before removing it — otherwise their result promises would await a RESULT message from a worker that's already been terminated and never arrives.]
    */
   async terminatePool(poolId: string): Promise<void> {
     const pool = this.pools.get(poolId);
     if (!pool) return;
+    for (const [taskId, taskPoolId] of this.taskPools) {
+      if (taskPoolId === poolId) this.cancel(taskId, 'Pool terminated');
+    }
     await pool.terminateAll();
     this.pools.delete(poolId);
   }
@@ -235,6 +246,19 @@ export class WorkerBus {
       };
     }
 
+    this.taskPools.set(task.taskId, pool.poolId);
+    try {
+      return await this.runOnPool(task, token, pool);
+    } finally {
+      this.taskPools.delete(task.taskId);
+    }
+  }
+
+  private async runOnPool<TResult>(
+    task: WorkerTask,
+    token: CancellationToken,
+    pool: WorkerPool,
+  ): Promise<TaskResult<TResult>> {
     const worker = await pool.acquire(token.signal);
     const startedAt = performance.now();
     const queueTimeMs = Math.round(startedAt - task.createdAt);

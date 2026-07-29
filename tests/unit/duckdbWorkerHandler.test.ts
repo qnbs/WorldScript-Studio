@@ -216,6 +216,67 @@ describe('duckdb.worker handlers', () => {
         'bad sql',
       );
     });
+
+    it('binds params via a prepared statement instead of dropping them', async () => {
+      const row = { toJSON: () => ({ id: 1 }) };
+      const stmtQuery = vi.fn().mockResolvedValue({ toArray: () => [row] });
+      const stmtClose = vi.fn().mockResolvedValue(undefined);
+      const prepare = vi.fn().mockResolvedValue({ query: stmtQuery, close: stmtClose });
+      const rawQuery = vi.fn();
+      mockConnect.mockResolvedValue({
+        query: rawQuery,
+        close: vi.fn().mockResolvedValue(undefined),
+        prepare,
+      });
+      stubNoOpfs();
+      await initDuckDb();
+
+      const result = await handleQuery(
+        makeCtx({ payload: { sql: 'select * from t where id = ?', params: [1] } }),
+      );
+
+      expect(prepare).toHaveBeenCalledWith('select * from t where id = ?');
+      expect(stmtQuery).toHaveBeenCalledWith(1);
+      expect(stmtClose).toHaveBeenCalled();
+      expect(rawQuery).not.toHaveBeenCalled();
+      expect(result).toEqual([{ id: 1 }]);
+    });
+
+    it('closes the prepared statement even when the bound query rejects', async () => {
+      const stmtQuery = vi.fn().mockRejectedValue(new Error('bind failed'));
+      const stmtClose = vi.fn().mockResolvedValue(undefined);
+      const prepare = vi.fn().mockResolvedValue({ query: stmtQuery, close: stmtClose });
+      mockConnect.mockResolvedValue({
+        query: vi.fn(),
+        close: vi.fn().mockResolvedValue(undefined),
+        prepare,
+      });
+      stubNoOpfs();
+      await initDuckDb();
+
+      await expect(
+        handleQuery(makeCtx({ payload: { sql: 'select ?', params: ['x'] } })),
+      ).rejects.toThrow('bind failed');
+      expect(stmtClose).toHaveBeenCalled();
+    });
+
+    it('does not use a prepared statement when params is an empty array', async () => {
+      const row = { toJSON: () => ({ id: 1 }) };
+      const rawQuery = vi.fn().mockResolvedValue({ toArray: () => [row] });
+      const prepare = vi.fn();
+      mockConnect.mockResolvedValue({
+        query: rawQuery,
+        close: vi.fn().mockResolvedValue(undefined),
+        prepare,
+      });
+      stubNoOpfs();
+      await initDuckDb();
+
+      await handleQuery(makeCtx({ payload: { sql: 'select 1', params: [] } }));
+
+      expect(prepare).not.toHaveBeenCalled();
+      expect(rawQuery).toHaveBeenCalledWith('select 1');
+    });
   });
 
   describe('handleExec', () => {
@@ -235,6 +296,35 @@ describe('duckdb.worker handlers', () => {
 
       expect(result).toEqual({ ok: true });
       expect(connectionQuery).toHaveBeenCalledWith('create table t (id int)');
+    });
+
+    it('binds params via a prepared statement instead of dropping them', async () => {
+      const stmtQuery = vi.fn().mockResolvedValue(undefined);
+      const stmtClose = vi.fn().mockResolvedValue(undefined);
+      const prepare = vi.fn().mockResolvedValue({ query: stmtQuery, close: stmtClose });
+      const rawQuery = vi.fn();
+      mockConnect.mockResolvedValue({
+        query: rawQuery,
+        close: vi.fn().mockResolvedValue(undefined),
+        prepare,
+      });
+      stubNoOpfs();
+      await initDuckDb();
+
+      const result = await handleExec(
+        makeCtx({
+          payload: {
+            sql: 'insert into ai_telemetry values (?, ?, ?, ?, ?)',
+            params: ['task', 'backend', 'model', 12, true],
+          },
+        }),
+      );
+
+      expect(prepare).toHaveBeenCalledWith('insert into ai_telemetry values (?, ?, ?, ?, ?)');
+      expect(stmtQuery).toHaveBeenCalledWith('task', 'backend', 'model', 12, true);
+      expect(stmtClose).toHaveBeenCalled();
+      expect(rawQuery).not.toHaveBeenCalled();
+      expect(result).toEqual({ ok: true });
     });
   });
 

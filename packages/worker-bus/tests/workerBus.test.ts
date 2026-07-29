@@ -233,6 +233,43 @@ describe('WorkerBus', () => {
     await expect(bus.terminatePool('does-not-exist')).resolves.toBeUndefined();
   });
 
+  it('terminatePool cancels only the in-flight tasks routed to that pool', async () => {
+    // QNBS-v3: [beforeEach's mocked acquire() ignores the abort signal entirely (returns a
+    //          promise that never settles); override it here with a signal-aware implementation
+    //          mirroring WorkerPool's real waitForIdle() so cancellation can actually be observed
+    //          unsticking the caller, not just verified as "cancel() was called".]
+    const fakePool = (bus as unknown as { pools: Map<string, WorkerPool> }).pools.get('fake')!;
+    vi.spyOn(fakePool, 'acquire').mockImplementation(
+      (signal) =>
+        new Promise((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(new Error('Aborted')), { once: true });
+        }),
+    );
+    bus.registerPool('other', ['db.duckdb'], {
+      maxWorkers: 1,
+      minWorkers: 1,
+      idleTimeoutMs: 120_000,
+      workerScript: '/other.worker.js',
+      capabilities: ['db.duckdb'],
+      labels: {},
+    });
+    const otherPool = (bus as unknown as { pools: Map<string, WorkerPool> }).pools.get('other')!;
+    vi.spyOn(otherPool, 'acquire').mockReturnValue(new Promise(() => {}));
+
+    const fakeHandle = bus.enqueue('test.task', {}, { capabilities: ['inference.text'] });
+    const otherHandle = bus.enqueue('other.task', {}, { capabilities: ['db.duckdb'] });
+    otherHandle.result.catch(() => {});
+
+    const cancelSpy = vi.spyOn(bus, 'cancel');
+    await bus.terminatePool('fake');
+
+    expect(cancelSpy).toHaveBeenCalledTimes(1);
+    expect(cancelSpy).toHaveBeenCalledWith(fakeHandle.taskId, 'Pool terminated');
+    // Without the fix, this task would hang forever at pool.acquire() — terminatePool()
+    // cancelling it lets the result promise settle instead.
+    await expect(fakeHandle.result).rejects.toThrow('Aborted');
+  });
+
   it('progress callback receives emitted progress', async () => {
     const progressUpdates: Array<{ stage: string; progress: number }> = [];
     let capturedTaskId = '';
