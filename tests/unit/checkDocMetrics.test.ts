@@ -4,7 +4,12 @@
  * QNBS-v3: protects the drift gate from historical-section regressions — an untested exclusion heuristic would turn it into noise.
  */
 import { describe, expect, it } from 'vitest';
-import { scanForDrift, stripHistoricalSections } from '../../scripts/check-doc-metrics.mjs';
+import {
+  getCanonicalProductionUrl,
+  scanForDrift,
+  scanForUrlDrift,
+  stripHistoricalSections,
+} from '../../scripts/check-doc-metrics.mjs';
 
 describe('stripHistoricalSections', () => {
   it('blanks a Keep-a-Changelog-style `## [x.y.z]` section', () => {
@@ -94,6 +99,48 @@ describe('scanForDrift', () => {
   it('does not flag a PLANNED marker for a version newer than the latest release', () => {
     const content = '## Upcoming — v2.0 (PLANNED)';
     const findings = scanForDrift(content, 'FAKE.md', actual);
+    expect(findings).toHaveLength(0);
+  });
+});
+
+// QNBS-v3 (F-10): regression guard for the dead worldscript-studio-indol.vercel.app URL that had
+// leaked into the in-app link and the Italian locale — this is the check that would have caught it.
+describe('getCanonicalProductionUrl', () => {
+  it('reads a real https://….vercel.app/ URL from constants/brand.ts', () => {
+    const url = getCanonicalProductionUrl();
+    expect(url).toMatch(/^https:\/\/worldscript-studio[a-z0-9-]*\.vercel\.app\/$/);
+  });
+});
+
+describe('scanForUrlDrift', () => {
+  const canonical = 'https://worldscript-studio.vercel.app/';
+
+  it('flags a Vercel URL that does not match the canonical one', () => {
+    const content = 'Production: https://worldscript-studio-indol.vercel.app/';
+    const findings = scanForUrlDrift(content, 'FAKE.md', canonical);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain('worldscript-studio-indol.vercel.app');
+  });
+
+  it('does not flag the canonical URL', () => {
+    const content = `Production: ${canonical}`;
+    const findings = scanForUrlDrift(content, 'FAKE.md', canonical);
+    expect(findings).toHaveLength(0);
+  });
+
+  it('does not flag the canonical URL without a trailing slash', () => {
+    const content = 'Production: https://worldscript-studio.vercel.app';
+    const findings = scanForUrlDrift(content, 'FAKE.md', canonical);
+    expect(findings).toHaveLength(0);
+  });
+
+  it('ignores a mismatched URL inside a historical section', () => {
+    const content = [
+      '## [1.20.0]',
+      '',
+      'Was at https://worldscript-studio-old-preview.vercel.app/',
+    ].join('\n');
+    const findings = scanForUrlDrift(content, 'FAKE.md', canonical);
     expect(findings).toHaveLength(0);
   });
 });

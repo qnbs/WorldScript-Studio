@@ -1,6 +1,6 @@
 import type { FC } from 'react';
 import React, { useCallback, useEffect, useState } from 'react';
-import { APP_NAME, ICONS } from '../../constants';
+import { APP_NAME, ICONS, PRODUCTION_URL } from '../../constants';
 import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
 import { defaultThemeCustomization } from '../../features/settings/settingsSlice';
@@ -448,7 +448,7 @@ export const AboutSection: FC = React.memo(() => {
               {t('settings.about.githubLabel')}
             </a>
             <a
-              href="https://worldscript-studio-indol.vercel.app/"
+              href={PRODUCTION_URL}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-4 py-2 rounded-sc-lg bg-[var(--sc-accent)]/10 border border-[var(--sc-accent)]/30 text-[var(--sc-accent)] hover:bg-[var(--sc-accent)]/20 transition-colors duration-sc-fast text-sm font-medium"
