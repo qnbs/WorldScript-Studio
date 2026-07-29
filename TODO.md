@@ -8,19 +8,34 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ---
 
-## Infra — Vercel deployments paused mid-term (2026-07-29)
+## Infra — Vercel deployment failures root-caused + fixed (2026-07-29)
 
-- ⬜ **Re-enable Vercel auto-deploy** — `vercel.json`'s `git.deploymentEnabled` set to `false`
-  after 2 consecutive Vercel preview-deployment failures (different deployment IDs, different
-  commits, both with only a generic "Deployment has failed" message — `npx vercel inspect
-  <id> --logs` requires an interactive Vercel account login not available in this session, and the
-  GitHub Checks API surfaces no further detail). The exact same commits build cleanly with
-  `pnpm run build` locally, so this looks Vercel-platform-side rather than a code regression.
-  Vercel is **not** a required branch-protection check, so this doesn't block any PR merge — it was
-  paused purely to stop the noisy, undiagnosable failure status. GitHub Pages is the primary
-  always-on mirror in the meantime (README.md/CLAUDE.md updated). **Re-enable** by flipping
-  `deploymentEnabled` back to `true` (or removing the `git` block) once someone with Vercel
-  dashboard/CLI access diagnoses the root cause.
+> **Status: Resolved same-day.** Briefly paused via `vercel.json`'s `git.deploymentEnabled: false`
+> after 2 consecutive preview-deployment failures with only a generic "Deployment has failed"
+> message and no further detail from the GitHub Checks API. `npx vercel inspect --logs` needs an
+> interactive account login unavailable in-session, so the actual fix came from noticing Vercel's
+> `buildCommand` runs `pnpm run build:edge` (`node scripts/build-edge.mjs` → `vite build` with
+> `DEPLOY_TARGET=edge`) — a **different command** than the plain `pnpm run build` used for the
+> earlier (misleading) local repro attempt, which succeeded and pointed away from a code cause.
+> Reproducing the *exact* Vercel command locally
+> (`NODE_OPTIONS=--max-old-space-size=3072 pnpm run build:edge`) immediately surfaced the real
+> error: `[MISSING_EXPORT] "ensureInferencePool" is not exported by "services/workerBusManager.ts"`
+> — `services/ai/localEmbeddingService.ts` (part of the in-flight worker-generation-consolidation
+> migration, PR #288) imported and called a function that was never actually added to
+> `workerBusManager.ts`. Vitest never caught it because `localEmbeddingService.test.ts` mocks the
+> *entire* `workerBusManager` module (`vi.mock(...)` wholesale replacement), so the real file's
+> missing export was invisible to that suite; `tsgo`'s local typecheck also passed clean for
+> reasons not fully understood (worth a follow-up look at cache behavior) — only rolldown's
+> stricter static bundling in the real production build caught it. Fixed by adding the missing
+> `ensureInferencePool()` (mirrors `ensureDuckDbPool()`'s shape) plus a `workerBusManager.test.ts`
+> suite that imports the *real* module instead of mocking it — that suite would have caught this
+> immediately. `git.deploymentEnabled` reverted to enabled; verified fixed via a clean local
+> `build:edge` re-run before re-enabling.
+>
+> **Lesson for future Vercel-build debugging in this repo:** always reproduce with the *exact*
+> `vercel.json` `buildCommand`, not `pnpm run build` — they differ (`build:edge` sets
+> `DEPLOY_TARGET=edge` and runs `scripts/sync-deploy-base.mjs` first) and a plain `build` passing
+> does not prove the deploy build would.
 
 ---
 
