@@ -72,14 +72,19 @@ export default defineConfig({
       // → L74/F66/B60/S72 (2026-06-03: ratchet to ~1pt below CI-measured 75.15/67.84/61.23/73.14
       //   after Phase 2.3/2.4 tests; margin absorbs Node 22/24 variance).
       // → L74/F67/B60/S72 (2026-06-06: incremental ratchet to ~1pt below CI-measured values).
+      // → L79/F72/B65/S77 (2026-07-29, F-13: WS-9 of the CSP/crypto/doc-truth sprint —
+      //   CI-measured L80.86/F73.78/B66.74/S79.02, identical on Node 22 and 24; capped at +5 pts
+      //   per metric per the quarterly cap below rather than the full ~1pt-below-measured jump,
+      //   since the straight ~1pt margin would have exceeded +5 on statements. First ratchet of
+      //   Q3 2026 — the prior entries above are all Q2, so this is not a same-quarter stack-up).
       // P1 target: L85/B75/F80 — next ratchet after verification.
       // RATCHET RULE: After 3 consecutive green CI runs on both Node versions, increase each threshold
       // by 1 point (max 5 points per quarter). Document the new baseline in this comment.
       thresholds: {
-        lines: 74,
-        functions: 67,
-        branches: 60,
-        statements: 72,
+        lines: 79,
+        functions: 72,
+        branches: 65,
+        statements: 77,
         perFile: false,
       },
     },
