@@ -45,14 +45,6 @@ function countTestFiles(dir) {
   return count;
 }
 
-/** Count leaf values in a nested JSON object. */
-function countLeaves(obj) {
-  return Object.values(obj).reduce(
-    (acc, v) => acc + (v && typeof v === 'object' ? countLeaves(v) : 1),
-    0,
-  );
-}
-
 function getTestFileCount() {
   // Mirror the three vitest.config.ts include roots; tests/e2e is excluded inside countTestFiles.
   return (
@@ -64,14 +56,19 @@ function getTestFileCount() {
   );
 }
 
+// QNBS-v3: Set-based dedup across module files — a key defined in two files (e.g. a shared
+// key living in both settings.json and its canonical home module) must count once, matching
+// check-i18n-keys.mjs's loadBundleKeys(). A per-file leaf sum double-counted such keys, which is
+// exactly what caused this badge to drift from the real, deduplicated i18n:check count.
 function getKeyCount() {
   const localeDir = join(root, 'locales', 'en');
-  let total = 0;
+  const keys = new Set();
   for (const file of readdirSync(localeDir)) {
     if (!file.endsWith('.json')) continue;
-    total += countLeaves(JSON.parse(readFileSync(join(localeDir, file), 'utf8')));
+    const data = JSON.parse(readFileSync(join(localeDir, file), 'utf8'));
+    for (const k of Object.keys(data)) keys.add(k);
   }
-  return total;
+  return keys.size;
 }
 
 // QNBS-v3: locale count is the number of per-language directories under locales/ (each ships a

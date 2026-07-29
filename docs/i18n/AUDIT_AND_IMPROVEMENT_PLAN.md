@@ -7,7 +7,7 @@
 
 ## 1. Current state (as audited)
 
-- **17 locales × 21 modules**, ~2793 keys, full **key parity** enforced by
+- **19 locales × 21 modules**, ~2849 keys, full **key parity** enforced by
   `scripts/check-i18n-keys.mjs` (CI `quality` job) + bundled to `public/locales/<lang>/bundle.json`.
 - Runtime: custom `contexts/I18nContext.tsx` — lazy `bundle.json` fetch, `localStorage` persistence
   (`worldscript-language`), English fallback chain, cached `Intl.*` helpers, `Intl.Segmenter` word

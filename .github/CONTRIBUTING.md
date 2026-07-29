@@ -2,7 +2,7 @@
 
 ## Code of Conduct
 
-This project follows the [Contributor Covenant Code of Conduct](https://www.contributor-covenant.org/version/2/1/code_of_conduct/).
+This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## How to Contribute
 
@@ -24,4 +24,4 @@ See [`docs/CI.md`](../docs/CI.md) for full CI documentation.
 
 ## Security
 
-See [`SECURITY.md`](../SECURITY.md) for vulnerability reporting.
+See [`SECURITY.md`](SECURITY.md) for vulnerability reporting.
