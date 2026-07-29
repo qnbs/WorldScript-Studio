@@ -15,7 +15,10 @@ permissions:
 jobs:
   auto-merge:
     name: Auto-merge patch-level Dependabot PRs
-    if: github.actor == 'dependabot[bot]'
+    # QNBS-v3: github.actor is the last actor to trigger the event, not the immutable PR author —
+    # spoofable (confused-deputy risk) for gating a contents:write/pull-requests:write job.
+    # github.event.pull_request.user.login is set at PR creation and can't be manipulated this way.
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
     runs-on: ubuntu-latest
     permissions:
       contents: write
