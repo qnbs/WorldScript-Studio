@@ -190,4 +190,51 @@ describe('workerBusManager', () => {
       );
     });
   });
+
+  describe('ensureInferencePool', () => {
+    // QNBS-v3: [Imports the real module (only @domain/worker-bus is mocked) — unlike
+    //          localEmbeddingService.test.ts's fully-mocked workerBusManager, this actually
+    //          exercises the export surface. This exact suite would have caught PR #288's
+    //          missing-export bug (ensureInferencePool was imported but never defined).]
+    it('initializes the bus when not yet running', async () => {
+      const { ensureInferencePool, isWorkerBusReady } = await import(
+        '../../services/workerBusManager'
+      );
+      const bus = await ensureInferencePool();
+      expect(bus).not.toBeNull();
+      expect(isWorkerBusReady()).toBe(true);
+    });
+
+    it('does not re-register the pool when it is already present', async () => {
+      const { initWorkerBus, ensureInferencePool } = await import(
+        '../../services/workerBusManager'
+      );
+      await initWorkerBus();
+      mockRegisterPool.mockClear();
+      mockHasPool.mockReturnValue(true);
+
+      await ensureInferencePool();
+
+      expect(mockHasPool).toHaveBeenCalledWith('inference');
+      expect(mockRegisterPool).not.toHaveBeenCalled();
+    });
+
+    it('re-registers the inference pool when the bus is alive but the pool was removed', async () => {
+      const { initWorkerBus, ensureInferencePool } = await import(
+        '../../services/workerBusManager'
+      );
+      await initWorkerBus();
+      mockRegisterPool.mockClear();
+      mockHasPool.mockReturnValue(false);
+
+      const bus = await ensureInferencePool();
+
+      expect(bus).not.toBeNull();
+      expect(mockRegisterPool).toHaveBeenCalledWith(
+        'inference',
+        expect.arrayContaining(['inference.text', 'inference.embed']),
+        expect.objectContaining({ workerScript: expect.stringContaining('inference.worker') }),
+      );
+    });
+  });
 });

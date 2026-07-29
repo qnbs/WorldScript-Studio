@@ -67,13 +67,35 @@ async function reRegisterDuckDbPool(bus: WorkerBus): Promise<void> {
   bus.registerPool('duckdb', options.capabilities, options);
 }
 
+// QNBS-v3: [Shared with reRegisterInferencePool() below, same rationale as duckDbPoolOptions().]
+async function inferencePoolOptions() {
+  const { MAX_WORKERS_INFERENCE, MIN_WORKERS, WORKER_IDLE_TIMEOUT_MS } = await import(
+    '@domain/worker-bus'
+  );
+  return {
+    // QNBS-v3: [Capped below MAX_WORKERS_INFERENCE — each replica loads its own transformers.js pipeline (no cross-replica cache sharing), so 4 concurrent workers could mean 4x the model memory footprint under a burst.]
+    maxWorkers: Math.min(2, MAX_WORKERS_INFERENCE),
+    minWorkers: MIN_WORKERS,
+    idleTimeoutMs: WORKER_IDLE_TIMEOUT_MS,
+    workerScript: new URL('../workers/v2/inference.worker.ts', import.meta.url).href,
+    capabilities: ['inference.text', 'inference.embed'] as const,
+    labels: { pool: 'inference', version: 'v2' },
+  };
+}
+
+/** Re-register the 'inference' pool if it was removed via terminatePool() — a no-op if already present. */
+async function reRegisterInferencePool(bus: WorkerBus): Promise<void> {
+  if (bus.hasPool('inference')) return;
+  const options = await inferencePoolOptions();
+  bus.registerPool('inference', options.capabilities, options);
+}
+
 async function doInitWorkerBus(): Promise<void> {
   try {
     const {
       WorkerBus,
       WorkerRegistry,
       MAX_WORKERS_INFERENCE,
-      MIN_WORKERS,
       WORKER_IDLE_TIMEOUT_MS,
       CIRCUIT_BREAKER_THRESHOLD,
       CIRCUIT_BREAKER_RECOVERY_MS,
@@ -96,25 +118,15 @@ async function doInitWorkerBus(): Promise<void> {
 
     const registry = new WorkerRegistry();
 
-    // QNBS-v3: new URL(path, import.meta.url) lets Vite emit the worker script as a proper
-    //          asset URL. The .ts extension is allowed — Vite transforms it during build.
-    const inferenceUrl = new URL('../workers/v2/inference.worker.ts', import.meta.url).href;
     // QNBS-v3: P1-1 — dedicated WebLLM (WebGPU) worker. Separate pool keeps @mlc-ai/web-llm out
     //          of the transformers.js worker bundle and isolates the GPU lifecycle.
     const webllmUrl = new URL('../workers/v2/webllm.worker.ts', import.meta.url).href;
 
+    const inferenceOptions = await inferencePoolOptions();
     registry.register({
       poolId: 'inference',
-      capabilities: ['inference.text', 'inference.embed'],
-      options: {
-        // QNBS-v3: [Capped below MAX_WORKERS_INFERENCE — each replica loads its own transformers.js pipeline (no cross-replica cache sharing), so 4 concurrent workers could mean 4x the model memory footprint under a burst.]
-        maxWorkers: Math.min(2, MAX_WORKERS_INFERENCE),
-        minWorkers: MIN_WORKERS,
-        idleTimeoutMs: WORKER_IDLE_TIMEOUT_MS,
-        workerScript: inferenceUrl,
-        capabilities: ['inference.text', 'inference.embed'],
-        labels: { pool: 'inference', version: 'v2' },
-      },
+      capabilities: inferenceOptions.capabilities,
+      options: inferenceOptions,
     });
 
     const duckdbOptions = await duckDbPoolOptions();
@@ -192,6 +204,22 @@ export async function ensureDuckDbPool(): Promise<WorkerBus | null> {
   }
   // QNBS-v3: [terminatePool('duckdb') can remove the pool while the bus itself stays alive — re-register it here instead of assuming a non-null bus always has every pool.]
   await reRegisterDuckDbPool(_bus);
+  return _bus;
+}
+
+/**
+ * Ensure the shared local-inference worker pool is available, initializing the WorkerBus on
+ * demand. QNBS-v3: mirrors ensureDuckDbPool()/ensureWebLlmPool()'s decoupling from
+ * `enableWorkerBusV2` — embeddings/NLP were never gated by that flag in the v1 worker they
+ * replace, so toggling an experimental infra flag off must not silently break RAG/cross-project
+ * search. Returns null only if init failed.
+ */
+export async function ensureInferencePool(): Promise<WorkerBus | null> {
+  if (_bus === null) {
+    await initWorkerBus();
+    return _bus;
+  }
+  await reRegisterInferencePool(_bus);
   return _bus;
 }
 
