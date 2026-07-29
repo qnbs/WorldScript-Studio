@@ -135,6 +135,21 @@ Tauri-specific CSP bug ever ships past Layer A/B undetected.
 
 ---
 
+## Non-blocking gates — exit criteria (F-13)
+
+A non-blocking gate without a stated exit criterion is permanent, silent debt — it looks like
+progress-in-motion but nothing ever forces a revisit. Every `continue-on-error: true` / `|| true`
+in `ci.yml` is listed here with why it isn't blocking today and what has to be true before it is:
+
+| Gate | Why not blocking today | Exit criterion |
+|------|------------------------|-----------------|
+| Storybook `test-storybook` (`storybook` job, `\|\| true`) | Fixed 2026-07-29 (F-12): the invocation was calling flags this test-runner version doesn't support (`--max-workers`/`--retries`/`--screenshot-on-failure`), so it failed on argument parsing before running a single story, on every prior run. This is the first run where it will actually execute real stories/a11y checks — no track record exists yet. | Re-evaluate after **~10 real (non-argument-error) runs on `main`**; remove `\|\| true` and make blocking if none fail on a genuine story/a11y assertion. |
+| `e2e-deep` (feature-flag matrix job, `continue-on-error: true`) | Deliberately informational by design — parametrizes across the full `testConfigurations` flag matrix (`tests/e2e/config/test-matrix.ts`) specifically to surface flag-interaction regressions that the required `e2e` gate's default-flag-state run cannot see; failures here are diagnostic signal, not necessarily a merge-blocking defect in the default configuration. | Promote a **specific flag combination** to blocking (add it to the required `e2e` spec instead) once it has been stable for **3 consecutive weeks of `main` runs** — do not flip the entire matrix job blocking at once, since that reintroduces the flakiness-cascade risk `e2e-deep` was created to avoid. |
+| Lighthouse **Desktop** step (`lighthouse` job, `continue-on-error: true`) — note: accessibility (`minScore: 0.95`) and CLS (`≤ 0.1`) stay **error**-level gates even on this step; only the broader desktop performance/SEO scores are non-blocking | Desktop performance baselines haven't been formally re-verified as stable since the last CI-runner change | Re-run `pnpm exec lhci autorun --config=.lighthouserc.desktop.cjs` locally or via `storybook-debug.yml`-style manual dispatch across **5 consecutive `main` runs**; if performance/SEO scores stay within the existing `warn` thresholds each time, remove `continue-on-error` for the step. |
+| Coverage ratchet (`scripts/check-coverage-ratchet.mjs`, `continue-on-error: true`) | **Deliberately, permanently advisory** — by design (see `vitest.config.ts`'s ratchet-history comment), it exists to *suggest* the next threshold bump, not to gate a merge on hitting one. | None — this is the one gate above intentionally without an exit criterion; its purpose is met by staying advisory. Reviewed here for completeness so it isn't mistaken for forgotten debt. |
+
+---
+
 ## Mutation testing status
 
 Stryker was removed from the `quality` job on **2026-06-02** — it ran as a flaky, non-gating check
