@@ -69,13 +69,18 @@ function directiveTokens(csp: string, directive: string): string[] | undefined {
     .filter(Boolean);
 }
 
-/** All inline <script>…</script> bodies in index.html that have no `src` attribute and non-empty content. */
+/**
+ * All inline <script>…</script> bodies in index.html that have no `src` attribute and non-empty
+ * content. Case-insensitive (`i` flag) — HTML tag names are case-insensitive per spec, and an
+ * uppercase `<SCRIPT>` would otherwise slip past this exact regression guard undetected (flagged
+ * by CodeQL's "Bad HTML filtering regexp" check on the case-sensitive version of this pattern).
+ */
 function inlineScriptContents(html: string): string[] {
   const results: string[] = [];
-  for (const m of html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/g)) {
+  for (const m of html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/gi)) {
     const attrs = m[1] ?? '';
     const body = m[2] ?? '';
-    if (!/\bsrc\s*=/.test(attrs) && body.trim().length > 0) {
+    if (!/\bsrc\s*=/i.test(attrs) && body.trim().length > 0) {
       results.push(body);
     }
   }
@@ -200,5 +205,17 @@ describe('CSP correctness — no ungehashtes (unhashed) inline <script> in index
         `inline script "${content.trim().slice(0, 60)}…" needs a 'sha256-…' entry in script-src`,
       ).toBe(true);
     }
+  });
+
+  // QNBS-v3: regression guard for a case-sensitivity gap CodeQL flagged in this exact detector
+  // ("Bad HTML filtering regexp") — an uppercase <SCRIPT> tag must still be caught.
+  it('detects an uppercase <SCRIPT> tag (HTML tag names are case-insensitive)', () => {
+    const fakeHtml = '<body><SCRIPT>doSomething();</SCRIPT></body>';
+    expect(inlineScriptContents(fakeHtml)).toEqual(['doSomething();']);
+  });
+
+  it('does not flag an uppercase <SCRIPT SRC="..."> as inline', () => {
+    const fakeHtml = '<body><SCRIPT SRC="/index.tsx" TYPE="module"></SCRIPT></body>';
+    expect(inlineScriptContents(fakeHtml)).toEqual([]);
   });
 });
