@@ -1,163 +1,132 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// QNBS-v3: Arrow functions cannot be constructors — use hoisted vi.fn() refs + class stub.
-const workerPostMessage = vi.hoisted(() => vi.fn());
-const workerAddEventListener = vi.hoisted(() => vi.fn());
-const workerRemoveEventListener = vi.hoisted(() => vi.fn());
-const workerTerminate = vi.hoisted(() => vi.fn());
+// QNBS-v3: [localNlpService now routes through WorkerBus v2 — mock ensureInferencePool() instead of the global Worker constructor. Consolidates the former tests/unit/services/localNlpService.test.ts, which duplicated most of this coverage.]
 
-// QNBS-v3: Class-based Worker stub so `new Worker(...)` in source doesn't throw.
-class MockWorker {
-  postMessage = workerPostMessage;
-  addEventListener = workerAddEventListener;
-  removeEventListener = workerRemoveEventListener;
-  terminate = workerTerminate;
+const { mockEnqueue, mockEnsureInferencePool } = vi.hoisted(() => ({
+  mockEnqueue: vi.fn(),
+  mockEnsureInferencePool: vi.fn(),
+}));
+
+vi.mock('../../services/workerBusManager', () => ({
+  ensureInferencePool: mockEnsureInferencePool,
+}));
+
+const { analyzeSentiment, classifyWritingTopic, summarizeText } = await import(
+  '../../services/ai/localNlpService'
+);
+
+function makeHandle(result: Promise<unknown>) {
+  return { taskId: 't1', result, progress: (async function* () {})(), cancel: vi.fn() };
 }
 
-vi.stubGlobal('Worker', MockWorker);
+function makeBus() {
+  return { enqueue: mockEnqueue };
+}
 
-import {
-  _resetWorkerForTest,
-  analyzeSentiment,
-  classifyWritingTopic,
-  summarizeText,
-} from '../../services/ai/localNlpService';
+let requestCalls: Array<{
+  task: string;
+  modelId: string;
+  input: string;
+  inferenceOptions?: Record<string, unknown>;
+}> = [];
+let nextResult = 'POSITIVE:0.95';
 
 beforeEach(() => {
-  _resetWorkerForTest();
-  workerPostMessage.mockReset();
-  workerAddEventListener.mockReset();
-  workerRemoveEventListener.mockReset();
+  vi.clearAllMocks();
+  requestCalls = [];
+  nextResult = 'POSITIVE:0.95';
+  mockEnsureInferencePool.mockResolvedValue(makeBus());
+  mockEnqueue.mockImplementation((_taskType: string, payload: unknown) => {
+    requestCalls.push(payload as (typeof requestCalls)[number]);
+    return makeHandle(Promise.resolve(nextResult));
+  });
 });
 
-afterEach(() => {
-  _resetWorkerForTest();
-});
-
-// Helper: fire the message handler captured by the last addEventListener call
-function resolveWorkerMessage(responseOverride?: {
-  ok?: boolean;
-  result?: string | undefined;
-  error?: string;
-}) {
-  const [, handler] =
-    workerAddEventListener.mock.calls[workerAddEventListener.mock.calls.length - 1] ?? [];
-  if (typeof handler !== 'function') throw new Error('No handler registered');
-
-  const lastMsg = workerPostMessage.mock.calls[workerPostMessage.mock.calls.length - 1]?.[0] as {
-    messageId: string;
-  };
-
-  handler({
-    data: {
-      messageId: lastMsg?.messageId ?? 'nlp-test',
-      ok: true,
-      result: 'POSITIVE:0.95',
-      ...responseOverride,
-    },
-  } as MessageEvent);
-}
-
-// ─── analyzeSentiment ──────────────────────────────────────────────────────────
+// ─── analyzeSentiment ────────────────────────────────────────────────────────
 
 describe('analyzeSentiment', () => {
   it('parses POSITIVE result correctly', async () => {
-    const promise = analyzeSentiment('I love writing!');
-    resolveWorkerMessage({ result: 'POSITIVE:0.95' });
-    const r = await promise;
+    nextResult = 'POSITIVE:0.95';
+    const r = await analyzeSentiment('I love writing!');
     expect(r.label).toBe('POSITIVE');
     expect(r.score).toBeCloseTo(0.95, 3);
     expect(r.normalized).toBeCloseTo(0.95, 3);
   });
 
   it('parses NEGATIVE result correctly', async () => {
-    const promise = analyzeSentiment('I hate this.');
-    resolveWorkerMessage({ result: 'NEGATIVE:0.88' });
-    const r = await promise;
+    nextResult = 'NEGATIVE:0.88';
+    const r = await analyzeSentiment('I hate this.');
     expect(r.label).toBe('NEGATIVE');
     expect(r.score).toBeCloseTo(0.88, 3);
     expect(r.normalized).toBeCloseTo(-0.88, 3);
   });
 
   it('parses NEUTRAL result with normalized = 0', async () => {
-    const promise = analyzeSentiment('The document exists.');
-    resolveWorkerMessage({ result: 'NEUTRAL:0.6' });
-    const r = await promise;
+    nextResult = 'NEUTRAL:0.6';
+    const r = await analyzeSentiment('The document exists.');
     expect(r.label).toBe('NEUTRAL');
     expect(r.normalized).toBe(0);
   });
 
-  it('returns NEUTRAL fallback on worker error', async () => {
-    const promise = analyzeSentiment('anything');
-    resolveWorkerMessage({ ok: false, result: undefined, error: 'OOM' });
-    const r = await promise;
+  it('returns NEUTRAL fallback when the task rejects', async () => {
+    mockEnqueue.mockReturnValue(makeHandle(Promise.reject(new Error('OOM'))));
+    const r = await analyzeSentiment('anything');
     expect(r.label).toBe('NEUTRAL');
     expect(r.score).toBe(0.5);
     expect(r.normalized).toBe(0);
   });
 
-  it('returns NEUTRAL fallback on empty result', async () => {
-    const promise = analyzeSentiment('anything');
-    resolveWorkerMessage({ ok: true, result: undefined });
-    const r = await promise;
-    expect(r.label).toBe('NEUTRAL');
+  it('caps input text to 512 chars before enqueuing', async () => {
+    await analyzeSentiment('x'.repeat(600));
+    expect(requestCalls[0]?.input.length).toBe(512);
   });
 
-  it('caps input text to 512 chars before sending', async () => {
-    const promise = analyzeSentiment('x'.repeat(600));
-    resolveWorkerMessage();
-    await promise;
-    const posted = workerPostMessage.mock.calls[0]?.[0] as { input: string };
-    expect(posted.input.length).toBe(512);
-  });
-
-  it('maps unknown label to NEUTRAL', async () => {
-    const promise = analyzeSentiment('weird text');
-    resolveWorkerMessage({ result: 'GARBAGE:0.7' });
-    const r = await promise;
+  it('maps an unknown label to NEUTRAL', async () => {
+    nextResult = 'GARBAGE:0.7';
+    const r = await analyzeSentiment('weird text');
     expect(r.label).toBe('NEUTRAL');
     expect(r.normalized).toBe(0);
   });
+
+  it('enqueues inference.text with the inference.text capability', async () => {
+    await analyzeSentiment('test');
+    expect(requestCalls[0]?.task).toBe('sentiment-analysis');
+    expect(mockEnqueue).toHaveBeenCalledWith(
+      'inference.text',
+      expect.anything(),
+      expect.objectContaining({ capabilities: ['inference.text'] }),
+    );
+  });
 });
 
-// ─── summarizeText ──────────────────────────────────────────────────────────
+// ─── summarizeText ────────────────────────────────────────────────────────────
 
 describe('summarizeText', () => {
-  it('returns worker result on success', async () => {
-    const promise = summarizeText('A long piece of text about storytelling and craft.');
-    resolveWorkerMessage({ result: 'Short summary.' });
-    const result = await promise;
+  it('returns the worker result on success', async () => {
+    nextResult = 'Short summary.';
+    const result = await summarizeText('A long piece of text about storytelling and craft.');
     expect(result).toBe('Short summary.');
   });
 
-  it('falls back to text.slice(0, 280) when worker fails', async () => {
+  it('falls back to text.slice(0, 280) when the task rejects', async () => {
+    mockEnqueue.mockReturnValue(makeHandle(Promise.reject(new Error('unavailable'))));
     const text = 'b'.repeat(400);
-    const promise = summarizeText(text);
-    resolveWorkerMessage({ ok: false, result: undefined });
-    const result = await promise;
+    const result = await summarizeText(text);
     expect(result).toBe(text.slice(0, 280));
   });
 
-  it('caps input to 1024 chars before sending to worker', async () => {
-    const promise = summarizeText('c'.repeat(2000));
-    resolveWorkerMessage({ result: 'ok' });
-    await promise;
-    const posted = workerPostMessage.mock.calls[0]?.[0] as { input: string };
-    expect(posted.input.length).toBe(1024);
+  it('caps input to 1024 chars before enqueuing', async () => {
+    await summarizeText('c'.repeat(2000));
+    expect(requestCalls[0]?.input.length).toBe(1024);
   });
 
-  it('passes max_new_tokens option from maxLength param', async () => {
-    const promise = summarizeText('some text', 200);
-    resolveWorkerMessage({ result: 'ok' });
-    await promise;
-    const posted = workerPostMessage.mock.calls[0]?.[0] as {
-      inferenceOptions: { max_new_tokens: number };
-    };
-    expect(posted.inferenceOptions.max_new_tokens).toBe(200);
+  it('passes max_new_tokens from the maxLength param', async () => {
+    await summarizeText('some text', 200);
+    expect(requestCalls[0]?.inferenceOptions?.['max_new_tokens']).toBe(200);
   });
 });
 
-// ─── classifyWritingTopic ────────────────────────────────────────────────────
+// ─── classifyWritingTopic ─────────────────────────────────────────────────────
 
 describe('classifyWritingTopic', () => {
   it('returns Fantasy for fantasy-keyword text', async () => {
