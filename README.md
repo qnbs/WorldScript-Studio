@@ -489,7 +489,7 @@ WorldScript-Studio/
 │   ├── keyboard/         # Shortcut matching, OS normalization, conflict detection
 │   ├── help/             # RAG-lite retrieval for in-app help articles
 │   └── settingsExchange/ # Zod-validated settings import/export
-├── locales/              # i18n source JSON (de/en/es/fr/it × 15 modules each)
+├── locales/              # i18n source JSON (19 locales × 21 modules each)
 ├── public/
 │   ├── locales/          # i18n runtime bundles (rebuilt by pnpm run i18n:check / prebuild)
 │   ├── sw.js             # PWA Service Worker

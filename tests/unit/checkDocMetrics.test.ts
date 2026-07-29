@@ -1,9 +1,7 @@
 // @vitest-environment node
 /**
  * Tests for scripts/check-doc-metrics.mjs
- * QNBS-v3: the historical-section exclusion heuristic is the part most likely to silently break
- * (an untested exclusion rule turns the drift gate into noise) — this file's primary job is
- * proving it actually excludes a dated snapshot and does NOT excuse a present-tense claim.
+ * QNBS-v3: protects the drift gate from historical-section regressions — an untested exclusion heuristic would turn it into noise.
  */
 import { describe, expect, it } from 'vitest';
 import { scanForDrift, stripHistoricalSections } from '../../scripts/check-doc-metrics.mjs';

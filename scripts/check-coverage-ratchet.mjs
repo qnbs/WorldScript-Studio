@@ -24,6 +24,7 @@ const SUMMARY_PATH = join(root, 'coverage', 'coverage-summary.json');
 const THRESHOLDS = { lines: 74, functions: 67, branches: 60, statements: 72 };
 const RATCHET_GAP = 2;
 
+// QNBS-v3: every exit path is a `return`, never `process.exit(1)` — this is advisory-only, so a missing/malformed/all-clean summary must all fall through to the same non-blocking outcome.
 function main() {
   if (!existsSync(SUMMARY_PATH)) {
     process.stdout.write(
@@ -32,7 +33,17 @@ function main() {
     return;
   }
 
-  const summary = JSON.parse(readFileSync(SUMMARY_PATH, 'utf8'));
+  // QNBS-v3: a truncated/invalid summary must not violate the "always exits 0" contract this
+  // script documents — catch parse failures the same way a missing file is already handled.
+  let summary;
+  try {
+    summary = JSON.parse(readFileSync(SUMMARY_PATH, 'utf8'));
+  } catch {
+    process.stdout.write(
+      '[coverage-ratchet] Could not parse coverage-summary.json — skipping (non-blocking).\n',
+    );
+    return;
+  }
   const total = summary.total;
   if (!total) {
     process.stdout.write(

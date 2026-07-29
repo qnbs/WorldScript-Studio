@@ -16,12 +16,17 @@ import { getModules, REF_LANG } from './i18n-locales.mjs';
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 
+// QNBS-v3: every file the header comment names as a past drift site must actually be scanned —
+// CodeRabbit caught .github/copilot-instructions.md missing here, which would let that exact
+// regression recur silently past this gate.
 const TARGET_FILES = [
   'README.md',
   'ROADMAP.md',
   'TODO.md',
   'docs/TRANSLATION-GUIDE.md',
   'CONTRIBUTING.md',
+  '.github/CONTRIBUTING.md',
+  '.github/copilot-instructions.md',
 ];
 
 // QNBS-v3: this repo marks "done" several different ways — Keep-a-Changelog `## [x.y.z]`,
@@ -64,12 +69,14 @@ export function stripHistoricalSections(markdown) {
 }
 
 /** Actual locale count = directories under locales/ (translation-glossary.json is a file, not a locale). */
+// QNBS-v3: reads the filesystem directly rather than a hand-maintained constant, so a new locale is picked up automatically instead of going stale like the doc claims this gate exists to catch.
 export function getActualLocaleCount() {
   return readdirSync(join(root, 'locales'), { withFileTypes: true }).filter((e) => e.isDirectory())
     .length;
 }
 
 /** Actual key count = deduplicated key set across all modules for the reference locale (matches check-i18n-keys.mjs). */
+// QNBS-v3: Set-based dedup, not a per-file sum — a key shared by two modules must count once, the exact bug this gate caught in sync-readme-metrics.mjs's own counting logic.
 export function getActualKeyCount() {
   const keys = new Set();
   for (const mod of getModules()) {
@@ -81,6 +88,7 @@ export function getActualKeyCount() {
 }
 
 /** Latest released version tag (e.g. "1.24.1"), or null if no tags exist (e.g. a shallow clone). */
+// QNBS-v3: null (not a thrown error) on a shallow/tagless checkout — callers must treat "no tags" as "skip the PLANNED check", never as a drift finding of its own.
 export function getLatestReleasedVersion() {
   try {
     const tag = execSync('git tag --sort=-v:refname', { cwd: root, encoding: 'utf8' })
@@ -105,6 +113,7 @@ function semverLte(a, b) {
  * Scan one file's (historical-stripped) content for locale-count / key-count / stale-PLANNED
  * drift against the actual computed values. Returns human-readable finding strings.
  */
+// QNBS-v3: regex-scans prose for numeric claims rather than requiring structured metadata — this gate exists precisely because docs drift in free-form text, not in a machine-checked field.
 export function scanForDrift(content, filePath, { localeCount, keyCount, latestVersion }) {
   const findings = [];
   const scanned = stripHistoricalSections(content);
@@ -142,6 +151,7 @@ export function scanForDrift(content, filePath, { localeCount, keyCount, latestV
   return findings;
 }
 
+// QNBS-v3: exits 1 on any finding — unlike check-coverage-ratchet.mjs this gate is blocking, since a doc claiming a wrong locale/key/release count is actively misleading, not just an opportunity.
 function main() {
   const localeCount = getActualLocaleCount();
   const keyCount = getActualKeyCount();

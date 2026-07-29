@@ -99,9 +99,12 @@ jobs:
         # QNBS-v3: Explicit versions — `node` (= 'current') breaks CI without code changes when Node N+1 is released.
         node-version: ['22', '24']
     steps:
+      # QNBS-v3: fetch-tags — check-doc-metrics.mjs's stale-PLANNED-status check reads `git tag`
+      # and silently no-ops without one; a default shallow checkout has no tags at all.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
         with:
           persist-credentials: false
+          fetch-tags: true
       - uses: ./.github/actions/setup
         with:
           node-version: ${{ matrix.node-version }}

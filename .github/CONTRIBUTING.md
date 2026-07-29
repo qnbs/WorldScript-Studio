@@ -24,4 +24,4 @@ See [`docs/CI.md`](../docs/CI.md) for full CI documentation.
 
 ## Security
 
-See [`SECURITY.md`](../SECURITY.md) for vulnerability reporting.
+See [`SECURITY.md`](SECURITY.md) for vulnerability reporting.
