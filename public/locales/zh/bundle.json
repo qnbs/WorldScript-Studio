@@ -885,7 +885,7 @@
   "dashboard.authorInsights.timelineWarnBadge": "{{count}} 条警告 — 在场景板上优化场景日期/持续时间。",
   "dashboard.authorInsights.title": "作者管道见解",
   "dashboard.backup.exportJson": "导出 JSON",
-  "dashboard.backup.hint": "导出 your project, import a backup, or open full backup settings.",
+  "dashboard.backup.hint": "导出项目、导入备份或打开完整备份设置。",
   "dashboard.backup.importJson": "导入 JSON",
   "dashboard.backup.latestSnapshot": "最新快照：{{name}}（{{date}}）",
   "dashboard.backup.openSettings": "备份设置",

@@ -885,7 +885,7 @@
   "dashboard.authorInsights.timelineWarnBadge": "{{count}} προειδοποιήσεις — βελτιώστε τις ημερομηνίες/διάρκειες των σκηνών στον πίνακα σκηνής.",
   "dashboard.authorInsights.title": "Insights για τη διοχέτευση του συγγραφέα",
   "dashboard.backup.exportJson": "Εξαγωγή JSON",
-  "dashboard.backup.hint": "Εξαγωγή your project, import a backup, or open full backup settings.",
+  "dashboard.backup.hint": "Εξάγετε το έργο σας, εισαγάγετε ένα αντίγραφο ασφαλείας ή ανοίξτε τις ρυθμίσεις πλήρους αντιγράφου ασφαλείας.",
   "dashboard.backup.importJson": "Εισαγωγή JSON",
   "dashboard.backup.latestSnapshot": "Τελευταίο στιγμιότυπο: {{name}} ({{date}})",
   "dashboard.backup.openSettings": "Ρυθμίσεις δημιουργίας αντιγράφων ασφαλείας",

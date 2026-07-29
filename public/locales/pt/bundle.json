@@ -885,7 +885,7 @@
   "dashboard.authorInsights.timelineWarnBadge": "{{count}} avisos — refine as datas/durações das cenas no Scene Board.",
   "dashboard.authorInsights.title": "Insights do pipeline do autor",
   "dashboard.backup.exportJson": "Exportar JSON",
-  "dashboard.backup.hint": "Exportar your project, import a backup, or open full backup settings.",
+  "dashboard.backup.hint": "Exporte seu projeto, importe um backup ou abra as configurações de backup completo.",
   "dashboard.backup.importJson": "Importar JSON",
   "dashboard.backup.latestSnapshot": "Instantâneo mais recente: {{name}} ({{date}})",
   "dashboard.backup.openSettings": "Configurações de backup",
