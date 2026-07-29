@@ -74,10 +74,15 @@ function directiveTokens(csp: string, directive: string): string[] | undefined {
  * content. Case-insensitive (`i` flag) — HTML tag names are case-insensitive per spec, and an
  * uppercase `<SCRIPT>` would otherwise slip past this exact regression guard undetected (flagged
  * by CodeQL's "Bad HTML filtering regexp" check on the case-sensitive version of this pattern).
+ * The closing-tag alternative `(?:\s[^>]*)?` tolerates a malformed end tag like `</script foo="bar">`
+ * or `</script >` — browsers still parse these as a valid `</script>` (CodeQL's own "Bad HTML
+ * filtering regexp" example), so a strict `<\/script>` literal would let such a script slip past
+ * this detector undetected, same failure class as the case-sensitivity gap above. `\b` after the
+ * opening `<script` likewise stops it from matching inside an unrelated tag name like `<scripts>`.
  */
 function inlineScriptContents(html: string): string[] {
   const results: string[] = [];
-  for (const m of html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/gi)) {
+  for (const m of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script(?:\s[^>]*)?>/gi)) {
     const attrs = m[1] ?? '';
     const body = m[2] ?? '';
     if (!/\bsrc\s*=/i.test(attrs) && body.trim().length > 0) {
@@ -216,6 +221,18 @@ describe('CSP correctness — no ungehashtes (unhashed) inline <script> in index
 
   it('does not flag an uppercase <SCRIPT SRC="..."> as inline', () => {
     const fakeHtml = '<body><SCRIPT SRC="/index.tsx" TYPE="module"></SCRIPT></body>';
+    expect(inlineScriptContents(fakeHtml)).toEqual([]);
+  });
+
+  // QNBS-v3: regression guard for CodeQL's "Bad HTML filtering regexp" (js/bad-tag-filter) —
+  // a malformed-but-browser-valid closing tag must still be caught, not silently skipped.
+  it('detects an inline script whose closing tag has trailing whitespace/attributes', () => {
+    const fakeHtml = '<body><script>doSomething();</script foo="bar"></body>';
+    expect(inlineScriptContents(fakeHtml)).toEqual(['doSomething();']);
+  });
+
+  it('does not mistake an unrelated <scripts> tag name for a script open tag', () => {
+    const fakeHtml = '<body><scripts>not a script</scripts></body>';
     expect(inlineScriptContents(fakeHtml)).toEqual([]);
   });
 });
