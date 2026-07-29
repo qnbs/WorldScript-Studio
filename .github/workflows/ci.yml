@@ -1,5 +1,5 @@
 # ============================================================
-# StoryCraft Studio – CI/CD Pipeline
+# WorldScript Studio – CI/CD Pipeline
 # security → quality (lint, i18n, tsgo, vitest+coverage) → build (+chunk budget, rollup analyze)
 #   ├→ e2e | storybook (parallel) ; lighthouse after build
 # deploy (main): needs build + e2e → GitHub Pages
@@ -129,9 +129,6 @@ jobs:
 
       - name: Typecheck (tsgo)
         run: npx tsgo --project tsconfig.tsgo.json --noEmit --checkers 4
-
-      - name: Build Storybook
-        run: pnpm run build-storybook
 
       # QNBS-v3: Vitest mit --retry=2 für stabile Runs + NODE_OPTIONS für Node 24 Kompatibilität.
       # --no-experimental-webstorage deaktiviert native Node 24+ Web Storage API (verhindert localStorage.clear() Fehler).
@@ -452,9 +449,16 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Serve Storybook + Run test-runner (cloud-optimised)
-        # QNBS-v3: || true — test failures produce artifacts and annotation but do NOT block the job;
-        # flaky a11y stories should not cascade into a full pipeline block on every PR.
-        # Remove || true once baseline is stable and no flaky a11y stories remain.
+        # QNBS-v3 (F-12, 2026-07-29): the command below was invoking three flags this
+        # @storybook/test-runner@^0.24.4 CLI does not support (`--max-workers` — wrong case, should
+        # be `--maxWorkers`; `--retries` and `--screenshot-on-failure` don't exist in this version
+        # at all). Every prior CI run failed on the FIRST unknown option before any story ever ran,
+        # printed --help text, and `|| true` silently turned that into a green step — this gate has
+        # produced zero real signal since it was added. Fixed to only pass supported flags.
+        # || true stays for now: this is the first run where test-storybook actually executes real
+        # stories, so there is no track record yet to judge stability against. Re-evaluate after
+        # ~10 real (non-help-text) runs on main — if none fail on genuine a11y/story assertions,
+        # remove || true and make this blocking.
         env:
           CI: true
           DEBUG: pw:browser*
@@ -462,10 +466,8 @@ jobs:
           npx http-server storybook-static -p 6006 -s &
           npx wait-on http://localhost:6006 --timeout 90000
           pnpm exec test-storybook --url http://localhost:6006 \
-            --max-workers=2 \
-            --retries=3 \
-            --junit \
-            --screenshot-on-failure || true
+            --maxWorkers=2 \
+            --junit || true
 
       # QNBS-v3: always() — upload even on failure; artifacts are the primary debug tool on low-end
       #          local hardware where storybook cannot run. Use the Storybook Debug workflow for
