@@ -10,11 +10,7 @@ export const APP_NAME = 'WorldScript Studio';
 /** Lowercase, filesystem-safe slug for generated artefacts (download filenames, key prefixes). */
 export const APP_FILE_SLUG = 'worldscript';
 
-/**
- * QNBS-v3 (F-10, 2026-07-29): the canonical, live Vercel deployment URL — single source of truth,
- * defined once to prevent re-drift. A stale `worldscript-studio-indol.vercel.app` URL (a dead
- * preview-deployment domain, confirmed 404) had drifted into the in-app link and the Italian
- * locale; both now reference this constant / are kept in sync with it. Verify liveness before
- * changing: this is the only URL that actually resolves (200) among the domains found in the repo.
- */
+// QNBS-v3 (F-10): single source of truth for the canonical, live Vercel URL — a stale
+// `worldscript-studio-indol.vercel.app` (dead preview domain, confirmed 404) had drifted into the
+// in-app link and the Italian locale; see docs/audit/WS-RUN-LOG-2026-07-29.md for the full trace.
 export const PRODUCTION_URL = 'https://worldscript-studio.vercel.app/';

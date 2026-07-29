@@ -6,12 +6,20 @@
  * unpinned `cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm/dist/...` URL (floating "latest", decoupled
  * from the locked `@duckdb/duckdb-wasm@^1.32.0` version, and already blocked by `worker-src 'self'
  * blob:'` CSP with no jsdelivr allowance — this was already-dead code, not just a supply-chain risk).
- * Run via predev/prebuild — idempotent, only copies when missing or the source changed size.
+ * Run via predev/prebuild — idempotent, only copies when missing or the source content changed.
  * `public/duckdb/` is gitignored: these are build artifacts of the pinned dependency, not source.
  */
-import { copyFileSync, existsSync, mkdirSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+// QNBS-v3 (CodeRabbit): equal byte length doesn't prove equal content — a dependency bump that
+// happens to keep the same asset size would leave a stale WASM/worker file in public/duckdb/ with
+// this check alone, so content is hashed once sizes already match.
+function fileHash(path) {
+  return createHash('sha256').update(readFileSync(path)).digest('hex');
+}
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const srcDir = join(root, 'node_modules', '@duckdb', 'duckdb-wasm', 'dist');
@@ -42,7 +50,10 @@ for (const name of ASSETS) {
     process.exitCode = 1;
     continue;
   }
-  const alreadyCurrent = existsSync(dest) && statSync(dest).size === statSync(src).size;
+  const alreadyCurrent =
+    existsSync(dest) &&
+    statSync(dest).size === statSync(src).size &&
+    fileHash(dest) === fileHash(src);
   if (!alreadyCurrent) {
     copyFileSync(src, dest);
     copied += 1;

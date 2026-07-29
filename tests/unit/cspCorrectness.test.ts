@@ -82,6 +82,7 @@ function directiveTokens(csp: string, directive: string): string[] | undefined {
  */
 function inlineScriptContents(html: string): string[] {
   const results: string[] = [];
+  // QNBS-v3 (CodeQL js/bad-tag-filter): tolerate a malformed-but-browser-valid closing tag like `</script foo="bar">` so it can't evade this detector.
   for (const m of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script(?:\s[^>]*)?>/gi)) {
     const attrs = m[1] ?? '';
     const body = m[2] ?? '';

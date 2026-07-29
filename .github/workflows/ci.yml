@@ -455,10 +455,13 @@ jobs:
         # at all). Every prior CI run failed on the FIRST unknown option before any story ever ran,
         # printed --help text, and `|| true` silently turned that into a green step — this gate has
         # produced zero real signal since it was added. Fixed to only pass supported flags.
-        # || true stays for now: this is the first run where test-storybook actually executes real
-        # stories, so there is no track record yet to judge stability against. Re-evaluate after
-        # ~10 real (non-help-text) runs on main — if none fail on genuine a11y/story assertions,
-        # remove || true and make this blocking.
+        # QNBS-v3 (CodeRabbit, 2026-07-29): `|| true` swallowed the exit code so this step showed
+        # green even when it truly failed — literally how the bug above stayed invisible. Moved the
+        # non-blocking behavior to step-level `continue-on-error: true`, which still shows the step
+        # as failed (visible signal for the F-13 "~10 real runs" re-evaluation) without failing the
+        # job. Re-evaluate after ~10 real (non-help-text) runs on main — if none fail on genuine
+        # a11y/story assertions, drop `continue-on-error` and make this blocking.
+        continue-on-error: true
         env:
           CI: true
           DEBUG: pw:browser*
@@ -467,7 +470,7 @@ jobs:
           npx wait-on http://localhost:6006 --timeout 90000
           pnpm exec test-storybook --url http://localhost:6006 \
             --maxWorkers=2 \
-            --junit || true
+            --junit
 
       # QNBS-v3: always() — upload even on failure; artifacts are the primary debug tool on low-end
       #          local hardware where storybook cannot run. Use the Storybook Debug workflow for

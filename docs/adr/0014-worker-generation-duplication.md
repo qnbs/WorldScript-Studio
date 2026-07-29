@@ -42,9 +42,16 @@ intended long-term target, without ever stating that v1 is deprecated or schedul
 (`duckdbClient.ts`, `localNlpService.ts`, `localEmbeddingService.ts`) onto WorkerBus v2 touches
 live, load-bearing code paths (analytics dual-write, local NLP/embedding inference used across RAG,
 cross-project search, and ProForge's memory bank) and is a properly-scoped migration effort in its
-own right — not a byproduct of a CSP/crypto/doc-truth hardening sprint. Per this sprint's own hard
-rules, a workstream that turns out to be >3× its estimated scope is a STOP-AND-ASK, not something
-to absorb silently.
+own right — not a byproduct of a CSP/crypto/doc-truth hardening sprint.
+
+This sprint's estimated scope was fixing CSP directives, desktop crypto, and doc-truth drift across
+a bounded set of already-identified files (F-01..F-10). Migrating the 3 v1 call sites onto WorkerBus
+v2 additionally requires re-verifying analytics dual-write, RAG/cross-project search, and ProForge's
+memory bank — a different, materially larger surface than anything this sprint scoped, not merely a
+longer version of it. That is this ADR's own STOP-AND-ASK decision (a sprint-local heuristic adopted
+here, not a citation to an external governing policy): a workstream discovered mid-sprint to require
+touching unrelated, independently load-bearing subsystems is deferred and documented rather than
+absorbed silently.
 
 ## Consequences
 

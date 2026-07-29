@@ -29,8 +29,7 @@ async function isOPFSSupported(): Promise<boolean> {
   }
 }
 
-// QNBS-v3 (F-09): self-hosted, same-origin DuckDB-WASM assets — see workers/duckdbWorker.ts for
-// the full rationale (unpinned CDN URL, supply-chain trust, already CSP-dead code).
+// QNBS-v3 (F-09): self-hosted, same-origin DuckDB-WASM assets — see workers/duckdbWorker.ts for the full rationale (unpinned CDN URL, supply-chain trust, already CSP-dead code).
 const DUCKDB_ASSET_BASE = `${import.meta.env.BASE_URL}duckdb/`;
 const SELF_HOSTED_BUNDLES = {
   mvp: {

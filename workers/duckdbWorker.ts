@@ -54,14 +54,7 @@ async function isOPFSSupported(): Promise<boolean> {
   }
 }
 
-// QNBS-v3 (F-09): self-hosted, same-origin DuckDB-WASM assets — copied from the pinned
-// @duckdb/duckdb-wasm npm dependency by scripts/copy-duckdb-assets.mjs (predev/prebuild) into
-// public/duckdb/. Previously loaded from an unversioned third-party CDN, which was (a) a
-// floating "latest" dependency decoupled from the locked npm version, (b) a supply-chain trust
-// dependency in an app that markets "offline-first" and "no data is sent to a server", and (c)
-// already unreachable under worker-src 'self' blob:' CSP (no CDN allowance) — dead code, not
-// just a risk. Absolute path (not relative) so resolution is unambiguous whether constructed
-// from the main thread or this nested worker context.
+// QNBS-v3 (F-09): self-hosted, same-origin DuckDB-WASM assets (scripts/copy-duckdb-assets.mjs) replacing an unversioned CDN that was already dead under worker-src 'self' blob:' CSP; absolute path so resolution is unambiguous from either the main thread or this nested worker context.
 const DUCKDB_ASSET_BASE = `${import.meta.env.BASE_URL}duckdb/`;
 const SELF_HOSTED_BUNDLES = {
   mvp: {

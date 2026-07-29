@@ -143,4 +143,19 @@ describe('scanForUrlDrift', () => {
     const findings = scanForUrlDrift(content, 'FAKE.md', canonical);
     expect(findings).toHaveLength(0);
   });
+
+  // QNBS-v3 (CodeRabbit): locales/it/help.json references the host with no `https://` prefix
+  // (inside a <code> tag) — the scheme must be optional or this exact drift shape goes undetected.
+  it('flags a scheme-less stale Vercel hostname', () => {
+    const content = 'URL di produzione: <code>worldscript-studio-indol.vercel.app</code>';
+    const findings = scanForUrlDrift(content, 'FAKE.json', canonical);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain('worldscript-studio-indol.vercel.app');
+  });
+
+  it('does not flag the canonical hostname without a scheme', () => {
+    const content = 'URL di produzione: <code>worldscript-studio.vercel.app</code>';
+    const findings = scanForUrlDrift(content, 'FAKE.json', canonical);
+    expect(findings).toHaveLength(0);
+  });
 });
