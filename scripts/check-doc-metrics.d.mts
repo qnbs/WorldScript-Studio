@@ -9,3 +9,4 @@ export function scanForDrift(
 ): string[];
 export function getCanonicalProductionUrl(): string;
 export function scanForUrlDrift(content: string, filePath: string, canonicalUrl: string): string[];
+export const VERCEL_URL_PATTERN: RegExp;

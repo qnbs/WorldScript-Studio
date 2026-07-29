@@ -201,6 +201,17 @@ describe('FsSettingsStore — settings + encrypted API keys', () => {
       appStoreRef.current = null;
     }
   });
+
+  // QNBS-v3 (Codecov-flagged missing line): the discard path's own cleanup can itself fail (e.g.
+  // the file is locked or already gone) — asserts that failure is swallowed (logged, not thrown)
+  // rather than surfacing as an unhandled rejection from getApiKey.
+  it('swallows a failure to remove the stale legacy key file (cleanup-of-cleanup)', async () => {
+    const legacyFile = '/app/config/legacyprovider2_key.enc.json';
+    fake.text.set(legacyFile, JSON.stringify({ iv: 'AAAAAAAAAAAAAAAA', data: 'AAAAAAAAAAAAAAAA' }));
+    fake.apis.remove = () => Promise.reject(new Error('EBUSY: file is locked'));
+
+    await expect(store.getApiKey('legacyprovider2')).resolves.toBeNull();
+  });
 });
 
 describe('FsSnapshotStore — snapshots', () => {

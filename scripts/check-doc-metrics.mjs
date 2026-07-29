@@ -89,9 +89,9 @@ export function getActualKeyCount() {
 
 // QNBS-v3 (F-10): the sole source of truth for the canonical production URL — see constants/brand.ts.
 const PRODUCTION_URL_ASSIGNMENT = /export const PRODUCTION_URL = '([^']+)';/;
-// QNBS-v3 (CodeRabbit): scheme optional — locales/it/help.json references the host inside <code>
-// tags with no `https://` prefix, and a scheme-required pattern would silently miss drift there.
-const VERCEL_URL_PATTERN = /(?:https?:\/\/)?worldscript-studio[a-z0-9-]*\.vercel\.app\/?/gi;
+// QNBS-v3 (CodeRabbit): scheme optional (locales/it/help.json has no `https://` prefix) + hostname-boundary lookaround so `evil.com`-suffixed or `not`-prefixed lookalike hosts can't slip through as a "match".
+export const VERCEL_URL_PATTERN =
+  /(?<![a-zA-Z0-9-])(?:https?:\/\/)?worldscript-studio[a-z0-9-]*\.vercel\.app\/?(?![a-zA-Z0-9.-])/gi;
 
 /** Read the canonical production URL from constants/brand.ts (the single source of truth). */
 export function getCanonicalProductionUrl() {
@@ -110,8 +110,7 @@ export function scanForUrlDrift(content, filePath, canonicalUrl) {
   const findings = [];
   const scanned = stripHistoricalSections(content);
   const lines = scanned.split('\n');
-  // QNBS-v3 (CodeRabbit): strip the scheme too, so a scheme-less match still normalizes to the
-  // same key as the (always-schemed) canonical URL instead of always comparing unequal.
+  // QNBS-v3 (CodeRabbit): strip the scheme too, so a scheme-less match normalizes to the same key as the always-schemed canonical URL instead of always comparing unequal.
   const normalize = (u) =>
     u
       .replace(/^https?:\/\//i, '')
@@ -195,11 +194,7 @@ export function scanForDrift(content, filePath, { localeCount, keyCount, latestV
 }
 
 // QNBS-v3: exits 1 on any finding — unlike check-coverage-ratchet.mjs this gate is blocking, since a doc claiming a wrong locale/key/release count is actively misleading, not just an opportunity.
-// QNBS-v3 (F-10, CodeRabbit follow-up): README.md and CLAUDE.md reference the live production URL
-// in prose; the in-app link (components/settings/GeneralSections.tsx) reads the constant directly
-// so it can't drift. locales/it/help.json IS included — it's exactly where the F-10 stale-URL
-// drift actually happened, so excluding it would leave the one file with a real incident history
-// uncovered.
+// QNBS-v3 (F-10, CodeRabbit follow-up): locales/it/help.json IS included — it's exactly where the F-10 stale-URL drift happened; the in-app link reads the constant directly so it can't drift and isn't listed here.
 const URL_CHECK_FILES = ['README.md', 'CLAUDE.md', 'locales/it/help.json'];
 
 function main() {

@@ -9,6 +9,7 @@ import {
   scanForDrift,
   scanForUrlDrift,
   stripHistoricalSections,
+  VERCEL_URL_PATTERN,
 } from '../../scripts/check-doc-metrics.mjs';
 
 describe('stripHistoricalSections', () => {
@@ -157,5 +158,33 @@ describe('scanForUrlDrift', () => {
     const content = 'URL di produzione: <code>worldscript-studio.vercel.app</code>';
     const findings = scanForUrlDrift(content, 'FAKE.json', canonical);
     expect(findings).toHaveLength(0);
+  });
+
+  // QNBS-v3 (CodeRabbit): scanForUrlDrift's finding COUNT can't distinguish "correctly didn't
+  // match" from "matched a truncated substring that happened to equal canonical" — both give 0
+  // findings, silently. Assert the pattern's own match behavior directly instead: without hostname
+  // boundaries it would extract "worldscript-studio.vercel.app" out of these unrelated domains and
+  // treat it as equivalent to canonical, which is the actual bug CodeRabbit flagged.
+  describe('VERCEL_URL_PATTERN hostname boundaries', () => {
+    function matches(text: string) {
+      VERCEL_URL_PATTERN.lastIndex = 0;
+      return VERCEL_URL_PATTERN.test(text);
+    }
+
+    it('does not match a canonical-host-suffixed lookalike domain', () => {
+      expect(matches('https://worldscript-studio.vercel.app.evil.com/login')).toBe(false);
+    });
+
+    it('does not match a canonical-host-prefixed lookalike domain', () => {
+      expect(matches('https://notworldscript-studio.vercel.app/')).toBe(false);
+    });
+
+    it('still matches the plain canonical host', () => {
+      expect(matches('https://worldscript-studio.vercel.app/')).toBe(true);
+    });
+
+    it('still matches the -indol dead-preview host (hyphenated variant)', () => {
+      expect(matches('https://worldscript-studio-indol.vercel.app/')).toBe(true);
+    });
   });
 });
