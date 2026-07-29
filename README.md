@@ -35,10 +35,10 @@ Two always-on hosted builds — open whichever you prefer (identical app, both a
 
 | | Host | Link |
 |---|---|---|
-| 🟢 | **GitHub Pages** _(primary — auto-deployed from `main` on every green build)_ | **🚀 <https://qnbs.github.io/WorldScript-Studio/> 🚀** |
-| ▲ | **Vercel** _(paused mid-term, see `vercel.json`'s `git.deploymentEnabled: false`)_ | <https://worldscript-studio.vercel.app/> |
+| 🟢 | **GitHub Pages** _(always-on mirror — auto-deployed from `main` on every green build)_ | **🚀 <https://qnbs.github.io/WorldScript-Studio/> 🚀** |
+| ▲ | **Vercel** _(primary)_ | <https://worldscript-studio.vercel.app/> |
 
-> **Tip:** Vercel auto-deploys are paused mid-term (undiagnosed build failures on the platform side — see `TODO.md`); the **[GitHub Pages mirror](https://qnbs.github.io/WorldScript-Studio/)** is the current always-on target and stays live and current regardless.
+> **Tip:** If the Vercel build is ever rate-limited, the **[GitHub Pages mirror](https://qnbs.github.io/WorldScript-Studio/)** is always live and current.
 
 ✨ _Try it right now — no installation, no account required. All data is saved securely in your browser's IndexedDB._ ✨
 
