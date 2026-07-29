@@ -39,6 +39,7 @@ This document provides a formal STRIDE threat analysis for WorldScript Studio, m
 | Threat | Mitigation | Code Location |
 |--------|------------|-------------|
 | API key leakage via logs | StructuredLogger sanitization; never log keys | `services/logger.ts:sanitizeLogContext()` |
+| Desktop API key exposure via local file-read access | AES-256-GCM with a PBKDF2-derived key (600 000 iterations, SHA-256, random 32-byte salt per encryption) — fixed 2026-07-29; the prior scheme derived the key from a single unsalted SHA-256 digest of publicly-derivable material (own file's parent path + provider name from the filename + a hardcoded literal), so anyone with read access to `config/<provider>_key.enc.json` could reconstruct the key in one hash operation (F-05/F-06). No migration path for pre-fix files by design — a legacy (unsalted) payload is discarded and the user is prompted to re-enter the key. | `services/fs/fsCore.ts:deriveFileSystemCryptoKey()`, `services/fs/settingsFsStore.ts:getApiKey()` |
 | Manuscript data in IndexedDB | AES-256-GCM at-rest encryption | `services/storage/storageEncryptionService.ts` |
 | Voice audio to cloud | Web Speech API consent gate | `components/voice/VoicePrivacyConsentModal.tsx` |
 | DuckDB analytics unencrypted (SEC-6) | **Bounded by design:** only local metadata is persisted (titles, loglines, character names, codex excerpts, word counts, embeddings) — **never manuscript prose**, and **nothing leaves the device**. Gated by `enableDuckDbAnalytics` **and** the Settings → Privacy "Analytics" opt-out (`isAnalyticsPersistenceAllowed` in `app/listenerMiddleware.ts`); turning the toggle off stops all DuckDB writes + inference telemetry. Full OPFS file / cell-level (`*_enc`) encryption is **deferred to v2.0** — DuckDB-WASM owns the OPFS file write, so transparent file encryption is high-risk for the limited exposure. The `duckdbEncryption.ts` shim has 0 callers by design until then. | `app/listenerMiddleware.ts:isAnalyticsPersistenceAllowed`, `services/duckdb/duckdbEncryption.ts` |
@@ -114,6 +115,22 @@ Goal: Intercept/decrypt collaboration traffic
 │  └─ Mitigation: AES-256-GCM E2E encryption
 └─ OR: Awareness state tampering
    └─ Mitigation: Encrypted awareness payload
+```
+
+### Desktop (Tauri) Local File-Read Attack Tree
+
+```
+Goal: Recover a user's cloud-provider API key from the Tauri desktop install
+├─ OR: Read config/<provider>_key.enc.json directly (local process / malware with user-level FS access)
+│  └─ Mitigation: AES-256-GCM with PBKDF2-derived key (600k iter, random 32-byte salt per file) —
+│     reading the ciphertext no longer reveals the key material; the pre-2026-07-29 scheme derived
+│     the key from data an attacker with file-read access already had (F-05/F-06, fixed)
+├─ OR: Read the IDB-at-rest passphrase sentinel (enableIdbAtRestEncryption)
+│  └─ Mitigation: same PBKDF2 + non-extractable-key pattern; session-scoped in-memory key, never
+│     persisted to disk (`services/storage/storageEncryptionService.ts`)
+└─ OR: Tamper with the CSP to re-enable a weaker script-src and inject a key-exfiltration script
+   └─ Mitigation: strict Tauri connect-src allowlist (no `https:` blanket); CSP is bundled into the
+      signed app binary, not user-editable at runtime without re-signing (ADR-0004, ADR-0013)
 ```
 
 ## Mitigation Mapping

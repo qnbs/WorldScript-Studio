@@ -68,6 +68,7 @@ describe('encryptText / decryptText', () => {
   it('round-trips a value with the same secret', async () => {
     const payload = await encryptText('top secret manuscript', 'passphrase-123');
     expect(payload.iv).toBeTruthy();
+    expect(payload.salt).toBeTruthy();
     expect(payload.data).toBeTruthy();
     await expect(decryptText(payload, 'passphrase-123')).resolves.toBe('top secret manuscript');
   });
@@ -75,6 +76,24 @@ describe('encryptText / decryptText', () => {
   it('fails to decrypt with the wrong secret', async () => {
     const payload = await encryptText('top secret', 'right-key');
     await expect(decryptText(payload, 'wrong-key')).rejects.toBeDefined();
+  });
+
+  // QNBS-v3 (F-05/F-06 fix, 2026-07-29): regression guard for the PBKDF2 + random-salt derivation
+  // replacing the prior unsalted single-SHA-256 scheme.
+  it('produces a different ciphertext, iv, and salt on every encryption of the same secret+plaintext', async () => {
+    const a = await encryptText('same plaintext', 'same-secret-material');
+    const b = await encryptText('same plaintext', 'same-secret-material');
+    expect(a.salt).not.toBe(b.salt);
+    expect(a.iv).not.toBe(b.iv);
+    expect(a.data).not.toBe(b.data);
+    // Both must still independently decrypt correctly with their own salt/iv.
+    await expect(decryptText(a, 'same-secret-material')).resolves.toBe('same plaintext');
+    await expect(decryptText(b, 'same-secret-material')).resolves.toBe('same plaintext');
+  });
+
+  it('rejects a legacy (pre-2026-07-29) payload with no salt field', async () => {
+    const legacyPayload = { iv: 'AAAAAAAAAAAAAAAA', data: 'AAAAAAAAAAAAAAAA' };
+    await expect(decryptText(legacyPayload, 'any-secret')).rejects.toThrow(/legacy/i);
   });
 });
 

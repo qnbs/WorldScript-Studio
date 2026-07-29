@@ -302,8 +302,7 @@ All project data, snapshots, and settings stored in IndexedDB can be encrypted a
 
 - **AES-256-GCM** with a PBKDF2-derived key (600 000 iterations, SHA-256, 32-byte random salt).
 - Gated behind `featureFlags.enableIdbAtRestEncryption` (on by default since v1.23; the passphrase unlock UX is complete — Settings → Privacy).
-- Web build: passphrase-entry unlock screen on cold start (session-scoped in-memory key).
-- Tauri build: transparent OS-keychain protection via `tauri-plugin-stronghold` (no user friction).
+- Same passphrase-entry unlock screen (`IdbUnlockModal`) on cold start, session-scoped in-memory key, on **both** the web build and the Tauri desktop build — Tauri's WebView uses the same IndexedDB-backed storage path, not an OS keychain. (No `tauri-plugin-stronghold` or equivalent OS-keychain integration ships today — see the API-key encryption note below for the desktop-specific mechanism that does exist.)
 - GDPR-compliant: encrypted blobs are unreadable without the passphrase, even from the browser profile directory.
 
 ### 🔐 Encrypted Library Backup
@@ -314,6 +313,20 @@ One-click encrypted export of your entire project library from **Settings → Da
 - `vault.bin` is encrypted with **AES-256-GCM** — the decryption key is derived from your chosen passphrase using PBKDF2.
 - No plaintext project data ever leaves your device unencrypted.
 - Import on any device using the same passphrase to restore your full library.
+
+### 🔑 Encryption — which mechanism protects what
+
+There is no single blanket "encrypted at rest" guarantee — four independent mechanisms protect
+different data, with different key material:
+
+| Data | Mechanism | Where |
+|------|-----------|-------|
+| **Browser BYOK API key** | Random, non-extractable AES-256-GCM key generated via `crypto.subtle.generateKey()` — no passphrase, nothing to derive | `services/storage/idbKeyStore.ts` |
+| **Browser IDB-at-rest data** _(opt-in, B-1)_ | User passphrase → PBKDF2 (600 000 iterations, SHA-256, random 32-byte salt) → AES-256-GCM, non-extractable key | `services/storage/storageEncryptionService.ts` |
+| **Desktop (Tauri) BYOK API key** | Install-scoped secret material → PBKDF2 (600 000 iterations, SHA-256, random 32-byte salt) → AES-256-GCM, non-extractable key | `services/fs/fsCore.ts`, `services/fs/settingsFsStore.ts` |
+| **Library backup vault** | User passphrase → PBKDF2 (600 000 iterations, SHA-256) → AES-256-GCM | `services/libraryBackupService.ts` |
+
+See [`docs/SECURITY-THREAT-MODEL.md`](docs/SECURITY-THREAT-MODEL.md) for the full threat-model mapping.
 
 ### 💾 Robust Offline-First Data Management
 
@@ -453,7 +466,7 @@ The Settings → AI panel shows a live GPU status badge with adapter details and
 | **AI Facade**        | `packages/ai-core` workspace package                     | Unified local inference interface; sanitizeForPrompt truncation      |
 | **Storage**          | Dual IndexedDB v8 (`StateDB` + `DataDB`)                 | Split state/asset persistence; LZ-String compression + AES-256-GCM  |
 | **Collaboration**    | Yjs + `packages/collab-transport` (y-webrtc vendor fork)  | P2P CRDT editing; RTCDataChannel E2E AES-256-GCM; PBKDF2 600 000 iter |
-| **Encryption**       | Web Crypto API (AES-256-GCM + PBKDF2)                    | API-key encryption at rest; IDB at-rest encryption; library backup vault |
+| **Encryption**       | Web Crypto API (AES-256-GCM; PBKDF2 where a passphrase is involved) | 4 independent mechanisms — see [Encryption — which mechanism protects what](#-encryption--which-mechanism-protects-what) |
 | **PDF Export**       | jsPDF                                                     | Client-side, configurable PDF document generation                    |
 | **Document Export**  | docx + jszip                                              | Word-compatible `.docx` generation (lazy-loaded)                     |
 | **PWA**              | Service Worker + Web App Manifest v3                     | Offline support, installability, Workbox chunking                    |
@@ -523,11 +536,11 @@ WorldScript Studio supports local-only AI (no API key) as well as BYOK cloud pro
 
 1. **Get your key** — e.g. at [Google AI Studio](https://aistudio.google.com/app/apikey) (free tier available)
 2. **Open Settings** → AI Provider → select your provider
-3. **Enter your API key** — encrypted with AES-256-GCM and stored only in your browser's IndexedDB; never transmitted except to the provider you select
+3. **Enter your API key** — encrypted with AES-256-GCM (web build: stored in your browser's IndexedDB; desktop build: stored on disk, see the encryption breakdown below); never transmitted except to the provider you select
 
 **Security best practices:**
 - ✅ Your key never leaves your device in plaintext
-- ✅ Encrypted at rest via the Web Crypto API
+- ✅ Encrypted at rest via the Web Crypto API — see [Encryption — which mechanism protects what](#-encryption--which-mechanism-protects-what) for the exact mechanism per platform
 - 🔒 **Recommended:** Restrict your Gemini key to `*.github.io` in Google AI Studio
 
 #### Option B: Ollama (local server)
