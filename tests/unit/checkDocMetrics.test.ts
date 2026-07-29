@@ -4,7 +4,13 @@
  * QNBS-v3: protects the drift gate from historical-section regressions — an untested exclusion heuristic would turn it into noise.
  */
 import { describe, expect, it } from 'vitest';
-import { scanForDrift, stripHistoricalSections } from '../../scripts/check-doc-metrics.mjs';
+import {
+  getCanonicalProductionUrl,
+  scanForDrift,
+  scanForUrlDrift,
+  stripHistoricalSections,
+  VERCEL_URL_PATTERN,
+} from '../../scripts/check-doc-metrics.mjs';
 
 describe('stripHistoricalSections', () => {
   it('blanks a Keep-a-Changelog-style `## [x.y.z]` section', () => {
@@ -95,5 +101,90 @@ describe('scanForDrift', () => {
     const content = '## Upcoming — v2.0 (PLANNED)';
     const findings = scanForDrift(content, 'FAKE.md', actual);
     expect(findings).toHaveLength(0);
+  });
+});
+
+// QNBS-v3 (F-10): regression guard for the dead worldscript-studio-indol.vercel.app URL that had
+// leaked into the in-app link and the Italian locale — this is the check that would have caught it.
+describe('getCanonicalProductionUrl', () => {
+  it('reads a real https://….vercel.app/ URL from constants/brand.ts', () => {
+    const url = getCanonicalProductionUrl();
+    expect(url).toMatch(/^https:\/\/worldscript-studio[a-z0-9-]*\.vercel\.app\/$/);
+  });
+});
+
+describe('scanForUrlDrift', () => {
+  const canonical = 'https://worldscript-studio.vercel.app/';
+
+  it('flags a Vercel URL that does not match the canonical one', () => {
+    const content = 'Production: https://worldscript-studio-indol.vercel.app/';
+    const findings = scanForUrlDrift(content, 'FAKE.md', canonical);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain('worldscript-studio-indol.vercel.app');
+  });
+
+  it('does not flag the canonical URL', () => {
+    const content = `Production: ${canonical}`;
+    const findings = scanForUrlDrift(content, 'FAKE.md', canonical);
+    expect(findings).toHaveLength(0);
+  });
+
+  it('does not flag the canonical URL without a trailing slash', () => {
+    const content = 'Production: https://worldscript-studio.vercel.app';
+    const findings = scanForUrlDrift(content, 'FAKE.md', canonical);
+    expect(findings).toHaveLength(0);
+  });
+
+  it('ignores a mismatched URL inside a historical section', () => {
+    const content = [
+      '## [1.20.0]',
+      '',
+      'Was at https://worldscript-studio-old-preview.vercel.app/',
+    ].join('\n');
+    const findings = scanForUrlDrift(content, 'FAKE.md', canonical);
+    expect(findings).toHaveLength(0);
+  });
+
+  // QNBS-v3 (CodeRabbit): locales/it/help.json references the host with no `https://` prefix
+  // (inside a <code> tag) — the scheme must be optional or this exact drift shape goes undetected.
+  it('flags a scheme-less stale Vercel hostname', () => {
+    const content = 'URL di produzione: <code>worldscript-studio-indol.vercel.app</code>';
+    const findings = scanForUrlDrift(content, 'FAKE.json', canonical);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain('worldscript-studio-indol.vercel.app');
+  });
+
+  it('does not flag the canonical hostname without a scheme', () => {
+    const content = 'URL di produzione: <code>worldscript-studio.vercel.app</code>';
+    const findings = scanForUrlDrift(content, 'FAKE.json', canonical);
+    expect(findings).toHaveLength(0);
+  });
+
+  // QNBS-v3 (CodeRabbit): scanForUrlDrift's finding COUNT can't distinguish "correctly didn't
+  // match" from "matched a truncated substring that happened to equal canonical" — both give 0
+  // findings, silently. Assert the pattern's own match behavior directly instead: without hostname
+  // boundaries it would extract "worldscript-studio.vercel.app" out of these unrelated domains and
+  // treat it as equivalent to canonical, which is the actual bug CodeRabbit flagged.
+  describe('VERCEL_URL_PATTERN hostname boundaries', () => {
+    function matches(text: string) {
+      VERCEL_URL_PATTERN.lastIndex = 0;
+      return VERCEL_URL_PATTERN.test(text);
+    }
+
+    it('does not match a canonical-host-suffixed lookalike domain', () => {
+      expect(matches('https://worldscript-studio.vercel.app.evil.com/login')).toBe(false);
+    });
+
+    it('does not match a canonical-host-prefixed lookalike domain', () => {
+      expect(matches('https://notworldscript-studio.vercel.app/')).toBe(false);
+    });
+
+    it('still matches the plain canonical host', () => {
+      expect(matches('https://worldscript-studio.vercel.app/')).toBe(true);
+    });
+
+    it('still matches the -indol dead-preview host (hyphenated variant)', () => {
+      expect(matches('https://worldscript-studio-indol.vercel.app/')).toBe(true);
+    });
   });
 });

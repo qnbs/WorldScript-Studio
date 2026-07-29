@@ -29,23 +29,23 @@ async function isOPFSSupported(): Promise<boolean> {
   }
 }
 
+// QNBS-v3 (F-09): self-hosted, same-origin DuckDB-WASM assets — see workers/duckdbWorker.ts for the full rationale (unpinned CDN URL, supply-chain trust, already CSP-dead code).
+const DUCKDB_ASSET_BASE = `${import.meta.env.BASE_URL}duckdb/`;
+const SELF_HOSTED_BUNDLES = {
+  mvp: {
+    mainModule: `${DUCKDB_ASSET_BASE}duckdb-mvp.wasm`,
+    mainWorker: `${DUCKDB_ASSET_BASE}duckdb-browser-mvp.worker.js`,
+  },
+  eh: {
+    mainModule: `${DUCKDB_ASSET_BASE}duckdb-eh.wasm`,
+    mainWorker: `${DUCKDB_ASSET_BASE}duckdb-browser-eh.worker.js`,
+  },
+};
+
 async function initDuckDb(): Promise<void> {
   const { AsyncDuckDB, selectBundle, ConsoleLogger } = await getDuckDb();
 
-  const JSDELIVR_BUNDLES = {
-    mvp: {
-      mainModule: 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm',
-      mainWorker:
-        'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js',
-    },
-    eh: {
-      mainModule: 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm/dist/duckdb-eh.wasm',
-      mainWorker:
-        'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js',
-    },
-  };
-
-  const bundle = await selectBundle(JSDELIVR_BUNDLES);
+  const bundle = await selectBundle(SELF_HOSTED_BUNDLES);
   const logger = new ConsoleLogger();
   if (!bundle.mainWorker) throw new Error('DuckDB bundle has no worker URL');
   const worker = new Worker(bundle.mainWorker);

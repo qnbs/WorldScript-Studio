@@ -7,6 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+<!-- QNBS-v3 (CodeRabbit): kept under [Unreleased], not a dated [1.24.2] heading — PR #284 is open/CI-green but not yet merged, tagged, or released; package.json/tauri.conf.json are pre-bumped to 1.24.2 as prep for that tag, matching this repo's existing version-bump-before-tag convention, but the CHANGELOG entry itself must not claim a release date until the tag actually exists. -->
+
+> CSP functional-truth, desktop crypto, and documentation-truth hardening sprint
+> (`PROMPT-WSS-v1.24.x`). Headline fix: `script-src` shipped without `'wasm-unsafe-eval'` for two
+> months (2026-05-27 → 2026-07-29), silently blocking `WebAssembly.instantiate` in every deployed
+> Chromium browser — the entire advertised local-inference stack (WebLLM, ONNX Runtime Web,
+> Transformers.js, DuckDB-WASM, Whisper-STT, Kokoro-TTS) never functioned in production. No gate
+> caught it because the only CSP tests that existed checked cross-surface consistency, never
+> functional correctness. See [`docs/adr/0013-csp-wasm-and-blob-frames.md`](docs/adr/0013-csp-wasm-and-blob-frames.md)
+> and [`docs/audit/WS-RUN-LOG-2026-07-29.md`](docs/audit/WS-RUN-LOG-2026-07-29.md) for the full record.
+
+### Security
+
+- **F-01/F-02 — CSP functional truth.** `'wasm-unsafe-eval'` (never the broader `'unsafe-eval'`)
+  and `frame-src 'self' blob:` added to all 5 deployment surfaces (`index.html`, `vercel.json`,
+  `public/_headers`, `nginx.conf` ×3, `src-tauri/tauri.conf.json`). The unhashed inline
+  `aurora-disabled` script that shipped alongside the broken CSP moved into `index.tsx` as a
+  same-origin module. New 3-layer test architecture (`tests/unit/cspCorrectness.test.ts` + a
+  hardened `scripts/smoke-prod-build.mjs` with real CSP-violation and WASM-instantiate probes)
+  so this class of defect can't silently recur.
+- **F-05/F-06 — desktop API-key encryption.** `services/fs/fsCore.ts`'s key derivation used a
+  single unsalted SHA-256 digest of publicly-derivable material — fixed to PBKDF2 (600,000
+  iterations) + a random 32-byte salt, matching the existing `storageEncryptionService.ts`
+  pattern. Pre-existing key files are discarded (not migrated) with a one-time notification
+  prompting re-entry.
+- **F-08 — Tauri/web `connect-src` completeness.** Added LanguageTool's default self-hosted port
+  (missing on **all 5** surfaces, not just Tauri) and the Hugging Face hosts WebLLM/Transformers.js
+  actually resolve models from, including the Xet CDN bridge (`us.aws.cdn.hf.co`) that real model
+  weight downloads redirect to — traced empirically, not assumed.
+- **F-09 — DuckDB-WASM self-hosted.** Replaced an unversioned, unreachable (already CSP-dead)
+  third-party CDN with assets copied from the pinned `@duckdb/duckdb-wasm` npm dependency at build
+  time (`scripts/copy-duckdb-assets.mjs`), never committed to git.
+
+### Fixed
+
+- **F-07 — doc truth-up.** README/CLAUDE.md no longer make a blanket "encrypted at rest" claim;
+  a fabricated `tauri-plugin-stronghold` reference (no trace of that dependency anywhere in the
+  repo) removed and replaced with the actual mechanism per platform.
+- **F-10 — canonical production URL unified.** A dead preview-deployment domain
+  (`worldscript-studio-indol.vercel.app`, confirmed 404) had drifted into the in-app link and the
+  Italian locale; both now reference a single `PRODUCTION_URL` constant. New drift gate in
+  `scripts/check-doc-metrics.mjs`.
+- **F-12 — CI Storybook deduplication + a genuine broken test-runner invocation.** Storybook was
+  built 3× per CI run; deduped to 1×. While evaluating whether the Storybook test-runner's
+  `|| true` could be made blocking, found the invocation was calling flags
+  (`--max-workers`/`--retries`/`--screenshot-on-failure`) the installed CLI version doesn't
+  support — every prior run failed on argument parsing before executing a single story, silently
+  turned green by `|| true`. Fixed the invocation and moved the non-blocking behavior to
+  step-level `continue-on-error: true`, which still surfaces genuine failures in the Actions UI.
+- **F-13 — coverage ratchet raised** to CI-measured values (L79/F72/B65/S77, from L74/F67/B60/S72).
+
+### Documentation
+
+- **F-04 — CSP gate governance.** `docs/CI.md` gains a "which layer catches which failure class"
+  table and a post-mortem on why cross-surface-consistency tests alone were never sufficient.
+- **F-14 — worker-generation duplication documented** (`docs/adr/0014-worker-generation-duplication.md`).
+  Both a v1 and a WorkerBus-v2 generation of the DuckDB and local-inference workers are live via
+  real call chains; consolidating them is a properly-scoped migration effort of its own, tracked
+  but out of scope for this sprint.
+
 ## [1.24.1] — 2026-07-28
 
 > Local-AI reliability (desktop Ollama/LM Studio/vLLM discovery, misleading browser status badge),

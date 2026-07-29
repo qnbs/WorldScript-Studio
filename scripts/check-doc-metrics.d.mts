@@ -7,3 +7,6 @@ export function scanForDrift(
   filePath: string,
   actual: { localeCount: number; keyCount: number; latestVersion: string | null },
 ): string[];
+export function getCanonicalProductionUrl(): string;
+export function scanForUrlDrift(content: string, filePath: string, canonicalUrl: string): string[];
+export const VERCEL_URL_PATTERN: RegExp;

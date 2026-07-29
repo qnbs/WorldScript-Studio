@@ -37,6 +37,7 @@ vi.mock('@tauri-apps/api/path', () => ({
   join: (...parts: string[]) => fsHolder.current.join(...parts),
 }));
 
+import { appStoreRef } from '../../../../app/storeRef';
 import { FsProjectStore } from '../../../../services/fs/projectFsStore';
 
 interface FakeFs {
@@ -168,6 +169,48 @@ describe('FsSettingsStore — settings + encrypted API keys', () => {
 
   it('returns null when decrypting a missing key', async () => {
     expect(await store.getApiKey('anthropic')).toBeNull();
+  });
+
+  // QNBS-v3 (F-05/F-06 fix, 2026-07-29): a pre-2026-07-29 key file (unsalted single-SHA-256
+  // scheme) is discarded, not migrated (locked decision) — this asserts the discard path returns
+  // null without throwing, removes the stale file, and surfaces a one-time notification rather
+  // than failing silently.
+  it('discards a legacy unsalted key file, removes it, and notifies instead of throwing', async () => {
+    const dispatch = vi.fn();
+    appStoreRef.current = { getState: vi.fn(), dispatch } as never;
+    try {
+      const legacyFile = '/app/config/legacyprovider_key.enc.json';
+      fake.text.set(
+        legacyFile,
+        JSON.stringify({ iv: 'AAAAAAAAAAAAAAAA', data: 'AAAAAAAAAAAAAAAA' }),
+      );
+
+      const result = await store.getApiKey('legacyprovider');
+
+      expect(result).toBeNull();
+      expect(fake.text.has(legacyFile)).toBe(false);
+      expect(dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            type: 'info',
+            title: expect.stringContaining('API Key Reset'),
+          }),
+        }),
+      );
+    } finally {
+      appStoreRef.current = null;
+    }
+  });
+
+  // QNBS-v3 (Codecov-flagged missing line): the discard path's own cleanup can itself fail (e.g.
+  // the file is locked or already gone) — asserts that failure is swallowed (logged, not thrown)
+  // rather than surfacing as an unhandled rejection from getApiKey.
+  it('swallows a failure to remove the stale legacy key file (cleanup-of-cleanup)', async () => {
+    const legacyFile = '/app/config/legacyprovider2_key.enc.json';
+    fake.text.set(legacyFile, JSON.stringify({ iv: 'AAAAAAAAAAAAAAAA', data: 'AAAAAAAAAAAAAAAA' }));
+    fake.apis.remove = () => Promise.reject(new Error('EBUSY: file is locked'));
+
+    await expect(store.getApiKey('legacyprovider2')).resolves.toBeNull();
   });
 });
 

@@ -5,7 +5,8 @@
 //           offline fallback, push notifications, share target
 // ============================================================
 
-const APP_VERSION   = '1.24.1';
+// QNBS-v3 (CodeRabbit): version bump auto-synced from package.json by scripts/sync-sw-version.mjs — every CACHE_STATIC/CACHE_DYNAMIC name changes too, so this alone invalidates all prior caches on next activate.
+const APP_VERSION   = '1.24.2';
 const CACHE_STATIC  = `worldscript-static-v${APP_VERSION}`;
 const CACHE_DYNAMIC = `worldscript-dynamic-v${APP_VERSION}`;
 const CACHE_IMAGES  = `worldscript-images-v${APP_VERSION}`;

@@ -77,6 +77,11 @@ graphify-out/cost.json
 public/locales/*/*.json
 !public/locales/*/bundle.json
 
+# Self-hosted DuckDB-WASM runtime assets (F-09) — ~75 MB, copied from the pinned
+# @duckdb/duckdb-wasm npm dependency by scripts/copy-duckdb-assets.mjs (predev/prebuild).
+# Never commit: these are build artifacts of an existing dependency, not source.
+public/duckdb/
+
 # Claude Code local config and Lighthouse CI results
 .claude/
 .lighthouseci/
