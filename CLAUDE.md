@@ -406,7 +406,7 @@ Feature-specific implementation patterns (Plot Board, ProForge Pipeline, scene-l
 
 See `AUDIT.md` and `TODO.md`. Key items:
 - `app/listenerMiddleware.ts` — redux-undo `StateWithHistory` typing at boundaries.
-- `workers/v2/inference.worker.ts` (v1 deleted, ADR-0015) — `@huggingface/transformers` v3 path alias in `tsconfig.json`; if alias breaks, restore `@ts-expect-error`.
+- `workers/v2/inference.worker.ts` (v1 deleted, ADR-0015) — `@huggingface/transformers` v3 path alias in `tsconfig.json`; if the alias breaks, fix the path alias or the package's type declaration directly — do not suppress with `@ts-expect-error` (conflicts with the suppression-ratchet policy above).
 - **`WorkerBus.runTask()` doesn't enforce `timeoutMs`** — confirmed via inspection, no timer on either the bus or worker-side rejects a hung task. Pre-existing, tracked in ADR-0015/TODO.md, not yet fixed.
 - **DS-5:** Delete legacy bridge block from `index.css` — deferred until DS-1 verified in production.
 - **B-1 (IDB encryption):** Passphrase UX complete (`IdbUnlockModal`, `PassphraseModal`). Actual IDB read/write integration for stores is Phase 4 (service-layer only currently).
