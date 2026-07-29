@@ -10,8 +10,8 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ## v1.24.2 — CSP/crypto/doc-truth hardening (2026-07-29)
 
-> **Status: PR #284 open, CI green (Security Audit / Build / Quality Gate ×2 — all required checks
-> pass), not yet merged.** Full record: [`docs/audit/WS-RUN-LOG-2026-07-29.md`](docs/audit/WS-RUN-LOG-2026-07-29.md),
+> **Status: Merged (PR #284) and released as `v1.24.2` on 2026-07-29.** Full record:
+> [`docs/audit/WS-RUN-LOG-2026-07-29.md`](docs/audit/WS-RUN-LOG-2026-07-29.md),
 > [`docs/adr/0013-csp-wasm-and-blob-frames.md`](docs/adr/0013-csp-wasm-and-blob-frames.md),
 > [`docs/adr/0014-worker-generation-duplication.md`](docs/adr/0014-worker-generation-duplication.md).
 > All 14 findings (F-01…F-14) code-complete — see `AUDIT.md`'s new audit section for the finding table.
