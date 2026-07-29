@@ -70,7 +70,7 @@ Conventional Commits format: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `ch
 
 WorldScript Studio is an offline-first PWA — a React 19 SPA with Google Gemini AI, IndexedDB persistence, and optional Tauri desktop packaging. No backend; API keys are entered in the UI and encrypted at rest via one of four platform-specific mechanisms (no single blanket guarantee) — see README § [Encryption — which mechanism protects what](README.md#-encryption--which-mechanism-protects-what).
 
-**Live:** `https://worldscript-studio.vercel.app/` (Vercel, primary) · GitHub Pages: `https://qnbs.github.io/WorldScript-Studio/` · Cloudflare Pages: `wrangler.toml` · Vercel: `vercel.json`.
+**Live:** GitHub Pages (primary): `https://qnbs.github.io/WorldScript-Studio/` · Vercel: `https://worldscript-studio.vercel.app/` (auto-deploys **paused mid-term** via `vercel.json`'s `git.deploymentEnabled: false` — undiagnosed platform-side build failures, see `TODO.md`) · Cloudflare Pages: `wrangler.toml`.
 
 ### Directory map
 

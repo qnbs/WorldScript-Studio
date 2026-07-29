@@ -8,6 +8,22 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ---
 
+## Infra — Vercel deployments paused mid-term (2026-07-29)
+
+- ⬜ **Re-enable Vercel auto-deploy** — `vercel.json`'s `git.deploymentEnabled` set to `false`
+  after 2 consecutive Vercel preview-deployment failures (different deployment IDs, different
+  commits, both with only a generic "Deployment has failed" message — `npx vercel inspect
+  <id> --logs` requires an interactive Vercel account login not available in this session, and the
+  GitHub Checks API surfaces no further detail). The exact same commits build cleanly with
+  `pnpm run build` locally, so this looks Vercel-platform-side rather than a code regression.
+  Vercel is **not** a required branch-protection check, so this doesn't block any PR merge — it was
+  paused purely to stop the noisy, undiagnosable failure status. GitHub Pages is the primary
+  always-on mirror in the meantime (README.md/CLAUDE.md updated). **Re-enable** by flipping
+  `deploymentEnabled` back to `true` (or removing the `git` block) once someone with Vercel
+  dashboard/CLI access diagnoses the root cause.
+
+---
+
 ## v1.24.2 — CSP/crypto/doc-truth hardening (2026-07-29)
 
 > **Status: Merged (PR #284) and released as `v1.24.2` on 2026-07-29.** Full record:

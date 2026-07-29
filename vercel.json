@@ -1,5 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": false
+  },
   "installCommand": "pnpm install",
   "buildCommand": "NODE_OPTIONS=--max-old-space-size=3072 pnpm run build:edge",
   "outputDirectory": "dist",
