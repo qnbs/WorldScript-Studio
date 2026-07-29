@@ -39,6 +39,28 @@ sequence below both shipped in v1.24.0/v1.24.1 — see the RELEASED sections):
 
 ---
 
+## v1.24.2 — CSP / Crypto / Doc-Truth Hardening (PR #284 OPEN, 2026-07-29)
+
+**Status:** Code complete, CI green (all 4 required checks pass), **not yet merged or tagged** —
+tag creation and GitHub Release publishing are maintainer actions. See [`CHANGELOG.md`](CHANGELOG.md)
+`[1.24.2]`, [`AUDIT.md`](AUDIT.md) "Audit 2026-07-29 — CSP / Crypto / Truth" for the full finding
+table and post-mortem, and [`docs/audit/WS-RUN-LOG-2026-07-29.md`](docs/audit/WS-RUN-LOG-2026-07-29.md)
+for the per-workstream execution record.
+
+- CSP functional-truth restored: `'wasm-unsafe-eval'` had been missing on all 5 deployment surfaces
+  for two months, silently blocking the entire advertised local-inference stack (WebLLM, ONNX
+  Runtime Web, Transformers.js, DuckDB-WASM, Whisper-STT, Kokoro-TTS) in every deployed Chromium
+  browser. New 3-layer CSP test architecture so this class of defect can't recur silently.
+- Desktop API-key encryption hardened from an unsalted single-SHA-256 scheme to PBKDF2 600k + salt.
+- DuckDB-WASM self-hosted, replacing an unversioned, already-unreachable third-party CDN.
+- Doc-truth fixes (fabricated OS-keychain claim removed, canonical production URL unified with a
+  new drift gate) and CI housekeeping (Storybook build dedup + a genuinely broken test-runner
+  invocation fixed; coverage ratchet raised to CI-measured values).
+- Worker-generation duplication (v1 vs. WorkerBus v2, both live) documented as tracked debt —
+  consolidation is out of scope here, deferred to a dedicated migration sprint.
+
+---
+
 ## v1.24.1 — Local-AI Reliability, Heuristic Fallbacks, LanguageTool (RELEASED 2026-07-28)
 
 **Status:** ✅ Released — see [`CHANGELOG.md`](CHANGELOG.md) `[1.24.1]`.

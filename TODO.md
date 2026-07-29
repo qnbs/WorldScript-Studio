@@ -8,6 +8,37 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ---
 
+## v1.24.2 — CSP/crypto/doc-truth hardening (2026-07-29)
+
+> **Status: PR #284 open, CI green (Security Audit / Build / Quality Gate ×2 — all required checks
+> pass), not yet merged.** Full record: [`docs/audit/WS-RUN-LOG-2026-07-29.md`](docs/audit/WS-RUN-LOG-2026-07-29.md),
+> [`docs/adr/0013-csp-wasm-and-blob-frames.md`](docs/adr/0013-csp-wasm-and-blob-frames.md),
+> [`docs/adr/0014-worker-generation-duplication.md`](docs/adr/0014-worker-generation-duplication.md).
+> All 14 findings (F-01…F-14) code-complete — see `AUDIT.md`'s new audit section for the finding table.
+
+- ✅ **CSP functional truth** — `'wasm-unsafe-eval'` + `frame-src blob:` on all 5 surfaces; the
+  local-inference stack (WebLLM/ONNX/Transformers.js/DuckDB-WASM/Whisper/Kokoro) had been silently
+  broken in production for two months. New 3-layer CSP test architecture.
+- ✅ **Desktop API-key encryption** — PBKDF2 600k + random salt, replacing an unsalted single-SHA-256 scheme.
+- ✅ **DuckDB-WASM self-hosted** — replaced an unversioned, already-CSP-dead third-party CDN.
+- ✅ **Doc-truth fixes** — fabricated `tauri-plugin-stronghold` claim removed; canonical Vercel URL unified with a new drift gate; CI Storybook 3×→1× + a genuinely broken test-runner invocation fixed.
+- ✅ **Coverage ratchet** raised to CI-measured values (L79/F72/B65/S77).
+- ⬜ **Worker-generation consolidation (F-14, new this sprint)** — both a v1 and a WorkerBus-v2
+  generation of the DuckDB and local-inference workers are live simultaneously
+  (`docs/adr/0014-worker-generation-duplication.md`). Needs a dedicated migration sprint: decide
+  the target generation (v2, per `CLAUDE.md`'s own architecture framing), plan the 3 v1 call-site
+  migrations (`services/duckdb/duckdbClient.ts`, `services/ai/localNlpService.ts`,
+  `services/ai/localEmbeddingService.ts`), then remove the v1 worker files. Until then, any worker-
+  level fix (CSP, protocol, error handling) must be checked against **both** generations.
+- ⬜ **Pre-existing, unrelated E2E a11y finding surfaced during this sprint's CI runs** —
+  `tests/e2e/a11y.spec.ts` "writer version control panel has no serious axe violations" fails
+  deterministically (`color-contrast` 4.47 vs. 4.5 required, `--sc-accent` `#92400e` over its own
+  `/20`-opacity background `#e0cab0`) on both `chromium` and `Mobile Chrome`. Confirmed unrelated
+  to the CSP/crypto sprint (no CSS/Tailwind/component files touched by that work). Not a required
+  status check today, so it didn't block merge — needs a design-token fix as its own small PR.
+- ⬜ **Tag `v1.24.2` + publish the GitHub Release** — maintainer action (STOP-AND-ASK per this
+  sprint's own hard rules); the version-bump commit is in, the tag/release is not.
+
 
 ## v1.24 — Post-release feature-flag refinement (2026-06-21)
 
