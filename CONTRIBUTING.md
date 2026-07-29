@@ -4,6 +4,7 @@ Thank you for your interest in contributing to WorldScript Studio — an AI-powe
 
 ## Table of Contents
 
+- [Code of Conduct](#code-of-conduct)
 - [Development Setup](#development-setup)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
@@ -16,6 +17,10 @@ Thank you for your interest in contributing to WorldScript Studio — an AI-powe
 - [Pull Request Process](#pull-request-process)
 
 ---
+
+## Code of Conduct
+
+This project follows the [Contributor Covenant Code of Conduct](.github/CODE_OF_CONDUCT.md). By participating, you are expected to uphold it — report unacceptable behavior via [GitHub Private Vulnerability Reporting](https://github.com/qnbs/WorldScript-Studio/security/advisories/new), the same private channel documented in [`.github/SECURITY.md`](.github/SECURITY.md).
 
 ## Development Setup
 
@@ -122,7 +127,7 @@ WorldScript-Studio/
 ├── contexts/         # React contexts per view + I18n + CommandExecutor
 ├── features/         # Redux slices (project, settings, writer, status, featureFlags, plotBoard, progressTracker, sceneComments)
 ├── hooks/            # Custom React hooks per view + shared hooks (e.g. useGlobalKeyboardShortcuts)
-├── locales/          # i18n source JSON — 17 locales: de/en/es/fr/it core + ar/he/fa RTL + el/ja/pt/zh/fi/sv/hu/is/eu Beta (key parity vs en)
+├── locales/          # i18n source JSON — 19 locales: de/en/es/fr/it core + ar/he/fa RTL + el/ja/pt/zh/fi/sv/hu/is/eu/ru/ko Beta (key parity vs en)
 ├── services/         # Adapters: AI, DB, storage, collaboration, EPUB; commands/, keyboard/, help/, settingsExchange
 ├── stories/          # Storybook stories for UI components
 ├── docs/             # Deep-dive docs (CI reference, history, graphify)

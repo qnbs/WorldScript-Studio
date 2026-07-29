@@ -4,8 +4,8 @@
 > terminology reference in [`I18N-GLOSSARY.md`](I18N-GLOSSARY.md) and the rollout notes in
 > [`LANGUAGE-EXPANSION-2026.md`](LANGUAGE-EXPANSION-2026.md).
 
-WorldScript Studio ships **17 locales**: `de` `en` `es` `fr` `it` (core, fully translated) ·
-`ar` `he` `fa` (RTL Beta) · `ja` `zh` `pt` `el` `fi` `sv` `hu` `is` `eu` (Beta). Beta locales are
+WorldScript Studio ships **19 locales**: `de` `en` `es` `fr` `it` (core, fully translated) ·
+`ar` `he` `fa` (RTL Beta) · `ja` `zh` `pt` `el` `fi` `sv` `hu` `is` `eu` `ru` `ko` (Beta). Beta locales are
 machine-translated (glossary-anchored) and await human native review.
 
 ---
@@ -14,12 +14,12 @@ machine-translated (glossary-anchored) and await human native review.
 
 - **No i18next.** A custom React context (`contexts/I18nContext.tsx`) is the runtime. Components read
   strings via `const { t } = useTranslation()` and call `t('module.key.path')`.
-- **Source of truth:** `locales/<lang>/<module>.json` — **20 modules** (`common`, `settings`,
-  `writer`, `manuscript`, `copilot`, `dashboard`, `outline`, `worlds`, `characters`, `export`,
-  `help`, `tour`, `portal`, `templates`, `sidebar`, `tags`, `objects`, `mindmap`, `lora`,
+- **Source of truth:** `locales/<lang>/<module>.json` — **21 modules** (`common`, `settings`,
+  `writer`, `manuscript`, `copilot`, `dashboard`, `desktop`, `outline`, `worlds`, `characters`,
+  `export`, `help`, `tour`, `portal`, `templates`, `sidebar`, `tags`, `objects`, `mindmap`, `lora`,
   `characterInterviews`). Files are **flat JSON** — keys are the full dotted path
   (`"portal.welcome.title": "…"`), not nested objects.
-- **Runtime bundles:** `pnpm run i18n:bundle` (or `i18n:check`) merges the 20 module files per
+- **Runtime bundles:** `pnpm run i18n:bundle` (or `i18n:check`) merges the 21 module files per
   language into `public/locales/<lang>/bundle.json`. **Never hand-edit a bundle** — edit the source
   module and rebuild.
 - **English is the reference.** Every locale must hold the exact same key set as `locales/en`
@@ -28,7 +28,7 @@ machine-translated (glossary-anchored) and await human native review.
 ### Commands
 
 ```bash
-pnpm run i18n:check     # key parity across all 17 locales + rebuild bundles + content guard
+pnpm run i18n:check     # key parity across all 19 locales + rebuild bundles + content guard
 pnpm run i18n:bundle    # rebuild public/locales/<lang>/bundle.json only
 node scripts/check-i18n-keys.mjs --quality   # report likely-untranslated (EN-identical) strings per locale
 node scripts/check-i18n-keys.mjs --fix       # fill MISSING keys in EXISTING files with the EN value (does NOT create files)

@@ -32,6 +32,7 @@
     "i18n:status": "tsx scripts/i18n-status-dashboard.ts",
     "content:guard": "node scripts/content-guard.mjs",
     "parity:check": "tsx scripts/audit-feature-parity.ts",
+    "docs:check": "node scripts/check-doc-metrics.mjs",
     "suppressions:check": "node scripts/check-suppressions.mjs",
     "token:audit": "node scripts/audit-tokens.mjs",
     "sync:readme": "node scripts/sync-readme-metrics.mjs",

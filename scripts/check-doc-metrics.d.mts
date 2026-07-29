@@ -1,0 +1,9 @@
+export function stripHistoricalSections(markdown: string): string;
+export function getActualLocaleCount(): number;
+export function getActualKeyCount(): number;
+export function getLatestReleasedVersion(): string | null;
+export function scanForDrift(
+  content: string,
+  filePath: string,
+  actual: { localeCount: number; keyCount: number; latestVersion: string | null },
+): string[];

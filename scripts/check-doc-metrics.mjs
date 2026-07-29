@@ -1,0 +1,192 @@
+#!/usr/bin/env node
+/**
+ * Fails if a doc file states a locale/key count or a release-status claim that no longer matches
+ * reality — the drift this audit found repeatedly (ROADMAP.md/TRANSLATION-GUIDE.md/TODO.md/
+ * CONTRIBUTING.md/.github/copilot-instructions.md all said "17 locales" after the 17→19 expansion).
+ * Historical/dated entries (CHANGELOG-style `## [x.y.z]` headings, or `## vX.Y.Z … RELEASED …`
+ * section headings) are exempt — they correctly describe a past state, not the present one.
+ *
+ * Run: node scripts/check-doc-metrics.mjs
+ */
+import { execSync } from 'node:child_process';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { getModules, REF_LANG } from './i18n-locales.mjs';
+
+const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
+
+// QNBS-v3: every file the header comment names as a past drift site must actually be scanned —
+// CodeRabbit caught .github/copilot-instructions.md missing here, which would let that exact
+// regression recur silently past this gate.
+const TARGET_FILES = [
+  'README.md',
+  'ROADMAP.md',
+  'TODO.md',
+  'docs/TRANSLATION-GUIDE.md',
+  'CONTRIBUTING.md',
+  '.github/CONTRIBUTING.md',
+  '.github/copilot-instructions.md',
+];
+
+// QNBS-v3: this repo marks "done" several different ways — Keep-a-Changelog `## [x.y.z]`,
+// `## vX.Y.Z … RELEASED …`, a heading suffixed with ✅ (`### Phase 3A … ✅`), a `**Status:** ✅
+// Released/Completed …` line just below a plain `## vX.Y — <title>` heading, or a dated heading
+// `(YYYY-MM-DD)` — a section carrying ANY of these near its top is a historical snapshot, exempt
+// from present-tense metric checks. Independently, this repo's own TODO.md legend ("✅ done") means
+// any individual `- ✅ …` bullet is historical regardless of which section it sits in.
+const ANY_HEADING = /^#{1,6}\s+/;
+const HISTORICAL_MARKER =
+  /(✅|\bRELEASED\b|\bDELIVERED\b|\bCompleted\b|\[\d+\.\d+\.\d+\]|\(\d{4}-\d{2}-\d{2})/i;
+const DONE_BULLET = /^\s*-\s*✅/;
+// QNBS-v3: how many lines below a heading to look for a "**Status:** ✅ Released …" marker that
+// applies to the whole section (this repo puts it on its own line, not in the heading text).
+const STATUS_LOOKAHEAD = 5;
+
+/**
+ * Blank out lines that fall in a historical section (see above), keeping line numbers stable so
+ * findings still point at the right place in the ORIGINAL file for anything that isn't blanked.
+ */
+export function stripHistoricalSections(markdown) {
+  const lines = markdown.split('\n');
+  const headingIdx = [];
+  lines.forEach((line, i) => {
+    if (ANY_HEADING.test(line)) headingIdx.push(i);
+  });
+  headingIdx.push(lines.length); // sentinel so the last section has an end bound
+
+  const historical = new Array(lines.length).fill(false);
+  for (let s = 0; s < headingIdx.length - 1; s++) {
+    const start = headingIdx[s];
+    const end = headingIdx[s + 1];
+    const lookahead = lines.slice(start, Math.min(end, start + STATUS_LOOKAHEAD));
+    if (lookahead.some((l) => HISTORICAL_MARKER.test(l))) {
+      for (let i = start; i < end; i++) historical[i] = true;
+    }
+  }
+
+  return lines.map((line, i) => (historical[i] || DONE_BULLET.test(line) ? '' : line)).join('\n');
+}
+
+/** Actual locale count = directories under locales/ (translation-glossary.json is a file, not a locale). */
+// QNBS-v3: reads the filesystem directly rather than a hand-maintained constant, so a new locale is picked up automatically instead of going stale like the doc claims this gate exists to catch.
+export function getActualLocaleCount() {
+  return readdirSync(join(root, 'locales'), { withFileTypes: true }).filter((e) => e.isDirectory())
+    .length;
+}
+
+/** Actual key count = deduplicated key set across all modules for the reference locale (matches check-i18n-keys.mjs). */
+// QNBS-v3: Set-based dedup, not a per-file sum — a key shared by two modules must count once, the exact bug this gate caught in sync-readme-metrics.mjs's own counting logic.
+export function getActualKeyCount() {
+  const keys = new Set();
+  for (const mod of getModules()) {
+    const p = join(root, 'locales', REF_LANG, `${mod}.json`);
+    const data = JSON.parse(readFileSync(p, 'utf8'));
+    for (const k of Object.keys(data)) keys.add(k);
+  }
+  return keys.size;
+}
+
+/** Latest released version tag (e.g. "1.24.1"), or null if no tags exist (e.g. a shallow clone). */
+// QNBS-v3: null (not a thrown error) on a shallow/tagless checkout — callers must treat "no tags" as "skip the PLANNED check", never as a drift finding of its own.
+export function getLatestReleasedVersion() {
+  try {
+    const tag = execSync('git tag --sort=-v:refname', { cwd: root, encoding: 'utf8' })
+      .split('\n')
+      .find((t) => t.trim().length > 0);
+    return tag ? tag.trim().replace(/^v/, '') : null;
+  } catch {
+    return null;
+  }
+}
+
+function semverLte(a, b) {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) < (pb[i] ?? 0);
+  }
+  return true; // equal
+}
+
+/**
+ * Scan one file's (historical-stripped) content for locale-count / key-count / stale-PLANNED
+ * drift against the actual computed values. Returns human-readable finding strings.
+ */
+// QNBS-v3: regex-scans prose for numeric claims rather than requiring structured metadata — this gate exists precisely because docs drift in free-form text, not in a machine-checked field.
+export function scanForDrift(content, filePath, { localeCount, keyCount, latestVersion }) {
+  const findings = [];
+  const scanned = stripHistoricalSections(content);
+  const lines = scanned.split('\n');
+
+  lines.forEach((line, i) => {
+    for (const m of line.matchAll(/(\d+)\s+locales?\b/gi)) {
+      const found = Number(m[1]);
+      if (found !== localeCount) {
+        findings.push(
+          `${filePath}:${i + 1} — says "${found} locale(s)", actual is ${localeCount}: "${line.trim()}"`,
+        );
+      }
+    }
+    for (const m of line.matchAll(/(\d+)\s+(?:i18n\s+)?keys\b/gi)) {
+      const found = Number(m[1]);
+      if (found !== keyCount) {
+        findings.push(
+          `${filePath}:${i + 1} — says "${found} keys", actual is ${keyCount}: "${line.trim()}"`,
+        );
+      }
+    }
+    if (latestVersion) {
+      for (const m of line.matchAll(/v?(\d+\.\d+(?:\.\d+)?)[^\n]*\bPLANNED\b/gi)) {
+        const mentioned = m[1];
+        if (semverLte(mentioned, latestVersion)) {
+          findings.push(
+            `${filePath}:${i + 1} — "v${mentioned} … PLANNED" but v${mentioned} <= latest released v${latestVersion}: "${line.trim()}"`,
+          );
+        }
+      }
+    }
+  });
+
+  return findings;
+}
+
+// QNBS-v3: exits 1 on any finding — unlike check-coverage-ratchet.mjs this gate is blocking, since a doc claiming a wrong locale/key/release count is actively misleading, not just an opportunity.
+function main() {
+  const localeCount = getActualLocaleCount();
+  const keyCount = getActualKeyCount();
+  const latestVersion = getLatestReleasedVersion();
+
+  const allFindings = [];
+  for (const relPath of TARGET_FILES) {
+    const abs = join(root, relPath);
+    let content;
+    try {
+      content = readFileSync(abs, 'utf8');
+    } catch {
+      continue; // file doesn't exist in this checkout — not this gate's concern
+    }
+    allFindings.push(...scanForDrift(content, relPath, { localeCount, keyCount, latestVersion }));
+  }
+
+  if (allFindings.length > 0) {
+    process.stderr.write(
+      `[docs:check] DOC METRICS DRIFT — ${allFindings.length} finding(s):\n${allFindings
+        .map((f) => `  - ${f}`)
+        .join('\n')}\n`,
+    );
+    process.exit(1);
+  }
+
+  process.stdout.write(
+    `[docs:check] OK — ${TARGET_FILES.length} files match actual state (${localeCount} locales, ${keyCount} keys${
+      latestVersion ? `, latest v${latestVersion}` : ''
+    }).\n`,
+  );
+}
+
+// QNBS-v3: only run the CLI side-effect when invoked directly — stripHistoricalSections/
+// scanForDrift/getActual* stay importable (and independently testable) from a unit test.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main();
+}
