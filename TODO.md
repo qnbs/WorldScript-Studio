@@ -47,7 +47,7 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 - ✅ **ProForge → opt-in** — flipped `enableProForge` default to `false` (experimental, token-heavy); now 17 on / 6 off. Slice + tests + `FEATURE-PARITY.md` + `CLAUDE.md` updated in lockstep.
 - ✅ **Feature catalog reconciled** — `featureCatalog.ts` covers all 23 flags; `defaultOn` derived from the slice (drift now impossible, guarded by `tests/unit/featureCatalog.test.ts`); added risk/desktop/dependency metadata.
 - ✅ **Grouped Settings UI** — Experimental flags grouped by category with risk hints, dependency-aware disabling (Voice WASM ⇠ Voice Support), "Desktop only" note (Rust Compute), and Reset-to-defaults.
-- ⬜ **WebNN flag decision** — `enableWebnnInference` is a ghost/stub (no runtime gate reads it). Either wire `selectEnableWebnnInference` into the ONNX RT WebNN provider selection, or retire the flag.
+- ✅ **WebNN flag decision** — the ghost/stub `enableWebnnInference` toggle was retired (removed from `featureFlagsSlice.ts`'s 22 flags); see `tests/unit/featureFlagsSlice.test.ts:96` ("WebNN flag (a ghost/no-op toggle) was removed → 22 flags"). This line was stale — reconciled 2026-07-29.
 - ⬜ **CII Best Practices badge** — removed from `README.md` (was a literal `projects/XXXX` placeholder — broken image, dead link). Register the project at <https://bestpractices.coreinfrastructure.org/> (external, interactive signup — maintainer-only action), then re-add the badge with the real project ID.
 
 
