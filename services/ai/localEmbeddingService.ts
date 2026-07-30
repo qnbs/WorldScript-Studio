@@ -1,9 +1,6 @@
-// QNBS-v3: Semantic embedding service — routes to inference.worker.ts via WorkerBus channels.
-//          Uses Xenova/all-MiniLM-L6-v2 (384-dim, L2-normalized) for semantic RAG and cross-project search.
-//          Adapted from CannaGuide-2025 embeddingService.ts patterns.
+// QNBS-v3: [Semantic embedding service — routes to workers/v2/inference.worker.ts via WorkerBus v2 (docs/adr/0014 migration). Xenova/all-MiniLM-L6-v2, 384-dim, L2-normalized.]
 
-// QNBS-v3: logger import was missing — restartWorker() references logger.error on restart-limit.
-import { logger } from '../logger';
+import { ensureInferencePool } from '../workerBusManager';
 
 const EMBEDDING_MODEL = 'Xenova/all-MiniLM-L6-v2';
 const MAX_INPUT_CHARS = 512;
@@ -21,95 +18,6 @@ function makeCacheKey(text: string): string {
 }
 
 export type EmbeddingVector = Float32Array;
-
-// QNBS-v3: The inference worker is loaded lazily to avoid a 2 MB bundle on app start.
-let workerInstance: Worker | null = null;
-// QNBS-v3: Health check — 30s ping interval; worker restarts if no pong within PONG_TIMEOUT_MS.
-const PING_INTERVAL_MS = 30_000;
-const PONG_TIMEOUT_MS = 5_000;
-let pingTimer: ReturnType<typeof setInterval> | null = null;
-let pongTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
-
-// QNBS-v3: Exponential backoff for worker restart to prevent infinite spin on permanent failure.
-let restartAttemptCount = 0;
-const MAX_RESTART_ATTEMPTS = 5;
-const MAX_RESTART_BACKOFF_MS = 60_000;
-
-function getRestartBackoffMs(): number {
-  return Math.min(2 ** restartAttemptCount * 1000, MAX_RESTART_BACKOFF_MS);
-}
-
-function clearWorkerHealthTimers(): void {
-  if (pingTimer) {
-    clearInterval(pingTimer);
-    pingTimer = null;
-  }
-  if (pongTimeoutTimer) {
-    clearTimeout(pongTimeoutTimer);
-    pongTimeoutTimer = null;
-  }
-}
-
-function restartWorker(): void {
-  clearWorkerHealthTimers();
-  if (workerInstance) {
-    workerInstance.terminate();
-    workerInstance = null;
-  }
-  if (import.meta.env?.DEV) {
-    console.warn('[localEmbeddingService] Inference worker restarted (missed health check pong)');
-  }
-  restartAttemptCount++;
-  if (restartAttemptCount > MAX_RESTART_ATTEMPTS) {
-    logger.error(
-      `[localEmbeddingService] Worker restart limit (${MAX_RESTART_ATTEMPTS}) reached. ` +
-        'Embedding service is offline. Reload the app to retry.',
-    );
-    return;
-  }
-  const backoff = getRestartBackoffMs();
-  if (backoff > 0) {
-    setTimeout(() => startWorkerHealthCheck(), backoff);
-  } else {
-    startWorkerHealthCheck();
-  }
-}
-
-function startWorkerHealthCheck(): void {
-  if (typeof Worker === 'undefined') return;
-  pingTimer = setInterval(() => {
-    const w = workerInstance;
-    if (!w) return;
-    w.postMessage({ type: 'WORKER_PING' });
-    pongTimeoutTimer = setTimeout(() => {
-      // QNBS-v3: No pong received — worker is dead or hung; restart with backoff.
-      restartWorker();
-    }, PONG_TIMEOUT_MS);
-
-    const pongHandler = (ev: MessageEvent<{ type?: string }>) => {
-      if (ev.data?.type === 'WORKER_PONG') {
-        // QNBS-v3: Successful pong resets the restart counter.
-        restartAttemptCount = 0;
-        if (pongTimeoutTimer) {
-          clearTimeout(pongTimeoutTimer);
-          pongTimeoutTimer = null;
-        }
-        w.removeEventListener('message', pongHandler);
-      }
-    };
-    w.addEventListener('message', pongHandler);
-  }, PING_INTERVAL_MS);
-}
-
-function getWorker(): Worker {
-  if (!workerInstance) {
-    workerInstance = new Worker(new URL('../../workers/inference.worker.ts', import.meta.url), {
-      type: 'module',
-    });
-    startWorkerHealthCheck();
-  }
-  return workerInstance;
-}
 
 function truncate(text: string): string {
   if (text.length <= MAX_INPUT_CHARS) return text;
@@ -129,30 +37,15 @@ function l2Normalize(vec: number[]): EmbeddingVector {
   return new Float32Array(vec.map((v) => v / magnitude));
 }
 
-function postToWorker(
-  task: string,
-  modelId: string,
-  input: string,
-): Promise<{ ok: boolean; result?: number[]; error?: string }> {
-  return new Promise((resolve) => {
-    const messageId = `emb-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const worker = getWorker();
-
-    const handler = (event: MessageEvent) => {
-      const data = event.data as {
-        messageId: string;
-        ok: boolean;
-        result?: number[];
-        error?: string;
-      };
-      if (data.messageId !== messageId) return;
-      worker.removeEventListener('message', handler);
-      resolve(data);
-    };
-
-    worker.addEventListener('message', handler);
-    worker.postMessage({ messageId, task, modelId, input });
-  });
+async function requestEmbedding(task: string, modelId: string, input: string): Promise<number[]> {
+  const bus = await ensureInferencePool();
+  if (!bus) throw new Error('WorkerBus v2 unavailable');
+  const handle = bus.enqueue<{ task: string; modelId: string; input: string }, number[]>(
+    'inference.embed',
+    { task, modelId, input },
+    { capabilities: ['inference.embed'] },
+  );
+  return handle.result;
 }
 
 export async function embedText(text: string): Promise<EmbeddingVector> {
@@ -167,11 +60,8 @@ export async function embedText(text: string): Promise<EmbeddingVector> {
     return cached;
   }
 
-  const response = await postToWorker('feature-extraction', EMBEDDING_MODEL, truncated);
-  if (!response.ok || !response.result) {
-    throw new Error(response.error ?? 'embedding failed');
-  }
-  const vector = l2Normalize(response.result);
+  const raw = await requestEmbedding('feature-extraction', EMBEDDING_MODEL, truncated);
+  const vector = l2Normalize(raw);
 
   // QNBS-v3: Evict the oldest (first) entry when at capacity before inserting.
   if (embeddingCache.size >= EMBEDDING_CACHE_MAX) {
@@ -205,13 +95,4 @@ export function cosineSimilarity(a: EmbeddingVector, b: EmbeddingVector): number
   for (let i = 0; i < a.length; i++) dot += a[i]! * b[i]!;
   // Both vectors are already L2-normalised, so cosine = dot product
   return Math.max(-1, Math.min(1, dot));
-}
-
-// QNBS-v3: Used in testing to reset the worker instance without affecting production code.
-export function _resetWorkerForTest(): void {
-  clearWorkerHealthTimers();
-  if (workerInstance) {
-    workerInstance.terminate();
-    workerInstance = null;
-  }
 }
