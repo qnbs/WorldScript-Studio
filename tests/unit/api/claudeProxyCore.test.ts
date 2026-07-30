@@ -212,4 +212,41 @@ describe('handleClaudeProxyRequest', () => {
     const res = await handleClaudeProxyRequest(req, fetchImpl);
     expect(res.status).toBe(502);
   });
+
+  it(
+    "preserves the current client's own request history through a bounded eviction instead of " +
+      'wiping the whole map (CodeRabbit, CWE-770, PR #301)',
+    async () => {
+      // QNBS-v3: a fresh Response per call — a Response body can only be read once, and this mock
+      // is invoked thousands of times, unlike the single-shot mockResolvedValue used elsewhere.
+      const fetchImpl = vi
+        .fn()
+        .mockImplementation(
+          async () => new Response(JSON.stringify({ content: [] }), { status: 200 }),
+        );
+
+      // QNBS-v3: exactly RATE_LIMIT_MAX_TRACKED_CLIENTS (5000) distinct spoofed clients fills the
+      // map to the eviction threshold (> 5000, not >=) without tripping it yet.
+      for (let i = 0; i < 5000; i++) {
+        const spoofedIp = `10.${Math.floor(i / 65025)}.${Math.floor(i / 255) % 255}.${i % 255}`;
+        const req = makeRequest(validBody(), { headers: { 'x-forwarded-for': spoofedIp } });
+        await handleClaudeProxyRequest(req, fetchImpl);
+      }
+
+      // QNBS-v3: the attacker's own 21 requests each push the map past the threshold (it never
+      // drains below 5000, since the attacker's own key already exists after the first call), so
+      // every one of these calls re-runs the eviction path with the attacker as the *current*
+      // client — exactly the condition the old `.clear()` bug mishandled, since it wiped the
+      // current caller's own just-recorded entry along with everyone else's.
+      const attackerIp = '198.51.100.1';
+      let lastRes: Response | undefined;
+      for (let i = 0; i < 21; i++) {
+        const req = makeRequest(validBody(), { headers: { 'x-forwarded-for': attackerIp } });
+        lastRes = await handleClaudeProxyRequest(req, fetchImpl);
+      }
+      // QNBS-v3: the 21st request must still trip the limit — proving the attacker's own history
+      // survived 20 rounds of eviction pressure instead of being reset by it.
+      expect(lastRes?.status).toBe(429);
+    },
+  );
 });
