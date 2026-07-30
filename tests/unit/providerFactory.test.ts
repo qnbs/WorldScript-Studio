@@ -63,8 +63,9 @@ describe('providerToKind', () => {
     expect(providerToKind('anthropic')).toBe('unsupported');
   });
 
-  it('maps grok to unsupported', () => {
-    expect(providerToKind('grok')).toBe('unsupported');
+  it('maps grok to its own grok kind (not folded into openaiCompatible)', () => {
+    // QNBS-v3: distinct from Ollama's 'openaiCompatible' default — grok needs a fixed baseURL + a real key.
+    expect(providerToKind('grok')).toBe('grok');
   });
 });
 

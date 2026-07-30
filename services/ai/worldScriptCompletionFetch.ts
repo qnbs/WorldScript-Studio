@@ -81,6 +81,20 @@ async function resolveModelConfig(
       status: 422,
     };
   }
+  // QNBS-v3: xAI's API is OpenAI-Chat-Completions-compatible, so Grok reuses the
+  // 'openaiCompatible' shape with a fixed baseURL instead of needing its own branch type.
+  if (kind === 'grok') {
+    const apiKey = await storageService.getApiKey('grok');
+    if (!apiKey) {
+      return { error: 'No Grok API key configured.', status: 401 };
+    }
+    return {
+      provider: 'openaiCompatible',
+      baseURL: 'https://api.x.ai/v1',
+      apiKey,
+      modelId: model.startsWith('grok-') ? model : 'grok-3',
+    };
+  }
   if (kind === 'gemini') {
     const apiKey = await storageService.getGeminiApiKey();
     if (!apiKey) {

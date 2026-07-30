@@ -46,6 +46,9 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
   // imply a verified connection next to the "desktop app required" banner.
   const ollamaUntestable = provider === 'ollama' && !isDesktop;
   const [openaiKey, setOpenaiKey] = useState('');
+  // QNBS-v3: Grok's own key input state, mirroring OpenAI's pattern above.
+  const [grokKey, setGrokKey] = useState('');
+  const [isSavingGrokKey, setIsSavingGrokKey] = useState(false);
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
   const [testError, setTestError] = useState('');
@@ -66,7 +69,25 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
       .getApiKey('openai')
       .then((k) => setOpenaiKey(k ?? ''))
       .catch(() => {});
+    storageService
+      .getApiKey('grok')
+      .then((k) => setGrokKey(k ?? ''))
+      .catch(() => {});
   }, []);
+
+  // QNBS-v3: save/clear via storageService, matching every other provider's key persistence.
+  const handleSaveGrokKey = useCallback(async () => {
+    setIsSavingGrokKey(true);
+    try {
+      if (grokKey.trim()) {
+        await storageService.saveApiKey('grok', grokKey.trim());
+      } else {
+        await storageService.clearApiKey('grok');
+      }
+    } finally {
+      setIsSavingGrokKey(false);
+    }
+  }, [grokKey]);
 
   const handleSaveOpenAiKey = useCallback(async () => {
     setIsSavingKey(true);
@@ -171,13 +192,14 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
   }, [provider, isDesktop, handleLoadOllamaModels, handleTest]);
 
   const providers: { id: AIProvider; label: string }[] = [
-    { id: 'gemini', label: 'Google Gemini' },
-    { id: 'openai', label: 'OpenAI' },
-    { id: 'ollama', label: 'Ollama (lokal)' },
+    { id: 'gemini', label: t('settings.ai.provider.gemini') },
+    { id: 'openai', label: t('settings.ai.provider.openai') },
+    { id: 'ollama', label: t('settings.ai.provider.ollama') },
     { id: 'webllm', label: t('settings.ai.providerWebllm') },
     { id: 'onnx', label: t('settings.ai.providerOnnx') },
     { id: 'transformers', label: t('settings.ai.providerTransformers') },
-    { id: 'anthropic', label: 'Anthropic Claude' },
+    { id: 'anthropic', label: t('settings.ai.provider.anthropic') },
+    { id: 'grok', label: t('settings.ai.provider.grok') },
   ];
 
   const presetOptions: { id: LocalBackendPreset; labelKey: string }[] = [
@@ -318,6 +340,46 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
               value={advancedAi.openAiSiteTitle}
               onChange={(e) => onAdvancedAiPatch({ openAiSiteTitle: e.target.value })}
               className="text-sm"
+            />
+          </div>
+        )}
+
+        {provider === 'grok' && (
+          <div className="space-y-3">
+            <label
+              htmlFor="grok-api-key"
+              className="text-sm font-medium text-[var(--sc-text-secondary)] block"
+            >
+              {t('settings.ai.grokKey')}
+            </label>
+            <div className="flex gap-2">
+              <Input
+                id="grok-api-key"
+                type="password"
+                placeholder="xai-..."
+                value={grokKey}
+                onChange={(e) => setGrokKey(e.target.value)}
+                className="flex-1 font-mono text-sm"
+              />
+              <Button onClick={handleSaveGrokKey} disabled={isSavingGrokKey} variant="secondary">
+                {isSavingGrokKey ? <Spinner className="w-4 h-4" /> : t('settings.ai.save')}
+              </Button>
+            </div>
+            <p className="text-xs text-[var(--sc-text-muted)]">{t('settings.ai.keysEncrypted')}</p>
+            <label
+              htmlFor="grok-model"
+              className="text-sm font-medium text-[var(--sc-text-secondary)] block"
+            >
+              {t('settings.advancedAi.model')}
+            </label>
+            <Select
+              id="grok-model"
+              value={advancedAi.model}
+              onChange={(v) => onModelSelect?.(v)}
+              options={[
+                { value: 'grok-3', label: 'Grok 3' },
+                { value: 'grok-3-mini', label: 'Grok 3 Mini' },
+              ]}
             />
           </div>
         )}
