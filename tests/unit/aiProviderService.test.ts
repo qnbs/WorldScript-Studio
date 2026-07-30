@@ -241,11 +241,12 @@ describe('generateJson', () => {
 // ─── testAIConnection ─────────────────────────────────────────────────────────
 
 describe('testAIConnection', () => {
-  it('returns ok:false for anthropic (CORS restriction)', async () => {
+  it('returns ok:false (noApiKey) for anthropic on proxy-capable web with no key stored', async () => {
+    // QNBS-v3 (ADR-0016 Track B): default jsdom BASE_URL is proxy-capable ('/', not the GitHub
+    // Pages path) — see tests/unit/deployTarget.test.ts for the dedicated branch coverage.
     const result = await testAIConnection('anthropic', {});
     expect(result.ok).toBe(false);
-    expect(result.error).toContain('CORS');
-    expect(result.kind).toBe('backendProxyRequired');
+    expect(result.kind).toBe('noApiKey');
   });
 
   it('returns ok:false for ollama in browser (no Tauri)', async () => {
@@ -331,15 +332,19 @@ describe('testAIConnection — ollama desktop branch', () => {
   });
 });
 
-// QNBS-v3 (ADR-0016 Track A): CORS is a browser-only restriction — on desktop, Anthropic is
-// called directly via localServerFetch's native-HTTP escape hatch (plugin-http), same pattern
-// as Ollama. localServerFetch itself falls back to globalThis.fetch outside Tauri.
-describe('Anthropic — desktop branch (ADR-0016 Track A)', () => {
+// QNBS-v3 (ADR-0016): CORS is a browser-only restriction. Track A — on desktop, Anthropic is
+// called directly via localServerFetch's native-HTTP escape hatch (plugin-http), same pattern as
+// Ollama; localServerFetch itself falls back to globalThis.fetch outside Tauri. Track B — on
+// proxy-capable web (Vercel/Cloudflare, not GitHub Pages), the same call goes through this app's
+// own same-origin api/claude-proxy instead of straight to api.anthropic.com.
+describe('Anthropic — desktop (Track A) and web proxy (Track B) branches (ADR-0016)', () => {
   const originalFetch = globalThis.fetch;
+  const originalBaseUrl = import.meta.env.BASE_URL;
 
   afterEach(() => {
     delete (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
     globalThis.fetch = originalFetch;
+    import.meta.env.BASE_URL = originalBaseUrl;
   });
 
   it('testAIConnection: returns noApiKey when no Claude key is stored under Tauri', async () => {
@@ -375,10 +380,31 @@ describe('Anthropic — desktop branch (ADR-0016 Track A)', () => {
     expect(result.params).toEqual({ status: 401 });
   });
 
-  it('testAIConnection: still returns backendProxyRequired outside Tauri (web unchanged)', async () => {
+  it('testAIConnection: returns proxyUnavailableStaticHost on GitHub Pages, without ever checking for a key', async () => {
+    import.meta.env.BASE_URL = '/WorldScript-Studio/';
     const result = await testAIConnection('anthropic', {});
     expect(result.ok).toBe(false);
-    expect(result.kind).toBe('backendProxyRequired');
+    expect(result.kind).toBe('proxyUnavailableStaticHost');
+    expect(storageService.getApiKey).not.toHaveBeenCalled();
+    expect(mockPluginHttpFetch).not.toHaveBeenCalled();
+  });
+
+  it('testAIConnection: calls the proxy (not api.anthropic.com directly) on proxy-capable web', async () => {
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('anthropic-key');
+    const fetchSpy = vi.fn().mockResolvedValueOnce(new Response('{}', { status: 200 }));
+    globalThis.fetch = fetchSpy as typeof fetch;
+    const result = await testAIConnection('anthropic', {});
+    expect(result.ok).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/api/claude-proxy',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toMatchObject({
+      apiKey: 'anthropic-key',
+      model: 'claude-haiku-4-5',
+      maxTokens: 1,
+    });
     expect(mockPluginHttpFetch).not.toHaveBeenCalled();
   });
 
@@ -400,17 +426,40 @@ describe('Anthropic — desktop branch (ADR-0016 Track A)', () => {
     expect(onChunk).toHaveBeenCalledWith('Hello from Claude');
   });
 
-  it('streamText: still throws the CORS message outside Tauri (web unchanged)', async () => {
+  it('streamText: delivers a real Claude response via the proxy on proxy-capable web', async () => {
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('anthropic-key');
+    const fetchSpy = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ content: [{ type: 'text', text: 'Hello via proxy' }] }), {
+        status: 200,
+      }),
+    );
+    globalThis.fetch = fetchSpy as typeof fetch;
+    const onChunk = vi.fn();
+    await streamText(
+      'hello',
+      'Balanced',
+      { provider: 'anthropic', model: 'claude-haiku-4-5' },
+      { onChunk },
+    );
+    expect(onChunk).toHaveBeenCalledWith('Hello via proxy');
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/api/claude-proxy',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(mockPluginHttpFetch).not.toHaveBeenCalled();
+  });
+
+  it('streamText: throws the GitHub-Pages-unavailable message without ever checking for a key', async () => {
+    import.meta.env.BASE_URL = '/WorldScript-Studio/';
     await expect(
       streamText(
         'hello',
         'Balanced',
         { provider: 'anthropic', model: 'claude-haiku-4-5' },
-        {
-          onChunk: vi.fn(),
-        },
+        { onChunk: vi.fn() },
       ),
-    ).rejects.toThrow('CORS');
+    ).rejects.toThrow('not available on this deployment');
+    expect(storageService.getApiKey).not.toHaveBeenCalled();
     expect(mockPluginHttpFetch).not.toHaveBeenCalled();
   });
 });

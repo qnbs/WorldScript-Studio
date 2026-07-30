@@ -106,9 +106,24 @@ for the full design.
   could have Claude too, at the cost of routing every such request through a fixed external host
   the user didn't choose) is not part of this decision — it's called out in the plan as a choice
   for the maintainer to make explicitly later, not a default.
-- **Not yet resolved:** whether Claude's image-generation call site should get an equivalent fix
-  depends on whether Anthropic's API even offers image generation — verify before wiring UI for a
-  capability that may not exist.
+- **Resolved during Track B implementation:** Claude's image-generation call site (`generateImage()`'s
+  `case 'anthropic':` in `services/aiProviderService.ts`) is left throwing, on every platform —
+  Anthropic's API has no image-generation endpoint at all, so this was never a CORS/proxy bug to fix.
+- **Resolved during Track B implementation:** no dedicated E2E spec was added for the Claude Settings
+  flow. Neither Grok (Phase 1) nor any other cloud provider (Gemini/OpenAI/Ollama/OpenRouter) has
+  one in this repo — that class of Settings-form interaction is covered at the component/RTL level
+  only, and the desktop/proxy-web/GitHub-Pages branching added here follows the same pattern
+  (`tests/unit/settings/AiProviderCard.test.tsx`, `tests/unit/aiProviderService.test.ts`,
+  `tests/unit/api/claudeProxyCore.test.ts`). Introducing a first-of-its-kind provider E2E spec —
+  with no established mocking pattern for `/api/claude-proxy` or base-path simulation — would be new
+  test infrastructure beyond what this fix requires, not a gap relative to actual repo convention.
+- **Resolved during Track B implementation:** `services/ai/providerFactory.ts`'s `providerToKind()`
+  deliberately keeps returning `'unsupported'` for `'anthropic'` — wiring the newer Vercel-AI-SDK
+  Writer-streaming layer would need the `@ai-sdk/anthropic` package (Anthropic's Messages API isn't
+  OpenAI-Chat-Completions-shaped, unlike Grok/Ollama, which both work through `createOpenAI`), a new
+  runtime dependency out of scope for this plan. Both tracks instead wire the actual live call path,
+  `aiProviderService.ts` — the same one every existing Settings UI flow (Test Connection, ProForge,
+  Writer thunks) already goes through.
 
 ## References
 
