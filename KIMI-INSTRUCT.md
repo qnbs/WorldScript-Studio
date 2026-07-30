@@ -152,14 +152,16 @@ Wiederhole für alle 18+ Threads in Batches.
 Nach dem Schließen aller Threads:
 
 ```bash
-gh pr comment <NUMMER> --body '@codeant-ai review'
+gh pr comment <NUMMER> --body '@coderabbitai review'
 ```
 
-Danach keine Live-Watch-Ausgabe der CI; Ergebnisse später aus den Cloud-Artifacts oder der GitHub-UI prüfen.
+Danach die **komplette** Review-Historie prüfen, nicht nur den letzten Status (ein „rate limited"-Status
+kann eine frühere echte Review verdecken). Keine Live-Watch-Ausgabe der CI; Ergebnisse später aus den
+Cloud-Artifacts oder der GitHub-UI prüfen.
 
 ### 3.7 Iron Rule — Loop bis Ruhe (Abbruchbedingung)
 
-**Der Correction-Loop endet NICHT nach einem Durchgang.** Ein Push, der Kommentare behebt, triggert eine **frische** CodeAnt-Review, die regelmäßig **neue** Findings erzeugt (eine „Welle") — oft als direkte Folge der gerade gemachten Fixes. Jede Welle wird exakt wie die erste behandelt (§3.1 → §3.6).
+**Der Correction-Loop endet NICHT nach einem Durchgang.** Ein Push, der Kommentare behebt, triggert eine **frische** CodeRabbit-Review, die regelmäßig **neue** Findings erzeugt (eine „Welle") — oft als direkte Folge der gerade gemachten Fixes. Jede Welle wird exakt wie die erste behandelt (§3.1 → §3.6).
 
 > **Abbruchbedingung (BEIDES muss gelten):**
 > 1. Eine frisch getriggerte Review liefert **0 neue Inline-Kommentare**, **und**

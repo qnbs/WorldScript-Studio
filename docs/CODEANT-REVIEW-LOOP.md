@@ -48,7 +48,7 @@ Each wave is handled exactly like the first.
         │ 6. Commit + push (one wave = one commit)     │
         │ 7. Reply to every thread (cite commit) +     │
         │    resolve it → 0 unresolved                 │
-        │ 8. Re-trigger: `@codeant-ai review`          │
+        │ 8. Re-trigger: `@coderabbitai review`        │
         └───────────────┬─────────────────────────────┘
                         │ new comments?
               ┌── yes ──┘         └── no ──┐
@@ -194,11 +194,13 @@ cite evidence) **and** is resolved.
 After all threads are resolved and the wave is pushed:
 
 ```bash
-gh pr comment PR_NUMBER --body "@codeant-ai review"
+gh pr comment PR_NUMBER --body "@coderabbitai review"
 ```
 
-A push usually auto-triggers CodeAnt; the explicit comment is belt-and-suspenders. **Wait for the
-fresh review**, then go back to step 2. Repeat until the **termination condition** in §1 holds.
+A push usually auto-triggers CodeRabbit; the explicit comment is belt-and-suspenders. Check the
+**full review history**, not just the latest status (a rate-limited latest status can hide an
+earlier real review). **Wait for the fresh review**, then go back to step 2. Repeat until the
+**termination condition** in §1 holds.
 
 ## 8. Merge
 
