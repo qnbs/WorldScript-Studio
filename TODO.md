@@ -23,13 +23,19 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 - ✅ **DuckDB-WASM self-hosted** — replaced an unversioned, already-CSP-dead third-party CDN.
 - ✅ **Doc-truth fixes** — fabricated `tauri-plugin-stronghold` claim removed; canonical Vercel URL unified with a new drift gate; CI Storybook 3×→1× + a genuinely broken test-runner invocation fixed.
 - ✅ **Coverage ratchet** raised to CI-measured values (L79/F72/B65/S77).
-- ⬜ **Worker-generation consolidation (F-14, new this sprint)** — both a v1 and a WorkerBus-v2
-  generation of the DuckDB and local-inference workers are live simultaneously
-  (`docs/adr/0014-worker-generation-duplication.md`). Needs a dedicated migration sprint: decide
-  the target generation (v2, per `CLAUDE.md`'s own architecture framing), plan the 3 v1 call-site
-  migrations (`services/duckdb/duckdbClient.ts`, `services/ai/localNlpService.ts`,
-  `services/ai/localEmbeddingService.ts`), then remove the v1 worker files. Until then, any worker-
-  level fix (CSP, protocol, error handling) must be checked against **both** generations.
+- ✅ **Worker-generation consolidation (F-14)** — the dedicated migration sprint
+  `docs/adr/0014-worker-generation-duplication.md` deferred, executed as 4 stacked PRs:
+  #286 (parity gate + real handler tests for the previously-untested v2 workers), #287 (DuckDB —
+  `duckdbClient.ts` migrated, `workers/duckdbWorker.ts` deleted), #288 (embeddings —
+  `localEmbeddingService.ts` migrated), #290 (NLP — `localNlpService.ts` migrated,
+  `workers/inference.worker.ts` deleted, closing out v1 entirely). Decision record:
+  `docs/adr/0015-worker-generation-consolidation.md` (supersedes 0014). Correction loops on #287/#288
+  surfaced and fixed real bugs the original v2 files had never been exercised against: DuckDB
+  `params` were silently dropped (already live in `telemetryService.ts`'s parameterized writes),
+  `terminatePool()` could leave tasks hanging forever, a respawned DuckDB worker lost its
+  connection, and `ensureInferencePool()` was imported but never defined (broke Vercel's prod
+  build — see the entry below). **Merge status:** #286 merged; #287/#288/#290 open, stacked, CI
+  green — merge in order before the next release.
 - ✅ **Pre-existing, unrelated E2E a11y finding surfaced during this sprint's CI runs** —
   `tests/e2e/a11y.spec.ts` "writer version control panel has no serious axe violations" failed
   deterministically (`color-contrast` 4.47 vs. 4.5 required, `--sc-accent` `#92400e` over its own
@@ -38,8 +44,8 @@ Status: 🔄 in progress | ⬜ open | ✅ done
   active-toggle classes reused `--sc-accent` for both background tint and text instead of the
   already-vetted `--nav-background-active`/`--nav-text-active` token pair; switched all 3
   occurrences (Writer VC desktop/mobile + mobile ProForge, same shared pattern).
-- ⬜ **Tag `v1.24.2` + publish the GitHub Release** — maintainer action (STOP-AND-ASK per this
-  sprint's own hard rules); the version-bump commit is in, the tag/release is not.
+- ✅ **Tag `v1.24.2` + publish the GitHub Release** — stale entry, already done (verified via
+  `git tag`/`gh release list`: `v1.24.2` tagged and published 2026-07-29T11:25:42Z).
 
 
 ## v1.24 — Post-release feature-flag refinement (2026-06-21)
