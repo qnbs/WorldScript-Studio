@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // QNBS-v3: duckdbClient now routes through WorkerBus v2 (workers/v2/duckdb.worker.ts) instead of
 //          spawning a raw Worker directly — mock services/workerBusManager's ensureDuckDbPool()/
@@ -318,6 +318,11 @@ describe('duckdbClient abort', () => {
 });
 
 describe('duckdbClient OPFS fallback', () => {
+  // QNBS-v3: afterEach (not end-of-test) so the handler resets even if an assertion throws first
+  afterEach(() => {
+    duckdbClient.setOpfsFallbackHandler(null);
+  });
+
   it('forwards the opfs-fallback progress stage to setOpfsFallbackHandler', async () => {
     let capturedOnProgress: ((p: { stage: string; message?: string }) => void) | undefined;
     mockEnqueue.mockImplementation((_type, _payload, opts) => {
@@ -331,7 +336,6 @@ describe('duckdbClient OPFS fallback', () => {
     capturedOnProgress?.({ stage: 'opfs-fallback', message: 'OPFS unavailable in private mode' });
 
     expect(onFallback).toHaveBeenCalledWith('OPFS unavailable in private mode');
-    duckdbClient.setOpfsFallbackHandler(null);
   });
 
   it('defaults to a generic message when the opfs-fallback progress event omits one', async () => {
@@ -347,7 +351,6 @@ describe('duckdbClient OPFS fallback', () => {
     capturedOnProgress?.({ stage: 'opfs-fallback' });
 
     expect(onFallback).toHaveBeenCalledWith('OPFS unavailable');
-    duckdbClient.setOpfsFallbackHandler(null);
   });
 
   it('ignores non-opfs-fallback progress stages', async () => {
@@ -363,6 +366,5 @@ describe('duckdbClient OPFS fallback', () => {
     capturedOnProgress?.({ stage: 'loading', message: 'irrelevant' });
 
     expect(onFallback).not.toHaveBeenCalled();
-    duckdbClient.setOpfsFallbackHandler(null);
   });
 });
