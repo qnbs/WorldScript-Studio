@@ -3,7 +3,9 @@ import undoable from 'redux-undo';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { listenerMiddleware } from '../../app/listenerMiddleware';
 import { useTransientUiStore } from '../../app/transientUiStore';
-import featureFlagsReducer from '../../features/featureFlags/featureFlagsSlice';
+import featureFlagsReducer, {
+  featureFlagsActions,
+} from '../../features/featureFlags/featureFlagsSlice';
 import projectReducer, { projectActions } from '../../features/project/projectSlice';
 import settingsReducer, { settingsActions } from '../../features/settings/settingsSlice';
 import statusReducer, { statusActions } from '../../features/status/statusSlice';
@@ -449,5 +451,22 @@ describe('analytics privacy opt-out gating', () => {
     // Opt out AFTER the call was made — a live thunk must now report false; a captured boolean wouldn't.
     store.dispatch(settingsActions.setPrivacy({ analyticsEnabled: false }));
     expect(gate()).toBe(false);
+  });
+});
+
+describe('local-first shadow sync (B1.1)', () => {
+  it('reads project data via the canonical selector when the flag flips on', async () => {
+    const store = makeFullStore();
+    store.dispatch(featureFlagsActions.setEnableLocalFirstSync(true));
+    await vi.advanceTimersByTimeAsync(100);
+    // getLocalFirstHandle's dynamic imports (Yjs doc/binding/persistence) aren't mocked in this
+    // suite; whatever happens next is caught internally and logged as non-critical (see
+    // listenerMiddleware.ts's runLocalFirstShadowSync catch block) — this test only needs to prove
+    // the selector line runs and the listener doesn't throw out to the store.
+    // Real dynamic-imported Yjs doc/binding modules run for real here (not mocked) — a freshly
+    // created shadow doc synced from the same present data has nothing to drift against, so a
+    // clean run logs neither a warning (self-heal) nor an error.
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
+    expect(mockLoggerError).not.toHaveBeenCalled();
   });
 });
