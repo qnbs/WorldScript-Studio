@@ -62,6 +62,25 @@ describe('stripHistoricalSections', () => {
     expect(stripped).not.toMatch(/Historical/);
     expect(stripped).toContain('Present: 17 locales.');
   });
+
+  // QNBS-v3: regression guard for the dc14bc0-shaped drift — a stale open bullet was invisible to the gate inside a historical section
+  it('preserves an open "⬜" bullet even inside a dated/historical section', () => {
+    const md = [
+      '## v1.24.2 — CSP/crypto/doc-truth hardening (2026-07-29)',
+      '',
+      '- ⬜ **Tag `v1.24.2` + publish the GitHub Release** — maintainer action.',
+    ].join('\n');
+    const stripped = stripHistoricalSections(md);
+    expect(stripped).toContain('⬜ **Tag `v1.24.2`');
+  });
+
+  it('still blanks a "✅" bullet even inside a live, non-historical section', () => {
+    const md = ['## Current status', '', '- ✅ Already-done item that should not be scanned.'].join(
+      '\n',
+    );
+    const stripped = stripHistoricalSections(md);
+    expect(stripped).not.toContain('Already-done item');
+  });
 });
 
 describe('scanForDrift', () => {
@@ -100,6 +119,37 @@ describe('scanForDrift', () => {
   it('does not flag a PLANNED marker for a version newer than the latest release', () => {
     const content = '## Upcoming — v2.0 (PLANNED)';
     const findings = scanForDrift(content, 'FAKE.md', actual);
+    expect(findings).toHaveLength(0);
+  });
+
+  // QNBS-v3: the OPEN_BULLET_VERSION check — a stale open tag/release bullet for an already-released version must be flagged
+  it('flags an open "⬜" bullet for tagging/releasing a version <= the latest release', () => {
+    const content = '- ⬜ **Tag `v1.24.1` + publish the GitHub Release** — maintainer action.';
+    const findings = scanForDrift(content, 'FAKE.md', actual);
+    expect(findings.some((f) => f.includes('v1.24.1'))).toBe(true);
+  });
+
+  it.each(['Tagging', 'Releasing', 'Publishing'])(
+    'flags an open "⬜" bullet using the inflected form "%s"',
+    (verb) => {
+      const content = `- ⬜ **${verb} \`v1.24.1\`** — maintainer action.`;
+      const findings = scanForDrift(content, 'FAKE.md', actual);
+      expect(findings.some((f) => f.includes('v1.24.1'))).toBe(true);
+    },
+  );
+
+  it('does not flag an open "⬜" bullet for tagging a version newer than the latest release', () => {
+    const content = '- ⬜ **Tag `v1.25.0` + publish the GitHub Release** — maintainer action.';
+    const findings = scanForDrift(content, 'FAKE.md', actual);
+    expect(findings).toHaveLength(0);
+  });
+
+  it('does not flag any version-based drift when latestVersion is null (shallow/tagless checkout)', () => {
+    const content = [
+      '- ⬜ **Tag `v1.24.1` + publish the GitHub Release** — maintainer action.',
+      '## Upcoming — v1.0 (PLANNED)',
+    ].join('\n');
+    const findings = scanForDrift(content, 'FAKE.md', { ...actual, latestVersion: null });
     expect(findings).toHaveLength(0);
   });
 });
