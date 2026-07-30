@@ -106,6 +106,7 @@
   "settings.ai.adaptive.warmedModelsHint": "模型已在内存中准备好进行快速推理",
   "settings.ai.anthropicCorsNote": "Anthropic Claude 无法直接从浏览器调用。设置代理服务器或使用 Tauri 桌面应用程序进行 Anthropic 呼叫。",
   "settings.ai.anthropicHint": "Anthropic 需要代理服务器或 Tauri 桌面应用程序来进行 API 调用。",
+  "settings.ai.anthropicKey": "Claude API Key",
   "settings.ai.connectionFailed": "连接失败",
   "settings.ai.connectionSuccess": "连接成功",
   "settings.ai.corsRestriction": "CORS 限制",

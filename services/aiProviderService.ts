@@ -241,15 +241,41 @@ async function streamOpenAI(
   callbacks.onDone?.();
 }
 
+// QNBS-v3 (ADR-0016 Track A): CORS is a *browser* restriction — Tauri's native HTTP plugin
+// (localServerFetch, ADR-0012) isn't subject to it, so desktop can call Anthropic directly.
+// Web/PWA still has no escape hatch and needs Track B's serverless proxy (not yet built).
 async function streamAnthropic(
-  _prompt: string,
-  _opts: AIRequestOptions,
-  _callbacks: AIStreamCallbacks,
+  prompt: string,
+  opts: AIRequestOptions,
+  callbacks: AIStreamCallbacks,
 ): Promise<void> {
-  throw new Error(
-    'Claude/Anthropic: Direct browser requests are blocked by Anthropic (CORS). ' +
-      'Please use a backend proxy or switch to Gemini/OpenAI/Ollama.',
-  );
+  if (!isTauriRuntime()) {
+    throw new Error(
+      'Claude/Anthropic: Direct browser requests are blocked by Anthropic (CORS). ' +
+        'Please use a backend proxy or switch to Gemini/OpenAI/Ollama.',
+    );
+  }
+  const apiKey = await storageService.getApiKey('anthropic');
+  if (!apiKey) throw new Error('NO_API_KEY: Claude API key missing. Please enter it in Settings.');
+  const res = await localServerFetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: opts.model,
+      max_tokens: opts.maxTokens ?? 2048,
+      messages: [{ role: 'user', content: sanitizePromptValue(prompt) }],
+    }),
+    signal: opts.signal ?? null,
+  });
+  if (!res.ok) throw new Error(`Claude API Error ${res.status}: ${res.statusText}`);
+  const json = (await res.json()) as { content?: Array<{ type?: string; text?: string }> };
+  const text = json.content?.find((c) => c.type === 'text')?.text ?? '';
+  if (text) callbacks.onChunk(text);
+  callbacks.onDone?.();
 }
 
 async function streamGrok(
@@ -373,10 +399,17 @@ async function generateTextSingleProvider(
       });
       return providerTextSchema.parse({ text: result }).text;
     }
-    case 'anthropic':
-      throw new Error(
-        'Claude/Anthropic is currently not available in the browser. Please use Gemini, OpenAI or Ollama.',
-      );
+    case 'anthropic': {
+      // QNBS-v3 (ADR-0016 Track A): reuses the now-fixed streamAnthropic, which itself branches
+      // on isTauriRuntime — desktop works, web still throws its CORS message.
+      let result = '';
+      await streamAnthropic(prompt, o, {
+        onChunk: (text) => {
+          result += text;
+        },
+      });
+      return providerTextSchema.parse({ text: result }).text;
+    }
     case 'grok': {
       let result = '';
       await streamGrok(prompt, o, {
@@ -818,12 +851,50 @@ export async function testAIConnection(
         }
         return testOllamaConnection(opts.ollamaBaseUrl);
       }
-      case 'anthropic':
-        return {
-          ok: false,
-          error: 'Claude requires a backend proxy (CORS restriction)',
-          kind: 'backendProxyRequired',
-        };
+      case 'anthropic': {
+        // QNBS-v3 (ADR-0016 Track A): desktop bypasses CORS via localServerFetch's native path;
+        // web still has no escape hatch until Track B's proxy exists.
+        if (!isTauriRuntime()) {
+          return {
+            ok: false,
+            error: 'Claude requires the desktop app or a backend proxy (browser CORS restriction)',
+            kind: 'backendProxyRequired',
+          };
+        }
+        const apiKey = await storageService.getApiKey('anthropic');
+        if (!apiKey) {
+          return {
+            ok: false,
+            error: 'Kein Claude API Key gesetzt',
+            kind: 'noApiKey',
+            params: { provider: 'Claude' },
+          };
+        }
+        // QNBS-v3: Anthropic has no public /v1/models endpoint — a minimal (max_tokens: 1) real
+        // request is the practical connectivity check, mirroring the pattern used for Grok.
+        const res = await localServerFetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'claude-haiku-4-5',
+            max_tokens: 1,
+            messages: [{ role: 'user', content: 'ping' }],
+          }),
+        });
+        if (!res.ok) {
+          return {
+            ok: false,
+            error: `HTTP ${res.status}`,
+            kind: 'httpError',
+            params: { status: res.status },
+          };
+        }
+        return { ok: true };
+      }
       case 'grok': {
         const apiKey = await storageService.getApiKey('grok');
         if (!apiKey) {

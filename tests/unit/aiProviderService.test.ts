@@ -32,6 +32,15 @@ vi.mock('../../services/ollamaService', () => ({
   testOllamaConnection: vi.fn().mockResolvedValue({ ok: true }),
 }));
 
+// QNBS-v3 (ADR-0016 Track A): localServerFetch's own Tauri-vs-web routing is already fully
+// covered by localServerHttp.test.ts — mock only its native dependency (plugin-http) here,
+// exactly like that file does, so the real localServerFetch (used by both the new Anthropic
+// path and the pre-existing local-server scan) keeps working for every other test in this file.
+const mockPluginHttpFetch = vi.fn();
+vi.mock('@tauri-apps/plugin-http', () => ({
+  fetch: (...args: unknown[]) => mockPluginHttpFetch(...args),
+}));
+
 import {
   generateImage,
   generateJson,
@@ -319,6 +328,90 @@ describe('testAIConnection — ollama desktop branch', () => {
     const result = await testAIConnection('ollama', {});
     expect(result.ok).toBe(false);
     expect(result.error).toContain('timed out');
+  });
+});
+
+// QNBS-v3 (ADR-0016 Track A): CORS is a browser-only restriction — on desktop, Anthropic is
+// called directly via localServerFetch's native-HTTP escape hatch (plugin-http), same pattern
+// as Ollama. localServerFetch itself falls back to globalThis.fetch outside Tauri.
+describe('Anthropic — desktop branch (ADR-0016 Track A)', () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    delete (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+    globalThis.fetch = originalFetch;
+  });
+
+  it('testAIConnection: returns noApiKey when no Claude key is stored under Tauri', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce(null);
+    const result = await testAIConnection('anthropic', {});
+    expect(result.ok).toBe(false);
+    expect(result.kind).toBe('noApiKey');
+  });
+
+  it('testAIConnection: returns ok:true when the native call succeeds under Tauri', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('anthropic-key');
+    mockPluginHttpFetch.mockResolvedValueOnce(new Response('{}', { status: 200 }));
+    const result = await testAIConnection('anthropic', {});
+    expect(result.ok).toBe(true);
+    expect(mockPluginHttpFetch).toHaveBeenCalledWith(
+      'https://api.anthropic.com/v1/messages',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'x-api-key': 'anthropic-key' }),
+      }),
+    );
+  });
+
+  it('testAIConnection: returns httpError when the native call fails under Tauri', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('anthropic-key');
+    mockPluginHttpFetch.mockResolvedValueOnce(new Response('{}', { status: 401 }));
+    const result = await testAIConnection('anthropic', {});
+    expect(result.ok).toBe(false);
+    expect(result.kind).toBe('httpError');
+    expect(result.params).toEqual({ status: 401 });
+  });
+
+  it('testAIConnection: still returns backendProxyRequired outside Tauri (web unchanged)', async () => {
+    const result = await testAIConnection('anthropic', {});
+    expect(result.ok).toBe(false);
+    expect(result.kind).toBe('backendProxyRequired');
+    expect(mockPluginHttpFetch).not.toHaveBeenCalled();
+  });
+
+  it('streamText: delivers a real Claude response via onChunk under Tauri instead of throwing', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('anthropic-key');
+    mockPluginHttpFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ content: [{ type: 'text', text: 'Hello from Claude' }] }), {
+        status: 200,
+      }),
+    );
+    const onChunk = vi.fn();
+    await streamText(
+      'hello',
+      'Balanced',
+      { provider: 'anthropic', model: 'claude-haiku-4-5' },
+      { onChunk },
+    );
+    expect(onChunk).toHaveBeenCalledWith('Hello from Claude');
+  });
+
+  it('streamText: still throws the CORS message outside Tauri (web unchanged)', async () => {
+    await expect(
+      streamText(
+        'hello',
+        'Balanced',
+        { provider: 'anthropic', model: 'claude-haiku-4-5' },
+        {
+          onChunk: vi.fn(),
+        },
+      ),
+    ).rejects.toThrow('CORS');
+    expect(mockPluginHttpFetch).not.toHaveBeenCalled();
   });
 });
 

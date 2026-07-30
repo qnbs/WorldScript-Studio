@@ -1724,6 +1724,7 @@
   "settings.ai.adaptive.warmedModelsHint": "Модели, хранящиеся в памяти для быстрого вывода",
   "settings.ai.anthropicCorsNote": "Anthropic Claude нельзя вызвать напрямую из браузера. Настройте прокси-сервер или используйте настольное приложение Tauri для вызовов Anthropic.",
   "settings.ai.anthropicHint": "Для вызовов API Anthropic требуется прокси-сервер или настольное приложение Tauri.",
+  "settings.ai.anthropicKey": "Claude API Key",
   "settings.ai.connectionFailed": "Соединение не удалось",
   "settings.ai.connectionSuccess": "Соединение успешно",
   "settings.ai.corsRestriction": "Ограничение CORS",

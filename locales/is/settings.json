@@ -106,6 +106,7 @@
   "settings.ai.adaptive.warmedModelsHint": "Líkön tilbúin í minni fyrir hraða ályktanir",
   "settings.ai.anthropicCorsNote": "Ekki er hægt að hringja í Anthropic Claude beint úr vafranum. Settu upp proxy-miðlara eða notaðu Tauri skrifborðsforritið fyrir antropísk símtöl.",
   "settings.ai.anthropicHint": "Anthropic krefst proxy-þjóns eða Tauri skrifborðsforritsins fyrir API símtöl.",
+  "settings.ai.anthropicKey": "Claude API Key",
   "settings.ai.connectionFailed": "Tenging mistókst",
   "settings.ai.connectionSuccess": "Tenging tókst",
   "settings.ai.corsRestriction": "CORS takmörkun",
