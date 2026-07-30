@@ -441,7 +441,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
               </div>
             )}
             {!isDesktop && browserOllamaEnabled && (
-              // QNBS-v3 (ADR-0017, Issue #266): the "technically: yes" opt-in path — direct browser
+              // QNBS-v3 (ADR-0017): the "technically: yes" opt-in path — direct browser
               // fetch works only if the user's own Ollama server was started with OLLAMA_ORIGINS
               // covering this exact origin. Not a proxy, not a bypass; same real-CORS model
               // NovelCrafter's browser-Ollama support uses. Command is computed from the current

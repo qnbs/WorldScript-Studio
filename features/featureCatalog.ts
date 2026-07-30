@@ -340,7 +340,7 @@ const RAW_FEATURE_CATALOG: CatalogEntryInput[] = [
       'components/settings/AiSections.tsx',
     ],
     drifts: [],
-    roadmapTarget: 'Issue #266 follow-up — see docs/adr/0017-pwa-browser-ollama-opt-in.md',
+    roadmapTarget: 'GitHub issue 266 follow-up — see docs/adr/0017-pwa-browser-ollama-opt-in.md',
   },
 
   // ── Pipeline ────────────────────────────────────────────────────────────
