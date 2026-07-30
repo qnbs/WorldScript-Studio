@@ -6593,7 +6593,7 @@ dependencies = [
 
 [[package]]
 name = "worldscript-studio"
-version = "1.24.1"
+version = "1.24.3"
 dependencies = [
  "base64 0.22.1",
  "candle-core",
