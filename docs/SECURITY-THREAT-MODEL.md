@@ -45,6 +45,7 @@ This document provides a formal STRIDE threat analysis for WorldScript Studio, m
 | DuckDB analytics unencrypted (SEC-6) | **Bounded by design:** only local metadata is persisted (titles, loglines, character names, codex excerpts, word counts, embeddings) — **never manuscript prose**, and **nothing leaves the device**. Gated by `enableDuckDbAnalytics` **and** the Settings → Privacy "Analytics" opt-out (`isAnalyticsPersistenceAllowed` in `app/listenerMiddleware.ts`); turning the toggle off stops all DuckDB writes + inference telemetry. Full OPFS file / cell-level (`*_enc`) encryption is **deferred to v2.0** — DuckDB-WASM owns the OPFS file write, so transparent file encryption is high-risk for the limited exposure. The `duckdbEncryption.ts` shim has 0 callers by design until then. | `app/listenerMiddleware.ts:isAnalyticsPersistenceAllowed`, `services/duckdb/duckdbEncryption.ts` |
 | Prompt injection exposing context | Prompt sanitization | `services/ai/ragPromptAssembly.ts:sanitizePromptBlock()` |
 | Prompt injection via AI-proposed edits | Control-character / lone-surrogate validation; per-item skip | `services/proForge/applyReviewEdits.ts:validateProposedText()` |
+| Claude BYOK key transits WorldScript's own infrastructure (web/PWA only — see §Claude serverless proxy below) | Stateless relay, no logging of key/prompt/response on any path; same-origin check rejects third-party callers | `api/_shared/claudeProxyCore.ts:handleClaudeProxyRequest()` |
 
 ### D - Denial of Service
 
@@ -54,6 +55,7 @@ This document provides a formal STRIDE threat analysis for WorldScript Studio, m
 | Worker pool exhaustion | PriorityTaskQueue with MAX_QUEUE_SIZE=32 | `packages/worker-bus/src/taskQueue.ts` |
 | Infinite AI retry loops | Exponential backoff with cap (30s) | `services/ai/aiRetry.ts` |
 | Malicious plugin CPU burn | Worker isolation with timeout | `workers/plugin.worker.ts` (P0-2) |
+| Public `claude-proxy` endpoint used as an open relay / resource-exhaustion surface (CWE-400) | Zod schema validation, 256 KiB body-size cap (checked via header **and** actual body length), same-origin check, per-client in-memory rate limit (20 req/60s), 20s outbound timeout to Anthropic | `api/_shared/claudeProxyCore.ts` |
 
 ### E - Elevation of Privilege
 
@@ -147,6 +149,7 @@ Goal: Recover a user's cloud-provider API key from the Tauri desktop install
 | `index.html` (web PWA) | I | CSP `connect-src 'self' https:` — broad HTTPS by design for BYOK; no `http:`/`ws:` wildcards | ⚠️ Documented tradeoff ([ADR-0004](adr/0004-csp-connect-src-byok-tradeoff.md)) |
 | `vercel.json` / `public/_headers` / `nginx.conf` | I | `Content-Security-Policy` response header, mirrors the meta CSP (`frame-ancestors 'none'` only takes effect as a header) | ✅ Complete on Vercel/CF/Docker. **GitHub Pages cannot set response headers at all** — the `index.html` meta CSP is the sole enforcement there. |
 | `script-src` (all 5 CSP surfaces) | D (denial of advertised functionality) | `'wasm-unsafe-eval'` (not `'unsafe-eval'`) — WebAssembly compile/instantiate for WebLLM/ONNX/Transformers.js/DuckDB-WASM/Whisper/Kokoro; plugin-sandbox WASM denial (`workers/plugin.worker.ts`) is a separate JS-level guard, unaffected | ✅ Complete ([ADR-0013](adr/0013-csp-wasm-and-blob-frames.md)) — was absent 2026-05-27 to 2026-07-29, blocking the entire local-inference stack in production (F-01/F-02) |
+| `api/_shared/claudeProxyCore.ts` (Vercel Edge Function + Cloudflare Pages Function) | I, D | Schema validation, body-size cap, same-origin check, per-client rate limit, outbound timeout, no logging of key/prompt/response on any path | ✅ Complete ([ADR-0016](adr/0016-native-grok-and-claude-providers.md) Track B) |
 
 ### CSP connect-src: web-vs-Tauri asymmetry (ADR-0004)
 
@@ -189,6 +192,38 @@ success and error paths, independent of CSP; the adversarial tests in
 `tests/unit/workers/plugin.worker.test.ts` remain green, unaffected. Full decision record:
 [`docs/adr/0013-csp-wasm-and-blob-frames.md`](adr/0013-csp-wasm-and-blob-frames.md).
 
+### Claude serverless proxy trust-model change (ADR-0016 Track B)
+
+Every cloud AI provider in WorldScript except Claude-on-web is a **direct browser→provider** call —
+the user's API key leaves their machine and goes straight to Gemini/OpenAI/Grok/OpenRouter, never
+touching WorldScript's own infrastructure. **This is the one exception.** Anthropic blocks direct
+browser requests entirely (no CORS allowlist WorldScript can request), so the web/PWA build (Vercel,
+Cloudflare Pages — not GitHub Pages, which is static-only and can host neither function) relays
+Claude calls through `api/claude-proxy.ts` / `functions/api/claude-proxy.ts`, both thin
+platform-specific wrappers around the shared `api/_shared/claudeProxyCore.ts` relay. Concretely: the
+user's browser → WorldScript's own Vercel/Cloudflare deployment → `api.anthropic.com`. The desktop
+app (Tauri, ADR-0012's native-HTTP escape hatch — see [ADR-0016 Track A](adr/0016-native-grok-and-claude-providers.md))
+does **not** go through this proxy; it calls Anthropic directly, matching every other provider's
+trust model.
+
+**Statelessness guarantee:** the proxy is a pure relay. It never writes the API key, prompt, or
+response to any log, database, or cache — `tests/unit/api/claudeProxyCore.test.ts` asserts
+`console.log`/`.warn`/`.error` are never called on any code path (success, validation failure, rate
+limit, upstream error). **Abuse controls** (the endpoint is public and unauthenticated by
+necessity — it exists so *any* user's own browser can reach it): Zod schema validation, a 256 KiB
+body-size cap enforced against both the declared `Content-Length` header and the actual received
+body length (defeats a spoofed header), a same-origin check (`Origin` header must match the
+deployment's own host — rejects third-party pages driving traffic through the proxy with a stolen
+or attacker-supplied key), a best-effort per-client-IP rate limit (20 requests/60s, in-memory —
+genuinely per-instance, not distributed; see the code comment for why a platform KV/rate-limit
+product was judged out of scope), and a 20s timeout on the outbound call to Anthropic so a hung
+upstream can't tie up function instances indefinitely.
+
+**What this does *not* change:** the proxy never sees the user's manuscript content in a way it
+didn't already see as the request body — it is a transit point, not a new data store. It also
+doesn't affect the CSP tradeoff above (ADR-0004): the client→proxy leg is same-origin (`'self'`,
+already allowed), and the proxy→Anthropic leg is server-side, never subject to browser CSP at all.
+
 ## Security Checklist
 
 - [x] PBKDF2 iterations ≥ 600,000 (OWASP 2024 minimum)
@@ -203,6 +238,7 @@ success and error paths, independent of CSP; the adversarial tests in
 - [x] DuckDB analytics privacy-gated (SEC-6) — writes require `enableDuckDbAnalytics` **and** the Settings → Privacy "Analytics" opt-out (`isAnalyticsPersistenceAllowed`, `app/listenerMiddleware.ts`); only local metadata is stored, never prose, nothing leaves the device.
 - [ ] DuckDB OPFS at-rest encryption (P0-4 / SEC-6) — **deferred to v2.0.** Encryption module + unit tests exist (`services/duckdb/duckdbEncryption.ts`) but stay unwired (0 callers by design): DuckDB-WASM owns the OPFS file write, so transparent file encryption is high-risk for the bounded, local-only metadata exposure.
 - [x] Voice WASM download UX (P0-5) — `components/voice/VoiceModelDownloadModal.tsx`
+- [x] Claude web proxy (ADR-0016 Track B): stateless (no key/prompt/response logging), schema-validated, body-size-capped, same-origin-checked, rate-limited, timeout-bounded — `api/_shared/claudeProxyCore.ts`
 
 ## References
 
