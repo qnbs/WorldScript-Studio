@@ -7,9 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.24.3] — 2026-07-30
+
 > Worker-generation consolidation sprint: the v1/WorkerBus-v2 duplication [ADR-0014](docs/adr/0014-worker-generation-duplication.md)
-> deferred is now closed out. Executed as 4 stacked PRs (#286–288, #290); see
-> [ADR-0015](docs/adr/0015-worker-generation-consolidation.md) for the full decision record.
+> deferred is now closed out. Executed as 5 stacked PRs (#286–288, #290–291), plus the independent
+> #289 (Vercel auto-deploy pause); see
+> [ADR-0015](docs/adr/0015-worker-generation-consolidation.md) for the full decision record. This
+> release also recovers a merge queue interrupted mid-session by a local editor crash — all five
+> PRs required a fresh sync-merge conflict resolution against the accumulated fixes below before
+> landing; see `docs/audit/` for the run log.
 
 ### Changed
 
@@ -23,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The shared `inference` WorkerBus pool's `maxWorkers` capped at 2 (was 4) — each replica
   independently loads its own transformers.js pipeline with no cross-replica cache sharing, so 4
   concurrent workers under a burst could mean 4x the model memory footprint.
+- **Vercel auto-deploy paused mid-term** after 2 consecutive preview-deployment failures with only a
+  generic "Deployment has failed" message and no reproducing local failure — GitHub Pages and
+  Cloudflare Pages remain live and unaffected while the platform-side cause is investigated.
 
 ### Fixed
 
@@ -44,6 +53,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `tsgo` typecheck. Root-caused by reproducing Vercel's *exact* build command
   (`pnpm run build:edge`, which differs from the plain `pnpm run build` used for an earlier,
   misleading local repro attempt) and fixed by adding the missing function.
+- **A reused `AbortSignal` leaked one `'abort'` listener per call** in `duckdbClient.ts`'s `send()`
+  — `{once: true}` only self-removes once the signal actually fires, so a caller reusing one signal
+  across many non-aborted queries (a common hook/thunk pattern) accumulated listeners for the
+  signal's whole lifetime. Fixed with an explicit `finally`-block `removeEventListener`.
+- **`ensureDuckDbPool()`/`ensureInferencePool()` could reject instead of degrading gracefully** —
+  their pool re-registration helpers awaited a lazy import and called `registerPool()` without a
+  catch, so a re-registration failure after the bus was already live broke the documented "returns
+  null only if init failed" contract. Both now log the failure and return the live bus instead of
+  propagating the rejection.
 
 ### Removed
 
