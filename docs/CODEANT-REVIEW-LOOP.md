@@ -8,6 +8,14 @@
 >
 > **See also:** [`DEEPSOURCE-REVIEW-LOOP.md`](DEEPSOURCE-REVIEW-LOOP.md) — the complementary,
 > token-free static-analysis loop. A PR is "review-quiescent" only when **both** are satisfied.
+>
+> **Which bot actually posts inline comments (2026-07-30 observation):** in practice, **CodeRabbit**
+> is the reviewer posting inline actionable/nitpick/outside-diff-range comments on PRs in this
+> repository — re-trigger it with `gh pr comment <N> --body "@coderabbitai review"`. `CodeAnt AI`
+> shows up as five CI **status checks** (`CodeAnt - Quality Gates/SAST/SCA/SCR/Test Coverage`) to
+> verify green, not as a comment thread requiring reply + resolve. The loop mechanics below apply
+> to whichever bot(s) are actually posting comments on a given PR — check the full review history
+> (not just the latest status) before concluding there's nothing to fix.
 
 ## 0. When this runs — proactively, automatically, every PR
 

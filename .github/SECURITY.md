@@ -4,8 +4,8 @@
 
 | Version | Supported |
 | --- | --- |
-| `main` (v1.19.0) | ✅ Full support |
-| `1.3.x – 1.18.x` | ⚠️ Best effort (upgrade strongly recommended) |
+| `main` (v1.24.3) | ✅ Full support |
+| `1.3.x – 1.23.x` | ⚠️ Best effort (upgrade strongly recommended) |
 | `< 1.3.0` | ❌ Not supported |
 
 Maintainer-facing documentation (CI, contributing, architecture) is indexed in [`README.md`](README.md#-documentation-hub) and enumerated in [`AUDIT.md`](AUDIT.md).

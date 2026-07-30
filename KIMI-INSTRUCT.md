@@ -40,6 +40,13 @@ Dieses Projekt läuft auf Low-End-Hardware. Beachte strikt:
 
 Dieser Workflow ist die Standardvorgehensweise, wenn der Nutzer um Behebung von CodeAnt-Kommentaren bittet.
 
+> **In der Praxis (Beobachtung 2026-07-30):** Der Bot, der tatsächlich Inline-Kommentare postet, ist
+> **CodeRabbit** (`@coderabbitai review` zum erneuten Triggern) — nicht CodeAnt AI. CodeAnt AI
+> erscheint als 5 CI-Status-Checks (`CodeAnt - Quality Gates/SAST/SCA/SCR/Test Coverage`), die auf
+> Grün geprüft werden, aber kein Kommentar-Thread zum Beantworten/Resolven sind. Wende den Loop
+> unten auf den Bot an, der tatsächlich Kommentare postet — prüfe dabei die komplette Review-Historie,
+> nicht nur den letzten Status (ein „rate limited"-Status kann eine frühere echte Review verdecken).
+
 ### 3.1 Threads abrufen
 
 Nutze **GitHub GraphQL** über `gh api graphql`, um den Status aller Review-Threads zu sehen:

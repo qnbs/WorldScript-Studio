@@ -44,19 +44,19 @@ The app supports a multi-provider AI stack (Gemini, OpenAI, Claude, Grok, OpenRo
 | Layer | Technology |
 |-------|------------|
 | Runtime | Node.js `>=22.0.0` (`.nvmrc` → `22`), pnpm `>=11.0.0` (`packageManager: pnpm@11.5.2`) |
-| Framework | React `^19.2.7`, TypeScript `~6.0.3` (strict) |
+| Framework | React `^19.2.7`, TypeScript 7 via `@typescript/native-preview` (tsgo, strict) — no pinned classic `typescript` package |
 | Build tool | Vite `^8.0.16` (`vite.config.ts`) |
 | Type checker | `tsgo` (TypeScript Go port) via `tsconfig.tsgo.json` with 4 checkers (`pnpm run typecheck`) |
-| Styling | Tailwind CSS `^4.3.0` via `@tailwindcss/vite` + semantic CSS custom properties (`index.css`) |
-| State | Redux Toolkit `^2.12.0` + `redux-undo` (project slice only); Zustand `^5.0.8` for transient UI (`app/transientUiStore.ts`) |
-| Testing | Vitest `^4.1.8` (jsdom, `maxWorkers: 1`), Playwright `^1.60.0` (E2E, CI-only), Stryker `^9.2.0` (mutation, manual workflow only) |
-| Lint/Format | Biome `^2.4.16` (`biome.json`) — single toolchain for JS/TS/CSS |
+| Styling | Tailwind CSS `^4.3.1` via `@tailwindcss/vite` + semantic CSS custom properties (`index.css`) |
+| State | Redux Toolkit `^2.12.0` + `redux-undo` (project slice only); Zustand `^5.0.14` for transient UI (`app/transientUiStore.ts`) |
+| Testing | Vitest `^4.1.10` (jsdom, `maxWorkers: 1`), Playwright `^1.61.1` (E2E, CI-only), Stryker `^9.2.0` (mutation, manual workflow only) |
+| Lint/Format | Biome `^2.5.4` (`biome.json`) — single toolchain for JS/TS/CSS |
 | AI | Multi-provider: Google Gemini (`@google/genai`), OpenAI, Anthropic Claude, Grok, OpenRouter, Ollama, WebLLM, ONNX Runtime Web, Transformers.js |
 | Voice | Web Speech API (fallback); WASM engines: Whisper.cpp (STT), Kokoro (TTS), Silero VAD; gated by `featureFlags.enableVoiceWasm` |
 | Storage | IndexedDB v8 (`dbService.ts` / `storageService.ts`) / Tauri filesystem (`fileSystemService.ts`); LZ-String compression; AES-256-GCM encryption for API keys and optional IDB at-rest encryption |
 | PWA | `vite-plugin-pwa` with `injectManifest` strategy (`public/sw.js`) |
 | Desktop | Tauri 2 (`src-tauri/`) — Rust toolchain required |
-| Storybook | Storybook `^10.4.2` with `@storybook/react-vite` and `@storybook/addon-a11y` |
+| Storybook | Storybook `^10.5.3` with `@storybook/react-vite` and `@storybook/addon-a11y` |
 | Orchestration | Turborepo (`turbo.json`) for parallel task caching; pnpm workspaces (`packages/*`) |
 | Collaboration | Yjs + `packages/collab-transport` (vendor fork of y-webrtc 10.3.0) with RTCDataChannel AES-256-GCM E2E encryption |
 

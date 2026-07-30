@@ -126,6 +126,10 @@ types.ts          → Core shared interfaces and types
   - **Iron rule — loop until quiescent:** a push triggers a fresh review that often raises NEW
     findings (a "wave"). Repeat until **BOTH** a fresh review yields **0 new comments** AND **0 threads
     unresolved**. Never stop while comments still arrive.
+  - **In practice, CodeRabbit posts the inline comments** — re-trigger it too (`@coderabbitai review`)
+    and check its full review history, not just the latest status (a rate-limited latest status can
+    hide an earlier real review). CodeAnt AI shows up as 5 CI status checks to verify green, not an
+    inline-comment thread.
 
 ### Test Stability Guidelines (QNBS-v3)
 
