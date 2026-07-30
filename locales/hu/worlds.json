@@ -33,6 +33,11 @@
   "worlds.edit.notes": "Megjegyzések",
   "worlds.editorTabsAriaLabel": "Világszerkesztő lapok",
   "worlds.error.imageFailed": "A hangulatkép létrehozása nem sikerült. Kérjük, próbáljon több részletet hozzáadni a világ leírásához, vagy ellenőrizze a kapcsolatot.",
+  "worlds.heuristic.culture": "Describe the peoples, beliefs, and daily life shaped by {{concept}}.",
+  "worlds.heuristic.description": "A world defined by its central premise: {{concept}}.",
+  "worlds.heuristic.geography": "Outline the major regions, climates, and natural features of {{concept}}.",
+  "worlds.heuristic.magicSystem": "Define the rules, costs, and limits of power in {{concept}}.",
+  "worlds.heuristic.name": "New World",
   "worlds.loading.profile": "Részletes világprofil létrehozása...",
   "worlds.newWorldName": "Új Világ",
   "worlds.noWorlds": "Még nem jött létre világ.",
@@ -50,10 +55,5 @@
   "worlds.tabs.timeline": "Előzmények és idővonal",
   "worlds.title": "Világatlasz",
   "worlds.uploadImage": "Kép feltöltése",
-  "worlds.yourWorlds": "A ti világotok",
-  "worlds.heuristic.name": "New World",
-  "worlds.heuristic.description": "A world defined by its central premise: {{concept}}.",
-  "worlds.heuristic.geography": "Outline the major regions, climates, and natural features of {{concept}}.",
-  "worlds.heuristic.magicSystem": "Define the rules, costs, and limits of power in {{concept}}.",
-  "worlds.heuristic.culture": "Describe the peoples, beliefs, and daily life shaped by {{concept}}."
+  "worlds.yourWorlds": "A ti világotok"
 }

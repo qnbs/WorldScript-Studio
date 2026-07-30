@@ -81,6 +81,18 @@ async function resolveModelConfig(
       status: 422,
     };
   }
+  if (kind === 'grok') {
+    const apiKey = await storageService.getApiKey('grok');
+    if (!apiKey) {
+      return { error: 'No Grok API key configured.', status: 401 };
+    }
+    return {
+      provider: 'openaiCompatible',
+      baseURL: 'https://api.x.ai/v1',
+      apiKey,
+      modelId: model.startsWith('grok-') ? model : 'grok-3',
+    };
+  }
   if (kind === 'gemini') {
     const apiKey = await storageService.getGeminiApiKey();
     if (!apiKey) {
