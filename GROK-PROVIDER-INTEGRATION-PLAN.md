@@ -72,7 +72,7 @@ its own architectural treatment, not just a UI patch.
 **Goal:** make Grok selectable as a primary provider with its own API-key field, exactly like
 Gemini/OpenAI.
 
-1. **`components/settings/AiProviderCard.tsx`**: add `{ id: 'grok', label: t('settings.ai.provider.grok') }` (translation key, never a hardcoded literal — see §5 below) to the
+1. **`components/settings/AiProviderCard.tsx`**: add `{ id: 'grok', label: t('settings.ai.provider.grok') }` (translation key, never a hardcoded literal — see item 5 below) to the
    primary options array (currently `gemini | openai | ollama | webllm`, lines 174-177). Add a
    `provider === 'grok'` UI block mirroring the existing `provider === 'openai'` block (lines
    257+): API-key input (`storageService.saveApiKey('grok', ...)` / `clearApiKey('grok')` — the
@@ -287,11 +287,11 @@ to have Claude too, understanding the trust-model change that implies.
 
 ## 7. Addendum — opt-in browser-fetch Ollama for the PWA (Issue #266 follow-up)
 
-**This is a separate initiative from §§1-7 above** — different issue, different mechanism, no
+**This is a separate initiative from §§0-6 above** — different issue, different mechanism, no
 backend involved — bundled into this same plan file at the maintainer's request rather than as a
 second document.
 
-### 8.1 Why this is *not* the same pattern as the Claude proxy
+### 7.1 Why this is *not* the same pattern as the Claude proxy
 
 A hosted serverless proxy (§4) works for Claude because the proxy's *destination* —
 `api.anthropic.com` — is a fixed host reachable from anywhere on the internet, including from
@@ -301,7 +301,7 @@ is `http://localhost:11434` **on the end user's own machine**. A serverless func
 bridges "an internet server reaching into a user's private machine." This is a hard networking
 fact, not a policy choice, and it's why no part of this addendum proposes a proxy.
 
-### 8.2 What actually exists: the maintainer's own "technically: yes" answer in Issue #266
+### 7.2 What actually exists: the maintainer's own "technically: yes" answer in Issue #266
 
 [Issue #266](https://github.com/qnbs/WorldScript-Studio/issues/266) already contains a full,
 correct analysis (comment thread, 2026-07-28/29) of why the PWA doesn't attempt Ollama connections
@@ -322,7 +322,7 @@ plan operationalizes exactly that answer, not a new invention:
   reason this was never made the *default* — but that's an argument against defaulting it on, not
   against offering it as an explicit, clearly-labeled opt-in for users who understand the tradeoff.
 
-### 8.3 Implementation sketch
+### 7.3 Implementation sketch
 
 1. **New feature flag** — e.g. `enableBrowserOllama` — default **off**, opt-in, added through the
    normal `featureFlagsSlice.ts` + `featureCatalog.ts` process this sprint's WS-2 already
@@ -360,11 +360,11 @@ plan operationalizes exactly that answer, not a new invention:
 7. **Docs**: update the existing "desktop app required" banner copy, README, TODO.md, and the
    in-app help article to mention the new opt-in path without implying it's the recommended one —
    desktop remains the recommended, zero-config path for local servers.
-8. **i18n**: same mandatory-translation-key requirement as §5/§8 above — the toggle label, the
-   `OLLAMA_ORIGINS` instructional copy, and the new `cors`-suspected error state all need real
-   `t()` keys across all 19 locales; no hardcoded literals.
+8. **i18n**: same mandatory-translation-key requirement as Phase 1's i18n item (§3.5) above — the
+   toggle label, the `OLLAMA_ORIGINS` instructional copy, and the new `cors`-suspected error state
+   all need real `t()` keys across all 19 locales; no hardcoded literals.
 
-### 8.4 Definition of Done
+### 7.4 Definition of Done
 
 - [ ] New feature flag, default off, follows this repo's existing flag conventions (`pnpm exec tsx scripts/audit-feature-parity.ts` reports 0 drifts)
 - [ ] PWA can optionally attempt a direct Ollama fetch when the flag is on, clearly labeled experimental/unsupported in the UI
