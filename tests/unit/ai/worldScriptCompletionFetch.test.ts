@@ -162,6 +162,16 @@ describe('worldScriptCompletionFetch — missing API key', () => {
     );
     expect(res.status).toBe(401);
   });
+
+  it('returns 401 when Grok API key is missing', async () => {
+    mockProviderToKind.mockReturnValue('grok');
+    mockGetApiKey.mockResolvedValue(null);
+    const res = await worldScriptCompletionFetch(
+      'worldscript-internal://completion',
+      makeInit(makeBody({ provider: 'grok', model: 'grok-3' })),
+    );
+    expect(res.status).toBe(401);
+  });
 });
 
 describe('worldScriptCompletionFetch — abort handling', () => {
@@ -231,6 +241,38 @@ describe('worldScriptCompletionFetch — success (ollama)', () => {
     expect(res.status).toBe(200);
     expect(mockCreateLanguageModelForWorldScript).toHaveBeenCalledWith(
       expect.objectContaining({ provider: 'openaiCompatible', apiKey: 'ollama' }),
+    );
+  });
+});
+
+describe('worldScriptCompletionFetch — success (grok)', () => {
+  it('resolves grok to openaiCompatible with the fixed xAI baseURL and the stored key', async () => {
+    mockProviderToKind.mockReturnValue('grok');
+    mockGetApiKey.mockResolvedValue('grok-key');
+    const res = await worldScriptCompletionFetch(
+      'worldscript-internal://completion',
+      makeInit(makeBody({ provider: 'grok', model: 'grok-3-mini' })),
+    );
+    expect(res.status).toBe(200);
+    expect(mockCreateLanguageModelForWorldScript).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'openaiCompatible',
+        baseURL: 'https://api.x.ai/v1',
+        apiKey: 'grok-key',
+        modelId: 'grok-3-mini',
+      }),
+    );
+  });
+
+  it('defaults modelId to grok-3 when the stored model is not a grok- id', async () => {
+    mockProviderToKind.mockReturnValue('grok');
+    mockGetApiKey.mockResolvedValue('grok-key');
+    await worldScriptCompletionFetch(
+      'worldscript-internal://completion',
+      makeInit(makeBody({ provider: 'grok', model: 'some-other-id' })),
+    );
+    expect(mockCreateLanguageModelForWorldScript).toHaveBeenCalledWith(
+      expect.objectContaining({ modelId: 'grok-3' }),
     );
   });
 });

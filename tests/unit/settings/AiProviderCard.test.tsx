@@ -7,6 +7,7 @@ import {
   scanLocalOpenAiCompatibleEndpoints,
   testAIConnection,
 } from '../../../services/aiProviderService';
+import { storageService } from '../../../services/storageService';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -63,6 +64,8 @@ const mockOnAdvancedAiPatch = vi.fn();
 const mockOnProviderChange = vi.fn();
 
 const ollamaAdvancedAi = { ...mockAdvancedAi, provider: 'ollama' as const };
+// QNBS-v3: fixture for the grok-provider describe block below.
+const grokAdvancedAi = { ...mockAdvancedAi, provider: 'grok' as const, model: 'grok-3' as const };
 
 function setDesktopRuntime(enabled: boolean): void {
   const w = window as Window & { __TAURI_INTERNALS__?: unknown };
@@ -114,9 +117,12 @@ describe('AiProviderCard', () => {
         onProviderChange={mockOnProviderChange}
       />,
     );
-    expect(screen.getByText('Google Gemini')).toBeTruthy();
-    expect(screen.getByText('OpenAI')).toBeTruthy();
-    expect(screen.getByText('Ollama (lokal)')).toBeTruthy();
+    // QNBS-v3: labels are translation keys now (t mock echoes the key) — was hardcoded literals
+    expect(screen.getByText('settings.ai.provider.gemini')).toBeTruthy();
+    expect(screen.getByText('settings.ai.provider.openai')).toBeTruthy();
+    expect(screen.getByText('settings.ai.provider.ollama')).toBeTruthy();
+    expect(screen.getByText('settings.ai.provider.anthropic')).toBeTruthy();
+    expect(screen.getByText('settings.ai.provider.grok')).toBeTruthy();
   });
 
   it('shows description text', () => {
@@ -335,5 +341,45 @@ describe('AiProviderCard — ollama provider (#266)', () => {
       expect(screen.getAllByText('settings.ai.testError.unexpected').length).toBeGreaterThan(0);
     });
     expect(screen.queryByText(/something internal broke/)).toBeNull();
+  });
+});
+
+// QNBS-v3: covers the new grok key-input/model-selector UI added in Phase 1 (ADR-0016).
+describe('AiProviderCard — grok provider', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('renders the API-key input and model selector for grok', async () => {
+    render(
+      <AiProviderCard
+        advancedAi={grokAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    expect(screen.getByLabelText('settings.ai.grokKey')).toBeTruthy();
+    // QNBS-v3: the Select renders only the currently-selected option's label when closed, so "Grok 3 Mini" isn't asserted here.
+    await waitFor(() => {
+      expect(screen.getByText('Grok 3')).toBeTruthy();
+    });
+  });
+
+  it('saves the entered key via storageService.saveApiKey("grok", ...)', async () => {
+    const user = userEvent.setup();
+    render(
+      <AiProviderCard
+        advancedAi={grokAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    const input = screen.getByLabelText('settings.ai.grokKey');
+    await user.type(input, 'xai-test-key');
+    const saveButton = screen.getByText('settings.ai.save');
+    await user.click(saveButton);
+    await waitFor(() => {
+      expect(storageService.saveApiKey).toHaveBeenCalledWith('grok', 'xai-test-key');
+    });
   });
 });

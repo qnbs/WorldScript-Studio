@@ -76,14 +76,18 @@ export function createLanguageModelForWorldScript(
 /** Mappt Redux-`AIProvider` auf Fabrik-Union (ohne Keys — Auflösung in `worldScriptCompletionFetch`). */
 export function providerToKind(
   provider: AIProvider,
-): 'gemini' | 'openai' | 'openaiCompatible' | 'unsupported' {
-  // QNBS-v3: webllm/onnx/transformers route through localAiFacade, not this factory.
-  // anthropic/grok are reserved in the type union but not yet implemented here.
+): 'gemini' | 'openai' | 'grok' | 'openaiCompatible' | 'unsupported' {
+  // QNBS-v3: webllm/onnx/transformers route through localAiFacade, not this factory. `grok` gets
+  // its own kind (not folded into 'openaiCompatible') because it needs a fixed baseURL + a real
+  // stored key, unlike the Ollama default this same 'openaiCompatible' path also serves.
+  // anthropic is reserved in the type union but not yet implemented here (see ADR-0016).
   switch (provider) {
     case 'gemini':
       return 'gemini';
     case 'openai':
       return 'openai';
+    case 'grok':
+      return 'grok';
     case 'ollama':
       return 'openaiCompatible';
     default:

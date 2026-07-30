@@ -2,10 +2,13 @@ import { configureStore, type Reducer } from '@reduxjs/toolkit';
 import undoable from 'redux-undo';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { listenerMiddleware } from '../../app/listenerMiddleware';
+import type { RootState } from '../../app/store';
 import { useTransientUiStore } from '../../app/transientUiStore';
+// QNBS-v3: featureFlagsActions dispatches setEnableLocalFirstSync to exercise the local-first listener below
 import featureFlagsReducer, {
   featureFlagsActions,
 } from '../../features/featureFlags/featureFlagsSlice';
+import { selectProjectData } from '../../features/project/projectSelectors';
 import projectReducer, { projectActions } from '../../features/project/projectSlice';
 import settingsReducer, { settingsActions } from '../../features/settings/settingsSlice';
 import statusReducer, { statusActions } from '../../features/status/statusSlice';
@@ -54,6 +57,34 @@ vi.mock('../../services/logger', () => ({
 
 vi.mock('../../services/storageBackend', () => ({
   saveEnvelopeFromProjectData: (data: unknown) => mockSaveEnvelope(data),
+}));
+
+// QNBS-v3: stub the real Yjs doc/binding/persistence chain so the test asserts selectProjectData's exact payload, not real Yjs behavior.
+const mockSyncFromProject = vi.fn();
+const mockVerify = vi.fn().mockReturnValue({ ok: true, mismatches: [] });
+const mockReproject = vi.fn();
+let lastBindingCtorArg: unknown;
+vi.mock('../../services/localFirst/projectDoc', () => ({
+  createBlankProjectDoc: vi.fn(() => ({})),
+}));
+// QNBS-v3: a class, not a function expression — the real code calls `new ProjectDocBinding(...)`, and Biome's useArrowFunction rule would otherwise rewrite a function expression into a non-constructible arrow function.
+class MockProjectDocBinding {
+  syncFromProject = mockSyncFromProject;
+  verify = mockVerify;
+  reproject = mockReproject;
+  constructor(initial: unknown) {
+    lastBindingCtorArg = initial;
+  }
+}
+vi.mock('../../services/localFirst/docBinding', () => ({
+  ProjectDocBinding: MockProjectDocBinding,
+}));
+vi.mock('../../services/localFirst/docPersistence', () => ({
+  NOOP_PERSISTENCE: { active: false, whenSynced: Promise.resolve() },
+  persistProjectDoc: vi.fn(() => ({ active: true, whenSynced: Promise.resolve() })),
+}));
+vi.mock('../../services/storage/storageEncryptionService', () => ({
+  isIdbEncryptionReady: vi.fn(() => true),
 }));
 
 // QNBS-v3: Phase 0 audit — duckdbListenerLoader is lazily imported in listenerMiddleware.
@@ -454,18 +485,22 @@ describe('analytics privacy opt-out gating', () => {
   });
 });
 
+// QNBS-v3: covers canonical selector use during local-first sync — prevents project-data selection regressions
 describe('local-first shadow sync (B1.1)', () => {
-  it('reads project data via the canonical selector when the flag flips on', async () => {
+  it('passes the canonical selector output straight through to the binding', async () => {
     const store = makeFullStore();
+    store.dispatch(projectActions.updateTitle('Local-First Title'));
     store.dispatch(featureFlagsActions.setEnableLocalFirstSync(true));
     await vi.advanceTimersByTimeAsync(100);
-    // getLocalFirstHandle's dynamic imports (Yjs doc/binding/persistence) aren't mocked in this
-    // suite; whatever happens next is caught internally and logged as non-critical (see
-    // listenerMiddleware.ts's runLocalFirstShadowSync catch block) — this test only needs to prove
-    // the selector line runs and the listener doesn't throw out to the store.
-    // Real dynamic-imported Yjs doc/binding modules run for real here (not mocked) — a freshly
-    // created shadow doc synced from the same present data has nothing to drift against, so a
-    // clean run logs neither a warning (self-heal) nor an error.
+
+    // Asserts the actual selector→sync boundary directly (per review feedback) instead of
+    // inferring success from an absence of logger calls: the exact object selectProjectData(state)
+    // returns must be what reaches ProjectDocBinding's constructor and syncFromProject/verify.
+    const presentData = selectProjectData(store.getState() as unknown as RootState);
+    expect(lastBindingCtorArg).toBe(presentData);
+    expect(mockSyncFromProject).toHaveBeenCalledWith(presentData);
+    expect(mockVerify).toHaveBeenCalledWith(presentData);
+    expect(mockReproject).not.toHaveBeenCalled();
     expect(mockLoggerWarn).not.toHaveBeenCalled();
     expect(mockLoggerError).not.toHaveBeenCalled();
   });
