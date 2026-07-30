@@ -115,7 +115,8 @@ describe('analyzeSentiment', () => {
 
   it('omits the inferenceOptions key entirely when none is passed (exactOptionalPropertyTypes)', async () => {
     await analyzeSentiment('test');
-    expect(Object.hasOwn(requestCalls[0] ?? {}, 'inferenceOptions')).toBe(false);
+    expect(requestCalls).toHaveLength(1);
+    expect(Object.hasOwn(requestCalls[0]!, 'inferenceOptions')).toBe(false);
   });
 });
 
