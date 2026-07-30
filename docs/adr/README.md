@@ -21,6 +21,7 @@ than editing history.
 | [0013](0013-csp-wasm-and-blob-frames.md) | CSP `'wasm-unsafe-eval'` and `frame-src blob:` | Accepted |
 | [0014](0014-worker-generation-duplication.md) | Two live worker generations (v1 and WorkerBus v2) | Superseded by 0015 |
 | [0015](0015-worker-generation-consolidation.md) | Worker-generation consolidation: v1 retired, WorkerBus v2 is the sole generation | Accepted |
+| [0016](0016-native-grok-and-claude-providers.md) | Native Grok provider + split Claude fix (desktop native-HTTP, web serverless proxy) | Accepted |
 
 **Format:** Context → Decision → Consequences (incl. rejected alternatives). Keep each ADR to one
 decision. Link related records with `[[slug]]`.
