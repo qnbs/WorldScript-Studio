@@ -66,6 +66,18 @@ vi.mock('../../services/legacyWorkerBusAdapter', () => ({
   }),
 }));
 
+const { mockLogError } = vi.hoisted(() => ({ mockLogError: vi.fn() }));
+
+vi.mock('../../services/logger', () => ({
+  createLogger: () => ({
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: mockLogError,
+    withContext: vi.fn(),
+  }),
+}));
+
 describe('workerBusManager', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -76,6 +88,7 @@ describe('workerBusManager', () => {
     mockHasPool.mockClear();
     mockHasPool.mockReturnValue(true);
     mockInstall.mockClear();
+    mockLogError.mockClear();
   });
 
   afterEach(() => {
@@ -189,6 +202,25 @@ describe('workerBusManager', () => {
         expect.objectContaining({ workerScript: expect.stringContaining('duckdb.worker') }),
       );
     });
+
+    it('logs and returns the live bus instead of rejecting when re-registration fails', async () => {
+      // QNBS-v3: [Regression guard for the documented "null only if init failed" contract — a
+      //          re-registration failure must not propagate out of ensureDuckDbPool.]
+      const { initWorkerBus, ensureDuckDbPool } = await import('../../services/workerBusManager');
+      await initWorkerBus();
+      mockHasPool.mockReturnValue(false);
+      mockRegisterPool.mockImplementationOnce(() => {
+        throw new Error('registerPool boom');
+      });
+
+      const bus = await ensureDuckDbPool();
+
+      expect(bus).not.toBeNull();
+      expect(mockLogError).toHaveBeenCalledWith(
+        'Failed to re-register duckdb pool',
+        expect.any(Error),
+      );
+    });
   });
 
   describe('ensureInferencePool', () => {
@@ -237,6 +269,27 @@ describe('workerBusManager', () => {
           maxWorkers: 2,
           workerScript: expect.stringContaining('inference.worker'),
         }),
+      );
+    });
+
+    it('logs and returns the live bus instead of rejecting when re-registration fails', async () => {
+      // QNBS-v3: [Regression guard for the documented "null only if init failed" contract — a
+      //          re-registration failure must not propagate out of ensureInferencePool.]
+      const { initWorkerBus, ensureInferencePool } = await import(
+        '../../services/workerBusManager'
+      );
+      await initWorkerBus();
+      mockHasPool.mockReturnValue(false);
+      mockRegisterPool.mockImplementationOnce(() => {
+        throw new Error('registerPool boom');
+      });
+
+      const bus = await ensureInferencePool();
+
+      expect(bus).not.toBeNull();
+      expect(mockLogError).toHaveBeenCalledWith(
+        'Failed to re-register inference pool',
+        expect.any(Error),
       );
     });
   });
