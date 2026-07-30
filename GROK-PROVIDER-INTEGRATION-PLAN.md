@@ -264,8 +264,23 @@ to have Claude too, understanding the trust-model change that implies.
 
 ## 7. Sequencing
 
-Per explicit instruction: **do not execute any part of this plan until every other workstream in
-the current post-recovery audit sprint has merged** — WS-3/WS-6 (in progress), WS-4/WS-5/WS-9
-(planned next), and WS-8's close-out re-audit (must run last, against the final merged `main`).
-This plan itself introduces the app's first backend dependency, which is exactly the kind of
-architectural change that should land on a clean, fully-reconciled `main`, not mid-sprint.
+**Updated 2026-07-30 (maintainer re-prioritization, supersedes the original deferral below):**
+execute this plan **immediately after PR #297 (WS-3 + WS-6) merges into `main`** — once its
+CodeRabbit correction loop is quiescent and CI is fully green — **before** WS-4, WS-5, WS-9, and
+the WS-8 close-out. This plan's Phase 0 re-verification step (§2.1) still applies: re-check this
+document's findings against `main` at that point, since PR #297's merge changes the baseline.
+
+WS-4/WS-5/WS-9 and the WS-8 close-out resume after Grok+Claude lands, in their previously-planned
+order. WS-8 still runs last regardless, since its whole purpose is auditing the final merged state
+— including whatever this plan produces.
+
+<details>
+<summary>Original deferral language (superseded above, kept for history)</summary>
+
+Per explicit instruction: do not execute any part of this plan until every other workstream in the
+current post-recovery audit sprint has merged — WS-3/WS-6 (in progress), WS-4/WS-5/WS-9 (planned
+next), and WS-8's close-out re-audit (must run last, against the final merged main). This plan
+itself introduces the app's first backend dependency, which is exactly the kind of architectural
+change that should land on a clean, fully-reconciled main, not mid-sprint.
+
+</details>
