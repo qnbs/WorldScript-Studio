@@ -40,6 +40,13 @@ Dieses Projekt läuft auf Low-End-Hardware. Beachte strikt:
 
 Dieser Workflow ist die Standardvorgehensweise, wenn der Nutzer um Behebung von CodeAnt-Kommentaren bittet.
 
+> **In der Praxis (Beobachtung 2026-07-30):** Der Bot, der tatsächlich Inline-Kommentare postet, ist
+> **CodeRabbit** (`@coderabbitai review` zum erneuten Triggern) — nicht CodeAnt AI. CodeAnt AI
+> erscheint als 5 CI-Status-Checks (`CodeAnt - Quality Gates/SAST/SCA/SCR/Test Coverage`), die auf
+> Grün geprüft werden, aber kein Kommentar-Thread zum Beantworten/Resolven sind. Wende den Loop
+> unten auf den Bot an, der tatsächlich Kommentare postet — prüfe dabei die komplette Review-Historie,
+> nicht nur den letzten Status (ein „rate limited"-Status kann eine frühere echte Review verdecken).
+
 ### 3.1 Threads abrufen
 
 Nutze **GitHub GraphQL** über `gh api graphql`, um den Status aller Review-Threads zu sehen:
@@ -145,14 +152,16 @@ Wiederhole für alle 18+ Threads in Batches.
 Nach dem Schließen aller Threads:
 
 ```bash
-gh pr comment <NUMMER> --body '@codeant-ai review'
+gh pr comment <NUMMER> --body '@coderabbitai review'
 ```
 
-Danach keine Live-Watch-Ausgabe der CI; Ergebnisse später aus den Cloud-Artifacts oder der GitHub-UI prüfen.
+Danach die **komplette** Review-Historie prüfen, nicht nur den letzten Status (ein „rate limited"-Status
+kann eine frühere echte Review verdecken). Keine Live-Watch-Ausgabe der CI; Ergebnisse später aus den
+Cloud-Artifacts oder der GitHub-UI prüfen.
 
 ### 3.7 Iron Rule — Loop bis Ruhe (Abbruchbedingung)
 
-**Der Correction-Loop endet NICHT nach einem Durchgang.** Ein Push, der Kommentare behebt, triggert eine **frische** CodeAnt-Review, die regelmäßig **neue** Findings erzeugt (eine „Welle") — oft als direkte Folge der gerade gemachten Fixes. Jede Welle wird exakt wie die erste behandelt (§3.1 → §3.6).
+**Der Correction-Loop endet NICHT nach einem Durchgang.** Ein Push, der Kommentare behebt, triggert eine **frische** CodeRabbit-Review, die regelmäßig **neue** Findings erzeugt (eine „Welle") — oft als direkte Folge der gerade gemachten Fixes. Jede Welle wird exakt wie die erste behandelt (§3.1 → §3.6).
 
 > **Abbruchbedingung (BEIDES muss gelten):**
 > 1. Eine frisch getriggerte Review liefert **0 neue Inline-Kommentare**, **und**

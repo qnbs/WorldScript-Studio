@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/Storage-IndexedDB_v8-F59E0B" alt="IndexedDB v8">
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
   <img src="https://img.shields.io/badge/i18n-19_locales-2849_keys-0EA5E9" alt="i18n 19 locales — 2849 keys">
-  <img src="https://img.shields.io/badge/Tests-5807%2B_%2F_531_files-22C55E" alt="5807+ tests / 531 files">
+  <img src="https://img.shields.io/badge/Tests-6477_%2F_529_files-22C55E" alt="6477 tests / 529 files">
   <img src="https://img.shields.io/codecov/c/github/qnbs/WorldScript-Studio?logo=codecov&label=Coverage" alt="Codecov Coverage">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">
   <img src="https://img.shields.io/github/actions/workflow/status/qnbs/WorldScript-Studio/.github/workflows/ci.yml?branch=main&logo=github" alt="CI Status">
@@ -80,7 +80,6 @@ Two always-on hosted builds — open whichever you prefer (identical app, both a
 - [A Creative Workflow](#-a-creative-workflow)
 - [Contributing](#-contributing)
 - [Documentation Hub](#-documentation-hub)
-- [Deutsche Version (German)](#-worldscript-studio-deutsch)
 
 ---
 
@@ -210,6 +209,16 @@ Your tireless creative co-pilot, available at every stage:
 
 A dedicated view using **Retrieval-Augmented Generation (RAG)** to give the AI deep, contextualized knowledge of your _entire_ project. It cross-checks your manuscript against character profiles and world-building notes to surface subtle inconsistencies and continuity errors that a read-through would miss.
 
+### 🧩 Story Organization & Research
+
+Rounding out the creative suite with dedicated tools for the parts of a story that live outside the manuscript itself — all on by default:
+
+- **Story Objects & Groups** — an inventory view for props, weapons, vehicles, artifacts, documents, and any other place-item, with group tagging to keep a large prop list navigable (`components/ObjectsView.tsx`).
+- **Enhanced Mind Maps** — an SVG mind-map canvas with 5 node shapes, entity-linking straight to characters and scenes, and multi-map management for brainstorming world lore or plot branches (`components/mind-map/`).
+- **Character Interviews v2** _(experimental)_ — archetype-based AI interview sessions with streaming responses, for developing a character's voice through simulated Q&A rather than a static form.
+- **Research Binder** — a sidebar panel inside the Manuscript view for collecting web clips, notes, and reference material alongside the scene you're writing, so research never leaves the editor.
+- **Compile Wizard** _(experimental)_ — a step-by-step guided flow on the Export view for configuring output format, trim size, and style before generating the final manuscript file.
+
 ### 🚀 ProForge Ultimate Author Pipeline _(Experimental — `enableProForge`)_
 
 An 8-stage agentic manuscript editing pipeline that transforms the Writer view into a full **Human-in-the-Loop** editorial workflow — from raw draft to publication-ready manuscript. All processing runs client-side; no cloud dependency for the pipeline itself.
@@ -327,6 +336,19 @@ different data, with different key material:
 | **Library backup vault** | User passphrase → PBKDF2 (600 000 iterations, SHA-256) → AES-256-GCM | `services/libraryBackupService.ts` |
 
 See [`docs/SECURITY-THREAT-MODEL.md`](docs/SECURITY-THREAT-MODEL.md) for the full threat-model mapping.
+
+### ⚡ Performance, Analytics & Extensibility
+
+Infrastructure-level features that keep the app fast and extensible as projects grow — all on by default unless noted:
+
+- **DuckDB Analytics** — an OPFS-backed DuckDB-WASM engine (off the main thread, via WorkerBus v2) powering fast story queries, RAG vector search, and scene-timeline analytics without a server.
+- **WorkerBus v2** — the unified background-task backbone behind DuckDB, local embeddings, and local NLP: auto-scaling worker pools, a priority queue, per-worker circuit breakers, and a dead-letter queue for failed tasks (`packages/worker-bus`).
+- **Adaptive AI Engine** — a runtime device profiler that automatically selects the best inference backend and model for the current hardware, network, and battery state, so the same project performs well on a phone and a workstation.
+- **Compute Shaders** _(experimental)_ — custom WGSL GPU kernels accelerate RAG similarity search, Plot-Board auto-layout, and voice preprocessing on WebGPU-capable hardware.
+- **Rust Compute** _(desktop only, experimental)_ — offloads heavy tasks like text analysis and embeddings to a native Tauri Rust `TaskSupervisor`; no-ops transparently on the web build.
+- **Plugin System v0.1** — an ESM-based extension system with Zod-validated descriptors and a sandboxed, permission-gated capability API, so third-party plugins can't reach outside what they're allowed to touch.
+- **LoRA Adapter Inference** _(experimental)_ — load pre-trained `.safetensors` adapters for personalized writing-style inference via an Ollama model-tag override (Settings → AI → Fine-Tuning).
+- **App Health Panel** — About-page runtime diagnostics covering memory usage, IndexedDB health, WebGPU status, and audio-context state, for diagnosing performance issues without opening DevTools.
 
 ### 💾 Robust Offline-First Data Management
 
@@ -453,7 +475,7 @@ The Settings → AI panel shows a live GPU status badge with adapter details and
 
 | Layer                | Technology                                                | Purpose                                                              |
 | -------------------- | --------------------------------------------------------- | -------------------------------------------------------------------- |
-| **UI Framework**     | React 19 + TypeScript 6 (strict)                         | Component-based, fully type-safe UI with `exactOptionalPropertyTypes` |
+| **UI Framework**     | React 19 + TypeScript 7 (tsgo, strict)                    | Component-based, fully type-safe UI with `exactOptionalPropertyTypes` |
 | **Build Tool**       | Vite 8 + pnpm 11 workspaces                              | App build + workspace orchestration (`packages/ai-core`, `packages/ui`) |
 | **State Management** | Redux Toolkit 2.x + Redux-Undo + Zustand                 | Persistent (Redux), ephemeral (Zustand `transientUiStore`) state layers |
 | **Styling**          | Tailwind CSS 4.x + CSS Variables                         | Utility-first design with theme-aware custom properties              |
@@ -471,7 +493,7 @@ The Settings → AI panel shows a live GPU status badge with adapter details and
 | **Document Export**  | docx + jszip                                              | Word-compatible `.docx` generation (lazy-loaded)                     |
 | **PWA**              | Service Worker + Web App Manifest v3                     | Offline support, installability, Workbox chunking                    |
 | **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 2849 keys × 19 locales (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta); EN fallback; `localStorage` persistence |
-| **Testing**          | Vitest 4.x (5807+ tests / 531 files) + Playwright E2E    | Unit/integration + cross-browser E2E; Stryker mutation (manual workflow)          |
+| **Testing**          | Vitest 4.x (6477 tests / 529 files) + Playwright E2E     | Unit/integration + cross-browser E2E; Stryker mutation (manual workflow)          |
 | **Code Quality**     | Biome (lint + format) + TypeScript 7 (tsgo) strict       | `--error-on-warnings` in CI; zero `any` policy                      |
 | **Visualization**    | Force-directed graph                                      | Interactive character relationship network                           |
 | **Desktop**          | Tauri v2                                                  | Cross-platform installer; auto-updater via `latest.json`             |
@@ -485,6 +507,7 @@ WorldScript-Studio/
 ├── packages/
 │   ├── ai-core/          # Local AI facade: 4-layer stack (WebLLM → ONNX → Transformers.js → heuristic)
 │   ├── collab-transport/ # Vendor fork of y-webrtc 10.3.0 with RTCDataChannel E2E encryption baked in
+│   ├── worker-bus/       # WorkerBus v2: typed worker pool, circuit breakers, dead-letter queue (sole worker generation, ADR-0015)
 │   └── ui/               # Shared design tokens + Tailwind preset
 ├── app/                  # Redux store, typed hooks, listenerMiddleware, transientUiStore (Zustand)
 ├── components/           # All UI view components
@@ -508,7 +531,7 @@ WorldScript-Studio/
 │   ├── sw.js             # PWA Service Worker
 │   └── manifest.json     # PWA Web App Manifest v3
 ├── tests/
-│   ├── unit/             # Vitest unit tests (5807+ tests, 531 files) — count spans tests/, components/, packages/*/tests/, not just this folder
+│   ├── unit/             # Vitest unit tests (6477 tests, 529 files) — count spans tests/, components/, packages/*/tests/, not just this folder
 │   │   ├── ai/           # aiSmallModules, aiCoreFallbackPaths
 │   │   └── settings/     # WebLlmPanel, AiSections
 │   └── e2e/              # Playwright specs + helpers.ts
@@ -660,14 +683,16 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 | `quality`    | after `security`     | Biome lint + format, **i18n key parity** (`pnpm run i18n:check`), `tsc --noEmit`, Vitest + V8 coverage (Node **22** + **24**); Codecov upload |
 | `build`      | after `quality`      | Production Vite build, **chunk budget** (max 7 000 KB/chunk, 4 500 KB entry), **rollup analyze** artifact; on `main`: SLSA provenance attestation + Pages artifact |
 | `e2e`        | after `quality`      | Playwright **Chromium**, `CI=true`; JUnit artifact uploaded for per-test PR annotations |
+| `e2e-deep`   | after `quality`, non-blocking | Parametrized feature-flag-matrix smoke suite (`tests/e2e/deep/`) + offline/error-path specs; `continue-on-error: true` |
+| `vrt`        | after `build`, non-blocking   | Visual Regression — Playwright screenshot diffing against `dist` |
 | `mutation`   | after `quality`      | Stryker (`pnpm run mutation`); `break: 75` enforced (high: 85, low: 70) |
 | `lighthouse` | after `build`        | LHCI against `dist` — accessibility `error:0.95`, CLS `error:0.1`, performance `warn:0.4`, SEO `warn:0.8` |
 | `storybook`  | after `quality`      | Static Storybook build artifact |
 | `deploy`     | `main` only          | GitHub Pages after **`build` + `e2e`** succeed |
 | `scorecard`  | weekly + `main` push | OpenSSF Scorecard — SARIF uploaded to GitHub Code Scanning |
 
-**Current test metrics (2026-07-28):**
-- **5807+ unit tests** across **531 test files** — all passing
+**Current test metrics (2026-07-30, CI-reported):**
+- **6477 unit tests** across **529 test files** — all passing
 - Coverage thresholds: lines ≥ 74 · branches ≥ 60 · functions ≥ 67 · statements ≥ 72 — enforced in CI (see Codecov badge for live metrics)
 - i18n: **2849 keys × 19 locales** (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta)
 

@@ -1,8 +1,8 @@
 # Security Threat Model
 
 **Version:** 1.0.0  
-**Date:** 2026-06-05  
-**Status:** v1.22.0 baseline
+**Date:** 2026-06-05 (baseline); desktop-crypto mitigation row updated 2026-07-29 (v1.24.2, F-05/F-06)  
+**Status:** v1.24.2 baseline
 
 This document provides a formal STRIDE threat analysis for WorldScript Studio, mapping threats to mitigations and code locations.
 
