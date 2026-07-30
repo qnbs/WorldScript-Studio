@@ -98,7 +98,7 @@ Mutation testing (Stryker) is **not** in this graph — it runs only via manual 
 | `deploy` | `build`, `e2e` | **Only** `main` push (not PR): `deploy-pages` |
 
 > **Desktop:** On-demand / tag-driven Tauri bundles live in [`tauri-build.yml`](../.github/workflows/tauri-build.yml); **`v*` tags** additionally publish installers on a **GitHub Release**. See [`docs/TAURI-CI.md`](TAURI-CI.md). Desktop CI does not block the web deploy graph above.
-
+>
 > **Maintainer follow-up (not done here):** switching branch protection's required-checks list from the
 > 4 individual contexts to just `ci-success` is a branch-protection settings change — out of scope for
 > an automated PR. Do it manually once `ci-success` has run green on `main` at least once: repo

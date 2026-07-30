@@ -1,6 +1,7 @@
 import type { TypedStartListening } from '@reduxjs/toolkit';
 import { createListenerMiddleware, isRejected } from '@reduxjs/toolkit';
 import { analyticsActions } from '../features/analytics/analyticsSlice';
+// QNBS-v3: canonical selector — replaces a local type that misapplied the persisted-state shape to the live store
 import { selectProjectData } from '../features/project/projectSelectors';
 import type { ProjectData } from '../features/project/projectSlice';
 import { statusActions } from '../features/status/statusSlice';
@@ -115,13 +116,8 @@ addDebouncedListener(
     }
 
     try {
+      // QNBS-v3: RootState already infers state.project.present.data as ProjectData — no cast, no null-guard needed
       const presentData = selectProjectData(state);
-
-      if (!presentData) {
-        logger.error('Auto-save aborted: Invalid project state detected (missing present.data)');
-        api.dispatch(statusActions.setSavingStatus('idle'));
-        return;
-      }
 
       const enriched: ProjectData = {
         ...presentData,
@@ -697,8 +693,8 @@ async function runLocalFirstShadowSync(
   stillEnabled: () => boolean,
 ): Promise<void> {
   if (state.featureFlags?.enableLocalFirstSync !== true) return;
+  // QNBS-v3: same canonical selector as the autosave listener — one source of truth for project data
   const presentData = selectProjectData(state);
-  if (!presentData) return;
   try {
     const handle = await getLocalFirstHandle(presentData);
     // QNBS-v3 (CodeAnt): flag may have flipped off during the await — re-check before mutating.

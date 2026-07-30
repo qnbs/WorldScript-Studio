@@ -258,9 +258,6 @@ jobs:
 
   # ----------------------------------------------------------
   # 3. CI SUCCESS: single required-status aggregator (security + quality + build)
-  # QNBS-v3: lets branch protection require ONE context instead of enumerating
-  # security/quality(x2)/build by name -- a new required job just joins `needs`
-  # here, no branch-protection settings edit needed on every CI change.
   # ----------------------------------------------------------
   ci-success:
     name: ✅ CI Success
