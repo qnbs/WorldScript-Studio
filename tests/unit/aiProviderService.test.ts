@@ -361,6 +361,9 @@ describe('Anthropic — desktop branch (ADR-0016 Track A)', () => {
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({ 'x-api-key': 'anthropic-key' }),
+        // QNBS-v3 (CodeRabbit): bounded like every sibling connectivity check — a real AbortSignal,
+        // not the unbounded `null` the pre-fix call passed.
+        signal: expect.any(AbortSignal),
       }),
     );
   });
@@ -398,6 +401,31 @@ describe('Anthropic — desktop branch (ADR-0016 Track A)', () => {
       { onChunk },
     );
     expect(onChunk).toHaveBeenCalledWith('Hello from Claude');
+  });
+
+  it('streamText: concatenates every text block instead of only the first (CodeRabbit)', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('anthropic-key');
+    mockPluginHttpFetch.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          content: [
+            { type: 'thinking', text: 'internal reasoning, not user-facing' },
+            { type: 'text', text: 'Part one. ' },
+            { type: 'text', text: 'Part two.' },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
+    const onChunk = vi.fn();
+    await streamText(
+      'hello',
+      'Balanced',
+      { provider: 'anthropic', model: 'claude-haiku-4-5' },
+      { onChunk },
+    );
+    expect(onChunk).toHaveBeenCalledWith('Part one. Part two.');
   });
 
   it('streamText: still throws the CORS message outside Tauri (web unchanged)', async () => {
