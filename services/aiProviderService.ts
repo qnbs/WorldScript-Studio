@@ -251,7 +251,13 @@ async function deliverAnthropicResponse(
 ): Promise<void> {
   if (!res.ok) throw new Error(`Claude API Error ${res.status}: ${res.statusText}`);
   const json = (await res.json()) as { content?: Array<{ type?: string; text?: string }> };
-  const text = json.content?.find((c) => c.type === 'text')?.text ?? '';
+  // QNBS-v3 (CodeRabbit): Anthropic can return multiple content blocks (e.g. a `thinking` block
+  // plus several `text` blocks on extended-thinking models) — concatenate all text blocks instead
+  // of taking only the first, which silently truncated output.
+  const text = (json.content ?? [])
+    .filter((c) => c.type === 'text' && typeof c.text === 'string')
+    .map((c) => c.text)
+    .join('');
   if (text) callbacks.onChunk(text);
   callbacks.onDone?.();
 }
@@ -908,6 +914,9 @@ export async function testAIConnection(
         }
         // QNBS-v3: Anthropic has no public /v1/models endpoint — a minimal (max_tokens: 1) real
         // request is the practical connectivity check, mirroring the pattern used for Grok.
+        // QNBS-v3 (CodeRabbit): bounded like every sibling connectivity check (testOllamaConnection
+        // uses timeoutMs: 5000; openai/grok/gemini use AbortSignal.timeout(8000)) — a stalled
+        // native/proxy HTTP call must not hang the Settings test spinner indefinitely.
         const res = isDesktop
           ? await localServerFetch('https://api.anthropic.com/v1/messages', {
               method: 'POST',
@@ -921,6 +930,7 @@ export async function testAIConnection(
                 max_tokens: 1,
                 messages: [{ role: 'user', content: 'ping' }],
               }),
+              timeoutMs: 8000,
             })
           : await fetch('/api/claude-proxy', {
               method: 'POST',
@@ -931,6 +941,7 @@ export async function testAIConnection(
                 maxTokens: 1,
                 messages: [{ role: 'user', content: 'ping' }],
               }),
+              signal: AbortSignal.timeout(8000),
             });
         if (!res.ok) {
           return {
