@@ -1,80 +1,124 @@
-// QNBS-v3: Singleton proxy for the DuckDB-WASM worker.
-//          Exposes typed query/exec/init/shutdown helpers with AbortSignal cancellation.
-//          Worker is instantiated lazily on first call to init().
+// QNBS-v3: Singleton proxy for DuckDB analytics — routes through the shared WorkerBus v2 'duckdb'
+//          pool (docs/adr/0014-worker-generation-duplication.md migration, superseded by
+//          ADR-0015). Public API is unchanged from the v1-backed client (init/query/exec/
+//          shutdown/terminate/setOpfsFallbackHandler) so all 5 consumers (useDuckDb.ts,
+//          duckdbAnalytics.ts, duckdbMigration.ts, ragVectorMigration.ts, telemetryService.ts)
+//          need no changes — only the transport underneath swapped.
 
-import type {
-  DuckDbRequest,
-  DuckDbRequestType,
-  DuckDbResponse,
-  DuckDbWorkerEvent,
-} from '../../workers/duckdbWorker';
+import { ensureDuckDbPool, getWorkerBus } from '../workerBusManager';
 
-let worker: Worker | null = null;
-const pendingResolvers = new Map<string, (res: DuckDbResponse) => void>();
+export type DuckDbRequestType = 'INIT' | 'QUERY' | 'EXEC' | 'SHUTDOWN';
+
+export interface DuckDbResponse {
+  messageId: string;
+  ok: boolean;
+  rows?: Record<string, unknown>[];
+  error?: string;
+  latencyMs?: number;
+}
+
+const TASK_TYPE: Record<DuckDbRequestType, string> = {
+  INIT: 'db.duckdb.init',
+  QUERY: 'db.duckdb.query',
+  EXEC: 'db.duckdb.exec',
+  SHUTDOWN: 'db.duckdb.shutdown',
+};
+
 let messageIdCounter = 0;
-// QNBS-v3: Settable by useDuckDb to surface OPFS fallback state in Redux.
-let opfsFallbackCb: ((reason: string) => void) | null = null;
-
 function generateMessageId(): string {
   return `duckdb-${Date.now()}-${++messageIdCounter}`;
 }
 
-function getWorker(): Worker {
-  if (!worker) {
-    // QNBS-v3: Vite import.meta.url pattern — same as inference.worker.ts.
-    worker = new Worker(new URL('../../workers/duckdbWorker.ts', import.meta.url), {
-      type: 'module',
-    });
-    worker.addEventListener('message', (event: MessageEvent) => {
-      const data = event.data as DuckDbResponse | DuckDbWorkerEvent;
-      // QNBS-v3: OPFS_FALLBACK is out-of-band — no messageId resolver to call.
-      if ((data as DuckDbWorkerEvent).type === 'OPFS_FALLBACK') {
-        opfsFallbackCb?.((data as DuckDbWorkerEvent).reason);
-        return;
-      }
-      const { messageId } = data as DuckDbResponse;
-      const resolve = pendingResolvers.get(messageId);
-      if (resolve) {
-        pendingResolvers.delete(messageId);
-        resolve(data as DuckDbResponse);
-      }
-    });
-    worker.addEventListener('error', (event) => {
-      // Reject all pending promises on fatal worker error
-      const error = event.message ?? 'DuckDB worker crashed';
-      for (const [id, resolve] of pendingResolvers) {
-        resolve({ messageId: id, ok: false, error });
-      }
-      pendingResolvers.clear();
-      worker = null;
-    });
-  }
-  return worker;
+// QNBS-v3: Settable by useDuckDb to surface OPFS fallback state in Redux.
+let opfsFallbackCb: ((reason: string) => void) | null = null;
+
+function errorMessage(err: unknown): string {
+  const code = (err as { code?: string } | undefined)?.code;
+  if (code === 'CIRCUIT_OPEN') return 'DuckDB temporarily unavailable (circuit open)';
+  return err instanceof Error ? err.message : String(err);
 }
 
-function send(
+async function send(
   type: DuckDbRequestType,
   sql?: string,
   params?: readonly unknown[],
   signal?: AbortSignal,
+  isReinitRetry = false,
 ): Promise<DuckDbResponse> {
   const messageId = generateMessageId();
-  const w = getWorker();
+  const start = Date.now();
 
-  return new Promise<DuckDbResponse>((resolve) => {
-    pendingResolvers.set(messageId, resolve);
+  // QNBS-v3: attach synchronously, before the `await` below — v1 set up its abort listener
+  //          inside a synchronous Promise executor, so a caller aborting in the same tick as the
+  //          call was always caught. This function is async and awaits ensureDuckDbPool() before
+  //          a handle exists, which opens a gap; a same-tick abort must not be lost inside it.
+  let abortedEarly = signal?.aborted ?? false;
+  let handleRef: { cancel: (reason?: string) => void } | undefined;
+  const onAbort = (): void => {
+    abortedEarly = true;
+    handleRef?.cancel('Aborted');
+  };
+  signal?.addEventListener('abort', onAbort, { once: true });
 
-    if (signal) {
-      signal.addEventListener('abort', () => {
-        w.postMessage({ type: 'WORKER_CANCEL', messageId });
-        pendingResolvers.delete(messageId);
-        resolve({ messageId, ok: false, error: 'Aborted' });
-      });
+  try {
+    const bus = await ensureDuckDbPool();
+    if (!bus) return { messageId, ok: false, error: 'WorkerBus v2 unavailable' };
+
+    // QNBS-v3: v1 never retried a failed QUERY/EXEC (caller decided) — disabling the bus's
+    //          default 2-retry here keeps that behavior instead of silently stacking under
+    //          duckdbAnalytics.ts's own withDuckDbRetry() app-level retry
+    //          (app/listenerMiddleware.ts).
+    const handle = bus.enqueue<
+      { sql?: string | undefined; params?: readonly unknown[] | undefined },
+      unknown
+    >(
+      TASK_TYPE[type],
+      { sql, params },
+      {
+        capabilities: ['db.duckdb'],
+        retryPolicy: { maxRetries: 0 },
+        onProgress: (p) => {
+          if (p.stage === 'opfs-fallback') opfsFallbackCb?.(p.message ?? 'OPFS unavailable');
+        },
+      },
+    );
+    handleRef = handle;
+    if (abortedEarly) handle.cancel('Aborted');
+
+    try {
+      const raw = await handle.result;
+      const latencyMs = Date.now() - start;
+      if (type === 'QUERY') {
+        return { messageId, ok: true, rows: raw as Record<string, unknown>[], latencyMs };
+      }
+      return { messageId, ok: true, latencyMs };
+    } catch (err) {
+      const latencyMs = Date.now() - start;
+      if (signal?.aborted) return { messageId, ok: false, error: 'Aborted', latencyMs };
+      const message = errorMessage(err);
+      // QNBS-v3: [The duckdb pool's worker can idle-terminate (minWorkers:0) or crash-restart; a
+      //          freshly spawned worker's module state has no `connection` until INIT runs again.
+      //          Transparently re-init once and retry, instead of surfacing a confusing "not
+      //          initialized" error for what looks like a routine idle-timeout respawn.]
+      if (
+        !isReinitRetry &&
+        type !== 'INIT' &&
+        type !== 'SHUTDOWN' &&
+        message === 'DuckDB not initialized'
+      ) {
+        const reinit = await send('INIT', undefined, undefined, signal, true);
+        if (reinit.ok) {
+          return send(type, sql, params, signal, true);
+        }
+      }
+      return { messageId, ok: false, error: message, latencyMs };
     }
-
-    const req: DuckDbRequest = { messageId, type, sql, params };
-    w.postMessage(req);
-  });
+  } finally {
+    // QNBS-v3: [{once:true} only self-removes once the listener actually fires — a caller that
+    //          reuses one AbortSignal across many queries (a common hook/thunk pattern) would
+    //          otherwise accumulate one listener per call for the signal's whole lifetime.]
+    signal?.removeEventListener('abort', onAbort);
+  }
 }
 
 export const duckdbClient = {
@@ -98,14 +142,17 @@ export const duckdbClient = {
     return send('SHUTDOWN', undefined, undefined, signal);
   },
 
-  /** Terminate the worker immediately (no flush). */
+  /**
+   * Terminate the DuckDB pool immediately (no flush).
+   * QNBS-v3: scoped via WorkerBus.terminatePool('duckdb') so this doesn't tear down the shared
+   * bus's other pools (inference/webllm/plugin) — bus.shutdown() would kill all of them.
+   */
   terminate(): void {
-    worker?.terminate();
-    worker = null;
-    pendingResolvers.clear();
+    const bus = getWorkerBus();
+    void bus?.terminatePool('duckdb');
   },
 
-  /** Register a callback invoked when the worker falls back to in-memory (OPFS unavailable). */
+  /** Register a callback invoked when DuckDB falls back to in-memory (OPFS unavailable). */
   setOpfsFallbackHandler(cb: ((reason: string) => void) | null): void {
     opfsFallbackCb = cb;
   },
