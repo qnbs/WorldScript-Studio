@@ -64,8 +64,7 @@ describe('providerToKind', () => {
   });
 
   it('maps grok to its own grok kind (not folded into openaiCompatible)', () => {
-    // QNBS-v3: grok needs a fixed baseURL + a real stored key, distinct from the Ollama
-    // default that also maps to 'openaiCompatible' — see providerFactory.ts's own comment.
+    // QNBS-v3: distinct from Ollama's 'openaiCompatible' default — grok needs a fixed baseURL + a real key.
     expect(providerToKind('grok')).toBe('grok');
   });
 });

@@ -46,6 +46,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
   // imply a verified connection next to the "desktop app required" banner.
   const ollamaUntestable = provider === 'ollama' && !isDesktop;
   const [openaiKey, setOpenaiKey] = useState('');
+  // QNBS-v3: Grok's own key input state, mirroring OpenAI's pattern above.
   const [grokKey, setGrokKey] = useState('');
   const [isSavingGrokKey, setIsSavingGrokKey] = useState(false);
   const [anthropicKey, setAnthropicKey] = useState('');
@@ -80,6 +81,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
       .catch(() => {});
   }, []);
 
+  // QNBS-v3: save/clear via storageService, matching every other provider's key persistence.
   const handleSaveGrokKey = useCallback(async () => {
     setIsSavingGrokKey(true);
     try {
