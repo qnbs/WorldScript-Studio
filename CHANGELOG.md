@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Doc-drift gate (`scripts/check-doc-metrics.mjs`) had a blind spot for still-open checklist
+  bullets inside dated/historical sections**: `stripHistoricalSections()` blanked every line in a
+  historical section indiscriminately, including a genuinely still-open `- ⬜` bullet — exactly how
+  a stale "Tag `v1.24.2`" bullet escaped the gate in a same-day doc edit (`dc14bc0`). `OPEN_BULLET`
+  now gets the same "always present-tense, never stripped" treatment `DONE_BULLET` already had for
+  the opposite polarity. `scanForDrift()` also gains a new check: a surviving open bullet
+  mentioning tag/release/publish (including inflected forms — "Tagging"/"Releasing"/"Publishing")
+  of a version `<=` the latest git tag is now flagged as drift. (#293)
+
+### Docs
+
+- **`CLAUDE.md` codifies three merge-discipline lessons** learned during the PROMPT-WSS-v1.24.x
+  recovery sprint: never commit directly to `main` (always branch + PR, even for a single-file
+  change); wait for the **full** CI suite — including non-required/advisory jobs like E2E,
+  Storybook, Lighthouse, and Visual Regression — to go green before merging, not just the
+  branch-protection-required checks; and group related small workstreams into the fewest
+  reviewable PRs by natural/documented boundaries rather than one PR per tiny item, while keeping
+  one commit per logical concern. Also adds a "Known merge-gate quirks" section distinguishing
+  GitHub's real pending-check block from this repo's own stricter wait-for-pass policy and the
+  mergeable-state cache-lag symptom, plus documents the stacked-PR auto-close-on-squash-merge
+  side effect and its recovery steps; and strengthens the CodeAnt Correction Loop policy to
+  explicitly cover CodeRabbit's collapsed nitpick and outside-diff-range comment sections. (#294)
+
 ## [1.24.3] — 2026-07-30
 
 > Worker-generation consolidation sprint: the v1/WorkerBus-v2 duplication [ADR-0014](docs/adr/0014-worker-generation-duplication.md)
