@@ -1,8 +1,8 @@
 /**
  * Shared LRU cache for loaded inference pipelines (transformers.js / ONNX).
- * QNBS-v3: Phase 2.3 — extracted from the byte-identical LRU loops that were duplicated in
- *          `workers/inference.worker.ts` and `workers/v2/inference.worker.ts`. Two real fixes
- *          over the inlined version:
+ * QNBS-v3: Phase 2.3 — extracted from byte-identical LRU loops duplicated across the v1/v2 worker
+ *          generations (v1 since deleted, docs/adr/0014); only `workers/v2/inference.worker.ts`
+ *          uses this now. Two real fixes over the inlined version:
  *            1. **dispose-on-evict** — evicted pipelines now `dispose()`, closing the VRAM/RAM
  *               leak (same bug-class as the WebLLM eviction fix in AUDIT 2026-06-01 #1).
  *            2. **in-flight dedup** — concurrent loads of the same key share one promise, so the

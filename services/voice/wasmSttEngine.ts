@@ -61,7 +61,7 @@ export class WasmSttEngine implements SttEngine {
       typedEnv.backends.onnx.wasm.proxy = false;
     }
     // QNBS-v3: cast pipeline to a loose signature — v3's typed overload union is too large to
-    //          represent (TS2590). Same pattern as workers/inference.worker.ts loadPipeline().
+    //          represent (TS2590). Same pattern as workers/v2/inference.worker.ts's loadPipeline().
     const createPipeline = pipeline as (
       task: string,
       model: string,

@@ -1,6 +1,6 @@
-// QNBS-v3: Local NLP service — sentiment, summarization, topic classification via inference.worker.ts.
-//          Adapted from CannaGuide-2025 nlpService.ts patterns for creative-writing context.
-//          All inference runs off-main-thread; falls back gracefully when worker unavailable.
+// QNBS-v3: [Local NLP service — sentiment/summarization via workers/v2/inference.worker.ts through WorkerBus v2 (docs/adr/0014 migration).]
+
+import { ensureInferencePool } from '../workerBusManager';
 
 export interface SentimentResult {
   label: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
@@ -12,74 +12,64 @@ const SENTIMENT_MODEL = 'Xenova/distilbert-base-uncased-finetuned-sst-2-english'
 const SUMMARIZATION_MODEL = 'Xenova/distilbart-cnn-6-6';
 const MAX_SUMMARY_TOKENS = 150;
 
-let workerInstance: Worker | null = null;
-
-function getWorker(): Worker {
-  if (!workerInstance) {
-    workerInstance = new Worker(new URL('../../workers/inference.worker.ts', import.meta.url), {
-      type: 'module',
-    });
-  }
-  return workerInstance;
-}
-
-function postToWorker(
+async function requestInference(
   task: string,
   modelId: string,
   input: string,
   inferenceOptions?: Record<string, unknown>,
-): Promise<{ ok: boolean; result?: string; error?: string }> {
-  return new Promise((resolve) => {
-    const messageId = `nlp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const worker = getWorker();
-
-    const handler = (event: MessageEvent) => {
-      const data = event.data as {
-        messageId: string;
-        ok: boolean;
-        result?: string;
-        error?: string;
-      };
-      if (data.messageId !== messageId) return;
-      worker.removeEventListener('message', handler);
-      resolve(data);
-    };
-
-    worker.addEventListener('message', handler);
-    worker.postMessage({ messageId, task, modelId, input, inferenceOptions });
-  });
+): Promise<string> {
+  const bus = await ensureInferencePool();
+  if (!bus) throw new Error('WorkerBus v2 unavailable');
+  // QNBS-v3: Omit inferenceOptions key (not `: undefined`) — exactOptionalPropertyTypes rejects
+  //          an explicit undefined against the optional payload field.
+  const payload = {
+    task,
+    modelId,
+    input,
+    ...(inferenceOptions !== undefined ? { inferenceOptions } : {}),
+  };
+  const handle = bus.enqueue<
+    { task: string; modelId: string; input: string; inferenceOptions?: Record<string, unknown> },
+    string
+  >('inference.text', payload, { capabilities: ['inference.text'] });
+  return handle.result;
 }
 
 export async function analyzeSentiment(text: string): Promise<SentimentResult> {
   const capped = text.slice(0, 512); // model input limit
-  const response = await postToWorker('sentiment-analysis', SENTIMENT_MODEL, capped);
 
-  if (!response.ok || !response.result) {
+  try {
+    const result = await requestInference('sentiment-analysis', SENTIMENT_MODEL, capped);
+
+    // Worker returns "LABEL:score" string (see workers/v2/inference.worker.ts sentiment branch)
+    // QNBS-v3: labelRaw is always defined — String.split(':') never returns an empty array — noUncheckedIndexedAccess can't see that, so `as string` (not `??`, which would be dead code) satisfies the type checker without an untestable runtime branch. scoreRaw genuinely can be undefined when the worker omits the ":score" suffix, so it keeps its `??` fallback.
+    const [labelRaw, scoreRaw] = result.split(':');
+    const rawLabel = (labelRaw as string).toUpperCase();
+    const score = parseFloat(scoreRaw ?? '0.5');
+
+    const label: SentimentResult['label'] =
+      rawLabel === 'POSITIVE' ? 'POSITIVE' : rawLabel === 'NEGATIVE' ? 'NEGATIVE' : 'NEUTRAL';
+
+    const normalized = label === 'POSITIVE' ? score : label === 'NEGATIVE' ? -score : 0;
+
+    return { label, score, normalized };
+  } catch {
+    // QNBS-v3: [Graceful degrade — same fallback v1 returned on any worker failure.]
     return { label: 'NEUTRAL', score: 0.5, normalized: 0 };
   }
-
-  // Worker returns "LABEL:score" string (see inference.worker.ts sentiment handler)
-  const [labelRaw, scoreRaw] = response.result.split(':');
-  const rawLabel = (labelRaw ?? 'NEUTRAL').toUpperCase();
-  const score = parseFloat(scoreRaw ?? '0.5');
-
-  const label: SentimentResult['label'] =
-    rawLabel === 'POSITIVE' ? 'POSITIVE' : rawLabel === 'NEGATIVE' ? 'NEGATIVE' : 'NEUTRAL';
-
-  const normalized = label === 'POSITIVE' ? score : label === 'NEGATIVE' ? -score : 0;
-
-  return { label, score, normalized };
 }
 
 export async function summarizeText(text: string, maxLength = MAX_SUMMARY_TOKENS): Promise<string> {
   const capped = text.slice(0, 1024);
-  const response = await postToWorker('summarization', SUMMARIZATION_MODEL, capped, {
-    max_new_tokens: maxLength,
-    do_sample: false,
-  });
 
-  if (!response.ok || !response.result) return text.slice(0, 280); // graceful degrade
-  return response.result;
+  try {
+    return await requestInference('summarization', SUMMARIZATION_MODEL, capped, {
+      max_new_tokens: maxLength,
+      do_sample: false,
+    });
+  } catch {
+    return text.slice(0, 280); // graceful degrade
+  }
 }
 
 // QNBS-v3: Zero-shot topic classification for creative-writing genres using sentiment model heuristic.
@@ -107,11 +97,4 @@ export async function classifyWritingTopic(text: string): Promise<string> {
   }
 
   return bestGenre;
-}
-
-export function _resetWorkerForTest(): void {
-  if (workerInstance) {
-    workerInstance.terminate();
-    workerInstance = null;
-  }
 }
