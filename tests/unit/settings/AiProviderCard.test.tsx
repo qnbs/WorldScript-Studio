@@ -383,21 +383,25 @@ describe('AiProviderCard — grok provider', () => {
   });
 });
 
-// QNBS-v3 (ADR-0016 Track A): desktop bypasses Anthropic's CORS restriction natively — the
-// warning-only block becomes a real key input there, while web/PWA keeps the warning.
-describe('AiProviderCard — anthropic provider (ADR-0016 Track A)', () => {
+// QNBS-v3 (ADR-0016): desktop (Track A, native) and proxy-capable web (Track B, api/claude-proxy —
+// Vercel/Cloudflare Pages) both render a real key input; only GitHub Pages (neither capability,
+// static-only) keeps the CORS/proxy-unavailable warning block.
+describe('AiProviderCard — anthropic provider (ADR-0016)', () => {
   const anthropicAdvancedAi = {
     ...mockAdvancedAi,
     provider: 'anthropic' as const,
     model: 'claude-haiku-4-5' as const,
   };
+  const originalBaseUrl = import.meta.env.BASE_URL;
 
   afterEach(() => {
     setDesktopRuntime(false);
+    import.meta.env.BASE_URL = originalBaseUrl;
   });
 
-  it('web: shows the CORS warning block, no key input', () => {
+  it('GitHub Pages: shows the unavailable warning block, no key input', () => {
     setDesktopRuntime(false);
+    import.meta.env.BASE_URL = '/WorldScript-Studio/';
     render(
       <AiProviderCard
         advancedAi={anthropicAdvancedAi}
@@ -409,7 +413,43 @@ describe('AiProviderCard — anthropic provider (ADR-0016 Track A)', () => {
     expect(screen.queryByLabelText('settings.ai.anthropicKey')).toBeNull();
   });
 
-  it('desktop: shows the real key input and model selector, no warning block', () => {
+  it('proxy-capable web: shows the real key input, model selector, and proxy note', () => {
+    setDesktopRuntime(false);
+    import.meta.env.BASE_URL = '/';
+    render(
+      <AiProviderCard
+        advancedAi={anthropicAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    expect(screen.getByLabelText('settings.ai.anthropicKey')).toBeTruthy();
+    expect(screen.getByText('Claude Haiku 4.5')).toBeTruthy();
+    expect(screen.getByText('settings.ai.anthropicProxyNote')).toBeTruthy();
+    expect(screen.queryByText('settings.ai.corsRestriction')).toBeNull();
+  });
+
+  it('proxy-capable web: saves the entered key via storageService.saveApiKey("anthropic", ...)', async () => {
+    setDesktopRuntime(false);
+    import.meta.env.BASE_URL = '/';
+    const user = userEvent.setup();
+    render(
+      <AiProviderCard
+        advancedAi={anthropicAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    const input = screen.getByLabelText('settings.ai.anthropicKey');
+    await user.type(input, 'sk-ant-test-key');
+    const saveButton = screen.getByText('settings.ai.save');
+    await user.click(saveButton);
+    await waitFor(() => {
+      expect(storageService.saveApiKey).toHaveBeenCalledWith('anthropic', 'sk-ant-test-key');
+    });
+  });
+
+  it('desktop: shows the real key input and model selector, no warning block, no proxy note', () => {
     setDesktopRuntime(true);
     render(
       <AiProviderCard
@@ -421,6 +461,7 @@ describe('AiProviderCard — anthropic provider (ADR-0016 Track A)', () => {
     expect(screen.getByLabelText('settings.ai.anthropicKey')).toBeTruthy();
     expect(screen.getByText('Claude Haiku 4.5')).toBeTruthy();
     expect(screen.queryByText('settings.ai.corsRestriction')).toBeNull();
+    expect(screen.queryByText('settings.ai.anthropicProxyNote')).toBeNull();
   });
 
   it('desktop: saves the entered key via storageService.saveApiKey("anthropic", ...)', async () => {
