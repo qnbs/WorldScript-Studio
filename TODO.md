@@ -8,6 +8,37 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ---
 
+## Infra — Vercel deployment failures root-caused + fixed (2026-07-29)
+
+> **Status: Resolved same-day.** Briefly paused via `vercel.json`'s `git.deploymentEnabled: false`
+> after 2 consecutive preview-deployment failures with only a generic "Deployment has failed"
+> message and no further detail from the GitHub Checks API. `npx vercel inspect --logs` needs an
+> interactive account login unavailable in-session, so the actual fix came from noticing Vercel's
+> `buildCommand` runs `pnpm run build:edge` (`node scripts/build-edge.mjs` → `vite build` with
+> `DEPLOY_TARGET=edge`) — a **different command** than the plain `pnpm run build` used for the
+> earlier (misleading) local repro attempt, which succeeded and pointed away from a code cause.
+> Reproducing the *exact* Vercel command locally
+> (`NODE_OPTIONS=--max-old-space-size=3072 pnpm run build:edge`) immediately surfaced the real
+> error: `[MISSING_EXPORT] "ensureInferencePool" is not exported by "services/workerBusManager.ts"`
+> — `services/ai/localEmbeddingService.ts` (part of the in-flight worker-generation-consolidation
+> migration, PR #288) imported and called a function that was never actually added to
+> `workerBusManager.ts`. Vitest never caught it because `localEmbeddingService.test.ts` mocks the
+> *entire* `workerBusManager` module (`vi.mock(...)` wholesale replacement), so the real file's
+> missing export was invisible to that suite; `tsgo`'s local typecheck also passed clean for
+> reasons not fully understood (worth a follow-up look at cache behavior) — only rolldown's
+> stricter static bundling in the real production build caught it. Fixed by adding the missing
+> `ensureInferencePool()` (mirrors `ensureDuckDbPool()`'s shape) plus a `workerBusManager.test.ts`
+> suite that imports the *real* module instead of mocking it — that suite would have caught this
+> immediately. `git.deploymentEnabled` reverted to enabled; verified fixed via a clean local
+> `build:edge` re-run before re-enabling.
+>
+> **Lesson for future Vercel-build debugging in this repo:** always reproduce with the *exact*
+> `vercel.json` `buildCommand`, not `pnpm run build` — they differ (`build:edge` sets
+> `DEPLOY_TARGET=edge` and runs `scripts/sync-deploy-base.mjs` first) and a plain `build` passing
+> does not prove the deploy build would.
+
+---
+
 ## v1.24.2 — CSP/crypto/doc-truth hardening (2026-07-29)
 
 > **Status: Merged (PR #284) and released as `v1.24.2` on 2026-07-29.** Full record:
