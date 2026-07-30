@@ -202,8 +202,15 @@ export async function ensureDuckDbPool(): Promise<WorkerBus | null> {
     await initWorkerBus();
     return _bus;
   }
-  // QNBS-v3: [terminatePool('duckdb') can remove the pool while the bus itself stays alive — re-register it here instead of assuming a non-null bus always has every pool.]
-  await reRegisterDuckDbPool(_bus);
+  // QNBS-v3: [terminatePool('duckdb') can remove the pool while the bus itself stays alive — re-register it here instead of assuming a non-null bus always has every pool. Catch so a re-registration failure logs instead of breaking the documented "null only if init failed" contract.]
+  try {
+    await reRegisterDuckDbPool(_bus);
+  } catch (err) {
+    log.error(
+      'Failed to re-register duckdb pool',
+      err instanceof Error ? err : new Error(String(err)),
+    );
+  }
   return _bus;
 }
 
@@ -219,7 +226,15 @@ export async function ensureInferencePool(): Promise<WorkerBus | null> {
     await initWorkerBus();
     return _bus;
   }
-  await reRegisterInferencePool(_bus);
+  // QNBS-v3: [catch so a re-registration failure logs instead of breaking the documented "null only if init failed" contract, mirroring ensureDuckDbPool().]
+  try {
+    await reRegisterInferencePool(_bus);
+  } catch (err) {
+    log.error(
+      'Failed to re-register inference pool',
+      err instanceof Error ? err : new Error(String(err)),
+    );
+  }
   return _bus;
 }
 

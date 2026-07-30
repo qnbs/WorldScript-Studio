@@ -233,7 +233,10 @@ describe('workerBusManager', () => {
       expect(mockRegisterPool).toHaveBeenCalledWith(
         'inference',
         expect.arrayContaining(['inference.text', 'inference.embed']),
-        expect.objectContaining({ workerScript: expect.stringContaining('inference.worker') }),
+        expect.objectContaining({
+          maxWorkers: 2,
+          workerScript: expect.stringContaining('inference.worker'),
+        }),
       );
     });
   });
