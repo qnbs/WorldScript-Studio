@@ -8,6 +8,14 @@
 >
 > **See also:** [`DEEPSOURCE-REVIEW-LOOP.md`](DEEPSOURCE-REVIEW-LOOP.md) — the complementary,
 > token-free static-analysis loop. A PR is "review-quiescent" only when **both** are satisfied.
+>
+> **Which bot actually posts inline comments (2026-07-30 observation):** in practice, **CodeRabbit**
+> is the reviewer posting inline actionable/nitpick/outside-diff-range comments on PRs in this
+> repository — re-trigger it with `gh pr comment <N> --body "@coderabbitai review"`. `CodeAnt AI`
+> shows up as five CI **status checks** (`CodeAnt - Quality Gates/SAST/SCA/SCR/Test Coverage`) to
+> verify green, not as a comment thread requiring reply + resolve. The loop mechanics below apply
+> to whichever bot(s) are actually posting comments on a given PR — check the full review history
+> (not just the latest status) before concluding there's nothing to fix.
 
 ## 0. When this runs — proactively, automatically, every PR
 
@@ -40,7 +48,7 @@ Each wave is handled exactly like the first.
         │ 6. Commit + push (one wave = one commit)     │
         │ 7. Reply to every thread (cite commit) +     │
         │    resolve it → 0 unresolved                 │
-        │ 8. Re-trigger: `@codeant-ai review`          │
+        │ 8. Re-trigger: `@coderabbitai review`        │
         └───────────────┬─────────────────────────────┘
                         │ new comments?
               ┌── yes ──┘         └── no ──┐
@@ -186,11 +194,13 @@ cite evidence) **and** is resolved.
 After all threads are resolved and the wave is pushed:
 
 ```bash
-gh pr comment PR_NUMBER --body "@codeant-ai review"
+gh pr comment PR_NUMBER --body "@coderabbitai review"
 ```
 
-A push usually auto-triggers CodeAnt; the explicit comment is belt-and-suspenders. **Wait for the
-fresh review**, then go back to step 2. Repeat until the **termination condition** in §1 holds.
+A push usually auto-triggers CodeRabbit; the explicit comment is belt-and-suspenders. Check the
+**full review history**, not just the latest status (a rate-limited latest status can hide an
+earlier real review). **Wait for the fresh review**, then go back to step 2. Repeat until the
+**termination condition** in §1 holds.
 
 ## 8. Merge
 

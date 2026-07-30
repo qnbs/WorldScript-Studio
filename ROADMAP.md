@@ -25,17 +25,34 @@ Benchmarks from the UI/PWA deep-dive (implemented in repo, no new mandatory docs
 ## Upcoming — v2.0 Foundation (PLANNED)
 
 Forward-looking work carried out of the v1.24 cycle (i18n expansion and the six-PR hardening
-sequence below both shipped in v1.24.0/v1.24.1 — see the RELEASED sections):
+sequence below both shipped in v1.24.0/v1.24.1; the worker-generation-duplication item deferred in
+v1.24.2 shipped as the v1.24.3 WorkerBus v2 consolidation — see the RELEASED sections):
 
 - **Coverage targets:** lift toward L≥85 % / B≥75 % / F≥80 % — focus on AI routing, Voice, Copilot.
 - **Local AI & Voice hardening:** Whisper/Kokoro on low-end devices, model-integrity checks, Eco-Mode.
 - **Error boundaries + structured logging** for AI/worker failures.
 - **Accessibility deep-dive:** manual keyboard + screen-reader passes.
-- **Collaboration:** finalise & test the RTCDataChannel E2E encryption path.
 - **Plugin Registry Beta:** graduate from the sandbox-hardening phase.
 - **Bundle optimisation:** further code-splitting for heavy chunks.
 - **Local-first:** advance ADR-0008 — B2.1 Y.Text migration → B2.2 SoT flip behind `enableLocalFirstSync`.
 - **i18n human native review:** 14 Beta/RTL locales (all except de/en/es/fr/it) are machine-translated to ~96-100 %; native-speaker review still open (checklist in [`docs/TRANSLATION-GUIDE.md`](docs/TRANSLATION-GUIDE.md)). See [`docs/LANGUAGE-EXPANSION-2026.md`](docs/LANGUAGE-EXPANSION-2026.md).
+
+---
+
+## v1.24.3 — WorkerBus v2 Worker-Generation Consolidation (RELEASED 2026-07-30)
+
+**Status:** Merged (5 stacked PRs #286–288/#290–291, plus independent #289) and tagged. See
+[`CHANGELOG.md`](CHANGELOG.md) `[1.24.3]` and [ADR-0015](docs/adr/0015-worker-generation-consolidation.md)
+for the full decision record.
+
+- Closed out the v1/WorkerBus-v2 duplication flagged as tracked debt in v1.24.2: DuckDB analytics,
+  local embeddings, and local NLP now all route through the shared WorkerBus v2 pool instead of
+  dedicated `new Worker(...)` instances per service.
+- Recovered a merge queue interrupted mid-session by a local editor crash — all five PRs required
+  a fresh sync-merge conflict resolution against accumulated fixes before landing.
+- Fixed a DuckDB abort-listener leak and hardened WorkerBus re-registration failure handling.
+- Paused Vercel auto-deploy mid-term after 2 undiagnosed preview-deployment failures (GitHub Pages
+  and Cloudflare Pages remain live and unaffected).
 
 ---
 
