@@ -1,6 +1,8 @@
 import type { TypedStartListening } from '@reduxjs/toolkit';
 import { createListenerMiddleware, isRejected } from '@reduxjs/toolkit';
 import { analyticsActions } from '../features/analytics/analyticsSlice';
+// QNBS-v3: canonical selector — replaces a local type that misapplied the persisted-state shape to the live store
+import { selectProjectData } from '../features/project/projectSelectors';
 import type { ProjectData } from '../features/project/projectSlice';
 import { statusActions } from '../features/status/statusSlice';
 import { ecoModeService } from '../services/ai/ecoModeService';
@@ -20,11 +22,6 @@ import { isAnalyticsPersistenceAllowed } from './analyticsGate';
 import type { AppDispatch, RootState } from './store';
 import { appStoreRef } from './storeRef';
 import { useTransientUiStore } from './transientUiStore';
-
-type ProjectStateWithHistory = {
-  present?: { data?: ProjectData };
-  data?: ProjectData;
-};
 
 export const listenerMiddleware = createListenerMiddleware();
 
@@ -119,14 +116,8 @@ addDebouncedListener(
     }
 
     try {
-      const projectState = state.project as ProjectStateWithHistory;
-      const presentData = projectState.present?.data ?? projectState.data;
-
-      if (!presentData || presentData.title === undefined) {
-        logger.error('Auto-save aborted: Invalid project state detected (missing present.data)');
-        api.dispatch(statusActions.setSavingStatus('idle'));
-        return;
-      }
+      // QNBS-v3: RootState already infers state.project.present.data as ProjectData — no cast, no null-guard needed
+      const presentData = selectProjectData(state);
 
       const enriched: ProjectData = {
         ...presentData,
@@ -702,9 +693,8 @@ async function runLocalFirstShadowSync(
   stillEnabled: () => boolean,
 ): Promise<void> {
   if (state.featureFlags?.enableLocalFirstSync !== true) return;
-  const projectState = state.project as ProjectStateWithHistory;
-  const presentData = projectState.present?.data ?? projectState.data;
-  if (!presentData || presentData.title === undefined) return;
+  // QNBS-v3: same canonical selector as the autosave listener — one source of truth for project data
+  const presentData = selectProjectData(state);
   try {
     const handle = await getLocalFirstHandle(presentData);
     // QNBS-v3 (CodeAnt): flag may have flipped off during the await — re-check before mutating.

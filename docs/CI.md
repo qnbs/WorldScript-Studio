@@ -75,6 +75,10 @@ security ──► quality ──┬──► build ──┬──► lighthous
                        ├──► e2e     └──► vrt
                        └──► storybook
 
+security ─┬
+quality ──┼──► ci-success (required-status aggregator)
+build ────┘
+
 build (main, non-PR) ──► upload-pages-artifact
 deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
 ```
@@ -90,9 +94,16 @@ Mutation testing (Stryker) is **not** in this graph — it runs only via manual 
 | `lighthouse` | `build` | LHCI (mobile): **accessibility error gate** `minScore: 0.95`; **CLS error** ≤ 0.1; performance/SEO warn. Desktop run: `continue-on-error: true` until baselines stabilise. Timeout 25 min. |
 | `storybook` | `quality` | Cloud-first — Storybook build + test-runner only run in CI (not locally); Playwright browser cache `v5`; `--maxWorkers=2 --junit` (non-blocking, `continue-on-error: true` — see [exit criteria](#non-blocking-gates--exit-criteria-f-13)); artifacts uploaded always. Debug: manual `storybook-debug.yml` workflow. |
 | `vrt` | `build` | Visual regression against production `dist`; `toHaveScreenshot()` with committed PNG baselines (4 views × Chromium); artifacts uploaded always |
+| `ci-success` | `security`, `quality`, `build` | Required-status **aggregator** — `if: always()`, fails if any of its three `needs` didn't resolve to `success` (a matrix job like `quality` only reports `success` once every Node 22/24 leg passes). Exists so branch protection can require **one** context instead of enumerating `security`/`quality (Node 22)`/`quality (Node 24)`/`build` by name; a future required job just joins this job's `needs` list, with no branch-protection settings edit needed. |
 | `deploy` | `build`, `e2e` | **Only** `main` push (not PR): `deploy-pages` |
 
 > **Desktop:** On-demand / tag-driven Tauri bundles live in [`tauri-build.yml`](../.github/workflows/tauri-build.yml); **`v*` tags** additionally publish installers on a **GitHub Release**. See [`docs/TAURI-CI.md`](TAURI-CI.md). Desktop CI does not block the web deploy graph above.
+>
+> **Maintainer follow-up (not done here):** switching branch protection's required-checks list from the
+> 4 individual contexts to just `ci-success` is a branch-protection settings change — out of scope for
+> an automated PR. Do it manually once `ci-success` has run green on `main` at least once: repo
+> Settings → Branches → `main` → Required status checks → remove the 4 individual entries, add
+> `✅ CI Success`.
 
 ---
 

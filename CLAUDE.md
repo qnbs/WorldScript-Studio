@@ -40,7 +40,7 @@ pnpm run token:audit        # audit-tokens.mjs — design-token usage gate (CI b
 
 **Quality gate (matches CI `quality` job):** `pnpm run lint && pnpm run i18n:check && pnpm run typecheck && pnpm exec vitest run --coverage`. Full pipeline graph: [`docs/CI.md`](docs/CI.md). Coverage thresholds: lines 74, branches 60, functions 67, statements 72 (see `vitest.config.ts`).
 
-**CI pipeline order:** `security` → `quality` (Biome + tsgo + Vitest matrix) → `build` / `e2e` / `storybook` (parallel) → `lighthouse` (after build) → `deploy` on `main`.
+**CI pipeline order:** `security` → `quality` (Biome + tsgo + Vitest matrix) → `build` / `e2e` / `storybook` (parallel) → `lighthouse` (after build) → `deploy` on `main`. `ci-success` is a required-status aggregator (`needs: [security, quality, build]`) so branch protection can require one context instead of three/four individual ones — see `docs/CI.md`.
 
 **CI-cloud-first workflow (constrained local hardware only):** On low-end hardware, run only `lint`, `typecheck`, `i18n:check` locally before pushing. Coverage, E2E, Lighthouse, and Stryker are CI-gate jobs. After each push, update README.md badges and AUDIT.md quality-gate line with CI-reported numbers. Local CI simulation: `act pull_request --job quality` (Docker + `act`; see `infra/low-end-ci/DAILY-DRIVER.md`).
 
@@ -411,7 +411,6 @@ Feature-specific implementation patterns (Plot Board, ProForge Pipeline, scene-l
 ## Known Technical Debt
 
 See `AUDIT.md` and `TODO.md`. Key items:
-- `app/listenerMiddleware.ts` — redux-undo `StateWithHistory` typing at boundaries.
 - `workers/v2/inference.worker.ts` (v1 deleted, ADR-0015) — `@huggingface/transformers` v3 path alias in `tsconfig.json`; if the alias breaks, fix the path alias or the package's type declaration directly — do not suppress with `@ts-expect-error` (conflicts with the suppression-ratchet policy above).
 - **`WorkerBus.runTask()` doesn't enforce `timeoutMs`** — confirmed via inspection, no timer on either the bus or worker-side rejects a hung task. Pre-existing, tracked in ADR-0015/TODO.md, not yet fixed.
 - **DS-5:** Delete legacy bridge block from `index.css` — deferred until DS-1 verified in production.

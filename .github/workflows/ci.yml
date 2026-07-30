@@ -257,6 +257,29 @@ jobs:
           path: ./dist
 
   # ----------------------------------------------------------
+  # 3. CI SUCCESS: single required-status aggregator (security + quality + build)
+  # ----------------------------------------------------------
+  ci-success:
+    name: ✅ CI Success
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [security, quality, build]
+    if: always()
+    steps:
+      - name: Verify all required jobs succeeded
+        run: |
+          if [ "${{ needs.security.result }}" != "success" ] || \
+             [ "${{ needs.quality.result }}" != "success" ] || \
+             [ "${{ needs.build.result }}" != "success" ]; then
+            echo "One or more required jobs did not succeed:"
+            echo "  security: ${{ needs.security.result }}"
+            echo "  quality:  ${{ needs.quality.result }}"
+            echo "  build:    ${{ needs.build.result }}"
+            exit 1
+          fi
+          echo "All required jobs succeeded."
+
+  # ----------------------------------------------------------
   # 4. DEPLOY: GitHub Pages (only on main push)
   # ----------------------------------------------------------
   deploy:
