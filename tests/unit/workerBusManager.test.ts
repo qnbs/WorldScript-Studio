@@ -68,6 +68,7 @@ vi.mock('../../services/legacyWorkerBusAdapter', () => ({
 
 const { mockLogError } = vi.hoisted(() => ({ mockLogError: vi.fn() }));
 
+// QNBS-v3: mocked separately so re-registration-failure tests can assert on log.error without asserting on the real StructuredLogger's console/IDB side effects
 vi.mock('../../services/logger', () => ({
   createLogger: () => ({
     debug: vi.fn(),
@@ -262,6 +263,7 @@ describe('workerBusManager', () => {
       const bus = await ensureInferencePool();
 
       expect(bus).not.toBeNull();
+      // QNBS-v3: asserts the memory-safety cap (below MAX_WORKERS_INFERENCE) survives re-registration, not just initial registration
       expect(mockRegisterPool).toHaveBeenCalledWith(
         'inference',
         expect.arrayContaining(['inference.text', 'inference.embed']),
