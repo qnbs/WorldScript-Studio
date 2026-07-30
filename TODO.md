@@ -263,8 +263,8 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 - ✅ **P0-2** — Plugin worker isolation (`workers/plugin.worker.ts`) — routes plugin execution to isolated worker context with timeout and sandboxed API
 - 🟡 **P0-4** — DuckDB OPFS encryption (`services/duckdb/duckdbEncryption.ts`) — encryption module + unit tests landed (passphrase-derived AES-256-GCM), **but not yet wired into the DuckDB persistence path** (0 production callers as of v1.23.1), so analytics are not encrypted at rest. Integration into `duckdbClient`/`duckdbWorker` remains open. (2026-06-17 reconciliation — was over-marked ✅; see `.github/SECURITY.md` SEC-6.)
 - ✅ **P0-5** — Voice WASM model download UI (`components/voice/VoiceModelDownloadModal.tsx`) — progress modal for Whisper/Kokoro model downloads with cancel/retry
-- ⬜ Complete Whisper WASM STT model download + inference pipeline (B-2 continuation)
-- ⬜ Kokoro/Piper TTS WASM engines
+- 🔄 Whisper WASM STT model download + inference pipeline (B-2 continuation) — engine (`services/voice/wasmSttEngine.ts`) + download UI (P0-5 above) shipped; remaining scope narrowed to E2E integration test coverage only — stale ⬜ reconciled 2026-07-30.
+- 🔄 Kokoro/Piper TTS WASM engines — Kokoro DONE (`services/voice/kokoroTtsEngine.ts`, tested since 2026-05-31); Piper remains an unimplemented type-level placeholder only (`preferredTtsEngine: 'piper'` in `voiceCommandService.ts` has no backing engine file) — stale ⬜ reconciled 2026-07-30.
 - ⬜ PLANbib v1.7 features (Objects → MindMap → Interviews → Timeline → Wizard → Analysis → ReadMode → Guide → Desktop) — 9 phases, go-ahead from user required
 
 ---
@@ -340,9 +340,9 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ### v2.0 Open Items
 
-- ⬜ Full RTCDataChannel in-flight E2E encryption (Yjs y-webrtc patch)
-- ⬜ RTL language support (Arabic, Hebrew, Persian)
-- ⬜ Fine-tuning / LoRA support for personalized writing styles
+- ✅ Full RTCDataChannel in-flight E2E encryption (Yjs y-webrtc patch) — DONE, vendor fork `packages/collab-transport` (y-webrtc 10.3.0, C-1); see its `AUDIT.md` ("RTCDataChannel payloads are now E2E-encrypted when `room.key` is set") — stale ⬜ reconciled 2026-07-30.
+- 🔄 RTL language support (Arabic, Hebrew, Persian) — Beta shipped behind `enableRtlLayout` (B-5); see the more current "C-6" entry above for the ar/he UI-translation detail and remaining native-speaker-review scope — stale duplicate ⬜ reconciled 2026-07-30.
+- ✅ Fine-tuning / LoRA support for personalized writing styles — DONE, `enableLoraAdapters` shipped default-on (Settings → AI → Fine-Tuning, Ollama Modelfile activation) — stale ⬜ reconciled 2026-07-30.
 - ⬜ Cloud sync (optional, E2E-encrypted)
 - ✅ DS-5: Delete legacy bridge block from index.css (after DS-1 verified in production) — DONE: bridge block already removed in prior sprints; remaining aliases (`--nav-*`, `--glass-*`, `--border-interactive`, `--ring-focus`) are intentional semantic tokens, not legacy bridges.
 
@@ -406,9 +406,9 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 ### v2.0 Open Items
 
 - ⬜ DuckDB `rag_chunks` schema migration: `FLOAT[64]` BoW → `FLOAT[384]` semantic vectors — **superseded by v1.8 embedding column** (verify on device)
-- ⬜ Full RTCDataChannel in-flight E2E encryption (Yjs y-webrtc patch)
-- ⬜ RTL language support (Arabic, Hebrew, Persian)
-- ⬜ Fine-tuning / LoRA support for personalized writing styles
+- ✅ Full RTCDataChannel in-flight E2E encryption (Yjs y-webrtc patch) — DONE, vendor fork `packages/collab-transport` (y-webrtc 10.3.0, C-1); see its `AUDIT.md` ("RTCDataChannel payloads are now E2E-encrypted when `room.key` is set") — stale ⬜ reconciled 2026-07-30.
+- 🔄 RTL language support (Arabic, Hebrew, Persian) — Beta shipped behind `enableRtlLayout` (B-5); see the more current "C-6" entry above for the ar/he UI-translation detail and remaining native-speaker-review scope — stale duplicate ⬜ reconciled 2026-07-30.
+- ✅ Fine-tuning / LoRA support for personalized writing styles — DONE, `enableLoraAdapters` shipped default-on (Settings → AI → Fine-Tuning, Ollama Modelfile activation) — stale ⬜ reconciled 2026-07-30.
 - ⬜ Cloud sync (optional, E2E-encrypted)
 - ✅ **Branches coverage ≥ 55 %** (v1.10: Vitest gate 55 %, RAG/help/plot tests)
 
@@ -428,9 +428,9 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ### v2.0 Open Items
 
-- ⬜ Full RTCDataChannel in-flight E2E encryption (Yjs y-webrtc patch)
-- ⬜ RTL language support (Arabic, Hebrew, Persian)
-- ⬜ Fine-tuning / LoRA support for personalized writing styles
+- ✅ Full RTCDataChannel in-flight E2E encryption (Yjs y-webrtc patch) — DONE, vendor fork `packages/collab-transport` (y-webrtc 10.3.0, C-1); see its `AUDIT.md` ("RTCDataChannel payloads are now E2E-encrypted when `room.key` is set") — stale ⬜ reconciled 2026-07-30.
+- 🔄 RTL language support (Arabic, Hebrew, Persian) — Beta shipped behind `enableRtlLayout` (B-5); see the more current "C-6" entry above for the ar/he UI-translation detail and remaining native-speaker-review scope — stale duplicate ⬜ reconciled 2026-07-30.
+- ✅ Fine-tuning / LoRA support for personalized writing styles — DONE, `enableLoraAdapters` shipped default-on (Settings → AI → Fine-Tuning, Ollama Modelfile activation) — stale ⬜ reconciled 2026-07-30.
 - ⬜ Cloud sync (optional, E2E-encrypted)
 - ⬜ AI creativity presets per project (not global)
 - ✅ **Branches coverage ≥ 55 %** (v1.10: Vitest gate 55 %, RAG/help/plot tests)
