@@ -42,8 +42,9 @@ export async function analyzeSentiment(text: string): Promise<SentimentResult> {
     const result = await requestInference('sentiment-analysis', SENTIMENT_MODEL, capped);
 
     // Worker returns "LABEL:score" string (see workers/v2/inference.worker.ts sentiment branch)
+    // QNBS-v3: labelRaw is always defined — String.split(':') never returns an empty array — noUncheckedIndexedAccess can't see that, so `as string` (not `??`, which would be dead code) satisfies the type checker without an untestable runtime branch. scoreRaw genuinely can be undefined when the worker omits the ":score" suffix, so it keeps its `??` fallback.
     const [labelRaw, scoreRaw] = result.split(':');
-    const rawLabel = (labelRaw ?? 'NEUTRAL').toUpperCase();
+    const rawLabel = (labelRaw as string).toUpperCase();
     const score = parseFloat(scoreRaw ?? '0.5');
 
     const label: SentimentResult['label'] =
