@@ -43,6 +43,7 @@ let mockFeatureFlags: FeatureFlagsState = {
   enableRustCompute: false,
   enableGlobalCopilot: false,
   enableLocalFirstSync: false,
+  enableBrowserOllama: false,
 };
 
 vi.mock('../../app/hooks', () => ({
@@ -140,6 +141,7 @@ afterEach(() => {
     enableRustCompute: false,
     enableGlobalCopilot: false,
     enableLocalFirstSync: false,
+    enableBrowserOllama: false,
   };
 });
 
