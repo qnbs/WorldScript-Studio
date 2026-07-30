@@ -39,6 +39,11 @@ const ANY_HEADING = /^#{1,6}\s+/;
 const HISTORICAL_MARKER =
   /(✅|\bRELEASED\b|\bDELIVERED\b|\bCompleted\b|\[\d+\.\d+\.\d+\]|\(\d{4}-\d{2}-\d{2})/i;
 const DONE_BULLET = /^\s*-\s*✅/;
+// QNBS-v3: mirrors DONE_BULLET's "always present-tense regardless of section" rule for the
+// opposite polarity — an open `- ⬜` bullet describes something NOT yet done, so it must survive
+// stripping even inside a dated/historical section (that's exactly how a stale ⬜ line escaped
+// this gate in a same-day doc edit — see the OPEN_BULLET_VERSION check in scanForDrift below).
+const OPEN_BULLET = /^\s*-\s*⬜/;
 // QNBS-v3: how many lines below a heading to look for a "**Status:** ✅ Released …" marker that
 // applies to the whole section (this repo puts it on its own line, not in the heading text).
 const STATUS_LOOKAHEAD = 5;
@@ -65,7 +70,12 @@ export function stripHistoricalSections(markdown) {
     }
   }
 
-  return lines.map((line, i) => (historical[i] || DONE_BULLET.test(line) ? '' : line)).join('\n');
+  return lines
+    .map((line, i) => {
+      if (OPEN_BULLET.test(line)) return line; // never strip — see OPEN_BULLET comment above
+      return historical[i] || DONE_BULLET.test(line) ? '' : line;
+    })
+    .join('\n');
 }
 
 /** Actual locale count = directories under locales/ (translation-glossary.json is a file, not a locale). */
@@ -185,6 +195,19 @@ export function scanForDrift(content, filePath, { localeCount, keyCount, latestV
           findings.push(
             `${filePath}:${i + 1} — "v${mentioned} … PLANNED" but v${mentioned} <= latest released v${latestVersion}: "${line.trim()}"`,
           );
+        }
+      }
+      // QNBS-v3: catches a stale "⬜ Tag/Release/publish vX.Y.Z" bullet that should have flipped to
+      // ✅ once that version actually shipped — the exact class of drift that escaped the gate when
+      // stripHistoricalSections() had no OPEN_BULLET exemption (see comment above its definition).
+      if (OPEN_BULLET.test(line) && /\b(?:tag|release|publish)\b/i.test(line)) {
+        for (const m of line.matchAll(/v(\d+\.\d+\.\d+)/gi)) {
+          const mentioned = m[1];
+          if (semverLte(mentioned, latestVersion)) {
+            findings.push(
+              `${filePath}:${i + 1} — open "⬜" bullet mentions tag/release/publish of v${mentioned}, but v${mentioned} <= latest released v${latestVersion}: "${line.trim()}"`,
+            );
+          }
         }
       }
     }
