@@ -1724,6 +1724,7 @@
   "settings.ai.adaptive.warmedModelsHint": "A modellek készen állnak a memóriában a gyors következtetés érdekében",
   "settings.ai.anthropicCorsNote": "Az Anthropic Claude nem hívható közvetlenül a böngészőből. Hozzon létre egy proxyszervert, vagy használja a Tauri asztali alkalmazást antropikus hívásokhoz.",
   "settings.ai.anthropicHint": "Az Anthropic proxykiszolgálót vagy a Tauri asztali alkalmazást igényel API-hívásokhoz.",
+  "settings.ai.anthropicKey": "Claude API Key",
   "settings.ai.connectionFailed": "A csatlakozás sikertelen",
   "settings.ai.connectionSuccess": "Sikeres csatlakozás",
   "settings.ai.corsRestriction": "CORS korlátozás",

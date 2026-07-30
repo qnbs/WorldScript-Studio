@@ -106,6 +106,7 @@
   "settings.ai.adaptive.warmedModelsHint": "Modeller redo i minnet för snabb slutledning",
   "settings.ai.anthropicCorsNote": "Antropiska Claude kan inte ringas direkt från webbläsaren. Konfigurera en proxyserver eller använd Tauri-skrivbordsappen för antropiska samtal.",
   "settings.ai.anthropicHint": "Anthropic kräver en proxyserver eller Tauri-skrivbordsappen för API-anrop.",
+  "settings.ai.anthropicKey": "Claude API Key",
   "settings.ai.connectionFailed": "Anslutning misslyckades",
   "settings.ai.connectionSuccess": "Anslutningen lyckades",
   "settings.ai.corsRestriction": "CORS-begränsning",

@@ -1724,6 +1724,7 @@
   "settings.ai.adaptive.warmedModelsHint": "نماذج جاهزة في الذاكرة لاستدلال سريع",
   "settings.ai.anthropicCorsNote": "لا يمكن استدعاء Anthropic Claude مباشرة من المتصفّح. أعدّ خادم وكيل أو استخدم تطبيق Tauri لسطح المكتب لاستدعاءات Anthropic.",
   "settings.ai.anthropicHint": "يتطلب Anthropic خادم وكيل أو تطبيق Tauri لسطح المكتب لاستدعاءات API.",
+  "settings.ai.anthropicKey": "Claude API Key",
   "settings.ai.connectionFailed": "فشل الاتصال",
   "settings.ai.connectionSuccess": "نجح الاتصال",
   "settings.ai.corsRestriction": "قيد CORS",
