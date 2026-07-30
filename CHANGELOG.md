@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+> Worker-generation consolidation sprint: the v1/WorkerBus-v2 duplication [ADR-0014](docs/adr/0014-worker-generation-duplication.md)
+> deferred is now closed out. Executed as 4 stacked PRs (#286–288, #290); see
+> [ADR-0015](docs/adr/0015-worker-generation-consolidation.md) for the full decision record.
+
+### Changed
+
+- **DuckDB analytics and local inference (embeddings + NLP) now route through WorkerBus v2**,
+  replacing dedicated `new Worker(...)` instances per service. `services/duckdb/duckdbClient.ts`,
+  `services/ai/localEmbeddingService.ts`, and `services/ai/localNlpService.ts` keep their exact
+  public APIs — an adapter pattern, not a consumer rewrite, so none of their real callers needed
+  changes. `ensureDuckDbPool()`/`ensureInferencePool()` added to `services/workerBusManager.ts`,
+  decoupled from `enableWorkerBusV2` (mirrors the existing `ensureWebLlmPool()` pattern — these are
+  core features, not experimental infra).
+- The shared `inference` WorkerBus pool's `maxWorkers` capped at 2 (was 4) — each replica
+  independently loads its own transformers.js pipeline with no cross-replica cache sharing, so 4
+  concurrent workers under a burst could mean 4x the model memory footprint.
+
+### Fixed
+
+- **DuckDB query/exec parameters were silently dropped**, executing an unbound query — already live
+  and breaking `services/ai/telemetryService.ts`'s parameterized `INSERT` writes. Fixed via
+  DuckDB-WASM prepared statements.
+- **`WorkerBus.terminatePool()` could leave tasks hanging forever** — removing a pool didn't settle
+  tasks already routed to it. Fixed by tracking task→pool assignment and cancelling matching tasks
+  before removal; a pool removed this way is now also transparently re-registered on next use
+  instead of failing every subsequent call.
+- **A respawned DuckDB worker lost its connection**, failing every query after an idle timeout with
+  "DuckDB not initialized." Fixed by transparently re-initializing once and retrying.
+- **DuckDB's OPFS-unavailable fallback silently swallowed the failure**, giving users no warning
+  their analytics wouldn't persist across reloads (private browsing, old Safari) — restored via the
+  existing progress channel. A follow-up fix made the fallback's own cleanup step best-effort, so a
+  secondary failure there can no longer block the fallback path itself.
+- **A missing `ensureInferencePool` export broke production builds** on Vercel (rolldown's
+  `[MISSING_EXPORT]`) — not caught by Vitest (the consumer test mocks the whole module) or by local
+  `tsgo` typecheck. Root-caused by reproducing Vercel's *exact* build command
+  (`pnpm run build:edge`, which differs from the plain `pnpm run build` used for an earlier,
+  misleading local repro attempt) and fixed by adding the missing function.
+
+### Removed
+
+- `workers/duckdbWorker.ts` and `workers/inference.worker.ts` (the v1 worker generation) — both
+  workloads now exclusively use `workers/v2/duckdb.worker.ts` and `workers/v2/inference.worker.ts`.
+
 ## [1.24.2] — 2026-07-29
 
 > CSP functional-truth, desktop crypto, and documentation-truth hardening sprint

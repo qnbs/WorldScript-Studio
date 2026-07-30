@@ -120,7 +120,7 @@ WorldScript-Studio/
 │   ├── unit/               # Vitest tests (co-located naming convention)
 │   ├── e2e/                # Playwright specs (CI-only)
 │   └── setup.ts            # Global Vitest setup
-├── workers/                # Web Workers: inference, duckdb, plugin, v2 inference/duckdb
+├── workers/                # Web Workers: plugin.worker.ts; v2/ is the sole worker generation since ADR-0015 (inference, duckdb, webllm)
 ├── scripts/                # Build/deploy helpers (i18n bundle, SW version sync, bundle budget, edge build)
 ├── infra/low-end-ci/       # Local CI stack for constrained hardware
 ├── src-tauri/              # Tauri 2 desktop app (Rust)
@@ -425,7 +425,7 @@ Edge builds run `scripts/build-edge.mjs` which sets `DEPLOY_TARGET=edge` and pat
 ### Local Inference
 
 - 4-layer stack: WebLLM → ONNX Runtime Web → Transformers.js → heuristics fallback.
-- `services/localAiFacade.ts` wraps WebLLM via `packages/ai-core` + `workers/inference.worker.ts`.
+- `services/localAiFacade.ts` wraps WebLLM via `packages/ai-core` + `workers/v2/inference.worker.ts`.
 - Tab-leader election via BroadcastChannel prevents multi-tab GPU contention.
 - **Adaptive AI Engine** (`services/ai/adaptiveAiEngine.ts`) — runtime hardware-aware backend/model selection. Gated by `enableAdaptiveAiEngine` flag.
 - **Device Profiler** (`services/ai/localAiDeviceProfiler.ts`) — WebGPU/WebNN/NPU/battery detection, 30s TTL cache.
@@ -448,19 +448,20 @@ Edge builds run `scripts/build-edge.mjs` which sets `DEPLOY_TARGET=edge` and pat
 
 ### WorkerBus v2
 
-Central orchestration layer for all background worker tasks. Messages use short kind literals (`TASK`, `CANCEL`, `PING`, `PONG`, `PROGRESS`, `RESULT`) validated by Zod.
+Central orchestration layer for all background worker tasks — since ADR-0015, the **sole** worker generation (v1's `workers/duckdbWorker.ts`/`workers/inference.worker.ts` deleted). Messages use short kind literals (`TASK`, `CANCEL`, `PING`, `PONG`, `PROGRESS`, `RESULT`) validated by Zod.
 
-- `packages/worker-bus/src/` — WorkerBus, WorkerPool, PriorityTaskQueue, CircuitBreaker, DeadLetterQueue, ProtocolHandler, workerBootstrap, constants, schemas.
-- `services/workerBusManager.ts` — singleton lifecycle; registers `inference` and `duckdb` pools.
+- `packages/worker-bus/src/` — WorkerBus (`hasPool()`/`terminatePool()` for scoped pool lifecycle), WorkerPool, PriorityTaskQueue (`critical > high > normal > low`, no `background` tier), CircuitBreaker, DeadLetterQueue, ProtocolHandler (unused by the live `runTask()` path), workerBootstrap (`WorkerHandlerContext.emitProgress(stage, progress, message?)` — a flat function, not `context.progress.emit(...)`), constants, schemas.
+- `services/workerBusManager.ts` — singleton lifecycle; registers `inference`, `duckdb`, `webllm`, `plugin` pools. `ensureDuckDbPool()`/`ensureInferencePool()`/`ensureWebLlmPool()` force-init and re-register a pool removed via `terminatePool()`, decoupled from `enableWorkerBusV2` (these are core features, not experimental infra).
 - `services/hybridRouter.ts` — routes to Web Worker pool or Rust TaskSupervisor (Tauri only) when `enableRustCompute` is on.
 - `services/legacyWorkerBusAdapter.ts` — shims old `@domain/ai-core` WorkerBus API onto v2.
 - `services/tauriTaskBridge.ts` — `invokeRustTask()`, `isRustComputeAvailable()` (60s TTL ping cache).
 - Feature flags: `enableWorkerBusV2` (on by default), `enableRustCompute` (on by default; effective on Tauri desktop only).
-- v2 workers: `workers/v2/inference.worker.ts` (text + embed via Hugging Face transformers), `workers/v2/duckdb.worker.ts` (init/query/exec/shutdown).
+- Workers: `workers/v2/inference.worker.ts` (text + embed via Hugging Face transformers, prepared-statement-free), `workers/v2/duckdb.worker.ts` (init/query/exec/shutdown, binds params via DuckDB-WASM prepared statements), `workers/v2/webllm.worker.ts` (WebGPU, ADR-0005), `workers/plugin.worker.ts` (sandboxed plugin execution, outside `v2/` but on the same protocol).
+- **Known gap:** `timeoutMs` is not enforced anywhere in the live `runTask()` path (no timer rejects a hung task) — pre-existing, tracked in ADR-0015/TODO.md.
 
 ### DuckDB Analytics
 
-- `workers/duckdbWorker.ts` runs DuckDB-WASM off main thread (OPFS persistence → in-memory fallback).
+- `workers/v2/duckdb.worker.ts` runs DuckDB-WASM off main thread via the shared `duckdb` pool (OPFS persistence → in-memory fallback). `duckdbClient.ts` is an adapter over `ensureDuckDbPool()`/`bus.enqueue()` that auto-reinits on a respawned worker's "not initialized" error.
 - `services/duckdb/duckdbClient.ts` is a singleton proxy with AbortSignal and init retry.
 - Schema (`duckdbSchema.ts`): 10 tables + 5 views including `rag_chunks` (FLOAT[384]), `cross_project_index`, `codex_*`.
 - Gated behind `featureFlagsSlice.enableDuckDbAnalytics` (on by default).
