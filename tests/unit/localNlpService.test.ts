@@ -88,6 +88,21 @@ describe('analyzeSentiment', () => {
     expect(r.normalized).toBe(0);
   });
 
+  it('returns NEUTRAL fallback when the WorkerBus pool is unavailable', async () => {
+    mockEnsureInferencePool.mockResolvedValue(null);
+    const r = await analyzeSentiment('anything');
+    expect(r.label).toBe('NEUTRAL');
+    expect(r.score).toBe(0.5);
+    expect(r.normalized).toBe(0);
+  });
+
+  it('defaults score to 0.5 when the worker omits the ":score" suffix', async () => {
+    nextResult = 'POSITIVE';
+    const r = await analyzeSentiment('no score suffix');
+    expect(r.label).toBe('POSITIVE');
+    expect(r.score).toBe(0.5);
+  });
+
   it('enqueues inference.text with the inference.text capability', async () => {
     await analyzeSentiment('test');
     expect(requestCalls[0]?.task).toBe('sentiment-analysis');
@@ -96,6 +111,12 @@ describe('analyzeSentiment', () => {
       expect.anything(),
       expect.objectContaining({ capabilities: ['inference.text'] }),
     );
+  });
+
+  it('omits the inferenceOptions key entirely when none is passed (exactOptionalPropertyTypes)', async () => {
+    await analyzeSentiment('test');
+    expect(requestCalls).toHaveLength(1);
+    expect(Object.hasOwn(requestCalls[0]!, 'inferenceOptions')).toBe(false);
   });
 });
 

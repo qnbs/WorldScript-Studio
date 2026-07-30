@@ -26,7 +26,8 @@ function makeCtx(overrides: Partial<WorkerHandlerContext> = {}): WorkerHandlerCo
 
 describe('inference.worker (v2) handleInference', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // QNBS-v3: resetAllMocks (not clearAllMocks) clears mock implementations too, preventing state leakage between tests
+    vi.resetAllMocks();
   });
 
   afterEach(() => {

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // QNBS-v3: duckdbClient now routes through WorkerBus v2 (workers/v2/duckdb.worker.ts) instead of
 //          spawning a raw Worker directly — mock services/workerBusManager's ensureDuckDbPool()/
@@ -102,6 +102,14 @@ describe('duckdbClient.query', () => {
     );
   });
 
+  it('stringifies a rejection that is not an Error instance', async () => {
+    mockEnqueue.mockReturnValue(makeHandle(Promise.reject('plain string rejection')));
+
+    const res = await duckdbClient.query('SELECT 1');
+
+    expect(res).toEqual(expect.objectContaining({ ok: false, error: 'plain string rejection' }));
+  });
+
   it('disables WorkerBus-level retries (retryPolicy maxRetries:0) to avoid stacking under withDuckDbRetry', async () => {
     mockEnqueue.mockReturnValue(makeHandle(Promise.resolve([])));
 
@@ -157,6 +165,28 @@ describe('duckdbClient.query', () => {
       expect(res).toEqual(expect.objectContaining({ ok: false, error: 'DuckDB not initialized' }));
       const initCalls = mockEnqueue.mock.calls.filter(([t]) => t === 'db.duckdb.init');
       expect(initCalls).toHaveLength(1);
+    });
+
+    it('does not retry the original query when the reinit INIT task itself rejects', async () => {
+      // QNBS-v3: [reinit.ok is only false when send('INIT', ...) itself hits the catch branch —
+      //          i.e. the INIT task's handle.result *rejects*. Distinct from the 'INIT enqueue
+      //          resolves but with an app-level failure shape' case, which send() doesn't model:
+      //          any resolved handle.result is always treated as {ok:true}.]
+      mockEnqueue.mockImplementation((taskType: string) => {
+        if (taskType === 'db.duckdb.query') {
+          return makeHandle(Promise.reject(new Error('DuckDB not initialized')));
+        }
+        if (taskType === 'db.duckdb.init') {
+          return makeHandle(Promise.reject(new Error('worker spawn failed')));
+        }
+        throw new Error(`unexpected taskType ${taskType}`);
+      });
+
+      const res = await duckdbClient.query('SELECT 1');
+
+      expect(res).toEqual(expect.objectContaining({ ok: false, error: 'DuckDB not initialized' }));
+      const queryCalls = mockEnqueue.mock.calls.filter(([t]) => t === 'db.duckdb.query');
+      expect(queryCalls).toHaveLength(1);
     });
 
     it('does not reinit-retry unrelated error messages', async () => {
@@ -272,9 +302,27 @@ describe('duckdbClient abort', () => {
 
     await vi.waitFor(() => expect(cancel).toHaveBeenCalledWith('Aborted'));
   });
+
+  it('detaches its abort listener once the call settles, so a reused signal does not accumulate listeners', async () => {
+    // QNBS-v3: [regression guard — {once:true} only self-removes when the signal actually
+    //          fires; a caller reusing one AbortSignal across many non-aborted queries must not
+    //          leak one listener per call for the signal's whole lifetime.]
+    mockEnqueue.mockReturnValue(makeHandle(Promise.resolve([{ n: 1 }])));
+    const controller = new AbortController();
+    const removeSpy = vi.spyOn(controller.signal, 'removeEventListener');
+
+    await duckdbClient.query('SELECT 1', undefined, controller.signal);
+
+    expect(removeSpy).toHaveBeenCalledWith('abort', expect.any(Function));
+  });
 });
 
 describe('duckdbClient OPFS fallback', () => {
+  // QNBS-v3: afterEach (not end-of-test) so the handler resets even if an assertion throws first
+  afterEach(() => {
+    duckdbClient.setOpfsFallbackHandler(null);
+  });
+
   it('forwards the opfs-fallback progress stage to setOpfsFallbackHandler', async () => {
     let capturedOnProgress: ((p: { stage: string; message?: string }) => void) | undefined;
     mockEnqueue.mockImplementation((_type, _payload, opts) => {
@@ -288,7 +336,21 @@ describe('duckdbClient OPFS fallback', () => {
     capturedOnProgress?.({ stage: 'opfs-fallback', message: 'OPFS unavailable in private mode' });
 
     expect(onFallback).toHaveBeenCalledWith('OPFS unavailable in private mode');
-    duckdbClient.setOpfsFallbackHandler(null);
+  });
+
+  it('defaults to a generic message when the opfs-fallback progress event omits one', async () => {
+    let capturedOnProgress: ((p: { stage: string; message?: string }) => void) | undefined;
+    mockEnqueue.mockImplementation((_type, _payload, opts) => {
+      capturedOnProgress = opts.onProgress;
+      return makeHandle(Promise.resolve({ ok: true }));
+    });
+    const onFallback = vi.fn();
+    duckdbClient.setOpfsFallbackHandler(onFallback);
+
+    await duckdbClient.init();
+    capturedOnProgress?.({ stage: 'opfs-fallback' });
+
+    expect(onFallback).toHaveBeenCalledWith('OPFS unavailable');
   });
 
   it('ignores non-opfs-fallback progress stages', async () => {
@@ -304,6 +366,5 @@ describe('duckdbClient OPFS fallback', () => {
     capturedOnProgress?.({ stage: 'loading', message: 'irrelevant' });
 
     expect(onFallback).not.toHaveBeenCalled();
-    duckdbClient.setOpfsFallbackHandler(null);
   });
 });

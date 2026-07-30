@@ -6,6 +6,12 @@ import {
   registerTaskHandler,
   type WorkerHandlerContext,
 } from '../../packages/worker-bus/src/workerBootstrap';
+import { createLogger } from '../../services/logger';
+
+// QNBS-v3: [services/logger.ts is worker-safe — its window.localStorage/Tauri touches are all
+//          guarded (typeof window !== 'undefined' / dynamic import) — so this matches
+//          workerBusManager.ts's log.warn/log.error convention instead of raw console.warn.]
+const log = createLogger('duckdb.worker');
 
 let duckdbModule: typeof import('@duckdb/duckdb-wasm') | null = null;
 let db: AsyncDuckDB | null = null;
@@ -81,7 +87,7 @@ export async function initDuckDb(
       try {
         await opfsConnection?.close();
       } catch (closeErr) {
-        console.warn('[duckdb.worker] Failed to close partial OPFS connection', closeErr);
+        log.warn('Failed to close partial OPFS connection', closeErr);
       }
       // QNBS-v3: [No bare postMessage from inside a task handler — OPFS-unavailable is surfaced via the progress channel duckdbClient's INIT adapter listens on instead.]
       emitProgress?.(
