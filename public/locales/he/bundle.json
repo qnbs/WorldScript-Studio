@@ -1724,6 +1724,7 @@
   "settings.ai.adaptive.warmedModelsHint": "מודלים מוכנים בזיכרון לאינפרנס מהיר",
   "settings.ai.anthropicCorsNote": "לא ניתן לקרוא ל‑Anthropic Claude ישירות מהדפדפן. הקימו שרת פרוקסי או השתמשו באפליקציית Tauri לשולחן העבודה לקריאות Anthropic.",
   "settings.ai.anthropicHint": "‏Anthropic דורש שרת פרוקסי או את אפליקציית Tauri לשולחן העבודה לקריאות API.",
+  "settings.ai.anthropicKey": "Claude API Key",
   "settings.ai.connectionFailed": "החיבור נכשל",
   "settings.ai.connectionSuccess": "החיבור הצליח",
   "settings.ai.corsRestriction": "הגבלת CORS",

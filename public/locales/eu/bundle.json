@@ -1724,6 +1724,7 @@
   "settings.ai.adaptive.warmedModelsHint": "Memorian prest dauden ereduak inferentzia azkarrak egiteko",
   "settings.ai.anthropicCorsNote": "Anthropic Claude ezin da zuzenean arakatzailetik deitu. Konfiguratu proxy zerbitzari bat edo erabili Tauri mahaigaineko aplikazioa Anthropic deietarako.",
   "settings.ai.anthropicHint": "Anthropic-ek proxy zerbitzari bat edo Tauri mahaigaineko aplikazioa behar du API deiak egiteko.",
+  "settings.ai.anthropicKey": "Claude API Key",
   "settings.ai.connectionFailed": "Konexioak huts egin du",
   "settings.ai.connectionSuccess": "Konexioa arrakastatsua da",
   "settings.ai.corsRestriction": "CORS Murrizketa",

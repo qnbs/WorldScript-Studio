@@ -106,6 +106,7 @@
   "settings.ai.adaptive.warmedModelsHint": "モデルをメモリ内に準備して高速推論を実現",
   "settings.ai.anthropicCorsNote": "Anthropic Claude をブラウザから直接呼び出すことはできません。プロキシ サーバーをセットアップするか、Anthropic 呼び出し用の Tauri デスクトップ アプリを使用します。",
   "settings.ai.anthropicHint": "Anthropic では、API 呼び出しのためにプロキシ サーバーまたは Tauri デスクトップ アプリが必要です。",
+  "settings.ai.anthropicKey": "Claude API Key",
   "settings.ai.connectionFailed": "接続に失敗しました",
   "settings.ai.connectionSuccess": "接続成功",
   "settings.ai.corsRestriction": "CORS の制限",

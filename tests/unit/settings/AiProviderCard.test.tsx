@@ -382,3 +382,63 @@ describe('AiProviderCard — grok provider', () => {
     });
   });
 });
+
+// QNBS-v3 (ADR-0016 Track A): desktop bypasses Anthropic's CORS restriction natively — the
+// warning-only block becomes a real key input there, while web/PWA keeps the warning.
+describe('AiProviderCard — anthropic provider (ADR-0016 Track A)', () => {
+  const anthropicAdvancedAi = {
+    ...mockAdvancedAi,
+    provider: 'anthropic' as const,
+    model: 'claude-haiku-4-5' as const,
+  };
+
+  afterEach(() => {
+    setDesktopRuntime(false);
+  });
+
+  it('web: shows the CORS warning block, no key input', () => {
+    setDesktopRuntime(false);
+    render(
+      <AiProviderCard
+        advancedAi={anthropicAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    expect(screen.getByText('settings.ai.corsRestriction')).toBeTruthy();
+    expect(screen.queryByLabelText('settings.ai.anthropicKey')).toBeNull();
+  });
+
+  it('desktop: shows the real key input and model selector, no warning block', () => {
+    setDesktopRuntime(true);
+    render(
+      <AiProviderCard
+        advancedAi={anthropicAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    expect(screen.getByLabelText('settings.ai.anthropicKey')).toBeTruthy();
+    expect(screen.getByText('Claude Haiku 4.5')).toBeTruthy();
+    expect(screen.queryByText('settings.ai.corsRestriction')).toBeNull();
+  });
+
+  it('desktop: saves the entered key via storageService.saveApiKey("anthropic", ...)', async () => {
+    setDesktopRuntime(true);
+    const user = userEvent.setup();
+    render(
+      <AiProviderCard
+        advancedAi={anthropicAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    const input = screen.getByLabelText('settings.ai.anthropicKey');
+    await user.type(input, 'sk-ant-test-key');
+    const saveButton = screen.getByText('settings.ai.save');
+    await user.click(saveButton);
+    await waitFor(() => {
+      expect(storageService.saveApiKey).toHaveBeenCalledWith('anthropic', 'sk-ant-test-key');
+    });
+  });
+});
