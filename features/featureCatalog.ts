@@ -309,6 +309,40 @@ const RAW_FEATURE_CATALOG: CatalogEntryInput[] = [
     drifts: [],
   },
 
+  {
+    flagKey: 'enableBrowserOllama',
+    name: 'Browser-Ollama (experimental, unsupported)',
+    description:
+      'Attempts a direct browser→Ollama connection in the web/PWA build instead of requiring the desktop app. Only works if the user has separately started their own Ollama server with OLLAMA_ORIGINS covering this exact origin — not a proxy, not a bypass, the same real-CORS model NovelCrafter uses.',
+    maturity: 'experimental',
+    tier: 'ai',
+    riskLevel: 'medium',
+    sinceVersion: 'v1.25',
+    gateLocations: [
+      {
+        file: 'components/settings/AiSections.tsx',
+        description: 'Reads selectEnableBrowserOllama and passes it into AiProviderCard',
+      },
+      {
+        file: 'components/settings/AiProviderCard.tsx',
+        description:
+          'canAttemptOllama = isDesktop || browserOllamaEnabled gates the auto-probe effect, Load Models, and Test Connection for the ollama provider; renders the OLLAMA_ORIGINS command when on',
+      },
+      {
+        file: 'services/aiProviderService.ts:testAIConnection',
+        description:
+          "case 'ollama' accepts opts.browserOllamaEnabled instead of hard-requiring isTauriRuntime(); remaps a generic 'unreachable' result to 'corsSuspected' when the flag is on",
+      },
+    ],
+    implementedIn: [
+      'services/aiProviderService.ts',
+      'components/settings/AiProviderCard.tsx',
+      'components/settings/AiSections.tsx',
+    ],
+    drifts: [],
+    roadmapTarget: 'Issue #266 follow-up — see docs/adr/0017-pwa-browser-ollama-opt-in.md',
+  },
+
   // ── Pipeline ────────────────────────────────────────────────────────────
 
   {

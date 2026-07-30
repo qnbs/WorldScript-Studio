@@ -28,6 +28,10 @@ interface AiProviderCardProps {
   onAdvancedAiPatch: (patch: Partial<AdvancedAiSettings>) => void;
   onProviderChange: (p: AIProvider) => void;
   onModelSelect?: (model: string) => void;
+  // QNBS-v3 (ADR-0017): opt-in feature flag — the Ollama section attempts a direct browser fetch
+  // instead of requiring desktop when the user has separately configured OLLAMA_ORIGINS. Default
+  // false so callers that don't pass it (e.g. older tests) keep today's desktop-only behavior.
+  browserOllamaEnabled?: boolean;
 }
 
 export const AiProviderCard: FC<AiProviderCardProps> = ({
@@ -35,6 +39,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
   onAdvancedAiPatch,
   onProviderChange,
   onModelSelect,
+  browserOllamaEnabled = false,
 }) => {
   const { t } = useTranslation();
   const provider = advancedAi.provider;
@@ -45,11 +50,14 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
   // QNBS-v3 (ADR-0016 Track B): web/PWA Claude support depends on api/claude-proxy existing on the
   // deployment — Vercel/Cloudflare Pages can host it, GitHub Pages (static-only) never can.
   const isAnthropicProxyCapableWeb = !isDesktop && isServerlessProxyCapable();
-  // QNBS-v3: for Ollama in a browser, the auto-test effect and the manual "Test connection"
-  // button are both disabled (see below) — testStatus can never leave 'idle' here, so the
-  // generic status badge must not render its idle→"Ready" label, which would misleadingly
-  // imply a verified connection next to the "desktop app required" banner.
-  const ollamaUntestable = provider === 'ollama' && !isDesktop;
+  // QNBS-v3 (ADR-0017): the opt-in flag widens Ollama testability to the browser — everywhere else
+  // in this component that gated Ollama purely on isDesktop now also accepts this flag.
+  const canAttemptOllama = isDesktop || browserOllamaEnabled;
+  // QNBS-v3: for Ollama when neither desktop nor the browser opt-in applies, the auto-test effect
+  // and the manual "Test connection" button are both disabled (see below) — testStatus can never
+  // leave 'idle' here, so the generic status badge must not render its idle→"Ready" label, which
+  // would misleadingly imply a verified connection next to the "desktop app required" banner.
+  const ollamaUntestable = provider === 'ollama' && !canAttemptOllama;
   const [openaiKey, setOpenaiKey] = useState('');
   const [grokKey, setGrokKey] = useState('');
   const [isSavingGrokKey, setIsSavingGrokKey] = useState(false);
@@ -125,9 +133,11 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
   }, [openaiKey]);
 
   const handleLoadOllamaModels = useCallback(async () => {
-    // QNBS-v3 (#266): never probe localhost from the PWA — the request is CORS/PNA-blocked anyway
-    // and only produces console noise. Local servers are a desktop-only feature by policy.
-    if (!isTauriRuntime()) {
+    // QNBS-v3 (#266, ADR-0017): never probe localhost from the PWA by default — the request is
+    // CORS/PNA-blocked anyway and only produces console noise. Local servers are desktop-only
+    // unless the user has explicitly opted into the browser-Ollama flag (and configured their own
+    // server's OLLAMA_ORIGINS accordingly).
+    if (!isTauriRuntime() && !browserOllamaEnabled) {
       setOllamaModels([]);
       return;
     }
@@ -140,7 +150,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
     } finally {
       setIsLoadingModels(false);
     }
-  }, [ollamaBaseUrl]);
+  }, [ollamaBaseUrl, browserOllamaEnabled]);
 
   const handleTest = useCallback(async () => {
     const requestId = ++testRequestIdRef.current;
@@ -150,6 +160,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
       const result = await testAIConnection(provider, {
         ollamaBaseUrl,
         openAiCompatibleBaseUrl: advancedAi.openAiCompatibleBaseUrl,
+        browserOllamaEnabled,
       });
       if (testRequestIdRef.current !== requestId) return; // stale — superseded by a newer request
       if (result.ok) {
@@ -170,7 +181,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
       setTestStatus('error');
       setTestError(e instanceof Error ? e.message : t('settings.ai.unknownError'));
     }
-  }, [provider, ollamaBaseUrl, advancedAi.openAiCompatibleBaseUrl, t]);
+  }, [provider, ollamaBaseUrl, advancedAi.openAiCompatibleBaseUrl, browserOllamaEnabled, t]);
 
   const handleScanLocals = useCallback(async () => {
     setScanBusy(true);
@@ -199,9 +210,10 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
     // QNBS-v3 (CodeRabbit CWE-209): invalidate any in-flight test from the previous provider
     // context before deciding whether to start a new one.
     testRequestIdRef.current++;
-    // QNBS-v3 (#266): the ollama auto-probe (models + connection test) only runs on desktop.
-    // In the PWA it fired CORS-blocked localhost requests on every settings visit.
-    if (provider === 'ollama' && isDesktop) {
+    // QNBS-v3 (#266, ADR-0017): the ollama auto-probe (models + connection test) only runs on
+    // desktop, or in the browser when the user has explicitly opted into browserOllamaEnabled. In
+    // the plain PWA it fired CORS-blocked localhost requests on every settings visit.
+    if (provider === 'ollama' && canAttemptOllama) {
       void handleLoadOllamaModels();
       void handleTest();
     } else if (provider === 'webllm') {
@@ -211,7 +223,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
         .then(setGpuInfo)
         .catch(() => setGpuInfo({ status: 'unknown' }));
     }
-  }, [provider, isDesktop, handleLoadOllamaModels, handleTest]);
+  }, [provider, canAttemptOllama, handleLoadOllamaModels, handleTest]);
 
   const providers: { id: AIProvider; label: string }[] = [
     { id: 'gemini', label: t('settings.ai.provider.gemini') },
@@ -408,7 +420,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
 
         {provider === 'ollama' && (
           <div className="space-y-3">
-            {!isDesktop && (
+            {!isDesktop && !browserOllamaEnabled && (
               // QNBS-v3 (#266): quiet banner instead of CORS console noise — the PWA never
               // auto-probes localhost, so this is the only place the restriction surfaces.
               <div className="p-3 rounded-lg bg-[var(--sc-warning-bg)] border border-[var(--sc-warning-border)] text-sm text-[var(--sc-warning-fg)] space-y-2">
@@ -426,6 +438,23 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
                   <Icon name="download" size="sm" aria-hidden="true" />
                   {t('settings.ai.downloadDesktopCta')}
                 </a>
+              </div>
+            )}
+            {!isDesktop && browserOllamaEnabled && (
+              // QNBS-v3 (ADR-0017, Issue #266): the "technically: yes" opt-in path — direct browser
+              // fetch works only if the user's own Ollama server was started with OLLAMA_ORIGINS
+              // covering this exact origin. Not a proxy, not a bypass; same real-CORS model
+              // NovelCrafter's browser-Ollama support uses. Command is computed from the current
+              // origin so it's always correct for this deployment, not a guessed/generic one.
+              <div className="p-3 rounded-lg border border-[var(--sc-info-fg)]/30 bg-[var(--sc-info-bg)] text-sm text-[var(--sc-info-fg)] space-y-2">
+                <p className="font-semibold flex items-center gap-1">
+                  <Icon name="info" size="sm" aria-hidden="true" />
+                  {t('settings.ai.ollamaBrowserOptInTitle')}
+                </p>
+                <p>{t('settings.ai.ollamaBrowserOptInBody')}</p>
+                <code className="block rounded bg-[var(--sc-surface-overlay)] px-2 py-1 font-mono text-xs overflow-x-auto text-[var(--sc-text-primary)]">
+                  OLLAMA_ORIGINS={window.location.origin} ollama serve
+                </code>
               </div>
             )}
             {isDesktop && (
@@ -475,7 +504,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
               />
               <Button
                 onClick={handleLoadOllamaModels}
-                disabled={isLoadingModels || !isDesktop}
+                disabled={isLoadingModels || !canAttemptOllama}
                 variant="secondary"
               >
                 {isLoadingModels ? <Spinner className="w-4 h-4" /> : t('settings.ai.loadModels')}
@@ -685,11 +714,12 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
 
         {provider !== 'gemini' && (
           <div className="flex items-center gap-3 pt-1">
-            {/* QNBS-v3 (#266 review): in the PWA the ollama test would re-create CORS noise —
-                the banner + CTA above is the only actionable path there. */}
+            {/* QNBS-v3 (#266 review, ADR-0017): in the plain PWA the ollama test would re-create
+                CORS noise — the banner + CTA above is the only actionable path there. The
+                browserOllamaEnabled opt-in widens this the same way it widens the auto-probe. */}
             <Button
               onClick={handleTest}
-              disabled={testStatus === 'loading' || (provider === 'ollama' && !isDesktop)}
+              disabled={testStatus === 'loading' || (provider === 'ollama' && !canAttemptOllama)}
               variant="secondary"
             >
               {testStatus === 'loading' ? (

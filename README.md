@@ -12,7 +12,7 @@
   <img src="https://img.shields.io/badge/Version-v1.24.3-6366F1" alt="v1.24.3">
   <img src="https://img.shields.io/badge/Storage-IndexedDB_v8-F59E0B" alt="IndexedDB v8">
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
-  <img src="https://img.shields.io/badge/i18n-19_locales-2857_keys-0EA5E9" alt="i18n 19 locales — 2857 keys">
+  <img src="https://img.shields.io/badge/i18n-19_locales-2861_keys-0EA5E9" alt="i18n 19 locales — 2861 keys">
   <img src="https://img.shields.io/badge/Tests-6477_%2F_529_files-22C55E" alt="6477 tests / 529 files">
   <img src="https://img.shields.io/codecov/c/github/qnbs/WorldScript-Studio?logo=codecov&label=Coverage" alt="Codecov Coverage">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">
@@ -396,7 +396,7 @@ Infrastructure-level features that keep the app fast and extensible as projects 
 
 ### 🌐 Full Multi-Language Support
 
-Shipped UI locales with **2857 i18n keys** across all 19 languages — zero hardcoded user-facing strings:
+Shipped UI locales with **2861 i18n keys** across all 19 languages — zero hardcoded user-facing strings:
 
 - 🇩🇪 **German** (Deutsch)
 - 🇬🇧 **English**
@@ -439,7 +439,7 @@ WorldScript Studio supports **9 distinct AI execution paths**, automatically rou
 | **Cloud 3** | Anthropic Claude | API key (BYOK) | Claude Opus 4.7, Sonnet 4.6, Haiku 4.5 — desktop (native) and Vercel/Cloudflare Pages (via serverless proxy); unavailable on GitHub Pages, see [privacy note](#-encryption--which-mechanism-protects-what) |
 | **Cloud 4** | Grok (xAI) | API key (BYOK) | grok-3, grok-3-mini |
 | **Cloud 5** | **OpenRouter** | Free or paid key | Unified gateway: DeepSeek R1, Llama 3.3 70B, Qwen 2.5 72B + 100s more; `:free` suffix = zero cost |
-| **Local 1** | Ollama | Local server | Default model: Qwen3 8B; configurable URL |
+| **Local 1** | Ollama | Local server | Default model: Qwen3 8B; configurable URL. Desktop app connects natively (no setup). Web/PWA is desktop-only **by default** — an opt-in `enableBrowserOllama` flag (Settings → Experimental, advanced/unsupported) lets the browser connect directly if you start your own server with `OLLAMA_ORIGINS` covering the page's origin, the same real-CORS model NovelCrafter uses; see [ADR-0017](docs/adr/0017-pwa-browser-ollama-opt-in.md). |
 | **Local 2** | WebLLM (WebGPU) | GPU + browser | MLC-packaged: Llama 3.2 1B/3B, Phi-3.5 Mini, Gemma 2 2B |
 | **Local 3** | ONNX Runtime Web | WASM (any device) | Fallback when no WebGPU; runs fully in-browser |
 | **Local 4** | Transformers.js | WASM / WebGPU | Hugging Face–compatible models; WebGPU or WASM backend |
@@ -505,7 +505,7 @@ The Settings → AI panel shows a live GPU status badge with adapter details and
 | **PDF Export**       | jsPDF                                                     | Client-side, configurable PDF document generation                    |
 | **Document Export**  | docx + jszip                                              | Word-compatible `.docx` generation (lazy-loaded)                     |
 | **PWA**              | Service Worker + Web App Manifest v3                     | Offline support, installability, Workbox chunking                    |
-| **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 2857 keys × 19 locales (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta); EN fallback; `localStorage` persistence |
+| **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 2861 keys × 19 locales (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta); EN fallback; `localStorage` persistence |
 | **Testing**          | Vitest 4.x (6477 tests / 529 files) + Playwright E2E     | Unit/integration + cross-browser E2E; Stryker mutation (manual workflow)          |
 | **Code Quality**     | Biome (lint + format) + TypeScript 7 (tsgo) strict       | `--error-on-warnings` in CI; zero `any` policy                      |
 | **Visualization**    | Force-directed graph                                      | Interactive character relationship network                           |
@@ -707,7 +707,7 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 **Current test metrics (2026-07-30, CI-reported):**
 - **6477 unit tests** across **529 test files** — all passing
 - Coverage thresholds: lines ≥ 74 · branches ≥ 60 · functions ≥ 67 · statements ≥ 72 — enforced in CI (see Codecov badge for live metrics)
-- i18n: **2857 keys × 19 locales** (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta)
+- i18n: **2861 keys × 19 locales** (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta)
 
 **CI-cloud-first workflow (recommended):** On constrained hardware run **`pnpm run lint && pnpm run i18n:check && pnpm run typecheck`** locally, then push and let CI handle coverage, E2E, Lighthouse, and Stryker. Authoritative numbers come from CI artifacts (Codecov, JUnit). After CI goes green, update the README badges and `AUDIT.md` quality-gate line from the reported metrics. See **[`docs/CI.md`](docs/CI.md) § Cloud CI-first vs local development** for the full post-merge doc-update checklist.
 

@@ -50,6 +50,8 @@ export interface FeatureFlagsState {
   enableGlobalCopilot: boolean;
   /** Local-First sync (shadow) — mirror the project into a Yjs doc + y-indexeddb; Redux stays SoT (default: false). */
   enableLocalFirstSync: boolean;
+  /** Experimental: attempt a direct browser→Ollama connection in the web/PWA build, opt-in and unsupported (default: false — see ADR-0017). */
+  enableBrowserOllama: boolean;
 }
 
 // QNBS-v3: exported so featureCatalog.ts can DERIVE each entry's defaultOn from this single source,
@@ -86,6 +88,9 @@ export const defaultFeatureFlagsState: FeatureFlagsState = {
   enableGlobalCopilot: false,
   // QNBS-v3: local-first sync off by default — experimental shadow projection (B1.1); Redux stays SoT
   enableLocalFirstSync: false,
+  // QNBS-v3 (ADR-0017): off by default — direct browser→Ollama fetch only works if the user has
+  // separately configured their own server's OLLAMA_ORIGINS; unsupported/advanced opt-in.
+  enableBrowserOllama: false,
 };
 
 const loadFeatureFlagsState = (): FeatureFlagsState => {
@@ -182,6 +187,9 @@ const featureFlagsSlice = createSlice({
     setEnableLocalFirstSync(state, action: PayloadAction<boolean>) {
       state.enableLocalFirstSync = action.payload;
     },
+    setEnableBrowserOllama(state, action: PayloadAction<boolean>) {
+      state.enableBrowserOllama = action.payload;
+    },
   },
 });
 
@@ -232,6 +240,8 @@ export const selectEnableGlobalCopilot = (state: { featureFlags: FeatureFlagsSta
   state.featureFlags.enableGlobalCopilot;
 export const selectEnableLocalFirstSync = (state: { featureFlags: FeatureFlagsState }) =>
   state.featureFlags.enableLocalFirstSync;
+export const selectEnableBrowserOllama = (state: { featureFlags: FeatureFlagsState }) =>
+  state.featureFlags.enableBrowserOllama;
 
 export const featureFlagsPersistenceMiddleware: Middleware<unknown, unknown> =
   (storeAPI) => (next) => (action) => {

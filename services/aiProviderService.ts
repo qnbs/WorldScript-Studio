@@ -62,6 +62,9 @@ export interface AIRequestOptions {
   systemPrompt?: string;
   signal?: AbortSignal;
   ollamaBaseUrl?: string;
+  // QNBS-v3 (ADR-0017): opt-in — attempt a direct browser→Ollama fetch instead of requiring
+  // desktop. Only meaningful when provider is 'ollama' and isTauriRuntime() is false.
+  browserOllamaEnabled?: boolean;
   fallbackProviders?: AIProvider[];
   /** Leer = api.openai.com; sonst OpenRouter/Groq/OpenAI-kompatible Root-URL. */
   openAiCompatibleBaseUrl?: string;
@@ -825,6 +828,7 @@ export type TestConnectionErrorKind =
   | 'pluginUnavailable'
   | 'desktopRequired'
   | 'proxyUnavailableStaticHost'
+  | 'corsSuspected'
   | 'noWebgpu'
   | 'unknownProvider'
   | 'unexpected';
@@ -871,7 +875,10 @@ export async function testAIConnection(
         // QNBS-v3 (T0): canonical detection — `__TAURI__` alone was false in the real shell, so the
         // desktop Ollama (localhost) path was unreachable there.
         const isDesktop = isTauriRuntime();
-        if (!isDesktop) {
+        // QNBS-v3 (ADR-0017): enableBrowserOllama is an explicit, advanced opt-in — the user has
+        // separately configured their own Ollama server's OLLAMA_ORIGINS for this exact origin
+        // (see AnthropicProviderFields-adjacent Ollama UI in AiProviderCard.tsx). Off by default.
+        if (!isDesktop && !opts.browserOllamaEnabled) {
           // QNBS-v3 (ADR-0012): browsers block localhost via CORS/Private Network Access, NOT CSP
           // — this repo's CSP already allowlists localhost (docs/adr/0004). Matches the corrected
           // settings.ai.ollamaDesktopOnlyBody wording from #269; this hard-gate string had drifted.
@@ -882,7 +889,14 @@ export async function testAIConnection(
             kind: 'desktopRequired',
           };
         }
-        return testOllamaConnection(opts.ollamaBaseUrl);
+        const result = await testOllamaConnection(opts.ollamaBaseUrl);
+        // QNBS-v3 (ADR-0017): the Fetch API gives an identical generic failure for "CORS rejected"
+        // and "server genuinely down" — this can only be a heuristic hint when running the opt-in
+        // browser path, never a certain diagnosis. Desktop keeps the plain 'unreachable' kind.
+        if (!isDesktop && !result.ok && result.kind === 'unreachable') {
+          return { ...result, kind: 'corsSuspected' };
+        }
+        return result;
       }
       case 'anthropic': {
         // QNBS-v3 (ADR-0016): desktop bypasses CORS via localServerFetch's native path (Track A);

@@ -102,6 +102,7 @@ const baseDeps: CommandRuntimeDeps = {
     enableRustCompute: false,
     enableGlobalCopilot: false,
     enableLocalFirstSync: false,
+    enableBrowserOllama: false,
   },
   aiMode: 'hybrid',
   openRouterEnabled: false,

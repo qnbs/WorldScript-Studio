@@ -343,6 +343,91 @@ describe('AiProviderCard — ollama provider (#266)', () => {
   });
 });
 
+// QNBS-v3 (ADR-0017): opt-in direct browser→Ollama connection — browserOllamaEnabled defaults to
+// false in AiProviderCardProps, so every other test in this file (which never passes it) exercises
+// the flag-off path unaffected.
+describe('AiProviderCard — browser-Ollama opt-in (ADR-0017)', () => {
+  it('web, flag off (default): still shows the desktop-only banner, no OLLAMA_ORIGINS command', () => {
+    setDesktopRuntime(false);
+    render(
+      <AiProviderCard
+        advancedAi={ollamaAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    expect(screen.getByText('settings.ai.ollamaDesktopOnlyTitle')).toBeTruthy();
+    expect(screen.queryByText('settings.ai.ollamaBrowserOptInTitle')).toBeNull();
+  });
+
+  it('web, flag on: shows the opt-in info block with the OLLAMA_ORIGINS command for the current origin', () => {
+    setDesktopRuntime(false);
+    render(
+      <AiProviderCard
+        advancedAi={ollamaAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+        browserOllamaEnabled
+      />,
+    );
+    expect(screen.getByText('settings.ai.ollamaBrowserOptInTitle')).toBeTruthy();
+    expect(screen.queryByText('settings.ai.ollamaDesktopOnlyTitle')).toBeNull();
+    expect(screen.getByText(`OLLAMA_ORIGINS=${window.location.origin} ollama serve`)).toBeTruthy();
+  });
+
+  it('web, flag on: auto-loads models and tests the connection (matches desktop behavior)', async () => {
+    setDesktopRuntime(false);
+    render(
+      <AiProviderCard
+        advancedAi={ollamaAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+        browserOllamaEnabled
+      />,
+    );
+    await waitFor(() => {
+      expect(listOllamaModels).toHaveBeenCalled();
+      expect(testAIConnection).toHaveBeenCalledWith(
+        'ollama',
+        expect.objectContaining({ browserOllamaEnabled: true }),
+      );
+    });
+  });
+
+  it('web, flag on: Load Models and Test Connection buttons are enabled (unlike the flag-off case)', async () => {
+    setDesktopRuntime(false);
+    render(
+      <AiProviderCard
+        advancedAi={ollamaAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+        browserOllamaEnabled
+      />,
+    );
+    // QNBS-v3: the auto-probe effect fires handleLoadOllamaModels/handleTest on mount, so both
+    // buttons briefly render a loading Spinner instead of their label — wait for that to settle
+    // before asserting the (never-disabled-by-the-flag) enabled state.
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'settings.ai.loadModels' })).not.toBeDisabled();
+      expect(screen.getByRole('button', { name: 'settings.ai.testConnection' })).not.toBeDisabled();
+    });
+  });
+
+  it('desktop: unaffected by the flag — no opt-in info block, no change to the existing native-bypass note', () => {
+    setDesktopRuntime(true);
+    render(
+      <AiProviderCard
+        advancedAi={ollamaAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+        browserOllamaEnabled
+      />,
+    );
+    expect(screen.getByText('settings.ai.ollamaTauriBypass')).toBeTruthy();
+    expect(screen.queryByText('settings.ai.ollamaBrowserOptInTitle')).toBeNull();
+  });
+});
+
 describe('AiProviderCard — grok provider', () => {
   afterEach(() => {
     vi.clearAllMocks();
