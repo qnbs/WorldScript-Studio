@@ -1,6 +1,7 @@
 import type { TypedStartListening } from '@reduxjs/toolkit';
 import { createListenerMiddleware, isRejected } from '@reduxjs/toolkit';
 import { analyticsActions } from '../features/analytics/analyticsSlice';
+import { selectProjectData } from '../features/project/projectSelectors';
 import type { ProjectData } from '../features/project/projectSlice';
 import { statusActions } from '../features/status/statusSlice';
 import { ecoModeService } from '../services/ai/ecoModeService';
@@ -20,11 +21,6 @@ import { isAnalyticsPersistenceAllowed } from './analyticsGate';
 import type { AppDispatch, RootState } from './store';
 import { appStoreRef } from './storeRef';
 import { useTransientUiStore } from './transientUiStore';
-
-type ProjectStateWithHistory = {
-  present?: { data?: ProjectData };
-  data?: ProjectData;
-};
 
 export const listenerMiddleware = createListenerMiddleware();
 
@@ -119,10 +115,9 @@ addDebouncedListener(
     }
 
     try {
-      const projectState = state.project as ProjectStateWithHistory;
-      const presentData = projectState.present?.data ?? projectState.data;
+      const presentData = selectProjectData(state);
 
-      if (!presentData || presentData.title === undefined) {
+      if (!presentData) {
         logger.error('Auto-save aborted: Invalid project state detected (missing present.data)');
         api.dispatch(statusActions.setSavingStatus('idle'));
         return;
@@ -702,9 +697,8 @@ async function runLocalFirstShadowSync(
   stillEnabled: () => boolean,
 ): Promise<void> {
   if (state.featureFlags?.enableLocalFirstSync !== true) return;
-  const projectState = state.project as ProjectStateWithHistory;
-  const presentData = projectState.present?.data ?? projectState.data;
-  if (!presentData || presentData.title === undefined) return;
+  const presentData = selectProjectData(state);
+  if (!presentData) return;
   try {
     const handle = await getLocalFirstHandle(presentData);
     // QNBS-v3 (CodeAnt): flag may have flipped off during the await — re-check before mutating.
