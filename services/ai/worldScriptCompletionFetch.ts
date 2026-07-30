@@ -81,6 +81,8 @@ async function resolveModelConfig(
       status: 422,
     };
   }
+  // QNBS-v3: xAI's API is OpenAI-Chat-Completions-compatible, so Grok reuses the
+  // 'openaiCompatible' shape with a fixed baseURL instead of needing its own branch type.
   if (kind === 'grok') {
     const apiKey = await storageService.getApiKey('grok');
     if (!apiKey) {

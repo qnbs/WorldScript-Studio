@@ -64,6 +64,7 @@ const mockOnAdvancedAiPatch = vi.fn();
 const mockOnProviderChange = vi.fn();
 
 const ollamaAdvancedAi = { ...mockAdvancedAi, provider: 'ollama' as const };
+// QNBS-v3: fixture for the grok-provider describe block below.
 const grokAdvancedAi = { ...mockAdvancedAi, provider: 'grok' as const, model: 'grok-3' as const };
 
 function setDesktopRuntime(enabled: boolean): void {
@@ -428,6 +429,7 @@ describe('AiProviderCard — browser-Ollama opt-in (ADR-0017)', () => {
   });
 });
 
+// QNBS-v3: covers the new grok key-input/model-selector UI added in Phase 1 (ADR-0016).
 describe('AiProviderCard — grok provider', () => {
   afterEach(() => {
     vi.clearAllMocks();
@@ -442,8 +444,7 @@ describe('AiProviderCard — grok provider', () => {
       />,
     );
     expect(screen.getByLabelText('settings.ai.grokKey')).toBeTruthy();
-    // QNBS-v3: the Select renders only the currently-selected option's label when closed —
-    // "Grok 3 Mini" only appears once the dropdown is opened, not asserted here.
+    // QNBS-v3: the Select renders only the currently-selected option's label when closed, so "Grok 3 Mini" isn't asserted here.
     await waitFor(() => {
       expect(screen.getByText('Grok 3')).toBeTruthy();
     });
