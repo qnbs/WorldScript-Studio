@@ -209,6 +209,103 @@ describe('WorkerBus', () => {
     expect(pool).toBeUndefined();
   });
 
+  it('terminatePool terminates and removes only the named pool, leaving others intact', async () => {
+    bus.registerPool('other', ['db.duckdb'], {
+      maxWorkers: 1,
+      minWorkers: 1,
+      idleTimeoutMs: 120_000,
+      workerScript: '/other.worker.js',
+      capabilities: ['db.duckdb'],
+      labels: {},
+    });
+    const pools = (bus as unknown as { pools: Map<string, WorkerPool> }).pools;
+    const terminateAllSpy = vi.spyOn(pools.get('fake')!, 'terminateAll');
+    vi.spyOn(pools.get('other')!, 'acquire').mockReturnValue(new Promise(() => {}));
+
+    await bus.terminatePool('fake');
+
+    expect(terminateAllSpy).toHaveBeenCalled();
+    expect(pools.get('fake')).toBeUndefined();
+    expect(pools.get('other')).toBeDefined();
+  });
+
+  it('terminatePool is a no-op for an unknown pool id', async () => {
+    await expect(bus.terminatePool('does-not-exist')).resolves.toBeUndefined();
+  });
+
+  it('terminatePool cancels only the in-flight tasks routed to that pool', async () => {
+    // QNBS-v3: [beforeEach's mocked acquire() ignores the abort signal entirely (returns a
+    //          promise that never settles); override it here with a signal-aware implementation
+    //          mirroring WorkerPool's real waitForIdle() so cancellation can actually be observed
+    //          unsticking the caller, not just verified as "cancel() was called".]
+    const fakePool = (bus as unknown as { pools: Map<string, WorkerPool> }).pools.get('fake')!;
+    vi.spyOn(fakePool, 'acquire').mockImplementation(
+      (signal) =>
+        new Promise((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(new Error('Aborted')), { once: true });
+        }),
+    );
+    bus.registerPool('other', ['db.duckdb'], {
+      maxWorkers: 1,
+      minWorkers: 1,
+      idleTimeoutMs: 120_000,
+      workerScript: '/other.worker.js',
+      capabilities: ['db.duckdb'],
+      labels: {},
+    });
+    const otherPool = (bus as unknown as { pools: Map<string, WorkerPool> }).pools.get('other')!;
+    vi.spyOn(otherPool, 'acquire').mockReturnValue(new Promise(() => {}));
+
+    const fakeHandle = bus.enqueue('test.task', {}, { capabilities: ['inference.text'] });
+    const otherHandle = bus.enqueue('other.task', {}, { capabilities: ['db.duckdb'] });
+    otherHandle.result.catch(() => {});
+
+    const cancelSpy = vi.spyOn(bus, 'cancel');
+    await bus.terminatePool('fake');
+
+    expect(cancelSpy).toHaveBeenCalledTimes(1);
+    expect(cancelSpy).toHaveBeenCalledWith(fakeHandle.taskId, 'Pool terminated');
+    // Without the fix, this task would hang forever at pool.acquire() — terminatePool()
+    // cancelling it lets the result promise settle instead.
+    await expect(fakeHandle.result).rejects.toThrow('Aborted');
+  });
+
+  it('hasPool reports true for a registered pool and false for an unknown one', () => {
+    expect(bus.hasPool('fake')).toBe(true);
+    expect(bus.hasPool('does-not-exist')).toBe(false);
+  });
+
+  it('hasPool returns false after terminatePool removes the pool', async () => {
+    await bus.terminatePool('fake');
+    expect(bus.hasPool('fake')).toBe(false);
+  });
+
+  it('isolates a throwing subscriber so a later subscriber still receives the same event', async () => {
+    // QNBS-v3: [emit() is only reached by 'circuit-breaker-open'/'backpressure-rejected' events
+    //          (grep-verified — regular enqueue/completion never calls this.emit()); reuse the
+    //          same circuit-breaker trigger as 'rejects when circuit breaker open' above, adding a
+    //          throwing listener ahead of a recording one to prove the try/catch isolates it.]
+    const events: Array<{ kind: string }> = [];
+    bus.subscribe(() => {
+      throw new Error('listener boom');
+    });
+    bus.subscribe((ev: unknown) => events.push(ev as { kind: string }));
+
+    const cb = (
+      bus as unknown as { getCircuitBreaker: (t: string) => { recordFailure: () => void } }
+    ).getCircuitBreaker('fragile.task');
+    cb.recordFailure();
+    cb.recordFailure();
+    cb.recordFailure();
+
+    const handle = bus.enqueue('fragile.task', {});
+    await expect(handle.result).rejects.toThrow('Circuit breaker is open');
+
+    expect(events).toContainEqual(
+      expect.objectContaining({ kind: 'circuit-breaker-open', taskType: 'fragile.task' }),
+    );
+  });
+
   it('progress callback receives emitted progress', async () => {
     const progressUpdates: Array<{ stage: string; progress: number }> = [];
     let capturedTaskId = '';

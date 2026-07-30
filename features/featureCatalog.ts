@@ -430,7 +430,7 @@ const RAW_FEATURE_CATALOG: CatalogEntryInput[] = [
         description: 'Conditionally shows DuckDB query tab',
       },
     ],
-    implementedIn: ['services/duckdb/', 'workers/duckdbWorker.ts', 'hooks/useDuckDb.ts'],
+    implementedIn: ['services/duckdb/', 'workers/v2/duckdb.worker.ts', 'hooks/useDuckDb.ts'],
     drifts: [],
   },
 
