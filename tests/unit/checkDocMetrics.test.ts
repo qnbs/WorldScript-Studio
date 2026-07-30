@@ -63,9 +63,7 @@ describe('stripHistoricalSections', () => {
     expect(stripped).toContain('Present: 17 locales.');
   });
 
-  // QNBS-v3 (F-1): regression guard for the dc14bc0-shaped drift — a stale `- ⬜` bullet sitting
-  // inside a dated/historical section was invisible to the gate because DONE_BULLET had no mirror
-  // for the open-bullet polarity.
+  // QNBS-v3: regression guard for the dc14bc0-shaped drift — a stale open bullet was invisible to the gate inside a historical section
   it('preserves an open "⬜" bullet even inside a dated/historical section', () => {
     const md = [
       '## v1.24.2 — CSP/crypto/doc-truth hardening (2026-07-29)',
@@ -124,13 +122,21 @@ describe('scanForDrift', () => {
     expect(findings).toHaveLength(0);
   });
 
-  // QNBS-v3 (F-1): the OPEN_BULLET_VERSION check — a stale "⬜ Tag/Release vX.Y.Z" bullet for an
-  // already-released version must be flagged now that stripHistoricalSections() preserves it.
+  // QNBS-v3: the OPEN_BULLET_VERSION check — a stale open tag/release bullet for an already-released version must be flagged
   it('flags an open "⬜" bullet for tagging/releasing a version <= the latest release', () => {
     const content = '- ⬜ **Tag `v1.24.1` + publish the GitHub Release** — maintainer action.';
     const findings = scanForDrift(content, 'FAKE.md', actual);
     expect(findings.some((f) => f.includes('v1.24.1'))).toBe(true);
   });
+
+  it.each(['Tagging', 'Releasing', 'Publishing'])(
+    'flags an open "⬜" bullet using the inflected form "%s"',
+    (verb) => {
+      const content = `- ⬜ **${verb} \`v1.24.1\`** — maintainer action.`;
+      const findings = scanForDrift(content, 'FAKE.md', actual);
+      expect(findings.some((f) => f.includes('v1.24.1'))).toBe(true);
+    },
+  );
 
   it('does not flag an open "⬜" bullet for tagging a version newer than the latest release', () => {
     const content = '- ⬜ **Tag `v1.25.0` + publish the GitHub Release** — maintainer action.';

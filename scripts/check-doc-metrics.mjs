@@ -39,10 +39,7 @@ const ANY_HEADING = /^#{1,6}\s+/;
 const HISTORICAL_MARKER =
   /(✅|\bRELEASED\b|\bDELIVERED\b|\bCompleted\b|\[\d+\.\d+\.\d+\]|\(\d{4}-\d{2}-\d{2})/i;
 const DONE_BULLET = /^\s*-\s*✅/;
-// QNBS-v3: mirrors DONE_BULLET's "always present-tense regardless of section" rule for the
-// opposite polarity — an open `- ⬜` bullet describes something NOT yet done, so it must survive
-// stripping even inside a dated/historical section (that's exactly how a stale ⬜ line escaped
-// this gate in a same-day doc edit — see the OPEN_BULLET_VERSION check in scanForDrift below).
+// QNBS-v3: mirrors DONE_BULLET's "always present-tense regardless of section" rule for open bullets, so a stale ⬜ can't hide in a historical section
 const OPEN_BULLET = /^\s*-\s*⬜/;
 // QNBS-v3: how many lines below a heading to look for a "**Status:** ✅ Released …" marker that
 // applies to the whole section (this repo puts it on its own line, not in the heading text).
@@ -197,10 +194,11 @@ export function scanForDrift(content, filePath, { localeCount, keyCount, latestV
           );
         }
       }
-      // QNBS-v3: catches a stale "⬜ Tag/Release/publish vX.Y.Z" bullet that should have flipped to
-      // ✅ once that version actually shipped — the exact class of drift that escaped the gate when
-      // stripHistoricalSections() had no OPEN_BULLET exemption (see comment above its definition).
-      if (OPEN_BULLET.test(line) && /\b(?:tag|release|publish)\b/i.test(line)) {
+      // QNBS-v3: catches a stale "⬜ Tag/Release/publish vX.Y.Z" bullet that should have flipped to ✅ once that version shipped
+      if (
+        OPEN_BULLET.test(line) &&
+        /\b(?:tag|tagging|release|releasing|publish|publishing)\b/i.test(line)
+      ) {
         for (const m of line.matchAll(/v(\d+\.\d+\.\d+)/gi)) {
           const mentioned = m[1];
           if (semverLte(mentioned, latestVersion)) {
