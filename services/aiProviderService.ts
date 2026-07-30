@@ -29,6 +29,7 @@ import {
 import { generateOpenRouterText, streamOpenRouter } from './ai/providers/openrouterProvider';
 import { logRoutingDecision } from './ai/routingLogger';
 import { attachCause, sanitizePromptValue, stripJsonFences } from './aiUtils';
+import { isServerlessProxyCapable } from './deployTarget';
 import {
   generateImage as generateImageGemini,
   generateJson as generateJsonGemini,
@@ -241,36 +242,13 @@ async function streamOpenAI(
   callbacks.onDone?.();
 }
 
-// QNBS-v3 (ADR-0016 Track A): CORS is a *browser* restriction — Tauri's native HTTP plugin
-// (localServerFetch, ADR-0012) isn't subject to it, so desktop can call Anthropic directly.
-// Web/PWA still has no escape hatch and needs Track B's serverless proxy (not yet built).
-async function streamAnthropic(
-  prompt: string,
-  opts: AIRequestOptions,
+// QNBS-v3 (ADR-0016): both the Track A (desktop) and Track B (web-via-proxy) response bodies are
+// Anthropic's own Messages API JSON shape unmodified — the proxy relays it verbatim — so a single
+// parser serves both branches of streamAnthropic below.
+async function deliverAnthropicResponse(
+  res: Response,
   callbacks: AIStreamCallbacks,
 ): Promise<void> {
-  if (!isTauriRuntime()) {
-    throw new Error(
-      'Claude/Anthropic: Direct browser requests are blocked by Anthropic (CORS). ' +
-        'Please use a backend proxy or switch to Gemini/OpenAI/Ollama.',
-    );
-  }
-  const apiKey = await storageService.getApiKey('anthropic');
-  if (!apiKey) throw new Error('NO_API_KEY: Claude API key missing. Please enter it in Settings.');
-  const res = await localServerFetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: opts.model,
-      max_tokens: opts.maxTokens ?? 2048,
-      messages: [{ role: 'user', content: sanitizePromptValue(prompt) }],
-    }),
-    signal: opts.signal ?? null,
-  });
   if (!res.ok) throw new Error(`Claude API Error ${res.status}: ${res.statusText}`);
   const json = (await res.json()) as { content?: Array<{ type?: string; text?: string }> };
   // QNBS-v3 (CodeRabbit): Anthropic can return multiple content blocks (e.g. a `thinking` block
@@ -282,6 +260,61 @@ async function streamAnthropic(
     .join('');
   if (text) callbacks.onChunk(text);
   callbacks.onDone?.();
+}
+
+// QNBS-v3 (ADR-0016): CORS is a *browser* restriction. Track A — Tauri's native HTTP plugin
+// (localServerFetch, ADR-0012) isn't subject to it, so desktop calls Anthropic directly. Track B —
+// web/PWA has no such escape hatch, so it relays through this app's own same-origin serverless
+// proxy (api/claude-proxy.ts / functions/api/claude-proxy.ts) instead, which itself isn't subject
+// to browser CORS on its outbound (server-to-server) leg. GitHub Pages hosts neither function, so
+// it stays genuinely unsupported — isServerlessProxyCapable() reports that structurally.
+async function streamAnthropic(
+  prompt: string,
+  opts: AIRequestOptions,
+  callbacks: AIStreamCallbacks,
+): Promise<void> {
+  // QNBS-v3: platform-capability checks come before the API-key check — a GitHub Pages user with
+  // no key configured should learn the deployment can't support Claude at all, not that a key is
+  // missing (setting one wouldn't help).
+  if (!isTauriRuntime() && !isServerlessProxyCapable()) {
+    throw new Error(
+      'Claude/Anthropic is not available on this deployment (no serverless proxy on GitHub Pages). ' +
+        'Please use the desktop app, a Vercel/Cloudflare Pages deployment, or switch providers.',
+    );
+  }
+  const apiKey = await storageService.getApiKey('anthropic');
+  if (!apiKey) throw new Error('NO_API_KEY: Claude API key missing. Please enter it in Settings.');
+
+  if (isTauriRuntime()) {
+    const res = await localServerFetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: opts.model,
+        max_tokens: opts.maxTokens ?? 2048,
+        messages: [{ role: 'user', content: sanitizePromptValue(prompt) }],
+      }),
+      signal: opts.signal ?? null,
+    });
+    return deliverAnthropicResponse(res, callbacks);
+  }
+
+  const res = await fetch('/api/claude-proxy', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      apiKey,
+      model: opts.model,
+      maxTokens: opts.maxTokens ?? 2048,
+      messages: [{ role: 'user', content: sanitizePromptValue(prompt) }],
+    }),
+    signal: opts.signal ?? null,
+  });
+  return deliverAnthropicResponse(res, callbacks);
 }
 
 async function streamGrok(
@@ -406,8 +439,8 @@ async function generateTextSingleProvider(
       return providerTextSchema.parse({ text: result }).text;
     }
     case 'anthropic': {
-      // QNBS-v3 (ADR-0016 Track A): reuses the now-fixed streamAnthropic, which itself branches
-      // on isTauriRuntime — desktop works, web still throws its CORS message.
+      // QNBS-v3 (ADR-0016): reuses streamAnthropic, which itself branches on isTauriRuntime
+      // (desktop, native) vs. isServerlessProxyCapable (web, via api/claude-proxy).
       let result = '';
       await streamAnthropic(prompt, o, {
         onChunk: (text) => {
@@ -797,7 +830,7 @@ export type TestConnectionErrorKind =
   | 'unreachable'
   | 'pluginUnavailable'
   | 'desktopRequired'
-  | 'backendProxyRequired'
+  | 'proxyUnavailableStaticHost'
   | 'noWebgpu'
   | 'unknownProvider'
   | 'unexpected';
@@ -858,13 +891,16 @@ export async function testAIConnection(
         return testOllamaConnection(opts.ollamaBaseUrl);
       }
       case 'anthropic': {
-        // QNBS-v3 (ADR-0016 Track A): desktop bypasses CORS via localServerFetch's native path;
-        // web still has no escape hatch until Track B's proxy exists.
-        if (!isTauriRuntime()) {
+        // QNBS-v3 (ADR-0016): desktop bypasses CORS via localServerFetch's native path (Track A);
+        // web relays through api/claude-proxy (Track B) — except GitHub Pages, which can host
+        // neither Vercel nor Cloudflare Pages Functions and stays structurally unsupported.
+        const isDesktop = isTauriRuntime();
+        if (!isDesktop && !isServerlessProxyCapable()) {
           return {
             ok: false,
-            error: 'Claude requires the desktop app or a backend proxy (browser CORS restriction)',
-            kind: 'backendProxyRequired',
+            error:
+              'Claude is not available on this deployment (no serverless proxy on GitHub Pages)',
+            kind: 'proxyUnavailableStaticHost',
           };
         }
         const apiKey = await storageService.getApiKey('anthropic');
@@ -880,21 +916,33 @@ export async function testAIConnection(
         // request is the practical connectivity check, mirroring the pattern used for Grok.
         // QNBS-v3 (CodeRabbit): bounded like every sibling connectivity check (testOllamaConnection
         // uses timeoutMs: 5000; openai/grok/gemini use AbortSignal.timeout(8000)) — a stalled
-        // native HTTP call must not hang the Settings test spinner indefinitely.
-        const res = await localServerFetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-            'content-type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'claude-haiku-4-5',
-            max_tokens: 1,
-            messages: [{ role: 'user', content: 'ping' }],
-          }),
-          timeoutMs: 8000,
-        });
+        // native/proxy HTTP call must not hang the Settings test spinner indefinitely.
+        const res = isDesktop
+          ? await localServerFetch('https://api.anthropic.com/v1/messages', {
+              method: 'POST',
+              headers: {
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01',
+                'content-type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: 'claude-haiku-4-5',
+                max_tokens: 1,
+                messages: [{ role: 'user', content: 'ping' }],
+              }),
+              timeoutMs: 8000,
+            })
+          : await fetch('/api/claude-proxy', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                apiKey,
+                model: 'claude-haiku-4-5',
+                maxTokens: 1,
+                messages: [{ role: 'user', content: 'ping' }],
+              }),
+              signal: AbortSignal.timeout(8000),
+            });
         if (!res.ok) {
           return {
             ok: false,
