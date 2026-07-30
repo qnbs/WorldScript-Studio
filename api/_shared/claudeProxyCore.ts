@@ -1,5 +1,5 @@
 // QNBS-v3 (ADR-0016 Track B): platform-agnostic relay core, shared by the Vercel Edge Function
-// (api/claude-proxy.ts) and the Cloudflare Pages Function (functions/claude-proxy.ts) so the
+// (api/claude-proxy.ts) and the Cloudflare Pages Function (functions/api/claude-proxy.ts) so the
 // abuse-control logic — the actual security-relevant part — is written and tested exactly once.
 // Web-standard Request/Response only; no platform-specific types, so it needs neither @vercel/node
 // nor @cloudflare/workers-types as a new dependency.
@@ -54,8 +54,19 @@ function isRateLimited(clientId: string): boolean {
   );
   recent.push(now);
   rateLimitLog.set(clientId, recent);
+  // QNBS-v3 (CodeRabbit, PR #301): a spoofed x-forwarded-for burst must not be able to reset every
+  // real client's window via a wholesale .clear() (CWE-770) — evict stale entries first, then oldest
+  // by insertion order, and never evict the current client.
   if (rateLimitLog.size > RATE_LIMIT_MAX_TRACKED_CLIENTS) {
-    rateLimitLog.clear();
+    for (const [id, stamps] of rateLimitLog) {
+      if (id !== clientId && stamps.every((t) => now - t >= RATE_LIMIT_WINDOW_MS)) {
+        rateLimitLog.delete(id);
+      }
+    }
+    for (const id of rateLimitLog.keys()) {
+      if (rateLimitLog.size <= RATE_LIMIT_MAX_TRACKED_CLIENTS) break;
+      if (id !== clientId) rateLimitLog.delete(id);
+    }
   }
   return recent.length > RATE_LIMIT_MAX_REQUESTS;
 }

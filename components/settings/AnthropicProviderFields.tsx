@@ -17,13 +17,9 @@ interface AnthropicProviderFieldsProps {
   onModelSelect?: ((model: string) => void) | undefined;
 }
 
-/**
- * QNBS-v3 (ADR-0016): extracted from AiProviderCard.tsx to keep that component's cognitive
- * complexity under the Biome gate. Desktop (Track A, native localServerFetch) and proxy-capable
- * web (Track B, api/claude-proxy — Vercel/Cloudflare Pages) render the same real key + model UI
- * every other cloud provider gets; GitHub Pages (neither capability) keeps a warning-only block,
- * since it's static-only and can host no serverless proxy at all.
- */
+// QNBS-v3 (ADR-0016): extracted from AiProviderCard.tsx to keep that component's cognitive
+// complexity under the Biome gate; desktop (Track A) and proxy-capable web (Track B) render the
+// same real key + model UI every other cloud provider gets, GitHub Pages keeps a warning-only block.
 export const AnthropicProviderFields: FC<AnthropicProviderFieldsProps> = ({
   isDesktop,
   isProxyCapableWeb,
