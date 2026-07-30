@@ -4,7 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import { analyticsPersistenceAllowedNow } from '../../app/analyticsGate';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
-import { selectEnableAdaptiveAiEngine } from '../../features/featureFlags/featureFlagsSlice';
+import {
+  selectEnableAdaptiveAiEngine,
+  selectEnableBrowserOllama,
+} from '../../features/featureFlags/featureFlagsSlice';
 import { selectProjectData } from '../../features/project/projectSelectors';
 import { statusActions } from '../../features/status/statusSlice';
 import { RECOMMENDED_OLLAMA_MODEL_IDS } from '../../services/ai/modelRecommendations';
@@ -50,6 +53,9 @@ export const AiSection: FC = () => {
   // QNBS-v3: Issue 10 — gate at the parent level so useAdaptiveAi hook + device profiling
   //          never run when the feature flag is off (saves GPU queries + IDB reads on every settings open)
   const adaptiveAiEnabled = useAppSelector(selectEnableAdaptiveAiEngine);
+  // QNBS-v3 (ADR-0017): opt-in browser→Ollama fetch — read once here so AiProviderCard stays a
+  // pure props-driven component (it doesn't otherwise touch Redux directly).
+  const browserOllamaEnabled = useAppSelector(selectEnableBrowserOllama);
 
   const creativityMap: Record<string, number> = { Focused: 0, Balanced: 1, Imaginative: 2 };
   const creativityReverseMap = ['Focused', 'Balanced', 'Imaginative'];
@@ -64,6 +70,7 @@ export const AiSection: FC = () => {
       {adaptiveAiEnabled && <AdaptiveAiHardwarePanel />}
       <AiProviderCard
         advancedAi={settings.advancedAi}
+        browserOllamaEnabled={browserOllamaEnabled}
         onAdvancedAiPatch={(patch) =>
           handleSettingChange('advancedAi', { ...settings.advancedAi, ...patch })
         }

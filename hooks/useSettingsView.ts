@@ -255,6 +255,11 @@ export const useSettingsView = () => {
             dispatch(copilotActions.clear());
           }
           break;
+        // QNBS-v3 (ADR-0017): opt-in direct browser→Ollama connection — see AiProviderCard.tsx's
+        // canAttemptOllama and aiProviderService.ts's testAIConnection ollama case.
+        case 'enableBrowserOllama':
+          dispatch(featureFlagsActions.setEnableBrowserOllama(Boolean(value)));
+          break;
         // QNBS-v3: enableIdbAtRestEncryption intentionally absent — managed via handlePassphraseConfirm
         // in Settings > Privacy, not the experimental flags UI toggle.
         default:

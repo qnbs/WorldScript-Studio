@@ -129,3 +129,13 @@ by `isTauriRuntime()` and never exercised there). `services/localServerHttp.ts`'
 also now wraps the dynamic import in its own try/catch, classifying a load failure as a distinct
 `LocalServerError('plugin_unavailable')` and logging it, so a future regression of this class fails
 loudly and distinctly instead of silently misclassifying as "unreachable."
+
+## Update (2026-07-30): decision #4 (PWA stays strictly desktop-only) narrowly widened by 0017
+
+[[0017-pwa-browser-ollama-opt-in]] adds an explicit, default-**off** `enableBrowserOllama` flag
+letting a user who has separately configured their own Ollama server's `OLLAMA_ORIGINS` attempt a
+direct browser fetch from the web/PWA build. This is a narrow widening, not a reversal: the default
+behavior described in decision #4 above — the PWA performs zero localhost requests unless a user
+explicitly opts in — is unchanged, and the "Allow PWA status-only probing with Private Network
+Access permission" alternative rejected above stays rejected (0017 doesn't use PNA at all; it relies
+on real, server-configured CORS instead).

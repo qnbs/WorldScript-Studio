@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Grok (xAI) wired into the primary provider dropdown** — the backend (`streamGrok()`, BYOK key
+  storage, `/v1/models` connection test) already worked; it just wasn't reachable from
+  `AiProviderCard.tsx`'s main flow. Added the key input + model selector (`grok-3`/`grok-3-mini`),
+  a `providerToKind()` case for the newer Vercel-AI-SDK layer, and fixed the whole provider array's
+  i18n (several labels were hardcoded literals). See [ADR-0016](docs/adr/0016-native-grok-and-claude-providers.md).
+- **Claude (Anthropic) now works on desktop** — `streamAnthropic()` threw unconditionally on every
+  platform; CORS is a browser-only restriction, so desktop now calls Anthropic directly via the
+  same native-HTTP escape hatch [ADR-0012](docs/adr/0012-local-server-connectivity-tauri-http.md)
+  established for Ollama. Desktop Settings now shows a real key input + model selector
+  (Opus 4.7/Sonnet 4.6/Haiku 4.5) instead of a warning-only block.
+- **Claude (Anthropic) now works on the web/PWA** (Vercel, Cloudflare Pages) via a new stateless
+  serverless proxy (`api/claude-proxy.ts` + `functions/api/claude-proxy.ts`) — this app's first
+  backend dependency ever. Schema-validated, body-size-capped, same-origin-checked, rate-limited,
+  and timeout-bounded; never logs the API key, prompt, or response. GitHub Pages (static-only,
+  can't host the proxy) shows an honest "not available on this deployment" state instead of a
+  silent failure. This is the one provider whose BYOK key transits WorldScript's own infrastructure
+  in the web build — documented plainly in `docs/SECURITY-THREAT-MODEL.md` and README's privacy
+  framing, not folded into the general "direct browser→provider" claim every other provider gets.
+- **Opt-in direct browser→Ollama connection in the web/PWA build** (`enableBrowserOllama`, default
+  off, Settings → Experimental) — for users who start their own Ollama server with `OLLAMA_ORIGINS`
+  covering the page's exact origin, matching NovelCrafter's real (non-proxy) browser-Ollama model.
+  Not a bypass and not the default: desktop remains the recommended, zero-config path. The Settings
+  UI renders the exact `OLLAMA_ORIGINS=<origin> ollama serve` command for the current deployment.
+  See [ADR-0017](docs/adr/0017-pwa-browser-ollama-opt-in.md) (Issue #266 follow-up).
+
 ### Fixed
 
 - **Doc-drift gate (`scripts/check-doc-metrics.mjs`) had a blind spot for still-open checklist

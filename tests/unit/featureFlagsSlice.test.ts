@@ -51,6 +51,7 @@ const initialState: FeatureFlagsState = {
   enableRustCompute: true,
   enableGlobalCopilot: false,
   enableLocalFirstSync: false,
+  enableBrowserOllama: false,
 };
 
 // ---------------------------------------------------------------------------
@@ -90,20 +91,22 @@ describe('featureFlagsSlice', () => {
     expect(state.enableStoryBibleAdvanced).toBe(false);
   });
 
-  it('defaults to 16 flags on and 6 user-opt-in flags off', () => {
+  it('defaults to 16 flags on and 7 user-opt-in flags off', () => {
     const state = featureFlagsReducer(undefined, { type: '@@INIT' });
     const values = Object.values(state);
-    // QNBS-v3: WebNN flag (a ghost/no-op toggle) was removed → 22 flags (16 on / 6 opt-in off).
-    expect(values).toHaveLength(22);
+    // QNBS-v3: WebNN flag (a ghost/no-op toggle) was removed; enableBrowserOllama (ADR-0017) added
+    // → 23 flags (16 on / 7 opt-in off).
+    expect(values).toHaveLength(23);
     expect(values.filter((v) => v === true)).toHaveLength(16);
-    expect(values.filter((v) => v === false)).toHaveLength(6);
-    // The six opt-in flags are exactly these:
+    expect(values.filter((v) => v === false)).toHaveLength(7);
+    // The seven opt-in flags are exactly these:
     expect(state.enableRtlLayout).toBe(false);
     expect(state.enableVoiceSupport).toBe(false);
     expect(state.enableVoiceWasm).toBe(false);
     expect(state.enableProForge).toBe(false);
     expect(state.enableGlobalCopilot).toBe(false);
     expect(state.enableLocalFirstSync).toBe(false);
+    expect(state.enableBrowserOllama).toBe(false);
   });
 });
 
@@ -190,6 +193,12 @@ describe('featureFlagsSlice — individual setters', () => {
     {
       flag: 'enableGlobalCopilot',
       action: featureFlagsActions.setEnableGlobalCopilot,
+      defaultOn: false,
+    },
+    // QNBS-v3 (ADR-0017): browser-Ollama off by default — advanced, unsupported, user opt-in
+    {
+      flag: 'enableBrowserOllama',
+      action: featureFlagsActions.setEnableBrowserOllama,
       defaultOn: false,
     },
   ];

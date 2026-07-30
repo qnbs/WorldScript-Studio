@@ -332,6 +332,63 @@ describe('testAIConnection — ollama desktop branch', () => {
   });
 });
 
+// QNBS-v3 (ADR-0017): opt-in direct browser→Ollama connection. window.__TAURI_INTERNALS__ is never
+// set in this describe block — every case here runs in the plain-browser context.
+describe('testAIConnection — ollama browser opt-in (ADR-0017)', () => {
+  it('still returns desktopRequired when the flag is off (default, unchanged)', async () => {
+    const { testOllamaConnection } = await import('../../services/ollamaService');
+    const result = await testAIConnection('ollama', { browserOllamaEnabled: false });
+    expect(result.ok).toBe(false);
+    expect(result.kind).toBe('desktopRequired');
+    expect(testOllamaConnection).not.toHaveBeenCalled();
+  });
+
+  it('delegates to testOllamaConnection when the flag is on', async () => {
+    const { testOllamaConnection } = await import('../../services/ollamaService');
+    vi.mocked(testOllamaConnection).mockResolvedValueOnce({ ok: true });
+    const result = await testAIConnection('ollama', {
+      ollamaBaseUrl: 'http://localhost:11434',
+      browserOllamaEnabled: true,
+    });
+    expect(result.ok).toBe(true);
+    expect(testOllamaConnection).toHaveBeenCalledWith('http://localhost:11434');
+  });
+
+  it("remaps a generic 'unreachable' result to 'corsSuspected' when the flag is on", async () => {
+    const { testOllamaConnection } = await import('../../services/ollamaService');
+    vi.mocked(testOllamaConnection).mockResolvedValueOnce({
+      ok: false,
+      error: 'Ollama not reachable (http://localhost:11434): TypeError: Failed to fetch',
+      kind: 'unreachable',
+      params: { url: 'http://localhost:11434' },
+    });
+    const result = await testAIConnection('ollama', { browserOllamaEnabled: true });
+    expect(result.ok).toBe(false);
+    expect(result.kind).toBe('corsSuspected');
+    expect(result.params).toEqual({ url: 'http://localhost:11434' });
+  });
+
+  it("does not remap a 'timeout' result — only 'unreachable' is CORS-ambiguous", async () => {
+    const { testOllamaConnection } = await import('../../services/ollamaService');
+    vi.mocked(testOllamaConnection).mockResolvedValueOnce({
+      ok: false,
+      error: 'Ollama timed out (http://localhost:11434)',
+      kind: 'timeout',
+      params: { url: 'http://localhost:11434' },
+    });
+    const result = await testAIConnection('ollama', { browserOllamaEnabled: true });
+    expect(result.kind).toBe('timeout');
+  });
+
+  it('does not remap a successful result', async () => {
+    const { testOllamaConnection } = await import('../../services/ollamaService');
+    vi.mocked(testOllamaConnection).mockResolvedValueOnce({ ok: true });
+    const result = await testAIConnection('ollama', { browserOllamaEnabled: true });
+    expect(result.ok).toBe(true);
+    expect(result.kind).toBeUndefined();
+  });
+});
+
 // QNBS-v3 (ADR-0016): CORS is a browser-only restriction. Track A — on desktop, Anthropic is
 // called directly via localServerFetch's native-HTTP escape hatch (plugin-http), same pattern as
 // Ollama; localServerFetch itself falls back to globalThis.fetch outside Tauri. Track B — on

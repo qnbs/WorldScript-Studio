@@ -97,6 +97,7 @@ function makeDeps(overrides: Partial<CommandRuntimeDeps> = {}): CommandRuntimeDe
       enableRustCompute: false,
       enableGlobalCopilot: false,
       enableLocalFirstSync: false,
+      enableBrowserOllama: false,
     },
     aiMode: 'hybrid',
     openRouterEnabled: false,

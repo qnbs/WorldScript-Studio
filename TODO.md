@@ -8,6 +8,32 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ---
 
+## Native Grok + Claude + Ollama-in-PWA providers (2026-07-30)
+
+README documented Grok and Claude as working cloud AI providers; neither was reachable from
+`AiProviderCard.tsx`'s main flow. Full details + rationale in
+[ADR-0016](docs/adr/0016-native-grok-and-claude-providers.md) and
+[ADR-0017](docs/adr/0017-pwa-browser-ollama-opt-in.md); see `[Unreleased]` in
+[CHANGELOG.md](CHANGELOG.md) for the user-facing summary. Execution plan:
+[`GROK-PROVIDER-INTEGRATION-PLAN.md`](GROK-PROVIDER-INTEGRATION-PLAN.md).
+
+- ✅ **Phase 1 — Grok**: wired into the primary provider dropdown + `providerFactory.ts`; the
+  backend (`streamGrok()`) already worked, this was purely a UI/wiring gap.
+- ✅ **Phase 2 Track A — Claude on desktop**: `streamAnthropic()` now branches on
+  `isTauriRuntime()` before throwing; desktop calls Anthropic directly via the native-HTTP pattern
+  ADR-0012 established for Ollama.
+- ✅ **Phase 2 Track B — Claude on web/PWA**: new stateless serverless proxy
+  (`api/claude-proxy.ts` + `functions/api/claude-proxy.ts`, Vercel + Cloudflare Pages) — this app's
+  first backend dependency. Mandatory abuse controls (schema validation, body-size cap, origin
+  check, rate limit, timeouts), never logs secrets. GitHub Pages shows an honest unavailable state.
+- ✅ **Addendum — Ollama-in-PWA opt-in (Issue #266 follow-up)**: `enableBrowserOllama` flag
+  (default off) lets the browser attempt a direct Ollama connection when the user has separately
+  configured their own server's `OLLAMA_ORIGINS`; not a proxy, not a bypass, not the default.
+- ⬜ Open WS-11's PR, run the CodeRabbit correction loop to quiescence, merge to `main`.
+- ⬜ Comprehensive tag/release afterward, folding in everything from `[Unreleased]`.
+
+---
+
 ## Infra — Vercel deployment failures root-caused + fixed (2026-07-29)
 
 > **Status: Resolved same-day.** Briefly paused via `vercel.json`'s `git.deploymentEnabled: false`

@@ -6,6 +6,14 @@
  * nothing. Under Tauri we route through `@tauri-apps/plugin-http` (native reqwest stack, no CORS);
  * on the web we keep the global fetch. The plugin is imported dynamically so the web bundle never
  * loads it. Kept deliberately thin: URL normalization, timeout composition, error classification.
+ *
+ * QNBS-v3 (ADR-0017): the opt-in `enableBrowserOllama` flag does NOT change anything in this file
+ * — `resolveFetch()` already returns `globalThis.fetch` on the web unconditionally, which already
+ * attempts the real request; the browser's own CORS enforcement (not this module) is what actually
+ * decides success or failure, based on whether the user configured their Ollama server's
+ * `OLLAMA_ORIGINS`. The flag only widens the *product-level* decision to attempt the call at all —
+ * see the call sites in `aiProviderService.ts`'s `testAIConnection` and
+ * `components/settings/AiProviderCard.tsx` — not the transport layer.
  */
 import { createLogger } from './logger';
 import { isTauriRuntime } from './tauriRuntime';

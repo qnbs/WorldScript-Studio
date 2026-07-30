@@ -22,8 +22,9 @@
 ## Feature Parity Matrix
 
 > **Defaults (v1.24 post-release):** the slice ships the **full feature set** —
-> 22 flags, **16 default-on**, **6 opt-in default-off** (`enableProForge`, `enableRtlLayout`,
-> `enableVoiceSupport`, `enableVoiceWasm`, `enableGlobalCopilot`, `enableLocalFirstSync`).
+> 23 flags, **16 default-on**, **7 opt-in default-off** (`enableProForge`, `enableRtlLayout`,
+> `enableVoiceSupport`, `enableVoiceWasm`, `enableGlobalCopilot`, `enableLocalFirstSync`,
+> `enableBrowserOllama`).
 > `enableProForge` was flipped to opt-in (experimental, token-heavy 8-stage pipeline). The retired/promoted
 > flags `enableCodexAutoTracking`, `enableCrossProjectSearch` (both promoted to permanent core),
 > `enablePlotBoardV2`, and `enableCloudSync` (retired) are no longer in the slice and have been
@@ -56,6 +57,7 @@
 | `enableVoiceWasm` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `useVoice.ts:29` + handler added *(fixed 2026-05-29)* | 🟢 OK |
 | `enableGlobalCopilot` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `App.tsx` lazy `CopilotPanel` mount; `hooks/useGlobalCopilot.ts` | 🟢 OK |
 | `enableLocalFirstSync` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | shadow Yjs projection (ADR-0008); Redux stays SoT | 🟢 OK |
+| `enableBrowserOllama` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `AiProviderCard.tsx` `canAttemptOllama`; `aiProviderService.ts` `testAIConnection` ollama case (ADR-0017) | 🟢 OK |
 
 ---
 

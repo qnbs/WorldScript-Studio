@@ -152,6 +152,10 @@ vi.mock('../../../features/featureFlags/featureFlagsSlice', () => ({
       type: 'featureFlags/setEnableGlobalCopilot',
       payload: v,
     }),
+    setEnableBrowserOllama: (v: unknown) => ({
+      type: 'featureFlags/setEnableBrowserOllama',
+      payload: v,
+    }),
   },
 }));
 
@@ -329,6 +333,16 @@ describe('handleSettingChange', () => {
       expect.objectContaining({ type: 'copilot/setOpen', payload: false }),
     );
     expect(mockDispatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'copilot/clear' }));
+  });
+
+  // QNBS-v3 (ADR-0017): opt-in direct browser→Ollama connection — a plain dispatch case, same
+  // pattern as enableLocalFirstSync above it in the switch.
+  it('dispatches setEnableBrowserOllama when toggled', () => {
+    const { result } = renderHook(() => useSettingsView());
+    act(() => result.current.handleSettingChange('enableBrowserOllama', true));
+    expect(mockDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'featureFlags/setEnableBrowserOllama', payload: true }),
+    );
   });
 
   it('logs warning for unknown key', () => {
