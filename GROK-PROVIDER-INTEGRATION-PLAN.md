@@ -4,7 +4,10 @@
 **Project:** [WorldScript Studio](https://github.com/qnbs/WorldScript-Studio)
 **Scope:** Native xAI Grok (Cloud 4) as a first-class provider + native Anthropic Claude (Cloud 3)
 via a serverless CORS proxy — both currently documented in README as working but not reachable
-from the Settings UI.
+from the Settings UI. **Addendum (§7):** an unrelated but adjacent follow-up to Issue #266 — an
+opt-in, experimental feature flag letting the PWA attempt direct browser-to-Ollama connections,
+matching the "technically: yes" option the maintainer already described in that issue's comment
+thread.
 **Status:** v1.24.3 (2026-07-30)
 **Execution:** **Plan only — do not implement yet.** Per explicit instruction, this file is written
 now and executed only after every other workstream in the current post-recovery audit sprint
@@ -69,7 +72,7 @@ its own architectural treatment, not just a UI patch.
 **Goal:** make Grok selectable as a primary provider with its own API-key field, exactly like
 Gemini/OpenAI.
 
-1. **`components/settings/AiProviderCard.tsx`**: add `{ id: 'grok', label: 'xAI Grok' }` to the
+1. **`components/settings/AiProviderCard.tsx`**: add `{ id: 'grok', label: t('settings.ai.provider.grok') }` (translation key, never a hardcoded literal — see §5 below) to the
    primary options array (currently `gemini | openai | ollama | webllm`, lines 174-177). Add a
    `provider === 'grok'` UI block mirroring the existing `provider === 'openai'` block (lines
    257+): API-key input (`storageService.saveApiKey('grok', ...)` / `clearApiKey('grok')` — the
@@ -89,11 +92,16 @@ Gemini/OpenAI.
 4. **CSP**: `https://api.x.ai` is already present in `src-tauri/tauri.conf.json`; web builds are
    already covered by the `https:` blanket (ADR-0004). **No CSP change needed for Grok** — verify
    this is still true at execution time before skipping it.
-5. **i18n**: add `settings.ai.provider.grok` (label, if not just reusing the existing `'xAI Grok'`
-   literal — check whether the other provider labels are already i18n keys or hardcoded strings
-   before deciding), model descriptions, and any new test-connection error strings, across all 19
-   locales (`node scripts/check-i18n-keys.mjs --fix` then manual translation per
-   `docs/LANGUAGE-EXPANSION-2026.md`'s workflow for the 14 non-production locales).
+5. **i18n — mandatory, no hardcoded literals**: this repo's own convention requires every
+   user-facing string to go through `t('key.path')` — no exceptions for a "just a label" string.
+   Add `settings.ai.provider.grok` (label), model descriptions, and any new test-connection
+   error strings, all via real translation keys — never a hardcoded `'xAI Grok'` literal anywhere
+   in the UI. Same requirement applies to Claude in Phase 2 (label, model descriptions,
+   connection-status and error text). Add all new keys across all 19 locales
+   (`node scripts/check-i18n-keys.mjs --fix` then manual translation per
+   `docs/LANGUAGE-EXPANSION-2026.md`'s workflow for the 14 non-production locales,
+   `pnpm run i18n:check` must pass). This is part of both providers' Definition of Done below,
+   not an optional nicety.
 6. **Fallback chain**: `AiSections.tsx`'s hybrid-fallback-chain selector already lists `'grok'` —
    no change needed there, but re-verify it still makes sense once Grok is also a primary option
    (a provider shouldn't be selectable as its own fallback; check the existing `.filter((p) => p
@@ -103,7 +111,7 @@ Gemini/OpenAI.
 - [ ] Grok selectable as primary provider in Settings → AI Provider, with API key + model selector + working Test Connection
 - [ ] Works in Hybrid and Cloud AI Execution Modes
 - [ ] Works in the new Writer-streaming path (`useWorldScriptAI`), not just legacy thunks
-- [ ] i18n: all 19 locales pass `pnpm run i18n:check`
+- [ ] i18n: all provider/model/status strings use translation keys (no hardcoded literals); all 19 locales pass `pnpm run i18n:check`
 - [ ] No new feature flag; `pnpm run parity:check` still reports 0 drifts
 - [ ] Unit tests: `providerFactory` grok case, key-handling, connection-test mock
 - [ ] README/CHANGELOG/ADR updated; TODO.md's Grok-related notes (if any) reconciled
@@ -157,12 +165,22 @@ to have Claude too, understanding the trust-model change that implies.
   `services/logger.ts` convention — GDPR sanitization — should extend to this function; if
   `StructuredLogger` isn't usable inside a Vercel Function runtime, document why and use the
   platform's own request logging with the same "never log secrets" discipline).
-- **Rate-limiting / abuse consideration:** since this proxy relays to an API that costs the *user's*
-  API key, per-user cost isn't WorldScript's problem the way it would be for a shared-key gateway —
-  but the proxy endpoint itself is public and unauthenticated (anyone could POST to it with any
-  Anthropic key). Decide whether that's acceptable (it's the same trust model as the user's own
-  browser calling Anthropic directly, just relayed) or whether a lightweight abuse guard (e.g.,
-  origin-checking against WorldScript's own deployed origin) is warranted.
+- **Abuse controls — mandatory, not optional (CWE-400, uncontrolled resource consumption):** the
+  proxy endpoint is public and unauthenticated — anyone can `POST` to it with any Anthropic key,
+  turning it into an externally-reachable resource-exhaustion surface even though per-request *cost*
+  is the caller's own key. Before this ships, the contract and test plan must cover **all** of:
+  - **Schema validation** of the incoming body (reject anything not matching the expected
+    `{ apiKey, model, messages, ... }` shape before forwarding).
+  - **Request body size limit** (reject oversized payloads outright).
+  - **Origin policy**: restrict accepted requests to WorldScript's own deployed origin(s)
+    (`Origin`/`Referer` check), not a fully open endpoint.
+  - **Rate limiting** per-IP or per-origin (platform-native — e.g. Vercel's edge rate-limiting — or
+    a lightweight in-function counter) to bound abuse even from a spoofed-origin request.
+  - **Timeouts** on both the inbound request and the outbound call to `api.anthropic.com`, so a
+    slow/hanging upstream can't tie up function instances indefinitely.
+  - Tests covering each control's rejection behavior (oversized body → 413, bad origin → 403,
+    rate-limit exceeded → 429, timeout → 504), alongside the existing statelessness/secret-handling
+    tests in §4.5.
 - **CSP update needed:** the client still only talks to `'self'` (the proxy), so no client-side CSP
   change — but the **proxy's own outbound call** to `api.anthropic.com` is server-side and not
   subject to browser CSP at all. Document this clearly in the ADR so a future audit doesn't go
@@ -173,7 +191,11 @@ to have Claude too, understanding the trust-model change that implies.
 
 ### 4.3 UI wiring (same pattern as Grok, once the proxy exists)
 
-1. `components/settings/AiProviderCard.tsx`: add `{ id: 'claude', label: 'Anthropic Claude' }`,
+1. `components/settings/AiProviderCard.tsx`: add `{ id: 'anthropic', label: t('settings.ai.provider.anthropic') }` —
+   **use the existing `'anthropic'` identifier consistently** (the `AIProvider` type, `aiProviderService.ts`'s
+   `case 'anthropic':`, and every other switch/lookup already use `'anthropic'`; do not introduce a
+   parallel `'claude'` id anywhere — selection, key storage, service dispatch, and factory routing
+   must all key off the same identifier),
    with the same API-key + model-selector + test-connection pattern as Grok — but the "backend" the
    Test Connection button calls is now the proxy endpoint, not a direct Anthropic call.
 2. **Availability detection:** on GitHub Pages / Tauri desktop builds (however that's detected at
@@ -221,11 +243,12 @@ to have Claude too, understanding the trust-model change that implies.
 
 **Claude Definition of Done:**
 - [ ] Vercel Function proxy deployed and relaying requests statelessly (no key/prompt logging)
+- [ ] Proxy enforces schema validation, body-size limit, origin policy, rate limiting, and timeouts (§4.2) — tested
 - [ ] Cloudflare Pages Function equivalent (or explicit decision to defer, documented in the ADR)
 - [ ] Claude selectable as primary provider in Settings → AI Provider on proxy-capable deployments
 - [ ] GitHub Pages and Tauri desktop show an honest "unavailable" state, not a silent failure
 - [ ] `docs/SECURITY-THREAT-MODEL.md` and README's privacy framing updated with the proxy caveat
-- [ ] i18n: all 19 locales
+- [ ] i18n: all provider/model/status/error strings use translation keys (no hardcoded literals); all 19 locales
 - [ ] No new feature flag
 - [ ] Unit + E2E tests (mocked, no real Anthropic calls in CI)
 - [ ] New ADR 0016 covers both Grok and Claude decisions
@@ -262,7 +285,100 @@ to have Claude too, understanding the trust-model change that implies.
 
 ---
 
-## 7. Sequencing
+## 7. Addendum — opt-in browser-fetch Ollama for the PWA (Issue #266 follow-up)
+
+**This is a separate initiative from §§1-7 above** — different issue, different mechanism, no
+backend involved — bundled into this same plan file at the maintainer's request rather than as a
+second document.
+
+### 8.1 Why this is *not* the same pattern as the Claude proxy
+
+A hosted serverless proxy (§4) works for Claude because the proxy's *destination* —
+`api.anthropic.com` — is a fixed host reachable from anywhere on the internet, including from
+Vercel's/Cloudflare's servers. **That reasoning does not transfer to Ollama.** Ollama's destination
+is `http://localhost:11434` **on the end user's own machine**. A serverless function fetching
+`localhost:11434` reaches *itself*, never the user's computer — there is no proxy design that
+bridges "an internet server reaching into a user's private machine." This is a hard networking
+fact, not a policy choice, and it's why no part of this addendum proposes a proxy.
+
+### 8.2 What actually exists: the maintainer's own "technically: yes" answer in Issue #266
+
+[Issue #266](https://github.com/qnbs/WorldScript-Studio/issues/266) already contains a full,
+correct analysis (comment thread, 2026-07-28/29) of why the PWA doesn't attempt Ollama connections
+today, and what would be required to allow it as an *explicit, opt-in, unsupported* path — this
+plan operationalizes exactly that answer, not a new invention:
+
+- **Desktop (Tauri) already works with zero config** — `@tauri-apps/plugin-http` does native
+  networking, immune to WebView CORS/Private-Network-Access rules (ADR-0012).
+- **The PWA deliberately does not auto-probe localhost** (ADR-0012, decision #4) — a *product*
+  decision, not a technical dead-end. Direct browser `fetch()` to `localhost:11434` **is** possible,
+  exactly like NovelCrafter does it, **if and only if** the user's own Ollama server is started with
+  `OLLAMA_ORIGINS` covering the PWA's exact origin (and, for LM Studio, its own "Enable CORS"
+  setting is turned on). This is real, working, user-configured CORS — not a bypass, not a hack.
+  NovelCrafter's browser-Ollama support works this same way and is not "magic": their own docs tell
+  users to run `OLLAMA_ORIGINS=https://app.novelcrafter.com ollama serve`.
+- WorldScript Studio has **more possible origins** than NovelCrafter's single fixed SaaS URL
+  (`qnbs.github.io`, `worldscript-studio.vercel.app`, custom domains, forks' own Pages URLs) — the
+  reason this was never made the *default* — but that's an argument against defaulting it on, not
+  against offering it as an explicit, clearly-labeled opt-in for users who understand the tradeoff.
+
+### 8.3 Implementation sketch
+
+1. **New feature flag** — e.g. `enableBrowserOllama` — default **off**, opt-in, added through the
+   normal `featureFlagsSlice.ts` + `featureCatalog.ts` process this sprint's WS-2 already
+   reconciled (re-run `pnpm exec tsx scripts/audit-feature-parity.ts` after adding it — 0 drifts
+   required).
+2. **`services/localServerHttp.ts`**: `resolveFetch()` currently branches purely on
+   `isTauriRuntime()`. Add a narrow, explicit widening — not a removal — of ADR-0012's decision #4:
+   `isTauriRuntime() || (enableBrowserOllama && provider === 'ollama')`. Scope this to Ollama only
+   in the first cut; LM Studio/vLLM browser-fetch is a separate follow-up (their CORS toggles are
+   per-server-product, not a single env var, and are explicitly out of scope for this first pass).
+3. **Settings UI**: a new "Experimental: allow browser connection to Ollama (advanced, unsupported)"
+   toggle under the existing Ollama section in `AiProviderCard.tsx`, gated on the feature flag being
+   present in the Experimental Features catalog (same pattern as every other opt-in flag). When
+   enabled, render the **exact** command the user needs to run, computed from
+   `window.location.origin` at render time — e.g. `OLLAMA_ORIGINS=https://qnbs.github.io ollama serve`
+   — so the copy-paste instruction is always correct for *this* deployment (GitHub Pages vs. Vercel
+   vs. a fork vs. a custom domain all differ; guessing wrong here was explicitly the failure mode
+   ADR-0012 rejected making default).
+4. **Error classification**: extend the existing `scanLocalOpenAiCompatibleEndpoints()` /
+   `testOllamaConnection()` result states (`ok` / `unreachable` / `timeout` / `http`) with a
+   best-effort `cors`-suspected state when running in the browser with the flag on. **Document the
+   known limitation honestly rather than overclaim precision:** the Fetch API deliberately gives a
+   generic `TypeError: Failed to fetch` for CORS rejections, indistinguishable at the JS level from
+   "server is actually down" — so this can only be a heuristic (e.g., "likely CORS — verify
+   `OLLAMA_ORIGINS` includes `<origin>`, or check the server is actually running"), not a certain
+   diagnosis.
+5. **Explicit non-goals**: no LAN-IP server support, no Private-Network-Access permission-prompt
+   flow (already deliberately rejected in ADR-0012's "Alternatives considered" — inconsistent
+   browser support, and PNA alone doesn't satisfy the *server's* CORS requirement anyway), no
+   attempt to make this the default or to remove/weaken the existing desktop-first messaging.
+6. **New ADR**: `docs/adr/0017-pwa-browser-ollama-opt-in.md` (sequential after 0016 from §2 above),
+   explicitly framed as a narrow, opt-in widening of ADR-0012's PWA-desktop-only decision — cross-
+   reference both directions (0012 should gain a "superseded-in-part by 0017 for the opt-in case"
+   pointer once 0017 exists).
+7. **Docs**: update the existing "desktop app required" banner copy, README, TODO.md, and the
+   in-app help article to mention the new opt-in path without implying it's the recommended one —
+   desktop remains the recommended, zero-config path for local servers.
+8. **i18n**: same mandatory-translation-key requirement as §5/§8 above — the toggle label, the
+   `OLLAMA_ORIGINS` instructional copy, and the new `cors`-suspected error state all need real
+   `t()` keys across all 19 locales; no hardcoded literals.
+
+### 8.4 Definition of Done
+
+- [ ] New feature flag, default off, follows this repo's existing flag conventions (`pnpm exec tsx scripts/audit-feature-parity.ts` reports 0 drifts)
+- [ ] PWA can optionally attempt a direct Ollama fetch when the flag is on, clearly labeled experimental/unsupported in the UI
+- [ ] Settings UI renders the exact `OLLAMA_ORIGINS` command for the *current* deployment origin, not a guessed/generic one
+- [ ] Connection failures surface an actionable CORS-suspected hint (honestly hedged, not overclaimed) rather than a generic "unreachable"
+- [ ] New ADR 0017 cross-referencing ADR-0012 in both directions
+- [ ] i18n: all provider/toggle/error strings use translation keys (no hardcoded literals); all 19 locales
+- [ ] Unit tests: flag on/off gating in `resolveFetch()`, origin-detection helper, error-classification logic
+- [ ] Explicitly documented as NOT a proxy and NOT solving LAN-IP or LM Studio/vLLM CORS automatically — user-configured, best-effort, the same non-magic model NovelCrafter actually uses
+- [ ] README/TODO.md/help article/existing banner copy updated without demoting desktop as the recommended zero-config path
+
+---
+
+## 8. Sequencing
 
 **Updated 2026-07-30 (maintainer re-prioritization, supersedes the original deferral below):**
 execute this plan **immediately after PR #297 (WS-3 + WS-6) merges into `main`** — once its
