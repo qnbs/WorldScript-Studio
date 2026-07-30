@@ -14,7 +14,7 @@ interface AnthropicProviderFieldsProps {
   isSavingAnthropicKey: boolean;
   onSaveAnthropicKey: () => void;
   model: string;
-  onModelSelect?: (model: string) => void;
+  onModelSelect?: ((model: string) => void) | undefined;
 }
 
 /**

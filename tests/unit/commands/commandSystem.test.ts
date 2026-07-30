@@ -51,6 +51,7 @@ const defaultFeatureFlags: FeatureFlagsState = {
   enableRustCompute: false,
   enableGlobalCopilot: false,
   enableLocalFirstSync: false,
+  enableBrowserOllama: false,
 };
 
 function makeDeps(overrides?: Partial<CommandRuntimeDeps>): CommandRuntimeDeps {
