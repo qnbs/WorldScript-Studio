@@ -59,8 +59,7 @@ vi.mock('../../services/storageBackend', () => ({
   saveEnvelopeFromProjectData: (data: unknown) => mockSaveEnvelope(data),
 }));
 
-// QNBS-v3: stub the real Yjs doc/binding/persistence chain so the local-first sync test can assert
-// the exact payload selectProjectData hands to the binding, instead of depending on real Yjs behavior.
+// QNBS-v3: stub the real Yjs doc/binding/persistence chain so the test asserts selectProjectData's exact payload, not real Yjs behavior.
 const mockSyncFromProject = vi.fn();
 const mockVerify = vi.fn().mockReturnValue({ ok: true, mismatches: [] });
 const mockReproject = vi.fn();
@@ -68,9 +67,7 @@ let lastBindingCtorArg: unknown;
 vi.mock('../../services/localFirst/projectDoc', () => ({
   createBlankProjectDoc: vi.fn(() => ({})),
 }));
-// QNBS-v3: a class, not a function expression — the real code calls `new ProjectDocBinding(...)`,
-// and Biome's useArrowFunction rule would otherwise rewrite a function expression into a
-// non-constructible arrow function here.
+// QNBS-v3: a class, not a function expression — the real code calls `new ProjectDocBinding(...)`, and Biome's useArrowFunction rule would otherwise rewrite a function expression into a non-constructible arrow function.
 class MockProjectDocBinding {
   syncFromProject = mockSyncFromProject;
   verify = mockVerify;
