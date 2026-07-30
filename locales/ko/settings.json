@@ -106,6 +106,7 @@
   "settings.ai.adaptive.warmedModelsHint": "빠른 추론을 위해 메모리에 준비된 모델",
   "settings.ai.anthropicCorsNote": "Anthropic Claude는 브라우저에서 직접 호출할 수 없습니다. Anthropic 통화를 위해 프록시 서버를 설정하거나 Tauri 데스크톱 앱을 사용하세요.",
   "settings.ai.anthropicHint": "Anthropic에는 API 호출을 위해 프록시 서버 또는 Tauri 데스크톱 앱이 필요합니다.",
+  "settings.ai.anthropicKey": "Claude API Key",
   "settings.ai.connectionFailed": "연결 실패",
   "settings.ai.connectionSuccess": "연결 성공",
   "settings.ai.corsRestriction": "CORS 제한",

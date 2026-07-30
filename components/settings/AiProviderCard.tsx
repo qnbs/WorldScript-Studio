@@ -49,6 +49,8 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
   // QNBS-v3: Grok's own key input state, mirroring OpenAI's pattern above.
   const [grokKey, setGrokKey] = useState('');
   const [isSavingGrokKey, setIsSavingGrokKey] = useState(false);
+  const [anthropicKey, setAnthropicKey] = useState('');
+  const [isSavingAnthropicKey, setIsSavingAnthropicKey] = useState(false);
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
   const [testError, setTestError] = useState('');
@@ -73,6 +75,10 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
       .getApiKey('grok')
       .then((k) => setGrokKey(k ?? ''))
       .catch(() => {});
+    storageService
+      .getApiKey('anthropic')
+      .then((k) => setAnthropicKey(k ?? ''))
+      .catch(() => {});
   }, []);
 
   // QNBS-v3: save/clear via storageService, matching every other provider's key persistence.
@@ -88,6 +94,19 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
       setIsSavingGrokKey(false);
     }
   }, [grokKey]);
+
+  const handleSaveAnthropicKey = useCallback(async () => {
+    setIsSavingAnthropicKey(true);
+    try {
+      if (anthropicKey.trim()) {
+        await storageService.saveApiKey('anthropic', anthropicKey.trim());
+      } else {
+        await storageService.clearApiKey('anthropic');
+      }
+    } finally {
+      setIsSavingAnthropicKey(false);
+    }
+  }, [anthropicKey]);
 
   const handleSaveOpenAiKey = useCallback(async () => {
     setIsSavingKey(true);
@@ -646,7 +665,55 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
           </div>
         )}
 
-        {provider === 'anthropic' && (
+        {/* QNBS-v3 (ADR-0016 Track A): desktop bypasses Anthropic's CORS restriction via the
+            native-HTTP path (localServerFetch) — real key input instead of the warning-only
+            block web/PWA still needs until Track B's proxy ships. */}
+        {provider === 'anthropic' && isDesktop && (
+          <div className="space-y-3">
+            <label
+              htmlFor="anthropic-api-key"
+              className="text-sm font-medium text-[var(--sc-text-secondary)] block"
+            >
+              {t('settings.ai.anthropicKey')}
+            </label>
+            <div className="flex gap-2">
+              <Input
+                id="anthropic-api-key"
+                type="password"
+                placeholder="sk-ant-..."
+                value={anthropicKey}
+                onChange={(e) => setAnthropicKey(e.target.value)}
+                className="flex-1 font-mono text-sm"
+              />
+              <Button
+                onClick={handleSaveAnthropicKey}
+                disabled={isSavingAnthropicKey}
+                variant="secondary"
+              >
+                {isSavingAnthropicKey ? <Spinner className="w-4 h-4" /> : t('settings.ai.save')}
+              </Button>
+            </div>
+            <p className="text-xs text-[var(--sc-text-muted)]">{t('settings.ai.keysEncrypted')}</p>
+            <label
+              htmlFor="anthropic-model"
+              className="text-sm font-medium text-[var(--sc-text-secondary)] block"
+            >
+              {t('settings.advancedAi.model')}
+            </label>
+            <Select
+              id="anthropic-model"
+              value={advancedAi.model}
+              onChange={(v) => onModelSelect?.(v)}
+              options={[
+                { value: 'claude-opus-4-7', label: 'Claude Opus 4.7' },
+                { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
+                { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
+              ]}
+            />
+          </div>
+        )}
+
+        {provider === 'anthropic' && !isDesktop && (
           <div className="p-3 rounded-lg bg-[var(--sc-warning-bg)] border border-[var(--sc-warning-border)] text-sm text-[var(--sc-warning-fg)]">
             <p className="font-semibold mb-1 flex items-center gap-1">
               <Icon name="warning" size="sm" aria-hidden="true" />

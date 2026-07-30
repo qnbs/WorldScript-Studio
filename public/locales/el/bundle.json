@@ -1724,6 +1724,7 @@
   "settings.ai.adaptive.warmedModelsHint": "Μοντέλα έτοιμα στη μνήμη για γρήγορη εξαγωγή συμπερασμάτων",
   "settings.ai.anthropicCorsNote": "Το Anthropic Claude δεν μπορεί να κληθεί απευθείας από το πρόγραμμα περιήγησης. Ρυθμίστε έναν διακομιστή μεσολάβησης ή χρησιμοποιήστε την εφαρμογή επιφάνειας εργασίας Tauri για κλήσεις Anthropic.",
   "settings.ai.anthropicHint": "Το Anthropic απαιτεί διακομιστή μεσολάβησης ή την εφαρμογή επιφάνειας εργασίας Tauri για κλήσεις API.",
+  "settings.ai.anthropicKey": "Claude API Key",
   "settings.ai.connectionFailed": "Η σύνδεση απέτυχε",
   "settings.ai.connectionSuccess": "Επιτυχής σύνδεση",
   "settings.ai.corsRestriction": "Περιορισμός CORS",

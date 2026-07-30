@@ -106,6 +106,7 @@
   "settings.ai.adaptive.warmedModelsHint": "مدل های آماده در حافظه برای استنتاج سریع",
   "settings.ai.anthropicCorsNote": "Anthropic Claude را نمی توان مستقیماً از مرورگر فراخوانی کرد. یک سرور پراکسی راه اندازی کنید یا از برنامه دسکتاپ Tauri برای تماس های Anthropic استفاده کنید.",
   "settings.ai.anthropicHint": "Anthropic به یک سرور پراکسی یا برنامه دسکتاپ Tauri برای تماس‌های API نیاز دارد.",
+  "settings.ai.anthropicKey": "Claude API Key",
   "settings.ai.connectionFailed": "اتصال ناموفق بود",
   "settings.ai.connectionSuccess": "اتصال با موفقیت انجام شد",
   "settings.ai.corsRestriction": "محدودیت CORS",

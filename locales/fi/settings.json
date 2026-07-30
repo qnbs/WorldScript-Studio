@@ -106,6 +106,7 @@
   "settings.ai.adaptive.warmedModelsHint": "Mallit valmiina muistiin nopeaa päättelyä varten",
   "settings.ai.anthropicCorsNote": "Anthropic Claudea ei voi kutsua suoraan selaimesta. Määritä välityspalvelin tai käytä Tauri-työpöytäsovellusta antrooppisiin puheluihin.",
   "settings.ai.anthropicHint": "Anthropic vaatii välityspalvelimen tai Tauri-työpöytäsovelluksen API-kutsuja varten.",
+  "settings.ai.anthropicKey": "Claude API Key",
   "settings.ai.connectionFailed": "Yhteys epäonnistui",
   "settings.ai.connectionSuccess": "Yhteys onnistui",
   "settings.ai.corsRestriction": "CORS-rajoitus",

@@ -1724,6 +1724,7 @@
   "settings.ai.adaptive.warmedModelsHint": "Modelos prontos na memória para inferência rápida",
   "settings.ai.anthropicCorsNote": "O Antrópico Claude não pode ser chamado diretamente do navegador. Configure um servidor proxy ou use o aplicativo de desktop Tauri para chamadas Antrópicas.",
   "settings.ai.anthropicHint": "A Anthropic requer um servidor proxy ou o aplicativo de desktop Tauri para chamadas de API.",
+  "settings.ai.anthropicKey": "Claude API Key",
   "settings.ai.connectionFailed": "Falha na conexão",
   "settings.ai.connectionSuccess": "Conexão bem-sucedida",
   "settings.ai.corsRestriction": "Restrição CORS",
