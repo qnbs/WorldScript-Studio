@@ -9,6 +9,7 @@ import { ecoModeService } from '../services/ai/ecoModeService';
 import { extractStoryCodex, saveStoryCodex } from '../services/codexService';
 import { checkStorageHealth } from '../services/dbInitialization';
 import {
+  loadCodexExcerptEncryptionMigration,
   loadDuckdbAnalytics,
   loadDuckdbMigration,
   loadLocalRagService,
@@ -362,10 +363,16 @@ listenerMiddleware.startListening({
       const projectId = project.id || 'default';
       const { runRagVectorMigration } = await loadRagVectorMigration();
       const ragResult = await runRagVectorMigration(projectId, project.manuscript, gate);
-      // QNBS-v3: SEC — if either migration aborted because analytics was opted out mid-run, do NOT mark
+      // QNBS-v3: SEC-6 — re-encrypts any pre-existing plaintext codex_mentions.excerpt rows once an
+      // IDB encryption key is unlocked. Reports aborted:false (not a failure) when encryption isn't
+      // active this session — see codexExcerptEncryptionMigration.ts's doc comment for why that must
+      // not block the other migrations' 'done' status.
+      const { runCodexExcerptEncryptionMigration } = await loadCodexExcerptEncryptionMigration();
+      const codexEncResult = await runCodexExcerptEncryptionMigration(projectId, gate);
+      // QNBS-v3: SEC — if any migration aborted because analytics was opted out mid-run, do NOT mark
       // it 'done' (no markers were written). Reset to 'idle' so re-enabling analytics re-triggers the
       // backfill (the predicate re-fires on analyticsEnabled→true while DuckDB is ready + status idle).
-      if (seedResult.aborted || ragResult.aborted) {
+      if (seedResult.aborted || ragResult.aborted || codexEncResult.aborted) {
         listenerApi.dispatch(analyticsActions.setMigrationStatus('idle'));
         return;
       }

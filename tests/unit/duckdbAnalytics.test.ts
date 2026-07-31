@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock duckdbClient before importing duckdbAnalytics
 vi.mock('../../services/duckdb/duckdbClient', () => ({
@@ -413,6 +413,69 @@ describe('duckdbCodexWrite', () => {
     ]);
     const sql = mockExec.mock.calls[0]?.[0] as string;
     expect(sql).toContain("O''Brien");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// duckdbCodexWrite — SEC-6 excerpt encryption gating.
+// QNBS-v3: Deliberately does NOT mock storageEncryptionService/duckdbEncryption — exercises the
+// REAL AES-256-GCM crypto path (only duckdbClient transport is mocked above) so a wiring bug
+// between the write path and the encryption module can't hide behind a stubbed crypto call.
+// ---------------------------------------------------------------------------
+describe('duckdbCodexWrite — excerpt encryption gating (SEC-6)', () => {
+  afterEach(async () => {
+    const { clearIdbEncryptionKey } = await import(
+      '../../services/storage/storageEncryptionService'
+    );
+    clearIdbEncryptionKey();
+  });
+
+  it('writes plaintext excerpt when IDB encryption is not active (default)', async () => {
+    await duckdbCodexWrite('p1', [
+      {
+        id: 'e1',
+        name: 'Alice',
+        type: 'character',
+        mentionCount: 1,
+        mentions: [{ sectionId: 's1', excerpt: 'Alice arrived at dusk.' }],
+      },
+    ]);
+    const mentionCall = mockExec.mock.calls.find(([s]) =>
+      String(s).includes('INSERT INTO codex_mentions'),
+    );
+    expect(mentionCall).toBeDefined();
+    const [sql, params] = mentionCall as [string, unknown[] | undefined];
+    expect(sql).toContain('Alice arrived at dusk.');
+    expect(sql).toMatch(/,\s*NULL\)/);
+    expect(params ?? []).toHaveLength(0);
+  });
+
+  it('encrypts excerpt via the real crypto path and nulls the plaintext column when IDB encryption is active', async () => {
+    const { initIdbEncryption } = await import('../../services/storage/storageEncryptionService');
+    await initIdbEncryption('test-pass');
+
+    await duckdbCodexWrite('p1', [
+      {
+        id: 'e1',
+        name: 'Alice',
+        type: 'character',
+        mentionCount: 1,
+        mentions: [{ sectionId: 's1', excerpt: 'secret manuscript prose' }],
+      },
+    ]);
+
+    const mentionCall = mockExec.mock.calls.find(([s]) =>
+      String(s).includes('INSERT INTO codex_mentions'),
+    );
+    expect(mentionCall).toBeDefined();
+    const [sql, params] = mentionCall as [string, unknown[] | undefined];
+    // No plaintext leak into the SQL string itself.
+    expect(sql).not.toContain('secret manuscript prose');
+    expect(sql).toContain('NULL, ?');
+    expect(params).toHaveLength(1);
+    const bytes = (params as unknown[])[0] as Uint8Array;
+    expect(bytes).toBeInstanceOf(Uint8Array);
+    expect(bytes.length).toBeGreaterThan(0);
   });
 });
 

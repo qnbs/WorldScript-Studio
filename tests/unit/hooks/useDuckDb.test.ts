@@ -57,6 +57,7 @@ vi.mock('../../../services/duckdb/duckdbClient', () => ({
 vi.mock('../../../services/duckdb/duckdbSchema', () => ({
   DUCKDB_DDL: 'CREATE TABLE IF NOT EXISTS sessions (id TEXT)',
   DUCKDB_MIGRATION_V2_DDL: 'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS created_at TEXT',
+  DUCKDB_MIGRATION_V3_DDL: 'ALTER TABLE codex_mentions ADD COLUMN IF NOT EXISTS excerpt_enc BLOB',
 }));
 
 vi.mock('../../../services/logger', () => ({

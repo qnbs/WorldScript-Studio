@@ -12,6 +12,10 @@ export async function loadRagVectorMigration() {
   return import('./ragVectorMigration');
 }
 
+export async function loadCodexExcerptEncryptionMigration() {
+  return import('./codexExcerptEncryptionMigration');
+}
+
 export async function loadLocalRagService() {
   return import('../localRagService');
 }

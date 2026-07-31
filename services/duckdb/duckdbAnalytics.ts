@@ -1,8 +1,13 @@
 // QNBS-v3: Typed query helpers for the DuckDB-WASM analytics layer.
-//          All queries operate on plaintext columns only — no encrypted BLOBs.
+//          Most queries operate on plaintext columns only. Exception (SEC-6): codex_mentions.excerpt
+//          holds literal manuscript prose, so duckdbCodexWrite encrypts it into excerpt_enc (AES-256-GCM,
+//          via duckdbEncryption.ts) whenever IDB at-rest encryption is active; see
+//          codexExcerptEncryptionMigration.ts for the one-time backfill of pre-existing plaintext rows.
 
 import { computeStreak } from '../../features/progressTracker/progressTrackerSlice';
+import { isIdbEncryptionReady } from '../storage/storageEncryptionService';
 import { duckdbClient } from './duckdbClient';
+import { encryptDuckDbData } from './duckdbEncryption';
 
 export interface DailyProgressRow {
   project_id: string;
@@ -82,8 +87,8 @@ function esc(s: string): string {
 }
 
 /** Execute SQL or throw — enables withDuckDbRetry to detect partial write failures. */
-async function execOrThrow(sql: string): Promise<void> {
-  const res = await duckdbClient.exec(sql);
+async function execOrThrow(sql: string, params?: readonly unknown[]): Promise<void> {
+  const res = await duckdbClient.exec(sql, params);
   if (!res.ok) throw new Error(`DuckDB exec failed: ${res.error ?? 'unknown'}`);
 }
 
@@ -383,10 +388,19 @@ export async function duckdbCodexWrite(
          mention_count = EXCLUDED.mention_count`,
     );
     for (const m of e.mentions) {
+      // QNBS-v3: SEC-6 — codex_mentions.excerpt is the one analytics column holding literal
+      // manuscript prose. When IDB at-rest encryption is active, encrypt it into excerpt_enc
+      // (AES-256-GCM via duckdbEncryption.ts) and null the plaintext column instead; otherwise
+      // keep today's plaintext behaviour unchanged.
+      const encrypted = isIdbEncryptionReady();
+      const excerptSql = encrypted ? 'NULL' : `'${esc(m.excerpt)}'`;
+      const params = encrypted ? [await encryptDuckDbData(m.excerpt)] : [];
       await execOrThrow(
-        `INSERT INTO codex_mentions (entity_id, project_id, section_id, excerpt)
-         VALUES ('${esc(e.id)}', '${esc(projectId)}', '${esc(m.sectionId)}', '${esc(m.excerpt)}')
-         ON CONFLICT (entity_id, project_id, section_id) DO UPDATE SET excerpt = EXCLUDED.excerpt`,
+        `INSERT INTO codex_mentions (entity_id, project_id, section_id, excerpt, excerpt_enc)
+         VALUES ('${esc(e.id)}', '${esc(projectId)}', '${esc(m.sectionId)}', ${excerptSql}, ${encrypted ? '?' : 'NULL'})
+         ON CONFLICT (entity_id, project_id, section_id) DO UPDATE SET
+           excerpt = EXCLUDED.excerpt, excerpt_enc = EXCLUDED.excerpt_enc`,
+        params,
       );
     }
   }

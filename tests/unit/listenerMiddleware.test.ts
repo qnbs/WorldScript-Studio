@@ -106,6 +106,13 @@ vi.mock('../../services/duckdb/duckdbListenerLoader', () => ({
   loadRagVectorMigration: vi.fn(() =>
     Promise.resolve({ runRagVectorMigration: vi.fn().mockResolvedValue(undefined) }),
   ),
+  loadCodexExcerptEncryptionMigration: vi.fn(() =>
+    Promise.resolve({
+      runCodexExcerptEncryptionMigration: vi
+        .fn()
+        .mockResolvedValue({ migrated: 0, aborted: false }),
+    }),
+  ),
 }));
 
 // ---------------------------------------------------------------------------
