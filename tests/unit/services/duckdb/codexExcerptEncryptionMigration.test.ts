@@ -228,23 +228,43 @@ describe('runCodexExcerptEncryptionMigration', () => {
     ).toBe(false);
   });
 
-  it('does not increment migrated when the row UPDATE fails, but still completes the run', async () => {
+  it('does not increment migrated and aborts without a marker when the row UPDATE fails', async () => {
     await initIdbEncryption('test-pass');
     mockQuery.mockResolvedValueOnce({ messageId: 'm1', ok: true, rows: [] }).mockResolvedValueOnce({
       messageId: 'm2',
       ok: true,
       rows: [{ entity_id: 'e1', project_id: 'proj-1', section_id: 's1', excerpt: 'a' }],
     });
-    // First exec call is the row UPDATE — fail it; the later marker INSERT uses the default { ok: true }.
+    // Only exec call in this run is the row UPDATE — fail it.
     mockExec.mockResolvedValueOnce({ messageId: 'u1', ok: false, error: 'update failed' });
 
     const result = await runCodexExcerptEncryptionMigration('proj-1');
 
-    expect(result).toEqual({ migrated: 0, aborted: false });
+    // QNBS-v3: SEC — a failed row UPDATE must abort (retryable) and skip the done-marker, or the
+    // still-plaintext row would never be retried (CodeRabbit finding, PR #303).
+    expect(result).toEqual({ migrated: 0, aborted: true });
     const markerCall = mockExec.mock.calls.find(([execSql]) =>
       String(execSql).includes('codex_excerpt_encryption_v1_migrated'),
     );
-    expect(markerCall).toBeDefined();
+    expect(markerCall).toBeUndefined();
+  });
+
+  it('aborts without a marker when encrypting a row throws', async () => {
+    await initIdbEncryption('test-pass');
+    mockQuery.mockResolvedValueOnce({ messageId: 'm1', ok: true, rows: [] }).mockResolvedValueOnce({
+      messageId: 'm2',
+      ok: true,
+      rows: [{ entity_id: 'e1', project_id: 'proj-1', section_id: 's1', excerpt: 'a' }],
+    });
+    const cryptoSpy = vi
+      .spyOn(globalThis.crypto.subtle, 'encrypt')
+      .mockRejectedValueOnce(new Error('encrypt failed'));
+
+    const result = await runCodexExcerptEncryptionMigration('proj-1');
+
+    expect(result).toEqual({ migrated: 0, aborted: true });
+    expect(mockExec).not.toHaveBeenCalled();
+    cryptoSpy.mockRestore();
   });
 
   it('yields via Promise.resolve() every 10 successful migrations without dropping any rows', async () => {

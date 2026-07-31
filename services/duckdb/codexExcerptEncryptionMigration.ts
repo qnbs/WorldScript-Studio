@@ -75,25 +75,44 @@ export async function runCodexExcerptEncryptionMigration(
   }
 
   let migrated = 0;
+  // QNBS-v3: SEC — any per-row failure must block the done-marker so the still-plaintext row is
+  // retried on the next run instead of being silently left unencrypted forever (CodeRabbit).
+  let hadRowFailure = false;
   const rows = (res.rows ?? []) as unknown as PlaintextExcerptRow[];
   for (const row of rows) {
     // QNBS-v3: SEC — re-check at each write so an opt-out mid-run stops further persistence.
     if (!shouldPersist()) return { migrated, aborted: true };
 
-    const bytes = await encryptDuckDbData(row.excerpt);
+    let bytes: Uint8Array;
+    try {
+      bytes = await encryptDuckDbData(row.excerpt);
+    } catch (err) {
+      logger.warn('[codexExcerptEncryptionMigration] Row encryption failed (non-fatal):', err);
+      hadRowFailure = true;
+      continue;
+    }
     const updRes = await duckdbClient.exec(
       `UPDATE codex_mentions SET excerpt = NULL, excerpt_enc = ?
        WHERE entity_id = '${esc(row.entity_id)}' AND project_id = '${esc(row.project_id)}'
          AND section_id = '${esc(row.section_id)}'`,
       [bytes],
     );
-    if (updRes.ok) migrated++;
+    if (updRes.ok) {
+      migrated++;
+    } else {
+      logger.warn('[codexExcerptEncryptionMigration] Row update failed (non-fatal):', updRes.error);
+      hadRowFailure = true;
+    }
     if (migrated % 10 === 0) await Promise.resolve();
   }
 
   // QNBS-v3: SEC — final gate check before the done-marker: an opt-out landing during the awaited
   // batch above must not let us record the migration as complete (else re-opt-in never reruns it).
   if (!shouldPersist()) {
+    return { migrated, aborted: true };
+  }
+  if (hadRowFailure) {
+    // Skip the done-marker so the still-plaintext rows are retried on the next run.
     return { migrated, aborted: true };
   }
 
