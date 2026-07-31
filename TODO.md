@@ -8,7 +8,9 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ---
 
-## Release — tag/publish pending (2026-08-01)
+## Release — v1.25.0 published (2026-08-01)
+
+> **Status: ✅ Done.** Tagged, released, and live — see the GitHub Release link below.
 
 Native Grok/Claude providers, opt-in Browser-Ollama, and DuckDB `codex_mentions.excerpt`
 cell-level encryption (SEC-6) all shipped in this cycle — see
@@ -20,10 +22,9 @@ are all version-bumped and synced for this release.
   at `256264d3` via admin-bypass squash-merge (fresh maintainer authorization; `mergeStateStatus`
   cache-lag artifact — all 20/20 checks green, 0 unresolved review threads, Tauri Rust build
   manually verified green on all 3 platforms before merge).
-- ⬜ Tag and publish this release (`v1.25.0`) once `main`'s post-merge CI (`build` + `e2e`) is green
-  so `deploy` (GitHub Pages) can run — see the exact hand-off commands in the archived provider
-  workstream doc linked above. Not auto-executed; requires explicit go-ahead per operational-safety
-  rules on pushing/tagging.
+- ✅ Tagged and published `v1.25.0` after `main`'s post-merge CI (`build` + `e2e`) went green — the
+  GitHub Release is live with all Tauri installer assets (macOS/Linux/Windows) and `.sig` files; see
+  [`v1.25.0` on GitHub](https://github.com/qnbs/WorldScript-Studio/releases/tag/v1.25.0).
 
 
 ---
