@@ -8,18 +8,17 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ---
 
-## Release — v1.25.0 tag/publish (2026-07-31)
+## Release — tag/publish pending (2026-07-31)
 
 Native Grok/Claude providers, opt-in Browser-Ollama, and DuckDB `codex_mentions.excerpt`
 cell-level encryption (SEC-6) all shipped in this cycle — see
 [`docs/history/completed-v1.25.0-providers.md`](docs/history/completed-v1.25.0-providers.md) for
-the full completed checklist. `CHANGELOG.md` is dated `[1.25.0]`, `package.json`/`README.md` are
-version-bumped, and `src-tauri`/`public/sw.js` versions are synced.
+the full completed checklist. `CHANGELOG.md`, `package.json`/`README.md`, and `src-tauri`/`public/sw.js`
+are all version-bumped and synced for this release.
 
-- ⬜ Tag and publish the release once CI is fully green on the release branch/PR: `git tag -a
-  v1.25.0`, push the tag, `gh release create v1.25.0` — see the exact hand-off commands in
-  `docs/history/completed-v1.25.0-providers.md`'s source plan. Not auto-executed; requires explicit
-  go-ahead per operational-safety rules on pushing/tagging.
+- ⬜ Tag and publish this release once CI is fully green on the release branch/PR — see the exact
+  hand-off commands in the archived provider workstream doc linked above. Not auto-executed;
+  requires explicit go-ahead per operational-safety rules on pushing/tagging.
 
 
 ---

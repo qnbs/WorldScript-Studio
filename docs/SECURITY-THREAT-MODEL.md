@@ -228,9 +228,11 @@ already allowed), and the proxy→Anthropic leg is server-side, never subject to
 requests, rate-limit hits, or errors — `tests/unit/api/claudeProxyCore.test.ts` enforces a hard
 zero-console-call guarantee on every path, and adding request-level logging here would violate that
 stateless contract. Instead, rely on the hosting platform's own request-level observability:
-**Vercel Analytics / Vercel Functions logs** (primary deployment) or **Cloudflare Web Analytics /
-Workers logs** (Cloudflare Pages), both of which capture request volume, status codes, and latency
-without any app code changes. Spikes in 429 (rate-limited) or 4xx responses on the `claude-proxy`
+**Vercel Function Logs** or **Vercel Observability** (primary deployment) for request volume, status
+codes, and latency; on Cloudflare Pages, **Cloudflare Workers Metrics/Analytics** and **Workers
+Logs** provide the equivalent view — note that Workers observability (Logs) is opt-in and must be
+explicitly enabled in the Worker's Wrangler configuration (`observability.enabled = true`) before
+it captures anything. Spikes in 429 (rate-limited) or 4xx responses on the `claude-proxy`
 route are the actionable signal for abuse; alert thresholds should be configured directly in the
 platform dashboard, not in application code.
 
