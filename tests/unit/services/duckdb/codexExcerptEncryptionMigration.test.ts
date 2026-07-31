@@ -44,17 +44,30 @@ afterEach(() => {
 describe('isCodexExcerptEncryptionMigrationDone', () => {
   it('returns true when the _meta marker row exists', async () => {
     mockQuery.mockResolvedValueOnce({ messageId: 'm', ok: true, rows: [{ value: '1' }] });
-    expect(await isCodexExcerptEncryptionMigrationDone()).toBe(true);
+    expect(await isCodexExcerptEncryptionMigrationDone('proj-1')).toBe(true);
   });
 
   it('returns false when no _meta marker row', async () => {
     mockQuery.mockResolvedValueOnce({ messageId: 'm', ok: true, rows: [] });
-    expect(await isCodexExcerptEncryptionMigrationDone()).toBe(false);
+    expect(await isCodexExcerptEncryptionMigrationDone('proj-1')).toBe(false);
   });
 
   it('returns false when the query fails', async () => {
     mockQuery.mockResolvedValueOnce({ messageId: 'm', ok: false });
-    expect(await isCodexExcerptEncryptionMigrationDone()).toBe(false);
+    expect(await isCodexExcerptEncryptionMigrationDone('proj-1')).toBe(false);
+  });
+
+  it('scopes the marker query by projectId so two projects use distinct keys', async () => {
+    mockQuery.mockResolvedValueOnce({ messageId: 'm', ok: true, rows: [] });
+    await isCodexExcerptEncryptionMigrationDone('proj-1');
+    const [sql] = mockQuery.mock.calls[0] as [string];
+    expect(sql).toContain('proj-1');
+
+    mockQuery.mockResolvedValueOnce({ messageId: 'm', ok: true, rows: [] });
+    await isCodexExcerptEncryptionMigrationDone('proj-2');
+    const [sql2] = mockQuery.mock.calls[1] as [string];
+    expect(sql2).toContain('proj-2');
+    expect(sql2).not.toEqual(sql);
   });
 });
 
@@ -127,6 +140,43 @@ describe('runCodexExcerptEncryptionMigration', () => {
       String(execSql).includes('codex_excerpt_encryption_v1_migrated'),
     );
     expect(markerCall).toBeDefined();
+  });
+
+  it('migrates a second project independently after a first project already completed (marker scoping regression)', async () => {
+    await initIdbEncryption('test-pass');
+
+    // Project 1: not done yet, one plaintext row, completes and writes its own marker.
+    mockQuery.mockResolvedValueOnce({ messageId: 'm1', ok: true, rows: [] }).mockResolvedValueOnce({
+      messageId: 'm2',
+      ok: true,
+      rows: [{ entity_id: 'e1', project_id: 'proj-1', section_id: 's1', excerpt: 'proj-1 prose' }],
+    });
+    const result1 = await runCodexExcerptEncryptionMigration('proj-1');
+    expect(result1).toEqual({ migrated: 1, aborted: false });
+
+    // Project 2 must NOT see project 1's marker and must run its own backfill.
+    mockQuery.mockResolvedValueOnce({ messageId: 'm3', ok: true, rows: [] }).mockResolvedValueOnce({
+      messageId: 'm4',
+      ok: true,
+      rows: [{ entity_id: 'e2', project_id: 'proj-2', section_id: 's1', excerpt: 'proj-2 prose' }],
+    });
+    const result2 = await runCodexExcerptEncryptionMigration('proj-2');
+    expect(result2).toEqual({ migrated: 1, aborted: false });
+
+    const isDoneQueries = mockQuery.mock.calls
+      .map(([sql]) => String(sql))
+      .filter((sql) => sql.includes('codex_excerpt_encryption_v1_migrated'));
+    expect(isDoneQueries).toHaveLength(2);
+    expect(isDoneQueries[0]).toContain('proj-1');
+    expect(isDoneQueries[1]).toContain('proj-2');
+    expect(isDoneQueries[0]).not.toEqual(isDoneQueries[1]);
+
+    const markerInserts = mockExec.mock.calls
+      .map(([sql]) => String(sql))
+      .filter((sql) => sql.includes('codex_excerpt_encryption_v1_migrated'));
+    expect(markerInserts).toHaveLength(2);
+    expect(markerInserts[0]).toContain('proj-1');
+    expect(markerInserts[1]).toContain('proj-2');
   });
 
   it('aborts without writing the done-marker when the privacy gate flips off mid-batch', async () => {

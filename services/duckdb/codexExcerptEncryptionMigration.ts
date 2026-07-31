@@ -23,31 +23,38 @@ interface PlaintextExcerptRow {
   excerpt: string;
 }
 
-export async function isCodexExcerptEncryptionMigrationDone(): Promise<boolean> {
+// QNBS-v3: SEC — marker is scoped per project (key includes projectId); a shared/global key would
+// let the first migrated project's marker silently block the backfill for every other project.
+function markerKey(projectId: string): string {
+  return `${CODEX_EXCERPT_ENCRYPTION_KEY}:${projectId}`;
+}
+
+export async function isCodexExcerptEncryptionMigrationDone(projectId: string): Promise<boolean> {
   const res = await duckdbClient.query(
-    `SELECT value FROM _meta WHERE key = '${CODEX_EXCERPT_ENCRYPTION_KEY}'`,
+    `SELECT value FROM _meta WHERE key = '${esc(markerKey(projectId))}'`,
   );
   return Boolean(res.ok && res.rows?.length);
 }
 
 /**
  * Re-encrypt existing plaintext codex_mentions.excerpt rows for a project in place, moving the
- * ciphertext into excerpt_enc and nulling the plaintext column. Idempotent via _meta marker.
+ * ciphertext into excerpt_enc and nulling the plaintext column. Idempotent via a per-project _meta marker.
  */
 export async function runCodexExcerptEncryptionMigration(
   projectId: string,
   // QNBS-v3: SEC — re-checked before each write so an analytics opt-out toggled mid-run aborts
   // before persisting further rows. Defaults to always-allow for callers without a privacy context.
   shouldPersist: () => boolean = () => true,
-  // QNBS-v3: SEC — `aborted: true` ONLY means a privacy opt-out stopped an in-progress (encryption
-  // already unlocked) run before the done-marker was written — callers MUST keep migration status
-  // retryable in that case. When encryption simply isn't unlocked yet this is NOT an abort (returns
-  // `aborted: false`): it's not applicable this session and must not block the other migrations'
-  // 'done' status for the common (encryption-off) case. It self-heals — the next time this function
-  // is invoked (next duckDbJustReady/analyticsJustEnabled transition, e.g. next app load) it re-checks
-  // isIdbEncryptionReady() and backfills then if the user has since unlocked/enabled encryption.
+  // QNBS-v3: SEC — `aborted: true` means either a privacy opt-out stopped an in-progress (encryption
+  // already unlocked) run, or the initial SELECT query failed — in both cases the done-marker is
+  // never written, so callers MUST keep migration status retryable. When encryption simply isn't
+  // unlocked yet this is NOT an abort (returns `aborted: false`): it's not applicable this session and
+  // must not block the other migrations' 'done' status for the common (encryption-off) case. It
+  // self-heals — the next time this function is invoked (next duckDbJustReady/analyticsJustEnabled
+  // transition, e.g. next app load) it re-checks isIdbEncryptionReady() and backfills then if the user
+  // has since unlocked/enabled encryption.
 ): Promise<{ migrated: number; aborted: boolean }> {
-  if (await isCodexExcerptEncryptionMigrationDone()) {
+  if (await isCodexExcerptEncryptionMigrationDone(projectId)) {
     return { migrated: 0, aborted: false };
   }
   // Not applicable this session — no active encryption key. Not a failure; see doc comment above.
@@ -91,7 +98,7 @@ export async function runCodexExcerptEncryptionMigration(
   }
 
   await duckdbClient.exec(
-    `INSERT INTO _meta (key, value) VALUES ('${CODEX_EXCERPT_ENCRYPTION_KEY}', '1')
+    `INSERT INTO _meta (key, value) VALUES ('${esc(markerKey(projectId))}', '1')
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
   );
 

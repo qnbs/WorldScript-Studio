@@ -477,6 +477,30 @@ describe('duckdbCodexWrite — excerpt encryption gating (SEC-6)', () => {
     expect(bytes).toBeInstanceOf(Uint8Array);
     expect(bytes.length).toBeGreaterThan(0);
   });
+
+  it('never lets an unencrypted write clobber an existing ciphertext on conflict', async () => {
+    await duckdbCodexWrite('p1', [
+      {
+        id: 'e1',
+        name: 'Alice',
+        type: 'character',
+        mentionCount: 1,
+        mentions: [{ sectionId: 's1', excerpt: 'Alice arrived at dusk.' }],
+      },
+    ]);
+    const mentionCall = mockExec.mock.calls.find(([s]) =>
+      String(s).includes('INSERT INTO codex_mentions'),
+    );
+    expect(mentionCall).toBeDefined();
+    const [sql] = mentionCall as [string, unknown[] | undefined];
+    // ON CONFLICT must preserve any pre-existing excerpt_enc rather than overwrite it with NULL.
+    expect(sql).toContain(
+      'excerpt_enc = COALESCE(EXCLUDED.excerpt_enc, codex_mentions.excerpt_enc)',
+    );
+    expect(sql).toContain(
+      'CASE\n             WHEN COALESCE(EXCLUDED.excerpt_enc, codex_mentions.excerpt_enc) IS NOT NULL THEN NULL',
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------

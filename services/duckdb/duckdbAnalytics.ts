@@ -395,11 +395,18 @@ export async function duckdbCodexWrite(
       const encrypted = isIdbEncryptionReady();
       const excerptSql = encrypted ? 'NULL' : `'${esc(m.excerpt)}'`;
       const params = encrypted ? [await encryptDuckDbData(m.excerpt)] : [];
+      // QNBS-v3: SEC-6 — COALESCE preserves any existing ciphertext (and keeps excerpt NULL) so a
+      // write made while encryption is unavailable this session can never downgrade an already-
+      // encrypted row back to plaintext.
       await execOrThrow(
         `INSERT INTO codex_mentions (entity_id, project_id, section_id, excerpt, excerpt_enc)
          VALUES ('${esc(e.id)}', '${esc(projectId)}', '${esc(m.sectionId)}', ${excerptSql}, ${encrypted ? '?' : 'NULL'})
          ON CONFLICT (entity_id, project_id, section_id) DO UPDATE SET
-           excerpt = EXCLUDED.excerpt, excerpt_enc = EXCLUDED.excerpt_enc`,
+           excerpt_enc = COALESCE(EXCLUDED.excerpt_enc, codex_mentions.excerpt_enc),
+           excerpt = CASE
+             WHEN COALESCE(EXCLUDED.excerpt_enc, codex_mentions.excerpt_enc) IS NOT NULL THEN NULL
+             ELSE EXCLUDED.excerpt
+           END`,
         params,
       );
     }
