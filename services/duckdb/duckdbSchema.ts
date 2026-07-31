@@ -1,7 +1,7 @@
 // QNBS-v3: Canonical DDL for the DuckDB-WASM analytics layer.
 //          IDB remains the source of truth; this schema is the read-optimised side-car.
 
-export const DUCK_DB_SCHEMA_VERSION = 2;
+export const DUCK_DB_SCHEMA_VERSION = 3;
 
 /** MiniLM-L6-v2 semantic embedding dimension for rag_chunks.embedding */
 export const RAG_EMBEDDING_DIM = 384;
@@ -9,6 +9,11 @@ export const RAG_EMBEDDING_DIM = 384;
 /** v1→v2: adds rag_chunks.embedding for 384-dim semantic vectors */
 export const DUCKDB_MIGRATION_V2_DDL = `
 ALTER TABLE rag_chunks ADD COLUMN IF NOT EXISTS embedding FLOAT[];
+`;
+
+/** v2→v3: adds codex_mentions.excerpt_enc (SEC-6 partial fix — see codexExcerptEncryptionMigration.ts) */
+export const DUCKDB_MIGRATION_V3_DDL = `
+ALTER TABLE codex_mentions ADD COLUMN IF NOT EXISTS excerpt_enc BLOB;
 `;
 
 export const DUCKDB_DDL = `
@@ -103,11 +108,15 @@ CREATE TABLE IF NOT EXISTS codex_entities (
   PRIMARY KEY (entity_id, project_id)
 );
 
+-- QNBS-v3: excerpt holds the literal manuscript prose snippet; excerpt_enc is the AES-256-GCM
+-- ciphertext used instead when at-rest encryption is active (see duckdbCodexWrite in
+-- duckdbAnalytics.ts) — never both populated for the same row.
 CREATE TABLE IF NOT EXISTS codex_mentions (
-  entity_id  VARCHAR,
-  project_id VARCHAR,
-  section_id VARCHAR,
-  excerpt    VARCHAR,
+  entity_id   VARCHAR,
+  project_id  VARCHAR,
+  section_id  VARCHAR,
+  excerpt     VARCHAR,
+  excerpt_enc BLOB,
   PRIMARY KEY (entity_id, project_id, section_id)
 );
 

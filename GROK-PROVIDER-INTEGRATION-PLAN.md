@@ -8,10 +8,11 @@ from the Settings UI. **Addendum (§7):** an unrelated but adjacent follow-up to
 opt-in, experimental feature flag letting the PWA attempt direct browser-to-Ollama connections,
 matching the "technically: yes" option the maintainer already described in that issue's comment
 thread.
-**Status:** v1.24.3 (2026-07-30)
-**Execution:** **Plan only — do not implement yet.** Per explicit instruction, this file is written
-now and executed only after every other workstream in the current post-recovery audit sprint
-(WS-3 through WS-10, including the WS-8 close-out) has merged into `main`.
+**Status:** ✅ Complete — merged 2026-07-30, see `[Unreleased]`/`[1.25.0]` in
+[CHANGELOG.md](CHANGELOG.md) for the user-facing summary.
+**Execution:** All phases below (Grok wiring, Claude desktop + web proxy, Ollama-in-PWA opt-in
+addendum) have shipped. This file is retained as the historical design record; do not treat any
+"do not implement yet" language below as current.
 
 ---
 

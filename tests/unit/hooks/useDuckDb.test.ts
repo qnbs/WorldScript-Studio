@@ -57,6 +57,7 @@ vi.mock('../../../services/duckdb/duckdbClient', () => ({
 vi.mock('../../../services/duckdb/duckdbSchema', () => ({
   DUCKDB_DDL: 'CREATE TABLE IF NOT EXISTS sessions (id TEXT)',
   DUCKDB_MIGRATION_V2_DDL: 'ALTER TABLE sessions ADD COLUMN IF NOT EXISTS created_at TEXT',
+  DUCKDB_MIGRATION_V3_DDL: 'ALTER TABLE codex_mentions ADD COLUMN IF NOT EXISTS excerpt_enc BLOB',
 }));
 
 vi.mock('../../../services/logger', () => ({
@@ -150,6 +151,32 @@ describe('useDuckDb', () => {
       for (let i = 0; i < 10; i++) await Promise.resolve();
     });
 
+    expect(analyticsActions.setDuckDbStatus).toHaveBeenCalledWith('unavailable');
+    vi.restoreAllMocks();
+  });
+
+  it('dispatches setDuckDbError with the v3 migration failure message when the v3 DDL fails', async () => {
+    mockIsEnabled = true;
+    mockStatus = 'idle';
+    mockDuckdbInit.mockResolvedValue({ ok: true });
+    // QNBS-v3: schema DDL + v2 DDL succeed; only the new v3 (codex excerpt encryption) DDL fails —
+    // exercises the previously-uncovered `!v3Res.ok` throw branch in bootstrapDuckDbSchema.
+    mockDuckdbExec.mockImplementation((sql: unknown) =>
+      Promise.resolve({
+        ok: sql !== 'ALTER TABLE codex_mentions ADD COLUMN IF NOT EXISTS excerpt_enc BLOB',
+      }),
+    );
+    vi.spyOn(global, 'setTimeout').mockImplementation((fn) => {
+      fn();
+      return 0 as unknown as ReturnType<typeof setTimeout>;
+    });
+
+    renderHook(() => useDuckDb());
+    await act(async () => {
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+    });
+
+    expect(analyticsActions.setDuckDbError).toHaveBeenCalledWith('DuckDB v3 migration DDL failed');
     expect(analyticsActions.setDuckDbStatus).toHaveBeenCalledWith('unavailable');
     vi.restoreAllMocks();
   });
