@@ -377,6 +377,7 @@ describe('DuckDB analytics migration listener', () => {
     );
     vi.mocked(loadCodexExcerptEncryptionMigration).mockResolvedValueOnce({
       runCodexExcerptEncryptionMigration: vi.fn().mockResolvedValue({ migrated: 0, aborted: true }),
+      isCodexExcerptEncryptionMigrationDone: vi.fn().mockResolvedValue(false),
     });
     const store = makeFullStore();
     store.dispatch(analyticsActions.setDuckDbStatus('ready'));
