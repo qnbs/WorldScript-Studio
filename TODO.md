@@ -21,7 +21,7 @@ are all version-bumped and synced for this release.
   cache-lag artifact — all 20/20 checks green, 0 unresolved review threads, Tauri Rust build
   manually verified green on all 3 platforms before merge).
 - ⬜ Tag and publish this release (`v1.25.0`) once `main`'s post-merge CI (`build` + `e2e`) is green
-  so `deploy` (GitHub Pages) succeeds — see the exact hand-off commands in the archived provider
+  so `deploy` (GitHub Pages) can run — see the exact hand-off commands in the archived provider
   workstream doc linked above. Not auto-executed; requires explicit go-ahead per operational-safety
   rules on pushing/tagging.
 

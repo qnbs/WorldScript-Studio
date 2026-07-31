@@ -15,6 +15,9 @@ playwright-report/
 # GraphiPy output (don't re-index the graph itself)
 graphify-out/
 
+# Vendored/minified third-party bundles (not our source code; pollutes God Nodes/Communities)
+public/duckdb/
+
 # Generated / lock files
 pnpm-lock.yaml
 *.lock
