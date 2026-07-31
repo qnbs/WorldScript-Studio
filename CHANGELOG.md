@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.25.0] — 2026-07-31
+
 ### Added
 
 - **Grok (xAI) wired into the primary provider dropdown** — the backend (`streamGrok()`, BYOK key
@@ -34,6 +36,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   UI renders the exact `OLLAMA_ORIGINS=<origin> ollama serve` command for the current deployment.
   See [ADR-0017](docs/adr/0017-pwa-browser-ollama-opt-in.md) (Issue #266 follow-up).
 
+### Security
+
+- **DuckDB `codex_mentions.excerpt` — the one analytics column holding literal manuscript prose —
+  is now cell-level encrypted (SEC-6)** when `enableIdbAtRestEncryption` is active.
+  `duckdbCodexWrite()` (`services/duckdb/duckdbAnalytics.ts`) encrypts new excerpts via
+  `services/duckdb/duckdbEncryption.ts` (AES-256-GCM, reusing the IDB at-rest encryption key) into
+  a new `excerpt_enc BLOB` column and nulls the plaintext `excerpt` column; a new backfill
+  migration (`services/duckdb/codexExcerptEncryptionMigration.ts`) re-encrypts any pre-existing
+  plaintext rows once encryption is unlocked, without blocking the schema's other migrations when
+  encryption isn't active this session. Full OPFS **file-level** encryption remains infeasible —
+  DuckDB-WASM owns the OPFS file handle directly, leaving no app-level interception point — so the
+  other DuckDB metadata columns (`title`/`logline`/`name`/`character_names`/`label`) stay
+  intentionally plaintext by design, not manuscript prose.
+
 ### Fixed
 
 - **Doc-drift gate (`scripts/check-doc-metrics.mjs`) had a blind spot for still-open checklist
@@ -58,6 +74,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mergeable-state cache-lag symptom, plus documents the stacked-PR auto-close-on-squash-merge
   side effect and its recovery steps; and strengthens the CodeAnt Correction Loop policy to
   explicitly cover CodeRabbit's collapsed nitpick and outside-diff-range comment sections. (#294)
+- **`.github/SECURITY.md` / `docs/SECURITY-THREAT-MODEL.md` SEC-6 status corrected** to reflect the
+  DuckDB excerpt-encryption wiring above, and the Claude serverless proxy section gains an explicit
+  monitoring recommendation (platform-native Vercel/Cloudflare request analytics — no in-app
+  logging, which would violate the proxy's zero-console-call stateless guarantee).
+- **`GROK-PROVIDER-INTEGRATION-PLAN.md`** status header updated from "Plan only — do not implement
+  yet" to reflect that all phases shipped; retained as the historical design record.
 
 ## [1.24.3] — 2026-07-30
 
