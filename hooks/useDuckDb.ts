@@ -6,7 +6,11 @@ import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { analyticsActions, selectDuckDbStatus } from '../features/analytics/analyticsSlice';
 import { selectEnableDuckDbAnalytics } from '../features/featureFlags/featureFlagsSlice';
 import { duckdbClient } from '../services/duckdb/duckdbClient';
-import { DUCKDB_DDL, DUCKDB_MIGRATION_V2_DDL } from '../services/duckdb/duckdbSchema';
+import {
+  DUCKDB_DDL,
+  DUCKDB_MIGRATION_V2_DDL,
+  DUCKDB_MIGRATION_V3_DDL,
+} from '../services/duckdb/duckdbSchema';
 import { logger } from '../services/logger';
 
 const MAX_INIT_ATTEMPTS = 3;
@@ -52,6 +56,9 @@ async function bootstrapDuckDbSchema(signal: AbortSignal): Promise<void> {
 
   const v2Res = await duckdbClient.exec(DUCKDB_MIGRATION_V2_DDL, undefined, signal);
   if (!v2Res.ok) throw new Error(v2Res.error ?? 'DuckDB v2 migration DDL failed');
+
+  const v3Res = await duckdbClient.exec(DUCKDB_MIGRATION_V3_DDL, undefined, signal);
+  if (!v3Res.ok) throw new Error(v3Res.error ?? 'DuckDB v3 migration DDL failed');
 }
 
 export function useDuckDb() {

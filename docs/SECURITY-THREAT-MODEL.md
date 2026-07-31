@@ -42,7 +42,7 @@ This document provides a formal STRIDE threat analysis for WorldScript Studio, m
 | Desktop API key exposure via local file-read access | AES-256-GCM with a PBKDF2-derived key (600 000 iterations, SHA-256, random 32-byte salt per encryption) — fixed 2026-07-29; the prior scheme derived the key from a single unsalted SHA-256 digest of publicly-derivable material (own file's parent path + provider name from the filename + a hardcoded literal), so anyone with read access to `config/<provider>_key.enc.json` could reconstruct the key in one hash operation (F-05/F-06). No migration path for pre-fix files by design — a legacy (unsalted) payload is discarded and the user is prompted to re-enter the key. | `services/fs/fsCore.ts:deriveFileSystemCryptoKey()`, `services/fs/settingsFsStore.ts:getApiKey()` |
 | Manuscript data in IndexedDB | AES-256-GCM at-rest encryption | `services/storage/storageEncryptionService.ts` |
 | Voice audio to cloud | Web Speech API consent gate | `components/voice/VoicePrivacyConsentModal.tsx` |
-| DuckDB analytics unencrypted (SEC-6) | **Bounded by design:** only local metadata is persisted (titles, loglines, character names, codex excerpts, word counts, embeddings) — **never manuscript prose**, and **nothing leaves the device**. Gated by `enableDuckDbAnalytics` **and** the Settings → Privacy "Analytics" opt-out (`isAnalyticsPersistenceAllowed` in `app/listenerMiddleware.ts`); turning the toggle off stops all DuckDB writes + inference telemetry. Full OPFS file / cell-level (`*_enc`) encryption is **deferred to v2.0** — DuckDB-WASM owns the OPFS file write, so transparent file encryption is high-risk for the limited exposure. The `duckdbEncryption.ts` shim has 0 callers by design until then. | `app/listenerMiddleware.ts:isAnalyticsPersistenceAllowed`, `services/duckdb/duckdbEncryption.ts` |
+| DuckDB analytics unencrypted (SEC-6) | **Bounded by design, with one prose column now encrypted:** most persisted fields are local metadata only (titles, loglines, character names, word counts, embeddings) and **nothing leaves the device**. The one column that genuinely holds literal manuscript prose, `codex_mentions.excerpt`, is now cell-level encrypted (AES-256-GCM via `services/duckdb/duckdbEncryption.ts`, reusing the IDB at-rest encryption key) whenever `enableIdbAtRestEncryption` is active: `duckdbCodexWrite()` writes ciphertext into `excerpt_enc BLOB` and nulls the plaintext `excerpt` column; `services/duckdb/codexExcerptEncryptionMigration.ts` backfills any pre-existing plaintext rows once encryption is unlocked. Gated by `enableDuckDbAnalytics` **and** the Settings → Privacy "Analytics" opt-out (`isAnalyticsPersistenceAllowed` in `app/listenerMiddleware.ts`); turning the toggle off stops all DuckDB writes + inference telemetry. Full OPFS file-level encryption remains **infeasible** — DuckDB-WASM owns the OPFS file handle directly, so there is no app-level interception point; the other metadata columns stay intentionally plaintext (bounded-exposure design). | `app/listenerMiddleware.ts:isAnalyticsPersistenceAllowed`, `services/duckdb/duckdbAnalytics.ts:duckdbCodexWrite()`, `services/duckdb/duckdbEncryption.ts`, `services/duckdb/codexExcerptEncryptionMigration.ts` |
 | Prompt injection exposing context | Prompt sanitization | `services/ai/ragPromptAssembly.ts:sanitizePromptBlock()` |
 | Prompt injection via AI-proposed edits | Control-character / lone-surrogate validation; per-item skip | `services/proForge/applyReviewEdits.ts:validateProposedText()` |
 | Claude BYOK key transits WorldScript's own infrastructure (web/PWA only — see §Claude serverless proxy below) | Stateless relay, no logging of key/prompt/response on any path; same-origin check rejects third-party callers | `api/_shared/claudeProxyCore.ts:handleClaudeProxyRequest()` |
@@ -224,6 +224,18 @@ didn't already see as the request body — it is a transit point, not a new data
 doesn't affect the CSP tradeoff above (ADR-0004): the client→proxy leg is same-origin (`'self'`,
 already allowed), and the proxy→Anthropic leg is server-side, never subject to browser CSP at all.
 
+**Monitoring / anomaly detection:** the proxy intentionally does **not** perform in-app logging of
+requests, rate-limit hits, or errors — `tests/unit/api/claudeProxyCore.test.ts` enforces a hard
+zero-console-call guarantee on every path, and adding request-level logging here would violate that
+stateless contract. Instead, rely on the hosting platform's own request-level observability:
+**Vercel Function Logs** or **Vercel Observability** (primary deployment) for request volume, status
+codes, and latency; on Cloudflare Pages, **Cloudflare Workers Metrics/Analytics** and **Workers
+Logs** provide the equivalent view — note that Workers observability (Logs) is opt-in and must be
+explicitly enabled in the Worker's Wrangler configuration (`observability.enabled = true`) before
+it captures anything. Spikes in 429 (rate-limited) or 4xx responses on the `claude-proxy`
+route are the actionable signal for abuse; alert thresholds should be configured directly in the
+platform dashboard, not in application code.
+
 ## Security Checklist
 
 - [x] PBKDF2 iterations ≥ 600,000 (OWASP 2024 minimum)
@@ -235,8 +247,9 @@ already allowed), and the proxy→Anthropic leg is server-side, never subject to
 - [x] Collaboration requires password in production
 - [x] Plugin system permission-gated
 - [x] Plugin system Worker-isolated (P0-2) — `workers/plugin.worker.ts`
-- [x] DuckDB analytics privacy-gated (SEC-6) — writes require `enableDuckDbAnalytics` **and** the Settings → Privacy "Analytics" opt-out (`isAnalyticsPersistenceAllowed`, `app/listenerMiddleware.ts`); only local metadata is stored, never prose, nothing leaves the device.
-- [ ] DuckDB OPFS at-rest encryption (P0-4 / SEC-6) — **deferred to v2.0.** Encryption module + unit tests exist (`services/duckdb/duckdbEncryption.ts`) but stay unwired (0 callers by design): DuckDB-WASM owns the OPFS file write, so transparent file encryption is high-risk for the bounded, local-only metadata exposure.
+- [x] DuckDB analytics privacy-gated (SEC-6) — writes require `enableDuckDbAnalytics` **and** the Settings → Privacy "Analytics" opt-out (`isAnalyticsPersistenceAllowed`, `app/listenerMiddleware.ts`); only local metadata is stored, nothing leaves the device.
+- [x] DuckDB cell-level excerpt encryption (SEC-6, v1.25.0) — `codex_mentions.excerpt` (the one column holding literal manuscript prose) is AES-256-GCM encrypted into `excerpt_enc BLOB` and nulled from the plaintext column when `enableIdbAtRestEncryption` is active, with a backfill migration for pre-existing rows (`services/duckdb/codexExcerptEncryptionMigration.ts`).
+- [ ] DuckDB OPFS file-level encryption (SEC-6) — **infeasible / accepted risk, not deferred-pending-work.** DuckDB-WASM owns the OPFS file handle directly (`workers/v2/duckdb.worker.ts`), leaving no app-level interception point for transparent file encryption. Remaining plaintext metadata columns (`title`/`logline`/`name`/`character_names`/`label`) are bounded-exposure by design, not manuscript prose.
 - [x] Voice WASM download UX (P0-5) — `components/voice/VoiceModelDownloadModal.tsx`
 - [x] Claude web proxy (ADR-0016 Track B): stateless (no key/prompt/response logging), schema-validated, body-size-capped, same-origin-checked, rate-limited, timeout-bounded — `api/_shared/claudeProxyCore.ts`
 

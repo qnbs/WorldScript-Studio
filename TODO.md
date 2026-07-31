@@ -8,29 +8,18 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ---
 
-## Native Grok + Claude + Ollama-in-PWA providers (2026-07-30)
+## Release — tag/publish pending (2026-07-31)
 
-README documented Grok and Claude as working cloud AI providers; neither was reachable from
-`AiProviderCard.tsx`'s main flow. Full details + rationale in
-[ADR-0016](docs/adr/0016-native-grok-and-claude-providers.md) and
-[ADR-0017](docs/adr/0017-pwa-browser-ollama-opt-in.md); see `[Unreleased]` in
-[CHANGELOG.md](CHANGELOG.md) for the user-facing summary. Execution plan:
-[`GROK-PROVIDER-INTEGRATION-PLAN.md`](GROK-PROVIDER-INTEGRATION-PLAN.md).
+Native Grok/Claude providers, opt-in Browser-Ollama, and DuckDB `codex_mentions.excerpt`
+cell-level encryption (SEC-6) all shipped in this cycle — see
+[`docs/history/completed-v1.25.0-providers.md`](docs/history/completed-v1.25.0-providers.md) for
+the full completed checklist. `CHANGELOG.md`, `package.json`/`README.md`, and `src-tauri`/`public/sw.js`
+are all version-bumped and synced for this release.
 
-- ✅ **Phase 1 — Grok**: wired into the primary provider dropdown + `providerFactory.ts`; the
-  backend (`streamGrok()`) already worked, this was purely a UI/wiring gap.
-- ✅ **Phase 2 Track A — Claude on desktop**: `streamAnthropic()` now branches on
-  `isTauriRuntime()` before throwing; desktop calls Anthropic directly via the native-HTTP pattern
-  ADR-0012 established for Ollama.
-- ✅ **Phase 2 Track B — Claude on web/PWA**: new stateless serverless proxy
-  (`api/claude-proxy.ts` + `functions/api/claude-proxy.ts`, Vercel + Cloudflare Pages) — this app's
-  first backend dependency. Mandatory abuse controls (schema validation, body-size cap, origin
-  check, rate limit, timeouts), never logs secrets. GitHub Pages shows an honest unavailable state.
-- ✅ **Addendum — Ollama-in-PWA opt-in (Issue #266 follow-up)**: `enableBrowserOllama` flag
-  (default off) lets the browser attempt a direct Ollama connection when the user has separately
-  configured their own server's `OLLAMA_ORIGINS`; not a proxy, not a bypass, not the default.
-- ⬜ Open WS-11's PR, run the CodeRabbit correction loop to quiescence, merge to `main`.
-- ⬜ Comprehensive tag/release afterward, folding in everything from `[Unreleased]`.
+- ⬜ Tag and publish this release once CI is fully green on the release branch/PR — see the exact
+  hand-off commands in the archived provider workstream doc linked above. Not auto-executed;
+  requires explicit go-ahead per operational-safety rules on pushing/tagging.
+
 
 ---
 
@@ -287,7 +276,7 @@ README documented Grok and Claude as working cloud AI providers; neither was rea
 - 🔄 **C-7 remainder** — Coverage → L85%/B75%/F80%; Stryker break 75→80 (current thresholds: L73/F65/B58). **Phase 3 started (2026-06-02):** +33 LoRA tests (useLoraView, training wizard, sub-panels — were 0%)
 - ✅ IDB at-rest encryption UX (2026-06-02 reconciliation) — `IdbUnlockModal` (startup unlock + 2-step forgot-passphrase escape hatch, `App.tsx:182-188,638-643`), `PassphraseModal` (set/change/disable), real read/write gating `idbProjectStore.ts:209-265`, session lock + key rotation (Phase 1). `enableIdbAtRestEncryption` flag in Settings › Privacy with ⚠ warning
 - ✅ **P0-2** — Plugin worker isolation (`workers/plugin.worker.ts`) — routes plugin execution to isolated worker context with timeout and sandboxed API
-- 🟡 **P0-4** — DuckDB OPFS encryption (`services/duckdb/duckdbEncryption.ts`) — encryption module + unit tests landed (passphrase-derived AES-256-GCM), **but not yet wired into the DuckDB persistence path** (0 production callers as of v1.23.1), so analytics are not encrypted at rest. Integration into `duckdbClient`/`duckdbWorker` remains open. (2026-06-17 reconciliation — was over-marked ✅; see `.github/SECURITY.md` SEC-6.)
+- 🟡 **P0-4** — DuckDB OPFS at-rest encryption (`services/duckdb/duckdbEncryption.ts`) — cell-level encryption is now wired for the one column holding literal manuscript prose, `codex_mentions.excerpt` (v1.25.0): `duckdbCodexWrite()` encrypts it into `excerpt_enc BLOB` when `enableIdbAtRestEncryption` is active, with `services/duckdb/codexExcerptEncryptionMigration.ts` backfilling pre-existing plaintext rows. Full OPFS **file-level** encryption remains infeasible (DuckDB-WASM owns the OPFS file handle directly) and is an accepted, permanent limitation, not a remaining task — see `.github/SECURITY.md` SEC-6.
 - ✅ **P0-5** — Voice WASM model download UI (`components/voice/VoiceModelDownloadModal.tsx`) — progress modal for Whisper/Kokoro model downloads with cancel/retry
 - 🔄 Whisper WASM STT model download + inference pipeline (B-2 continuation) — engine (`services/voice/wasmSttEngine.ts`) + download UI (P0-5 above) shipped; remaining scope narrowed to E2E integration test coverage only — stale ⬜ reconciled 2026-07-30.
 - 🔄 Kokoro/Piper TTS WASM engines — Kokoro DONE (`services/voice/kokoroTtsEngine.ts`, tested since 2026-05-31); Piper remains an unimplemented type-level placeholder only (`preferredTtsEngine: 'piper'` in `voiceCommandService.ts` has no backing engine file) — stale ⬜ reconciled 2026-07-30.

@@ -8,12 +8,13 @@ import {
   DUCK_DB_SCHEMA_VERSION,
   DUCKDB_DDL,
   DUCKDB_MIGRATION_V2_DDL,
+  DUCKDB_MIGRATION_V3_DDL,
   RAG_EMBEDDING_DIM,
 } from '../../../services/duckdb/duckdbSchema';
 
 describe('duckdbSchema constants', () => {
-  it('DUCK_DB_SCHEMA_VERSION is 2', () => {
-    expect(DUCK_DB_SCHEMA_VERSION).toBe(2);
+  it('DUCK_DB_SCHEMA_VERSION is 3', () => {
+    expect(DUCK_DB_SCHEMA_VERSION).toBe(3);
   });
 
   it('RAG_EMBEDDING_DIM is 384', () => {
@@ -42,6 +43,11 @@ describe('DUCKDB_DDL', () => {
     expect(DUCKDB_DDL).toContain('writing_sessions');
   });
 
+  it('contains codex_mentions.excerpt_enc column', () => {
+    expect(DUCKDB_DDL).toContain('codex_mentions');
+    expect(DUCKDB_DDL).toContain('excerpt_enc');
+  });
+
   it('is a non-empty string', () => {
     expect(DUCKDB_DDL.trim().length).toBeGreaterThan(100);
   });
@@ -52,5 +58,13 @@ describe('DUCKDB_MIGRATION_V2_DDL', () => {
     expect(DUCKDB_MIGRATION_V2_DDL).toContain('rag_chunks');
     expect(DUCKDB_MIGRATION_V2_DDL).toContain('embedding');
     expect(DUCKDB_MIGRATION_V2_DDL).toContain('FLOAT[]');
+  });
+});
+
+describe('DUCKDB_MIGRATION_V3_DDL', () => {
+  it('alters codex_mentions to add excerpt_enc BLOB column', () => {
+    expect(DUCKDB_MIGRATION_V3_DDL).toContain('codex_mentions');
+    expect(DUCKDB_MIGRATION_V3_DDL).toContain('excerpt_enc');
+    expect(DUCKDB_MIGRATION_V3_DDL).toContain('BLOB');
   });
 });

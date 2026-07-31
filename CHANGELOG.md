@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.25.0] — 2026-07-31
+
 ### Added
 
 - **Grok (xAI) wired into the primary provider dropdown** — the backend (`streamGrok()`, BYOK key
@@ -34,8 +36,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   UI renders the exact `OLLAMA_ORIGINS=<origin> ollama serve` command for the current deployment.
   See [ADR-0017](docs/adr/0017-pwa-browser-ollama-opt-in.md) (Issue #266 follow-up).
 
+### Security
+
+- **DuckDB `codex_mentions.excerpt` — the one analytics column holding literal manuscript prose —
+  is now cell-level encrypted (SEC-6)** when `enableIdbAtRestEncryption` is active.
+  `duckdbCodexWrite()` (`services/duckdb/duckdbAnalytics.ts`) encrypts new excerpts via
+  `services/duckdb/duckdbEncryption.ts` (AES-256-GCM, reusing the IDB at-rest encryption key) into
+  a new `excerpt_enc BLOB` column and nulls the plaintext `excerpt` column; a new backfill
+  migration (`services/duckdb/codexExcerptEncryptionMigration.ts`) re-encrypts any pre-existing
+  plaintext rows once encryption is unlocked, without blocking the schema's other migrations when
+  encryption isn't active this session. Full OPFS **file-level** encryption remains infeasible —
+  DuckDB-WASM owns the OPFS file handle directly, leaving no app-level interception point — so the
+  other DuckDB metadata columns (`title`/`logline`/`name`/`character_names`/`label`) stay
+  intentionally plaintext by design, not manuscript prose.
+- **SEC-6 backfill migration marker was a single global key, not scoped per project** —
+  once *any* project completed the excerpt-encryption backfill, every other project's
+  plaintext `codex_mentions.excerpt` rows were silently never migrated.
+  `isCodexExcerptEncryptionMigrationDone()` now takes a `projectId` and scopes the `_meta`
+  done-marker key per project. Also fixed `duckdbCodexWrite()`'s `ON CONFLICT` clause for
+  `codex_mentions` so an unencrypted write (a session where IDB encryption isn't unlocked yet)
+  can no longer clobber an existing ciphertext row back to plaintext — it now preserves any
+  prior `excerpt_enc` via `COALESCE`/`CASE` instead of overwriting it. Added a two-project
+  regression test proving the marker-scoping fix and a test asserting the `ON CONFLICT` clause
+  never downgrades ciphertext. (CodeRabbit + Copilot review, PR #303)
+- **A failed per-row `UPDATE` during the SEC-6 excerpt-encryption backfill could still let the
+  migration write its done-marker** — the row's plaintext `excerpt` would then never be retried
+  or encrypted on any future run. `runCodexExcerptEncryptionMigration()` now tracks row-level
+  failures (a failed `UPDATE`, or `encryptDuckDbData()` throwing) and skips the done-marker,
+  returning `{ aborted: true }` so the still-plaintext rows are retried next run instead of being
+  silently left unencrypted forever. (CodeRabbit outside-diff-range finding, PR #303)
+
 ### Fixed
 
+- **`event-listener` (Rust, transitive via Tauri) bumped 5.4.1 → 5.4.2** — the OSV/RUSTSEC scan
+  flagged 5.4.1 as vulnerable (RUSTSEC-2026-0221), fixed upstream in 5.4.2; `Cargo.lock` only,
+  no other dependency churn.
 - **Doc-drift gate (`scripts/check-doc-metrics.mjs`) had a blind spot for still-open checklist
   bullets inside dated/historical sections**: `stripHistoricalSections()` blanked every line in a
   historical section indiscriminately, including a genuinely still-open `- ⬜` bullet — exactly how
@@ -58,6 +93,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mergeable-state cache-lag symptom, plus documents the stacked-PR auto-close-on-squash-merge
   side effect and its recovery steps; and strengthens the CodeAnt Correction Loop policy to
   explicitly cover CodeRabbit's collapsed nitpick and outside-diff-range comment sections. (#294)
+- **`.github/SECURITY.md` / `docs/SECURITY-THREAT-MODEL.md` SEC-6 status corrected** to reflect the
+  DuckDB excerpt-encryption wiring above, and the Claude serverless proxy section gains an explicit
+  monitoring recommendation (platform-native Vercel/Cloudflare request analytics — no in-app
+  logging, which would violate the proxy's zero-console-call stateless guarantee).
+- **`GROK-PROVIDER-INTEGRATION-PLAN.md`** status header updated from "Plan only — do not implement
+  yet" to reflect that all phases shipped; retained as the historical design record.
+- **`TODO.md`** reworded the open tag/publish bullet so it no longer embeds the literal `v1.25.0`
+  version string on the `- ⬜` bullet line itself, removing the risk that
+  `scripts/check-doc-metrics.mjs`'s `scanForDrift()` would flag it as stale drift once the
+  `v1.25.0` tag is actually pushed (verified via a `scanForDrift()` simulation with
+  `latestVersion: '1.25.0'` — zero findings).
+- **`docs/SECURITY-THREAT-MODEL.md`** now names the specific platform observability products
+  (Vercel Function Logs / Vercel Observability; Cloudflare Workers Metrics/Analytics and Workers
+  Logs) instead of a vague "platform-native analytics" reference, and notes that Cloudflare
+  Workers Logs is opt-in and must be enabled via the Wrangler `observability` config.
+
+### Tests
+
+- **Closed 3 Codecov patch-coverage gaps found on PR #303**: the DuckDB analytics migration
+  listener in `app/listenerMiddleware.ts` was never exercised by any test at all (stale mocks —
+  `loadDuckdbMigration`'s mock returned `runIfNeeded`, but the real listener calls
+  `runMigrationWithRollback`; `loadRagVectorMigration`'s mock resolved `undefined` where the
+  listener reads `.aborted`) — fixed the mocks and added 2 tests covering both branches of the
+  `codexEncResult.aborted` gate. Added 5 tests for `codexExcerptEncryptionMigration.ts` (a
+  post-loop privacy-gate abort distinct from the existing mid-loop-abort case, a failed row
+  `UPDATE` that now aborts without writing the done-marker, a row-encryption throw that aborts
+  the same way, and the `migrated % 10 === 0` yield-point). Added a test for `useDuckDb.ts`'s new
+  v3 migration DDL failure branch.
 
 ## [1.24.3] — 2026-07-30
 
