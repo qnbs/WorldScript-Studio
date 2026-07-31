@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { listenerMiddleware } from '../../app/listenerMiddleware';
 import type { RootState } from '../../app/store';
 import { useTransientUiStore } from '../../app/transientUiStore';
+import analyticsReducer, { analyticsActions } from '../../features/analytics/analyticsSlice';
 // QNBS-v3: featureFlagsActions dispatches setEnableLocalFirstSync to exercise the local-first listener below
 import featureFlagsReducer, {
   featureFlagsActions,
@@ -26,6 +27,9 @@ const mockLoggerError = vi.fn();
 const mockLoggerWarn = vi.fn();
 const mockSaveEnvelope = vi.fn((data: unknown) => data);
 const mockRebuildHybridRagIndex = vi.fn().mockResolvedValue(undefined);
+const mockRunCodexExcerptEncryptionMigration = vi
+  .fn()
+  .mockResolvedValue({ migrated: 0, aborted: false });
 
 vi.mock('../../services/storageService', () => ({
   storageService: {
@@ -101,16 +105,18 @@ vi.mock('../../services/duckdb/duckdbListenerLoader', () => ({
     }),
   ),
   loadDuckdbMigration: vi.fn(() =>
-    Promise.resolve({ runIfNeeded: vi.fn().mockResolvedValue(undefined) }),
+    Promise.resolve({
+      runIfNeeded: vi.fn().mockResolvedValue(undefined),
+      // QNBS-v3: listenerMiddleware calls runMigrationWithRollback (not runIfNeeded) — see duckdbMigration.ts
+      runMigrationWithRollback: vi.fn().mockResolvedValue({ aborted: false }),
+    }),
   ),
   loadRagVectorMigration: vi.fn(() =>
-    Promise.resolve({ runRagVectorMigration: vi.fn().mockResolvedValue(undefined) }),
+    Promise.resolve({ runRagVectorMigration: vi.fn().mockResolvedValue({ aborted: false }) }),
   ),
   loadCodexExcerptEncryptionMigration: vi.fn(() =>
     Promise.resolve({
-      runCodexExcerptEncryptionMigration: vi
-        .fn()
-        .mockResolvedValue({ migrated: 0, aborted: false }),
+      runCodexExcerptEncryptionMigration: mockRunCodexExcerptEncryptionMigration,
     }),
   ),
 }));
@@ -135,6 +141,7 @@ function makeFullStore() {
       status: statusReducer,
       versionControl: versionControlReducer,
       featureFlags: featureFlagsReducer,
+      analytics: analyticsReducer,
     },
     middleware: (getDefault) => getDefault().prepend(listenerMiddleware.middleware),
   });
@@ -345,6 +352,37 @@ describe('auto-save settings listener', () => {
     expect(store.getState().settings.theme).not.toBe(prevTheme);
     // Advance timers — should not throw
     await vi.advanceTimersByTimeAsync(1500);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DuckDB analytics migration chain (seed + RAG + codex excerpt encryption, SEC-6)
+// ---------------------------------------------------------------------------
+describe('DuckDB analytics migration listener', () => {
+  it('runs the codex excerpt encryption migration and marks status done when nothing aborts', async () => {
+    const store = makeFullStore();
+    store.dispatch(analyticsActions.setDuckDbStatus('ready'));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(mockRunCodexExcerptEncryptionMigration).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Function),
+    );
+    expect(store.getState().analytics.migrationStatus).toBe('done');
+  });
+
+  it('resets migrationStatus to idle (not done) when the codex excerpt migration aborts', async () => {
+    const { loadCodexExcerptEncryptionMigration } = await import(
+      '../../services/duckdb/duckdbListenerLoader'
+    );
+    vi.mocked(loadCodexExcerptEncryptionMigration).mockResolvedValueOnce({
+      runCodexExcerptEncryptionMigration: vi.fn().mockResolvedValue({ migrated: 0, aborted: true }),
+    });
+    const store = makeFullStore();
+    store.dispatch(analyticsActions.setDuckDbStatus('ready'));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(store.getState().analytics.migrationStatus).toBe('idle');
   });
 });
 

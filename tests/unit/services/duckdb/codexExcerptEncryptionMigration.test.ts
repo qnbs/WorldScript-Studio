@@ -201,4 +201,71 @@ describe('runCodexExcerptEncryptionMigration', () => {
       ),
     ).toBe(false);
   });
+
+  it('aborts without writing the done-marker when the privacy gate flips off after the loop fully completes', async () => {
+    await initIdbEncryption('test-pass');
+    // QNBS-v3: SEC — gate is consulted before the loop, once per row, and once more after the loop
+    // finishes but before the marker INSERT. Returning true for the first two calls (pre-loop + the
+    // single row) and false on the third exercises that final post-loop check specifically.
+    let calls = 0;
+    const gate = () => {
+      calls++;
+      return calls <= 2;
+    };
+    mockQuery.mockResolvedValueOnce({ messageId: 'm1', ok: true, rows: [] }).mockResolvedValueOnce({
+      messageId: 'm2',
+      ok: true,
+      rows: [{ entity_id: 'e1', project_id: 'proj-1', section_id: 's1', excerpt: 'a' }],
+    });
+
+    const result = await runCodexExcerptEncryptionMigration('proj-1', gate);
+
+    expect(result).toEqual({ migrated: 1, aborted: true });
+    expect(
+      mockExec.mock.calls.some(([execSql]) =>
+        String(execSql).includes('codex_excerpt_encryption_v1_migrated'),
+      ),
+    ).toBe(false);
+  });
+
+  it('does not increment migrated when the row UPDATE fails, but still completes the run', async () => {
+    await initIdbEncryption('test-pass');
+    mockQuery.mockResolvedValueOnce({ messageId: 'm1', ok: true, rows: [] }).mockResolvedValueOnce({
+      messageId: 'm2',
+      ok: true,
+      rows: [{ entity_id: 'e1', project_id: 'proj-1', section_id: 's1', excerpt: 'a' }],
+    });
+    // First exec call is the row UPDATE — fail it; the later marker INSERT uses the default { ok: true }.
+    mockExec.mockResolvedValueOnce({ messageId: 'u1', ok: false, error: 'update failed' });
+
+    const result = await runCodexExcerptEncryptionMigration('proj-1');
+
+    expect(result).toEqual({ migrated: 0, aborted: false });
+    const markerCall = mockExec.mock.calls.find(([execSql]) =>
+      String(execSql).includes('codex_excerpt_encryption_v1_migrated'),
+    );
+    expect(markerCall).toBeDefined();
+  });
+
+  it('yields via Promise.resolve() every 10 successful migrations without dropping any rows', async () => {
+    await initIdbEncryption('test-pass');
+    const rowCount = 12;
+    const rows = Array.from({ length: rowCount }, (_, i) => ({
+      entity_id: `e${i}`,
+      project_id: 'proj-1',
+      section_id: 's1',
+      excerpt: `prose ${i}`,
+    }));
+    mockQuery
+      .mockResolvedValueOnce({ messageId: 'm1', ok: true, rows: [] })
+      .mockResolvedValueOnce({ messageId: 'm2', ok: true, rows });
+
+    const result = await runCodexExcerptEncryptionMigration('proj-1');
+
+    expect(result).toEqual({ migrated: rowCount, aborted: false });
+    const updateCalls = mockExec.mock.calls.filter(([sql]) =>
+      String(sql).includes('UPDATE codex_mentions'),
+    );
+    expect(updateCalls).toHaveLength(rowCount);
+  });
 });
