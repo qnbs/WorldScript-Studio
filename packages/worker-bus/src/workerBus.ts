@@ -7,6 +7,7 @@ import { CircuitBreaker } from './circuitBreaker';
 import { DeadLetterQueue } from './deadLetterQueue';
 import { createCancelMessage, createTaskMessage, validateWorkerMessage } from './messageBus';
 import { ProgressEmitter } from './progressEmitter';
+import type { WorkerMessage } from './schemas';
 import { PriorityTaskQueue } from './taskQueue';
 import type {
   BusEvent,
@@ -318,6 +319,29 @@ export class WorkerBus {
           });
         }
 
+        // QNBS-v3: split out of handler() to keep its cyclomatic complexity down — this is
+        //          the only branch with an inner conditional (the error ternary).
+        function settleWithResult(msg: Extract<WorkerMessage, { kind: 'RESULT' }>) {
+          settle();
+          resolve({
+            taskId: task.taskId,
+            success: msg.success,
+            result: msg.result as TResult,
+            error: msg.error
+              ? {
+                  code: msg.error.code,
+                  message: msg.error.message,
+                  recoverable: true,
+                  retryCount: 0,
+                }
+              : undefined,
+            latencyMs: Math.round(performance.now() - startedAt),
+            queueTimeMs,
+            workerId: worker.workerId,
+            layer: 'web',
+          });
+        }
+
         function handler(event: MessageEvent) {
           if (settled) return;
           const msg = validateWorkerMessage(event.data);
@@ -337,25 +361,7 @@ export class WorkerBus {
               timestamp: Date.now(),
             });
           } else if (msg.kind === 'RESULT') {
-            settle();
-            const latencyMs = Math.round(performance.now() - startedAt);
-            resolve({
-              taskId: task.taskId,
-              success: msg.success,
-              result: msg.result as TResult,
-              error: msg.error
-                ? {
-                    code: msg.error.code,
-                    message: msg.error.message,
-                    recoverable: true,
-                    retryCount: 0,
-                  }
-                : undefined,
-              latencyMs,
-              queueTimeMs,
-              workerId: worker.workerId,
-              layer: 'web',
-            });
+            settleWithResult(msg);
           }
         }
         port.addEventListener('message', handler);
