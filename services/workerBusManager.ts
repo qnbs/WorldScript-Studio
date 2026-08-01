@@ -72,9 +72,7 @@ async function inferencePoolOptions() {
   const { MAX_WORKERS_INFERENCE, MIN_WORKERS, WORKER_IDLE_TIMEOUT_MS } = await import(
     '@domain/worker-bus'
   );
-  // QNBS-v3: [P1 — scale inference worker count to the device's memory tier instead of a fixed
-  //          cap. Each replica loads its own transformers.js pipeline (no cross-replica cache
-  //          sharing), so more replicas only help on devices with RAM headroom to spare.]
+  // QNBS-v3: scale worker count to memory tier — each replica loads its own pipeline, no shared cache.
   const maxWorkers = Math.min(await resolveInferenceMaxWorkers(), MAX_WORKERS_INFERENCE);
   return {
     maxWorkers,
@@ -86,11 +84,7 @@ async function inferencePoolOptions() {
   };
 }
 
-/**
- * QNBS-v3: memory-tier-driven worker count — high:3, medium:2 (previous hardcoded default),
- * low:1. Falls back to the previous default (2) if device profiling throws (e.g. non-browser
- * test environment) so this can never block or fail pool initialization.
- */
+// QNBS-v3: high:3, medium:2 (prior default), low:1; falls back to 2 if profiling throws so init never blocks.
 async function resolveInferenceMaxWorkers(): Promise<number> {
   try {
     const { detectMemoryTier } = await import('./ai/localAiDeviceProfiler');

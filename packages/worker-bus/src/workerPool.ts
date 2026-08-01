@@ -90,6 +90,7 @@ export class WorkerPool {
   terminateWorker(workerId: string): void {
     const entry = this.entries.find((e) => e.instance.workerId === workerId);
     if (!entry) return;
+    log.warn(`Worker ${workerId} force-terminated after exceeding its task timeout`);
     this.setCrashed(workerId);
     this.restartWorker(entry);
   }
@@ -125,6 +126,8 @@ export class WorkerPool {
       port: channel.port1,
     };
 
+    // QNBS-v3: addEventListener (unlike onmessage) never dispatches until start() is called.
+    channel.port1.start();
     // QNBS-v3: Transfer port2 to worker for dedicated bidirectional channel
     worker.postMessage({ kind: 'INIT_PORT', port: channel.port2 }, [channel.port2]);
 

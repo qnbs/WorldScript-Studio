@@ -297,11 +297,7 @@ describe('workerBusManager', () => {
   });
 
   describe('inference pool sizing by memory tier', () => {
-    // QNBS-v3: [P1 — inference pool maxWorkers is now derived from
-    //          localAiDeviceProfiler.detectMemoryTier() instead of a hardcoded 2. Verified via
-    //          the same re-registration path as the "memory-safety cap" test above, since
-    //          initWorkerBus() only calls registry.register() (mocked, no-op) — bus.registerPool()
-    //          with the real computed options is only exercised by ensureInferencePool().]
+    // QNBS-v3: verified via ensureInferencePool()'s re-registration path — initWorkerBus() only calls the mocked registry.register(), not bus.registerPool().
     afterEach(() => {
       vi.doUnmock('../../services/ai/localAiDeviceProfiler');
     });

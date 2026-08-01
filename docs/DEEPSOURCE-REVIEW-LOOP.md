@@ -270,6 +270,21 @@ GitHub App resumes auto-reviewing, run **both** loops: CodeAnt for narrative/AI 
   new service/hook needs its branches tested or patch coverage dips below the ~72% target and the
   `codecov/patch` check fails. #236's hook+panel needed a dedicated hook test (offline/error/disabled/
   stale-apply/dictionary/clear branches) to clear it — same posture as #232's binderDepth test.
+- **2026-08-01** — On PR #305, `DeepSource: JavaScript` surfaced **JS-0067** ("unexpected function
+  declaration in the global scope") on top-level `function`/`async function` declarations in
+  `services/ai/localAiDeviceProfiler.ts` and `services/workerBusManager.ts` — a pattern used
+  throughout this repo's ES modules (every service file declares top-level functions; this is
+  idiomatic, Biome-approved module code, not `<script>`-tag global-scope pollution). Confirmed via
+  `gh api .../branches/main/protection`: only the `CI Success` aggregator is a **required** status
+  check — `DeepSource: JavaScript` is informational-only and does not block merge. Per §4a.3, do not
+  scatter `# skipcq: JS-0067` across dozens of pre-existing functions repo-wide to chase this; the
+  correct fix is a **dashboard rule-level ignore** for JS-0067 (maintainer action, not toml-expressible
+  — DeepSource rule toggles live under Settings → Issue Types on app.deepsource.com, not
+  `.deepsource.toml`). Real, valuable findings from the same wave (real bugs, not style noise) were
+  fixed instead: a stale-`MessagePort`-reuse bug (late PROGRESS/RESULT from a cancelled task could
+  reset/resolve a new task sharing the same released port — fixed by filtering on `msg.taskId` in
+  `workerBus.ts`), and a missing `port.start()` call in `workerPool.ts::spawnWorker()` (an
+  `addEventListener`-based `MessagePort` never dispatches without it per the WHATWG spec).
 
 ---
 

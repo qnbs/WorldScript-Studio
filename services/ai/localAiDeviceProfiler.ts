@@ -172,9 +172,7 @@ function detectDirectML(
 // Memory Tier
 // ---------------------------------------------------------------------------
 
-// QNBS-v3: exported (previously module-private) so callers that only need a fast, synchronous
-//          memory-tier read — e.g. workerBusManager sizing the inference pool at init — don't
-//          have to pay for the full async generateDeviceProfile() (WebGPU/WebNN/battery probes).
+// QNBS-v3: exported (was private) so callers needing a fast sync memory-tier read (pool sizing) skip the async generateDeviceProfile() probes.
 export function detectMemoryTier(): DeviceCapabilityProfile['memoryTier'] {
   const deviceMemory =
     typeof navigator !== 'undefined' && 'deviceMemory' in navigator

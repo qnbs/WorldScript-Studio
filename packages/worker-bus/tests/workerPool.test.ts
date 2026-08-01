@@ -228,6 +228,7 @@ describe('WorkerPool', () => {
   });
 
   it('terminateWorker is a no-op for an unknown workerId', async () => {
+    // QNBS-v3: guards against a race where the caller holds a stale workerId (already replaced by a prior restart).
     const pool = new WorkerPool('test-pool', ['inference.text'], {
       maxWorkers: 1,
       minWorkers: 1,

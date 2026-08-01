@@ -305,7 +305,7 @@ export class WorkerBus {
             success: false,
             error: {
               code: 'TIMEOUT',
-              message: `Task exceeded its ${task.timeoutMs}ms deadline with no response from the worker`,
+              message: `No response from the worker for ${task.timeoutMs}ms (inactivity watchdog, not a fixed deadline)`,
               recoverable: true,
               retryCount: 0,
             },
@@ -320,6 +320,9 @@ export class WorkerBus {
           if (settled) return;
           const msg = validateWorkerMessage(event.data);
           if (!msg) return;
+          // QNBS-v3: a released+reused port can still deliver a stale PROGRESS/RESULT from a
+          //          cancelled prior task — ignore anything not addressed to this task.
+          if (msg.taskId !== task.taskId) return;
 
           if (msg.kind === 'PROGRESS') {
             armTimeout();
