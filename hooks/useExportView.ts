@@ -12,10 +12,9 @@ type Format = 'md' | 'txt' | 'pdf' | 'docx' | 'epub' | 'norm-txt';
 // QNBS-v3: gate the Book Preview → Export hand-off so only valid formats can preselect the dropdown.
 const VALID_FORMATS: readonly Format[] = ['md', 'txt', 'pdf', 'docx', 'epub', 'norm-txt'];
 
-// QNBS-v3: extracted from handleDownload to keep its cyclomatic complexity down — handles the
-// non-pdf/docx/epub branches (norm-txt, md, plain txt), which don't need per-branch failure tracking.
+// QNBS-v3: extracted from handleDownload to shrink its cyclomatic complexity — non-pdf/docx/epub branches don't need per-branch failure tracking.
 async function downloadPlainTextFormat(
-  format: Exclude<Format, 'pdf' | 'docx' | 'epub'>,
+  format: Format,
   project: Pick<ProjectData, 'title' | 'manuscript'>,
   formattedOutput: string,
 ): Promise<void> {
@@ -29,10 +28,10 @@ async function downloadPlainTextFormat(
     );
     const blob = new Blob([textOutput], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${project.title}-norm.txt`;
-    a.click();
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${project.title}-norm.txt`;
+    anchor.click();
     URL.revokeObjectURL(url);
     return;
   }
@@ -43,10 +42,10 @@ async function downloadPlainTextFormat(
   }
   const blob = new Blob([textOutput], { type: 'text/plain' });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${project.title}.${extension}`;
-  a.click();
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `${project.title}.${extension}`;
+  anchor.click();
   URL.revokeObjectURL(url);
 }
 // QNBS-v3 (CodeAnt): runtime type guard instead of an `as Format` assertion on store-supplied input.
@@ -391,16 +390,17 @@ export const useExportView = () => {
 
   const handleDownload = useCallback(async () => {
     try {
-      let exportSucceeded = true;
-      if (format === 'pdf') {
-        exportSucceeded = await downloadPdf();
-      } else if (format === 'docx') {
-        exportSucceeded = await downloadDocx();
-      } else if (format === 'epub') {
-        exportSucceeded = await downloadEpub();
-      } else {
-        await downloadPlainTextFormat(format, project, formattedOutput);
-      }
+      // QNBS-v3: lookup table (not an if/else-if chain) keeps this callback's cyclomatic complexity low.
+      const formatDownloaders: Partial<Record<Format, () => Promise<boolean>>> = {
+        pdf: downloadPdf,
+        docx: downloadDocx,
+        epub: downloadEpub,
+      };
+      const downloader = formatDownloaders[format];
+      const exportSucceeded = downloader
+        ? await downloader()
+        : await downloadPlainTextFormat(format, project, formattedOutput).then(() => true);
+      // QNBS-v3: send a native completion notification only after a successful user-requested export.
       if (exportSucceeded && desktopNotificationsEnabled) {
         void sendDesktopNotification(
           t('export.notify.completeTitle'),

@@ -15,7 +15,10 @@ export function useTauriUpdater(options?: { autoCheck?: boolean }) {
   const { t } = useTranslation();
   // QNBS-v3: read via a ref so translation-bundle reloads don't change checkForUpdate's identity and retrigger the autoCheck mount effect.
   const tRef = useRef(t);
-  tRef.current = t;
+  // QNBS-v3: sync in an effect, not during render, so a discarded render can't leak a stale translator into the ref.
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
   // QNBS-v3 (T3): gate the "update ready" native notification behind the opt-in desktop setting.
   const desktopNotificationsEnabled = useAppSelector(
     (state) => state.settings.desktop?.desktopNotifications ?? false,
@@ -43,6 +46,7 @@ export function useTauriUpdater(options?: { autoCheck?: boolean }) {
           available: true,
         });
         if (desktopNotificationsEnabled && lastNotifiedVersionRef.current !== result.version) {
+          // QNBS-v3: gate and deduplicate localized update-ready notifications.
           await sendDesktopNotification(
             tRef.current('desktop.notify.updateReadyTitle'),
             tRef.current('desktop.notify.updateReadyBody', { version: result.version }),
@@ -58,6 +62,7 @@ export function useTauriUpdater(options?: { autoCheck?: boolean }) {
     } finally {
       setChecking(false);
     }
+    // QNBS-v3: re-check notification-dedup state when the notification preference changes.
   }, [desktopNotificationsEnabled]);
 
   const installUpdate = useCallback(async () => {

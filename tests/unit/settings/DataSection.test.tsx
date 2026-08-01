@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DataSection } from '../../../components/settings/DataSection';
 
@@ -60,15 +61,13 @@ const baseContextValue = {
   currentWordCount: 0,
 };
 
-// QNBS-v3 (T3): declared outside the vi.mock factory so tests can call `.mockReturnValue(...)` on
-// it directly without importing (and type-checking against) the real hook's full return type.
+// QNBS-v3 (T3): declared outside the vi.mock factory so tests can call `.mockReturnValue(...)` without importing the real hook's return type.
 const mockUseSettingsViewContext = vi.fn(() => baseContextValue);
 vi.mock('../../../contexts/SettingsViewContext', () => ({
   useSettingsViewContext: () => mockUseSettingsViewContext(),
 }));
 
-// QNBS-v3 (T3): the encrypted library export's desktop-notification branch dynamically imports
-// this service — mock it so tests can control success/failure without touching a real OS API.
+// QNBS-v3 (T3): the encrypted library export's notification branch dynamically imports this service — mock it for deterministic tests.
 const mockSendDesktopNotification = vi.fn().mockResolvedValue(true);
 vi.mock('../../../services/desktop/desktopNotifications', () => ({
   sendDesktopNotification: (...args: unknown[]) => mockSendDesktopNotification(...args),
@@ -175,11 +174,13 @@ describe('DataSection encrypted library export desktop notification', () => {
       },
     });
     render(<DataSection />);
-    fireEvent.click(screen.getByText('settings.data.libraryExport.button'));
-    fireEvent.change(screen.getByLabelText('settings.data.libraryExport.passphraseLabel'), {
-      target: { value: 'correct horse battery staple' },
-    });
-    fireEvent.click(screen.getByText('settings.data.libraryExport.confirm'));
+    const user = userEvent.setup();
+    await user.click(screen.getByText('settings.data.libraryExport.button'));
+    await user.type(
+      screen.getByLabelText('settings.data.libraryExport.passphraseLabel'),
+      'correct horse battery staple',
+    );
+    await user.click(screen.getByText('settings.data.libraryExport.confirm'));
     await waitFor(() =>
       expect(screen.queryByText('settings.data.libraryExport.confirm')).toBeNull(),
     );
