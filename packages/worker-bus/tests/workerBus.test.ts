@@ -934,6 +934,39 @@ describe('WorkerBus', () => {
     }
   });
 
+  it('settles an active timeout when worker replacement throws', async () => {
+    vi.useFakeTimers();
+    try {
+      allowDispatch();
+      const pool = (bus as unknown as { pools: Map<string, WorkerPool> }).pools.get('fake')!;
+      vi.spyOn(pool, 'terminateWorker').mockImplementation(() => {
+        throw new Error('replacement construction failed');
+      });
+      (bus as unknown as { runTask: () => Promise<TaskResult> }).runTask = vi
+        .fn()
+        .mockImplementation(() => new Promise<TaskResult>(() => {}));
+
+      const handle = bus.enqueue(
+        'test.task',
+        {},
+        {
+          timeoutMs: 25,
+          retryPolicy: { maxRetries: 0 },
+        },
+      );
+      const assertion = expect(handle.result).rejects.toThrow(
+        /no response from the worker for 25ms/i,
+      );
+      await vi.advanceTimersByTimeAsync(25);
+
+      await assertion;
+      expect(bus.getTelemetry().failedTasks).toBe(1);
+      expect(bus.getTelemetry().deadLetterCount).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('retries an active inactivity timeout with a fresh attempt token', async () => {
     vi.useFakeTimers();
     try {

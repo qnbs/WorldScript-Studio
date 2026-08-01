@@ -608,7 +608,12 @@ export class WorkerBus {
     if (!active) return;
     active.timedOut = true;
     active.token.cancel('Task inactivity timeout');
-    active.pool.terminateWorker(active.worker.workerId);
+    try {
+      active.pool.terminateWorker(active.worker.workerId);
+    } catch (error) {
+      // QNBS-v3: replacement failure must not bypass timeout settlement on constrained devices.
+      log.warn('Failed to replace a timed-out worker', this.asError(error).message);
+    }
   }
 
   private timeoutResult(pending: PendingTask, active: ActiveAttempt | undefined): TaskResult {
