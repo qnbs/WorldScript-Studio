@@ -446,11 +446,11 @@ export class WorkerBus {
     );
     return new Promise((resolve) => {
       let settled = false;
+      const removeListeners: Array<() => void> = [];
 
       function cleanup(): void {
         settled = true;
-        port.removeEventListener('message', handler);
-        token.signal.removeEventListener('abort', handleAbort);
+        for (const removeListener of removeListeners) removeListener();
       }
 
       function finish(result: TaskResult<TResult>): void {
@@ -496,6 +496,10 @@ export class WorkerBus {
           finish(bus.workerMessageToResult<TResult>(task, worker, message, startedAt, queueTimeMs));
         }
       }
+      removeListeners.push(
+        () => port.removeEventListener('message', handler),
+        () => token.signal.removeEventListener('abort', handleAbort),
+      );
       port.addEventListener('message', handler);
       token.signal.addEventListener('abort', handleAbort, { once: true });
       if (token.signal.aborted) handleAbort();
