@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useAppSelector } from '../app/hooks';
+import { sendDesktopNotification } from '../services/desktop/desktopNotifications';
 import { isTauriRuntime } from '../services/tauriRuntime';
+import { useTranslation } from './useTranslation';
 
 export type TauriUpdateInfo = {
   version: string;
@@ -9,6 +12,11 @@ export type TauriUpdateInfo = {
 
 export function useTauriUpdater(options?: { autoCheck?: boolean }) {
   const autoCheck = options?.autoCheck ?? false;
+  const { t } = useTranslation();
+  // QNBS-v3 (T3): gate the "update ready" native notification behind the opt-in desktop setting.
+  const desktopNotificationsEnabled = useAppSelector(
+    (state) => state.settings.desktop?.desktopNotifications ?? false,
+  );
   const [update, setUpdate] = useState<TauriUpdateInfo | null>(null);
   const [checking, setChecking] = useState(false);
   const [installing, setInstalling] = useState(false);
@@ -29,6 +37,12 @@ export function useTauriUpdater(options?: { autoCheck?: boolean }) {
           currentVersion,
           available: true,
         });
+        if (desktopNotificationsEnabled) {
+          void sendDesktopNotification(
+            t('desktop.notify.updateReadyTitle'),
+            t('desktop.notify.updateReadyBody', { version: result.version }),
+          );
+        }
       } else {
         setUpdate({ version: currentVersion, currentVersion, available: false });
       }
@@ -38,7 +52,7 @@ export function useTauriUpdater(options?: { autoCheck?: boolean }) {
     } finally {
       setChecking(false);
     }
-  }, []);
+  }, [desktopNotificationsEnabled, t]);
 
   const installUpdate = useCallback(async () => {
     if (!isTauriRuntime()) return;

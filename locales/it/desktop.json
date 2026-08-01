@@ -15,5 +15,9 @@
   "desktop.tray.quit": "Esci",
   "desktop.settings.sectionTitle": "Desktop",
   "desktop.settings.minimizeToTray": "Riduci nella barra delle applicazioni alla chiusura",
-  "desktop.settings.minimizeToTrayHint": "Mantieni WorldScript Studio attivo nell'area di notifica invece di uscire quando chiudi la finestra."
+  "desktop.settings.minimizeToTrayHint": "Mantieni WorldScript Studio attivo nell'area di notifica invece di uscire quando chiudi la finestra.",
+  "desktop.settings.desktopNotifications": "Notifiche desktop",
+  "desktop.settings.desktopNotificationsHint": "Mostra una notifica nativa del sistema operativo quando un'attività in background termina (esportazione, backup crittografato, fase della pipeline ProForge, aggiornamento dell'app).",
+  "desktop.notify.updateReadyTitle": "Aggiornamento pronto",
+  "desktop.notify.updateReadyBody": "WorldScript Studio {{version}} è pronto per l'installazione."
 }

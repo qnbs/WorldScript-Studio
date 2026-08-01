@@ -93,6 +93,7 @@ const baseSettings = (): Settings => ({
   },
   desktop: {
     minimizeToTray: false,
+    desktopNotifications: false,
   },
 });
 

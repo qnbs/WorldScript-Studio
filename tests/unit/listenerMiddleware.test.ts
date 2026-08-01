@@ -9,6 +9,7 @@ import analyticsReducer, { analyticsActions } from '../../features/analytics/ana
 import featureFlagsReducer, {
   featureFlagsActions,
 } from '../../features/featureFlags/featureFlagsSlice';
+import proForgeReducer, { proForgeActions } from '../../features/proForge/proForgeSlice';
 import { selectProjectData } from '../../features/project/projectSelectors';
 import projectReducer, { projectActions } from '../../features/project/projectSlice';
 import settingsReducer, { settingsActions } from '../../features/settings/settingsSlice';
@@ -121,6 +122,12 @@ vi.mock('../../services/duckdb/duckdbListenerLoader', () => ({
   ),
 }));
 
+// QNBS-v3 (T3): desktopNotifications is dynamically imported by the ProForge stageCompleted listener.
+const mockSendDesktopNotification = vi.fn().mockResolvedValue(true);
+vi.mock('../../services/desktop/desktopNotifications', () => ({
+  sendDesktopNotification: (...args: unknown[]) => mockSendDesktopNotification(...args),
+}));
+
 // ---------------------------------------------------------------------------
 // Minimal store factory for listener tests
 // ---------------------------------------------------------------------------
@@ -142,6 +149,7 @@ function makeFullStore() {
       versionControl: versionControlReducer,
       featureFlags: featureFlagsReducer,
       analytics: analyticsReducer,
+      proForge: proForgeReducer,
     },
     middleware: (getDefault) => getDefault().prepend(listenerMiddleware.middleware),
   });
@@ -549,5 +557,32 @@ describe('local-first shadow sync (B1.1)', () => {
     expect(mockReproject).not.toHaveBeenCalled();
     expect(mockLoggerWarn).not.toHaveBeenCalled();
     expect(mockLoggerError).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Desktop Notify (T3): ProForge stageCompleted -> native OS notification
+// ---------------------------------------------------------------------------
+describe('desktop notification listener (ProForge stageCompleted)', () => {
+  it('sends a desktop notification when desktopNotifications is enabled', async () => {
+    const store = makeFullStore();
+    store.dispatch(settingsActions.setDesktopSettings({ desktopNotifications: true }));
+    store.dispatch(proForgeActions.stageCompleted({ stage: 'structural', result: {} }));
+    await vi.runAllTimersAsync();
+
+    expect(mockSendDesktopNotification).toHaveBeenCalledTimes(1);
+    expect(mockSendDesktopNotification).toHaveBeenCalledWith(
+      'ProForge Pipeline',
+      expect.stringContaining('structural'),
+    );
+  });
+
+  it('does not send a notification when desktopNotifications is disabled', async () => {
+    const store = makeFullStore();
+    store.dispatch(settingsActions.setDesktopSettings({ desktopNotifications: false }));
+    store.dispatch(proForgeActions.stageCompleted({ stage: 'structural', result: {} }));
+    await vi.runAllTimersAsync();
+
+    expect(mockSendDesktopNotification).not.toHaveBeenCalled();
   });
 });

@@ -4,6 +4,7 @@ import { useTransientUiStore } from '../app/transientUiStore';
 import { selectAllCharacters, selectAllWorlds } from '../features/project/projectSelectors';
 import { generateSynopsisThunk } from '../features/project/thunks/writingThunks';
 import { statusActions } from '../features/status/statusSlice';
+import { sendDesktopNotification } from '../services/desktop/desktopNotifications';
 import { useTranslation } from './useTranslation';
 
 type Format = 'md' | 'txt' | 'pdf' | 'docx' | 'epub' | 'norm-txt';
@@ -34,6 +35,10 @@ export const useExportView = () => {
   const dispatch = useAppDispatch();
   const projectState = useAppSelector((state) => state.project.present);
   const project = projectState.data;
+  // QNBS-v3 (T3): gate the post-export native notification behind the opt-in desktop setting.
+  const desktopNotificationsEnabled = useAppSelector(
+    (state) => state.settings.desktop?.desktopNotifications ?? false,
+  );
   const characters = useAppSelector(selectAllCharacters);
   const worlds = useAppSelector(selectAllWorlds);
 
@@ -376,6 +381,12 @@ export const useExportView = () => {
         a.click();
         URL.revokeObjectURL(url);
       }
+      if (desktopNotificationsEnabled) {
+        void sendDesktopNotification(
+          t('export.notify.completeTitle'),
+          t('export.notify.completeBody'),
+        );
+      }
     } catch (error) {
       dispatch(
         statusActions.addNotification({
@@ -393,6 +404,7 @@ export const useExportView = () => {
     downloadPdf,
     downloadDocx,
     downloadEpub,
+    desktopNotificationsEnabled,
     dispatch,
     t,
   ]);

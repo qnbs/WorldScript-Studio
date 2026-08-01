@@ -55,6 +55,7 @@ import { projectActions } from './features/project/projectSlice';
 import { statusActions } from './features/status/statusSlice';
 import { useApp } from './hooks/useApp';
 import { useGlobalKeyboardShortcuts } from './hooks/useGlobalKeyboardShortcuts';
+import { useNativeNotifications } from './hooks/useNativeNotifications';
 import { usePushToTalk } from './hooks/usePushToTalk';
 import { useTranslation } from './hooks/useTranslation';
 import { runCommandById } from './services/commands/commandBuilder';
@@ -480,6 +481,9 @@ const App: FC<AppProps> = ({ isNewUser }) => {
 
   // QNBS-v3: Push-to-Talk voice activation when configured
   usePushToTalk();
+
+  // QNBS-v3 (T3): bootstrap native notification permission when the setting is on. No-op on the web.
+  useNativeNotifications();
 
   const executeCommand = useCallback(
     (id: string) =>

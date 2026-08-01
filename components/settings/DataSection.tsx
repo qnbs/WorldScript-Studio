@@ -54,6 +54,15 @@ export const DataSection: FC = () => {
           description: t('settings.data.libraryExport.successBody'),
         }),
       );
+      if (settings.desktop?.desktopNotifications) {
+        void import('../../services/desktop/desktopNotifications').then(
+          ({ sendDesktopNotification }) =>
+            sendDesktopNotification(
+              t('settings.data.libraryExport.successTitle'),
+              t('settings.data.libraryExport.successBody'),
+            ),
+        );
+      }
       setLibraryModalOpen(false);
       setLibraryPassphrase('');
     } catch {

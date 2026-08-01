@@ -2,6 +2,7 @@ import type { TypedStartListening } from '@reduxjs/toolkit';
 import { createListenerMiddleware, isRejected } from '@reduxjs/toolkit';
 import { analyticsActions } from '../features/analytics/analyticsSlice';
 // QNBS-v3: canonical selector — replaces a local type that misapplied the persisted-state shape to the live store
+import { proForgeActions } from '../features/proForge/proForgeSlice';
 import { selectProjectData } from '../features/project/projectSelectors';
 import type { ProjectData } from '../features/project/projectSlice';
 import { statusActions } from '../features/status/statusSlice';
@@ -39,6 +40,7 @@ export { isAnalyticsPersistenceAllowed };
 //   6. Cross-Project    — search index updated on save (always-on; promoted from enableCrossProjectSearch flag)
 //   7. WorkerBus v2     — init/shutdown pools on enableWorkerBusV2 flag change (Phase 2)
 //   8. Rust Compute     — invalidate Rust availability cache on enableRustCompute toggle (Phase 2)
+//   9. Desktop Notify   — native OS notification on ProForge stageCompleted (Phase 2 / T3)
 //
 // All AI inference side effects (local/cloud) are intentionally NOT in this middleware —
 // they belong in service-layer thunks (aiProviderService, localAiFacade) to keep the
@@ -534,6 +536,30 @@ listenerMiddleware.startListening({
       logger.info('Rust compute flag changed — availability cache invalidated');
     } catch (err) {
       logger.warn('Rust availability cache invalidation failed', err);
+    }
+  },
+});
+
+// QNBS-v3 (T3): Desktop Notifications — ProForge stage ready for review.
+// `stageCompleted` is the one long-running "AI generation finished in the background" signal in
+// this app (pipeline stages can run for minutes), so the user may have tabbed away. No-op unless
+// running in Tauri with the opt-in `desktop.desktopNotifications` setting on (checked inside
+// `sendDesktopNotification` + here). Body text is not translated — matches the existing
+// "Storage Nearly Full" notification precedent above; a static (non-hook) i18n accessor for
+// middleware-dispatched strings is tracked as follow-up work, not part of this listener.
+listenerMiddleware.startListening({
+  actionCreator: proForgeActions.stageCompleted,
+  effect: async (action, listenerApi) => {
+    const state = listenerApi.getState() as RootState;
+    if (!state.settings.desktop?.desktopNotifications) return;
+    try {
+      const { sendDesktopNotification } = await import('../services/desktop/desktopNotifications');
+      await sendDesktopNotification(
+        'ProForge Pipeline',
+        `Stage "${action.payload.stage}" is ready for review.`,
+      );
+    } catch (err) {
+      logger.warn('ProForge desktop notification failed', err);
     }
   },
 });

@@ -6,6 +6,7 @@ import type { Settings } from '../../types';
 
 export const defaultDesktopSettings: Settings['desktop'] = {
   minimizeToTray: false,
+  desktopNotifications: false,
 };
 
 export const defaultVoiceSettings: Settings['voice'] = {

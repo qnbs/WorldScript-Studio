@@ -15,5 +15,9 @@
   "desktop.tray.quit": "Quitter",
   "desktop.settings.sectionTitle": "Bureau",
   "desktop.settings.minimizeToTray": "Réduire dans la zone de notification à la fermeture",
-  "desktop.settings.minimizeToTrayHint": "Garder WorldScript Studio actif dans la zone de notification au lieu de quitter lorsque vous fermez la fenêtre."
+  "desktop.settings.minimizeToTrayHint": "Garder WorldScript Studio actif dans la zone de notification au lieu de quitter lorsque vous fermez la fenêtre.",
+  "desktop.settings.desktopNotifications": "Notifications de bureau",
+  "desktop.settings.desktopNotificationsHint": "Afficher une notification native du système lorsqu'une tâche en arrière-plan se termine (export, sauvegarde chiffrée, étape du pipeline ProForge, mise à jour de l'application).",
+  "desktop.notify.updateReadyTitle": "Mise à jour prête",
+  "desktop.notify.updateReadyBody": "WorldScript Studio {{version}} est prêt à être installé."
 }
