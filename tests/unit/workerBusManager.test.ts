@@ -295,4 +295,70 @@ describe('workerBusManager', () => {
       );
     });
   });
+
+  describe('inference pool sizing by memory tier', () => {
+    // QNBS-v3: [P1 — inference pool maxWorkers is now derived from
+    //          localAiDeviceProfiler.detectMemoryTier() instead of a hardcoded 2. Verified via
+    //          the same re-registration path as the "memory-safety cap" test above, since
+    //          initWorkerBus() only calls registry.register() (mocked, no-op) — bus.registerPool()
+    //          with the real computed options is only exercised by ensureInferencePool().]
+    afterEach(() => {
+      vi.doUnmock('../../services/ai/localAiDeviceProfiler');
+    });
+
+    async function expectMaxWorkersForTier(
+      detectMemoryTier: () => 'high' | 'medium' | 'low',
+      expectedMaxWorkers: number,
+    ): Promise<void> {
+      vi.doMock('../../services/ai/localAiDeviceProfiler', () => ({ detectMemoryTier }));
+      const { initWorkerBus, ensureInferencePool } = await import(
+        '../../services/workerBusManager'
+      );
+      await initWorkerBus();
+      mockRegisterPool.mockClear();
+      mockHasPool.mockReturnValue(false);
+
+      await ensureInferencePool();
+
+      expect(mockRegisterPool).toHaveBeenCalledWith(
+        'inference',
+        expect.arrayContaining(['inference.text', 'inference.embed']),
+        expect.objectContaining({ maxWorkers: expectedMaxWorkers }),
+      );
+    }
+
+    it('sizes maxWorkers to 3 on a high memory tier', async () => {
+      await expectMaxWorkersForTier(() => 'high', 3);
+    });
+
+    it('sizes maxWorkers to 2 on a medium memory tier (unchanged default)', async () => {
+      await expectMaxWorkersForTier(() => 'medium', 2);
+    });
+
+    it('sizes maxWorkers to 1 on a low memory tier', async () => {
+      await expectMaxWorkersForTier(() => 'low', 1);
+    });
+
+    it('falls back to maxWorkers 2 when memory-tier detection throws', async () => {
+      vi.doMock('../../services/ai/localAiDeviceProfiler', () => ({
+        detectMemoryTier: () => {
+          throw new Error('profiler boom');
+        },
+      }));
+      const { initWorkerBus, ensureInferencePool } = await import(
+        '../../services/workerBusManager'
+      );
+      await initWorkerBus();
+      mockRegisterPool.mockClear();
+      mockHasPool.mockReturnValue(false);
+
+      await ensureInferencePool();
+
+      expect(mockRegisterPool).toHaveBeenCalledWith(
+        'inference',
+        expect.arrayContaining(['inference.text', 'inference.embed']),
+        expect.objectContaining({ maxWorkers: 2 }),
+      );
+    });
+  });
 });
