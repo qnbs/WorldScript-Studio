@@ -60,7 +60,7 @@ List + resolve via the GraphQL snippet in §3a.
 A push that fixes findings triggers a **fresh** DeepSource run, which can surface **new** findings
 caused by the fix (a "wave"). Handle each wave like the first.
 
-```
+```text
         ┌─────────────────────────────────────────────┐
         │ 1. Fetch DeepSource findings (check-runs +   │
         │    annotations) for the PR head SHA          │
@@ -215,7 +215,8 @@ git commit -m "refactor(scope): address DeepSource wave N (<issue codes>)"
 git push origin <feature-branch>
 ```
 
-End commit messages with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
+End commit messages with the attribution matching whichever agent/model actually made the change, e.g.
+`Co-Authored-By: GitHub Copilot (Claude Sonnet 5) <noreply@github.com>`.
 **No manual re-trigger** — DeepSource analyses the new head SHA on its own. Wait for the fresh run,
 then go back to §3.
 
@@ -270,6 +271,21 @@ GitHub App resumes auto-reviewing, run **both** loops: CodeAnt for narrative/AI 
   new service/hook needs its branches tested or patch coverage dips below the ~72% target and the
   `codecov/patch` check fails. #236's hook+panel needed a dedicated hook test (offline/error/disabled/
   stale-apply/dictionary/clear branches) to clear it — same posture as #232's binderDepth test.
+- **2026-08-01** — On PR #305, `DeepSource: JavaScript` surfaced **JS-0067** ("unexpected function
+  declaration in the global scope") on top-level `function`/`async function` declarations in
+  `services/ai/localAiDeviceProfiler.ts` and `services/workerBusManager.ts` — a pattern used
+  throughout this repo's ES modules (every service file declares top-level functions; this is
+  idiomatic, Biome-approved module code, not `<script>`-tag global-scope pollution). Confirmed via
+  `gh api .../branches/main/protection`: only the `CI Success` aggregator is a **required** status
+  check — `DeepSource: JavaScript` is informational-only and does not block merge. Per §4a.3, do not
+  scatter `# skipcq: JS-0067` across dozens of pre-existing functions repo-wide to chase this; the
+  correct fix is a **dashboard rule-level ignore** for JS-0067 (maintainer action, not toml-expressible
+  — DeepSource rule toggles live under Settings → Issue Types on app.deepsource.com, not
+  `.deepsource.toml`). Real, valuable findings from the same wave (real bugs, not style noise) were
+  fixed instead: a stale-`MessagePort`-reuse bug (late PROGRESS/RESULT from a cancelled task could
+  reset/resolve a new task sharing the same released port — fixed by filtering on `msg.taskId` in
+  `workerBus.ts`), and a missing `port.start()` call in `workerPool.ts::spawnWorker()` (an
+  `addEventListener`-based `MessagePort` never dispatches without it per the WHATWG spec).
 
 ---
 

@@ -172,7 +172,8 @@ function detectDirectML(
 // Memory Tier
 // ---------------------------------------------------------------------------
 
-function detectMemoryTier(): DeviceCapabilityProfile['memoryTier'] {
+// QNBS-v3: exported (was private) so callers needing a fast sync memory-tier read (pool sizing) skip the async generateDeviceProfile() probes.
+export function detectMemoryTier(): DeviceCapabilityProfile['memoryTier'] {
   const deviceMemory =
     typeof navigator !== 'undefined' && 'deviceMemory' in navigator
       ? (navigator as Navigator & { deviceMemory?: number }).deviceMemory

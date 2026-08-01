@@ -7,6 +7,7 @@ import { CircuitBreaker } from './circuitBreaker';
 import { DeadLetterQueue } from './deadLetterQueue';
 import { createCancelMessage, createTaskMessage, validateWorkerMessage } from './messageBus';
 import { ProgressEmitter } from './progressEmitter';
+import type { WorkerMessage } from './schemas';
 import { PriorityTaskQueue } from './taskQueue';
 import type {
   BusEvent,
@@ -262,6 +263,9 @@ export class WorkerBus {
     const worker = await pool.acquire(token.signal);
     const startedAt = performance.now();
     const queueTimeMs = Math.round(startedAt - task.createdAt);
+    // QNBS-v3: [P0 timeout enforcement — runOnPool previously awaited RESULT/abort forever;
+    //          a wedged worker (no crash, no message) left the task's promise pending indefinitely.]
+    let timedOut = false;
 
     try {
       const port = worker.port;
@@ -269,15 +273,94 @@ export class WorkerBus {
         createTaskMessage(task.taskId, task.taskType, task.payload, task.traceId, task.timeoutMs),
       );
 
+      // QNBS-v3: captured so the message handler below can be a plain hoisted `function`
+      //          (not an arrow bound to `this`) without losing access to the emitter.
+      const progressEmitter = this.progress;
+
       const result = await new Promise<TaskResult<TResult>>((resolve, _reject) => {
         let settled = false;
-        const handler = (event: MessageEvent) => {
+        let timeoutTimer: ReturnType<typeof setTimeout>;
+
+        // QNBS-v3: `settle`/`armTimeout`/`onTimeout`/`handler` are mutually recursive
+        //          (settle reads `handler`, `handler` calls `settle`/`armTimeout`) — plain
+        //          `function` declarations hoist fully (name + body), so each can reference
+        //          the others regardless of source order, with no TDZ and no `let` needed.
+        function settle() {
+          settled = true;
+          clearTimeout(timeoutTimer);
+          port.removeEventListener('message', handler);
+        }
+
+        // QNBS-v3: watchdog, not a hard ceiling — re-armed on every PROGRESS message so
+        //          long-running jobs (ProForge stages, LoRA training) that report progress
+        //          aren't falsely killed while genuinely wedged workers still get caught.
+        function armTimeout() {
+          clearTimeout(timeoutTimer);
+          timeoutTimer = setTimeout(onTimeout, task.timeoutMs);
+        }
+
+        function onTimeout() {
           if (settled) return;
+          settle();
+          timedOut = true;
+          resolve({
+            taskId: task.taskId,
+            success: false,
+            error: {
+              code: 'TIMEOUT',
+              message: `No response from the worker for ${task.timeoutMs}ms (inactivity watchdog, not a fixed deadline)`,
+              recoverable: true,
+              retryCount: 0,
+            },
+            latencyMs: Math.round(performance.now() - startedAt),
+            queueTimeMs,
+            workerId: worker.workerId,
+            layer: 'web',
+          });
+        }
+
+        // QNBS-v3: split out of handler() to keep its cyclomatic complexity down — this is
+        //          the only branch with an inner conditional (the error ternary).
+        function settleWithResult(msg: Extract<WorkerMessage, { kind: 'RESULT' }>) {
+          settle();
+          resolve({
+            taskId: task.taskId,
+            success: msg.success,
+            result: msg.result as TResult,
+            error: msg.error
+              ? {
+                  code: msg.error.code,
+                  message: msg.error.message,
+                  recoverable: true,
+                  retryCount: 0,
+                }
+              : undefined,
+            latencyMs: Math.round(performance.now() - startedAt),
+            queueTimeMs,
+            workerId: worker.workerId,
+            layer: 'web',
+          });
+        }
+
+        // QNBS-v3: split out of handler() — isolates the "is this message ours to act on"
+        //          guard from the "what do we do with it" dispatch, each staying low-complexity.
+        function parseRelevantMessage(event: MessageEvent): WorkerMessage | null {
+          if (settled) return null;
           const msg = validateWorkerMessage(event.data);
+          if (!msg) return null;
+          // QNBS-v3: a released+reused port can still deliver a stale PROGRESS/RESULT from a
+          //          cancelled prior task — ignore anything not addressed to this task.
+          if (msg.taskId !== task.taskId) return null;
+          return msg;
+        }
+
+        function handler(event: MessageEvent) {
+          const msg = parseRelevantMessage(event);
           if (!msg) return;
 
           if (msg.kind === 'PROGRESS') {
-            this.progress.emit(task.taskId, {
+            armTimeout();
+            progressEmitter.emit(task.taskId, {
               taskId: task.taskId,
               taskType: task.taskType,
               stage: msg.stage,
@@ -286,34 +369,15 @@ export class WorkerBus {
               timestamp: Date.now(),
             });
           } else if (msg.kind === 'RESULT') {
-            settled = true;
-            port.removeEventListener('message', handler);
-            const latencyMs = Math.round(performance.now() - startedAt);
-            resolve({
-              taskId: task.taskId,
-              success: msg.success,
-              result: msg.result as TResult,
-              error: msg.error
-                ? {
-                    code: msg.error.code,
-                    message: msg.error.message,
-                    recoverable: true,
-                    retryCount: 0,
-                  }
-                : undefined,
-              latencyMs,
-              queueTimeMs,
-              workerId: worker.workerId,
-              layer: 'web',
-            });
+            settleWithResult(msg);
           }
-        };
+        }
         port.addEventListener('message', handler);
+        armTimeout();
 
         const onAbort = () => {
           if (settled) return;
-          settled = true;
-          port.removeEventListener('message', handler);
+          settle();
           port.postMessage(createCancelMessage(task.taskId, 'Aborted'));
           resolve({
             taskId: task.taskId,
@@ -342,7 +406,13 @@ export class WorkerBus {
       }
       return result;
     } finally {
-      pool.release(worker);
+      // QNBS-v3: a timed-out worker is presumed wedged — force-terminate + respawn instead of
+      //          releasing it back to the idle pool where a future task would reuse it.
+      if (timedOut) {
+        pool.terminateWorker(worker.workerId);
+      } else {
+        pool.release(worker);
+      }
     }
   }
 

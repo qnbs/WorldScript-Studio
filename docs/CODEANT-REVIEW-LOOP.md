@@ -38,7 +38,7 @@ Each wave is handled exactly like the first.
 > Until both are true, **keep iterating**. Never declare the PR done while new comments are still
 > arriving or any thread is open.
 
-```
+```text
         ┌─────────────────────────────────────────────┐
         │ 1. Fetch unresolved threads (GraphQL)        │
         │ 2. Validate each against CURRENT code        │
@@ -167,10 +167,10 @@ git commit -m "refactor(scope): address CodeAnt wave N review feedback"
 git push origin <feature-branch>
 ```
 
-End commit messages with:
+End commit messages with the attribution matching whichever agent/model actually made the change, e.g.:
 
-```
-Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+```text
+Co-Authored-By: GitHub Copilot (Claude Sonnet 5) <noreply@github.com>
 ```
 
 ## 6. Reply to every thread, then resolve it → 0 unresolved
