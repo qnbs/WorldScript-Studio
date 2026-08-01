@@ -5,11 +5,11 @@ mod pandoc;
 use tauri::Emitter;
 
 #[cfg(desktop)]
-fn install_app_menu(app: &tauri::App) -> tauri::Result<()> {
-  use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
-
-  let handle = app.handle();
-  let file_menu = Submenu::with_items(
+fn build_file_menu<R: tauri::Runtime>(
+  handle: &tauri::AppHandle<R>,
+) -> tauri::Result<tauri::menu::Submenu<R>> {
+  use tauri::menu::{MenuItem, PredefinedMenuItem, Submenu};
+  Submenu::with_items(
     handle,
     "File",
     true,
@@ -19,11 +19,18 @@ fn install_app_menu(app: &tauri::App) -> tauri::Result<()> {
       &PredefinedMenuItem::separator(handle)?,
       &PredefinedMenuItem::quit(handle, None)?,
     ],
-  )?;
-  // QNBS-v3 (D4): standard Edit menu via predefined items — the OS routes these to the focused
-  // WebView (text fields + the editor's contenteditable) automatically, so no frontend wiring or
-  // event emit is needed. Fills the desktop-affordance gap flagged as C-7 in DESKTOP-UI-AUDIT.md.
-  let edit_menu = Submenu::with_items(
+  )
+}
+
+// QNBS-v3 (D4): standard Edit menu via predefined items — the OS routes these to the focused
+// WebView (text fields + the editor's contenteditable) automatically, so no frontend wiring or
+// event emit is needed. Fills the desktop-affordance gap flagged as C-7 in DESKTOP-UI-AUDIT.md.
+#[cfg(desktop)]
+fn build_edit_menu<R: tauri::Runtime>(
+  handle: &tauri::AppHandle<R>,
+) -> tauri::Result<tauri::menu::Submenu<R>> {
+  use tauri::menu::{PredefinedMenuItem, Submenu};
+  Submenu::with_items(
     handle,
     "Edit",
     true,
@@ -36,10 +43,17 @@ fn install_app_menu(app: &tauri::App) -> tauri::Result<()> {
       &PredefinedMenuItem::paste(handle, None)?,
       &PredefinedMenuItem::select_all(handle, None)?,
     ],
-  )?;
-  // QNBS-v3 (D4): View menu — custom "Command Palette" emits "menu-action" → the frontend maps it
-  // to the `global-open-command-palette` command (services/tauriMenuService.ts + App.tsx).
-  let view_menu = Submenu::with_items(
+  )
+}
+
+// QNBS-v3 (D4): View menu — custom "Command Palette" emits "menu-action" → the frontend maps it
+// to the `global-open-command-palette` command (services/tauriMenuService.ts + App.tsx).
+#[cfg(desktop)]
+fn build_view_menu<R: tauri::Runtime>(
+  handle: &tauri::AppHandle<R>,
+) -> tauri::Result<tauri::menu::Submenu<R>> {
+  use tauri::menu::{MenuItem, Submenu};
+  Submenu::with_items(
     handle,
     "View",
     true,
@@ -53,9 +67,16 @@ fn install_app_menu(app: &tauri::App) -> tauri::Result<()> {
       true,
       None::<&str>,
     )?],
-  )?;
-  // QNBS-v3 (D4): Window menu via predefined items — OS-native window controls, no wiring needed.
-  let window_menu = Submenu::with_items(
+  )
+}
+
+// QNBS-v3 (D4): Window menu via predefined items — OS-native window controls, no wiring needed.
+#[cfg(desktop)]
+fn build_window_menu<R: tauri::Runtime>(
+  handle: &tauri::AppHandle<R>,
+) -> tauri::Result<tauri::menu::Submenu<R>> {
+  use tauri::menu::{PredefinedMenuItem, Submenu};
+  Submenu::with_items(
     handle,
     "Window",
     true,
@@ -66,13 +87,34 @@ fn install_app_menu(app: &tauri::App) -> tauri::Result<()> {
       &PredefinedMenuItem::fullscreen(handle, None)?,
       &PredefinedMenuItem::close_window(handle, None)?,
     ],
-  )?;
-  let help_menu = Submenu::with_items(
+  )
+}
+
+#[cfg(desktop)]
+fn build_help_menu<R: tauri::Runtime>(
+  handle: &tauri::AppHandle<R>,
+) -> tauri::Result<tauri::menu::Submenu<R>> {
+  use tauri::menu::{MenuItem, Submenu};
+  Submenu::with_items(
     handle,
     "Help",
     true,
     &[&MenuItem::with_id(handle, "menu-help", "Help Center", true, None::<&str>)?],
-  )?;
+  )
+}
+
+// QNBS-v3: split into per-submenu builders (was one large function) to keep cyclomatic
+// complexity low — DeepSource RS-R1000 flagged the monolithic version at 26 ("very-high" risk).
+#[cfg(desktop)]
+fn install_app_menu(app: &tauri::App) -> tauri::Result<()> {
+  use tauri::menu::Menu;
+
+  let handle = app.handle();
+  let file_menu = build_file_menu(handle)?;
+  let edit_menu = build_edit_menu(handle)?;
+  let view_menu = build_view_menu(handle)?;
+  let window_menu = build_window_menu(handle)?;
+  let help_menu = build_help_menu(handle)?;
   let menu =
     Menu::with_items(handle, &[&file_menu, &edit_menu, &view_menu, &window_menu, &help_menu])?;
   app.set_menu(menu)?;
