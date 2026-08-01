@@ -460,14 +460,14 @@ Edge builds run `scripts/build-edge.mjs` which sets `DEPLOY_TARGET=edge` and pat
 
 Central orchestration layer for all background worker tasks — since ADR-0015, the **sole** worker generation (v1's `workers/duckdbWorker.ts`/`workers/inference.worker.ts` deleted). Messages use short kind literals (`TASK`, `CANCEL`, `PING`, `PONG`, `PROGRESS`, `RESULT`) validated by Zod.
 
-- `packages/worker-bus/src/` — WorkerBus (`hasPool()`/`terminatePool()` for scoped pool lifecycle), WorkerPool, PriorityTaskQueue (`critical > high > normal > low`, no `background` tier), CircuitBreaker, DeadLetterQueue, ProtocolHandler (unused by the live `runTask()` path), workerBootstrap (`WorkerHandlerContext.emitProgress(stage, progress, message?)` — a flat function, not `context.progress.emit(...)`), constants, schemas.
+- `packages/worker-bus/src/` — WorkerBus (`hasPool()`/`terminatePool()` for scoped pool lifecycle), WorkerPool, authoritative PriorityTaskQueue scheduler (`critical > high > normal > low`, no `background` tier; 32 ordinary slots + 8 critical reserve), CircuitBreaker, DeadLetterQueue, ProtocolHandler (unused by the live `runTask()` path), workerBootstrap (`WorkerHandlerContext.emitProgress(stage, progress, message?)` — a flat function, not `context.progress.emit(...)`), constants, schemas.
 - `services/workerBusManager.ts` — singleton lifecycle; registers `inference`, `duckdb`, `webllm`, `plugin` pools. `ensureDuckDbPool()`/`ensureInferencePool()`/`ensureWebLlmPool()` force-init and re-register a pool removed via `terminatePool()`, decoupled from `enableWorkerBusV2` (these are core features, not experimental infra).
 - `services/hybridRouter.ts` — routes to Web Worker pool or Rust TaskSupervisor (Tauri only) when `enableRustCompute` is on.
 - `services/legacyWorkerBusAdapter.ts` — shims old `@domain/ai-core` WorkerBus API onto v2.
 - `services/tauriTaskBridge.ts` — `invokeRustTask()`, `isRustComputeAvailable()` (60s TTL ping cache).
 - Feature flags: `enableWorkerBusV2` (on by default), `enableRustCompute` (on by default; effective on Tauri desktop only).
 - Workers: `workers/v2/inference.worker.ts` (text + embed via Hugging Face transformers, prepared-statement-free), `workers/v2/duckdb.worker.ts` (init/query/exec/shutdown, binds params via DuckDB-WASM prepared statements), `workers/v2/webllm.worker.ts` (WebGPU, ADR-0005), `workers/plugin.worker.ts` (sandboxed plugin execution, outside `v2/` but on the same protocol).
-- **Known gap:** `timeoutMs` is not enforced anywhere in the live `runTask()` path (no timer rejects a hung task) — pre-existing, tracked in ADR-0015/TODO.md.
+- `timeoutMs` is an inactivity watchdog that starts at enqueue, covers queue wait and execution, and rearms on valid `PROGRESS`; a timed-out active worker is replaced.
 
 ### DuckDB Analytics
 
