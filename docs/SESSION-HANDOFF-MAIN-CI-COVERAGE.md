@@ -158,5 +158,6 @@ Flow-Mode fullscreen + docs). Each = one PR off main, CodeAnt deferred.
 ## Environment reminders
 - **ONE Bash call per turn** (low-end hardware ~3.7 GB RAM); no concurrent heavy shells. A full local
   coverage run ≈ 1 hour — prefer single-file runs for diagnosis.
-- Co-Author commits with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
+- Co-Author commits with the attribution matching whichever agent/model actually made the change, e.g.
+  `Co-Authored-By: GitHub Copilot (Claude Sonnet 5) <noreply@github.com>`.
 - Never lower coverage thresholds or `it.skip` to go green — fix the root cause.

@@ -215,7 +215,8 @@ git commit -m "refactor(scope): address DeepSource wave N (<issue codes>)"
 git push origin <feature-branch>
 ```
 
-End commit messages with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
+End commit messages with the attribution matching whichever agent/model actually made the change, e.g.
+`Co-Authored-By: GitHub Copilot (Claude Sonnet 5) <noreply@github.com>`.
 **No manual re-trigger** — DeepSource analyses the new head SHA on its own. Wait for the fresh run,
 then go back to §3.
 
