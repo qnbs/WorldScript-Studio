@@ -626,4 +626,105 @@ describe('WorkerBus', () => {
     handle.cancel('test-abort');
     await expect(handle.result).rejects.toThrow('cancelled');
   });
+
+  it('times out a hung worker, records a circuit-breaker failure, and force-terminates it', async () => {
+    // Worker never sends PROGRESS or RESULT — simulates a wedged worker (not crashed, just silent).
+    const mockPort = {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      postMessage: vi.fn(),
+      start: vi.fn(),
+    };
+
+    const mockWorker = {
+      workerId: 'mock-worker-hung',
+      worker: {} as Worker,
+      channel: { port1: mockPort, port2: mockPort } as unknown as MessageChannel,
+      port: mockPort as unknown as MessagePort,
+      state: 'idle' as const,
+      capabilities: ['inference.text'] as const,
+      labels: {},
+    };
+
+    const pool = (bus as unknown as { pools: Map<string, WorkerPool> }).pools.get('fake')!;
+    vi.spyOn(pool, 'acquire').mockResolvedValue(
+      mockWorker as unknown as import('../src/workerPool').PooledWorkerInstance,
+    );
+    const terminateWorkerSpy = vi.spyOn(pool, 'terminateWorker').mockImplementation(() => {});
+    const releaseSpy = vi.spyOn(pool, 'release');
+
+    const handle = bus.enqueue(
+      'test.task',
+      { data: 1 },
+      { timeoutMs: 25, retryPolicy: { maxRetries: 0 } },
+    );
+
+    await expect(handle.result).rejects.toThrow(/exceeded its 25ms deadline/i);
+    expect(terminateWorkerSpy).toHaveBeenCalledWith('mock-worker-hung');
+    expect(releaseSpy).not.toHaveBeenCalled();
+    expect(bus.getTelemetry().failedTasks).toBe(1);
+    expect(bus.getTelemetry().deadLetterCount).toBe(1);
+    expect(bus.getTelemetry().circuitBreakerStates['test.task']).toBeDefined();
+  });
+
+  it('resets the timeout watchdog on PROGRESS so a slow-but-alive task is not killed early', async () => {
+    const mockPort = {
+      addEventListener: vi.fn((type: string, handler: EventListener) => {
+        if (type === 'message') {
+          // Two PROGRESS pings inside the timeout window, then RESULT after the original
+          // deadline would have expired — only survives if PROGRESS re-arms the watchdog.
+          setTimeout(() => {
+            handler(
+              new MessageEvent('message', {
+                data: { kind: 'PROGRESS', taskId: 'mock-task-id', stage: 'step1', progress: 0.3 },
+              }),
+            );
+          }, 15);
+          setTimeout(() => {
+            handler(
+              new MessageEvent('message', {
+                data: { kind: 'PROGRESS', taskId: 'mock-task-id', stage: 'step2', progress: 0.6 },
+              }),
+            );
+          }, 30);
+          setTimeout(() => {
+            handler(
+              new MessageEvent('message', {
+                data: {
+                  kind: 'RESULT',
+                  taskId: 'mock-task-id',
+                  success: true,
+                  result: 'slow-but-done',
+                  latencyMs: 45,
+                },
+              }),
+            );
+          }, 45);
+        }
+      }),
+      removeEventListener: vi.fn(),
+      postMessage: vi.fn(),
+      start: vi.fn(),
+    };
+
+    const mockWorker = {
+      workerId: 'mock-worker-slow',
+      worker: {} as Worker,
+      channel: { port1: mockPort, port2: mockPort } as unknown as MessageChannel,
+      port: mockPort as unknown as MessagePort,
+      state: 'idle' as const,
+      capabilities: ['inference.text'] as const,
+      labels: {},
+    };
+
+    const pool = (bus as unknown as { pools: Map<string, WorkerPool> }).pools.get('fake')!;
+    vi.spyOn(pool, 'acquire').mockResolvedValue(
+      mockWorker as unknown as import('../src/workerPool').PooledWorkerInstance,
+    );
+
+    // timeoutMs (20ms) is shorter than the total run (45ms), but each PROGRESS arrives
+    // well within 20ms of the previous reset, so the watchdog never fires.
+    const handle = bus.enqueue('test.task', { data: 1 }, { timeoutMs: 20 });
+    await expect(handle.result).resolves.toBe('slow-but-done');
+  });
 });

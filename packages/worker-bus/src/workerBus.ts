@@ -262,6 +262,9 @@ export class WorkerBus {
     const worker = await pool.acquire(token.signal);
     const startedAt = performance.now();
     const queueTimeMs = Math.round(startedAt - task.createdAt);
+    // QNBS-v3: [P0 timeout enforcement — runOnPool previously awaited RESULT/abort forever;
+    //          a wedged worker (no crash, no message) left the task's promise pending indefinitely.]
+    let timedOut = false;
 
     try {
       const port = worker.port;
@@ -271,12 +274,49 @@ export class WorkerBus {
 
       const result = await new Promise<TaskResult<TResult>>((resolve, _reject) => {
         let settled = false;
+        let timeoutTimer: ReturnType<typeof setTimeout>;
+
+        const settle = () => {
+          settled = true;
+          clearTimeout(timeoutTimer);
+          port.removeEventListener('message', handler);
+        };
+
+        // QNBS-v3: watchdog, not a hard ceiling — re-armed on every PROGRESS message so
+        //          long-running jobs (ProForge stages, LoRA training) that report progress
+        //          aren't falsely killed while genuinely wedged workers still get caught.
+        const armTimeout = () => {
+          clearTimeout(timeoutTimer);
+          timeoutTimer = setTimeout(onTimeout, task.timeoutMs);
+        };
+
+        const onTimeout = () => {
+          if (settled) return;
+          settle();
+          timedOut = true;
+          resolve({
+            taskId: task.taskId,
+            success: false,
+            error: {
+              code: 'TIMEOUT',
+              message: `Task exceeded its ${task.timeoutMs}ms deadline with no response from the worker`,
+              recoverable: true,
+              retryCount: 0,
+            },
+            latencyMs: Math.round(performance.now() - startedAt),
+            queueTimeMs,
+            workerId: worker.workerId,
+            layer: 'web',
+          });
+        };
+
         const handler = (event: MessageEvent) => {
           if (settled) return;
           const msg = validateWorkerMessage(event.data);
           if (!msg) return;
 
           if (msg.kind === 'PROGRESS') {
+            armTimeout();
             this.progress.emit(task.taskId, {
               taskId: task.taskId,
               taskType: task.taskType,
@@ -286,8 +326,7 @@ export class WorkerBus {
               timestamp: Date.now(),
             });
           } else if (msg.kind === 'RESULT') {
-            settled = true;
-            port.removeEventListener('message', handler);
+            settle();
             const latencyMs = Math.round(performance.now() - startedAt);
             resolve({
               taskId: task.taskId,
@@ -309,11 +348,11 @@ export class WorkerBus {
           }
         };
         port.addEventListener('message', handler);
+        armTimeout();
 
         const onAbort = () => {
           if (settled) return;
-          settled = true;
-          port.removeEventListener('message', handler);
+          settle();
           port.postMessage(createCancelMessage(task.taskId, 'Aborted'));
           resolve({
             taskId: task.taskId,
@@ -342,7 +381,13 @@ export class WorkerBus {
       }
       return result;
     } finally {
-      pool.release(worker);
+      // QNBS-v3: a timed-out worker is presumed wedged — force-terminate + respawn instead of
+      //          releasing it back to the idle pool where a future task would reuse it.
+      if (timedOut) {
+        pool.terminateWorker(worker.workerId);
+      } else {
+        pool.release(worker);
+      }
     }
   }
 

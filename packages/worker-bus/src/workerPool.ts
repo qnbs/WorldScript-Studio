@@ -82,6 +82,18 @@ export class WorkerPool {
     this.entries = [];
   }
 
+  /**
+   * Force-terminate one worker and respawn a replacement (pool stays at capacity).
+   * QNBS-v3: a task that missed its timeoutMs deadline may have wedged the worker in an
+   * unknown state — treat it like a crash instead of recycling it back to idle via release().
+   */
+  terminateWorker(workerId: string): void {
+    const entry = this.entries.find((e) => e.instance.workerId === workerId);
+    if (!entry) return;
+    this.setCrashed(workerId);
+    this.restartWorker(entry);
+  }
+
   getHealth(): {
     totalWorkers: number;
     idleWorkers: number;
