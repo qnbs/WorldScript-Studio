@@ -38,7 +38,7 @@ Each wave is handled exactly like the first.
 > Until both are true, **keep iterating**. Never declare the PR done while new comments are still
 > arriving or any thread is open.
 
-```
+```text
         ┌─────────────────────────────────────────────┐
         │ 1. Fetch unresolved threads (GraphQL)        │
         │ 2. Validate each against CURRENT code        │
@@ -169,7 +169,7 @@ git push origin <feature-branch>
 
 End commit messages with the attribution matching whichever agent/model actually made the change, e.g.:
 
-```
+```text
 Co-Authored-By: GitHub Copilot (Claude Sonnet 5) <noreply@github.com>
 ```
 

@@ -342,13 +342,21 @@ export class WorkerBus {
           });
         }
 
-        function handler(event: MessageEvent) {
-          if (settled) return;
+        // QNBS-v3: split out of handler() — isolates the "is this message ours to act on"
+        //          guard from the "what do we do with it" dispatch, each staying low-complexity.
+        function parseRelevantMessage(event: MessageEvent): WorkerMessage | null {
+          if (settled) return null;
           const msg = validateWorkerMessage(event.data);
-          if (!msg) return;
+          if (!msg) return null;
           // QNBS-v3: a released+reused port can still deliver a stale PROGRESS/RESULT from a
           //          cancelled prior task — ignore anything not addressed to this task.
-          if (msg.taskId !== task.taskId) return;
+          if (msg.taskId !== task.taskId) return null;
+          return msg;
+        }
+
+        function handler(event: MessageEvent) {
+          const msg = parseRelevantMessage(event);
+          if (!msg) return;
 
           if (msg.kind === 'PROGRESS') {
             armTimeout();

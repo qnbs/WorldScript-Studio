@@ -60,7 +60,7 @@ List + resolve via the GraphQL snippet in §3a.
 A push that fixes findings triggers a **fresh** DeepSource run, which can surface **new** findings
 caused by the fix (a "wave"). Handle each wave like the first.
 
-```
+```text
         ┌─────────────────────────────────────────────┐
         │ 1. Fetch DeepSource findings (check-runs +   │
         │    annotations) for the PR head SHA          │
