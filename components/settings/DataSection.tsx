@@ -54,6 +54,21 @@ export const DataSection: FC = () => {
           description: t('settings.data.libraryExport.successBody'),
         }),
       );
+      // QNBS-v3: notify only after a successful encrypted library export.
+      if (settings.desktop?.desktopNotifications) {
+        void import('../../services/desktop/desktopNotifications')
+          .then(({ sendDesktopNotification }) =>
+            sendDesktopNotification(
+              t('settings.data.libraryExport.successTitle'),
+              t('settings.data.libraryExport.successBody'),
+            ),
+          )
+          .catch(() => {
+            // QNBS-v3 (T3): best-effort background notification — the export itself already
+            // succeeded and was toasted above, so a notification failure must never surface to
+            // the user nor become an unhandled promise rejection.
+          });
+      }
       setLibraryModalOpen(false);
       setLibraryPassphrase('');
     } catch {

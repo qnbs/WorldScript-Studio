@@ -136,6 +136,18 @@ types.ts          → Core shared interfaces and types
 - **ICU-dependent APIs**: Tests using `Intl.Segmenter`, `Intl.PluralRules`, or other ICU-dependent APIs MUST use relaxed assertions (non-zero counts, monotonic behavior, locale invariants) instead of exact counts to ensure cross-environment stability.
 - **Environment variance**: Node.js ICU versions and browser implementations can differ; tests should verify behavior, not exact output.
 
+### Code Comment Convention & Recurring Review-Loop Findings (QNBS-v3)
+
+On any non-trivial code change add a single-line comment explaining **why**, not what: `// QNBS-v3: <reason / impact>` (TS/JS), `{/* QNBS-v3: … */}` (JSX, only when needed), `/* QNBS-v3: … */` (CSS). No inline comment in pure JSON/YAML config — explain in the commit message instead.
+
+**Hard rule — never wrap:** the comment MUST fit on a single physical line, however long. Never split it across two `//` lines. This exact mistake has recurred 3× in one PR and is a guaranteed CodeRabbit nitpick — shorten the wording instead of wrapping it.
+
+**Other recurring findings, codified so they stop recurring:**
+- Name DOM elements created for download/print descriptively (`anchor`, not `a`).
+- Never mutate `ref.current` during render — sync via `useEffect(() => { ref.current = value }, [value])`, never as a bare statement in the component body.
+- Prefer `@testing-library/user-event` over `fireEvent` for click/type/change interactions in tests.
+- Prefer a lookup table (`Partial<Record<Key, Fn>>`) over long `if/else if` dispatch chains to keep cyclomatic complexity low, especially inside `useCallback`.
+
 ### Testing
 
 - Unit tests: Vitest + @testing-library/react in `tests/unit/` (see `tests/setup.ts`)

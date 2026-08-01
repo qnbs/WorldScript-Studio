@@ -246,6 +246,34 @@ describe('settingsSlice', () => {
     expect(state.accessibility.comfortableTargets).toBe(false);
   });
 
+  // QNBS-v3: regression coverage for the desktop-settings backfill/merge behavior in setSettings (T3).
+  it('setSettings backfills desktop.desktopNotifications when a legacy payload omits it', () => {
+    const base = initState();
+    // Simulate an older persisted/imported settings envelope predating the desktopNotifications
+    // field (only minimizeToTray existed at the time).
+    const legacy = {
+      ...base,
+      desktop: { minimizeToTray: true } as typeof base.desktop,
+    };
+
+    const state = settingsReducer(base, settingsActions.setSettings(legacy as typeof base));
+
+    expect(state.desktop.minimizeToTray).toBe(true);
+    expect(state.desktop.desktopNotifications).toBe(false);
+  });
+
+  it('setSettings keeps an explicit desktopNotifications value from the payload', () => {
+    const base = initState();
+    const nextSettings = {
+      ...base,
+      desktop: { minimizeToTray: false, desktopNotifications: true },
+    };
+
+    const state = settingsReducer(base, settingsActions.setSettings(nextSettings));
+
+    expect(state.desktop.desktopNotifications).toBe(true);
+  });
+
   it('setPrivacy merges privacy settings', () => {
     const state = settingsReducer(
       initState(),

@@ -2,15 +2,59 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "App-data-scoped FS access — limits filesystem permissions to the application data directory to prevent arbitrary file access from a compromised renderer.",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
-    { "identifier": "fs:allow-read-text-file", "allow": [{ "path": "$APPDATA/**" }] },
-    { "identifier": "fs:allow-write-text-file", "allow": [{ "path": "$APPDATA/**" }] },
-    { "identifier": "fs:allow-mkdir",           "allow": [{ "path": "$APPDATA/**" }] },
-    { "identifier": "fs:allow-exists",          "allow": [{ "path": "$APPDATA/**" }] },
-    { "identifier": "fs:allow-read-dir",        "allow": [{ "path": "$APPDATA/**" }] },
-    { "identifier": "fs:allow-remove",          "allow": [{ "path": "$APPDATA/**" }] },
+    {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [
+        {
+          "path": "$APPDATA/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [
+        {
+          "path": "$APPDATA/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-mkdir",
+      "allow": [
+        {
+          "path": "$APPDATA/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-exists",
+      "allow": [
+        {
+          "path": "$APPDATA/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-read-dir",
+      "allow": [
+        {
+          "path": "$APPDATA/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-remove",
+      "allow": [
+        {
+          "path": "$APPDATA/**"
+        }
+      ]
+    },
     "dialog:default",
     "dialog:allow-open",
     "dialog:allow-save",
@@ -29,6 +73,7 @@
     },
     "shell:allow-open",
     "updater:default",
+    "notification:default",
     "core:tray:default",
     "core:app:allow-default-window-icon",
     "core:window:allow-show",

@@ -33,6 +33,8 @@ tauri-plugin-updater = "2"
 tauri-plugin-window-state = "2"
 tauri-plugin-deep-link = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+# QNBS-v3 (T3): native OS notifications (background-task completion), permission-gated in JS.
+tauri-plugin-notification = "2"
 tokio = { version = "1", features = ["sync", "time", "process", "rt-multi-thread"] }
 candle-core = { version = "0.11", optional = true }
 candle-nn = { version = "0.11", optional = true }

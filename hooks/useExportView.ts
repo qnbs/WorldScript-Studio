@@ -2,13 +2,52 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useTransientUiStore } from '../app/transientUiStore';
 import { selectAllCharacters, selectAllWorlds } from '../features/project/projectSelectors';
+import type { ProjectData } from '../features/project/projectState';
 import { generateSynopsisThunk } from '../features/project/thunks/writingThunks';
 import { statusActions } from '../features/status/statusSlice';
+import { sendDesktopNotification } from '../services/desktop/desktopNotifications';
 import { useTranslation } from './useTranslation';
 
 type Format = 'md' | 'txt' | 'pdf' | 'docx' | 'epub' | 'norm-txt';
 // QNBS-v3: gate the Book Preview → Export hand-off so only valid formats can preselect the dropdown.
 const VALID_FORMATS: readonly Format[] = ['md', 'txt', 'pdf', 'docx', 'epub', 'norm-txt'];
+
+// QNBS-v3: extracted from handleDownload to shrink its cyclomatic complexity — non-pdf/docx/epub branches don't need per-branch failure tracking.
+async function downloadPlainTextFormat(
+  format: Format,
+  project: Pick<ProjectData, 'title' | 'manuscript'>,
+  formattedOutput: string,
+): Promise<void> {
+  if (format === 'norm-txt') {
+    const { buildNormManuscriptExport } = await import('../services/normPageExport');
+    const textOutput = buildNormManuscriptExport(
+      project.manuscript.map((s) => ({
+        title: s.title,
+        content: s.content ?? '',
+      })),
+    );
+    const blob = new Blob([textOutput], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${project.title}-norm.txt`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    return;
+  }
+  const extension = format === 'md' ? 'md' : 'txt';
+  let textOutput = formattedOutput;
+  if (format === 'txt') {
+    textOutput = textOutput.replace(/#+\s/g, '').replace(/\*\*(.*?)\*\*/g, '$1');
+  }
+  const blob = new Blob([textOutput], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `${project.title}.${extension}`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
 // QNBS-v3 (CodeAnt): runtime type guard instead of an `as Format` assertion on store-supplied input.
 function isFormat(value: string | null): value is Format {
   return value !== null && (VALID_FORMATS as readonly string[]).includes(value);
@@ -34,6 +73,10 @@ export const useExportView = () => {
   const dispatch = useAppDispatch();
   const projectState = useAppSelector((state) => state.project.present);
   const project = projectState.data;
+  // QNBS-v3 (T3): gate the post-export native notification behind the opt-in desktop setting.
+  const desktopNotificationsEnabled = useAppSelector(
+    (state) => state.settings.desktop?.desktopNotifications ?? false,
+  );
   const characters = useAppSelector(selectAllCharacters);
   const worlds = useAppSelector(selectAllWorlds);
 
@@ -139,7 +182,7 @@ export const useExportView = () => {
     compileSuffix,
   ]);
 
-  const downloadPdf = useCallback(async () => {
+  const downloadPdf = useCallback(async (): Promise<boolean> => {
     setIsExportLoading(true);
     try {
       const jspdfModule = await import('jspdf');
@@ -205,6 +248,7 @@ export const useExportView = () => {
       }
 
       doc.save(`${project.title}.pdf`);
+      return true;
     } catch (error) {
       dispatch(
         statusActions.addNotification({
@@ -213,12 +257,13 @@ export const useExportView = () => {
           description: error instanceof Error ? error.message : String(error),
         }),
       );
+      return false;
     } finally {
       setIsExportLoading(false);
     }
   }, [pdfOptions, project, synopsis, t, aiEnhancements, contentToExport, dispatch]);
 
-  const downloadDocx = useCallback(async () => {
+  const downloadDocx = useCallback(async (): Promise<boolean> => {
     setIsExportLoading(true);
     try {
       const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import('docx');
@@ -273,6 +318,7 @@ export const useExportView = () => {
       a.download = `${project.title}.docx`;
       a.click();
       URL.revokeObjectURL(url);
+      return true;
     } catch (error) {
       dispatch(
         statusActions.addNotification({
@@ -281,12 +327,13 @@ export const useExportView = () => {
           description: error instanceof Error ? error.message : String(error),
         }),
       );
+      return false;
     } finally {
       setIsExportLoading(false);
     }
   }, [project, synopsis, aiEnhancements, contentToExport, t, dispatch]);
 
-  const downloadEpub = useCallback(async () => {
+  const downloadEpub = useCallback(async (): Promise<boolean> => {
     setIsExportLoading(true);
     try {
       const { buildPandocMarkdownFromProject } = await import('../services/pandocExportMarkdown');
@@ -301,7 +348,7 @@ export const useExportView = () => {
         a.download = `${project.title.replace(/[/\\?%*:|"<>]/g, '-')}.epub`;
         a.click();
         URL.revokeObjectURL(url);
-        return;
+        return true;
       }
       const { exportEpub } = await import('../services/epubApiService');
       const chapters = contentToExport.manuscript
@@ -318,6 +365,7 @@ export const useExportView = () => {
         ...(aiEnhancements.synopsis && synopsis.trim() ? { synopsis } : {}),
         ...(project.compileProfile ? { compileProfile: project.compileProfile } : {}),
       });
+      return true;
     } catch (error) {
       dispatch(
         statusActions.addNotification({
@@ -326,6 +374,7 @@ export const useExportView = () => {
           description: error instanceof Error ? error.message : String(error),
         }),
       );
+      return false;
     } finally {
       setIsExportLoading(false);
     }
@@ -341,40 +390,22 @@ export const useExportView = () => {
 
   const handleDownload = useCallback(async () => {
     try {
-      if (format === 'pdf') {
-        await downloadPdf();
-      } else if (format === 'docx') {
-        await downloadDocx();
-      } else if (format === 'epub') {
-        await downloadEpub();
-      } else if (format === 'norm-txt') {
-        const { buildNormManuscriptExport } = await import('../services/normPageExport');
-        const textOutput = buildNormManuscriptExport(
-          project.manuscript.map((s) => ({
-            title: s.title,
-            content: s.content ?? '',
-          })),
+      // QNBS-v3: lookup table (not an if/else-if chain) keeps this callback's cyclomatic complexity low.
+      const formatDownloaders: Partial<Record<Format, () => Promise<boolean>>> = {
+        pdf: downloadPdf,
+        docx: downloadDocx,
+        epub: downloadEpub,
+      };
+      const downloader = formatDownloaders[format];
+      const exportSucceeded = downloader
+        ? await downloader()
+        : await downloadPlainTextFormat(format, project, formattedOutput).then(() => true);
+      // QNBS-v3: send a native completion notification only after a successful user-requested export.
+      if (exportSucceeded && desktopNotificationsEnabled) {
+        void sendDesktopNotification(
+          t('export.notify.completeTitle'),
+          t('export.notify.completeBody'),
         );
-        const blob = new Blob([textOutput], { type: 'text/plain;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${project.title}-norm.txt`;
-        a.click();
-        URL.revokeObjectURL(url);
-      } else {
-        const extension = format === 'md' ? 'md' : 'txt';
-        let textOutput = formattedOutput;
-        if (format === 'txt') {
-          textOutput = textOutput.replace(/#+\s/g, '').replace(/\*\*(.*?)\*\*/g, '$1');
-        }
-        const blob = new Blob([textOutput], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${project.title}.${extension}`;
-        a.click();
-        URL.revokeObjectURL(url);
       }
     } catch (error) {
       dispatch(
@@ -388,11 +419,11 @@ export const useExportView = () => {
   }, [
     format,
     formattedOutput,
-    project.title,
-    project.manuscript,
+    project,
     downloadPdf,
     downloadDocx,
     downloadEpub,
+    desktopNotificationsEnabled,
     dispatch,
     t,
   ]);

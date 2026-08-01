@@ -245,6 +245,16 @@ On any non-trivial change, add a single-line comment explaining **why**, not wha
 | CSS | `/* QNBS-v3: … */` |
 | Config (JSON, YAML) | No inline comments — explain in the commit message |
 
+**Hard rule:** a `// QNBS-v3: …` comment MUST fit on one physical line, however long — never wrap it across two `//` lines. Shorten the reason instead of splitting it.
+
+### Recurring review-loop findings (codified to avoid repeats)
+
+- **QNBS-v3 comments:** one line only (see hard rule above) — this has recurred 3× in a single PR.
+- **DOM elements for download/print** (`document.createElement('a')`): name it `anchor`, not the single letter `a`.
+- **Never mutate `ref.current` during render.** Sync refs from props/state inside `useEffect(() => { ref.current = value }, [value])`, never as a bare statement in the component body — a bare assignment can leak a stale value from a discarded render.
+- **Tests:** prefer `@testing-library/user-event` over `fireEvent` for click/type/change interactions; keep `fireEvent` only for low-level DOM events `user-event` doesn't model.
+- **Cyclomatic complexity:** prefer a lookup table (`Partial<Record<Key, Fn>>`) over long `if/else if` dispatch chains, especially inside `useCallback`.
+
 ### Commit Messages
 
 Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`.

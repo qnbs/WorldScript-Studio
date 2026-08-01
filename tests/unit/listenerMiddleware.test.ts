@@ -9,6 +9,8 @@ import analyticsReducer, { analyticsActions } from '../../features/analytics/ana
 import featureFlagsReducer, {
   featureFlagsActions,
 } from '../../features/featureFlags/featureFlagsSlice';
+import proForgeReducer, { proForgeActions } from '../../features/proForge/proForgeSlice';
+import { DEFAULT_PIPELINE_CONFIG } from '../../features/proForge/types';
 import { selectProjectData } from '../../features/project/projectSelectors';
 import projectReducer, { projectActions } from '../../features/project/projectSlice';
 import settingsReducer, { settingsActions } from '../../features/settings/settingsSlice';
@@ -121,6 +123,27 @@ vi.mock('../../services/duckdb/duckdbListenerLoader', () => ({
   ),
 }));
 
+// QNBS-v3: desktopNotifications is dynamically imported by the ProForge stageCompleted listener, so it must be mocked here.
+const mockSendDesktopNotification = vi.fn().mockResolvedValue(true);
+vi.mock('../../services/desktop/desktopNotifications', () => ({
+  sendDesktopNotification: (...args: unknown[]) => mockSendDesktopNotification(...args),
+}));
+
+// QNBS-v3: the middleware-safe static i18n accessor is also dynamically imported by the same listener; mocked with deterministic English strings since jsdom has no network access.
+vi.mock('../../services/i18n/staticTranslate', () => ({
+  getCurrentLanguage: () => 'en',
+  getStaticTranslation: (key: string, _lang: string, replacements?: Record<string, string>) => {
+    if (key === 'desktop.notify.proforgeStageReadyTitle')
+      return Promise.resolve('ProForge Pipeline');
+    if (key === 'desktop.notify.proforgeStageReadyBody') {
+      return Promise.resolve(`Stage "${replacements?.['stage']}" is ready for review.`);
+    }
+    if (key.startsWith('proforge.stageName.'))
+      return Promise.resolve(key.replace('proforge.stageName.', ''));
+    return Promise.resolve(key);
+  },
+}));
+
 // ---------------------------------------------------------------------------
 // Minimal store factory for listener tests
 // ---------------------------------------------------------------------------
@@ -142,6 +165,7 @@ function makeFullStore() {
       versionControl: versionControlReducer,
       featureFlags: featureFlagsReducer,
       analytics: analyticsReducer,
+      proForge: proForgeReducer,
     },
     middleware: (getDefault) => getDefault().prepend(listenerMiddleware.middleware),
   });
@@ -549,5 +573,57 @@ describe('local-first shadow sync (B1.1)', () => {
     expect(mockReproject).not.toHaveBeenCalled();
     expect(mockLoggerWarn).not.toHaveBeenCalled();
     expect(mockLoggerError).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Desktop Notify (T3): ProForge stageCompleted -> native OS notification
+// ---------------------------------------------------------------------------
+describe('desktop notification listener (ProForge stageCompleted)', () => {
+  // QNBS-v3: starts a real pipeline run + stage so stageCompleted transitions a genuine `awaitingReview`, not a no-op on a null currentRun.
+  function startStructuralStage(store: ReturnType<typeof makeFullStore>) {
+    store.dispatch(
+      proForgeActions.startPipeline({
+        projectId: 'proj-1',
+        label: 'Test Run',
+        config: DEFAULT_PIPELINE_CONFIG,
+        preSnapshotId: 'snap-pre',
+      }),
+    );
+    store.dispatch(proForgeActions.stageStarted({ stage: 'structural' }));
+  }
+
+  it('sends a desktop notification when desktopNotifications is enabled', async () => {
+    const store = makeFullStore();
+    store.dispatch(settingsActions.setDesktopSettings({ desktopNotifications: true }));
+    startStructuralStage(store);
+    store.dispatch(proForgeActions.stageCompleted({ stage: 'structural', result: {} }));
+    await vi.runAllTimersAsync();
+
+    expect(mockSendDesktopNotification).toHaveBeenCalledTimes(1);
+    expect(mockSendDesktopNotification).toHaveBeenCalledWith(
+      'ProForge Pipeline',
+      'Stage "structural" is ready for review.',
+    );
+  });
+
+  it('does not send a notification when desktopNotifications is disabled', async () => {
+    const store = makeFullStore();
+    store.dispatch(settingsActions.setDesktopSettings({ desktopNotifications: false }));
+    startStructuralStage(store);
+    store.dispatch(proForgeActions.stageCompleted({ stage: 'structural', result: {} }));
+    await vi.runAllTimersAsync();
+
+    expect(mockSendDesktopNotification).not.toHaveBeenCalled();
+  });
+
+  // QNBS-v3: regression coverage — an invalid stageCompleted (no active run/stage) must not notify.
+  it('does not send a notification for stageCompleted without a current run or active stage', async () => {
+    const store = makeFullStore();
+    store.dispatch(settingsActions.setDesktopSettings({ desktopNotifications: true }));
+    store.dispatch(proForgeActions.stageCompleted({ stage: 'structural', result: {} }));
+    await vi.runAllTimersAsync();
+
+    expect(mockSendDesktopNotification).not.toHaveBeenCalled();
   });
 });

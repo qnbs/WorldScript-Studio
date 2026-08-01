@@ -135,13 +135,16 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
   if (!validSettings.voice || typeof validSettings.voice !== 'object') {
     validSettings.voice = { ...defaultVoiceSettings };
   }
-  // QNBS-v3 (T2/#190): backfill the desktop group AND coerce minimizeToTray to a strict boolean —
+  // QNBS-v3 (T2/#190, T3): backfill the desktop group AND coerce each flag to a strict boolean —
   // imported/corrupted settings can carry a truthy non-boolean (e.g. the string "false"), which would
-  // make close-to-tray behave incorrectly.
+  // make close-to-tray / native notifications behave incorrectly.
   if (!validSettings.desktop || typeof validSettings.desktop !== 'object') {
     validSettings.desktop = { ...defaultDesktopSettings };
   } else {
-    validSettings.desktop = { minimizeToTray: validSettings.desktop.minimizeToTray === true };
+    validSettings.desktop = {
+      minimizeToTray: validSettings.desktop.minimizeToTray === true,
+      desktopNotifications: validSettings.desktop.desktopNotifications === true,
+    };
   }
   // QNBS-v3: openRouter added in OpenRouter integration — backfill for older persisted settings.
   if (!validSettings.openRouter || typeof validSettings.openRouter !== 'object') {

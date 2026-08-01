@@ -3,6 +3,7 @@
  * QNBS-v3 (P1.3): the minimize-to-tray control is the design-system ToggleSwitch (role=switch +
  * aria-describedby hint), Tauri-gated. Verifies the web no-op, accessible switch, state reflection,
  * and dispatch on toggle.
+ * QNBS-v3 (T3): also covers the desktopNotifications toggle added alongside minimize-to-tray.
  */
 
 import { render, screen } from '@testing-library/react';
@@ -16,7 +17,7 @@ import type { RootState } from '../../../app/store';
 
 const { mockDispatch, stateRef, mockIsTauri } = vi.hoisted(() => ({
   mockDispatch: vi.fn(),
-  stateRef: { minimizeToTray: false },
+  stateRef: { minimizeToTray: false, desktopNotifications: false },
   mockIsTauri: vi.fn(() => true),
 }));
 
@@ -26,7 +27,12 @@ vi.mock('../../../app/hooks', () => ({
   // `unknown` — keeps the test honest without a lint suppression (the ratchet gate stays at baseline).
   useAppSelector: (selector: (s: RootState) => unknown) =>
     selector({
-      settings: { desktop: { minimizeToTray: stateRef.minimizeToTray } },
+      settings: {
+        desktop: {
+          minimizeToTray: stateRef.minimizeToTray,
+          desktopNotifications: stateRef.desktopNotifications,
+        },
+      },
     } as unknown as RootState),
 }));
 
@@ -45,6 +51,7 @@ describe('DesktopSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     stateRef.minimizeToTray = false;
+    stateRef.desktopNotifications = false;
     mockIsTauri.mockReturnValue(true);
   });
 
@@ -64,15 +71,42 @@ describe('DesktopSection', () => {
   it('reflects the enabled state via aria-checked', () => {
     stateRef.minimizeToTray = true;
     render(<DesktopSection />);
-    expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('switch', { name: 'desktop.settings.minimizeToTray' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
   });
 
   it('dispatches setDesktopSettings({ minimizeToTray: true }) when toggled on', async () => {
     const user = userEvent.setup();
     render(<DesktopSection />);
-    await user.click(screen.getByRole('switch'));
+    await user.click(screen.getByRole('switch', { name: 'desktop.settings.minimizeToTray' }));
     expect(mockDispatch).toHaveBeenCalledWith(
       settingsActions.setDesktopSettings({ minimizeToTray: true }),
+    );
+  });
+
+  it('renders the desktop-notifications switch with an accessible name + described-by hint', () => {
+    render(<DesktopSection />);
+    const sw = screen.getByRole('switch', { name: 'desktop.settings.desktopNotifications' });
+    expect(sw).toHaveAttribute('aria-checked', 'false');
+    expect(sw).toHaveAttribute('aria-describedby');
+  });
+
+  it('reflects the desktopNotifications enabled state via aria-checked', () => {
+    stateRef.desktopNotifications = true;
+    render(<DesktopSection />);
+    expect(
+      screen.getByRole('switch', { name: 'desktop.settings.desktopNotifications' }),
+    ).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('dispatches setDesktopSettings({ desktopNotifications: true }) when toggled on', async () => {
+    const user = userEvent.setup();
+    render(<DesktopSection />);
+    await user.click(screen.getByRole('switch', { name: 'desktop.settings.desktopNotifications' }));
+    expect(mockDispatch).toHaveBeenCalledWith(
+      settingsActions.setDesktopSettings({ desktopNotifications: true }),
     );
   });
 });

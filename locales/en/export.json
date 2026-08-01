@@ -76,6 +76,8 @@
   "export.format.docx": "Word Document (.docx)",
   "export.error.epubFailed": "EPUB export failed: ",
   "export.error.exportFailed": "Export failed",
+  "export.notify.completeTitle": "Export complete",
+  "export.notify.completeBody": "Your manuscript export finished successfully.",
   "export.compileWizard.openButton": "Compile wizard…",
   "export.compileWizard.title": "Compile wizard",
   "export.compileWizard.stepPreset": "Choose a preset",

@@ -41,6 +41,8 @@
   "export.emptySection": "Sezione vuota",
   "export.error.epubFailed": "Esportazione EPUB fallita: ",
   "export.error.exportFailed": "Esportazione fallita",
+  "export.notify.completeTitle": "Esportazione completata",
+  "export.notify.completeBody": "L'esportazione del tuo manoscritto è stata completata con successo.",
   "export.export": "Esporta",
   "export.exportFailed": "Esportazione fallita",
   "export.exportFormat": "Formato di esportazione",
