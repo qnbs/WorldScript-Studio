@@ -1,9 +1,5 @@
-/**
- * Tests for services/desktop/desktopNotifications.ts
- * QNBS-v3 (T3): Mocks isTauriRuntime + @tauri-apps/plugin-notification — asserts the web no-op,
- * permission-check/request flow (including in-flight dedupe), and the send gate (permission must be
- * granted; never throws on plugin failure).
- */
+/** Tests for services/desktop/desktopNotifications.ts */
+// QNBS-v3: mocks isTauriRuntime + @tauri-apps/plugin-notification to assert the web no-op, permission-check/request flow (including in-flight dedupe), and the send gate.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

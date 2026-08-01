@@ -633,7 +633,7 @@ export interface OpenRouterSettings {
 export interface DesktopSettings {
   /** Hide to the system tray on window close instead of quitting. */
   minimizeToTray: boolean;
-  /** QNBS-v3 (T3): Show native OS notifications for background-task completion. Opt-in, default off. */
+  /** QNBS-v3: Show native OS notifications for background-task completion. Opt-in, default off. */
   desktopNotifications: boolean;
 }
 

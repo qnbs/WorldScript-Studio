@@ -246,6 +246,7 @@ describe('settingsSlice', () => {
     expect(state.accessibility.comfortableTargets).toBe(false);
   });
 
+  // QNBS-v3: regression coverage for the desktop-settings backfill/merge behavior in setSettings (T3).
   it('setSettings backfills desktop.desktopNotifications when a legacy payload omits it', () => {
     const base = initState();
     // Simulate an older persisted/imported settings envelope predating the desktopNotifications

@@ -225,6 +225,28 @@ describe('useTauriUpdater', () => {
         'desktop.notify.updateReadyTitle',
         expect.stringContaining('desktop.notify.updateReadyBody'),
       );
+      expect(mockSendDesktopNotification).toHaveBeenCalledWith(
+        'desktop.notify.updateReadyTitle',
+        expect.stringContaining('2.0.0'),
+      );
+    });
+
+    // QNBS-v3: regression coverage — repeated checks for the same pending version must not re-notify.
+    it('does not re-send a notification for the same version on a second check', async () => {
+      mockIsTauri = true;
+      mockDesktopNotificationsEnabled = true;
+      mockCheck.mockResolvedValue({
+        version: '2.0.0',
+        downloadAndInstall: mockDownloadAndInstall,
+      });
+      const { result } = renderHook(() => useTauriUpdater());
+      await act(async () => {
+        await result.current.checkForUpdate();
+      });
+      await act(async () => {
+        await result.current.checkForUpdate();
+      });
+      expect(mockSendDesktopNotification).toHaveBeenCalledTimes(1);
     });
 
     it('does not send a notification when the setting is disabled', async () => {

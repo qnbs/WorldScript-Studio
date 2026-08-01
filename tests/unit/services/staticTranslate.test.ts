@@ -1,11 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as StaticTranslateModule from '../../../services/i18n/staticTranslate';
 
-// QNBS-v3 (T3): unit tests for the middleware-safe static i18n accessor used by
-// app/listenerMiddleware.ts (non-React code cannot call useTranslation()).
-//
-// The module caches fetched bundles at module scope (mirrors I18nProvider's own bundle cache), so
-// each test re-imports it fresh via vi.resetModules() + dynamic import to avoid cross-test bleed.
+// QNBS-v3: unit tests for the middleware-safe static i18n accessor used by app/listenerMiddleware.ts; re-imports fresh per test via vi.resetModules() to avoid the module-scoped bundle cache bleeding across tests.
 async function importFresh(): Promise<typeof StaticTranslateModule> {
   vi.resetModules();
   return import('../../../services/i18n/staticTranslate');

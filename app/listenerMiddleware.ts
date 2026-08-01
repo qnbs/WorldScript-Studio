@@ -540,19 +540,19 @@ listenerMiddleware.startListening({
   },
 });
 
-// QNBS-v3 (T3): Desktop Notifications — ProForge stage ready for review.
-// `stageCompleted` is the one long-running "AI generation finished in the background" signal in
-// this app (pipeline stages can run for minutes), so the user may have tabbed away. No-op unless
-// running in Tauri with the opt-in `desktop.desktopNotifications` setting on (checked inside
-// `sendDesktopNotification` + here). Title/body are resolved via the middleware-safe static i18n
-// accessor (services/i18n/staticTranslate.ts) — listener middleware runs outside React, so it can't
-// call useTranslation() directly; the stage name reuses the same `proforge.stageName.<stage>` keys
-// ProForge's own UI resolves (components/proForge/PipelineReviewPanel.tsx).
+// QNBS-v3: Native "ProForge stage ready for review" notification — the user may have tabbed away during a long-running pipeline stage.
 listenerMiddleware.startListening({
   actionCreator: proForgeActions.stageCompleted,
   effect: async (action, listenerApi) => {
-    const state = listenerApi.getState() as RootState;
-    if (!state.settings.desktop?.desktopNotifications) return;
+    // QNBS-v3: capture the original (pre-effect) state synchronously before any await, per this file's listener state-capture contract.
+    const originalState = listenerApi.getOriginalState() as RootState;
+    if (!originalState.settings.desktop?.desktopNotifications) return;
+    // QNBS-v3: the reducer no-ops when there's no matching run/stage — mirror that here so an invalid action never notifies.
+    const stateAfter = listenerApi.getState() as RootState;
+    const stageResult = stateAfter.proForge.currentRun?.stages.find(
+      (s) => s.stage === action.payload.stage,
+    );
+    if (stageResult?.status !== 'awaitingReview') return;
     try {
       const [{ sendDesktopNotification }, { getStaticTranslation, getCurrentLanguage }] =
         await Promise.all([

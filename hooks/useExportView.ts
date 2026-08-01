@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useTransientUiStore } from '../app/transientUiStore';
 import { selectAllCharacters, selectAllWorlds } from '../features/project/projectSelectors';
+import type { ProjectData } from '../features/project/projectState';
 import { generateSynopsisThunk } from '../features/project/thunks/writingThunks';
 import { statusActions } from '../features/status/statusSlice';
 import { sendDesktopNotification } from '../services/desktop/desktopNotifications';
@@ -10,6 +11,44 @@ import { useTranslation } from './useTranslation';
 type Format = 'md' | 'txt' | 'pdf' | 'docx' | 'epub' | 'norm-txt';
 // QNBS-v3: gate the Book Preview → Export hand-off so only valid formats can preselect the dropdown.
 const VALID_FORMATS: readonly Format[] = ['md', 'txt', 'pdf', 'docx', 'epub', 'norm-txt'];
+
+// QNBS-v3: extracted from handleDownload to keep its cyclomatic complexity down — handles the
+// non-pdf/docx/epub branches (norm-txt, md, plain txt), which don't need per-branch failure tracking.
+async function downloadPlainTextFormat(
+  format: Exclude<Format, 'pdf' | 'docx' | 'epub'>,
+  project: Pick<ProjectData, 'title' | 'manuscript'>,
+  formattedOutput: string,
+): Promise<void> {
+  if (format === 'norm-txt') {
+    const { buildNormManuscriptExport } = await import('../services/normPageExport');
+    const textOutput = buildNormManuscriptExport(
+      project.manuscript.map((s) => ({
+        title: s.title,
+        content: s.content ?? '',
+      })),
+    );
+    const blob = new Blob([textOutput], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${project.title}-norm.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    return;
+  }
+  const extension = format === 'md' ? 'md' : 'txt';
+  let textOutput = formattedOutput;
+  if (format === 'txt') {
+    textOutput = textOutput.replace(/#+\s/g, '').replace(/\*\*(.*?)\*\*/g, '$1');
+  }
+  const blob = new Blob([textOutput], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${project.title}.${extension}`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 // QNBS-v3 (CodeAnt): runtime type guard instead of an `as Format` assertion on store-supplied input.
 function isFormat(value: string | null): value is Format {
   return value !== null && (VALID_FORMATS as readonly string[]).includes(value);
@@ -359,34 +398,8 @@ export const useExportView = () => {
         exportSucceeded = await downloadDocx();
       } else if (format === 'epub') {
         exportSucceeded = await downloadEpub();
-      } else if (format === 'norm-txt') {
-        const { buildNormManuscriptExport } = await import('../services/normPageExport');
-        const textOutput = buildNormManuscriptExport(
-          project.manuscript.map((s) => ({
-            title: s.title,
-            content: s.content ?? '',
-          })),
-        );
-        const blob = new Blob([textOutput], { type: 'text/plain;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${project.title}-norm.txt`;
-        a.click();
-        URL.revokeObjectURL(url);
       } else {
-        const extension = format === 'md' ? 'md' : 'txt';
-        let textOutput = formattedOutput;
-        if (format === 'txt') {
-          textOutput = textOutput.replace(/#+\s/g, '').replace(/\*\*(.*?)\*\*/g, '$1');
-        }
-        const blob = new Blob([textOutput], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${project.title}.${extension}`;
-        a.click();
-        URL.revokeObjectURL(url);
+        await downloadPlainTextFormat(format, project, formattedOutput);
       }
       if (exportSucceeded && desktopNotificationsEnabled) {
         void sendDesktopNotification(
@@ -406,8 +419,7 @@ export const useExportView = () => {
   }, [
     format,
     formattedOutput,
-    project.title,
-    project.manuscript,
+    project,
     downloadPdf,
     downloadDocx,
     downloadEpub,

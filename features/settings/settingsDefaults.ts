@@ -6,6 +6,7 @@ import type { Settings } from '../../types';
 
 export const defaultDesktopSettings: Settings['desktop'] = {
   minimizeToTray: false,
+  // QNBS-v3: keep native desktop notifications opt-in by default.
   desktopNotifications: false,
 };
 

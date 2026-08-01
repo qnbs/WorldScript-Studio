@@ -13,8 +13,7 @@ import { isTauriRuntime } from '../tauriRuntime';
 
 const log = createLogger('desktop-notifications');
 
-// QNBS-v3 (T3): dedupe concurrent permission requests — mirrors the trayInstalling in-flight guard
-// in desktopTray.ts, but here we share the resolved value since multiple callers may race on startup.
+// QNBS-v3: dedupe concurrent permission requests — shares the resolved value across racing callers on startup.
 let permissionRequestInFlight: Promise<boolean> | null = null;
 
 /** @internal test-only reset for the in-flight guard. */

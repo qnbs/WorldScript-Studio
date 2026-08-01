@@ -54,6 +54,7 @@ export const DataSection: FC = () => {
           description: t('settings.data.libraryExport.successBody'),
         }),
       );
+      // QNBS-v3: notify only after a successful encrypted library export.
       if (settings.desktop?.desktopNotifications) {
         void import('../../services/desktop/desktopNotifications')
           .then(({ sendDesktopNotification }) =>

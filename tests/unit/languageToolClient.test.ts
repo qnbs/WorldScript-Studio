@@ -91,6 +91,7 @@ const baseSettings = (): Settings => ({
     ttsMuted: false,
     dictationAutoPunctuation: true,
   },
+  // QNBS-v3: Settings fixture must include the desktop group so assertLanguageToolAllowed's full Settings type-check compiles.
   desktop: {
     minimizeToTray: false,
     desktopNotifications: false,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppSelector } from '../app/hooks';
 import { sendDesktopNotification } from '../services/desktop/desktopNotifications';
 import { isTauriRuntime } from '../services/tauriRuntime';
@@ -13,6 +13,9 @@ export type TauriUpdateInfo = {
 export function useTauriUpdater(options?: { autoCheck?: boolean }) {
   const autoCheck = options?.autoCheck ?? false;
   const { t } = useTranslation();
+  // QNBS-v3: read via a ref so translation-bundle reloads don't change checkForUpdate's identity and retrigger the autoCheck mount effect.
+  const tRef = useRef(t);
+  tRef.current = t;
   // QNBS-v3 (T3): gate the "update ready" native notification behind the opt-in desktop setting.
   const desktopNotificationsEnabled = useAppSelector(
     (state) => state.settings.desktop?.desktopNotifications ?? false,
@@ -21,6 +24,8 @@ export function useTauriUpdater(options?: { autoCheck?: boolean }) {
   const [checking, setChecking] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // QNBS-v3: last version a notification was sent for, so repeated checks don't re-notify.
+  const lastNotifiedVersionRef = useRef<string | null>(null);
 
   const checkForUpdate = useCallback(async () => {
     if (!isTauriRuntime()) return;
@@ -37,11 +42,12 @@ export function useTauriUpdater(options?: { autoCheck?: boolean }) {
           currentVersion,
           available: true,
         });
-        if (desktopNotificationsEnabled) {
-          void sendDesktopNotification(
-            t('desktop.notify.updateReadyTitle'),
-            t('desktop.notify.updateReadyBody', { version: result.version }),
+        if (desktopNotificationsEnabled && lastNotifiedVersionRef.current !== result.version) {
+          await sendDesktopNotification(
+            tRef.current('desktop.notify.updateReadyTitle'),
+            tRef.current('desktop.notify.updateReadyBody', { version: result.version }),
           );
+          lastNotifiedVersionRef.current = result.version;
         }
       } else {
         setUpdate({ version: currentVersion, currentVersion, available: false });
@@ -52,7 +58,7 @@ export function useTauriUpdater(options?: { autoCheck?: boolean }) {
     } finally {
       setChecking(false);
     }
-  }, [desktopNotificationsEnabled, t]);
+  }, [desktopNotificationsEnabled]);
 
   const installUpdate = useCallback(async () => {
     if (!isTauriRuntime()) return;

@@ -1,21 +1,18 @@
 /**
- * QNBS-v3 (T3): Middleware-safe i18n accessor.
- *
- * `I18nContext`'s `t()` lives in React state and is only reachable from components. Redux listener
- * middleware (e.g. the ProForge "stage ready" desktop notification in `app/listenerMiddleware.ts`)
- * runs outside React, so it cannot call `useTranslation()`. This module provides a small, dependency-free
- * translate function for that non-component context: it fetches + caches the same runtime
- * `public/locales/{lang}/bundle.json` files the app already serves, with the identical
- * active-language → English → raw-key fallback chain and `{{placeholder}}` interpolation as `t()`.
- *
- * Not intended as a general replacement for `useTranslation()` — use the React hook in components.
+ * Middleware-safe i18n accessor. `I18nContext`'s `t()` lives in React state and is only reachable
+ * from components; Redux listener middleware runs outside React and cannot call `useTranslation()`.
+ * This module fetches + caches the same runtime `public/locales/{lang}/bundle.json` files the app
+ * already serves, with the identical active-language → English → raw-key fallback chain and
+ * `{{placeholder}}` interpolation as `t()`. Not a general replacement for `useTranslation()` — use
+ * the React hook in components.
  */
 import { isLanguage, type Language } from '../../i18n/locales';
+import { createLogger } from '../logger';
 
+const log = createLogger('static-translate');
 const LANG_STORAGE_KEY = 'worldscript-language';
 
-// Module-level cache — shared across all callers within the same page lifetime, mirrors the
-// dedup/cache behaviour of I18nProvider's `loadLanguage`.
+// QNBS-v3: module-level cache shared across all callers within the same page lifetime, mirroring I18nProvider's `loadLanguage` dedup/cache behaviour.
 const bundleCache = new Map<Language, Record<string, unknown>>();
 const inFlight = new Map<Language, Promise<Record<string, unknown>>>();
 
@@ -36,7 +33,11 @@ async function loadBundle(lang: Language): Promise<Record<string, unknown>> {
         inFlight.delete(lang);
         return data;
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        log.warn('Locale bundle load failed', {
+          lang,
+          err: err instanceof Error ? err.message : String(err),
+        });
         inFlight.delete(lang);
         return {};
       });
