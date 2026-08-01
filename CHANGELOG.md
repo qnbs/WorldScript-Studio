@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.26.0] — 2026-08-01
+
+### Added
+
+- **Opt-in native desktop notifications** now report completed encrypted-library and manuscript
+  exports, updater readiness, and ProForge stage completion through the Tauri notification plugin.
+  Permission is requested only after the user enables the setting, web builds remain a no-op, and
+  the settings migration defaults existing installations to disabled. (#306)
+
+### Changed
+
+- **Local-inference worker capacity now follows the detected memory tier**: low-memory devices use
+  one inference worker, the default remains two, and high-memory devices may use three. Detection
+  failures safely retain the two-worker default. (#305)
+- **`WorkerBus` is now an authoritative, event-driven priority scheduler.** Tasks dispatch only
+  after leaving the bounded queue; worker availability events replace animation-frame polling;
+  retries re-enter the scheduler without duplicating logical handles; and an eight-task critical
+  reserve bounds total queue growth while retaining emergency capacity. (#307)
+
+### Fixed
+
+- **Worker tasks can no longer remain pending indefinitely after queue saturation or inactivity.**
+  The progress-rearmed inactivity watchdog now starts at enqueue, covers both queue wait and active
+  execution, retries recoverable timeouts, and replaces presumed-wedged workers without returning
+  them to the idle pool. Worker-construction, replacement, cancellation, retry-backpressure,
+  shutdown, and pool-termination failures all settle through one cleanup path. (#305, #307)
+- **Completed tasks are removed from live scheduler state**, so more than 32 lifetime submissions
+  no longer trigger false `BACKPRESSURE`; priority order and FIFO-within-tier are preserved under
+  saturation, and completed progress iterators terminate instead of hanging. (#307)
+- **The E2E API-key setup helper uses an exact configured-status match**, avoiding strict-locator
+  ambiguity between the status badge and its descriptive label. (#307)
+
+### Tests
+
+- Added direct regressions for queue drain and reuse, priority ordering, critical reserve bounds,
+  queued and active timeouts, fresh retry tokens, cancellation, shutdown, pool termination,
+  constructor/replacement failures, listener/timer cleanup, and progress-iterator completion.
+
 ## [1.25.0] — 2026-07-31
 
 ### Added
