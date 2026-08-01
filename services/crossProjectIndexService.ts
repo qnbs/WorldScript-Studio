@@ -1,13 +1,18 @@
 /**
  * Privacy-preserving project search index backed by IndexedDB.
- * Stores only metadata (title, logline, character names, word count) —
- * never manuscript plaintext.
+ * Descriptive metadata is encrypted when at-rest encryption is configured; only routing fields
+ * remain plaintext. The optional DuckDB analytics mirror retains its documented metadata boundary.
  */
 import type { ProjectData } from '../features/project/projectSlice';
 import type { Character } from '../types';
 import { cosineSimilarity, embedText } from './ai/localEmbeddingService';
 import { DATA_DB_NAME, DB_VERSION, PROJECTS_INDEX_STORE } from './dbConstants';
 import { loadDuckdbAnalytics } from './duckdb/duckdbListenerLoader';
+import {
+  prepareSecureRecordPayload,
+  readSecureRecordPayload,
+  type SecureRecordEnvelope,
+} from './storage/storageEncryptionService';
 
 export interface ProjectSearchIndex {
   projectId: string;
@@ -22,9 +27,21 @@ export interface ProjectSearchIndex {
   embeddingVector?: number[];
 }
 
+const RECORD_SCHEMA_VERSION = 1;
+
+type ProjectSearchPayload = Omit<ProjectSearchIndex, 'projectId' | 'lastIndexed'>;
+
+interface StoredProjectSearchIndex {
+  projectId: string;
+  lastIndexed: number;
+  schemaVersion: typeof RECORD_SCHEMA_VERSION;
+  payload: ProjectSearchPayload | SecureRecordEnvelope;
+}
+
 // QNBS-v3: Own connection to data-db — avoids circular import with dbService singleton.
 //          IDB handles concurrent same-version opens gracefully; no upgrade runs again.
 let dbPromise: Promise<IDBDatabase> | null = null;
+let dbHandle: IDBDatabase | null = null;
 
 function getDb(): Promise<IDBDatabase> {
   if (!dbPromise) {
@@ -39,11 +56,85 @@ function getDb(): Promise<IDBDatabase> {
           store.createIndex('lastIndexed', 'lastIndexed', { unique: false });
         }
       };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
+      req.onsuccess = () => {
+        dbHandle = req.result;
+        dbHandle.onversionchange = () => {
+          dbHandle?.close();
+          dbHandle = null;
+          dbPromise = null;
+        };
+        resolve(req.result);
+      };
+      req.onerror = () => {
+        dbPromise = null;
+        reject(req.error);
+      };
     });
   }
   return dbPromise;
+}
+
+function projectSearchPayload(record: ProjectSearchIndex): ProjectSearchPayload {
+  return {
+    title: record.title,
+    logline: record.logline,
+    manuscriptWordCount: record.manuscriptWordCount,
+    characterNames: record.characterNames,
+    ...(record.aiSummary !== undefined && { aiSummary: record.aiSummary }),
+    ...(record.embeddingVector !== undefined && { embeddingVector: record.embeddingVector }),
+  };
+}
+
+async function encodeProjectSearchIndex(
+  record: ProjectSearchIndex,
+): Promise<StoredProjectSearchIndex> {
+  return {
+    projectId: record.projectId,
+    lastIndexed: record.lastIndexed,
+    schemaVersion: RECORD_SCHEMA_VERSION,
+    payload: await prepareSecureRecordPayload(projectSearchPayload(record)),
+  };
+}
+
+async function decodeProjectSearchIndex(
+  stored: StoredProjectSearchIndex | ProjectSearchIndex,
+): Promise<{ record: ProjectSearchIndex; needsMigration: boolean }> {
+  if ('payload' in stored) {
+    const decoded = await readSecureRecordPayload<ProjectSearchPayload>(stored.payload);
+    return {
+      record: {
+        projectId: stored.projectId,
+        lastIndexed: stored.lastIndexed,
+        ...decoded.value,
+      },
+      needsMigration: decoded.needsMigration,
+    };
+  }
+
+  const decoded = await readSecureRecordPayload<ProjectSearchPayload>(projectSearchPayload(stored));
+  return {
+    record: {
+      projectId: stored.projectId,
+      lastIndexed: stored.lastIndexed,
+      ...decoded.value,
+    },
+    needsMigration: decoded.needsMigration,
+  };
+}
+
+async function putProjectSearchIndexes(
+  db: IDBDatabase,
+  records: StoredProjectSearchIndex[],
+): Promise<void> {
+  if (records.length === 0) return;
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(PROJECTS_INDEX_STORE, 'readwrite');
+    const store = transaction.objectStore(PROJECTS_INDEX_STORE);
+    for (const record of records) store.put(record);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error);
+  });
 }
 
 function extractCharacterNames(data: ProjectData): string[] {
@@ -74,8 +165,6 @@ export async function indexProject(
   // function awaits IDB work first) — a boolean captured up-front could go stale on a mid-call opt-out.
   duckDbEnabled: boolean | (() => boolean) = false,
 ): Promise<void> {
-  const db = await getDb();
-
   const record: ProjectSearchIndex = {
     projectId,
     title: (data.title ?? '').slice(0, 256),
@@ -84,13 +173,10 @@ export async function indexProject(
     characterNames: extractCharacterNames(data).slice(0, 50),
     lastIndexed: Date.now(),
   };
-
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(PROJECTS_INDEX_STORE, 'readwrite');
-    const req = tx.objectStore(PROJECTS_INDEX_STORE).put(record);
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-  });
+  // QNBS-v3: Encrypt before opening IDB so WebCrypto cannot outlive the write transaction.
+  const stored = await encodeProjectSearchIndex(record);
+  const db = await getDb();
+  await putProjectSearchIndexes(db, [stored]);
 
   // SEC: normalize to a gate function and re-evaluate it INSIDE the async write chain — both after the
   // IDB put AND after the dynamic loadDuckdbAnalytics() import — so a mid-call opt-out is honoured at
@@ -116,18 +202,28 @@ export async function indexProject(
 /** Return all indexed project records, sorted by lastIndexed descending. */
 export async function listIndexedProjects(): Promise<ProjectSearchIndex[]> {
   const db = await getDb();
+  const raw = await new Promise<Array<StoredProjectSearchIndex | ProjectSearchIndex>>(
+    (resolve, reject) => {
+      const tx = db.transaction(PROJECTS_INDEX_STORE, 'readonly');
+      const req = tx.objectStore(PROJECTS_INDEX_STORE).getAll();
+      req.onsuccess = () =>
+        resolve(req.result as Array<StoredProjectSearchIndex | ProjectSearchIndex>);
+      req.onerror = () => reject(req.error);
+    },
+  );
 
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(PROJECTS_INDEX_STORE, 'readonly');
-    const req = tx.objectStore(PROJECTS_INDEX_STORE).getAll();
-    req.onsuccess = () => {
-      const results = (req.result as ProjectSearchIndex[]).sort(
-        (a, b) => b.lastIndexed - a.lastIndexed,
-      );
-      resolve(results);
-    };
-    req.onerror = () => reject(req.error);
-  });
+  const records: ProjectSearchIndex[] = [];
+  const migrations: StoredProjectSearchIndex[] = [];
+  // QNBS-v3: Sequential decrypts keep large embedding collections within a stable memory bound.
+  for (const stored of raw) {
+    const decoded = await decodeProjectSearchIndex(stored);
+    records.push(decoded.record);
+    if (decoded.needsMigration) {
+      migrations.push(await encodeProjectSearchIndex(decoded.record));
+    }
+  }
+  await putProjectSearchIndexes(db, migrations);
+  return records.sort((a, b) => b.lastIndexed - a.lastIndexed);
 }
 
 /** Remove a project from the index (call on project deletion). */
@@ -154,14 +250,22 @@ export async function enrichProjectIndex(
 ): Promise<void> {
   const db = await getDb();
 
-  const record = await new Promise<ProjectSearchIndex | undefined>((resolve, reject) => {
-    const tx = db.transaction(PROJECTS_INDEX_STORE, 'readonly');
-    const req = tx.objectStore(PROJECTS_INDEX_STORE).get(projectId);
-    req.onsuccess = () => resolve(req.result as ProjectSearchIndex | undefined);
-    req.onerror = () => reject(req.error);
-  });
+  const stored = await new Promise<StoredProjectSearchIndex | ProjectSearchIndex | undefined>(
+    (resolve, reject) => {
+      const tx = db.transaction(PROJECTS_INDEX_STORE, 'readonly');
+      const req = tx.objectStore(PROJECTS_INDEX_STORE).get(projectId);
+      req.onsuccess = () =>
+        resolve(req.result as StoredProjectSearchIndex | ProjectSearchIndex | undefined);
+      req.onerror = () => reject(req.error);
+    },
+  );
 
-  if (!record) return;
+  if (!stored) return;
+  const decoded = await decodeProjectSearchIndex(stored);
+  const record = decoded.record;
+  if (decoded.needsMigration) {
+    await putProjectSearchIndexes(db, [await encodeProjectSearchIndex(record)]);
+  }
 
   // Build a short plaintext synopsis from available metadata (no manuscript text).
   const synopsis = [record.title, record.logline, ...record.characterNames.slice(0, 5)]
@@ -185,12 +289,7 @@ export async function enrichProjectIndex(
     lastIndexed: Date.now(),
   };
 
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(PROJECTS_INDEX_STORE, 'readwrite');
-    const req = tx.objectStore(PROJECTS_INDEX_STORE).put(enriched);
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-  });
+  await putProjectSearchIndexes(db, [await encodeProjectSearchIndex(enriched)]);
 
   // QNBS-v3: P3 — update DuckDB entry with the now-computed embedding vector.
   // SEC: re-evaluate the gate INSIDE the async chain — after the embedding + IDB put AND after the
@@ -270,4 +369,11 @@ export async function semanticSearchProjects(
     .sort((a, b) => b.score - a.score)
     .slice(0, topK)
     .map((s) => s.project);
+}
+
+/** Close the cached connection so tests can install a fresh IDBFactory. */
+export function _resetCrossProjectIndexDbForTest(): void {
+  dbHandle?.close();
+  dbHandle = null;
+  dbPromise = null;
 }

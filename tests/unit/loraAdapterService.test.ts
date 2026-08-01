@@ -16,6 +16,7 @@ vi.mock('../../services/logger', () => ({
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
+  _resetLoraDbForTest();
   global.indexedDB = new IDBFactory();
   global.IDBKeyRange = IDBKeyRange;
 });
@@ -25,6 +26,7 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 import {
+  _resetLoraDbForTest,
   deleteAdapter,
   getAdapterBlob,
   type LoraAdapterMeta,

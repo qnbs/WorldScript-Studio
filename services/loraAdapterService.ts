@@ -1,4 +1,11 @@
 import { logger } from './logger';
+import {
+  prepareSecureRecordPayload,
+  readSecureRecordPayload,
+  SecureRecordCorruptError,
+  type SecureRecordEnvelope,
+  SecureRecordLockedError,
+} from './storage/storageEncryptionService';
 
 export interface LoraAdapterMeta {
   id: string;
@@ -36,9 +43,24 @@ const RUNS_STORE = 'lora-runs';
 const ACTIVE_STORE = 'lora-active';
 
 const ACTIVE_KEY = 'active_adapter_id';
+const RECORD_SCHEMA_VERSION = 1;
+
+type LoraAdapterMetaPayload = Omit<LoraAdapterMeta, 'id' | 'projectId' | 'createdAt'>;
+
+interface StoredLoraAdapterMeta {
+  id: string;
+  projectId?: string;
+  createdAt: number;
+  schemaVersion: typeof RECORD_SCHEMA_VERSION;
+  payload: LoraAdapterMetaPayload | SecureRecordEnvelope;
+}
+
+let dbPromise: Promise<IDBDatabase> | null = null;
+let dbHandle: IDBDatabase | null = null;
 
 function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = (e) => {
       const db = (e.target as IDBOpenDBRequest).result;
@@ -61,21 +83,121 @@ function openDb(): Promise<IDBDatabase> {
         db.createObjectStore(ACTIVE_STORE);
       }
     };
-    req.onsuccess = (e) => resolve((e.target as IDBOpenDBRequest).result);
-    req.onerror = () => reject(req.error);
+    req.onsuccess = (e) => {
+      dbHandle = (e.target as IDBOpenDBRequest).result;
+      dbHandle.onversionchange = () => {
+        dbHandle?.close();
+        dbHandle = null;
+        dbPromise = null;
+      };
+      resolve(dbHandle);
+    };
+    req.onerror = () => {
+      dbPromise = null;
+      reject(req.error);
+    };
+  });
+  return dbPromise;
+}
+
+function adapterMetaPayload(meta: LoraAdapterMeta): LoraAdapterMetaPayload {
+  return {
+    name: meta.name,
+    description: meta.description,
+    modelCompatibility: meta.modelCompatibility,
+    scale: meta.scale,
+    fileSizeBytes: meta.fileSizeBytes,
+    ...(meta.format !== undefined && { format: meta.format }),
+    ...(meta.baseVersionId !== undefined && { baseVersionId: meta.baseVersionId }),
+    ...(meta.version !== undefined && { version: meta.version }),
+    ...(meta.isActive !== undefined && { isActive: meta.isActive }),
+    ...(meta.qualityScore !== undefined && { qualityScore: meta.qualityScore }),
+    ...(meta.localPath !== undefined && { localPath: meta.localPath }),
+  };
+}
+
+async function encodeAdapterMeta(meta: LoraAdapterMeta): Promise<StoredLoraAdapterMeta> {
+  return {
+    id: meta.id,
+    createdAt: meta.createdAt,
+    schemaVersion: RECORD_SCHEMA_VERSION,
+    ...(meta.projectId !== undefined && { projectId: meta.projectId }),
+    payload: await prepareSecureRecordPayload(adapterMetaPayload(meta)),
+  };
+}
+
+async function decodeAdapterMeta(
+  stored: StoredLoraAdapterMeta | LoraAdapterMeta,
+): Promise<{ meta: LoraAdapterMeta; needsMigration: boolean }> {
+  if ('payload' in stored) {
+    const decoded = await readSecureRecordPayload<LoraAdapterMetaPayload>(stored.payload);
+    return {
+      meta: {
+        id: stored.id,
+        createdAt: stored.createdAt,
+        ...(stored.projectId !== undefined && { projectId: stored.projectId }),
+        ...decoded.value,
+      },
+      needsMigration: decoded.needsMigration,
+    };
+  }
+
+  const decoded = await readSecureRecordPayload<LoraAdapterMetaPayload>(adapterMetaPayload(stored));
+  return {
+    meta: {
+      id: stored.id,
+      createdAt: stored.createdAt,
+      ...(stored.projectId !== undefined && { projectId: stored.projectId }),
+      ...decoded.value,
+    },
+    needsMigration: decoded.needsMigration,
+  };
+}
+
+function rethrowSecureRecordError(error: unknown): void {
+  if (error instanceof SecureRecordLockedError || error instanceof SecureRecordCorruptError) {
+    throw error;
+  }
+}
+
+async function putRecords(
+  db: IDBDatabase,
+  storeName: string,
+  records: Array<Record<string, unknown> | object>,
+): Promise<void> {
+  if (records.length === 0) return;
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(storeName, 'readwrite');
+    const store = transaction.objectStore(storeName);
+    for (const record of records) store.put(record);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error);
   });
 }
 
 export async function listAdapters(): Promise<LoraAdapterMeta[]> {
   try {
     const db = await openDb();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(META_STORE, 'readonly');
-      const req = tx.objectStore(META_STORE).getAll();
-      req.onsuccess = () => resolve((req.result as LoraAdapterMeta[]) ?? []);
-      req.onerror = () => reject(req.error);
-    });
+    const raw = await new Promise<Array<StoredLoraAdapterMeta | LoraAdapterMeta>>(
+      (resolve, reject) => {
+        const tx = db.transaction(META_STORE, 'readonly');
+        const req = tx.objectStore(META_STORE).getAll();
+        req.onsuccess = () => resolve(req.result as Array<StoredLoraAdapterMeta | LoraAdapterMeta>);
+        req.onerror = () => reject(req.error);
+      },
+    );
+    const adapters: LoraAdapterMeta[] = [];
+    const migrations: StoredLoraAdapterMeta[] = [];
+    for (const stored of raw) {
+      const decoded = await decodeAdapterMeta(stored);
+      adapters.push(decoded.meta);
+      if (decoded.needsMigration) migrations.push(await encodeAdapterMeta(decoded.meta));
+    }
+    await putRecords(db, META_STORE, migrations);
+    return adapters;
   } catch (err) {
+    rethrowSecureRecordError(err);
     logger.warn('loraAdapterService: listAdapters failed', { err });
     return [];
   }
@@ -86,16 +208,19 @@ export async function getAdaptersByProject(projectId: string): Promise<LoraAdapt
     const all = await listAdapters();
     return all.filter((a) => a.projectId === projectId);
   } catch (err) {
+    rethrowSecureRecordError(err);
     logger.warn('loraAdapterService: getAdaptersByProject failed', { err });
     return [];
   }
 }
 
 export async function saveAdapter(meta: LoraAdapterMeta, blob: ArrayBuffer): Promise<void> {
+  // QNBS-v3: Finish metadata encryption before starting the atomic meta/blob transaction.
+  const storedMeta = await encodeAdapterMeta(meta);
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction([META_STORE, BLOB_STORE], 'readwrite');
-    tx.objectStore(META_STORE).put(meta);
+    tx.objectStore(META_STORE).put(storedMeta);
     tx.objectStore(BLOB_STORE).put({ id: meta.id, data: blob });
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
@@ -133,14 +258,15 @@ export async function getAdapterBlob(id: string): Promise<ArrayBuffer | null> {
 
 export async function activateAdapter(id: string): Promise<void> {
   const db = await openDb();
-  // Mark old active adapter as inactive, new one as active
   const all = await listAdapters();
+  // QNBS-v3: Encrypt every updated record before opening the multi-store transaction.
+  const updated = await Promise.all(
+    all.map((adapter) => encodeAdapterMeta({ ...adapter, isActive: adapter.id === id })),
+  );
   return new Promise((resolve, reject) => {
     const tx = db.transaction([META_STORE, ACTIVE_STORE], 'readwrite');
     const metaStore = tx.objectStore(META_STORE);
-    for (const adapter of all) {
-      metaStore.put({ ...adapter, isActive: adapter.id === id });
-    }
+    for (const adapter of updated) metaStore.put(adapter);
     tx.objectStore(ACTIVE_STORE).put(id, ACTIVE_KEY);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
@@ -150,12 +276,13 @@ export async function activateAdapter(id: string): Promise<void> {
 export async function deactivateAdapter(): Promise<void> {
   const db = await openDb();
   const all = await listAdapters();
+  const updated = await Promise.all(
+    all.map((adapter) => encodeAdapterMeta({ ...adapter, isActive: false })),
+  );
   return new Promise((resolve, reject) => {
     const tx = db.transaction([META_STORE, ACTIVE_STORE], 'readwrite');
     const metaStore = tx.objectStore(META_STORE);
-    for (const adapter of all) {
-      metaStore.put({ ...adapter, isActive: false });
-    }
+    for (const adapter of updated) metaStore.put(adapter);
     tx.objectStore(ACTIVE_STORE).delete(ACTIVE_KEY);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
@@ -172,13 +299,23 @@ export async function getActiveAdapter(): Promise<LoraAdapterMeta | null> {
       req.onerror = () => reject(req.error);
     });
     if (!activeId) return null;
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(META_STORE, 'readonly');
-      const req = tx.objectStore(META_STORE).get(activeId);
-      req.onsuccess = () => resolve((req.result as LoraAdapterMeta) ?? null);
-      req.onerror = () => reject(req.error);
-    });
+    const stored = await new Promise<StoredLoraAdapterMeta | LoraAdapterMeta | undefined>(
+      (resolve, reject) => {
+        const tx = db.transaction(META_STORE, 'readonly');
+        const req = tx.objectStore(META_STORE).get(activeId);
+        req.onsuccess = () =>
+          resolve(req.result as StoredLoraAdapterMeta | LoraAdapterMeta | undefined);
+        req.onerror = () => reject(req.error);
+      },
+    );
+    if (!stored) return null;
+    const decoded = await decodeAdapterMeta(stored);
+    if (decoded.needsMigration) {
+      await putRecords(db, META_STORE, [await encodeAdapterMeta(decoded.meta)]);
+    }
+    return decoded.meta;
   } catch (err) {
+    rethrowSecureRecordError(err);
     logger.warn('loraAdapterService: getActiveAdapter failed', { err });
     return null;
   }
@@ -224,19 +361,18 @@ export async function updateAdapterMeta(
   meta: Partial<LoraAdapterMeta> & { id: string },
 ): Promise<void> {
   const db = await openDb();
-  const existing = await new Promise<LoraAdapterMeta | undefined>((resolve, reject) => {
-    const tx = db.transaction(META_STORE, 'readonly');
-    const req = tx.objectStore(META_STORE).get(meta.id);
-    req.onsuccess = () => resolve(req.result as LoraAdapterMeta | undefined);
-    req.onerror = () => reject(req.error);
-  });
-  if (!existing) throw new Error(`Adapter ${meta.id} not found`);
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(META_STORE, 'readwrite');
-    tx.objectStore(META_STORE).put({ ...existing, ...meta });
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
+  const stored = await new Promise<StoredLoraAdapterMeta | LoraAdapterMeta | undefined>(
+    (resolve, reject) => {
+      const tx = db.transaction(META_STORE, 'readonly');
+      const req = tx.objectStore(META_STORE).get(meta.id);
+      req.onsuccess = () =>
+        resolve(req.result as StoredLoraAdapterMeta | LoraAdapterMeta | undefined);
+      req.onerror = () => reject(req.error);
+    },
+  );
+  if (!stored) throw new Error(`Adapter ${meta.id} not found`);
+  const existing = (await decodeAdapterMeta(stored)).meta;
+  await putRecords(db, META_STORE, [await encodeAdapterMeta({ ...existing, ...meta })]);
 }
 
 // ---------------------------------------------------------------------------
@@ -255,28 +391,86 @@ export interface StoredDatasetEntry {
   createdAt: number;
 }
 
+type DatasetEntryPayload = Omit<StoredDatasetEntry, 'id' | 'projectId' | 'source' | 'createdAt'>;
+
+interface StoredDatasetRecord {
+  id: string;
+  projectId: string;
+  source: StoredDatasetEntry['source'];
+  createdAt: number;
+  schemaVersion: typeof RECORD_SCHEMA_VERSION;
+  payload: DatasetEntryPayload | SecureRecordEnvelope;
+}
+
+function datasetPayload(entry: StoredDatasetEntry): DatasetEntryPayload {
+  return {
+    instruction: entry.instruction,
+    input: entry.input,
+    output: entry.output,
+    qualityScore: entry.qualityScore,
+    wordCount: entry.wordCount,
+  };
+}
+
+async function encodeDatasetEntry(entry: StoredDatasetEntry): Promise<StoredDatasetRecord> {
+  return {
+    id: entry.id,
+    projectId: entry.projectId,
+    source: entry.source,
+    createdAt: entry.createdAt,
+    schemaVersion: RECORD_SCHEMA_VERSION,
+    payload: await prepareSecureRecordPayload(datasetPayload(entry)),
+  };
+}
+
+async function decodeDatasetEntry(
+  stored: StoredDatasetRecord | StoredDatasetEntry,
+): Promise<{ entry: StoredDatasetEntry; needsMigration: boolean }> {
+  const decoded = await readSecureRecordPayload<DatasetEntryPayload>(
+    'payload' in stored ? stored.payload : datasetPayload(stored),
+  );
+  return {
+    entry: {
+      id: stored.id,
+      projectId: stored.projectId,
+      source: stored.source,
+      createdAt: stored.createdAt,
+      ...decoded.value,
+    },
+    needsMigration: decoded.needsMigration,
+  };
+}
+
 export async function saveDatasetEntries(entries: StoredDatasetEntry[]): Promise<void> {
   const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(DATASETS_STORE, 'readwrite');
-    const store = tx.objectStore(DATASETS_STORE);
-    for (const entry of entries) store.put(entry);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
+  const stored = await Promise.all(entries.map(encodeDatasetEntry));
+  await putRecords(db, DATASETS_STORE, stored);
 }
 
 export async function listDatasetEntries(projectId: string): Promise<StoredDatasetEntry[]> {
   try {
     const db = await openDb();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(DATASETS_STORE, 'readonly');
-      const idx = tx.objectStore(DATASETS_STORE).index('by_project');
-      const req = idx.getAll(projectId);
-      req.onsuccess = () => resolve((req.result as StoredDatasetEntry[]) ?? []);
-      req.onerror = () => reject(req.error);
-    });
+    const raw = await new Promise<Array<StoredDatasetRecord | StoredDatasetEntry>>(
+      (resolve, reject) => {
+        const tx = db.transaction(DATASETS_STORE, 'readonly');
+        const idx = tx.objectStore(DATASETS_STORE).index('by_project');
+        const req = idx.getAll(projectId);
+        req.onsuccess = () =>
+          resolve((req.result as Array<StoredDatasetRecord | StoredDatasetEntry>) ?? []);
+        req.onerror = () => reject(req.error);
+      },
+    );
+    const entries: StoredDatasetEntry[] = [];
+    const migrations: StoredDatasetRecord[] = [];
+    for (const stored of raw) {
+      const decoded = await decodeDatasetEntry(stored);
+      entries.push(decoded.entry);
+      if (decoded.needsMigration) migrations.push(await encodeDatasetEntry(decoded.entry));
+    }
+    await putRecords(db, DATASETS_STORE, migrations);
+    return entries;
   } catch (err) {
+    rethrowSecureRecordError(err);
     logger.warn('loraAdapterService: listDatasetEntries failed', { err });
     return [];
   }
@@ -315,27 +509,95 @@ export interface StoredTrainingRun {
   errorMessage?: string;
 }
 
+type TrainingRunPayload = Omit<
+  StoredTrainingRun,
+  'id' | 'projectId' | 'status' | 'startedAt' | 'completedAt'
+>;
+
+interface StoredTrainingRecord {
+  id: string;
+  projectId: string;
+  status: StoredTrainingRun['status'];
+  startedAt: number;
+  completedAt?: number;
+  schemaVersion: typeof RECORD_SCHEMA_VERSION;
+  payload: TrainingRunPayload | SecureRecordEnvelope;
+}
+
+function trainingRunPayload(run: StoredTrainingRun): TrainingRunPayload {
+  return {
+    baseModelId: run.baseModelId,
+    presetId: run.presetId,
+    progressPercent: run.progressPercent,
+    currentEpoch: run.currentEpoch,
+    totalEpochs: run.totalEpochs,
+    currentLoss: run.currentLoss,
+    lossHistory: run.lossHistory,
+    ...(run.outputAdapterId !== undefined && { outputAdapterId: run.outputAdapterId }),
+    ...(run.errorMessage !== undefined && { errorMessage: run.errorMessage }),
+  };
+}
+
+async function encodeTrainingRun(run: StoredTrainingRun): Promise<StoredTrainingRecord> {
+  return {
+    id: run.id,
+    projectId: run.projectId,
+    status: run.status,
+    startedAt: run.startedAt,
+    ...(run.completedAt !== undefined && { completedAt: run.completedAt }),
+    schemaVersion: RECORD_SCHEMA_VERSION,
+    payload: await prepareSecureRecordPayload(trainingRunPayload(run)),
+  };
+}
+
+async function decodeTrainingRun(
+  stored: StoredTrainingRecord | StoredTrainingRun,
+): Promise<{ run: StoredTrainingRun; needsMigration: boolean }> {
+  const decoded = await readSecureRecordPayload<TrainingRunPayload>(
+    'payload' in stored ? stored.payload : trainingRunPayload(stored),
+  );
+  return {
+    run: {
+      id: stored.id,
+      projectId: stored.projectId,
+      status: stored.status,
+      startedAt: stored.startedAt,
+      ...(stored.completedAt !== undefined && { completedAt: stored.completedAt }),
+      ...decoded.value,
+    },
+    needsMigration: decoded.needsMigration,
+  };
+}
+
 export async function saveTrainingRun(run: StoredTrainingRun): Promise<void> {
   const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(RUNS_STORE, 'readwrite');
-    tx.objectStore(RUNS_STORE).put(run);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
+  await putRecords(db, RUNS_STORE, [await encodeTrainingRun(run)]);
 }
 
 export async function listTrainingRuns(projectId: string): Promise<StoredTrainingRun[]> {
   try {
     const db = await openDb();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(RUNS_STORE, 'readonly');
-      const idx = tx.objectStore(RUNS_STORE).index('by_project');
-      const req = idx.getAll(projectId);
-      req.onsuccess = () => resolve((req.result as StoredTrainingRun[]) ?? []);
-      req.onerror = () => reject(req.error);
-    });
+    const raw = await new Promise<Array<StoredTrainingRecord | StoredTrainingRun>>(
+      (resolve, reject) => {
+        const tx = db.transaction(RUNS_STORE, 'readonly');
+        const idx = tx.objectStore(RUNS_STORE).index('by_project');
+        const req = idx.getAll(projectId);
+        req.onsuccess = () =>
+          resolve((req.result as Array<StoredTrainingRecord | StoredTrainingRun>) ?? []);
+        req.onerror = () => reject(req.error);
+      },
+    );
+    const runs: StoredTrainingRun[] = [];
+    const migrations: StoredTrainingRecord[] = [];
+    for (const stored of raw) {
+      const decoded = await decodeTrainingRun(stored);
+      runs.push(decoded.run);
+      if (decoded.needsMigration) migrations.push(await encodeTrainingRun(decoded.run));
+    }
+    await putRecords(db, RUNS_STORE, migrations);
+    return runs;
   } catch (err) {
+    rethrowSecureRecordError(err);
     logger.warn('loraAdapterService: listTrainingRuns failed', { err });
     return [];
   }
@@ -343,9 +605,7 @@ export async function listTrainingRuns(projectId: string): Promise<StoredTrainin
 
 /** Reset the IDB for unit tests. */
 export function _resetLoraDbForTest(): void {
-  // Re-assign global so the next openDb() call starts fresh
-  if (typeof global !== 'undefined' && 'IDBFactory' in global) {
-    const { IDBFactory } = global as unknown as { IDBFactory: new () => IDBDatabase };
-    (global as unknown as { indexedDB: IDBDatabase }).indexedDB = new IDBFactory();
-  }
+  dbHandle?.close();
+  dbHandle = null;
+  dbPromise = null;
 }
