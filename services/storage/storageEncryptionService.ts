@@ -33,6 +33,39 @@ export interface EncryptedBlob {
   bytes: Uint8Array;
 }
 
+export const SECURE_RECORD_VERSION = 1 as const;
+
+/** Structured-clone-safe encrypted payload used by secondary IndexedDB databases. */
+export interface SecureRecordEnvelope {
+  version: typeof SECURE_RECORD_VERSION;
+  iv: Uint8Array;
+  ciphertext: Uint8Array;
+}
+
+export interface SecureRecordReadResult<T> {
+  value: T;
+  /** True only for legacy plaintext read while the encryption key is unlocked. */
+  needsMigration: boolean;
+}
+
+export class SecureRecordLockedError extends Error {
+  readonly code = 'STORAGE_LOCKED' as const;
+
+  constructor() {
+    super('Encrypted storage is locked');
+    this.name = 'SecureRecordLockedError';
+  }
+}
+
+export class SecureRecordCorruptError extends Error {
+  readonly code = 'STORAGE_CORRUPT' as const;
+
+  constructor() {
+    super('Encrypted storage record is corrupt or uses an unsupported version');
+    this.name = 'SecureRecordCorruptError';
+  }
+}
+
 export class StorageEncryptionService {
   /**
    * Derive a non-extractable AES-256-GCM key from a passphrase + salt.
@@ -167,6 +200,82 @@ export function isEncryptedBlob(value: unknown): value is Uint8Array {
     if (value[i] !== SENTINEL[i]) return false;
   }
   return true;
+}
+
+function isSecureRecordCandidate(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null) return false;
+  const record = value as Record<string, unknown>;
+  return 'version' in record && 'iv' in record && 'ciphertext' in record;
+}
+
+/** Type guard for the versioned envelope stored by secondary IndexedDB services. */
+export function isSecureRecordEnvelope(value: unknown): value is SecureRecordEnvelope {
+  if (!isSecureRecordCandidate(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    record['version'] === SECURE_RECORD_VERSION &&
+    record['iv'] instanceof Uint8Array &&
+    record['iv'].length === IV_BYTE_LENGTH &&
+    record['ciphertext'] instanceof Uint8Array &&
+    record['ciphertext'].length >= 16
+  );
+}
+
+function encryptedBlobToEnvelope(bytes: Uint8Array): SecureRecordEnvelope {
+  return {
+    version: SECURE_RECORD_VERSION,
+    iv: bytes.slice(SENTINEL.length, SENTINEL.length + IV_BYTE_LENGTH),
+    ciphertext: bytes.slice(SENTINEL.length + IV_BYTE_LENGTH),
+  };
+}
+
+function envelopeToEncryptedBlob(envelope: SecureRecordEnvelope): EncryptedBlob {
+  const bytes = new Uint8Array(SENTINEL.length + IV_BYTE_LENGTH + envelope.ciphertext.length);
+  bytes.set(SENTINEL, 0);
+  bytes.set(envelope.iv, SENTINEL.length);
+  bytes.set(envelope.ciphertext, SENTINEL.length + IV_BYTE_LENGTH);
+  return { bytes };
+}
+
+async function isSecureStorageConfigured(): Promise<boolean> {
+  if (typeof indexedDB === 'undefined') return false;
+  try {
+    return await hasPassphraseSentinel();
+  } catch {
+    // QNBS-v3: An unreadable verifier must fail closed instead of silently authorising plaintext.
+    throw new SecureRecordLockedError();
+  }
+}
+
+/** Prepare a secondary-store payload without ever downgrading configured encryption to plaintext. */
+export async function prepareSecureRecordPayload<T>(value: T): Promise<T | SecureRecordEnvelope> {
+  if (_activeKey) {
+    const blob = await _svc.encrypt(_activeKey, value);
+    return encryptedBlobToEnvelope(blob.bytes);
+  }
+  if (await isSecureStorageConfigured()) throw new SecureRecordLockedError();
+  return value;
+}
+
+/** Read an encrypted or legacy secondary-store payload with typed fail-closed errors. */
+export async function readSecureRecordPayload<T>(
+  stored: unknown,
+): Promise<SecureRecordReadResult<T>> {
+  if (isSecureRecordCandidate(stored)) {
+    if (!isSecureRecordEnvelope(stored)) throw new SecureRecordCorruptError();
+    if (!_activeKey) throw new SecureRecordLockedError();
+    try {
+      const value = (await _svc.decrypt(_activeKey, envelopeToEncryptedBlob(stored))) as T;
+      return { value, needsMigration: false };
+    } catch {
+      // QNBS-v3: Durable errors expose no ciphertext, key material, or decrypted content.
+      throw new SecureRecordCorruptError();
+    }
+  }
+
+  if (_activeKey) return { value: stored as T, needsMigration: true };
+  if (await isSecureStorageConfigured()) throw new SecureRecordLockedError();
+  return { value: stored as T, needsMigration: false };
 }
 
 /**

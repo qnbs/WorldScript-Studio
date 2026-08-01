@@ -10,16 +10,58 @@ import {
   listRevisions,
   saveRevision,
 } from '../../services/sceneRevisionService';
+import { _resetPassphraseSentinelForTest } from '../../services/storage/idbPassphraseSentinel';
+import {
+  clearIdbEncryptionKey,
+  isSecureRecordEnvelope,
+  SecureRecordCorruptError,
+  SecureRecordLockedError,
+  setupIdbEncryption,
+} from '../../services/storage/storageEncryptionService';
+
+const DB_NAME = 'worldscript-revisions-db';
+const STORE = 'scene-revisions';
+
+async function readRawRevision(id: string): Promise<unknown> {
+  const db = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  return new Promise((resolve, reject) => {
+    const request = db.transaction(STORE, 'readonly').objectStore(STORE).get(id);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function writeRawRevision(record: unknown): Promise<void> {
+  const db = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(STORE, 'readwrite');
+    transaction.objectStore(STORE).put(record);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+  });
+}
 
 beforeEach(() => {
+  _resetDbForTest();
+  _resetPassphraseSentinelForTest();
+  clearIdbEncryptionKey();
   // Fresh IDB instance per test — avoids record leak between tests
   global.indexedDB = new IDBFactory();
   global.IDBKeyRange = IDBKeyRange;
-  _resetDbForTest();
 });
 
 afterEach(() => {
   _resetDbForTest();
+  _resetPassphraseSentinelForTest();
+  clearIdbEncryptionKey();
 });
 
 describe('sceneRevisionService', () => {
@@ -96,6 +138,78 @@ describe('sceneRevisionService', () => {
     const rev = await saveRevision('sec1', { title: 'T', content: 'C' });
     expect(typeof rev.createdAt).toBe('number');
     expect(rev.createdAt).toBeGreaterThan(0);
+  });
+
+  it('encrypts all content-bearing fields in the raw IndexedDB record', async () => {
+    const canary = 'SCENE_CONTENT_CANARY_28f0';
+    const titleCanary = 'SCENE_TITLE_CANARY_18a7';
+    await setupIdbEncryption('revision-passphrase');
+
+    const revision = await saveRevision(
+      'sec-encrypted',
+      { title: titleCanary, content: canary },
+      'PRIVATE_LABEL_CANARY',
+      'PRIVATE_AUTHOR_CANARY',
+    );
+    const raw = (await readRawRevision(revision.id)) as Record<string, unknown>;
+
+    expect(raw['id']).toBe(revision.id);
+    expect(raw['sectionId']).toBe('sec-encrypted');
+    expect(isSecureRecordEnvelope(raw['payload'])).toBe(true);
+    expect(JSON.stringify(raw)).not.toContain(canary);
+    expect(JSON.stringify(raw)).not.toContain(titleCanary);
+    expect(JSON.stringify(raw)).not.toContain('PRIVATE_LABEL_CANARY');
+    expect(JSON.stringify(raw)).not.toContain('PRIVATE_AUTHOR_CANARY');
+    await expect(listRevisions('sec-encrypted')).resolves.toEqual([revision]);
+  });
+
+  it('rejects reads and writes while configured encryption is locked', async () => {
+    await setupIdbEncryption('revision-passphrase');
+    await saveRevision('sec-locked', { title: 'Locked', content: 'Sensitive' });
+    clearIdbEncryptionKey();
+
+    await expect(listRevisions('sec-locked')).rejects.toBeInstanceOf(SecureRecordLockedError);
+    await expect(
+      saveRevision('sec-locked', { title: 'New', content: 'Must not persist plaintext' }),
+    ).rejects.toBeInstanceOf(SecureRecordLockedError);
+  });
+
+  it('lazily rewrites a legacy plaintext revision after unlock', async () => {
+    const seed = await saveRevision('seed', { title: 'Seed', content: 'Seed' });
+    await deleteRevision(seed.id);
+    const legacy = {
+      id: 'legacy-revision',
+      sectionId: 'sec-legacy',
+      createdAt: 123,
+      title: 'LEGACY_TITLE_CANARY',
+      content: 'LEGACY_CONTENT_CANARY',
+      wordCount: 2,
+      label: 'LEGACY_LABEL_CANARY',
+    };
+    await writeRawRevision(legacy);
+    await setupIdbEncryption('revision-passphrase');
+
+    await expect(listRevisions('sec-legacy')).resolves.toEqual([legacy]);
+    const migrated = (await readRawRevision(legacy.id)) as Record<string, unknown>;
+    expect(isSecureRecordEnvelope(migrated['payload'])).toBe(true);
+    expect(JSON.stringify(migrated)).not.toContain('LEGACY_CONTENT_CANARY');
+    expect(JSON.stringify(migrated)).not.toContain('LEGACY_TITLE_CANARY');
+  });
+
+  it('fails closed when an encrypted revision is corrupted', async () => {
+    await setupIdbEncryption('revision-passphrase');
+    const revision = await saveRevision('sec-corrupt', {
+      title: 'Corrupt',
+      content: 'CORRUPTION_CANARY',
+    });
+    const raw = (await readRawRevision(revision.id)) as Record<string, unknown>;
+    const payload = raw['payload'];
+    if (!isSecureRecordEnvelope(payload)) throw new Error('Expected encrypted revision');
+    const ciphertext = new Uint8Array(payload.ciphertext);
+    ciphertext[0] = (ciphertext[0] ?? 0) ^ 0xff;
+    await writeRawRevision({ ...raw, payload: { ...payload, ciphertext } });
+
+    await expect(listRevisions('sec-corrupt')).rejects.toBeInstanceOf(SecureRecordCorruptError);
   });
 
   it('_resetDbForTest allows re-initialization', async () => {

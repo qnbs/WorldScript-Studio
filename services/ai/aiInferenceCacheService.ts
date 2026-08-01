@@ -1,5 +1,11 @@
 // QNBS-v3: Two-layer inference cache — in-memory LRU for hot paths, IndexedDB for persistence.
 //          Adapted from CannaGuide-2025 cacheService.ts patterns for WorldScript creative context.
+import {
+  prepareSecureRecordPayload,
+  readSecureRecordPayload,
+  SecureRecordCorruptError,
+  type SecureRecordEnvelope,
+} from '../storage/storageEncryptionService';
 
 const IN_MEMORY_MAX = 64;
 const IDB_MAX_ENTRIES = 256;
@@ -10,10 +16,20 @@ const IDB_STORE = 'inference-cache';
 const IDB_DB_NAME = 'worldscript-inference-cache-db';
 const IDB_DB_VERSION = 1;
 
-interface CacheEntry {
+interface LegacyCacheEntry {
   key: string;
   result: string;
   timestamp: number;
+}
+
+interface CachePayload {
+  result: string;
+}
+
+interface CacheEntry {
+  key: string;
+  timestamp: number;
+  payload: CachePayload | SecureRecordEnvelope;
 }
 
 interface LruEntry {
@@ -34,7 +50,7 @@ function hashKey(prompt: string, modelId: string): string {
   return `${(djb2 >>> 0).toString(16)}-${(fnv >>> 0).toString(16)}`;
 }
 
-class AiInferenceCacheService {
+export class AiInferenceCacheService {
   private readonly inMemory = new Map<string, LruEntry>();
   private db: IDBDatabase | null = null;
   private dbReady: Promise<void>;
@@ -93,6 +109,35 @@ class AiInferenceCacheService {
     return prompt.length > SKIP_CACHE_PROMPT_LENGTH;
   }
 
+  private async encodeEntry(key: string, result: string, timestamp: number): Promise<CacheEntry> {
+    return {
+      key,
+      timestamp,
+      payload: await prepareSecureRecordPayload<CachePayload>({ result }),
+    };
+  }
+
+  private async decodeEntry(
+    stored: CacheEntry | LegacyCacheEntry,
+  ): Promise<{ result: string; needsMigration: boolean }> {
+    const rawPayload = 'payload' in stored ? stored.payload : { result: stored.result };
+    const decoded = await readSecureRecordPayload<CachePayload>(rawPayload);
+    if (typeof decoded.value?.result !== 'string') throw new SecureRecordCorruptError();
+    return { result: decoded.value.result, needsMigration: decoded.needsMigration };
+  }
+
+  private async persistEntry(entry: CacheEntry): Promise<void> {
+    if (!this.db) return;
+    await new Promise<void>((resolve) => {
+      const transaction = this.db!.transaction(IDB_STORE, 'readwrite');
+      transaction.objectStore(IDB_STORE).put(entry);
+      // QNBS-v3: Cache persistence remains best-effort; encryption/locked errors happen before this transaction.
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => resolve();
+      transaction.onabort = () => resolve();
+    });
+  }
+
   async getCachedInference(prompt: string, modelId: string): Promise<string | null> {
     if (this.shouldSkip(prompt)) return null;
     const key = hashKey(prompt, modelId);
@@ -107,11 +152,11 @@ class AiInferenceCacheService {
     // 2. IDB check
     await this.dbReady;
     if (!this.db) return null;
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const tx = this.db!.transaction(IDB_STORE, 'readonly');
       const req = tx.objectStore(IDB_STORE).get(key);
       req.onsuccess = (e) => {
-        const entry = (e.target as IDBRequest<CacheEntry | undefined>).result;
+        const entry = (e.target as IDBRequest<CacheEntry | LegacyCacheEntry | undefined>).result;
         if (!entry) {
           resolve(null);
           return;
@@ -120,10 +165,15 @@ class AiInferenceCacheService {
           resolve(null);
           return;
         }
-        // Populate in-memory from IDB hit
-        this.evictLru();
-        this.inMemory.set(key, { result: entry.result, lastUsed: Date.now() });
-        resolve(entry.result);
+        void (async () => {
+          const decoded = await this.decodeEntry(entry);
+          if (decoded.needsMigration) {
+            await this.persistEntry(await this.encodeEntry(key, decoded.result, entry.timestamp));
+          }
+          this.evictLru();
+          this.inMemory.set(key, { result: decoded.result, lastUsed: Date.now() });
+          return decoded.result;
+        })().then(resolve, reject);
       };
       req.onerror = () => resolve(null);
     });
@@ -133,21 +183,18 @@ class AiInferenceCacheService {
     if (this.shouldSkip(prompt)) return;
     const key = hashKey(prompt, modelId);
 
-    // Store in-memory
+    await this.dbReady;
+    if (!this.db) {
+      this.evictLru();
+      this.inMemory.set(key, { result, lastUsed: Date.now() });
+      return;
+    }
+    // QNBS-v3: Encrypt before mutating either cache layer so a locked persistent cache fails atomically.
+    const entry = await this.encodeEntry(key, result, Date.now());
     this.evictLru();
     this.inMemory.set(key, { result, lastUsed: Date.now() });
-
-    // Persist to IDB
-    await this.dbReady;
-    if (!this.db) return;
     await this.idbEvictOldest();
-    return new Promise((resolve) => {
-      const tx = this.db!.transaction(IDB_STORE, 'readwrite');
-      const entry: CacheEntry = { key, result, timestamp: Date.now() };
-      tx.objectStore(IDB_STORE).put(entry);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => resolve();
-    });
+    await this.persistEntry(entry);
   }
 
   private async idbEvictOldest(): Promise<void> {

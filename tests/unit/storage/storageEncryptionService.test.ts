@@ -34,7 +34,12 @@ import {
   initIdbEncryption,
   isEncryptedBlob,
   isIdbEncryptionReady,
+  isSecureRecordEnvelope,
+  prepareSecureRecordPayload,
+  readSecureRecordPayload,
   rotateIdbPassphrase,
+  SecureRecordCorruptError,
+  SecureRecordLockedError,
   StorageEncryptionService,
   setupIdbEncryption,
   verifyAndInitIdbEncryption,
@@ -166,6 +171,84 @@ describe('isEncryptedBlob', () => {
 
   it('returns false for a Uint8Array without sentinel', () => {
     expect(isEncryptedBlob(new Uint8Array(20).fill(1))).toBe(false);
+  });
+});
+
+describe('secure record envelopes', () => {
+  const canary = 'MANUSCRIPT_CANARY_7c91f4';
+
+  it('keeps payloads plaintext only when at-rest encryption is not configured', async () => {
+    const payload = { content: canary };
+
+    await expect(prepareSecureRecordPayload(payload)).resolves.toBe(payload);
+    await expect(readSecureRecordPayload(payload)).resolves.toEqual({
+      value: payload,
+      needsMigration: false,
+    });
+  });
+
+  it('stores an opaque envelope and round-trips it when encryption is unlocked', async () => {
+    await setupIdbEncryption('correct horse battery staple');
+
+    const stored = await prepareSecureRecordPayload({ content: canary });
+
+    expect(isSecureRecordEnvelope(stored)).toBe(true);
+    expect(JSON.stringify(stored)).not.toContain(canary);
+    await expect(readSecureRecordPayload(stored)).resolves.toEqual({
+      value: { content: canary },
+      needsMigration: false,
+    });
+  });
+
+  it('marks legacy plaintext for lazy migration after unlock', async () => {
+    await setupIdbEncryption('correct horse battery staple');
+
+    await expect(readSecureRecordPayload({ content: canary })).resolves.toEqual({
+      value: { content: canary },
+      needsMigration: true,
+    });
+  });
+
+  it('fails closed for encrypted and legacy records while configured storage is locked', async () => {
+    await setupIdbEncryption('correct horse battery staple');
+    const stored = await prepareSecureRecordPayload({ content: canary });
+    clearIdbEncryptionKey();
+
+    await expect(prepareSecureRecordPayload({ content: canary })).rejects.toBeInstanceOf(
+      SecureRecordLockedError,
+    );
+    await expect(readSecureRecordPayload(stored)).rejects.toBeInstanceOf(SecureRecordLockedError);
+    await expect(readSecureRecordPayload({ content: canary })).rejects.toBeInstanceOf(
+      SecureRecordLockedError,
+    );
+  });
+
+  it('reports authenticated-decryption failures as typed corruption', async () => {
+    await setupIdbEncryption('correct horse battery staple');
+    const stored = await prepareSecureRecordPayload({ content: canary });
+    expect(isSecureRecordEnvelope(stored)).toBe(true);
+    if (!isSecureRecordEnvelope(stored)) throw new Error('Expected encrypted test envelope');
+    const corrupted = {
+      ...stored,
+      ciphertext: new Uint8Array(stored.ciphertext),
+    };
+    corrupted.ciphertext[0] = (corrupted.ciphertext[0] ?? 0) ^ 0xff;
+
+    await expect(readSecureRecordPayload(corrupted)).rejects.toBeInstanceOf(
+      SecureRecordCorruptError,
+    );
+  });
+
+  it('rejects unsupported envelope versions instead of treating them as plaintext', async () => {
+    await setupIdbEncryption('correct horse battery staple');
+
+    await expect(
+      readSecureRecordPayload({
+        version: 99,
+        iv: new Uint8Array(12),
+        ciphertext: new Uint8Array(16),
+      }),
+    ).rejects.toBeInstanceOf(SecureRecordCorruptError);
   });
 });
 
