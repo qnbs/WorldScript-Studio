@@ -303,6 +303,25 @@ GitHub App resumes auto-reviewing, run **both** loops: CodeAnt for narrative/AI 
   likely scopes JS-R1005/JS-C1002 similarly for this file, or the file is decomposed) — an agent
   should not attempt that maintainer-only dashboard action nor a speculative mass-refactor of this
   critical middleware file as a side effect of an unrelated feature PR.
+- **2026-08-01 (LOCAL-ONLY entry — not pushed to remote)** — Re-checked the dashboard "Security"
+  category: **JS-0440** (`Dangerous property 'dangerouslySetInnerHTML' found`, **Major**, OWASP
+  A03/SANS-Top-25/CWE-937) is still listed as an **active, non-ignored** occurrence in
+  [`components/HelpView.tsx`](../components/HelpView.tsx) (the `dangerouslySetInnerHTML={{ __html:
+  DOMPurify.sanitize(t(selectedArticle.content)) }}` block, already wrapped in
+  `biome-ignore-start/end lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify`). This
+  **contradicts** the 2026-06-24 log line above claiming "JS-0440 dashboard-ignored, reviewed-safe" —
+  either that ignore never persisted for this occurrence or a later scan re-surfaced it; the dashboard
+  ignore state should **not** be trusted without re-verifying per PR. Disposition: **accepted risk,
+  no code change needed** — content is sanitized through `DOMPurify.sanitize()` before render, matching
+  the repo-wide rule ("`dangerouslySetInnerHTML` only with DOMPurify-sanitized content"); DeepSource's
+  static analyzer flags the JSX prop categorically and cannot trace the sanitization dataflow. **TODO
+  for later execution (maintainer, local-only tracking — do not push this entry upstream):**
+  (1) click **Ignore** on this specific occurrence in the DeepSource dashboard again (Issues → JS-0440
+  → `components/HelpView.tsx`) and confirm it survives the next full-repo scan; (2) if it keeps
+  re-surfacing, consider a rule-level ignore for JS-0440 repo-wide given every `dangerouslySetInnerHTML`
+  call site in this codebase already goes through DOMPurify (grep confirms no raw usages); (3) audit
+  whether any *other* file uses `dangerouslySetInnerHTML` without the same DOMPurify + biome-ignore
+  pairing (none found via `grep -rn dangerouslySetInnerHTML` as of this date — only `HelpView.tsx`).
 
 ---
 
