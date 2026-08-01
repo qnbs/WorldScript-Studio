@@ -4,7 +4,7 @@
 
 | Version | Supported |
 | --- | --- |
-| `main` (v1.25.1) | ✅ Full support |
+| `main` (v1.26.0) | ✅ Full support |
 | `1.3.x – 1.25.0` | ⚠️ Best effort (upgrade strongly recommended) |
 | `< 1.3.0` | ❌ Not supported |
 
