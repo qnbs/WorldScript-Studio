@@ -425,7 +425,7 @@ Feature-specific implementation patterns (Plot Board, ProForge Pipeline, scene-l
 See `AUDIT.md` and `TODO.md`. Key items:
 - `workers/v2/inference.worker.ts` (v1 deleted, ADR-0015) — `@huggingface/transformers` v3 path alias in `tsconfig.json`; if the alias breaks, fix the path alias or the package's type declaration directly — do not suppress with `@ts-expect-error` (conflicts with the suppression-ratchet policy above).
 - **DS-5:** Delete legacy bridge block from `index.css` — deferred until DS-1 verified in production.
-- **B-1 (IDB encryption):** Passphrase UX complete (`IdbUnlockModal`, `PassphraseModal`). Actual IDB read/write integration for stores is Phase 4 (service-layer only currently).
+- **B-1 (IDB encryption):** Primary and content-bearing secondary IDB reads/writes are integrated, fail closed while locked, and lazily migrate legacy plaintext. DuckDB structural metadata and large LoRA weights are documented exceptions. Remaining: durable resumable passphrase rotation across every registered database.
 - **B-2 (Voice WASM):** Engine + download UI shipped. Remaining: E2E integration test coverage.
 - **SW version sync:** `public/sw.js` `APP_VERSION` and the Tauri versions are **auto-synced** from `package.json` `version` by `scripts/sync-sw-version.mjs` + `scripts/sync-tauri-version.mjs`, which run on every `predev`/`prebuild` — no manual edit needed (just bump `package.json` for a release). The earlier "must hand-sync" note is obsolete.
 

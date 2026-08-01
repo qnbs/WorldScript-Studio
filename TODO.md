@@ -8,23 +8,32 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ---
 
-## Release — v1.25.0 published (2026-08-01)
+## Release — v1.26.0 published (2026-08-01)
 
 > **Status: ✅ Done.** Tagged, released, and live — see the GitHub Release link below.
 
-Native Grok/Claude providers, opt-in Browser-Ollama, and DuckDB `codex_mentions.excerpt`
-cell-level encryption (SEC-6) all shipped in this cycle — see
-[`docs/history/completed-v1.25.0-providers.md`](docs/history/completed-v1.25.0-providers.md) for
-the full completed checklist. `CHANGELOG.md`, `package.json`/`README.md`, and `src-tauri`/`public/sw.js`
-are all version-bumped and synced for this release.
+The authoritative WorkerBus scheduler, bounded critical reserve, queue-inclusive inactivity timeout,
+and native task-completion notifications shipped in this release. Native Grok/Claude providers,
+opt-in Browser-Ollama, and DuckDB `codex_mentions.excerpt` cell-level encryption shipped in v1.25.0;
+see [`docs/history/completed-v1.25.0-providers.md`](docs/history/completed-v1.25.0-providers.md).
 
-- ✅ PR #303 (DuckDB excerpt encryption SEC-6 + CodeRabbit fix + doc-truth fixes) merged to `main`
-  at `256264d3` via admin-bypass squash-merge (fresh maintainer authorization; `mergeStateStatus`
-  cache-lag artifact — all 20/20 checks green, 0 unresolved review threads, Tauri Rust build
-  manually verified green on all 3 platforms before merge).
-- ✅ Tagged and published `v1.25.0` after `main`'s post-merge CI (`build` + `e2e`) went green — the
-  GitHub Release is live with all Tauri installer assets (macOS/Linux/Windows) and `.sig` files; see
-  [`v1.25.0` on GitHub](https://github.com/qnbs/WorldScript-Studio/releases/tag/v1.25.0).
+## Active security follow-up — secondary storage and rotation
+
+- ✅ Content-bearing secondary IDB payloads encrypted: scene revisions, inference cache, ProForge
+  memory/history, cross-project descriptive metadata/embeddings, and LoRA metadata/datasets/runs.
+- ✅ Configured-but-locked access fails closed; legacy plaintext migrates lazily after unlock;
+  corruption and raw-record canaries are covered by focused tests.
+- ⬜ Add a durable cross-database rotation journal with bounded checkpoints and restart recovery;
+  retain the old verifier until all registered stores have completed.
+- ⬜ Add recursive, bounded, content-minimizing durable-log sanitization and one clear-diagnostics
+  operation covering memory, IndexedDB, and Tauri JSONL sinks.
+
+- ✅ PR #309 merged to `main` at `804793aa` via approved admin-bypass squash merge after required
+  review and cloud checks completed.
+- ✅ Signed annotated tag `v1.26.0` published; tag CI/CD, Docker, and Tauri workflows are green.
+- ✅ GitHub Release contains 14 verified desktop assets and signatures for Linux, Windows, and
+  macOS plus a `latest.json` updater manifest; see
+  [`v1.26.0` on GitHub](https://github.com/qnbs/WorldScript-Studio/releases/tag/v1.26.0).
 
 
 ---
