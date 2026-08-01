@@ -272,31 +272,33 @@ export class WorkerBus {
         createTaskMessage(task.taskId, task.taskType, task.payload, task.traceId, task.timeoutMs),
       );
 
+      // QNBS-v3: captured so the message handler below can be a plain hoisted `function`
+      //          (not an arrow bound to `this`) without losing access to the emitter.
+      const progressEmitter = this.progress;
+
       const result = await new Promise<TaskResult<TResult>>((resolve, _reject) => {
         let settled = false;
         let timeoutTimer: ReturnType<typeof setTimeout>;
-        // QNBS-v3: `handler`/`onTimeout` are forward-declared via `let` (hoisted, no TDZ read)
-        //          because `settle`/`armTimeout` close over them before their real definitions
-        //          run — the three closures are mutually recursive, so a strict top-to-bottom
-        //          `const` chain isn't possible without one forward reference.
-        let handler: (event: MessageEvent) => void;
-        let onTimeout: () => void;
 
-        const settle = () => {
+        // QNBS-v3: `settle`/`armTimeout`/`onTimeout`/`handler` are mutually recursive
+        //          (settle reads `handler`, `handler` calls `settle`/`armTimeout`) — plain
+        //          `function` declarations hoist fully (name + body), so each can reference
+        //          the others regardless of source order, with no TDZ and no `let` needed.
+        function settle() {
           settled = true;
           clearTimeout(timeoutTimer);
           port.removeEventListener('message', handler);
-        };
+        }
 
         // QNBS-v3: watchdog, not a hard ceiling — re-armed on every PROGRESS message so
         //          long-running jobs (ProForge stages, LoRA training) that report progress
         //          aren't falsely killed while genuinely wedged workers still get caught.
-        const armTimeout = () => {
+        function armTimeout() {
           clearTimeout(timeoutTimer);
           timeoutTimer = setTimeout(onTimeout, task.timeoutMs);
-        };
+        }
 
-        onTimeout = () => {
+        function onTimeout() {
           if (settled) return;
           settle();
           timedOut = true;
@@ -314,9 +316,9 @@ export class WorkerBus {
             workerId: worker.workerId,
             layer: 'web',
           });
-        };
+        }
 
-        handler = (event: MessageEvent) => {
+        function handler(event: MessageEvent) {
           if (settled) return;
           const msg = validateWorkerMessage(event.data);
           if (!msg) return;
@@ -326,7 +328,7 @@ export class WorkerBus {
 
           if (msg.kind === 'PROGRESS') {
             armTimeout();
-            this.progress.emit(task.taskId, {
+            progressEmitter.emit(task.taskId, {
               taskId: task.taskId,
               taskType: task.taskType,
               stage: msg.stage,
@@ -355,7 +357,7 @@ export class WorkerBus {
               layer: 'web',
             });
           }
-        };
+        }
         port.addEventListener('message', handler);
         armTimeout();
 

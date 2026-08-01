@@ -127,6 +127,11 @@ export class WorkerPool {
     };
 
     // QNBS-v3: addEventListener (unlike onmessage) never dispatches until start() is called.
+    //          Enabling here — once, before any task traffic — covers every later
+    //          `port.addEventListener('message', ...)` in workerBus.ts::runOnPool for the
+    //          lifetime of this port (including across task reuse): per the WHATWG spec,
+    //          start() only flips the port's [[Enabled]] flag, it doesn't need to be
+    //          re-called once a listener is attached or for subsequent tasks on the port.
     channel.port1.start();
     // QNBS-v3: Transfer port2 to worker for dedicated bidirectional channel
     worker.postMessage({ kind: 'INIT_PORT', port: channel.port2 }, [channel.port2]);
