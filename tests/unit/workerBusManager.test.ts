@@ -295,4 +295,66 @@ describe('workerBusManager', () => {
       );
     });
   });
+
+  describe('inference pool sizing by memory tier', () => {
+    // QNBS-v3: verified via ensureInferencePool()'s re-registration path — initWorkerBus() only calls the mocked registry.register(), not bus.registerPool().
+    afterEach(() => {
+      vi.doUnmock('../../services/ai/localAiDeviceProfiler');
+    });
+
+    async function expectMaxWorkersForTier(
+      detectMemoryTier: () => 'high' | 'medium' | 'low',
+      expectedMaxWorkers: number,
+    ): Promise<void> {
+      vi.doMock('../../services/ai/localAiDeviceProfiler', () => ({ detectMemoryTier }));
+      const { initWorkerBus, ensureInferencePool } = await import(
+        '../../services/workerBusManager'
+      );
+      await initWorkerBus();
+      mockRegisterPool.mockClear();
+      mockHasPool.mockReturnValue(false);
+
+      await ensureInferencePool();
+
+      expect(mockRegisterPool).toHaveBeenCalledWith(
+        'inference',
+        expect.arrayContaining(['inference.text', 'inference.embed']),
+        expect.objectContaining({ maxWorkers: expectedMaxWorkers }),
+      );
+    }
+
+    it('sizes maxWorkers to 3 on a high memory tier', async () => {
+      await expectMaxWorkersForTier(() => 'high', 3);
+    });
+
+    it('sizes maxWorkers to 2 on a medium memory tier (unchanged default)', async () => {
+      await expectMaxWorkersForTier(() => 'medium', 2);
+    });
+
+    it('sizes maxWorkers to 1 on a low memory tier', async () => {
+      await expectMaxWorkersForTier(() => 'low', 1);
+    });
+
+    it('falls back to maxWorkers 2 when memory-tier detection throws', async () => {
+      vi.doMock('../../services/ai/localAiDeviceProfiler', () => ({
+        detectMemoryTier: () => {
+          throw new Error('profiler boom');
+        },
+      }));
+      const { initWorkerBus, ensureInferencePool } = await import(
+        '../../services/workerBusManager'
+      );
+      await initWorkerBus();
+      mockRegisterPool.mockClear();
+      mockHasPool.mockReturnValue(false);
+
+      await ensureInferencePool();
+
+      expect(mockRegisterPool).toHaveBeenCalledWith(
+        'inference',
+        expect.arrayContaining(['inference.text', 'inference.embed']),
+        expect.objectContaining({ maxWorkers: 2 }),
+      );
+    });
+  });
 });

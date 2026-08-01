@@ -21,9 +21,9 @@ Analysiere **jede Datei, jedes Feature und jedes Repo individuell und ganzheitli
 
 ---
 
-## StoryCraft-Studio (dieses Repo) — Kurzkontext
+## WorldScript-Studio (dieses Repo, ehem. StoryCraft-Studio) — Kurzkontext
 
-Offline-first, **Privacy**, Redux Toolkit + IndexedDB + Zustand (transient UI), Hybrid-KI (Gemini, Vercel AI SDK, Ollama/WebLLM), pnpm-Workspace (`packages/*`), PWA, 5-Locale-i18n. Fokus: **Erzählung**, Schreibflow, KI als Co-Pilot — nicht als Ghostwriter. Vollständiger Stack und Regelkatalog: **`.cursor/index.mdc`**.
+Offline-first, **Privacy**, Redux Toolkit + IndexedDB + Zustand (transient UI), Multi-Provider-KI (Gemini, Vercel AI SDK, OpenAI/Claude/Grok/OpenRouter, Ollama/WebLLM/ONNX/Transformers.js), pnpm-Workspace (`packages/*`), PWA + Tauri 2, 19-Locale-i18n. Fokus: **Erzählung**, Schreibflow, KI als Co-Pilot — nicht als Ghostwriter. Vollständiger Stack und Regelkatalog: **`.cursor/index.mdc`**.
 
 ---
 
@@ -46,7 +46,7 @@ Inhalt des Kommentars: **warum** die Änderung, **was** sie verbessert, optional
 
 Bei jeder offenen PR **alle** Inline-Review-Kommentare (CodeRabbit + jeder andere Bot/Mensch) **proaktiv, ungefragt** abarbeiten. Pro Finding: gegen den **aktuellen** Code validieren (Anker oft veraltet), dann **Root-Cause-Fix** vollständig umsetzen (Code **+ Tests + i18n + Doku**) oder mit Begründung als False-Positive ablehnen. Jeden Thread mit Commit-Referenz beantworten, **resolven**, **0 unresolved** hinterlassen, committen + pushen.
 
-**Iron Rule — Loop bis Ruhe:** Nach jedem Push **Review erneut triggern** (`gh pr comment <N> --body "@coderabbitai review"`) und die komplette Review-Historie prüfen, nicht nur den letzten Status (ein „rate limited"-Status kann eine frühere echte Review verdecken); eine frische Review bringt regelmäßig **neue** Findings (eine „Welle"). Zyklus wiederholen, bis **BEIDES** gilt: frische Review = **0 neue Kommentare** UND **0 offene Threads**. Niemals aufhören, solange noch Kommentare kommen. **Niemals ein neues `biome-ignore`/Suppression** einbauen, um ein Finding stummzuschalten — der Suppression-Ratchet-Gate lässt die CI scheitern; stattdessen sauber refaktorieren. CodeAnt AI erscheint nur als 5 CI-Status-Checks (Quality Gates/SAST/SCA/SCR/Test Coverage) zur Grün-Prüfung, kein Kommentar-Thread — dort nicht erneut triggern in Erwartung eines Kommentars. Vollständige Prozedur: **`docs/CODEANT-REVIEW-LOOP.md`**.
+**Iron Rule — Loop bis Ruhe:** Nach jedem Push **Review erneut triggern** (`gh pr comment <N> --body "@coderabbitai review"`) und die komplette Review-Historie prüfen, nicht nur den letzten Status (ein „rate limited"-Status kann eine frühere echte Review verdecken); eine frische Review bringt regelmäßig **neue** Findings (eine „Welle"). Zyklus wiederholen, bis **BEIDES** gilt: frische Review = **0 neue Kommentare** UND **0 offene Threads**. Niemals aufhören, solange noch Kommentare kommen. **Niemals ein neues `biome-ignore`/Suppression** einbauen, um ein Finding stummzuschalten — der Suppression-Ratchet-Gate lässt die CI scheitern; stattdessen sauber refaktorieren. CodeAnt AI erscheint nur als 5 CI-Status-Checks (Quality Gates/SAST/SCA/SCR/Test Coverage) zur Grün-Prüfung, kein Kommentar-Thread — dort nicht erneut triggern in Erwartung eines Kommentars. Vollständige Prozedur (inkl. des komplementären, token-freien DeepSource-Loops): **`docs/CODEANT-REVIEW-LOOP.md`** + **`docs/DEEPSOURCE-REVIEW-LOOP.md`**.
 
 ---
 

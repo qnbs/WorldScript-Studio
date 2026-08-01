@@ -485,6 +485,8 @@ describe('WorkerBus', () => {
   });
 
   it('runs task through real worker port and resolves result', async () => {
+    // QNBS-v3: taskId is captured post-enqueue since the mock's RESULT must now match the real generated taskId (taskId filter above).
+    let capturedTaskId = '';
     // Create a mock port that responds with a RESULT message
     const mockPort = {
       addEventListener: vi.fn((type: string, handler: EventListener) => {
@@ -495,7 +497,7 @@ describe('WorkerBus', () => {
               new MessageEvent('message', {
                 data: {
                   kind: 'RESULT',
-                  taskId: 'mock-task-id',
+                  taskId: capturedTaskId,
                   success: true,
                   result: 'worker-output',
                   latencyMs: 10,
@@ -526,10 +528,13 @@ describe('WorkerBus', () => {
     );
 
     const handle = bus.enqueue('test.task', { data: 1 });
+    capturedTaskId = handle.taskId;
     await expect(handle.result).resolves.toBe('worker-output');
   });
 
   it('runs task through real worker port and handles progress', async () => {
+    // QNBS-v3: taskId is captured post-enqueue since the mock's PROGRESS/RESULT must now match the real generated taskId (taskId filter above).
+    let capturedTaskId = '';
     const progressEvents: Array<{ stage: string; progress: number }> = [];
     const mockPort = {
       addEventListener: vi.fn((type: string, handler: EventListener) => {
@@ -539,7 +544,7 @@ describe('WorkerBus', () => {
               new MessageEvent('message', {
                 data: {
                   kind: 'PROGRESS',
-                  taskId: 'mock-task-id',
+                  taskId: capturedTaskId,
                   stage: 'loading',
                   progress: 0.5,
                 },
@@ -551,7 +556,7 @@ describe('WorkerBus', () => {
               new MessageEvent('message', {
                 data: {
                   kind: 'RESULT',
-                  taskId: 'mock-task-id',
+                  taskId: capturedTaskId,
                   success: true,
                   result: 'done',
                   latencyMs: 10,
@@ -588,6 +593,7 @@ describe('WorkerBus', () => {
         onProgress: (p) => progressEvents.push({ stage: p.stage, progress: p.progress }),
       },
     );
+    capturedTaskId = handle.taskId;
     await handle.result;
     expect(progressEvents.length).toBeGreaterThanOrEqual(1);
     expect(progressEvents[0]?.stage).toBe('loading');
@@ -625,5 +631,192 @@ describe('WorkerBus', () => {
     await new Promise((r) => setTimeout(r, 10));
     handle.cancel('test-abort');
     await expect(handle.result).rejects.toThrow('cancelled');
+  });
+
+  it('times out a hung worker, records a circuit-breaker failure, and force-terminates it', async () => {
+    // QNBS-v3: fake timers make the 25ms deadline deterministic instead of racing real wall-clock time in CI.
+    vi.useFakeTimers();
+    try {
+      // Worker never sends PROGRESS or RESULT — simulates a wedged worker (not crashed, just silent).
+      const mockPort = {
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        postMessage: vi.fn(),
+        start: vi.fn(),
+      };
+
+      const mockWorker = {
+        workerId: 'mock-worker-hung',
+        worker: {} as Worker,
+        channel: { port1: mockPort, port2: mockPort } as unknown as MessageChannel,
+        port: mockPort as unknown as MessagePort,
+        state: 'idle' as const,
+        capabilities: ['inference.text'] as const,
+        labels: {},
+      };
+
+      const pool = (bus as unknown as { pools: Map<string, WorkerPool> }).pools.get('fake')!;
+      vi.spyOn(pool, 'acquire').mockResolvedValue(
+        mockWorker as unknown as import('../src/workerPool').PooledWorkerInstance,
+      );
+      const terminateWorkerSpy = vi.spyOn(pool, 'terminateWorker').mockImplementation(() => {});
+      const releaseSpy = vi.spyOn(pool, 'release');
+
+      const handle = bus.enqueue(
+        'test.task',
+        { data: 1 },
+        { timeoutMs: 25, retryPolicy: { maxRetries: 0 } },
+      );
+      const assertion = expect(handle.result).rejects.toThrow(
+        /no response from the worker for 25ms/i,
+      );
+      await vi.advanceTimersByTimeAsync(25);
+      await assertion;
+
+      expect(terminateWorkerSpy).toHaveBeenCalledWith('mock-worker-hung');
+      expect(releaseSpy).not.toHaveBeenCalled();
+      expect(bus.getTelemetry().failedTasks).toBe(1);
+      expect(bus.getTelemetry().deadLetterCount).toBe(1);
+      expect(bus.getTelemetry().circuitBreakerStates['test.task']).toBeDefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('resets the timeout watchdog on PROGRESS so a slow-but-alive task is not killed early', async () => {
+    // QNBS-v3: fake timers replace real 15/30/45ms delays so the 20ms re-arm margin can't flake under CI scheduling jitter.
+    vi.useFakeTimers();
+    try {
+      // QNBS-v3: taskId is captured post-enqueue since the mock's messages must match the real generated taskId (taskId filter above).
+      let capturedTaskId = '';
+      const mockPort = {
+        addEventListener: vi.fn((type: string, handler: EventListener) => {
+          if (type === 'message') {
+            // Two PROGRESS pings inside the timeout window, then RESULT after the original
+            // deadline would have expired — only survives if PROGRESS re-arms the watchdog.
+            setTimeout(() => {
+              handler(
+                new MessageEvent('message', {
+                  data: {
+                    kind: 'PROGRESS',
+                    taskId: capturedTaskId,
+                    stage: 'step1',
+                    progress: 0.3,
+                  },
+                }),
+              );
+            }, 15);
+            setTimeout(() => {
+              handler(
+                new MessageEvent('message', {
+                  data: {
+                    kind: 'PROGRESS',
+                    taskId: capturedTaskId,
+                    stage: 'step2',
+                    progress: 0.6,
+                  },
+                }),
+              );
+            }, 30);
+            setTimeout(() => {
+              handler(
+                new MessageEvent('message', {
+                  data: {
+                    kind: 'RESULT',
+                    taskId: capturedTaskId,
+                    success: true,
+                    result: 'slow-but-done',
+                    latencyMs: 45,
+                  },
+                }),
+              );
+            }, 45);
+          }
+        }),
+        removeEventListener: vi.fn(),
+        postMessage: vi.fn(),
+        start: vi.fn(),
+      };
+
+      const mockWorker = {
+        workerId: 'mock-worker-slow',
+        worker: {} as Worker,
+        channel: { port1: mockPort, port2: mockPort } as unknown as MessageChannel,
+        port: mockPort as unknown as MessagePort,
+        state: 'idle' as const,
+        capabilities: ['inference.text'] as const,
+        labels: {},
+      };
+
+      const pool = (bus as unknown as { pools: Map<string, WorkerPool> }).pools.get('fake')!;
+      vi.spyOn(pool, 'acquire').mockResolvedValue(
+        mockWorker as unknown as import('../src/workerPool').PooledWorkerInstance,
+      );
+
+      // timeoutMs (20ms) is shorter than the total run (45ms), but each PROGRESS arrives
+      // well within 20ms of the previous reset, so the watchdog never fires.
+      const handle = bus.enqueue('test.task', { data: 1 }, { timeoutMs: 20 });
+      capturedTaskId = handle.taskId;
+      const assertion = expect(handle.result).resolves.toBe('slow-but-done');
+      await vi.advanceTimersByTimeAsync(45);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('ignores a stale PROGRESS/RESULT for a cancelled task after the MessagePort is reused', async () => {
+    // QNBS-v3: regression test for the taskId filter above — a released (not terminated) port
+    //          handed to a new task must not let the old task's late messages resolve/rearm it.
+    let messageHandler: ((event: MessageEvent) => void) | undefined;
+    const mockPort = {
+      addEventListener: vi.fn((type: string, handler: EventListener) => {
+        if (type === 'message') messageHandler = handler as (event: MessageEvent) => void;
+      }),
+      removeEventListener: vi.fn(),
+      postMessage: vi.fn(),
+      start: vi.fn(),
+    };
+
+    const mockWorker = {
+      workerId: 'mock-worker-reused',
+      worker: {} as Worker,
+      channel: { port1: mockPort, port2: mockPort } as unknown as MessageChannel,
+      port: mockPort as unknown as MessagePort,
+      state: 'idle' as const,
+      capabilities: ['inference.text'] as const,
+      labels: {},
+    };
+
+    const pool = (bus as unknown as { pools: Map<string, WorkerPool> }).pools.get('fake')!;
+    vi.spyOn(pool, 'acquire').mockResolvedValue(
+      mockWorker as unknown as import('../src/workerPool').PooledWorkerInstance,
+    );
+    vi.spyOn(pool, 'release').mockImplementation(() => {});
+
+    // Task A is cancelled (released, not terminated) — its port is reused for task B below.
+    const handleA = bus.enqueue('test.task', { data: 'A' }, { timeoutMs: 5_000 });
+    await new Promise((r) => setTimeout(r, 5));
+    const staleTaskId = handleA.taskId;
+    handleA.cancel('superseded');
+    await expect(handleA.result).rejects.toThrow('cancelled');
+
+    const handleB = bus.enqueue('test.task', { data: 'B' }, { timeoutMs: 5_000 });
+    await new Promise((r) => setTimeout(r, 5));
+
+    // Stale RESULT from task A arrives on the reused port while task B is in flight — must be ignored.
+    messageHandler?.(
+      new MessageEvent('message', {
+        data: { kind: 'RESULT', taskId: staleTaskId, success: true, result: 'stale-A-result' },
+      }),
+    );
+
+    messageHandler?.(
+      new MessageEvent('message', {
+        data: { kind: 'RESULT', taskId: handleB.taskId, success: true, result: 'real-B-result' },
+      }),
+    );
+
+    await expect(handleB.result).resolves.toBe('real-B-result');
   });
 });

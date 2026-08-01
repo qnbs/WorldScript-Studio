@@ -25,7 +25,7 @@ The diagnostic narrative below is retained for the record.
 **Symptom:** On `main`, the **`CI / CD` → `🔍 Quality Gate`** job (both Node 22 and Node 24) fails on the
 **coverage threshold**:
 
-```
+```text
 ERROR: Coverage for lines (5.16%) does not meet global threshold (74%)
 ERROR: Coverage for functions (4.91%) ... (67%)
 ERROR: Coverage for statements (5.02%) ... (72%)
@@ -113,7 +113,7 @@ the coverage-threshold path (i.e. not as a hard test failure). Candidates, in pr
 **⚠️ BLOCKER on #180 — real typecheck failure (must fix before commit):**
 `pnpm run typecheck` fails with **3× TS2352** at `features/proForge/machine/proForgeMachine.ts` lines
 **68, 71, 75** (the pre-existing `setPreSnapshot`/`setResult`/`setDecision` actions):
-```
+```text
 Conversion of type 'ProForgeMachineEvent' to type '{ output: ... }' may be a mistake ...
 Property 'output' is missing in type '{ type: "ABORT"; }' ...
 ```
@@ -158,5 +158,6 @@ Flow-Mode fullscreen + docs). Each = one PR off main, CodeAnt deferred.
 ## Environment reminders
 - **ONE Bash call per turn** (low-end hardware ~3.7 GB RAM); no concurrent heavy shells. A full local
   coverage run ≈ 1 hour — prefer single-file runs for diagnosis.
-- Co-Author commits with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
+- Co-Author commits with the attribution matching whichever agent/model actually made the change, e.g.
+  `Co-Authored-By: GitHub Copilot (Claude Sonnet 5) <noreply@github.com>`.
 - Never lower coverage thresholds or `it.skip` to go green — fix the root cause.

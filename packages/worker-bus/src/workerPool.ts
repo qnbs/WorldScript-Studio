@@ -82,6 +82,19 @@ export class WorkerPool {
     this.entries = [];
   }
 
+  /**
+   * Force-terminate one worker and respawn a replacement (pool stays at capacity).
+   * QNBS-v3: a task that missed its timeoutMs deadline may have wedged the worker in an
+   * unknown state — treat it like a crash instead of recycling it back to idle via release().
+   */
+  terminateWorker(workerId: string): void {
+    const entry = this.entries.find((e) => e.instance.workerId === workerId);
+    if (!entry) return;
+    log.warn(`Worker ${workerId} force-terminated after exceeding its task timeout`);
+    this.setCrashed(workerId);
+    this.restartWorker(entry);
+  }
+
   getHealth(): {
     totalWorkers: number;
     idleWorkers: number;
@@ -113,6 +126,13 @@ export class WorkerPool {
       port: channel.port1,
     };
 
+    // QNBS-v3: addEventListener (unlike onmessage) never dispatches until start() is called.
+    //          Enabling here — once, before any task traffic — covers every later
+    //          `port.addEventListener('message', ...)` in workerBus.ts::runOnPool for the
+    //          lifetime of this port (including across task reuse): per the WHATWG spec,
+    //          start() only flips the port's [[Enabled]] flag, it doesn't need to be
+    //          re-called once a listener is attached or for subsequent tasks on the port.
+    channel.port1.start();
     // QNBS-v3: Transfer port2 to worker for dedicated bidirectional channel
     worker.postMessage({ kind: 'INIT_PORT', port: channel.port2 }, [channel.port2]);
 
@@ -211,7 +231,21 @@ export class WorkerPool {
 
   private waitForIdle(signal?: AbortSignal): Promise<PooledWorkerInstance> {
     return new Promise((resolve, reject) => {
-      const check = () => {
+      // QNBS-v3: cleanup/onAbort are mutually recursive — plain `function` declarations
+      //          hoist fully, avoiding the `const` "used before defined" antipattern
+      //          without aliasing `this` (neither touches pool state, unlike `check`).
+      function cleanup() {
+        signal?.removeEventListener('abort', onAbort);
+      }
+      function onAbort() {
+        cleanup();
+        reject(new Error('Aborted'));
+      }
+
+      // QNBS-v3: arrow function keeps `this` lexical (no aliasing) since it only
+      //          self-recurses via requestAnimationFrame and references `cleanup`,
+      //          both already declared above.
+      const check = (): void => {
         const idle = this.entries.find((e) => e.instance.state === 'idle');
         if (idle) {
           cleanup();
@@ -225,14 +259,6 @@ export class WorkerPool {
           return;
         }
         requestAnimationFrame(check);
-      };
-
-      const cleanup = () => {
-        signal?.removeEventListener('abort', onAbort);
-      };
-      const onAbort = () => {
-        cleanup();
-        reject(new Error('Aborted'));
       };
 
       signal?.addEventListener('abort', onAbort);

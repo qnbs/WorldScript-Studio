@@ -40,6 +40,11 @@ Dieses Projekt läuft auf Low-End-Hardware. Beachte strikt:
 
 Dieser Workflow ist die Standardvorgehensweise, wenn der Nutzer um Behebung von CodeAnt-Kommentaren bittet.
 
+> **Kanonische Quelle:** Die vollständige, agenten-unabhängige Prozedur (inkl. GraphQL-Snippets, PR-Split
+> bei >100 Dateien, Merge-Regeln) lebt in **`docs/CODEANT-REVIEW-LOOP.md`**; der komplementäre,
+> token-freie statische-Analyse-Loop in **`docs/DEEPSOURCE-REVIEW-LOOP.md`**. Der Abschnitt unten ist
+> eine Kimi-spezifische Kurzfassung — bei Abweichungen gelten die beiden kanonischen Dateien.
+
 > **In der Praxis (Beobachtung 2026-07-30):** Der Bot, der tatsächlich Inline-Kommentare postet, ist
 > **CodeRabbit** (`@coderabbitai review` zum erneuten Triggern) — nicht CodeAnt AI. CodeAnt AI
 > erscheint als 5 CI-Status-Checks (`CodeAnt - Quality Gates/SAST/SCA/SCR/Test Coverage`), die auf
@@ -102,7 +107,8 @@ pnpm exec vitest run <betroffene-testdateien>
 
 - Lint/Format-Fehler vor dem Commit beheben (`biome check --write ...`).
 - TypeScript-Fehler sofort beheben.
-- i18n-Keys bei neuem UI-Text zu **allen 11 Locales** hinzufügen und Bundles neu bauen.
+- i18n-Keys bei neuem UI-Text zu **allen 19 Locales** hinzufügen (`node scripts/check-i18n-keys.mjs --fix`) und Bundles neu bauen (`pnpm run i18n:bundle`).
+- Commit-Nachrichten mit der Zuordnung des tatsächlich arbeitenden Agenten/Modells abschließen, z. B. `Co-Authored-By: Kimi K2 <noreply@moonshot.ai>` — niemals eine generische oder falsche Modellangabe übernehmen.
 
 ### 3.4 Commit & Push
 

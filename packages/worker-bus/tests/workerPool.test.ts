@@ -204,4 +204,42 @@ describe('WorkerPool', () => {
     pool.release(worker);
     expect(pool.getHealth().totalWorkers).toBe(0);
   });
+
+  it('terminateWorker force-terminates a specific worker and respawns a replacement', async () => {
+    const pool = new WorkerPool('test-pool', ['inference.text'], {
+      maxWorkers: 1,
+      minWorkers: 1,
+      idleTimeoutMs: 120_000,
+      workerScript: '/mock.worker.js',
+      capabilities: ['inference.text'],
+      labels: {},
+    });
+    const worker = await pool.acquire();
+    const mockWorker = worker.worker as unknown as MockWorker;
+
+    pool.terminateWorker(worker.workerId);
+
+    expect(mockWorker.terminated).toBe(true);
+    // QNBS-v3: like restartWorker() on crash — the pool respawns to stay at capacity,
+    //          but the new worker must be a distinct instance, not the wedged one.
+    expect(pool.getHealth().totalWorkers).toBe(1);
+    expect(pool.getHealth().crashedWorkers).toBe(0);
+    await pool.terminateAll();
+  });
+
+  it('terminateWorker is a no-op for an unknown workerId', async () => {
+    // QNBS-v3: guards against a race where the caller holds a stale workerId (already replaced by a prior restart).
+    const pool = new WorkerPool('test-pool', ['inference.text'], {
+      maxWorkers: 1,
+      minWorkers: 1,
+      idleTimeoutMs: 120_000,
+      workerScript: '/mock.worker.js',
+      capabilities: ['inference.text'],
+      labels: {},
+    });
+    await pool.acquire();
+    expect(() => pool.terminateWorker('nonexistent-worker-id')).not.toThrow();
+    expect(pool.getHealth().totalWorkers).toBe(1);
+    await pool.terminateAll();
+  });
 });
