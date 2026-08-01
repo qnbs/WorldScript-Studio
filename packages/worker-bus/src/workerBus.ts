@@ -275,6 +275,12 @@ export class WorkerBus {
       const result = await new Promise<TaskResult<TResult>>((resolve, _reject) => {
         let settled = false;
         let timeoutTimer: ReturnType<typeof setTimeout>;
+        // QNBS-v3: `handler`/`onTimeout` are forward-declared via `let` (hoisted, no TDZ read)
+        //          because `settle`/`armTimeout` close over them before their real definitions
+        //          run — the three closures are mutually recursive, so a strict top-to-bottom
+        //          `const` chain isn't possible without one forward reference.
+        let handler: (event: MessageEvent) => void;
+        let onTimeout: () => void;
 
         const settle = () => {
           settled = true;
@@ -290,7 +296,7 @@ export class WorkerBus {
           timeoutTimer = setTimeout(onTimeout, task.timeoutMs);
         };
 
-        const onTimeout = () => {
+        onTimeout = () => {
           if (settled) return;
           settle();
           timedOut = true;
@@ -310,7 +316,7 @@ export class WorkerBus {
           });
         };
 
-        const handler = (event: MessageEvent) => {
+        handler = (event: MessageEvent) => {
           if (settled) return;
           const msg = validateWorkerMessage(event.data);
           if (!msg) return;
