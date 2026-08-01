@@ -15,5 +15,11 @@
   "desktop.tray.quit": "Salir",
   "desktop.settings.sectionTitle": "Escritorio",
   "desktop.settings.minimizeToTray": "Minimizar a la bandeja al cerrar",
-  "desktop.settings.minimizeToTrayHint": "Mantén WorldScript Studio en la bandeja del sistema en lugar de salir al cerrar la ventana."
+  "desktop.settings.minimizeToTrayHint": "Mantén WorldScript Studio en la bandeja del sistema en lugar de salir al cerrar la ventana.",
+  "desktop.settings.desktopNotifications": "Notificaciones de escritorio",
+  "desktop.settings.desktopNotificationsHint": "Muestra una notificación nativa del sistema cuando finaliza una tarea en segundo plano (exportación, copia de seguridad cifrada, fase del pipeline ProForge, actualización de la app).",
+  "desktop.notify.updateReadyTitle": "Actualización lista",
+  "desktop.notify.updateReadyBody": "WorldScript Studio {{version}} está listo para instalar.",
+  "desktop.notify.proforgeStageReadyTitle": "Pipeline ProForge",
+  "desktop.notify.proforgeStageReadyBody": "La fase «{{stage}}» está lista para revisión."
 }

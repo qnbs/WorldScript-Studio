@@ -280,7 +280,19 @@ On any non-trivial code change add a single-line comment explaining **why**, not
 | CSS | `/* QNBS-v3: … */` |
 | Pure config (JSON, YAML) | No inline comment — explain in the commit message |
 
+**Hard rule — one physical line, never wrapped:** a `// QNBS-v3: …` comment MUST fit on a single line, however long. Never split it across two `//` lines (`// QNBS-v3: foo\n// bar`) — CodeRabbit flags this as a nitpick on every PR that does it. If the reason doesn't fit on one line, shorten it; don't wrap it.
+
 Skip for pure formatting, lockfile updates, or generated artefacts.
+
+### Recurring review-loop findings — codified to prevent repeats
+
+These patterns have each triggered a CodeRabbit/DeepSource finding more than once. Apply proactively, don't wait for the bot:
+
+- **QNBS-v3 comments:** one line only (see hard rule above).
+- **DOM elements for download/print (`document.createElement('a')`):** name the variable descriptively (`anchor`, `link`) — never the single letter `a`/`el`.
+- **Never mutate a `ref.current` directly during render** (e.g. `tRef.current = t;` as a bare statement in the component body). Sync it in an effect instead: `useEffect(() => { tRef.current = t; }, [t]);` — a bare-render assignment can leak a stale value from a discarded/interrupted render.
+- **Tests — prefer `@testing-library/user-event` over `fireEvent`** for anything simulating a real user interaction (`click`, `type`, `change` on a form field). `fireEvent` is fine only for low-level DOM events `userEvent` doesn't cover.
+- **Cyclomatic complexity:** replace long `if/else if` format/type dispatch chains with a lookup table (`Partial<Record<Key, Fn>>` + a single ternary/optional call) instead of adding more branches — especially inside `useCallback`.
 
 ## Documentation index
 

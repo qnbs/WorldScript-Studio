@@ -14,6 +14,10 @@ export const DesktopSection: FC = () => {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const minimizeToTray = useAppSelector((s) => s.settings.desktop?.minimizeToTray ?? false);
+  // QNBS-v3 (T3): opt-in native OS notifications for background-task completion.
+  const desktopNotifications = useAppSelector(
+    (s) => s.settings.desktop?.desktopNotifications ?? false,
+  );
 
   if (!isTauriRuntime()) return null;
 
@@ -31,6 +35,16 @@ export const DesktopSection: FC = () => {
           checked={minimizeToTray}
           onChange={(checked) =>
             dispatch(settingsActions.setDesktopSettings({ minimizeToTray: checked }))
+          }
+        />
+        {/* QNBS-v3 (T3): permission is requested lazily by useNativeNotifications() the next time
+            this flips true — no permission prompt just from opening Settings. */}
+        <ToggleSwitch
+          label={t('desktop.settings.desktopNotifications')}
+          hint={t('desktop.settings.desktopNotificationsHint')}
+          checked={desktopNotifications}
+          onChange={(checked) =>
+            dispatch(settingsActions.setDesktopSettings({ desktopNotifications: checked }))
           }
         />
       </CardContent>

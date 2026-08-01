@@ -2,6 +2,7 @@ import type { TypedStartListening } from '@reduxjs/toolkit';
 import { createListenerMiddleware, isRejected } from '@reduxjs/toolkit';
 import { analyticsActions } from '../features/analytics/analyticsSlice';
 // QNBS-v3: canonical selector — replaces a local type that misapplied the persisted-state shape to the live store
+import { proForgeActions } from '../features/proForge/proForgeSlice';
 import { selectProjectData } from '../features/project/projectSelectors';
 import type { ProjectData } from '../features/project/projectSlice';
 import { statusActions } from '../features/status/statusSlice';
@@ -39,6 +40,7 @@ export { isAnalyticsPersistenceAllowed };
 //   6. Cross-Project    — search index updated on save (always-on; promoted from enableCrossProjectSearch flag)
 //   7. WorkerBus v2     — init/shutdown pools on enableWorkerBusV2 flag change (Phase 2)
 //   8. Rust Compute     — invalidate Rust availability cache on enableRustCompute toggle (Phase 2)
+//   9. Desktop Notify   — native OS notification on ProForge stageCompleted (Phase 2 / T3)
 //
 // All AI inference side effects (local/cloud) are intentionally NOT in this middleware —
 // they belong in service-layer thunks (aiProviderService, localAiFacade) to keep the
@@ -534,6 +536,43 @@ listenerMiddleware.startListening({
       logger.info('Rust compute flag changed — availability cache invalidated');
     } catch (err) {
       logger.warn('Rust availability cache invalidation failed', err);
+    }
+  },
+});
+
+// QNBS-v3: Native "ProForge stage ready for review" notification — the user may have tabbed away during a long-running pipeline stage.
+listenerMiddleware.startListening({
+  actionCreator: proForgeActions.stageCompleted,
+  effect: async (action, listenerApi) => {
+    // QNBS-v3: capture the original (pre-effect) state synchronously before any await, per this file's listener state-capture contract.
+    const originalState = listenerApi.getOriginalState() as RootState;
+    if (!originalState.settings.desktop?.desktopNotifications) return;
+    // QNBS-v3: the reducer no-ops when there's no matching run/stage — mirror that here so an invalid action never notifies.
+    const stateAfter = listenerApi.getState() as RootState;
+    const stageResult = stateAfter.proForge.currentRun?.stages.find(
+      (s) => s.stage === action.payload.stage,
+    );
+    if (stageResult?.status !== 'awaitingReview') return;
+    try {
+      const [{ sendDesktopNotification }, { getStaticTranslation, getCurrentLanguage }] =
+        await Promise.all([
+          import('../services/desktop/desktopNotifications'),
+          import('../services/i18n/staticTranslate'),
+        ]);
+      const lang = getCurrentLanguage();
+      const stageLabel = await getStaticTranslation(
+        `proforge.stageName.${action.payload.stage}`,
+        lang,
+      );
+      const [title, body] = await Promise.all([
+        getStaticTranslation('desktop.notify.proforgeStageReadyTitle', lang),
+        getStaticTranslation('desktop.notify.proforgeStageReadyBody', lang, {
+          stage: stageLabel,
+        }),
+      ]);
+      await sendDesktopNotification(title, body);
+    } catch (err) {
+      logger.warn('ProForge desktop notification failed', err);
     }
   },
 });

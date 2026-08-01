@@ -286,6 +286,23 @@ GitHub App resumes auto-reviewing, run **both** loops: CodeAnt for narrative/AI 
   reset/resolve a new task sharing the same released port — fixed by filtering on `msg.taskId` in
   `workerBus.ts`), and a missing `port.start()` call in `workerPool.ts::spawnWorker()` (an
   `addEventListener`-based `MessagePort` never dispatches without it per the WHATWG spec).
+- **2026-08-01** — Same pattern recurred on PR #306 (`feat/tauri-native-notifications`, T3 desktop
+  notifications): adding one new listener block to `app/listenerMiddleware.ts` (a ~800-line god-file)
+  triggered `DeepSource: JavaScript` to report **63 "introduced" issues** across the *entire* file —
+  JS-0067 (top-level function declarations, the repo's idiomatic module style), JS-R1005 (cyclomatic
+  complexity on pre-existing listener effects untouched by this PR, e.g. `addDebouncedListener`'s
+  internal effect and three older auto-save/DuckDB listeners), and JS-C1002 (short param names `c`/`p`
+  in pre-existing predicates). None of the 63 findings land on the actual new code (the
+  `proForgeActions.stageCompleted` listener, ~line 551) — confirmed by diffing finding line ranges
+  against the PR's real diff. Re-confirmed via `gh api .../branches/main/protection`: only
+  `✅ CI Success` is a required status check; `DeepSource: JavaScript` stayed informational-only.
+  Per the 2026-08-01/#305 precedent, did **not** scatter `# skipcq` across pre-existing unrelated code
+  — logged here instead and proceeded once the real (required) CI gates were green. **Reinforces the
+  standing conclusion:** any PR that merely imports/touches this file will keep re-triggering this
+  same false-positive wave until a maintainer applies a dashboard rule-level ignore for JS-0067 (and
+  likely scopes JS-R1005/JS-C1002 similarly for this file, or the file is decomposed) — an agent
+  should not attempt that maintainer-only dashboard action nor a speculative mass-refactor of this
+  critical middleware file as a side effect of an unrelated feature PR.
 
 ---
 
