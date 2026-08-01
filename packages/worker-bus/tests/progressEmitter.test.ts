@@ -70,6 +70,30 @@ describe('ProgressEmitter', () => {
     expect(next.done).toBe(true);
   });
 
+  it('complete resolves a pending next() as done', async () => {
+    const emitter = new ProgressEmitter();
+    const reader = emitter.iterable('t-1')[Symbol.asyncIterator]();
+
+    const pending = reader.next();
+    emitter.complete('t-1');
+
+    await expect(pending).resolves.toEqual({ value: undefined, done: true });
+    await expect(reader.next()).resolves.toEqual({ value: undefined, done: true });
+  });
+
+  it('clear completes pending iterators instead of leaving consumers waiting', async () => {
+    const emitter = new ProgressEmitter();
+    const readerA = emitter.iterable('a')[Symbol.asyncIterator]();
+    const readerB = emitter.iterable('b')[Symbol.asyncIterator]();
+    const pendingA = readerA.next();
+    const pendingB = readerB.next();
+
+    emitter.clear();
+
+    await expect(pendingA).resolves.toMatchObject({ done: true });
+    await expect(pendingB).resolves.toMatchObject({ done: true });
+  });
+
   it('off removes a specific listener', () => {
     const emitter = new ProgressEmitter();
     const received: TaskProgress[] = [];

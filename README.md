@@ -355,7 +355,7 @@ specifically.** Anthropic doesn't send CORS headers permitting direct browser ac
 Infrastructure-level features that keep the app fast and extensible as projects grow — all on by default unless noted:
 
 - **DuckDB Analytics** — an OPFS-backed DuckDB-WASM engine (off the main thread, via WorkerBus v2) powering fast story queries, RAG vector search, and scene-timeline analytics without a server.
-- **WorkerBus v2** — the unified background-task backbone behind DuckDB, local embeddings, and local NLP: auto-scaling worker pools, a priority queue, per-worker circuit breakers, and a dead-letter queue for failed tasks (`packages/worker-bus`).
+- **WorkerBus v2** — the unified background-task backbone behind DuckDB, local embeddings, and local NLP: auto-scaling worker pools, a bounded priority scheduler, enqueue-to-completion inactivity watchdogs, per-worker circuit breakers, and a dead-letter queue for failed tasks (`packages/worker-bus`).
 - **Adaptive AI Engine** — a runtime device profiler that automatically selects the best inference backend and model for the current hardware, network, and battery state, so the same project performs well on a phone and a workstation.
 - **Compute Shaders** _(experimental)_ — custom WGSL GPU kernels accelerate RAG similarity search, Plot-Board auto-layout, and voice preprocessing on WebGPU-capable hardware.
 - **Rust Compute** _(desktop only, experimental)_ — offloads heavy tasks like text analysis and embeddings to a native Tauri Rust `TaskSupervisor`; no-ops transparently on the web build.

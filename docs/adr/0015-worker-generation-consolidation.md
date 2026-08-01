@@ -86,10 +86,10 @@ degrade exactly as they did against v1 (empty query results, heuristic sentiment
   `MAX_WORKERS_INFERENCE`=4) because each pool replica independently loads its own transformers.js
   pipeline with no cross-replica cache sharing — a resource tradeoff to revisit from WorkerBus's own
   telemetry (`peakLatencyMs`/`errorRate`) if it proves too conservative.
-- **Not yet resolved:** `WorkerBus.runTask()`'s live path does not enforce `timeoutMs` — confirmed
-  via code inspection, no timer anywhere rejects a hung task, on either the bus or the worker-side
-  bootstrap. Pre-existing (not introduced by this migration), tracked as a follow-up in `TODO.md`
-  rather than expanded into this migration's scope.
+- **Resolved in the scheduler follow-up (2026-08-01):** WorkerBus now dispatches exclusively through
+  its bounded priority queue, uses event-driven pool availability instead of animation-frame polling,
+  and enforces `timeoutMs` as an inactivity watchdog from enqueue through execution. Valid progress
+  rearms the watchdog; an active timeout replaces the presumed-wedged worker.
 
 ## References
 

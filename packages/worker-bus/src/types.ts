@@ -126,7 +126,8 @@ export interface TaskHandle<TResult = unknown> {
 // --- Bus Events --------------------------------------------------------------
 export type BusEvent =
   | { kind: 'circuit-breaker-open'; taskType: string }
-  | { kind: 'backpressure-rejected'; taskType: string };
+  | { kind: 'backpressure-rejected'; taskType: string }
+  | { kind: 'hard-backpressure-rejected'; taskType: string };
 
 export type BusEventListener = (event: BusEvent) => void;
 
@@ -170,6 +171,7 @@ export interface WorkerBusTelemetry {
 export interface EnqueueOptions {
   readonly priority?: TaskPriority;
   readonly target?: TaskTarget;
+  /** Maximum interval without progress, measured from enqueue and rearmed by worker progress. */
   readonly timeoutMs?: number;
   readonly retryPolicy?: Partial<RetryPolicy>;
   readonly transferables?: Transferable[];

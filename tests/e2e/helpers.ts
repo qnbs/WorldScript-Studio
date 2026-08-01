@@ -95,10 +95,10 @@ export async function seedGeminiApiKey(page: Page): Promise<void> {
     .getByLabel(/Enter your Gemini API Key|Geben Sie Ihren Gemini API-Schlüssel ein/i)
     .fill('AIzaTestKey123456789012345678901234');
   await page.getByRole('button', { name: /Save Key|Speichern/i }).click();
-  await expect(page.getByText(/Configured|Konfiguriert/i)).toBeVisible({ timeout: 15000 });
+  // QNBS-v3: anchor the saved-state badge so API Key Configured cannot violate Playwright strict mode.
+  await expect(page.getByText(/^(Configured|Konfiguriert)$/i)).toBeVisible({ timeout: 15000 });
   await page.keyboard.press('Escape');
-  // QNBS-v3: default localStorageOnly:true blocks cloud AI — must disable so Gemini calls go through.
-  //          ToggleSwitch uses role="switch" (not "checkbox") — wrong role means the locator never finds it.
+  // QNBS-v3: disable default local-only mode through role=switch so Gemini reaches the mocked cloud route.
   await page.getByRole('button', { name: /Privacy & Security/i }).click();
   const localOnlyToggle = page.getByRole('switch', { name: /Local Storage Only/i });
   const isOn = await localOnlyToggle.getAttribute('aria-checked').catch(() => null);

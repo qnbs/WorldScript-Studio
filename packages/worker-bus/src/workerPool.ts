@@ -24,10 +24,20 @@ interface PoolEntry {
   pongTimer: ReturnType<typeof setTimeout> | null;
 }
 
+interface AcquireWaiter {
+  readonly id: symbol;
+  readonly resolve: (worker: PooledWorkerInstance) => void;
+  readonly reject: (error: Error) => void;
+  readonly signal: AbortSignal | undefined;
+  readonly onAbort: () => void;
+}
+
 export class WorkerPool {
   private entries: PoolEntry[] = [];
   private readonly workerScript: string;
   private shutdownFlag = false;
+  private readonly availabilityListeners = new Set<() => void>();
+  private readonly acquireWaiters: AcquireWaiter[] = [];
 
   constructor(
     public readonly poolId: string,
@@ -38,25 +48,39 @@ export class WorkerPool {
   }
 
   async acquire(signal?: AbortSignal): Promise<PooledWorkerInstance> {
+    const worker = this.tryAcquire();
+    if (worker) return worker;
     if (this.shutdownFlag) throw new Error('Pool is shutting down');
+    if (signal?.aborted) throw new Error('Aborted');
 
-    // Try to find idle worker
-    const idle = this.entries.find((e) => e.instance.state === 'idle');
+    return new Promise((resolve, reject) => {
+      const waiterId = Symbol('worker-pool-waiter');
+      const onAbort = () => {
+        this.abortWaiter(waiterId);
+      };
+      const waiter: AcquireWaiter = { id: waiterId, resolve, reject, signal, onAbort };
+      signal?.addEventListener('abort', onAbort, { once: true });
+      this.acquireWaiters.push(waiter);
+    });
+  }
+
+  tryAcquire(): PooledWorkerInstance | undefined {
+    if (this.shutdownFlag) return undefined;
+    const idle = this.entries.find((entry) => entry.instance.state === 'idle');
     if (idle) {
       this.setBusy(idle.instance.workerId);
       this.clearIdleTimer(idle.instance);
       return idle.instance;
     }
+    if (this.entries.length >= this.options.maxWorkers) return undefined;
+    const worker = this.spawnWorker();
+    this.setBusy(worker.workerId);
+    return worker;
+  }
 
-    // Spawn new worker if under max
-    if (this.entries.length < this.options.maxWorkers) {
-      const worker = this.spawnWorker();
-      this.setBusy(worker.workerId);
-      return worker;
-    }
-
-    // Wait for a worker to become idle
-    return this.waitForIdle(signal);
+  onAvailable(listener: () => void): () => void {
+    this.availabilityListeners.add(listener);
+    return () => this.availabilityListeners.delete(listener);
   }
 
   release(worker: PooledWorkerInstance): void {
@@ -72,14 +96,20 @@ export class WorkerPool {
         this.terminateEntry(entry);
       }
     }, WORKER_IDLE_TIMEOUT_MS);
+    this.notifyAvailable();
   }
 
   async terminateAll(): Promise<void> {
     this.shutdownFlag = true;
+    for (const waiter of this.acquireWaiters.splice(0)) {
+      waiter.signal?.removeEventListener('abort', waiter.onAbort);
+      waiter.reject(new Error('Pool is shutting down'));
+    }
     for (const entry of this.entries) {
       this.terminateEntry(entry);
     }
     this.entries = [];
+    this.notifyAvailable();
   }
 
   /**
@@ -185,6 +215,7 @@ export class WorkerPool {
     this.terminateEntry(entry);
     if (!this.shutdownFlag) {
       this.spawnWorker();
+      this.notifyAvailable();
     }
   }
 
@@ -229,40 +260,22 @@ export class WorkerPool {
     }
   }
 
-  private waitForIdle(signal?: AbortSignal): Promise<PooledWorkerInstance> {
-    return new Promise((resolve, reject) => {
-      // QNBS-v3: cleanup/onAbort are mutually recursive — plain `function` declarations
-      //          hoist fully, avoiding the `const` "used before defined" antipattern
-      //          without aliasing `this` (neither touches pool state, unlike `check`).
-      function cleanup() {
-        signal?.removeEventListener('abort', onAbort);
-      }
-      function onAbort() {
-        cleanup();
-        reject(new Error('Aborted'));
-      }
+  private notifyAvailable(): void {
+    while (this.acquireWaiters.length > 0) {
+      const worker = this.tryAcquire();
+      if (!worker) break;
+      const waiter = this.acquireWaiters.shift();
+      if (!waiter) break;
+      waiter.signal?.removeEventListener('abort', waiter.onAbort);
+      waiter.resolve(worker);
+    }
+    for (const listener of this.availabilityListeners) listener();
+  }
 
-      // QNBS-v3: arrow function keeps `this` lexical (no aliasing) since it only
-      //          self-recurses via requestAnimationFrame and references `cleanup`,
-      //          both already declared above.
-      const check = (): void => {
-        const idle = this.entries.find((e) => e.instance.state === 'idle');
-        if (idle) {
-          cleanup();
-          this.setBusy(idle.instance.workerId);
-          resolve(idle.instance);
-          return;
-        }
-        if (this.shutdownFlag) {
-          cleanup();
-          reject(new Error('Pool is shutting down'));
-          return;
-        }
-        requestAnimationFrame(check);
-      };
-
-      signal?.addEventListener('abort', onAbort);
-      check();
-    });
+  private abortWaiter(waiterId: symbol): void {
+    const index = this.acquireWaiters.findIndex((waiter) => waiter.id === waiterId);
+    if (index === -1) return;
+    const [waiter] = this.acquireWaiters.splice(index, 1);
+    waiter?.reject(new Error('Aborted'));
   }
 }

@@ -3,6 +3,8 @@
 import { MAX_PREEMPTIONS, MAX_QUEUE_SIZE } from './constants';
 import type { TaskPriority, WorkerTask } from './types';
 
+const CRITICAL_RESERVE = 8;
+
 export interface QueueStats {
   readonly depth: number;
   readonly depthByPriority: Record<TaskPriority, number>;
@@ -16,10 +18,18 @@ export class PriorityTaskQueue {
     low: [],
   };
 
-  constructor(private readonly maxSize = MAX_QUEUE_SIZE) {}
+  constructor(
+    private readonly maxSize = MAX_QUEUE_SIZE,
+    private readonly criticalReserve = CRITICAL_RESERVE,
+  ) {}
 
   enqueue(task: WorkerTask): boolean {
-    if (this.totalDepth() >= this.maxSize && task.priority !== 'critical') {
+    const depth = this.totalDepth();
+    if (
+      task.priority === 'critical'
+        ? depth >= this.maxSize + this.criticalReserve
+        : depth >= this.maxSize
+    ) {
       return false;
     }
     const effectivePriority = this.effectivePriority(task);
@@ -28,11 +38,16 @@ export class PriorityTaskQueue {
   }
 
   dequeue(): WorkerTask | undefined {
+    return this.dequeueFirst(() => true);
+  }
+
+  dequeueFirst(predicate: (task: WorkerTask) => boolean): WorkerTask | undefined {
     const priorities: TaskPriority[] = ['critical', 'high', 'normal', 'low'];
     for (const p of priorities) {
-      const next = this.queues[p].shift();
-      if (next !== undefined) {
-        // QNBS-v3: increment preemption count for lower-priority tasks that were skipped
+      const index = this.queues[p].findIndex(predicate);
+      if (index !== -1) {
+        const [next] = this.queues[p].splice(index, 1);
+        // QNBS-v3: runnable work keeps global priority while unavailable pools do not block other pools.
         if (p !== 'critical') {
           this.promoteStarvedTasks();
         }
