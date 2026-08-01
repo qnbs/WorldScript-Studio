@@ -230,30 +230,37 @@ export class WorkerPool {
   }
 
   private waitForIdle(signal?: AbortSignal): Promise<PooledWorkerInstance> {
+    // QNBS-v3: captured so the hoisted `function` declarations below (which don't have
+    //          their own lexical `this`) can still reach the pool instance.
+    const pool = this;
     return new Promise((resolve, reject) => {
-      const check = () => {
-        const idle = this.entries.find((e) => e.instance.state === 'idle');
+      // QNBS-v3: `check`/`cleanup`/`onAbort` are mutually recursive (check calls cleanup,
+      //          onAbort calls cleanup) — plain `function` declarations hoist fully (name +
+      //          body), so each can reference the others regardless of source order, with no
+      //          TDZ and no `const` "used before defined" antipattern.
+      function check() {
+        const idle = pool.entries.find((e) => e.instance.state === 'idle');
         if (idle) {
           cleanup();
-          this.setBusy(idle.instance.workerId);
+          pool.setBusy(idle.instance.workerId);
           resolve(idle.instance);
           return;
         }
-        if (this.shutdownFlag) {
+        if (pool.shutdownFlag) {
           cleanup();
           reject(new Error('Pool is shutting down'));
           return;
         }
         requestAnimationFrame(check);
-      };
+      }
 
-      const cleanup = () => {
+      function cleanup() {
         signal?.removeEventListener('abort', onAbort);
-      };
-      const onAbort = () => {
+      }
+      function onAbort() {
         cleanup();
         reject(new Error('Aborted'));
-      };
+      }
 
       signal?.addEventListener('abort', onAbort);
       check();
