@@ -20,76 +20,78 @@ function makeTask(taskId: string, priority: WorkerTask['priority'], requeueCount
 
 describe('PriorityTaskQueue', () => {
   it('dequeues in priority order', () => {
-    const q = new PriorityTaskQueue(10);
-    q.enqueue(makeTask('low-1', 'low'));
-    q.enqueue(makeTask('high-1', 'high'));
-    q.enqueue(makeTask('normal-1', 'normal'));
-    q.enqueue(makeTask('critical-1', 'critical'));
+    const queue = new PriorityTaskQueue(10);
+    queue.enqueue(makeTask('low-1', 'low'));
+    queue.enqueue(makeTask('high-1', 'high'));
+    queue.enqueue(makeTask('normal-1', 'normal'));
+    queue.enqueue(makeTask('critical-1', 'critical'));
 
-    expect(q.dequeue()?.taskId).toBe('critical-1');
-    expect(q.dequeue()?.taskId).toBe('high-1');
-    expect(q.dequeue()?.taskId).toBe('normal-1');
-    expect(q.dequeue()?.taskId).toBe('low-1');
+    expect(queue.dequeue()?.taskId).toBe('critical-1');
+    expect(queue.dequeue()?.taskId).toBe('high-1');
+    expect(queue.dequeue()?.taskId).toBe('normal-1');
+    expect(queue.dequeue()?.taskId).toBe('low-1');
   });
 
   it('rejects non-critical when full', () => {
-    const q = new PriorityTaskQueue(2);
-    expect(q.enqueue(makeTask('a', 'normal'))).toBe(true);
-    expect(q.enqueue(makeTask('b', 'normal'))).toBe(true);
-    expect(q.enqueue(makeTask('c', 'normal'))).toBe(false);
-    expect(q.enqueue(makeTask('d', 'critical'))).toBe(true);
+    const queue = new PriorityTaskQueue(2);
+    expect(queue.enqueue(makeTask('a', 'normal'))).toBe(true);
+    expect(queue.enqueue(makeTask('b', 'normal'))).toBe(true);
+    expect(queue.enqueue(makeTask('c', 'normal'))).toBe(false);
+    expect(queue.enqueue(makeTask('d', 'critical'))).toBe(true);
   });
 
   it('bounds critical work to the eight-task reserve', () => {
-    const q = new PriorityTaskQueue(2);
-    expect(q.enqueue(makeTask('normal-1', 'normal'))).toBe(true);
-    expect(q.enqueue(makeTask('normal-2', 'normal'))).toBe(true);
+    const queue = new PriorityTaskQueue(2);
+    expect(queue.enqueue(makeTask('normal-1', 'normal'))).toBe(true);
+    expect(queue.enqueue(makeTask('normal-2', 'normal'))).toBe(true);
     for (let index = 0; index < 8; index++) {
-      expect(q.enqueue(makeTask(`critical-${index}`, 'critical'))).toBe(true);
+      expect(queue.enqueue(makeTask(`critical-${index}`, 'critical'))).toBe(true);
     }
-    expect(q.enqueue(makeTask('critical-overflow', 'critical'))).toBe(false);
-    expect(q.stats().depth).toBe(10);
+    expect(queue.enqueue(makeTask('critical-overflow', 'critical'))).toBe(false);
+    expect(queue.stats().depth).toBe(10);
   });
 
   it('dequeues the highest-priority runnable task without blocking on another pool', () => {
-    const q = new PriorityTaskQueue(4);
-    q.enqueue(makeTask('blocked-critical', 'critical'));
-    q.enqueue(makeTask('runnable-high', 'high'));
+    const queue = new PriorityTaskQueue(4);
+    queue.enqueue(makeTask('blocked-critical', 'critical'));
+    queue.enqueue(makeTask('runnable-high', 'high'));
 
-    expect(q.dequeueFirst((task) => task.taskId === 'runnable-high')?.taskId).toBe('runnable-high');
-    expect(q.dequeue()?.taskId).toBe('blocked-critical');
+    expect(queue.dequeueFirst((task) => task.taskId === 'runnable-high')?.taskId).toBe(
+      'runnable-high',
+    );
+    expect(queue.dequeue()?.taskId).toBe('blocked-critical');
   });
 
   it('removes by taskId', () => {
-    const q = new PriorityTaskQueue(10);
-    q.enqueue(makeTask('a', 'normal'));
-    q.enqueue(makeTask('b', 'normal'));
-    expect(q.remove('a')).toBe(true);
-    expect(q.remove('z')).toBe(false);
-    expect(q.dequeue()?.taskId).toBe('b');
+    const queue = new PriorityTaskQueue(10);
+    queue.enqueue(makeTask('a', 'normal'));
+    queue.enqueue(makeTask('b', 'normal'));
+    expect(queue.remove('a')).toBe(true);
+    expect(queue.remove('z')).toBe(false);
+    expect(queue.dequeue()?.taskId).toBe('b');
   });
 
   it('reports stats', () => {
-    const q = new PriorityTaskQueue(10);
-    q.enqueue(makeTask('a', 'critical'));
-    q.enqueue(makeTask('b', 'high'));
-    q.enqueue(makeTask('c', 'normal'));
-    q.enqueue(makeTask('d', 'low'));
-    const stats = q.stats();
+    const queue = new PriorityTaskQueue(10);
+    queue.enqueue(makeTask('a', 'critical'));
+    queue.enqueue(makeTask('b', 'high'));
+    queue.enqueue(makeTask('c', 'normal'));
+    queue.enqueue(makeTask('d', 'low'));
+    const stats = queue.stats();
     expect(stats.depth).toBe(4);
     expect(stats.depthByPriority).toEqual({ critical: 1, high: 1, normal: 1, low: 1 });
   });
 
   it('promotes starved low-priority tasks', () => {
-    const q = new PriorityTaskQueue(10);
-    q.enqueue(makeTask('low-1', 'low', 2));
-    q.enqueue(makeTask('low-2', 'low', 2));
-    q.enqueue(makeTask('normal-1', 'normal'));
+    const queue = new PriorityTaskQueue(10);
+    queue.enqueue(makeTask('low-1', 'low', 2));
+    queue.enqueue(makeTask('low-2', 'low', 2));
+    queue.enqueue(makeTask('normal-1', 'normal'));
 
     // dequeue normal first (higher priority)
-    expect(q.dequeue()?.taskId).toBe('normal-1');
+    expect(queue.dequeue()?.taskId).toBe('normal-1');
     // next dequeue should promote low tasks that hit MAX_PREEMPTIONS
-    const next = q.dequeue();
+    const next = queue.dequeue();
     // After promotion, low tasks with requeueCount >= 3 move to normal queue
     expect(next?.priority === 'low' || next?.priority === 'normal').toBe(true);
   });

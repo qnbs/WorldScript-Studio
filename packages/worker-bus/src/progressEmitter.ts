@@ -6,6 +6,7 @@ type ProgressListener = (progress: TaskProgress) => void;
 
 export class ProgressEmitter {
   private listeners = new Map<string, Set<ProgressListener>>();
+  private completionListeners = new Map<string, Set<() => void>>();
 
   on(taskId: string, listener: ProgressListener): () => void {
     let set = this.listeners.get(taskId);
@@ -45,6 +46,9 @@ export class ProgressEmitter {
   }
 
   complete(taskId: string): void {
+    const completionListeners = [...(this.completionListeners.get(taskId) ?? [])];
+    for (const listener of completionListeners) listener();
+    this.completionListeners.delete(taskId);
     this.listeners.delete(taskId);
   }
 
@@ -63,7 +67,18 @@ export class ProgressEmitter {
       }
     };
 
-    this.on(taskId, listener);
+    const offProgress = this.on(taskId, listener);
+    let offComplete: () => void = () => {};
+    const finish = (discardBuffered: boolean) => {
+      if (done) return;
+      done = true;
+      if (discardBuffered) emitted.length = 0;
+      offProgress();
+      offComplete();
+      resolveNext?.({ value: undefined, done: true });
+      resolveNext = null;
+    };
+    offComplete = this.onComplete(taskId, () => finish(false));
 
     return {
       [Symbol.asyncIterator](): AsyncIterableIterator<TaskProgress> {
@@ -80,7 +95,7 @@ export class ProgressEmitter {
             });
           },
           return(): Promise<IteratorResult<TaskProgress>> {
-            done = true;
+            finish(true);
             return Promise.resolve({ value: undefined, done: true });
           },
           [Symbol.asyncIterator](): AsyncIterableIterator<TaskProgress> {
@@ -92,6 +107,22 @@ export class ProgressEmitter {
   }
 
   clear(): void {
+    const taskIds = new Set([...this.listeners.keys(), ...this.completionListeners.keys()]);
+    for (const taskId of taskIds) this.complete(taskId);
     this.listeners.clear();
+    this.completionListeners.clear();
+  }
+
+  private onComplete(taskId: string, listener: () => void): () => void {
+    let set = this.completionListeners.get(taskId);
+    if (!set) {
+      set = new Set();
+      this.completionListeners.set(taskId, set);
+    }
+    set.add(listener);
+    return () => {
+      set?.delete(listener);
+      if (set?.size === 0) this.completionListeners.delete(taskId);
+    };
   }
 }

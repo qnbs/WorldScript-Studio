@@ -199,6 +199,36 @@ describe('WorkerBus', () => {
     }
   });
 
+  it('retries a queued inactivity timeout without cancelling the logical task', async () => {
+    vi.useFakeTimers();
+    try {
+      const runTask = vi.fn().mockResolvedValue({
+        taskId: 'x',
+        success: true,
+        result: 'retried',
+        latencyMs: 1,
+        queueTimeMs: 0,
+        layer: 'web',
+      });
+      (bus as unknown as { runTask: typeof runTask }).runTask = runTask;
+      const handle = bus.enqueue<null, string>('test.task', null, {
+        timeoutMs: 25,
+        retryPolicy: { maxRetries: 1, backoffMs: 1, maxBackoffMs: 1, jitter: false },
+      });
+
+      await vi.advanceTimersByTimeAsync(25);
+      allowDispatch();
+      await vi.advanceTimersByTimeAsync(1);
+
+      await expect(handle.result).resolves.toBe('retried');
+      expect(runTask).toHaveBeenCalledTimes(1);
+      expect(bus.getTelemetry().failedTasks).toBe(0);
+      expect(bus.getTelemetry().deadLetterCount).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('rejects queued handles on shutdown and clears every scheduler map', async () => {
     const handle = bus.enqueue('test.task', {});
     const assertion = expect(handle.result).rejects.toMatchObject({ code: 'SHUTDOWN' });
@@ -317,6 +347,81 @@ describe('WorkerBus', () => {
     );
     await expect(handle.result).rejects.toThrow('Worker timed out');
     expect(mockRunTask).toHaveBeenCalledTimes(3);
+  });
+
+  it('retries a worker-construction failure instead of stalling in the pump microtask', async () => {
+    vi.useFakeTimers();
+    try {
+      const pool = (bus as unknown as { pools: Map<string, WorkerPool> }).pools.get('fake')!;
+      allowDispatch();
+      vi.mocked(pool.tryAcquire).mockImplementationOnce(() => {
+        throw new Error('worker constructor failed');
+      });
+      const runTask = vi.fn().mockResolvedValue({
+        taskId: 'x',
+        success: true,
+        result: 'recovered',
+        latencyMs: 1,
+        queueTimeMs: 0,
+        layer: 'web',
+      });
+      (bus as unknown as { runTask: typeof runTask }).runTask = runTask;
+
+      const handle = bus.enqueue<null, string>('test.task', null, {
+        retryPolicy: { maxRetries: 1, backoffMs: 1, maxBackoffMs: 1, jitter: false },
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(1);
+
+      await expect(handle.result).resolves.toBe('recovered');
+      expect(pool.tryAcquire).toHaveBeenCalledTimes(2);
+      expect(runTask).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('records retry backpressure as a terminal failure and dead letter', async () => {
+    vi.useFakeTimers();
+    try {
+      const events: string[] = [];
+      bus.subscribe((event) => events.push(event.kind));
+      const handle = bus.enqueue(
+        'retrying.task',
+        {},
+        {
+          retryPolicy: { maxRetries: 1, backoffMs: 1, maxBackoffMs: 1, jitter: false },
+        },
+      );
+      const internals = bus as unknown as {
+        queue: { remove: (taskId: string) => boolean };
+        pendingTasks: Map<string, unknown>;
+        handleAttemptResult: (pending: unknown, result: TaskResult) => void;
+      };
+      internals.queue.remove(handle.taskId);
+      const pending = internals.pendingTasks.get(handle.taskId)!;
+      internals.handleAttemptResult(pending, {
+        taskId: handle.taskId,
+        success: false,
+        error: { code: 'RETRY', message: 'retry', recoverable: true, retryCount: 0 },
+        latencyMs: 1,
+        queueTimeMs: 0,
+        layer: 'main',
+      });
+      for (let index = 0; index < 8; index++) {
+        bus.enqueue('filler.task', { index }).result.catch(() => {});
+      }
+      const assertion = expect(handle.result).rejects.toMatchObject({ code: 'BACKPRESSURE' });
+
+      await vi.advanceTimersByTimeAsync(1);
+
+      await assertion;
+      expect(events).toContain('backpressure-rejected');
+      expect(bus.getTelemetry().failedTasks).toBe(1);
+      expect(bus.getTelemetry().deadLetterCount).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('emits bus events on enqueue and result', async () => {
@@ -762,12 +867,14 @@ describe('WorkerBus', () => {
     vi.spyOn(pool, 'tryAcquire').mockReturnValue(
       mockWorker as unknown as import('../src/workerPool').PooledWorkerInstance,
     );
+    const releaseSpy = vi.spyOn(pool, 'release');
 
     const handle = bus.enqueue('test.task', { data: 1 });
     // Allow runTask to set up abort listener before cancelling
     await new Promise((r) => setTimeout(r, 10));
-    handle.cancel('test-abort');
+    handle.cancel('Task inactivity timeout');
     await expect(handle.result).rejects.toThrow('cancelled');
+    await vi.waitFor(() => expect(releaseSpy).toHaveBeenCalledWith(mockWorker));
   });
 
   it('times out a hung worker, records a circuit-breaker failure, and force-terminates it', async () => {
@@ -815,6 +922,73 @@ describe('WorkerBus', () => {
       expect(bus.getTelemetry().failedTasks).toBe(1);
       expect(bus.getTelemetry().deadLetterCount).toBe(1);
       expect(bus.getTelemetry().circuitBreakerStates['test.task']).toBeDefined();
+      const deadLetters = (
+        bus as unknown as {
+          dlq: { list: () => ReadonlyArray<{ result: TaskResult }> };
+        }
+      ).dlq.list();
+      expect(deadLetters[0]?.result.latencyMs).toBeGreaterThanOrEqual(0);
+      expect(deadLetters[0]?.result.queueTimeMs).toBeGreaterThanOrEqual(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('retries an active inactivity timeout with a fresh attempt token', async () => {
+    vi.useFakeTimers();
+    try {
+      const pool = (bus as unknown as { pools: Map<string, WorkerPool> }).pools.get('fake')!;
+      allowDispatch();
+      vi.spyOn(pool, 'terminateWorker').mockImplementation(() => {});
+      const tokens: Array<{ signal: AbortSignal }> = [];
+      const runTask = vi.fn().mockImplementation((_task, token) => {
+        tokens.push(token);
+        if (tokens.length === 2) {
+          return Promise.resolve({
+            taskId: 'x',
+            success: true,
+            result: 'second-attempt',
+            latencyMs: 1,
+            queueTimeMs: 0,
+            layer: 'web',
+          });
+        }
+        return new Promise<TaskResult>((resolve) => {
+          token.signal.addEventListener(
+            'abort',
+            () =>
+              resolve({
+                taskId: 'x',
+                success: false,
+                error: {
+                  code: 'CANCELLED',
+                  message: 'attempt cancelled',
+                  recoverable: false,
+                  retryCount: 0,
+                },
+                latencyMs: 25,
+                queueTimeMs: 0,
+                layer: 'web',
+              }),
+            { once: true },
+          );
+        });
+      });
+      (bus as unknown as { runTask: typeof runTask }).runTask = runTask;
+
+      const handle = bus.enqueue<null, string>('test.task', null, {
+        timeoutMs: 25,
+        retryPolicy: { maxRetries: 1, backoffMs: 1, maxBackoffMs: 1, jitter: false },
+      });
+      await vi.advanceTimersByTimeAsync(25);
+      await vi.advanceTimersByTimeAsync(1);
+
+      await expect(handle.result).resolves.toBe('second-attempt');
+      expect(tokens).toHaveLength(2);
+      expect(tokens[0]?.signal.aborted).toBe(true);
+      expect(tokens[1]?.signal.aborted).toBe(false);
+      expect(bus.getTelemetry().failedTasks).toBe(0);
+      expect(bus.getTelemetry().deadLetterCount).toBe(0);
     } finally {
       vi.useRealTimers();
     }

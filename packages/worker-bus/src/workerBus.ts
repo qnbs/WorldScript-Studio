@@ -21,9 +21,19 @@ import type {
   WorkerPoolOptions,
   WorkerTask,
 } from './types';
+import { DEFAULT_RETRY_POLICY } from './types';
 import { type PooledWorkerInstance, WorkerPool } from './workerPool';
 
 const log = createLogger('worker-bus');
+
+// QNBS-v3: attempt-local cancellation preserves logical task retries while replacing wedged workers.
+interface ActiveAttempt {
+  readonly pool: WorkerPool;
+  readonly worker: PooledWorkerInstance;
+  readonly token: CancellationToken;
+  readonly startedAt: number;
+  timedOut: boolean;
+}
 
 interface PendingTask {
   readonly task: WorkerTask;
@@ -34,8 +44,15 @@ interface PendingTask {
   retryCount: number;
   watchdog: ReturnType<typeof setTimeout> | undefined;
   retryTimer: ReturnType<typeof setTimeout> | undefined;
-  active: { pool: WorkerPool; worker: PooledWorkerInstance } | undefined;
+  active: ActiveAttempt | undefined;
   settled: boolean;
+}
+
+interface DispatchSelection {
+  task: WorkerTask | undefined;
+  pool: WorkerPool | undefined;
+  worker: PooledWorkerInstance | undefined;
+  acquisitionError: Error | undefined;
 }
 
 export class WorkerBus {
@@ -92,20 +109,18 @@ export class WorkerBus {
   ): TaskHandle<TResult> {
     const taskId = crypto.randomUUID();
     const task = this.createTask(taskId, taskType, payload, opts);
-    const circuitBreaker = this.getCircuitBreaker(taskType);
-    if (!this.running) return this.rejectHandle(taskId, 'SHUTDOWN', 'WorkerBus is shut down');
-    if (this.options.enableCircuitBreaker && !circuitBreaker.canExecute()) {
-      this.emit({ kind: 'circuit-breaker-open', taskType });
-      return this.rejectHandle(taskId, 'CIRCUIT_OPEN', 'Circuit breaker is open');
-    }
-    if (!this.queue.enqueue(task)) {
-      const hardSaturation = task.priority === 'critical';
-      this.emit({
-        kind: hardSaturation ? 'hard-backpressure-rejected' : 'backpressure-rejected',
-        taskType,
-      });
-      return this.rejectHandle(taskId, 'BACKPRESSURE', 'Queue full');
-    }
+    const rejectedHandle = this.getRejectedHandle<TResult>(task);
+    if (rejectedHandle) return rejectedHandle;
+    if (!this.queue.enqueue(task)) return this.rejectForBackpressure<TResult>(task);
+
+    return this.createPendingHandle<TResult>(task, opts);
+  }
+
+  private createPendingHandle<TResult>(
+    task: WorkerTask,
+    opts: EnqueueOptions,
+  ): TaskHandle<TResult> {
+    const taskId = task.taskId;
 
     const token = createCancellationToken();
     this.tokens.set(taskId, token);
@@ -146,6 +161,7 @@ export class WorkerBus {
     if (!pending || pending.settled) return false;
     this.queue.remove(taskId);
     pending.token.cancel(reason);
+    pending.active?.token.cancel(reason);
     this.settleFailure(pending, {
       code: 'CANCELLED',
       message: 'Task was cancelled',
@@ -184,6 +200,7 @@ export class WorkerBus {
     this.running = false;
     for (const pending of [...this.pendingTasks.values()]) {
       pending.token.cancel('WorkerBus shut down');
+      pending.active?.token.cancel('WorkerBus shut down');
       this.settleFailure(pending, {
         code: 'SHUTDOWN',
         message: 'WorkerBus shut down',
@@ -223,70 +240,167 @@ export class WorkerBus {
       taskId,
       taskType,
       payload,
-      priority: opts.priority ?? 'normal',
-      target: opts.target ?? 'any',
-      capabilities: opts.capabilities ?? [],
+      priority: this.withDefault(opts.priority, 'normal'),
+      target: this.withDefault(opts.target, 'any'),
+      capabilities: this.withDefault(opts.capabilities, []),
       transferables: opts.transferables,
       createdAt: Date.now(),
-      timeoutMs: opts.timeoutMs ?? 300_000,
-      retryPolicy: {
-        maxRetries: 2,
-        backoffMs: 400,
-        maxBackoffMs: 30_000,
-        jitter: true,
-        ...(opts.retryPolicy ?? {}),
-      },
-      traceId: opts.parentTaskId ? `${opts.parentTaskId}:${taskId}` : taskId,
+      timeoutMs: this.withDefault(opts.timeoutMs, 300_000),
+      retryPolicy: { ...DEFAULT_RETRY_POLICY, ...opts.retryPolicy },
+      traceId: this.createTraceId(taskId, opts.parentTaskId),
       parentTaskId: opts.parentTaskId,
     };
   }
 
+  private getRejectedHandle<TResult>(task: WorkerTask): TaskHandle<TResult> | undefined {
+    if (!this.running) {
+      return this.rejectHandle(task.taskId, 'SHUTDOWN', 'WorkerBus is shut down');
+    }
+    const circuitBreaker = this.getCircuitBreaker(task.taskType);
+    if (!this.options.enableCircuitBreaker || circuitBreaker.canExecute()) return undefined;
+    this.emit({ kind: 'circuit-breaker-open', taskType: task.taskType });
+    return this.rejectHandle(task.taskId, 'CIRCUIT_OPEN', 'Circuit breaker is open');
+  }
+
+  private rejectForBackpressure<TResult>(task: WorkerTask): TaskHandle<TResult> {
+    this.emitBackpressure(task);
+    return this.rejectHandle(task.taskId, 'BACKPRESSURE', 'Queue full');
+  }
+
+  private emitBackpressure(task: WorkerTask): void {
+    this.emit({
+      kind: task.priority === 'critical' ? 'hard-backpressure-rejected' : 'backpressure-rejected',
+      taskType: task.taskType,
+    });
+  }
+
+  private withDefault<T>(value: T | undefined, fallback: T): T {
+    return value === undefined ? fallback : value;
+  }
+
+  private createTraceId(taskId: string, parentTaskId: string | undefined): string {
+    return parentTaskId ? `${parentTaskId}:${taskId}` : taskId;
+  }
+
   private pump(): void {
     while (this.running) {
-      let selectedPool: WorkerPool | undefined;
-      let selectedWorker: PooledWorkerInstance | undefined;
-      const task = this.queue.dequeueFirst((candidate) => {
-        const pending = this.pendingTasks.get(candidate.taskId);
-        if (!pending || pending.settled) return true;
-        const pool = this.resolvePool(candidate);
-        if (!pool) return true;
-        const worker = pool.tryAcquire();
-        if (!worker) return false;
-        selectedPool = pool;
-        selectedWorker = worker;
-        return true;
-      });
-      if (!task) return;
-      const pending = this.pendingTasks.get(task.taskId);
-      if (!pending || pending.settled) continue;
-      if (!selectedPool || !selectedWorker) {
-        this.handleAttemptResult(pending, this.noPoolResult(task));
-        continue;
-      }
-      pending.active = { pool: selectedPool, worker: selectedWorker };
-      this.taskPools.set(task.taskId, selectedPool.poolId);
-      void this.executeAttempt(pending, selectedPool, selectedWorker);
+      const selection = this.dequeueRunnableTask();
+      if (!selection.task) return;
+      this.dispatchSelection(selection);
     }
   }
 
-  private async executeAttempt(
-    pending: PendingTask,
-    pool: WorkerPool,
-    worker: PooledWorkerInstance,
-  ): Promise<void> {
+  private dequeueRunnableTask(): DispatchSelection {
+    const selection: DispatchSelection = {
+      task: undefined,
+      pool: undefined,
+      worker: undefined,
+      acquisitionError: undefined,
+    };
+    selection.task = this.queue.dequeueFirst((candidate) =>
+      this.selectCandidate(candidate, selection),
+    );
+    return selection;
+  }
+
+  private selectCandidate(candidate: WorkerTask, selection: DispatchSelection): boolean {
+    selection.pool = undefined;
+    selection.worker = undefined;
+    selection.acquisitionError = undefined;
+    const pending = this.pendingTasks.get(candidate.taskId);
+    if (!pending || pending.settled) return true;
+    const pool = this.resolvePool(candidate);
+    if (!pool) return true;
+    selection.pool = pool;
+    return this.trySelectWorker(pool, selection);
+  }
+
+  private trySelectWorker(pool: WorkerPool, selection: DispatchSelection): boolean {
     try {
-      const result = await this.runTask(pending.task, pending.token, pool, worker);
-      if (!pending.settled) this.handleAttemptResult(pending, result);
+      selection.worker = pool.tryAcquire();
+      return Boolean(selection.worker);
     } catch (error) {
-      if (!pending.settled) {
-        this.getCircuitBreaker(pending.task.taskType).recordFailure();
-        this.settleError(pending, error instanceof Error ? error : new Error(String(error)));
-      }
-    } finally {
-      if (pending.active?.worker === worker) pending.active = undefined;
-      this.taskPools.delete(pending.task.taskId);
-      this.schedulePump();
+      selection.acquisitionError = this.asError(error);
+      return true;
     }
+  }
+
+  private dispatchSelection(selection: DispatchSelection): void {
+    const task = selection.task;
+    if (!task) return;
+    const pending = this.pendingTasks.get(task.taskId);
+    if (!pending || pending.settled) return;
+    if (selection.acquisitionError) {
+      this.handleAttemptResult(
+        pending,
+        this.acquisitionFailureResult(task, selection.acquisitionError),
+      );
+      return;
+    }
+    if (!selection.pool || !selection.worker) {
+      this.handleAttemptResult(pending, this.noPoolResult(task));
+      return;
+    }
+    const attempt: ActiveAttempt = {
+      pool: selection.pool,
+      worker: selection.worker,
+      token: createCancellationToken(),
+      startedAt: Date.now(),
+      timedOut: false,
+    };
+    pending.active = attempt;
+    this.taskPools.set(task.taskId, selection.pool.poolId);
+    void this.executeAttempt(pending, attempt);
+  }
+
+  private async executeAttempt(pending: PendingTask, attempt: ActiveAttempt): Promise<void> {
+    try {
+      const result = await this.runTask(
+        pending.task,
+        attempt.token,
+        attempt.pool,
+        attempt.worker,
+        attempt,
+      );
+      this.acceptAttemptResult(pending, attempt, result);
+    } catch (error) {
+      this.handleAttemptException(pending, attempt, error);
+    } finally {
+      this.finishAttempt(pending, attempt);
+    }
+  }
+
+  private acceptAttemptResult(
+    pending: PendingTask,
+    attempt: ActiveAttempt,
+    result: TaskResult,
+  ): void {
+    if (!this.isCurrentAttempt(pending, attempt) || attempt.timedOut) return;
+    this.handleAttemptResult(pending, result);
+  }
+
+  private handleAttemptException(
+    pending: PendingTask,
+    attempt: ActiveAttempt,
+    error: unknown,
+  ): void {
+    if (!this.isCurrentAttempt(pending, attempt) || attempt.timedOut) return;
+    this.handleAttemptResult(
+      pending,
+      this.executionFailureResult(pending.task, this.asError(error)),
+    );
+  }
+
+  private finishAttempt(pending: PendingTask, attempt: ActiveAttempt): void {
+    if (pending.active === attempt) {
+      pending.active = undefined;
+      this.taskPools.delete(pending.task.taskId);
+    }
+    this.schedulePump();
+  }
+
+  private isCurrentAttempt(pending: PendingTask, attempt: ActiveAttempt): boolean {
+    return !pending.settled && pending.active === attempt;
   }
 
   private async runTask<TResult>(
@@ -294,8 +408,9 @@ export class WorkerBus {
     token: CancellationToken,
     pool: WorkerPool,
     worker: PooledWorkerInstance,
+    attempt: ActiveAttempt,
   ): Promise<TaskResult<TResult>> {
-    return this.runOnPool(task, token, pool, worker, () => {
+    return this.runOnPool(task, token, pool, worker, attempt, () => {
       const pending = this.pendingTasks.get(task.taskId);
       if (pending && !pending.settled) this.armWatchdog(pending);
     });
@@ -306,23 +421,14 @@ export class WorkerBus {
     token: CancellationToken,
     pool: WorkerPool,
     worker: PooledWorkerInstance,
+    attempt: ActiveAttempt,
     onProgress: () => void,
   ): Promise<TaskResult<TResult>> {
-    const startedAt = performance.now();
-    let timedOut = false;
+    const startedAt = Date.now();
     try {
-      const result = await this.waitForWorkerResult<TResult>(
-        task,
-        token,
-        worker,
-        startedAt,
-        onProgress,
-      );
-      timedOut = result.error?.code === 'TIMEOUT';
-      return result;
+      return await this.waitForWorkerResult<TResult>(task, token, worker, startedAt, onProgress);
     } finally {
-      if (timedOut) pool.terminateWorker(worker.workerId);
-      else if (token.reason !== 'Task inactivity timeout') pool.release(worker);
+      if (!attempt.timedOut) pool.release(worker);
     }
   }
 
@@ -340,17 +446,20 @@ export class WorkerBus {
     );
     return new Promise((resolve) => {
       let settled = false;
-      const cleanup = () => {
+
+      function cleanup(): void {
         settled = true;
         port.removeEventListener('message', handler);
         token.signal.removeEventListener('abort', handleAbort);
-      };
-      const finish = (result: TaskResult<TResult>) => {
+      }
+
+      function finish(result: TaskResult<TResult>): void {
         if (settled) return;
         cleanup();
         resolve(result);
-      };
-      const handleAbort = () => {
+      }
+
+      function handleAbort(): void {
         port.postMessage(createCancelMessage(task.taskId, token.reason ?? 'Aborted'));
         finish({
           taskId: task.taskId,
@@ -361,18 +470,21 @@ export class WorkerBus {
             recoverable: false,
             retryCount: 0,
           },
-          latencyMs: Math.round(performance.now() - startedAt),
+          latencyMs: Math.round(Date.now() - startedAt),
           queueTimeMs,
           workerId: worker.workerId,
           layer: 'web',
         });
-      };
-      const handler = (event: MessageEvent) => {
+      }
+
+      const bus = this;
+      const progress = this.progress;
+      function handler(event: MessageEvent): void {
         const message = validateWorkerMessage(event.data);
         if (!message || message.taskId !== task.taskId) return;
         if (message.kind === 'PROGRESS') {
           onProgress();
-          this.progress.emit(task.taskId, {
+          progress.emit(task.taskId, {
             taskId: task.taskId,
             taskType: task.taskType,
             stage: message.stage,
@@ -381,11 +493,9 @@ export class WorkerBus {
             timestamp: Date.now(),
           });
         } else if (message.kind === 'RESULT') {
-          finish(
-            this.workerMessageToResult<TResult>(task, worker, message, startedAt, queueTimeMs),
-          );
+          finish(bus.workerMessageToResult<TResult>(task, worker, message, startedAt, queueTimeMs));
         }
-      };
+      }
       port.addEventListener('message', handler);
       token.signal.addEventListener('abort', handleAbort, { once: true });
       if (token.signal.aborted) handleAbort();
@@ -411,7 +521,7 @@ export class WorkerBus {
             retryCount: 0,
           }
         : undefined,
-      latencyMs: Math.round(performance.now() - startedAt),
+      latencyMs: Math.round(Date.now() - startedAt),
       queueTimeMs,
       workerId: worker.workerId,
       layer: 'web',
@@ -431,7 +541,7 @@ export class WorkerBus {
       pending.retryCount < pending.task.retryPolicy.maxRetries &&
       !pending.token.isCancelled;
     if (canRetry) {
-      this.armWatchdog(pending);
+      this.clearWatchdog(pending);
       const delay = this.calculateBackoff(pending.retryCount, pending.task.retryPolicy);
       pending.retryCount++;
       pending.retryTimer = setTimeout(() => this.requeueRetry(pending), delay);
@@ -451,14 +561,11 @@ export class WorkerBus {
     pending.retryTimer = undefined;
     if (pending.settled || pending.token.isCancelled) return;
     if (!this.queue.enqueue(pending.task)) {
-      this.settleFailure(pending, {
-        code: 'BACKPRESSURE',
-        message: 'Queue full while retrying task',
-        recoverable: false,
-        retryCount: pending.retryCount,
-      });
+      this.emitBackpressure(pending.task);
+      this.handleAttemptResult(pending, this.retryBackpressureResult(pending));
       return;
     }
+    this.armWatchdog(pending);
     this.schedulePump();
   }
 
@@ -467,37 +574,60 @@ export class WorkerBus {
     pending.watchdog = setTimeout(() => this.handleWatchdog(pending), pending.task.timeoutMs);
   }
 
+  private clearWatchdog(pending: PendingTask): void {
+    if (!pending.watchdog) return;
+    clearTimeout(pending.watchdog);
+    pending.watchdog = undefined;
+  }
+
   private handleWatchdog(pending: PendingTask): void {
     if (pending.settled) return;
+    pending.watchdog = undefined;
     this.queue.remove(pending.task.taskId);
     const active = pending.active;
-    pending.token.cancel('Task inactivity timeout');
-    if (active) active.pool.terminateWorker(active.worker.workerId);
-    const latencyMs = Math.round(performance.now() - pending.task.createdAt);
-    const error = {
+    this.expireAttempt(active);
+    this.handleAttemptResult(pending, this.timeoutResult(pending, active));
+  }
+
+  private expireAttempt(active: ActiveAttempt | undefined): void {
+    if (!active) return;
+    active.timedOut = true;
+    active.token.cancel('Task inactivity timeout');
+    active.pool.terminateWorker(active.worker.workerId);
+  }
+
+  private timeoutResult(pending: PendingTask, active: ActiveAttempt | undefined): TaskResult {
+    if (active) return this.activeTimeoutResult(pending, active);
+    const latencyMs = this.elapsedSince(pending.task.createdAt);
+    return {
+      taskId: pending.task.taskId,
+      success: false,
+      error: this.timeoutError(pending),
+      latencyMs,
+      queueTimeMs: latencyMs,
+      layer: 'main',
+    };
+  }
+
+  private activeTimeoutResult(pending: PendingTask, active: ActiveAttempt): TaskResult {
+    return {
+      taskId: pending.task.taskId,
+      success: false,
+      error: this.timeoutError(pending),
+      latencyMs: this.elapsedSince(active.startedAt),
+      queueTimeMs: this.elapsedBetween(pending.task.createdAt, active.startedAt),
+      workerId: active.worker.workerId,
+      layer: 'web',
+    };
+  }
+
+  private timeoutError(pending: PendingTask): TaskErrorInfo {
+    return {
       code: 'TIMEOUT',
       message: `No response from the worker for ${pending.task.timeoutMs}ms (inactivity watchdog, including queue wait)`,
       recoverable: true,
       retryCount: pending.retryCount,
     };
-    const result: TaskResult = {
-      taskId: pending.task.taskId,
-      success: false,
-      error,
-      latencyMs,
-      queueTimeMs: active ? Math.round(performance.now() - pending.task.createdAt) : latencyMs,
-      ...(active ? { workerId: active.worker.workerId } : {}),
-      layer: active ? 'web' : 'main',
-    };
-    this.getCircuitBreaker(pending.task.taskType).recordFailure();
-    this.recordFailure(latencyMs);
-    this.dlq.add({
-      task: pending.task,
-      result,
-      retryCount: pending.retryCount,
-      deadAt: Date.now(),
-    });
-    this.settleFailure(pending, error);
   }
 
   private settleSuccess(pending: PendingTask, value: unknown): void {
@@ -510,16 +640,11 @@ export class WorkerBus {
     pending.reject(this.toError(info, pending.retryCount));
   }
 
-  private settleError(pending: PendingTask, error: Error): void {
-    if (!this.finalize(pending)) return;
-    pending.reject(error);
-  }
-
   private finalize(pending: PendingTask): boolean {
     if (pending.settled) return false;
     pending.settled = true;
     this.queue.remove(pending.task.taskId);
-    if (pending.watchdog) clearTimeout(pending.watchdog);
+    this.clearWatchdog(pending);
     if (pending.retryTimer) clearTimeout(pending.retryTimer);
     pending.offProgress?.();
     this.progress.complete(pending.task.taskId);
@@ -540,9 +665,63 @@ export class WorkerBus {
         retryCount: 0,
       },
       latencyMs: 0,
-      queueTimeMs: Math.round(performance.now() - task.createdAt),
+      queueTimeMs: Math.round(Date.now() - task.createdAt),
       layer: 'main',
     };
+  }
+
+  private acquisitionFailureResult(task: WorkerTask, error: Error): TaskResult {
+    return this.internalFailureResult(task, 'WORKER_SPAWN_FAILED', error);
+  }
+
+  private executionFailureResult(task: WorkerTask, error: Error): TaskResult {
+    return this.internalFailureResult(task, 'WORKER_EXECUTION_FAILED', error);
+  }
+
+  private internalFailureResult(task: WorkerTask, code: string, error: Error): TaskResult {
+    const latencyMs = this.elapsedSince(task.createdAt);
+    return {
+      taskId: task.taskId,
+      success: false,
+      error: {
+        code,
+        message: error.message,
+        recoverable: true,
+        retryCount: 0,
+      },
+      latencyMs,
+      queueTimeMs: latencyMs,
+      layer: 'main',
+    };
+  }
+
+  private retryBackpressureResult(pending: PendingTask): TaskResult {
+    const latencyMs = this.elapsedSince(pending.task.createdAt);
+    return {
+      taskId: pending.task.taskId,
+      success: false,
+      error: {
+        code: 'BACKPRESSURE',
+        message: 'Queue full while retrying task',
+        recoverable: false,
+        retryCount: pending.retryCount,
+      },
+      latencyMs,
+      queueTimeMs: latencyMs,
+      layer: 'main',
+    };
+  }
+
+  private elapsedSince(startedAt: number): number {
+    return this.elapsedBetween(startedAt, Date.now());
+  }
+
+  private elapsedBetween(startedAt: number, endedAt: number): number {
+    return Math.max(0, Math.round(endedAt - startedAt));
+  }
+
+  private asError(error: unknown): Error {
+    return error instanceof Error ? error : new Error(String(error));
   }
 
   private resolvePool(task: WorkerTask): WorkerPool | undefined {

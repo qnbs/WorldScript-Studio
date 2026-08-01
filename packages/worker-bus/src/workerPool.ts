@@ -25,6 +25,7 @@ interface PoolEntry {
 }
 
 interface AcquireWaiter {
+  readonly id: symbol;
   readonly resolve: (worker: PooledWorkerInstance) => void;
   readonly reject: (error: Error) => void;
   readonly signal: AbortSignal | undefined;
@@ -53,11 +54,11 @@ export class WorkerPool {
     if (signal?.aborted) throw new Error('Aborted');
 
     return new Promise((resolve, reject) => {
+      const waiterId = Symbol('worker-pool-waiter');
       const onAbort = () => {
-        this.removeWaiter(waiter);
-        reject(new Error('Aborted'));
+        this.abortWaiter(waiterId);
       };
-      const waiter: AcquireWaiter = { resolve, reject, signal, onAbort };
+      const waiter: AcquireWaiter = { id: waiterId, resolve, reject, signal, onAbort };
       signal?.addEventListener('abort', onAbort, { once: true });
       this.acquireWaiters.push(waiter);
     });
@@ -271,8 +272,10 @@ export class WorkerPool {
     for (const listener of this.availabilityListeners) listener();
   }
 
-  private removeWaiter(waiter: AcquireWaiter): void {
-    const index = this.acquireWaiters.indexOf(waiter);
-    if (index !== -1) this.acquireWaiters.splice(index, 1);
+  private abortWaiter(waiterId: symbol): void {
+    const index = this.acquireWaiters.findIndex((waiter) => waiter.id === waiterId);
+    if (index === -1) return;
+    const [waiter] = this.acquireWaiters.splice(index, 1);
+    waiter?.reject(new Error('Aborted'));
   }
 }
