@@ -330,26 +330,37 @@ export class WorkerBus {
     if (!task) return;
     const pending = this.pendingTasks.get(task.taskId);
     if (!pending || pending.settled) return;
+    const failureResult = this.dispatchFailureResult(task, selection);
+    if (failureResult) {
+      this.handleAttemptResult(pending, failureResult);
+      return;
+    }
+    this.startAttempt(pending, task, selection);
+  }
+
+  private dispatchFailureResult(
+    task: WorkerTask,
+    selection: DispatchSelection,
+  ): TaskResult | undefined {
     if (selection.acquisitionError) {
-      this.handleAttemptResult(
-        pending,
-        this.acquisitionFailureResult(task, selection.acquisitionError),
-      );
-      return;
+      return this.acquisitionFailureResult(task, selection.acquisitionError);
     }
-    if (!selection.pool || !selection.worker) {
-      this.handleAttemptResult(pending, this.noPoolResult(task));
-      return;
-    }
+    if (!selection.pool || !selection.worker) return this.noPoolResult(task);
+    return undefined;
+  }
+
+  private startAttempt(pending: PendingTask, task: WorkerTask, selection: DispatchSelection): void {
+    const { pool, worker } = selection;
+    if (!pool || !worker) return;
     const attempt: ActiveAttempt = {
-      pool: selection.pool,
-      worker: selection.worker,
+      pool,
+      worker,
       token: createCancellationToken(),
       startedAt: Date.now(),
       timedOut: false,
     };
     pending.active = attempt;
-    this.taskPools.set(task.taskId, selection.pool.poolId);
+    this.taskPools.set(task.taskId, pool.poolId);
     void this.executeAttempt(pending, attempt);
   }
 
@@ -477,14 +488,12 @@ export class WorkerBus {
         });
       }
 
-      const bus = this;
-      const progress = this.progress;
-      function handler(event: MessageEvent): void {
+      const handler = (event: MessageEvent): void => {
         const message = validateWorkerMessage(event.data);
         if (!message || message.taskId !== task.taskId) return;
         if (message.kind === 'PROGRESS') {
           onProgress();
-          progress.emit(task.taskId, {
+          this.progress.emit(task.taskId, {
             taskId: task.taskId,
             taskType: task.taskType,
             stage: message.stage,
@@ -493,9 +502,11 @@ export class WorkerBus {
             timestamp: Date.now(),
           });
         } else if (message.kind === 'RESULT') {
-          finish(bus.workerMessageToResult<TResult>(task, worker, message, startedAt, queueTimeMs));
+          finish(
+            this.workerMessageToResult<TResult>(task, worker, message, startedAt, queueTimeMs),
+          );
         }
-      }
+      };
       removeListeners.push(
         () => port.removeEventListener('message', handler),
         () => token.signal.removeEventListener('abort', handleAbort),
