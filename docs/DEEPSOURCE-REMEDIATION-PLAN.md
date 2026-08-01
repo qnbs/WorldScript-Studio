@@ -71,7 +71,7 @@ Fix in this order — highest user/security impact first; cosmetic last. Within 
 | Issue code | Title | Occ. | Files / modules | Decision | Status | PR |
 |---|---|---|---|---|---|---|
 | CWE/SANS Top-25 rows | code-level Top-25 CWE violations | **0** | — | none needed (clean) | done | — |
-| **JS-0440** | Avoid dangerous JSX props — `dangerouslySetInnerHTML` (CWE-937 / OWASP; the report's "1 active") | 1 | `components/HelpView.tsx:125` | **dashboard "Ignore" (reviewed-safe)** — `__html` is `DOMPurify.sanitize()`d (repo's documented safe pattern); not a real XSS. In-code `skipcq` can't attach to a JSX attribute (§4b). | maintainer-click | — |
+| **JS-0440** | Avoid dangerous JSX props — `dangerouslySetInnerHTML` (CWE-937 / OWASP; the report's "1 active") | 1 | `components/HelpView.tsx:125` | **dashboard "Ignore" (reviewed-safe)** — `__html` is `DOMPurify.sanitize()`d (repo's documented safe pattern); not a real XSS. In-code `skipcq` can't attach to a JSX attribute (§4b). **Re-surfaced 2026-08-01** as an active, non-ignored **Major** finding on the dashboard — the 2026-06-24 ignore click did not persist (or a rescan reset it); re-click Ignore and re-verify after the next full-repo scan. | todo (re-ignore + verify) | — |
 
 ### P1 — Bug-risk / Reliability
 | Issue code | Title | Occ. | Files / modules | Decision | Status | PR |
@@ -150,7 +150,7 @@ config level (`.deepsource.toml`) instead of scattering inline `skipcq`. Log eac
 | Rule / analyzer | Action | Rationale | Date |
 |---|---|---|---|
 | **JS-0323** (`any`) | dashboard rule-ignore, **test-file scope** | 34 occ all in test mocks, already governed by Biome `noExplicitAny` + the suppression ratchet (baseline 52); double-suppressing is noise. 0 production `any`. Long-term cleanup → §4c. | 2026-06-24 |
-| **JS-0440** (`dangerouslySetInnerHTML`) | dashboard "Ignore" (single occurrence) | reviewed-safe — `__html` is DOMPurify-sanitized (repo policy). In-code skipcq can't attach to a JSX attribute (§4b). | 2026-06-24 |
+| **JS-0440** (`dangerouslySetInnerHTML`) | dashboard "Ignore" (single occurrence) — **re-click needed, see §11 in `DEEPSOURCE-REVIEW-LOOP.md`** | reviewed-safe — `__html` is DOMPurify-sanitized (repo policy). In-code skipcq can't attach to a JSX attribute (§4b). Ignore did not survive to 2026-08-01; re-verified as still safe, only the dashboard-suppression state needs re-applying. | 2026-06-24 (re-observed 2026-08-01) |
 | **JS-0067** ("unexpected function declaration in the global scope") | recommend dashboard rule-ignore (not yet actioned — maintainer click) | flagged on PR #305 for ordinary top-level `function`/`async function` declarations in `services/ai/localAiDeviceProfiler.ts` + `services/workerBusManager.ts` — idiomatic Biome-approved ES-module code, not `<script>`-tag global pollution; repo-wide pattern, not a per-file fix. Informational-only check (not in required-status list). See `DEEPSOURCE-REVIEW-LOOP.md` §11, 2026-08-01 entry. | 2026-08-01 |
 
 ## 6. Definition of done
