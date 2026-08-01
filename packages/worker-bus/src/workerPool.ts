@@ -230,30 +230,10 @@ export class WorkerPool {
   }
 
   private waitForIdle(signal?: AbortSignal): Promise<PooledWorkerInstance> {
-    // QNBS-v3: captured so the hoisted `function` declarations below (which don't have
-    //          their own lexical `this`) can still reach the pool instance.
-    const pool = this;
     return new Promise((resolve, reject) => {
-      // QNBS-v3: `check`/`cleanup`/`onAbort` are mutually recursive (check calls cleanup,
-      //          onAbort calls cleanup) — plain `function` declarations hoist fully (name +
-      //          body), so each can reference the others regardless of source order, with no
-      //          TDZ and no `const` "used before defined" antipattern.
-      function check() {
-        const idle = pool.entries.find((e) => e.instance.state === 'idle');
-        if (idle) {
-          cleanup();
-          pool.setBusy(idle.instance.workerId);
-          resolve(idle.instance);
-          return;
-        }
-        if (pool.shutdownFlag) {
-          cleanup();
-          reject(new Error('Pool is shutting down'));
-          return;
-        }
-        requestAnimationFrame(check);
-      }
-
+      // QNBS-v3: cleanup/onAbort are mutually recursive — plain `function` declarations
+      //          hoist fully, avoiding the `const` "used before defined" antipattern
+      //          without aliasing `this` (neither touches pool state, unlike `check`).
       function cleanup() {
         signal?.removeEventListener('abort', onAbort);
       }
@@ -261,6 +241,25 @@ export class WorkerPool {
         cleanup();
         reject(new Error('Aborted'));
       }
+
+      // QNBS-v3: arrow function keeps `this` lexical (no aliasing) since it only
+      //          self-recurses via requestAnimationFrame and references `cleanup`,
+      //          both already declared above.
+      const check = (): void => {
+        const idle = this.entries.find((e) => e.instance.state === 'idle');
+        if (idle) {
+          cleanup();
+          this.setBusy(idle.instance.workerId);
+          resolve(idle.instance);
+          return;
+        }
+        if (this.shutdownFlag) {
+          cleanup();
+          reject(new Error('Pool is shutting down'));
+          return;
+        }
+        requestAnimationFrame(check);
+      };
 
       signal?.addEventListener('abort', onAbort);
       check();
