@@ -250,6 +250,20 @@ describe('secure record envelopes', () => {
       }),
     ).rejects.toBeInstanceOf(SecureRecordCorruptError);
   });
+
+  it('rejects incomplete envelope shapes instead of migrating them as legacy plaintext', async () => {
+    await setupIdbEncryption('correct horse battery staple');
+
+    await expect(
+      readSecureRecordPayload({ version: 1, iv: new Uint8Array(12) }),
+    ).rejects.toBeInstanceOf(SecureRecordCorruptError);
+    await expect(
+      readSecureRecordPayload({ version: 1, ciphertext: new Uint8Array(16) }),
+    ).rejects.toBeInstanceOf(SecureRecordCorruptError);
+    await expect(readSecureRecordPayload({ version: 1 })).rejects.toBeInstanceOf(
+      SecureRecordCorruptError,
+    );
+  });
 });
 
 // ── Module singleton functions ───────────────────────────────────────────────

@@ -205,7 +205,12 @@ export function isEncryptedBlob(value: unknown): value is Uint8Array {
 function isSecureRecordCandidate(value: unknown): boolean {
   if (typeof value !== 'object' || value === null) return false;
   const record = value as Record<string, unknown>;
-  return 'version' in record && 'iv' in record && 'ciphertext' in record;
+  if ('iv' in record || 'ciphertext' in record) return true;
+  if (!('version' in record)) return false;
+  // QNBS-v3: Reserve envelope-only shapes so missing fields fail closed without misclassifying payloads that merely have a domain `version` field.
+  return Object.keys(record).every(
+    (key) => key === 'version' || key === 'iv' || key === 'ciphertext',
+  );
 }
 
 /** Type guard for the versioned envelope stored by secondary IndexedDB services. */
