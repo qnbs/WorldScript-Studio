@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TaskResult } from '../src/types';
 import { WorkerBus } from '../src/workerBus';
-import type { WorkerPool } from '../src/workerPool';
+import type { PooledWorkerInstance, WorkerPool } from '../src/workerPool';
 
 // QNBS-v3: suppress unhandled rejections from async microtask timing in mocked runTask tests.
 //          The rejections are always caught by test assertions; Vitest's detector fires first.
@@ -11,6 +11,17 @@ process.on('unhandledRejection', () => {
 
 describe('WorkerBus', () => {
   let bus: WorkerBus;
+  let allowDispatch: (worker?: PooledWorkerInstance) => void;
+
+  const schedulerWorker = {
+    workerId: 'scheduler-worker',
+    worker: {} as Worker,
+    channel: {} as MessageChannel,
+    port: {} as MessagePort,
+    state: 'busy' as const,
+    capabilities: ['inference.text'] as const,
+    labels: {},
+  };
 
   beforeEach(() => {
     bus = new WorkerBus({
@@ -33,7 +44,8 @@ describe('WorkerBus', () => {
       labels: {},
     });
     const pool = (bus as unknown as { pools: Map<string, WorkerPool> }).pools.get('fake')!;
-    vi.spyOn(pool, 'acquire').mockReturnValue(new Promise(() => {}));
+    const tryAcquire = vi.spyOn(pool, 'tryAcquire').mockReturnValue(undefined);
+    allowDispatch = (worker = schedulerWorker) => tryAcquire.mockReturnValue(worker);
   });
 
   afterEach(async () => {
@@ -102,12 +114,133 @@ describe('WorkerBus', () => {
       labels: {},
     });
     const pool2 = (smallBus as unknown as { pools: Map<string, WorkerPool> }).pools.get('fake2')!;
-    vi.spyOn(pool2, 'acquire').mockReturnValue(new Promise(() => {}));
+    vi.spyOn(pool2, 'tryAcquire').mockReturnValue(undefined);
 
     smallBus.enqueue('fill', {}).result.catch(() => {});
     const handle = smallBus.enqueue('overflow', {});
     await expect(handle.result).rejects.toThrow('Queue full');
     await smallBus.shutdown();
+  });
+
+  it('drains the live queue across more than 32 lifetime submissions', async () => {
+    allowDispatch();
+    (bus as unknown as { runTask: () => Promise<TaskResult<number>> }).runTask = vi
+      .fn()
+      .mockResolvedValue({
+        taskId: 'x',
+        success: true,
+        result: 1,
+        latencyMs: 1,
+        queueTimeMs: 0,
+        layer: 'web',
+      });
+
+    for (let index = 0; index < 40; index++) {
+      await expect(bus.enqueue<null, number>('test.task', null).result).resolves.toBe(1);
+    }
+
+    expect(bus.getTelemetry().queueDepth).toEqual({ critical: 0, high: 0, normal: 0, low: 0 });
+    expect(bus.getTelemetry().processedTasks).toBe(40);
+  });
+
+  it('dispatches saturated work by priority and FIFO within a tier', async () => {
+    const executionOrder: string[] = [];
+    (
+      bus as unknown as { runTask: (task: { payload: string }) => Promise<TaskResult<string>> }
+    ).runTask = vi.fn().mockImplementation(async (task) => {
+      executionOrder.push(task.payload);
+      return {
+        taskId: 'x',
+        success: true,
+        result: task.payload,
+        latencyMs: 1,
+        queueTimeMs: 0,
+        layer: 'web',
+      };
+    });
+    const handles = [
+      bus.enqueue<string, string>('test.task', 'low', { priority: 'low' }),
+      bus.enqueue<string, string>('test.task', 'normal-1', { priority: 'normal' }),
+      bus.enqueue<string, string>('test.task', 'critical', { priority: 'critical' }),
+      bus.enqueue<string, string>('test.task', 'high', { priority: 'high' }),
+      bus.enqueue<string, string>('test.task', 'normal-2', { priority: 'normal' }),
+    ];
+
+    allowDispatch();
+    (bus as unknown as { schedulePump: () => void }).schedulePump();
+    await Promise.all(handles.map((handle) => handle.result));
+
+    expect(executionOrder).toEqual(['critical', 'high', 'normal-1', 'normal-2', 'low']);
+  });
+
+  it('times out while queued and clears scheduler-owned state', async () => {
+    vi.useFakeTimers();
+    try {
+      const handle = bus.enqueue(
+        'test.task',
+        {},
+        { timeoutMs: 25, retryPolicy: { maxRetries: 0 } },
+      );
+      const assertion = expect(handle.result).rejects.toMatchObject({ code: 'TIMEOUT' });
+      await vi.advanceTimersByTimeAsync(25);
+      await assertion;
+
+      expect(bus.getTelemetry().queueDepth).toEqual({ critical: 0, high: 0, normal: 0, low: 0 });
+      const internals = bus as unknown as {
+        pendingTasks: Map<string, unknown>;
+        tokens: Map<string, unknown>;
+        taskPools: Map<string, unknown>;
+      };
+      expect(internals.pendingTasks.size).toBe(0);
+      expect(internals.tokens.size).toBe(0);
+      expect(internals.taskPools.size).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('rejects queued handles on shutdown and clears every scheduler map', async () => {
+    const handle = bus.enqueue('test.task', {});
+    const assertion = expect(handle.result).rejects.toMatchObject({ code: 'SHUTDOWN' });
+
+    await bus.shutdown();
+    await assertion;
+
+    const internals = bus as unknown as {
+      pendingTasks: Map<string, unknown>;
+      tokens: Map<string, unknown>;
+      taskPools: Map<string, unknown>;
+    };
+    expect(internals.pendingTasks.size).toBe(0);
+    expect(internals.tokens.size).toBe(0);
+    expect(internals.taskPools.size).toBe(0);
+  });
+
+  it('uses a bounded critical reserve and emits hard-saturation telemetry', async () => {
+    const constrainedBus = new WorkerBus({
+      maxQueueSize: 1,
+      maxPreemptions: 3,
+      workerPoolSize: 1,
+      enableCircuitBreaker: false,
+      circuitBreakerThreshold: 5,
+      circuitBreakerRecoveryMs: 1_000,
+      enableDeadLetter: true,
+      deadLetterCapacity: 4,
+      enableTracing: false,
+    });
+    const events: string[] = [];
+    constrainedBus.subscribe((event) => events.push(event.kind));
+    const accepted = [constrainedBus.enqueue('normal', {})];
+    for (let index = 0; index < 8; index++) {
+      accepted.push(constrainedBus.enqueue('critical', {}, { priority: 'critical' }));
+    }
+    const overflow = constrainedBus.enqueue('critical', {}, { priority: 'critical' });
+    const assertion = expect(overflow.result).rejects.toMatchObject({ code: 'BACKPRESSURE' });
+
+    await assertion;
+    expect(events).toContain('hard-backpressure-rejected');
+    for (const handle of accepted) handle.result.catch(() => {});
+    await constrainedBus.shutdown();
   });
 
   it('resolves task when runTask succeeds', async () => {
@@ -121,6 +254,7 @@ describe('WorkerBus', () => {
         queueTimeMs: 5,
         layer: 'web',
       });
+    allowDispatch();
     const handle = bus.enqueue('test.task', {});
     await expect(handle.result).resolves.toBe('hello');
   });
@@ -141,6 +275,7 @@ describe('WorkerBus', () => {
         queueTimeMs: 5,
         layer: 'web',
       });
+    allowDispatch();
     const handle = bus.enqueue('test.task', {});
     await expect(handle.result).rejects.toThrow('Invalid payload');
   });
@@ -173,6 +308,7 @@ describe('WorkerBus', () => {
         layer: 'web',
       });
     (bus as unknown as { runTask: typeof mockRunTask }).runTask = mockRunTask;
+    allowDispatch();
 
     const handle = bus.enqueue(
       'test.task',
@@ -197,6 +333,7 @@ describe('WorkerBus', () => {
         queueTimeMs: 5,
         layer: 'web',
       });
+    allowDispatch();
 
     const handle = bus.enqueue('test.task', {});
     await handle.result;
@@ -220,7 +357,7 @@ describe('WorkerBus', () => {
     });
     const pools = (bus as unknown as { pools: Map<string, WorkerPool> }).pools;
     const terminateAllSpy = vi.spyOn(pools.get('fake')!, 'terminateAll');
-    vi.spyOn(pools.get('other')!, 'acquire').mockReturnValue(new Promise(() => {}));
+    vi.spyOn(pools.get('other')!, 'tryAcquire').mockReturnValue(undefined);
 
     await bus.terminatePool('fake');
 
@@ -239,12 +376,7 @@ describe('WorkerBus', () => {
     //          mirroring WorkerPool's real waitForIdle() so cancellation can actually be observed
     //          unsticking the caller, not just verified as "cancel() was called".]
     const fakePool = (bus as unknown as { pools: Map<string, WorkerPool> }).pools.get('fake')!;
-    vi.spyOn(fakePool, 'acquire').mockImplementation(
-      (signal) =>
-        new Promise((_resolve, reject) => {
-          signal?.addEventListener('abort', () => reject(new Error('Aborted')), { once: true });
-        }),
-    );
+    vi.spyOn(fakePool, 'tryAcquire').mockReturnValue(schedulerWorker);
     bus.registerPool('other', ['db.duckdb'], {
       maxWorkers: 1,
       minWorkers: 1,
@@ -254,7 +386,7 @@ describe('WorkerBus', () => {
       labels: {},
     });
     const otherPool = (bus as unknown as { pools: Map<string, WorkerPool> }).pools.get('other')!;
-    vi.spyOn(otherPool, 'acquire').mockReturnValue(new Promise(() => {}));
+    vi.spyOn(otherPool, 'tryAcquire').mockReturnValue(undefined);
 
     const fakeHandle = bus.enqueue('test.task', {}, { capabilities: ['inference.text'] });
     const otherHandle = bus.enqueue('other.task', {}, { capabilities: ['db.duckdb'] });
@@ -267,7 +399,7 @@ describe('WorkerBus', () => {
     expect(cancelSpy).toHaveBeenCalledWith(fakeHandle.taskId, 'Pool terminated');
     // Without the fix, this task would hang forever at pool.acquire() — terminatePool()
     // cancelling it lets the result promise settle instead.
-    await expect(fakeHandle.result).rejects.toThrow('Aborted');
+    await expect(fakeHandle.result).rejects.toThrow('cancelled');
   });
 
   it('hasPool reports true for a registered pool and false for an unknown one', () => {
@@ -332,6 +464,7 @@ describe('WorkerBus', () => {
           layer: 'web',
         };
       });
+    allowDispatch();
 
     const handle = bus.enqueue(
       'test.task',
@@ -380,6 +513,7 @@ describe('WorkerBus', () => {
           }, 100);
         });
       });
+    allowDispatch();
 
     const handle = bus.enqueue('test.task', {});
     handle.cancel('user-request');
@@ -397,6 +531,7 @@ describe('WorkerBus', () => {
         queueTimeMs: 5,
         layer: 'web',
       });
+    allowDispatch();
 
     const handle = bus.enqueue('resilient.task', {});
     await handle.result;
@@ -414,6 +549,7 @@ describe('WorkerBus', () => {
       layer: 'web',
     });
     (bus as unknown as { runTask: typeof mockRunTask }).runTask = mockRunTask;
+    allowDispatch();
 
     const handle = bus.enqueue(
       'test.task',
@@ -453,6 +589,7 @@ describe('WorkerBus', () => {
         queueTimeMs: 5,
         layer: 'web',
       });
+    allowDispatch();
     const handle = bus.enqueue('test.task', {});
     await expect(handle.result).resolves.toBe('ok');
   });
@@ -523,7 +660,7 @@ describe('WorkerBus', () => {
     };
 
     const pool = (bus as unknown as { pools: Map<string, WorkerPool> }).pools.get('fake')!;
-    vi.spyOn(pool, 'acquire').mockResolvedValue(
+    vi.spyOn(pool, 'tryAcquire').mockReturnValue(
       mockWorker as unknown as import('../src/workerPool').PooledWorkerInstance,
     );
 
@@ -582,7 +719,7 @@ describe('WorkerBus', () => {
     };
 
     const pool = (bus as unknown as { pools: Map<string, WorkerPool> }).pools.get('fake')!;
-    vi.spyOn(pool, 'acquire').mockResolvedValue(
+    vi.spyOn(pool, 'tryAcquire').mockReturnValue(
       mockWorker as unknown as import('../src/workerPool').PooledWorkerInstance,
     );
 
@@ -622,7 +759,7 @@ describe('WorkerBus', () => {
     };
 
     const pool = (bus as unknown as { pools: Map<string, WorkerPool> }).pools.get('fake')!;
-    vi.spyOn(pool, 'acquire').mockResolvedValue(
+    vi.spyOn(pool, 'tryAcquire').mockReturnValue(
       mockWorker as unknown as import('../src/workerPool').PooledWorkerInstance,
     );
 
@@ -656,7 +793,7 @@ describe('WorkerBus', () => {
       };
 
       const pool = (bus as unknown as { pools: Map<string, WorkerPool> }).pools.get('fake')!;
-      vi.spyOn(pool, 'acquire').mockResolvedValue(
+      vi.spyOn(pool, 'tryAcquire').mockReturnValue(
         mockWorker as unknown as import('../src/workerPool').PooledWorkerInstance,
       );
       const terminateWorkerSpy = vi.spyOn(pool, 'terminateWorker').mockImplementation(() => {});
@@ -749,7 +886,7 @@ describe('WorkerBus', () => {
       };
 
       const pool = (bus as unknown as { pools: Map<string, WorkerPool> }).pools.get('fake')!;
-      vi.spyOn(pool, 'acquire').mockResolvedValue(
+      vi.spyOn(pool, 'tryAcquire').mockReturnValue(
         mockWorker as unknown as import('../src/workerPool').PooledWorkerInstance,
       );
 
@@ -789,7 +926,7 @@ describe('WorkerBus', () => {
     };
 
     const pool = (bus as unknown as { pools: Map<string, WorkerPool> }).pools.get('fake')!;
-    vi.spyOn(pool, 'acquire').mockResolvedValue(
+    vi.spyOn(pool, 'tryAcquire').mockReturnValue(
       mockWorker as unknown as import('../src/workerPool').PooledWorkerInstance,
     );
     vi.spyOn(pool, 'release').mockImplementation(() => {});

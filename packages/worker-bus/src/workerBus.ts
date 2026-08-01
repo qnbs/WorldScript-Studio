@@ -1,5 +1,4 @@
-// QNBS-v3: WorkerBus v2 — central orchestrator. All background tasks flow through here.
-//          Integrates queue, pool, circuit breaker, DLQ, cancellation, and telemetry.
+// QNBS-v3: WorkerBus v2 uses one bounded priority scheduler for queueing, retries, and dispatch.
 
 import { createLogger } from '../../../services/logger';
 import { type CancellationToken, createCancellationToken } from './cancellation';
@@ -22,21 +21,35 @@ import type {
   WorkerPoolOptions,
   WorkerTask,
 } from './types';
-import { WorkerPool } from './workerPool';
+import { type PooledWorkerInstance, WorkerPool } from './workerPool';
 
 const log = createLogger('worker-bus');
+
+interface PendingTask {
+  readonly task: WorkerTask;
+  readonly token: CancellationToken;
+  readonly resolve: (value: unknown) => void;
+  readonly reject: (error: Error) => void;
+  readonly offProgress: (() => void) | undefined;
+  retryCount: number;
+  watchdog: ReturnType<typeof setTimeout> | undefined;
+  retryTimer: ReturnType<typeof setTimeout> | undefined;
+  active: { pool: WorkerPool; worker: PooledWorkerInstance } | undefined;
+  settled: boolean;
+}
 
 export class WorkerBus {
   private readonly queue: PriorityTaskQueue;
   private readonly pools = new Map<string, WorkerPool>();
+  private readonly poolAvailabilityOff = new Map<string, () => void>();
   private readonly circuitBreakers = new Map<string, CircuitBreaker>();
   private readonly dlq: DeadLetterQueue;
   private readonly progress = new ProgressEmitter();
   private readonly tokens = new Map<string, CancellationToken>();
-  // QNBS-v3: [Tracks which pool each in-flight task is running on, so terminatePool() can cancel exactly the affected tasks instead of leaving their result promises hanging forever.]
+  private readonly pendingTasks = new Map<string, PendingTask>();
   private readonly taskPools = new Map<string, string>();
   private readonly listeners = new Set<BusEventListener>();
-  private running = false;
+  private running = true;
   private pumpScheduled = false;
   private processedTasks = 0;
   private failedTasks = 0;
@@ -48,11 +61,8 @@ export class WorkerBus {
   constructor(private readonly options: WorkerBusOptions) {
     this.queue = new PriorityTaskQueue(options.maxQueueSize);
     this.dlq = new DeadLetterQueue(options.deadLetterCapacity ?? 64);
-    this.running = true;
-    this.schedulePump();
   }
 
-  // QNBS-v3: [Lets callers (e.g. ensureDuckDbPool()) detect a pool removed via terminatePool() and re-register it, instead of assuming a non-null bus always has every pool.]
   hasPool(poolId: string): boolean {
     return this.pools.has(poolId);
   }
@@ -66,7 +76,13 @@ export class WorkerBus {
       log.warn(`Pool ${poolId} already registered`);
       return;
     }
-    this.pools.set(poolId, new WorkerPool(poolId, capabilities, opts));
+    const pool = new WorkerPool(poolId, capabilities, opts);
+    this.pools.set(poolId, pool);
+    this.poolAvailabilityOff.set(
+      poolId,
+      pool.onAvailable(() => this.schedulePump()),
+    );
+    this.schedulePump();
   }
 
   enqueue<TPayload, TResult>(
@@ -75,99 +91,68 @@ export class WorkerBus {
     opts: EnqueueOptions = {},
   ): TaskHandle<TResult> {
     const taskId = crypto.randomUUID();
-    const traceId = opts.parentTaskId ? `${opts.parentTaskId}:${taskId}` : taskId;
-    const token = createCancellationToken();
-    this.tokens.set(taskId, token);
-
-    const task: WorkerTask<TPayload> = {
-      taskId,
-      taskType,
-      payload,
-      priority: opts.priority ?? 'normal',
-      target: opts.target ?? 'any',
-      capabilities: opts.capabilities ?? [],
-      transferables: opts.transferables,
-      createdAt: Date.now(),
-      timeoutMs: opts.timeoutMs ?? 300_000,
-      retryPolicy: {
-        maxRetries: 2,
-        backoffMs: 400,
-        maxBackoffMs: 30_000,
-        jitter: true,
-        ...(opts.retryPolicy ?? {}),
-      },
-      traceId,
-      parentTaskId: opts.parentTaskId,
-    };
-
-    const cb = this.getCircuitBreaker(taskType);
-    if (this.options.enableCircuitBreaker && !cb.canExecute()) {
+    const task = this.createTask(taskId, taskType, payload, opts);
+    const circuitBreaker = this.getCircuitBreaker(taskType);
+    if (!this.running) return this.rejectHandle(taskId, 'SHUTDOWN', 'WorkerBus is shut down');
+    if (this.options.enableCircuitBreaker && !circuitBreaker.canExecute()) {
       this.emit({ kind: 'circuit-breaker-open', taskType });
       return this.rejectHandle(taskId, 'CIRCUIT_OPEN', 'Circuit breaker is open');
     }
-
     if (!this.queue.enqueue(task)) {
-      this.emit({ kind: 'backpressure-rejected', taskType });
+      const hardSaturation = task.priority === 'critical';
+      this.emit({
+        kind: hardSaturation ? 'hard-backpressure-rejected' : 'backpressure-rejected',
+        taskType,
+      });
       return this.rejectHandle(taskId, 'BACKPRESSURE', 'Queue full');
     }
 
-    // progress callback wrapper
-    const offList: Array<() => void> = [];
-    if (opts.onProgress) {
-      offList.push(this.progress.on(taskId, opts.onProgress));
-    }
-
+    const token = createCancellationToken();
+    this.tokens.set(taskId, token);
+    let resolveResult: (value: unknown) => void = () => {};
+    let rejectResult: (error: Error) => void = () => {};
     const result = new Promise<TResult>((resolve, reject) => {
-      const attempt = (retryCount: number) => {
-        this.runTask(task, token)
-          .then((res) => {
-            if (res.success) {
-              resolve(res.result as TResult);
-            } else {
-              const canRetry =
-                res.error?.recoverable !== false && retryCount < task.retryPolicy.maxRetries;
-              if (canRetry) {
-                const delay = this.calculateBackoff(retryCount, task.retryPolicy);
-                setTimeout(() => attempt(retryCount + 1), delay);
-              } else {
-                this.dlq.add({ task, result: res, retryCount, deadAt: Date.now() });
-                reject(this.toError(res.error, retryCount));
-              }
-            }
-          })
-          .catch((err) => {
-            cb.recordFailure();
-            reject(err instanceof Error ? err : new Error(String(err)));
-          });
-      };
-      attempt(0);
+      resolveResult = (value) => resolve(value as TResult);
+      rejectResult = reject;
     });
-
-    result.finally(() => {
-      this.tokens.delete(taskId);
-      for (const off of offList) {
-        off();
-      }
-    });
+    const pending: PendingTask = {
+      task,
+      token,
+      resolve: resolveResult,
+      reject: rejectResult,
+      offProgress: opts.onProgress ? this.progress.on(taskId, opts.onProgress) : undefined,
+      retryCount: 0,
+      watchdog: undefined,
+      retryTimer: undefined,
+      active: undefined,
+      settled: false,
+    };
+    this.pendingTasks.set(taskId, pending);
+    this.armWatchdog(pending);
+    this.schedulePump();
 
     return {
       taskId,
       result,
       progress: this.progress.iterable(taskId),
       cancel: (reason?: string) => {
-        token.cancel(reason);
         this.cancel(taskId, reason);
       },
     };
   }
 
   cancel(taskId: string, reason?: string): boolean {
-    const token = this.tokens.get(taskId);
-    if (token) {
-      token.cancel(reason);
-      this.tokens.delete(taskId);
-    }
-    return this.queue.remove(taskId);
+    const pending = this.pendingTasks.get(taskId);
+    if (!pending || pending.settled) return false;
+    this.queue.remove(taskId);
+    pending.token.cancel(reason);
+    this.settleFailure(pending, {
+      code: 'CANCELLED',
+      message: 'Task was cancelled',
+      recoverable: false,
+      retryCount: pending.retryCount,
+    });
+    return true;
   }
 
   getTelemetry(): WorkerBusTelemetry {
@@ -195,255 +180,399 @@ export class WorkerBus {
   }
 
   async shutdown(): Promise<void> {
+    if (!this.running) return;
     this.running = false;
-    for (const pool of this.pools.values()) {
-      await pool.terminateAll();
+    for (const pending of [...this.pendingTasks.values()]) {
+      pending.token.cancel('WorkerBus shut down');
+      this.settleFailure(pending, {
+        code: 'SHUTDOWN',
+        message: 'WorkerBus shut down',
+        recoverable: false,
+        retryCount: pending.retryCount,
+      });
     }
+    for (const off of this.poolAvailabilityOff.values()) off();
+    this.poolAvailabilityOff.clear();
+    for (const pool of this.pools.values()) await pool.terminateAll();
     this.pools.clear();
     this.progress.clear();
   }
 
-  /**
-   * Terminate all workers in a single named pool without shutting down the rest of the bus.
-   * QNBS-v3: unlike shutdown() (tears down every pool), this only affects `poolId` — added so
-   * duckdbClient's terminate()/shutdown() can stop the DuckDB worker without also killing
-   * in-flight inference/webllm/plugin work on the shared bus (docs/adr/0014-worker-generation-
-   * duplication.md's migration follow-up). The pool is removed from the registry; a later task
-   * routed to its capabilities fails with NO_POOL until the bus re-registers it.
-   * QNBS-v3: [Cancels every in-flight task routed to this pool before removing it — otherwise their result promises would await a RESULT message from a worker that's already been terminated and never arrives.]
-   */
   async terminatePool(poolId: string): Promise<void> {
     const pool = this.pools.get(poolId);
     if (!pool) return;
-    for (const [taskId, taskPoolId] of this.taskPools) {
-      if (taskPoolId === poolId) this.cancel(taskId, 'Pool terminated');
+    for (const pending of [...this.pendingTasks.values()]) {
+      if (pending.active?.pool === pool || this.resolvePool(pending.task) === pool) {
+        this.cancel(pending.task.taskId, 'Pool terminated');
+      }
     }
+    this.poolAvailabilityOff.get(poolId)?.();
+    this.poolAvailabilityOff.delete(poolId);
     await pool.terminateAll();
     this.pools.delete(poolId);
+    this.schedulePump();
   }
 
-  // ---------------------------------------------------------------------------
-  // Internal
-  // ---------------------------------------------------------------------------
+  private createTask<TPayload>(
+    taskId: string,
+    taskType: string,
+    payload: TPayload,
+    opts: EnqueueOptions,
+  ): WorkerTask<TPayload> {
+    return {
+      taskId,
+      taskType,
+      payload,
+      priority: opts.priority ?? 'normal',
+      target: opts.target ?? 'any',
+      capabilities: opts.capabilities ?? [],
+      transferables: opts.transferables,
+      createdAt: Date.now(),
+      timeoutMs: opts.timeoutMs ?? 300_000,
+      retryPolicy: {
+        maxRetries: 2,
+        backoffMs: 400,
+        maxBackoffMs: 30_000,
+        jitter: true,
+        ...(opts.retryPolicy ?? {}),
+      },
+      traceId: opts.parentTaskId ? `${opts.parentTaskId}:${taskId}` : taskId,
+      parentTaskId: opts.parentTaskId,
+    };
+  }
+
+  private pump(): void {
+    while (this.running) {
+      let selectedPool: WorkerPool | undefined;
+      let selectedWorker: PooledWorkerInstance | undefined;
+      const task = this.queue.dequeueFirst((candidate) => {
+        const pending = this.pendingTasks.get(candidate.taskId);
+        if (!pending || pending.settled) return true;
+        const pool = this.resolvePool(candidate);
+        if (!pool) return true;
+        const worker = pool.tryAcquire();
+        if (!worker) return false;
+        selectedPool = pool;
+        selectedWorker = worker;
+        return true;
+      });
+      if (!task) return;
+      const pending = this.pendingTasks.get(task.taskId);
+      if (!pending || pending.settled) continue;
+      if (!selectedPool || !selectedWorker) {
+        this.handleAttemptResult(pending, this.noPoolResult(task));
+        continue;
+      }
+      pending.active = { pool: selectedPool, worker: selectedWorker };
+      this.taskPools.set(task.taskId, selectedPool.poolId);
+      void this.executeAttempt(pending, selectedPool, selectedWorker);
+    }
+  }
+
+  private async executeAttempt(
+    pending: PendingTask,
+    pool: WorkerPool,
+    worker: PooledWorkerInstance,
+  ): Promise<void> {
+    try {
+      const result = await this.runTask(pending.task, pending.token, pool, worker);
+      if (!pending.settled) this.handleAttemptResult(pending, result);
+    } catch (error) {
+      if (!pending.settled) {
+        this.getCircuitBreaker(pending.task.taskType).recordFailure();
+        this.settleError(pending, error instanceof Error ? error : new Error(String(error)));
+      }
+    } finally {
+      if (pending.active?.worker === worker) pending.active = undefined;
+      this.taskPools.delete(pending.task.taskId);
+      this.schedulePump();
+    }
+  }
 
   private async runTask<TResult>(
     task: WorkerTask,
     token: CancellationToken,
+    pool: WorkerPool,
+    worker: PooledWorkerInstance,
   ): Promise<TaskResult<TResult>> {
-    const pool = this.resolvePool(task);
-    if (!pool) {
-      return {
-        taskId: task.taskId,
-        success: false,
-        error: {
-          code: 'NO_POOL',
-          message: 'No pool supports required capabilities',
-          recoverable: false,
-          retryCount: 0,
-        },
-        latencyMs: 0,
-        queueTimeMs: 0,
-        layer: 'main',
-      };
-    }
-
-    this.taskPools.set(task.taskId, pool.poolId);
-    try {
-      return await this.runOnPool(task, token, pool);
-    } finally {
-      this.taskPools.delete(task.taskId);
-    }
+    return this.runOnPool(task, token, pool, worker, () => {
+      const pending = this.pendingTasks.get(task.taskId);
+      if (pending && !pending.settled) this.armWatchdog(pending);
+    });
   }
 
   private async runOnPool<TResult>(
     task: WorkerTask,
     token: CancellationToken,
     pool: WorkerPool,
+    worker: PooledWorkerInstance,
+    onProgress: () => void,
   ): Promise<TaskResult<TResult>> {
-    const worker = await pool.acquire(token.signal);
     const startedAt = performance.now();
-    const queueTimeMs = Math.round(startedAt - task.createdAt);
-    // QNBS-v3: [P0 timeout enforcement — runOnPool previously awaited RESULT/abort forever;
-    //          a wedged worker (no crash, no message) left the task's promise pending indefinitely.]
     let timedOut = false;
-
     try {
-      const port = worker.port;
-      port.postMessage(
-        createTaskMessage(task.taskId, task.taskType, task.payload, task.traceId, task.timeoutMs),
+      const result = await this.waitForWorkerResult<TResult>(
+        task,
+        token,
+        worker,
+        startedAt,
+        onProgress,
       );
-
-      // QNBS-v3: captured so the message handler below can be a plain hoisted `function`
-      //          (not an arrow bound to `this`) without losing access to the emitter.
-      const progressEmitter = this.progress;
-
-      const result = await new Promise<TaskResult<TResult>>((resolve, _reject) => {
-        let settled = false;
-        let timeoutTimer: ReturnType<typeof setTimeout>;
-
-        // QNBS-v3: `settle`/`armTimeout`/`onTimeout`/`handler` are mutually recursive
-        //          (settle reads `handler`, `handler` calls `settle`/`armTimeout`) — plain
-        //          `function` declarations hoist fully (name + body), so each can reference
-        //          the others regardless of source order, with no TDZ and no `let` needed.
-        function settle() {
-          settled = true;
-          clearTimeout(timeoutTimer);
-          port.removeEventListener('message', handler);
-        }
-
-        // QNBS-v3: watchdog, not a hard ceiling — re-armed on every PROGRESS message so
-        //          long-running jobs (ProForge stages, LoRA training) that report progress
-        //          aren't falsely killed while genuinely wedged workers still get caught.
-        function armTimeout() {
-          clearTimeout(timeoutTimer);
-          timeoutTimer = setTimeout(onTimeout, task.timeoutMs);
-        }
-
-        function onTimeout() {
-          if (settled) return;
-          settle();
-          timedOut = true;
-          resolve({
-            taskId: task.taskId,
-            success: false,
-            error: {
-              code: 'TIMEOUT',
-              message: `No response from the worker for ${task.timeoutMs}ms (inactivity watchdog, not a fixed deadline)`,
-              recoverable: true,
-              retryCount: 0,
-            },
-            latencyMs: Math.round(performance.now() - startedAt),
-            queueTimeMs,
-            workerId: worker.workerId,
-            layer: 'web',
-          });
-        }
-
-        // QNBS-v3: split out of handler() to keep its cyclomatic complexity down — this is
-        //          the only branch with an inner conditional (the error ternary).
-        function settleWithResult(msg: Extract<WorkerMessage, { kind: 'RESULT' }>) {
-          settle();
-          resolve({
-            taskId: task.taskId,
-            success: msg.success,
-            result: msg.result as TResult,
-            error: msg.error
-              ? {
-                  code: msg.error.code,
-                  message: msg.error.message,
-                  recoverable: true,
-                  retryCount: 0,
-                }
-              : undefined,
-            latencyMs: Math.round(performance.now() - startedAt),
-            queueTimeMs,
-            workerId: worker.workerId,
-            layer: 'web',
-          });
-        }
-
-        // QNBS-v3: split out of handler() — isolates the "is this message ours to act on"
-        //          guard from the "what do we do with it" dispatch, each staying low-complexity.
-        function parseRelevantMessage(event: MessageEvent): WorkerMessage | null {
-          if (settled) return null;
-          const msg = validateWorkerMessage(event.data);
-          if (!msg) return null;
-          // QNBS-v3: a released+reused port can still deliver a stale PROGRESS/RESULT from a
-          //          cancelled prior task — ignore anything not addressed to this task.
-          if (msg.taskId !== task.taskId) return null;
-          return msg;
-        }
-
-        function handler(event: MessageEvent) {
-          const msg = parseRelevantMessage(event);
-          if (!msg) return;
-
-          if (msg.kind === 'PROGRESS') {
-            armTimeout();
-            progressEmitter.emit(task.taskId, {
-              taskId: task.taskId,
-              taskType: task.taskType,
-              stage: msg.stage,
-              progress: msg.progress,
-              message: msg.message,
-              timestamp: Date.now(),
-            });
-          } else if (msg.kind === 'RESULT') {
-            settleWithResult(msg);
-          }
-        }
-        port.addEventListener('message', handler);
-        armTimeout();
-
-        const onAbort = () => {
-          if (settled) return;
-          settle();
-          port.postMessage(createCancelMessage(task.taskId, 'Aborted'));
-          resolve({
-            taskId: task.taskId,
-            success: false,
-            error: {
-              code: 'CANCELLED',
-              message: 'Task was cancelled',
-              recoverable: false,
-              retryCount: 0,
-            },
-            latencyMs: Math.round(performance.now() - startedAt),
-            queueTimeMs,
-            workerId: worker.workerId,
-            layer: 'web',
-          });
-        };
-        token.signal.addEventListener('abort', onAbort, { once: true });
-      });
-
-      if (result.success) {
-        this.getCircuitBreaker(task.taskType).recordSuccess();
-        this.recordSuccess(result.latencyMs, queueTimeMs);
-      } else {
-        this.getCircuitBreaker(task.taskType).recordFailure();
-        this.recordFailure(result.latencyMs);
-      }
+      timedOut = result.error?.code === 'TIMEOUT';
       return result;
     } finally {
-      // QNBS-v3: a timed-out worker is presumed wedged — force-terminate + respawn instead of
-      //          releasing it back to the idle pool where a future task would reuse it.
-      if (timedOut) {
-        pool.terminateWorker(worker.workerId);
-      } else {
-        pool.release(worker);
-      }
+      if (timedOut) pool.terminateWorker(worker.workerId);
+      else if (token.reason !== 'Task inactivity timeout') pool.release(worker);
     }
   }
 
+  private waitForWorkerResult<TResult>(
+    task: WorkerTask,
+    token: CancellationToken,
+    worker: PooledWorkerInstance,
+    startedAt: number,
+    onProgress: () => void,
+  ): Promise<TaskResult<TResult>> {
+    const queueTimeMs = Math.round(startedAt - task.createdAt);
+    const port = worker.port;
+    port.postMessage(
+      createTaskMessage(task.taskId, task.taskType, task.payload, task.traceId, task.timeoutMs),
+    );
+    return new Promise((resolve) => {
+      let settled = false;
+      const cleanup = () => {
+        settled = true;
+        port.removeEventListener('message', handler);
+        token.signal.removeEventListener('abort', handleAbort);
+      };
+      const finish = (result: TaskResult<TResult>) => {
+        if (settled) return;
+        cleanup();
+        resolve(result);
+      };
+      const handleAbort = () => {
+        port.postMessage(createCancelMessage(task.taskId, token.reason ?? 'Aborted'));
+        finish({
+          taskId: task.taskId,
+          success: false,
+          error: {
+            code: 'CANCELLED',
+            message: token.reason ?? 'Task was cancelled',
+            recoverable: false,
+            retryCount: 0,
+          },
+          latencyMs: Math.round(performance.now() - startedAt),
+          queueTimeMs,
+          workerId: worker.workerId,
+          layer: 'web',
+        });
+      };
+      const handler = (event: MessageEvent) => {
+        const message = validateWorkerMessage(event.data);
+        if (!message || message.taskId !== task.taskId) return;
+        if (message.kind === 'PROGRESS') {
+          onProgress();
+          this.progress.emit(task.taskId, {
+            taskId: task.taskId,
+            taskType: task.taskType,
+            stage: message.stage,
+            progress: message.progress,
+            message: message.message,
+            timestamp: Date.now(),
+          });
+        } else if (message.kind === 'RESULT') {
+          finish(
+            this.workerMessageToResult<TResult>(task, worker, message, startedAt, queueTimeMs),
+          );
+        }
+      };
+      port.addEventListener('message', handler);
+      token.signal.addEventListener('abort', handleAbort, { once: true });
+      if (token.signal.aborted) handleAbort();
+    });
+  }
+
+  private workerMessageToResult<TResult>(
+    task: WorkerTask,
+    worker: PooledWorkerInstance,
+    message: Extract<WorkerMessage, { kind: 'RESULT' }>,
+    startedAt: number,
+    queueTimeMs: number,
+  ): TaskResult<TResult> {
+    return {
+      taskId: task.taskId,
+      success: message.success,
+      result: message.result as TResult,
+      error: message.error
+        ? {
+            code: message.error.code,
+            message: message.error.message,
+            recoverable: true,
+            retryCount: 0,
+          }
+        : undefined,
+      latencyMs: Math.round(performance.now() - startedAt),
+      queueTimeMs,
+      workerId: worker.workerId,
+      layer: 'web',
+    };
+  }
+
+  private handleAttemptResult(pending: PendingTask, result: TaskResult): void {
+    if (result.success) {
+      this.getCircuitBreaker(pending.task.taskType).recordSuccess();
+      this.recordSuccess(result.latencyMs, result.queueTimeMs);
+      this.settleSuccess(pending, result.result);
+      return;
+    }
+    this.getCircuitBreaker(pending.task.taskType).recordFailure();
+    const canRetry =
+      result.error?.recoverable !== false &&
+      pending.retryCount < pending.task.retryPolicy.maxRetries &&
+      !pending.token.isCancelled;
+    if (canRetry) {
+      this.armWatchdog(pending);
+      const delay = this.calculateBackoff(pending.retryCount, pending.task.retryPolicy);
+      pending.retryCount++;
+      pending.retryTimer = setTimeout(() => this.requeueRetry(pending), delay);
+      return;
+    }
+    this.recordFailure(result.latencyMs);
+    this.dlq.add({
+      task: pending.task,
+      result,
+      retryCount: pending.retryCount,
+      deadAt: Date.now(),
+    });
+    this.settleFailure(pending, result.error);
+  }
+
+  private requeueRetry(pending: PendingTask): void {
+    pending.retryTimer = undefined;
+    if (pending.settled || pending.token.isCancelled) return;
+    if (!this.queue.enqueue(pending.task)) {
+      this.settleFailure(pending, {
+        code: 'BACKPRESSURE',
+        message: 'Queue full while retrying task',
+        recoverable: false,
+        retryCount: pending.retryCount,
+      });
+      return;
+    }
+    this.schedulePump();
+  }
+
+  private armWatchdog(pending: PendingTask): void {
+    if (pending.watchdog) clearTimeout(pending.watchdog);
+    pending.watchdog = setTimeout(() => this.handleWatchdog(pending), pending.task.timeoutMs);
+  }
+
+  private handleWatchdog(pending: PendingTask): void {
+    if (pending.settled) return;
+    this.queue.remove(pending.task.taskId);
+    const active = pending.active;
+    pending.token.cancel('Task inactivity timeout');
+    if (active) active.pool.terminateWorker(active.worker.workerId);
+    const latencyMs = Math.round(performance.now() - pending.task.createdAt);
+    const error = {
+      code: 'TIMEOUT',
+      message: `No response from the worker for ${pending.task.timeoutMs}ms (inactivity watchdog, including queue wait)`,
+      recoverable: true,
+      retryCount: pending.retryCount,
+    };
+    const result: TaskResult = {
+      taskId: pending.task.taskId,
+      success: false,
+      error,
+      latencyMs,
+      queueTimeMs: active ? Math.round(performance.now() - pending.task.createdAt) : latencyMs,
+      ...(active ? { workerId: active.worker.workerId } : {}),
+      layer: active ? 'web' : 'main',
+    };
+    this.getCircuitBreaker(pending.task.taskType).recordFailure();
+    this.recordFailure(latencyMs);
+    this.dlq.add({
+      task: pending.task,
+      result,
+      retryCount: pending.retryCount,
+      deadAt: Date.now(),
+    });
+    this.settleFailure(pending, error);
+  }
+
+  private settleSuccess(pending: PendingTask, value: unknown): void {
+    if (!this.finalize(pending)) return;
+    pending.resolve(value);
+  }
+
+  private settleFailure(pending: PendingTask, info: TaskErrorInfo | undefined): void {
+    if (!this.finalize(pending)) return;
+    pending.reject(this.toError(info, pending.retryCount));
+  }
+
+  private settleError(pending: PendingTask, error: Error): void {
+    if (!this.finalize(pending)) return;
+    pending.reject(error);
+  }
+
+  private finalize(pending: PendingTask): boolean {
+    if (pending.settled) return false;
+    pending.settled = true;
+    this.queue.remove(pending.task.taskId);
+    if (pending.watchdog) clearTimeout(pending.watchdog);
+    if (pending.retryTimer) clearTimeout(pending.retryTimer);
+    pending.offProgress?.();
+    this.progress.complete(pending.task.taskId);
+    this.tokens.delete(pending.task.taskId);
+    this.pendingTasks.delete(pending.task.taskId);
+    this.taskPools.delete(pending.task.taskId);
+    return true;
+  }
+
+  private noPoolResult(task: WorkerTask): TaskResult {
+    return {
+      taskId: task.taskId,
+      success: false,
+      error: {
+        code: 'NO_POOL',
+        message: 'No pool supports required capabilities',
+        recoverable: false,
+        retryCount: 0,
+      },
+      latencyMs: 0,
+      queueTimeMs: Math.round(performance.now() - task.createdAt),
+      layer: 'main',
+    };
+  }
+
   private resolvePool(task: WorkerTask): WorkerPool | undefined {
-    // Simple capability matching: find first pool that supports all required capabilities
     for (const pool of this.pools.values()) {
-      const hasAll = task.capabilities.every((cap) => pool.capabilities.includes(cap));
-      if (hasAll) return pool;
+      if (task.capabilities.every((capability) => pool.capabilities.includes(capability))) {
+        return pool;
+      }
     }
     return undefined;
   }
 
   private getCircuitBreaker(taskType: string): CircuitBreaker {
-    let cb = this.circuitBreakers.get(taskType);
-    if (!cb) {
-      cb = new CircuitBreaker(
+    let circuitBreaker = this.circuitBreakers.get(taskType);
+    if (!circuitBreaker) {
+      circuitBreaker = new CircuitBreaker(
         this.options.circuitBreakerThreshold,
         60_000,
         this.options.circuitBreakerRecoveryMs,
       );
-      this.circuitBreakers.set(taskType, cb);
+      this.circuitBreakers.set(taskType, circuitBreaker);
     }
-    return cb;
+    return circuitBreaker;
   }
 
   private getCircuitBreakerStates(): Record<string, 'closed' | 'open' | 'half-open'> {
-    const out: Record<string, 'closed' | 'open' | 'half-open'> = {};
-    for (const [type, cb] of this.circuitBreakers) {
-      out[type] = cb.getState();
+    const states: Record<string, 'closed' | 'open' | 'half-open'> = {};
+    for (const [taskType, circuitBreaker] of this.circuitBreakers) {
+      states[taskType] = circuitBreaker.getState();
     }
-    return out;
+    return states;
   }
 
   private rejectHandle<TResult>(
@@ -451,28 +580,34 @@ export class WorkerBus {
     code: string,
     message: string,
   ): TaskHandle<TResult> {
-    const err = new Error(message) as Error & { code: string };
-    err.code = code;
+    const error = new Error(message) as Error & { code: string };
+    error.code = code;
     return {
       taskId,
-      result: Promise.reject(err),
-      progress: this.progress.iterable(taskId),
-      cancel: () => {
-        /* no-op */
+      result: Promise.reject(error),
+      progress: this.emptyProgress(),
+      cancel: () => {},
+    };
+  }
+
+  private emptyProgress(): AsyncIterable<never> {
+    return {
+      async *[Symbol.asyncIterator]() {
+        // QNBS-v3: rejected enqueues expose a completed stream without registering a listener.
       },
     };
   }
 
   private toError(info: TaskErrorInfo | undefined, retryCount: number): Error {
-    const e = new Error(info?.message ?? 'Task failed') as Error & {
+    const error = new Error(info?.message ?? 'Task failed') as Error & {
       code: string;
       recoverable: boolean;
       retryCount: number;
     };
-    e.code = info?.code ?? 'FAILED';
-    e.recoverable = info?.recoverable ?? false;
-    e.retryCount = retryCount;
-    return e;
+    error.code = info?.code ?? 'FAILED';
+    error.recoverable = info?.recoverable ?? false;
+    error.retryCount = retryCount;
+    return error;
   }
 
   private calculateBackoff(retryCount: number, policy: WorkerTask['retryPolicy']): number {
@@ -497,19 +632,15 @@ export class WorkerBus {
   }
 
   private countActiveWorkers(): number {
-    let sum = 0;
-    for (const pool of this.pools.values()) {
-      sum += pool.getHealth().busyWorkers;
-    }
-    return sum;
+    let count = 0;
+    for (const pool of this.pools.values()) count += pool.getHealth().busyWorkers;
+    return count;
   }
 
   private countIdleWorkers(): number {
-    let sum = 0;
-    for (const pool of this.pools.values()) {
-      sum += pool.getHealth().idleWorkers;
-    }
-    return sum;
+    let count = 0;
+    for (const pool of this.pools.values()) count += pool.getHealth().idleWorkers;
+    return count;
   }
 
   private emit(event: BusEvent): void {
@@ -517,7 +648,7 @@ export class WorkerBus {
       try {
         listener(event);
       } catch {
-        /* isolated */
+        // QNBS-v3: subscriber failures must not interrupt scheduling or other subscribers.
       }
     }
   }
@@ -527,13 +658,7 @@ export class WorkerBus {
     this.pumpScheduled = true;
     queueMicrotask(() => {
       this.pumpScheduled = false;
-      if (!this.running) return;
-      const task = this.queue.peek();
-      if (task) {
-        // QNBS-v3: Fire-and-forget pump; each enqueue already starts its own execution chain.
-        //          This microtask pump is only for future scheduler extensions.
-        this.schedulePump();
-      }
+      this.pump();
     });
   }
 }

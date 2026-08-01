@@ -40,6 +40,26 @@ describe('PriorityTaskQueue', () => {
     expect(q.enqueue(makeTask('d', 'critical'))).toBe(true);
   });
 
+  it('bounds critical work to the eight-task reserve', () => {
+    const q = new PriorityTaskQueue(2);
+    expect(q.enqueue(makeTask('normal-1', 'normal'))).toBe(true);
+    expect(q.enqueue(makeTask('normal-2', 'normal'))).toBe(true);
+    for (let index = 0; index < 8; index++) {
+      expect(q.enqueue(makeTask(`critical-${index}`, 'critical'))).toBe(true);
+    }
+    expect(q.enqueue(makeTask('critical-overflow', 'critical'))).toBe(false);
+    expect(q.stats().depth).toBe(10);
+  });
+
+  it('dequeues the highest-priority runnable task without blocking on another pool', () => {
+    const q = new PriorityTaskQueue(4);
+    q.enqueue(makeTask('blocked-critical', 'critical'));
+    q.enqueue(makeTask('runnable-high', 'high'));
+
+    expect(q.dequeueFirst((task) => task.taskId === 'runnable-high')?.taskId).toBe('runnable-high');
+    expect(q.dequeue()?.taskId).toBe('blocked-critical');
+  });
+
   it('removes by taskId', () => {
     const q = new PriorityTaskQueue(10);
     q.enqueue(makeTask('a', 'normal'));

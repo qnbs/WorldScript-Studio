@@ -116,6 +116,42 @@ describe('WorkerPool', () => {
     await pool.terminateAll();
   });
 
+  it('tryAcquire returns undefined at capacity without polling', async () => {
+    const pool = new WorkerPool('test-pool', ['inference.text'], {
+      maxWorkers: 1,
+      minWorkers: 1,
+      idleTimeoutMs: 120_000,
+      workerScript: '/mock.worker.js',
+      capabilities: ['inference.text'],
+      labels: {},
+    });
+    const worker = pool.tryAcquire();
+
+    expect(worker).toBeDefined();
+    expect(pool.tryAcquire()).toBeUndefined();
+    await pool.terminateAll();
+  });
+
+  it('notifies availability subscribers when a worker is released', async () => {
+    const pool = new WorkerPool('test-pool', ['inference.text'], {
+      maxWorkers: 1,
+      minWorkers: 1,
+      idleTimeoutMs: 120_000,
+      workerScript: '/mock.worker.js',
+      capabilities: ['inference.text'],
+      labels: {},
+    });
+    const worker = await pool.acquire();
+    const listener = vi.fn();
+    const unsubscribe = pool.onAvailable(listener);
+
+    pool.release(worker);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    unsubscribe();
+    await pool.terminateAll();
+  });
+
   it('waits for idle when maxWorkers reached', async () => {
     const pool = new WorkerPool('test-pool', ['inference.text'], {
       maxWorkers: 1,

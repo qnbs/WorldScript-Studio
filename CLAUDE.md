@@ -225,7 +225,7 @@ Real-time P2P via Yjs + `packages/collab-transport`. Signaling AES-256-GCM/PBKDF
 
 ### WorkerBus v2 (`packages/worker-bus`)
 
-Central orchestration layer for all background tasks — since ADR-0015, the **sole** worker generation (no more v1/v2 duplication). Key files: `workerBus.ts` (orchestrator, priority queue + circuit breakers, `hasPool()`/`terminatePool()` for scoped pool lifecycle), `workerPool.ts` (auto-scaling `MIN`→`MAX_WORKERS_INFERENCE`, idle timeout), `taskQueue.ts` (priority queue: `critical > high > normal > low` — no `background` tier), `circuitBreaker.ts` (per-worker health gate), `deadLetterQueue.ts`, `protocolHandler.ts` (typed postMessage + version negotiation, currently unused by the live `runTask()` path — not wired up), `workerBootstrap.ts` (`registerTaskHandler` inside worker scripts; handlers receive `WorkerHandlerContext.emitProgress(stage, progress, message?)`, a flat function, not `context.progress.emit(...)`).
+Central orchestration layer for all background tasks — since ADR-0015, the **sole** worker generation (no more v1/v2 duplication). Key files: `workerBus.ts` (authoritative bounded priority scheduler + circuit breakers, `hasPool()`/`terminatePool()` for scoped pool lifecycle), `workerPool.ts` (event-driven availability, auto-scaling `MIN`→`MAX_WORKERS_INFERENCE`, idle timeout), `taskQueue.ts` (`critical > high > normal > low`; 32 ordinary slots + 8 critical reserve), `circuitBreaker.ts` (per-worker health gate), `deadLetterQueue.ts`, `protocolHandler.ts` (typed postMessage + version negotiation, currently unused by the live `runTask()` path — not wired up), `workerBootstrap.ts` (`registerTaskHandler` inside worker scripts; handlers receive `WorkerHandlerContext.emitProgress(stage, progress, message?)`, a flat function, not `context.progress.emit(...)`). `timeoutMs` is an inactivity watchdog beginning at enqueue and rearmed by valid progress.
 
 **All constants** re-exported from `constants.ts`. **Schemas** (Zod) in `schemas.ts` gate cross-thread messages. After changes: `pnpm exec vitest run tests/unit/workerBus`.
 
@@ -424,7 +424,6 @@ Feature-specific implementation patterns (Plot Board, ProForge Pipeline, scene-l
 
 See `AUDIT.md` and `TODO.md`. Key items:
 - `workers/v2/inference.worker.ts` (v1 deleted, ADR-0015) — `@huggingface/transformers` v3 path alias in `tsconfig.json`; if the alias breaks, fix the path alias or the package's type declaration directly — do not suppress with `@ts-expect-error` (conflicts with the suppression-ratchet policy above).
-- **`WorkerBus.runTask()` doesn't enforce `timeoutMs`** — confirmed via inspection, no timer on either the bus or worker-side rejects a hung task. Pre-existing, tracked in ADR-0015/TODO.md, not yet fixed.
 - **DS-5:** Delete legacy bridge block from `index.css` — deferred until DS-1 verified in production.
 - **B-1 (IDB encryption):** Passphrase UX complete (`IdbUnlockModal`, `PassphraseModal`). Actual IDB read/write integration for stores is Phase 4 (service-layer only currently).
 - **B-2 (Voice WASM):** Engine + download UI shipped. Remaining: E2E integration test coverage.

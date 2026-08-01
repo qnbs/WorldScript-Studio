@@ -44,6 +44,10 @@ export class ProgressEmitter {
     }
   }
 
+  complete(taskId: string): void {
+    this.listeners.delete(taskId);
+  }
+
   iterable(taskId: string): AsyncIterable<TaskProgress> {
     const emitted: TaskProgress[] = [];
     let resolveNext: ((value: IteratorResult<TaskProgress>) => void) | null = null;
