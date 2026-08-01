@@ -152,6 +152,10 @@ const settingsSlice = createSlice({
       if (!state.aiMode) state.aiMode = 'hybrid';
       // QNBS-v3: backfill openRouter for settings persisted before OpenRouter integration
       if (!state.openRouter) state.openRouter = { ...DEFAULT_OPENROUTER_SETTINGS };
+      // QNBS-v3 (T3): merge (not replace) desktop settings so an older imported/persisted envelope
+      // that predates a new DesktopSettings field (e.g. desktopNotifications) doesn't leave it
+      // undefined — mirrors the backfill already done in services/storage/idbProjectStore.ts.
+      state.desktop = { ...defaultDesktopSettings, ...state.desktop };
     },
     setTheme(state, action: PayloadAction<Theme>) {
       state.theme = action.payload;

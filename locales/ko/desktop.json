@@ -8,6 +8,8 @@
   "desktop.menu.settings": "설정",
   "desktop.menu.view": "보다",
   "desktop.menu.window": "창문",
+  "desktop.notify.proforgeStageReadyBody": "Stage \"{{stage}}\" is ready for review.",
+  "desktop.notify.proforgeStageReadyTitle": "ProForge Pipeline",
   "desktop.notify.updateReadyBody": "WorldScript Studio {{version}} is ready to install.",
   "desktop.notify.updateReadyTitle": "Update ready",
   "desktop.settings.desktopNotifications": "Desktop notifications",

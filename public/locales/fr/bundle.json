@@ -1007,6 +1007,8 @@
   "desktop.settings.desktopNotificationsHint": "Afficher une notification native du système lorsqu'une tâche en arrière-plan se termine (export, sauvegarde chiffrée, étape du pipeline ProForge, mise à jour de l'application).",
   "desktop.notify.updateReadyTitle": "Mise à jour prête",
   "desktop.notify.updateReadyBody": "WorldScript Studio {{version}} est prêt à être installé.",
+  "desktop.notify.proforgeStageReadyTitle": "Pipeline ProForge",
+  "desktop.notify.proforgeStageReadyBody": "L'étape « {{stage}} » est prête à être révisée.",
   "export.ai.generateButton": "Générer le synopsis",
   "export.ai.generating": "Génération en cours...",
   "export.ai.synopsis": "Générer un synopsis IA",

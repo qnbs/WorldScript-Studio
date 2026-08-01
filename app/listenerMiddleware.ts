@@ -544,20 +544,33 @@ listenerMiddleware.startListening({
 // `stageCompleted` is the one long-running "AI generation finished in the background" signal in
 // this app (pipeline stages can run for minutes), so the user may have tabbed away. No-op unless
 // running in Tauri with the opt-in `desktop.desktopNotifications` setting on (checked inside
-// `sendDesktopNotification` + here). Body text is not translated — matches the existing
-// "Storage Nearly Full" notification precedent above; a static (non-hook) i18n accessor for
-// middleware-dispatched strings is tracked as follow-up work, not part of this listener.
+// `sendDesktopNotification` + here). Title/body are resolved via the middleware-safe static i18n
+// accessor (services/i18n/staticTranslate.ts) — listener middleware runs outside React, so it can't
+// call useTranslation() directly; the stage name reuses the same `proforge.stageName.<stage>` keys
+// ProForge's own UI resolves (components/proForge/PipelineReviewPanel.tsx).
 listenerMiddleware.startListening({
   actionCreator: proForgeActions.stageCompleted,
   effect: async (action, listenerApi) => {
     const state = listenerApi.getState() as RootState;
     if (!state.settings.desktop?.desktopNotifications) return;
     try {
-      const { sendDesktopNotification } = await import('../services/desktop/desktopNotifications');
-      await sendDesktopNotification(
-        'ProForge Pipeline',
-        `Stage "${action.payload.stage}" is ready for review.`,
+      const [{ sendDesktopNotification }, { getStaticTranslation, getCurrentLanguage }] =
+        await Promise.all([
+          import('../services/desktop/desktopNotifications'),
+          import('../services/i18n/staticTranslate'),
+        ]);
+      const lang = getCurrentLanguage();
+      const stageLabel = await getStaticTranslation(
+        `proforge.stageName.${action.payload.stage}`,
+        lang,
       );
+      const [title, body] = await Promise.all([
+        getStaticTranslation('desktop.notify.proforgeStageReadyTitle', lang),
+        getStaticTranslation('desktop.notify.proforgeStageReadyBody', lang, {
+          stage: stageLabel,
+        }),
+      ]);
+      await sendDesktopNotification(title, body);
     } catch (err) {
       logger.warn('ProForge desktop notification failed', err);
     }

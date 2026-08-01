@@ -12,9 +12,32 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // ---------------------------------------------------------------------------
 
 let mockIsTauri = false;
+let mockDesktopNotificationsEnabled = false;
 
 vi.mock('../../../services/tauriRuntime', () => ({
   isTauriRuntime: () => mockIsTauri,
+}));
+
+vi.mock('../../../app/hooks', () => ({
+  useAppSelector: (selector: (s: unknown) => unknown) =>
+    selector({
+      settings: { desktop: { desktopNotifications: mockDesktopNotificationsEnabled } },
+    }),
+}));
+
+// QNBS-v3: `t` must be referentially stable across renders (mirrors the real I18nContext
+// contract) — checkForUpdate's useCallback depends on it, so a fresh function identity on
+// every call would retrigger the autoCheck mount effect in an infinite loop.
+const stableT = (key: string, params?: Record<string, unknown>) =>
+  params ? `${key} ${JSON.stringify(params)}` : key;
+
+vi.mock('../../../hooks/useTranslation', () => ({
+  useTranslation: () => ({ t: stableT, language: 'en' }),
+}));
+
+const mockSendDesktopNotification = vi.fn().mockResolvedValue(true);
+vi.mock('../../../services/desktop/desktopNotifications', () => ({
+  sendDesktopNotification: (...args: unknown[]) => mockSendDesktopNotification(...args),
 }));
 
 const mockGetVersion = vi.fn().mockResolvedValue('1.0.0');
@@ -47,7 +70,9 @@ import { useTauriUpdater } from '../../../hooks/useTauriUpdater';
 describe('useTauriUpdater', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetVersion.mockResolvedValue('1.0.0');
     mockIsTauri = false;
+    mockDesktopNotificationsEnabled = false;
   });
 
   it('returns isDesktop=false when not in Tauri', () => {
@@ -182,5 +207,49 @@ describe('useTauriUpdater', () => {
       await Promise.resolve();
     });
     expect(mockCheck).toHaveBeenCalled();
+  });
+
+  describe('desktop notification gating (QNBS-v3 T3)', () => {
+    it('sends a notification with the update version when a pending update is found and the setting is enabled', async () => {
+      mockIsTauri = true;
+      mockDesktopNotificationsEnabled = true;
+      mockCheck.mockResolvedValueOnce({
+        version: '2.0.0',
+        downloadAndInstall: mockDownloadAndInstall,
+      });
+      const { result } = renderHook(() => useTauriUpdater());
+      await act(async () => {
+        await result.current.checkForUpdate();
+      });
+      expect(mockSendDesktopNotification).toHaveBeenCalledWith(
+        'desktop.notify.updateReadyTitle',
+        expect.stringContaining('desktop.notify.updateReadyBody'),
+      );
+    });
+
+    it('does not send a notification when the setting is disabled', async () => {
+      mockIsTauri = true;
+      mockDesktopNotificationsEnabled = false;
+      mockCheck.mockResolvedValueOnce({
+        version: '2.0.0',
+        downloadAndInstall: mockDownloadAndInstall,
+      });
+      const { result } = renderHook(() => useTauriUpdater());
+      await act(async () => {
+        await result.current.checkForUpdate();
+      });
+      expect(mockSendDesktopNotification).not.toHaveBeenCalled();
+    });
+
+    it('does not send a notification when no update is available', async () => {
+      mockIsTauri = true;
+      mockDesktopNotificationsEnabled = true;
+      mockCheck.mockResolvedValueOnce(null);
+      const { result } = renderHook(() => useTauriUpdater());
+      await act(async () => {
+        await result.current.checkForUpdate();
+      });
+      expect(mockSendDesktopNotification).not.toHaveBeenCalled();
+    });
   });
 });

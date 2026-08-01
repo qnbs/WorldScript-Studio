@@ -26,6 +26,7 @@ let mockProject = {
 };
 let mockCharacters: Character[] = [];
 let mockWorlds: World[] = [];
+let mockDesktopNotificationsEnabled = false;
 
 vi.mock('../../../app/hooks', () => ({
   useAppDispatch: () => mockDispatch,
@@ -34,7 +35,13 @@ vi.mock('../../../app/hooks', () => ({
       project: { present: { data: mockProject } },
       characters: mockCharacters,
       worlds: mockWorlds,
+      settings: { desktop: { desktopNotifications: mockDesktopNotificationsEnabled } },
     }),
+}));
+
+const mockSendDesktopNotification = vi.fn().mockResolvedValue(true);
+vi.mock('../../../services/desktop/desktopNotifications', () => ({
+  sendDesktopNotification: (...args: unknown[]) => mockSendDesktopNotification(...args),
 }));
 
 vi.mock('../../../hooks/useTranslation', () => ({
@@ -160,6 +167,7 @@ beforeEach(() => {
   };
   mockCharacters = [];
   mockWorlds = [];
+  mockDesktopNotificationsEnabled = false;
   mockSynopsisMatch.mockReturnValue(true);
 });
 
@@ -333,6 +341,81 @@ describe('handleDownload (norm-txt format)', () => {
       await result.current.handleDownload();
     });
     expect(mockCreateObjectURL).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// handleDownload — desktop notification gating (QNBS-v3 T3)
+// ---------------------------------------------------------------------------
+describe('handleDownload desktop notification gating', () => {
+  it('sends a desktop notification after a successful download when the setting is enabled', async () => {
+    mockDesktopNotificationsEnabled = true;
+    const { result } = renderHook(() => useExportView());
+    await act(async () => {
+      await result.current.handleDownload();
+    });
+    expect(mockSendDesktopNotification).toHaveBeenCalledWith(
+      'export.notify.completeTitle',
+      'export.notify.completeBody',
+    );
+  });
+
+  it('does not send a desktop notification when the setting is disabled', async () => {
+    mockDesktopNotificationsEnabled = false;
+    const { result } = renderHook(() => useExportView());
+    await act(async () => {
+      await result.current.handleDownload();
+    });
+    expect(mockSendDesktopNotification).not.toHaveBeenCalled();
+  });
+
+  it('does not send a desktop notification when the download fails (docx)', async () => {
+    mockDesktopNotificationsEnabled = true;
+    const docxModule = await import('docx');
+    vi.mocked(docxModule.Packer.toBlob).mockRejectedValueOnce(new Error('Packer failed'));
+
+    const { result } = renderHook(() => useExportView());
+    act(() => {
+      result.current.setFormat('docx');
+    });
+    await act(async () => {
+      await result.current.handleDownload();
+    });
+
+    expect(mockDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'status/addNotification' }),
+    );
+    expect(mockSendDesktopNotification).not.toHaveBeenCalled();
+  });
+
+  it('does not send a desktop notification when the download fails (pdf)', async () => {
+    mockDesktopNotificationsEnabled = true;
+    const jspdfModule = await import('jspdf');
+    const jspdfCtor = jspdfModule.default as unknown as ReturnType<typeof vi.fn>;
+    jspdfCtor.mockImplementationOnce(() => ({
+      setFont: vi.fn(),
+      setFontSize: vi.fn(),
+      text: vi.fn(),
+      splitTextToSize: (t: string) => [t],
+      addPage: vi.fn(),
+      save: vi.fn(() => {
+        throw new Error('save failed');
+      }),
+      internal: { pageSize: { getHeight: () => 297, getWidth: () => 210 } },
+    }));
+
+    const { result } = renderHook(() => useExportView());
+    act(() => {
+      result.current.setFormat('pdf');
+    });
+    await act(async () => {
+      await result.current.handleDownload();
+    });
+
+    expect(mockDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'status/addNotification' }),
+    );
+    expect(mockSendDesktopNotification).not.toHaveBeenCalled();
   });
 });
 

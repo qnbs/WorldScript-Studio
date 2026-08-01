@@ -144,7 +144,7 @@ export const useExportView = () => {
     compileSuffix,
   ]);
 
-  const downloadPdf = useCallback(async () => {
+  const downloadPdf = useCallback(async (): Promise<boolean> => {
     setIsExportLoading(true);
     try {
       const jspdfModule = await import('jspdf');
@@ -210,6 +210,7 @@ export const useExportView = () => {
       }
 
       doc.save(`${project.title}.pdf`);
+      return true;
     } catch (error) {
       dispatch(
         statusActions.addNotification({
@@ -218,12 +219,13 @@ export const useExportView = () => {
           description: error instanceof Error ? error.message : String(error),
         }),
       );
+      return false;
     } finally {
       setIsExportLoading(false);
     }
   }, [pdfOptions, project, synopsis, t, aiEnhancements, contentToExport, dispatch]);
 
-  const downloadDocx = useCallback(async () => {
+  const downloadDocx = useCallback(async (): Promise<boolean> => {
     setIsExportLoading(true);
     try {
       const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import('docx');
@@ -278,6 +280,7 @@ export const useExportView = () => {
       a.download = `${project.title}.docx`;
       a.click();
       URL.revokeObjectURL(url);
+      return true;
     } catch (error) {
       dispatch(
         statusActions.addNotification({
@@ -286,12 +289,13 @@ export const useExportView = () => {
           description: error instanceof Error ? error.message : String(error),
         }),
       );
+      return false;
     } finally {
       setIsExportLoading(false);
     }
   }, [project, synopsis, aiEnhancements, contentToExport, t, dispatch]);
 
-  const downloadEpub = useCallback(async () => {
+  const downloadEpub = useCallback(async (): Promise<boolean> => {
     setIsExportLoading(true);
     try {
       const { buildPandocMarkdownFromProject } = await import('../services/pandocExportMarkdown');
@@ -306,7 +310,7 @@ export const useExportView = () => {
         a.download = `${project.title.replace(/[/\\?%*:|"<>]/g, '-')}.epub`;
         a.click();
         URL.revokeObjectURL(url);
-        return;
+        return true;
       }
       const { exportEpub } = await import('../services/epubApiService');
       const chapters = contentToExport.manuscript
@@ -323,6 +327,7 @@ export const useExportView = () => {
         ...(aiEnhancements.synopsis && synopsis.trim() ? { synopsis } : {}),
         ...(project.compileProfile ? { compileProfile: project.compileProfile } : {}),
       });
+      return true;
     } catch (error) {
       dispatch(
         statusActions.addNotification({
@@ -331,6 +336,7 @@ export const useExportView = () => {
           description: error instanceof Error ? error.message : String(error),
         }),
       );
+      return false;
     } finally {
       setIsExportLoading(false);
     }
@@ -346,12 +352,13 @@ export const useExportView = () => {
 
   const handleDownload = useCallback(async () => {
     try {
+      let exportSucceeded = true;
       if (format === 'pdf') {
-        await downloadPdf();
+        exportSucceeded = await downloadPdf();
       } else if (format === 'docx') {
-        await downloadDocx();
+        exportSucceeded = await downloadDocx();
       } else if (format === 'epub') {
-        await downloadEpub();
+        exportSucceeded = await downloadEpub();
       } else if (format === 'norm-txt') {
         const { buildNormManuscriptExport } = await import('../services/normPageExport');
         const textOutput = buildNormManuscriptExport(
@@ -381,7 +388,7 @@ export const useExportView = () => {
         a.click();
         URL.revokeObjectURL(url);
       }
-      if (desktopNotificationsEnabled) {
+      if (exportSucceeded && desktopNotificationsEnabled) {
         void sendDesktopNotification(
           t('export.notify.completeTitle'),
           t('export.notify.completeBody'),

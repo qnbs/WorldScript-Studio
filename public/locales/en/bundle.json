@@ -1007,6 +1007,8 @@
   "desktop.settings.desktopNotificationsHint": "Show a native OS notification when a background task finishes (export, encrypted backup, ProForge pipeline stage, app update).",
   "desktop.notify.updateReadyTitle": "Update ready",
   "desktop.notify.updateReadyBody": "WorldScript Studio {{version}} is ready to install.",
+  "desktop.notify.proforgeStageReadyTitle": "ProForge Pipeline",
+  "desktop.notify.proforgeStageReadyBody": "Stage \"{{stage}}\" is ready for review.",
   "export.title": "Export Publishing Suite",
   "export.description": "Select content, choose a format, and download your project.",
   "export.options.title": "Export Controls",

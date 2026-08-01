@@ -1007,6 +1007,8 @@
   "desktop.settings.desktopNotificationsHint": "Native Betriebssystem-Benachrichtigung anzeigen, wenn eine Hintergrundaufgabe abgeschlossen ist (Export, verschlüsseltes Backup, ProForge-Pipeline-Phase, App-Update).",
   "desktop.notify.updateReadyTitle": "Update bereit",
   "desktop.notify.updateReadyBody": "WorldScript Studio {{version}} ist installationsbereit.",
+  "desktop.notify.proforgeStageReadyTitle": "ProForge-Pipeline",
+  "desktop.notify.proforgeStageReadyBody": "Phase „{{stage}}“ ist bereit zur Überprüfung.",
   "export.ai.generateButton": "Synopse generieren",
   "export.ai.generating": "Generiere...",
   "export.ai.synopsis": "KI-Synopse generieren",

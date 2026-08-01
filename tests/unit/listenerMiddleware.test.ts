@@ -128,6 +128,23 @@ vi.mock('../../services/desktop/desktopNotifications', () => ({
   sendDesktopNotification: (...args: unknown[]) => mockSendDesktopNotification(...args),
 }));
 
+// QNBS-v3 (T3): the middleware-safe static i18n accessor is also dynamically imported by the same
+// listener. Mock it with simple deterministic English strings so the notification assertions don't
+// depend on real bundle fetches (jsdom has no network access in unit tests anyway).
+vi.mock('../../services/i18n/staticTranslate', () => ({
+  getCurrentLanguage: () => 'en',
+  getStaticTranslation: (key: string, _lang: string, replacements?: Record<string, string>) => {
+    if (key === 'desktop.notify.proforgeStageReadyTitle')
+      return Promise.resolve('ProForge Pipeline');
+    if (key === 'desktop.notify.proforgeStageReadyBody') {
+      return Promise.resolve(`Stage "${replacements?.['stage']}" is ready for review.`);
+    }
+    if (key.startsWith('proforge.stageName.'))
+      return Promise.resolve(key.replace('proforge.stageName.', ''));
+    return Promise.resolve(key);
+  },
+}));
+
 // ---------------------------------------------------------------------------
 // Minimal store factory for listener tests
 // ---------------------------------------------------------------------------
@@ -573,7 +590,7 @@ describe('desktop notification listener (ProForge stageCompleted)', () => {
     expect(mockSendDesktopNotification).toHaveBeenCalledTimes(1);
     expect(mockSendDesktopNotification).toHaveBeenCalledWith(
       'ProForge Pipeline',
-      expect.stringContaining('structural'),
+      'Stage "structural" is ready for review.',
     );
   });
 
