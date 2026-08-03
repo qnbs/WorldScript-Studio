@@ -130,7 +130,7 @@
     "@tauri-apps/plugin-shell": "^2.3.5",
     "@tauri-apps/plugin-updater": "^2.10.1",
     "@xstate/react": "^6.1.0",
-    "ai": "^7.0.31",
+    "ai": "^7.0.38",
     "diff-match-patch": "^1.0.5",
     "docx": "^9.7.1",
     "dompurify": "^3.4.6",
