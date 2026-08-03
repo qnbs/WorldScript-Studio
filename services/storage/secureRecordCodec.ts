@@ -16,7 +16,7 @@ type EncodedNode =
   | { k: 'blob'; mime: string; bytes: number[] }
   | { k: 'u8'; v: number[] };
 
-function encodeNode(value: unknown): EncodedNode {
+const encodeNode = (value: unknown): EncodedNode => {
   if (value === null) return { k: 'null' };
   if (typeof value === 'boolean') return { k: 'bool', v: value };
   if (typeof value === 'number') return { k: 'num', v: value };
@@ -33,14 +33,14 @@ function encodeNode(value: unknown): EncodedNode {
     return { k: 'obj', v: out };
   }
   return { k: 'str', v: String(value) };
-}
+};
 
-async function encodeBlobNode(blob: Blob): Promise<EncodedNode> {
+const encodeBlobNode = async (blob: Blob): Promise<EncodedNode> => {
   const bytes = new Uint8Array(await blob.arrayBuffer());
   return { k: 'blob', mime: blob.type || 'application/octet-stream', bytes: Array.from(bytes) };
-}
+};
 
-function decodeNode(node: EncodedNode): unknown {
+const decodeNode = (node: EncodedNode): unknown => {
   switch (node.k) {
     case 'null':
       return null;
@@ -68,9 +68,9 @@ function decodeNode(node: EncodedNode): unknown {
     default:
       throw new Error('Unsupported secure-record codec node');
   }
-}
+};
 
-async function encodeValueNode(value: unknown): Promise<EncodedNode> {
+const encodeValueNode = async (value: unknown): Promise<EncodedNode> => {
   if (value instanceof Blob) return encodeBlobNode(value);
   if (Array.isArray(value)) {
     const children = await Promise.all(value.map((item) => encodeValueNode(item)));
@@ -90,17 +90,17 @@ async function encodeValueNode(value: unknown): Promise<EncodedNode> {
     return { k: 'obj', v: out };
   }
   return encodeNode(value);
-}
+};
 
 /** Serialize a payload for AES-GCM encryption (preserves Blob bytes). */
-export async function encodeSecureRecordValue(value: unknown): Promise<Uint8Array> {
+export const encodeSecureRecordValue = async (value: unknown): Promise<Uint8Array> => {
   const root = await encodeValueNode(value);
   const wrapped = { v: CODEC_VERSION, root };
   return new TextEncoder().encode(JSON.stringify(wrapped));
-}
+};
 
 /** Deserialize bytes produced by encodeSecureRecordValue. */
-export function decodeSecureRecordValue(bytes: Uint8Array): unknown {
+export const decodeSecureRecordValue = (bytes: Uint8Array): unknown => {
   const parsed = JSON.parse(new TextDecoder().decode(bytes)) as {
     v: number;
     root: EncodedNode;
@@ -109,4 +109,4 @@ export function decodeSecureRecordValue(bytes: Uint8Array): unknown {
     throw new Error(`Unsupported secure-record codec version: ${String(parsed.v)}`);
   }
   return decodeNode(parsed.root);
-}
+};
