@@ -32,16 +32,19 @@ const openDb = (name: string, version = 1): Promise<IDBDatabase> =>
     request.onerror = () => reject(request.error);
   });
 
-const idbGetAll = async <T>(db: IDBDatabase, storeName: string): Promise<T[]> =>
-  new Promise((resolve, reject) => {
+const idbGetAll = async <T>(db: IDBDatabase, storeName: string): Promise<T[]> => {
+  if (!db.objectStoreNames.contains(storeName)) return [];
+  return new Promise((resolve, reject) => {
     const tx = db.transaction(storeName, 'readonly');
     const req = tx.objectStore(storeName).getAll();
     req.onsuccess = () => resolve(req.result as T[]);
     req.onerror = () => reject(req.error);
   });
+};
 
-const idbPutAll = async (db: IDBDatabase, storeName: string, records: unknown[]): Promise<void> =>
-  new Promise((resolve, reject) => {
+const idbPutAll = async (db: IDBDatabase, storeName: string, records: unknown[]): Promise<void> => {
+  if (records.length === 0 || !db.objectStoreNames.contains(storeName)) return;
+  return new Promise((resolve, reject) => {
     const tx = db.transaction(storeName, 'readwrite');
     const store = tx.objectStore(storeName);
     for (const record of records) store.put(record);
@@ -49,6 +52,7 @@ const idbPutAll = async (db: IDBDatabase, storeName: string, records: unknown[])
     tx.onerror = () => reject(tx.error);
     tx.onabort = () => reject(tx.error);
   });
+};
 
 const reEncryptPayload = async (
   payload: unknown,
