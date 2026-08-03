@@ -5,9 +5,18 @@
  */
 
 import type { MemoryBankEntry, PipelineStage } from '../../features/proForge/types';
+import {
+  assertSecureStorageWritableForMutation,
+  prepareSecureRecordPayload,
+  readSecureRecordPayload,
+  type SecureRecordEnvelope,
+} from '../storage/storageEncryptionService';
+
+const SECURE_STORE = 'proforge-memory';
 
 const MEMORY_BANK_STORE = 'proforge-memory-bank';
 const MEMORY_BANK_VERSION = 1;
+const RECORD_SCHEMA_VERSION = 1;
 
 // ---------------------------------------------------------------------------
 // IndexedDB Setup
@@ -22,19 +31,47 @@ interface MemoryBankDb extends IDBDatabase {
 // Node capability adapter still get remember/recall/search without an IndexedDB dependency.
 const memFallback = new Map<string, MemoryBankEntry>();
 
+interface MemoryEntryPayload {
+  key: string;
+  content: string;
+  sourceStage: PipelineStage;
+  embedding?: number[];
+}
+
+interface StoredMemoryEntry {
+  id: string;
+  projectId: string;
+  category: MemoryBankEntry['category'];
+  createdAt: string;
+  schemaVersion: typeof RECORD_SCHEMA_VERSION;
+  payload: MemoryEntryPayload | SecureRecordEnvelope;
+}
+
 function idbAvailable(): boolean {
   return typeof indexedDB !== 'undefined';
 }
 
 let dbPromise: Promise<MemoryBankDb> | null = null;
+let dbHandle: MemoryBankDb | null = null;
 
 function openMemoryBankDb(): Promise<MemoryBankDb> {
   if (dbPromise) return dbPromise;
 
   dbPromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(MEMORY_BANK_STORE, MEMORY_BANK_VERSION);
-    request.onerror = () => reject(new Error('Failed to open Memory Bank DB'));
-    request.onsuccess = () => resolve(request.result as MemoryBankDb);
+    request.onerror = () => {
+      dbPromise = null;
+      reject(new Error('Failed to open Memory Bank DB'));
+    };
+    request.onsuccess = () => {
+      dbHandle = request.result as MemoryBankDb;
+      dbHandle.onversionchange = () => {
+        dbHandle?.close();
+        dbHandle = null;
+        dbPromise = null;
+      };
+      resolve(dbHandle);
+    };
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
       if (!db.objectStoreNames.contains('entries')) {
@@ -47,6 +84,73 @@ function openMemoryBankDb(): Promise<MemoryBankDb> {
   });
 
   return dbPromise;
+}
+
+function memoryPayload(entry: MemoryBankEntry): MemoryEntryPayload {
+  return {
+    key: entry.key,
+    content: entry.content,
+    sourceStage: entry.sourceStage,
+    ...(entry.embedding !== undefined && { embedding: entry.embedding }),
+  };
+}
+
+async function encodeMemoryEntry(entry: MemoryBankEntry): Promise<StoredMemoryEntry> {
+  return {
+    id: entry.id,
+    projectId: entry.projectId,
+    category: entry.category,
+    createdAt: entry.createdAt,
+    schemaVersion: RECORD_SCHEMA_VERSION,
+    payload: await prepareSecureRecordPayload(memoryPayload(entry), {
+      store: SECURE_STORE,
+      recordId: entry.id,
+    }),
+  };
+}
+
+async function decodeMemoryEntry(
+  stored: StoredMemoryEntry | MemoryBankEntry,
+): Promise<{ entry: MemoryBankEntry; needsMigration: boolean }> {
+  const recordId = stored.id;
+  const context = { store: SECURE_STORE, recordId };
+  if ('payload' in stored) {
+    const decoded = await readSecureRecordPayload<MemoryEntryPayload>(stored.payload, context);
+    return {
+      entry: {
+        id: stored.id,
+        projectId: stored.projectId,
+        category: stored.category,
+        createdAt: stored.createdAt,
+        ...decoded.value,
+      },
+      needsMigration: decoded.needsMigration,
+    };
+  }
+
+  const decoded = await readSecureRecordPayload<MemoryEntryPayload>(memoryPayload(stored), context);
+  return {
+    entry: {
+      id: stored.id,
+      projectId: stored.projectId,
+      category: stored.category,
+      createdAt: stored.createdAt,
+      ...decoded.value,
+    },
+    needsMigration: decoded.needsMigration,
+  };
+}
+
+async function putMemoryEntries(db: MemoryBankDb, records: StoredMemoryEntry[]): Promise<void> {
+  if (records.length === 0) return;
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction('entries', 'readwrite');
+    const store = transaction.objectStore('entries');
+    for (const record of records) store.put(record);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(new Error('Failed to save memory entry'));
+    transaction.onabort = () => reject(new Error('Memory entry transaction aborted'));
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -67,14 +171,11 @@ export async function saveMemoryEntry(
     return fullEntry;
   }
 
+  // QNBS-v3: Complete WebCrypto before starting the write transaction.
+  const stored = await encodeMemoryEntry(fullEntry);
   const db = await openMemoryBankDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction('entries', 'readwrite');
-    const store = tx.objectStore('entries');
-    const request = store.put(fullEntry);
-    request.onsuccess = () => resolve(fullEntry);
-    request.onerror = () => reject(new Error('Failed to save memory entry'));
-  });
+  await putMemoryEntries(db, [stored]);
+  return fullEntry;
 }
 
 export async function getMemoryEntries(
@@ -87,25 +188,26 @@ export async function getMemoryEntries(
     );
   }
   const db = await openMemoryBankDb();
-  return new Promise((resolve, reject) => {
+  const raw = await new Promise<Array<StoredMemoryEntry | MemoryBankEntry>>((resolve, reject) => {
     const tx = db.transaction('entries', 'readonly');
     const store = tx.objectStore('entries');
     const index = category ? store.index('projectId_category') : store.index('projectId');
     const key = category ? IDBKeyRange.only([projectId, category]) : IDBKeyRange.only(projectId);
-    const request = index.openCursor(key);
-    const results: MemoryBankEntry[] = [];
-
-    request.onsuccess = () => {
-      const cursor = request.result;
-      if (cursor) {
-        results.push(cursor.value as MemoryBankEntry);
-        cursor.continue();
-      } else {
-        resolve(results);
-      }
-    };
+    const request = index.getAll(key);
+    request.onsuccess = () => resolve(request.result as Array<StoredMemoryEntry | MemoryBankEntry>);
     request.onerror = () => reject(new Error('Failed to read memory entries'));
   });
+
+  const entries: MemoryBankEntry[] = [];
+  const migrations: StoredMemoryEntry[] = [];
+  // QNBS-v3: Decode sequentially to bound memory when a project has a large memory bank.
+  for (const stored of raw) {
+    const decoded = await decodeMemoryEntry(stored);
+    entries.push(decoded.entry);
+    if (decoded.needsMigration) migrations.push(await encodeMemoryEntry(decoded.entry));
+  }
+  await putMemoryEntries(db, migrations);
+  return entries;
 }
 
 export type MemoryRagMode = 'lexical' | 'semantic' | 'hybrid';
@@ -182,6 +284,7 @@ export async function searchMemoryEntries(
 }
 
 export async function deleteMemoryEntry(id: string): Promise<void> {
+  await assertSecureStorageWritableForMutation();
   if (!idbAvailable()) {
     memFallback.delete(id);
     return;
@@ -316,6 +419,8 @@ export function clearMemoryBankCache(): void {
 
 /** Reset DB connection and singleton cache — test-only. Allows fresh IDBFactory per test. */
 export function _resetDbForTest(): void {
+  dbHandle?.close();
+  dbHandle = null;
   dbPromise = null;
   bankCache.clear();
   memFallback.clear();

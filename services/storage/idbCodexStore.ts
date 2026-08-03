@@ -1,6 +1,6 @@
 /**
  * IdbCodexStore — Codex entries and RAG vector embeddings.
- * ENCRYPTION: plaintext — codex entries are project content; at-rest encryption planned for Phase 2 (P2-1).
+ * ENCRYPTION: codex entries and RAG vectors use AES-256-GCM while encryption is unlocked.
  * QNBS-v3: Extracted from dbService.ts.
  */
 

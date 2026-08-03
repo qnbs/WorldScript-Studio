@@ -7,12 +7,16 @@ vi.mock('../../services/duckdb/duckdbAnalytics', () => ({
   queryCrossProjectSearch: vi.fn(),
 }));
 
-// Mock IDB operations
-vi.mock('../../services/dbConstants', () => ({
-  DATA_DB_NAME: 'test-data-db',
-  DB_VERSION: 8,
-  PROJECTS_INDEX_STORE: 'projects-index-store',
-}));
+// QNBS-v3: Partial override only — spread importOriginal so idbCore/dbMigration keep full store constants.
+vi.mock('../../services/dbConstants', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../services/dbConstants')>();
+  return {
+    ...actual,
+    DATA_DB_NAME: 'test-data-db',
+    DB_VERSION: 8,
+    PROJECTS_INDEX_STORE: 'projects-index-store',
+  };
+});
 
 vi.mock('../../services/ai/localEmbeddingService', () => ({
   embedText: vi.fn(),

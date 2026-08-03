@@ -42,6 +42,13 @@ class PassphraseSentinelStore extends IdbConnectionManager {
       req.onerror = () => reject(getUserFriendlyDbError(req.error));
     });
   }
+
+  resetForTest(): void {
+    this.stateDb?.close();
+    this.dataDb?.close();
+    this.stateDb = null;
+    this.dataDb = null;
+  }
 }
 
 const _store = new PassphraseSentinelStore();
@@ -59,4 +66,9 @@ export async function getPassphraseSentinel(): Promise<Uint8Array | null> {
 /** Remove the sentinel (called when disabling encryption). */
 export async function deletePassphraseSentinel(): Promise<void> {
   return _store.delete();
+}
+
+/** Close cached IDB handles so tests can install an isolated IDBFactory. */
+export function _resetPassphraseSentinelForTest(): void {
+  _store.resetForTest();
 }

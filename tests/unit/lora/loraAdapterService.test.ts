@@ -13,11 +13,13 @@ vi.mock('../../../services/logger', () => ({
 }));
 
 beforeEach(() => {
+  _resetLoraDbForTest();
   global.indexedDB = new IDBFactory();
   global.IDBKeyRange = IDBKeyRange;
 });
 
 import {
+  _resetLoraDbForTest,
   activateAdapter,
   deactivateAdapter,
   getActiveAdapter,

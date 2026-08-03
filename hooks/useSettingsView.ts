@@ -20,6 +20,10 @@ import { dbService } from '../services/dbService';
 import { wipeAllAppData } from '../services/factoryResetService';
 import { logger } from '../services/logger';
 import {
+  decryptAllSecondaryStoresToPlaintext,
+  reEncryptAllSecondaryStores,
+} from '../services/storage/secondaryStorageLifecycle';
+import {
   clearIdbEncryptionKey,
   clearIdbPassphrase,
   isIdbEncryptionReady,
@@ -385,8 +389,7 @@ export const useSettingsView = () => {
         await rotateIdbPassphrase(_current, newPassphrase, async (oldKey, newKey) => {
           await dbService.reEncryptAllAppData(oldKey, newKey);
           await dbService.reEncryptAllSnapshots(oldKey, newKey);
-          // QNBS-v3: Codex, RAG vectors, images, and binder assets are re-encrypted on next
-          // natural write. A full re-encryption of all auxiliary stores is Phase-2 hardening.
+          await reEncryptAllSecondaryStores(oldKey, newKey);
         });
         setEncryptionReady(true);
         toast.success(t('settings.privacy.encryptionActiveStatus'));
@@ -396,8 +399,9 @@ export const useSettingsView = () => {
         setEncryptionReady(true);
         toast.success(t('settings.privacy.encryptionActiveStatus'));
       } else if (passphraseModal === 'disable') {
-        // QNBS-v3: verify current passphrase first, then remove sentinel and disable flag
+        // QNBS-v3: Decrypt secondary stores before removing the sentinel so envelopes are not stranded locked.
         await verifyAndInitIdbEncryption(_current);
+        await decryptAllSecondaryStoresToPlaintext();
         await clearIdbPassphrase();
         dispatch(featureFlagsActions.setEnableIdbAtRestEncryption(false));
         setEncryptionReady(false);

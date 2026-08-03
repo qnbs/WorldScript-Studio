@@ -6,14 +6,23 @@
  */
 
 import type { PipelineRun } from '../../features/proForge/types';
+import {
+  prepareSecureRecordPayload,
+  readSecureRecordPayload,
+  type SecureRecordEnvelope,
+} from '../storage/storageEncryptionService';
+
+const SECURE_STORE = 'proforge-history';
 
 const HISTORY_DB = 'proforge-run-history';
 const HISTORY_VERSION = 1;
 const STORE = 'history';
 /** Keep at most this many runs per project (most recent first). */
 export const MAX_RUN_HISTORY = 20;
+const RECORD_SCHEMA_VERSION = 1;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
+let dbHandle: IDBDatabase | null = null;
 
 function openHistoryDb(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
@@ -26,7 +35,15 @@ function openHistoryDb(): Promise<IDBDatabase> {
       dbPromise = null;
       reject(new Error('Failed to open ProForge history DB'));
     };
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      dbHandle = request.result;
+      dbHandle.onversionchange = () => {
+        dbHandle?.close();
+        dbHandle = null;
+        dbPromise = null;
+      };
+      resolve(request.result);
+    };
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
       if (!db.objectStoreNames.contains(STORE)) {
@@ -39,36 +56,73 @@ function openHistoryDb(): Promise<IDBDatabase> {
 
 interface HistoryRecord {
   projectId: string;
+  schemaVersion: typeof RECORD_SCHEMA_VERSION;
+  payload: { runs: PipelineRun[] } | SecureRecordEnvelope;
+}
+
+interface LegacyHistoryRecord {
+  projectId: string;
   runs: PipelineRun[];
+}
+
+async function encodeHistory(projectId: string, runs: PipelineRun[]): Promise<HistoryRecord> {
+  return {
+    projectId,
+    schemaVersion: RECORD_SCHEMA_VERSION,
+    payload: await prepareSecureRecordPayload(
+      { runs: runs.slice(0, MAX_RUN_HISTORY) },
+      {
+        store: SECURE_STORE,
+        recordId: projectId,
+      },
+    ),
+  };
+}
+
+async function putHistory(db: IDBDatabase, record: HistoryRecord): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(STORE, 'readwrite');
+    transaction.objectStore(STORE).put(record);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(new Error('Failed to save ProForge run history'));
+    transaction.onabort = () => reject(new Error('ProForge run-history transaction aborted'));
+  });
 }
 
 /** Persist the run history for a project (capped to MAX_RUN_HISTORY, most-recent-first). */
 export async function saveRunHistory(projectId: string, runs: PipelineRun[]): Promise<void> {
+  // QNBS-v3: Resolve WebCrypto before opening IDB so the transaction cannot become inactive.
+  const record = await encodeHistory(projectId, runs);
   const db = await openHistoryDb();
-  const record: HistoryRecord = { projectId, runs: runs.slice(0, MAX_RUN_HISTORY) };
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readwrite');
-    tx.objectStore(STORE).put(record);
-    // QNBS-v3: Resolve only once the transaction COMMITS — an IDB write is not durable on
-    // request.onsuccess; the tx can still abort (quota/commit failure) afterwards.
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(new Error('Failed to save ProForge run history'));
-    tx.onabort = () => reject(new Error('ProForge run-history transaction aborted'));
-  });
+  await putHistory(db, record);
 }
 
 /** Load the persisted run history for a project (empty array if none). */
 export async function loadRunHistory(projectId: string): Promise<PipelineRun[]> {
   const db = await openHistoryDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readonly');
-    const request = tx.objectStore(STORE).get(projectId);
-    request.onsuccess = () => resolve((request.result as HistoryRecord | undefined)?.runs ?? []);
-    request.onerror = () => reject(new Error('Failed to load ProForge run history'));
+  const stored = await new Promise<HistoryRecord | LegacyHistoryRecord | undefined>(
+    (resolve, reject) => {
+      const tx = db.transaction(STORE, 'readonly');
+      const request = tx.objectStore(STORE).get(projectId);
+      request.onsuccess = () => resolve(request.result as HistoryRecord | undefined);
+      request.onerror = () => reject(new Error('Failed to load ProForge run history'));
+    },
+  );
+  if (!stored) return [];
+  const rawPayload = 'payload' in stored ? stored.payload : { runs: stored.runs };
+  const decoded = await readSecureRecordPayload<{ runs: PipelineRun[] }>(rawPayload, {
+    store: SECURE_STORE,
+    recordId: projectId,
   });
+  if (decoded.needsMigration) {
+    await putHistory(db, await encodeHistory(projectId, decoded.value.runs));
+  }
+  return decoded.value.runs;
 }
 
 /** Reset the DB connection — test-only. */
 export function _resetHistoryDbForTest(): void {
+  dbHandle?.close();
+  dbHandle = null;
   dbPromise = null;
 }

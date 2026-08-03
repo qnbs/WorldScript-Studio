@@ -1,6 +1,6 @@
 /**
  * IdbAssetStore — Images and Binder binary assets (research PDFs, files).
- * ENCRYPTION: plaintext — blob storage; at-rest encryption planned for Phase 2.
+ * ENCRYPTION: image and Binder payloads use AES-256-GCM while at-rest encryption is unlocked.
  * QNBS-v3: Extracted from dbService.ts. Redux keeps only asset IDs; blobs stay here.
  */
 

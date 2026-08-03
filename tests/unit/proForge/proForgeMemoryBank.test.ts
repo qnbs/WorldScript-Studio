@@ -32,19 +32,61 @@ import {
   saveMemoryEntry,
   searchMemoryEntries,
 } from '../../../services/proForge/proForgeMemoryBank';
+import { _resetPassphraseSentinelForTest } from '../../../services/storage/idbPassphraseSentinel';
+import {
+  clearIdbEncryptionKey,
+  isSecureRecordEnvelope,
+  SecureRecordCorruptError,
+  SecureRecordLockedError,
+  setupIdbEncryption,
+} from '../../../services/storage/storageEncryptionService';
+
+const DB_NAME = 'proforge-memory-bank';
+const STORE = 'entries';
+
+async function readRawMemoryEntry(id: string): Promise<Record<string, unknown> | undefined> {
+  const db = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  return new Promise((resolve, reject) => {
+    const request = db.transaction(STORE, 'readonly').objectStore(STORE).get(id);
+    request.onsuccess = () => resolve(request.result as Record<string, unknown> | undefined);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function writeRawMemoryEntry(record: Record<string, unknown>): Promise<void> {
+  const db = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(STORE, 'readwrite');
+    transaction.objectStore(STORE).put(record);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
+  _resetDbForTest();
+  _resetPassphraseSentinelForTest();
+  clearIdbEncryptionKey();
   global.indexedDB = new IDBFactory();
   global.IDBKeyRange = IDBKeyRange;
-  _resetDbForTest();
 });
 
 afterEach(() => {
   _resetDbForTest();
+  _resetPassphraseSentinelForTest();
+  clearIdbEncryptionKey();
 });
 
 // ---------------------------------------------------------------------------
@@ -291,6 +333,100 @@ describe('deleteMemoryEntry', () => {
 
   it('does not throw when deleting a non-existent id', async () => {
     await expect(deleteMemoryEntry('ghost-id')).resolves.not.toThrow();
+  });
+});
+
+describe('memory bank encrypted persistence', () => {
+  it('keeps keys, content, embeddings, and source stage out of raw IndexedDB', async () => {
+    await setupIdbEncryption('memory-passphrase');
+    const entry = await saveMemoryEntry({
+      id: 'encrypted-entry',
+      projectId: 'p-encrypted',
+      category: 'lore',
+      key: 'MEMORY_KEY_CANARY',
+      content: 'MEMORY_CONTENT_CANARY',
+      sourceStage: 'structural',
+      embedding: [0.123456, 0.654321],
+    });
+    const raw = await readRawMemoryEntry(entry.id);
+
+    expect(raw?.['projectId']).toBe('p-encrypted');
+    expect(raw?.['category']).toBe('lore');
+    expect(isSecureRecordEnvelope(raw?.['payload'])).toBe(true);
+    expect(JSON.stringify(raw)).not.toContain('MEMORY_KEY_CANARY');
+    expect(JSON.stringify(raw)).not.toContain('MEMORY_CONTENT_CANARY');
+    expect(JSON.stringify(raw)).not.toContain('0.123456');
+    await expect(getMemoryEntries('p-encrypted')).resolves.toEqual([entry]);
+  });
+
+  it('rejects memory-bank reads and writes while configured encryption is locked', async () => {
+    await setupIdbEncryption('memory-passphrase');
+    await saveMemoryEntry({
+      projectId: 'p-locked',
+      category: 'lore',
+      key: 'locked',
+      content: 'sensitive',
+      sourceStage: 'intake',
+    });
+    clearIdbEncryptionKey();
+
+    await expect(getMemoryEntries('p-locked')).rejects.toBeInstanceOf(SecureRecordLockedError);
+    await expect(
+      saveMemoryEntry({
+        projectId: 'p-locked',
+        category: 'lore',
+        key: 'new',
+        content: 'must not persist',
+        sourceStage: 'intake',
+      }),
+    ).rejects.toBeInstanceOf(SecureRecordLockedError);
+  });
+
+  it('lazily rewrites a legacy plaintext memory entry after unlock', async () => {
+    const seed = await saveMemoryEntry({
+      projectId: 'seed',
+      category: 'meta',
+      key: 'seed',
+      content: 'seed',
+      sourceStage: 'intake',
+    });
+    await deleteMemoryEntry(seed.id);
+    const legacy = {
+      id: 'legacy-memory',
+      projectId: 'p-legacy',
+      category: 'character',
+      key: 'LEGACY_MEMORY_KEY_CANARY',
+      content: 'LEGACY_MEMORY_CONTENT_CANARY',
+      sourceStage: 'intake',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+    await writeRawMemoryEntry(legacy);
+    await setupIdbEncryption('memory-passphrase');
+
+    await expect(getMemoryEntries('p-legacy')).resolves.toEqual([legacy]);
+    const migrated = await readRawMemoryEntry(legacy.id);
+    expect(isSecureRecordEnvelope(migrated?.['payload'])).toBe(true);
+    expect(JSON.stringify(migrated)).not.toContain('LEGACY_MEMORY_CONTENT_CANARY');
+  });
+
+  it('fails closed when an encrypted memory entry is corrupted', async () => {
+    await setupIdbEncryption('memory-passphrase');
+    const entry = await saveMemoryEntry({
+      id: 'corrupt-memory',
+      projectId: 'p-corrupt',
+      category: 'meta',
+      key: 'corrupt',
+      content: 'CORRUPTION_CANARY',
+      sourceStage: 'intake',
+    });
+    const raw = await readRawMemoryEntry(entry.id);
+    const payload = raw?.['payload'];
+    if (!raw || !isSecureRecordEnvelope(payload)) throw new Error('Expected memory envelope');
+    const ciphertext = new Uint8Array(payload.ciphertext);
+    ciphertext[0] = (ciphertext[0] ?? 0) ^ 0xff;
+    await writeRawMemoryEntry({ ...raw, payload: { ...payload, ciphertext } });
+
+    await expect(getMemoryEntries('p-corrupt')).rejects.toBeInstanceOf(SecureRecordCorruptError);
   });
 });
 

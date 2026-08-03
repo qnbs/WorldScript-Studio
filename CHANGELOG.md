@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Content-bearing secondary IndexedDB databases now honor at-rest encryption.** Scene revisions,
+  AI inference results, ProForge memory/history, cross-project descriptive metadata and embeddings,
+  and LoRA adapter metadata/datasets/training runs store sensitive fields in versioned AES-256-GCM
+  envelopes. Configured-but-locked storage rejects reads and writes instead of silently falling back
+  to plaintext; legacy plaintext records migrate lazily after unlock, and corrupt envelopes fail
+  closed. Large LoRA weight blobs and approved DuckDB structural analytics metadata remain explicit
+  exceptions. Passphrase rotation across these independent databases is tracked separately as a
+  durable, resumable journal rather than being described as atomic.
+
 ## [1.26.0] — 2026-08-01
 
 ### Added
@@ -761,7 +772,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **B-1 — IDB At-Rest Encryption** (`services/storage/storageEncryptionService.ts`): Full AES-256-GCM passphrase-derived encryption for IndexedDB stores. PBKDF2 (600 000 iterations, SHA-256, 32-byte random salt stored in `app-data` as `idb_kdf_salt_v1`). `CryptoKey` is `{ extractable: false }`. Feature-flagged behind `enableIdbAtRestEncryption` (off by default). Tauri build uses `tauri-plugin-stronghold` for OS-keychain-backed passphrase (zero user friction). Web build shows passphrase unlock modal on cold start (session-scoped in-memory key wiped on tab close). GDPR threat model: encrypted blobs unreadable without passphrase from browser profile or malicious extension. Storage decomposition in `services/storage/` (`idbCore`, `idbProjectStore`, `idbSnapshotStore`, `idbKeyStore`, `idbCodexStore`, `idbAssetStore`).
+- **B-1 — IDB At-Rest Encryption** (`services/storage/storageEncryptionService.ts`): Full AES-256-GCM passphrase-derived encryption for IndexedDB stores. PBKDF2 (600 000 iterations, SHA-256, 32-byte random salt stored in `localStorage` as `worldscript-idb-kdf-salt-v1`). `CryptoKey` is `{ extractable: false }`. Feature-flagged behind `enableIdbAtRestEncryption` (off by default). Tauri build uses `tauri-plugin-stronghold` for OS-keychain-backed passphrase (zero user friction). Web build shows passphrase unlock modal on cold start (session-scoped in-memory key wiped on tab close). GDPR threat model: encrypted blobs unreadable without passphrase from browser profile or malicious extension. Storage decomposition in `services/storage/` (`idbCore`, `idbProjectStore`, `idbSnapshotStore`, `idbKeyStore`, `idbCodexStore`, `idbAssetStore`).
 
 - **B-2 — Voice WASM Engine Scaffold** (`services/voice/wasmSttEngine.ts`, `services/voice/sileroVadEngine.ts`): Whisper.cpp WASM STT engine interface scaffold (model download, chunked inference, 99+ language detection). Silero VAD v4 via ONNX Runtime Web (~2 MB model, lazy-loaded). Both implement the existing abstract `SttEngine` / `VadEngine` interfaces from `voiceTypes.ts`. Feature-flagged behind `enableVoiceWasm` (off by default); falls back to `WebSpeechSttEngine` / `WebRtcVadEngine` when off.
 

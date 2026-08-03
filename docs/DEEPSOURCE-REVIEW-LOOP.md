@@ -303,8 +303,11 @@ GitHub App resumes auto-reviewing, run **both** loops: CodeAnt for narrative/AI 
   likely scopes JS-R1005/JS-C1002 similarly for this file, or the file is decomposed) — an agent
   should not attempt that maintainer-only dashboard action nor a speculative mass-refactor of this
   critical middleware file as a side effect of an unrelated feature PR.
-
----
+- **2026-08-03** — Maintainer applied repo-wide dashboard ignores for the correct rules (notably
+  **JS-0067**). **JS-0058** (empty destructuring) was briefly ignored by mistake and **reverted** the
+  same day — keep that rule active (0 repo occurrences at revert time). PR #310 migration
+  consolidation + `.deepsource.toml` `cyclomatic_complexity_threshold = "critical"` committed in
+  `5f3ad256`; 288 deepsource-io review threads resolved on PR #310.
 
 ### Quick reference
 
