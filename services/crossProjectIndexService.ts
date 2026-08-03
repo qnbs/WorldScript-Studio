@@ -10,11 +10,8 @@ import { DATA_DB_NAME, DB_VERSION, PROJECTS_INDEX_STORE } from './dbConstants';
 import { loadDuckdbAnalytics } from './duckdb/duckdbListenerLoader';
 import {
   assertSecureStorageWritableForMutation,
-  isSecureRecordEnvelope,
   prepareSecureRecordPayload,
-  prepareSecureRecordPayloadWithKey,
   readSecureRecordPayload,
-  reEncryptSecureRecordEnvelope,
   type SecureRecordEnvelope,
 } from './storage/storageEncryptionService';
 
@@ -391,60 +388,4 @@ export function _resetCrossProjectIndexDbForTest(): void {
   dbHandle?.close();
   dbHandle = null;
   dbPromise = null;
-}
-
-/** Decrypt all index payloads to plaintext before encryption is disabled. */
-export async function migrateCrossProjectIndexForDisable(): Promise<void> {
-  const db = await getDb();
-  const raw = await new Promise<StoredProjectSearchIndex[]>((resolve, reject) => {
-    const tx = db.transaction(PROJECTS_INDEX_STORE, 'readonly');
-    const req = tx.objectStore(PROJECTS_INDEX_STORE).getAll();
-    req.onsuccess = () => resolve(req.result as StoredProjectSearchIndex[]);
-    req.onerror = () => reject(req.error);
-  });
-  const plaintext: StoredProjectSearchIndex[] = [];
-  for (const stored of raw) {
-    const decoded = await decodeProjectSearchIndex(stored);
-    plaintext.push({
-      projectId: decoded.record.projectId,
-      lastIndexed: decoded.record.lastIndexed,
-      schemaVersion: RECORD_SCHEMA_VERSION,
-      payload: projectSearchPayload(decoded.record),
-    });
-  }
-  await putProjectSearchIndexes(db, plaintext);
-}
-
-/** Re-encrypt all index payloads during passphrase rotation. */
-export async function reEncryptCrossProjectIndex(
-  oldKey: CryptoKey,
-  newKey: CryptoKey,
-): Promise<void> {
-  const db = await getDb();
-  const raw = await new Promise<StoredProjectSearchIndex[]>((resolve, reject) => {
-    const tx = db.transaction(PROJECTS_INDEX_STORE, 'readonly');
-    const req = tx.objectStore(PROJECTS_INDEX_STORE).getAll();
-    req.onsuccess = () => resolve(req.result as StoredProjectSearchIndex[]);
-    req.onerror = () => reject(req.error);
-  });
-  const migrated: StoredProjectSearchIndex[] = [];
-  for (const stored of raw) {
-    const context = { store: SECURE_STORE, recordId: stored.projectId };
-    if (isSecureRecordEnvelope(stored.payload)) {
-      migrated.push({
-        ...stored,
-        payload: await reEncryptSecureRecordEnvelope(stored.payload, context, oldKey, newKey),
-      });
-    } else {
-      migrated.push({
-        ...stored,
-        payload: await prepareSecureRecordPayloadWithKey(
-          stored.payload as ProjectSearchPayload,
-          context,
-          newKey,
-        ),
-      });
-    }
-  }
-  await putProjectSearchIndexes(db, migrated);
 }

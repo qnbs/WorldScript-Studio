@@ -8,9 +8,7 @@ import type { MemoryBankEntry, PipelineStage } from '../../features/proForge/typ
 import {
   assertSecureStorageWritableForMutation,
   prepareSecureRecordPayload,
-  prepareSecureRecordPayloadWithKey,
   readSecureRecordPayload,
-  reEncryptSecureRecordEnvelope,
   type SecureRecordEnvelope,
 } from '../storage/storageEncryptionService';
 
@@ -426,66 +424,4 @@ export function _resetDbForTest(): void {
   dbPromise = null;
   bankCache.clear();
   memFallback.clear();
-}
-
-/** Decrypt all memory payloads to plaintext before encryption is disabled. */
-export async function migrateProForgeMemoryForDisable(): Promise<void> {
-  if (!idbAvailable()) return;
-  const db = await openMemoryBankDb();
-  const raw = await new Promise<StoredMemoryEntry[]>((resolve, reject) => {
-    const tx = db.transaction('entries', 'readonly');
-    const req = tx.objectStore('entries').getAll();
-    req.onsuccess = () => resolve(req.result as StoredMemoryEntry[]);
-    req.onerror = () => reject(new Error('Failed to load memory entries'));
-  });
-  const plaintext: StoredMemoryEntry[] = [];
-  for (const stored of raw) {
-    const decoded = await decodeMemoryEntry(stored);
-    plaintext.push({
-      id: decoded.entry.id,
-      projectId: decoded.entry.projectId,
-      category: decoded.entry.category,
-      createdAt: decoded.entry.createdAt,
-      schemaVersion: RECORD_SCHEMA_VERSION,
-      payload: memoryPayload(decoded.entry),
-    });
-  }
-  await putMemoryEntries(db, plaintext);
-}
-
-/** Re-encrypt all memory payloads during passphrase rotation. */
-export async function reEncryptProForgeMemory(oldKey: CryptoKey, newKey: CryptoKey): Promise<void> {
-  if (!idbAvailable()) return;
-  const db = await openMemoryBankDb();
-  const raw = await new Promise<StoredMemoryEntry[]>((resolve, reject) => {
-    const tx = db.transaction('entries', 'readonly');
-    const req = tx.objectStore('entries').getAll();
-    req.onsuccess = () => resolve(req.result as StoredMemoryEntry[]);
-    req.onerror = () => reject(new Error('Failed to load memory entries'));
-  });
-  const migrated: StoredMemoryEntry[] = [];
-  for (const stored of raw) {
-    const context = { store: SECURE_STORE, recordId: stored.id };
-    if (stored.payload && typeof stored.payload === 'object' && 'ciphertext' in stored.payload) {
-      migrated.push({
-        ...stored,
-        payload: await reEncryptSecureRecordEnvelope(
-          stored.payload as SecureRecordEnvelope,
-          context,
-          oldKey,
-          newKey,
-        ),
-      });
-    } else {
-      migrated.push({
-        ...stored,
-        payload: await prepareSecureRecordPayloadWithKey(
-          stored.payload as MemoryEntryPayload,
-          context,
-          newKey,
-        ),
-      });
-    }
-  }
-  await putMemoryEntries(db, migrated);
 }

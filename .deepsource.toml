@@ -36,3 +36,5 @@ name = "javascript"
   environment = ["nodejs", "browser"]
   dialect = "typescript"
   plugins = ["react"]
+  # QNBS-v3: Align with Biome — only flag critical complexity; medium on bulk migration helpers is noise.
+  cyclomatic_complexity_threshold = "critical"

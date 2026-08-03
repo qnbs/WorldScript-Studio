@@ -3,11 +3,8 @@
 import type { SceneRevision } from '../types';
 import {
   assertSecureStorageWritableForMutation,
-  isSecureRecordEnvelope,
   prepareSecureRecordPayload,
-  prepareSecureRecordPayloadWithKey,
   readSecureRecordPayload,
-  reEncryptSecureRecordEnvelope,
   type SecureRecordEnvelope,
 } from './storage/storageEncryptionService';
 
@@ -216,56 +213,4 @@ export async function deleteRevision(id: string): Promise<void> {
 export function _resetDbForTest(): void {
   _db?.close();
   _db = null;
-}
-
-/** Decrypt all revision payloads to plaintext before encryption is disabled. */
-export async function migrateSceneRevisionsForDisable(): Promise<void> {
-  const db = await getDb();
-  const raw = await new Promise<unknown[]>((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readonly');
-    const req = tx.objectStore(STORE).getAll();
-    req.onsuccess = () => resolve(req.result as unknown[]);
-    req.onerror = () => reject(req.error);
-  });
-  const plaintext: StoredSceneRevision[] = [];
-  for (const stored of raw) {
-    const decoded = await decodeRevision(stored);
-    plaintext.push({
-      id: decoded.revision.id,
-      sectionId: decoded.revision.sectionId,
-      createdAt: decoded.revision.createdAt,
-      schemaVersion: RECORD_SCHEMA_VERSION,
-      payload: revisionPayload(decoded.revision),
-    });
-  }
-  await putStoredRevisions(db, plaintext);
-}
-
-/** Re-encrypt all revision payloads during passphrase rotation. */
-export async function reEncryptSceneRevisions(oldKey: CryptoKey, newKey: CryptoKey): Promise<void> {
-  const db = await getDb();
-  const raw = await new Promise<StoredSceneRevision[]>((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readonly');
-    const req = tx.objectStore(STORE).getAll();
-    req.onsuccess = () => resolve(req.result as StoredSceneRevision[]);
-    req.onerror = () => reject(req.error);
-  });
-  const migrated: StoredSceneRevision[] = [];
-  for (const stored of raw) {
-    const context = { store: SECURE_STORE, recordId: stored.id };
-    if (isSecureRecordEnvelope(stored.payload)) {
-      migrated.push({
-        ...stored,
-        payload: await reEncryptSecureRecordEnvelope(stored.payload, context, oldKey, newKey),
-      });
-    } else {
-      const payload = await prepareSecureRecordPayloadWithKey(
-        stored.payload as SceneRevisionPayload,
-        context,
-        newKey,
-      );
-      migrated.push({ ...stored, payload });
-    }
-  }
-  await putStoredRevisions(db, migrated);
 }

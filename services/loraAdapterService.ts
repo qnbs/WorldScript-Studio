@@ -1,11 +1,8 @@
 import { logger } from './logger';
 import {
   assertSecureStorageWritableForMutation,
-  isSecureRecordEnvelope,
   prepareSecureRecordPayload,
-  prepareSecureRecordPayloadWithKey,
   readSecureRecordPayload,
-  reEncryptSecureRecordEnvelope,
   SecureRecordCorruptError,
   type SecureRecordEnvelope,
   SecureRecordLockedError,
@@ -630,97 +627,4 @@ export function _resetLoraDbForTest(): void {
   dbHandle?.close();
   dbHandle = null;
   dbPromise = null;
-}
-
-async function reEncryptStoreRecords<T extends { id: string; payload: unknown }>(
-  storeName: string,
-  secureStore: string,
-  oldKey: CryptoKey,
-  newKey: CryptoKey,
-): Promise<void> {
-  const db = await openDb();
-  const raw = await new Promise<T[]>((resolve, reject) => {
-    const tx = db.transaction(storeName, 'readonly');
-    const req = tx.objectStore(storeName).getAll();
-    req.onsuccess = () => resolve(req.result as T[]);
-    req.onerror = () => reject(req.error);
-  });
-  const migrated: T[] = [];
-  for (const stored of raw) {
-    const context = { store: secureStore, recordId: stored.id };
-    const payload = isSecureRecordEnvelope(stored.payload)
-      ? await reEncryptSecureRecordEnvelope(stored.payload, context, oldKey, newKey)
-      : await prepareSecureRecordPayloadWithKey(stored.payload, context, newKey);
-    migrated.push({ ...stored, payload } as T);
-  }
-  await putRecords(db, storeName, migrated);
-}
-
-/** Decrypt all LoRA secure payloads to plaintext before encryption is disabled. */
-export async function migrateLoraStoresForDisable(): Promise<void> {
-  const db = await openDb();
-  for (const [storeName] of [
-    [META_STORE] as const,
-    [DATASETS_STORE] as const,
-    [RUNS_STORE] as const,
-  ]) {
-    const raw = await new Promise<unknown[]>((resolve, reject) => {
-      const tx = db.transaction(storeName, 'readonly');
-      const req = tx.objectStore(storeName).getAll();
-      req.onsuccess = () => resolve(req.result as unknown[]);
-      req.onerror = () => reject(req.error);
-    });
-    const plaintext: unknown[] = [];
-    for (const stored of raw) {
-      if (storeName === META_STORE) {
-        const decoded = await decodeAdapterMeta(stored as StoredLoraAdapterMeta);
-        plaintext.push({
-          id: decoded.meta.id,
-          createdAt: decoded.meta.createdAt,
-          schemaVersion: RECORD_SCHEMA_VERSION,
-          ...(decoded.meta.projectId !== undefined && { projectId: decoded.meta.projectId }),
-          payload: adapterMetaPayload(decoded.meta),
-        });
-      } else if (storeName === DATASETS_STORE) {
-        const decoded = await decodeDatasetEntry(stored as StoredDatasetRecord);
-        plaintext.push({
-          id: decoded.entry.id,
-          projectId: decoded.entry.projectId,
-          source: decoded.entry.source,
-          createdAt: decoded.entry.createdAt,
-          schemaVersion: RECORD_SCHEMA_VERSION,
-          payload: datasetPayload(decoded.entry),
-        });
-      } else {
-        const decoded = await decodeTrainingRun(stored as StoredTrainingRecord);
-        plaintext.push({
-          id: decoded.run.id,
-          projectId: decoded.run.projectId,
-          status: decoded.run.status,
-          startedAt: decoded.run.startedAt,
-          ...(decoded.run.completedAt !== undefined && { completedAt: decoded.run.completedAt }),
-          schemaVersion: RECORD_SCHEMA_VERSION,
-          payload: trainingRunPayload(decoded.run),
-        });
-      }
-    }
-    await putRecords(db, storeName, plaintext as Array<Record<string, unknown>>);
-  }
-}
-
-/** Re-encrypt all LoRA secure payloads during passphrase rotation. */
-export async function reEncryptLoraStores(oldKey: CryptoKey, newKey: CryptoKey): Promise<void> {
-  await reEncryptStoreRecords<StoredLoraAdapterMeta>(
-    META_STORE,
-    'lora-adapter-meta',
-    oldKey,
-    newKey,
-  );
-  await reEncryptStoreRecords<StoredDatasetRecord>(DATASETS_STORE, 'lora-dataset', oldKey, newKey);
-  await reEncryptStoreRecords<StoredTrainingRecord>(
-    RUNS_STORE,
-    'lora-training-run',
-    oldKey,
-    newKey,
-  );
 }

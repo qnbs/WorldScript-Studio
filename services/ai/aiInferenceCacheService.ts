@@ -3,9 +3,7 @@
 import {
   assertSecureStorageWritableForMutation,
   prepareSecureRecordPayload,
-  prepareSecureRecordPayloadWithKey,
   readSecureRecordPayload,
-  reEncryptSecureRecordEnvelope,
   SecureRecordCorruptError,
   type SecureRecordEnvelope,
 } from '../storage/storageEncryptionService';
@@ -263,80 +261,3 @@ export class AiInferenceCacheService {
 }
 
 export const aiInferenceCacheService = new AiInferenceCacheService();
-
-async function openInferenceCacheDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(IDB_DB_NAME, IDB_DB_VERSION);
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-/** Decrypt all cache payloads to plaintext before encryption is disabled. */
-export async function migrateAiInferenceCacheForDisable(): Promise<void> {
-  if (typeof indexedDB === 'undefined') return;
-  const db = await openInferenceCacheDb();
-  const raw = await new Promise<Array<CacheEntry | LegacyCacheEntry>>((resolve, reject) => {
-    const tx = db.transaction(IDB_STORE, 'readonly');
-    const req = tx.objectStore(IDB_STORE).getAll();
-    req.onsuccess = () => resolve(req.result as Array<CacheEntry | LegacyCacheEntry>);
-    req.onerror = () => reject(req.error);
-  });
-  const plaintext: Array<{ key: string; timestamp: number; payload: CachePayload }> = [];
-  for (const stored of raw) {
-    const recordId = stored.key;
-    const rawPayload = 'payload' in stored ? stored.payload : { result: stored.result };
-    const decoded = await readSecureRecordPayload<CachePayload>(rawPayload, {
-      store: SECURE_STORE,
-      recordId,
-    });
-    plaintext.push({
-      key: stored.key,
-      timestamp: stored.timestamp,
-      payload: { result: decoded.value.result },
-    });
-  }
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(IDB_STORE, 'readwrite');
-    const store = tx.objectStore(IDB_STORE);
-    for (const entry of plaintext) store.put(entry);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
-/** Re-encrypt all cache payloads during passphrase rotation. */
-export async function reEncryptAiInferenceCache(
-  oldKey: CryptoKey,
-  newKey: CryptoKey,
-): Promise<void> {
-  if (typeof indexedDB === 'undefined') return;
-  const db = await openInferenceCacheDb();
-  const raw = await new Promise<CacheEntry[]>((resolve, reject) => {
-    const tx = db.transaction(IDB_STORE, 'readonly');
-    const req = tx.objectStore(IDB_STORE).getAll();
-    req.onsuccess = () => resolve(req.result as CacheEntry[]);
-    req.onerror = () => reject(req.error);
-  });
-  const migrated: CacheEntry[] = [];
-  for (const stored of raw) {
-    const context = { store: SECURE_STORE, recordId: stored.key };
-    const payload =
-      stored.payload && typeof stored.payload === 'object' && 'ciphertext' in stored.payload
-        ? await reEncryptSecureRecordEnvelope(
-            stored.payload as SecureRecordEnvelope,
-            context,
-            oldKey,
-            newKey,
-          )
-        : await prepareSecureRecordPayloadWithKey(stored.payload as CachePayload, context, newKey);
-    migrated.push({ ...stored, payload });
-  }
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(IDB_STORE, 'readwrite');
-    const store = tx.objectStore(IDB_STORE);
-    for (const entry of migrated) store.put(entry);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
