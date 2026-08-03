@@ -2,10 +2,16 @@
 //          Max 50 revisions per scene; oldest are evicted automatically on save.
 import type { SceneRevision } from '../types';
 import {
+  assertSecureStorageWritableForMutation,
+  isSecureRecordEnvelope,
   prepareSecureRecordPayload,
+  prepareSecureRecordPayloadWithKey,
   readSecureRecordPayload,
+  reEncryptSecureRecordEnvelope,
   type SecureRecordEnvelope,
 } from './storage/storageEncryptionService';
+
+const SECURE_STORE = 'scene-revisions';
 
 const DB_NAME = 'worldscript-revisions-db';
 const DB_VERSION = 1;
@@ -75,15 +81,23 @@ async function encodeRevision(revision: SceneRevision): Promise<StoredSceneRevis
     sectionId: revision.sectionId,
     createdAt: revision.createdAt,
     schemaVersion: RECORD_SCHEMA_VERSION,
-    payload: await prepareSecureRecordPayload(revisionPayload(revision)),
+    payload: await prepareSecureRecordPayload(revisionPayload(revision), {
+      store: SECURE_STORE,
+      recordId: revision.id,
+    }),
   };
 }
 
 async function decodeRevision(
   stored: unknown,
 ): Promise<{ revision: SceneRevision; needsMigration: boolean }> {
+  const recordId =
+    typeof stored === 'object' && stored !== null && 'id' in stored
+      ? String((stored as { id: string }).id)
+      : String((stored as SceneRevision).id);
+  const context = { store: SECURE_STORE, recordId };
   if (isStoredSceneRevision(stored)) {
-    const decoded = await readSecureRecordPayload<SceneRevisionPayload>(stored.payload);
+    const decoded = await readSecureRecordPayload<SceneRevisionPayload>(stored.payload, context);
     return {
       revision: {
         id: stored.id,
@@ -96,7 +110,10 @@ async function decodeRevision(
   }
 
   const legacy = stored as SceneRevision;
-  const decoded = await readSecureRecordPayload<SceneRevisionPayload>(revisionPayload(legacy));
+  const decoded = await readSecureRecordPayload<SceneRevisionPayload>(
+    revisionPayload(legacy),
+    context,
+  );
   return {
     revision: {
       id: legacy.id,
@@ -185,6 +202,7 @@ export async function listRevisions(sectionId: string): Promise<SceneRevision[]>
 
 /** Deletes a single revision by ID. */
 export async function deleteRevision(id: string): Promise<void> {
+  await assertSecureStorageWritableForMutation();
   const db = await getDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readwrite');
@@ -198,4 +216,56 @@ export async function deleteRevision(id: string): Promise<void> {
 export function _resetDbForTest(): void {
   _db?.close();
   _db = null;
+}
+
+/** Decrypt all revision payloads to plaintext before encryption is disabled. */
+export async function migrateSceneRevisionsForDisable(): Promise<void> {
+  const db = await getDb();
+  const raw = await new Promise<unknown[]>((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readonly');
+    const req = tx.objectStore(STORE).getAll();
+    req.onsuccess = () => resolve(req.result as unknown[]);
+    req.onerror = () => reject(req.error);
+  });
+  const plaintext: StoredSceneRevision[] = [];
+  for (const stored of raw) {
+    const decoded = await decodeRevision(stored);
+    plaintext.push({
+      id: decoded.revision.id,
+      sectionId: decoded.revision.sectionId,
+      createdAt: decoded.revision.createdAt,
+      schemaVersion: RECORD_SCHEMA_VERSION,
+      payload: revisionPayload(decoded.revision),
+    });
+  }
+  await putStoredRevisions(db, plaintext);
+}
+
+/** Re-encrypt all revision payloads during passphrase rotation. */
+export async function reEncryptSceneRevisions(oldKey: CryptoKey, newKey: CryptoKey): Promise<void> {
+  const db = await getDb();
+  const raw = await new Promise<StoredSceneRevision[]>((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readonly');
+    const req = tx.objectStore(STORE).getAll();
+    req.onsuccess = () => resolve(req.result as StoredSceneRevision[]);
+    req.onerror = () => reject(req.error);
+  });
+  const migrated: StoredSceneRevision[] = [];
+  for (const stored of raw) {
+    const context = { store: SECURE_STORE, recordId: stored.id };
+    if (isSecureRecordEnvelope(stored.payload)) {
+      migrated.push({
+        ...stored,
+        payload: await reEncryptSecureRecordEnvelope(stored.payload, context, oldKey, newKey),
+      });
+    } else {
+      const payload = await prepareSecureRecordPayloadWithKey(
+        stored.payload as SceneRevisionPayload,
+        context,
+        newKey,
+      );
+      migrated.push({ ...stored, payload });
+    }
+  }
+  await putStoredRevisions(db, migrated);
 }

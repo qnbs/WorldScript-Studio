@@ -8,9 +8,13 @@
 import type { PipelineRun } from '../../features/proForge/types';
 import {
   prepareSecureRecordPayload,
+  prepareSecureRecordPayloadWithKey,
   readSecureRecordPayload,
+  reEncryptSecureRecordEnvelope,
   type SecureRecordEnvelope,
 } from '../storage/storageEncryptionService';
+
+const SECURE_STORE = 'proforge-history';
 
 const HISTORY_DB = 'proforge-run-history';
 const HISTORY_VERSION = 1;
@@ -67,7 +71,13 @@ async function encodeHistory(projectId: string, runs: PipelineRun[]): Promise<Hi
   return {
     projectId,
     schemaVersion: RECORD_SCHEMA_VERSION,
-    payload: await prepareSecureRecordPayload({ runs: runs.slice(0, MAX_RUN_HISTORY) }),
+    payload: await prepareSecureRecordPayload(
+      { runs: runs.slice(0, MAX_RUN_HISTORY) },
+      {
+        store: SECURE_STORE,
+        recordId: projectId,
+      },
+    ),
   };
 }
 
@@ -102,7 +112,10 @@ export async function loadRunHistory(projectId: string): Promise<PipelineRun[]> 
   );
   if (!stored) return [];
   const rawPayload = 'payload' in stored ? stored.payload : { runs: stored.runs };
-  const decoded = await readSecureRecordPayload<{ runs: PipelineRun[] }>(rawPayload);
+  const decoded = await readSecureRecordPayload<{ runs: PipelineRun[] }>(rawPayload, {
+    store: SECURE_STORE,
+    recordId: projectId,
+  });
   if (decoded.needsMigration) {
     await putHistory(db, await encodeHistory(projectId, decoded.value.runs));
   }
@@ -114,4 +127,54 @@ export function _resetHistoryDbForTest(): void {
   dbHandle?.close();
   dbHandle = null;
   dbPromise = null;
+}
+
+/** Decrypt all history payloads to plaintext before encryption is disabled. */
+export async function migrateProForgeHistoryForDisable(): Promise<void> {
+  const db = await openHistoryDb();
+  const raw = await new Promise<HistoryRecord[]>((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readonly');
+    const req = tx.objectStore(STORE).getAll();
+    req.onsuccess = () => resolve(req.result as HistoryRecord[]);
+    req.onerror = () => reject(new Error('Failed to load ProForge history'));
+  });
+  const plaintext: HistoryRecord[] = [];
+  for (const stored of raw) {
+    const runs = await loadRunHistory(stored.projectId);
+    plaintext.push({
+      projectId: stored.projectId,
+      schemaVersion: RECORD_SCHEMA_VERSION,
+      payload: { runs },
+    });
+  }
+  for (const record of plaintext) {
+    await putHistory(db, record);
+  }
+}
+
+/** Re-encrypt all history payloads during passphrase rotation. */
+export async function reEncryptProForgeHistory(
+  oldKey: CryptoKey,
+  newKey: CryptoKey,
+): Promise<void> {
+  const db = await openHistoryDb();
+  const raw = await new Promise<HistoryRecord[]>((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readonly');
+    const req = tx.objectStore(STORE).getAll();
+    req.onsuccess = () => resolve(req.result as HistoryRecord[]);
+    req.onerror = () => reject(new Error('Failed to load ProForge history'));
+  });
+  for (const stored of raw) {
+    const context = { store: SECURE_STORE, recordId: stored.projectId };
+    const payload =
+      stored.payload && typeof stored.payload === 'object' && 'ciphertext' in stored.payload
+        ? await reEncryptSecureRecordEnvelope(
+            stored.payload as SecureRecordEnvelope,
+            context,
+            oldKey,
+            newKey,
+          )
+        : await prepareSecureRecordPayloadWithKey(stored.payload, context, newKey);
+    await putHistory(db, { ...stored, payload });
+  }
 }

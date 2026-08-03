@@ -112,15 +112,16 @@ cover locked access, authentication corruption, encrypted round trips, and lazy 
 
 ## Passphrase rotation
 
-The current Settings flow verifies the old passphrase, derives the new key, and re-encrypts primary
-app-data and snapshot records. This operation is not atomic across independent IndexedDB databases,
-and secondary secure-record databases are not yet included in that callback.
+The Settings flow verifies the old passphrase, derives the new key, and re-encrypts primary
+app-data, snapshot records, and all secondary secure-record databases via
+`reEncryptAllSecondaryStores()`. Disabling encryption first decrypts secondary stores to plaintext
+via `decryptAllSecondaryStoresToPlaintext()` so envelopes are not stranded after the sentinel is
+removed.
 
-Until the durable rotation coordinator is implemented, do not describe passphrase rotation as
-covering every local database. The required follow-up is a cross-database journal with bounded batch
-checkpoints, explicit old/new envelope versions, restart recovery, and delayed replacement of the
-old verifier until every registered store is complete. An interrupted rotation must retain the last
-readable copy and require both passphrases to resume.
+This operation is not atomic across independent IndexedDB databases. Codex, RAG vectors, images,
+and binder assets in the primary data DB are still re-encrypted on the next natural write. The
+durable rotation journal described below remains future hardening for crash recovery across every
+store.
 
 ## Failure and recovery behavior
 

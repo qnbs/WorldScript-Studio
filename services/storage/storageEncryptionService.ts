@@ -17,6 +17,7 @@ import {
   getPassphraseSentinel,
   savePassphraseSentinel,
 } from './idbPassphraseSentinel';
+import { decodeSecureRecordValue, encodeSecureRecordValue } from './secureRecordCodec';
 
 const PBKDF2_ITERATIONS = 600_000; // OWASP 2024 minimum for PBKDF2-HMAC-SHA-256
 const IV_BYTE_LENGTH = 12;
@@ -46,6 +47,16 @@ export interface SecureRecordReadResult<T> {
   value: T;
   /** True only for legacy plaintext read while the encryption key is unlocked. */
   needsMigration: boolean;
+}
+
+/** Binds ciphertext to a specific secondary-store record — prevents envelope swap attacks. */
+export interface SecureRecordContext {
+  store: string;
+  recordId: string;
+}
+
+export function buildSecureRecordAad(context: SecureRecordContext): Uint8Array {
+  return new TextEncoder().encode(`${context.store}:${context.recordId}`);
 }
 
 export class SecureRecordLockedError extends Error {
@@ -113,18 +124,54 @@ export class StorageEncryptionService {
 
   /** Decrypt a blob produced by encrypt(). Throws on wrong key or corruption. */
   async decrypt(key: CryptoKey, blob: EncryptedBlob): Promise<unknown> {
+    const bytes = await this.decryptBytes(key, blob);
+    return JSON.parse(new TextDecoder().decode(bytes)) as unknown;
+  }
+
+  /** Encrypt raw bytes with optional AES-GCM additional authenticated data. */
+  async encryptBytes(
+    key: CryptoKey,
+    plaintext: Uint8Array,
+    aad?: Uint8Array,
+  ): Promise<EncryptedBlob> {
+    const iv = crypto.getRandomValues(new Uint8Array(IV_BYTE_LENGTH));
+    const plainBytes = new Uint8Array(plaintext);
+    const aadBytes = aad ? new Uint8Array(aad) : undefined;
+    const cipherBuf = aadBytes
+      ? await crypto.subtle.encrypt(
+          { name: 'AES-GCM', iv, additionalData: aadBytes },
+          key,
+          plainBytes,
+        )
+      : await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plainBytes);
+    const cipherBytes = new Uint8Array(cipherBuf);
+    const out = new Uint8Array(SENTINEL.length + IV_BYTE_LENGTH + cipherBytes.length);
+    out.set(SENTINEL, 0);
+    out.set(iv, SENTINEL.length);
+    out.set(cipherBytes, SENTINEL.length + IV_BYTE_LENGTH);
+    return { bytes: out };
+  }
+
+  /** Decrypt bytes produced by encryptBytes(). Throws on wrong key, AAD mismatch, or corruption. */
+  async decryptBytes(key: CryptoKey, blob: EncryptedBlob, aad?: Uint8Array): Promise<Uint8Array> {
     const { bytes } = blob;
     if (bytes.length < SENTINEL.length + IV_BYTE_LENGTH) {
       throw new Error('Encrypted blob is too short');
     }
-    // Verify sentinel
     for (let i = 0; i < SENTINEL.length; i++) {
       if (bytes[i] !== SENTINEL[i]) throw new Error('Not an encrypted blob — sentinel mismatch');
     }
     const iv = bytes.slice(SENTINEL.length, SENTINEL.length + IV_BYTE_LENGTH);
     const ciphertext = bytes.slice(SENTINEL.length + IV_BYTE_LENGTH);
-    const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
-    return JSON.parse(new TextDecoder().decode(plainBuf)) as unknown;
+    const aadBytes = aad ? new Uint8Array(aad) : undefined;
+    const plainBuf = aadBytes
+      ? await crypto.subtle.decrypt(
+          { name: 'AES-GCM', iv, additionalData: aadBytes },
+          key,
+          ciphertext,
+        )
+      : await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+    return new Uint8Array(plainBuf);
   }
 
   /**
@@ -252,35 +299,110 @@ async function isSecureStorageConfigured(): Promise<boolean> {
   }
 }
 
-/** Prepare a secondary-store payload without ever downgrading configured encryption to plaintext. */
-export async function prepareSecureRecordPayload<T>(value: T): Promise<T | SecureRecordEnvelope> {
-  if (_activeKey) {
-    const blob = await _svc.encrypt(_activeKey, value);
-    return encryptedBlobToEnvelope(blob.bytes);
+async function decryptSecureEnvelopeValue<T>(
+  key: CryptoKey,
+  envelope: SecureRecordEnvelope,
+  context: SecureRecordContext,
+): Promise<{ value: T; needsMigration: boolean }> {
+  const aad = buildSecureRecordAad(context);
+  const blob = envelopeToEncryptedBlob(envelope);
+  try {
+    const bytes = await _svc.decryptBytes(key, blob, aad);
+    return { value: decodeSecureRecordValue(bytes) as T, needsMigration: false };
+  } catch {
+    // QNBS-v3: Legacy envelopes used JSON.stringify without AAD — migrate on successful read.
+    try {
+      const bytes = await _svc.decryptBytes(key, blob);
+      const text = new TextDecoder().decode(bytes);
+      try {
+        return {
+          value: decodeSecureRecordValue(new TextEncoder().encode(text)) as T,
+          needsMigration: true,
+        };
+      } catch {
+        return { value: JSON.parse(text) as T, needsMigration: true };
+      }
+    } catch {
+      throw new SecureRecordCorruptError();
+    }
   }
+}
+
+async function encryptSecureRecordValue<T>(
+  key: CryptoKey,
+  value: T,
+  context: SecureRecordContext,
+): Promise<SecureRecordEnvelope> {
+  const plaintext = await encodeSecureRecordValue(value);
+  const aad = buildSecureRecordAad(context);
+  const blob = await _svc.encryptBytes(key, plaintext, aad);
+  return encryptedBlobToEnvelope(blob.bytes);
+}
+
+/** Reject destructive writes when configured encryption is locked. */
+export async function assertSecureStorageWritableForMutation(): Promise<void> {
+  if (_activeKey) return;
+  if (await isSecureStorageConfigured()) throw new SecureRecordLockedError();
+}
+
+/** Prepare a secondary-store payload without ever downgrading configured encryption to plaintext. */
+export async function prepareSecureRecordPayload<T>(
+  value: T,
+  context: SecureRecordContext,
+): Promise<T | SecureRecordEnvelope> {
+  if (_activeKey) return encryptSecureRecordValue(_activeKey, value, context);
   if (await isSecureStorageConfigured()) throw new SecureRecordLockedError();
   return value;
+}
+
+/** Key-scoped encrypt for passphrase rotation (does not rely on the active session key). */
+export async function prepareSecureRecordPayloadWithKey<T>(
+  value: T,
+  context: SecureRecordContext,
+  key: CryptoKey,
+): Promise<SecureRecordEnvelope> {
+  return encryptSecureRecordValue(key, value, context);
+}
+
+/** Re-encrypt one envelope during passphrase rotation. */
+export async function reEncryptSecureRecordEnvelope(
+  envelope: SecureRecordEnvelope,
+  context: SecureRecordContext,
+  oldKey: CryptoKey,
+  newKey: CryptoKey,
+): Promise<SecureRecordEnvelope> {
+  const decoded = await decryptSecureEnvelopeValue<unknown>(oldKey, envelope, context);
+  return encryptSecureRecordValue(newKey, decoded.value, context);
 }
 
 /** Read an encrypted or legacy secondary-store payload with typed fail-closed errors. */
 export async function readSecureRecordPayload<T>(
   stored: unknown,
+  context: SecureRecordContext,
 ): Promise<SecureRecordReadResult<T>> {
   if (isSecureRecordCandidate(stored)) {
     if (!isSecureRecordEnvelope(stored)) throw new SecureRecordCorruptError();
     if (!_activeKey) throw new SecureRecordLockedError();
-    try {
-      const value = (await _svc.decrypt(_activeKey, envelopeToEncryptedBlob(stored))) as T;
-      return { value, needsMigration: false };
-    } catch {
-      // QNBS-v3: Durable errors expose no ciphertext, key material, or decrypted content.
-      throw new SecureRecordCorruptError();
-    }
+    const decoded = await decryptSecureEnvelopeValue<T>(_activeKey, stored, context);
+    return decoded;
   }
 
   if (_activeKey) return { value: stored as T, needsMigration: true };
   if (await isSecureStorageConfigured()) throw new SecureRecordLockedError();
   return { value: stored as T, needsMigration: false };
+}
+
+/** Key-scoped read for passphrase rotation (decrypt with the outgoing key). */
+export async function readSecureRecordPayloadWithKey<T>(
+  stored: unknown,
+  context: SecureRecordContext,
+  key: CryptoKey,
+): Promise<SecureRecordReadResult<T>> {
+  if (isSecureRecordEnvelope(stored)) {
+    const decoded = await decryptSecureEnvelopeValue<T>(key, stored, context);
+    return decoded;
+  }
+  return { value: stored as T, needsMigration: true };
 }
 
 /**

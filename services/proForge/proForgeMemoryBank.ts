@@ -6,10 +6,15 @@
 
 import type { MemoryBankEntry, PipelineStage } from '../../features/proForge/types';
 import {
+  assertSecureStorageWritableForMutation,
   prepareSecureRecordPayload,
+  prepareSecureRecordPayloadWithKey,
   readSecureRecordPayload,
+  reEncryptSecureRecordEnvelope,
   type SecureRecordEnvelope,
 } from '../storage/storageEncryptionService';
+
+const SECURE_STORE = 'proforge-memory';
 
 const MEMORY_BANK_STORE = 'proforge-memory-bank';
 const MEMORY_BANK_VERSION = 1;
@@ -99,15 +104,20 @@ async function encodeMemoryEntry(entry: MemoryBankEntry): Promise<StoredMemoryEn
     category: entry.category,
     createdAt: entry.createdAt,
     schemaVersion: RECORD_SCHEMA_VERSION,
-    payload: await prepareSecureRecordPayload(memoryPayload(entry)),
+    payload: await prepareSecureRecordPayload(memoryPayload(entry), {
+      store: SECURE_STORE,
+      recordId: entry.id,
+    }),
   };
 }
 
 async function decodeMemoryEntry(
   stored: StoredMemoryEntry | MemoryBankEntry,
 ): Promise<{ entry: MemoryBankEntry; needsMigration: boolean }> {
+  const recordId = stored.id;
+  const context = { store: SECURE_STORE, recordId };
   if ('payload' in stored) {
-    const decoded = await readSecureRecordPayload<MemoryEntryPayload>(stored.payload);
+    const decoded = await readSecureRecordPayload<MemoryEntryPayload>(stored.payload, context);
     return {
       entry: {
         id: stored.id,
@@ -120,7 +130,7 @@ async function decodeMemoryEntry(
     };
   }
 
-  const decoded = await readSecureRecordPayload<MemoryEntryPayload>(memoryPayload(stored));
+  const decoded = await readSecureRecordPayload<MemoryEntryPayload>(memoryPayload(stored), context);
   return {
     entry: {
       id: stored.id,
@@ -276,6 +286,7 @@ export async function searchMemoryEntries(
 }
 
 export async function deleteMemoryEntry(id: string): Promise<void> {
+  await assertSecureStorageWritableForMutation();
   if (!idbAvailable()) {
     memFallback.delete(id);
     return;
@@ -415,4 +426,66 @@ export function _resetDbForTest(): void {
   dbPromise = null;
   bankCache.clear();
   memFallback.clear();
+}
+
+/** Decrypt all memory payloads to plaintext before encryption is disabled. */
+export async function migrateProForgeMemoryForDisable(): Promise<void> {
+  if (!idbAvailable()) return;
+  const db = await openMemoryBankDb();
+  const raw = await new Promise<StoredMemoryEntry[]>((resolve, reject) => {
+    const tx = db.transaction('entries', 'readonly');
+    const req = tx.objectStore('entries').getAll();
+    req.onsuccess = () => resolve(req.result as StoredMemoryEntry[]);
+    req.onerror = () => reject(new Error('Failed to load memory entries'));
+  });
+  const plaintext: StoredMemoryEntry[] = [];
+  for (const stored of raw) {
+    const decoded = await decodeMemoryEntry(stored);
+    plaintext.push({
+      id: decoded.entry.id,
+      projectId: decoded.entry.projectId,
+      category: decoded.entry.category,
+      createdAt: decoded.entry.createdAt,
+      schemaVersion: RECORD_SCHEMA_VERSION,
+      payload: memoryPayload(decoded.entry),
+    });
+  }
+  await putMemoryEntries(db, plaintext);
+}
+
+/** Re-encrypt all memory payloads during passphrase rotation. */
+export async function reEncryptProForgeMemory(oldKey: CryptoKey, newKey: CryptoKey): Promise<void> {
+  if (!idbAvailable()) return;
+  const db = await openMemoryBankDb();
+  const raw = await new Promise<StoredMemoryEntry[]>((resolve, reject) => {
+    const tx = db.transaction('entries', 'readonly');
+    const req = tx.objectStore('entries').getAll();
+    req.onsuccess = () => resolve(req.result as StoredMemoryEntry[]);
+    req.onerror = () => reject(new Error('Failed to load memory entries'));
+  });
+  const migrated: StoredMemoryEntry[] = [];
+  for (const stored of raw) {
+    const context = { store: SECURE_STORE, recordId: stored.id };
+    if (stored.payload && typeof stored.payload === 'object' && 'ciphertext' in stored.payload) {
+      migrated.push({
+        ...stored,
+        payload: await reEncryptSecureRecordEnvelope(
+          stored.payload as SecureRecordEnvelope,
+          context,
+          oldKey,
+          newKey,
+        ),
+      });
+    } else {
+      migrated.push({
+        ...stored,
+        payload: await prepareSecureRecordPayloadWithKey(
+          stored.payload as MemoryEntryPayload,
+          context,
+          newKey,
+        ),
+      });
+    }
+  }
+  await putMemoryEntries(db, migrated);
 }
