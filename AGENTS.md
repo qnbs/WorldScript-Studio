@@ -536,3 +536,14 @@ Central orchestration layer for all background worker tasks — since ADR-0015, 
 | `docs/IDB-ENCRYPTION.md` | IDB at-rest encryption architecture |
 | `docs/VOICE_MASTER_PLAN.md` | Voice full-support master plan |
 | `docs/dual-graph-setup.md` | Graphify + CodeGraph setup |
+
+---
+
+## Cursor Cloud specific instructions
+
+Non-obvious caveats for agents running in the Cursor Cloud VM (dependencies are already refreshed by the startup update script `pnpm install`):
+
+- **Dev server base path.** `pnpm run dev` serves the app at `http://127.0.0.1:3000/WorldScript-Studio/` — the `/WorldScript-Studio/` base path is required. A bare `http://localhost:3000/` returns a blank/404 and is not the app. `predev` auto-syncs SW/Tauri versions, rebuilds i18n bundles, and copies DuckDB assets, so `pnpm run dev` is self-contained after install.
+- **The "low-end hardware" warning above applies to the maintainer's local machine, not this Cloud VM.** In this VM the heavy commands run fine and are the right way to verify changes: `pnpm run test:run` (full Vitest suite, ~6600 tests, runs serially at `maxWorkers: 1`, takes several minutes) and `pnpm run build` both complete cleanly. The quick tier (`pnpm run lint && pnpm run typecheck && pnpm run i18n:check`) is fast (seconds each). Coverage/E2E/Lighthouse/Stryker remain CI-gated by policy (E2E/mutation are hard-blocked unless `CI=true`).
+- **No backend or secrets needed to run or test the app.** It is an offline-first SPA; project data persists to IndexedDB and cloud AI keys are entered in the UI at runtime. The hello-world flow (Start a New Project → Blank Manuscript → type in the editor → auto-save) needs no external services.
+- **Rust/Tauri is not built by web setup.** `pnpm install` + the web scripts never compile `src-tauri/`; verifying native changes requires the `tauri-build.yml` workflow (see `docs/TAURI-CI.md`).
