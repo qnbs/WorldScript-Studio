@@ -18,16 +18,15 @@ import {
 import type { Settings, StoryProject } from '../../types';
 import { DEFAULT_WEBRTC_SIGNALING_URLS } from '../collaborationService';
 import { APP_DATA_STORE } from '../dbConstants';
+import { logger } from '../logger';
 import type { SaveProjectInput } from '../storageBackend';
 import { IdbAssetStore } from './idbAssetStore';
 import { compressData, getUserFriendlyDbError, retryDb } from './idbCore';
 import {
   assertIdbProtectedWriteAllowed,
-  idbEncrypt,
+  idbEncryptWithKey,
   idbReadSecure,
-  isEncryptedBlob,
-  isIdbEncryptionReady,
-  StorageEncryptionService,
+  resolveProtectedWriteKey,
 } from './storageEncryptionService';
 
 // ─── Exported for unit testing ────────────────────────────────────────────────
@@ -216,10 +215,15 @@ export class IdbProjectStore extends IdbAssetStore {
     sliceName: 'project' | 'settings',
     data: PersistedProjectState | Settings,
   ): Promise<void> {
-    await assertIdbProtectedWriteAllowed();
-    const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
+    // QNBS-v3: Resolve the write key AND encrypt BEFORE opening the store — awaiting
+    //          idbEncryptWithKey after getObjectStore would yield the event loop while the
+    //          transaction is open, letting IDB auto-commit it before store.put runs
+    //          (TransactionInactiveError); resolving the key first also removes the Lock-Session
+    //          race, since the payload decision no longer depends on state read after an await.
+    const writeKey = await resolveProtectedWriteKey();
     // QNBS-v3: Plaintext is allowed only when encryption was never configured for this library.
-    const payload = isIdbEncryptionReady() ? await idbEncrypt(data) : compressData(data);
+    const payload = writeKey ? await idbEncryptWithKey(writeKey, data) : compressData(data);
+    const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
     return new Promise((resolve, reject) => {
       const request = store.put(payload, sliceName);
       request.onsuccess = () => resolve();
@@ -234,9 +238,19 @@ export class IdbProjectStore extends IdbAssetStore {
       const persisted = data as PersistedProjectState;
       const projectData = persisted.present ? persisted.present.data : persisted.data;
       if (projectData?.manuscript) {
-        this.lastAutoSnapshotTime = Date.now();
+        // QNBS-v3: Only commit the timestamp after a successful snapshot — an unhandled rejection
+        //          here (e.g. the expected locked-write error) previously suppressed the next
+        //          automatic snapshot for a full interval even though none was actually taken.
+        const snapshotTime = Date.now();
         // Fire and forget snapshot to not block UI
-        this.createSnapshot(projectData).then(() => this.pruneAutoSnapshots());
+        this.createSnapshot(projectData)
+          .then(() => {
+            this.lastAutoSnapshotTime = snapshotTime;
+            return this.pruneAutoSnapshots();
+          })
+          .catch((error: unknown) => {
+            logger.warn('Automatic snapshot failed', { error: String(error) });
+          });
       }
     }
     // QNBS-v3: retryDb guards against transient IDB errors (QuotaExceeded, AbortError, etc.).
@@ -266,17 +280,29 @@ export class IdbProjectStore extends IdbAssetStore {
           }
         };
 
-        projectRequest.onsuccess = async () => {
+        // QNBS-v3: IDBRequest.onsuccess is not awaited by the browser — an async handler whose
+        //          promise rejects (e.g. idbReadSecure throwing IdbStorageLockedError) becomes an
+        //          unhandled rejection instead of reaching this Promise's reject, leaving startup
+        //          hydration pending forever instead of surfacing the locked-storage error.
+        projectRequest.onsuccess = () => {
           const raw = projectRequest.result;
           // QNBS-v3: Decrypt encrypted blobs; fall back to decompressData for legacy plaintext.
           //          idbReadSecure throws a clear error if encrypted data is found without a key.
-          project = await idbReadSecure(raw);
-          onComplete();
+          idbReadSecure(raw)
+            .then((value) => {
+              project = value;
+              onComplete();
+            })
+            .catch(reject);
         };
-        settingsRequest.onsuccess = async () => {
+        settingsRequest.onsuccess = () => {
           const raw = settingsRequest.result;
-          settings = await idbReadSecure(raw);
-          onComplete();
+          idbReadSecure(raw)
+            .then((value) => {
+              settings = value;
+              onComplete();
+            })
+            .catch(reject);
         };
 
         projectRequest.onerror = () => reject(projectRequest.error);
@@ -327,6 +353,9 @@ export class IdbProjectStore extends IdbAssetStore {
   }
 
   async deleteProject(projectId: string): Promise<void> {
+    // QNBS-v3: Guard before the binder-asset cascade too — a locked session must not delete
+    //          protected assets even indirectly via a project-delete request.
+    await assertIdbProtectedWriteAllowed();
     await this.deleteAllBinderAssetsForProject(projectId);
     return retryDb(async () => {
       const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
@@ -336,32 +365,5 @@ export class IdbProjectStore extends IdbAssetStore {
         req.onerror = () => reject(getUserFriendlyDbError(req.error));
       });
     });
-  }
-
-  /**
-   * Re-encrypt all APP_DATA_STORE records (project + settings) with a new key.
-   * QNBS-v3: Called during passphrase rotation. Does NOT touch the global _activeKey;
-   * instead uses the provided keys directly via StorageEncryptionService.
-   */
-  async reEncryptAllAppData(oldKey: CryptoKey, newKey: CryptoKey): Promise<void> {
-    const svc = new StorageEncryptionService();
-    const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
-
-    for (const key of ['project', 'settings'] as const) {
-      const raw: unknown = await new Promise((resolve, reject) => {
-        const req = store.get(key);
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-      });
-      if (raw instanceof Uint8Array && isEncryptedBlob(raw)) {
-        const decrypted = await svc.decrypt(oldKey, { bytes: raw });
-        const reEncrypted = await svc.encrypt(newKey, decrypted);
-        await new Promise<void>((resolve, reject) => {
-          const req = store.put(reEncrypted.bytes, key);
-          req.onsuccess = () => resolve();
-          req.onerror = () => reject(req.error);
-        });
-      }
-    }
   }
 }

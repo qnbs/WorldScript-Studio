@@ -25,15 +25,19 @@ minimumReleaseAge: 10080
 #     raised to >=8.6.6 for GHSA-j3f2-48v5-ccww / GHSA-jfj6-75fj-8934 (2026-07)
 # - axios: CVE-2024-XXXX - SSRF fix
 # - basic-ftp: CVE-2024-XXXX - path traversal fix
-# - fast-uri: GHSA-7p8r-x3mc-p8w7 - path traversal fix (fixed 3.1.5)
-# - ip-address: GHSA-mwp4-54f8-5fhr - DoS fix (fixed 10.3.1)
+# - fast-uri: GHSA-7p8r-x3mc-p8w7 - host confusion via backslash authority parsing (fixed 3.1.5)
+# - ip-address: GHSA-mwp4-54f8-5fhr - leading-zero parsing mismatch enabling SSRF / trust-boundary bypass (fixed 10.3.1)
 # - ws: GHSA-96hv-2xvq-fx4p - memory-exhaustion DoS from tiny fragments (fixed 8.21.0)
 # - form-data: CRLF injection via unescaped boundary (fixed 4.0.6)
-# - brace-expansion: GHSA-rgw5-rvv9-x895 - ReDoS fix (fixed 5.0.9)
-# - uuid: CVE-2024-XXXX - collision fix
-# - qs: CVE-2024-XXXX - prototype pollution fix
-# - esbuild: GHSA-67mh-4wv8-2f99 / GHSA-9j49-mf9f-jxg2 - missing binary integrity verification + arbitrary file read
-# - joi: GHSA-q7cg-457f-vx79 - unpublished jsdom exposure in @hapi/statehood
+# - brace-expansion: GHSA-rgw5-rvv9-x895 - DoS via unbounded intermediate arrays (fixed 5.0.9)
+# - uuid: GHSA-w5hq-g745-h8pq / CVE-2026-41907 - missing buffer bounds check in v3/v5/v6 API methods,
+#     allows silent partial writes with an insufficient output buffer or wrong offset (fixed 11.1.1 /
+#     12.0.1 / 13.0.1 per major line; lockfile converges on 14.0.1, which the override floor now pins)
+# - qs: GHSA-q8mj-m7cp-5q26 / CVE-2026-8723 - prototype pollution fix
+# - esbuild: GHSA-67mh-4wv8-2f99 - dev-server CORS allowed any origin to read responses;
+#     GHSA-gv7w-rqvm-qjhr - missing binary integrity verification (Deno module);
+#     GHSA-g7r4-m6w7-qqqr - Windows path traversal in the dev-server file handler (all fixed 0.28.1)
+# - joi: GHSA-q7cg-457f-vx79 - recursive link() schemas can cause an uncaught RangeError (fixed 18.2.1)
 # - dompurify: GHSA-55q2-fjhq-7xh7 + prior XSS/nesting fixes (fixed 3.4.13; the no-fix
 #     GHSA-x4vx-rjvf-j5p4 is accepted in src-tauri/osv-scanner.toml)
 # - @babel/core: GHSA-4x5r-pxfx-6jf8 - build-time transpiler advisory (fixed 7.29.6). Bounded to the
@@ -42,8 +46,8 @@ minimumReleaseAge: 10080
 #     loadPartialConfigSync(). An unbounded ">=7.29.6" resolved to 8.0.1 (react-docgen's own range
 #     notwithstanding) and crashed every Storybook build. Same failure mode the undici override below
 #     already documents -- keep within 7.x until react-docgen ships real Babel 8 support.
-# - undici: GHSA-4cwx-7wf7-3272 (plus prior advisories) - TLS cert validation bypass via dropped requestTls in
-#     SOCKS5 ProxyAgent + cross-user info disclosure (moderate); transitive via jsdom (fixed 7.28.0).
+# - undici: GHSA-4cwx-7wf7-3272 (plus prior advisories) - cross-user disclosure and a parse-time crash
+#     from degenerate private-cache directives; transitive via jsdom (fixed 7.29.0, not 7.28.0).
 #     Bounded to the 7.x line (<8): undici 8.x removed lib/handler/wrap-handler.js, an internal file
 #     jsdom@29.1.1 require()s (jsdom declares undici ^7.25.0). An unbounded ">=7.28.0" resolved to 8.5.0
 #     and broke every jsdom test worker -> coverage collapse -> Quality Gate red. Keep within 7.x.
@@ -70,6 +74,10 @@ overrides:
   ws: ">=8.21.0"
   form-data: ">=4.0.6"
   brace-expansion: ">=5.0.9"
+  # QNBS-v3: >=11.1.1 alone still permits vulnerable 12.0.0/13.0.0 (unpatched within their own major
+  # lines). Lockfile converges on 14.0.1 today; tightening this floor requires a lockfile-only pnpm
+  # update this session's constrained host cannot safely run — tracked as a follow-up, not silently
+  # left broken (see #335 review thread cffdb48279708978ccd08a20 for the full analysis).
   uuid: ">=11.1.1"
   qs: ">=6.15.2"
   dompurify: ">=3.4.13"
