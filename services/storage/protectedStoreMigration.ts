@@ -100,6 +100,11 @@ function migrationContext(
   };
 }
 
+function yieldAfterCheckpoint(): Promise<void> {
+  // QNBS-v3: WebCrypto/IDB batches must yield so migration progress never monopolizes the renderer event loop.
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 function assertRegisteredAdapters(
   journal: EncryptionMigrationJournal,
   adapters: readonly ProtectedStoreAdapter[],
@@ -154,6 +159,7 @@ export async function runProtectedStoreMigration(
           phase: 'migrating',
           stores: replaceCheckpoint(journal, checkpoint),
         });
+        await yieldAfterCheckpoint();
       }
     }
     journal = await updateEncryptionMigrationJournal(journal, {

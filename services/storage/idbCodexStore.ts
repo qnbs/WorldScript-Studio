@@ -83,6 +83,7 @@ export class IdbCodexStore extends IdbKeyStore {
   }
 
   async deleteStoryCodex(projectId: string): Promise<void> {
+    await assertIdbProtectedWriteAllowed();
     const store = await this.getObjectStore(CODEX_STORE, 'readwrite');
     return new Promise((resolve, reject) => {
       const request = store.delete(projectId);

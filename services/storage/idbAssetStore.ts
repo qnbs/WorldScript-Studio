@@ -1,6 +1,6 @@
 /**
  * IdbAssetStore — Images and Binder binary assets (research PDFs, files).
- * ENCRYPTION: plaintext — blob storage; at-rest encryption planned for Phase 2.
+ * ENCRYPTION: image and binder payloads are encrypted when optional IDB at-rest encryption is unlocked.
  * QNBS-v3: Extracted from dbService.ts. Redux keeps only asset IDs; blobs stay here.
  */
 
@@ -56,6 +56,7 @@ export class IdbAssetStore extends IdbSnapshotStore {
   }
 
   async deleteImage(id: string): Promise<void> {
+    await assertIdbProtectedWriteAllowed();
     const store = await this.getObjectStore(IMAGES_STORE, 'readwrite');
     return new Promise((resolve, reject) => {
       const request = store.delete(id);
@@ -119,6 +120,7 @@ export class IdbAssetStore extends IdbSnapshotStore {
 
   async deleteBinderAsset(projectId: string, assetId: string): Promise<void> {
     return retryDb(async () => {
+      await assertIdbProtectedWriteAllowed();
       const key = makeBinderAssetStorageKey(projectId, assetId);
       const store = await this.getObjectStore(BINDER_ASSETS_STORE, 'readwrite');
       return new Promise<void>((resolve, reject) => {
@@ -131,6 +133,7 @@ export class IdbAssetStore extends IdbSnapshotStore {
 
   async listBinderAssetIds(projectId: string): Promise<string[]> {
     return retryDb(async () => {
+      await assertIdbProtectedWriteAllowed();
       const prefix = makeBinderAssetIdsPrefix(projectId);
       const store = await this.getObjectStore(BINDER_ASSETS_STORE, 'readonly');
       const ids: string[] = [];
@@ -154,7 +157,9 @@ export class IdbAssetStore extends IdbSnapshotStore {
   }
 
   async deleteAllBinderAssetsForProject(projectId: string): Promise<void> {
+    await assertIdbProtectedWriteAllowed();
     const ids = await this.listBinderAssetIds(projectId);
-    await Promise.all(ids.map((id) => this.deleteBinderAsset(projectId, id)));
+    // QNBS-v3: Sequential deletion avoids a large project creating an unbounded transaction burst.
+    for (const id of ids) await this.deleteBinderAsset(projectId, id);
   }
 }

@@ -327,6 +327,7 @@ export class IdbProjectStore extends IdbAssetStore {
   }
 
   async deleteProject(projectId: string): Promise<void> {
+    await assertIdbProtectedWriteAllowed();
     await this.deleteAllBinderAssetsForProject(projectId);
     return retryDb(async () => {
       const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');

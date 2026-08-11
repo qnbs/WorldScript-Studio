@@ -45,6 +45,8 @@ export interface SecureRecordContext {
   store: string;
   /** Immutable logical record identity used as AES-GCM additional authenticated data. */
   recordId: string;
+  /** Prior documented namespaces accepted only for a verified one-way migration. */
+  legacyStores?: readonly string[];
 }
 
 export interface SecureRecordReadResult<T> {
@@ -290,6 +292,11 @@ function isSecureRecordCandidate(value: unknown): boolean {
   );
 }
 
+/** Detect a complete or truncated secure-record shape so malformed ciphertext is never treated as plaintext. */
+export function isSecureRecordEnvelopeCandidate(value: unknown): boolean {
+  return isSecureRecordCandidate(value);
+}
+
 /** Strictly validate envelopes so truncated ciphertext cannot be misclassified as legacy plaintext. */
 export function isSecureRecordEnvelope(value: unknown): value is SecureRecordEnvelope {
   if (!isSecureRecordCandidate(value)) return false;
@@ -329,6 +336,18 @@ async function decryptSecureRecordValue<T>(
     const plaintext = await _svc.decryptBytes(key, blob, buildSecureRecordAad(context));
     return { value: decodeSecureRecordValue(plaintext) as T, needsMigration: false };
   } catch {
+    for (const legacyStore of context.legacyStores ?? []) {
+      try {
+        const plaintext = await _svc.decryptBytes(
+          key,
+          blob,
+          buildSecureRecordAad({ store: legacyStore, recordId: context.recordId }),
+        );
+        return { value: decodeSecureRecordValue(plaintext) as T, needsMigration: true };
+      } catch {
+        // QNBS-v3: Only an authenticated legacy namespace may fall through to the next documented format.
+      }
+    }
     try {
       // QNBS-v3: Early secondary envelopes lacked AAD; rewrite them only after a successful legacy read.
       const plaintext = await _svc.decryptBytes(key, blob);
@@ -362,6 +381,12 @@ async function encryptSecureRecordValue<T>(
 /** Protect any secondary-store mutation with the same lock and active-migration policy as primary stores. */
 export async function assertSecureStorageWritableForMutation(): Promise<void> {
   await assertIdbProtectedWriteAllowed();
+}
+
+/** Block protected reads while encryption is locked or a journal owns the storage lifecycle. */
+export async function assertSecureStorageReadable(): Promise<void> {
+  await assertNoActiveEncryptionMigration();
+  if ((await hasPassphraseSentinel()) && !_activeKey) throw new SecureRecordLockedError();
 }
 
 /** Prepare a secondary payload without silently storing protected plaintext while the library is locked. */
@@ -398,7 +423,7 @@ export async function readSecureRecordPayload<T>(
   stored: unknown,
   context: SecureRecordContext,
 ): Promise<SecureRecordReadResult<T>> {
-  await assertNoActiveEncryptionMigration();
+  await assertSecureStorageReadable();
   if (isSecureRecordCandidate(stored)) {
     if (!isSecureRecordEnvelope(stored)) throw new SecureRecordCorruptError();
     if (!_activeKey) throw new SecureRecordLockedError();

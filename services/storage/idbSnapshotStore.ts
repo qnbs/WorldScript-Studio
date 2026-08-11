@@ -93,6 +93,7 @@ export class IdbSnapshotStore extends IdbCodexStore {
   }
 
   async deleteSnapshot(id: number): Promise<void> {
+    await assertIdbProtectedWriteAllowed();
     return retryDb(async () => {
       const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readwrite');
       return new Promise<void>((resolve, reject) => {
