@@ -1,6 +1,6 @@
 /**
  * Tests for components/settings/PassphraseModal.tsx
- * QNBS-v3: Covers set/change/disable modes — validation, field visibility, onConfirm/onClose.
+ * QNBS-v3: Covers the supported set/unlock modes — validation, field visibility, onConfirm/onClose.
  */
 
 import { render, screen, waitFor } from '@testing-library/react';
@@ -53,7 +53,7 @@ type OnConfirm = (current: string, next: string) => Promise<void>;
 type OnClose = () => void;
 
 const makeProps = (
-  mode: 'set' | 'change' | 'disable',
+  mode: 'set' | 'unlock',
   onConfirm: Mock<OnConfirm> = vi.fn<OnConfirm>().mockResolvedValue(undefined) as Mock<OnConfirm>,
   onClose: Mock<OnClose> = vi.fn<OnClose>(),
 ) => ({ mode, onConfirm, onClose });
@@ -163,11 +163,7 @@ describe('PassphraseModal — set mode', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Tests: change mode
-// ---------------------------------------------------------------------------
-
-describe('PassphraseModal — change mode', () => {
+describe('PassphraseModal — unlock mode', () => {
   let onClose: Mock<OnClose>;
   let onConfirm: Mock<OnConfirm>;
 
@@ -177,74 +173,20 @@ describe('PassphraseModal — change mode', () => {
     onConfirm = vi.fn<OnConfirm>().mockResolvedValue(undefined) as Mock<OnConfirm>;
   });
 
-  it('renders change title', () => {
-    render(<PassphraseModal {...makeProps('change', onConfirm, onClose)} />);
-    expect(screen.getByText('settings.privacy.encryptionModalChangeTitle')).toBeInTheDocument();
+  it('renders unlock title', () => {
+    render(<PassphraseModal {...makeProps('unlock', onConfirm, onClose)} />);
+    expect(screen.getByText('settings.privacy.encryptionModalUnlockTitle')).toBeInTheDocument();
   });
 
-  it('renders current passphrase field in change mode', () => {
-    render(<PassphraseModal {...makeProps('change', onConfirm, onClose)} />);
+  it('shows the current passphrase field without new-passphrase fields', () => {
+    render(<PassphraseModal {...makeProps('unlock', onConfirm, onClose)} />);
     expect(
       screen.getByLabelText('settings.privacy.encryptionCurrentPassphrase'),
     ).toBeInTheDocument();
   });
 
-  it('renders new and confirm fields in change mode', () => {
-    render(<PassphraseModal {...makeProps('change', onConfirm, onClose)} />);
-    expect(screen.getByLabelText('settings.privacy.encryptionNewPassphrase')).toBeInTheDocument();
-    expect(
-      screen.getByLabelText('settings.privacy.encryptionConfirmPassphrase'),
-    ).toBeInTheDocument();
-  });
-
-  it('calls onConfirm with current and new passphrase', async () => {
-    const user = userEvent.setup();
-    render(<PassphraseModal {...makeProps('change', onConfirm, onClose)} />);
-    await user.type(
-      screen.getByLabelText('settings.privacy.encryptionCurrentPassphrase'),
-      'oldpassword',
-    );
-    await user.type(
-      screen.getByLabelText('settings.privacy.encryptionNewPassphrase'),
-      'newpassword1',
-    );
-    await user.type(
-      screen.getByLabelText('settings.privacy.encryptionConfirmPassphrase'),
-      'newpassword1',
-    );
-    await user.click(screen.getByText('settings.privacy.encryptionChangeButton'));
-    await waitFor(() => expect(onConfirm).toHaveBeenCalledWith('oldpassword', 'newpassword1'));
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Tests: disable mode
-// ---------------------------------------------------------------------------
-
-describe('PassphraseModal — disable mode', () => {
-  let onClose: Mock<OnClose>;
-  let onConfirm: Mock<OnConfirm>;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    onClose = vi.fn<OnClose>();
-    onConfirm = vi.fn<OnConfirm>().mockResolvedValue(undefined) as Mock<OnConfirm>;
-  });
-
-  it('renders disable title', () => {
-    render(<PassphraseModal {...makeProps('disable', onConfirm, onClose)} />);
-    expect(screen.getByText('settings.privacy.encryptionModalDisableTitle')).toBeInTheDocument();
-  });
-
-  it('shows current passphrase field in disable mode', () => {
-    render(<PassphraseModal {...makeProps('disable', onConfirm, onClose)} />);
-    expect(
-      screen.getByLabelText('settings.privacy.encryptionCurrentPassphrase'),
-    ).toBeInTheDocument();
-  });
-
-  it('does not show new or confirm fields in disable mode', () => {
-    render(<PassphraseModal {...makeProps('disable', onConfirm, onClose)} />);
+  it('does not show new or confirm fields', () => {
+    render(<PassphraseModal {...makeProps('unlock', onConfirm, onClose)} />);
     expect(
       screen.queryByLabelText('settings.privacy.encryptionNewPassphrase'),
     ).not.toBeInTheDocument();
@@ -253,37 +195,26 @@ describe('PassphraseModal — disable mode', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('calls onConfirm with current passphrase and empty next on disable', async () => {
+  it('calls onConfirm with current passphrase and empty next value', async () => {
     const user = userEvent.setup();
-    render(<PassphraseModal {...makeProps('disable', onConfirm, onClose)} />);
+    render(<PassphraseModal {...makeProps('unlock', onConfirm, onClose)} />);
     await user.type(
       screen.getByLabelText('settings.privacy.encryptionCurrentPassphrase'),
       'mypassword',
     );
-    await user.click(screen.getByText('settings.privacy.encryptionDisableButton'));
+    await user.click(screen.getByText('settings.privacy.encryptionUnlockButton'));
     await waitFor(() => expect(onConfirm).toHaveBeenCalledWith('mypassword', ''));
   });
 
-  it('calls onClose after successful disable', async () => {
-    const user = userEvent.setup();
-    render(<PassphraseModal {...makeProps('disable', onConfirm, onClose)} />);
-    await user.type(
-      screen.getByLabelText('settings.privacy.encryptionCurrentPassphrase'),
-      'mypassword',
-    );
-    await user.click(screen.getByText('settings.privacy.encryptionDisableButton'));
-    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
-  });
-
-  it('shows error when onConfirm rejects in disable mode', async () => {
+  it('shows an error when unlock fails', async () => {
     onConfirm.mockRejectedValue(new Error('wrong'));
     const user = userEvent.setup();
-    render(<PassphraseModal {...makeProps('disable', onConfirm, onClose)} />);
+    render(<PassphraseModal {...makeProps('unlock', onConfirm, onClose)} />);
     await user.type(
       screen.getByLabelText('settings.privacy.encryptionCurrentPassphrase'),
       'wrongpass',
     );
-    await user.click(screen.getByText('settings.privacy.encryptionDisableButton'));
+    await user.click(screen.getByText('settings.privacy.encryptionUnlockButton'));
     await waitFor(() =>
       expect(screen.getByRole('alert')).toHaveTextContent(
         'settings.privacy.encryptionWrongPassphrase',

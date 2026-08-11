@@ -20,6 +20,7 @@ import type {
   ThemeCustomization,
   VoiceSettings,
   WritingGoal,
+  WritingSurfaceStyle,
 } from '../../types';
 import { normalizeAccessibilitySettings } from './accessibilitySchema';
 import { getDefaultKeyboardShortcuts } from './keyboardShortcutsDefaults';
@@ -43,7 +44,9 @@ export const DEFAULT_OPENROUTER_SETTINGS: OpenRouterSettings = {
 const defaultSettings: Settings = {
   // Basic Settings
   theme: getSystemThemePreference(),
-  appearancePreset: 'sepia',
+  // QNBS-v3: First-run and rehydration defaults must agree so a missing legacy field cannot restore sepia.
+  appearancePreset: 'default',
+  writingSurfaceStyle: 'textured',
   aiMode: 'hybrid',
   openRouter: DEFAULT_OPENROUTER_SETTINGS,
   editorFont: 'serif',
@@ -160,6 +163,9 @@ const settingsSlice = createSlice({
     },
     setAppearancePreset(state, action: PayloadAction<AppearancePreset>) {
       state.appearancePreset = action.payload;
+    },
+    setWritingSurfaceStyle(state, action: PayloadAction<WritingSurfaceStyle>) {
+      state.writingSurfaceStyle = action.payload;
     },
     setAiMode(state, action: PayloadAction<AiMode>) {
       state.aiMode = action.payload;

@@ -9,6 +9,7 @@ import { CODEX_STORE, RAG_VECTORS_STORE } from '../dbConstants';
 import { compressData, decompressData } from './idbCore';
 import { IdbKeyStore } from './idbKeyStore';
 import {
+  assertIdbProtectedWriteAllowed,
   idbEncrypt,
   idbReadSecure,
   isEncryptedBlob,
@@ -17,6 +18,7 @@ import {
 
 export class IdbCodexStore extends IdbKeyStore {
   async saveStoryCodex(codex: StoryCodex): Promise<void> {
+    await assertIdbProtectedWriteAllowed();
     // QNBS-v3: Encrypt/compress BEFORE opening the IDB transaction — `await idbEncrypt` yields the
     //          event loop, which auto-commits an already-open transaction (TransactionInactiveError).
     const processed = isIdbEncryptionReady() ? await idbEncrypt(codex) : compressData(codex);
@@ -42,6 +44,7 @@ export class IdbCodexStore extends IdbKeyStore {
   }
 
   async getStoryCodex(projectId: string): Promise<StoryCodex | null> {
+    await assertIdbProtectedWriteAllowed();
     const store = await this.getObjectStore(CODEX_STORE, 'readonly');
     return new Promise((resolve, reject) => {
       const request = store.get(projectId);
@@ -91,6 +94,7 @@ export class IdbCodexStore extends IdbKeyStore {
   // --- RAG Vector Methods ---
 
   async saveRagVectors(projectId: string, vectors: unknown[]): Promise<void> {
+    await assertIdbProtectedWriteAllowed();
     // QNBS-v3: Encrypt BEFORE opening the transaction — `await idbEncrypt` yields the event loop and
     //          would auto-commit the open transaction before the put (TransactionInactiveError).
     const encryptedPayload = isIdbEncryptionReady()
@@ -142,6 +146,7 @@ export class IdbCodexStore extends IdbKeyStore {
   }
 
   async getRagVectors(projectId: string): Promise<unknown[]> {
+    await assertIdbProtectedWriteAllowed();
     const store = await this.getObjectStore(RAG_VECTORS_STORE, 'readonly');
     return new Promise((resolve, reject) => {
       const req = store.index('projectId').getAll(projectId);

@@ -25,10 +25,12 @@ Object.defineProperty(global, 'localStorage', { value: localStorageMock, writabl
 // QNBS-v3: provide a working IndexedDB for the sentinel-store tests (node has none by default).
 globalThis.indexedDB = new IDBFactory();
 
+import { deletePassphraseSentinel } from '../../../services/storage/idbPassphraseSentinel';
 import {
   clearIdbEncryptionKey,
   clearIdbPassphrase,
   hasPassphraseSentinel,
+  IdbEncryptionMigrationRequiredError,
   idbDecrypt,
   idbEncrypt,
   initIdbEncryption,
@@ -52,7 +54,7 @@ beforeEach(async () => {
   clearIdbEncryptionKey();
   // QNBS-v3: the sentinel store is a module singleton with a cached connection — clear its record
   //          between tests so sentinel-presence assertions start from a clean slate.
-  await clearIdbPassphrase();
+  await deletePassphraseSentinel();
 });
 
 afterEach(() => {
@@ -221,6 +223,18 @@ describe('initIdbEncryption / isIdbEncryptionReady / idbEncrypt / idbDecrypt', (
     const salt2 = localStorageMock.getItem('worldscript-idb-kdf-salt-v1');
     expect(salt1).toBe(salt2);
   });
+
+  it('fails setup instead of deriving a key with a deterministic salt when persistence is unavailable', async () => {
+    const originalSetItem = localStorageMock.setItem;
+    localStorageMock.setItem = () => {
+      throw new Error('storage blocked');
+    };
+
+    await expect(initIdbEncryption('pass')).rejects.toThrow('Unable to persist encryption salt');
+    expect(isIdbEncryptionReady()).toBe(false);
+
+    localStorageMock.setItem = originalSetItem;
+  });
 });
 
 // ── Sentinel-backed API ───────────────────────────────────────────────────────
@@ -275,56 +289,41 @@ describe('hasPassphraseSentinel', () => {
     expect(await hasPassphraseSentinel()).toBe(true);
   });
 
-  it('returns false after clearIdbPassphrase', async () => {
+  it('preserves the sentinel when an unsafe disable is requested', async () => {
     await setupIdbEncryption('pass');
-    await clearIdbPassphrase();
-    expect(await hasPassphraseSentinel()).toBe(false);
+    await expect(clearIdbPassphrase()).rejects.toBeInstanceOf(IdbEncryptionMigrationRequiredError);
+    expect(await hasPassphraseSentinel()).toBe(true);
   });
 });
 
 describe('clearIdbPassphrase', () => {
-  it('deletes sentinel and clears active key', async () => {
+  it('fails closed without deleting the sentinel or clearing the active key', async () => {
     await setupIdbEncryption('pass');
     expect(isIdbEncryptionReady()).toBe(true);
-    await clearIdbPassphrase();
-    expect(isIdbEncryptionReady()).toBe(false);
-    expect(await hasPassphraseSentinel()).toBe(false);
+    await expect(clearIdbPassphrase()).rejects.toBeInstanceOf(IdbEncryptionMigrationRequiredError);
+    expect(isIdbEncryptionReady()).toBe(true);
+    expect(await hasPassphraseSentinel()).toBe(true);
   });
 });
 
 describe('rotateIdbPassphrase', () => {
-  it('changes passphrase and keeps encryption active', async () => {
+  it('fails closed until a resumable migration journal is available', async () => {
     await setupIdbEncryption('old');
-    await rotateIdbPassphrase('old', 'new');
+    await expect(rotateIdbPassphrase('old', 'new')).rejects.toBeInstanceOf(
+      IdbEncryptionMigrationRequiredError,
+    );
     expect(isIdbEncryptionReady()).toBe(true);
-    // Verify new passphrase works
     clearIdbEncryptionKey();
-    await verifyAndInitIdbEncryption('new');
+    await verifyAndInitIdbEncryption('old');
     expect(isIdbEncryptionReady()).toBe(true);
   });
 
-  it('throws on wrong old passphrase', async () => {
+  it('does not replace the verifier when passed a wrong old passphrase', async () => {
     await setupIdbEncryption('old');
-    await expect(rotateIdbPassphrase('wrong', 'new')).rejects.toThrow();
-  });
-
-  it('new passphrase can encrypt/decrypt data', async () => {
-    await setupIdbEncryption('old');
-    await rotateIdbPassphrase('old', 'new');
-    const payload = { test: 'data' };
-    const encrypted = await idbEncrypt(payload);
-    const decrypted = await idbDecrypt<typeof payload>(encrypted);
-    expect(decrypted).toEqual(payload);
-  });
-
-  it('calls reEncrypt callback with old and new keys', async () => {
-    await setupIdbEncryption('old');
-    const mockReEncrypt = vi.fn().mockResolvedValue(undefined);
-    await rotateIdbPassphrase('old', 'new', mockReEncrypt);
-    expect(mockReEncrypt).toHaveBeenCalledTimes(1);
-    const [oldKey, newKey] = mockReEncrypt.mock.calls[0] as [CryptoKey, CryptoKey];
-    expect(oldKey).toBeInstanceOf(CryptoKey);
-    expect(newKey).toBeInstanceOf(CryptoKey);
-    expect(oldKey).not.toBe(newKey);
+    await expect(rotateIdbPassphrase('wrong', 'new')).rejects.toBeInstanceOf(
+      IdbEncryptionMigrationRequiredError,
+    );
+    clearIdbEncryptionKey();
+    await expect(verifyAndInitIdbEncryption('old')).resolves.toBeUndefined();
   });
 });

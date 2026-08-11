@@ -23,12 +23,18 @@ const localStorageMock = (() => {
 })();
 Object.defineProperty(global, 'localStorage', { value: localStorageMock, writable: true });
 
+import type { ProjectData } from '../../../features/project/projectState';
 import { IdbAssetStore } from '../../../services/storage/idbAssetStore';
 import { IdbCodexStore } from '../../../services/storage/idbCodexStore';
+import { deletePassphraseSentinel } from '../../../services/storage/idbPassphraseSentinel';
+import { IdbProjectStore } from '../../../services/storage/idbProjectStore';
 import {
   clearIdbEncryptionKey,
+  IdbStorageLockedError,
   initIdbEncryption,
+  setupIdbEncryption,
 } from '../../../services/storage/storageEncryptionService';
+import type { Settings } from '../../../types';
 
 beforeEach(() => {
   // QNBS-v3: fresh, isolated IndexedDB per test (stores are instantiated per test, so each gets a
@@ -38,7 +44,9 @@ beforeEach(() => {
   clearIdbEncryptionKey();
 });
 
-afterEach(() => {
+afterEach(async () => {
+  // QNBS-v3: The sentinel uses a singleton connection, so clear its durable record between libraries.
+  await deletePassphraseSentinel();
   clearIdbEncryptionKey();
 });
 
@@ -130,5 +138,87 @@ describe('IdbAssetStore encryption round-trip', () => {
     expect(result).not.toBeNull();
     expect(result!.meta).toEqual(meta);
     expect(result!.data.byteLength).toBe(8);
+  });
+});
+
+describe('configured but locked storage', () => {
+  it('does not persist protected plaintext while encryption is configured but locked', async () => {
+    await setupIdbEncryption('test-pass');
+    clearIdbEncryptionKey();
+
+    const projectStore = new IdbProjectStore();
+    const codexStore = new IdbCodexStore();
+    const assetStore = new IdbAssetStore();
+    const project = { manuscript: [] } as unknown as ProjectData;
+
+    await expect(projectStore.saveSettings({} as Settings)).rejects.toBeInstanceOf(
+      IdbStorageLockedError,
+    );
+    await expect(projectStore.createSnapshot(project)).rejects.toBeInstanceOf(
+      IdbStorageLockedError,
+    );
+    await expect(
+      codexStore.saveStoryCodex({
+        projectId: 'locked',
+        entities: [],
+      } as unknown as import('../../../types').StoryCodex),
+    ).rejects.toBeInstanceOf(IdbStorageLockedError);
+    await expect(codexStore.saveRagVectors('locked', [])).rejects.toBeInstanceOf(
+      IdbStorageLockedError,
+    );
+    await expect(
+      assetStore.saveImage('locked', 'data:image/png;base64,blocked'),
+    ).rejects.toBeInstanceOf(IdbStorageLockedError);
+    await expect(
+      assetStore.saveBinderAsset('locked', 'asset', new ArrayBuffer(0), {
+        byteSize: 0,
+        mimeType: 'application/pdf',
+        originalFileName: 'blocked.pdf',
+      }),
+    ).rejects.toBeInstanceOf(IdbStorageLockedError);
+  });
+
+  it('does not expose legacy protected content while the configured library is locked', async () => {
+    const assetStore = new IdbAssetStore();
+    const codexStore = new IdbCodexStore();
+    await assetStore.saveImage('legacy-image', 'data:image/png;base64,legacy');
+    await assetStore.saveBinderAsset('legacy', 'legacy-asset', new ArrayBuffer(1), {
+      byteSize: 1,
+      mimeType: 'application/pdf',
+      originalFileName: 'legacy.pdf',
+    });
+    await codexStore.saveStoryCodex({
+      projectId: 'legacy',
+      entities: [],
+    } as unknown as import('../../../types').StoryCodex);
+    await codexStore.saveRagVectors('legacy', [{ id: 'legacy-vector' }]);
+
+    await setupIdbEncryption('test-pass');
+    clearIdbEncryptionKey();
+
+    await expect(assetStore.getImage('legacy-image')).rejects.toBeInstanceOf(IdbStorageLockedError);
+    await expect(assetStore.getBinderAsset('legacy', 'legacy-asset')).rejects.toBeInstanceOf(
+      IdbStorageLockedError,
+    );
+    await expect(codexStore.getStoryCodex('legacy')).rejects.toBeInstanceOf(IdbStorageLockedError);
+    await expect(codexStore.getRagVectors('legacy')).rejects.toBeInstanceOf(IdbStorageLockedError);
+  });
+});
+
+describe('settings restart persistence', () => {
+  it('restores a persisted non-sepia appearance preset from a fresh store instance', async () => {
+    const savedSettings = {
+      appearancePreset: 'default',
+      writingSurfaceStyle: 'plain',
+    } as Settings;
+    const firstStore = new IdbProjectStore();
+
+    await firstStore.saveSettings(savedSettings);
+
+    const restartedStore = new IdbProjectStore();
+    await expect(restartedStore.loadSettings()).resolves.toMatchObject({
+      appearancePreset: 'default',
+      writingSurfaceStyle: 'plain',
+    });
   });
 });

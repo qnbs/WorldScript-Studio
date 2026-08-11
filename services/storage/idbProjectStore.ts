@@ -22,6 +22,7 @@ import type { SaveProjectInput } from '../storageBackend';
 import { IdbAssetStore } from './idbAssetStore';
 import { compressData, getUserFriendlyDbError, retryDb } from './idbCore';
 import {
+  assertIdbProtectedWriteAllowed,
   idbEncrypt,
   idbReadSecure,
   isEncryptedBlob,
@@ -41,6 +42,7 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
   const validSettings = {
     theme: 'dark',
     appearancePreset: 'default',
+    writingSurfaceStyle: 'textured',
     // QNBS-v3: aiMode added in v1.22 — backfill for older persisted settings that lack the field.
     aiMode: 'hybrid',
     editorFont: 'serif',
@@ -55,6 +57,9 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
   // QNBS-v3: fantasy/romance presets removed in v1.22 — migrate legacy stored values to 'default'
   if (!['default', 'sepia'].includes(validSettings.appearancePreset)) {
     validSettings.appearancePreset = 'default';
+  }
+  if (!['textured', 'plain'].includes(validSettings.writingSurfaceStyle)) {
+    validSettings.writingSurfaceStyle = 'textured';
   }
 
   validSettings.accessibility = normalizeAccessibilitySettings(incoming['accessibility']);
@@ -211,8 +216,9 @@ export class IdbProjectStore extends IdbAssetStore {
     sliceName: 'project' | 'settings',
     data: PersistedProjectState | Settings,
   ): Promise<void> {
+    await assertIdbProtectedWriteAllowed();
     const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
-    // QNBS-v3: Encrypt when session key is active; fall back to LZ compression otherwise.
+    // QNBS-v3: Plaintext is allowed only when encryption was never configured for this library.
     const payload = isIdbEncryptionReady() ? await idbEncrypt(data) : compressData(data);
     return new Promise((resolve, reject) => {
       const request = store.put(payload, sliceName);

@@ -16,7 +16,8 @@ describe('settingsSlice', () => {
     const state = initState();
     expect(state).toBeDefined();
     expect(state.theme).toBeTypeOf('string');
-    expect(state.appearancePreset).toBe('sepia');
+    expect(state.appearancePreset).toBe('default');
+    expect(state.writingSurfaceStyle).toBe('textured');
     expect(state.aiCreativity).toBe('Balanced');
     expect(state.keyboardShortcuts.length).toBeGreaterThan(0);
     expect(state.writingGoals.length).toBeGreaterThan(0);
@@ -67,6 +68,11 @@ describe('settingsSlice', () => {
   it('setAppearancePreset updates appearance preset', () => {
     const state = settingsReducer(initState(), settingsActions.setAppearancePreset('sepia'));
     expect(state.appearancePreset).toBe('sepia');
+  });
+
+  it('setWritingSurfaceStyle updates the persisted writing backdrop preference', () => {
+    const state = settingsReducer(initState(), settingsActions.setWritingSurfaceStyle('plain'));
+    expect(state.writingSurfaceStyle).toBe('plain');
   });
 
   it('setEditorFont updates editor font', () => {

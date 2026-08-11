@@ -307,12 +307,13 @@ Real-time P2P co-editing via **Yjs + collab-transport** (vendor fork of y-webrtc
 
 ### 🔒 IDB At-Rest Encryption _(B-1, v1.19.0)_
 
-All project data, snapshots, and settings stored in IndexedDB can be encrypted at rest via `services/storage/storageEncryptionService.ts`:
+The current primary project, settings, snapshot, image, Codex, RAG, and binder-asset IndexedDB paths can be encrypted at rest via `services/storage/storageEncryptionService.ts`. This is not yet a claim that every IndexedDB surface is covered:
 
 - **AES-256-GCM** with a PBKDF2-derived key (600 000 iterations, SHA-256, 32-byte random salt).
-- Gated behind `featureFlags.enableIdbAtRestEncryption` (on by default since v1.23; the passphrase unlock UX is complete — Settings → Privacy).
+- Gated behind `featureFlags.enableIdbAtRestEncryption`. When a library is configured but locked, protected reads and writes fail closed rather than falling back to plaintext.
+- Disable and passphrase rotation are temporarily unavailable until a journaled, cross-store migration protocol can prove recovery after interruption.
 - Same passphrase-entry unlock screen (`IdbUnlockModal`) on cold start, session-scoped in-memory key, on **both** the web build and the Tauri desktop build — Tauri's WebView uses the same IndexedDB-backed storage path, not an OS keychain. (No `tauri-plugin-stronghold` or equivalent OS-keychain integration ships today — see the API-key encryption note below for the desktop-specific mechanism that does exist.)
-- GDPR-compliant: encrypted blobs are unreadable without the passphrase, even from the browser profile directory.
+- At-rest protection reduces disclosure from an extracted browser profile while the library is locked; it does not protect an unlocked renderer, a compromised device, or every persistence surface.
 
 ### 🔐 Encrypted Library Backup
 
@@ -320,7 +321,7 @@ One-click encrypted export of your entire project library from **Settings → Da
 
 - Archives all projects as a **ZIP** containing `META.json` + `vault.bin`.
 - `vault.bin` is encrypted with **AES-256-GCM** — the decryption key is derived from your chosen passphrase using PBKDF2.
-- No plaintext project data ever leaves your device unencrypted.
+- The encrypted vault holds its project payload in `vault.bin`; users must still protect the downloaded archive and should not confuse it with ordinary plaintext JSON export.
 - Import on any device using the same passphrase to restore your full library.
 
 ### 🔑 Encryption — which mechanism protects what

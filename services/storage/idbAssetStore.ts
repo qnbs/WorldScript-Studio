@@ -10,6 +10,7 @@ import { makeBinderAssetIdsPrefix, makeBinderAssetStorageKey } from '../storageB
 import { getUserFriendlyDbError, retryDb } from './idbCore';
 import { IdbSnapshotStore } from './idbSnapshotStore';
 import {
+  assertIdbProtectedWriteAllowed,
   idbEncrypt,
   idbReadSecure,
   isEncryptedBlob,
@@ -20,6 +21,7 @@ export class IdbAssetStore extends IdbSnapshotStore {
   // --- Image Store Methods ---
 
   async saveImage(id: string, base64: string): Promise<void> {
+    await assertIdbProtectedWriteAllowed();
     // QNBS-v3: Encrypt BEFORE opening the transaction — `await idbEncrypt` yields the event loop,
     //          which auto-commits an already-open IDB transaction (TransactionInactiveError on put).
     const payload = isIdbEncryptionReady() ? await idbEncrypt(base64) : base64;
@@ -32,6 +34,7 @@ export class IdbAssetStore extends IdbSnapshotStore {
   }
 
   async getImage(id: string): Promise<string | null> {
+    await assertIdbProtectedWriteAllowed();
     const store = await this.getObjectStore(IMAGES_STORE, 'readonly');
     return new Promise((resolve, reject) => {
       const request = store.get(id);
@@ -70,6 +73,7 @@ export class IdbAssetStore extends IdbSnapshotStore {
     meta: BinderAssetMeta,
   ): Promise<void> {
     return retryDb(async () => {
+      await assertIdbProtectedWriteAllowed();
       const key = makeBinderAssetStorageKey(projectId, assetId);
       const fullMeta = { ...meta, byteSize: data.byteLength };
       // QNBS-v3: idbEncrypt serialises via JSON.stringify, which silently drops a Blob ({} → no data).
@@ -91,6 +95,7 @@ export class IdbAssetStore extends IdbSnapshotStore {
 
   async getBinderAsset(projectId: string, assetId: string): Promise<BinderAssetPayload | null> {
     return retryDb(async () => {
+      await assertIdbProtectedWriteAllowed();
       const key = makeBinderAssetStorageKey(projectId, assetId);
       const store = await this.getObjectStore(BINDER_ASSETS_STORE, 'readonly');
       const raw = await new Promise<unknown>((resolve, reject) => {

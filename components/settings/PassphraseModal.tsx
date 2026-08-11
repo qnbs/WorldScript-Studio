@@ -5,12 +5,12 @@ import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { Spinner } from '../ui/Spinner';
 
-export type PassphraseModalMode = 'set' | 'change' | 'disable' | 'unlock';
+export type PassphraseModalMode = 'set' | 'unlock';
 
 interface Props {
   mode: PassphraseModalMode;
   onClose: () => void;
-  /** Called with (current, next) — for 'set': ('' , passphrase); for 'unlock'/'disable': (passphrase, ''); for 'change': (old, new). */
+  /** Called with (current, next) — for 'set': ('', passphrase); for 'unlock': (passphrase, ''). */
   onConfirm: (current: string, next: string) => Promise<void>;
 }
 
@@ -35,14 +35,10 @@ export const PassphraseModal: FC<Props> = ({ mode, onClose, onConfirm }) => {
   const title =
     mode === 'set'
       ? t('settings.privacy.encryptionModalSetTitle')
-      : mode === 'change'
-        ? t('settings.privacy.encryptionModalChangeTitle')
-        : mode === 'unlock'
-          ? t('settings.privacy.encryptionModalUnlockTitle')
-          : t('settings.privacy.encryptionModalDisableTitle');
+      : t('settings.privacy.encryptionModalUnlockTitle');
 
   const validate = useCallback((): string => {
-    if (mode === 'set' || mode === 'change') {
+    if (mode === 'set') {
       if (next.length < MIN_LEN) return t('settings.privacy.encryptionTooShort');
       if (next !== confirm) return t('settings.privacy.encryptionMismatch');
     }
@@ -71,22 +67,12 @@ export const PassphraseModal: FC<Props> = ({ mode, onClose, onConfirm }) => {
   const confirmButtonLabel =
     mode === 'set'
       ? t('settings.privacy.encryptionSetButton')
-      : mode === 'change'
-        ? t('settings.privacy.encryptionChangeButton')
-        : mode === 'unlock'
-          ? t('settings.privacy.encryptionUnlockButton')
-          : t('settings.privacy.encryptionDisableButton');
+      : t('settings.privacy.encryptionUnlockButton');
 
   const hasError = error.length > 0;
 
-  // QNBS-v3: 'disable' mode is a destructive confirmation — alertdialog announces immediately via AT
   return (
-    <Modal
-      isOpen={true}
-      onClose={onClose}
-      title={title}
-      variant={mode === 'disable' ? 'alertdialog' : 'dialog'}
-    >
+    <Modal isOpen={true} onClose={onClose} title={title}>
       <div className="space-y-4">
         {/* 'unlock' mode: single current-passphrase field to re-derive the in-memory key */}
         {mode === 'unlock' && (
@@ -114,33 +100,7 @@ export const PassphraseModal: FC<Props> = ({ mode, onClose, onConfirm }) => {
           </div>
         )}
 
-        {(mode === 'change' || mode === 'disable') && (
-          <div className="space-y-1">
-            <label
-              htmlFor="enc-current"
-              className="text-sm font-medium text-[var(--sc-text-primary)]"
-            >
-              {t('settings.privacy.encryptionCurrentPassphrase')}
-            </label>
-            <input
-              ref={firstFieldRef}
-              id="enc-current"
-              type="password"
-              autoComplete="current-password"
-              value={current}
-              onChange={(e) => {
-                setCurrent(e.target.value);
-                setError('');
-              }}
-              // QNBS-v3: aria-describedby + aria-invalid wire the error to the field for screen readers
-              aria-describedby={hasError ? ERROR_ID : undefined}
-              aria-invalid={hasError}
-              className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)] outline-none"
-            />
-          </div>
-        )}
-
-        {(mode === 'set' || mode === 'change') && (
+        {mode === 'set' && (
           <>
             <div className="space-y-1">
               <label
@@ -150,7 +110,7 @@ export const PassphraseModal: FC<Props> = ({ mode, onClose, onConfirm }) => {
                 {t('settings.privacy.encryptionNewPassphrase')}
               </label>
               <input
-                ref={mode === 'set' ? firstFieldRef : undefined}
+                ref={firstFieldRef}
                 id="enc-next"
                 type="password"
                 autoComplete="new-password"
@@ -194,16 +154,6 @@ export const PassphraseModal: FC<Props> = ({ mode, onClose, onConfirm }) => {
           </p>
         )}
 
-        {/* forgot passphrase hint — only relevant when entering an existing passphrase */}
-        {(mode === 'unlock' || mode === 'disable') && (
-          <p className="text-xs text-[var(--sc-text-muted)]">
-            {t('settings.privacy.encryptionForgotPassphrase')}{' '}
-            <span className="text-[var(--sc-warning-fg)]">
-              {t('settings.privacy.encryptionForgotPassphraseWarning')}
-            </span>
-          </p>
-        )}
-
         {/* QNBS-v3: pre-rendered with minHeight so the DOM node exists before text is injected —
             required by NVDA/JAWS for role="alert" to fire the live-region announcement */}
         <p
@@ -220,7 +170,7 @@ export const PassphraseModal: FC<Props> = ({ mode, onClose, onConfirm }) => {
             {t('common.cancel')}
           </Button>
           <Button
-            variant={mode === 'disable' ? 'danger' : 'primary'}
+            variant="primary"
             onClick={() => void handleSubmit()}
             disabled={busy}
             aria-busy={busy}

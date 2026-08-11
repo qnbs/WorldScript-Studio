@@ -1,6 +1,6 @@
 # IndexedDB At-Rest Encryption — Implementation
 
-**Status:** ✅ Implemented + Phase 1.1 UX complete — `services/storage/storageEncryptionService.ts` (v1.19.0 B-1 + 2026-05-31 Local AI Perfection Phase 1.1)
+**Status:** Partial implementation with fail-closed locked writes. Cross-database enable, disable, and rekey migration remains a release-blocking follow-up.
 **Feature flag:** `enableIdbAtRestEncryption` (on by default since v1.23 — manage via Settings → Privacy)
 **Tracking:** SEC-3 (Master Plan Phase 2 delivery)
 
@@ -8,15 +8,17 @@
 
 ## Overview
 
-WorldScript Studio stores all project data in IndexedDB. API keys were already encrypted at rest via `dbService.ts` using AES-256-GCM with a locally-generated `CryptoKey`. As of v1.19.0 (B-1), `services/storage/storageEncryptionService.ts` extends at-rest encryption to all IDB stores using a passphrase-derived key, protecting data against offline extraction (e.g. from a shared or compromised browser profile).
+WorldScript Studio stores project data in IndexedDB. API keys use a separate encrypted-secret mechanism in `dbService.ts`. Optional IDB at-rest encryption uses a passphrase-derived AES-256-GCM key for the primary project, settings, snapshot, image, Codex, RAG, and binder-asset persistence paths. Other persistence surfaces must be inventoried and integrated through the same policy before a blanket “all IndexedDB data” claim is valid.
 
-The encryption service is gated behind `featureFlags.enableIdbAtRestEncryption` (on by default since v1.23 — manage in Settings → Privacy → "Encrypt project data at rest"). **Passphrase UX is complete as of 2026-05-31 (Phase 1.1):**
+The encryption service is gated behind `featureFlags.enableIdbAtRestEncryption` (on by default since v1.23 — manage in Settings → Privacy → "Encrypt project data at rest"). Current lifecycle behavior is deliberately conservative:
 - `IdbUnlockModal` — prompts for passphrase on cold start when flag is on; rate-limiting: 3 failures → 5 s lockout, 6 failures → 30 s lockout
 - **Session lock** — `lockSession()` clears the in-memory key; "Lock Session" button in Settings → Privacy
-- **Key rotation** — `rotateKey(old, new)` re-encrypts all 5 IDB stores atomically via `reEncryptAllAppData()` + `reEncryptAllSnapshots()`; Settings → Privacy → Change Passphrase
-- `PassphraseModal` in Settings handles set / change / disable flows
+- **Locked writes fail closed** — when a passphrase sentinel exists but no runtime key is available, protected reads and writes return a typed locked error rather than storing plaintext.
+- **Disable and passphrase rotation are unavailable** until a versioned, resumable cross-database journal verifies every conversion. The UI does not expose those destructive controls and the service rejects them before mutation.
 
-**Remaining Phase 4:** actual IDB read/write integration for `idbProjectStore`, `idbSnapshotStore`, etc. — the service layer is complete; the store-layer call sites are stubbed for a final integration pass.
+**Required next step:** implement a durable migration journal, per-store checkpoints, multi-tab coordination, and verified enable/disable/rekey conversion before enabling lifecycle operations.
+
+The authoritative lifecycle states, transition rules, and journal requirements are in [ADR 0018](adr/0018-idb-encryption-lifecycle-and-recovery.md).
 
 ---
 
@@ -26,7 +28,7 @@ The encryption service is gated behind `featureFlags.enableIdbAtRestEncryption` 
 | --- | --- |
 | Physical access to browser profile directory | ✅ Encrypted blobs unreadable without passphrase |
 | Malicious browser extension reading IDB | ✅ Same — ciphertext only |
-| XSS reading IDB via `indexedDB.open()` | ✅ — content cannot be decrypted without the in-memory key |
+| XSS in an unlocked renderer | ❌ Out of scope — an attacker executing in the app origin can use the in-memory key through application APIs |
 | Man-in-the-middle on sync / export | Out of scope (handled by transport layer) |
 | User forgets passphrase | ⚠️ Data loss — deliberate UX tradeoff |
 
@@ -52,8 +54,8 @@ AES-256-GCM CryptoKey  { extractable: false, usages: ['encrypt','decrypt','wrapK
 | --- | --- | --- |
 | KDF | PBKDF2 | WebCrypto native; no WASM dependency |
 | Hash | SHA-256 | OWASP 2024 minimum |
-| Iterations | 310,000 | Matches collaboration PBKDF2 budget (`collaborationService.ts`) |
-| Salt | 32-byte random, stored in IDB `app-data` store as `idb_kdf_salt_v1` | Random per-install; must not be derived from passphrase |
+| Iterations | 600,000 | Current `storageEncryptionService.ts` PBKDF2-HMAC-SHA-256 setting |
+| Salt | 32-byte random, stored in localStorage as `worldscript-idb-kdf-salt-v1` | Random per-install; setup fails if it cannot be persisted |
 | Key output | AES-GCM 256-bit | Authenticated encryption — GCM tag detects corruption |
 | `extractable` | `false` | Key cannot be exported from WebCrypto context |
 
@@ -62,7 +64,7 @@ AES-256-GCM CryptoKey  { extractable: false, usages: ['encrypt','decrypt','wrapK
 The salt is a 32-byte random value generated on first initialization:
 ```ts
 const salt = crypto.getRandomValues(new Uint8Array(32));
-// stored as: APP_DATA_STORE / 'idb_kdf_salt_v1'  (plaintext — public by design)
+// stored as: localStorage['worldscript-idb-kdf-salt-v1']  (plaintext — public by design)
 ```
 
 The salt is **not** secret. Its purpose is to prevent cross-device rainbow-table attacks. It is stored alongside the encrypted data.
@@ -128,36 +130,26 @@ Stores `proforge-memory-bank`, `scene-revisions`, `cross-project-index` are in s
 ```ts
 // services/storage/storageEncryptionService.ts  (v1.19.0, B-1)
 
-export async function initStorageEncryption(passphrase: string): Promise<void>
-// Derives CryptoKey via PBKDF2, stores in module-level singleton. Throws if passphrase is empty.
+export async function setupIdbEncryption(passphrase: string): Promise<void>
+// Derives a non-extractable CryptoKey, persists an encrypted verifier, then activates the in-memory key.
 
-export async function encryptForStorage(plaintext: unknown): Promise<Uint8Array>
+export async function idbEncrypt(plaintext: unknown): Promise<Uint8Array>
 // JSON.stringify → LZ-String compress (> 10 KB) → AES-256-GCM encrypt → [ IV || ciphertext ] Uint8Array
 
-export async function decryptFromStorage<T>(ciphertext: Uint8Array): Promise<T>
+export async function idbReadSecure<T>(ciphertext: Uint8Array | unknown): Promise<T>
 // Split IV[0..12] + ciphertext[12..] → AES-256-GCM decrypt (GCM tag verified) → decompress → JSON.parse → T
 
-export function isStorageEncryptionReady(): boolean
+export function isIdbEncryptionReady(): boolean
 // Returns true once initStorageEncryption() has resolved successfully
 ```
 
-IDB store reads/writes in `services/storage/idbCore.ts` call `encryptForStorage` / `decryptFromStorage` when `featureFlags.enableIdbAtRestEncryption` is on and `isStorageEncryptionReady()` returns `true`.
+Protected store writers call `assertIdbProtectedWriteAllowed()` before they open an IndexedDB write transaction. A configured but locked library therefore does not silently downgrade to plaintext.
 
 ---
 
 ## Tauri Desktop Layer
 
-On Tauri, the passphrase is managed by **`tauri-plugin-stronghold`** (OS keychain / TPM-backed KMS):
-
-1. On first launch: generate a 256-bit random passphrase, store in Stronghold.
-2. On subsequent launches: retrieve passphrase from Stronghold, derive `CryptoKey`.
-3. The user never sees or types the passphrase — Stronghold provides OS-level protection.
-
-This means:
-- Web build: passphrase entered by user at app open (unlock screen, similar to KeePass).
-- Tauri build: transparent, OS-protected — no user friction.
-
-Plugin requirement: `pnpm add @tauri-apps/plugin-stronghold` + `src-tauri/Cargo.toml` entry.
+Tauri uses the same WebView storage encryption lifecycle as the web build. The repository does **not** currently use `tauri-plugin-stronghold`, an OS keychain, or a transparent desktop-only passphrase store. Desktop users enter the passphrase through the same unlock flow and receive the same locked-write guarantees.
 
 ---
 
@@ -165,10 +157,10 @@ Plugin requirement: `pnpm add @tauri-apps/plugin-stronghold` + `src-tauri/Cargo.
 
 At-rest encryption is a breaking change to the IDB schema. Migration proceeds via `dbMigration.ts`:
 
-1. **DB version bump:** `DB_VERSION` in `dbConstants.ts` incremented (current: see `DB_VERSION` constant).
-2. **`onupgradeneeded` handler:** Reads all existing plaintext records, encrypts each with the derived key, writes back. Transaction rolls back on any failure — app surfaces "migration failed" with retry.
-3. **Forward compat:** Records without the IV prefix (`\x00enc1\x00` sentinel, distinct from `\x00lz1\x00`) are treated as legacy plaintext and migrated lazily on first read (write-back encrypted copy).
-4. **Rollback:** Not supported — downgrading to a pre-encryption build will fail to read encrypted stores. Release notes must warn about this.
+1. Existing plaintext records are readable only after unlock and may be encrypted when rewritten.
+2. The application must not claim complete library encryption until a verified full-store migration exists.
+3. A future migration must be journaled across databases; IndexedDB cannot make the current multi-database conversion atomic.
+4. Old writers must be blocked or coordinated during a future migration; rollback of code is not automatically rollback of data.
 
 ### Migration sentinel
 
@@ -182,13 +174,11 @@ byte 18..:  AES-GCM ciphertext + 16-byte GCM tag
 
 ---
 
-## Open Questions (Phase 3)
+## Remaining migration work
 
-1. **Web UX for passphrase entry:** unlock modal at app init with session-scoped in-memory key (key wiped on tab close / `visibilitychange` to `hidden`). Design approved; implementation is Phase 3.
-2. **Forgot passphrase flow:** emergency export of unencrypted data while key is still known, or complete data loss. UX decision deferred to Phase 3.
-3. **Multi-tab coordination:** all tabs must use the same derived key. `BroadcastChannel` can signal "passphrase unlocked" to sibling tabs; key itself stays per-tab in WebCrypto (non-extractable — cannot be transferred). Phase 3.
-4. **Key rotation:** change passphrase → re-derive key → re-encrypt all stores in one transaction. Expensive for large vaults; show progress spinner. Phase 3.
-5. **DuckDB OPFS:** DuckDB WAL and data files are outside IDB. Separate encryption layer required. Phase 3 design (SEC-6).
+1. **Multi-tab coordination:** all tabs must be blocked or coordinated before a future migration begins; a `BroadcastChannel` notification alone cannot transfer a non-extractable key safely.
+2. **Disable/rekey:** both are currently blocked rather than risking inaccessible data. A durable journal, checkpoints, generation handling, and recovery UX are required before they are re-enabled.
+3. **DuckDB OPFS:** DuckDB WAL and data files are outside IDB. A separate encryption layer requires its own threat model and recovery protocol.
 
 ---
 

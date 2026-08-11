@@ -197,6 +197,14 @@ describe('AppearanceSection', () => {
     await user.click(screen.getByText('settings.theme.light'));
     expect(mockHandleSettingChange).toHaveBeenCalledWith('theme', 'light');
   });
+
+  it('offers a persistent plain writing-surface preference', async () => {
+    const user = userEvent.setup();
+    render(<AppearanceSection />);
+    expect(screen.getByText('settings.appearance.writingSurface')).toBeInTheDocument();
+    await user.click(screen.getByText('settings.appearance.writingSurfacePlain'));
+    expect(mockHandleSettingChange).toHaveBeenCalledWith('writingSurfaceStyle', 'plain');
+  });
 });
 
 describe('AboutSection', () => {

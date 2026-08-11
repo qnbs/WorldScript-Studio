@@ -12,11 +12,7 @@
  */
 
 import { decompressData } from './idbCore';
-import {
-  deletePassphraseSentinel,
-  getPassphraseSentinel,
-  savePassphraseSentinel,
-} from './idbPassphraseSentinel';
+import { getPassphraseSentinel, savePassphraseSentinel } from './idbPassphraseSentinel';
 
 const PBKDF2_ITERATIONS = 600_000; // OWASP 2024 minimum for PBKDF2-HMAC-SHA-256
 const IV_BYTE_LENGTH = 12;
@@ -31,6 +27,26 @@ const SENTINEL = new Uint8Array([0x00, 0x65, 0x6e, 0x63, 0x31, 0x00]);
 export interface EncryptedBlob {
   /** sentinel(6) || iv(12) || AES-GCM ciphertext+tag */
   bytes: Uint8Array;
+}
+
+/** Raised when configured at-rest encryption has no session key for a protected operation. */
+export class IdbStorageLockedError extends Error {
+  readonly code = 'STORAGE_LOCKED' as const;
+
+  constructor() {
+    super('Encrypted storage is locked');
+    this.name = 'IdbStorageLockedError';
+  }
+}
+
+/** Raised instead of risking an incomplete cross-database disable or passphrase rotation. */
+export class IdbEncryptionMigrationRequiredError extends Error {
+  readonly code = 'ENCRYPTION_MIGRATION_REQUIRED' as const;
+
+  constructor(operation: 'disable' | 'rotate') {
+    super(`Cannot ${operation} encrypted storage without a completed migration journal`);
+    this.name = 'IdbEncryptionMigrationRequiredError';
+  }
 }
 
 export class StorageEncryptionService {
@@ -120,9 +136,9 @@ function getOrCreateSalt(): Uint8Array {
     const b64 = btoa(String.fromCharCode(...salt));
     localStorage.setItem(SALT_STORAGE_KEY, b64);
     return salt;
-  } catch {
-    // QNBS-v3: SSR / test env without localStorage — return zero-filled fallback salt.
-    return new Uint8Array(SALT_BYTE_LENGTH);
+  } catch (error) {
+    // QNBS-v3: A deterministic fallback salt would weaken every new encrypted library.
+    throw new Error('Unable to persist encryption salt', { cause: error });
   }
 }
 
@@ -154,6 +170,15 @@ export function isIdbEncryptionReady(): boolean {
   return _activeKey !== null;
 }
 
+/**
+ * Reject a protected durable write while encryption is configured but the key is locked.
+ * Call this before opening an IDB write transaction so callers cannot downgrade to plaintext.
+ */
+export async function assertIdbProtectedWriteAllowed(): Promise<void> {
+  if (_activeKey) return;
+  if (await hasPassphraseSentinel()) throw new IdbStorageLockedError();
+}
+
 /** Clear the in-memory key (call on tab-hide / session end). */
 export function clearIdbEncryptionKey(): void {
   _activeKey = null;
@@ -179,13 +204,12 @@ export function isEncryptedBlob(value: unknown): value is Uint8Array {
 export async function idbReadSecure<T>(raw: unknown): Promise<T> {
   if (isEncryptedBlob(raw)) {
     if (!isIdbEncryptionReady()) {
-      throw new Error(
-        'Data is encrypted but encryption key is not available. ' +
-          'Please re-enable encryption in Settings → Privacy to access your data.',
-      );
+      throw new IdbStorageLockedError();
     }
     return idbDecrypt<T>(raw);
   }
+  // QNBS-v3: Legacy plaintext remains readable only after unlock so a locked library cannot expose protected content.
+  await assertIdbProtectedWriteAllowed();
   return decompressData<T>(raw);
 }
 
@@ -233,36 +257,25 @@ export async function hasPassphraseSentinel(): Promise<boolean> {
 }
 
 /**
- * Delete the passphrase sentinel from IDB and clear the in-memory key.
- * Call when the user disables encryption (after verifying current passphrase).
+ * Disabling encryption is blocked until a verified, resumable conversion protocol covers every
+ * protected store. Deleting the verifier first would strand existing ciphertext.
  */
 export async function clearIdbPassphrase(): Promise<void> {
-  await deletePassphraseSentinel();
-  _activeKey = null;
+  throw new IdbEncryptionMigrationRequiredError('disable');
 }
 
 /**
- * Change the passphrase: verify the old one against the sentinel, derive the new
- * key, replace the sentinel, then optionally re-encrypt all existing IDB data.
- *
- * @param reEncrypt — optional callback that receives (oldKey, newKey) and must
- *   re-encrypt all existing data. Called while oldKey is still valid so decryption
- *   of legacy records is possible. If omitted, old data remains encrypted under
- *   the old key until the next natural overwrite.
+ * Rekey is intentionally unavailable until a durable, cross-store journal can prove that mixed
+ * generations are recoverable after interruption. The arguments remain for source compatibility.
  */
 export async function rotateIdbPassphrase(
   oldPassphrase: string,
   newPassphrase: string,
   reEncrypt?: (oldKey: CryptoKey, newKey: CryptoKey) => Promise<void>,
 ): Promise<void> {
-  // QNBS-v3: verifyAndInitIdbEncryption throws on wrong old passphrase — caller catches and shows error
-  await verifyAndInitIdbEncryption(oldPassphrase);
-  const oldKey = _activeKey;
-  if (!oldKey) throw new Error('Encryption not active');
-  await setupIdbEncryption(newPassphrase);
-  const newKey = _activeKey;
-  if (!newKey) throw new Error('Encryption not active after rotation');
-  if (reEncrypt) {
-    await reEncrypt(oldKey, newKey);
-  }
+  void oldPassphrase;
+  void newPassphrase;
+  void reEncrypt;
+  // QNBS-v3: A new verifier cannot become authoritative before every old ciphertext is checkpointed and verified.
+  throw new IdbEncryptionMigrationRequiredError('rotate');
 }

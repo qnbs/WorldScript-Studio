@@ -1,7 +1,7 @@
 /**
  * Tests for components/settings/IdbUnlockModal.tsx
  * QNBS-v3: Mocks verifyAndInitIdbEncryption; covers unlock flow, wrong-passphrase error,
- *          Enter-key shortcut, and the forgot-passphrase escape hatch.
+ *          Enter-key shortcut, and the absence of a destructive escape hatch.
  */
 
 import { render, screen, waitFor } from '@testing-library/react';
@@ -74,7 +74,6 @@ import { IdbUnlockModal } from '../../../components/settings/IdbUnlockModal';
 
 describe('IdbUnlockModal', () => {
   const mockOnUnlocked = vi.fn();
-  const mockOnForgotPassphrase = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -241,65 +240,10 @@ describe('IdbUnlockModal', () => {
     expect(mockVerifyAndInit).not.toHaveBeenCalled();
   });
 
-  // ── Forgot passphrase escape hatch ─────────────────────────────────────────
-
-  it('does not show forgot-passphrase button when onForgotPassphrase prop is absent', () => {
+  it('does not offer a destructive forgot-passphrase escape hatch', () => {
     render(<IdbUnlockModal onUnlocked={mockOnUnlocked} />);
     expect(
       screen.queryByText('settings.privacy.encryptionForgotPassphrase'),
     ).not.toBeInTheDocument();
-  });
-
-  it('shows forgot-passphrase link when onForgotPassphrase prop is provided', () => {
-    render(
-      <IdbUnlockModal onUnlocked={mockOnUnlocked} onForgotPassphrase={mockOnForgotPassphrase} />,
-    );
-    expect(screen.getByText('settings.privacy.encryptionForgotPassphrase')).toBeInTheDocument();
-  });
-
-  it('shows confirmation UI after clicking forgot-passphrase link', async () => {
-    const user = userEvent.setup();
-    render(
-      <IdbUnlockModal onUnlocked={mockOnUnlocked} onForgotPassphrase={mockOnForgotPassphrase} />,
-    );
-    await user.click(screen.getByText('settings.privacy.encryptionForgotPassphrase'));
-    expect(
-      screen.getByText('settings.privacy.encryptionForgotPassphraseWarning'),
-    ).toBeInTheDocument();
-    expect(screen.getByText('settings.privacy.encryptionDisableConfirm')).toBeInTheDocument();
-    expect(screen.getByText('common.cancel')).toBeInTheDocument();
-  });
-
-  it('calls onForgotPassphrase when confirm button is clicked', async () => {
-    const user = userEvent.setup();
-    render(
-      <IdbUnlockModal onUnlocked={mockOnUnlocked} onForgotPassphrase={mockOnForgotPassphrase} />,
-    );
-    await user.click(screen.getByText('settings.privacy.encryptionForgotPassphrase'));
-    await user.click(screen.getByText('settings.privacy.encryptionDisableConfirm'));
-    expect(mockOnForgotPassphrase).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not call onForgotPassphrase when cancel button is clicked', async () => {
-    const user = userEvent.setup();
-    render(
-      <IdbUnlockModal onUnlocked={mockOnUnlocked} onForgotPassphrase={mockOnForgotPassphrase} />,
-    );
-    await user.click(screen.getByText('settings.privacy.encryptionForgotPassphrase'));
-    await user.click(screen.getByText('common.cancel'));
-    expect(mockOnForgotPassphrase).not.toHaveBeenCalled();
-  });
-
-  it('hides confirmation UI after cancel is clicked', async () => {
-    const user = userEvent.setup();
-    render(
-      <IdbUnlockModal onUnlocked={mockOnUnlocked} onForgotPassphrase={mockOnForgotPassphrase} />,
-    );
-    await user.click(screen.getByText('settings.privacy.encryptionForgotPassphrase'));
-    await user.click(screen.getByText('common.cancel'));
-    expect(
-      screen.queryByText('settings.privacy.encryptionForgotPassphraseWarning'),
-    ).not.toBeInTheDocument();
-    expect(screen.getByText('settings.privacy.encryptionForgotPassphrase')).toBeInTheDocument();
   });
 });

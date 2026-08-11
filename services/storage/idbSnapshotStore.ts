@@ -11,6 +11,7 @@ import { SNAPSHOTS_STORE } from '../dbConstants';
 import { IdbCodexStore } from './idbCodexStore';
 import { compressData, getUserFriendlyDbError, retryDb } from './idbCore';
 import {
+  assertIdbProtectedWriteAllowed,
   idbEncrypt,
   idbReadSecure,
   isEncryptedBlob,
@@ -28,7 +29,8 @@ export class IdbSnapshotStore extends IdbCodexStore {
       (sum, section) => sum + (section.content?.split(/\s+/).filter(Boolean).length || 0),
       0,
     );
-    // QNBS-v3: Encrypt payload when session key is active; LZ-compress otherwise.
+    await assertIdbProtectedWriteAllowed();
+    // QNBS-v3: Plaintext snapshots are allowed only before encryption is configured.
     const snapshotPayload = isIdbEncryptionReady() ? await idbEncrypt(data) : compressData(data);
     const snapshotData = {
       date: new Date().toISOString(),

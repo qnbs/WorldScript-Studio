@@ -360,6 +360,8 @@ export interface OutlineSection {
 export type Theme = 'dark' | 'light' | 'auto';
 /** Creative appearance presets — map to `body` classes in App (`.appearance-sepia`). */
 export type AppearancePreset = 'default' | 'sepia';
+/** Decorative backdrop for the long-form writing surface. */
+export type WritingSurfaceStyle = 'textured' | 'plain';
 /**
  * AI execution mode — controls whether requests are routed to cloud providers,
  * local on-device models, or resolved automatically (hybrid smart routing).
@@ -641,6 +643,7 @@ export interface Settings {
   // Basic Settings
   theme: Theme;
   appearancePreset: AppearancePreset;
+  writingSurfaceStyle: WritingSurfaceStyle;
   /** AI execution routing mode — hybrid (default), cloud-only, local-only, or eco (tiny models). */
   aiMode: AiMode;
   /** OpenRouter cloud provider settings — enabled/disabled, API key, preferred model. */

@@ -121,8 +121,7 @@ describe('PrivacySection', () => {
     expect(mockSetPassphraseModal).toHaveBeenCalledWith('set');
   });
 
-  it('dataEncryption toggle opens disable modal when turned off and encryption is active', async () => {
-    const user = userEvent.setup();
+  it('keeps the encryption toggle checked and disabled while encryption is active', () => {
     mockCtx.mockReturnValue(
       makeCtx({
         featureFlags: { enableIdbAtRestEncryption: true },
@@ -131,11 +130,11 @@ describe('PrivacySection', () => {
     );
     render(<PrivacySection />);
     const toggle = screen.getByRole('switch', { name: 'settings.privacy.dataEncryption' });
-    await user.click(toggle);
-    expect(mockSetPassphraseModal).toHaveBeenCalledWith('disable');
+    expect(toggle).toBeChecked();
+    expect(toggle).toBeDisabled();
   });
 
-  it('shows active status and change/disable buttons when encryption is on and ready', () => {
+  it('shows active status and lock action when encryption is on and ready', () => {
     mockCtx.mockReturnValue(
       makeCtx({
         featureFlags: { enableIdbAtRestEncryption: true },
@@ -144,8 +143,9 @@ describe('PrivacySection', () => {
     );
     render(<PrivacySection />);
     expect(screen.getByText('settings.privacy.encryptionActiveStatus')).toBeInTheDocument();
-    expect(screen.getByText('settings.privacy.encryptionChangeAction')).toBeInTheDocument();
-    expect(screen.getByText('settings.privacy.encryptionDisableAction')).toBeInTheDocument();
+    expect(screen.getByText('settings.privacy.encryptionLockAction')).toBeInTheDocument();
+    expect(screen.queryByText('settings.privacy.encryptionChangeAction')).not.toBeInTheDocument();
+    expect(screen.queryByText('settings.privacy.encryptionDisableAction')).not.toBeInTheDocument();
   });
 
   it('shows locked status when encryption is on but key not in session', () => {
@@ -157,32 +157,6 @@ describe('PrivacySection', () => {
     );
     render(<PrivacySection />);
     expect(screen.getByText('settings.privacy.encryptionLockedStatus')).toBeInTheDocument();
-  });
-
-  it('opens change modal when change action is clicked', async () => {
-    const user = userEvent.setup();
-    mockCtx.mockReturnValue(
-      makeCtx({
-        featureFlags: { enableIdbAtRestEncryption: true },
-        encryptionReady: true,
-      }) as unknown as ReturnType<typeof useSettingsViewContext>,
-    );
-    render(<PrivacySection />);
-    await user.click(screen.getByText('settings.privacy.encryptionChangeAction'));
-    expect(mockSetPassphraseModal).toHaveBeenCalledWith('change');
-  });
-
-  it('opens disable modal when disable action is clicked', async () => {
-    const user = userEvent.setup();
-    mockCtx.mockReturnValue(
-      makeCtx({
-        featureFlags: { enableIdbAtRestEncryption: true },
-        encryptionReady: true,
-      }) as unknown as ReturnType<typeof useSettingsViewContext>,
-    );
-    render(<PrivacySection />);
-    await user.click(screen.getByText('settings.privacy.encryptionDisableAction'));
-    expect(mockSetPassphraseModal).toHaveBeenCalledWith('disable');
   });
 
   it('shows lock session button when encryption is active', () => {

@@ -206,6 +206,32 @@ export const AppearanceSection: FC = () => {
               </Button>
             </div>
           </div>
+          <div className="pt-2 border-t border-[var(--sc-border-subtle)] space-y-2">
+            <span className="text-sm font-medium text-[var(--sc-text-secondary)]">
+              {t('settings.appearance.writingSurface')}
+            </span>
+            <p className="text-xs text-[var(--sc-text-muted)]">
+              {t('settings.appearance.writingSurfaceHint')}
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                variant={settings.writingSurfaceStyle === 'textured' ? 'primary' : 'secondary'}
+                size="sm"
+                onClick={() => handleSettingChange('writingSurfaceStyle', 'textured')}
+                className="justify-center"
+              >
+                {t('settings.appearance.writingSurfaceTextured')}
+              </Button>
+              <Button
+                variant={settings.writingSurfaceStyle === 'plain' ? 'primary' : 'secondary'}
+                size="sm"
+                onClick={() => handleSettingChange('writingSurfaceStyle', 'plain')}
+                className="justify-center"
+              >
+                {t('settings.appearance.writingSurfacePlain')}
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
       <Card>
