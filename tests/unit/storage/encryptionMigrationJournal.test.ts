@@ -1,5 +1,5 @@
 // @vitest-environment node
-// QNBS-v3: Real fake IndexedDB verifies journal transactions and independent module-owner CAS behavior.
+// QNBS-v3: Real fake IndexedDB verifies journal transactions and competing-owner CAS rejection (same module instance, different ownerId values — not a cross-tab/reloaded-module scenario).
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { APP_DATA_STORE, STATE_DB_NAME } from '../../../services/dbConstants';
