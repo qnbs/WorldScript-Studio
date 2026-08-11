@@ -76,6 +76,14 @@ describe('loraTrainingService — Tauri desktop build', () => {
     expect(typeof modelfile).toBe('string');
   });
 
+  it('propagates a native cancellation failure instead of claiming training stopped', async () => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    vi.mocked(invoke).mockRejectedValueOnce(new Error('training_cancel_not_confirmed'));
+
+    await expect(abortTraining()).rejects.toThrow('training_cancel_not_confirmed');
+    expect(invoke).toHaveBeenCalledWith('abort_lora_training', undefined);
+  });
+
   it('validates and persists an explicitly selected Python executable through the native resolver', async () => {
     const { invoke } = await import('@tauri-apps/api/core');
     const { open } = await import('@tauri-apps/plugin-dialog');
