@@ -22,7 +22,7 @@ overrides:
   ws: '>=8.21.0'
   form-data: '>=4.0.6'
   brace-expansion: '>=5.0.9'
-  uuid: '>=11.1.1'
+  uuid: '>=11.1.1 <12.0.0 || >=12.0.1 <13.0.0 || >=13.0.1'
   qs: '>=6.15.2'
   dompurify: '>=3.4.13'
   '@babel/core': '>=7.29.6 <8'
@@ -187,7 +187,7 @@ importers:
         specifier: ^1.1.0
         version: 1.1.0
       uuid:
-        specifier: '>=11.1.1'
+        specifier: '>=11.1.1 <12.0.0 || >=12.0.1 <13.0.0 || >=13.0.1'
         version: 14.0.1
       xstate:
         specifier: ^5.32.1

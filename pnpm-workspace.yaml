@@ -74,11 +74,8 @@ overrides:
   ws: ">=8.21.0"
   form-data: ">=4.0.6"
   brace-expansion: ">=5.0.9"
-  # QNBS-v3: >=11.1.1 alone still permits vulnerable 12.0.0/13.0.0 (unpatched within their own major
-  # lines). Lockfile converges on 14.0.1 today; tightening this floor requires a lockfile-only pnpm
-  # update this session's constrained host cannot safely run — tracked as a follow-up, not silently
-  # left broken (see #335 review thread cffdb48279708978ccd08a20 for the full analysis).
-  uuid: ">=11.1.1"
+  # QNBS-v3: excludes the two exact unpatched releases (12.0.0, 13.0.0) a bare ">=11.1.1" floor would still permit; the resolved 14.0.1 already satisfies this.
+  uuid: ">=11.1.1 <12.0.0 || >=12.0.1 <13.0.0 || >=13.0.1"
   qs: ">=6.15.2"
   dompurify: ">=3.4.13"
   "@babel/core": ">=7.29.6 <8"
