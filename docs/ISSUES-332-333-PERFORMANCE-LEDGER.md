@@ -6,16 +6,23 @@ authoritative closure record for the responsiveness portions of
 [#332](https://github.com/qnbs/WorldScript-Studio/issues/332) and
 [#333](https://github.com/qnbs/WorldScript-Studio/issues/333).
 
-## Live baseline — 2026-08-11 (updated)
+## Live baseline — 2026-08-11 (updated again after the appearancePreset/unlock-routing fix cascade)
 
 | Ref | Live value |
 | --- | --- |
 | `main` | `804793aa0815a726935785639e4fb139af7c4b59` |
-| PR #335 | `5e80aaa44fc6e31bf50b06294be106577d4d93c3` |
-| PR #336 | `2438f991afa4ad3630573e2d12a8fcf83f5280d5` |
-| PR #337 | `dc0b5262b7c1c9d9dc1a3b33551d497f29a3a1a8` (pushed; review threads: 0 unresolved) |
+| PR #335 | `0353364df974362d8ca6c4f1e50a229a8ef4219c` (1 review thread still open by design — see review-thread note below) |
+| PR #336 | `ad4364ac7f6685980c82417c1953e66fbe3ce25b` (review threads: 0 unresolved) |
+| PR #337 | `dd92628f850bfe0932e753c1910f3ec115d18546` (review threads: 0 unresolved) |
 | PR #310 | `27177ce549d4579f1fc9dfbc4630ebf0c2592f9b` |
 | Issue #332 / #333 | Open / Open; neither has post-report comments |
+
+PR #335's one remaining open review thread (CodeRabbit, `.npmrc`/`pnpm-workspace.yaml` uuid
+override range) is a confirmed-valid, deliberately-deferred fix: applying it requires a real
+`pnpm install` to regenerate the lockfile, which this session's severely memory-constrained host
+cannot safely run without risking an OOM crash mid-install. The exact fix is specified in the
+thread reply; it needs a normal-resourced environment or a dependency-update CI job, not a
+hand-edit.
 
 `#335` is the lifecycle foundation, `#336` owns desktop, Local-AI, provider,
 and Python reliability, and `#337` owns recovery-journal/secondary-store work.
