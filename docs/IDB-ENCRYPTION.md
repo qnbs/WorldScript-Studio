@@ -55,7 +55,7 @@ AES-256-GCM CryptoKey  { extractable: false, usages: ['encrypt','decrypt','wrapK
 | KDF | PBKDF2 | WebCrypto native; no WASM dependency |
 | Hash | SHA-256 | OWASP 2024 minimum |
 | Iterations | 600,000 | Current `storageEncryptionService.ts` PBKDF2-HMAC-SHA-256 setting |
-| Salt | 32-byte random, stored in localStorage as `worldscript-idb-kdf-salt-v1` | Random per-install; setup fails if it cannot be persisted |
+| Salt | 32-byte random, stored in localStorage as `worldscript-idb-kdf-salt-v1` | Random per-install; setup fails if it cannot be persisted; a missing/invalid salt after a passphrase sentinel already exists fails closed with `IdbEncryptionSaltLostError` instead of silently deriving a new, incompatible key |
 | Key output | AES-GCM 256-bit | Authenticated encryption — GCM tag detects corruption |
 | `extractable` | `false` | Key cannot be exported from WebCrypto context |
 

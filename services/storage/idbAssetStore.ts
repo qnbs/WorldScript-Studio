@@ -12,20 +12,22 @@ import { IdbSnapshotStore } from './idbSnapshotStore';
 import {
   assertIdbProtectedWriteAllowed,
   assertSecureStorageReadable,
-  idbEncrypt,
+  idbEncryptWithKey,
   idbReadSecure,
   isEncryptedBlob,
-  isIdbEncryptionReady,
+  resolveProtectedWriteKey,
 } from './storageEncryptionService';
 
 export class IdbAssetStore extends IdbSnapshotStore {
   // --- Image Store Methods ---
 
   async saveImage(id: string, base64: string): Promise<void> {
-    await assertIdbProtectedWriteAllowed();
-    // QNBS-v3: Encrypt BEFORE opening the transaction — `await idbEncrypt` yields the event loop,
-    //          which auto-commits an already-open IDB transaction (TransactionInactiveError on put).
-    const payload = isIdbEncryptionReady() ? await idbEncrypt(base64) : base64;
+    // QNBS-v3: Resolve the write key BEFORE opening the transaction — `await idbEncryptWithKey`
+    //          yields the event loop, which auto-commits an already-open IDB transaction
+    //          (TransactionInactiveError on put), and re-reading isIdbEncryptionReady() after any
+    //          later await could race with Lock Session and silently fall back to plaintext.
+    const writeKey = await resolveProtectedWriteKey();
+    const payload = writeKey ? await idbEncryptWithKey(writeKey, base64) : base64;
     const store = await this.getObjectStore(IMAGES_STORE, 'readwrite');
     return new Promise((resolve, reject) => {
       const request = store.put(payload, id);
@@ -35,10 +37,15 @@ export class IdbAssetStore extends IdbSnapshotStore {
   }
 
   async getImage(id: string): Promise<string | null> {
+    // QNBS-v3: assertSecureStorageReadable also blocks reads during an active journal migration,
+    //          not just a plain lock — the superset check needed while a journal owns lifecycle state.
     await assertSecureStorageReadable();
     const store = await this.getObjectStore(IMAGES_STORE, 'readonly');
     return new Promise((resolve, reject) => {
       const request = store.get(id);
+      // QNBS-v3: IDBRequest.onsuccess is not awaited by the browser — an async handler whose
+      //          promise rejects becomes an unhandled rejection instead of reaching this
+      //          Promise's reject, leaving the caller pending instead of surfacing the error.
       request.onsuccess = () => {
         const raw = request.result;
         if (raw == null) {
@@ -47,7 +54,7 @@ export class IdbAssetStore extends IdbSnapshotStore {
         }
         // QNBS-v3: Decrypt encrypted image payload; legacy plaintext falls through.
         if (raw instanceof Uint8Array && isEncryptedBlob(raw)) {
-          void idbReadSecure<string>(raw).then(resolve, reject);
+          idbReadSecure<string>(raw).then(resolve).catch(reject);
           return;
         }
         resolve(raw as string);
@@ -57,6 +64,7 @@ export class IdbAssetStore extends IdbSnapshotStore {
   }
 
   async deleteImage(id: string): Promise<void> {
+    // QNBS-v3: A locked session must not be able to destroy protected images it cannot read.
     await assertIdbProtectedWriteAllowed();
     const store = await this.getObjectStore(IMAGES_STORE, 'readwrite');
     return new Promise((resolve, reject) => {
@@ -75,13 +83,16 @@ export class IdbAssetStore extends IdbSnapshotStore {
     meta: BinderAssetMeta,
   ): Promise<void> {
     return retryDb(async () => {
-      await assertIdbProtectedWriteAllowed();
+      const writeKey = await resolveProtectedWriteKey();
       const key = makeBinderAssetStorageKey(projectId, assetId);
       const fullMeta = { ...meta, byteSize: data.byteLength };
       // QNBS-v3: idbEncrypt serialises via JSON.stringify, which silently drops a Blob ({} → no data).
       //          When encrypting, persist the raw bytes; otherwise store a structured-clone-friendly Blob.
-      const payload = isIdbEncryptionReady()
-        ? await idbEncrypt({ meta: fullMeta, bytes: Array.from(new Uint8Array(data)) })
+      const payload = writeKey
+        ? await idbEncryptWithKey(writeKey, {
+            meta: fullMeta,
+            bytes: Array.from(new Uint8Array(data)),
+          })
         : {
             meta: fullMeta,
             blob: new Blob([data], { type: meta.mimeType || 'application/octet-stream' }),
@@ -97,6 +108,7 @@ export class IdbAssetStore extends IdbSnapshotStore {
 
   async getBinderAsset(projectId: string, assetId: string): Promise<BinderAssetPayload | null> {
     return retryDb(async () => {
+      // QNBS-v3: superset of the lock check — also blocks reads during an active journal migration.
       await assertSecureStorageReadable();
       const key = makeBinderAssetStorageKey(projectId, assetId);
       const store = await this.getObjectStore(BINDER_ASSETS_STORE, 'readonly');
@@ -121,6 +133,7 @@ export class IdbAssetStore extends IdbSnapshotStore {
 
   async deleteBinderAsset(projectId: string, assetId: string): Promise<void> {
     return retryDb(async () => {
+      // QNBS-v3: A locked session must not be able to destroy protected binder assets it cannot read.
       await assertIdbProtectedWriteAllowed();
       const key = makeBinderAssetStorageKey(projectId, assetId);
       const store = await this.getObjectStore(BINDER_ASSETS_STORE, 'readwrite');
@@ -134,6 +147,8 @@ export class IdbAssetStore extends IdbSnapshotStore {
 
   async listBinderAssetIds(projectId: string): Promise<string[]> {
     return retryDb(async () => {
+      // QNBS-v3: Binder asset ids are metadata about protected content — use the superset check so
+      //          a locked session, or an active journal migration, can't enumerate them either.
       await assertSecureStorageReadable();
       const prefix = makeBinderAssetIdsPrefix(projectId);
       const store = await this.getObjectStore(BINDER_ASSETS_STORE, 'readonly');

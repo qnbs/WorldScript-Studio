@@ -27,11 +27,14 @@ vi.mock('../../../../services/storage/idbCore', () => ({
 vi.mock('../../../../services/storage/storageEncryptionService', () => ({
   assertIdbProtectedWriteAllowed: async () => undefined,
   assertSecureStorageReadable: async () => undefined,
-  idbEncrypt: async (data: unknown) => data,
+  idbEncryptWithKey: async (_key: unknown, data: unknown) => data,
+  idbDecrypt: async (data: unknown) => data,
   idbReadSecure: async (data: unknown) => data,
   isIdbEncryptionReady: () => false,
   isEncryptedBlob: () => false,
-  StorageEncryptionService: class {},
+  // QNBS-v3: null mirrors isIdbEncryptionReady() => false — every write here takes the
+  // never-configured plaintext branch.
+  resolveProtectedWriteKey: async () => null,
 }));
 
 vi.mock('../../../../services/dbConstants', () => ({

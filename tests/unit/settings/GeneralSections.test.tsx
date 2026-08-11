@@ -205,6 +205,17 @@ describe('AppearanceSection', () => {
     await user.click(screen.getByText('settings.appearance.writingSurfacePlain'));
     expect(mockHandleSettingChange).toHaveBeenCalledWith('writingSurfaceStyle', 'plain');
   });
+
+  it('exposes the selected writing-surface option via aria-pressed', () => {
+    settingsRef.current = { writingSurfaceStyle: 'plain' };
+    render(<AppearanceSection />);
+    expect(
+      screen.getByRole('button', { name: 'settings.appearance.writingSurfaceTextured' }),
+    ).toHaveAttribute('aria-pressed', 'false');
+    expect(
+      screen.getByRole('button', { name: 'settings.appearance.writingSurfacePlain' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+  });
 });
 
 describe('AboutSection', () => {

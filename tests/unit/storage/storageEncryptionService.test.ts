@@ -31,7 +31,7 @@ import {
   IdbMigrationInProgressError,
   updateEncryptionMigrationJournal,
 } from '../../../services/storage/encryptionMigrationJournal';
-import { deletePassphraseSentinel } from '../../../services/storage/idbPassphraseSentinel';
+import * as sentinelModule from '../../../services/storage/idbPassphraseSentinel';
 import {
   assertIdbMigrationTargetKeyMatchesVerifier,
   clearIdbEncryptionKey,
@@ -39,15 +39,18 @@ import {
   createIdbMigrationTargetVerifier,
   hasPassphraseSentinel,
   IdbEncryptionMigrationRequiredError,
+  IdbEncryptionSaltLostError,
   IdbStorageLockedError,
   idbDecrypt,
   idbEncrypt,
+  idbEncryptWithKey,
   initIdbEncryption,
   isEncryptedBlob,
   isIdbEncryptionReady,
   isSecureRecordEnvelope,
   prepareSecureRecordPayload,
   readSecureRecordPayload,
+  resolveProtectedWriteKey,
   rotateIdbPassphrase,
   SECURE_RECORD_VERSION,
   SecureRecordCorruptError,
@@ -69,7 +72,7 @@ beforeEach(async () => {
   clearIdbEncryptionKey();
   // QNBS-v3: the sentinel store is a module singleton with a cached connection — clear its record
   //          between tests so sentinel-presence assertions start from a clean slate.
-  await deletePassphraseSentinel();
+  await sentinelModule.deletePassphraseSentinel();
 });
 
 afterEach(() => {
@@ -310,14 +313,41 @@ describe('initIdbEncryption / isIdbEncryptionReady / idbEncrypt / idbDecrypt', (
 
   it('fails setup instead of deriving a key with a deterministic salt when persistence is unavailable', async () => {
     const originalSetItem = localStorageMock.setItem;
-    localStorageMock.setItem = () => {
-      throw new Error('storage blocked');
-    };
+    try {
+      localStorageMock.setItem = () => {
+        throw new Error('storage blocked');
+      };
 
-    await expect(initIdbEncryption('pass')).rejects.toThrow('Unable to persist encryption salt');
+      await expect(initIdbEncryption('pass')).rejects.toThrow('Unable to persist encryption salt');
+      expect(isIdbEncryptionReady()).toBe(false);
+    } finally {
+      localStorageMock.setItem = originalSetItem;
+    }
+  });
+
+  it('fails closed instead of deriving a new (incompatible) salt when a sentinel already exists', async () => {
+    await setupIdbEncryption('original-pass');
+    clearIdbEncryptionKey();
+    // QNBS-v3: simulate the salt being lost (e.g. localStorage cleared) while the sentinel survives.
+    localStorageMock.clear();
+
+    await expect(initIdbEncryption('original-pass')).rejects.toBeInstanceOf(
+      IdbEncryptionSaltLostError,
+    );
     expect(isIdbEncryptionReady()).toBe(false);
+    // QNBS-v3: no replacement salt must have been written — that would make the loss permanent.
+    expect(localStorageMock.getItem('worldscript-idb-kdf-salt-v1')).toBeNull();
+  });
 
-    localStorageMock.setItem = originalSetItem;
+  it('verifyAndInitIdbEncryption also fails closed when the sentinel survives but the salt is lost', async () => {
+    await setupIdbEncryption('original-pass');
+    clearIdbEncryptionKey();
+    localStorageMock.clear();
+
+    await expect(verifyAndInitIdbEncryption('original-pass')).rejects.toBeInstanceOf(
+      IdbEncryptionSaltLostError,
+    );
+    expect(isIdbEncryptionReady()).toBe(false);
   });
 });
 
@@ -436,6 +466,98 @@ describe('clearIdbPassphrase', () => {
     await expect(clearIdbPassphrase()).rejects.toBeInstanceOf(IdbEncryptionMigrationRequiredError);
     expect(isIdbEncryptionReady()).toBe(true);
     expect(await hasPassphraseSentinel()).toBe(true);
+  });
+});
+
+// ── Atomic write-key resolution (TOCTOU fix) ─────────────────────────────────
+
+describe('resolveProtectedWriteKey', () => {
+  it('returns the active key without an IDB read when a key is present', async () => {
+    await initIdbEncryption('pass');
+    const spy = vi.spyOn(sentinelModule, 'getPassphraseSentinel');
+    const key = await resolveProtectedWriteKey();
+    expect(key).toBeInstanceOf(CryptoKey);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('returns null when encryption was never configured', async () => {
+    await expect(resolveProtectedWriteKey()).resolves.toBeNull();
+  });
+
+  it('throws IdbStorageLockedError when configured but locked', async () => {
+    await setupIdbEncryption('pass');
+    clearIdbEncryptionKey();
+    await expect(resolveProtectedWriteKey()).rejects.toBeInstanceOf(IdbStorageLockedError);
+  });
+});
+
+describe('idbEncryptWithKey', () => {
+  it('encrypts with the exact key passed in, independent of the active session key', async () => {
+    const explicitKey = await freshKey('explicit-pass');
+    const bytes = await idbEncryptWithKey(explicitKey, { title: 'Novel' });
+    expect(isEncryptedBlob(bytes)).toBe(true);
+    const decrypted = await svc.decrypt(explicitKey, { bytes });
+    expect(decrypted).toEqual({ title: 'Novel' });
+  });
+
+  it('remains decryptable with the captured key even after clearIdbEncryptionKey() clears the session', async () => {
+    await initIdbEncryption('pass');
+    const capturedKey = (await resolveProtectedWriteKey())!;
+    clearIdbEncryptionKey();
+    const bytes = await idbEncryptWithKey(capturedKey, 'still works');
+    expect(await svc.decrypt(capturedKey, { bytes })).toBe('still works');
+  });
+});
+
+// ── hasPassphraseSentinel caching ────────────────────────────────────────────
+
+describe('hasPassphraseSentinel caching', () => {
+  it('does not re-read IDB on repeated calls once a positive result is cached', async () => {
+    await setupIdbEncryption('pass');
+    const spy = vi.spyOn(sentinelModule, 'getPassphraseSentinel');
+    await hasPassphraseSentinel();
+    await hasPassphraseSentinel();
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('does NOT cache a negative result — repeated calls with no sentinel keep re-reading IDB', async () => {
+    // QNBS-v3 regression: caching "false" could survive setupIdbEncryption() happening in another
+    // tab, permanently stranding resolveProtectedWriteKey() on a stale "never configured" answer.
+    expect(await hasPassphraseSentinel()).toBe(false);
+    const spy = vi.spyOn(sentinelModule, 'getPassphraseSentinel');
+    await hasPassphraseSentinel();
+    await hasPassphraseSentinel();
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it('picks up a sentinel created after an earlier negative lookup (simulated cross-tab setup)', async () => {
+    expect(await hasPassphraseSentinel()).toBe(false);
+    await setupIdbEncryption('pass');
+    expect(await hasPassphraseSentinel()).toBe(true);
+  });
+
+  it('setupIdbEncryption primes the cache without an extra read', async () => {
+    await setupIdbEncryption('pass');
+    const spy = vi.spyOn(sentinelModule, 'getPassphraseSentinel');
+    expect(await hasPassphraseSentinel()).toBe(true);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('verifyAndInitIdbEncryption primes the cache without an extra read', async () => {
+    await setupIdbEncryption('pass');
+    clearIdbEncryptionKey();
+    await verifyAndInitIdbEncryption('pass');
+    const spy = vi.spyOn(sentinelModule, 'getPassphraseSentinel');
+    expect(await hasPassphraseSentinel()).toBe(true);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('clearIdbEncryptionKey() resets the cache so the next call re-reads IDB', async () => {
+    await setupIdbEncryption('pass');
+    clearIdbEncryptionKey();
+    const spy = vi.spyOn(sentinelModule, 'getPassphraseSentinel');
+    expect(await hasPassphraseSentinel()).toBe(true);
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 });
 

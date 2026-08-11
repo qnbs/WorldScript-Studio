@@ -206,6 +206,7 @@ export const AppearanceSection: FC = () => {
               </Button>
             </div>
           </div>
+          {/* QNBS-v3: Let writers remove decorative layers without changing the selected theme. */}
           <div className="pt-2 border-t border-[var(--sc-border-subtle)] space-y-2">
             <span className="text-sm font-medium text-[var(--sc-text-secondary)]">
               {t('settings.appearance.writingSurface')}
@@ -216,6 +217,7 @@ export const AppearanceSection: FC = () => {
             <div className="grid grid-cols-2 gap-3">
               <Button
                 variant={settings.writingSurfaceStyle === 'textured' ? 'primary' : 'secondary'}
+                aria-pressed={settings.writingSurfaceStyle === 'textured'}
                 size="sm"
                 onClick={() => handleSettingChange('writingSurfaceStyle', 'textured')}
                 className="justify-center"
@@ -224,6 +226,7 @@ export const AppearanceSection: FC = () => {
               </Button>
               <Button
                 variant={settings.writingSurfaceStyle === 'plain' ? 'primary' : 'secondary'}
+                aria-pressed={settings.writingSurfaceStyle === 'plain'}
                 size="sm"
                 onClick={() => handleSettingChange('writingSurfaceStyle', 'plain')}
                 className="justify-center"

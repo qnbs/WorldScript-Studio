@@ -4,8 +4,8 @@
  */
 
 import {
-  ProtectedStoreMigrationAdapterError,
   type ProtectedStoreAdapter,
+  ProtectedStoreMigrationAdapterError,
 } from './protectedStoreMigration';
 import {
   createSecondaryPayloadStoreAdapter,
@@ -50,7 +50,11 @@ interface CacheRecord extends Record<string, unknown> {
   result?: string;
 }
 
-function assertExactKeys(value: Record<string, unknown>, allowed: readonly string[], store: string): void {
+function assertExactKeys(
+  value: Record<string, unknown>,
+  allowed: readonly string[],
+  store: string,
+): void {
   if (Object.keys(value).some((key) => !allowed.includes(key))) {
     throw new ProtectedStoreMigrationAdapterError(
       `${store} contains an unsupported record schema; recovery must preserve it before migration`,
@@ -80,9 +84,15 @@ function isCachePayload(value: unknown): value is CachePayload {
 
 function scenePayload(record: SceneRevisionRecord): unknown {
   if (record.payload !== undefined) {
-    assertExactKeys(record, ['id', 'sectionId', 'createdAt', 'schemaVersion', 'payload'], 'scene revisions');
+    assertExactKeys(
+      record,
+      ['id', 'sectionId', 'createdAt', 'schemaVersion', 'payload'],
+      'scene revisions',
+    );
     if (record.schemaVersion !== 1) {
-      throw new ProtectedStoreMigrationAdapterError('Scene revisions have an unsupported schema version');
+      throw new ProtectedStoreMigrationAdapterError(
+        'Scene revisions have an unsupported schema version',
+      );
     }
     return record.payload;
   }
@@ -159,4 +169,3 @@ export function getRegisteredSecondaryProtectedStoreAdapters(): readonly Protect
     createSecondaryPayloadStoreAdapter(inferenceCacheAdapterSpec),
   ];
 }
-

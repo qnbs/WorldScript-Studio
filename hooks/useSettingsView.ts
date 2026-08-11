@@ -112,6 +112,8 @@ export const useSettingsView = () => {
         case 'appearancePreset':
           dispatch(settingsActions.setAppearancePreset(value as AppearancePreset));
           break;
+        // QNBS-v3: dispatch through the settings slice (not local component state) so the
+        // preference persists via the same save path as every other appearance setting.
         case 'writingSurfaceStyle':
           dispatch(settingsActions.setWritingSurfaceStyle(value as WritingSurfaceStyle));
           break;
