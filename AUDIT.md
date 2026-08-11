@@ -113,7 +113,7 @@ the same root cause in one sprint is itself the finding: **the failure mode is n
 - **Rebrand residue:** ADR-0008 present-tense "StoryCraft is offline-first" → "WorldScript Studio". Remaining `storycraft*` hits are intentional historical records (CHANGELOG version entries, archived sprints) or technical identifiers that were genuine at their version — left intact.
 - **GitHub releases:** 6 historical release titles renamed StoryCraft → WorldScript (v1.3.0, v1.5.0, v1.7.0, v1.17.0, v1.20.0, v1.21.0); v1.23.0 release/tag verified correct (latest, full changelog, tag → `fbaa33c3`).
 - **GitHub Packages:** orphaned `storycraft-studio` GHCR container image to be deleted so only `worldscript-studio` remains (requires `delete:packages` token scope — pending maintainer auth refresh).
-- **Dependabot hardening:** added `cooldown: default-days: 7` to all three `.github/dependabot.yml` ecosystems so newly released versions age 7 days before a PR is opened — matched to the `.npmrc` `minimum-release-age=10080` (7-day) supply-chain quarantine already enforced at pnpm install-time, so a version is never PR'd before `pnpm install --frozen-lockfile` would accept it (`.github/dependabot.yml` is the source of truth for the cooldown value). Open queue handled per the CodeAnt Correction Loop: #150 candle-nn merged; #151 candle-core rebased + re-running; #152 dev-tooling fixed at root (dual `playwright-core` deduped to 1.61.0 via `pnpm-workspace.yaml` override); #154/#155 are blocked solely by the `minimum-release-age` quarantine (packages too fresh — working as designed) and clear once aged.
+- **Dependabot hardening:** added `cooldown: default-days: 7` to all three `.github/dependabot.yml` ecosystems so newly released versions age 7 days before a PR is opened — matched to the `pnpm-workspace.yaml` `minimumReleaseAge: 10080` (7-day) supply-chain quarantine enforced at pnpm install-time, so a version is never PR'd before `pnpm install --frozen-lockfile` would accept it (`.github/dependabot.yml` is the source of truth for the cooldown value). Open queue handled per the CodeAnt Correction Loop: #150 candle-nn merged; #151 candle-core rebased + re-running; #152 dev-tooling fixed at root (dual `playwright-core` deduped to 1.61.0 via `pnpm-workspace.yaml` override); #154/#155 are blocked solely by the `minimumReleaseAge` quarantine (packages too fresh — working as designed) and clear once aged.
 
 ## v1.23 i18n Interpolation Bug-Class Fix + Regression Guard (2026-06-14)
 
@@ -260,7 +260,7 @@ the same root cause in one sprint is itself the finding: **the failure mode is n
 | `package.json` | Added `@typescript/native-preview@beta` and `@typescript/typescript6` alias |
 | `tsconfig.tsgo.json` | New tsgo-specific config (excludes `vite/client` types) |
 | `.github/workflows/ci.yml` | Updated typecheck step to use tsgo |
-| `.npmrc` | Disabled `strict-peer-dependencies` for tsgo compatibility |
+| `pnpm-workspace.yaml` | Disabled `strictPeerDependencies` for tsgo compatibility |
 | `pnpm-workspace.yaml` | Added `strictPeerDependencies: false` |
 | `docs/TS7-MIGRATION.md` | Migration guide created |
 
@@ -1744,9 +1744,9 @@ WorldScript Studio was assessed as a strong, modern React/TypeScript application
 
 | Status | Item |
 |--------|------|
-| ✅ | Added `strict-dep-builds=true` to `.npmrc` |
-| ✅ | Added `block-exotic-subdeps=true` to `.npmrc` |
-| ✅ | Added `minimum-release-age=10080` (7 days) to `.npmrc` |
+| ✅ | Added `strictDepBuilds: true` to `pnpm-workspace.yaml` |
+| ✅ | Added `blockExoticSubdeps: true` to `pnpm-workspace.yaml` |
+| ✅ | Added `minimumReleaseAge: 10080` (7 days) to `pnpm-workspace.yaml` |
 | ✅ | Added security justification comments to `pnpm-workspace.yaml` overrides |
 
 ### OpenRouter Provider Hardening (P1)
@@ -1834,7 +1834,7 @@ several apply only to dev/test transitive deps and are never shipped to users.
 **Dependency hygiene status (2026-06-13):**
 - `pnpm audit --audit-level=high` → 0 vulnerabilities.
 - `pnpm audit --audit-level=moderate` → 0 vulnerabilities.
-- `.npmrc` hardening active: `strict-dep-builds=true`, `block-exotic-subdeps=true`, `minimum-release-age=10080`.
+- `pnpm-workspace.yaml` hardening active: `strictDepBuilds: true`, `blockExoticSubdeps: true`, `minimumReleaseAge: 10080`.
 - `pnpm outdated` (re-run 2026-06-13): only non-critical patch/minor drift — `@ai-sdk/google|openai|react`, `ai`, `@storybook/*` + `storybook` (10.4.2→10.4.4), `@types/node`, `docx`, `dompurify`, `lint-staged`, `turbo`, `yjs`, `zustand`, `wrangler`. No major versions. `@duckdb/duckdb-wasm` (1.32.0) and `@typescript/native-preview` are dev/pre-release tracks and intentionally pinned.
 
 **Plugin sandbox post-fix validation (2026-06-13):** The v1.22 plugin-isolation hardening

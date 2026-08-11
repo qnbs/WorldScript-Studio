@@ -29,6 +29,8 @@ export interface ProtectedStoreAdapterContext extends EncryptionMigrationKeys {
 
 export interface ProtectedStoreAdapter {
   id: string;
+  /** Required because a crash can occur after a store transaction commits but before its journal checkpoint. */
+  replaySafe: true;
   /** Converts one bounded, transaction-confirmed batch. */
   migrateNext(context: ProtectedStoreAdapterContext): Promise<ProtectedStoreMigrationBatch>;
   /** Reads every relevant record under the post-migration policy without changing storage. */
@@ -113,12 +115,32 @@ function assertRegisteredAdapters(
   if (ids.size !== adapters.length) {
     throw new ProtectedStoreMigrationAdapterError('Protected-store adapter ids must be unique');
   }
+  if (adapters.some((adapter) => adapter.replaySafe !== true)) {
+    throw new ProtectedStoreMigrationAdapterError(
+      'Every protected-store adapter must explicitly guarantee replay-safe batches',
+    );
+  }
   for (const checkpoint of journal.stores) {
     if (!ids.has(checkpoint.id)) {
       throw new ProtectedStoreMigrationAdapterError(
         `No registered protected-store adapter exists for ${checkpoint.id}`,
       );
     }
+  }
+}
+
+function assertRequiredKeys(
+  operation: EncryptionMigrationOperation,
+  keys: EncryptionMigrationKeys,
+): void {
+  if (operation === 'enable' && !keys.targetKey) {
+    throw new ProtectedStoreMigrationAdapterError('Enable migration requires a target key');
+  }
+  if (operation === 'disable' && !keys.sourceKey) {
+    throw new ProtectedStoreMigrationAdapterError('Disable migration requires a source key');
+  }
+  if (operation === 'rekey' && (!keys.sourceKey || !keys.targetKey)) {
+    throw new ProtectedStoreMigrationAdapterError('Rekey migration requires source and target keys');
   }
 }
 
@@ -131,13 +153,14 @@ export async function runProtectedStoreMigration(
   adapters: readonly ProtectedStoreAdapter[],
   keys: EncryptionMigrationKeys,
 ): Promise<EncryptionMigrationJournal> {
-  assertRegisteredAdapters(initialJournal, adapters);
   let journal = initialJournal;
   if (journal.phase === 'recovery-required') {
     throw new ProtectedStoreMigrationAdapterError(
       'Recovery-required journal cannot run until an explicit recovery procedure validates it',
     );
   }
+  assertRegisteredAdapters(journal, adapters);
+  assertRequiredKeys(journal.operation, keys);
   if (journal.phase === 'prepared') {
     journal = await updateEncryptionMigrationJournal(journal, {
       phase: 'migrating',
@@ -176,6 +199,7 @@ export async function runProtectedStoreMigration(
   if (journal.phase === 'verifying') {
     for (const adapter of adapters) {
       const checkpoint = checkpointFor(journal, adapter.id);
+      if (checkpoint.done && checkpoint.verified >= checkpoint.processed) continue;
       const verified = await adapter.verify({
         operation: journal.operation,
         ...(keys.sourceKey ? { sourceKey: keys.sourceKey } : {}),

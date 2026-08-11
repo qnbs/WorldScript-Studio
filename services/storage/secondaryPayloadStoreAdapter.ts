@@ -254,6 +254,8 @@ export function createSecondaryPayloadStoreAdapter<Record extends object, Payloa
 
   return {
     id: spec.id,
+    // QNBS-v3: Re-keying probes the target key first, so a batch committed before its journal checkpoint can be replayed safely.
+    replaySafe: true,
     async migrateNext(context): Promise<ProtectedStoreMigrationBatch> {
       return withDatabase(async (database) => {
         if (!database) return { processed: 0, complete: true };

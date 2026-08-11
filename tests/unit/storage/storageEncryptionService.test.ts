@@ -29,6 +29,7 @@ import {
   beginEncryptionMigration,
   completeEncryptionMigration,
   IdbMigrationInProgressError,
+  updateEncryptionMigrationJournal,
 } from '../../../services/storage/encryptionMigrationJournal';
 import { deletePassphraseSentinel } from '../../../services/storage/idbPassphraseSentinel';
 import {
@@ -46,6 +47,7 @@ import {
   prepareSecureRecordPayload,
   readSecureRecordPayload,
   rotateIdbPassphrase,
+  SECURE_RECORD_VERSION,
   SecureRecordCorruptError,
   SecureRecordLockedError,
   StorageEncryptionService,
@@ -190,6 +192,7 @@ describe('secondary secure-record envelopes', () => {
     const envelope = await prepareSecureRecordPayload({ content: 'confidential' }, context);
 
     expect(isSecureRecordEnvelope(envelope)).toBe(true);
+    expect(envelope).toMatchObject({ version: SECURE_RECORD_VERSION });
     await expect(
       readSecureRecordPayload(envelope, { ...context, recordId: 'revision-2' }),
     ).rejects.toBeInstanceOf(SecureRecordCorruptError);
@@ -375,7 +378,9 @@ describe('verifyAndInitIdbEncryption', () => {
     await expect(setupIdbEncryption('replacement')).rejects.toBeInstanceOf(
       IdbMigrationInProgressError,
     );
-    await completeEncryptionMigration(journal);
+    await completeEncryptionMigration(
+      await updateEncryptionMigrationJournal(journal, { phase: 'committing', stores: journal.stores }),
+    );
   });
 
   it('throws on wrong passphrase (AES-GCM auth-tag mismatch)', async () => {

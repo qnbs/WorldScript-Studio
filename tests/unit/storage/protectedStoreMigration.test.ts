@@ -33,11 +33,15 @@ const begin = () =>
     stores: [{ id: 'test-store', processed: 0, verified: 0, done: false }],
   });
 
+// QNBS-v3: Runner orchestration tests validate key presence; these adapters never invoke WebCrypto.
+const migrationKeys = { sourceKey: {} as CryptoKey, targetKey: {} as CryptoKey };
+
 describe('runProtectedStoreMigration', () => {
   it('checkpoints committed batches and reaches committing only after verification', async () => {
     const calls: Array<string | undefined> = [];
     const adapter: ProtectedStoreAdapter = {
       id: 'test-store',
+      replaySafe: true,
       async migrateNext({ cursor }) {
         calls.push(cursor);
         return cursor === undefined
@@ -49,7 +53,7 @@ describe('runProtectedStoreMigration', () => {
       },
     };
 
-    const result = await runProtectedStoreMigration(await begin(), [adapter], {});
+    const result = await runProtectedStoreMigration(await begin(), [adapter], migrationKeys);
 
     expect(calls).toEqual([undefined, 'record-1']);
     expect(result.phase).toBe('committing');
@@ -65,6 +69,7 @@ describe('runProtectedStoreMigration', () => {
   it('resumes from the last durable cursor after an interrupted batch', async () => {
     const firstAttempt: ProtectedStoreAdapter = {
       id: 'test-store',
+      replaySafe: true,
       async migrateNext() {
         return { cursor: 'record-1', processed: 1, complete: false };
       },
@@ -85,7 +90,7 @@ describe('runProtectedStoreMigration', () => {
             },
           },
         ],
-        {},
+        migrationKeys,
       ),
     ).rejects.toThrow('injected interruption');
 
@@ -101,6 +106,7 @@ describe('runProtectedStoreMigration', () => {
       [
         {
           id: 'test-store',
+          replaySafe: true,
           async migrateNext({ cursor }) {
             resumedCalls.push(cursor);
             return { cursor: 'record-2', processed: 1, complete: true };
@@ -110,7 +116,7 @@ describe('runProtectedStoreMigration', () => {
           },
         },
       ],
-      {},
+      migrationKeys,
     );
 
     expect(resumedCalls).toEqual(['record-1']);
@@ -130,6 +136,7 @@ describe('runProtectedStoreMigration', () => {
     });
     const adapter: ProtectedStoreAdapter = {
       id: 'test-store',
+      replaySafe: true,
       async migrateNext() {
         throw new Error('must not execute');
       },
@@ -138,7 +145,7 @@ describe('runProtectedStoreMigration', () => {
       },
     };
 
-    await expect(runProtectedStoreMigration(journal, [adapter], {})).rejects.toBeInstanceOf(
+    await expect(runProtectedStoreMigration(journal, [adapter], migrationKeys)).rejects.toBeInstanceOf(
       ProtectedStoreMigrationAdapterError,
     );
     await expect(readEncryptionMigrationJournal()).resolves.toMatchObject({
@@ -149,6 +156,7 @@ describe('runProtectedStoreMigration', () => {
   it('rejects invalid adapter progress before it can advance the durable checkpoint', async () => {
     const adapter: ProtectedStoreAdapter = {
       id: 'test-store',
+      replaySafe: true,
       async migrateNext() {
         return { cursor: 'record-1', processed: -1, complete: false };
       },
@@ -157,13 +165,90 @@ describe('runProtectedStoreMigration', () => {
       },
     };
 
-    await expect(runProtectedStoreMigration(await begin(), [adapter], {})).rejects.toThrow(
+    await expect(runProtectedStoreMigration(await begin(), [adapter], migrationKeys)).rejects.toThrow(
       'returned invalid progress',
     );
     await expect(readEncryptionMigrationJournal()).resolves.toMatchObject({
       phase: 'migrating',
       stores: [{ processed: 0, done: false }],
     });
+  });
+
+  it('rejects missing operation keys before changing the durable phase', async () => {
+    const adapter: ProtectedStoreAdapter = {
+      id: 'test-store',
+      replaySafe: true,
+      async migrateNext() {
+        throw new Error('must not execute');
+      },
+      async verify() {
+        throw new Error('must not execute');
+      },
+    };
+
+    await expect(
+      runProtectedStoreMigration(await begin(), [adapter], { sourceKey: migrationKeys.sourceKey }),
+    ).rejects.toThrow('Rekey migration requires source and target keys');
+    await expect(readEncryptionMigrationJournal()).resolves.toMatchObject({ phase: 'prepared' });
+  });
+
+  it('does not repeat a durably verified store after verification is interrupted', async () => {
+    const journal = await beginEncryptionMigration({
+      operationId: 'verification-resume',
+      operation: 'rekey',
+      phase: 'verifying',
+      sourceGeneration: 'source',
+      targetGeneration: 'target',
+      targetVerifier: [1, 2, 3],
+      stores: [
+        { id: 'first-store', processed: 2, verified: 0, done: true },
+        { id: 'second-store', processed: 1, verified: 0, done: true },
+      ],
+    });
+    const calls: string[] = [];
+    const first: ProtectedStoreAdapter = {
+      id: 'first-store',
+      replaySafe: true,
+      async migrateNext() {
+        throw new Error('must not execute');
+      },
+      async verify() {
+        calls.push('first');
+        return 2;
+      },
+    };
+    const secondFailure: ProtectedStoreAdapter = {
+      id: 'second-store',
+      replaySafe: true,
+      async migrateNext() {
+        throw new Error('must not execute');
+      },
+      async verify() {
+        calls.push('second-failure');
+        throw new Error('injected verification interruption');
+      },
+    };
+
+    await expect(runProtectedStoreMigration(journal, [first, secondFailure], migrationKeys)).rejects.toThrow(
+      'injected verification interruption',
+    );
+    const checkpoint = await readEncryptionMigrationJournal();
+    expect(checkpoint).toMatchObject({
+      phase: 'verifying',
+      stores: [{ id: 'first-store', verified: 2 }, { id: 'second-store', verified: 0 }],
+    });
+
+    const secondResume: ProtectedStoreAdapter = {
+      ...secondFailure,
+      async verify() {
+        calls.push('second-resume');
+        return 1;
+      },
+    };
+    await expect(
+      runProtectedStoreMigration(checkpoint!, [first, secondResume], migrationKeys),
+    ).resolves.toMatchObject({ phase: 'committing' });
+    expect(calls).toEqual(['first', 'second-failure', 'second-resume']);
   });
 
   it('rejects a missing registered adapter before a migration can mutate storage', async () => {
@@ -181,6 +266,7 @@ describe('runProtectedStoreMigration', () => {
   it('rejects duplicate adapter identifiers before a migration can mutate storage', async () => {
     const adapter: ProtectedStoreAdapter = {
       id: 'test-store',
+      replaySafe: true,
       async migrateNext() {
         throw new Error('must not execute');
       },

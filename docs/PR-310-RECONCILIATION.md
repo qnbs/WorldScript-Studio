@@ -41,9 +41,9 @@ the replacements because that would duplicate migrations and lifecycle controls.
 
 | ID | Behavior | Security/data impact | Disposition | Final implementation / proof |
 | --- | --- | --- | --- | --- |
-| PR310-B001 | Versioned AES-GCM envelopes for secondary payloads | Confidentiality and integrity | ADOPTED_WITH_MODIFICATIONS | Shared envelope API with strict candidate validation and versioned codec tests |
-| PR310-B002 | AAD binds store and record id | Detects record swapping | ADOPTED_WITH_MODIFICATIONS | Preserve record-bound AAD; add database/store context where required |
-| PR310-B003 | Blob-preserving structured codec | Prevents ProForge artifact corruption | ADOPTED_WITH_MODIFICATIONS | Preserve Blob bytes; explicitly encode `undefined`; reject non-finite and unsupported values |
+| PR310-B001 | Versioned AES-GCM envelopes for secondary payloads | Confidentiality and integrity | ADOPTED_WITH_MODIFICATIONS | v2 shared envelope API with strict candidate validation; the legacy v1 reader migrates only authenticated, AAD-bound namespaces |
+| PR310-B002 | AAD binds store and record id | Detects record swapping | ADOPTED_WITH_MODIFICATIONS | Database/store/record AAD is mandatory for v2; AAD-less ciphertext is recovery-required rather than silently accepted or rewritten |
+| PR310-B003 | Blob-preserving structured codec | Prevents ProForge artifact corruption | ADOPTED_WITH_MODIFICATIONS | Preserve Blob/`Uint8Array`/`undefined`; reject non-finite and non-plain structured-clone values rather than flattening them |
 | PR310-B004 | Locked secondary reads/writes/deletes fail closed | Prevents plaintext downgrade and destructive mutation while locked | ADOPTED_WITH_MODIFICATIONS | One lifecycle-policy guard for every protected adapter and background writer |
 | PR310-B005 | Lazy legacy migration after unlock | Migrates existing plaintext without silent loss | ADOPTED_WITH_MODIFICATIONS | Adapter-specific canonical decoders plus conditional, non-stale rewrites |
 | PR310-B006 | Bulk disable conversion | Recoverability | SUPERSEDED_BY_BETTER_IMPLEMENTATION | Journalled, checkpointed decrypt-to-plaintext before verifier retirement |
@@ -100,8 +100,8 @@ not a disposition.
 | Reason | pnpm v11 documents `allowBuilds` as the replacement control; legacy lists no longer define the effective policy |
 | Scripts newly allowed | None; the policy was narrowed after manifest-level evidence showed only the two native packages require an install hook |
 | Scripts newly denied | `@google/genai`, `core-js`, `onnxruntime-node`, `protobufjs`, `sharp`, `simple-git-hooks`, `unrs-resolver`, and `workerd` dependency lifecycle scripts |
-| Additional guard | `verify-deps-before-run=error` prevents `pnpm run`/`pnpm exec` from implicitly invoking install; root Git-hook setup moved from automatic `prepare` to explicit `hooks:install` |
-| Verification | Script-free `pnpm install --lockfile-only --ignore-scripts` exit 0; pnpm v11 source confirms `verifyDepsBeforeRun: error` aborts before install; direct Biome, docs, and suppression checks passed |
+| Additional guard | `pnpm-workspace.yaml` is the sole effective pnpm-v11 policy: `verifyDepsBeforeRun: error`, `minimumReleaseAge: 10080`, strict build/integrity controls, and the narrow `allowBuilds` map; root Git-hook setup moved from automatic `prepare` to explicit `hooks:install` |
+| Verification | Script-free `pnpm install --lockfile-only --ignore-scripts` exit 0; active pnpm `config get` confirms `verifyDepsBeforeRun=error`, `minimumReleaseAge=10080`, `strictDepBuilds=true`, `blockExoticSubdeps=true`, and `verifyStoreIntegrity=true`; direct Biome, docs, and suppression checks passed |
 | Rollback | Revert the policy commit; do not use `approve-builds`, a broad allowlist, or an automatic root `prepare` |
 
 ## Current merge decision

@@ -201,7 +201,7 @@ Only the two reviewed native packages marked `true` in `allowBuilds` (`@swc/core
 may run dependency lifecycle scripts. `@google/genai`, `core-js`, `onnxruntime-node`, `protobufjs`,
 `sharp`, `simple-git-hooks`, `unrs-resolver`, and `workerd` are explicitly denied. Git-hook
 installation is deliberately opt-in through `pnpm run hooks:install`; dependency installation no
-longer runs a root `prepare` command. `.npmrc` also sets `verify-deps-before-run=error`, so
+longer runs a root `prepare` command. `pnpm-workspace.yaml` sets `verifyDepsBeforeRun: error`, so
 `pnpm run`/`pnpm exec` aborts when dependencies are stale instead of implicitly running install.
 
 ---

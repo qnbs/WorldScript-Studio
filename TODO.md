@@ -155,7 +155,7 @@ are all version-bumped and synced for this release.
 
 ## Dependency-Hygiene Backlog (carried forward)
 
-> `.npmrc` Hardening (`strict-dep-builds=true`, `block-exotic-subdeps=true`, `minimum-release-age=10080`) ist bereits aktiv.
+> `pnpm-workspace.yaml` hardening (`strictDepBuilds: true`, `blockExoticSubdeps: true`, `minimumReleaseAge: 10080`) is active.
 > `pnpm audit --audit-level=high` → 0 vulnerabilities; `pnpm audit --audit-level=moderate` → 0 vulnerabilities.
 > Aktueller Status in `AUDIT.md` § *Known Overrides Table*.
 

@@ -111,16 +111,19 @@ function parseJournal(raw: unknown): EncryptionMigrationJournal | null {
         !checkpoint ||
         typeof checkpoint.id !== 'string' ||
         (checkpoint.cursor !== undefined && typeof checkpoint.cursor !== 'string') ||
-        typeof checkpoint.processed !== 'number' ||
-        typeof checkpoint.verified !== 'number' ||
+        !Number.isSafeInteger(checkpoint.processed) ||
+        checkpoint.processed < 0 ||
+        !Number.isSafeInteger(checkpoint.verified) ||
+        checkpoint.verified < 0 ||
         typeof checkpoint.done !== 'boolean',
     )
   ) {
     return null;
   }
   if (
-    value.targetVerifier &&
-    !value.targetVerifier.every((byte) => Number.isInteger(byte) && byte >= 0 && byte <= 255)
+    value.targetVerifier !== undefined &&
+    (!Array.isArray(value.targetVerifier) ||
+      !value.targetVerifier.every((byte) => Number.isInteger(byte) && byte >= 0 && byte <= 255))
   ) {
     return null;
   }
@@ -279,6 +282,9 @@ export async function updateEncryptionMigrationJournal(
 export async function completeEncryptionMigration(
   journal: EncryptionMigrationJournal,
 ): Promise<void> {
+  if (journal.phase !== 'committing' && journal.phase !== 'cleanup') {
+    throw new IdbMigrationInProgressError(journal);
+  }
   await journalStore.saveIfCurrent({ ...journal, phase: 'completed' });
 }
 

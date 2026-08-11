@@ -31,11 +31,15 @@ export interface EncryptedBlob {
   bytes: Uint8Array;
 }
 
-export const SECURE_RECORD_VERSION = 1 as const;
+const LEGACY_BOUND_SECURE_RECORD_VERSION = 1 as const;
+export const SECURE_RECORD_VERSION = 2 as const;
+type SecureRecordVersion =
+  | typeof LEGACY_BOUND_SECURE_RECORD_VERSION
+  | typeof SECURE_RECORD_VERSION;
 
 /** Structured-clone-safe AES-GCM envelope for a secondary-store payload. */
 export interface SecureRecordEnvelope {
-  version: typeof SECURE_RECORD_VERSION;
+  version: SecureRecordVersion;
   iv: Uint8Array;
   ciphertext: Uint8Array;
 }
@@ -320,7 +324,8 @@ export function isSecureRecordEnvelope(value: unknown): value is SecureRecordEnv
   if (!isSecureRecordCandidate(value)) return false;
   const record = value as Record<string, unknown>;
   return (
-    record.version === SECURE_RECORD_VERSION &&
+    (record.version === LEGACY_BOUND_SECURE_RECORD_VERSION ||
+      record.version === SECURE_RECORD_VERSION) &&
     record.iv instanceof Uint8Array &&
     record.iv.length === IV_BYTE_LENGTH &&
     record.ciphertext instanceof Uint8Array &&
@@ -352,8 +357,12 @@ async function decryptSecureRecordValue<T>(
   const blob = envelopeToEncryptedBlob(envelope);
   try {
     const plaintext = await _svc.decryptBytes(key, blob, buildSecureRecordAad(context));
-    return { value: decodeSecureRecordValue(plaintext) as T, needsMigration: false };
+    return {
+      value: decodeSecureRecordValue(plaintext) as T,
+      needsMigration: envelope.version !== SECURE_RECORD_VERSION,
+    };
   } catch {
+    if (envelope.version === SECURE_RECORD_VERSION) throw new SecureRecordCorruptError();
     for (const legacyStore of context.legacyStores ?? []) {
       try {
         const plaintext = await _svc.decryptBytes(
@@ -366,23 +375,8 @@ async function decryptSecureRecordValue<T>(
         // QNBS-v3: Only an authenticated legacy namespace may fall through to the next documented format.
       }
     }
-    try {
-      // QNBS-v3: Early secondary envelopes lacked AAD; rewrite them only after a successful legacy read.
-      const plaintext = await _svc.decryptBytes(key, blob);
-      try {
-        return {
-          value: decodeSecureRecordValue(plaintext) as T,
-          needsMigration: true,
-        };
-      } catch {
-        return {
-          value: JSON.parse(new TextDecoder().decode(plaintext)) as T,
-          needsMigration: true,
-        };
-      }
-    } catch {
-      throw new SecureRecordCorruptError();
-    }
+    // QNBS-v3: AAD-less ciphertext cannot prove its record/store binding, so it is recovery-required rather than rewritten.
+    throw new SecureRecordCorruptError();
   }
 }
 

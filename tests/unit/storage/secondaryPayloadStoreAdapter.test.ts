@@ -92,6 +92,7 @@ describe('secondary protected-store payload adapter', () => {
       { id: 'b', payload: { content: 'second protected record' } },
     ]);
     const adapter = createSecondaryPayloadStoreAdapter(spec);
+    expect(adapter.replaySafe).toBe(true);
     const sourceKey = await deriveKey('source');
     const targetKey = await deriveKey('target');
 
@@ -121,6 +122,10 @@ describe('secondary protected-store payload adapter', () => {
       targetKey,
     });
     expect(rekeyFirst.cursor).toBe('a');
+    // QNBS-v3: Simulate a crash after the store transaction but before the journal checkpoint persists.
+    await expect(
+      adapter.migrateNext({ operation: 'rekey', sourceKey, targetKey }),
+    ).resolves.toMatchObject({ cursor: 'a', processed: 1, complete: false });
     await adapter.migrateNext({
       operation: 'rekey',
       sourceKey,

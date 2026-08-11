@@ -39,6 +39,15 @@ describe('secureRecordCodec', () => {
     },
   );
 
+  it.each([
+    new Map([['scene', 'opening']]),
+    new Set(['draft']),
+    new ArrayBuffer(8),
+    new Float32Array([1, 2, 3]),
+  ])('rejects non-plain structured-clone objects instead of flattening them', async (value) => {
+    await expect(encodeSecureRecordValue({ value })).rejects.toThrow('non-plain structured-clone');
+  });
+
   it('rejects malformed and unsupported serialized payloads', () => {
     expect(() => decodeSecureRecordValue(new TextEncoder().encode('{"v":2,"root":{}}'))).toThrow(
       'Unsupported or malformed',

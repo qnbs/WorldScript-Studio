@@ -46,12 +46,12 @@ async function encodeValueNode(value: unknown): Promise<EncodedNode> {
   if (Array.isArray(value)) {
     return { k: 'arr', v: await Promise.all(value.map((item) => encodeValueNode(item))) };
   }
-  if (
-    value !== null &&
-    typeof value === 'object' &&
-    !(value instanceof Date) &&
-    !(value instanceof Uint8Array)
-  ) {
+  if (value instanceof Date || value instanceof Uint8Array) return encodeScalarNode(value);
+  if (value !== null && typeof value === 'object') {
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) {
+      throw new Error('Secure-record codec cannot encode a non-plain structured-clone object');
+    }
     const encodedEntries = await Promise.all(
       Object.entries(value as Record<string, unknown>).map(
         async ([key, child]) => [key, await encodeValueNode(child)] as const,

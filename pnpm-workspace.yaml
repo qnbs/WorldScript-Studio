@@ -3,6 +3,16 @@
 # All other dependency build scripts are denied by default under pnpm v11.
 # QNBS-v3: TS7 migration - disabled strictPeerDependencies for tsgo preview compatibility
 strictPeerDependencies: false
+verifyDepsBeforeRun: error
+autoInstallPeers: true
+ignoreScripts: false
+engineStrict: true
+preferFrozenLockfile: true
+verifyStoreIntegrity: true
+sideEffectsCache: true
+strictDepBuilds: true
+blockExoticSubdeps: true
+minimumReleaseAge: 10080
 
 # QNBS-v3: Migrated from package.json "pnpm" field (deprecated in pnpm v10+)
 # Overrides with security justifications:

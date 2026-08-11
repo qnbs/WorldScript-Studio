@@ -58,6 +58,10 @@ function replaceStoredJournalForTest(value: unknown): Promise<void> {
   });
 }
 
+function markJournalCommitting(journal: Awaited<ReturnType<typeof beginEncryptionMigration>>) {
+  return updateEncryptionMigrationJournal(journal, { phase: 'committing', stores: journal.stores });
+}
+
 beforeEach(() => {
   __resetEncryptionMigrationJournalConnectionsForTest();
   globalThis.indexedDB = new IDBFactory();
@@ -100,13 +104,13 @@ describe('encryption migration journal', () => {
       IdbMigrationInProgressError,
     );
 
-    await completeEncryptionMigration(created);
+    await completeEncryptionMigration(await markJournalCommitting(created));
     await expect(assertNoActiveEncryptionMigration()).resolves.toBeUndefined();
   });
 
   it('allows a completed journal to be cleared before a later migration begins', async () => {
     const first = await beginEncryptionMigration(migrationInput('operation-1'));
-    await completeEncryptionMigration(first);
+    await completeEncryptionMigration(await markJournalCommitting(first));
     await clearCompletedEncryptionMigration();
 
     await expect(beginEncryptionMigration(migrationInput('operation-2'))).resolves.toMatchObject({
@@ -171,9 +175,18 @@ describe('encryption migration journal', () => {
     });
   });
 
+  it('refuses to complete a journal before every store reaches committing', async () => {
+    const created = await beginEncryptionMigration(migrationInput('operation-1'));
+
+    await expect(completeEncryptionMigration(created)).rejects.toBeInstanceOf(
+      IdbMigrationInProgressError,
+    );
+    await expect(readEncryptionMigrationJournal()).resolves.toMatchObject({ phase: 'prepared' });
+  });
+
   it('fails closed into recovery-required when persisted metadata is malformed', async () => {
-    await beginEncryptionMigration(migrationInput('operation-1'));
-    await replaceStoredJournalForTest({ schemaVersion: 1, operationId: 'missing-required-fields' });
+    const created = await beginEncryptionMigration(migrationInput('operation-1'));
+    await replaceStoredJournalForTest({ ...created, targetVerifier: { malformed: true } });
     __resetEncryptionMigrationJournalConnectionsForTest();
 
     await expect(readEncryptionMigrationJournal()).rejects.toBeInstanceOf(
