@@ -158,7 +158,12 @@ export async function listOllamaModels(baseUrl?: string): Promise<string[]> {
  * a raw/technical string for logs; UI code should prefer `kind` (+ `params` for interpolation) to
  * render a localized message, per `settings.ai.testError.*` in `locales/<lang>/settings.json`.
  */
-export type TestConnectionErrorKind = 'httpError' | 'timeout' | 'unreachable' | 'pluginUnavailable';
+export type TestConnectionErrorKind =
+  | 'httpError'
+  | 'timeout'
+  | 'unreachable'
+  | 'pluginUnavailable'
+  | 'invalidResponse';
 
 export interface TestConnectionResult {
   ok: boolean;
@@ -189,18 +194,22 @@ export async function testOllamaConnection(baseUrl?: string): Promise<TestConnec
     try {
       payload = await res.json();
     } catch {
-      payload = null;
+      // QNBS-v3: a 200 with an unparseable body (e.g. a proxy login page) is not a working Ollama endpoint.
+      return { ok: false, error: 'Invalid Ollama response', kind: 'invalidResponse' };
     }
-    const modelNames =
-      typeof payload === 'object' &&
-      payload !== null &&
-      Array.isArray((payload as { models?: unknown }).models)
-        ? (payload as { models: unknown[] }).models.flatMap((model) => {
-            if (typeof model !== 'object' || model === null) return [];
-            const name = (model as { name?: unknown }).name;
-            return typeof name === 'string' && name.trim() ? [name.trim()] : [];
-          })
-        : [];
+    if (
+      typeof payload !== 'object' ||
+      payload === null ||
+      !Array.isArray((payload as { models?: unknown }).models)
+    ) {
+      // QNBS-v3: valid JSON without a `models` array means the endpoint isn't speaking the Ollama API.
+      return { ok: false, error: 'Invalid Ollama response', kind: 'invalidResponse' };
+    }
+    const modelNames = (payload as { models: unknown[] }).models.flatMap((model) => {
+      if (typeof model !== 'object' || model === null) return [];
+      const name = (model as { name?: unknown }).name;
+      return typeof name === 'string' && name.trim() ? [name.trim()] : [];
+    });
     return {
       ok: true,
       localServer: {

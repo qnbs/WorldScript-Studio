@@ -136,6 +136,31 @@ describe('testOllamaConnection', () => {
     expect(result.kind).toBe('pluginUnavailable');
     expect(result.params).toBeUndefined();
   });
+
+  it('reports invalidResponse instead of a false-positive ok when the body is not valid JSON', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response('<html>login</html>', { status: 200 }));
+    const result = await testOllamaConnection();
+    expect(result.ok).toBe(false);
+    expect(result.kind).toBe('invalidResponse');
+  });
+
+  it('reports invalidResponse instead of a false-positive ok when the body has no models array', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ notModels: [] }), { status: 200 }),
+    );
+    const result = await testOllamaConnection();
+    expect(result.ok).toBe(false);
+    expect(result.kind).toBe('invalidResponse');
+  });
+
+  it('still reports ok:true with an empty model list for a validly-shaped, empty Ollama server', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ models: [] }), { status: 200 }),
+    );
+    const result = await testOllamaConnection();
+    expect(result.ok).toBe(true);
+    expect(result.localServer?.modelNames).toEqual([]);
+  });
 });
 
 // ─── streamOllama ─────────────────────────────────────────────────────────────
