@@ -11,6 +11,7 @@ import { getUserFriendlyDbError, retryDb } from './idbCore';
 import { IdbSnapshotStore } from './idbSnapshotStore';
 import {
   assertIdbProtectedWriteAllowed,
+  assertNoActiveEncryptionMigration,
   assertSecureStorageReadable,
   idbEncryptWithKey,
   idbReadSecure,
@@ -22,14 +23,14 @@ export class IdbAssetStore extends IdbSnapshotStore {
   // --- Image Store Methods ---
 
   async saveImage(id: string, base64: string): Promise<void> {
-    // QNBS-v3: A migration journal owns store conversion — an ordinary write here must not race it.
-    await assertIdbProtectedWriteAllowed();
     // QNBS-v3: Resolve the write key BEFORE opening the transaction — `await idbEncryptWithKey`
     //          yields the event loop, which auto-commits an already-open IDB transaction
     //          (TransactionInactiveError on put), and re-reading isIdbEncryptionReady() after any
     //          later await could race with Lock Session and silently fall back to plaintext.
     const writeKey = await resolveProtectedWriteKey();
     const payload = writeKey ? await idbEncryptWithKey(writeKey, base64) : base64;
+    // QNBS-v3: only the migration guard is re-checked here — resolveProtectedWriteKey() already made its own lock check atomically with the key snapshot, so re-running that too would wrongly reject an already-safely-encrypted write if the session locks mid-write.
+    await assertNoActiveEncryptionMigration();
     const store = await this.getObjectStore(IMAGES_STORE, 'readwrite');
     return new Promise((resolve, reject) => {
       const request = store.put(payload, id);
@@ -85,8 +86,6 @@ export class IdbAssetStore extends IdbSnapshotStore {
     meta: BinderAssetMeta,
   ): Promise<void> {
     return retryDb(async () => {
-      // QNBS-v3: A migration journal owns store conversion — an ordinary write here must not race it.
-      await assertIdbProtectedWriteAllowed();
       const writeKey = await resolveProtectedWriteKey();
       const key = makeBinderAssetStorageKey(projectId, assetId);
       const fullMeta = { ...meta, byteSize: data.byteLength };
@@ -101,6 +100,8 @@ export class IdbAssetStore extends IdbSnapshotStore {
             meta: fullMeta,
             blob: new Blob([data], { type: meta.mimeType || 'application/octet-stream' }),
           };
+      // QNBS-v3: only the migration guard is re-checked here — resolveProtectedWriteKey() already made its own lock check atomically with the key snapshot, so re-running that too would wrongly reject an already-safely-encrypted write if the session locks mid-write.
+      await assertNoActiveEncryptionMigration();
       const store = await this.getObjectStore(BINDER_ASSETS_STORE, 'readwrite');
       return new Promise<void>((resolve, reject) => {
         const req = store.put(payload, key);

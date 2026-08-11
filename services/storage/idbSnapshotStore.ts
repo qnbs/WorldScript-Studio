@@ -12,6 +12,7 @@ import { IdbCodexStore } from './idbCodexStore';
 import { compressData, getUserFriendlyDbError, retryDb } from './idbCore';
 import {
   assertIdbProtectedWriteAllowed,
+  assertNoActiveEncryptionMigration,
   assertSecureStorageReadable,
   idbEncryptWithKey,
   idbReadSecure,
@@ -24,8 +25,6 @@ export class IdbSnapshotStore extends IdbCodexStore {
   protected readonly MAX_AUTO_SNAPSHOTS = 20;
 
   async createSnapshot(data: ProjectData, name?: string): Promise<number> {
-    // QNBS-v3: A migration journal owns store conversion — an ordinary write here must not race it.
-    await assertIdbProtectedWriteAllowed();
     const wordCount = data.manuscript.reduce(
       (sum, section) => sum + (section.content?.split(/\s+/).filter(Boolean).length || 0),
       0,
@@ -44,6 +43,8 @@ export class IdbSnapshotStore extends IdbCodexStore {
     };
 
     return retryDb(async () => {
+      // QNBS-v3: only the migration guard is re-checked here — resolveProtectedWriteKey() already made its own lock check atomically with the key snapshot, so re-running that too would wrongly reject an already-safely-encrypted write if the session locks mid-write.
+      await assertNoActiveEncryptionMigration();
       const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readwrite');
       return new Promise<number>((resolve, reject) => {
         const request = store.add(snapshotData);

@@ -9,7 +9,6 @@ import {
   listRevisions,
   saveRevision,
 } from '../../services/sceneRevisionService';
-import { SecureRecordCorruptError } from '../../services/storage/storageEncryptionService';
 
 beforeEach(() => {
   // Fresh IDB instance per test — avoids record leak between tests
@@ -122,7 +121,9 @@ describe('sceneRevisionService', () => {
     await expect(listRevisions('sec1')).resolves.toHaveLength(50);
   });
 
-  it('rejects a future stored schema instead of interpreting it as v1', async () => {
+  it('skips a future stored schema instead of interpreting it as v1, keeping other revisions readable', async () => {
+    // QNBS-v3: one damaged/unparseable revision must not hide the rest of a scene's readable
+    //          history — listRevisions now skips it (logged) rather than rejecting the whole call.
     await saveRevision('sec1', { title: 'known', content: 'known content' });
     await insertRawRevision({
       id: 'future-schema',
@@ -132,7 +133,9 @@ describe('sceneRevisionService', () => {
       payload: { title: 'future', content: 'must not decode as v1', wordCount: 6 },
     });
 
-    await expect(listRevisions('sec1')).rejects.toBeInstanceOf(SecureRecordCorruptError);
+    const list = await listRevisions('sec1');
+    expect(list).toHaveLength(1);
+    expect(list[0]?.title).toBe('known');
   });
 
   it('createdAt is a number timestamp', async () => {

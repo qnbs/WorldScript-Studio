@@ -16,6 +16,9 @@ import { decompressData } from './idbCore';
 import { getPassphraseSentinel, savePassphraseSentinel } from './idbPassphraseSentinel';
 import { decodeSecureRecordValue, encodeSecureRecordValue } from './secureRecordCodec';
 
+// QNBS-v3: re-exported so a write that already captured its key via resolveProtectedWriteKey() can re-check only the migration guard pre-write, without re-running its redundant lock check.
+export { assertNoActiveEncryptionMigration } from './encryptionMigrationJournal';
+
 const PBKDF2_ITERATIONS = 600_000; // OWASP 2024 minimum for PBKDF2-HMAC-SHA-256
 const IV_BYTE_LENGTH = 12;
 const SALT_BYTE_LENGTH = 32;

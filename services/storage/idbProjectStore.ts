@@ -24,6 +24,7 @@ import { IdbAssetStore } from './idbAssetStore';
 import { compressData, getUserFriendlyDbError, retryDb } from './idbCore';
 import {
   assertIdbProtectedWriteAllowed,
+  assertNoActiveEncryptionMigration,
   assertSecureStorageReadable,
   idbEncryptWithKey,
   idbReadSecure,
@@ -216,9 +217,6 @@ export class IdbProjectStore extends IdbAssetStore {
     sliceName: 'project' | 'settings',
     data: PersistedProjectState | Settings,
   ): Promise<void> {
-    // QNBS-v3: A migration journal owns store conversion — an ordinary write here must not race
-    //          it (assertIdbProtectedWriteAllowed also covers the plain-locked-session case).
-    await assertIdbProtectedWriteAllowed();
     // QNBS-v3: Resolve the write key AND encrypt BEFORE opening the store — awaiting
     //          idbEncryptWithKey after getObjectStore would yield the event loop while the
     //          transaction is open, letting IDB auto-commit it before store.put runs
@@ -227,6 +225,8 @@ export class IdbProjectStore extends IdbAssetStore {
     const writeKey = await resolveProtectedWriteKey();
     // QNBS-v3: Plaintext is allowed only when encryption was never configured for this library.
     const payload = writeKey ? await idbEncryptWithKey(writeKey, data) : compressData(data);
+    // QNBS-v3: only the migration guard is re-checked here — resolveProtectedWriteKey() already made its own lock check atomically with the key snapshot, so re-running that too would wrongly reject an already-safely-encrypted write if the session locks mid-write.
+    await assertNoActiveEncryptionMigration();
     const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
     return new Promise((resolve, reject) => {
       const request = store.put(payload, sliceName);

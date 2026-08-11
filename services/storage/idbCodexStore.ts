@@ -10,6 +10,7 @@ import { compressData, decompressData } from './idbCore';
 import { IdbKeyStore } from './idbKeyStore';
 import {
   assertIdbProtectedWriteAllowed,
+  assertNoActiveEncryptionMigration,
   assertSecureStorageReadable,
   idbEncryptWithKey,
   idbReadSecure,
@@ -19,8 +20,6 @@ import {
 
 export class IdbCodexStore extends IdbKeyStore {
   async saveStoryCodex(codex: StoryCodex): Promise<void> {
-    // QNBS-v3: A migration journal owns store conversion — an ordinary write here must not race it.
-    await assertIdbProtectedWriteAllowed();
     // QNBS-v3: Resolve the write key BEFORE opening the transaction — `await idbEncryptWithKey`
     //          yields the event loop, which auto-commits an already-open transaction
     //          (TransactionInactiveError), and re-reading isIdbEncryptionReady() after any later
@@ -40,6 +39,8 @@ export class IdbCodexStore extends IdbKeyStore {
     } else {
       record = processed as object;
     }
+    // QNBS-v3: only the migration guard is re-checked here — resolveProtectedWriteKey() already made its own lock check atomically with the key snapshot, so re-running that too would wrongly reject an already-safely-encrypted write if the session locks mid-write.
+    await assertNoActiveEncryptionMigration();
     const store = await this.getObjectStore(CODEX_STORE, 'readwrite');
     return new Promise((resolve, reject) => {
       const request = store.put(record);
@@ -101,8 +102,6 @@ export class IdbCodexStore extends IdbKeyStore {
   // --- RAG Vector Methods ---
 
   async saveRagVectors(projectId: string, vectors: unknown[]): Promise<void> {
-    // QNBS-v3: A migration journal owns store conversion — an ordinary write here must not race it.
-    await assertIdbProtectedWriteAllowed();
     // QNBS-v3: Resolve the write key BEFORE opening the transaction — `await idbEncryptWithKey`
     //          yields the event loop and would auto-commit the open transaction before the put
     //          (TransactionInactiveError), and re-reading isIdbEncryptionReady() after any later
@@ -111,6 +110,8 @@ export class IdbCodexStore extends IdbKeyStore {
     const encryptedPayload = writeKey
       ? Array.from(await idbEncryptWithKey(writeKey, { projectId, vectors }))
       : null;
+    // QNBS-v3: only the migration guard is re-checked here — the lock check already happened atomically inside resolveProtectedWriteKey(); this function's multiple sequential IDB ops (clear then write) still leave a residual window, but re-running the lock check too would wrongly reject an already-safely-encrypted write if the session locks mid-write.
+    await assertNoActiveEncryptionMigration();
     const store = await this.getObjectStore(RAG_VECTORS_STORE, 'readwrite');
     // Clear existing vectors for this project then write the full set
     const index = store.index('projectId');

@@ -1,5 +1,6 @@
 // QNBS-v3: Standalone IDB for scene revisions avoids a shared schema upgrade and keeps history bounded.
 import type { SceneRevision } from '../types';
+import { createLogger } from './logger';
 import {
   assertSecureStorageReadable,
   assertSecureStorageWritableForMutation,
@@ -15,6 +16,7 @@ const STORE = 'scene-revisions';
 const SECURE_STORE = `${DB_NAME}/${STORE}`;
 const MAX_PER_SCENE = 50;
 const RECORD_SCHEMA_VERSION = 1;
+const log = createLogger('sceneRevisionService');
 
 interface SceneRevisionPayload {
   title: string;
@@ -239,7 +241,19 @@ export async function listRevisions(sectionId: string): Promise<SceneRevision[]>
 
   const revisions: SceneRevision[] = [];
   // QNBS-v3: Sequential decryption keeps a full scene history from causing a renderer memory burst.
-  for (const stored of raw) revisions.push(await decodeRevision(stored, encryptionConfigured));
+  for (const stored of raw) {
+    try {
+      revisions.push(await decodeRevision(stored, encryptionConfigured));
+    } catch (error) {
+      // QNBS-v3: one damaged/unparseable revision must not hide the rest of a scene's readable
+      //          history — but a genuine lock-state change mid-listing still aborts the whole call.
+      if (error instanceof SecureRecordCorruptError) {
+        log.warn('Skipping a damaged revision', { sectionId, error: String(error) });
+        continue;
+      }
+      throw error;
+    }
+  }
   return revisions.sort((left, right) => right.createdAt - left.createdAt);
 }
 

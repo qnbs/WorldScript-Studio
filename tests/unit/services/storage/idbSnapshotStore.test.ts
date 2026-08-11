@@ -26,6 +26,7 @@ vi.mock('../../../../services/storage/idbCore', () => ({
 
 vi.mock('../../../../services/storage/storageEncryptionService', () => ({
   assertIdbProtectedWriteAllowed: async () => undefined,
+  assertNoActiveEncryptionMigration: async () => undefined,
   assertSecureStorageReadable: async () => undefined,
   idbEncryptWithKey: async (_key: unknown, data: unknown) => data,
   idbDecrypt: async (data: unknown) => data,
