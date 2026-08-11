@@ -194,7 +194,13 @@ once a manual run demonstrates the flakiness is resolved — concretely, three c
 | **SHA-pinned actions** | Every job | All `uses:` references pinned to commit SHA (`# vN` comment) — immune to tag-mutable supply-chain attacks; Dependabot updates SHAs automatically |
 | **Dependabot** | Weekly (Monday) | PRs for npm deps (dev-tooling grouped) + GitHub Actions SHA bumps (max 5 open PRs) |
 | **`dependency-review-action`** | PRs only (security job) | Blocks PRs that introduce new high/critical vulnerabilities |
+| **pnpm v11 build-script policy** | Dependency installation | `pnpm-workspace.yaml` uses the sole supported, default-deny `allowBuilds` map; legacy build-script lists are intentionally absent |
 | **Branch protection** | Always | `main` requires 1 approved review, required status checks (security, quality ×2, build), no force-push |
+
+Only the reviewed packages marked `true` in `allowBuilds` may run dependency lifecycle scripts.
+`onnxruntime-node`, `simple-git-hooks`, `unrs-resolver`, and `workerd` are explicitly denied. The
+repository's own `prepare` command is a separate project script; it does not authorize a dependency
+postinstall script.
 
 ---
 
