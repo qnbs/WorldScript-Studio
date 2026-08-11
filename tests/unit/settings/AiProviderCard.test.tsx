@@ -361,7 +361,10 @@ describe('AiProviderCard — ollama provider (#266)', () => {
     );
 
     if (!resolveTest) throw new Error('Connection test did not start');
-    resolveTest({
+    // QNBS-v3: explicit annotation, not inferred — tsgo narrows a `let` reassigned inside the
+    // Promise executor closure to `never` here otherwise, after the awaits above.
+    const resolve: (result: Awaited<ReturnType<typeof testAIConnection>>) => void = resolveTest;
+    resolve({
       ok: true,
       localServer: {
         normalizedEndpoint: 'http://127.0.0.1:1234/v1',
