@@ -131,7 +131,13 @@ describe('useConsistencyCheckerView', () => {
     expect(mockGenerateText).toHaveBeenCalledWith(
       'check prompt',
       mockState.aiCreativity,
-      expect.objectContaining({ provider: expect.any(String), model: expect.any(String) }),
+      expect.objectContaining({
+        provider: expect.any(String),
+        model: expect.any(String),
+        // QNBS-v3: regression — LM Studio/vLLM/custom local backends silently fell back to the
+        // Ollama-native protocol here since this field was previously omitted.
+        localBackendPreset: 'ollama_default',
+      }),
       expect.any(Object),
     );
 

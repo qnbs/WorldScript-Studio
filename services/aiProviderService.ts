@@ -248,13 +248,28 @@ async function streamOpenAI(
   callbacks.onDone?.();
 }
 
-/** Streams LM Studio/vLLM through their OpenAI-compatible API using the Tauri-aware local transport. */
+// QNBS-v3: single source of truth for which local presets speak the OpenAI-compatible /v1 API —
+// 'custom' is included because editing the base URL by hand (e.g. LM Studio/vLLM on a non-default
+// port) is what selects it, and listLocalBackendModels already treats it as OpenAI-compatible for
+// discovery; every routing decision (testing, streaming, non-streaming) must agree or a server
+// that lists its models successfully then fails every completion against the wrong protocol.
+// undefined (a caller that never set the field) falls through to native-Ollama, matching the
+// pre-existing default for provider-agnostic callers that never touch this option.
+function isOpenAiCompatibleLocalPreset(preset: LocalBackendPreset | undefined): boolean {
+  return preset === 'lm_studio' || preset === 'vllm' || preset === 'custom';
+}
+
+/** Streams LM Studio/vLLM/custom through their OpenAI-compatible API using the Tauri-aware local transport. */
 async function streamOpenAiCompatibleLocal(
   prompt: string,
   opts: AIRequestOptions,
   callbacks: AIStreamCallbacks,
 ): Promise<void> {
-  const endpoint = normalizeOpenAiCompatibleBaseUrl(opts.ollamaBaseUrl ?? 'http://localhost:1234');
+  // QNBS-v3: `||`, not `??` — an explicitly-cleared ollamaBaseUrl ('') must still resolve to the
+  // same preset-aware default testOpenAiCompatibleLocalConnection uses, not an app-relative URL.
+  const endpoint = normalizeOpenAiCompatibleBaseUrl(
+    opts.ollamaBaseUrl?.trim() || 'http://localhost:1234',
+  );
   const messages = opts.systemPrompt
     ? [
         { role: 'system', content: sanitizePromptValue(opts.systemPrompt) },
@@ -271,36 +286,62 @@ async function streamOpenAiCompatibleLocal(
       temperature: opts.temperature ?? 0.7,
       max_tokens: opts.maxTokens ?? 2048,
     }),
+    // QNBS-v3: LocalServerFetchInit.signal is typed AbortSignal | null (not | undefined) — this is
+    // this codebase's own wrapper (composeSignal handles null explicitly), not a raw Fetch API
+    // pass-through, so `?? null` here is a required conversion, not an inconsistency.
     signal: opts.signal ?? null,
   });
-  if (!response.ok) throw new Error(`Local OpenAI-compatible server HTTP ${response.status}`);
+  if (!response.ok) {
+    // QNBS-v3: LM Studio/vLLM return a JSON error body (invalid model, bad request) that the
+    // status code alone discards — bounded read, best-effort parse, never throws itself.
+    const bodyText = await response.text().catch(() => '');
+    let detail = '';
+    try {
+      const parsed = JSON.parse(bodyText) as { error?: { message?: string } | string };
+      detail =
+        typeof parsed.error === 'string' ? parsed.error : (parsed.error?.message ?? bodyText);
+    } catch {
+      detail = bodyText;
+    }
+    const suffix = detail.trim() ? `: ${detail.trim().slice(0, 300)}` : '';
+    throw new Error(`Local OpenAI-compatible server HTTP ${response.status}${suffix}`);
+  }
 
   const reader = response.body?.getReader();
   if (!reader) throw new Error('Local OpenAI-compatible server returned no response body');
   const decoder = new TextDecoder();
   let buffer = '';
+  // QNBS-v3: parses one accumulated SSE line into an onChunk call — shared by the loop below and
+  // the final buffer flush after `done`, so the last frame (no trailing newline) isn't dropped.
+  const parseLine = (line: string) => {
+    if (!line.startsWith('data: ') || line === 'data: [DONE]') return;
+    try {
+      const json: unknown = JSON.parse(line.slice(6));
+      const delta =
+        typeof json === 'object' && json !== null
+          ? (json as { choices?: Array<{ delta?: { content?: unknown } }> }).choices?.[0]?.delta
+              ?.content
+          : undefined;
+      if (typeof delta === 'string' && delta) callbacks.onChunk(delta);
+    } catch {
+      // QNBS-v3: Ignore an incomplete SSE frame; a later frame still carries the valid delta.
+    }
+  };
   while (true) {
-    if (opts.signal?.aborted) break;
+    if (opts.signal?.aborted) {
+      await reader.cancel().catch(() => {});
+      throw new DOMException('Local generation aborted', 'AbortError');
+    }
     const { done, value } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split('\n');
     buffer = lines.pop() ?? '';
-    for (const line of lines) {
-      if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
-      try {
-        const json: unknown = JSON.parse(line.slice(6));
-        const delta =
-          typeof json === 'object' && json !== null
-            ? (json as { choices?: Array<{ delta?: { content?: unknown } }> }).choices?.[0]?.delta
-                ?.content
-            : undefined;
-        if (typeof delta === 'string' && delta) callbacks.onChunk(delta);
-      } catch {
-        // QNBS-v3: Ignore an incomplete SSE frame; a later frame still carries the valid delta.
-      }
-    }
+    for (const line of lines) parseLine(line);
   }
+  // QNBS-v3: the server can close the stream without a trailing newline after the last `data:`
+  // frame — without this, that final delta (often the tail of the response) is silently dropped.
+  if (buffer) parseLine(buffer);
   callbacks.onDone?.();
 }
 
@@ -435,7 +476,7 @@ async function streamProvider(
       return streamOpenRouter(prompt, oWithLora, callbacks, apiKey);
     }
     case 'ollama':
-      return oWithLora.localBackendPreset === 'lm_studio' || oWithLora.localBackendPreset === 'vllm'
+      return isOpenAiCompatibleLocalPreset(oWithLora.localBackendPreset)
         ? streamOpenAiCompatibleLocal(prompt, oWithLora, callbacks)
         : streamOllama(prompt, oWithLora, callbacks);
     case 'anthropic':
@@ -495,10 +536,9 @@ async function generateTextSingleProvider(
     }
     case 'ollama': {
       let result = '';
-      const stream =
-        o.localBackendPreset === 'lm_studio' || o.localBackendPreset === 'vllm'
-          ? streamOpenAiCompatibleLocal
-          : streamOllama;
+      const stream = isOpenAiCompatibleLocalPreset(o.localBackendPreset)
+        ? streamOpenAiCompatibleLocal
+        : streamOllama;
       await stream(prompt, o, {
         onChunk: (text) => {
           result += text;
@@ -921,7 +961,7 @@ export async function listLocalBackendModels(
   baseUrl: string | undefined,
   preset: LocalBackendPreset,
 ): Promise<string[]> {
-  if (preset === 'ollama_default') return listOllamaModels(baseUrl);
+  if (!isOpenAiCompatibleLocalPreset(preset)) return listOllamaModels(baseUrl);
   const result = await testOpenAiCompatibleLocalConnection(baseUrl);
   return result.ok ? (result.localServer?.modelNames ?? []) : [];
 }
@@ -1059,10 +1099,9 @@ export async function testAIConnection(
             kind: 'desktopRequired',
           };
         }
-        const result =
-          opts.localBackendPreset === 'lm_studio' || opts.localBackendPreset === 'vllm'
-            ? await testOpenAiCompatibleLocalConnection(opts.ollamaBaseUrl)
-            : await testOllamaConnection(opts.ollamaBaseUrl);
+        const result = isOpenAiCompatibleLocalPreset(opts.localBackendPreset)
+          ? await testOpenAiCompatibleLocalConnection(opts.ollamaBaseUrl)
+          : await testOllamaConnection(opts.ollamaBaseUrl);
         // QNBS-v3 (ADR-0017): the Fetch API gives an identical generic failure for "CORS rejected"
         // and "server genuinely down" — this can only be a heuristic hint when running the opt-in
         // browser path, never a certain diagnosis. Desktop keeps the plain 'unreachable' kind.
