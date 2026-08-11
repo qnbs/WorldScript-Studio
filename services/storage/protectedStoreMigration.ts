@@ -133,7 +133,12 @@ export async function runProtectedStoreMigration(
 ): Promise<EncryptionMigrationJournal> {
   assertRegisteredAdapters(initialJournal, adapters);
   let journal = initialJournal;
-  if (journal.phase === 'prepared' || journal.phase === 'recovery-required') {
+  if (journal.phase === 'recovery-required') {
+    throw new ProtectedStoreMigrationAdapterError(
+      'Recovery-required journal cannot run until an explicit recovery procedure validates it',
+    );
+  }
+  if (journal.phase === 'prepared') {
     journal = await updateEncryptionMigrationJournal(journal, {
       phase: 'migrating',
       stores: journal.stores,

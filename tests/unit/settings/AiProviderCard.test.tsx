@@ -289,6 +289,87 @@ describe('AiProviderCard — ollama provider (#266)', () => {
     expect(screen.getByText('local-model')).toBeTruthy();
   });
 
+  it('PWA: labels an opted-in Ollama diagnostic with its browser transport', async () => {
+    setDesktopRuntime(false);
+    vi.mocked(testAIConnection).mockResolvedValueOnce({
+      ok: true,
+      localServer: {
+        normalizedEndpoint: 'http://localhost:11434/api/tags',
+        transport: 'browser-fetch',
+        modelNames: ['browser-model'],
+      },
+    });
+    const user = userEvent.setup();
+    render(
+      <AiProviderCard
+        advancedAi={ollamaAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+        browserOllamaEnabled
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'settings.ai.testConnection' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('http://localhost:11434/api/tags')).toBeTruthy();
+    });
+    expect(screen.getByText('settings.ai.localDiagnostic.browserFetch')).toBeTruthy();
+    expect(screen.getByText('browser-model')).toBeTruthy();
+  });
+
+  it('never displays an in-flight diagnostic after the local backend context changes', async () => {
+    setDesktopRuntime(true);
+    let resolveTest: ((result: Awaited<ReturnType<typeof testAIConnection>>) => void) | null = null;
+    vi.mocked(testAIConnection).mockImplementationOnce(
+      () =>
+        new Promise<Awaited<ReturnType<typeof testAIConnection>>>((resolve) => {
+          resolveTest = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    const initialSettings = {
+      ...ollamaAdvancedAi,
+      ollamaBaseUrl: 'http://localhost:1234',
+      localBackendPreset: 'lm_studio' as const,
+    };
+    const { rerender } = render(
+      <AiProviderCard
+        advancedAi={initialSettings}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'settings.ai.testConnection' }));
+    await waitFor(() => expect(resolveTest).not.toBeNull());
+
+    rerender(
+      <AiProviderCard
+        advancedAi={{
+          ...initialSettings,
+          openAiCompatibleBaseUrl: 'http://localhost:9999/v1',
+        }}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+
+    if (!resolveTest) throw new Error('Connection test did not start');
+    resolveTest({
+      ok: true,
+      localServer: {
+        normalizedEndpoint: 'http://127.0.0.1:1234/v1',
+        transport: 'tauri-http',
+        modelNames: ['stale-model'],
+      },
+    });
+
+    await waitFor(() => expect(screen.queryByText('stale-model')).toBeNull());
+    expect(screen.queryByText('http://127.0.0.1:1234/v1')).toBeNull();
+    expect(screen.getByText('settings.ai.providerStatusNotTested')).toBeTruthy();
+  });
+
   it('clears a completed local diagnostic when its endpoint context changes', async () => {
     setDesktopRuntime(true);
     vi.mocked(testAIConnection).mockResolvedValueOnce({

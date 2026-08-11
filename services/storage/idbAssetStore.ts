@@ -11,6 +11,7 @@ import { getUserFriendlyDbError, retryDb } from './idbCore';
 import { IdbSnapshotStore } from './idbSnapshotStore';
 import {
   assertIdbProtectedWriteAllowed,
+  assertSecureStorageReadable,
   idbEncrypt,
   idbReadSecure,
   isEncryptedBlob,
@@ -34,11 +35,11 @@ export class IdbAssetStore extends IdbSnapshotStore {
   }
 
   async getImage(id: string): Promise<string | null> {
-    await assertIdbProtectedWriteAllowed();
+    await assertSecureStorageReadable();
     const store = await this.getObjectStore(IMAGES_STORE, 'readonly');
     return new Promise((resolve, reject) => {
       const request = store.get(id);
-      request.onsuccess = async () => {
+      request.onsuccess = () => {
         const raw = request.result;
         if (raw == null) {
           resolve(null);
@@ -46,7 +47,7 @@ export class IdbAssetStore extends IdbSnapshotStore {
         }
         // QNBS-v3: Decrypt encrypted image payload; legacy plaintext falls through.
         if (raw instanceof Uint8Array && isEncryptedBlob(raw)) {
-          resolve(await idbReadSecure<string>(raw));
+          void idbReadSecure<string>(raw).then(resolve, reject);
           return;
         }
         resolve(raw as string);
@@ -96,7 +97,7 @@ export class IdbAssetStore extends IdbSnapshotStore {
 
   async getBinderAsset(projectId: string, assetId: string): Promise<BinderAssetPayload | null> {
     return retryDb(async () => {
-      await assertIdbProtectedWriteAllowed();
+      await assertSecureStorageReadable();
       const key = makeBinderAssetStorageKey(projectId, assetId);
       const store = await this.getObjectStore(BINDER_ASSETS_STORE, 'readonly');
       const raw = await new Promise<unknown>((resolve, reject) => {
@@ -133,7 +134,7 @@ export class IdbAssetStore extends IdbSnapshotStore {
 
   async listBinderAssetIds(projectId: string): Promise<string[]> {
     return retryDb(async () => {
-      await assertIdbProtectedWriteAllowed();
+      await assertSecureStorageReadable();
       const prefix = makeBinderAssetIdsPrefix(projectId);
       const store = await this.getObjectStore(BINDER_ASSETS_STORE, 'readonly');
       const ids: string[] = [];

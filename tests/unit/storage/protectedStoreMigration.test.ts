@@ -9,6 +9,7 @@ import {
 } from '../../../services/storage/encryptionMigrationJournal';
 import {
   type ProtectedStoreAdapter,
+  ProtectedStoreMigrationAdapterError,
   runProtectedStoreMigration,
 } from '../../../services/storage/protectedStoreMigration';
 
@@ -115,5 +116,85 @@ describe('runProtectedStoreMigration', () => {
     expect(resumedCalls).toEqual(['record-1']);
     expect(resumed.phase).toBe('committing');
     expect(resumed.stores[0]).toMatchObject({ cursor: 'record-2', processed: 2, verified: 2 });
+  });
+
+  it('refuses to resume recovery-required metadata through the normal executor', async () => {
+    const journal = await beginEncryptionMigration({
+      operationId: 'recovery-required',
+      operation: 'rekey',
+      phase: 'recovery-required',
+      sourceGeneration: 'source',
+      targetGeneration: 'target',
+      targetVerifier: [1, 2, 3],
+      stores: [{ id: 'test-store', processed: 0, verified: 0, done: false }],
+    });
+    const adapter: ProtectedStoreAdapter = {
+      id: 'test-store',
+      async migrateNext() {
+        throw new Error('must not execute');
+      },
+      async verify() {
+        throw new Error('must not execute');
+      },
+    };
+
+    await expect(runProtectedStoreMigration(journal, [adapter], {})).rejects.toBeInstanceOf(
+      ProtectedStoreMigrationAdapterError,
+    );
+    await expect(readEncryptionMigrationJournal()).resolves.toMatchObject({
+      phase: 'recovery-required',
+    });
+  });
+
+  it('rejects invalid adapter progress before it can advance the durable checkpoint', async () => {
+    const adapter: ProtectedStoreAdapter = {
+      id: 'test-store',
+      async migrateNext() {
+        return { cursor: 'record-1', processed: -1, complete: false };
+      },
+      async verify() {
+        return 0;
+      },
+    };
+
+    await expect(runProtectedStoreMigration(await begin(), [adapter], {})).rejects.toThrow(
+      'returned invalid progress',
+    );
+    await expect(readEncryptionMigrationJournal()).resolves.toMatchObject({
+      phase: 'migrating',
+      stores: [{ processed: 0, done: false }],
+    });
+  });
+
+  it('rejects a missing registered adapter before a migration can mutate storage', async () => {
+    const journal = await begin();
+
+    await expect(runProtectedStoreMigration(journal, [], {})).rejects.toThrow(
+      'No registered protected-store adapter exists for test-store',
+    );
+    await expect(readEncryptionMigrationJournal()).resolves.toMatchObject({
+      phase: 'prepared',
+      stores: [{ processed: 0, done: false }],
+    });
+  });
+
+  it('rejects duplicate adapter identifiers before a migration can mutate storage', async () => {
+    const adapter: ProtectedStoreAdapter = {
+      id: 'test-store',
+      async migrateNext() {
+        throw new Error('must not execute');
+      },
+      async verify() {
+        throw new Error('must not execute');
+      },
+    };
+
+    await expect(runProtectedStoreMigration(await begin(), [adapter, adapter], {})).rejects.toThrow(
+      'Protected-store adapter ids must be unique',
+    );
+    await expect(readEncryptionMigrationJournal()).resolves.toMatchObject({
+      phase: 'prepared',
+      stores: [{ processed: 0, done: false }],
+    });
   });
 });

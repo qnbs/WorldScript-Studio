@@ -10,6 +10,7 @@ import { compressData, decompressData } from './idbCore';
 import { IdbKeyStore } from './idbKeyStore';
 import {
   assertIdbProtectedWriteAllowed,
+  assertSecureStorageReadable,
   idbEncrypt,
   idbReadSecure,
   isEncryptedBlob,
@@ -44,11 +45,11 @@ export class IdbCodexStore extends IdbKeyStore {
   }
 
   async getStoryCodex(projectId: string): Promise<StoryCodex | null> {
-    await assertIdbProtectedWriteAllowed();
+    await assertSecureStorageReadable();
     const store = await this.getObjectStore(CODEX_STORE, 'readonly');
     return new Promise((resolve, reject) => {
       const request = store.get(projectId);
-      request.onsuccess = async () => {
+      request.onsuccess = () => {
         const raw = request.result;
         if (!raw) {
           resolve(null);
@@ -63,7 +64,7 @@ export class IdbCodexStore extends IdbKeyStore {
         ) {
           const bytes = new Uint8Array((raw as { encrypted: number[] }).encrypted);
           if (isEncryptedBlob(bytes)) {
-            resolve(await idbReadSecure<StoryCodex>(bytes));
+            void idbReadSecure<StoryCodex>(bytes).then(resolve, reject);
             return;
           }
         }
@@ -147,11 +148,11 @@ export class IdbCodexStore extends IdbKeyStore {
   }
 
   async getRagVectors(projectId: string): Promise<unknown[]> {
-    await assertIdbProtectedWriteAllowed();
+    await assertSecureStorageReadable();
     const store = await this.getObjectStore(RAG_VECTORS_STORE, 'readonly');
     return new Promise((resolve, reject) => {
       const req = store.index('projectId').getAll(projectId);
-      req.onsuccess = async () => {
+      req.onsuccess = () => {
         const results = req.result as unknown[];
         // QNBS-v3: Check for encrypted blob wrapper (single record with _enc flag)
         if (results.length === 1) {
@@ -159,8 +160,10 @@ export class IdbCodexStore extends IdbKeyStore {
           if (first?._enc && first.encrypted) {
             const bytes = new Uint8Array(first.encrypted);
             if (isEncryptedBlob(bytes)) {
-              const decrypted = await idbReadSecure<{ vectors: unknown[] }>(bytes);
-              resolve(decrypted.vectors);
+              void idbReadSecure<{ vectors: unknown[] }>(bytes).then(
+                (decrypted) => resolve(decrypted.vectors),
+                reject,
+              );
               return;
             }
           }

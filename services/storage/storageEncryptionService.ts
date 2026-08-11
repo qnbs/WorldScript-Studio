@@ -197,7 +197,7 @@ export class StorageEncryptionService {
    * Callers must re-encrypt all IDB data with the returned key.
    */
   async rotateKey(_oldKey: CryptoKey, newPassphrase: string): Promise<CryptoKey> {
-    const salt = getOrCreateSalt();
+    const salt = getExistingSalt();
     return this.deriveKey(newPassphrase, salt);
   }
 }
@@ -207,13 +207,20 @@ export class StorageEncryptionService {
 const _svc = new StorageEncryptionService();
 let _activeKey: CryptoKey | null = null;
 
-function getOrCreateSalt(): Uint8Array {
+function readStoredSalt(): Uint8Array | null {
   try {
     const stored = localStorage.getItem(SALT_STORAGE_KEY);
-    if (stored) {
-      const arr = Uint8Array.from(atob(stored), (c) => c.charCodeAt(0));
-      if (arr.length === SALT_BYTE_LENGTH) return arr;
-    }
+    if (!stored) return null;
+    const salt = Uint8Array.from(atob(stored), (character) => character.charCodeAt(0));
+    if (salt.length !== SALT_BYTE_LENGTH) throw new Error('Encryption salt has an invalid length');
+    return salt;
+  } catch (error) {
+    throw new Error('Unable to read encryption salt', { cause: error });
+  }
+}
+
+function createAndPersistSalt(): Uint8Array {
+  try {
     const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTE_LENGTH));
     const b64 = btoa(String.fromCharCode(...salt));
     localStorage.setItem(SALT_STORAGE_KEY, b64);
@@ -224,13 +231,24 @@ function getOrCreateSalt(): Uint8Array {
   }
 }
 
+function getOrCreateSalt(): Uint8Array {
+  return readStoredSalt() ?? createAndPersistSalt();
+}
+
+function getExistingSalt(): Uint8Array {
+  const salt = readStoredSalt();
+  if (!salt) throw new Error('Encryption salt is missing; recovery requires the original metadata');
+  return salt;
+}
+
 /**
  * Initialise the session encryption key from a passphrase.
  * Must be called before any idbEncrypt / idbDecrypt calls.
  */
 export async function initIdbEncryption(passphrase: string): Promise<void> {
   if (!passphrase) throw new Error('Passphrase must not be empty');
-  const salt = getOrCreateSalt();
+  await assertNoActiveEncryptionMigration();
+  const salt = (await hasPassphraseSentinel()) ? getExistingSalt() : getOrCreateSalt();
   _activeKey = await _svc.deriveKey(passphrase, salt);
 }
 
@@ -455,14 +473,14 @@ export async function readSecureRecordPayloadWithKey<T>(
  * after encrypted data already exists.
  */
 export async function idbReadSecure<T>(raw: unknown): Promise<T> {
+  // QNBS-v3: Keep the exported primitive fail-closed too; callers may not bypass lifecycle state by reading raw IDB values.
+  await assertSecureStorageReadable();
   if (isEncryptedBlob(raw)) {
     if (!isIdbEncryptionReady()) {
       throw new IdbStorageLockedError();
     }
     return idbDecrypt<T>(raw);
   }
-  // QNBS-v3: Legacy plaintext remains readable only after unlock so a locked library cannot expose protected content.
-  await assertIdbProtectedWriteAllowed();
   return decompressData<T>(raw);
 }
 
@@ -475,6 +493,10 @@ export async function idbReadSecure<T>(raw: unknown): Promise<T> {
  */
 export async function setupIdbEncryption(passphrase: string): Promise<void> {
   if (!passphrase) throw new Error('Passphrase must not be empty');
+  await assertNoActiveEncryptionMigration();
+  if (await hasPassphraseSentinel()) {
+    throw new Error('Encryption is already configured; use the resumable passphrase-rotation flow');
+  }
   const salt = getOrCreateSalt();
   const key = await _svc.deriveKey(passphrase, salt);
   const blob = await _svc.encrypt(key, { v: 1 });
@@ -490,9 +512,10 @@ export async function setupIdbEncryption(passphrase: string): Promise<void> {
  */
 export async function verifyAndInitIdbEncryption(passphrase: string): Promise<void> {
   if (!passphrase) throw new Error('Passphrase must not be empty');
+  await assertNoActiveEncryptionMigration();
   const sentinelBytes = await getPassphraseSentinel();
   if (!sentinelBytes) throw new Error('No passphrase sentinel found — encryption was not set up');
-  const salt = getOrCreateSalt();
+  const salt = getExistingSalt();
   const key = await _svc.deriveKey(passphrase, salt);
   // QNBS-v3: decrypt throws on wrong key — AES-GCM auth-tag is the verifier
   await _svc.decrypt(key, { bytes: sentinelBytes });

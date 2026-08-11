@@ -1,8 +1,10 @@
 // @vitest-environment node
-// QNBS-v3: Real fake IndexedDB verifies the journal transaction and cross-instance behavior.
+// QNBS-v3: Real fake IndexedDB verifies journal transactions and independent module-owner CAS behavior.
 import { IDBFactory } from 'fake-indexeddb';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { APP_DATA_STORE, STATE_DB_NAME } from '../../../services/dbConstants';
 import {
+  __encryptionMigrationJournalRecordKeyForTest,
   __resetEncryptionMigrationJournalConnectionsForTest,
   assertNoActiveEncryptionMigration,
   beginEncryptionMigration,
@@ -10,6 +12,7 @@ import {
   completeEncryptionMigration,
   IdbMigrationInProgressError,
   IdbMigrationOwnershipError,
+  IdbMigrationRecoveryRequiredError,
   readEncryptionMigrationJournal,
   updateEncryptionMigrationJournal,
 } from '../../../services/storage/encryptionMigrationJournal';
@@ -32,6 +35,28 @@ const migrationInput = (operationId: string) => ({
     },
   ],
 });
+
+function replaceStoredJournalForTest(value: unknown): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(STATE_DB_NAME);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const database = request.result;
+      const transaction = database.transaction(APP_DATA_STORE, 'readwrite');
+      const putRequest = transaction
+        .objectStore(APP_DATA_STORE)
+        .put(value, __encryptionMigrationJournalRecordKeyForTest);
+      putRequest.onerror = () => reject(putRequest.error);
+      transaction.oncomplete = () => {
+        database.close();
+        resolve();
+      };
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () =>
+        reject(transaction.error ?? new Error('Journal replacement transaction aborted'));
+    };
+  });
+}
 
 beforeEach(() => {
   __resetEncryptionMigrationJournalConnectionsForTest();
@@ -69,6 +94,9 @@ describe('encryption migration journal', () => {
       IdbMigrationInProgressError,
     );
     await expect(new IdbProjectStore().saveSettings({} as Settings)).rejects.toBeInstanceOf(
+      IdbMigrationInProgressError,
+    );
+    await expect(new IdbProjectStore().loadState()).rejects.toBeInstanceOf(
       IdbMigrationInProgressError,
     );
 
@@ -115,6 +143,22 @@ describe('encryption migration journal', () => {
     });
   });
 
+  it('rejects a stale checkpoint from an independently loaded journal module', async () => {
+    const created = await beginEncryptionMigration(migrationInput('operation-1'));
+    vi.resetModules();
+    const reloaded = await import('../../../services/storage/encryptionMigrationJournal');
+    const updated = await reloaded.updateEncryptionMigrationJournal(created, {
+      phase: 'migrating',
+      stores: created.stores,
+    });
+
+    await expect(
+      updateEncryptionMigrationJournal(created, { phase: 'verifying', stores: created.stores }),
+    ).rejects.toMatchObject({ code: 'ENCRYPTION_MIGRATION_OWNERSHIP_LOST' });
+    expect(updated.revision).toBe(1);
+    reloaded.__resetEncryptionMigrationJournalConnectionsForTest();
+  });
+
   it('never clears an active journal during completed-state cleanup', async () => {
     await beginEncryptionMigration(migrationInput('operation-1'));
 
@@ -125,5 +169,18 @@ describe('encryption migration journal', () => {
       operationId: 'operation-1',
       phase: 'prepared',
     });
+  });
+
+  it('fails closed into recovery-required when persisted metadata is malformed', async () => {
+    await beginEncryptionMigration(migrationInput('operation-1'));
+    await replaceStoredJournalForTest({ schemaVersion: 1, operationId: 'missing-required-fields' });
+    __resetEncryptionMigrationJournalConnectionsForTest();
+
+    await expect(readEncryptionMigrationJournal()).rejects.toBeInstanceOf(
+      IdbMigrationRecoveryRequiredError,
+    );
+    await expect(assertNoActiveEncryptionMigration()).rejects.toBeInstanceOf(
+      IdbMigrationRecoveryRequiredError,
+    );
   });
 });

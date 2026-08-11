@@ -25,6 +25,11 @@ Object.defineProperty(global, 'localStorage', { value: localStorageMock, writabl
 // QNBS-v3: provide a working IndexedDB for the sentinel-store tests (node has none by default).
 globalThis.indexedDB = new IDBFactory();
 
+import {
+  beginEncryptionMigration,
+  completeEncryptionMigration,
+  IdbMigrationInProgressError,
+} from '../../../services/storage/encryptionMigrationJournal';
 import { deletePassphraseSentinel } from '../../../services/storage/idbPassphraseSentinel';
 import {
   clearIdbEncryptionKey,
@@ -213,6 +218,23 @@ describe('secondary secure-record envelopes', () => {
       readSecureRecordPayload({ version: 1, iv: new Uint8Array(12) }, context),
     ).rejects.toBeInstanceOf(SecureRecordCorruptError);
   });
+
+  it('returns unlocked legacy plaintext as migration-required without treating it as final', async () => {
+    await setupIdbEncryption('secure-record-pass');
+
+    await expect(readSecureRecordPayload({ content: 'legacy' }, context)).resolves.toEqual({
+      value: { content: 'legacy' },
+      needsMigration: true,
+    });
+  });
+
+  it('rejects a ciphertext-only envelope fragment as corruption', async () => {
+    await setupIdbEncryption('secure-record-pass');
+
+    await expect(
+      readSecureRecordPayload({ ciphertext: new Uint8Array(32) }, context),
+    ).rejects.toBeInstanceOf(SecureRecordCorruptError);
+  });
 });
 
 // ── Module singleton functions ───────────────────────────────────────────────
@@ -297,6 +319,16 @@ describe('setupIdbEncryption', () => {
     await setupIdbEncryption('secret');
     expect(await hasPassphraseSentinel()).toBe(true);
   });
+
+  it('refuses to overwrite an existing verifier outside the resumable rotation flow', async () => {
+    await setupIdbEncryption('first-passphrase');
+
+    await expect(setupIdbEncryption('second-passphrase')).rejects.toThrow(
+      'Encryption is already configured',
+    );
+    clearIdbEncryptionKey();
+    await expect(verifyAndInitIdbEncryption('first-passphrase')).resolves.toBeUndefined();
+  });
 });
 
 describe('verifyAndInitIdbEncryption', () => {
@@ -310,6 +342,40 @@ describe('verifyAndInitIdbEncryption', () => {
 
   it('throws when no sentinel exists', async () => {
     await expect(verifyAndInitIdbEncryption('any')).rejects.toThrow('No passphrase sentinel found');
+  });
+
+  it('fails closed without replacing missing salt for an existing encrypted library', async () => {
+    await setupIdbEncryption('correct');
+    clearIdbEncryptionKey();
+    localStorageMock.removeItem('worldscript-idb-kdf-salt-v1');
+
+    await expect(verifyAndInitIdbEncryption('correct')).rejects.toThrow(
+      'Encryption salt is missing',
+    );
+    expect(localStorageMock.getItem('worldscript-idb-kdf-salt-v1')).toBeNull();
+  });
+
+  it('does not replace the active key while a journal owns the encryption lifecycle', async () => {
+    await setupIdbEncryption('correct');
+    clearIdbEncryptionKey();
+    const journal = await beginEncryptionMigration({
+      operationId: 'lock-setup-and-unlock',
+      operation: 'rekey',
+      phase: 'prepared',
+      sourceGeneration: 'source',
+      targetGeneration: 'target',
+      targetVerifier: [1, 2, 3],
+      stores: [],
+    });
+
+    await expect(verifyAndInitIdbEncryption('correct')).rejects.toBeInstanceOf(
+      IdbMigrationInProgressError,
+    );
+    await expect(initIdbEncryption('correct')).rejects.toBeInstanceOf(IdbMigrationInProgressError);
+    await expect(setupIdbEncryption('replacement')).rejects.toBeInstanceOf(
+      IdbMigrationInProgressError,
+    );
+    await completeEncryptionMigration(journal);
   });
 
   it('throws on wrong passphrase (AES-GCM auth-tag mismatch)', async () => {

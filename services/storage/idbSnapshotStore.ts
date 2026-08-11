@@ -12,6 +12,7 @@ import { IdbCodexStore } from './idbCodexStore';
 import { compressData, getUserFriendlyDbError, retryDb } from './idbCore';
 import {
   assertIdbProtectedWriteAllowed,
+  assertSecureStorageReadable,
   idbEncrypt,
   idbReadSecure,
   isEncryptedBlob,
@@ -55,6 +56,7 @@ export class IdbSnapshotStore extends IdbCodexStore {
 
   async listSnapshots(): Promise<ProjectSnapshot[]> {
     return retryDb(async () => {
+      await assertSecureStorageReadable();
       const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readonly');
       // IDBKeyRange: iterate in reverse (newest first) using cursor direction 'prev'
       const request = store.openCursor(null, 'prev');
@@ -78,14 +80,13 @@ export class IdbSnapshotStore extends IdbCodexStore {
 
   async getSnapshotData(id: number): Promise<ProjectData> {
     return retryDb(async () => {
+      await assertSecureStorageReadable();
       const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readonly');
       return new Promise<ProjectData>((resolve, reject) => {
         const request = store.get(id);
-        request.onsuccess = async () => {
-          const raw: unknown = request.result?.data;
-          // QNBS-v3: Decrypt encrypted snapshot payload; legacy plaintext falls through decompressData.
-          const result = await idbReadSecure<ProjectData>(raw);
-          resolve(result);
+        request.onsuccess = () => {
+          // QNBS-v3: Decode errors must reject the public read instead of escaping an IDB callback.
+          void idbReadSecure<ProjectData>(request.result?.data).then(resolve, reject);
         };
         request.onerror = () => reject(getUserFriendlyDbError(request.error));
       });

@@ -23,6 +23,7 @@ import { IdbAssetStore } from './idbAssetStore';
 import { compressData, getUserFriendlyDbError, retryDb } from './idbCore';
 import {
   assertIdbProtectedWriteAllowed,
+  assertSecureStorageReadable,
   idbEncrypt,
   idbReadSecure,
   isEncryptedBlob,
@@ -250,6 +251,7 @@ export class IdbProjectStore extends IdbAssetStore {
 
   async loadState(): Promise<PersistedState | undefined> {
     return retryDb(async () => {
+      await assertSecureStorageReadable();
       const store = await this.getObjectStore(APP_DATA_STORE, 'readonly');
       const projectRequest = store.get('project');
       const settingsRequest = store.get('settings');
@@ -266,17 +268,23 @@ export class IdbProjectStore extends IdbAssetStore {
           }
         };
 
-        projectRequest.onsuccess = async () => {
-          const raw = projectRequest.result;
-          // QNBS-v3: Decrypt encrypted blobs; fall back to decompressData for legacy plaintext.
-          //          idbReadSecure throws a clear error if encrypted data is found without a key.
-          project = await idbReadSecure(raw);
-          onComplete();
+        projectRequest.onsuccess = () => {
+          void idbReadSecure(projectRequest.result).then(
+            (value) => {
+              project = value;
+              onComplete();
+            },
+            (error: unknown) => reject(error),
+          );
         };
-        settingsRequest.onsuccess = async () => {
-          const raw = settingsRequest.result;
-          settings = await idbReadSecure(raw);
-          onComplete();
+        settingsRequest.onsuccess = () => {
+          void idbReadSecure(settingsRequest.result).then(
+            (value) => {
+              settings = value;
+              onComplete();
+            },
+            (error: unknown) => reject(error),
+          );
         };
 
         projectRequest.onerror = () => reject(projectRequest.error);

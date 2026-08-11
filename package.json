@@ -196,7 +196,7 @@
     "y-protocols": "^1.0.7"
   },
   "simple-git-hooks": {
-    "pre-commit": "npm exec -- lint-staged"
+    "pre-commit": "pnpm exec lint-staged"
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs,css,md,json}": "biome check --write --error-on-warnings --no-errors-on-unmatched --files-ignore-unknown=true",
