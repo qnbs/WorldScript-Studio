@@ -325,6 +325,35 @@ describe('localAiFacade', () => {
     await pB;
   });
 
+  it('a superseded preload settling late does not overwrite a newer preload modal state', async () => {
+    // QNBS-v3: regression test — retryLastPreload() starting a new attempt B while an older,
+    // cancelled/superseded attempt A's generateLocalText call is still settling must not let A's
+    // late error/reset/ready overwrite B's own progress once B has become the current attempt.
+    const { inferenceProgressEmitter } = await import('../../services/ai/inferenceProgressEmitter');
+    const errorSpy = vi.spyOn(inferenceProgressEmitter, 'reportWebLlmError');
+    const readySpy = vi.spyOn(inferenceProgressEmitter, 'reportWebLlmReady');
+    const { preloadLocalModel } = await import('../../services/localAiFacade');
+
+    const resolvers: Array<(v: { layer: string; text: string }) => void> = [];
+    mockRunLocalTextGeneration.mockImplementation(() => new Promise((res) => resolvers.push(res)));
+
+    const pA = preloadLocalModel('A');
+    await Promise.resolve();
+    const pB = preloadLocalModel('B'); // newer → owns the active progress-report identity
+    await Promise.resolve();
+
+    // A's stale fallback settles AFTER B has become current — must not touch the emitter.
+    resolvers[0]?.({ layer: 'onnx', text: 'a' });
+    await pA;
+    expect(errorSpy).not.toHaveBeenCalled();
+    expect(readySpy).not.toHaveBeenCalled();
+
+    // B, still current, resolves with a real WebLLM warm-up — this IS allowed to report ready.
+    resolvers[1]?.({ layer: 'webllm', text: 'b' });
+    await pB;
+    expect(readySpy).toHaveBeenCalled();
+  });
+
   it('publishes a terminal error when a main-thread fallback cannot warm the requested WebLLM model', async () => {
     mockRunLocalTextGeneration.mockResolvedValue({ layer: 'onnx', text: 'fallback' });
     const { inferenceProgressEmitter } = await import('../../services/ai/inferenceProgressEmitter');

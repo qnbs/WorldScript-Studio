@@ -718,6 +718,24 @@ describe('AiProviderCard — connection-context invalidation (no remount)', () =
     expect(screen.queryByText('old-server-model')).toBeNull();
   });
 
+  it('editing the server URL does not silently reassign the protocol preset', async () => {
+    // QNBS-v3: a native-Ollama user changing host/port must keep speaking native Ollama, not get
+    // force-switched to 'custom' (which routes through the OpenAI-compatible protocol and breaks it).
+    render(
+      <AiProviderCard
+        advancedAi={{ ...ollamaAdvancedAi, localBackendPreset: 'ollama_default' }}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    const urlInput = screen.getByLabelText('settings.ai.ollamaServerUrl');
+    await userEvent.setup().type(urlInput, 'x');
+    expect(mockOnAdvancedAiPatch).toHaveBeenCalled();
+    for (const call of mockOnAdvancedAiPatch.mock.calls) {
+      expect(call[0]).not.toHaveProperty('localBackendPreset');
+    }
+  });
+
   it('preserves unsaved key input across a provider switch (no more key={provider} remount)', async () => {
     const user = userEvent.setup();
     const { rerender } = render(

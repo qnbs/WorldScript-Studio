@@ -573,12 +573,12 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
                 id="ollama-server-url"
                 placeholder="http://localhost:11434"
                 value={ollamaBaseUrl}
-                onChange={(e) =>
-                  onAdvancedAiPatch({
-                    ollamaBaseUrl: e.target.value,
-                    localBackendPreset: 'custom',
-                  })
-                }
+                // QNBS-v3: editing the URL must not silently reassign the protocol — a native-Ollama
+                // user pointing at a non-default host/port (e.g. a LAN server) previously had their
+                // preset force-switched to 'custom', which routes every request through the
+                // OpenAI-compatible protocol instead of native Ollama and breaks all completions.
+                // Protocol selection stays explicit via the preset dropdown above.
+                onChange={(e) => onAdvancedAiPatch({ ollamaBaseUrl: e.target.value })}
                 className="flex-1 font-mono text-sm"
               />
               <Button
