@@ -136,6 +136,29 @@ describe('ApiKeySection', () => {
     });
   });
 
+  it('auto-validates a newly saved key and surfaces an invalid-key result without a separate Test click', async () => {
+    // QNBS-v3: regression test — saving previously only ran syntactic checks (length + control
+    // chars) and marked the key active, deferring real provider validation to whatever generation
+    // call happened to run next. Saving now auto-triggers the same test-connection flow.
+    mockGenerateText.mockRejectedValue(new Error('INVALID_API_KEY error'));
+    render(<ApiKeySection />);
+    await waitFor(() => screen.getByText('settings.apiKey.statusInactive'));
+
+    const input = screen.getByPlaceholderText('settings.apiKey.inputLabel');
+    fireEvent.change(input, { target: { value: 'AIzaBogusKey' } });
+    fireEvent.click(screen.getByText('settings.apiKey.save'));
+
+    await waitFor(() => {
+      expect(screen.getByText('settings.apiKey.saved')).toBeTruthy();
+    });
+    await waitFor(() => {
+      expect(screen.getByText('apiKey.invalidKey')).toBeTruthy();
+    });
+    await waitFor(() => {
+      expect(screen.getByText('settings.apiKey.statusInactive')).toBeTruthy();
+    });
+  });
+
   it('shows save error when dbService throws', async () => {
     mockSaveGeminiApiKey.mockRejectedValue(new Error('DB error'));
     render(<ApiKeySection />);

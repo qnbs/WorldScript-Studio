@@ -67,7 +67,9 @@ export const ApiKeySection: FC = () => {
     setIsSaving(true);
     setMessage(null);
     try {
-      // QNBS-v3: Provider validation, not an historical prefix, determines credential validity.
+      // QNBS-v3: this only checks syntax (length + control chars) and persists — it does not confirm
+      // the key actually authenticates. handleTestConnection (auto-triggered below) is what proves
+      // that; "Active" here means "saved", not "verified working."
       await dbService.saveGeminiApiKey(normalizedKey);
       invalidateAiClientCache();
       setApiKey('');
@@ -75,6 +77,10 @@ export const ApiKeySection: FC = () => {
       setDecryptFailed(false);
       setMessage({ type: 'success', text: t('settings.apiKey.saved') });
       setTestResult(null);
+      // QNBS-v3: surface an invalid/unauthenticated key immediately instead of deferring discovery
+      // to whatever later generation call happens to be the first to use it — handleTestConnection
+      // already flips hasKey back to false on an INVALID_API_KEY response.
+      void handleTestConnection();
     } catch (error: unknown) {
       logger.error('Failed to save API key:', error);
       setMessage({
