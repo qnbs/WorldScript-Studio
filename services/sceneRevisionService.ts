@@ -1,10 +1,11 @@
 // QNBS-v3: Standalone IDB for scene revisions avoids a shared schema upgrade and keeps history bounded.
 import type { SceneRevision } from '../types';
 import {
-  SecureRecordCorruptError,
+  assertSecureStorageReadable,
   assertSecureStorageWritableForMutation,
   prepareSecureRecordPayload,
-  readSecureRecordPayload,
+  readSecureRecordPayloadAfterLifecycleCheck,
+  SecureRecordCorruptError,
   type SecureRecordEnvelope,
 } from './storage/storageEncryptionService';
 
@@ -65,7 +66,8 @@ function isStoredSceneRevision(value: unknown): value is StoredSceneRevision {
     'payload' in value &&
     typeof (value as Partial<StoredSceneRevision>).id === 'string' &&
     typeof (value as Partial<StoredSceneRevision>).sectionId === 'string' &&
-    typeof (value as Partial<StoredSceneRevision>).createdAt === 'number'
+    typeof (value as Partial<StoredSceneRevision>).createdAt === 'number' &&
+    (value as Partial<StoredSceneRevision>).schemaVersion === RECORD_SCHEMA_VERSION
   );
 }
 
@@ -105,11 +107,29 @@ async function encodeRevision(revision: SceneRevision): Promise<StoredSceneRevis
   };
 }
 
-async function decodeRevision(stored: unknown): Promise<SceneRevision> {
+function hasSupportedRevisionRoutingMetadata(
+  value: unknown,
+): value is Pick<SceneRevision, 'id' | 'sectionId' | 'createdAt'> {
+  if (isStoredSceneRevision(value)) return true;
+  if (typeof value !== 'object' || value === null || 'payload' in value) return false;
+  const legacy = value as Partial<SceneRevision>;
+  return (
+    typeof legacy.id === 'string' &&
+    typeof legacy.sectionId === 'string' &&
+    typeof legacy.createdAt === 'number' &&
+    isRevisionPayload(revisionPayload(legacy as SceneRevision))
+  );
+}
+
+async function decodeRevision(
+  stored: unknown,
+  encryptionConfigured: boolean,
+): Promise<SceneRevision> {
   if (isStoredSceneRevision(stored)) {
-    const decoded = await readSecureRecordPayload<SceneRevisionPayload>(
+    const decoded = await readSecureRecordPayloadAfterLifecycleCheck<SceneRevisionPayload>(
       stored.payload,
       contextFor(stored.id),
+      encryptionConfigured,
     );
     if (!isRevisionPayload(decoded.value)) throw new SecureRecordCorruptError();
     return {
@@ -128,9 +148,10 @@ async function decodeRevision(stored: unknown): Promise<SceneRevision> {
   ) {
     throw new SecureRecordCorruptError();
   }
-  const decoded = await readSecureRecordPayload<SceneRevisionPayload>(
+  const decoded = await readSecureRecordPayloadAfterLifecycleCheck<SceneRevisionPayload>(
     revisionPayload(legacy as SceneRevision),
     contextFor(legacy.id),
+    encryptionConfigured,
   );
   if (!isRevisionPayload(decoded.value)) throw new SecureRecordCorruptError();
   return {
@@ -141,12 +162,26 @@ async function decodeRevision(stored: unknown): Promise<SceneRevision> {
   };
 }
 
-async function putStoredRevisions(db: IDBDatabase, revisions: readonly StoredSceneRevision[]): Promise<void> {
-  if (revisions.length === 0) return;
+async function saveStoredRevisionWithRetention(
+  db: IDBDatabase,
+  revision: StoredSceneRevision,
+): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const transaction = db.transaction(STORE, 'readwrite');
     const store = transaction.objectStore(STORE);
-    for (const revision of revisions) store.put(revision);
+    const putRequest = store.put(revision);
+    putRequest.onerror = () => reject(putRequest.error);
+    // QNBS-v3: Revision routing metadata stays plaintext so retention can be atomic without decoding history.
+    const listRequest = store.index('sectionId').getAll(revision.sectionId);
+    listRequest.onsuccess = () => {
+      const staleIds = (listRequest.result as unknown[])
+        .filter(hasSupportedRevisionRoutingMetadata)
+        .sort((left, right) => right.createdAt - left.createdAt)
+        .slice(MAX_PER_SCENE)
+        .map((storedRevision) => storedRevision.id);
+      for (const id of staleIds) store.delete(id);
+    };
+    listRequest.onerror = () => reject(listRequest.error);
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error);
     transaction.onabort = () => reject(transaction.error ?? new Error('Revision write aborted'));
@@ -186,20 +221,13 @@ export async function saveRevision(
   // QNBS-v3: Encrypt before IDB work so WebCrypto cannot make a write transaction inactive.
   const stored = await encodeRevision(revision);
   const db = await getDb();
-  await putStoredRevisions(db, [stored]);
-
-  const existing = await listRevisions(sectionId);
-  if (existing.length > MAX_PER_SCENE) {
-    await deleteRevisions(
-      db,
-      existing.slice(MAX_PER_SCENE).map((existingRevision) => existingRevision.id),
-    );
-  }
+  await saveStoredRevisionWithRetention(db, stored);
   return revision;
 }
 
 /** Returns revisions for a section, ordered newest-first. Reads never attempt an opportunistic rewrite. */
 export async function listRevisions(sectionId: string): Promise<SceneRevision[]> {
+  const encryptionConfigured = await assertSecureStorageReadable();
   const db = await getDb();
   const raw = await new Promise<unknown[]>((resolve, reject) => {
     const transaction = db.transaction(STORE, 'readonly');
@@ -211,7 +239,7 @@ export async function listRevisions(sectionId: string): Promise<SceneRevision[]>
 
   const revisions: SceneRevision[] = [];
   // QNBS-v3: Sequential decryption keeps a full scene history from causing a renderer memory burst.
-  for (const stored of raw) revisions.push(await decodeRevision(stored));
+  for (const stored of raw) revisions.push(await decodeRevision(stored, encryptionConfigured));
   return revisions.sort((left, right) => right.createdAt - left.createdAt);
 }
 

@@ -8,12 +8,14 @@ import {
   __resetEncryptionMigrationJournalConnectionsForTest,
   assertNoActiveEncryptionMigration,
   beginEncryptionMigration,
+  claimEncryptionMigrationOwnership,
   clearCompletedEncryptionMigration,
   completeEncryptionMigration,
   IdbMigrationInProgressError,
   IdbMigrationOwnershipError,
   IdbMigrationRecoveryRequiredError,
   readEncryptionMigrationJournal,
+  releaseEncryptionMigrationOwnership,
   updateEncryptionMigrationJournal,
 } from '../../../services/storage/encryptionMigrationJournal';
 import { IdbProjectStore } from '../../../services/storage/idbProjectStore';
@@ -145,6 +147,29 @@ describe('encryption migration journal', () => {
       revision: updated.revision,
       stores: [{ cursor: 'project/settings', processed: 1, verified: 1, done: false }],
     });
+  });
+
+  it('serializes execution owners and permits recovery after a crashed owner lease expires', async () => {
+    const created = await beginEncryptionMigration(migrationInput('operation-1'));
+    const firstOwner = await claimEncryptionMigrationOwnership(created, 'owner-a');
+
+    await expect(claimEncryptionMigrationOwnership(firstOwner, 'owner-b')).rejects.toBeInstanceOf(
+      IdbMigrationOwnershipError,
+    );
+
+    await replaceStoredJournalForTest({
+      ...firstOwner,
+      ownerLeaseExpiresAt: Date.now() - 1,
+    });
+    __resetEncryptionMigrationJournalConnectionsForTest();
+    const expiredOwner = await readEncryptionMigrationJournal();
+    if (!expiredOwner) throw new Error('Expected an expired migration owner');
+    const recoveredOwner = await claimEncryptionMigrationOwnership(expiredOwner, 'owner-b');
+    expect(recoveredOwner).toMatchObject({ ownerId: 'owner-b', revision: firstOwner.revision + 1 });
+
+    const released = await releaseEncryptionMigrationOwnership(recoveredOwner);
+    expect(released.ownerId).toBeUndefined();
+    expect(released.ownerLeaseExpiresAt).toBeUndefined();
   });
 
   it('rejects a stale checkpoint from an independently loaded journal module', async () => {

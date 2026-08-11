@@ -5,6 +5,7 @@ import {
   normalizeLocalBaseUrl,
 } from './localServerHttp';
 import { createLogger } from './logger';
+import { isTauriRuntime } from './tauriRuntime';
 
 // QNBS-v3 (#266): canonical normalization lives in localServerHttp (shared with the scanner).
 const normalizeBaseUrl = normalizeLocalBaseUrl;
@@ -164,6 +165,11 @@ export interface TestConnectionResult {
   error?: string;
   kind?: TestConnectionErrorKind;
   params?: Record<string, string | number>;
+  localServer?: {
+    normalizedEndpoint: string;
+    transport: 'tauri-http' | 'browser-fetch';
+    modelNames: string[];
+  };
 }
 
 export async function testOllamaConnection(baseUrl?: string): Promise<TestConnectionResult> {
@@ -179,7 +185,30 @@ export async function testOllamaConnection(baseUrl?: string): Promise<TestConnec
         params: { status: res.status },
       };
     }
-    return { ok: true };
+    let payload: unknown;
+    try {
+      payload = await res.json();
+    } catch {
+      payload = null;
+    }
+    const modelNames =
+      typeof payload === 'object' &&
+      payload !== null &&
+      Array.isArray((payload as { models?: unknown }).models)
+        ? (payload as { models: unknown[] }).models.flatMap((model) => {
+            if (typeof model !== 'object' || model === null) return [];
+            const name = (model as { name?: unknown }).name;
+            return typeof name === 'string' && name.trim() ? [name.trim()] : [];
+          })
+        : [];
+    return {
+      ok: true,
+      localServer: {
+        normalizedEndpoint: url,
+        transport: isTauriRuntime() ? 'tauri-http' : 'browser-fetch',
+        modelNames,
+      },
+    };
   } catch (error: unknown) {
     // QNBS-v3 (#266): classified failures — distinguish a hanging server from a missing one.
     if (error instanceof LocalServerError && error.kind === 'timeout') {

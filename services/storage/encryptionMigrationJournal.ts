@@ -8,6 +8,7 @@ import { IdbConnectionManager } from './idbCore';
 
 const JOURNAL_RECORD_KEY = '__idb_encryption_migration_journal_v1__';
 const JOURNAL_SCHEMA_VERSION = 1;
+const OWNER_LEASE_DURATION_MS = 60_000;
 
 export type EncryptionMigrationOperation = 'enable' | 'rekey' | 'disable';
 export type EncryptionMigrationPhase =
@@ -33,6 +34,10 @@ export interface EncryptionMigrationJournal {
   operationId: string;
   /** Monotone compare-and-swap token; it is independent from wall-clock precision. */
   revision: number;
+  /** Ephemeral executor identity; the lease prevents concurrent store rewrites across clients. */
+  ownerId?: string;
+  /** Owner leases are renewed with every durable checkpoint and can expire after a crash. */
+  ownerLeaseExpiresAt?: number;
   operation: EncryptionMigrationOperation;
   phase: EncryptionMigrationPhase;
   startedAt: number;
@@ -106,6 +111,16 @@ function parseJournal(raw: unknown): EncryptionMigrationJournal | null {
     return null;
   }
   if (
+    (value.ownerId === undefined) !== (value.ownerLeaseExpiresAt === undefined) ||
+    (value.ownerId !== undefined &&
+      (typeof value.ownerId !== 'string' ||
+        value.ownerId.length === 0 ||
+        !Number.isSafeInteger(value.ownerLeaseExpiresAt) ||
+        value.ownerLeaseExpiresAt < 0))
+  ) {
+    return null;
+  }
+  if (
     value.stores.some(
       (checkpoint) =>
         !checkpoint ||
@@ -133,6 +148,26 @@ function parseJournal(raw: unknown): EncryptionMigrationJournal | null {
 
 function journalIsActive(journal: EncryptionMigrationJournal): boolean {
   return journal.phase !== 'completed';
+}
+
+function withoutOwner(
+  journal: EncryptionMigrationJournal,
+): Omit<EncryptionMigrationJournal, 'ownerId' | 'ownerLeaseExpiresAt'> {
+  const { ownerId: _ownerId, ownerLeaseExpiresAt: _ownerLeaseExpiresAt, ...withoutLease } = journal;
+  return withoutLease;
+}
+
+function nextOwnedJournal(
+  journal: EncryptionMigrationJournal,
+  ownerId: string | undefined,
+): EncryptionMigrationJournal {
+  const now = Date.now();
+  return {
+    ...withoutOwner(journal),
+    revision: journal.revision + 1,
+    updatedAt: now,
+    ...(ownerId ? { ownerId, ownerLeaseExpiresAt: now + OWNER_LEASE_DURATION_MS } : {}),
+  };
 }
 
 class EncryptionMigrationJournalStore extends IdbConnectionManager {
@@ -187,11 +222,7 @@ class EncryptionMigrationJournalStore extends IdbConnectionManager {
   async saveIfCurrent(journal: EncryptionMigrationJournal): Promise<EncryptionMigrationJournal> {
     const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
     const transaction = store.transaction;
-    const next: EncryptionMigrationJournal = {
-      ...journal,
-      revision: journal.revision + 1,
-      updatedAt: Date.now(),
-    };
+    const next = nextOwnedJournal(journal, journal.ownerId);
     return new Promise((resolve, reject) => {
       let writeQueued = false;
       const existingRequest = store.get(JOURNAL_RECORD_KEY);
@@ -201,7 +232,9 @@ class EncryptionMigrationJournalStore extends IdbConnectionManager {
         if (
           !existing ||
           existing.operationId !== journal.operationId ||
-          existing.revision !== journal.revision
+          existing.revision !== journal.revision ||
+          existing.ownerId !== journal.ownerId ||
+          existing.ownerLeaseExpiresAt !== journal.ownerLeaseExpiresAt
         ) {
           reject(new IdbMigrationOwnershipError());
           return;
@@ -216,6 +249,83 @@ class EncryptionMigrationJournalStore extends IdbConnectionManager {
       transaction.onerror = () => reject(transaction.error);
       transaction.onabort = () =>
         reject(transaction.error ?? new Error('Journal transaction aborted'));
+    });
+  }
+
+  async claimOwnership(
+    journal: EncryptionMigrationJournal,
+    ownerId: string,
+  ): Promise<EncryptionMigrationJournal> {
+    const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
+    const transaction = store.transaction;
+    const next = nextOwnedJournal(journal, ownerId);
+    return new Promise((resolve, reject) => {
+      let writeQueued = false;
+      const existingRequest = store.get(JOURNAL_RECORD_KEY);
+      existingRequest.onerror = () => reject(existingRequest.error);
+      existingRequest.onsuccess = () => {
+        const existing = parseJournal(existingRequest.result);
+        if (
+          !existing ||
+          existing.operationId !== journal.operationId ||
+          existing.revision !== journal.revision
+        ) {
+          reject(new IdbMigrationOwnershipError());
+          return;
+        }
+        const now = Date.now();
+        if (
+          existing.ownerId !== undefined &&
+          existing.ownerId !== ownerId &&
+          (existing.ownerLeaseExpiresAt ?? now) > now
+        ) {
+          reject(new IdbMigrationOwnershipError());
+          return;
+        }
+        const putRequest = store.put(next, JOURNAL_RECORD_KEY);
+        putRequest.onerror = () => reject(putRequest.error);
+        writeQueued = true;
+      };
+      transaction.oncomplete = () => {
+        if (writeQueued) resolve(next);
+      };
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () =>
+        reject(transaction.error ?? new Error('Journal ownership claim aborted'));
+    });
+  }
+
+  async releaseOwnership(journal: EncryptionMigrationJournal): Promise<EncryptionMigrationJournal> {
+    if (journal.ownerId === undefined) return journal;
+    const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
+    const transaction = store.transaction;
+    const next = nextOwnedJournal(journal, undefined);
+    return new Promise((resolve, reject) => {
+      let writeQueued = false;
+      const existingRequest = store.get(JOURNAL_RECORD_KEY);
+      existingRequest.onerror = () => reject(existingRequest.error);
+      existingRequest.onsuccess = () => {
+        const existing = parseJournal(existingRequest.result);
+        if (
+          !existing ||
+          existing.operationId !== journal.operationId ||
+          existing.revision !== journal.revision ||
+          existing.ownerId !== journal.ownerId ||
+          existing.ownerLeaseExpiresAt !== journal.ownerLeaseExpiresAt
+        ) {
+          reject(new IdbMigrationOwnershipError());
+          return;
+        }
+        const putRequest = store.put(next, JOURNAL_RECORD_KEY);
+        putRequest.onerror = () => reject(putRequest.error);
+        writeQueued = true;
+      };
+      transaction.oncomplete = () => {
+        if (writeQueued) resolve(next);
+      };
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () =>
+        reject(transaction.error ?? new Error('Journal ownership release aborted'));
     });
   }
 
@@ -258,7 +368,10 @@ export async function readEncryptionMigrationJournal(): Promise<EncryptionMigrat
 }
 
 export async function beginEncryptionMigration(
-  input: Omit<EncryptionMigrationJournal, 'schemaVersion' | 'revision' | 'startedAt' | 'updatedAt'>,
+  input: Omit<
+    EncryptionMigrationJournal,
+    'schemaVersion' | 'revision' | 'startedAt' | 'updatedAt' | 'ownerId' | 'ownerLeaseExpiresAt'
+  >,
 ): Promise<EncryptionMigrationJournal> {
   const now = Date.now();
   const journal: EncryptionMigrationJournal = {
@@ -277,6 +390,22 @@ export async function updateEncryptionMigrationJournal(
   changes: Pick<EncryptionMigrationJournal, 'phase' | 'stores'>,
 ): Promise<EncryptionMigrationJournal> {
   return journalStore.saveIfCurrent({ ...journal, ...changes });
+}
+
+/** Claim the single execution lease before an adapter can mutate a protected store. */
+export async function claimEncryptionMigrationOwnership(
+  journal: EncryptionMigrationJournal,
+  ownerId: string,
+): Promise<EncryptionMigrationJournal> {
+  if (!ownerId) throw new IdbMigrationOwnershipError();
+  return journalStore.claimOwnership(journal, ownerId);
+}
+
+/** Release a healthy runner after a recoverable failure so an explicit retry can resume immediately. */
+export async function releaseEncryptionMigrationOwnership(
+  journal: EncryptionMigrationJournal,
+): Promise<EncryptionMigrationJournal> {
+  return journalStore.releaseOwnership(journal);
 }
 
 export async function completeEncryptionMigration(

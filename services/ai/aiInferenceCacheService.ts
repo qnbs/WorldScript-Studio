@@ -1,10 +1,10 @@
 // QNBS-v3: Two-layer inference cache keeps hot reads in memory while the durable layer is encrypted.
 import {
-  SecureRecordCorruptError,
   assertSecureStorageReadable,
   assertSecureStorageWritableForMutation,
   prepareSecureRecordPayload,
   readSecureRecordPayload,
+  SecureRecordCorruptError,
   type SecureRecordEnvelope,
 } from '../storage/storageEncryptionService';
 
@@ -135,10 +135,13 @@ export class AiInferenceCacheService {
     return {
       key,
       timestamp,
-      payload: await prepareSecureRecordPayload<CachePayload>({ result }, {
-        store: SECURE_STORE,
-        recordId: key,
-      }),
+      payload: await prepareSecureRecordPayload<CachePayload>(
+        { result },
+        {
+          store: SECURE_STORE,
+          recordId: key,
+        },
+      ),
     };
   }
 
@@ -213,13 +216,17 @@ export class AiInferenceCacheService {
   async setCachedInference(prompt: string, modelId: string, result: string): Promise<void> {
     if (this.shouldSkip(prompt)) return;
     const key = hashKey(prompt, modelId);
-    await this.dbReady;
-    const entry = await this.encodeEntry(key, result, Date.now());
     this.evictLru();
     this.inMemory.set(key, { result, lastUsed: Date.now() });
+    await this.dbReady;
     if (!this.db) return;
-    await this.idbEvictOldest();
-    await this.persistEntry(entry);
+    try {
+      const entry = await this.encodeEntry(key, result, Date.now());
+      await this.idbEvictOldest();
+      await this.persistEntry(entry);
+    } catch {
+      // QNBS-v3: The encrypted durable cache is non-authoritative; lock or migration state must not fail inference.
+    }
   }
 
   private async idbEvictOldest(): Promise<void> {

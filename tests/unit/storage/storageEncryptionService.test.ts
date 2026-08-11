@@ -33,8 +33,10 @@ import {
 } from '../../../services/storage/encryptionMigrationJournal';
 import { deletePassphraseSentinel } from '../../../services/storage/idbPassphraseSentinel';
 import {
+  assertIdbMigrationTargetKeyMatchesVerifier,
   clearIdbEncryptionKey,
   clearIdbPassphrase,
+  createIdbMigrationTargetVerifier,
   hasPassphraseSentinel,
   IdbEncryptionMigrationRequiredError,
   IdbStorageLockedError,
@@ -159,6 +161,19 @@ describe('StorageEncryptionService.encrypt / decrypt', () => {
     const blob = await svc.encrypt(key, 'data');
     const truncated = { bytes: blob.bytes.slice(0, 10) };
     await expect(svc.decrypt(key, truncated)).rejects.toThrow();
+  });
+});
+
+describe('migration target verifier', () => {
+  it('accepts only the key that created the durable verifier', async () => {
+    const targetKey = await freshKey('target');
+    const otherKey = await freshKey('other');
+    const verifier = await createIdbMigrationTargetVerifier(targetKey);
+
+    await expect(
+      assertIdbMigrationTargetKeyMatchesVerifier(targetKey, verifier),
+    ).resolves.toBeUndefined();
+    await expect(assertIdbMigrationTargetKeyMatchesVerifier(otherKey, verifier)).rejects.toThrow();
   });
 });
 
@@ -379,7 +394,10 @@ describe('verifyAndInitIdbEncryption', () => {
       IdbMigrationInProgressError,
     );
     await completeEncryptionMigration(
-      await updateEncryptionMigrationJournal(journal, { phase: 'committing', stores: journal.stores }),
+      await updateEncryptionMigrationJournal(journal, {
+        phase: 'committing',
+        stores: journal.stores,
+      }),
     );
   });
 

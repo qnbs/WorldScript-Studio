@@ -73,12 +73,21 @@ describe('listOllamaModels', () => {
 // ─── testOllamaConnection ─────────────────────────────────────────────────────
 
 describe('testOllamaConnection', () => {
-  it('returns ok:true on 200', async () => {
+  it('returns safe endpoint, transport, and model diagnostics on 200', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(
-      new Response(JSON.stringify({ models: [] }), { status: 200 }),
+      new Response(JSON.stringify({ models: [{ name: 'llama3' }, { name: ' mistral ' }] }), {
+        status: 200,
+      }),
     );
     const result = await testOllamaConnection();
-    expect(result).toEqual({ ok: true });
+    expect(result).toEqual({
+      ok: true,
+      localServer: {
+        normalizedEndpoint: 'http://localhost:11434/api/tags',
+        transport: 'browser-fetch',
+        modelNames: ['llama3', 'mistral'],
+      },
+    });
   });
 
   it('returns ok:false with error message on HTTP error', async () => {

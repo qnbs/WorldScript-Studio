@@ -33,9 +33,7 @@ export interface EncryptedBlob {
 
 const LEGACY_BOUND_SECURE_RECORD_VERSION = 1 as const;
 export const SECURE_RECORD_VERSION = 2 as const;
-type SecureRecordVersion =
-  | typeof LEGACY_BOUND_SECURE_RECORD_VERSION
-  | typeof SECURE_RECORD_VERSION;
+type SecureRecordVersion = typeof LEGACY_BOUND_SECURE_RECORD_VERSION | typeof SECURE_RECORD_VERSION;
 
 /** Structured-clone-safe AES-GCM envelope for a secondary-store payload. */
 export interface SecureRecordEnvelope {
@@ -396,9 +394,11 @@ export async function assertSecureStorageWritableForMutation(): Promise<void> {
 }
 
 /** Block protected reads while encryption is locked or a journal owns the storage lifecycle. */
-export async function assertSecureStorageReadable(): Promise<void> {
+export async function assertSecureStorageReadable(): Promise<boolean> {
   await assertNoActiveEncryptionMigration();
-  if ((await hasPassphraseSentinel()) && !_activeKey) throw new SecureRecordLockedError();
+  const encryptionConfigured = await hasPassphraseSentinel();
+  if (encryptionConfigured && !_activeKey) throw new SecureRecordLockedError();
+  return encryptionConfigured;
 }
 
 /** Prepare a secondary payload without silently storing protected plaintext while the library is locked. */
@@ -430,20 +430,32 @@ export async function reEncryptSecureRecordEnvelope(
   return encryptSecureRecordValue(newKey, decoded.value, context);
 }
 
-/** Read a secondary payload with locked, malformed-envelope, and legacy states distinguished. */
-export async function readSecureRecordPayload<T>(
+/**
+ * Decode records collected by one caller immediately after `assertSecureStorageReadable()` returned
+ * this access value. It is intentionally narrow so batch readers do not re-query lifecycle metadata per row.
+ */
+export async function readSecureRecordPayloadAfterLifecycleCheck<T>(
   stored: unknown,
   context: SecureRecordContext,
+  encryptionConfigured: boolean,
 ): Promise<SecureRecordReadResult<T>> {
-  await assertSecureStorageReadable();
   if (isSecureRecordCandidate(stored)) {
     if (!isSecureRecordEnvelope(stored)) throw new SecureRecordCorruptError();
     if (!_activeKey) throw new SecureRecordLockedError();
     return decryptSecureRecordValue<T>(_activeKey, stored, context);
   }
   if (_activeKey) return { value: stored as T, needsMigration: true };
-  if (await hasPassphraseSentinel()) throw new SecureRecordLockedError();
+  if (encryptionConfigured) throw new SecureRecordLockedError();
   return { value: stored as T, needsMigration: false };
+}
+
+/** Read a secondary payload with locked, malformed-envelope, and legacy states distinguished. */
+export async function readSecureRecordPayload<T>(
+  stored: unknown,
+  context: SecureRecordContext,
+): Promise<SecureRecordReadResult<T>> {
+  const encryptionConfigured = await assertSecureStorageReadable();
+  return readSecureRecordPayloadAfterLifecycleCheck(stored, context, encryptionConfigured);
 }
 
 /** Read with an explicitly supplied generation key while a journal owns the migration. */
@@ -514,6 +526,28 @@ export async function verifyAndInitIdbEncryption(passphrase: string): Promise<vo
   // QNBS-v3: decrypt throws on wrong key — AES-GCM auth-tag is the verifier
   await _svc.decrypt(key, { bytes: sentinelBytes });
   _activeKey = key;
+}
+
+/** Create a non-secret verifier that a future enable/rekey runner must authenticate before mutation. */
+export async function createIdbMigrationTargetVerifier(targetKey: CryptoKey): Promise<number[]> {
+  const blob = await _svc.encrypt(targetKey, { v: 1 });
+  return Array.from(blob.bytes);
+}
+
+/** Reject a supplied target key unless it decrypts the durable migration verifier exactly. */
+export async function assertIdbMigrationTargetKeyMatchesVerifier(
+  targetKey: CryptoKey,
+  targetVerifier: readonly number[],
+): Promise<void> {
+  const verified = await _svc.decrypt(targetKey, { bytes: new Uint8Array(targetVerifier) });
+  if (
+    typeof verified !== 'object' ||
+    verified === null ||
+    Object.getPrototypeOf(verified) !== Object.prototype ||
+    (verified as { v?: unknown }).v !== 1
+  ) {
+    throw new Error('Migration target verifier is invalid');
+  }
 }
 
 /**

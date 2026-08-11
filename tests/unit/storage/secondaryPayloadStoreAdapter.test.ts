@@ -1,17 +1,18 @@
 // @vitest-environment node
 // QNBS-v3: Real fake-indexeddb coverage proves each checkpointed adapter conversion preserves recoverable payloads.
 import { IDBFactory } from 'fake-indexeddb';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createSecondaryPayloadStoreAdapter,
+  ProtectedStoreMigrationConflictError,
   type SecondaryPayloadStoreAdapterSpec,
 } from '../../../services/storage/secondaryPayloadStoreAdapter';
 import {
-  StorageEncryptionService,
   isSecureRecordEnvelope,
   readSecureRecordPayloadWithKey,
   type SecureRecordEnvelope,
+  StorageEncryptionService,
 } from '../../../services/storage/storageEncryptionService';
 
 interface DemoPayload {
@@ -72,6 +73,25 @@ async function readRecord(id: string): Promise<DemoRecord> {
         resolve(getRequest.result as DemoRecord);
       };
       getRequest.onerror = () => reject(getRequest.error);
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function overwriteRecord(record: DemoRecord): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME);
+    request.onsuccess = () => {
+      const database = request.result;
+      const transaction = database.transaction(STORE_NAME, 'readwrite');
+      transaction.objectStore(STORE_NAME).put(record);
+      transaction.oncomplete = () => {
+        database.close();
+        resolve();
+      };
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () =>
+        reject(transaction.error ?? new Error('Concurrent write aborted'));
     };
     request.onerror = () => reject(request.error);
   });
@@ -142,7 +162,11 @@ describe('secondary protected-store payload adapter', () => {
 
     const targetEncrypted = await readRecord('a');
     await expect(
-      readSecureRecordPayloadWithKey<DemoPayload>(targetEncrypted.payload, { store: STORE_ID, recordId: 'a' }, targetKey),
+      readSecureRecordPayloadWithKey<DemoPayload>(
+        targetEncrypted.payload,
+        { store: STORE_ID, recordId: 'a' },
+        targetKey,
+      ),
     ).resolves.toMatchObject({ value: { content: 'first protected record' } });
 
     const disableFirst = await adapter.migrateNext({ operation: 'disable', sourceKey: targetKey });
@@ -154,5 +178,41 @@ describe('secondary protected-store payload adapter', () => {
     await adapter.migrateNext({ operation: 'disable', sourceKey: targetKey, cursor: 'b' });
     await expect(adapter.verify({ operation: 'disable', sourceKey: targetKey })).resolves.toBe(2);
     expect((await readRecord('a')).payload).toEqual({ content: 'first protected record' });
+  });
+
+  it('aborts a batch instead of overwriting a record changed during asynchronous encryption', async () => {
+    await createStore([{ id: 'a', payload: { content: 'original protected record' } }]);
+    const adapter = createSecondaryPayloadStoreAdapter(spec);
+    const targetKey = await deriveKey('target');
+    let releaseEncryption: (() => void) | undefined;
+    let encryptionStarted: (() => void) | undefined;
+    const encryptionGate = new Promise<void>((resolve) => {
+      releaseEncryption = resolve;
+    });
+    const started = new Promise<void>((resolve) => {
+      encryptionStarted = resolve;
+    });
+    const originalEncrypt = crypto.subtle.encrypt.bind(crypto.subtle);
+    const encryptSpy = vi.spyOn(crypto.subtle, 'encrypt').mockImplementation(async (...args) => {
+      encryptionStarted?.();
+      await encryptionGate;
+      return originalEncrypt(...args);
+    });
+
+    try {
+      const migration = adapter.migrateNext({ operation: 'enable', targetKey });
+      await started;
+      await overwriteRecord({ id: 'a', payload: { content: 'newer user write' } });
+      if (!releaseEncryption) throw new Error('Encryption did not start');
+      releaseEncryption();
+
+      await expect(migration).rejects.toBeInstanceOf(ProtectedStoreMigrationConflictError);
+      await expect(readRecord('a')).resolves.toEqual({
+        id: 'a',
+        payload: { content: 'newer user write' },
+      });
+    } finally {
+      encryptSpy.mockRestore();
+    }
   });
 });

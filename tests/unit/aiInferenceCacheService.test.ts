@@ -24,6 +24,25 @@ describe('aiInferenceCacheService — in-memory LRU', () => {
     expect(result).toBe('world');
   });
 
+  it('keeps the in-memory result when non-authoritative durable cache encoding is blocked', async () => {
+    type CacheInternals = {
+      dbReady: Promise<void>;
+      db: IDBDatabase | null;
+      encodeEntry: (key: string, result: string, timestamp: number) => Promise<unknown>;
+    };
+    const cache = service.aiInferenceCacheService as unknown as CacheInternals;
+    await cache.dbReady;
+    cache.db = {} as IDBDatabase;
+    vi.spyOn(cache, 'encodeEntry').mockRejectedValueOnce(new Error('storage locked'));
+
+    await expect(
+      service.aiInferenceCacheService.setCachedInference('hello', 'model-a', 'world'),
+    ).resolves.toBeUndefined();
+    await expect(
+      service.aiInferenceCacheService.getCachedInference('hello', 'model-a'),
+    ).resolves.toBe('world');
+  });
+
   it('keys are model-scoped (different model → miss)', async () => {
     await service.aiInferenceCacheService.setCachedInference('hello', 'model-a', 'world');
     const result = await service.aiInferenceCacheService.getCachedInference('hello', 'model-b');

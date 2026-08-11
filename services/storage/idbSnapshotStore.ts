@@ -85,8 +85,12 @@ export class IdbSnapshotStore extends IdbCodexStore {
       return new Promise<ProjectData>((resolve, reject) => {
         const request = store.get(id);
         request.onsuccess = () => {
+          if (request.result === undefined) {
+            reject(new Error(`Snapshot ${id} was not found`));
+            return;
+          }
           // QNBS-v3: Decode errors must reject the public read instead of escaping an IDB callback.
-          void idbReadSecure<ProjectData>(request.result?.data).then(resolve, reject);
+          void idbReadSecure<ProjectData>(request.result.data).then(resolve, reject);
         };
         request.onerror = () => reject(getUserFriendlyDbError(request.error));
       });

@@ -88,6 +88,40 @@ not a disposition.
 | Optional/missing store test | RETAIN | Missing stores are no-ops that are checkpointed and verified rather than silently skipped |
 | Cross-project mock repair | UPDATE | Keep the full constants mock only if final test imports require it |
 
+## Current implementation checkpoint — recovery and review hardening
+
+The following changes are uncommitted at the time of this checkpoint and are
+part of the replacement architecture, not a reason to merge #310 unchanged.
+
+| ID | Review finding / invariant | Disposition | Replacement behavior | Regression evidence |
+| --- | --- | --- | --- | --- |
+| PR310-R010 | A migration runner could begin adapter mutation with a key that did not match the journal target | ADOPTED_WITH_MODIFICATIONS | A journalled enable/rekey stores an authenticated target-key verifier. The runner proves that verifier before claiming a store batch, so a stale or incorrect runtime key cannot convert records. | `storageEncryptionService.test.ts`, `protectedStoreMigration.test.ts` target-verifier case |
+| PR310-R011 | Two renderers could run the same journal concurrently | ADOPTED_WITH_MODIFICATIONS | Journal compare-and-set ownership uses a durable owner id plus expiring lease. Only the owner may checkpoint or mutate; failed runs release the lease and an expired owner can be recovered deterministically. | `encryptionMigrationJournal.test.ts`, `protectedStoreMigration.test.ts` concurrent-runner case |
+| PR310-R012 | A read/encrypt/write adapter could overwrite a newer ordinary writer | ADOPTED_WITH_MODIFICATIONS | Secondary payload rewrites re-read the complete original record in the same read-write transaction and abort the transaction on any mismatch. The stale migration never wins a write race. | `secondaryPayloadStoreAdapter.test.ts` concurrent-write conflict case |
+| PR310-R013 | Snapshot lookup could turn a missing record into `undefined` data | ADOPTED_WITH_MODIFICATIONS | Snapshot reads now reject a typed not-found condition; callers cannot mistake absence for a valid decrypted payload. | `idbSnapshotStore.test.ts` missing-snapshot case |
+| PR310-R014 | Scene revision retention decrypted content and could prune unknown future schemas | ADOPTED_WITH_MODIFICATIONS | Retention runs with plaintext routing metadata in one transaction, caps only recognised schema-1/validated legacy records, and preserves unrecognised future-format records. | `sceneRevisionService.test.ts` retention and future-schema cases |
+| PR310-R015 | A non-authoritative inference cache persistence failure could discard a usable result while locked/durable persistence changed state | ADOPTED_WITH_MODIFICATIONS | The memory cache remains available after a best-effort durable-cache failure; durable writes remain subject to the central lifecycle guard. | `aiInferenceCacheService.test.ts` durable-write-failure case |
+
+### Review findings already disproved by executable guards
+
+Two CodeAnt reports against the current replacement branch were valid concerns
+against older anchors but are not unresolved code defects: public setup,
+verification, and initialization paths already call
+`assertNoActiveEncryptionMigration`, and the runner explicitly rejects a
+`recovery-required` journal before adapter execution. The follow-up review must
+verify these guards against the pushed commit before the corresponding threads
+are answered or resolved.
+
+### Local validation boundary
+
+`protectedStoreMigration.test.ts` passed 11/11 and
+`encryptionMigrationJournal.test.ts` passed 9/9 under a single-worker,
+low-priority 512 MiB Node ceiling. On this constrained host the crypto-heavy
+`storageEncryptionService.test.ts` process twice ended after creating an empty
+JUnit file (at 448 MiB and 640 MiB) without a Vitest completion report. That is
+recorded as **inconclusive local evidence**, not a pass or failure of the code.
+The pushed GitHub Actions quality job is the required proof for that module.
+
 ## Supply-chain evidence
 
 ### SUPPLYCHAIN-PNPM-001 — pnpm v11 build-script policy drift

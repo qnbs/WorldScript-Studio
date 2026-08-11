@@ -4,11 +4,14 @@
  */
 
 import {
+  claimEncryptionMigrationOwnership,
   type EncryptionMigrationJournal,
   type EncryptionMigrationOperation,
   type EncryptionMigrationStoreCheckpoint,
+  releaseEncryptionMigrationOwnership,
   updateEncryptionMigrationJournal,
 } from './encryptionMigrationJournal';
+import { assertIdbMigrationTargetKeyMatchesVerifier } from './storageEncryptionService';
 
 export interface EncryptionMigrationKeys {
   sourceKey?: CryptoKey;
@@ -112,8 +115,14 @@ function assertRegisteredAdapters(
   adapters: readonly ProtectedStoreAdapter[],
 ): void {
   const ids = new Set(adapters.map((adapter) => adapter.id));
+  const checkpointIds = new Set(journal.stores.map((checkpoint) => checkpoint.id));
   if (ids.size !== adapters.length) {
     throw new ProtectedStoreMigrationAdapterError('Protected-store adapter ids must be unique');
+  }
+  if (checkpointIds.size !== journal.stores.length) {
+    throw new ProtectedStoreMigrationAdapterError(
+      'Migration journal store checkpoint ids must be unique',
+    );
   }
   if (adapters.some((adapter) => adapter.replaySafe !== true)) {
     throw new ProtectedStoreMigrationAdapterError(
@@ -124,6 +133,13 @@ function assertRegisteredAdapters(
     if (!ids.has(checkpoint.id)) {
       throw new ProtectedStoreMigrationAdapterError(
         `No registered protected-store adapter exists for ${checkpoint.id}`,
+      );
+    }
+  }
+  for (const adapter of adapters) {
+    if (!checkpointIds.has(adapter.id)) {
+      throw new ProtectedStoreMigrationAdapterError(
+        `Registered protected-store adapter ${adapter.id} is missing from the migration journal`,
       );
     }
   }
@@ -140,8 +156,35 @@ function assertRequiredKeys(
     throw new ProtectedStoreMigrationAdapterError('Disable migration requires a source key');
   }
   if (operation === 'rekey' && (!keys.sourceKey || !keys.targetKey)) {
-    throw new ProtectedStoreMigrationAdapterError('Rekey migration requires source and target keys');
+    throw new ProtectedStoreMigrationAdapterError(
+      'Rekey migration requires source and target keys',
+    );
   }
+}
+
+async function assertTargetKeyMatchesJournal(
+  journal: EncryptionMigrationJournal,
+  keys: EncryptionMigrationKeys,
+): Promise<void> {
+  if (journal.operation === 'disable') return;
+  if (!keys.targetKey || !journal.targetVerifier || journal.targetVerifier.length === 0) {
+    throw new ProtectedStoreMigrationAdapterError(
+      'Enable and rekey migrations require an authenticated target verifier',
+    );
+  }
+  try {
+    await assertIdbMigrationTargetKeyMatchesVerifier(keys.targetKey, journal.targetVerifier);
+  } catch {
+    throw new ProtectedStoreMigrationAdapterError(
+      'Migration target key does not match the durable target verifier',
+    );
+  }
+}
+
+function createMigrationOwnerId(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 /**
@@ -161,65 +204,81 @@ export async function runProtectedStoreMigration(
   }
   assertRegisteredAdapters(journal, adapters);
   assertRequiredKeys(journal.operation, keys);
-  if (journal.phase === 'prepared') {
-    journal = await updateEncryptionMigrationJournal(journal, {
-      phase: 'migrating',
-      stores: journal.stores,
-    });
-  }
-  if (
-    journal.phase !== 'migrating' &&
-    journal.phase !== 'verifying' &&
-    journal.phase !== 'committing'
-  ) {
-    throw new ProtectedStoreMigrationAdapterError(
-      `Cannot execute protected-store migration from ${journal.phase}`,
-    );
-  }
-
-  if (journal.phase === 'migrating') {
-    for (const adapter of adapters) {
-      let checkpoint = checkpointFor(journal, adapter.id);
-      while (!checkpoint.done) {
-        const batch = await adapter.migrateNext(migrationContext(journal, checkpoint, keys));
-        checkpoint = nextCheckpoint(checkpoint, batch);
-        journal = await updateEncryptionMigrationJournal(journal, {
-          phase: 'migrating',
-          stores: replaceCheckpoint(journal, checkpoint),
-        });
-        await yieldAfterCheckpoint();
-      }
-    }
-    journal = await updateEncryptionMigrationJournal(journal, {
-      phase: 'verifying',
-      stores: journal.stores,
-    });
-  }
-
-  if (journal.phase === 'verifying') {
-    for (const adapter of adapters) {
-      const checkpoint = checkpointFor(journal, adapter.id);
-      if (checkpoint.done && checkpoint.verified >= checkpoint.processed) continue;
-      const verified = await adapter.verify({
-        operation: journal.operation,
-        ...(keys.sourceKey ? { sourceKey: keys.sourceKey } : {}),
-        ...(keys.targetKey ? { targetKey: keys.targetKey } : {}),
+  let ownsLease = false;
+  try {
+    // QNBS-v3: Claim before the first adapter mutation so two tabs cannot transform the same batch concurrently.
+    journal = await claimEncryptionMigrationOwnership(journal, createMigrationOwnerId());
+    ownsLease = true;
+    await assertTargetKeyMatchesJournal(journal, keys);
+    if (journal.phase === 'prepared') {
+      journal = await updateEncryptionMigrationJournal(journal, {
+        phase: 'migrating',
+        stores: journal.stores,
       });
-      if (!Number.isSafeInteger(verified) || verified < checkpoint.processed) {
-        throw new ProtectedStoreMigrationAdapterError(
-          `Store ${adapter.id} verification is incomplete`,
-        );
+    }
+    if (
+      journal.phase !== 'migrating' &&
+      journal.phase !== 'verifying' &&
+      journal.phase !== 'committing'
+    ) {
+      throw new ProtectedStoreMigrationAdapterError(
+        `Cannot execute protected-store migration from ${journal.phase}`,
+      );
+    }
+
+    if (journal.phase === 'migrating') {
+      for (const adapter of adapters) {
+        let checkpoint = checkpointFor(journal, adapter.id);
+        while (!checkpoint.done) {
+          const batch = await adapter.migrateNext(migrationContext(journal, checkpoint, keys));
+          checkpoint = nextCheckpoint(checkpoint, batch);
+          journal = await updateEncryptionMigrationJournal(journal, {
+            phase: 'migrating',
+            stores: replaceCheckpoint(journal, checkpoint),
+          });
+          await yieldAfterCheckpoint();
+        }
       }
       journal = await updateEncryptionMigrationJournal(journal, {
         phase: 'verifying',
-        stores: replaceCheckpoint(journal, { ...checkpoint, verified }),
+        stores: journal.stores,
       });
     }
-    journal = await updateEncryptionMigrationJournal(journal, {
-      phase: 'committing',
-      stores: journal.stores,
-    });
-  }
 
-  return journal;
+    if (journal.phase === 'verifying') {
+      for (const adapter of adapters) {
+        const checkpoint = checkpointFor(journal, adapter.id);
+        if (checkpoint.done && checkpoint.verified >= checkpoint.processed) continue;
+        const verified = await adapter.verify({
+          operation: journal.operation,
+          ...(keys.sourceKey ? { sourceKey: keys.sourceKey } : {}),
+          ...(keys.targetKey ? { targetKey: keys.targetKey } : {}),
+        });
+        if (!Number.isSafeInteger(verified) || verified < checkpoint.processed) {
+          throw new ProtectedStoreMigrationAdapterError(
+            `Store ${adapter.id} verification is incomplete`,
+          );
+        }
+        journal = await updateEncryptionMigrationJournal(journal, {
+          phase: 'verifying',
+          stores: replaceCheckpoint(journal, { ...checkpoint, verified }),
+        });
+      }
+      journal = await updateEncryptionMigrationJournal(journal, {
+        phase: 'committing',
+        stores: journal.stores,
+      });
+    }
+
+    return journal;
+  } catch (error) {
+    if (ownsLease && journal.phase !== 'committing') {
+      try {
+        await releaseEncryptionMigrationOwnership(journal);
+      } catch {
+        // QNBS-v3: A lost lease must never overwrite a newer recovery owner's durable state.
+      }
+    }
+    throw error;
+  }
 }

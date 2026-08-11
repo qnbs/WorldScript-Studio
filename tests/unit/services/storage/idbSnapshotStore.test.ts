@@ -25,10 +25,13 @@ vi.mock('../../../../services/storage/idbCore', () => ({
 }));
 
 vi.mock('../../../../services/storage/storageEncryptionService', () => ({
+  assertIdbProtectedWriteAllowed: async () => undefined,
+  assertSecureStorageReadable: async () => undefined,
   idbEncrypt: async (data: unknown) => data,
-  idbDecrypt: async (data: unknown) => data,
+  idbReadSecure: async (data: unknown) => data,
   isIdbEncryptionReady: () => false,
   isEncryptedBlob: () => false,
+  StorageEncryptionService: class {},
 }));
 
 vi.mock('../../../../services/dbConstants', () => ({
@@ -113,6 +116,23 @@ describe('IdbSnapshotStore', () => {
 
       const result = await store.listSnapshots();
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('getSnapshotData', () => {
+    it('rejects a missing snapshot instead of fulfilling with undefined project data', async () => {
+      const mockRequest = {
+        result: undefined,
+        error: null,
+        onsuccess: null as (() => void) | null,
+        onerror: null as ((err: unknown) => void) | null,
+      };
+      mockStore.get.mockImplementation(() => {
+        setTimeout(() => mockRequest.onsuccess?.(), 0);
+        return mockRequest;
+      });
+
+      await expect(store.getSnapshotData(404)).rejects.toThrow('Snapshot 404 was not found');
     });
   });
 });
