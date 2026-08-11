@@ -2314,6 +2314,7 @@
   "settings.privacy.encryptionUnlockButton": "Unlock",
   "settings.privacy.encryptionWarning": "If you forget your passphrase, your data cannot be recovered.",
   "settings.privacy.encryptionWrongPassphrase": "Wrong passphrase — decryption failed",
+  "settings.privacy.encryptionSetupFailed": "Could not save the encryption setup — check that this browser allows local storage, then try again",
   "settings.privacy.euDataResidency": "EU Data Residency",
   "settings.privacy.euDataResidencyHint": "Keep all data within European Union servers where applicable.",
   "settings.privacy.localStorageOnly": "Local Storage Only",

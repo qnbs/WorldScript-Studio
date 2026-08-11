@@ -2314,6 +2314,7 @@
   "settings.privacy.encryptionUnlockButton": "Déverrouiller",
   "settings.privacy.encryptionWarning": "Si vous oubliez votre phrase secrète, vos données ne pourront pas être récupérées.",
   "settings.privacy.encryptionWrongPassphrase": "Phrase secrète incorrecte — déchiffrement échoué",
+  "settings.privacy.encryptionSetupFailed": "Impossible d’enregistrer la configuration du chiffrement — vérifiez que ce navigateur autorise le stockage local, puis réessayez",
   "settings.privacy.euDataResidency": "Résidence des données UE",
   "settings.privacy.euDataResidencyHint": "Conserver toutes les données sur des serveurs de l'Union européenne si possible.",
   "settings.privacy.localStorageOnly": "Stockage local uniquement",

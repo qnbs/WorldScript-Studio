@@ -688,6 +688,7 @@
   "settings.privacy.encryptionUnlockButton": "Desbloquear",
   "settings.privacy.encryptionWarning": "Se você esquecer sua senha, seus dados não poderão ser recuperados.",
   "settings.privacy.encryptionWrongPassphrase": "Senha errada – falha na descriptografia",
+  "settings.privacy.encryptionSetupFailed": "Não foi possível salvar a configuração de criptografia — verifique se este navegador permite armazenamento local e tente novamente",
   "settings.privacy.euDataResidency": "Residência de Dados na UE",
   "settings.privacy.euDataResidencyHint": "Manter todos os dados em servidores da União Europeia quando possível.",
   "settings.privacy.localStorageOnly": "Somente armazenamento local",

@@ -2314,6 +2314,7 @@
   "settings.privacy.encryptionUnlockButton": "Desblokeatu",
   "settings.privacy.encryptionWarning": "Pasaesaldia ahazten baduzu, ezin izango dira zure datuak berreskuratu.",
   "settings.privacy.encryptionWrongPassphrase": "Pasaesaldi okerra — deszifratzeak huts egin du",
+  "settings.privacy.encryptionSetupFailed": "Ezin izan da enkriptazioaren konfigurazioa gorde — egiaztatu nabigatzaile honek biltegiratze lokala onartzen duela, eta saiatu berriro",
   "settings.privacy.euDataResidency": "EBko Datuen Egoitza",
   "settings.privacy.euDataResidencyHint": "Gorde datu guztiak Europar Batasuneko zerbitzarietan, hala badagokio.",
   "settings.privacy.localStorageOnly": "Tokiko biltegiratzea soilik",

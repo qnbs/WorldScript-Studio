@@ -134,8 +134,10 @@ describe('PassphraseModal — set mode', () => {
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });
 
-  it('shows wrong passphrase error when onConfirm rejects', async () => {
-    onConfirm.mockRejectedValue(new Error('wrong'));
+  it('shows a setup-failed error (not wrong-passphrase) when onConfirm rejects', async () => {
+    // QNBS-v3: 'set' mode has no prior passphrase to be "wrong" — a rejection here is always a
+    // storage/salt failure, so it must not show the wrong-passphrase message.
+    onConfirm.mockRejectedValue(new Error('storage blocked'));
     const user = userEvent.setup();
     render(<PassphraseModal {...makeProps('set', onConfirm, onClose)} />);
     await user.type(
@@ -148,9 +150,7 @@ describe('PassphraseModal — set mode', () => {
     );
     await user.click(screen.getByText('settings.privacy.encryptionSetButton'));
     await waitFor(() =>
-      expect(screen.getByRole('alert')).toHaveTextContent(
-        'settings.privacy.encryptionWrongPassphrase',
-      ),
+      expect(screen.getByRole('alert')).toHaveTextContent('settings.privacy.encryptionSetupFailed'),
     );
     expect(onClose).not.toHaveBeenCalled();
   });

@@ -2314,6 +2314,7 @@
   "settings.privacy.encryptionUnlockButton": "פתיחה",
   "settings.privacy.encryptionWarning": "אם תשכחו את ביטוי הסיסמה, לא ניתן יהיה לשחזר את הנתונים שלכם.",
   "settings.privacy.encryptionWrongPassphrase": "ביטוי סיסמה שגוי — הפענוח נכשל",
+  "settings.privacy.encryptionSetupFailed": "לא ניתן היה לשמור את הגדרת ההצפנה — ודאו שדפדפן זה מאפשר אחסון מקומי ונסו שוב",
   "settings.privacy.euDataResidency": "אחסון נתונים באיחוד האירופי",
   "settings.privacy.euDataResidencyHint": "EU Data Residency — keep all data within EU servers where applicable.",
   "settings.privacy.localStorageOnly": "אחסון מקומי בלבד",

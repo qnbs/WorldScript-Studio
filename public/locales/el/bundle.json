@@ -2314,6 +2314,7 @@
   "settings.privacy.encryptionUnlockButton": "Ξεκλειδώνω",
   "settings.privacy.encryptionWarning": "Εάν ξεχάσετε τη φράση πρόσβασης, τα δεδομένα σας δεν μπορούν να ανακτηθούν.",
   "settings.privacy.encryptionWrongPassphrase": "Λανθασμένη φράση πρόσβασης — η αποκρυπτογράφηση απέτυχε",
+  "settings.privacy.encryptionSetupFailed": "Could not save the encryption setup — check that this browser allows local storage, then try again",
   "settings.privacy.euDataResidency": "Εντοπισμός δεδομένων ΕΕ",
   "settings.privacy.euDataResidencyHint": "Διατήρηση όλων των δεδομένων σε servers της Ευρωπαϊκής Ένωσης όπου είναι δυνατόν.",
   "settings.privacy.localStorageOnly": "Μόνο τοπικός χώρος αποθήκευσης",

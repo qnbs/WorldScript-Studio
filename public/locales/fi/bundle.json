@@ -2314,6 +2314,7 @@
   "settings.privacy.encryptionUnlockButton": "Avata",
   "settings.privacy.encryptionWarning": "Jos unohdat salasanasi, tietojasi ei voida palauttaa.",
   "settings.privacy.encryptionWrongPassphrase": "Väärä tunnuslause – salauksen purku epäonnistui",
+  "settings.privacy.encryptionSetupFailed": "Could not save the encryption setup — check that this browser allows local storage, then try again",
   "settings.privacy.euDataResidency": "EU Data Residency",
   "settings.privacy.euDataResidencyHint": "Säilytä kaikki tiedot tarvittaessa Euroopan unionin palvelimilla.",
   "settings.privacy.localStorageOnly": "Vain paikallinen tallennustila",

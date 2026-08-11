@@ -688,6 +688,7 @@
   "settings.privacy.encryptionUnlockButton": "ロックを解除する",
   "settings.privacy.encryptionWarning": "パスフレーズを忘れた場合、データは復元できません。",
   "settings.privacy.encryptionWrongPassphrase": "パスフレーズが間違っています - 復号化に失敗しました",
+  "settings.privacy.encryptionSetupFailed": "暗号化の設定を保存できませんでした — このブラウザでローカルストレージが許可されているか確認してから、もう一度お試しください",
   "settings.privacy.euDataResidency": "EUデータレジデンシー",
   "settings.privacy.euDataResidencyHint": "可能な限り、すべてのデータをEUサーバーに保持します。",
   "settings.privacy.localStorageOnly": "ローカルストレージのみ",

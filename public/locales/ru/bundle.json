@@ -2314,6 +2314,7 @@
   "settings.privacy.encryptionUnlockButton": "Разблокировать",
   "settings.privacy.encryptionWarning": "Если вы забудете парольную фразу, ваши данные не смогут быть восстановлены.",
   "settings.privacy.encryptionWrongPassphrase": "Неверная парольная фраза — расшифровка не удалась.",
+  "settings.privacy.encryptionSetupFailed": "Не удалось сохранить настройку шифрования — убедитесь, что этот браузер разрешает локальное хранилище, и повторите попытку",
   "settings.privacy.euDataResidency": "Резиденция данных ЕС",
   "settings.privacy.euDataResidencyHint": "Храните все данные на серверах Европейского Союза, где это применимо.",
   "settings.privacy.localStorageOnly": "Только локальное хранилище",

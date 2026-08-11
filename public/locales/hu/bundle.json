@@ -2314,6 +2314,7 @@
   "settings.privacy.encryptionUnlockButton": "Kinyit",
   "settings.privacy.encryptionWarning": "Ha elfelejti jelszavát, adatait nem lehet visszaállítani.",
   "settings.privacy.encryptionWrongPassphrase": "Hibás jelszó – a visszafejtés nem sikerült",
+  "settings.privacy.encryptionSetupFailed": "Could not save the encryption setup — check that this browser allows local storage, then try again",
   "settings.privacy.euDataResidency": "EU Data Residency",
   "settings.privacy.euDataResidencyHint": "Adott esetben minden adatot tároljon az Európai Unió szerverein.",
   "settings.privacy.localStorageOnly": "Csak helyi tárhely",

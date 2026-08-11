@@ -2314,6 +2314,7 @@
   "settings.privacy.encryptionUnlockButton": "Opnaðu",
   "settings.privacy.encryptionWarning": "Ef þú gleymir lykilorðinu þínu er ekki hægt að endurheimta gögnin þín.",
   "settings.privacy.encryptionWrongPassphrase": "Rangt lykilorð — afkóðun mistókst",
+  "settings.privacy.encryptionSetupFailed": "Could not save the encryption setup — check that this browser allows local storage, then try again",
   "settings.privacy.euDataResidency": "EU Gagnavistarleyfi",
   "settings.privacy.euDataResidencyHint": "Geymdu öll gögn innan netþjóna Evrópusambandsins þar sem við á.",
   "settings.privacy.localStorageOnly": "Aðeins staðbundin geymsla",

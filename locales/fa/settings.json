@@ -688,6 +688,7 @@
   "settings.privacy.encryptionUnlockButton": "باز کردن قفل",
   "settings.privacy.encryptionWarning": "اگر رمز عبور خود را فراموش کنید، اطلاعات شما قابل بازیابی نیست.",
   "settings.privacy.encryptionWrongPassphrase": "عبارت عبور اشتباه - رمزگشایی انجام نشد",
+  "settings.privacy.encryptionSetupFailed": "راه‌اندازی رمزگذاری ذخیره نشد — بررسی کنید که این مرورگر اجازه ذخیره‌سازی محلی را می‌دهد، سپس دوباره امتحان کنید",
   "settings.privacy.euDataResidency": "اقامت داده اتحادیه اروپا",
   "settings.privacy.euDataResidencyHint": "در صورت لزوم، تمام داده ها را در سرورهای اتحادیه اروپا نگه دارید.",
   "settings.privacy.localStorageOnly": "فقط فضای ذخیره‌سازی محلی",

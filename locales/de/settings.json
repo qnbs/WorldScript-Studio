@@ -688,6 +688,7 @@
   "settings.privacy.encryptionUnlockButton": "Entsperren",
   "settings.privacy.encryptionWarning": "Wenn du dein Passwort vergisst, können deine Daten nicht wiederhergestellt werden.",
   "settings.privacy.encryptionWrongPassphrase": "Falsches Passwort — Entschlüsselung fehlgeschlagen",
+  "settings.privacy.encryptionSetupFailed": "Die Verschlüsselungseinrichtung konnte nicht gespeichert werden — prüfe, ob dieser Browser lokalen Speicher zulässt, und versuche es erneut",
   "settings.privacy.euDataResidency": "EU-Datenspeicherung",
   "settings.privacy.euDataResidencyHint": "Alle Daten wo möglich auf europäischen Servern speichern.",
   "settings.privacy.localStorageOnly": "Nur lokaler Speicher",

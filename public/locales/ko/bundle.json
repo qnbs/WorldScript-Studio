@@ -2314,6 +2314,7 @@
   "settings.privacy.encryptionUnlockButton": "터놓다",
   "settings.privacy.encryptionWarning": "암호를 잊어버리면 데이터를 복구할 수 없습니다.",
   "settings.privacy.encryptionWrongPassphrase": "잘못된 암호 - 암호 해독 실패",
+  "settings.privacy.encryptionSetupFailed": "암호화 설정을 저장할 수 없습니다 — 이 브라우저가 로컬 저장소를 허용하는지 확인한 후 다시 시도하세요",
   "settings.privacy.euDataResidency": "EU 데이터 상주",
   "settings.privacy.euDataResidencyHint": "해당하는 경우 모든 데이터를 유럽 연합 서버 내에 보관하십시오.",
   "settings.privacy.localStorageOnly": "로컬 저장소만",

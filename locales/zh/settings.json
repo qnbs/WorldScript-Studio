@@ -688,6 +688,7 @@
   "settings.privacy.encryptionUnlockButton": "开锁",
   "settings.privacy.encryptionWarning": "如果您忘记密码，您的数据将无法恢复。",
   "settings.privacy.encryptionWrongPassphrase": "密码错误 — 解密失败",
+  "settings.privacy.encryptionSetupFailed": "无法保存加密设置 — 请检查此浏览器是否允许本地存储，然后重试",
   "settings.privacy.euDataResidency": "欧盟数据驻留",
   "settings.privacy.euDataResidencyHint": "在可能的情况下，将所有数据保存在欧盟服务器上。",
   "settings.privacy.localStorageOnly": "仅本地存储",
