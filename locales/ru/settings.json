@@ -339,7 +339,7 @@
   "settings.appearance.presetHint": "Слой предустановок по вашему выбору темный/светлый. Writer's Sepia полностью адаптируется к обоим режимам.",
   "settings.appearance.presetSepia": "Писательская сепия",
   "settings.appearance.writingSurface": "Фон для письма",
-  "settings.appearance.writingSurfaceHint": "Выберите нейтральный фон без текстуры для долгой работы с текстом.",
+  "settings.appearance.writingSurfaceHint": "Выберите стиль фона, который наиболее комфортен для долгой работы с текстом.",
   "settings.appearance.writingSurfaceTextured": "Текстурный",
   "settings.appearance.writingSurfacePlain": "Однотонный",
   "settings.appearance.primaryColor": "Основной цвет",

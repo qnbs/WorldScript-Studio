@@ -286,6 +286,15 @@ describe('locked reads reject instead of hanging (IDBRequest.onsuccess propagati
     await expect(store.loadState()).rejects.toBeInstanceOf(IdbStorageLockedError);
   });
 
+  it('IdbProjectStore.loadSettings() rejects legacy plaintext settings while locked', async () => {
+    const store = new IdbProjectStore();
+    await store.saveSettings({ appearancePreset: 'default' } as Settings);
+    await setupIdbEncryption('test-pass');
+    clearIdbEncryptionKey();
+
+    await expect(store.loadSettings()).rejects.toBeInstanceOf(IdbStorageLockedError);
+  });
+
   it('IdbSnapshotStore.getSnapshotData() rejects instead of leaving the caller pending', async () => {
     const store = new IdbSnapshotStore();
     const id = await store.createSnapshot({ manuscript: [] } as unknown as ProjectData);

@@ -339,7 +339,7 @@
   "settings.appearance.presetHint": "プリセットはライト/ダークモードと組み合わさります。作家のセピアは両方のモードに完全対応しています。",
   "settings.appearance.presetSepia": "作家のセピア",
   "settings.appearance.writingSurface": "執筆背景",
-  "settings.appearance.writingSurfaceHint": "長文執筆用に、テクスチャのない中立的な背景を選びます。",
+  "settings.appearance.writingSurfaceHint": "長文執筆に最も心地よい背景スタイルを選んでください。",
   "settings.appearance.writingSurfaceTextured": "テクスチャあり",
   "settings.appearance.writingSurfacePlain": "無地",
   "settings.appearance.primaryColor": "原色",

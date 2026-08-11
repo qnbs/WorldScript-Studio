@@ -339,7 +339,7 @@
   "settings.appearance.presetHint": "Előre beállítja a réteget a sötét/világos választás szerint. A Writer's Sepia teljes mértékben alkalmazkodik mindkét módhoz.",
   "settings.appearance.presetSepia": "Írói szépia",
   "settings.appearance.writingSurface": "Writing surface",
-  "settings.appearance.writingSurfaceHint": "Choose a neutral, texture-free backdrop for long-form writing.",
+  "settings.appearance.writingSurfaceHint": "Pick the backdrop style that feels most comfortable for long-form writing.",
   "settings.appearance.writingSurfaceTextured": "Textured",
   "settings.appearance.writingSurfacePlain": "Plain",
   "settings.appearance.primaryColor": "Elsődleges szín",

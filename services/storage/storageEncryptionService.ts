@@ -51,6 +51,22 @@ export class IdbEncryptionMigrationRequiredError extends Error {
   }
 }
 
+/**
+ * Raised when the persisted KDF salt is missing or invalid while a passphrase sentinel already
+ * exists — deriving a fresh salt at that point would silently produce a different key and
+ * permanently orphan existing encrypted data instead of surfacing the loss.
+ */
+export class IdbEncryptionSaltLostError extends Error {
+  readonly code = 'ENCRYPTION_SALT_LOST' as const;
+
+  constructor() {
+    super(
+      'Encryption salt is missing or invalid, but a passphrase was previously configured — a new salt cannot be created without losing access to existing encrypted data',
+    );
+    this.name = 'IdbEncryptionSaltLostError';
+  }
+}
+
 export class StorageEncryptionService {
   /**
    * Derive a non-extractable AES-256-GCM key from a passphrase + salt.
@@ -117,7 +133,7 @@ export class StorageEncryptionService {
    * Callers must re-encrypt all IDB data with the returned key.
    */
   async rotateKey(_oldKey: CryptoKey, newPassphrase: string): Promise<CryptoKey> {
-    const salt = getOrCreateSalt();
+    const salt = await getOrCreateSalt();
     return this.deriveKey(newPassphrase, salt);
   }
 }
@@ -131,13 +147,23 @@ let _activeKey: CryptoKey | null = null;
 //          unconditionally throw IdbEncryptionMigrationRequiredError today (see below).
 let _sentinelPresenceCache: boolean | null = null;
 
-function getOrCreateSalt(): Uint8Array {
+async function getOrCreateSalt(): Promise<Uint8Array> {
   try {
     const stored = localStorage.getItem(SALT_STORAGE_KEY);
     if (stored) {
       const arr = Uint8Array.from(atob(stored), (c) => c.charCodeAt(0));
       if (arr.length === SALT_BYTE_LENGTH) return arr;
     }
+  } catch (error) {
+    throw new Error('Unable to persist encryption salt', { cause: error });
+  }
+  // QNBS-v3: only first-time setup (no sentinel yet) may create a fresh salt — a missing/invalid
+  // salt after that point means the original key material is unrecoverable, so fail closed instead
+  // of silently deriving a different key that can never decrypt the existing sentinel/data.
+  if (await hasPassphraseSentinel()) {
+    throw new IdbEncryptionSaltLostError();
+  }
+  try {
     const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTE_LENGTH));
     const b64 = btoa(String.fromCharCode(...salt));
     localStorage.setItem(SALT_STORAGE_KEY, b64);
@@ -154,7 +180,7 @@ function getOrCreateSalt(): Uint8Array {
  */
 export async function initIdbEncryption(passphrase: string): Promise<void> {
   if (!passphrase) throw new Error('Passphrase must not be empty');
-  const salt = getOrCreateSalt();
+  const salt = await getOrCreateSalt();
   _activeKey = await _svc.deriveKey(passphrase, salt);
 }
 
@@ -253,7 +279,7 @@ export async function idbReadSecure<T>(raw: unknown): Promise<T> {
  */
 export async function setupIdbEncryption(passphrase: string): Promise<void> {
   if (!passphrase) throw new Error('Passphrase must not be empty');
-  const salt = getOrCreateSalt();
+  const salt = await getOrCreateSalt();
   const key = await _svc.deriveKey(passphrase, salt);
   const blob = await _svc.encrypt(key, { v: 1 });
   await savePassphraseSentinel(blob.bytes);
@@ -276,7 +302,7 @@ export async function verifyAndInitIdbEncryption(passphrase: string): Promise<vo
   // QNBS-v3: sentinelBytes being non-null already proves the sentinel exists — populate the cache
   // from this read instead of letting the next hasPassphraseSentinel() call repeat the IDB lookup.
   _sentinelPresenceCache = true;
-  const salt = getOrCreateSalt();
+  const salt = await getOrCreateSalt();
   const key = await _svc.deriveKey(passphrase, salt);
   // QNBS-v3: decrypt throws on wrong key — AES-GCM auth-tag is the verifier
   await _svc.decrypt(key, { bytes: sentinelBytes });

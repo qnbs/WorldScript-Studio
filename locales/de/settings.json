@@ -339,7 +339,7 @@
   "settings.appearance.presetHint": "Presets ergänzen dein Hell-/Dunkel-Thema. Schreib-Sepia passt sich vollständig an beide Modi an.",
   "settings.appearance.presetSepia": "Schreib-Sepia",
   "settings.appearance.writingSurface": "Schreibfläche",
-  "settings.appearance.writingSurfaceHint": "Wähle für längeres Schreiben einen neutralen Hintergrund ohne Textur.",
+  "settings.appearance.writingSurfaceHint": "Wähle den Hintergrundstil, der sich für längeres Schreiben am angenehmsten anfühlt.",
   "settings.appearance.writingSurfaceTextured": "Strukturiert",
   "settings.appearance.writingSurfacePlain": "Einfarbig",
   "settings.appearance.primaryColor": "Primärfarbe",

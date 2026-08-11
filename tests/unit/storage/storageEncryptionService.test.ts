@@ -31,6 +31,7 @@ import {
   clearIdbPassphrase,
   hasPassphraseSentinel,
   IdbEncryptionMigrationRequiredError,
+  IdbEncryptionSaltLostError,
   IdbStorageLockedError,
   idbDecrypt,
   idbEncrypt,
@@ -229,14 +230,41 @@ describe('initIdbEncryption / isIdbEncryptionReady / idbEncrypt / idbDecrypt', (
 
   it('fails setup instead of deriving a key with a deterministic salt when persistence is unavailable', async () => {
     const originalSetItem = localStorageMock.setItem;
-    localStorageMock.setItem = () => {
-      throw new Error('storage blocked');
-    };
+    try {
+      localStorageMock.setItem = () => {
+        throw new Error('storage blocked');
+      };
 
-    await expect(initIdbEncryption('pass')).rejects.toThrow('Unable to persist encryption salt');
+      await expect(initIdbEncryption('pass')).rejects.toThrow('Unable to persist encryption salt');
+      expect(isIdbEncryptionReady()).toBe(false);
+    } finally {
+      localStorageMock.setItem = originalSetItem;
+    }
+  });
+
+  it('fails closed instead of deriving a new (incompatible) salt when a sentinel already exists', async () => {
+    await setupIdbEncryption('original-pass');
+    clearIdbEncryptionKey();
+    // QNBS-v3: simulate the salt being lost (e.g. localStorage cleared) while the sentinel survives.
+    localStorageMock.clear();
+
+    await expect(initIdbEncryption('original-pass')).rejects.toBeInstanceOf(
+      IdbEncryptionSaltLostError,
+    );
     expect(isIdbEncryptionReady()).toBe(false);
+    // QNBS-v3: no replacement salt must have been written — that would make the loss permanent.
+    expect(localStorageMock.getItem('worldscript-idb-kdf-salt-v1')).toBeNull();
+  });
 
-    localStorageMock.setItem = originalSetItem;
+  it('verifyAndInitIdbEncryption also fails closed when the sentinel survives but the salt is lost', async () => {
+    await setupIdbEncryption('original-pass');
+    clearIdbEncryptionKey();
+    localStorageMock.clear();
+
+    await expect(verifyAndInitIdbEncryption('original-pass')).rejects.toBeInstanceOf(
+      IdbEncryptionSaltLostError,
+    );
+    expect(isIdbEncryptionReady()).toBe(false);
   });
 });
 

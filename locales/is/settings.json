@@ -339,7 +339,7 @@
   "settings.appearance.presetHint": "Forstillir lag á dökkt/ljóst val þitt. Writer's Sepia aðlagast að fullu að báðum stillingum.",
   "settings.appearance.presetSepia": "Sepia rithöfundar",
   "settings.appearance.writingSurface": "Writing surface",
-  "settings.appearance.writingSurfaceHint": "Choose a neutral, texture-free backdrop for long-form writing.",
+  "settings.appearance.writingSurfaceHint": "Pick the backdrop style that feels most comfortable for long-form writing.",
   "settings.appearance.writingSurfaceTextured": "Textured",
   "settings.appearance.writingSurfacePlain": "Plain",
   "settings.appearance.primaryColor": "Aðal litur",

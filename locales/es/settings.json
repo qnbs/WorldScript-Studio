@@ -339,7 +339,7 @@
   "settings.appearance.presetHint": "Los preajustes se combinan con tu elección de modo. Sepia del escritor se adapta completamente a ambos modos.",
   "settings.appearance.presetSepia": "Sepia del escritor",
   "settings.appearance.writingSurface": "Superficie de escritura",
-  "settings.appearance.writingSurfaceHint": "Elige un fondo neutro sin textura para escribir textos largos.",
+  "settings.appearance.writingSurfaceHint": "Elige el estilo de fondo que te resulte más cómodo para escribir textos largos.",
   "settings.appearance.writingSurfaceTextured": "Texturizada",
   "settings.appearance.writingSurfacePlain": "Lisa",
   "settings.appearance.primaryColor": "Color primario",
