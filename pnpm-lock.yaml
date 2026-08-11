@@ -3,7 +3,6 @@ lockfileVersion: '9.0'
 settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
-  minimumReleaseAge: 10080
 
 overrides:
   playwright: 1.61.0
@@ -19,7 +18,7 @@ overrides:
   axios: '>=1.18.0'
   basic-ftp: '>=5.3.1'
   fast-uri: '>=3.1.5 <4'
-  ip-address: '>=10.3.1'
+  ip-address: 10.3.1
   ws: '>=8.21.0'
   form-data: '>=4.0.6'
   brace-expansion: '>=5.0.9'
@@ -5113,8 +5112,8 @@ packages:
   iobuffer@5.4.0:
     resolution: {integrity: sha512-DRebOWuqDvxunfkNJAlc3IzWIPD5xVxwUNbHr7xKB8E6aLJxIPfNX3CoMJghcFjpv6RWQsrcJbghtEwSPoJqMA==}
 
-  ip-address@10.5.0:
-    resolution: {integrity: sha512-R5SnVLJmgYYvf2F2ZgwSBnelz5G4q5AxIC277GDfUaNbrZKNANcBC7RHqYYePlszf4kBolVkJauG0ZjHHFh55g==}
+  ip-address@10.3.1:
+    resolution: {integrity: sha512-1e9d3kb97NHJTIJDZW9rKqW2h6+dFa50Dy0fpPSMQp2ADje5gvKsXmdiK6dwY5t76TaTt5+P5N1Y/LoToIxP6g==}
     engines: {node: '>= 12'}
 
   ipaddr.js@1.9.1:
@@ -12631,7 +12630,7 @@ snapshots:
 
   iobuffer@5.4.0: {}
 
-  ip-address@10.5.0: {}
+  ip-address@10.3.1: {}
 
   ipaddr.js@1.9.1: {}
 
@@ -14685,7 +14684,7 @@ snapshots:
 
   socks@2.8.7:
     dependencies:
-      ip-address: 10.5.0
+      ip-address: 10.3.1
       smart-buffer: 4.2.0
 
   source-map-js@1.2.1: {}

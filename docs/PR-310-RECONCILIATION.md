@@ -104,6 +104,20 @@ not a disposition.
 | Verification | Script-free `pnpm install --lockfile-only --ignore-scripts` exit 0; active pnpm `config get` confirms `verifyDepsBeforeRun=error`, `minimumReleaseAge=10080`, `strictDepBuilds=true`, `blockExoticSubdeps=true`, and `verifyStoreIntegrity=true`; direct Biome, docs, and suppression checks passed |
 | Rollback | Revert the policy commit; do not use `approve-builds`, a broad allowlist, or an automatic root `prepare` |
 
+### SUPPLYCHAIN-PNPM-002 — release-age lockfile reconciliation
+
+| Field | Evidence |
+| --- | --- |
+| Trigger | Vercel deployment `dpl_Gyzd9qSWPHFq3En1roQ1BVTF72Gp` failed before build because `ip-address@10.5.0` was published on 2026-08-10, inside the active 10,080-minute release-age window |
+| Dependency path | `@lhci/cli` → `proxy-agent` → `socks` → `ip-address`; `pnpm why ip-address --depth Infinity` found no other version or writer |
+| Final override | The broad floor `ip-address: ">=10.3.1"` is replaced with exact `ip-address: "10.3.1"`, the first patched version and a release outside the seven-day quarantine |
+| Integrity evidence | The public npm registry manifest for `ip-address@10.3.1` reports `sha512-1e9d3kb97NHJTIJDZW9rKqW2h6+dFa50Dy0fpPSMQp2ADje5gvKsXmdiK6dwY5t76TaTt5+P5N1Y/LoToIxP6g==`, no runtime dependencies, npm signatures, and SLSA provenance |
+| Lockfile scope | Exactly the override, package integrity record, empty snapshot, and `socks` dependency reference changed; `git diff --check` passed |
+| Policy source of truth | pnpm 11 normalizes `minimumReleaseAge` out of generated lockfile settings. The effective policy remains `pnpm-workspace.yaml`; `pnpm config get minimumReleaseAge` returns `10080`. The lockfile is not treated as the authority for this setting. |
+| Controlled repair boundary | Recovery used only `--lockfile-only`, `--ignore-scripts`, low CPU/I/O priority, and pnpm's documented `--trust-lockfile` repair path. No lifecycle scripts, rebuilds, or broad build approvals were run. |
+| Verification still required | A clean Vercel installation and its deployment build must pass on this commit. Full local resolution is deliberately not retried while this low-memory host has about 511 MiB available RAM and 1.8 GiB active swap. |
+| Rollback | Revert the workspace override and matching lockfile records together. Do not reduce `minimumReleaseAge`, disable `verifyDepsBeforeRun`, or add a broad build-script allowlist. |
+
 ## Current merge decision
 
 **NO-GO — REQUIRES FURTHER REMEDIATION.** PR #310 contains valuable secondary-store
