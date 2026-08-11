@@ -380,12 +380,28 @@ describe('idbEncryptWithKey', () => {
 // ── hasPassphraseSentinel caching ────────────────────────────────────────────
 
 describe('hasPassphraseSentinel caching', () => {
-  it('does not re-read IDB on repeated calls once a result is cached', async () => {
-    await hasPassphraseSentinel();
+  it('does not re-read IDB on repeated calls once a positive result is cached', async () => {
+    await setupIdbEncryption('pass');
     const spy = vi.spyOn(sentinelModule, 'getPassphraseSentinel');
     await hasPassphraseSentinel();
     await hasPassphraseSentinel();
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('does NOT cache a negative result — repeated calls with no sentinel keep re-reading IDB', async () => {
+    // QNBS-v3 regression: caching "false" could survive setupIdbEncryption() happening in another
+    // tab, permanently stranding resolveProtectedWriteKey() on a stale "never configured" answer.
+    expect(await hasPassphraseSentinel()).toBe(false);
+    const spy = vi.spyOn(sentinelModule, 'getPassphraseSentinel');
+    await hasPassphraseSentinel();
+    await hasPassphraseSentinel();
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it('picks up a sentinel created after an earlier negative lookup (simulated cross-tab setup)', async () => {
+    expect(await hasPassphraseSentinel()).toBe(false);
+    await setupIdbEncryption('pass');
+    expect(await hasPassphraseSentinel()).toBe(true);
   });
 
   it('setupIdbEncryption primes the cache without an extra read', async () => {
@@ -405,10 +421,10 @@ describe('hasPassphraseSentinel caching', () => {
   });
 
   it('clearIdbEncryptionKey() resets the cache so the next call re-reads IDB', async () => {
-    await hasPassphraseSentinel();
+    await setupIdbEncryption('pass');
     clearIdbEncryptionKey();
     const spy = vi.spyOn(sentinelModule, 'getPassphraseSentinel');
-    await hasPassphraseSentinel();
+    expect(await hasPassphraseSentinel()).toBe(true);
     expect(spy).toHaveBeenCalledTimes(1);
   });
 });

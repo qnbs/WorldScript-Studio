@@ -315,10 +315,15 @@ export async function verifyAndInitIdbEncryption(passphrase: string): Promise<vo
  * a stale flag (flag on, no sentinel → flag never properly set up → disable flag).
  */
 export async function hasPassphraseSentinel(): Promise<boolean> {
-  if (_sentinelPresenceCache !== null) return _sentinelPresenceCache;
+  // QNBS-v3: Only a positive result is cached. Setup can happen in another tab (or, once rotate/
+  // disable ship, sentinel state can otherwise change) after this tab observed "no sentinel" —
+  // caching that negative would let resolveProtectedWriteKey()/assertIdbProtectedWriteAllowed()
+  // keep treating a now-configured library as never-configured and silently allow a plaintext
+  // write. A negative lookup still costs one IDB read each time, which is the fail-closed direction.
+  if (_sentinelPresenceCache === true) return true;
   const bytes = await getPassphraseSentinel();
-  _sentinelPresenceCache = bytes !== null;
-  return _sentinelPresenceCache;
+  if (bytes !== null) _sentinelPresenceCache = true;
+  return bytes !== null;
 }
 
 /**

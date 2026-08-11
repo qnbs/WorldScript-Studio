@@ -215,13 +215,15 @@ export class IdbProjectStore extends IdbAssetStore {
     sliceName: 'project' | 'settings',
     data: PersistedProjectState | Settings,
   ): Promise<void> {
-    // QNBS-v3: Resolve the write key BEFORE opening the store — opening/awaiting the transaction
-    //          can cross a macrotask boundary where Lock Session clears _activeKey; re-reading
-    //          isIdbEncryptionReady() afterward would then silently downgrade this write to plaintext.
+    // QNBS-v3: Resolve the write key AND encrypt BEFORE opening the store — awaiting
+    //          idbEncryptWithKey after getObjectStore would yield the event loop while the
+    //          transaction is open, letting IDB auto-commit it before store.put runs
+    //          (TransactionInactiveError); resolving the key first also removes the Lock-Session
+    //          race, since the payload decision no longer depends on state read after an await.
     const writeKey = await resolveProtectedWriteKey();
-    const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
     // QNBS-v3: Plaintext is allowed only when encryption was never configured for this library.
     const payload = writeKey ? await idbEncryptWithKey(writeKey, data) : compressData(data);
+    const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
     return new Promise((resolve, reject) => {
       const request = store.put(payload, sliceName);
       request.onsuccess = () => resolve();
