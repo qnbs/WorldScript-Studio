@@ -291,4 +291,17 @@ describe('localAiFacade', () => {
     resolvers[1]?.({ layer: 'onnx', text: 'b' });
     await pB;
   });
+
+  it('publishes a terminal error when a main-thread fallback cannot warm the requested WebLLM model', async () => {
+    mockRunLocalTextGeneration.mockResolvedValue({ layer: 'onnx', text: 'fallback' });
+    const { inferenceProgressEmitter } = await import('../../services/ai/inferenceProgressEmitter');
+    const progressSpy = vi.spyOn(inferenceProgressEmitter, 'reportWebLlmProgress');
+    const errorSpy = vi.spyOn(inferenceProgressEmitter, 'reportWebLlmError');
+    const { preloadLocalModel } = await import('../../services/localAiFacade');
+
+    await expect(preloadLocalModel('Qwen2.5-0.5B')).resolves.toMatchObject({ downloaded: false });
+
+    expect(progressSpy).toHaveBeenCalledWith(0, 'Preparing local model');
+    expect(errorSpy).toHaveBeenCalledWith('Local model preload did not complete');
+  });
 });

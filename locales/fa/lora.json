@@ -47,6 +47,7 @@
   "lora.onboarding.privacyPromise": "100% خصوصی و آفلاین",
   "lora.onboarding.systemCheck": "سیستم مورد نیاز",
   "lora.onboarding.title": "سبک نوشتن خود را آموزش دهید",
+  "lora.onboarding.selectPython": "انتخاب فایل اجرایی پایتون",
   "lora.presets.deepNarrative.desc": "سبک روایت کامل - 60 دقیقه، 12 گیگابایت VRAM",
   "lora.presets.deepNarrative.label": "روایت عمیق",
   "lora.presets.dialogueMaster.desc": "دیالوگ بهینه شده - ~45 دقیقه، 8 گیگابایت VRAM",

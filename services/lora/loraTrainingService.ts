@@ -141,36 +141,54 @@ export async function generateOllamaModelfile(
   return `FROM ${baseModel}\nADAPTER ${adapterPath}\nSYSTEM "You are ${name}, a writing assistant trained on this author's style. Match their voice precisely."\n`;
 }
 
-/** Check if training environment is available (Python + Unsloth). Tauri-only. */
-export async function checkTrainingEnvironment(): Promise<{
+export interface TrainingEnvironment {
   pythonAvailable: boolean;
   unslothAvailable: boolean;
   cudaAvailable: boolean;
   vramGb: number;
+  pythonVersion: string;
+  pythonPath?: string;
+  lastError?: string;
   message?: string;
-}> {
+}
+
+type NativeTrainingEnvironment = {
+  python_available: boolean;
+  unsloth_available: boolean;
+  cuda_available: boolean;
+  vram_gb: number;
+  python_version: string;
+  python_path?: string | null;
+  last_error?: string | null;
+};
+
+function fromNativeEnvironment(result: NativeTrainingEnvironment): TrainingEnvironment {
+  return {
+    pythonAvailable: result.python_available,
+    unslothAvailable: result.unsloth_available,
+    cudaAvailable: result.cuda_available,
+    vramGb: result.vram_gb,
+    pythonVersion: result.python_version,
+    ...(result.python_path ? { pythonPath: result.python_path } : {}),
+    ...(result.last_error ? { lastError: result.last_error } : {}),
+  };
+}
+
+/** Check if training environment is available (Python + Unsloth). Tauri-only. */
+export async function checkTrainingEnvironment(): Promise<TrainingEnvironment> {
   if (!isTauri()) {
     return {
       pythonAvailable: false,
       unslothAvailable: false,
       cudaAvailable: false,
       vramGb: 0,
+      pythonVersion: '',
       message: 'Training is only available in the desktop app.',
     };
   }
   try {
-    const result = await tauriInvoke<{
-      python_available: boolean;
-      unsloth_available: boolean;
-      cuda_available: boolean;
-      vram_gb: number;
-    }>('check_lora_environment');
-    return {
-      pythonAvailable: result.python_available,
-      unslothAvailable: result.unsloth_available,
-      cudaAvailable: result.cuda_available,
-      vramGb: result.vram_gb,
-    };
+    const result = await tauriInvoke<NativeTrainingEnvironment>('check_lora_environment');
+    return fromNativeEnvironment(result);
   } catch (err) {
     logger.warn('loraTrainingService: env check failed', { err });
     return {
@@ -178,7 +196,23 @@ export async function checkTrainingEnvironment(): Promise<{
       unslothAvailable: false,
       cudaAvailable: false,
       vramGb: 0,
+      pythonVersion: '',
       message: String(err),
     };
   }
+}
+
+/** Ask the user to choose a Python executable, then let the desktop backend verify and persist it. */
+export async function selectPythonExecutable(): Promise<TrainingEnvironment | null> {
+  if (!isTauri()) return null;
+  const { open } = await import('@tauri-apps/plugin-dialog');
+  const selected = await open({
+    multiple: false,
+    directory: false,
+  });
+  if (typeof selected !== 'string') return null;
+  const result = await tauriInvoke<NativeTrainingEnvironment>('set_lora_python_path', {
+    python_path: selected,
+  });
+  return fromNativeEnvironment(result);
 }

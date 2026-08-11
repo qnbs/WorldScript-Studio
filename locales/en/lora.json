@@ -1,6 +1,7 @@
 {
   "lora.title": "LoRA Fine-Tuning",
   "lora.onboarding.title": "Train Your Writing Style",
+  "lora.onboarding.selectPython": "Choose Python executable",
   "lora.onboarding.description": "Create a personalized AI model trained on your manuscripts. Your data never leaves your device.",
   "lora.onboarding.privacyPromise": "100% Private & Offline",
   "lora.onboarding.privacyDetail": "All training happens locally. Your manuscript is never sent to any cloud service.",

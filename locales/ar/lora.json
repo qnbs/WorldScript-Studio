@@ -47,6 +47,7 @@
   "lora.onboarding.privacyPromise": "خاص وغير متصل بنسبة 100%",
   "lora.onboarding.systemCheck": "متطلبات النظام",
   "lora.onboarding.title": "درّب أسلوب كتابتك",
+  "lora.onboarding.selectPython": "اختيار ملف Python التنفيذي",
   "lora.presets.deepNarrative.desc": "أسلوب سردي كامل — ~60 دقيقة، 12 غيغابايت ذاكرة رسوميات",
   "lora.presets.deepNarrative.label": "سرد عميق",
   "lora.presets.dialogueMaster.desc": "مُحسَّن للحوار — ~45 دقيقة، 8 غيغابايت ذاكرة رسوميات",

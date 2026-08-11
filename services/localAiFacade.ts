@@ -47,6 +47,12 @@ interface WebLlmWorkerResult {
   modelId: string;
 }
 
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException
+    ? error.name === 'AbortError'
+    : error instanceof Error && /abort|cancel/i.test(error.message);
+}
+
 /**
  * QNBS-v3: P1-1 — Run WebLLM inference in the dedicated WorkerBus v2 worker (off the main thread).
  * Returns a LocalAiResponse on success, or null to signal the caller to use its main-thread fallback
@@ -82,15 +88,9 @@ async function tryWebLlmWorker(
       priority: 'normal',
       capabilities: ['inference.webllm'],
       timeoutMs: WEBLLM_TASK_TIMEOUT_MS,
-      // QNBS-v3: Bridge worker progress → existing UI subscribers (inferenceProgressEmitter) AND
-      //          the caller's onProgress, so the loading UX is identical to the main-thread path.
+      // QNBS-v3: The caller owns the progress sink, keeping worker and main-thread fallback events identical.
       onProgress: (p) => {
-        if (p.stage === 'done') {
-          inferenceProgressEmitter.reportWebLlmReady();
-        } else {
-          inferenceProgressEmitter.reportWebLlmProgress(p.progress, p.message ?? '');
-          onProgress?.({ progress: p.progress, text: p.message ?? '' });
-        }
+        if (p.stage !== 'done') onProgress?.({ progress: p.progress, text: p.message ?? '' });
       },
     });
 
@@ -107,13 +107,10 @@ async function tryWebLlmWorker(
   } catch (err) {
     // QNBS-v3: CodeAnt — a caller-initiated abort/cancel must short-circuit, NOT trigger a second
     //          main-thread generation or emit a WebLLM error. Rethrow so generateLocalText unwinds.
-    if (signal?.aborted || (err instanceof Error && /abort|cancel/i.test(err.message))) {
+    if (signal?.aborted || isAbortError(err)) {
       throw err instanceof Error ? err : new Error('Aborted');
     }
-    // QNBS-v3: genuine worker failure → fall back to the main-thread multi-layer orchestrator.
-    inferenceProgressEmitter.reportWebLlmError(
-      err instanceof Error ? err.message : 'WebLLM worker error',
-    );
+    // QNBS-v3: A worker failure may still recover through the main-thread chain, so do not surface a terminal error yet.
     logger.info('WebLLM worker unavailable, using main-thread fallback', { err: String(err) });
     return null;
   }
@@ -138,6 +135,14 @@ export async function generateLocalText(
   const startedAt = performance.now();
   inFlightLocalInference += 1;
   try {
+    const reportProgress = (report: WebLlmProgressReport) => {
+      const fraction = Number.isFinite(report.progress)
+        ? Math.min(1, Math.max(0, report.progress))
+        : 0;
+      const normalized = { progress: fraction, text: report.text };
+      inferenceProgressEmitter.reportWebLlmProgress(normalized.progress, normalized.text);
+      onProgress?.(normalized);
+    };
     // QNBS-v3: When adaptive AI engine is enabled, use its task config for optimal backend/model.
     const adaptiveEnabled =
       typeof window !== 'undefined' && window.__worldscript_adaptive_ai__ === true;
@@ -159,7 +164,7 @@ export async function generateLocalText(
     // QNBS-v3: P1-1 — Worker-first WebLLM. Only attempt when WebGPU is present AND the runtime has
     //          Workers (real browsers); otherwise skip straight to the main-thread orchestrator.
     if (needsGpu && typeof Worker !== 'undefined') {
-      result = await tryWebLlmWorker(prompt, workerModelId, loraAdapterId, onProgress, signal);
+      result = await tryWebLlmWorker(prompt, workerModelId, loraAdapterId, reportProgress, signal);
       if (result) {
         usedBackend = 'webllm';
         usedModel = workerModelId;
@@ -169,7 +174,7 @@ export async function generateLocalText(
     // QNBS-v3: Fallback — full main-thread chain (WebLLM no-ops without GPU, then ONNX → Transformers
     //          → heuristic). Also the path when the worker is unavailable or returns nothing.
     if (!result) {
-      result = await runLocalTextGeneration(prompt, fallbackModelId, onProgress, signal);
+      result = await runLocalTextGeneration(prompt, fallbackModelId, reportProgress, signal);
       usedBackend = result.layer;
       usedModel = fallbackModelId ?? usedModel;
     }
@@ -181,6 +186,9 @@ export async function generateLocalText(
     // (webllm/onnx/transformers), not the heuristic stub (G4).
     if (result.layer !== 'heuristic') {
       notifyLocalModelsReady(true);
+    }
+    if (result.layer === 'webllm') {
+      inferenceProgressEmitter.reportWebLlmReady();
     }
 
     // QNBS-v3: CodeAnt — record latency against the ACTUAL backend/model that produced the response
@@ -212,6 +220,7 @@ export async function generateLocalText(
       });
     return result;
   } catch (err) {
+    if (signal?.aborted || isAbortError(err)) throw err;
     // QNBS-v3: Log the actual error so telemetry and bug reports are useful.
     logger.warn('Local text generation failed:', err);
     localWorkerBus.recordResult(performance.now() - startedAt, false);
@@ -294,9 +303,16 @@ export function clearReadyLocalModels(): void {
 // QNBS-v3: Abort hook for the in-flight preload so the download modal's Cancel can truly stop it
 //          (not just hide the UI). Only one preload runs at a time (GPU mutex), so a single ref is safe.
 let activePreloadAbort: (() => void) | null = null;
+let lastPreloadModelId: string | null = null;
 
 export function abortActivePreload(): void {
   activePreloadAbort?.();
+}
+
+/** Re-run the exact model warm-up that most recently entered the download flow. */
+export async function retryLastPreload(): Promise<PreloadResult> {
+  if (!lastPreloadModelId) throw new Error('No local model download is available to retry');
+  return preloadLocalModel(lastPreloadModelId);
 }
 
 /**
@@ -324,6 +340,7 @@ export async function preloadLocalModel(
   onProgress?: (report: WebLlmProgressReport) => void,
   signal?: AbortSignal,
 ): Promise<PreloadResult> {
+  lastPreloadModelId = modelId;
   // QNBS-v3: own the AbortController so both the modal Cancel (abortActivePreload) and a caller
   //          signal (e.g. unmount) can stop the underlying generation/worker task.
   const controller = new AbortController();
@@ -338,10 +355,25 @@ export async function preloadLocalModel(
 
   const startedAt = performance.now();
   try {
+    // QNBS-v3: Worker fallback must still make the download visible; otherwise Settings appears frozen.
+    inferenceProgressEmitter.reportWebLlmProgress(0, 'Preparing local model');
+    const reportProgress = (report: WebLlmProgressReport) => {
+      const fraction = Number.isFinite(report.progress)
+        ? Math.min(1, Math.max(0, report.progress))
+        : 0;
+      onProgress?.({ progress: fraction, text: report.text });
+    };
     // QNBS-v3: A minimal prompt forces the weight download + a short warm-up generation.
-    const res = await generateLocalText('Hi', modelId, onProgress, undefined, controller.signal, {
-      bypassAdaptiveModel: true,
-    });
+    const res = await generateLocalText(
+      'Hi',
+      modelId,
+      reportProgress,
+      undefined,
+      controller.signal,
+      {
+        bypassAdaptiveModel: true,
+      },
+    );
     const elapsedSec = (performance.now() - startedAt) / 1000;
 
     const downloaded = res.layer === 'webllm' && !isWebLlmLockMessage(res.text);
@@ -355,8 +387,18 @@ export async function preloadLocalModel(
           at: Date.now(),
         };
       }
+    } else {
+      // QNBS-v3: Do not leave a visible progress dialog pending when a fallback cannot warm WebLLM.
+      inferenceProgressEmitter.reportWebLlmError('Local model preload did not complete');
     }
     return { layer: res.layer, modelId, downloaded };
+  } catch (error) {
+    if (!controller.signal.aborted) {
+      inferenceProgressEmitter.reportWebLlmError(
+        error instanceof Error ? error.message : 'Local model preload failed',
+      );
+    }
+    throw error;
   } finally {
     if (activePreloadAbort === abortHook) activePreloadAbort = null;
   }

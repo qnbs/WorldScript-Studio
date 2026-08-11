@@ -47,6 +47,7 @@
   "lora.onboarding.privacyPromise": "100% конфиденциальность и офлайн",
   "lora.onboarding.systemCheck": "Системные требования",
   "lora.onboarding.title": "Тренируйте свой стиль письма",
+  "lora.onboarding.selectPython": "Выбрать исполняемый файл Python",
   "lora.presets.deepNarrative.desc": "Полный стиль повествования — ~60 мин, 12 ГБ видеопамяти",
   "lora.presets.deepNarrative.label": "Глубокое повествование",
   "lora.presets.dialogueMaster.desc": "Оптимизация для диалогов — ~45 минут, 8 ГБ видеопамяти",

@@ -47,6 +47,7 @@
   "lora.onboarding.privacyPromise": "100% 私密且离线",
   "lora.onboarding.systemCheck": "系统要求",
   "lora.onboarding.title": "训练你的写作风格",
+  "lora.onboarding.selectPython": "选择 Python 可执行文件",
   "lora.presets.deepNarrative.desc": "完整的叙事风格 — 约 60 分钟，12 GB VRAM",
   "lora.presets.deepNarrative.label": "深度叙事",
   "lora.presets.dialogueMaster.desc": "对话优化 — 约 45 分钟，8 GB VRAM",

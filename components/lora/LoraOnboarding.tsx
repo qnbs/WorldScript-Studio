@@ -13,6 +13,9 @@ interface EnvStatus {
   unslothAvailable: boolean;
   cudaAvailable: boolean;
   vramGb: number;
+  pythonVersion: string;
+  pythonPath?: string;
+  lastError?: string;
   message?: string;
 }
 
@@ -20,10 +23,14 @@ interface EnvStatus {
 const useLoraTrainingService = () => {
   const [api, setApi] = useState<{
     checkTrainingEnvironment: () => Promise<Omit<EnvStatus, 'loaded'>>;
+    selectPythonExecutable: () => Promise<Omit<EnvStatus, 'loaded'> | null>;
   } | null>(null);
   useEffect(() => {
     void import('../../services/lora/loraTrainingService').then((m) => {
-      setApi({ checkTrainingEnvironment: m.checkTrainingEnvironment });
+      setApi({
+        checkTrainingEnvironment: m.checkTrainingEnvironment,
+        selectPythonExecutable: m.selectPythonExecutable,
+      });
     });
   }, []);
   return api;
@@ -52,8 +59,10 @@ export default React.memo(function LoraOnboarding({ onDismiss }: { onDismiss: ()
     unslothAvailable: false,
     cudaAvailable: false,
     vramGb: 0,
+    pythonVersion: '',
   });
   const api = useLoraTrainingService();
+  const [isSelectingPython, setIsSelectingPython] = useState(false);
 
   useEffect(() => {
     if (!api) return;
@@ -61,6 +70,24 @@ export default React.memo(function LoraOnboarding({ onDismiss }: { onDismiss: ()
       setEnv({ loaded: true, ...result });
     });
   }, [api]);
+
+  const handleSelectPython = async () => {
+    if (!api) return;
+    setIsSelectingPython(true);
+    try {
+      const result = await api.selectPythonExecutable();
+      if (result) setEnv({ loaded: true, ...result });
+    } catch (error) {
+      // QNBS-v3: Keep the failed manual selection visible instead of falsely reporting Python as absent.
+      setEnv((current) => ({
+        ...current,
+        loaded: true,
+        lastError: error instanceof Error ? error.message : 'python_selection_failed',
+      }));
+    } finally {
+      setIsSelectingPython(false);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-6 rounded-sc-xl border border-[var(--sc-border-default)] bg-[var(--sc-surface-base)] p-6 shadow-sm">
@@ -96,7 +123,9 @@ export default React.memo(function LoraOnboarding({ onDismiss }: { onDismiss: ()
               label="Python 3.10+"
               ok={env.pythonAvailable}
               detail={
-                env.pythonAvailable ? t('lora.onboarding.installed') : t('lora.onboarding.notFound')
+                env.pythonAvailable
+                  ? [env.pythonVersion, env.pythonPath].filter(Boolean).join(' · ')
+                  : (env.lastError ?? t('lora.onboarding.notFound'))
               }
             />
             <StatusRow
@@ -118,6 +147,14 @@ export default React.memo(function LoraOnboarding({ onDismiss }: { onDismiss: ()
         {env.message && (
           <p className="text-xs text-[var(--sc-danger-fg)]">{t('lora.onboarding.envError')}</p>
         )}
+        <button
+          type="button"
+          onClick={() => void handleSelectPython()}
+          disabled={!api || isSelectingPython}
+          className="text-sm text-[var(--sc-interactive-primary)] underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)]"
+        >
+          {isSelectingPython ? t('lora.onboarding.checking') : t('lora.onboarding.selectPython')}
+        </button>
       </div>
 
       <button

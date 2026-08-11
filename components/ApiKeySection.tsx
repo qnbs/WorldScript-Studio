@@ -8,6 +8,16 @@ import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Spinner } from './ui/Spinner';
 
+// QNBS-v3: Reject non-printing control input without binding Gemini acceptance to a historical key prefix.
+const containsAsciiControlCharacter = (value: string): boolean =>
+  Array.from(value).some((character) => {
+    const code = character.charCodeAt(0);
+    return code < 0x20 || code === 0x7f;
+  });
+
+export const isSyntacticallySafeGeminiApiKey = (value: string): boolean =>
+  value.length <= 4096 && !containsAsciiControlCharacter(value);
+
 export const ApiKeySection: FC = () => {
   const { t } = useTranslation();
   const [apiKey, setApiKey] = useState('');
@@ -45,18 +55,20 @@ export const ApiKeySection: FC = () => {
   }, [checkKeyStatus]);
 
   const handleSaveKey = async () => {
-    if (!apiKey.trim()) {
+    const normalizedKey = apiKey.trim();
+    if (!normalizedKey) {
       setMessage({ type: 'error', text: t('settings.apiKey.errorEmpty') });
       return;
     }
-    if (!apiKey.trim().startsWith('AIza')) {
+    if (!isSyntacticallySafeGeminiApiKey(normalizedKey)) {
       setMessage({ type: 'error', text: t('settings.apiKey.errorInvalid') });
       return;
     }
     setIsSaving(true);
     setMessage(null);
     try {
-      await dbService.saveGeminiApiKey(apiKey.trim());
+      // QNBS-v3: Provider validation, not an historical prefix, determines credential validity.
+      await dbService.saveGeminiApiKey(normalizedKey);
       invalidateAiClientCache();
       setApiKey('');
       setHasKey(true);
@@ -296,7 +308,7 @@ export const ApiKeySection: FC = () => {
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSaveKey()}
-                  placeholder="AIza..."
+                  placeholder={t<string>('settings.apiKey.inputLabel')}
                   autoComplete="off"
                   className="pr-10"
                 />

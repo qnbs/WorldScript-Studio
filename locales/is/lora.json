@@ -47,6 +47,7 @@
   "lora.onboarding.privacyPromise": "100% einkamál og án nettengingar",
   "lora.onboarding.systemCheck": "Kerfiskröfur",
   "lora.onboarding.title": "Þjálfa ritstílinn þinn",
+  "lora.onboarding.selectPython": "Veldu Python keyrsluskrá",
   "lora.presets.deepNarrative.desc": "Fullur frásagnarstíll — ~60 mín., 12 GB VRAM",
   "lora.presets.deepNarrative.label": "Djúp frásögn",
   "lora.presets.dialogueMaster.desc": "Samræðubjartað — ~45 mín., 8 GB VRAM",

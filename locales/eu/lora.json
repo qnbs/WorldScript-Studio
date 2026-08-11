@@ -47,6 +47,7 @@
   "lora.onboarding.privacyPromise": "%100 pribatua eta lineaz kanpo",
   "lora.onboarding.systemCheck": "Sistemaren eskakizunak",
   "lora.onboarding.title": "Prestatu zure idazketa-estiloa",
+  "lora.onboarding.selectPython": "Aukeratu Python exekutagarria",
   "lora.presets.deepNarrative.desc": "Narrazio estilo osoa — ~60 min, 12 GB VRAM",
   "lora.presets.deepNarrative.label": "Narrazio Sakona",
   "lora.presets.dialogueMaster.desc": "Elkarrizketa optimizatua — ~45 min, 8 GB VRAM",

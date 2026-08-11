@@ -47,6 +47,7 @@
   "lora.onboarding.privacyPromise": "100% yksityinen ja offline-tilassa",
   "lora.onboarding.systemCheck": "Järjestelmävaatimukset",
   "lora.onboarding.title": "Harjoittele kirjoitustyyliäsi",
+  "lora.onboarding.selectPython": "Valitse Python-suoritustiedosto",
   "lora.presets.deepNarrative.desc": "Täysi kerrontyyli – ~60 min, 12 Gt VRAM",
   "lora.presets.deepNarrative.label": "Syvä kerronta",
   "lora.presets.dialogueMaster.desc": "Dialogioptimoitu – ~45 min, 8 Gt VRAM",

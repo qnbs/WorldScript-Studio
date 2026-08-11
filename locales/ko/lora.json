@@ -47,6 +47,7 @@
   "lora.onboarding.privacyPromise": "100% 비공개 및 오프라인",
   "lora.onboarding.systemCheck": "시스템 요구 사항",
   "lora.onboarding.title": "글쓰기 스타일을 훈련하세요",
+  "lora.onboarding.selectPython": "Python 실행 파일 선택",
   "lora.presets.deepNarrative.desc": "전체 내러티브 스타일 — ~60분, 12GB VRAM",
   "lora.presets.deepNarrative.label": "깊은 내러티브",
   "lora.presets.dialogueMaster.desc": "대화 최적화 — ~45분, 8GB VRAM",

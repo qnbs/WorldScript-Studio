@@ -47,6 +47,7 @@
   "lora.onboarding.privacyPromise": "100% privado e off-line",
   "lora.onboarding.systemCheck": "Requisitos do sistema",
   "lora.onboarding.title": "Treine seu estilo de escrita",
+  "lora.onboarding.selectPython": "Escolher executável Python",
   "lora.presets.deepNarrative.desc": "Estilo narrativo completo — ~60 min, 12 GB VRAM",
   "lora.presets.deepNarrative.label": "Narrativa Profunda",
   "lora.presets.dialogueMaster.desc": "Otimizado para diálogo – ~45 min, 8 GB VRAM",

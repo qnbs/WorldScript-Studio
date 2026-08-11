@@ -7,7 +7,7 @@ import type { WebGpuAdapterInfo } from '../../services/ai/webGpuDetectorService'
 import { detectWebGpuDetails } from '../../services/ai/webGpuDetectorService';
 import {
   type LocalEndpointScanResult,
-  listOllamaModels,
+  listLocalBackendModels,
   scanLocalOpenAiCompatibleEndpoints,
   testAIConnection,
 } from '../../services/aiProviderService';
@@ -145,22 +145,28 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
     }
     setIsLoadingModels(true);
     try {
-      const models = await listOllamaModels(ollamaBaseUrl);
+      const models = await listLocalBackendModels(ollamaBaseUrl, advancedAi.localBackendPreset);
       setOllamaModels(models);
     } catch {
       setOllamaModels([]);
     } finally {
       setIsLoadingModels(false);
     }
-  }, [ollamaBaseUrl, browserOllamaEnabled]);
+  }, [ollamaBaseUrl, advancedAi.localBackendPreset, browserOllamaEnabled]);
 
   const handleTest = useCallback(async () => {
     const requestId = ++testRequestIdRef.current;
     setTestStatus('loading');
     setTestError('');
+    if (provider === 'webllm') {
+      void detectWebGpuDetails()
+        .then(setGpuInfo)
+        .catch(() => setGpuInfo({ status: 'unknown' }));
+    }
     try {
       const result = await testAIConnection(provider, {
         ollamaBaseUrl,
+        localBackendPreset: advancedAi.localBackendPreset,
         openAiCompatibleBaseUrl: advancedAi.openAiCompatibleBaseUrl,
         browserOllamaEnabled,
       });
@@ -183,7 +189,14 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
       setTestStatus('error');
       setTestError(e instanceof Error ? e.message : t('settings.ai.unknownError'));
     }
-  }, [provider, ollamaBaseUrl, advancedAi.openAiCompatibleBaseUrl, browserOllamaEnabled, t]);
+  }, [
+    provider,
+    ollamaBaseUrl,
+    advancedAi.localBackendPreset,
+    advancedAi.openAiCompatibleBaseUrl,
+    browserOllamaEnabled,
+    t,
+  ]);
 
   const handleScanLocals = useCallback(async () => {
     setScanBusy(true);
@@ -207,25 +220,6 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
     },
     [onAdvancedAiPatch],
   );
-
-  useEffect(() => {
-    // QNBS-v3 (CodeRabbit CWE-209): invalidate any in-flight test from the previous provider
-    // context before deciding whether to start a new one.
-    testRequestIdRef.current++;
-    // QNBS-v3 (#266, ADR-0017): the ollama auto-probe (models + connection test) only runs on
-    // desktop, or in the browser when the user has explicitly opted into browserOllamaEnabled. In
-    // the plain PWA it fired CORS-blocked localhost requests on every settings visit.
-    if (provider === 'ollama' && canAttemptOllama) {
-      void handleLoadOllamaModels();
-      void handleTest();
-    } else if (provider === 'webllm') {
-      void handleTest();
-      // QNBS-v3: Probe WebGPU once on WebLLM selection; result shown as status badge.
-      detectWebGpuDetails()
-        .then(setGpuInfo)
-        .catch(() => setGpuInfo({ status: 'unknown' }));
-    }
-  }, [provider, canAttemptOllama, handleLoadOllamaModels, handleTest]);
 
   const providers: { id: AIProvider; label: string }[] = [
     { id: 'gemini', label: t('settings.ai.provider.gemini') },
@@ -296,7 +290,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
                 <>
                   {testStatus === 'ok' && t('settings.ai.providerStatusConnected')}
                   {testStatus === 'error' && t('settings.ai.providerStatusDisconnected')}
-                  {testStatus === 'idle' && t('settings.ai.providerStatusReady')}
+                  {testStatus === 'idle' && t('settings.ai.providerStatusNotTested')}
                 </>
               )}
             </span>

@@ -12,11 +12,15 @@ vi.mock('@tauri-apps/api/core', () => ({
 vi.mock('@tauri-apps/api/event', () => ({
   listen: vi.fn().mockResolvedValue(() => {}),
 }));
+vi.mock('@tauri-apps/plugin-dialog', () => ({
+  open: vi.fn(),
+}));
 
 import {
   abortTraining,
   checkTrainingEnvironment,
   generateOllamaModelfile,
+  selectPythonExecutable,
 } from '../../../services/lora/loraTrainingService';
 
 describe('loraTrainingService — web build (no Tauri)', () => {
@@ -51,6 +55,7 @@ describe('loraTrainingService — web build (no Tauri)', () => {
 
 describe('loraTrainingService — Tauri desktop build', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
   });
 
@@ -69,5 +74,41 @@ describe('loraTrainingService — Tauri desktop build', () => {
       }),
     );
     expect(typeof modelfile).toBe('string');
+  });
+
+  it('validates and persists an explicitly selected Python executable through the native resolver', async () => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const { open } = await import('@tauri-apps/plugin-dialog');
+    vi.mocked(open).mockResolvedValueOnce('/opt/python 3.12/bin/python3');
+    vi.mocked(invoke).mockResolvedValueOnce({
+      python_available: true,
+      unsloth_available: false,
+      cuda_available: true,
+      vram_gb: 24,
+      python_version: '3.12.1',
+      python_path: '/opt/python 3.12/bin/python3',
+      last_error: null,
+    });
+
+    await expect(selectPythonExecutable()).resolves.toEqual({
+      pythonAvailable: true,
+      unslothAvailable: false,
+      cudaAvailable: true,
+      vramGb: 24,
+      pythonVersion: '3.12.1',
+      pythonPath: '/opt/python 3.12/bin/python3',
+    });
+    expect(invoke).toHaveBeenCalledWith('set_lora_python_path', {
+      python_path: '/opt/python 3.12/bin/python3',
+    });
+  });
+
+  it('does not invoke the native resolver when interpreter selection is cancelled', async () => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const { open } = await import('@tauri-apps/plugin-dialog');
+    vi.mocked(open).mockResolvedValueOnce(null);
+
+    await expect(selectPythonExecutable()).resolves.toBeNull();
+    expect(invoke).not.toHaveBeenCalledWith('set_lora_python_path', expect.anything());
   });
 });

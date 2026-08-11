@@ -47,6 +47,7 @@
   "lora.onboarding.privacyPromise": "100 % privat och offline",
   "lora.onboarding.systemCheck": "Systemkrav",
   "lora.onboarding.title": "Träna din skrivstil",
+  "lora.onboarding.selectPython": "Välj Python-körbar fil",
   "lora.presets.deepNarrative.desc": "Fullständig berättarstil — ~60 min, 12 GB VRAM",
   "lora.presets.deepNarrative.label": "Djup berättelse",
   "lora.presets.dialogueMaster.desc": "Dialogoptimerad — ~45 min, 8 GB VRAM",

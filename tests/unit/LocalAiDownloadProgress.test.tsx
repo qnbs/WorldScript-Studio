@@ -30,6 +30,7 @@ vi.mock('../../services/ai/inferenceProgressEmitter', () => ({
       };
     }),
     reportWebLlmError: vi.fn(),
+    reset: vi.fn(),
   },
 }));
 
@@ -37,6 +38,16 @@ vi.mock('../../services/ai/gpuResourceManager', () => ({
   gpuResourceManager: {
     releaseGpu: vi.fn(),
   },
+}));
+
+const { mockAbortActivePreload, mockRetryLastPreload } = vi.hoisted(() => ({
+  mockAbortActivePreload: vi.fn(),
+  mockRetryLastPreload: vi.fn(),
+}));
+
+vi.mock('../../services/localAiFacade', () => ({
+  abortActivePreload: mockAbortActivePreload,
+  retryLastPreload: mockRetryLastPreload,
 }));
 
 vi.mock('../../hooks/useTranslation', () => ({
@@ -105,6 +116,24 @@ describe('LocalAiDownloadProgress', () => {
     render(<LocalAiDownloadProgress />);
     await user.click(screen.getByText('settings.ai.localAi.cancelButton'));
     expect(gpuResourceManager.releaseGpu).toHaveBeenCalledWith('webllm');
+    expect(mockAbortActivePreload).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries the actual prior preload after an error', async () => {
+    const { inferenceProgressEmitter } = await import('../../services/ai/inferenceProgressEmitter');
+    const user = userEvent.setup();
+    mockSnapshot = {
+      state: 'error',
+      progress: 0.2,
+      estimatedSecondsRemaining: null,
+      text: 'Download failed',
+    };
+    mockRetryLastPreload.mockResolvedValue(undefined);
+    render(<LocalAiDownloadProgress />);
+
+    await user.click(screen.getByText('settings.ai.localAi.retryButton'));
+    expect(inferenceProgressEmitter.reset).toHaveBeenCalledTimes(1);
+    expect(mockRetryLastPreload).toHaveBeenCalledTimes(1);
   });
 
   it('updates progress when subscriber fires', async () => {

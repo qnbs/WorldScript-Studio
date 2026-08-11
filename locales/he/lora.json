@@ -47,6 +47,7 @@
   "lora.onboarding.privacyPromise": "100% פרטי ולא מקוון",
   "lora.onboarding.systemCheck": "דרישות מערכת",
   "lora.onboarding.title": "אמנו את סגנון הכתיבה שלכם",
+  "lora.onboarding.selectPython": "בחירת קובץ ההפעלה של Python",
   "lora.presets.deepNarrative.desc": "סגנון נרטיבי מלא — ~60 דק׳, 12 GB VRAM",
   "lora.presets.deepNarrative.label": "נרטיב עמוק",
   "lora.presets.dialogueMaster.desc": "מותאם לדיאלוג — ~45 דק׳, 8 GB VRAM",

@@ -330,6 +330,80 @@ describe('testAIConnection — ollama desktop branch', () => {
     expect(result.ok).toBe(false);
     expect(result.error).toContain('timed out');
   });
+
+  it('uses the OpenAI-compatible models endpoint for the LM Studio preset', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    mockPluginHttpFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: [{ id: 'local-model' }] }), { status: 200 }),
+    );
+
+    const result = await testAIConnection('ollama', {
+      ollamaBaseUrl: 'http://127.0.0.1:1234/',
+      localBackendPreset: 'lm_studio',
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      localServer: {
+        normalizedEndpoint: 'http://127.0.0.1:1234/v1',
+        transport: 'tauri-http',
+        modelNames: ['local-model'],
+      },
+    });
+    expect(mockPluginHttpFetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:1234/v1/models',
+      expect.any(Object),
+    );
+  });
+
+  it('reports a reachable LM Studio endpoint with no models distinctly', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    mockPluginHttpFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: [] }), { status: 200 }),
+    );
+
+    const result = await testAIConnection('ollama', {
+      ollamaBaseUrl: 'http://localhost:1234',
+      localBackendPreset: 'lm_studio',
+    });
+
+    expect(result).toMatchObject({ ok: false, kind: 'noModels' });
+  });
+
+  it('streams legacy LM Studio requests through /v1/chat/completions, not Ollama /api', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    mockPluginHttpFetch.mockResolvedValueOnce(
+      new Response(
+        'data: {"choices":[{"delta":{"content":"Hello"}}]}\n' +
+          'data: {"choices":[{"delta":{"content":" world"}}]}\n' +
+          'data: [DONE]\n',
+        { status: 200 },
+      ),
+    );
+    const chunks: string[] = [];
+
+    await streamText(
+      'Continue this scene',
+      'balanced',
+      {
+        provider: 'ollama',
+        model: 'ollama/local-model',
+        ollamaBaseUrl: 'http://localhost:1234',
+        localBackendPreset: 'lm_studio',
+      },
+      { onChunk: (chunk) => chunks.push(chunk) },
+    );
+
+    expect(chunks).toEqual(['Hello', ' world']);
+    expect(mockPluginHttpFetch).toHaveBeenCalledWith(
+      'http://localhost:1234/v1/chat/completions',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(mockPluginHttpFetch).not.toHaveBeenCalledWith(
+      expect.stringContaining('/api/generate'),
+      expect.anything(),
+    );
+  });
 });
 
 // QNBS-v3 (ADR-0017): opt-in direct browser→Ollama connection. window.__TAURI_INTERNALS__ is never

@@ -47,6 +47,7 @@
   "lora.onboarding.privacyPromise": "100% privát és offline",
   "lora.onboarding.systemCheck": "Rendszerkövetelmények",
   "lora.onboarding.title": "Tanítsa meg írási stílusát",
+  "lora.onboarding.selectPython": "Python futtatható fájl kiválasztása",
   "lora.presets.deepNarrative.desc": "Teljes narratív stílus — ~60 perc, 12 GB VRAM",
   "lora.presets.deepNarrative.label": "Mély narratíva",
   "lora.presets.dialogueMaster.desc": "Párbeszédre optimalizált – ~45 perc, 8 GB VRAM",
