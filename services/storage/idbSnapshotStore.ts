@@ -12,11 +12,9 @@ import { IdbCodexStore } from './idbCodexStore';
 import { compressData, getUserFriendlyDbError, retryDb } from './idbCore';
 import {
   assertIdbProtectedWriteAllowed,
-  idbEncrypt,
+  idbEncryptWithKey,
   idbReadSecure,
-  isEncryptedBlob,
-  isIdbEncryptionReady,
-  StorageEncryptionService,
+  resolveProtectedWriteKey,
 } from './storageEncryptionService';
 
 export class IdbSnapshotStore extends IdbCodexStore {
@@ -29,9 +27,12 @@ export class IdbSnapshotStore extends IdbCodexStore {
       (sum, section) => sum + (section.content?.split(/\s+/).filter(Boolean).length || 0),
       0,
     );
-    await assertIdbProtectedWriteAllowed();
+    // QNBS-v3: Resolve the write key in one atomic snapshot rather than re-reading
+    //          isIdbEncryptionReady() later, so Lock Session during this async call cannot
+    //          silently downgrade an already-approved snapshot to plaintext.
+    const writeKey = await resolveProtectedWriteKey();
     // QNBS-v3: Plaintext snapshots are allowed only before encryption is configured.
-    const snapshotPayload = isIdbEncryptionReady() ? await idbEncrypt(data) : compressData(data);
+    const snapshotPayload = writeKey ? await idbEncryptWithKey(writeKey, data) : compressData(data);
     const snapshotData = {
       date: new Date().toISOString(),
       name: name ?? 'Automatic Snapshot',
@@ -55,6 +56,9 @@ export class IdbSnapshotStore extends IdbCodexStore {
 
   async listSnapshots(): Promise<ProjectSnapshot[]> {
     return retryDb(async () => {
+      // QNBS-v3: Snapshot metadata (name/date/word count) is about protected content — a locked
+      //          session must not be able to enumerate it either, even without the payload.
+      await assertIdbProtectedWriteAllowed();
       const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readonly');
       // IDBKeyRange: iterate in reverse (newest first) using cursor direction 'prev'
       const request = store.openCursor(null, 'prev');
@@ -78,14 +82,18 @@ export class IdbSnapshotStore extends IdbCodexStore {
 
   async getSnapshotData(id: number): Promise<ProjectData> {
     return retryDb(async () => {
+      // QNBS-v3: Explicit guard up front (idbReadSecure's legacy-plaintext branch already checks
+      //          this internally) so a missing record can't skip the lock check before decode.
+      await assertIdbProtectedWriteAllowed();
       const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readonly');
       return new Promise<ProjectData>((resolve, reject) => {
         const request = store.get(id);
-        request.onsuccess = async () => {
+        // QNBS-v3: IDBRequest.onsuccess is not awaited by the browser — an unhandled rejection
+        //          here would leave the caller pending instead of surfacing the error.
+        request.onsuccess = () => {
           const raw: unknown = request.result?.data;
           // QNBS-v3: Decrypt encrypted snapshot payload; legacy plaintext falls through decompressData.
-          const result = await idbReadSecure<ProjectData>(raw);
-          resolve(result);
+          idbReadSecure<ProjectData>(raw).then(resolve).catch(reject);
         };
         request.onerror = () => reject(getUserFriendlyDbError(request.error));
       });
@@ -94,6 +102,8 @@ export class IdbSnapshotStore extends IdbCodexStore {
 
   async deleteSnapshot(id: number): Promise<void> {
     return retryDb(async () => {
+      // QNBS-v3: A locked session must not be able to destroy protected snapshot records.
+      await assertIdbProtectedWriteAllowed();
       const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readwrite');
       return new Promise<void>((resolve, reject) => {
         const request = store.delete(id);
@@ -121,41 +131,6 @@ export class IdbSnapshotStore extends IdbCodexStore {
 
     for (const key of toDelete) {
       await this.deleteSnapshot(key);
-    }
-  }
-
-  /**
-   * Re-encrypt all snapshot payloads with a new key.
-   * QNBS-v3: Iterates every snapshot, decrypts with oldKey, encrypts with newKey.
-   */
-  async reEncryptAllSnapshots(oldKey: CryptoKey, newKey: CryptoKey): Promise<void> {
-    const svc = new StorageEncryptionService();
-    const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readwrite');
-    const keys: number[] = await new Promise((resolve, reject) => {
-      const req = store.getAllKeys();
-      req.onsuccess = () => resolve(req.result as number[]);
-      req.onerror = () => reject(req.error);
-    });
-
-    for (const id of keys) {
-      const record: { date: string; name: string; wordCount: number; data: unknown } | undefined =
-        await new Promise((resolve, reject) => {
-          const req = store.get(id);
-          req.onsuccess = () => resolve(req.result);
-          req.onerror = () => reject(req.error);
-        });
-      if (!record) continue;
-      const raw = record.data;
-      if (raw instanceof Uint8Array && isEncryptedBlob(raw)) {
-        const decrypted = await svc.decrypt(oldKey, { bytes: raw });
-        const reEncrypted = await svc.encrypt(newKey, decrypted);
-        record.data = reEncrypted.bytes;
-        await new Promise<void>((resolve, reject) => {
-          const req = store.put(record, id);
-          req.onsuccess = () => resolve();
-          req.onerror = () => reject(req.error);
-        });
-      }
     }
   }
 }

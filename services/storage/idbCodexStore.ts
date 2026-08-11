@@ -10,18 +10,20 @@ import { compressData, decompressData } from './idbCore';
 import { IdbKeyStore } from './idbKeyStore';
 import {
   assertIdbProtectedWriteAllowed,
-  idbEncrypt,
+  idbEncryptWithKey,
   idbReadSecure,
   isEncryptedBlob,
-  isIdbEncryptionReady,
+  resolveProtectedWriteKey,
 } from './storageEncryptionService';
 
 export class IdbCodexStore extends IdbKeyStore {
   async saveStoryCodex(codex: StoryCodex): Promise<void> {
-    await assertIdbProtectedWriteAllowed();
-    // QNBS-v3: Encrypt/compress BEFORE opening the IDB transaction — `await idbEncrypt` yields the
-    //          event loop, which auto-commits an already-open transaction (TransactionInactiveError).
-    const processed = isIdbEncryptionReady() ? await idbEncrypt(codex) : compressData(codex);
+    // QNBS-v3: Resolve the write key BEFORE opening the transaction — `await idbEncryptWithKey`
+    //          yields the event loop, which auto-commits an already-open transaction
+    //          (TransactionInactiveError), and re-reading isIdbEncryptionReady() after any later
+    //          await could race with Lock Session and silently fall back to plaintext.
+    const writeKey = await resolveProtectedWriteKey();
+    const processed = writeKey ? await idbEncryptWithKey(writeKey, codex) : compressData(codex);
     // QNBS-v3: three shapes — encrypted Uint8Array, LZ-compressed string, or (small codex) the raw
     //          object. compressData() returns the original object when JSON is below the compress
     //          threshold, so the previous `Array.from(processed as Uint8Array)` turned a small,
@@ -83,6 +85,8 @@ export class IdbCodexStore extends IdbKeyStore {
   }
 
   async deleteStoryCodex(projectId: string): Promise<void> {
+    // QNBS-v3: A locked session must not be able to destroy protected codex records it cannot read.
+    await assertIdbProtectedWriteAllowed();
     const store = await this.getObjectStore(CODEX_STORE, 'readwrite');
     return new Promise((resolve, reject) => {
       const request = store.delete(projectId);
@@ -94,11 +98,13 @@ export class IdbCodexStore extends IdbKeyStore {
   // --- RAG Vector Methods ---
 
   async saveRagVectors(projectId: string, vectors: unknown[]): Promise<void> {
-    await assertIdbProtectedWriteAllowed();
-    // QNBS-v3: Encrypt BEFORE opening the transaction — `await idbEncrypt` yields the event loop and
-    //          would auto-commit the open transaction before the put (TransactionInactiveError).
-    const encryptedPayload = isIdbEncryptionReady()
-      ? Array.from(await idbEncrypt({ projectId, vectors }))
+    // QNBS-v3: Resolve the write key BEFORE opening the transaction — `await idbEncryptWithKey`
+    //          yields the event loop and would auto-commit the open transaction before the put
+    //          (TransactionInactiveError), and re-reading isIdbEncryptionReady() after any later
+    //          await could race with Lock Session and silently fall back to plaintext.
+    const writeKey = await resolveProtectedWriteKey();
+    const encryptedPayload = writeKey
+      ? Array.from(await idbEncryptWithKey(writeKey, { projectId, vectors }))
       : null;
     const store = await this.getObjectStore(RAG_VECTORS_STORE, 'readwrite');
     // Clear existing vectors for this project then write the full set

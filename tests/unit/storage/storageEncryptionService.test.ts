@@ -25,17 +25,20 @@ Object.defineProperty(global, 'localStorage', { value: localStorageMock, writabl
 // QNBS-v3: provide a working IndexedDB for the sentinel-store tests (node has none by default).
 globalThis.indexedDB = new IDBFactory();
 
-import { deletePassphraseSentinel } from '../../../services/storage/idbPassphraseSentinel';
+import * as sentinelModule from '../../../services/storage/idbPassphraseSentinel';
 import {
   clearIdbEncryptionKey,
   clearIdbPassphrase,
   hasPassphraseSentinel,
   IdbEncryptionMigrationRequiredError,
+  IdbStorageLockedError,
   idbDecrypt,
   idbEncrypt,
+  idbEncryptWithKey,
   initIdbEncryption,
   isEncryptedBlob,
   isIdbEncryptionReady,
+  resolveProtectedWriteKey,
   rotateIdbPassphrase,
   StorageEncryptionService,
   setupIdbEncryption,
@@ -54,7 +57,7 @@ beforeEach(async () => {
   clearIdbEncryptionKey();
   // QNBS-v3: the sentinel store is a module singleton with a cached connection — clear its record
   //          between tests so sentinel-presence assertions start from a clean slate.
-  await deletePassphraseSentinel();
+  await sentinelModule.deletePassphraseSentinel();
 });
 
 afterEach(() => {
@@ -303,6 +306,82 @@ describe('clearIdbPassphrase', () => {
     await expect(clearIdbPassphrase()).rejects.toBeInstanceOf(IdbEncryptionMigrationRequiredError);
     expect(isIdbEncryptionReady()).toBe(true);
     expect(await hasPassphraseSentinel()).toBe(true);
+  });
+});
+
+// ── Atomic write-key resolution (TOCTOU fix) ─────────────────────────────────
+
+describe('resolveProtectedWriteKey', () => {
+  it('returns the active key without an IDB read when a key is present', async () => {
+    await initIdbEncryption('pass');
+    const spy = vi.spyOn(sentinelModule, 'getPassphraseSentinel');
+    const key = await resolveProtectedWriteKey();
+    expect(key).toBeInstanceOf(CryptoKey);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('returns null when encryption was never configured', async () => {
+    await expect(resolveProtectedWriteKey()).resolves.toBeNull();
+  });
+
+  it('throws IdbStorageLockedError when configured but locked', async () => {
+    await setupIdbEncryption('pass');
+    clearIdbEncryptionKey();
+    await expect(resolveProtectedWriteKey()).rejects.toBeInstanceOf(IdbStorageLockedError);
+  });
+});
+
+describe('idbEncryptWithKey', () => {
+  it('encrypts with the exact key passed in, independent of the active session key', async () => {
+    const explicitKey = await freshKey('explicit-pass');
+    const bytes = await idbEncryptWithKey(explicitKey, { title: 'Novel' });
+    expect(isEncryptedBlob(bytes)).toBe(true);
+    const decrypted = await svc.decrypt(explicitKey, { bytes });
+    expect(decrypted).toEqual({ title: 'Novel' });
+  });
+
+  it('remains decryptable with the captured key even after clearIdbEncryptionKey() clears the session', async () => {
+    await initIdbEncryption('pass');
+    const capturedKey = (await resolveProtectedWriteKey())!;
+    clearIdbEncryptionKey();
+    const bytes = await idbEncryptWithKey(capturedKey, 'still works');
+    expect(await svc.decrypt(capturedKey, { bytes })).toBe('still works');
+  });
+});
+
+// ── hasPassphraseSentinel caching ────────────────────────────────────────────
+
+describe('hasPassphraseSentinel caching', () => {
+  it('does not re-read IDB on repeated calls once a result is cached', async () => {
+    await hasPassphraseSentinel();
+    const spy = vi.spyOn(sentinelModule, 'getPassphraseSentinel');
+    await hasPassphraseSentinel();
+    await hasPassphraseSentinel();
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('setupIdbEncryption primes the cache without an extra read', async () => {
+    await setupIdbEncryption('pass');
+    const spy = vi.spyOn(sentinelModule, 'getPassphraseSentinel');
+    expect(await hasPassphraseSentinel()).toBe(true);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('verifyAndInitIdbEncryption primes the cache without an extra read', async () => {
+    await setupIdbEncryption('pass');
+    clearIdbEncryptionKey();
+    await verifyAndInitIdbEncryption('pass');
+    const spy = vi.spyOn(sentinelModule, 'getPassphraseSentinel');
+    expect(await hasPassphraseSentinel()).toBe(true);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('clearIdbEncryptionKey() resets the cache so the next call re-reads IDB', async () => {
+    await hasPassphraseSentinel();
+    clearIdbEncryptionKey();
+    const spy = vi.spyOn(sentinelModule, 'getPassphraseSentinel');
+    await hasPassphraseSentinel();
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 });
 
