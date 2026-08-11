@@ -91,8 +91,8 @@ function makeDispatch() {
   return vi.fn();
 }
 
-function makeGetState(loraAdapters: unknown[] = []) {
-  return () => ({ lora: { adapters: loraAdapters } });
+function makeGetState(loraAdapters: unknown[] = [], currentRun: unknown = null) {
+  return () => ({ lora: { adapters: loraAdapters, currentRun } });
 }
 
 // QNBS-v3: RTK thunk test helper. ThunkFn uses `any` for dispatch/getState to satisfy
@@ -340,6 +340,19 @@ describe('startTrainingThunk', () => {
     const started = dispatch.mock.calls.find((c) => c[0]?.type === 'lora/trainingStarted');
     expect(started![0].payload.totalEpochs).toBe(10);
   });
+
+  it('dispatches trainingAborted instead of trainingFailed when a cancellation was requested', async () => {
+    // QNBS-v3: abort_lora_training killing the process makes train_lora reject first — the
+    // rejection must be classified as an abort, not a failure, when cancellationRequested is set.
+    mockStartTraining.mockRejectedValue(new Error('training_cancel_not_confirmed'));
+    const dispatch = makeDispatch();
+    const getState = makeGetState([], { cancellationRequested: true });
+    await run(startTrainingThunk(trainConfig), dispatch, getState);
+    const aborted = dispatch.mock.calls.find((c) => c[0]?.type === 'lora/trainingAborted');
+    const failed = dispatch.mock.calls.find((c) => c[0]?.type === 'lora/trainingFailed');
+    expect(aborted).toBeDefined();
+    expect(failed).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -358,6 +371,19 @@ describe('abortTrainingThunk', () => {
     expect(mockAbortTraining).toHaveBeenCalled();
     const aborted = dispatch.mock.calls.find((c) => c[0]?.type === 'lora/trainingAborted');
     expect(aborted).toBeDefined();
+  });
+
+  it('dispatches trainingCancellationRequested before awaiting the native abort', async () => {
+    const dispatch = makeDispatch();
+    await run(abortTrainingThunk(), dispatch);
+    const requestedIndex = dispatch.mock.calls.findIndex(
+      (c) => c[0]?.type === 'lora/trainingCancellationRequested',
+    );
+    const abortedIndex = dispatch.mock.calls.findIndex(
+      (c) => c[0]?.type === 'lora/trainingAborted',
+    );
+    expect(requestedIndex).toBeGreaterThanOrEqual(0);
+    expect(requestedIndex).toBeLessThan(abortedIndex);
   });
 });
 
