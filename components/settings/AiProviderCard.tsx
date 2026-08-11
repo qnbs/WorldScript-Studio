@@ -7,6 +7,7 @@ import type { WebGpuAdapterInfo } from '../../services/ai/webGpuDetectorService'
 import { detectWebGpuDetails } from '../../services/ai/webGpuDetectorService';
 import {
   type LocalEndpointScanResult,
+  type LocalServerDiagnostic,
   listLocalBackendModels,
   scanLocalOpenAiCompatibleEndpoints,
   testAIConnection,
@@ -34,6 +35,46 @@ interface AiProviderCardProps {
   browserOllamaEnabled?: boolean;
 }
 
+const LocalServerDiagnosticPanel: FC<{ diagnostic: LocalServerDiagnostic }> = ({ diagnostic }) => {
+  const { t } = useTranslation();
+  const transportLabel =
+    diagnostic.transport === 'tauri-http'
+      ? t('settings.ai.localDiagnostic.tauriHttp')
+      : t('settings.ai.localDiagnostic.browserFetch');
+
+  return (
+    <dl
+      aria-label={t('settings.ai.localDiagnostic.title')}
+      className="mt-3 grid gap-x-3 gap-y-1 text-xs text-[var(--sc-text-secondary)] sm:grid-cols-[auto_1fr]"
+    >
+      <dt className="font-medium text-[var(--sc-text-primary)]">
+        {t('settings.ai.localDiagnostic.endpoint')}
+      </dt>
+      <dd className="break-all">{diagnostic.normalizedEndpoint}</dd>
+      <dt className="font-medium text-[var(--sc-text-primary)]">
+        {t('settings.ai.localDiagnostic.transport')}
+      </dt>
+      <dd>{transportLabel}</dd>
+      <dt className="font-medium text-[var(--sc-text-primary)]">
+        {t('settings.ai.localDiagnostic.models')}
+      </dt>
+      <dd>{diagnostic.modelNames.join(', ')}</dd>
+    </dl>
+  );
+};
+
+function getOllamaAvailability(
+  provider: AIProvider,
+  isDesktop: boolean,
+  browserOllamaEnabled: boolean,
+): { canAttemptOllama: boolean; ollamaUntestable: boolean } {
+  const canAttemptOllama = isDesktop || browserOllamaEnabled;
+  return {
+    canAttemptOllama,
+    ollamaUntestable: provider === 'ollama' && !canAttemptOllama,
+  };
+}
+
 export const AiProviderCard: FC<AiProviderCardProps> = ({
   advancedAi,
   onAdvancedAiPatch,
@@ -52,12 +93,15 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
   const isAnthropicProxyCapableWeb = !isDesktop && isServerlessProxyCapable();
   // QNBS-v3 (ADR-0017): the opt-in flag widens Ollama testability to the browser — everywhere else
   // in this component that gated Ollama purely on isDesktop now also accepts this flag.
-  const canAttemptOllama = isDesktop || browserOllamaEnabled;
   // QNBS-v3: for Ollama when neither desktop nor the browser opt-in applies, the auto-test effect
   // and the manual "Test connection" button are both disabled (see below) — testStatus can never
   // leave 'idle' here, so the generic status badge must not render its idle→"Ready" label, which
   // would misleadingly imply a verified connection next to the "desktop app required" banner.
-  const ollamaUntestable = provider === 'ollama' && !canAttemptOllama;
+  const { canAttemptOllama, ollamaUntestable } = getOllamaAvailability(
+    provider,
+    isDesktop,
+    browserOllamaEnabled,
+  );
   const [openaiKey, setOpenaiKey] = useState('');
   // QNBS-v3: Grok's own key input state, mirroring OpenAI's pattern above.
   const [grokKey, setGrokKey] = useState('');
@@ -67,6 +111,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
   const [testError, setTestError] = useState('');
+  const [localDiagnostic, setLocalDiagnostic] = useState<LocalServerDiagnostic | null>(null);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [isSavingKey, setIsSavingKey] = useState(false);
   const [scanBusy, setScanBusy] = useState(false);
@@ -158,6 +203,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
     const requestId = ++testRequestIdRef.current;
     setTestStatus('loading');
     setTestError('');
+    setLocalDiagnostic(null);
     if (provider === 'webllm') {
       void detectWebGpuDetails()
         .then(setGpuInfo)
@@ -173,6 +219,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
       if (testRequestIdRef.current !== requestId) return; // stale — superseded by a newer request
       if (result.ok) {
         setTestStatus('ok');
+        setLocalDiagnostic(result.localServer ?? null);
       } else {
         setTestStatus('error');
         // QNBS-v3: `kind` is a stable, i18n-mappable classification — prefer it over the raw
@@ -298,6 +345,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
           {!ollamaUntestable && testStatus === 'error' && testError && (
             <p className="text-xs text-[var(--sc-danger-fg)]">{testError}</p>
           )}
+          {localDiagnostic && <LocalServerDiagnosticPanel diagnostic={localDiagnostic} />}
         </div>
 
         {provider === 'gemini' && (

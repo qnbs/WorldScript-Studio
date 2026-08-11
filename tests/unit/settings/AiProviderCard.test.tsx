@@ -250,6 +250,14 @@ describe('AiProviderCard — ollama provider (#266)', () => {
 
   it('desktop: uses the LM Studio preset for the explicit model and connection diagnostics', async () => {
     setDesktopRuntime(true);
+    vi.mocked(testAIConnection).mockResolvedValueOnce({
+      ok: true,
+      localServer: {
+        normalizedEndpoint: 'http://127.0.0.1:1234/v1',
+        transport: 'tauri-http',
+        modelNames: ['local-model'],
+      },
+    });
     const user = userEvent.setup();
     render(
       <AiProviderCard
@@ -276,6 +284,9 @@ describe('AiProviderCard — ollama provider (#266)', () => {
         }),
       );
     });
+    expect(screen.getByText('http://127.0.0.1:1234/v1')).toBeTruthy();
+    expect(screen.getByText('settings.ai.localDiagnostic.tauriHttp')).toBeTruthy();
+    expect(screen.getByText('local-model')).toBeTruthy();
   });
 
   it('desktop: scan renders classified status badges and the use-url action patches settings', async () => {
