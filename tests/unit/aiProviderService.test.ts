@@ -49,6 +49,7 @@ import {
   scanLocalOpenAiCompatibleEndpoints,
   streamText,
   testAIConnection,
+  testOpenAiCompatibleLocalConnection,
 } from '../../services/aiProviderService';
 import * as geminiService from '../../services/geminiService';
 import * as localAiFacade from '../../services/localAiFacade';
@@ -368,6 +369,51 @@ describe('testAIConnection — ollama desktop branch', () => {
     });
 
     expect(result).toMatchObject({ ok: false, kind: 'noModels' });
+  });
+
+  it('uses the OpenAI-compatible models endpoint for the vLLM preset', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    mockPluginHttpFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: [{ id: 'vllm-local-model' }] }), { status: 200 }),
+    );
+
+    const result = await testAIConnection('ollama', {
+      ollamaBaseUrl: 'http://127.0.0.1:8000/',
+      localBackendPreset: 'vllm',
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      localServer: {
+        normalizedEndpoint: 'http://127.0.0.1:8000/v1',
+        transport: 'tauri-http',
+        modelNames: ['vllm-local-model'],
+      },
+    });
+    expect(mockPluginHttpFetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/v1/models',
+      expect.any(Object),
+    );
+  });
+
+  it('returns invalidResponse when the models payload has a non-array data field', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    mockPluginHttpFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: { id: 'not-an-array' } }), { status: 200 }),
+    );
+
+    const result = await testOpenAiCompatibleLocalConnection('http://127.0.0.1:9999');
+
+    expect(result).toMatchObject({ ok: false, kind: 'invalidResponse' });
+  });
+
+  it('returns invalidResponse when the models response body is not JSON', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    mockPluginHttpFetch.mockResolvedValueOnce(new Response('not json', { status: 200 }));
+
+    const result = await testOpenAiCompatibleLocalConnection('http://127.0.0.1:9999');
+
+    expect(result).toMatchObject({ ok: false, kind: 'invalidResponse' });
   });
 
   it('streams legacy LM Studio requests through /v1/chat/completions, not Ollama /api', async () => {
