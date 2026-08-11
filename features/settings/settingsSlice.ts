@@ -44,8 +44,7 @@ export const DEFAULT_OPENROUTER_SETTINGS: OpenRouterSettings = {
 const defaultSettings: Settings = {
   // Basic Settings
   theme: getSystemThemePreference(),
-  // QNBS-v3: First-run and rehydration defaults must agree so a missing legacy field cannot restore sepia.
-  appearancePreset: 'default',
+  appearancePreset: 'sepia',
   writingSurfaceStyle: 'textured',
   aiMode: 'hybrid',
   openRouter: DEFAULT_OPENROUTER_SETTINGS,
