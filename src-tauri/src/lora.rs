@@ -207,6 +207,13 @@ fn cache_python(runtime: ResolvedPython) -> Result<(), String> {
     Ok(())
 }
 
+// QNBS-v3: a cached interpreter was trusted forever otherwise — reuses probe_python's own lightweight filesystem check so a removed/replaced/non-executable cache entry is no longer silently believed.
+async fn cached_python_still_valid(cached: ResolvedPython) -> bool {
+    tokio::task::spawn_blocking(move || validate_python_candidate_path(&cached.path).is_ok())
+        .await
+        .unwrap_or(false)
+}
+
 fn python_candidates() -> Vec<String> {
     if cfg!(windows) {
         ["python.exe", "python3.exe", "python", "python3"]
@@ -231,7 +238,7 @@ async fn resolve_python(app: AppHandle) -> Result<ResolvedPython, String> {
     let configured = configured_python_path(app).await?;
     if let Some(configured) = configured {
         if let Some(cached) = read_cached_python()? {
-            if cached.path == configured {
+            if cached.path == configured && cached_python_still_valid(cached.clone()).await {
                 return Ok(cached);
             }
         }
@@ -242,7 +249,9 @@ async fn resolve_python(app: AppHandle) -> Result<ResolvedPython, String> {
     }
 
     if let Some(cached) = read_cached_python()? {
-        return Ok(cached);
+        if cached_python_still_valid(cached.clone()).await {
+            return Ok(cached);
+        }
     }
 
     let runtime = timeout(PYTHON_RESOLUTION_TIMEOUT, async {
@@ -816,7 +825,7 @@ mod tests {
     use super::{
         active_training_state, clear_training_if, ensure_training_start_not_cancelled,
         mark_training_running, parse_python_version, request_training_abort, reserve_training_slot,
-        AbortTrainingRequest, LoraEnvReport, TrainingState,
+        validate_python_candidate_path, AbortTrainingRequest, LoraEnvReport, TrainingState,
     };
 
     fn reset_training_state() {
@@ -899,5 +908,30 @@ mod tests {
         clear_training_if(41).expect("tracked child cleanup should release the slot");
         reserve_training_slot().expect("reaped child must release the slot");
         reset_training_state();
+    }
+
+    // QNBS-v3: regression coverage for the cache-revalidation fix — the lightweight check cached_python_still_valid reuses before trusting a cache hit.
+    #[test]
+    fn accepts_a_relative_candidate_without_touching_the_filesystem() {
+        // Relative candidates (e.g. "python3") are resolved via PATH at spawn time, not checked here.
+        assert!(validate_python_candidate_path("python3").is_ok());
+    }
+
+    #[test]
+    fn accepts_an_absolute_path_that_exists_and_is_executable() {
+        // The current test binary itself is a real, absolute, executable file — no tempfile needed.
+        let exe = std::env::current_exe().expect("test binary path must resolve");
+        let exe_str = exe.to_str().expect("test binary path must be valid UTF-8");
+        assert!(validate_python_candidate_path(exe_str).is_ok());
+    }
+
+    #[test]
+    fn rejects_an_absolute_path_that_no_longer_exists() {
+        // QNBS-v3: this is the exact scenario the cache-revalidation fix guards against — a
+        // previously-cached, now-removed interpreter must not keep being trusted.
+        assert_eq!(
+            validate_python_candidate_path("/nonexistent/worldscript-lora-test/python3"),
+            Err("configured_path_missing".to_string())
+        );
     }
 }
