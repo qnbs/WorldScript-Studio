@@ -887,6 +887,8 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
             {/* QNBS-v3 (#266 review, ADR-0017): in the plain PWA the ollama test would re-create
                 CORS noise — the banner + CTA above is the only actionable path there. The
                 browserOllamaEnabled opt-in widens this the same way it widens the auto-probe. */}
+            {/* QNBS-v3: success/error text lives only in ProviderConnectionStatus above — this
+                button previously duplicated the exact same testError string in a second span. */}
             <Button
               onClick={handleTest}
               disabled={testStatus === 'loading' || (provider === 'ollama' && !canAttemptOllama)}
@@ -898,20 +900,6 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
                 t('settings.ai.testConnection')
               )}
             </Button>
-            {testStatus === 'ok' && (
-              <span className="text-sm text-[var(--sc-success-fg)] flex items-center gap-1">
-                <Icon name="success" size="sm" aria-hidden="true" />
-                {t('settings.ai.connectionSuccess')}
-              </span>
-            )}
-            {/* QNBS-v3 (CodeRabbit CWE-209): mirror the guard above — a stale in-flight test for a
-                prior provider must not surface raw error text once Ollama-in-browser is selected. */}
-            {!ollamaUntestable && testStatus === 'error' && (
-              <span className="text-sm text-[var(--sc-danger-fg)] flex items-center gap-1">
-                <Icon name="error" size="sm" aria-hidden="true" />
-                {testError}
-              </span>
-            )}
           </div>
         )}
       </CardContent>

@@ -486,9 +486,7 @@ describe('AiProviderCard — ollama provider (#266)', () => {
     );
     await user.click(screen.getByRole('button', { name: 'settings.ai.testConnection' }));
     await waitFor(() => {
-      // QNBS-v3: the translated text renders in two places (the status-badge error line and the
-      // manual "Test connection" result span) — both share the same `testError` state.
-      expect(screen.getAllByText('settings.ai.testError.httpError').length).toBeGreaterThan(0);
+      expect(screen.getByText('settings.ai.testError.httpError')).toBeTruthy();
     });
     expect(screen.queryByText('Ollama HTTP 503')).toBeNull();
   });
@@ -510,7 +508,7 @@ describe('AiProviderCard — ollama provider (#266)', () => {
     );
     await user.click(screen.getByRole('button', { name: 'settings.ai.testConnection' }));
     await waitFor(() => {
-      expect(screen.getAllByText('settings.ai.testError.unexpected').length).toBeGreaterThan(0);
+      expect(screen.getByText('settings.ai.testError.unexpected')).toBeTruthy();
     });
     expect(screen.queryByText(/something internal broke/)).toBeNull();
   });
