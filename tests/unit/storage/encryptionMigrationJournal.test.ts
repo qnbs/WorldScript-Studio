@@ -90,7 +90,15 @@ describe('encryption migration journal', () => {
     const created = await beginEncryptionMigration(migrationInput('operation-1'));
     const updated = await updateEncryptionMigrationJournal(created, {
       phase: 'migrating',
-      stores: [{ ...created.stores[0], processed: 1, verified: 1, done: false }],
+      stores: [
+        {
+          ...created.stores[0],
+          cursor: 'project/settings',
+          processed: 1,
+          verified: 1,
+          done: false,
+        },
+      ],
     });
 
     await expect(
@@ -103,7 +111,7 @@ describe('encryption migration journal', () => {
       operationId: 'operation-1',
       phase: 'migrating',
       revision: updated.revision,
-      stores: [{ processed: 1, verified: 1, done: false }],
+      stores: [{ cursor: 'project/settings', processed: 1, verified: 1, done: false }],
     });
   });
 

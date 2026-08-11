@@ -21,6 +21,8 @@ export type EncryptionMigrationPhase =
 
 export interface EncryptionMigrationStoreCheckpoint {
   id: string;
+  /** Last durably committed logical record id; omitted before the first successful batch. */
+  cursor?: string;
   processed: number;
   verified: number;
   done: boolean;
@@ -108,6 +110,7 @@ function parseJournal(raw: unknown): EncryptionMigrationJournal | null {
       (checkpoint) =>
         !checkpoint ||
         typeof checkpoint.id !== 'string' ||
+        (checkpoint.cursor !== undefined && typeof checkpoint.cursor !== 'string') ||
         typeof checkpoint.processed !== 'number' ||
         typeof checkpoint.verified !== 'number' ||
         typeof checkpoint.done !== 'boolean',
