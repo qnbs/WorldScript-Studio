@@ -31,12 +31,18 @@ import {
   clearIdbPassphrase,
   hasPassphraseSentinel,
   IdbEncryptionMigrationRequiredError,
+  IdbStorageLockedError,
   idbDecrypt,
   idbEncrypt,
   initIdbEncryption,
   isEncryptedBlob,
   isIdbEncryptionReady,
+  isSecureRecordEnvelope,
+  prepareSecureRecordPayload,
+  readSecureRecordPayload,
   rotateIdbPassphrase,
+  SecureRecordCorruptError,
+  SecureRecordLockedError,
   StorageEncryptionService,
   setupIdbEncryption,
   verifyAndInitIdbEncryption,
@@ -168,6 +174,44 @@ describe('isEncryptedBlob', () => {
 
   it('returns false for a Uint8Array without sentinel', () => {
     expect(isEncryptedBlob(new Uint8Array(20).fill(1))).toBe(false);
+  });
+});
+
+describe('secondary secure-record envelopes', () => {
+  const context = { store: 'worldscript-revisions-db/scene-revisions', recordId: 'revision-1' };
+
+  it('binds ciphertext to its record identity with AAD', async () => {
+    await setupIdbEncryption('secure-record-pass');
+    const envelope = await prepareSecureRecordPayload({ content: 'confidential' }, context);
+
+    expect(isSecureRecordEnvelope(envelope)).toBe(true);
+    await expect(
+      readSecureRecordPayload(envelope, { ...context, recordId: 'revision-2' }),
+    ).rejects.toBeInstanceOf(SecureRecordCorruptError);
+    await expect(readSecureRecordPayload(envelope, context)).resolves.toMatchObject({
+      value: { content: 'confidential' },
+      needsMigration: false,
+    });
+  });
+
+  it('never falls back to plaintext when configured secondary storage is locked', async () => {
+    await setupIdbEncryption('secure-record-pass');
+    clearIdbEncryptionKey();
+
+    await expect(
+      prepareSecureRecordPayload({ content: 'changed' }, context),
+    ).rejects.toBeInstanceOf(IdbStorageLockedError);
+    await expect(readSecureRecordPayload({ content: 'legacy' }, context)).rejects.toBeInstanceOf(
+      SecureRecordLockedError,
+    );
+  });
+
+  it('treats a partial envelope as corruption rather than legacy plaintext', async () => {
+    await setupIdbEncryption('secure-record-pass');
+
+    await expect(
+      readSecureRecordPayload({ version: 1, iv: new Uint8Array(12) }, context),
+    ).rejects.toBeInstanceOf(SecureRecordCorruptError);
   });
 });
 
