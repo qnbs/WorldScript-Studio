@@ -163,6 +163,31 @@ describe('runProtectedStoreMigration', () => {
     });
   });
 
+  it('rejects a nonterminal batch that reports progress without advancing its cursor', async () => {
+    // QNBS-v3: without this guard, an adapter violating the "cursor omitted only before any record
+    // is committed" contract would retain the stale cursor forever — the runner would call
+    // migrateNext with the same cursor on every iteration, replaying the same records and
+    // inflating `processed` without ever terminating.
+    const adapter: ProtectedStoreAdapter = {
+      id: 'test-store',
+      replaySafe: true,
+      async migrateNext() {
+        return { processed: 1, complete: false };
+      },
+      async verify() {
+        return 0;
+      },
+    };
+
+    await expect(
+      runProtectedStoreMigration(await begin(), [adapter], migrationKeys),
+    ).rejects.toThrow('reported progress without advancing its cursor');
+    await expect(readEncryptionMigrationJournal()).resolves.toMatchObject({
+      phase: 'migrating',
+      stores: [{ processed: 0, done: false }],
+    });
+  });
+
   it('rejects invalid adapter progress before it can advance the durable checkpoint', async () => {
     const adapter: ProtectedStoreAdapter = {
       id: 'test-store',

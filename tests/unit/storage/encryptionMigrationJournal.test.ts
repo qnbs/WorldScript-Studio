@@ -60,8 +60,23 @@ function replaceStoredJournalForTest(value: unknown): Promise<void> {
   });
 }
 
-function markJournalCommitting(journal: Awaited<ReturnType<typeof beginEncryptionMigration>>) {
-  return updateEncryptionMigrationJournal(journal, { phase: 'committing', stores: journal.stores });
+// QNBS-v3: routes through the legal prepared→migrating→verifying→committing chain — saveIfCurrent
+// now rejects skipping straight from prepared to committing (see IdbMigrationInvalidTransitionError).
+async function markJournalCommitting(
+  journal: Awaited<ReturnType<typeof beginEncryptionMigration>>,
+) {
+  const migrating = await updateEncryptionMigrationJournal(journal, {
+    phase: 'migrating',
+    stores: journal.stores,
+  });
+  const verifying = await updateEncryptionMigrationJournal(migrating, {
+    phase: 'verifying',
+    stores: migrating.stores,
+  });
+  return updateEncryptionMigrationJournal(verifying, {
+    phase: 'committing',
+    stores: verifying.stores,
+  });
 }
 
 beforeEach(() => {
@@ -126,7 +141,7 @@ describe('encryption migration journal', () => {
       phase: 'migrating',
       stores: [
         {
-          ...created.stores[0],
+          ...created.stores[0]!,
           cursor: 'project/settings',
           processed: 1,
           verified: 1,

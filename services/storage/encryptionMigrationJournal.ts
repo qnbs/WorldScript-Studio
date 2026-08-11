@@ -77,6 +77,50 @@ export class IdbMigrationOwnershipError extends Error {
   }
 }
 
+/** Raised when a caller-supplied phase would skip required migration/verification work. */
+export class IdbMigrationInvalidTransitionError extends Error {
+  readonly code = 'ENCRYPTION_MIGRATION_INVALID_TRANSITION' as const;
+
+  constructor(from: EncryptionMigrationPhase, to: EncryptionMigrationPhase) {
+    super(`Encryption migration cannot move from ${from} to ${to}`);
+    this.name = 'IdbMigrationInvalidTransitionError';
+  }
+}
+
+// QNBS-v3: enforced against the DURABLY-STORED phase (not the caller-supplied one) inside
+// saveIfCurrent — CAS alone (revision/owner match) never validated that a phase transition was a
+// legal state-machine step, so any caller could pass e.g. {phase: 'committing'} on a journal still
+// 'prepared' and skip conversion/verification entirely; assertNoActiveEncryptionMigration() would
+// then treat unconverted data as safe to access normally. Same-phase entries allow the repeated
+// per-batch/per-store checkpoint writes within migrating/verifying. recovery-required is reachable
+// from any active phase (an external fail-safe) but never left except via out-of-band recovery.
+const ALLOWED_PHASE_TRANSITIONS: Record<
+  EncryptionMigrationPhase,
+  ReadonlySet<EncryptionMigrationPhase>
+> = {
+  prepared: new Set<EncryptionMigrationPhase>(['prepared', 'migrating', 'recovery-required']),
+  migrating: new Set<EncryptionMigrationPhase>(['migrating', 'verifying', 'recovery-required']),
+  verifying: new Set<EncryptionMigrationPhase>(['verifying', 'committing', 'recovery-required']),
+  committing: new Set<EncryptionMigrationPhase>([
+    'committing',
+    'cleanup',
+    'completed',
+    'recovery-required',
+  ]),
+  cleanup: new Set<EncryptionMigrationPhase>(['cleanup', 'completed', 'recovery-required']),
+  completed: new Set<EncryptionMigrationPhase>(['completed']),
+  'recovery-required': new Set<EncryptionMigrationPhase>(['recovery-required']),
+};
+
+function assertLegalPhaseTransition(
+  from: EncryptionMigrationPhase,
+  to: EncryptionMigrationPhase,
+): void {
+  if (!ALLOWED_PHASE_TRANSITIONS[from].has(to)) {
+    throw new IdbMigrationInvalidTransitionError(from, to);
+  }
+}
+
 function isPhase(value: unknown): value is EncryptionMigrationPhase {
   return (
     value === 'prepared' ||
@@ -115,6 +159,7 @@ function parseJournal(raw: unknown): EncryptionMigrationJournal | null {
     (value.ownerId !== undefined &&
       (typeof value.ownerId !== 'string' ||
         value.ownerId.length === 0 ||
+        typeof value.ownerLeaseExpiresAt !== 'number' ||
         !Number.isSafeInteger(value.ownerLeaseExpiresAt) ||
         value.ownerLeaseExpiresAt < 0))
   ) {
@@ -237,6 +282,12 @@ class EncryptionMigrationJournalStore extends IdbConnectionManager {
           existing.ownerLeaseExpiresAt !== journal.ownerLeaseExpiresAt
         ) {
           reject(new IdbMigrationOwnershipError());
+          return;
+        }
+        try {
+          assertLegalPhaseTransition(existing.phase, next.phase);
+        } catch (transitionError) {
+          reject(transitionError);
           return;
         }
         const putRequest = store.put(next, JOURNAL_RECORD_KEY);

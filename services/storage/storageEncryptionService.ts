@@ -377,12 +377,12 @@ export function isSecureRecordEnvelope(value: unknown): value is SecureRecordEnv
   if (!isSecureRecordCandidate(value)) return false;
   const record = value as Record<string, unknown>;
   return (
-    (record.version === LEGACY_BOUND_SECURE_RECORD_VERSION ||
-      record.version === SECURE_RECORD_VERSION) &&
-    record.iv instanceof Uint8Array &&
-    record.iv.length === IV_BYTE_LENGTH &&
-    record.ciphertext instanceof Uint8Array &&
-    record.ciphertext.length >= 16
+    (record['version'] === LEGACY_BOUND_SECURE_RECORD_VERSION ||
+      record['version'] === SECURE_RECORD_VERSION) &&
+    record['iv'] instanceof Uint8Array &&
+    record['iv'].length === IV_BYTE_LENGTH &&
+    record['ciphertext'] instanceof Uint8Array &&
+    record['ciphertext'].length >= 16
   );
 }
 

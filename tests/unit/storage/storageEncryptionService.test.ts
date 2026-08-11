@@ -423,12 +423,22 @@ describe('verifyAndInitIdbEncryption', () => {
     await expect(setupIdbEncryption('replacement')).rejects.toBeInstanceOf(
       IdbMigrationInProgressError,
     );
-    await completeEncryptionMigration(
-      await updateEncryptionMigrationJournal(journal, {
-        phase: 'committing',
-        stores: journal.stores,
-      }),
-    );
+    // QNBS-v3: routes through the legal prepared→migrating→verifying→committing chain — a direct
+    // jump is now rejected (see IdbMigrationInvalidTransitionError) and would leak this journal
+    // into every later test in this file via assertNoActiveEncryptionMigration().
+    const migrating = await updateEncryptionMigrationJournal(journal, {
+      phase: 'migrating',
+      stores: journal.stores,
+    });
+    const verifying = await updateEncryptionMigrationJournal(migrating, {
+      phase: 'verifying',
+      stores: migrating.stores,
+    });
+    const committing = await updateEncryptionMigrationJournal(verifying, {
+      phase: 'committing',
+      stores: verifying.stores,
+    });
+    await completeEncryptionMigration(committing);
   });
 
   it('throws on wrong passphrase (AES-GCM auth-tag mismatch)', async () => {

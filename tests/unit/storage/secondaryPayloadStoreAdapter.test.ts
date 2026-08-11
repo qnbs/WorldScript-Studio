@@ -121,13 +121,13 @@ describe('secondary protected-store payload adapter', () => {
     const secondEnable = await adapter.migrateNext({
       operation: 'enable',
       targetKey: sourceKey,
-      cursor: firstEnable.cursor,
+      ...(firstEnable.cursor !== undefined ? { cursor: firstEnable.cursor } : {}),
     });
     expect(secondEnable).toMatchObject({ processed: 1, complete: false, cursor: 'b' });
     const finishEnable = await adapter.migrateNext({
       operation: 'enable',
       targetKey: sourceKey,
-      cursor: secondEnable.cursor,
+      ...(secondEnable.cursor !== undefined ? { cursor: secondEnable.cursor } : {}),
     });
     expect(finishEnable).toEqual({ processed: 0, complete: true });
     await expect(adapter.verify({ operation: 'enable', targetKey: sourceKey })).resolves.toBe(2);
@@ -150,7 +150,7 @@ describe('secondary protected-store payload adapter', () => {
       operation: 'rekey',
       sourceKey,
       targetKey,
-      cursor: rekeyFirst.cursor,
+      ...(rekeyFirst.cursor !== undefined ? { cursor: rekeyFirst.cursor } : {}),
     });
     await adapter.migrateNext({
       operation: 'rekey',
@@ -173,7 +173,7 @@ describe('secondary protected-store payload adapter', () => {
     await adapter.migrateNext({
       operation: 'disable',
       sourceKey: targetKey,
-      cursor: disableFirst.cursor,
+      ...(disableFirst.cursor !== undefined ? { cursor: disableFirst.cursor } : {}),
     });
     await adapter.migrateNext({ operation: 'disable', sourceKey: targetKey, cursor: 'b' });
     await expect(adapter.verify({ operation: 'disable', sourceKey: targetKey })).resolves.toBe(2);

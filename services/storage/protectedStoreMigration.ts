@@ -83,6 +83,15 @@ function nextCheckpoint(
       `Store ${checkpoint.id} made no progress without completing`,
     );
   }
+  // QNBS-v3: a nonterminal batch that reports progress but omits cursor would retain the previous
+  // cursor forever — the next iteration replays the same records, inflating `processed` without
+  // ever advancing (the batch.cursor contract only permits omitting it before any record is
+  // committed, i.e. on a batch that makes no progress; that case is already rejected above).
+  if (!batch.complete && batch.cursor === undefined) {
+    throw new ProtectedStoreMigrationAdapterError(
+      `Store ${checkpoint.id} reported progress without advancing its cursor`,
+    );
+  }
   const cursor = batch.cursor ?? checkpoint.cursor;
   return {
     ...checkpoint,
