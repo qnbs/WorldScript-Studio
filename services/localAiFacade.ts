@@ -295,6 +295,20 @@ export function getReadyLocalModelIds(): readonly string[] {
   return Array.from(readyLocalModelIds);
 }
 
+// QNBS-v3: preloadLocalModel can be called from outside LocalAiSection (e.g. the global download
+// modal's Retry button). Listeners let any mounted panel re-sync its readyIds/throughput/storage
+// after a warm that it did not itself initiate, instead of only reacting to its own call site.
+const localModelReadyListeners = new Set<(modelId: string) => void>();
+
+export function subscribeLocalModelReady(listener: (modelId: string) => void): () => void {
+  localModelReadyListeners.add(listener);
+  return () => localModelReadyListeners.delete(listener);
+}
+
+function notifyLocalModelReady(modelId: string): void {
+  for (const listener of localModelReadyListeners) listener(modelId);
+}
+
 /** Reset session readiness — call after the on-disk model caches are cleared. */
 export function clearReadyLocalModels(): void {
   readyLocalModelIds.clear();
@@ -387,6 +401,7 @@ export async function preloadLocalModel(
           at: Date.now(),
         };
       }
+      notifyLocalModelReady(modelId);
     } else {
       // QNBS-v3: Do not leave a visible progress dialog pending when a fallback cannot warm WebLLM.
       inferenceProgressEmitter.reportWebLlmError('Local model preload did not complete');

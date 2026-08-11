@@ -96,10 +96,13 @@ describe('localAiFacade', () => {
     const { generateLocalText } = await import('../../services/localAiFacade');
     const controller = new AbortController();
     await generateLocalText('prompt', 'model', undefined, undefined, controller.signal);
+    // QNBS-v3: generateLocalText always wraps onProgress in its own reportProgress closure (so
+    // inferenceProgressEmitter gets progress even when the caller passes no onProgress) — the 3rd
+    // arg is never the caller's raw undefined.
     expect(mockRunLocalTextGeneration).toHaveBeenCalledWith(
       'prompt',
       'model',
-      undefined,
+      expect.any(Function),
       controller.signal,
     );
   });
@@ -303,5 +306,28 @@ describe('localAiFacade', () => {
 
     expect(progressSpy).toHaveBeenCalledWith(0, 'Preparing local model');
     expect(errorSpy).toHaveBeenCalledWith('Local model preload did not complete');
+  });
+
+  it('retryLastPreload throws when no preload has been requested yet', async () => {
+    // QNBS-v3: lastPreloadModelId is module-level state — reset the module so this observes the
+    // true initial value instead of whatever a prior test in this file already set it to.
+    vi.resetModules();
+    const { retryLastPreload } = await import('../../services/localAiFacade');
+    await expect(retryLastPreload()).rejects.toThrow(/no local model download/i);
+  });
+
+  it('does not publish a WebLLM error when preload fails because the user cancelled it', async () => {
+    const { inferenceProgressEmitter } = await import('../../services/ai/inferenceProgressEmitter');
+    const errorSpy = vi.spyOn(inferenceProgressEmitter, 'reportWebLlmError');
+    const { preloadLocalModel, abortActivePreload } = await import('../../services/localAiFacade');
+
+    mockRunLocalTextGeneration.mockImplementation(async () => {
+      // Simulates the Cancel button firing while generation is in flight.
+      abortActivePreload();
+      throw new Error('aborted mid-flight');
+    });
+
+    await expect(preloadLocalModel('Qwen2.5-0.5B')).rejects.toThrow('aborted mid-flight');
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 });
