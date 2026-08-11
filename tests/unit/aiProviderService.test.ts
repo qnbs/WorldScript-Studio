@@ -384,7 +384,7 @@ describe('testAIConnection — ollama desktop branch', () => {
 
     await streamText(
       'Continue this scene',
-      'balanced',
+      'Balanced',
       {
         provider: 'ollama',
         model: 'ollama/local-model',
