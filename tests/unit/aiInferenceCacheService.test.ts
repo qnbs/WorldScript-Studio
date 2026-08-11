@@ -102,8 +102,9 @@ describe('aiInferenceCacheService — TTL expiry', () => {
 });
 
 describe('aiInferenceCacheService — IDB unavailable (jsdom)', () => {
+  // QNBS-v3: tests/setup.ts imports fake-indexeddb/auto globally, so indexedDB IS defined here —
+  // these exercise the in-memory-only-miss path via an empty durable store, not a true IDB-absent env.
   it('getCachedInference degrades gracefully when indexedDB is undefined', async () => {
-    // jsdom does not provide indexedDB by default — service already handles this
     const result = await service.aiInferenceCacheService.getCachedInference('any', 'model');
     expect(result).toBeNull(); // either from in-memory miss or IDB degrade
   });
@@ -112,5 +113,63 @@ describe('aiInferenceCacheService — IDB unavailable (jsdom)', () => {
     await expect(
       service.aiInferenceCacheService.setCachedInference('any', 'model', 'val'),
     ).resolves.not.toThrow();
+  });
+});
+
+describe('aiInferenceCacheService — protected-storage lifecycle', () => {
+  afterEach(() => {
+    vi.doUnmock('../../services/storage/storageEncryptionService');
+  });
+
+  it('returns null instead of rejecting when the protected-storage lifecycle check fails', async () => {
+    vi.doMock('../../services/storage/storageEncryptionService', () => ({
+      assertSecureStorageReadable: vi.fn().mockRejectedValue(new Error('locked')),
+      assertSecureStorageWritableForMutation: vi.fn().mockResolvedValue(undefined),
+      prepareSecureRecordPayload: vi.fn(async (value: unknown) => value),
+      readSecureRecordPayload: vi.fn(),
+      SecureRecordCorruptError: class extends Error {},
+    }));
+    vi.resetModules();
+    const mod = await import('../../services/ai/aiInferenceCacheService');
+
+    await expect(
+      mod.aiInferenceCacheService.getCachedInference('hello', 'model-a'),
+    ).resolves.toBeNull();
+  });
+
+  it('opportunistically re-encrypts a legacy plaintext entry after a successful read', async () => {
+    const persisted: unknown[] = [];
+    vi.doMock('../../services/storage/storageEncryptionService', () => ({
+      assertSecureStorageReadable: vi.fn().mockResolvedValue(true),
+      assertSecureStorageWritableForMutation: vi.fn().mockResolvedValue(undefined),
+      prepareSecureRecordPayload: vi.fn(async (value: unknown) => {
+        persisted.push(value);
+        return { version: 1, iv: new Uint8Array([1]), ciphertext: new Uint8Array([2]) };
+      }),
+      readSecureRecordPayload: vi.fn().mockResolvedValue({
+        value: { result: 'legacy answer' },
+        needsMigration: true,
+      }),
+      SecureRecordCorruptError: class extends Error {},
+    }));
+    vi.resetModules();
+    const mod = await import('../../services/ai/aiInferenceCacheService');
+    type CacheInternals = {
+      dbReady: Promise<void>;
+      decodeEntry: (entry: { key: string; result: string; timestamp: number }) => Promise<string>;
+    };
+    const cache = mod.aiInferenceCacheService as unknown as CacheInternals;
+    await cache.dbReady;
+
+    const decoded = await cache.decodeEntry({
+      key: 'legacy-key',
+      result: 'legacy answer',
+      timestamp: Date.now(),
+    });
+    expect(decoded).toBe('legacy answer');
+
+    // reencryptLegacyEntry is fire-and-forget from decodeEntry — flush pending microtasks before asserting.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(persisted).toEqual([{ result: 'legacy answer' }]);
   });
 });

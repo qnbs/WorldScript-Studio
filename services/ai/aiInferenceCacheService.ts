@@ -153,7 +153,25 @@ export class AiInferenceCacheService {
       legacyStores: ['inference-cache'],
     });
     if (!isCachePayload(decoded.value)) throw new SecureRecordCorruptError();
+    if (decoded.needsMigration) {
+      // QNBS-v3: best-effort opportunistic re-encrypt on read — a failure (e.g. an active migration) must never block the read, and the 7-day TTL already bounds residual plaintext exposure even without this.
+      void this.reencryptLegacyEntry(entry.key, decoded.value.result, entry.timestamp);
+    }
     return decoded.value.result;
+  }
+
+  private async reencryptLegacyEntry(
+    key: string,
+    result: string,
+    timestamp: number,
+  ): Promise<void> {
+    if (!this.db) return;
+    try {
+      const encoded = await this.encodeEntry(key, result, timestamp);
+      await this.persistEntry(encoded);
+    } catch {
+      // QNBS-v3: best-effort; a failed opportunistic re-encrypt is not user-visible and TTL still bounds exposure.
+    }
   }
 
   private async persistEntry(entry: CacheEntry): Promise<void> {
@@ -171,8 +189,13 @@ export class AiInferenceCacheService {
   async getCachedInference(prompt: string, modelId: string): Promise<string | null> {
     if (this.shouldSkip(prompt)) return null;
     const key = hashKey(prompt, modelId);
-    // QNBS-v3: A locked library must not expose an earlier plaintext response through the RAM tier.
-    await assertSecureStorageReadable();
+    try {
+      // QNBS-v3: A locked library must not expose an earlier plaintext response through the RAM tier.
+      await assertSecureStorageReadable();
+    } catch {
+      // QNBS-v3: cache is non-authoritative — any lifecycle-check failure (locked, migrating, or the check's own IDB access failing) degrades to a miss rather than failing an otherwise-successful inference call.
+      return null;
+    }
 
     const memoryEntry = this.inMemory.get(key);
     if (memoryEntry) {
