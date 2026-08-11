@@ -310,6 +310,41 @@ describe('runProtectedStoreMigration', () => {
     expect(calls).toEqual(['first', 'second-failure', 'second-resume']);
   });
 
+  it('marks recovery-required instead of looping forever when verification finds fewer valid records than were migrated', async () => {
+    const journal = await beginEncryptionMigration({
+      operationId: 'verification-shortfall',
+      operation: 'rekey',
+      phase: 'verifying',
+      sourceGeneration: 'source',
+      targetGeneration: 'target',
+      targetVerifier: [1, 2, 3],
+      stores: [{ id: 'test-store', processed: 5, verified: 0, done: true }],
+    });
+    const adapter: ProtectedStoreAdapter = {
+      id: 'test-store',
+      replaySafe: true,
+      async migrateNext() {
+        throw new Error('must not execute');
+      },
+      async verify() {
+        // QNBS-v3: simulates a stray write landing on an already-migrated record with the superseded key.
+        return 4;
+      },
+    };
+
+    await expect(runProtectedStoreMigration(journal, [adapter], migrationKeys)).rejects.toThrow(
+      'verification is incomplete',
+    );
+    await expect(readEncryptionMigrationJournal()).resolves.toMatchObject({
+      phase: 'recovery-required',
+    });
+
+    const parked = await readEncryptionMigrationJournal();
+    await expect(runProtectedStoreMigration(parked!, [adapter], migrationKeys)).rejects.toThrow(
+      'Recovery-required journal cannot run until an explicit recovery procedure validates it',
+    );
+  });
+
   it('rejects a missing registered adapter before a migration can mutate storage', async () => {
     const journal = await begin();
 

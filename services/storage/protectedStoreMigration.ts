@@ -47,6 +47,14 @@ export class ProtectedStoreMigrationAdapterError extends Error {
   }
 }
 
+// QNBS-v3: distinct from a transient/interrupted verify() throw — a shortfall means the adapter re-scanned and found fewer valid records than this saga already migrated, most likely because an ordinary write landed on an already-migrated record using a superseded key after this store's migrating pass finished; nothing in this saga can revisit and reconvert that record, so blindly retrying verify() would fail identically forever.
+export class ProtectedStoreVerificationShortfallError extends ProtectedStoreMigrationAdapterError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ProtectedStoreVerificationShortfallError';
+  }
+}
+
 function checkpointFor(
   journal: EncryptionMigrationJournal,
   adapterId: string,
@@ -264,7 +272,7 @@ export async function runProtectedStoreMigration(
           ...(keys.targetKey ? { targetKey: keys.targetKey } : {}),
         });
         if (!Number.isSafeInteger(verified) || verified < checkpoint.processed) {
-          throw new ProtectedStoreMigrationAdapterError(
+          throw new ProtectedStoreVerificationShortfallError(
             `Store ${adapter.id} verification is incomplete`,
           );
         }
@@ -281,6 +289,21 @@ export async function runProtectedStoreMigration(
 
     return journal;
   } catch (error) {
+    if (
+      ownsLease &&
+      journal.phase === 'verifying' &&
+      error instanceof ProtectedStoreVerificationShortfallError
+    ) {
+      // QNBS-v3: retrying verify() alone can never fix a shortfall — mark recovery-required so the stuck state is visible instead of an indefinite, silently-failing retry loop.
+      try {
+        journal = await updateEncryptionMigrationJournal(journal, {
+          phase: 'recovery-required',
+          stores: journal.stores,
+        });
+      } catch {
+        // QNBS-v3: best-effort — the original verification error still propagates below either way.
+      }
+    }
     if (ownsLease && journal.phase !== 'committing') {
       try {
         await releaseEncryptionMigrationOwnership(journal);
