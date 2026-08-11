@@ -216,6 +216,9 @@ export class IdbProjectStore extends IdbAssetStore {
     sliceName: 'project' | 'settings',
     data: PersistedProjectState | Settings,
   ): Promise<void> {
+    // QNBS-v3: A migration journal owns store conversion — an ordinary write here must not race
+    //          it (assertIdbProtectedWriteAllowed also covers the plain-locked-session case).
+    await assertIdbProtectedWriteAllowed();
     // QNBS-v3: Resolve the write key AND encrypt BEFORE opening the store — awaiting
     //          idbEncryptWithKey after getObjectStore would yield the event loop while the
     //          transaction is open, letting IDB auto-commit it before store.put runs

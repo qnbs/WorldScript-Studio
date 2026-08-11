@@ -62,6 +62,20 @@ function assertExactKeys(
   }
 }
 
+// QNBS-v3: IndexedDB key paths permit numeric keys even though these interfaces declare `id`/`key`
+// as string — a record fetched from storage is not runtime-validated against that declaration. An
+// unvalidated non-string routing key would still successfully rewrite the payload but then
+// persist a non-string journal cursor, which parseJournal() rejects on the next read and pushes
+// the whole migration into recovery-required. Fail fast here with a clear, specific error instead.
+function assertStringRoutingKey(value: unknown, field: string, store: string): string {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new ProtectedStoreMigrationAdapterError(
+      `${store} record has a non-string ${field}; recovery must reconcile it before migration`,
+    );
+  }
+  return value;
+}
+
 function isSceneRevisionPayload(value: unknown): value is SceneRevisionPayload {
   if (typeof value !== 'object' || value === null) return false;
   const payload = value as Partial<SceneRevisionPayload>;
@@ -126,7 +140,7 @@ const sceneRevisionAdapterSpec: SecondaryPayloadStoreAdapterSpec<
   id: `${SCENE_REVISIONS_DB}/${SCENE_REVISIONS_STORE}`,
   databaseName: SCENE_REVISIONS_DB,
   storeName: SCENE_REVISIONS_STORE,
-  recordId: (record) => record.id,
+  recordId: (record) => assertStringRoutingKey(record.id, 'id', 'scene revisions'),
   context: (recordId) => ({
     store: `${SCENE_REVISIONS_DB}/${SCENE_REVISIONS_STORE}`,
     recordId,
@@ -147,7 +161,7 @@ const inferenceCacheAdapterSpec: SecondaryPayloadStoreAdapterSpec<CacheRecord, C
   id: `${INFERENCE_CACHE_DB}/${INFERENCE_CACHE_STORE}`,
   databaseName: INFERENCE_CACHE_DB,
   storeName: INFERENCE_CACHE_STORE,
-  recordId: (record) => record.key,
+  recordId: (record) => assertStringRoutingKey(record.key, 'key', 'inference cache'),
   context: (recordId) => ({
     store: `${INFERENCE_CACHE_DB}/${INFERENCE_CACHE_STORE}`,
     recordId,

@@ -24,6 +24,8 @@ export class IdbSnapshotStore extends IdbCodexStore {
   protected readonly MAX_AUTO_SNAPSHOTS = 20;
 
   async createSnapshot(data: ProjectData, name?: string): Promise<number> {
+    // QNBS-v3: A migration journal owns store conversion — an ordinary write here must not race it.
+    await assertIdbProtectedWriteAllowed();
     const wordCount = data.manuscript.reduce(
       (sum, section) => sum + (section.content?.split(/\s+/).filter(Boolean).length || 0),
       0,

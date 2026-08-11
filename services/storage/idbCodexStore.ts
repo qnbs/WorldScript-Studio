@@ -19,6 +19,8 @@ import {
 
 export class IdbCodexStore extends IdbKeyStore {
   async saveStoryCodex(codex: StoryCodex): Promise<void> {
+    // QNBS-v3: A migration journal owns store conversion — an ordinary write here must not race it.
+    await assertIdbProtectedWriteAllowed();
     // QNBS-v3: Resolve the write key BEFORE opening the transaction — `await idbEncryptWithKey`
     //          yields the event loop, which auto-commits an already-open transaction
     //          (TransactionInactiveError), and re-reading isIdbEncryptionReady() after any later
@@ -99,6 +101,8 @@ export class IdbCodexStore extends IdbKeyStore {
   // --- RAG Vector Methods ---
 
   async saveRagVectors(projectId: string, vectors: unknown[]): Promise<void> {
+    // QNBS-v3: A migration journal owns store conversion — an ordinary write here must not race it.
+    await assertIdbProtectedWriteAllowed();
     // QNBS-v3: Resolve the write key BEFORE opening the transaction — `await idbEncryptWithKey`
     //          yields the event loop and would auto-commit the open transaction before the put
     //          (TransactionInactiveError), and re-reading isIdbEncryptionReady() after any later

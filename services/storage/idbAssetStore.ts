@@ -22,6 +22,8 @@ export class IdbAssetStore extends IdbSnapshotStore {
   // --- Image Store Methods ---
 
   async saveImage(id: string, base64: string): Promise<void> {
+    // QNBS-v3: A migration journal owns store conversion — an ordinary write here must not race it.
+    await assertIdbProtectedWriteAllowed();
     // QNBS-v3: Resolve the write key BEFORE opening the transaction — `await idbEncryptWithKey`
     //          yields the event loop, which auto-commits an already-open IDB transaction
     //          (TransactionInactiveError on put), and re-reading isIdbEncryptionReady() after any
@@ -83,6 +85,8 @@ export class IdbAssetStore extends IdbSnapshotStore {
     meta: BinderAssetMeta,
   ): Promise<void> {
     return retryDb(async () => {
+      // QNBS-v3: A migration journal owns store conversion — an ordinary write here must not race it.
+      await assertIdbProtectedWriteAllowed();
       const writeKey = await resolveProtectedWriteKey();
       const key = makeBinderAssetStorageKey(projectId, assetId);
       const fullMeta = { ...meta, byteSize: data.byteLength };
@@ -173,9 +177,30 @@ export class IdbAssetStore extends IdbSnapshotStore {
   }
 
   async deleteAllBinderAssetsForProject(projectId: string): Promise<void> {
-    await assertIdbProtectedWriteAllowed();
-    const ids = await this.listBinderAssetIds(projectId);
-    // QNBS-v3: Sequential deletion avoids a large project creating an unbounded transaction burst.
-    for (const id of ids) await this.deleteBinderAsset(projectId, id);
+    return retryDb(async () => {
+      await assertIdbProtectedWriteAllowed();
+      const ids = await this.listBinderAssetIds(projectId);
+      if (ids.length === 0) return;
+      // QNBS-v3: one transaction for every delete, not one transaction PER asset — a later failure
+      //          aborts the whole batch (IDB rolls back everything already queued in it) instead of
+      //          leaving earlier assets permanently removed while later ones and the project record
+      //          survive. All requests are queued synchronously below the store fetch so IDB never
+      //          auto-commits the transaction mid-batch.
+      const store = await this.getObjectStore(BINDER_ASSETS_STORE, 'readwrite');
+      const transaction = store.transaction;
+      return new Promise<void>((resolve, reject) => {
+        let failure: string | undefined;
+        for (const id of ids) {
+          const request = store.delete(makeBinderAssetStorageKey(projectId, id));
+          request.onerror = () => {
+            failure = getUserFriendlyDbError(request.error);
+            transaction.abort();
+          };
+        }
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(failure ?? getUserFriendlyDbError(transaction.error));
+      });
+    });
   }
 }
