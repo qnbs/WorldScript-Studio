@@ -26,6 +26,10 @@ const mocks = vi.hoisted(() => ({
   modelRec: vi.fn(() => 'm-small'),
 }));
 
+// QNBS-v3: captures the subscribeLocalModelReady callback so tests can simulate a preload that
+// completed outside this section (e.g. the global download modal's Retry button).
+let capturedReadyListener: ((modelId: string) => void) | null = null;
+
 const SUPPORTED_ESTIMATE = {
   usageMb: 100,
   quotaMb: 1000,
@@ -64,6 +68,12 @@ vi.mock('../../../services/localAiFacade', () => ({
   clearReadyLocalModels: () => mocks.clearReady(),
   abortActivePreload: () => mocks.abortPreload(),
   isLocalAiBusy: () => mocks.busy(),
+  subscribeLocalModelReady: (cb: (modelId: string) => void) => {
+    capturedReadyListener = cb;
+    return () => {
+      capturedReadyListener = null;
+    };
+  },
 }));
 vi.mock('../../../components/settings/LocalAiDownloadProgress', () => ({
   LocalAiDownloadProgress: () => null,
@@ -76,6 +86,7 @@ import { LocalAiSection } from '../../../components/settings/LocalAiSection';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  capturedReadyListener = null;
   mocks.detectWebGpu.mockReturnValue(true);
   mocks.estimate.mockResolvedValue(SUPPORTED_ESTIMATE);
   mocks.clear.mockResolvedValue({ clearedCaches: 2 });
@@ -132,6 +143,66 @@ describe('LocalAiSection', () => {
       ),
     );
     expect(await screen.findByText('settings.ai.localAi.readyBadge')).toBeInTheDocument();
+  });
+
+  it('re-syncs readyIds/throughput/storage and announces when a preload finishes elsewhere', async () => {
+    // QNBS-v3: regression test — the global download-progress modal's Retry button calls
+    // preloadLocalModel directly, bypassing this section's own handleDownload. Simulates that
+    // by firing the subscribeLocalModelReady callback without ever clicking a Download button here.
+    render(<LocalAiSection />);
+    await screen.findByText('settings.ai.localAi.webgpuAvailable');
+    expect(screen.queryByText('settings.ai.localAi.readyBadge')).not.toBeInTheDocument();
+
+    mocks.lastThroughput.mockReturnValue({ tokensPerSecond: 42, modelId: 'm-big', at: 1 });
+    expect(capturedReadyListener).not.toBeNull();
+    act(() => {
+      capturedReadyListener?.('m-big');
+    });
+
+    await waitFor(() =>
+      expect(mocks.announce).toHaveBeenCalledWith(
+        'settings.ai.localAi.modelReadyAnnounce',
+        'polite',
+      ),
+    );
+    expect(await screen.findByText('settings.ai.localAi.readyBadge')).toBeInTheDocument();
+  });
+
+  it('does not double-announce when the ready notification matches its own in-flight download', async () => {
+    // QNBS-v3: preloadLocalModel's notification fires before handleDownload's own success branch —
+    // without the downloadingIdRef guard, a self-initiated download would announce twice.
+    let resolvePreload!: (v: { layer: string; modelId: string; downloaded: boolean }) => void;
+    mocks.preload.mockReturnValue(
+      new Promise((resolve) => {
+        resolvePreload = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+    render(<LocalAiSection />);
+    await screen.findByText('settings.ai.localAi.webgpuAvailable');
+
+    await user.click(screen.getAllByText('settings.ai.localAi.downloadButton')[0]!); // m-small
+    expect(mocks.preload).toHaveBeenCalledWith('m-small');
+
+    // Simulate the notification firing mid-flight, before the mocked preload promise resolves.
+    act(() => {
+      capturedReadyListener?.('m-small');
+    });
+    expect(mocks.announce).not.toHaveBeenCalledWith(
+      'settings.ai.localAi.modelReadyAnnounce',
+      'polite',
+    );
+
+    resolvePreload({ layer: 'webllm', modelId: 'm-small', downloaded: true });
+    await waitFor(() =>
+      expect(mocks.announce).toHaveBeenCalledWith(
+        'settings.ai.localAi.modelReadyAnnounce',
+        'polite',
+      ),
+    );
+    expect(
+      mocks.announce.mock.calls.filter((c) => c[0] === 'settings.ai.localAi.modelReadyAnnounce'),
+    ).toHaveLength(1);
   });
 
   it('restores the Ready badge from the session source across an unmount/remount', async () => {

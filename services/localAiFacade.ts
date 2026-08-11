@@ -124,7 +124,10 @@ export async function generateLocalText(
   signal?: AbortSignal,
   // QNBS-v3: bypassAdaptiveModel forces the caller's exact modelId (skips adaptive override) — used
   //          by preloadLocalModel so a "Download model X" action always warms X, never a substitute.
-  options?: { bypassAdaptiveModel?: boolean },
+  // QNBS-v3: reportToGlobalProgress opts this call into the singleton inferenceProgressEmitter (and
+  //          therefore the global LocalAiDownloadProgress modal) — true only for preloadLocalModel.
+  //          An ordinary Writer/Copilot/ProForge generation call must not make that modal appear.
+  options?: { bypassAdaptiveModel?: boolean; reportToGlobalProgress?: boolean },
 ): Promise<LocalAiResponse> {
   // QNBS-v3: Acquire GPU mutex before WebLLM/ONNX-WebGPU init to prevent VRAM races across
   //          concurrent callers (e.g. ProForge agents running multiple pipeline stages).
@@ -140,7 +143,10 @@ export async function generateLocalText(
         ? Math.min(1, Math.max(0, report.progress))
         : 0;
       const normalized = { progress: fraction, text: report.text };
-      inferenceProgressEmitter.reportWebLlmProgress(normalized.progress, normalized.text);
+      // QNBS-v3: gated — an ordinary generation call must not make the global download modal appear.
+      if (options?.reportToGlobalProgress) {
+        inferenceProgressEmitter.reportWebLlmProgress(normalized.progress, normalized.text);
+      }
       onProgress?.(normalized);
     };
     // QNBS-v3: When adaptive AI engine is enabled, use its task config for optimal backend/model.
@@ -187,8 +193,15 @@ export async function generateLocalText(
     if (result.layer !== 'heuristic') {
       notifyLocalModelsReady(true);
     }
-    if (result.layer === 'webllm') {
-      inferenceProgressEmitter.reportWebLlmReady();
+    if (options?.reportToGlobalProgress) {
+      if (result.layer === 'webllm') {
+        inferenceProgressEmitter.reportWebLlmReady();
+      } else {
+        // QNBS-v3: a preload that fell back off WebLLM still must clear the modal's loading state —
+        // otherwise it's stuck showing "downloading" forever (this branch only reachable when the
+        // caller opted in via reportToGlobalProgress, i.e. preloadLocalModel).
+        inferenceProgressEmitter.reset();
+      }
     }
 
     // QNBS-v3: CodeAnt — record latency against the ACTUAL backend/model that produced the response
@@ -295,6 +308,20 @@ export function getReadyLocalModelIds(): readonly string[] {
   return Array.from(readyLocalModelIds);
 }
 
+// QNBS-v3: preloadLocalModel can be called from outside LocalAiSection (e.g. the global download
+// modal's Retry button). Listeners let any mounted panel re-sync its readyIds/throughput/storage
+// after a warm that it did not itself initiate, instead of only reacting to its own call site.
+const localModelReadyListeners = new Set<(modelId: string) => void>();
+
+export function subscribeLocalModelReady(listener: (modelId: string) => void): () => void {
+  localModelReadyListeners.add(listener);
+  return () => localModelReadyListeners.delete(listener);
+}
+
+function notifyLocalModelReady(modelId: string): void {
+  for (const listener of localModelReadyListeners) listener(modelId);
+}
+
 /** Reset session readiness — call after the on-disk model caches are cleared. */
 export function clearReadyLocalModels(): void {
   readyLocalModelIds.clear();
@@ -340,6 +367,7 @@ export async function preloadLocalModel(
   onProgress?: (report: WebLlmProgressReport) => void,
   signal?: AbortSignal,
 ): Promise<PreloadResult> {
+  // QNBS-v3: every preload attempt updates the retry target, so a failed retry itself can be retried.
   lastPreloadModelId = modelId;
   // QNBS-v3: own the AbortController so both the modal Cancel (abortActivePreload) and a caller
   //          signal (e.g. unmount) can stop the underlying generation/worker task.
@@ -372,6 +400,7 @@ export async function preloadLocalModel(
       controller.signal,
       {
         bypassAdaptiveModel: true,
+        reportToGlobalProgress: true,
       },
     );
     const elapsedSec = (performance.now() - startedAt) / 1000;
@@ -387,13 +416,19 @@ export async function preloadLocalModel(
           at: Date.now(),
         };
       }
+      notifyLocalModelReady(modelId);
     } else {
       // QNBS-v3: Do not leave a visible progress dialog pending when a fallback cannot warm WebLLM.
       inferenceProgressEmitter.reportWebLlmError('Local model preload did not complete');
     }
     return { layer: res.layer, modelId, downloaded };
   } catch (error) {
-    if (!controller.signal.aborted) {
+    // QNBS-v3: a caller-provided signal aborting (as opposed to the modal's own Cancel button,
+    // which already reports its own terminal state via abortActivePreload) must still clear the
+    // modal's loading state — otherwise it and isLocalAiBusy() stay stuck indefinitely.
+    if (signal?.aborted) {
+      inferenceProgressEmitter.reset();
+    } else if (!controller.signal.aborted) {
       inferenceProgressEmitter.reportWebLlmError(
         error instanceof Error ? error.message : 'Local model preload failed',
       );

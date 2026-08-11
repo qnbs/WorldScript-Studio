@@ -40,6 +40,10 @@ vi.mock('../../../services/ai/localBackendPresets', () => ({
   },
 }));
 
+vi.mock('../../../services/ai/webGpuDetectorService', () => ({
+  detectWebGpuDetails: vi.fn().mockResolvedValue({ status: 'available' }),
+}));
+
 const mockAdvancedAi = {
   model: 'gemini-2.5-flash' as const,
   provider: 'gemini' as const,
@@ -66,6 +70,7 @@ const mockOnProviderChange = vi.fn();
 const ollamaAdvancedAi = { ...mockAdvancedAi, provider: 'ollama' as const };
 // QNBS-v3: fixture for the grok-provider describe block below.
 const grokAdvancedAi = { ...mockAdvancedAi, provider: 'grok' as const, model: 'grok-3' as const };
+const webllmAdvancedAi = { ...mockAdvancedAi, provider: 'webllm' as const };
 
 function setDesktopRuntime(enabled: boolean): void {
   const w = window as Window & { __TAURI_INTERNALS__?: unknown };
@@ -734,5 +739,164 @@ describe('AiProviderCard — anthropic provider (ADR-0016)', () => {
     await waitFor(() => {
       expect(storageService.saveApiKey).toHaveBeenCalledWith('anthropic', 'sk-ant-test-key');
     });
+  });
+});
+
+// QNBS-v3: regression coverage for the connection-context race guard + the key={provider} removal.
+describe('AiProviderCard — connection-context invalidation (no remount)', () => {
+  afterEach(() => {
+    setDesktopRuntime(false);
+    vi.clearAllMocks();
+    // QNBS-v3: clearAllMocks() clears call history but NOT mockImplementation — these tests
+    // override testAIConnection/listLocalBackendModels with a never-resolving promise factory;
+    // without restoring the defaults, later describe blocks' calls hang on an abandoned resolver.
+    vi.mocked(testAIConnection).mockResolvedValue({ ok: true });
+    vi.mocked(listLocalBackendModels).mockResolvedValue([]);
+  });
+
+  it('ignores a stale Test Connection result after the endpoint changes mid-flight (no provider switch)', async () => {
+    setDesktopRuntime(true);
+    const resolvers: Array<(v: { ok: boolean }) => void> = [];
+    vi.mocked(testAIConnection).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+    const { rerender } = render(
+      <AiProviderCard
+        advancedAi={ollamaAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    await userEvent
+      .setup()
+      .click(screen.getByRole('button', { name: 'settings.ai.testConnection' }));
+    await waitFor(() => expect(resolvers.length).toBeGreaterThan(0));
+
+    // Same provider, same desktop context — only the endpoint URL changes mid-flight.
+    rerender(
+      <AiProviderCard
+        advancedAi={{ ...ollamaAdvancedAi, ollamaBaseUrl: 'http://localhost:9999' }}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByText('settings.ai.providerStatusNotTested')).toBeTruthy();
+    });
+
+    for (const resolve of resolvers) resolve({ ok: false });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.getByText('settings.ai.providerStatusNotTested')).toBeTruthy();
+    expect(screen.queryByText('settings.ai.providerStatusDisconnected')).toBeNull();
+  });
+
+  it('ignores a stale Load Models result after the endpoint changes mid-flight', async () => {
+    setDesktopRuntime(true);
+    const resolvers: Array<(v: string[]) => void> = [];
+    vi.mocked(listLocalBackendModels).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+    const { rerender } = render(
+      <AiProviderCard
+        advancedAi={ollamaAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    await userEvent.setup().click(screen.getByRole('button', { name: 'settings.ai.loadModels' }));
+    await waitFor(() => expect(resolvers.length).toBeGreaterThan(0));
+
+    rerender(
+      <AiProviderCard
+        advancedAi={{ ...ollamaAdvancedAi, localBackendPreset: 'lm_studio' }}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+
+    // Resolve the stale request with models from the OLD server — they must never apply.
+    for (const resolve of resolvers) resolve(['stale-model-from-old-server']);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByText('stale-model-from-old-server')).toBeNull();
+  });
+
+  it('preserves unsaved key input across a provider switch (no more key={provider} remount)', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <AiProviderCard
+        advancedAi={grokAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    const input = screen.getByLabelText('settings.ai.grokKey');
+    await user.type(input, 'unsaved-key-in-progress');
+    expect(input).toHaveValue('unsaved-key-in-progress');
+
+    // Switch away and back without ever saving — a key={provider} remount would have discarded this.
+    rerender(
+      <AiProviderCard
+        advancedAi={mockAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    rerender(
+      <AiProviderCard
+        advancedAi={grokAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    expect(screen.getByLabelText('settings.ai.grokKey')).toHaveValue('unsaved-key-in-progress');
+  });
+});
+
+// QNBS-v3: regression coverage for the WebGPU-badge spinner fix (isProbingGpu vs gpuInfo === null).
+describe('AiProviderCard — WebGPU status badge', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('shows "untested" (not a permanent spinner) before Test Connection has ever run', () => {
+    render(
+      <AiProviderCard
+        advancedAi={webllmAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    expect(screen.getByText('settings.ai.webllm.gpuUnknown')).toBeTruthy();
+    expect(screen.queryByText('Loading…')).toBeNull();
+  });
+
+  it('shows a spinner while probing, then the result once detectWebGpuDetails resolves', async () => {
+    const { detectWebGpuDetails } = await import('../../../services/ai/webGpuDetectorService');
+    let resolveProbe!: (v: { status: 'available' }) => void;
+    vi.mocked(detectWebGpuDetails).mockReturnValue(
+      new Promise((resolve) => {
+        resolveProbe = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+    render(
+      <AiProviderCard
+        advancedAi={webllmAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'settings.ai.testConnection' }));
+    await waitFor(() => expect(screen.queryByText('Loading…')).toBeTruthy());
+
+    resolveProbe({ status: 'available' });
+    await waitFor(() => expect(screen.getByText('settings.ai.webllm.gpuAvailable')).toBeTruthy());
+    expect(screen.queryByText('Loading…')).toBeNull();
   });
 });

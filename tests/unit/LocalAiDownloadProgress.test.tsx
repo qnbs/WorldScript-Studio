@@ -136,6 +136,27 @@ describe('LocalAiDownloadProgress', () => {
     expect(mockRetryLastPreload).toHaveBeenCalledTimes(1);
   });
 
+  it('surfaces retry failures via reportWebLlmError when retryLastPreload rejects', async () => {
+    const { inferenceProgressEmitter } = await import('../../services/ai/inferenceProgressEmitter');
+    const user = userEvent.setup();
+    mockSnapshot = {
+      state: 'error',
+      progress: 0.2,
+      estimatedSecondsRemaining: null,
+      text: 'Download failed',
+    };
+    const retryError = new Error('No local model download is available to retry');
+    mockRetryLastPreload.mockRejectedValueOnce(retryError);
+    render(<LocalAiDownloadProgress />);
+
+    await user.click(screen.getByText('settings.ai.localAi.retryButton'));
+
+    expect(mockRetryLastPreload).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(inferenceProgressEmitter.reportWebLlmError).toHaveBeenCalledWith(retryError.message),
+    );
+  });
+
   it('updates progress when subscriber fires', async () => {
     mockSnapshot = { state: 'idle', progress: 0, estimatedSecondsRemaining: null, text: '' };
     render(<LocalAiDownloadProgress />);

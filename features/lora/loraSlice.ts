@@ -217,6 +217,14 @@ const loraSlice = createSlice({
       state.currentRun = null;
     },
 
+    // QNBS-v3: dispatched synchronously before abortTrainingThunk awaits confirmation — see
+    // TrainingRun.cancellationRequested for why startTrainingThunk needs this to classify its own
+    // subsequent rejection correctly.
+    trainingCancellationRequested(state) {
+      if (!state.currentRun) return;
+      state.currentRun.cancellationRequested = true;
+    },
+
     // -----------------------------------------------------------------------
     // Evaluation
     // -----------------------------------------------------------------------
@@ -264,6 +272,7 @@ export const {
   trainingCompleted,
   trainingFailed,
   trainingAborted,
+  trainingCancellationRequested,
   setIsEvaluating,
   evaluationCompleted,
   hydrateLoraState,

@@ -19,6 +19,7 @@ import {
   setIsEvaluating,
   setIsMerging,
   trainingAborted,
+  trainingCancellationRequested,
   trainingCompleted,
   trainingFailed,
   trainingProgress,
@@ -136,7 +137,7 @@ export const startTrainingThunk = createAsyncThunk<
     customEpochs?: number;
   },
   ThunkConfig
->('lora/startTraining', async (config, { dispatch }) => {
+>('lora/startTraining', async (config, { dispatch, getState }) => {
   const { assertLoraLocalOnly } = await import('../../services/ai/aiPolicy');
   assertLoraLocalOnly(config.baseModelId);
 
@@ -199,7 +200,15 @@ export const startTrainingThunk = createAsyncThunk<
     dispatch(adapterSaved(meta));
     dispatch(trainingCompleted({ outputAdapterId: adapterId }));
   } catch (err) {
-    dispatch(trainingFailed(err instanceof Error ? err.message : String(err)));
+    // QNBS-v3: abort_lora_training waits for the killed child to exit before resolving, so the
+    // train_lora invoke it just killed can reject here first — without this check, a successful
+    // user cancellation would archive as a training failure instead of an abort (see
+    // TrainingRun.cancellationRequested).
+    if (getState().lora.currentRun?.cancellationRequested) {
+      dispatch(trainingAborted());
+    } else {
+      dispatch(trainingFailed(err instanceof Error ? err.message : String(err)));
+    }
   }
 });
 
@@ -210,6 +219,9 @@ export const startTrainingThunk = createAsyncThunk<
 export const abortTrainingThunk = createAsyncThunk<void, void, ThunkConfig>(
   'lora/abortTraining',
   async (_, { dispatch }) => {
+    // QNBS-v3: set before awaiting so startTrainingThunk's catch (which can fire first — see there)
+    // can tell a killed process apart from a genuine training failure.
+    dispatch(trainingCancellationRequested());
     const { abortTraining } = await import('../../services/lora/loraTrainingService');
     await abortTraining();
     dispatch(trainingAborted());

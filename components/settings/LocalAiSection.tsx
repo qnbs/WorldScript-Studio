@@ -29,6 +29,7 @@ import {
   isLocalAiBusy,
   type LocalThroughputSample,
   preloadLocalModel,
+  subscribeLocalModelReady,
 } from '../../services/localAiFacade';
 import { logger } from '../../services/logger';
 import { Card, CardContent, CardHeader } from '../ui/Card';
@@ -156,6 +157,32 @@ export const LocalAiSection: FC = () => {
         setDownloadingId(null);
       }
     },
+    [announce, t, labelOf, refreshStorage],
+  );
+
+  // QNBS-v3: mirrors downloadingId for the subscription below — effects only re-run on dep
+  // changes, so a plain closure read would see a stale value; sync via effect, never in render.
+  const downloadingIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    downloadingIdRef.current = downloadingId;
+  }, [downloadingId]);
+
+  useEffect(
+    () =>
+      // QNBS-v3: preloadLocalModel can be triggered outside this section (the global download
+      // modal's Retry button) — without this, a successful retry left readyIds/throughput/storage
+      // stale here until the section remounted. Skip when this section's own handleDownload
+      // initiated it — that path already updates state itself, so this would double-announce.
+      subscribeLocalModelReady((modelId) => {
+        if (modelId === downloadingIdRef.current) return;
+        setReadyIds((prev) => (prev.has(modelId) ? prev : new Set(prev).add(modelId)));
+        setThroughput(getLastLocalThroughput());
+        void refreshStorage();
+        announce(
+          t('settings.ai.localAi.modelReadyAnnounce', { model: labelOf(modelId) }),
+          'polite',
+        );
+      }),
     [announce, t, labelOf, refreshStorage],
   );
 

@@ -24,6 +24,57 @@ import { Select } from '../ui/Select';
 import { Spinner } from '../ui/Spinner';
 import { AnthropicProviderFields } from './AnthropicProviderFields';
 
+// QNBS-v3: extracted out of AiProviderCard to keep its cognitive complexity under the CI
+// threshold — this effect's only job is invalidating stale in-flight tests/model-loads when the
+// connection context changes (none of the five values need to be READ, only reacted to).
+function useConnectionContextReset(
+  testRequestIdRef: React.MutableRefObject<number>,
+  setTestStatus: (status: 'idle') => void,
+  setTestError: (error: string) => void,
+  setIsLoadingModels: (loading: false) => void,
+  provider: AIProvider,
+  ollamaBaseUrl: string,
+  localBackendPreset: LocalBackendPreset,
+  openAiCompatibleBaseUrl: string,
+  browserOllamaEnabled: boolean,
+) {
+  useEffect(() => {
+    void provider;
+    void ollamaBaseUrl;
+    void localBackendPreset;
+    void openAiCompatibleBaseUrl;
+    void browserOllamaEnabled;
+    testRequestIdRef.current += 1;
+    setTestStatus('idle');
+    setTestError('');
+    // QNBS-v3: without this, a model-load left in flight when the context changes never gets
+    // reset (its own stale-check skips setIsLoadingModels(false) too) and the button stays
+    // permanently disabled until another load happens to be triggered.
+    setIsLoadingModels(false);
+  }, [
+    testRequestIdRef,
+    setTestStatus,
+    setTestError,
+    setIsLoadingModels,
+    provider,
+    ollamaBaseUrl,
+    localBackendPreset,
+    openAiCompatibleBaseUrl,
+    browserOllamaEnabled,
+  ]);
+}
+
+// QNBS-v3: converts an inline `if (requestIdRef.current === requestId) apply()` guard into a
+// function call — extracted (like the hook above) purely to keep AiProviderCard's own cognitive
+// complexity under the CI threshold; each inline guard counted as a branch against it.
+function applyIfCurrent(
+  requestIdRef: React.MutableRefObject<number>,
+  requestId: number,
+  apply: () => void,
+): void {
+  if (requestIdRef.current === requestId) apply();
+}
+
 interface AiProviderCardProps {
   advancedAi: AdvancedAiSettings;
   onAdvancedAiPatch: (patch: Partial<AdvancedAiSettings>) => void;
@@ -168,8 +219,13 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
   const [isSavingKey, setIsSavingKey] = useState(false);
   const [scanBusy, setScanBusy] = useState(false);
   const [scanRows, setScanRows] = useState<LocalEndpointScanResult[]>([]);
-  // QNBS-v3: GPU probe runs once when WebLLM tab is selected — no polling.
-  const [gpuInfo, setGpuInfo] = useState<WebGpuAdapterInfo | null>(null);
+  // QNBS-v3: GPU probe runs once when WebLLM tab is selected — no polling. Default 'unknown'
+  // (not null) so "never tested" and "tested, inconclusive" render identically without a
+  // separate null-check — isProbingGpu below is what distinguishes "actively checking".
+  const [gpuInfo, setGpuInfo] = useState<WebGpuAdapterInfo>({ status: 'unknown' });
+  // QNBS-v3: without this, the WebGPU badge rendered a permanent spinner until the user clicked
+  // Test Connection, since gpuInfo had no other signal for "a probe is currently running".
+  const [isProbingGpu, setIsProbingGpu] = useState(false);
   // QNBS-v3 (CodeRabbit CWE-209): monotonic guard against a stale in-flight test result
   // (button click or the auto-test effect) overwriting state after the provider/desktop
   // context has since moved on — e.g. a switch to Ollama-in-browser must not let an older
@@ -196,6 +252,22 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
     setTestError('');
     setLocalDiagnostic(null);
   }, [localDiagnosticContext]);
+
+  // QNBS-v3: any connection-context change invalidates in-flight tests/model-loads — without this,
+  // only an explicit second handleTest() call bumped the guard, so editing the endpoint/preset/URL
+  // mid-request let a stale response land under the new context. Also replaces the old
+  // key={provider} remount (which discarded unsaved openaiKey/grokKey/anthropicKey input).
+  useConnectionContextReset(
+    testRequestIdRef,
+    setTestStatus,
+    setTestError,
+    setIsLoadingModels,
+    provider,
+    ollamaBaseUrl,
+    advancedAi.localBackendPreset,
+    advancedAi.openAiCompatibleBaseUrl,
+    browserOllamaEnabled,
+  );
 
   useEffect(() => {
     storageService
@@ -261,14 +333,17 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
       setOllamaModels([]);
       return;
     }
+    // QNBS-v3: capture, don't increment — the context-change effect above owns invalidation; this
+    // only needs to detect whether ITS OWN in-flight request is still current before applying it.
+    const requestId = testRequestIdRef.current;
     setIsLoadingModels(true);
     try {
       const models = await listLocalBackendModels(ollamaBaseUrl, advancedAi.localBackendPreset);
-      setOllamaModels(models);
+      applyIfCurrent(testRequestIdRef, requestId, () => setOllamaModels(models));
     } catch {
-      setOllamaModels([]);
+      applyIfCurrent(testRequestIdRef, requestId, () => setOllamaModels([]));
     } finally {
-      setIsLoadingModels(false);
+      applyIfCurrent(testRequestIdRef, requestId, () => setIsLoadingModels(false));
     }
   }, [ollamaBaseUrl, advancedAi.localBackendPreset, browserOllamaEnabled]);
 
@@ -279,9 +354,11 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
     setTestError('');
     setLocalDiagnostic(null);
     if (provider === 'webllm') {
+      setIsProbingGpu(true);
       void detectWebGpuDetails()
         .then(setGpuInfo)
-        .catch(() => setGpuInfo({ status: 'unknown' }));
+        .catch(() => setGpuInfo({ status: 'unknown' }))
+        .finally(() => setIsProbingGpu(false));
     }
     try {
       const result = await testAIConnection(provider, {
@@ -681,7 +758,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
             {/* GPU status badge */}
             <div className="flex items-center gap-2">
               <span className="font-medium">{t('settings.ai.webllm.gpuStatus')}:</span>
-              {gpuInfo === null ? (
+              {isProbingGpu ? (
                 <Spinner className="w-3 h-3" />
               ) : (
                 <span
@@ -703,7 +780,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
             </div>
 
             {/* Adapter info when available */}
-            {gpuInfo?.adapterDescription && (
+            {gpuInfo.adapterDescription && (
               <p className="text-xs text-[var(--sc-text-muted)]">
                 {t('settings.ai.webllm.adapterLabel')}: {gpuInfo.adapterDescription}
                 {gpuInfo.vramTier && (

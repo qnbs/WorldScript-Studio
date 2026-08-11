@@ -69,8 +69,6 @@ export const AiSection: FC = () => {
           does not trigger device profiling when the feature is disabled */}
       {adaptiveAiEnabled && <AdaptiveAiHardwarePanel />}
       <AiProviderCard
-        // QNBS-v3: Provider changes remount local connection state without triggering a background probe.
-        key={settings.advancedAi.provider}
         advancedAi={settings.advancedAi}
         browserOllamaEnabled={browserOllamaEnabled}
         onAdvancedAiPatch={(patch) =>

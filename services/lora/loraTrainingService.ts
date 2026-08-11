@@ -120,10 +120,12 @@ export async function mergeAdapter(
   outputPath: string,
 ): Promise<void> {
   if (!isTauri()) throw new Error('Merge requires the desktop app.');
+  // QNBS-v3: Tauri's #[tauri::command] macro binds top-level JS invoke keys as camelCase by
+  // default (no rename_all override on merge_lora) — snake_case keys here fail arg binding.
   await tauriInvoke('merge_lora', {
-    base_model: baseModel,
-    adapter_path: adapterPath,
-    output_path: outputPath,
+    baseModel,
+    adapterPath,
+    outputPath,
   });
 }
 
@@ -133,9 +135,10 @@ export async function generateOllamaModelfile(
   name: string,
 ): Promise<string> {
   if (isTauri()) {
+    // QNBS-v3: same Tauri default-camelCase arg binding as merge_lora — no rename_all override.
     return tauriInvoke<string>('generate_ollama_modelfile', {
-      base_model: baseModel,
-      adapter_path: adapterPath,
+      baseModel,
+      adapterPath,
       name,
     });
   }
@@ -213,8 +216,10 @@ export async function selectPythonExecutable(): Promise<TrainingEnvironment | nu
     directory: false,
   });
   if (typeof selected !== 'string') return null;
+  // QNBS-v3: set_lora_python_path has no rename_all override, so Tauri's default camelCase arg
+  // binding requires `pythonPath` here — `python_path` fails invocation before the command runs.
   const result = await tauriInvoke<NativeTrainingEnvironment>('set_lora_python_path', {
-    python_path: selected,
+    pythonPath: selected,
   });
   return fromNativeEnvironment(result);
 }

@@ -3,9 +3,35 @@
  * QNBS-v3: Privacy-first promise + system requirements checklist.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
 import { Icon } from '../ui/Icon';
+
+// QNBS-v3: maps raw native diagnostic categories (lora.rs Err()/last_error strings) to i18n
+// keys — showing snake_case Rust identifiers directly to users was the reported defect.
+const NATIVE_ERROR_KEYS: Record<string, string> = {
+  configured_path_empty: 'lora.onboarding.error.configuredPathEmpty',
+  configured_path_not_absolute: 'lora.onboarding.error.configuredPathNotAbsolute',
+  executable_not_found: 'lora.onboarding.error.executableNotFound',
+  permission_denied: 'lora.onboarding.error.permissionDenied',
+  process_spawn_failed: 'lora.onboarding.error.processSpawnFailed',
+  version_probe_failed: 'lora.onboarding.error.versionProbeFailed',
+  version_parse_failed: 'lora.onboarding.error.versionParseFailed',
+  incompatible_version: 'lora.onboarding.error.incompatibleVersion',
+  version_probe_timed_out: 'lora.onboarding.error.versionProbeTimedOut',
+  python_probe_task_failed: 'lora.onboarding.error.pythonProbeTaskFailed',
+  configuration_path_unavailable: 'lora.onboarding.error.configurationPathUnavailable',
+  configuration_write_failed: 'lora.onboarding.error.configurationWriteFailed',
+  helper_script_missing: 'lora.onboarding.error.helperScriptMissing',
+  helper_timed_out: 'lora.onboarding.error.helperTimedOut',
+  helper_spawn_failed: 'lora.onboarding.error.helperSpawnFailed',
+  helper_exit_nonzero: 'lora.onboarding.error.helperExitNonzero',
+  helper_report_parse_failed: 'lora.onboarding.error.helperReportParseFailed',
+};
+
+function describeNativeError(raw: string, t: (key: string) => string): string {
+  return t(NATIVE_ERROR_KEYS[raw] ?? 'lora.onboarding.error.generic');
+}
 
 interface EnvStatus {
   loaded: boolean;
@@ -63,21 +89,29 @@ export default React.memo(function LoraOnboarding({ onDismiss }: { onDismiss: ()
   });
   const api = useLoraTrainingService();
   const [isSelectingPython, setIsSelectingPython] = useState(false);
+  // QNBS-v3: request-generation guard — a slow initial checkTrainingEnvironment() resolving after
+  // a manual selectPythonExecutable() must not overwrite the newer result (race condition).
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
     if (!api) return;
+    const requestId = ++requestIdRef.current;
     api.checkTrainingEnvironment().then((result) => {
+      if (requestIdRef.current !== requestId) return;
       setEnv({ loaded: true, ...result });
     });
   }, [api]);
 
   const handleSelectPython = async () => {
     if (!api) return;
+    const requestId = ++requestIdRef.current;
     setIsSelectingPython(true);
     try {
       const result = await api.selectPythonExecutable();
+      if (requestIdRef.current !== requestId) return;
       if (result) setEnv({ loaded: true, ...result });
     } catch (error) {
+      if (requestIdRef.current !== requestId) return;
       // QNBS-v3: Keep the failed manual selection visible instead of falsely reporting Python as absent.
       setEnv((current) => ({
         ...current,
@@ -85,7 +119,7 @@ export default React.memo(function LoraOnboarding({ onDismiss }: { onDismiss: ()
         lastError: error instanceof Error ? error.message : 'python_selection_failed',
       }));
     } finally {
-      setIsSelectingPython(false);
+      if (requestIdRef.current === requestId) setIsSelectingPython(false);
     }
   };
 
@@ -123,9 +157,11 @@ export default React.memo(function LoraOnboarding({ onDismiss }: { onDismiss: ()
               label="Python 3.10+"
               ok={env.pythonAvailable}
               detail={
-                env.pythonAvailable
-                  ? [env.pythonVersion, env.pythonPath].filter(Boolean).join(' · ')
-                  : (env.lastError ?? t('lora.onboarding.notFound'))
+                env.lastError
+                  ? describeNativeError(env.lastError, t)
+                  : env.pythonAvailable
+                    ? [env.pythonVersion, env.pythonPath].filter(Boolean).join(' · ')
+                    : env.message || t('lora.onboarding.notFound')
               }
             />
             <StatusRow
@@ -151,9 +187,12 @@ export default React.memo(function LoraOnboarding({ onDismiss }: { onDismiss: ()
           type="button"
           onClick={() => void handleSelectPython()}
           disabled={!api || isSelectingPython}
-          className="text-sm text-[var(--sc-interactive-primary)] underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)]"
+          aria-busy={isSelectingPython}
+          className="text-sm text-[var(--sc-interactive-primary)] underline underline-offset-2 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
         >
-          {isSelectingPython ? t('lora.onboarding.checking') : t('lora.onboarding.selectPython')}
+          {isSelectingPython
+            ? t('lora.onboarding.selectingPython')
+            : t('lora.onboarding.selectPython')}
         </button>
       </div>
 
