@@ -827,6 +827,50 @@ describe('AiProviderCard — connection-context invalidation (no remount)', () =
     expect(screen.queryByText('stale-model-from-old-server')).toBeNull();
   });
 
+  it('clears an already-loaded model list when the endpoint/preset context changes', async () => {
+    // QNBS-v3: distinct from the stale in-flight case above — this is a PREVIOUSLY SUCCESSFUL load
+    // whose rendered buttons must not survive a context switch, or a user could select a model id
+    // that doesn't exist on the newly selected server.
+    setDesktopRuntime(true);
+    vi.mocked(listLocalBackendModels).mockResolvedValueOnce(['old-server-model']);
+    const { rerender } = render(
+      <AiProviderCard
+        advancedAi={ollamaAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    await userEvent.setup().click(screen.getByRole('button', { name: 'settings.ai.loadModels' }));
+    await waitFor(() => expect(screen.getByText('old-server-model')).toBeInTheDocument());
+
+    rerender(
+      <AiProviderCard
+        advancedAi={{ ...ollamaAdvancedAi, localBackendPreset: 'lm_studio' }}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    expect(screen.queryByText('old-server-model')).toBeNull();
+  });
+
+  it('editing the server URL does not silently reassign the protocol preset', async () => {
+    // QNBS-v3: a native-Ollama user changing host/port must keep speaking native Ollama, not get
+    // force-switched to 'custom' (which routes through the OpenAI-compatible protocol and breaks it).
+    render(
+      <AiProviderCard
+        advancedAi={{ ...ollamaAdvancedAi, localBackendPreset: 'ollama_default' }}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    const urlInput = screen.getByLabelText('settings.ai.ollamaServerUrl');
+    await userEvent.setup().type(urlInput, 'x');
+    expect(mockOnAdvancedAiPatch).toHaveBeenCalled();
+    for (const call of mockOnAdvancedAiPatch.mock.calls) {
+      expect(call[0]).not.toHaveProperty('localBackendPreset');
+    }
+  });
+
   it('preserves unsaved key input across a provider switch (no more key={provider} remount)', async () => {
     const user = userEvent.setup();
     const { rerender } = render(

@@ -104,14 +104,17 @@ export default React.memo(function LoraOnboarding({ onDismiss }: { onDismiss: ()
 
   const handleSelectPython = async () => {
     if (!api) return;
-    const requestId = ++requestIdRef.current;
     setIsSelectingPython(true);
     try {
       const result = await api.selectPythonExecutable();
-      if (requestIdRef.current !== requestId) return;
-      if (result) setEnv({ loaded: true, ...result });
+      // QNBS-v3: a cancelled picker resolves with null and must not invalidate the still-pending
+      // initial check — only bump the generation guard once there's an actual new result to apply,
+      // otherwise a cancel could leave `env` stuck at its unloaded default forever.
+      if (!result) return;
+      requestIdRef.current += 1;
+      setEnv({ loaded: true, ...result });
     } catch (error) {
-      if (requestIdRef.current !== requestId) return;
+      requestIdRef.current += 1;
       // QNBS-v3: Keep the failed manual selection visible instead of falsely reporting Python as absent.
       setEnv((current) => ({
         ...current,
@@ -119,7 +122,7 @@ export default React.memo(function LoraOnboarding({ onDismiss }: { onDismiss: ()
         lastError: error instanceof Error ? error.message : 'python_selection_failed',
       }));
     } finally {
-      if (requestIdRef.current === requestId) setIsSelectingPython(false);
+      setIsSelectingPython(false);
     }
   };
 

@@ -127,7 +127,15 @@ export async function generateLocalText(
   // QNBS-v3: reportToGlobalProgress opts this call into the singleton inferenceProgressEmitter (and
   //          therefore the global LocalAiDownloadProgress modal) — true only for preloadLocalModel.
   //          An ordinary Writer/Copilot/ProForge generation call must not make that modal appear.
-  options?: { bypassAdaptiveModel?: boolean; reportToGlobalProgress?: boolean },
+  // QNBS-v3: isCurrentAttempt lets preloadLocalModel say "am I still the latest preload" — a
+  //          cancelled/superseded preload whose generateLocalText call settles late must not emit
+  //          global progress that overwrites a newer preload's modal state. Defaults to always-current
+  //          for every other caller, which never sets reportToGlobalProgress anyway.
+  options?: {
+    bypassAdaptiveModel?: boolean;
+    reportToGlobalProgress?: boolean;
+    isCurrentAttempt?: () => boolean;
+  },
 ): Promise<LocalAiResponse> {
   // QNBS-v3: Acquire GPU mutex before WebLLM/ONNX-WebGPU init to prevent VRAM races across
   //          concurrent callers (e.g. ProForge agents running multiple pipeline stages).
@@ -137,14 +145,17 @@ export async function generateLocalText(
 
   const startedAt = performance.now();
   inFlightLocalInference += 1;
+  // QNBS-v3: gated — an ordinary generation call must not make the global download modal appear,
+  //          and a superseded preload attempt must not overwrite a newer one's modal state.
+  const canReportToGlobalProgress = () =>
+    Boolean(options?.reportToGlobalProgress) && (options?.isCurrentAttempt?.() ?? true);
   try {
     const reportProgress = (report: WebLlmProgressReport) => {
       const fraction = Number.isFinite(report.progress)
         ? Math.min(1, Math.max(0, report.progress))
         : 0;
       const normalized = { progress: fraction, text: report.text };
-      // QNBS-v3: gated — an ordinary generation call must not make the global download modal appear.
-      if (options?.reportToGlobalProgress) {
+      if (canReportToGlobalProgress()) {
         inferenceProgressEmitter.reportWebLlmProgress(normalized.progress, normalized.text);
       }
       onProgress?.(normalized);
@@ -193,7 +204,7 @@ export async function generateLocalText(
     if (result.layer !== 'heuristic') {
       notifyLocalModelsReady(true);
     }
-    if (options?.reportToGlobalProgress) {
+    if (canReportToGlobalProgress()) {
       if (result.layer === 'webllm') {
         inferenceProgressEmitter.reportWebLlmReady();
       } else {
@@ -401,6 +412,9 @@ export async function preloadLocalModel(
       {
         bypassAdaptiveModel: true,
         reportToGlobalProgress: true,
+        // QNBS-v3: a cancelled/superseded preload's late-settling generateLocalText call must not
+        //          overwrite a newer preload's modal state — see canReportToGlobalProgress there.
+        isCurrentAttempt: () => activePreloadAbort === abortHook,
       },
     );
     const elapsedSec = (performance.now() - startedAt) / 1000;
@@ -417,21 +431,25 @@ export async function preloadLocalModel(
         };
       }
       notifyLocalModelReady(modelId);
-    } else {
-      // QNBS-v3: Do not leave a visible progress dialog pending when a fallback cannot warm WebLLM.
+    } else if (activePreloadAbort === abortHook) {
+      // QNBS-v3: Do not leave a visible progress dialog pending when a fallback cannot warm WebLLM —
+      //          but only for the still-current attempt; a superseded one must not touch the modal.
       inferenceProgressEmitter.reportWebLlmError('Local model preload did not complete');
     }
     return { layer: res.layer, modelId, downloaded };
   } catch (error) {
     // QNBS-v3: a caller-provided signal aborting (as opposed to the modal's own Cancel button,
     // which already reports its own terminal state via abortActivePreload) must still clear the
-    // modal's loading state — otherwise it and isLocalAiBusy() stay stuck indefinitely.
-    if (signal?.aborted) {
-      inferenceProgressEmitter.reset();
-    } else if (!controller.signal.aborted) {
-      inferenceProgressEmitter.reportWebLlmError(
-        error instanceof Error ? error.message : 'Local model preload failed',
-      );
+    // modal's loading state — otherwise it and isLocalAiBusy() stay stuck indefinitely. Guarded on
+    // identity too: a superseded attempt's own abort/failure must not touch a newer attempt's modal.
+    if (activePreloadAbort === abortHook) {
+      if (signal?.aborted) {
+        inferenceProgressEmitter.reset();
+      } else if (!controller.signal.aborted) {
+        inferenceProgressEmitter.reportWebLlmError(
+          error instanceof Error ? error.message : 'Local model preload failed',
+        );
+      }
     }
     throw error;
   } finally {

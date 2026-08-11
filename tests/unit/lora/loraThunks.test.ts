@@ -95,6 +95,22 @@ function makeGetState(loraAdapters: unknown[] = [], currentRun: unknown = null) 
   return () => ({ lora: { adapters: loraAdapters, currentRun } });
 }
 
+// QNBS-v3: startTrainingThunk generates its own runId via uuid() (not mocked in this file, so it's
+// genuinely random) — a getState mock that echoes the id from the dispatched trainingStarted
+// payload lets a test assert against the run this specific thunk invocation actually started.
+function makeGetStateFollowingDispatch(
+  dispatch: ReturnType<typeof vi.fn>,
+  currentRunOverrides: Record<string, unknown> = {},
+) {
+  return () => {
+    const started = dispatch.mock.calls.find(
+      (c: unknown[]) => (c[0] as { type?: string } | undefined)?.type === 'lora/trainingStarted',
+    );
+    const id = (started?.[0] as { payload?: { id?: string } } | undefined)?.payload?.id;
+    return { lora: { adapters: [], currentRun: id ? { id, ...currentRunOverrides } : null } };
+  };
+}
+
 // QNBS-v3: RTK thunk test helper. ThunkFn uses `any` for dispatch/getState to satisfy
 // RTK's contravariant ThunkDispatch param — only call site, mocked in tests.
 // biome-ignore lint/suspicious/noExplicitAny: RTK thunk test helper — necessary for dispatch/getState contravariance
@@ -329,7 +345,8 @@ describe('startTrainingThunk', () => {
   it('dispatches trainingFailed on service error', async () => {
     mockStartTraining.mockRejectedValue(new Error('GPU out of memory'));
     const dispatch = makeDispatch();
-    await run(startTrainingThunk(trainConfig), dispatch);
+    const getState = makeGetStateFollowingDispatch(dispatch);
+    await run(startTrainingThunk(trainConfig), dispatch, getState);
     const failed = dispatch.mock.calls.find((c) => c[0]?.type === 'lora/trainingFailed');
     expect(failed![0].payload).toBe('GPU out of memory');
   });
@@ -346,11 +363,33 @@ describe('startTrainingThunk', () => {
     // rejection must be classified as an abort, not a failure, when cancellationRequested is set.
     mockStartTraining.mockRejectedValue(new Error('training_cancel_not_confirmed'));
     const dispatch = makeDispatch();
-    const getState = makeGetState([], { cancellationRequested: true });
+    const getState = makeGetStateFollowingDispatch(dispatch, { cancellationRequested: true });
     await run(startTrainingThunk(trainConfig), dispatch, getState);
     const aborted = dispatch.mock.calls.find((c) => c[0]?.type === 'lora/trainingAborted');
     const failed = dispatch.mock.calls.find((c) => c[0]?.type === 'lora/trainingFailed');
     expect(aborted).toBeDefined();
+    expect(failed).toBeUndefined();
+  });
+
+  it('does not dispatch a terminal action when a newer run has already superseded this one', async () => {
+    // QNBS-v3: abort_lora_training awaits child-process exit before resolving, so a killed
+    // train_lora invoke can reject after a NEW run has already started — currentRun.id no longer
+    // matches this invocation's own runId, and dispatching against it would wrongly terminate the
+    // newer run instead of being a no-op for this stale one.
+    mockStartTraining.mockRejectedValue(
+      new Error('stale rejection from an already-superseded run'),
+    );
+    const dispatch = makeDispatch();
+    const getState = () => ({
+      lora: {
+        adapters: [],
+        currentRun: { id: 'a-different-newer-run-id', cancellationRequested: false },
+      },
+    });
+    await run(startTrainingThunk(trainConfig), dispatch, getState);
+    const aborted = dispatch.mock.calls.find((c) => c[0]?.type === 'lora/trainingAborted');
+    const failed = dispatch.mock.calls.find((c) => c[0]?.type === 'lora/trainingFailed');
+    expect(aborted).toBeUndefined();
     expect(failed).toBeUndefined();
   });
 });

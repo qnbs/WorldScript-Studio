@@ -32,6 +32,7 @@ function useConnectionContextReset(
   setTestStatus: (status: 'idle') => void,
   setTestError: (error: string) => void,
   setIsLoadingModels: (loading: false) => void,
+  setOllamaModels: (models: string[]) => void,
   provider: AIProvider,
   ollamaBaseUrl: string,
   localBackendPreset: LocalBackendPreset,
@@ -51,11 +52,15 @@ function useConnectionContextReset(
     // reset (its own stale-check skips setIsLoadingModels(false) too) and the button stays
     // permanently disabled until another load happens to be triggered.
     setIsLoadingModels(false);
+    // QNBS-v3: without this, the previous backend's model buttons stay rendered until a new load
+    // completes — a user can select a model id that doesn't exist on the newly selected server.
+    setOllamaModels([]);
   }, [
     testRequestIdRef,
     setTestStatus,
     setTestError,
     setIsLoadingModels,
+    setOllamaModels,
     provider,
     ollamaBaseUrl,
     localBackendPreset,
@@ -262,6 +267,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
     setTestStatus,
     setTestError,
     setIsLoadingModels,
+    setOllamaModels,
     provider,
     ollamaBaseUrl,
     advancedAi.localBackendPreset,
@@ -664,12 +670,12 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
                 id="ollama-server-url"
                 placeholder="http://localhost:11434"
                 value={ollamaBaseUrl}
-                onChange={(e) =>
-                  onAdvancedAiPatch({
-                    ollamaBaseUrl: e.target.value,
-                    localBackendPreset: 'custom',
-                  })
-                }
+                // QNBS-v3: editing the URL must not silently reassign the protocol — a native-Ollama
+                // user pointing at a non-default host/port (e.g. a LAN server) previously had their
+                // preset force-switched to 'custom', which routes every request through the
+                // OpenAI-compatible protocol instead of native Ollama and breaks all completions.
+                // Protocol selection stays explicit via the preset dropdown above.
+                onChange={(e) => onAdvancedAiPatch({ ollamaBaseUrl: e.target.value })}
                 className="flex-1 font-mono text-sm"
               />
               <Button

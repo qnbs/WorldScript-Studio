@@ -200,6 +200,10 @@ export const startTrainingThunk = createAsyncThunk<
     dispatch(adapterSaved(meta));
     dispatch(trainingCompleted({ outputAdapterId: adapterId }));
   } catch (err) {
+    // QNBS-v3: a killed child's train_lora rejection can arrive after a newer run has already
+    // started (abort_lora_training waits for exit; currentRun can move on before this settles) —
+    // dispatching against a stale runId would wrongly terminate the newer run instead of a no-op.
+    if (getState().lora.currentRun?.id !== runId) return;
     // QNBS-v3: abort_lora_training waits for the killed child to exit before resolving, so the
     // train_lora invoke it just killed can reject here first — without this check, a successful
     // user cancellation would archive as a training failure instead of an abort (see
