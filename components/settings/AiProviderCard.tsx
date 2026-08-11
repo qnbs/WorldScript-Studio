@@ -31,6 +31,7 @@ function useConnectionContextReset(
   setTestStatus: (status: 'idle') => void,
   setTestError: (error: string) => void,
   setIsLoadingModels: (loading: false) => void,
+  setOllamaModels: (models: string[]) => void,
   provider: AIProvider,
   ollamaBaseUrl: string,
   localBackendPreset: LocalBackendPreset,
@@ -50,11 +51,15 @@ function useConnectionContextReset(
     // reset (its own stale-check skips setIsLoadingModels(false) too) and the button stays
     // permanently disabled until another load happens to be triggered.
     setIsLoadingModels(false);
+    // QNBS-v3: without this, the previous backend's model buttons stay rendered until a new load
+    // completes — a user can select a model id that doesn't exist on the newly selected server.
+    setOllamaModels([]);
   }, [
     testRequestIdRef,
     setTestStatus,
     setTestError,
     setIsLoadingModels,
+    setOllamaModels,
     provider,
     ollamaBaseUrl,
     localBackendPreset,
@@ -144,6 +149,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
     setTestStatus,
     setTestError,
     setIsLoadingModels,
+    setOllamaModels,
     provider,
     ollamaBaseUrl,
     advancedAi.localBackendPreset,

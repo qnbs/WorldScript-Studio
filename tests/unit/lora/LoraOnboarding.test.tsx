@@ -92,6 +92,32 @@ describe('LoraOnboarding', () => {
     expect(screen.queryByText(/3\.9\.0/)).not.toBeInTheDocument();
   });
 
+  it('does not get stuck on "checking" forever when the file picker is cancelled mid-flight', async () => {
+    // QNBS-v3: a cancelled picker resolves with null — it must not invalidate the still-pending
+    // initial check, or the component never leaves the loading state.
+    const initial = deferred<DeferredEnv>();
+    mockCheckTrainingEnvironment.mockReturnValue(initial.promise);
+    mockSelectPythonExecutable.mockResolvedValue(null);
+
+    render(<LoraOnboarding onDismiss={vi.fn()} />);
+    await waitFor(() => expect(mockCheckTrainingEnvironment).toHaveBeenCalled());
+    expect(screen.getByText('lora.onboarding.checking')).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'lora.onboarding.selectPython' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'lora.onboarding.selectPython' })).toBeEnabled(),
+    );
+    // Still checking — the cancelled picker applied no result.
+    expect(screen.getByText('lora.onboarding.checking')).toBeInTheDocument();
+
+    await act(async () => {
+      initial.resolve({ ...baseEnv, pythonAvailable: true, pythonVersion: '3.12.1' });
+      await initial.promise;
+    });
+    await waitFor(() => expect(screen.getByText(/3\.12\.1/)).toBeInTheDocument());
+  });
+
   it('surfaces a translated native error even when pythonAvailable is true', async () => {
     mockCheckTrainingEnvironment.mockResolvedValue({
       ...baseEnv,
