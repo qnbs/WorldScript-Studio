@@ -3,11 +3,14 @@ import ReactDOM from 'react-dom/client';
 import { Provider } from 'react-redux';
 import App from './App';
 import { type AppDispatch, appStoreRef, type RootState, setupStore } from './app/store';
+import { IdbUnlockModal } from './components/settings/IdbUnlockModal';
+import { I18nProvider } from './contexts/I18nContext';
 import type { ProjectData } from './features/project/projectSlice';
 import { versionControlActions } from './features/versionControl/versionControlSlice';
 import { initializeStorage, resetAllDatabases } from './services/dbInitialization';
 import { dbService } from './services/dbService';
 import { logger } from './services/logger';
+import { IdbStorageLockedError } from './services/storage/storageEncryptionService';
 import { saveEnvelopeFromProjectData, storageService } from './services/storageService';
 import type { PersistedRootState } from './types';
 /* ── Self-hosted fonts (@fontsource) ── */
@@ -177,8 +180,9 @@ function StorageErrorScreen({ message, onReset }: { message: string; onReset: ()
   );
 }
 
-// Async IIFE: pre-loads state from IndexedDB before mounting React.
-(async () => {
+// QNBS-v3: named (not an anonymous IIFE) so a locked-storage catch below can retry the full boot
+// sequence after the user unlocks, without a page reload — a reload would lose the in-memory key.
+async function bootApp(): Promise<void> {
   const initResult = await initializeStorage();
   if (!initResult.success) {
     logger.error('StorageBackend: initializeStorage failed:', initResult.error);
@@ -281,6 +285,21 @@ function StorageErrorScreen({ message, onReset }: { message: string; onReset: ()
       </React.StrictMode>,
     );
   } catch (error) {
+    if (error instanceof IdbStorageLockedError) {
+      // QNBS-v3: loadState() throws when at-rest encryption is configured but not yet unlocked in
+      // this tab — App never mounts in that case, so its own unlock-prompt effect never runs and
+      // the user previously saw only the destructive "reset database" screen. Render a standalone
+      // unlock prompt (no Redux store needed — IdbUnlockModal only needs i18n) and retry the full
+      // boot in place on success, since the freshly-unlocked key lives in this same JS context.
+      root.render(
+        <React.StrictMode>
+          <I18nProvider>
+            <IdbUnlockModal onUnlocked={() => void bootApp()} />
+          </I18nProvider>
+        </React.StrictMode>,
+      );
+      return;
+    }
     logger.error('Failed to initialize the application:', error);
     const msg = error instanceof Error ? error.message : 'Could not load project data.';
     root.render(
@@ -295,4 +314,6 @@ function StorageErrorScreen({ message, onReset }: { message: string; onReset: ()
       </React.StrictMode>,
     );
   }
-})();
+}
+
+void bootApp();

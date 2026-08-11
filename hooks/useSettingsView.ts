@@ -2,6 +2,7 @@ import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import type { RootState } from '../app/store';
+import { useTransientUiStore } from '../app/transientUiStore';
 import type { PassphraseModalMode } from '../components/settings/PassphraseModal';
 import { useToast } from '../components/ui/Toast';
 import type { Language } from '../contexts/I18nContext';
@@ -53,6 +54,7 @@ export const useSettingsView = () => {
   const { t, language, setLanguage } = useTranslation();
   const dispatch = useAppDispatch();
   const toast = useToast();
+  const setIdbUnlockOpen = useTransientUiStore((s) => s.setIdbUnlockOpen);
   const settings = useAppSelector((state) => state.settings);
   const featureFlags = useAppSelector((state) => state.featureFlags);
   const projectState = useAppSelector((state) => state.project.present);
@@ -427,7 +429,11 @@ export const useSettingsView = () => {
       clearIdbEncryptionKey();
       setEncryptionReady(false);
       toast.info(t('settings.privacy.encryptionLockedStatus'));
-    }, [toast, t]),
+      // QNBS-v3: without this, a subsequent autosave silently fails closed (no route back to the
+      // unlock UI existed) until the user manually reopens Settings and unlocks — surface the same
+      // global unlock modal App.tsx shows on a locked cold start.
+      setIdbUnlockOpen(true);
+    }, [toast, t, setIdbUnlockOpen]),
   };
 };
 
