@@ -70,7 +70,7 @@ describe('loraTrainingService — Tauri desktop build', () => {
     expect(invoke).toHaveBeenCalledWith(
       'generate_ollama_modelfile',
       expect.objectContaining({
-        base_model: 'base',
+        baseModel: 'base',
       }),
     );
     expect(typeof modelfile).toBe('string');
@@ -107,7 +107,7 @@ describe('loraTrainingService — Tauri desktop build', () => {
       pythonPath: '/opt/python 3.12/bin/python3',
     });
     expect(invoke).toHaveBeenCalledWith('set_lora_python_path', {
-      python_path: '/opt/python 3.12/bin/python3',
+      pythonPath: '/opt/python 3.12/bin/python3',
     });
   });
 
