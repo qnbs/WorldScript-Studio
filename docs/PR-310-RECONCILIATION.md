@@ -95,13 +95,14 @@ not a disposition.
 | Field | Evidence |
 | --- | --- |
 | Original config | Legacy `onlyBuiltDependencies` / `ignoredBuiltDependencies` lists plus contradictory `allowBuilds: true` entries |
-| Final config | One pnpm v11 `allowBuilds` map: seven reviewed packages `true`; `onnxruntime-node`, `simple-git-hooks`, `unrs-resolver`, and `workerd` explicitly `false` |
+| Final config | One pnpm v11 `allowBuilds` map: only required native packages (`@swc/core`, `esbuild`) are `true`; every other known build-script package is explicitly `false` |
 | Active toolchain | Node `v24.11.1`, pnpm `11.5.2`, declared `pnpm@11.5.2` |
 | Reason | pnpm v11 documents `allowBuilds` as the replacement control; legacy lists no longer define the effective policy |
-| Scripts newly allowed | None |
-| Scripts newly denied | `onnxruntime-node`, `simple-git-hooks`, `unrs-resolver`, `workerd` dependency lifecycle scripts |
-| Verification | Script-free `pnpm install --lockfile-only --ignore-scripts` exit 0; direct Biome, docs, and suppression checks passed |
-| Rollback | Revert commit `82e2e8d0`; do not use `approve-builds` or a broad allowlist |
+| Scripts newly allowed | None; the policy was narrowed after manifest-level evidence showed only the two native packages require an install hook |
+| Scripts newly denied | `@google/genai`, `core-js`, `onnxruntime-node`, `protobufjs`, `sharp`, `simple-git-hooks`, `unrs-resolver`, and `workerd` dependency lifecycle scripts |
+| Additional guard | `verify-deps-before-run=error` prevents `pnpm run`/`pnpm exec` from implicitly invoking install; root Git-hook setup moved from automatic `prepare` to explicit `hooks:install` |
+| Verification | Script-free `pnpm install --lockfile-only --ignore-scripts` exit 0; pnpm v11 source confirms `verifyDepsBeforeRun: error` aborts before install; direct Biome, docs, and suppression checks passed |
+| Rollback | Revert the policy commit; do not use `approve-builds`, a broad allowlist, or an automatic root `prepare` |
 
 ## Current merge decision
 

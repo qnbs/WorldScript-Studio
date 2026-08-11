@@ -197,10 +197,12 @@ once a manual run demonstrates the flakiness is resolved — concretely, three c
 | **pnpm v11 build-script policy** | Dependency installation | `pnpm-workspace.yaml` uses the sole supported, default-deny `allowBuilds` map; legacy build-script lists are intentionally absent |
 | **Branch protection** | Always | `main` requires 1 approved review, required status checks (security, quality ×2, build), no force-push |
 
-Only the reviewed packages marked `true` in `allowBuilds` may run dependency lifecycle scripts.
-`onnxruntime-node`, `simple-git-hooks`, `unrs-resolver`, and `workerd` are explicitly denied. The
-repository's own `prepare` command is a separate project script; it does not authorize a dependency
-postinstall script.
+Only the two reviewed native packages marked `true` in `allowBuilds` (`@swc/core` and `esbuild`)
+may run dependency lifecycle scripts. `@google/genai`, `core-js`, `onnxruntime-node`, `protobufjs`,
+`sharp`, `simple-git-hooks`, `unrs-resolver`, and `workerd` are explicitly denied. Git-hook
+installation is deliberately opt-in through `pnpm run hooks:install`; dependency installation no
+longer runs a root `prepare` command. `.npmrc` also sets `verify-deps-before-run=error`, so
+`pnpm run`/`pnpm exec` aborts when dependencies are stale instead of implicitly running install.
 
 ---
 

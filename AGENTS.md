@@ -258,7 +258,8 @@ On any non-trivial change, add a single-line comment explaining **why**, not wha
 ### Commit Messages
 
 Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`.
-Pre-commit hook runs `biome check --write` on staged files via `simple-git-hooks` + `lint-staged`.
+After an explicit `pnpm run hooks:install`, the pre-commit hook runs `biome check --write` on staged
+files via `simple-git-hooks` + `lint-staged`; CI remains mandatory when hooks are not installed.
 
 ---
 
