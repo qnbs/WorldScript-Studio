@@ -1,6 +1,6 @@
 # IndexedDB At-Rest Encryption — Implementation
 
-**Status:** Partial implementation with fail-closed locked writes. Cross-database enable, disable, and rekey migration remains a release-blocking follow-up.
+**Status:** Partial implementation with fail-closed locked writes and a durable migration-journal foundation. Cross-database enable, disable, and rekey conversion/recovery remain a release-blocking follow-up.
 **Feature flag:** `enableIdbAtRestEncryption` (on by default since v1.23 — manage via Settings → Privacy)
 **Tracking:** SEC-3 (Master Plan Phase 2 delivery)
 
@@ -16,7 +16,7 @@ The encryption service is gated behind `featureFlags.enableIdbAtRestEncryption` 
 - **Locked writes fail closed** — when a passphrase sentinel exists but no runtime key is available, protected reads and writes return a typed locked error rather than storing plaintext.
 - **Disable and passphrase rotation are unavailable** until a versioned, resumable cross-database journal verifies every conversion. The UI does not expose those destructive controls and the service rejects them before mutation.
 
-**Required next step:** implement a durable migration journal, per-store checkpoints, multi-tab coordination, and verified enable/disable/rekey conversion before enabling lifecycle operations.
+**Required next step:** implement per-store conversion/checkpointing, multi-tab coordination, and verified enable/disable/rekey recovery before enabling lifecycle operations. The journal currently blocks a second migration owner and ordinary protected access while active; it does not yet convert records.
 
 The authoritative lifecycle states, transition rules, and journal requirements are in [ADR 0018](adr/0018-idb-encryption-lifecycle-and-recovery.md).
 
