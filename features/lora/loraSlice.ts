@@ -217,12 +217,16 @@ const loraSlice = createSlice({
       state.currentRun = null;
     },
 
-    // QNBS-v3: dispatched synchronously before abortTrainingThunk awaits confirmation — see
-    // TrainingRun.cancellationRequested for why startTrainingThunk needs this to classify its own
-    // subsequent rejection correctly.
+    // QNBS-v3: dispatched synchronously before abortTrainingThunk awaits confirmation — see TrainingRun.cancellationRequested for why startTrainingThunk needs this to classify its own rejection.
     trainingCancellationRequested(state) {
       if (!state.currentRun) return;
       state.currentRun.cancellationRequested = true;
+    },
+
+    // QNBS-v3: dispatched when the native abort call itself fails — without this, a leaked cancellationRequested:true would misclassify the run's later genuine failure as a user abort instead of a real error.
+    trainingCancellationFailed(state) {
+      if (!state.currentRun) return;
+      state.currentRun.cancellationRequested = false;
     },
 
     // -----------------------------------------------------------------------
@@ -273,6 +277,7 @@ export const {
   trainingFailed,
   trainingAborted,
   trainingCancellationRequested,
+  trainingCancellationFailed,
   setIsEvaluating,
   evaluationCompleted,
   hydrateLoraState,

@@ -19,6 +19,7 @@ import {
   setIsEvaluating,
   setIsMerging,
   trainingAborted,
+  trainingCancellationFailed,
   trainingCancellationRequested,
   trainingCompleted,
   trainingFailed,
@@ -200,14 +201,9 @@ export const startTrainingThunk = createAsyncThunk<
     dispatch(adapterSaved(meta));
     dispatch(trainingCompleted({ outputAdapterId: adapterId }));
   } catch (err) {
-    // QNBS-v3: a killed child's train_lora rejection can arrive after a newer run has already
-    // started (abort_lora_training waits for exit; currentRun can move on before this settles) —
-    // dispatching against a stale runId would wrongly terminate the newer run instead of a no-op.
+    // QNBS-v3: a killed child's train_lora rejection can arrive after a newer run started (currentRun moved on) — dispatching against a stale runId would wrongly terminate the newer run instead of a no-op.
     if (getState().lora.currentRun?.id !== runId) return;
-    // QNBS-v3: abort_lora_training waits for the killed child to exit before resolving, so the
-    // train_lora invoke it just killed can reject here first — without this check, a successful
-    // user cancellation would archive as a training failure instead of an abort (see
-    // TrainingRun.cancellationRequested).
+    // QNBS-v3: abort_lora_training waits for the killed child to exit, so the train_lora invoke it just killed can reject here first — without this check a successful cancellation archives as a failure.
     if (getState().lora.currentRun?.cancellationRequested) {
       dispatch(trainingAborted());
     } else {
@@ -223,11 +219,16 @@ export const startTrainingThunk = createAsyncThunk<
 export const abortTrainingThunk = createAsyncThunk<void, void, ThunkConfig>(
   'lora/abortTraining',
   async (_, { dispatch }) => {
-    // QNBS-v3: set before awaiting so startTrainingThunk's catch (which can fire first — see there)
-    // can tell a killed process apart from a genuine training failure.
+    // QNBS-v3: set before awaiting so startTrainingThunk's catch (which can fire first — see there) can tell a killed process apart from a genuine training failure.
     dispatch(trainingCancellationRequested());
     const { abortTraining } = await import('../../services/lora/loraTrainingService');
-    await abortTraining();
+    try {
+      await abortTraining();
+    } catch (err) {
+      // QNBS-v3: a failed native abort must not leave cancellationRequested:true set — training may still be genuinely running, and its own later failure must not be misclassified as a user abort.
+      dispatch(trainingCancellationFailed());
+      throw err;
+    }
     dispatch(trainingAborted());
   },
 );

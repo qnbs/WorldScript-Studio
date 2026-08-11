@@ -26,8 +26,7 @@ const mocks = vi.hoisted(() => ({
   modelRec: vi.fn(() => 'm-small'),
 }));
 
-// QNBS-v3: captures the subscribeLocalModelReady callback so tests can simulate a preload that
-// completed outside this section (e.g. the global download modal's Retry button).
+// QNBS-v3: captures the subscribeLocalModelReady callback so tests can simulate a preload that completed outside this section (e.g. the global download modal's Retry button).
 let capturedReadyListener: ((modelId: string) => void) | null = null;
 
 const SUPPORTED_ESTIMATE = {
@@ -146,9 +145,7 @@ describe('LocalAiSection', () => {
   });
 
   it('re-syncs readyIds/throughput/storage and announces when a preload finishes elsewhere', async () => {
-    // QNBS-v3: regression test — the global download-progress modal's Retry button calls
-    // preloadLocalModel directly, bypassing this section's own handleDownload. Simulates that
-    // by firing the subscribeLocalModelReady callback without ever clicking a Download button here.
+    // QNBS-v3: regression test — the global modal's Retry button calls preloadLocalModel directly, bypassing this section's handleDownload; simulated by firing the ready callback with no Download click here.
     render(<LocalAiSection />);
     await screen.findByText('settings.ai.localAi.webgpuAvailable');
     expect(screen.queryByText('settings.ai.localAi.readyBadge')).not.toBeInTheDocument();
@@ -169,8 +166,7 @@ describe('LocalAiSection', () => {
   });
 
   it('does not double-announce when the ready notification matches its own in-flight download', async () => {
-    // QNBS-v3: preloadLocalModel's notification fires before handleDownload's own success branch —
-    // without the downloadingIdRef guard, a self-initiated download would announce twice.
+    // QNBS-v3: preloadLocalModel's notification fires before handleDownload's own success branch — without the downloadingIdRef guard, a self-initiated download would announce twice.
     let resolvePreload!: (v: { layer: string; modelId: string; downloaded: boolean }) => void;
     mocks.preload.mockReturnValue(
       new Promise((resolve) => {
