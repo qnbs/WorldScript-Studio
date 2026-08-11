@@ -109,6 +109,8 @@ export async function abortTraining(): Promise<void> {
     await tauriInvoke('abort_lora_training');
   } catch (err) {
     logger.warn('loraTrainingService: abort failed', { err });
+    // QNBS-v3: A native cancellation failure must reach the thunk so UI state never claims an orphan process stopped.
+    throw err;
   }
 }
 
