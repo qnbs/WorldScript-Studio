@@ -1,8 +1,18 @@
-# pnpm v10/v11 workspace configuration
+# pnpm v11 workspace configuration
 # Build-script allow-list: ONLY these packages may run postinstall/preinstall scripts.
-# All others are silently denied (pnpm v10 default since v9.15+ approve-builds model).
+# All other dependency build scripts are denied by default under pnpm v11.
 # QNBS-v3: TS7 migration - disabled strictPeerDependencies for tsgo preview compatibility
 strictPeerDependencies: false
+verifyDepsBeforeRun: error
+autoInstallPeers: true
+ignoreScripts: false
+engineStrict: true
+preferFrozenLockfile: true
+verifyStoreIntegrity: true
+sideEffectsCache: true
+strictDepBuilds: true
+blockExoticSubdeps: true
+minimumReleaseAge: 10080
 
 # QNBS-v3: Migrated from package.json "pnpm" field (deprecated in pnpm v10+)
 # Overrides with security justifications:
@@ -56,7 +66,7 @@ overrides:
   axios: ">=1.18.0"
   basic-ftp: ">=5.3.1"
   fast-uri: ">=3.1.5 <4"
-  ip-address: ">=10.3.1"
+  ip-address: "10.3.1"
   ws: ">=8.21.0"
   form-data: ">=4.0.6"
   brace-expansion: ">=5.0.9"
@@ -78,20 +88,6 @@ peerDependencyRules:
   allowedVersions:
     vite-plugin-pwa>vite: "8"
 
-onlyBuiltDependencies:
-  - "@google/genai"
-  - "@swc/core"
-  - core-js
-  - esbuild
-  - protobufjs
-  - sharp
-  - workerd
-
-ignoredBuiltDependencies:
-  - onnxruntime-node
-  - simple-git-hooks
-  - unrs-resolver
-
 patchedDependencies:
   zod@4.4.3: patches/zod@4.4.3.patch
 
@@ -99,13 +95,13 @@ packages:
   - "packages/*"
 
 allowBuilds:
-  '@google/genai': true
+  '@google/genai': false
   '@swc/core': true
-  core-js: true
+  core-js: false
   esbuild: true
-  onnxruntime-node: true
-  protobufjs: true
-  sharp: true
-  simple-git-hooks: true
-  unrs-resolver: true
-  workerd: true
+  onnxruntime-node: false
+  protobufjs: false
+  sharp: false
+  simple-git-hooks: false
+  unrs-resolver: false
+  workerd: false
