@@ -6,14 +6,14 @@ authoritative closure record for the responsiveness portions of
 [#332](https://github.com/qnbs/WorldScript-Studio/issues/332) and
 [#333](https://github.com/qnbs/WorldScript-Studio/issues/333).
 
-## Live baseline — 2026-08-11
+## Live baseline — 2026-08-11 (updated)
 
 | Ref | Live value |
 | --- | --- |
 | `main` | `804793aa0815a726935785639e4fb139af7c4b59` |
-| PR #335 | `fa3cd983260cd91d412d6a57508e4d4f600cff2e` |
-| PR #336 | `fd7ed7c1489df0a9453cc0d67a0e59b22f49ea9d` |
-| PR #337 | `dda48b33d56f6cfbae7b2e134553ab769a52d7af` (local merge pending push) |
+| PR #335 | `5e80aaa44fc6e31bf50b06294be106577d4d93c3` |
+| PR #336 | `2438f991afa4ad3630573e2d12a8fcf83f5280d5` |
+| PR #337 | `dc0b5262b7c1c9d9dc1a3b33551d497f29a3a1a8` (pushed; review threads: 0 unresolved) |
 | PR #310 | `27177ce549d4579f1fc9dfbc4630ebf0c2592f9b` |
 | Issue #332 / #333 | Open / Open; neither has post-report comments |
 

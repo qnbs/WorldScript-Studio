@@ -35,7 +35,7 @@ the replacements because that would duplicate migrations and lifecycle controls.
 | PR310-R006 | `c991c03` | Add AAD, Blob codec, delete gating, and lifecycle calls | ADOPTED_WITH_MODIFICATIONS | AAD/Blob/delete protections move into the shared policy; unsafe lifecycle calls are superseded |
 | PR310-R007 | `3a18c9d` | Reduce codec complexity for DeepSource | NO_LONGER_APPLICABLE | The final codec is structured for correctness; analyzer thresholds will not be raised to hide risk |
 | PR310-R008 | `5f3ad25` | Consolidate secondary-store migration | SUPERSEDED_BY_BETTER_IMPLEMENTATION | Replace aggregate helpers with registered adapters driven by durable journal checkpoints |
-| PR310-R009 | `27177ce` | Cover migration and missing-store paths | REWRITE | Preserve missing-store coverage and add interruption, legacy-shape, resume, and verification cases |
+| PR310-R009 | `27177ce` | Cover migration and missing-store paths | ADOPTED_WITH_MODIFICATIONS | Missing-store coverage preserved; interruption, legacy-shape, resume, and verification cases all added — see PR310-R016 |
 
 ## Behavior reconciliation
 
@@ -73,7 +73,7 @@ not a disposition.
 | `PRRT_kwDOQOeAgc6WAh9q` | Scene revision eviction decrypts all content | ADOPTED_WITH_MODIFICATIONS: use plaintext routing metadata for eviction |
 | `PRRT_kwDOQOeAgc6WAsgW`, `PRRT_kwDOQOeAgc6WA2oe`, `PRRT_kwDOQOeAgc6WBH2E`, `PRRT_kwDOQOeAgc6WBsgD` | Rotation/disable lose legacy flat record shapes | SUPERSEDED_BY_BETTER_IMPLEMENTATION: canonical per-store decoders are part of journal adapters |
 | `PRRT_kwDOQOeAgc6WBA9v` | Required one-line rationale missing | NO_LONGER_APPLICABLE: unsafe call is removed; new non-trivial lifecycle calls include a one-line rationale |
-| `PRRT_kwDOQOeAgc6WBA90`, `PRRT_kwDOQOeAgc6WBA95`, `PRRT_kwDOQOeAgc6WBA-a` | Missing stores, malformed cache data, and history migration behavior | REWRITE: final registered adapters use safe open/close, shape validation, and single-transaction writes |
+| `PRRT_kwDOQOeAgc6WBA90`, `PRRT_kwDOQOeAgc6WBA95`, `PRRT_kwDOQOeAgc6WBA-a` | Missing stores, malformed cache data, and history migration behavior | ADOPTED_WITH_MODIFICATIONS: final registered adapters use safe open/close, shape validation, and single-transaction writes — see PR310-R016 |
 | `PRRT_kwDOQOeAgc6WBA-i` | Codec stringifies unsupported values / corrupts non-finite numbers | ADOPTED_WITH_MODIFICATIONS: explicit undefined node and strict unsupported-value rejection |
 | `PRRT_kwDOQOeAgc6WBmtc` | DeepSource parses an ESM maintainer script as CommonJS | SUPERSEDED_BY_BETTER_IMPLEMENTATION: remove the ad-hoc resolver script and fix analyzer-compatible code/config without a threshold waiver |
 
@@ -83,7 +83,7 @@ not a disposition.
 | --- | --- | --- |
 | Secure envelope and corruption tests | UPDATE | Candidate, version, IV/ciphertext, AAD swap, codec-value, and wrong-key cases |
 | Per-store encrypted round trips | RETAIN | One registered adapter fixture per protected store, including binary artifacts |
-| Legacy lazy-migration tests | REWRITE | Flat legacy shape plus conditional write race and failure-safe read result |
+| Legacy lazy-migration tests | ADOPTED_WITH_MODIFICATIONS | Flat legacy shape plus conditional write race and failure-safe read result — see PR310-R016 |
 | Secondary lifecycle happy paths | REPLACE | Journal creation, every checkpoint boundary, interruption/restart, verify, commit, cleanup |
 | Optional/missing store test | RETAIN | Missing stores are no-ops that are checkpointed and verified rather than silently skipped |
 | Cross-project mock repair | UPDATE | Keep the full constants mock only if final test imports require it |
@@ -101,6 +101,7 @@ part of the replacement architecture, not a reason to merge #310 unchanged.
 | PR310-R013 | Snapshot lookup could turn a missing record into `undefined` data | ADOPTED_WITH_MODIFICATIONS | Snapshot reads now reject a typed not-found condition; callers cannot mistake absence for a valid decrypted payload. | `idbSnapshotStore.test.ts` missing-snapshot case |
 | PR310-R014 | Scene revision retention decrypted content and could prune unknown future schemas | ADOPTED_WITH_MODIFICATIONS | Retention runs with plaintext routing metadata in one transaction, caps only recognised schema-1/validated legacy records, and preserves unrecognised future-format records. | `sceneRevisionService.test.ts` retention and future-schema cases |
 | PR310-R015 | A non-authoritative inference cache persistence failure could discard a usable result while locked/durable persistence changed state | ADOPTED_WITH_MODIFICATIONS | The memory cache remains available after a best-effort durable-cache failure; durable writes remain subject to the central lifecycle guard. | `aiInferenceCacheService.test.ts` durable-write-failure case |
+| PR310-R016 | Consolidates PR310-R009's four required test categories (interruption, legacy-shape, resume, verification) plus missing-store coverage — previously tracked under the impermissible interim disposition `REWRITE` | ADOPTED_WITH_MODIFICATIONS | Missing-store/checkpoint: the runner throws a clear error for an unregistered adapter or a checkpoint-less registration instead of silently skipping it. Interruption + resume: a verify() exception mid-phase leaves the journal at `verifying` and a subsequent call resumes from the durable per-store `verified` checkpoint rather than re-running already-verified stores. Verification shortfall: a re-scan finding fewer valid records than were migrated now moves the journal to `recovery-required` instead of retrying an unwinnable check forever. Legacy-shape: plaintext/pre-migration record shapes decode correctly and convert to the current encrypted envelope shape without data loss. | `protectedStoreMigration.test.ts`: `'rejects a missing registered adapter before a migration can mutate storage'`, `'rejects a registered adapter that has no durable checkpoint before mutation'`, `'does not repeat a durably verified store after verification is interrupted'`, `'marks recovery-required instead of looping forever when verification finds fewer valid records than were migrated'`; `secondaryPayloadStoreAdapter.test.ts`: `'converts plaintext through enable, resumable rekey, and verified disable'` |
 
 ### Review findings already disproved by executable guards
 
