@@ -29,6 +29,8 @@ export interface EncryptionMigrationStoreCheckpoint {
 export interface EncryptionMigrationJournal {
   schemaVersion: number;
   operationId: string;
+  /** Monotone compare-and-swap token; it is independent from wall-clock precision. */
+  revision: number;
   operation: EncryptionMigrationOperation;
   phase: EncryptionMigrationPhase;
   startedAt: number;
@@ -58,6 +60,16 @@ export class IdbMigrationRecoveryRequiredError extends Error {
   }
 }
 
+/** Raised when a delayed tab tries to overwrite a newer durable journal state. */
+export class IdbMigrationOwnershipError extends Error {
+  readonly code = 'ENCRYPTION_MIGRATION_OWNERSHIP_LOST' as const;
+
+  constructor() {
+    super('Encryption migration journal ownership was lost');
+    this.name = 'IdbMigrationOwnershipError';
+  }
+}
+
 function isPhase(value: unknown): value is EncryptionMigrationPhase {
   return (
     value === 'prepared' ||
@@ -77,9 +89,12 @@ function isOperation(value: unknown): value is EncryptionMigrationOperation {
 function parseJournal(raw: unknown): EncryptionMigrationJournal | null {
   if (!raw || typeof raw !== 'object') return null;
   const value = raw as Partial<EncryptionMigrationJournal>;
+  const revision = value.revision ?? 0;
   if (
     value.schemaVersion !== JOURNAL_SCHEMA_VERSION ||
     typeof value.operationId !== 'string' ||
+    !Number.isSafeInteger(revision) ||
+    revision < 0 ||
     !isOperation(value.operation) ||
     !isPhase(value.phase) ||
     typeof value.startedAt !== 'number' ||
@@ -106,7 +121,8 @@ function parseJournal(raw: unknown): EncryptionMigrationJournal | null {
   ) {
     return null;
   }
-  return value as EncryptionMigrationJournal;
+  // QNBS-v3: Pre-CAS journals are safely upgraded in memory and persist a revision on their next write.
+  return { ...value, revision } as EncryptionMigrationJournal;
 }
 
 function journalIsActive(journal: EncryptionMigrationJournal): boolean {
@@ -162,12 +178,61 @@ class EncryptionMigrationJournalStore extends IdbConnectionManager {
     });
   }
 
-  async save(journal: EncryptionMigrationJournal): Promise<void> {
+  async saveIfCurrent(journal: EncryptionMigrationJournal): Promise<EncryptionMigrationJournal> {
+    const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
+    const transaction = store.transaction;
+    const next: EncryptionMigrationJournal = {
+      ...journal,
+      revision: journal.revision + 1,
+      updatedAt: Date.now(),
+    };
+    return new Promise((resolve, reject) => {
+      let writeQueued = false;
+      const existingRequest = store.get(JOURNAL_RECORD_KEY);
+      existingRequest.onerror = () => reject(existingRequest.error);
+      existingRequest.onsuccess = () => {
+        const existing = parseJournal(existingRequest.result);
+        if (
+          !existing ||
+          existing.operationId !== journal.operationId ||
+          existing.revision !== journal.revision
+        ) {
+          reject(new IdbMigrationOwnershipError());
+          return;
+        }
+        const putRequest = store.put(next, JOURNAL_RECORD_KEY);
+        putRequest.onerror = () => reject(putRequest.error);
+        writeQueued = true;
+      };
+      transaction.oncomplete = () => {
+        if (writeQueued) resolve(next);
+      };
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () =>
+        reject(transaction.error ?? new Error('Journal transaction aborted'));
+    });
+  }
+
+  async clearCompleted(): Promise<void> {
     const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
     const transaction = store.transaction;
     return new Promise((resolve, reject) => {
-      const request = store.put(journal, JOURNAL_RECORD_KEY);
-      request.onerror = () => reject(request.error);
+      const existingRequest = store.get(JOURNAL_RECORD_KEY);
+      existingRequest.onerror = () => reject(existingRequest.error);
+      existingRequest.onsuccess = () => {
+        if (existingRequest.result === undefined) return;
+        const existing = parseJournal(existingRequest.result);
+        if (!existing) {
+          reject(new IdbMigrationRecoveryRequiredError());
+          return;
+        }
+        if (journalIsActive(existing)) {
+          reject(new IdbMigrationInProgressError(existing));
+          return;
+        }
+        const deleteRequest = store.delete(JOURNAL_RECORD_KEY);
+        deleteRequest.onerror = () => reject(deleteRequest.error);
+      };
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);
       transaction.onabort = () =>
@@ -175,17 +240,8 @@ class EncryptionMigrationJournalStore extends IdbConnectionManager {
     });
   }
 
-  async delete(): Promise<void> {
-    const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
-    const transaction = store.transaction;
-    return new Promise((resolve, reject) => {
-      const request = store.delete(JOURNAL_RECORD_KEY);
-      request.onerror = () => reject(request.error);
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
-      transaction.onabort = () =>
-        reject(transaction.error ?? new Error('Journal transaction aborted'));
-    });
+  resetConnectionsForTest(): void {
+    this.closeConnections();
   }
 }
 
@@ -196,12 +252,13 @@ export async function readEncryptionMigrationJournal(): Promise<EncryptionMigrat
 }
 
 export async function beginEncryptionMigration(
-  input: Omit<EncryptionMigrationJournal, 'schemaVersion' | 'startedAt' | 'updatedAt'>,
+  input: Omit<EncryptionMigrationJournal, 'schemaVersion' | 'revision' | 'startedAt' | 'updatedAt'>,
 ): Promise<EncryptionMigrationJournal> {
   const now = Date.now();
   const journal: EncryptionMigrationJournal = {
     ...input,
     schemaVersion: JOURNAL_SCHEMA_VERSION,
+    revision: 0,
     startedAt: now,
     updatedAt: now,
   };
@@ -213,28 +270,17 @@ export async function updateEncryptionMigrationJournal(
   journal: EncryptionMigrationJournal,
   changes: Pick<EncryptionMigrationJournal, 'phase' | 'stores'>,
 ): Promise<EncryptionMigrationJournal> {
-  const updated: EncryptionMigrationJournal = {
-    ...journal,
-    ...changes,
-    updatedAt: Date.now(),
-  };
-  await journalStore.save(updated);
-  return updated;
+  return journalStore.saveIfCurrent({ ...journal, ...changes });
 }
 
 export async function completeEncryptionMigration(
   journal: EncryptionMigrationJournal,
 ): Promise<void> {
-  await journalStore.save({ ...journal, phase: 'completed', updatedAt: Date.now() });
+  await journalStore.saveIfCurrent({ ...journal, phase: 'completed' });
 }
 
 export async function clearCompletedEncryptionMigration(): Promise<void> {
-  const journal = await journalStore.read();
-  if (!journal || journal.phase === 'completed') {
-    await journalStore.delete();
-    return;
-  }
-  throw new IdbMigrationInProgressError(journal);
+  await journalStore.clearCompleted();
 }
 
 /** Reject normal protected access while a cross-store migration is not in a terminal state. */
@@ -246,3 +292,8 @@ export async function assertNoActiveEncryptionMigration(): Promise<void> {
 }
 
 export const __encryptionMigrationJournalRecordKeyForTest = JOURNAL_RECORD_KEY;
+
+/** Test-only reset so a new fake IndexedDB factory cannot reuse stale singleton connections. */
+export function __resetEncryptionMigrationJournalConnectionsForTest(): void {
+  journalStore.resetConnectionsForTest();
+}

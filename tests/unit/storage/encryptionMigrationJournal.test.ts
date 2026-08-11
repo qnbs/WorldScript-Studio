@@ -3,12 +3,15 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  __resetEncryptionMigrationJournalConnectionsForTest,
   assertNoActiveEncryptionMigration,
   beginEncryptionMigration,
   clearCompletedEncryptionMigration,
   completeEncryptionMigration,
   IdbMigrationInProgressError,
+  IdbMigrationOwnershipError,
   readEncryptionMigrationJournal,
+  updateEncryptionMigrationJournal,
 } from '../../../services/storage/encryptionMigrationJournal';
 import { IdbProjectStore } from '../../../services/storage/idbProjectStore';
 import type { Settings } from '../../../types';
@@ -30,21 +33,13 @@ const migrationInput = (operationId: string) => ({
   ],
 });
 
-beforeEach(async () => {
+beforeEach(() => {
+  __resetEncryptionMigrationJournalConnectionsForTest();
   globalThis.indexedDB = new IDBFactory();
-  const journal = await readEncryptionMigrationJournal();
-  if (journal) {
-    await completeEncryptionMigration(journal);
-  }
-  await clearCompletedEncryptionMigration();
 });
 
-afterEach(async () => {
-  const journal = await readEncryptionMigrationJournal();
-  if (journal) {
-    await completeEncryptionMigration(journal);
-  }
-  await clearCompletedEncryptionMigration();
+afterEach(() => {
+  __resetEncryptionMigrationJournalConnectionsForTest();
 });
 
 describe('encryption migration journal', () => {
@@ -53,6 +48,7 @@ describe('encryption migration journal', () => {
     const restored = await readEncryptionMigrationJournal();
 
     expect(created.schemaVersion).toBe(1);
+    expect(created.revision).toBe(0);
     expect(restored).toMatchObject({
       operationId: 'operation-1',
       operation: 'rekey',
@@ -87,6 +83,39 @@ describe('encryption migration journal', () => {
 
     await expect(beginEncryptionMigration(migrationInput('operation-2'))).resolves.toMatchObject({
       operationId: 'operation-2',
+    });
+  });
+
+  it('rejects a delayed owner instead of overwriting a newer checkpoint', async () => {
+    const created = await beginEncryptionMigration(migrationInput('operation-1'));
+    const updated = await updateEncryptionMigrationJournal(created, {
+      phase: 'migrating',
+      stores: [{ ...created.stores[0], processed: 1, verified: 1, done: false }],
+    });
+
+    await expect(
+      updateEncryptionMigrationJournal(created, {
+        phase: 'verifying',
+        stores: created.stores,
+      }),
+    ).rejects.toBeInstanceOf(IdbMigrationOwnershipError);
+    await expect(readEncryptionMigrationJournal()).resolves.toMatchObject({
+      operationId: 'operation-1',
+      phase: 'migrating',
+      revision: updated.revision,
+      stores: [{ processed: 1, verified: 1, done: false }],
+    });
+  });
+
+  it('never clears an active journal during completed-state cleanup', async () => {
+    await beginEncryptionMigration(migrationInput('operation-1'));
+
+    await expect(clearCompletedEncryptionMigration()).rejects.toBeInstanceOf(
+      IdbMigrationInProgressError,
+    );
+    await expect(readEncryptionMigrationJournal()).resolves.toMatchObject({
+      operationId: 'operation-1',
+      phase: 'prepared',
     });
   });
 });

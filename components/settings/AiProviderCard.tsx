@@ -123,6 +123,24 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
   // context has since moved on — e.g. a switch to Ollama-in-browser must not let an older
   // request's raw error text land in testError once ollamaUntestable becomes true.
   const testRequestIdRef = useRef(0);
+  const diagnosticContextRef = useRef<string | null>(null);
+  const localDiagnosticContext = [
+    provider,
+    ollamaBaseUrl,
+    advancedAi.localBackendPreset,
+    advancedAi.openAiCompatibleBaseUrl,
+    browserOllamaEnabled ? 'browser-enabled' : 'desktop-only',
+  ].join('\u0000');
+
+  useEffect(() => {
+    // QNBS-v3: A completed diagnostic only describes the exact local endpoint context that was tested.
+    if (diagnosticContextRef.current === localDiagnosticContext) return;
+    diagnosticContextRef.current = localDiagnosticContext;
+    testRequestIdRef.current += 1;
+    setTestStatus('idle');
+    setTestError('');
+    setLocalDiagnostic(null);
+  }, [localDiagnosticContext]);
 
   useEffect(() => {
     storageService

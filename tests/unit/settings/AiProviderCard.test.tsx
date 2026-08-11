@@ -289,6 +289,48 @@ describe('AiProviderCard — ollama provider (#266)', () => {
     expect(screen.getByText('local-model')).toBeTruthy();
   });
 
+  it('clears a completed local diagnostic when its endpoint context changes', async () => {
+    setDesktopRuntime(true);
+    vi.mocked(testAIConnection).mockResolvedValueOnce({
+      ok: true,
+      localServer: {
+        normalizedEndpoint: 'http://127.0.0.1:1234/v1',
+        transport: 'tauri-http',
+        modelNames: ['local-model'],
+      },
+    });
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <AiProviderCard
+        advancedAi={{
+          ...ollamaAdvancedAi,
+          ollamaBaseUrl: 'http://localhost:1234',
+          localBackendPreset: 'lm_studio',
+        }}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'settings.ai.testConnection' }));
+    await waitFor(() => expect(screen.getByText('local-model')).toBeTruthy());
+
+    rerender(
+      <AiProviderCard
+        advancedAi={{
+          ...ollamaAdvancedAi,
+          ollamaBaseUrl: 'http://localhost:8000',
+          localBackendPreset: 'vllm',
+        }}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+
+    await waitFor(() => expect(screen.queryByText('local-model')).toBeNull());
+    expect(screen.getByText('settings.ai.providerStatusNotTested')).toBeTruthy();
+  });
+
   it('desktop: scan renders classified status badges and the use-url action patches settings', async () => {
     setDesktopRuntime(true);
     vi.mocked(scanLocalOpenAiCompatibleEndpoints).mockResolvedValueOnce([
