@@ -11,6 +11,7 @@
  *   If no sentinel exists the feature flag is silently cleared (App.tsx startup guard).
  */
 
+import { assertNoActiveEncryptionMigration } from './encryptionMigrationJournal';
 import { decompressData } from './idbCore';
 import { getPassphraseSentinel, savePassphraseSentinel } from './idbPassphraseSentinel';
 
@@ -175,6 +176,7 @@ export function isIdbEncryptionReady(): boolean {
  * Call this before opening an IDB write transaction so callers cannot downgrade to plaintext.
  */
 export async function assertIdbProtectedWriteAllowed(): Promise<void> {
+  await assertNoActiveEncryptionMigration();
   if (_activeKey) return;
   if (await hasPassphraseSentinel()) throw new IdbStorageLockedError();
 }
