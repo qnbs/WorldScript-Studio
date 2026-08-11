@@ -42,7 +42,12 @@ pub struct LoraEnvReport {
     pub cuda_available: bool,
     pub vram_gb: f32,
     pub python_version: String,
+    // QNBS-v3: scripts/check_lora_env.py never emits these two fields — without #[serde(default)]
+    //          every successful helper run fails deserialization and reports
+    //          helper_report_parse_failed, hiding the real Unsloth/CUDA status.
+    #[serde(default)]
     pub python_path: Option<String>,
+    #[serde(default)]
     pub last_error: Option<String>,
 }
 
@@ -121,7 +126,12 @@ async fn probe_python(candidate: String) -> Result<ResolvedPython, String> {
 
     let mut command = Command::new(&candidate);
     command
-        .arg("--version")
+        // QNBS-v3: probe actual Python identity via `-c "import sys; ..."`, not `--version` text —
+        //          a manually-chosen path pointing at any other executable that happens to print a
+        //          numeric string (e.g. `bash --version` → "5.1...") would otherwise pass this check
+        //          and later be invoked with Python script arguments.
+        .arg("-c")
+        .arg("import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         // QNBS-v3: A timed-out interpreter probe must not leave a hidden child consuming desktop resources.
@@ -426,22 +436,28 @@ async fn confirm_training_process_terminated(pid: u32) -> Result<bool, String> {
     Ok(false)
 }
 
-async fn terminate_training_process(pid: u32) -> Result<(), String> {
+// QNBS-v3: `force` escalates from SIGTERM to SIGKILL on Unix so a process that ignores/delays the
+//          first signal can still be cancelled on retry, instead of leaving abort permanently stuck.
+async fn terminate_training_process(pid: u32, force: bool) -> Result<(), String> {
     #[cfg(unix)]
     let output = {
         let process_group = format!("-{pid}");
+        let signal = if force { "-KILL" } else { "-TERM" };
         Command::new("kill")
-            .args(["-TERM", "--", process_group.as_str()])
+            .args([signal, "--", process_group.as_str()])
             .output()
             .await
             .map_err(|_| "training_cancel_spawn_failed".to_string())?
     };
     #[cfg(windows)]
-    let output = Command::new("taskkill")
-        .args(["/PID", &pid.to_string(), "/T", "/F"])
-        .output()
-        .await
-        .map_err(|_| "training_cancel_spawn_failed".to_string())?;
+    let output = {
+        let _ = force; // QNBS-v3: taskkill /F is already forceful; retried as-is on escalation.
+        Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .output()
+            .await
+            .map_err(|_| "training_cancel_spawn_failed".to_string())?
+    };
 
     if !output.status.success() && is_training_process_running(pid).await? {
         return Err("training_cancel_signal_failed".to_string());
@@ -586,10 +602,10 @@ pub async fn train_lora(app: AppHandle, payload: LoraTrainPayload) -> Result<Str
         Ok("training_completed".to_string())
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(format!(
-            "Training failed: {}",
-            &stderr[..stderr.len().min(500)]
-        ))
+        // QNBS-v3: truncate on a char boundary, not a byte index — a raw byte slice can panic if it
+        //          lands inside a multibyte character (e.g. a non-ASCII path in a Python traceback).
+        let truncated: String = stderr.chars().take(500).collect();
+        Err(format!("Training failed: {truncated}"))
     }
 }
 
@@ -640,20 +656,36 @@ pub async fn abort_lora_training() -> Result<(), String> {
     match request_training_abort()? {
         AbortTrainingRequest::NothingRunning | AbortTrainingRequest::CancelPendingStart => Ok(()),
         AbortTrainingRequest::StopProcess(pid) => {
-            if let Err(error) = terminate_training_process(pid).await {
+            if let Err(error) = terminate_training_process(pid, false).await {
                 if error != "training_cancel_not_confirmed" {
                     restore_running_training(pid)?;
                 }
                 return Err(error);
             }
+            // QNBS-v3: clear the slot as soon as termination is confirmed here — waiting only for
+            //          train_lora's own reap left a window where a successful abort still answered
+            //          "training_already_running" to an immediate retry. Safe to call twice: it's
+            //          PID-guarded, so train_lora's later reap of this same pid is then a no-op.
+            clear_training_if(pid)?;
             Ok(())
         }
         AbortTrainingRequest::AlreadyStopping(pid) => {
-            if confirm_training_process_terminated(pid).await? {
-                Ok(())
-            } else {
-                Err("training_cancellation_in_progress".to_string())
+            // QNBS-v3: escalate to SIGKILL on retry — a process that ignored the first SIGTERM
+            //          would otherwise leave every subsequent abort stuck polling forever with no
+            //          way to actually cancel it. terminate_training_process already confirms
+            //          termination internally, so reaching past it means the process is gone.
+            if let Err(error) = terminate_training_process(pid, true).await {
+                if error != "training_cancel_not_confirmed" {
+                    restore_running_training(pid)?;
+                }
+                return Err(if error == "training_cancel_not_confirmed" {
+                    "training_cancellation_in_progress".to_string()
+                } else {
+                    error
+                });
             }
+            clear_training_if(pid)?;
+            Ok(())
         }
     }
 }
@@ -784,7 +816,7 @@ mod tests {
     use super::{
         active_training_state, clear_training_if, ensure_training_start_not_cancelled,
         mark_training_running, parse_python_version, request_training_abort, reserve_training_slot,
-        AbortTrainingRequest, TrainingState,
+        AbortTrainingRequest, LoraEnvReport, TrainingState,
     };
 
     fn reset_training_state() {
@@ -802,8 +834,36 @@ mod tests {
     }
 
     #[test]
+    fn parses_python_version_from_a_bare_sys_version_info_probe() {
+        // QNBS-v3: the -c "import sys; ..." probe prints a bare "major.minor.micro" with no prefix.
+        assert_eq!(
+            parse_python_version("3.11.9"),
+            Some((3, 11, "3.11.9".to_string()))
+        );
+    }
+
+    #[test]
     fn rejects_malformed_python_version_output() {
         assert_eq!(parse_python_version("not-python"), None);
+    }
+
+    #[test]
+    fn deserializes_the_helper_script_output_without_python_path_or_last_error() {
+        // QNBS-v3 regression: scripts/check_lora_env.py never emits these two fields — without
+        // #[serde(default)] every successful helper run failed deserialization.
+        let helper_json = r#"{
+            "python_available": true,
+            "python_version": "3.11.9",
+            "unsloth_available": true,
+            "cuda_available": true,
+            "vram_gb": 24.0
+        }"#;
+        let report: LoraEnvReport = serde_json::from_str(helper_json)
+            .expect("helper output without the newer fields must parse");
+        assert!(report.python_path.is_none());
+        assert!(report.last_error.is_none());
+        assert!(report.unsloth_available);
+        assert!(report.cuda_available);
     }
 
     #[test]
