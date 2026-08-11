@@ -238,9 +238,39 @@ describe('localAiFacade', () => {
       const progSpy = vi.spyOn(inferenceProgressEmitter, 'reportWebLlmProgress');
       const readySpy = vi.spyOn(inferenceProgressEmitter, 'reportWebLlmReady');
       const { generateLocalText } = await import('../../services/localAiFacade');
-      await generateLocalText('prompt', 'm');
+      // QNBS-v3: reportToGlobalProgress:true simulates preloadLocalModel's call — the only caller
+      // that should drive the singleton emitter (see the ordinary-call test right below).
+      await generateLocalText('prompt', 'm', undefined, undefined, undefined, {
+        reportToGlobalProgress: true,
+      });
       expect(progSpy).toHaveBeenCalledWith(0.5, 'half');
       expect(readySpy).toHaveBeenCalled();
+      progSpy.mockRestore();
+      readySpy.mockRestore();
+    }),
+  );
+
+  it(
+    'does not touch the global download emitter for an ordinary generation call',
+    withWorkerGlobal(async () => {
+      // QNBS-v3: regression test — an ordinary Writer/Copilot/ProForge call (no
+      // reportToGlobalProgress) must never make the global "downloading a model" modal appear.
+      mockDetectWebGpuSupport.mockReturnValue(true);
+      mockEnsureWebLlmPool.mockResolvedValue(
+        makeFakeBus({
+          result: Promise.resolve({ text: 'done', layer: 'webllm', modelId: 'm' }),
+          progressEvents: [{ stage: 'loading', progress: 0.5, message: 'half' }],
+        }),
+      );
+      const { inferenceProgressEmitter } = await import(
+        '../../services/ai/inferenceProgressEmitter'
+      );
+      const progSpy = vi.spyOn(inferenceProgressEmitter, 'reportWebLlmProgress');
+      const readySpy = vi.spyOn(inferenceProgressEmitter, 'reportWebLlmReady');
+      const { generateLocalText } = await import('../../services/localAiFacade');
+      await generateLocalText('prompt', 'm');
+      expect(progSpy).not.toHaveBeenCalled();
+      expect(readySpy).not.toHaveBeenCalled();
       progSpy.mockRestore();
       readySpy.mockRestore();
     }),
@@ -329,5 +359,44 @@ describe('localAiFacade', () => {
 
     await expect(preloadLocalModel('Qwen2.5-0.5B')).rejects.toThrow('aborted mid-flight');
     expect(errorSpy).not.toHaveBeenCalled();
+  });
+
+  it('resets the emitter (not error) when a caller-provided signal aborts the preload', async () => {
+    // QNBS-v3: regression test — a caller-provided AbortSignal (distinct from the modal's own
+    // Cancel button, which reports its own terminal state) previously left the emitter stuck in
+    // 'loading' since the catch block only suppressed the error report without resetting it.
+    const { inferenceProgressEmitter } = await import('../../services/ai/inferenceProgressEmitter');
+    const errorSpy = vi.spyOn(inferenceProgressEmitter, 'reportWebLlmError');
+    const resetSpy = vi.spyOn(inferenceProgressEmitter, 'reset');
+    const { preloadLocalModel } = await import('../../services/localAiFacade');
+
+    const controller = new AbortController();
+    mockRunLocalTextGeneration.mockImplementation(async () => {
+      controller.abort();
+      const err = new DOMException('aborted', 'AbortError');
+      throw err;
+    });
+
+    await expect(preloadLocalModel('Qwen2.5-0.5B', undefined, controller.signal)).rejects.toThrow();
+    expect(resetSpy).toHaveBeenCalled();
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+
+  it('resets the emitter when a preload falls back off WebLLM (generateLocalText level)', async () => {
+    // QNBS-v3: regression test — generateLocalText itself must terminate 'loading' for any
+    // reportToGlobalProgress caller whose result isn't webllm, not only for preloadLocalModel's
+    // own outer handling (an ordinary caller that opted in would otherwise get stuck at 'loading').
+    mockRunLocalTextGeneration.mockResolvedValue({ layer: 'onnx', text: 'fallback' });
+    const { inferenceProgressEmitter } = await import('../../services/ai/inferenceProgressEmitter');
+    const resetSpy = vi.spyOn(inferenceProgressEmitter, 'reset');
+    const readySpy = vi.spyOn(inferenceProgressEmitter, 'reportWebLlmReady');
+    const { generateLocalText } = await import('../../services/localAiFacade');
+
+    await generateLocalText('prompt', 'm', undefined, undefined, undefined, {
+      reportToGlobalProgress: true,
+    });
+
+    expect(resetSpy).toHaveBeenCalled();
+    expect(readySpy).not.toHaveBeenCalled();
   });
 });
