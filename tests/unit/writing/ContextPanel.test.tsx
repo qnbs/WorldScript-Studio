@@ -75,33 +75,43 @@ vi.mock('../../../hooks/useTranslation', () => ({
 let lastDebouncedTextareaVariant: string | undefined;
 let lastDebouncedTextareaOnScroll: ((e: React.UIEvent<HTMLTextAreaElement>) => void) | undefined;
 
+type MockDebouncedTextareaProps = Omit<
+  React.TextareaHTMLAttributes<HTMLTextAreaElement>,
+  'value'
+> & {
+  value: string;
+  variant?: string;
+};
+
+function DebouncedTextareaMock(
+  {
+    value,
+    placeholder,
+    'aria-label': ariaLabel,
+    variant,
+    onScroll,
+    ...rest
+  }: MockDebouncedTextareaProps,
+  ref: React.Ref<HTMLTextAreaElement>,
+) {
+  lastDebouncedTextareaVariant = variant;
+  lastDebouncedTextareaOnScroll = onScroll;
+  return (
+    <textarea
+      ref={ref}
+      data-testid="debounced-textarea"
+      defaultValue={value}
+      placeholder={placeholder}
+      aria-label={ariaLabel}
+      onScroll={onScroll}
+      {...rest}
+    />
+  );
+}
+
 // Stub DebouncedTextarea to avoid debounce complexity in tests
 vi.mock('../../../components/ui/DebouncedTextarea', () => ({
-  DebouncedTextarea: forwardRef<
-    HTMLTextAreaElement,
-    {
-      value: string;
-      placeholder?: string;
-      'aria-label'?: string;
-      variant?: string;
-      onScroll?: (e: React.UIEvent<HTMLTextAreaElement>) => void;
-      [key: string]: unknown;
-    }
-  >(({ value, placeholder, 'aria-label': ariaLabel, variant, onScroll, ...rest }, ref) => {
-    lastDebouncedTextareaVariant = variant;
-    lastDebouncedTextareaOnScroll = onScroll;
-    return (
-      <textarea
-        ref={ref}
-        data-testid="debounced-textarea"
-        defaultValue={value}
-        placeholder={placeholder}
-        aria-label={ariaLabel}
-        onScroll={onScroll}
-        {...(rest as object)}
-      />
-    );
-  }),
+  DebouncedTextarea: forwardRef(DebouncedTextareaMock),
 }));
 
 vi.mock('../../../components/ui/DictationButton', () => ({

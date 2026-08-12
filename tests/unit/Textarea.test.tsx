@@ -159,7 +159,7 @@ describe('Textarea', () => {
     });
 
     it('still applies the resolved font family from settings', () => {
-      mockSettings = { editorFont: 'serif', fontSize: 18, lineSpacing: 1.8 };
+      mockSettings = { editorFont: 'serif', fontSize: 18, lineSpacing: 1.8, customFont: undefined };
       render(<Textarea variant="overlay" data-testid="ta" />);
       expect(screen.getByTestId('ta').style.fontFamily).toContain('Merriweather');
     });
