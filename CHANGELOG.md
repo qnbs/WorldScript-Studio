@@ -71,6 +71,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   padding/mic button) and a single shared `services/editorTypography.ts` font-stack resolver used
   by both the real textarea and its mirror in both components, plus one-directional scroll sync
   from each real textarea to its mirror. (#341)
+- **Overlay-variant textareas dropped RTL font resolution, custom-font selection, and dictation.**
+  `resolveEditorFontFamily` now also takes the active text direction and `settings.customFont?.name`
+  (previously every `editorFont: 'custom'` silently rendered as JetBrains Mono, and RTL sessions used
+  LTR font stacks); the new `DictationButton` component restores the microphone entry point that
+  `variant="overlay"` had unconditionally removed from both Writer Studio and the manuscript editor,
+  rendered as a sibling above the mirror instead of inside `Textarea` itself. Also fixes two related
+  scroll-sync gaps: the mirror now resets to the top on a section switch instead of showing a stale
+  offset, and re-syncs after debounced/deferred content growth instead of staying clamped to a
+  since-invalid scroll range. (#341, #344)
 
 ### Docs
 

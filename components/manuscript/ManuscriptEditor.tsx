@@ -9,6 +9,7 @@ import { resolveEditorFontFamily } from '../../services/editorTypography';
 import type { LanguageToolMatch } from '../../services/languageToolService';
 import { InlineAnnotationLayer } from '../copilot/InlineAnnotationLayer';
 import { DebouncedInput } from '../ui/DebouncedInput';
+import { DictationButton } from '../ui/DictationButton';
 import { Icon } from '../ui/Icon';
 import { Textarea } from '../ui/Textarea';
 
@@ -100,7 +101,11 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
   // QNBS-v3 (#341): shared with components/ui/Textarea.tsx and ContextPanel.tsx — the raw enum
   // value (e.g. 'custom') is not a valid font-family, and the highlight overlay must render the
   // exact same stack as the textarea so glyphs stay aligned.
-  const editorFontFamily = resolveEditorFontFamily(settings.editorFont, dir);
+  const editorFontFamily = resolveEditorFontFamily(
+    settings.editorFont,
+    dir,
+    settings.customFont?.name,
+  );
   const editorStyles: React.CSSProperties = {
     fontFamily: editorFontFamily,
     fontSize: `${settings.fontSize}px`,
@@ -299,6 +304,26 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
   // independently (overlay is pointer-events-none, so this is one-directional: textarea → overlay
   // only). Declared before the early return below — hooks must run unconditionally.
   const highlightRef = useRef<HTMLDivElement>(null);
+  const prevSectionIdRef = useRef(activeSection?.id);
+
+  // QNBS-v3 (#344): resets both layers to the top on a section switch (stale offset from the previous section); otherwise re-applies the textarea's current scrollTop once deferredContent catches up, since a scroll during the useDeferredValue lag window can clamp the overlay's scrollTop against its then-shorter content.
+  useEffect(() => {
+    const sectionChanged = prevSectionIdRef.current !== activeSection?.id;
+    prevSectionIdRef.current = activeSection?.id;
+    if (sectionChanged) {
+      if (editorRef.current) {
+        editorRef.current.scrollTop = 0;
+        editorRef.current.scrollLeft = 0;
+      }
+      if (highlightRef.current) {
+        highlightRef.current.scrollTop = 0;
+        highlightRef.current.scrollLeft = 0;
+      }
+    } else if (deferredContent && editorRef.current && highlightRef.current) {
+      highlightRef.current.scrollTop = editorRef.current.scrollTop;
+      highlightRef.current.scrollLeft = editorRef.current.scrollLeft;
+    }
+  }, [activeSection?.id, deferredContent, editorRef]);
 
   if (!activeSection) {
     return (
@@ -365,8 +390,6 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
           }
           style={{
             fontSize: `${settings.fontSize}px`,
-            // QNBS-v3: must match the highlight overlay's editorFontFamily so glyphs align in RTL.
-            fontFamily: editorFontFamily,
             lineHeight: settings.lineSpacing,
           }}
           spellCheck={false}
@@ -374,12 +397,14 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
         <div
           ref={highlightRef}
           data-testid="manuscript-editor-mirror"
+          dir={dir}
           className={`absolute inset-0 p-4 sm:p-6 md:p-12 pt-2 leading-relaxed pointer-events-none overflow-auto max-w-3xl mx-auto transition-all duration-500 ${isFocusMode ? 'max-w-4xl pt-12' : ''} ${isHighlightPending ? 'opacity-70' : 'opacity-100'}`}
           style={editorStyles}
           aria-hidden="true"
         >
           {renderedContent}
         </div>
+        <DictationButton targetRef={editorRef} />
       </div>
       <div className="absolute bottom-20 left-6 md:bottom-4 text-xs text-[var(--sc-text-muted)] bg-[var(--sc-surface-raised)]/90 border border-[var(--sc-border-subtle)] px-3 py-1 rounded-full pointer-events-none backdrop-blur-sm shadow-sm transition-opacity duration-300">
         {activeSectionStats.wordCount} {t('common.words')}

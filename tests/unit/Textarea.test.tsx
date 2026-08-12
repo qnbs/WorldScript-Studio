@@ -16,7 +16,13 @@ const mockSetTranscript = vi.fn();
 
 let mockIsListening = false;
 let mockTranscript = '';
-let mockSettings = { editorFont: 'serif' as string, fontSize: 16, lineSpacing: 1.6 };
+let mockSettings = {
+  editorFont: 'serif' as string,
+  fontSize: 16,
+  lineSpacing: 1.6,
+  customFont: undefined as { name: string } | undefined,
+};
+let mockDir: 'ltr' | 'rtl' = 'ltr';
 
 vi.mock('../../hooks/useSpeechRecognition', () => ({
   useSpeechRecognition: () => ({
@@ -28,7 +34,7 @@ vi.mock('../../hooks/useSpeechRecognition', () => ({
 }));
 
 vi.mock('../../hooks/useTranslation', () => ({
-  useTranslation: () => ({ t: (k: string) => k, language: 'en' }),
+  useTranslation: () => ({ t: (k: string) => k, language: 'en', dir: mockDir }),
 }));
 
 vi.mock('../../app/hooks', () => ({
@@ -50,7 +56,8 @@ describe('Textarea', () => {
     vi.clearAllMocks();
     mockIsListening = false;
     mockTranscript = '';
-    mockSettings = { editorFont: 'serif', fontSize: 16, lineSpacing: 1.6 };
+    mockSettings = { editorFont: 'serif', fontSize: 16, lineSpacing: 1.6, customFont: undefined };
+    mockDir = 'ltr';
   });
 
   it('renders a <textarea> element', () => {
@@ -83,10 +90,33 @@ describe('Textarea', () => {
   });
 
   it('applies serif font family from settings', () => {
-    mockSettings = { editorFont: 'serif', fontSize: 18, lineSpacing: 1.8 };
+    mockSettings = { editorFont: 'serif', fontSize: 18, lineSpacing: 1.8, customFont: undefined };
     render(<Textarea data-testid="ta" />);
     const textarea = screen.getByTestId('ta');
     expect(textarea.style.fontFamily).toContain('serif');
+  });
+
+  it('uses the configured custom font name when editorFont is "custom"', () => {
+    mockSettings = {
+      editorFont: 'custom',
+      fontSize: 16,
+      lineSpacing: 1.6,
+      customFont: { name: 'My Special Font' },
+    };
+    render(<Textarea data-testid="ta" />);
+    expect(screen.getByTestId('ta').style.fontFamily).toContain('My Special Font');
+  });
+
+  it('falls back to the monospace stack when editorFont is "custom" but no custom font is set', () => {
+    mockSettings = { editorFont: 'custom', fontSize: 16, lineSpacing: 1.6, customFont: undefined };
+    render(<Textarea data-testid="ta" />);
+    expect(screen.getByTestId('ta').style.fontFamily).toContain('JetBrains Mono');
+  });
+
+  it('sets the dir attribute to match the active text direction', () => {
+    mockDir = 'rtl';
+    render(<Textarea data-testid="ta" />);
+    expect(screen.getByTestId('ta').getAttribute('dir')).toBe('rtl');
   });
 
   it('forwards ref to underlying <textarea>', () => {
@@ -109,8 +139,7 @@ describe('Textarea', () => {
     expect(screen.getByRole('button').className).toContain('animate-pulse');
   });
 
-  // QNBS-v3 (#341): 'overlay' variant renders a real, focusable textarea meant to sit invisibly
-  // over a separate visible mirror layer — no glass/blur/shadow/reserved padding, no mic button.
+  // QNBS-v3 (#341): 'overlay' renders a real, focusable textarea meant to sit invisibly over a separate visible mirror layer — no glass/blur/shadow/reserved padding, no mic button.
   describe('variant="overlay"', () => {
     it('does not render the microphone button', () => {
       render(<Textarea variant="overlay" data-testid="ta" />);
@@ -137,7 +166,10 @@ describe('Textarea', () => {
 
     it('retains the focus-visible ring for keyboard accessibility', () => {
       render(<Textarea variant="overlay" data-testid="ta" />);
-      expect(screen.getByTestId('ta').className).toContain('focus-visible:ring-4');
+      expect(screen.getByTestId('ta').className).toContain('focus-visible:ring-2');
+      expect(screen.getByTestId('ta').className).toContain(
+        'focus-visible:ring-[var(--sc-ring-focus)]',
+      );
     });
   });
 

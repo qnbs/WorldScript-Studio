@@ -1,8 +1,5 @@
 /**
- * QNBS-v3 (#341): ManuscriptEditor.tsx uses the same real-textarea-over-visible-mirror-div
- * rendering pattern as the AI Writing Studio's ContextPanel.tsx, and carried the same latent
- * defect (unconditional backdrop-blur bleeding through, no scroll sync). This spec exercises the
- * primary manuscript writing surface directly, independent of writer.spec.ts's Writer Studio coverage.
+ * QNBS-v3 (#341): ManuscriptEditor.tsx shares the real-textarea-over-mirror pattern and defects with Writer Studio's ContextPanel.tsx; this spec exercises the primary manuscript surface independent of writer.spec.ts.
  */
 import { expect, test } from '@playwright/test';
 
@@ -28,8 +25,7 @@ test.describe('Manuscript editor rendering (CI-only)', () => {
     await selectEnglish(page);
     await ensureBlankProject(page);
 
-    // QNBS-v3: seed section content via Writer Studio (the established, reliable content-entry
-    // path in this suite) before switching to the Manuscript view to check its own rendering.
+    // QNBS-v3: seed section content via Writer Studio (the established, reliable content-entry path) before switching to the Manuscript view to check its own rendering.
     await clickNavItem(page, /AI Writing Studio|Writer/i);
     await selectFirstEnabledWriterSection(page);
     const writerTextbox = page.getByTestId('writer-studio-editor').first();

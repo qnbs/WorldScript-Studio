@@ -52,9 +52,7 @@ test.describe('AI Writer Flow (CI-only)', () => {
     await flushWriterDebounce(page);
   });
 
-  // QNBS-v3 (#341): the real (input-handling) textarea sits invisibly over a separate visible
-  // text-mirror layer — a regression here previously left the mirror unreadable (backdrop-blur
-  // bleeding through) and out of scroll sync with the real textarea.
+  // QNBS-v3 (#341): the real textarea sits invisibly over a visible text-mirror layer — a regression here previously left the mirror unreadable (backdrop-blur bleeding through) and scroll-desynced.
   test('Writer Studio text is visually readable and stays in scroll sync (#341)', async ({
     page,
   }) => {

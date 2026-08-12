@@ -1,6 +1,6 @@
 // QNBS-v3: Extracted from WriterView.tsx to keep each file ≤350 lines per architecture rules
 import type { FC } from 'react';
-import React, { useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useAppSelector } from '../../app/hooks';
 import { useWriterViewContext } from '../../contexts/WriterViewContext';
 import { writerActions } from '../../features/writer/writerSlice';
@@ -8,25 +8,25 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { resolveEditorFontFamily } from '../../services/editorTypography';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { DebouncedTextarea } from '../ui/DebouncedTextarea';
+import { DictationButton } from '../ui/DictationButton';
 import { Select } from '../ui/Select';
 
 const ContextPanel: FC = React.memo(() => {
-  const { t } = useTranslation();
+  const { t, dir } = useTranslation();
   const { project, selectedSectionId, handleContentChange, writerState, dispatch } =
     useWriterViewContext();
   const { selection, activeTool } = writerState;
   const selectedSection = project.manuscript.find((s) => s.id === selectedSectionId);
   const selectedSectionIndex = project.manuscript.findIndex((s) => s.id === selectedSectionId);
   const settings = useAppSelector((state) => state.settings);
-  // QNBS-v3 (#341): must resolve to the exact same stack as the real textarea (DebouncedTextarea →
-  // Textarea) — a mismatch here was the direct cause of selection/visible-text position drift.
+  // QNBS-v3 (#341): must resolve to the exact same stack as the real textarea (DebouncedTextarea → Textarea) — a mismatch here was the direct cause of selection/visible-text position drift.
   const editorStyles: React.CSSProperties = {
-    fontFamily: resolveEditorFontFamily(settings.editorFont),
+    fontFamily: resolveEditorFontFamily(settings.editorFont, dir, settings.customFont?.name),
     fontSize: `${settings.fontSize}px`,
     lineHeight: settings.lineSpacing,
   };
-  // QNBS-v3 (#341): the real textarea and the visible mirror div below can scroll independently
-  // (mirror is pointer-events-none, so this is one-directional: real textarea → mirror only).
+  // QNBS-v3 (#341): the real textarea and mirror div can scroll independently (mirror is pointer-events-none, so this is one-directional: real textarea → mirror only).
+  const editorRef = useRef<HTMLTextAreaElement>(null);
   const mirrorRef = useRef<HTMLDivElement>(null);
   const handleTextareaScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
     if (mirrorRef.current) {
@@ -34,6 +34,25 @@ const ContextPanel: FC = React.memo(() => {
       mirrorRef.current.scrollLeft = e.currentTarget.scrollLeft;
     }
   };
+  const prevSectionIdRef = useRef(selectedSectionId);
+  // QNBS-v3 (#344): resets both layers to the top on a section switch (stale offset from the previous section); otherwise re-applies the textarea's current scrollTop once the debounced mirror content catches up, since a scroll during the debounce window can clamp the mirror's scrollTop against its then-shorter content.
+  useEffect(() => {
+    const sectionChanged = prevSectionIdRef.current !== selectedSectionId;
+    prevSectionIdRef.current = selectedSectionId;
+    if (sectionChanged) {
+      if (editorRef.current) {
+        editorRef.current.scrollTop = 0;
+        editorRef.current.scrollLeft = 0;
+      }
+      if (mirrorRef.current) {
+        mirrorRef.current.scrollTop = 0;
+        mirrorRef.current.scrollLeft = 0;
+      }
+    } else if (selectedSection?.content && editorRef.current && mirrorRef.current) {
+      mirrorRef.current.scrollTop = editorRef.current.scrollTop;
+      mirrorRef.current.scrollLeft = editorRef.current.scrollLeft;
+    }
+  }, [selectedSectionId, selectedSection?.content]);
   const handleSelectionEvents = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
     const target = e.currentTarget;
     const { selectionStart, selectionEnd, value } = target;
@@ -77,6 +96,7 @@ const ContextPanel: FC = React.memo(() => {
           <div className="relative flex-grow border rounded-md border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] overflow-hidden min-h-[300px]">
             {/* QNBS-v3: data-testid disambiguates Writer vs Manuscript textareas in Playwright (shared aria labelling). */}
             <DebouncedTextarea
+              ref={editorRef}
               variant="overlay"
               data-testid="writer-studio-editor"
               value={selectedSection?.content || ''}
@@ -101,6 +121,7 @@ const ContextPanel: FC = React.memo(() => {
               ref={mirrorRef}
               data-testid="writer-studio-mirror"
               aria-hidden="true"
+              dir={dir}
               className="absolute inset-0 p-4 leading-relaxed pointer-events-none overflow-auto whitespace-pre-wrap text-[var(--sc-text-primary)]"
               style={editorStyles}
             >
@@ -117,6 +138,7 @@ const ContextPanel: FC = React.memo(() => {
                 </>
               )}
             </div>
+            <DictationButton targetRef={editorRef} />
           </div>
         </CardContent>
       </Card>

@@ -21,11 +21,16 @@ export const EDITOR_FONT_STACKS: Record<EditorFont, string> = {
  * coverage (generic serif/sans/mono stacks lack reliable Arabic/Hebrew rendering) — this mirrors
  * the RTL branch ManuscriptEditor.tsx already had before this module existed.
  */
+// QNBS-v3 (#341/#344): customFontName is quoted and prepended ahead of the 'custom' stack's JetBrains Mono fallback — previously ignored entirely, so every 'custom' editorFont silently rendered as monospace.
 export function resolveEditorFontFamily(
   editorFont: EditorFont,
   dir: 'ltr' | 'rtl' = 'ltr',
+  customFontName?: string,
 ): string {
-  const ltrStack = EDITOR_FONT_STACKS[editorFont] ?? EDITOR_FONT_STACKS['sans-serif'];
+  const ltrStack =
+    editorFont === 'custom' && customFontName
+      ? `"${customFontName}", ${EDITOR_FONT_STACKS.custom}`
+      : (EDITOR_FONT_STACKS[editorFont] ?? EDITOR_FONT_STACKS['sans-serif']);
   if (dir !== 'rtl') return ltrStack;
   return editorFont === 'sans-serif' || editorFont === 'monospace'
     ? `"Noto Sans Arabic", "Noto Sans Hebrew", ${ltrStack}`

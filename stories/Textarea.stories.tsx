@@ -41,9 +41,7 @@ export const Tall: Story = {
   args: { placeholder: 'Long-form entry…', rows: 12 },
 };
 
-// QNBS-v3 (#341): the 'overlay' variant is meant to sit invisibly over a separate visible mirror
-// layer (see components/writing/ContextPanel.tsx, components/manuscript/ManuscriptEditor.tsx) —
-// no glass background/blur/reserved padding/mic button, so it renders as a plain bordered box here.
+// QNBS-v3 (#341): 'overlay' sits invisibly over a separate visible mirror layer (ContextPanel.tsx, ManuscriptEditor.tsx) — no glass/blur/reserved padding/mic button, so it's a plain bordered box here.
 export const Overlay: Story = {
   args: { variant: 'overlay', placeholder: 'Real input textarea, no glass/blur…', rows: 5 },
 };

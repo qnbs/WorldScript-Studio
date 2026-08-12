@@ -113,8 +113,7 @@ vi.mock('../../../components/ui/DebouncedInput', () => ({
   ),
 }));
 
-// QNBS-v3 (#341): captured so tests can assert ManuscriptEditor passes variant="overlay" through,
-// and so onScroll can be invoked manually to verify the mirror scroll-sync wiring.
+// QNBS-v3 (#341): captured so tests can assert variant="overlay" is passed and invoke onScroll manually to verify the mirror scroll-sync wiring.
 let lastEditorTextareaVariant: string | undefined;
 let lastEditorTextareaOnScroll: ((e: React.UIEvent<HTMLTextAreaElement>) => void) | undefined;
 
@@ -126,8 +125,7 @@ vi.mock('../../../components/ui/Textarea', () => ({
     placeholder,
     variant,
     onScroll,
-    // QNBS-v3 (#341): destructured out (not spread) so this mock's own stable "editor-textarea"
-    // testid below always wins over whatever data-testid the real component now also passes.
+    // QNBS-v3 (#341): destructured out (not spread) so this mock's own stable "editor-textarea" testid always wins over the real component's data-testid.
     'data-testid': _dataTestId,
     ...rest
   }: {
@@ -299,8 +297,7 @@ describe('ManuscriptEditor', () => {
     });
   });
 
-  // QNBS-v3 (#341): same overlay-textarea/mirror-div pattern and defect as ContextPanel — the real
-  // textarea must stay invisible-input-only, and the mirror must track its scroll position.
+  // QNBS-v3 (#341): same overlay-textarea/mirror-div pattern and defect as ContextPanel — the real textarea must stay invisible-input-only, and the mirror must track its scroll position.
   describe('rendering fix (#341)', () => {
     it('passes variant="overlay" to the real textarea', () => {
       render(<ManuscriptEditor isFocusMode={false} />);
