@@ -7,6 +7,7 @@ import type { WebGpuAdapterInfo } from '../../services/ai/webGpuDetectorService'
 import { detectWebGpuDetails } from '../../services/ai/webGpuDetectorService';
 import {
   type LocalEndpointScanResult,
+  type LocalServerDiagnostic,
   listLocalBackendModels,
   scanLocalOpenAiCompatibleEndpoints,
   testAIConnection,
@@ -90,6 +91,100 @@ interface AiProviderCardProps {
   browserOllamaEnabled?: boolean;
 }
 
+interface LocalDiagnosticState {
+  context: string;
+  diagnostic: LocalServerDiagnostic;
+}
+
+type ConnectionTestStatus = 'idle' | 'loading' | 'ok' | 'error';
+
+const LocalServerDiagnosticPanel: FC<{ diagnostic: LocalServerDiagnostic }> = ({ diagnostic }) => {
+  const { t } = useTranslation();
+  const transportLabel =
+    diagnostic.transport === 'tauri-http'
+      ? t('settings.ai.localDiagnostic.tauriHttp')
+      : t('settings.ai.localDiagnostic.browserFetch');
+
+  return (
+    <dl
+      aria-label={t('settings.ai.localDiagnostic.title')}
+      className="mt-3 grid gap-x-3 gap-y-1 text-xs text-[var(--sc-text-secondary)] sm:grid-cols-[auto_1fr]"
+    >
+      <dt className="font-medium text-[var(--sc-text-primary)]">
+        {t('settings.ai.localDiagnostic.endpoint')}
+      </dt>
+      <dd className="break-all">{diagnostic.normalizedEndpoint}</dd>
+      <dt className="font-medium text-[var(--sc-text-primary)]">
+        {t('settings.ai.localDiagnostic.transport')}
+      </dt>
+      <dd>{transportLabel}</dd>
+      <dt className="font-medium text-[var(--sc-text-primary)]">
+        {t('settings.ai.localDiagnostic.models')}
+      </dt>
+      <dd>{diagnostic.modelNames.join(', ')}</dd>
+    </dl>
+  );
+};
+
+const ProviderConnectionStatus: FC<{
+  diagnostic: LocalServerDiagnostic | null;
+  isOllamaUntestable: boolean;
+  status: ConnectionTestStatus;
+  testError: string;
+}> = ({ diagnostic, isOllamaUntestable, status, testError }) => {
+  const { t } = useTranslation();
+  const statusClass = isOllamaUntestable
+    ? 'bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)]'
+    : status === 'ok'
+      ? 'bg-[var(--sc-success-bg)] text-[var(--sc-success-fg)]'
+      : status === 'error'
+        ? 'bg-[var(--sc-danger-bg)] text-[var(--sc-danger-fg)]'
+        : 'bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)]';
+
+  return (
+    <div className="flex flex-col gap-2 text-sm">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-medium text-[var(--sc-text-secondary)]">
+          {t('settings.ai.providerStatusLabel')}
+        </span>
+        <span
+          role="status"
+          aria-live="polite"
+          aria-busy={!isOllamaUntestable && status === 'loading'}
+          className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${statusClass}`}
+        >
+          {isOllamaUntestable ? (
+            t('settings.ai.providerStatusUnavailableBrowser')
+          ) : (
+            <>
+              {status === 'loading' && t('settings.ai.providerStatusTesting')}
+              {status === 'ok' && t('settings.ai.providerStatusConnected')}
+              {status === 'error' && t('settings.ai.providerStatusDisconnected')}
+              {status === 'idle' && t('settings.ai.providerStatusNotTested')}
+            </>
+          )}
+        </span>
+      </div>
+      {!isOllamaUntestable && status === 'error' && testError && (
+        <p className="text-xs text-[var(--sc-danger-fg)]">{testError}</p>
+      )}
+      {diagnostic && <LocalServerDiagnosticPanel diagnostic={diagnostic} />}
+    </div>
+  );
+};
+
+function getOllamaAvailability(
+  provider: AIProvider,
+  isDesktop: boolean,
+  browserOllamaEnabled: boolean,
+): { canAttemptOllama: boolean; ollamaUntestable: boolean } {
+  const canAttemptOllama = isDesktop || browserOllamaEnabled;
+  return {
+    canAttemptOllama,
+    ollamaUntestable: provider === 'ollama' && !canAttemptOllama,
+  };
+}
+
 export const AiProviderCard: FC<AiProviderCardProps> = ({
   advancedAi,
   onAdvancedAiPatch,
@@ -108,12 +203,15 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
   const isAnthropicProxyCapableWeb = !isDesktop && isServerlessProxyCapable();
   // QNBS-v3 (ADR-0017): the opt-in flag widens Ollama testability to the browser — everywhere else
   // in this component that gated Ollama purely on isDesktop now also accepts this flag.
-  const canAttemptOllama = isDesktop || browserOllamaEnabled;
   // QNBS-v3: for Ollama when neither desktop nor the browser opt-in applies, the auto-test effect
   // and the manual "Test connection" button are both disabled (see below) — testStatus can never
   // leave 'idle' here, so the generic status badge must not render its idle→"Ready" label, which
   // would misleadingly imply a verified connection next to the "desktop app required" banner.
-  const ollamaUntestable = provider === 'ollama' && !canAttemptOllama;
+  const { canAttemptOllama, ollamaUntestable } = getOllamaAvailability(
+    provider,
+    isDesktop,
+    browserOllamaEnabled,
+  );
   const [openaiKey, setOpenaiKey] = useState('');
   // QNBS-v3: Grok's own key input state, mirroring OpenAI's pattern above.
   const [grokKey, setGrokKey] = useState('');
@@ -121,8 +219,9 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
   const [anthropicKey, setAnthropicKey] = useState('');
   const [isSavingAnthropicKey, setIsSavingAnthropicKey] = useState(false);
   const [ollamaModels, setOllamaModels] = useState<string[]>([]);
-  const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
+  const [testStatus, setTestStatus] = useState<ConnectionTestStatus>('idle');
   const [testError, setTestError] = useState('');
+  const [localDiagnostic, setLocalDiagnostic] = useState<LocalDiagnosticState | null>(null);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [isSavingKey, setIsSavingKey] = useState(false);
   const [scanBusy, setScanBusy] = useState(false);
@@ -139,6 +238,27 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
   // context has since moved on — e.g. a switch to Ollama-in-browser must not let an older
   // request's raw error text land in testError once ollamaUntestable becomes true.
   const testRequestIdRef = useRef(0);
+  const diagnosticContextRef = useRef<string | null>(null);
+  const localDiagnosticContext = [
+    provider,
+    ollamaBaseUrl,
+    advancedAi.localBackendPreset,
+    advancedAi.openAiCompatibleBaseUrl,
+    browserOllamaEnabled ? 'browser-enabled' : 'desktop-only',
+    isDesktop ? 'tauri-runtime' : 'browser-runtime',
+  ].join('\u0000');
+  const visibleLocalDiagnostic =
+    localDiagnostic?.context === localDiagnosticContext ? localDiagnostic.diagnostic : null;
+
+  useEffect(() => {
+    // QNBS-v3: A completed diagnostic only describes the exact local endpoint context that was tested.
+    if (diagnosticContextRef.current === localDiagnosticContext) return;
+    diagnosticContextRef.current = localDiagnosticContext;
+    testRequestIdRef.current += 1;
+    setTestStatus('idle');
+    setTestError('');
+    setLocalDiagnostic(null);
+  }, [localDiagnosticContext]);
 
   // QNBS-v3: any connection-context change invalidates in-flight tests/model-loads — without this,
   // only an explicit second handleTest() call bumped the guard, so editing the endpoint/preset/URL
@@ -256,8 +376,10 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
 
   const handleTest = useCallback(async () => {
     const requestId = ++testRequestIdRef.current;
+    const requestContext = localDiagnosticContext;
     setTestStatus('loading');
     setTestError('');
+    setLocalDiagnostic(null);
     if (provider === 'webllm') probeWebGpu(requestId);
     try {
       const result = await testAIConnection(provider, {
@@ -269,6 +391,9 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
       if (testRequestIdRef.current !== requestId) return; // stale — superseded by a newer request
       if (result.ok) {
         setTestStatus('ok');
+        setLocalDiagnostic(
+          result.localServer ? { context: requestContext, diagnostic: result.localServer } : null,
+        );
       } else {
         setTestStatus('error');
         // QNBS-v3: `kind` is a stable, i18n-mappable classification — prefer it over the raw
@@ -291,6 +416,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
     advancedAi.localBackendPreset,
     advancedAi.openAiCompatibleBaseUrl,
     browserOllamaEnabled,
+    localDiagnosticContext,
     probeWebGpu,
     t,
   ]);
@@ -363,39 +489,12 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
           ))}
         </div>
 
-        <div className="flex flex-col gap-2 text-sm">
-          <div className="flex items-center justify-between gap-2">
-            <span className="font-medium text-[var(--sc-text-secondary)]">
-              {t('settings.ai.providerStatusLabel')}
-            </span>
-            <span
-              role="status"
-              aria-live="polite"
-              className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${
-                ollamaUntestable
-                  ? 'bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)]'
-                  : testStatus === 'ok'
-                    ? 'bg-[var(--sc-success-bg)] text-[var(--sc-success-fg)]'
-                    : testStatus === 'error'
-                      ? 'bg-[var(--sc-danger-bg)] text-[var(--sc-danger-fg)]'
-                      : 'bg-[var(--sc-surface-overlay)] text-[var(--sc-text-secondary)]'
-              }`}
-            >
-              {ollamaUntestable ? (
-                t('settings.ai.providerStatusUnavailableBrowser')
-              ) : (
-                <>
-                  {testStatus === 'ok' && t('settings.ai.providerStatusConnected')}
-                  {testStatus === 'error' && t('settings.ai.providerStatusDisconnected')}
-                  {testStatus === 'idle' && t('settings.ai.providerStatusNotTested')}
-                </>
-              )}
-            </span>
-          </div>
-          {!ollamaUntestable && testStatus === 'error' && testError && (
-            <p className="text-xs text-[var(--sc-danger-fg)]">{testError}</p>
-          )}
-        </div>
+        <ProviderConnectionStatus
+          diagnostic={visibleLocalDiagnostic}
+          isOllamaUntestable={ollamaUntestable}
+          status={testStatus}
+          testError={testError}
+        />
 
         {provider === 'gemini' && (
           <div className="p-3 rounded-lg bg-[var(--sc-surface-raised)] text-sm text-[var(--sc-text-secondary)]">
@@ -810,6 +909,8 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
             {/* QNBS-v3 (#266 review, ADR-0017): in the plain PWA the ollama test would re-create
                 CORS noise — the banner + CTA above is the only actionable path there. The
                 browserOllamaEnabled opt-in widens this the same way it widens the auto-probe. */}
+            {/* QNBS-v3: success/error text lives only in ProviderConnectionStatus above — this
+                button previously duplicated the exact same testError string in a second span. */}
             <Button
               onClick={handleTest}
               disabled={testStatus === 'loading' || (provider === 'ollama' && !canAttemptOllama)}
@@ -821,20 +922,6 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
                 t('settings.ai.testConnection')
               )}
             </Button>
-            {testStatus === 'ok' && (
-              <span className="text-sm text-[var(--sc-success-fg)] flex items-center gap-1">
-                <Icon name="success" size="sm" aria-hidden="true" />
-                {t('settings.ai.connectionSuccess')}
-              </span>
-            )}
-            {/* QNBS-v3 (CodeRabbit CWE-209): mirror the guard above — a stale in-flight test for a
-                prior provider must not surface raw error text once Ollama-in-browser is selected. */}
-            {!ollamaUntestable && testStatus === 'error' && (
-              <span className="text-sm text-[var(--sc-danger-fg)] flex items-center gap-1">
-                <Icon name="error" size="sm" aria-hidden="true" />
-                {testError}
-              </span>
-            )}
           </div>
         )}
       </CardContent>

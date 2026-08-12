@@ -96,6 +96,14 @@ export class IdbConnectionManager {
   protected stateDb: IDBDatabase | null = null;
   protected dataDb: IDBDatabase | null = null;
 
+  protected closeConnections(): void {
+    // QNBS-v3: Test singletons must release old factories before another fake IndexedDB is installed.
+    this.stateDb?.close();
+    this.dataDb?.close();
+    this.stateDb = null;
+    this.dataDb = null;
+  }
+
   protected isStateStore(storeName: string): boolean {
     return storeName === APP_DATA_STORE || storeName === SNAPSHOTS_STORE;
   }

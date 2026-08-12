@@ -25,10 +25,18 @@ Object.defineProperty(global, 'localStorage', { value: localStorageMock, writabl
 // QNBS-v3: provide a working IndexedDB for the sentinel-store tests (node has none by default).
 globalThis.indexedDB = new IDBFactory();
 
+import {
+  beginEncryptionMigration,
+  completeEncryptionMigration,
+  IdbMigrationInProgressError,
+  updateEncryptionMigrationJournal,
+} from '../../../services/storage/encryptionMigrationJournal';
 import * as sentinelModule from '../../../services/storage/idbPassphraseSentinel';
 import {
+  assertIdbMigrationTargetKeyMatchesVerifier,
   clearIdbEncryptionKey,
   clearIdbPassphrase,
+  createIdbMigrationTargetVerifier,
   hasPassphraseSentinel,
   IdbEncryptionMigrationRequiredError,
   IdbEncryptionSaltLostError,
@@ -39,8 +47,14 @@ import {
   initIdbEncryption,
   isEncryptedBlob,
   isIdbEncryptionReady,
+  isSecureRecordEnvelope,
+  prepareSecureRecordPayload,
+  readSecureRecordPayload,
   resolveProtectedWriteKey,
   rotateIdbPassphrase,
+  SECURE_RECORD_VERSION,
+  SecureRecordCorruptError,
+  SecureRecordLockedError,
   StorageEncryptionService,
   setupIdbEncryption,
   verifyAndInitIdbEncryption,
@@ -153,6 +167,19 @@ describe('StorageEncryptionService.encrypt / decrypt', () => {
   });
 });
 
+describe('migration target verifier', () => {
+  it('accepts only the key that created the durable verifier', async () => {
+    const targetKey = await freshKey('target');
+    const otherKey = await freshKey('other');
+    const verifier = await createIdbMigrationTargetVerifier(targetKey);
+
+    await expect(
+      assertIdbMigrationTargetKeyMatchesVerifier(targetKey, verifier),
+    ).resolves.toBeUndefined();
+    await expect(assertIdbMigrationTargetKeyMatchesVerifier(otherKey, verifier)).rejects.toThrow();
+  });
+});
+
 // ── isEncryptedBlob ──────────────────────────────────────────────────────────
 
 describe('isEncryptedBlob', () => {
@@ -172,6 +199,62 @@ describe('isEncryptedBlob', () => {
 
   it('returns false for a Uint8Array without sentinel', () => {
     expect(isEncryptedBlob(new Uint8Array(20).fill(1))).toBe(false);
+  });
+});
+
+describe('secondary secure-record envelopes', () => {
+  const context = { store: 'worldscript-revisions-db/scene-revisions', recordId: 'revision-1' };
+
+  it('binds ciphertext to its record identity with AAD', async () => {
+    await setupIdbEncryption('secure-record-pass');
+    const envelope = await prepareSecureRecordPayload({ content: 'confidential' }, context);
+
+    expect(isSecureRecordEnvelope(envelope)).toBe(true);
+    expect(envelope).toMatchObject({ version: SECURE_RECORD_VERSION });
+    await expect(
+      readSecureRecordPayload(envelope, { ...context, recordId: 'revision-2' }),
+    ).rejects.toBeInstanceOf(SecureRecordCorruptError);
+    await expect(readSecureRecordPayload(envelope, context)).resolves.toMatchObject({
+      value: { content: 'confidential' },
+      needsMigration: false,
+    });
+  });
+
+  it('never falls back to plaintext when configured secondary storage is locked', async () => {
+    await setupIdbEncryption('secure-record-pass');
+    clearIdbEncryptionKey();
+
+    await expect(
+      prepareSecureRecordPayload({ content: 'changed' }, context),
+    ).rejects.toBeInstanceOf(IdbStorageLockedError);
+    await expect(readSecureRecordPayload({ content: 'legacy' }, context)).rejects.toBeInstanceOf(
+      SecureRecordLockedError,
+    );
+  });
+
+  it('treats a partial envelope as corruption rather than legacy plaintext', async () => {
+    await setupIdbEncryption('secure-record-pass');
+
+    await expect(
+      readSecureRecordPayload({ version: 1, iv: new Uint8Array(12) }, context),
+    ).rejects.toBeInstanceOf(SecureRecordCorruptError);
+  });
+
+  it('returns unlocked legacy plaintext as migration-required without treating it as final', async () => {
+    await setupIdbEncryption('secure-record-pass');
+
+    await expect(readSecureRecordPayload({ content: 'legacy' }, context)).resolves.toEqual({
+      value: { content: 'legacy' },
+      needsMigration: true,
+    });
+  });
+
+  it('rejects a ciphertext-only envelope fragment as corruption', async () => {
+    await setupIdbEncryption('secure-record-pass');
+
+    await expect(
+      readSecureRecordPayload({ ciphertext: new Uint8Array(32) }, context),
+    ).rejects.toBeInstanceOf(SecureRecordCorruptError);
   });
 });
 
@@ -284,6 +367,16 @@ describe('setupIdbEncryption', () => {
     await setupIdbEncryption('secret');
     expect(await hasPassphraseSentinel()).toBe(true);
   });
+
+  it('refuses to overwrite an existing verifier outside the resumable rotation flow', async () => {
+    await setupIdbEncryption('first-passphrase');
+
+    await expect(setupIdbEncryption('second-passphrase')).rejects.toThrow(
+      'Encryption is already configured',
+    );
+    clearIdbEncryptionKey();
+    await expect(verifyAndInitIdbEncryption('first-passphrase')).resolves.toBeUndefined();
+  });
 });
 
 describe('verifyAndInitIdbEncryption', () => {
@@ -297,6 +390,53 @@ describe('verifyAndInitIdbEncryption', () => {
 
   it('throws when no sentinel exists', async () => {
     await expect(verifyAndInitIdbEncryption('any')).rejects.toThrow('No passphrase sentinel found');
+  });
+
+  it('fails closed without replacing missing salt for an existing encrypted library', async () => {
+    await setupIdbEncryption('correct');
+    clearIdbEncryptionKey();
+    localStorageMock.removeItem('worldscript-idb-kdf-salt-v1');
+
+    await expect(verifyAndInitIdbEncryption('correct')).rejects.toThrow(
+      'Encryption salt is missing',
+    );
+    expect(localStorageMock.getItem('worldscript-idb-kdf-salt-v1')).toBeNull();
+  });
+
+  it('does not replace the active key while a journal owns the encryption lifecycle', async () => {
+    await setupIdbEncryption('correct');
+    clearIdbEncryptionKey();
+    const journal = await beginEncryptionMigration({
+      operationId: 'lock-setup-and-unlock',
+      operation: 'rekey',
+      phase: 'prepared',
+      sourceGeneration: 'source',
+      targetGeneration: 'target',
+      targetVerifier: [1, 2, 3],
+      stores: [],
+    });
+
+    await expect(verifyAndInitIdbEncryption('correct')).rejects.toBeInstanceOf(
+      IdbMigrationInProgressError,
+    );
+    await expect(initIdbEncryption('correct')).rejects.toBeInstanceOf(IdbMigrationInProgressError);
+    await expect(setupIdbEncryption('replacement')).rejects.toBeInstanceOf(
+      IdbMigrationInProgressError,
+    );
+    // QNBS-v3: route through the legal prepared→migrating→verifying→committing chain so this journal does not leak into later tests.
+    const migrating = await updateEncryptionMigrationJournal(journal, {
+      phase: 'migrating',
+      stores: journal.stores,
+    });
+    const verifying = await updateEncryptionMigrationJournal(migrating, {
+      phase: 'verifying',
+      stores: migrating.stores,
+    });
+    const committing = await updateEncryptionMigrationJournal(verifying, {
+      phase: 'committing',
+      stores: verifying.stores,
+    });
+    await completeEncryptionMigration(committing);
   });
 
   it('throws on wrong passphrase (AES-GCM auth-tag mismatch)', async () => {

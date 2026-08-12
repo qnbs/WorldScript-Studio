@@ -12,6 +12,8 @@ import { IdbCodexStore } from './idbCodexStore';
 import { compressData, getUserFriendlyDbError, retryDb } from './idbCore';
 import {
   assertIdbProtectedWriteAllowed,
+  assertNoActiveEncryptionMigration,
+  assertSecureStorageReadable,
   idbEncryptWithKey,
   idbReadSecure,
   resolveProtectedWriteKey,
@@ -41,6 +43,8 @@ export class IdbSnapshotStore extends IdbCodexStore {
     };
 
     return retryDb(async () => {
+      // QNBS-v3: only the migration guard is re-checked here — resolveProtectedWriteKey() already made its own lock check atomically with the key snapshot, so re-running that too would wrongly reject an already-safely-encrypted write if the session locks mid-write.
+      await assertNoActiveEncryptionMigration();
       const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readwrite');
       return new Promise<number>((resolve, reject) => {
         const request = store.add(snapshotData);
@@ -56,9 +60,8 @@ export class IdbSnapshotStore extends IdbCodexStore {
 
   async listSnapshots(): Promise<ProjectSnapshot[]> {
     return retryDb(async () => {
-      // QNBS-v3: Snapshot metadata (name/date/word count) is about protected content — a locked
-      //          session must not be able to enumerate it either, even without the payload.
-      await assertIdbProtectedWriteAllowed();
+      // QNBS-v3: Snapshot metadata (name/date/word count) is about protected content — the superset check blocks a locked session, or an active journal migration, from enumerating it.
+      await assertSecureStorageReadable();
       const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readonly');
       // IDBKeyRange: iterate in reverse (newest first) using cursor direction 'prev'
       const request = store.openCursor(null, 'prev');
@@ -82,18 +85,20 @@ export class IdbSnapshotStore extends IdbCodexStore {
 
   async getSnapshotData(id: number): Promise<ProjectData> {
     return retryDb(async () => {
-      // QNBS-v3: Explicit guard up front (idbReadSecure's legacy-plaintext branch already checks
-      //          this internally) so a missing record can't skip the lock check before decode.
-      await assertIdbProtectedWriteAllowed();
+      // QNBS-v3: superset check — blocks a locked session or an active journal migration before the record lookup can even run.
+      await assertSecureStorageReadable();
       const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readonly');
       return new Promise<ProjectData>((resolve, reject) => {
         const request = store.get(id);
         // QNBS-v3: IDBRequest.onsuccess is not awaited by the browser — an unhandled rejection
         //          here would leave the caller pending instead of surfacing the error.
         request.onsuccess = () => {
-          const raw: unknown = request.result?.data;
+          if (request.result === undefined) {
+            reject(new Error(`Snapshot ${id} was not found`));
+            return;
+          }
           // QNBS-v3: Decrypt encrypted snapshot payload; legacy plaintext falls through decompressData.
-          idbReadSecure<ProjectData>(raw).then(resolve).catch(reject);
+          idbReadSecure<ProjectData>(request.result.data).then(resolve).catch(reject);
         };
         request.onerror = () => reject(getUserFriendlyDbError(request.error));
       });

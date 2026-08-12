@@ -73,12 +73,21 @@ describe('listOllamaModels', () => {
 // ─── testOllamaConnection ─────────────────────────────────────────────────────
 
 describe('testOllamaConnection', () => {
-  it('returns ok:true on 200', async () => {
+  it('returns safe endpoint, transport, and model diagnostics on 200', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(
-      new Response(JSON.stringify({ models: [] }), { status: 200 }),
+      new Response(JSON.stringify({ models: [{ name: 'llama3' }, { name: ' mistral ' }] }), {
+        status: 200,
+      }),
     );
     const result = await testOllamaConnection();
-    expect(result).toEqual({ ok: true });
+    expect(result).toEqual({
+      ok: true,
+      localServer: {
+        normalizedEndpoint: 'http://localhost:11434/api/tags',
+        transport: 'browser-fetch',
+        modelNames: ['llama3', 'mistral'],
+      },
+    });
   });
 
   it('returns ok:false with error message on HTTP error', async () => {
@@ -126,6 +135,31 @@ describe('testOllamaConnection', () => {
     expect(result.error).not.toContain('not reachable');
     expect(result.kind).toBe('pluginUnavailable');
     expect(result.params).toBeUndefined();
+  });
+
+  it('reports invalidResponse instead of a false-positive ok when the body is not valid JSON', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response('<html>login</html>', { status: 200 }));
+    const result = await testOllamaConnection();
+    expect(result.ok).toBe(false);
+    expect(result.kind).toBe('invalidResponse');
+  });
+
+  it('reports invalidResponse instead of a false-positive ok when the body has no models array', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ notModels: [] }), { status: 200 }),
+    );
+    const result = await testOllamaConnection();
+    expect(result.ok).toBe(false);
+    expect(result.kind).toBe('invalidResponse');
+  });
+
+  it('still reports ok:true with an empty model list for a validly-shaped, empty Ollama server', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ models: [] }), { status: 200 }),
+    );
+    const result = await testOllamaConnection();
+    expect(result.ok).toBe(true);
+    expect(result.localServer?.modelNames).toEqual([]);
   });
 });
 

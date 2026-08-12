@@ -255,6 +255,14 @@ describe('AiProviderCard — ollama provider (#266)', () => {
 
   it('desktop: uses the LM Studio preset for the explicit model and connection diagnostics', async () => {
     setDesktopRuntime(true);
+    vi.mocked(testAIConnection).mockResolvedValueOnce({
+      ok: true,
+      localServer: {
+        normalizedEndpoint: 'http://127.0.0.1:1234/v1',
+        transport: 'tauri-http',
+        modelNames: ['local-model'],
+      },
+    });
     const user = userEvent.setup();
     render(
       <AiProviderCard
@@ -281,6 +289,136 @@ describe('AiProviderCard — ollama provider (#266)', () => {
         }),
       );
     });
+    expect(screen.getByText('http://127.0.0.1:1234/v1')).toBeTruthy();
+    expect(screen.getByText('settings.ai.localDiagnostic.tauriHttp')).toBeTruthy();
+    expect(screen.getByText('local-model')).toBeTruthy();
+  });
+
+  // QNBS-v3: verify the browser opt-in displays metadata from its separate browser-fetch path.
+  it('PWA: labels an opted-in Ollama diagnostic with its browser transport', async () => {
+    setDesktopRuntime(false);
+    vi.mocked(testAIConnection).mockResolvedValueOnce({
+      ok: true,
+      localServer: {
+        normalizedEndpoint: 'http://localhost:11434/api/tags',
+        transport: 'browser-fetch',
+        modelNames: ['browser-model'],
+      },
+    });
+    const user = userEvent.setup();
+    render(
+      <AiProviderCard
+        advancedAi={ollamaAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+        browserOllamaEnabled
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'settings.ai.testConnection' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('http://localhost:11434/api/tags')).toBeTruthy();
+    });
+    expect(screen.getByText('settings.ai.localDiagnostic.browserFetch')).toBeTruthy();
+    expect(screen.getByText('browser-model')).toBeTruthy();
+  });
+
+  it('never displays an in-flight diagnostic after the local backend context changes', async () => {
+    setDesktopRuntime(true);
+    let resolveTest: ((result: Awaited<ReturnType<typeof testAIConnection>>) => void) | null = null;
+    vi.mocked(testAIConnection).mockImplementationOnce(
+      () =>
+        new Promise<Awaited<ReturnType<typeof testAIConnection>>>((resolve) => {
+          resolveTest = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    const initialSettings = {
+      ...ollamaAdvancedAi,
+      ollamaBaseUrl: 'http://localhost:1234',
+      localBackendPreset: 'lm_studio' as const,
+    };
+    const { rerender } = render(
+      <AiProviderCard
+        advancedAi={initialSettings}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'settings.ai.testConnection' }));
+    await waitFor(() => expect(resolveTest).not.toBeNull());
+
+    rerender(
+      <AiProviderCard
+        advancedAi={{
+          ...initialSettings,
+          ollamaBaseUrl: 'http://localhost:9999',
+        }}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+
+    if (!resolveTest) throw new Error('Connection test did not start');
+    // QNBS-v3: keep the resolver type explicit because closure assignment narrows it to never after awaits.
+    const resolve: (result: Awaited<ReturnType<typeof testAIConnection>>) => void = resolveTest;
+    resolve({
+      ok: true,
+      localServer: {
+        normalizedEndpoint: 'http://127.0.0.1:1234/v1',
+        transport: 'tauri-http',
+        modelNames: ['stale-model'],
+      },
+    });
+
+    await waitFor(() => expect(screen.queryByText('stale-model')).toBeNull());
+    expect(screen.queryByText('http://127.0.0.1:1234/v1')).toBeNull();
+    expect(screen.getByText('settings.ai.providerStatusNotTested')).toBeTruthy();
+  });
+
+  // QNBS-v3: remove completed diagnostics when the active local backend changes.
+  it('clears a completed local diagnostic when its endpoint context changes', async () => {
+    setDesktopRuntime(true);
+    vi.mocked(testAIConnection).mockResolvedValueOnce({
+      ok: true,
+      localServer: {
+        normalizedEndpoint: 'http://127.0.0.1:1234/v1',
+        transport: 'tauri-http',
+        modelNames: ['local-model'],
+      },
+    });
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <AiProviderCard
+        advancedAi={{
+          ...ollamaAdvancedAi,
+          ollamaBaseUrl: 'http://localhost:1234',
+          localBackendPreset: 'lm_studio',
+        }}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'settings.ai.testConnection' }));
+    await waitFor(() => expect(screen.getByText('local-model')).toBeTruthy());
+
+    rerender(
+      <AiProviderCard
+        advancedAi={{
+          ...ollamaAdvancedAi,
+          ollamaBaseUrl: 'http://localhost:8000',
+          localBackendPreset: 'vllm',
+        }}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+
+    await waitFor(() => expect(screen.queryByText('local-model')).toBeNull());
+    expect(screen.getByText('settings.ai.providerStatusNotTested')).toBeTruthy();
   });
 
   it('desktop: scan renders classified status badges and the use-url action patches settings', async () => {
@@ -349,9 +487,7 @@ describe('AiProviderCard — ollama provider (#266)', () => {
     );
     await user.click(screen.getByRole('button', { name: 'settings.ai.testConnection' }));
     await waitFor(() => {
-      // QNBS-v3: the translated text renders in two places (the status-badge error line and the
-      // manual "Test connection" result span) — both share the same `testError` state.
-      expect(screen.getAllByText('settings.ai.testError.httpError').length).toBeGreaterThan(0);
+      expect(screen.getByText('settings.ai.testError.httpError')).toBeTruthy();
     });
     expect(screen.queryByText('Ollama HTTP 503')).toBeNull();
   });
@@ -373,9 +509,37 @@ describe('AiProviderCard — ollama provider (#266)', () => {
     );
     await user.click(screen.getByRole('button', { name: 'settings.ai.testConnection' }));
     await waitFor(() => {
-      expect(screen.getAllByText('settings.ai.testError.unexpected').length).toBeGreaterThan(0);
+      expect(screen.getByText('settings.ai.testError.unexpected')).toBeTruthy();
     });
     expect(screen.queryByText(/something internal broke/)).toBeNull();
+  });
+
+  it('marks the connection status region aria-busy while a test is in flight', async () => {
+    // QNBS-v3 regression: the status region announced via aria-live but never set aria-busy, so
+    // assistive tech had no programmatic signal that a connection test was actively running.
+    setDesktopRuntime(true);
+    let resolveTest!: (v: Awaited<ReturnType<typeof testAIConnection>>) => void;
+    vi.mocked(testAIConnection).mockReturnValue(
+      new Promise((resolve) => {
+        resolveTest = resolve;
+      }),
+    );
+    render(
+      <AiProviderCard
+        advancedAi={ollamaAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'settings.ai.testConnection' }));
+    // QNBS-v3: the Button's own Spinner also uses role="status", so disambiguate by excluding it.
+    const connectionStatus = () =>
+      screen.getAllByRole('status').find((el) => el.getAttribute('aria-label') !== 'Loading…')!;
+    await waitFor(() => expect(connectionStatus().getAttribute('aria-busy')).toBe('true'));
+
+    resolveTest({ ok: true });
+    await waitFor(() => expect(connectionStatus().getAttribute('aria-busy')).toBe('false'));
   });
 });
 

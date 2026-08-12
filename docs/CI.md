@@ -194,7 +194,15 @@ once a manual run demonstrates the flakiness is resolved — concretely, three c
 | **SHA-pinned actions** | Every job | All `uses:` references pinned to commit SHA (`# vN` comment) — immune to tag-mutable supply-chain attacks; Dependabot updates SHAs automatically |
 | **Dependabot** | Weekly (Monday) | PRs for npm deps (dev-tooling grouped) + GitHub Actions SHA bumps (max 5 open PRs) |
 | **`dependency-review-action`** | PRs only (security job) | Blocks PRs that introduce new high/critical vulnerabilities |
+| **pnpm v11 build-script policy** | Dependency installation | `pnpm-workspace.yaml` uses the sole supported, default-deny `allowBuilds` map; legacy build-script lists are intentionally absent |
 | **Branch protection** | Always | `main` requires 1 approved review, required status checks (security, quality ×2, build), no force-push |
+
+Only the two reviewed native packages marked `true` in `allowBuilds` (`@swc/core` and `esbuild`)
+may run dependency lifecycle scripts. `@google/genai`, `core-js`, `onnxruntime-node`, `protobufjs`,
+`sharp`, `simple-git-hooks`, `unrs-resolver`, and `workerd` are explicitly denied. Git-hook
+installation is deliberately opt-in through `pnpm run hooks:install`; dependency installation no
+longer runs a root `prepare` command. `pnpm-workspace.yaml` sets `verifyDepsBeforeRun: error`, so
+`pnpm run`/`pnpm exec` aborts when dependencies are stale instead of implicitly running install.
 
 ---
 

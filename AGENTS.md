@@ -139,7 +139,7 @@ WorldScript-Studio/
 - `vitest.config.ts` — coverage thresholds (lines 74, branches 60, functions 67, statements 72), `maxWorkers: 1`
 - `playwright.config.ts` — E2E projects: Chromium desktop + Pixel 5 mobile in CI; Firefox + optional mobile locally
 - `turbo.json` — task graph for `build`, `dev`, `lint`, `typecheck`, `test`, `mutation`
-- `pnpm-workspace.yaml` — workspace packages + `onlyBuiltDependencies` allowlist
+- `pnpm-workspace.yaml` — workspace packages + pnpm v11 `allowBuilds` default-deny map
 - `stryker.conf.json` — ~20 mutation targets (services + features), `break: 75`
 - `.lighthouserc.cjs` — accessibility `error` ≥ 0.95, CLS `error` ≤ 0.1, performance/SEO `warn`
 - `src-tauri/tauri.conf.json` / `Cargo.toml` — desktop window config, CSP, updater endpoints, rust-compute feature
@@ -258,7 +258,8 @@ On any non-trivial change, add a single-line comment explaining **why**, not wha
 ### Commit Messages
 
 Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`.
-Pre-commit hook runs `biome check --write` on staged files via `simple-git-hooks` + `lint-staged`.
+After an explicit `pnpm run hooks:install`, the pre-commit hook runs `biome check --write` on staged
+files via `simple-git-hooks` + `lint-staged`; CI remains mandatory when hooks are not installed.
 
 ---
 

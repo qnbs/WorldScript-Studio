@@ -2,8 +2,7 @@
 // QNBS-v3: node environment avoids jsdom's non-configurable indexedDB stub.
 //          Fresh IDBFactory per test ensures complete isolation between tests.
 import { IDBFactory, IDBKeyRange } from 'fake-indexeddb';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   _resetDbForTest,
   deleteRevision,
@@ -21,6 +20,25 @@ beforeEach(() => {
 afterEach(() => {
   _resetDbForTest();
 });
+
+async function insertRawRevision(record: unknown): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const request = indexedDB.open('worldscript-revisions-db');
+    request.onsuccess = () => {
+      const database = request.result;
+      const transaction = database.transaction('scene-revisions', 'readwrite');
+      transaction.objectStore('scene-revisions').put(record);
+      transaction.oncomplete = () => {
+        database.close();
+        resolve();
+      };
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () =>
+        reject(transaction.error ?? new Error('Raw revision insert aborted'));
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
 
 describe('sceneRevisionService', () => {
   it('saveRevision returns a revision with correct fields', async () => {
@@ -90,6 +108,44 @@ describe('sceneRevisionService', () => {
     const list = await listRevisions('sec1');
     expect(list).toHaveLength(1);
     expect(list[0]?.sectionId).toBe('sec1');
+  });
+
+  it('keeps retention bounded when concurrent saves target the same section', async () => {
+    await saveRevision('sec1', { title: 'seed', content: 'seed' });
+    await Promise.all(
+      Array.from({ length: 55 }, (_, index) =>
+        saveRevision('sec1', { title: `revision ${index}`, content: `content ${index}` }),
+      ),
+    );
+
+    await expect(listRevisions('sec1')).resolves.toHaveLength(50);
+  });
+
+  it('opens the database connection only once for concurrent saves (single-flight)', async () => {
+    // QNBS-v3: Cover the race that opened multiple databases before the first connection was cached.
+    const openSpy = vi.spyOn(indexedDB, 'open');
+    await Promise.all(
+      Array.from({ length: 10 }, (_, index) =>
+        saveRevision('sec2', { title: `revision ${index}`, content: `content ${index}` }),
+      ),
+    );
+    expect(openSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips a future stored schema instead of interpreting it as v1, keeping other revisions readable', async () => {
+    // QNBS-v3: listRevisions skips an unreadable revision (logged) instead of rejecting the whole call.
+    await saveRevision('sec1', { title: 'known', content: 'known content' });
+    await insertRawRevision({
+      id: 'future-schema',
+      sectionId: 'sec1',
+      createdAt: Date.now(),
+      schemaVersion: 2,
+      payload: { title: 'future', content: 'must not decode as v1', wordCount: 6 },
+    });
+
+    const list = await listRevisions('sec1');
+    expect(list).toHaveLength(1);
+    expect(list[0]?.title).toBe('known');
   });
 
   it('createdAt is a number timestamp', async () => {
