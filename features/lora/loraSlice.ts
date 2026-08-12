@@ -223,8 +223,8 @@ const loraSlice = createSlice({
       state.currentRun.cancellationRequested = true;
     },
 
-    // QNBS-v3: dispatched when the native abort call itself fails — without this, a leaked cancellationRequested:true would misclassify the run's later genuine failure as a user abort instead of a real error.
-    trainingCancellationFailed(state) {
+    // QNBS-v3: dispatched when the native abort call errors OR resolves without confirming it actually stopped a process for this run — either way, a leaked cancellationRequested:true would misclassify the run's later genuine failure as a user abort instead of a real error.
+    trainingCancellationNotConfirmed(state) {
       if (!state.currentRun) return;
       state.currentRun.cancellationRequested = false;
     },
@@ -277,7 +277,7 @@ export const {
   trainingFailed,
   trainingAborted,
   trainingCancellationRequested,
-  trainingCancellationFailed,
+  trainingCancellationNotConfirmed,
   setIsEvaluating,
   evaluationCompleted,
   hydrateLoraState,

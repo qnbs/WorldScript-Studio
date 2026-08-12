@@ -103,10 +103,11 @@ export async function startTraining(
   }
 }
 
-export async function abortTraining(): Promise<void> {
-  if (!isTauri()) return;
+/** Returns true only when a real process for the current run was found and confirmed terminated. */
+export async function abortTraining(): Promise<boolean> {
+  if (!isTauri()) return false;
   try {
-    await tauriInvoke('abort_lora_training');
+    return await tauriInvoke<boolean>('abort_lora_training');
   } catch (err) {
     logger.warn('loraTrainingService: abort failed', { err });
     // QNBS-v3: A native cancellation failure must reach the thunk so UI state never claims an orphan process stopped.

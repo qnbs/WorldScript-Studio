@@ -49,7 +49,7 @@
   "lora.onboarding.error.helperReportParseFailed": "Det gick inte att läsa resultaten av miljökontrollen.",
   "lora.onboarding.error.helperScriptMissing": "Hjälpskriptet för miljökontroll saknas.",
   "lora.onboarding.error.helperSpawnFailed": "Det gick inte att köra hjälpprogrammet för miljökontroll.",
-  "lora.onboarding.error.helperTimedOut": "Miljökontrollen fick tidsgräns.",
+  "lora.onboarding.error.helperTimedOut": "Tidsgränsen överskreds vid miljökontrollen.",
   "lora.onboarding.error.incompatibleVersion": "Python 3.10 eller nyare krävs.",
   "lora.onboarding.error.permissionDenied": "Åtkomst nekad vid körning av den körbara filen.",
   "lora.onboarding.error.processSpawnFailed": "Det gick inte att starta den körbara filen.",
