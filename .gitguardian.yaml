@@ -6,9 +6,18 @@
 # labels; their translated values trip the high-recall "Generic Password" detector
 # as false positives (e.g. hu: "Titkos jelszó a privát szobához"). Exclude all
 # locale sources and the generated runtime bundles from secret scanning.
+#
+# storageEncryptionService.test.ts exercises the at-rest encryption
+# disable/rotate/recovery flows against fake-indexeddb with obviously-fake
+# fixture passphrases ('original', 'new-pass', 'wrong-old', 'wrong-new', ...)
+# assigned to sourcePassphrase/targetPassphrase object keys — the same
+# "Generic Password" detector false-positives on these literal pairs. This is
+# a Vitest unit test with no real backend/credentials; excluded for the same
+# reason as the locale trees above.
 version: 2
 
 secret:
   ignored-paths:
     - 'locales/**'
     - 'public/locales/**'
+    - 'tests/unit/storage/storageEncryptionService.test.ts'
