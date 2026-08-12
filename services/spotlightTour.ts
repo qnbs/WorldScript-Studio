@@ -46,7 +46,7 @@ export function startSpotlightTour(t: Translate, tourId: SpotlightTourId = 'defa
         title: t('tour.intro.title'),
         description:
           tourId === 'navigation' ? t('tour.navigationOnly.introBody') : t('tour.intro.body'),
-        side: 'over',
+        // QNBS-v3: driver.js 1.8.0 removed 'over' from Side and now auto-centers any step with no `element` (this one) via an internal dummy target — 'side' is unused for these steps.
         align: 'center',
       },
     },
@@ -99,7 +99,7 @@ export function startSpotlightTour(t: Translate, tourId: SpotlightTourId = 'defa
         tourId === 'navigation'
           ? `${t('tour.navigationOnly.outroBody')}\n\n${t('tour.outro.helpCta')}`
           : `${t('tour.outro.body')}\n\n${t('tour.outro.helpCta')}`,
-      side: 'over',
+      // QNBS-v3: driver.js 1.8.0 removed 'over' from Side and now auto-centers any step with no `element` (this one) via an internal dummy target — 'side' is unused for these steps.
       align: 'center',
     },
   });
