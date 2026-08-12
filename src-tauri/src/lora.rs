@@ -659,11 +659,26 @@ pub async fn merge_lora(
     }
 }
 
+// QNBS-v3: pure classifier kept separate from the async command so it's unit-testable without spawning a real process — see abort_reports_no_active_process_for_idle_and_pending_start below.
+fn abort_request_targets_active_process(req: AbortTrainingRequest) -> bool {
+    matches!(
+        req,
+        AbortTrainingRequest::StopProcess(_) | AbortTrainingRequest::AlreadyStopping(_)
+    )
+}
+
 /// Abort the currently running training process and confirm its process group exits.
+/// Returns `true` only when a real process for the current run was found and confirmed
+/// terminated; `false` means the call was a no-op (nothing running, or a start still
+/// pending) and the caller must not attribute a later training-outcome rejection to it.
 #[tauri::command]
-pub async fn abort_lora_training() -> Result<(), String> {
-    match request_training_abort()? {
-        AbortTrainingRequest::NothingRunning | AbortTrainingRequest::CancelPendingStart => Ok(()),
+pub async fn abort_lora_training() -> Result<bool, String> {
+    let request = request_training_abort()?;
+    let targets_active_process = abort_request_targets_active_process(request);
+    match request {
+        AbortTrainingRequest::NothingRunning | AbortTrainingRequest::CancelPendingStart => {
+            Ok(false)
+        }
         AbortTrainingRequest::StopProcess(pid) => {
             if let Err(error) = terminate_training_process(pid, false).await {
                 if error != "training_cancel_not_confirmed" {
@@ -676,7 +691,7 @@ pub async fn abort_lora_training() -> Result<(), String> {
             //          "training_already_running" to an immediate retry. Safe to call twice: it's
             //          PID-guarded, so train_lora's later reap of this same pid is then a no-op.
             clear_training_if(pid)?;
-            Ok(())
+            Ok(targets_active_process)
         }
         AbortTrainingRequest::AlreadyStopping(pid) => {
             // QNBS-v3: escalate to SIGKILL on retry — a process that ignored the first SIGTERM
@@ -694,7 +709,7 @@ pub async fn abort_lora_training() -> Result<(), String> {
                 });
             }
             clear_training_if(pid)?;
-            Ok(())
+            Ok(targets_active_process)
         }
     }
 }
@@ -823,9 +838,10 @@ pub async fn set_lora_python_path(
 #[cfg(test)]
 mod tests {
     use super::{
-        active_training_state, clear_training_if, ensure_training_start_not_cancelled,
-        mark_training_running, parse_python_version, request_training_abort, reserve_training_slot,
-        validate_python_candidate_path, AbortTrainingRequest, LoraEnvReport, TrainingState,
+        abort_request_targets_active_process, active_training_state, clear_training_if,
+        ensure_training_start_not_cancelled, mark_training_running, parse_python_version,
+        request_training_abort, reserve_training_slot, validate_python_candidate_path,
+        AbortTrainingRequest, LoraEnvReport, TrainingState,
     };
 
     fn reset_training_state() {
@@ -893,6 +909,24 @@ mod tests {
         );
         reserve_training_slot().expect("cancelled startup must release the slot");
         reset_training_state();
+    }
+
+    #[test]
+    fn abort_reports_no_active_process_for_idle_and_pending_start() {
+        // QNBS-v3 regression: these two outcomes previously mapped to the same Ok(()) as a
+        // confirmed kill, letting the JS caller misattribute an unrelated training failure to abort.
+        assert!(!abort_request_targets_active_process(
+            AbortTrainingRequest::NothingRunning
+        ));
+        assert!(!abort_request_targets_active_process(
+            AbortTrainingRequest::CancelPendingStart
+        ));
+        assert!(abort_request_targets_active_process(
+            AbortTrainingRequest::StopProcess(1)
+        ));
+        assert!(abort_request_targets_active_process(
+            AbortTrainingRequest::AlreadyStopping(1)
+        ));
     }
 
     #[test]

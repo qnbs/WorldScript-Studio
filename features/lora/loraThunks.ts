@@ -19,7 +19,7 @@ import {
   setIsEvaluating,
   setIsMerging,
   trainingAborted,
-  trainingCancellationFailed,
+  trainingCancellationNotConfirmed,
   trainingCancellationRequested,
   trainingCompleted,
   trainingFailed,
@@ -222,12 +222,18 @@ export const abortTrainingThunk = createAsyncThunk<void, void, ThunkConfig>(
     // QNBS-v3: set before awaiting so startTrainingThunk's catch (which can fire first — see there) can tell a killed process apart from a genuine training failure.
     dispatch(trainingCancellationRequested());
     const { abortTraining } = await import('../../services/lora/loraTrainingService');
+    let confirmedActiveProcess: boolean;
     try {
-      await abortTraining();
+      confirmedActiveProcess = await abortTraining();
     } catch (err) {
       // QNBS-v3: a failed native abort must not leave cancellationRequested:true set — training may still be genuinely running, and its own later failure must not be misclassified as a user abort.
-      dispatch(trainingCancellationFailed());
+      dispatch(trainingCancellationNotConfirmed());
       throw err;
+    }
+    if (!confirmedActiveProcess) {
+      // QNBS-v3: nothing was actually running to cancel — clearing the flag stops a coincidental, unrelated training-outcome rejection from being misattributed to this no-op abort.
+      dispatch(trainingCancellationNotConfirmed());
+      return;
     }
     dispatch(trainingAborted());
   },

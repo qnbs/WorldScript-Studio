@@ -37,8 +37,8 @@ describe('loraTrainingService — web build (no Tauri)', () => {
     expect(result.message).toContain('desktop app');
   });
 
-  it('abortTraining is a no-op on web (does not throw)', async () => {
-    await expect(abortTraining()).resolves.toBeUndefined();
+  it('abortTraining is a no-op on web and reports no confirmed process', async () => {
+    await expect(abortTraining()).resolves.toBe(false);
   });
 
   it('generateOllamaModelfile returns valid template on web', async () => {
@@ -82,6 +82,19 @@ describe('loraTrainingService — Tauri desktop build', () => {
 
     await expect(abortTraining()).rejects.toThrow('training_cancel_not_confirmed');
     expect(invoke).toHaveBeenCalledWith('abort_lora_training', undefined);
+  });
+
+  it('passes through the native confirmed-process-stopped result', async () => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    vi.mocked(invoke).mockResolvedValueOnce(true);
+    await expect(abortTraining()).resolves.toBe(true);
+  });
+
+  it('passes through the native no-op result (nothing was actually running)', async () => {
+    // QNBS-v3: abort_lora_training resolves Ok(false), not an error, when there was nothing to cancel.
+    const { invoke } = await import('@tauri-apps/api/core');
+    vi.mocked(invoke).mockResolvedValueOnce(false);
+    await expect(abortTraining()).resolves.toBe(false);
   });
 
   it('validates and persists an explicitly selected Python executable through the native resolver', async () => {
