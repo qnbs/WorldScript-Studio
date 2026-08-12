@@ -135,6 +135,89 @@ if (typeof window !== 'undefined' && !('SpeechSynthesisUtterance' in window)) {
     SpeechSynthesisUtteranceMock;
 }
 
+// navigator.locks (Web Locks API) — jsdom does not implement it, and Node has no navigator at all.
+// QNBS-v3: minimal fair reader/writer mutex per lock name, enough fidelity for protectedWriteAdmission.ts without a full spec-accurate implementation.
+if (typeof navigator === 'undefined') {
+  (globalThis as unknown as { navigator: unknown }).navigator = {};
+}
+if (!('locks' in navigator) || !navigator.locks) {
+  const activeSharedByName = new Map<string, number>();
+  const exclusiveHeldByName = new Set<string>();
+  type Waiter = { mode: 'shared' | 'exclusive'; resolve: () => void };
+  const waiters = new Map<string, Waiter[]>();
+
+  function hasQueuedExclusive(name: string): boolean {
+    return (waiters.get(name) ?? []).some((w) => w.mode === 'exclusive');
+  }
+
+  // QNBS-v3: wakes the queue's leading exclusive waiter alone, or every leading shared waiter together — prevents new shared requests from barging a queued exclusive one.
+  function wakeNext(name: string): void {
+    const queue = waiters.get(name);
+    if (!queue || queue.length === 0) return;
+    if (queue[0]!.mode === 'exclusive') {
+      queue.shift()!.resolve();
+      return;
+    }
+    while (queue.length > 0 && queue[0]!.mode === 'shared') {
+      queue.shift()!.resolve();
+    }
+  }
+
+  async function acquire(name: string, mode: 'shared' | 'exclusive'): Promise<() => void> {
+    while (
+      exclusiveHeldByName.has(name) ||
+      (mode === 'exclusive' && (activeSharedByName.get(name) ?? 0) > 0) ||
+      (mode === 'shared' && hasQueuedExclusive(name))
+    ) {
+      await new Promise<void>((resolve) => {
+        const queue = waiters.get(name) ?? [];
+        queue.push({ mode, resolve });
+        waiters.set(name, queue);
+      });
+    }
+    if (mode === 'exclusive') {
+      exclusiveHeldByName.add(name);
+      return () => {
+        exclusiveHeldByName.delete(name);
+        wakeNext(name);
+      };
+    }
+    activeSharedByName.set(name, (activeSharedByName.get(name) ?? 0) + 1);
+    return () => {
+      const remaining = (activeSharedByName.get(name) ?? 1) - 1;
+      activeSharedByName.set(name, remaining);
+      if (remaining === 0) wakeNext(name);
+    };
+  }
+
+  Object.defineProperty(navigator, 'locks', {
+    configurable: true,
+    writable: true,
+    value: {
+      request: async <T>(
+        name: string,
+        optionsOrCallback: { mode?: 'shared' | 'exclusive' } | (() => T | Promise<T>),
+        maybeCallback?: () => T | Promise<T>,
+      ): Promise<T> => {
+        const isCallbackOnly = typeof optionsOrCallback === 'function';
+        const callback = isCallbackOnly ? optionsOrCallback : maybeCallback!;
+        // QNBS-v3: LockManager.request()'s 2-arg form defaults to 'exclusive' per spec, not 'shared'.
+        const mode = isCallbackOnly
+          ? 'exclusive'
+          : optionsOrCallback.mode === 'shared'
+            ? 'shared'
+            : 'exclusive';
+        const release = await acquire(name, mode);
+        try {
+          return await callback();
+        } finally {
+          release();
+        }
+      },
+    },
+  });
+}
+
 // ResizeObserver & IntersectionObserver (sehr häufig in modernen React-Komponenten)
 // QNBS-v3: These APIs are used by container-query components and lazy-loading features.
 if (typeof window !== 'undefined') {

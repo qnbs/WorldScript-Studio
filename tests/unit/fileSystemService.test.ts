@@ -29,9 +29,14 @@ vi.mock('@tauri-apps/api/path', () => ({
   join: vi.fn((...parts: string[]) => Promise.resolve(parts.join('/'))),
 }));
 
-vi.mock('../../services/logger', () => ({
-  logger: { debug: vi.fn(), error: vi.fn(), warn: vi.fn(), info: vi.fn() },
-}));
+vi.mock('../../services/logger', () => {
+  const noopLogger = { debug: vi.fn(), error: vi.fn(), warn: vi.fn(), info: vi.fn() };
+  return {
+    logger: noopLogger,
+    // QNBS-v3: protectedWriteAdmission.ts (pulled in transitively via the storage layer) calls createLogger() at module load.
+    createLogger: () => ({ ...noopLogger, withContext: () => ({ ...noopLogger }) }),
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Tests
