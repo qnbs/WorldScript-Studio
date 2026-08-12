@@ -28,6 +28,12 @@ export interface PrimaryProtectedStoreAdapterSpec {
   keyType: 'string' | 'number';
   /** Keys this adapter must never read or write (e.g. the migration journal record, the passphrase sentinel). */
   reservedKeys?: readonly IDBValidKey[];
+  /**
+   * Predicate for keys this adapter must never read or write, checked in addition to reservedKeys —
+   * for stores holding a dynamic family of non-migratable keys (e.g. IdbKeyStore's per-provider
+   * `api_key_<provider>_enc`/`_iv` records) that can't be enumerated as a fixed list.
+   */
+  isReservedKey?: (key: IDBValidKey) => boolean;
   /** Returns the new value to persist, or NO_CHANGE if the record already reflects the target state. */
   transform(
     key: IDBValidKey,
@@ -97,7 +103,8 @@ async function openExistingDatabase(name: string): Promise<IDBDatabase | null> {
 }
 
 function isReservedKey(spec: PrimaryProtectedStoreAdapterSpec, key: IDBValidKey): boolean {
-  return (spec.reservedKeys ?? []).some((reserved) => reserved === key);
+  if ((spec.reservedKeys ?? []).some((reserved) => reserved === key)) return true;
+  return spec.isReservedKey?.(key) ?? false;
 }
 
 function decodeCursorLowerBound(
@@ -120,18 +127,37 @@ function putValue(
   return spec.keyMode === 'explicit' ? store.put(value, key) : store.put(value);
 }
 
-function valuesMatch(left: unknown, right: unknown): boolean {
+// QNBS-v3 (CodeAnt/#342): Blobs must be compared by content, not just size+type — two Blobs with
+// identical size and MIME type can hold entirely different bytes (e.g. a concurrent binder-asset
+// re-upload that preserves both properties), and the prior size/type-only check would accept that
+// stale value as "unchanged" and silently overwrite the newer asset with an in-flight migration's
+// replacement. Blob.arrayBuffer() is async, so valuesMatch is async too now.
+// Exported as __valuesMatchForTest — matches this module family's existing `__xForTest` convention
+// (see encryptionMigrationJournal.ts's __encryptionMigrationJournalRecordKeyForTest) — direct
+// coverage of the byte-comparison logic without needing to orchestrate a live IDB race.
+export async function __valuesMatchForTest(left: unknown, right: unknown): Promise<boolean> {
+  return valuesMatch(left, right);
+}
+
+async function valuesMatch(left: unknown, right: unknown): Promise<boolean> {
   if (Object.is(left, right)) return true;
   if (left instanceof Uint8Array && right instanceof Uint8Array) {
     return left.length === right.length && left.every((byte, index) => byte === right[index]);
   }
   if (left instanceof Blob && right instanceof Blob) {
-    return left.size === right.size && left.type === right.type;
+    if (left.size !== right.size || left.type !== right.type) return false;
+    const [leftBytes, rightBytes] = await Promise.all([
+      left.arrayBuffer().then((buf) => new Uint8Array(buf)),
+      right.arrayBuffer().then((buf) => new Uint8Array(buf)),
+    ]);
+    return leftBytes.every((byte, index) => byte === rightBytes[index]);
   }
   if (Array.isArray(left) && Array.isArray(right)) {
-    return (
-      left.length === right.length && left.every((value, index) => valuesMatch(value, right[index]))
-    );
+    if (left.length !== right.length) return false;
+    for (let index = 0; index < left.length; index += 1) {
+      if (!(await valuesMatch(left[index], right[index]))) return false;
+    }
+    return true;
   }
   if (
     typeof left !== 'object' ||
@@ -147,12 +173,13 @@ function valuesMatch(left: unknown, right: unknown): boolean {
   const rightRecord = right as Record<string, unknown>;
   const leftKeys = Object.keys(leftRecord).sort();
   const rightKeys = Object.keys(rightRecord).sort();
-  return (
-    leftKeys.length === rightKeys.length &&
-    leftKeys.every(
-      (key, index) => key === rightKeys[index] && valuesMatch(leftRecord[key], rightRecord[key]),
-    )
-  );
+  if (leftKeys.length !== rightKeys.length) return false;
+  for (let index = 0; index < leftKeys.length; index += 1) {
+    const key = leftKeys[index];
+    if (key === undefined || key !== rightKeys[index]) return false;
+    if (!(await valuesMatch(leftRecord[key], rightRecord[key]))) return false;
+  }
+  return true;
 }
 
 async function readBatch(
@@ -191,12 +218,47 @@ async function readBatch(
   });
 }
 
-async function writeBatch(
+/**
+ * QNBS-v3: reads the store's CURRENT value for every pending write's key, in one transaction.
+ * Split out from the write phase because the optimistic-write freshness check (valuesMatch) is now
+ * async for Blob content — awaiting inside a live IDB request's onsuccess handler risks the
+ * transaction auto-committing before the follow-up put() request is issued. Reading first, in a
+ * transaction that only ever issues get() requests, has no such risk.
+ */
+async function readCurrentValues(
+  database: IDBDatabase,
+  spec: PrimaryProtectedStoreAdapterSpec,
+  writes: readonly PendingWrite[],
+): Promise<Map<IDBValidKey, unknown>> {
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(spec.storeName, 'readonly');
+    const store = transaction.objectStore(spec.storeName);
+    const current = new Map<IDBValidKey, unknown>();
+    for (const write of writes) {
+      const request = store.get(write.key);
+      request.onsuccess = () => {
+        current.set(write.key, request.result);
+      };
+    }
+    transaction.oncomplete = () => resolve(current);
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () =>
+      reject(transaction.error ?? new Error(`${spec.storeName} freshness read aborted`));
+  });
+}
+
+/**
+ * QNBS-v3: performs the actual writes. Safe to run unconditionally (no re-check against a fresh
+ * read) because the caller only reaches this after every write already passed the async freshness
+ * comparison in readCurrentValues()/valuesMatch(), and the whole migrateNext() batch this belongs to
+ * is held under an exclusive withMigrationAdmission() lock for its entire duration — no other
+ * protected writer can interleave a change between the freshness check and this write.
+ */
+async function putValues(
   database: IDBDatabase,
   spec: PrimaryProtectedStoreAdapterSpec,
   writes: readonly PendingWrite[],
 ): Promise<void> {
-  if (writes.length === 0) return;
   await new Promise<void>((resolve, reject) => {
     const transaction = database.transaction(spec.storeName, 'readwrite');
     const store = transaction.objectStore(spec.storeName);
@@ -213,28 +275,32 @@ async function writeBatch(
       }
     };
     for (const write of writes) {
-      const request = store.get(write.key);
-      request.onsuccess = () => {
-        if (!valuesMatch(request.result, write.original)) {
-          abortForFailure(
-            new ProtectedStoreMigrationAdapterError(
-              `Protected-store migration detected a concurrent update in ${spec.id}/${encodeCursor(write.key)}`,
-            ),
-          );
-          return;
-        }
-        const putRequest = putValue(store, spec, write.key, write.replacement);
-        putRequest.onerror = () =>
-          abortForFailure(putRequest.error ?? new Error(`${spec.storeName} write failed`));
-      };
-      request.onerror = () =>
-        abortForFailure(request.error ?? new Error(`${spec.storeName} read failed`));
+      const putRequest = putValue(store, spec, write.key, write.replacement);
+      putRequest.onerror = () =>
+        abortForFailure(putRequest.error ?? new Error(`${spec.storeName} write failed`));
     }
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error);
     transaction.onabort = () =>
       reject(failure ?? transaction.error ?? new Error(`${spec.storeName} write aborted`));
   });
+}
+
+async function writeBatch(
+  database: IDBDatabase,
+  spec: PrimaryProtectedStoreAdapterSpec,
+  writes: readonly PendingWrite[],
+): Promise<void> {
+  if (writes.length === 0) return;
+  const currentValues = await readCurrentValues(database, spec, writes);
+  for (const write of writes) {
+    if (!(await valuesMatch(currentValues.get(write.key), write.original))) {
+      throw new ProtectedStoreMigrationAdapterError(
+        `Protected-store migration detected a concurrent update in ${spec.id}/${encodeCursor(write.key)}`,
+      );
+    }
+  }
+  await putValues(database, spec, writes);
 }
 
 async function verifyRecord(

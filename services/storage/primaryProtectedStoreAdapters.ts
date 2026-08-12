@@ -15,6 +15,7 @@ import {
 import type { BinderAssetMeta } from '../storageBackend';
 import { ENCRYPTION_MIGRATION_JOURNAL_RECORD_KEY } from './encryptionMigrationJournal';
 import { compressData, decompressData } from './idbCore';
+import { isKeyStoreRecordKey } from './idbKeyStore';
 import { PASSPHRASE_SENTINEL_RECORD_KEY } from './idbPassphraseSentinel';
 import {
   createPrimaryProtectedStoreAdapter,
@@ -154,6 +155,12 @@ const appDataAdapterSpec: PrimaryProtectedStoreAdapterSpec = {
   // QNBS-v3: the migration journal and the passphrase sentinel live in the same physical store —
   // both are lifecycle metadata the migration itself depends on and must never rewrite.
   reservedKeys: [ENCRYPTION_MIGRATION_JOURNAL_RECORD_KEY, PASSPHRASE_SENTINEL_RECORD_KEY],
+  // QNBS-v3 (CodeAnt/qodo #342): APP_DATA_STORE also holds IdbKeyStore's raw CryptoKey and
+  // per-provider encrypted-API-key records (local_crypto_key_v2, api_key_<provider>_enc/_iv,
+  // the legacy gemini_api_key_* pair) — JSON.stringify-based whole-value transform would destroy
+  // the non-extractable CryptoKey and corrupt the independently-AES-GCM-encrypted API-key bytes.
+  // These aren't project/settings data and must never pass through this adapter.
+  isReservedKey: isKeyStoreRecordKey,
   transform: (_key, value, context) =>
     transformWholeValue(APP_DATA_ADAPTER_ID, value, context, {
       decodeLegacy: (value) => decompressData<unknown>(value),
