@@ -181,7 +181,7 @@
     "fake-indexeddb": "^6.2.5",
     "http-server": "^14.1.1",
     "jsdom": "^29.1.1",
-    "lint-staged": "^17.1.0",
+    "lint-staged": "^17.3.0",
     "rollup-plugin-visualizer": "^7.0.1",
     "simple-git-hooks": "^2.13.1",
     "storybook": "^10.5.6",
