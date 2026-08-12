@@ -10,6 +10,8 @@ const SCENE_REVISIONS_DB = 'worldscript-revisions-db';
 const SCENE_REVISIONS_STORE = 'scene-revisions';
 const INFERENCE_CACHE_DB = 'worldscript-inference-cache-db';
 const INFERENCE_CACHE_STORE = 'inference-cache';
+// QNBS-v3: fixed fixture timestamp instead of Date.now() — these tests never assert on the value, so a literal is simpler and safer than fake timers around real WebCrypto/fake-indexeddb async work.
+const FIXED_TIMESTAMP = 1_700_000_000_000;
 
 function createDatabase(name: string, storeName: string, keyPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -114,7 +116,7 @@ describe('secondaryProtectedStoreAdapters — scene revision payload shapes', ()
     await putRecord(SCENE_REVISIONS_DB, SCENE_REVISIONS_STORE, {
       id: 'rev-1',
       sectionId: 'section-1',
-      createdAt: Date.now(),
+      createdAt: FIXED_TIMESTAMP,
       title: 'Legacy',
       content: 'legacy body',
       wordCount: 2,
@@ -138,7 +140,7 @@ describe('secondaryProtectedStoreAdapters — scene revision payload shapes', ()
     await putRecord(SCENE_REVISIONS_DB, SCENE_REVISIONS_STORE, {
       id: 'rev-2',
       sectionId: 'section-1',
-      createdAt: Date.now(),
+      createdAt: FIXED_TIMESTAMP,
       schemaVersion: 1,
       payload: { title: 'Nested', content: 'nested body', wordCount: 2 },
     });
@@ -161,7 +163,7 @@ describe('secondaryProtectedStoreAdapters — scene revision payload shapes', ()
     await putRecord(SCENE_REVISIONS_DB, SCENE_REVISIONS_STORE, {
       id: 'rev-3',
       sectionId: 'section-1',
-      createdAt: Date.now(),
+      createdAt: FIXED_TIMESTAMP,
       schemaVersion: 2,
       payload: { title: 'Future', content: 'future body', wordCount: 2 },
     });
@@ -181,7 +183,7 @@ describe('secondaryProtectedStoreAdapters — scene revision payload shapes', ()
     await putRecord(SCENE_REVISIONS_DB, SCENE_REVISIONS_STORE, {
       id: 'rev-4',
       sectionId: 'section-1',
-      createdAt: Date.now(),
+      createdAt: FIXED_TIMESTAMP,
       title: 'Bad',
       content: 'bad body',
       wordCount: 2,
@@ -203,7 +205,7 @@ describe('secondaryProtectedStoreAdapters — scene revision payload shapes', ()
     await putRecord(SCENE_REVISIONS_DB, SCENE_REVISIONS_STORE, {
       id: 'rev-5',
       sectionId: 'section-1',
-      createdAt: Date.now(),
+      createdAt: FIXED_TIMESTAMP,
       schemaVersion: 1,
       payload: { title: 'Bad nested', content: 'body', wordCount: 2 },
       unexpectedField: 'should not be here',
@@ -225,7 +227,7 @@ describe('secondaryProtectedStoreAdapters — inference cache payload shapes', (
     await createDatabase(INFERENCE_CACHE_DB, INFERENCE_CACHE_STORE, 'key');
     await putRecord(INFERENCE_CACHE_DB, INFERENCE_CACHE_STORE, {
       key: 'cache-1',
-      timestamp: Date.now(),
+      timestamp: FIXED_TIMESTAMP,
       result: 'legacy cached text',
     });
     const [, cacheAdapter] = getRegisteredSecondaryProtectedStoreAdapters();
@@ -243,7 +245,7 @@ describe('secondaryProtectedStoreAdapters — inference cache payload shapes', (
     await createDatabase(INFERENCE_CACHE_DB, INFERENCE_CACHE_STORE, 'key');
     await putRecord(INFERENCE_CACHE_DB, INFERENCE_CACHE_STORE, {
       key: 'cache-2',
-      timestamp: Date.now(),
+      timestamp: FIXED_TIMESTAMP,
       payload: { result: 'nested cached text' },
     });
     const [, cacheAdapter] = getRegisteredSecondaryProtectedStoreAdapters();
@@ -260,7 +262,7 @@ describe('secondaryProtectedStoreAdapters — inference cache payload shapes', (
     await createDatabase(INFERENCE_CACHE_DB, INFERENCE_CACHE_STORE, 'key');
     await putRecord(INFERENCE_CACHE_DB, INFERENCE_CACHE_STORE, {
       key: 'cache-3',
-      timestamp: Date.now(),
+      timestamp: FIXED_TIMESTAMP,
       result: 'bad',
       unexpectedField: 'should not be here',
     });
@@ -279,7 +281,7 @@ describe('secondaryProtectedStoreAdapters — inference cache payload shapes', (
     await createDatabase(INFERENCE_CACHE_DB, INFERENCE_CACHE_STORE, 'key');
     await putRecord(INFERENCE_CACHE_DB, INFERENCE_CACHE_STORE, {
       key: 'cache-4',
-      timestamp: Date.now(),
+      timestamp: FIXED_TIMESTAMP,
       payload: { result: 'bad nested' },
       unexpectedField: 'should not be here',
     });

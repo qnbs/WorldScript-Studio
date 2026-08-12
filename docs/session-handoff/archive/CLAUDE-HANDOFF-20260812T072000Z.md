@@ -395,11 +395,12 @@ available for #336/#337 — treat them as the full available evidence, not as
 
 ## 18. Exact Next Actions
 
-1. **Check § 15 first** — has CodeRabbit's re-review on #336 completed? This
-   is the **one remaining unconfirmed item** for the review/CI dimension
-   (the Tauri build is now confirmed `success` — item 2 below is done). If a
-   fresh pass found new findings, classify (§ 13), fix, reply+resolve, push,
-   and re-poll — do not stop after one pass.
+1. ~~Check § 15 first — has CodeRabbit's re-review on #336 completed?~~
+   **DONE, per § 1/§ 2 above — the review completed with 0 new findings**
+   before this document was finished; this item and § 15/§ 23 item 1 were
+   drafted earlier in the same capture and never updated to match. If a
+   fresh pass ever finds new findings, classify (§ 13), fix, reply+resolve,
+   push, and re-poll — do not stop after one pass.
 2. ~~Check the Tauri build~~ **DONE — confirmed `success` on all 3 platforms
    (run `31549539018`, against `b01564ed`).** This closes the "unverified
    Rust compile" gap in § 19.
@@ -493,9 +494,9 @@ still-unconfirmed fresh review) before reproducing anything locally.
 
 ## 23. Open Questions / Uncertainty
 
-1. Will CodeRabbit's re-review on #336 complete, and if so, does it find
-   anything new? **Still the one genuinely unresolved question at capture**
-   — § 15.
+1. ~~Will CodeRabbit's re-review on #336 complete, and if so, does it find
+   anything new?~~ **Answered, per § 1/§ 2: yes, with 0 new findings** — see
+   § 15 for the check procedure this question originally referred to.
 2. ~~Does the Tauri build succeed?~~ **Answered: yes, `success` on all 3
    platforms.**
 3. #310's review-thread queue is now formally resolved (0/317), but were
