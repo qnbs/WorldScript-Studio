@@ -4,6 +4,7 @@
 // v1.20 housekeeping (no UI ever shipped); create() keeps an explicit-consent boolean guard instead.
 
 import type { ProjectSnapshot, Settings, StoryCodex, StoryProject } from '../../types';
+import { normalizePersistedSettings } from '../storage/idbProjectStore';
 import type {
   BinderAssetMeta,
   BinderAssetPayload,
@@ -127,7 +128,10 @@ export class CloudSyncBackend implements StorageBackend {
 
   async loadSettings(): Promise<Settings | null> {
     // QNBS-v3: P2-1 — Use conflict-aware load with metadata
-    return this.loadWithMetadata<Settings>(KEY_SETTINGS);
+    const loaded = await this.loadWithMetadata<Record<string, unknown>>(KEY_SETTINGS);
+    // QNBS-v3: normalize so settings saved before a newer required Settings field existed
+    // (e.g. writingSurfaceStyle) don't return an object that violates the Settings contract.
+    return loaded ? normalizePersistedSettings(loaded) : null;
   }
 
   async saveStoryCodex(codex: StoryCodex): Promise<void> {

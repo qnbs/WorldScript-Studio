@@ -12,6 +12,7 @@ describe('idbProjectStore', () => {
       const result = normalizePersistedSettings({});
       expect(result.theme).toBe('dark');
       expect(result.appearancePreset).toBe('default');
+      expect(result.writingSurfaceStyle).toBe('textured');
       expect(result.editorFont).toBe('serif');
       expect(result.fontSize).toBe(16);
     });
@@ -20,9 +21,11 @@ describe('idbProjectStore', () => {
       const result = normalizePersistedSettings({
         theme: 'light',
         fontSize: 20,
+        writingSurfaceStyle: 'plain',
       });
       expect(result.theme).toBe('light');
       expect(result.fontSize).toBe(20);
+      expect(result.writingSurfaceStyle).toBe('plain');
     });
 
     it('normalizes accessibility settings with defaults', () => {

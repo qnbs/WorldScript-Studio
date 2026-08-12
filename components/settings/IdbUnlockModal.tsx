@@ -7,7 +7,6 @@ import { Modal } from '../ui/Modal';
 
 interface Props {
   onUnlocked: () => void;
-  onForgotPassphrase?: () => void;
 }
 
 const ATTEMPT_STORAGE_KEY = 'worldscript-idb-unlock-attempts';
@@ -100,16 +99,13 @@ function lockoutMs(attempts: number): number {
   return Math.min(2 ** (attempts - 4), 60) * 1000;
 }
 
-export const IdbUnlockModal: FC<Props> = ({ onUnlocked, onForgotPassphrase }) => {
+export const IdbUnlockModal: FC<Props> = ({ onUnlocked }) => {
   const { t } = useTranslation();
   const [passphrase, setPassphrase] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  // QNBS-v3: two-step confirm for forgot-passphrase to prevent accidental clicks
-  const [showForgotConfirm, setShowForgotConfirm] = useState(false);
   const [lockoutRemaining, setLockoutRemaining] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const cancelBtnRef = useRef<HTMLButtonElement>(null);
 
   // QNBS-v3: Rate-limiting tick — update remaining lockout time every second
   useEffect(() => {
@@ -126,17 +122,6 @@ export const IdbUnlockModal: FC<Props> = ({ onUnlocked, onForgotPassphrase }) =>
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
-
-  // QNBS-v3: WCAG 2.4.3 focus management — when confirmation panel opens, move focus to
-  // the Cancel button so keyboard users don't lose their position in the document.
-  useEffect(() => {
-    if (showForgotConfirm) {
-      cancelBtnRef.current?.focus();
-    } else {
-      // Restore focus to the passphrase input when the panel is dismissed.
-      inputRef.current?.focus();
-    }
-  }, [showForgotConfirm]);
 
   const handleUnlock = useCallback(async () => {
     if (!passphrase) return;
@@ -238,40 +223,6 @@ export const IdbUnlockModal: FC<Props> = ({ onUnlocked, onForgotPassphrase }) =>
                 : t('settings.privacy.encryptionUnlockButton')}
           </Button>
         </div>
-
-        {onForgotPassphrase && (
-          <div className="border-t border-[var(--sc-border-subtle)] pt-4 space-y-3">
-            {!showForgotConfirm ? (
-              <button
-                type="button"
-                onClick={() => setShowForgotConfirm(true)}
-                className="text-sm text-[var(--sc-text-muted)] underline underline-offset-2 hover:text-[var(--sc-text-secondary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)] rounded"
-              >
-                {t('settings.privacy.encryptionForgotPassphrase')}
-              </button>
-            ) : (
-              <div className="space-y-3">
-                {/* QNBS-v3: role="alert" so screen readers immediately read the warning when this section appears */}
-                <p
-                  id="idb-forgot-warning"
-                  role="alert"
-                  className="text-sm text-[var(--sc-warning-fg)]"
-                >
-                  {t('settings.privacy.encryptionForgotPassphraseWarning')}
-                </p>
-                <div className="flex gap-2 justify-end">
-                  <Button ref={cancelBtnRef} onClick={() => setShowForgotConfirm(false)}>
-                    {t('common.cancel')}
-                  </Button>
-                  {/* QNBS-v3: aria-describedby links destructive button to the warning text for AT users */}
-                  <Button onClick={onForgotPassphrase} aria-describedby="idb-forgot-warning">
-                    {t('settings.privacy.encryptionDisableConfirm')}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
       </div>
     </Modal>
   );

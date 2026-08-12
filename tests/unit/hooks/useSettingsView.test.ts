@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useTransientUiStore } from '../../../app/transientUiStore';
 import { useSettingsView } from '../../../hooks/useSettingsView';
 import type { ProjectSnapshot, StorySection } from '../../../types';
 
@@ -578,5 +579,23 @@ describe('activeCategory', () => {
     await waitFor(() => {
       expect(mockListSnapshots).toHaveBeenCalledTimes(2);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// handleLockSession — must route back to the unlock modal, not just clear the key
+// ---------------------------------------------------------------------------
+describe('handleLockSession', () => {
+  beforeEach(() => {
+    useTransientUiStore.getState().setIdbUnlockOpen(false);
+  });
+
+  it('opens the global unlock modal so a subsequent autosave has a route back to unlocking', () => {
+    const { result } = renderHook(() => useSettingsView());
+    act(() => {
+      result.current.handleLockSession();
+    });
+    expect(useTransientUiStore.getState().isIdbUnlockOpen).toBe(true);
+    expect(mockToastInfo).toHaveBeenCalledWith('settings.privacy.encryptionLockedStatus');
   });
 });

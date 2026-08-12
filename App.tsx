@@ -67,7 +67,6 @@ import { pluginRegistry } from './services/pluginRegistry';
 import { repairProjectI18nFields } from './services/projectI18nRepair';
 import { hasCompletedSpotlightTour, startSpotlightTour } from './services/spotlightTour';
 import {
-  clearIdbPassphrase,
   hasPassphraseSentinel,
   isIdbEncryptionReady,
 } from './services/storage/storageEncryptionService';
@@ -196,15 +195,6 @@ const App: FC<AppProps> = ({ isNewUser }) => {
   const isIdbUnlockOpen = useTransientUiStore((s) => s.isIdbUnlockOpen);
   const setIdbUnlockOpen = useTransientUiStore((s) => s.setIdbUnlockOpen);
 
-  // QNBS-v3: escape hatch — clears sentinel + disables flag so the app is accessible again
-  const handleForgotPassphrase = useCallback(async () => {
-    await clearIdbPassphrase();
-    dispatch(featureFlagsActions.setEnableIdbAtRestEncryption(false));
-    setIdbUnlockOpen(false);
-    // QNBS-v3: WCAG 4.1.3 — assertive announcement so screen reader users know the security state changed
-    announce(t('settings.privacy.encryptionDisabledStatus'), 'assertive');
-  }, [dispatch, setIdbUnlockOpen, announce, t]);
-
   // Collaboration Panel State
   const [isCollabPanelOpen, setIsCollabPanelOpen] = useState(false);
 
@@ -255,6 +245,14 @@ const App: FC<AppProps> = ({ isNewUser }) => {
       document.body.classList.add('appearance-sepia');
     }
   }, [settings.appearancePreset]);
+
+  useEffect(() => {
+    // QNBS-v3: Decorative fixed layers are opt-out so long-form writers can keep a neutral canvas.
+    document.body.classList.toggle(
+      'writing-surface-plain',
+      settings.writingSurfaceStyle === 'plain',
+    );
+  }, [settings.writingSurfaceStyle]);
 
   useEffect(() => {
     document.body.classList.toggle(
@@ -809,10 +807,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
               )}
               {isIdbUnlockOpen && (
                 <ErrorBoundary onReset={() => setIdbUnlockOpen(false)}>
-                  <IdbUnlockModal
-                    onUnlocked={() => setIdbUnlockOpen(false)}
-                    onForgotPassphrase={() => void handleForgotPassphrase()}
-                  />
+                  <IdbUnlockModal onUnlocked={() => setIdbUnlockOpen(false)} />
                 </ErrorBoundary>
               )}
             </div>

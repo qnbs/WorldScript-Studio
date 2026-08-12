@@ -12,11 +12,7 @@
  */
 
 import { decompressData } from './idbCore';
-import {
-  deletePassphraseSentinel,
-  getPassphraseSentinel,
-  savePassphraseSentinel,
-} from './idbPassphraseSentinel';
+import { getPassphraseSentinel, savePassphraseSentinel } from './idbPassphraseSentinel';
 
 const PBKDF2_ITERATIONS = 600_000; // OWASP 2024 minimum for PBKDF2-HMAC-SHA-256
 const IV_BYTE_LENGTH = 12;
@@ -31,6 +27,44 @@ const SENTINEL = new Uint8Array([0x00, 0x65, 0x6e, 0x63, 0x31, 0x00]);
 export interface EncryptedBlob {
   /** sentinel(6) || iv(12) || AES-GCM ciphertext+tag */
   bytes: Uint8Array;
+}
+
+// QNBS-v3: Explicit typed errors — callers branch on `.code`, so a locked read/write and an
+//          incomplete migration must never collapse into a generic Error a caller could ignore.
+/** Raised when configured at-rest encryption has no session key for a protected operation. */
+export class IdbStorageLockedError extends Error {
+  readonly code = 'STORAGE_LOCKED' as const;
+
+  constructor() {
+    super('Encrypted storage is locked');
+    this.name = 'IdbStorageLockedError';
+  }
+}
+
+/** Raised instead of risking an incomplete cross-database disable or passphrase rotation. */
+export class IdbEncryptionMigrationRequiredError extends Error {
+  readonly code = 'ENCRYPTION_MIGRATION_REQUIRED' as const;
+
+  constructor(operation: 'disable' | 'rotate') {
+    super(`Cannot ${operation} encrypted storage without a completed migration journal`);
+    this.name = 'IdbEncryptionMigrationRequiredError';
+  }
+}
+
+/**
+ * Raised when the persisted KDF salt is missing or invalid while a passphrase sentinel already
+ * exists — deriving a fresh salt at that point would silently produce a different key and
+ * permanently orphan existing encrypted data instead of surfacing the loss.
+ */
+export class IdbEncryptionSaltLostError extends Error {
+  readonly code = 'ENCRYPTION_SALT_LOST' as const;
+
+  constructor() {
+    super(
+      'Encryption salt is missing or invalid, but a passphrase was previously configured — a new salt cannot be created without losing access to existing encrypted data',
+    );
+    this.name = 'IdbEncryptionSaltLostError';
+  }
 }
 
 export class StorageEncryptionService {
@@ -99,7 +133,7 @@ export class StorageEncryptionService {
    * Callers must re-encrypt all IDB data with the returned key.
    */
   async rotateKey(_oldKey: CryptoKey, newPassphrase: string): Promise<CryptoKey> {
-    const salt = getOrCreateSalt();
+    const salt = await getOrCreateSalt();
     return this.deriveKey(newPassphrase, salt);
   }
 }
@@ -108,21 +142,35 @@ export class StorageEncryptionService {
 
 const _svc = new StorageEncryptionService();
 let _activeKey: CryptoKey | null = null;
+// QNBS-v3: Caches a known-true sentinel so hot read/write paths skip an IDB round trip on every
+//          call; safe because disable/rotate (the only ops that could make it false again) both
+//          unconditionally throw IdbEncryptionMigrationRequiredError today (see below).
+let _sentinelPresenceCache: boolean | null = null;
 
-function getOrCreateSalt(): Uint8Array {
+async function getOrCreateSalt(): Promise<Uint8Array> {
   try {
     const stored = localStorage.getItem(SALT_STORAGE_KEY);
     if (stored) {
       const arr = Uint8Array.from(atob(stored), (c) => c.charCodeAt(0));
       if (arr.length === SALT_BYTE_LENGTH) return arr;
     }
+  } catch (error) {
+    throw new Error('Unable to persist encryption salt', { cause: error });
+  }
+  // QNBS-v3: only first-time setup (no sentinel yet) may create a fresh salt — a missing/invalid
+  // salt after that point means the original key material is unrecoverable, so fail closed instead
+  // of silently deriving a different key that can never decrypt the existing sentinel/data.
+  if (await hasPassphraseSentinel()) {
+    throw new IdbEncryptionSaltLostError();
+  }
+  try {
     const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTE_LENGTH));
     const b64 = btoa(String.fromCharCode(...salt));
     localStorage.setItem(SALT_STORAGE_KEY, b64);
     return salt;
-  } catch {
-    // QNBS-v3: SSR / test env without localStorage — return zero-filled fallback salt.
-    return new Uint8Array(SALT_BYTE_LENGTH);
+  } catch (error) {
+    // QNBS-v3: A deterministic fallback salt would weaken every new encrypted library.
+    throw new Error('Unable to persist encryption salt', { cause: error });
   }
 }
 
@@ -132,7 +180,7 @@ function getOrCreateSalt(): Uint8Array {
  */
 export async function initIdbEncryption(passphrase: string): Promise<void> {
   if (!passphrase) throw new Error('Passphrase must not be empty');
-  const salt = getOrCreateSalt();
+  const salt = await getOrCreateSalt();
   _activeKey = await _svc.deriveKey(passphrase, salt);
 }
 
@@ -154,9 +202,43 @@ export function isIdbEncryptionReady(): boolean {
   return _activeKey !== null;
 }
 
+// QNBS-v3: Must run before any protected IDB access — the session key can be cleared between
+//          two awaits, so every protected read/write checks it fresh rather than caching a stale "unlocked" result.
+/**
+ * Reject a protected durable write while encryption is configured but the key is locked.
+ * Call this before opening an IDB write transaction so callers cannot downgrade to plaintext.
+ */
+export async function assertIdbProtectedWriteAllowed(): Promise<void> {
+  if (_activeKey) return;
+  if (await hasPassphraseSentinel()) throw new IdbStorageLockedError();
+}
+
+/**
+ * Atomically resolve whether a protected write may proceed AND the exact key to encrypt with,
+ * in one snapshot. QNBS-v3: a caller that instead awaits assertIdbProtectedWriteAllowed() and
+ * later re-reads isIdbEncryptionReady()/_activeKey after another await (e.g. opening an IDB
+ * transaction) can have Lock Session race in between and silently fall back to a plaintext
+ * write; capturing the CryptoKey once here and encrypting with that exact reference (via
+ * idbEncryptWithKey) removes the gap entirely, independent of caller ordering.
+ */
+export async function resolveProtectedWriteKey(): Promise<CryptoKey | null> {
+  if (_activeKey) return _activeKey;
+  if (await hasPassphraseSentinel()) throw new IdbStorageLockedError();
+  return null;
+}
+
+/** Encrypt with an explicit key captured via resolveProtectedWriteKey — immune to a later clearIdbEncryptionKey(). */
+export async function idbEncryptWithKey(key: CryptoKey, plaintext: unknown): Promise<Uint8Array> {
+  const blob = await _svc.encrypt(key, plaintext);
+  return blob.bytes;
+}
+
 /** Clear the in-memory key (call on tab-hide / session end). */
 export function clearIdbEncryptionKey(): void {
   _activeKey = null;
+  // QNBS-v3: also drop the sentinel-presence cache — tests (and any future out-of-band sentinel
+  // deletion) rely on this call to force the next hasPassphraseSentinel() back to a fresh IDB read.
+  _sentinelPresenceCache = null;
 }
 
 /** Type-guard: returns true if a stored IDB value looks like an encrypted blob. */
@@ -179,13 +261,12 @@ export function isEncryptedBlob(value: unknown): value is Uint8Array {
 export async function idbReadSecure<T>(raw: unknown): Promise<T> {
   if (isEncryptedBlob(raw)) {
     if (!isIdbEncryptionReady()) {
-      throw new Error(
-        'Data is encrypted but encryption key is not available. ' +
-          'Please re-enable encryption in Settings → Privacy to access your data.',
-      );
+      throw new IdbStorageLockedError();
     }
     return idbDecrypt<T>(raw);
   }
+  // QNBS-v3: Legacy plaintext remains readable only after unlock so a locked library cannot expose protected content.
+  await assertIdbProtectedWriteAllowed();
   return decompressData<T>(raw);
 }
 
@@ -198,11 +279,14 @@ export async function idbReadSecure<T>(raw: unknown): Promise<T> {
  */
 export async function setupIdbEncryption(passphrase: string): Promise<void> {
   if (!passphrase) throw new Error('Passphrase must not be empty');
-  const salt = getOrCreateSalt();
+  const salt = await getOrCreateSalt();
   const key = await _svc.deriveKey(passphrase, salt);
   const blob = await _svc.encrypt(key, { v: 1 });
   await savePassphraseSentinel(blob.bytes);
   _activeKey = key;
+  // QNBS-v3: sentinel now durably exists — update the cache immediately instead of waiting for
+  // the next hasPassphraseSentinel() call to re-derive it from an IDB read.
+  _sentinelPresenceCache = true;
 }
 
 /**
@@ -215,7 +299,10 @@ export async function verifyAndInitIdbEncryption(passphrase: string): Promise<vo
   if (!passphrase) throw new Error('Passphrase must not be empty');
   const sentinelBytes = await getPassphraseSentinel();
   if (!sentinelBytes) throw new Error('No passphrase sentinel found — encryption was not set up');
-  const salt = getOrCreateSalt();
+  // QNBS-v3: sentinelBytes being non-null already proves the sentinel exists — populate the cache
+  // from this read instead of letting the next hasPassphraseSentinel() call repeat the IDB lookup.
+  _sentinelPresenceCache = true;
+  const salt = await getOrCreateSalt();
   const key = await _svc.deriveKey(passphrase, salt);
   // QNBS-v3: decrypt throws on wrong key — AES-GCM auth-tag is the verifier
   await _svc.decrypt(key, { bytes: sentinelBytes });
@@ -228,41 +315,37 @@ export async function verifyAndInitIdbEncryption(passphrase: string): Promise<vo
  * a stale flag (flag on, no sentinel → flag never properly set up → disable flag).
  */
 export async function hasPassphraseSentinel(): Promise<boolean> {
+  // QNBS-v3: Only a positive result is cached. Setup can happen in another tab (or, once rotate/
+  // disable ship, sentinel state can otherwise change) after this tab observed "no sentinel" —
+  // caching that negative would let resolveProtectedWriteKey()/assertIdbProtectedWriteAllowed()
+  // keep treating a now-configured library as never-configured and silently allow a plaintext
+  // write. A negative lookup still costs one IDB read each time, which is the fail-closed direction.
+  if (_sentinelPresenceCache === true) return true;
   const bytes = await getPassphraseSentinel();
+  if (bytes !== null) _sentinelPresenceCache = true;
   return bytes !== null;
 }
 
 /**
- * Delete the passphrase sentinel from IDB and clear the in-memory key.
- * Call when the user disables encryption (after verifying current passphrase).
+ * Disabling encryption is blocked until a verified, resumable conversion protocol covers every
+ * protected store. Deleting the verifier first would strand existing ciphertext.
  */
 export async function clearIdbPassphrase(): Promise<void> {
-  await deletePassphraseSentinel();
-  _activeKey = null;
+  throw new IdbEncryptionMigrationRequiredError('disable');
 }
 
 /**
- * Change the passphrase: verify the old one against the sentinel, derive the new
- * key, replace the sentinel, then optionally re-encrypt all existing IDB data.
- *
- * @param reEncrypt — optional callback that receives (oldKey, newKey) and must
- *   re-encrypt all existing data. Called while oldKey is still valid so decryption
- *   of legacy records is possible. If omitted, old data remains encrypted under
- *   the old key until the next natural overwrite.
+ * Rekey is intentionally unavailable until a durable, cross-store journal can prove that mixed
+ * generations are recoverable after interruption. The arguments remain for source compatibility.
  */
 export async function rotateIdbPassphrase(
   oldPassphrase: string,
   newPassphrase: string,
   reEncrypt?: (oldKey: CryptoKey, newKey: CryptoKey) => Promise<void>,
 ): Promise<void> {
-  // QNBS-v3: verifyAndInitIdbEncryption throws on wrong old passphrase — caller catches and shows error
-  await verifyAndInitIdbEncryption(oldPassphrase);
-  const oldKey = _activeKey;
-  if (!oldKey) throw new Error('Encryption not active');
-  await setupIdbEncryption(newPassphrase);
-  const newKey = _activeKey;
-  if (!newKey) throw new Error('Encryption not active after rotation');
-  if (reEncrypt) {
-    await reEncrypt(oldKey, newKey);
-  }
+  void oldPassphrase;
+  void newPassphrase;
+  void reEncrypt;
+  // QNBS-v3: A new verifier cannot become authoritative before every old ciphertext is checkpointed and verified.
+  throw new IdbEncryptionMigrationRequiredError('rotate');
 }

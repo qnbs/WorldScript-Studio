@@ -20,6 +20,7 @@ import type {
   ThemeCustomization,
   VoiceSettings,
   WritingGoal,
+  WritingSurfaceStyle,
 } from '../../types';
 import { normalizeAccessibilitySettings } from './accessibilitySchema';
 import { getDefaultKeyboardShortcuts } from './keyboardShortcutsDefaults';
@@ -44,6 +45,7 @@ const defaultSettings: Settings = {
   // Basic Settings
   theme: getSystemThemePreference(),
   appearancePreset: 'sepia',
+  writingSurfaceStyle: 'textured',
   aiMode: 'hybrid',
   openRouter: DEFAULT_OPENROUTER_SETTINGS,
   editorFont: 'serif',
@@ -160,6 +162,9 @@ const settingsSlice = createSlice({
     },
     setAppearancePreset(state, action: PayloadAction<AppearancePreset>) {
       state.appearancePreset = action.payload;
+    },
+    setWritingSurfaceStyle(state, action: PayloadAction<WritingSurfaceStyle>) {
+      state.writingSurfaceStyle = action.payload;
     },
     setAiMode(state, action: PayloadAction<AiMode>) {
       state.aiMode = action.payload;

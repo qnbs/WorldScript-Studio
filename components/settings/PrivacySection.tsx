@@ -52,12 +52,12 @@ export const PrivacySection: FC = () => {
             />
             <ToggleSwitch
               label={t('settings.privacy.dataEncryption')}
-              checked={featureFlags.enableIdbAtRestEncryption && encryptionReady}
+              // QNBS-v3: Locked is still encrypted; showing it as off invited an unsafe disable path.
+              checked={featureFlags.enableIdbAtRestEncryption}
+              hint={encEnabled ? t('settings.privacy.encryptionWarning') : undefined}
+              disabled={encEnabled}
               onChange={(v) => {
-                // QNBS-v3: dataEncryption is now a read-through of the actual IDB at-rest encryption
-                // state. Toggling it opens the passphrase modal to set up or disable encryption.
                 if (v) setPassphraseModal('set');
-                else setPassphraseModal('disable');
               }}
             />
             <ToggleSwitch
@@ -107,12 +107,6 @@ export const PrivacySection: FC = () => {
             )}
             {encEnabled && encryptionReady && (
               <>
-                <Button variant="secondary" onClick={() => setPassphraseModal('change')}>
-                  {t('settings.privacy.encryptionChangeAction')}
-                </Button>
-                <Button variant="danger" onClick={() => setPassphraseModal('disable')}>
-                  {t('settings.privacy.encryptionDisableAction')}
-                </Button>
                 {/* QNBS-v3: Lock Session clears the in-memory key without disabling encryption —
                     user must re-enter passphrase on next access. */}
                 <Button variant="secondary" onClick={handleLockSession}>

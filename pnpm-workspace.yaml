@@ -1,8 +1,18 @@
-# pnpm v10/v11 workspace configuration
+# pnpm v11 workspace configuration
 # Build-script allow-list: ONLY these packages may run postinstall/preinstall scripts.
-# All others are silently denied (pnpm v10 default since v9.15+ approve-builds model).
+# All other dependency build scripts are denied by default under pnpm v11.
 # QNBS-v3: TS7 migration - disabled strictPeerDependencies for tsgo preview compatibility
 strictPeerDependencies: false
+verifyDepsBeforeRun: error
+autoInstallPeers: true
+ignoreScripts: false
+engineStrict: true
+preferFrozenLockfile: true
+verifyStoreIntegrity: true
+sideEffectsCache: true
+strictDepBuilds: true
+blockExoticSubdeps: true
+minimumReleaseAge: 10080
 
 # QNBS-v3: Migrated from package.json "pnpm" field (deprecated in pnpm v10+)
 # Overrides with security justifications:
@@ -15,16 +25,20 @@ strictPeerDependencies: false
 #     raised to >=8.6.6 for GHSA-j3f2-48v5-ccww / GHSA-jfj6-75fj-8934 (2026-07)
 # - axios: CVE-2024-XXXX - SSRF fix
 # - basic-ftp: CVE-2024-XXXX - path traversal fix
-# - fast-uri: CVE-2024-XXXX - path traversal fix
-# - ip-address: CVE-2024-XXXX - DoS fix
+# - fast-uri: GHSA-7p8r-x3mc-p8w7 - host confusion via backslash authority parsing (fixed 3.1.5)
+# - ip-address: GHSA-mwp4-54f8-5fhr - leading-zero parsing mismatch enabling SSRF / trust-boundary bypass (fixed 10.3.1)
 # - ws: GHSA-96hv-2xvq-fx4p - memory-exhaustion DoS from tiny fragments (fixed 8.21.0)
 # - form-data: CRLF injection via unescaped boundary (fixed 4.0.6)
-# - brace-expansion: CVE-2024-XXXX - ReDoS fix
-# - uuid: CVE-2024-XXXX - collision fix
-# - qs: CVE-2024-XXXX - prototype pollution fix
-# - esbuild: GHSA-67mh-4wv8-2f99 / GHSA-9j49-mf9f-jxg2 - missing binary integrity verification + arbitrary file read
-# - joi: GHSA-q7cg-457f-vx79 - unpublished jsdom exposure in @hapi/statehood
-# - dompurify: GHSA-vxr8-fq34-vvx9 + 3 others - XSS/nesting fixes (fixed 3.4.10; the no-fix
+# - brace-expansion: GHSA-rgw5-rvv9-x895 - DoS via unbounded intermediate arrays (fixed 5.0.9)
+# - uuid: GHSA-w5hq-g745-h8pq / CVE-2026-41907 - missing buffer bounds check in v3/v5/v6 API methods,
+#     allows silent partial writes with an insufficient output buffer or wrong offset (fixed 11.1.1 /
+#     12.0.1 / 13.0.1 per major line; lockfile converges on 14.0.1, which the override floor now pins)
+# - qs: GHSA-q8mj-m7cp-5q26 / CVE-2026-8723 - prototype pollution fix
+# - esbuild: GHSA-67mh-4wv8-2f99 - dev-server CORS allowed any origin to read responses;
+#     GHSA-gv7w-rqvm-qjhr - missing binary integrity verification (Deno module);
+#     GHSA-g7r4-m6w7-qqqr - Windows path traversal in the dev-server file handler (all fixed 0.28.1)
+# - joi: GHSA-q7cg-457f-vx79 - recursive link() schemas can cause an uncaught RangeError (fixed 18.2.1)
+# - dompurify: GHSA-55q2-fjhq-7xh7 + prior XSS/nesting fixes (fixed 3.4.13; the no-fix
 #     GHSA-x4vx-rjvf-j5p4 is accepted in src-tauri/osv-scanner.toml)
 # - @babel/core: GHSA-4x5r-pxfx-6jf8 - build-time transpiler advisory (fixed 7.29.6). Bounded to the
 #     7.x line (<8): react-docgen@8.0.3 (via storybook/@storybook/react-vite) declares "@babel/core":
@@ -32,12 +46,12 @@ strictPeerDependencies: false
 #     loadPartialConfigSync(). An unbounded ">=7.29.6" resolved to 8.0.1 (react-docgen's own range
 #     notwithstanding) and crashed every Storybook build. Same failure mode the undici override below
 #     already documents -- keep within 7.x until react-docgen ships real Babel 8 support.
-# - undici: GHSA-vmh5-mc38-953g (HIGH) - TLS cert validation bypass via dropped requestTls in
-#     SOCKS5 ProxyAgent + cross-user info disclosure (moderate); transitive via jsdom (fixed 7.28.0).
+# - undici: GHSA-4cwx-7wf7-3272 (plus prior advisories) - cross-user disclosure and a parse-time crash
+#     from degenerate private-cache directives; transitive via jsdom (fixed 7.29.0, not 7.28.0).
 #     Bounded to the 7.x line (<8): undici 8.x removed lib/handler/wrap-handler.js, an internal file
 #     jsdom@29.1.1 require()s (jsdom declares undici ^7.25.0). An unbounded ">=7.28.0" resolved to 8.5.0
 #     and broke every jsdom test worker -> coverage collapse -> Quality Gate red. Keep within 7.x.
-# - js-yaml: quadratic-complexity DoS in merge key (<=4.1.1; fixed 4.1.2)
+# - js-yaml: GHSA-5p4m-2wfm-xmqj - parser DoS fix (fixed 4.3.1)
 # - playwright / playwright-core: dedup to a single version. @playwright/test bumped to 1.61
 #     while @axe-core/playwright (peer >=1.0.0) + the transitive `playwright` runner stayed on
 #     playwright-core@1.60.0, producing two copies whose nominally-distinct Page/ElementHandle
@@ -55,17 +69,20 @@ overrides:
   protobufjs: ">=8.6.6"
   axios: ">=1.18.0"
   basic-ftp: ">=5.3.1"
-  fast-uri: ">=3.1.4 <4"
-  ip-address: ">=10.1.1"
+  fast-uri: ">=3.1.5 <4"
+  ip-address: "10.3.1"
   ws: ">=8.21.0"
   form-data: ">=4.0.6"
-  brace-expansion: ">=5.0.8"
-  uuid: ">=11.1.1"
+  brace-expansion: ">=5.0.9"
+  # QNBS-v3: excludes the two exact unpatched releases (12.0.0, 13.0.0) a bare ">=11.1.1" floor would still permit; the resolved 14.0.1 already satisfies this.
+  uuid: ">=11.1.1 <12.0.0 || >=12.0.1 <13.0.0 || >=13.0.1"
   qs: ">=6.15.2"
-  dompurify: ">=3.4.12"
+  dompurify: ">=3.4.13"
   "@babel/core": ">=7.29.6 <8"
-  undici: ">=7.28.0 <8"
-  js-yaml: ">=4.3.0 <5"
+  undici: ">=7.29.0 <8"
+  js-yaml: ">=4.3.1 <5"
+  nanoid@^3: "3.3.17"
+  nanoid@^5: "5.1.16"
   # QNBS-v3 (2026-07-26): GHSA batch blocking the CI security gate — transitive-only dev paths.
   adm-zip: ">=0.6.0" # GHSA-xcpc-8h2w-3j85 — 4GB memory allocation via crafted ZIP (onnxruntime-node)
   postcss: ">=8.5.18" # GHSA — path traversal in previous source map (vite/storybook chain)
@@ -76,20 +93,6 @@ peerDependencyRules:
   allowedVersions:
     vite-plugin-pwa>vite: "8"
 
-onlyBuiltDependencies:
-  - "@google/genai"
-  - "@swc/core"
-  - core-js
-  - esbuild
-  - protobufjs
-  - sharp
-  - workerd
-
-ignoredBuiltDependencies:
-  - onnxruntime-node
-  - simple-git-hooks
-  - unrs-resolver
-
 patchedDependencies:
   zod@4.4.3: patches/zod@4.4.3.patch
 
@@ -97,13 +100,13 @@ packages:
   - "packages/*"
 
 allowBuilds:
-  '@google/genai': true
+  '@google/genai': false
   '@swc/core': true
-  core-js: true
+  core-js: false
   esbuild: true
-  onnxruntime-node: true
-  protobufjs: true
-  sharp: true
-  simple-git-hooks: true
-  unrs-resolver: true
-  workerd: true
+  onnxruntime-node: false
+  protobufjs: false
+  sharp: false
+  simple-git-hooks: false
+  unrs-resolver: false
+  workerd: false

@@ -7,8 +7,8 @@
 import { appStoreRef } from '../../app/storeRef';
 import { statusActions } from '../../features/status/statusSlice';
 import type { Settings } from '../../types';
-import { DEFAULT_WEBRTC_SIGNALING_URLS } from '../collaborationService';
 import { logger } from '../logger';
+import { normalizePersistedSettings } from '../storage/idbProjectStore';
 import type { TauriApis } from './fsCore';
 import { decryptText, encryptText, FsCore, retryFs } from './fsCore';
 
@@ -37,35 +37,11 @@ export class FsSettingsStore extends FsCore {
       }
 
       const content = await retryFs(() => apis.readTextFile(settingsFile));
-      const parsed = JSON.parse(content) as Settings;
-      const collabDefaults = {
-        realTimeCollaboration: false,
-        publicSharing: false,
-        commentSystem: true,
-        versionHistory: true,
-        webrtcSignalingUrls: [...DEFAULT_WEBRTC_SIGNALING_URLS],
-      };
-      parsed.collaboration = {
-        ...collabDefaults,
-        ...(parsed.collaboration ?? {}),
-      };
-      if (
-        !parsed.collaboration.webrtcSignalingUrls ||
-        parsed.collaboration.webrtcSignalingUrls.length === 0
-      ) {
-        parsed.collaboration.webrtcSignalingUrls = [...DEFAULT_WEBRTC_SIGNALING_URLS];
-      }
-      const integrationsDefaults = {
-        syncProvider: 'none' as const,
-        evernoteSync: false,
-        notionSync: false,
-        scrivenerExport: false,
-        googleDocsImport: false,
-        languageToolEnabled: false,
-        languageToolBaseUrl: 'http://localhost:8010',
-      };
-      parsed.integrations = { ...integrationsDefaults, ...(parsed.integrations ?? {}) };
-      return parsed;
+      const parsed = JSON.parse(content) as Record<string, unknown>;
+      // QNBS-v3: reuse the same normalizer as the IDB path — older desktop settings files can
+      // predate newer required Settings fields (e.g. writingSurfaceStyle); an unchecked `as
+      // Settings` cast would let those fall through as undefined at runtime.
+      return normalizePersistedSettings(parsed);
     } catch (error) {
       logger.error('Failed to load settings:', error);
       return null;
