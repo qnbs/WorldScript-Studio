@@ -25,7 +25,9 @@ Object.defineProperty(global, 'localStorage', { value: localStorageMock, writabl
 // QNBS-v3: provide a working IndexedDB for the sentinel-store tests (node has none by default).
 globalThis.indexedDB = new IDBFactory();
 
+import { APP_DATA_STORE, DB_VERSION, STATE_DB_NAME } from '../../../services/dbConstants';
 import {
+  __encryptionMigrationJournalRecordKeyForTest,
   beginEncryptionMigration,
   completeEncryptionMigration,
   IdbMigrationInProgressError,
@@ -459,21 +461,26 @@ describe('hasPassphraseSentinel', () => {
     await setupIdbEncryption('pass');
     expect(await hasPassphraseSentinel()).toBe(true);
   });
-
-  it('preserves the sentinel when an unsafe disable is requested', async () => {
-    await setupIdbEncryption('pass');
-    await expect(clearIdbPassphrase()).rejects.toBeInstanceOf(IdbEncryptionMigrationRequiredError);
-    expect(await hasPassphraseSentinel()).toBe(true);
-  });
 });
 
 describe('clearIdbPassphrase', () => {
-  it('fails closed without deleting the sentinel or clearing the active key', async () => {
+  it('throws IdbStorageLockedError when the session is locked', async () => {
+    await setupIdbEncryption('pass');
+    clearIdbEncryptionKey();
+    await expect(clearIdbPassphrase()).rejects.toBeInstanceOf(IdbStorageLockedError);
+    // QNBS-v3: a locked, failed disable attempt must not touch the durable verifier.
+    expect(await hasPassphraseSentinel()).toBe(true);
+  });
+
+  it('migrates every protected store to plaintext, deletes the sentinel, and clears the active key', async () => {
     await setupIdbEncryption('pass');
     expect(isIdbEncryptionReady()).toBe(true);
-    await expect(clearIdbPassphrase()).rejects.toBeInstanceOf(IdbEncryptionMigrationRequiredError);
-    expect(isIdbEncryptionReady()).toBe(true);
     expect(await hasPassphraseSentinel()).toBe(true);
+
+    await expect(clearIdbPassphrase()).resolves.toBeUndefined();
+
+    expect(isIdbEncryptionReady()).toBe(false);
+    expect(await hasPassphraseSentinel()).toBe(false);
   });
 });
 
@@ -570,23 +577,76 @@ describe('hasPassphraseSentinel caching', () => {
 });
 
 describe('rotateIdbPassphrase', () => {
-  it('fails closed until a resumable migration journal is available', async () => {
+  it('re-keys to the new passphrase; the old passphrase no longer unlocks', async () => {
     await setupIdbEncryption('old');
-    await expect(rotateIdbPassphrase('old', 'new')).rejects.toBeInstanceOf(
-      IdbEncryptionMigrationRequiredError,
-    );
+    await expect(rotateIdbPassphrase('old', 'new')).resolves.toBeUndefined();
     expect(isIdbEncryptionReady()).toBe(true);
+
     clearIdbEncryptionKey();
-    await verifyAndInitIdbEncryption('old');
+    await expect(verifyAndInitIdbEncryption('new')).resolves.toBeUndefined();
     expect(isIdbEncryptionReady()).toBe(true);
+
+    clearIdbEncryptionKey();
+    await expect(verifyAndInitIdbEncryption('old')).rejects.toThrow();
   });
 
   it('does not replace the verifier when passed a wrong old passphrase', async () => {
     await setupIdbEncryption('old');
-    await expect(rotateIdbPassphrase('wrong', 'new')).rejects.toBeInstanceOf(
-      IdbEncryptionMigrationRequiredError,
-    );
+    clearIdbEncryptionKey();
+
+    await expect(rotateIdbPassphrase('wrong', 'new')).rejects.toThrow();
+
     clearIdbEncryptionKey();
     await expect(verifyAndInitIdbEncryption('old')).resolves.toBeUndefined();
+  });
+});
+
+// QNBS-v3: a 'recovery-required' journal has no legal transition back to 'completed' via the
+// checked API (by design — it requires the dedicated recovery UX, not a normal migration retry),
+// so this suite plants and removes it with raw IDB access rather than the journal module's API.
+async function deleteJournalRecordForTest(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(STATE_DB_NAME, DB_VERSION);
+    request.onsuccess = () => {
+      const db = request.result;
+      const tx = db.transaction(APP_DATA_STORE, 'readwrite');
+      tx.objectStore(APP_DATA_STORE).delete(__encryptionMigrationJournalRecordKeyForTest);
+      tx.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+      tx.onerror = () => reject(tx.error);
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
+describe('disable/rotate blocked by a stuck recovery-required journal', () => {
+  it('clearIdbPassphrase and rotateIdbPassphrase both refuse to start a new migration', async () => {
+    await setupIdbEncryption('pass');
+    const journal = await beginEncryptionMigration({
+      operationId: 'stuck-recovery',
+      operation: 'rekey',
+      phase: 'prepared',
+      targetVerifier: [1, 2, 3],
+      stores: [],
+    });
+    await updateEncryptionMigrationJournal(journal, {
+      phase: 'recovery-required',
+      stores: journal.stores,
+    });
+
+    try {
+      await expect(clearIdbPassphrase()).rejects.toBeInstanceOf(
+        IdbEncryptionMigrationRequiredError,
+      );
+      await expect(rotateIdbPassphrase('pass', 'new')).rejects.toBeInstanceOf(
+        IdbEncryptionMigrationRequiredError,
+      );
+      expect(isIdbEncryptionReady()).toBe(true);
+      expect(await hasPassphraseSentinel()).toBe(true);
+    } finally {
+      await deleteJournalRecordForTest();
+    }
   });
 });
