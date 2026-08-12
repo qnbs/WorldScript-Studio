@@ -512,6 +512,34 @@ describe('AiProviderCard — ollama provider (#266)', () => {
     });
     expect(screen.queryByText(/something internal broke/)).toBeNull();
   });
+
+  it('marks the connection status region aria-busy while a test is in flight', async () => {
+    // QNBS-v3 regression: the status region announced via aria-live but never set aria-busy, so
+    // assistive tech had no programmatic signal that a connection test was actively running.
+    setDesktopRuntime(true);
+    let resolveTest!: (v: Awaited<ReturnType<typeof testAIConnection>>) => void;
+    vi.mocked(testAIConnection).mockReturnValue(
+      new Promise((resolve) => {
+        resolveTest = resolve;
+      }),
+    );
+    render(
+      <AiProviderCard
+        advancedAi={ollamaAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'settings.ai.testConnection' }));
+    // QNBS-v3: the Button's own Spinner also uses role="status", so disambiguate by excluding it.
+    const connectionStatus = () =>
+      screen.getAllByRole('status').find((el) => el.getAttribute('aria-label') !== 'Loading…')!;
+    await waitFor(() => expect(connectionStatus().getAttribute('aria-busy')).toBe('true'));
+
+    resolveTest({ ok: true });
+    await waitFor(() => expect(connectionStatus().getAttribute('aria-busy')).toBe('false'));
+  });
 });
 
 // QNBS-v3 (ADR-0017): opt-in direct browser→Ollama connection — browserOllamaEnabled defaults to
