@@ -2319,7 +2319,7 @@
   "settings.privacy.encryptionCurrentPassphrase": "Aktuell lösenfras",
   "settings.privacy.encryptionDisableAction": "Inaktivera",
   "settings.privacy.encryptionDisableButton": "Inaktivera kryptering",
-  "settings.privacy.encryptionDisableConfirm": "Inaktivera kryptering",
+  "settings.privacy.encryptionDisableConfirm": "Detta dekrypterar all din data och stänger av vilokrypteringen. Din data finns kvar på den här enheten men skyddas inte längre av en lösenfras.",
   "settings.privacy.encryptionDisableFailed": "Could not disable encryption — check that this browser allows local storage, then try again",
   "settings.privacy.encryptionDisabledStatus": "Kryptering i vila är inaktiverad",
   "settings.privacy.encryptionEnabled": "Kryptera projektdata i vila",

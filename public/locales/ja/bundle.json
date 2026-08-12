@@ -2319,7 +2319,7 @@
   "settings.privacy.encryptionCurrentPassphrase": "現在のパスフレーズ",
   "settings.privacy.encryptionDisableAction": "無効にする",
   "settings.privacy.encryptionDisableButton": "暗号化を無効にする",
-  "settings.privacy.encryptionDisableConfirm": "暗号化を無効にする",
+  "settings.privacy.encryptionDisableConfirm": "これによりすべてのデータが復号され、保存時の暗号化がオフになります。データはこのデバイスに残りますが、パスフレーズによる保護はなくなります。",
   "settings.privacy.encryptionDisableFailed": "Could not disable encryption — check that this browser allows local storage, then try again",
   "settings.privacy.encryptionDisabledStatus": "保存時の暗号化は無効になっています",
   "settings.privacy.encryptionEnabled": "保存中のプロジェクト データを暗号化する",

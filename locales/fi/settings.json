@@ -673,7 +673,7 @@
   "settings.privacy.encryptionCurrentPassphrase": "Nykyinen tunnuslause",
   "settings.privacy.encryptionDisableAction": "Poista käytöstä",
   "settings.privacy.encryptionDisableButton": "Poista salaus käytöstä",
-  "settings.privacy.encryptionDisableConfirm": "Poista salaus käytöstä",
+  "settings.privacy.encryptionDisableConfirm": "Tämä purkaa kaikkien tietojesi salauksen ja poistaa lepotilan salauksen käytöstä. Tietosi säilyvät tällä laitteella, mutta niitä ei enää suojaa tunnuslause.",
   "settings.privacy.encryptionDisableFailed": "Could not disable encryption — check that this browser allows local storage, then try again",
   "settings.privacy.encryptionDisabledStatus": "Lepotilasalaus on poistettu käytöstä",
   "settings.privacy.encryptionEnabled": "Salaa projektitiedot levossa",

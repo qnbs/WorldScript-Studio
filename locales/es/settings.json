@@ -673,7 +673,7 @@
   "settings.privacy.encryptionCurrentPassphrase": "Contraseña actual",
   "settings.privacy.encryptionDisableAction": "Desactivar",
   "settings.privacy.encryptionDisableButton": "Desactivar cifrado",
-  "settings.privacy.encryptionDisableConfirm": "Deshabilitar cifrado",
+  "settings.privacy.encryptionDisableConfirm": "Esto descifrará todos tus datos y desactivará el cifrado en reposo. Tus datos permanecerán en este dispositivo, pero ya no estarán protegidos por una frase de contraseña.",
   "settings.privacy.encryptionDisableFailed": "No se pudo desactivar el cifrado — comprueba que este navegador permite el almacenamiento local y vuelve a intentarlo",
   "settings.privacy.encryptionDisabledStatus": "El cifrado en reposo está desactivado",
   "settings.privacy.encryptionEnabled": "Cifrar datos del proyecto en reposo",

@@ -2319,7 +2319,7 @@
   "settings.privacy.encryptionCurrentPassphrase": "Текущая парольная фраза",
   "settings.privacy.encryptionDisableAction": "Запрещать",
   "settings.privacy.encryptionDisableButton": "Отключить шифрование",
-  "settings.privacy.encryptionDisableConfirm": "Отключить шифрование",
+  "settings.privacy.encryptionDisableConfirm": "Это расшифрует все ваши данные и отключит шифрование в состоянии покоя. Ваши данные останутся на этом устройстве, но больше не будут защищены парольной фразой.",
   "settings.privacy.encryptionDisableFailed": "Could not disable encryption — check that this browser allows local storage, then try again",
   "settings.privacy.encryptionDisabledStatus": "Шифрование при хранении отключено",
   "settings.privacy.encryptionEnabled": "Шифрование хранящихся данных проекта",

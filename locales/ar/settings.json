@@ -673,7 +673,7 @@
   "settings.privacy.encryptionCurrentPassphrase": "عبارة المرور الحالية",
   "settings.privacy.encryptionDisableAction": "تعطيل",
   "settings.privacy.encryptionDisableButton": "تعطيل التشفير",
-  "settings.privacy.encryptionDisableConfirm": "تعطيل التشفير",
+  "settings.privacy.encryptionDisableConfirm": "سيؤدي هذا إلى فك تشفير جميع بياناتك وإيقاف التشفير أثناء التخزين. ستبقى بياناتك على هذا الجهاز، لكنها لن تكون محمية بعد الآن بعبارة مرور.",
   "settings.privacy.encryptionDisableFailed": "Could not disable encryption — check that this browser allows local storage, then try again",
   "settings.privacy.encryptionDisabledStatus": "التشفير أثناء السكون مُعطَّل",
   "settings.privacy.encryptionEnabled": "تشفير بيانات المشروع أثناء السكون",

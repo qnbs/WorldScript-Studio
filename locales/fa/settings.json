@@ -673,7 +673,7 @@
   "settings.privacy.encryptionCurrentPassphrase": "عبارت عبور فعلی",
   "settings.privacy.encryptionDisableAction": "غیر فعال کردن",
   "settings.privacy.encryptionDisableButton": "غیرفعال کردن رمزگذاری",
-  "settings.privacy.encryptionDisableConfirm": "غیرفعال کردن رمزگذاری",
+  "settings.privacy.encryptionDisableConfirm": "این کار تمام داده‌های شما را رمزگشایی کرده و رمزگذاری در حالت سکون را غیرفعال می‌کند. داده‌های شما در این دستگاه باقی می‌مانند، اما دیگر با یک عبارت عبور محافظت نمی‌شوند.",
   "settings.privacy.encryptionDisableFailed": "Could not disable encryption — check that this browser allows local storage, then try again",
   "settings.privacy.encryptionDisabledStatus": "رمزگذاری در حالت استراحت غیرفعال است",
   "settings.privacy.encryptionEnabled": "رمزگذاری داده های پروژه در حالت استراحت",

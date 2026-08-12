@@ -2319,7 +2319,7 @@
   "settings.privacy.encryptionCurrentPassphrase": "Oraingo pasaesaldia",
   "settings.privacy.encryptionDisableAction": "Desgaitu",
   "settings.privacy.encryptionDisableButton": "Desgaitu enkriptatzea",
-  "settings.privacy.encryptionDisableConfirm": "Desgaitu enkriptatzea",
+  "settings.privacy.encryptionDisableConfirm": "Honek zure datu guztiak deszifratuko ditu eta atsedenaldiko enkriptatzea desaktibatuko du. Zure datuak gailu honetan geratuko dira, baina jada ez daude pasaesaldi batek babestuta.",
   "settings.privacy.encryptionDisableFailed": "Could not disable encryption — check that this browser allows local storage, then try again",
   "settings.privacy.encryptionDisabledStatus": "Atsedenean enkriptatzea desgaituta dago",
   "settings.privacy.encryptionEnabled": "Zifratu proiektuaren datuak atsedenean",

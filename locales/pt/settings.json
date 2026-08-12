@@ -673,7 +673,7 @@
   "settings.privacy.encryptionCurrentPassphrase": "Senha atual",
   "settings.privacy.encryptionDisableAction": "Desativar",
   "settings.privacy.encryptionDisableButton": "Desativar criptografia",
-  "settings.privacy.encryptionDisableConfirm": "Desativar criptografia",
+  "settings.privacy.encryptionDisableConfirm": "Isso descriptografará todos os seus dados e desativará a criptografia em repouso. Seus dados permanecem neste dispositivo, mas não estarão mais protegidos por uma frase-senha.",
   "settings.privacy.encryptionDisableFailed": "Could not disable encryption — check that this browser allows local storage, then try again",
   "settings.privacy.encryptionDisabledStatus": "A criptografia em repouso está desativada",
   "settings.privacy.encryptionEnabled": "Criptografe os dados do projeto em repouso",

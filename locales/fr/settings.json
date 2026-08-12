@@ -673,7 +673,7 @@
   "settings.privacy.encryptionCurrentPassphrase": "Phrase secrète actuelle",
   "settings.privacy.encryptionDisableAction": "Désactiver",
   "settings.privacy.encryptionDisableButton": "Désactiver le chiffrement",
-  "settings.privacy.encryptionDisableConfirm": "Désactiver le chiffrement",
+  "settings.privacy.encryptionDisableConfirm": "Cela déchiffrera toutes vos données et désactivera le chiffrement au repos. Vos données resteront sur cet appareil, mais ne seront plus protégées par une phrase secrète.",
   "settings.privacy.encryptionDisableFailed": "Impossible de désactiver le chiffrement — vérifiez que ce navigateur autorise le stockage local, puis réessayez",
   "settings.privacy.encryptionDisabledStatus": "Le chiffrement au repos est désactivé",
   "settings.privacy.encryptionEnabled": "Chiffrer les données du projet au repos",
