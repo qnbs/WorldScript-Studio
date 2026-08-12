@@ -6,6 +6,7 @@ import type { Settings } from '../../types';
 const baseSettings = (): Settings => ({
   theme: 'dark',
   appearancePreset: 'default',
+  writingSurfaceStyle: 'textured',
   aiMode: 'hybrid',
   editorFont: 'serif',
   fontSize: 16,

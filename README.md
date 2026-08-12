@@ -12,7 +12,7 @@
   <img src="https://img.shields.io/badge/Version-v1.26.0-6366F1" alt="v1.26.0">
   <img src="https://img.shields.io/badge/Storage-IndexedDB_v8-F59E0B" alt="IndexedDB v8">
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
-  <img src="https://img.shields.io/badge/i18n-19_locales-2869_keys-0EA5E9" alt="i18n 19 locales — 2869 keys">
+  <img src="https://img.shields.io/badge/i18n-19_locales-2877_keys-0EA5E9" alt="i18n 19 locales — 2877 keys">
   <img src="https://img.shields.io/badge/Tests-6477%2B_%2F_532_files-22C55E" alt="6477+ tests / 532 files">
   <img src="https://img.shields.io/codecov/c/github/qnbs/WorldScript-Studio?logo=codecov&label=Coverage" alt="Codecov Coverage">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">
@@ -307,12 +307,13 @@ Real-time P2P co-editing via **Yjs + collab-transport** (vendor fork of y-webrtc
 
 ### 🔒 IDB At-Rest Encryption _(B-1, v1.19.0)_
 
-All project data, snapshots, and settings stored in IndexedDB can be encrypted at rest via `services/storage/storageEncryptionService.ts`:
+The current primary project, settings, snapshot, image, Codex, RAG, and binder-asset IndexedDB paths can be encrypted at rest via `services/storage/storageEncryptionService.ts`. This is not yet a claim that every IndexedDB surface is covered:
 
 - **AES-256-GCM** with a PBKDF2-derived key (600 000 iterations, SHA-256, 32-byte random salt).
-- Gated behind `featureFlags.enableIdbAtRestEncryption` (on by default since v1.23; the passphrase unlock UX is complete — Settings → Privacy).
-- Same passphrase-entry unlock screen (`IdbUnlockModal`) on cold start, session-scoped in-memory key, on **both** the web build and the Tauri desktop build — Tauri's WebView uses the same IndexedDB-backed storage path, not an OS keychain. (No `tauri-plugin-stronghold` or equivalent OS-keychain integration ships today — see the API-key encryption note below for the desktop-specific mechanism that does exist.)
-- GDPR-compliant: encrypted blobs are unreadable without the passphrase, even from the browser profile directory.
+- Gated behind `featureFlags.enableIdbAtRestEncryption`. When a library is configured but locked, protected reads and writes fail closed rather than falling back to plaintext.
+- Disable and passphrase rotation are temporarily unavailable until a journaled, cross-store migration protocol can prove recovery after interruption.
+- **Web/PWA build only.** The unlock screen (`IdbUnlockModal`) and session-scoped in-memory key protect the IndexedDB-backed storage path used by the browser/PWA build. On the **Tauri desktop build**, primary project, settings, snapshot, image, Codex, RAG, and binder-asset data are written by the filesystem-backed store (`services/fs/*`), which is plaintext (LZ-string compressed, not encrypted) regardless of this setting — enabling it on desktop still shows the same unlock screen (the passphrase sentinel lives in the WebView's IndexedDB) but does not encrypt the actual manuscript files on disk. No `tauri-plugin-stronghold` or equivalent OS-keychain integration ships today — see the API-key encryption note below for the desktop-specific mechanism that does exist.
+- At-rest protection reduces disclosure from an extracted browser profile while the library is locked; it does not protect an unlocked renderer, a compromised device, or every persistence surface.
 
 ### 🔐 Encrypted Library Backup
 
@@ -320,7 +321,7 @@ One-click encrypted export of your entire project library from **Settings → Da
 
 - Archives all projects as a **ZIP** containing `META.json` + `vault.bin`.
 - `vault.bin` is encrypted with **AES-256-GCM** — the decryption key is derived from your chosen passphrase using PBKDF2.
-- No plaintext project data ever leaves your device unencrypted.
+- The encrypted vault holds its project payload in `vault.bin`; users must still protect the downloaded archive and should not confuse it with ordinary plaintext JSON export.
 - Import on any device using the same passphrase to restore your full library.
 
 ### 🔑 Encryption — which mechanism protects what
@@ -396,7 +397,7 @@ Infrastructure-level features that keep the app fast and extensible as projects 
 
 ### 🌐 Full Multi-Language Support
 
-Shipped UI locales with **2869 i18n keys** across all 19 languages — zero hardcoded user-facing strings:
+Shipped UI locales with **2877 i18n keys** across all 19 languages — zero hardcoded user-facing strings:
 
 - 🇩🇪 **German** (Deutsch)
 - 🇬🇧 **English**
@@ -505,7 +506,7 @@ The Settings → AI panel shows a live GPU status badge with adapter details and
 | **PDF Export**       | jsPDF                                                     | Client-side, configurable PDF document generation                    |
 | **Document Export**  | docx + jszip                                              | Word-compatible `.docx` generation (lazy-loaded)                     |
 | **PWA**              | Service Worker + Web App Manifest v3                     | Offline support, installability, Workbox chunking                    |
-| **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 2869 keys × 19 locales (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu/ru/ko Beta); EN fallback; `localStorage` persistence |
+| **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 2877 keys × 19 locales (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu/ru/ko Beta); EN fallback; `localStorage` persistence |
 | **Testing**          | Vitest 4.x (6477+ tests / 532 files) + Playwright E2E     | Unit/integration + cross-browser E2E; Stryker mutation (manual workflow)          |
 | **Code Quality**     | Biome (lint + format) + TypeScript 7 (tsgo) strict       | `--error-on-warnings` in CI; zero `any` policy                      |
 | **Visualization**    | Force-directed graph                                      | Interactive character relationship network                           |
@@ -707,7 +708,7 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 **Current test metrics (2026-07-30, CI-reported):**
 - **6477+ unit tests** across **532 test files** — all passing
 - Coverage thresholds: lines ≥ 74 · branches ≥ 60 · functions ≥ 67 · statements ≥ 72 — enforced in CI (see Codecov badge for live metrics)
-- i18n: **2869 keys × 19 locales** (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta)
+- i18n: **2877 keys × 19 locales** (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu Beta)
 
 **CI-cloud-first workflow (recommended):** On constrained hardware run **`pnpm run lint && pnpm run i18n:check && pnpm run typecheck`** locally, then push and let CI handle coverage, E2E, Lighthouse, and Stryker. Authoritative numbers come from CI artifacts (Codecov, JUnit). After CI goes green, update the README badges and `AUDIT.md` quality-gate line from the reported metrics. See **[`docs/CI.md`](docs/CI.md) § Cloud CI-first vs local development** for the full post-merge doc-update checklist.
 

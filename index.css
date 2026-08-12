@@ -609,6 +609,12 @@ body {
   animation-delay: -15s;
 }
 
+/* QNBS-v3: A plain writing surface removes decorative fixed layers without clipping content or changing layout. */
+.writing-surface-plain .noise-overlay,
+.writing-surface-plain .aurora-container {
+  display: none;
+}
+
 @keyframes float {
   0% {
     transform: translate(0, 0) scale(1);

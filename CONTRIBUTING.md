@@ -84,7 +84,10 @@ pnpm run graphs:update        # update both Graphify + CodeGraph
 git clone https://github.com/qnbs/WorldScript-Studio.git
 cd WorldScript-Studio
 pnpm install
+pnpm run hooks:install  # configures the pre-commit lint-staged hook
 ```
+
+`hooks:install` is a separate, explicit step rather than an automatic `prepare` script: pnpm v11's `allowBuilds` policy denies `simple-git-hooks`' own install-time script by default (supply-chain hardening — see `pnpm-workspace.yaml`), so a `prepare` script that shelled out to it would silently do nothing anyway. Skipping this step means commits bypass the `lint-staged` pre-commit check.
 
 ### Environment
 
