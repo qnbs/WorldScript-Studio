@@ -202,8 +202,8 @@ replacement work, never merge #310 on top of the replacement). It is closed
 as superseded, referencing this ledger.
 
 **What "superseded" does and does not mean:** the journal/adapter
-*architecture* B006/B007 point to (durable, checkpointed, resumable) is real
-and tested in `main`. The end-user *feature* those rows describe — an
+*architecture* that B006/B007 point to (durable, checkpointed, resumable) is
+real and tested in `main`. The end-user *feature* those rows describe — an
 actual disable-encryption / rotate-passphrase button that runs it — is not
 wired to any production trigger yet; `clearIdbPassphrase()` and
 `rotateIdbPassphrase()` in `services/storage/storageEncryptionService.ts`
