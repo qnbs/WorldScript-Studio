@@ -8,14 +8,17 @@ import type { BinderAssetMeta } from '../../services/storageBackend';
 type BinderRecord = { meta: BinderAssetMeta & { byteSize: number }; blob: Blob };
 const binderStore = new Map<string, BinderRecord>();
 
-function createBinderFakeStore() {
+// QNBS-v3: pending tracks each request's completion promise so the owning transaction mock (below) can fire oncomplete only after every request queued on it has actually settled.
+function createBinderFakeStore(pending: Promise<void>[] = []) {
   return {
     put: (value: unknown, key: string) => {
       const req: Record<string, unknown> = { onsuccess: null, onerror: null };
-      Promise.resolve().then(() => {
-        binderStore.set(key, value as BinderRecord);
-        (req['onsuccess'] as (() => void) | null)?.();
-      });
+      pending.push(
+        Promise.resolve().then(() => {
+          binderStore.set(key, value as BinderRecord);
+          (req['onsuccess'] as (() => void) | null)?.();
+        }),
+      );
       return req;
     },
     get: (key: string) => {
@@ -25,17 +28,21 @@ function createBinderFakeStore() {
         result: binderStore.get(key),
         error: null,
       };
-      Promise.resolve().then(() => {
-        (req['onsuccess'] as ((e: Event) => void) | null)?.({} as Event);
-      });
+      pending.push(
+        Promise.resolve().then(() => {
+          (req['onsuccess'] as ((e: Event) => void) | null)?.({} as Event);
+        }),
+      );
       return req;
     },
     delete: (key: string) => {
       const req: Record<string, unknown> = { onsuccess: null, onerror: null };
-      Promise.resolve().then(() => {
-        binderStore.delete(key);
-        (req['onsuccess'] as ((e: Event) => void) | null)?.({} as Event);
-      });
+      pending.push(
+        Promise.resolve().then(() => {
+          binderStore.delete(key);
+          (req['onsuccess'] as ((e: Event) => void) | null)?.({} as Event);
+        }),
+      );
       return req;
     },
     openCursor: () => {
@@ -65,10 +72,28 @@ function createBinderFakeStore() {
   };
 }
 
+// QNBS-v3: builds a store whose .transaction back-reference resolves oncomplete once every
+// request synchronously queued in the current task has settled — mirrors real IDB transaction
+// batching (deleteAllBinderAssetsForProject relies on this) without needing fake-indexeddb.
+function createBinderFakeTransaction() {
+  const pending: Promise<void>[] = [];
+  const txn: Record<string, unknown> = {
+    oncomplete: null,
+    onerror: null,
+    onabort: null,
+    error: null,
+  };
+  const store: Record<string, unknown> = createBinderFakeStore(pending);
+  store['transaction'] = txn;
+  txn['objectStore'] = () => store;
+  queueMicrotask(() => {
+    void Promise.all(pending).then(() => (txn['oncomplete'] as (() => void) | null)?.());
+  });
+  return txn;
+}
+
 const fakeDataDb = {
-  transaction: vi.fn().mockImplementation(() => ({
-    objectStore: () => createBinderFakeStore(),
-  })),
+  transaction: vi.fn().mockImplementation(() => createBinderFakeTransaction()),
 };
 
 // stateDb is not used by binder methods — but must be non-null to skip init()
