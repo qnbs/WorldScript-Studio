@@ -116,17 +116,20 @@ function createSnapshotFakeStore(pending: Promise<void>[] = []) {
       Promise.resolve().then(advance);
       return req;
     },
-    // getAllKeys for pruneAutoSnapshots — its own standalone (readwrite) transaction in production
-    // code, never batched with add/get/delete/openCursor, so it does not push into `pending`.
+    // getAllKeys for pruneAutoSnapshots — always its own standalone transaction in production code
+    // (never batched with add/get/delete/openCursor), but still tracked into `pending` so this
+    // transaction's own oncomplete cannot fire before this, its only, request settles.
     getAllKeys: () => {
       const req: Record<string, unknown> = {
         onsuccess: null,
         onerror: null,
         result: [...snapshotStore.keys()].sort((a, b) => a - b),
       };
-      Promise.resolve().then(() => {
-        (req['onsuccess'] as ((e: Event) => void) | null)?.({} as Event);
-      });
+      pending.push(
+        Promise.resolve().then(() => {
+          (req['onsuccess'] as ((e: Event) => void) | null)?.({} as Event);
+        }),
+      );
       return req;
     },
   };

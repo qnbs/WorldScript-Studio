@@ -169,8 +169,11 @@ export class AiInferenceCacheService {
   ): Promise<void> {
     if (!this.db) return;
     try {
-      const encoded = await this.encodeEntry(key, result, timestamp);
-      await this.persistEntry(encoded);
+      // QNBS-v3: shares the writer-admission lock so this opportunistic write cannot land mid-migration-batch either.
+      await withProtectedWriteAdmission(async () => {
+        const encoded = await this.encodeEntry(key, result, timestamp);
+        await this.persistEntry(encoded);
+      });
     } catch {
       // QNBS-v3: best-effort; a failed opportunistic re-encrypt is not user-visible and TTL still bounds exposure.
     }
@@ -255,8 +258,7 @@ export class AiInferenceCacheService {
     await this.dbReady;
     if (!this.db) return;
     try {
-      // QNBS-v3: shares the writer-admission lock with ordinary protected writes so eviction/persist
-      //          cannot run mid-migration-batch and produce a false verification shortfall (#338).
+      // QNBS-v3: shares the writer-admission lock so eviction/persist cannot run mid-migration-batch and produce a false verification shortfall (#338).
       await withProtectedWriteAdmission(async () => {
         const entry = await this.encodeEntry(key, result, Date.now());
         await this.idbEvictOldest();

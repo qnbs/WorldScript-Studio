@@ -271,6 +271,7 @@ export async function listRevisions(sectionId: string): Promise<SceneRevision[]>
 
 /** Deletes a single revision by ID. */
 export async function deleteRevision(id: string): Promise<void> {
+  // QNBS-v3: shares the writer-admission lock so this delete cannot land mid-migration-batch either.
   await withProtectedWriteAdmission(async () => {
     await assertSecureStorageWritableForMutation();
     const db = await getDb();

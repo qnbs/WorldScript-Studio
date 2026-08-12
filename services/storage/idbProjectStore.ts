@@ -366,6 +366,8 @@ export class IdbProjectStore extends IdbAssetStore {
       retryDb(async () => {
         await assertIdbProtectedWriteAllowed();
         await this.deleteAllBinderAssetsForProjectUnadmitted(projectId);
+        // QNBS-v3: re-checked immediately before the final mutation — the cascade above took real async time under the same admission hold, and a Lock Session (not a migration, which admission already excludes) could still fire during it.
+        await assertIdbProtectedWriteAllowed();
         const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
         return new Promise<void>((resolve, reject) => {
           const req = store.delete('project');

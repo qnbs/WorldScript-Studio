@@ -199,10 +199,15 @@ if (!('locks' in navigator) || !navigator.locks) {
         optionsOrCallback: { mode?: 'shared' | 'exclusive' } | (() => T | Promise<T>),
         maybeCallback?: () => T | Promise<T>,
       ): Promise<T> => {
-        const options = typeof optionsOrCallback === 'function' ? {} : optionsOrCallback;
-        const callback =
-          typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback!;
-        const release = await acquire(name, options.mode === 'exclusive' ? 'exclusive' : 'shared');
+        const isCallbackOnly = typeof optionsOrCallback === 'function';
+        const callback = isCallbackOnly ? optionsOrCallback : maybeCallback!;
+        // QNBS-v3: LockManager.request()'s 2-arg form defaults to 'exclusive' per spec, not 'shared'.
+        const mode = isCallbackOnly
+          ? 'exclusive'
+          : optionsOrCallback.mode === 'shared'
+            ? 'shared'
+            : 'exclusive';
+        const release = await acquire(name, mode);
         try {
           return await callback();
         } finally {

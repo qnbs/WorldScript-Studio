@@ -26,11 +26,12 @@ export class IdbSnapshotStore extends IdbCodexStore {
   protected readonly MAX_AUTO_SNAPSHOTS = 20;
 
   async createSnapshot(data: ProjectData, name?: string): Promise<number> {
+    // QNBS-v3: pure CPU work computed before acquiring admission, not inside the lock hold.
+    const wordCount = data.manuscript.reduce(
+      (sum, section) => sum + (section.content?.split(/\s+/).filter(Boolean).length || 0),
+      0,
+    );
     return withProtectedWriteAdmission(() => {
-      const wordCount = data.manuscript.reduce(
-        (sum, section) => sum + (section.content?.split(/\s+/).filter(Boolean).length || 0),
-        0,
-      );
       return retryDb(async () => {
         // QNBS-v3: Resolve the write key in one atomic snapshot rather than re-reading
         //          isIdbEncryptionReady() later, so Lock Session during this async call cannot

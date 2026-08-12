@@ -95,7 +95,7 @@ describe('protectedWriteAdmission', () => {
     ).rejects.toThrow('boom');
   });
 
-  it('falls back to running the callback directly when navigator.locks is unavailable', async () => {
+  it('uses the in-process fallback lock and still returns results when navigator.locks is unavailable', async () => {
     const original = navigator.locks;
     // @ts-expect-error — simulating an older runtime without the Web Locks API
     delete navigator.locks;
@@ -104,6 +104,34 @@ describe('protectedWriteAdmission', () => {
       expect(result).toBe('fallback-ok');
       const migrationResult = await withMigrationAdmission(async () => 'migration-fallback-ok');
       expect(migrationResult).toBe('migration-fallback-ok');
+    } finally {
+      Object.defineProperty(navigator, 'locks', {
+        configurable: true,
+        writable: true,
+        value: original,
+      });
+    }
+  });
+
+  it('still excludes a writer from a migration batch via the in-process fallback lock', async () => {
+    const original = navigator.locks;
+    // @ts-expect-error — simulating an older runtime without the Web Locks API
+    delete navigator.locks;
+    try {
+      const order: string[] = [];
+      const migration = withMigrationAdmission(async () => {
+        order.push('migration-start');
+        await new Promise((resolve) => setTimeout(resolve, 15));
+        order.push('migration-end');
+      });
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      const writer = withProtectedWriteAdmission(async () => {
+        order.push('writer-start');
+        order.push('writer-end');
+      });
+
+      await Promise.all([migration, writer]);
+      expect(order).toEqual(['migration-start', 'migration-end', 'writer-start', 'writer-end']);
     } finally {
       Object.defineProperty(navigator, 'locks', {
         configurable: true,
