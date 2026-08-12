@@ -108,4 +108,44 @@ describe('Textarea', () => {
     render(<Textarea />);
     expect(screen.getByRole('button').className).toContain('animate-pulse');
   });
+
+  // QNBS-v3 (#341): 'overlay' variant renders a real, focusable textarea meant to sit invisibly
+  // over a separate visible mirror layer — no glass/blur/shadow/reserved padding, no mic button.
+  describe('variant="overlay"', () => {
+    it('does not render the microphone button', () => {
+      render(<Textarea variant="overlay" data-testid="ta" />);
+      expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    });
+
+    it('does not include backdrop-blur or the glass background class', () => {
+      render(<Textarea variant="overlay" data-testid="ta" />);
+      const className = screen.getByTestId('ta').className;
+      expect(className).not.toContain('backdrop-blur');
+      expect(className).not.toContain('bg-[var(--glass-bg)]');
+    });
+
+    it('does not include the reserved bottom padding for the mic button', () => {
+      render(<Textarea variant="overlay" data-testid="ta" />);
+      expect(screen.getByTestId('ta').className).not.toContain('pb-12');
+    });
+
+    it('still applies the resolved font family from settings', () => {
+      mockSettings = { editorFont: 'serif', fontSize: 18, lineSpacing: 1.8 };
+      render(<Textarea variant="overlay" data-testid="ta" />);
+      expect(screen.getByTestId('ta').style.fontFamily).toContain('Merriweather');
+    });
+
+    it('retains the focus-visible ring for keyboard accessibility', () => {
+      render(<Textarea variant="overlay" data-testid="ta" />);
+      expect(screen.getByTestId('ta').className).toContain('focus-visible:ring-4');
+    });
+  });
+
+  describe('variant="default" (unchanged regression guard)', () => {
+    it('still includes backdrop-blur and renders the mic button', () => {
+      render(<Textarea data-testid="ta" />);
+      expect(screen.getByTestId('ta').className).toContain('backdrop-blur-md');
+      expect(screen.getByRole('button')).toBeInTheDocument();
+    });
+  });
 });

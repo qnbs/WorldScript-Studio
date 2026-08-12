@@ -60,6 +60,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Migration verification no longer re-scans already-verified stores on resume**, and a batch that
   reports progress without advancing its durable cursor is now rejected instead of being able to
   replay the same records indefinitely. (#337)
+- **AI Writing Studio manuscript text was unreadable, with selection/caret position drifting from
+  the visible text.** `ContextPanel.tsx`'s real (input-handling) textarea sat invisibly over a
+  separate visible text-mirror layer; the shared `Textarea` primitive's unconditional
+  `backdrop-blur-md` blurred the mirror text underneath, the two layers resolved different concrete
+  font stacks for the same font setting (different glyph metrics → position drift), and neither
+  layer synced its scroll position with the other. `components/manuscript/ManuscriptEditor.tsx`
+  (the primary writing surface) used the same fragile pattern and carried the same blur/scroll-sync
+  defect. Fixed via a new `Textarea` `variant="overlay"` (no glass background/blur/reserved
+  padding/mic button) and a single shared `services/editorTypography.ts` font-stack resolver used
+  by both the real textarea and its mirror in both components, plus one-directional scroll sync
+  from each real textarea to its mirror. (#341)
 
 ### Docs
 

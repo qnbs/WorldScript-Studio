@@ -1,8 +1,8 @@
 import type React from 'react';
 import { useEffect, useState } from 'react';
-import { Textarea } from './Textarea';
+import { Textarea, type TextareaProps } from './Textarea';
 
-interface DebouncedTextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+interface DebouncedTextareaProps extends TextareaProps {
   value: string;
   onDebouncedChange: (value: string) => void;
   debounceTimeout?: number;

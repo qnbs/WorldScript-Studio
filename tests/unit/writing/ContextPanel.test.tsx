@@ -5,6 +5,7 @@
 
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
@@ -68,27 +69,41 @@ vi.mock('../../../hooks/useTranslation', () => ({
   }),
 }));
 
+// QNBS-v3 (#341): captured so tests can assert ContextPanel passes variant="overlay" through, and
+// so onScroll can be invoked manually to verify the mirror scroll-sync wiring.
+let lastDebouncedTextareaVariant: string | undefined;
+let lastDebouncedTextareaOnScroll: ((e: React.UIEvent<HTMLTextAreaElement>) => void) | undefined;
+
 // Stub DebouncedTextarea to avoid debounce complexity in tests
 vi.mock('../../../components/ui/DebouncedTextarea', () => ({
   DebouncedTextarea: ({
     value,
     placeholder,
     'aria-label': ariaLabel,
+    variant,
+    onScroll,
     ...rest
   }: {
     value: string;
     placeholder?: string;
     'aria-label'?: string;
+    variant?: string;
+    onScroll?: (e: React.UIEvent<HTMLTextAreaElement>) => void;
     [key: string]: unknown;
-  }) => (
-    <textarea
-      data-testid="debounced-textarea"
-      defaultValue={value}
-      placeholder={placeholder}
-      aria-label={ariaLabel}
-      {...(rest as object)}
-    />
-  ),
+  }) => {
+    lastDebouncedTextareaVariant = variant;
+    lastDebouncedTextareaOnScroll = onScroll;
+    return (
+      <textarea
+        data-testid="debounced-textarea"
+        defaultValue={value}
+        placeholder={placeholder}
+        aria-label={ariaLabel}
+        onScroll={onScroll}
+        {...(rest as object)}
+      />
+    );
+  },
 }));
 
 vi.mock('../../../components/ui/Select', () => ({
@@ -194,5 +209,29 @@ describe('ContextPanel', () => {
     render(<ContextPanel />);
     const textarea = screen.getByTestId('writer-studio-editor');
     expect(textarea).toHaveAttribute('placeholder', 'writer.studio.context.contentPlaceholder');
+  });
+
+  // QNBS-v3 (#341): the real textarea must stay invisible-input-only over the visible mirror —
+  // confirms the fix is wired, not just present in isolation.
+  it('passes variant="overlay" to the real textarea', () => {
+    render(<ContextPanel />);
+    expect(lastDebouncedTextareaVariant).toBe('overlay');
+  });
+
+  it('renders the mirror layer as aria-hidden with a stable test id', () => {
+    render(<ContextPanel />);
+    const mirror = screen.getByTestId('writer-studio-mirror');
+    expect(mirror).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('syncs the mirror scroll position when the real textarea scrolls', () => {
+    render(<ContextPanel />);
+    const mirror = screen.getByTestId('writer-studio-mirror');
+    expect(lastDebouncedTextareaOnScroll).toBeDefined();
+    Object.defineProperty(mirror, 'scrollTop', { value: 0, writable: true });
+    lastDebouncedTextareaOnScroll?.({
+      currentTarget: { scrollTop: 240, scrollLeft: 0 },
+    } as unknown as React.UIEvent<HTMLTextAreaElement>);
+    expect(mirror.scrollTop).toBe(240);
   });
 });

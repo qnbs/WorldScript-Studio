@@ -113,27 +113,45 @@ vi.mock('../../../components/ui/DebouncedInput', () => ({
   ),
 }));
 
+// QNBS-v3 (#341): captured so tests can assert ManuscriptEditor passes variant="overlay" through,
+// and so onScroll can be invoked manually to verify the mirror scroll-sync wiring.
+let lastEditorTextareaVariant: string | undefined;
+let lastEditorTextareaOnScroll: ((e: React.UIEvent<HTMLTextAreaElement>) => void) | undefined;
+
 // Stub Textarea
 vi.mock('../../../components/ui/Textarea', () => ({
   Textarea: ({
     value,
     onChange,
     placeholder,
+    variant,
+    onScroll,
+    // QNBS-v3 (#341): destructured out (not spread) so this mock's own stable "editor-textarea"
+    // testid below always wins over whatever data-testid the real component now also passes.
+    'data-testid': _dataTestId,
     ...rest
   }: {
     value: string;
     onChange?: React.ChangeEventHandler<HTMLTextAreaElement>;
     placeholder?: string;
+    variant?: string;
+    onScroll?: (e: React.UIEvent<HTMLTextAreaElement>) => void;
+    'data-testid'?: string;
     [k: string]: unknown;
-  }) => (
-    <textarea
-      data-testid="editor-textarea"
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      {...(rest as object)}
-    />
-  ),
+  }) => {
+    lastEditorTextareaVariant = variant;
+    lastEditorTextareaOnScroll = onScroll;
+    return (
+      <textarea
+        data-testid="editor-textarea"
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        onScroll={onScroll}
+        {...(rest as object)}
+      />
+    );
+  },
 }));
 
 // ---------------------------------------------------------------------------
@@ -278,6 +296,26 @@ describe('ManuscriptEditor', () => {
       const { container } = render(<ManuscriptEditor isFocusMode={false} />);
       // "teh" is in the static TYPOS map but must NOT be flagged while LT is the source of truth.
       expect(container.querySelector('.spell-error')).toBeNull();
+    });
+  });
+
+  // QNBS-v3 (#341): same overlay-textarea/mirror-div pattern and defect as ContextPanel — the real
+  // textarea must stay invisible-input-only, and the mirror must track its scroll position.
+  describe('rendering fix (#341)', () => {
+    it('passes variant="overlay" to the real textarea', () => {
+      render(<ManuscriptEditor isFocusMode={false} />);
+      expect(lastEditorTextareaVariant).toBe('overlay');
+    });
+
+    it('syncs the mirror scroll position when the real textarea scrolls', () => {
+      render(<ManuscriptEditor isFocusMode={false} />);
+      const mirror = screen.getByTestId('manuscript-editor-mirror');
+      expect(lastEditorTextareaOnScroll).toBeDefined();
+      Object.defineProperty(mirror, 'scrollTop', { value: 0, writable: true });
+      lastEditorTextareaOnScroll?.({
+        currentTarget: { scrollTop: 360, scrollLeft: 0 },
+      } as unknown as React.UIEvent<HTMLTextAreaElement>);
+      expect(mirror.scrollTop).toBe(360);
     });
   });
 });

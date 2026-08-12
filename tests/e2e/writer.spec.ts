@@ -52,6 +52,53 @@ test.describe('AI Writer Flow (CI-only)', () => {
     await flushWriterDebounce(page);
   });
 
+  // QNBS-v3 (#341): the real (input-handling) textarea sits invisibly over a separate visible
+  // text-mirror layer — a regression here previously left the mirror unreadable (backdrop-blur
+  // bleeding through) and out of scroll sync with the real textarea.
+  test('Writer Studio text is visually readable and stays in scroll sync (#341)', async ({
+    page,
+  }) => {
+    await selectEnglish(page);
+    await ensureBlankProject(page);
+    await clickNavItem(page, /AI Writing Studio|Writer/i);
+    await selectFirstEnabledWriterSection(page);
+
+    const writerTextbox = page.getByTestId('writer-studio-editor').first();
+    await expect(writerTextbox).toBeVisible();
+    const longContent = Array.from(
+      { length: 60 },
+      (_, i) => `Paragraph ${i + 1}: the quick brown fox jumps over the lazy dog.`,
+    ).join('\n\n');
+    await writerTextbox.fill(longContent);
+    await flushWriterDebounce(page);
+
+    const mirror = page.getByTestId('writer-studio-mirror').first();
+    await expect(mirror).toBeVisible();
+
+    // The real (invisible) input textarea must never blur the mirror text sitting behind it.
+    const backdropFilter = await writerTextbox.evaluate(
+      (el) => getComputedStyle(el).backdropFilter,
+    );
+    expect(backdropFilter === 'none' || backdropFilter === '').toBeTruthy();
+
+    // The mirror's rendered text color must be a real, non-transparent color.
+    const mirrorColor = await mirror.evaluate((el) => getComputedStyle(el).color);
+    expect(mirrorColor).not.toMatch(/rgba\(0,\s*0,\s*0,\s*0\)|transparent/);
+
+    // Scroll parity: scrolling the real textarea must move the mirror by the same amount.
+    await writerTextbox.evaluate((el) => {
+      const textarea = el as HTMLTextAreaElement;
+      textarea.scrollTop = 200;
+      textarea.dispatchEvent(new Event('scroll'));
+    });
+    await expect.poll(async () => mirror.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+    const [textareaScroll, mirrorScroll] = await Promise.all([
+      writerTextbox.evaluate((el) => (el as HTMLTextAreaElement).scrollTop),
+      mirror.evaluate((el) => el.scrollTop),
+    ]);
+    expect(Math.abs(textareaScroll - mirrorScroll)).toBeLessThanOrEqual(2);
+  });
+
   test('keyboard navigation and responsive layout work', async ({ page }) => {
     await page.keyboard.press('Tab');
     await page.keyboard.press('Tab');
