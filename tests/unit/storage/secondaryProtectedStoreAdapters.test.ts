@@ -4,6 +4,7 @@ import { IDBFactory } from 'fake-indexeddb';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ProtectedStoreMigrationAdapterError } from '../../../services/storage/protectedStoreMigration';
 import { getRegisteredSecondaryProtectedStoreAdapters } from '../../../services/storage/secondaryProtectedStoreAdapters';
+import { StorageEncryptionService } from '../../../services/storage/storageEncryptionService';
 
 const SCENE_REVISIONS_DB = 'worldscript-revisions-db';
 const SCENE_REVISIONS_STORE = 'scene-revisions';
@@ -37,6 +38,31 @@ function putRecord(name: string, storeName: string, record: unknown): Promise<vo
     };
     request.onerror = () => reject(request.error);
   });
+}
+
+function readRecord(
+  name: string,
+  storeName: string,
+  key: string,
+): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(name);
+    request.onsuccess = () => {
+      const database = request.result;
+      const transaction = database.transaction(storeName, 'readonly');
+      const getRequest = transaction.objectStore(storeName).get(key);
+      getRequest.onsuccess = () => {
+        database.close();
+        resolve(getRequest.result as Record<string, unknown>);
+      };
+      getRequest.onerror = () => reject(getRequest.error);
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function deriveKey(): Promise<CryptoKey> {
+  return new StorageEncryptionService().deriveKey('phase4-target', new Uint8Array(32).fill(7));
 }
 
 beforeEach(() => {
@@ -78,6 +104,193 @@ describe('secondaryProtectedStoreAdapters — routing-key validation', () => {
     ).rejects.toMatchObject({
       constructor: ProtectedStoreMigrationAdapterError,
       message: expect.stringContaining('non-string key'),
+    });
+  });
+});
+
+describe('secondaryProtectedStoreAdapters — scene revision payload shapes', () => {
+  it('migrates a legacy flat-field scene revision record', async () => {
+    await createDatabase(SCENE_REVISIONS_DB, SCENE_REVISIONS_STORE, 'id');
+    await putRecord(SCENE_REVISIONS_DB, SCENE_REVISIONS_STORE, {
+      id: 'rev-1',
+      sectionId: 'section-1',
+      createdAt: Date.now(),
+      title: 'Legacy',
+      content: 'legacy body',
+      wordCount: 2,
+      label: 'Draft',
+      authorName: 'Alice',
+    });
+    const [sceneAdapter] = getRegisteredSecondaryProtectedStoreAdapters();
+    const targetKey = await deriveKey();
+
+    const result = await sceneAdapter!.migrateNext({ operation: 'enable', targetKey });
+    expect(result).toMatchObject({ processed: 1, complete: true });
+
+    const migrated = await readRecord(SCENE_REVISIONS_DB, SCENE_REVISIONS_STORE, 'rev-1');
+    expect(migrated['schemaVersion']).toBe(1);
+    expect(migrated['payload']).toBeTruthy();
+    expect(migrated['title']).toBeUndefined();
+  });
+
+  it('migrates an already-nested schemaVersion 1 scene revision record', async () => {
+    await createDatabase(SCENE_REVISIONS_DB, SCENE_REVISIONS_STORE, 'id');
+    await putRecord(SCENE_REVISIONS_DB, SCENE_REVISIONS_STORE, {
+      id: 'rev-2',
+      sectionId: 'section-1',
+      createdAt: Date.now(),
+      schemaVersion: 1,
+      payload: { title: 'Nested', content: 'nested body', wordCount: 2 },
+    });
+    const [sceneAdapter] = getRegisteredSecondaryProtectedStoreAdapters();
+    const targetKey = await deriveKey();
+
+    const result = await sceneAdapter!.migrateNext({ operation: 'enable', targetKey });
+    expect(result).toMatchObject({ processed: 1, complete: true });
+
+    const migrated = await readRecord(SCENE_REVISIONS_DB, SCENE_REVISIONS_STORE, 'rev-2');
+    expect(migrated['payload']).not.toEqual({
+      title: 'Nested',
+      content: 'nested body',
+      wordCount: 2,
+    });
+  });
+
+  it('rejects a nested-payload scene revision record with an unsupported schema version', async () => {
+    await createDatabase(SCENE_REVISIONS_DB, SCENE_REVISIONS_STORE, 'id');
+    await putRecord(SCENE_REVISIONS_DB, SCENE_REVISIONS_STORE, {
+      id: 'rev-3',
+      sectionId: 'section-1',
+      createdAt: Date.now(),
+      schemaVersion: 2,
+      payload: { title: 'Future', content: 'future body', wordCount: 2 },
+    });
+    const [sceneAdapter] = getRegisteredSecondaryProtectedStoreAdapters();
+    const targetKey = await deriveKey();
+
+    await expect(
+      sceneAdapter!.migrateNext({ operation: 'enable', targetKey }),
+    ).rejects.toMatchObject({
+      constructor: ProtectedStoreMigrationAdapterError,
+      message: expect.stringContaining('unsupported schema version'),
+    });
+  });
+
+  it('rejects a legacy-shape scene revision record with an unexpected extra field', async () => {
+    await createDatabase(SCENE_REVISIONS_DB, SCENE_REVISIONS_STORE, 'id');
+    await putRecord(SCENE_REVISIONS_DB, SCENE_REVISIONS_STORE, {
+      id: 'rev-4',
+      sectionId: 'section-1',
+      createdAt: Date.now(),
+      title: 'Bad',
+      content: 'bad body',
+      wordCount: 2,
+      unexpectedField: 'should not be here',
+    });
+    const [sceneAdapter] = getRegisteredSecondaryProtectedStoreAdapters();
+    const targetKey = await deriveKey();
+
+    await expect(
+      sceneAdapter!.migrateNext({ operation: 'enable', targetKey }),
+    ).rejects.toMatchObject({
+      constructor: ProtectedStoreMigrationAdapterError,
+      message: expect.stringContaining('unsupported record schema'),
+    });
+  });
+
+  it('rejects a nested-payload scene revision record with an unexpected extra field', async () => {
+    await createDatabase(SCENE_REVISIONS_DB, SCENE_REVISIONS_STORE, 'id');
+    await putRecord(SCENE_REVISIONS_DB, SCENE_REVISIONS_STORE, {
+      id: 'rev-5',
+      sectionId: 'section-1',
+      createdAt: Date.now(),
+      schemaVersion: 1,
+      payload: { title: 'Bad nested', content: 'body', wordCount: 2 },
+      unexpectedField: 'should not be here',
+    });
+    const [sceneAdapter] = getRegisteredSecondaryProtectedStoreAdapters();
+    const targetKey = await deriveKey();
+
+    await expect(
+      sceneAdapter!.migrateNext({ operation: 'enable', targetKey }),
+    ).rejects.toMatchObject({
+      constructor: ProtectedStoreMigrationAdapterError,
+      message: expect.stringContaining('unsupported record schema'),
+    });
+  });
+});
+
+describe('secondaryProtectedStoreAdapters — inference cache payload shapes', () => {
+  it('migrates a legacy flat-field inference cache record', async () => {
+    await createDatabase(INFERENCE_CACHE_DB, INFERENCE_CACHE_STORE, 'key');
+    await putRecord(INFERENCE_CACHE_DB, INFERENCE_CACHE_STORE, {
+      key: 'cache-1',
+      timestamp: Date.now(),
+      result: 'legacy cached text',
+    });
+    const [, cacheAdapter] = getRegisteredSecondaryProtectedStoreAdapters();
+    const targetKey = await deriveKey();
+
+    const result = await cacheAdapter!.migrateNext({ operation: 'enable', targetKey });
+    expect(result).toMatchObject({ processed: 1, complete: true });
+
+    const migrated = await readRecord(INFERENCE_CACHE_DB, INFERENCE_CACHE_STORE, 'cache-1');
+    expect(migrated['payload']).toBeTruthy();
+    expect(migrated['result']).toBeUndefined();
+  });
+
+  it('migrates an already-nested-payload inference cache record', async () => {
+    await createDatabase(INFERENCE_CACHE_DB, INFERENCE_CACHE_STORE, 'key');
+    await putRecord(INFERENCE_CACHE_DB, INFERENCE_CACHE_STORE, {
+      key: 'cache-2',
+      timestamp: Date.now(),
+      payload: { result: 'nested cached text' },
+    });
+    const [, cacheAdapter] = getRegisteredSecondaryProtectedStoreAdapters();
+    const targetKey = await deriveKey();
+
+    const result = await cacheAdapter!.migrateNext({ operation: 'enable', targetKey });
+    expect(result).toMatchObject({ processed: 1, complete: true });
+
+    const migrated = await readRecord(INFERENCE_CACHE_DB, INFERENCE_CACHE_STORE, 'cache-2');
+    expect(migrated['payload']).not.toEqual({ result: 'nested cached text' });
+  });
+
+  it('rejects a legacy-shape inference cache record with an unexpected extra field', async () => {
+    await createDatabase(INFERENCE_CACHE_DB, INFERENCE_CACHE_STORE, 'key');
+    await putRecord(INFERENCE_CACHE_DB, INFERENCE_CACHE_STORE, {
+      key: 'cache-3',
+      timestamp: Date.now(),
+      result: 'bad',
+      unexpectedField: 'should not be here',
+    });
+    const [, cacheAdapter] = getRegisteredSecondaryProtectedStoreAdapters();
+    const targetKey = await deriveKey();
+
+    await expect(
+      cacheAdapter!.migrateNext({ operation: 'enable', targetKey }),
+    ).rejects.toMatchObject({
+      constructor: ProtectedStoreMigrationAdapterError,
+      message: expect.stringContaining('unsupported record schema'),
+    });
+  });
+
+  it('rejects a nested-payload inference cache record with an unexpected extra field', async () => {
+    await createDatabase(INFERENCE_CACHE_DB, INFERENCE_CACHE_STORE, 'key');
+    await putRecord(INFERENCE_CACHE_DB, INFERENCE_CACHE_STORE, {
+      key: 'cache-4',
+      timestamp: Date.now(),
+      payload: { result: 'bad nested' },
+      unexpectedField: 'should not be here',
+    });
+    const [, cacheAdapter] = getRegisteredSecondaryProtectedStoreAdapters();
+    const targetKey = await deriveKey();
+
+    await expect(
+      cacheAdapter!.migrateNext({ operation: 'enable', targetKey }),
+    ).rejects.toMatchObject({
+      constructor: ProtectedStoreMigrationAdapterError,
+      message: expect.stringContaining('unsupported record schema'),
     });
   });
 });
