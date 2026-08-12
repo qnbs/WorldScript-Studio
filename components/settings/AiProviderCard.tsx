@@ -157,6 +157,25 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
     browserOllamaEnabled,
   );
 
+  // QNBS-v3: shared by the auto-probe effect below and the manual Test Connection click.
+  const probeWebGpu = useCallback((requestId: number) => {
+    setIsProbingGpu(true);
+    void detectWebGpuDetails()
+      .then((info) => applyIfCurrent(testRequestIdRef, requestId, () => setGpuInfo(info)))
+      .catch(() =>
+        applyIfCurrent(testRequestIdRef, requestId, () => setGpuInfo({ status: 'unknown' })),
+      )
+      .finally(() => applyIfCurrent(testRequestIdRef, requestId, () => setIsProbingGpu(false)));
+  }, []);
+
+  // QNBS-v3 regression: restores the auto-probe-on-selection UX lost when an earlier commit removed
+  // the combined ollama+webllm auto-test effect — WebGPU detection is a local hardware check, not a
+  // network request, so the CORS/privacy rationale for dropping the Ollama auto-test doesn't apply.
+  // Runs after useConnectionContextReset's bump above so it always reads the current request id.
+  useEffect(() => {
+    if (provider === 'webllm') probeWebGpu(testRequestIdRef.current);
+  }, [provider, probeWebGpu]);
+
   useEffect(() => {
     storageService
       .getApiKey('openai')
@@ -239,16 +258,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
     const requestId = ++testRequestIdRef.current;
     setTestStatus('loading');
     setTestError('');
-    if (provider === 'webllm') {
-      setIsProbingGpu(true);
-      // QNBS-v3: guarded like every other async result below — an unguarded stale probe could overwrite gpuInfo/isProbingGpu after a provider switch already reset them.
-      void detectWebGpuDetails()
-        .then((info) => applyIfCurrent(testRequestIdRef, requestId, () => setGpuInfo(info)))
-        .catch(() =>
-          applyIfCurrent(testRequestIdRef, requestId, () => setGpuInfo({ status: 'unknown' })),
-        )
-        .finally(() => applyIfCurrent(testRequestIdRef, requestId, () => setIsProbingGpu(false)));
-    }
+    if (provider === 'webllm') probeWebGpu(requestId);
     try {
       const result = await testAIConnection(provider, {
         ollamaBaseUrl,
@@ -281,6 +291,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
     advancedAi.localBackendPreset,
     advancedAi.openAiCompatibleBaseUrl,
     browserOllamaEnabled,
+    probeWebGpu,
     t,
   ]);
 
