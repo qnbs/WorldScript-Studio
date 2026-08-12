@@ -1,5 +1,6 @@
 // QNBS-v3: Two-layer inference cache keeps hot reads in memory while the durable layer is encrypted.
 import { logger } from '../logger';
+import { withProtectedWriteAdmission } from '../storage/protectedWriteAdmission';
 import {
   assertSecureStorageReadable,
   assertSecureStorageWritableForMutation,
@@ -254,9 +255,13 @@ export class AiInferenceCacheService {
     await this.dbReady;
     if (!this.db) return;
     try {
-      const entry = await this.encodeEntry(key, result, Date.now());
-      await this.idbEvictOldest();
-      await this.persistEntry(entry);
+      // QNBS-v3: shares the writer-admission lock with ordinary protected writes so eviction/persist
+      //          cannot run mid-migration-batch and produce a false verification shortfall (#338).
+      await withProtectedWriteAdmission(async () => {
+        const entry = await this.encodeEntry(key, result, Date.now());
+        await this.idbEvictOldest();
+        await this.persistEntry(entry);
+      });
     } catch {
       // QNBS-v3: The encrypted durable cache is non-authoritative; lock or migration state must not fail inference.
     }

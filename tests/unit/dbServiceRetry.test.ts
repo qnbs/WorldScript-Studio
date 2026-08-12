@@ -3,9 +3,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // QNBS-v3: Tests retryDb wrapper on saveProject/saveSettings by mocking saveSlice on the service
 // instance — avoids needing a real or stubbed IDB environment.
 
-vi.mock('../../services/logger', () => ({
-  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
-}));
+vi.mock('../../services/logger', () => {
+  const noopLogger = { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() };
+  return {
+    logger: noopLogger,
+    // QNBS-v3: protectedWriteAdmission.ts (pulled in transitively via idbCodexStore.ts) calls
+    // createLogger() at module load — this mock must cover it too or import throws.
+    createLogger: () => ({ ...noopLogger, withContext: () => ({ ...noopLogger }) }),
+  };
+});
 
 // Minimal fake IDB objects so dbService can load and setDb without crashing.
 const fakeStore = {

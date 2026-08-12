@@ -9,6 +9,7 @@ import type { BinderAssetMeta, BinderAssetPayload } from '../storageBackend';
 import { makeBinderAssetIdsPrefix, makeBinderAssetStorageKey } from '../storageBackend';
 import { getUserFriendlyDbError, retryDb } from './idbCore';
 import { IdbSnapshotStore } from './idbSnapshotStore';
+import { withProtectedWriteAdmission } from './protectedWriteAdmission';
 import {
   assertIdbProtectedWriteAllowed,
   assertNoActiveEncryptionMigration,
@@ -23,19 +24,21 @@ export class IdbAssetStore extends IdbSnapshotStore {
   // --- Image Store Methods ---
 
   async saveImage(id: string, base64: string): Promise<void> {
-    // QNBS-v3: Resolve the write key BEFORE opening the transaction — `await idbEncryptWithKey`
-    //          yields the event loop, which auto-commits an already-open IDB transaction
-    //          (TransactionInactiveError on put), and re-reading isIdbEncryptionReady() after any
-    //          later await could race with Lock Session and silently fall back to plaintext.
-    const writeKey = await resolveProtectedWriteKey();
-    const payload = writeKey ? await idbEncryptWithKey(writeKey, base64) : base64;
-    // QNBS-v3: only the migration guard is re-checked here — resolveProtectedWriteKey() already made its own lock check atomically with the key snapshot, so re-running that too would wrongly reject an already-safely-encrypted write if the session locks mid-write.
-    await assertNoActiveEncryptionMigration();
-    const store = await this.getObjectStore(IMAGES_STORE, 'readwrite');
-    return new Promise((resolve, reject) => {
-      const request = store.put(payload, id);
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
+    return withProtectedWriteAdmission(async () => {
+      // QNBS-v3: Resolve the write key BEFORE opening the transaction — `await idbEncryptWithKey`
+      //          yields the event loop, which auto-commits an already-open IDB transaction
+      //          (TransactionInactiveError on put), and re-reading isIdbEncryptionReady() after any
+      //          later await could race with Lock Session and silently fall back to plaintext.
+      const writeKey = await resolveProtectedWriteKey();
+      const payload = writeKey ? await idbEncryptWithKey(writeKey, base64) : base64;
+      // QNBS-v3: only the migration guard is re-checked here — resolveProtectedWriteKey() already made its own lock check atomically with the key snapshot, so re-running that too would wrongly reject an already-safely-encrypted write if the session locks mid-write.
+      await assertNoActiveEncryptionMigration();
+      const store = await this.getObjectStore(IMAGES_STORE, 'readwrite');
+      return new Promise<void>((resolve, reject) => {
+        const request = store.put(payload, id);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
     });
   }
 
@@ -66,13 +69,15 @@ export class IdbAssetStore extends IdbSnapshotStore {
   }
 
   async deleteImage(id: string): Promise<void> {
-    // QNBS-v3: A locked session must not be able to destroy protected images it cannot read.
-    await assertIdbProtectedWriteAllowed();
-    const store = await this.getObjectStore(IMAGES_STORE, 'readwrite');
-    return new Promise((resolve, reject) => {
-      const request = store.delete(id);
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
+    return withProtectedWriteAdmission(async () => {
+      // QNBS-v3: A locked session must not be able to destroy protected images it cannot read.
+      await assertIdbProtectedWriteAllowed();
+      const store = await this.getObjectStore(IMAGES_STORE, 'readwrite');
+      return new Promise<void>((resolve, reject) => {
+        const request = store.delete(id);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
     });
   }
 
@@ -84,30 +89,32 @@ export class IdbAssetStore extends IdbSnapshotStore {
     data: ArrayBuffer,
     meta: BinderAssetMeta,
   ): Promise<void> {
-    return retryDb(async () => {
-      const writeKey = await resolveProtectedWriteKey();
-      const key = makeBinderAssetStorageKey(projectId, assetId);
-      const fullMeta = { ...meta, byteSize: data.byteLength };
-      // QNBS-v3: idbEncrypt serialises via JSON.stringify, which silently drops a Blob ({} → no data).
-      //          When encrypting, persist the raw bytes; otherwise store a structured-clone-friendly Blob.
-      const payload = writeKey
-        ? await idbEncryptWithKey(writeKey, {
-            meta: fullMeta,
-            bytes: Array.from(new Uint8Array(data)),
-          })
-        : {
-            meta: fullMeta,
-            blob: new Blob([data], { type: meta.mimeType || 'application/octet-stream' }),
-          };
-      // QNBS-v3: only the migration guard is re-checked here — resolveProtectedWriteKey() already made its own lock check atomically with the key snapshot, so re-running that too would wrongly reject an already-safely-encrypted write if the session locks mid-write.
-      await assertNoActiveEncryptionMigration();
-      const store = await this.getObjectStore(BINDER_ASSETS_STORE, 'readwrite');
-      return new Promise<void>((resolve, reject) => {
-        const req = store.put(payload, key);
-        req.onsuccess = () => resolve();
-        req.onerror = () => reject(getUserFriendlyDbError(req.error));
-      });
-    });
+    return retryDb(() =>
+      withProtectedWriteAdmission(async () => {
+        const writeKey = await resolveProtectedWriteKey();
+        const key = makeBinderAssetStorageKey(projectId, assetId);
+        const fullMeta = { ...meta, byteSize: data.byteLength };
+        // QNBS-v3: idbEncrypt serialises via JSON.stringify, which silently drops a Blob ({} → no data).
+        //          When encrypting, persist the raw bytes; otherwise store a structured-clone-friendly Blob.
+        const payload = writeKey
+          ? await idbEncryptWithKey(writeKey, {
+              meta: fullMeta,
+              bytes: Array.from(new Uint8Array(data)),
+            })
+          : {
+              meta: fullMeta,
+              blob: new Blob([data], { type: meta.mimeType || 'application/octet-stream' }),
+            };
+        // QNBS-v3: only the migration guard is re-checked here — resolveProtectedWriteKey() already made its own lock check atomically with the key snapshot, so re-running that too would wrongly reject an already-safely-encrypted write if the session locks mid-write.
+        await assertNoActiveEncryptionMigration();
+        const store = await this.getObjectStore(BINDER_ASSETS_STORE, 'readwrite');
+        return new Promise<void>((resolve, reject) => {
+          const req = store.put(payload, key);
+          req.onsuccess = () => resolve();
+          req.onerror = () => reject(getUserFriendlyDbError(req.error));
+        });
+      }),
+    );
   }
 
   async getBinderAsset(projectId: string, assetId: string): Promise<BinderAssetPayload | null> {
@@ -136,17 +143,19 @@ export class IdbAssetStore extends IdbSnapshotStore {
   }
 
   async deleteBinderAsset(projectId: string, assetId: string): Promise<void> {
-    return retryDb(async () => {
-      // QNBS-v3: A locked session must not be able to destroy protected binder assets it cannot read.
-      await assertIdbProtectedWriteAllowed();
-      const key = makeBinderAssetStorageKey(projectId, assetId);
-      const store = await this.getObjectStore(BINDER_ASSETS_STORE, 'readwrite');
-      return new Promise<void>((resolve, reject) => {
-        const req = store.delete(key);
-        req.onsuccess = () => resolve();
-        req.onerror = () => reject(getUserFriendlyDbError(req.error));
-      });
-    });
+    return retryDb(() =>
+      withProtectedWriteAdmission(async () => {
+        // QNBS-v3: A locked session must not be able to destroy protected binder assets it cannot read.
+        await assertIdbProtectedWriteAllowed();
+        const key = makeBinderAssetStorageKey(projectId, assetId);
+        const store = await this.getObjectStore(BINDER_ASSETS_STORE, 'readwrite');
+        return new Promise<void>((resolve, reject) => {
+          const req = store.delete(key);
+          req.onsuccess = () => resolve();
+          req.onerror = () => reject(getUserFriendlyDbError(req.error));
+        });
+      }),
+    );
   }
 
   async listBinderAssetIds(projectId: string): Promise<string[]> {
@@ -176,30 +185,32 @@ export class IdbAssetStore extends IdbSnapshotStore {
   }
 
   async deleteAllBinderAssetsForProject(projectId: string): Promise<void> {
-    return retryDb(async () => {
-      await assertIdbProtectedWriteAllowed();
-      const ids = await this.listBinderAssetIds(projectId);
-      if (ids.length === 0) return;
-      // QNBS-v3: one transaction for every delete, not one transaction PER asset — a later failure
-      //          aborts the whole batch (IDB rolls back everything already queued in it) instead of
-      //          leaving earlier assets permanently removed while later ones and the project record
-      //          survive. All requests are queued synchronously below the store fetch so IDB never
-      //          auto-commits the transaction mid-batch.
-      const store = await this.getObjectStore(BINDER_ASSETS_STORE, 'readwrite');
-      const transaction = store.transaction;
-      return new Promise<void>((resolve, reject) => {
-        let failure: string | undefined;
-        for (const id of ids) {
-          const request = store.delete(makeBinderAssetStorageKey(projectId, id));
-          request.onerror = () => {
-            failure = getUserFriendlyDbError(request.error);
-            transaction.abort();
-          };
-        }
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error);
-        transaction.onabort = () => reject(failure ?? getUserFriendlyDbError(transaction.error));
-      });
-    });
+    return retryDb(() =>
+      withProtectedWriteAdmission(async () => {
+        await assertIdbProtectedWriteAllowed();
+        const ids = await this.listBinderAssetIds(projectId);
+        if (ids.length === 0) return;
+        // QNBS-v3: one transaction for every delete, not one transaction PER asset — a later failure
+        //          aborts the whole batch (IDB rolls back everything already queued in it) instead of
+        //          leaving earlier assets permanently removed while later ones and the project record
+        //          survive. All requests are queued synchronously below the store fetch so IDB never
+        //          auto-commits the transaction mid-batch.
+        const store = await this.getObjectStore(BINDER_ASSETS_STORE, 'readwrite');
+        const transaction = store.transaction;
+        return new Promise<void>((resolve, reject) => {
+          let failure: string | undefined;
+          for (const id of ids) {
+            const request = store.delete(makeBinderAssetStorageKey(projectId, id));
+            request.onerror = () => {
+              failure = getUserFriendlyDbError(request.error);
+              transaction.abort();
+            };
+          }
+          transaction.oncomplete = () => resolve();
+          transaction.onerror = () => reject(transaction.error);
+          transaction.onabort = () => reject(failure ?? getUserFriendlyDbError(transaction.error));
+        });
+      }),
+    );
   }
 }

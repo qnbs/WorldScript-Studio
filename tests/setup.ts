@@ -135,6 +135,72 @@ if (typeof window !== 'undefined' && !('SpeechSynthesisUtterance' in window)) {
     SpeechSynthesisUtteranceMock;
 }
 
+// navigator.locks (Web Locks API) — jsdom does not implement it, and Node has no navigator at all.
+// QNBS-v3: minimal fair mutex per lock name — shared holders run concurrently, an exclusive
+//          request waits for current holders then blocks new requests until it releases; enough
+//          fidelity for protectedWriteAdmission.ts without a full spec-accurate implementation.
+if (typeof navigator === 'undefined') {
+  (globalThis as unknown as { navigator: unknown }).navigator = {};
+}
+if (!('locks' in navigator) || !navigator.locks) {
+  const activeSharedByName = new Map<string, number>();
+  const exclusiveHeldByName = new Set<string>();
+  const waiters = new Map<string, Array<() => void>>();
+
+  function nextWaiter(name: string): void {
+    const queue = waiters.get(name);
+    queue?.shift()?.();
+  }
+
+  async function acquire(name: string, mode: 'shared' | 'exclusive'): Promise<() => void> {
+    while (
+      exclusiveHeldByName.has(name) ||
+      (mode === 'exclusive' && (activeSharedByName.get(name) ?? 0) > 0)
+    ) {
+      await new Promise<void>((resolve) => {
+        const queue = waiters.get(name) ?? [];
+        queue.push(resolve);
+        waiters.set(name, queue);
+      });
+    }
+    if (mode === 'exclusive') {
+      exclusiveHeldByName.add(name);
+      return () => {
+        exclusiveHeldByName.delete(name);
+        nextWaiter(name);
+      };
+    }
+    activeSharedByName.set(name, (activeSharedByName.get(name) ?? 0) + 1);
+    return () => {
+      const remaining = (activeSharedByName.get(name) ?? 1) - 1;
+      activeSharedByName.set(name, remaining);
+      if (remaining === 0) nextWaiter(name);
+    };
+  }
+
+  Object.defineProperty(navigator, 'locks', {
+    configurable: true,
+    writable: true,
+    value: {
+      request: async <T>(
+        name: string,
+        optionsOrCallback: { mode?: 'shared' | 'exclusive' } | (() => T | Promise<T>),
+        maybeCallback?: () => T | Promise<T>,
+      ): Promise<T> => {
+        const options = typeof optionsOrCallback === 'function' ? {} : optionsOrCallback;
+        const callback =
+          typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback!;
+        const release = await acquire(name, options.mode === 'exclusive' ? 'exclusive' : 'shared');
+        try {
+          return await callback();
+        } finally {
+          release();
+        }
+      },
+    },
+  });
+}
+
 // ResizeObserver & IntersectionObserver (sehr häufig in modernen React-Komponenten)
 // QNBS-v3: These APIs are used by container-query components and lazy-loading features.
 if (typeof window !== 'undefined') {

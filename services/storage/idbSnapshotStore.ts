@@ -10,6 +10,7 @@ import type { ProjectSnapshot } from '../../types';
 import { SNAPSHOTS_STORE } from '../dbConstants';
 import { IdbCodexStore } from './idbCodexStore';
 import { compressData, getUserFriendlyDbError, retryDb } from './idbCore';
+import { withProtectedWriteAdmission } from './protectedWriteAdmission';
 import {
   assertIdbProtectedWriteAllowed,
   assertNoActiveEncryptionMigration,
@@ -25,31 +26,34 @@ export class IdbSnapshotStore extends IdbCodexStore {
   protected readonly MAX_AUTO_SNAPSHOTS = 20;
 
   async createSnapshot(data: ProjectData, name?: string): Promise<number> {
-    const wordCount = data.manuscript.reduce(
-      (sum, section) => sum + (section.content?.split(/\s+/).filter(Boolean).length || 0),
-      0,
-    );
-    // QNBS-v3: Resolve the write key in one atomic snapshot rather than re-reading
-    //          isIdbEncryptionReady() later, so Lock Session during this async call cannot
-    //          silently downgrade an already-approved snapshot to plaintext.
-    const writeKey = await resolveProtectedWriteKey();
-    // QNBS-v3: Plaintext snapshots are allowed only before encryption is configured.
-    const snapshotPayload = writeKey ? await idbEncryptWithKey(writeKey, data) : compressData(data);
-    const snapshotData = {
-      date: new Date().toISOString(),
-      name: name ?? 'Automatic Snapshot',
-      wordCount,
-      data: snapshotPayload,
-    };
-
-    return retryDb(async () => {
-      // QNBS-v3: only the migration guard is re-checked here — resolveProtectedWriteKey() already made its own lock check atomically with the key snapshot, so re-running that too would wrongly reject an already-safely-encrypted write if the session locks mid-write.
-      await assertNoActiveEncryptionMigration();
-      const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readwrite');
-      return new Promise<number>((resolve, reject) => {
-        const request = store.add(snapshotData);
-        request.onsuccess = () => resolve(request.result as number);
-        request.onerror = () => reject(getUserFriendlyDbError(request.error));
+    return withProtectedWriteAdmission(() => {
+      const wordCount = data.manuscript.reduce(
+        (sum, section) => sum + (section.content?.split(/\s+/).filter(Boolean).length || 0),
+        0,
+      );
+      return retryDb(async () => {
+        // QNBS-v3: Resolve the write key in one atomic snapshot rather than re-reading
+        //          isIdbEncryptionReady() later, so Lock Session during this async call cannot
+        //          silently downgrade an already-approved snapshot to plaintext.
+        const writeKey = await resolveProtectedWriteKey();
+        // QNBS-v3: Plaintext snapshots are allowed only before encryption is configured.
+        const snapshotPayload = writeKey
+          ? await idbEncryptWithKey(writeKey, data)
+          : compressData(data);
+        const snapshotData = {
+          date: new Date().toISOString(),
+          name: name ?? 'Automatic Snapshot',
+          wordCount,
+          data: snapshotPayload,
+        };
+        // QNBS-v3: only the migration guard is re-checked here — resolveProtectedWriteKey() already made its own lock check atomically with the key snapshot, so re-running that too would wrongly reject an already-safely-encrypted write if the session locks mid-write.
+        await assertNoActiveEncryptionMigration();
+        const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readwrite');
+        return new Promise<number>((resolve, reject) => {
+          const request = store.add(snapshotData);
+          request.onsuccess = () => resolve(request.result as number);
+          request.onerror = () => reject(getUserFriendlyDbError(request.error));
+        });
       });
     });
   }
@@ -106,16 +110,18 @@ export class IdbSnapshotStore extends IdbCodexStore {
   }
 
   async deleteSnapshot(id: number): Promise<void> {
-    return retryDb(async () => {
-      // QNBS-v3: A locked session must not be able to destroy protected snapshot records.
-      await assertIdbProtectedWriteAllowed();
-      const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readwrite');
-      return new Promise<void>((resolve, reject) => {
-        const request = store.delete(id);
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(getUserFriendlyDbError(request.error));
-      });
-    });
+    return retryDb(() =>
+      withProtectedWriteAdmission(async () => {
+        // QNBS-v3: A locked session must not be able to destroy protected snapshot records.
+        await assertIdbProtectedWriteAllowed();
+        const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readwrite');
+        return new Promise<void>((resolve, reject) => {
+          const request = store.delete(id);
+          request.onsuccess = () => resolve();
+          request.onerror = () => reject(getUserFriendlyDbError(request.error));
+        });
+      }),
+    );
   }
 
   protected async pruneAutoSnapshots(): Promise<void> {

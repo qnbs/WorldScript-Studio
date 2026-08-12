@@ -1,6 +1,7 @@
 // QNBS-v3: Standalone IDB for scene revisions avoids a shared schema upgrade and keeps history bounded.
 import type { SceneRevision } from '../types';
 import { createLogger } from './logger';
+import { withProtectedWriteAdmission } from './storage/protectedWriteAdmission';
 import {
   assertSecureStorageReadable,
   assertSecureStorageWritableForMutation,
@@ -228,10 +229,14 @@ export async function saveRevision(
     ...(authorName !== undefined ? { authorName } : {}),
   };
 
-  // QNBS-v3: Encrypt before IDB work so WebCrypto cannot make a write transaction inactive.
-  const stored = await encodeRevision(revision);
-  const db = await getDb();
-  await saveStoredRevisionWithRetention(db, stored);
+  // QNBS-v3: shares the writer-admission lock with primary-store writes so encode-through-commit
+  //          cannot straddle a migration batch and land under a superseded key/generation (#338).
+  await withProtectedWriteAdmission(async () => {
+    // QNBS-v3: Encrypt before IDB work so WebCrypto cannot make a write transaction inactive.
+    const stored = await encodeRevision(revision);
+    const db = await getDb();
+    await saveStoredRevisionWithRetention(db, stored);
+  });
   return revision;
 }
 
@@ -266,9 +271,11 @@ export async function listRevisions(sectionId: string): Promise<SceneRevision[]>
 
 /** Deletes a single revision by ID. */
 export async function deleteRevision(id: string): Promise<void> {
-  await assertSecureStorageWritableForMutation();
-  const db = await getDb();
-  await deleteRevisions(db, [id]);
+  await withProtectedWriteAdmission(async () => {
+    await assertSecureStorageWritableForMutation();
+    const db = await getDb();
+    await deleteRevisions(db, [id]);
+  });
 }
 
 /** Reset the singleton and close its handle so tests cannot retain a stale database connection. */
