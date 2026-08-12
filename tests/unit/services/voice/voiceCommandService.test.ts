@@ -87,6 +87,14 @@ vi.mock('../../../../features/voice/voiceSlice', () => ({
   setWakeWordStatus: vi.fn(),
 }));
 
+// QNBS-v3 (#333 item 1): mock the pipeline factory downloadVoiceModels() calls to trigger the
+// model download — lets tests drive its onProgress callback with representative payloads.
+const { mockPipeline } = vi.hoisted(() => ({ mockPipeline: vi.fn() }));
+vi.mock('@huggingface/transformers', () => ({
+  pipeline: mockPipeline,
+  env: { backends: { onnx: { wasm: {} } } },
+}));
+
 import { VoiceCommandService } from '../../../../services/voice/voiceCommandService';
 
 describe('VoiceCommandService', () => {
@@ -240,6 +248,84 @@ describe('VoiceCommandService', () => {
       expect(disposeSpies.tts).toHaveBeenCalled();
       expect(disposeSpies.vad).toHaveBeenCalled();
       expect(disposeSpies.wake).toHaveBeenCalled();
+    });
+  });
+
+  // QNBS-v3 (#333 item 1): transformers.js's own progress payload is
+  // `{ progress: <0-100>, loaded: <bytes>, total: <bytes> }` (verified against its readResponse()
+  // source — progress = loaded/total*100). The prior code treated `progress` as if it were already
+  // a 0-1 fraction, so `Math.min(0.95, pct)` clamped to 0.95 almost immediately (any progress value
+  // over 0.95%), making the download bar look stuck. These tests pin the fixed 0-1 conversion and
+  // the new real byte-count threading.
+  describe('downloadVoiceModels', () => {
+    let dispatch: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      dispatch = vi.fn();
+      service.setDispatch(dispatch as never, vi.fn() as never);
+      mockPipeline.mockReset();
+    });
+
+    it('derives a 0-1 progress fraction from loaded/total bytes, not the raw 0-100 percent field', async () => {
+      mockPipeline.mockImplementation(async (_task: string, _model: string, opts: unknown) => {
+        const { onProgress } = opts as { onProgress: (p: unknown) => void };
+        onProgress({ progress: 20, loaded: 8_400_000, total: 42_000_000 });
+        return { dispose: vi.fn() };
+      });
+
+      await service.downloadVoiceModels('stt');
+
+      const progressCalls = dispatch.mock.calls
+        .map((c) => c[0])
+        .filter(
+          (a): a is { payload: { wasmModelDownloadProgress?: number } } =>
+            typeof (a as { payload?: { wasmModelDownloadProgress?: number } })?.payload
+              ?.wasmModelDownloadProgress === 'number',
+        );
+      // 8.4M / 42M = 0.2 — well under the 0.95 clamp, not stuck at 0.95 from a single early tick.
+      expect(progressCalls.some((a) => a.payload.wasmModelDownloadProgress === 0.2)).toBe(true);
+    });
+
+    it('threads real loadedBytes/totalBytes from the progress payload into Redux', async () => {
+      mockPipeline.mockImplementation(async (_task: string, _model: string, opts: unknown) => {
+        const { onProgress } = opts as { onProgress: (p: unknown) => void };
+        onProgress({ progress: 50, loaded: 21_000_000, total: 42_000_000 });
+        return { dispose: vi.fn() };
+      });
+
+      await service.downloadVoiceModels('stt');
+
+      const byteCall = dispatch.mock.calls
+        .map((c) => c[0])
+        .find(
+          (a): a is { payload: { wasmModelDownloadLoadedBytes?: number } } =>
+            typeof (a as { payload?: { wasmModelDownloadLoadedBytes?: number } })?.payload
+              ?.wasmModelDownloadLoadedBytes === 'number',
+        );
+      expect(byteCall?.payload.wasmModelDownloadLoadedBytes).toBe(21_000_000);
+      expect(
+        (byteCall as unknown as { payload: { wasmModelDownloadTotalBytes: number } }).payload
+          .wasmModelDownloadTotalBytes,
+      ).toBe(42_000_000);
+    });
+
+    it('falls back to progress/100 when the payload has no loaded/total (defensive, not the normal path)', async () => {
+      mockPipeline.mockImplementation(async (_task: string, _model: string, opts: unknown) => {
+        const { onProgress } = opts as { onProgress: (p: unknown) => void };
+        onProgress({ progress: 30 });
+        return { dispose: vi.fn() };
+      });
+
+      await service.downloadVoiceModels('stt');
+
+      const progressCalls = dispatch.mock.calls
+        .map((c) => c[0])
+        .filter(
+          (a): a is { payload: { wasmModelDownloadProgress?: number } } =>
+            typeof (a as { payload?: { wasmModelDownloadProgress?: number } })?.payload
+              ?.wasmModelDownloadProgress === 'number',
+        );
+      expect(progressCalls.some((a) => a.payload.wasmModelDownloadProgress === 0.3)).toBe(true);
     });
   });
 });

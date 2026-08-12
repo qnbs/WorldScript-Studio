@@ -159,6 +159,8 @@
   "settings.ai.localAi.downloadCancelled": "Download annullato",
   "settings.ai.localAi.downloadEta": "circa {{seconds}} s rimanenti",
   "settings.ai.localAi.downloadFailed": "Download non riuscito. Riprova.",
+  "settings.ai.localAi.downloadSize": "{{loaded}} MB di {{total}} MB",
+  "settings.ai.localAi.downloadSpeed": "{{speed}} MB/s",
   "settings.ai.localAi.downloadTitle": "Download del modello IA in corso…",
   "settings.ai.localAi.downloadedLabel": "scaricato",
   "settings.ai.localAi.downloadingButton": "Download in corso…",
@@ -819,6 +821,8 @@
   "voice.modelDownload.description": "Download del modello {{model}} ({{size}} MB). Questo abilita l'elaborazione vocale locale senza instradamento cloud.",
   "voice.modelDownload.error": "Download fallito: {{error}}",
   "voice.modelDownload.progress": "{{percent}}% completato",
+  "voice.modelDownload.progressBytes": "{{loaded}} MB di {{total}} MB",
   "voice.modelDownload.retry": "Riprova",
+  "voice.modelDownload.speed": "{{speed}} MB/s",
   "voice.modelDownload.title": "Download modello vocale"
 }

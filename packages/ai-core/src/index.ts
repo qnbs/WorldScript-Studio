@@ -182,6 +182,21 @@ export const WEBLLM_SUPPORTED_MODELS = [
 
 export type WebLlmModelId = (typeof WEBLLM_SUPPORTED_MODELS)[number]['id'];
 
+// QNBS-v3 (#333 item 1): machine-readable mirror of the approximate sizes already embedded as free
+// text in WEBLLM_SUPPORTED_MODELS' labels above (e.g. "~0.4 GB") — the installed @mlc-ai/web-llm's
+// own InitProgressReport type exposes only a 0-1 progress fraction + a status string, no structured
+// byte counts, so this is the only source for a downloaded/total MB estimate in the download UI.
+// Keep in sync with the labels above when adding/changing a supported model.
+export const WEBLLM_MODEL_APPROX_MB: Record<WebLlmModelId, number> = {
+  'Qwen2.5-0.5B-Instruct-q4f16_1-MLC': 400,
+  'Llama-3.2-1B-Instruct-q4f16_1-MLC': 700,
+  'Llama-3.2-3B-Instruct-q4f16_1-MLC': 1800,
+  'Phi-4-mini-instruct-q4f16_1-MLC': 2300,
+  'gemma-3-1b-it-q4f16_1-MLC': 800,
+  'gemma-3-4b-it-q4f32_1-MLC': 4900,
+  'Llama-3.3-70B-Instruct-q3f16_1-MLC': 35000,
+};
+
 export interface WebLlmProgressReport {
   progress: number; // 0–1
   text: string;

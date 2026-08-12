@@ -156,7 +156,14 @@ export async function generateLocalText(
         : 0;
       const normalized = { progress: fraction, text: report.text };
       if (canReportToGlobalProgress()) {
-        inferenceProgressEmitter.reportWebLlmProgress(normalized.progress, normalized.text);
+        // QNBS-v3 (#333 item 1): workerModelId is the actual model this attempt is downloading —
+        // captured by closure, safe to read here even though it's assigned after this closure is
+        // defined, since reportProgress is only ever invoked later, once it holds its final value.
+        inferenceProgressEmitter.reportWebLlmProgress(
+          normalized.progress,
+          normalized.text,
+          workerModelId,
+        );
       }
       onProgress?.(normalized);
     };
@@ -395,7 +402,7 @@ export async function preloadLocalModel(
   const startedAt = performance.now();
   try {
     // QNBS-v3: Worker fallback must still make the download visible; otherwise Settings appears frozen.
-    inferenceProgressEmitter.reportWebLlmProgress(0, 'Preparing local model');
+    inferenceProgressEmitter.reportWebLlmProgress(0, 'Preparing local model', modelId);
     const reportProgress = (report: WebLlmProgressReport) => {
       const fraction = Number.isFinite(report.progress)
         ? Math.min(1, Math.max(0, report.progress))

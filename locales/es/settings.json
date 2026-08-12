@@ -159,6 +159,8 @@
   "settings.ai.localAi.downloadCancelled": "Descarga cancelada",
   "settings.ai.localAi.downloadEta": "aprox. {{seconds}} s restantes",
   "settings.ai.localAi.downloadFailed": "La descarga falló. Inténtalo de nuevo.",
+  "settings.ai.localAi.downloadSize": "{{loaded}} MB de {{total}} MB",
+  "settings.ai.localAi.downloadSpeed": "{{speed}} MB/s",
   "settings.ai.localAi.downloadTitle": "Descargando modelo de IA…",
   "settings.ai.localAi.downloadedLabel": "descargado",
   "settings.ai.localAi.downloadingButton": "Descargando…",
@@ -819,6 +821,8 @@
   "voice.modelDownload.description": "Descargando modelo {{model}} ({{size}} MB). Esto habilita el procesamiento de voz local sin enrutamiento en la nube.",
   "voice.modelDownload.error": "Descarga fallida: {{error}}",
   "voice.modelDownload.progress": "{{percent}}% completado",
+  "voice.modelDownload.progressBytes": "{{loaded}} MB de {{total}} MB",
   "voice.modelDownload.retry": "Reintentar",
+  "voice.modelDownload.speed": "{{speed}} MB/s",
   "voice.modelDownload.title": "Descarga de modelo de voz"
 }

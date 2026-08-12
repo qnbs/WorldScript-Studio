@@ -7,6 +7,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { settingsActions } from '../../features/settings/settingsSlice';
 import { useTranslation } from '../../hooks/useTranslation';
+import { formatMegabytes, formatMegabytesPerSecond } from '../../services/downloadProgressFormat';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { Progress } from '../ui/Progress';
@@ -31,10 +32,32 @@ export const VoiceModelDownloadModal = React.memo(function VoiceModelDownloadMod
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const progress = useAppSelector((s) => s.settings.voice.wasmModelDownloadProgress ?? 0);
+  // QNBS-v3 (#333 item 1): real bytes from transformers.js's own progress payload (not an
+  // approximation — see wasmModelDownloadLoadedBytes's doc comment in types.ts).
+  const loadedBytes = useAppSelector((s) => s.settings.voice.wasmModelDownloadLoadedBytes);
+  const totalBytes = useAppSelector((s) => s.settings.voice.wasmModelDownloadTotalBytes);
   const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // QNBS-v3: CodeAnt P2-3 — AbortController lets cancel button stop an in-flight download
   const abortRef = useRef<AbortController | null>(null);
+  // QNBS-v3 (#333 item 1): wall-clock speed, computed client-side from real loaded-bytes deltas —
+  // the service layer only reports cumulative bytes, not a rate.
+  const downloadStartMsRef = useRef<number | null>(null);
+  const [bytesPerSecond, setBytesPerSecond] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!isDownloading) {
+      downloadStartMsRef.current = null;
+      setBytesPerSecond(null);
+      return;
+    }
+    if (downloadStartMsRef.current == null) {
+      downloadStartMsRef.current = Date.now();
+    }
+    if (loadedBytes == null) return;
+    const elapsedSeconds = (Date.now() - downloadStartMsRef.current) / 1000;
+    setBytesPerSecond(elapsedSeconds > 0.5 ? loadedBytes / elapsedSeconds : null);
+  }, [isDownloading, loadedBytes]);
 
   const handleDownload = useCallback(async () => {
     const ctrl = new AbortController();
@@ -87,6 +110,20 @@ export const VoiceModelDownloadModal = React.memo(function VoiceModelDownloadMod
   const modelName = modelType === 'stt' ? 'Whisper (STT)' : 'Kokoro (TTS)';
   const modelSize = modelType === 'stt' ? MODEL_SIZES.whisper : MODEL_SIZES.kokoro;
 
+  // QNBS-v3 (#333 item 1): real byte counts once the first progress tick with them has arrived;
+  // MODEL_SIZES above is only the pre-download estimate shown in the description text.
+  const sizeText =
+    loadedBytes != null && totalBytes != null
+      ? t('voice.modelDownload.progressBytes', {
+          loaded: formatMegabytes(loadedBytes),
+          total: formatMegabytes(totalBytes),
+        })
+      : '';
+  const speedText =
+    bytesPerSecond != null
+      ? t('voice.modelDownload.speed', { speed: formatMegabytesPerSecond(bytesPerSecond) })
+      : '';
+
   return (
     <Modal
       isOpen={isOpen}
@@ -109,6 +146,12 @@ export const VoiceModelDownloadModal = React.memo(function VoiceModelDownloadMod
             <p className="text-xs text-[var(--sc-text-tertiary)]" aria-live="polite">
               {t('voice.modelDownload.progress', { percent: String(Math.round(progress * 100)) })}
             </p>
+            {(sizeText || speedText) && (
+              <p className="flex justify-between text-xs text-[var(--sc-text-tertiary)]">
+                <span>{sizeText}</span>
+                {speedText && <span>{speedText}</span>}
+              </p>
+            )}
           </>
         )}
 

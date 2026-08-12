@@ -605,10 +605,28 @@ export class VoiceCommandService {
         onProgress: (progress: unknown) => {
           if (signal?.aborted) return;
           const p = progress as { progress?: number; loaded?: number; total?: number };
-          const pct = p.progress ?? (p.loaded && p.total ? p.loaded / p.total : 0);
+          // QNBS-v3 (#333 item 1): transformers.js's own `progress` field is 0-100 (percent), NOT a
+          // 0-1 fraction — verified against its readResponse() source (`progress = loaded/total*100`).
+          // The prior `p.progress ?? ...` fallback used it as-is, so `Math.min(0.95, pct)` clamped to
+          // 0.95 almost immediately (any progress > 0.95%, i.e. after the very first chunk), making
+          // the bar look stuck/frozen for the entire download. Prefer the real loaded/total ratio —
+          // it's also what the new byte-level UI needs — and only fall back to progress/100.
+          const hasBytes =
+            typeof p.loaded === 'number' && typeof p.total === 'number' && p.total > 0;
+          const pct = hasBytes
+            ? (p.loaded as number) / (p.total as number)
+            : typeof p.progress === 'number'
+              ? p.progress / 100
+              : 0;
           this.d(
             settingsActions.setVoiceSettings({
               wasmModelDownloadProgress: Math.min(0.95, pct),
+              ...(hasBytes
+                ? {
+                    wasmModelDownloadLoadedBytes: p.loaded,
+                    wasmModelDownloadTotalBytes: p.total,
+                  }
+                : {}),
             }),
           );
         },
