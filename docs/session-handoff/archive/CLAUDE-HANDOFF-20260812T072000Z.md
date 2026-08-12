@@ -5,10 +5,15 @@
 - Captured UTC: `2026-08-12T00:20:00Z` (approximate — host clock/session
   timestamps drifted across this long session; treat as "just after the
   layering-mistake-#2 correction and the #336 12-finding CodeRabbit loop").
-- Mode: live working state. A Tauri desktop build dispatch (run
-  `31549539018`, against #336 `b01564ed`) and a CodeRabbit re-review
-  (`@coderabbitai review` on #336, currently **rate-limited**, not yet
-  produced a fresh pass) were both in flight when this document was written.
+  Note: the archive filename's `20260812T072000Z` records when this document
+  was *archived* (moved aside on supersession), not this original capture
+  time — the two intentionally differ.
+- Mode: this document was edited across a span of live work; by the time it
+  was finished both the Tauri desktop build (run `31549539018`, against
+  `#336` `b01564ed`) and the CodeRabbit rate-limit had resolved — **build
+  succeeded on all 3 platforms, CodeRabbit's fresh review completed with 0
+  new findings** — see § 2 and § 15 below for the final, correct state; do
+  not trust this line's earlier "in flight" wording in isolation.
 - Evidence labels: **LIVE FACT** = command/API evidence at capture;
   **HISTORICAL FACT** = retained provenance; **UNVERIFIED** = no closure
   claim.
@@ -58,7 +63,7 @@ wave (QNBS-v3 formatting ×2 batches, the abort-failure bug, and i18n
 translation gaps across 9 locales — § 6), and **fully reconciled PR #310's
 review-thread queue** — all 28 previously-unresolved threads (of 317 total)
 replied to citing the specific replacement code/test and resolved, bringing
-#310 to 0/317 unresolved (§ 9).
+`#310` to 0/317 unresolved (§ 9).
 
 Legacy PR #310 remains open and must neither be merged nor closed as
 superseded yet — its review-thread queue is now fully reconciled (§ 9), but
@@ -67,11 +72,12 @@ packaged-replacement verification are not yet complete. #332/#333 remain
 open with no packaged `.deb` evidence — explicitly deferred again.
 
 **Standing merge authorization**: the user has authorized merging the
-#335→#336→#337 stack into `main` once every PR reaches review-thread
-quiescence and CI is green, without asking again, provided none of the
-NO-GO conditions in § 19 are triggered. **As of this capture, NOT satisfied**
-— specifically because of the one unconfirmed CodeRabbit item above, plus
-the unchanged #310 (commit/behavior/test tables)/#332/#333 NO-GO conditions.
+`#335` → `#336` → `#337` stack into `main` once every PR reaches
+review-thread quiescence and CI is green, without asking again, provided
+none of the NO-GO conditions in § 19 are triggered. **As of this capture,
+NOT satisfied** — specifically because of the one unconfirmed CodeRabbit
+item above, plus the unchanged `#310` (commit/behavior/test tables)/`#332`/`#333`
+NO-GO conditions.
 Do not merge until § 15 is re-checked clean and § 19's remaining conditions
 are independently resolved.
 
@@ -434,8 +440,8 @@ this — § 13 — every one of the 12 #336 threads and all 28 #310 threads
 closed this segment was verified against live code first, not just
 anchor-matched).
 
-**Net effect: the Rust-compile NO-GO condition is now closed. #310 and
-#332/#333 remain open NO-GO conditions.** The migration/session-race and
+**Net effect: the Rust-compile NO-GO condition is now closed. `#310` and
+`#332`/`#333` remain open NO-GO conditions.** The migration/session-race and
 silent-plaintext-downgrade conditions remain in their prior
 accepted/not-observed state.
 

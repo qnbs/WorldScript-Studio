@@ -104,8 +104,13 @@
 
 ## 5. The 3 Deliberately Unresolved Threads (real, deferred, not fixed)
 
-All three stem from the same root cause: **the migration journal system has
-no production trigger.**
+All three are independent code defects in the migration engine. They share
+one **reachability constraint** — the migration journal system has no
+production trigger today (§ 2) — but that absence is not their root cause
+and fixing it (wiring the system up) would not, by itself, fix any of them.
+Phase 4 must address both: build the missing disable/rotate-passphrase flow
+*and* fix these three defects before that flow can safely use the migration
+engine.
 
 1. **`services/storage/idbAssetStore.ts` (cross-tab write admission).**
    `assertNoActiveEncryptionMigration()` is preflight-only, not atomic with

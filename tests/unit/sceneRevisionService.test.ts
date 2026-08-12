@@ -122,8 +122,7 @@ describe('sceneRevisionService', () => {
   });
 
   it('opens the database connection only once for concurrent saves (single-flight)', async () => {
-    // QNBS-v3 regression: getDb() only cached the connection after its own open resolved, so
-    // concurrent callers each raced past the null check and opened a separate connection.
+    // QNBS-v3: Cover the race that opened multiple databases before the first connection was cached.
     const openSpy = vi.spyOn(indexedDB, 'open');
     await Promise.all(
       Array.from({ length: 10 }, (_, index) =>

@@ -49,11 +49,19 @@ function createBinderFakeStore(pending: Promise<void>[] = []) {
       const entries = [...binderStore.entries()];
       let index = 0;
       const req: Record<string, unknown> = { onsuccess: null, onerror: null, result: null };
+      // QNBS-v3: tracks the whole cursor walk (not just its first step) so the owning transaction's oncomplete waits for every continue()-driven iteration, matching the callers below that always continue to exhaustion.
+      let resolveCursorDone!: () => void;
+      pending.push(
+        new Promise<void>((resolve) => {
+          resolveCursorDone = resolve;
+        }),
+      );
 
       const advance = () => {
         if (index >= entries.length) {
           req['result'] = null;
           (req['onsuccess'] as ((e: Event) => void) | null)?.({} as Event);
+          resolveCursorDone();
           return;
         }
         const [key] = entries[index++] as [string, BinderRecord];
@@ -72,9 +80,7 @@ function createBinderFakeStore(pending: Promise<void>[] = []) {
   };
 }
 
-// QNBS-v3: builds a store whose .transaction back-reference resolves oncomplete once every
-// request synchronously queued in the current task has settled — mirrors real IDB transaction
-// batching (deleteAllBinderAssetsForProject relies on this) without needing fake-indexeddb.
+// QNBS-v3: complete the fake transaction after every queued request (including full cursor walks) settles, mirroring real IDB transaction batching.
 function createBinderFakeTransaction() {
   const pending: Promise<void>[] = [];
   const txn: Record<string, unknown> = {
