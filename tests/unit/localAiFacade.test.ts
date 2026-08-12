@@ -96,9 +96,7 @@ describe('localAiFacade', () => {
     const { generateLocalText } = await import('../../services/localAiFacade');
     const controller = new AbortController();
     await generateLocalText('prompt', 'model', undefined, undefined, controller.signal);
-    // QNBS-v3: generateLocalText always wraps onProgress in its own reportProgress closure (so
-    // inferenceProgressEmitter gets progress even when the caller passes no onProgress) — the 3rd
-    // arg is never the caller's raw undefined.
+    // QNBS-v3: generateLocalText always wraps onProgress in its own reportProgress closure, so the 3rd arg is never the caller's raw undefined even when no onProgress was passed.
     expect(mockRunLocalTextGeneration).toHaveBeenCalledWith(
       'prompt',
       'model',
@@ -238,8 +236,7 @@ describe('localAiFacade', () => {
       const progSpy = vi.spyOn(inferenceProgressEmitter, 'reportWebLlmProgress');
       const readySpy = vi.spyOn(inferenceProgressEmitter, 'reportWebLlmReady');
       const { generateLocalText } = await import('../../services/localAiFacade');
-      // QNBS-v3: reportToGlobalProgress:true simulates preloadLocalModel's call — the only caller
-      // that should drive the singleton emitter (see the ordinary-call test right below).
+      // QNBS-v3: reportToGlobalProgress:true simulates preloadLocalModel's call — the only caller that should drive the singleton emitter (see the ordinary-call test right below).
       await generateLocalText('prompt', 'm', undefined, undefined, undefined, {
         reportToGlobalProgress: true,
       });
@@ -253,8 +250,7 @@ describe('localAiFacade', () => {
   it(
     'does not touch the global download emitter for an ordinary generation call',
     withWorkerGlobal(async () => {
-      // QNBS-v3: regression test — an ordinary Writer/Copilot/ProForge call (no
-      // reportToGlobalProgress) must never make the global "downloading a model" modal appear.
+      // QNBS-v3: regression test — an ordinary Writer/Copilot/ProForge call (no reportToGlobalProgress) must never make the global "downloading a model" modal appear.
       mockDetectWebGpuSupport.mockReturnValue(true);
       mockEnsureWebLlmPool.mockResolvedValue(
         makeFakeBus({
@@ -326,9 +322,7 @@ describe('localAiFacade', () => {
   });
 
   it('a superseded preload settling late does not overwrite a newer preload modal state', async () => {
-    // QNBS-v3: regression test — retryLastPreload() starting a new attempt B while an older,
-    // cancelled/superseded attempt A's generateLocalText call is still settling must not let A's
-    // late error/reset/ready overwrite B's own progress once B has become the current attempt.
+    // QNBS-v3: regression test — retryLastPreload() starting attempt B while superseded attempt A's generateLocalText call is still settling must not let A's late error/reset/ready overwrite B's own progress.
     const { inferenceProgressEmitter } = await import('../../services/ai/inferenceProgressEmitter');
     const errorSpy = vi.spyOn(inferenceProgressEmitter, 'reportWebLlmError');
     const readySpy = vi.spyOn(inferenceProgressEmitter, 'reportWebLlmReady');
@@ -368,8 +362,7 @@ describe('localAiFacade', () => {
   });
 
   it('retryLastPreload throws when no preload has been requested yet', async () => {
-    // QNBS-v3: lastPreloadModelId is module-level state — reset the module so this observes the
-    // true initial value instead of whatever a prior test in this file already set it to.
+    // QNBS-v3: lastPreloadModelId is module-level state — reset the module so this observes the true initial value, not whatever a prior test in this file already set it to.
     vi.resetModules();
     const { retryLastPreload } = await import('../../services/localAiFacade');
     await expect(retryLastPreload()).rejects.toThrow(/no local model download/i);
@@ -391,9 +384,7 @@ describe('localAiFacade', () => {
   });
 
   it('resets the emitter (not error) when a caller-provided signal aborts the preload', async () => {
-    // QNBS-v3: regression test — a caller-provided AbortSignal (distinct from the modal's own
-    // Cancel button, which reports its own terminal state) previously left the emitter stuck in
-    // 'loading' since the catch block only suppressed the error report without resetting it.
+    // QNBS-v3: regression test — a caller-provided AbortSignal (distinct from the modal's own Cancel button) previously left the emitter stuck in 'loading' since the catch only suppressed the error report without resetting it.
     const { inferenceProgressEmitter } = await import('../../services/ai/inferenceProgressEmitter');
     const errorSpy = vi.spyOn(inferenceProgressEmitter, 'reportWebLlmError');
     const resetSpy = vi.spyOn(inferenceProgressEmitter, 'reset');
@@ -412,9 +403,7 @@ describe('localAiFacade', () => {
   });
 
   it('resets the emitter when a preload falls back off WebLLM (generateLocalText level)', async () => {
-    // QNBS-v3: regression test — generateLocalText itself must terminate 'loading' for any
-    // reportToGlobalProgress caller whose result isn't webllm, not only for preloadLocalModel's
-    // own outer handling (an ordinary caller that opted in would otherwise get stuck at 'loading').
+    // QNBS-v3: regression test — generateLocalText itself must terminate 'loading' for any reportToGlobalProgress caller whose result isn't webllm, not only for preloadLocalModel's own outer handling.
     mockRunLocalTextGeneration.mockResolvedValue({ layer: 'onnx', text: 'fallback' });
     const { inferenceProgressEmitter } = await import('../../services/ai/inferenceProgressEmitter');
     const resetSpy = vi.spyOn(inferenceProgressEmitter, 'reset');
