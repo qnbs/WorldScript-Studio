@@ -37,8 +37,8 @@ describe('loraTrainingService — web build (no Tauri)', () => {
     expect(result.message).toContain('desktop app');
   });
 
-  it('abortTraining is a no-op on web and reports no confirmed process', async () => {
-    await expect(abortTraining()).resolves.toBe(false);
+  it('abortTraining is a no-op on web and reports nothing to cancel', async () => {
+    await expect(abortTraining()).resolves.toBe('nothing_to_cancel');
   });
 
   it('generateOllamaModelfile returns valid template on web', async () => {
@@ -86,15 +86,22 @@ describe('loraTrainingService — Tauri desktop build', () => {
 
   it('passes through the native confirmed-process-stopped result', async () => {
     const { invoke } = await import('@tauri-apps/api/core');
-    vi.mocked(invoke).mockResolvedValueOnce(true);
-    await expect(abortTraining()).resolves.toBe(true);
+    vi.mocked(invoke).mockResolvedValueOnce('confirmed');
+    await expect(abortTraining()).resolves.toBe('confirmed');
   });
 
   it('passes through the native no-op result (nothing was actually running)', async () => {
-    // QNBS-v3: abort_lora_training resolves Ok(false), not an error, when there was nothing to cancel.
     const { invoke } = await import('@tauri-apps/api/core');
-    vi.mocked(invoke).mockResolvedValueOnce(false);
-    await expect(abortTraining()).resolves.toBe(false);
+    vi.mocked(invoke).mockResolvedValueOnce('nothing_to_cancel');
+    await expect(abortTraining()).resolves.toBe('nothing_to_cancel');
+  });
+
+  it('passes through the native pending-start-cancelled result', async () => {
+    // QNBS-v3 regression: a cancel during startup is a recorded cancellation, not a no-op — the
+    // caller must be able to tell it apart from 'nothing_to_cancel'.
+    const { invoke } = await import('@tauri-apps/api/core');
+    vi.mocked(invoke).mockResolvedValueOnce('pending_start_cancelled');
+    await expect(abortTraining()).resolves.toBe('pending_start_cancelled');
   });
 
   it('validates and persists an explicitly selected Python executable through the native resolver', async () => {

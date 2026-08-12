@@ -313,7 +313,9 @@ async function streamOpenAiCompatibleLocal(
   let buffer = '';
   // QNBS-v3: parses one accumulated SSE line into an onChunk call — shared by the loop below and
   // the final buffer flush after `done`, so the last frame (no trailing newline) isn't dropped.
-  const parseLine = (line: string) => {
+  const parseLine = (rawLine: string) => {
+    // QNBS-v3: trimEnd strips a trailing \r left by CRLF-terminated SSE streams before the prefix/DONE checks.
+    const line = rawLine.trimEnd();
     if (!line.startsWith('data: ') || line === 'data: [DONE]') return;
     try {
       const json: unknown = JSON.parse(line.slice(6));

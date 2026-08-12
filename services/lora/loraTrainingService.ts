@@ -103,11 +103,13 @@ export async function startTraining(
   }
 }
 
-/** Returns true only when a real process for the current run was found and confirmed terminated. */
-export async function abortTraining(): Promise<boolean> {
-  if (!isTauri()) return false;
+// QNBS-v3: three-way, not boolean — 'pending_start_cancelled' means the run was still starting (no process yet) but the cancellation was recorded and the pending native call will reject with training_cancelled, unlike 'nothing_to_cancel' which is a true no-op.
+export type AbortTrainingOutcome = 'confirmed' | 'pending_start_cancelled' | 'nothing_to_cancel';
+
+export async function abortTraining(): Promise<AbortTrainingOutcome> {
+  if (!isTauri()) return 'nothing_to_cancel';
   try {
-    return await tauriInvoke<boolean>('abort_lora_training');
+    return await tauriInvoke<AbortTrainingOutcome>('abort_lora_training');
   } catch (err) {
     logger.warn('loraTrainingService: abort failed', { err });
     // QNBS-v3: A native cancellation failure must reach the thunk so UI state never claims an orphan process stopped.

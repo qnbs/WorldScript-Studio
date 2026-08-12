@@ -486,6 +486,33 @@ describe('streamText — LM Studio/vLLM/custom OpenAI-compatible local streaming
     expect(chunks).toEqual(['Hello', ' world']);
   });
 
+  it('parses SSE frames terminated with Windows-style CRLF line endings', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    mockPluginHttpFetch.mockResolvedValueOnce(
+      new Response(
+        'data: {"choices":[{"delta":{"content":"Hello"}}]}\r\n' +
+          'data: {"choices":[{"delta":{"content":" world"}}]}\r\n' +
+          'data: [DONE]\r\n',
+        { status: 200 },
+      ),
+    );
+    const chunks: string[] = [];
+
+    await streamText(
+      'Continue this scene',
+      'Balanced',
+      {
+        provider: 'ollama',
+        model: 'ollama/local-model',
+        ollamaBaseUrl: 'http://localhost:1234',
+        localBackendPreset: 'lm_studio',
+      },
+      { onChunk: (chunk) => chunks.push(chunk) },
+    );
+
+    expect(chunks).toEqual(['Hello', ' world']);
+  });
+
   it('resolves a blank ollamaBaseUrl to the same default diagnostics use, not an app-relative URL', async () => {
     (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
     mockPluginHttpFetch.mockResolvedValueOnce(
