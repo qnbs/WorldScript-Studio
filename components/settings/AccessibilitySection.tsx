@@ -166,6 +166,11 @@ export const AccessibilitySection: FC = () => {
               onChange={(v) => patchA11y({ reducedMotion: v })}
             />
             <ToggleSwitch
+              label={t('settings.accessibility.reducedTransparency')}
+              checked={accessibility.reducedTransparency}
+              onChange={(v) => patchA11y({ reducedTransparency: v })}
+            />
+            <ToggleSwitch
               label={t('settings.accessibility.largeText')}
               checked={accessibility.largeText}
               onChange={(v) => patchA11y({ largeText: v })}

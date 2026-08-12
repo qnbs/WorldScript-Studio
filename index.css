@@ -1011,15 +1011,34 @@ body.is-desktop
 
 /* QNBS-v3 (D4 / C-6): honor the OS reduced-transparency accessibility preference
    on desktop by making the token-driven glass layer opaque (drops the GPU cost of
-   compositing translucent surfaces). NOTE: components that apply `backdrop-blur-*`
-   Tailwind utilities directly are not covered here — consolidating those onto the
-   `--glass-*` token layer is the remaining C-6 work (see docs/DESKTOP-UI-AUDIT.md). */
+   compositing translucent surfaces). QNBS-v3 (#332/D4): also neutralize direct
+   `backdrop-blur-*` Tailwind utilities (24 files, incl. shared Input/Textarea/Checkbox/
+   RadioGroup/Card/Modal/Drawer/Toast primitives) via an attribute selector — the token
+   swap above never touched these since they're static utility classes, not token-driven.
+   No `!important` needed: Tailwind v4's `@import "tailwindcss"` emits utilities inside a
+   `utilities` cascade layer, and unlayered CSS (this file's plain rules) always outranks
+   any layered rule regardless of specificity or source order. */
 @media (prefers-reduced-transparency: reduce) {
   body.is-desktop {
     --glass-bg: var(--sc-surface-raised);
     --glass-bg-hover: var(--sc-surface-overlay);
     --glass-border: var(--sc-border-subtle);
   }
+  body.is-desktop [class*="backdrop-blur-"] {
+    backdrop-filter: none;
+  }
+}
+
+/* QNBS-v3 (#332/D4): manual "Reduce transparency effects" toggle (Settings › Accessibility) —
+   a self-service relief valve for desktop/Linux users whose OS/DE doesn't expose
+   `prefers-reduced-transparency`, without waiting on a packaged-build performance measurement. */
+body.worldscript-reduced-transparency {
+  --glass-bg: var(--sc-surface-raised);
+  --glass-bg-hover: var(--sc-surface-overlay);
+  --glass-border: var(--sc-border-subtle);
+}
+body.worldscript-reduced-transparency [class*="backdrop-blur-"] {
+  backdrop-filter: none;
 }
 
 /* QNBS-v3 (PR2): scoped typography for the Export view's "Rendered" preview. DOMPurify strips

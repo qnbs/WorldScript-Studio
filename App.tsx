@@ -2,6 +2,7 @@ import type { FC } from 'react';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'react-redux';
 import { useAppDispatch, useAppSelector } from './app/hooks';
+import { flushPersistedState } from './app/persistedStateFlush';
 import type { RootState } from './app/store';
 import { useTransientUiStore } from './app/transientUiStore';
 import { AnalyticsBootstrap } from './components/AnalyticsBootstrap';
@@ -273,6 +274,16 @@ const App: FC<AppProps> = ({ isNewUser }) => {
       settings.accessibility.reducedMotion,
     );
   }, [settings.accessibility.reducedMotion]);
+
+  // QNBS-v3 (#332/D4): manual relief valve for backdrop-blur GPU cost, mirroring reducedMotion above —
+  // the OS `prefers-reduced-transparency` CSS block already covers automatic detection; this covers
+  // users whose OS/DE doesn't expose that preference (e.g. some Linux/Wayland setups).
+  useEffect(() => {
+    document.body.classList.toggle(
+      'worldscript-reduced-transparency',
+      settings.accessibility.reducedTransparency,
+    );
+  }, [settings.accessibility.reducedTransparency]);
 
   // QNBS-v3: Barrierefreiheits-Toggles → dokumentweite Klassen (Tokens in index.css).
   useEffect(() => {
@@ -598,6 +609,8 @@ const App: FC<AppProps> = ({ isNewUser }) => {
       // Defensive read — imported/malformed persisted settings can leave `desktop` null/undefined,
       // which would crash the close handler; default to false (don't trap the window).
       () => (store.getState() as RootState).settings.desktop?.minimizeToTray ?? false,
+      // QNBS-v3 (#332/D3): flush pending project/settings state before a real quit proceeds.
+      () => flushPersistedState(store.getState() as RootState),
     ).then((fn) => {
       if (cancelled) {
         fn?.();

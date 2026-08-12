@@ -395,46 +395,84 @@ export const useSettingsView = () => {
     [passphraseModal, dispatch, toast, t],
   );
 
-  return {
-    t,
-    language,
-    settings,
-    featureFlags,
-    project,
-    activeCategory,
-    setActiveCategory,
-    modal,
-    setModal,
-    importFileRef,
-    snapshots,
-    snapshotName,
-    setSnapshotName,
-    handleLanguageChange,
-    handleSettingChange,
-    handleExport,
-    handleImport,
-    handleResetProject,
-    handleFactoryReset,
-    handleRepeatOnboarding,
-    handleCreateSnapshot,
-    handleRestoreSnapshot,
-    handleDeleteSnapshot,
-    projectSize,
-    currentWordCount,
-    passphraseModal,
-    setPassphraseModal,
-    encryptionReady,
-    handlePassphraseConfirm,
-    handleLockSession: useCallback(() => {
-      clearIdbEncryptionKey();
-      setEncryptionReady(false);
-      toast.info(t('settings.privacy.encryptionLockedStatus'));
-      // QNBS-v3: without this, a subsequent autosave silently fails closed (no route back to the
-      // unlock UI existed) until the user manually reopens Settings and unlocks — surface the same
-      // global unlock modal App.tsx shows on a locked cold start.
-      setIdbUnlockOpen(true);
-    }, [toast, t, setIdbUnlockOpen]),
-  };
+  const handleLockSession = useCallback(() => {
+    clearIdbEncryptionKey();
+    setEncryptionReady(false);
+    toast.info(t('settings.privacy.encryptionLockedStatus'));
+    // QNBS-v3: without this, a subsequent autosave silently fails closed (no route back to the
+    // unlock UI existed) until the user manually reopens Settings and unlocks — surface the same
+    // global unlock modal App.tsx shows on a locked cold start.
+    setIdbUnlockOpen(true);
+  }, [toast, t, setIdbUnlockOpen]);
+
+  // QNBS-v3 (#332/D5): stabilize the context value's identity — without this, every render of
+  // SettingsView (even ones caused by unrelated global state, e.g. a background AI/autosave write)
+  // handed SettingsViewContext a brand-new object, forcing every consumer in the Settings tree to
+  // re-render regardless of whether anything Settings-relevant actually changed. `project` (and its
+  // dependents `characters`/`worlds`/`projectSize`/`currentWordCount`) is a real dependency here, not
+  // spurious — handleExport/handleCreateSnapshot need the current project — so it still re-memoizes
+  // on genuine project edits; this only removes re-renders that weren't tied to any of these.
+  return useMemo(
+    () => ({
+      t,
+      language,
+      settings,
+      featureFlags,
+      project,
+      activeCategory,
+      setActiveCategory,
+      modal,
+      setModal,
+      importFileRef,
+      snapshots,
+      snapshotName,
+      setSnapshotName,
+      handleLanguageChange,
+      handleSettingChange,
+      handleExport,
+      handleImport,
+      handleResetProject,
+      handleFactoryReset,
+      handleRepeatOnboarding,
+      handleCreateSnapshot,
+      handleRestoreSnapshot,
+      handleDeleteSnapshot,
+      projectSize,
+      currentWordCount,
+      passphraseModal,
+      setPassphraseModal,
+      encryptionReady,
+      handlePassphraseConfirm,
+      handleLockSession,
+    }),
+    [
+      t,
+      language,
+      settings,
+      featureFlags,
+      project,
+      activeCategory,
+      modal,
+      snapshots,
+      snapshotName,
+      handleLanguageChange,
+      handleSettingChange,
+      handleExport,
+      handleImport,
+      handleResetProject,
+      handleFactoryReset,
+      handleRepeatOnboarding,
+      handleCreateSnapshot,
+      handleRestoreSnapshot,
+      handleDeleteSnapshot,
+      projectSize,
+      currentWordCount,
+      passphraseModal,
+      encryptionReady,
+      handlePassphraseConfirm,
+      handleLockSession,
+    ],
+  );
 };
 
 export type UseSettingsViewReturnType = ReturnType<typeof useSettingsView>;

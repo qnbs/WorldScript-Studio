@@ -117,19 +117,27 @@ export async function installDesktopTray(
  * Intercept the window close button: when `shouldMinimizeToTray()` is true, hide to the tray instead
  * of quitting. Returns an unlisten fn (or null on web / failure). The getter is read live so a
  * settings change takes effect without re-registering.
+ *
+ * QNBS-v3 (#332/D3): when the window is actually allowed to close (minimize-to-tray off, the
+ * default), `flushPendingState` is awaited first — Tauri's `onCloseRequested` supports and awaits
+ * async handlers before the window closes — so the 1s debounced project/settings autosave can't be
+ * silently dropped by a quit that lands mid-debounce.
  */
 export async function installCloseToTray(
   shouldMinimizeToTray: () => boolean,
+  flushPendingState: () => Promise<void>,
 ): Promise<(() => void) | null> {
   if (!isTauriRuntime()) return null;
   try {
     const { getCurrentWindow } = await import('@tauri-apps/api/window');
     const win = getCurrentWindow();
-    return await win.onCloseRequested((event) => {
+    return await win.onCloseRequested(async (event) => {
       if (shouldMinimizeToTray()) {
         event.preventDefault();
         void win.hide();
+        return;
       }
+      await flushPendingState();
     });
   } catch (err) {
     log.warn('Failed to install close-to-tray handler', { error: String(err) });

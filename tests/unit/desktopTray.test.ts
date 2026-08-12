@@ -19,7 +19,7 @@ const h = vi.hoisted(() => ({
     action?: (e: { type: string; button?: string }) => void;
   } | null,
   setVisible: vi.fn(),
-  closeCb: null as ((e: { preventDefault: () => void }) => void) | null,
+  closeCb: null as ((e: { preventDefault: () => void }) => void | Promise<void>) | null,
   hide: vi.fn(),
   setMenu: vi.fn(),
   setTooltip: vi.fn(),
@@ -53,10 +53,12 @@ vi.mock('@tauri-apps/api/menu', () => ({
 vi.mock('@tauri-apps/api/app', () => ({ defaultWindowIcon: vi.fn(async () => null) }));
 vi.mock('@tauri-apps/api/window', () => ({
   getCurrentWindow: () => ({
-    onCloseRequested: vi.fn(async (cb: (e: { preventDefault: () => void }) => void) => {
-      h.closeCb = cb;
-      return () => {};
-    }),
+    onCloseRequested: vi.fn(
+      async (cb: (e: { preventDefault: () => void }) => void | Promise<void>) => {
+        h.closeCb = cb;
+        return () => {};
+      },
+    ),
     hide: () => h.hide(),
   }),
 }));
@@ -138,22 +140,49 @@ describe('installCloseToTray', () => {
 
   it('returns null on the web', async () => {
     h.isTauri.value = false;
-    expect(await installCloseToTray(() => true)).toBeNull();
+    expect(await installCloseToTray(() => true, vi.fn())).toBeNull();
   });
 
-  it('hides + prevents close when minimizeToTray is on', async () => {
-    await installCloseToTray(() => true);
+  it('hides + prevents close when minimizeToTray is on, without flushing', async () => {
+    const flush = vi.fn(async () => {});
+    await installCloseToTray(() => true, flush);
     const preventDefault = vi.fn();
-    h.closeCb?.({ preventDefault });
+    await h.closeCb?.({ preventDefault });
     expect(preventDefault).toHaveBeenCalled();
     expect(h.hide).toHaveBeenCalled();
+    expect(flush).not.toHaveBeenCalled();
   });
 
   it('lets the window close when minimizeToTray is off', async () => {
-    await installCloseToTray(() => false);
+    const flush = vi.fn(async () => {});
+    await installCloseToTray(() => false, flush);
     const preventDefault = vi.fn();
-    h.closeCb?.({ preventDefault });
+    await h.closeCb?.({ preventDefault });
     expect(preventDefault).not.toHaveBeenCalled();
     expect(h.hide).not.toHaveBeenCalled();
+  });
+
+  it('awaits the flush callback before letting the window close (QNBS-v3 #332/D3)', async () => {
+    let resolveFlush: (() => void) | undefined;
+    const flush = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveFlush = resolve;
+        }),
+    );
+    await installCloseToTray(() => false, flush);
+    const preventDefault = vi.fn();
+    const closePromise = h.closeCb?.({ preventDefault }) as Promise<void> | undefined;
+    expect(flush).toHaveBeenCalledTimes(1);
+    // The handler is still pending until the flush resolves.
+    let settled = false;
+    void closePromise?.then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    resolveFlush?.();
+    await closePromise;
+    expect(settled).toBe(true);
   });
 });

@@ -11,6 +11,14 @@ describe('accessibilitySchema', () => {
     expect(a.liveRegionVerbosity).toBe('normal');
     expect(a.comfortableTargets).toBe(false);
     expect(a.focusIndicators).toBe(true);
+    // QNBS-v3 (#332/D4): manual reduced-transparency toggle defaults off — it must not silently
+    // change anyone's visual design on upgrade.
+    expect(a.reducedTransparency).toBe(false);
+  });
+
+  it('preserves an explicitly persisted reducedTransparency value over the default', () => {
+    const a = normalizeAccessibilitySettings({ reducedTransparency: true });
+    expect(a.reducedTransparency).toBe(true);
   });
 
   it('motor preset enables comfortable targets and large text', () => {

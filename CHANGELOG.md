@@ -26,6 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the race where an ordinary protected write could commit after a migration had already claimed
   ownership of the same store, which could otherwise land ciphertext under a superseded
   key/generation. (#339)
+- **Manual "Reduce transparency effects" accessibility toggle** (Settings › Accessibility,
+  `accessibility.reducedTransparency`, default off) — strips `backdrop-blur-*` GPU compositing
+  everywhere, for desktop/Linux users whose window manager doesn't expose the OS-level
+  `prefers-reduced-transparency` preference that the existing automatic mitigation relies on.
+  (#332)
 
 ### Changed
 
@@ -60,6 +65,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Migration verification no longer re-scans already-verified stores on resume**, and a batch that
   reports progress without advancing its durable cursor is now rejected instead of being able to
   replay the same records indefinitely. (#337)
+- **Desktop (Tauri) build never read persisted state back at cold boot.** The app's boot-time
+  hydration called the raw IndexedDB-only `dbService.loadState()` unconditionally, with zero Tauri
+  branching, while every save path already routed through the Tauri-aware `storageService` — every
+  desktop launch loaded as a brand-new user regardless of what was actually saved to disk (a strict
+  superset of the reported "appearance preference doesn't persist" symptom). Boot-time hydration
+  (`services/appBootstrap.ts`) now mirrors the save path, branching on `isTauriRuntime()`. The
+  first-ever-launch settings default (`appearancePreset`) is also reconciled between
+  `idbProjectStore.ts`'s normalizer and `settingsSlice.ts`'s deliberate `'sepia'` initial state, and
+  quitting the desktop window now awaits any pending 1s-debounced project/settings autosave
+  (`services/desktop/desktopTray.ts`) before the process actually exits, instead of allowing a quit
+  to land mid-debounce and silently drop the last edit. (#332)
+- **`SettingsView` re-rendered its entire tree on every unrelated Redux state change** —
+  `useSettingsView`'s return value was a fresh object every render (no memoization), so any
+  background write anywhere in the app (autosave, AI copilot, progress tracker) forced every
+  Settings component to re-render even while a completely different view was in the foreground. The
+  context value is now memoized against its actual dependencies. (#332)
 
 ### Docs
 
