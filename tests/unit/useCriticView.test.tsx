@@ -79,7 +79,13 @@ describe('useCriticView', () => {
     expect(mockGenerateText).toHaveBeenCalledWith(
       'mock-prompt',
       mockState.aiCreativity,
-      expect.objectContaining({ provider: 'gemini', model: 'gemini-2.5-flash' }),
+      expect.objectContaining({
+        provider: 'gemini',
+        model: 'gemini-2.5-flash',
+        // QNBS-v3: regression — LM Studio/vLLM/custom local backends silently fell back to the
+        // Ollama-native protocol here since this field was previously omitted.
+        localBackendPreset: 'ollama_default',
+      }),
       expect.any(AbortSignal),
     );
     expect(result.current.analysisResult).toBe('AI critique result');

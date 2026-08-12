@@ -13,6 +13,7 @@ import loraReducer, {
   setActiveAdapter,
   setIsBuilding,
   trainingAborted,
+  trainingCancellationRequested,
   trainingCompleted,
   trainingFailed,
   trainingProgress,
@@ -118,6 +119,18 @@ describe('loraSlice — training state machine', () => {
     const s1 = loraReducer(s0, trainingAborted());
     expect(s1.currentRun).toBeNull();
     expect(s1.runHistory[0]!.status).toBe('aborted');
+  });
+
+  it('trainingCancellationRequested flags the active run without changing its status', () => {
+    const s0 = loraReducer(initial, trainingStarted(runPayload));
+    const s1 = loraReducer(s0, trainingCancellationRequested());
+    expect(s1.currentRun?.cancellationRequested).toBe(true);
+    expect(s1.currentRun?.status).toBe('training');
+  });
+
+  it('trainingCancellationRequested is a no-op when there is no active run', () => {
+    const s1 = loraReducer(initial, trainingCancellationRequested());
+    expect(s1.currentRun).toBeNull();
   });
 });
 

@@ -7,7 +7,7 @@ import type { WebGpuAdapterInfo } from '../../services/ai/webGpuDetectorService'
 import { detectWebGpuDetails } from '../../services/ai/webGpuDetectorService';
 import {
   type LocalEndpointScanResult,
-  listOllamaModels,
+  listLocalBackendModels,
   scanLocalOpenAiCompatibleEndpoints,
   testAIConnection,
 } from '../../services/aiProviderService';
@@ -22,6 +22,62 @@ import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Spinner } from '../ui/Spinner';
 import { AnthropicProviderFields } from './AnthropicProviderFields';
+
+// QNBS-v3: extracted out of AiProviderCard to keep its cognitive complexity under the CI
+// threshold — this effect's only job is invalidating stale in-flight tests/model-loads when the
+// connection context changes (none of the five values need to be READ, only reacted to).
+function useConnectionContextReset(
+  testRequestIdRef: React.MutableRefObject<number>,
+  setTestStatus: (status: 'idle') => void,
+  setTestError: (error: string) => void,
+  setIsLoadingModels: (loading: false) => void,
+  setOllamaModels: (models: string[]) => void,
+  provider: AIProvider,
+  ollamaBaseUrl: string,
+  localBackendPreset: LocalBackendPreset,
+  openAiCompatibleBaseUrl: string,
+  browserOllamaEnabled: boolean,
+) {
+  useEffect(() => {
+    void provider;
+    void ollamaBaseUrl;
+    void localBackendPreset;
+    void openAiCompatibleBaseUrl;
+    void browserOllamaEnabled;
+    testRequestIdRef.current += 1;
+    setTestStatus('idle');
+    setTestError('');
+    // QNBS-v3: without this, a model-load left in flight when the context changes never gets
+    // reset (its own stale-check skips setIsLoadingModels(false) too) and the button stays
+    // permanently disabled until another load happens to be triggered.
+    setIsLoadingModels(false);
+    // QNBS-v3: without this, the previous backend's model buttons stay rendered until a new load
+    // completes — a user can select a model id that doesn't exist on the newly selected server.
+    setOllamaModels([]);
+  }, [
+    testRequestIdRef,
+    setTestStatus,
+    setTestError,
+    setIsLoadingModels,
+    setOllamaModels,
+    provider,
+    ollamaBaseUrl,
+    localBackendPreset,
+    openAiCompatibleBaseUrl,
+    browserOllamaEnabled,
+  ]);
+}
+
+// QNBS-v3: converts an inline `if (requestIdRef.current === requestId) apply()` guard into a
+// function call — extracted (like the hook above) purely to keep AiProviderCard's own cognitive
+// complexity under the CI threshold; each inline guard counted as a branch against it.
+function applyIfCurrent(
+  requestIdRef: React.MutableRefObject<number>,
+  requestId: number,
+  apply: () => void,
+): void {
+  if (requestIdRef.current === requestId) apply();
+}
 
 interface AiProviderCardProps {
   advancedAi: AdvancedAiSettings;
@@ -71,13 +127,54 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
   const [isSavingKey, setIsSavingKey] = useState(false);
   const [scanBusy, setScanBusy] = useState(false);
   const [scanRows, setScanRows] = useState<LocalEndpointScanResult[]>([]);
-  // QNBS-v3: GPU probe runs once when WebLLM tab is selected — no polling.
-  const [gpuInfo, setGpuInfo] = useState<WebGpuAdapterInfo | null>(null);
+  // QNBS-v3: GPU probe runs once when WebLLM tab is selected — no polling. Default 'unknown'
+  // (not null) so "never tested" and "tested, inconclusive" render identically without a
+  // separate null-check — isProbingGpu below is what distinguishes "actively checking".
+  const [gpuInfo, setGpuInfo] = useState<WebGpuAdapterInfo>({ status: 'unknown' });
+  // QNBS-v3: without this, the WebGPU badge rendered a permanent spinner until the user clicked
+  // Test Connection, since gpuInfo had no other signal for "a probe is currently running".
+  const [isProbingGpu, setIsProbingGpu] = useState(false);
   // QNBS-v3 (CodeRabbit CWE-209): monotonic guard against a stale in-flight test result
   // (button click or the auto-test effect) overwriting state after the provider/desktop
   // context has since moved on — e.g. a switch to Ollama-in-browser must not let an older
   // request's raw error text land in testError once ollamaUntestable becomes true.
   const testRequestIdRef = useRef(0);
+
+  // QNBS-v3: any connection-context change invalidates in-flight tests/model-loads — without this,
+  // only an explicit second handleTest() call bumped the guard, so editing the endpoint/preset/URL
+  // mid-request let a stale response land under the new context. Also replaces the old
+  // key={provider} remount (which discarded unsaved openaiKey/grokKey/anthropicKey input).
+  useConnectionContextReset(
+    testRequestIdRef,
+    setTestStatus,
+    setTestError,
+    setIsLoadingModels,
+    setOllamaModels,
+    provider,
+    ollamaBaseUrl,
+    advancedAi.localBackendPreset,
+    advancedAi.openAiCompatibleBaseUrl,
+    browserOllamaEnabled,
+  );
+
+  // QNBS-v3: shared by the auto-probe effect below and the manual Test Connection click.
+  const probeWebGpu = useCallback((requestId: number) => {
+    setIsProbingGpu(true);
+    void detectWebGpuDetails()
+      .then((info) => applyIfCurrent(testRequestIdRef, requestId, () => setGpuInfo(info)))
+      .catch(() =>
+        applyIfCurrent(testRequestIdRef, requestId, () => setGpuInfo({ status: 'unknown' })),
+      )
+      .finally(() => applyIfCurrent(testRequestIdRef, requestId, () => setIsProbingGpu(false)));
+  }, []);
+
+  // QNBS-v3 regression: restores the auto-probe-on-selection UX lost when an earlier commit removed
+  // the combined ollama+webllm auto-test effect — WebGPU detection is a local hardware check, not a
+  // network request, so the CORS/privacy rationale for dropping the Ollama auto-test doesn't apply.
+  // Runs after useConnectionContextReset's bump above so it always reads the current request id.
+  useEffect(() => {
+    if (provider === 'webllm') probeWebGpu(testRequestIdRef.current);
+  }, [provider, probeWebGpu]);
 
   useEffect(() => {
     storageService
@@ -143,24 +240,29 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
       setOllamaModels([]);
       return;
     }
+    // QNBS-v3: capture, don't increment — the context-change effect above owns invalidation; this
+    // only needs to detect whether ITS OWN in-flight request is still current before applying it.
+    const requestId = testRequestIdRef.current;
     setIsLoadingModels(true);
     try {
-      const models = await listOllamaModels(ollamaBaseUrl);
-      setOllamaModels(models);
+      const models = await listLocalBackendModels(ollamaBaseUrl, advancedAi.localBackendPreset);
+      applyIfCurrent(testRequestIdRef, requestId, () => setOllamaModels(models));
     } catch {
-      setOllamaModels([]);
+      applyIfCurrent(testRequestIdRef, requestId, () => setOllamaModels([]));
     } finally {
-      setIsLoadingModels(false);
+      applyIfCurrent(testRequestIdRef, requestId, () => setIsLoadingModels(false));
     }
-  }, [ollamaBaseUrl, browserOllamaEnabled]);
+  }, [ollamaBaseUrl, advancedAi.localBackendPreset, browserOllamaEnabled]);
 
   const handleTest = useCallback(async () => {
     const requestId = ++testRequestIdRef.current;
     setTestStatus('loading');
     setTestError('');
+    if (provider === 'webllm') probeWebGpu(requestId);
     try {
       const result = await testAIConnection(provider, {
         ollamaBaseUrl,
+        localBackendPreset: advancedAi.localBackendPreset,
         openAiCompatibleBaseUrl: advancedAi.openAiCompatibleBaseUrl,
         browserOllamaEnabled,
       });
@@ -183,7 +285,15 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
       setTestStatus('error');
       setTestError(e instanceof Error ? e.message : t('settings.ai.unknownError'));
     }
-  }, [provider, ollamaBaseUrl, advancedAi.openAiCompatibleBaseUrl, browserOllamaEnabled, t]);
+  }, [
+    provider,
+    ollamaBaseUrl,
+    advancedAi.localBackendPreset,
+    advancedAi.openAiCompatibleBaseUrl,
+    browserOllamaEnabled,
+    probeWebGpu,
+    t,
+  ]);
 
   const handleScanLocals = useCallback(async () => {
     setScanBusy(true);
@@ -207,25 +317,6 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
     },
     [onAdvancedAiPatch],
   );
-
-  useEffect(() => {
-    // QNBS-v3 (CodeRabbit CWE-209): invalidate any in-flight test from the previous provider
-    // context before deciding whether to start a new one.
-    testRequestIdRef.current++;
-    // QNBS-v3 (#266, ADR-0017): the ollama auto-probe (models + connection test) only runs on
-    // desktop, or in the browser when the user has explicitly opted into browserOllamaEnabled. In
-    // the plain PWA it fired CORS-blocked localhost requests on every settings visit.
-    if (provider === 'ollama' && canAttemptOllama) {
-      void handleLoadOllamaModels();
-      void handleTest();
-    } else if (provider === 'webllm') {
-      void handleTest();
-      // QNBS-v3: Probe WebGPU once on WebLLM selection; result shown as status badge.
-      detectWebGpuDetails()
-        .then(setGpuInfo)
-        .catch(() => setGpuInfo({ status: 'unknown' }));
-    }
-  }, [provider, canAttemptOllama, handleLoadOllamaModels, handleTest]);
 
   const providers: { id: AIProvider; label: string }[] = [
     { id: 'gemini', label: t('settings.ai.provider.gemini') },
@@ -296,7 +387,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
                 <>
                   {testStatus === 'ok' && t('settings.ai.providerStatusConnected')}
                   {testStatus === 'error' && t('settings.ai.providerStatusDisconnected')}
-                  {testStatus === 'idle' && t('settings.ai.providerStatusReady')}
+                  {testStatus === 'idle' && t('settings.ai.providerStatusNotTested')}
                 </>
               )}
             </span>
@@ -496,12 +587,12 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
                 id="ollama-server-url"
                 placeholder="http://localhost:11434"
                 value={ollamaBaseUrl}
-                onChange={(e) =>
-                  onAdvancedAiPatch({
-                    ollamaBaseUrl: e.target.value,
-                    localBackendPreset: 'custom',
-                  })
-                }
+                // QNBS-v3: editing the URL must not silently reassign the protocol — a native-Ollama
+                // user pointing at a non-default host/port (e.g. a LAN server) previously had their
+                // preset force-switched to 'custom', which routes every request through the
+                // OpenAI-compatible protocol instead of native Ollama and breaks all completions.
+                // Protocol selection stays explicit via the preset dropdown above.
+                onChange={(e) => onAdvancedAiPatch({ ollamaBaseUrl: e.target.value })}
                 className="flex-1 font-mono text-sm"
               />
               <Button
@@ -590,7 +681,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
             {/* GPU status badge */}
             <div className="flex items-center gap-2">
               <span className="font-medium">{t('settings.ai.webllm.gpuStatus')}:</span>
-              {gpuInfo === null ? (
+              {isProbingGpu ? (
                 <Spinner className="w-3 h-3" />
               ) : (
                 <span
@@ -612,7 +703,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
             </div>
 
             {/* Adapter info when available */}
-            {gpuInfo?.adapterDescription && (
+            {gpuInfo.adapterDescription && (
               <p className="text-xs text-[var(--sc-text-muted)]">
                 {t('settings.ai.webllm.adapterLabel')}: {gpuInfo.adapterDescription}
                 {gpuInfo.vramTier && (

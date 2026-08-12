@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
@@ -55,7 +56,7 @@ vi.mock('../../components/ui/Spinner', () => ({
 }));
 
 import type React from 'react';
-import ApiKeySection from '../../components/ApiKeySection';
+import ApiKeySection, { isSyntacticallySafeGeminiApiKey } from '../../components/ApiKeySection';
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -98,27 +99,31 @@ describe('ApiKeySection', () => {
     });
   });
 
-  it('shows error when saving empty key', async () => {
+  it('accepts an unfamiliar non-empty key format and trims it before save', async () => {
     render(<ApiKeySection />);
     await waitFor(() => screen.getByText('settings.apiKey.statusInactive'));
 
-    // find save button (disabled when input empty, but we can still test the error message path)
-    const input = screen.getByPlaceholderText('AIza...');
-    // type an invalid prefix (not AIza)
-    fireEvent.change(input, { target: { value: 'bad-key' } });
+    const input = screen.getByPlaceholderText('settings.apiKey.inputLabel');
+    fireEvent.change(input, { target: { value: '  AQ-new-format-key  ' } });
 
     const saveBtn = screen.getByText('settings.apiKey.save');
     fireEvent.click(saveBtn);
     await waitFor(() => {
-      expect(screen.getByText('settings.apiKey.errorInvalid')).toBeTruthy();
+      expect(mockSaveGeminiApiKey).toHaveBeenCalledWith('AQ-new-format-key');
     });
+  });
+
+  it('rejects a control character or an overlong key before provider validation', () => {
+    expect(isSyntacticallySafeGeminiApiKey('AQ-valid\nkey')).toBe(false);
+    expect(isSyntacticallySafeGeminiApiKey('a'.repeat(4097))).toBe(false);
+    expect(isSyntacticallySafeGeminiApiKey('AQ-new-format-key')).toBe(true);
   });
 
   it('saves a valid key and shows success', async () => {
     render(<ApiKeySection />);
     await waitFor(() => screen.getByText('settings.apiKey.statusInactive'));
 
-    const input = screen.getByPlaceholderText('AIza...');
+    const input = screen.getByPlaceholderText('settings.apiKey.inputLabel');
     fireEvent.change(input, { target: { value: 'AIzaValidKey123' } });
 
     const saveBtn = screen.getByText('settings.apiKey.save');
@@ -132,12 +137,34 @@ describe('ApiKeySection', () => {
     });
   });
 
+  it('auto-validates a newly saved key and surfaces an invalid-key result without a separate Test click', async () => {
+    // QNBS-v3: regression test — saving previously only ran syntactic checks and marked the key active, deferring real provider validation to whatever generation call happened to run next.
+    mockGenerateText.mockRejectedValue(new Error('INVALID_API_KEY error'));
+    render(<ApiKeySection />);
+    await waitFor(() => screen.getByText('settings.apiKey.statusInactive'));
+
+    const user = userEvent.setup();
+    const input = screen.getByPlaceholderText('settings.apiKey.inputLabel');
+    await user.type(input, 'AIzaBogusKey');
+    await user.click(screen.getByText('settings.apiKey.save'));
+
+    await waitFor(() => {
+      expect(screen.getByText('settings.apiKey.saved')).toBeTruthy();
+    });
+    await waitFor(() => {
+      expect(screen.getByText('apiKey.invalidKey')).toBeTruthy();
+    });
+    await waitFor(() => {
+      expect(screen.getByText('settings.apiKey.statusInactive')).toBeTruthy();
+    });
+  });
+
   it('shows save error when dbService throws', async () => {
     mockSaveGeminiApiKey.mockRejectedValue(new Error('DB error'));
     render(<ApiKeySection />);
     await waitFor(() => screen.getByText('settings.apiKey.statusInactive'));
 
-    const input = screen.getByPlaceholderText('AIza...');
+    const input = screen.getByPlaceholderText('settings.apiKey.inputLabel');
     fireEvent.change(input, { target: { value: 'AIzaValidKey123' } });
     fireEvent.click(screen.getByText('settings.apiKey.save'));
     await waitFor(() => {
@@ -187,9 +214,9 @@ describe('ApiKeySection', () => {
 
   it('toggles key visibility when show/hide button is clicked', async () => {
     render(<ApiKeySection />);
-    await waitFor(() => screen.getByPlaceholderText('AIza...'));
+    await waitFor(() => screen.getByPlaceholderText('settings.apiKey.inputLabel'));
 
-    const input = screen.getByPlaceholderText('AIza...') as HTMLInputElement;
+    const input = screen.getByPlaceholderText('settings.apiKey.inputLabel') as HTMLInputElement;
     expect(input.type).toBe('password');
 
     const toggleBtn = screen.getByLabelText('settings.apiKey.show');

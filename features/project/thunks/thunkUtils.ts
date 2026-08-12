@@ -18,6 +18,7 @@ export const buildAiOptions = (state: RootState): AIRequestOptions => {
       usePreset && preset.temperature !== undefined ? preset.temperature : global.temperature,
     maxTokens: usePreset && preset.maxTokens !== undefined ? preset.maxTokens : global.maxTokens,
     ollamaBaseUrl: global.ollamaBaseUrl,
+    localBackendPreset: global.localBackendPreset,
     openAiCompatibleBaseUrl: global.openAiCompatibleBaseUrl,
     openAiSiteUrl: global.openAiSiteUrl,
     openAiSiteTitle: global.openAiSiteTitle,

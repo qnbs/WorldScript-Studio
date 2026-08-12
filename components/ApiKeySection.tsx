@@ -8,6 +8,16 @@ import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Spinner } from './ui/Spinner';
 
+// QNBS-v3: Reject non-printing control input without binding Gemini acceptance to a historical key prefix.
+const containsAsciiControlCharacter = (value: string): boolean =>
+  Array.from(value).some((character) => {
+    const code = character.charCodeAt(0);
+    return code < 0x20 || code === 0x7f;
+  });
+
+export const isSyntacticallySafeGeminiApiKey = (value: string): boolean =>
+  value.length <= 4096 && !containsAsciiControlCharacter(value);
+
 export const ApiKeySection: FC = () => {
   const { t } = useTranslation();
   const [apiKey, setApiKey] = useState('');
@@ -45,24 +55,30 @@ export const ApiKeySection: FC = () => {
   }, [checkKeyStatus]);
 
   const handleSaveKey = async () => {
-    if (!apiKey.trim()) {
+    const normalizedKey = apiKey.trim();
+    if (!normalizedKey) {
       setMessage({ type: 'error', text: t('settings.apiKey.errorEmpty') });
       return;
     }
-    if (!apiKey.trim().startsWith('AIza')) {
+    if (!isSyntacticallySafeGeminiApiKey(normalizedKey)) {
       setMessage({ type: 'error', text: t('settings.apiKey.errorInvalid') });
       return;
     }
     setIsSaving(true);
     setMessage(null);
     try {
-      await dbService.saveGeminiApiKey(apiKey.trim());
+      // QNBS-v3: this only checks syntax and persists — handleTestConnection (auto-triggered below) is what actually confirms the key authenticates; "Active" here means "saved", not "verified working."
+      await dbService.saveGeminiApiKey(normalizedKey);
       invalidateAiClientCache();
       setApiKey('');
       setHasKey(true);
       setDecryptFailed(false);
       setMessage({ type: 'success', text: t('settings.apiKey.saved') });
       setTestResult(null);
+      // QNBS-v3: surface an invalid/unauthenticated key immediately instead of deferring discovery
+      // to whatever later generation call happens to be the first to use it — handleTestConnection
+      // already flips hasKey back to false on an INVALID_API_KEY response.
+      void handleTestConnection();
     } catch (error: unknown) {
       logger.error('Failed to save API key:', error);
       setMessage({
@@ -296,7 +312,7 @@ export const ApiKeySection: FC = () => {
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSaveKey()}
-                  placeholder="AIza..."
+                  placeholder={t<string>('settings.apiKey.inputLabel')}
                   autoComplete="off"
                   className="pr-10"
                 />

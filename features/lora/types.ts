@@ -167,6 +167,8 @@ export interface TrainingRun {
   outputAdapterId?: string;
   errorMessage?: string;
   isFallback?: boolean;
+  // QNBS-v3: set by abortTrainingThunk before it awaits confirmation — lets startTrainingThunk's catch classify a subsequent rejection as a user cancellation instead of a training failure.
+  cancellationRequested?: boolean;
 }
 
 // ---------------------------------------------------------------------------

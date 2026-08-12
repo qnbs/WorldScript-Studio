@@ -49,6 +49,7 @@ import {
   scanLocalOpenAiCompatibleEndpoints,
   streamText,
   testAIConnection,
+  testOpenAiCompatibleLocalConnection,
 } from '../../services/aiProviderService';
 import * as geminiService from '../../services/geminiService';
 import * as localAiFacade from '../../services/localAiFacade';
@@ -329,6 +330,322 @@ describe('testAIConnection — ollama desktop branch', () => {
     const result = await testAIConnection('ollama', {});
     expect(result.ok).toBe(false);
     expect(result.error).toContain('timed out');
+  });
+
+  it('uses the OpenAI-compatible models endpoint for the LM Studio preset', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    mockPluginHttpFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: [{ id: 'local-model' }] }), { status: 200 }),
+    );
+
+    const result = await testAIConnection('ollama', {
+      ollamaBaseUrl: 'http://127.0.0.1:1234/',
+      localBackendPreset: 'lm_studio',
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      localServer: {
+        normalizedEndpoint: 'http://127.0.0.1:1234/v1',
+        transport: 'tauri-http',
+        modelNames: ['local-model'],
+      },
+    });
+    expect(mockPluginHttpFetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:1234/v1/models',
+      expect.any(Object),
+    );
+  });
+
+  it('reports a reachable LM Studio endpoint with no models distinctly', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    mockPluginHttpFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: [] }), { status: 200 }),
+    );
+
+    const result = await testAIConnection('ollama', {
+      ollamaBaseUrl: 'http://localhost:1234',
+      localBackendPreset: 'lm_studio',
+    });
+
+    expect(result).toMatchObject({ ok: false, kind: 'noModels' });
+  });
+
+  it('uses the OpenAI-compatible models endpoint for the vLLM preset', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    mockPluginHttpFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: [{ id: 'vllm-local-model' }] }), { status: 200 }),
+    );
+
+    const result = await testAIConnection('ollama', {
+      ollamaBaseUrl: 'http://127.0.0.1:8000/',
+      localBackendPreset: 'vllm',
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      localServer: {
+        normalizedEndpoint: 'http://127.0.0.1:8000/v1',
+        transport: 'tauri-http',
+        modelNames: ['vllm-local-model'],
+      },
+    });
+    expect(mockPluginHttpFetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/v1/models',
+      expect.any(Object),
+    );
+  });
+
+  it('returns invalidResponse when the models payload has a non-array data field', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    mockPluginHttpFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: { id: 'not-an-array' } }), { status: 200 }),
+    );
+
+    const result = await testOpenAiCompatibleLocalConnection('http://127.0.0.1:9999');
+
+    expect(result).toMatchObject({ ok: false, kind: 'invalidResponse' });
+  });
+
+  it('returns invalidResponse when the models response body is not JSON', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    mockPluginHttpFetch.mockResolvedValueOnce(new Response('not json', { status: 200 }));
+
+    const result = await testOpenAiCompatibleLocalConnection('http://127.0.0.1:9999');
+
+    expect(result).toMatchObject({ ok: false, kind: 'invalidResponse' });
+  });
+
+  it('streams legacy LM Studio requests through /v1/chat/completions, not Ollama /api', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    mockPluginHttpFetch.mockResolvedValueOnce(
+      new Response(
+        'data: {"choices":[{"delta":{"content":"Hello"}}]}\n' +
+          'data: {"choices":[{"delta":{"content":" world"}}]}\n' +
+          'data: [DONE]\n',
+        { status: 200 },
+      ),
+    );
+    const chunks: string[] = [];
+
+    await streamText(
+      'Continue this scene',
+      'Balanced',
+      {
+        provider: 'ollama',
+        model: 'ollama/local-model',
+        ollamaBaseUrl: 'http://localhost:1234',
+        localBackendPreset: 'lm_studio',
+      },
+      { onChunk: (chunk) => chunks.push(chunk) },
+    );
+
+    expect(chunks).toEqual(['Hello', ' world']);
+    expect(mockPluginHttpFetch).toHaveBeenCalledWith(
+      'http://localhost:1234/v1/chat/completions',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(mockPluginHttpFetch).not.toHaveBeenCalledWith(
+      expect.stringContaining('/api/generate'),
+      expect.anything(),
+    );
+  });
+});
+
+// QNBS-v3: regression coverage for streamOpenAiCompatibleLocal — SSE final-buffer flush, abort
+// propagation, blank-URL resolution, error-body inclusion, and 'custom' preset routing.
+describe('streamText — LM Studio/vLLM/custom OpenAI-compatible local streaming', () => {
+  afterEach(() => {
+    delete (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+  });
+
+  it('flushes the final SSE frame when the server closes the stream without a trailing newline', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    // No trailing "\n" after the last data: frame — the server closed the connection right there.
+    mockPluginHttpFetch.mockResolvedValueOnce(
+      new Response(
+        'data: {"choices":[{"delta":{"content":"Hello"}}]}\n' +
+          'data: {"choices":[{"delta":{"content":" world"}}]}',
+        { status: 200 },
+      ),
+    );
+    const chunks: string[] = [];
+
+    await streamText(
+      'Continue this scene',
+      'Balanced',
+      {
+        provider: 'ollama',
+        model: 'ollama/local-model',
+        ollamaBaseUrl: 'http://localhost:1234',
+        localBackendPreset: 'lm_studio',
+      },
+      { onChunk: (chunk) => chunks.push(chunk) },
+    );
+
+    expect(chunks).toEqual(['Hello', ' world']);
+  });
+
+  it('parses SSE frames terminated with Windows-style CRLF line endings', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    mockPluginHttpFetch.mockResolvedValueOnce(
+      new Response(
+        'data: {"choices":[{"delta":{"content":"Hello"}}]}\r\n' +
+          'data: {"choices":[{"delta":{"content":" world"}}]}\r\n' +
+          'data: [DONE]\r\n',
+        { status: 200 },
+      ),
+    );
+    const chunks: string[] = [];
+
+    await streamText(
+      'Continue this scene',
+      'Balanced',
+      {
+        provider: 'ollama',
+        model: 'ollama/local-model',
+        ollamaBaseUrl: 'http://localhost:1234',
+        localBackendPreset: 'lm_studio',
+      },
+      { onChunk: (chunk) => chunks.push(chunk) },
+    );
+
+    expect(chunks).toEqual(['Hello', ' world']);
+  });
+
+  it('resolves a blank ollamaBaseUrl to the same default diagnostics use, not an app-relative URL', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    mockPluginHttpFetch.mockResolvedValueOnce(
+      new Response('data: {"choices":[{"delta":{"content":"hi"}}]}\n', { status: 200 }),
+    );
+    const chunks: string[] = [];
+
+    await streamText(
+      'prompt',
+      'Balanced',
+      {
+        provider: 'ollama',
+        model: 'ollama/local-model',
+        ollamaBaseUrl: '',
+        localBackendPreset: 'lm_studio',
+      },
+      { onChunk: (chunk) => chunks.push(chunk) },
+    );
+
+    expect(mockPluginHttpFetch).toHaveBeenCalledWith(
+      'http://localhost:1234/v1/chat/completions',
+      expect.anything(),
+    );
+  });
+
+  it('includes the server JSON error body in the thrown error, not just the HTTP status', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    mockPluginHttpFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: { message: 'model "foo" not found' } }), {
+        status: 400,
+      }),
+    );
+
+    await expect(
+      streamText(
+        'prompt',
+        'Balanced',
+        {
+          provider: 'ollama',
+          model: 'ollama/local-model',
+          ollamaBaseUrl: 'http://localhost:1234',
+          localBackendPreset: 'lm_studio',
+        },
+        { onChunk: () => {} },
+      ),
+    ).rejects.toThrow(/model "foo" not found/);
+  });
+
+  it('routes the custom preset through /v1/chat/completions, not Ollama /api/generate', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    mockPluginHttpFetch.mockResolvedValueOnce(
+      new Response('data: {"choices":[{"delta":{"content":"hi"}}]}\n', { status: 200 }),
+    );
+    const chunks: string[] = [];
+
+    await streamText(
+      'prompt',
+      'Balanced',
+      {
+        provider: 'ollama',
+        model: 'ollama/local-model',
+        ollamaBaseUrl: 'http://localhost:9999',
+        localBackendPreset: 'custom',
+      },
+      { onChunk: (chunk) => chunks.push(chunk) },
+    );
+
+    expect(chunks).toEqual(['hi']);
+    expect(mockPluginHttpFetch).toHaveBeenCalledWith(
+      'http://localhost:9999/v1/chat/completions',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('throws an AbortError instead of completing when the signal aborts mid-stream', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    const ac = new AbortController();
+    const encoder = new TextEncoder();
+    const chunks: string[] = [];
+    let resolveHold!: () => void;
+
+    mockPluginHttpFetch.mockResolvedValueOnce(
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(
+              encoder.encode('data: {"choices":[{"delta":{"content":"chunk1"}}]}\n'),
+            );
+            const hold = new Promise<void>((res) => {
+              resolveHold = res;
+            });
+            void hold.then(() => {
+              controller.enqueue(
+                encoder.encode('data: {"choices":[{"delta":{"content":"chunk2"}}]}\n'),
+              );
+              controller.enqueue(encoder.encode('data: [DONE]\n'));
+              controller.close();
+            });
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const streamPromise = streamText(
+      'prompt',
+      'Balanced',
+      {
+        provider: 'ollama',
+        model: 'ollama/local-model',
+        ollamaBaseUrl: 'http://localhost:1234',
+        localBackendPreset: 'lm_studio',
+      },
+      { onChunk: (chunk) => chunks.push(chunk) },
+      ac.signal,
+    );
+
+    await new Promise<void>((res) => {
+      const interval = setInterval(() => {
+        if (chunks.length > 0) {
+          clearInterval(interval);
+          ac.abort();
+          resolveHold();
+          res();
+        }
+      }, 5);
+    });
+
+    // QNBS-v3: the abort check runs at the top of the read loop, so a read() already in flight
+    // when abort() fires can still resolve with its chunk (same best-effort race the sibling
+    // streamOpenAI abort test documents) — what matters is that the function throws instead of
+    // resolving/calling onDone, so no caller can treat this partial output as a completed request.
+    await expect(streamPromise).rejects.toThrow();
   });
 });
 
