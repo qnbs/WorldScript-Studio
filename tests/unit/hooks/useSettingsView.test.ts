@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type React from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTransientUiStore } from '../../../app/transientUiStore';
 import { useSettingsView } from '../../../hooks/useSettingsView';
 import type { ProjectSnapshot, StorySection } from '../../../types';
@@ -24,6 +24,13 @@ const mockSaveSnapshot = vi.fn().mockResolvedValue(undefined);
 const mockDeleteSnapshot = vi.fn().mockResolvedValue(undefined);
 const mockLoggerWarn = vi.fn();
 const mockToastInfo = vi.fn();
+const mockToastSuccess = vi.fn();
+const mockClearIdbEncryptionKey = vi.fn();
+const mockIsIdbEncryptionReady = vi.fn(() => false);
+const mockSetupIdbEncryption = vi.fn().mockResolvedValue(undefined);
+const mockVerifyAndInitIdbEncryption = vi.fn().mockResolvedValue(undefined);
+const mockClearIdbPassphrase = vi.fn().mockResolvedValue(undefined);
+const mockRotateIdbPassphrase = vi.fn().mockResolvedValue(undefined);
 
 const mockSettings = {
   theme: 'dark' as const,
@@ -176,13 +183,23 @@ vi.mock('../../../features/status/statusSlice', () => ({
 vi.mock('../../../components/ui/Toast', () => ({
   useToast: () => ({
     info: mockToastInfo,
-    success: vi.fn(),
+    success: mockToastSuccess,
     error: vi.fn(),
   }),
 }));
 
 vi.mock('../../../services/logger', () => ({
   logger: { warn: (...args: unknown[]) => mockLoggerWarn(...args) },
+}));
+
+vi.mock('../../../services/storage/storageEncryptionService', () => ({
+  clearIdbEncryptionKey: () => mockClearIdbEncryptionKey(),
+  isIdbEncryptionReady: () => mockIsIdbEncryptionReady(),
+  setupIdbEncryption: (passphrase: string) => mockSetupIdbEncryption(passphrase),
+  verifyAndInitIdbEncryption: (passphrase: string) => mockVerifyAndInitIdbEncryption(passphrase),
+  clearIdbPassphrase: (onProgress?: unknown) => mockClearIdbPassphrase(onProgress),
+  rotateIdbPassphrase: (oldPass: string, newPass: string, onProgress?: unknown) =>
+    mockRotateIdbPassphrase(oldPass, newPass, onProgress),
 }));
 
 vi.mock('../../../services/storageService', () => ({
@@ -579,6 +596,121 @@ describe('activeCategory', () => {
     await waitFor(() => {
       expect(mockListSnapshots).toHaveBeenCalledTimes(2);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// handlePassphraseConfirm — disable/rotate branches (Phase 4, #338)
+// ---------------------------------------------------------------------------
+describe('handlePassphraseConfirm — disable/rotate', () => {
+  afterEach(() => {
+    mockClearIdbPassphrase.mockResolvedValue(undefined);
+    mockRotateIdbPassphrase.mockResolvedValue(undefined);
+  });
+
+  it('calls clearIdbPassphrase with a progress callback, updates the flag, and toasts on success', async () => {
+    const { result } = renderHook(() => useSettingsView());
+    act(() => {
+      result.current.setPassphraseModal('disable');
+    });
+    await act(async () => {
+      await result.current.handlePassphraseConfirm('', '');
+    });
+
+    expect(mockClearIdbPassphrase).toHaveBeenCalledWith(expect.any(Function));
+    expect(mockDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'featureFlags/setEnableIdbAtRestEncryption',
+        payload: false,
+      }),
+    );
+    expect(mockToastSuccess).toHaveBeenCalledWith('settings.privacy.encryptionDisabledStatus');
+    expect(result.current.passphraseModal).toBe('closed');
+  });
+
+  it('calls rotateIdbPassphrase with both passphrases and a progress callback, then toasts on success', async () => {
+    const { result } = renderHook(() => useSettingsView());
+    act(() => {
+      result.current.setPassphraseModal('rotate');
+    });
+    await act(async () => {
+      await result.current.handlePassphraseConfirm('old-pass', 'new-pass');
+    });
+
+    expect(mockRotateIdbPassphrase).toHaveBeenCalledWith(
+      'old-pass',
+      'new-pass',
+      expect.any(Function),
+    );
+    expect(mockToastSuccess).toHaveBeenCalledWith('settings.privacy.encryptionChangedStatus');
+    expect(result.current.passphraseModal).toBe('closed');
+  });
+
+  it('does not call clearIdbPassphrase or rotateIdbPassphrase for set/unlock modes', async () => {
+    const { result } = renderHook(() => useSettingsView());
+    act(() => {
+      result.current.setPassphraseModal('set');
+    });
+    await act(async () => {
+      await result.current.handlePassphraseConfirm('', 'newpass123');
+    });
+
+    expect(mockClearIdbPassphrase).not.toHaveBeenCalled();
+    expect(mockRotateIdbPassphrase).not.toHaveBeenCalled();
+    expect(mockSetupIdbEncryption).toHaveBeenCalledWith('newpass123');
+  });
+
+  it('surfaces migrationProgress updates from the onProgress callback while disable is pending, then clears it', async () => {
+    let capturedCallback: ((progress: unknown) => void) | undefined;
+    let resolveClear: (() => void) | undefined;
+    mockClearIdbPassphrase.mockImplementation((onProgress: (progress: unknown) => void) => {
+      capturedCallback = onProgress;
+      return new Promise<void>((resolve) => {
+        resolveClear = resolve;
+      });
+    });
+
+    const { result } = renderHook(() => useSettingsView());
+    act(() => {
+      result.current.setPassphraseModal('disable');
+    });
+
+    let confirmPromise: Promise<void> | undefined;
+    act(() => {
+      confirmPromise = result.current.handlePassphraseConfirm('', '');
+    });
+    await waitFor(() => expect(capturedCallback).toBeDefined());
+
+    act(() => {
+      capturedCallback?.({ storeId: 's', storeIndex: 1, storeCount: 2, phase: 'migrating' });
+    });
+    expect(result.current.migrationProgress).toEqual(
+      expect.objectContaining({ storeIndex: 1, storeCount: 2 }),
+    );
+
+    await act(async () => {
+      resolveClear?.();
+      await confirmPromise;
+    });
+    expect(result.current.migrationProgress).toBeNull();
+  });
+
+  it('clears migrationProgress and leaves the modal open when clearIdbPassphrase rejects', async () => {
+    mockClearIdbPassphrase.mockRejectedValueOnce(new Error('migration failed'));
+    const { result } = renderHook(() => useSettingsView());
+    act(() => {
+      result.current.setPassphraseModal('disable');
+    });
+
+    await act(async () => {
+      await expect(result.current.handlePassphraseConfirm('', '')).rejects.toThrow();
+    });
+
+    expect(result.current.passphraseModal).toBe('disable');
+    expect(result.current.migrationProgress).toBeNull();
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'featureFlags/setEnableIdbAtRestEncryption' }),
+    );
   });
 });
 

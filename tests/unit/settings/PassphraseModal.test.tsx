@@ -42,7 +42,10 @@ vi.mock('../../../components/ui/Modal', () => ({
 // Import after mocks
 // ---------------------------------------------------------------------------
 
-import { PassphraseModal } from '../../../components/settings/PassphraseModal';
+import {
+  PassphraseModal,
+  type PassphraseModalMode,
+} from '../../../components/settings/PassphraseModal';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -53,7 +56,7 @@ type OnConfirm = (current: string, next: string) => Promise<void>;
 type OnClose = () => void;
 
 const makeProps = (
-  mode: 'set' | 'unlock',
+  mode: PassphraseModalMode,
   onConfirm: Mock<OnConfirm> = vi.fn<OnConfirm>().mockResolvedValue(undefined) as Mock<OnConfirm>,
   onClose: Mock<OnClose> = vi.fn<OnClose>(),
 ) => ({ mode, onConfirm, onClose });
@@ -220,5 +223,191 @@ describe('PassphraseModal — unlock mode', () => {
         'settings.privacy.encryptionWrongPassphrase',
       ),
     );
+  });
+});
+
+describe('PassphraseModal — disable mode', () => {
+  let onClose: Mock<OnClose>;
+  let onConfirm: Mock<OnConfirm>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    onClose = vi.fn<OnClose>();
+    onConfirm = vi.fn<OnConfirm>().mockResolvedValue(undefined) as Mock<OnConfirm>;
+  });
+
+  it('renders the disable title', () => {
+    render(<PassphraseModal {...makeProps('disable', onConfirm, onClose)} />);
+    expect(screen.getByText('settings.privacy.encryptionModalDisableTitle')).toBeInTheDocument();
+  });
+
+  it('renders no passphrase input fields — clearIdbPassphrase() requires an already-unlocked session', () => {
+    render(<PassphraseModal {...makeProps('disable', onConfirm, onClose)} />);
+    expect(
+      screen.queryByLabelText('settings.privacy.encryptionCurrentPassphrase'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText('settings.privacy.encryptionNewPassphrase'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows the disable confirmation warning, not the forgot-passphrase warning', () => {
+    render(<PassphraseModal {...makeProps('disable', onConfirm, onClose)} />);
+    expect(screen.getByText('settings.privacy.encryptionDisableConfirm')).toBeInTheDocument();
+    expect(screen.queryByText('settings.privacy.encryptionWarning')).not.toBeInTheDocument();
+  });
+
+  it('calls onConfirm with empty args and onClose on success', async () => {
+    const user = userEvent.setup();
+    render(<PassphraseModal {...makeProps('disable', onConfirm, onClose)} />);
+    await user.click(screen.getByText('settings.privacy.encryptionDisableButton'));
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledWith('', ''));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  it('shows a disable-failed error (not wrong-passphrase) when onConfirm rejects', async () => {
+    onConfirm.mockRejectedValue(new Error('migration failed'));
+    const user = userEvent.setup();
+    render(<PassphraseModal {...makeProps('disable', onConfirm, onClose)} />);
+    await user.click(screen.getByText('settings.privacy.encryptionDisableButton'));
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'settings.privacy.encryptionDisableFailed',
+      ),
+    );
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('shows live migration progress while the confirm promise is pending', async () => {
+    let resolveConfirm: (() => void) | undefined;
+    onConfirm.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveConfirm = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <PassphraseModal {...makeProps('disable', onConfirm, onClose)} progress={null} />,
+    );
+    await user.click(screen.getByText('settings.privacy.encryptionDisableButton'));
+    await waitFor(() => expect(onConfirm).toHaveBeenCalled());
+
+    rerender(
+      <PassphraseModal
+        {...makeProps('disable', onConfirm, onClose)}
+        progress={{
+          storeId: 'store-a',
+          storeIndex: 1,
+          storeCount: 4,
+          phase: 'migrating',
+          processed: 10,
+        }}
+      />,
+    );
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '25');
+    expect(
+      screen.getByText('settings.privacy.encryptionMigrationProgress', { exact: false }),
+    ).toBeInTheDocument();
+
+    resolveConfirm?.();
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe('PassphraseModal — rotate mode', () => {
+  let onClose: Mock<OnClose>;
+  let onConfirm: Mock<OnConfirm>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    onClose = vi.fn<OnClose>();
+    onConfirm = vi.fn<OnConfirm>().mockResolvedValue(undefined) as Mock<OnConfirm>;
+  });
+
+  it('renders the change-passphrase title', () => {
+    render(<PassphraseModal {...makeProps('rotate', onConfirm, onClose)} />);
+    expect(screen.getByText('settings.privacy.encryptionModalChangeTitle')).toBeInTheDocument();
+  });
+
+  it('renders current, new, and confirm passphrase fields', () => {
+    render(<PassphraseModal {...makeProps('rotate', onConfirm, onClose)} />);
+    expect(
+      screen.getByLabelText('settings.privacy.encryptionCurrentPassphrase'),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('settings.privacy.encryptionNewPassphrase')).toBeInTheDocument();
+    expect(
+      screen.getByLabelText('settings.privacy.encryptionConfirmPassphrase'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows too-short error when new passphrase < 8 chars', async () => {
+    const user = userEvent.setup();
+    render(<PassphraseModal {...makeProps('rotate', onConfirm, onClose)} />);
+    await user.type(screen.getByLabelText('settings.privacy.encryptionCurrentPassphrase'), 'old');
+    await user.type(screen.getByLabelText('settings.privacy.encryptionNewPassphrase'), 'short');
+    await user.type(screen.getByLabelText('settings.privacy.encryptionConfirmPassphrase'), 'short');
+    await user.click(screen.getByText('settings.privacy.encryptionChangeButton'));
+    expect(screen.getByRole('alert')).toHaveTextContent('settings.privacy.encryptionTooShort');
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it('shows mismatch error when new and confirm differ', async () => {
+    const user = userEvent.setup();
+    render(<PassphraseModal {...makeProps('rotate', onConfirm, onClose)} />);
+    await user.type(screen.getByLabelText('settings.privacy.encryptionCurrentPassphrase'), 'old');
+    await user.type(
+      screen.getByLabelText('settings.privacy.encryptionNewPassphrase'),
+      'longpassword1',
+    );
+    await user.type(
+      screen.getByLabelText('settings.privacy.encryptionConfirmPassphrase'),
+      'longpassword2',
+    );
+    await user.click(screen.getByText('settings.privacy.encryptionChangeButton'));
+    expect(screen.getByRole('alert')).toHaveTextContent('settings.privacy.encryptionMismatch');
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it('calls onConfirm with (current, next) and onClose on valid rotate', async () => {
+    const user = userEvent.setup();
+    render(<PassphraseModal {...makeProps('rotate', onConfirm, onClose)} />);
+    await user.type(
+      screen.getByLabelText('settings.privacy.encryptionCurrentPassphrase'),
+      'oldpass1',
+    );
+    await user.type(
+      screen.getByLabelText('settings.privacy.encryptionNewPassphrase'),
+      'newpass123',
+    );
+    await user.type(
+      screen.getByLabelText('settings.privacy.encryptionConfirmPassphrase'),
+      'newpass123',
+    );
+    await user.click(screen.getByText('settings.privacy.encryptionChangeButton'));
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledWith('oldpass1', 'newpass123'));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  it('shows a wrong-passphrase error when onConfirm rejects', async () => {
+    onConfirm.mockRejectedValue(new Error('wrong old passphrase'));
+    const user = userEvent.setup();
+    render(<PassphraseModal {...makeProps('rotate', onConfirm, onClose)} />);
+    await user.type(screen.getByLabelText('settings.privacy.encryptionCurrentPassphrase'), 'wrong');
+    await user.type(
+      screen.getByLabelText('settings.privacy.encryptionNewPassphrase'),
+      'newpass123',
+    );
+    await user.type(
+      screen.getByLabelText('settings.privacy.encryptionConfirmPassphrase'),
+      'newpass123',
+    );
+    await user.click(screen.getByText('settings.privacy.encryptionChangeButton'));
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'settings.privacy.encryptionWrongPassphrase',
+      ),
+    );
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

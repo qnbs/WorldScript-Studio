@@ -26,6 +26,7 @@ Object.defineProperty(global, 'localStorage', { value: localStorageMock, writabl
 globalThis.indexedDB = new IDBFactory();
 
 import { APP_DATA_STORE, DB_VERSION, STATE_DB_NAME } from '../../../services/dbConstants';
+import { dbService } from '../../../services/storage';
 import {
   __encryptionMigrationJournalRecordKeyForTest,
   beginEncryptionMigration,
@@ -53,6 +54,7 @@ import {
   prepareSecureRecordPayload,
   readSecureRecordPayload,
   resolveProtectedWriteKey,
+  resumeEncryptionMigration,
   rotateIdbPassphrase,
   SECURE_RECORD_VERSION,
   SecureRecordCorruptError,
@@ -61,6 +63,7 @@ import {
   setupIdbEncryption,
   verifyAndInitIdbEncryption,
 } from '../../../services/storage/storageEncryptionService';
+import type { StoryCodex } from '../../../types';
 
 const svc = new StorageEncryptionService();
 
@@ -645,6 +648,193 @@ describe('disable/rotate blocked by a stuck recovery-required journal', () => {
       );
       expect(isIdbEncryptionReady()).toBe(true);
       expect(await hasPassphraseSentinel()).toBe(true);
+    } finally {
+      await deleteJournalRecordForTest();
+    }
+  });
+});
+
+// QNBS-v3: exercises the primary-store adapters (primaryProtectedStoreAdapters.ts) against real
+// data through the public dbService API — the earlier disable/rotate tests above only prove the
+// migration completes over EMPTY stores; this proves round-tripped content survives both operations.
+describe('production migration round-trip with real data', () => {
+  it('preserves an image through rekey then disable', async () => {
+    await setupIdbEncryption('original');
+    await dbService.saveImage('recovery-img', 'recovery-content');
+    expect(await dbService.getImage('recovery-img')).toBe('recovery-content');
+
+    await rotateIdbPassphrase('original', 'new-pass');
+    expect(await dbService.getImage('recovery-img')).toBe('recovery-content');
+
+    await clearIdbPassphrase();
+    expect(isIdbEncryptionReady()).toBe(false);
+    expect(await dbService.getImage('recovery-img')).toBe('recovery-content');
+  });
+
+  it('preserves a story codex (3-shape dispatch) through rekey then disable', async () => {
+    const codex: StoryCodex = {
+      projectId: 'recovery-project',
+      extractedAt: '2026-01-01T00:00:00.000Z',
+      entities: [
+        {
+          id: 'e1',
+          name: 'Ada',
+          type: 'character',
+          known: true,
+          mentionCount: 3,
+          mentions: [],
+        },
+      ],
+      summary: 'A test codex',
+    };
+
+    await setupIdbEncryption('original');
+    await dbService.saveStoryCodex(codex);
+    expect(await dbService.getStoryCodex('recovery-project')).toEqual(codex);
+
+    await rotateIdbPassphrase('original', 'new-pass');
+    expect(await dbService.getStoryCodex('recovery-project')).toEqual(codex);
+
+    await clearIdbPassphrase();
+    expect(await dbService.getStoryCodex('recovery-project')).toEqual(codex);
+  });
+
+  it('preserves a binder asset (Blob <-> bytes conversion) through rekey then disable', async () => {
+    const originalBytes = new Uint8Array([1, 2, 3, 4, 5]);
+    const meta = { mimeType: 'application/pdf', originalFileName: 'notes.pdf', byteSize: 0 };
+
+    await setupIdbEncryption('original');
+    await dbService.saveBinderAsset('proj-1', 'asset-1', originalBytes.buffer, meta);
+
+    async function readAssetBytes(): Promise<number[]> {
+      const payload = await dbService.getBinderAsset('proj-1', 'asset-1');
+      if (!payload) throw new Error('binder asset not found');
+      return Array.from(new Uint8Array(payload.data));
+    }
+
+    expect(await readAssetBytes()).toEqual([1, 2, 3, 4, 5]);
+
+    await rotateIdbPassphrase('original', 'new-pass');
+    expect(await readAssetBytes()).toEqual([1, 2, 3, 4, 5]);
+
+    await clearIdbPassphrase();
+    expect(await readAssetBytes()).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it('preserves RAG vectors (aggregate <-> individual-record duality) through rekey then disable', async () => {
+    const vectors = [
+      { id: 'chunk-1', embedding: [0.1, 0.2], text: 'first chunk' },
+      { id: 'chunk-2', embedding: [0.3, 0.4], text: 'second chunk' },
+    ];
+
+    await setupIdbEncryption('original');
+    await dbService.saveRagVectors('recovery-project-vec', vectors);
+    expect(await dbService.getRagVectors('recovery-project-vec')).toEqual(vectors);
+
+    await rotateIdbPassphrase('original', 'new-pass');
+    expect(await dbService.getRagVectors('recovery-project-vec')).toEqual(vectors);
+
+    await clearIdbPassphrase();
+    // QNBS-v3: disable's target shape is N individual plain records — the projectId field is
+    // re-added by writeProjectVectors(), so the round-tripped records carry it too.
+    expect(await dbService.getRagVectors('recovery-project-vec')).toEqual(
+      vectors.map((vector) => ({ ...vector, projectId: 'recovery-project-vec' })),
+    );
+  });
+});
+
+describe('resumeEncryptionMigration (recovery UX)', () => {
+  function readCurrentSaltForTest(): Uint8Array {
+    const stored = localStorageMock.getItem('worldscript-idb-kdf-salt-v1');
+    if (!stored) throw new Error('No salt found — call setupIdbEncryption first');
+    return Uint8Array.from(atob(stored), (character) => character.charCodeAt(0));
+  }
+
+  async function buildPendingRekeyJournal(targetPassphrase: string) {
+    const salt = readCurrentSaltForTest();
+    const targetKey = await svc.deriveKey(targetPassphrase, salt);
+    const targetVerifier = await createIdbMigrationTargetVerifier(targetKey);
+    const { getRegisteredPrimaryProtectedStoreAdapters } = await import(
+      '../../../services/storage/primaryProtectedStoreAdapters'
+    );
+    const { getRegisteredSecondaryProtectedStoreAdapters } = await import(
+      '../../../services/storage/secondaryProtectedStoreAdapters'
+    );
+    const adapters = [
+      ...getRegisteredPrimaryProtectedStoreAdapters(),
+      ...getRegisteredSecondaryProtectedStoreAdapters(),
+    ];
+    return beginEncryptionMigration({
+      operationId: `recovery-test-${Math.random().toString(36).slice(2)}`,
+      operation: 'rekey',
+      phase: 'prepared',
+      targetVerifier,
+      stores: adapters.map((adapter) => ({
+        id: adapter.id,
+        processed: 0,
+        verified: 0,
+        done: false,
+      })),
+    });
+  }
+
+  it('re-derives keys from passphrases and completes a pending rekey journal', async () => {
+    await setupIdbEncryption('original');
+    await dbService.saveImage('recovery-img-2', 'recovery-content-2');
+    const journal = await buildPendingRekeyJournal('new-pass');
+    clearIdbEncryptionKey();
+
+    try {
+      await expect(
+        resumeEncryptionMigration(journal, {
+          sourcePassphrase: 'original',
+          targetPassphrase: 'new-pass',
+        }),
+      ).resolves.toBeUndefined();
+
+      expect(isIdbEncryptionReady()).toBe(true);
+      expect(await dbService.getImage('recovery-img-2')).toBe('recovery-content-2');
+
+      clearIdbEncryptionKey();
+      await expect(verifyAndInitIdbEncryption('new-pass')).resolves.toBeUndefined();
+    } finally {
+      await deleteJournalRecordForTest();
+    }
+  });
+
+  it('rejects a wrong source passphrase without mutating the journal or sentinel', async () => {
+    await setupIdbEncryption('original');
+    const journal = await buildPendingRekeyJournal('new-pass');
+    clearIdbEncryptionKey();
+
+    try {
+      // QNBS-v3: fails before the journal is ever claimed/advanced — assertNoActiveEncryptionMigration
+      // correctly keeps rejecting other operations until this still-'prepared' journal is resolved,
+      // by design (it doesn't know the resume attempt failed on key derivation, not on the migration).
+      await expect(
+        resumeEncryptionMigration(journal, {
+          sourcePassphrase: 'wrong',
+          targetPassphrase: 'new-pass',
+        }),
+      ).rejects.toThrow();
+      expect(await hasPassphraseSentinel()).toBe(true);
+    } finally {
+      await deleteJournalRecordForTest();
+    }
+
+    clearIdbEncryptionKey();
+    await expect(verifyAndInitIdbEncryption('original')).resolves.toBeUndefined();
+  });
+
+  it('rejects a resume attempt missing the target passphrase for a rekey operation', async () => {
+    await setupIdbEncryption('original');
+    const journal = await buildPendingRekeyJournal('new-pass');
+    clearIdbEncryptionKey();
+
+    try {
+      await expect(
+        resumeEncryptionMigration(journal, { sourcePassphrase: 'original' }),
+      ).rejects.toThrow('new passphrase is required');
     } finally {
       await deleteJournalRecordForTest();
     }
