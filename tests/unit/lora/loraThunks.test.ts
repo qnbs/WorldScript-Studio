@@ -91,8 +91,22 @@ function makeDispatch() {
   return vi.fn();
 }
 
-function makeGetState(loraAdapters: unknown[] = []) {
-  return () => ({ lora: { adapters: loraAdapters } });
+function makeGetState(loraAdapters: unknown[] = [], currentRun: unknown = null) {
+  return () => ({ lora: { adapters: loraAdapters, currentRun } });
+}
+
+// QNBS-v3: startTrainingThunk generates its own genuinely-random runId via uuid() — a getState mock that echoes the id from the dispatched trainingStarted payload lets a test target this specific invocation.
+function makeGetStateFollowingDispatch(
+  dispatch: ReturnType<typeof vi.fn>,
+  currentRunOverrides: Record<string, unknown> = {},
+) {
+  return () => {
+    const started = dispatch.mock.calls.find(
+      (c: unknown[]) => (c[0] as { type?: string } | undefined)?.type === 'lora/trainingStarted',
+    );
+    const id = (started?.[0] as { payload?: { id?: string } } | undefined)?.payload?.id;
+    return { lora: { adapters: [], currentRun: id ? { id, ...currentRunOverrides } : null } };
+  };
 }
 
 // QNBS-v3: RTK thunk test helper. ThunkFn uses `any` for dispatch/getState to satisfy
@@ -329,7 +343,8 @@ describe('startTrainingThunk', () => {
   it('dispatches trainingFailed on service error', async () => {
     mockStartTraining.mockRejectedValue(new Error('GPU out of memory'));
     const dispatch = makeDispatch();
-    await run(startTrainingThunk(trainConfig), dispatch);
+    const getState = makeGetStateFollowingDispatch(dispatch);
+    await run(startTrainingThunk(trainConfig), dispatch, getState);
     const failed = dispatch.mock.calls.find((c) => c[0]?.type === 'lora/trainingFailed');
     expect(failed![0].payload).toBe('GPU out of memory');
   });
@@ -340,6 +355,37 @@ describe('startTrainingThunk', () => {
     const started = dispatch.mock.calls.find((c) => c[0]?.type === 'lora/trainingStarted');
     expect(started![0].payload.totalEpochs).toBe(10);
   });
+
+  it('dispatches trainingAborted instead of trainingFailed when a cancellation was requested', async () => {
+    // QNBS-v3: abort_lora_training killing the process makes train_lora reject first — the rejection must be classified as an abort, not a failure, when cancellationRequested is set.
+    mockStartTraining.mockRejectedValue(new Error('training_cancel_not_confirmed'));
+    const dispatch = makeDispatch();
+    const getState = makeGetStateFollowingDispatch(dispatch, { cancellationRequested: true });
+    await run(startTrainingThunk(trainConfig), dispatch, getState);
+    const aborted = dispatch.mock.calls.find((c) => c[0]?.type === 'lora/trainingAborted');
+    const failed = dispatch.mock.calls.find((c) => c[0]?.type === 'lora/trainingFailed');
+    expect(aborted).toBeDefined();
+    expect(failed).toBeUndefined();
+  });
+
+  it('does not dispatch a terminal action when a newer run has already superseded this one', async () => {
+    // QNBS-v3: abort_lora_training awaits child-process exit, so a killed train_lora invoke can reject after a NEW run started — dispatching against the stale runId would wrongly terminate the newer run.
+    mockStartTraining.mockRejectedValue(
+      new Error('stale rejection from an already-superseded run'),
+    );
+    const dispatch = makeDispatch();
+    const getState = () => ({
+      lora: {
+        adapters: [],
+        currentRun: { id: 'a-different-newer-run-id', cancellationRequested: false },
+      },
+    });
+    await run(startTrainingThunk(trainConfig), dispatch, getState);
+    const aborted = dispatch.mock.calls.find((c) => c[0]?.type === 'lora/trainingAborted');
+    const failed = dispatch.mock.calls.find((c) => c[0]?.type === 'lora/trainingFailed');
+    expect(aborted).toBeUndefined();
+    expect(failed).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -349,15 +395,99 @@ describe('startTrainingThunk', () => {
 describe('abortTrainingThunk', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockAbortTraining.mockResolvedValue(undefined);
+    mockAbortTraining.mockResolvedValue('confirmed');
   });
 
-  it('calls abortTraining service and dispatches trainingAborted', async () => {
+  it('calls abortTraining service and dispatches trainingAborted when a process was confirmed stopped', async () => {
     const dispatch = makeDispatch();
     await run(abortTrainingThunk(), dispatch);
     expect(mockAbortTraining).toHaveBeenCalled();
     const aborted = dispatch.mock.calls.find((c) => c[0]?.type === 'lora/trainingAborted');
     expect(aborted).toBeDefined();
+  });
+
+  it('dispatches trainingCancellationRequested before awaiting the native abort', async () => {
+    // QNBS-v3: a deferred (manually-resolved) abort promise proves the dispatch happens before the
+    // await actually settles — an immediately-resolving mock can't distinguish "before the await"
+    // from "after it resolved but before the next dispatch," since both produce the same final order.
+    let resolveAbort!: (outcome: 'confirmed') => void;
+    mockAbortTraining.mockReturnValue(
+      new Promise<'confirmed'>((resolve) => {
+        resolveAbort = resolve;
+      }),
+    );
+    const dispatch = makeDispatch();
+    const pending = run(abortTrainingThunk(), dispatch);
+    await Promise.resolve();
+    const requested = dispatch.mock.calls.find(
+      (c) => c[0]?.type === 'lora/trainingCancellationRequested',
+    );
+    expect(requested).toBeDefined();
+    expect(dispatch.mock.calls.some((c) => c[0]?.type === 'lora/trainingAborted')).toBe(false);
+    resolveAbort('confirmed');
+    await pending;
+    expect(dispatch.mock.calls.some((c) => c[0]?.type === 'lora/trainingAborted')).toBe(true);
+  });
+
+  it('clears cancellationRequested when the native abort call fails', async () => {
+    // QNBS-v3: regression test — a leaked cancellationRequested:true would misclassify this run's
+    // later genuine failure (dispatched by startTrainingThunk's own catch) as a user abort.
+    // QNBS-v3: createAsyncThunk always resolves (never rejects) its returned promise, dispatching a
+    // '.../rejected' lifecycle action instead — so this asserts on that dispatch, not a thrown error.
+    mockAbortTraining.mockRejectedValue(new Error('native abort failed'));
+    const dispatch = makeDispatch();
+    await run(abortTrainingThunk(), dispatch);
+    const requested = dispatch.mock.calls.find(
+      (c) => c[0]?.type === 'lora/trainingCancellationRequested',
+    );
+    const notConfirmed = dispatch.mock.calls.find(
+      (c) => c[0]?.type === 'lora/trainingCancellationNotConfirmed',
+    );
+    const rejected = dispatch.mock.calls.find((c) => c[0]?.type === 'lora/abortTraining/rejected');
+    const aborted = dispatch.mock.calls.find((c) => c[0]?.type === 'lora/trainingAborted');
+    expect(requested).toBeDefined();
+    expect(notConfirmed).toBeDefined();
+    expect(rejected).toBeDefined();
+    expect(aborted).toBeUndefined();
+  });
+
+  it('clears cancellationRequested without dispatching trainingAborted when nothing was actually running', async () => {
+    // QNBS-v3 regression: abort_lora_training resolves successfully (not an error) for NothingRunning,
+    // but that must not be treated as a confirmed cancellation of the current run — a coincidental,
+    // unrelated training failure racing with this no-op must not be misattributed to it.
+    mockAbortTraining.mockResolvedValue('nothing_to_cancel');
+    const dispatch = makeDispatch();
+    await run(abortTrainingThunk(), dispatch);
+    const notConfirmed = dispatch.mock.calls.find(
+      (c) => c[0]?.type === 'lora/trainingCancellationNotConfirmed',
+    );
+    const aborted = dispatch.mock.calls.find((c) => c[0]?.type === 'lora/trainingAborted');
+    const fulfilled = dispatch.mock.calls.find(
+      (c) => c[0]?.type === 'lora/abortTraining/fulfilled',
+    );
+    expect(notConfirmed).toBeDefined();
+    expect(aborted).toBeUndefined();
+    expect(fulfilled).toBeDefined();
+  });
+
+  it('leaves cancellationRequested set (and dispatches neither terminal action) when a pending start is cancelled', async () => {
+    // QNBS-v3 regression: CancelPendingStart previously mapped to the same "nothing to cancel"
+    // outcome as a true no-op, clearing cancellationRequested before the pending train_lora
+    // invocation's own training_cancelled rejection reached startTrainingThunk's catch — which then
+    // misclassified a successful startup cancellation as a genuine training failure.
+    mockAbortTraining.mockResolvedValue('pending_start_cancelled');
+    const dispatch = makeDispatch();
+    await run(abortTrainingThunk(), dispatch);
+    const notConfirmed = dispatch.mock.calls.find(
+      (c) => c[0]?.type === 'lora/trainingCancellationNotConfirmed',
+    );
+    const aborted = dispatch.mock.calls.find((c) => c[0]?.type === 'lora/trainingAborted');
+    const fulfilled = dispatch.mock.calls.find(
+      (c) => c[0]?.type === 'lora/abortTraining/fulfilled',
+    );
+    expect(notConfirmed).toBeUndefined();
+    expect(aborted).toBeUndefined();
+    expect(fulfilled).toBeDefined();
   });
 });
 

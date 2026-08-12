@@ -103,12 +103,17 @@ export async function startTraining(
   }
 }
 
-export async function abortTraining(): Promise<void> {
-  if (!isTauri()) return;
+// QNBS-v3: three-way, not boolean — 'pending_start_cancelled' means the run was still starting (no process yet) but the cancellation was recorded and the pending native call will reject with training_cancelled, unlike 'nothing_to_cancel' which is a true no-op.
+export type AbortTrainingOutcome = 'confirmed' | 'pending_start_cancelled' | 'nothing_to_cancel';
+
+export async function abortTraining(): Promise<AbortTrainingOutcome> {
+  if (!isTauri()) return 'nothing_to_cancel';
   try {
-    await tauriInvoke('abort_lora_training');
+    return await tauriInvoke<AbortTrainingOutcome>('abort_lora_training');
   } catch (err) {
     logger.warn('loraTrainingService: abort failed', { err });
+    // QNBS-v3: A native cancellation failure must reach the thunk so UI state never claims an orphan process stopped.
+    throw err;
   }
 }
 
@@ -118,10 +123,11 @@ export async function mergeAdapter(
   outputPath: string,
 ): Promise<void> {
   if (!isTauri()) throw new Error('Merge requires the desktop app.');
+  // QNBS-v3: Tauri's #[tauri::command] macro binds top-level JS invoke keys as camelCase by default (no rename_all override on merge_lora) — snake_case keys here fail arg binding.
   await tauriInvoke('merge_lora', {
-    base_model: baseModel,
-    adapter_path: adapterPath,
-    output_path: outputPath,
+    baseModel,
+    adapterPath,
+    outputPath,
   });
 }
 
@@ -131,9 +137,10 @@ export async function generateOllamaModelfile(
   name: string,
 ): Promise<string> {
   if (isTauri()) {
+    // QNBS-v3: same Tauri default-camelCase arg binding as merge_lora — no rename_all override.
     return tauriInvoke<string>('generate_ollama_modelfile', {
-      base_model: baseModel,
-      adapter_path: adapterPath,
+      baseModel,
+      adapterPath,
       name,
     });
   }
@@ -141,36 +148,54 @@ export async function generateOllamaModelfile(
   return `FROM ${baseModel}\nADAPTER ${adapterPath}\nSYSTEM "You are ${name}, a writing assistant trained on this author's style. Match their voice precisely."\n`;
 }
 
-/** Check if training environment is available (Python + Unsloth). Tauri-only. */
-export async function checkTrainingEnvironment(): Promise<{
+export interface TrainingEnvironment {
   pythonAvailable: boolean;
   unslothAvailable: boolean;
   cudaAvailable: boolean;
   vramGb: number;
+  pythonVersion: string;
+  pythonPath?: string;
+  lastError?: string;
   message?: string;
-}> {
+}
+
+type NativeTrainingEnvironment = {
+  python_available: boolean;
+  unsloth_available: boolean;
+  cuda_available: boolean;
+  vram_gb: number;
+  python_version: string;
+  python_path?: string | null;
+  last_error?: string | null;
+};
+
+function fromNativeEnvironment(result: NativeTrainingEnvironment): TrainingEnvironment {
+  return {
+    pythonAvailable: result.python_available,
+    unslothAvailable: result.unsloth_available,
+    cudaAvailable: result.cuda_available,
+    vramGb: result.vram_gb,
+    pythonVersion: result.python_version,
+    ...(result.python_path ? { pythonPath: result.python_path } : {}),
+    ...(result.last_error ? { lastError: result.last_error } : {}),
+  };
+}
+
+/** Check if training environment is available (Python + Unsloth). Tauri-only. */
+export async function checkTrainingEnvironment(): Promise<TrainingEnvironment> {
   if (!isTauri()) {
     return {
       pythonAvailable: false,
       unslothAvailable: false,
       cudaAvailable: false,
       vramGb: 0,
+      pythonVersion: '',
       message: 'Training is only available in the desktop app.',
     };
   }
   try {
-    const result = await tauriInvoke<{
-      python_available: boolean;
-      unsloth_available: boolean;
-      cuda_available: boolean;
-      vram_gb: number;
-    }>('check_lora_environment');
-    return {
-      pythonAvailable: result.python_available,
-      unslothAvailable: result.unsloth_available,
-      cudaAvailable: result.cuda_available,
-      vramGb: result.vram_gb,
-    };
+    const result = await tauriInvoke<NativeTrainingEnvironment>('check_lora_environment');
+    return fromNativeEnvironment(result);
   } catch (err) {
     logger.warn('loraTrainingService: env check failed', { err });
     return {
@@ -178,7 +203,24 @@ export async function checkTrainingEnvironment(): Promise<{
       unslothAvailable: false,
       cudaAvailable: false,
       vramGb: 0,
+      pythonVersion: '',
       message: String(err),
     };
   }
+}
+
+/** Ask the user to choose a Python executable, then let the desktop backend verify and persist it. */
+export async function selectPythonExecutable(): Promise<TrainingEnvironment | null> {
+  if (!isTauri()) return null;
+  const { open } = await import('@tauri-apps/plugin-dialog');
+  const selected = await open({
+    multiple: false,
+    directory: false,
+  });
+  if (typeof selected !== 'string') return null;
+  // QNBS-v3: set_lora_python_path has no rename_all override, so Tauri's default camelCase arg binding requires `pythonPath` here — `python_path` fails invocation before the command runs.
+  const result = await tauriInvoke<NativeTrainingEnvironment>('set_lora_python_path', {
+    pythonPath: selected,
+  });
+  return fromNativeEnvironment(result);
 }

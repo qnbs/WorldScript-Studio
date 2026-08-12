@@ -104,6 +104,9 @@ export const useConsistencyCheckerView = () => {
       temperature: aiSettings?.temperature,
       maxTokens: aiSettings?.maxTokens,
       ollamaBaseUrl: aiSettings?.ollamaBaseUrl,
+      // QNBS-v3: without this, LM Studio/vLLM/custom local backends silently fell back to the
+      // Ollama-native protocol here even though the same settings work in the main Writer surface.
+      localBackendPreset: aiSettings?.localBackendPreset,
     }),
     [aiSettings],
   );

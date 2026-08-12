@@ -9,7 +9,7 @@ import {
   inferenceProgressEmitter,
   type WebLlmLoadProgress,
 } from '../../services/ai/inferenceProgressEmitter';
-import { abortActivePreload } from '../../services/localAiFacade';
+import { abortActivePreload, retryLastPreload } from '../../services/localAiFacade';
 
 export const LocalAiDownloadProgress: FC = () => {
   const { t } = useTranslation();
@@ -55,6 +55,12 @@ export const LocalAiDownloadProgress: FC = () => {
 
   function handleRetry() {
     inferenceProgressEmitter.reset();
+    // QNBS-v3: Retry must restart the failed preload, not merely clear the error presentation.
+    void retryLastPreload().catch((error: unknown) => {
+      inferenceProgressEmitter.reportWebLlmError(
+        error instanceof Error ? error.message : t<string>('settings.ai.localAi.downloadFailed'),
+      );
+    });
   }
 
   return (

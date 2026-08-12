@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AiProviderCard } from '../../../components/settings/AiProviderCard';
 import {
-  listOllamaModels,
+  listLocalBackendModels,
   scanLocalOpenAiCompatibleEndpoints,
   testAIConnection,
 } from '../../../services/aiProviderService';
@@ -26,7 +26,7 @@ vi.mock('../../../services/storageService', () => ({
 }));
 
 vi.mock('../../../services/aiProviderService', () => ({
-  listOllamaModels: vi.fn().mockResolvedValue([]),
+  listLocalBackendModels: vi.fn().mockResolvedValue([]),
   scanLocalOpenAiCompatibleEndpoints: vi.fn().mockResolvedValue([]),
   testAIConnection: vi.fn().mockResolvedValue({ ok: true, latencyMs: 100 }),
 }));
@@ -38,6 +38,10 @@ vi.mock('../../../services/ai/localBackendPresets', () => ({
     vllm: 'http://localhost:8000',
     custom: 'http://localhost:11434',
   },
+}));
+
+vi.mock('../../../services/ai/webGpuDetectorService', () => ({
+  detectWebGpuDetails: vi.fn().mockResolvedValue({ status: 'available' }),
 }));
 
 const mockAdvancedAi = {
@@ -66,6 +70,7 @@ const mockOnProviderChange = vi.fn();
 const ollamaAdvancedAi = { ...mockAdvancedAi, provider: 'ollama' as const };
 // QNBS-v3: fixture for the grok-provider describe block below.
 const grokAdvancedAi = { ...mockAdvancedAi, provider: 'grok' as const, model: 'grok-3' as const };
+const webllmAdvancedAi = { ...mockAdvancedAi, provider: 'webllm' as const };
 
 function setDesktopRuntime(enabled: boolean): void {
   const w = window as Window & { __TAURI_INTERNALS__?: unknown };
@@ -160,7 +165,7 @@ describe('AiProviderCard — ollama provider (#266)', () => {
     await waitFor(() => {
       expect(screen.getByText('settings.ai.ollamaDesktopOnlyTitle')).toBeTruthy();
     });
-    expect(listOllamaModels).not.toHaveBeenCalled();
+    expect(listLocalBackendModels).not.toHaveBeenCalled();
     expect(testAIConnection).not.toHaveBeenCalled();
   });
 
@@ -177,7 +182,7 @@ describe('AiProviderCard — ollama provider (#266)', () => {
     expect(screen.queryByText('settings.ai.providerStatusReady')).toBeNull();
   });
 
-  it('desktop: status badge never shows "unavailable in browser" for ollama (real test result renders instead)', async () => {
+  it('desktop: does not show the browser-only status for ollama before a user-triggered test', () => {
     setDesktopRuntime(true);
     render(
       <AiProviderCard
@@ -186,18 +191,13 @@ describe('AiProviderCard — ollama provider (#266)', () => {
         onProviderChange={mockOnProviderChange}
       />,
     );
-    // The auto-test effect runs the mocked testAIConnection (ok:true); wait for it to settle.
-    await waitFor(() => {
-      expect(screen.getByText('settings.ai.providerStatusConnected')).toBeTruthy();
-    });
+    expect(screen.getByText('settings.ai.providerStatusNotTested')).toBeTruthy();
     expect(screen.queryByText('settings.ai.providerStatusUnavailableBrowser')).toBeNull();
   });
 
   it('ignores stale connection-test results after switching to Ollama-in-browser mid-flight (CWE-209 race guard)', async () => {
     setDesktopRuntime(true);
-    // QNBS-v3: queue every call's resolver rather than asserting an exact call count — the auto-test
-    // effect's own invocation count isn't the point under test; what matters is that whichever
-    // in-flight request(s) are still pending when the context moves on get discarded, not rendered.
+    // Start a user-requested test, then ensure a provider-context switch invalidates its stale result.
     const resolvers: Array<(v: { ok: boolean }) => void> = [];
     vi.mocked(testAIConnection).mockImplementation(
       () =>
@@ -212,6 +212,9 @@ describe('AiProviderCard — ollama provider (#266)', () => {
         onProviderChange={mockOnProviderChange}
       />,
     );
+    await userEvent
+      .setup()
+      .click(screen.getByRole('button', { name: 'settings.ai.testConnection' }));
     await waitFor(() => expect(resolvers.length).toBeGreaterThan(0));
 
     // Switch to the browser before any in-flight request resolves — this must invalidate them all.
@@ -235,7 +238,7 @@ describe('AiProviderCard — ollama provider (#266)', () => {
     expect(screen.queryByText(/testError/)).toBeNull();
   });
 
-  it('desktop: auto-loads models and tests the connection when ollama is selected', async () => {
+  it('desktop: does not probe models or localhost until the user requests it', () => {
     setDesktopRuntime(true);
     render(
       <AiProviderCard
@@ -245,11 +248,39 @@ describe('AiProviderCard — ollama provider (#266)', () => {
       />,
     );
 
-    await waitFor(() => {
-      expect(listOllamaModels).toHaveBeenCalled();
-      expect(testAIConnection).toHaveBeenCalledWith('ollama', expect.any(Object));
-    });
+    expect(listLocalBackendModels).not.toHaveBeenCalled();
+    expect(testAIConnection).not.toHaveBeenCalled();
     expect(screen.queryByText('settings.ai.ollamaDesktopOnlyTitle')).toBeNull();
+  });
+
+  it('desktop: uses the LM Studio preset for the explicit model and connection diagnostics', async () => {
+    setDesktopRuntime(true);
+    const user = userEvent.setup();
+    render(
+      <AiProviderCard
+        advancedAi={{
+          ...ollamaAdvancedAi,
+          ollamaBaseUrl: 'http://localhost:1234',
+          localBackendPreset: 'lm_studio',
+        }}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'settings.ai.loadModels' }));
+    await user.click(screen.getByRole('button', { name: 'settings.ai.testConnection' }));
+
+    await waitFor(() => {
+      expect(listLocalBackendModels).toHaveBeenCalledWith('http://localhost:1234', 'lm_studio');
+      expect(testAIConnection).toHaveBeenCalledWith(
+        'ollama',
+        expect.objectContaining({
+          ollamaBaseUrl: 'http://localhost:1234',
+          localBackendPreset: 'lm_studio',
+        }),
+      );
+    });
   });
 
   it('desktop: scan renders classified status badges and the use-url action patches settings', async () => {
@@ -300,7 +331,7 @@ describe('AiProviderCard — ollama provider (#266)', () => {
     });
   });
 
-  it('desktop: a classified test failure renders the translated key, not the raw technical message', async () => {
+  it('desktop: a classified manual test failure renders the translated key, not the raw technical message', async () => {
     setDesktopRuntime(true);
     vi.mocked(testAIConnection).mockResolvedValue({
       ok: false,
@@ -308,6 +339,7 @@ describe('AiProviderCard — ollama provider (#266)', () => {
       kind: 'httpError',
       params: { status: 503 },
     });
+    const user = userEvent.setup();
     render(
       <AiProviderCard
         advancedAi={ollamaAdvancedAi}
@@ -315,6 +347,7 @@ describe('AiProviderCard — ollama provider (#266)', () => {
         onProviderChange={mockOnProviderChange}
       />,
     );
+    await user.click(screen.getByRole('button', { name: 'settings.ai.testConnection' }));
     await waitFor(() => {
       // QNBS-v3: the translated text renders in two places (the status-badge error line and the
       // manual "Test connection" result span) — both share the same `testError` state.
@@ -323,13 +356,14 @@ describe('AiProviderCard — ollama provider (#266)', () => {
     expect(screen.queryByText('Ollama HTTP 503')).toBeNull();
   });
 
-  it('desktop: an unexpected failure (no params) renders the translated key without crashing', async () => {
+  it('desktop: an unexpected manual test failure renders the translated key without crashing', async () => {
     setDesktopRuntime(true);
     vi.mocked(testAIConnection).mockResolvedValue({
       ok: false,
       error: 'TypeError: something internal broke at services/foo.ts:42',
       kind: 'unexpected',
     });
+    const user = userEvent.setup();
     render(
       <AiProviderCard
         advancedAi={ollamaAdvancedAi}
@@ -337,6 +371,7 @@ describe('AiProviderCard — ollama provider (#266)', () => {
         onProviderChange={mockOnProviderChange}
       />,
     );
+    await user.click(screen.getByRole('button', { name: 'settings.ai.testConnection' }));
     await waitFor(() => {
       expect(screen.getAllByText('settings.ai.testError.unexpected').length).toBeGreaterThan(0);
     });
@@ -376,7 +411,7 @@ describe('AiProviderCard — browser-Ollama opt-in (ADR-0017)', () => {
     expect(screen.getByText(`OLLAMA_ORIGINS=${window.location.origin} ollama serve`)).toBeTruthy();
   });
 
-  it('web, flag on: auto-loads models and tests the connection (matches desktop behavior)', async () => {
+  it('web, flag on: probes models and tests the connection only after an explicit action', async () => {
     setDesktopRuntime(false);
     render(
       <AiProviderCard
@@ -386,8 +421,16 @@ describe('AiProviderCard — browser-Ollama opt-in (ADR-0017)', () => {
         browserOllamaEnabled
       />,
     );
+    const user = userEvent.setup();
+    expect(listLocalBackendModels).not.toHaveBeenCalled();
+    expect(testAIConnection).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'settings.ai.loadModels' }));
+    await user.click(screen.getByRole('button', { name: 'settings.ai.testConnection' }));
     await waitFor(() => {
-      expect(listOllamaModels).toHaveBeenCalled();
+      expect(listLocalBackendModels).toHaveBeenCalledWith(
+        'http://localhost:11434',
+        'ollama_default',
+      );
       expect(testAIConnection).toHaveBeenCalledWith(
         'ollama',
         expect.objectContaining({ browserOllamaEnabled: true }),
@@ -395,7 +438,7 @@ describe('AiProviderCard — browser-Ollama opt-in (ADR-0017)', () => {
     });
   });
 
-  it('web, flag on: Load Models and Test Connection buttons are enabled (unlike the flag-off case)', async () => {
+  it('web, flag on: Load Models and Test Connection buttons are enabled without background work', () => {
     setDesktopRuntime(false);
     render(
       <AiProviderCard
@@ -405,13 +448,8 @@ describe('AiProviderCard — browser-Ollama opt-in (ADR-0017)', () => {
         browserOllamaEnabled
       />,
     );
-    // QNBS-v3: the auto-probe effect fires handleLoadOllamaModels/handleTest on mount, so both
-    // buttons briefly render a loading Spinner instead of their label — wait for that to settle
-    // before asserting the (never-disabled-by-the-flag) enabled state.
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'settings.ai.loadModels' })).not.toBeDisabled();
-      expect(screen.getByRole('button', { name: 'settings.ai.testConnection' })).not.toBeDisabled();
-    });
+    expect(screen.getByRole('button', { name: 'settings.ai.loadModels' })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'settings.ai.testConnection' })).not.toBeDisabled();
   });
 
   it('desktop: unaffected by the flag — no opt-in info block, no change to the existing native-bypass note', () => {
@@ -567,5 +605,249 @@ describe('AiProviderCard — anthropic provider (ADR-0016)', () => {
     await waitFor(() => {
       expect(storageService.saveApiKey).toHaveBeenCalledWith('anthropic', 'sk-ant-test-key');
     });
+  });
+});
+
+// QNBS-v3: regression coverage for the connection-context race guard + the key={provider} removal.
+describe('AiProviderCard — connection-context invalidation (no remount)', () => {
+  afterEach(() => {
+    setDesktopRuntime(false);
+    vi.clearAllMocks();
+    // QNBS-v3: clearAllMocks() clears call history but NOT mockImplementation — these tests
+    // override testAIConnection/listLocalBackendModels with a never-resolving promise factory;
+    // without restoring the defaults, later describe blocks' calls hang on an abandoned resolver.
+    vi.mocked(testAIConnection).mockResolvedValue({ ok: true });
+    vi.mocked(listLocalBackendModels).mockResolvedValue([]);
+  });
+
+  it('ignores a stale Test Connection result after the endpoint changes mid-flight (no provider switch)', async () => {
+    setDesktopRuntime(true);
+    const resolvers: Array<(v: { ok: boolean }) => void> = [];
+    vi.mocked(testAIConnection).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+    const { rerender } = render(
+      <AiProviderCard
+        advancedAi={ollamaAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    await userEvent
+      .setup()
+      .click(screen.getByRole('button', { name: 'settings.ai.testConnection' }));
+    await waitFor(() => expect(resolvers.length).toBeGreaterThan(0));
+
+    // Same provider, same desktop context — only the endpoint URL changes mid-flight.
+    rerender(
+      <AiProviderCard
+        advancedAi={{ ...ollamaAdvancedAi, ollamaBaseUrl: 'http://localhost:9999' }}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByText('settings.ai.providerStatusNotTested')).toBeTruthy();
+    });
+
+    for (const resolve of resolvers) resolve({ ok: false });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.getByText('settings.ai.providerStatusNotTested')).toBeTruthy();
+    expect(screen.queryByText('settings.ai.providerStatusDisconnected')).toBeNull();
+  });
+
+  it('ignores a stale Load Models result after the endpoint changes mid-flight', async () => {
+    setDesktopRuntime(true);
+    const resolvers: Array<(v: string[]) => void> = [];
+    vi.mocked(listLocalBackendModels).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+    const { rerender } = render(
+      <AiProviderCard
+        advancedAi={ollamaAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    await userEvent.setup().click(screen.getByRole('button', { name: 'settings.ai.loadModels' }));
+    await waitFor(() => expect(resolvers.length).toBeGreaterThan(0));
+
+    rerender(
+      <AiProviderCard
+        advancedAi={{ ...ollamaAdvancedAi, localBackendPreset: 'lm_studio' }}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+
+    // Resolve the stale request with models from the OLD server — they must never apply.
+    for (const resolve of resolvers) resolve(['stale-model-from-old-server']);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByText('stale-model-from-old-server')).toBeNull();
+  });
+
+  it('clears an already-loaded model list when the endpoint/preset context changes', async () => {
+    // QNBS-v3: distinct from the stale in-flight case above — this is a PREVIOUSLY SUCCESSFUL load
+    // whose rendered buttons must not survive a context switch, or a user could select a model id
+    // that doesn't exist on the newly selected server.
+    setDesktopRuntime(true);
+    vi.mocked(listLocalBackendModels).mockResolvedValueOnce(['old-server-model']);
+    const { rerender } = render(
+      <AiProviderCard
+        advancedAi={ollamaAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    await userEvent.setup().click(screen.getByRole('button', { name: 'settings.ai.loadModels' }));
+    await waitFor(() => expect(screen.getByText('old-server-model')).toBeInTheDocument());
+
+    rerender(
+      <AiProviderCard
+        advancedAi={{ ...ollamaAdvancedAi, localBackendPreset: 'lm_studio' }}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    expect(screen.queryByText('old-server-model')).toBeNull();
+  });
+
+  it('editing the server URL does not silently reassign the protocol preset', async () => {
+    // QNBS-v3: a native-Ollama user changing host/port must keep speaking native Ollama, not get
+    // force-switched to 'custom' (which routes through the OpenAI-compatible protocol and breaks it).
+    render(
+      <AiProviderCard
+        advancedAi={{ ...ollamaAdvancedAi, localBackendPreset: 'ollama_default' }}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    const urlInput = screen.getByLabelText('settings.ai.ollamaServerUrl');
+    await userEvent.setup().type(urlInput, 'x');
+    expect(mockOnAdvancedAiPatch).toHaveBeenCalled();
+    for (const call of mockOnAdvancedAiPatch.mock.calls) {
+      expect(call[0]).not.toHaveProperty('localBackendPreset');
+    }
+  });
+
+  it('preserves unsaved key input across a provider switch (no more key={provider} remount)', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <AiProviderCard
+        advancedAi={grokAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    const input = screen.getByLabelText('settings.ai.grokKey');
+    await user.type(input, 'unsaved-key-in-progress');
+    expect(input).toHaveValue('unsaved-key-in-progress');
+
+    // Switch away and back without ever saving — a key={provider} remount would have discarded this.
+    rerender(
+      <AiProviderCard
+        advancedAi={mockAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    rerender(
+      <AiProviderCard
+        advancedAi={grokAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    expect(screen.getByLabelText('settings.ai.grokKey')).toHaveValue('unsaved-key-in-progress');
+  });
+});
+
+// QNBS-v3: regression coverage for the WebGPU-badge spinner fix (isProbingGpu vs gpuInfo === null).
+describe('AiProviderCard — WebGPU status badge', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('auto-probes on mount without requiring a Test Connection click', async () => {
+    // QNBS-v3 regression: an earlier commit removed the combined ollama+webllm auto-test effect
+    // for CORS/privacy reasons that only apply to the Ollama network probe — WebGPU detection is a
+    // local hardware check with no such concern, and dropping it as collateral damage left this
+    // badge stuck on "untested" until the user clicked Test Connection.
+    render(
+      <AiProviderCard
+        advancedAi={webllmAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    await waitFor(() => expect(screen.getByText('settings.ai.webllm.gpuAvailable')).toBeTruthy());
+  });
+
+  it('shows a spinner while probing, then the result once detectWebGpuDetails resolves', async () => {
+    const { detectWebGpuDetails } = await import('../../../services/ai/webGpuDetectorService');
+    let resolveProbe!: (v: { status: 'available' }) => void;
+    vi.mocked(detectWebGpuDetails).mockReturnValue(
+      new Promise((resolve) => {
+        resolveProbe = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+    render(
+      <AiProviderCard
+        advancedAi={webllmAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'settings.ai.testConnection' }));
+    await waitFor(() => expect(screen.queryByText('Loading…')).toBeTruthy());
+
+    resolveProbe({ status: 'available' });
+    await waitFor(() => expect(screen.getByText('settings.ai.webllm.gpuAvailable')).toBeTruthy());
+    expect(screen.queryByText('Loading…')).toBeNull();
+  });
+
+  it('ignores a stale GPU probe that resolves after a newer Test Connection click', async () => {
+    // QNBS-v3 regression: the GPU probe chain was the only async result in handleTest not guarded
+    // by testRequestIdRef — an out-of-order stale resolution could overwrite the newer probe's result.
+    const { detectWebGpuDetails } = await import('../../../services/ai/webGpuDetectorService');
+    let resolveFirstProbe!: (v: { status: 'unavailable' }) => void;
+    let resolveSecondProbe!: (v: { status: 'available' }) => void;
+    vi.mocked(detectWebGpuDetails)
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveFirstProbe = resolve;
+        }),
+      )
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveSecondProbe = resolve;
+        }),
+      );
+    const user = userEvent.setup();
+    render(
+      <AiProviderCard
+        advancedAi={webllmAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    const testButton = screen.getByRole('button', { name: 'settings.ai.testConnection' });
+    await user.click(testButton);
+    await user.click(testButton);
+
+    // The stale (first) probe settles after the newer (second) one has already started.
+    resolveFirstProbe({ status: 'unavailable' });
+    await Promise.resolve();
+    expect(screen.queryByText('settings.ai.webllm.gpuUnavailable')).toBeNull();
+
+    resolveSecondProbe({ status: 'available' });
+    await waitFor(() => expect(screen.getByText('settings.ai.webllm.gpuAvailable')).toBeTruthy());
   });
 });

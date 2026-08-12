@@ -58,9 +58,7 @@ export const PassphraseModal: FC<Props> = ({ mode, onClose, onConfirm }) => {
       await onConfirm(current, next);
       onClose();
     } catch {
-      // QNBS-v3: 'set' (first-time setup) has no prior passphrase to be "wrong" — a thrown error
-      // there is always a storage/salt failure, not an auth-tag mismatch. Only 'unlock' verifies
-      // an existing passphrase, so only it can genuinely fail because the passphrase is wrong.
+      // QNBS-v3: 'set' has no prior passphrase to be "wrong" — a thrown error there is a storage/salt failure, not an auth-tag mismatch, so only 'unlock' can genuinely fail on a wrong passphrase.
       setError(
         mode === 'set'
           ? t('settings.privacy.encryptionSetupFailed')

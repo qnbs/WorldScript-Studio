@@ -19,6 +19,8 @@ import {
   setIsEvaluating,
   setIsMerging,
   trainingAborted,
+  trainingCancellationNotConfirmed,
+  trainingCancellationRequested,
   trainingCompleted,
   trainingFailed,
   trainingProgress,
@@ -136,7 +138,7 @@ export const startTrainingThunk = createAsyncThunk<
     customEpochs?: number;
   },
   ThunkConfig
->('lora/startTraining', async (config, { dispatch }) => {
+>('lora/startTraining', async (config, { dispatch, getState }) => {
   const { assertLoraLocalOnly } = await import('../../services/ai/aiPolicy');
   assertLoraLocalOnly(config.baseModelId);
 
@@ -199,7 +201,14 @@ export const startTrainingThunk = createAsyncThunk<
     dispatch(adapterSaved(meta));
     dispatch(trainingCompleted({ outputAdapterId: adapterId }));
   } catch (err) {
-    dispatch(trainingFailed(err instanceof Error ? err.message : String(err)));
+    // QNBS-v3: a killed child's train_lora rejection can arrive after a newer run started (currentRun moved on) — dispatching against a stale runId would wrongly terminate the newer run instead of a no-op.
+    if (getState().lora.currentRun?.id !== runId) return;
+    // QNBS-v3: abort_lora_training waits for the killed child to exit, so the train_lora invoke it just killed can reject here first — without this check a successful cancellation archives as a failure.
+    if (getState().lora.currentRun?.cancellationRequested) {
+      dispatch(trainingAborted());
+    } else {
+      dispatch(trainingFailed(err instanceof Error ? err.message : String(err)));
+    }
   }
 });
 
@@ -210,8 +219,26 @@ export const startTrainingThunk = createAsyncThunk<
 export const abortTrainingThunk = createAsyncThunk<void, void, ThunkConfig>(
   'lora/abortTraining',
   async (_, { dispatch }) => {
+    // QNBS-v3: set before awaiting so startTrainingThunk's catch (which can fire first — see there) can tell a killed process apart from a genuine training failure.
+    dispatch(trainingCancellationRequested());
     const { abortTraining } = await import('../../services/lora/loraTrainingService');
-    await abortTraining();
+    let outcome: Awaited<ReturnType<typeof abortTraining>>;
+    try {
+      outcome = await abortTraining();
+    } catch (err) {
+      // QNBS-v3: a failed native abort must not leave cancellationRequested:true set — training may still be genuinely running, and its own later failure must not be misclassified as a user abort.
+      dispatch(trainingCancellationNotConfirmed());
+      throw err;
+    }
+    if (outcome === 'nothing_to_cancel') {
+      // QNBS-v3: nothing was actually running or starting — clearing the flag stops a coincidental, unrelated training-outcome rejection from being misattributed to this no-op abort.
+      dispatch(trainingCancellationNotConfirmed());
+      return;
+    }
+    if (outcome === 'pending_start_cancelled') {
+      // QNBS-v3: no process exists yet to confirm stopped, but the cancellation WAS recorded — leave cancellationRequested set so startTrainingThunk's catch classifies the pending training_cancelled rejection as aborted, not failed.
+      return;
+    }
     dispatch(trainingAborted());
   },
 );
