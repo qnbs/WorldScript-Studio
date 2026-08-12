@@ -809,4 +809,42 @@ describe('AiProviderCard — WebGPU status badge', () => {
     await waitFor(() => expect(screen.getByText('settings.ai.webllm.gpuAvailable')).toBeTruthy());
     expect(screen.queryByText('Loading…')).toBeNull();
   });
+
+  it('ignores a stale GPU probe that resolves after a newer Test Connection click', async () => {
+    // QNBS-v3 regression: the GPU probe chain was the only async result in handleTest not guarded
+    // by testRequestIdRef — an out-of-order stale resolution could overwrite the newer probe's result.
+    const { detectWebGpuDetails } = await import('../../../services/ai/webGpuDetectorService');
+    let resolveFirstProbe!: (v: { status: 'unavailable' }) => void;
+    let resolveSecondProbe!: (v: { status: 'available' }) => void;
+    vi.mocked(detectWebGpuDetails)
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveFirstProbe = resolve;
+        }),
+      )
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveSecondProbe = resolve;
+        }),
+      );
+    const user = userEvent.setup();
+    render(
+      <AiProviderCard
+        advancedAi={webllmAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    const testButton = screen.getByRole('button', { name: 'settings.ai.testConnection' });
+    await user.click(testButton);
+    await user.click(testButton);
+
+    // The stale (first) probe settles after the newer (second) one has already started.
+    resolveFirstProbe({ status: 'unavailable' });
+    await Promise.resolve();
+    expect(screen.queryByText('settings.ai.webllm.gpuUnavailable')).toBeNull();
+
+    resolveSecondProbe({ status: 'available' });
+    await waitFor(() => expect(screen.getByText('settings.ai.webllm.gpuAvailable')).toBeTruthy());
+  });
 });

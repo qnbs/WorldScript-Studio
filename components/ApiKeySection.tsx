@@ -67,9 +67,7 @@ export const ApiKeySection: FC = () => {
     setIsSaving(true);
     setMessage(null);
     try {
-      // QNBS-v3: this only checks syntax (length + control chars) and persists — it does not confirm
-      // the key actually authenticates. handleTestConnection (auto-triggered below) is what proves
-      // that; "Active" here means "saved", not "verified working."
+      // QNBS-v3: this only checks syntax and persists — handleTestConnection (auto-triggered below) is what actually confirms the key authenticates; "Active" here means "saved", not "verified working."
       await dbService.saveGeminiApiKey(normalizedKey);
       invalidateAiClientCache();
       setApiKey('');

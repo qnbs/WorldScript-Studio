@@ -241,10 +241,13 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
     setTestError('');
     if (provider === 'webllm') {
       setIsProbingGpu(true);
+      // QNBS-v3: guarded like every other async result below — an unguarded stale probe could overwrite gpuInfo/isProbingGpu after a provider switch already reset them.
       void detectWebGpuDetails()
-        .then(setGpuInfo)
-        .catch(() => setGpuInfo({ status: 'unknown' }))
-        .finally(() => setIsProbingGpu(false));
+        .then((info) => applyIfCurrent(testRequestIdRef, requestId, () => setGpuInfo(info)))
+        .catch(() =>
+          applyIfCurrent(testRequestIdRef, requestId, () => setGpuInfo({ status: 'unknown' })),
+        )
+        .finally(() => applyIfCurrent(testRequestIdRef, requestId, () => setIsProbingGpu(false)));
     }
     try {
       const result = await testAIConnection(provider, {

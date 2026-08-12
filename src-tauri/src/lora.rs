@@ -207,11 +207,19 @@ fn cache_python(runtime: ResolvedPython) -> Result<(), String> {
     Ok(())
 }
 
-// QNBS-v3: a cached interpreter was trusted forever otherwise — reuses probe_python's own lightweight filesystem check so a removed/replaced/non-executable cache entry is no longer silently believed.
+// QNBS-v3: pure comparison kept separate from the async reprobe so it's unit-testable without spawning a real interpreter.
+fn python_identity_matches(cached: &ResolvedPython, probed: &ResolvedPython) -> bool {
+    cached.path == probed.path && cached.version == probed.version
+}
+
+// QNBS-v3: a cached interpreter was trusted forever on a filesystem-only check — an executable
+// replaced in place at the same path (upgraded/downgraded/swapped) kept the stale cached version
+// identity. Now re-runs the full probe_python identity check and only trusts the cache on a match.
 async fn cached_python_still_valid(cached: ResolvedPython) -> bool {
-    tokio::task::spawn_blocking(move || validate_python_candidate_path(&cached.path).is_ok())
-        .await
-        .unwrap_or(false)
+    match probe_python(cached.path.clone()).await {
+        Ok(probed) => python_identity_matches(&cached, &probed),
+        Err(_) => false,
+    }
 }
 
 fn python_candidates() -> Vec<String> {
@@ -659,25 +667,43 @@ pub async fn merge_lora(
     }
 }
 
-// QNBS-v3: pure classifier kept separate from the async command so it's unit-testable without spawning a real process — see abort_reports_no_active_process_for_idle_and_pending_start below.
-fn abort_request_targets_active_process(req: AbortTrainingRequest) -> bool {
-    matches!(
-        req,
-        AbortTrainingRequest::StopProcess(_) | AbortTrainingRequest::AlreadyStopping(_)
-    )
+// QNBS-v3: three-way, not boolean — CancelPendingStart is a genuine recorded cancellation (the
+// pending train_lora invocation will reject with training_cancelled), unlike NothingRunning,
+// which is a true no-op. Conflating them as a single "not confirmed" outcome (an earlier version
+// of this fix) made the JS caller clear its cancellation-intent flag before that rejection
+// arrived, misclassifying a successful startup cancellation as a genuine training failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AbortOutcome {
+    /// A real process was found and confirmed terminated.
+    Confirmed,
+    /// The run was still starting (no process yet) — cancellation was recorded and the pending
+    /// `train_lora` invocation will reject with `training_cancelled`; the caller must keep
+    /// treating this run as cancellation-pending until that rejection arrives.
+    PendingStartCancelled,
+    /// Nothing was running or starting — a genuine no-op with no further outcome to expect.
+    NothingToCancel,
+}
+
+// QNBS-v3: pure classifier kept separate from the async command so it's unit-testable without spawning a real process — see abort_outcome_distinguishes_pending_start_from_a_true_no_op below.
+fn classify_abort_outcome(req: AbortTrainingRequest) -> AbortOutcome {
+    match req {
+        AbortTrainingRequest::NothingRunning => AbortOutcome::NothingToCancel,
+        AbortTrainingRequest::CancelPendingStart => AbortOutcome::PendingStartCancelled,
+        AbortTrainingRequest::StopProcess(_) | AbortTrainingRequest::AlreadyStopping(_) => {
+            AbortOutcome::Confirmed
+        }
+    }
 }
 
 /// Abort the currently running training process and confirm its process group exits.
-/// Returns `true` only when a real process for the current run was found and confirmed
-/// terminated; `false` means the call was a no-op (nothing running, or a start still
-/// pending) and the caller must not attribute a later training-outcome rejection to it.
 #[tauri::command]
-pub async fn abort_lora_training() -> Result<bool, String> {
+pub async fn abort_lora_training() -> Result<AbortOutcome, String> {
     let request = request_training_abort()?;
-    let targets_active_process = abort_request_targets_active_process(request);
+    let outcome = classify_abort_outcome(request);
     match request {
         AbortTrainingRequest::NothingRunning | AbortTrainingRequest::CancelPendingStart => {
-            Ok(false)
+            Ok(outcome)
         }
         AbortTrainingRequest::StopProcess(pid) => {
             if let Err(error) = terminate_training_process(pid, false).await {
@@ -691,7 +717,7 @@ pub async fn abort_lora_training() -> Result<bool, String> {
             //          "training_already_running" to an immediate retry. Safe to call twice: it's
             //          PID-guarded, so train_lora's later reap of this same pid is then a no-op.
             clear_training_if(pid)?;
-            Ok(targets_active_process)
+            Ok(outcome)
         }
         AbortTrainingRequest::AlreadyStopping(pid) => {
             // QNBS-v3: escalate to SIGKILL on retry — a process that ignored the first SIGTERM
@@ -709,7 +735,7 @@ pub async fn abort_lora_training() -> Result<bool, String> {
                 });
             }
             clear_training_if(pid)?;
-            Ok(targets_active_process)
+            Ok(outcome)
         }
     }
 }
@@ -838,10 +864,11 @@ pub async fn set_lora_python_path(
 #[cfg(test)]
 mod tests {
     use super::{
-        abort_request_targets_active_process, active_training_state, clear_training_if,
+        active_training_state, classify_abort_outcome, clear_training_if,
         ensure_training_start_not_cancelled, mark_training_running, parse_python_version,
-        request_training_abort, reserve_training_slot, validate_python_candidate_path,
-        AbortTrainingRequest, LoraEnvReport, TrainingState,
+        python_identity_matches, request_training_abort, reserve_training_slot,
+        validate_python_candidate_path, AbortOutcome, AbortTrainingRequest, LoraEnvReport,
+        ResolvedPython, TrainingState,
     };
 
     fn reset_training_state() {
@@ -912,21 +939,47 @@ mod tests {
     }
 
     #[test]
-    fn abort_reports_no_active_process_for_idle_and_pending_start() {
-        // QNBS-v3 regression: these two outcomes previously mapped to the same Ok(()) as a
-        // confirmed kill, letting the JS caller misattribute an unrelated training failure to abort.
-        assert!(!abort_request_targets_active_process(
-            AbortTrainingRequest::NothingRunning
-        ));
-        assert!(!abort_request_targets_active_process(
-            AbortTrainingRequest::CancelPendingStart
-        ));
-        assert!(abort_request_targets_active_process(
-            AbortTrainingRequest::StopProcess(1)
-        ));
-        assert!(abort_request_targets_active_process(
-            AbortTrainingRequest::AlreadyStopping(1)
-        ));
+    fn abort_outcome_distinguishes_pending_start_from_a_true_no_op() {
+        // QNBS-v3 regression: an earlier boolean design mapped NothingRunning and
+        // CancelPendingStart to the same "not confirmed" outcome, letting the JS caller clear its
+        // cancellation-intent flag before a startup cancellation's own training_cancelled
+        // rejection arrived — misclassifying a successful cancel as a genuine training failure.
+        assert_eq!(
+            classify_abort_outcome(AbortTrainingRequest::NothingRunning),
+            AbortOutcome::NothingToCancel
+        );
+        assert_eq!(
+            classify_abort_outcome(AbortTrainingRequest::CancelPendingStart),
+            AbortOutcome::PendingStartCancelled
+        );
+        assert_eq!(
+            classify_abort_outcome(AbortTrainingRequest::StopProcess(1)),
+            AbortOutcome::Confirmed
+        );
+        assert_eq!(
+            classify_abort_outcome(AbortTrainingRequest::AlreadyStopping(1)),
+            AbortOutcome::Confirmed
+        );
+    }
+
+    #[test]
+    fn cached_python_identity_requires_matching_path_and_version() {
+        // QNBS-v3 regression: a filesystem-only cache check kept trusting a stale version identity
+        // after the same path was replaced with a different (possibly incompatible) interpreter.
+        let cached = ResolvedPython {
+            path: "/usr/bin/python3".to_string(),
+            version: "3.11.9".to_string(),
+        };
+        let same = ResolvedPython {
+            path: "/usr/bin/python3".to_string(),
+            version: "3.11.9".to_string(),
+        };
+        let replaced_with_older = ResolvedPython {
+            path: "/usr/bin/python3".to_string(),
+            version: "3.9.0".to_string(),
+        };
+        assert!(python_identity_matches(&cached, &same));
+        assert!(!python_identity_matches(&cached, &replaced_with_older));
     }
 
     #[test]

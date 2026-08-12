@@ -395,7 +395,7 @@ describe('startTrainingThunk', () => {
 describe('abortTrainingThunk', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockAbortTraining.mockResolvedValue(true);
+    mockAbortTraining.mockResolvedValue('confirmed');
   });
 
   it('calls abortTraining service and dispatches trainingAborted when a process was confirmed stopped', async () => {
@@ -410,9 +410,9 @@ describe('abortTrainingThunk', () => {
     // QNBS-v3: a deferred (manually-resolved) abort promise proves the dispatch happens before the
     // await actually settles — an immediately-resolving mock can't distinguish "before the await"
     // from "after it resolved but before the next dispatch," since both produce the same final order.
-    let resolveAbort!: (confirmed: boolean) => void;
+    let resolveAbort!: (outcome: 'confirmed') => void;
     mockAbortTraining.mockReturnValue(
-      new Promise<boolean>((resolve) => {
+      new Promise<'confirmed'>((resolve) => {
         resolveAbort = resolve;
       }),
     );
@@ -424,7 +424,7 @@ describe('abortTrainingThunk', () => {
     );
     expect(requested).toBeDefined();
     expect(dispatch.mock.calls.some((c) => c[0]?.type === 'lora/trainingAborted')).toBe(false);
-    resolveAbort(true);
+    resolveAbort('confirmed');
     await pending;
     expect(dispatch.mock.calls.some((c) => c[0]?.type === 'lora/trainingAborted')).toBe(true);
   });
@@ -452,10 +452,10 @@ describe('abortTrainingThunk', () => {
   });
 
   it('clears cancellationRequested without dispatching trainingAborted when nothing was actually running', async () => {
-    // QNBS-v3 regression: abort_lora_training resolves successfully (not an error) for NothingRunning/
-    // CancelPendingStart, but that must not be treated as a confirmed cancellation of the current run —
-    // a coincidental, unrelated training failure racing with this no-op must not be misattributed to it.
-    mockAbortTraining.mockResolvedValue(false);
+    // QNBS-v3 regression: abort_lora_training resolves successfully (not an error) for NothingRunning,
+    // but that must not be treated as a confirmed cancellation of the current run — a coincidental,
+    // unrelated training failure racing with this no-op must not be misattributed to it.
+    mockAbortTraining.mockResolvedValue('nothing_to_cancel');
     const dispatch = makeDispatch();
     await run(abortTrainingThunk(), dispatch);
     const notConfirmed = dispatch.mock.calls.find(
@@ -466,6 +466,26 @@ describe('abortTrainingThunk', () => {
       (c) => c[0]?.type === 'lora/abortTraining/fulfilled',
     );
     expect(notConfirmed).toBeDefined();
+    expect(aborted).toBeUndefined();
+    expect(fulfilled).toBeDefined();
+  });
+
+  it('leaves cancellationRequested set (and dispatches neither terminal action) when a pending start is cancelled', async () => {
+    // QNBS-v3 regression: CancelPendingStart previously mapped to the same "nothing to cancel"
+    // outcome as a true no-op, clearing cancellationRequested before the pending train_lora
+    // invocation's own training_cancelled rejection reached startTrainingThunk's catch — which then
+    // misclassified a successful startup cancellation as a genuine training failure.
+    mockAbortTraining.mockResolvedValue('pending_start_cancelled');
+    const dispatch = makeDispatch();
+    await run(abortTrainingThunk(), dispatch);
+    const notConfirmed = dispatch.mock.calls.find(
+      (c) => c[0]?.type === 'lora/trainingCancellationNotConfirmed',
+    );
+    const aborted = dispatch.mock.calls.find((c) => c[0]?.type === 'lora/trainingAborted');
+    const fulfilled = dispatch.mock.calls.find(
+      (c) => c[0]?.type === 'lora/abortTraining/fulfilled',
+    );
+    expect(notConfirmed).toBeUndefined();
     expect(aborted).toBeUndefined();
     expect(fulfilled).toBeDefined();
   });
