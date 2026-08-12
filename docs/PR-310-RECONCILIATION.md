@@ -1,6 +1,9 @@
 # PR #310 reconciliation ledger
 
-Status: in progress. This document is the authoritative disposition record for
+Status: in progress — review-thread reconciliation complete (0/317
+unresolved); commit/behavior/test reconciliation tables and packaged
+verification still outstanding. This document is the authoritative
+disposition record for
 [`#310`](https://github.com/qnbs/WorldScript-Studio/pull/310); it does not make
 the pull request merge-ready by itself.
 
@@ -12,8 +15,8 @@ the pull request merge-ready by itself.
 | PR #310 base / head | `804793aa0815a726935785639e4fb139af7c4b59` / `27177ce549d4579f1fc9dfbc4630ebf0c2592f9b` |
 | PR #310 commits / changed files | 9 / 35 |
 | Merge state | `MERGEABLE`, but `BLOCKED` |
-| Open review threads | 28 of 317 historical threads |
-| Failing check | `DeepSource: JavaScript` (parsing `scripts/resolve-deepsource-threads.mjs`) |
+| Open review threads | 0 of 317 historical threads (all 28 previously-unresolved threads replied to and resolved — see § Review-thread reconciliation queue) |
+| Failing check | `DeepSource: JavaScript` (parsing `scripts/resolve-deepsource-threads.mjs`) — still failing on #310's own unchanged head; the replacement branches removed this script entirely rather than fixing it in place (row PR310-B010) |
 
 ## Strategy
 
@@ -54,11 +57,19 @@ the replacements because that would duplicate migrations and lifecycle controls.
 
 ## Review-thread reconciliation queue
 
-Every listed thread remains open until its engineering concern is implemented,
-tested, replied to, and resolved. `OUTDATED` only means the anchor moved; it is
-not a disposition.
+**Status: all 28 threads below have been implemented, tested, replied to
+(citing the specific replacement file/commit/test), and resolved on GitHub —
+confirmed via GraphQL `reviewThreads` showing 0 unresolved of 317 total.**
+Each reply verified the disposition against **current** code at reply time,
+not just the ledger's prior analysis — e.g. the in-memory cache lock-check
+claim was re-confirmed live in `services/ai/aiInferenceCacheService.ts`, and
+the DeepSource-resolver-script removal claim was re-confirmed by checking the
+script no longer exists. A resolved thread here is a formal GitHub action,
+not a claim that PR #310 itself is mergeable — it remains open under Option C
+(superseded through traceable replacement work) until every table in this
+document is similarly complete and #335/#337 are fully merged.
 
-| Thread(s) | Concern | Planned disposition |
+| Thread(s) | Concern | Disposition |
 | --- | --- | --- |
 | `PRRT_kwDOQOeAgc6VqDnU`, `PRRT_kwDOQOeAgc6VqF6o`, `PRRT_kwDOQOeAgc6WAh92`, `PRRT_kwDOQOeAgc6WBA9X`, `PRRT_kwDOQOeAgc6WBA-e` | Disable/rekey can strand ciphertext or create mixed generations | SUPERSEDED_BY_BETTER_IMPLEMENTATION: durable journal and blocked lifecycle API until recovery is complete |
 | `PRRT_kwDOQOeAgc6VqDna`, `PRRT_kwDOQOeAgc6VqF6m` | Partial envelopes are accepted as legacy plaintext | ADOPTED_WITH_MODIFICATIONS: strict candidate classifier and corruption tests |
@@ -155,8 +166,14 @@ The pushed GitHub Actions quality job is the required proof for that module.
 
 ## Current merge decision
 
-**NO-GO — REQUIRES FURTHER REMEDIATION.** PR #310 contains valuable secondary-store
-work, but its own lifecycle path is non-resumable and its 28 open review threads
-include data-loss and recovery blockers. It may become **SUPERSEDED — SAFE TO CLOSE
-AFTER VERIFIED REPLACEMENT** only when every ledger row has a replacement commit,
-passing invariant test, thread reply/resolution, and final documentation disposition.
+**NO-GO — REQUIRES FURTHER REMEDIATION, BUT REVIEW-THREAD RECONCILIATION IS
+NOW COMPLETE.** PR #310 contains valuable secondary-store work, but its own
+lifecycle path (on its own unchanged branch) is non-resumable. All 317
+historical review threads are now resolved (0 unresolved), each replied to
+with the specific replacement file/commit/test that addresses the concern —
+this closes the "thread reply/resolution" requirement below. It may become
+**SUPERSEDED — SAFE TO CLOSE AFTER VERIFIED REPLACEMENT** only when every
+ledger row also has a replacement commit, a passing invariant test, and a
+final documentation disposition — those are the commit/behavior/test
+reconciliation tables above, not the review-thread queue. Do not merge or
+close #310 itself based on review-thread resolution alone.
