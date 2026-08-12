@@ -33,6 +33,11 @@
   "worlds.edit.notes": "注意事項",
   "worlds.editorTabsAriaLabel": "世界 editor tabs",
   "worlds.error.imageFailed": "アンビエンス画像の生成に失敗しました。世界の説明にさらに詳細を追加するか、接続を確認してください。",
+  "worlds.heuristic.culture": "Describe the peoples, beliefs, and daily life shaped by {{concept}}.",
+  "worlds.heuristic.description": "A world defined by its central premise: {{concept}}.",
+  "worlds.heuristic.geography": "Outline the major regions, climates, and natural features of {{concept}}.",
+  "worlds.heuristic.magicSystem": "Define the rules, costs, and limits of power in {{concept}}.",
+  "worlds.heuristic.name": "New World",
   "worlds.loading.profile": "詳細な世界プロファイルを生成しています...",
   "worlds.newWorldName": "New 世界",
   "worlds.noWorlds": "まだワールドが作成されていません。",
@@ -50,10 +55,5 @@
   "worlds.tabs.timeline": "歴史とタイムライン",
   "worlds.title": "世界 Atlas",
   "worlds.uploadImage": "画像をアップロードする",
-  "worlds.yourWorlds": "あなたの世界",
-  "worlds.heuristic.name": "New World",
-  "worlds.heuristic.description": "A world defined by its central premise: {{concept}}.",
-  "worlds.heuristic.geography": "Outline the major regions, climates, and natural features of {{concept}}.",
-  "worlds.heuristic.magicSystem": "Define the rules, costs, and limits of power in {{concept}}.",
-  "worlds.heuristic.culture": "Describe the peoples, beliefs, and daily life shaped by {{concept}}."
+  "worlds.yourWorlds": "あなたの世界"
 }

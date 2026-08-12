@@ -33,6 +33,11 @@
   "worlds.edit.notes": "Notas",
   "worlds.editorTabsAriaLabel": "Pestañas del editor de mundo",
   "worlds.error.imageFailed": "Error al generar la imagen de ambiente. Intenta añadir más detalles a la descripción del mundo.",
+  "worlds.heuristic.culture": "Describe los pueblos, creencias y la vida cotidiana moldeados por {{concept}}.",
+  "worlds.heuristic.description": "Un mundo definido por su premisa central: {{concept}}.",
+  "worlds.heuristic.geography": "Esboza las principales regiones, climas y rasgos naturales de {{concept}}.",
+  "worlds.heuristic.magicSystem": "Define las reglas, los costes y los límites del poder en {{concept}}.",
+  "worlds.heuristic.name": "Nuevo mundo",
   "worlds.loading.profile": "Generando perfil de mundo detallado...",
   "worlds.newWorldName": "Nuevo mundo",
   "worlds.noWorlds": "Ningún mundo creado aún.",
@@ -50,10 +55,5 @@
   "worlds.tabs.timeline": "Historia y cronología",
   "worlds.title": "Atlas de mundos",
   "worlds.uploadImage": "Subir imagen",
-  "worlds.yourWorlds": "Tus mundos",
-  "worlds.heuristic.name": "Nuevo mundo",
-  "worlds.heuristic.description": "Un mundo definido por su premisa central: {{concept}}.",
-  "worlds.heuristic.geography": "Esboza las principales regiones, climas y rasgos naturales de {{concept}}.",
-  "worlds.heuristic.magicSystem": "Define las reglas, los costes y los límites del poder en {{concept}}.",
-  "worlds.heuristic.culture": "Describe los pueblos, creencias y la vida cotidiana moldeados por {{concept}}."
+  "worlds.yourWorlds": "Tus mundos"
 }
