@@ -1,6 +1,6 @@
 # ADR 0018: IndexedDB encryption lifecycle and recovery
 
-**Status:** Accepted. The durable journal and single-owner write gate are implemented; per-record conversion, recovery UX, and lifecycle operations remain unavailable.
+**Status:** Accepted and implemented. The durable journal, single-owner write gate, per-record conversion (primary + secondary store adapters via `encryptionMigrationOrchestrator.ts`), disable/rekey lifecycle operations, and interrupted-migration recovery UX (`EncryptionRecoveryModal`) all ship (Phase 4, issue #338). The `RECOVERY_REQUIRED` state remains a deliberate manual-recovery dead end — see `docs/IDB-ENCRYPTION.md` § Remaining migration work.
 
 ## Context
 
