@@ -1,22 +1,31 @@
 # PR #310 reconciliation ledger
 
-Status: in progress — review-thread reconciliation complete (0/317
-unresolved); commit/behavior/test reconciliation tables and packaged
-verification still outstanding. This document is the authoritative
-disposition record for
-[`#310`](https://github.com/qnbs/WorldScript-Studio/pull/310); it does not make
-the pull request merge-ready by itself.
+Status: **SUPERSEDED — closed as superseded by #335/#336/#337, all merged
+into `main`.** Every row below has a replacement commit, a passing invariant
+test, and a final documentation disposition; all 317 review threads are
+resolved (0 unresolved); the commit/behavior/test reconciliation tables and
+the § Current implementation checkpoint (PR310-R010…R016) hardening rows are
+complete, each verified against `main` at merge time — see § Current merge
+decision. This document remains the authoritative disposition record for
+[`#310`](https://github.com/qnbs/WorldScript-Studio/pull/310)'s closure.
+Production wiring for disable/passphrase-rotation (the actual end-user
+feature B006/B007 describe) is separately tracked as Phase 4 in
+[issue #338](https://github.com/qnbs/WorldScript-Studio/issues/338) — the
+journal/adapter architecture that supersedes #310 is real and tested, but
+not yet wired to a production trigger; see that issue before assuming
+disable/rotate works end-to-end today.
 
-## Live baseline
+## Live baseline (at #310's closure)
 
 | Field | Value |
 | --- | --- |
-| Main SHA | `804793aa0815a726935785639e4fb139af7c4b59` |
+| Main SHA (at #310 closure) | `4fadbd7c82a9e784cac63b8a5dd32d12e9ba7c4d` (#337 merged) |
+| Main SHA (original capture) | `804793aa0815a726935785639e4fb139af7c4b59` |
 | PR #310 base / head | `804793aa0815a726935785639e4fb139af7c4b59` / `27177ce549d4579f1fc9dfbc4630ebf0c2592f9b` |
 | PR #310 commits / changed files | 9 / 35 |
-| Merge state | `MERGEABLE`, but `BLOCKED` |
+| Merge state | `MERGEABLE`, but `BLOCKED` — moot; #310 is closed, not merged |
 | Open review threads | 0 of 317 historical threads (all 28 previously-unresolved threads replied to and resolved — see § Review-thread reconciliation queue) |
-| Failing check | `DeepSource: JavaScript` (parsing `scripts/resolve-deepsource-threads.mjs`) — still failing on #310's own unchanged head; the replacement branches removed this script entirely rather than fixing it in place (row PR310-B010) |
+| Failing check | `DeepSource: JavaScript` (parsing `scripts/resolve-deepsource-threads.mjs`) — was failing on #310's own unchanged head; moot at closure, the replacement branches removed this script entirely rather than fixing it in place (row PR310-B010) |
 
 ## Strategy
 
@@ -166,14 +175,39 @@ The pushed GitHub Actions quality job is the required proof for that module.
 
 ## Current merge decision
 
-**NO-GO — REQUIRES FURTHER REMEDIATION, BUT REVIEW-THREAD RECONCILIATION IS
-NOW COMPLETE.** PR #310 contains valuable secondary-store work, but its own
-lifecycle path (on its own unchanged branch) is non-resumable. All 317
-historical review threads are now resolved (0 unresolved), each replied to
-with the specific replacement file/commit/test that addresses the concern —
-this closes the "thread reply/resolution" requirement below. It may become
-**SUPERSEDED — SAFE TO CLOSE AFTER VERIFIED REPLACEMENT** only when every
-ledger row also has a replacement commit, a passing invariant test, and a
-final documentation disposition — those are the commit/behavior/test
-reconciliation tables above, not the review-thread queue. Do not merge or
-close #310 itself based on review-thread resolution alone.
+**SUPERSEDED — CLOSED, NOT MERGED.** Every gate this ledger set for closure
+is satisfied:
+
+- All 317 historical review threads resolved (0 unresolved), each replied to
+  with the specific replacement file/commit/test.
+- Every commit-reconciliation row (PR310-R001…R009) and behavior-
+  reconciliation row (PR310-B001…B010) has a final disposition and a cited
+  replacement location.
+- The deeper hardening checkpoint (PR310-R010…R016) is independently
+  verified against `main` at closure time — every cited test name
+  (`protectedStoreMigration.test.ts`'s missing-adapter/no-checkpoint/
+  interrupted-verification/recovery-required cases,
+  `secondaryPayloadStoreAdapter.test.ts`'s enable/rekey/disable round trip
+  and concurrent-write-conflict abort, `encryptionMigrationJournal.test.ts`'s
+  owner-lease recovery, `idbSnapshotStore.test.ts`'s missing-snapshot
+  rejection, `sceneRevisionService.test.ts`'s retention/future-schema cases,
+  `aiInferenceCacheService.test.ts`'s durable-write-failure case) exists in
+  `main` and passes.
+- #335, #336, and #337 are all merged into `main` (`4fadbd7c`) — the one
+  condition this document previously left open.
+
+PR #310 itself was never merged — its own branch's lifecycle path remained
+non-resumable throughout, per Option C (supersede through traceable
+replacement work, never merge #310 on top of the replacement). It is closed
+as superseded, referencing this ledger.
+
+**What "superseded" does and does not mean:** the journal/adapter
+*architecture* that B006/B007 point to (durable, checkpointed, resumable) is
+real and tested in `main`. The end-user *feature* those rows describe — an
+actual disable-encryption / rotate-passphrase button that runs it — is not
+wired to any production trigger yet; `clearIdbPassphrase()` and
+`rotateIdbPassphrase()` in `services/storage/storageEncryptionService.ts`
+still unconditionally throw `IdbEncryptionMigrationRequiredError`. That
+production wiring is tracked separately as Phase 4 in
+[issue #338](https://github.com/qnbs/WorldScript-Studio/issues/338), in
+active implementation. Closing #310 does not claim that work is done.

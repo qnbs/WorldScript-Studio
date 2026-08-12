@@ -7,6 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Durable encryption migration journal** (`services/storage/encryptionMigrationJournal.ts`) —
+  persisted, versioned, no-secret coordination metadata (phase, per-store checkpoints, a
+  compare-and-swap owner lease) for cross-database at-rest encryption migrations, which cannot be
+  wrapped in a single atomic IndexedDB transaction. Protected access is blocked while a migration
+  is active or requires recovery, and a durable transaction prevents competing migration owners.
+  This is a recovery foundation — see below for what still isn't wired to a production trigger.
+  (#337)
+- **Resumable protected-store migration runner** (`protectedStoreMigration.ts`) with registered
+  adapters for the two secondary stores (scene revisions, AI inference cache): batch conversion,
+  interruption/resume from the last durable checkpoint, and verification that distinguishes a
+  genuine shortfall from records legitimately deleted by cache eviction or history retention.
+  (#337)
+- **Cross-tab admission for protected writes vs. active migrations**
+  (`services/storage/protectedWriteAdmission.ts`) — a Web Locks API shared/exclusive lock closes
+  the race where an ordinary protected write could commit after a migration had already claimed
+  ownership of the same store, which could otherwise land ciphertext under a superseded
+  key/generation. (#339)
+
+### Changed
+
+- **IndexedDB at-rest encryption now fails closed instead of silently downgrading to plaintext.**
+  Protected reads and writes are rejected with a typed locked-storage error whenever encryption is
+  configured but the session key is missing, closing several Time-Of-Check-To-Time-Of-Use gaps
+  where an intervening `await` (opening a transaction, awaiting encryption) could let Lock Session
+  race a write into plaintext. Every previously-unguarded destructive/listing path (`deleteImage`,
+  `deleteBinderAsset`, `listBinderAssetIds`, `deleteStoryCodex`, `listSnapshots`, `deleteSnapshot`,
+  `deleteProject`) now has the same guard. Disabling encryption or rotating the passphrase is
+  intentionally unavailable until the migration journal's resumable conversion protocol is wired to
+  a production trigger — see [issue #338](https://github.com/qnbs/WorldScript-Studio/issues/338).
+  (#335)
+- **Desktop AI provider and Python integration hardening**, addressing user-reported release-quality
+  issues #332/#333: removed the brittle Gemini `AIza`-prefix key rejection in favor of minimal
+  syntax checks plus real provider validation; Local AI cancel/retry now operates on the actual
+  in-flight acquisition instead of a detached handle, and terminal failures stay visible instead of
+  silently resetting to idle; LM Studio discovery/testing now uses the correct OpenAI-compatible
+  `/v1/models` endpoint with sanitized diagnostics surfaced in the UI; desktop Python discovery,
+  executable selection, and version/error reporting were centralized for consistency across
+  commands. (#336)
+
+### Fixed
+
+- **Secure-record codec no longer silently corrupts unsupported structured-clone types.** `Map`,
+  `Set`, `RegExp`, and non-`Uint8Array` typed arrays previously fell through to a generic
+  object-entries encoder that lost their type and often all content; they now fail closed instead
+  of being encrypted as a different, wrong value. (#337)
+- **Encryption migration journal rejects illegal phase transitions** — completing a migration from
+  a freshly `prepared` journal (skipping conversion and verification entirely) is no longer
+  possible; only a `committing` or `cleanup` phase may terminate. (#337)
+- **Migration verification no longer re-scans already-verified stores on resume**, and a batch that
+  reports progress without advancing its durable cursor is now rejected instead of being able to
+  replay the same records indefinitely. (#337)
+
+### Docs
+
+- Closed out the [PR #310 reconciliation ledger](docs/PR-310-RECONCILIATION.md) as **superseded** —
+  #335/#336/#337 are merged into `main`, satisfying the one condition its merge decision previously
+  left open. PR #310 itself was never merged; its own branch remained non-resumable throughout.
+- Opened [issue #338](https://github.com/qnbs/WorldScript-Studio/issues/338) tracking the remaining
+  Phase-4 work: wiring the migration journal to a real disable/passphrase-rotation UI flow, primary
+  IDB-store adapters, and the two above race-condition fixes' production reachability.
+
 ## [1.26.0] — 2026-08-01
 
 ### Added
