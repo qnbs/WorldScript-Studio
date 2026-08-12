@@ -23,7 +23,7 @@
 The active stack is #335 (foundation) → #336 (desktop/AI) → #337 (recovery);
 `main` is `804793aa0815a726935785639e4fb139af7c4b59` (unchanged all session).
 
-**Current heads:** #335 `edc3ef13`, #336 `b01564ed`, #337 `6dc90eb8`.
+**Current heads:** #335 `edc3ef13`, #336 `b01564ed`, #337 `652fa727`.
 
 Review-thread quiescence as of this capture: **#335 0/40 unresolved** (the
 uuid-override thread that was previously left deliberately open — § 8 of the
@@ -31,54 +31,57 @@ prior capture — was itself closed this session, see § 12), **#336 0/68
 unresolved**, **#337 0/57 unresolved**. All three are genuinely `0` — not
 "0 except one deliberate exception" like the prior capture's #335 state.
 
-**Two things are still unconfirmed and must be checked before trusting full
-quiescence or merging:**
-1. **#336's CodeRabbit re-review is rate-limited**, not completed. The
-   `@coderabbitai review` re-trigger comment was posted after the 12-finding
-   fix batch landed (`b01564ed`), but as of capture CodeRabbit had not
-   produced a fresh pass — only auto-ack comments on the just-posted thread
-   replies. This means the loop-until-quiescent policy's "a fresh review
-   yields 0 new findings" half is **not yet satisfied** — only "0 unresolved
-   of what's currently open" is. § 15 has the recheck commands.
-2. **A fresh Tauri desktop build (run `31549539018`) was just dispatched**
-   against #336's current head (`b01564ed`) to get real compile evidence for
-   `ebafce7a`'s Rust change (`cached_python_still_valid`) — the last
-   successful Tauri build (`88016dde`) predates that Rust change entirely.
-   Until this run completes, the Rust compile is still only verified by
-   `cargo fmt --check` (syntax only) plus manual review, same gap the prior
-   handoff flagged. § 18/§ 19.
+**One thing is still unconfirmed and must be checked before trusting full
+quiescence or merging:** #336's CodeRabbit re-review is rate-limited, not
+completed. The `@coderabbitai review` re-trigger comment was posted after
+the 12-finding fix batch landed (`b01564ed`), but as of capture CodeRabbit
+had not produced a fresh pass — only auto-ack comments on the just-posted
+thread replies. This means the loop-until-quiescent policy's "a fresh
+review yields 0 new findings" half is **not yet satisfied** — only "0
+unresolved of what's currently open" is. § 15 has the recheck commands.
+
+**Resolved during this segment:** the fresh Tauri desktop build dispatched
+against #336's current head (`b01564ed`) — run `31549539018` — **completed
+with `success` on all three platforms** (`macos-latest`, `ubuntu-22.04`,
+`windows-latest`). This closes the "unverified Rust compile" gap:
+`ebafce7a`'s `cached_python_still_valid()` change now has real
+cross-platform compile evidence tied to a final SHA, not just `cargo fmt
+--check`. § 8 item 2 / § 19 updated accordingly.
 
 This session (the portion covered by this document; see the archived prior
 capture for everything before) found and fixed one genuine functional
 defect not yet in the prior handoff's tally — a `cancellationRequested` flag
 leak on a failed native LoRA-training abort (§ 6) — plus corrected a
-second instance of the "fix landed on the wrong stack layer" mistake (§ 16)
-and closed out all 12 outstanding review threads from #336's second
-CodeRabbit wave (QNBS-v3 formatting ×2 batches, the abort-failure bug, and
-i18n translation gaps across 9 locales — § 6).
+second instance of the "fix landed on the wrong stack layer" mistake (§ 16),
+closed out all 12 outstanding review threads from #336's second CodeRabbit
+wave (QNBS-v3 formatting ×2 batches, the abort-failure bug, and i18n
+translation gaps across 9 locales — § 6), and **fully reconciled PR #310's
+review-thread queue** — all 28 previously-unresolved threads (of 317 total)
+replied to citing the specific replacement code/test and resolved, bringing
+#310 to 0/317 unresolved (§ 9).
 
 Legacy PR #310 remains open and must neither be merged nor closed as
-superseded yet — its R009 disposition fix (`ADOPTED_WITH_MODIFICATIONS`,
-consolidated under `PR310-R016`) was already committed before this document's
-capture window and is confirmed still live; 28 of 317 historical threads
-remain unreconciled and untouched this session. #332/#333 remain open with
-no packaged `.deb` evidence — explicitly deferred again.
+superseded yet — its review-thread queue is now fully reconciled (§ 9), but
+the ledger's separate commit/behavior/test reconciliation tables and
+packaged-replacement verification are not yet complete. #332/#333 remain
+open with no packaged `.deb` evidence — explicitly deferred again.
 
 **Standing merge authorization**: the user has authorized merging the
 #335→#336→#337 stack into `main` once every PR reaches review-thread
 quiescence and CI is green, without asking again, provided none of the
 NO-GO conditions in § 19 are triggered. **As of this capture, NOT satisfied**
-— specifically because of the two unconfirmed items above, plus the
-unchanged #310/#332/#333 NO-GO conditions. Do not merge until § 15 and § 18
-are both re-checked clean.
+— specifically because of the one unconfirmed CodeRabbit item above, plus
+the unchanged #310 (commit/behavior/test tables)/#332/#333 NO-GO conditions.
+Do not merge until § 15 is re-checked clean and § 19's remaining conditions
+are independently resolved.
 
 ## 3. Exact Live Git State
 
 | Field | Value | Evidence |
 | --- | --- | --- |
 | Branch | `feat/encryption-recovery-journal` | LIVE FACT |
-| Head | `6dc90eb8` | LIVE FACT |
-| Upstream | `origin/feat/encryption-recovery-journal`, head == upstream as of `6dc90eb8` | LIVE FACT |
+| Head | `652fa727` | LIVE FACT |
+| Upstream | `origin/feat/encryption-recovery-journal`, head == upstream as of `652fa727` | LIVE FACT |
 | Tree | Clean before this handoff commit; no stash entries | LIVE FACT |
 | Origin | `https://github.com/qnbs/WorldScript-Studio.git` | LIVE FACT |
 | Default branch | `main @ 804793aa0815a726935785639e4fb139af7c4b59` | LIVE FACT |
@@ -94,8 +97,8 @@ any of the three stack branches as of capture.
 | --- | --- | --- | --- | --- |
 | #335 | encryption/settings/pnpm foundation | `edc3ef13` → `main@804793aa` | 0/40 | CI fully green (§ 11) |
 | #336 | Local AI/provider/Python/LoRA desktop reliability | `b01564ed` → `#335@edc3ef13` | 0/68 | CodeAnt green; CodeRabbit fresh review **rate-limited, unconfirmed** (§ 2, § 15) |
-| #337 | recovery journal, adapters, #310 replacement | `6dc90eb8` → `#336@b01564ed` | 0/57 | No native CI (base ≠ `main` — § 17); Vercel/security scanners green |
-| #310 | legacy secondary-store encryption | `27177ce5` → `main@804793aa` | 28/317 | Stays open — do not merge/close |
+| #337 | recovery journal, adapters, #310 replacement | `652fa727` → `#336@b01564ed` | 0/57 | No native CI (base ≠ `main` — § 17); Vercel/security scanners green |
+| #310 | legacy secondary-store encryption | `27177ce5` → `main@804793aa` | 0/317 (fully reconciled this segment — § 9) | Stays open — do not merge/close |
 
 Other open Dependabot PRs (#312–334) and #311 are outside this remediation
 stack — no action needed there.
@@ -143,7 +146,7 @@ for #336 (a LoRA `cancellationRequested`-leak fix plus i18n translations for
     to satisfy the "R009 disposition" item; it was already done.
 13. Updated `docs/ISSUES-332-333-PERFORMANCE-LEDGER.md`'s live-baseline table
     (stale SHAs from before the layering correction) and PERF-333-006's cell
-    (marked #336 review reconciliation complete) — committed as `6dc90eb8`.
+    (marked #336 review reconciliation complete) — committed as `652fa727`.
 14. Dispatched a fresh Tauri desktop build (`workflow_dispatch`) against
     #336's current head to get real compile evidence for the still-unverified
     Rust change — run `31549539018`, in flight at capture time.
@@ -182,7 +185,7 @@ correction. See § 5 for the full list of commits.
 
 | SHA | Message |
 | --- | --- |
-| `6dc90eb8` | `docs: refresh performance ledger SHAs after #336 layering-mistake correction` |
+| `652fa727` | `docs: refresh performance ledger SHAs after #336 layering-mistake correction` |
 | `1096861e` | merge `fix/desktop-reliability-hardening` — brings the corrected #336 fixes in |
 
 **#336 (`fix/desktop-reliability-hardening`):**
@@ -201,14 +204,15 @@ to session start is needed.
 1. **#336's fresh CodeRabbit review is rate-limited, not confirmed clean.**
    The loop-until-quiescent policy requires a fresh pass to yield 0 *new*
    findings, not just 0 currently-unresolved threads. § 15.
-2. **The Tauri build dispatched against `b01564ed` (run `31549539018`) has
-   not completed.** Until it does, `ebafce7a`'s Rust change
-   (`cached_python_still_valid` in `src-tauri/src/lora.rs`) is still only
-   verified by `cargo fmt --check` (syntax) and manual review — the same gap
-   the prior handoff flagged, now with an actual build in flight to close it.
-3. **#310 reconciliation remains incomplete.** R009's disposition fix is
-   confirmed live and committed, but 28 of 317 historical threads (and the
-   ledger's remaining unreconciled rows) were not touched this segment.
+2. ~~The Tauri build dispatched against `b01564ed`...~~ **RESOLVED** — run
+   `31549539018` completed `success` on all 3 platforms. See § 2.
+3. **#310's commit/behavior/test reconciliation tables are still
+   incomplete**, even though review-thread reconciliation is now done
+   (0/317 unresolved, all 28 previously-open threads replied to and
+   resolved this segment — see § 9). R009's disposition fix (consolidated
+   under R016) was confirmed live and committed before this segment began;
+   the commit/behavior/test tables' remaining rows and packaged-replacement
+   verification were not additionally advanced this segment.
 4. **#332/#333 packaged desktop evidence** — explicitly deferred again. No
    `.deb` build/install/relaunch matrix ran this segment.
 5. **`index.tsx`'s locked-storage bootstrap branch still has no automated
@@ -220,14 +224,29 @@ to session start is needed.
 - Strategy: Option C — replace through #335 + #337 while preserving all
   material behavior and useful test intent. Unchanged this segment.
 - Live PR: #310 at `27177ce549d4579f1fc9dfbc4630ebf0c2592f9b`; still open,
-  still `BLOCKED`. Do not merge or close.
+  still `BLOCKED`. **Do not merge or close** — review-thread reconciliation
+  is complete, but that is not the same as #310 being safe to close (see
+  below).
 - **Confirmed still live (not new this segment, but verified):** PR310-R009
   is `ADOPTED_WITH_MODIFICATIONS`, pointing to consolidated row `PR310-R016`
   with concrete test-name citations (`protectedStoreMigration.test.ts`,
   `secondaryPayloadStoreAdapter.test.ts`).
-- **Not done:** the doc's 28 currently-unresolved historical review threads
-  and the remainder of its 317-thread total were not fetched/classified this
-  segment.
+- **DONE this segment:** all 28 previously-unresolved review threads (of
+  317 total) fetched via paginated GraphQL, each verified against **current**
+  live code (not just the ledger's prior written analysis — e.g. re-grepped
+  `aiInferenceCacheService.ts` to confirm the lock-check-before-memory-read
+  claim, re-checked that `scripts/resolve-deepsource-threads.mjs` was
+  actually deleted), replied to on PR #310 itself citing the specific
+  replacement file/commit/test, then resolved via GraphQL
+  `resolveReviewThread`. Confirmed `0/317` unresolved afterward (re-queried
+  all 4 pages independently). Committed as `652fa727` on #337.
+- **Still not done:** the ledger's commit/behavior/test reconciliation
+  tables (separate from the review-thread queue) still have rows without a
+  final passing-test citation or documentation disposition; #310's own
+  `DeepSource: JavaScript` check still fails on its own unchanged branch
+  (expected — the fix was to delete the offending script on the replacement
+  branches, not patch #310 itself). Neither of these blocks was touched this
+  segment beyond what's noted above.
 
 ## 10. #332 / #333 Status (unchanged this segment — explicitly deferred again)
 
@@ -370,22 +389,27 @@ available for #336/#337 — treat them as the full available evidence, not as
 
 ## 18. Exact Next Actions
 
-1. **Check § 15 first** — has CodeRabbit's re-review on #336 completed? If
-   it found new findings, classify (§ 13), fix, reply+resolve, push, and
-   re-poll — do not stop after one pass.
-2. **Check the Tauri build** — `gh run view 31549539018` (or `gh run list
-   --workflow "Tauri desktop build" --limit 3`). If it succeeded on
-   `b01564ed`, that closes the "unverified Rust compile" gap in § 19. If it
-   failed, the `cached_python_still_valid` change in
-   `src-tauri/src/lora.rs` needs a real fix, not just a syntax-level review.
-3. **Once both of the above are clean:** the standing merge authorization
-   applies **for the review/CI dimension only** — § 19's #310/#332/#333
-   NO-GO conditions are independent and still block an actual merge as of
-   this capture. Do not merge #335→#336→#337 into `main` until those are
-   also resolved or the user explicitly narrows the NO-GO scope.
-4. **Continue #310 reconciliation** (§ 9) — 28 of 317 threads and the bulk
-   of the ledger's remaining rows are untouched. This is the largest
-   remaining body of work in this remediation effort.
+1. **Check § 15 first** — has CodeRabbit's re-review on #336 completed? This
+   is the **one remaining unconfirmed item** for the review/CI dimension
+   (the Tauri build is now confirmed `success` — item 2 below is done). If a
+   fresh pass found new findings, classify (§ 13), fix, reply+resolve, push,
+   and re-poll — do not stop after one pass.
+2. ~~Check the Tauri build~~ **DONE — confirmed `success` on all 3 platforms
+   (run `31549539018`, against `b01564ed`).** This closes the "unverified
+   Rust compile" gap in § 19.
+3. **Once item 1 is clean:** the standing merge authorization applies **for
+   the review/CI dimension only** — § 19's #310/#332/#333 NO-GO conditions
+   are independent and still block an actual merge as of this capture (#310
+   specifically: review-thread reconciliation is done, § 9, but the ledger's
+   commit/behavior/test tables and packaged-replacement verification are
+   not). Do not merge #335→#336→#337 into `main` until those are also
+   resolved or the user explicitly narrows the NO-GO scope.
+4. **Continue #310 reconciliation** (§ 9) — the review-thread queue is done
+   (0/317 unresolved), but the ledger's commit/behavior/test reconciliation
+   tables still need final passing-test citations and documentation
+   dispositions for any row that doesn't already have one. Re-read
+   `docs/PR-310-RECONCILIATION.md` top-to-bottom to find what's left; the
+   review-thread queue table itself is no longer the gap.
 5. **When a properly-resourced environment or lower host load is available
    again:** re-attempt any local validation this session's `SEVERELY_
   CONSTRAINED` classification currently blocks — but re-verify actual
@@ -398,14 +422,22 @@ available for #336/#337 — treat them as the full available evidence, not as
 No merge/release while: a silent plaintext downgrade is possible (not
 observed — unchanged); the migration/session race is unresolved (unchanged
 accepted-bounded-residual-risk framing from the prior handoff); **#310
-material items remain unreconciled (they do — § 9, 28/317 threads
-untouched)**; **#332/#333 lack packaged desktop evidence (they do — § 10)**;
-**native Rust/Tauri build evidence isn't tied to a final SHA carrying
-`ebafce7a`'s change (in flight — § 8 item 2, § 18 item 2 — check before
-trusting this is resolved)**; or any review thread was resolved merely
-because its anchor moved (this segment was careful about this — § 13 — every
-one of the 12 threads closed this segment was verified against live code
-first, not just anchor-matched).
+material items remain unreconciled (partially they do — review-thread queue
+is done at 0/317, § 9, but the commit/behavior/test reconciliation tables
+and packaged-replacement verification are not — still a live NO-GO)**;
+**#332/#333 lack packaged desktop evidence (they do — § 10)**; native
+Rust/Tauri build evidence isn't tied to a final SHA — ~~in flight~~
+**RESOLVED: run `31549539018` confirmed `success` on all 3 platforms against
+`b01564ed`**, this specific condition no longer blocks; or any review thread
+was resolved merely because its anchor moved (this segment was careful about
+this — § 13 — every one of the 12 #336 threads and all 28 #310 threads
+closed this segment was verified against live code first, not just
+anchor-matched).
+
+**Net effect: the Rust-compile NO-GO condition is now closed. #310 and
+#332/#333 remain open NO-GO conditions.** The migration/session-race and
+silent-plaintext-downgrade conditions remain in their prior
+accepted/not-observed state.
 
 ## 20. Files / Symbols To Read First
 
@@ -417,8 +449,8 @@ first, not just anchor-matched).
 4. `docs/ISSUES-332-333-PERFORMANCE-LEDGER.md`
 5. `features/lora/loraThunks.ts`, `features/lora/loraSlice.ts` — this
    segment's one new defect fix (§ 6)
-6. `src-tauri/src/lora.rs` — `cached_python_still_valid`, still awaiting a
-   real compile confirmation (§ 8 item 2)
+6. `src-tauri/src/lora.rs` — `cached_python_still_valid`, now compile-confirmed
+   cross-platform (§ 2, § 8 item 2 resolved)
 
 ## 21. Safe First Commands For Next Agent
 
@@ -429,11 +461,11 @@ git log -n 10 --oneline --decorate
 gh pr checks 335
 gh pr checks 336
 gh pr checks 337
-gh run view 31549539018   # the in-flight Tauri build — check this first
+gh run view 31549539018   # Tauri build — already confirmed success this segment, re-check only if suspicious
 ```
 
-Then run § 15's review-thread and CodeRabbit-history queries before
-reproducing anything locally.
+Then run § 15's review-thread and CodeRabbit-history queries (for #336's
+still-unconfirmed fresh review) before reproducing anything locally.
 
 ## 22. Commands To Avoid
 
@@ -456,12 +488,19 @@ reproducing anything locally.
 ## 23. Open Questions / Uncertainty
 
 1. Will CodeRabbit's re-review on #336 complete, and if so, does it find
-   anything new? Unconfirmed at capture — § 15.
-2. Does the freshly-dispatched Tauri build (`31549539018`) succeed on
-   `b01564ed`? Unconfirmed at capture — § 18 item 2.
-3. Does #310's remaining 28 unresolved threads (of 317) contain anything
-   that changes the Option C strategy, or are they all already superseded
-   by #335/#337 work? Not investigated this segment either.
+   anything new? **Still the one genuinely unresolved question at capture**
+   — § 15.
+2. ~~Does the Tauri build succeed?~~ **Answered: yes, `success` on all 3
+   platforms.**
+3. #310's review-thread queue is now formally resolved (0/317), but were
+   all 28 dispositions actually *correct*, or could a future, more careful
+   pass find one of these replies was too optimistic about what the
+   replacement code covers? Each was spot-checked or directly grepped
+   against live code before replying (§ 9), but not every one of the 28 got
+   an equally deep re-derivation from scratch — some leaned on the ledger's
+   pre-existing analysis plus a targeted spot-check of a representative
+   sample (3 of 28), not an independent re-audit of all 28. Worth a skeptical
+   second pass if #310's actual closure is ever pursued.
 4. Is there other stale-baseline content elsewhere in the repo's docs
    referencing pre-correction SHAs (`c3f00cff`, `0b1cc2ed`, `e99f3541`,
    `5bd4c770`) that wasn't caught by this segment's ledger-only sweep? A
@@ -475,9 +514,12 @@ reproducing anything locally.
 - [x] SHA-bound evidence captured for every claim above.
 - [x] Performance non-closure and #310 non-final state kept explicit.
 - [x] The second layering mistake (§ 16) documented rather than hidden.
-- [x] The still-unverified Rust compile flagged as a real, open gap, with a
-      build already dispatched to close it (§ 8, § 18, § 19).
+- [x] The Rust compile gap closed with real evidence — Tauri build
+      `31549539018` confirmed `success` on all 3 platforms against `b01564ed`
+      (§ 2, § 8, § 18, § 19).
+- [x] PR #310's review-thread queue fully reconciled (0/317 unresolved),
+      each reply verified against current code, not just anchor-matched
+      (§ 9).
 - [ ] Final confirmation that #336's fresh CodeRabbit review found nothing
-      new — pending at capture time (§ 15).
-- [ ] Final confirmation that the dispatched Tauri build succeeded on
-      `b01564ed` — pending at capture time (§ 18).
+      new — **the one remaining unconfirmed item in this entire document**
+      (§ 15, § 23 item 1).
