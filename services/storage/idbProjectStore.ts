@@ -361,12 +361,11 @@ export class IdbProjectStore extends IdbAssetStore {
   }
 
   async deleteProject(projectId: string): Promise<void> {
-    // QNBS-v3: Guard before the binder-asset cascade too — a locked session must not delete
-    //          protected assets even indirectly via a project-delete request.
-    await assertIdbProtectedWriteAllowed();
-    await this.deleteAllBinderAssetsForProject(projectId);
-    return retryDb(() =>
-      withProtectedWriteAdmission(async () => {
+    // QNBS-v3: one outer admission spans guard+cascade+delete; calls the cascade's unadmitted core since nesting the same lock name can deadlock behind a queued exclusive migration request.
+    return withProtectedWriteAdmission(() =>
+      retryDb(async () => {
+        await assertIdbProtectedWriteAllowed();
+        await this.deleteAllBinderAssetsForProjectUnadmitted(projectId);
         const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
         return new Promise<void>((resolve, reject) => {
           const req = store.delete('project');

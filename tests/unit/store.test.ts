@@ -4,9 +4,14 @@ import { describe, expect, it, vi } from 'vitest';
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('../../services/logger', () => ({
-  logger: { debug: vi.fn(), error: vi.fn(), warn: vi.fn(), info: vi.fn() },
-}));
+vi.mock('../../services/logger', () => {
+  const noopLogger = { debug: vi.fn(), error: vi.fn(), warn: vi.fn(), info: vi.fn() };
+  return {
+    logger: noopLogger,
+    // QNBS-v3: protectedWriteAdmission.ts (pulled in transitively via the storage-backed slices) calls createLogger() at module load.
+    createLogger: () => ({ ...noopLogger, withContext: () => ({ ...noopLogger }) }),
+  };
+});
 
 vi.mock('../../features/settings/keyboardShortcutsDefaults', () => ({
   getDefaultKeyboardShortcuts: vi.fn(() => []),

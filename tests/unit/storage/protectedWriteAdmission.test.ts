@@ -55,6 +55,37 @@ describe('protectedWriteAdmission', () => {
     expect(order).toEqual(['writer-start', 'writer-end', 'migration-start', 'migration-end']);
   });
 
+  it('does not let a new shared writer barge a queued exclusive migration', async () => {
+    const order: string[] = [];
+    const holder = withProtectedWriteAdmission(async () => {
+      order.push('holder-start');
+      await new Promise((resolve) => setTimeout(resolve, 15));
+      order.push('holder-end');
+    });
+    // QNBS-v3: queues the exclusive request while the shared holder above is still running.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const migration = withMigrationAdmission(async () => {
+      order.push('migration-start');
+      order.push('migration-end');
+    });
+    // QNBS-v3: this late writer must queue behind the already-queued exclusive migration, not ahead of it.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const lateWriter = withProtectedWriteAdmission(async () => {
+      order.push('late-writer-start');
+      order.push('late-writer-end');
+    });
+
+    await Promise.all([holder, migration, lateWriter]);
+    expect(order).toEqual([
+      'holder-start',
+      'holder-end',
+      'migration-start',
+      'migration-end',
+      'late-writer-start',
+      'late-writer-end',
+    ]);
+  });
+
   it('propagates the wrapped function result and rethrows its error', async () => {
     await expect(withProtectedWriteAdmission(async () => 'ok')).resolves.toBe('ok');
     await expect(

@@ -110,18 +110,28 @@ export class IdbSnapshotStore extends IdbCodexStore {
   }
 
   async deleteSnapshot(id: number): Promise<void> {
-    return retryDb(() =>
-      withProtectedWriteAdmission(async () => {
-        // QNBS-v3: A locked session must not be able to destroy protected snapshot records.
-        await assertIdbProtectedWriteAllowed();
-        const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readwrite');
-        return new Promise<void>((resolve, reject) => {
-          const request = store.delete(id);
-          request.onsuccess = () => resolve();
-          request.onerror = () => reject(getUserFriendlyDbError(request.error));
-        });
-      }),
-    );
+    return retryDb(() => withProtectedWriteAdmission(() => this.deleteSnapshotsUnadmitted([id])));
+  }
+
+  // QNBS-v3: one transaction + one admission hold for N deletes, not N round trips — used by both deleteSnapshot() and pruneAutoSnapshots().
+  private async deleteSnapshotsUnadmitted(ids: readonly number[]): Promise<void> {
+    if (ids.length === 0) return;
+    await assertIdbProtectedWriteAllowed();
+    const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readwrite');
+    const transaction = store.transaction;
+    return new Promise<void>((resolve, reject) => {
+      let failure: string | undefined;
+      for (const id of ids) {
+        const request = store.delete(id);
+        request.onerror = () => {
+          failure = getUserFriendlyDbError(request.error);
+          transaction.abort();
+        };
+      }
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(failure ?? getUserFriendlyDbError(transaction.error));
+    });
   }
 
   protected async pruneAutoSnapshots(): Promise<void> {
@@ -140,8 +150,8 @@ export class IdbSnapshotStore extends IdbCodexStore {
       .sort((a, b) => a - b)
       .slice(0, allKeys.length - this.MAX_AUTO_SNAPSHOTS);
 
-    for (const key of toDelete) {
-      await this.deleteSnapshot(key);
-    }
+    await retryDb(() =>
+      withProtectedWriteAdmission(() => this.deleteSnapshotsUnadmitted(toDelete)),
+    );
   }
 }

@@ -1,9 +1,6 @@
 /**
  * Cross-tab admission for protected-store writes vs. an active encryption migration.
- * QNBS-v3: assertNoActiveEncryptionMigration() alone is a standalone read — a migration can claim
- *          ownership and commit in the gap between a writer's key resolution and its transaction
- *          commit. Web Locks gives every protected writer/migration batch real mutual exclusion
- *          instead of a preflight check with a race window.
+ * QNBS-v3: replaces the standalone-read assertNoActiveEncryptionMigration() preflight, which left a race window between a writer's key resolution and its transaction commit, with real mutual exclusion.
  */
 
 import { createLogger } from '../logger';

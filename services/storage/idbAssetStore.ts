@@ -185,32 +185,37 @@ export class IdbAssetStore extends IdbSnapshotStore {
   }
 
   async deleteAllBinderAssetsForProject(projectId: string): Promise<void> {
-    return retryDb(() =>
-      withProtectedWriteAdmission(async () => {
-        await assertIdbProtectedWriteAllowed();
-        const ids = await this.listBinderAssetIds(projectId);
-        if (ids.length === 0) return;
-        // QNBS-v3: one transaction for every delete, not one transaction PER asset — a later failure
-        //          aborts the whole batch (IDB rolls back everything already queued in it) instead of
-        //          leaving earlier assets permanently removed while later ones and the project record
-        //          survive. All requests are queued synchronously below the store fetch so IDB never
-        //          auto-commits the transaction mid-batch.
-        const store = await this.getObjectStore(BINDER_ASSETS_STORE, 'readwrite');
-        const transaction = store.transaction;
-        return new Promise<void>((resolve, reject) => {
-          let failure: string | undefined;
-          for (const id of ids) {
-            const request = store.delete(makeBinderAssetStorageKey(projectId, id));
-            request.onerror = () => {
-              failure = getUserFriendlyDbError(request.error);
-              transaction.abort();
-            };
-          }
-          transaction.oncomplete = () => resolve();
-          transaction.onerror = () => reject(transaction.error);
-          transaction.onabort = () => reject(failure ?? getUserFriendlyDbError(transaction.error));
-        });
-      }),
+    return withProtectedWriteAdmission(() =>
+      this.deleteAllBinderAssetsForProjectUnadmitted(projectId),
     );
+  }
+
+  // QNBS-v3: unwrapped core for deleteProject() to call inside its own single outer admission — nesting withProtectedWriteAdmission (same shared lock name, same call stack) can deadlock if an exclusive migration request queues between the outer and inner acquisition.
+  protected async deleteAllBinderAssetsForProjectUnadmitted(projectId: string): Promise<void> {
+    return retryDb(async () => {
+      await assertIdbProtectedWriteAllowed();
+      const ids = await this.listBinderAssetIds(projectId);
+      if (ids.length === 0) return;
+      // QNBS-v3: one transaction for every delete, not one transaction PER asset — a later failure
+      //          aborts the whole batch (IDB rolls back everything already queued in it) instead of
+      //          leaving earlier assets permanently removed while later ones and the project record
+      //          survive. All requests are queued synchronously below the store fetch so IDB never
+      //          auto-commits the transaction mid-batch.
+      const store = await this.getObjectStore(BINDER_ASSETS_STORE, 'readwrite');
+      const transaction = store.transaction;
+      return new Promise<void>((resolve, reject) => {
+        let failure: string | undefined;
+        for (const id of ids) {
+          const request = store.delete(makeBinderAssetStorageKey(projectId, id));
+          request.onerror = () => {
+            failure = getUserFriendlyDbError(request.error);
+            transaction.abort();
+          };
+        }
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(failure ?? getUserFriendlyDbError(transaction.error));
+      });
+    });
   }
 }

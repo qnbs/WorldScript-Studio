@@ -136,30 +136,42 @@ if (typeof window !== 'undefined' && !('SpeechSynthesisUtterance' in window)) {
 }
 
 // navigator.locks (Web Locks API) — jsdom does not implement it, and Node has no navigator at all.
-// QNBS-v3: minimal fair mutex per lock name — shared holders run concurrently, an exclusive
-//          request waits for current holders then blocks new requests until it releases; enough
-//          fidelity for protectedWriteAdmission.ts without a full spec-accurate implementation.
+// QNBS-v3: minimal fair reader/writer mutex per lock name, enough fidelity for protectedWriteAdmission.ts without a full spec-accurate implementation.
 if (typeof navigator === 'undefined') {
   (globalThis as unknown as { navigator: unknown }).navigator = {};
 }
 if (!('locks' in navigator) || !navigator.locks) {
   const activeSharedByName = new Map<string, number>();
   const exclusiveHeldByName = new Set<string>();
-  const waiters = new Map<string, Array<() => void>>();
+  type Waiter = { mode: 'shared' | 'exclusive'; resolve: () => void };
+  const waiters = new Map<string, Waiter[]>();
 
-  function nextWaiter(name: string): void {
+  function hasQueuedExclusive(name: string): boolean {
+    return (waiters.get(name) ?? []).some((w) => w.mode === 'exclusive');
+  }
+
+  // QNBS-v3: wakes the queue's leading exclusive waiter alone, or every leading shared waiter together — prevents new shared requests from barging a queued exclusive one.
+  function wakeNext(name: string): void {
     const queue = waiters.get(name);
-    queue?.shift()?.();
+    if (!queue || queue.length === 0) return;
+    if (queue[0]!.mode === 'exclusive') {
+      queue.shift()!.resolve();
+      return;
+    }
+    while (queue.length > 0 && queue[0]!.mode === 'shared') {
+      queue.shift()!.resolve();
+    }
   }
 
   async function acquire(name: string, mode: 'shared' | 'exclusive'): Promise<() => void> {
     while (
       exclusiveHeldByName.has(name) ||
-      (mode === 'exclusive' && (activeSharedByName.get(name) ?? 0) > 0)
+      (mode === 'exclusive' && (activeSharedByName.get(name) ?? 0) > 0) ||
+      (mode === 'shared' && hasQueuedExclusive(name))
     ) {
       await new Promise<void>((resolve) => {
         const queue = waiters.get(name) ?? [];
-        queue.push(resolve);
+        queue.push({ mode, resolve });
         waiters.set(name, queue);
       });
     }
@@ -167,14 +179,14 @@ if (!('locks' in navigator) || !navigator.locks) {
       exclusiveHeldByName.add(name);
       return () => {
         exclusiveHeldByName.delete(name);
-        nextWaiter(name);
+        wakeNext(name);
       };
     }
     activeSharedByName.set(name, (activeSharedByName.get(name) ?? 0) + 1);
     return () => {
       const remaining = (activeSharedByName.get(name) ?? 1) - 1;
       activeSharedByName.set(name, remaining);
-      if (remaining === 0) nextWaiter(name);
+      if (remaining === 0) wakeNext(name);
     };
   }
 
