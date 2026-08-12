@@ -26,9 +26,10 @@ Object.defineProperty(global, 'localStorage', { value: localStorageMock, writabl
 globalThis.indexedDB = new IDBFactory();
 
 import { APP_DATA_STORE, DB_VERSION, STATE_DB_NAME } from '../../../services/dbConstants';
-import { dbService } from '../../../services/storage';
+import { _resetDbForTest, dbService } from '../../../services/storage';
 import {
   __encryptionMigrationJournalRecordKeyForTest,
+  __resetEncryptionMigrationJournalConnectionsForTest,
   beginEncryptionMigration,
   completeEncryptionMigration,
   IdbMigrationInProgressError,
@@ -72,16 +73,23 @@ async function freshKey(passphrase = 'test-pass'): Promise<CryptoKey> {
   return svc.deriveKey(passphrase, salt);
 }
 
-beforeEach(async () => {
+// QNBS-v3 (CodeRabbit #342): dbService/sentinel/journal are separate IdbConnectionManager singletons
+// with their own cached connections — closing all three before installing a fresh IDBFactory gives
+// every test a genuinely empty database instead of leaking images/codex/vectors/assets across tests.
+beforeEach(() => {
+  _resetDbForTest();
+  sentinelModule._resetSentinelStoreForTest();
+  __resetEncryptionMigrationJournalConnectionsForTest();
+  globalThis.indexedDB = new IDBFactory();
   localStorageMock.clear();
   clearIdbEncryptionKey();
-  // QNBS-v3: the sentinel store is a module singleton with a cached connection — clear its record
-  //          between tests so sentinel-presence assertions start from a clean slate.
-  await sentinelModule.deletePassphraseSentinel();
 });
 
 afterEach(() => {
   clearIdbEncryptionKey();
+  _resetDbForTest();
+  sentinelModule._resetSentinelStoreForTest();
+  __resetEncryptionMigrationJournalConnectionsForTest();
   vi.restoreAllMocks();
 });
 

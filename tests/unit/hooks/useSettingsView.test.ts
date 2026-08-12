@@ -712,6 +712,24 @@ describe('handlePassphraseConfirm — disable/rotate', () => {
       expect.objectContaining({ type: 'featureFlags/setEnableIdbAtRestEncryption' }),
     );
   });
+
+  it('clears migrationProgress and leaves the modal open when rotateIdbPassphrase rejects', async () => {
+    mockRotateIdbPassphrase.mockRejectedValueOnce(new Error('migration failed'));
+    const { result } = renderHook(() => useSettingsView());
+    act(() => {
+      result.current.setPassphraseModal('rotate');
+    });
+
+    await act(async () => {
+      await expect(
+        result.current.handlePassphraseConfirm('old-pass', 'new-pass'),
+      ).rejects.toThrow();
+    });
+
+    expect(result.current.passphraseModal).toBe('rotate');
+    expect(result.current.migrationProgress).toBeNull();
+    expect(mockToastSuccess).not.toHaveBeenCalledWith('settings.privacy.encryptionChangedStatus');
+  });
 });
 
 // ---------------------------------------------------------------------------

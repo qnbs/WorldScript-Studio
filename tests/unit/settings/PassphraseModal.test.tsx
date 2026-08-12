@@ -16,6 +16,22 @@ vi.mock('../../../hooks/useTranslation', () => ({
   useTranslation: () => ({ t: (k: string) => k, language: 'en' }),
 }));
 
+const mockLoggerWarn = vi.fn();
+vi.mock('../../../services/logger', () => ({
+  logger: { warn: (...args: unknown[]) => mockLoggerWarn(...args) },
+}));
+
+// QNBS-v3: IdbWrongPassphraseError must be a real class (not a plain mock) so the component's
+// `err instanceof IdbWrongPassphraseError` check works the same way it does against the real
+// module — vi.hoisted() is required because vi.mock factories run before ordinary top-level
+// `class`/`const` initializers execute.
+const { MockIdbWrongPassphraseError } = vi.hoisted(() => ({
+  MockIdbWrongPassphraseError: class extends Error {},
+}));
+vi.mock('../../../services/storage/storageEncryptionService', () => ({
+  IdbWrongPassphraseError: MockIdbWrongPassphraseError,
+}));
+
 vi.mock('../../../components/ui/Button', () => ({
   Button: (props: React.ButtonHTMLAttributes<HTMLButtonElement>) => <button {...props} />,
 }));
@@ -25,13 +41,17 @@ vi.mock('../../../components/ui/Modal', () => ({
     children,
     title,
     isOpen,
+    isDismissible,
   }: {
     children: React.ReactNode;
     title: string;
     isOpen: boolean;
+    isDismissible?: boolean;
   }) =>
     isOpen ? (
-      <div role="dialog">
+      // QNBS-v3 (CodeRabbit #342): expose isDismissible so tests can assert the modal blocks
+      // dismissal while a disable/rotate migration is running (busy).
+      <div role="dialog" data-dismissible={String(isDismissible)}>
         <h2>{title}</h2>
         {children}
       </div>
@@ -73,6 +93,11 @@ describe('PassphraseModal — set mode', () => {
     vi.clearAllMocks();
     onClose = vi.fn<OnClose>();
     onConfirm = vi.fn<OnConfirm>().mockResolvedValue(undefined) as Mock<OnConfirm>;
+  });
+
+  it('is dismissible while idle (not busy)', () => {
+    render(<PassphraseModal {...makeProps('set', onConfirm, onClose)} />);
+    expect(screen.getByRole('dialog')).toHaveAttribute('data-dismissible', 'true');
   });
 
   it('renders set title', () => {
@@ -209,8 +234,8 @@ describe('PassphraseModal — unlock mode', () => {
     await waitFor(() => expect(onConfirm).toHaveBeenCalledWith('mypassword', ''));
   });
 
-  it('shows an error when unlock fails', async () => {
-    onConfirm.mockRejectedValue(new Error('wrong'));
+  it('shows a wrong-passphrase error when unlock fails on a credential mismatch', async () => {
+    onConfirm.mockRejectedValue(new MockIdbWrongPassphraseError());
     const user = userEvent.setup();
     render(<PassphraseModal {...makeProps('unlock', onConfirm, onClose)} />);
     await user.type(
@@ -309,6 +334,8 @@ describe('PassphraseModal — disable mode', () => {
     expect(
       screen.getByText('settings.privacy.encryptionMigrationProgress', { exact: false }),
     ).toBeInTheDocument();
+    // QNBS-v3 (CodeRabbit #342): the modal must block dismissal while the migration is running.
+    expect(screen.getByRole('dialog')).toHaveAttribute('data-dismissible', 'false');
 
     resolveConfirm?.();
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
@@ -389,8 +416,8 @@ describe('PassphraseModal — rotate mode', () => {
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });
 
-  it('shows a wrong-passphrase error when onConfirm rejects', async () => {
-    onConfirm.mockRejectedValue(new Error('wrong old passphrase'));
+  it('shows a wrong-passphrase error when onConfirm rejects with a credential mismatch', async () => {
+    onConfirm.mockRejectedValue(new MockIdbWrongPassphraseError());
     const user = userEvent.setup();
     render(<PassphraseModal {...makeProps('rotate', onConfirm, onClose)} />);
     await user.type(screen.getByLabelText('settings.privacy.encryptionCurrentPassphrase'), 'wrong');
@@ -409,5 +436,39 @@ describe('PassphraseModal — rotate mode', () => {
       ),
     );
     expect(onClose).not.toHaveBeenCalled();
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
+  });
+
+  // QNBS-v3 (CodeRabbit #342): rotateIdbPassphrase can also fail after old-passphrase verification
+  // succeeded — an active/recovery-required journal or a store migration failure — which must not
+  // be misreported as a wrong-passphrase error (it would send the user to retype a correct
+  // passphrase instead of towards the actual recovery/migration problem).
+  it('shows a generic recovery-failed error (not wrong-passphrase) for a non-credential migration failure', async () => {
+    onConfirm.mockRejectedValue(new Error('a migration is already active'));
+    const user = userEvent.setup();
+    render(<PassphraseModal {...makeProps('rotate', onConfirm, onClose)} />);
+    await user.type(
+      screen.getByLabelText('settings.privacy.encryptionCurrentPassphrase'),
+      'correctpass',
+    );
+    await user.type(
+      screen.getByLabelText('settings.privacy.encryptionNewPassphrase'),
+      'newpass123',
+    );
+    await user.type(
+      screen.getByLabelText('settings.privacy.encryptionConfirmPassphrase'),
+      'newpass123',
+    );
+    await user.click(screen.getByText('settings.privacy.encryptionChangeButton'));
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'settings.privacy.encryptionRecoveryFailed',
+      ),
+    );
+    expect(onClose).not.toHaveBeenCalled();
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      'PassphraseModal rotate failed',
+      expect.objectContaining({ error: 'a migration is already active' }),
+    );
   });
 });

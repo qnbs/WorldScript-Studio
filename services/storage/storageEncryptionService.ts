@@ -128,6 +128,23 @@ export class IdbEncryptionSaltLostError extends Error {
   }
 }
 
+/**
+ * QNBS-v3 (CodeRabbit #342): raised specifically when a supplied passphrase fails to authenticate
+ * against a durable sentinel/verifier (AES-GCM auth-tag mismatch, or a migration target-verifier
+ * shape check) — as opposed to any other resume/migration failure (missing verifier, invalid
+ * journal operation, storage/adapter errors). Lets callers (PassphraseModal, EncryptionRecoveryModal)
+ * show an actionable "wrong passphrase" message only for genuine credential mismatches, and a
+ * distinct recovery/migration-failure message for everything else.
+ */
+export class IdbWrongPassphraseError extends Error {
+  readonly code = 'WRONG_PASSPHRASE' as const;
+
+  constructor() {
+    super('Passphrase does not match the stored verifier');
+    this.name = 'IdbWrongPassphraseError';
+  }
+}
+
 export class StorageEncryptionService {
   /**
    * Derive a non-extractable AES-256-GCM key from a passphrase + salt.
@@ -615,8 +632,12 @@ export async function verifyAndInitIdbEncryption(passphrase: string): Promise<vo
   _sentinelPresenceCache = true;
   const salt = getExistingSalt();
   const key = await _svc.deriveKey(passphrase, salt);
-  // QNBS-v3: decrypt throws on wrong key — AES-GCM auth-tag is the verifier
-  await _svc.decrypt(key, { bytes: sentinelBytes });
+  try {
+    // QNBS-v3: decrypt throws on wrong key — AES-GCM auth-tag is the verifier
+    await _svc.decrypt(key, { bytes: sentinelBytes });
+  } catch {
+    throw new IdbWrongPassphraseError();
+  }
   _activeKey = key;
 }
 
@@ -631,14 +652,19 @@ export async function assertIdbMigrationTargetKeyMatchesVerifier(
   targetKey: CryptoKey,
   targetVerifier: readonly number[],
 ): Promise<void> {
-  const verified = await _svc.decrypt(targetKey, { bytes: new Uint8Array(targetVerifier) });
+  let verified: unknown;
+  try {
+    verified = await _svc.decrypt(targetKey, { bytes: new Uint8Array(targetVerifier) });
+  } catch {
+    throw new IdbWrongPassphraseError();
+  }
   if (
     typeof verified !== 'object' ||
     verified === null ||
     Object.getPrototypeOf(verified) !== Object.prototype ||
     (verified as { v?: unknown }).v !== 1
   ) {
-    throw new Error('Migration target verifier is invalid');
+    throw new IdbWrongPassphraseError();
   }
 }
 
@@ -758,8 +784,12 @@ export async function deriveAndVerifySourceKeyFromSentinel(passphrase: string): 
   const sentinelBytes = await getPassphraseSentinel();
   if (!sentinelBytes) throw new Error('No passphrase sentinel found — encryption was not set up');
   const key = await _svc.deriveKey(passphrase, getExistingSalt());
-  // QNBS-v3: decrypt throws on wrong key — AES-GCM auth-tag is the verifier, same pattern as verifyAndInitIdbEncryption.
-  await _svc.decrypt(key, { bytes: sentinelBytes });
+  try {
+    // QNBS-v3: decrypt throws on wrong key — AES-GCM auth-tag is the verifier, same pattern as verifyAndInitIdbEncryption.
+    await _svc.decrypt(key, { bytes: sentinelBytes });
+  } catch {
+    throw new IdbWrongPassphraseError();
+  }
   return key;
 }
 

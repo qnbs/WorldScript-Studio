@@ -49,6 +49,11 @@ class PassphraseSentinelStore extends IdbConnectionManager {
 
 const _store = new PassphraseSentinelStore();
 
+/** Test-only: closes the cached connection so a freshly-installed IDBFactory takes effect. */
+export function _resetSentinelStoreForTest(): void {
+  (_store as unknown as { closeConnections: () => void }).closeConnections();
+}
+
 /** Persist the encrypted sentinel bytes (produced by AES-GCM encrypt). */
 export async function savePassphraseSentinel(bytes: Uint8Array): Promise<void> {
   return _store.save(bytes);

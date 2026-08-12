@@ -108,13 +108,11 @@ export const PrivacySection: FC = () => {
             )}
             {encEnabled && encryptionReady && (
               <>
-                {/* QNBS-v3: Lock Session clears the in-memory key without disabling encryption —
-                    user must re-enter passphrase on next access. */}
+                {/* QNBS-v3: Lock Session clears the in-memory key without disabling encryption — user must re-enter passphrase on next access. */}
                 <Button variant="secondary" onClick={handleLockSession}>
                   {t('settings.privacy.encryptionLockAction')}
                 </Button>
-                {/* QNBS-v3: both require an unlocked session key — clearIdbPassphrase/
-                    rotateIdbPassphrase re-migrate every protected store before touching the sentinel. */}
+                {/* QNBS-v3: both require an unlocked session key — clearIdbPassphrase/rotateIdbPassphrase re-migrate every protected store before touching the sentinel. */}
                 <Button variant="secondary" onClick={() => setPassphraseModal('rotate')}>
                   {t('settings.privacy.encryptionChangeAction')}
                 </Button>

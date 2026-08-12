@@ -130,6 +130,9 @@ async function readProjectRecords(database: IDBDatabase, projectId: string): Pro
     const request = transaction.objectStore(RAG_VECTORS_STORE).index('projectId').getAll(projectId);
     request.onsuccess = () => resolve(request.result as unknown[]);
     request.onerror = () => reject(request.error);
+    // QNBS-v3 (CodeRabbit #342): an abort without a request error (quota, version change) must still settle this promise, or the migration stalls holding its lease — matches listDistinctProjectIds/readBatch's existing onabort handling.
+    transaction.onabort = () =>
+      reject(transaction.error ?? new Error(`${RAG_VECTORS_STORE} read aborted`));
   });
 }
 
