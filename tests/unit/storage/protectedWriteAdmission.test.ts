@@ -95,6 +95,7 @@ describe('protectedWriteAdmission', () => {
     ).rejects.toThrow('boom');
   });
 
+  // QNBS-v3: proves the fallback path stays usable (not just excluded/dropped) on runtimes without navigator.locks.
   it('uses the in-process fallback lock and still returns results when navigator.locks is unavailable', async () => {
     const original = navigator.locks;
     // @ts-expect-error — simulating an older runtime without the Web Locks API

@@ -18,7 +18,7 @@ function hasLocksApi(): boolean {
 type FallbackMode = 'shared' | 'exclusive';
 interface FallbackWaiter {
   mode: FallbackMode;
-  resolve: () => void;
+  grant: () => void;
 }
 let fallbackActiveShared = 0;
 let fallbackExclusiveHeld = false;
@@ -28,33 +28,44 @@ function fallbackHasQueuedExclusive(): boolean {
   return fallbackWaiters.some((waiter) => waiter.mode === 'exclusive');
 }
 
+// QNBS-v3: claims ownership synchronously, in the same statement that decides the lock is free — a caller can never observe a moment where the lock looks free but no one has claimed it yet.
+function fallbackTryClaim(mode: FallbackMode): boolean {
+  if (fallbackExclusiveHeld) return false;
+  if (mode === 'exclusive') {
+    if (fallbackActiveShared > 0) return false;
+    fallbackExclusiveHeld = true;
+    return true;
+  }
+  if (fallbackHasQueuedExclusive()) return false;
+  fallbackActiveShared++;
+  return true;
+}
+
+// QNBS-v3: also claims ownership synchronously before grant() resolves the waiter's promise, so release-then-wake can never leave a gap where a fresh caller barges in ahead of an already-woken waiter.
 function fallbackWakeNext(): void {
   if (fallbackWaiters.length === 0) return;
   if (fallbackWaiters[0]!.mode === 'exclusive') {
-    fallbackWaiters.shift()!.resolve();
+    fallbackExclusiveHeld = true;
+    fallbackWaiters.shift()!.grant();
     return;
   }
   while (fallbackWaiters.length > 0 && fallbackWaiters[0]!.mode === 'shared') {
-    fallbackWaiters.shift()!.resolve();
+    fallbackActiveShared++;
+    fallbackWaiters.shift()!.grant();
   }
 }
 
 async function acquireFallback(mode: FallbackMode): Promise<() => void> {
-  while (
-    fallbackExclusiveHeld ||
-    (mode === 'exclusive' && fallbackActiveShared > 0) ||
-    (mode === 'shared' && fallbackHasQueuedExclusive())
-  ) {
-    await new Promise<void>((resolve) => fallbackWaiters.push({ mode, resolve }));
+  if (!fallbackTryClaim(mode)) {
+    // QNBS-v3: fallbackWakeNext() already claimed ownership on this waiter's behalf before calling grant() — no re-check needed here.
+    await new Promise<void>((grant) => fallbackWaiters.push({ mode, grant }));
   }
   if (mode === 'exclusive') {
-    fallbackExclusiveHeld = true;
     return () => {
       fallbackExclusiveHeld = false;
       fallbackWakeNext();
     };
   }
-  fallbackActiveShared++;
   return () => {
     fallbackActiveShared--;
     if (fallbackActiveShared === 0) fallbackWakeNext();
