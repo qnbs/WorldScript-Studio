@@ -16,6 +16,7 @@ export const PrivacySection: FC = () => {
     setPassphraseModal,
     handlePassphraseConfirm,
     handleLockSession,
+    migrationProgress,
   } = useSettingsViewContext();
 
   const encEnabled = featureFlags.enableIdbAtRestEncryption;
@@ -112,6 +113,14 @@ export const PrivacySection: FC = () => {
                 <Button variant="secondary" onClick={handleLockSession}>
                   {t('settings.privacy.encryptionLockAction')}
                 </Button>
+                {/* QNBS-v3: both require an unlocked session key — clearIdbPassphrase/
+                    rotateIdbPassphrase re-migrate every protected store before touching the sentinel. */}
+                <Button variant="secondary" onClick={() => setPassphraseModal('rotate')}>
+                  {t('settings.privacy.encryptionChangeAction')}
+                </Button>
+                <Button variant="danger" onClick={() => setPassphraseModal('disable')}>
+                  {t('settings.privacy.encryptionDisableAction')}
+                </Button>
               </>
             )}
           </div>
@@ -123,6 +132,7 @@ export const PrivacySection: FC = () => {
           mode={passphraseModal}
           onClose={() => setPassphraseModal('closed')}
           onConfirm={handlePassphraseConfirm}
+          progress={migrationProgress}
         />
       )}
     </div>
