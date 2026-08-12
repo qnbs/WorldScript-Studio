@@ -11,6 +11,7 @@ import {
   releaseEncryptionMigrationOwnership,
   updateEncryptionMigrationJournal,
 } from './encryptionMigrationJournal';
+import { withMigrationAdmission } from './protectedWriteAdmission';
 import { assertIdbMigrationTargetKeyMatchesVerifier } from './storageEncryptionService';
 
 export interface EncryptionMigrationKeys {
@@ -244,7 +245,10 @@ export async function runProtectedStoreMigration(
       for (const adapter of adapters) {
         let checkpoint = checkpointFor(journal, adapter.id);
         while (!checkpoint.done) {
-          const batch = await adapter.migrateNext(migrationContext(journal, checkpoint, keys));
+          // QNBS-v3: exclusive admission bounds the race window to one batch, not the whole run — closes the write-vs-migration TOCTOU gap (#338) while still letting writers proceed between batches.
+          const batch = await withMigrationAdmission(() =>
+            adapter.migrateNext(migrationContext(journal, checkpoint, keys)),
+          );
           checkpoint = nextCheckpoint(checkpoint, batch);
           journal = await updateEncryptionMigrationJournal(journal, {
             phase: 'migrating',

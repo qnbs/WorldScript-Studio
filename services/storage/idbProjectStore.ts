@@ -22,6 +22,7 @@ import { logger } from '../logger';
 import type { SaveProjectInput } from '../storageBackend';
 import { IdbAssetStore } from './idbAssetStore';
 import { compressData, getUserFriendlyDbError, retryDb } from './idbCore';
+import { withProtectedWriteAdmission } from './protectedWriteAdmission';
 import {
   assertIdbProtectedWriteAllowed,
   assertNoActiveEncryptionMigration,
@@ -217,21 +218,23 @@ export class IdbProjectStore extends IdbAssetStore {
     sliceName: 'project' | 'settings',
     data: PersistedProjectState | Settings,
   ): Promise<void> {
-    // QNBS-v3: Resolve the write key AND encrypt BEFORE opening the store — awaiting
-    //          idbEncryptWithKey after getObjectStore would yield the event loop while the
-    //          transaction is open, letting IDB auto-commit it before store.put runs
-    //          (TransactionInactiveError); resolving the key first also removes the Lock-Session
-    //          race, since the payload decision no longer depends on state read after an await.
-    const writeKey = await resolveProtectedWriteKey();
-    // QNBS-v3: Plaintext is allowed only when encryption was never configured for this library.
-    const payload = writeKey ? await idbEncryptWithKey(writeKey, data) : compressData(data);
-    // QNBS-v3: only the migration guard is re-checked here — resolveProtectedWriteKey() already made its own lock check atomically with the key snapshot, so re-running that too would wrongly reject an already-safely-encrypted write if the session locks mid-write.
-    await assertNoActiveEncryptionMigration();
-    const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
-    return new Promise((resolve, reject) => {
-      const request = store.put(payload, sliceName);
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
+    return withProtectedWriteAdmission(async () => {
+      // QNBS-v3: Resolve the write key AND encrypt BEFORE opening the store — awaiting
+      //          idbEncryptWithKey after getObjectStore would yield the event loop while the
+      //          transaction is open, letting IDB auto-commit it before store.put runs
+      //          (TransactionInactiveError); resolving the key first also removes the Lock-Session
+      //          race, since the payload decision no longer depends on state read after an await.
+      const writeKey = await resolveProtectedWriteKey();
+      // QNBS-v3: Plaintext is allowed only when encryption was never configured for this library.
+      const payload = writeKey ? await idbEncryptWithKey(writeKey, data) : compressData(data);
+      // QNBS-v3: only the migration guard is re-checked here — resolveProtectedWriteKey() already made its own lock check atomically with the key snapshot, so re-running that too would wrongly reject an already-safely-encrypted write if the session locks mid-write.
+      await assertNoActiveEncryptionMigration();
+      const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
+      return new Promise<void>((resolve, reject) => {
+        const request = store.put(payload, sliceName);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
     });
   }
 
@@ -358,17 +361,20 @@ export class IdbProjectStore extends IdbAssetStore {
   }
 
   async deleteProject(projectId: string): Promise<void> {
-    // QNBS-v3: Guard before the binder-asset cascade too — a locked session must not delete
-    //          protected assets even indirectly via a project-delete request.
-    await assertIdbProtectedWriteAllowed();
-    await this.deleteAllBinderAssetsForProject(projectId);
-    return retryDb(async () => {
-      const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
-      return new Promise<void>((resolve, reject) => {
-        const req = store.delete('project');
-        req.onsuccess = () => resolve();
-        req.onerror = () => reject(getUserFriendlyDbError(req.error));
-      });
-    });
+    // QNBS-v3: one outer admission spans guard+cascade+delete; calls the cascade's unadmitted core since nesting the same lock name can deadlock behind a queued exclusive migration request.
+    return withProtectedWriteAdmission(() =>
+      retryDb(async () => {
+        await assertIdbProtectedWriteAllowed();
+        await this.deleteAllBinderAssetsForProjectUnadmitted(projectId);
+        // QNBS-v3: re-checked immediately before the final mutation — the cascade above took real async time under the same admission hold, and a Lock Session (not a migration, which admission already excludes) could still fire during it.
+        await assertIdbProtectedWriteAllowed();
+        const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
+        return new Promise<void>((resolve, reject) => {
+          const req = store.delete('project');
+          req.onsuccess = () => resolve();
+          req.onerror = () => reject(getUserFriendlyDbError(req.error));
+        });
+      }),
+    );
   }
 }

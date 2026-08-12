@@ -30,7 +30,8 @@ const snapshotStore = new Map<number, SnapshotRecord>();
 const appDataStore = new Map<string, unknown>();
 let nextSnapshotKey = 1;
 
-function createSnapshotFakeStore() {
+// QNBS-v3: pending tracks each request's completion promise so the owning transaction mock (below) can fire oncomplete only after every request queued on it has actually settled.
+function createSnapshotFakeStore(pending: Promise<void>[] = []) {
   return {
     add: (value: unknown) => {
       const key = nextSnapshotKey++;
@@ -40,10 +41,12 @@ function createSnapshotFakeStore() {
         result: key,
         error: null,
       };
-      Promise.resolve().then(() => {
-        snapshotStore.set(key, value as SnapshotRecord);
-        (req['onsuccess'] as (() => void) | null)?.();
-      });
+      pending.push(
+        Promise.resolve().then(() => {
+          snapshotStore.set(key, value as SnapshotRecord);
+          (req['onsuccess'] as (() => void) | null)?.();
+        }),
+      );
       return req;
     },
     get: (key: number) => {
@@ -53,9 +56,11 @@ function createSnapshotFakeStore() {
         result: snapshotStore.get(key),
         error: null,
       };
-      Promise.resolve().then(() => {
-        (req['onsuccess'] as ((e: Event) => void) | null)?.({} as Event);
-      });
+      pending.push(
+        Promise.resolve().then(() => {
+          (req['onsuccess'] as ((e: Event) => void) | null)?.({} as Event);
+        }),
+      );
       return req;
     },
     delete: (key: number) => {
@@ -63,10 +68,12 @@ function createSnapshotFakeStore() {
         onsuccess: null,
         onerror: null,
       };
-      Promise.resolve().then(() => {
-        snapshotStore.delete(key);
-        (req['onsuccess'] as ((e: Event) => void) | null)?.({} as Event);
-      });
+      pending.push(
+        Promise.resolve().then(() => {
+          snapshotStore.delete(key);
+          (req['onsuccess'] as ((e: Event) => void) | null)?.({} as Event);
+        }),
+      );
       return req;
     },
     // openCursor with 'prev' direction for listSnapshots
@@ -80,11 +87,19 @@ function createSnapshotFakeStore() {
         onerror: null,
         result: null,
       };
+      // QNBS-v3: tracks the whole cursor walk (not just its first step) so the owning transaction's oncomplete waits for every continue()-driven iteration.
+      let resolveCursorDone!: () => void;
+      pending.push(
+        new Promise<void>((resolve) => {
+          resolveCursorDone = resolve;
+        }),
+      );
 
       const advance = () => {
         if (index >= entries.length) {
           req['result'] = null;
           (req['onsuccess'] as ((e: Event) => void) | null)?.({} as Event);
+          resolveCursorDone();
           return;
         }
         const [key, value] = entries[index++] as [number, SnapshotRecord];
@@ -101,19 +116,41 @@ function createSnapshotFakeStore() {
       Promise.resolve().then(advance);
       return req;
     },
-    // getAllKeys for pruneAutoSnapshots
+    // getAllKeys for pruneAutoSnapshots — always its own standalone transaction in production code
+    // (never batched with add/get/delete/openCursor), but still tracked into `pending` so this
+    // transaction's own oncomplete cannot fire before this, its only, request settles.
     getAllKeys: () => {
       const req: Record<string, unknown> = {
         onsuccess: null,
         onerror: null,
         result: [...snapshotStore.keys()].sort((a, b) => a - b),
       };
-      Promise.resolve().then(() => {
-        (req['onsuccess'] as ((e: Event) => void) | null)?.({} as Event);
-      });
+      pending.push(
+        Promise.resolve().then(() => {
+          (req['onsuccess'] as ((e: Event) => void) | null)?.({} as Event);
+        }),
+      );
       return req;
     },
   };
+}
+
+// QNBS-v3: completes the fake transaction after every queued request (including full cursor walks) settles, mirroring real IDB transaction batching.
+function createSnapshotFakeTransaction() {
+  const pending: Promise<void>[] = [];
+  const txn: Record<string, unknown> = {
+    oncomplete: null,
+    onerror: null,
+    onabort: null,
+    error: null,
+  };
+  const store: Record<string, unknown> = createSnapshotFakeStore(pending);
+  store['transaction'] = txn;
+  txn['objectStore'] = () => store;
+  queueMicrotask(() => {
+    void Promise.all(pending).then(() => (txn['oncomplete'] as (() => void) | null)?.());
+  });
+  return txn;
 }
 
 function createAppDataFakeStore() {
@@ -136,8 +173,8 @@ const SNAPSHOTS_STORE_NAME = 'snapshots-store';
 
 const fakeMixedDb = {
   transaction: vi.fn().mockImplementation((storeName: string) => {
-    const store =
-      storeName === SNAPSHOTS_STORE_NAME ? createSnapshotFakeStore() : createAppDataFakeStore();
+    if (storeName === SNAPSHOTS_STORE_NAME) return createSnapshotFakeTransaction();
+    const store = createAppDataFakeStore();
     return { objectStore: () => store };
   }),
 };
