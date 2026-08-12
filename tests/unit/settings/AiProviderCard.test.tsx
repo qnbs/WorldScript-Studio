@@ -909,7 +909,11 @@ describe('AiProviderCard — WebGPU status badge', () => {
     vi.clearAllMocks();
   });
 
-  it('shows "untested" (not a permanent spinner) before Test Connection has ever run', () => {
+  it('auto-probes on mount without requiring a Test Connection click', async () => {
+    // QNBS-v3 regression: an earlier commit removed the combined ollama+webllm auto-test effect
+    // for CORS/privacy reasons that only apply to the Ollama network probe — WebGPU detection is a
+    // local hardware check with no such concern, and dropping it as collateral damage left this
+    // badge stuck on "untested" until the user clicked Test Connection.
     render(
       <AiProviderCard
         advancedAi={webllmAdvancedAi}
@@ -917,8 +921,7 @@ describe('AiProviderCard — WebGPU status badge', () => {
         onProviderChange={mockOnProviderChange}
       />,
     );
-    expect(screen.getByText('settings.ai.webllm.gpuUnknown')).toBeTruthy();
-    expect(screen.queryByText('Loading…')).toBeNull();
+    await waitFor(() => expect(screen.getByText('settings.ai.webllm.gpuAvailable')).toBeTruthy());
   });
 
   it('shows a spinner while probing, then the result once detectWebGpuDetails resolves', async () => {
