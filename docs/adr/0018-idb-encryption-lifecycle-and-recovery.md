@@ -1,6 +1,6 @@
 # ADR 0018: IndexedDB encryption lifecycle and recovery
 
-**Status:** Accepted for the fail-closed foundation; durable conversion work remains required before disable or rekey is enabled.
+**Status:** Accepted. The durable journal and single-owner write gate are implemented; per-record conversion, recovery UX, and lifecycle operations remain unavailable.
 
 ## Context
 
@@ -24,7 +24,7 @@ The encryption state is defined by persistent sentinel/journal metadata and runt
 | `DISABLE_PENDING` | source + journal | source key | normal writers blocked; each target record is verified plaintext before sentinel retirement | resume or recovery-required |
 | `RECOVERY_REQUIRED` | journal | no assumed key | normal writers blocked; recovery requires the applicable passphrase(s) | resume or explicit support-led recovery |
 
-The currently shipped foundation implements `DISABLED`, `ENABLED_LOCKED`, and `ENABLED_UNLOCKED`. It deliberately rejects disable and rekey requests until the pending states can be made durable.
+The currently shipped foundation implements `DISABLED`, `ENABLED_LOCKED`, and `ENABLED_UNLOCKED`. It also persists a versioned journal and rejects a second migration owner before a conversion begins. It deliberately rejects disable and rekey requests until the pending conversion states can be completed and recovered.
 
 ## Invariants
 
@@ -35,9 +35,9 @@ The currently shipped foundation implements `DISABLED`, `ENABLED_LOCKED`, and `E
 5. No cross-database conversion is described as atomic. IndexedDB transactions are atomic only within one database transaction.
 6. Journal metadata never contains a passphrase, raw key, or extractable `CryptoKey`.
 
-## Durable journal requirements
+## Durable journal protocol
 
-The follow-up journal is stored as versioned operational metadata, separate from protected content. It must contain an operation ID, schema version, operation (`enable`, `rekey`, or `disable`), phase, source/target key generation identifiers, store checkpoints, record counts, and the last verified checkpoint. It must not contain key material.
+The implemented journal is stored as versioned operational metadata, separate from protected content. It contains an operation ID, schema version, operation (`enable`, `rekey`, or `disable`), phase, source/target key generation identifiers, store checkpoints, and an optional target-key verifier. It does not contain key material. Creating a journal uses one state-database read/write transaction, so a concurrent owner is rejected instead of overwriting the active operation.
 
 Every migration unit must follow this sequence:
 
@@ -52,9 +52,9 @@ Failure before cleanup leaves the journal and sufficient source/target verificat
 
 ## Store scope and writer coordination
 
-The initial journal must cover the policy-covered current stores in both databases: project/settings, snapshots, images, Codex, RAG vectors, and binder assets. It must also record intentionally excluded surfaces and why they are excluded.
+The conversion adapters must cover the policy-covered current stores in both databases: project/settings, snapshots, images, Codex, RAG vectors, and binder assets. They must also record intentionally excluded surfaces and why they are excluded.
 
-Before conversion starts, the migration owner must acquire a cross-tab lease. Other tabs, service-worker/outbox writers, and stale clients must stop policy-covered writes or display a reload/recovery requirement. The implementation must test stale lease recovery and reject concurrent migration owners.
+Before conversion starts, the journal’s atomic owner gate blocks normal policy-covered reads and writes and rejects a concurrent migration owner. A cross-tab lease/notification path, stale-client reload requirement, and stale lease recovery remain required before lifecycle operations can be enabled.
 
 ## Consequences
 

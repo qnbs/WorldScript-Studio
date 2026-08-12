@@ -11,8 +11,13 @@
  *   If no sentinel exists the feature flag is silently cleared (App.tsx startup guard).
  */
 
+import { assertNoActiveEncryptionMigration } from './encryptionMigrationJournal';
 import { decompressData } from './idbCore';
 import { getPassphraseSentinel, savePassphraseSentinel } from './idbPassphraseSentinel';
+import { decodeSecureRecordValue, encodeSecureRecordValue } from './secureRecordCodec';
+
+// QNBS-v3: re-exported so a write that already captured its key via resolveProtectedWriteKey() can re-check only the migration guard pre-write, without re-running its redundant lock check.
+export { assertNoActiveEncryptionMigration } from './encryptionMigrationJournal';
 
 const PBKDF2_ITERATIONS = 600_000; // OWASP 2024 minimum for PBKDF2-HMAC-SHA-256
 const IV_BYTE_LENGTH = 12;
@@ -29,6 +34,32 @@ export interface EncryptedBlob {
   bytes: Uint8Array;
 }
 
+const LEGACY_BOUND_SECURE_RECORD_VERSION = 1 as const;
+export const SECURE_RECORD_VERSION = 2 as const;
+type SecureRecordVersion = typeof LEGACY_BOUND_SECURE_RECORD_VERSION | typeof SECURE_RECORD_VERSION;
+
+/** Structured-clone-safe AES-GCM envelope for a secondary-store payload. */
+export interface SecureRecordEnvelope {
+  version: SecureRecordVersion;
+  iv: Uint8Array;
+  ciphertext: Uint8Array;
+}
+
+export interface SecureRecordContext {
+  /** Stable protected-store namespace, including the database where names can collide. */
+  store: string;
+  /** Immutable logical record identity used as AES-GCM additional authenticated data. */
+  recordId: string;
+  /** Prior documented namespaces accepted only for a verified one-way migration. */
+  legacyStores?: readonly string[];
+}
+
+export interface SecureRecordReadResult<T> {
+  value: T;
+  /** True only when an unlocked legacy plaintext or legacy envelope needs a safe rewrite. */
+  needsMigration: boolean;
+}
+
 // QNBS-v3: Explicit typed errors — callers branch on `.code`, so a locked read/write and an
 //          incomplete migration must never collapse into a generic Error a caller could ignore.
 /** Raised when configured at-rest encryption has no session key for a protected operation. */
@@ -38,6 +69,23 @@ export class IdbStorageLockedError extends Error {
   constructor() {
     super('Encrypted storage is locked');
     this.name = 'IdbStorageLockedError';
+  }
+}
+
+/** Retained for secondary-store callers while sharing the authoritative locked-state policy. */
+export class SecureRecordLockedError extends IdbStorageLockedError {
+  constructor() {
+    super();
+    this.name = 'SecureRecordLockedError';
+  }
+}
+
+export class SecureRecordCorruptError extends Error {
+  readonly code = 'STORAGE_CORRUPT' as const;
+
+  constructor() {
+    super('Encrypted storage record is corrupt or uses an unsupported version');
+    this.name = 'SecureRecordCorruptError';
   }
 }
 
@@ -128,12 +176,51 @@ export class StorageEncryptionService {
     return JSON.parse(new TextDecoder().decode(plainBuf)) as unknown;
   }
 
+  /** Encrypt already-serialized bytes, optionally binding them to stable record metadata. */
+  async encryptBytes(
+    key: CryptoKey,
+    plaintext: Uint8Array,
+    aad?: Uint8Array,
+  ): Promise<EncryptedBlob> {
+    const iv = crypto.getRandomValues(new Uint8Array(IV_BYTE_LENGTH));
+    const cipherBuf = await crypto.subtle.encrypt(
+      aad ? { name: 'AES-GCM', iv, additionalData: new Uint8Array(aad) } : { name: 'AES-GCM', iv },
+      key,
+      new Uint8Array(plaintext),
+    );
+    const ciphertext = new Uint8Array(cipherBuf);
+    const bytes = new Uint8Array(SENTINEL.length + IV_BYTE_LENGTH + ciphertext.length);
+    bytes.set(SENTINEL, 0);
+    bytes.set(iv, SENTINEL.length);
+    bytes.set(ciphertext, SENTINEL.length + IV_BYTE_LENGTH);
+    return { bytes };
+  }
+
+  /** Decrypt bytes produced by encryptBytes, including the same AAD when one was supplied. */
+  async decryptBytes(key: CryptoKey, blob: EncryptedBlob, aad?: Uint8Array): Promise<Uint8Array> {
+    const { bytes } = blob;
+    if (bytes.length < SENTINEL.length + IV_BYTE_LENGTH + 16) {
+      throw new Error('Encrypted blob is too short');
+    }
+    for (let index = 0; index < SENTINEL.length; index++) {
+      if (bytes[index] !== SENTINEL[index]) throw new Error('Encrypted blob sentinel mismatch');
+    }
+    const iv = bytes.slice(SENTINEL.length, SENTINEL.length + IV_BYTE_LENGTH);
+    const ciphertext = bytes.slice(SENTINEL.length + IV_BYTE_LENGTH);
+    const plaintext = await crypto.subtle.decrypt(
+      aad ? { name: 'AES-GCM', iv, additionalData: new Uint8Array(aad) } : { name: 'AES-GCM', iv },
+      key,
+      ciphertext,
+    );
+    return new Uint8Array(plaintext);
+  }
+
   /**
    * Re-derive a new key from newPassphrase using the same install salt.
    * Callers must re-encrypt all IDB data with the returned key.
    */
   async rotateKey(_oldKey: CryptoKey, newPassphrase: string): Promise<CryptoKey> {
-    const salt = await getOrCreateSalt();
+    const salt = getExistingSalt();
     return this.deriveKey(newPassphrase, salt);
   }
 }
@@ -147,22 +234,19 @@ let _activeKey: CryptoKey | null = null;
 //          unconditionally throw IdbEncryptionMigrationRequiredError today (see below).
 let _sentinelPresenceCache: boolean | null = null;
 
-async function getOrCreateSalt(): Promise<Uint8Array> {
+function readStoredSalt(): Uint8Array | null {
   try {
     const stored = localStorage.getItem(SALT_STORAGE_KEY);
-    if (stored) {
-      const arr = Uint8Array.from(atob(stored), (c) => c.charCodeAt(0));
-      if (arr.length === SALT_BYTE_LENGTH) return arr;
-    }
+    if (!stored) return null;
+    const salt = Uint8Array.from(atob(stored), (character) => character.charCodeAt(0));
+    if (salt.length !== SALT_BYTE_LENGTH) throw new Error('Encryption salt has an invalid length');
+    return salt;
   } catch (error) {
-    throw new Error('Unable to persist encryption salt', { cause: error });
+    throw new Error('Unable to read encryption salt', { cause: error });
   }
-  // QNBS-v3: only first-time setup (no sentinel yet) may create a fresh salt — a missing/invalid
-  // salt after that point means the original key material is unrecoverable, so fail closed instead
-  // of silently deriving a different key that can never decrypt the existing sentinel/data.
-  if (await hasPassphraseSentinel()) {
-    throw new IdbEncryptionSaltLostError();
-  }
+}
+
+function createAndPersistSalt(): Uint8Array {
   try {
     const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTE_LENGTH));
     const b64 = btoa(String.fromCharCode(...salt));
@@ -174,13 +258,30 @@ async function getOrCreateSalt(): Promise<Uint8Array> {
   }
 }
 
+function getOrCreateSalt(): Uint8Array {
+  return readStoredSalt() ?? createAndPersistSalt();
+}
+
+// QNBS-v3: sentinel already exists here, so a missing or corrupted salt means unrecoverable key material — fail closed with a typed error.
+function getExistingSalt(): Uint8Array {
+  let salt: Uint8Array | null;
+  try {
+    salt = readStoredSalt();
+  } catch {
+    throw new IdbEncryptionSaltLostError();
+  }
+  if (!salt) throw new IdbEncryptionSaltLostError();
+  return salt;
+}
+
 /**
  * Initialise the session encryption key from a passphrase.
  * Must be called before any idbEncrypt / idbDecrypt calls.
  */
 export async function initIdbEncryption(passphrase: string): Promise<void> {
   if (!passphrase) throw new Error('Passphrase must not be empty');
-  const salt = await getOrCreateSalt();
+  await assertNoActiveEncryptionMigration();
+  const salt = (await hasPassphraseSentinel()) ? getExistingSalt() : getOrCreateSalt();
   _activeKey = await _svc.deriveKey(passphrase, salt);
 }
 
@@ -209,6 +310,7 @@ export function isIdbEncryptionReady(): boolean {
  * Call this before opening an IDB write transaction so callers cannot downgrade to plaintext.
  */
 export async function assertIdbProtectedWriteAllowed(): Promise<void> {
+  await assertNoActiveEncryptionMigration();
   if (_activeKey) return;
   if (await hasPassphraseSentinel()) throw new IdbStorageLockedError();
 }
@@ -251,6 +353,180 @@ export function isEncryptedBlob(value: unknown): value is Uint8Array {
   return true;
 }
 
+/** Bind a secure record to its stable storage namespace and logical identity. */
+export function buildSecureRecordAad(context: SecureRecordContext): Uint8Array {
+  return new TextEncoder().encode(`${context.store}:${context.recordId}`);
+}
+
+function isSecureRecordCandidate(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null) return false;
+  const record = value as Record<string, unknown>;
+  if ('iv' in record || 'ciphertext' in record) return true;
+  if (!('version' in record)) return false;
+  return Object.keys(record).every(
+    (key) => key === 'version' || key === 'iv' || key === 'ciphertext',
+  );
+}
+
+/** Detect a complete or truncated secure-record shape so malformed ciphertext is never treated as plaintext. */
+export function isSecureRecordEnvelopeCandidate(value: unknown): boolean {
+  return isSecureRecordCandidate(value);
+}
+
+/** Strictly validate envelopes so truncated ciphertext cannot be misclassified as legacy plaintext. */
+export function isSecureRecordEnvelope(value: unknown): value is SecureRecordEnvelope {
+  if (!isSecureRecordCandidate(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    (record['version'] === LEGACY_BOUND_SECURE_RECORD_VERSION ||
+      record['version'] === SECURE_RECORD_VERSION) &&
+    record['iv'] instanceof Uint8Array &&
+    record['iv'].length === IV_BYTE_LENGTH &&
+    record['ciphertext'] instanceof Uint8Array &&
+    record['ciphertext'].length >= 16
+  );
+}
+
+function envelopeToEncryptedBlob(envelope: SecureRecordEnvelope): EncryptedBlob {
+  const bytes = new Uint8Array(SENTINEL.length + IV_BYTE_LENGTH + envelope.ciphertext.length);
+  bytes.set(SENTINEL, 0);
+  bytes.set(envelope.iv, SENTINEL.length);
+  bytes.set(envelope.ciphertext, SENTINEL.length + IV_BYTE_LENGTH);
+  return { bytes };
+}
+
+function encryptedBlobToEnvelope(bytes: Uint8Array): SecureRecordEnvelope {
+  return {
+    version: SECURE_RECORD_VERSION,
+    iv: bytes.slice(SENTINEL.length, SENTINEL.length + IV_BYTE_LENGTH),
+    ciphertext: bytes.slice(SENTINEL.length + IV_BYTE_LENGTH),
+  };
+}
+
+async function decryptSecureRecordValue<T>(
+  key: CryptoKey,
+  envelope: SecureRecordEnvelope,
+  context: SecureRecordContext,
+): Promise<SecureRecordReadResult<T>> {
+  const blob = envelopeToEncryptedBlob(envelope);
+  try {
+    const plaintext = await _svc.decryptBytes(key, blob, buildSecureRecordAad(context));
+    return {
+      value: decodeSecureRecordValue(plaintext) as T,
+      needsMigration: envelope.version !== SECURE_RECORD_VERSION,
+    };
+  } catch {
+    if (envelope.version === SECURE_RECORD_VERSION) throw new SecureRecordCorruptError();
+    for (const legacyStore of context.legacyStores ?? []) {
+      try {
+        const plaintext = await _svc.decryptBytes(
+          key,
+          blob,
+          buildSecureRecordAad({ store: legacyStore, recordId: context.recordId }),
+        );
+        return { value: decodeSecureRecordValue(plaintext) as T, needsMigration: true };
+      } catch {
+        // QNBS-v3: Only an authenticated legacy namespace may fall through to the next documented format.
+      }
+    }
+    // QNBS-v3: AAD-less ciphertext cannot prove its record/store binding, so it is recovery-required rather than rewritten.
+    throw new SecureRecordCorruptError();
+  }
+}
+
+async function encryptSecureRecordValue<T>(
+  key: CryptoKey,
+  value: T,
+  context: SecureRecordContext,
+): Promise<SecureRecordEnvelope> {
+  const plaintext = await encodeSecureRecordValue(value);
+  const blob = await _svc.encryptBytes(key, plaintext, buildSecureRecordAad(context));
+  return encryptedBlobToEnvelope(blob.bytes);
+}
+
+/** Protect any secondary-store mutation with the same lock and active-migration policy as primary stores. */
+export async function assertSecureStorageWritableForMutation(): Promise<void> {
+  await assertIdbProtectedWriteAllowed();
+}
+
+/** Block protected reads while encryption is locked or a journal owns the storage lifecycle. */
+export async function assertSecureStorageReadable(): Promise<boolean> {
+  await assertNoActiveEncryptionMigration();
+  const encryptionConfigured = await hasPassphraseSentinel();
+  if (encryptionConfigured && !_activeKey) throw new SecureRecordLockedError();
+  return encryptionConfigured;
+}
+
+/** Prepare a secondary payload without silently storing protected plaintext while the library is locked. */
+export async function prepareSecureRecordPayload<T>(
+  value: T,
+  context: SecureRecordContext,
+): Promise<T | SecureRecordEnvelope> {
+  await assertIdbProtectedWriteAllowed();
+  return _activeKey ? encryptSecureRecordValue(_activeKey, value, context) : value;
+}
+
+/** Key-scoped encrypt used by a journal-owned rekey adapter; it never changes the active session key. */
+export async function prepareSecureRecordPayloadWithKey<T>(
+  value: T,
+  context: SecureRecordContext,
+  key: CryptoKey,
+): Promise<SecureRecordEnvelope> {
+  return encryptSecureRecordValue(key, value, context);
+}
+
+/** Re-encrypt one fully validated envelope during a journal-owned rekey checkpoint. */
+export async function reEncryptSecureRecordEnvelope(
+  envelope: SecureRecordEnvelope,
+  context: SecureRecordContext,
+  oldKey: CryptoKey,
+  newKey: CryptoKey,
+): Promise<SecureRecordEnvelope> {
+  const decoded = await decryptSecureRecordValue<unknown>(oldKey, envelope, context);
+  return encryptSecureRecordValue(newKey, decoded.value, context);
+}
+
+/**
+ * Decode records collected by one caller immediately after `assertSecureStorageReadable()` returned
+ * this access value. It is intentionally narrow so batch readers do not re-query lifecycle metadata per row.
+ */
+export async function readSecureRecordPayloadAfterLifecycleCheck<T>(
+  stored: unknown,
+  context: SecureRecordContext,
+  encryptionConfigured: boolean,
+): Promise<SecureRecordReadResult<T>> {
+  if (isSecureRecordCandidate(stored)) {
+    if (!isSecureRecordEnvelope(stored)) throw new SecureRecordCorruptError();
+    if (!_activeKey) throw new SecureRecordLockedError();
+    return decryptSecureRecordValue<T>(_activeKey, stored, context);
+  }
+  if (_activeKey) return { value: stored as T, needsMigration: true };
+  if (encryptionConfigured) throw new SecureRecordLockedError();
+  return { value: stored as T, needsMigration: false };
+}
+
+/** Read a secondary payload with locked, malformed-envelope, and legacy states distinguished. */
+export async function readSecureRecordPayload<T>(
+  stored: unknown,
+  context: SecureRecordContext,
+): Promise<SecureRecordReadResult<T>> {
+  const encryptionConfigured = await assertSecureStorageReadable();
+  return readSecureRecordPayloadAfterLifecycleCheck(stored, context, encryptionConfigured);
+}
+
+/** Read with an explicitly supplied generation key while a journal owns the migration. */
+export async function readSecureRecordPayloadWithKey<T>(
+  stored: unknown,
+  context: SecureRecordContext,
+  key: CryptoKey,
+): Promise<SecureRecordReadResult<T>> {
+  if (isSecureRecordCandidate(stored)) {
+    if (!isSecureRecordEnvelope(stored)) throw new SecureRecordCorruptError();
+    return decryptSecureRecordValue<T>(key, stored, context);
+  }
+  return { value: stored as T, needsMigration: true };
+}
+
 /**
  * Unified read helper: decrypts encrypted blobs when the key is available,
  * decompresses plaintext legacy data, and throws a clear user-facing error
@@ -259,14 +535,14 @@ export function isEncryptedBlob(value: unknown): value is Uint8Array {
  * after encrypted data already exists.
  */
 export async function idbReadSecure<T>(raw: unknown): Promise<T> {
+  // QNBS-v3: Keep the exported primitive fail-closed too; callers may not bypass lifecycle state by reading raw IDB values.
+  await assertSecureStorageReadable();
   if (isEncryptedBlob(raw)) {
     if (!isIdbEncryptionReady()) {
       throw new IdbStorageLockedError();
     }
     return idbDecrypt<T>(raw);
   }
-  // QNBS-v3: Legacy plaintext remains readable only after unlock so a locked library cannot expose protected content.
-  await assertIdbProtectedWriteAllowed();
   return decompressData<T>(raw);
 }
 
@@ -279,7 +555,11 @@ export async function idbReadSecure<T>(raw: unknown): Promise<T> {
  */
 export async function setupIdbEncryption(passphrase: string): Promise<void> {
   if (!passphrase) throw new Error('Passphrase must not be empty');
-  const salt = await getOrCreateSalt();
+  await assertNoActiveEncryptionMigration();
+  if (await hasPassphraseSentinel()) {
+    throw new Error('Encryption is already configured; use the resumable passphrase-rotation flow');
+  }
+  const salt = getOrCreateSalt();
   const key = await _svc.deriveKey(passphrase, salt);
   const blob = await _svc.encrypt(key, { v: 1 });
   await savePassphraseSentinel(blob.bytes);
@@ -297,16 +577,39 @@ export async function setupIdbEncryption(passphrase: string): Promise<void> {
  */
 export async function verifyAndInitIdbEncryption(passphrase: string): Promise<void> {
   if (!passphrase) throw new Error('Passphrase must not be empty');
+  await assertNoActiveEncryptionMigration();
   const sentinelBytes = await getPassphraseSentinel();
   if (!sentinelBytes) throw new Error('No passphrase sentinel found — encryption was not set up');
   // QNBS-v3: sentinelBytes being non-null already proves the sentinel exists — populate the cache
   // from this read instead of letting the next hasPassphraseSentinel() call repeat the IDB lookup.
   _sentinelPresenceCache = true;
-  const salt = await getOrCreateSalt();
+  const salt = getExistingSalt();
   const key = await _svc.deriveKey(passphrase, salt);
   // QNBS-v3: decrypt throws on wrong key — AES-GCM auth-tag is the verifier
   await _svc.decrypt(key, { bytes: sentinelBytes });
   _activeKey = key;
+}
+
+/** Create a non-secret verifier that a future enable/rekey runner must authenticate before mutation. */
+export async function createIdbMigrationTargetVerifier(targetKey: CryptoKey): Promise<number[]> {
+  const blob = await _svc.encrypt(targetKey, { v: 1 });
+  return Array.from(blob.bytes);
+}
+
+/** Reject a supplied target key unless it decrypts the durable migration verifier exactly. */
+export async function assertIdbMigrationTargetKeyMatchesVerifier(
+  targetKey: CryptoKey,
+  targetVerifier: readonly number[],
+): Promise<void> {
+  const verified = await _svc.decrypt(targetKey, { bytes: new Uint8Array(targetVerifier) });
+  if (
+    typeof verified !== 'object' ||
+    verified === null ||
+    Object.getPrototypeOf(verified) !== Object.prototype ||
+    (verified as { v?: unknown }).v !== 1
+  ) {
+    throw new Error('Migration target verifier is invalid');
+  }
 }
 
 /**

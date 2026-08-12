@@ -5,6 +5,7 @@ import {
   normalizeLocalBaseUrl,
 } from './localServerHttp';
 import { createLogger } from './logger';
+import { isTauriRuntime } from './tauriRuntime';
 
 // QNBS-v3 (#266): canonical normalization lives in localServerHttp (shared with the scanner).
 const normalizeBaseUrl = normalizeLocalBaseUrl;
@@ -157,13 +158,23 @@ export async function listOllamaModels(baseUrl?: string): Promise<string[]> {
  * a raw/technical string for logs; UI code should prefer `kind` (+ `params` for interpolation) to
  * render a localized message, per `settings.ai.testError.*` in `locales/<lang>/settings.json`.
  */
-export type TestConnectionErrorKind = 'httpError' | 'timeout' | 'unreachable' | 'pluginUnavailable';
+export type TestConnectionErrorKind =
+  | 'httpError'
+  | 'timeout'
+  | 'unreachable'
+  | 'pluginUnavailable'
+  | 'invalidResponse';
 
 export interface TestConnectionResult {
   ok: boolean;
   error?: string;
   kind?: TestConnectionErrorKind;
   params?: Record<string, string | number>;
+  localServer?: {
+    normalizedEndpoint: string;
+    transport: 'tauri-http' | 'browser-fetch';
+    modelNames: string[];
+  };
 }
 
 export async function testOllamaConnection(baseUrl?: string): Promise<TestConnectionResult> {
@@ -179,7 +190,34 @@ export async function testOllamaConnection(baseUrl?: string): Promise<TestConnec
         params: { status: res.status },
       };
     }
-    return { ok: true };
+    let payload: unknown;
+    try {
+      payload = await res.json();
+    } catch {
+      // QNBS-v3: a 200 with an unparseable body (e.g. a proxy login page) is not a working Ollama endpoint.
+      return { ok: false, error: 'Invalid Ollama response', kind: 'invalidResponse' };
+    }
+    if (
+      typeof payload !== 'object' ||
+      payload === null ||
+      !Array.isArray((payload as { models?: unknown }).models)
+    ) {
+      // QNBS-v3: valid JSON without a `models` array means the endpoint isn't speaking the Ollama API.
+      return { ok: false, error: 'Invalid Ollama response', kind: 'invalidResponse' };
+    }
+    const modelNames = (payload as { models: unknown[] }).models.flatMap((model) => {
+      if (typeof model !== 'object' || model === null) return [];
+      const name = (model as { name?: unknown }).name;
+      return typeof name === 'string' && name.trim() ? [name.trim()] : [];
+    });
+    return {
+      ok: true,
+      localServer: {
+        normalizedEndpoint: url,
+        transport: isTauriRuntime() ? 'tauri-http' : 'browser-fetch',
+        modelNames,
+      },
+    };
   } catch (error: unknown) {
     // QNBS-v3 (#266): classified failures — distinguish a hanging server from a missing one.
     if (error instanceof LocalServerError && error.kind === 'timeout') {

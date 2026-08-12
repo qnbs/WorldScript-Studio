@@ -274,6 +274,31 @@ describe('locked-state guards on destructive and listing operations', () => {
     await initIdbEncryption('test-pass');
     await expect(store.listBinderAssetIds('proj-1')).resolves.toEqual(['asset-1']);
   });
+
+  it('deletes every binder asset for a project in a single batched transaction', async () => {
+    // QNBS-v3 regression: was one transaction PER asset — a later failure could leave earlier assets permanently removed. Now every delete is queued in one transaction (all-or-nothing).
+    const store = new IdbAssetStore();
+    await store.saveBinderAsset('proj-1', 'a1', new ArrayBuffer(1), {
+      byteSize: 1,
+      mimeType: 'application/pdf',
+      originalFileName: 'a.pdf',
+    });
+    await store.saveBinderAsset('proj-1', 'a2', new ArrayBuffer(1), {
+      byteSize: 1,
+      mimeType: 'application/pdf',
+      originalFileName: 'b.pdf',
+    });
+    await store.saveBinderAsset('proj-other', 'a3', new ArrayBuffer(1), {
+      byteSize: 1,
+      mimeType: 'application/pdf',
+      originalFileName: 'c.pdf',
+    });
+
+    await store.deleteAllBinderAssetsForProject('proj-1');
+
+    await expect(store.listBinderAssetIds('proj-1')).resolves.toEqual([]);
+    await expect(store.listBinderAssetIds('proj-other')).resolves.toEqual(['a3']);
+  });
 });
 
 describe('locked reads reject instead of hanging (IDBRequest.onsuccess propagation)', () => {
