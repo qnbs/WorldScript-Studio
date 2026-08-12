@@ -294,6 +294,7 @@ describe('AiProviderCard — ollama provider (#266)', () => {
     expect(screen.getByText('local-model')).toBeTruthy();
   });
 
+  // QNBS-v3: verify the browser opt-in displays metadata from its separate browser-fetch path.
   it('PWA: labels an opted-in Ollama diagnostic with its browser transport', async () => {
     setDesktopRuntime(false);
     vi.mocked(testAIConnection).mockResolvedValueOnce({
@@ -353,7 +354,7 @@ describe('AiProviderCard — ollama provider (#266)', () => {
       <AiProviderCard
         advancedAi={{
           ...initialSettings,
-          openAiCompatibleBaseUrl: 'http://localhost:9999/v1',
+          ollamaBaseUrl: 'http://localhost:9999',
         }}
         onAdvancedAiPatch={mockOnAdvancedAiPatch}
         onProviderChange={mockOnProviderChange}
@@ -361,8 +362,7 @@ describe('AiProviderCard — ollama provider (#266)', () => {
     );
 
     if (!resolveTest) throw new Error('Connection test did not start');
-    // QNBS-v3: explicit annotation, not inferred — tsgo narrows a `let` reassigned inside the
-    // Promise executor closure to `never` here otherwise, after the awaits above.
+    // QNBS-v3: keep the resolver type explicit because closure assignment narrows it to never after awaits.
     const resolve: (result: Awaited<ReturnType<typeof testAIConnection>>) => void = resolveTest;
     resolve({
       ok: true,
@@ -378,6 +378,7 @@ describe('AiProviderCard — ollama provider (#266)', () => {
     expect(screen.getByText('settings.ai.providerStatusNotTested')).toBeTruthy();
   });
 
+  // QNBS-v3: remove completed diagnostics when the active local backend changes.
   it('clears a completed local diagnostic when its endpoint context changes', async () => {
     setDesktopRuntime(true);
     vi.mocked(testAIConnection).mockResolvedValueOnce({

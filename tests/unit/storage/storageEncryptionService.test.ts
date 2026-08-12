@@ -423,9 +423,7 @@ describe('verifyAndInitIdbEncryption', () => {
     await expect(setupIdbEncryption('replacement')).rejects.toBeInstanceOf(
       IdbMigrationInProgressError,
     );
-    // QNBS-v3: routes through the legal prepared→migrating→verifying→committing chain — a direct
-    // jump is now rejected (see IdbMigrationInvalidTransitionError) and would leak this journal
-    // into every later test in this file via assertNoActiveEncryptionMigration().
+    // QNBS-v3: route through the legal prepared→migrating→verifying→committing chain so this journal does not leak into later tests.
     const migrating = await updateEncryptionMigrationJournal(journal, {
       phase: 'migrating',
       stores: journal.stores,

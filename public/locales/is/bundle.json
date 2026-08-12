@@ -1877,6 +1877,7 @@
   "settings.ai.providerStatusLabel": "Tengingarstaða",
   "settings.ai.providerStatusReady": "Tilbúið",
   "settings.ai.providerStatusNotTested": "Ekki prófað",
+  "settings.ai.providerStatusTesting": "Prófar…",
   "settings.ai.localDiagnostic.title": "Tengigreining",
   "settings.ai.localDiagnostic.endpoint": "Endapunktur",
   "settings.ai.localDiagnostic.transport": "Flutningur",

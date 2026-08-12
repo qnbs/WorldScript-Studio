@@ -262,9 +262,7 @@ function getOrCreateSalt(): Uint8Array {
   return readStoredSalt() ?? createAndPersistSalt();
 }
 
-// QNBS-v3: callers only reach getExistingSalt() when a passphrase sentinel already exists (setup
-// already happened) — a missing OR corrupted salt at that point means the original key material is
-// unrecoverable, so fail closed with a typed error instead of a generic "missing metadata" message.
+// QNBS-v3: sentinel already exists here, so a missing or corrupted salt means unrecoverable key material — fail closed with a typed error.
 function getExistingSalt(): Uint8Array {
   let salt: Uint8Array | null;
   try {

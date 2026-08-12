@@ -13,7 +13,7 @@ authoritative closure record for the responsiveness portions of
 | `main` | `804793aa0815a726935785639e4fb139af7c4b59` |
 | PR #335 | `edc3ef13c7f87007f290d3a60ee77b119ffeea57` (review threads: 0 unresolved of 40; all CI green) |
 | PR #336 | `b01564ed77ae1acf9f9cb8c02ee4767e8909ef15` (review threads: 0 unresolved of 68) |
-| PR #337 | `1096861ec6af72f580225c4fcf1dc6858f4b592e` (review threads: 0 unresolved of 57) |
+| PR #337 | `1335e81b` (review threads: 0 unresolved of 61) |
 | PR #310 | `27177ce549d4579f1fc9dfbc4630ebf0c2592f9b` |
 | Issue #332 / #333 | Open / Open; neither has post-report comments |
 

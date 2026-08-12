@@ -40,8 +40,7 @@ export class IdbAssetStore extends IdbSnapshotStore {
   }
 
   async getImage(id: string): Promise<string | null> {
-    // QNBS-v3: assertSecureStorageReadable also blocks reads during an active journal migration,
-    //          not just a plain lock — the superset check needed while a journal owns lifecycle state.
+    // QNBS-v3: assertSecureStorageReadable also blocks reads during an active journal migration, not just a plain lock — the superset check needed while a journal owns lifecycle state.
     await assertSecureStorageReadable();
     const store = await this.getObjectStore(IMAGES_STORE, 'readonly');
     return new Promise((resolve, reject) => {
@@ -152,8 +151,7 @@ export class IdbAssetStore extends IdbSnapshotStore {
 
   async listBinderAssetIds(projectId: string): Promise<string[]> {
     return retryDb(async () => {
-      // QNBS-v3: Binder asset ids are metadata about protected content — use the superset check so
-      //          a locked session, or an active journal migration, can't enumerate them either.
+      // QNBS-v3: Binder asset ids are metadata about protected content — use the superset check so a locked session, or an active journal migration, can't enumerate them either.
       await assertSecureStorageReadable();
       const prefix = makeBinderAssetIdsPrefix(projectId);
       const store = await this.getObjectStore(BINDER_ASSETS_STORE, 'readonly');

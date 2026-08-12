@@ -62,11 +62,7 @@ function assertExactKeys(
   }
 }
 
-// QNBS-v3: IndexedDB key paths permit numeric keys even though these interfaces declare `id`/`key`
-// as string — a record fetched from storage is not runtime-validated against that declaration. An
-// unvalidated non-string routing key would still successfully rewrite the payload but then
-// persist a non-string journal cursor, which parseJournal() rejects on the next read and pushes
-// the whole migration into recovery-required. Fail fast here with a clear, specific error instead.
+// QNBS-v3: IndexedDB allows numeric keys, so an unvalidated routing key would persist a non-string journal cursor that parseJournal() later rejects into recovery-required; fail fast instead.
 function assertStringRoutingKey(value: unknown, field: string, store: string): string {
   if (typeof value !== 'string' || value.length === 0) {
     throw new ProtectedStoreMigrationAdapterError(

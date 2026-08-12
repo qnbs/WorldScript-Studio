@@ -1,8 +1,5 @@
 // @vitest-environment node
-// QNBS-v3: Covers the non-string routing-key validation — a numeric id/key (IndexedDB key paths
-// permit them even though these records declare id/key as string) must fail fast with a clear
-// error instead of silently becoming a non-string journal cursor that later trips parseJournal()
-// and pushes the whole migration into recovery-required.
+// QNBS-v3: Covers non-string routing-key validation — a numeric id/key must fail fast instead of becoming a journal cursor that parseJournal() later rejects into recovery-required.
 import { IDBFactory } from 'fake-indexeddb';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ProtectedStoreMigrationAdapterError } from '../../../services/storage/protectedStoreMigration';

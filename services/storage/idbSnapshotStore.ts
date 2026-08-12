@@ -60,8 +60,7 @@ export class IdbSnapshotStore extends IdbCodexStore {
 
   async listSnapshots(): Promise<ProjectSnapshot[]> {
     return retryDb(async () => {
-      // QNBS-v3: Snapshot metadata (name/date/word count) is about protected content — the superset
-      //          check blocks a locked session, or an active journal migration, from enumerating it.
+      // QNBS-v3: Snapshot metadata (name/date/word count) is about protected content — the superset check blocks a locked session, or an active journal migration, from enumerating it.
       await assertSecureStorageReadable();
       const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readonly');
       // IDBKeyRange: iterate in reverse (newest first) using cursor direction 'prev'
@@ -86,8 +85,7 @@ export class IdbSnapshotStore extends IdbCodexStore {
 
   async getSnapshotData(id: number): Promise<ProjectData> {
     return retryDb(async () => {
-      // QNBS-v3: superset check — blocks a locked session or an active journal migration before
-      //          the record lookup can even run.
+      // QNBS-v3: superset check — blocks a locked session or an active journal migration before the record lookup can even run.
       await assertSecureStorageReadable();
       const store = await this.getObjectStore(SNAPSHOTS_STORE, 'readonly');
       return new Promise<ProjectData>((resolve, reject) => {

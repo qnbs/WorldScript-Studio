@@ -1877,6 +1877,7 @@
   "settings.ai.providerStatusLabel": "연결 상태",
   "settings.ai.providerStatusReady": "준비가 된",
   "settings.ai.providerStatusNotTested": "테스트되지 않음",
+  "settings.ai.providerStatusTesting": "테스트 중…",
   "settings.ai.localDiagnostic.title": "연결 진단",
   "settings.ai.localDiagnostic.endpoint": "엔드포인트",
   "settings.ai.localDiagnostic.transport": "전송 방식",

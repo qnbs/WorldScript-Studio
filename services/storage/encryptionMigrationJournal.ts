@@ -87,13 +87,7 @@ export class IdbMigrationInvalidTransitionError extends Error {
   }
 }
 
-// QNBS-v3: enforced against the DURABLY-STORED phase (not the caller-supplied one) inside
-// saveIfCurrent — CAS alone (revision/owner match) never validated that a phase transition was a
-// legal state-machine step, so any caller could pass e.g. {phase: 'committing'} on a journal still
-// 'prepared' and skip conversion/verification entirely; assertNoActiveEncryptionMigration() would
-// then treat unconverted data as safe to access normally. Same-phase entries allow the repeated
-// per-batch/per-store checkpoint writes within migrating/verifying. recovery-required is reachable
-// from any active phase (an external fail-safe) but never left except via out-of-band recovery.
+// QNBS-v3: enforce transitions against the durable phase, because CAS alone never validated that a phase step was legal and let a caller skip conversion/verification entirely.
 const ALLOWED_PHASE_TRANSITIONS: Record<
   EncryptionMigrationPhase,
   ReadonlySet<EncryptionMigrationPhase>

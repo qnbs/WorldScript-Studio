@@ -157,6 +157,7 @@ const ProviderConnectionStatus: FC<{
             t('settings.ai.providerStatusUnavailableBrowser')
           ) : (
             <>
+              {status === 'loading' && t('settings.ai.providerStatusTesting')}
               {status === 'ok' && t('settings.ai.providerStatusConnected')}
               {status === 'error' && t('settings.ai.providerStatusDisconnected')}
               {status === 'idle' && t('settings.ai.providerStatusNotTested')}

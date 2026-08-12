@@ -2,7 +2,7 @@
 // QNBS-v3: node environment avoids jsdom's non-configurable indexedDB stub.
 //          Fresh IDBFactory per test ensures complete isolation between tests.
 import { IDBFactory, IDBKeyRange } from 'fake-indexeddb';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   _resetDbForTest,
   deleteRevision,
@@ -121,9 +121,20 @@ describe('sceneRevisionService', () => {
     await expect(listRevisions('sec1')).resolves.toHaveLength(50);
   });
 
+  it('opens the database connection only once for concurrent saves (single-flight)', async () => {
+    // QNBS-v3 regression: getDb() only cached the connection after its own open resolved, so
+    // concurrent callers each raced past the null check and opened a separate connection.
+    const openSpy = vi.spyOn(indexedDB, 'open');
+    await Promise.all(
+      Array.from({ length: 10 }, (_, index) =>
+        saveRevision('sec2', { title: `revision ${index}`, content: `content ${index}` }),
+      ),
+    );
+    expect(openSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('skips a future stored schema instead of interpreting it as v1, keeping other revisions readable', async () => {
-    // QNBS-v3: one damaged/unparseable revision must not hide the rest of a scene's readable
-    //          history — listRevisions now skips it (logged) rather than rejecting the whole call.
+    // QNBS-v3: listRevisions skips an unreadable revision (logged) instead of rejecting the whole call.
     await saveRevision('sec1', { title: 'known', content: 'known content' });
     await insertRawRevision({
       id: 'future-schema',

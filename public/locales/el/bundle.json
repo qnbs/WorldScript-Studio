@@ -1877,6 +1877,7 @@
   "settings.ai.providerStatusLabel": "Κατάσταση σύνδεσης",
   "settings.ai.providerStatusReady": "Ετοιμος",
   "settings.ai.providerStatusNotTested": "Δεν έχει δοκιμαστεί",
+  "settings.ai.providerStatusTesting": "Δοκιμή σε εξέλιξη…",
   "settings.ai.localDiagnostic.title": "Διαγνωστικά σύνδεσης",
   "settings.ai.localDiagnostic.endpoint": "Τελικό σημείο",
   "settings.ai.localDiagnostic.transport": "Μεταφορά",

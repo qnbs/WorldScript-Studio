@@ -1,4 +1,5 @@
 // QNBS-v3: Two-layer inference cache keeps hot reads in memory while the durable layer is encrypted.
+import { logger } from '../logger';
 import {
   assertSecureStorageReadable,
   assertSecureStorageWritableForMutation,
@@ -205,7 +206,7 @@ export class AiInferenceCacheService {
 
     await this.dbReady;
     if (!this.db) return null;
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const transaction = this.db!.transaction(IDB_STORE, 'readonly');
       const request = transaction.objectStore(IDB_STORE).get(key);
       request.onsuccess = () => {
@@ -215,7 +216,9 @@ export class AiInferenceCacheService {
           return;
         }
         if (!isCacheEntry(entry)) {
-          reject(new SecureRecordCorruptError());
+          // QNBS-v3: matches the non-authoritative cache policy above — a malformed row degrades to a miss, never fails the caller's inference request.
+          logger.warn('aiInferenceCacheService: dropping a malformed cache row', { key });
+          resolve(null);
           return;
         }
         if (Date.now() - entry.timestamp > TTL_MS) {
@@ -228,7 +231,14 @@ export class AiInferenceCacheService {
             this.inMemory.set(key, { result, lastUsed: Date.now() });
             resolve(result);
           },
-          (error: unknown) => reject(error),
+          (error: unknown) => {
+            // QNBS-v3: same non-authoritative policy — a corrupt/undecodable row degrades to a miss instead of failing the caller's inference request.
+            logger.warn('aiInferenceCacheService: dropping an undecodable cache row', {
+              key,
+              error,
+            });
+            resolve(null);
+          },
         );
       };
       request.onerror = () => resolve(null);

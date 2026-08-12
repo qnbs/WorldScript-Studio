@@ -1877,6 +1877,7 @@
   "settings.ai.providerStatusLabel": "Anslutningsstatus",
   "settings.ai.providerStatusReady": "Redo",
   "settings.ai.providerStatusNotTested": "Inte testad",
+  "settings.ai.providerStatusTesting": "Testar…",
   "settings.ai.localDiagnostic.title": "Anslutningsdiagnostik",
   "settings.ai.localDiagnostic.endpoint": "Slutpunkt",
   "settings.ai.localDiagnostic.transport": "Transport",

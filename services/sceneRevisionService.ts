@@ -35,10 +35,13 @@ interface StoredSceneRevision {
 }
 
 let database: IDBDatabase | null = null;
+let openPromise: Promise<IDBDatabase> | null = null;
 
 async function getDb(): Promise<IDBDatabase> {
   if (database) return database;
-  return new Promise((resolve, reject) => {
+  if (openPromise) return openPromise;
+  // QNBS-v3: single-flight open — concurrent saves must share one connection instead of leaking one per call.
+  openPromise = new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
@@ -52,13 +55,18 @@ async function getDb(): Promise<IDBDatabase> {
       const opened = request.result;
       database = opened;
       opened.onversionchange = () => {
-        database?.close();
+        opened.close();
         database = null;
+        openPromise = null;
       };
       resolve(opened);
     };
-    request.onerror = () => reject(request.error);
+    request.onerror = () => {
+      openPromise = null;
+      reject(request.error);
+    };
   });
+  return openPromise;
 }
 
 function isStoredSceneRevision(value: unknown): value is StoredSceneRevision {
@@ -245,8 +253,7 @@ export async function listRevisions(sectionId: string): Promise<SceneRevision[]>
     try {
       revisions.push(await decodeRevision(stored, encryptionConfigured));
     } catch (error) {
-      // QNBS-v3: one damaged/unparseable revision must not hide the rest of a scene's readable
-      //          history — but a genuine lock-state change mid-listing still aborts the whole call.
+      // QNBS-v3: skip one damaged revision so the rest stay readable, but still abort on a real lock-state change.
       if (error instanceof SecureRecordCorruptError) {
         log.warn('Skipping a damaged revision', { sectionId, error: String(error) });
         continue;
@@ -268,4 +275,5 @@ export async function deleteRevision(id: string): Promise<void> {
 export function _resetDbForTest(): void {
   database?.close();
   database = null;
+  openPromise = null;
 }

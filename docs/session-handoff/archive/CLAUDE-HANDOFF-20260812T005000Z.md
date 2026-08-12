@@ -279,12 +279,14 @@ among the devDependencies) risks an OOM crash mid-install, leaving the
 lockfile in a worse, half-resolved state than today's.
 
 **To close this thread:** from a normal-resourced environment (or a
-dependency-update CI job), apply the exact override string above to both
-files consistently, run `pnpm install` to let it reconcile, verify
-`pnpm run typecheck` and `pnpm run lint` pass, then push, reply to the thread
-citing the resolving commit, and resolve it via GraphQL `resolveReviewThread`.
-Thread id at capture time: `PRRT_kwDOQOeAgc6YK1Aq` on PR #335 (re-fetch if
-the SHA has moved and IDs changed).
+dependency-update CI job), edit only `pnpm-workspace.yaml`, run `pnpm install`,
+and inspect the generated `pnpm-lock.yaml` diff — never hand-edit the lockfile
+directly. Verify `pnpm run typecheck` and `pnpm run lint` pass, then push,
+reply to the thread citing the resolving commit, and resolve it via GraphQL
+`resolveReviewThread`. Thread id at capture time: `PRRT_kwDOQOeAgc6YK1Aq` on
+PR #335 (re-fetch if the SHA has moved and IDs changed). Historical note: this
+specific thread was later closed earlier in the same session via a real `pnpm
+install`, not a hand-edit — see `edc3ef13` and `CURRENT-HANDOFF.md` § 12.
 
 ## 9. PR #310 Reconciliation
 

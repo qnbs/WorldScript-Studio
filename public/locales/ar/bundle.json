@@ -1877,6 +1877,7 @@
   "settings.ai.providerStatusLabel": "حالة الاتصال",
   "settings.ai.providerStatusReady": "جاهز",
   "settings.ai.providerStatusNotTested": "لم يتم الاختبار",
+  "settings.ai.providerStatusTesting": "جارٍ الاختبار…",
   "settings.ai.localDiagnostic.title": "تشخيص الاتصال",
   "settings.ai.localDiagnostic.endpoint": "نقطة النهاية",
   "settings.ai.localDiagnostic.transport": "النقل",

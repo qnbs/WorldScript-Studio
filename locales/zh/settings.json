@@ -231,6 +231,7 @@
   "settings.ai.providerStatusLabel": "连接状态",
   "settings.ai.providerStatusReady": "准备好",
   "settings.ai.providerStatusNotTested": "未测试",
+  "settings.ai.providerStatusTesting": "测试中…",
   "settings.ai.localDiagnostic.title": "连接诊断",
   "settings.ai.localDiagnostic.endpoint": "端点",
   "settings.ai.localDiagnostic.transport": "传输方式",

@@ -231,6 +231,7 @@
   "settings.ai.providerStatusLabel": "Yhteyden tila",
   "settings.ai.providerStatusReady": "Valmis",
   "settings.ai.providerStatusNotTested": "Ei testattu",
+  "settings.ai.providerStatusTesting": "Testataan…",
   "settings.ai.localDiagnostic.title": "Yhteysdiagnostiikka",
   "settings.ai.localDiagnostic.endpoint": "Päätepiste",
   "settings.ai.localDiagnostic.transport": "Siirto",

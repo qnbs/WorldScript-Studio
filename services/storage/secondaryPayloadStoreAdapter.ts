@@ -180,9 +180,16 @@ async function writeBatch<Record extends object>(
     const transaction = database.transaction(storeName, 'readwrite');
     const store = transaction.objectStore(storeName);
     let failure: Error | undefined;
+    let aborting = false;
     const abortForFailure = (error: Error) => {
       failure = error;
-      transaction.abort();
+      if (aborting) return;
+      aborting = true;
+      try {
+        transaction.abort();
+      } catch {
+        // QNBS-v3: the request error already aborted the transaction; onabort still reports `failure`.
+      }
     };
     for (const record of records) {
       const request = store.get(record.recordId);

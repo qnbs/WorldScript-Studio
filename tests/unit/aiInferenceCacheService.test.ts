@@ -137,6 +137,24 @@ describe('aiInferenceCacheService — protected-storage lifecycle', () => {
     ).resolves.toBeNull();
   });
 
+  it('degrades to a miss instead of rejecting when a durable cache row fails to decode', async () => {
+    // QNBS-v3 regression: the durable-read path used to reject (SecureRecordCorruptError / decode
+    // failure), which failed an otherwise-successful inference call — the cache is documented as
+    // non-authoritative and must degrade to a miss instead, matching setCachedInference's own policy.
+    type CacheInternals = {
+      inMemory: Map<string, unknown>;
+      decodeEntry: (entry: unknown) => Promise<string>;
+    };
+    await service.aiInferenceCacheService.setCachedInference('hello', 'model-a', 'world');
+    const cache = service.aiInferenceCacheService as unknown as CacheInternals;
+    cache.inMemory.clear();
+    vi.spyOn(cache, 'decodeEntry').mockRejectedValueOnce(new Error('corrupt payload'));
+
+    await expect(
+      service.aiInferenceCacheService.getCachedInference('hello', 'model-a'),
+    ).resolves.toBeNull();
+  });
+
   it('opportunistically re-encrypts a legacy plaintext entry after a successful read', async () => {
     const persisted: unknown[] = [];
     vi.doMock('../../services/storage/storageEncryptionService', () => ({

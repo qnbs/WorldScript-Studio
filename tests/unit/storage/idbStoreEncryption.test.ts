@@ -276,8 +276,7 @@ describe('locked-state guards on destructive and listing operations', () => {
   });
 
   it('deletes every binder asset for a project in a single batched transaction', async () => {
-    // QNBS-v3 regression: was one transaction PER asset — a later failure could leave earlier
-    // assets permanently removed. Now every delete is queued in one transaction (all-or-nothing).
+    // QNBS-v3 regression: was one transaction PER asset — a later failure could leave earlier assets permanently removed. Now every delete is queued in one transaction (all-or-nothing).
     const store = new IdbAssetStore();
     await store.saveBinderAsset('proj-1', 'a1', new ArrayBuffer(1), {
       byteSize: 1,

@@ -231,6 +231,7 @@
   "settings.ai.providerStatusLabel": "Status da conexão",
   "settings.ai.providerStatusReady": "Preparar",
   "settings.ai.providerStatusNotTested": "Não testado",
+  "settings.ai.providerStatusTesting": "Testando…",
   "settings.ai.localDiagnostic.title": "Diagnóstico de conexão",
   "settings.ai.localDiagnostic.endpoint": "Ponto de extremidade",
   "settings.ai.localDiagnostic.transport": "Transporte",

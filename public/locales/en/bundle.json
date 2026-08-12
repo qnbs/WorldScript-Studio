@@ -1877,6 +1877,7 @@
   "settings.ai.providerStatusLabel": "Connection Status",
   "settings.ai.providerStatusReady": "Ready",
   "settings.ai.providerStatusNotTested": "Not tested",
+  "settings.ai.providerStatusTesting": "Testing…",
   "settings.ai.localDiagnostic.title": "Connection diagnostics",
   "settings.ai.localDiagnostic.endpoint": "Endpoint",
   "settings.ai.localDiagnostic.transport": "Transport",

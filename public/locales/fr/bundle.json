@@ -1877,6 +1877,7 @@
   "settings.ai.providerStatusLabel": "État de la connexion",
   "settings.ai.providerStatusReady": "Prêt",
   "settings.ai.providerStatusNotTested": "Non testé",
+  "settings.ai.providerStatusTesting": "Test en cours…",
   "settings.ai.localDiagnostic.title": "Diagnostic de connexion",
   "settings.ai.localDiagnostic.endpoint": "Point de terminaison",
   "settings.ai.localDiagnostic.transport": "Transport",

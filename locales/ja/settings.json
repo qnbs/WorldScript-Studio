@@ -231,6 +231,7 @@
   "settings.ai.providerStatusLabel": "接続ステータス",
   "settings.ai.providerStatusReady": "準備ができて",
   "settings.ai.providerStatusNotTested": "未テスト",
+  "settings.ai.providerStatusTesting": "テスト中…",
   "settings.ai.localDiagnostic.title": "接続診断",
   "settings.ai.localDiagnostic.endpoint": "エンドポイント",
   "settings.ai.localDiagnostic.transport": "通信方式",

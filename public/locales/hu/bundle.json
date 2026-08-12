@@ -1877,6 +1877,7 @@
   "settings.ai.providerStatusLabel": "Kapcsolat állapota",
   "settings.ai.providerStatusReady": "Kész",
   "settings.ai.providerStatusNotTested": "Nincs tesztelve",
+  "settings.ai.providerStatusTesting": "Tesztelés…",
   "settings.ai.localDiagnostic.title": "Kapcsolati diagnosztika",
   "settings.ai.localDiagnostic.endpoint": "Végpont",
   "settings.ai.localDiagnostic.transport": "Átvitel",

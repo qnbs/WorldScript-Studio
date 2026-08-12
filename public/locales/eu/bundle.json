@@ -1877,6 +1877,7 @@
   "settings.ai.providerStatusLabel": "Konexioaren egoera",
   "settings.ai.providerStatusReady": "Prest",
   "settings.ai.providerStatusNotTested": "Probatu gabe",
+  "settings.ai.providerStatusTesting": "Probatzen…",
   "settings.ai.localDiagnostic.title": "Konexio-diagnostikoa",
   "settings.ai.localDiagnostic.endpoint": "Amaiera-puntua",
   "settings.ai.localDiagnostic.transport": "Garraioa",
