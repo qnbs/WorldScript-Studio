@@ -6,23 +6,22 @@ authoritative closure record for the responsiveness portions of
 [#332](https://github.com/qnbs/WorldScript-Studio/issues/332) and
 [#333](https://github.com/qnbs/WorldScript-Studio/issues/333).
 
-## Live baseline — 2026-08-11 (updated again after the appearancePreset/unlock-routing fix cascade)
+## Live baseline — 2026-08-12 (updated after the #336 second-wave CodeRabbit loop and the layering-mistake correction)
 
 | Ref | Live value |
 | --- | --- |
 | `main` | `804793aa0815a726935785639e4fb139af7c4b59` |
-| PR #335 | `0353364df974362d8ca6c4f1e50a229a8ef4219c` (1 review thread still open by design — see review-thread note below) |
-| PR #336 | `ad4364ac7f6685980c82417c1953e66fbe3ce25b` (review threads: 0 unresolved) |
-| PR #337 | `dd92628f850bfe0932e753c1910f3ec115d18546` (review threads: 0 unresolved) |
+| PR #335 | `edc3ef13c7f87007f290d3a60ee77b119ffeea57` (review threads: 0 unresolved of 40; all CI green) |
+| PR #336 | `b01564ed77ae1acf9f9cb8c02ee4767e8909ef15` (review threads: 0 unresolved of 68) |
+| PR #337 | `1096861ec6af72f580225c4fcf1dc6858f4b592e` (review threads: 0 unresolved of 57) |
 | PR #310 | `27177ce549d4579f1fc9dfbc4630ebf0c2592f9b` |
 | Issue #332 / #333 | Open / Open; neither has post-report comments |
 
-PR #335's one remaining open review thread (CodeRabbit, `.npmrc`/`pnpm-workspace.yaml` uuid
-override range) is a confirmed-valid, deliberately-deferred fix: applying it requires a real
-`pnpm install` to regenerate the lockfile, which this session's severely memory-constrained host
-cannot safely run without risking an OOM crash mid-install. The exact fix is specified in the
-thread reply; it needs a normal-resourced environment or a dependency-update CI job, not a
-hand-edit.
+The `.npmrc`/`pnpm-workspace.yaml` uuid override-range hardening (previously deferred as
+unsafe for this memory-constrained host to resolve via a real `pnpm install`) has since been
+applied: a real `pnpm install --child-concurrency=1` succeeded once host load dropped, tightening
+the override to exclude the two unpatched uuid releases (`edc3ef13`, resolved `uuid@14.0.1`
+unchanged). That review thread is resolved; no deferred fix remains outstanding on #335.
 
 `#335` is the lifecycle foundation, `#336` owns desktop, Local-AI, provider,
 and Python reliability, and `#337` owns recovery-journal/secondary-store work.
@@ -56,7 +55,7 @@ environment is unavailable, record the closest environment and use
 | PERF-333-003 | Scrolling/panel/text overlap | Required resolution/zoom/locale/RTL matrix | Not yet | Screenshot/visual and overflow inspection pending | Layout root cause unknown | Existing desktop audit is hypothesis-only | Pending | `NOT_REPRODUCED_ENVIRONMENT_LIMITED` |
 | PERF-333-004 | Python detection/probing contributes to desktop instability | Tauri desktop, terminal versus menu launch | Code inspection required on #336 | Pending candidate count, per-candidate and total duration | Synchronous probe risk must be confirmed or disproved | Pending `spawn_blocking`/timeout/cache assessment | Pending | `ROOT_CAUSE_CONFIRMED_FIX_PENDING` |
 | PERF-333-005 | Duplicate LoRA jobs or cancellation leaves resource load | Tauri desktop | Code inspection required on #336 | Pending concurrent-spawn/termination evidence | Atomic slot and confirmed child termination required | Pending | Pending | `ROOT_CAUSE_CONFIRMED_FIX_PENDING` |
-| PERF-333-006 | Local backend diagnostics cause stale/repeated work | Provider Settings, LM Studio/Ollama/vLLM | Unit/code evidence exists; runtime not measured | Pending request count, timeout and stale-result measurements | Requests must be user-triggered, abortable, deduplicated | Pending live #336 review reconciliation | Pending `.deb` | `FIXED_CODE_ONLY_AWAITING_PACKAGED_VERIFICATION` |
+| PERF-333-006 | Local backend diagnostics cause stale/repeated work | Provider Settings, LM Studio/Ollama/vLLM | Unit/code evidence exists; runtime not measured | Pending request count, timeout and stale-result measurements | Requests must be user-triggered, abortable, deduplicated | #336 review reconciliation complete (0 unresolved of 68 threads at `b01564ed`) | Pending `.deb` | `FIXED_CODE_ONLY_AWAITING_PACKAGED_VERIFICATION` |
 
 ## Required packaged desktop matrix
 
