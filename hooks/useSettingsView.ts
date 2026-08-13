@@ -390,23 +390,16 @@ export const useSettingsView = () => {
       if (passphraseModal === 'set') {
         // QNBS-v3: setupIdbEncryption derives key, writes sentinel to IDB, sets _activeKey
         await setupIdbEncryption(newPassphrase);
-        // QNBS-v3: without this, "encryption active" would only mean future writes get protected — every already-existing fs-backed file would stay plaintext until its next incidental save; strict:false so a stray pre-existing oddity can't block setup for everything else.
-        if (isTauriRuntime()) {
-          try {
-            const key = await resolveProtectedWriteKey();
-            if (key) {
-              await migrateAllProtectedFsData(key, 'set');
-              await clearFsMigrationMarker();
-            }
-          } catch (error) {
-            // QNBS-v3: migrateAllProtectedFsData('set') is non-strict and already skips per-file failures — reaching here means a pre-flight failure (e.g. the migration marker itself couldn't be written) before any file was touched, so undoing the sentinel just-created above is safe, not just cosmetic.
-            await clearIdbPassphrase();
-            setEncryptionReady(false);
-            throw error;
-          }
-        }
+        // QNBS-v3: persist configured state before FS migration so an interrupted strict setup retains the key material required for recovery instead of orphaning already-protected files.
         dispatch(featureFlagsActions.setEnableIdbAtRestEncryption(true));
         setEncryptionReady(true);
+        if (isTauriRuntime()) {
+          const key = await resolveProtectedWriteKey();
+          if (key) {
+            await migrateAllProtectedFsData(key, 'set');
+            await clearFsMigrationMarker();
+          }
+        }
         // QNBS-v3: WCAG 4.1.3 — toast confirms success for keyboard/AT users who can't see status text
         toast.success(t('settings.privacy.encryptionActiveStatus'));
       } else if (passphraseModal === 'unlock') {

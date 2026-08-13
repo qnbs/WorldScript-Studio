@@ -61,8 +61,10 @@ vi.mock('../../../../services/logger', async (importOriginal) => {
 });
 
 import {
+  assertNoInterruptedFsMigration,
   checkForInterruptedFsMigration,
   clearFsMigrationMarker,
+  FsMigrationInterruptedError,
   migrateAllProtectedFsData,
 } from '../../../../services/fs/fsEncryptionMigration';
 import { fileSystemService } from '../../../../services/fs/index';
@@ -238,9 +240,9 @@ describe('migrateAllProtectedFsData — set (first-time setup)', () => {
     expect(await fileSystemService.getApiKey('gemini')).toBe('secret-key-123');
   });
 
-  it('skips (does not throw or discard) a file it cannot decrypt, unlike disable/rotate', async () => {
-    // Simulate a stray already-protected file left over from a previous, unrelated encryption
-    // session — the exact edge case 'set' must tolerate rather than abort on.
+  it('rejects instead of reporting successful setup when an existing file cannot decrypt', async () => {
+    // Simulate a stray already-protected file from a prior session: success would falsely claim
+    // every existing desktop file is protected by the new passphrase.
     await enableTestPassphrase();
     await fileSystemService.saveProject(project as never);
     cryptoState.activeKey = null;
@@ -251,8 +253,8 @@ describe('migrateAllProtectedFsData — set (first-time setup)', () => {
     cryptoState.activeKey = newKey;
     cryptoState.sentinelConfigured = true;
 
-    await expect(migrateAllProtectedFsData(newKey, 'set')).resolves.toBeUndefined();
-    // Left untouched — the new key can't decrypt it, and 'set' must not destroy or crash on that.
+    await expect(migrateAllProtectedFsData(newKey, 'set')).rejects.toThrow();
+    // It remains untouched and the caller retains recovery metadata.
     expect(fake.text.get('/app/projects/p1/project.json')).toBe(before);
   });
 });
@@ -284,6 +286,24 @@ describe('migrateAllProtectedFsData — interrupted-migration marker', () => {
 
   it('reports no marker when none exists', async () => {
     expect(await checkForInterruptedFsMigration()).toBeNull();
+    await expect(assertNoInterruptedFsMigration()).resolves.toBeUndefined();
+  });
+
+  it('blocks startup hydration when a valid interrupted-migration marker exists', async () => {
+    fake.text.set(
+      '/app/config/fs-migration-marker.json',
+      JSON.stringify({ operation: 'rotate', startedAt: '2026-08-13T12:00:00.000Z' }),
+    );
+
+    await expect(assertNoInterruptedFsMigration()).rejects.toBeInstanceOf(
+      FsMigrationInterruptedError,
+    );
+  });
+
+  it('propagates a marker-clear I/O failure instead of falsely reporting recovery complete', async () => {
+    fake.apis.remove = () => Promise.reject(new Error('EACCES marker'));
+
+    await expect(clearFsMigrationMarker()).rejects.toThrow('EACCES marker');
   });
 });
 
@@ -399,14 +419,13 @@ describe('migrateAllProtectedFsData — safety', () => {
     await expect(migrateAllProtectedFsData(newKey, 'rotate')).rejects.toThrow(/anthropic/);
   });
 
-  // QNBS-v3: a malformed API-key file must never strand setupIdbEncryption()'s already-activated
-  // sentinel/key — non-strict (first-time setup) must swallow even a synchronous JSON.parse throw.
-  it('does not throw when an API key file contains malformed JSON, in non-strict (set) mode', async () => {
+  // QNBS-v3: strict setup must preserve a recoverable pending state instead of claiming complete protection when an existing API-key file is malformed.
+  it('throws when an API key file contains malformed JSON during first-time setup', async () => {
     await fake.apis.mkdir('/app/config');
     fake.text.set('/app/config/openai_key.enc.json', '{not valid json');
 
     const newKey = await deriveKey('first-passphrase');
-    await expect(migrateAllProtectedFsData(newKey, 'set')).resolves.toBeUndefined();
+    await expect(migrateAllProtectedFsData(newKey, 'set')).rejects.toThrow();
   });
 
   it('throws when an API key file contains malformed JSON, in strict (disable/rotate) mode', async () => {
@@ -417,8 +436,8 @@ describe('migrateAllProtectedFsData — safety', () => {
     await expect(migrateAllProtectedFsData(null, 'disable')).rejects.toThrow();
   });
 
-  // QNBS-v3: a 'set' migration running right after setupIdbEncryption() has already activated the sentinel must never throw from a routine per-file write failure — the caller has no safe partial-success state to leave the sentinel in.
-  it('logs and skips (does not throw) a write failure on an otherwise-migratable file, in non-strict (set) mode', async () => {
+  // QNBS-v3: setup must stop before success when a file cannot be atomically rewritten, leaving the marker and passphrase metadata available for recovery.
+  it('throws on a write failure during first-time setup', async () => {
     await fileSystemService.saveProject(project as never);
     const originalWriteTextFile = fake.apis.writeTextFile;
     fake.apis.writeTextFile = (p: string, c: string) => {
@@ -428,8 +447,8 @@ describe('migrateAllProtectedFsData — safety', () => {
     };
 
     const newKey = await deriveKey('first-passphrase');
-    await expect(migrateAllProtectedFsData(newKey, 'set')).resolves.toBeUndefined();
-    // The file is left exactly as it was before the failed write attempt — not corrupted, not stranded.
+    await expect(migrateAllProtectedFsData(newKey, 'set')).rejects.toThrow('EIO');
+    // The file is left exactly as it was before the failed write attempt, with the marker retained.
     expect(fake.text.get('/app/projects/p1/project.json')).toBeDefined();
   });
 

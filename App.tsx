@@ -67,7 +67,6 @@ import { getEffectiveTheme } from './services/commands/effectiveTheme';
 import { approximateManuscriptWordCount } from './services/commands/wordCountApprox';
 import { installDesktopMenu } from './services/desktop/desktopMenu';
 import { installCloseToTray, installDesktopTray } from './services/desktop/desktopTray';
-import { checkForInterruptedFsMigration } from './services/fs/fsEncryptionMigration';
 import { logger } from './services/logger';
 import { pluginRegistry } from './services/pluginRegistry';
 import { repairProjectI18nFields } from './services/projectI18nRepair';
@@ -81,7 +80,7 @@ import {
   isIdbEncryptionReady,
 } from './services/storage/storageEncryptionService';
 import { initTauriDeepLink } from './services/tauriDeepLink';
-import { applyDesktopRuntimeFlags, isTauriRuntime } from './services/tauriRuntime';
+import { applyDesktopRuntimeFlags } from './services/tauriRuntime';
 import { viewNavigationLabelKey } from './services/viewNavigationLabels';
 import type { View } from './types';
 
@@ -368,30 +367,6 @@ const App: FC<AppProps> = ({ isNewUser }) => {
       if (journal && journal.phase !== 'completed') setRecoveryJournal(journal);
     })();
   }, []);
-
-  // QNBS-v3: the fs-data migration bridge has no resumable journal yet (issue #359) — surface an interrupted-migration marker honestly rather than silently proceeding as if the desktop file state is consistent.
-  useEffect(() => {
-    if (!isTauriRuntime()) return;
-    void (async () => {
-      const marker = await checkForInterruptedFsMigration();
-      if (!marker) return;
-      const operationKey = {
-        set: 'settings.privacy.encryptionOperationSet',
-        disable: 'settings.privacy.encryptionOperationDisable',
-        rotate: 'settings.privacy.encryptionOperationRotate',
-      } as const;
-      dispatch(
-        statusActions.addNotification({
-          type: 'error',
-          title: t('settings.privacy.encryptionMigrationInterruptedTitle'),
-          description: t('settings.privacy.encryptionMigrationInterruptedBody', {
-            operation: t(operationKey[marker.operation]),
-            startedAt: new Date(marker.startedAt).toLocaleString(language),
-          }),
-        }),
-      );
-    })();
-  }, [dispatch, t, language]);
 
   // QNBS-v3: B-1 sentinel guard (async) — skips if flag off/unlocked/recovery-pending, auto-disables on a missing sentinel, else shows the unlock modal.
   useEffect(() => {

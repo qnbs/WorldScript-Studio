@@ -29,8 +29,8 @@ const PROTECTED_TEXT_SCHEME = 'protected-v1';
 
 interface MigrationOptions {
   targetKey: CryptoKey | null;
-  // QNBS-v3: strict=true (disable/rotate) aborts on any decrypt failure — the caller is about to destroy/replace the only key that could decrypt a stranded file; strict=false (first-time setup) logs and skips instead, since nothing valuable is being destroyed.
-  strict: boolean;
+  // QNBS-v3: every lifecycle operation is strict, so setup never reports complete encryption while a pre-existing file remains plaintext or unreadable.
+  strict: true;
 }
 
 // QNBS-v3: an exists() check first separates "genuinely absent" (always safe to skip — e.g. config/ not yet created on a fresh install) from "present but unreadable" (a real error that must propagate in strict mode, or be logged-and-skipped in non-strict mode — never silently treated as empty).
@@ -52,9 +52,18 @@ async function listDirEntries(
 // QNBS-v3: no persistent per-file journal/checkpoint yet (tracked in issue #359) — a process kill mid-rotate can leave a mixed-key state; this marker can't resume/fix that but converts it into a detected one.
 const MIGRATION_MARKER_FILENAME = 'fs-migration-marker.json';
 
-interface FsMigrationMarker {
+export interface FsMigrationMarker {
   operation: 'set' | 'disable' | 'rotate';
   startedAt: string;
+}
+
+export class FsMigrationInterruptedError extends Error {
+  readonly code = 'FS_ENCRYPTION_MIGRATION_INTERRUPTED' as const;
+
+  constructor(readonly marker: FsMigrationMarker) {
+    super(`Desktop filesystem encryption ${marker.operation} migration was interrupted`);
+    this.name = 'FsMigrationInterruptedError';
+  }
 }
 
 async function writeMigrationMarker(
@@ -81,26 +90,41 @@ export async function clearFsMigrationMarker(): Promise<void> {
   const apis = await loadTauriApis();
   const appDataPath = await apis.appDataDir();
   const markerPath = await apis.join(appDataPath, 'config', MIGRATION_MARKER_FILENAME);
-  await apis.remove(markerPath).catch(() => {});
+  try {
+    await apis.remove(markerPath);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+    if (!message.includes('not found') && !message.includes('enoent')) throw error;
+  }
 }
 
 /**
  * Returns the marker left by an fs-data migration that never reached completion (crash, forced
- * quit, power loss mid-operation), or null if none exists. Called once at startup
- * (FsCore.initialize()) to surface an honest warning rather than silently proceeding as if
- * nothing happened — see issue #359 for the real fix (a resumable, journaled migration).
+ * quit, power loss mid-operation), or null if none exists. Startup checks this before persisted
+ * state hydration, so a mixed-key state cannot be mistaken for a first-run library — see #359.
  */
 export async function checkForInterruptedFsMigration(): Promise<FsMigrationMarker | null> {
-  try {
-    const apis = await loadTauriApis();
-    const appDataPath = await apis.appDataDir();
-    const markerPath = await apis.join(appDataPath, 'config', MIGRATION_MARKER_FILENAME);
-    if (!(await apis.exists(markerPath))) return null;
-    const content = await apis.readTextFile(markerPath);
-    return JSON.parse(content) as FsMigrationMarker;
-  } catch {
-    return null;
+  const apis = await loadTauriApis();
+  const appDataPath = await apis.appDataDir();
+  const markerPath = await apis.join(appDataPath, 'config', MIGRATION_MARKER_FILENAME);
+  if (!(await apis.exists(markerPath))) return null;
+  const marker = JSON.parse(await apis.readTextFile(markerPath)) as Partial<FsMigrationMarker>;
+  if (
+    (marker.operation !== 'set' &&
+      marker.operation !== 'disable' &&
+      marker.operation !== 'rotate') ||
+    typeof marker.startedAt !== 'string'
+  ) {
+    throw new Error('Desktop filesystem encryption migration marker is malformed');
   }
+  return marker as FsMigrationMarker;
+}
+
+/** Block persistence hydration until a previously interrupted filesystem migration is recovered. */
+export async function assertNoInterruptedFsMigration(): Promise<void> {
+  const marker = await checkForInterruptedFsMigration();
+  if (marker) throw new FsMigrationInterruptedError(marker);
 }
 
 /**
@@ -201,20 +225,15 @@ async function reprotectSnapshotFile(
 
 /**
  * Converges every fs-backed protected file to targetKey (first-time setup or rotate) or to
- * plaintext (targetKey=null, disable). For 'disable'/'rotate', any positively-identified protected
- * file that fails to decrypt under the current session key throws immediately rather than being
- * skipped, so a partial migration can never silently strand a file at a key that's about to become
- * unrecoverable. For 'set', such a file is logged and left untouched instead, so an unrelated
- * pre-existing oddity can't block the user from enabling encryption for everything else. Writes a
- * durable marker before starting; the caller must call clearFsMigrationMarker() once the whole
- * operation (this call AND any subsequent IDB-side commit) succeeds — see
- * checkForInterruptedFsMigration() and issue #359.
+ * plaintext (targetKey=null, disable). Every operation is strict: a read, decrypt, enumeration, or
+ * write failure leaves the durable marker in place and reports failure rather than claiming complete
+ * desktop protection. The caller clears the marker only after the subsequent IDB lifecycle commit.
  */
 export async function migrateAllProtectedFsData(
   targetKey: CryptoKey | null,
   operation: FsMigrationMarker['operation'],
 ): Promise<void> {
-  const opts: MigrationOptions = { targetKey, strict: operation !== 'set' };
+  const opts: MigrationOptions = { targetKey, strict: true };
   const apis = await loadTauriApis();
   const appDataPath = await apis.appDataDir();
 
@@ -222,53 +241,44 @@ export async function migrateAllProtectedFsData(
 
   const configPath = await apis.join(appDataPath, 'config');
   const configEntries = await listDirEntries(apis, configPath, opts.strict);
-  await Promise.all(
-    configEntries.map(async (entry) => {
-      if (!entry.name || entry.isDirectory) return;
-      if (entry.name === 'settings.json') {
-        const entryPath = await apis.join(configPath, entry.name);
-        await reprotectWholeFile(apis, entryPath, opts);
-      } else if (entry.name.endsWith('_key.enc.json')) {
-        const provider = entry.name.slice(0, -'_key.enc.json'.length);
-        await fileSystemService.reprotectApiKeyFile(provider, opts.targetKey, opts.strict);
-      }
-    }),
-  );
+  for (const entry of configEntries) {
+    if (!entry.name || entry.isDirectory) continue;
+    if (entry.name === 'settings.json') {
+      const entryPath = await apis.join(configPath, entry.name);
+      await reprotectWholeFile(apis, entryPath, opts);
+    } else if (entry.name.endsWith('_key.enc.json')) {
+      const provider = entry.name.slice(0, -'_key.enc.json'.length);
+      await fileSystemService.reprotectApiKeyFile(provider, opts.targetKey, opts.strict);
+    }
+  }
 
   const snapshotsPath = await apis.join(appDataPath, 'snapshots');
   const snapshotEntries = await listDirEntries(apis, snapshotsPath, opts.strict);
-  await Promise.all(
-    snapshotEntries.map(async (entry) => {
-      if (!entry.name?.endsWith('.json')) return;
-      const filePath = await apis.join(snapshotsPath, entry.name);
-      await reprotectSnapshotFile(apis, filePath, opts);
-    }),
-  );
+  for (const entry of snapshotEntries) {
+    if (!entry.name?.endsWith('.json')) continue;
+    const filePath = await apis.join(snapshotsPath, entry.name);
+    await reprotectSnapshotFile(apis, filePath, opts);
+  }
 
   const imagesPath = await apis.join(appDataPath, 'images');
   const imageEntries = await listDirEntries(apis, imagesPath, opts.strict);
-  await Promise.all(
-    imageEntries.map(async (entry) => {
-      if (!entry.name?.endsWith('.png')) return;
-      const filePath = await apis.join(imagesPath, entry.name);
-      await reprotectWholeFile(apis, filePath, opts);
-    }),
-  );
+  for (const entry of imageEntries) {
+    if (!entry.name?.endsWith('.png')) continue;
+    const filePath = await apis.join(imagesPath, entry.name);
+    await reprotectWholeFile(apis, filePath, opts);
+  }
 
   // QNBS-v3: uses listDirEntries (not fileSystemService.listProjects(), which swallows every readDir failure to []) — a transient permission/I/O error enumerating projects/ must abort strict-mode migrations, not silently skip every project/Codex/vector file while still reporting success.
   const projectsPath = await apis.join(appDataPath, 'projects');
   const projectEntries = await listDirEntries(apis, projectsPath, opts.strict);
-  await Promise.all(
-    projectEntries
-      .filter((entry) => entry.name)
-      .map(async (entry) => {
-        const projectDir = await apis.join(projectsPath, entry.name as string);
-        await reprotectWholeFile(apis, await apis.join(projectDir, 'project.json'), opts);
-        const codexDir = await apis.join(projectDir, 'codex');
-        await reprotectWholeFile(apis, await apis.join(codexDir, 'codex.snap'), opts);
-        await reprotectWholeFile(apis, await apis.join(codexDir, 'vectors.snap'), opts);
-      }),
-  );
+  for (const entry of projectEntries) {
+    if (!entry.name) continue;
+    const projectDir = await apis.join(projectsPath, entry.name);
+    await reprotectWholeFile(apis, await apis.join(projectDir, 'project.json'), opts);
+    const codexDir = await apis.join(projectDir, 'codex');
+    await reprotectWholeFile(apis, await apis.join(codexDir, 'codex.snap'), opts);
+    await reprotectWholeFile(apis, await apis.join(codexDir, 'vectors.snap'), opts);
+  }
 }
 
 // QNBS-v3: both resetAllDatabases() (storage-init-failure recovery) and wipeAllAppData() (factory

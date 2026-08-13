@@ -723,7 +723,7 @@ describe('handlePassphraseConfirm — disable/rotate', () => {
     ]);
   });
 
-  it('rolls back the just-created sentinel when the first-time-setup fs migration fails, in the Tauri runtime', async () => {
+  it('preserves the just-created sentinel when strict first-time setup fails in the Tauri runtime', async () => {
     mockIsTauriRuntime.mockReturnValue(true);
     mockResolveProtectedWriteKey.mockResolvedValue('newly-active-key');
     mockMigrateAllProtectedFsData.mockRejectedValueOnce(new Error('marker write failed'));
@@ -738,9 +738,8 @@ describe('handlePassphraseConfirm — disable/rotate', () => {
       );
     });
 
-    // QNBS-v3: no progress callback here — this is a rollback of setupIdbEncryption(), not the disable branch's user-facing migration.
-    expect(mockClearIdbPassphrase).toHaveBeenCalledWith(undefined);
-    expect(mockDispatch).not.toHaveBeenCalledWith(
+    expect(mockClearIdbPassphrase).not.toHaveBeenCalled();
+    expect(mockDispatch).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'featureFlags/setEnableIdbAtRestEncryption',
         payload: true,

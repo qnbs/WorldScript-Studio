@@ -9,8 +9,10 @@ import { I18nProvider } from './contexts/I18nContext';
 import { versionControlActions } from './features/versionControl/versionControlSlice';
 import { loadPersistedRootState } from './services/appBootstrap';
 import { initializeStorage, resetAllDatabases } from './services/dbInitialization';
+import { assertNoInterruptedFsMigration } from './services/fs/fsEncryptionMigration';
 import { logger } from './services/logger';
 import { IdbStorageLockedError } from './services/storage/storageEncryptionService';
+import { isTauriRuntime } from './services/tauriRuntime';
 /* ── Self-hosted fonts (@fontsource) ── */
 import '@fontsource/inter/300.css';
 import '@fontsource/inter/400.css';
@@ -199,6 +201,8 @@ async function bootApp(): Promise<void> {
   }
 
   try {
+    // QNBS-v3: a marker means prior FS rekey/disable/setup may be mixed-key, so hydration and autosave must remain blocked instead of treating decrypt failures as a fresh library.
+    if (isTauriRuntime()) await assertNoInterruptedFsMigration();
     const preloadedState = await loadPersistedRootState();
 
     const isNewUser = !preloadedState;
