@@ -68,9 +68,9 @@ vi.mock('../../hooks/useTranslation', () => ({
   useTranslation: () => ({ t: (k: string) => k, language: 'en' }),
 }));
 
-vi.mock('../../services/dbService', () => ({
-  dbService: {
-    getCharacterImage: vi.fn().mockResolvedValue(null),
+vi.mock('../../services/storageService', () => ({
+  storageService: {
+    getImage: vi.fn().mockResolvedValue(null),
   },
 }));
 

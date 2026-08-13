@@ -5,13 +5,13 @@ import { ICONS } from '../constants';
 import { useWorldViewContext, WorldViewContext } from '../contexts/WorldViewContext';
 import { uploadWorldImageThunk } from '../features/project/thunks/worldThunks';
 import { useWorldView } from '../hooks/useWorldView';
-import { dbService } from '../services/dbService';
 import {
   filterByQuery,
   type RosterSort,
   sortByMode,
   worldCompleteness,
 } from '../services/rosterMetrics';
+import { storageService } from '../services/storageService';
 import type { World } from '../types';
 import { CompletenessRing } from './roster/CompletenessRing';
 import { RosterToolbar } from './roster/RosterToolbar';
@@ -28,7 +28,7 @@ import { SectionIcon } from './ui/SectionIcon';
 import { Spinner } from './ui/Spinner';
 import { Textarea } from './ui/Textarea';
 
-// A local hook to fetch image data on-demand from IndexedDB
+// QNBS-v3: reads through the selected backend so Tauri uploads and views use the same storage location.
 const useStoredImage = (id: string | undefined, hasImage: boolean | undefined) => {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   useEffect(() => {
@@ -38,9 +38,9 @@ const useStoredImage = (id: string | undefined, hasImage: boolean | undefined) =
     }
     let isMounted = true;
     const fetchImage = async () => {
-      const base64 = await dbService.getImage(id);
-      if (isMounted && base64) {
-        setImageUrl(`data:image/png;base64,${base64}`);
+      const image = await storageService.getImage(id);
+      if (isMounted && image) {
+        setImageUrl(image.startsWith('data:image/') ? image : `data:image/png;base64,${image}`);
       }
     };
     fetchImage();
