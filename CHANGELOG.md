@@ -29,6 +29,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `.tmp-*` siblings left behind by a write interrupted by an actual process kill (crash/power
   loss) rather than a caught JS error — neither `atomicRename`'s nor the temp-write failure
   handler's in-session cleanup can ever see that case, since execution stops before either runs.
+  **Second round of review-loop follow-up fixes:** the startup sweep being fire-and-forget meant a
+  save started immediately after `initialize()` could create a brand-new (legitimate, not
+  orphaned) temp file that the still-running sweep would then delete out from under it — a
+  module-level `activeTempPaths` set, populated for the duration of each write, now tells the
+  sweep to skip any temp file currently being written rather than delaying every session's
+  startup by awaiting the sweep. The per-path write queue also didn't coalesce: a burst of
+  same-path writes arriving faster than disk I/O completes (e.g. rapid autosave retries on a slow
+  or temporarily locked disk) appended every call to a growing promise chain, writing every stale
+  intermediate version to disk instead of just the latest one. The queue now keeps at most the
+  currently-running write and a single latest-queued write per path — a write arriving while
+  another is already queued (not yet started) supersedes it in place instead of appending another
+  link, bounding both memory and wasted I/O regardless of how many same-path writes arrive in a
+  burst.
 
 ## [1.27.0] — 2026-08-13
 

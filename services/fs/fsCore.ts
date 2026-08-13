@@ -90,21 +90,61 @@ function createTempSuffix(): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-// QNBS-v3: per-path write queue serializes same-path atomic writes in call order — without it, two overlapping saves race on which rename finishes last, letting an older save overwrite a newer one; entries self-delete once settled and unclaimed, so this never grows unbounded.
-const writeQueues = new Map<string, Promise<void>>();
+// QNBS-v3: tracks temp files currently mid-write so cleanupOrphanedTempFiles' startup sweep never
+// deletes one out from under an active save — a sweep that races a save started right after
+// initialize() would otherwise see a brand-new (not orphaned) .tmp-* file and remove it.
+const activeTempPaths = new Set<string>();
 
-function enqueueWrite<T>(path: string, fn: () => Promise<T>): Promise<T> {
-  const previousSettled = writeQueues.get(path) ?? Promise.resolve();
-  const result = previousSettled.then(fn);
-  const settled = result.then(
-    () => undefined,
-    () => undefined,
-  );
-  writeQueues.set(path, settled);
-  settled.then(() => {
-    if (writeQueues.get(path) === settled) writeQueues.delete(path);
+interface QueuedWrite {
+  fn: () => Promise<void>;
+  waiters: Array<{ resolve: () => void; reject: (reason: unknown) => void }>;
+}
+
+// QNBS-v3: per-path write coordination — at most one write in flight per path (serializes rename
+// order so an older/slower save can never overwrite a newer one) plus at most one queued "next"
+// write; a write arriving while one is already queued (not yet started) supersedes it in place
+// instead of appending another link, so a burst of same-path saves (e.g. rapid autosave retries
+// on a slow/locked disk) can't grow an unbounded promise chain or write every stale intermediate
+// version — only the currently-running write and the single latest queued one ever execute.
+const inFlightPaths = new Set<string>();
+const nextWrite = new Map<string, QueuedWrite>();
+
+function enqueueWrite(path: string, fn: () => Promise<void>): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const waiter = { resolve, reject };
+    const queued = nextWrite.get(path);
+    if (queued) {
+      queued.fn = fn;
+      queued.waiters.push(waiter);
+      return;
+    }
+    if (inFlightPaths.has(path)) {
+      nextWrite.set(path, { fn, waiters: [waiter] });
+      return;
+    }
+    void runQueuedWrite(path, fn, [waiter]);
   });
-  return result;
+}
+
+async function runQueuedWrite(
+  path: string,
+  fn: () => Promise<void>,
+  waiters: Array<{ resolve: () => void; reject: (reason: unknown) => void }>,
+): Promise<void> {
+  inFlightPaths.add(path);
+  try {
+    await fn();
+    for (const waiter of waiters) waiter.resolve();
+  } catch (err) {
+    for (const waiter of waiters) waiter.reject(err);
+  } finally {
+    inFlightPaths.delete(path);
+  }
+  const queued = nextWrite.get(path);
+  if (queued) {
+    nextWrite.delete(path);
+    void runQueuedWrite(path, queued.fn, queued.waiters);
+  }
 }
 
 async function atomicRename(apis: TauriApis, tmpPath: string, finalPath: string): Promise<void> {
@@ -124,13 +164,18 @@ async function writeThenRename(
   finalPath: string,
   write: () => Promise<void>,
 ): Promise<void> {
+  activeTempPaths.add(tmpPath);
   try {
-    await write();
-  } catch (err) {
-    await apis.remove(tmpPath).catch(() => {});
-    throw err;
+    try {
+      await write();
+    } catch (err) {
+      await apis.remove(tmpPath).catch(() => {});
+      throw err;
+    }
+    await atomicRename(apis, tmpPath, finalPath);
+  } finally {
+    activeTempPaths.delete(tmpPath);
   }
-  await atomicRename(apis, tmpPath, finalPath);
 }
 
 export function writeTextFileAtomic(apis: TauriApis, path: string, content: string): Promise<void> {
@@ -311,7 +356,7 @@ export async function cleanupOrphanedTempFiles(
         await cleanupOrphanedTempFiles(apis, entryPath, depth + 1);
         return;
       }
-      if (TEMP_FILE_PATTERN.test(entry.name)) {
+      if (TEMP_FILE_PATTERN.test(entry.name) && !activeTempPaths.has(entryPath)) {
         await apis.remove(entryPath).catch(() => {});
       }
     }),

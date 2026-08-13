@@ -238,6 +238,45 @@ describe('writeTextFileAtomic / writeFileAtomic', () => {
     // was artificially slower.
     expect(text.get('/app/project.json')).toBe('second');
   });
+
+  // QNBS-v3: a write queued while another is already pending (not yet started) must supersede it in place, not append another link — otherwise a burst of same-path saves writes every stale intermediate version to disk instead of coalescing to the latest.
+  it('coalesces a write queued behind an already-pending write, skipping the superseded content entirely', async () => {
+    const { apis, text } = makeAtomicWriteFake();
+    const originalWriteTextFile = apis.writeTextFile;
+    const writtenContents: string[] = [];
+    let releaseFirst: (() => void) | undefined;
+    let resolveFirstStarted: (() => void) | undefined;
+    const firstStarted = new Promise<void>((resolve) => {
+      resolveFirstStarted = resolve;
+    });
+
+    apis.writeTextFile = async (p, c) => {
+      writtenContents.push(c);
+      if (c === 'first') {
+        resolveFirstStarted?.();
+        await new Promise<void>((res) => {
+          releaseFirst = res;
+        });
+      }
+      return originalWriteTextFile(p, c);
+    };
+
+    const first = writeTextFileAtomic(apis, '/app/project.json', 'first');
+    await firstStarted;
+
+    // "second" is queued while "first" is still running — becomes the pending write.
+    const second = writeTextFileAtomic(apis, '/app/project.json', 'second');
+    // "third" arrives while "second" is still only queued (not started) — supersedes it in place.
+    const third = writeTextFileAtomic(apis, '/app/project.json', 'third');
+
+    releaseFirst?.();
+    await Promise.all([first, second, third]);
+
+    // "first" had already started before superseding was possible, so it genuinely ran; "second"
+    // was superseded before it ever started and must never reach the temp-file write at all.
+    expect(writtenContents).toEqual(['first', 'third']);
+    expect(text.get('/app/project.json')).toBe('third');
+  });
 });
 
 describe('cleanupOrphanedTempFiles', () => {
@@ -271,6 +310,65 @@ describe('cleanupOrphanedTempFiles', () => {
     const { apis, removed } = makeDirTreeFake({});
     await expect(cleanupOrphanedTempFiles(apis, '/app')).resolves.toBeUndefined();
     expect(removed).toEqual([]);
+  });
+
+  // QNBS-v3: a save started right after initialize() creates a brand-new .tmp-* file that a still-running startup sweep must never treat as an orphan — without this, the sweep could delete a legitimately in-progress write out from under it.
+  it('does not delete a temp file that a same-session write is still actively writing', async () => {
+    const removed: string[] = [];
+    const text = new Map<string, string>();
+    let capturedTmpPath = '';
+    let releaseWrite: (() => void) | undefined;
+    let resolveWriteStarted: (() => void) | undefined;
+    const writeStarted = new Promise<void>((resolve) => {
+      resolveWriteStarted = resolve;
+    });
+
+    const apis: TauriApis = {
+      writeTextFile: async (p, c) => {
+        capturedTmpPath = p;
+        resolveWriteStarted?.();
+        await new Promise<void>((res) => {
+          releaseWrite = res;
+        });
+        text.set(p, c);
+      },
+      writeFile: () => Promise.reject(new Error('not used')),
+      readTextFile: () => Promise.reject(new Error('not used')),
+      readFile: () => Promise.reject(new Error('not used')),
+      mkdir: () => Promise.resolve(),
+      exists: () => Promise.resolve(false),
+      readDir: (dir) => {
+        if (dir !== '/app') return Promise.reject(new Error(`ENOENT ${dir}`));
+        const name = capturedTmpPath.split('/').pop();
+        return Promise.resolve(name ? [{ name, isDirectory: false }] : []);
+      },
+      remove: (p) => {
+        removed.push(p);
+        return Promise.resolve();
+      },
+      rename: (oldPath, newPath) => {
+        if (text.has(oldPath)) {
+          text.set(newPath, text.get(oldPath) as string);
+          text.delete(oldPath);
+        }
+        return Promise.resolve();
+      },
+      open: () => Promise.resolve(null),
+      save: () => Promise.resolve(null),
+      appDataDir: () => Promise.resolve('/app'),
+      join: (...parts) => Promise.resolve(parts.join('/')),
+      invoke: () => Promise.resolve(undefined),
+    };
+
+    const writePromise = writeTextFileAtomic(apis, '/app/project.json', 'content');
+    await writeStarted;
+
+    await cleanupOrphanedTempFiles(apis, '/app');
+    expect(removed).toEqual([]);
+
+    releaseWrite?.();
+    await writePromise;
+    expect(text.get('/app/project.json')).toBe('content');
   });
 
   it('stops recursing past the depth guard instead of following an unexpectedly deep tree', async () => {
