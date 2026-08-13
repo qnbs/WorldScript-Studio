@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.27.0] — 2026-08-13
+
 ### Added
 
 - **Durable encryption migration journal** (`services/storage/encryptionMigrationJournal.ts`) —
@@ -38,6 +40,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   total MB and speed, derived from the existing 0-1 progress fraction × a new per-model known-size
   table (`WEBLLM_MODEL_APPROX_MB`) — the installed `@mlc-ai/web-llm`'s own progress callback exposes
   no structured byte counts, so this is clearly labeled as an estimate, not measured telemetry.
+- **Disabling at-rest encryption and rotating the storage passphrase are now live** in Settings ›
+  Privacy — the production wiring the prior release's migration journal was built for. Both flows
+  run through the same resumable, crash-recoverable migration journal, verify identity via a
+  durable AES-GCM sentinel/verifier before touching any data, and surface an `EncryptionRecoveryModal`
+  on next startup if a migration was interrupted mid-flight. Closes
+  [issue #338](https://github.com/qnbs/WorldScript-Studio/issues/338). (#342, #343)
 
 ### Changed
 
@@ -47,10 +55,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   where an intervening `await` (opening a transaction, awaiting encryption) could let Lock Session
   race a write into plaintext. Every previously-unguarded destructive/listing path (`deleteImage`,
   `deleteBinderAsset`, `listBinderAssetIds`, `deleteStoryCodex`, `listSnapshots`, `deleteSnapshot`,
-  `deleteProject`) now has the same guard. Disabling encryption or rotating the passphrase is
-  intentionally unavailable until the migration journal's resumable conversion protocol is wired to
-  a production trigger — see [issue #338](https://github.com/qnbs/WorldScript-Studio/issues/338).
-  (#335)
+  `deleteProject`) now has the same guard. At the time of this change, disabling encryption or
+  rotating the passphrase was intentionally unavailable pending the migration journal's resumable
+  conversion protocol being wired to a production trigger — see the "Added" section above for the
+  production wiring that shipped in this same release. (#335)
 - **Desktop AI provider and Python integration hardening**, addressing user-reported release-quality
   issues #332/#333: removed the brittle Gemini `AIza`-prefix key rejection in favor of minimal
   syntax checks plus real provider validation; Local AI cancel/retry now operates on the actual
@@ -121,9 +129,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Closed out the [PR #310 reconciliation ledger](docs/PR-310-RECONCILIATION.md) as **superseded** —
   #335/#336/#337 are merged into `main`, satisfying the one condition its merge decision previously
   left open. PR #310 itself was never merged; its own branch remained non-resumable throughout.
-- Opened [issue #338](https://github.com/qnbs/WorldScript-Studio/issues/338) tracking the remaining
-  Phase-4 work: wiring the migration journal to a real disable/passphrase-rotation UI flow, primary
-  IDB-store adapters, and the two above race-condition fixes' production reachability.
+- Opened, then closed in this same release, [issue #338](https://github.com/qnbs/WorldScript-Studio/issues/338)
+  tracking the Phase-4 work: wiring the migration journal to a real disable/passphrase-rotation UI
+  flow, primary IDB-store adapters, and the two above race-condition fixes' production reachability
+  — all landed via #342/#343 (see "Added" above).
 
 ## [1.26.0] — 2026-08-01
 
