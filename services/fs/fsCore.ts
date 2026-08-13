@@ -146,7 +146,7 @@ async function writeThenRename(
 export function writeTextFileAtomic(apis: TauriApis, path: string, content: string): Promise<void> {
   return enqueueWrite(path, () => {
     if (isTauriRuntime()) {
-      return writeFileDurablyInTauri(path, new TextEncoder().encode(content));
+      return retryFs(() => writeFileDurablyInTauri(path, new TextEncoder().encode(content)));
     }
     const tmpPath = `${path}.tmp-${createTempSuffix()}`;
     return writeThenRename(apis, tmpPath, path, () =>
@@ -157,7 +157,7 @@ export function writeTextFileAtomic(apis: TauriApis, path: string, content: stri
 
 export function writeFileAtomic(apis: TauriApis, path: string, data: Uint8Array): Promise<void> {
   return enqueueWrite(path, () => {
-    if (isTauriRuntime()) return writeFileDurablyInTauri(path, data);
+    if (isTauriRuntime()) return retryFs(() => writeFileDurablyInTauri(path, data));
     const tmpPath = `${path}.tmp-${createTempSuffix()}`;
     return writeThenRename(apis, tmpPath, path, () => retryFs(() => apis.writeFile(tmpPath, data)));
   });

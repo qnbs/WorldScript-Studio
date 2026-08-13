@@ -158,6 +158,19 @@ describe('writeTextFileAtomic / writeFileAtomic', () => {
     );
   });
 
+  it('retries a transient native durable-write failure', async () => {
+    const { apis } = makeAtomicWriteFake();
+    h.isTauri = true;
+    h.invoke
+      .mockRejectedValueOnce(new Error('resource temporarily unavailable'))
+      .mockResolvedValueOnce(undefined);
+
+    await expect(
+      writeTextFileAtomic(apis, '/app/project.json', 'content'),
+    ).resolves.toBeUndefined();
+    expect(h.invoke).toHaveBeenCalledTimes(2);
+  });
+
   it('writes content under the final path and leaves no temp file behind', async () => {
     const { apis, text } = makeAtomicWriteFake();
     await writeTextFileAtomic(apis, '/app/project.json', '{"a":1}');

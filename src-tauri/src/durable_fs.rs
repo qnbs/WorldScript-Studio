@@ -199,6 +199,28 @@ fn decode_percent_encoded_path(encoded: &str) -> Result<String, String> {
     String::from_utf8(bytes).map_err(|_| "Durable write path is not valid UTF-8".to_owned())
 }
 
+fn is_native_temp_file_name(name: &std::ffi::OsStr) -> bool {
+    let name = name.to_string_lossy();
+    let Some((_, suffix)) = name.rsplit_once(".native-tmp-") else {
+        return false;
+    };
+    let mut segments = suffix.split('-');
+    let (Some(process_id), Some(epoch_nanos), Some(sequence), None) = (
+        segments.next(),
+        segments.next(),
+        segments.next(),
+        segments.next(),
+    ) else {
+        return false;
+    };
+    !process_id.is_empty()
+        && !epoch_nanos.is_empty()
+        && !sequence.is_empty()
+        && process_id.bytes().all(|byte| byte.is_ascii_digit())
+        && epoch_nanos.bytes().all(|byte| byte.is_ascii_digit())
+        && sequence.bytes().all(|byte| byte.is_ascii_digit())
+}
+
 #[tauri::command]
 pub async fn worldscript_atomic_write(
     app: AppHandle,
@@ -232,11 +254,7 @@ fn cleanup_native_temp_files(dir: &Path, depth: usize) -> Result<(), String> {
             .map_err(|error| format!("Could not inspect durable temp type: {error}"))?;
         if file_type.is_dir() {
             cleanup_native_temp_files(&path, depth + 1)?;
-        } else if file_type.is_file()
-            && path
-                .file_name()
-                .is_some_and(|name| name.to_string_lossy().contains(".native-tmp-"))
-        {
+        } else if file_type.is_file() && path.file_name().is_some_and(is_native_temp_file_name) {
             fs::remove_file(&path)
                 .map_err(|error| format!("Could not remove native orphaned temp file: {error}"))?;
         }
@@ -262,7 +280,9 @@ pub async fn worldscript_cleanup_atomic_temps(app: AppHandle) -> Result<(), Stri
 
 #[cfg(test)]
 mod tests {
-    use super::{create_sibling_temp, publish_replacement, sync_parent_directory};
+    use super::{
+        create_sibling_temp, is_native_temp_file_name, publish_replacement, sync_parent_directory,
+    };
     use std::{
         fs,
         io::Write,
@@ -306,5 +326,18 @@ mod tests {
         );
         assert!(!temporary.exists());
         fs::remove_dir_all(parent).expect("test directory should be removed");
+    }
+
+    #[test]
+    fn native_temp_cleanup_matches_only_generated_name_shape() {
+        assert!(is_native_temp_file_name(
+            "project.json.native-tmp-42-1723560000000000000-0".as_ref()
+        ));
+        assert!(!is_native_temp_file_name(
+            "notes.native-tmp-user-content.bin".as_ref()
+        ));
+        assert!(!is_native_temp_file_name(
+            "project.json.native-tmp-42-100-0-copy".as_ref()
+        ));
     }
 }

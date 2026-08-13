@@ -359,6 +359,7 @@ describe('FsAssetStore — images + binder assets', () => {
       name: 'before.pdf',
       mime: 'application/pdf',
     } as never);
+    const committedFiles = [...fake.bin.keys()].sort();
 
     const originalWriteTextFile = fake.apis.writeTextFile;
     fake.apis.writeTextFile = (path, content) => {
@@ -376,6 +377,7 @@ describe('FsAssetStore — images + binder assets', () => {
     const recovered = await store.getBinderAsset('p1', 'a1');
     expect(recovered?.meta.name).toBe('before.pdf');
     expect(new Uint8Array(recovered?.data as ArrayBuffer)).toEqual(new Uint8Array([1, 2, 3]));
+    expect([...fake.bin.keys()].sort()).toEqual(committedFiles);
   });
 
   it('returns null/[] for missing binder assets', async () => {

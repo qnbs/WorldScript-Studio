@@ -136,11 +136,19 @@ export class FsAssetStore extends FsSnapshotStore {
     const dataFile = await apis.join(dir, dataFileName);
     await writeFileAtomic(apis, dataFile, new Uint8Array(data));
     // QNBS-v3: publishing this manifest is the binder pair's commit point, so readers never combine new bytes with stale metadata.
-    await writeTextFileAtomic(
-      apis,
-      metaFile,
-      JSON.stringify({ version: 1, dataFile: dataFileName, meta: metaOut }),
-    );
+    try {
+      await writeTextFileAtomic(
+        apis,
+        metaFile,
+        JSON.stringify({ version: 1, dataFile: dataFileName, meta: metaOut }),
+      );
+    } catch (error) {
+      // QNBS-v3: the revision is unreachable until its manifest commits, so failed publication must not leak a new binary on every retry.
+      await retryFs(() => apis.remove(dataFile)).catch((cleanupError) => {
+        logger.warn('Failed to remove unpublished binder asset revision:', cleanupError);
+      });
+      throw error;
+    }
     if (prior) {
       const priorFile = await apis.join(dir, prior.dataFile);
       if (priorFile !== dataFile && (await apis.exists(priorFile))) {
