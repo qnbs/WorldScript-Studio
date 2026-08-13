@@ -67,6 +67,7 @@ import { getEffectiveTheme } from './services/commands/effectiveTheme';
 import { approximateManuscriptWordCount } from './services/commands/wordCountApprox';
 import { installDesktopMenu } from './services/desktop/desktopMenu';
 import { installCloseToTray, installDesktopTray } from './services/desktop/desktopTray';
+import { checkForInterruptedFsMigration } from './services/fs/fsEncryptionMigration';
 import { logger } from './services/logger';
 import { pluginRegistry } from './services/pluginRegistry';
 import { repairProjectI18nFields } from './services/projectI18nRepair';
@@ -80,7 +81,7 @@ import {
   isIdbEncryptionReady,
 } from './services/storage/storageEncryptionService';
 import { initTauriDeepLink } from './services/tauriDeepLink';
-import { applyDesktopRuntimeFlags } from './services/tauriRuntime';
+import { applyDesktopRuntimeFlags, isTauriRuntime } from './services/tauriRuntime';
 import { viewNavigationLabelKey } from './services/viewNavigationLabels';
 import type { View } from './types';
 
@@ -374,6 +375,24 @@ const App: FC<AppProps> = ({ isNewUser }) => {
       if (journal && journal.phase !== 'completed') setRecoveryJournal(journal);
     })();
   }, []);
+
+  // QNBS-v3: the fs-data migration bridge has no resumable journal yet (issue #359) — a marker
+  // left behind by an interrupted set/disable/rotate is the only signal available; surface it
+  // honestly rather than silently proceeding as if the desktop file state is fully consistent.
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+    void (async () => {
+      const marker = await checkForInterruptedFsMigration();
+      if (!marker) return;
+      dispatch(
+        statusActions.addNotification({
+          type: 'error',
+          title: 'Encryption Migration Interrupted',
+          description: `A previous "${marker.operation}" encryption change did not finish (started ${marker.startedAt}). Some desktop files may still be encrypted under a different key than expected. Back up your data folder and contact support before changing the at-rest encryption passphrase again.`,
+        }),
+      );
+    })();
+  }, [dispatch]);
 
   // QNBS-v3: B-1 sentinel guard (async) — skips if flag off/unlocked/recovery-pending, auto-disables on a missing sentinel, else shows the unlock modal.
   useEffect(() => {

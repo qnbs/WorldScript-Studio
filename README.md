@@ -312,7 +312,7 @@ The current primary project, settings, snapshot, image, Codex, RAG, and binder-a
 - **AES-256-GCM** with a PBKDF2-derived key (600 000 iterations, SHA-256, 32-byte random salt).
 - Gated behind `featureFlags.enableIdbAtRestEncryption`. When a library is configured but locked, protected reads and writes fail closed rather than falling back to plaintext.
 - Disable and passphrase rotation are temporarily unavailable until a journaled, cross-store migration protocol can prove recovery after interruption.
-- **Web/PWA build only.** The unlock screen (`IdbUnlockModal`) and session-scoped in-memory key protect the IndexedDB-backed storage path used by the browser/PWA build. On the **Tauri desktop build**, primary project, settings, snapshot, image, Codex, RAG, and binder-asset data are written by the filesystem-backed store (`services/fs/*`), which is plaintext (LZ-string compressed, not encrypted) regardless of this setting — enabling it on desktop still shows the same unlock screen (the passphrase sentinel lives in the WebView's IndexedDB) but does not encrypt the actual manuscript files on disk. No `tauri-plugin-stronghold` or equivalent OS-keychain integration ships today — see the API-key encryption note below for the desktop-specific mechanism that does exist.
+- **Tauri desktop build.** The unlock screen (`IdbUnlockModal`) and session-scoped in-memory key are shared with the browser/PWA build, and now genuinely protect the filesystem-backed store (`services/fs/*`) too — project, settings, snapshot, Codex, RAG, and image data reuse the same passphrase-derived key. Binder-asset files (`.bin` binary blob and `.meta.json` metadata sidecar) are the one exception and remain plaintext — see the encryption-mechanism table below. No `tauri-plugin-stronghold` or equivalent OS-keychain integration ships today — see the API-key encryption note below for the desktop-specific mechanism that does exist.
 - At-rest protection reduces disclosure from an extracted browser profile while the library is locked; it does not protect an unlocked renderer, a compromised device, or every persistence surface.
 
 ### 🔐 Encrypted Library Backup
@@ -326,7 +326,7 @@ One-click encrypted export of your entire project library from **Settings → Da
 
 ### 🔑 Encryption — which mechanism protects what
 
-There is no single blanket "encrypted at rest" guarantee — four independent mechanisms protect
+There is no single blanket "encrypted at rest" guarantee — five independent mechanisms protect
 different data, with different key material:
 
 | Data | Mechanism | Where |
@@ -334,6 +334,7 @@ different data, with different key material:
 | **Browser BYOK API key** | Random, non-extractable AES-256-GCM key generated via `crypto.subtle.generateKey()` — no passphrase, nothing to derive | `services/storage/idbKeyStore.ts` |
 | **Browser IDB-at-rest data** _(opt-in, B-1)_ | User passphrase → PBKDF2 (600 000 iterations, SHA-256, random 32-byte salt) → AES-256-GCM, non-extractable key | `services/storage/storageEncryptionService.ts` |
 | **Desktop (Tauri) BYOK API key** | Install-scoped secret material → PBKDF2 (600 000 iterations, SHA-256, random 32-byte salt) → AES-256-GCM, non-extractable key | `services/fs/fsCore.ts`, `services/fs/settingsFsStore.ts` |
+| **Desktop (Tauri) project/settings/snapshot/Codex/RAG/image data** | User passphrase → PBKDF2 (600 000 iterations, SHA-256, random 32-byte salt) → AES-256-GCM, same key material as the browser IDB-at-rest row above. Lazy/opportunistic: existing plaintext files are protected on their next save; first-time setup and disable/rotate additionally migrate every already-existing file immediately, not just future writes. ⚠️ **Not covered**: binder-asset files — both the binary blob (`.bin`) and its metadata sidecar (`.meta.json`, which includes the original filename) remain plaintext | `services/fs/*Store.ts`, `services/fs/fsEncryptionMigration.ts` |
 | **Library backup vault** | User passphrase → PBKDF2 (600 000 iterations, SHA-256) → AES-256-GCM | `services/libraryBackupService.ts` |
 
 See [`docs/SECURITY-THREAT-MODEL.md`](docs/SECURITY-THREAT-MODEL.md) for the full threat-model mapping.

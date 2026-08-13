@@ -43,9 +43,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   files are protected on their next save (autosave already runs on a short interval); there is no
   explicit "encrypt everything now" step and no data-loss risk either way. Snapshot files protect
   only their `data` field, keeping name/date/word-count metadata plaintext so the snapshot list
-  never needs decryption to render. **Not yet covered**: binder-asset binary blobs
-  (`services/fs/assetFsStore.ts`'s `.bin` files) — they need a byte-native encrypt path rather
-  than the JSON-serializing helpers used here, and remain plaintext pending a follow-up.
+  never needs decryption to render. **Not yet covered**: binder-asset files — both the binary
+  blob (`.bin`) *and* its metadata sidecar (`.meta.json`, which includes `originalFileName` —
+  filenames can themselves carry sensitive project information). The `.bin` payload needs a
+  byte-native encrypt path rather than the JSON-serializing helpers used here; both remain
+  plaintext pending a follow-up.
   **Review-loop follow-up fix to the same change:** disabling or rotating the at-rest passphrase
   previously destroyed or swapped the shared salt/session key (`storageEncryptionService.ts`'s
   `clearIdbPassphrase()`/`rotateIdbPassphrase()`) with no awareness that desktop's `services/fs/*`

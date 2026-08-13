@@ -40,6 +40,7 @@ const mockVerifyAndInitIdbEncryption = vi.fn().mockResolvedValue(undefined);
 const mockClearIdbPassphrase = vi.fn().mockResolvedValue(undefined);
 const mockRotateIdbPassphrase = vi.fn().mockResolvedValue(undefined);
 const mockDeriveRotationTargetKey = vi.fn().mockResolvedValue('mock-target-key');
+const mockResolveProtectedWriteKey = vi.fn().mockResolvedValue('mock-active-key');
 const mockMigrateAllProtectedFsData = vi.fn().mockResolvedValue(undefined);
 const mockIsTauriRuntime = vi.fn(() => false);
 
@@ -209,6 +210,7 @@ vi.mock('../../../services/storage/storageEncryptionService', () => ({
   rotateIdbPassphrase: (oldPass: string, newPass: string, onProgress?: unknown) =>
     mockRotateIdbPassphrase(oldPass, newPass, onProgress),
   deriveRotationTargetKey: (newPassphrase: string) => mockDeriveRotationTargetKey(newPassphrase),
+  resolveProtectedWriteKey: () => mockResolveProtectedWriteKey(),
 }));
 
 vi.mock('../../../services/storageService', () => ({
@@ -221,7 +223,8 @@ vi.mock('../../../services/storageService', () => ({
 
 // QNBS-v3: services/fs/fsEncryptionMigration.ts transitively imports the real Tauri fs store chain (down to idbCodexStore.ts) — mocked here so this hook test stays isolated and doesn't need the full @tauri-apps/* + IDB mock surface fsStores.test.ts sets up.
 vi.mock('../../../services/fs/fsEncryptionMigration', () => ({
-  migrateAllProtectedFsData: (targetKey: unknown) => mockMigrateAllProtectedFsData(targetKey),
+  migrateAllProtectedFsData: (targetKey: unknown, operation: unknown) =>
+    mockMigrateAllProtectedFsData(targetKey, operation),
 }));
 
 vi.mock('../../../services/tauriRuntime', () => ({
@@ -626,6 +629,7 @@ describe('handlePassphraseConfirm — disable/rotate', () => {
     mockRotateIdbPassphrase.mockResolvedValue(undefined);
     mockMigrateAllProtectedFsData.mockClear().mockResolvedValue(undefined);
     mockDeriveRotationTargetKey.mockClear().mockResolvedValue('mock-target-key');
+    mockResolveProtectedWriteKey.mockClear().mockResolvedValue('mock-active-key');
     mockIsTauriRuntime.mockReturnValue(false);
   });
 
@@ -679,6 +683,44 @@ describe('handlePassphraseConfirm — disable/rotate', () => {
     expect(mockClearIdbPassphrase).not.toHaveBeenCalled();
     expect(mockRotateIdbPassphrase).not.toHaveBeenCalled();
     expect(mockSetupIdbEncryption).toHaveBeenCalledWith('newpass123');
+    expect(mockMigrateAllProtectedFsData).not.toHaveBeenCalled();
+  });
+
+  it('encrypts existing fs-backed desktop data with the newly-active key on first-time setup, in the Tauri runtime', async () => {
+    mockIsTauriRuntime.mockReturnValue(true);
+    mockResolveProtectedWriteKey.mockResolvedValue('newly-active-key');
+    const callOrder: string[] = [];
+    mockSetupIdbEncryption.mockImplementation(async () => {
+      callOrder.push('setupIdbEncryption');
+    });
+    mockMigrateAllProtectedFsData.mockImplementation(async () => {
+      callOrder.push('migrateAllProtectedFsData');
+    });
+
+    const { result } = renderHook(() => useSettingsView());
+    act(() => {
+      result.current.setPassphraseModal('set');
+    });
+    await act(async () => {
+      await result.current.handlePassphraseConfirm('', 'newpass123');
+    });
+
+    expect(mockMigrateAllProtectedFsData).toHaveBeenCalledWith('newly-active-key', 'set');
+    expect(callOrder).toEqual(['setupIdbEncryption', 'migrateAllProtectedFsData']);
+  });
+
+  it('does not encrypt fs-backed desktop data on first-time setup outside the Tauri runtime', async () => {
+    mockIsTauriRuntime.mockReturnValue(false);
+    const { result } = renderHook(() => useSettingsView());
+    act(() => {
+      result.current.setPassphraseModal('set');
+    });
+    await act(async () => {
+      await result.current.handlePassphraseConfirm('', 'newpass123');
+    });
+
+    expect(mockMigrateAllProtectedFsData).not.toHaveBeenCalled();
+    expect(mockResolveProtectedWriteKey).not.toHaveBeenCalled();
   });
 
   it('surfaces migrationProgress updates from the onProgress callback while disable is pending, then clears it', async () => {
@@ -784,7 +826,7 @@ describe('handlePassphraseConfirm — disable/rotate', () => {
       await result.current.handlePassphraseConfirm('', '');
     });
 
-    expect(mockMigrateAllProtectedFsData).toHaveBeenCalledWith(null);
+    expect(mockMigrateAllProtectedFsData).toHaveBeenCalledWith(null, 'disable');
     expect(mockDeriveRotationTargetKey).not.toHaveBeenCalled();
     expect(callOrder).toEqual(['migrateAllProtectedFsData', 'clearIdbPassphrase']);
   });
@@ -809,7 +851,7 @@ describe('handlePassphraseConfirm — disable/rotate', () => {
     });
 
     expect(mockDeriveRotationTargetKey).toHaveBeenCalledWith('new-pass');
-    expect(mockMigrateAllProtectedFsData).toHaveBeenCalledWith('derived-target-key');
+    expect(mockMigrateAllProtectedFsData).toHaveBeenCalledWith('derived-target-key', 'rotate');
     expect(callOrder).toEqual(['migrateAllProtectedFsData', 'rotateIdbPassphrase']);
   });
 

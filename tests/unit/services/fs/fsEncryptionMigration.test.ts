@@ -54,7 +54,10 @@ vi.mock('../../../../services/logger', async (importOriginal) => {
   return { ...actual, logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } };
 });
 
-import { migrateAllProtectedFsData } from '../../../../services/fs/fsEncryptionMigration';
+import {
+  checkForInterruptedFsMigration,
+  migrateAllProtectedFsData,
+} from '../../../../services/fs/fsEncryptionMigration';
 import { fileSystemService } from '../../../../services/fs/index';
 import { StorageEncryptionService } from '../../../../services/storage/storageEncryptionService';
 
@@ -173,7 +176,7 @@ describe('migrateAllProtectedFsData — disable (targetKey = null)', () => {
     expect(fake.text.get('/app/projects/p1/project.json')).toContain('"scheme":"protected-v1"');
     expect(fake.text.get('/app/config/gemini_key.enc.json')).toContain('"scheme":"protected-v1"');
 
-    await migrateAllProtectedFsData(null);
+    await migrateAllProtectedFsData(null, 'disable');
 
     expect(fake.text.get('/app/projects/p1/project.json')).not.toContain('protected-v1');
     expect(fake.text.get('/app/config/settings.json')).not.toContain('protected-v1');
@@ -198,8 +201,76 @@ describe('migrateAllProtectedFsData — disable (targetKey = null)', () => {
   it('leaves an already-plaintext project untouched (no key ever configured)', async () => {
     await fileSystemService.saveProject(project as never);
     const before = fake.text.get('/app/projects/p1/project.json');
-    await migrateAllProtectedFsData(null);
+    await migrateAllProtectedFsData(null, 'disable');
     expect(fake.text.get('/app/projects/p1/project.json')).toBe(before);
+  });
+});
+
+describe('migrateAllProtectedFsData — set (first-time setup)', () => {
+  it('encrypts every existing plaintext file, not just future saves', async () => {
+    // No passphrase configured yet — every save below lands as plaintext (lazy/opportunistic
+    // design), exactly like a real pre-existing desktop install turning encryption on for the
+    // first time.
+    await fileSystemService.saveProject(project as never);
+    await fileSystemService.saveApiKey('gemini', 'secret-key-123');
+    const snapshotId = await fileSystemService.saveSnapshot('manual', project);
+    expect(fake.text.get('/app/projects/p1/project.json')).not.toContain('protected-v1');
+    expect(fake.text.get('/app/config/gemini_key.enc.json')).toContain('"scheme":"plaintext-v1"');
+
+    const newKey = await deriveKey('first-passphrase');
+    await migrateAllProtectedFsData(newKey, 'set');
+
+    expect(fake.text.get('/app/projects/p1/project.json')).toContain('"scheme":"protected-v1"');
+    expect(fake.text.get('/app/config/gemini_key.enc.json')).toContain('"scheme":"protected-v1"');
+    const snapshotRaw = fake.text.get(`/app/snapshots/${snapshotId}.json`);
+    expect(JSON.parse(snapshotRaw as string).data).toContain('protected-v1');
+
+    cryptoState.activeKey = newKey;
+    cryptoState.sentinelConfigured = true;
+    expect((await fileSystemService.loadProject('p1'))?.title).toBe('My Novel');
+    expect(await fileSystemService.getApiKey('gemini')).toBe('secret-key-123');
+  });
+
+  it('skips (does not throw or discard) a file it cannot decrypt, unlike disable/rotate', async () => {
+    // Simulate a stray already-protected file left over from a previous, unrelated encryption
+    // session — the exact edge case 'set' must tolerate rather than abort on.
+    await enableTestPassphrase();
+    await fileSystemService.saveProject(project as never);
+    cryptoState.activeKey = null;
+    cryptoState.sentinelConfigured = false;
+
+    const before = fake.text.get('/app/projects/p1/project.json');
+    const newKey = await deriveKey('first-passphrase');
+    cryptoState.activeKey = newKey;
+    cryptoState.sentinelConfigured = true;
+
+    await expect(migrateAllProtectedFsData(newKey, 'set')).resolves.toBeUndefined();
+    // Left untouched — the new key can't decrypt it, and 'set' must not destroy or crash on that.
+    expect(fake.text.get('/app/projects/p1/project.json')).toBe(before);
+  });
+});
+
+describe('migrateAllProtectedFsData — interrupted-migration marker', () => {
+  it('leaves no marker after a successful migration', async () => {
+    await enableTestPassphrase();
+    await fileSystemService.saveProject(project as never);
+    await migrateAllProtectedFsData(null, 'disable');
+    expect(await checkForInterruptedFsMigration()).toBeNull();
+  });
+
+  it('leaves the marker in place when a strict-mode migration throws (simulated crash-equivalent)', async () => {
+    await enableTestPassphrase();
+    await fileSystemService.saveProject(project as never);
+    cryptoState.activeKey = await deriveKey('a-completely-different-passphrase');
+
+    await expect(migrateAllProtectedFsData(null, 'disable')).rejects.toThrow();
+
+    const marker = await checkForInterruptedFsMigration();
+    expect(marker).toEqual(expect.objectContaining({ operation: 'disable' }));
+  });
+
+  it('reports no marker when none exists', async () => {
+    expect(await checkForInterruptedFsMigration()).toBeNull();
   });
 });
 
@@ -210,7 +281,7 @@ describe('migrateAllProtectedFsData — rotate (targetKey = new key)', () => {
     await fileSystemService.saveApiKey('openai', 'rotate-me');
 
     const newKey = await deriveKey('new-passphrase');
-    await migrateAllProtectedFsData(newKey);
+    await migrateAllProtectedFsData(newKey, 'rotate');
 
     // Old key can no longer decrypt the on-disk bytes — proves re-encryption actually happened.
     cryptoState.activeKey = await deriveKey('old-passphrase');
@@ -232,7 +303,7 @@ describe('migrateAllProtectedFsData — safety', () => {
     // the file was actually encrypted under.
     cryptoState.activeKey = await deriveKey('a-completely-different-passphrase');
 
-    await expect(migrateAllProtectedFsData(null)).rejects.toThrow();
+    await expect(migrateAllProtectedFsData(null, 'disable')).rejects.toThrow();
   });
 
   it('does not touch binder assets, which are intentionally out of scope', async () => {
@@ -244,7 +315,7 @@ describe('migrateAllProtectedFsData — safety', () => {
       { originalFileName: 'note.txt', mimeType: 'text/plain', byteSize: 0 },
     );
     const before = fake.bin.get('/app/projects/p1/binder/asset-1.bin');
-    await migrateAllProtectedFsData(null);
+    await migrateAllProtectedFsData(null, 'disable');
     expect(fake.bin.get('/app/projects/p1/binder/asset-1.bin')).toEqual(before);
   });
 });

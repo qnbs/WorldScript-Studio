@@ -211,31 +211,60 @@ export class FsSettingsStore extends FsCore {
    * fsEncryptionMigration.ts) BEFORE storageEncryptionService.ts swaps/discards the active key —
    * after that point the old key is unrecoverable and this file would be permanently stranded.
    */
-  async reprotectApiKeyFile(provider: string, targetKey: CryptoKey | null): Promise<void> {
+  async reprotectApiKeyFile(
+    provider: string,
+    targetKey: CryptoKey | null,
+    strict = true,
+  ): Promise<void> {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
     const keyFile = await apis.join(appDataPath, 'config', `${provider}_key.enc.json`);
     if (!(await apis.exists(keyFile))) return;
     const content = await retryFs(() => apis.readTextFile(keyFile));
     const parsed = JSON.parse(content) as Record<string, unknown>;
-    if (parsed['scheme'] !== PROTECTED_SCHEME || typeof parsed['data'] !== 'string') return;
-    const sourceKey = await resolveProtectedWriteKey();
-    if (!sourceKey) {
-      throw new Error(
-        `Protected API key for provider "${provider}" exists but at-rest encryption is no longer configured`,
-      );
+
+    let apiKey: string;
+    if (parsed['scheme'] === PLAINTEXT_SCHEME && typeof parsed['value'] === 'string') {
+      // QNBS-v3: covers first-time setup, where every existing key file starts as plaintext-v1 —
+      // without this branch, migrateAllProtectedFsData(targetKey) during 'set' would silently
+      // leave already-saved keys unencrypted until their next incidental re-save.
+      apiKey = parsed['value'];
+    } else if (parsed['scheme'] === PROTECTED_SCHEME && typeof parsed['data'] === 'string') {
+      const sourceKey = await resolveProtectedWriteKey();
+      if (!sourceKey) {
+        const error = new Error(
+          `Protected API key for provider "${provider}" exists but at-rest encryption is no longer configured`,
+        );
+        if (strict) throw error;
+        logger.warn(error.message);
+        return;
+      }
+      try {
+        const decrypted = await idbDecryptWithKey<{ provider: string; apiKey: string }>(
+          sourceKey,
+          base64ToBytes(parsed['data']),
+        );
+        apiKey = decrypted.apiKey;
+      } catch (error) {
+        if (strict) throw error;
+        logger.warn(`Skipping API key for provider "${provider}" — could not decrypt it:`, error);
+        return;
+      }
+    } else {
+      // Unrecognized/legacy shape — not this method's job to migrate; getApiKey()'s own
+      // positively-identified-legacy-only discard path handles that on next read.
+      return;
     }
-    const decrypted = await idbDecryptWithKey<{ provider: string; apiKey: string }>(
-      sourceKey,
-      base64ToBytes(parsed['data']),
-    );
+
     const payload: ProtectedApiKeyPayload | PlaintextApiKeyPayload = targetKey
       ? {
           scheme: PROTECTED_SCHEME,
-          data: bytesToBase64(await idbEncryptWithKey(targetKey, decrypted)),
+          data: bytesToBase64(await idbEncryptWithKey(targetKey, { provider, apiKey })),
         }
-      : { scheme: PLAINTEXT_SCHEME, value: decrypted.apiKey };
-    await writeTextFileAtomic(apis, keyFile, JSON.stringify(payload));
+      : { scheme: PLAINTEXT_SCHEME, value: apiKey };
+    const newContent = JSON.stringify(payload);
+    if (newContent === content) return; // already in the desired state
+    await writeTextFileAtomic(apis, keyFile, newContent);
   }
 
   async clearApiKey(provider: string): Promise<void> {

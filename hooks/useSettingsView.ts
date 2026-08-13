@@ -26,6 +26,7 @@ import {
   clearIdbPassphrase,
   deriveRotationTargetKey,
   isIdbEncryptionReady,
+  resolveProtectedWriteKey,
   rotateIdbPassphrase,
   setupIdbEncryption,
   verifyAndInitIdbEncryption,
@@ -388,6 +389,16 @@ export const useSettingsView = () => {
       if (passphraseModal === 'set') {
         // QNBS-v3: setupIdbEncryption derives key, writes sentinel to IDB, sets _activeKey
         await setupIdbEncryption(newPassphrase);
+        // QNBS-v3: without this, "encryption active" would only mean future writes get protected —
+        // every already-existing fs-backed file (project.json, settings, API keys, snapshots, Codex,
+        // RAG, images) would stay plaintext until its next incidental save. strict:false because
+        // turning encryption ON must never be blocked by an unrelated pre-existing oddity (e.g. a
+        // stray file left over from a previous, since-forgotten encryption session) — such a file is
+        // logged and skipped rather than aborting setup for everything else.
+        if (isTauriRuntime()) {
+          const key = await resolveProtectedWriteKey();
+          if (key) await migrateAllProtectedFsData(key, 'set');
+        }
         dispatch(featureFlagsActions.setEnableIdbAtRestEncryption(true));
         setEncryptionReady(true);
         // QNBS-v3: WCAG 4.1.3 — toast confirms success for keyboard/AT users who can't see status text
@@ -402,7 +413,7 @@ export const useSettingsView = () => {
         setMigrationProgress(null);
         try {
           // QNBS-v3: must convert fs-backed desktop data to plaintext BEFORE the sentinel below is destroyed — clearIdbPassphrase() has no awareness of services/fs/*, so ordering here is load-bearing, not cosmetic.
-          if (isTauriRuntime()) await migrateAllProtectedFsData(null);
+          if (isTauriRuntime()) await migrateAllProtectedFsData(null, 'disable');
           await clearIdbPassphrase((progress) => setMigrationProgress(progress));
         } finally {
           setMigrationProgress(null);
@@ -416,7 +427,7 @@ export const useSettingsView = () => {
           // QNBS-v3: derives the SAME target key rotateIdbPassphrase() will activate (same salt/passphrase) and re-keys fs-backed desktop data under it BEFORE the active session key is swapped below — otherwise fs data stays under the old, soon-unrecoverable key.
           if (isTauriRuntime()) {
             const targetKey = await deriveRotationTargetKey(newPassphrase);
-            await migrateAllProtectedFsData(targetKey);
+            await migrateAllProtectedFsData(targetKey, 'rotate');
           }
           await rotateIdbPassphrase(_current, newPassphrase, (progress) =>
             setMigrationProgress(progress),
