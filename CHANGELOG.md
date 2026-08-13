@@ -34,7 +34,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the new gate covers and when the full cross-platform `tauri-build.yml` dispatch remains
   necessary (macOS/Windows-specific code, real installer signing). Removed several newly-added
   inline YAML rationale comments that violated this repo's own "no inline comments in config
-  files, explain in the commit message" rule.
+  files, explain in the commit message" rule. **Third round of review-loop follow-up:** once the
+  fuzz crate's dependency was actually fixed and its `Cargo.lock` committed, the pre-existing
+  `security` job's `dependency-review-action` step started failing on `glib@0.18.5`
+  (`GHSA-wrw7-89jp-8q8g`) — a transitive dependency pulled in via the fuzz crate's path dependency
+  on the parent app. This is the same already-documented, already-accepted risk in
+  `src-tauri/osv-scanner.toml` (`RUSTSEC-2024-0429` — no fix available without a `webkit2gtk` 4.1+
+  upgrade Tauri 2.x doesn't yet support); `dependency-review-action` doesn't read that file, so it
+  re-flagged the same risk fresh. Added a matching `allow-ghsas` entry so the two tools' accepted
+  lists agree instead of one silently re-litigating the other's documented exception.
 
 ## [1.27.0] — 2026-08-13
 

@@ -84,6 +84,8 @@ jobs:
       - name: Dependency review (PRs only)
         if: github.event_name == 'pull_request'
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5
+        with:
+          allow-ghsas: GHSA-wrw7-89jp-8q8g
 
   # ----------------------------------------------------------
   # 1. QUALITY GATE: Lint + Typecheck + Tests (parallel matrix)
