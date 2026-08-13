@@ -17,6 +17,10 @@ let mockSnapshot = {
   progress: 0,
   estimatedSecondsRemaining: null as number | null,
   text: '',
+  // QNBS-v3 (#333 item 1)
+  loadedBytes: null as number | null,
+  totalBytes: null as number | null,
+  bytesPerSecond: null as number | null,
 };
 let capturedSubscriber: ((p: typeof mockSnapshot) => void) | null = null;
 
@@ -54,6 +58,8 @@ vi.mock('../../hooks/useTranslation', () => ({
   useTranslation: () => ({
     t: (k: string, args?: Record<string, string>) => (args ? `${k}:${JSON.stringify(args)}` : k),
     language: 'en',
+    formatNumber: (value: number, options?: Intl.NumberFormatOptions) =>
+      value.toFixed(options?.maximumFractionDigits ?? 0),
   }),
 }));
 
@@ -70,7 +76,15 @@ import { LocalAiDownloadProgress } from '../../components/settings/LocalAiDownlo
 describe('LocalAiDownloadProgress', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockSnapshot = { state: 'idle', progress: 0, estimatedSecondsRemaining: null, text: '' };
+    mockSnapshot = {
+      state: 'idle',
+      progress: 0,
+      estimatedSecondsRemaining: null,
+      text: '',
+      loadedBytes: null,
+      totalBytes: null,
+      bytesPerSecond: null,
+    };
     capturedSubscriber = null;
   });
 
@@ -80,19 +94,43 @@ describe('LocalAiDownloadProgress', () => {
   });
 
   it('renders the progress modal when state is loading', () => {
-    mockSnapshot = { state: 'loading', progress: 0.5, estimatedSecondsRemaining: 30, text: '' };
+    mockSnapshot = {
+      state: 'loading',
+      progress: 0.5,
+      estimatedSecondsRemaining: 30,
+      text: '',
+      loadedBytes: null,
+      totalBytes: null,
+      bytesPerSecond: null,
+    };
     render(<LocalAiDownloadProgress />);
     expect(screen.getByRole('progressbar')).toBeInTheDocument();
   });
 
   it('renders cancel button when loading', () => {
-    mockSnapshot = { state: 'loading', progress: 0.3, estimatedSecondsRemaining: null, text: '' };
+    mockSnapshot = {
+      state: 'loading',
+      progress: 0.3,
+      estimatedSecondsRemaining: null,
+      text: '',
+      loadedBytes: null,
+      totalBytes: null,
+      bytesPerSecond: null,
+    };
     render(<LocalAiDownloadProgress />);
     expect(screen.getByText('settings.ai.localAi.cancelButton')).toBeInTheDocument();
   });
 
   it('shows progress percentage in aria-valuenow', () => {
-    mockSnapshot = { state: 'loading', progress: 0.75, estimatedSecondsRemaining: null, text: '' };
+    mockSnapshot = {
+      state: 'loading',
+      progress: 0.75,
+      estimatedSecondsRemaining: null,
+      text: '',
+      loadedBytes: null,
+      totalBytes: null,
+      bytesPerSecond: null,
+    };
     render(<LocalAiDownloadProgress />);
     const progressbar = screen.getByRole('progressbar');
     expect(progressbar).toHaveAttribute('aria-valuenow', '75');
@@ -104,6 +142,9 @@ describe('LocalAiDownloadProgress', () => {
       progress: 0,
       estimatedSecondsRemaining: null,
       text: 'Download failed',
+      loadedBytes: null,
+      totalBytes: null,
+      bytesPerSecond: null,
     };
     render(<LocalAiDownloadProgress />);
     expect(screen.getByText('Download failed')).toBeInTheDocument();
@@ -112,7 +153,15 @@ describe('LocalAiDownloadProgress', () => {
   it('calls releaseGpu when cancel is clicked', async () => {
     const { gpuResourceManager } = await import('../../services/ai/gpuResourceManager');
     const user = userEvent.setup();
-    mockSnapshot = { state: 'loading', progress: 0.2, estimatedSecondsRemaining: null, text: '' };
+    mockSnapshot = {
+      state: 'loading',
+      progress: 0.2,
+      estimatedSecondsRemaining: null,
+      text: '',
+      loadedBytes: null,
+      totalBytes: null,
+      bytesPerSecond: null,
+    };
     render(<LocalAiDownloadProgress />);
     await user.click(screen.getByText('settings.ai.localAi.cancelButton'));
     expect(gpuResourceManager.releaseGpu).toHaveBeenCalledWith('webllm');
@@ -127,6 +176,9 @@ describe('LocalAiDownloadProgress', () => {
       progress: 0.2,
       estimatedSecondsRemaining: null,
       text: 'Download failed',
+      loadedBytes: null,
+      totalBytes: null,
+      bytesPerSecond: null,
     };
     mockRetryLastPreload.mockResolvedValue(undefined);
     render(<LocalAiDownloadProgress />);
@@ -144,6 +196,9 @@ describe('LocalAiDownloadProgress', () => {
       progress: 0.2,
       estimatedSecondsRemaining: null,
       text: 'Download failed',
+      loadedBytes: null,
+      totalBytes: null,
+      bytesPerSecond: null,
     };
     const retryError = new Error('No local model download is available to retry');
     mockRetryLastPreload.mockRejectedValueOnce(retryError);
@@ -158,7 +213,15 @@ describe('LocalAiDownloadProgress', () => {
   });
 
   it('updates progress when subscriber fires', async () => {
-    mockSnapshot = { state: 'idle', progress: 0, estimatedSecondsRemaining: null, text: '' };
+    mockSnapshot = {
+      state: 'idle',
+      progress: 0,
+      estimatedSecondsRemaining: null,
+      text: '',
+      loadedBytes: null,
+      totalBytes: null,
+      bytesPerSecond: null,
+    };
     render(<LocalAiDownloadProgress />);
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
 
@@ -169,8 +232,45 @@ describe('LocalAiDownloadProgress', () => {
         progress: 0.6,
         estimatedSecondsRemaining: null,
         text: '',
+        loadedBytes: null,
+        totalBytes: null,
+        bytesPerSecond: null,
       });
     }
     await waitFor(() => expect(screen.getByRole('progressbar')).toBeInTheDocument());
+  });
+
+  it('shows loaded/total MB and speed once the snapshot has byte metrics', () => {
+    mockSnapshot = {
+      state: 'loading',
+      progress: 0.5,
+      estimatedSecondsRemaining: null,
+      text: '',
+      loadedBytes: 350 * 1024 * 1024,
+      totalBytes: 700 * 1024 * 1024,
+      bytesPerSecond: 3.2 * 1024 * 1024,
+    };
+    render(<LocalAiDownloadProgress />);
+    expect(
+      screen.getByText('settings.ai.localAi.downloadSize:{"loaded":"~350","total":"~700"}'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('settings.ai.localAi.downloadSpeed:{"speed":"~3.2"}'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows no size/speed text when the snapshot has no byte metrics', () => {
+    mockSnapshot = {
+      state: 'loading',
+      progress: 0.5,
+      estimatedSecondsRemaining: null,
+      text: '',
+      loadedBytes: null,
+      totalBytes: null,
+      bytesPerSecond: null,
+    };
+    render(<LocalAiDownloadProgress />);
+    expect(screen.queryByText(/downloadSize/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/downloadSpeed/)).not.toBeInTheDocument();
   });
 });

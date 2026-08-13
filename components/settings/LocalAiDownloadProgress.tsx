@@ -9,10 +9,11 @@ import {
   inferenceProgressEmitter,
   type WebLlmLoadProgress,
 } from '../../services/ai/inferenceProgressEmitter';
+import { formatMegabytes, megabytesPerSecond } from '../../services/downloadProgressFormat';
 import { abortActivePreload, retryLastPreload } from '../../services/localAiFacade';
 
 export const LocalAiDownloadProgress: FC = () => {
-  const { t } = useTranslation();
+  const { t, formatNumber } = useTranslation();
   const titleId = useId();
   const cancelRef = useRef<HTMLButtonElement>(null);
   const [progress, setProgress] = useState<WebLlmLoadProgress>(
@@ -45,6 +46,24 @@ export const LocalAiDownloadProgress: FC = () => {
   const ariaValueText = etaText
     ? `${progressPct}% ${t<string>('settings.ai.localAi.downloadedLabel')}, ${etaText}`
     : `${progressPct}%`;
+
+  // QNBS-v3 (#333 item 1): approximate — see WebLlmLoadProgress's own doc comment. Only shown once
+  // both bounds are known (null whenever the active model id isn't in WEBLLM_MODEL_APPROX_MB).
+  // QNBS-v3 (#333/Qodo): "~" prefix marks these as derived estimates, unlike the voice download UI's
+  // measured bytes — avoids a new i18n key by reusing the tilde convention already in model labels.
+  const sizeText =
+    progress.loadedBytes != null && progress.totalBytes != null
+      ? t<string>('settings.ai.localAi.downloadSize', {
+          loaded: `~${formatMegabytes(progress.loadedBytes)}`,
+          total: `~${formatMegabytes(progress.totalBytes)}`,
+        })
+      : '';
+  const speedText =
+    progress.bytesPerSecond != null
+      ? t<string>('settings.ai.localAi.downloadSpeed', {
+          speed: `~${formatNumber(megabytesPerSecond(progress.bytesPerSecond), { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`,
+        })
+      : '';
 
   function handleCancel() {
     // QNBS-v3: actually abort the in-flight preload/worker task — not just hide the modal.
@@ -138,10 +157,18 @@ export const LocalAiDownloadProgress: FC = () => {
               />
             </div>
 
-            <div className="mb-4 flex justify-between text-xs text-[var(--sc-text-muted)]">
+            <div
+              className={`flex justify-between text-xs text-[var(--sc-text-muted)] ${sizeText || speedText ? 'mb-1' : 'mb-4'}`}
+            >
               <span>{progressPct}%</span>
               {etaText && <span>{etaText}</span>}
             </div>
+            {(sizeText || speedText) && (
+              <div className="mb-4 flex justify-between text-xs text-[var(--sc-text-muted)]">
+                <span>{sizeText}</span>
+                {speedText && <span>{speedText}</span>}
+              </div>
+            )}
 
             <button
               ref={cancelRef}

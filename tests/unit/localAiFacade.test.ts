@@ -240,7 +240,7 @@ describe('localAiFacade', () => {
       await generateLocalText('prompt', 'm', undefined, undefined, undefined, {
         reportToGlobalProgress: true,
       });
-      expect(progSpy).toHaveBeenCalledWith(0.5, 'half');
+      expect(progSpy).toHaveBeenCalledWith(0.5, 'half', 'm');
       expect(readySpy).toHaveBeenCalled();
       progSpy.mockRestore();
       readySpy.mockRestore();
@@ -357,7 +357,7 @@ describe('localAiFacade', () => {
 
     await expect(preloadLocalModel('Qwen2.5-0.5B')).resolves.toMatchObject({ downloaded: false });
 
-    expect(progressSpy).toHaveBeenCalledWith(0, 'Preparing local model');
+    expect(progressSpy).toHaveBeenCalledWith(0, 'Preparing local model', 'Qwen2.5-0.5B');
     expect(errorSpy).toHaveBeenCalledWith('Local model preload did not complete');
   });
 

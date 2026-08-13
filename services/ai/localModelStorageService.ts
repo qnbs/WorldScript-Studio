@@ -3,7 +3,11 @@
 //          the multi-GB downloaded WEIGHTS persist in the Cache API (MLC WebLLM + transformers.js).
 //          This service estimates and clears that on-disk footprint so users can reclaim space.
 
-import { releaseAllOnnxSessions, releaseAllWebLlmEngines } from '@domain/ai-core';
+import {
+  releaseAllOnnxSessions,
+  releaseAllWebLlmEngines,
+  WEBLLM_MODEL_APPROX_MB,
+} from '@domain/ai-core';
 import { logger } from '../logger';
 
 // QNBS-v3: Cache API bucket names used by local-inference runtimes. MLC web-llm shards weights across
@@ -16,17 +20,8 @@ export const LOCAL_MODEL_CACHE_PATTERNS: readonly RegExp[] = [
   /transformers/i,
 ];
 
-// QNBS-v3: Approximate on-disk download size (MB) per curated WebLLM model — drives the pre-download
-//          storage warning. Mirrors the "~X GB" hints in WEBLLM_SUPPORTED_MODELS labels.
-export const WEBLLM_MODEL_APPROX_MB: Readonly<Record<string, number>> = {
-  'Qwen2.5-0.5B-Instruct-q4f16_1-MLC': 400,
-  'Llama-3.2-1B-Instruct-q4f16_1-MLC': 700,
-  'Llama-3.2-3B-Instruct-q4f16_1-MLC': 1800,
-  'Phi-4-mini-instruct-q4f16_1-MLC': 2300,
-  'gemma-3-1b-it-q4f16_1-MLC': 800,
-  'gemma-3-4b-it-q4f32_1-MLC': 4900,
-  'Llama-3.3-70B-Instruct-q3f16_1-MLC': 35_000,
-};
+// QNBS-v3 (#333/Qodo): re-export the canonical @domain/ai-core table instead of maintaining a second, driftable literal — this was a duplicate of the size table now in packages/ai-core/src/index.ts.
+export { WEBLLM_MODEL_APPROX_MB };
 
 export interface LocalModelStorageEstimate {
   // QNBS-v3: null when the StorageManager quota is unknown — callers MUST NOT treat that as "0 free",

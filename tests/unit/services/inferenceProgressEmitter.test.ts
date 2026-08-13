@@ -95,4 +95,56 @@ describe('inferenceProgressEmitter', () => {
     const snapshot = inferenceProgressEmitter.getWebLlmLoadingSnapshot();
     expect(snapshot.estimatedSecondsRemaining).toBeNull();
   });
+
+  // QNBS-v3 (#333 item 1): derived byte metrics from a known-model-size lookup table.
+  describe('derived byte metrics', () => {
+    it('computes loadedBytes/totalBytes from a known model id', () => {
+      inferenceProgressEmitter.reportWebLlmProgress(
+        0.5,
+        'Downloading',
+        'Llama-3.2-1B-Instruct-q4f16_1-MLC',
+      );
+      const snapshot = inferenceProgressEmitter.getWebLlmLoadingSnapshot();
+      // 700 MB total (WEBLLM_MODEL_APPROX_MB) at 50% progress.
+      expect(snapshot.totalBytes).toBe(700 * 1024 * 1024);
+      expect(snapshot.loadedBytes).toBe(Math.round(700 * 1024 * 1024 * 0.5));
+    });
+
+    it('leaves byte fields null when no modelId is passed', () => {
+      inferenceProgressEmitter.reportWebLlmProgress(0.5, 'Downloading');
+      const snapshot = inferenceProgressEmitter.getWebLlmLoadingSnapshot();
+      expect(snapshot.loadedBytes).toBeNull();
+      expect(snapshot.totalBytes).toBeNull();
+      expect(snapshot.bytesPerSecond).toBeNull();
+    });
+
+    it('leaves byte fields null for an unrecognized modelId', () => {
+      inferenceProgressEmitter.reportWebLlmProgress(0.5, 'Downloading', 'not-a-real-model');
+      const snapshot = inferenceProgressEmitter.getWebLlmLoadingSnapshot();
+      expect(snapshot.loadedBytes).toBeNull();
+      expect(snapshot.totalBytes).toBeNull();
+    });
+
+    it('clears byte fields on ready/error/reset', () => {
+      inferenceProgressEmitter.reportWebLlmProgress(
+        0.5,
+        'Downloading',
+        'Llama-3.2-1B-Instruct-q4f16_1-MLC',
+      );
+      inferenceProgressEmitter.reportWebLlmReady();
+      let snapshot = inferenceProgressEmitter.getWebLlmLoadingSnapshot();
+      expect(snapshot.loadedBytes).toBeNull();
+      expect(snapshot.totalBytes).toBeNull();
+
+      inferenceProgressEmitter.reportWebLlmProgress(
+        0.5,
+        'Downloading',
+        'Llama-3.2-1B-Instruct-q4f16_1-MLC',
+      );
+      inferenceProgressEmitter.reportWebLlmError('failed');
+      snapshot = inferenceProgressEmitter.getWebLlmLoadingSnapshot();
+      expect(snapshot.loadedBytes).toBeNull();
+      expect(snapshot.totalBytes).toBeNull();
+    });
+  });
 });

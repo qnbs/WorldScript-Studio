@@ -160,6 +160,8 @@
   "settings.ai.localAi.downloadCancelled": "Загрузка отменена",
   "settings.ai.localAi.downloadEta": "ок. осталось {{seconds}}с",
   "settings.ai.localAi.downloadFailed": "Загрузка не удалась. Пожалуйста, попробуйте еще раз.",
+  "settings.ai.localAi.downloadSize": "{{loaded}} МБ из {{total}} МБ",
+  "settings.ai.localAi.downloadSpeed": "{{speed}} MB/s",
   "settings.ai.localAi.downloadTitle": "Загрузка модели ИИ…",
   "settings.ai.localAi.downloadedLabel": "скачал",
   "settings.ai.localAi.downloadingButton": "Загрузка…",
@@ -830,6 +832,8 @@
   "voice.modelDownload.description": "Скачиваем модель {{model}} ({{size}} МБ). Это обеспечивает локальную обработку голоса без облачной маршрутизации.",
   "voice.modelDownload.error": "Загрузка не удалась: {{error}}",
   "voice.modelDownload.progress": "{{percent}}% выполнено",
+  "voice.modelDownload.progressBytes": "{{loaded}} МБ из {{total}} МБ",
   "voice.modelDownload.retry": "Повторить попытку",
+  "voice.modelDownload.speed": "{{speed}} MB/s",
   "voice.modelDownload.title": "Скачать модель голоса"
 }

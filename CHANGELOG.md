@@ -31,6 +31,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   everywhere, for desktop/Linux users whose window manager doesn't expose the OS-level
   `prefers-reduced-transparency` preference that the existing automatic mitigation relies on.
   (#332)
+- **Downloaded/total size and speed in both model-download progress UIs** (#333 item 1).
+  `VoiceModelDownloadModal` now shows real byte counts and transfer speed, sourced directly from
+  transformers.js's own progress payload (`loaded`/`total` fields it was already receiving but
+  discarding). `LocalAiDownloadProgress` (WebLLM text models) shows an **approximate** downloaded/
+  total MB and speed, derived from the existing 0-1 progress fraction × a new per-model known-size
+  table (`WEBLLM_MODEL_APPROX_MB`) — the installed `@mlc-ai/web-llm`'s own progress callback exposes
+  no structured byte counts, so this is clearly labeled as an estimate, not measured telemetry.
 
 ### Changed
 
@@ -101,6 +108,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scroll-sync gaps: the mirror now resets to the top on a section switch instead of showing a stale
   offset, and re-syncs after debounced/deferred content growth instead of staying clamped to a
   since-invalid scroll range. (#341, #344)
+- **Voice model download progress bar looked stuck at ~95% for most of the download.**
+  `voiceCommandService.ts`'s download progress handler treated transformers.js's `progress` field
+  as if it were already a 0-1 fraction; it's actually 0-100 (percent), so the existing
+  `Math.min(0.95, pct)` safety clamp kicked in almost immediately (any progress value over 0.95%,
+  i.e. after the very first chunk of the download) and stayed there until the download's final
+  "complete" dispatch. Now derives the fraction from the payload's real `loaded`/`total` byte
+  counts (falling back to `progress / 100` only when those are absent). (#333 item 1)
 
 ### Docs
 

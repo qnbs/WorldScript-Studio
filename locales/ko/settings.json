@@ -160,6 +160,8 @@
   "settings.ai.localAi.downloadCancelled": "다운로드가 취소되었습니다.",
   "settings.ai.localAi.downloadEta": "대략. {{seconds}}초 남음",
   "settings.ai.localAi.downloadFailed": "다운로드에 실패했습니다. 다시 시도해 주세요.",
+  "settings.ai.localAi.downloadSize": "{{loaded}} MB of {{total}} MB",
+  "settings.ai.localAi.downloadSpeed": "{{speed}} MB/s",
   "settings.ai.localAi.downloadTitle": "AI 모델 다운로드 중…",
   "settings.ai.localAi.downloadedLabel": "다운로드됨",
   "settings.ai.localAi.downloadingButton": "다운로드 중…",
@@ -830,6 +832,8 @@
   "voice.modelDownload.description": "{{model}} 모델 다운로드 중({{size}}MB) 이를 통해 클라우드 라우팅 없이 로컬 음성 처리가 가능해집니다.",
   "voice.modelDownload.error": "다운로드 실패: {{error}}",
   "voice.modelDownload.progress": "{{percent}}% 완료",
+  "voice.modelDownload.progressBytes": "{{loaded}} MB of {{total}} MB",
   "voice.modelDownload.retry": "다시 해 보다",
+  "voice.modelDownload.speed": "{{speed}} MB/s",
   "voice.modelDownload.title": "음성 모델 다운로드"
 }
