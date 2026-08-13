@@ -21,13 +21,16 @@ vi.mock('../../services/storage/idbPassphraseSentinel', () => ({
     mockSaveSentinel(...args),
   getPassphraseSentinel: () => mockGetSentinel(),
   deletePassphraseSentinel: () => mockDeleteSentinel(),
+  // QNBS-v3: primaryProtectedStoreAdapters.ts reads this reserved-key constant at module load —
+  // the mock factory must supply it too, not just the three sentinel CRUD functions.
+  PASSPHRASE_SENTINEL_RECORD_KEY: 'idb_passphrase_sentinel_v1',
 }));
 
 import {
   clearIdbEncryptionKey,
   clearIdbPassphrase,
   hasPassphraseSentinel,
-  IdbEncryptionMigrationRequiredError,
+  IdbStorageLockedError,
   idbDecrypt,
   idbEncrypt,
   initIdbEncryption,
@@ -265,40 +268,55 @@ describe('Sentinel-backed API', () => {
 
   // ── clearIdbPassphrase ────────────────────────────────────────────────────
 
-  it('clearIdbPassphrase fails closed without deleting the sentinel', async () => {
+  it('clearIdbPassphrase migrates protected stores to plaintext and deletes the sentinel', async () => {
     await setupIdbEncryption('pass');
     expect(isIdbEncryptionReady()).toBe(true);
 
-    await expect(clearIdbPassphrase()).rejects.toBeInstanceOf(IdbEncryptionMigrationRequiredError);
+    await expect(clearIdbPassphrase()).resolves.toBeUndefined();
+
+    expect(mockDeleteSentinel).toHaveBeenCalled();
+    expect(isIdbEncryptionReady()).toBe(false);
+  });
+
+  it('clearIdbPassphrase throws IdbStorageLockedError, and preserves the sentinel, when locked', async () => {
+    await setupIdbEncryption('pass');
+    clearIdbEncryptionKey();
+
+    await expect(clearIdbPassphrase()).rejects.toBeInstanceOf(IdbStorageLockedError);
     expect(mockDeleteSentinel).not.toHaveBeenCalled();
-    expect(isIdbEncryptionReady()).toBe(true);
   });
 
   // ── rotateIdbPassphrase ───────────────────────────────────────────────────
 
-  it('rotateIdbPassphrase fails closed before changing the sentinel', async () => {
+  it('rotateIdbPassphrase re-keys to the new passphrase and replaces the sentinel', async () => {
     await setupIdbEncryption('original');
-    const savedBytes = mockSaveSentinel.mock.calls[0]?.[0] as Uint8Array;
+    const firstSentinel = mockSaveSentinel.mock.calls[0]?.[0] as Uint8Array;
     clearIdbEncryptionKey();
+    mockGetSentinel.mockResolvedValue(firstSentinel);
+    mockSaveSentinel.mockClear();
 
-    mockGetSentinel.mockResolvedValue(savedBytes);
-    await expect(rotateIdbPassphrase('wrong-old', 'new-pass')).rejects.toBeInstanceOf(
-      IdbEncryptionMigrationRequiredError,
-    );
+    await expect(rotateIdbPassphrase('original', 'new-pass')).resolves.toBeUndefined();
+
+    expect(mockSaveSentinel).toHaveBeenCalledTimes(1);
+    expect(isIdbEncryptionReady()).toBe(true);
+
+    // The rotated sentinel now unlocks with the new passphrase, not the old one.
+    const rotatedSentinel = mockSaveSentinel.mock.calls[0]?.[0] as Uint8Array;
+    clearIdbEncryptionKey();
+    mockGetSentinel.mockResolvedValue(rotatedSentinel);
+    await expect(verifyAndInitIdbEncryption('new-pass')).resolves.toBeUndefined();
   });
 
-  it('rotateIdbPassphrase does not replace the sentinel', async () => {
+  it('rotateIdbPassphrase does not replace the sentinel when passed a wrong old passphrase', async () => {
     await setupIdbEncryption('original');
     const firstSentinel = mockSaveSentinel.mock.calls[0]?.[0] as Uint8Array;
     clearIdbEncryptionKey();
 
-    // A blocked operation must leave the existing verifier untouched.
+    // A rejected rotation must leave the existing verifier untouched.
     mockGetSentinel.mockResolvedValue(firstSentinel);
     mockSaveSentinel.mockClear();
 
-    await expect(rotateIdbPassphrase('original', 'new-pass')).rejects.toBeInstanceOf(
-      IdbEncryptionMigrationRequiredError,
-    );
+    await expect(rotateIdbPassphrase('wrong-old', 'new-pass')).rejects.toThrow();
     expect(mockSaveSentinel).not.toHaveBeenCalled();
     expect(isIdbEncryptionReady()).toBe(false);
   });

@@ -11,9 +11,22 @@
  *   If no sentinel exists the feature flag is silently cleared (App.tsx startup guard).
  */
 
-import { assertNoActiveEncryptionMigration } from './encryptionMigrationJournal';
+import {
+  assertNoActiveEncryptionMigration,
+  clearCompletedEncryptionMigration,
+  completeEncryptionMigration,
+  type EncryptionMigrationJournal,
+  readEncryptionMigrationJournal,
+} from './encryptionMigrationJournal';
 import { decompressData } from './idbCore';
-import { getPassphraseSentinel, savePassphraseSentinel } from './idbPassphraseSentinel';
+import {
+  deletePassphraseSentinel,
+  getPassphraseSentinel,
+  savePassphraseSentinel,
+} from './idbPassphraseSentinel';
+// QNBS-v3: type-only — erased at compile time, so it cannot participate in the runtime circular
+// dependency the dynamic imports below avoid (see clearIdbPassphrase()).
+import type { ProtectedStoreMigrationProgressCallback } from './protectedStoreMigration';
 import { decodeSecureRecordValue, encodeSecureRecordValue } from './secureRecordCodec';
 
 // QNBS-v3: re-exported so a write that already captured its key via resolveProtectedWriteKey() can re-check only the migration guard pre-write, without re-running its redundant lock check.
@@ -112,6 +125,23 @@ export class IdbEncryptionSaltLostError extends Error {
       'Encryption salt is missing or invalid, but a passphrase was previously configured — a new salt cannot be created without losing access to existing encrypted data',
     );
     this.name = 'IdbEncryptionSaltLostError';
+  }
+}
+
+/**
+ * QNBS-v3 (CodeRabbit #342): raised specifically when a supplied passphrase fails to authenticate
+ * against a durable sentinel/verifier (AES-GCM auth-tag mismatch, or a migration target-verifier
+ * shape check) — as opposed to any other resume/migration failure (missing verifier, invalid
+ * journal operation, storage/adapter errors). Lets callers (PassphraseModal, EncryptionRecoveryModal)
+ * show an actionable "wrong passphrase" message only for genuine credential mismatches, and a
+ * distinct recovery/migration-failure message for everything else.
+ */
+export class IdbWrongPassphraseError extends Error {
+  readonly code = 'WRONG_PASSPHRASE' as const;
+
+  constructor() {
+    super('Passphrase does not match the stored verifier');
+    this.name = 'IdbWrongPassphraseError';
   }
 }
 
@@ -262,6 +292,15 @@ function getOrCreateSalt(): Uint8Array {
   return readStoredSalt() ?? createAndPersistSalt();
 }
 
+// QNBS-v3: best-effort — a stale salt with no sentinel is harmless (getOrCreateSalt regenerates on next setup).
+function clearStoredSalt(): void {
+  try {
+    localStorage.removeItem(SALT_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 // QNBS-v3: sentinel already exists here, so a missing or corrupted salt means unrecoverable key material — fail closed with a typed error.
 function getExistingSalt(): Uint8Array {
   let salt: Uint8Array | null;
@@ -333,6 +372,14 @@ export async function resolveProtectedWriteKey(): Promise<CryptoKey | null> {
 export async function idbEncryptWithKey(key: CryptoKey, plaintext: unknown): Promise<Uint8Array> {
   const blob = await _svc.encrypt(key, plaintext);
   return blob.bytes;
+}
+
+/**
+ * Decrypt with an explicit key — used by primary-store migration adapters, which operate on a
+ * source/target generation key rather than the current session's active key.
+ */
+export async function idbDecryptWithKey<T>(key: CryptoKey, bytes: Uint8Array): Promise<T> {
+  return _svc.decrypt(key, { bytes }) as Promise<T>;
 }
 
 /** Clear the in-memory key (call on tab-hide / session end). */
@@ -585,8 +632,12 @@ export async function verifyAndInitIdbEncryption(passphrase: string): Promise<vo
   _sentinelPresenceCache = true;
   const salt = getExistingSalt();
   const key = await _svc.deriveKey(passphrase, salt);
-  // QNBS-v3: decrypt throws on wrong key — AES-GCM auth-tag is the verifier
-  await _svc.decrypt(key, { bytes: sentinelBytes });
+  try {
+    // QNBS-v3: decrypt throws on wrong key — AES-GCM auth-tag is the verifier
+    await _svc.decrypt(key, { bytes: sentinelBytes });
+  } catch {
+    throw new IdbWrongPassphraseError();
+  }
   _activeKey = key;
 }
 
@@ -601,14 +652,19 @@ export async function assertIdbMigrationTargetKeyMatchesVerifier(
   targetKey: CryptoKey,
   targetVerifier: readonly number[],
 ): Promise<void> {
-  const verified = await _svc.decrypt(targetKey, { bytes: new Uint8Array(targetVerifier) });
+  let verified: unknown;
+  try {
+    verified = await _svc.decrypt(targetKey, { bytes: new Uint8Array(targetVerifier) });
+  } catch {
+    throw new IdbWrongPassphraseError();
+  }
   if (
     typeof verified !== 'object' ||
     verified === null ||
     Object.getPrototypeOf(verified) !== Object.prototype ||
     (verified as { v?: unknown }).v !== 1
   ) {
-    throw new Error('Migration target verifier is invalid');
+    throw new IdbWrongPassphraseError();
   }
 }
 
@@ -629,26 +685,230 @@ export async function hasPassphraseSentinel(): Promise<boolean> {
   return bytes !== null;
 }
 
-/**
- * Disabling encryption is blocked until a verified, resumable conversion protocol covers every
- * protected store. Deleting the verifier first would strand existing ciphertext.
- */
-export async function clearIdbPassphrase(): Promise<void> {
-  throw new IdbEncryptionMigrationRequiredError('disable');
+// QNBS-v3: shared by the fresh-start disable/rotate flows below and by resumeEncryptionMigration()
+// (App.tsx recovery UX) — both paths reach 'committing' via different journals but finish identically.
+async function commitDisableMigration(journal: EncryptionMigrationJournal): Promise<void> {
+  await deletePassphraseSentinel();
+  clearStoredSalt();
+  await completeEncryptionMigration(journal);
+  await clearCompletedEncryptionMigration();
+  _activeKey = null;
+  _sentinelPresenceCache = null;
+}
+
+async function commitRekeyMigration(
+  journal: EncryptionMigrationJournal,
+  targetKey: CryptoKey,
+): Promise<void> {
+  const newSentinel = await _svc.encrypt(targetKey, { v: 1 });
+  await savePassphraseSentinel(newSentinel.bytes);
+  await completeEncryptionMigration(journal);
+  await clearCompletedEncryptionMigration();
+  _activeKey = targetKey;
+  _sentinelPresenceCache = true;
 }
 
 /**
- * Rekey is intentionally unavailable until a durable, cross-store journal can prove that mixed
- * generations are recoverable after interruption. The arguments remain for source compatibility.
+ * Disable at-rest encryption: runs a full journal-backed migration (decrypting every primary and
+ * secondary protected store with the active key) via encryptionMigrationOrchestrator.ts, then
+ * removes the passphrase sentinel and KDF salt only once every store is verified plaintext.
+ * If the migration itself fails, the durable journal is left in place for the recovery UX
+ * (App.tsx startup guard) to resume — this function never partially deletes the verifier.
+ */
+export async function clearIdbPassphrase(
+  onProgress?: ProtectedStoreMigrationProgressCallback,
+): Promise<void> {
+  if (!_activeKey) throw new IdbStorageLockedError();
+  const existingJournal = await readEncryptionMigrationJournal();
+  if (existingJournal?.phase === 'recovery-required') {
+    throw new IdbEncryptionMigrationRequiredError('disable');
+  }
+  await assertNoActiveEncryptionMigration();
+  const sourceKey = _activeKey;
+  // QNBS-v3: dynamic import breaks a static circular dependency — the orchestrator's adapter graph
+  // imports back into this module's crypto primitives (idbEncryptWithKey/idbDecryptWithKey), and a
+  // static top-level import here made class-declaration evaluation order (e.g.
+  // ProtectedStoreMigrationAdapterError) dependent on which module entered the cycle first.
+  const { runProductionEncryptionMigration } = await import('./encryptionMigrationOrchestrator');
+  const journal = await runProductionEncryptionMigration({
+    operation: 'disable',
+    keys: { sourceKey },
+    ...(onProgress ? { onProgress } : {}),
+  });
+  // QNBS-v3: journal is durably 'committing' here — every store has been migrated and verified
+  // plaintext. Only bookkeeping remains; a failure below just needs a retry via the recovery UX.
+  await commitDisableMigration(journal);
+}
+
+/**
+ * Rotate (rekey) the at-rest encryption passphrase: verifies the old passphrase against the
+ * durable sentinel (AES-GCM auth-tag mismatch fails closed, same as verifyAndInitIdbEncryption),
+ * derives the new key, authenticates it via a durable target verifier, then runs a full
+ * journal-backed re-encryption of every primary and secondary protected store. The new sentinel
+ * is only saved — and the session key only swapped — once every store is verified under the new key.
  */
 export async function rotateIdbPassphrase(
   oldPassphrase: string,
   newPassphrase: string,
-  reEncrypt?: (oldKey: CryptoKey, newKey: CryptoKey) => Promise<void>,
+  onProgress?: ProtectedStoreMigrationProgressCallback,
 ): Promise<void> {
-  void oldPassphrase;
-  void newPassphrase;
-  void reEncrypt;
-  // QNBS-v3: A new verifier cannot become authoritative before every old ciphertext is checkpointed and verified.
-  throw new IdbEncryptionMigrationRequiredError('rotate');
+  if (!oldPassphrase || !newPassphrase) throw new Error('Passphrase must not be empty');
+  const existingJournal = await readEncryptionMigrationJournal();
+  if (existingJournal?.phase === 'recovery-required') {
+    throw new IdbEncryptionMigrationRequiredError('rotate');
+  }
+  await assertNoActiveEncryptionMigration();
+  const sourceKey = await deriveAndVerifySourceKeyFromSentinel(oldPassphrase);
+  const targetKey = await _svc.deriveKey(newPassphrase, getExistingSalt());
+  const targetVerifier = await createIdbMigrationTargetVerifier(targetKey);
+  // QNBS-v3: dynamic import breaks a static circular dependency — see clearIdbPassphrase() above.
+  const { runProductionEncryptionMigration } = await import('./encryptionMigrationOrchestrator');
+  const journal = await runProductionEncryptionMigration({
+    operation: 'rekey',
+    keys: { sourceKey, targetKey },
+    targetVerifier,
+    ...(onProgress ? { onProgress } : {}),
+  });
+  // QNBS-v3: journal is durably 'committing' here — every store is verified re-encrypted under the
+  // target key. Only bookkeeping remains; a failure below just needs a retry via the recovery UX.
+  await commitRekeyMigration(journal, targetKey);
+}
+
+/**
+ * Verify a candidate passphrase against the durable sentinel and return its derived key, without
+ * activating a session (`_activeKey` is left untouched). Used by rotateIdbPassphrase() and by the
+ * recovery UX (resumeEncryptionMigration()) to re-derive a migration's source key — CryptoKey
+ * material is never persisted in the journal, only re-derivable from the passphrase + salt.
+ */
+export async function deriveAndVerifySourceKeyFromSentinel(passphrase: string): Promise<CryptoKey> {
+  const sentinelBytes = await getPassphraseSentinel();
+  if (!sentinelBytes) throw new Error('No passphrase sentinel found — encryption was not set up');
+  const key = await _svc.deriveKey(passphrase, getExistingSalt());
+  try {
+    // QNBS-v3: decrypt throws on wrong key — AES-GCM auth-tag is the verifier, same pattern as verifyAndInitIdbEncryption.
+    await _svc.decrypt(key, { bytes: sentinelBytes });
+  } catch {
+    throw new IdbWrongPassphraseError();
+  }
+  return key;
+}
+
+/**
+ * Verify a candidate passphrase against a durable migration target verifier and return its
+ * derived key, without activating a session. Used by the recovery UX to re-derive the target key
+ * of an interrupted rekey migration.
+ */
+export async function deriveAndVerifyTargetKeyFromVerifier(
+  passphrase: string,
+  targetVerifier: readonly number[],
+): Promise<CryptoKey> {
+  const key = await _svc.deriveKey(passphrase, getExistingSalt());
+  await assertIdbMigrationTargetKeyMatchesVerifier(key, targetVerifier);
+  return key;
+}
+
+/**
+ * Resume an interrupted disable/rekey migration from a durable journal — the recovery UX
+ * (App.tsx startup guard) calls this when readEncryptionMigrationJournal() returns a journal whose
+ * phase is neither 'completed' nor 'recovery-required'. The passphrase(s) must be re-entered
+ * because CryptoKey material is never persisted; commits identically to a fresh-start migration.
+ */
+export async function resumeEncryptionMigration(
+  journal: EncryptionMigrationJournal,
+  input: { sourcePassphrase: string; targetPassphrase?: string },
+  onProgress?: ProtectedStoreMigrationProgressCallback,
+): Promise<void> {
+  if (journal.operation !== 'disable' && journal.operation !== 'rekey') {
+    throw new Error(`Cannot resume a migration with operation "${journal.operation}"`);
+  }
+
+  // QNBS-v3: a journal already in 'committing' phase means every store's data migration is done and
+  // verified — runProtectedStoreMigration() is a pure passthrough for this phase (nothing left to
+  // migrate/verify), so only the commitDisableMigration/commitRekeyMigration bookkeeping below
+  // remains. If a PRIOR commit attempt crashed partway through that bookkeeping, the sentinel it
+  // mutates may already reflect the post-commit state — deleted for disable, replaced for rekey —
+  // which makes the general source-key derivation further down fail even with the correct
+  // passphrase(s). Handle both committing sub-states (not-yet-committed vs. partially-committed)
+  // before falling through to the general resume path used by earlier phases.
+  if (journal.phase === 'committing') {
+    if (journal.operation === 'disable') {
+      const sentinelStillPresent = (await getPassphraseSentinel()) !== null;
+      if (!sentinelStillPresent) {
+        // A prior commitDisableMigration already deleted the sentinel/salt before crashing — there is
+        // no credential left to verify against; the disable itself is already effectively done.
+        await completeEncryptionMigration(journal);
+        await clearCompletedEncryptionMigration();
+        _activeKey = null;
+        _sentinelPresenceCache = null;
+        return;
+      }
+      // Sentinel untouched — commitDisableMigration never ran. Verify identity, then commit normally.
+      await deriveAndVerifySourceKeyFromSentinel(input.sourcePassphrase);
+      await commitDisableMigration(journal);
+      return;
+    }
+    // operation === 'rekey'
+    if (!input.targetPassphrase) {
+      throw new Error('The new passphrase is required to resume this passphrase rotation');
+    }
+    if (!journal.targetVerifier || journal.targetVerifier.length === 0) {
+      throw new Error('Migration journal is missing its target verifier');
+    }
+    // QNBS-v3: only a source-verify failure proves the sentinel was already replaced — a
+    // commitRekeyMigration failure must stay a retryable error with the journal intact, not get
+    // misread by a shared catch as "the commit already happened" (that left both passphrases dead).
+    let sourceVerifyError: unknown = null;
+    try {
+      await deriveAndVerifySourceKeyFromSentinel(input.sourcePassphrase);
+    } catch (err) {
+      sourceVerifyError = err;
+    }
+    if (sourceVerifyError === null) {
+      // Old passphrase still decrypts the sentinel — commitRekeyMigration never ran. Commit normally.
+      const targetKey = await deriveAndVerifyTargetKeyFromVerifier(
+        input.targetPassphrase,
+        journal.targetVerifier,
+      );
+      await commitRekeyMigration(journal, targetKey);
+      return;
+    }
+    // The old passphrase no longer decrypts the sentinel — a prior commitRekeyMigration already
+    // replaced it before crashing. Confirm via the durable target verifier before concluding that,
+    // rather than surfacing this as a wrong-passphrase error.
+    const targetKey = await deriveAndVerifyTargetKeyFromVerifier(
+      input.targetPassphrase,
+      journal.targetVerifier,
+    ).catch(() => {
+      throw sourceVerifyError;
+    });
+    await completeEncryptionMigration(journal);
+    await clearCompletedEncryptionMigration();
+    _activeKey = targetKey;
+    _sentinelPresenceCache = true;
+    return;
+  }
+
+  const sourceKey = await deriveAndVerifySourceKeyFromSentinel(input.sourcePassphrase);
+  const { resumeProductionEncryptionMigration } = await import('./encryptionMigrationOrchestrator');
+  if (journal.operation === 'disable') {
+    const resumed = await resumeProductionEncryptionMigration(journal, { sourceKey }, onProgress);
+    await commitDisableMigration(resumed);
+    return;
+  }
+  if (!input.targetPassphrase) {
+    throw new Error('The new passphrase is required to resume this passphrase rotation');
+  }
+  if (!journal.targetVerifier || journal.targetVerifier.length === 0) {
+    throw new Error('Migration journal is missing its target verifier');
+  }
+  const targetKey = await deriveAndVerifyTargetKeyFromVerifier(
+    input.targetPassphrase,
+    journal.targetVerifier,
+  );
+  const resumed = await resumeProductionEncryptionMigration(
+    journal,
+    { sourceKey, targetKey },
+    onProgress,
+  );
+  await commitRekeyMigration(resumed, targetKey);
 }

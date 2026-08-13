@@ -10,6 +10,9 @@ import { getUserFriendlyDbError, IdbConnectionManager } from './idbCore';
 
 const SENTINEL_RECORD_KEY = 'idb_passphrase_sentinel_v1';
 
+/** The APP_DATA_STORE key the sentinel is persisted under — primary-store migration adapters must skip it. */
+export const PASSPHRASE_SENTINEL_RECORD_KEY = SENTINEL_RECORD_KEY;
+
 // QNBS-v3: Methods live inside the subclass so protected getObjectStore() is called via `this`,
 // not via an external reference (TypeScript TS2445: protected access must be within the class).
 class PassphraseSentinelStore extends IdbConnectionManager {
@@ -45,6 +48,11 @@ class PassphraseSentinelStore extends IdbConnectionManager {
 }
 
 const _store = new PassphraseSentinelStore();
+
+/** Test-only: closes the cached connection so a freshly-installed IDBFactory takes effect. */
+export function _resetSentinelStoreForTest(): void {
+  (_store as unknown as { closeConnections: () => void }).closeConnections();
+}
 
 /** Persist the encrypted sentinel bytes (produced by AES-GCM encrypt). */
 export async function savePassphraseSentinel(bytes: Uint8Array): Promise<void> {

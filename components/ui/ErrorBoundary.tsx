@@ -9,6 +9,8 @@ import { Icon } from './Icon';
 interface ErrorBoundaryProps {
   children?: ReactNode;
   onReset?: () => void;
+  /** Overrides the default non-blocking ErrorFallback — use for boundaries wrapping a blocking gate (a modal that must stay blocking even if it crashes) so the app underneath doesn't become interactive. */
+  fallback?: (onReset: () => void) => ReactNode;
 }
 
 interface ErrorBoundaryState {
@@ -84,6 +86,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             this.props.onReset?.();
           }
         : undefined;
+      if (this.props.fallback) {
+        return this.props.fallback(handleReset ?? (() => this.setState({ hasError: false })));
+      }
       return handleReset ? <ErrorFallback onReset={handleReset} /> : <ErrorFallback />;
     }
 

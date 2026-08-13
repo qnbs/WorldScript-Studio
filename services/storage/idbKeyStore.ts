@@ -12,6 +12,24 @@ const GEMINI_API_KEY_RECORD = 'gemini_api_key_encrypted_v1';
 const GEMINI_API_KEY_IV_RECORD = 'gemini_api_key_iv_v1';
 const CRYPTO_KEY_RECORD = 'local_crypto_key_v2';
 
+// QNBS-v3 (CodeAnt/qodo #342): IdbKeyStore's records share APP_DATA_STORE with project/settings
+// data (see saveApiKey/getApiKey/clearApiKey below for the api_key_<provider>_enc/_iv pattern). The
+// at-rest-encryption primary-store migration adapter for that store (primaryProtectedStoreAdapters.ts)
+// must never touch these — CRYPTO_KEY_RECORD holds a raw non-extractable CryptoKey (JSON.stringify
+// destroys it), and the *_enc/_iv records are already independently AES-GCM-encrypted under that key,
+// not plain JSON project data. Exported so the migration adapter can reserve them without duplicating
+// this module's internal naming scheme.
+export function isKeyStoreRecordKey(key: IDBValidKey): boolean {
+  if (
+    key === CRYPTO_KEY_RECORD ||
+    key === GEMINI_API_KEY_RECORD ||
+    key === GEMINI_API_KEY_IV_RECORD
+  ) {
+    return true;
+  }
+  return typeof key === 'string' && /^api_key_.+_(enc|iv)$/.test(key);
+}
+
 export class IdbKeyStore extends IdbConnectionManager {
   /** Legacy key derivation — used only for migrating existing encrypted data. */
   private async getLegacyCryptoKey(): Promise<CryptoKey> {

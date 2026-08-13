@@ -1,8 +1,8 @@
 # IndexedDB At-Rest Encryption — Implementation
 
-**Status:** Partial implementation with fail-closed locked writes and a durable migration-journal foundation. Cross-database enable, disable, and rekey conversion/recovery remain a release-blocking follow-up.
+**Status:** Complete. Fail-closed locked writes, a durable cross-database migration journal, and production disable/rekey wiring (Phase 4, issue #338) all ship. Interrupted migrations are resumable via a dedicated recovery UX. Remaining: E2E test coverage for the disable/rotate/recovery round trips (unit + component tests only so far).
 **Feature flag:** `enableIdbAtRestEncryption` (on by default since v1.23 — manage via Settings → Privacy)
-**Tracking:** SEC-3 (Master Plan Phase 2 delivery)
+**Tracking:** SEC-3 (Master Plan Phase 2 delivery); Phase 4 production wiring: issue #338
 
 ---
 
@@ -10,13 +10,13 @@
 
 WorldScript Studio stores project data in IndexedDB. API keys use a separate encrypted-secret mechanism in `dbService.ts`. Optional IDB at-rest encryption uses a passphrase-derived AES-256-GCM key for the primary project, settings, snapshot, image, Codex, RAG, and binder-asset persistence paths. Other persistence surfaces must be inventoried and integrated through the same policy before a blanket “all IndexedDB data” claim is valid.
 
-The encryption service is gated behind `featureFlags.enableIdbAtRestEncryption` (on by default since v1.23 — manage in Settings → Privacy → "Encrypt project data at rest"). Current lifecycle behavior is deliberately conservative:
+The encryption service is gated behind `featureFlags.enableIdbAtRestEncryption` (on by default since v1.23 — manage in Settings → Privacy → "Encrypt project data at rest"):
 - `IdbUnlockModal` — prompts for passphrase on cold start when flag is on; rate-limiting: 3 failures → 5 s lockout, 6 failures → 30 s lockout
 - **Session lock** — `lockSession()` clears the in-memory key; "Lock Session" button in Settings → Privacy
 - **Locked writes fail closed** — when a passphrase sentinel exists but no runtime key is available, protected reads and writes return a typed locked error rather than storing plaintext.
-- **Disable and passphrase rotation are unavailable** until a versioned, resumable cross-database journal verifies every conversion. The UI does not expose those destructive controls and the service rejects them before mutation.
-
-**Required next step:** implement per-store conversion/checkpointing, multi-tab coordination, and verified enable/disable/rekey recovery before enabling lifecycle operations. The journal currently blocks a second migration owner and ordinary protected access while active; it does not yet convert records.
+- **Disable and passphrase rotation** — `PassphraseModal`'s `'disable'`/`'rotate'` modes drive `clearIdbPassphrase()`/`rotateIdbPassphrase()`, which run a full journal-backed migration (`services/storage/encryptionMigrationOrchestrator.ts`) across every primary and secondary protected store, verify it, and only then touch the passphrase sentinel. A live progress bar shows per-store migration/verification progress.
+- **Cross-tab write admission** — `services/storage/protectedWriteAdmission.ts` (Web Locks API) admits ordinary protected writes/deletes in shared mode and migration batches in exclusive mode, closing the write-vs-migration TOCTOU race a standalone journal read alone could not.
+- **Interrupted-migration recovery** — if a disable/rotate migration is interrupted (reload/crash) before reaching `'completed'`, `EncryptionRecoveryModal` (App.tsx startup guard, takes priority over `IdbUnlockModal`) lets the user re-enter their passphrase(s) to resume via `resumeEncryptionMigration()`. A `'recovery-required'` journal (the migration's own verification found an inconsistency) is surfaced as a distinct, honest stuck state requiring manual/support recovery — never auto-fixed.
 
 The authoritative lifecycle states, transition rules, and journal requirements are in [ADR 0018](adr/0018-idb-encryption-lifecycle-and-recovery.md).
 
@@ -141,9 +141,21 @@ export async function idbReadSecure<T>(ciphertext: Uint8Array | unknown): Promis
 
 export function isIdbEncryptionReady(): boolean
 // Returns true once initStorageEncryption() has resolved successfully
+
+export async function clearIdbPassphrase(onProgress?: ProtectedStoreMigrationProgressCallback): Promise<void>
+// Disable: journal-backed migration decrypts every protected store with the active key, verifies it,
+// then deletes the sentinel + KDF salt and clears the session key. Requires an already-unlocked session.
+
+export async function rotateIdbPassphrase(oldPassphrase: string, newPassphrase: string, onProgress?: ProtectedStoreMigrationProgressCallback): Promise<void>
+// Rekey: verifies oldPassphrase against the sentinel, derives+authenticates the target key via a
+// durable verifier, re-encrypts every protected store, verifies it, then saves the new sentinel.
+
+export async function resumeEncryptionMigration(journal: EncryptionMigrationJournal, input: { sourcePassphrase: string; targetPassphrase?: string }, onProgress?: ProtectedStoreMigrationProgressCallback): Promise<void>
+// Recovery UX entry point — re-derives keys from re-entered passphrase(s) and resumes an
+// interrupted disable/rekey journal to the same end state as a fresh-start migration.
 ```
 
-Protected store writers call `assertIdbProtectedWriteAllowed()` before they open an IndexedDB write transaction. A configured but locked library therefore does not silently downgrade to plaintext.
+Every protected store writer runs inside `withProtectedWriteAdmission()` (shared-mode Web Lock), so a concurrent migration batch (exclusive-mode lock) can never interleave with an ordinary write. The two call paths differ inside that admission: save paths call `resolveProtectedWriteKey()` to snapshot the write key and lock state atomically, then re-run only `assertNoActiveEncryptionMigration()` immediately before opening the transaction (re-checking the full lock guard here would wrongly reject a write that already captured a valid key before the session locked mid-write); delete paths, which encrypt nothing and so have no key to snapshot, call `assertIdbProtectedWriteAllowed()` directly. Either path rejects a configured-but-locked library before a transaction opens, so it never silently downgrades to plaintext.
 
 ---
 
@@ -176,15 +188,24 @@ byte 18..:  AES-GCM ciphertext + 16-byte GCM tag
 
 ## Remaining migration work
 
-1. **Multi-tab coordination:** all tabs must be blocked or coordinated before a future migration begins; a `BroadcastChannel` notification alone cannot transfer a non-extractable key safely.
-2. **Disable/rekey:** both are currently blocked rather than risking inaccessible data. A durable journal, checkpoints, generation handling, and recovery UX are required before they are re-enabled.
-3. **DuckDB OPFS:** DuckDB WAL and data files are outside IDB. A separate encryption layer requires its own threat model and recovery protocol.
+1. **Multi-tab coordination:** the migration journal's single-owner lease (`claimEncryptionMigrationOwnership`) and `protectedWriteAdmission.ts`'s exclusive-mode Web Lock coordinate a migration against ordinary writers *within* the current tab set, but a non-extractable `CryptoKey` still cannot be transferred to another tab — a second tab that opens mid-migration must re-derive its own key from a re-entered passphrase (same as `EncryptionRecoveryModal`) rather than receiving one via `BroadcastChannel`.
+2. **`'recovery-required'` manual recovery:** when the migration's own verification finds an inconsistency, the journal is deliberately left stuck (no automatic retry, no automatic data reconciliation) — `EncryptionRecoveryModal` surfaces this honestly but does not resolve it. A dedicated manual-recovery procedure (support-assisted) is out of scope for Phase 4.
+3. **DuckDB OPFS:** DuckDB WAL and data files are outside IDB and outside the Phase 4 migration's scope. A separate encryption layer requires its own threat model and recovery protocol.
+4. **E2E coverage:** the disable/rotate/recovery flows currently have unit + component test coverage (`tests/unit/storage/storageEncryptionService.test.ts`, `tests/unit/settings/PassphraseModal.test.tsx`, `tests/unit/settings/EncryptionRecoveryModal.test.tsx`) but no Playwright E2E round trip yet.
 
 ---
 
 ## References
 
-- `services/storage/storageEncryptionService.ts` — **implemented service** (v1.19.0, B-1)
+- `services/storage/storageEncryptionService.ts` — **implemented service** (v1.19.0, B-1; Phase 4 disable/rotate/resume)
+- `services/storage/encryptionMigrationJournal.ts` — durable cross-database journal, single-owner lease, legal phase transitions
+- `services/storage/protectedStoreMigration.ts` — journal-owned adapter execution protocol + progress callback
+- `services/storage/protectedWriteAdmission.ts` — Web Locks–based cross-tab admission (shared writers vs. exclusive migration batches)
+- `services/storage/primaryProtectedStoreAdapter.ts` / `primaryProtectedStoreAdapters.ts` — explicit-key/inline-keyPath adapter engine + the 5 generic-engine primary-store specs
+- `services/storage/ragVectorsProtectedStoreAdapter.ts` — bespoke per-project RAG-vector adapter (aggregate ↔ individual-record duality)
+- `services/storage/secondaryPayloadStoreAdapter.ts` / `secondaryProtectedStoreAdapters.ts` — pre-existing secondary-store adapters (scene revisions, inference cache)
+- `services/storage/encryptionMigrationOrchestrator.ts` — combines primary + secondary adapters into one production migration run
+- `components/settings/PassphraseModal.tsx` / `EncryptionRecoveryModal.tsx` — set/unlock/disable/rotate UI + interrupted-migration recovery UX
 - `services/storage/idbCore.ts` — IDB lifecycle; calls `encryptForStorage`/`decryptFromStorage` when flag is on
 - `services/storage/` (barrel) — `idbProjectStore`, `idbSnapshotStore`, `idbKeyStore`, `idbCodexStore`, `idbAssetStore`
 - `services/dbMigration.ts` — existing schema migration infrastructure
