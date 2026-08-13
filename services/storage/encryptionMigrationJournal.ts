@@ -474,6 +474,9 @@ export async function assertNoActiveEncryptionMigration(): Promise<void> {
   }
 }
 
+/** The APP_DATA_STORE key the journal itself is persisted under — primary-store migration adapters must skip it. */
+export const ENCRYPTION_MIGRATION_JOURNAL_RECORD_KEY = JOURNAL_RECORD_KEY;
+
 export const __encryptionMigrationJournalRecordKeyForTest = JOURNAL_RECORD_KEY;
 
 /** Test-only reset so a new fake IndexedDB factory cannot reuse stale singleton connections. */

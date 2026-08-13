@@ -119,4 +119,38 @@ describe('ErrorBoundary', () => {
     );
     expect(screen.getByRole('button', { name: 'Report issue' })).toBeTruthy();
   });
+
+  it('renders the custom fallback instead of ErrorFallback when provided', () => {
+    render(
+      <ErrorBoundary
+        fallback={(reset) => (
+          <button type="button" onClick={reset}>
+            Custom fallback
+          </button>
+        )}
+      >
+        <Bomb shouldThrow />
+      </ErrorBoundary>,
+    );
+    expect(screen.getByRole('button', { name: 'Custom fallback' })).toBeTruthy();
+    expect(screen.queryByText('Something went wrong.')).toBeNull();
+  });
+
+  it('calls onReset when the custom fallback invokes its reset callback', () => {
+    const onReset = vi.fn();
+    render(
+      <ErrorBoundary
+        onReset={onReset}
+        fallback={(reset) => (
+          <button type="button" onClick={reset}>
+            Custom fallback
+          </button>
+        )}
+      >
+        <Bomb shouldThrow />
+      </ErrorBoundary>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Custom fallback' }));
+    expect(onReset).toHaveBeenCalledOnce();
+  });
 });

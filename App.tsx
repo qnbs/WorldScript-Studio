@@ -30,9 +30,12 @@ import {
 } from './app/listenerMiddleware';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
+import { EncryptionRecoveryModal } from './components/settings/EncryptionRecoveryModal';
 import { IdbUnlockModal } from './components/settings/IdbUnlockModal';
+import { Button } from './components/ui/Button';
 import { DuckDbMigrationBanner } from './components/ui/DuckDbMigrationBanner';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
+import { Modal } from './components/ui/Modal';
 import { OfflineIndicator, PWAInstallBanner, PWAUpdateToast } from './components/ui/PWAComponents';
 import { Spinner } from './components/ui/Spinner';
 import { ToastProvider } from './components/ui/Toast';
@@ -66,6 +69,10 @@ import { installCloseToTray, installDesktopTray } from './services/desktop/deskt
 import { pluginRegistry } from './services/pluginRegistry';
 import { repairProjectI18nFields } from './services/projectI18nRepair';
 import { hasCompletedSpotlightTour, startSpotlightTour } from './services/spotlightTour';
+import {
+  type EncryptionMigrationJournal,
+  readEncryptionMigrationJournal,
+} from './services/storage/encryptionMigrationJournal';
 import {
   hasPassphraseSentinel,
   isIdbEncryptionReady,
@@ -197,6 +204,14 @@ const App: FC<AppProps> = ({ isNewUser }) => {
 
   // Collaboration Panel State
   const [isCollabPanelOpen, setIsCollabPanelOpen] = useState(false);
+
+  // QNBS-v3: a non-'completed' journal means a disable/rotate was interrupted — recovery UX takes priority over the normal unlock flow below.
+  const [recoveryJournal, setRecoveryJournal] = useState<EncryptionMigrationJournal | null>(null);
+  // QNBS-v3 (CodeAnt #342): mirrors recoveryJournal so the sentinel-check effect can read it synchronously despite a stale closure.
+  const recoveryJournalRef = useRef<EncryptionMigrationJournal | null>(null);
+  useEffect(() => {
+    recoveryJournalRef.current = recoveryJournal;
+  }, [recoveryJournal]);
 
   useEffect(() => {
     const applyTheme = (isDark: boolean) => {
@@ -342,20 +357,29 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     void initLocalFirstSyncOnStartup(featureFlags.enableLocalFirstSync);
   }, []);
 
-  // QNBS-v3: B-1 sentinel guard — async because IDB sentinel read is async.
-  // Three cases: flag off → skip; key already in session → skip; sentinel missing →
-  // flag was toggled without proper setup → auto-disable; sentinel present → show modal.
+  // QNBS-v3: checked independently of the feature flag — the journal, not the flag, is the source of truth for an interrupted disable/rotate migration (Phase 4/#338).
   useEffect(() => {
-    if (!featureFlags.enableIdbAtRestEncryption || isIdbEncryptionReady()) return;
+    void (async () => {
+      const journal = await readEncryptionMigrationJournal();
+      if (journal && journal.phase !== 'completed') setRecoveryJournal(journal);
+    })();
+  }, []);
+
+  // QNBS-v3: B-1 sentinel guard (async) — skips if flag off/unlocked/recovery-pending, auto-disables on a missing sentinel, else shows the unlock modal.
+  useEffect(() => {
+    if (!featureFlags.enableIdbAtRestEncryption || isIdbEncryptionReady() || recoveryJournal)
+      return;
     void (async () => {
       const hasSentinel = await hasPassphraseSentinel();
       if (!hasSentinel) {
         dispatch(featureFlagsActions.setEnableIdbAtRestEncryption(false));
         return;
       }
+      // QNBS-v3 (CodeAnt #342): re-check via the ref, not the closed-over `recoveryJournal`, since the sibling journal-check effect may have resolved mid-await.
+      if (recoveryJournalRef.current) return;
       setIdbUnlockOpen(true);
     })();
-  }, [featureFlags.enableIdbAtRestEncryption, dispatch, setIdbUnlockOpen]);
+  }, [featureFlags.enableIdbAtRestEncryption, recoveryJournal, dispatch, setIdbUnlockOpen]);
 
   // QNBS-v3: PWA share_target GET params → toast + stash for Writer paste flows; strip query to avoid leaking shared text in URL bar.
   useEffect(() => {
@@ -805,7 +829,47 @@ const App: FC<AppProps> = ({ isNewUser }) => {
                   </ErrorBoundary>
                 </>
               )}
-              {isIdbUnlockOpen && (
+              {recoveryJournal && (
+                // QNBS-v3 (CodeRabbit #342): fallback keeps the recovery gate blocking even if EncryptionRecoveryModal itself throws — a plain ErrorFallback has no backdrop/focus-trap and would leave the app underneath interactive.
+                <ErrorBoundary
+                  onReset={() => setRecoveryJournal(null)}
+                  fallback={(reset) => (
+                    <Modal
+                      isOpen={true}
+                      onClose={() => undefined}
+                      isDismissible={false}
+                      title={t('error.boundary.title')}
+                    >
+                      <div className="space-y-4">
+                        <p className="text-[var(--sc-text-secondary)]">
+                          {t('error.boundary.description')}
+                        </p>
+                        <div className="flex flex-wrap gap-2 justify-end">
+                          <Button onClick={reset} variant="primary">
+                            {t('error.boundary.reset')}
+                          </Button>
+                          <Button onClick={() => window.location.reload()} variant="secondary">
+                            {t('error.boundary.reload')}
+                          </Button>
+                        </div>
+                      </div>
+                    </Modal>
+                  )}
+                >
+                  <EncryptionRecoveryModal
+                    journal={recoveryJournal}
+                    onRecovered={() => {
+                      if (recoveryJournal.operation === 'disable') {
+                        dispatch(featureFlagsActions.setEnableIdbAtRestEncryption(false));
+                      }
+                      setRecoveryJournal(null);
+                      // QNBS-v3 (CodeAnt #342): defensively close any unlock-modal state the sentinel-guard race (see recoveryJournalRef) might have set before this resolved.
+                      setIdbUnlockOpen(false);
+                    }}
+                  />
+                </ErrorBoundary>
+              )}
+              {isIdbUnlockOpen && !recoveryJournal && (
                 <ErrorBoundary onReset={() => setIdbUnlockOpen(false)}>
                   <IdbUnlockModal onUnlocked={() => setIdbUnlockOpen(false)} />
                 </ErrorBoundary>

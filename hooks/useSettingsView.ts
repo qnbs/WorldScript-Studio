@@ -19,9 +19,12 @@ import { statusActions } from '../features/status/statusSlice';
 import { useTranslation } from '../hooks/useTranslation';
 import { wipeAllAppData } from '../services/factoryResetService';
 import { logger } from '../services/logger';
+import type { ProtectedStoreMigrationProgress } from '../services/storage/protectedStoreMigration';
 import {
   clearIdbEncryptionKey,
+  clearIdbPassphrase,
   isIdbEncryptionReady,
+  rotateIdbPassphrase,
   setupIdbEncryption,
   verifyAndInitIdbEncryption,
 } from '../services/storage/storageEncryptionService';
@@ -85,6 +88,8 @@ export const useSettingsView = () => {
   const [snapshotName, setSnapshotName] = useState('');
   const [passphraseModal, setPassphraseModal] = useState<PassphraseModalMode | 'closed'>('closed');
   const [encryptionReady, setEncryptionReady] = useState(isIdbEncryptionReady());
+  const [migrationProgress, setMigrationProgress] =
+    useState<ProtectedStoreMigrationProgress | null>(null);
 
   const refreshSnapshots = useCallback(async () => {
     const snaps = await storageService.listSnapshots();
@@ -389,6 +394,28 @@ export const useSettingsView = () => {
         await verifyAndInitIdbEncryption(_current);
         setEncryptionReady(true);
         toast.success(t('settings.privacy.encryptionActiveStatus'));
+      } else if (passphraseModal === 'disable') {
+        // QNBS-v3: clearIdbPassphrase() requires an already-unlocked session key — no passphrase re-entry.
+        setMigrationProgress(null);
+        try {
+          await clearIdbPassphrase((progress) => setMigrationProgress(progress));
+        } finally {
+          setMigrationProgress(null);
+        }
+        dispatch(featureFlagsActions.setEnableIdbAtRestEncryption(false));
+        setEncryptionReady(false);
+        toast.success(t('settings.privacy.encryptionDisabledStatus'));
+      } else if (passphraseModal === 'rotate') {
+        setMigrationProgress(null);
+        try {
+          await rotateIdbPassphrase(_current, newPassphrase, (progress) =>
+            setMigrationProgress(progress),
+          );
+        } finally {
+          setMigrationProgress(null);
+        }
+        setEncryptionReady(true);
+        toast.success(t('settings.privacy.encryptionChangedStatus'));
       }
       setPassphraseModal('closed');
     },
@@ -424,6 +451,7 @@ export const useSettingsView = () => {
     passphraseModal,
     setPassphraseModal,
     encryptionReady,
+    migrationProgress,
     handlePassphraseConfirm,
     handleLockSession: useCallback(() => {
       clearIdbEncryptionKey();

@@ -7,6 +7,7 @@ import {
   claimEncryptionMigrationOwnership,
   type EncryptionMigrationJournal,
   type EncryptionMigrationOperation,
+  type EncryptionMigrationPhase,
   type EncryptionMigrationStoreCheckpoint,
   releaseEncryptionMigrationOwnership,
   updateEncryptionMigrationJournal,
@@ -30,6 +31,18 @@ export interface ProtectedStoreAdapterContext extends EncryptionMigrationKeys {
   operation: EncryptionMigrationOperation;
   cursor?: string;
 }
+
+export interface ProtectedStoreMigrationProgress {
+  storeId: string;
+  storeIndex: number;
+  storeCount: number;
+  phase: EncryptionMigrationPhase;
+  processed: number;
+}
+
+export type ProtectedStoreMigrationProgressCallback = (
+  progress: ProtectedStoreMigrationProgress,
+) => void;
 
 export interface ProtectedStoreAdapter {
   id: string;
@@ -210,6 +223,7 @@ export async function runProtectedStoreMigration(
   initialJournal: EncryptionMigrationJournal,
   adapters: readonly ProtectedStoreAdapter[],
   keys: EncryptionMigrationKeys,
+  onProgress?: ProtectedStoreMigrationProgressCallback,
 ): Promise<EncryptionMigrationJournal> {
   let journal = initialJournal;
   if (journal.phase === 'recovery-required') {
@@ -242,7 +256,7 @@ export async function runProtectedStoreMigration(
     }
 
     if (journal.phase === 'migrating') {
-      for (const adapter of adapters) {
+      for (const [storeIndex, adapter] of adapters.entries()) {
         let checkpoint = checkpointFor(journal, adapter.id);
         while (!checkpoint.done) {
           // QNBS-v3: exclusive admission bounds the race window to one batch, not the whole run — closes the write-vs-migration TOCTOU gap (#338) while still letting writers proceed between batches.
@@ -254,6 +268,13 @@ export async function runProtectedStoreMigration(
             phase: 'migrating',
             stores: replaceCheckpoint(journal, checkpoint),
           });
+          onProgress?.({
+            storeId: adapter.id,
+            storeIndex,
+            storeCount: adapters.length,
+            phase: 'migrating',
+            processed: checkpoint.processed,
+          });
           await yieldAfterCheckpoint();
         }
       }
@@ -264,7 +285,7 @@ export async function runProtectedStoreMigration(
     }
 
     if (journal.phase === 'verifying') {
-      for (const adapter of adapters) {
+      for (const [storeIndex, adapter] of adapters.entries()) {
         const checkpoint = checkpointFor(journal, adapter.id);
         if (checkpoint.done && checkpoint.verified >= checkpoint.processed) continue;
         const verified = await adapter.verify({
@@ -280,6 +301,13 @@ export async function runProtectedStoreMigration(
         journal = await updateEncryptionMigrationJournal(journal, {
           phase: 'verifying',
           stores: replaceCheckpoint(journal, { ...checkpoint, verified }),
+        });
+        onProgress?.({
+          storeId: adapter.id,
+          storeIndex,
+          storeCount: adapters.length,
+          phase: 'verifying',
+          processed: verified,
         });
       }
       journal = await updateEncryptionMigrationJournal(journal, {
