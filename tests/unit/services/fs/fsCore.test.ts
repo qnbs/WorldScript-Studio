@@ -5,6 +5,7 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
+import type { TauriApis } from '../../../../services/fs/fsCore';
 import {
   compressData,
   countProjectWords,
@@ -13,7 +14,42 @@ import {
   encryptText,
   retryFs,
   sanitizePathSegment,
+  writeFileAtomic,
+  writeTextFileAtomic,
 } from '../../../../services/fs/fsCore';
+
+// QNBS-v3: minimal in-memory fake covering only what writeTextFileAtomic/writeFileAtomic use —
+// a lighter-weight sibling of fsStores.test.ts's fuller FakeFs, scoped to this file's needs.
+function makeAtomicWriteFake() {
+  const text = new Map<string, string>();
+  const bin = new Map<string, Uint8Array>();
+  const apis: Pick<TauriApis, 'writeTextFile' | 'writeFile' | 'rename' | 'remove'> = {
+    writeTextFile: (p, c) => {
+      text.set(p, c);
+      return Promise.resolve();
+    },
+    writeFile: (p, d) => {
+      bin.set(p, d);
+      return Promise.resolve();
+    },
+    rename: (oldPath, newPath) => {
+      if (text.has(oldPath)) {
+        text.set(newPath, text.get(oldPath) as string);
+        text.delete(oldPath);
+      } else if (bin.has(oldPath)) {
+        bin.set(newPath, bin.get(oldPath) as Uint8Array);
+        bin.delete(oldPath);
+      }
+      return Promise.resolve();
+    },
+    remove: (p) => {
+      text.delete(p);
+      bin.delete(p);
+      return Promise.resolve();
+    },
+  };
+  return { apis: apis as TauriApis, text, bin };
+}
 
 describe('retryFs', () => {
   it('returns on first success without retrying', async () => {
@@ -41,6 +77,73 @@ describe('retryFs', () => {
     const fn = vi.fn().mockRejectedValue(new Error('file is locked, try again'));
     await expect(retryFs(fn, 2, 0)).rejects.toThrow(/locked/);
     expect(fn).toHaveBeenCalledTimes(3); // initial + 2 retries
+  });
+});
+
+describe('writeTextFileAtomic / writeFileAtomic', () => {
+  it('writes content under the final path and leaves no temp file behind', async () => {
+    const { apis, text } = makeAtomicWriteFake();
+    await writeTextFileAtomic(apis, '/app/project.json', '{"a":1}');
+    expect(text.get('/app/project.json')).toBe('{"a":1}');
+    expect([...text.keys()]).toEqual(['/app/project.json']);
+  });
+
+  it('binary variant writes content under the final path and leaves no temp file behind', async () => {
+    const { apis, bin } = makeAtomicWriteFake();
+    const data = new Uint8Array([1, 2, 3]);
+    await writeFileAtomic(apis, '/app/asset.bin', data);
+    expect(bin.get('/app/asset.bin')).toEqual(data);
+    expect([...bin.keys()]).toEqual(['/app/asset.bin']);
+  });
+
+  // QNBS-v3: the core crash-safety guarantee — a failure AFTER the temp file is written but
+  // BEFORE the rename completes must never touch the final path, so a reader always sees either
+  // the old complete file or the new complete file, never a partial/torn write.
+  it('leaves the original file untouched when the rename step fails after the temp write succeeds', async () => {
+    const { apis, text } = makeAtomicWriteFake();
+    text.set('/app/project.json', '{"old":true}');
+    apis.rename = () => Promise.reject(new Error('EBUSY: file is locked'));
+
+    await expect(writeTextFileAtomic(apis, '/app/project.json', '{"new":true}')).rejects.toThrow(
+      /locked/,
+    );
+    expect(text.get('/app/project.json')).toBe('{"old":true}');
+  });
+
+  it('cleans up the orphaned temp file when the rename step fails', async () => {
+    const { apis, text } = makeAtomicWriteFake();
+    apis.rename = () => Promise.reject(new Error('EBUSY: file is locked'));
+    const removeSpy = vi.spyOn(apis, 'remove');
+
+    await expect(writeTextFileAtomic(apis, '/app/project.json', '{"new":true}')).rejects.toThrow(
+      /locked/,
+    );
+
+    expect(removeSpy).toHaveBeenCalledWith(expect.stringContaining('/app/project.json.tmp-'));
+    expect([...text.keys()]).toEqual([]);
+  });
+
+  it('leaves the original file untouched when the temp-file write itself fails', async () => {
+    const { apis, text } = makeAtomicWriteFake();
+    text.set('/app/project.json', '{"old":true}');
+    apis.writeTextFile = () => Promise.reject(new Error('disk full'));
+
+    await expect(writeTextFileAtomic(apis, '/app/project.json', '{"new":true}')).rejects.toThrow(
+      /disk full/,
+    );
+    expect(text.get('/app/project.json')).toBe('{"old":true}');
+  });
+
+  it('does not throw when best-effort cleanup of the orphaned temp file also fails', async () => {
+    const { apis } = makeAtomicWriteFake();
+    apis.rename = () => Promise.reject(new Error('EBUSY: file is locked'));
+    apis.remove = () => Promise.reject(new Error('ENOENT'));
+
+    // The original rename error must still surface — the cleanup failure must not mask it or
+    // throw an unhandled rejection of its own.
+    await expect(writeTextFileAtomic(apis, '/app/project.json', '{"new":true}')).rejects.toThrow(
+      /locked/,
+    );
   });
 });
 

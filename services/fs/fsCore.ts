@@ -16,6 +16,7 @@ export type TauriApis = {
   exists: (path: string) => Promise<boolean>;
   readDir: (path: string) => Promise<{ name?: string; isDirectory?: boolean }[]>;
   remove: (path: string, opts?: { recursive?: boolean }) => Promise<void>;
+  rename: (oldPath: string, newPath: string) => Promise<void>;
   open: (opts?: Record<string, unknown>) => Promise<string | null>;
   save: (opts?: Record<string, unknown>) => Promise<string | null>;
   appDataDir: () => Promise<string>;
@@ -44,6 +45,7 @@ export async function loadTauriApis(): Promise<TauriApis> {
       exists: fsModule.exists,
       readDir: fsModule.readDir as TauriApis['readDir'],
       remove: fsModule.remove,
+      rename: fsModule.rename,
       open: dialogModule.open as TauriApis['open'],
       save: dialogModule.save as TauriApis['save'],
       appDataDir: pathModule.appDataDir,
@@ -76,6 +78,43 @@ export async function retryFs<T>(fn: () => Promise<T>, retries = 2, delayMs = 50
     }
   }
   throw lastError;
+}
+
+// --- Atomic writes (write-temp-then-rename) ---
+// QNBS-v3: prior writers called writeTextFile/writeFile directly against the final path — a crash
+// or power loss mid-write could leave the file truncated/corrupted with no recovery path. Both
+// helpers write to a sibling temp file first, then rename over the final path; rename is atomic on
+// POSIX and NTFS for same-volume same-directory moves, so readers only ever see the old complete
+// file or the new complete file, never a partial one.
+
+async function atomicRename(apis: TauriApis, tmpPath: string, finalPath: string): Promise<void> {
+  try {
+    await retryFs(() => apis.rename(tmpPath, finalPath));
+  } catch (err) {
+    // Best-effort cleanup of the orphaned temp file; the original write error is what matters.
+    await apis.remove(tmpPath).catch(() => {});
+    throw err;
+  }
+}
+
+export async function writeTextFileAtomic(
+  apis: TauriApis,
+  path: string,
+  content: string,
+): Promise<void> {
+  const tmpPath = `${path}.tmp-${crypto.randomUUID()}`;
+  await retryFs(() => apis.writeTextFile(tmpPath, content));
+  await atomicRename(apis, tmpPath, path);
+}
+
+export async function writeFileAtomic(
+  apis: TauriApis,
+  path: string,
+  data: Uint8Array,
+): Promise<void> {
+  const tmpPath = `${path}.tmp-${crypto.randomUUID()}`;
+  await retryFs(() => apis.writeFile(tmpPath, data));
+  await atomicRename(apis, tmpPath, path);
 }
 
 // --- LZ-String compression (mirrors dbService threshold and prefix) ---

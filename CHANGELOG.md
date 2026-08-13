@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Atomic writes for desktop filesystem storage.** Every `services/fs/*Store.ts` writer
+  (project, active-project marker, settings, API keys, snapshots, Codex, RAG vectors, binder
+  assets, images) previously wrote directly to its final path — a crash or power loss mid-write
+  could leave the file truncated/corrupted with no recovery path. New `writeTextFileAtomic`/
+  `writeFileAtomic` helpers (`services/fs/fsCore.ts`) write to a temp sibling first, then
+  atomically rename over the final path, so a reader only ever sees the old complete file or the
+  new complete file, never a partial one. Also fixes a latent capability gap: `fs:allow-read-file`/
+  `fs:allow-write-file`/`fs:allow-rename` were never declared in
+  `src-tauri/capabilities/default.json`, even though `assetFsStore.ts` already called the binary
+  `readFile`/`writeFile` commands they gate.
+
 ## [1.27.0] — 2026-08-13
 
 ### Added

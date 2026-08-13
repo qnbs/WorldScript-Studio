@@ -10,7 +10,13 @@ import { logger } from '../logger';
 import { parseImportedProjectJson } from '../projectImportSchema';
 import { normalizeSaveProjectInputToStoryProject, type SaveProjectInput } from '../storageBackend';
 import { FsAssetStore } from './assetFsStore';
-import { compressData, decompressData, retryFs, sanitizePathSegment } from './fsCore';
+import {
+  compressData,
+  decompressData,
+  retryFs,
+  sanitizePathSegment,
+  writeTextFileAtomic,
+} from './fsCore';
 
 export class FsProjectStore extends FsAssetStore {
   async saveProject(project: SaveProjectInput): Promise<void> {
@@ -36,7 +42,7 @@ export class FsProjectStore extends FsAssetStore {
     }
 
     const projectFile = await apis.join(projectPath, 'project.json');
-    await retryFs(() => apis.writeTextFile(projectFile, compressData(flat)));
+    await writeTextFileAtomic(apis, projectFile, compressData(flat));
     // QNBS-v3 (#332): documented best-effort abort — the project data above already saved; a failed marker write only degrades the next cold-boot's project selection, not worth failing this save over.
     await this.setActiveProjectId(projectId).catch((error) => {
       logger.warn('Failed to persist active-project marker (project save itself succeeded)', {
@@ -54,7 +60,7 @@ export class FsProjectStore extends FsAssetStore {
       await apis.mkdir(configPath, { recursive: true });
     }
     const markerFile = await apis.join(configPath, 'active-project-id.txt');
-    await retryFs(() => apis.writeTextFile(markerFile, projectId));
+    await writeTextFileAtomic(apis, markerFile, projectId);
   }
 
   /**

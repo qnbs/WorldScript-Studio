@@ -27,6 +27,7 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
   exists: (p: string) => fsHolder.current.exists(p),
   readDir: (p: string) => fsHolder.current.readDir(p),
   remove: (p: string, opts?: { recursive?: boolean }) => fsHolder.current.remove(p, opts),
+  rename: (oldPath: string, newPath: string) => fsHolder.current.rename(oldPath, newPath),
 }));
 vi.mock('@tauri-apps/plugin-dialog', () => ({
   open: (opts?: Record<string, unknown>) => fsHolder.current.open(opts),
@@ -95,6 +96,20 @@ function makeFakeFs(): FakeFs {
       for (const k of [...bin.keys()]) if (k.startsWith(`${p}/`)) bin.delete(k);
       return Promise.resolve();
     },
+    // QNBS-v3: atomic-write support (writeTextFileAtomic/writeFileAtomic in fsCore.ts) — a plain
+    // in-memory move from the temp key to the final key, mirroring a real filesystem rename.
+    rename: (oldPath: string, newPath: string) => {
+      if (text.has(oldPath)) {
+        text.set(newPath, text.get(oldPath) as string);
+        text.delete(oldPath);
+      } else if (bin.has(oldPath)) {
+        bin.set(newPath, bin.get(oldPath) as Uint8Array);
+        bin.delete(oldPath);
+      } else {
+        return Promise.reject(new Error(`ENOENT ${oldPath}`));
+      }
+      return Promise.resolve();
+    },
     readDir: (p: string) => Promise.resolve(under(p).map((name) => ({ name, isDirectory: false }))),
     open: () => Promise.resolve(null),
     save: () => Promise.resolve(null),
@@ -155,11 +170,28 @@ describe('FsProjectStore — projects', () => {
     expect(await store.getActiveProjectId()).toBe('p2');
   });
 
+  // QNBS-v3: writeTextFileAtomic (fsCore.ts) integration proof for the highest-stakes writer —
+  // an interrupted save (rename fails after the temp file already has the new content) must never
+  // corrupt/truncate the previously-saved project.json; the old save must remain fully readable.
+  it('leaves the previously-saved project.json intact when an interrupted save fails after the temp write', async () => {
+    await store.saveProject(project as never);
+    expect((await store.loadProject('p1'))?.title).toBe('My Novel');
+
+    fake.apis.rename = () => Promise.reject(new Error('EBUSY: file is locked'));
+    const updated = { ...project, title: 'Renamed Novel' };
+    await expect(store.saveProject(updated as never)).rejects.toThrow(/locked/);
+
+    const reloaded = await store.loadProject('p1');
+    expect(reloaded?.title).toBe('My Novel');
+  });
+
   // QNBS-v3 (#332): a rejected marker write is a documented best-effort abort — it must not fail the project save that already succeeded.
   it('still resolves saveProject and logs a warning when the active-project marker write rejects', async () => {
     const originalWriteTextFile = fake.apis.writeTextFile;
+    // QNBS-v3: writeTextFileAtomic writes to a `active-project-id.txt.tmp-<uuid>` sibling first —
+    // `.includes` (not `.endsWith`) still catches that temp path, failing before the rename step.
     fake.apis.writeTextFile = (p: string, c: string) => {
-      if (p.endsWith('active-project-id.txt')) return Promise.reject(new Error('disk full'));
+      if (p.includes('active-project-id.txt')) return Promise.reject(new Error('disk full'));
       return originalWriteTextFile(p, c);
     };
 

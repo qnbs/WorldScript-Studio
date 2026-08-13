@@ -6,7 +6,7 @@
 
 import { logger } from '../logger';
 import type { BinderAssetMeta, BinderAssetPayload } from '../storageBackend';
-import { retryFs, sanitizePathSegment } from './fsCore';
+import { retryFs, sanitizePathSegment, writeFileAtomic, writeTextFileAtomic } from './fsCore';
 import { FsSnapshotStore } from './snapshotFsStore';
 
 export class FsAssetStore extends FsSnapshotStore {
@@ -23,7 +23,7 @@ export class FsAssetStore extends FsSnapshotStore {
 
     const imageFile = await apis.join(imagesPath, `${sanitizePathSegment(id, 'image')}.png`);
     const cleanBase64 = base64Data.replace(/^data:image\/png;base64,/, '');
-    await retryFs(() => apis.writeTextFile(imageFile, cleanBase64));
+    await writeTextFileAtomic(apis, imageFile, cleanBase64);
   }
 
   async getImage(id: string): Promise<string | null> {
@@ -88,8 +88,8 @@ export class FsAssetStore extends FsSnapshotStore {
     const { dir, binFile, metaFile } = await this.binderAssetPaths(projectId, assetId);
     if (!(await apis.exists(dir))) await apis.mkdir(dir, { recursive: true });
     const metaOut: BinderAssetMeta = { ...meta, byteSize: data.byteLength };
-    await retryFs(() => apis.writeFile(binFile, new Uint8Array(data)));
-    await retryFs(() => apis.writeTextFile(metaFile, JSON.stringify(metaOut)));
+    await writeFileAtomic(apis, binFile, new Uint8Array(data));
+    await writeTextFileAtomic(apis, metaFile, JSON.stringify(metaOut));
   }
 
   async getBinderAsset(projectId: string, assetId: string): Promise<BinderAssetPayload | null> {
