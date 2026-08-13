@@ -138,9 +138,7 @@ export const ToastProvider: FC<{ children: React.ReactNode }> = ({ children }) =
   const dispatch = useAppDispatch();
   const notifications = useAppSelector((state) => state.status.notifications);
 
-  // QNBS-v3 (#332/D5): stable identity so the memoized context value below (and useToast()'s own
-  // memoization) actually holds across ToastProvider re-renders instead of being invalidated by a
-  // fresh function reference every time.
+  // QNBS-v3 (#332/D5): stable identity so the memoized context value below and useToast()'s own memoization actually hold across re-renders.
   const addToast = useCallback(
     (
       type: NotificationType,

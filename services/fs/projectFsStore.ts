@@ -37,8 +37,12 @@ export class FsProjectStore extends FsAssetStore {
 
     const projectFile = await apis.join(projectPath, 'project.json');
     await retryFs(() => apis.writeTextFile(projectFile, compressData(flat)));
-    // QNBS-v3 (#332): records which project was last saved so cold boot can hydrate the right one instead of an arbitrary readDir() entry — best-effort, never fails the save itself.
-    await this.setActiveProjectId(projectId).catch(() => {});
+    // QNBS-v3 (#332): documented best-effort abort — the project data above already saved; a failed marker write only degrades the next cold-boot's project selection, not worth failing this save over.
+    await this.setActiveProjectId(projectId).catch((error) => {
+      logger.warn('Failed to persist active-project marker (project save itself succeeded)', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
   }
 
   /** QNBS-v3 (#332): marker file recording the last-saved project ID, read back at cold boot. */

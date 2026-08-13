@@ -92,6 +92,7 @@ describe('installDesktopTray', () => {
     ).toBe(false);
   });
 
+  // QNBS-v3 (#332): covers the tray's flush-aware Quit item and its custom (not predefined-OS) routing.
   it('creates a tray with localized tooltip and four custom items, including Quit', async () => {
     const ok = await installDesktopTray(
       (k) => `T:${k}`,

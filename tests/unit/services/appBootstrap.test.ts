@@ -91,6 +91,7 @@ describe('loadPersistedRootState', () => {
     expect(result?.project).toBeUndefined();
   });
 
+  // QNBS-v3 (#332): covers desktop boot's active-project restoration — marker preferred, deleted-project marker and no-marker both fall back to the first listed project id.
   it('on desktop with no active-project marker, falls back to the first listed project id', async () => {
     h.isTauri.value = true;
     h.listProjects.mockResolvedValue(['proj-1', 'proj-2']);

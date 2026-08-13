@@ -10,6 +10,7 @@ declare module '@tauri-apps/plugin-updater' {
 
 declare module '@tauri-apps/plugin-process' {
   export function relaunch(): Promise<void>;
+  // QNBS-v3 (#332): typed exit() so App.tsx's quitApp can flush persisted state before a coordinated desktop shutdown.
   export function exit(code?: number): Promise<void>;
 }
 
