@@ -166,6 +166,17 @@ describe('FsProjectStore — projects', () => {
     expect(await store.getActiveProjectId()).toBe('p2');
   });
 
+  // QNBS-v3: empirical regression proof that rename() replaces an existing project.json — a normal
+  // (non-error-injected) repeat save of the same project must succeed and reflect the new content.
+  it('saves the same project twice, with the second save replacing the first', async () => {
+    await store.saveProject(project as never);
+    expect((await store.loadProject('p1'))?.title).toBe('My Novel');
+
+    const updated = { ...project, title: 'Revised Novel' };
+    await store.saveProject(updated as never);
+    expect((await store.loadProject('p1'))?.title).toBe('Revised Novel');
+  });
+
   // QNBS-v3: writeTextFileAtomic integration proof for the highest-stakes writer — an interrupted save (rename fails after the temp file has the new content) must never corrupt/truncate the previously-saved project.json.
   it('leaves the previously-saved project.json intact when an interrupted save fails after the temp write', async () => {
     await store.saveProject(project as never);

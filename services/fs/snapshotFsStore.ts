@@ -42,6 +42,7 @@ export class FsSnapshotStore extends FsCodexStore {
       data: compressData(data),
     };
     const snapshotFile = await apis.join(snapshotsPath, `${id}.json`);
+    // QNBS-v3: atomic write — a crash/power-loss mid-write must never leave a snapshot truncated.
     await writeTextFileAtomic(apis, snapshotFile, JSON.stringify(envelope));
     return id;
   }

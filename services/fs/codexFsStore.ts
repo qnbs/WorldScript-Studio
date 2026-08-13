@@ -25,6 +25,7 @@ export class FsCodexStore extends FsSettingsStore {
     const codexDir = await apis.join(appDataPath, 'projects', safeId, 'codex');
     if (!(await apis.exists(codexDir))) await apis.mkdir(codexDir, { recursive: true });
     const codexFile = await apis.join(codexDir, 'codex.snap');
+    // QNBS-v3: atomic write — a crash/power-loss mid-write must never leave codex.snap truncated.
     await writeTextFileAtomic(apis, codexFile, compressData(codex));
   }
 
@@ -64,6 +65,7 @@ export class FsCodexStore extends FsSettingsStore {
     const codexDir = await apis.join(appDataPath, 'projects', safeId, 'codex');
     if (!(await apis.exists(codexDir))) await apis.mkdir(codexDir, { recursive: true });
     const vectorsFile = await apis.join(codexDir, 'vectors.snap');
+    // QNBS-v3: atomic write — same crash-safety rationale as saveStoryCodex above.
     await writeTextFileAtomic(apis, vectorsFile, compressData(vectors));
   }
 
