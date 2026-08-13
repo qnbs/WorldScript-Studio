@@ -19,6 +19,12 @@ vi.mock('../../../../services/storage/storageEncryptionService', async (importOr
   return {
     ...actual,
     hasPassphraseSentinel: () => Promise.resolve(cryptoState.sentinelConfigured),
+    assertSecureStorageReadable: () => {
+      if (cryptoState.sentinelConfigured && !cryptoState.activeKey) {
+        return Promise.reject(new actual.IdbStorageLockedError());
+      }
+      return Promise.resolve(cryptoState.sentinelConfigured);
+    },
     resolveProtectedWriteKey: () => {
       if (cryptoState.activeKey) return Promise.resolve(cryptoState.activeKey);
       if (cryptoState.sentinelConfigured) return Promise.reject(new actual.IdbStorageLockedError());

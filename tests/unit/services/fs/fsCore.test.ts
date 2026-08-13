@@ -38,6 +38,12 @@ vi.mock('../../../../services/storage/storageEncryptionService', async (importOr
   return {
     ...actual,
     hasPassphraseSentinel: () => Promise.resolve(cryptoState.sentinelConfigured),
+    assertSecureStorageReadable: () => {
+      if (cryptoState.sentinelConfigured && !cryptoState.activeKey) {
+        return Promise.reject(new actual.IdbStorageLockedError());
+      }
+      return Promise.resolve(cryptoState.sentinelConfigured);
+    },
     resolveProtectedWriteKey: async () => {
       const delay = cryptoState.keyResolutionDelaysMs.shift();
       if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
@@ -48,7 +54,10 @@ vi.mock('../../../../services/storage/storageEncryptionService', async (importOr
   };
 });
 
-import { StorageEncryptionService } from '../../../../services/storage/storageEncryptionService';
+import {
+  SecureRecordCorruptError,
+  StorageEncryptionService,
+} from '../../../../services/storage/storageEncryptionService';
 
 beforeEach(() => {
   cryptoState.activeKey = null;
@@ -391,6 +400,23 @@ describe('protectTextValue / unprotectTextValue / writeProtectedTextFileAtomic /
     const protectedValue = await protectTextValue('secret');
     cryptoState.activeKey = null; // sentinelConfigured stays true — locked, not disabled
     await expect(unprotectTextValue(protectedValue)).rejects.toThrow(/storage is locked/i);
+  });
+
+  it('does not expose legacy plaintext while a configured library is locked', async () => {
+    cryptoState.sentinelConfigured = true;
+
+    await expect(unprotectTextValue('legacy plaintext')).rejects.toThrow(/storage is locked/i);
+  });
+
+  it('reports structurally valid ciphertext with a bad authentication tag as corruption', async () => {
+    await enableTestPassphrase();
+    const protectedValue = JSON.parse(await protectTextValue('secret')) as { data: string };
+    const finalByte = protectedValue.data.endsWith('A') ? 'B' : 'A';
+    protectedValue.data = `${protectedValue.data.slice(0, -1)}${finalByte}`;
+
+    await expect(unprotectTextValue(JSON.stringify(protectedValue))).rejects.toBeInstanceOf(
+      SecureRecordCorruptError,
+    );
   });
 
   it('writeProtectedTextFileAtomic + readProtectedTextFile round-trip through the filesystem, encrypted', async () => {

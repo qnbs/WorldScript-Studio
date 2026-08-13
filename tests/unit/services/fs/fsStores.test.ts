@@ -21,6 +21,12 @@ vi.mock('../../../../services/storage/storageEncryptionService', async (importOr
   return {
     ...actual,
     hasPassphraseSentinel: () => Promise.resolve(cryptoState.sentinelConfigured),
+    assertSecureStorageReadable: () => {
+      if (cryptoState.sentinelConfigured && !cryptoState.activeKey) {
+        return Promise.reject(new actual.IdbStorageLockedError());
+      }
+      return Promise.resolve(cryptoState.sentinelConfigured);
+    },
     resolveProtectedWriteKey: () => {
       if (cryptoState.activeKey) return Promise.resolve(cryptoState.activeKey);
       if (cryptoState.sentinelConfigured) return Promise.reject(new actual.IdbStorageLockedError());
@@ -62,6 +68,7 @@ import { FsProjectStore } from '../../../../services/fs/projectFsStore';
 import { logger } from '../../../../services/logger';
 import {
   IdbStorageLockedError,
+  SecureRecordCorruptError,
   StorageEncryptionService,
 } from '../../../../services/storage/storageEncryptionService';
 
@@ -207,6 +214,18 @@ describe('FsProjectStore — projects', () => {
     cryptoState.activeKey = null; // simulate session lock; sentinelConfigured stays true
 
     await expect(store.loadProject('p1')).rejects.toBeInstanceOf(IdbStorageLockedError);
+  });
+
+  it('propagates authenticated-ciphertext corruption instead of returning a missing project', async () => {
+    await enableTestPassphrase();
+    await store.saveProject(project as never);
+    const filePath = '/app/projects/p1/project.json';
+    const envelope = JSON.parse(fake.text.get(filePath) as string) as { data: string };
+    const finalByte = envelope.data.endsWith('A') ? 'B' : 'A';
+    envelope.data = `${envelope.data.slice(0, -1)}${finalByte}`;
+    fake.text.set(filePath, JSON.stringify(envelope));
+
+    await expect(store.loadProject('p1')).rejects.toBeInstanceOf(SecureRecordCorruptError);
   });
 
   it('leaves project.json as plaintext when no at-rest passphrase is configured (unchanged default)', async () => {

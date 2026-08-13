@@ -102,6 +102,15 @@ export class SecureRecordCorruptError extends Error {
   }
 }
 
+/** True only for storage states callers must propagate instead of treating as absent data. */
+export function isStorageAccessError(error: unknown): boolean {
+  if (error instanceof IdbStorageLockedError || error instanceof SecureRecordCorruptError)
+    return true;
+  if (!(error instanceof Error) || !('code' in error)) return false;
+  const code = (error as { code?: unknown }).code;
+  return code === 'ENCRYPTION_MIGRATION_IN_PROGRESS' || code === 'ENCRYPTION_RECOVERY_REQUIRED';
+}
+
 /** Raised instead of risking an incomplete cross-database disable or passphrase rotation. */
 export class IdbEncryptionMigrationRequiredError extends Error {
   readonly code = 'ENCRYPTION_MIGRATION_REQUIRED' as const;

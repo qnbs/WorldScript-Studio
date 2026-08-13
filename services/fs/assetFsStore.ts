@@ -8,7 +8,7 @@
  */
 
 import { logger } from '../logger';
-import { IdbStorageLockedError } from '../storage/storageEncryptionService';
+import { isStorageAccessError } from '../storage/storageEncryptionService';
 import type { BinderAssetMeta, BinderAssetPayload } from '../storageBackend';
 import {
   readProtectedTextFile,
@@ -55,7 +55,7 @@ export class FsAssetStore extends FsSnapshotStore {
       return `data:image/png;base64,${base64Data}`;
     } catch (error) {
       // QNBS-v3: a locked session is not "no image" — never conflate the two.
-      if (error instanceof IdbStorageLockedError) throw error;
+      if (isStorageAccessError(error)) throw error;
       logger.error('Failed to load image:', error);
       return null;
     }

@@ -5,10 +5,13 @@
 
 import LZString from 'lz-string';
 import { logger } from '../logger';
+import { withProtectedWriteAdmission } from '../storage/protectedWriteAdmission';
 import {
+  assertSecureStorageReadable,
   idbDecryptWithKey,
   idbEncryptWithKey,
   resolveProtectedWriteKey,
+  SecureRecordCorruptError,
 } from '../storage/storageEncryptionService';
 
 // Dynamic imports for Tauri v2 plugin APIs — fail gracefully in browser
@@ -206,11 +209,13 @@ function parseProtectedTextEnvelope(raw: string): ProtectedTextEnvelope | null {
  * never need to decrypt (mirrors the IDB path's own "encryption applied at the value level" design).
  */
 export async function protectTextValue(plaintext: string): Promise<string> {
-  const key = await resolveProtectedWriteKey();
-  if (!key) return plaintext;
-  return JSON.stringify({
-    scheme: PROTECTED_TEXT_SCHEME,
-    data: bytesToBase64(await idbEncryptWithKey(key, plaintext)),
+  return withProtectedWriteAdmission(async () => {
+    const key = await resolveProtectedWriteKey();
+    if (!key) return plaintext;
+    return JSON.stringify({
+      scheme: PROTECTED_TEXT_SCHEME,
+      data: bytesToBase64(await idbEncryptWithKey(key, plaintext)),
+    });
   });
 }
 
@@ -221,14 +226,21 @@ export async function protectTextValue(plaintext: string): Promise<string> {
  * back to treating it as absent.
  */
 export async function unprotectTextValue(stored: string): Promise<string> {
-  const envelope = parseProtectedTextEnvelope(stored);
-  if (!envelope) return stored;
-  const key = await resolveProtectedWriteKey();
-  if (!key) {
-    // Sentinel was cleared/disabled since this value was saved — nothing left to decrypt with.
-    throw new Error('Protected value exists but at-rest encryption is no longer configured');
-  }
-  return idbDecryptWithKey<string>(key, base64ToBytes(envelope.data));
+  return withProtectedWriteAdmission(async () => {
+    // QNBS-v3: gate every fs value before parsing so a configured-but-locked library never exposes legacy plaintext while a filesystem migration is active.
+    await assertSecureStorageReadable();
+    const envelope = parseProtectedTextEnvelope(stored);
+    if (!envelope) return stored;
+    const key = await resolveProtectedWriteKey();
+    if (!key) {
+      throw new Error('Protected value exists but at-rest encryption is no longer configured');
+    }
+    try {
+      return await idbDecryptWithKey<string>(key, base64ToBytes(envelope.data));
+    } catch {
+      throw new SecureRecordCorruptError();
+    }
+  });
 }
 
 /** Whole-file variant of protectTextValue, for stores with no separate plaintext metadata to preserve. */

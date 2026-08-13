@@ -19,6 +19,7 @@ import {
   IdbStorageLockedError,
   idbDecryptWithKey,
   idbEncryptWithKey,
+  isStorageAccessError,
   resolveProtectedWriteKey,
 } from '../storage/storageEncryptionService';
 import type { TauriApis } from './fsCore';
@@ -77,7 +78,7 @@ export class FsSettingsStore extends FsCore {
       return normalizePersistedSettings(parsed);
     } catch (error) {
       // QNBS-v3: a locked session is not "no settings" — propagate so appBootstrap.ts's Promise.all surfaces it to index.tsx's existing IdbStorageLockedError catch (unlock modal + retry) instead of silently hydrating defaults.
-      if (error instanceof IdbStorageLockedError) throw error;
+      if (isStorageAccessError(error)) throw error;
       logger.error('Failed to load settings:', error);
       return null;
     }
