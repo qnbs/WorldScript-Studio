@@ -33,6 +33,11 @@
   "worlds.edit.notes": "Примечания",
   "worlds.editorTabsAriaLabel": "Вкладки редактора мира",
   "worlds.error.imageFailed": "Не удалось создать изображение атмосферы. Попробуйте добавить больше деталей в описание мира или проверьте подключение.",
+  "worlds.heuristic.culture": "Describe the peoples, beliefs, and daily life shaped by {{concept}}.",
+  "worlds.heuristic.description": "A world defined by its central premise: {{concept}}.",
+  "worlds.heuristic.geography": "Outline the major regions, climates, and natural features of {{concept}}.",
+  "worlds.heuristic.magicSystem": "Define the rules, costs, and limits of power in {{concept}}.",
+  "worlds.heuristic.name": "New World",
   "worlds.loading.profile": "Создание подробного профиля мира...",
   "worlds.newWorldName": "Новый Свет",
   "worlds.noWorlds": "Миры еще не созданы.",
@@ -50,10 +55,5 @@
   "worlds.tabs.timeline": "История и хронология",
   "worlds.title": "Мировой Атлас",
   "worlds.uploadImage": "Загрузить изображение",
-  "worlds.yourWorlds": "Ваши миры",
-  "worlds.heuristic.name": "New World",
-  "worlds.heuristic.description": "A world defined by its central premise: {{concept}}.",
-  "worlds.heuristic.geography": "Outline the major regions, climates, and natural features of {{concept}}.",
-  "worlds.heuristic.magicSystem": "Define the rules, costs, and limits of power in {{concept}}.",
-  "worlds.heuristic.culture": "Describe the peoples, beliefs, and daily life shaped by {{concept}}."
+  "worlds.yourWorlds": "Ваши миры"
 }

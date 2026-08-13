@@ -33,6 +33,11 @@
   "worlds.edit.notes": "笔记",
   "worlds.editorTabsAriaLabel": "世界 editor tabs",
   "worlds.error.imageFailed": "氛围图像生成失败。请尝试在世界描述中添加更多详细信息或检查您的连接。",
+  "worlds.heuristic.culture": "Describe the peoples, beliefs, and daily life shaped by {{concept}}.",
+  "worlds.heuristic.description": "A world defined by its central premise: {{concept}}.",
+  "worlds.heuristic.geography": "Outline the major regions, climates, and natural features of {{concept}}.",
+  "worlds.heuristic.magicSystem": "Define the rules, costs, and limits of power in {{concept}}.",
+  "worlds.heuristic.name": "New World",
   "worlds.loading.profile": "正在生成详细的世界概况...",
   "worlds.newWorldName": "New 世界",
   "worlds.noWorlds": "尚未创建任何世界。",
@@ -50,10 +55,5 @@
   "worlds.tabs.timeline": "历史与时间表",
   "worlds.title": "世界 Atlas",
   "worlds.uploadImage": "上传图片",
-  "worlds.yourWorlds": "你的世界",
-  "worlds.heuristic.name": "New World",
-  "worlds.heuristic.description": "A world defined by its central premise: {{concept}}.",
-  "worlds.heuristic.geography": "Outline the major regions, climates, and natural features of {{concept}}.",
-  "worlds.heuristic.magicSystem": "Define the rules, costs, and limits of power in {{concept}}.",
-  "worlds.heuristic.culture": "Describe the peoples, beliefs, and daily life shaped by {{concept}}."
+  "worlds.yourWorlds": "你的世界"
 }

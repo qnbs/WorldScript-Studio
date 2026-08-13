@@ -67,6 +67,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Migration verification no longer re-scans already-verified stores on resume**, and a batch that
   reports progress without advancing its durable cursor is now rejected instead of being able to
   replay the same records indefinitely. (#337)
+- **AI Writing Studio manuscript text was unreadable, with selection/caret position drifting from
+  the visible text.** `ContextPanel.tsx`'s real (input-handling) textarea sat invisibly over a
+  separate visible text-mirror layer; the shared `Textarea` primitive's unconditional
+  `backdrop-blur-md` blurred the mirror text underneath, the two layers resolved different concrete
+  font stacks for the same font setting (different glyph metrics → position drift), and neither
+  layer synced its scroll position with the other. `components/manuscript/ManuscriptEditor.tsx`
+  (the primary writing surface) used the same fragile pattern and carried the same blur/scroll-sync
+  defect. Fixed via a new `Textarea` `variant="overlay"` (no glass background/blur/reserved
+  padding/mic button) and a single shared `services/editorTypography.ts` font-stack resolver used
+  by both the real textarea and its mirror in both components, plus one-directional scroll sync
+  from each real textarea to its mirror. (#341)
+- **Overlay-variant textareas dropped RTL font resolution, custom-font selection, and dictation.**
+  `resolveEditorFontFamily` now also takes the active text direction and `settings.customFont?.name`
+  (previously every `editorFont: 'custom'` silently rendered as JetBrains Mono, and RTL sessions used
+  LTR font stacks); the new `DictationButton` component restores the microphone entry point that
+  `variant="overlay"` had unconditionally removed from both Writer Studio and the manuscript editor,
+  rendered as a sibling above the mirror instead of inside `Textarea` itself. Also fixes two related
+  scroll-sync gaps: the mirror now resets to the top on a section switch instead of showing a stale
+  offset, and re-syncs after debounced/deferred content growth instead of staying clamped to a
+  since-invalid scroll range. (#341, #344)
 - **Voice model download progress bar looked stuck at ~95% for most of the download.**
   `voiceCommandService.ts`'s download progress handler treated transformers.js's `progress` field
   as if it were already a 0-1 fraction; it's actually 0-100 (percent), so the existing
