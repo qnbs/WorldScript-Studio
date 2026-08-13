@@ -16,6 +16,7 @@ const h = vi.hoisted(() => ({
   loadSettings: vi.fn(),
   listProjects: vi.fn(),
   loadProject: vi.fn(),
+  getActiveProjectId: vi.fn(),
 }));
 
 vi.mock('../../../services/tauriRuntime', () => ({
@@ -31,6 +32,7 @@ vi.mock('../../../services/storageService', () => ({
     loadSettings: h.loadSettings,
     listProjects: h.listProjects,
     loadProject: h.loadProject,
+    getActiveProjectId: h.getActiveProjectId,
   },
 }));
 
@@ -44,6 +46,7 @@ describe('loadPersistedRootState', () => {
     h.loadSettings.mockResolvedValue(null);
     h.listProjects.mockResolvedValue([]);
     h.loadProject.mockResolvedValue(null);
+    h.getActiveProjectId.mockResolvedValue(null);
   });
 
   it('on the web, reads via dbService.loadState() and never touches storageService', async () => {
@@ -88,9 +91,30 @@ describe('loadPersistedRootState', () => {
     expect(result?.project).toBeUndefined();
   });
 
-  it('on desktop, single-project mode: loads only the first listed project id', async () => {
+  it('on desktop with no active-project marker, falls back to the first listed project id', async () => {
     h.isTauri.value = true;
     h.listProjects.mockResolvedValue(['proj-1', 'proj-2']);
+    h.getActiveProjectId.mockResolvedValue(null);
+    h.loadProject.mockResolvedValue({ id: 'proj-1', title: 'First' });
+    await loadPersistedRootState();
+    expect(h.loadProject).toHaveBeenCalledTimes(1);
+    expect(h.loadProject).toHaveBeenCalledWith('proj-1');
+  });
+
+  it('on desktop, prefers the active-project marker over the first listed project id', async () => {
+    h.isTauri.value = true;
+    h.listProjects.mockResolvedValue(['proj-1', 'proj-2']);
+    h.getActiveProjectId.mockResolvedValue('proj-2');
+    h.loadProject.mockResolvedValue({ id: 'proj-2', title: 'Second' });
+    await loadPersistedRootState();
+    expect(h.loadProject).toHaveBeenCalledTimes(1);
+    expect(h.loadProject).toHaveBeenCalledWith('proj-2');
+  });
+
+  it('on desktop, falls back to the first listed project id when the marker points to a deleted project', async () => {
+    h.isTauri.value = true;
+    h.listProjects.mockResolvedValue(['proj-1', 'proj-2']);
+    h.getActiveProjectId.mockResolvedValue('proj-deleted');
     h.loadProject.mockResolvedValue({ id: 'proj-1', title: 'First' });
     await loadPersistedRootState();
     expect(h.loadProject).toHaveBeenCalledTimes(1);

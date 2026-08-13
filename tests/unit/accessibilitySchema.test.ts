@@ -11,8 +11,7 @@ describe('accessibilitySchema', () => {
     expect(a.liveRegionVerbosity).toBe('normal');
     expect(a.comfortableTargets).toBe(false);
     expect(a.focusIndicators).toBe(true);
-    // QNBS-v3 (#332/D4): manual reduced-transparency toggle defaults off — it must not silently
-    // change anyone's visual design on upgrade.
+    // QNBS-v3 (#332/D4): manual reduced-transparency toggle defaults off — must not silently change anyone's visual design on upgrade.
     expect(a.reducedTransparency).toBe(false);
   });
 

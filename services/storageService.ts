@@ -82,6 +82,11 @@ class StorageManager {
     return backend.listProjects();
   }
 
+  async getActiveProjectId(): Promise<string | null> {
+    const backend = await this.getBackend();
+    return (await backend.getActiveProjectId?.()) ?? null;
+  }
+
   async deleteProject(projectId: string): Promise<void> {
     const backend = await this.getBackend();
     return backend.deleteProject(projectId);

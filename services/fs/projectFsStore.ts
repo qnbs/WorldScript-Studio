@@ -37,6 +37,39 @@ export class FsProjectStore extends FsAssetStore {
 
     const projectFile = await apis.join(projectPath, 'project.json');
     await retryFs(() => apis.writeTextFile(projectFile, compressData(flat)));
+    // QNBS-v3 (#332): records which project was last saved so cold boot can hydrate the right one instead of an arbitrary readDir() entry — best-effort, never fails the save itself.
+    await this.setActiveProjectId(projectId).catch(() => {});
+  }
+
+  /** QNBS-v3 (#332): marker file recording the last-saved project ID, read back at cold boot. */
+  private async setActiveProjectId(projectId: string): Promise<void> {
+    const apis = await this.getApis();
+    const appDataPath = await this.ensureAppDataPath();
+    const configPath = await apis.join(appDataPath, 'config');
+    if (!(await apis.exists(configPath))) {
+      await apis.mkdir(configPath, { recursive: true });
+    }
+    const markerFile = await apis.join(configPath, 'active-project-id.txt');
+    await retryFs(() => apis.writeTextFile(markerFile, projectId));
+  }
+
+  /**
+   * The last-saved project's ID, or null if no marker exists yet (fresh install, or one that
+   * predates this marker — callers should fall back to a deterministic choice among
+   * `listProjects()`'s results, not assume null means no projects exist).
+   */
+  async getActiveProjectId(): Promise<string | null> {
+    try {
+      const apis = await this.getApis();
+      const appDataPath = await this.ensureAppDataPath();
+      const markerFile = await apis.join(appDataPath, 'config', 'active-project-id.txt');
+      if (!(await apis.exists(markerFile))) return null;
+      const id = (await retryFs(() => apis.readTextFile(markerFile))).trim();
+      return id || null;
+    } catch (error) {
+      logger.error('Failed to read active project marker:', error);
+      return null;
+    }
   }
 
   async loadProject(projectId: string): Promise<StoryProject | null> {

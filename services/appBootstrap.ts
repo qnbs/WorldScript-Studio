@@ -19,12 +19,14 @@ export async function loadPersistedRootState(): Promise<PersistedRootState | und
     const loadedState = await dbService.loadState();
     return loadedState as PersistedRootState | undefined;
   }
-  const [settings, projectIds] = await Promise.all([
+  const [settings, projectIds, activeProjectId] = await Promise.all([
     storageService.loadSettings(),
     storageService.listProjects(),
+    storageService.getActiveProjectId(),
   ]);
-  // QNBS-v3: single-project mode on desktop (mirrors IdbProjectStore's own "single active project" contract).
-  const projectId = projectIds[0];
+  // QNBS-v3 (#332): prefer the last-saved project's marker over projectIds[0] — readDir() order isn't recency, so an arbitrary first entry could hydrate a stale project. Falls back to projectIds[0] for pre-marker installs or a since-deleted active project.
+  const projectId =
+    activeProjectId && projectIds.includes(activeProjectId) ? activeProjectId : projectIds[0];
   const project = projectId ? await storageService.loadProject(projectId) : null;
   if (!settings && !project) return undefined;
   const result: PersistedRootState = {};

@@ -399,19 +399,11 @@ export const useSettingsView = () => {
     clearIdbEncryptionKey();
     setEncryptionReady(false);
     toast.info(t('settings.privacy.encryptionLockedStatus'));
-    // QNBS-v3: without this, a subsequent autosave silently fails closed (no route back to the
-    // unlock UI existed) until the user manually reopens Settings and unlocks — surface the same
-    // global unlock modal App.tsx shows on a locked cold start.
+    // QNBS-v3: without this, a subsequent autosave silently fails closed with no route back to the unlock UI — surface the same global unlock modal App.tsx shows on a locked cold start.
     setIdbUnlockOpen(true);
   }, [toast, t, setIdbUnlockOpen]);
 
-  // QNBS-v3 (#332/D5): stabilize the context value's identity — without this, every render of
-  // SettingsView (even ones caused by unrelated global state, e.g. a background AI/autosave write)
-  // handed SettingsViewContext a brand-new object, forcing every consumer in the Settings tree to
-  // re-render regardless of whether anything Settings-relevant actually changed. `project` (and its
-  // dependents `characters`/`worlds`/`projectSize`/`currentWordCount`) is a real dependency here, not
-  // spurious — handleExport/handleCreateSnapshot need the current project — so it still re-memoizes
-  // on genuine project edits; this only removes re-renders that weren't tied to any of these.
+  // QNBS-v3 (#332/D5): stabilizes the context value's identity so unrelated global-state renders (e.g. a background autosave write) don't force every Settings-tree consumer to re-render.
   return useMemo(
     () => ({
       t,

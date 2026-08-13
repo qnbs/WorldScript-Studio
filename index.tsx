@@ -254,7 +254,11 @@ async function bootApp(): Promise<void> {
     // QNBS-v3: visibilitychange-Flush reduziert Datenverlust, wenn Tabs abrupt in den Hintergrund wechseln.
     const flushOnHidden = () => {
       if (document.visibilityState !== 'hidden') return;
-      void flushPersistedState(store.getState() as RootState);
+      flushPersistedState(store.getState() as RootState).catch((error) => {
+        logger.warn('Best-effort visibilitychange flush failed', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
     };
     document.addEventListener('visibilitychange', flushOnHidden);
 

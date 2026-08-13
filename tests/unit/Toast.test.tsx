@@ -204,4 +204,13 @@ describe('useToast', () => {
     });
     expect(mockDispatch).toHaveBeenCalled();
   });
+
+  // QNBS-v3 (#332/D5): consumers (e.g. useSettingsView's own context memoization) depend on this
+  // staying stable across unrelated re-renders — a fresh object every render defeated their useMemo.
+  it('keeps the same object reference across a re-render', () => {
+    const { result, rerender } = renderHook(() => useToast(), { wrapper });
+    const first = result.current;
+    rerender();
+    expect(result.current).toBe(first);
+  });
 });

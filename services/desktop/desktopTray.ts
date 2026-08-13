@@ -20,6 +20,8 @@ const TRAY_ID = 'worldscript-main-tray';
 
 export type MenuTranslate = (key: string) => string;
 export type TrayCommandRunner = (commandId: string) => void;
+/** Flushes pending state, then exits the process — must not resolve if it did not actually quit. */
+export type DesktopQuitFn = () => Promise<void>;
 
 let trayInstalled = false;
 // QNBS-v3 (#190): in-flight guard. `trayInstalled` only flips true AFTER the async imports + tray
@@ -45,6 +47,7 @@ export function _resetTrayInstalledForTest(): void {
 export async function installDesktopTray(
   t: MenuTranslate,
   runCommand: TrayCommandRunner,
+  quitApp: DesktopQuitFn,
 ): Promise<boolean> {
   if (!isTauriRuntime() || trayInstalling) return false;
   trayInstalling = true;
@@ -76,7 +79,14 @@ export async function installDesktopTray(
           action: () => runCommand(DESKTOP_COMMANDS.commandPalette),
         }),
         await PredefinedMenuItem.new({ item: 'Separator' }),
-        await PredefinedMenuItem.new({ item: 'Quit' }),
+        // QNBS-v3 (#332/D3): custom item (not PredefinedMenuItem) so Quit routes through quitApp's flush — the predefined item calls the OS exit directly, bypassing onCloseRequested entirely.
+        await MenuItem.new({
+          id: 'tray-quit',
+          text: t('desktop.tray.quit'),
+          action: () => {
+            void quitApp();
+          },
+        }),
       ],
     });
 
@@ -121,7 +131,8 @@ export async function installDesktopTray(
  * QNBS-v3 (#332/D3): when the window is actually allowed to close (minimize-to-tray off, the
  * default), `flushPendingState` is awaited first — Tauri's `onCloseRequested` supports and awaits
  * async handlers before the window closes — so the 1s debounced project/settings autosave can't be
- * silently dropped by a quit that lands mid-debounce.
+ * silently dropped by a quit that lands mid-debounce. A rejected flush keeps the window open
+ * (fail closed) instead of letting a failed save through as if it were a successful pre-close save.
  */
 export async function installCloseToTray(
   shouldMinimizeToTray: () => boolean,
@@ -137,7 +148,14 @@ export async function installCloseToTray(
         void win.hide();
         return;
       }
-      await flushPendingState();
+      try {
+        await flushPendingState();
+      } catch (err) {
+        event.preventDefault();
+        log.warn('Pre-close flush failed — keeping the window open instead of quitting', {
+          error: String(err),
+        });
+      }
     });
   } catch (err) {
     log.warn('Failed to install close-to-tray handler', { error: String(err) });

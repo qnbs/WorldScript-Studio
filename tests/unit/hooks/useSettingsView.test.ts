@@ -12,13 +12,10 @@ const { mockImportMatch, mockRestoreMatch, stableT, stableToast, stableEmptyArra
   () => ({
     mockImportMatch: vi.fn((_: unknown) => true),
     mockRestoreMatch: vi.fn((_: unknown) => true),
-    // QNBS-v3 (#332/D5): the real I18nContext wraps `t` in useCallback (stable across renders); a
-    // fresh arrow function here would defeat the useSettingsView useMemo identity test below.
+    // QNBS-v3 (#332/D5): the real I18nContext memoizes `t` — a fresh arrow function here would defeat the useSettingsView useMemo identity test below.
     stableT: (key: string) => key,
     stableToast: { info: vi.fn(), success: vi.fn(), error: vi.fn() },
-    // QNBS-v3 (#332/D5): real EntityAdapter selectAll() selectors are memoized and return the same
-    // array reference when the underlying entities haven't changed — a fresh `[]` per call here
-    // would defeat the identity test below for a reason unrelated to what it's testing.
+    // QNBS-v3 (#332/D5): real EntityAdapter selectAll() selectors return the same array reference when entities are unchanged — a fresh `[]` here would defeat the identity test for an unrelated reason.
     stableEmptyArray: [] as unknown[],
   }),
 );
@@ -184,10 +181,7 @@ vi.mock('../../../features/status/statusSlice', () => ({
 }));
 
 vi.mock('../../../components/ui/Toast', () => ({
-  // QNBS-v3 (#332/D5): a stable reference here (not a fresh literal per call, unlike the real
-  // useToast()) isolates the useMemo identity test below to useSettingsView's own dependency
-  // wiring — the real useToast() itself returning a fresh object every render is a separate,
-  // pre-existing gap outside this hook's file, not something this test asserts is already fixed.
+  // QNBS-v3 (#332/D5): a stable reference here isolates the identity test below to useSettingsView's own dependency wiring — production useToast() is now separately memoized and covered by tests/unit/Toast.test.tsx's own reference-stability test.
   useToast: () => stableToast,
 }));
 
@@ -610,12 +604,7 @@ describe('handleLockSession', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// QNBS-v3 (#332/D5): the returned object's identity must stay stable across a re-render
-// unless one of its actual inputs changed — otherwise SettingsViewContext.Provider hands a new
-// value to every consumer on every render, forcing the whole Settings tree to re-render even when
-// nothing settings-relevant changed (e.g. an unrelated background write elsewhere in the app).
-// ---------------------------------------------------------------------------
+// QNBS-v3 (#332/D5): the returned object's identity must stay stable across a re-render with unchanged inputs, or every Settings-tree consumer re-renders on any unrelated global-state change.
 describe('memoized return value', () => {
   it('keeps the same object reference across a re-render with unchanged inputs', () => {
     const { result, rerender } = renderHook(() => useSettingsView());

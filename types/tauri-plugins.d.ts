@@ -10,6 +10,7 @@ declare module '@tauri-apps/plugin-updater' {
 
 declare module '@tauri-apps/plugin-process' {
   export function relaunch(): Promise<void>;
+  export function exit(code?: number): Promise<void>;
 }
 
 declare module '@tauri-apps/plugin-shell' {

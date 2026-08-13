@@ -137,6 +137,18 @@ describe('FsProjectStore — projects', () => {
     expect(await store.loadProject('nope')).toBeNull();
     expect(await store.listProjects()).toEqual([]);
   });
+
+  // QNBS-v3 (#332): saveProject records the active-project marker so cold boot doesn't pick an arbitrary readDir() entry.
+  it('records the saved project as the active-project marker, updating it on each subsequent save', async () => {
+    expect(await store.getActiveProjectId()).toBeNull();
+
+    await store.saveProject(project as never);
+    expect(await store.getActiveProjectId()).toBe('p1');
+
+    const secondProject = { ...project, id: 'p2', title: 'Second Novel' };
+    await store.saveProject(secondProject as never);
+    expect(await store.getActiveProjectId()).toBe('p2');
+  });
 });
 
 describe('FsSettingsStore — settings + encrypted API keys', () => {

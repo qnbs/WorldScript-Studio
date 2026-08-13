@@ -1009,15 +1009,7 @@ body.is-desktop
   scrollbar-gutter: stable;
 }
 
-/* QNBS-v3 (D4 / C-6): honor the OS reduced-transparency accessibility preference
-   on desktop by making the token-driven glass layer opaque (drops the GPU cost of
-   compositing translucent surfaces). QNBS-v3 (#332/D4): also neutralize direct
-   `backdrop-blur-*` Tailwind utilities (24 files, incl. shared Input/Textarea/Checkbox/
-   RadioGroup/Card/Modal/Drawer/Toast primitives) via an attribute selector — the token
-   swap above never touched these since they're static utility classes, not token-driven.
-   No `!important` needed: Tailwind v4's `@import "tailwindcss"` emits utilities inside a
-   `utilities` cascade layer, and unlayered CSS (this file's plain rules) always outranks
-   any layered rule regardless of specificity or source order. */
+/* QNBS-v3 (D4/C-6/#332): honors OS reduced-transparency by making the token-driven glass layer opaque and neutralizing direct backdrop-blur-* utilities (24 files) the token swap alone doesn't reach; unlayered CSS already outranks Tailwind's utility layer, so no !important is needed. */
 @media (prefers-reduced-transparency: reduce) {
   body.is-desktop {
     --glass-bg: var(--sc-surface-raised);
@@ -1029,15 +1021,13 @@ body.is-desktop
   }
 }
 
-/* QNBS-v3 (#332/D4): manual "Reduce transparency effects" toggle (Settings › Accessibility) —
-   a self-service relief valve for desktop/Linux users whose OS/DE doesn't expose
-   `prefers-reduced-transparency`, without waiting on a packaged-build performance measurement. */
-body.worldscript-reduced-transparency {
+/* QNBS-v3 (#332/D4): manual "Reduce transparency effects" relief valve for desktop/Linux users whose OS/DE doesn't expose prefers-reduced-transparency; scoped to body.is-desktop like the OS-preference block above since the GPU cost this addresses is WebKitGTK-specific. */
+body.is-desktop.worldscript-reduced-transparency {
   --glass-bg: var(--sc-surface-raised);
   --glass-bg-hover: var(--sc-surface-overlay);
   --glass-border: var(--sc-border-subtle);
 }
-body.worldscript-reduced-transparency [class*="backdrop-blur-"] {
+body.is-desktop.worldscript-reduced-transparency [class*="backdrop-blur-"] {
   backdrop-filter: none;
 }
 
