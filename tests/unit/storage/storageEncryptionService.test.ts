@@ -667,11 +667,11 @@ describe('disable/rotate blocked by a stuck recovery-required journal', () => {
 // migration completes over EMPTY stores; this proves round-tripped content survives both operations.
 describe('production migration round-trip with real data', () => {
   it('preserves an image through rekey then disable', async () => {
-    await setupIdbEncryption('original');
+    await setupIdbEncryption('test-fixture-original-passphrase');
     await dbService.saveImage('recovery-img', 'recovery-content');
     expect(await dbService.getImage('recovery-img')).toBe('recovery-content');
 
-    await rotateIdbPassphrase('original', 'new-pass');
+    await rotateIdbPassphrase('test-fixture-original-passphrase', 'test-fixture-new-passphrase');
     expect(await dbService.getImage('recovery-img')).toBe('recovery-content');
 
     await clearIdbPassphrase();
@@ -696,11 +696,11 @@ describe('production migration round-trip with real data', () => {
       summary: 'A test codex',
     };
 
-    await setupIdbEncryption('original');
+    await setupIdbEncryption('test-fixture-original-passphrase');
     await dbService.saveStoryCodex(codex);
     expect(await dbService.getStoryCodex('recovery-project')).toEqual(codex);
 
-    await rotateIdbPassphrase('original', 'new-pass');
+    await rotateIdbPassphrase('test-fixture-original-passphrase', 'test-fixture-new-passphrase');
     expect(await dbService.getStoryCodex('recovery-project')).toEqual(codex);
 
     await clearIdbPassphrase();
@@ -711,7 +711,7 @@ describe('production migration round-trip with real data', () => {
     const originalBytes = new Uint8Array([1, 2, 3, 4, 5]);
     const meta = { mimeType: 'application/pdf', originalFileName: 'notes.pdf', byteSize: 0 };
 
-    await setupIdbEncryption('original');
+    await setupIdbEncryption('test-fixture-original-passphrase');
     await dbService.saveBinderAsset('proj-1', 'asset-1', originalBytes.buffer, meta);
 
     async function readAssetBytes(): Promise<number[]> {
@@ -722,7 +722,7 @@ describe('production migration round-trip with real data', () => {
 
     expect(await readAssetBytes()).toEqual([1, 2, 3, 4, 5]);
 
-    await rotateIdbPassphrase('original', 'new-pass');
+    await rotateIdbPassphrase('test-fixture-original-passphrase', 'test-fixture-new-passphrase');
     expect(await readAssetBytes()).toEqual([1, 2, 3, 4, 5]);
 
     await clearIdbPassphrase();
@@ -735,11 +735,11 @@ describe('production migration round-trip with real data', () => {
       { id: 'chunk-2', embedding: [0.3, 0.4], text: 'second chunk' },
     ];
 
-    await setupIdbEncryption('original');
+    await setupIdbEncryption('test-fixture-original-passphrase');
     await dbService.saveRagVectors('recovery-project-vec', vectors);
     expect(await dbService.getRagVectors('recovery-project-vec')).toEqual(vectors);
 
-    await rotateIdbPassphrase('original', 'new-pass');
+    await rotateIdbPassphrase('test-fixture-original-passphrase', 'test-fixture-new-passphrase');
     expect(await dbService.getRagVectors('recovery-project-vec')).toEqual(vectors);
 
     await clearIdbPassphrase();
@@ -758,11 +758,11 @@ describe('production migration round-trip with real data', () => {
   // the already-independently-encrypted API-key bytes as if they were plaintext — silently making
   // every stored API key permanently unreadable. This is the regression test for that bug.
   it('does not corrupt a stored provider API key while rekeying then disabling encryption', async () => {
-    await setupIdbEncryption('original');
+    await setupIdbEncryption('test-fixture-original-passphrase');
     await dbService.saveApiKey('openai', 'sk-test-should-survive-migration');
     expect(await dbService.getApiKey('openai')).toBe('sk-test-should-survive-migration');
 
-    await rotateIdbPassphrase('original', 'new-pass');
+    await rotateIdbPassphrase('test-fixture-original-passphrase', 'test-fixture-new-passphrase');
     expect(await dbService.getApiKey('openai')).toBe('sk-test-should-survive-migration');
 
     await clearIdbPassphrase();
@@ -806,16 +806,16 @@ describe('resumeEncryptionMigration (recovery UX)', () => {
   }
 
   it('re-derives keys from passphrases and completes a pending rekey journal', async () => {
-    await setupIdbEncryption('original');
+    await setupIdbEncryption('test-fixture-original-passphrase');
     await dbService.saveImage('recovery-img-2', 'recovery-content-2');
-    const journal = await buildPendingRekeyJournal('new-pass');
+    const journal = await buildPendingRekeyJournal('test-fixture-new-passphrase');
     clearIdbEncryptionKey();
 
     try {
       await expect(
         resumeEncryptionMigration(journal, {
-          sourcePassphrase: 'original',
-          targetPassphrase: 'new-pass',
+          sourcePassphrase: 'test-fixture-original-passphrase',
+          targetPassphrase: 'test-fixture-new-passphrase',
         }),
       ).resolves.toBeUndefined();
 
@@ -823,15 +823,17 @@ describe('resumeEncryptionMigration (recovery UX)', () => {
       expect(await dbService.getImage('recovery-img-2')).toBe('recovery-content-2');
 
       clearIdbEncryptionKey();
-      await expect(verifyAndInitIdbEncryption('new-pass')).resolves.toBeUndefined();
+      await expect(
+        verifyAndInitIdbEncryption('test-fixture-new-passphrase'),
+      ).resolves.toBeUndefined();
     } finally {
       await deleteJournalRecordForTest();
     }
   });
 
   it('rejects a wrong source passphrase without mutating the journal or sentinel', async () => {
-    await setupIdbEncryption('original');
-    const journal = await buildPendingRekeyJournal('new-pass');
+    await setupIdbEncryption('test-fixture-original-passphrase');
+    const journal = await buildPendingRekeyJournal('test-fixture-new-passphrase');
     clearIdbEncryptionKey();
 
     try {
@@ -841,7 +843,7 @@ describe('resumeEncryptionMigration (recovery UX)', () => {
       await expect(
         resumeEncryptionMigration(journal, {
           sourcePassphrase: 'wrong',
-          targetPassphrase: 'new-pass',
+          targetPassphrase: 'test-fixture-new-passphrase',
         }),
       ).rejects.toThrow();
       expect(await hasPassphraseSentinel()).toBe(true);
@@ -850,17 +852,21 @@ describe('resumeEncryptionMigration (recovery UX)', () => {
     }
 
     clearIdbEncryptionKey();
-    await expect(verifyAndInitIdbEncryption('original')).resolves.toBeUndefined();
+    await expect(
+      verifyAndInitIdbEncryption('test-fixture-original-passphrase'),
+    ).resolves.toBeUndefined();
   });
 
   it('rejects a resume attempt missing the target passphrase for a rekey operation', async () => {
-    await setupIdbEncryption('original');
-    const journal = await buildPendingRekeyJournal('new-pass');
+    await setupIdbEncryption('test-fixture-original-passphrase');
+    const journal = await buildPendingRekeyJournal('test-fixture-new-passphrase');
     clearIdbEncryptionKey();
 
     try {
       await expect(
-        resumeEncryptionMigration(journal, { sourcePassphrase: 'original' }),
+        resumeEncryptionMigration(journal, {
+          sourcePassphrase: 'test-fixture-original-passphrase',
+        }),
       ).rejects.toThrow('new passphrase is required');
     } finally {
       await deleteJournalRecordForTest();
@@ -875,7 +881,7 @@ describe('resumeEncryptionMigration (recovery UX)', () => {
   // not-yet-committed and partially-committed sub-states for each operation.
   describe('resuming a journal already at the committing phase (interrupted commit)', () => {
     it('disable: finishes the journal without a passphrase when the sentinel is already gone', async () => {
-      await setupIdbEncryption('original');
+      await setupIdbEncryption('test-fixture-original-passphrase');
       const journal = await beginEncryptionMigration({
         operationId: 'committing-disable-gone',
         operation: 'disable',
@@ -897,7 +903,7 @@ describe('resumeEncryptionMigration (recovery UX)', () => {
     });
 
     it('disable: verifies the passphrase and commits normally when commit never started', async () => {
-      await setupIdbEncryption('original');
+      await setupIdbEncryption('test-fixture-original-passphrase');
       const journal = await beginEncryptionMigration({
         operationId: 'committing-disable-fresh',
         operation: 'disable',
@@ -909,7 +915,9 @@ describe('resumeEncryptionMigration (recovery UX)', () => {
       try {
         expect(await hasPassphraseSentinel()).toBe(true);
         await expect(
-          resumeEncryptionMigration(journal, { sourcePassphrase: 'original' }),
+          resumeEncryptionMigration(journal, {
+            sourcePassphrase: 'test-fixture-original-passphrase',
+          }),
         ).resolves.toBeUndefined();
         expect(await hasPassphraseSentinel()).toBe(false);
       } finally {
@@ -918,7 +926,7 @@ describe('resumeEncryptionMigration (recovery UX)', () => {
     });
 
     it('disable: rejects a wrong passphrase when the sentinel is still present', async () => {
-      await setupIdbEncryption('original');
+      await setupIdbEncryption('test-fixture-original-passphrase');
       const journal = await beginEncryptionMigration({
         operationId: 'committing-disable-wrongpass',
         operation: 'disable',
@@ -938,9 +946,9 @@ describe('resumeEncryptionMigration (recovery UX)', () => {
     });
 
     it('rekey: finishes via the target verifier when the sentinel already reflects the new passphrase', async () => {
-      await setupIdbEncryption('original');
+      await setupIdbEncryption('test-fixture-original-passphrase');
       const salt = readCurrentSaltForTest();
-      const targetKey = await svc.deriveKey('new-pass', salt);
+      const targetKey = await svc.deriveKey('test-fixture-new-passphrase', salt);
       const targetVerifier = await createIdbMigrationTargetVerifier(targetKey);
       const journal = await beginEncryptionMigration({
         operationId: 'committing-rekey-replaced',
@@ -957,22 +965,24 @@ describe('resumeEncryptionMigration (recovery UX)', () => {
       try {
         await expect(
           resumeEncryptionMigration(journal, {
-            sourcePassphrase: 'original',
-            targetPassphrase: 'new-pass',
+            sourcePassphrase: 'test-fixture-original-passphrase',
+            targetPassphrase: 'test-fixture-new-passphrase',
           }),
         ).resolves.toBeUndefined();
 
         clearIdbEncryptionKey();
-        await expect(verifyAndInitIdbEncryption('new-pass')).resolves.toBeUndefined();
+        await expect(
+          verifyAndInitIdbEncryption('test-fixture-new-passphrase'),
+        ).resolves.toBeUndefined();
       } finally {
         await deleteJournalRecordForTest();
       }
     });
 
     it('rekey: verifies the old passphrase and commits normally when commit never started', async () => {
-      await setupIdbEncryption('original');
+      await setupIdbEncryption('test-fixture-original-passphrase');
       const salt = readCurrentSaltForTest();
-      const targetKey = await svc.deriveKey('new-pass', salt);
+      const targetKey = await svc.deriveKey('test-fixture-new-passphrase', salt);
       const targetVerifier = await createIdbMigrationTargetVerifier(targetKey);
       const journal = await beginEncryptionMigration({
         operationId: 'committing-rekey-fresh',
@@ -986,22 +996,24 @@ describe('resumeEncryptionMigration (recovery UX)', () => {
       try {
         await expect(
           resumeEncryptionMigration(journal, {
-            sourcePassphrase: 'original',
-            targetPassphrase: 'new-pass',
+            sourcePassphrase: 'test-fixture-original-passphrase',
+            targetPassphrase: 'test-fixture-new-passphrase',
           }),
         ).resolves.toBeUndefined();
 
         clearIdbEncryptionKey();
-        await expect(verifyAndInitIdbEncryption('new-pass')).resolves.toBeUndefined();
+        await expect(
+          verifyAndInitIdbEncryption('test-fixture-new-passphrase'),
+        ).resolves.toBeUndefined();
       } finally {
         await deleteJournalRecordForTest();
       }
     });
 
     it('rekey: rejects when neither the old nor new passphrase matches the current sentinel', async () => {
-      await setupIdbEncryption('original');
+      await setupIdbEncryption('test-fixture-original-passphrase');
       const salt = readCurrentSaltForTest();
-      const targetKey = await svc.deriveKey('new-pass', salt);
+      const targetKey = await svc.deriveKey('test-fixture-new-passphrase', salt);
       const targetVerifier = await createIdbMigrationTargetVerifier(targetKey);
       const journal = await beginEncryptionMigration({
         operationId: 'committing-rekey-wrongboth',
@@ -1015,10 +1027,12 @@ describe('resumeEncryptionMigration (recovery UX)', () => {
       try {
         await expect(
           resumeEncryptionMigration(journal, {
-            sourcePassphrase: 'wrong-old',
-            targetPassphrase: 'wrong-new',
+            sourcePassphrase: 'test-fixture-wrong-old-passphrase',
+            targetPassphrase: 'test-fixture-wrong-new-passphrase',
           }),
         ).rejects.toThrow();
+        // QNBS-v3: the recovery failed — the journal must remain resumable and the sentinel unchanged, matching the disable counterpart's assertion above.
+        expect(await hasPassphraseSentinel()).toBe(true);
       } finally {
         await deleteJournalRecordForTest();
       }

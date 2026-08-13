@@ -854,8 +854,16 @@ export async function resumeEncryptionMigration(
     if (!journal.targetVerifier || journal.targetVerifier.length === 0) {
       throw new Error('Migration journal is missing its target verifier');
     }
+    // QNBS-v3: only a source-verify failure proves the sentinel was already replaced — a
+    // commitRekeyMigration failure must stay a retryable error with the journal intact, not get
+    // misread by a shared catch as "the commit already happened" (that left both passphrases dead).
+    let sourceVerifyError: unknown = null;
     try {
       await deriveAndVerifySourceKeyFromSentinel(input.sourcePassphrase);
+    } catch (err) {
+      sourceVerifyError = err;
+    }
+    if (sourceVerifyError === null) {
       // Old passphrase still decrypts the sentinel — commitRekeyMigration never ran. Commit normally.
       const targetKey = await deriveAndVerifyTargetKeyFromVerifier(
         input.targetPassphrase,
@@ -863,23 +871,21 @@ export async function resumeEncryptionMigration(
       );
       await commitRekeyMigration(journal, targetKey);
       return;
-    } catch (sourceVerifyError) {
-      // The old passphrase no longer decrypts the sentinel — a prior commitRekeyMigration may have
-      // already replaced it with the new one before crashing. Confirm via the durable target
-      // verifier (independent of the sentinel) before concluding the commit already happened,
-      // rather than surfacing this as a wrong-passphrase error.
-      const targetKey = await deriveAndVerifyTargetKeyFromVerifier(
-        input.targetPassphrase,
-        journal.targetVerifier,
-      ).catch(() => {
-        throw sourceVerifyError;
-      });
-      await completeEncryptionMigration(journal);
-      await clearCompletedEncryptionMigration();
-      _activeKey = targetKey;
-      _sentinelPresenceCache = true;
-      return;
     }
+    // The old passphrase no longer decrypts the sentinel — a prior commitRekeyMigration already
+    // replaced it before crashing. Confirm via the durable target verifier before concluding that,
+    // rather than surfacing this as a wrong-passphrase error.
+    const targetKey = await deriveAndVerifyTargetKeyFromVerifier(
+      input.targetPassphrase,
+      journal.targetVerifier,
+    ).catch(() => {
+      throw sourceVerifyError;
+    });
+    await completeEncryptionMigration(journal);
+    await clearCompletedEncryptionMigration();
+    _activeKey = targetKey;
+    _sentinelPresenceCache = true;
+    return;
   }
 
   const sourceKey = await deriveAndVerifySourceKeyFromSentinel(input.sourcePassphrase);

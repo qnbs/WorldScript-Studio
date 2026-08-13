@@ -694,7 +694,7 @@
   "settings.privacy.encryptionRecoveryBodyRotate": "Un precedente cambio di passphrase è stato interrotto. Inserisci la tua vecchia e nuova passphrase per completarlo in sicurezza.",
   "settings.privacy.encryptionRecoveryFailed": "Il ripristino non è stato completato. I tuoi dati non sono andati persi — riprova.",
   "settings.privacy.encryptionRecoveryResumeButton": "Riprendi",
-  "settings.privacy.encryptionRecoveryStuck": "Questa migrazione non è stata verificata automaticamente e richiede assistenza manuale per il ripristino. I tuoi dati restano al sicuro, ma non possono essere ripresi da qui.",
+  "settings.privacy.encryptionRecoveryStuck": "Questa migrazione non è stata verificata automaticamente e richiede assistenza manuale per il ripristino. I tuoi dati restano al sicuro, ma questa migrazione non può essere ripresa da qui.",
   "settings.privacy.encryptionRecoveryTitle": "Riprendi il cambio di crittografia",
   "settings.privacy.encryptionSetAction": "Imposta passphrase",
   "settings.privacy.encryptionSetButton": "Attiva e cifra",

@@ -671,7 +671,7 @@
   "settings.privacy.encryptionChangedStatus": "Passphrase changed successfully",
   "settings.privacy.encryptionConfirmPassphrase": "Подтвердите парольную фразу",
   "settings.privacy.encryptionCurrentPassphrase": "Текущая парольная фраза",
-  "settings.privacy.encryptionDisableAction": "Запрещать",
+  "settings.privacy.encryptionDisableAction": "Отключить",
   "settings.privacy.encryptionDisableButton": "Отключить шифрование",
   "settings.privacy.encryptionDisableConfirm": "Это расшифрует все ваши данные и отключит шифрование в состоянии покоя. Ваши данные останутся на этом устройстве, но больше не будут защищены парольной фразой.",
   "settings.privacy.encryptionDisableFailed": "Could not disable encryption. Please try again.",

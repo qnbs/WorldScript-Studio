@@ -2340,7 +2340,7 @@
   "settings.privacy.encryptionRecoveryBodyRotate": "Un changement de phrase secrète précédent a été interrompu. Entrez votre ancienne et votre nouvelle phrase secrète pour le terminer en toute sécurité.",
   "settings.privacy.encryptionRecoveryFailed": "La récupération n'a pas pu aboutir. Vos données ne sont pas perdues — veuillez réessayer.",
   "settings.privacy.encryptionRecoveryResumeButton": "Reprendre",
-  "settings.privacy.encryptionRecoveryStuck": "Cette migration n'a pas pu être vérifiée automatiquement et nécessite une assistance manuelle pour être récupérée. Vos données restent en sécurité, mais ne peuvent pas être reprises depuis ici.",
+  "settings.privacy.encryptionRecoveryStuck": "Cette migration n'a pas pu être vérifiée automatiquement et nécessite une assistance manuelle pour être récupérée. Vos données restent en sécurité, mais cette migration ne peut pas être reprise depuis ici.",
   "settings.privacy.encryptionRecoveryTitle": "Reprendre le changement de chiffrement",
   "settings.privacy.encryptionSetAction": "Définir la phrase secrète",
   "settings.privacy.encryptionSetButton": "Activer et chiffrer",
