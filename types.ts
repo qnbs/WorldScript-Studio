@@ -512,6 +512,8 @@ export type LiveRegionVerbosity = 'minimal' | 'normal' | 'verbose';
 export interface AccessibilitySettings {
   highContrast: boolean;
   reducedMotion: boolean;
+  /** Manual opt-in to strip backdrop-blur/glass translucency (GPU cost relief valve, #332/D4). */
+  reducedTransparency: boolean;
   largeText: boolean;
   screenReader: boolean;
   focusIndicators: boolean;

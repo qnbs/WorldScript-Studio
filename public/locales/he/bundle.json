@@ -1688,6 +1688,7 @@
   "settings.accessibility.preset.motor": "נוחות מוטורית",
   "settings.accessibility.preset.screenReader": "קורא מסך",
   "settings.accessibility.reducedMotion": "תנועה מופחתת",
+  "settings.accessibility.reducedTransparency": "הפחתת אפקטי שקיפות",
   "settings.accessibility.screenReader": "תמיכת קורא מסך",
   "settings.accessibility.title": "הגדרות נגישות",
   "settings.advancedAi.localRagBuild": "בנייה מחדש של אינדקס החיפוש המקומי",

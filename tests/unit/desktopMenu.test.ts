@@ -65,13 +65,21 @@ describe('installDesktopMenu', () => {
 
   it('returns false on the web (no Tauri runtime)', async () => {
     h.isTauri.value = false;
-    const ok = await installDesktopMenu((k) => k, vi.fn());
+    const ok = await installDesktopMenu(
+      (k) => k,
+      vi.fn(),
+      vi.fn(async () => {}),
+    );
     expect(ok).toBe(false);
     expect(h.setAsAppMenu).not.toHaveBeenCalled();
   });
 
   it('builds five localized submenus and sets the app menu', async () => {
-    const ok = await installDesktopMenu((k) => `T:${k}`, vi.fn());
+    const ok = await installDesktopMenu(
+      (k) => `T:${k}`,
+      vi.fn(),
+      vi.fn(async () => {}),
+    );
     expect(ok).toBe(true);
     expect(h.setAsAppMenu).toHaveBeenCalledTimes(1);
     expect(h.submenuCalls.map((s) => s.text)).toEqual([
@@ -83,11 +91,16 @@ describe('installDesktopMenu', () => {
     ]);
   });
 
-  it('creates exactly the four custom items (Edit/Window use predefined items)', async () => {
-    await installDesktopMenu((k) => k, vi.fn());
+  it('creates exactly the five custom items, including Quit (Edit/Window use predefined items)', async () => {
+    await installDesktopMenu(
+      (k) => k,
+      vi.fn(),
+      vi.fn(async () => {}),
+    );
     expect(h.itemCalls.map((c) => c.id)).toEqual([
       'menu-export',
       'menu-settings',
+      'menu-quit',
       'menu-command-palette',
       'menu-help',
     ]);
@@ -95,11 +108,18 @@ describe('installDesktopMenu', () => {
     expect(h.itemCalls.find((c) => c.id === 'menu-command-palette')?.accelerator).toBe(
       'CmdOrCtrl+K',
     );
+    // QNBS-v3 (#332/D3): Quit is now a custom item (not PredefinedMenuItem) so it routes through quitApp's flush.
+    expect(h.itemCalls.find((c) => c.id === 'menu-quit')?.text).toBe('desktop.tray.quit');
+    expect(h.predefinedCalls.map((c) => c.item)).not.toContain('Quit');
   });
 
   it('routes custom item actions to executeCommand with the right command id', async () => {
     const run = vi.fn();
-    await installDesktopMenu((k) => k, run);
+    await installDesktopMenu(
+      (k) => k,
+      run,
+      vi.fn(async () => {}),
+    );
     const byId = Object.fromEntries(h.itemCalls.map((c) => [c.id, c]));
     byId['menu-export']?.action?.();
     byId['menu-settings']?.action?.();
@@ -111,10 +131,26 @@ describe('installDesktopMenu', () => {
     expect(run).toHaveBeenCalledWith('nav-help');
   });
 
+  it('routes the Quit item action to quitApp', async () => {
+    const quitApp = vi.fn(async () => {});
+    await installDesktopMenu((k) => k, vi.fn(), quitApp);
+    const byId = Object.fromEntries(h.itemCalls.map((c) => [c.id, c]));
+    byId['menu-quit']?.action?.();
+    expect(quitApp).toHaveBeenCalledTimes(1);
+  });
+
   it('discards a stale concurrent install — only the latest applies setAsAppMenu', async () => {
     const results = await Promise.all([
-      installDesktopMenu((k) => k, vi.fn()),
-      installDesktopMenu((k) => k, vi.fn()),
+      installDesktopMenu(
+        (k) => k,
+        vi.fn(),
+        vi.fn(async () => {}),
+      ),
+      installDesktopMenu(
+        (k) => k,
+        vi.fn(),
+        vi.fn(async () => {}),
+      ),
     ]);
     // Core guarantee: a superseded (stale) call must NEVER apply its menu — at most one of the two
     // overlapping calls reaches setAsAppMenu, so a stale locale can't overwrite the newer menu.
@@ -127,7 +163,11 @@ describe('installDesktopMenu', () => {
   it('returns false (and does not throw) when the menu API rejects', async () => {
     const mod = await import('@tauri-apps/api/menu');
     vi.mocked(mod.Menu.new).mockRejectedValueOnce(new Error('boom'));
-    const ok = await installDesktopMenu((k) => k, vi.fn());
+    const ok = await installDesktopMenu(
+      (k) => k,
+      vi.fn(),
+      vi.fn(async () => {}),
+    );
     expect(ok).toBe(false);
   });
 });

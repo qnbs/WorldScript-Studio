@@ -8,10 +8,17 @@ import type { ProjectSnapshot, StorySection } from '../../../types';
 // ---------------------------------------------------------------------------
 // vi.hoisted — thunk match fns
 // ---------------------------------------------------------------------------
-const { mockImportMatch, mockRestoreMatch } = vi.hoisted(() => ({
-  mockImportMatch: vi.fn((_: unknown) => true),
-  mockRestoreMatch: vi.fn((_: unknown) => true),
-}));
+const { mockImportMatch, mockRestoreMatch, stableT, stableToast, stableEmptyArray } = vi.hoisted(
+  () => ({
+    mockImportMatch: vi.fn((_: unknown) => true),
+    mockRestoreMatch: vi.fn((_: unknown) => true),
+    // QNBS-v3 (#332/D5): the real I18nContext memoizes `t` — a fresh arrow function here would defeat the useSettingsView useMemo identity test below.
+    stableT: (key: string) => key,
+    stableToast: { info: vi.fn(), success: vi.fn(), error: vi.fn() },
+    // QNBS-v3 (#332/D5): real EntityAdapter selectAll() selectors return the same array reference when entities are unchanged — a fresh `[]` here would defeat the identity test for an unrelated reason.
+    stableEmptyArray: [] as unknown[],
+  }),
+);
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -23,8 +30,9 @@ const mockListSnapshots = vi.fn().mockResolvedValue([]);
 const mockSaveSnapshot = vi.fn().mockResolvedValue(undefined);
 const mockDeleteSnapshot = vi.fn().mockResolvedValue(undefined);
 const mockLoggerWarn = vi.fn();
-const mockToastInfo = vi.fn();
-const mockToastSuccess = vi.fn();
+// QNBS-v3 (#332/D5): aliased to stableToast's own methods (not fresh vi.fn()s) so the encryption tests below assert against the same stable mock useToast() actually returns.
+const mockToastInfo = stableToast.info;
+const mockToastSuccess = stableToast.success;
 const mockClearIdbEncryptionKey = vi.fn();
 const mockIsIdbEncryptionReady = vi.fn(() => false);
 const mockSetupIdbEncryption = vi.fn().mockResolvedValue(undefined);
@@ -68,15 +76,15 @@ vi.mock('../../../app/hooks', () => ({
 
 vi.mock('../../../hooks/useTranslation', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: stableT,
     language: 'en',
     setLanguage: mockSetLanguage,
   }),
 }));
 
 vi.mock('../../../features/project/projectSelectors', () => ({
-  selectAllCharacters: () => [],
-  selectAllWorlds: () => [],
+  selectAllCharacters: () => stableEmptyArray,
+  selectAllWorlds: () => stableEmptyArray,
 }));
 
 vi.mock('../../../features/project/projectSlice', () => ({
@@ -181,11 +189,8 @@ vi.mock('../../../features/status/statusSlice', () => ({
 }));
 
 vi.mock('../../../components/ui/Toast', () => ({
-  useToast: () => ({
-    info: mockToastInfo,
-    success: mockToastSuccess,
-    error: vi.fn(),
-  }),
+  // QNBS-v3 (#332/D5): a stable reference here isolates the identity test below to useSettingsView's own dependency wiring — production useToast() is now separately memoized and covered by tests/unit/Toast.test.tsx's own reference-stability test.
+  useToast: () => stableToast,
 }));
 
 vi.mock('../../../services/logger', () => ({
@@ -747,5 +752,24 @@ describe('handleLockSession', () => {
     });
     expect(useTransientUiStore.getState().isIdbUnlockOpen).toBe(true);
     expect(mockToastInfo).toHaveBeenCalledWith('settings.privacy.encryptionLockedStatus');
+  });
+});
+
+// QNBS-v3 (#332/D5): the returned object's identity must stay stable across a re-render with unchanged inputs, or every Settings-tree consumer re-renders on any unrelated global-state change.
+describe('memoized return value', () => {
+  it('keeps the same object reference across a re-render with unchanged inputs', () => {
+    const { result, rerender } = renderHook(() => useSettingsView());
+    const first = result.current;
+    rerender();
+    expect(result.current).toBe(first);
+  });
+
+  it('returns a new reference (with updated data) once a real dependency changes', () => {
+    const { result, rerender } = renderHook(() => useSettingsView());
+    const first = result.current;
+    mockProject = { ...mockProject, title: 'Renamed Novel' };
+    rerender();
+    expect(result.current).not.toBe(first);
+    expect(result.current.project.title).toBe('Renamed Novel');
   });
 });

@@ -1688,6 +1688,7 @@
   "settings.accessibility.preset.motor": "モーターの快適性",
   "settings.accessibility.preset.screenReader": "スクリーンリーダー",
   "settings.accessibility.reducedMotion": "モーションの軽減",
+  "settings.accessibility.reducedTransparency": "透明効果を減らす",
   "settings.accessibility.screenReader": "スクリーン リーダーのサポート",
   "settings.accessibility.title": "Accessibility 設定",
   "settings.advancedAi.localRagBuild": "ローカル検索インデックスを再構築する",

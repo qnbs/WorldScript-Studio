@@ -43,7 +43,10 @@ import {
 export function normalizePersistedSettings(incoming: Record<string, unknown>): Settings {
   const validSettings = {
     theme: 'dark',
-    appearancePreset: 'default',
+    // QNBS-v3 (#332): must match settingsSlice.ts's initialState.appearancePreset — a mismatch here
+    // only mattered for genuinely first-ever launches, but the two are the same product default and
+    // should never silently disagree about what "no persisted preference" means.
+    appearancePreset: 'sepia',
     writingSurfaceStyle: 'textured',
     // QNBS-v3: aiMode added in v1.22 — backfill for older persisted settings that lack the field.
     aiMode: 'hybrid',
@@ -56,9 +59,10 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
     ...incoming,
   } as Settings;
 
-  // QNBS-v3: fantasy/romance presets removed in v1.22 — migrate legacy stored values to 'default'
+  // QNBS-v3: fantasy/romance presets removed in v1.22 — migrate legacy stored values to the
+  // current default (#332: was 'default', now matches settingsSlice.ts's 'sepia').
   if (!['default', 'sepia'].includes(validSettings.appearancePreset)) {
-    validSettings.appearancePreset = 'default';
+    validSettings.appearancePreset = 'sepia';
   }
   if (!['textured', 'plain'].includes(validSettings.writingSurfaceStyle)) {
     validSettings.writingSurfaceStyle = 'textured';

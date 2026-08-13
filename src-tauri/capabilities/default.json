@@ -74,6 +74,7 @@
     "shell:allow-open",
     "updater:default",
     "notification:default",
+    "process:allow-exit",
     "core:tray:default",
     "core:app:allow-default-window-icon",
     "core:window:allow-show",

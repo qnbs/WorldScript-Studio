@@ -36,9 +36,14 @@ vi.mock('@tauri-apps/api/path', () => ({
   appDataDir: () => fsHolder.current.appDataDir(),
   join: (...parts: string[]) => fsHolder.current.join(...parts),
 }));
+vi.mock('../../../../services/logger', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../../services/logger')>();
+  return { ...actual, logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } };
+});
 
 import { appStoreRef } from '../../../../app/storeRef';
 import { FsProjectStore } from '../../../../services/fs/projectFsStore';
+import { logger } from '../../../../services/logger';
 
 interface FakeFs {
   apis: TauriApis;
@@ -136,6 +141,34 @@ describe('FsProjectStore — projects', () => {
   it('returns null for a missing project and [] when no projects dir', async () => {
     expect(await store.loadProject('nope')).toBeNull();
     expect(await store.listProjects()).toEqual([]);
+  });
+
+  // QNBS-v3 (#332): saveProject records the active-project marker so cold boot doesn't pick an arbitrary readDir() entry.
+  it('records the saved project as the active-project marker, updating it on each subsequent save', async () => {
+    expect(await store.getActiveProjectId()).toBeNull();
+
+    await store.saveProject(project as never);
+    expect(await store.getActiveProjectId()).toBe('p1');
+
+    const secondProject = { ...project, id: 'p2', title: 'Second Novel' };
+    await store.saveProject(secondProject as never);
+    expect(await store.getActiveProjectId()).toBe('p2');
+  });
+
+  // QNBS-v3 (#332): a rejected marker write is a documented best-effort abort — it must not fail the project save that already succeeded.
+  it('still resolves saveProject and logs a warning when the active-project marker write rejects', async () => {
+    const originalWriteTextFile = fake.apis.writeTextFile;
+    fake.apis.writeTextFile = (p: string, c: string) => {
+      if (p.endsWith('active-project-id.txt')) return Promise.reject(new Error('disk full'));
+      return originalWriteTextFile(p, c);
+    };
+
+    await expect(store.saveProject(project as never)).resolves.toBeUndefined();
+    expect(await store.loadProject('p1')).not.toBeNull();
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Failed to persist active-project marker (project save itself succeeded)',
+      expect.objectContaining({ error: 'disk full' }),
+    );
   });
 });
 

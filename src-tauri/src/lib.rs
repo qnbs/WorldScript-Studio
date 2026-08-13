@@ -141,6 +141,8 @@ pub fn run() {
     // QNBS-v3 (T3): native OS notifications — permission request/gating lives entirely in JS
     // (services/desktop/desktopNotifications.ts); the Rust side only registers the plugin.
     .plugin(tauri_plugin_notification::init())
+    // QNBS-v3 (#332/D3): exposes exit() to JS so tray/menu Quit can flush state before terminating.
+    .plugin(tauri_plugin_process::init())
     .plugin(
       tauri_plugin_window_state::Builder::new()
         .with_state_flags(tauri_plugin_window_state::StateFlags::all())

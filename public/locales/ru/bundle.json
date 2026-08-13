@@ -1688,6 +1688,7 @@
   "settings.accessibility.preset.motor": "Двигательный комфорт",
   "settings.accessibility.preset.screenReader": "Программа чтения с экрана",
   "settings.accessibility.reducedMotion": "Уменьшенное движение",
+  "settings.accessibility.reducedTransparency": "Уменьшить эффекты прозрачности",
   "settings.accessibility.screenReader": "Поддержка программы чтения с экрана",
   "settings.accessibility.title": "Настройки специальных возможностей",
   "settings.advancedAi.localRagBuild": "Восстановить индекс локального поиска",

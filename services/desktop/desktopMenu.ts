@@ -20,6 +20,8 @@ const log = createLogger('desktop-menu');
 export type MenuTranslate = (key: string) => string;
 /** Routes a native menu action to an app command (the App-level `executeCommand`). */
 export type MenuCommandRunner = (commandId: string) => void;
+/** Flushes pending state, then exits the process — must not resolve if it did not actually quit. */
+export type DesktopQuitFn = () => Promise<void>;
 
 // QNBS-v3 (#189): monotonic request token. installDesktopMenu is async and re-runs on every language
 // change; without this, two overlapping calls race and whichever finishes setAsAppMenu() LAST wins —
@@ -40,6 +42,7 @@ export function _resetMenuInstallTokenForTest(): void {
 export async function installDesktopMenu(
   t: MenuTranslate,
   runCommand: MenuCommandRunner,
+  quitApp: DesktopQuitFn,
 ): Promise<boolean> {
   if (!isTauriRuntime()) return false;
   const myToken = ++menuInstallToken;
@@ -60,7 +63,14 @@ export async function installDesktopMenu(
           action: () => runCommand(DESKTOP_COMMANDS.settings),
         }),
         await PredefinedMenuItem.new({ item: 'Separator' }),
-        await PredefinedMenuItem.new({ item: 'Quit' }),
+        // QNBS-v3 (#332/D3): custom item (not PredefinedMenuItem) so Quit routes through quitApp's flush — the predefined item calls the OS exit directly, bypassing any app-level flush.
+        await MenuItem.new({
+          id: 'menu-quit',
+          text: t('desktop.tray.quit'),
+          action: () => {
+            void quitApp();
+          },
+        }),
       ],
     });
 

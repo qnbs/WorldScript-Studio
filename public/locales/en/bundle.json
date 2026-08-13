@@ -1688,6 +1688,7 @@
   "settings.accessibility.preset.motor": "Motor comfort",
   "settings.accessibility.preset.screenReader": "Screen reader",
   "settings.accessibility.reducedMotion": "Reduced Motion",
+  "settings.accessibility.reducedTransparency": "Reduce transparency effects",
   "settings.accessibility.screenReader": "Screen Reader Support",
   "settings.accessibility.title": "Accessibility Settings",
   "settings.advancedAi.localRagBuild": "Rebuild local search index",

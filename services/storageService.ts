@@ -82,6 +82,12 @@ class StorageManager {
     return backend.listProjects();
   }
 
+  // QNBS-v3 (#332): optional on StorageBackend — IndexedDB has no multi-project ambiguity to resolve, so a missing implementation normalizes to null rather than throwing.
+  async getActiveProjectId(): Promise<string | null> {
+    const backend = await this.getBackend();
+    return (await backend.getActiveProjectId?.()) ?? null;
+  }
+
   async deleteProject(projectId: string): Promise<void> {
     const backend = await this.getBackend();
     return backend.deleteProject(projectId);

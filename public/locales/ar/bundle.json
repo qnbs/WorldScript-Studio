@@ -1688,6 +1688,7 @@
   "settings.accessibility.preset.motor": "الراحة الحركية",
   "settings.accessibility.preset.screenReader": "قارئ الشاشة",
   "settings.accessibility.reducedMotion": "حركة مُخفَّضة",
+  "settings.accessibility.reducedTransparency": "تقليل تأثيرات الشفافية",
   "settings.accessibility.screenReader": "دعم قارئ الشاشة",
   "settings.accessibility.title": "إعدادات إمكانية الوصول",
   "settings.advancedAi.localRagBuild": "إعادة بناء فهرس البحث المحلي",

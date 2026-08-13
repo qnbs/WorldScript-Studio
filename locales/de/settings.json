@@ -42,6 +42,7 @@
   "settings.accessibility.preset.motor": "Motorik & Bedienung",
   "settings.accessibility.preset.screenReader": "Screenreader",
   "settings.accessibility.reducedMotion": "Reduzierte Bewegung",
+  "settings.accessibility.reducedTransparency": "Transparenzeffekte reduzieren",
   "settings.accessibility.screenReader": "Bildschirmleser-Unterstützung",
   "settings.accessibility.title": "Barrierefreiheitseinstellungen",
   "settings.advancedAi.localRagBuild": "Suchindex neu aufbauen",

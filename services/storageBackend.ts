@@ -64,6 +64,8 @@ export interface StorageBackend {
   loadProject(projectId: string): Promise<StoryProject | null>;
   listProjects(): Promise<string[]>;
   deleteProject(projectId: string): Promise<void>;
+  /** QNBS-v3 (#332): optional — only the multi-project Tauri filesystem backend implements this; IndexedDB's single-project contract has no "which one" ambiguity to resolve. */
+  getActiveProjectId?(): Promise<string | null>;
 
   saveImage(id: string, base64Data: string): Promise<void>;
   getImage(id: string): Promise<string | null>;

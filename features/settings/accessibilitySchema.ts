@@ -11,6 +11,9 @@ export const accessibilityPresetIdSchema = z.enum([
 export const accessibilitySettingsSchema = z.object({
   highContrast: z.boolean(),
   reducedMotion: z.boolean(),
+  // QNBS-v3 (#332/D4): manual opt-in for users who want backdrop-blur GPU cost off without relying
+  // on the OS `prefers-reduced-transparency` preference (which the existing CSS block already covers).
+  reducedTransparency: z.boolean(),
   largeText: z.boolean(),
   screenReader: z.boolean(),
   focusIndicators: z.boolean(),
@@ -25,6 +28,7 @@ export type NormalizedAccessibilitySettings = z.infer<typeof accessibilitySettin
 export const DEFAULT_NORMALIZED_ACCESSIBILITY: NormalizedAccessibilitySettings = {
   highContrast: false,
   reducedMotion: false,
+  reducedTransparency: false,
   largeText: false,
   screenReader: false,
   focusIndicators: true,
