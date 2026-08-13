@@ -13,6 +13,8 @@ sideEffectsCache: true
 strictDepBuilds: true
 blockExoticSubdeps: true
 minimumReleaseAge: 10080
+minimumReleaseAgeExclude:
+  - nanoid@3.3.18
 
 # QNBS-v3: Migrated from package.json "pnpm" field (deprecated in pnpm v10+)
 # Overrides with security justifications:
