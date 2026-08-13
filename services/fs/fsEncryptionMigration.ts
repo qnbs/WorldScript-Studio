@@ -18,6 +18,7 @@ import { logger } from '../logger';
 import { idbEncryptWithKey } from '../storage/storageEncryptionService';
 import {
   bytesToBase64,
+  compressData,
   loadTauriApis,
   type TauriApis,
   unprotectTextValue,
@@ -195,10 +196,22 @@ async function reprotectSnapshotFile(
   let envelope: SnapshotEnvelopeShape;
   try {
     envelope = JSON.parse(raw) as SnapshotEnvelopeShape;
-  } catch {
-    return; // legacy raw-project-data snapshot format predates the envelope — never protected
+  } catch (error) {
+    if (opts.strict) throw error;
+    logger.warn(`Skipping ${path} — snapshot is not valid JSON:`, error);
+    return;
   }
-  if (typeof envelope.data !== 'string') return;
+
+  if (typeof envelope.data !== 'string') {
+    if (!opts.targetKey) return; // Legacy raw snapshots are already in the requested plaintext state.
+    // QNBS-v3: raw pre-envelope snapshots contain whole project data, so wrap compressed project JSON in the current value-level envelope instead of leaving historical manuscripts plaintext.
+    const encryptedLegacyData = JSON.stringify({
+      scheme: PROTECTED_TEXT_SCHEME,
+      data: bytesToBase64(await idbEncryptWithKey(opts.targetKey, compressData(envelope))),
+    });
+    await writeTextFileAtomic(apis, path, JSON.stringify({ data: encryptedLegacyData }));
+    return;
+  }
   const originalData = envelope.data;
   let plaintext: string;
   try {

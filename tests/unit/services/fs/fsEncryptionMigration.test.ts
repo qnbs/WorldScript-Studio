@@ -257,6 +257,20 @@ describe('migrateAllProtectedFsData — set (first-time setup)', () => {
     // It remains untouched and the caller retains recovery metadata.
     expect(fake.text.get('/app/projects/p1/project.json')).toBe(before);
   });
+
+  it('wraps and encrypts a legacy raw-project snapshot during first-time setup', async () => {
+    fake.text.set('/app/snapshots/1.json', JSON.stringify(project));
+    const newKey = await deriveKey('first-passphrase');
+
+    await migrateAllProtectedFsData(newKey, 'set');
+
+    const migrated = fake.text.get('/app/snapshots/1.json') as string;
+    expect(migrated).toContain('protected-v1');
+    expect(migrated).not.toContain('hello world');
+    cryptoState.activeKey = newKey;
+    cryptoState.sentinelConfigured = true;
+    await expect(fileSystemService.getSnapshotData(1)).resolves.toEqual(project);
+  });
 });
 
 describe('migrateAllProtectedFsData — interrupted-migration marker', () => {
