@@ -11,11 +11,11 @@ import { logger } from '../logger';
 import { IdbStorageLockedError } from '../storage/storageEncryptionService';
 import type { BinderAssetMeta, BinderAssetPayload } from '../storageBackend';
 import {
-  protectTextValue,
   readProtectedTextFile,
   retryFs,
   sanitizePathSegment,
   writeFileAtomic,
+  writeProtectedTextFileAtomic,
   writeTextFileAtomic,
 } from './fsCore';
 import { FsSnapshotStore } from './snapshotFsStore';
@@ -34,7 +34,7 @@ export class FsAssetStore extends FsSnapshotStore {
 
     const imageFile = await apis.join(imagesPath, `${sanitizePathSegment(id, 'image')}.png`);
     const cleanBase64 = base64Data.replace(/^data:image\/png;base64,/, '');
-    await writeTextFileAtomic(apis, imageFile, await protectTextValue(cleanBase64));
+    await writeProtectedTextFileAtomic(apis, imageFile, cleanBase64);
   }
 
   async getImage(id: string): Promise<string | null> {

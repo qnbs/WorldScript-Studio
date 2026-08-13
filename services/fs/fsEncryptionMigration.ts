@@ -33,13 +33,20 @@ interface MigrationOptions {
   strict: boolean;
 }
 
-// QNBS-v3: an exists() check first separates "genuinely absent" (always safe to skip — e.g. config/ not yet created on a fresh install) from "present but unreadable" (a real error that must propagate, not be silently treated as empty).
+// QNBS-v3: an exists() check first separates "genuinely absent" (always safe to skip — e.g. config/ not yet created on a fresh install) from "present but unreadable" (a real error that must propagate in strict mode, or be logged-and-skipped in non-strict mode — never silently treated as empty).
 async function listDirEntries(
   apis: TauriApis,
   dir: string,
+  strict: boolean,
 ): Promise<{ name?: string; isDirectory?: boolean }[]> {
   if (!(await apis.exists(dir))) return [];
-  return apis.readDir(dir);
+  try {
+    return await apis.readDir(dir);
+  } catch (error) {
+    if (strict) throw error;
+    logger.warn(`Skipping directory ${dir} — could not list its contents:`, error);
+    return [];
+  }
 }
 
 // QNBS-v3: no persistent per-file journal/checkpoint yet (tracked in issue #359) — a process kill mid-rotate can leave a mixed-key state; this marker can't resume/fix that but converts it into a detected one.
@@ -123,7 +130,12 @@ async function reprotectWholeFile(
       })
     : plaintext;
   if (content === raw) return; // already in the desired state
-  await writeTextFileAtomic(apis, path, content);
+  try {
+    await writeTextFileAtomic(apis, path, content);
+  } catch (error) {
+    if (opts.strict) throw error;
+    logger.warn(`Skipping ${path} — could not write its new protected state:`, error);
+  }
 }
 
 interface SnapshotEnvelopeShape {
@@ -169,7 +181,12 @@ async function reprotectSnapshotFile(
       })
     : plaintext;
   if (envelope.data === originalData) return; // already in the desired state
-  await writeTextFileAtomic(apis, path, JSON.stringify(envelope));
+  try {
+    await writeTextFileAtomic(apis, path, JSON.stringify(envelope));
+  } catch (error) {
+    if (opts.strict) throw error;
+    logger.warn(`Skipping ${path} — could not write its new protected state:`, error);
+  }
 }
 
 /**
@@ -193,7 +210,7 @@ export async function migrateAllProtectedFsData(
   await writeMigrationMarker(apis, appDataPath, operation);
 
   const configPath = await apis.join(appDataPath, 'config');
-  const configEntries = await listDirEntries(apis, configPath);
+  const configEntries = await listDirEntries(apis, configPath, opts.strict);
   await Promise.all(
     configEntries.map(async (entry) => {
       if (!entry.name || entry.isDirectory) return;
@@ -208,7 +225,7 @@ export async function migrateAllProtectedFsData(
   );
 
   const snapshotsPath = await apis.join(appDataPath, 'snapshots');
-  const snapshotEntries = await listDirEntries(apis, snapshotsPath);
+  const snapshotEntries = await listDirEntries(apis, snapshotsPath, opts.strict);
   await Promise.all(
     snapshotEntries.map(async (entry) => {
       if (!entry.name?.endsWith('.json')) return;
@@ -218,7 +235,7 @@ export async function migrateAllProtectedFsData(
   );
 
   const imagesPath = await apis.join(appDataPath, 'images');
-  const imageEntries = await listDirEntries(apis, imagesPath);
+  const imageEntries = await listDirEntries(apis, imagesPath, opts.strict);
   await Promise.all(
     imageEntries.map(async (entry) => {
       if (!entry.name?.endsWith('.png')) return;

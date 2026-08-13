@@ -59,6 +59,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   file that fails to decrypt under the still-active old key aborts the whole disable/rotate
   operation instead of silently stranding it. Wired into `hooks/useSettingsView.ts`'s
   `handlePassphraseConfirm`, gated on `isTauriRuntime()` (no-op on web).
+  **Second review-loop follow-up to the same change:** a locked session previously read as "no
+  project"/"no settings" on every fs-backed store (project, settings, Codex, RAG vectors,
+  snapshot, image) — the catch-all handlers swallowed `IdbStorageLockedError` into `null`, so
+  desktop could silently boot as a brand-new user instead of showing the unlock modal; all six now
+  re-throw it, reusing the web build's already-proven unlock-and-retry flow with no boot-sequence
+  changes needed. Rotating the passphrase now verifies the *current* passphrase against the
+  durable sentinel before re-keying any filesystem file, closing a mixed-key bug where a mistyped
+  current passphrase let the bridge re-key everything to a new key that `rotateIdbPassphrase()`
+  then never actually activates. The migration bridge's non-strict ('set') mode now also survives
+  a write failure or an unreadable directory (previously only read/decrypt failures on individual
+  files were caught) — a routine per-file I/O error can no longer crash first-time setup after the
+  sentinel is already active; when it still does (e.g. the migration marker itself can't be
+  written), `useSettingsView.ts` now rolls the just-created sentinel back via `clearIdbPassphrase()`
+  rather than leaving it active with the feature flag off. Fixed a write-ordering gap where an
+  older, slower-to-encrypt save's write could land in the per-path queue after a newer save and
+  silently overwrite it — encryption now happens *inside* the same queue slot that serializes the
+  atomic write, not before it. An API-key ciphertext swapped between two provider files is now
+  rejected (not laundered into a correctly-labeled file) by the migration path, mirroring the
+  existing ordinary-read guard. Neither of the app's two "nuclear reset" flows
+  (`resetAllDatabases()`, storage-init-failure recovery; `wipeAllAppData()`, factory reset) ever
+  touched Tauri filesystem data, while both destroy the KDF salt required to derive any key — any
+  already-protected fs file became permanently orphaned ciphertext after either reset. Both now
+  call a new `deleteAllFsData()` first, with failure propagating rather than being swallowed, so a
+  partial fs-delete failure never proceeds to destroy the salt. An interrupted migration (crash,
+  forced quit, power loss mid-operation) now leaves a durable marker detected at next startup and
+  surfaced as a status notification — not a full resumable migration yet, see
+  [issue #359](https://github.com/qnbs/WorldScript-Studio/issues/359) for that tracked gap.
 
 ### Fixed
 

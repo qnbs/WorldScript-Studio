@@ -389,8 +389,15 @@ export const useSettingsView = () => {
         await setupIdbEncryption(newPassphrase);
         // QNBS-v3: without this, "encryption active" would only mean future writes get protected — every already-existing fs-backed file would stay plaintext until its next incidental save; strict:false so a stray pre-existing oddity can't block setup for everything else.
         if (isTauriRuntime()) {
-          const key = await resolveProtectedWriteKey();
-          if (key) await migrateAllProtectedFsData(key, 'set');
+          try {
+            const key = await resolveProtectedWriteKey();
+            if (key) await migrateAllProtectedFsData(key, 'set');
+          } catch (error) {
+            // QNBS-v3: migrateAllProtectedFsData('set') is non-strict and already skips per-file failures — reaching here means a pre-flight failure (e.g. the migration marker itself couldn't be written) before any file was touched, so undoing the sentinel just-created above is safe, not just cosmetic.
+            await clearIdbPassphrase();
+            setEncryptionReady(false);
+            throw error;
+          }
         }
         dispatch(featureFlagsActions.setEnableIdbAtRestEncryption(true));
         setEncryptionReady(true);

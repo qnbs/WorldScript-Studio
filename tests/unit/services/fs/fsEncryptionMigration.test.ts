@@ -376,4 +376,33 @@ describe('migrateAllProtectedFsData — safety', () => {
 
     await expect(migrateAllProtectedFsData(null, 'disable')).rejects.toThrow();
   });
+
+  // QNBS-v3: a 'set' migration running right after setupIdbEncryption() has already activated the sentinel must never throw from a routine per-file write failure — the caller has no safe partial-success state to leave the sentinel in.
+  it('logs and skips (does not throw) a write failure on an otherwise-migratable file, in non-strict (set) mode', async () => {
+    await fileSystemService.saveProject(project as never);
+    const originalWriteTextFile = fake.apis.writeTextFile;
+    fake.apis.writeTextFile = (p: string, c: string) => {
+      if (p.includes('project.json') && p.includes('.tmp-'))
+        return Promise.reject(new Error('EIO'));
+      return originalWriteTextFile(p, c);
+    };
+
+    const newKey = await deriveKey('first-passphrase');
+    await expect(migrateAllProtectedFsData(newKey, 'set')).resolves.toBeUndefined();
+    // The file is left exactly as it was before the failed write attempt — not corrupted, not stranded.
+    expect(fake.text.get('/app/projects/p1/project.json')).toBeDefined();
+  });
+
+  it('propagates (does not silently skip) a write failure on an otherwise-migratable file, in strict (disable/rotate) mode', async () => {
+    await enableTestPassphrase();
+    await fileSystemService.saveProject(project as never);
+    const originalWriteTextFile = fake.apis.writeTextFile;
+    fake.apis.writeTextFile = (p: string, c: string) => {
+      if (p.includes('project.json') && p.includes('.tmp-'))
+        return Promise.reject(new Error('EIO'));
+      return originalWriteTextFile(p, c);
+    };
+
+    await expect(migrateAllProtectedFsData(null, 'disable')).rejects.toThrow(/EIO/);
+  });
 });

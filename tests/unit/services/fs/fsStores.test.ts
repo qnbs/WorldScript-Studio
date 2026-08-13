@@ -527,6 +527,24 @@ describe('FsSnapshotStore — snapshots', () => {
     expect(await store.getSnapshotData(id)).toEqual({ manuscript: [{ content: 'secret prose' }] });
   });
 
+  // QNBS-v3: distinct from the locked-session test below — this is "encryption disabled entirely" (sentinel cleared, not just the key), the state a snapshot is left in if it was created before a disable/rotate migration that (by design) never touches already-created snapshots outside the fs bridge's own reprotectSnapshotFile path.
+  it('returns null (fails closed, does not throw or discard the file) for a protected snapshot once at-rest encryption has been disabled', async () => {
+    await enableTestPassphrase();
+    const id = await store.saveSnapshot('Encrypted Snapshot', {
+      manuscript: [{ content: 'secret prose' }],
+    });
+
+    cryptoState.activeKey = null;
+    cryptoState.sentinelConfigured = false;
+
+    await expect(store.getSnapshotData(id)).resolves.toBeNull();
+    // The on-disk ciphertext itself must survive this — nothing here should have deleted the file.
+    const onDiskFile = [...fake.text.keys()].find((k) => k.endsWith(`${id}.json`)) as string;
+    expect(JSON.parse(JSON.parse(fake.text.get(onDiskFile) as string).data).scheme).toBe(
+      'protected-v1',
+    );
+  });
+
   // QNBS-v3: a locked session is not "no snapshot" — getSnapshotData() must propagate IdbStorageLockedError, not swallow it.
   it('throws IdbStorageLockedError (not null) when reading a protected snapshot while the session is locked', async () => {
     await enableTestPassphrase();

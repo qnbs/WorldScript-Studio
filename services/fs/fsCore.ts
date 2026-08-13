@@ -138,13 +138,23 @@ async function writeThenRename(
   await atomicRename(apis, tmpPath, finalPath);
 }
 
-export function writeTextFileAtomic(apis: TauriApis, path: string, content: string): Promise<void> {
-  return enqueueWrite(path, () => {
+// QNBS-v3: takes a content-producer, not a value, so writeProtectedTextFileAtomic can enqueue BEFORE encrypting — otherwise two overlapping saves race on which one finishes encrypting first, letting an older save's slower encryption land last in the queue and overwrite a newer save's plaintext write.
+function enqueueTextFileWrite(
+  apis: TauriApis,
+  path: string,
+  getContent: () => Promise<string>,
+): Promise<void> {
+  return enqueueWrite(path, async () => {
+    const content = await getContent();
     const tmpPath = `${path}.tmp-${createTempSuffix()}`;
-    return writeThenRename(apis, tmpPath, path, () =>
+    await writeThenRename(apis, tmpPath, path, () =>
       retryFs(() => apis.writeTextFile(tmpPath, content)),
     );
   });
+}
+
+export function writeTextFileAtomic(apis: TauriApis, path: string, content: string): Promise<void> {
+  return enqueueTextFileWrite(apis, path, () => Promise.resolve(content));
 }
 
 export function writeFileAtomic(apis: TauriApis, path: string, data: Uint8Array): Promise<void> {
@@ -223,12 +233,12 @@ export async function unprotectTextValue(stored: string): Promise<string> {
 }
 
 /** Whole-file variant of protectTextValue, for stores with no separate plaintext metadata to preserve. */
-export async function writeProtectedTextFileAtomic(
+export function writeProtectedTextFileAtomic(
   apis: TauriApis,
   path: string,
   plaintext: string,
 ): Promise<void> {
-  await writeTextFileAtomic(apis, path, await protectTextValue(plaintext));
+  return enqueueTextFileWrite(apis, path, () => protectTextValue(plaintext));
 }
 
 /** Whole-file variant of unprotectTextValue, for stores with no separate plaintext metadata to preserve. */

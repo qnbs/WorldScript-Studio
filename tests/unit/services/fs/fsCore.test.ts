@@ -24,8 +24,13 @@ import {
 } from '../../../../services/fs/fsCore';
 
 // QNBS-v3: controllable fake for storageEncryptionService's IDB-backed sentinel/session state — see tests/unit/services/fs/fsStores.test.ts for the full rationale (same pattern, scoped here to the pure protectTextValue/unprotectTextValue helpers rather than a whole store).
+// QNBS-v3: keyResolutionDelaysMs lets a test make one call's resolveProtectedWriteKey() (the first async step inside protectTextValue) resolve slower than another's, to test write-ordering under encryption.
 const { cryptoState } = vi.hoisted(() => ({
-  cryptoState: { activeKey: null as CryptoKey | null, sentinelConfigured: false },
+  cryptoState: {
+    activeKey: null as CryptoKey | null,
+    sentinelConfigured: false,
+    keyResolutionDelaysMs: [] as number[],
+  },
 }));
 vi.mock('../../../../services/storage/storageEncryptionService', async (importOriginal) => {
   const actual =
@@ -33,10 +38,12 @@ vi.mock('../../../../services/storage/storageEncryptionService', async (importOr
   return {
     ...actual,
     hasPassphraseSentinel: () => Promise.resolve(cryptoState.sentinelConfigured),
-    resolveProtectedWriteKey: () => {
-      if (cryptoState.activeKey) return Promise.resolve(cryptoState.activeKey);
-      if (cryptoState.sentinelConfigured) return Promise.reject(new actual.IdbStorageLockedError());
-      return Promise.resolve(null);
+    resolveProtectedWriteKey: async () => {
+      const delay = cryptoState.keyResolutionDelaysMs.shift();
+      if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+      if (cryptoState.activeKey) return cryptoState.activeKey;
+      if (cryptoState.sentinelConfigured) throw new actual.IdbStorageLockedError();
+      return null;
     },
   };
 });
@@ -46,6 +53,7 @@ import { StorageEncryptionService } from '../../../../services/storage/storageEn
 beforeEach(() => {
   cryptoState.activeKey = null;
   cryptoState.sentinelConfigured = false;
+  cryptoState.keyResolutionDelaysMs = [];
 });
 
 // QNBS-v3: entries are plain names, directories suffixed with '/' — just enough to model a nested tree for cleanupOrphanedTempFiles' recursive walk, independent of makeAtomicWriteFake above.
@@ -380,6 +388,20 @@ describe('protectTextValue / unprotectTextValue / writeProtectedTextFileAtomic /
     const { apis, text } = makeAtomicWriteFake();
     await writeProtectedTextFileAtomic(apis, '/app/project.json', '{"title":"My Novel"}');
     expect(text.get('/app/project.json')).toBe('{"title":"My Novel"}');
+  });
+
+  // QNBS-v3: an older call's key-resolution step used to run OUTSIDE the per-path write queue, so a slower-to-encrypt older save could land in the queue after a faster-to-encrypt newer save and overwrite it — regression test for that ordering gap.
+  it('serializes concurrent protected writes to the same path in call order, even when the OLDER call resolves its key slower', async () => {
+    await enableTestPassphrase();
+    const { apis, text } = makeAtomicWriteFake();
+    cryptoState.keyResolutionDelaysMs = [20, 0]; // first (older) call's key resolution is slower
+
+    const first = writeProtectedTextFileAtomic(apis, '/app/project.json', 'first-plaintext');
+    const second = writeProtectedTextFileAtomic(apis, '/app/project.json', 'second-plaintext');
+    await Promise.all([first, second]);
+
+    const onDisk = text.get('/app/project.json') as string;
+    expect(await unprotectTextValue(onDisk)).toBe('second-plaintext');
   });
 });
 

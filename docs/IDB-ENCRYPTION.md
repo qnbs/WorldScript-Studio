@@ -161,7 +161,7 @@ Every protected store writer runs inside `withProtectedWriteAdmission()` (shared
 
 ## Tauri Desktop Layer
 
-Tauri uses the same WebView storage encryption lifecycle as the web build. The repository does **not** currently use `tauri-plugin-stronghold`, an OS keychain, or a transparent desktop-only passphrase store. Desktop users enter the passphrase through the same unlock flow and receive the same locked-write guarantees.
+Desktop shares this lifecycle's passphrase, PBKDF2 derivation, sentinel, and unlock/lock UX — but its actual project data lives in the filesystem (`services/fs/*Store.ts`), not the browser's IndexedDB, so it cannot reuse the IDB migration orchestrator above directly. `services/fs/fsEncryptionMigration.ts` is a parallel bridge that converges every fs-backed file (project, settings, snapshot, Codex, RAG-vector, and image data) to whatever the IDB-side operation implies — first-time setup encrypts existing plaintext files, disable decrypts back to plaintext, rotate re-keys — and must run to completion before the shared sentinel/active key changes underneath it. It has no journal/checkpoint of its own yet (see [issue #359](https://github.com/qnbs/WorldScript-Studio/issues/359) for the tracked gap: an interrupted rotation is detected via a marker file on next launch, but not automatically resumed). Binder research-asset files (`.bin`/`.meta.json`) are the one fs-backed store this bridge does not cover and remain plaintext. The repository does **not** use `tauri-plugin-stronghold`, an OS keychain, or a transparent desktop-only passphrase store. See [README § Encryption — which mechanism protects what](../README.md#-encryption--which-mechanism-protects-what) for the full per-store breakdown.
 
 ---
 
