@@ -54,6 +54,7 @@ vi.mock('../../../../services/storage/storageEncryptionService', async (importOr
   };
 });
 
+import { withMigrationAdmission } from '../../../../services/storage/protectedWriteAdmission';
 import {
   SecureRecordCorruptError,
   StorageEncryptionService,
@@ -432,6 +433,37 @@ describe('protectTextValue / unprotectTextValue / writeProtectedTextFileAtomic /
     const { apis, text } = makeAtomicWriteFake();
     await writeProtectedTextFileAtomic(apis, '/app/project.json', '{"title":"My Novel"}');
     expect(text.get('/app/project.json')).toBe('{"title":"My Novel"}');
+  });
+
+  it('holds write admission through atomic publication so a migration cannot overtake the captured key', async () => {
+    await enableTestPassphrase();
+    const { apis, text } = makeAtomicWriteFake();
+    let startWrite: (() => void) | undefined;
+    let releaseWrite: (() => void) | undefined;
+    const writeStarted = new Promise<void>((resolve) => {
+      startWrite = resolve;
+    });
+    const allowWrite = new Promise<void>((resolve) => {
+      releaseWrite = resolve;
+    });
+    apis.writeTextFile = async (path, content) => {
+      startWrite?.();
+      await allowWrite;
+      text.set(path, content);
+    };
+
+    const write = writeProtectedTextFileAtomic(apis, '/app/project.json', '{"title":"My Novel"}');
+    await writeStarted;
+    let migrationEntered = false;
+    const migration = withMigrationAdmission(async () => {
+      migrationEntered = true;
+    });
+    await Promise.resolve();
+    expect(migrationEntered).toBe(false);
+
+    releaseWrite?.();
+    await Promise.all([write, migration]);
+    expect(migrationEntered).toBe(true);
   });
 
   // QNBS-v3: an older call's key-resolution step used to run OUTSIDE the per-path write queue, so a slower-to-encrypt older save could land in the queue after a faster-to-encrypt newer save and overwrite it — regression test for that ordering gap.

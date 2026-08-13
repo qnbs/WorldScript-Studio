@@ -11,10 +11,8 @@ import {
   compressData,
   countProjectWords,
   decompressData,
-  protectTextValue,
   retryFs,
   unprotectTextValue,
-  writeTextFileAtomic,
 } from './fsCore';
 
 // Envelope stored in each snapshot file — outer shell is plain JSON (id/name/date/wordCount stay
@@ -45,11 +43,13 @@ export class FsSnapshotStore extends FsCodexStore {
       name: snapshotLabel,
       date: new Date().toISOString(),
       wordCount: countProjectWords(data),
-      data: await protectTextValue(compressData(data)),
+      data: '',
     };
     const snapshotFile = await apis.join(snapshotsPath, `${id}.json`);
     // QNBS-v3: atomic write — a crash/power-loss mid-write must never leave a snapshot truncated.
-    await writeTextFileAtomic(apis, snapshotFile, JSON.stringify(envelope));
+    await writeProtectedTextFileAtomic(apis, snapshotFile, compressData(data), (protectedData) =>
+      JSON.stringify({ ...envelope, data: protectedData }),
+    );
     return id;
   }
 

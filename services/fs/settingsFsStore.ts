@@ -15,6 +15,7 @@ import { statusActions } from '../../features/status/statusSlice';
 import type { Settings } from '../../types';
 import { logger } from '../logger';
 import { normalizePersistedSettings } from '../storage/idbProjectStore';
+import { withProtectedWriteAdmission } from '../storage/protectedWriteAdmission';
 import {
   IdbStorageLockedError,
   idbDecryptWithKey,
@@ -109,18 +110,18 @@ export class FsSettingsStore extends FsCore {
     const configPath = await apis.join(appDataPath, 'config');
     if (!(await apis.exists(configPath))) await apis.mkdir(configPath, { recursive: true });
 
-    // QNBS-v3: resolveProtectedWriteKey() throws IdbStorageLockedError when configured-but-locked — propagated deliberately (fail closed) rather than silently falling back to plaintext, matching the existing IDB protected-write policy this reuses.
-    const key = await resolveProtectedWriteKey();
-    const payload: ProtectedApiKeyPayload | PlaintextApiKeyPayload = key
-      ? {
-          scheme: PROTECTED_SCHEME,
-          // QNBS-v3: encrypts {provider, apiKey} together (not just the bare key) so a ciphertext swapped between two providers' files decrypts but fails the provider check below, instead of silently handing one provider's key to another.
-          data: bytesToBase64(await idbEncryptWithKey(key, { provider, apiKey: apiKey.trim() })),
-        }
-      : { scheme: PLAINTEXT_SCHEME, value: apiKey.trim() };
-
     const filePath = await apis.join(configPath, `${provider}_key.enc.json`);
-    await writeTextFileAtomic(apis, filePath, JSON.stringify(payload));
+    await withProtectedWriteAdmission(async () => {
+      // QNBS-v3: keep key resolution, encryption, and atomic publication in one shared admission so a lifecycle transition cannot commit after this write has captured the outgoing key.
+      const key = await resolveProtectedWriteKey();
+      const payload: ProtectedApiKeyPayload | PlaintextApiKeyPayload = key
+        ? {
+            scheme: PROTECTED_SCHEME,
+            data: bytesToBase64(await idbEncryptWithKey(key, { provider, apiKey: apiKey.trim() })),
+          }
+        : { scheme: PLAINTEXT_SCHEME, value: apiKey.trim() };
+      await writeTextFileAtomic(apis, filePath, JSON.stringify(payload));
+    });
   }
 
   private async readProtectedApiKey(provider: string, base64Data: string): Promise<string> {

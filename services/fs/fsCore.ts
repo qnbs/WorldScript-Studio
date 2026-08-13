@@ -141,6 +141,17 @@ async function writeThenRename(
   await atomicRename(apis, tmpPath, finalPath);
 }
 
+async function writeTextFileAtomicUnqueued(
+  apis: TauriApis,
+  path: string,
+  content: string,
+): Promise<void> {
+  const tmpPath = `${path}.tmp-${createTempSuffix()}`;
+  await writeThenRename(apis, tmpPath, path, () =>
+    retryFs(() => apis.writeTextFile(tmpPath, content)),
+  );
+}
+
 // QNBS-v3: takes a content-producer, not a value, so writeProtectedTextFileAtomic can enqueue BEFORE encrypting — otherwise two overlapping saves race on which one finishes encrypting first, letting an older save's slower encryption land last in the queue and overwrite a newer save's plaintext write.
 function enqueueTextFileWrite(
   apis: TauriApis,
@@ -149,10 +160,7 @@ function enqueueTextFileWrite(
 ): Promise<void> {
   return enqueueWrite(path, async () => {
     const content = await getContent();
-    const tmpPath = `${path}.tmp-${createTempSuffix()}`;
-    await writeThenRename(apis, tmpPath, path, () =>
-      retryFs(() => apis.writeTextFile(tmpPath, content)),
-    );
+    await writeTextFileAtomicUnqueued(apis, path, content);
   });
 }
 
@@ -209,13 +217,15 @@ function parseProtectedTextEnvelope(raw: string): ProtectedTextEnvelope | null {
  * never need to decrypt (mirrors the IDB path's own "encryption applied at the value level" design).
  */
 export async function protectTextValue(plaintext: string): Promise<string> {
-  return withProtectedWriteAdmission(async () => {
-    const key = await resolveProtectedWriteKey();
-    if (!key) return plaintext;
-    return JSON.stringify({
-      scheme: PROTECTED_TEXT_SCHEME,
-      data: bytesToBase64(await idbEncryptWithKey(key, plaintext)),
-    });
+  return withProtectedWriteAdmission(() => protectTextValueWithinAdmission(plaintext));
+}
+
+async function protectTextValueWithinAdmission(plaintext: string): Promise<string> {
+  const key = await resolveProtectedWriteKey();
+  if (!key) return plaintext;
+  return JSON.stringify({
+    scheme: PROTECTED_TEXT_SCHEME,
+    data: bytesToBase64(await idbEncryptWithKey(key, plaintext)),
   });
 }
 
@@ -248,8 +258,14 @@ export function writeProtectedTextFileAtomic(
   apis: TauriApis,
   path: string,
   plaintext: string,
+  formatContent: (protectedValue: string) => string = (protectedValue) => protectedValue,
 ): Promise<void> {
-  return enqueueTextFileWrite(apis, path, () => protectTextValue(plaintext));
+  return enqueueWrite(path, () =>
+    withProtectedWriteAdmission(async () => {
+      const protectedValue = await protectTextValueWithinAdmission(plaintext);
+      await writeTextFileAtomicUnqueued(apis, path, formatContent(protectedValue));
+    }),
+  );
 }
 
 /** Whole-file variant of unprotectTextValue, for stores with no separate plaintext metadata to preserve. */
