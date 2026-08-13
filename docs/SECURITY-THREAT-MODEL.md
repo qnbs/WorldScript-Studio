@@ -1,7 +1,7 @@
 # Security Threat Model
 
 **Version:** 1.0.0  
-**Date:** 2026-06-05 (baseline); desktop-crypto mitigation row updated 2026-07-29 (v1.24.2, F-05/F-06)  
+**Date:** 2026-06-05 (baseline); desktop-crypto mitigation row updated 2026-08-13 (F-05/F-06 reopened — not resolved by the 2026-07-29 change, see Mitigation Mapping below)  
 **Status:** v1.24.2 baseline
 
 This document provides a formal STRIDE threat analysis for WorldScript Studio, mapping threats to mitigations and code locations.
@@ -124,9 +124,11 @@ Goal: Intercept/decrypt collaboration traffic
 ```
 Goal: Recover a user's cloud-provider API key from the Tauri desktop install
 ├─ OR: Read config/<provider>_key.enc.json directly (local process / malware with user-level FS access)
-│  └─ Mitigation: AES-256-GCM with PBKDF2-derived key (600k iter, random 32-byte salt per file) —
-│     reading the ciphertext no longer reveals the key material; the pre-2026-07-29 scheme derived
-│     the key from data an attacker with file-read access already had (F-05/F-06, fixed)
+│  └─ Mitigation: NOT RESOLVED as of 2026-08-13 — see the Mitigation Mapping row below. The
+│     2026-07-29 change (F-05/F-06) added PBKDF2 (600k iter, random 32-byte salt), but the
+│     derivation *input* is still `${appDataPath}|${provider}|WorldScriptStudio|v1` — entirely
+│     public/reconstructible by anyone with the file-read access this row assumes. Reading the
+│     ciphertext still reveals the key material in one PBKDF2 call; real fix tracked separately
 ├─ OR: Read the IDB-at-rest passphrase sentinel (enableIdbAtRestEncryption)
 │  └─ Mitigation: same PBKDF2 + non-extractable-key pattern; session-scoped in-memory key, never
 │     persisted to disk (`services/storage/storageEncryptionService.ts`)

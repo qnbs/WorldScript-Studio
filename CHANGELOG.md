@@ -376,7 +376,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and multi-target reuse, but the derivation *input* itself — `${appDataPath}|${provider}|WorldScriptStudio|v1`
   — remained fully public/reconstructible, so the root "obfuscation, not encryption" finding was
   never actually closed. Tracked as an open gap — see `docs/IDB-ENCRYPTION.md` § Tauri Desktop Layer
-  and `AUDIT.md`'s F-05/F-06 row for current status.
+  and `AUDIT.md`'s F-05/F-06 row for current status. **Review-loop follow-up (2026-08-13):**
+  `docs/SECURITY-THREAT-MODEL.md`'s Desktop Local File-Read Attack Tree and document header still
+  called this "fixed" and said reading the ciphertext no longer reveals the key material, directly
+  contradicting the corrected Mitigation Mapping row above it — reconciled to say "not resolved"
+  consistently throughout. Also documented a separate, unrelated functional bug surfaced while
+  fact-checking this row: `components/ApiKeySection.tsx` never adopted the `storageService`/
+  `FsSettingsStore` path this desktop API-key row describes — it still reads/writes the Gemini key
+  through `dbService` (IndexedDB) even on desktop, while `services/geminiService.ts` reads through
+  `storageService` (filesystem on desktop), so a Gemini key saved via Settings → AI on desktop is
+  invisible to the code that actually uses it. Tracked in
+  [#358](https://github.com/qnbs/WorldScript-Studio/issues/358); not fixed by this entry.
 - **F-08 — Tauri/web `connect-src` completeness.** Added LanguageTool's default self-hosted port
   (missing on **all 5** surfaces, not just Tauri) and the Hugging Face hosts WebLLM/Transformers.js
   actually resolve models from, including the Xet CDN bridge (`us.aws.cdn.hf.co`) that real model
