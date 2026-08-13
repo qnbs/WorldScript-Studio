@@ -1,8 +1,9 @@
 /**
  * Tests for app/persistedStateFlush.ts
  * QNBS-v3 (#332/D3): shared flush helper used by both index.tsx's visibilitychange handler and the
- * desktop close-to-tray quit flush — verifies it saves project+settings via storageService and is a
- * true no-op when there's no project data yet (fresh/new-user state).
+ * desktop close-to-tray quit flush — verifies it saves project+settings via storageService, always
+ * saves settings even with no project data yet (fresh/new-user state), and fails closed on any
+ * rejected save (Promise.all, not Promise.allSettled) so a failed write is never silently ignored.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -62,12 +63,22 @@ describe('flushPersistedState', () => {
     expect(h.saveSettings).toHaveBeenCalledWith(state.settings);
   });
 
-  it('is a no-op when there is no project data yet (fresh/new-user state)', async () => {
+  it('still saves settings when there is no project data yet (fresh/new-user state)', async () => {
     const state = buildState({
       project: { present: { data: undefined } } as unknown as RootState['project'],
     });
     await flushPersistedState(state);
     expect(h.saveProject).not.toHaveBeenCalled();
-    expect(h.saveSettings).not.toHaveBeenCalled();
+    expect(h.saveSettings).toHaveBeenCalledWith(state.settings);
+  });
+
+  it('propagates a rejection when saveProject fails (fail-closed, not swallowed)', async () => {
+    h.saveProject.mockRejectedValueOnce(new Error('disk full'));
+    await expect(flushPersistedState(buildState())).rejects.toThrow('disk full');
+  });
+
+  it('propagates a rejection when saveSettings fails (fail-closed, not swallowed)', async () => {
+    h.saveSettings.mockRejectedValueOnce(new Error('disk full'));
+    await expect(flushPersistedState(buildState())).rejects.toThrow('disk full');
   });
 });
