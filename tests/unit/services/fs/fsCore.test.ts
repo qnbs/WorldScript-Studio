@@ -7,6 +7,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { TauriApis } from '../../../../services/fs/fsCore';
 import {
+  cleanupOrphanedTempFiles,
   compressData,
   countProjectWords,
   decompressData,
@@ -17,6 +18,29 @@ import {
   writeFileAtomic,
   writeTextFileAtomic,
 } from '../../../../services/fs/fsCore';
+
+// QNBS-v3: entries are plain names, directories suffixed with '/' — just enough to model a nested tree for cleanupOrphanedTempFiles' recursive walk, independent of makeAtomicWriteFake above.
+function makeDirTreeFake(tree: Record<string, string[]>) {
+  const removed: string[] = [];
+  const apis: Pick<TauriApis, 'readDir' | 'remove' | 'join'> = {
+    readDir: (dir) => {
+      const entries = tree[dir];
+      if (!entries) return Promise.reject(new Error(`ENOENT ${dir}`));
+      return Promise.resolve(
+        entries.map((name) => ({
+          name: name.endsWith('/') ? name.slice(0, -1) : name,
+          isDirectory: name.endsWith('/'),
+        })),
+      );
+    },
+    remove: (p: string) => {
+      removed.push(p);
+      return Promise.resolve();
+    },
+    join: (...parts: string[]) => Promise.resolve(parts.join('/')),
+  };
+  return { apis: apis as TauriApis, removed };
+}
 
 // QNBS-v3: minimal in-memory fake covering only what writeTextFileAtomic/writeFileAtomic use — a lighter-weight sibling of fsStores.test.ts's fuller FakeFs, scoped to this file's needs.
 function makeAtomicWriteFake() {
@@ -192,8 +216,7 @@ describe('writeTextFileAtomic / writeFileAtomic', () => {
     ).rejects.toThrow(/locked/);
   });
 
-  // QNBS-v3: the new fix under test — same-path writes serialize in call order, so an older save
-  // (slower temp write) can never overwrite a newer save's already-committed content.
+  // QNBS-v3: same-path writes serialize in call order, so an older (slower) save can never overwrite a newer save's already-committed content.
   it('serializes concurrent writes to the same path in call order, not completion order', async () => {
     const { apis, text } = makeAtomicWriteFake();
     const originalWriteTextFile = apis.writeTextFile;
@@ -214,6 +237,54 @@ describe('writeTextFileAtomic / writeFileAtomic', () => {
     // Second (newer) call must be the one that lands, even though the first call's temp write
     // was artificially slower.
     expect(text.get('/app/project.json')).toBe('second');
+  });
+});
+
+describe('cleanupOrphanedTempFiles', () => {
+  // QNBS-v3: reclaims .tmp-* siblings left by writes interrupted by a process kill, which neither atomicRename's nor writeThenRename's in-session cleanup ever sees.
+  it('removes .tmp-* files at the root and nested inside subdirectories', async () => {
+    const { apis, removed } = makeDirTreeFake({
+      '/app': ['project.json.tmp-a1b2c3d4-1111-2222-3333-444444444444', 'config/', 'projects/'],
+      '/app/config': ['settings.json'],
+      '/app/projects': ['p1/'],
+      '/app/projects/p1': ['project.json', 'codex/'],
+      '/app/projects/p1/codex': ['codex.snap.tmp-deadbeefcafefeed00112233445566'],
+    });
+
+    await cleanupOrphanedTempFiles(apis, '/app');
+
+    expect(removed.sort()).toEqual(
+      [
+        '/app/project.json.tmp-a1b2c3d4-1111-2222-3333-444444444444',
+        '/app/projects/p1/codex/codex.snap.tmp-deadbeefcafefeed00112233445566',
+      ].sort(),
+    );
+  });
+
+  it('does not remove non-temp files', async () => {
+    const { apis, removed } = makeDirTreeFake({ '/app': ['project.json', 'settings.json'] });
+    await cleanupOrphanedTempFiles(apis, '/app');
+    expect(removed).toEqual([]);
+  });
+
+  it('does not throw when the root directory does not exist yet (fresh install)', async () => {
+    const { apis, removed } = makeDirTreeFake({});
+    await expect(cleanupOrphanedTempFiles(apis, '/app')).resolves.toBeUndefined();
+    expect(removed).toEqual([]);
+  });
+
+  it('stops recursing past the depth guard instead of following an unexpectedly deep tree', async () => {
+    const tree: Record<string, string[]> = { '/app': ['d/'] };
+    let path = '/app';
+    for (let i = 0; i < 10; i++) {
+      tree[path] = ['d/'];
+      path = `${path}/d`;
+    }
+    tree[path] = ['leaf.tmp-a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4'];
+    const { apis, removed } = makeDirTreeFake(tree);
+
+    await expect(cleanupOrphanedTempFiles(apis, '/app')).resolves.toBeUndefined();
+    expect(removed).toEqual([]); // the leaf is past the depth guard, never reached
   });
 });
 

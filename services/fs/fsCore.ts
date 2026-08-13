@@ -288,6 +288,36 @@ export function countProjectWords(projectData: unknown): number {
 
 // --- Base class: Tauri path resolution ---
 
+// QNBS-v3: both atomicRename's and writeThenRename's cleanup only run when a JS promise actually rejects — a process kill (crash/power-loss) mid-write stops execution before either handler runs, leaving a uniquely-named `.tmp-*` orphan with no in-session path to reclaim it. Swept once at startup below.
+const TEMP_FILE_PATTERN = /\.tmp-[0-9a-f-]+$/i;
+
+export async function cleanupOrphanedTempFiles(
+  apis: TauriApis,
+  dir: string,
+  depth = 0,
+): Promise<void> {
+  if (depth > 6) return; // guard against an unexpectedly deep tree
+  let entries: { name?: string; isDirectory?: boolean }[];
+  try {
+    entries = await apis.readDir(dir);
+  } catch {
+    return; // directory may not exist yet on a fresh install — nothing to clean up
+  }
+  await Promise.all(
+    entries.map(async (entry) => {
+      if (!entry.name) return;
+      const entryPath = await apis.join(dir, entry.name);
+      if (entry.isDirectory) {
+        await cleanupOrphanedTempFiles(apis, entryPath, depth + 1);
+        return;
+      }
+      if (TEMP_FILE_PATTERN.test(entry.name)) {
+        await apis.remove(entryPath).catch(() => {});
+      }
+    }),
+  );
+}
+
 export class FsCore {
   protected appDataPath: string | null = null;
   protected lastAutoSnapshotTime = Date.now();
@@ -295,13 +325,18 @@ export class FsCore {
   protected readonly MAX_AUTO_SNAPSHOTS = 20;
 
   async initialize(): Promise<void> {
+    let apis: TauriApis;
     try {
-      const apis = await loadTauriApis();
+      apis = await loadTauriApis();
       this.appDataPath = await apis.appDataDir();
     } catch (error) {
       logger.error('Failed to get app data directory:', error);
       throw error;
     }
+    // Fire-and-forget: never delays the caller waiting on this initialize() call.
+    cleanupOrphanedTempFiles(apis, this.appDataPath).catch((error) => {
+      logger.warn('Failed to clean up orphaned temp files:', error);
+    });
   }
 
   protected async ensureAppDataPath(): Promise<string> {

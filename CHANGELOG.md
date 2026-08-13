@@ -24,7 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   overlapping saves could have an older write's rename land after a newer one and silently roll
   the file back; `crypto.randomUUID()` now has a `getRandomValues()`-based fallback for WebKit
   versions that predate it, matching the existing pattern in
-  `encryptionMigrationOrchestrator.ts#createMigrationOperationId`.
+  `encryptionMigrationOrchestrator.ts#createMigrationOperationId`. A new startup sweep
+  (`cleanupOrphanedTempFiles`, run once per session, fire-and-forget) recursively removes
+  `.tmp-*` siblings left behind by a write interrupted by an actual process kill (crash/power
+  loss) rather than a caught JS error — neither `atomicRename`'s nor the temp-write failure
+  handler's in-session cleanup can ever see that case, since execution stops before either runs.
 
 ## [1.27.0] — 2026-08-13
 
