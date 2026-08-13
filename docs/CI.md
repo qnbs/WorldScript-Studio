@@ -74,7 +74,7 @@ Each job that uses the composite must call `actions/checkout@v6` first (local co
 security ──► quality ──┬──► build ──┬──► lighthouse
         │              ├──► e2e     └──► vrt
         │              └──► storybook
-        └──► rust-check (path-scoped: src-tauri/ only)
+        └──► rust-check (cargo steps run when src-tauri/ or ci.yml itself changes)
 
 security ─────┬
 quality ──────┼
@@ -91,7 +91,7 @@ Mutation testing (Stryker) is **not** in this graph — it runs only via manual 
 |-----|--------|---------|
 | `security` | — | `pnpm audit --audit-level=high`; **OSV scanner** (`google/osv-scanner-action`) for npm + Rust lockfiles; `gitleaks` secrets scan; on PRs: `dependency-review-action` |
 | `quality` | `security` | Matrix **Node 22** and **24** → Biome lint, **`pnpm run i18n:check`**, **`pnpm run docs:check`**, **`pnpm run parity:check`**, `pnpm run typecheck`, Vitest + coverage (+ non-blocking coverage-ratchet suggestion), Codecov (optional token), coverage artifact |
-| `rust-check` | `security` | `cargo fmt --check`, `cargo check --locked`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo test --locked` against `src-tauri/`. Path-scoped: the job always runs (valid `ci-success` dependency), but skips the cargo steps entirely when the PR diff doesn't touch `src-tauri/**`, so frontend-only PRs pay no meaningful cost. Prior to this job, native code could merge with zero compile/lint/test verification — only an advisory OSV vuln scan (in `security`, above) ever touched `Cargo.lock`, and the only workflow that actually ran `cargo build` was tag-push/manual-dispatch-only ([`tauri-build.yml`](../.github/workflows/tauri-build.yml)), never PRs. |
+| `rust-check` | `security` | `cargo fmt --check`, `cargo check --locked`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo test --locked` against `src-tauri/`, plus the same four checks (manifest-scoped) against the nested `src-tauri/fuzz/` crate, which isn't part of the parent crate's workspace. The job always runs (valid `ci-success` dependency), but skips all cargo steps entirely when the PR diff touches neither `src-tauri/**` nor `.github/workflows/ci.yml` itself (an edit to the job's own logic must exercise it too), so frontend-only PRs pay no meaningful cost. Prior to this job, native code could merge with zero compile/lint/test verification — only an advisory OSV vuln scan (in `security`, above) ever touched `Cargo.lock`, and the only workflow that actually ran `cargo build` was tag-push/manual-dispatch-only ([`tauri-build.yml`](../.github/workflows/tauri-build.yml)), never PRs. |
 | `build` | `quality` | Production `pnpm run build`, **`bundle:budget`**, **`analyze`** (upload `bundle-analysis.html`), **`pnpm run smoke:prod`** (headless-Chromium prod-build + CSP-runtime gate — see below), `dist` artifact; on `main` (non-PR): Pages artifact + **SLSA build provenance attestation**. No `if:` on the job itself — `smoke:prod` runs on every PR, not just `main` pushes. |
 | `e2e` | `quality` | Playwright **Chromium** + **Mobile Chrome** (Pixel 5) — `CI=true`, 2× retries, 50 min timeout; browser cache via `actions/cache@v5`. Firefox optional locally. `PLAYWRIGHT_SKIP_VRT=true` (VRT is its own job). |
 | `lighthouse` | `build` | LHCI (mobile): **accessibility error gate** `minScore: 0.95`; **CLS error** ≤ 0.1; performance/SEO warn. Desktop run: `continue-on-error: true` until baselines stabilise. Timeout 25 min. |

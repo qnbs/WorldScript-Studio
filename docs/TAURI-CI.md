@@ -51,9 +51,9 @@ Linux dev deps match the Ubuntu job (WebKitGTK 4.1, AppIndicator, librsvg, patch
 
 ## Verifying native (Rust) changes
 
-`ci.yml`'s `rust-check` job now compiles `src-tauri/` on every PR that touches it (or `.github/
-workflows/ci.yml` itself): `cargo fmt --check`, `cargo check --locked`, `cargo clippy --locked
---all-targets -- -D warnings`, and `cargo test --locked`, all on ubuntu-latest, required for
+`ci.yml`'s `rust-check` job now compiles `src-tauri/` on every PR that touches it (or
+`.github/workflows/ci.yml` itself): `cargo fmt --check`, `cargo check --locked`,
+`cargo clippy --locked --all-targets -- -D warnings`, and `cargo test --locked`, all on ubuntu-latest, required for
 `ci-success`. A Rust change can no longer merge without having compiled and passed lint/tests —
 but that PR gate only proves the crate builds cleanly on Linux; it does not build/sign real
 installers, and it says nothing about macOS/Windows-specific `#[cfg(...)]` code paths. This

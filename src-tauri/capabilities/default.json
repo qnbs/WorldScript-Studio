@@ -65,6 +65,7 @@
         "http://127.0.0.1:*/*",
         "https://generativelanguage.googleapis.com/*",
         "https://api.openai.com/*",
+        "https://api.anthropic.com/*",
         "https://api.x.ai/*",
         "https://openrouter.ai/*",
         "https://api.openrouter.ai/*",

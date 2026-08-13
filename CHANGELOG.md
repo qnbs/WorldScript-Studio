@@ -9,8 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Required Rust/Tauri compile gate on pull requests** (`rust-check` job, `.github/workflows/
-  ci.yml`). Previously the only Rust CI was an advisory-only OSV vulnerability scan plus a full
+- **Required Rust/Tauri compile gate on pull requests** (`rust-check` job,
+  `.github/workflows/ci.yml`). Previously the only Rust CI was an advisory-only OSV vulnerability scan plus a full
   installer build on tag-push/manual-dispatch only (`tauri-build.yml`) — native code could merge
   without ever having compiled. The new job runs `cargo fmt --check` / `cargo check --locked` /
   `cargo clippy --locked --all-targets -- -D warnings` / `cargo test --locked` on every PR that
@@ -42,7 +42,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `src-tauri/osv-scanner.toml` (`RUSTSEC-2024-0429` — no fix available without a `webkit2gtk` 4.1+
   upgrade Tauri 2.x doesn't yet support); `dependency-review-action` doesn't read that file, so it
   re-flagged the same risk fresh. Added a matching `allow-ghsas` entry so the two tools' accepted
-  lists agree instead of one silently re-litigating the other's documented exception.
+  lists agree instead of one silently re-litigating the other's documented exception. **Fourth
+  round of review-loop follow-up:** the fuzz-crate check only ran `cargo check`, not `cargo fmt
+  --check`/`cargo clippy` — added both (the crate wasn't actually formatted; fixed). The OSV
+  scanner's `scan-args` never listed `src-tauri/fuzz/Cargo.lock`, so vulnerabilities in the fuzz
+  dependency graph were invisible to the enforced security gate — added. `src-tauri/fuzz/Cargo.lock`
+  is format v4 (stabilized in Cargo 1.83), incompatible with the parent crate's declared 1.77.2
+  MSRV; declared a separate `rust-version = "1.83"` for the fuzz crate (dev-only tooling, never
+  shipped) so an older toolchain fails with a clear error instead of a confusing lockfile-parse
+  failure. `.github/dependabot.yml` only watched `/src-tauri`, so the fuzz crate's independent
+  dependency graph never got automated update PRs — added a second Cargo entry for
+  `/src-tauri/fuzz`. `Swatinem/rust-cache`'s `workspaces` only listed `src-tauri`, so every run
+  recompiled the fuzz crate's entire dependency tree (the whole Tauri stack, via its path
+  dependency on the parent) uncached — added `src-tauri/fuzz` to the cached workspaces and gave
+  the job a larger timeout margin. Separately, found (via the same review pass) and fixed a
+  real, unrelated functional gap: `src-tauri/capabilities/default.json`'s `http:default` allowlist
+  was missing `https://api.anthropic.com/*`, even though desktop is documented to call Anthropic
+  directly via native HTTP — the CSP already permitted the origin, but the Tauri HTTP-plugin
+  capability didn't, so every desktop Anthropic API call would have been denied.
 
 ## [1.27.0] — 2026-08-13
 

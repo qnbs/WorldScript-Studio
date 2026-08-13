@@ -74,6 +74,7 @@ jobs:
             --config=src-tauri/osv-scanner.toml
             --lockfile=pnpm-lock.yaml
             --lockfile=src-tauri/Cargo.lock
+            --lockfile=src-tauri/fuzz/Cargo.lock
 
       # QNBS-v3: gitleaks scans git history for secrets; GITHUB_TOKEN is enough for PR annotations.
       - name: Scan for leaked secrets (gitleaks)
@@ -181,7 +182,7 @@ jobs:
   rust-check:
     name: 🦀 Rust Check
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     needs: [security]
     if: always()
     steps:
@@ -215,7 +216,9 @@ jobs:
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         if: steps.filter.outputs.changed == 'true'
         with:
-          workspaces: src-tauri
+          workspaces: |
+            src-tauri
+            src-tauri/fuzz
           cache-all-crates: true
           prefix-key: "v1"
 
@@ -245,9 +248,17 @@ jobs:
         working-directory: src-tauri
         run: cargo test --locked
 
+      - name: cargo fmt --check (fuzz crate)
+        if: steps.filter.outputs.changed == 'true'
+        run: cargo fmt --manifest-path src-tauri/fuzz/Cargo.toml -- --check
+
       - name: cargo check (fuzz crate)
         if: steps.filter.outputs.changed == 'true'
         run: cargo check --locked --manifest-path src-tauri/fuzz/Cargo.toml
+
+      - name: cargo clippy (fuzz crate)
+        if: steps.filter.outputs.changed == 'true'
+        run: cargo clippy --locked --manifest-path src-tauri/fuzz/Cargo.toml -- -D warnings
 
 
   # ----------------------------------------------------------

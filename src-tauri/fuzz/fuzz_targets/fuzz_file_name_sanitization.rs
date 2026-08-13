@@ -13,7 +13,12 @@ fuzz_target!(|data: &[u8]| {
         // strip path separators and null bytes that could cause path traversal.
         let _sanitized: String = s
             .chars()
-            .filter(|c| !matches!(c, '/' | '\\' | '\0' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
+            .filter(|c| {
+                !matches!(
+                    c,
+                    '/' | '\\' | '\0' | ':' | '*' | '?' | '"' | '<' | '>' | '|'
+                )
+            })
             .take(255)
             .collect();
     }
