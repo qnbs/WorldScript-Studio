@@ -2,17 +2,15 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { Provider } from 'react-redux';
 import App from './App';
+import { flushPersistedState } from './app/persistedStateFlush';
 import { type AppDispatch, appStoreRef, type RootState, setupStore } from './app/store';
 import { IdbUnlockModal } from './components/settings/IdbUnlockModal';
 import { I18nProvider } from './contexts/I18nContext';
-import type { ProjectData } from './features/project/projectSlice';
 import { versionControlActions } from './features/versionControl/versionControlSlice';
+import { loadPersistedRootState } from './services/appBootstrap';
 import { initializeStorage, resetAllDatabases } from './services/dbInitialization';
-import { dbService } from './services/dbService';
 import { logger } from './services/logger';
 import { IdbStorageLockedError } from './services/storage/storageEncryptionService';
-import { saveEnvelopeFromProjectData, storageService } from './services/storageService';
-import type { PersistedRootState } from './types';
 /* ── Self-hosted fonts (@fontsource) ── */
 import '@fontsource/inter/300.css';
 import '@fontsource/inter/400.css';
@@ -201,10 +199,7 @@ async function bootApp(): Promise<void> {
   }
 
   try {
-    const loadedState = await dbService.loadState();
-    const preloadedState: PersistedRootState | undefined = loadedState as
-      | PersistedRootState
-      | undefined;
+    const preloadedState = await loadPersistedRootState();
 
     const isNewUser = !preloadedState;
 
@@ -259,21 +254,11 @@ async function bootApp(): Promise<void> {
     // QNBS-v3: visibilitychange-Flush reduziert Datenverlust, wenn Tabs abrupt in den Hintergrund wechseln.
     const flushOnHidden = () => {
       if (document.visibilityState !== 'hidden') return;
-      const state = store.getState() as RootState;
-      const presentData = state.project.present?.data;
-      if (!presentData) return;
-      const enriched: ProjectData = {
-        ...presentData,
-        persistedVersionControl: {
-          branches: state.versionControl.branches,
-          snapshots: state.versionControl.snapshots,
-          currentBranchId: state.versionControl.currentBranchId,
-        },
-      };
-      void Promise.allSettled([
-        storageService.saveProject(saveEnvelopeFromProjectData(enriched)),
-        storageService.saveSettings(state.settings),
-      ]);
+      flushPersistedState(store.getState() as RootState).catch((error) => {
+        logger.warn('Best-effort visibilitychange flush failed', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
     };
     document.addEventListener('visibilitychange', flushOnHidden);
 

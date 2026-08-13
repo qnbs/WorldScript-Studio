@@ -2,6 +2,7 @@ import type { FC } from 'react';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'react-redux';
 import { useAppDispatch, useAppSelector } from './app/hooks';
+import { flushPersistedState } from './app/persistedStateFlush';
 import type { RootState } from './app/store';
 import { useTransientUiStore } from './app/transientUiStore';
 import { AnalyticsBootstrap } from './components/AnalyticsBootstrap';
@@ -66,6 +67,7 @@ import { getEffectiveTheme } from './services/commands/effectiveTheme';
 import { approximateManuscriptWordCount } from './services/commands/wordCountApprox';
 import { installDesktopMenu } from './services/desktop/desktopMenu';
 import { installCloseToTray, installDesktopTray } from './services/desktop/desktopTray';
+import { logger } from './services/logger';
 import { pluginRegistry } from './services/pluginRegistry';
 import { repairProjectI18nFields } from './services/projectI18nRepair';
 import { hasCompletedSpotlightTour, startSpotlightTour } from './services/spotlightTour';
@@ -288,6 +290,14 @@ const App: FC<AppProps> = ({ isNewUser }) => {
       settings.accessibility.reducedMotion,
     );
   }, [settings.accessibility.reducedMotion]);
+
+  // QNBS-v3 (#332/D4): manual relief valve for backdrop-blur GPU cost, mirroring reducedMotion above — covers OS/DE setups (some Linux/Wayland) that don't expose prefers-reduced-transparency.
+  useEffect(() => {
+    document.body.classList.toggle(
+      'worldscript-reduced-transparency',
+      settings.accessibility.reducedTransparency,
+    );
+  }, [settings.accessibility.reducedTransparency]);
 
   // QNBS-v3: Barrierefreiheits-Toggles → dokumentweite Klassen (Tokens in index.css).
   useEffect(() => {
@@ -579,25 +589,33 @@ const App: FC<AppProps> = ({ isNewUser }) => {
   //
   // executeCommand is held in a ref so the menu only rebuilds when the language (t) changes — not on
   // every executeCommand identity change (it depends on characters/worlds/settings/… and recreates often).
+  // QNBS-v3 (#332/D3): shared by the tray/menu Quit items — PredefinedMenuItem's native Quit bypasses onCloseRequested's flush entirely, so these call this instead. Never resolves if the flush failed, so the app stays running for the user to retry.
+  const quitApp = useCallback(async () => {
+    try {
+      await flushPersistedState(store.getState() as RootState);
+    } catch (error) {
+      logger.warn('Pre-quit flush failed — aborting quit so autosave can retry', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return;
+    }
+    const { exit } = await import('@tauri-apps/plugin-process');
+    await exit(0);
+  }, [store]);
+
+  // QNBS-v3: executeCommandRef synced in its own effect (never assigned during render) so the menu
+  // effect below can depend on [t, quitApp] only and skip rebuilding on every executeCommand identity change.
   const executeCommandRef = useRef(executeCommand);
-  executeCommandRef.current = executeCommand;
+  useEffect(() => {
+    executeCommandRef.current = executeCommand;
+  }, [executeCommand]);
   useEffect(() => {
     void installDesktopMenu(
       (key) => t(key),
       (id) => executeCommandRef.current(id),
+      quitApp,
     );
-  }, [t]);
-
-  // QNBS-v3 (T1): install the localized JS application menu (overrides the minimal Rust fallback).
-  // Rebuilds when the language changes so labels follow the active locale. No-op on the web.
-  useEffect(() => {
-    void installDesktopMenu(
-      (key) => t(key),
-      (id) => {
-        executeCommand(id);
-      },
-    );
-  }, [t, executeCommand]);
+  }, [t, quitApp]);
 
   // QNBS-v3 (T2): system tray (created once; guard makes re-calls a no-op). No-op on the web.
   // QNBS-v3 (#190): executeCommand in a ref so the tray rebuilds on language (t) change only, not on
@@ -608,8 +626,9 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     void installDesktopTray(
       (key) => t(key),
       (id) => trayCommandRef.current(id),
+      quitApp,
     );
-  }, [t]);
+  }, [t, quitApp]);
 
   // QNBS-v3 (T2): close-to-tray — hide instead of quit when the setting is on (read live from store).
   useEffect(() => {
@@ -622,6 +641,8 @@ const App: FC<AppProps> = ({ isNewUser }) => {
       // Defensive read — imported/malformed persisted settings can leave `desktop` null/undefined,
       // which would crash the close handler; default to false (don't trap the window).
       () => (store.getState() as RootState).settings.desktop?.minimizeToTray ?? false,
+      // QNBS-v3 (#332/D3): flush pending project/settings state before a real quit proceeds.
+      () => flushPersistedState(store.getState() as RootState),
     ).then((fn) => {
       if (cancelled) {
         fn?.();

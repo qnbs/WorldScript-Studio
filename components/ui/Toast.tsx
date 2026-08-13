@@ -1,6 +1,6 @@
 import type React from 'react';
 import type { FC } from 'react';
-import { createContext, useContext, useEffect } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo } from 'react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { useCommandExecutor } from '../../contexts/CommandExecutorContext';
 import type { Notification, NotificationType } from '../../features/status/statusSlice';
@@ -29,23 +29,27 @@ export const useToast = () => {
     throw new Error('useToast must be used within a ToastProvider');
   }
 
-  return {
-    success: (
-      title: string,
-      description?: string,
-      options?: { actionLabel?: string; commandId?: string },
-    ) => context.addToast('success', title, description, options),
-    error: (
-      title: string,
-      description?: string,
-      options?: { actionLabel?: string; commandId?: string },
-    ) => context.addToast('error', title, description, options),
-    info: (
-      title: string,
-      description?: string,
-      options?: { actionLabel?: string; commandId?: string },
-    ) => context.addToast('info', title, description, options),
-  };
+  // QNBS-v3 (#332/D5): memoized on context.addToast's identity — an unmemoized object here previously invalidated every consumer's own useMemo (e.g. Settings context) on each unrelated render.
+  return useMemo(
+    () => ({
+      success: (
+        title: string,
+        description?: string,
+        options?: { actionLabel?: string; commandId?: string },
+      ) => context.addToast('success', title, description, options),
+      error: (
+        title: string,
+        description?: string,
+        options?: { actionLabel?: string; commandId?: string },
+      ) => context.addToast('error', title, description, options),
+      info: (
+        title: string,
+        description?: string,
+        options?: { actionLabel?: string; commandId?: string },
+      ) => context.addToast('info', title, description, options),
+    }),
+    [context],
+  );
 };
 
 const ToastItem: FC<{
@@ -134,29 +138,35 @@ export const ToastProvider: FC<{ children: React.ReactNode }> = ({ children }) =
   const dispatch = useAppDispatch();
   const notifications = useAppSelector((state) => state.status.notifications);
 
-  const addToast = (
-    type: NotificationType,
-    title: string,
-    description?: string,
-    options?: { actionLabel?: string; commandId?: string },
-  ) => {
-    dispatch(
-      statusActions.addNotification({
-        type,
-        title,
-        ...(description !== undefined ? { description } : {}),
-        ...(options?.actionLabel ? { actionLabel: options.actionLabel } : {}),
-        ...(options?.commandId ? { commandId: options.commandId } : {}),
-      }),
-    );
-  };
+  // QNBS-v3 (#332/D5): stable identity so the memoized context value below and useToast()'s own memoization actually hold across re-renders.
+  const addToast = useCallback(
+    (
+      type: NotificationType,
+      title: string,
+      description?: string,
+      options?: { actionLabel?: string; commandId?: string },
+    ) => {
+      dispatch(
+        statusActions.addNotification({
+          type,
+          title,
+          ...(description !== undefined ? { description } : {}),
+          ...(options?.actionLabel ? { actionLabel: options.actionLabel } : {}),
+          ...(options?.commandId ? { commandId: options.commandId } : {}),
+        }),
+      );
+    },
+    [dispatch],
+  );
 
   const removeToast = (id: string) => {
     dispatch(statusActions.removeNotification(id));
   };
 
+  const contextValue = useMemo(() => ({ addToast }), [addToast]);
+
   return (
-    <ToastContext.Provider value={{ addToast }}>
+    <ToastContext.Provider value={contextValue}>
       {children}
       <div
         role="status"

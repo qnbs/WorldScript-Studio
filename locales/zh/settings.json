@@ -42,6 +42,7 @@
   "settings.accessibility.preset.motor": "电机舒适度",
   "settings.accessibility.preset.screenReader": "屏幕阅读器",
   "settings.accessibility.reducedMotion": "减少运动",
+  "settings.accessibility.reducedTransparency": "减少透明效果",
   "settings.accessibility.screenReader": "屏幕阅读器支持",
   "settings.accessibility.title": "Accessibility 设置",
   "settings.advancedAi.localRagBuild": "重建本地搜索索引",

@@ -22,6 +22,7 @@ const makeSettings = (overrides = {}) => ({
     presetId: 'custom' as const,
     highContrast: false,
     reducedMotion: false,
+    reducedTransparency: false,
     largeText: false,
     screenReader: false,
     liveRegionVerbosity: 'normal' as const,
@@ -61,6 +62,7 @@ vi.mock('../../../features/settings/accessibilitySchema', () => ({
     presetId: id,
     highContrast: id === 'lowVision',
     reducedMotion: id === 'motor',
+    reducedTransparency: false,
     largeText: id === 'lowVision',
     screenReader: id === 'screenReader',
     liveRegionVerbosity: 'normal' as const,
@@ -71,6 +73,7 @@ vi.mock('../../../features/settings/accessibilitySchema', () => ({
     presetId: 'custom' as const,
     highContrast: false,
     reducedMotion: false,
+    reducedTransparency: false,
     largeText: false,
     screenReader: false,
     focusIndicators: true,
@@ -175,6 +178,24 @@ describe('AccessibilitySection', () => {
   it('renders reduced motion toggle', () => {
     render(<AccessibilitySection />);
     expect(screen.getByText('settings.accessibility.reducedMotion')).toBeInTheDocument();
+  });
+
+  // QNBS-v3 (#332/D4)
+  it('renders reduced transparency toggle', () => {
+    render(<AccessibilitySection />);
+    expect(screen.getByText('settings.accessibility.reducedTransparency')).toBeInTheDocument();
+  });
+
+  it('calls handleSettingChange when reduced transparency is toggled', async () => {
+    const user = userEvent.setup();
+    render(<AccessibilitySection />);
+    await user.click(
+      screen.getByRole('switch', { name: 'settings.accessibility.reducedTransparency' }),
+    );
+    expect(mockHandleSettingChange).toHaveBeenCalledWith(
+      'accessibility',
+      expect.objectContaining({ reducedTransparency: true }),
+    );
   });
 
   it('renders the preview section', () => {

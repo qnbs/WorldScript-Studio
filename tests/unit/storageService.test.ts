@@ -84,6 +84,11 @@ describe('storageService (IndexedDB backend in browser)', () => {
     expect(mockDb.deleteProject).toHaveBeenCalledWith('p1');
   });
 
+  // QNBS-v3 (#332): getActiveProjectId is optional on StorageBackend — dbService/IndexedDB has no multi-project ambiguity to resolve, so this must not throw when the backend doesn't implement it.
+  it('returns null for getActiveProjectId when the backend does not implement it', async () => {
+    expect(await storageService.getActiveProjectId()).toBeNull();
+  });
+
   it('delegates saveSettings / loadSettings to dbService', async () => {
     await storageService.saveSettings({} as never);
     expect(mockDb.saveSettings).toHaveBeenCalled();

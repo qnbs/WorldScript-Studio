@@ -42,6 +42,7 @@
   "settings.accessibility.preset.motor": "Motor erosotasuna",
   "settings.accessibility.preset.screenReader": "Pantaila irakurgailua",
   "settings.accessibility.reducedMotion": "Mugimendu murriztua",
+  "settings.accessibility.reducedTransparency": "Murriztu gardentasun-efektuak",
   "settings.accessibility.screenReader": "Pantaila irakurgailuaren euskarria",
   "settings.accessibility.title": "Irisgarritasun ezarpenak",
   "settings.advancedAi.localRagBuild": "Berreraiki tokiko bilaketa-indizea",
