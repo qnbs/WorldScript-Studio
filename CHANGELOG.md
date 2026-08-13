@@ -372,7 +372,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   single unsalted SHA-256 digest of publicly-derivable material — fixed to PBKDF2 (600,000
   iterations) + a random 32-byte salt, matching the existing `storageEncryptionService.ts`
   pattern. Pre-existing key files are discarded (not migrated) with a one-time notification
-  prompting re-entry.
+  prompting re-entry. **Correction (2026-08-13):** this hardened the KDF against rainbow-table
+  and multi-target reuse, but the derivation *input* itself — `${appDataPath}|${provider}|WorldScriptStudio|v1`
+  — remained fully public/reconstructible, so the root "obfuscation, not encryption" finding was
+  never actually closed. Tracked as an open gap — see `docs/IDB-ENCRYPTION.md` § Tauri Desktop Layer
+  and `AUDIT.md`'s F-05/F-06 row for current status.
 - **F-08 — Tauri/web `connect-src` completeness.** Added LanguageTool's default self-hosted port
   (missing on **all 5** surfaces, not just Tauri) and the Hugging Face hosts WebLLM/Transformers.js
   actually resolve models from, including the Xet CDN bridge (`us.aws.cdn.hf.co`) that real model

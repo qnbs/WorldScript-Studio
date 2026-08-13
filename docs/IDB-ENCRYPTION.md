@@ -161,7 +161,13 @@ Every protected store writer runs inside `withProtectedWriteAdmission()` (shared
 
 ## Tauri Desktop Layer
 
-Tauri uses the same WebView storage encryption lifecycle as the web build. The repository does **not** currently use `tauri-plugin-stronghold`, an OS keychain, or a transparent desktop-only passphrase store. Desktop users enter the passphrase through the same unlock flow and receive the same locked-write guarantees.
+**This section previously claimed desktop shares the full encryption lifecycle described above. That was inaccurate — corrected below.**
+
+On the Tauri desktop build, primary project, settings, snapshot, image, Codex, RAG, and binder-asset data is persisted by the filesystem-backed store (`services/fs/*Store.ts`), not IndexedDB. That store writes plaintext (LZ-string compressed only, no encryption) regardless of `enableIdbAtRestEncryption` — every writer is explicitly commented `ENCRYPTION: plaintext`. Enabling the setting on desktop still shows `IdbUnlockModal`/`PassphraseModal` (the passphrase sentinel lives in the WebView's own IndexedDB, which persists on desktop too), but that unlock flow gates nothing on the filesystem side today — only the UI, not the actual manuscript files under `$APPDATA`, is shared with the web build. See `README.md`'s "Encryption — which mechanism protects what" table for the authoritative per-mechanism breakdown. Extending real at-rest protection to the desktop filesystem store is a tracked, open gap — not yet implemented.
+
+The one thing that *is* desktop-specific and already encrypted is per-provider API keys (`services/fs/settingsFsStore.ts`, via `encryptText`/`decryptText` in `services/fs/fsCore.ts`) — but that mechanism has its own, separate weakness: its PBKDF2 passphrase is derived from a string built entirely out of public/discoverable values (the app-data path, the provider name, and hardcoded constants), not a real secret. Anyone with filesystem read access to the encrypted key file — the exact threat model at-rest encryption exists to defend against — can reconstruct the same derivation and decrypt it. This is also a tracked, open gap, independent from the project-data gap above; do not treat the presence of `encryptText`/`decryptText` as evidence that desktop API keys are meaningfully protected today.
+
+The repository does **not** currently use `tauri-plugin-stronghold`, an OS keychain, or a transparent desktop-only passphrase store.
 
 ---
 

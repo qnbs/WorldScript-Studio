@@ -326,14 +326,16 @@ One-click encrypted export of your entire project library from **Settings → Da
 
 ### 🔑 Encryption — which mechanism protects what
 
-There is no single blanket "encrypted at rest" guarantee — four independent mechanisms protect
-different data, with different key material:
+There is no single blanket "encrypted at rest" guarantee — five independent mechanisms cover
+different data, with different key material, and two of them (marked ⚠️) currently provide no
+real protection despite being present in code:
 
 | Data | Mechanism | Where |
 |------|-----------|-------|
 | **Browser BYOK API key** | Random, non-extractable AES-256-GCM key generated via `crypto.subtle.generateKey()` — no passphrase, nothing to derive | `services/storage/idbKeyStore.ts` |
 | **Browser IDB-at-rest data** _(opt-in, B-1)_ | User passphrase → PBKDF2 (600 000 iterations, SHA-256, random 32-byte salt) → AES-256-GCM, non-extractable key | `services/storage/storageEncryptionService.ts` |
-| **Desktop (Tauri) BYOK API key** | Install-scoped secret material → PBKDF2 (600 000 iterations, SHA-256, random 32-byte salt) → AES-256-GCM, non-extractable key | `services/fs/fsCore.ts`, `services/fs/settingsFsStore.ts` |
+| **Desktop (Tauri) BYOK API key** ⚠️ | PBKDF2 (600 000 iterations, SHA-256, random 32-byte salt) → AES-256-GCM — but the passphrase input is a *public* string (`appDataPath\|provider\|WorldScriptStudio\|v1`), not a real secret; anyone with read access to the encrypted file can reconstruct it and decrypt in one step. Tracked, open gap — see `docs/IDB-ENCRYPTION.md` § Tauri Desktop Layer | `services/fs/fsCore.ts`, `services/fs/settingsFsStore.ts` |
+| **Desktop (Tauri) project/settings/snapshot/Codex/RAG/asset data** ⚠️ | **None — plaintext (LZ-string compressed only).** Enabling "Encrypt project data at rest" still shows the passphrase unlock screen on desktop, but it doesn't gate this filesystem-backed store. Tracked, open gap | `services/fs/*Store.ts` |
 | **Library backup vault** | User passphrase → PBKDF2 (600 000 iterations, SHA-256) → AES-256-GCM | `services/libraryBackupService.ts` |
 
 See [`docs/SECURITY-THREAT-MODEL.md`](docs/SECURITY-THREAT-MODEL.md) for the full threat-model mapping.
