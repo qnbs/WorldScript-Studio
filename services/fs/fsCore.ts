@@ -193,6 +193,8 @@ interface ProtectedTextEnvelope {
   data: string;
 }
 
+export type FsEncryptionMigrationOperation = 'set' | 'disable' | 'rotate';
+
 // QNBS-v3: a value that claims scheme==='protected-v1' but has an invalid/missing `data` field is corrupted ciphertext, not plaintext that happens to mention the scheme — throwing here (instead of falling through as "not protected") stops callers from deserializing the envelope shell itself as real domain data.
 function parseProtectedTextEnvelope(raw: string): ProtectedTextEnvelope | null {
   let parsed: unknown;
@@ -227,6 +229,56 @@ async function protectTextValueWithinAdmission(plaintext: string): Promise<strin
     scheme: PROTECTED_TEXT_SCHEME,
     data: bytesToBase64(await idbEncryptWithKey(key, plaintext)),
   });
+}
+
+/**
+ * Converts a value while the caller already owns the exclusive lifecycle admission. This deliberately
+ * bypasses ordinary readiness checks: the migration journal/marker itself makes those checks reject.
+ */
+export async function migrateProtectedTextValue(
+  stored: string,
+  operation: FsEncryptionMigrationOperation,
+  sourceKey: CryptoKey | undefined,
+  targetKey: CryptoKey | undefined,
+): Promise<string> {
+  const envelope = parseProtectedTextEnvelope(stored);
+  if (!envelope) {
+    if (operation === 'disable') return stored;
+    if (!targetKey) throw new Error('Filesystem encryption migration is missing its target key');
+    return JSON.stringify({
+      scheme: PROTECTED_TEXT_SCHEME,
+      data: bytesToBase64(await idbEncryptWithKey(targetKey, stored)),
+    });
+  }
+
+  const decryptWith = async (key: CryptoKey): Promise<string> => {
+    try {
+      return await idbDecryptWithKey<string>(key, base64ToBytes(envelope.data));
+    } catch {
+      throw new SecureRecordCorruptError();
+    }
+  };
+  if (operation === 'disable') {
+    if (!sourceKey) throw new Error('Filesystem encryption migration is missing its source key');
+    return decryptWith(sourceKey);
+  }
+  if (!targetKey) throw new Error('Filesystem encryption migration is missing its target key');
+  if (operation === 'set') {
+    // A protected file during first enable cannot be attributed safely without its prior key.
+    await decryptWith(targetKey);
+    return stored;
+  }
+  try {
+    await decryptWith(targetKey);
+    return stored; // Replay-safe after an interruption between publication and checkpointing.
+  } catch (targetError) {
+    if (!sourceKey) throw targetError;
+    const plaintext = await decryptWith(sourceKey);
+    return JSON.stringify({
+      scheme: PROTECTED_TEXT_SCHEME,
+      data: bytesToBase64(await idbEncryptWithKey(targetKey, plaintext)),
+    });
+  }
 }
 
 /**

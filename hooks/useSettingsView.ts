@@ -24,6 +24,7 @@ import {
 } from '../services/fs/fsEncryptionMigration';
 import { logger } from '../services/logger';
 import type { ProtectedStoreMigrationProgress } from '../services/storage/protectedStoreMigration';
+import { withMigrationAdmission } from '../services/storage/protectedWriteAdmission';
 import {
   clearIdbEncryptionKey,
   clearIdbPassphrase,
@@ -388,18 +389,18 @@ export const useSettingsView = () => {
   const handlePassphraseConfirm = useCallback(
     async (_current: string, newPassphrase: string) => {
       if (passphraseModal === 'set') {
-        // QNBS-v3: setupIdbEncryption derives key, writes sentinel to IDB, sets _activeKey
-        await setupIdbEncryption(newPassphrase);
-        // QNBS-v3: persist configured state before FS migration so an interrupted strict setup retains the key material required for recovery instead of orphaning already-protected files.
-        dispatch(featureFlagsActions.setEnableIdbAtRestEncryption(true));
-        setEncryptionReady(true);
-        if (isTauriRuntime()) {
+        const setup = async () => {
+          await setupIdbEncryption(newPassphrase);
+          dispatch(featureFlagsActions.setEnableIdbAtRestEncryption(true));
+          setEncryptionReady(true);
           const key = await resolveProtectedWriteKey();
           if (key) {
             await migrateAllProtectedFsData(key, 'set');
             await clearFsMigrationMarker();
           }
-        }
+        };
+        if (isTauriRuntime()) await withMigrationAdmission(setup);
+        else await setup();
         // QNBS-v3: WCAG 4.1.3 — toast confirms success for keyboard/AT users who can't see status text
         toast.success(t('settings.privacy.encryptionActiveStatus'));
       } else if (passphraseModal === 'unlock') {
@@ -411,11 +412,18 @@ export const useSettingsView = () => {
         // QNBS-v3: clearIdbPassphrase() requires an already-unlocked session key — no passphrase re-entry.
         setMigrationProgress(null);
         try {
-          // QNBS-v3: must convert fs-backed desktop data to plaintext BEFORE the sentinel below is destroyed — clearIdbPassphrase() has no awareness of services/fs/*, so ordering here is load-bearing, not cosmetic.
-          if (isTauriRuntime()) await migrateAllProtectedFsData(null, 'disable');
-          await clearIdbPassphrase((progress) => setMigrationProgress(progress));
-          // QNBS-v3: cleared only now, not inside the bridge — a crash between the bridge succeeding and this IDB commit must still leave the marker in place to detect, since fs files are already plaintext but the sentinel isn't cleared yet.
-          if (isTauriRuntime()) await clearFsMigrationMarker();
+          const disable = async () => {
+            const sourceKey = await resolveProtectedWriteKey();
+            if (!sourceKey)
+              throw new Error('Encryption must be unlocked before it can be disabled');
+            await migrateAllProtectedFsData(null, 'disable', sourceKey);
+            await clearIdbPassphrase((progress) => setMigrationProgress(progress), {
+              alreadyHasExclusiveAdmission: true,
+            });
+            await clearFsMigrationMarker();
+          };
+          if (isTauriRuntime()) await withMigrationAdmission(disable);
+          else await clearIdbPassphrase((progress) => setMigrationProgress(progress));
         } finally {
           setMigrationProgress(null);
         }
@@ -426,17 +434,24 @@ export const useSettingsView = () => {
         setMigrationProgress(null);
         try {
           // QNBS-v3: derives the SAME target key rotateIdbPassphrase() will activate (same salt/passphrase) and re-keys fs-backed desktop data under it BEFORE the active session key is swapped below — otherwise fs data stays under the old, soon-unrecoverable key.
-          if (isTauriRuntime()) {
-            // QNBS-v3: verify _current against the durable sentinel BEFORE mutating any fs file — otherwise a mistyped current passphrase lets the bridge re-key everything to the new key while rotateIdbPassphrase() below then rejects (wrong _current) and never activates that key, stranding fs data under a key the active session never adopts.
-            await deriveAndVerifySourceKeyFromSentinel(_current);
+          const rotate = async () => {
+            const sourceKey = await deriveAndVerifySourceKeyFromSentinel(_current);
             const targetKey = await deriveRotationTargetKey(newPassphrase);
-            await migrateAllProtectedFsData(targetKey, 'rotate');
+            await migrateAllProtectedFsData(targetKey, 'rotate', sourceKey);
+            await rotateIdbPassphrase(
+              _current,
+              newPassphrase,
+              (progress) => setMigrationProgress(progress),
+              { alreadyHasExclusiveAdmission: true },
+            );
+            await clearFsMigrationMarker();
+          };
+          if (isTauriRuntime()) await withMigrationAdmission(rotate);
+          else {
+            await rotateIdbPassphrase(_current, newPassphrase, (progress) =>
+              setMigrationProgress(progress),
+            );
           }
-          await rotateIdbPassphrase(_current, newPassphrase, (progress) =>
-            setMigrationProgress(progress),
-          );
-          // QNBS-v3: cleared only now, not inside the bridge — a crash between the bridge re-keying every fs file to the new key and this IDB commit updating the sentinel must still leave the marker in place; clearing it earlier would make that exact window (new-key fs files, old-key sentinel) undetectable at next startup.
-          if (isTauriRuntime()) await clearFsMigrationMarker();
         } finally {
           setMigrationProgress(null);
         }

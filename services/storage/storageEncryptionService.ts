@@ -32,6 +32,11 @@ import { decodeSecureRecordValue, encodeSecureRecordValue } from './secureRecord
 // QNBS-v3: re-exported so a write that already captured its key via resolveProtectedWriteKey() can re-check only the migration guard pre-write, without re-running its redundant lock check.
 export { assertNoActiveEncryptionMigration } from './encryptionMigrationJournal';
 
+export interface EncryptionLifecycleAdmissionOptions {
+  /** A desktop coordinator already owns the exclusive admission across filesystem and IDB work. */
+  alreadyHasExclusiveAdmission?: boolean;
+}
+
 const PBKDF2_ITERATIONS = 600_000; // OWASP 2024 minimum for PBKDF2-HMAC-SHA-256
 const IV_BYTE_LENGTH = 12;
 const SALT_BYTE_LENGTH = 32;
@@ -738,6 +743,7 @@ async function commitRekeyMigration(
  */
 export async function clearIdbPassphrase(
   onProgress?: ProtectedStoreMigrationProgressCallback,
+  admission: EncryptionLifecycleAdmissionOptions = {},
 ): Promise<void> {
   if (!_activeKey) throw new IdbStorageLockedError();
   const existingJournal = await readEncryptionMigrationJournal();
@@ -755,6 +761,9 @@ export async function clearIdbPassphrase(
     operation: 'disable',
     keys: { sourceKey },
     ...(onProgress ? { onProgress } : {}),
+    ...(admission.alreadyHasExclusiveAdmission
+      ? { admission: { alreadyHasExclusiveAdmission: true } }
+      : {}),
   });
   // QNBS-v3: journal is durably 'committing' here — every store has been migrated and verified
   // plaintext. Only bookkeeping remains; a failure below just needs a retry via the recovery UX.
@@ -772,6 +781,7 @@ export async function rotateIdbPassphrase(
   oldPassphrase: string,
   newPassphrase: string,
   onProgress?: ProtectedStoreMigrationProgressCallback,
+  admission: EncryptionLifecycleAdmissionOptions = {},
 ): Promise<void> {
   if (!oldPassphrase || !newPassphrase) throw new Error('Passphrase must not be empty');
   const existingJournal = await readEncryptionMigrationJournal();
@@ -789,6 +799,9 @@ export async function rotateIdbPassphrase(
     keys: { sourceKey, targetKey },
     targetVerifier,
     ...(onProgress ? { onProgress } : {}),
+    ...(admission.alreadyHasExclusiveAdmission
+      ? { admission: { alreadyHasExclusiveAdmission: true } }
+      : {}),
   });
   // QNBS-v3: journal is durably 'committing' here — every store is verified re-encrypted under the
   // target key. Only bookkeeping remains; a failure below just needs a retry via the recovery UX.

@@ -15,13 +15,13 @@
  */
 
 import { logger } from '../logger';
-import { idbEncryptWithKey } from '../storage/storageEncryptionService';
+import { idbEncryptWithKey, resolveProtectedWriteKey } from '../storage/storageEncryptionService';
 import {
   bytesToBase64,
   compressData,
   loadTauriApis,
+  migrateProtectedTextValue,
   type TauriApis,
-  unprotectTextValue,
   writeTextFileAtomic,
 } from './fsCore';
 import { fileSystemService } from './index';
@@ -29,6 +29,8 @@ import { fileSystemService } from './index';
 const PROTECTED_TEXT_SCHEME = 'protected-v1';
 
 interface MigrationOptions {
+  operation: FsMigrationMarker['operation'];
+  sourceKey?: CryptoKey;
   targetKey: CryptoKey | null;
   // QNBS-v3: every lifecycle operation is strict, so setup never reports complete encryption while a pre-existing file remains plaintext or unreadable.
   strict: true;
@@ -152,18 +154,18 @@ async function reprotectWholeFile(
   }
   let plaintext: string;
   try {
-    plaintext = await unprotectTextValue(raw);
+    plaintext = await migrateProtectedTextValue(
+      raw,
+      opts.operation,
+      opts.sourceKey,
+      opts.targetKey ?? undefined,
+    );
   } catch (error) {
     if (opts.strict) throw error;
     logger.warn(`Skipping ${path} — could not read its current content:`, error);
     return;
   }
-  const content = opts.targetKey
-    ? JSON.stringify({
-        scheme: PROTECTED_TEXT_SCHEME,
-        data: bytesToBase64(await idbEncryptWithKey(opts.targetKey, plaintext)),
-      })
-    : plaintext;
+  const content = plaintext;
   if (content === raw) return; // already in the desired state
   try {
     await writeTextFileAtomic(apis, path, content);
@@ -215,18 +217,18 @@ async function reprotectSnapshotFile(
   const originalData = envelope.data;
   let plaintext: string;
   try {
-    plaintext = await unprotectTextValue(originalData);
+    plaintext = await migrateProtectedTextValue(
+      originalData,
+      opts.operation,
+      opts.sourceKey,
+      opts.targetKey ?? undefined,
+    );
   } catch (error) {
     if (opts.strict) throw error;
     logger.warn(`Skipping ${path} — could not read its current data field:`, error);
     return;
   }
-  envelope.data = opts.targetKey
-    ? JSON.stringify({
-        scheme: PROTECTED_TEXT_SCHEME,
-        data: bytesToBase64(await idbEncryptWithKey(opts.targetKey, plaintext)),
-      })
-    : plaintext;
+  envelope.data = plaintext;
   if (envelope.data === originalData) return; // already in the desired state
   try {
     await writeTextFileAtomic(apis, path, JSON.stringify(envelope));
@@ -245,8 +247,20 @@ async function reprotectSnapshotFile(
 export async function migrateAllProtectedFsData(
   targetKey: CryptoKey | null,
   operation: FsMigrationMarker['operation'],
+  sourceKey?: CryptoKey,
 ): Promise<void> {
-  const opts: MigrationOptions = { targetKey, strict: true };
+  // QNBS-v3: production lifecycle calls pass an explicit source key while holding exclusive admission; this fallback preserves the standalone bridge API for focused tests and callers that run before the marker exists.
+  const effectiveSourceKey =
+    sourceKey ?? (operation === 'set' ? undefined : await resolveProtectedWriteKey());
+  if (operation !== 'set' && !effectiveSourceKey) {
+    throw new Error('Filesystem encryption migration is missing its source key');
+  }
+  const opts: MigrationOptions = {
+    operation,
+    ...(effectiveSourceKey ? { sourceKey: effectiveSourceKey } : {}),
+    targetKey,
+    strict: true,
+  };
   const apis = await loadTauriApis();
   const appDataPath = await apis.appDataDir();
 
@@ -261,7 +275,12 @@ export async function migrateAllProtectedFsData(
       await reprotectWholeFile(apis, entryPath, opts);
     } else if (entry.name.endsWith('_key.enc.json')) {
       const provider = entry.name.slice(0, -'_key.enc.json'.length);
-      await fileSystemService.reprotectApiKeyFile(provider, opts.targetKey, opts.strict);
+      await fileSystemService.reprotectApiKeyFile(
+        provider,
+        opts.targetKey,
+        opts.strict,
+        opts.sourceKey,
+      );
     }
   }
 

@@ -219,9 +219,10 @@ export class FsSettingsStore extends FsCore {
     provider: string,
     targetKey: CryptoKey | null,
     strict = true,
+    sourceKey?: CryptoKey,
   ): Promise<void> {
     try {
-      await this.reprotectApiKeyFileInner(provider, targetKey);
+      await this.reprotectApiKeyFileInner(provider, targetKey, sourceKey);
     } catch (error) {
       if (strict) throw error;
       // QNBS-v3: non-strict (first-time setup) must never throw — any per-file error is logged and skipped so it can never strand setupIdbEncryption()'s already-activated sentinel/key.
@@ -232,6 +233,7 @@ export class FsSettingsStore extends FsCore {
   private async reprotectApiKeyFileInner(
     provider: string,
     targetKey: CryptoKey | null,
+    sourceKey?: CryptoKey,
   ): Promise<void> {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
@@ -245,16 +247,30 @@ export class FsSettingsStore extends FsCore {
       // QNBS-v3: covers first-time setup, where every existing key file starts as plaintext-v1 — without this, 'set' would leave already-saved keys unencrypted until their next incidental re-save.
       apiKey = parsed['value'];
     } else if (parsed['scheme'] === PROTECTED_SCHEME && typeof parsed['data'] === 'string') {
-      const sourceKey = await resolveProtectedWriteKey();
       if (!sourceKey) {
         throw new Error(
           `Protected API key for provider "${provider}" exists but at-rest encryption is no longer configured`,
         );
       }
-      const decrypted = await idbDecryptWithKey<{ provider: string; apiKey: string }>(
-        sourceKey,
-        base64ToBytes(parsed['data']),
-      );
+      let decrypted: { provider: string; apiKey: string };
+      if (targetKey) {
+        try {
+          decrypted = await idbDecryptWithKey<{ provider: string; apiKey: string }>(
+            targetKey,
+            base64ToBytes(parsed['data']),
+          );
+        } catch {
+          decrypted = await idbDecryptWithKey<{ provider: string; apiKey: string }>(
+            sourceKey,
+            base64ToBytes(parsed['data']),
+          );
+        }
+      } else {
+        decrypted = await idbDecryptWithKey<{ provider: string; apiKey: string }>(
+          sourceKey,
+          base64ToBytes(parsed['data']),
+        );
+      }
       // QNBS-v3: same provider-identity check readProtectedApiKey() enforces on ordinary reads — without it, a ciphertext swapped between two provider files gets "laundered" into a correctly-labeled new file by this migration, silently bypassing the cross-file substitution guard.
       if (decrypted.provider !== provider) {
         throw new Error(

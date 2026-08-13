@@ -54,6 +54,11 @@ export interface ProtectedStoreAdapter {
   verify(context: Omit<ProtectedStoreAdapterContext, 'cursor'>): Promise<number>;
 }
 
+export interface ProtectedStoreMigrationRunOptions {
+  /** The caller owns one exclusive admission across an external participant and the final key commit. */
+  alreadyHasExclusiveAdmission?: boolean;
+}
+
 export class ProtectedStoreMigrationAdapterError extends Error {
   constructor(message: string) {
     super(message);
@@ -224,6 +229,7 @@ export async function runProtectedStoreMigration(
   adapters: readonly ProtectedStoreAdapter[],
   keys: EncryptionMigrationKeys,
   onProgress?: ProtectedStoreMigrationProgressCallback,
+  options: ProtectedStoreMigrationRunOptions = {},
 ): Promise<EncryptionMigrationJournal> {
   let journal = initialJournal;
   if (journal.phase === 'recovery-required') {
@@ -260,9 +266,11 @@ export async function runProtectedStoreMigration(
         let checkpoint = checkpointFor(journal, adapter.id);
         while (!checkpoint.done) {
           // QNBS-v3: exclusive admission bounds the race window to one batch, not the whole run — closes the write-vs-migration TOCTOU gap (#338) while still letting writers proceed between batches.
-          const batch = await withMigrationAdmission(() =>
-            adapter.migrateNext(migrationContext(journal, checkpoint, keys)),
-          );
+          const migrateBatch = () =>
+            adapter.migrateNext(migrationContext(journal, checkpoint, keys));
+          const batch = options.alreadyHasExclusiveAdmission
+            ? await migrateBatch()
+            : await withMigrationAdmission(migrateBatch);
           checkpoint = nextCheckpoint(checkpoint, batch);
           journal = await updateEncryptionMigrationJournal(journal, {
             phase: 'migrating',

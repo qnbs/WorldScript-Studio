@@ -15,6 +15,7 @@ import {
   type EncryptionMigrationKeys,
   type ProtectedStoreAdapter,
   type ProtectedStoreMigrationProgressCallback,
+  type ProtectedStoreMigrationRunOptions,
   runProtectedStoreMigration,
 } from './protectedStoreMigration';
 import { getRegisteredSecondaryProtectedStoreAdapters } from './secondaryProtectedStoreAdapters';
@@ -43,6 +44,7 @@ export interface StartProductionEncryptionMigrationInput {
   /** A verifier encrypted with the target key — required for 'enable'/'rekey', omitted for 'disable'. */
   targetVerifier?: number[];
   onProgress?: ProtectedStoreMigrationProgressCallback;
+  admission?: ProtectedStoreMigrationRunOptions;
 }
 
 /**
@@ -62,7 +64,13 @@ export async function runProductionEncryptionMigration(
     ...(input.targetVerifier ? { targetVerifier: input.targetVerifier } : {}),
     stores: adapters.map((adapter) => ({ id: adapter.id, processed: 0, verified: 0, done: false })),
   });
-  return runProtectedStoreMigration(journal, adapters, input.keys, input.onProgress);
+  return runProtectedStoreMigration(
+    journal,
+    adapters,
+    input.keys,
+    input.onProgress,
+    input.admission,
+  );
 }
 
 /**
@@ -74,11 +82,13 @@ export async function resumeProductionEncryptionMigration(
   journal: EncryptionMigrationJournal,
   keys: EncryptionMigrationKeys,
   onProgress?: ProtectedStoreMigrationProgressCallback,
+  admission?: ProtectedStoreMigrationRunOptions,
 ): Promise<EncryptionMigrationJournal> {
   return runProtectedStoreMigration(
     journal,
     getRegisteredProtectedStoreAdapters(),
     keys,
     onProgress,
+    admission,
   );
 }
