@@ -165,6 +165,12 @@ export const AccessibilitySection: FC = () => {
               checked={accessibility.reducedMotion}
               onChange={(v) => patchA11y({ reducedMotion: v })}
             />
+            {/* QNBS-v3 (#332/D4): manual relief valve for the backdrop-blur GPU cost — see index.css's body.is-desktop.worldscript-reduced-transparency rule; a no-op on web/PWA by design. */}
+            <ToggleSwitch
+              label={t('settings.accessibility.reducedTransparency')}
+              checked={accessibility.reducedTransparency}
+              onChange={(v) => patchA11y({ reducedTransparency: v })}
+            />
             <ToggleSwitch
               label={t('settings.accessibility.largeText')}
               checked={accessibility.largeText}

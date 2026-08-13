@@ -35,6 +35,8 @@ tauri-plugin-deep-link = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 # QNBS-v3 (T3): native OS notifications (background-task completion), permission-gated in JS.
 tauri-plugin-notification = "2"
+# QNBS-v3 (#332/D3): exposes exit() to JS so the tray/menu Quit items can flush state before actually terminating the process.
+tauri-plugin-process = "2"
 tokio = { version = "1", features = ["sync", "time", "process", "rt-multi-thread"] }
 candle-core = { version = "0.11", optional = true }
 candle-nn = { version = "0.11", optional = true }
