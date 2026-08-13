@@ -81,7 +81,7 @@ overrides:
   "@babel/core": ">=7.29.6 <8"
   undici: ">=7.29.0 <8"
   js-yaml: ">=4.3.1 <5"
-  nanoid@^3: "3.3.17"
+  nanoid@^3: "3.3.18"
   nanoid@^5: "5.1.16"
   # QNBS-v3 (2026-07-26): GHSA batch blocking the CI security gate — transitive-only dev paths.
   adm-zip: ">=0.6.0" # GHSA-xcpc-8h2w-3j85 — 4GB memory allocation via crafted ZIP (onnxruntime-node)
