@@ -43,6 +43,7 @@ const mockDeriveRotationTargetKey = vi.fn().mockResolvedValue('mock-target-key')
 const mockResolveProtectedWriteKey = vi.fn().mockResolvedValue('mock-active-key');
 const mockDeriveAndVerifySourceKeyFromSentinel = vi.fn().mockResolvedValue('mock-source-key');
 const mockMigrateAllProtectedFsData = vi.fn().mockResolvedValue(undefined);
+const mockClearFsMigrationMarker = vi.fn().mockResolvedValue(undefined);
 const mockIsTauriRuntime = vi.fn(() => false);
 
 const mockSettings = {
@@ -228,6 +229,7 @@ vi.mock('../../../services/storageService', () => ({
 vi.mock('../../../services/fs/fsEncryptionMigration', () => ({
   migrateAllProtectedFsData: (targetKey: unknown, operation: unknown) =>
     mockMigrateAllProtectedFsData(targetKey, operation),
+  clearFsMigrationMarker: () => mockClearFsMigrationMarker(),
 }));
 
 vi.mock('../../../services/tauriRuntime', () => ({
@@ -631,6 +633,7 @@ describe('handlePassphraseConfirm — disable/rotate', () => {
     mockClearIdbPassphrase.mockResolvedValue(undefined);
     mockRotateIdbPassphrase.mockResolvedValue(undefined);
     mockMigrateAllProtectedFsData.mockClear().mockResolvedValue(undefined);
+    mockClearFsMigrationMarker.mockClear().mockResolvedValue(undefined);
     mockDeriveRotationTargetKey.mockClear().mockResolvedValue('mock-target-key');
     mockResolveProtectedWriteKey.mockClear().mockResolvedValue('mock-active-key');
     mockDeriveAndVerifySourceKeyFromSentinel.mockClear().mockResolvedValue('mock-source-key');
@@ -690,7 +693,7 @@ describe('handlePassphraseConfirm — disable/rotate', () => {
     expect(mockMigrateAllProtectedFsData).not.toHaveBeenCalled();
   });
 
-  it('encrypts existing fs-backed desktop data with the newly-active key on first-time setup, in the Tauri runtime', async () => {
+  it('encrypts existing fs-backed desktop data with the newly-active key on first-time setup, and clears the fs migration marker on success, in the Tauri runtime', async () => {
     mockIsTauriRuntime.mockReturnValue(true);
     mockResolveProtectedWriteKey.mockResolvedValue('newly-active-key');
     const callOrder: string[] = [];
@@ -699,6 +702,9 @@ describe('handlePassphraseConfirm — disable/rotate', () => {
     });
     mockMigrateAllProtectedFsData.mockImplementation(async () => {
       callOrder.push('migrateAllProtectedFsData');
+    });
+    mockClearFsMigrationMarker.mockImplementation(async () => {
+      callOrder.push('clearFsMigrationMarker');
     });
 
     const { result } = renderHook(() => useSettingsView());
@@ -710,7 +716,11 @@ describe('handlePassphraseConfirm — disable/rotate', () => {
     });
 
     expect(mockMigrateAllProtectedFsData).toHaveBeenCalledWith('newly-active-key', 'set');
-    expect(callOrder).toEqual(['setupIdbEncryption', 'migrateAllProtectedFsData']);
+    expect(callOrder).toEqual([
+      'setupIdbEncryption',
+      'migrateAllProtectedFsData',
+      'clearFsMigrationMarker',
+    ]);
   });
 
   it('rolls back the just-created sentinel when the first-time-setup fs migration fails, in the Tauri runtime', async () => {
@@ -838,7 +848,7 @@ describe('handlePassphraseConfirm — disable/rotate', () => {
     expect(mockDeriveRotationTargetKey).not.toHaveBeenCalled();
   });
 
-  it('migrates fs-backed desktop data to plaintext BEFORE clearIdbPassphrase runs, in the Tauri runtime', async () => {
+  it('migrates fs-backed desktop data to plaintext BEFORE clearIdbPassphrase runs, and clears the fs migration marker only AFTER it, in the Tauri runtime', async () => {
     mockIsTauriRuntime.mockReturnValue(true);
     const callOrder: string[] = [];
     mockMigrateAllProtectedFsData.mockImplementation(async () => {
@@ -846,6 +856,9 @@ describe('handlePassphraseConfirm — disable/rotate', () => {
     });
     mockClearIdbPassphrase.mockImplementation(async () => {
       callOrder.push('clearIdbPassphrase');
+    });
+    mockClearFsMigrationMarker.mockImplementation(async () => {
+      callOrder.push('clearFsMigrationMarker');
     });
 
     const { result } = renderHook(() => useSettingsView());
@@ -858,10 +871,15 @@ describe('handlePassphraseConfirm — disable/rotate', () => {
 
     expect(mockMigrateAllProtectedFsData).toHaveBeenCalledWith(null, 'disable');
     expect(mockDeriveRotationTargetKey).not.toHaveBeenCalled();
-    expect(callOrder).toEqual(['migrateAllProtectedFsData', 'clearIdbPassphrase']);
+    // QNBS-v3: clearFsMigrationMarker must run LAST — clearing it any earlier would erase the only "mid-flight" signal a crash between the fs bridge and the IDB commit would leave behind.
+    expect(callOrder).toEqual([
+      'migrateAllProtectedFsData',
+      'clearIdbPassphrase',
+      'clearFsMigrationMarker',
+    ]);
   });
 
-  it('derives the rotation target key and re-keys fs-backed desktop data BEFORE rotateIdbPassphrase runs, in the Tauri runtime', async () => {
+  it('derives the rotation target key and re-keys fs-backed desktop data BEFORE rotateIdbPassphrase runs, and clears the fs migration marker only AFTER it, in the Tauri runtime', async () => {
     mockIsTauriRuntime.mockReturnValue(true);
     mockDeriveRotationTargetKey.mockResolvedValue('derived-target-key');
     const callOrder: string[] = [];
@@ -870,6 +888,9 @@ describe('handlePassphraseConfirm — disable/rotate', () => {
     });
     mockRotateIdbPassphrase.mockImplementation(async () => {
       callOrder.push('rotateIdbPassphrase');
+    });
+    mockClearFsMigrationMarker.mockImplementation(async () => {
+      callOrder.push('clearFsMigrationMarker');
     });
 
     const { result } = renderHook(() => useSettingsView());
@@ -883,7 +904,12 @@ describe('handlePassphraseConfirm — disable/rotate', () => {
     expect(mockDeriveAndVerifySourceKeyFromSentinel).toHaveBeenCalledWith('old-pass');
     expect(mockDeriveRotationTargetKey).toHaveBeenCalledWith('new-pass');
     expect(mockMigrateAllProtectedFsData).toHaveBeenCalledWith('derived-target-key', 'rotate');
-    expect(callOrder).toEqual(['migrateAllProtectedFsData', 'rotateIdbPassphrase']);
+    // QNBS-v3: clearFsMigrationMarker must run LAST — a crash between the bridge re-keying every fs file and rotateIdbPassphrase() updating the sentinel must still be detectable at next startup.
+    expect(callOrder).toEqual([
+      'migrateAllProtectedFsData',
+      'rotateIdbPassphrase',
+      'clearFsMigrationMarker',
+    ]);
   });
 
   // QNBS-v3: a mistyped current passphrase must abort BEFORE any fs file is re-keyed — otherwise the
@@ -926,6 +952,7 @@ describe('handlePassphraseConfirm — disable/rotate', () => {
     });
 
     expect(mockClearIdbPassphrase).not.toHaveBeenCalled();
+    expect(mockClearFsMigrationMarker).not.toHaveBeenCalled();
     expect(result.current.passphraseModal).toBe('disable');
   });
 });

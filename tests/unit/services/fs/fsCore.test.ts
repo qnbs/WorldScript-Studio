@@ -360,6 +360,24 @@ describe('protectTextValue / unprotectTextValue / writeProtectedTextFileAtomic /
     expect(await unprotectTextValue(lzLike)).toBe(lzLike);
   });
 
+  // QNBS-v3: a truncated/corrupted write that still parses as JSON and claims scheme==='protected-v1' must never be silently loaded as if it were real domain data — throwing surfaces it as corruption instead.
+  it('throws on a protected-v1 envelope missing its data field, instead of returning the envelope shell as plaintext', async () => {
+    await expect(unprotectTextValue('{"scheme":"protected-v1"}')).rejects.toThrow(
+      /malformed protected-v1 envelope/i,
+    );
+  });
+
+  it('throws on a protected-v1 envelope whose data field has the wrong type, instead of returning the envelope shell as plaintext', async () => {
+    await expect(unprotectTextValue('{"scheme":"protected-v1","data":123}')).rejects.toThrow(
+      /malformed protected-v1 envelope/i,
+    );
+  });
+
+  it('treats ordinary domain JSON without a protected-v1 scheme as plaintext, unaffected by the malformed-envelope check', async () => {
+    const domainJson = '{"title":"My Novel","scheme":"not-a-real-scheme"}';
+    expect(await unprotectTextValue(domainJson)).toBe(domainJson);
+  });
+
   it('throws when a protected value exists but at-rest encryption is no longer configured', async () => {
     await enableTestPassphrase();
     const protectedValue = await protectTextValue('secret');

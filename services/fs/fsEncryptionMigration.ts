@@ -69,7 +69,17 @@ async function writeMigrationMarker(
   await writeTextFileAtomic(apis, markerPath, JSON.stringify(marker));
 }
 
-async function clearMigrationMarker(apis: TauriApis, appDataPath: string): Promise<void> {
+/**
+ * Clears the marker written by migrateAllProtectedFsData(). Deliberately NOT called automatically
+ * at the end of migrateAllProtectedFsData itself — for disable/rotate, an IDB-side commit
+ * (clearIdbPassphrase()/rotateIdbPassphrase()) still has to run after the fs bridge succeeds, and
+ * clearing this marker before that commit would erase the only "an operation is mid-flight"
+ * signal a process kill in that remaining window would leave behind. Callers (useSettingsView.ts)
+ * call this only once the ENTIRE operation — fs bridge AND any subsequent IDB commit — succeeds.
+ */
+export async function clearFsMigrationMarker(): Promise<void> {
+  const apis = await loadTauriApis();
+  const appDataPath = await apis.appDataDir();
   const markerPath = await apis.join(appDataPath, 'config', MIGRATION_MARKER_FILENAME);
   await apis.remove(markerPath).catch(() => {});
 }
@@ -196,7 +206,8 @@ async function reprotectSnapshotFile(
  * skipped, so a partial migration can never silently strand a file at a key that's about to become
  * unrecoverable. For 'set', such a file is logged and left untouched instead, so an unrelated
  * pre-existing oddity can't block the user from enabling encryption for everything else. Writes a
- * durable marker before starting and clears it only on full success — see
+ * durable marker before starting; the caller must call clearFsMigrationMarker() once the whole
+ * operation (this call AND any subsequent IDB-side commit) succeeds — see
  * checkForInterruptedFsMigration() and issue #359.
  */
 export async function migrateAllProtectedFsData(
@@ -244,19 +255,20 @@ export async function migrateAllProtectedFsData(
     }),
   );
 
-  const projectIds = await fileSystemService.listProjects();
+  // QNBS-v3: uses listDirEntries (not fileSystemService.listProjects(), which swallows every readDir failure to []) — a transient permission/I/O error enumerating projects/ must abort strict-mode migrations, not silently skip every project/Codex/vector file while still reporting success.
+  const projectsPath = await apis.join(appDataPath, 'projects');
+  const projectEntries = await listDirEntries(apis, projectsPath, opts.strict);
   await Promise.all(
-    projectIds.map(async (projectId) => {
-      const projectDir = await apis.join(appDataPath, 'projects', projectId);
-      await reprotectWholeFile(apis, await apis.join(projectDir, 'project.json'), opts);
-      const codexDir = await apis.join(projectDir, 'codex');
-      await reprotectWholeFile(apis, await apis.join(codexDir, 'codex.snap'), opts);
-      await reprotectWholeFile(apis, await apis.join(codexDir, 'vectors.snap'), opts);
-    }),
+    projectEntries
+      .filter((entry) => entry.name)
+      .map(async (entry) => {
+        const projectDir = await apis.join(projectsPath, entry.name as string);
+        await reprotectWholeFile(apis, await apis.join(projectDir, 'project.json'), opts);
+        const codexDir = await apis.join(projectDir, 'codex');
+        await reprotectWholeFile(apis, await apis.join(codexDir, 'codex.snap'), opts);
+        await reprotectWholeFile(apis, await apis.join(codexDir, 'vectors.snap'), opts);
+      }),
   );
-
-  // QNBS-v3: only reached if every step above completed without throwing — a strict-mode abort or a process kill both leave the marker in place, the intended "interrupted" signal.
-  await clearMigrationMarker(apis, appDataPath);
 }
 
 // QNBS-v3: both resetAllDatabases() (storage-init-failure recovery) and wipeAllAppData() (factory

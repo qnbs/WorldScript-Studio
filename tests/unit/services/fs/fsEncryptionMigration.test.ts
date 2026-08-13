@@ -56,6 +56,7 @@ vi.mock('../../../../services/logger', async (importOriginal) => {
 
 import {
   checkForInterruptedFsMigration,
+  clearFsMigrationMarker,
   migrateAllProtectedFsData,
 } from '../../../../services/fs/fsEncryptionMigration';
 import { fileSystemService } from '../../../../services/fs/index';
@@ -251,10 +252,16 @@ describe('migrateAllProtectedFsData — set (first-time setup)', () => {
 });
 
 describe('migrateAllProtectedFsData — interrupted-migration marker', () => {
-  it('leaves no marker after a successful migration', async () => {
+  // QNBS-v3: migrateAllProtectedFsData no longer clears its own marker — for disable/rotate, an IDB-side commit still has to run after it succeeds, and clearing here would erase the only "mid-flight" signal a crash in that remaining window would leave behind (see #356's follow-up review comments); the caller clears it explicitly once the whole operation, including that later IDB commit, succeeds.
+  it('leaves the marker in place after a successful migration, until the caller explicitly clears it', async () => {
     await enableTestPassphrase();
     await fileSystemService.saveProject(project as never);
     await migrateAllProtectedFsData(null, 'disable');
+    expect(await checkForInterruptedFsMigration()).toEqual(
+      expect.objectContaining({ operation: 'disable' }),
+    );
+
+    await clearFsMigrationMarker();
     expect(await checkForInterruptedFsMigration()).toBeNull();
   });
 
@@ -332,6 +339,33 @@ describe('migrateAllProtectedFsData — safety', () => {
     };
 
     await expect(migrateAllProtectedFsData(null, 'disable')).rejects.toThrow(/EACCES/);
+  });
+
+  // QNBS-v3: fileSystemService.listProjects() (the ordinary, best-effort read API) swallows every
+  // readDir failure to [] — using it here would let a transient permission/IO error enumerating
+  // projects/ silently skip EVERY project/Codex/vector file while still reporting migration success.
+  it('propagates (does not silently skip) a failure enumerating the projects directory itself, in strict mode', async () => {
+    await enableTestPassphrase();
+    await fileSystemService.saveProject(project as never);
+    const originalReadDir = fake.apis.readDir;
+    fake.apis.readDir = (p: string) => {
+      if (p === '/app/projects') return Promise.reject(new Error('EACCES'));
+      return originalReadDir(p);
+    };
+
+    await expect(migrateAllProtectedFsData(null, 'disable')).rejects.toThrow(/EACCES/);
+  });
+
+  it('logs and skips (does not throw) a failure enumerating the projects directory itself, in non-strict (set) mode', async () => {
+    await fileSystemService.saveProject(project as never);
+    const originalReadDir = fake.apis.readDir;
+    fake.apis.readDir = (p: string) => {
+      if (p === '/app/projects') return Promise.reject(new Error('EACCES'));
+      return originalReadDir(p);
+    };
+
+    const newKey = await deriveKey('first-passphrase');
+    await expect(migrateAllProtectedFsData(newKey, 'set')).resolves.toBeUndefined();
   });
 
   it('logs and skips (does not throw) a read failure on a file that exists, in non-strict (set) mode', async () => {

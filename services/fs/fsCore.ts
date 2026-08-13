@@ -182,22 +182,21 @@ interface ProtectedTextEnvelope {
   data: string;
 }
 
+// QNBS-v3: a value that claims scheme==='protected-v1' but has an invalid/missing `data` field is corrupted ciphertext, not plaintext that happens to mention the scheme — throwing here (instead of falling through as "not protected") stops callers from deserializing the envelope shell itself as real domain data.
 function parseProtectedTextEnvelope(raw: string): ProtectedTextEnvelope | null {
-  // QNBS-v3: plaintext here is compressData()'s output (plain JSON or LZ-compressed) — a JSON.parse failure or shape mismatch just means "not protected", not an error; this is a probe, not a strict parser.
+  let parsed: unknown;
   try {
-    const parsed: unknown = JSON.parse(raw);
-    if (
-      parsed !== null &&
-      typeof parsed === 'object' &&
-      (parsed as Record<string, unknown>)['scheme'] === PROTECTED_TEXT_SCHEME &&
-      typeof (parsed as Record<string, unknown>)['data'] === 'string'
-    ) {
-      return parsed as ProtectedTextEnvelope;
-    }
+    parsed = JSON.parse(raw);
   } catch {
-    /* not JSON at all — definitely plaintext (or LZ-compressed plaintext) */
+    return null; // not JSON at all — definitely plaintext (or LZ-compressed plaintext)
   }
-  return null;
+  if (parsed === null || typeof parsed !== 'object') return null;
+  const obj = parsed as Record<string, unknown>;
+  if (obj['scheme'] !== PROTECTED_TEXT_SCHEME) return null; // plain JSON content, not a protected envelope
+  if (typeof obj['data'] !== 'string') {
+    throw new Error('Malformed protected-v1 envelope: missing or invalid "data" field');
+  }
+  return obj as unknown as ProtectedTextEnvelope;
 }
 
 /**

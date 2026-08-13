@@ -86,6 +86,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   forced quit, power loss mid-operation) now leaves a durable marker detected at next startup and
   surfaced as a status notification — not a full resumable migration yet, see
   [issue #359](https://github.com/qnbs/WorldScript-Studio/issues/359) for that tracked gap.
+  **Third review-loop follow-up to the same change:** a truncated or bit-corrupted write that still
+  parses as JSON and claims `scheme: 'protected-v1'` but has a missing/invalid `data` field
+  previously fell through as "not protected" and was returned as plaintext — the corresponding
+  store would then deserialize the envelope shell itself as domain data, silently corrupting
+  in-memory state instead of surfacing the corruption. Any value claiming the protected scheme now
+  throws unless its envelope fully validates. `migrateAllProtectedFsData` used the ordinary
+  best-effort `listProjects()` API (which swallows every `readDir` failure to `[]`) to enumerate
+  the `projects/` directory — a transient permission/I/O error there would silently skip every
+  project/Codex/vector file while the migration still reported success; it now uses the same
+  failure-propagating helper every other directory scan in the bridge already uses. The fs
+  migration marker is no longer cleared by the bridge itself — for disable/rotate, an IDB-side
+  commit (`clearIdbPassphrase()`/`rotateIdbPassphrase()`) still has to run *after* the bridge
+  succeeds, and clearing the marker before that commit erased the only "an operation is mid-flight"
+  signal a crash in that remaining window would leave behind; the caller now clears it only once
+  the whole operation, including that later IDB commit, has actually succeeded.
 
 ### Fixed
 

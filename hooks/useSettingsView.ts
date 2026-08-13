@@ -18,7 +18,10 @@ import { settingsActions } from '../features/settings/settingsSlice';
 import { statusActions } from '../features/status/statusSlice';
 import { useTranslation } from '../hooks/useTranslation';
 import { wipeAllAppData } from '../services/factoryResetService';
-import { migrateAllProtectedFsData } from '../services/fs/fsEncryptionMigration';
+import {
+  clearFsMigrationMarker,
+  migrateAllProtectedFsData,
+} from '../services/fs/fsEncryptionMigration';
 import { logger } from '../services/logger';
 import type { ProtectedStoreMigrationProgress } from '../services/storage/protectedStoreMigration';
 import {
@@ -391,7 +394,10 @@ export const useSettingsView = () => {
         if (isTauriRuntime()) {
           try {
             const key = await resolveProtectedWriteKey();
-            if (key) await migrateAllProtectedFsData(key, 'set');
+            if (key) {
+              await migrateAllProtectedFsData(key, 'set');
+              await clearFsMigrationMarker();
+            }
           } catch (error) {
             // QNBS-v3: migrateAllProtectedFsData('set') is non-strict and already skips per-file failures — reaching here means a pre-flight failure (e.g. the migration marker itself couldn't be written) before any file was touched, so undoing the sentinel just-created above is safe, not just cosmetic.
             await clearIdbPassphrase();
@@ -415,6 +421,8 @@ export const useSettingsView = () => {
           // QNBS-v3: must convert fs-backed desktop data to plaintext BEFORE the sentinel below is destroyed — clearIdbPassphrase() has no awareness of services/fs/*, so ordering here is load-bearing, not cosmetic.
           if (isTauriRuntime()) await migrateAllProtectedFsData(null, 'disable');
           await clearIdbPassphrase((progress) => setMigrationProgress(progress));
+          // QNBS-v3: cleared only now, not inside the bridge — a crash between the bridge succeeding and this IDB commit must still leave the marker in place to detect, since fs files are already plaintext but the sentinel isn't cleared yet.
+          if (isTauriRuntime()) await clearFsMigrationMarker();
         } finally {
           setMigrationProgress(null);
         }
@@ -434,6 +442,8 @@ export const useSettingsView = () => {
           await rotateIdbPassphrase(_current, newPassphrase, (progress) =>
             setMigrationProgress(progress),
           );
+          // QNBS-v3: cleared only now, not inside the bridge — a crash between the bridge re-keying every fs file to the new key and this IDB commit updating the sentinel must still leave the marker in place; clearing it earlier would make that exact window (new-key fs files, old-key sentinel) undetectable at next startup.
+          if (isTauriRuntime()) await clearFsMigrationMarker();
         } finally {
           setMigrationProgress(null);
         }
