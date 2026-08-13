@@ -251,8 +251,7 @@ describe('FsSettingsStore — settings + encrypted API keys', () => {
     expect(await store.getApiKey('openai')).toBeNull();
   });
 
-  // QNBS-v3: the actual fix under test — a real, non-public secret protects the key when the
-  // user has configured and unlocked at-rest encryption.
+  // QNBS-v3: a real, non-public secret protects the key when the user has configured and unlocked at-rest encryption.
   it('round-trips an API key under real AES-GCM protection when a passphrase is configured and unlocked', async () => {
     cryptoState.activeKey = await new StorageEncryptionService().deriveKey(
       'test-passphrase',
@@ -268,8 +267,7 @@ describe('FsSettingsStore — settings + encrypted API keys', () => {
     expect(await store.getApiKey('openai')).toBe('sk-secret-123');
   });
 
-  // QNBS-v3: fail-closed, matching the existing IDB protected-write policy — never silently
-  // downgrade to plaintext while the user believes at-rest encryption is protecting this key.
+  // QNBS-v3: fail-closed, matching the existing IDB protected-write policy — never silently downgrade to plaintext while the user believes at-rest encryption is protecting this key.
   it('rejects saveApiKey when at-rest encryption is configured but the session is locked', async () => {
     cryptoState.sentinelConfigured = true; // configured, but no activeKey — locked
 
@@ -277,8 +275,7 @@ describe('FsSettingsStore — settings + encrypted API keys', () => {
     expect(fake.text.has('/app/config/openai_key.enc.json')).toBe(false);
   });
 
-  // QNBS-v3: a locked-but-configured read must fail closed WITHOUT discarding the file — the key
-  // is still there, just temporarily unreadable until the user unlocks their session.
+  // QNBS-v3: a locked-but-configured read must fail closed WITHOUT discarding the file — the key is still there, just temporarily unreadable until the user unlocks their session.
   it('returns null without discarding the file when reading a protected key while locked', async () => {
     cryptoState.activeKey = await new StorageEncryptionService().deriveKey(
       'test-passphrase',
@@ -291,6 +288,49 @@ describe('FsSettingsStore — settings + encrypted API keys', () => {
 
     expect(await store.getApiKey('openai')).toBeNull();
     expect(fake.text.has('/app/config/openai_key.enc.json')).toBe(true);
+  });
+
+  // QNBS-v3: critical fix — a passphrase rotation (active key no longer matching what a protected-v1 file was encrypted under) must NEVER discard the file; previously any non-locked decrypt failure fell into the generic discard path and would have permanently deleted a still-valid key.
+  it('preserves a protected-v1 file that fails to decrypt under a different (rotated) key, instead of discarding it', async () => {
+    cryptoState.activeKey = await new StorageEncryptionService().deriveKey(
+      'old-passphrase',
+      new Uint8Array(32).fill(7),
+    );
+    cryptoState.sentinelConfigured = true;
+    await store.saveApiKey('openai', 'sk-secret-123');
+
+    // Simulate a completed passphrase rotation: a different active key, same salt.
+    cryptoState.activeKey = await new StorageEncryptionService().deriveKey(
+      'new-passphrase',
+      new Uint8Array(32).fill(7),
+    );
+
+    expect(await store.getApiKey('openai')).toBeNull();
+    // The file must still be there — not silently deleted.
+    expect(fake.text.has('/app/config/openai_key.enc.json')).toBe(true);
+  });
+
+  // QNBS-v3: provider-identity binding — a ciphertext swapped between two providers' files decrypts under the same key but fails the provider check, so it's rejected (and preserved), not silently handed to the wrong provider.
+  it('rejects (without discarding) a protected-v1 file whose ciphertext belongs to a different provider', async () => {
+    cryptoState.activeKey = await new StorageEncryptionService().deriveKey(
+      'test-passphrase',
+      new Uint8Array(32).fill(7),
+    );
+    cryptoState.sentinelConfigured = true;
+    await store.saveApiKey('openai', 'sk-openai-secret');
+    await store.saveApiKey('anthropic', 'sk-anthropic-secret');
+
+    // Swap the two providers' encrypted payloads on disk.
+    const openaiContent = fake.text.get('/app/config/openai_key.enc.json') as string;
+    const anthropicContent = fake.text.get('/app/config/anthropic_key.enc.json') as string;
+    fake.text.set('/app/config/openai_key.enc.json', anthropicContent);
+    fake.text.set('/app/config/anthropic_key.enc.json', openaiContent);
+
+    expect(await store.getApiKey('openai')).toBeNull();
+    expect(await store.getApiKey('anthropic')).toBeNull();
+    // Neither file is discarded — the ciphertext is intact, just bound to the wrong provider.
+    expect(fake.text.has('/app/config/openai_key.enc.json')).toBe(true);
+    expect(fake.text.has('/app/config/anthropic_key.enc.json')).toBe(true);
   });
 
   it('delegates the Gemini key helpers to provider storage', async () => {

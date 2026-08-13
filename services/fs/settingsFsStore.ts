@@ -96,15 +96,13 @@ export class FsSettingsStore extends FsCore {
     const configPath = await apis.join(appDataPath, 'config');
     if (!(await apis.exists(configPath))) await apis.mkdir(configPath, { recursive: true });
 
-    // QNBS-v3: resolveProtectedWriteKey() throws IdbStorageLockedError when a passphrase is
-    // configured but the session is locked — propagated deliberately (fail closed) rather than
-    // silently falling back to plaintext while the user believes encryption is active, matching
-    // the existing IDB protected-write policy this reuses.
+    // QNBS-v3: resolveProtectedWriteKey() throws IdbStorageLockedError when configured-but-locked — propagated deliberately (fail closed) rather than silently falling back to plaintext, matching the existing IDB protected-write policy this reuses.
     const key = await resolveProtectedWriteKey();
     const payload: ProtectedApiKeyPayload | PlaintextApiKeyPayload = key
       ? {
           scheme: PROTECTED_SCHEME,
-          data: bytesToBase64(await idbEncryptWithKey(key, apiKey.trim())),
+          // QNBS-v3: encrypts {provider, apiKey} together (not just the bare key) so a ciphertext swapped between two providers' files decrypts but fails the provider check below, instead of silently handing one provider's key to another.
+          data: bytesToBase64(await idbEncryptWithKey(key, { provider, apiKey: apiKey.trim() })),
         }
       : { scheme: PLAINTEXT_SCHEME, value: apiKey.trim() };
 
@@ -112,62 +110,86 @@ export class FsSettingsStore extends FsCore {
     await writeTextFileAtomic(apis, filePath, JSON.stringify(payload));
   }
 
-  private async readProtectedApiKey(base64Data: string): Promise<string> {
+  private async readProtectedApiKey(provider: string, base64Data: string): Promise<string> {
     const key = await resolveProtectedWriteKey();
     if (!key) {
       // Sentinel was cleared/disabled since this key was saved under the old, now-configured-off
       // passphrase — there is nothing left to decrypt with; treat the same as an unreadable file.
       throw new Error('Protected API key exists but at-rest encryption is no longer configured');
     }
-    return idbDecryptWithKey<string>(key, base64ToBytes(base64Data));
+    const decrypted = await idbDecryptWithKey<{ provider: string; apiKey: string }>(
+      key,
+      base64ToBytes(base64Data),
+    );
+    if (decrypted.provider !== provider) {
+      throw new Error(
+        `Decrypted payload belongs to provider "${decrypted.provider}", not "${provider}"`,
+      );
+    }
+    return decrypted.apiKey;
   }
 
   async getApiKey(provider: string): Promise<string | null> {
-    // QNBS-v3: separate outer refs (rather than narrowing `apis`/`keyFile` from the try block) — TS's control-flow narrowing doesn't survive into the retryFs() closure, and the catch block below still needs both for the legacy-payload cleanup path.
-    let apisForCleanup: TauriApis | undefined;
-    let keyFileForCleanup: string | undefined;
+    const apis = await this.getApis();
+    const appDataPath = await this.ensureAppDataPath();
+    const keyFile = await apis.join(appDataPath, 'config', `${provider}_key.enc.json`);
+
+    let parsed: Record<string, unknown>;
     try {
-      const apis = await this.getApis();
-      apisForCleanup = apis;
-      const appDataPath = await this.ensureAppDataPath();
-      const keyFile = await apis.join(appDataPath, 'config', `${provider}_key.enc.json`);
-      keyFileForCleanup = keyFile;
       if (!(await apis.exists(keyFile))) return null;
       const content = await retryFs(() => apis.readTextFile(keyFile));
-      const parsed = JSON.parse(content) as Record<string, unknown>;
-
-      if (parsed['scheme'] === PLAINTEXT_SCHEME && typeof parsed['value'] === 'string') {
-        return parsed['value'];
-      }
-      if (parsed['scheme'] === PROTECTED_SCHEME && typeof parsed['data'] === 'string') {
-        return await this.readProtectedApiKey(parsed['data']);
-      }
-      // Anything else is one of the two obsolete pre-2026-08-13 formats (unsalted single-SHA-256,
-      // or salted-but-publicly-derivable-passphrase — F-05/F-06) — neither provides real
-      // confidentiality and neither is migrated by design; fall through to the discard+notify path.
-      throw new Error('Unrecognized or obsolete API key payload format');
+      parsed = JSON.parse(content) as Record<string, unknown>;
     } catch (error) {
-      if (error instanceof IdbStorageLockedError) {
-        // Configured but locked — the key still exists, just temporarily unreadable. Fail closed without discarding the file; the caller re-prompts once the session is unlocked.
+      // A transient read/parse failure is not evidence the format is obsolete — preserve the file.
+      logger.warn(`Failed to read API key file for provider "${provider}":`, error);
+      return null;
+    }
+
+    if (parsed['scheme'] === PLAINTEXT_SCHEME && typeof parsed['value'] === 'string') {
+      return parsed['value'];
+    }
+
+    if (parsed['scheme'] === PROTECTED_SCHEME && typeof parsed['data'] === 'string') {
+      try {
+        return await this.readProtectedApiKey(provider, parsed['data']);
+      } catch (error) {
+        if (error instanceof IdbStorageLockedError) {
+          // Configured but locked — the key still exists, just temporarily unreadable. Fail closed without discarding the file; the caller re-prompts once the session is unlocked.
+          return null;
+        }
+        // QNBS-v3: a RECOGNIZED protected-v1 envelope that fails to decrypt (rotated passphrase, transient sentinel-lookup error) is NOT an obsolete format — never discard on an ambiguous decrypt failure; only genuinely unrecognized shapes are discarded below.
+        logger.warn(
+          `Failed to decrypt protected API key for provider "${provider}" (file preserved, not discarded):`,
+          error,
+        );
         return null;
       }
-      // QNBS-v3: pre-2026-08-13 key files (both obsolete crypto schemes) are not migrated (locked decision — discard); removing the stale file avoids retrying every call, and a one-time notification beats a silent null indistinguishable from "no key ever set".
-      if (apisForCleanup && keyFileForCleanup) {
-        try {
-          await apisForCleanup.remove(keyFileForCleanup);
-          appStoreRef.current?.dispatch(
-            statusActions.addNotification({
-              type: 'info',
-              title: 'API Key Reset Required',
-              description: `Your saved ${provider} API key was encrypted with a scheme that has since been hardened and could not be read. Please re-enter it in Settings → AI.`,
-            }),
-          );
-        } catch (cleanupError) {
-          logger.warn(`Failed to remove stale key file for provider "${provider}":`, cleanupError);
-        }
-      }
-      logger.warn(`Failed to decrypt API key for provider "${provider}":`, error);
-      return null;
+    }
+
+    // Anything else is one of the two obsolete pre-2026-08-13 formats (unsalted single-SHA-256, or
+    // salted-but-publicly-derivable-passphrase — F-05/F-06) — neither provides real confidentiality
+    // and neither is migrated by design; this is the only path that discards the file.
+    await this.discardObsoleteApiKeyFile(provider, apis, keyFile);
+    return null;
+  }
+
+  // QNBS-v3: pre-2026-08-13 key files (both obsolete crypto schemes) are not migrated (locked decision — discard); removing the stale file avoids retrying every call, and a one-time notification beats a silent null indistinguishable from "no key ever set".
+  private async discardObsoleteApiKeyFile(
+    provider: string,
+    apis: TauriApis,
+    keyFile: string,
+  ): Promise<void> {
+    try {
+      await apis.remove(keyFile);
+      appStoreRef.current?.dispatch(
+        statusActions.addNotification({
+          type: 'info',
+          title: 'API Key Reset Required',
+          description: `Your saved ${provider} API key was encrypted with a scheme that has since been hardened and could not be read. Please re-enter it in Settings → AI.`,
+        }),
+      );
+    } catch (cleanupError) {
+      logger.warn(`Failed to remove stale key file for provider "${provider}":`, cleanupError);
     }
   }
 

@@ -24,7 +24,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   precedent as the original F-05/F-06 fix; the user is notified and re-prompted for the key.
   `services/fs/fsCore.ts`'s derived-passphrase `encryptText`/`decryptText` were retired outright.
   Project/settings/snapshot/Codex/RAG/binder-asset data on desktop remains plaintext — that gap
-  is tracked separately and not fixed by this entry.
+  is tracked separately and not fixed by this entry. **Review-loop follow-up fixes to the same
+  change:** a `protected-v1` file that fails to decrypt under the *current* key (e.g. after a
+  passphrase rotation, or a transient error resolving the key) is no longer discarded — only
+  payloads positively identified as one of the two obsolete pre-2026-08-13 formats are; a rotation
+  no longer permanently destroys an otherwise-valid saved key. Encrypted payloads now bind
+  `{provider, apiKey}` together (not just the bare key string), so a ciphertext swapped between two
+  providers' files decrypts under the same key but fails the provider check, closing a cross-file
+  substitution gap.
 
 ### Fixed
 
