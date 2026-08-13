@@ -10,17 +10,22 @@ import {
   compressData,
   countProjectWords,
   decompressData,
+  protectTextValue,
   retryFs,
+  unprotectTextValue,
   writeTextFileAtomic,
 } from './fsCore';
 
-// Envelope stored in each snapshot file — outer shell is plain JSON, `data` field is compressed.
+// Envelope stored in each snapshot file — outer shell is plain JSON (id/name/date/wordCount stay
+// plaintext so listSnapshots() never needs to decrypt just to render a list), `data` field is
+// compressData()'d and, when at-rest encryption is configured and unlocked, further protected via
+// protectTextValue — see fsCore.ts's "Protected text files" section.
 interface SnapshotEnvelope {
   id: number;
   name: string;
   date: string;
   wordCount: number;
-  data: string; // compressData(projectData)
+  data: string; // compressData(projectData), optionally protectTextValue()'d
 }
 
 export class FsSnapshotStore extends FsCodexStore {
@@ -39,7 +44,7 @@ export class FsSnapshotStore extends FsCodexStore {
       name: snapshotLabel,
       date: new Date().toISOString(),
       wordCount: countProjectWords(data),
-      data: compressData(data),
+      data: await protectTextValue(compressData(data)),
     };
     const snapshotFile = await apis.join(snapshotsPath, `${id}.json`);
     // QNBS-v3: atomic write — a crash/power-loss mid-write must never leave a snapshot truncated.
@@ -59,9 +64,9 @@ export class FsSnapshotStore extends FsCodexStore {
 
       const content = await retryFs(() => apis.readTextFile(snapshotFile));
       const envelope = JSON.parse(content) as SnapshotEnvelope;
-      // New format: envelope with compressed data field
+      // New format: envelope with compressed (optionally protected) data field
       if (envelope && typeof envelope.data === 'string') {
-        return decompressData(envelope.data);
+        return decompressData(await unprotectTextValue(envelope.data));
       }
       // Legacy format: raw project data stored directly
       return envelope;

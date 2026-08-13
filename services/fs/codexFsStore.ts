@@ -1,6 +1,7 @@
 /**
  * FsCodexStore — Story codex and RAG vector storage on the filesystem.
- * ENCRYPTION: plaintext — project content; at-rest encryption planned for Phase 2 (P2-1).
+ * ENCRYPTION: AES-256-GCM under the real at-rest passphrase when configured and unlocked;
+ * plaintext otherwise — see fsCore.ts's "Protected text files" section.
  * QNBS-v3: Extracted from fileSystemService.ts.
  */
 
@@ -9,9 +10,10 @@ import { logger } from '../logger';
 import {
   compressData,
   decompressData,
+  readProtectedTextFile,
   retryFs,
   sanitizePathSegment,
-  writeTextFileAtomic,
+  writeProtectedTextFileAtomic,
 } from './fsCore';
 import { FsSettingsStore } from './settingsFsStore';
 
@@ -25,8 +27,8 @@ export class FsCodexStore extends FsSettingsStore {
     const codexDir = await apis.join(appDataPath, 'projects', safeId, 'codex');
     if (!(await apis.exists(codexDir))) await apis.mkdir(codexDir, { recursive: true });
     const codexFile = await apis.join(codexDir, 'codex.snap');
-    // QNBS-v3: atomic write — a crash/power-loss mid-write must never leave codex.snap truncated.
-    await writeTextFileAtomic(apis, codexFile, compressData(codex));
+    // QNBS-v3: atomic + protected write — a crash/power-loss mid-write must never leave codex.snap truncated.
+    await writeProtectedTextFileAtomic(apis, codexFile, compressData(codex));
   }
 
   async getStoryCodex(projectId: string): Promise<StoryCodex | null> {
@@ -36,7 +38,7 @@ export class FsCodexStore extends FsSettingsStore {
       const safeId = sanitizePathSegment(projectId, 'project');
       const codexFile = await apis.join(appDataPath, 'projects', safeId, 'codex', 'codex.snap');
       if (!(await apis.exists(codexFile))) return null;
-      const content = await retryFs(() => apis.readTextFile(codexFile));
+      const content = await readProtectedTextFile(apis, codexFile);
       return decompressData<StoryCodex>(content);
     } catch (error) {
       logger.error('Failed to load story codex:', error);
@@ -65,8 +67,8 @@ export class FsCodexStore extends FsSettingsStore {
     const codexDir = await apis.join(appDataPath, 'projects', safeId, 'codex');
     if (!(await apis.exists(codexDir))) await apis.mkdir(codexDir, { recursive: true });
     const vectorsFile = await apis.join(codexDir, 'vectors.snap');
-    // QNBS-v3: atomic write — same crash-safety rationale as saveStoryCodex above.
-    await writeTextFileAtomic(apis, vectorsFile, compressData(vectors));
+    // QNBS-v3: atomic + protected write — same rationale as saveStoryCodex above.
+    await writeProtectedTextFileAtomic(apis, vectorsFile, compressData(vectors));
   }
 
   async getRagVectors(projectId: string): Promise<unknown[]> {
@@ -76,7 +78,7 @@ export class FsCodexStore extends FsSettingsStore {
       const safeId = sanitizePathSegment(projectId, 'project');
       const vectorsFile = await apis.join(appDataPath, 'projects', safeId, 'codex', 'vectors.snap');
       if (!(await apis.exists(vectorsFile))) return [];
-      const content = await retryFs(() => apis.readTextFile(vectorsFile));
+      const content = await readProtectedTextFile(apis, vectorsFile);
       return decompressData<unknown[]>(content);
     } catch (error) {
       logger.error('Failed to load RAG vectors:', error);

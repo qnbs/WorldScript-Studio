@@ -32,6 +32,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `{provider, apiKey}` together (not just the bare key string), so a ciphertext swapped between two
   providers' files decrypts under the same key but fails the provider check, closing a cross-file
   substitution gap.
+- **Desktop project data now honors the at-rest encryption setting.** Previously, enabling
+  Settings → Privacy → "Encrypt project data at rest" only protected the browser/PWA build's
+  IndexedDB path — on the Tauri desktop build, `services/fs/*Store.ts` wrote project.json,
+  settings.json, snapshots, Codex, RAG vectors, and character/world images as plaintext
+  regardless of the setting, while still showing the same passphrase unlock screen. Desktop now
+  reuses `services/storage/storageEncryptionService.ts`'s real passphrase-derived key directly
+  (same pattern as the API-key fix above): AES-256-GCM protection when a passphrase is configured
+  and unlocked, honest plaintext otherwise. Migration is lazy/opportunistic — existing plaintext
+  files are protected on their next save (autosave already runs on a short interval); there is no
+  explicit "encrypt everything now" step and no data-loss risk either way. Snapshot files protect
+  only their `data` field, keeping name/date/word-count metadata plaintext so the snapshot list
+  never needs decryption to render. **Not yet covered**: binder-asset binary blobs
+  (`services/fs/assetFsStore.ts`'s `.bin` files) — they need a byte-native encrypt path rather
+  than the JSON-serializing helpers used here, and remain plaintext pending a follow-up.
 
 ### Fixed
 

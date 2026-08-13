@@ -5,6 +5,11 @@
 
 import LZString from 'lz-string';
 import { logger } from '../logger';
+import {
+  idbDecryptWithKey,
+  idbEncryptWithKey,
+  resolveProtectedWriteKey,
+} from '../storage/storageEncryptionService';
 
 // Dynamic imports for Tauri v2 plugin APIs — fail gracefully in browser
 export type TauriApis = {
@@ -147,6 +152,91 @@ export function writeFileAtomic(apis: TauriApis, path: string, data: Uint8Array)
     const tmpPath = `${path}.tmp-${createTempSuffix()}`;
     return writeThenRename(apis, tmpPath, path, () => retryFs(() => apis.writeFile(tmpPath, data)));
   });
+}
+
+// --- Protected text files (opportunistic at-rest encryption) ---
+// QNBS-v3 (2026-08-13): desktop project/settings/snapshot/Codex/RAG-vector data was previously
+// always plaintext, regardless of the "Encrypt project data at rest" setting — enabling it only
+// gated the IndexedDB path (web build); this fs-backed store ignored it entirely. Reuses
+// services/storage/storageEncryptionService.ts's real user-passphrase-derived key directly (same
+// pattern as settingsFsStore.ts's API-key fix) rather than a second parallel crypto/migration
+// system. Lazy/opportunistic migration by design: a save encrypts if a key is currently available;
+// a read transparently handles either format. Existing plaintext files stay plaintext until their
+// next save (autosave already runs on a short interval) — no explicit "migrate everything now"
+// step, no data-loss risk, and no new failure mode beyond what saves already have.
+
+const PROTECTED_TEXT_SCHEME = 'protected-v1';
+
+interface ProtectedTextEnvelope {
+  scheme: typeof PROTECTED_TEXT_SCHEME;
+  data: string;
+}
+
+function parseProtectedTextEnvelope(raw: string): ProtectedTextEnvelope | null {
+  // QNBS-v3: plaintext content here is compressData()'s output — either plain JSON or an
+  // LZ-compressed string carrying its own \x00lz1\x00 sentinel, never valid envelope JSON. A
+  // JSON.parse failure (the LZ-compressed case) or a shape mismatch both simply mean "not
+  // protected" rather than an error — this is deliberately a probe, not a strict parser.
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      parsed !== null &&
+      typeof parsed === 'object' &&
+      (parsed as Record<string, unknown>)['scheme'] === PROTECTED_TEXT_SCHEME &&
+      typeof (parsed as Record<string, unknown>)['data'] === 'string'
+    ) {
+      return parsed as ProtectedTextEnvelope;
+    }
+  } catch {
+    /* not JSON at all — definitely plaintext (or LZ-compressed plaintext) */
+  }
+  return null;
+}
+
+/**
+ * Protect a single text value (e.g. compressData()'s output), encrypted under the real at-rest key
+ * when one is available. Value-level, not file-level — lets a caller (snapshotFsStore.ts) embed
+ * the result as one field inside an otherwise-plaintext JSON envelope, so listing/metadata reads
+ * never need to decrypt (mirrors the IDB path's own "encryption applied at the value level" design).
+ */
+export async function protectTextValue(plaintext: string): Promise<string> {
+  const key = await resolveProtectedWriteKey();
+  if (!key) return plaintext;
+  return JSON.stringify({
+    scheme: PROTECTED_TEXT_SCHEME,
+    data: bytesToBase64(await idbEncryptWithKey(key, plaintext)),
+  });
+}
+
+/**
+ * Reverse of protectTextValue — transparently handles either a protected envelope or plain
+ * (legacy/unprotected) text. Propagates IdbStorageLockedError when the value is protected but the
+ * session is locked — callers should let that fail closed like any other protected read, not fall
+ * back to treating it as absent.
+ */
+export async function unprotectTextValue(stored: string): Promise<string> {
+  const envelope = parseProtectedTextEnvelope(stored);
+  if (!envelope) return stored;
+  const key = await resolveProtectedWriteKey();
+  if (!key) {
+    // Sentinel was cleared/disabled since this value was saved — nothing left to decrypt with.
+    throw new Error('Protected value exists but at-rest encryption is no longer configured');
+  }
+  return idbDecryptWithKey<string>(key, base64ToBytes(envelope.data));
+}
+
+/** Whole-file variant of protectTextValue, for stores with no separate plaintext metadata to preserve. */
+export async function writeProtectedTextFileAtomic(
+  apis: TauriApis,
+  path: string,
+  plaintext: string,
+): Promise<void> {
+  await writeTextFileAtomic(apis, path, await protectTextValue(plaintext));
+}
+
+/** Whole-file variant of unprotectTextValue, for stores with no separate plaintext metadata to preserve. */
+export async function readProtectedTextFile(apis: TauriApis, path: string): Promise<string> {
+  return unprotectTextValue(await retryFs(() => apis.readTextFile(path)));
 }
 
 // --- LZ-String compression (mirrors dbService threshold and prefix) ---

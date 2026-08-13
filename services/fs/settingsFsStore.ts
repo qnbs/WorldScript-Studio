@@ -22,7 +22,15 @@ import {
   resolveProtectedWriteKey,
 } from '../storage/storageEncryptionService';
 import type { TauriApis } from './fsCore';
-import { base64ToBytes, bytesToBase64, FsCore, retryFs, writeTextFileAtomic } from './fsCore';
+import {
+  base64ToBytes,
+  bytesToBase64,
+  FsCore,
+  readProtectedTextFile,
+  retryFs,
+  writeProtectedTextFileAtomic,
+  writeTextFileAtomic,
+} from './fsCore';
 
 const PLAINTEXT_SCHEME = 'plaintext-v1';
 const PROTECTED_SCHEME = 'protected-v1';
@@ -38,6 +46,8 @@ interface ProtectedApiKeyPayload {
 }
 
 export class FsSettingsStore extends FsCore {
+  // ENCRYPTION: AES-256-GCM under the real at-rest passphrase when configured and unlocked,
+  // plaintext otherwise — see fsCore.ts's "Protected text files" section.
   async saveSettings(settings: Settings): Promise<void> {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
@@ -48,7 +58,7 @@ export class FsSettingsStore extends FsCore {
     }
 
     const settingsFile = await apis.join(configPath, 'settings.json');
-    await writeTextFileAtomic(apis, settingsFile, JSON.stringify(settings, null, 2));
+    await writeProtectedTextFileAtomic(apis, settingsFile, JSON.stringify(settings, null, 2));
   }
 
   async loadSettings(): Promise<Settings | null> {
@@ -61,7 +71,7 @@ export class FsSettingsStore extends FsCore {
         return null;
       }
 
-      const content = await retryFs(() => apis.readTextFile(settingsFile));
+      const content = await readProtectedTextFile(apis, settingsFile);
       const parsed = JSON.parse(content) as Record<string, unknown>;
       // QNBS-v3: reuse the same normalizer as the IDB path — older desktop settings files can predate newer required Settings fields (e.g. writingSurfaceStyle); an unchecked `as Settings` cast would let those fall through as undefined at runtime.
       return normalizePersistedSettings(parsed);

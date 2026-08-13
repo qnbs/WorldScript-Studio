@@ -147,6 +147,14 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+async function enableTestPassphrase(): Promise<void> {
+  cryptoState.activeKey = await new StorageEncryptionService().deriveKey(
+    'test-passphrase',
+    new Uint8Array(32).fill(7),
+  );
+  cryptoState.sentinelConfigured = true;
+}
+
 describe('FsProjectStore — projects', () => {
   const project = {
     id: 'p1',
@@ -173,6 +181,26 @@ describe('FsProjectStore — projects', () => {
   it('returns null for a missing project and [] when no projects dir', async () => {
     expect(await store.loadProject('nope')).toBeNull();
     expect(await store.listProjects()).toEqual([]);
+  });
+
+  // QNBS-v3 (2026-08-13): the actual fix under test — desktop project data previously ignored
+  // the at-rest encryption setting entirely (README/docs corrected in a companion PR); it's now
+  // real AES-GCM protection when a passphrase is configured and unlocked.
+  it('encrypts project.json on disk when at-rest encryption is configured and unlocked, and still round-trips', async () => {
+    await enableTestPassphrase();
+    await store.saveProject(project as never);
+
+    const onDisk = fake.text.get('/app/projects/p1/project.json') as string;
+    expect(onDisk).not.toContain('My Novel');
+    expect(JSON.parse(onDisk).scheme).toBe('protected-v1');
+
+    expect((await store.loadProject('p1'))?.title).toBe('My Novel');
+  });
+
+  it('leaves project.json as plaintext when no at-rest passphrase is configured (unchanged default)', async () => {
+    await store.saveProject(project as never);
+    const onDisk = fake.text.get('/app/projects/p1/project.json') as string;
+    expect(onDisk).toContain('My Novel');
   });
 
   // QNBS-v3 (#332): saveProject records the active-project marker so cold boot doesn't pick an arbitrary readDir() entry.
@@ -240,8 +268,18 @@ describe('FsSettingsStore — settings + encrypted API keys', () => {
     expect(await store.loadSettings()).toBeNull();
   });
 
-  // QNBS-v3 (2026-08-13, F-05/F-06 follow-up): no passphrase configured — honest plaintext,
-  // not a fake-secret derivation.
+  it('encrypts settings.json on disk when at-rest encryption is configured, and still round-trips', async () => {
+    await enableTestPassphrase();
+    await store.saveSettings({ appearancePreset: 'sepia' } as never);
+
+    const onDisk = fake.text.get('/app/config/settings.json') as string;
+    expect(onDisk).not.toContain('sepia');
+    expect(JSON.parse(onDisk).scheme).toBe('protected-v1');
+
+    expect((await store.loadSettings())?.appearancePreset).toBe('sepia');
+  });
+
+  // QNBS-v3 (2026-08-13, F-05/F-06 follow-up): no passphrase configured — honest plaintext, not a fake-secret derivation.
   it('round-trips an API key as plaintext when no at-rest passphrase is configured', async () => {
     await store.saveApiKey('openai', 'sk-secret-123');
     const stored = JSON.parse(fake.text.get('/app/config/openai_key.enc.json') as string);
@@ -443,6 +481,30 @@ describe('FsSnapshotStore — snapshots', () => {
     expect(await store.listSnapshots()).toEqual([]);
     expect(await store.hasSavedData()).toBe(false);
   });
+
+  // QNBS-v3: value-level protection, not file-level — only the `data` field is protected so
+  // listSnapshots() (name/date/wordCount) never needs to decrypt just to render a list.
+  it('protects only the data field when at-rest encryption is configured, keeping name/date/wordCount plaintext and listable', async () => {
+    await enableTestPassphrase();
+    const id = await store.saveSnapshot('My Snapshot', {
+      manuscript: [{ content: 'secret prose' }],
+    });
+
+    const onDiskFile = [...fake.text.keys()].find((k) => k.endsWith(`${id}.json`)) as string;
+    const onDisk = JSON.parse(fake.text.get(onDiskFile) as string);
+    expect(onDisk.name).toBe('My Snapshot'); // metadata stays plaintext
+    expect(onDisk.data).not.toContain('secret prose'); // content is protected
+    expect(JSON.parse(onDisk.data).scheme).toBe('protected-v1');
+
+    // Listing must not require a passphrase/key at all — lock the session and confirm it still works.
+    cryptoState.activeKey = null;
+    const list = await store.listSnapshots();
+    expect(list.find((s) => s.id === id)?.name).toBe('My Snapshot');
+
+    // Reading the actual content still requires (and correctly uses) the key once unlocked again.
+    await enableTestPassphrase();
+    expect(await store.getSnapshotData(id)).toEqual({ manuscript: [{ content: 'secret prose' }] });
+  });
 });
 
 describe('FsCodexStore — codex + RAG vectors', () => {
@@ -461,6 +523,23 @@ describe('FsCodexStore — codex + RAG vectors', () => {
     await store.deleteRagVectors('p1');
     expect(await store.getRagVectors('p1')).toEqual([]);
   });
+
+  it('encrypts codex.snap and vectors.snap on disk when at-rest encryption is configured, and still round-trips', async () => {
+    await enableTestPassphrase();
+    await store.saveStoryCodex({ projectId: 'p1', entries: [{ k: 'secret-entity' }] } as never);
+    await store.saveRagVectors('p1', [{ id: 1 }]);
+
+    const codexOnDisk = fake.text.get('/app/projects/p1/codex/codex.snap') as string;
+    const vectorsOnDisk = fake.text.get('/app/projects/p1/codex/vectors.snap') as string;
+    expect(codexOnDisk).not.toContain('secret-entity');
+    expect(JSON.parse(codexOnDisk).scheme).toBe('protected-v1');
+    expect(JSON.parse(vectorsOnDisk).scheme).toBe('protected-v1');
+
+    expect((await store.getStoryCodex('p1')) as { entries?: unknown[] } | null).toEqual(
+      expect.objectContaining({ entries: [{ k: 'secret-entity' }] }),
+    );
+    expect(await store.getRagVectors('p1')).toEqual([{ id: 1 }]);
+  });
 });
 
 describe('FsAssetStore — images + binder assets', () => {
@@ -469,6 +548,17 @@ describe('FsAssetStore — images + binder assets', () => {
     expect(await store.getImage('char-1')).toBe('data:image/png;base64,QUJD');
     await store.deleteImage('char-1');
     expect(await store.getImage('char-1')).toBeNull();
+  });
+
+  it('encrypts an image on disk when at-rest encryption is configured, and still round-trips', async () => {
+    await enableTestPassphrase();
+    await store.saveImage('char-1', 'data:image/png;base64,QUJD');
+
+    const onDisk = fake.text.get('/app/images/char-1.png') as string;
+    expect(onDisk).not.toContain('QUJD');
+    expect(JSON.parse(onDisk).scheme).toBe('protected-v1');
+
+    expect(await store.getImage('char-1')).toBe('data:image/png;base64,QUJD');
   });
 
   it('round-trips a binder binary asset with metadata', async () => {

@@ -1,12 +1,22 @@
 /**
  * FsAssetFsStore — Image and Binder binary asset filesystem storage.
- * ENCRYPTION: plaintext — blob storage; at-rest encryption planned for Phase 2.
+ * ENCRYPTION: images — AES-256-GCM under the real at-rest passphrase when configured and
+ * unlocked, plaintext otherwise (see fsCore.ts's "Protected text files" section). Binder
+ * assets (`.bin`/`.meta.json`) remain plaintext — the binary path needs a byte-native encrypt
+ * (not the JSON-serializing helpers used here) and is tracked as a separate follow-up.
  * QNBS-v3: Extracted from fileSystemService.ts.
  */
 
 import { logger } from '../logger';
 import type { BinderAssetMeta, BinderAssetPayload } from '../storageBackend';
-import { retryFs, sanitizePathSegment, writeFileAtomic, writeTextFileAtomic } from './fsCore';
+import {
+  protectTextValue,
+  retryFs,
+  sanitizePathSegment,
+  unprotectTextValue,
+  writeFileAtomic,
+  writeTextFileAtomic,
+} from './fsCore';
 import { FsSnapshotStore } from './snapshotFsStore';
 
 export class FsAssetStore extends FsSnapshotStore {
@@ -23,7 +33,7 @@ export class FsAssetStore extends FsSnapshotStore {
 
     const imageFile = await apis.join(imagesPath, `${sanitizePathSegment(id, 'image')}.png`);
     const cleanBase64 = base64Data.replace(/^data:image\/png;base64,/, '');
-    await writeTextFileAtomic(apis, imageFile, cleanBase64);
+    await writeTextFileAtomic(apis, imageFile, await protectTextValue(cleanBase64));
   }
 
   async getImage(id: string): Promise<string | null> {
@@ -40,7 +50,8 @@ export class FsAssetStore extends FsSnapshotStore {
         return null;
       }
 
-      const base64Data = await retryFs(() => apis.readTextFile(imageFile));
+      const stored = await retryFs(() => apis.readTextFile(imageFile));
+      const base64Data = await unprotectTextValue(stored);
       return `data:image/png;base64,${base64Data}`;
     } catch (error) {
       logger.error('Failed to load image:', error);

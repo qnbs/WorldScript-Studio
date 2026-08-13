@@ -4,7 +4,7 @@
  * sanitization, and word counting — no Tauri APIs required.
  */
 
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TauriApis } from '../../../../services/fs/fsCore';
 import {
   base64ToBytes,
@@ -13,11 +13,40 @@ import {
   compressData,
   countProjectWords,
   decompressData,
+  protectTextValue,
+  readProtectedTextFile,
   retryFs,
   sanitizePathSegment,
+  unprotectTextValue,
   writeFileAtomic,
+  writeProtectedTextFileAtomic,
   writeTextFileAtomic,
 } from '../../../../services/fs/fsCore';
+
+// QNBS-v3: controllable fake for storageEncryptionService's IDB-backed sentinel/session state — see tests/unit/services/fs/fsStores.test.ts for the full rationale (same pattern, scoped here to the pure protectTextValue/unprotectTextValue helpers rather than a whole store).
+const { cryptoState } = vi.hoisted(() => ({
+  cryptoState: { activeKey: null as CryptoKey | null, sentinelConfigured: false },
+}));
+vi.mock('../../../../services/storage/storageEncryptionService', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../../../services/storage/storageEncryptionService')>();
+  return {
+    ...actual,
+    hasPassphraseSentinel: () => Promise.resolve(cryptoState.sentinelConfigured),
+    resolveProtectedWriteKey: () => {
+      if (cryptoState.activeKey) return Promise.resolve(cryptoState.activeKey);
+      if (cryptoState.sentinelConfigured) return Promise.reject(new actual.IdbStorageLockedError());
+      return Promise.resolve(null);
+    },
+  };
+});
+
+import { StorageEncryptionService } from '../../../../services/storage/storageEncryptionService';
+
+beforeEach(() => {
+  cryptoState.activeKey = null;
+  cryptoState.sentinelConfigured = false;
+});
 
 // QNBS-v3: entries are plain names, directories suffixed with '/' — just enough to model a nested tree for cleanupOrphanedTempFiles' recursive walk, independent of makeAtomicWriteFake above.
 function makeDirTreeFake(tree: Record<string, string[]>) {
@@ -46,7 +75,10 @@ function makeDirTreeFake(tree: Record<string, string[]>) {
 function makeAtomicWriteFake() {
   const text = new Map<string, string>();
   const bin = new Map<string, Uint8Array>();
-  const apis: Pick<TauriApis, 'writeTextFile' | 'writeFile' | 'rename' | 'remove'> = {
+  const apis: Pick<
+    TauriApis,
+    'writeTextFile' | 'writeFile' | 'readTextFile' | 'rename' | 'remove'
+  > = {
     writeTextFile: (p, c) => {
       text.set(p, c);
       return Promise.resolve();
@@ -54,6 +86,10 @@ function makeAtomicWriteFake() {
     writeFile: (p, d) => {
       bin.set(p, d);
       return Promise.resolve();
+    },
+    readTextFile: (p) => {
+      if (!text.has(p)) return Promise.reject(new Error(`ENOENT ${p}`));
+      return Promise.resolve(text.get(p) as string);
     },
     rename: (oldPath, newPath) => {
       if (text.has(oldPath)) {
@@ -72,6 +108,14 @@ function makeAtomicWriteFake() {
     },
   };
   return { apis: apis as TauriApis, text, bin };
+}
+
+async function enableTestPassphrase(): Promise<void> {
+  cryptoState.activeKey = await new StorageEncryptionService().deriveKey(
+    'test-passphrase',
+    new Uint8Array(32).fill(7),
+  );
+  cryptoState.sentinelConfigured = true;
 }
 
 describe('retryFs', () => {
@@ -285,6 +329,57 @@ describe('cleanupOrphanedTempFiles', () => {
 
     await expect(cleanupOrphanedTempFiles(apis, '/app')).resolves.toBeUndefined();
     expect(removed).toEqual([]); // the leaf is past the depth guard, never reached
+  });
+});
+
+describe('protectTextValue / unprotectTextValue / writeProtectedTextFileAtomic / readProtectedTextFile', () => {
+  it('passes plaintext through unchanged when no at-rest passphrase is configured', async () => {
+    const protectedValue = await protectTextValue('plain compressed data');
+    expect(protectedValue).toBe('plain compressed data');
+    expect(await unprotectTextValue(protectedValue)).toBe('plain compressed data');
+  });
+
+  it('encrypts under the real key when a passphrase is configured and unlocked, and round-trips', async () => {
+    await enableTestPassphrase();
+    const protectedValue = await protectTextValue('sensitive manuscript text');
+    expect(protectedValue).not.toContain('sensitive manuscript text');
+    expect(JSON.parse(protectedValue).scheme).toBe('protected-v1');
+    expect(await unprotectTextValue(protectedValue)).toBe('sensitive manuscript text');
+  });
+
+  it("treats LZ-compressed plaintext (compressData()'s large-payload output) as plaintext, not a protected envelope", async () => {
+    const lzLike = `\x00lz1\x00${'x'.repeat(50)}`;
+    expect(await unprotectTextValue(lzLike)).toBe(lzLike);
+  });
+
+  it('throws when a protected value exists but at-rest encryption is no longer configured', async () => {
+    await enableTestPassphrase();
+    const protectedValue = await protectTextValue('secret');
+    cryptoState.activeKey = null;
+    cryptoState.sentinelConfigured = false; // sentinel cleared/disabled since this was saved
+    await expect(unprotectTextValue(protectedValue)).rejects.toThrow(/no longer configured/);
+  });
+
+  it('propagates a locked error (fail closed) when a protected value exists but the session is locked', async () => {
+    await enableTestPassphrase();
+    const protectedValue = await protectTextValue('secret');
+    cryptoState.activeKey = null; // sentinelConfigured stays true — locked, not disabled
+    await expect(unprotectTextValue(protectedValue)).rejects.toThrow(/storage is locked/i);
+  });
+
+  it('writeProtectedTextFileAtomic + readProtectedTextFile round-trip through the filesystem, encrypted', async () => {
+    await enableTestPassphrase();
+    const { apis, text } = makeAtomicWriteFake();
+    await writeProtectedTextFileAtomic(apis, '/app/project.json', '{"title":"My Novel"}');
+
+    expect(text.get('/app/project.json')).not.toContain('My Novel');
+    expect(await readProtectedTextFile(apis, '/app/project.json')).toBe('{"title":"My Novel"}');
+  });
+
+  it('writeProtectedTextFileAtomic writes plaintext when no passphrase is configured (unchanged default)', async () => {
+    const { apis, text } = makeAtomicWriteFake();
+    await writeProtectedTextFileAtomic(apis, '/app/project.json', '{"title":"My Novel"}');
+    expect(text.get('/app/project.json')).toBe('{"title":"My Novel"}');
   });
 });
 

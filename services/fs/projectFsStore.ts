@@ -1,6 +1,8 @@
 /**
  * FsProjectStore — Project CRUD + import/export on the filesystem.
- * ENCRYPTION: plaintext — manuscript data; at-rest encryption planned for Phase 2 (P2-1).
+ * ENCRYPTION: AES-256-GCM under the real at-rest passphrase (services/storage/
+ * storageEncryptionService.ts) when one is configured and unlocked; plaintext otherwise —
+ * opportunistic/lazy migration, see fsCore.ts's writeProtectedTextFileAtomic doc comment.
  * QNBS-v3: Extracted from fileSystemService.ts. saveProject triggers auto-snapshot via FsSnapshotStore.
  */
 
@@ -13,8 +15,10 @@ import { FsAssetStore } from './assetFsStore';
 import {
   compressData,
   decompressData,
+  readProtectedTextFile,
   retryFs,
   sanitizePathSegment,
+  writeProtectedTextFileAtomic,
   writeTextFileAtomic,
 } from './fsCore';
 
@@ -42,7 +46,7 @@ export class FsProjectStore extends FsAssetStore {
     }
 
     const projectFile = await apis.join(projectPath, 'project.json');
-    await writeTextFileAtomic(apis, projectFile, compressData(flat));
+    await writeProtectedTextFileAtomic(apis, projectFile, compressData(flat));
     // QNBS-v3 (#332): documented best-effort abort — the project data above already saved; a failed marker write only degrades the next cold-boot's project selection, not worth failing this save over.
     await this.setActiveProjectId(projectId).catch((error) => {
       logger.warn('Failed to persist active-project marker (project save itself succeeded)', {
@@ -93,7 +97,7 @@ export class FsProjectStore extends FsAssetStore {
         return null;
       }
 
-      const content = await retryFs(() => apis.readTextFile(projectFile));
+      const content = await readProtectedTextFile(apis, projectFile);
       return decompressData<StoryProject>(content);
     } catch (error) {
       logger.error('Failed to load project:', error);
