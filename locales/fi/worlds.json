@@ -33,6 +33,11 @@
   "worlds.edit.notes": "Huomautuksia",
   "worlds.editorTabsAriaLabel": "Maailman muokkausvälilehdet",
   "worlds.error.imageFailed": "Tunnelmakuvan luominen epäonnistui. Yritä lisätä yksityiskohtia maailmankuvaukseen tai tarkista yhteys.",
+  "worlds.heuristic.culture": "Describe the peoples, beliefs, and daily life shaped by {{concept}}.",
+  "worlds.heuristic.description": "A world defined by its central premise: {{concept}}.",
+  "worlds.heuristic.geography": "Outline the major regions, climates, and natural features of {{concept}}.",
+  "worlds.heuristic.magicSystem": "Define the rules, costs, and limits of power in {{concept}}.",
+  "worlds.heuristic.name": "New World",
   "worlds.loading.profile": "Luodaan yksityiskohtaista maailmanprofiilia...",
   "worlds.newWorldName": "Uusi maailma",
   "worlds.noWorlds": "Maailmaa ei ole vielä luotu.",
@@ -50,10 +55,5 @@
   "worlds.tabs.timeline": "Historia ja aikajana",
   "worlds.title": "Maailman atlas",
   "worlds.uploadImage": "Lataa kuva",
-  "worlds.yourWorlds": "Sinun maailmasi",
-  "worlds.heuristic.name": "New World",
-  "worlds.heuristic.description": "A world defined by its central premise: {{concept}}.",
-  "worlds.heuristic.geography": "Outline the major regions, climates, and natural features of {{concept}}.",
-  "worlds.heuristic.magicSystem": "Define the rules, costs, and limits of power in {{concept}}.",
-  "worlds.heuristic.culture": "Describe the peoples, beliefs, and daily life shaped by {{concept}}."
+  "worlds.yourWorlds": "Sinun maailmasi"
 }

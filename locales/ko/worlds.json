@@ -33,6 +33,11 @@
   "worlds.edit.notes": "메모",
   "worlds.editorTabsAriaLabel": "월드 에디터 탭",
   "worlds.error.imageFailed": "분위기 이미지 생성에 실패했습니다. 세계 설명에 더 자세한 내용을 추가하거나 연결을 확인해보세요.",
+  "worlds.heuristic.culture": "Describe the peoples, beliefs, and daily life shaped by {{concept}}.",
+  "worlds.heuristic.description": "A world defined by its central premise: {{concept}}.",
+  "worlds.heuristic.geography": "Outline the major regions, climates, and natural features of {{concept}}.",
+  "worlds.heuristic.magicSystem": "Define the rules, costs, and limits of power in {{concept}}.",
+  "worlds.heuristic.name": "New World",
   "worlds.loading.profile": "자세한 세계 프로필을 생성하는 중...",
   "worlds.newWorldName": "새로운 세계",
   "worlds.noWorlds": "아직 생성된 세계가 없습니다.",
@@ -50,10 +55,5 @@
   "worlds.tabs.timeline": "역사 및 타임라인",
   "worlds.title": "월드 아틀라스",
   "worlds.uploadImage": "이미지 업로드",
-  "worlds.yourWorlds": "당신의 세계",
-  "worlds.heuristic.name": "New World",
-  "worlds.heuristic.description": "A world defined by its central premise: {{concept}}.",
-  "worlds.heuristic.geography": "Outline the major regions, climates, and natural features of {{concept}}.",
-  "worlds.heuristic.magicSystem": "Define the rules, costs, and limits of power in {{concept}}.",
-  "worlds.heuristic.culture": "Describe the peoples, beliefs, and daily life shaped by {{concept}}."
+  "worlds.yourWorlds": "당신의 세계"
 }

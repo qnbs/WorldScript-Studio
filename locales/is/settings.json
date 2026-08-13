@@ -673,7 +673,7 @@
   "settings.privacy.encryptionCurrentPassphrase": "Núverandi lykilorð",
   "settings.privacy.encryptionDisableAction": "Óvirkja",
   "settings.privacy.encryptionDisableButton": "Slökktu á dulkóðun",
-  "settings.privacy.encryptionDisableConfirm": "Slökktu á dulkóðun",
+  "settings.privacy.encryptionDisableConfirm": "Þetta afkóðar öll gögnin þín og slekkur á dulkóðun í hvíld. Gögnin þín verða áfram á þessu tæki en verða ekki lengur varin með lykilorðasetningu.",
   "settings.privacy.encryptionDisableFailed": "Could not disable encryption. Please try again.",
   "settings.privacy.encryptionDisabledStatus": "Dulkóðun í hvíld er óvirk",
   "settings.privacy.encryptionEnabled": "Dulkóða verkefnisgögn í hvíld",

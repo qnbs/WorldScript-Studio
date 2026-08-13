@@ -33,6 +33,11 @@
   "worlds.edit.notes": "یادداشت ها",
   "worlds.editorTabsAriaLabel": "برگه های ویرایشگر جهان",
   "worlds.error.imageFailed": "تولید تصویر محیطی ناموفق بود. لطفاً سعی کنید جزئیات بیشتری را به شرح جهان اضافه کنید یا اتصال خود را بررسی کنید.",
+  "worlds.heuristic.culture": "Describe the peoples, beliefs, and daily life shaped by {{concept}}.",
+  "worlds.heuristic.description": "A world defined by its central premise: {{concept}}.",
+  "worlds.heuristic.geography": "Outline the major regions, climates, and natural features of {{concept}}.",
+  "worlds.heuristic.magicSystem": "Define the rules, costs, and limits of power in {{concept}}.",
+  "worlds.heuristic.name": "New World",
   "worlds.loading.profile": "ایجاد نمایه جهانی دقیق...",
   "worlds.newWorldName": "دنیای جدید",
   "worlds.noWorlds": "هنوز جهانی ساخته نشده است.",
@@ -50,10 +55,5 @@
   "worlds.tabs.timeline": "تاریخچه و جدول زمانی",
   "worlds.title": "اطلس جهانی",
   "worlds.uploadImage": "آپلود تصویر",
-  "worlds.yourWorlds": "دنیاهای شما",
-  "worlds.heuristic.name": "New World",
-  "worlds.heuristic.description": "A world defined by its central premise: {{concept}}.",
-  "worlds.heuristic.geography": "Outline the major regions, climates, and natural features of {{concept}}.",
-  "worlds.heuristic.magicSystem": "Define the rules, costs, and limits of power in {{concept}}.",
-  "worlds.heuristic.culture": "Describe the peoples, beliefs, and daily life shaped by {{concept}}."
+  "worlds.yourWorlds": "دنیاهای شما"
 }

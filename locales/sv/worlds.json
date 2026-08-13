@@ -33,6 +33,11 @@
   "worlds.edit.notes": "Anteckningar",
   "worlds.editorTabsAriaLabel": "World editor flikar",
   "worlds.error.imageFailed": "Det gick inte att skapa stämningsbilder. Försök att lägga till mer detaljer i världsbeskrivningen eller kontrollera din anslutning.",
+  "worlds.heuristic.culture": "Describe the peoples, beliefs, and daily life shaped by {{concept}}.",
+  "worlds.heuristic.description": "A world defined by its central premise: {{concept}}.",
+  "worlds.heuristic.geography": "Outline the major regions, climates, and natural features of {{concept}}.",
+  "worlds.heuristic.magicSystem": "Define the rules, costs, and limits of power in {{concept}}.",
+  "worlds.heuristic.name": "New World",
   "worlds.loading.profile": "Genererar detaljerad världsprofil...",
   "worlds.newWorldName": "Ny värld",
   "worlds.noWorlds": "Inga världar skapade ännu.",
@@ -50,10 +55,5 @@
   "worlds.tabs.timeline": "Historia och tidslinje",
   "worlds.title": "Världsatlas",
   "worlds.uploadImage": "Ladda upp bild",
-  "worlds.yourWorlds": "Dina världar",
-  "worlds.heuristic.name": "New World",
-  "worlds.heuristic.description": "A world defined by its central premise: {{concept}}.",
-  "worlds.heuristic.geography": "Outline the major regions, climates, and natural features of {{concept}}.",
-  "worlds.heuristic.magicSystem": "Define the rules, costs, and limits of power in {{concept}}.",
-  "worlds.heuristic.culture": "Describe the peoples, beliefs, and daily life shaped by {{concept}}."
+  "worlds.yourWorlds": "Dina världar"
 }

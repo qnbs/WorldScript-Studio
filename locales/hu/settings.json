@@ -673,7 +673,7 @@
   "settings.privacy.encryptionCurrentPassphrase": "Jelenlegi jelszó",
   "settings.privacy.encryptionDisableAction": "Letiltás",
   "settings.privacy.encryptionDisableButton": "A titkosítás letiltása",
-  "settings.privacy.encryptionDisableConfirm": "A titkosítás letiltása",
+  "settings.privacy.encryptionDisableConfirm": "Ez visszafejti az összes adatát, és kikapcsolja a nyugalmi titkosítást. Az adatai ezen az eszközön maradnak, de már nem védi őket jelmondat.",
   "settings.privacy.encryptionDisableFailed": "Could not disable encryption. Please try again.",
   "settings.privacy.encryptionDisabledStatus": "A nyugalmi titkosítás le van tiltva",
   "settings.privacy.encryptionEnabled": "A projektadatok titkosítása nyugalmi állapotban",
