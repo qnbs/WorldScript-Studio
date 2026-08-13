@@ -53,8 +53,6 @@ updates:
           - 'wry'
           - 'tao'
 
-  # Cargo / Rust (fuzz targets) — a separate, non-workspace manifest with its own Cargo.lock
-  # (src-tauri/fuzz/Cargo.lock), so the /src-tauri entry above never sees its dependency graph.
   - package-ecosystem: cargo
     directory: /src-tauri/fuzz
     schedule:
