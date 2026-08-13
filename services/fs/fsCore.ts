@@ -22,7 +22,11 @@ export type TauriApis = {
   save: (opts?: Record<string, unknown>) => Promise<string | null>;
   appDataDir: () => Promise<string>;
   join: (...parts: string[]) => Promise<string>;
-  invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
+  invoke: (
+    cmd: string,
+    args?: Record<string, unknown> | Uint8Array,
+    options?: { headers: HeadersInit },
+  ) => Promise<unknown>;
 };
 
 let tauriApis: TauriApis | null = null;
@@ -94,51 +98,18 @@ function createTempSuffix(): string {
 // QNBS-v3: tracks temp files mid-write so the startup sweep never deletes one racing an active save right after initialize().
 const activeTempPaths = new Set<string>();
 
-interface QueuedWrite {
-  fn: () => Promise<void>;
-  waiters: Array<{ resolve: () => void; reject: (reason: unknown) => void }>;
-}
-
-// QNBS-v3: one write in flight per path plus at most one queued "next" write — a write arriving while one is already queued supersedes it, bounding memory/I/O for a same-path write burst.
-const inFlightPaths = new Set<string>();
-const nextWrite = new Map<string, QueuedWrite>();
+// QNBS-v3: each caller owns a real ordered write result; coalescing pending writes made an earlier caller report success after a later payload was persisted instead.
+const writeTails = new Map<string, Promise<void>>();
 
 function enqueueWrite(path: string, fn: () => Promise<void>): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    const waiter = { resolve, reject };
-    const queued = nextWrite.get(path);
-    if (queued) {
-      queued.fn = fn;
-      queued.waiters.push(waiter);
-      return;
-    }
-    if (inFlightPaths.has(path)) {
-      nextWrite.set(path, { fn, waiters: [waiter] });
-      return;
-    }
-    void runQueuedWrite(path, fn, [waiter]);
+  const previous = writeTails.get(path) ?? Promise.resolve();
+  const operation = previous.catch(() => {}).then(fn);
+  const tail = operation.catch(() => {});
+  writeTails.set(path, tail);
+  void tail.then(() => {
+    if (writeTails.get(path) === tail) writeTails.delete(path);
   });
-}
-
-async function runQueuedWrite(
-  path: string,
-  fn: () => Promise<void>,
-  waiters: Array<{ resolve: () => void; reject: (reason: unknown) => void }>,
-): Promise<void> {
-  inFlightPaths.add(path);
-  try {
-    await fn();
-    for (const waiter of waiters) waiter.resolve();
-  } catch (err) {
-    for (const waiter of waiters) waiter.reject(err);
-  } finally {
-    inFlightPaths.delete(path);
-  }
-  const queued = nextWrite.get(path);
-  if (queued) {
-    nextWrite.delete(path);
-    void runQueuedWrite(path, queued.fn, queued.waiters);
-  }
+  return operation;
 }
 
 async function atomicRename(apis: TauriApis, tmpPath: string, finalPath: string): Promise<void> {
@@ -194,8 +165,10 @@ export function writeFileAtomic(apis: TauriApis, path: string, data: Uint8Array)
 
 async function writeFileDurablyInTauri(path: string, data: Uint8Array): Promise<void> {
   const { invoke } = await import('@tauri-apps/api/core');
-  // QNBS-v3: native publication synchronizes the temp file before replacement; plugin-fs exposes no equivalent stable-storage boundary.
-  await invoke('worldscript_atomic_write', { path, data: Array.from(data) });
+  // QNBS-v3: raw IPC avoids expanding every binary byte into a JavaScript number-array element.
+  await invoke('worldscript_atomic_write', data, {
+    headers: { 'x-worldscript-path': encodeURIComponent(path) },
+  });
 }
 
 // --- LZ-String compression (mirrors dbService threshold and prefix) ---
@@ -337,7 +310,7 @@ export function countProjectWords(projectData: unknown): number {
 
 // --- Base class: Tauri path resolution ---
 
-// QNBS-v3: both atomicRename's and writeThenRename's cleanup only run when a JS promise actually rejects — a process kill (crash/power-loss) mid-write stops execution before either handler runs, leaving a uniquely-named `.tmp-*` orphan with no in-session path to reclaim it. Swept once at startup below.
+// QNBS-v3: JS-generated names are separate from native names so the JavaScript sweep cannot delete a native temp while its native command is still writing it.
 const TEMP_FILE_PATTERN = /\.tmp-[0-9a-f-]+$/i;
 
 export async function cleanupOrphanedTempFiles(
@@ -382,9 +355,11 @@ export class FsCore {
       logger.error('Failed to get app data directory:', error);
       throw error;
     }
-    // Fire-and-forget: never delays the caller waiting on this initialize() call.
-    cleanupOrphanedTempFiles(apis, this.appDataPath).catch((error) => {
+    await cleanupOrphanedTempFiles(apis, this.appDataPath).catch((error) => {
       logger.warn('Failed to clean up orphaned temp files:', error);
+    });
+    await apis.invoke('worldscript_cleanup_atomic_temps').catch((error) => {
+      logger.warn('Failed to clean up native orphaned temp files:', error);
     });
   }
 

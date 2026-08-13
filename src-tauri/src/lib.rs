@@ -160,6 +160,7 @@ pub fn run() {
       commands::task_supervisor::worldscript_task_supervisor_ping,
       commands::task_supervisor::worldscript_task_supervisor_submit,
       durable_fs::worldscript_atomic_write,
+      durable_fs::worldscript_cleanup_atomic_temps,
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {

@@ -129,10 +129,11 @@ describe('writeTextFileAtomic / writeFileAtomic', () => {
 
     await writeTextFileAtomic(apis, '/app/project.json', 'content');
 
-    expect(h.invoke).toHaveBeenCalledWith('worldscript_atomic_write', {
-      path: '/app/project.json',
-      data: Array.from(new TextEncoder().encode('content')),
-    });
+    expect(h.invoke).toHaveBeenCalledWith(
+      'worldscript_atomic_write',
+      new TextEncoder().encode('content'),
+      { headers: { 'x-worldscript-path': '%2Fapp%2Fproject.json' } },
+    );
   });
 
   it('uses the native durable command for binary writes in Tauri', async () => {
@@ -142,9 +143,8 @@ describe('writeTextFileAtomic / writeFileAtomic', () => {
 
     await writeFileAtomic(apis, '/app/asset.bin', new Uint8Array([1, 2, 3]));
 
-    expect(h.invoke).toHaveBeenCalledWith('worldscript_atomic_write', {
-      path: '/app/asset.bin',
-      data: [1, 2, 3],
+    expect(h.invoke).toHaveBeenCalledWith('worldscript_atomic_write', new Uint8Array([1, 2, 3]), {
+      headers: { 'x-worldscript-path': '%2Fapp%2Fasset.bin' },
     });
   });
 
@@ -293,8 +293,8 @@ describe('writeTextFileAtomic / writeFileAtomic', () => {
     expect(text.get('/app/project.json')).toBe('second');
   });
 
-  // QNBS-v3: a write queued while another is already pending (not yet started) must supersede it in place, not append another link — otherwise a burst of same-path saves writes every stale intermediate version to disk instead of coalescing to the latest.
-  it('coalesces a write queued behind an already-pending write, skipping the superseded content entirely', async () => {
+  // QNBS-v3: every caller must observe its own write outcome; replacing a pending payload made superseded callers receive false success.
+  it('executes every queued write in call order and resolves each caller only after its own payload commits', async () => {
     const { apis, text } = makeAtomicWriteFake();
     const originalWriteTextFile = apis.writeTextFile;
     const writtenContents: string[] = [];
@@ -318,17 +318,13 @@ describe('writeTextFileAtomic / writeFileAtomic', () => {
     const first = writeTextFileAtomic(apis, '/app/project.json', 'first');
     await firstStarted;
 
-    // "second" is queued while "first" is still running — becomes the pending write.
     const second = writeTextFileAtomic(apis, '/app/project.json', 'second');
-    // "third" arrives while "second" is still only queued (not started) — supersedes it in place.
     const third = writeTextFileAtomic(apis, '/app/project.json', 'third');
 
     releaseFirst?.();
     await Promise.all([first, second, third]);
 
-    // "first" had already started before superseding was possible, so it genuinely ran; "second"
-    // was superseded before it ever started and must never reach the temp-file write at all.
-    expect(writtenContents).toEqual(['first', 'third']);
+    expect(writtenContents).toEqual(['first', 'second', 'third']);
     expect(text.get('/app/project.json')).toBe('third');
   });
 });

@@ -330,6 +330,14 @@ describe('FsAssetStore — images + binder assets', () => {
     expect(await store.getImage('char-1')).toBeNull();
   });
 
+  it('preserves the MIME type of non-PNG image data URLs while reading legacy raw base64', async () => {
+    await store.saveImage('world-1', 'data:image/webp;base64,V0VCUA==');
+    expect(await store.getImage('world-1')).toBe('data:image/webp;base64,V0VCUA==');
+
+    fake.text.set('/app/images/legacy.png', 'TEVHQUNZ');
+    expect(await store.getImage('legacy')).toBe('data:image/png;base64,TEVHQUNZ');
+  });
+
   it('round-trips a binder binary asset with metadata', async () => {
     const data = new Uint8Array([1, 2, 3, 4]).buffer;
     await store.saveBinderAsset('p1', 'a1', data, {
@@ -343,6 +351,31 @@ describe('FsAssetStore — images + binder assets', () => {
     expect(await store.listBinderAssetIds('p1')).toContain('a1');
     await store.deleteBinderAsset('p1', 'a1');
     expect(await store.getBinderAsset('p1', 'a1')).toBeNull();
+  });
+
+  it('keeps the previously committed binder pair readable when the new manifest cannot publish', async () => {
+    const original = new Uint8Array([1, 2, 3]).buffer;
+    await store.saveBinderAsset('p1', 'a1', original, {
+      name: 'before.pdf',
+      mime: 'application/pdf',
+    } as never);
+
+    const originalWriteTextFile = fake.apis.writeTextFile;
+    fake.apis.writeTextFile = (path, content) => {
+      if (path.includes('a1.meta.json.tmp-')) return Promise.reject(new Error('disk full'));
+      return originalWriteTextFile(path, content);
+    };
+
+    await expect(
+      store.saveBinderAsset('p1', 'a1', new Uint8Array([9, 9]).buffer, {
+        name: 'after.pdf',
+        mime: 'application/pdf',
+      } as never),
+    ).rejects.toThrow('disk full');
+
+    const recovered = await store.getBinderAsset('p1', 'a1');
+    expect(recovered?.meta.name).toBe('before.pdf');
+    expect(new Uint8Array(recovered?.data as ArrayBuffer)).toEqual(new Uint8Array([1, 2, 3]));
   });
 
   it('returns null/[] for missing binder assets', async () => {

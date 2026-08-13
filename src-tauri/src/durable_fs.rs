@@ -3,6 +3,7 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     process,
+    sync::{LazyLock, Mutex},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -13,8 +14,11 @@ use std::os::windows::ffi::OsStrExt;
 
 #[cfg(windows)]
 use windows_sys::Win32::Storage::FileSystem::{
-    MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+    MoveFileExW, ReplaceFileW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+    REPLACEFILE_WRITE_THROUGH,
 };
+
+static NATIVE_TEMP_OPERATION_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 fn validated_destination(app: &AppHandle, requested: &str) -> Result<(PathBuf, PathBuf), String> {
     let app_data = app
@@ -52,7 +56,7 @@ fn create_sibling_temp(destination: &Path) -> Result<(PathBuf, File), String> {
         .as_nanos();
     for sequence in 0..32_u8 {
         let candidate = parent.join(format!(
-            "{name}.tmp-{}-{epoch_nanos}-{sequence}",
+            "{name}.native-tmp-{}-{epoch_nanos}-{sequence}",
             process::id()
         ));
         match OpenOptions::new()
@@ -66,6 +70,21 @@ fn create_sibling_temp(destination: &Path) -> Result<(PathBuf, File), String> {
         }
     }
     Err("Could not allocate a unique durable temporary file".to_owned())
+}
+
+#[cfg(unix)]
+fn preserve_destination_permissions(destination: &Path, temporary: &Path) -> Result<(), String> {
+    if let Ok(metadata) = fs::metadata(destination) {
+        fs::set_permissions(temporary, metadata.permissions()).map_err(|error| {
+            format!("Could not preserve durable destination permissions: {error}")
+        })?;
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn preserve_destination_permissions(_destination: &Path, _temporary: &Path) -> Result<(), String> {
+    Ok(())
 }
 
 #[cfg(unix)]
@@ -98,7 +117,27 @@ fn publish_replacement(temporary: &Path, destination: &Path) -> Result<(), Strin
         .encode_wide()
         .chain(std::iter::once(0))
         .collect::<Vec<_>>();
-    // QNBS-v3: Windows needs MoveFileExW because std::fs::rename does not guarantee replacement of an existing destination there.
+    if destination.exists() {
+        // QNBS-v3: ReplaceFileW preserves the existing destination's security descriptor when replacing an existing file.
+        let outcome = unsafe {
+            ReplaceFileW(
+                destination_wide.as_ptr(),
+                temporary_wide.as_ptr(),
+                std::ptr::null(),
+                REPLACEFILE_WRITE_THROUGH,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            )
+        };
+        if outcome != 0 {
+            return Ok(());
+        }
+        return Err(format!(
+            "Could not publish durable replacement: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    // QNBS-v3: MoveFileExW publishes new destinations with write-through semantics; ReplaceFileW above handles existing destinations safely.
     let outcome = unsafe {
         MoveFileExW(
             temporary_wide.as_ptr(),
@@ -115,11 +154,14 @@ fn publish_replacement(temporary: &Path, destination: &Path) -> Result<(), Strin
     Ok(())
 }
 
-#[tauri::command]
-pub fn worldscript_atomic_write(app: AppHandle, path: String, data: Vec<u8>) -> Result<(), String> {
+fn durable_write(app: AppHandle, path: String, data: Vec<u8>) -> Result<(), String> {
+    let _operation_guard = NATIVE_TEMP_OPERATION_LOCK
+        .lock()
+        .map_err(|_| "Durable-write coordination lock is poisoned".to_owned())?;
     let (destination, parent) = validated_destination(&app, &path)?;
     let (temporary, mut file) = create_sibling_temp(&destination)?;
     let result = (|| -> Result<(), String> {
+        preserve_destination_permissions(&destination, &temporary)?;
         file.write_all(&data)
             .map_err(|error| format!("Could not write durable temporary file: {error}"))?;
         file.sync_all()
@@ -132,6 +174,90 @@ pub fn worldscript_atomic_write(app: AppHandle, path: String, data: Vec<u8>) -> 
         let _ = fs::remove_file(&temporary);
     }
     result
+}
+
+fn decode_percent_encoded_path(encoded: &str) -> Result<String, String> {
+    let mut bytes = Vec::with_capacity(encoded.len());
+    let raw = encoded.as_bytes();
+    let mut index = 0;
+    while index < raw.len() {
+        if raw[index] == b'%' {
+            if index + 2 >= raw.len() {
+                return Err("Durable write path contains an incomplete percent escape".to_owned());
+            }
+            let hex = std::str::from_utf8(&raw[index + 1..index + 3])
+                .map_err(|_| "Durable write path contains invalid percent encoding".to_owned())?;
+            let byte = u8::from_str_radix(hex, 16)
+                .map_err(|_| "Durable write path contains invalid percent encoding".to_owned())?;
+            bytes.push(byte);
+            index += 3;
+        } else {
+            bytes.push(raw[index]);
+            index += 1;
+        }
+    }
+    String::from_utf8(bytes).map_err(|_| "Durable write path is not valid UTF-8".to_owned())
+}
+
+#[tauri::command]
+pub async fn worldscript_atomic_write(
+    app: AppHandle,
+    request: tauri::ipc::Request<'_>,
+) -> Result<(), String> {
+    let encoded_path = request
+        .headers()
+        .get("x-worldscript-path")
+        .ok_or_else(|| "Durable write is missing its target path".to_owned())?
+        .to_str()
+        .map_err(|_| "Durable write target path header is invalid".to_owned())?;
+    let path = decode_percent_encoded_path(encoded_path)?;
+    let data = request.body().to_vec();
+    tauri::async_runtime::spawn_blocking(move || durable_write(app, path, data))
+        .await
+        .map_err(|error| format!("Durable write task failed: {error}"))?
+}
+
+fn cleanup_native_temp_files(dir: &Path, depth: usize) -> Result<(), String> {
+    if depth > 6 || !dir.exists() {
+        return Ok(());
+    }
+    for entry in fs::read_dir(dir)
+        .map_err(|error| format!("Could not read durable temp directory: {error}"))?
+    {
+        let entry =
+            entry.map_err(|error| format!("Could not inspect durable temp entry: {error}"))?;
+        let path = entry.path();
+        let file_type = entry
+            .file_type()
+            .map_err(|error| format!("Could not inspect durable temp type: {error}"))?;
+        if file_type.is_dir() {
+            cleanup_native_temp_files(&path, depth + 1)?;
+        } else if file_type.is_file()
+            && path
+                .file_name()
+                .is_some_and(|name| name.to_string_lossy().contains(".native-tmp-"))
+        {
+            fs::remove_file(&path)
+                .map_err(|error| format!("Could not remove native orphaned temp file: {error}"))?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn worldscript_cleanup_atomic_temps(app: AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _operation_guard = NATIVE_TEMP_OPERATION_LOCK
+            .lock()
+            .map_err(|_| "Durable-write coordination lock is poisoned".to_owned())?;
+        let app_data = app
+            .path()
+            .app_data_dir()
+            .map_err(|error| format!("Could not resolve app-data directory: {error}"))?;
+        cleanup_native_temp_files(&app_data, 0)
+    })
+    .await
+    .map_err(|error| format!("Native temp cleanup task failed: {error}"))?
 }
 
 #[cfg(test)]
