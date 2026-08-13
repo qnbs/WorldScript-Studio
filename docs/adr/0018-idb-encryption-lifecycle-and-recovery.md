@@ -24,7 +24,7 @@ The encryption state is defined by persistent sentinel/journal metadata and runt
 | `DISABLE_PENDING` | source + journal | source key | normal writers blocked; each target record is verified plaintext before sentinel retirement | resume or recovery-required |
 | `RECOVERY_REQUIRED` | journal | no assumed key | normal writers blocked; recovery requires the applicable passphrase(s) | resume or explicit support-led recovery |
 
-The currently shipped foundation implements `DISABLED`, `ENABLED_LOCKED`, and `ENABLED_UNLOCKED`. It also persists a versioned journal and rejects a second migration owner before a conversion begins. It deliberately rejects disable and rekey requests until the pending conversion states can be completed and recovered.
+The shipped implementation covers every state in the table above, including `REKEY_PENDING`, `DISABLE_PENDING`, and `RECOVERY_REQUIRED`. It persists a versioned journal, rejects a second migration owner before a conversion begins, and disable/rekey requests run the full per-store conversion through to a verified commit — they are no longer rejected outright. `RECOVERY_REQUIRED` remains a deliberate manual-recovery dead end by design (see `docs/IDB-ENCRYPTION.md` § Remaining migration work): the journal's own verification detected an inconsistency, and no automatic retry can be trusted to resolve that safely.
 
 ## Invariants
 
@@ -54,10 +54,10 @@ Failure before cleanup leaves the journal and sufficient source/target verificat
 
 The conversion adapters must cover the policy-covered current stores in both databases: project/settings, snapshots, images, Codex, RAG vectors, and binder assets. They must also record intentionally excluded surfaces and why they are excluded.
 
-Before conversion starts, the journal’s atomic owner gate blocks normal policy-covered reads and writes and rejects a concurrent migration owner. A cross-tab lease/notification path, stale-client reload requirement, and stale lease recovery remain required before lifecycle operations can be enabled.
+Before conversion starts, the journal’s atomic owner gate blocks normal policy-covered reads and writes and rejects a concurrent migration owner. Cross-tab admission (`services/storage/protectedWriteAdmission.ts`, a Web Locks API shared/exclusive lock) closes the write-vs-migration race between an ordinary protected write and a migration batch claiming the same store (issue #339) — this is shipped, not a remaining prerequisite.
 
 ## Consequences
 
-The short-term consequence is that users cannot yet disable at-rest encryption or rotate its passphrase from the UI. This is preferable to claiming an operation succeeded while leaving unreadable ciphertext or silently downgrading content to plaintext.
+Disable and passphrase rotation are available from Settings → Privacy, backed by the full journal-based conversion described above — no operation is claimed successful while leaving unreadable ciphertext or silently downgrading content to plaintext. `RECOVERY_REQUIRED` still has no automatic resolution; the interrupted-migration recovery UX (`EncryptionRecoveryModal`) covers a resumable journal, but a verification-shortfall journal requires manual/support-led recovery.
 
-The implementation must not re-enable these controls merely because a happy-path conversion test passes. It needs failure injection for transaction abort, quota exhaustion, reload between stores, corruption, and concurrent writers, plus packaged-webview validation.
+Remaining work: broader failure-injection coverage (transaction abort, quota exhaustion, reload between stores, corruption, concurrent writers) beyond what's already unit-tested, plus packaged-webview validation — see `docs/IDB-ENCRYPTION.md` § Remaining migration work for the current list.

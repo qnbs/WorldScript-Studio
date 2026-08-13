@@ -1,7 +1,9 @@
 import type { FC } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
+import { logger } from '../../services/logger';
 import type { ProtectedStoreMigrationProgress } from '../../services/storage/protectedStoreMigration';
+import { IdbWrongPassphraseError } from '../../services/storage/storageEncryptionService';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { Spinner } from '../ui/Spinner';
@@ -11,7 +13,7 @@ export type PassphraseModalMode = 'set' | 'unlock' | 'disable' | 'rotate';
 interface Props {
   mode: PassphraseModalMode;
   onClose: () => void;
-  /** Called with (current, next) — for 'set': ('', passphrase); for 'unlock'/'disable': (passphrase, ''); for 'rotate': (current, next). */
+  /** Called with (current, next) — for 'set': ('', passphrase); for 'unlock'/'rotate': (passphrase, next); for 'disable': ('', ''), since useSettingsView reads the passphrase from the already-unlocked session key instead. */
   onConfirm: (current: string, next: string) => Promise<void>;
   /** Live progress while a 'disable'/'rotate' migration runs across every protected store. */
   progress?: ProtectedStoreMigrationProgress | null;
@@ -74,17 +76,24 @@ export const PassphraseModal: FC<Props> = ({ mode, onClose, onConfirm, progress 
     try {
       await onConfirm(current, next);
       onClose();
-    } catch {
-      // QNBS-v3: 'set' has no prior passphrase to be "wrong" (storage/salt failure instead);
-      // 'disable' already requires an unlocked session, so its failure is a migration error, not
-      // an auth-tag mismatch; 'unlock'/'rotate' most commonly fail on a wrong current passphrase.
-      setError(
-        mode === 'set'
-          ? t('settings.privacy.encryptionSetupFailed')
-          : mode === 'disable'
-            ? t('settings.privacy.encryptionDisableFailed')
-            : t('settings.privacy.encryptionWrongPassphrase'),
-      );
+    } catch (err) {
+      // QNBS-v3: 'set' has no prior passphrase to be "wrong" (storage/salt failure instead).
+      // 'unlock'/'rotate' can fail on a genuine wrong current passphrase (IdbWrongPassphraseError)
+      // OR — for 'rotate' specifically — on an unrelated migration/journal failure (active/
+      // recovery-required journal, adapter error); only the former is fixed by re-entering
+      // credentials, so they need visibly different messages.
+      if (mode === 'set') {
+        setError(t('settings.privacy.encryptionSetupFailed'));
+      } else if (mode === 'disable') {
+        setError(t('settings.privacy.encryptionDisableFailed'));
+      } else if (err instanceof IdbWrongPassphraseError) {
+        setError(t('settings.privacy.encryptionWrongPassphrase'));
+      } else {
+        setError(t('settings.privacy.encryptionRecoveryFailed'));
+        logger.warn(`PassphraseModal ${mode} failed`, {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     } finally {
       setBusy(false);
     }
@@ -101,8 +110,9 @@ export const PassphraseModal: FC<Props> = ({ mode, onClose, onConfirm, progress 
         )
       : null;
 
+  // QNBS-v3: not dismissible while busy (a disable/rotate migration is running) — closing mid-migration would leave it running with no visible progress.
   return (
-    <Modal isOpen={true} onClose={onClose} title={title}>
+    <Modal isOpen={true} onClose={onClose} isDismissible={!busy} title={title}>
       <div className="space-y-4">
         {/* 'unlock'/'rotate': current-passphrase field re-derives/verifies the in-memory key */}
         {needsCurrentPassphrase && (
@@ -126,7 +136,7 @@ export const PassphraseModal: FC<Props> = ({ mode, onClose, onConfirm, progress 
               aria-describedby={hasError ? ERROR_ID : undefined}
               aria-invalid={hasError}
               disabled={busy}
-              className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)] outline-none"
+              className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] outline-none"
             />
           </div>
         )}
@@ -153,7 +163,7 @@ export const PassphraseModal: FC<Props> = ({ mode, onClose, onConfirm, progress 
                 aria-describedby={hasError ? ERROR_ID : undefined}
                 aria-invalid={hasError}
                 disabled={busy}
-                className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)] outline-none"
+                className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] outline-none"
               />
             </div>
             <div className="space-y-1">
@@ -175,7 +185,7 @@ export const PassphraseModal: FC<Props> = ({ mode, onClose, onConfirm, progress 
                 aria-describedby={hasError ? ERROR_ID : undefined}
                 aria-invalid={hasError}
                 disabled={busy}
-                className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)] outline-none"
+                className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] outline-none"
               />
             </div>
           </>
@@ -195,7 +205,7 @@ export const PassphraseModal: FC<Props> = ({ mode, onClose, onConfirm, progress 
 
         {busy && progress && progress.storeCount > 0 && (
           <div className="space-y-1">
-            <p className="text-xs text-[var(--sc-text-secondary)]">
+            <p className="text-xs text-[var(--sc-text-secondary)]" aria-live="polite">
               {t('settings.privacy.encryptionMigrationProgress', {
                 current: Math.min(progress.storeIndex + 1, progress.storeCount),
                 total: progress.storeCount,

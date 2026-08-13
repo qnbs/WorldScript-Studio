@@ -13,6 +13,11 @@ export class IndexedDBService extends IdbProjectStore implements StorageBackend 
 
 export const dbService: IndexedDBService = new IndexedDBService();
 
+/** Test-only: closes dbService's cached IDB connections so a freshly-installed IDBFactory takes effect. */
+export function _resetDbForTest(): void {
+  (dbService as unknown as { closeConnections: () => void }).closeConnections();
+}
+
 export { IdbAssetStore } from './idbAssetStore';
 export { IdbCodexStore } from './idbCodexStore';
 // Re-export shared utilities for callers that previously imported directly from dbService.ts

@@ -155,7 +155,7 @@ export async function resumeEncryptionMigration(journal: EncryptionMigrationJour
 // interrupted disable/rekey journal to the same end state as a fresh-start migration.
 ```
 
-Protected store writers call `assertIdbProtectedWriteAllowed()` before they open an IndexedDB write transaction, wrapped in `withProtectedWriteAdmission()` (shared-mode Web Lock). A configured but locked library therefore does not silently downgrade to plaintext, and a concurrent migration batch (exclusive-mode lock) cannot interleave with an ordinary write.
+Every protected store writer runs inside `withProtectedWriteAdmission()` (shared-mode Web Lock), so a concurrent migration batch (exclusive-mode lock) can never interleave with an ordinary write. The two call paths differ inside that admission: save paths call `resolveProtectedWriteKey()` to snapshot the write key and lock state atomically, then re-run only `assertNoActiveEncryptionMigration()` immediately before opening the transaction (re-checking the full lock guard here would wrongly reject a write that already captured a valid key before the session locked mid-write); delete paths, which encrypt nothing and so have no key to snapshot, call `assertIdbProtectedWriteAllowed()` directly. Either path rejects a configured-but-locked library before a transaction opens, so it never silently downgrades to plaintext.
 
 ---
 

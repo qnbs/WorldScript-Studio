@@ -1,9 +1,13 @@
 import type { FC } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
+import { logger } from '../../services/logger';
 import type { EncryptionMigrationJournal } from '../../services/storage/encryptionMigrationJournal';
 import type { ProtectedStoreMigrationProgress } from '../../services/storage/protectedStoreMigration';
-import { resumeEncryptionMigration } from '../../services/storage/storageEncryptionService';
+import {
+  IdbWrongPassphraseError,
+  resumeEncryptionMigration,
+} from '../../services/storage/storageEncryptionService';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 
@@ -49,6 +53,7 @@ export const EncryptionRecoveryModal: FC<Props> = ({ journal, onRecovered }) => 
     [progress],
   );
 
+  // QNBS-v3: IdbWrongPassphraseError means bad credentials (actionable); any other rejection is a migration/journal failure the user can't fix by re-typing.
   const handleResume = useCallback(async () => {
     setBusy(true);
     setError('');
@@ -63,8 +68,15 @@ export const EncryptionRecoveryModal: FC<Props> = ({ journal, onRecovered }) => 
         (next) => setProgress(next),
       );
       onRecovered();
-    } catch {
-      setError(t('settings.privacy.encryptionWrongPassphrase'));
+    } catch (err) {
+      if (err instanceof IdbWrongPassphraseError) {
+        setError(t('settings.privacy.encryptionWrongPassphrase'));
+      } else {
+        setError(t('settings.privacy.encryptionRecoveryFailed'));
+        logger.warn('Encryption recovery resume failed', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     } finally {
       setBusy(false);
       setProgress(null);
@@ -117,7 +129,7 @@ export const EncryptionRecoveryModal: FC<Props> = ({ journal, onRecovered }) => 
                 aria-describedby={hasError ? ERROR_ID : undefined}
                 aria-invalid={hasError}
                 disabled={busy}
-                className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)] outline-none"
+                className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] outline-none"
               />
             </div>
 
@@ -141,14 +153,14 @@ export const EncryptionRecoveryModal: FC<Props> = ({ journal, onRecovered }) => 
                   aria-describedby={hasError ? ERROR_ID : undefined}
                   aria-invalid={hasError}
                   disabled={busy}
-                  className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-border-focus)] outline-none"
+                  className="w-full px-3 py-2 rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] text-[var(--sc-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)] outline-none"
                 />
               </div>
             )}
 
             {busy && progress && progress.storeCount > 0 && (
               <div className="space-y-1">
-                <p className="text-xs text-[var(--sc-text-secondary)]">
+                <p className="text-xs text-[var(--sc-text-secondary)]" aria-live="polite">
                   {t('settings.privacy.encryptionMigrationProgress', {
                     current: Math.min(progress.storeIndex + 1, progress.storeCount),
                     total: progress.storeCount,
