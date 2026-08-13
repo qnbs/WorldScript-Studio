@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   saveApiKey: vi.fn().mockResolvedValue(undefined),
   clearApiKey: vi.fn().mockResolvedValue(undefined),
   getApiKey: vi.fn().mockResolvedValue(null),
+  encryptionReady: vi.fn().mockReturnValue(false),
   // QNBS-v3: mutable Redux settings the useAppSelector mock reads from — the policy block now derives
   // from live aiMode + privacy, so tests drive it by mutating this (reset in beforeEach).
   settingsState: {
@@ -37,6 +38,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../../../hooks/useTranslation', () => ({
   useTranslation: () => ({ t: (k: string) => k, language: 'en' }),
+}));
+
+vi.mock('../../../hooks/useEncryptionReady', () => ({
+  useEncryptionReady: () => mocks.encryptionReady(),
 }));
 
 vi.mock('../../../app/hooks', () => ({
@@ -196,6 +201,7 @@ describe('OpenRouterSection', () => {
     mocks.saveApiKey.mockResolvedValue(undefined);
     mocks.clearApiKey.mockResolvedValue(undefined);
     mocks.getApiKey.mockResolvedValue(null);
+    mocks.encryptionReady.mockReturnValue(false);
     mocks.clearCache.mockImplementation(() => undefined);
     mocks.resetCircuit.mockImplementation(() => undefined);
     mocks.isCircuitOpen.mockReturnValue(false);
@@ -480,5 +486,72 @@ describe('OpenRouterSection', () => {
       expect(mocks.clearCache).toHaveBeenCalled();
       expect(mocks.fetchModels).toHaveBeenCalled();
     });
+  });
+});
+
+// ─── #355 follow-up: reactive key reload across encryption lock/unlock ──────
+
+describe('OpenRouterSection — reactive key reload on encryption lock/unlock', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mocks.dispatch.mockImplementation(() => undefined);
+    mocks.fetchModels.mockResolvedValue([]);
+    mocks.validateKey.mockResolvedValue({ ok: true });
+    mocks.settingsState.aiMode = 'cloud';
+    mocks.settingsState.privacy = { localStorageOnly: false };
+    mocks.settingsState.openRouter = {
+      enabled: false,
+      preferredModel: 'deepseek/deepseek-r1:free',
+    };
+    mocks.saveApiKey.mockResolvedValue(undefined);
+    mocks.clearApiKey.mockResolvedValue(undefined);
+    mocks.getApiKey.mockResolvedValue(null);
+    mocks.encryptionReady.mockReturnValue(false);
+    mocks.clearCache.mockImplementation(() => undefined);
+    mocks.resetCircuit.mockImplementation(() => undefined);
+    mocks.isCircuitOpen.mockReturnValue(false);
+  });
+
+  it('reloads the stored-key status when encryptionReady flips from false to true', async () => {
+    mocks.getApiKey.mockResolvedValue(null);
+    const { rerender } = render(<OpenRouterSection />);
+    await waitFor(() => expect(mocks.getApiKey).toHaveBeenCalledWith('openrouter'));
+    expect(screen.queryByText('settings.openRouter.clearKey')).toBeNull();
+
+    // Simulate App.tsx's global unlock modal succeeding while Settings stays mounted.
+    mocks.getApiKey.mockClear().mockResolvedValue('stored-key');
+    mocks.encryptionReady.mockReturnValue(true);
+    rerender(<OpenRouterSection />);
+
+    await waitFor(() =>
+      expect(screen.getByText('settings.openRouter.clearKey')).toBeInTheDocument(),
+    );
+  });
+
+  it('ignores a stale locked-session key-load result that resolves after a newer unlocked reload already applied its result', async () => {
+    const resolvers: Array<(key: string | null) => void> = [];
+    mocks.getApiKey.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+    const { rerender } = render(<OpenRouterSection />);
+    await waitFor(() => expect(resolvers.length).toBe(1));
+
+    mocks.encryptionReady.mockReturnValue(true);
+    rerender(<OpenRouterSection />);
+    await waitFor(() => expect(resolvers.length).toBe(2));
+
+    // The newer request resolves with a real key...
+    resolvers[1]?.('stored-key');
+    await waitFor(() =>
+      expect(screen.getByText('settings.openRouter.clearKey')).toBeInTheDocument(),
+    );
+
+    // ...then the STALE older (locked-session) request resolves with null — must not hide it again.
+    resolvers[0]?.(null);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.getByText('settings.openRouter.clearKey')).toBeInTheDocument();
   });
 });

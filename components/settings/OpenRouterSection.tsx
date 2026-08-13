@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { settingsActions } from '../../features/settings/settingsSlice';
 import { statusActions } from '../../features/status/statusSlice';
+import { useEncryptionReady } from '../../hooks/useEncryptionReady';
 import { useTranslation } from '../../hooks/useTranslation';
 import {
   clearOpenRouterModelCache,
@@ -144,6 +145,7 @@ export const OpenRouterSection: FC = () => {
   // local default before Redux settings load, not a primary model source.
   const preferredModel = openRouterSettings?.preferredModel ?? OPENROUTER_FREE_MODEL_FALLBACK[0];
 
+  const encryptionReady = useEncryptionReady();
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [storedKey, setStoredKey] = useState<string | null>(null);
   const hasStoredKey = Boolean(storedKey);
@@ -165,15 +167,25 @@ export const OpenRouterSection: FC = () => {
   // QNBS-v3: Set once the user saves/clears a key, so a slower initial getApiKey load can't resolve
   // afterwards and overwrite the user's newer key state with a stale value.
   const keyOverriddenRef = useRef(false);
+  const keyLoadReadinessRef = useRef(encryptionReady);
 
-  // Load stored key status on mount.
+  // QNBS-v3: reload stored-key status when app-wide encryption readiness changes, so global unlock does not leave a mounted section showing a saved key as missing.
   useEffect(() => {
     let cancelled = false;
+    const readinessAtStart = encryptionReady;
+    keyLoadReadinessRef.current = readinessAtStart;
+    // QNBS-v3: reset this run's override guard so a previous run cannot suppress a fresh readiness reload; its cancelled closure still protects stale results.
+    keyOverriddenRef.current = false;
     storageService
       .getApiKey('openrouter')
       .then((k) => {
         // QNBS-v3: Drop the result if the user already saved/cleared a key while this was in flight.
-        if (!cancelled && !keyOverriddenRef.current) setStoredKey(k);
+        if (
+          !cancelled &&
+          !keyOverriddenRef.current &&
+          keyLoadReadinessRef.current === readinessAtStart
+        )
+          setStoredKey(k);
       })
       .catch((err) => {
         logger.error('OpenRouter: failed to read stored API key status', { error: String(err) });
@@ -184,7 +196,7 @@ export const OpenRouterSection: FC = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [encryptionReady]);
 
   // QNBS-v3: Monotonic guard so concurrent catalog fetches are last-wins — a slower or failing
   // response can never overwrite the result of a newer request, and a response that resolves after

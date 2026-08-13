@@ -259,6 +259,18 @@ export class StorageEncryptionService {
 
 const _svc = new StorageEncryptionService();
 let _activeKey: CryptoKey | null = null;
+// QNBS-v3: notifies subscribers (useEncryptionReady()) whenever _activeKey changes, so an already-mounted component (e.g. AiProviderCard's stored-key display) can react to a lock/unlock/rotate that happens elsewhere — App.tsx's global unlock modal previously had no way to signal this.
+const _activeKeyListeners = new Set<() => void>();
+function setActiveKey(key: CryptoKey | null): void {
+  _activeKey = key;
+  for (const listener of _activeKeyListeners) listener();
+}
+export function subscribeToEncryptionReadyChanges(listener: () => void): () => void {
+  _activeKeyListeners.add(listener);
+  return () => {
+    _activeKeyListeners.delete(listener);
+  };
+}
 // QNBS-v3: Caches a known-true sentinel so hot read/write paths skip an IDB round trip on every
 //          call; safe because disable/rotate (the only ops that could make it false again) both
 //          unconditionally throw IdbEncryptionMigrationRequiredError today (see below).
@@ -321,7 +333,7 @@ export async function initIdbEncryption(passphrase: string): Promise<void> {
   if (!passphrase) throw new Error('Passphrase must not be empty');
   await assertNoActiveEncryptionMigration();
   const salt = (await hasPassphraseSentinel()) ? getExistingSalt() : getOrCreateSalt();
-  _activeKey = await _svc.deriveKey(passphrase, salt);
+  setActiveKey(await _svc.deriveKey(passphrase, salt));
 }
 
 /** Encrypt plaintext data with the active session key. */
@@ -384,7 +396,7 @@ export async function idbDecryptWithKey<T>(key: CryptoKey, bytes: Uint8Array): P
 
 /** Clear the in-memory key (call on tab-hide / session end). */
 export function clearIdbEncryptionKey(): void {
-  _activeKey = null;
+  setActiveKey(null);
   // QNBS-v3: also drop the sentinel-presence cache — tests (and any future out-of-band sentinel
   // deletion) rely on this call to force the next hasPassphraseSentinel() back to a fresh IDB read.
   _sentinelPresenceCache = null;
@@ -610,7 +622,7 @@ export async function setupIdbEncryption(passphrase: string): Promise<void> {
   const key = await _svc.deriveKey(passphrase, salt);
   const blob = await _svc.encrypt(key, { v: 1 });
   await savePassphraseSentinel(blob.bytes);
-  _activeKey = key;
+  setActiveKey(key);
   // QNBS-v3: sentinel now durably exists — update the cache immediately instead of waiting for
   // the next hasPassphraseSentinel() call to re-derive it from an IDB read.
   _sentinelPresenceCache = true;
@@ -638,7 +650,7 @@ export async function verifyAndInitIdbEncryption(passphrase: string): Promise<vo
   } catch {
     throw new IdbWrongPassphraseError();
   }
-  _activeKey = key;
+  setActiveKey(key);
 }
 
 /** Create a non-secret verifier that a future enable/rekey runner must authenticate before mutation. */
@@ -692,7 +704,7 @@ async function commitDisableMigration(journal: EncryptionMigrationJournal): Prom
   clearStoredSalt();
   await completeEncryptionMigration(journal);
   await clearCompletedEncryptionMigration();
-  _activeKey = null;
+  setActiveKey(null);
   _sentinelPresenceCache = null;
 }
 
@@ -704,7 +716,7 @@ async function commitRekeyMigration(
   await savePassphraseSentinel(newSentinel.bytes);
   await completeEncryptionMigration(journal);
   await clearCompletedEncryptionMigration();
-  _activeKey = targetKey;
+  setActiveKey(targetKey);
   _sentinelPresenceCache = true;
 }
 
@@ -850,7 +862,7 @@ export async function resumeEncryptionMigration(
         // no credential left to verify against; the disable itself is already effectively done.
         await completeEncryptionMigration(journal);
         await clearCompletedEncryptionMigration();
-        _activeKey = null;
+        setActiveKey(null);
         _sentinelPresenceCache = null;
         return;
       }
@@ -895,7 +907,7 @@ export async function resumeEncryptionMigration(
     });
     await completeEncryptionMigration(journal);
     await clearCompletedEncryptionMigration();
-    _activeKey = targetKey;
+    setActiveKey(targetKey);
     _sentinelPresenceCache = true;
     return;
   }

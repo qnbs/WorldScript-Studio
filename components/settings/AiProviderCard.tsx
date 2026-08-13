@@ -1,6 +1,7 @@
 import { ONNX_SUPPORTED_MODELS, WEBLLM_SUPPORTED_MODELS } from '@domain/ai-core';
 import type { FC } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEncryptionReady } from '../../hooks/useEncryptionReady';
 import { useTranslation } from '../../hooks/useTranslation';
 import { LOCAL_BACKEND_PRESET_DEFAULT_URL } from '../../services/ai/localBackendPresets';
 import type { WebGpuAdapterInfo } from '../../services/ai/webGpuDetectorService';
@@ -85,9 +86,7 @@ interface AiProviderCardProps {
   onAdvancedAiPatch: (patch: Partial<AdvancedAiSettings>) => void;
   onProviderChange: (p: AIProvider) => void;
   onModelSelect?: (model: string) => void;
-  // QNBS-v3 (ADR-0017): opt-in feature flag — the Ollama section attempts a direct browser fetch
-  // instead of requiring desktop when the user has separately configured OLLAMA_ORIGINS. Default
-  // false so callers that don't pass it (e.g. older tests) keep today's desktop-only behavior.
+  // QNBS-v3 (ADR-0017): opt-in flag — Ollama section attempts a direct browser fetch instead of requiring desktop when OLLAMA_ORIGINS is configured; default false so callers omitting it keep desktop-only behavior.
   browserOllamaEnabled?: boolean;
 }
 
@@ -212,6 +211,8 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
     isDesktop,
     browserOllamaEnabled,
   );
+  // QNBS-v3: reactive to lock/unlock happening elsewhere (App.tsx's global unlock modal) — without this, keys loaded while locked stayed showing as missing until this component remounted.
+  const encryptionReady = useEncryptionReady();
   const [openaiKey, setOpenaiKey] = useState('');
   // QNBS-v3: Grok's own key input state, mirroring OpenAI's pattern above.
   const [grokKey, setGrokKey] = useState('');
@@ -296,20 +297,34 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
     if (provider === 'webllm') probeWebGpu(testRequestIdRef.current);
   }, [provider, probeWebGpu]);
 
+  // QNBS-v3: sequence guard — a lock immediately followed by an unlock starts two overlapping loads per provider; without this, the older (locked, resolves to null) load can resolve after the newer one and clear an already-reloaded key back to empty.
+  const keyLoadSeqRef = useRef(0);
+  const keyLoadReadinessRef = useRef(encryptionReady);
   useEffect(() => {
+    const seq = ++keyLoadSeqRef.current;
+    const readinessAtStart = encryptionReady;
+    keyLoadReadinessRef.current = readinessAtStart;
+    const isLatest = () => keyLoadSeqRef.current === seq;
     storageService
       .getApiKey('openai')
-      .then((k) => setOpenaiKey(k ?? ''))
+      .then((k) => {
+        if (isLatest() && keyLoadReadinessRef.current === readinessAtStart) setOpenaiKey(k ?? '');
+      })
       .catch(() => {});
     storageService
       .getApiKey('grok')
-      .then((k) => setGrokKey(k ?? ''))
+      .then((k) => {
+        if (isLatest() && keyLoadReadinessRef.current === readinessAtStart) setGrokKey(k ?? '');
+      })
       .catch(() => {});
     storageService
       .getApiKey('anthropic')
-      .then((k) => setAnthropicKey(k ?? ''))
+      .then((k) => {
+        if (isLatest() && keyLoadReadinessRef.current === readinessAtStart)
+          setAnthropicKey(k ?? '');
+      })
       .catch(() => {});
-  }, []);
+  }, [encryptionReady]);
 
   // QNBS-v3: save/clear via storageService, matching every other provider's key persistence.
   const handleSaveGrokKey = useCallback(async () => {

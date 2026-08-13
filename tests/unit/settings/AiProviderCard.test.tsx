@@ -17,6 +17,11 @@ vi.mock('../../../hooks/useTranslation', () => ({
   useTranslation: () => ({ t: (k: string) => k, language: 'en' }),
 }));
 
+const mockUseEncryptionReady = vi.fn(() => false);
+vi.mock('../../../hooks/useEncryptionReady', () => ({
+  useEncryptionReady: () => mockUseEncryptionReady(),
+}));
+
 vi.mock('../../../services/storageService', () => ({
   storageService: {
     getApiKey: vi.fn().mockResolvedValue(null),
@@ -83,6 +88,7 @@ function setDesktopRuntime(enabled: boolean): void {
 
 afterEach(() => {
   setDesktopRuntime(false);
+  mockUseEncryptionReady.mockReturnValue(false);
   vi.clearAllMocks();
 });
 
@@ -1013,5 +1019,83 @@ describe('AiProviderCard — WebGPU status badge', () => {
 
     resolveSecondProbe({ status: 'available' });
     await waitFor(() => expect(screen.getByText('settings.ai.webllm.gpuAvailable')).toBeTruthy());
+  });
+});
+
+// ─── #355 follow-up: reactive key reload across encryption lock/unlock ──────
+
+describe('AiProviderCard — reactive key reload on encryption lock/unlock', () => {
+  const openaiAdvancedAi = { ...mockAdvancedAi, provider: 'openai' as const };
+
+  it('reloads provider keys from storageService when encryptionReady flips from false to true', async () => {
+    mockUseEncryptionReady.mockReturnValue(false);
+    vi.mocked(storageService.getApiKey).mockResolvedValue(null);
+    const { rerender } = render(
+      <AiProviderCard
+        advancedAi={openaiAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    await waitFor(() => expect(storageService.getApiKey).toHaveBeenCalledWith('openai'));
+    vi.mocked(storageService.getApiKey).mockClear();
+
+    // Simulate App.tsx's global unlock modal succeeding while Settings stays mounted.
+    mockUseEncryptionReady.mockReturnValue(true);
+    rerender(
+      <AiProviderCard
+        advancedAi={openaiAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(storageService.getApiKey).toHaveBeenCalledWith('openai');
+      expect(storageService.getApiKey).toHaveBeenCalledWith('grok');
+      expect(storageService.getApiKey).toHaveBeenCalledWith('anthropic');
+    });
+  });
+
+  it('ignores a stale locked-session key-load result that resolves after a newer unlocked reload already applied its result', async () => {
+    const resolvers: Array<(key: string | null) => void> = [];
+    vi.mocked(storageService.getApiKey).mockImplementation(
+      (provider: string) =>
+        new Promise((resolve) => {
+          if (provider === 'openai') resolvers.push(resolve);
+          else resolve(null);
+        }),
+    );
+    mockUseEncryptionReady.mockReturnValue(false);
+    const { rerender } = render(
+      <AiProviderCard
+        advancedAi={openaiAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    await waitFor(() => expect(resolvers.length).toBe(1));
+
+    // A newer (unlocked) load starts before the older (locked-session) one resolves.
+    mockUseEncryptionReady.mockReturnValue(true);
+    rerender(
+      <AiProviderCard
+        advancedAi={openaiAdvancedAi}
+        onAdvancedAiPatch={mockOnAdvancedAiPatch}
+        onProviderChange={mockOnProviderChange}
+      />,
+    );
+    await waitFor(() => expect(resolvers.length).toBe(2));
+
+    // The newer request resolves with a real key...
+    resolvers[1]?.('sk-real-key');
+    await waitFor(() =>
+      expect(screen.getByLabelText('settings.ai.openaiKey')).toHaveValue('sk-real-key'),
+    );
+
+    // ...then the STALE older (locked) request resolves with null — must not clear the input.
+    resolvers[0]?.(null);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.getByLabelText('settings.ai.openaiKey')).toHaveValue('sk-real-key');
   });
 });

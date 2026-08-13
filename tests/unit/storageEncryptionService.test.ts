@@ -39,6 +39,7 @@ import {
   rotateIdbPassphrase,
   StorageEncryptionService,
   setupIdbEncryption,
+  subscribeToEncryptionReadyChanges,
   verifyAndInitIdbEncryption,
 } from '../../services/storage/storageEncryptionService';
 
@@ -136,6 +137,49 @@ describe('Module-level singleton API', () => {
     await initIdbEncryption('my-passphrase');
     clearIdbEncryptionKey();
     expect(isIdbEncryptionReady()).toBe(false);
+  });
+
+  // QNBS-v3: mounted provider cards subscribe so App.tsx global lock/unlock updates their stored-key state without remounting Settings.
+  describe('subscribeToEncryptionReadyChanges', () => {
+    it('notifies subscribers when the active key is set and when it is cleared', async () => {
+      const listener = vi.fn();
+      const unsubscribe = subscribeToEncryptionReadyChanges(listener);
+
+      await initIdbEncryption('my-passphrase');
+      expect(listener).toHaveBeenCalledTimes(1);
+
+      clearIdbEncryptionKey();
+      expect(listener).toHaveBeenCalledTimes(2);
+
+      unsubscribe();
+    });
+
+    it('stops notifying after unsubscribe', async () => {
+      const listener = vi.fn();
+      const unsubscribe = subscribeToEncryptionReadyChanges(listener);
+      unsubscribe();
+
+      await initIdbEncryption('my-passphrase');
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('supports multiple independent subscribers', async () => {
+      const listenerA = vi.fn();
+      const listenerB = vi.fn();
+      const unsubscribeA = subscribeToEncryptionReadyChanges(listenerA);
+      const unsubscribeB = subscribeToEncryptionReadyChanges(listenerB);
+
+      await initIdbEncryption('my-passphrase');
+      expect(listenerA).toHaveBeenCalledTimes(1);
+      expect(listenerB).toHaveBeenCalledTimes(1);
+
+      unsubscribeA();
+      clearIdbEncryptionKey();
+      expect(listenerA).toHaveBeenCalledTimes(1); // unsubscribed — no second call
+      expect(listenerB).toHaveBeenCalledTimes(2);
+
+      unsubscribeB();
+    });
   });
 
   it('initIdbEncryption throws on empty passphrase', async () => {
