@@ -7,6 +7,7 @@
 
 import type { StoryCodex } from '../../types';
 import { logger } from '../logger';
+import { IdbStorageLockedError } from '../storage/storageEncryptionService';
 import {
   compressData,
   decompressData,
@@ -41,6 +42,8 @@ export class FsCodexStore extends FsSettingsStore {
       const content = await readProtectedTextFile(apis, codexFile);
       return decompressData<StoryCodex>(content);
     } catch (error) {
+      // QNBS-v3: a locked session is not "no codex" — never conflate the two.
+      if (error instanceof IdbStorageLockedError) throw error;
       logger.error('Failed to load story codex:', error);
       return null;
     }
@@ -81,6 +84,8 @@ export class FsCodexStore extends FsSettingsStore {
       const content = await readProtectedTextFile(apis, vectorsFile);
       return decompressData<unknown[]>(content);
     } catch (error) {
+      // QNBS-v3: a locked session is not "no vectors" — never conflate the two.
+      if (error instanceof IdbStorageLockedError) throw error;
       logger.error('Failed to load RAG vectors:', error);
       return [];
     }

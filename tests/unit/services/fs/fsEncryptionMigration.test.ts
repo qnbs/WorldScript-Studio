@@ -318,4 +318,62 @@ describe('migrateAllProtectedFsData — safety', () => {
     await migrateAllProtectedFsData(null, 'disable');
     expect(fake.bin.get('/app/projects/p1/binder/asset-1.bin')).toEqual(before);
   });
+
+  // QNBS-v3: a permission/IO error reading a file that DOES exist must never be conflated with "file
+  // never existed" — the prior `.catch(() => null)` pattern silently skipped such files, letting
+  // disable/rotate complete and destroy/swap the key while stranding the unreadable file's ciphertext.
+  it('propagates (does not silently skip) a read failure on a file that exists, in strict mode', async () => {
+    await enableTestPassphrase();
+    await fileSystemService.saveProject(project as never);
+    const originalReadTextFile = fake.apis.readTextFile;
+    fake.apis.readTextFile = (p: string) => {
+      if (p === '/app/projects/p1/project.json') return Promise.reject(new Error('EACCES'));
+      return originalReadTextFile(p);
+    };
+
+    await expect(migrateAllProtectedFsData(null, 'disable')).rejects.toThrow(/EACCES/);
+  });
+
+  it('logs and skips (does not throw) a read failure on a file that exists, in non-strict (set) mode', async () => {
+    await fileSystemService.saveProject(project as never);
+    const originalReadTextFile = fake.apis.readTextFile;
+    fake.apis.readTextFile = (p: string) => {
+      if (p === '/app/projects/p1/project.json') return Promise.reject(new Error('EACCES'));
+      return originalReadTextFile(p);
+    };
+
+    const newKey = await deriveKey('first-passphrase');
+    await expect(migrateAllProtectedFsData(newKey, 'set')).resolves.toBeUndefined();
+  });
+
+  // QNBS-v3: a ciphertext swapped between two provider files must not be "laundered" into a
+  // correctly-labeled new file by re-keying — the same provider-identity check normal reads enforce.
+  it('rejects (does not launder) an API key ciphertext whose decrypted provider does not match its filename', async () => {
+    await enableTestPassphrase();
+    await fileSystemService.saveApiKey('openai', 'openai-secret');
+    // Swap the ciphertext into a differently-named file, simulating a cross-file substitution.
+    const openaiRaw = fake.text.get('/app/config/openai_key.enc.json') as string;
+    fake.text.set('/app/config/anthropic_key.enc.json', openaiRaw);
+
+    const newKey = await deriveKey('new-passphrase');
+    await expect(migrateAllProtectedFsData(newKey, 'rotate')).rejects.toThrow(/anthropic/);
+  });
+
+  // QNBS-v3: a malformed API-key file must never strand setupIdbEncryption()'s already-activated
+  // sentinel/key — non-strict (first-time setup) must swallow even a synchronous JSON.parse throw.
+  it('does not throw when an API key file contains malformed JSON, in non-strict (set) mode', async () => {
+    await fake.apis.mkdir('/app/config');
+    fake.text.set('/app/config/openai_key.enc.json', '{not valid json');
+
+    const newKey = await deriveKey('first-passphrase');
+    await expect(migrateAllProtectedFsData(newKey, 'set')).resolves.toBeUndefined();
+  });
+
+  it('throws when an API key file contains malformed JSON, in strict (disable/rotate) mode', async () => {
+    await enableTestPassphrase();
+    await fake.apis.mkdir('/app/config');
+    fake.text.set('/app/config/openai_key.enc.json', '{not valid json');
+
+    await expect(migrateAllProtectedFsData(null, 'disable')).rejects.toThrow();
+  });
 });

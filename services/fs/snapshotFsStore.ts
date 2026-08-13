@@ -5,6 +5,7 @@
 
 import type { ProjectSnapshot } from '../../types';
 import { logger } from '../logger';
+import { IdbStorageLockedError } from '../storage/storageEncryptionService';
 import { FsCodexStore } from './codexFsStore';
 import {
   compressData,
@@ -71,6 +72,8 @@ export class FsSnapshotStore extends FsCodexStore {
       // Legacy format: raw project data stored directly
       return envelope;
     } catch (error) {
+      // QNBS-v3: a locked session is not "no snapshot" — never conflate the two.
+      if (error instanceof IdbStorageLockedError) throw error;
       logger.error('Failed to load snapshot:', error);
       return null;
     }

@@ -173,10 +173,7 @@ interface ProtectedTextEnvelope {
 }
 
 function parseProtectedTextEnvelope(raw: string): ProtectedTextEnvelope | null {
-  // QNBS-v3: plaintext content here is compressData()'s output — either plain JSON or an
-  // LZ-compressed string carrying its own \x00lz1\x00 sentinel, never valid envelope JSON. A
-  // JSON.parse failure (the LZ-compressed case) or a shape mismatch both simply mean "not
-  // protected" rather than an error — this is deliberately a probe, not a strict parser.
+  // QNBS-v3: plaintext here is compressData()'s output (plain JSON or LZ-compressed) — a JSON.parse failure or shape mismatch just means "not protected", not an error; this is a probe, not a strict parser.
   try {
     const parsed: unknown = JSON.parse(raw);
     if (

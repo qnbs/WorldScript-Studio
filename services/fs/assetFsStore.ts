@@ -8,12 +8,13 @@
  */
 
 import { logger } from '../logger';
+import { IdbStorageLockedError } from '../storage/storageEncryptionService';
 import type { BinderAssetMeta, BinderAssetPayload } from '../storageBackend';
 import {
   protectTextValue,
+  readProtectedTextFile,
   retryFs,
   sanitizePathSegment,
-  unprotectTextValue,
   writeFileAtomic,
   writeTextFileAtomic,
 } from './fsCore';
@@ -50,10 +51,11 @@ export class FsAssetStore extends FsSnapshotStore {
         return null;
       }
 
-      const stored = await retryFs(() => apis.readTextFile(imageFile));
-      const base64Data = await unprotectTextValue(stored);
+      const base64Data = await readProtectedTextFile(apis, imageFile);
       return `data:image/png;base64,${base64Data}`;
     } catch (error) {
+      // QNBS-v3: a locked session is not "no image" — never conflate the two.
+      if (error instanceof IdbStorageLockedError) throw error;
       logger.error('Failed to load image:', error);
       return null;
     }

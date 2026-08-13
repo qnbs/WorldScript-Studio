@@ -10,6 +10,7 @@ import type { EntityState } from '@reduxjs/toolkit';
 import type { Character, StoryProject, World } from '../../types';
 import { logger } from '../logger';
 import { parseImportedProjectJson } from '../projectImportSchema';
+import { IdbStorageLockedError } from '../storage/storageEncryptionService';
 import { normalizeSaveProjectInputToStoryProject, type SaveProjectInput } from '../storageBackend';
 import { FsAssetStore } from './assetFsStore';
 import {
@@ -100,6 +101,8 @@ export class FsProjectStore extends FsAssetStore {
       const content = await readProtectedTextFile(apis, projectFile);
       return decompressData<StoryProject>(content);
     } catch (error) {
+      // QNBS-v3: a locked session is not "no project" — appBootstrap.ts's Promise.all propagates this up to index.tsx's existing IdbStorageLockedError catch, which shows the unlock modal and retries boot, instead of silently hydrating as a brand-new user.
+      if (error instanceof IdbStorageLockedError) throw error;
       logger.error('Failed to load project:', error);
       return null;
     }

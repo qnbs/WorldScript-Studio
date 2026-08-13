@@ -76,6 +76,8 @@ export class FsSettingsStore extends FsCore {
       // QNBS-v3: reuse the same normalizer as the IDB path — older desktop settings files can predate newer required Settings fields (e.g. writingSurfaceStyle); an unchecked `as Settings` cast would let those fall through as undefined at runtime.
       return normalizePersistedSettings(parsed);
     } catch (error) {
+      // QNBS-v3: a locked session is not "no settings" — propagate so appBootstrap.ts's Promise.all surfaces it to index.tsx's existing IdbStorageLockedError catch (unlock modal + retry) instead of silently hydrating defaults.
+      if (error instanceof IdbStorageLockedError) throw error;
       logger.error('Failed to load settings:', error);
       return null;
     }
@@ -216,6 +218,19 @@ export class FsSettingsStore extends FsCore {
     targetKey: CryptoKey | null,
     strict = true,
   ): Promise<void> {
+    try {
+      await this.reprotectApiKeyFileInner(provider, targetKey);
+    } catch (error) {
+      if (strict) throw error;
+      // QNBS-v3: non-strict (first-time setup) must never throw — any per-file error is logged and skipped so it can never strand setupIdbEncryption()'s already-activated sentinel/key.
+      logger.warn(`Skipping API key for provider "${provider}" during encryption setup:`, error);
+    }
+  }
+
+  private async reprotectApiKeyFileInner(
+    provider: string,
+    targetKey: CryptoKey | null,
+  ): Promise<void> {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
     const keyFile = await apis.join(appDataPath, 'config', `${provider}_key.enc.json`);
@@ -225,31 +240,26 @@ export class FsSettingsStore extends FsCore {
 
     let apiKey: string;
     if (parsed['scheme'] === PLAINTEXT_SCHEME && typeof parsed['value'] === 'string') {
-      // QNBS-v3: covers first-time setup, where every existing key file starts as plaintext-v1 —
-      // without this branch, migrateAllProtectedFsData(targetKey) during 'set' would silently
-      // leave already-saved keys unencrypted until their next incidental re-save.
+      // QNBS-v3: covers first-time setup, where every existing key file starts as plaintext-v1 — without this, 'set' would leave already-saved keys unencrypted until their next incidental re-save.
       apiKey = parsed['value'];
     } else if (parsed['scheme'] === PROTECTED_SCHEME && typeof parsed['data'] === 'string') {
       const sourceKey = await resolveProtectedWriteKey();
       if (!sourceKey) {
-        const error = new Error(
+        throw new Error(
           `Protected API key for provider "${provider}" exists but at-rest encryption is no longer configured`,
         );
-        if (strict) throw error;
-        logger.warn(error.message);
-        return;
       }
-      try {
-        const decrypted = await idbDecryptWithKey<{ provider: string; apiKey: string }>(
-          sourceKey,
-          base64ToBytes(parsed['data']),
+      const decrypted = await idbDecryptWithKey<{ provider: string; apiKey: string }>(
+        sourceKey,
+        base64ToBytes(parsed['data']),
+      );
+      // QNBS-v3: same provider-identity check readProtectedApiKey() enforces on ordinary reads — without it, a ciphertext swapped between two provider files gets "laundered" into a correctly-labeled new file by this migration, silently bypassing the cross-file substitution guard.
+      if (decrypted.provider !== provider) {
+        throw new Error(
+          `Decrypted payload belongs to provider "${decrypted.provider}", not "${provider}"`,
         );
-        apiKey = decrypted.apiKey;
-      } catch (error) {
-        if (strict) throw error;
-        logger.warn(`Skipping API key for provider "${provider}" — could not decrypt it:`, error);
-        return;
       }
+      apiKey = decrypted.apiKey;
     } else {
       // Unrecognized/legacy shape — not this method's job to migrate; getApiKey()'s own
       // positively-identified-legacy-only discard path handles that on next read.

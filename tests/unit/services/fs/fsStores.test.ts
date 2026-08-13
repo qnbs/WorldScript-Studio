@@ -60,7 +60,10 @@ vi.mock('../../../../services/logger', async (importOriginal) => {
 import { appStoreRef } from '../../../../app/storeRef';
 import { FsProjectStore } from '../../../../services/fs/projectFsStore';
 import { logger } from '../../../../services/logger';
-import { StorageEncryptionService } from '../../../../services/storage/storageEncryptionService';
+import {
+  IdbStorageLockedError,
+  StorageEncryptionService,
+} from '../../../../services/storage/storageEncryptionService';
 
 interface FakeFs {
   apis: TauriApis;
@@ -197,6 +200,15 @@ describe('FsProjectStore — projects', () => {
     expect((await store.loadProject('p1'))?.title).toBe('My Novel');
   });
 
+  // QNBS-v3: a locked session is not "no project" — loadProject() must propagate IdbStorageLockedError so appBootstrap.ts's Promise.all surfaces it to index.tsx's unlock-modal-and-retry catch, instead of silently hydrating as a brand-new user.
+  it('throws IdbStorageLockedError (not null) when loading a project while the session is locked', async () => {
+    await enableTestPassphrase();
+    await store.saveProject(project as never);
+    cryptoState.activeKey = null; // simulate session lock; sentinelConfigured stays true
+
+    await expect(store.loadProject('p1')).rejects.toBeInstanceOf(IdbStorageLockedError);
+  });
+
   it('leaves project.json as plaintext when no at-rest passphrase is configured (unchanged default)', async () => {
     await store.saveProject(project as never);
     const onDisk = fake.text.get('/app/projects/p1/project.json') as string;
@@ -277,6 +289,15 @@ describe('FsSettingsStore — settings + encrypted API keys', () => {
     expect(JSON.parse(onDisk).scheme).toBe('protected-v1');
 
     expect((await store.loadSettings())?.appearancePreset).toBe('sepia');
+  });
+
+  // QNBS-v3: a locked session is not "no settings" — loadSettings() must propagate IdbStorageLockedError so appBootstrap.ts's Promise.all surfaces it to index.tsx's unlock-modal-and-retry catch, instead of silently hydrating defaults.
+  it('throws IdbStorageLockedError (not null) when loading settings while the session is locked', async () => {
+    await enableTestPassphrase();
+    await store.saveSettings({ appearancePreset: 'sepia' } as never);
+    cryptoState.activeKey = null; // simulate session lock; sentinelConfigured stays true
+
+    await expect(store.loadSettings()).rejects.toBeInstanceOf(IdbStorageLockedError);
   });
 
   // QNBS-v3 (2026-08-13, F-05/F-06 follow-up): no passphrase configured — honest plaintext, not a fake-secret derivation.
@@ -505,6 +526,15 @@ describe('FsSnapshotStore — snapshots', () => {
     await enableTestPassphrase();
     expect(await store.getSnapshotData(id)).toEqual({ manuscript: [{ content: 'secret prose' }] });
   });
+
+  // QNBS-v3: a locked session is not "no snapshot" — getSnapshotData() must propagate IdbStorageLockedError, not swallow it.
+  it('throws IdbStorageLockedError (not null) when reading a protected snapshot while the session is locked', async () => {
+    await enableTestPassphrase();
+    const id = await store.saveSnapshot('My Snapshot', { manuscript: [] });
+    cryptoState.activeKey = null; // simulate session lock; sentinelConfigured stays true
+
+    await expect(store.getSnapshotData(id)).rejects.toBeInstanceOf(IdbStorageLockedError);
+  });
 });
 
 describe('FsCodexStore — codex + RAG vectors', () => {
@@ -540,6 +570,17 @@ describe('FsCodexStore — codex + RAG vectors', () => {
     );
     expect(await store.getRagVectors('p1')).toEqual([{ id: 1 }]);
   });
+
+  // QNBS-v3: a locked session is not "no codex/vectors" — both getters must propagate IdbStorageLockedError, not swallow it.
+  it('throws IdbStorageLockedError (not null/[]) when reading protected codex/RAG data while the session is locked', async () => {
+    await enableTestPassphrase();
+    await store.saveStoryCodex({ projectId: 'p1', entries: [] } as never);
+    await store.saveRagVectors('p1', [{ id: 1 }]);
+    cryptoState.activeKey = null; // simulate session lock; sentinelConfigured stays true
+
+    await expect(store.getStoryCodex('p1')).rejects.toBeInstanceOf(IdbStorageLockedError);
+    await expect(store.getRagVectors('p1')).rejects.toBeInstanceOf(IdbStorageLockedError);
+  });
 });
 
 describe('FsAssetStore — images + binder assets', () => {
@@ -559,6 +600,15 @@ describe('FsAssetStore — images + binder assets', () => {
     expect(JSON.parse(onDisk).scheme).toBe('protected-v1');
 
     expect(await store.getImage('char-1')).toBe('data:image/png;base64,QUJD');
+  });
+
+  // QNBS-v3: a locked session is not "no image" — getImage() must propagate IdbStorageLockedError, not swallow it.
+  it('throws IdbStorageLockedError (not null) when reading a protected image while the session is locked', async () => {
+    await enableTestPassphrase();
+    await store.saveImage('char-1', 'data:image/png;base64,QUJD');
+    cryptoState.activeKey = null; // simulate session lock; sentinelConfigured stays true
+
+    await expect(store.getImage('char-1')).rejects.toBeInstanceOf(IdbStorageLockedError);
   });
 
   it('round-trips a binder binary asset with metadata', async () => {

@@ -4,7 +4,9 @@
  */
 import { DATA_DB_NAME, STATE_DB_NAME } from './dbConstants';
 import { dbService } from './dbService';
+import { deleteAllFsData } from './fs/fsEncryptionMigration';
 import { logger } from './logger';
+import { isTauriRuntime } from './tauriRuntime';
 
 export interface InitStorageResult {
   success: boolean;
@@ -102,6 +104,16 @@ export async function checkStorageHealth(): Promise<StorageHealth> {
  * Use as a last-resort recovery option (user-confirmed).
  */
 export async function resetAllDatabases(): Promise<void> {
+  // QNBS-v3: fs-backed data deleted FIRST, before the KDF salt below — if this throws partway, the
+  // salt/sentinel are still intact and no protected file becomes permanently undecryptable; erasing
+  // the salt first would strand any already-protected file that this step hadn't reached yet.
+  if (isTauriRuntime()) {
+    await deleteAllFsData().catch((error) => {
+      logger.error('dbInitialization: resetAllDatabases — failed to delete filesystem data', error);
+      throw error;
+    });
+  }
+
   logger.warn('dbInitialization: resetAllDatabases — deleting both IDB databases');
   await Promise.all([deleteIdb(STATE_DB_NAME), deleteIdb(DATA_DB_NAME)]);
 

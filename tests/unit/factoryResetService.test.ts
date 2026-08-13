@@ -7,8 +7,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { wipeAllAppData } from '../../services/factoryResetService';
 import { logger } from '../../services/logger';
 
+const { mockIsTauriRuntime, mockDeleteAllFsData } = vi.hoisted(() => ({
+  mockIsTauriRuntime: vi.fn(() => false),
+  mockDeleteAllFsData: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('../../services/logger', () => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
+}));
+
+vi.mock('../../services/tauriRuntime', () => ({
+  isTauriRuntime: () => mockIsTauriRuntime(),
+}));
+
+vi.mock('../../services/fs/fsEncryptionMigration', () => ({
+  deleteAllFsData: () => mockDeleteAllFsData(),
 }));
 
 function createDb(name: string): Promise<void> {
@@ -42,6 +55,8 @@ let originalLocation: Location;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockIsTauriRuntime.mockReturnValue(false);
+  mockDeleteAllFsData.mockResolvedValue(undefined);
   reloadMock = vi.fn();
   originalLocation = window.location;
   Object.defineProperty(window, 'location', {
@@ -99,5 +114,43 @@ describe('wipeAllAppData', () => {
     expect(del).toHaveBeenCalledWith('static-v1');
     expect(del).toHaveBeenCalledWith('dynamic-v1');
     expect(reloadMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not touch filesystem data outside the Tauri runtime', async () => {
+    mockIsTauriRuntime.mockReturnValue(false);
+
+    await runWipe();
+
+    expect(mockDeleteAllFsData).not.toHaveBeenCalled();
+  });
+
+  it('deletes filesystem data BEFORE clearing IDB/web storage, in the Tauri runtime', async () => {
+    await createDb('worldscript-data-db');
+    mockIsTauriRuntime.mockReturnValue(true);
+    const delSpy = vi.spyOn(indexedDB, 'deleteDatabase');
+
+    await runWipe();
+
+    expect(mockDeleteAllFsData).toHaveBeenCalled();
+    expect(delSpy).toHaveBeenCalled();
+    const fsDataCallOrder = mockDeleteAllFsData.mock.invocationCallOrder[0] as number;
+    const idbDeleteCallOrder = delSpy.mock.invocationCallOrder[0] as number;
+    expect(fsDataCallOrder).toBeLessThan(idbDeleteCallOrder);
+    delSpy.mockRestore();
+  });
+
+  it('aborts before deleting any IDB database or clearing storage when filesystem cleanup fails, in the Tauri runtime', async () => {
+    mockIsTauriRuntime.mockReturnValue(true);
+    mockDeleteAllFsData.mockRejectedValueOnce(new Error('fs delete failed'));
+    localStorage.setItem('foo', 'bar');
+    const delSpy = vi.spyOn(indexedDB, 'deleteDatabase');
+
+    // QNBS-v3: fs-delete rejects synchronously before the 300ms fake-timer delay is ever scheduled — plain await, no runWipe()/fake timers needed for this negative path.
+    await expect(wipeAllAppData()).rejects.toThrow('fs delete failed');
+
+    expect(delSpy).not.toHaveBeenCalled();
+    expect(localStorage.getItem('foo')).toBe('bar');
+    expect(reloadMock).not.toHaveBeenCalled();
+    delSpy.mockRestore();
   });
 });

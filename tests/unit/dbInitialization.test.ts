@@ -3,13 +3,25 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockInitDB, mockDeleteDatabase } = vi.hoisted(() => ({
-  mockInitDB: vi.fn(),
-  mockDeleteDatabase: vi.fn(),
-}));
+const { mockInitDB, mockDeleteDatabase, mockIsTauriRuntime, mockDeleteAllFsData } = vi.hoisted(
+  () => ({
+    mockInitDB: vi.fn(),
+    mockDeleteDatabase: vi.fn(),
+    mockIsTauriRuntime: vi.fn(() => false),
+    mockDeleteAllFsData: vi.fn().mockResolvedValue(undefined),
+  }),
+);
 
 vi.mock('../../services/dbService', () => ({
   dbService: { initDB: mockInitDB },
+}));
+
+vi.mock('../../services/tauriRuntime', () => ({
+  isTauriRuntime: () => mockIsTauriRuntime(),
+}));
+
+vi.mock('../../services/fs/fsEncryptionMigration', () => ({
+  deleteAllFsData: () => mockDeleteAllFsData(),
 }));
 
 vi.mock('../../services/logger', () => ({
@@ -26,6 +38,8 @@ describe('dbInitialization', () => {
     vi.resetModules();
     mockInitDB.mockReset();
     mockDeleteDatabase.mockReset();
+    mockIsTauriRuntime.mockReset().mockReturnValue(false);
+    mockDeleteAllFsData.mockReset().mockResolvedValue(undefined);
 
     // QNBS-v3: fresh req per call so parallel deletes each own their onsuccess slot.
     mockDeleteDatabase.mockImplementation(() => {
@@ -135,6 +149,47 @@ describe('dbInitialization', () => {
 
       const { resetAllDatabases } = await import('../../services/dbInitialization');
       await expect(resetAllDatabases()).resolves.toBeUndefined();
+    });
+
+    it('does not touch filesystem data outside the Tauri runtime', async () => {
+      mockIsTauriRuntime.mockReturnValue(false);
+      const { resetAllDatabases } = await import('../../services/dbInitialization');
+
+      await resetAllDatabases();
+
+      expect(mockDeleteAllFsData).not.toHaveBeenCalled();
+    });
+
+    it('deletes filesystem data BEFORE the IDB databases (which hold the KDF salt-adjacent state), in the Tauri runtime', async () => {
+      mockIsTauriRuntime.mockReturnValue(true);
+      const callOrder: string[] = [];
+      mockDeleteAllFsData.mockImplementation(async () => {
+        callOrder.push('deleteAllFsData');
+      });
+      mockDeleteDatabase.mockImplementation((name: string) => {
+        callOrder.push(`deleteDatabase:${name}`);
+        const req: Record<string, unknown> = { onsuccess: null, onerror: null, onblocked: null };
+        Promise.resolve().then(() => {
+          if (typeof req['onsuccess'] === 'function') (req['onsuccess'] as () => void)();
+        });
+        return req;
+      });
+
+      const { resetAllDatabases } = await import('../../services/dbInitialization');
+      await resetAllDatabases();
+
+      expect(mockDeleteAllFsData).toHaveBeenCalled();
+      expect(callOrder[0]).toBe('deleteAllFsData');
+    });
+
+    it('aborts before deleting any IDB database when filesystem cleanup fails, in the Tauri runtime', async () => {
+      mockIsTauriRuntime.mockReturnValue(true);
+      mockDeleteAllFsData.mockRejectedValueOnce(new Error('fs delete failed'));
+
+      const { resetAllDatabases } = await import('../../services/dbInitialization');
+      await expect(resetAllDatabases()).rejects.toThrow('fs delete failed');
+
+      expect(mockDeleteDatabase).not.toHaveBeenCalled();
     });
   });
 });

@@ -222,8 +222,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
       document.body.classList.add(isDark ? 'dark-theme' : 'light-theme');
       const themeColorMeta = document.querySelector('meta[name="theme-color"]');
       if (themeColorMeta) {
-        // QNBS-v3: Sepia has distinct dark/light surface colors; reflect them in the
-        // mobile browser chrome so the status bar matches the app shell.
+        // QNBS-v3: Sepia has distinct dark/light surface colors; reflect them in the mobile browser chrome so the status bar matches the app shell.
         const themeColor =
           settings.appearancePreset === 'sepia'
             ? isDark
@@ -279,8 +278,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     );
   }, [settings.accessibility.highContrast]);
 
-  // QNBS-v3: Tag the body for desktop-scoped styling (is-desktop + data-os). Tauri-ness is constant
-  // for the session, so this runs once; no-op on the web. Pairs with the `.is-desktop` CSS layer.
+  // QNBS-v3: Tag the body for desktop-scoped styling (is-desktop + data-os) — Tauri-ness is constant for the session, so this runs once; no-op on the web. Pairs with the `.is-desktop` CSS layer.
   useEffect(() => {
     applyDesktopRuntimeFlags();
   }, []);
@@ -341,24 +339,19 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     document.documentElement.dir = featureFlags.enableRtlLayout ? 'rtl' : localeDir;
   }, [language, featureFlags.enableRtlLayout]);
 
-  // QNBS-v3: Sync enablePluginSystem flag into pluginRegistry so execute/executeAsync/loadPlugin
-  // are properly gated without the registry needing direct Redux access.
+  // QNBS-v3: Sync enablePluginSystem flag into pluginRegistry so execute/executeAsync/loadPlugin are properly gated without the registry needing direct Redux access.
   useEffect(() => {
     pluginRegistry.setEnabled(featureFlags.enablePluginSystem);
   }, [featureFlags.enablePluginSystem]);
 
-  // QNBS-v3: Sync inference telemetry into telemetryService — the service cannot import the Redux
-  // store without a circular dep, so App.tsx acts as the bridge. SEC: telemetry now also honours the
-  // Settings → Privacy "Analytics" opt-out, mirroring the DuckDB persistence gate in listenerMiddleware
-  // (isAnalyticsPersistenceAllowed). Re-runs on either input change so toggling the opt-out is live.
+  // QNBS-v3: Sync inference telemetry into telemetryService (can't import the Redux store directly — circular dep) — also honours Settings → Privacy "Analytics" opt-out, mirroring listenerMiddleware's isAnalyticsPersistenceAllowed gate; re-runs on either input change so toggling is live.
   useEffect(() => {
     void import('./services/ai/telemetryService').then(({ setTelemetryEnabled }) => {
       setTelemetryEnabled(featureFlags.enableDuckDbAnalytics && settings.privacy.analyticsEnabled);
     });
   }, [featureFlags.enableDuckDbAnalytics, settings.privacy.analyticsEnabled]);
 
-  // QNBS-v3: Issue 5 — set the window adaptive-AI gate on cold start if the flag is already on
-  //          (listener only fires on OFF→ON transitions, not on initial true state from localStorage)
+  // QNBS-v3: Issue 5 — set the window adaptive-AI gate on cold start if the flag is already on (listener only fires on OFF→ON transitions, not on initial true state from localStorage).
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional one-shot on mount only; flag changes handled by listenerMiddleware
   useEffect(() => {
     initAdaptiveAiOnStartup(featureFlags.enableAdaptiveAiEngine);
@@ -376,23 +369,29 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     })();
   }, []);
 
-  // QNBS-v3: the fs-data migration bridge has no resumable journal yet (issue #359) — a marker
-  // left behind by an interrupted set/disable/rotate is the only signal available; surface it
-  // honestly rather than silently proceeding as if the desktop file state is fully consistent.
+  // QNBS-v3: the fs-data migration bridge has no resumable journal yet (issue #359) — surface an interrupted-migration marker honestly rather than silently proceeding as if the desktop file state is consistent.
   useEffect(() => {
     if (!isTauriRuntime()) return;
     void (async () => {
       const marker = await checkForInterruptedFsMigration();
       if (!marker) return;
+      const operationKey = {
+        set: 'settings.privacy.encryptionOperationSet',
+        disable: 'settings.privacy.encryptionOperationDisable',
+        rotate: 'settings.privacy.encryptionOperationRotate',
+      } as const;
       dispatch(
         statusActions.addNotification({
           type: 'error',
-          title: 'Encryption Migration Interrupted',
-          description: `A previous "${marker.operation}" encryption change did not finish (started ${marker.startedAt}). Some desktop files may still be encrypted under a different key than expected. Back up your data folder and contact support before changing the at-rest encryption passphrase again.`,
+          title: t('settings.privacy.encryptionMigrationInterruptedTitle'),
+          description: t('settings.privacy.encryptionMigrationInterruptedBody', {
+            operation: t(operationKey[marker.operation]),
+            startedAt: new Date(marker.startedAt).toLocaleString(language),
+          }),
         }),
       );
     })();
-  }, [dispatch]);
+  }, [dispatch, t, language]);
 
   // QNBS-v3: B-1 sentinel guard (async) — skips if flag off/unlocked/recovery-pending, auto-disables on a missing sentinel, else shows the unlock modal.
   useEffect(() => {
@@ -447,8 +446,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     }
   }, [dispatch, isPortalActive, t]);
 
-  // QNBS-v3: Translated view announcement instead of raw text (WCAG 4.1.3 status messages).
-  //          requestAnimationFrame focus ensures the new view is mounted before focus moves (WCAG 2.4.3).
+  // QNBS-v3: Translated view announcement instead of raw text (WCAG 4.1.3) — requestAnimationFrame focus ensures the new view is mounted before focus moves (WCAG 2.4.3).
   useEffect(() => {
     if (isInitialLoad || isPortalActive) return;
     if (prevViewRef.current === currentView) return;
@@ -486,15 +484,11 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     }
   }, [project, isPortalActive, isI18nReady, dispatch, t]);
 
-  // QNBS-v3: PR3 — auto-launch the product tour once for first-run installs, after the welcome
-  // portal closes and the nav has rendered. Returning users (or anyone who already finished/closed
-  // it) are never interrupted; they can still start it manually from the Dashboard or Help.
+  // QNBS-v3: PR3 — auto-launch the product tour once for first-run installs, after the welcome portal closes and the nav has rendered; returning users are never interrupted and can start it manually from the Dashboard or Help.
   const tourStartedRef = useRef(false);
   useEffect(() => {
     if (!isNewUser || isInitialLoad || isPortalActive) return;
-    // QNBS-v3: never hijack an automated browser session — the tour's full-screen overlay intercepts
-    // pointer events and breaks E2E. navigator.webdriver is true only under automation, never for
-    // real users, so this is invisible in production.
+    // QNBS-v3: never hijack an automated browser session — the tour's overlay intercepts pointer events and breaks E2E; navigator.webdriver is true only under automation, invisible in production.
     if (typeof navigator !== 'undefined' && navigator.webdriver) return;
     if (tourStartedRef.current || hasCompletedSpotlightTour()) return;
     // QNBS-v3 (CodeAnt): set the once-guard when the timer actually fires, not before it. If a dep
@@ -622,8 +616,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     await exit(0);
   }, [store]);
 
-  // QNBS-v3: executeCommandRef synced in its own effect (never assigned during render) so the menu
-  // effect below can depend on [t, quitApp] only and skip rebuilding on every executeCommand identity change.
+  // QNBS-v3: executeCommandRef synced in its own effect (never assigned during render) so the menu effect below can depend on [t, quitApp] only, skipping rebuilds on every executeCommand identity change.
   const executeCommandRef = useRef(executeCommand);
   useEffect(() => {
     executeCommandRef.current = executeCommand;

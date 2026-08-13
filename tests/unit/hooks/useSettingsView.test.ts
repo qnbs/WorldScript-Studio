@@ -41,6 +41,7 @@ const mockClearIdbPassphrase = vi.fn().mockResolvedValue(undefined);
 const mockRotateIdbPassphrase = vi.fn().mockResolvedValue(undefined);
 const mockDeriveRotationTargetKey = vi.fn().mockResolvedValue('mock-target-key');
 const mockResolveProtectedWriteKey = vi.fn().mockResolvedValue('mock-active-key');
+const mockDeriveAndVerifySourceKeyFromSentinel = vi.fn().mockResolvedValue('mock-source-key');
 const mockMigrateAllProtectedFsData = vi.fn().mockResolvedValue(undefined);
 const mockIsTauriRuntime = vi.fn(() => false);
 
@@ -211,6 +212,8 @@ vi.mock('../../../services/storage/storageEncryptionService', () => ({
     mockRotateIdbPassphrase(oldPass, newPass, onProgress),
   deriveRotationTargetKey: (newPassphrase: string) => mockDeriveRotationTargetKey(newPassphrase),
   resolveProtectedWriteKey: () => mockResolveProtectedWriteKey(),
+  deriveAndVerifySourceKeyFromSentinel: (passphrase: string) =>
+    mockDeriveAndVerifySourceKeyFromSentinel(passphrase),
 }));
 
 vi.mock('../../../services/storageService', () => ({
@@ -630,6 +633,7 @@ describe('handlePassphraseConfirm — disable/rotate', () => {
     mockMigrateAllProtectedFsData.mockClear().mockResolvedValue(undefined);
     mockDeriveRotationTargetKey.mockClear().mockResolvedValue('mock-target-key');
     mockResolveProtectedWriteKey.mockClear().mockResolvedValue('mock-active-key');
+    mockDeriveAndVerifySourceKeyFromSentinel.mockClear().mockResolvedValue('mock-source-key');
     mockIsTauriRuntime.mockReturnValue(false);
   });
 
@@ -850,9 +854,35 @@ describe('handlePassphraseConfirm — disable/rotate', () => {
       await result.current.handlePassphraseConfirm('old-pass', 'new-pass');
     });
 
+    expect(mockDeriveAndVerifySourceKeyFromSentinel).toHaveBeenCalledWith('old-pass');
     expect(mockDeriveRotationTargetKey).toHaveBeenCalledWith('new-pass');
     expect(mockMigrateAllProtectedFsData).toHaveBeenCalledWith('derived-target-key', 'rotate');
     expect(callOrder).toEqual(['migrateAllProtectedFsData', 'rotateIdbPassphrase']);
+  });
+
+  // QNBS-v3: a mistyped current passphrase must abort BEFORE any fs file is re-keyed — otherwise the
+  // bridge (which uses the still-active old key, independent of _current) would already have rewritten
+  // everything under the new key by the time rotateIdbPassphrase() rejects the wrong _current, leaving
+  // fs data under a key the active session never actually adopts.
+  it('verifies the current passphrase against the sentinel BEFORE re-keying any fs file, in the Tauri runtime', async () => {
+    mockIsTauriRuntime.mockReturnValue(true);
+    mockDeriveAndVerifySourceKeyFromSentinel.mockRejectedValueOnce(new Error('wrong passphrase'));
+
+    const { result } = renderHook(() => useSettingsView());
+    act(() => {
+      result.current.setPassphraseModal('rotate');
+    });
+    await act(async () => {
+      await expect(result.current.handlePassphraseConfirm('typo-pass', 'new-pass')).rejects.toThrow(
+        'wrong passphrase',
+      );
+    });
+
+    expect(mockDeriveAndVerifySourceKeyFromSentinel).toHaveBeenCalledWith('typo-pass');
+    expect(mockDeriveRotationTargetKey).not.toHaveBeenCalled();
+    expect(mockMigrateAllProtectedFsData).not.toHaveBeenCalled();
+    expect(mockRotateIdbPassphrase).not.toHaveBeenCalled();
+    expect(result.current.passphraseModal).toBe('rotate');
   });
 
   it('aborts before clearIdbPassphrase and leaves the modal open when the fs migration bridge fails', async () => {

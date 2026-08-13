@@ -8,7 +8,9 @@
  * IDB store is added.
  */
 
+import { deleteAllFsData } from './fs/fsEncryptionMigration';
 import { logger } from './logger';
+import { isTauriRuntime } from './tauriRuntime';
 
 /** All IDB databases the app may have created. */
 const KNOWN_DB_NAMES = [
@@ -63,6 +65,15 @@ async function clearServiceWorkerCaches(): Promise<void> {
  */
 export async function wipeAllAppData(): Promise<void> {
   logger.warn('[factoryReset] Wiping all app data…');
+  // QNBS-v3: fs-backed data deleted FIRST, before localStorage.clear() below erases the KDF salt —
+  // if this throws partway, the salt/sentinel are still intact and no protected file becomes
+  // permanently undecryptable; a "factory reset" that leaves orphaned ciphertext on disk isn't one.
+  if (isTauriRuntime()) {
+    await deleteAllFsData().catch((error) => {
+      logger.error('[factoryReset] Failed to delete filesystem data', error);
+      throw error;
+    });
+  }
   await deleteAllIndexedDBDatabases();
   await clearServiceWorkerCaches();
   try {

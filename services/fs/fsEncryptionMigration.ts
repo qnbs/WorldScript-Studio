@@ -29,32 +29,20 @@ const PROTECTED_TEXT_SCHEME = 'protected-v1';
 
 interface MigrationOptions {
   targetKey: CryptoKey | null;
-  // QNBS-v3: strict=true (disable/rotate) aborts the whole operation on any decrypt failure — the
-  // caller is about to destroy/replace the only key that could ever decrypt a stranded file, so a
-  // failure here must block the operation rather than complete with data silently left behind.
-  // strict=false (first-time setup) logs and skips the offending file instead — nothing valuable
-  // is being destroyed by turning encryption on, and a stray already-protected file (e.g. a
-  // leftover from a previous, since-forgotten encryption session) must not block the user from
-  // protecting everything else.
+  // QNBS-v3: strict=true (disable/rotate) aborts on any decrypt failure — the caller is about to destroy/replace the only key that could decrypt a stranded file; strict=false (first-time setup) logs and skips instead, since nothing valuable is being destroyed.
   strict: boolean;
 }
 
+// QNBS-v3: an exists() check first separates "genuinely absent" (always safe to skip — e.g. config/ not yet created on a fresh install) from "present but unreadable" (a real error that must propagate, not be silently treated as empty).
 async function listDirEntries(
   apis: TauriApis,
   dir: string,
 ): Promise<{ name?: string; isDirectory?: boolean }[]> {
-  try {
-    return await apis.readDir(dir);
-  } catch {
-    return []; // directory may not exist yet — nothing to migrate under it
-  }
+  if (!(await apis.exists(dir))) return [];
+  return apis.readDir(dir);
 }
 
-// QNBS-v3: this bridge re-keys files directly with no persistent per-file journal/checkpoint (the
-// IDB migration path has one; this doesn't yet — tracked in issue #359). A process kill mid-rotate
-// can leave some files under the new key while the durable sentinel still reflects the old one. The
-// marker below can't resume or fix that, but it converts a silent mixed-key state into a detected
-// one: written before migration starts, cleared only on full success, checked at next startup.
+// QNBS-v3: no persistent per-file journal/checkpoint yet (tracked in issue #359) — a process kill mid-rotate can leave a mixed-key state; this marker can't resume/fix that but converts it into a detected one.
 const MIGRATION_MARKER_FILENAME = 'fs-migration-marker.json';
 
 interface FsMigrationMarker {
@@ -110,8 +98,16 @@ async function reprotectWholeFile(
   path: string,
   opts: MigrationOptions,
 ): Promise<void> {
-  const raw = await apis.readTextFile(path).catch(() => null);
-  if (raw === null) return;
+  // QNBS-v3: exists() first — a read failure on a file that DOES exist must propagate, not be conflated with "never existed".
+  if (!(await apis.exists(path))) return;
+  let raw: string;
+  try {
+    raw = await apis.readTextFile(path);
+  } catch (error) {
+    if (opts.strict) throw error;
+    logger.warn(`Skipping ${path} — could not read it:`, error);
+    return;
+  }
   let plaintext: string;
   try {
     plaintext = await unprotectTextValue(raw);
@@ -141,8 +137,15 @@ async function reprotectSnapshotFile(
   path: string,
   opts: MigrationOptions,
 ): Promise<void> {
-  const raw = await apis.readTextFile(path).catch(() => null);
-  if (raw === null) return;
+  if (!(await apis.exists(path))) return;
+  let raw: string;
+  try {
+    raw = await apis.readTextFile(path);
+  } catch (error) {
+    if (opts.strict) throw error;
+    logger.warn(`Skipping ${path} — could not read it:`, error);
+    return;
+  }
   let envelope: SnapshotEnvelopeShape;
   try {
     envelope = JSON.parse(raw) as SnapshotEnvelopeShape;
@@ -235,7 +238,30 @@ export async function migrateAllProtectedFsData(
     }),
   );
 
-  // QNBS-v3: only reached if every step above completed without throwing — a strict-mode abort or
-  // a process kill both leave the marker in place, which is the intended "interrupted" signal.
+  // QNBS-v3: only reached if every step above completed without throwing — a strict-mode abort or a process kill both leave the marker in place, the intended "interrupted" signal.
   await clearMigrationMarker(apis, appDataPath);
+}
+
+// QNBS-v3: both resetAllDatabases() (storage-init-failure recovery) and wipeAllAppData() (factory
+// reset) previously deleted only IDB + localStorage (including the KDF salt) without touching this
+// filesystem backend — any already-protected fs file became permanently undecryptable ciphertext
+// orphaned on disk, since the salt is required to re-derive any key, even with the right passphrase.
+const RESETTABLE_TOP_LEVEL_DIRS = ['projects', 'config', 'snapshots', 'images'] as const;
+
+/**
+ * Deletes every fs-backed store's data (projects, settings, API keys, snapshots, images). No-op
+ * outside the Tauri runtime — callers should still gate on isTauriRuntime() themselves so this
+ * import doesn't need to be reached at all on web. Deliberately called BEFORE the salt/sentinel is
+ * erased by the caller: if this throws partway through, the salt/sentinel are still intact, so no
+ * remaining file becomes stranded — only a full, unconditional erase of both sides together is safe.
+ */
+export async function deleteAllFsData(): Promise<void> {
+  const apis = await loadTauriApis();
+  const appDataPath = await apis.appDataDir();
+  for (const dir of RESETTABLE_TOP_LEVEL_DIRS) {
+    const dirPath = await apis.join(appDataPath, dir);
+    if (await apis.exists(dirPath)) {
+      await apis.remove(dirPath, { recursive: true });
+    }
+  }
 }

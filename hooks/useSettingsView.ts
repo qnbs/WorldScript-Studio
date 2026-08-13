@@ -24,6 +24,7 @@ import type { ProtectedStoreMigrationProgress } from '../services/storage/protec
 import {
   clearIdbEncryptionKey,
   clearIdbPassphrase,
+  deriveAndVerifySourceKeyFromSentinel,
   deriveRotationTargetKey,
   isIdbEncryptionReady,
   resolveProtectedWriteKey,
@@ -123,8 +124,7 @@ export const useSettingsView = () => {
         case 'appearancePreset':
           dispatch(settingsActions.setAppearancePreset(value as AppearancePreset));
           break;
-        // QNBS-v3: dispatch through the settings slice (not local component state) so the
-        // preference persists via the same save path as every other appearance setting.
+        // QNBS-v3: dispatch through the settings slice so the preference persists via the same save path as every other appearance setting.
         case 'writingSurfaceStyle':
           dispatch(settingsActions.setWritingSurfaceStyle(value as WritingSurfaceStyle));
           break;
@@ -230,8 +230,7 @@ export const useSettingsView = () => {
         case 'enablePluginSystem':
           dispatch(featureFlagsActions.setEnablePluginSystem(Boolean(value)));
           break;
-        // QNBS-v3: Three flags were wired into FeatureFlagsSection.tsx but missing here;
-        // toggles fell to default and logged a warning without updating Redux/localStorage.
+        // QNBS-v3: three flags were wired into FeatureFlagsSection.tsx but missing here; toggles fell to default and logged a warning without updating Redux/localStorage.
         case 'enableProForge':
           dispatch(featureFlagsActions.setEnableProForge(Boolean(value)));
           // QNBS-v3: guide user to the ProForge button — it is only in WriterView, not the sidebar
@@ -274,8 +273,7 @@ export const useSettingsView = () => {
         case 'enableBrowserOllama':
           dispatch(featureFlagsActions.setEnableBrowserOllama(Boolean(value)));
           break;
-        // QNBS-v3: enableIdbAtRestEncryption intentionally absent — managed via handlePassphraseConfirm
-        // in Settings > Privacy, not the experimental flags UI toggle.
+        // QNBS-v3: enableIdbAtRestEncryption intentionally absent — managed via handlePassphraseConfirm in Settings > Privacy, not the experimental flags UI toggle.
         default:
           logger.warn(`Unknown setting key: ${key}`);
           break;
@@ -389,12 +387,7 @@ export const useSettingsView = () => {
       if (passphraseModal === 'set') {
         // QNBS-v3: setupIdbEncryption derives key, writes sentinel to IDB, sets _activeKey
         await setupIdbEncryption(newPassphrase);
-        // QNBS-v3: without this, "encryption active" would only mean future writes get protected —
-        // every already-existing fs-backed file (project.json, settings, API keys, snapshots, Codex,
-        // RAG, images) would stay plaintext until its next incidental save. strict:false because
-        // turning encryption ON must never be blocked by an unrelated pre-existing oddity (e.g. a
-        // stray file left over from a previous, since-forgotten encryption session) — such a file is
-        // logged and skipped rather than aborting setup for everything else.
+        // QNBS-v3: without this, "encryption active" would only mean future writes get protected — every already-existing fs-backed file would stay plaintext until its next incidental save; strict:false so a stray pre-existing oddity can't block setup for everything else.
         if (isTauriRuntime()) {
           const key = await resolveProtectedWriteKey();
           if (key) await migrateAllProtectedFsData(key, 'set');
@@ -426,6 +419,8 @@ export const useSettingsView = () => {
         try {
           // QNBS-v3: derives the SAME target key rotateIdbPassphrase() will activate (same salt/passphrase) and re-keys fs-backed desktop data under it BEFORE the active session key is swapped below — otherwise fs data stays under the old, soon-unrecoverable key.
           if (isTauriRuntime()) {
+            // QNBS-v3: verify _current against the durable sentinel BEFORE mutating any fs file — otherwise a mistyped current passphrase lets the bridge re-key everything to the new key while rotateIdbPassphrase() below then rejects (wrong _current) and never activates that key, stranding fs data under a key the active session never adopts.
+            await deriveAndVerifySourceKeyFromSentinel(_current);
             const targetKey = await deriveRotationTargetKey(newPassphrase);
             await migrateAllProtectedFsData(targetKey, 'rotate');
           }
