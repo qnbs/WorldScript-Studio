@@ -90,9 +90,7 @@ function createTempSuffix(): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-// QNBS-v3: tracks temp files currently mid-write so cleanupOrphanedTempFiles' startup sweep never
-// deletes one out from under an active save — a sweep that races a save started right after
-// initialize() would otherwise see a brand-new (not orphaned) .tmp-* file and remove it.
+// QNBS-v3: tracks temp files mid-write so the startup sweep never deletes one racing an active save right after initialize().
 const activeTempPaths = new Set<string>();
 
 interface QueuedWrite {
@@ -100,12 +98,7 @@ interface QueuedWrite {
   waiters: Array<{ resolve: () => void; reject: (reason: unknown) => void }>;
 }
 
-// QNBS-v3: per-path write coordination — at most one write in flight per path (serializes rename
-// order so an older/slower save can never overwrite a newer one) plus at most one queued "next"
-// write; a write arriving while one is already queued (not yet started) supersedes it in place
-// instead of appending another link, so a burst of same-path saves (e.g. rapid autosave retries
-// on a slow/locked disk) can't grow an unbounded promise chain or write every stale intermediate
-// version — only the currently-running write and the single latest queued one ever execute.
+// QNBS-v3: one write in flight per path plus at most one queued "next" write — a write arriving while one is already queued supersedes it, bounding memory/I/O for a same-path write burst.
 const inFlightPaths = new Set<string>();
 const nextWrite = new Map<string, QueuedWrite>();
 
