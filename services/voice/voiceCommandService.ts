@@ -585,9 +585,14 @@ export class VoiceCommandService {
       if (signal?.aborted) return;
 
       // Report initial progress
+      // QNBS-v3 (#333/CodeAnt+Qodo): clear stale byte counts from a previous download attempt —
+      // setVoiceSettings merges partial state, so a prior attempt's bytes would otherwise linger
+      // until the first byte-bearing progress tick of THIS attempt arrives.
       this.d(
         settingsActions.setVoiceSettings({
           wasmModelDownloadProgress: 0.1,
+          wasmModelDownloadLoadedBytes: undefined,
+          wasmModelDownloadTotalBytes: undefined,
         }),
       );
 
@@ -605,10 +610,28 @@ export class VoiceCommandService {
         onProgress: (progress: unknown) => {
           if (signal?.aborted) return;
           const p = progress as { progress?: number; loaded?: number; total?: number };
-          const pct = p.progress ?? (p.loaded && p.total ? p.loaded / p.total : 0);
+          // QNBS-v3 (#333 item 1): transformers.js's own `progress` field is 0-100 (percent), NOT a
+          // 0-1 fraction — verified against its readResponse() source (`progress = loaded/total*100`).
+          // The prior `p.progress ?? ...` fallback used it as-is, so `Math.min(0.95, pct)` clamped to
+          // 0.95 almost immediately (any progress > 0.95%, i.e. after the very first chunk), making
+          // the bar look stuck/frozen for the entire download. Prefer the real loaded/total ratio —
+          // it's also what the new byte-level UI needs — and only fall back to progress/100.
+          const hasBytes =
+            typeof p.loaded === 'number' && typeof p.total === 'number' && p.total > 0;
+          const pct = hasBytes
+            ? (p.loaded as number) / (p.total as number)
+            : typeof p.progress === 'number'
+              ? p.progress / 100
+              : 0;
           this.d(
             settingsActions.setVoiceSettings({
               wasmModelDownloadProgress: Math.min(0.95, pct),
+              ...(hasBytes
+                ? {
+                    wasmModelDownloadLoadedBytes: p.loaded,
+                    wasmModelDownloadTotalBytes: p.total,
+                  }
+                : {}),
             }),
           );
         },
@@ -621,11 +644,13 @@ export class VoiceCommandService {
         return;
       }
 
-      // Mark complete
+      // Mark complete — clear byte counts too (no longer meaningful once the download is done).
       this.d(
         settingsActions.setVoiceSettings({
           wasmModelDownloadProgress: 1.0,
           wasmModelsReady: true,
+          wasmModelDownloadLoadedBytes: undefined,
+          wasmModelDownloadTotalBytes: undefined,
         }),
       );
 
@@ -642,6 +667,8 @@ export class VoiceCommandService {
         settingsActions.setVoiceSettings({
           wasmModelDownloadProgress: 0,
           voiceWasmDownloadError: err instanceof Error ? err.message : String(err),
+          wasmModelDownloadLoadedBytes: undefined,
+          wasmModelDownloadTotalBytes: undefined,
         }),
       );
       throw err;

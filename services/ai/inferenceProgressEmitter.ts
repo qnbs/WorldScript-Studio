@@ -2,6 +2,15 @@
 //          the UI can subscribe without dispatching on every 1% progress tick.
 //          Adapted from CannaGuide-2025 progressEmitter.ts for WorldScript context.
 
+import { WEBLLM_MODEL_APPROX_MB, type WebLlmModelId } from '@domain/ai-core';
+
+// QNBS-v3 (#333/Sourcery): modelId at call sites (services/localAiFacade.ts) is a broader `string` —
+// it can be an adaptive-engine or fallback-chain model id, not just a curated WebLlmModelId — so the
+// param below stays `string`; this guard replaces an unsafe `as WebLlmModelId` cast when indexing.
+function isKnownWebLlmModel(id: string): id is WebLlmModelId {
+  return id in WEBLLM_MODEL_APPROX_MB;
+}
+
 export type WebLlmLoadingState = 'idle' | 'loading' | 'ready' | 'error';
 
 export interface WebLlmLoadProgress {
@@ -9,16 +18,26 @@ export interface WebLlmLoadProgress {
   progress: number; // 0–1
   text: string;
   estimatedSecondsRemaining: number | null;
+  // QNBS-v3 (#333 item 1): DERIVED, not measured — WebLLM's own progress callback exposes only a
+  // 0-1 fraction, no structured byte counts (verified against @mlc-ai/web-llm's InitProgressReport
+  // type). loadedBytes/totalBytes are progress × a hand-authored known-total-size table
+  // (WEBLLM_MODEL_APPROX_MB); null whenever the model id isn't in that table.
+  loadedBytes: number | null;
+  totalBytes: number | null;
+  bytesPerSecond: number | null;
 }
-
-type ProgressListener = (snapshot: WebLlmLoadProgress) => void;
 
 const INITIAL_SNAPSHOT: WebLlmLoadProgress = {
   state: 'idle',
   progress: 0,
   text: '',
   estimatedSecondsRemaining: null,
+  loadedBytes: null,
+  totalBytes: null,
+  bytesPerSecond: null,
 };
+
+type ProgressListener = (snapshot: WebLlmLoadProgress) => void;
 
 class InferenceProgressEmitter {
   private snapshot: WebLlmLoadProgress = { ...INITIAL_SNAPSHOT };
@@ -41,7 +60,9 @@ class InferenceProgressEmitter {
     return { ...this.snapshot };
   }
 
-  reportWebLlmProgress(progress: number, text: string): void {
+  // QNBS-v3 (#333 item 1): modelId is optional (existing callers with no known model id keep
+  // working; loadedBytes/totalBytes/bytesPerSecond simply stay null when it's absent or unknown).
+  reportWebLlmProgress(progress: number, text: string, modelId?: string): void {
     if (this.snapshot.state !== 'loading') {
       this.loadStartMs = Date.now();
     }
@@ -50,13 +71,36 @@ class InferenceProgressEmitter {
     const estimatedSecondsRemaining =
       progress > 0.01 && progress < 1 ? Math.round((elapsed / progress) * (1 - progress)) : null;
 
-    this.snapshot = { state: 'loading', progress, text, estimatedSecondsRemaining };
+    const approxMb =
+      modelId && isKnownWebLlmModel(modelId) ? WEBLLM_MODEL_APPROX_MB[modelId] : undefined;
+    const totalBytes = approxMb != null ? approxMb * 1024 * 1024 : null;
+    const loadedBytes = totalBytes != null ? Math.round(totalBytes * progress) : null;
+    const bytesPerSecond =
+      loadedBytes != null && elapsed > 0.5 ? Math.round(loadedBytes / elapsed) : null;
+
+    this.snapshot = {
+      state: 'loading',
+      progress,
+      text,
+      estimatedSecondsRemaining,
+      loadedBytes,
+      totalBytes,
+      bytesPerSecond,
+    };
     this.emit();
   }
 
   reportWebLlmReady(): void {
     this.loadStartMs = null;
-    this.snapshot = { state: 'ready', progress: 1, text: '', estimatedSecondsRemaining: null };
+    this.snapshot = {
+      state: 'ready',
+      progress: 1,
+      text: '',
+      estimatedSecondsRemaining: null,
+      loadedBytes: null,
+      totalBytes: null,
+      bytesPerSecond: null,
+    };
     this.emit();
   }
 
@@ -67,6 +111,9 @@ class InferenceProgressEmitter {
       progress: this.snapshot.progress,
       text: message,
       estimatedSecondsRemaining: null,
+      loadedBytes: null,
+      totalBytes: null,
+      bytesPerSecond: null,
     };
     this.emit();
   }
