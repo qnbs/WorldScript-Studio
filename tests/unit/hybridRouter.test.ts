@@ -31,6 +31,7 @@ describe('hybridRouter', () => {
     vi.resetModules();
     mockGetWorkerBus.mockReturnValue(null);
     mockIsRustAvailable.mockResolvedValue(false);
+    mockIsRustAvailable.mockClear();
     mockEnqueue.mockReturnValue(mockHandle);
     mockInvalidateCache.mockReset();
     mockInvokeRustTask.mockReset();
@@ -54,7 +55,7 @@ describe('hybridRouter', () => {
     expect(mockEnqueue).toHaveBeenCalledWith('inference.text', { prompt: 'hi' }, { target: 'web' });
   });
 
-  it('routes to Rust when rustComputeEnabled + target:rust + Rust available', async () => {
+  it('routes a registered native task to Rust when rustComputeEnabled + target:rust + Rust available', async () => {
     mockIsRustAvailable.mockResolvedValue(true);
     mockInvokeRustTask.mockResolvedValue({
       taskId: 'rust-tid',
@@ -64,8 +65,8 @@ describe('hybridRouter', () => {
     });
     const { routeTask } = await import('../../services/hybridRouter');
     const result = await routeTask(
-      'proforge.stage',
-      { doc: '...' },
+      'text.analyze',
+      { text: '...' },
       {
         target: 'rust',
         rustComputeEnabled: true,
@@ -76,8 +77,8 @@ describe('hybridRouter', () => {
     await expect(result!.result).resolves.toEqual({ answer: 42 });
   });
 
-  it('falls back to web worker when Rust is unavailable (target:rust)', async () => {
-    mockIsRustAvailable.mockResolvedValue(false);
+  it('keeps unsupported tasks on the web worker even when Rust compute is available', async () => {
+    mockIsRustAvailable.mockResolvedValue(true);
     mockGetWorkerBus.mockReturnValue({ enqueue: mockEnqueue });
     const { routeTask } = await import('../../services/hybridRouter');
     const result = await routeTask(
@@ -89,7 +90,9 @@ describe('hybridRouter', () => {
       },
     );
     expect(result).toBe(mockHandle);
-    expect(mockEnqueue).toHaveBeenCalled();
+    expect(mockIsRustAvailable).not.toHaveBeenCalled();
+    expect(mockInvokeRustTask).not.toHaveBeenCalled();
+    expect(mockEnqueue).toHaveBeenCalledWith('proforge.stage', {}, { target: 'web' });
   });
 
   it('falls back to web worker when Rust invoke throws', async () => {
@@ -98,7 +101,7 @@ describe('hybridRouter', () => {
     mockGetWorkerBus.mockReturnValue({ enqueue: mockEnqueue });
     const { routeTask } = await import('../../services/hybridRouter');
     const result = await routeTask(
-      'inference.text',
+      'text.analyze',
       {},
       {
         rustComputeEnabled: true,
@@ -116,8 +119,9 @@ describe('hybridRouter', () => {
     expect(mockEnqueue).toHaveBeenCalled();
   });
 
-  it('Rust result promise rejects when success is false', async () => {
+  it('falls back to web worker when a native handler reports failure', async () => {
     mockIsRustAvailable.mockResolvedValue(true);
+    mockGetWorkerBus.mockReturnValue({ enqueue: mockEnqueue });
     mockInvokeRustTask.mockResolvedValue({
       taskId: 'rust-fail',
       success: false,
@@ -127,11 +131,12 @@ describe('hybridRouter', () => {
     });
     const { routeTask } = await import('../../services/hybridRouter');
     const result = await routeTask(
-      'inference.text',
+      'text.analyze',
       {},
       { target: 'rust', rustComputeEnabled: true },
     );
-    await expect(result!.result).rejects.toThrow('task supervisor error');
+    expect(result).toBe(mockHandle);
+    expect(mockEnqueue).toHaveBeenCalledWith('text.analyze', {}, { target: 'web' });
   });
 
   it('invalidateRustAvailabilityCache is re-exported', async () => {

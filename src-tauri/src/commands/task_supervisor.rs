@@ -18,7 +18,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 /// Bumped when the wire contract or task registry changes; surfaced via `ping`.
 const SUPERVISOR_VERSION: &str = "1.0.0";
@@ -26,9 +26,7 @@ const SUPERVISOR_VERSION: &str = "1.0.0";
 /// Incoming task request from the TS hybrid router (camelCase on the wire).
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-// QNBS-v3: priority/target/timeoutMs/retryPolicy are part of the worker-bus wire contract
-//          and accepted from the TS router, but the current dispatcher only reads
-//          task_id/task_type/payload — allow(dead_code) until the retry/timeout path lands.
+// QNBS-v3: priority/target/retryPolicy remain wire-contract fields even though only timeoutMs affects the first native handler.
 #[allow(dead_code)]
 pub struct RustTaskRequest {
     pub task_id: String,
@@ -68,6 +66,8 @@ pub struct TextAnalysis {
     pub reading_time_minutes: f64,
 }
 
+const MAX_TEXT_ANALYSIS_BYTES: usize = 2 * 1024 * 1024;
+
 /// Health-check command. Any non-error response signals the supervisor is reachable;
 /// the TS bridge treats a successful resolve as "Rust compute available".
 #[tauri::command]
@@ -86,10 +86,21 @@ pub fn worldscript_task_supervisor_submit(
 ) -> Result<RustTaskResultEvent, String> {
     let started = Instant::now();
     let task_id = request.task_id.clone();
+    let timeout = Duration::from_millis(request.timeout_ms);
 
-    let outcome: Result<Value, String> = match request.task_type.as_str() {
-        "text.analyze" => run_text_analyze(&request.payload),
-        other => Err(format!("Unknown task type: {other}")),
+    let outcome: Result<Value, String> = if timeout.is_zero() {
+        Err("Task timeout must be greater than zero".to_string())
+    } else {
+        match request.task_type.as_str() {
+            "text.analyze" => run_text_analyze(&request.payload),
+            other => Err(format!("Unknown task type: {other}")),
+        }
+    };
+
+    let outcome = if started.elapsed() > timeout {
+        Err(format!("Task exceeded {}ms deadline", request.timeout_ms))
+    } else {
+        outcome
     };
 
     let latency_ms = started.elapsed().as_millis() as u64;
@@ -118,6 +129,11 @@ fn run_text_analyze(payload: &Value) -> Result<Value, String> {
         .get("text")
         .and_then(Value::as_str)
         .ok_or_else(|| "text.analyze requires payload.text to be a string".to_string())?;
+    if text.len() > MAX_TEXT_ANALYSIS_BYTES {
+        return Err(format!(
+            "text.analyze payload exceeds {MAX_TEXT_ANALYSIS_BYTES}-byte safety limit"
+        ));
+    }
 
     let analysis = analyze_text(text);
     serde_json::to_value(&analysis).map_err(|e| e.to_string())
@@ -306,5 +322,37 @@ mod tests {
         let res = worldscript_task_supervisor_submit(req).unwrap();
         assert!(!res.success);
         assert!(res.error.unwrap().contains("payload.text"));
+    }
+
+    #[test]
+    fn submit_rejects_a_zero_timeout_before_dispatching() {
+        let req = RustTaskRequest {
+            task_id: "t4".into(),
+            task_type: "text.analyze".into(),
+            payload: json!({ "text": "Hello" }),
+            priority: "normal".into(),
+            target: "rust".into(),
+            timeout_ms: 0,
+            retry_policy: None,
+        };
+        let res = worldscript_task_supervisor_submit(req).unwrap();
+        assert!(!res.success);
+        assert!(res.error.unwrap().contains("timeout"));
+    }
+
+    #[test]
+    fn submit_rejects_an_oversized_text_payload() {
+        let req = RustTaskRequest {
+            task_id: "t5".into(),
+            task_type: "text.analyze".into(),
+            payload: json!({ "text": "x".repeat(MAX_TEXT_ANALYSIS_BYTES + 1) }),
+            priority: "normal".into(),
+            target: "rust".into(),
+            timeout_ms: 1_000,
+            retry_policy: None,
+        };
+        let res = worldscript_task_supervisor_submit(req).unwrap();
+        assert!(!res.success);
+        assert!(res.error.unwrap().contains("safety limit"));
     }
 }

@@ -238,10 +238,20 @@ jobs:
         working-directory: src-tauri
         run: cargo check --locked
 
+      - name: cargo check (all features)
+        if: steps.filter.outputs.changed == 'true'
+        working-directory: src-tauri
+        run: cargo check --locked --all-targets --all-features
+
       - name: cargo clippy
         if: steps.filter.outputs.changed == 'true'
         working-directory: src-tauri
         run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: cargo clippy (all features)
+        if: steps.filter.outputs.changed == 'true'
+        working-directory: src-tauri
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
 
       - name: cargo test
         if: steps.filter.outputs.changed == 'true'

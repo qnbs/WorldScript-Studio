@@ -15,6 +15,9 @@ import { getWorkerBus } from './workerBusManager';
 
 const log = createLogger('hybridRouter');
 
+// QNBS-v3: only handlers registered by the native supervisor may enter the Rust path; all other WorkerBus tasks must retain their web-worker fallback.
+const RUST_TASK_TYPES = new Set(['text.analyze']);
+
 export interface HybridRouteOptions extends Omit<EnqueueOptions, 'target'> {
   /** Routing hint: 'rust' to prefer Tauri, 'any'/'web' to use web worker pool. Default: 'any'. */
   readonly target?: 'web' | 'rust' | 'any';
@@ -40,8 +43,12 @@ export async function routeTask<TResult = unknown>(
 ): Promise<TaskHandle<TResult> | null> {
   const { target = 'any', rustComputeEnabled = false, ...busOpts } = opts;
 
-  // QNBS-v3: Rust path — only when explicitly targeted or 'any' with rust flag on
-  if (rustComputeEnabled && (target === 'rust' || target === 'any')) {
+  // QNBS-v3: Rust path — only when explicitly targeted or 'any' with rust flag on, and only for a registered native handler.
+  if (
+    rustComputeEnabled &&
+    RUST_TASK_TYPES.has(taskType) &&
+    (target === 'rust' || target === 'any')
+  ) {
     const rustAvailable = await isRustComputeAvailable();
     if (rustAvailable) {
       try {
@@ -54,11 +61,12 @@ export async function routeTask<TResult = unknown>(
           timeoutMs: opts.timeoutMs ?? 300_000,
         };
         const rustResult = await invokeRustTask(request);
+        if (!rustResult.success) {
+          throw new Error(rustResult.error ?? 'Rust TaskSupervisor failed');
+        }
         const rustHandle: TaskHandle<TResult> = {
           taskId: request.taskId,
-          result: rustResult.success
-            ? Promise.resolve(rustResult.payload as TResult)
-            : Promise.reject(new Error(rustResult.error ?? 'Rust TaskSupervisor failed')),
+          result: Promise.resolve(rustResult.payload as TResult),
           progress: _emptyProgress(),
           // QNBS-v3: Rust tasks are not cancellable in Phase 2 (Tauri invoke is synchronous)
           cancel: () => {

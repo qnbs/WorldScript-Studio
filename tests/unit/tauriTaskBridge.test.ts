@@ -75,6 +75,31 @@ describe('tauriTaskBridge', () => {
         }),
       ).rejects.toThrow('Rust TaskSupervisor failed');
     });
+
+    it('enforces the caller deadline when a native command does not settle', async () => {
+      vi.useFakeTimers();
+      try {
+        const { isTauriRuntime } = await import('../../services/tauriRuntime');
+        vi.mocked(isTauriRuntime).mockReturnValue(true);
+        const { invoke } = await import('@tauri-apps/api/core');
+        vi.mocked(invoke).mockImplementation(() => new Promise(() => {}));
+        const { invokeRustTask } = await import('../../services/tauriTaskBridge');
+        const result = invokeRustTask({
+          taskId: '00000000-0000-0000-0000-000000000004',
+          taskType: 'text.analyze',
+          payload: { text: 'hello' },
+          priority: 'normal',
+          target: 'rust',
+          timeoutMs: 25,
+        });
+
+        const timeoutAssertion = expect(result).rejects.toThrow('exceeded 25ms deadline');
+        await vi.advanceTimersByTimeAsync(25);
+        await timeoutAssertion;
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe('isRustComputeAvailable', () => {

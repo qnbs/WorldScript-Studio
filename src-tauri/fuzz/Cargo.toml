@@ -3,11 +3,8 @@ name = "storycraft-fuzz"
 version = "0.0.1"
 publish = false
 edition = "2021"
-# QNBS-v3: this crate's Cargo.lock is format v4 (stabilized in Cargo 1.83), independent of the
-# parent crate's 1.77.2 MSRV — fuzzing is dev-only tooling, never shipped, and cargo-fuzz itself
-# already requires a recent nightly toolchain. Declaring this makes an older toolchain fail with a
-# clear "requires 1.83" error instead of a confusing lockfile-parse failure.
-rust-version = "1.83"
+# QNBS-v3: this dev-only fuzz graph resolves dependencies requiring Rust 1.89, so its declared MSRV must fail clearly before Cargo evaluates the lockfile.
+rust-version = "1.89"
 
 [package.metadata]
 cargo-fuzz = true

@@ -18,9 +18,10 @@ export async function invokeRustTask(request: RustTaskRequest): Promise<RustTask
   }
   try {
     const { invoke } = await import('@tauri-apps/api/core');
-    const result = await invoke<RustTaskResultEvent>('worldscript_task_supervisor_submit', {
-      request,
-    });
+    const result = await invokeWithTimeout(
+      invoke<RustTaskResultEvent>('worldscript_task_supervisor_submit', { request }),
+      request.timeoutMs,
+    );
     log.info('Rust TaskSupervisor completed task', {
       taskId: request.taskId,
       taskType: request.taskType,
@@ -29,6 +30,26 @@ export async function invokeRustTask(request: RustTaskRequest): Promise<RustTask
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     throw new Error(`[tauriTaskBridge] Rust TaskSupervisor failed: ${msg}`);
+  }
+}
+
+async function invokeWithTimeout<T>(operation: Promise<T>, timeoutMs: number): Promise<T> {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new Error('[tauriTaskBridge] Rust task timeout must be greater than zero');
+  }
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<T>((_, reject) => {
+        // QNBS-v3: Tauri cannot cancel an already-dispatched synchronous command, but callers must regain their WorkerBus deadline and fall back instead of waiting indefinitely.
+        timeout = setTimeout(() => {
+          reject(new Error(`[tauriTaskBridge] Rust task exceeded ${timeoutMs}ms deadline`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
 }
 
