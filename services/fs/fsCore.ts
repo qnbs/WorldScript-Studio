@@ -5,6 +5,7 @@
 
 import LZString from 'lz-string';
 import { logger } from '../logger';
+import { isTauriRuntime } from '../tauriRuntime';
 
 // Dynamic imports for Tauri v2 plugin APIs — fail gracefully in browser
 export type TauriApis = {
@@ -173,6 +174,9 @@ async function writeThenRename(
 
 export function writeTextFileAtomic(apis: TauriApis, path: string, content: string): Promise<void> {
   return enqueueWrite(path, () => {
+    if (isTauriRuntime()) {
+      return writeFileDurablyInTauri(path, new TextEncoder().encode(content));
+    }
     const tmpPath = `${path}.tmp-${createTempSuffix()}`;
     return writeThenRename(apis, tmpPath, path, () =>
       retryFs(() => apis.writeTextFile(tmpPath, content)),
@@ -182,9 +186,16 @@ export function writeTextFileAtomic(apis: TauriApis, path: string, content: stri
 
 export function writeFileAtomic(apis: TauriApis, path: string, data: Uint8Array): Promise<void> {
   return enqueueWrite(path, () => {
+    if (isTauriRuntime()) return writeFileDurablyInTauri(path, data);
     const tmpPath = `${path}.tmp-${createTempSuffix()}`;
     return writeThenRename(apis, tmpPath, path, () => retryFs(() => apis.writeFile(tmpPath, data)));
   });
+}
+
+async function writeFileDurablyInTauri(path: string, data: Uint8Array): Promise<void> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  // QNBS-v3: native publication synchronizes the temp file before replacement; plugin-fs exposes no equivalent stable-storage boundary.
+  await invoke('worldscript_atomic_write', { path, data: Array.from(data) });
 }
 
 // --- LZ-String compression (mirrors dbService threshold and prefix) ---

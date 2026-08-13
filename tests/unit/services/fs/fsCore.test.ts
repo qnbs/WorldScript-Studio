@@ -4,7 +4,19 @@
  * sanitization, and word counting — no Tauri APIs required.
  */
 
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const h = vi.hoisted(() => ({
+  isTauri: false,
+  invoke: vi.fn(),
+}));
+
+vi.mock('../../../../services/tauriRuntime', () => ({
+  isTauriRuntime: () => h.isTauri,
+}));
+
+vi.mock('@tauri-apps/api/core', () => ({ invoke: h.invoke }));
+
 import type { TauriApis } from '../../../../services/fs/fsCore';
 import {
   cleanupOrphanedTempFiles,
@@ -104,6 +116,48 @@ describe('retryFs', () => {
 });
 
 describe('writeTextFileAtomic / writeFileAtomic', () => {
+  afterEach(() => {
+    h.isTauri = false;
+    h.invoke.mockReset();
+  });
+
+  // QNBS-v3: desktop writes cross the native boundary so the temp file and replacement metadata are synchronized before success returns.
+  it('uses the native durable command for text writes in Tauri', async () => {
+    const { apis } = makeAtomicWriteFake();
+    h.isTauri = true;
+    h.invoke.mockResolvedValue(undefined);
+
+    await writeTextFileAtomic(apis, '/app/project.json', 'content');
+
+    expect(h.invoke).toHaveBeenCalledWith('worldscript_atomic_write', {
+      path: '/app/project.json',
+      data: Array.from(new TextEncoder().encode('content')),
+    });
+  });
+
+  it('uses the native durable command for binary writes in Tauri', async () => {
+    const { apis } = makeAtomicWriteFake();
+    h.isTauri = true;
+    h.invoke.mockResolvedValue(undefined);
+
+    await writeFileAtomic(apis, '/app/asset.bin', new Uint8Array([1, 2, 3]));
+
+    expect(h.invoke).toHaveBeenCalledWith('worldscript_atomic_write', {
+      path: '/app/asset.bin',
+      data: [1, 2, 3],
+    });
+  });
+
+  it('propagates a native durable-write failure', async () => {
+    const { apis } = makeAtomicWriteFake();
+    h.isTauri = true;
+    h.invoke.mockRejectedValue(new Error('disk full'));
+
+    await expect(writeTextFileAtomic(apis, '/app/project.json', 'content')).rejects.toThrow(
+      'disk full',
+    );
+  });
+
   it('writes content under the final path and leaves no temp file behind', async () => {
     const { apis, text } = makeAtomicWriteFake();
     await writeTextFileAtomic(apis, '/app/project.json', '{"a":1}');

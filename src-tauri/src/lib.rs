@@ -1,4 +1,5 @@
 mod commands;
+mod durable_fs;
 mod lora;
 mod pandoc;
 
@@ -158,6 +159,7 @@ pub fn run() {
       lora::set_lora_python_path,
       commands::task_supervisor::worldscript_task_supervisor_ping,
       commands::task_supervisor::worldscript_task_supervisor_submit,
+      durable_fs::worldscript_atomic_write,
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {
