@@ -2317,7 +2317,7 @@
   "settings.privacy.encryptionChangedStatus": "Passphrase changed successfully",
   "settings.privacy.encryptionConfirmPassphrase": "Подтвердите парольную фразу",
   "settings.privacy.encryptionCurrentPassphrase": "Текущая парольная фраза",
-  "settings.privacy.encryptionDisableAction": "Запрещать",
+  "settings.privacy.encryptionDisableAction": "Отключить",
   "settings.privacy.encryptionDisableButton": "Отключить шифрование",
   "settings.privacy.encryptionDisableConfirm": "Отключить шифрование",
   "settings.privacy.encryptionDisableFailed": "Could not disable encryption. Please try again.",

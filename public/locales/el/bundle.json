@@ -2317,7 +2317,7 @@
   "settings.privacy.encryptionChangedStatus": "Passphrase changed successfully",
   "settings.privacy.encryptionConfirmPassphrase": "Επιβεβαιώστε τη φράση πρόσβασης",
   "settings.privacy.encryptionCurrentPassphrase": "Τρέχουσα φράση πρόσβασης",
-  "settings.privacy.encryptionDisableAction": "Καθιστώ ανίκανο",
+  "settings.privacy.encryptionDisableAction": "Απενεργοποίηση",
   "settings.privacy.encryptionDisableButton": "Απενεργοποιήστε την κρυπτογράφηση",
   "settings.privacy.encryptionDisableConfirm": "Απενεργοποιήστε την κρυπτογράφηση",
   "settings.privacy.encryptionDisableFailed": "Could not disable encryption. Please try again.",

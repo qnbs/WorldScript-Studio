@@ -1882,7 +1882,7 @@
   "settings.ai.providerStatusDisconnected": "Indisponível",
   "settings.ai.providerStatusLabel": "Status da conexão",
   "settings.ai.providerStatusNotTested": "Não testado",
-  "settings.ai.providerStatusReady": "Preparar",
+  "settings.ai.providerStatusReady": "Pronto",
   "settings.ai.providerStatusTesting": "Testando…",
   "settings.ai.providerStatusUnavailableBrowser": "Não disponível no navegador",
   "settings.ai.providerTitle": "IA Provider",
