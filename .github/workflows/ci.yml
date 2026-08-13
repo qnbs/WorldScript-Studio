@@ -179,6 +179,32 @@ jobs:
   #          flaky, non-gating check. Mutation now runs ONLY via the manual `.github/workflows/
   #          mutation.yml` (workflow_dispatch). To be re-integrated in a later iteration.
   # ----------------------------------------------------------
+  rust-tauri:
+    name: 🦀 Tauri Rust Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [security]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+      - name: Rust format check
+        working-directory: src-tauri
+        run: cargo fmt --check
+      - name: Rust compile check
+        working-directory: src-tauri
+        run: cargo check --locked
+      - name: Rust clippy
+        working-directory: src-tauri
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Rust tests
+        working-directory: src-tauri
+        run: cargo test --locked
+
   build:
     name: 🏗️ Build
     runs-on: ubuntu-latest
@@ -263,18 +289,24 @@ jobs:
     name: ✅ CI Success
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [security, quality, build]
+    needs: [security, quality, rust-tauri, build, e2e, vrt]
     if: always()
     steps:
       - name: Verify all required jobs succeeded
         run: |
           if [ "${{ needs.security.result }}" != "success" ] || \
              [ "${{ needs.quality.result }}" != "success" ] || \
-             [ "${{ needs.build.result }}" != "success" ]; then
+             [ "${{ needs.rust-tauri.result }}" != "success" ] || \
+             [ "${{ needs.build.result }}" != "success" ] || \
+             [ "${{ needs.e2e.result }}" != "success" ] || \
+             [ "${{ needs.vrt.result }}" != "success" ]; then
             echo "One or more required jobs did not succeed:"
             echo "  security: ${{ needs.security.result }}"
             echo "  quality:  ${{ needs.quality.result }}"
+            echo "  rust-tauri: ${{ needs.rust-tauri.result }}"
             echo "  build:    ${{ needs.build.result }}"
+            echo "  e2e:      ${{ needs.e2e.result }}"
+            echo "  vrt:      ${{ needs.vrt.result }}"
             exit 1
           fi
           echo "All required jobs succeeded."
