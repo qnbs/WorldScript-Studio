@@ -7,12 +7,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { TauriApis } from '../../../../services/fs/fsCore';
 import {
+  base64ToBytes,
+  bytesToBase64,
   cleanupOrphanedTempFiles,
   compressData,
   countProjectWords,
   decompressData,
-  decryptText,
-  encryptText,
   retryFs,
   sanitizePathSegment,
   writeFileAtomic,
@@ -308,35 +308,20 @@ describe('compressData / decompressData', () => {
   });
 });
 
-describe('encryptText / decryptText', () => {
-  it('round-trips a value with the same secret', async () => {
-    const payload = await encryptText('top secret manuscript', 'passphrase-123');
-    expect(payload.iv).toBeTruthy();
-    expect(payload.salt).toBeTruthy();
-    expect(payload.data).toBeTruthy();
-    await expect(decryptText(payload, 'passphrase-123')).resolves.toBe('top secret manuscript');
+// QNBS-v3 (2026-08-13): the derived-passphrase encryptText/decryptText scheme these tests used to
+// cover was retired entirely — its "secret" (`${appDataPath}|${provider}|WorldScriptStudio|v1`)
+// was fully public/reconstructible by anyone who could read the encrypted file, providing no real
+// confidentiality (see services/fs/settingsFsStore.ts's header comment and AUDIT.md's F-05/F-06
+// row). API-key protection now reuses services/storage/storageEncryptionService.ts's real
+// passphrase-derived key directly; see tests/unit/services/fs/fsStores.test.ts for that coverage.
+describe('bytesToBase64 / base64ToBytes', () => {
+  it('round-trips arbitrary byte sequences, including zero and high bytes', () => {
+    const bytes = new Uint8Array([0, 1, 2, 254, 255, 128, 42]);
+    expect(base64ToBytes(bytesToBase64(bytes))).toEqual(bytes);
   });
 
-  it('fails to decrypt with the wrong secret', async () => {
-    const payload = await encryptText('top secret', 'right-key');
-    await expect(decryptText(payload, 'wrong-key')).rejects.toBeDefined();
-  });
-
-  // QNBS-v3 (F-05/F-06 fix, 2026-07-29): regression guard for the PBKDF2 + random-salt derivation replacing the prior unsalted single-SHA-256 scheme.
-  it('produces a different ciphertext, iv, and salt on every encryption of the same secret+plaintext', async () => {
-    const a = await encryptText('same plaintext', 'same-secret-material');
-    const b = await encryptText('same plaintext', 'same-secret-material');
-    expect(a.salt).not.toBe(b.salt);
-    expect(a.iv).not.toBe(b.iv);
-    expect(a.data).not.toBe(b.data);
-    // Both must still independently decrypt correctly with their own salt/iv.
-    await expect(decryptText(a, 'same-secret-material')).resolves.toBe('same plaintext');
-    await expect(decryptText(b, 'same-secret-material')).resolves.toBe('same plaintext');
-  });
-
-  it('rejects a legacy (pre-2026-07-29) payload with no salt field', async () => {
-    const legacyPayload = { iv: 'AAAAAAAAAAAAAAAA', data: 'AAAAAAAAAAAAAAAA' };
-    await expect(decryptText(legacyPayload, 'any-secret')).rejects.toThrow(/legacy/i);
+  it('round-trips an empty byte sequence', () => {
+    expect(base64ToBytes(bytesToBase64(new Uint8Array([])))).toEqual(new Uint8Array([]));
   });
 });
 

@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Desktop API-key protection now uses a real secret.** The scheme credited as "fixed" for
+  F-05/F-06 (2026-07-29) upgraded the KDF (unsalted SHA-256 → PBKDF2 + random salt) but never
+  addressed the actual finding: its passphrase input —
+  `${appDataPath}|${provider}|WorldScriptStudio|v1` — was built entirely from public/discoverable
+  values, so anyone with read access to the encrypted `<provider>_key.enc.json` file could
+  reconstruct it and decrypt in one PBKDF2 call. API keys now reuse
+  `services/storage/storageEncryptionService.ts`'s real user-passphrase-derived key (the same one
+  protecting IDB at-rest data) whenever at-rest encryption is configured and unlocked; when no
+  passphrase is configured, keys are stored as honest plaintext rather than fake-encrypted.
+  Configured-but-locked reads/writes fail closed (no silent plaintext downgrade), matching the
+  existing IDB protected-write policy. The two obsolete pre-2026-08-13 formats (unsalted and
+  salted-but-public-passphrase) are discarded, not migrated, on next read — same "locked decision"
+  precedent as the original F-05/F-06 fix; the user is notified and re-prompted for the key.
+  `services/fs/fsCore.ts`'s derived-passphrase `encryptText`/`decryptText` were retired outright.
+  Project/settings/snapshot/Codex/RAG/binder-asset data on desktop remains plaintext — that gap
+  is tracked separately and not fixed by this entry.
+
 ### Fixed
 
 - **Atomic writes for desktop filesystem storage.** Every `services/fs/*Store.ts` writer

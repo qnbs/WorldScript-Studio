@@ -11,6 +11,24 @@ import type { TauriApis } from '../../../../services/fs/fsCore';
 // QNBS-v3: typed via `unknown` (not `any`) so the mock factories see a non-null TauriApis; the real value is set in beforeEach before any mock is invoked.
 const { fsHolder } = vi.hoisted(() => ({ fsHolder: { current: null as unknown as TauriApis } }));
 
+// QNBS-v3: controllable fake for storageEncryptionService's IDB-backed sentinel/session state — activeKey/sentinelConfigured drive resolveProtectedWriteKey()'s tri-state (real key | never configured | locked); idbEncryptWithKey/idbDecryptWithKey/IdbStorageLockedError are the REAL implementation via importOriginal (pure Web Crypto, no IDB access), so this file never needs to mock or initialize real IndexedDB.
+const { cryptoState } = vi.hoisted(() => ({
+  cryptoState: { activeKey: null as CryptoKey | null, sentinelConfigured: false },
+}));
+vi.mock('../../../../services/storage/storageEncryptionService', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../../../services/storage/storageEncryptionService')>();
+  return {
+    ...actual,
+    hasPassphraseSentinel: () => Promise.resolve(cryptoState.sentinelConfigured),
+    resolveProtectedWriteKey: () => {
+      if (cryptoState.activeKey) return Promise.resolve(cryptoState.activeKey);
+      if (cryptoState.sentinelConfigured) return Promise.reject(new actual.IdbStorageLockedError());
+      return Promise.resolve(null);
+    },
+  };
+});
+
 // QNBS-v3: mock the @tauri-apps plugin modules so the REAL loadTauriApis assembles a TauriApis whose methods delegate to the per-test in-memory fake FS (memoization-safe); exercises real store logic AND loadTauriApis itself.
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: (cmd: string, args?: Record<string, unknown>) => fsHolder.current.invoke(cmd, args),
@@ -42,6 +60,7 @@ vi.mock('../../../../services/logger', async (importOriginal) => {
 import { appStoreRef } from '../../../../app/storeRef';
 import { FsProjectStore } from '../../../../services/fs/projectFsStore';
 import { logger } from '../../../../services/logger';
+import { StorageEncryptionService } from '../../../../services/storage/storageEncryptionService';
 
 interface FakeFs {
   apis: TauriApis;
@@ -121,6 +140,8 @@ beforeEach(() => {
   fake = makeFakeFs();
   fsHolder.current = fake.apis;
   store = new FsProjectStore();
+  cryptoState.activeKey = null;
+  cryptoState.sentinelConfigured = false;
 });
 afterEach(() => {
   vi.clearAllMocks();
@@ -219,11 +240,57 @@ describe('FsSettingsStore — settings + encrypted API keys', () => {
     expect(await store.loadSettings()).toBeNull();
   });
 
-  it('encrypts and decrypts an API key round-trip', async () => {
+  // QNBS-v3 (2026-08-13, F-05/F-06 follow-up): no passphrase configured — honest plaintext,
+  // not a fake-secret derivation.
+  it('round-trips an API key as plaintext when no at-rest passphrase is configured', async () => {
     await store.saveApiKey('openai', 'sk-secret-123');
+    const stored = JSON.parse(fake.text.get('/app/config/openai_key.enc.json') as string);
+    expect(stored.scheme).toBe('plaintext-v1');
     expect(await store.getApiKey('openai')).toBe('sk-secret-123');
     await store.clearApiKey('openai');
     expect(await store.getApiKey('openai')).toBeNull();
+  });
+
+  // QNBS-v3: the actual fix under test — a real, non-public secret protects the key when the
+  // user has configured and unlocked at-rest encryption.
+  it('round-trips an API key under real AES-GCM protection when a passphrase is configured and unlocked', async () => {
+    cryptoState.activeKey = await new StorageEncryptionService().deriveKey(
+      'test-passphrase',
+      new Uint8Array(32).fill(7),
+    );
+    cryptoState.sentinelConfigured = true;
+
+    await store.saveApiKey('openai', 'sk-secret-123');
+    const stored = JSON.parse(fake.text.get('/app/config/openai_key.enc.json') as string);
+    expect(stored.scheme).toBe('protected-v1');
+    expect(stored.data).not.toContain('sk-secret-123');
+
+    expect(await store.getApiKey('openai')).toBe('sk-secret-123');
+  });
+
+  // QNBS-v3: fail-closed, matching the existing IDB protected-write policy — never silently
+  // downgrade to plaintext while the user believes at-rest encryption is protecting this key.
+  it('rejects saveApiKey when at-rest encryption is configured but the session is locked', async () => {
+    cryptoState.sentinelConfigured = true; // configured, but no activeKey — locked
+
+    await expect(store.saveApiKey('openai', 'sk-secret-123')).rejects.toThrow(/storage is locked/i);
+    expect(fake.text.has('/app/config/openai_key.enc.json')).toBe(false);
+  });
+
+  // QNBS-v3: a locked-but-configured read must fail closed WITHOUT discarding the file — the key
+  // is still there, just temporarily unreadable until the user unlocks their session.
+  it('returns null without discarding the file when reading a protected key while locked', async () => {
+    cryptoState.activeKey = await new StorageEncryptionService().deriveKey(
+      'test-passphrase',
+      new Uint8Array(32).fill(7),
+    );
+    cryptoState.sentinelConfigured = true;
+    await store.saveApiKey('openai', 'sk-secret-123');
+
+    cryptoState.activeKey = null; // simulate session lock; sentinelConfigured stays true
+
+    expect(await store.getApiKey('openai')).toBeNull();
+    expect(fake.text.has('/app/config/openai_key.enc.json')).toBe(true);
   });
 
   it('delegates the Gemini key helpers to provider storage', async () => {
@@ -239,10 +306,10 @@ describe('FsSettingsStore — settings + encrypted API keys', () => {
     expect(await store.getApiKey('anthropic')).toBeNull();
   });
 
-  // QNBS-v3 (F-05/F-06 fix, 2026-07-29): a pre-2026-07-29 key file (unsalted single-SHA-256
-  // scheme) is discarded, not migrated (locked decision) — this asserts the discard path returns
-  // null without throwing, removes the stale file, and surfaces a one-time notification rather
-  // than failing silently.
+  // QNBS-v3 (F-05/F-06 fix, 2026-07-29; superseded 2026-08-13): a pre-2026-07-29 key file
+  // (unsalted single-SHA-256 scheme) is discarded, not migrated (locked decision) — this asserts
+  // the discard path returns null without throwing, removes the stale file, and surfaces a
+  // one-time notification rather than failing silently.
   it('discards a legacy unsalted key file, removes it, and notifies instead of throwing', async () => {
     const dispatch = vi.fn();
     appStoreRef.current = { getState: vi.fn(), dispatch } as never;
@@ -254,6 +321,40 @@ describe('FsSettingsStore — settings + encrypted API keys', () => {
       );
 
       const result = await store.getApiKey('legacyprovider');
+
+      expect(result).toBeNull();
+      expect(fake.text.has(legacyFile)).toBe(false);
+      expect(dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            type: 'info',
+            title: expect.stringContaining('API Key Reset'),
+          }),
+        }),
+      );
+    } finally {
+      appStoreRef.current = null;
+    }
+  });
+
+  // QNBS-v3 (2026-08-13): the 2026-07-29 fix (salted PBKDF2) is now ALSO obsolete — its passphrase
+  // was `${appDataPath}|${provider}|WorldScriptStudio|v1`, entirely public — so a key file in that
+  // format must be discarded exactly like the older unsalted one, not trusted as "already secure".
+  it('discards a legacy salted-but-public-passphrase key file (2026-07-29 scheme), removes it, and notifies', async () => {
+    const dispatch = vi.fn();
+    appStoreRef.current = { getState: vi.fn(), dispatch } as never;
+    try {
+      const legacyFile = '/app/config/legacyprovider3_key.enc.json';
+      fake.text.set(
+        legacyFile,
+        JSON.stringify({
+          iv: 'AAAAAAAAAAAAAAAA',
+          salt: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+          data: 'AAAAAAAAAAAAAAAA',
+        }),
+      );
+
+      const result = await store.getApiKey('legacyprovider3');
 
       expect(result).toBeNull();
       expect(fake.text.has(legacyFile)).toBe(false);

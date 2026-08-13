@@ -1,6 +1,12 @@
 /**
- * FsSettingsStore — Settings persistence and AES-256-GCM API key encryption on the filesystem.
- * ENCRYPTION: AES-256-GCM — API keys stored as `<provider>_key.enc.json` in config/.
+ * FsSettingsStore — Settings persistence and API key protection on the filesystem.
+ * ENCRYPTION: AES-256-GCM under the user's real at-rest-encryption passphrase (reused from
+ * services/storage/storageEncryptionService.ts) when one is configured and unlocked; honest
+ * plaintext otherwise. QNBS-v3 (F-05/F-06 follow-up, 2026-08-13): the prior scheme derived its
+ * PBKDF2 key from `${appDataPath}|${provider}|WorldScriptStudio|v1` — entirely public/
+ * reconstructible by anyone who can read the encrypted file, so it provided no real
+ * confidentiality despite looking like AES-256-GCM+PBKDF2. Retired outright rather than patched;
+ * see getApiKey's legacy-format discard path.
  * QNBS-v3: Extracted from fileSystemService.ts.
  */
 
@@ -9,8 +15,27 @@ import { statusActions } from '../../features/status/statusSlice';
 import type { Settings } from '../../types';
 import { logger } from '../logger';
 import { normalizePersistedSettings } from '../storage/idbProjectStore';
+import {
+  IdbStorageLockedError,
+  idbDecryptWithKey,
+  idbEncryptWithKey,
+  resolveProtectedWriteKey,
+} from '../storage/storageEncryptionService';
 import type { TauriApis } from './fsCore';
-import { decryptText, encryptText, FsCore, retryFs, writeTextFileAtomic } from './fsCore';
+import { base64ToBytes, bytesToBase64, FsCore, retryFs, writeTextFileAtomic } from './fsCore';
+
+const PLAINTEXT_SCHEME = 'plaintext-v1';
+const PROTECTED_SCHEME = 'protected-v1';
+
+interface PlaintextApiKeyPayload {
+  scheme: typeof PLAINTEXT_SCHEME;
+  value: string;
+}
+
+interface ProtectedApiKeyPayload {
+  scheme: typeof PROTECTED_SCHEME;
+  data: string;
+}
 
 export class FsSettingsStore extends FsCore {
   async saveSettings(settings: Settings): Promise<void> {
@@ -59,7 +84,8 @@ export class FsSettingsStore extends FsCore {
     return this.clearApiKey('gemini');
   }
 
-  // Generic provider API key — stored encrypted in app data dir
+  // Generic provider API key — protected under the real at-rest-encryption passphrase when one is
+  // configured and unlocked; stored as honest plaintext otherwise (never a fake-secret derivation).
   async saveApiKey(provider: string, apiKey: string): Promise<void> {
     if (!apiKey?.trim()) {
       throw new Error('API key cannot be empty');
@@ -70,12 +96,30 @@ export class FsSettingsStore extends FsCore {
     const configPath = await apis.join(appDataPath, 'config');
     if (!(await apis.exists(configPath))) await apis.mkdir(configPath, { recursive: true });
 
-    const encrypted = await encryptText(
-      apiKey.trim(),
-      `${appDataPath}|${provider}|WorldScriptStudio|v1`,
-    );
+    // QNBS-v3: resolveProtectedWriteKey() throws IdbStorageLockedError when a passphrase is
+    // configured but the session is locked — propagated deliberately (fail closed) rather than
+    // silently falling back to plaintext while the user believes encryption is active, matching
+    // the existing IDB protected-write policy this reuses.
+    const key = await resolveProtectedWriteKey();
+    const payload: ProtectedApiKeyPayload | PlaintextApiKeyPayload = key
+      ? {
+          scheme: PROTECTED_SCHEME,
+          data: bytesToBase64(await idbEncryptWithKey(key, apiKey.trim())),
+        }
+      : { scheme: PLAINTEXT_SCHEME, value: apiKey.trim() };
+
     const filePath = await apis.join(configPath, `${provider}_key.enc.json`);
-    await writeTextFileAtomic(apis, filePath, JSON.stringify(encrypted));
+    await writeTextFileAtomic(apis, filePath, JSON.stringify(payload));
+  }
+
+  private async readProtectedApiKey(base64Data: string): Promise<string> {
+    const key = await resolveProtectedWriteKey();
+    if (!key) {
+      // Sentinel was cleared/disabled since this key was saved under the old, now-configured-off
+      // passphrase — there is nothing left to decrypt with; treat the same as an unreadable file.
+      throw new Error('Protected API key exists but at-rest encryption is no longer configured');
+    }
+    return idbDecryptWithKey<string>(key, base64ToBytes(base64Data));
   }
 
   async getApiKey(provider: string): Promise<string | null> {
@@ -90,10 +134,24 @@ export class FsSettingsStore extends FsCore {
       keyFileForCleanup = keyFile;
       if (!(await apis.exists(keyFile))) return null;
       const content = await retryFs(() => apis.readTextFile(keyFile));
-      const payload = JSON.parse(content) as { iv: string; salt?: string; data: string };
-      return await decryptText(payload, `${appDataPath}|${provider}|WorldScriptStudio|v1`);
+      const parsed = JSON.parse(content) as Record<string, unknown>;
+
+      if (parsed['scheme'] === PLAINTEXT_SCHEME && typeof parsed['value'] === 'string') {
+        return parsed['value'];
+      }
+      if (parsed['scheme'] === PROTECTED_SCHEME && typeof parsed['data'] === 'string') {
+        return await this.readProtectedApiKey(parsed['data']);
+      }
+      // Anything else is one of the two obsolete pre-2026-08-13 formats (unsalted single-SHA-256,
+      // or salted-but-publicly-derivable-passphrase — F-05/F-06) — neither provides real
+      // confidentiality and neither is migrated by design; fall through to the discard+notify path.
+      throw new Error('Unrecognized or obsolete API key payload format');
     } catch (error) {
-      // QNBS-v3: pre-2026-07-29 key files (unsalted single-SHA-256, F-05/F-06) are not migrated (locked decision — discard); removing the stale file avoids retrying every call, and a one-time notification beats a silent null indistinguishable from "no key ever set".
+      if (error instanceof IdbStorageLockedError) {
+        // Configured but locked — the key still exists, just temporarily unreadable. Fail closed without discarding the file; the caller re-prompts once the session is unlocked.
+        return null;
+      }
+      // QNBS-v3: pre-2026-08-13 key files (both obsolete crypto schemes) are not migrated (locked decision — discard); removing the stale file avoids retrying every call, and a one-time notification beats a silent null indistinguishable from "no key ever set".
       if (apisForCleanup && keyFileForCleanup) {
         try {
           await apisForCleanup.remove(keyFileForCleanup);

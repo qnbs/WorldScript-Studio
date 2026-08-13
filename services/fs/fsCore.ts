@@ -168,13 +168,10 @@ export function decompressData<T>(raw: string): T {
   return JSON.parse(raw) as T;
 }
 
-// --- Crypto helpers ---
-// QNBS-v3: PBKDF2-SHA-256 (600k iter, OWASP 2024 minimum) + random 32-byte salt, mirroring storageEncryptionService.ts#deriveKey, replacing a prior unsalted-SHA-256-of-public-material scheme (F-05/F-06); legacy (no `salt` field) payloads are treated as unreadable, not migrated — see decryptText below.
+// --- Base64 codec helpers ---
+// QNBS-v3: previously private to a now-removed derived-passphrase crypto scheme (F-05/F-06 fix, then found still-insecure — see settingsFsStore.ts header comment); API-key protection now reuses storageEncryptionService.ts's real passphrase-derived key directly, and these two helpers stay, exported, as the JSON-safe codec for its Uint8Array ciphertext.
 
-const PBKDF2_ITERATIONS = 600_000; // OWASP 2024 minimum for PBKDF2-HMAC-SHA-256
-const SALT_BYTE_LENGTH = 32;
-
-function bytesToBase64(bytes: Uint8Array): string {
+export function bytesToBase64(bytes: Uint8Array): string {
   let bin = '';
   for (let i = 0; i < bytes.byteLength; i++) {
     bin += String.fromCharCode(bytes[i]!);
@@ -183,73 +180,13 @@ function bytesToBase64(bytes: Uint8Array): string {
 }
 
 // QNBS-v3: explicit Uint8Array<ArrayBuffer> return type — a bare `Uint8Array` annotation widens to `Uint8Array<ArrayBufferLike>` (includes SharedArrayBuffer), rejected by crypto.subtle as a BufferSource; same pattern as libraryBackupService.ts#copyToFixedBuffer.
-function base64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
+export function base64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
   const bin = atob(b64);
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) {
     out[i] = bin.charCodeAt(i);
   }
   return out;
-}
-
-async function deriveFileSystemCryptoKey(
-  secretMaterial: string,
-  salt: Uint8Array,
-): Promise<CryptoKey> {
-  const encoder = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(secretMaterial),
-    { name: 'PBKDF2' },
-    false,
-    ['deriveBits', 'deriveKey'],
-  );
-  return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt: new Uint8Array(salt), iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
-    keyMaterial,
-    { name: 'AES-GCM', length: 256 },
-    // QNBS-v3: extractable: false — key cannot leave the WebCrypto context.
-    false,
-    ['encrypt', 'decrypt'],
-  );
-}
-
-export interface EncryptedFsPayload {
-  iv: string;
-  salt: string;
-  data: string;
-}
-
-export async function encryptText(
-  value: string,
-  secretMaterial: string,
-): Promise<EncryptedFsPayload> {
-  const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTE_LENGTH));
-  const key = await deriveFileSystemCryptoKey(secretMaterial, salt);
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const encoded = new TextEncoder().encode(value);
-  const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
-  return {
-    iv: bytesToBase64(iv),
-    salt: bytesToBase64(salt),
-    data: bytesToBase64(new Uint8Array(encrypted)),
-  };
-}
-
-export async function decryptText(
-  payload: { iv: string; salt?: string; data: string },
-  secretMaterial: string,
-): Promise<string> {
-  if (!payload.salt) {
-    // QNBS-v3: pre-2026-07-29 payloads have no salt field (unsalted single-SHA-256 scheme, F-05) — not migrated by design (locked decision); the caller treats this as "no key available".
-    throw new Error('Legacy unsalted key payload is no longer supported; re-enter the API key.');
-  }
-  const salt = base64ToBytes(payload.salt);
-  const key = await deriveFileSystemCryptoKey(secretMaterial, salt);
-  const iv = base64ToBytes(payload.iv);
-  const encrypted = base64ToBytes(payload.data);
-  const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, encrypted);
-  return new TextDecoder().decode(decrypted);
 }
 
 // --- Path sanitization helpers ---
