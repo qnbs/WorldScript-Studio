@@ -27,6 +27,7 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
   exists: (p: string) => fsHolder.current.exists(p),
   readDir: (p: string) => fsHolder.current.readDir(p),
   remove: (p: string, opts?: { recursive?: boolean }) => fsHolder.current.remove(p, opts),
+  rename: (from: string, to: string) => fsHolder.current.rename(from, to),
 }));
 vi.mock('@tauri-apps/plugin-dialog', () => ({
   open: (opts?: Record<string, unknown>) => fsHolder.current.open(opts),
@@ -95,6 +96,18 @@ function makeFakeFs(): FakeFs {
       for (const k of [...bin.keys()]) if (k.startsWith(`${p}/`)) bin.delete(k);
       return Promise.resolve();
     },
+    rename: (from: string, to: string) => {
+      if (!text.has(from) && !bin.has(from)) return Promise.reject(new Error(`ENOENT ${from}`));
+      text.delete(to);
+      bin.delete(to);
+      const textValue = text.get(from);
+      const binaryValue = bin.get(from);
+      if (textValue !== undefined) text.set(to, textValue);
+      if (binaryValue !== undefined) bin.set(to, binaryValue);
+      text.delete(from);
+      bin.delete(from);
+      return Promise.resolve();
+    },
     readDir: (p: string) => Promise.resolve(under(p).map((name) => ({ name, isDirectory: false }))),
     open: () => Promise.resolve(null),
     save: () => Promise.resolve(null),
@@ -159,7 +172,7 @@ describe('FsProjectStore — projects', () => {
   it('still resolves saveProject and logs a warning when the active-project marker write rejects', async () => {
     const originalWriteTextFile = fake.apis.writeTextFile;
     fake.apis.writeTextFile = (p: string, c: string) => {
-      if (p.endsWith('active-project-id.txt')) return Promise.reject(new Error('disk full'));
+      if (p.includes('active-project-id.txt')) return Promise.reject(new Error('disk full'));
       return originalWriteTextFile(p, c);
     };
 

@@ -16,6 +16,7 @@ export type TauriApis = {
   exists: (path: string) => Promise<boolean>;
   readDir: (path: string) => Promise<{ name?: string; isDirectory?: boolean }[]>;
   remove: (path: string, opts?: { recursive?: boolean }) => Promise<void>;
+  rename: (oldPath: string, newPath: string) => Promise<void>;
   open: (opts?: Record<string, unknown>) => Promise<string | null>;
   save: (opts?: Record<string, unknown>) => Promise<string | null>;
   appDataDir: () => Promise<string>;
@@ -44,6 +45,7 @@ export async function loadTauriApis(): Promise<TauriApis> {
       exists: fsModule.exists,
       readDir: fsModule.readDir as TauriApis['readDir'],
       remove: fsModule.remove,
+      rename: fsModule.rename,
       open: dialogModule.open as TauriApis['open'],
       save: dialogModule.save as TauriApis['save'],
       appDataDir: pathModule.appDataDir,
@@ -76,6 +78,41 @@ export async function retryFs<T>(fn: () => Promise<T>, retries = 2, delayMs = 50
     }
   }
   throw lastError;
+}
+
+function temporaryPath(path: string): string {
+  const suffix =
+    typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) =>
+          byte.toString(16).padStart(2, '0'),
+        ).join('');
+  return `${path}.tmp-${suffix}`;
+}
+
+async function writeAndReplace(
+  apis: TauriApis,
+  path: string,
+  write: (temporary: string) => Promise<void>,
+): Promise<void> {
+  const temporary = temporaryPath(path);
+  try {
+    await retryFs(() => write(temporary));
+    await retryFs(() => apis.rename(temporary, path));
+  } catch (error) {
+    await apis.remove(temporary).catch(() => undefined);
+    throw error;
+  }
+}
+
+// QNBS-v3: replace authoritative files only after a complete sibling write, preserving the last valid file on interruption.
+export function writeTextFileAtomic(apis: TauriApis, path: string, content: string): Promise<void> {
+  return writeAndReplace(apis, path, (temporary) => apis.writeTextFile(temporary, content));
+}
+
+// QNBS-v3: binary assets use the same same-directory replace so readers never observe a partial file.
+export function writeFileAtomic(apis: TauriApis, path: string, data: Uint8Array): Promise<void> {
+  return writeAndReplace(apis, path, (temporary) => apis.writeFile(temporary, data));
 }
 
 // --- LZ-String compression (mirrors dbService threshold and prefix) ---

@@ -10,7 +10,7 @@ import type { Settings } from '../../types';
 import { logger } from '../logger';
 import { normalizePersistedSettings } from '../storage/idbProjectStore';
 import type { TauriApis } from './fsCore';
-import { decryptText, encryptText, FsCore, retryFs } from './fsCore';
+import { decryptText, encryptText, FsCore, retryFs, writeTextFileAtomic } from './fsCore';
 
 export class FsSettingsStore extends FsCore {
   async saveSettings(settings: Settings): Promise<void> {
@@ -23,7 +23,7 @@ export class FsSettingsStore extends FsCore {
     }
 
     const settingsFile = await apis.join(configPath, 'settings.json');
-    await retryFs(() => apis.writeTextFile(settingsFile, JSON.stringify(settings, null, 2)));
+    await writeTextFileAtomic(apis, settingsFile, JSON.stringify(settings, null, 2));
   }
 
   async loadSettings(): Promise<Settings | null> {
@@ -77,7 +77,7 @@ export class FsSettingsStore extends FsCore {
       `${appDataPath}|${provider}|WorldScriptStudio|v1`,
     );
     const filePath = await apis.join(configPath, `${provider}_key.enc.json`);
-    await retryFs(() => apis.writeTextFile(filePath, JSON.stringify(encrypted)));
+    await writeTextFileAtomic(apis, filePath, JSON.stringify(encrypted));
   }
 
   async getApiKey(provider: string): Promise<string | null> {

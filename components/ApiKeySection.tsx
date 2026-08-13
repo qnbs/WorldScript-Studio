@@ -1,9 +1,9 @@
 import type { FC } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from '../hooks/useTranslation';
-import { dbService } from '../services/dbService';
 import { generateText, invalidateAiClientCache } from '../services/geminiService';
 import { logger } from '../services/logger';
+import { storageService } from '../services/storageService';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Spinner } from './ui/Spinner';
@@ -34,14 +34,11 @@ export const ApiKeySection: FC = () => {
   const checkKeyStatus = useCallback(async () => {
     setIsLoading(true);
     try {
-      const exists = await dbService.hasGeminiApiKey();
+      const exists = Boolean(await storageService.getGeminiApiKey());
       setHasKey(exists);
       // Check if key exists but decryption failed (device change, cleared site data)
       if (!exists) {
-        const raw = await dbService.getGeminiApiKey();
-        if (raw === 'DECRYPT_FAILED') {
-          setDecryptFailed(true);
-        }
+        setDecryptFailed(false);
       }
     } catch (error) {
       logger.error('Failed to check API key status:', error);
@@ -68,7 +65,7 @@ export const ApiKeySection: FC = () => {
     setMessage(null);
     try {
       // QNBS-v3: this only checks syntax and persists — handleTestConnection (auto-triggered below) is what actually confirms the key authenticates; "Active" here means "saved", not "verified working."
-      await dbService.saveGeminiApiKey(normalizedKey);
+      await storageService.saveGeminiApiKey(normalizedKey);
       invalidateAiClientCache();
       setApiKey('');
       setHasKey(true);
@@ -95,7 +92,7 @@ export const ApiKeySection: FC = () => {
     setMessage(null);
     setTestResult(null);
     try {
-      await dbService.clearGeminiApiKey();
+      await storageService.clearGeminiApiKey();
       invalidateAiClientCache();
       setHasKey(false);
       setMessage({ type: 'success', text: t('settings.apiKey.removed') });
