@@ -1,7 +1,7 @@
 # Security Threat Model
 
 **Version:** 1.0.0  
-**Date:** 2026-06-05 (baseline); desktop-crypto mitigation row updated 2026-07-29 (v1.24.2, F-05/F-06)  
+**Date:** 2026-06-05 (baseline); desktop-crypto mitigation row updated 2026-08-13 (F-05/F-06 superseded — see below)  
 **Status:** v1.24.2 baseline
 
 This document provides a formal STRIDE threat analysis for WorldScript Studio, mapping threats to mitigations and code locations.
@@ -39,7 +39,7 @@ This document provides a formal STRIDE threat analysis for WorldScript Studio, m
 | Threat | Mitigation | Code Location |
 |--------|------------|-------------|
 | API key leakage via logs | StructuredLogger sanitization; never log keys | `services/logger.ts:sanitizeLogContext()` |
-| Desktop API key exposure via local file-read access | AES-256-GCM with a PBKDF2-derived key (600 000 iterations, SHA-256, random 32-byte salt per encryption) — fixed 2026-07-29; the prior scheme derived the key from a single unsalted SHA-256 digest of publicly-derivable material (own file's parent path + provider name from the filename + a hardcoded literal), so anyone with read access to `config/<provider>_key.enc.json` could reconstruct the key in one hash operation (F-05/F-06). No migration path for pre-fix files by design — a legacy (unsalted) payload is discarded and the user is prompted to re-enter the key. | `services/fs/fsCore.ts:deriveFileSystemCryptoKey()`, `services/fs/settingsFsStore.ts:getApiKey()` |
+| Desktop API key exposure via local file-read access | **Fixed 2026-08-13 (supersedes F-05/F-06).** API keys are now protected by the real user at-rest-encryption passphrase (the same `CryptoKey` protecting IDB data — `services/storage/storageEncryptionService.ts`) whenever one is configured and unlocked, AEAD-encrypting `{provider, apiKey}` together so a ciphertext swapped between two providers' files fails the provider check on decrypt. **The two prior F-05/F-06 schemes (both retired, not migrated)**: (1) pre-2026-07-29, unsalted single-SHA-256 of publicly-derivable material; (2) 2026-07-29–2026-08-13, salted PBKDF2 — but of that *same* publicly-derivable material (`${appDataPath}\|${provider}\|WorldScriptStudio\|v1`), so it hardened against rainbow tables without addressing the actual finding (anyone with file-read access could reconstruct the identical string). Neither is migrated — the file is discarded and the user re-prompted for the key. **Honest residual gap**: with no at-rest passphrase configured (the default), API keys are stored as plaintext, not fake-encrypted — this is a disclosed, deliberate tradeoff, not an oversight. | `services/storage/storageEncryptionService.ts`, `services/fs/settingsFsStore.ts:getApiKey()`/`saveApiKey()` |
 | Manuscript data in IndexedDB | AES-256-GCM at-rest encryption | `services/storage/storageEncryptionService.ts` |
 | Voice audio to cloud | Web Speech API consent gate | `components/voice/VoicePrivacyConsentModal.tsx` |
 | DuckDB analytics unencrypted (SEC-6) | **Bounded by design, with one prose column now encrypted:** most persisted fields are local metadata only (titles, loglines, character names, word counts, embeddings) and **nothing leaves the device**. The one column that genuinely holds literal manuscript prose, `codex_mentions.excerpt`, is now cell-level encrypted (AES-256-GCM via `services/duckdb/duckdbEncryption.ts`, reusing the IDB at-rest encryption key) whenever `enableIdbAtRestEncryption` is active: `duckdbCodexWrite()` writes ciphertext into `excerpt_enc BLOB` and nulls the plaintext `excerpt` column; `services/duckdb/codexExcerptEncryptionMigration.ts` backfills any pre-existing plaintext rows once encryption is unlocked. Gated by `enableDuckDbAnalytics` **and** the Settings → Privacy "Analytics" opt-out (`isAnalyticsPersistenceAllowed` in `app/listenerMiddleware.ts`); turning the toggle off stops all DuckDB writes + inference telemetry. Full OPFS file-level encryption remains **infeasible** — DuckDB-WASM owns the OPFS file handle directly, so there is no app-level interception point; the other metadata columns stay intentionally plaintext (bounded-exposure design). | `app/listenerMiddleware.ts:isAnalyticsPersistenceAllowed`, `services/duckdb/duckdbAnalytics.ts:duckdbCodexWrite()`, `services/duckdb/duckdbEncryption.ts`, `services/duckdb/codexExcerptEncryptionMigration.ts` |
@@ -124,9 +124,12 @@ Goal: Intercept/decrypt collaboration traffic
 ```
 Goal: Recover a user's cloud-provider API key from the Tauri desktop install
 ├─ OR: Read config/<provider>_key.enc.json directly (local process / malware with user-level FS access)
-│  └─ Mitigation: AES-256-GCM with PBKDF2-derived key (600k iter, random 32-byte salt per file) —
-│     reading the ciphertext no longer reveals the key material; the pre-2026-07-29 scheme derived
-│     the key from data an attacker with file-read access already had (F-05/F-06, fixed)
+│  └─ Mitigation (when at-rest encryption is configured+unlocked): AES-256-GCM under the real,
+│     user-chosen passphrase-derived key — not derivable from file contents or path. When no
+│     passphrase is configured (default), the file is honestly plaintext, not fake-encrypted — a
+│     disclosed tradeoff, not a bypass of this mitigation. Both pre-2026-08-13 schemes (F-05/F-06)
+│     derived their key from data an attacker with file-read access already had; retired, not
+│     migrated (superseded 2026-08-13)
 ├─ OR: Read the IDB-at-rest passphrase sentinel (enableIdbAtRestEncryption)
 │  └─ Mitigation: same PBKDF2 + non-extractable-key pattern; session-scoped in-memory key, never
 │     persisted to disk (`services/storage/storageEncryptionService.ts`)
