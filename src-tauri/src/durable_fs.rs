@@ -3,7 +3,10 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     process,
-    sync::{LazyLock, Mutex},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        LazyLock, Mutex,
+    },
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -19,6 +22,7 @@ use windows_sys::Win32::Storage::FileSystem::{
 };
 
 static NATIVE_TEMP_OPERATION_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+static NATIVE_TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 fn validated_destination(app: &AppHandle, requested: &str) -> Result<(PathBuf, PathBuf), String> {
     let app_data = app
@@ -52,12 +56,14 @@ fn create_sibling_temp(destination: &Path) -> Result<(PathBuf, File), String> {
         .to_string_lossy();
     let epoch_nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|error| format!("System clock is before the Unix epoch: {error}"))?
+        .unwrap_or_default()
         .as_nanos();
-    for sequence in 0..32_u8 {
+    let sequence = NATIVE_TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    for collision_offset in 0..32_u8 {
         let candidate = parent.join(format!(
-            "{name}.native-tmp-{}-{epoch_nanos}-{sequence}",
-            process::id()
+            "{name}.native-tmp-{}-{epoch_nanos}-{}",
+            process::id(),
+            sequence + u64::from(collision_offset)
         ));
         match OpenOptions::new()
             .write(true)
@@ -233,7 +239,12 @@ pub async fn worldscript_atomic_write(
         .to_str()
         .map_err(|_| "Durable write target path header is invalid".to_owned())?;
     let path = decode_percent_encoded_path(encoded_path)?;
-    let data = request.body().to_vec();
+    let data = match request.body() {
+        tauri::ipc::InvokeBody::Raw(data) => data.clone(),
+        tauri::ipc::InvokeBody::Json(_) => {
+            return Err("Durable write requires a raw binary IPC body".to_owned())
+        }
+    };
     tauri::async_runtime::spawn_blocking(move || durable_write(app, path, data))
         .await
         .map_err(|error| format!("Durable write task failed: {error}"))?

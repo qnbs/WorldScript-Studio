@@ -100,13 +100,23 @@ const activeTempPaths = new Set<string>();
 
 // QNBS-v3: each caller owns a real ordered write result; coalescing pending writes made an earlier caller report success after a later payload was persisted instead.
 const writeTails = new Map<string, Promise<void>>();
+const pendingWriteCounts = new Map<string, number>();
+const MAX_PENDING_WRITES_PER_PATH = 8;
 
 function enqueueWrite(path: string, fn: () => Promise<void>): Promise<void> {
+  const pendingCount = pendingWriteCounts.get(path) ?? 0;
+  if (pendingCount >= MAX_PENDING_WRITES_PER_PATH) {
+    return Promise.reject(new Error(`Atomic write backlog is full for ${path}`));
+  }
+  pendingWriteCounts.set(path, pendingCount + 1);
   const previous = writeTails.get(path) ?? Promise.resolve();
   const operation = previous.catch(() => {}).then(fn);
   const tail = operation.catch(() => {});
   writeTails.set(path, tail);
   void tail.then(() => {
+    const remaining = (pendingWriteCounts.get(path) ?? 1) - 1;
+    if (remaining > 0) pendingWriteCounts.set(path, remaining);
+    else pendingWriteCounts.delete(path);
     if (writeTails.get(path) === tail) writeTails.delete(path);
   });
   return operation;

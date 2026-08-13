@@ -15,6 +15,18 @@ interface BinderAssetManifest {
   meta: BinderAssetMeta;
 }
 
+function isBinderAssetMeta(value: unknown): value is BinderAssetMeta {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<BinderAssetMeta>;
+  return (
+    typeof candidate.mimeType === 'string' &&
+    typeof candidate.originalFileName === 'string' &&
+    typeof candidate.byteSize === 'number' &&
+    Number.isFinite(candidate.byteSize) &&
+    candidate.byteSize >= 0
+  );
+}
+
 function createBinderRevision(): string {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
   return Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) =>
@@ -25,10 +37,92 @@ function createBinderRevision(): string {
 function isBinderAssetManifest(value: unknown): value is BinderAssetManifest {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<BinderAssetManifest>;
-  return candidate.version === 1 && typeof candidate.dataFile === 'string' && !!candidate.meta;
+  return (
+    candidate.version === 1 &&
+    typeof candidate.dataFile === 'string' &&
+    isBinderAssetMeta(candidate.meta)
+  );
 }
 
+const BINDER_REVISION_FILE_PATTERN = /^(.+)\.([0-9a-f]{32}|[0-9a-f-]{36})\.bin$/i;
+
 export class FsAssetStore extends FsSnapshotStore {
+  private readonly binderOperationTails = new Map<string, Promise<void>>();
+
+  private enqueueBinderOperation<T>(
+    projectId: string,
+    assetId: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const key = `${projectId}\u0000${assetId}`;
+    const previous = this.binderOperationTails.get(key) ?? Promise.resolve();
+    const result = previous.catch(() => {}).then(operation);
+    const tail = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.binderOperationTails.set(key, tail);
+    void tail.then(() => {
+      if (this.binderOperationTails.get(key) === tail) this.binderOperationTails.delete(key);
+    });
+    return result;
+  }
+
+  override async initialize(): Promise<void> {
+    await super.initialize();
+    await this.cleanupOrphanedBinderRevisions();
+  }
+
+  private async cleanupOrphanedBinderRevisions(): Promise<void> {
+    try {
+      const apis = await this.getApis();
+      const appDataPath = await this.ensureAppDataPath();
+      const projectsPath = await apis.join(appDataPath, 'projects');
+      if (!(await apis.exists(projectsPath))) return;
+      const projects = await retryFs(() => apis.readDir(projectsPath));
+      for (const project of projects) {
+        if (!project.name || !project.isDirectory) continue;
+        const binderPath = await apis.join(projectsPath, project.name, 'binder');
+        if (!(await apis.exists(binderPath))) continue;
+        const entries = await retryFs(() => apis.readDir(binderPath));
+        const committedFiles = new Set<string>();
+        const protectedAssets = new Set<string>();
+        for (const entry of entries) {
+          const metaName = entry.name;
+          if (!metaName?.endsWith('.meta.json')) continue;
+          const safeAsset = metaName.replace(/\.meta\.json$/, '');
+          const metaFile = await apis.join(binderPath, metaName);
+          try {
+            const raw = JSON.parse(await retryFs(() => apis.readTextFile(metaFile))) as unknown;
+            if (
+              raw &&
+              typeof raw === 'object' &&
+              ('version' in raw || 'dataFile' in raw)
+            ) {
+              const manifest = await this.readBinderManifest(apis, metaFile, safeAsset);
+              if (manifest) committedFiles.add(manifest.dataFile);
+              else protectedAssets.add(safeAsset);
+            }
+          } catch {
+            protectedAssets.add(safeAsset);
+          }
+        }
+        for (const entry of entries) {
+          const match = entry.name?.match(BINDER_REVISION_FILE_PATTERN);
+          if (!match) continue;
+          const [, safeAsset] = match;
+          if (!safeAsset || committedFiles.has(entry.name!) || protectedAssets.has(safeAsset)) continue;
+          const revisionFile = await apis.join(binderPath, entry.name!);
+          await retryFs(() => apis.remove(revisionFile)).catch((error) => {
+            logger.warn('Failed to remove orphaned binder asset revision:', error);
+          });
+        }
+      }
+    } catch (error) {
+      logger.warn('Failed to clean up orphaned binder asset revisions:', error);
+    }
+  }
+
   // --- Image Store Methods ---
 
   async saveImage(id: string, base64Data: string): Promise<void> {
@@ -127,6 +221,17 @@ export class FsAssetStore extends FsSnapshotStore {
     data: ArrayBuffer,
     meta: BinderAssetMeta,
   ): Promise<void> {
+    return this.enqueueBinderOperation(projectId, assetId, () =>
+      this.saveBinderAssetLocked(projectId, assetId, data, meta),
+    );
+  }
+
+  private async saveBinderAssetLocked(
+    projectId: string,
+    assetId: string,
+    data: ArrayBuffer,
+    meta: BinderAssetMeta,
+  ): Promise<void> {
     const apis = await this.getApis();
     const { dir, binFile, metaFile, safeAsset } = await this.binderAssetPaths(projectId, assetId);
     if (!(await apis.exists(dir))) await apis.mkdir(dir, { recursive: true });
@@ -184,6 +289,12 @@ export class FsAssetStore extends FsSnapshotStore {
   }
 
   async deleteBinderAsset(projectId: string, assetId: string): Promise<void> {
+    return this.enqueueBinderOperation(projectId, assetId, () =>
+      this.deleteBinderAssetLocked(projectId, assetId),
+    );
+  }
+
+  private async deleteBinderAssetLocked(projectId: string, assetId: string): Promise<void> {
     try {
       const apis = await this.getApis();
       const { binFile, metaFile, dir, safeAsset } = await this.binderAssetPaths(projectId, assetId);

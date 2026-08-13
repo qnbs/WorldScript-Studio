@@ -340,6 +340,31 @@ describe('writeTextFileAtomic / writeFileAtomic', () => {
     expect(writtenContents).toEqual(['first', 'second', 'third']);
     expect(text.get('/app/project.json')).toBe('third');
   });
+
+  it('rejects new work when a same-path write backlog reaches its bounded limit', async () => {
+    const { apis } = makeAtomicWriteFake();
+    let releaseFirst: (() => void) | undefined;
+    const originalWriteTextFile = apis.writeTextFile;
+    let isFirstWrite = true;
+    apis.writeTextFile = async (path, content) => {
+      if (!isFirstWrite) return originalWriteTextFile(path, content);
+      isFirstWrite = false;
+      await new Promise<void>((resolve) => {
+        releaseFirst = resolve;
+      });
+      return originalWriteTextFile(path, content);
+    };
+
+    const accepted = Array.from({ length: 8 }, (_, index) =>
+      writeTextFileAtomic(apis, '/app/project.json', `save-${index}`),
+    );
+    await expect(writeTextFileAtomic(apis, '/app/project.json', 'overflow')).rejects.toThrow(
+      'backlog is full',
+    );
+
+    releaseFirst?.();
+    await Promise.all(accepted);
+  });
 });
 
 describe('cleanupOrphanedTempFiles', () => {
