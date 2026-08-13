@@ -31,7 +31,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   no longer permanently destroys an otherwise-valid saved key. Encrypted payloads now bind
   `{provider, apiKey}` together (not just the bare key string), so a ciphertext swapped between two
   providers' files decrypts under the same key but fails the provider check, closing a cross-file
-  substitution gap.
+  substitution gap. **Second round of review-loop follow-up fixes:** a key file containing valid
+  JSON that isn't an object (e.g. the literal `null`) previously threw an uncaught `TypeError` when
+  indexed instead of being treated as unreadable — now guarded explicitly. The "obsolete format,
+  discard" fallback previously deleted *any* payload that didn't match a currently-recognized
+  scheme, without checking it actually matched one of the two legacy shapes — an unexpected future
+  format (e.g. after a rollback) or a merely corrupted current-format file would have been
+  permanently destroyed instead of preserved; now only payloads positively identified as the legacy
+  `{iv, data}` shape (no `scheme` field) are discarded. `AiProviderCard` and `OpenRouterSection`
+  read API keys in a mount-only effect, so a key that read as locked (not "absent") while the
+  encrypted session was still unlocking stayed shown as missing even after the user unlocked —
+  both now re-fetch when `encryptionReady` (threaded from `SettingsViewContext`) changes.
 
 ### Fixed
 

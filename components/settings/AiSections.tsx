@@ -49,7 +49,7 @@ const isCustomOllamaModel = (model: string) =>
   model.startsWith('ollama/') && !KNOWN_OLLAMA_MODELS.has(model);
 
 export const AiSection: FC = () => {
-  const { t, settings, handleSettingChange } = useSettingsViewContext();
+  const { t, settings, handleSettingChange, encryptionReady } = useSettingsViewContext();
   // QNBS-v3: Issue 10 — gate at the parent level so useAdaptiveAi hook + device profiling
   //          never run when the feature flag is off (saves GPU queries + IDB reads on every settings open)
   const adaptiveAiEnabled = useAppSelector(selectEnableAdaptiveAiEngine);
@@ -71,6 +71,7 @@ export const AiSection: FC = () => {
       <AiProviderCard
         advancedAi={settings.advancedAi}
         browserOllamaEnabled={browserOllamaEnabled}
+        encryptionReady={encryptionReady}
         onAdvancedAiPatch={(patch) =>
           handleSettingChange('advancedAi', { ...settings.advancedAi, ...patch })
         }

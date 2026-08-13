@@ -36,6 +36,7 @@ vi.mock('../../../contexts/SettingsViewContext', () => ({
     },
     featureFlags: { enableDuckDbAnalytics: false },
     handleSettingChange: mockHandleSettingChange,
+    encryptionReady: false,
   }),
 }));
 

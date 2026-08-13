@@ -7,6 +7,7 @@
 import type { FC } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
+import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
 import { settingsActions } from '../../features/settings/settingsSlice';
 import { statusActions } from '../../features/status/statusSlice';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -110,6 +111,7 @@ const CircuitBreakerStatus: FC<{ t: ReturnType<typeof useTranslation>['t'] }> = 
 export const OpenRouterSection: FC = () => {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
+  const { encryptionReady } = useSettingsViewContext();
   const openRouterSettings = useAppSelector((s) => s.settings.openRouter);
   const aiMode = useAppSelector((s) => s.settings.aiMode);
   const privacy = useAppSelector((s) => s.settings.privacy);
@@ -166,8 +168,11 @@ export const OpenRouterSection: FC = () => {
   // afterwards and overwrite the user's newer key state with a stale value.
   const keyOverriddenRef = useRef(false);
 
-  // Load stored key status on mount.
+  // QNBS-v3: re-runs when encryptionReady changes, not just on mount — a mount-time-locked read
+  // (fail-closed null, not "no key saved") must be retried once the session unlocks, instead of
+  // leaving the key permanently shown as missing until this component remounts/the page reloads.
   useEffect(() => {
+    void encryptionReady;
     let cancelled = false;
     storageService
       .getApiKey('openrouter')
@@ -184,7 +189,7 @@ export const OpenRouterSection: FC = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [encryptionReady]);
 
   // QNBS-v3: Monotonic guard so concurrent catalog fetches are last-wins — a slower or failing
   // response can never overwrite the result of a newer request, and a response that resolves after

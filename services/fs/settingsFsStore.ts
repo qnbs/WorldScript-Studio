@@ -134,24 +134,35 @@ export class FsSettingsStore extends FsCore {
     const appDataPath = await this.ensureAppDataPath();
     const keyFile = await apis.join(appDataPath, 'config', `${provider}_key.enc.json`);
 
-    let parsed: Record<string, unknown>;
+    let parsed: unknown;
     try {
       if (!(await apis.exists(keyFile))) return null;
       const content = await retryFs(() => apis.readTextFile(keyFile));
-      parsed = JSON.parse(content) as Record<string, unknown>;
+      parsed = JSON.parse(content);
     } catch (error) {
       // A transient read/parse failure is not evidence the format is obsolete — preserve the file.
       logger.warn(`Failed to read API key file for provider "${provider}":`, error);
       return null;
     }
 
-    if (parsed['scheme'] === PLAINTEXT_SCHEME && typeof parsed['value'] === 'string') {
-      return parsed['value'];
+    // QNBS-v3: JSON.parse succeeds on non-object payloads too (e.g. literal `null`, a bare number)
+    // — indexing those below would throw a TypeError instead of returning null, so guard explicitly
+    // rather than asserting the shape via a cast.
+    if (typeof parsed !== 'object' || parsed === null) {
+      logger.warn(
+        `API key file for provider "${provider}" is not a recognizable object (preserved, not discarded).`,
+      );
+      return null;
+    }
+    const record = parsed as Record<string, unknown>;
+
+    if (record['scheme'] === PLAINTEXT_SCHEME && typeof record['value'] === 'string') {
+      return record['value'];
     }
 
-    if (parsed['scheme'] === PROTECTED_SCHEME && typeof parsed['data'] === 'string') {
+    if (record['scheme'] === PROTECTED_SCHEME && typeof record['data'] === 'string') {
       try {
-        return await this.readProtectedApiKey(provider, parsed['data']);
+        return await this.readProtectedApiKey(provider, record['data']);
       } catch (error) {
         if (error instanceof IdbStorageLockedError) {
           // Configured but locked — the key still exists, just temporarily unreadable. Fail closed without discarding the file; the caller re-prompts once the session is unlocked.
@@ -166,10 +177,22 @@ export class FsSettingsStore extends FsCore {
       }
     }
 
-    // Anything else is one of the two obsolete pre-2026-08-13 formats (unsalted single-SHA-256, or
-    // salted-but-publicly-derivable-passphrase — F-05/F-06) — neither provides real confidentiality
-    // and neither is migrated by design; this is the only path that discards the file.
-    await this.discardObsoleteApiKeyFile(provider, apis, keyFile);
+    // QNBS-v3: only positively-identified pre-2026-08-13 legacy envelopes (iv+data strings, no
+    // scheme field — the exact shape the retired encryptText()/decryptText() wrote) are discarded.
+    // An unrecognized-but-not-legacy shape (a future format after a rollback, or a merely corrupted
+    // current-format file) is preserved instead of guessed away — same "never destroy on ambiguous
+    // read" rule as the decrypt-failure branch above.
+    const looksLikeLegacyEnvelope =
+      typeof record['iv'] === 'string' &&
+      typeof record['data'] === 'string' &&
+      !('scheme' in record);
+    if (looksLikeLegacyEnvelope) {
+      await this.discardObsoleteApiKeyFile(provider, apis, keyFile);
+    } else {
+      logger.warn(
+        `API key file for provider "${provider}" has an unrecognized format (preserved, not discarded).`,
+      );
+    }
     return null;
   }
 

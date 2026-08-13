@@ -64,6 +64,7 @@ const baseContextValue = {
   handleDeleteSnapshot: vi.fn(),
   projectSize: '2.3 KB',
   currentWordCount: 0,
+  encryptionReady: false,
 };
 
 vi.mock('../../../contexts/SettingsViewContext', () => ({

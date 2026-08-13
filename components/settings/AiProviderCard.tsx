@@ -89,6 +89,10 @@ interface AiProviderCardProps {
   // instead of requiring desktop when the user has separately configured OLLAMA_ORIGINS. Default
   // false so callers that don't pass it (e.g. older tests) keep today's desktop-only behavior.
   browserOllamaEnabled?: boolean;
+  // QNBS-v3: at-rest-encrypted API keys read as null while the session is locked (fail-closed, not
+  // "no key saved") — this must be in the key-fetch effect's deps so a mount-time-locked read gets
+  // retried once the session unlocks, instead of leaving the input permanently blank until reload.
+  encryptionReady?: boolean;
 }
 
 interface LocalDiagnosticState {
@@ -191,6 +195,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
   onProviderChange,
   onModelSelect,
   browserOllamaEnabled = false,
+  encryptionReady,
 }) => {
   const { t } = useTranslation();
   const provider = advancedAi.provider;
@@ -297,6 +302,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
   }, [provider, probeWebGpu]);
 
   useEffect(() => {
+    void encryptionReady;
     storageService
       .getApiKey('openai')
       .then((k) => setOpenaiKey(k ?? ''))
@@ -309,7 +315,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
       .getApiKey('anthropic')
       .then((k) => setAnthropicKey(k ?? ''))
       .catch(() => {});
-  }, []);
+  }, [encryptionReady]);
 
   // QNBS-v3: save/clear via storageService, matching every other provider's key persistence.
   const handleSaveGrokKey = useCallback(async () => {

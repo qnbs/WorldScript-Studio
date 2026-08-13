@@ -78,6 +78,13 @@ vi.mock('../../../services/storageService', () => ({
   },
 }));
 
+// QNBS-v3: OpenRouterSection now reads encryptionReady from SettingsViewContext to re-fetch the
+// key once a locked session unlocks — mock the context module rather than wrapping in the real
+// provider tree, matching this repo's established pattern for use*ViewContext hooks.
+vi.mock('../../../contexts/SettingsViewContext', () => ({
+  useSettingsViewContext: () => ({ encryptionReady: true }),
+}));
+
 vi.mock('../../../services/logger', () => ({
   logger: {
     debug: vi.fn(),
