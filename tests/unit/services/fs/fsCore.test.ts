@@ -18,8 +18,7 @@ import {
   writeTextFileAtomic,
 } from '../../../../services/fs/fsCore';
 
-// QNBS-v3: minimal in-memory fake covering only what writeTextFileAtomic/writeFileAtomic use —
-// a lighter-weight sibling of fsStores.test.ts's fuller FakeFs, scoped to this file's needs.
+// QNBS-v3: minimal in-memory fake covering only what writeTextFileAtomic/writeFileAtomic use — a lighter-weight sibling of fsStores.test.ts's fuller FakeFs, scoped to this file's needs.
 function makeAtomicWriteFake() {
   const text = new Map<string, string>();
   const bin = new Map<string, Uint8Array>();
@@ -96,9 +95,7 @@ describe('writeTextFileAtomic / writeFileAtomic', () => {
     expect([...bin.keys()]).toEqual(['/app/asset.bin']);
   });
 
-  // QNBS-v3: the core crash-safety guarantee — a failure AFTER the temp file is written but
-  // BEFORE the rename completes must never touch the final path, so a reader always sees either
-  // the old complete file or the new complete file, never a partial/torn write.
+  // QNBS-v3: the core crash-safety guarantee — a failure after the temp write but before rename must never touch the final path, so a reader always sees the old or new complete file, never a partial/torn write.
   it('leaves the original file untouched when the rename step fails after the temp write succeeds', async () => {
     const { apis, text } = makeAtomicWriteFake();
     text.set('/app/project.json', '{"old":true}');
@@ -145,6 +142,79 @@ describe('writeTextFileAtomic / writeFileAtomic', () => {
       /locked/,
     );
   });
+
+  // QNBS-v3: binary-path parity with the text-path failure-mode tests above.
+  it('binary: leaves the original file untouched when the rename step fails after the temp write succeeds', async () => {
+    const { apis, bin } = makeAtomicWriteFake();
+    const original = new Uint8Array([9, 9, 9]);
+    bin.set('/app/asset.bin', original);
+    apis.rename = () => Promise.reject(new Error('EBUSY: file is locked'));
+
+    await expect(
+      writeFileAtomic(apis, '/app/asset.bin', new Uint8Array([1, 2, 3])),
+    ).rejects.toThrow(/locked/);
+    expect(bin.get('/app/asset.bin')).toEqual(original);
+    expect([...bin.keys()]).toEqual(['/app/asset.bin']);
+  });
+
+  it('binary: cleans up the orphaned temp file when the rename step fails', async () => {
+    const { apis, bin } = makeAtomicWriteFake();
+    apis.rename = () => Promise.reject(new Error('EBUSY: file is locked'));
+    const removeSpy = vi.spyOn(apis, 'remove');
+
+    await expect(
+      writeFileAtomic(apis, '/app/asset.bin', new Uint8Array([1, 2, 3])),
+    ).rejects.toThrow(/locked/);
+
+    expect(removeSpy).toHaveBeenCalledWith(expect.stringContaining('/app/asset.bin.tmp-'));
+    expect([...bin.keys()]).toEqual([]);
+  });
+
+  it('binary: leaves the original file untouched when the temp-file write itself fails', async () => {
+    const { apis, bin } = makeAtomicWriteFake();
+    const original = new Uint8Array([9, 9, 9]);
+    bin.set('/app/asset.bin', original);
+    apis.writeFile = () => Promise.reject(new Error('disk full'));
+
+    await expect(
+      writeFileAtomic(apis, '/app/asset.bin', new Uint8Array([1, 2, 3])),
+    ).rejects.toThrow(/disk full/);
+    expect(bin.get('/app/asset.bin')).toEqual(original);
+  });
+
+  it('binary: does not throw when best-effort cleanup of the orphaned temp file also fails', async () => {
+    const { apis } = makeAtomicWriteFake();
+    apis.rename = () => Promise.reject(new Error('EBUSY: file is locked'));
+    apis.remove = () => Promise.reject(new Error('ENOENT'));
+
+    await expect(
+      writeFileAtomic(apis, '/app/asset.bin', new Uint8Array([1, 2, 3])),
+    ).rejects.toThrow(/locked/);
+  });
+
+  // QNBS-v3: the new fix under test — same-path writes serialize in call order, so an older save
+  // (slower temp write) can never overwrite a newer save's already-committed content.
+  it('serializes concurrent writes to the same path in call order, not completion order', async () => {
+    const { apis, text } = makeAtomicWriteFake();
+    const originalWriteTextFile = apis.writeTextFile;
+    let firstWriteStarted = false;
+    apis.writeTextFile = async (p, c) => {
+      if (p.includes('.tmp-') && c === 'first' && !firstWriteStarted) {
+        firstWriteStarted = true;
+        // Delay the first (older) write so it would finish AFTER the second one if unserialized.
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      return originalWriteTextFile(p, c);
+    };
+
+    const first = writeTextFileAtomic(apis, '/app/project.json', 'first');
+    const second = writeTextFileAtomic(apis, '/app/project.json', 'second');
+    await Promise.all([first, second]);
+
+    // Second (newer) call must be the one that lands, even though the first call's temp write
+    // was artificially slower.
+    expect(text.get('/app/project.json')).toBe('second');
+  });
 });
 
 describe('compressData / decompressData', () => {
@@ -181,8 +251,7 @@ describe('encryptText / decryptText', () => {
     await expect(decryptText(payload, 'wrong-key')).rejects.toBeDefined();
   });
 
-  // QNBS-v3 (F-05/F-06 fix, 2026-07-29): regression guard for the PBKDF2 + random-salt derivation
-  // replacing the prior unsalted single-SHA-256 scheme.
+  // QNBS-v3 (F-05/F-06 fix, 2026-07-29): regression guard for the PBKDF2 + random-salt derivation replacing the prior unsalted single-SHA-256 scheme.
   it('produces a different ciphertext, iv, and salt on every encryption of the same secret+plaintext', async () => {
     const a = await encryptText('same plaintext', 'same-secret-material');
     const b = await encryptText('same plaintext', 'same-secret-material');

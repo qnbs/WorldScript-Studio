@@ -81,11 +81,31 @@ export async function retryFs<T>(fn: () => Promise<T>, retries = 2, delayMs = 50
 }
 
 // --- Atomic writes (write-temp-then-rename) ---
-// QNBS-v3: prior writers called writeTextFile/writeFile directly against the final path — a crash
-// or power loss mid-write could leave the file truncated/corrupted with no recovery path. Both
-// helpers write to a sibling temp file first, then rename over the final path; rename is atomic on
-// POSIX and NTFS for same-volume same-directory moves, so readers only ever see the old complete
-// file or the new complete file, never a partial one.
+// QNBS-v3: write-temp-then-rename replaces prior direct writeTextFile/writeFile calls to the final path (crash/power-loss mid-write could truncate it); rename() replaces an existing destination per @tauri-apps/plugin-fs 2.5.1's own dist-js/index.d.ts docs, so readers only ever see the old or new complete file, never a partial one.
+
+// QNBS-v3: crypto.randomUUID() is unsupported on some older WebKit still within this app's declared minimumSystemVersion — same feature-detected fallback as createMigrationOperationId() in encryptionMigrationOrchestrator.ts.
+function createTempSuffix(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+// QNBS-v3: per-path write queue serializes same-path atomic writes in call order — without it, two overlapping saves race on which rename finishes last, letting an older save overwrite a newer one; entries self-delete once settled and unclaimed, so this never grows unbounded.
+const writeQueues = new Map<string, Promise<void>>();
+
+function enqueueWrite<T>(path: string, fn: () => Promise<T>): Promise<T> {
+  const previousSettled = writeQueues.get(path) ?? Promise.resolve();
+  const result = previousSettled.then(fn);
+  const settled = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  writeQueues.set(path, settled);
+  settled.then(() => {
+    if (writeQueues.get(path) === settled) writeQueues.delete(path);
+  });
+  return result;
+}
 
 async function atomicRename(apis: TauriApis, tmpPath: string, finalPath: string): Promise<void> {
   try {
@@ -97,24 +117,36 @@ async function atomicRename(apis: TauriApis, tmpPath: string, finalPath: string)
   }
 }
 
-export async function writeTextFileAtomic(
+// QNBS-v3: cleans up the orphaned temp file on a WRITE failure too, not just on rename failure — otherwise a failed temp write (e.g. disk full mid-write) leaves a uniquely-named orphan behind.
+async function writeThenRename(
   apis: TauriApis,
-  path: string,
-  content: string,
+  tmpPath: string,
+  finalPath: string,
+  write: () => Promise<void>,
 ): Promise<void> {
-  const tmpPath = `${path}.tmp-${crypto.randomUUID()}`;
-  await retryFs(() => apis.writeTextFile(tmpPath, content));
-  await atomicRename(apis, tmpPath, path);
+  try {
+    await write();
+  } catch (err) {
+    await apis.remove(tmpPath).catch(() => {});
+    throw err;
+  }
+  await atomicRename(apis, tmpPath, finalPath);
 }
 
-export async function writeFileAtomic(
-  apis: TauriApis,
-  path: string,
-  data: Uint8Array,
-): Promise<void> {
-  const tmpPath = `${path}.tmp-${crypto.randomUUID()}`;
-  await retryFs(() => apis.writeFile(tmpPath, data));
-  await atomicRename(apis, tmpPath, path);
+export function writeTextFileAtomic(apis: TauriApis, path: string, content: string): Promise<void> {
+  return enqueueWrite(path, () => {
+    const tmpPath = `${path}.tmp-${createTempSuffix()}`;
+    return writeThenRename(apis, tmpPath, path, () =>
+      retryFs(() => apis.writeTextFile(tmpPath, content)),
+    );
+  });
+}
+
+export function writeFileAtomic(apis: TauriApis, path: string, data: Uint8Array): Promise<void> {
+  return enqueueWrite(path, () => {
+    const tmpPath = `${path}.tmp-${createTempSuffix()}`;
+    return writeThenRename(apis, tmpPath, path, () => retryFs(() => apis.writeFile(tmpPath, data)));
+  });
 }
 
 // --- LZ-String compression (mirrors dbService threshold and prefix) ---
@@ -137,15 +169,7 @@ export function decompressData<T>(raw: string): T {
 }
 
 // --- Crypto helpers ---
-// QNBS-v3: PBKDF2-SHA-256 (600k iter, OWASP 2024 minimum) + random 32-byte salt per encryption,
-// mirroring services/storage/storageEncryptionService.ts#deriveKey. The prior scheme derived the
-// key from a single unsalted SHA-256 digest of publicly-derivable material
-// (`${appDataPath}|${provider}|WorldScriptStudio|v1` — anyone who can read the encrypted file
-// already knows its own parent path and the provider from the filename), making it obfuscation,
-// not encryption (F-05/F-06). No migration path for pre-existing `*_key.enc.json` files: a legacy
-// payload (no `salt` field) is treated as unreadable — see decryptText below and
-// FsSettingsStore#getApiKey, which already returns null on any decrypt failure so the caller
-// naturally re-prompts for the key.
+// QNBS-v3: PBKDF2-SHA-256 (600k iter, OWASP 2024 minimum) + random 32-byte salt, mirroring storageEncryptionService.ts#deriveKey, replacing a prior unsalted-SHA-256-of-public-material scheme (F-05/F-06); legacy (no `salt` field) payloads are treated as unreadable, not migrated — see decryptText below.
 
 const PBKDF2_ITERATIONS = 600_000; // OWASP 2024 minimum for PBKDF2-HMAC-SHA-256
 const SALT_BYTE_LENGTH = 32;
@@ -158,9 +182,7 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(bin);
 }
 
-// QNBS-v3: explicit Uint8Array<ArrayBuffer> return type — a bare `Uint8Array` annotation widens to
-// `Uint8Array<ArrayBufferLike>` (includes SharedArrayBuffer), which crypto.subtle rejects as a
-// BufferSource. Same pattern as services/libraryBackupService.ts#copyToFixedBuffer.
+// QNBS-v3: explicit Uint8Array<ArrayBuffer> return type — a bare `Uint8Array` annotation widens to `Uint8Array<ArrayBufferLike>` (includes SharedArrayBuffer), rejected by crypto.subtle as a BufferSource; same pattern as libraryBackupService.ts#copyToFixedBuffer.
 function base64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
   const bin = atob(b64);
   const out = new Uint8Array(bin.length);
@@ -219,8 +241,7 @@ export async function decryptText(
   secretMaterial: string,
 ): Promise<string> {
   if (!payload.salt) {
-    // QNBS-v3: pre-2026-07-29 payloads have no salt field (unsalted single-SHA-256 scheme, F-05).
-    // Not migrated by design (locked decision) — the caller treats this as "no key available".
+    // QNBS-v3: pre-2026-07-29 payloads have no salt field (unsalted single-SHA-256 scheme, F-05) — not migrated by design (locked decision); the caller treats this as "no key available".
     throw new Error('Legacy unsalted key payload is no longer supported; re-enter the API key.');
   }
   const salt = base64ToBytes(payload.salt);

@@ -38,9 +38,7 @@ export class FsSettingsStore extends FsCore {
 
       const content = await retryFs(() => apis.readTextFile(settingsFile));
       const parsed = JSON.parse(content) as Record<string, unknown>;
-      // QNBS-v3: reuse the same normalizer as the IDB path — older desktop settings files can
-      // predate newer required Settings fields (e.g. writingSurfaceStyle); an unchecked `as
-      // Settings` cast would let those fall through as undefined at runtime.
+      // QNBS-v3: reuse the same normalizer as the IDB path — older desktop settings files can predate newer required Settings fields (e.g. writingSurfaceStyle); an unchecked `as Settings` cast would let those fall through as undefined at runtime.
       return normalizePersistedSettings(parsed);
     } catch (error) {
       logger.error('Failed to load settings:', error);
@@ -81,9 +79,7 @@ export class FsSettingsStore extends FsCore {
   }
 
   async getApiKey(provider: string): Promise<string | null> {
-    // QNBS-v3: separate outer refs (rather than narrowing `apis`/`keyFile` from the try block) —
-    // TS's control-flow narrowing doesn't survive into the retryFs() closure below, and the catch
-    // block below still needs both for the legacy-payload cleanup path.
+    // QNBS-v3: separate outer refs (rather than narrowing `apis`/`keyFile` from the try block) — TS's control-flow narrowing doesn't survive into the retryFs() closure, and the catch block below still needs both for the legacy-payload cleanup path.
     let apisForCleanup: TauriApis | undefined;
     let keyFileForCleanup: string | undefined;
     try {
@@ -97,10 +93,7 @@ export class FsSettingsStore extends FsCore {
       const payload = JSON.parse(content) as { iv: string; salt?: string; data: string };
       return await decryptText(payload, `${appDataPath}|${provider}|WorldScriptStudio|v1`);
     } catch (error) {
-      // QNBS-v3: pre-2026-07-29 key files used an unsalted single-SHA-256 derivation (F-05/F-06,
-      // fixed in fsCore.ts) and are not migrated (locked decision — discard, not migrate). Remove
-      // the stale file so this doesn't retry on every call, and surface a one-time, explicit
-      // notification rather than a silent null return that looks identical to "no key ever set".
+      // QNBS-v3: pre-2026-07-29 key files (unsalted single-SHA-256, F-05/F-06) are not migrated (locked decision — discard); removing the stale file avoids retrying every call, and a one-time notification beats a silent null indistinguishable from "no key ever set".
       if (apisForCleanup && keyFileForCleanup) {
         try {
           await apisForCleanup.remove(keyFileForCleanup);

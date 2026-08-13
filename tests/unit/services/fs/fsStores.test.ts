@@ -8,13 +8,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TauriApis } from '../../../../services/fs/fsCore';
 
-// QNBS-v3: typed via `unknown` (not `any`) so the mock factories see a non-null TauriApis; the
-// real value is set in beforeEach before any mock is invoked.
+// QNBS-v3: typed via `unknown` (not `any`) so the mock factories see a non-null TauriApis; the real value is set in beforeEach before any mock is invoked.
 const { fsHolder } = vi.hoisted(() => ({ fsHolder: { current: null as unknown as TauriApis } }));
 
-// QNBS-v3: mock the @tauri-apps plugin modules so the REAL loadTauriApis assembles a TauriApis
-// whose methods delegate to the per-test in-memory fake FS (memoization-safe — each call reads
-// fsHolder.current). This exercises the real store logic AND loadTauriApis itself.
+// QNBS-v3: mock the @tauri-apps plugin modules so the REAL loadTauriApis assembles a TauriApis whose methods delegate to the per-test in-memory fake FS (memoization-safe); exercises real store logic AND loadTauriApis itself.
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: (cmd: string, args?: Record<string, unknown>) => fsHolder.current.invoke(cmd, args),
 }));
@@ -96,8 +93,7 @@ function makeFakeFs(): FakeFs {
       for (const k of [...bin.keys()]) if (k.startsWith(`${p}/`)) bin.delete(k);
       return Promise.resolve();
     },
-    // QNBS-v3: atomic-write support (writeTextFileAtomic/writeFileAtomic in fsCore.ts) — a plain
-    // in-memory move from the temp key to the final key, mirroring a real filesystem rename.
+    // QNBS-v3: atomic-write support (writeTextFileAtomic/writeFileAtomic) — a plain in-memory move from the temp key to the final key, mirroring a real filesystem rename.
     rename: (oldPath: string, newPath: string) => {
       if (text.has(oldPath)) {
         text.set(newPath, text.get(oldPath) as string);
@@ -170,9 +166,7 @@ describe('FsProjectStore — projects', () => {
     expect(await store.getActiveProjectId()).toBe('p2');
   });
 
-  // QNBS-v3: writeTextFileAtomic (fsCore.ts) integration proof for the highest-stakes writer —
-  // an interrupted save (rename fails after the temp file already has the new content) must never
-  // corrupt/truncate the previously-saved project.json; the old save must remain fully readable.
+  // QNBS-v3: writeTextFileAtomic integration proof for the highest-stakes writer — an interrupted save (rename fails after the temp file has the new content) must never corrupt/truncate the previously-saved project.json.
   it('leaves the previously-saved project.json intact when an interrupted save fails after the temp write', async () => {
     await store.saveProject(project as never);
     expect((await store.loadProject('p1'))?.title).toBe('My Novel');
@@ -188,8 +182,7 @@ describe('FsProjectStore — projects', () => {
   // QNBS-v3 (#332): a rejected marker write is a documented best-effort abort — it must not fail the project save that already succeeded.
   it('still resolves saveProject and logs a warning when the active-project marker write rejects', async () => {
     const originalWriteTextFile = fake.apis.writeTextFile;
-    // QNBS-v3: writeTextFileAtomic writes to a `active-project-id.txt.tmp-<uuid>` sibling first —
-    // `.includes` (not `.endsWith`) still catches that temp path, failing before the rename step.
+    // QNBS-v3: writeTextFileAtomic writes to a temp sibling first — `.includes` (not `.endsWith`) still catches that path, failing before the rename step.
     fake.apis.writeTextFile = (p: string, c: string) => {
       if (p.includes('active-project-id.txt')) return Promise.reject(new Error('disk full'));
       return originalWriteTextFile(p, c);

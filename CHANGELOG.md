@@ -18,7 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   new complete file, never a partial one. Also fixes a latent capability gap: `fs:allow-read-file`/
   `fs:allow-write-file`/`fs:allow-rename` were never declared in
   `src-tauri/capabilities/default.json`, even though `assetFsStore.ts` already called the binary
-  `readFile`/`writeFile` commands they gate.
+  `readFile`/`writeFile` commands they gate. **Review-loop follow-up fixes to the same change:** a
+  failed temp-file write (not just a failed rename) now also cleans up its orphaned temp file;
+  same-path writes now serialize in call order via a per-path queue, closing a race where two
+  overlapping saves could have an older write's rename land after a newer one and silently roll
+  the file back; `crypto.randomUUID()` now has a `getRandomValues()`-based fallback for WebKit
+  versions that predate it, matching the existing pattern in
+  `encryptionMigrationOrchestrator.ts#createMigrationOperationId`.
 
 ## [1.27.0] — 2026-08-13
 
