@@ -4,6 +4,13 @@
 
 import { WEBLLM_MODEL_APPROX_MB, type WebLlmModelId } from '@domain/ai-core';
 
+// QNBS-v3 (#333/Sourcery): modelId at call sites (services/localAiFacade.ts) is a broader `string` —
+// it can be an adaptive-engine or fallback-chain model id, not just a curated WebLlmModelId — so the
+// param below stays `string`; this guard replaces an unsafe `as WebLlmModelId` cast when indexing.
+function isKnownWebLlmModel(id: string): id is WebLlmModelId {
+  return id in WEBLLM_MODEL_APPROX_MB;
+}
+
 export type WebLlmLoadingState = 'idle' | 'loading' | 'ready' | 'error';
 
 export interface WebLlmLoadProgress {
@@ -64,7 +71,8 @@ class InferenceProgressEmitter {
     const estimatedSecondsRemaining =
       progress > 0.01 && progress < 1 ? Math.round((elapsed / progress) * (1 - progress)) : null;
 
-    const approxMb = modelId ? WEBLLM_MODEL_APPROX_MB[modelId as WebLlmModelId] : undefined;
+    const approxMb =
+      modelId && isKnownWebLlmModel(modelId) ? WEBLLM_MODEL_APPROX_MB[modelId] : undefined;
     const totalBytes = approxMb != null ? approxMb * 1024 * 1024 : null;
     const loadedBytes = totalBytes != null ? Math.round(totalBytes * progress) : null;
     const bytesPerSecond =

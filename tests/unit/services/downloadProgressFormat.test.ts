@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  formatMegabytes,
-  formatMegabytesPerSecond,
-} from '../../../services/downloadProgressFormat';
+import { formatMegabytes, megabytesPerSecond } from '../../../services/downloadProgressFormat';
 
 describe('formatMegabytes', () => {
   it('formats bytes as whole megabytes', () => {
@@ -18,12 +15,17 @@ describe('formatMegabytes', () => {
   });
 });
 
-describe('formatMegabytesPerSecond', () => {
-  it('formats a byte rate with one decimal', () => {
-    expect(formatMegabytesPerSecond(3.2 * 1024 * 1024)).toBe('3.2');
+describe('megabytesPerSecond', () => {
+  it('converts a byte rate to megabytes, rounded to one decimal', () => {
+    expect(megabytesPerSecond(3.2 * 1024 * 1024)).toBe(3.2);
   });
 
   it('handles zero bytes per second', () => {
-    expect(formatMegabytesPerSecond(0)).toBe('0.0');
+    expect(megabytesPerSecond(0)).toBe(0);
+  });
+
+  // QNBS-v3 (#333/CodeRabbit): the caller — not this function — is responsible for locale-aware decimal formatting.
+  it('returns a plain number, not a locale-formatted string', () => {
+    expect(typeof megabytesPerSecond(1024 * 1024)).toBe('number');
   });
 });

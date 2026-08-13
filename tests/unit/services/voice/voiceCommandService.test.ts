@@ -327,5 +327,77 @@ describe('VoiceCommandService', () => {
         );
       expect(progressCalls.some((a) => a.payload.wasmModelDownloadProgress === 0.3)).toBe(true);
     });
+
+    // QNBS-v3 (#333/CodeAnt+Qodo+CodeRabbit): byte fields must be explicitly cleared at every
+    // lifecycle boundary — setVoiceSettings merges partial state, so an omitted key would leave a
+    // prior attempt's bytes visible until the next byte-bearing progress tick arrives.
+    it('clears stale byte counts from a previous attempt at the start of a new download', async () => {
+      mockPipeline.mockImplementation(async (_task: string, _model: string, opts: unknown) => {
+        const { onProgress } = opts as { onProgress: (p: unknown) => void };
+        onProgress({ progress: 10, loaded: 1, total: 10 });
+        return { dispose: vi.fn() };
+      });
+
+      await service.downloadVoiceModels('stt');
+
+      const initialCall = dispatch.mock.calls
+        .map((c) => c[0])
+        .find(
+          (a) =>
+            (a as { payload?: { wasmModelDownloadProgress?: number } })?.payload
+              ?.wasmModelDownloadProgress === 0.1,
+        ) as { payload: Record<string, unknown> } | undefined;
+      expect(initialCall).toBeDefined();
+      expect(initialCall?.payload).toHaveProperty('wasmModelDownloadLoadedBytes');
+      expect(initialCall?.payload['wasmModelDownloadLoadedBytes']).toBeUndefined();
+      expect(initialCall?.payload).toHaveProperty('wasmModelDownloadTotalBytes');
+      expect(initialCall?.payload['wasmModelDownloadTotalBytes']).toBeUndefined();
+    });
+
+    it('clears byte counts on successful completion', async () => {
+      mockPipeline.mockImplementation(async (_task: string, _model: string, opts: unknown) => {
+        const { onProgress } = opts as { onProgress: (p: unknown) => void };
+        onProgress({ progress: 50, loaded: 21_000_000, total: 42_000_000 });
+        return { dispose: vi.fn() };
+      });
+
+      await service.downloadVoiceModels('stt');
+
+      const completeCall = dispatch.mock.calls
+        .map((c) => c[0])
+        .find(
+          (a) =>
+            (a as { payload?: { wasmModelDownloadProgress?: number } })?.payload
+              ?.wasmModelDownloadProgress === 1.0,
+        ) as { payload: Record<string, unknown> } | undefined;
+      expect(completeCall).toBeDefined();
+      expect(completeCall?.payload).toHaveProperty('wasmModelDownloadLoadedBytes');
+      expect(completeCall?.payload['wasmModelDownloadLoadedBytes']).toBeUndefined();
+      expect(completeCall?.payload).toHaveProperty('wasmModelDownloadTotalBytes');
+      expect(completeCall?.payload['wasmModelDownloadTotalBytes']).toBeUndefined();
+    });
+
+    it('clears byte counts when the download fails', async () => {
+      mockPipeline.mockImplementation(async (_task: string, _model: string, opts: unknown) => {
+        const { onProgress } = opts as { onProgress: (p: unknown) => void };
+        onProgress({ progress: 50, loaded: 21_000_000, total: 42_000_000 });
+        throw new Error('network error');
+      });
+
+      await expect(service.downloadVoiceModels('stt')).rejects.toThrow('network error');
+
+      const errorCall = dispatch.mock.calls
+        .map((c) => c[0])
+        .find(
+          (a) =>
+            (a as { payload?: { voiceWasmDownloadError?: string } })?.payload
+              ?.voiceWasmDownloadError === 'network error',
+        ) as { payload: Record<string, unknown> } | undefined;
+      expect(errorCall).toBeDefined();
+      expect(errorCall?.payload).toHaveProperty('wasmModelDownloadLoadedBytes');
+      expect(errorCall?.payload['wasmModelDownloadLoadedBytes']).toBeUndefined();
+      expect(errorCall?.payload).toHaveProperty('wasmModelDownloadTotalBytes');
+      expect(errorCall?.payload['wasmModelDownloadTotalBytes']).toBeUndefined();
+    });
   });
 });

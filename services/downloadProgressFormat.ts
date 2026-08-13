@@ -7,7 +7,10 @@ export function formatMegabytes(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(0);
 }
 
-/** Formats a bytes-per-second rate as megabytes/sec with one decimal, e.g. `"3.2"`. */
-export function formatMegabytesPerSecond(bytesPerSecond: number): string {
-  return (bytesPerSecond / (1024 * 1024)).toFixed(1);
+// QNBS-v3 (#333/CodeRabbit): returns a number, not a locale-formatted string — toFixed() always
+// emits a period decimal separator, wrong for comma-decimal locales. Callers format the result with
+// formatNumber() from useTranslation() so the decimal separator matches the active UI locale.
+/** Converts a bytes-per-second rate to megabytes/sec, rounded to one decimal place. */
+export function megabytesPerSecond(bytesPerSecond: number): number {
+  return Math.round((bytesPerSecond / (1024 * 1024)) * 10) / 10;
 }

@@ -611,10 +611,11 @@ export interface VoiceSettings {
   wasmModelDownloadProgress?: number;
   /** QNBS-v3 (#333 item 1): real bytes loaded so far, from transformers.js's own progress payload
    * (not an approximation, unlike the WebLLM text-model path — this download is a raw fetch the
-   * library already reports byte counts for). Undefined until the first progress tick arrives. */
-  wasmModelDownloadLoadedBytes?: number;
+   * library already reports byte counts for). Undefined until the first progress tick arrives, and
+   * explicitly cleared (not just omitted) at every download lifecycle boundary — see downloadVoiceModels. */
+  wasmModelDownloadLoadedBytes?: number | undefined;
   /** QNBS-v3 (#333 item 1): real total byte size of the file currently downloading. */
-  wasmModelDownloadTotalBytes?: number;
+  wasmModelDownloadTotalBytes?: number | undefined;
   /** WASM voice models ready for use */
   wasmModelsReady?: boolean;
   /** WASM voice model download error message */

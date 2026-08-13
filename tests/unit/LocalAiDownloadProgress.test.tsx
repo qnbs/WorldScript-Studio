@@ -58,6 +58,8 @@ vi.mock('../../hooks/useTranslation', () => ({
   useTranslation: () => ({
     t: (k: string, args?: Record<string, string>) => (args ? `${k}:${JSON.stringify(args)}` : k),
     language: 'en',
+    formatNumber: (value: number, options?: Intl.NumberFormatOptions) =>
+      value.toFixed(options?.maximumFractionDigits ?? 0),
   }),
 }));
 
@@ -250,10 +252,10 @@ describe('LocalAiDownloadProgress', () => {
     };
     render(<LocalAiDownloadProgress />);
     expect(
-      screen.getByText('settings.ai.localAi.downloadSize:{"loaded":"350","total":"700"}'),
+      screen.getByText('settings.ai.localAi.downloadSize:{"loaded":"~350","total":"~700"}'),
     ).toBeInTheDocument();
     expect(
-      screen.getByText('settings.ai.localAi.downloadSpeed:{"speed":"3.2"}'),
+      screen.getByText('settings.ai.localAi.downloadSpeed:{"speed":"~3.2"}'),
     ).toBeInTheDocument();
   });
 

@@ -585,9 +585,14 @@ export class VoiceCommandService {
       if (signal?.aborted) return;
 
       // Report initial progress
+      // QNBS-v3 (#333/CodeAnt+Qodo): clear stale byte counts from a previous download attempt —
+      // setVoiceSettings merges partial state, so a prior attempt's bytes would otherwise linger
+      // until the first byte-bearing progress tick of THIS attempt arrives.
       this.d(
         settingsActions.setVoiceSettings({
           wasmModelDownloadProgress: 0.1,
+          wasmModelDownloadLoadedBytes: undefined,
+          wasmModelDownloadTotalBytes: undefined,
         }),
       );
 
@@ -639,11 +644,13 @@ export class VoiceCommandService {
         return;
       }
 
-      // Mark complete
+      // Mark complete — clear byte counts too (no longer meaningful once the download is done).
       this.d(
         settingsActions.setVoiceSettings({
           wasmModelDownloadProgress: 1.0,
           wasmModelsReady: true,
+          wasmModelDownloadLoadedBytes: undefined,
+          wasmModelDownloadTotalBytes: undefined,
         }),
       );
 
@@ -660,6 +667,8 @@ export class VoiceCommandService {
         settingsActions.setVoiceSettings({
           wasmModelDownloadProgress: 0,
           voiceWasmDownloadError: err instanceof Error ? err.message : String(err),
+          wasmModelDownloadLoadedBytes: undefined,
+          wasmModelDownloadTotalBytes: undefined,
         }),
       );
       throw err;

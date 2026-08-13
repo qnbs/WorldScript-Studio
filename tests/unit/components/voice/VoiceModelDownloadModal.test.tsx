@@ -3,7 +3,7 @@
  * QNBS-v3: P1 tests for P0-5 voice WASM download UI.
  */
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { VoiceModelDownloadModal } from '../../../../components/voice/VoiceModelDownloadModal';
@@ -32,6 +32,9 @@ vi.mock('../../../../hooks/useTranslation', () => ({
       }
       return template;
     },
+    // QNBS-v3 (#333/Sourcery): mirrors formatNumber's real 1-decimal rendering for the speed display.
+    formatNumber: (value: number, options?: Intl.NumberFormatOptions) =>
+      value.toFixed(options?.maximumFractionDigits ?? 0),
   }),
 }));
 
@@ -186,6 +189,32 @@ describe('VoiceModelDownloadModal', () => {
       render(<VoiceModelDownloadModal {...defaultProps} />);
       await waitFor(() => expect(screen.getByTestId('progress')).toBeInTheDocument());
       expect(screen.queryByText(/MB of/)).not.toBeInTheDocument();
+    });
+
+    // QNBS-v3 (#333/Sourcery): exercises the delta-based bytesPerSecond effect end-to-end. Uses fake
+    // timers directly (not waitFor's own polling, which deadlocks once Date.now/setTimeout are faked)
+    // — render/rerender are act()-wrapped by RTL, so state settles synchronously after each call. The
+    // component is React.memo-wrapped, so the second render passes a fresh onClose reference — a
+    // shallow-equal props object would make memo bail out and never re-read the mutated selector value.
+    it('shows a MB/s speed label once two byte samples have elapsed', () => {
+      vi.useFakeTimers();
+      try {
+        mockVoiceState.wasmModelDownloadLoadedBytes = 10 * 1024 * 1024;
+        mockVoiceState.wasmModelDownloadTotalBytes = 42 * 1024 * 1024;
+        const { rerender } = render(<VoiceModelDownloadModal {...defaultProps} />);
+        expect(screen.getByTestId('progress')).toBeInTheDocument();
+        expect(screen.queryByText(/MB\/s/)).not.toBeInTheDocument();
+
+        act(() => {
+          vi.advanceTimersByTime(1000);
+        });
+        mockVoiceState.wasmModelDownloadLoadedBytes = 13.2 * 1024 * 1024;
+        rerender(<VoiceModelDownloadModal {...defaultProps} onClose={vi.fn()} />);
+
+        expect(screen.getByText('3.2 MB/s')).toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

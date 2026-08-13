@@ -159,7 +159,7 @@
   "settings.ai.localAi.downloadCancelled": "Nedladdningen avbröts",
   "settings.ai.localAi.downloadEta": "ca. {{seconds}}s kvar",
   "settings.ai.localAi.downloadFailed": "Nedladdningen misslyckades. Försök igen.",
-  "settings.ai.localAi.downloadSize": "{{loaded}} MB of {{total}} MB",
+  "settings.ai.localAi.downloadSize": "{{loaded}} MB av {{total}} MB",
   "settings.ai.localAi.downloadSpeed": "{{speed}} MB/s",
   "settings.ai.localAi.downloadTitle": "Laddar ner AI-modell...",
   "settings.ai.localAi.downloadedLabel": "nedladdade",
@@ -821,7 +821,7 @@
   "voice.modelDownload.description": "Laddar ner {{model}}-modellen ({{size}} MB). Detta möjliggör lokal röstbehandling utan molnrouting.",
   "voice.modelDownload.error": "Nedladdning misslyckades: {{error}}",
   "voice.modelDownload.progress": "{{percent}}% klar",
-  "voice.modelDownload.progressBytes": "{{loaded}} MB of {{total}} MB",
+  "voice.modelDownload.progressBytes": "{{loaded}} MB av {{total}} MB",
   "voice.modelDownload.retry": "Försöka igen",
   "voice.modelDownload.speed": "{{speed}} MB/s",
   "voice.modelDownload.title": "Ladda ner röstmodell"
