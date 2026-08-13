@@ -5,6 +5,8 @@
 
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type React from 'react';
+import { forwardRef } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
@@ -65,30 +67,55 @@ vi.mock('../../../hooks/useTranslation', () => ({
   useTranslation: () => ({
     t: (k: string, args?: Record<string, string>) => (args ? `${k}:${JSON.stringify(args)}` : k),
     language: 'en',
+    dir: 'ltr' as const,
   }),
 }));
 
-// Stub DebouncedTextarea to avoid debounce complexity in tests
-vi.mock('../../../components/ui/DebouncedTextarea', () => ({
-  DebouncedTextarea: ({
+// QNBS-v3 (#341): captured so tests can assert variant="overlay" is passed and invoke onScroll manually to verify the mirror scroll-sync wiring.
+let lastDebouncedTextareaVariant: string | undefined;
+let lastDebouncedTextareaOnScroll: ((e: React.UIEvent<HTMLTextAreaElement>) => void) | undefined;
+
+type MockDebouncedTextareaProps = Omit<
+  React.TextareaHTMLAttributes<HTMLTextAreaElement>,
+  'value'
+> & {
+  value: string;
+  variant?: string;
+};
+
+function DebouncedTextareaMock(
+  {
     value,
     placeholder,
     'aria-label': ariaLabel,
+    variant,
+    onScroll,
     ...rest
-  }: {
-    value: string;
-    placeholder?: string;
-    'aria-label'?: string;
-    [key: string]: unknown;
-  }) => (
+  }: MockDebouncedTextareaProps,
+  ref: React.Ref<HTMLTextAreaElement>,
+) {
+  lastDebouncedTextareaVariant = variant;
+  lastDebouncedTextareaOnScroll = onScroll;
+  return (
     <textarea
+      ref={ref}
       data-testid="debounced-textarea"
       defaultValue={value}
       placeholder={placeholder}
       aria-label={ariaLabel}
-      {...(rest as object)}
+      onScroll={onScroll}
+      {...rest}
     />
-  ),
+  );
+}
+
+// Stub DebouncedTextarea to avoid debounce complexity in tests
+vi.mock('../../../components/ui/DebouncedTextarea', () => ({
+  DebouncedTextarea: forwardRef(DebouncedTextareaMock),
+}));
+
+vi.mock('../../../components/ui/DictationButton', () => ({
+  DictationButton: () => <button type="button" data-testid="dictation-button" />,
 }));
 
 vi.mock('../../../components/ui/Select', () => ({
@@ -194,5 +221,35 @@ describe('ContextPanel', () => {
     render(<ContextPanel />);
     const textarea = screen.getByTestId('writer-studio-editor');
     expect(textarea).toHaveAttribute('placeholder', 'writer.studio.context.contentPlaceholder');
+  });
+
+  // QNBS-v3 (#341): the real textarea must stay invisible-input-only over the visible mirror — confirms the fix is wired, not just present in isolation.
+  it('passes variant="overlay" to the real textarea', () => {
+    render(<ContextPanel />);
+    expect(lastDebouncedTextareaVariant).toBe('overlay');
+  });
+
+  it('renders the mirror layer as aria-hidden with a stable test id', () => {
+    render(<ContextPanel />);
+    const mirror = screen.getByTestId('writer-studio-mirror');
+    expect(mirror).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('syncs the mirror scroll position when the real textarea scrolls, both vertically and horizontally', () => {
+    render(<ContextPanel />);
+    const mirror = screen.getByTestId('writer-studio-mirror');
+    expect(lastDebouncedTextareaOnScroll).toBeDefined();
+    Object.defineProperty(mirror, 'scrollTop', { value: 0, writable: true });
+    Object.defineProperty(mirror, 'scrollLeft', { value: 0, writable: true });
+    lastDebouncedTextareaOnScroll?.({
+      currentTarget: { scrollTop: 240, scrollLeft: 80 },
+    } as unknown as React.UIEvent<HTMLTextAreaElement>);
+    expect(mirror.scrollTop).toBe(240);
+    expect(mirror.scrollLeft).toBe(80);
+  });
+
+  it('renders a dictation entry point alongside the overlay editor', () => {
+    render(<ContextPanel />);
+    expect(screen.getByTestId('dictation-button')).toBeInTheDocument();
   });
 });
