@@ -673,7 +673,7 @@
   "settings.privacy.encryptionCurrentPassphrase": "현재 암호",
   "settings.privacy.encryptionDisableAction": "비활성화",
   "settings.privacy.encryptionDisableButton": "암호화 비활성화",
-  "settings.privacy.encryptionDisableConfirm": "암호화 비활성화",
+  "settings.privacy.encryptionDisableConfirm": "이 작업은 모든 데이터를 복호화하고 저장 시 암호화를 비활성화합니다. 데이터는 이 기기에 남아 있지만 더 이상 암호 구문으로 보호되지 않습니다.",
   "settings.privacy.encryptionDisableFailed": "Could not disable encryption. Please try again.",
   "settings.privacy.encryptionDisabledStatus": "저장 시 암호화가 비활성화되었습니다.",
   "settings.privacy.encryptionEnabled": "저장 시 프로젝트 데이터 암호화",

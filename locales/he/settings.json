@@ -673,7 +673,7 @@
   "settings.privacy.encryptionCurrentPassphrase": "ביטוי סיסמה נוכחי",
   "settings.privacy.encryptionDisableAction": "השבתה",
   "settings.privacy.encryptionDisableButton": "השבתת הצפנה",
-  "settings.privacy.encryptionDisableConfirm": "השבתת הצפנה",
+  "settings.privacy.encryptionDisableConfirm": "פעולה זו תפענח את כל הנתונים שלך ותכבה את ההצפנה במנוחה. הנתונים שלך יישארו במכשיר זה, אך לא יהיו מוגנים עוד באמצעות סיסמה.",
   "settings.privacy.encryptionDisableFailed": "Could not disable encryption. Please try again.",
   "settings.privacy.encryptionDisabledStatus": "הצפנה במנוחה מושבתת",
   "settings.privacy.encryptionEnabled": "הצפנת נתוני פרויקט במנוחה",

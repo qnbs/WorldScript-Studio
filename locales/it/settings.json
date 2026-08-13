@@ -673,7 +673,7 @@
   "settings.privacy.encryptionCurrentPassphrase": "Passphrase attuale",
   "settings.privacy.encryptionDisableAction": "Disattiva",
   "settings.privacy.encryptionDisableButton": "Disattiva cifratura",
-  "settings.privacy.encryptionDisableConfirm": "Disabilita crittografia",
+  "settings.privacy.encryptionDisableConfirm": "Questa operazione decifrerà tutti i tuoi dati e disattiverà la crittografia a riposo. I tuoi dati rimarranno su questo dispositivo, ma non saranno più protetti da una passphrase.",
   "settings.privacy.encryptionDisableFailed": "Impossibile disattivare la crittografia. Riprova.",
   "settings.privacy.encryptionDisabledStatus": "La cifratura a riposo è disattivata",
   "settings.privacy.encryptionEnabled": "Cifra i dati del progetto a riposo",

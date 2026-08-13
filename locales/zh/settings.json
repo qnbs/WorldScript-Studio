@@ -673,7 +673,7 @@
   "settings.privacy.encryptionCurrentPassphrase": "当前密码",
   "settings.privacy.encryptionDisableAction": "禁用",
   "settings.privacy.encryptionDisableButton": "禁用加密",
-  "settings.privacy.encryptionDisableConfirm": "禁用加密",
+  "settings.privacy.encryptionDisableConfirm": "这将解密您的所有数据并关闭静态加密。您的数据仍保留在此设备上，但不再受密码短语保护。",
   "settings.privacy.encryptionDisableFailed": "Could not disable encryption. Please try again.",
   "settings.privacy.encryptionDisabledStatus": "静态加密已禁用",
   "settings.privacy.encryptionEnabled": "静态加密项目数据",
