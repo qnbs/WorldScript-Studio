@@ -794,6 +794,18 @@ export async function deriveAndVerifySourceKeyFromSentinel(passphrase: string): 
 }
 
 /**
+ * Derive the same target key rotateIdbPassphrase() will activate for a given new passphrase,
+ * without running any migration or touching the sentinel — same salt, same deriveKey() call, so
+ * the result is byte-identical to what rotation will use. QNBS-v3: lets the desktop fs-data
+ * migration bridge (services/fs/fsEncryptionMigration.ts) re-encrypt filesystem-backed protected
+ * files under the correct new key BEFORE rotateIdbPassphrase() swaps the active session key —
+ * without this, fs data re-keyed after the IDB rotation would need the now-discarded old key.
+ */
+export async function deriveRotationTargetKey(newPassphrase: string): Promise<CryptoKey> {
+  return _svc.deriveKey(newPassphrase, getExistingSalt());
+}
+
+/**
  * Verify a candidate passphrase against a durable migration target verifier and return its
  * derived key, without activating a session. Used by the recovery UX to re-derive the target key
  * of an interrupted rekey migration.

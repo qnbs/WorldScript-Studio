@@ -46,6 +46,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   never needs decryption to render. **Not yet covered**: binder-asset binary blobs
   (`services/fs/assetFsStore.ts`'s `.bin` files) — they need a byte-native encrypt path rather
   than the JSON-serializing helpers used here, and remain plaintext pending a follow-up.
+  **Review-loop follow-up fix to the same change:** disabling or rotating the at-rest passphrase
+  previously destroyed or swapped the shared salt/session key (`storageEncryptionService.ts`'s
+  `clearIdbPassphrase()`/`rotateIdbPassphrase()`) with no awareness that desktop's `services/fs/*`
+  data depends on the same key material — every fs-backed protected file (project.json, settings,
+  API keys, snapshots, Codex, RAG vectors, images) would have been permanently stranded under a
+  now-unrecoverable key. A new migration bridge (`services/fs/fsEncryptionMigration.ts`) now
+  converts every fs-backed protected file to plaintext (disable) or re-encrypts it under the
+  independently-derived new target key (rotate) *before* the sentinel/session key is touched; any
+  file that fails to decrypt under the still-active old key aborts the whole disable/rotate
+  operation instead of silently stranding it. Wired into `hooks/useSettingsView.ts`'s
+  `handlePassphraseConfirm`, gated on `isTauriRuntime()` (no-op on web).
 
 ### Fixed
 

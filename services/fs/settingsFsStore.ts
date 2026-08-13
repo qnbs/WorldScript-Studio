@@ -203,6 +203,41 @@ export class FsSettingsStore extends FsCore {
     }
   }
 
+  /**
+   * Re-key a single provider's protected API key file for a passphrase disable/rotate operation:
+   * decrypts under the still-active OLD session key and re-encrypts under targetKey, or writes
+   * plaintext-v1 when targetKey is null (disable). No-op when no key file exists or it isn't
+   * currently protected. Must be called by the migration bridge (services/fs/
+   * fsEncryptionMigration.ts) BEFORE storageEncryptionService.ts swaps/discards the active key —
+   * after that point the old key is unrecoverable and this file would be permanently stranded.
+   */
+  async reprotectApiKeyFile(provider: string, targetKey: CryptoKey | null): Promise<void> {
+    const apis = await this.getApis();
+    const appDataPath = await this.ensureAppDataPath();
+    const keyFile = await apis.join(appDataPath, 'config', `${provider}_key.enc.json`);
+    if (!(await apis.exists(keyFile))) return;
+    const content = await retryFs(() => apis.readTextFile(keyFile));
+    const parsed = JSON.parse(content) as Record<string, unknown>;
+    if (parsed['scheme'] !== PROTECTED_SCHEME || typeof parsed['data'] !== 'string') return;
+    const sourceKey = await resolveProtectedWriteKey();
+    if (!sourceKey) {
+      throw new Error(
+        `Protected API key for provider "${provider}" exists but at-rest encryption is no longer configured`,
+      );
+    }
+    const decrypted = await idbDecryptWithKey<{ provider: string; apiKey: string }>(
+      sourceKey,
+      base64ToBytes(parsed['data']),
+    );
+    const payload: ProtectedApiKeyPayload | PlaintextApiKeyPayload = targetKey
+      ? {
+          scheme: PROTECTED_SCHEME,
+          data: bytesToBase64(await idbEncryptWithKey(targetKey, decrypted)),
+        }
+      : { scheme: PLAINTEXT_SCHEME, value: decrypted.apiKey };
+    await writeTextFileAtomic(apis, keyFile, JSON.stringify(payload));
+  }
+
   async clearApiKey(provider: string): Promise<void> {
     try {
       const apis = await this.getApis();

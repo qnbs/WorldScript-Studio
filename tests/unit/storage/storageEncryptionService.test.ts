@@ -41,11 +41,13 @@ import {
   clearIdbEncryptionKey,
   clearIdbPassphrase,
   createIdbMigrationTargetVerifier,
+  deriveRotationTargetKey,
   hasPassphraseSentinel,
   IdbEncryptionMigrationRequiredError,
   IdbEncryptionSaltLostError,
   IdbStorageLockedError,
   idbDecrypt,
+  idbDecryptWithKey,
   idbEncrypt,
   idbEncryptWithKey,
   initIdbEncryption,
@@ -608,6 +610,41 @@ describe('rotateIdbPassphrase', () => {
     await expect(rotateIdbPassphrase('wrong', 'new')).rejects.toThrow();
 
     clearIdbEncryptionKey();
+    await expect(verifyAndInitIdbEncryption('old')).resolves.toBeUndefined();
+  });
+});
+
+// QNBS-v3: covers the desktop fs-data migration bridge's key-derivation dependency — see
+// services/fs/fsEncryptionMigration.ts, which must independently derive the SAME target key
+// rotateIdbPassphrase() will activate, without running any migration itself.
+describe('deriveRotationTargetKey', () => {
+  it('derives a key that decrypts data rotateIdbPassphrase() re-encrypts under the new passphrase', async () => {
+    await setupIdbEncryption('old');
+
+    // Derive the target key BEFORE rotation runs, exactly as the fs migration bridge does.
+    const targetKey = await deriveRotationTargetKey('new');
+    const ciphertext = await idbEncryptWithKey(targetKey, { secret: 'fs-backed-value' });
+
+    await rotateIdbPassphrase('old', 'new');
+
+    // The now-active session key (post-rotation) must be able to decrypt the SAME bytes.
+    const activeKey = await resolveProtectedWriteKey();
+    expect(activeKey).not.toBeNull();
+    await expect(
+      idbDecryptWithKey<{ secret: string }>(activeKey as CryptoKey, ciphertext),
+    ).resolves.toEqual({ secret: 'fs-backed-value' });
+  });
+
+  it('does not activate a session or touch the sentinel', async () => {
+    await setupIdbEncryption('old');
+    clearIdbEncryptionKey();
+
+    await deriveRotationTargetKey('some-candidate-passphrase');
+
+    expect(isIdbEncryptionReady()).toBe(false);
+    expect(await hasPassphraseSentinel()).toBe(true);
+    // The real passphrase still unlocks normally — deriving a rotation target key for an
+    // unrelated candidate passphrase must not have mutated the sentinel or salt.
     await expect(verifyAndInitIdbEncryption('old')).resolves.toBeUndefined();
   });
 });

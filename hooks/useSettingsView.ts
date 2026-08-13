@@ -18,17 +18,20 @@ import { settingsActions } from '../features/settings/settingsSlice';
 import { statusActions } from '../features/status/statusSlice';
 import { useTranslation } from '../hooks/useTranslation';
 import { wipeAllAppData } from '../services/factoryResetService';
+import { migrateAllProtectedFsData } from '../services/fs/fsEncryptionMigration';
 import { logger } from '../services/logger';
 import type { ProtectedStoreMigrationProgress } from '../services/storage/protectedStoreMigration';
 import {
   clearIdbEncryptionKey,
   clearIdbPassphrase,
+  deriveRotationTargetKey,
   isIdbEncryptionReady,
   rotateIdbPassphrase,
   setupIdbEncryption,
   verifyAndInitIdbEncryption,
 } from '../services/storage/storageEncryptionService';
 import { storageService } from '../services/storageService';
+import { isTauriRuntime } from '../services/tauriRuntime';
 import type {
   AccessibilitySettings,
   AdvancedAiSettings,
@@ -398,6 +401,8 @@ export const useSettingsView = () => {
         // QNBS-v3: clearIdbPassphrase() requires an already-unlocked session key — no passphrase re-entry.
         setMigrationProgress(null);
         try {
+          // QNBS-v3: must convert fs-backed desktop data to plaintext BEFORE the sentinel below is destroyed — clearIdbPassphrase() has no awareness of services/fs/*, so ordering here is load-bearing, not cosmetic.
+          if (isTauriRuntime()) await migrateAllProtectedFsData(null);
           await clearIdbPassphrase((progress) => setMigrationProgress(progress));
         } finally {
           setMigrationProgress(null);
@@ -408,6 +413,11 @@ export const useSettingsView = () => {
       } else if (passphraseModal === 'rotate') {
         setMigrationProgress(null);
         try {
+          // QNBS-v3: derives the SAME target key rotateIdbPassphrase() will activate (same salt/passphrase) and re-keys fs-backed desktop data under it BEFORE the active session key is swapped below — otherwise fs data stays under the old, soon-unrecoverable key.
+          if (isTauriRuntime()) {
+            const targetKey = await deriveRotationTargetKey(newPassphrase);
+            await migrateAllProtectedFsData(targetKey);
+          }
           await rotateIdbPassphrase(_current, newPassphrase, (progress) =>
             setMigrationProgress(progress),
           );
