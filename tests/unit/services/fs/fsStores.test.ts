@@ -288,11 +288,16 @@ describe('FsCodexStore — codex + RAG vectors', () => {
 });
 
 describe('FsAssetStore — images + binder assets', () => {
-  it('round-trips an image (strips/re-adds the data-url prefix)', async () => {
-    await store.saveImage('char-1', 'data:image/png;base64,QUJD');
-    expect(await store.getImage('char-1')).toBe('data:image/png;base64,QUJD');
+  it('round-trips an image while preserving its data-url MIME type', async () => {
+    await store.saveImage('char-1', 'data:image/webp;base64,QUJD');
+    expect(await store.getImage('char-1')).toBe('data:image/webp;base64,QUJD');
     await store.deleteImage('char-1');
     expect(await store.getImage('char-1')).toBeNull();
+  });
+
+  it('treats legacy raw image payloads as PNG', async () => {
+    await store.saveImage('legacy-char', 'QUJD');
+    expect(await store.getImage('legacy-char')).toBe('data:image/png;base64,QUJD');
   });
 
   it('round-trips a binder binary asset with metadata', async () => {

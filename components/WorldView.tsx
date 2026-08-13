@@ -5,6 +5,7 @@ import { ICONS } from '../constants';
 import { useWorldViewContext, WorldViewContext } from '../contexts/WorldViewContext';
 import { uploadWorldImageThunk } from '../features/project/thunks/worldThunks';
 import { useWorldView } from '../hooks/useWorldView';
+import { logger } from '../services/logger';
 import {
   filterByQuery,
   type RosterSort,
@@ -38,9 +39,14 @@ const useStoredImage = (id: string | undefined, hasImage: boolean | undefined) =
     }
     let isMounted = true;
     const fetchImage = async () => {
-      const image = await storageService.getImage(id);
-      if (isMounted && image) {
-        setImageUrl(image.startsWith('data:image/') ? image : `data:image/png;base64,${image}`);
+      try {
+        const image = await storageService.getImage(id);
+        if (isMounted && image) {
+          setImageUrl(image.startsWith('data:image/') ? image : `data:image/png;base64,${image}`);
+        }
+      } catch (error) {
+        // QNBS-v3: an unavailable image must retain the placeholder instead of causing an unhandled async rejection.
+        logger.warn('Failed to load world image', { error: String(error) });
       }
     };
     fetchImage();

@@ -391,7 +391,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   both the ciphertext *and* the public derivation inputs, not the ciphertext alone) in both the
   Mitigation Mapping row and the attack tree; added the same Gemini-exception note to the attack
   tree (previously only in the table row); and added a new Mitigation Mapping row for desktop
-  project/settings/snapshot/Codex/RAG/image data, which this threat model previously didn't
+  project/settings/snapshot/Codex/RAG/image/binder-asset data, which this threat model previously didn't
   mention at all despite it having neither confidentiality nor authentication on disk — real fix
   in progress on [PR #356](https://github.com/qnbs/WorldScript-Studio/pull/356).
 - **F-08 — Tauri/web `connect-src` completeness.** Added LanguageTool's default self-hosted port

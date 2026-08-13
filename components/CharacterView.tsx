@@ -5,6 +5,7 @@ import { ICONS } from '../constants';
 import { CharacterViewContext, useCharacterViewContext } from '../contexts/CharacterViewContext';
 import { uploadCharacterImageThunk } from '../features/project/thunks/characterThunks';
 import { useCharacterView } from '../hooks/useCharacterView';
+import { logger } from '../services/logger';
 import {
   characterCompleteness,
   filterByQuery,
@@ -38,9 +39,14 @@ const useStoredImage = (id: string | undefined, hasImage: boolean | undefined) =
     }
     let isMounted = true;
     const fetchImage = async () => {
-      const image = await storageService.getImage(id);
-      if (isMounted && image) {
-        setImageUrl(image.startsWith('data:image/') ? image : `data:image/png;base64,${image}`);
+      try {
+        const image = await storageService.getImage(id);
+        if (isMounted && image) {
+          setImageUrl(image.startsWith('data:image/') ? image : `data:image/png;base64,${image}`);
+        }
+      } catch (error) {
+        // QNBS-v3: an unavailable image must retain the placeholder instead of causing an unhandled async rejection.
+        logger.warn('Failed to load character image', { error: String(error) });
       }
     };
     fetchImage();

@@ -22,8 +22,8 @@ export class FsAssetStore extends FsSnapshotStore {
     }
 
     const imageFile = await apis.join(imagesPath, `${sanitizePathSegment(id, 'image')}.png`);
-    const cleanBase64 = base64Data.replace(/^data:image\/png;base64,/, '');
-    await retryFs(() => apis.writeTextFile(imageFile, cleanBase64));
+    // QNBS-v3: data URLs retain an uploaded image's MIME type; legacy raw payloads remain readable as PNG below.
+    await retryFs(() => apis.writeTextFile(imageFile, base64Data));
   }
 
   async getImage(id: string): Promise<string | null> {
@@ -40,8 +40,8 @@ export class FsAssetStore extends FsSnapshotStore {
         return null;
       }
 
-      const base64Data = await retryFs(() => apis.readTextFile(imageFile));
-      return `data:image/png;base64,${base64Data}`;
+      const imageData = await retryFs(() => apis.readTextFile(imageFile));
+      return imageData.startsWith('data:image/') ? imageData : `data:image/png;base64,${imageData}`;
     } catch (error) {
       logger.error('Failed to load image:', error);
       return null;
