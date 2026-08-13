@@ -174,6 +174,84 @@ jobs:
           fail_ci_if_error: false
 
   # ----------------------------------------------------------
+  # 1a. RUST CHECK: native compile/lint/test gate for src-tauri/ (required — see ci-success)
+  # QNBS-v3: previously the ONLY Rust CI was an OSV vuln scan (security job, advisory-only) plus
+  #          a full bundle build on tag-push/manual-dispatch only (tauri-build.yml) — native code
+  #          could merge without ever having compiled. This job always runs (so it's a valid
+  #          `needs:` dependency for ci-success) but skips the actual cargo steps when the diff
+  #          doesn't touch src-tauri/, so frontend-only PRs pay no meaningful cost.
+  # ----------------------------------------------------------
+  rust-check:
+    name: 🦀 Rust Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [security]
+    steps:
+      # QNBS-v3: fetch-depth:0 so the base-branch diff below can always resolve base.sha (same
+      # reasoning as the security job's gitleaks checkout).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Detect src-tauri changes
+        id: filter
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            if git diff --quiet "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}" -- src-tauri/; then
+              echo "changed=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "changed=true" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            # Push to main / workflow_dispatch: always verify — merges are infrequent, cost is trivial.
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: No src-tauri changes — skipping Rust checks
+        if: steps.filter.outputs.changed == 'false'
+        run: echo "src-tauri/ unchanged in this PR — nothing to compile."
+
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        if: steps.filter.outputs.changed == 'true'
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        if: steps.filter.outputs.changed == 'true'
+        with:
+          workspaces: src-tauri
+          cache-all-crates: true
+          # QNBS-v3: same prefix-key scheme as tauri-build.yml — bump together on Rust channel/Cargo.lock churn.
+          prefix-key: "v1"
+
+      - name: Install Linux dependencies (WebKitGTK)
+        if: steps.filter.outputs.changed == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: cargo fmt --check
+        if: steps.filter.outputs.changed == 'true'
+        working-directory: src-tauri
+        run: cargo fmt --check
+
+      - name: cargo check
+        if: steps.filter.outputs.changed == 'true'
+        working-directory: src-tauri
+        run: cargo check --locked
+
+      - name: cargo clippy
+        if: steps.filter.outputs.changed == 'true'
+        working-directory: src-tauri
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: cargo test
+        if: steps.filter.outputs.changed == 'true'
+        working-directory: src-tauri
+        run: cargo test --locked
+
+  # ----------------------------------------------------------
   # 2. BUILD: Production build + Pages artifact upload
   # QNBS-v3: Stryker mutation removed from the PR/CI pipeline (2026-06-02) — it added noise as a
   #          flaky, non-gating check. Mutation now runs ONLY via the manual `.github/workflows/
@@ -257,24 +335,26 @@ jobs:
           path: ./dist
 
   # ----------------------------------------------------------
-  # 3. CI SUCCESS: single required-status aggregator (security + quality + build)
+  # 3. CI SUCCESS: single required-status aggregator (security + quality + rust-check + build)
   # ----------------------------------------------------------
   ci-success:
     name: ✅ CI Success
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [security, quality, build]
+    needs: [security, quality, rust-check, build]
     if: always()
     steps:
       - name: Verify all required jobs succeeded
         run: |
           if [ "${{ needs.security.result }}" != "success" ] || \
              [ "${{ needs.quality.result }}" != "success" ] || \
+             [ "${{ needs.rust-check.result }}" != "success" ] || \
              [ "${{ needs.build.result }}" != "success" ]; then
             echo "One or more required jobs did not succeed:"
-            echo "  security: ${{ needs.security.result }}"
-            echo "  quality:  ${{ needs.quality.result }}"
-            echo "  build:    ${{ needs.build.result }}"
+            echo "  security:    ${{ needs.security.result }}"
+            echo "  quality:     ${{ needs.quality.result }}"
+            echo "  rust-check:  ${{ needs.rust-check.result }}"
+            echo "  build:       ${{ needs.build.result }}"
             exit 1
           fi
           echo "All required jobs succeeded."

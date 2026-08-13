@@ -72,12 +72,14 @@ Each job that uses the composite must call `actions/checkout@v6` first (local co
 
 ```text
 security ──► quality ──┬──► build ──┬──► lighthouse
-                       ├──► e2e     └──► vrt
-                       └──► storybook
+        │              ├──► e2e     └──► vrt
+        │              └──► storybook
+        └──► rust-check (path-scoped: src-tauri/ only)
 
-security ─┬
-quality ──┼──► ci-success (required-status aggregator)
-build ────┘
+security ─────┬
+quality ──────┼
+rust-check ───┼──► ci-success (required-status aggregator)
+build ────────┘
 
 build (main, non-PR) ──► upload-pages-artifact
 deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
@@ -89,21 +91,16 @@ Mutation testing (Stryker) is **not** in this graph — it runs only via manual 
 |-----|--------|---------|
 | `security` | — | `pnpm audit --audit-level=high`; **OSV scanner** (`google/osv-scanner-action`) for npm + Rust lockfiles; `gitleaks` secrets scan; on PRs: `dependency-review-action` |
 | `quality` | `security` | Matrix **Node 22** and **24** → Biome lint, **`pnpm run i18n:check`**, **`pnpm run docs:check`**, **`pnpm run parity:check`**, `pnpm run typecheck`, Vitest + coverage (+ non-blocking coverage-ratchet suggestion), Codecov (optional token), coverage artifact |
+| `rust-check` | `security` | `cargo fmt --check`, `cargo check --locked`, `cargo clippy --locked --all-targets -- -D warnings`, `cargo test --locked` against `src-tauri/`. Path-scoped: the job always runs (valid `ci-success` dependency), but skips the cargo steps entirely when the PR diff doesn't touch `src-tauri/**`, so frontend-only PRs pay no meaningful cost. Prior to this job, native code could merge with zero compile/lint/test verification — only an advisory OSV vuln scan (in `security`, above) ever touched `Cargo.lock`, and the only workflow that actually ran `cargo build` was tag-push/manual-dispatch-only ([`tauri-build.yml`](../.github/workflows/tauri-build.yml)), never PRs. |
 | `build` | `quality` | Production `pnpm run build`, **`bundle:budget`**, **`analyze`** (upload `bundle-analysis.html`), **`pnpm run smoke:prod`** (headless-Chromium prod-build + CSP-runtime gate — see below), `dist` artifact; on `main` (non-PR): Pages artifact + **SLSA build provenance attestation**. No `if:` on the job itself — `smoke:prod` runs on every PR, not just `main` pushes. |
 | `e2e` | `quality` | Playwright **Chromium** + **Mobile Chrome** (Pixel 5) — `CI=true`, 2× retries, 50 min timeout; browser cache via `actions/cache@v5`. Firefox optional locally. `PLAYWRIGHT_SKIP_VRT=true` (VRT is its own job). |
 | `lighthouse` | `build` | LHCI (mobile): **accessibility error gate** `minScore: 0.95`; **CLS error** ≤ 0.1; performance/SEO warn. Desktop run: `continue-on-error: true` until baselines stabilise. Timeout 25 min. |
 | `storybook` | `quality` | Cloud-first — Storybook build + test-runner only run in CI (not locally); Playwright browser cache `v5`; `--maxWorkers=2 --junit` (non-blocking, `continue-on-error: true` — see [exit criteria](#non-blocking-gates--exit-criteria-f-13)); artifacts uploaded always. Debug: manual `storybook-debug.yml` workflow. |
 | `vrt` | `build` | Visual regression against production `dist`; `toHaveScreenshot()` with committed PNG baselines (4 views × Chromium); artifacts uploaded always |
-| `ci-success` | `security`, `quality`, `build` | Required-status **aggregator** — `if: always()`, fails if any of its three `needs` didn't resolve to `success` (a matrix job like `quality` only reports `success` once every Node 22/24 leg passes). Exists so branch protection can require **one** context instead of enumerating `security`/`quality (Node 22)`/`quality (Node 24)`/`build` by name; a future required job just joins this job's `needs` list, with no branch-protection settings edit needed. |
+| `ci-success` | `security`, `quality`, `rust-check`, `build` | Required-status **aggregator** — `if: always()`, fails if any of its `needs` didn't resolve to `success` (a matrix job like `quality` only reports `success` once every Node 22/24 leg passes). Branch protection requires **only** this one context (`✅ CI Success`) — confirmed live via `gh api repos/qnbs/WorldScript-Studio/branches/main/protection`, not the 4 individual contexts. A future required job just joins this job's `needs` list, with no branch-protection settings edit needed — exactly how `rust-check` was added. |
 | `deploy` | `build`, `e2e` | **Only** `main` push (not PR): `deploy-pages` |
 
 > **Desktop:** On-demand / tag-driven Tauri bundles live in [`tauri-build.yml`](../.github/workflows/tauri-build.yml); **`v*` tags** additionally publish installers on a **GitHub Release**. See [`docs/TAURI-CI.md`](TAURI-CI.md). Desktop CI does not block the web deploy graph above.
->
-> **Maintainer follow-up (not done here):** switching branch protection's required-checks list from the
-> 4 individual contexts to just `ci-success` is a branch-protection settings change — out of scope for
-> an automated PR. Do it manually once `ci-success` has run green on `main` at least once: repo
-> Settings → Branches → `main` → Required status checks → remove the 4 individual entries, add
-> `✅ CI Success`.
 
 ---
 
@@ -195,7 +192,7 @@ once a manual run demonstrates the flakiness is resolved — concretely, three c
 | **Dependabot** | Weekly (Monday) | PRs for npm deps (dev-tooling grouped) + GitHub Actions SHA bumps (max 5 open PRs) |
 | **`dependency-review-action`** | PRs only (security job) | Blocks PRs that introduce new high/critical vulnerabilities |
 | **pnpm v11 build-script policy** | Dependency installation | `pnpm-workspace.yaml` uses the sole supported, default-deny `allowBuilds` map; legacy build-script lists are intentionally absent |
-| **Branch protection** | Always | `main` requires 1 approved review, required status checks (security, quality ×2, build), no force-push |
+| **Branch protection** | Always | `main` requires 1 approved review, required status check (`✅ CI Success` aggregator only — see `ci-success` row above), no force-push |
 
 Only the two reviewed native packages marked `true` in `allowBuilds` (`@swc/core` and `esbuild`)
 may run dependency lifecycle scripts. `@google/genai`, `core-js`, `onnxruntime-node`, `protobufjs`,
