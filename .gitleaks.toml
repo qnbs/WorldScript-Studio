@@ -1,0 +1,25 @@
+title = "WorldScript Studio gitleaks config"
+
+[extend]
+# QNBS-v3: keep every default gitleaks rule active — this file only narrows one verified false
+# positive, it does not weaken secret detection anywhere else in the repo.
+useDefault = true
+
+# ─── Verified false positives ────────────────────────────────────────────────
+#
+# PASSPHRASE_SENTINEL_RECORD_KEY = 'idb_passphrase_sentinel_v1'
+# (services/storage/idbPassphraseSentinel.ts, mirrored as a mock constant in
+# tests/unit/storageEncryptionService.test.ts) is a static IndexedDB record-key identifier, not a
+# credential — the app must know it deterministically to find the passphrase-sentinel record via
+# store.get/put/delete. Gitleaks' `generic-api-key` heuristic flags it purely because the variable
+# name contains "PASSPHRASE" + "KEY" next to a sufficiently long, structured string (entropy 3.72).
+# Reviewed 2026-08-12: no other gitleaks finding in this scan; pnpm audit / OSV / CodeQL all clean.
+#
+# gitleaks' top-level [allowlist] has no AND condition between `paths` and `regexes` (only
+# per-rule [[rules.allowlists]] blocks support `condition`), so combining both here would OR them —
+# broadening the exemption to "anything in that file" rather than narrowing it. The exact leaked
+# value alone is already a highly-specific, non-generic string that cannot coincidentally match a
+# real secret elsewhere, so it's the narrowest correct scope available in this schema.
+[allowlist]
+description = "PASSPHRASE_SENTINEL_RECORD_KEY test mock — static IDB record-key identifier, not a credential"
+regexes = ['''^idb_passphrase_sentinel_v1$''']

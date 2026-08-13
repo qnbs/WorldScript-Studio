@@ -33,6 +33,11 @@
   "worlds.edit.notes": "Oharrak",
   "worlds.editorTabsAriaLabel": "Munduko editorearen fitxak",
   "worlds.error.imageFailed": "Huts egin du giroko irudiak sortzea. Mesedez, saiatu munduaren deskribapenari xehetasun gehiago gehitzen edo egiaztatu zure konexioa.",
+  "worlds.heuristic.culture": "Describe the peoples, beliefs, and daily life shaped by {{concept}}.",
+  "worlds.heuristic.description": "A world defined by its central premise: {{concept}}.",
+  "worlds.heuristic.geography": "Outline the major regions, climates, and natural features of {{concept}}.",
+  "worlds.heuristic.magicSystem": "Define the rules, costs, and limits of power in {{concept}}.",
+  "worlds.heuristic.name": "New World",
   "worlds.loading.profile": "Munduko profil zehatza sortzen...",
   "worlds.newWorldName": "Mundu Berria",
   "worlds.noWorlds": "Oraindik ez dago mundurik sortu.",
@@ -50,10 +55,5 @@
   "worlds.tabs.timeline": "Historia eta kronograma",
   "worlds.title": "Munduko Atlasa",
   "worlds.uploadImage": "Igo irudia",
-  "worlds.yourWorlds": "Zure Munduak",
-  "worlds.heuristic.name": "New World",
-  "worlds.heuristic.description": "A world defined by its central premise: {{concept}}.",
-  "worlds.heuristic.geography": "Outline the major regions, climates, and natural features of {{concept}}.",
-  "worlds.heuristic.magicSystem": "Define the rules, costs, and limits of power in {{concept}}.",
-  "worlds.heuristic.culture": "Describe the peoples, beliefs, and daily life shaped by {{concept}}."
+  "worlds.yourWorlds": "Zure Munduak"
 }
