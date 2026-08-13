@@ -171,7 +171,9 @@ describe('EncryptionRecoveryModal', () => {
     expect(
       screen.queryByLabelText('settings.privacy.encryptionPassphrase'),
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'settings.data.dangerZone.factoryReset.button' }),
+    ).toBeInTheDocument();
   });
 
   it('disables the resume button until the required fields are filled', async () => {

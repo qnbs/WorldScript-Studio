@@ -197,31 +197,27 @@ describe('FsSettingsStore — settings + encrypted API keys', () => {
     expect(await store.loadSettings()).toBeNull();
   });
 
-  it('encrypts and decrypts an API key round-trip', async () => {
-    await store.saveApiKey('openai', 'sk-secret-123');
-    expect(await store.getApiKey('openai')).toBe('sk-secret-123');
-    await store.clearApiKey('openai');
+  it('rejects filesystem API-key persistence', async () => {
+    await expect(store.saveApiKey('openai', 'sk-secret-123')).rejects.toThrow(/disabled/);
+  });
+
+  it('does not read legacy filesystem API-key files', async () => {
+    const keyFile = '/app/config/openai_key.enc.json';
+    fake.text.set(keyFile, JSON.stringify({ iv: 'legacy', data: 'legacy' }));
     expect(await store.getApiKey('openai')).toBeNull();
+    expect(fake.text.has(keyFile)).toBe(false);
   });
 
-  it('delegates the Gemini key helpers to provider storage', async () => {
-    await store.saveGeminiApiKey('gem-key');
-    expect(await store.getGeminiApiKey()).toBe('gem-key');
+  it('rejects filesystem API-key persistence even for an empty key', async () => {
+    await expect(store.saveApiKey('openai', '  ')).rejects.toThrow(/disabled/);
   });
 
-  it('rejects an empty API key', async () => {
-    await expect(store.saveApiKey('openai', '  ')).rejects.toThrow(/empty/);
-  });
-
-  it('returns null when decrypting a missing key', async () => {
+  it('returns null when no filesystem key exists', async () => {
     expect(await store.getApiKey('anthropic')).toBeNull();
   });
 
-  // QNBS-v3 (F-05/F-06 fix, 2026-07-29): a pre-2026-07-29 key file (unsalted single-SHA-256
-  // scheme) is discarded, not migrated (locked decision) — this asserts the discard path returns
-  // null without throwing, removes the stale file, and surfaces a one-time notification rather
-  // than failing silently.
-  it('discards a legacy unsalted key file, removes it, and notifies instead of throwing', async () => {
+  // QNBS-v3: legacy filesystem key files are discarded because their derivation was recoverable.
+  it('discards a legacy unsalted key file without notifying or throwing', async () => {
     const dispatch = vi.fn();
     appStoreRef.current = { getState: vi.fn(), dispatch } as never;
     try {
@@ -235,14 +231,7 @@ describe('FsSettingsStore — settings + encrypted API keys', () => {
 
       expect(result).toBeNull();
       expect(fake.text.has(legacyFile)).toBe(false);
-      expect(dispatch).toHaveBeenCalledWith(
-        expect.objectContaining({
-          payload: expect.objectContaining({
-            type: 'info',
-            title: expect.stringContaining('API Key Reset'),
-          }),
-        }),
-      );
+      expect(dispatch).not.toHaveBeenCalled();
     } finally {
       appStoreRef.current = null;
     }

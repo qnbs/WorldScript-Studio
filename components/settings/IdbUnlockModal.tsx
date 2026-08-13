@@ -1,6 +1,7 @@
 import type { FC } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
+import { wipeAllAppData } from '../../services/factoryResetService';
 import { verifyAndInitIdbEncryption } from '../../services/storage/storageEncryptionService';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
@@ -163,6 +164,12 @@ export const IdbUnlockModal: FC<Props> = ({ onUnlocked }) => {
     [handleUnlock],
   );
 
+  const handleFactoryReset = useCallback(async () => {
+    if (!window.confirm(t('settings.data.dangerZone.factoryReset.modalWarning'))) return;
+    setBusy(true);
+    await wipeAllAppData();
+  }, [t]);
+
   const errorId = 'idb-unlock-error';
   const hasError = error.length > 0;
 
@@ -221,6 +228,19 @@ export const IdbUnlockModal: FC<Props> = ({ onUnlocked }) => {
               : lockoutRemaining > 0
                 ? `${t('settings.privacy.encryptionUnlockButton')} (${Math.ceil(lockoutRemaining / 1000)}s)`
                 : t('settings.privacy.encryptionUnlockButton')}
+          </Button>
+        </div>
+        <div className="border-t border-[var(--sc-border-subtle)] pt-3">
+          <p className="text-xs text-[var(--sc-danger-fg)] mb-2">
+            {t('settings.data.dangerZone.factoryReset.modalDescription')}
+          </p>
+          <Button
+            variant="danger"
+            onClick={() => void handleFactoryReset()}
+            disabled={busy}
+            aria-busy={busy}
+          >
+            {t('settings.data.dangerZone.factoryReset.button')}
           </Button>
         </div>
       </div>

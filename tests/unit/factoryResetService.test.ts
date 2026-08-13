@@ -10,6 +10,7 @@ import { logger } from '../../services/logger';
 vi.mock('../../services/logger', () => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
 }));
+vi.mock('../../services/tauriRuntime', () => ({ isTauriRuntime: vi.fn(() => false) }));
 
 function createDb(name: string): Promise<void> {
   return new Promise((resolve, reject) => {
