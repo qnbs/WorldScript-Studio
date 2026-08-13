@@ -183,6 +183,21 @@ describe('FsProjectStore — projects', () => {
       expect.objectContaining({ error: 'disk full' }),
     );
   });
+
+  it('keeps the previous project when the replacement write fails', async () => {
+    await store.saveProject(project as never);
+    const originalWriteTextFile = fake.apis.writeTextFile;
+    fake.apis.writeTextFile = (path: string, content: string) => {
+      if (path.includes('/project.json.tmp-')) return Promise.reject(new Error('disk full'));
+      return originalWriteTextFile(path, content);
+    };
+
+    await expect(
+      store.saveProject({ ...project, title: 'Should not replace' } as never),
+    ).rejects.toThrow('disk full');
+    expect((await store.loadProject('p1'))?.title).toBe('My Novel');
+    expect([...fake.text.keys()].some((path) => path.includes('.tmp-'))).toBe(false);
+  });
 });
 
 describe('FsSettingsStore — settings + encrypted API keys', () => {
