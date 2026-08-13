@@ -94,11 +94,7 @@ export class FsAssetStore extends FsSnapshotStore {
           const metaFile = await apis.join(binderPath, metaName);
           try {
             const raw = JSON.parse(await retryFs(() => apis.readTextFile(metaFile))) as unknown;
-            if (
-              raw &&
-              typeof raw === 'object' &&
-              ('version' in raw || 'dataFile' in raw)
-            ) {
+            if (raw && typeof raw === 'object' && ('version' in raw || 'dataFile' in raw)) {
               const manifest = await this.readBinderManifest(apis, metaFile, safeAsset);
               if (manifest) committedFiles.add(manifest.dataFile);
               else protectedAssets.add(safeAsset);
@@ -111,7 +107,8 @@ export class FsAssetStore extends FsSnapshotStore {
           const match = entry.name?.match(BINDER_REVISION_FILE_PATTERN);
           if (!match) continue;
           const [, safeAsset] = match;
-          if (!safeAsset || committedFiles.has(entry.name!) || protectedAssets.has(safeAsset)) continue;
+          if (!safeAsset || committedFiles.has(entry.name!) || protectedAssets.has(safeAsset))
+            continue;
           const revisionFile = await apis.join(binderPath, entry.name!);
           await retryFs(() => apis.remove(revisionFile)).catch((error) => {
             logger.warn('Failed to remove orphaned binder asset revision:', error);

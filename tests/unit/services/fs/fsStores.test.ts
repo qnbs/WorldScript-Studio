@@ -341,11 +341,13 @@ describe('FsAssetStore — images + binder assets', () => {
   it('round-trips a binder binary asset with metadata', async () => {
     const data = new Uint8Array([1, 2, 3, 4]).buffer;
     await store.saveBinderAsset('p1', 'a1', data, {
-      name: 'doc.pdf',
-      mime: 'application/pdf',
-    } as never);
+      originalFileName: 'doc.pdf',
+      mimeType: 'application/pdf',
+      byteSize: 0,
+    });
     const got = await store.getBinderAsset('p1', 'a1');
     expect(got?.meta.byteSize).toBe(4);
+    expect(got?.meta.originalFileName).toBe('doc.pdf');
     expect(new Uint8Array(got?.data as ArrayBuffer)).toEqual(new Uint8Array([1, 2, 3, 4]));
 
     expect(await store.listBinderAssetIds('p1')).toContain('a1');
@@ -356,9 +358,10 @@ describe('FsAssetStore — images + binder assets', () => {
   it('keeps the previously committed binder pair readable when the new manifest cannot publish', async () => {
     const original = new Uint8Array([1, 2, 3]).buffer;
     await store.saveBinderAsset('p1', 'a1', original, {
-      name: 'before.pdf',
-      mime: 'application/pdf',
-    } as never);
+      originalFileName: 'before.pdf',
+      mimeType: 'application/pdf',
+      byteSize: 0,
+    });
     const committedFiles = [...fake.bin.keys()].sort();
 
     const originalWriteTextFile = fake.apis.writeTextFile;
@@ -369,13 +372,14 @@ describe('FsAssetStore — images + binder assets', () => {
 
     await expect(
       store.saveBinderAsset('p1', 'a1', new Uint8Array([9, 9]).buffer, {
-        name: 'after.pdf',
-        mime: 'application/pdf',
-      } as never),
+        originalFileName: 'after.pdf',
+        mimeType: 'application/pdf',
+        byteSize: 0,
+      }),
     ).rejects.toThrow('disk full');
 
     const recovered = await store.getBinderAsset('p1', 'a1');
-    expect(recovered?.meta.name).toBe('before.pdf');
+    expect(recovered?.meta.originalFileName).toBe('before.pdf');
     expect(new Uint8Array(recovered?.data as ArrayBuffer)).toEqual(new Uint8Array([1, 2, 3]));
     expect([...fake.bin.keys()].sort()).toEqual(committedFiles);
   });
