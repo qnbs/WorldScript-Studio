@@ -49,14 +49,20 @@ pnpm exec tauri build
 
 Linux dev deps match the Ubuntu job (WebKitGTK 4.1, AppIndicator, librsvg, patchelf).
 
-## Verifying native (Rust) changes — there is no PR-CI gate
+## Verifying native (Rust) changes
 
-The web `ci.yml` pipeline **never compiles `src-tauri/`**. This workflow only runs on
-`workflow_dispatch` / `v*` tags, and the full crate often will not build on constrained dev hardware
-(huge dep tree, WebKitGTK system libs, possible OOM). So a Rust change can merge through a green
-web-CI while never having been compiled.
+`ci.yml`'s `rust-check` job now compiles `src-tauri/` on every PR that touches it (or `.github/
+workflows/ci.yml` itself): `cargo fmt --check`, `cargo check --locked`, `cargo clippy --locked
+--all-targets -- -D warnings`, and `cargo test --locked`, all on ubuntu-latest, required for
+`ci-success`. A Rust change can no longer merge without having compiled and passed lint/tests —
+but that PR gate only proves the crate builds cleanly on Linux; it does not build/sign real
+installers, and it says nothing about macOS/Windows-specific `#[cfg(...)]` code paths. This
+workflow (`tauri-build.yml`) — full cross-platform bundle build/sign — remains the only way to
+verify those, and still only runs on `workflow_dispatch` / `v*` tags; the full crate often will not
+build on constrained dev hardware either (huge dep tree, WebKitGTK system libs, possible OOM).
 
-**The gate for any `src-tauri/` change is to dispatch this workflow on the branch:**
+**For a `src-tauri/` change touching platform-specific code, or before a release, dispatch this
+workflow on the branch:**
 
 ```bash
 git push -u origin <branch>

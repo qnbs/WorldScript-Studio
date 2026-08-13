@@ -175,20 +175,14 @@ jobs:
 
   # ----------------------------------------------------------
   # 1a. RUST CHECK: native compile/lint/test gate for src-tauri/ (required — see ci-success)
-  # QNBS-v3: previously the ONLY Rust CI was an OSV vuln scan (security job, advisory-only) plus
-  #          a full bundle build on tag-push/manual-dispatch only (tauri-build.yml) — native code
-  #          could merge without ever having compiled. This job always runs (so it's a valid
-  #          `needs:` dependency for ci-success) but skips the actual cargo steps when the diff
-  #          doesn't touch src-tauri/, so frontend-only PRs pay no meaningful cost.
   # ----------------------------------------------------------
   rust-check:
     name: 🦀 Rust Check
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: [security]
+    if: always()
     steps:
-      # QNBS-v3: fetch-depth:0 so the base-branch diff below can always resolve base.sha (same
-      # reasoning as the security job's gitleaks checkout).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
         with:
           fetch-depth: 0
@@ -198,13 +192,12 @@ jobs:
         id: filter
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            if git diff --quiet "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}" -- src-tauri/; then
+            if git diff --quiet "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}" -- src-tauri/ .github/workflows/ci.yml; then
               echo "changed=false" >> "$GITHUB_OUTPUT"
             else
               echo "changed=true" >> "$GITHUB_OUTPUT"
             fi
           else
-            # Push to main / workflow_dispatch: always verify — merges are infrequent, cost is trivial.
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -222,7 +215,6 @@ jobs:
         with:
           workspaces: src-tauri
           cache-all-crates: true
-          # QNBS-v3: same prefix-key scheme as tauri-build.yml — bump together on Rust channel/Cargo.lock churn.
           prefix-key: "v1"
 
       - name: Install Linux dependencies (WebKitGTK)
@@ -250,6 +242,11 @@ jobs:
         if: steps.filter.outputs.changed == 'true'
         working-directory: src-tauri
         run: cargo test --locked
+
+      - name: cargo check (fuzz crate)
+        if: steps.filter.outputs.changed == 'true'
+        run: cargo check --locked --manifest-path src-tauri/fuzz/Cargo.toml
+
 
   # ----------------------------------------------------------
   # 2. BUILD: Production build + Pages artifact upload

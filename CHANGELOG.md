@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Required Rust/Tauri compile gate on pull requests** (`rust-check` job, `.github/workflows/
+  ci.yml`). Previously the only Rust CI was an advisory-only OSV vulnerability scan plus a full
+  installer build on tag-push/manual-dispatch only (`tauri-build.yml`) — native code could merge
+  without ever having compiled. The new job runs `cargo fmt --check` / `cargo check --locked` /
+  `cargo clippy --locked --all-targets -- -D warnings` / `cargo test --locked` on every PR that
+  touches `src-tauri/` (or the job's own definition in `ci.yml`); other PRs skip the cargo steps
+  via an in-job change-detection filter, so the job always runs (a valid `needs:` dependency for
+  `ci-success`) at negligible cost when nothing Rust-related changed. **Review-loop follow-up
+  fixes to the same change:** the crate was not actually `rustfmt`-compliant (no `rustfmt.toml`,
+  pre-existing 2-space indentation vs. the 4-space default) — the first real PR to touch
+  `src-tauri/` would have failed `cargo fmt --check` immediately; reformatted the whole crate to
+  the rustfmt default instead of pinning the check to non-standard style. The change-detector only
+  diffed `src-tauri/`, so edits to the Rust job's own logic in `ci.yml` — including this PR's
+  original commit — never actually exercised the cargo steps; now also diffs `ci.yml` itself.
+  `src-tauri/fuzz/` (a separate nested crate, `cargo-fuzz`) was never checked and its path
+  dependency on the parent crate was actually broken (`[dependencies.app_lib] path = ".."` with no
+  `package =` override — the parent package is named `worldscript-studio`, so cargo could never
+  resolve it); fixed the dependency declaration, generated and committed its `Cargo.lock`, and
+  added an explicit `cargo check` step for it. Added `if: always()` at the job level so it still
+  runs (and reports real Rust diagnostics) even when the unrelated `security` job fails, matching
+  the job's own "always runs" framing. `AGENTS.md` § Desktop Releases and `docs/TAURI-CI.md` still
+  said "no PR-CI gate for Rust" / "never compiles `src-tauri/`" — updated both to describe what
+  the new gate covers and when the full cross-platform `tauri-build.yml` dispatch remains
+  necessary (macOS/Windows-specific code, real installer signing). Removed several newly-added
+  inline YAML rationale comments that violated this repo's own "no inline comments in config
+  files, explain in the commit message" rule.
+
 ## [1.27.0] — 2026-08-13
 
 ### Added

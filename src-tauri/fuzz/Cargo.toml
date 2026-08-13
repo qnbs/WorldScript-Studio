@@ -10,9 +10,12 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 
-# Fuzz targets are compiled as separate binaries so we need the main crate as a dependency
+# Fuzz targets are compiled as separate binaries so we need the main crate as a dependency.
+# The package is named "worldscript-studio" (its [lib] target is "app_lib") — the package
+# override below is required or cargo cannot resolve this path dependency at all.
 [dependencies.app_lib]
 path = ".."
+package = "worldscript-studio"
 
 [[bin]]
 name = "fuzz_file_name_sanitization"

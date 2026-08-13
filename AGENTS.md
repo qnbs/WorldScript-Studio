@@ -342,7 +342,7 @@ deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
 - `tauri-build.yml` runs on `workflow_dispatch` or `v*` tags. `v*` tags publish installers on a GitHub Release.
 - Artifacts: `.appimage`, `.msi`, `.dmg` + `latest.json` updater manifest.
 - Signing: Optional `TAURI_SIGNING_PRIVATE_KEY` and password for updater signatures.
-- **No PR-CI gate for Rust:** the web `ci.yml` never compiles `src-tauri/`, and the crate may not build on constrained hardware. After **any** `src-tauri/` change, verify by dispatching the build on your branch — `gh workflow run tauri-build.yml --ref <branch>` — and confirm it reaches `Finished N bundles`. ubuntu/macOS are the meaningful Rust signal. See [`docs/TAURI-CI.md`](docs/TAURI-CI.md) § *Verifying native (Rust) changes*.
+- **PR-CI Rust gate (`rust-check` in `ci.yml`, required):** `cargo fmt --check` / `cargo check --locked` / `cargo clippy --locked --all-targets -- -D warnings` / `cargo test --locked` run on every PR that touches `src-tauri/` or `.github/workflows/ci.yml` itself; other PRs skip the cargo steps via an in-job change-detection filter (the job still runs so it's a valid `needs:` dependency for `ci-success`). This only proves the crate **compiles, lints clean, and unit-tests pass on ubuntu-latest** — it does not build/sign real installers or verify macOS/Windows-specific code paths. After **any** `src-tauri/` change that touches platform-specific code, or before a release, still verify by dispatching the full bundle build on your branch — `gh workflow run tauri-build.yml --ref <branch>` — and confirm it reaches `Finished N bundles`. See [`docs/TAURI-CI.md`](docs/TAURI-CI.md) § *Verifying native (Rust) changes*.
 
 ### Deployment Targets
 
