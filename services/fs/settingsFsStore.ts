@@ -145,9 +145,7 @@ export class FsSettingsStore extends FsCore {
       return null;
     }
 
-    // QNBS-v3: JSON.parse succeeds on non-object payloads too (e.g. literal `null`, a bare number)
-    // — indexing those below would throw a TypeError instead of returning null, so guard explicitly
-    // rather than asserting the shape via a cast.
+    // QNBS-v3: JSON.parse succeeds on non-object payloads too (e.g. literal `null`) — indexing those below would throw instead of returning null, so guard explicitly rather than asserting the shape via a cast.
     if (typeof parsed !== 'object' || parsed === null) {
       logger.warn(
         `API key file for provider "${provider}" is not a recognizable object (preserved, not discarded).`,
@@ -177,11 +175,7 @@ export class FsSettingsStore extends FsCore {
       }
     }
 
-    // QNBS-v3: only positively-identified pre-2026-08-13 legacy envelopes (iv+data strings, no
-    // scheme field — the exact shape the retired encryptText()/decryptText() wrote) are discarded.
-    // An unrecognized-but-not-legacy shape (a future format after a rollback, or a merely corrupted
-    // current-format file) is preserved instead of guessed away — same "never destroy on ambiguous
-    // read" rule as the decrypt-failure branch above.
+    // QNBS-v3: only positively-identified legacy envelopes (iv+data strings, no scheme field — the retired encryptText()/decryptText() shape) are discarded; anything else is preserved, same "never destroy on ambiguous read" rule as the decrypt-failure branch above.
     const looksLikeLegacyEnvelope =
       typeof record['iv'] === 'string' &&
       typeof record['data'] === 'string' &&
