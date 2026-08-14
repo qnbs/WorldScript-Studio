@@ -7,6 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.27.1] — 2026-08-14
+
+> Desktop persistence/security stabilization (#363) — atomic writes and fail-closed key routing
+> across every Tauri filesystem-backed store, a factory-reset UI/logic consolidation, and three
+> new required CI gates (Rust compile/lint/test, E2E, Visual Regression) that previously let
+> native-code and UI-regression risk merge unchecked — plus a nanoid security-advisory patch.
+
+### Fixed
+
+- **Atomic writes across all Tauri filesystem-backed stores** (`services/fs/{assetFsStore,
+  codexFsStore,fsCore,projectFsStore,settingsFsStore,snapshotFsStore}.ts`) — writes are now
+  serialized, and an orphaned temp file left behind by a failed write is retried on cleanup (with a
+  warning logged, not silently dropped) instead of risking corruption of concurrently-written
+  project data.
+- **Unified, fail-closed desktop API-key routing.** Desktop key storage now routes unconditionally
+  through the same encrypted IndexedDB path used on the web, with recovery-reset hardened to fail
+  closed rather than leaving a partially-wiped state; `docs/SECURITY-THREAT-MODEL.md` corrected to
+  describe the unconditional routing and the best-effort (not guaranteed) nature of legacy-key-file
+  cleanup.
+- **Factory reset / danger-zone UI consolidated.** New `hooks/useFactoryReset.ts` +
+  `components/settings/FactoryResetDangerZone.tsx` replace three near-duplicate confirm/wipe/error/
+  busy implementations across `ApiKeySection`, `IdbUnlockModal`, and `EncryptionRecoveryModal`; also
+  fixes a bug where the stuck "recovery-required" branch had no error paragraph to render a failed
+  reset's error state.
+- **Packaged-build factory reset was broken.** The Tauri fs capability glob for `fs:allow-exists`
+  and `fs:allow-read-dir` only covered `$APPDATA/**`, rejecting `exists()`/`readDir()` on the
+  `$APPDATA` root itself; the capability now grants the exact root path too
+  (`src-tauri/capabilities/default.json`).
+- **Corrupt binder-asset detection fixed.** A binary/metadata byte-size mismatch is now treated as
+  corruption instead of silently pairing two independent atomic writes from different save
+  generations as if they were one transaction.
+- **Legacy API-key file cleanup no longer provider-list-bound.** Scans the config directory by the
+  `*_key.enc.json` naming convention instead of a hardcoded 5-provider list, so a future or
+  unlisted provider's legacy key file is no longer left behind after migration.
+- **Rust: `Builder::on_menu_event` gated `#[cfg(desktop)]`.** The call was unconditional despite
+  the crate itself restricting that method to desktop, which would have failed to compile for the
+  mobile targets `src-tauri/src/lib.rs` already anticipates (`#[cfg_attr(mobile, ...)]`).
+- **Re-wired the dead Rust menu-action event bridge.** `registerTauriMenuHandler` is back as a
+  pre-paint-window fallback, self-unregistering once the JS-owned menu (`installDesktopMenu`) takes
+  over — the native fallback menu's items were previously silently inert, and the two menus can no
+  longer double-dispatch a single click.
+
+### Security
+
+- **nanoid security advisory patched** (PR #362) — `nanoid@3.3.17` → `3.3.18`, added to
+  `minimumReleaseAgeExclude` in `pnpm-workspace.yaml` so the fix isn't held back by the
+  10,080-minute (7-day) `minimumReleaseAge` policy.
+
+### Changed
+
+- **CI: Rust compile/lint/test, E2E, and Visual Regression Testing are now required merge gates**
+  (`rust-tauri`, `e2e`, `vrt` join the `ci-success` aggregator's `needs`). Previously native Rust
+  code and UI regressions could merge into `main` with no automated check beyond an advisory OSV
+  vulnerability scan.
+
+### Tests
+
+- Added coverage for the new `clearTauriAppData` branch and the factory-reset danger-zone UI
+  (`tests/unit/factoryResetService.test.ts`, `tests/unit/settings/{EncryptionRecoveryModal,
+  IdbUnlockModal}.test.tsx`, `tests/unit/services/fs/{fsCore,fsStores}.test.ts`,
+  `tests/unit/tauriServices.test.ts`, `tests/unit/ApiKeySection.test.tsx`) — `codecov/patch` had
+  dropped to 52.75% before this pass.
+
 ## [1.27.0] — 2026-08-13
 
 ### Added
