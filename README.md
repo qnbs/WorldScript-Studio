@@ -312,7 +312,7 @@ The current primary project, settings, snapshot, image, Codex, RAG, and binder-a
 - **AES-256-GCM** with a PBKDF2-derived key (600 000 iterations, SHA-256, 32-byte random salt).
 - Gated behind `featureFlags.enableIdbAtRestEncryption`. When a library is configured but locked, protected reads and writes fail closed rather than falling back to plaintext.
 - Disable and passphrase rotation are temporarily unavailable until a journaled, cross-store migration protocol can prove recovery after interruption.
-- **Web/PWA build only.** The unlock screen (`IdbUnlockModal`) and session-scoped in-memory key protect the IndexedDB-backed storage path used by the browser/PWA build. On the **Tauri desktop build**, primary project, settings, snapshot, image, Codex, RAG, and binder-asset data are written by the filesystem-backed store (`services/fs/*`), which is plaintext (LZ-string compressed, not encrypted) regardless of this setting — enabling it on desktop still shows the same unlock screen (the passphrase sentinel lives in the WebView's IndexedDB) but does not encrypt the actual manuscript files on disk. No `tauri-plugin-stronghold` or equivalent OS-keychain integration ships today — see the API-key encryption note below for the desktop-specific mechanism that does exist.
+- **Web/PWA and desktop API-key paths are separate from project-file protection.** The unlock screen (`IdbUnlockModal`) and session-scoped in-memory key protect the IndexedDB-backed storage path. On the **Tauri desktop build**, primary project, settings, snapshot, image, Codex, RAG, and binder-asset data are written by the filesystem-backed store (`services/fs/*`), which is plaintext (LZ-string compressed, not encrypted) regardless of this setting. API keys are kept in the WebView's IndexedDB random-key store; the desktop filesystem never receives API-key ciphertext or derived key material.
 - At-rest protection reduces disclosure from an extracted browser profile while the library is locked; it does not protect an unlocked renderer, a compromised device, or every persistence surface.
 
 ### 🔐 Encrypted Library Backup
@@ -334,7 +334,7 @@ real protection despite being present in code:
 |------|-----------|-------|
 | **Browser BYOK API key** | Random, non-extractable AES-256-GCM key generated via `crypto.subtle.generateKey()` — no passphrase, nothing to derive | `services/storage/idbKeyStore.ts` |
 | **Browser IDB-at-rest data** _(opt-in, B-1)_ | User passphrase → PBKDF2 (600 000 iterations, SHA-256, random 32-byte salt) → AES-256-GCM, non-extractable key | `services/storage/storageEncryptionService.ts` |
-| **Desktop (Tauri) BYOK API key** ⚠️ | PBKDF2 (600 000 iterations, SHA-256, random 32-byte salt) → AES-256-GCM — but the passphrase input is a *public* string (`appDataPath\|provider\|WorldScriptStudio\|v1`), not a real secret; anyone with read access to the encrypted file can reconstruct it and decrypt in one step. Tracked, open gap — see `docs/IDB-ENCRYPTION.md` § Tauri Desktop Layer. **Does not apply to Gemini**: `components/ApiKeySection.tsx` still saves/reads the Gemini key through `dbService` (the browser IndexedDB row above) even on desktop, never through this filesystem path — a separate, functional bug tracked in [#358](https://github.com/qnbs/WorldScript-Studio/issues/358) | `services/fs/fsCore.ts`, `services/fs/settingsFsStore.ts` |
+| **Desktop (Tauri) BYOK API key** | Same random, non-extractable AES-256-GCM key store as the browser; no filesystem-derived secret material. Resolved 2026-08-14 — previously used a PBKDF2 derivation with a public/reconstructible input; also closed a Gemini-specific split-persistence bug ([#358](https://github.com/qnbs/WorldScript-Studio/issues/358)) where `ApiKeySection.tsx` and `geminiService.ts` read the key through different backends | `services/storage/idbKeyStore.ts`, `services/storageService.ts` |
 | **Desktop (Tauri) project/settings/snapshot/Codex/RAG/asset data** ⚠️ | **None — plaintext (LZ-string compressed only).** Enabling "Encrypt project data at rest" still shows the passphrase unlock screen on desktop, but it doesn't gate this filesystem-backed store. Tracked, open gap | `services/fs/*Store.ts` |
 | **Library backup vault** | User passphrase → PBKDF2 (600 000 iterations, SHA-256) → AES-256-GCM | `services/libraryBackupService.ts` |
 
@@ -575,7 +575,7 @@ WorldScript Studio supports local-only AI (no API key) as well as BYOK cloud pro
 
 1. **Get your key** — e.g. at [Google AI Studio](https://aistudio.google.com/app/apikey) (free tier available)
 2. **Open Settings** → AI Provider → select your provider
-3. **Enter your API key** — encrypted with AES-256-GCM (web build: stored in your browser's IndexedDB; desktop build: stored on disk, see the encryption breakdown below); never transmitted except to the provider you select
+3. **Enter your API key** — encrypted with AES-256-GCM in the local random-key store (browser and desktop WebView); never transmitted except to the provider you select
 
 **Security best practices:**
 - ✅ Your key never leaves your device in plaintext

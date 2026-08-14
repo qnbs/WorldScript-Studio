@@ -4,7 +4,8 @@
  * sanitization, and word counting — no Tauri APIs required.
  */
 
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { TauriApis } from '../../../../services/fs/fsCore';
 import {
   compressData,
   countProjectWords,
@@ -13,7 +14,15 @@ import {
   encryptText,
   retryFs,
   sanitizePathSegment,
+  writeTextFileAtomic,
 } from '../../../../services/fs/fsCore';
+
+// QNBS-v3 (CodeRabbit #363): vi.hoisted — vi.mock factories run before ordinary top-level
+// initializers, so a plain `const` here risks a temporal-dead-zone read on the mock path.
+const { mockLoggerWarn } = vi.hoisted(() => ({ mockLoggerWarn: vi.fn() }));
+vi.mock('../../../../services/logger', () => ({
+  logger: { warn: (...args: unknown[]) => mockLoggerWarn(...args) },
+}));
 
 describe('retryFs', () => {
   it('returns on first success without retrying', async () => {
@@ -41,6 +50,76 @@ describe('retryFs', () => {
     const fn = vi.fn().mockRejectedValue(new Error('file is locked, try again'));
     await expect(retryFs(fn, 2, 0)).rejects.toThrow(/locked/);
     expect(fn).toHaveBeenCalledTimes(3); // initial + 2 retries
+  });
+});
+
+describe('writeTextFileAtomic', () => {
+  function makeApis(overrides: Partial<TauriApis> = {}): TauriApis {
+    return {
+      readTextFile: vi.fn(),
+      writeTextFile: vi.fn().mockResolvedValue(undefined),
+      readFile: vi.fn(),
+      writeFile: vi.fn(),
+      mkdir: vi.fn(),
+      exists: vi.fn(),
+      readDir: vi.fn(),
+      remove: vi.fn().mockResolvedValue(undefined),
+      rename: vi.fn().mockResolvedValue(undefined),
+      open: vi.fn(),
+      save: vi.fn(),
+      appDataDir: vi.fn(),
+      join: vi.fn(),
+      invoke: vi.fn(),
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    mockLoggerWarn.mockClear();
+  });
+
+  it('writes to a temp sibling then renames it into place', async () => {
+    const apis = makeApis();
+    await writeTextFileAtomic(apis, '/data/project.json', '{"a":1}');
+
+    expect(apis.writeTextFile).toHaveBeenCalledTimes(1);
+    const [temporary, content] = (apis.writeTextFile as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      string,
+    ];
+    expect(temporary).toMatch(/^\/data\/project\.json\.tmp-/);
+    expect(content).toBe('{"a":1}');
+    expect(apis.rename).toHaveBeenCalledWith(temporary, '/data/project.json');
+    expect(apis.remove).not.toHaveBeenCalled();
+  });
+
+  it('removes the orphaned temp file and rethrows the original error when the write fails', async () => {
+    const apis = makeApis({ writeTextFile: vi.fn().mockRejectedValue(new Error('disk full')) });
+
+    await expect(writeTextFileAtomic(apis, '/data/project.json', 'x')).rejects.toThrow('disk full');
+    expect(apis.remove).toHaveBeenCalledTimes(1);
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
+  });
+
+  it('removes the temp file and rethrows the original error when rename fails', async () => {
+    const apis = makeApis({ rename: vi.fn().mockRejectedValue(new Error('EPERM')) });
+
+    await expect(writeTextFileAtomic(apis, '/data/project.json', 'x')).rejects.toThrow('EPERM');
+    expect(apis.remove).toHaveBeenCalledTimes(1);
+  });
+
+  it('logs a warning but still rethrows the original error when temp-file cleanup itself fails', async () => {
+    // QNBS-v3: a non-transient message keeps the cleanup retry a single immediate attempt — a transient-looking one (e.g. "busy") would trigger real 500ms retry delays here.
+    const apis = makeApis({
+      rename: vi.fn().mockRejectedValue(new Error('EPERM')),
+      remove: vi.fn().mockRejectedValue(new Error('access denied')),
+    });
+
+    await expect(writeTextFileAtomic(apis, '/data/project.json', 'x')).rejects.toThrow('EPERM');
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      'Failed to remove temp file after a failed atomic write',
+      expect.objectContaining({ error: 'access denied' }),
+    );
   });
 });
 

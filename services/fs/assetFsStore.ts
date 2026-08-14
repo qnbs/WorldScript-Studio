@@ -6,7 +6,7 @@
 
 import { logger } from '../logger';
 import type { BinderAssetMeta, BinderAssetPayload } from '../storageBackend';
-import { retryFs, sanitizePathSegment } from './fsCore';
+import { retryFs, sanitizePathSegment, writeFileAtomic, writeTextFileAtomic } from './fsCore';
 import { FsSnapshotStore } from './snapshotFsStore';
 
 export class FsAssetStore extends FsSnapshotStore {
@@ -23,7 +23,7 @@ export class FsAssetStore extends FsSnapshotStore {
 
     const imageFile = await apis.join(imagesPath, `${sanitizePathSegment(id, 'image')}.png`);
     // QNBS-v3: data URLs retain an uploaded image's MIME type; legacy raw payloads remain readable as PNG below.
-    await retryFs(() => apis.writeTextFile(imageFile, base64Data));
+    await writeTextFileAtomic(apis, imageFile, base64Data);
   }
 
   async getImage(id: string): Promise<string | null> {
@@ -88,8 +88,8 @@ export class FsAssetStore extends FsSnapshotStore {
     const { dir, binFile, metaFile } = await this.binderAssetPaths(projectId, assetId);
     if (!(await apis.exists(dir))) await apis.mkdir(dir, { recursive: true });
     const metaOut: BinderAssetMeta = { ...meta, byteSize: data.byteLength };
-    await retryFs(() => apis.writeFile(binFile, new Uint8Array(data)));
-    await retryFs(() => apis.writeTextFile(metaFile, JSON.stringify(metaOut)));
+    await writeFileAtomic(apis, binFile, new Uint8Array(data));
+    await writeTextFileAtomic(apis, metaFile, JSON.stringify(metaOut));
   }
 
   async getBinderAsset(projectId: string, assetId: string): Promise<BinderAssetPayload | null> {
@@ -102,6 +102,16 @@ export class FsAssetStore extends FsSnapshotStore {
         retryFs(() => apis.readTextFile(metaFile)),
       ]);
       const meta = JSON.parse(metaRaw) as BinderAssetMeta;
+      // QNBS-v3: binary + metadata are two independent atomic writes, not one transaction — a byteSize mismatch is the cheapest reliable signal that a partial failure paired a new generation with a stale one.
+      if (meta.byteSize !== bytes.byteLength) {
+        logger.warn('getBinderAsset: byteSize/binary mismatch — treating pair as corrupt', {
+          projectId,
+          assetId,
+          expected: meta.byteSize,
+          actual: bytes.byteLength,
+        });
+        return null;
+      }
       const copy = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
       return { data: copy, meta };
     } catch (error) {
