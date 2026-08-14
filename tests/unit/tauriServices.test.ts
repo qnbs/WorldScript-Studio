@@ -3,6 +3,7 @@
  * QNBS-v3: Mocks isTauriRuntime — non-Tauri paths do nothing and don't import Tauri modules.
  */
 
+import { waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
@@ -16,14 +17,17 @@ vi.mock('../../services/tauriRuntime', () => ({
 }));
 
 // QNBS-v3: capture the registered `listen` callback so tests can simulate native menu events.
+// mockListen is a controllable reference (not the default auto-resolving body inline) so the race-
+// condition regression test below can defer its resolution to simulate a stale completion.
 let capturedMenuListener: ((event: { payload: string }) => void) | null = null;
+const mockListen = vi.fn(async (_name: string, cb: (event: { payload: string }) => void) => {
+  capturedMenuListener = cb;
+  return () => {
+    capturedMenuListener = null;
+  };
+});
 vi.mock('@tauri-apps/api/event', () => ({
-  listen: vi.fn(async (_name: string, cb: (event: { payload: string }) => void) => {
-    capturedMenuListener = cb;
-    return () => {
-      capturedMenuListener = null;
-    };
-  }),
+  listen: (...args: Parameters<typeof mockListen>) => mockListen(...args),
 }));
 
 // ---------------------------------------------------------------------------
@@ -76,6 +80,31 @@ describe('registerTauriMenuHandler', () => {
     await registerTauriMenuHandler(handler);
     capturedMenuListener?.({ payload: 'undo' });
     expect(handler).not.toHaveBeenCalled();
+  });
+
+  // QNBS-v3 (CodeAnt/CodeRabbit #363): registration is async (dynamic import + listen()) — an
+  // unregister landing while it's still pending must tear down the stale listener instead of
+  // letting its late completion install one anyway (which would survive past "unregistered").
+  it('tears down a stale listener whose registration resolves after an unregister', async () => {
+    mockIsTauri = true;
+    let resolveListen: ((stop: () => void) => void) | undefined;
+    const staleStop = vi.fn();
+    mockListen.mockImplementationOnce(
+      () =>
+        new Promise<() => void>((resolve) => {
+          resolveListen = resolve;
+        }),
+    );
+
+    const registerPromise = registerTauriMenuHandler(vi.fn());
+    // Wait for the pending dynamic import + listen() call to actually land before unregistering —
+    // otherwise unregister would run before registrationToken has even been captured.
+    await waitFor(() => expect(resolveListen).toBeDefined());
+    unregisterTauriMenuHandler(); // lands before listen() above resolves
+    resolveListen?.(staleStop);
+    await registerPromise;
+
+    expect(staleStop).toHaveBeenCalledTimes(1);
   });
 });
 

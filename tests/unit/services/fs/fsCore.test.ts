@@ -17,7 +17,9 @@ import {
   writeTextFileAtomic,
 } from '../../../../services/fs/fsCore';
 
-const mockLoggerWarn = vi.fn();
+// QNBS-v3 (CodeRabbit #363): vi.hoisted — vi.mock factories run before ordinary top-level
+// initializers, so a plain `const` here risks a temporal-dead-zone read on the mock path.
+const { mockLoggerWarn } = vi.hoisted(() => ({ mockLoggerWarn: vi.fn() }));
 vi.mock('../../../../services/logger', () => ({
   logger: { warn: (...args: unknown[]) => mockLoggerWarn(...args) },
 }));

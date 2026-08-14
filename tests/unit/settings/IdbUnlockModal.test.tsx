@@ -271,7 +271,9 @@ describe('IdbUnlockModal', () => {
     it('asks for confirmation and wipes app data when confirmed', async () => {
       const user = userEvent.setup();
       render(<IdbUnlockModal onUnlocked={mockOnUnlocked} />);
-      await user.click(screen.getAllByRole('button')[1] as HTMLElement);
+      await user.click(
+        screen.getByRole('button', { name: 'settings.data.dangerZone.factoryReset.button' }),
+      );
       expect(window.confirm).toHaveBeenCalledWith(
         'settings.data.dangerZone.factoryReset.modalWarning',
       );
@@ -282,7 +284,9 @@ describe('IdbUnlockModal', () => {
       vi.spyOn(window, 'confirm').mockReturnValue(false);
       const user = userEvent.setup();
       render(<IdbUnlockModal onUnlocked={mockOnUnlocked} />);
-      await user.click(screen.getAllByRole('button')[1] as HTMLElement);
+      await user.click(
+        screen.getByRole('button', { name: 'settings.data.dangerZone.factoryReset.button' }),
+      );
       expect(mockWipeAllAppData).not.toHaveBeenCalled();
     });
 
@@ -290,7 +294,9 @@ describe('IdbUnlockModal', () => {
       mockWipeAllAppData.mockRejectedValue(new Error('disk full'));
       const user = userEvent.setup();
       render(<IdbUnlockModal onUnlocked={mockOnUnlocked} />);
-      await user.click(screen.getAllByRole('button')[1] as HTMLElement);
+      await user.click(
+        screen.getByRole('button', { name: 'settings.data.dangerZone.factoryReset.button' }),
+      );
       await waitFor(() => {
         expect(screen.getByText('settings.privacy.encryptionRecoveryFailed')).toBeInTheDocument();
       });
