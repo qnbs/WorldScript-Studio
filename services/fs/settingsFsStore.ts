@@ -13,6 +13,22 @@ import type { TauriApis } from './fsCore';
 import { FsCore, retryFs, writeTextFileAtomic } from './fsCore';
 
 export class FsSettingsStore extends FsCore {
+  async removeLegacyApiKeyFiles(): Promise<void> {
+    const apis = await this.getApis();
+    const appDataPath = await this.ensureAppDataPath();
+    const configPath = await apis.join(appDataPath, 'config');
+    const providers = ['gemini', 'openai', 'anthropic', 'grok', 'openrouter'];
+
+    for (const provider of providers) {
+      const keyFile = await apis.join(configPath, `${provider}_key.enc.json`);
+      try {
+        if (await apis.exists(keyFile)) await retryFs(() => apis.remove(keyFile));
+      } catch (error) {
+        logger.warn(`Failed to remove legacy API key file for provider "${provider}":`, error);
+      }
+    }
+  }
+
   async saveSettings(settings: Settings): Promise<void> {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();

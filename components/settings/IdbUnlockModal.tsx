@@ -2,6 +2,7 @@ import type { FC } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
 import { wipeAllAppData } from '../../services/factoryResetService';
+import { logger } from '../../services/logger';
 import { verifyAndInitIdbEncryption } from '../../services/storage/storageEncryptionService';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
@@ -167,7 +168,17 @@ export const IdbUnlockModal: FC<Props> = ({ onUnlocked }) => {
   const handleFactoryReset = useCallback(async () => {
     if (!window.confirm(t('settings.data.dangerZone.factoryReset.modalWarning'))) return;
     setBusy(true);
-    await wipeAllAppData();
+    setError('');
+    try {
+      await wipeAllAppData();
+    } catch (err) {
+      setError(t('settings.privacy.encryptionRecoveryFailed'));
+      logger.error('Factory reset failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setBusy(false);
+    }
   }, [t]);
 
   const errorId = 'idb-unlock-error';

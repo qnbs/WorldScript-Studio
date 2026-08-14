@@ -18,6 +18,7 @@ const mockDb = {
   saveApiKey: vi.fn().mockResolvedValue(undefined),
   getApiKey: vi.fn().mockResolvedValue(null),
   clearApiKey: vi.fn().mockResolvedValue(undefined),
+  removeLegacyApiKeyFiles: vi.fn().mockResolvedValue(undefined),
   saveSnapshot: vi.fn().mockResolvedValue(1),
   getSnapshotData: vi.fn().mockResolvedValue(null),
   listSnapshots: vi.fn().mockResolvedValue([]),

@@ -213,7 +213,7 @@ describe('FsSettingsStore — settings + encrypted API keys', () => {
   });
 
   it('rejects filesystem API-key persistence', async () => {
-    await expect(store.saveApiKey('openai', 'sk-secret-123')).rejects.toThrow(/disabled/);
+    await expect(store.saveApiKey('openai', 'test-provider-key')).rejects.toThrow(/disabled/);
   });
 
   it('does not read legacy filesystem API-key files', async () => {
@@ -231,7 +231,20 @@ describe('FsSettingsStore — settings + encrypted API keys', () => {
     expect(await store.getApiKey('anthropic')).toBeNull();
   });
 
-  // QNBS-v3: legacy filesystem key files are discarded because their derivation was recoverable.
+  it('removes known legacy API-key files during desktop startup cleanup', async () => {
+    const providers = ['gemini', 'openai', 'anthropic', 'grok', 'openrouter'];
+    for (const provider of providers) {
+      fake.text.set(`/app/config/${provider}_key.enc.json`, 'legacy-ciphertext');
+    }
+
+    await store.removeLegacyApiKeyFiles();
+
+    expect(
+      providers.every((provider) => !fake.text.has(`/app/config/${provider}_key.enc.json`)),
+    ).toBe(true);
+  });
+
+  // QNBS-v3: [security / discard recoverable legacy ciphertext / prevents unsafe migration].
   it('discards a legacy unsalted key file without notifying or throwing', async () => {
     const dispatch = vi.fn();
     appStoreRef.current = { getState: vi.fn(), dispatch } as never;

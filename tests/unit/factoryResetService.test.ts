@@ -1,6 +1,6 @@
 /**
  * Tests for services/factoryResetService.ts
- * QNBS-v3: wipeAllAppData — clears IDB + web storage + SW caches, then reloads. Covers the
+ * QNBS-v3: [data safety / verify complete reset sequencing / preserves deterministic recovery]. Covers the
  * native indexedDB.databases() path, the known-list fallback, and the Cache API branch.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

@@ -29,17 +29,11 @@ export const ApiKeySection: FC = () => {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showKey, setShowKey] = useState(false);
 
-  const [decryptFailed, setDecryptFailed] = useState(false);
-
   const checkKeyStatus = useCallback(async () => {
     setIsLoading(true);
     try {
       const exists = Boolean(await storageService.getGeminiApiKey());
       setHasKey(exists);
-      // Check if key exists but decryption failed (device change, cleared site data)
-      if (!exists) {
-        setDecryptFailed(false);
-      }
     } catch (error) {
       logger.error('Failed to check API key status:', error);
     } finally {
@@ -69,7 +63,6 @@ export const ApiKeySection: FC = () => {
       invalidateAiClientCache();
       setApiKey('');
       setHasKey(true);
-      setDecryptFailed(false);
       setMessage({ type: 'success', text: t('settings.apiKey.saved') });
       setTestResult(null);
       // QNBS-v3: surface an invalid/unauthenticated key immediately instead of deferring discovery
@@ -195,34 +188,6 @@ export const ApiKeySection: FC = () => {
           </div>
         </div>
       </div>
-
-      {/* Decrypt Failed Warning */}
-      {decryptFailed && (
-        <div className="p-4 rounded-lg bg-[var(--sc-danger-bg)] border border-[var(--sc-danger-fg)]/30">
-          <div className="flex items-start gap-3">
-            {/* QNBS-v3: Decorative icon - hidden from assistive tech */}
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-              className="w-5 h-5 text-[var(--sc-danger-fg)] flex-shrink-0 mt-0.5"
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
-              />
-            </svg>
-            <div className="text-sm text-[var(--sc-danger-fg)]">
-              <p className="font-medium mb-1">{t('apiKey.decryptFailed')}</p>
-              <p className="text-[var(--sc-danger-fg)]/80">{t('apiKey.decryptFailedDetail')}</p>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Key Status / Input */}
       {hasKey ? (

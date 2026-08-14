@@ -91,7 +91,17 @@ export const EncryptionRecoveryModal: FC<Props> = ({ journal, onRecovered }) => 
   const handleFactoryReset = useCallback(async () => {
     if (!window.confirm(t('settings.data.dangerZone.factoryReset.modalWarning'))) return;
     setBusy(true);
-    await wipeAllAppData();
+    setError('');
+    try {
+      await wipeAllAppData();
+    } catch (err) {
+      setError(t('settings.privacy.encryptionRecoveryFailed'));
+      logger.error('Factory reset failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setBusy(false);
+    }
   }, [t]);
 
   return (

@@ -49,6 +49,7 @@ class StorageManager {
     if (isTauriRuntime()) {
       try {
         await fileSystemService.initialize();
+        await fileSystemService.removeLegacyApiKeyFiles();
         this.backend = fileSystemService;
         logger.debug('Using file system storage backend');
       } catch (error) {

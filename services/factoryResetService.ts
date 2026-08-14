@@ -64,7 +64,17 @@ async function clearTauriAppData(): Promise<void> {
     const apis = await loadTauriApis();
     const appDataPath = await apis.appDataDir();
     if (await apis.exists(appDataPath)) {
-      await apis.remove(appDataPath, { recursive: true });
+      // QNBS-v3: keep the capability-scoped AppData root and remove only its contents.
+      const entries = await apis.readDir(appDataPath);
+      await Promise.all(
+        entries
+          .map((entry) => entry.name)
+          .filter((name): name is string => Boolean(name))
+          .map(async (name) => {
+            const childPath = await apis.join(appDataPath, name);
+            await apis.remove(childPath, { recursive: true });
+          }),
+      );
     }
   } catch (error) {
     logger.error('Failed to clear Tauri app data during factory reset:', error);
@@ -79,9 +89,10 @@ async function clearTauriAppData(): Promise<void> {
  */
 export async function wipeAllAppData(): Promise<void> {
   logger.warn('[factoryReset] Wiping all app data…');
+  // QNBS-v3: clear fallible desktop data first so a failed desktop reset never leaves a mixed wipe.
+  await clearTauriAppData();
   await deleteAllIndexedDBDatabases();
   await clearServiceWorkerCaches();
-  await clearTauriAppData();
   try {
     localStorage.clear();
     sessionStorage.clear();
