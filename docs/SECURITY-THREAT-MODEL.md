@@ -39,7 +39,7 @@ This document provides a formal STRIDE threat analysis for WorldScript Studio, m
 | Threat | Mitigation | Code Location |
 |--------|------------|-------------|
 | API key leakage via logs | StructuredLogger sanitization; never log keys | `services/logger.ts:sanitizeLogContext()` |
-| Desktop API key exposure via local filesystem read | API keys are not written to the Tauri AppData filesystem. `storageService` uses the IndexedDB key store with a random non-extractable AES-GCM key; legacy filesystem key files are discarded and re-entry is required. | `services/storage/idbKeyStore.ts`, `services/storageService.ts`, `services/fs/settingsFsStore.ts` |
+| Desktop API key exposure via local filesystem read | Filesystem API-key persistence is disabled: `storageService`'s key methods route directly to the IndexedDB key store (random non-extractable AES-GCM key) on every platform, desktop included — the filesystem adapter's own `saveApiKey` is a defense-in-depth backstop that throws if ever called directly. Legacy filesystem key files are removed on a best-effort basis (each failure is logged, not retried indefinitely) and re-entry is required if cleanup or decryption fails. | `services/storage/idbKeyStore.ts`, `services/storageService.ts`, `services/fs/settingsFsStore.ts` |
 | Manuscript data in IndexedDB | AES-256-GCM at-rest encryption | `services/storage/storageEncryptionService.ts` |
 | Voice audio to cloud | Web Speech API consent gate | `components/voice/VoicePrivacyConsentModal.tsx` |
 | DuckDB analytics unencrypted (SEC-6) | **Bounded by design, with one prose column now encrypted:** most persisted fields are local metadata only (titles, loglines, character names, word counts, embeddings) and **nothing leaves the device**. The one column that genuinely holds literal manuscript prose, `codex_mentions.excerpt`, is now cell-level encrypted (AES-256-GCM via `services/duckdb/duckdbEncryption.ts`, reusing the IDB at-rest encryption key) whenever `enableIdbAtRestEncryption` is active: `duckdbCodexWrite()` writes ciphertext into `excerpt_enc BLOB` and nulls the plaintext `excerpt` column; `services/duckdb/codexExcerptEncryptionMigration.ts` backfills any pre-existing plaintext rows once encryption is unlocked. Gated by `enableDuckDbAnalytics` **and** the Settings → Privacy "Analytics" opt-out (`isAnalyticsPersistenceAllowed` in `app/listenerMiddleware.ts`); turning the toggle off stops all DuckDB writes + inference telemetry. Full OPFS file-level encryption remains **infeasible** — DuckDB-WASM owns the OPFS file handle directly, so there is no app-level interception point; the other metadata columns stay intentionally plaintext (bounded-exposure design). | `app/listenerMiddleware.ts:isAnalyticsPersistenceAllowed`, `services/duckdb/duckdbAnalytics.ts:duckdbCodexWrite()`, `services/duckdb/duckdbEncryption.ts`, `services/duckdb/codexExcerptEncryptionMigration.ts` |
@@ -124,8 +124,10 @@ Goal: Intercept/decrypt collaboration traffic
 ```
 Goal: Recover a user's cloud-provider API key from the Tauri desktop install
 ├─ OR: Read the Tauri AppData filesystem directly (local process / malware with user-level FS access)
-│  └─ Mitigation: API keys are not stored there; the filesystem adapter rejects key writes and
-│     deletes legacy derived-key files. Runtime key access uses the WebView IDB key store.
+│  └─ Mitigation: API keys are not stored there — `storageService` routes every key operation to the
+│     WebView's IndexedDB key store regardless of platform; the filesystem adapter's own key-write
+│     path is a defense-in-depth backstop that throws rather than persisting. Legacy derived-key
+│     files are removed best-effort (logged, not guaranteed) during startup cleanup.
 ├─ OR: Read the IDB-at-rest passphrase sentinel (enableIdbAtRestEncryption)
 │  └─ Mitigation: same PBKDF2 + non-extractable-key pattern; session-scoped in-memory key, never
 │     persisted to disk (`services/storage/storageEncryptionService.ts`)

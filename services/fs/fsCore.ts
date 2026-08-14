@@ -104,7 +104,15 @@ async function writeAndReplace(
       await retryFs(() => write(temporary));
       await retryFs(() => apis.rename(temporary, path));
     } catch (error) {
-      await apis.remove(temporary).catch(() => undefined);
+      // QNBS-v3: retry cleanup, then log (not throw) — the caller must always see the original write/rename error, with an orphaned-temp-file warning surfaced for diagnostics.
+      try {
+        await retryFs(() => apis.remove(temporary));
+      } catch (cleanupError) {
+        logger.warn('Failed to remove temp file after a failed atomic write', {
+          path: temporary,
+          error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+        });
+      }
       throw error;
     }
   });

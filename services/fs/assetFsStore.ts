@@ -102,6 +102,16 @@ export class FsAssetStore extends FsSnapshotStore {
         retryFs(() => apis.readTextFile(metaFile)),
       ]);
       const meta = JSON.parse(metaRaw) as BinderAssetMeta;
+      // QNBS-v3: binary + metadata are two independent atomic writes, not one transaction — a byteSize mismatch is the cheapest reliable signal that a partial failure paired a new generation with a stale one.
+      if (meta.byteSize !== bytes.byteLength) {
+        logger.warn('getBinderAsset: byteSize/binary mismatch — treating pair as corrupt', {
+          projectId,
+          assetId,
+          expected: meta.byteSize,
+          actual: bytes.byteLength,
+        });
+        return null;
+      }
       const copy = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
       return { data: copy, meta };
     } catch (error) {

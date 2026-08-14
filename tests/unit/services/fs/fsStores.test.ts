@@ -244,6 +244,17 @@ describe('FsSettingsStore — settings + encrypted API keys', () => {
     ).toBe(true);
   });
 
+  // QNBS-v3 (CodeRabbit #363): regression guard — a hardcoded provider list would leave an unlisted/future provider's legacy file uncleaned forever, since cleanup now scans by filename pattern instead.
+  it('removes a legacy key file for a provider not in any hardcoded list, and leaves other files alone', async () => {
+    fake.text.set('/app/config/some-future-provider_key.enc.json', 'legacy-ciphertext');
+    fake.text.set('/app/config/settings.json', '{"kept":true}');
+
+    await store.removeLegacyApiKeyFiles();
+
+    expect(fake.text.has('/app/config/some-future-provider_key.enc.json')).toBe(false);
+    expect(fake.text.has('/app/config/settings.json')).toBe(true);
+  });
+
   // QNBS-v3: [security / discard recoverable legacy ciphertext / prevents unsafe migration].
   it('discards a legacy unsalted key file without notifying or throwing', async () => {
     const dispatch = vi.fn();
@@ -343,6 +354,25 @@ describe('FsAssetStore — images + binder assets', () => {
   it('returns null/[] for missing binder assets', async () => {
     expect(await store.getBinderAsset('p1', 'missing')).toBeNull();
     expect(await store.listBinderAssetIds('p1')).toEqual([]);
+  });
+
+  // QNBS-v3 (CodeAnt #363): simulates a torn write (a partially-applied metadata update from a different generation) and asserts the read side refuses to pair mismatched binary/metadata.
+  it('treats a binary/metadata byteSize mismatch as corrupt rather than returning a mixed pair', async () => {
+    const data = new Uint8Array([1, 2, 3, 4]).buffer;
+    await store.saveBinderAsset('p1', 'a1', data, {
+      name: 'doc.pdf',
+      mime: 'application/pdf',
+    } as never);
+
+    const metaFile = '/app/projects/p1/binder/a1.meta.json';
+    const staleMeta = JSON.parse(fake.text.get(metaFile) as string);
+    fake.text.set(metaFile, JSON.stringify({ ...staleMeta, byteSize: 999 }));
+
+    expect(await store.getBinderAsset('p1', 'a1')).toBeNull();
+    expect(logger.warn).toHaveBeenCalledWith(
+      'getBinderAsset: byteSize/binary mismatch — treating pair as corrupt',
+      expect.objectContaining({ expected: 999, actual: 4 }),
+    );
   });
 });
 

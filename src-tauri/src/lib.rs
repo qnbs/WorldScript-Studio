@@ -136,7 +136,7 @@ fn install_app_menu(_app: &tauri::App) -> tauri::Result<()> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         // QNBS-v3: Single-instance plugin with deep-link feature handles file associations
         // The plugin automatically handles CLI args and emits "deep-link://new-url" event
         .plugin(tauri_plugin_single_instance::Builder::new().build())
@@ -177,23 +177,30 @@ pub fn run() {
             }
             install_app_menu(app)?;
             Ok(())
-        })
-        .on_menu_event(|app, event| {
-            let id = event.id().0.clone();
-            // QNBS-v3 (#187): only forward the custom ids the frontend actually handles. The predefined
-            // Edit/Window items (undo/redo/cut/copy/paste/select-all/minimize/…) are handled natively by the
-            // OS; emitting them too would flood the JS bridge with high-frequency events during editing that
-            // the frontend just ignores.
-            if matches!(
-                id.as_str(),
-                "menu-export" | "menu-settings" | "menu-help" | "menu-command-palette"
-            ) {
-                let _ = app.emit("menu-action", id);
-            }
-        })
-        // QNBS-v3: RunEvent handlers removed because tauri_plugin_single_instance
-        // handles SecondInstance/Opened via "deep-link://new-url" events and
-        // tauri::Builder no longer exposes .on_event() in Tauri v2.
+        });
+
+    // QNBS-v3: Builder::on_menu_event is itself #[cfg(desktop)]-gated inside the tauri crate — an
+    // unconditional call here would fail to compile for the mobile targets #[cfg_attr(mobile, ...)]
+    // above anticipates. Rebinding `builder` keeps the rest of the chain shared across targets.
+    #[cfg(desktop)]
+    let builder = builder.on_menu_event(|app, event| {
+        let id = event.id().0.clone();
+        // QNBS-v3 (#187): only forward the custom ids the frontend actually handles. The predefined
+        // Edit/Window items (undo/redo/cut/copy/paste/select-all/minimize/…) are handled natively by the
+        // OS; emitting them too would flood the JS bridge with high-frequency events during editing that
+        // the frontend just ignores.
+        if matches!(
+            id.as_str(),
+            "menu-export" | "menu-settings" | "menu-help" | "menu-command-palette"
+        ) {
+            let _ = app.emit("menu-action", id);
+        }
+    });
+
+    // QNBS-v3: RunEvent handlers removed because tauri_plugin_single_instance
+    // handles SecondInstance/Opened via "deep-link://new-url" events and
+    // tauri::Builder no longer exposes .on_event() in Tauri v2.
+    builder
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

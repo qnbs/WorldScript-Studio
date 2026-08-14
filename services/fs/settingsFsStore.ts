@@ -13,18 +13,31 @@ import type { TauriApis } from './fsCore';
 import { FsCore, retryFs, writeTextFileAtomic } from './fsCore';
 
 export class FsSettingsStore extends FsCore {
+  // QNBS-v3 (CodeRabbit #363): scan by the `*_key.enc.json` naming convention, not a fixed provider list — saveApiKey/getApiKey accept any provider string, so a hardcoded list left unlisted providers' legacy files uncleaned.
   async removeLegacyApiKeyFiles(): Promise<void> {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
     const configPath = await apis.join(appDataPath, 'config');
-    const providers = ['gemini', 'openai', 'anthropic', 'grok', 'openrouter'];
+    if (!(await apis.exists(configPath))) return;
 
-    for (const provider of providers) {
-      const keyFile = await apis.join(configPath, `${provider}_key.enc.json`);
+    let entries: Awaited<ReturnType<TauriApis['readDir']>>;
+    try {
+      entries = await retryFs(() => apis.readDir(configPath));
+    } catch (error) {
+      logger.warn('Failed to enumerate config directory for legacy API key cleanup:', error);
+      return;
+    }
+
+    const keyFileNames = entries
+      .map((entry) => entry.name)
+      .filter((name): name is string => typeof name === 'string' && /_key\.enc\.json$/i.test(name));
+
+    for (const name of keyFileNames) {
+      const keyFile = await apis.join(configPath, name);
       try {
-        if (await apis.exists(keyFile)) await retryFs(() => apis.remove(keyFile));
+        await retryFs(() => apis.remove(keyFile));
       } catch (error) {
-        logger.warn(`Failed to remove legacy API key file for provider "${provider}":`, error);
+        logger.warn(`Failed to remove legacy API key file "${name}":`, error);
       }
     }
   }

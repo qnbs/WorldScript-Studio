@@ -60,19 +60,19 @@ async function clearServiceWorkerCaches(): Promise<void> {
 async function clearTauriAppData(): Promise<void> {
   if (!isTauriRuntime()) return;
   try {
-    const { loadTauriApis } = await import('./fs/fsCore');
+    const { loadTauriApis, retryFs } = await import('./fs/fsCore');
     const apis = await loadTauriApis();
     const appDataPath = await apis.appDataDir();
     if (await apis.exists(appDataPath)) {
       // QNBS-v3: keep the capability-scoped AppData root and remove only its contents.
-      const entries = await apis.readDir(appDataPath);
+      const entries = await retryFs(() => apis.readDir(appDataPath));
       let firstError: unknown;
       for (const name of entries
         .map((entry) => entry.name)
         .filter((entryName): entryName is string => Boolean(entryName))) {
         try {
           const childPath = await apis.join(appDataPath, name);
-          await apis.remove(childPath, { recursive: true });
+          await retryFs(() => apis.remove(childPath, { recursive: true }));
         } catch (error) {
           firstError ??= error;
         }

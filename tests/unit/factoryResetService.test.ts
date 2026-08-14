@@ -1,8 +1,6 @@
 /**
  * Tests for services/factoryResetService.ts
- * QNBS-v3: [data safety / verify complete reset sequencing / preserves deterministic recovery]. Covers the
- * native indexedDB.databases() path, the known-list fallback, the Cache API branch, and the
- * Tauri AppData clear branch (exists/missing/partial-failure).
+ * QNBS-v3: covers the native indexedDB.databases() path, the known-list fallback, the Cache API branch, and the Tauri AppData clear branch (exists/missing/partial-failure).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { wipeAllAppData } from '../../services/factoryResetService';
@@ -19,6 +17,8 @@ vi.mock('../../services/tauriRuntime', () => ({
 }));
 vi.mock('../../services/fs/fsCore', () => ({
   loadTauriApis: (...args: unknown[]) => mockLoadTauriApis(...args),
+  // QNBS-v3: pass-through — retry/backoff behavior is covered by fsCore.test.ts directly.
+  retryFs: (fn: () => Promise<unknown>) => fn(),
 }));
 
 function createDb(name: string): Promise<void> {
