@@ -119,6 +119,22 @@ describe('storageService (IndexedDB backend in browser)', () => {
     expect(mockDb.clearApiKey).toHaveBeenCalledWith('openai');
   });
 
+  it('keeps API keys on IndexedDB when the desktop filesystem backend is active', async () => {
+    (window as { __TAURI__?: unknown }).__TAURI__ = {};
+    vi.resetModules();
+    // QNBS-v3: Desktop project storage must not redirect API keys to filesystem persistence.
+    const desktopStorage = (await import('../../services/storageService')).storageService;
+
+    await desktopStorage.saveApiKey('openai', 'desktop-key');
+    await desktopStorage.getApiKey('openai');
+    await desktopStorage.clearApiKey('openai');
+
+    expect(mockDb.saveApiKey).toHaveBeenCalledWith('openai', 'desktop-key');
+    expect(mockDb.getApiKey).toHaveBeenCalledWith('openai');
+    expect(mockDb.clearApiKey).toHaveBeenCalledWith('openai');
+    delete (window as { __TAURI__?: unknown }).__TAURI__;
+  });
+
   it('delegates snapshot operations to dbService', async () => {
     mockDb.saveSnapshot.mockResolvedValueOnce(42);
     const id = await storageService.saveSnapshot('label', { data: 1 });
