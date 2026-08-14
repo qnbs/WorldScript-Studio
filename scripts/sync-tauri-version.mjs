@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 /**
- * Sync Tauri version from package.json → src-tauri/Cargo.toml + src-tauri/tauri.conf.json
- * QNBS-v3: Prevents version drift between web (package.json) and desktop builds.
+ * Sync version from package.json → src-tauri/Cargo.toml, src-tauri/tauri.conf.json,
+ * src-tauri/Cargo.lock (the workspace package's own locked entry), and AGENTS.md.
+ * QNBS-v3: Prevents version drift between web (package.json) and desktop builds/docs — a stale
+ * Cargo.lock entry fails `cargo check --locked` in CI's rust-check gate, and a stale AGENTS.md
+ * `Version:` field is agent-facing documentation drift (found by review-loop bots on PR #364).
  * Run via predev / prebuild hooks or manually:
  *   node scripts/sync-tauri-version.mjs
  */
@@ -15,6 +18,8 @@ const root = path.join(__dirname, '..');
 const pkgPath = path.join(root, 'package.json');
 const cargoPath = path.join(root, 'src-tauri', 'Cargo.toml');
 const tauriConfPath = path.join(root, 'src-tauri', 'tauri.conf.json');
+const cargoLockPath = path.join(root, 'src-tauri', 'Cargo.lock');
+const agentsPath = path.join(root, 'AGENTS.md');
 
 const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
 const version = pkg.version;
@@ -25,25 +30,27 @@ if (!version || typeof version !== 'string') {
 
 let changed = false;
 
-// --- Cargo.toml ---
-const cargo = fs.readFileSync(cargoPath, 'utf8');
-const cargoRe = /^version = "[^"]+"/m;
-const cargoNew = cargo.replace(cargoRe, `version = "${version}"`);
-if (cargoNew !== cargo) {
-  fs.writeFileSync(cargoPath, cargoNew);
-  console.log(`[sync-tauri-version] ${cargoPath} → ${version}`);
-  changed = true;
+function syncFile(filePath, pattern, replacement) {
+  const content = fs.readFileSync(filePath, 'utf8');
+  const next = content.replace(pattern, replacement);
+  if (next !== content) {
+    fs.writeFileSync(filePath, next);
+    console.log(`[sync-tauri-version] ${filePath} → ${version}`);
+    changed = true;
+  }
 }
 
+// --- Cargo.toml ---
+syncFile(cargoPath, /^version = "[^"]+"/m, `version = "${version}"`);
+
 // --- tauri.conf.json ---
-const tauriConf = fs.readFileSync(tauriConfPath, 'utf8');
-const tauriRe = /"version":\s*"[^"]+"/;
-const tauriNew = tauriConf.replace(tauriRe, `"version": "${version}"`);
-if (tauriNew !== tauriConf) {
-  fs.writeFileSync(tauriConfPath, tauriNew);
-  console.log(`[sync-tauri-version] ${tauriConfPath} → ${version}`);
-  changed = true;
-}
+syncFile(tauriConfPath, /"version":\s*"[^"]+"/, `"version": "${version}"`);
+
+// --- Cargo.lock (the workspace package's own locked entry, not registry deps) ---
+syncFile(cargoLockPath, /(name = "worldscript-studio"\nversion = )"[^"]+"/, `$1"${version}"`);
+
+// --- AGENTS.md ---
+syncFile(agentsPath, /(\*\*Version:\*\* `)[^`]+(`)/, `$1${version}$2`);
 
 if (!changed) {
   console.log('[sync-tauri-version] Already in sync.');
