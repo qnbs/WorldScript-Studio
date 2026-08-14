@@ -6,7 +6,13 @@
 
 import type { StoryCodex } from '../../types';
 import { logger } from '../logger';
-import { compressData, decompressData, retryFs, sanitizePathSegment } from './fsCore';
+import {
+  compressData,
+  decompressData,
+  retryFs,
+  sanitizePathSegment,
+  writeTextFileAtomic,
+} from './fsCore';
 import { FsSettingsStore } from './settingsFsStore';
 
 export class FsCodexStore extends FsSettingsStore {
@@ -19,7 +25,7 @@ export class FsCodexStore extends FsSettingsStore {
     const codexDir = await apis.join(appDataPath, 'projects', safeId, 'codex');
     if (!(await apis.exists(codexDir))) await apis.mkdir(codexDir, { recursive: true });
     const codexFile = await apis.join(codexDir, 'codex.snap');
-    await retryFs(() => apis.writeTextFile(codexFile, compressData(codex)));
+    await writeTextFileAtomic(apis, codexFile, compressData(codex));
   }
 
   async getStoryCodex(projectId: string): Promise<StoryCodex | null> {
@@ -58,7 +64,7 @@ export class FsCodexStore extends FsSettingsStore {
     const codexDir = await apis.join(appDataPath, 'projects', safeId, 'codex');
     if (!(await apis.exists(codexDir))) await apis.mkdir(codexDir, { recursive: true });
     const vectorsFile = await apis.join(codexDir, 'vectors.snap');
-    await retryFs(() => apis.writeTextFile(vectorsFile, compressData(vectors)));
+    await writeTextFileAtomic(apis, vectorsFile, compressData(vectors));
   }
 
   async getRagVectors(projectId: string): Promise<unknown[]> {

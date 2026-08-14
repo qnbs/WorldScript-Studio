@@ -49,6 +49,7 @@ class StorageManager {
     if (isTauriRuntime()) {
       try {
         await fileSystemService.initialize();
+        await fileSystemService.removeLegacyApiKeyFiles();
         this.backend = fileSystemService;
         logger.debug('Using file system storage backend');
       } catch (error) {
@@ -114,33 +115,28 @@ class StorageManager {
   }
 
   async saveGeminiApiKey(apiKey: string): Promise<void> {
-    const backend = await this.getBackend();
-    return backend.saveGeminiApiKey(apiKey);
+    // QNBS-v3: API keys stay in the random-key IndexedDB store; filesystem-derived material is not a secret.
+    return dbService.saveGeminiApiKey(apiKey);
   }
 
   async getGeminiApiKey(): Promise<string | null> {
-    const backend = await this.getBackend();
-    return backend.getGeminiApiKey();
+    return dbService.getGeminiApiKey();
   }
 
   async clearGeminiApiKey(): Promise<void> {
-    const backend = await this.getBackend();
-    return backend.clearGeminiApiKey();
+    return dbService.clearGeminiApiKey();
   }
 
   async saveApiKey(provider: string, apiKey: string): Promise<void> {
-    const backend = await this.getBackend();
-    return backend.saveApiKey(provider, apiKey);
+    return dbService.saveApiKey(provider, apiKey);
   }
 
   async getApiKey(provider: string): Promise<string | null> {
-    const backend = await this.getBackend();
-    return backend.getApiKey(provider);
+    return dbService.getApiKey(provider);
   }
 
   async clearApiKey(provider: string): Promise<void> {
-    const backend = await this.getBackend();
-    return backend.clearApiKey(provider);
+    return dbService.clearApiKey(provider);
   }
 
   async saveSnapshot(name: string, data: unknown): Promise<number> {

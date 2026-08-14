@@ -39,7 +39,7 @@ This document provides a formal STRIDE threat analysis for WorldScript Studio, m
 | Threat | Mitigation | Code Location |
 |--------|------------|-------------|
 | API key leakage via logs | StructuredLogger sanitization; never log keys | `services/logger.ts:sanitizeLogContext()` |
-| Desktop API key exposure via local file-read access | AES-256-GCM with a PBKDF2-derived key (600 000 iterations, SHA-256, random 32-byte salt per encryption) — fixed 2026-07-29; the prior scheme derived the key from a single unsalted SHA-256 digest of publicly-derivable material (own file's parent path + provider name from the filename + a hardcoded literal), so anyone with read access to `config/<provider>_key.enc.json` could reconstruct the key in one hash operation (F-05/F-06). No migration path for pre-fix files by design — a legacy (unsalted) payload is discarded and the user is prompted to re-enter the key. | `services/fs/fsCore.ts:deriveFileSystemCryptoKey()`, `services/fs/settingsFsStore.ts:getApiKey()` |
+| Desktop API key exposure via local filesystem read | Filesystem API-key persistence is disabled: `storageService`'s key methods route directly to the IndexedDB key store (random non-extractable AES-GCM key) on every platform, desktop included — the filesystem adapter's own `saveApiKey` is a defense-in-depth backstop that throws if ever called directly. Legacy filesystem key files are removed on a best-effort basis (each failure is logged, not retried indefinitely) and re-entry is required if cleanup or decryption fails. | `services/storage/idbKeyStore.ts`, `services/storageService.ts`, `services/fs/settingsFsStore.ts` |
 | Manuscript data in IndexedDB | AES-256-GCM at-rest encryption | `services/storage/storageEncryptionService.ts` |
 | Voice audio to cloud | Web Speech API consent gate | `components/voice/VoicePrivacyConsentModal.tsx` |
 | DuckDB analytics unencrypted (SEC-6) | **Bounded by design, with one prose column now encrypted:** most persisted fields are local metadata only (titles, loglines, character names, word counts, embeddings) and **nothing leaves the device**. The one column that genuinely holds literal manuscript prose, `codex_mentions.excerpt`, is now cell-level encrypted (AES-256-GCM via `services/duckdb/duckdbEncryption.ts`, reusing the IDB at-rest encryption key) whenever `enableIdbAtRestEncryption` is active: `duckdbCodexWrite()` writes ciphertext into `excerpt_enc BLOB` and nulls the plaintext `excerpt` column; `services/duckdb/codexExcerptEncryptionMigration.ts` backfills any pre-existing plaintext rows once encryption is unlocked. Gated by `enableDuckDbAnalytics` **and** the Settings → Privacy "Analytics" opt-out (`isAnalyticsPersistenceAllowed` in `app/listenerMiddleware.ts`); turning the toggle off stops all DuckDB writes + inference telemetry. Full OPFS file-level encryption remains **infeasible** — DuckDB-WASM owns the OPFS file handle directly, so there is no app-level interception point; the other metadata columns stay intentionally plaintext (bounded-exposure design). | `app/listenerMiddleware.ts:isAnalyticsPersistenceAllowed`, `services/duckdb/duckdbAnalytics.ts:duckdbCodexWrite()`, `services/duckdb/duckdbEncryption.ts`, `services/duckdb/codexExcerptEncryptionMigration.ts` |
@@ -123,10 +123,11 @@ Goal: Intercept/decrypt collaboration traffic
 
 ```
 Goal: Recover a user's cloud-provider API key from the Tauri desktop install
-├─ OR: Read config/<provider>_key.enc.json directly (local process / malware with user-level FS access)
-│  └─ Mitigation: AES-256-GCM with PBKDF2-derived key (600k iter, random 32-byte salt per file) —
-│     reading the ciphertext no longer reveals the key material; the pre-2026-07-29 scheme derived
-│     the key from data an attacker with file-read access already had (F-05/F-06, fixed)
+├─ OR: Read the Tauri AppData filesystem directly (local process / malware with user-level FS access)
+│  └─ Mitigation: API keys are not stored there — `storageService` routes every key operation to the
+│     WebView's IndexedDB key store regardless of platform; the filesystem adapter's own key-write
+│     path is a defense-in-depth backstop that throws rather than persisting. Legacy derived-key
+│     files are removed best-effort (logged, not guaranteed) during startup cleanup.
 ├─ OR: Read the IDB-at-rest passphrase sentinel (enableIdbAtRestEncryption)
 │  └─ Mitigation: same PBKDF2 + non-extractable-key pattern; session-scoped in-memory key, never
 │     persisted to disk (`services/storage/storageEncryptionService.ts`)

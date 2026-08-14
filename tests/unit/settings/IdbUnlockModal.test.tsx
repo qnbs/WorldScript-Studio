@@ -13,6 +13,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // ---------------------------------------------------------------------------
 
 const mockVerifyAndInit = vi.fn();
+const mockWipeAllAppData = vi.fn();
+const mockLoggerError = vi.fn();
 
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
@@ -37,6 +39,14 @@ vi.mock('../../../hooks/useTranslation', () => ({
 
 vi.mock('../../../services/storage/storageEncryptionService', () => ({
   verifyAndInitIdbEncryption: (...args: unknown[]) => mockVerifyAndInit(...args),
+}));
+
+vi.mock('../../../services/factoryResetService', () => ({
+  wipeAllAppData: (...args: unknown[]) => mockWipeAllAppData(...args),
+}));
+
+vi.mock('../../../services/logger', () => ({
+  logger: { error: (...args: unknown[]) => mockLoggerError(...args) },
 }));
 
 vi.mock('../../../components/ui/Button', () => ({
@@ -79,6 +89,8 @@ describe('IdbUnlockModal', () => {
     vi.clearAllMocks();
     localStorageMock.clear();
     mockVerifyAndInit.mockResolvedValue(undefined);
+    mockWipeAllAppData.mockResolvedValue(undefined);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
   });
 
   it('renders the unlock modal dialog', () => {
@@ -245,5 +257,52 @@ describe('IdbUnlockModal', () => {
     expect(
       screen.queryByText('settings.privacy.encryptionForgotPassphrase'),
     ).not.toBeInTheDocument();
+  });
+
+  describe('danger-zone factory reset', () => {
+    it('renders the factory reset description and button', () => {
+      render(<IdbUnlockModal onUnlocked={mockOnUnlocked} />);
+      expect(
+        screen.getByText('settings.data.dangerZone.factoryReset.modalDescription'),
+      ).toBeInTheDocument();
+      expect(screen.getByText('settings.data.dangerZone.factoryReset.button')).toBeInTheDocument();
+    });
+
+    it('asks for confirmation and wipes app data when confirmed', async () => {
+      const user = userEvent.setup();
+      render(<IdbUnlockModal onUnlocked={mockOnUnlocked} />);
+      await user.click(
+        screen.getByRole('button', { name: 'settings.data.dangerZone.factoryReset.button' }),
+      );
+      expect(window.confirm).toHaveBeenCalledWith(
+        'settings.data.dangerZone.factoryReset.modalWarning',
+      );
+      await waitFor(() => expect(mockWipeAllAppData).toHaveBeenCalledTimes(1));
+    });
+
+    it('does not wipe app data when the confirmation is dismissed', async () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(false);
+      const user = userEvent.setup();
+      render(<IdbUnlockModal onUnlocked={mockOnUnlocked} />);
+      await user.click(
+        screen.getByRole('button', { name: 'settings.data.dangerZone.factoryReset.button' }),
+      );
+      expect(mockWipeAllAppData).not.toHaveBeenCalled();
+    });
+
+    it('shows a recovery-failed error and logs it when wipeAllAppData rejects', async () => {
+      mockWipeAllAppData.mockRejectedValue(new Error('disk full'));
+      const user = userEvent.setup();
+      render(<IdbUnlockModal onUnlocked={mockOnUnlocked} />);
+      await user.click(
+        screen.getByRole('button', { name: 'settings.data.dangerZone.factoryReset.button' }),
+      );
+      await waitFor(() => {
+        expect(screen.getByText('settings.privacy.encryptionRecoveryFailed')).toBeInTheDocument();
+      });
+      expect(mockLoggerError).toHaveBeenCalledWith('Factory reset failed', {
+        error: 'disk full',
+      });
+    });
   });
 });

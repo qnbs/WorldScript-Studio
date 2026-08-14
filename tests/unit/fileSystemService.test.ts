@@ -17,6 +17,7 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
   exists: vi.fn().mockRejectedValue(new Error('Tauri not available')),
   readDir: vi.fn().mockRejectedValue(new Error('Tauri not available')),
   remove: vi.fn().mockRejectedValue(new Error('Tauri not available')),
+  rename: vi.fn().mockRejectedValue(new Error('Tauri not available')),
 }));
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({

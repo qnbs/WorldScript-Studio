@@ -1,6 +1,6 @@
 /**
- * FsSettingsStore — Settings persistence and AES-256-GCM API key encryption on the filesystem.
- * ENCRYPTION: AES-256-GCM — API keys stored as `<provider>_key.enc.json` in config/.
+ * FsSettingsStore — Settings persistence on the filesystem.
+ * API-key persistence is deliberately disabled here; storageService routes keys to the random-key IDB store.
  * QNBS-v3: Extracted from fileSystemService.ts.
  */
 
@@ -10,9 +10,38 @@ import type { Settings } from '../../types';
 import { logger } from '../logger';
 import { normalizePersistedSettings } from '../storage/idbProjectStore';
 import type { TauriApis } from './fsCore';
-import { decryptText, encryptText, FsCore, retryFs } from './fsCore';
+import { FsCore, retryFs, writeTextFileAtomic } from './fsCore';
 
 export class FsSettingsStore extends FsCore {
+  // QNBS-v3 (CodeRabbit #363): scan by the `*_key.enc.json` naming convention, not a fixed provider list — saveApiKey/getApiKey accept any provider string, so a hardcoded list left unlisted providers' legacy files uncleaned.
+  async removeLegacyApiKeyFiles(): Promise<void> {
+    const apis = await this.getApis();
+    const appDataPath = await this.ensureAppDataPath();
+    const configPath = await apis.join(appDataPath, 'config');
+    if (!(await apis.exists(configPath))) return;
+
+    let entries: Awaited<ReturnType<TauriApis['readDir']>>;
+    try {
+      entries = await retryFs(() => apis.readDir(configPath));
+    } catch (error) {
+      logger.warn('Failed to enumerate config directory for legacy API key cleanup:', error);
+      return;
+    }
+
+    const keyFileNames = entries
+      .map((entry) => entry.name)
+      .filter((name): name is string => typeof name === 'string' && /_key\.enc\.json$/i.test(name));
+
+    for (const name of keyFileNames) {
+      const keyFile = await apis.join(configPath, name);
+      try {
+        await retryFs(() => apis.remove(keyFile));
+      } catch (error) {
+        logger.warn(`Failed to remove legacy API key file "${name}":`, error);
+      }
+    }
+  }
+
   async saveSettings(settings: Settings): Promise<void> {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
@@ -23,7 +52,7 @@ export class FsSettingsStore extends FsCore {
     }
 
     const settingsFile = await apis.join(configPath, 'settings.json');
-    await retryFs(() => apis.writeTextFile(settingsFile, JSON.stringify(settings, null, 2)));
+    await writeTextFileAtomic(apis, settingsFile, JSON.stringify(settings, null, 2));
   }
 
   async loadSettings(): Promise<Settings | null> {
@@ -61,23 +90,11 @@ export class FsSettingsStore extends FsCore {
     return this.clearApiKey('gemini');
   }
 
-  // Generic provider API key — stored encrypted in app data dir
-  async saveApiKey(provider: string, apiKey: string): Promise<void> {
-    if (!apiKey?.trim()) {
-      throw new Error('API key cannot be empty');
-    }
-
-    const apis = await this.getApis();
-    const appDataPath = await this.ensureAppDataPath();
-    const configPath = await apis.join(appDataPath, 'config');
-    if (!(await apis.exists(configPath))) await apis.mkdir(configPath, { recursive: true });
-
-    const encrypted = await encryptText(
-      apiKey.trim(),
-      `${appDataPath}|${provider}|WorldScriptStudio|v1`,
+  // QNBS-v3: filesystem key persistence is disabled because app-path-derived material is recoverable.
+  async saveApiKey(provider: string, _apiKey: string): Promise<void> {
+    throw new Error(
+      `Desktop filesystem API-key storage is disabled for ${provider}; use storageService instead`,
     );
-    const filePath = await apis.join(configPath, `${provider}_key.enc.json`);
-    await retryFs(() => apis.writeTextFile(filePath, JSON.stringify(encrypted)));
   }
 
   async getApiKey(provider: string): Promise<string | null> {
@@ -93,9 +110,8 @@ export class FsSettingsStore extends FsCore {
       const keyFile = await apis.join(appDataPath, 'config', `${provider}_key.enc.json`);
       keyFileForCleanup = keyFile;
       if (!(await apis.exists(keyFile))) return null;
-      const content = await retryFs(() => apis.readTextFile(keyFile));
-      const payload = JSON.parse(content) as { iv: string; salt?: string; data: string };
-      return await decryptText(payload, `${appDataPath}|${provider}|WorldScriptStudio|v1`);
+      await retryFs(() => apis.remove(keyFile));
+      return null;
     } catch (error) {
       // QNBS-v3: pre-2026-07-29 key files used an unsalted single-SHA-256 derivation (F-05/F-06,
       // fixed in fsCore.ts) and are not migrated (locked decision — discard, not migrate). Remove

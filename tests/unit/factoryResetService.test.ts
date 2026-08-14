@@ -1,14 +1,24 @@
 /**
  * Tests for services/factoryResetService.ts
- * QNBS-v3: wipeAllAppData — clears IDB + web storage + SW caches, then reloads. Covers the
- * native indexedDB.databases() path, the known-list fallback, and the Cache API branch.
+ * QNBS-v3: covers the native indexedDB.databases() path, the known-list fallback, the Cache API branch, and the Tauri AppData clear branch (exists/missing/partial-failure).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { wipeAllAppData } from '../../services/factoryResetService';
 import { logger } from '../../services/logger';
 
+const mockIsTauriRuntime = vi.fn(() => false);
+const mockLoadTauriApis = vi.fn();
+
 vi.mock('../../services/logger', () => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
+}));
+vi.mock('../../services/tauriRuntime', () => ({
+  isTauriRuntime: () => mockIsTauriRuntime(),
+}));
+vi.mock('../../services/fs/fsCore', () => ({
+  loadTauriApis: (...args: unknown[]) => mockLoadTauriApis(...args),
+  // QNBS-v3: pass-through — retry/backoff behavior is covered by fsCore.test.ts directly.
+  retryFs: (fn: () => Promise<unknown>) => fn(),
 }));
 
 function createDb(name: string): Promise<void> {
@@ -42,6 +52,7 @@ let originalLocation: Location;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockIsTauriRuntime.mockReturnValue(false);
   reloadMock = vi.fn();
   originalLocation = window.location;
   Object.defineProperty(window, 'location', {
@@ -99,5 +110,94 @@ describe('wipeAllAppData', () => {
     expect(del).toHaveBeenCalledWith('static-v1');
     expect(del).toHaveBeenCalledWith('dynamic-v1');
     expect(reloadMock).toHaveBeenCalledTimes(1);
+  });
+
+  describe('desktop (Tauri) AppData clearing', () => {
+    beforeEach(() => {
+      mockIsTauriRuntime.mockReturnValue(true);
+    });
+
+    it('skips readDir/remove when the AppData path does not exist, and still completes the wipe', async () => {
+      const removeMock = vi.fn().mockResolvedValue(undefined);
+      mockLoadTauriApis.mockResolvedValue({
+        appDataDir: vi.fn().mockResolvedValue('/app/data'),
+        exists: vi.fn().mockResolvedValue(false),
+        readDir: vi.fn(),
+        join: vi.fn(),
+        remove: removeMock,
+      });
+
+      await runWipe();
+
+      expect(removeMock).not.toHaveBeenCalled();
+      expect(reloadMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('removes every AppData entry (skipping unnamed entries) and completes the wipe', async () => {
+      const removeMock = vi.fn().mockResolvedValue(undefined);
+      const joinMock = vi.fn((base: string, name: string) => Promise.resolve(`${base}/${name}`));
+      mockLoadTauriApis.mockResolvedValue({
+        appDataDir: vi.fn().mockResolvedValue('/app/data'),
+        exists: vi.fn().mockResolvedValue(true),
+        readDir: vi
+          .fn()
+          .mockResolvedValue([{ name: 'projects' }, { name: undefined }, { name: 'keys.bin' }]),
+        join: joinMock,
+        remove: removeMock,
+      });
+
+      await runWipe();
+
+      expect(removeMock).toHaveBeenCalledWith('/app/data/projects', { recursive: true });
+      expect(removeMock).toHaveBeenCalledWith('/app/data/keys.bin', { recursive: true });
+      expect(removeMock).toHaveBeenCalledTimes(2);
+      expect(reloadMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects and never reloads when every AppData entry fails to remove', async () => {
+      mockLoadTauriApis.mockResolvedValue({
+        appDataDir: vi.fn().mockResolvedValue('/app/data'),
+        exists: vi.fn().mockResolvedValue(true),
+        readDir: vi.fn().mockResolvedValue([{ name: 'locked-file' }]),
+        join: vi.fn((base: string, name: string) => Promise.resolve(`${base}/${name}`)),
+        remove: vi.fn().mockRejectedValue(new Error('EBUSY')),
+      });
+
+      vi.useFakeTimers();
+      try {
+        await expect(wipeAllAppData()).rejects.toThrow(
+          'Factory reset could not clear desktop data',
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+
+      expect(reloadMock).not.toHaveBeenCalled();
+      expect(logger.error).toHaveBeenCalledWith(
+        'Failed to clear Tauri app data during factory reset:',
+        expect.any(Error),
+      );
+    });
+
+    it('rejects and never reloads when readDir itself throws', async () => {
+      mockLoadTauriApis.mockResolvedValue({
+        appDataDir: vi.fn().mockResolvedValue('/app/data'),
+        exists: vi.fn().mockResolvedValue(true),
+        readDir: vi.fn().mockRejectedValue(new Error('permission denied')),
+        join: vi.fn(),
+        remove: vi.fn(),
+      });
+
+      vi.useFakeTimers();
+      try {
+        await expect(wipeAllAppData()).rejects.toThrow(
+          'Factory reset could not clear desktop data',
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+
+      expect(reloadMock).not.toHaveBeenCalled();
+    });
   });
 });

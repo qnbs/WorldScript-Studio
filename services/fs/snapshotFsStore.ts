@@ -6,7 +6,13 @@
 import type { ProjectSnapshot } from '../../types';
 import { logger } from '../logger';
 import { FsCodexStore } from './codexFsStore';
-import { compressData, countProjectWords, decompressData, retryFs } from './fsCore';
+import {
+  compressData,
+  countProjectWords,
+  decompressData,
+  retryFs,
+  writeTextFileAtomic,
+} from './fsCore';
 
 // Envelope stored in each snapshot file — outer shell is plain JSON, `data` field is compressed.
 interface SnapshotEnvelope {
@@ -36,7 +42,7 @@ export class FsSnapshotStore extends FsCodexStore {
       data: compressData(data),
     };
     const snapshotFile = await apis.join(snapshotsPath, `${id}.json`);
-    await retryFs(() => apis.writeTextFile(snapshotFile, JSON.stringify(envelope)));
+    await writeTextFileAtomic(apis, snapshotFile, JSON.stringify(envelope));
     return id;
   }
 

@@ -81,7 +81,9 @@ pub fn worldscript_task_supervisor_ping() -> Result<String, String> {
 /// tasks; reserves `Err` for transport-level problems (none currently). This keeps
 /// the router's fallback logic driven by `result.success`, not by a thrown error.
 #[tauri::command]
-pub fn worldscript_task_supervisor_submit(request: RustTaskRequest) -> Result<RustTaskResultEvent, String> {
+pub fn worldscript_task_supervisor_submit(
+    request: RustTaskRequest,
+) -> Result<RustTaskResultEvent, String> {
     let started = Instant::now();
     let task_id = request.task_id.clone();
 
