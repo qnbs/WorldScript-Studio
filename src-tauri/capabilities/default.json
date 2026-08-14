@@ -35,6 +35,9 @@
       "identifier": "fs:allow-exists",
       "allow": [
         {
+          "path": "$APPDATA"
+        },
+        {
           "path": "$APPDATA/**"
         }
       ]
@@ -43,12 +46,23 @@
       "identifier": "fs:allow-read-dir",
       "allow": [
         {
+          "path": "$APPDATA"
+        },
+        {
           "path": "$APPDATA/**"
         }
       ]
     },
     {
       "identifier": "fs:allow-remove",
+      "allow": [
+        {
+          "path": "$APPDATA/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-rename",
       "allow": [
         {
           "path": "$APPDATA/**"

@@ -1,9 +1,11 @@
 import type { FC } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useFactoryReset } from '../../hooks/useFactoryReset';
 import { useTranslation } from '../../hooks/useTranslation';
 import { verifyAndInitIdbEncryption } from '../../services/storage/storageEncryptionService';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
+import { FactoryResetDangerZone } from './FactoryResetDangerZone';
 
 interface Props {
   onUnlocked: () => void;
@@ -163,6 +165,8 @@ export const IdbUnlockModal: FC<Props> = ({ onUnlocked }) => {
     [handleUnlock],
   );
 
+  const handleFactoryReset = useFactoryReset({ t, setBusy, setError });
+
   const errorId = 'idb-unlock-error';
   const hasError = error.length > 0;
 
@@ -223,6 +227,7 @@ export const IdbUnlockModal: FC<Props> = ({ onUnlocked }) => {
                 : t('settings.privacy.encryptionUnlockButton')}
           </Button>
         </div>
+        <FactoryResetDangerZone t={t} busy={busy} onReset={() => void handleFactoryReset()} />
       </div>
     </Modal>
   );

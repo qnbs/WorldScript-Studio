@@ -13,12 +13,19 @@ type MenuHandler = (action: TauriMenuAction) => void;
 
 let handler: MenuHandler | null = null;
 let unlisten: (() => void) | null = null;
+// QNBS-v3 (CodeAnt/CodeRabbit #363): generation guard, mirroring desktopMenu.ts's menuInstallToken —
+// registerTauriMenuHandler is async (dynamic import + listen()), so an unregister (or a second,
+// overlapping call) can land while a prior call is still pending. Without this, a stale completion
+// could install a listener after cleanup, or two overlapping calls could both end up registered,
+// double-dispatching a single menu click.
+let registrationToken = 0;
 
 /** Registers a handler for native menu events emitted from the Tauri shell. */
 export async function registerTauriMenuHandler(onAction: MenuHandler): Promise<void> {
   if (!isTauriRuntime()) return;
   handler = onAction;
   if (unlisten) return;
+  const myToken = ++registrationToken;
   try {
     const { listen } = await import('@tauri-apps/api/event');
     const stop = await listen<string>('menu-action', (event) => {
@@ -35,6 +42,12 @@ export async function registerTauriMenuHandler(onAction: MenuHandler): Promise<v
         handler?.(id);
       }
     });
+    if (myToken !== registrationToken) {
+      // A newer call (or an unregister) landed while this one was pending — discard this listener
+      // rather than let a stale completion overwrite `unlisten` or leak a second live subscription.
+      stop();
+      return;
+    }
     unlisten = stop;
   } catch {
     /* menu events unavailable */
@@ -45,4 +58,5 @@ export function unregisterTauriMenuHandler(): void {
   handler = null;
   unlisten?.();
   unlisten = null;
+  registrationToken++;
 }

@@ -9,6 +9,7 @@
  */
 
 import { logger } from './logger';
+import { isTauriRuntime } from './tauriRuntime';
 
 /** All IDB databases the app may have created. */
 const KNOWN_DB_NAMES = [
@@ -56,6 +57,34 @@ async function clearServiceWorkerCaches(): Promise<void> {
   }
 }
 
+async function clearTauriAppData(): Promise<void> {
+  if (!isTauriRuntime()) return;
+  try {
+    const { loadTauriApis, retryFs } = await import('./fs/fsCore');
+    const apis = await loadTauriApis();
+    const appDataPath = await apis.appDataDir();
+    if (await apis.exists(appDataPath)) {
+      // QNBS-v3: keep the capability-scoped AppData root and remove only its contents.
+      const entries = await retryFs(() => apis.readDir(appDataPath));
+      let firstError: unknown;
+      for (const name of entries
+        .map((entry) => entry.name)
+        .filter((entryName): entryName is string => Boolean(entryName))) {
+        try {
+          const childPath = await apis.join(appDataPath, name);
+          await retryFs(() => apis.remove(childPath, { recursive: true }));
+        } catch (error) {
+          firstError ??= error;
+        }
+      }
+      if (firstError) throw firstError;
+    }
+  } catch (error) {
+    logger.error('Failed to clear Tauri app data during factory reset:', error);
+    throw new Error('Factory reset could not clear desktop data');
+  }
+}
+
 /**
  * Wipe all app data and reload.
  * Clears: IDB, localStorage, sessionStorage, SW caches.
@@ -63,6 +92,8 @@ async function clearServiceWorkerCaches(): Promise<void> {
  */
 export async function wipeAllAppData(): Promise<void> {
   logger.warn('[factoryReset] Wiping all app data…');
+  // QNBS-v3: clear fallible desktop data first so a failed desktop reset never leaves a mixed wipe.
+  await clearTauriAppData();
   await deleteAllIndexedDBDatabases();
   await clearServiceWorkerCaches();
   try {

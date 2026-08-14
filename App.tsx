@@ -65,6 +65,7 @@ import { useTranslation } from './hooks/useTranslation';
 import { runCommandById } from './services/commands/commandBuilder';
 import { getEffectiveTheme } from './services/commands/effectiveTheme';
 import { approximateManuscriptWordCount } from './services/commands/wordCountApprox';
+import { DESKTOP_COMMANDS } from './services/desktop/desktopEvents';
 import { installDesktopMenu } from './services/desktop/desktopMenu';
 import { installCloseToTray, installDesktopTray } from './services/desktop/desktopTray';
 import { logger } from './services/logger';
@@ -80,6 +81,11 @@ import {
   isIdbEncryptionReady,
 } from './services/storage/storageEncryptionService';
 import { initTauriDeepLink } from './services/tauriDeepLink';
+import {
+  registerTauriMenuHandler,
+  type TauriMenuAction,
+  unregisterTauriMenuHandler,
+} from './services/tauriMenuService';
 import { applyDesktopRuntimeFlags } from './services/tauriRuntime';
 import { viewNavigationLabelKey } from './services/viewNavigationLabels';
 import type { View } from './types';
@@ -582,10 +588,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     return () => window.removeEventListener('voice-command', handler);
   }, [executeCommand]);
 
-  // QNBS-v3 (T1/#189): the localized JS menu (installDesktopMenu) is the single source of truth for
-  // native menu actions — its item callbacks dispatch via executeCommand directly. The old
-  // registerTauriMenuHandler (Rust `menu-action` event bridge) reused the SAME item ids, so on desktop
-  // every menu click dispatched twice (JS callback + Rust event path). It is removed; the JS menu owns it.
+  // QNBS-v3 (T1/#189): installDesktopMenu is the source of truth for native menu actions once installed; registerTauriMenuHandler below is scoped to the pre-paint window (or a permanent fallback if install fails) and unregisters itself once the JS menu takes over, so the two paths never double-dispatch the same click.
   //
   // executeCommand is held in a ref so the menu only rebuilds when the language (t) changes — not on
   // every executeCommand identity change (it depends on characters/worlds/settings/… and recreates often).
@@ -610,11 +613,24 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     executeCommandRef.current = executeCommand;
   }, [executeCommand]);
   useEffect(() => {
+    // QNBS-v3: fallback bridge for the Rust pre-paint menu (see comment above) — unregisters itself once installDesktopMenu confirms the JS menu has taken over, or stays registered if it failed.
+    const RUST_MENU_ACTION_TO_COMMAND: Record<TauriMenuAction, string> = {
+      'menu-export': DESKTOP_COMMANDS.export,
+      'menu-settings': DESKTOP_COMMANDS.settings,
+      'menu-help': DESKTOP_COMMANDS.help,
+      'menu-command-palette': DESKTOP_COMMANDS.commandPalette,
+    };
+    void registerTauriMenuHandler((action) =>
+      executeCommandRef.current(RUST_MENU_ACTION_TO_COMMAND[action]),
+    );
     void installDesktopMenu(
       (key) => t(key),
       (id) => executeCommandRef.current(id),
       quitApp,
-    );
+    ).then((installed) => {
+      if (installed) unregisterTauriMenuHandler();
+    });
+    return unregisterTauriMenuHandler;
   }, [t, quitApp]);
 
   // QNBS-v3 (T2): system tray (created once; guard makes re-calls a no-op). No-op on the web.

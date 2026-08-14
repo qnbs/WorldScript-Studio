@@ -7,14 +7,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // ---------------------------------------------------------------------------
 
 const {
-  mockHasGeminiApiKey,
   mockGetGeminiApiKey,
   mockSaveGeminiApiKey,
   mockClearGeminiApiKey,
   mockGenerateText,
   mockInvalidateAiClientCache,
 } = vi.hoisted(() => ({
-  mockHasGeminiApiKey: vi.fn(),
   mockGetGeminiApiKey: vi.fn(),
   mockSaveGeminiApiKey: vi.fn(),
   mockClearGeminiApiKey: vi.fn(),
@@ -22,9 +20,8 @@ const {
   mockInvalidateAiClientCache: vi.fn(),
 }));
 
-vi.mock('../../services/dbService', () => ({
-  dbService: {
-    hasGeminiApiKey: mockHasGeminiApiKey,
+vi.mock('../../services/storageService', () => ({
+  storageService: {
     getGeminiApiKey: mockGetGeminiApiKey,
     saveGeminiApiKey: mockSaveGeminiApiKey,
     clearGeminiApiKey: mockClearGeminiApiKey,
@@ -65,7 +62,6 @@ import ApiKeySection, { isSyntacticallySafeGeminiApiKey } from '../../components
 describe('ApiKeySection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockHasGeminiApiKey.mockResolvedValue(false);
     mockGetGeminiApiKey.mockResolvedValue(null);
     mockSaveGeminiApiKey.mockResolvedValue(undefined);
     mockClearGeminiApiKey.mockResolvedValue(undefined);
@@ -83,19 +79,18 @@ describe('ApiKeySection', () => {
   });
 
   it('shows configured status when key exists', async () => {
-    mockHasGeminiApiKey.mockResolvedValue(true);
+    mockGetGeminiApiKey.mockResolvedValue('configured-key');
     render(<ApiKeySection />);
     await waitFor(() => {
       expect(screen.getByText('settings.apiKey.statusActive')).toBeTruthy();
     });
   });
 
-  it('shows decryptFailed warning when getGeminiApiKey returns DECRYPT_FAILED', async () => {
-    mockHasGeminiApiKey.mockResolvedValue(false);
-    mockGetGeminiApiKey.mockResolvedValue('DECRYPT_FAILED');
+  it('keeps the key inactive when the shared storage path cannot read a key', async () => {
+    mockGetGeminiApiKey.mockResolvedValue(null);
     render(<ApiKeySection />);
     await waitFor(() => {
-      expect(screen.getByText('apiKey.decryptFailed')).toBeTruthy();
+      expect(screen.getByText('settings.apiKey.statusInactive')).toBeTruthy();
     });
   });
 
@@ -159,7 +154,7 @@ describe('ApiKeySection', () => {
     });
   });
 
-  it('shows save error when dbService throws', async () => {
+  it('shows save error when shared storage throws', async () => {
     mockSaveGeminiApiKey.mockRejectedValue(new Error('DB error'));
     render(<ApiKeySection />);
     await waitFor(() => screen.getByText('settings.apiKey.statusInactive'));
@@ -173,7 +168,7 @@ describe('ApiKeySection', () => {
   });
 
   it('removes key and shows removed message', async () => {
-    mockHasGeminiApiKey.mockResolvedValue(true);
+    mockGetGeminiApiKey.mockResolvedValue('configured-key');
     render(<ApiKeySection />);
     await waitFor(() => screen.getByText('settings.apiKey.statusActive'));
 
@@ -189,7 +184,7 @@ describe('ApiKeySection', () => {
   });
 
   it('shows test connection result on success', async () => {
-    mockHasGeminiApiKey.mockResolvedValue(true);
+    mockGetGeminiApiKey.mockResolvedValue('configured-key');
     mockGenerateText.mockResolvedValue('OK');
     render(<ApiKeySection />);
     await waitFor(() => screen.getByText('apiKey.test'));
@@ -201,7 +196,7 @@ describe('ApiKeySection', () => {
   });
 
   it('shows invalid key message when test returns INVALID_API_KEY error', async () => {
-    mockHasGeminiApiKey.mockResolvedValue(true);
+    mockGetGeminiApiKey.mockResolvedValue('configured-key');
     mockGenerateText.mockRejectedValue(new Error('INVALID_API_KEY error'));
     render(<ApiKeySection />);
     await waitFor(() => screen.getByText('apiKey.test'));

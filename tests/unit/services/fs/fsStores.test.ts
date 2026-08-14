@@ -27,6 +27,7 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
   exists: (p: string) => fsHolder.current.exists(p),
   readDir: (p: string) => fsHolder.current.readDir(p),
   remove: (p: string, opts?: { recursive?: boolean }) => fsHolder.current.remove(p, opts),
+  rename: (from: string, to: string) => fsHolder.current.rename(from, to),
 }));
 vi.mock('@tauri-apps/plugin-dialog', () => ({
   open: (opts?: Record<string, unknown>) => fsHolder.current.open(opts),
@@ -95,6 +96,18 @@ function makeFakeFs(): FakeFs {
       for (const k of [...bin.keys()]) if (k.startsWith(`${p}/`)) bin.delete(k);
       return Promise.resolve();
     },
+    rename: (from: string, to: string) => {
+      if (!text.has(from) && !bin.has(from)) return Promise.reject(new Error(`ENOENT ${from}`));
+      text.delete(to);
+      bin.delete(to);
+      const textValue = text.get(from);
+      const binaryValue = bin.get(from);
+      if (textValue !== undefined) text.set(to, textValue);
+      if (binaryValue !== undefined) bin.set(to, binaryValue);
+      text.delete(from);
+      bin.delete(from);
+      return Promise.resolve();
+    },
     readDir: (p: string) => Promise.resolve(under(p).map((name) => ({ name, isDirectory: false }))),
     open: () => Promise.resolve(null),
     save: () => Promise.resolve(null),
@@ -159,7 +172,7 @@ describe('FsProjectStore — projects', () => {
   it('still resolves saveProject and logs a warning when the active-project marker write rejects', async () => {
     const originalWriteTextFile = fake.apis.writeTextFile;
     fake.apis.writeTextFile = (p: string, c: string) => {
-      if (p.endsWith('active-project-id.txt')) return Promise.reject(new Error('disk full'));
+      if (p.includes('active-project-id.txt')) return Promise.reject(new Error('disk full'));
       return originalWriteTextFile(p, c);
     };
 
@@ -169,6 +182,21 @@ describe('FsProjectStore — projects', () => {
       'Failed to persist active-project marker (project save itself succeeded)',
       expect.objectContaining({ error: 'disk full' }),
     );
+  });
+
+  it('keeps the previous project when the replacement write fails', async () => {
+    await store.saveProject(project as never);
+    const originalWriteTextFile = fake.apis.writeTextFile;
+    fake.apis.writeTextFile = (path: string, content: string) => {
+      if (path.includes('/project.json.tmp-')) return Promise.reject(new Error('disk full'));
+      return originalWriteTextFile(path, content);
+    };
+
+    await expect(
+      store.saveProject({ ...project, title: 'Should not replace' } as never),
+    ).rejects.toThrow('disk full');
+    expect((await store.loadProject('p1'))?.title).toBe('My Novel');
+    expect([...fake.text.keys()].some((path) => path.includes('.tmp-'))).toBe(false);
   });
 });
 
@@ -184,31 +212,51 @@ describe('FsSettingsStore — settings + encrypted API keys', () => {
     expect(await store.loadSettings()).toBeNull();
   });
 
-  it('encrypts and decrypts an API key round-trip', async () => {
-    await store.saveApiKey('openai', 'sk-secret-123');
-    expect(await store.getApiKey('openai')).toBe('sk-secret-123');
-    await store.clearApiKey('openai');
+  it('rejects filesystem API-key persistence', async () => {
+    await expect(store.saveApiKey('openai', 'test-provider-key')).rejects.toThrow(/disabled/);
+  });
+
+  it('does not read legacy filesystem API-key files', async () => {
+    const keyFile = '/app/config/openai_key.enc.json';
+    fake.text.set(keyFile, JSON.stringify({ iv: 'legacy', data: 'legacy' }));
     expect(await store.getApiKey('openai')).toBeNull();
+    expect(fake.text.has(keyFile)).toBe(false);
   });
 
-  it('delegates the Gemini key helpers to provider storage', async () => {
-    await store.saveGeminiApiKey('gem-key');
-    expect(await store.getGeminiApiKey()).toBe('gem-key');
+  it('rejects filesystem API-key persistence even for an empty key', async () => {
+    await expect(store.saveApiKey('openai', '  ')).rejects.toThrow(/disabled/);
   });
 
-  it('rejects an empty API key', async () => {
-    await expect(store.saveApiKey('openai', '  ')).rejects.toThrow(/empty/);
-  });
-
-  it('returns null when decrypting a missing key', async () => {
+  it('returns null when no filesystem key exists', async () => {
     expect(await store.getApiKey('anthropic')).toBeNull();
   });
 
-  // QNBS-v3 (F-05/F-06 fix, 2026-07-29): a pre-2026-07-29 key file (unsalted single-SHA-256
-  // scheme) is discarded, not migrated (locked decision) — this asserts the discard path returns
-  // null without throwing, removes the stale file, and surfaces a one-time notification rather
-  // than failing silently.
-  it('discards a legacy unsalted key file, removes it, and notifies instead of throwing', async () => {
+  it('removes known legacy API-key files during desktop startup cleanup', async () => {
+    const providers = ['gemini', 'openai', 'anthropic', 'grok', 'openrouter'];
+    for (const provider of providers) {
+      fake.text.set(`/app/config/${provider}_key.enc.json`, 'legacy-ciphertext');
+    }
+
+    await store.removeLegacyApiKeyFiles();
+
+    expect(
+      providers.every((provider) => !fake.text.has(`/app/config/${provider}_key.enc.json`)),
+    ).toBe(true);
+  });
+
+  // QNBS-v3 (CodeRabbit #363): regression guard — a hardcoded provider list would leave an unlisted/future provider's legacy file uncleaned forever, since cleanup now scans by filename pattern instead.
+  it('removes a legacy key file for a provider not in any hardcoded list, and leaves other files alone', async () => {
+    fake.text.set('/app/config/some-future-provider_key.enc.json', 'legacy-ciphertext');
+    fake.text.set('/app/config/settings.json', '{"kept":true}');
+
+    await store.removeLegacyApiKeyFiles();
+
+    expect(fake.text.has('/app/config/some-future-provider_key.enc.json')).toBe(false);
+    expect(fake.text.has('/app/config/settings.json')).toBe(true);
+  });
+
+  // QNBS-v3: [security / discard recoverable legacy ciphertext / prevents unsafe migration].
+  it('discards a legacy unsalted key file without notifying or throwing', async () => {
     const dispatch = vi.fn();
     appStoreRef.current = { getState: vi.fn(), dispatch } as never;
     try {
@@ -222,14 +270,7 @@ describe('FsSettingsStore — settings + encrypted API keys', () => {
 
       expect(result).toBeNull();
       expect(fake.text.has(legacyFile)).toBe(false);
-      expect(dispatch).toHaveBeenCalledWith(
-        expect.objectContaining({
-          payload: expect.objectContaining({
-            type: 'info',
-            title: expect.stringContaining('API Key Reset'),
-          }),
-        }),
-      );
+      expect(dispatch).not.toHaveBeenCalled();
     } finally {
       appStoreRef.current = null;
     }
@@ -313,6 +354,25 @@ describe('FsAssetStore — images + binder assets', () => {
   it('returns null/[] for missing binder assets', async () => {
     expect(await store.getBinderAsset('p1', 'missing')).toBeNull();
     expect(await store.listBinderAssetIds('p1')).toEqual([]);
+  });
+
+  // QNBS-v3 (CodeAnt #363): simulates a torn write (a partially-applied metadata update from a different generation) and asserts the read side refuses to pair mismatched binary/metadata.
+  it('treats a binary/metadata byteSize mismatch as corrupt rather than returning a mixed pair', async () => {
+    const data = new Uint8Array([1, 2, 3, 4]).buffer;
+    await store.saveBinderAsset('p1', 'a1', data, {
+      name: 'doc.pdf',
+      mime: 'application/pdf',
+    } as never);
+
+    const metaFile = '/app/projects/p1/binder/a1.meta.json';
+    const staleMeta = JSON.parse(fake.text.get(metaFile) as string);
+    fake.text.set(metaFile, JSON.stringify({ ...staleMeta, byteSize: 999 }));
+
+    expect(await store.getBinderAsset('p1', 'a1')).toBeNull();
+    expect(logger.warn).toHaveBeenCalledWith(
+      'getBinderAsset: byteSize/binary mismatch — treating pair as corrupt',
+      expect.objectContaining({ expected: 999, actual: 4 }),
+    );
   });
 });
 
