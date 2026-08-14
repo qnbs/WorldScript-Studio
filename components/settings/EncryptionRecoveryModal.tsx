@@ -1,7 +1,7 @@
 import type { FC } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useFactoryReset } from '../../hooks/useFactoryReset';
 import { useTranslation } from '../../hooks/useTranslation';
-import { wipeAllAppData } from '../../services/factoryResetService';
 import { logger } from '../../services/logger';
 import type { EncryptionMigrationJournal } from '../../services/storage/encryptionMigrationJournal';
 import type { ProtectedStoreMigrationProgress } from '../../services/storage/protectedStoreMigration';
@@ -11,6 +11,7 @@ import {
 } from '../../services/storage/storageEncryptionService';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
+import { FactoryResetDangerZone } from './FactoryResetDangerZone';
 
 interface Props {
   journal: EncryptionMigrationJournal;
@@ -88,21 +89,7 @@ export const EncryptionRecoveryModal: FC<Props> = ({ journal, onRecovered }) => 
   const canSubmit =
     !busy && sourcePassphrase.length > 0 && (!needsTargetPassphrase || targetPassphrase.length > 0);
 
-  const handleFactoryReset = useCallback(async () => {
-    if (!window.confirm(t('settings.data.dangerZone.factoryReset.modalWarning'))) return;
-    setBusy(true);
-    setError('');
-    try {
-      await wipeAllAppData();
-    } catch (err) {
-      setError(t('settings.privacy.encryptionRecoveryFailed'));
-      logger.error('Factory reset failed', {
-        error: err instanceof Error ? err.message : String(err),
-      });
-    } finally {
-      setBusy(false);
-    }
-  }, [t]);
+  const handleFactoryReset = useFactoryReset({ t, setBusy, setError });
 
   return (
     <Modal
@@ -123,17 +110,22 @@ export const EncryptionRecoveryModal: FC<Props> = ({ journal, onRecovered }) => 
             <p className="text-sm text-[var(--sc-danger-fg)] bg-[var(--sc-danger-border)]/10 rounded-md px-3 py-2">
               {t('settings.privacy.encryptionRecoveryStuck')}
             </p>
-            <p className="text-xs text-[var(--sc-text-secondary)]">
-              {t('settings.data.dangerZone.factoryReset.modalDescription')}
-            </p>
-            <Button
-              variant="danger"
-              onClick={() => void handleFactoryReset()}
-              disabled={busy}
-              aria-busy={busy}
+            {/* QNBS-v3: mirrors the resume-flow error paragraph — without it a failed reset here left setError with nowhere to render */}
+            <p
+              id={ERROR_ID}
+              role="alert"
+              className="text-sm text-[var(--sc-danger-fg)]"
+              style={{ minHeight: '1.25rem' }}
             >
-              {t('settings.data.dangerZone.factoryReset.button')}
-            </Button>
+              {error}
+            </p>
+            <FactoryResetDangerZone
+              t={t}
+              busy={busy}
+              onReset={() => void handleFactoryReset()}
+              bordered={false}
+              descriptionClassName="text-xs text-[var(--sc-text-secondary)]"
+            />
           </div>
         ) : (
           <>
@@ -226,19 +218,7 @@ export const EncryptionRecoveryModal: FC<Props> = ({ journal, onRecovered }) => 
                 {t('settings.privacy.encryptionRecoveryResumeButton')}
               </Button>
             </div>
-            <div className="border-t border-[var(--sc-border-subtle)] pt-3">
-              <p className="text-xs text-[var(--sc-danger-fg)] mb-2">
-                {t('settings.data.dangerZone.factoryReset.modalDescription')}
-              </p>
-              <Button
-                variant="danger"
-                onClick={() => void handleFactoryReset()}
-                disabled={busy}
-                aria-busy={busy}
-              >
-                {t('settings.data.dangerZone.factoryReset.button')}
-              </Button>
-            </div>
+            <FactoryResetDangerZone t={t} busy={busy} onReset={() => void handleFactoryReset()} />
           </>
         )}
       </div>

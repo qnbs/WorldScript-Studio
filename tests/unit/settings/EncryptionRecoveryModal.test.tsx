@@ -19,13 +19,22 @@ type OnRecovered = () => void;
 
 const mockResumeEncryptionMigration = vi.fn();
 const mockLoggerWarn = vi.fn();
+const mockLoggerError = vi.fn();
+const mockWipeAllAppData = vi.fn();
 
 vi.mock('../../../hooks/useTranslation', () => ({
   useTranslation: () => ({ t: (k: string) => k, language: 'en' }),
 }));
 
 vi.mock('../../../services/logger', () => ({
-  logger: { warn: (...args: unknown[]) => mockLoggerWarn(...args) },
+  logger: {
+    warn: (...args: unknown[]) => mockLoggerWarn(...args),
+    error: (...args: unknown[]) => mockLoggerError(...args),
+  },
+}));
+
+vi.mock('../../../services/factoryResetService', () => ({
+  wipeAllAppData: (...args: unknown[]) => mockWipeAllAppData(...args),
 }));
 
 // QNBS-v3: IdbWrongPassphraseError must be a real class (not a plain mock) so the component's
@@ -99,6 +108,8 @@ describe('EncryptionRecoveryModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     onRecovered = vi.fn<OnRecovered>();
+    mockWipeAllAppData.mockResolvedValue(undefined);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
   });
 
   it('renders the recovery title', () => {
@@ -316,5 +327,71 @@ describe('EncryptionRecoveryModal', () => {
 
     resolveResume?.();
     await waitFor(() => expect(onRecovered).toHaveBeenCalledTimes(1));
+  });
+
+  describe('danger-zone factory reset', () => {
+    it('asks for confirmation and wipes app data from the stuck (recovery-required) state', async () => {
+      const user = userEvent.setup();
+      render(
+        <EncryptionRecoveryModal
+          journal={makeJournal({ phase: 'recovery-required' })}
+          onRecovered={onRecovered}
+        />,
+      );
+      await user.click(
+        screen.getByRole('button', { name: 'settings.data.dangerZone.factoryReset.button' }),
+      );
+      expect(window.confirm).toHaveBeenCalledWith(
+        'settings.data.dangerZone.factoryReset.modalWarning',
+      );
+      await waitFor(() => expect(mockWipeAllAppData).toHaveBeenCalledTimes(1));
+    });
+
+    it('asks for confirmation and wipes app data from the normal resume state', async () => {
+      const user = userEvent.setup();
+      render(
+        <EncryptionRecoveryModal
+          journal={makeJournal({ operation: 'disable' })}
+          onRecovered={onRecovered}
+        />,
+      );
+      await user.click(
+        screen.getByRole('button', { name: 'settings.data.dangerZone.factoryReset.button' }),
+      );
+      await waitFor(() => expect(mockWipeAllAppData).toHaveBeenCalledTimes(1));
+    });
+
+    it('does not wipe app data when the confirmation is dismissed', async () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(false);
+      const user = userEvent.setup();
+      render(
+        <EncryptionRecoveryModal
+          journal={makeJournal({ phase: 'recovery-required' })}
+          onRecovered={onRecovered}
+        />,
+      );
+      await user.click(
+        screen.getByRole('button', { name: 'settings.data.dangerZone.factoryReset.button' }),
+      );
+      expect(mockWipeAllAppData).not.toHaveBeenCalled();
+    });
+
+    it('shows a recovery-failed error and logs it when wipeAllAppData rejects', async () => {
+      mockWipeAllAppData.mockRejectedValue(new Error('disk full'));
+      const user = userEvent.setup();
+      render(
+        <EncryptionRecoveryModal
+          journal={makeJournal({ phase: 'recovery-required' })}
+          onRecovered={onRecovered}
+        />,
+      );
+      await user.click(
+        screen.getByRole('button', { name: 'settings.data.dangerZone.factoryReset.button' }),
+      );
+      await waitFor(() =>
+        expect(screen.getByText('settings.privacy.encryptionRecoveryFailed')).toBeInTheDocument(),
+      );
+      expect(mockLoggerError).toHaveBeenCalledWith('Factory reset failed', { error: 'disk full' });
+    });
   });
 });
