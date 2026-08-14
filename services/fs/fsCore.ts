@@ -90,18 +90,31 @@ function temporaryPath(path: string): string {
   return `${path}.tmp-${suffix}`;
 }
 
+const atomicWriteTails = new Map<string, Promise<void>>();
+
 async function writeAndReplace(
   apis: TauriApis,
   path: string,
   write: (temporary: string) => Promise<void>,
 ): Promise<void> {
-  const temporary = temporaryPath(path);
+  const previous = atomicWriteTails.get(path);
+  const current = (previous?.catch(() => undefined) ?? Promise.resolve()).then(async () => {
+    const temporary = temporaryPath(path);
+    try {
+      await retryFs(() => write(temporary));
+      await retryFs(() => apis.rename(temporary, path));
+    } catch (error) {
+      await apis.remove(temporary).catch(() => undefined);
+      throw error;
+    }
+  });
+  atomicWriteTails.set(path, current);
   try {
-    await retryFs(() => write(temporary));
-    await retryFs(() => apis.rename(temporary, path));
-  } catch (error) {
-    await apis.remove(temporary).catch(() => undefined);
-    throw error;
+    await current;
+  } finally {
+    if (atomicWriteTails.get(path) === current) {
+      atomicWriteTails.delete(path);
+    }
   }
 }
 

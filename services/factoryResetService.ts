@@ -66,15 +66,18 @@ async function clearTauriAppData(): Promise<void> {
     if (await apis.exists(appDataPath)) {
       // QNBS-v3: keep the capability-scoped AppData root and remove only its contents.
       const entries = await apis.readDir(appDataPath);
-      await Promise.all(
-        entries
-          .map((entry) => entry.name)
-          .filter((name): name is string => Boolean(name))
-          .map(async (name) => {
-            const childPath = await apis.join(appDataPath, name);
-            await apis.remove(childPath, { recursive: true });
-          }),
-      );
+      let firstError: unknown;
+      for (const name of entries
+        .map((entry) => entry.name)
+        .filter((entryName): entryName is string => Boolean(entryName))) {
+        try {
+          const childPath = await apis.join(appDataPath, name);
+          await apis.remove(childPath, { recursive: true });
+        } catch (error) {
+          firstError ??= error;
+        }
+      }
+      if (firstError) throw firstError;
     }
   } catch (error) {
     logger.error('Failed to clear Tauri app data during factory reset:', error);
