@@ -1,0 +1,36 @@
+# ADR 0019: CEF as the next-generation WorldScript Studio desktop runtime
+
+**Status:** Accepted (strategy only — no implementation yet). This ADR locks the direction; it does not add any CEF code, dependency, or build target. Full context, waves, and gates: `docs/cef/ROADMAP-CEF-DESKTOP-MIGRATION.md`.
+
+## Context
+
+WorldScript Studio's desktop build (`src-tauri/`) currently ships on Tauri 2, which on Linux renders through the system WebKitGTK. Issue #332 (resolved in v1.27.0, see `docs/ISSUES-332-333-PERFORMANCE-LEDGER.md`) documented a severe WebKitGTK memory blow-up on one reporter's environment — one diagnostic case reached roughly 26.7 GB before WebKit's own 16 GiB kill threshold intervened. That issue is fixed for its specific triggers, but it exposed a structural risk: WorldScript does not control the Chromium/WebKit engine version, patch cadence, or process behavior it renders on for Linux desktop users.
+
+Direct Tauri coupling today is real but not centralized: `services/tauriRuntime.ts` is a thin 5-function facade (runtime detection, OS detection, version, "open data dir"), while the actual `@tauri-apps/*` API surface — `invoke`, events, fs, dialog, window, menu, tray, notifications, updater, HTTP — is imported directly across 16 files (`App.tsx`, `hooks/useTauriUpdater.ts`, `services/ai/fetchAdapter.ts`, `services/desktop/desktopMenu.ts`, `services/desktop/desktopNotifications.ts`, `services/desktop/desktopTray.ts`, `services/fs/fsCore.ts`, `services/localServerHttp.ts`, `services/logger.ts`, `services/lora/loraTrainingService.ts`, `services/pandocTauri.ts`, `services/tauriDeepLink.ts`, `services/tauriMenuService.ts`, `services/tauriRuntime.ts`, `services/tauriTaskBridge.ts`, `services/tauriTrayService.ts`), verified by direct `rg` search on 2026-08-18 (full inventory: `docs/cef/TAURI-COUPLING-INVENTORY.md`). `src-tauri/` itself is a small, standard Tauri v2 Rust scaffold (`lib.rs`, `main.rs`, `lora.rs`, `pandoc.rs`, `capabilities/default.json`, `tauri.conf.json`).
+
+Before committing to any migration, we reconciled the currently open desktop-security/CI PRs against `main` to establish an unambiguous starting point (roadmap §65, full table in the roadmap doc): PR #363 (merged 2026-08-14, v1.27.1) already shipped atomic writes across every Tauri filesystem-backed store, fail-closed API-key routing, and a blocking Rust/Tauri CI gate — substantially overlapping #353's and #354's stated goals and most of #355's. Only #356 (full at-rest encryption of desktop project-text stores) remains a genuinely open gap not covered by anything on `main` today; browser/PWA IndexedDB encryption (ADR-0018) does not protect the Tauri filesystem path. This ADR treats `main` — not any of #352–#356 — as the sole implementation baseline, consistent with the roadmap's "no CEF dependency on stale branches" principle.
+
+## Decision
+
+We adopt Chromium Embedded Framework (CEF) as the intended production successor to the current Tauri/system-WebView desktop runtime, executed as a long, gated, incremental program (`docs/cef/ROADMAP-CEF-DESKTOP-MIGRATION.md`, Waves 0–22). This ADR locks the following, non-negotiable without a superseding ADR:
+
+1. **CEF is the primary next-generation desktop runtime.** Not a proof of concept, not one of several competing experiments — the planned successor, subject to the maturity gates in the roadmap (§71, §72).
+2. **React/Vite remains the primary frontend** throughout the migration. This is not a UI rewrite; the existing `dist/` is what CEF will render.
+3. **Rust becomes increasingly authoritative** for critical desktop concerns (persistence, snapshots, crypto, migrations, filesystem, tasks, diagnostics) as the program proceeds — moved out of the renderer only where it materially improves correctness, security, or portability.
+4. **Tauri remains the transition/reference/fallback runtime** — the regression comparator and production support path — until CEF has demonstrated the parity and maturity defined in the roadmap's Tauri-retirement gate (§72). It is not the target for large new architectural investment during this program.
+5. **CEF development starts from current `main`**, not from stale branches. Per the PR reconciliation above, no #352–#356 branch is treated as an implementation baseline; any genuinely unique delta (currently: #356's project-at-rest-encryption goal) is carried forward as tracked scope (risk register, Wave 7), not resurrected as-is.
+6. **Renderer-native integration occurs through typed, versioned contracts** (a `DesktopPlatform` abstraction and a typed IPC protocol), not ad hoc bridging.
+7. **Renderer IPC is allowlisted.** No generic/arbitrary privileged command bridge; every native operation is named, typed, validated, and capability-scoped.
+8. **No production `egui`/`wgpu` implementation begins before the Native-v2 admission gate** (roadmap §73, Appendix K). Documentation and renderer-neutral core design that doesn't block a future native client are allowed; native UI work is not.
+9. **New desktop functionality should avoid unnecessary new Tauri-only coupling** for the duration of the migration, per the roadmap's Tauri feature-freeze policy (§69) — security/data-integrity/critical-reliability fixes remain always allowed.
+10. **Storage, updater, diagnostics, and crash recovery are first-class CEF deliverables**, not deferred polish — they gate CEF Stable (roadmap §71).
+
+## Consequences
+
+- No code, dependency, or build-target changes ship from this ADR. `docs/cef/` is established as the living documentation set for the program (roadmap, risk register, competency matrix, Tauri-coupling inventory, knowledge-base skeletons, ownership manifest) — see the sibling files in this PR.
+- Every subsequent CEF-labeled PR must cite this ADR and the relevant roadmap wave/section; work that does not fit an existing wave requires a roadmap update, not an undocumented side effort.
+- The open PRs #352–#356 are handled as a separate, explicitly confirmed action (not silently closed as a side effect of this ADR): #352 is re-validated against post-#363 reality before merging as a docs fix; #353, #354, and #355 are closed with a comment citing #363 as the superseding change (pending a final delta check); #356's goal is preserved via the risk register and Wave 7 (crypto) scope rather than merged as-is.
+- Direct `@tauri-apps/*` imports are not removed or refactored by this ADR — Wave 1 (`DesktopPlatform` boundary) is where that abstraction work begins.
+- `egui`/`wgpu` (WorldScript Native) stays explicitly out of scope until the Native-v2 admission gate passes; no production work toward it should be scheduled before then.
+
+**Rejected alternative:** continuing to invest in Tauri/WebKitGTK-specific fixes indefinitely. Rejected because WorldScript does not control WebKitGTK's version or patch cadence on Linux, and issue #332 demonstrated the resulting risk is not fully addressable from the application side alone.
