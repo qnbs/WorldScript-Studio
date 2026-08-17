@@ -11,6 +11,6 @@
   "optionalDependencies": {
     "@mlc-ai/web-llm": "^0.2.84",
     "@huggingface/transformers": "^4.2.0",
-    "onnxruntime-web": "^1.26.0"
+    "onnxruntime-web": "^1.27.0"
   }
 }
