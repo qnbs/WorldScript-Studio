@@ -15,6 +15,7 @@ export default defineConfig({
       // QNBS-v3: B-3 vendor fork — resolve workspace package in tests
       '@domain/collab-transport': path.resolve('./packages/collab-transport/src/index.ts'),
       '@domain/worker-bus': path.resolve('./packages/worker-bus/src/index.ts'),
+      '@domain/desktop-contracts': path.resolve('./packages/desktop-contracts/src/index.ts'),
     },
   },
   test: {
