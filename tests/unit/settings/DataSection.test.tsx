@@ -167,12 +167,7 @@ describe('DataSection', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// QNBS-v3: settings-file import must route through normalizePersistedSettings
-// before dispatch — a raw import previously bypassed sanitization entirely,
-// letting a legacy/crafted openRouter.apiKey reach Redux (and then autosave)
-// unfiltered.
-// ---------------------------------------------------------------------------
+// QNBS-v3: a raw settings import previously bypassed sanitization entirely, letting a legacy/crafted openRouter.apiKey reach Redux (and then autosave) unfiltered.
 describe('DataSection settings-file import sanitization', () => {
   beforeEach(async () => {
     mockDispatch.mockClear();
