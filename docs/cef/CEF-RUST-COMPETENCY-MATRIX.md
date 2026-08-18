@@ -24,7 +24,7 @@ CI validation of this block ("fail CI when a required item for the active progra
 
 | Domain | Status | Evidence |
 |---|---|---|
-| CEF architecture (process model, browser/frame/client ownership, message loop, shutdown ordering, subprocess packaging, sandbox expectations) | Partial | Process model, message loop, shutdown ordering, and subprocess packaging all have real working code + CI proof (`apps/desktop-cef/`, PR #388) — but no dedicated architecture-primer doc exists yet (`docs/cef/knowledge/cef-architecture-primer.md` still skeleton), and sandbox expectations have zero evidence. |
+| CEF architecture (process model, browser/frame/client ownership, message loop, shutdown ordering, subprocess packaging, sandbox expectations) | Partial | Process model, message loop, and shutdown ordering all have real working code + CI proof (`apps/desktop-cef/`, PR #388). Subprocess *resource layout* (unpackaged CEF build output — `COPY_FILES`) is confirmed, but real shipped/installer packaging is separate, unproven, later scope. No dedicated architecture-primer doc exists yet (`docs/cef/knowledge/cef-architecture-primer.md` still skeleton), and sandbox expectations have zero evidence. |
 | CEF threading & lifetime rules (UI-thread callbacks, IO thread, ref-counted objects, callback lifetime, async cancellation, shutdown races) | Partial | `CEF_REQUIRE_UI_THREAD()` used throughout; `IMPLEMENT_REFCOUNTING`/`CefRefPtr` applied correctly; a real callback-lifetime lesson learned and fixed (`base::Unretained` vs. a plain `CefTask` — see `apps/desktop-cef/src/worldscript_handler.cpp`). No dedicated review doc yet (`docs/cef/knowledge/threading-and-lifetimes.md` still skeleton); IO thread and async-cancellation patterns untouched. |
 | Rust binding layer (crate/version, unsafe/FFI boundary, wrapper ownership, API coverage gaps, upgrade procedure) | Partial | `apps/desktop-cef/rust-core/` (`worldscript_rust_core`, Corrosion-linked) — FFI boundary proven inside the real CEF host in CI (PR #388), not just an isolated test. No upgrade procedure written yet (`docs/cef/knowledge/binding-upgrade-playbook.md` still skeleton); API coverage is currently one trivial function, not representative of real surface area. |
 | Cross-platform native host (Linux loader/resource layout, Windows process/installer/sandbox, macOS bundle/signing, window lifecycle, high-DPI, IME/a11y) | Partial (Linux only) | Linux loader/resource layout confirmed via a real filesystem listing in CI (`docs/cef/knowledge/linux-runtime-notes.md`); a real cwd-relative-path startup bug found and fixed. Zero Windows/macOS evidence. Window lifecycle proven for open/close only — high-DPI and IME/a11y untouched. |
@@ -39,7 +39,7 @@ CI validation of this block ("fail CI when a required item for the active progra
 [ ] CEF reference-count/lifetime rules documented (same — same caveat)
 [ ] Rust binding unsafe surface reviewed          (trivial surface so far, not representative)
 [ ] Binding API gaps catalogued
-[x] Subprocess packaging proven                   — PR #388, real filesystem listing in CI
+[x] Unpackaged CEF resource layout proven          — PR #388, real filesystem listing in CI (real shipped/installer packaging remains separate, unproven, later scope)
 [x] Repeated startup/shutdown harness green        — PR #388, 3/3 cycles, cef-learning-harness CI job
 [ ] Renderer crash observation green
 [ ] Accessibility smoke green
@@ -59,7 +59,7 @@ CI validation of this block ("fail CI when a required item for the active progra
 [x] unsafe/FFI boundary identified                 — apps/desktop-cef/rust-core/, proven in CI (PR #388)
 [ ] threading/lifetime map reviewed                 (no dedicated doc yet — see domains table)
 [x] clean repeated startup/shutdown proven          — PR #388, 3/3 cycles, cef-learning-harness CI job
-[x] renderer termination observed and handled       — PR #388's subprocess-reaping grace-period finding
+[ ] renderer termination observed and handled       (not proven — PR #388 exercised normal shutdown only; no test deliberately terminates/crashes a renderer, per Qodo review finding on PR #389)
 [ ] sandbox development plan validated
 [ ] Linux runtime dependencies inventoried           (inventoried but not yet proven sufficient — see native-readiness.md)
 [ ] at least one accessibility smoke test performed
@@ -67,7 +67,7 @@ CI validation of this block ("fail CI when a required item for the active progra
 [ ] upgrade playbook exists
 ```
 
-This gate is **not** satisfied yet — 5 of 12 items checked, several with explicit caveats above. `WS-CEF-IPC` (Wave 4) remains blocked.
+This gate is **not** satisfied yet — 4 of 12 items checked, several with explicit caveats above. `WS-CEF-IPC` (Wave 4) remains blocked.
 
 ## What this snapshot (Wave 2, 2026-08-18/19) does NOT claim
 

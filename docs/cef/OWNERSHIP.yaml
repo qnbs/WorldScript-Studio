@@ -54,7 +54,7 @@ documents:
     review_days: 90
     related_ci:
       - cef-learning-harness
-      - cef-competency-gate
+      # cef-competency-gate: no such CI workflow/job exists yet — planned, not implemented (CodeRabbit review finding on PR #389). Re-add once it's a real job.
     driftCheckTool: "planned — not implemented, see Wave 1"
     note: "Updated in place for Wave 2 (PR #386/#387/#388) — 2 of 7 cef_competency items now true with linked evidence; competency gate still not satisfied (5/12)."
 
@@ -123,7 +123,7 @@ documents:
     review_days: 90
     related_ci:
       - cef-learning-harness
-      - cef-competency-gate
+      # cef-competency-gate: no such CI workflow/job exists yet — planned, not implemented (CodeRabbit review finding on PR #389). Re-add once it's a real job.
     driftCheckTool: "planned — not implemented, see Wave 1"
     note: "Skeleton only — Status: Not started"
 
