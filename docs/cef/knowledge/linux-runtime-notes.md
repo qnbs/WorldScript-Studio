@@ -1,6 +1,6 @@
 # CEF Linux Runtime Notes
 
-**Status:** Preliminary spike evidence only (2026-08-18, ADR-0020) — one dev machine, one CEF version, X11 only. Not a compatibility contract yet; do not treat any number below as a floor until packaged builds prove it (§44.1).
+**Status:** Preliminary spike evidence only (2026-08-18, ADR-0020) — one dev machine, one CEF version, X11 only. Not a compatibility contract yet; do not treat any number below as a floor until packaged builds prove it (§44.1). The package-presence portion of the dependency inventory now also has a real, CI-run second data point (stock `ubuntu-latest`) via the `🧪 CEF Learning Harness` workflow — see the "Remaining outline" section below for exactly what that job does and does not cover.
 **Scope:** The Linux Runtime Compatibility Contract for WorldScript's CEF build — minimum supported distribution/runtime baseline, CPU architectures, required dynamic libraries/packages, `libcef.so`/resource layout, loader/rpath policy, X11 vs. Wayland policy, Ozone/backend policy, GPU/driver expectations, installer dependency behavior.
 **Tier:** A (release/security-critical) — see [`../OWNERSHIP.yaml`](../OWNERSHIP.yaml).
 **Roadmap context:** [`../ROADMAP-CEF-DESKTOP-MIGRATION.md`](../ROADMAP-CEF-DESKTOP-MIGRATION.md) §44.1–§44.5 (Linux runtime compatibility as its own workstream), Appendix A.3 (compatibility matrix template).
@@ -26,4 +26,4 @@ Do not hardcode a glibc/distro minimum here until packaged builds have proven it
 - `libcef.so` and resource layout for our actual packaging (not yet designed — this spike used CEF's own unpackaged build-output layout)
 - X11 and Wayland smoke-test results across KDE, GNOME × NVIDIA, AMD, Intel (Appendix A.3 matrix) — this spike covers exactly one cell (X11/Xvfb, Intel integrated) of that matrix
 - Sandbox requirements observed on Linux (not exercised this spike)
-- Clean-machine dependency test results (§44.3) — this spike ran on an already-configured dev machine, not a clean install
+- Clean-machine dependency test results (§44.3) — **partially closed**: the `🧪 CEF Learning Harness` CI job (`.github/workflows/cef-learning-harness.yml`, `scripts/cef/check-linux-runtime-deps.mjs`) runs the same package-presence check against a stock `ubuntu-latest` runner, before any `apt-get`, giving a real second data point beyond this already-configured dev machine. Still open: only checks `dpkg` package presence, not `ldd` against the actual shipped `.so` files; only one distro/runner image; still not a packaged-installer dependency declaration

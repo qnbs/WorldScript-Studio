@@ -96,6 +96,10 @@ public/duckdb/
 .codegraph/codegraph.db-wal
 voice-spike/
 
+# CEF SDK cache (~300MB compressed / ~1.5GB extracted) — fetched on demand by
+# scripts/cef/fetch-cef-sdk.mjs (Wave 2, ADR-0020), never committed. See cef-version.json for the pin.
+.cef-cache/
+
 # Signing keys, certificates, and secrets — NEVER commit
 *.key
 *.key.pub
