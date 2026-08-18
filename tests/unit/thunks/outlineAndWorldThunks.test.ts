@@ -194,6 +194,7 @@ describe('generateWorldProfileThunk', () => {
   });
 });
 
+// QNBS-v3: regenerateWorldFieldThunk/generateWorldImageThunk were only mocked out in hook tests, never actually exercised — these protect the fulfilled payload, prompt args, persistence call, and rejection path.
 describe('regenerateWorldFieldThunk', () => {
   const world = {
     id: 'w1',
@@ -314,6 +315,7 @@ describe('uploadWorldImageThunk', () => {
     expect(storageService.saveImage).not.toHaveBeenCalled();
   });
 
+  // QNBS-v3: covers the `reader.error ?? new Error(...)` fallback branch — a browser could fire onerror with a null/undefined reader.error, which must still reject instead of leaving the upload thunk pending.
   it('rejects with a fallback error when the FileReader errors without a reader.error', async () => {
     vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(function (this: FileReader) {
       Object.defineProperty(this, 'error', { value: null, configurable: true });

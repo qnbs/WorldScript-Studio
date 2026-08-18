@@ -201,7 +201,9 @@ describe('DataSection settings-file import sanitization', () => {
       });
     });
 
-    fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
+    // QNBS-v3: userEvent.upload (not fireEvent.change) simulates the real browser file-selection interaction.
+    const user = userEvent.setup();
+    await user.upload(fileInput as HTMLInputElement, file);
 
     const { normalizePersistedSettings } = await import(
       '../../../services/storage/idbProjectStore'
