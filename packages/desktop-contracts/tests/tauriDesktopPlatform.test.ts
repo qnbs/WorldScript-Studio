@@ -284,10 +284,16 @@ describe('tauriDesktopPlatform', () => {
       h.isPermissionGranted.mockRejectedValueOnce(new Error('plugin unavailable'));
       await expect(tauriDesktopPlatform.notifications.isPermissionGranted()).resolves.toBe(false);
 
-      h.isPermissionGranted.mockRejectedValueOnce(new Error('plugin unavailable'));
+      // QNBS-v3: isPermissionGranted must resolve false (not reject) here, otherwise requestPermission() never reaches its own plugin call — this exercises THAT call's failure, not a repeat of the assertion above.
+      h.isPermissionGranted.mockResolvedValueOnce(false);
+      h.requestPermission.mockRejectedValueOnce(new Error('plugin unavailable'));
       await expect(tauriDesktopPlatform.notifications.requestPermission()).resolves.toBe(false);
 
-      h.isPermissionGranted.mockRejectedValueOnce(new Error('plugin unavailable'));
+      // QNBS-v3: isPermissionGranted must resolve true here so send() reaches sendNotification() itself, exercising that call's failure.
+      h.isPermissionGranted.mockResolvedValueOnce(true);
+      h.sendNotification.mockImplementationOnce(() => {
+        throw new Error('plugin unavailable');
+      });
       await expect(tauriDesktopPlatform.notifications.send('t', 'b')).resolves.toBe(false);
       expect(h.loggerWarn).toHaveBeenCalledTimes(3);
     });
@@ -528,15 +534,16 @@ describe('tauriDesktopPlatform', () => {
     });
 
     it('temporaryPath falls back to manual random-hex generation when crypto.randomUUID is unavailable', async () => {
-      const original = crypto.randomUUID;
-      // biome-ignore lint/suspicious/noExplicitAny: test-only global stub, restored immediately after
-      (crypto as any).randomUUID = undefined;
+      const nativeCrypto = globalThis.crypto;
+      vi.stubGlobal('crypto', {
+        getRandomValues: nativeCrypto.getRandomValues.bind(nativeCrypto),
+      });
       try {
         await tauriDesktopPlatform.filesystem.writeTextFileAtomic('/data/x.json', '{}');
         const [tempPath] = h.writeTextFile.mock.calls[0] as [string, string];
         expect(tempPath).toMatch(/^\/data\/x\.json\.tmp-[0-9a-f]+$/);
       } finally {
-        crypto.randomUUID = original;
+        vi.unstubAllGlobals();
       }
     });
 
