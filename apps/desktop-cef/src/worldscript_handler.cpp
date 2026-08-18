@@ -31,7 +31,8 @@ void WorldScriptHandler::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
   printf("[worldscript_host] rust_core ping = %d\n", worldscript_rust_ping());
   fflush(stdout);
 
-  CefPostDelayedTask(TID_UI, base::BindOnce(&WorldScriptHandler::PollShutdownFlag, this),
+  CefPostDelayedTask(TID_UI,
+                     base::BindOnce(&WorldScriptHandler::PollShutdownFlag, base::Unretained(this)),
                      kShutdownPollIntervalMs);
 }
 
@@ -45,7 +46,8 @@ void WorldScriptHandler::PollShutdownFlag() {
     return;  // Closing now — no need to keep polling.
   }
   if (!browser_list_.empty()) {
-    CefPostDelayedTask(TID_UI, base::BindOnce(&WorldScriptHandler::PollShutdownFlag, this),
+    CefPostDelayedTask(TID_UI,
+                       base::BindOnce(&WorldScriptHandler::PollShutdownFlag, base::Unretained(this)),
                        kShutdownPollIntervalMs);
   }
 }
