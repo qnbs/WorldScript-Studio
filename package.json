@@ -143,7 +143,7 @@
     "react-dom": "^19.2.8",
     "react-force-graph-2d": "^1.29.1",
     "react-redux": "^9.3.0",
-    "recharts": "^3.8.1",
+    "recharts": "^3.10.1",
     "redux-undo": "^1.1.0",
     "uuid": "14",
     "xstate": "^5.32.5",
