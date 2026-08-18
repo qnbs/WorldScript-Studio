@@ -1,3 +1,4 @@
+import { logger } from '../../../../services/logger';
 import type {
   DesktopClipboard,
   DesktopDeepLinks,
@@ -14,11 +15,12 @@ import type {
   DesktopTray,
   DesktopUpdater,
   DesktopWindow,
+  LoraMergeRequest,
+  LoraOllamaModelfileRequest,
+  LoraTrainRequest,
 } from '../types';
 
-// QNBS-v3: every facet reuses the exact dynamic-import-inside-try/catch pattern the 14 files being
-// migrated (Wave 1 PR B) already use — this adapter relocates that pattern, it does not invent a new
-// one. Behavior is preserved byte-for-byte; only the import site moves.
+// QNBS-v3: every facet reuses the exact dynamic-import-inside-try/catch pattern the 14 files being migrated (Wave 1 PR B) already use — relocates the pattern, doesn't invent a new one.
 
 function detectOs(): DesktopOsKind | null {
   const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
@@ -97,9 +99,9 @@ const filesystem: DesktopFilesystem = {
     const { readTextFile } = await import('@tauri-apps/plugin-fs');
     return readTextFile(path);
   },
-  writeTextFile: async (path, content) => {
+  writeTextFile: async (path, content, opts) => {
     const { writeTextFile } = await import('@tauri-apps/plugin-fs');
-    await writeTextFile(path, content);
+    await writeTextFile(path, content, opts);
   },
   writeTextFileAtomic: async (path, content) => {
     const { writeTextFile, rename, remove } = await import('@tauri-apps/plugin-fs');
@@ -109,9 +111,9 @@ const filesystem: DesktopFilesystem = {
     const { readFile } = await import('@tauri-apps/plugin-fs');
     return readFile(path);
   },
-  writeFile: async (path, data) => {
+  writeFile: async (path, data, opts) => {
     const { writeFile } = await import('@tauri-apps/plugin-fs');
-    await writeFile(path, data);
+    await writeFile(path, data, opts);
   },
   writeFileAtomic: async (path, data) => {
     const { writeFile, rename, remove } = await import('@tauri-apps/plugin-fs');
@@ -187,7 +189,8 @@ const menu: DesktopMenu = {
     try {
       const { Menu, Submenu, MenuItem, PredefinedMenuItem } = await import('@tauri-apps/api/menu');
       return { Menu, Submenu, MenuItem, PredefinedMenuItem };
-    } catch {
+    } catch (error) {
+      logger.warn('desktopPlatform.menu: failed to load the native menu builder', { error });
       return null;
     }
   },
@@ -212,7 +215,8 @@ const tray: DesktopTray = {
           import('@tauri-apps/api/app'),
         ]);
       return { TrayIcon, Menu, MenuItem, PredefinedMenuItem, defaultWindowIcon };
-    } catch {
+    } catch (error) {
+      logger.warn('desktopPlatform.tray: failed to load the native tray builder', { error });
       return null;
     }
   },
@@ -220,26 +224,42 @@ const tray: DesktopTray = {
 
 // --- notifications --------------------------------------------------------------------------------
 
+// QNBS-v3: mirrors services/desktop/desktopNotifications.ts's pre-migration never-throw guarantee at the facet level too, since desktopPlatform is now a directly-consumable API, not just this one wrapper.
 const notifications: DesktopNotifications = {
   isPermissionGranted: async () => {
-    const { isPermissionGranted } = await import('@tauri-apps/plugin-notification');
-    return isPermissionGranted();
+    try {
+      const { isPermissionGranted } = await import('@tauri-apps/plugin-notification');
+      return await isPermissionGranted();
+    } catch (error) {
+      logger.warn('desktopPlatform.notifications: failed to read permission state', { error });
+      return false;
+    }
   },
   requestPermission: async () => {
-    const { isPermissionGranted, requestPermission } = await import(
-      '@tauri-apps/plugin-notification'
-    );
-    if (await isPermissionGranted()) return true;
-    const permission = await requestPermission();
-    return permission === 'granted';
+    try {
+      const { isPermissionGranted, requestPermission } = await import(
+        '@tauri-apps/plugin-notification'
+      );
+      if (await isPermissionGranted()) return true;
+      const permission = await requestPermission();
+      return permission === 'granted';
+    } catch (error) {
+      logger.warn('desktopPlatform.notifications: failed to request permission', { error });
+      return false;
+    }
   },
   send: async (title, body) => {
-    const { isPermissionGranted, sendNotification } = await import(
-      '@tauri-apps/plugin-notification'
-    );
-    if (!(await isPermissionGranted())) return false;
-    sendNotification({ title, body });
-    return true;
+    try {
+      const { isPermissionGranted, sendNotification } = await import(
+        '@tauri-apps/plugin-notification'
+      );
+      if (!(await isPermissionGranted())) return false;
+      sendNotification({ title, body });
+      return true;
+    } catch (error) {
+      logger.warn('desktopPlatform.notifications: failed to send', { error });
+      return false;
+    }
   },
 };
 
@@ -274,9 +294,16 @@ const lifecycle: DesktopLifecycle = {
       const { getCurrentWindow } = await import('@tauri-apps/api/window');
       const win = getCurrentWindow();
       return await win.onCloseRequested(async (event) => {
-        await handler({ preventDefault: () => event.preventDefault() });
+        try {
+          await handler({ preventDefault: () => event.preventDefault() });
+        } catch (error) {
+          logger.warn('desktopPlatform.lifecycle: onCloseRequested handler failed', { error });
+        }
       });
-    } catch {
+    } catch (error) {
+      logger.warn('desktopPlatform.lifecycle: failed to install the close-requested handler', {
+        error,
+      });
       return () => {};
     }
   },
@@ -288,7 +315,7 @@ const tasks: DesktopTasks = {
   submitTask: async (request) => {
     const { invoke } = await import('@tauri-apps/api/core');
     return invoke('worldscript_task_supervisor_submit', {
-      request: request as Record<string, unknown>,
+      request: request as unknown as Record<string, unknown>,
     });
   },
   pingSupervisor: async () => {
@@ -305,23 +332,24 @@ const tasks: DesktopTasks = {
       const bytes = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
       return bytes;
-    } catch {
+    } catch (error) {
+      logger.warn('desktopPlatform.tasks: convertMarkdownToEpub failed', { error });
       return null;
     }
   },
-  // QNBS-v3: LoRA commands wrap invoke() with the same signature loraTrainingService.ts uses today;
-  // exact request/result types are tightened when that file migrates in Wave 1 PR B.
-  trainLora: async (request) => {
+  // QNBS-v3: train_lora's Rust command binds args under a top-level `payload` key — matches loraTrainingService.ts's existing invoke shape exactly.
+  trainLora: async (request: LoraTrainRequest) => {
     const { invoke } = await import('@tauri-apps/api/core');
-    return invoke('train_lora', request as Record<string, unknown>);
+    return invoke<string>('train_lora', { payload: request });
   },
   abortLoraTraining: async () => {
     const { invoke } = await import('@tauri-apps/api/core');
     return invoke('abort_lora_training');
   },
-  mergeLora: async (request) => {
+  // QNBS-v3: merge_lora/generateOllamaModelfile bind flat camelCase args (no serde rename) — spread the request object directly, matching loraTrainingService.ts.
+  mergeLora: async (request: LoraMergeRequest) => {
     const { invoke } = await import('@tauri-apps/api/core');
-    return invoke('merge_lora', request as Record<string, unknown>);
+    await invoke('merge_lora', { ...request });
   },
   checkLoraEnvironment: async () => {
     const { invoke } = await import('@tauri-apps/api/core');
@@ -331,9 +359,9 @@ const tasks: DesktopTasks = {
     const { invoke } = await import('@tauri-apps/api/core');
     return invoke('set_lora_python_path', { pythonPath });
   },
-  generateOllamaModelfile: async (request) => {
+  generateOllamaModelfile: async (request: LoraOllamaModelfileRequest) => {
     const { invoke } = await import('@tauri-apps/api/core');
-    return invoke<string>('generate_ollama_modelfile', request as Record<string, unknown>);
+    return invoke<string>('generate_ollama_modelfile', { ...request });
   },
 };
 
@@ -344,19 +372,20 @@ const diagnostics: DesktopDiagnostics = {
     try {
       const { getVersion } = await import('@tauri-apps/api/app');
       return await getVersion();
-    } catch {
+    } catch (error) {
+      logger.warn('desktopPlatform.diagnostics: failed to read the app version', { error });
       return null;
     }
   },
   openDataDirectory: async () => {
     try {
-      const { appDataDir, join } = await import('@tauri-apps/api/path');
+      const { appDataDir } = await import('@tauri-apps/api/path');
       const { open } = await import('@tauri-apps/plugin-shell');
       const dir = await appDataDir();
-      const path = await join(dir, '');
-      await open(path);
+      await open(dir);
       return true;
-    } catch {
+    } catch (error) {
+      logger.warn('desktopPlatform.diagnostics: failed to open the data directory', { error });
       return false;
     }
   },
@@ -377,10 +406,17 @@ const deepLinks: DesktopDeepLinks = {
       const { listen } = await import('@tauri-apps/api/event');
       const stop = await listen<string[] | string>('deep-link://new-url', (event) => {
         const urls = Array.isArray(event.payload) ? event.payload : [event.payload];
-        void handler(urls.filter((url): url is string => Boolean(url)));
+        void (async () => {
+          try {
+            await handler(urls.filter((url): url is string => Boolean(url)));
+          } catch (error) {
+            logger.warn('desktopPlatform.deepLinks: handler failed', { error });
+          }
+        })();
       });
       return stop;
-    } catch {
+    } catch (error) {
+      logger.warn('desktopPlatform.deepLinks: failed to subscribe', { error });
       return () => {};
     }
   },

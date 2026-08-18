@@ -15,6 +15,7 @@ export default defineConfig({
       // QNBS-v3: B-3 vendor fork — resolve workspace package in tests
       '@domain/collab-transport': path.resolve('./packages/collab-transport/src/index.ts'),
       '@domain/worker-bus': path.resolve('./packages/worker-bus/src/index.ts'),
+      // QNBS-v3: Wave 1 DesktopPlatform contract — resolve workspace package in tests (mirrors the worker-bus/collab-transport aliases above)
       '@domain/desktop-contracts': path.resolve('./packages/desktop-contracts/src/index.ts'),
     },
   },

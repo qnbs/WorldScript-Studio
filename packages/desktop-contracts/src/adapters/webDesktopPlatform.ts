@@ -16,9 +16,7 @@ import type {
   RuntimeInfo,
 } from '../types';
 
-// QNBS-v3: mirrors services/desktop/desktopNotifications.ts's "never throw" convention — every
-// facet resolves a safe default on the web/PWA build instead of rejecting, so callers never need
-// a platform-specific branch of their own.
+// QNBS-v3: mirrors desktopNotifications.ts's never-throw convention — every facet resolves a safe default on web instead of rejecting, so callers never need a platform-specific branch.
 
 const filesystemUnavailable = (): never => {
   throw new Error('DesktopPlatform.filesystem is unavailable on the web/PWA build');

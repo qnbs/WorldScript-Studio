@@ -1,3 +1,4 @@
+// QNBS-v3: Wave 1 renderer-neutral DesktopPlatform contract — every desktop capability access should route through this interface instead of a direct @tauri-apps/* import.
 /**
  * DesktopPlatform contract (roadmap §8, docs/cef/ROADMAP-CEF-DESKTOP-MIGRATION.md).
  * Renderer-neutral typed interface all desktop capability access should route through.
@@ -7,6 +8,8 @@
  * facet here — the roadmap's own §8 sketch has no HTTP facet, and the coupling inventory tags both
  * files as Wave 10 scope; they keep importing `@tauri-apps/plugin-http` directly until then.
  */
+
+import type { RustTaskRequest, RustTaskResultEvent } from '@domain/worker-bus';
 
 export type DesktopOsKind = 'windows' | 'macos' | 'linux';
 
@@ -22,14 +25,20 @@ export interface DesktopDirEntry {
   isDirectory?: boolean;
 }
 
+/** Matches Tauri plugin-fs's real WriteFileOptions subset — services/logger.ts needs `{ append: true, create: true }` for JSONL log writes. */
+export interface DesktopWriteOptions {
+  append?: boolean;
+  create?: boolean;
+}
+
 /** Low-level filesystem primitives — mirrors services/fs/fsCore.ts's `TauriApis` fs subset exactly. */
 export interface DesktopFilesystem {
   readTextFile(path: string): Promise<string>;
-  writeTextFile(path: string, content: string): Promise<void>;
+  writeTextFile(path: string, content: string, opts?: DesktopWriteOptions): Promise<void>;
   /** Same-directory temp-write-then-rename so readers never observe a partial file. */
   writeTextFileAtomic(path: string, content: string): Promise<void>;
   readFile(path: string): Promise<Uint8Array>;
-  writeFile(path: string, data: Uint8Array): Promise<void>;
+  writeFile(path: string, data: Uint8Array, opts?: DesktopWriteOptions): Promise<void>;
   writeFileAtomic(path: string, data: Uint8Array): Promise<void>;
   mkdir(path: string, opts?: { recursive?: boolean }): Promise<void>;
   exists(path: string): Promise<boolean>;
@@ -128,20 +137,46 @@ export interface DesktopLifecycle {
 
 // --- tasks (native Rust commands — named/typed per ADR-0019 point 7, never a generic invoke passthrough) --
 
+/** Matches src-tauri/src/lora.rs's `LoraTrainPayload` field-for-field (snake_case, no serde rename). */
+export interface LoraTrainRequest {
+  model_id: string;
+  dataset_path: string;
+  output_dir: string;
+  preset: string;
+  rank: number | null;
+  alpha: number | null;
+  epochs: number | null;
+  max_seq_len: number | null;
+}
+
+/** Matches `merge_lora`'s flat, default-camelCase-bound Tauri args (no serde rename on the Rust side). */
+export interface LoraMergeRequest {
+  baseModel: string;
+  adapterPath: string;
+  outputPath: string;
+}
+
+/** Matches `generate_ollama_modelfile`'s flat, default-camelCase-bound Tauri args. */
+export interface LoraOllamaModelfileRequest {
+  baseModel: string;
+  adapterPath: string;
+  name: string;
+}
+
 export interface DesktopTasks {
   /** Dispatches a typed task to the Rust TaskSupervisor (`worldscript_task_supervisor_submit`). */
-  submitTask<TRequest, TResult>(request: TRequest): Promise<TResult>;
+  submitTask(request: RustTaskRequest): Promise<RustTaskResultEvent>;
   /** Health-check (`worldscript_task_supervisor_ping`). */
   pingSupervisor(): Promise<void>;
   /** Native Pandoc Markdown→EPUB conversion (`pandoc_markdown_to_epub`). Null on failure/unavailable. */
   convertMarkdownToEpub(markdown: string): Promise<Uint8Array | null>;
-  /** LoRA training sidecar commands — exact param/result shapes finalized when loraTrainingService.ts migrates (Wave 1 PR B). */
-  trainLora(request: unknown): Promise<unknown>;
+  /** LoRA training (`train_lora`) — Rust expects the whole request wrapped under a top-level `payload` key; the adapter does that wrapping, not the caller. */
+  trainLora(request: LoraTrainRequest): Promise<string>;
   abortLoraTraining(): Promise<unknown>;
-  mergeLora(request: unknown): Promise<unknown>;
+  mergeLora(request: LoraMergeRequest): Promise<void>;
   checkLoraEnvironment(): Promise<unknown>;
   setLoraPythonPath(pythonPath: string): Promise<unknown>;
-  generateOllamaModelfile(request: unknown): Promise<string>;
+  generateOllamaModelfile(request: LoraOllamaModelfileRequest): Promise<string>;
 }
 
 // --- diagnostics ----------------------------------------------------------------------------------
