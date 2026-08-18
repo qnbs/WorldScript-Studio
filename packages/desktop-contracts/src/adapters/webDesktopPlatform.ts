@@ -16,12 +16,13 @@ import type {
   RuntimeInfo,
 } from '../types';
 
-// QNBS-v3: mirrors desktopNotifications.ts's never-throw convention — every facet resolves a safe default on web instead of rejecting, so callers never need a platform-specific branch.
+// QNBS-v3: only the facets with a real web equivalent (notifications, dialogs, window, etc.) resolve a safe default, mirroring desktopNotifications.ts's never-throw convention — filesystem and tasks have no web equivalent at all and throw/reject instead (see below).
 
 const filesystemUnavailable = (): never => {
   throw new Error('DesktopPlatform.filesystem is unavailable on the web/PWA build');
 };
 
+// QNBS-v3: intentional split, not an inconsistency — exists()/readDir() are capability probes with a meaningful safe-default answer (false/[]), matching fsCore.ts's own pre-existing behavior; readTextFile()/readFile()/writes have no meaningful empty substitute for "the content of a file that doesn't exist," so they reject instead.
 const filesystem: DesktopFilesystem = {
   readTextFile: async () => filesystemUnavailable(),
   writeTextFile: async () => filesystemUnavailable(),

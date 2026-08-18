@@ -20,9 +20,10 @@ export interface RuntimeInfo {
 
 // --- filesystem + persistence -----------------------------------------------------------------
 
+// QNBS-v3: required (not optional) — Tauri's real DirEntry.name/.isDirectory are always present and the adapter passes them straight through; the web adapter's empty array never needs to construct one.
 export interface DesktopDirEntry {
-  name?: string;
-  isDirectory?: boolean;
+  readonly name: string;
+  readonly isDirectory: boolean;
 }
 
 /** Matches Tauri plugin-fs's real WriteFileOptions subset — services/logger.ts needs `{ append: true, create: true }` for JSONL log writes. */
@@ -204,17 +205,17 @@ export interface DesktopDeepLinks {
 
 export interface DesktopPlatform {
   readonly runtime: RuntimeInfo;
-  filesystem: DesktopFilesystem;
-  persistence: DesktopPersistence;
-  dialogs: DesktopDialogs;
-  window: DesktopWindow;
-  menu: DesktopMenu;
-  tray: DesktopTray;
-  notifications: DesktopNotifications;
-  updater: DesktopUpdater;
-  lifecycle: DesktopLifecycle;
-  tasks: DesktopTasks;
-  diagnostics: DesktopDiagnostics;
-  clipboard: DesktopClipboard;
-  deepLinks: DesktopDeepLinks;
+  readonly filesystem: DesktopFilesystem;
+  readonly persistence: DesktopPersistence;
+  readonly dialogs: DesktopDialogs;
+  readonly window: DesktopWindow;
+  readonly menu: DesktopMenu;
+  readonly tray: DesktopTray;
+  readonly notifications: DesktopNotifications;
+  readonly updater: DesktopUpdater;
+  readonly lifecycle: DesktopLifecycle;
+  readonly tasks: DesktopTasks;
+  readonly diagnostics: DesktopDiagnostics;
+  readonly clipboard: DesktopClipboard;
+  readonly deepLinks: DesktopDeepLinks;
 }

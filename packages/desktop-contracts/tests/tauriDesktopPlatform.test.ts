@@ -195,6 +195,16 @@ describe('tauriDesktopPlatform', () => {
       expect(h.remove).toHaveBeenCalled();
       expect(h.rename).not.toHaveBeenCalled();
     });
+
+    // QNBS-v3: a successful write with a failing rename is a distinct failure path from a failing write itself — must still clean up the temp file and surface the real rename error.
+    it('writeTextFileAtomic removes the temp file and rethrows on a failed rename (write succeeded)', async () => {
+      h.rename.mockRejectedValueOnce(new Error('permission denied'));
+      await expect(
+        tauriDesktopPlatform.filesystem.writeTextFileAtomic('/data/y.json', '{}'),
+      ).rejects.toThrow('permission denied');
+      expect(h.writeTextFile).toHaveBeenCalledTimes(1);
+      expect(h.remove).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('persistence + dialogs', () => {
@@ -438,6 +448,7 @@ describe('tauriDesktopPlatform', () => {
         outputPath: '/out',
       });
 
+      h.invoke.mockResolvedValueOnce('FROM base\nADAPTER /adapter\n');
       await tauriDesktopPlatform.tasks.generateOllamaModelfile({
         baseModel: 'base',
         adapterPath: '/adapter',

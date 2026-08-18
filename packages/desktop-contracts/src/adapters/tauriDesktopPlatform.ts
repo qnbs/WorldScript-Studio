@@ -361,7 +361,12 @@ const tasks: DesktopTasks = {
   },
   generateOllamaModelfile: async (request: LoraOllamaModelfileRequest) => {
     const { invoke } = await import('@tauri-apps/api/core');
-    return invoke<string>('generate_ollama_modelfile', { ...request });
+    const result = await invoke('generate_ollama_modelfile', { ...request });
+    // QNBS-v3: validate the Rust response shape at the boundary, matching convertMarkdownToEpub's own guard, instead of trusting an unchecked cast.
+    if (typeof result !== 'string') {
+      throw new Error('generate_ollama_modelfile returned a non-string response');
+    }
+    return result;
   },
 };
 
