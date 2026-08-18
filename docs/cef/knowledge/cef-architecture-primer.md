@@ -29,6 +29,14 @@ This single-binary-multi-role design is directly why `scripts/cef/run-launch-cyc
 
 A real launch-path bug was found and fixed here too: Chromium resolves several of these resource paths relative to the process's *working directory*, not the executable's own location — launching the binary from a different cwd produced an ICU-init crash despite every file being correctly present. See `docs/cef/knowledge/linux-runtime-notes.md` for the full finding.
 
+## Accessibility API — a real blocker found, not yet worked around
+
+An attempt was made (2026-08-19, PR #391) to implement `CefAccessibilityHandler` on `WorldScriptHandler`, returned from a `CefClient::GetAccessibilityHandler()` override, following the pattern every other handler type in this codebase uses (`GetLifeSpanHandler`, `GetDisplayHandler`). **This does not compile against CEF 151.3.18** — the actual compiler error was explicit: `'CefRefPtr<CefAccessibilityHandler> WorldScriptHandler::GetAccessibilityHandler()' marked 'override', but does not override`. `CefClient` simply does not declare this getter in this CEF version, contradicting the assumption (drawn from older CEF documentation/examples) that it would.
+
+The attempt was fully reverted rather than left half-working: `browser->GetHost()->SetAccessibilityState(STATE_ENABLED)` and a `--force-renderer-accessibility` command-line switch (both real, confirmed-to-compile CEF/Chromium APIs, unrelated to the `GetAccessibilityHandler` issue) were tried as a fallback with no observability attempt, but the very next CI run showed the previously 100%-reliable FFI-boundary and rendering proofs failing to produce any output at all — a regression serious enough that isolating its exact cause needs a real CEF SDK to compile and test against locally, not another blind CI round-trip on this constrained dev machine (see ADR-0020's own disk/RAM constraints). `apps/desktop-cef/` was reverted to byte-identical with what's on `main`.
+
+**What this means for the next attempt**: the correct modern CEF 151 mechanism for accessibility tree observation is genuinely unknown as of this doc's writing — it needs real API research (current CEF source/docs, not assumptions carried from older versions or generic Chromium knowledge) before writing any more code against it. `accessibility_smoke` stays `false` in the competency manifest; the Early Accessibility Gate remains unattempted-with-a-working-mechanism, not "attempted and passed."
+
 ## Sandbox configuration, as shipped
 
 `chrome-sandbox` is present in the output directory (copied automatically as part of `CEF_BINARY_FILES`) but is **not used** — `main.cpp` sets `CefSettings.no_sandbox = true` unconditionally. Zero evidence exists on real sandbox posture; this is explicitly tracked as "Not yet attempted" in `docs/architecture/native-readiness.md` and `false` in the competency manifest.
