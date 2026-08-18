@@ -435,7 +435,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   single unsalted SHA-256 digest of publicly-derivable material — fixed to PBKDF2 (600,000
   iterations) + a random 32-byte salt, matching the existing `storageEncryptionService.ts`
   pattern. Pre-existing key files are discarded (not migrated) with a one-time notification
-  prompting re-entry.
+  prompting re-entry. **Correction (2026-08-13):** this hardened the KDF against rainbow-table
+  and multi-target reuse, but the derivation *input* itself — `${appDataPath}|${provider}|WorldScriptStudio|v1`
+  — remained fully public/reconstructible, so the root "obfuscation, not encryption" finding was
+  never actually closed. Tracked as an open gap — see `docs/IDB-ENCRYPTION.md` § Tauri Desktop Layer
+  and `AUDIT.md`'s F-05/F-06 row for current status. **Review-loop follow-up (2026-08-13):**
+  `docs/SECURITY-THREAT-MODEL.md`'s Desktop Local File-Read Attack Tree and document header still
+  called this "fixed" and said reading the ciphertext no longer reveals the key material, directly
+  contradicting the corrected Mitigation Mapping row above it — reconciled to say "not resolved"
+  consistently throughout. Also documented a separate, unrelated functional bug surfaced while
+  fact-checking this row: `components/ApiKeySection.tsx` never adopted the `storageService`/
+  `FsSettingsStore` path this desktop API-key row describes — it still reads/writes the Gemini key
+  through `dbService` (IndexedDB) even on desktop, while `services/geminiService.ts` reads through
+  `storageService` (filesystem on desktop), so a Gemini key saved via Settings → AI on desktop is
+  invisible to the code that actually uses it. Tracked in
+  [#358](https://github.com/qnbs/WorldScript-Studio/issues/358); not fixed by this entry.
+  **Second review-loop follow-up (2026-08-13):** tightened the attacker-capability wording (needs
+  both the ciphertext *and* the public derivation inputs, not the ciphertext alone) in both the
+  Mitigation Mapping row and the attack tree; added the same Gemini-exception note to the attack
+  tree (previously only in the table row); and added a new Mitigation Mapping row for desktop
+  project/settings/snapshot/Codex/RAG/image/binder-asset data, which this threat model previously didn't
+  mention at all despite it having neither confidentiality nor authentication on disk — real fix
+  in progress on [PR #356](https://github.com/qnbs/WorldScript-Studio/pull/356).
 - **F-08 — Tauri/web `connect-src` completeness.** Added LanguageTool's default self-hosted port
   (missing on **all 5** surfaces, not just Tauri) and the Hugging Face hosts WebLLM/Transformers.js
   actually resolve models from, including the Xet CDN bridge (`us.aws.cdn.hf.co`) that real model

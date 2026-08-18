@@ -435,7 +435,7 @@ describe('generateCharacterPortraitThunk', () => {
 // uploadCharacterImageThunk
 // ---------------------------------------------------------------------------
 describe('uploadCharacterImageThunk', () => {
-  it('reads file as dataURL and saves base64 without prefix', async () => {
+  it('reads file as a MIME-preserving data URL', async () => {
     const fakeBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAA';
     const fakeDataUrl = `data:image/png;base64,${fakeBase64}`;
 
@@ -453,7 +453,7 @@ describe('uploadCharacterImageThunk', () => {
     const action = await store.dispatch(uploadCharacterImageThunk({ characterId: 'c99', file }));
 
     expect(action.type).toBe('project/uploadCharacterImage/fulfilled');
-    expect(storageService.saveImage).toHaveBeenCalledWith('c99', fakeBase64);
+    expect(storageService.saveImage).toHaveBeenCalledWith('c99', fakeDataUrl);
   });
 
   it('dispatches fulfilled with characterId', async () => {
@@ -473,5 +473,6 @@ describe('uploadCharacterImageThunk', () => {
     const action = await store.dispatch(uploadCharacterImageThunk({ characterId: 'c7', file }));
 
     expect((action as { payload: { characterId: string } }).payload?.characterId).toBe('c7');
+    expect(storageService.saveImage).toHaveBeenCalledWith('c7', 'data:image/jpeg;base64,abc123');
   });
 });

@@ -85,8 +85,8 @@ export const uploadWorldImageThunk = createAsyncThunk(
     return new Promise<{ worldId: string }>((resolve, reject) => {
       const reader = new FileReader();
       reader.onloadend = async () => {
-        const base64 = (reader.result as string).replace(/^data:image\/\w+;base64,/, '');
-        await storageService.saveImage(worldId, base64);
+        // QNBS-v3: retain the data-URL MIME type so uploaded JPEG/WebP images survive filesystem round-trips.
+        await storageService.saveImage(worldId, reader.result as string);
         resolve({ worldId });
       };
       reader.onerror = reject;
