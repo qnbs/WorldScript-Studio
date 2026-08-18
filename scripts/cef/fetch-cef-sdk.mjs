@@ -18,21 +18,15 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveCefPaths } from './cefPaths.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const root = path.join(__dirname, '..', '..');
 
 const pin = JSON.parse(fs.readFileSync(path.join(__dirname, 'cef-version.json'), 'utf8'));
 
 const argCacheDirIdx = process.argv.indexOf('--cache-dir');
-const cacheDir =
-  argCacheDirIdx !== -1 && process.argv[argCacheDirIdx + 1]
-    ? path.resolve(process.argv[argCacheDirIdx + 1])
-    : path.join(root, '.cef-cache');
-
-const archivePath = path.join(cacheDir, pin.filename);
-const extractedDirName = pin.filename.replace(/\.tar\.bz2$/, '');
-const extractedDir = path.join(cacheDir, extractedDirName);
+const cacheDirArg = argCacheDirIdx !== -1 ? process.argv[argCacheDirIdx + 1] : undefined;
+const { cacheDir, archivePath, extractedDir, extractedDirName } = resolveCefPaths(pin, cacheDirArg);
 const markerPath = path.join(extractedDir, '.fetch-cef-sdk-verified');
 
 /** @param {string} filePath */
@@ -76,13 +70,19 @@ function verifyArchive() {
 function extractArchive() {
   console.log(`[fetch-cef-sdk] Extracting to ${extractedDir}…`);
   fs.rmSync(extractedDir, { recursive: true, force: true });
-  // QNBS-v3: shells out to tar (bzip2 support) rather than a JS decompressor — this is a fetch
-  // script that runs once per CI job / dev-machine cache miss, not hot application code.
+  // QNBS-v3: shells out to tar (bzip2 support) rather than a JS decompressor — runs once per cache miss, not hot code.
   execFileSync('tar', ['xjf', archivePath, '-C', cacheDir], { stdio: 'inherit' });
   fs.writeFileSync(markerPath, pin.sha1);
 }
 
 async function main() {
+  // QNBS-v3: enforced here, not just in the package.json wrapper — a direct `node` invocation must not bypass the CI-only disk/RAM guard either.
+  if (process.env.CI !== 'true') {
+    throw new Error(
+      '[fetch-cef-sdk] CI-only on this machine (disk/RAM constraints) — use: gh workflow run cef-learning-harness.yml',
+    );
+  }
+
   if (alreadyVerified()) {
     console.log(
       `[fetch-cef-sdk] OK — ${extractedDirName} already fetched and verified (cache hit).`,

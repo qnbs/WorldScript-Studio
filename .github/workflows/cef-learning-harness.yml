@@ -55,9 +55,8 @@ jobs:
         with:
           node-version-file: '.nvmrc'
 
-      # QNBS-v3: runs on the stock runner BEFORE any apt-get — this is the "clean machine"
-      # data point docs/cef/knowledge/linux-runtime-notes.md flags as still open, distinct
-      # from the spike's already-configured dev machine.
+      # Runs on the stock runner before any apt-get — the "clean machine" data point
+      # docs/cef/knowledge/linux-runtime-notes.md flags as still open.
       - name: Clean-machine Linux dependency inventory
         run: node scripts/cef/check-linux-runtime-deps.mjs
 
@@ -70,6 +69,7 @@ jobs:
 
       - name: Fetch + verify CEF SDK
         run: |
+          set -o pipefail
           CEF_DIR=$(node scripts/cef/fetch-cef-sdk.mjs --cache-dir .cef-cache | tail -1)
           echo "CEF_DIR=$CEF_DIR" >> "$GITHUB_ENV"
 

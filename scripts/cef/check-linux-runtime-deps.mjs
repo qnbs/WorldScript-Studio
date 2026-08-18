@@ -16,10 +16,7 @@
  */
 import { execFileSync } from 'node:child_process';
 
-// QNBS-v3: this exact list is the one CEF's own build docs call out and the one the Wave 2 spike
-// (ADR-0020) confirmed present on one dev machine — see docs/cef/knowledge/linux-runtime-notes.md.
-// Do not add packages here from generic Chromium documentation without a real WorldScript test;
-// the roadmap explicitly warns against extrapolating "CEF uses Chromium" into assumed correctness.
+// QNBS-v3: list is what CEF's own build docs call out, confirmed present on one dev machine — see docs/cef/knowledge/linux-runtime-notes.md; don't add packages from generic Chromium docs without a real WorldScript test.
 const REQUIRED_PACKAGES = [
   'libnss3',
   'libnspr4',
@@ -42,13 +39,22 @@ const REQUIRED_PACKAGES = [
 ];
 
 /** @param {string} pkg */
-function isInstalled(pkg) {
+function dpkgReportsInstalled(pkg) {
   try {
-    execFileSync('dpkg', ['-s', pkg], { stdio: ['ignore', 'ignore', 'ignore'] });
-    return true;
+    // QNBS-v3: dpkg -s exits 0 even for a removed package still holding config-files state — only the Status line's "installed" word confirms it's actually present.
+    const out = execFileSync('dpkg', ['-s', pkg], {
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).toString();
+    return /^Status:.*\binstalled\b/m.test(out);
   } catch {
     return false;
   }
+}
+
+// QNBS-v3: Ubuntu 24.04's 64-bit-time_t transition renamed several of these to a "t64" suffix (confirmed on the real ubuntu-latest CI runner) — check both spellings.
+/** @param {string} pkg */
+function isInstalled(pkg) {
+  return dpkgReportsInstalled(pkg) || dpkgReportsInstalled(`${pkg}t64`);
 }
 
 const strict = process.argv.includes('--strict');
