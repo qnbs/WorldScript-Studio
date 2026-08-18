@@ -1,0 +1,10 @@
+{
+  "$comment": "Pinned CEF binary distribution for the Wave 2 learning harness (docs/cef/ROADMAP-CEF-DESKTOP-MIGRATION.md §3142, ADR-0020). Bump this file — and only this file — to move to a new CEF version; scripts/cef/fetch-cef-sdk.mjs reads it, never hardcodes a version. sha1/sizeBytes come straight from https://cef-builds.spotifycdn.com/index.json — do not hand-compute them.",
+  "cefVersion": "151.3.18+gbeff58d+chromium-151.0.7922.138",
+  "platform": "linux64",
+  "distType": "minimal",
+  "filename": "cef_binary_151.3.18+gbeff58d+chromium-151.0.7922.138_linux64_minimal.tar.bz2",
+  "sha1": "5fc23dcccfead1044b2c3bf02e4ad27e86c29c0f",
+  "sizeBytes": 321422583,
+  "baseUrl": "https://cef-builds.spotifycdn.com"
+}

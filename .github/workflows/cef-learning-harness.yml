@@ -1,0 +1,86 @@
+# ============================================================
+# WorldScript Studio – CEF Learning Harness (Wave 2 bootstrap)
+#
+# docs/cef/ROADMAP-CEF-DESKTOP-MIGRATION.md §3142 (Wave 2 deliverables), ADR-0020
+# (CEF binding choice — the Wave 2 spike this harness formalizes into a real,
+# repo-committed, CI-run check per §61.1.4's evidence-link discipline).
+#
+# Scope of this first increment: fetch + verify the pinned CEF SDK, report a
+# clean-machine Linux runtime-dependency inventory (before any apt-get — a genuinely
+# new data point vs. the spike's already-configured dev machine), and print real
+# version diagnostics parsed from the fetched SDK itself. The actual CEF host
+# build/run/shutdown proof (§4.11.3's "isolated learning harness") is deliberately
+# NOT part of this increment — see ADR-0020's Consequences for why that needs its
+# own CMake/Cargo bootstrap PR.
+#
+# Advisory only: not part of the required `ci-success` aggregator. Wave 2 is still
+# in progress; this harness informs it rather than gating unrelated PRs on it.
+# ============================================================
+
+name: 🧪 CEF Learning Harness
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/cef/**'
+      - 'docs/cef/**'
+      - '.github/workflows/cef-learning-harness.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/cef/**'
+      - 'docs/cef/**'
+      - '.github/workflows/cef-learning-harness.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cef-learning-harness-${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  harness:
+    name: 🧪 Fetch CEF SDK + dependency inventory + version diagnostics
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: '.nvmrc'
+
+      # QNBS-v3: runs on the stock runner BEFORE any apt-get — this is the "clean machine"
+      # data point docs/cef/knowledge/linux-runtime-notes.md flags as still open, distinct
+      # from the spike's already-configured dev machine.
+      - name: Clean-machine Linux dependency inventory
+        run: node scripts/cef/check-linux-runtime-deps.mjs
+
+      - name: Restore CEF SDK cache
+        id: cef-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cef-cache
+          key: cef-sdk-${{ hashFiles('scripts/cef/cef-version.json') }}
+
+      - name: Fetch + verify CEF SDK
+        run: |
+          CEF_DIR=$(node scripts/cef/fetch-cef-sdk.mjs --cache-dir .cef-cache | tail -1)
+          echo "CEF_DIR=$CEF_DIR" >> "$GITHUB_ENV"
+
+      - name: Print CEF version diagnostics
+        run: node scripts/cef/print-cef-version-diagnostics.mjs "$CEF_DIR"
+
+      - name: Summary
+        run: |
+          echo "## 🧪 CEF Learning Harness" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Pinned SDK: \`$(node -e "console.log(require('./scripts/cef/cef-version.json').cefVersion)")\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Cache hit: \`${{ steps.cef-cache.outputs.cache-hit }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Scope: fetch/verify + clean-machine dependency inventory + version diagnostics only." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Not yet in scope: CEF host build/run/shutdown proof (see ADR-0020 Consequences)." >> "$GITHUB_STEP_SUMMARY"

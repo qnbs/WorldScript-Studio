@@ -50,7 +50,7 @@ The Wave 1 PR A snapshot left three DEBT rows marked "not yet scheduled to a spe
 
 Re-score "Platform APIs adapter-contained" again once `services/logger.ts`'s JSONL sink migrates (Wave 5/7, see above). Re-score the three newly-scheduled rows at each wave's exit (Wave 4 typed-IPC-v1, Wave 5 domain extraction).
 
-## Snapshot: Wave 2 binding spike (ADR-0020, `docs/cef/CEF-BINDING-DECISION-SCORECARD.md`)
+## Snapshot: Wave 2 progress (ADR-0020 spike + CI bootstrap, `docs/cef/CEF-BINDING-DECISION-SCORECARD.md`)
 
 Wave 2's first deliverable — the CEF binding/C++ decision — is now backed by a real hands-on spike, not a desk pick. Full scorecard: `docs/cef/CEF-BINDING-DECISION-SCORECARD.md`. This snapshot only tracks what changes for *this* readiness table; the roadmap's own Wave 2 exit criteria (Early Accessibility Gate, "no production-critical lifecycle assumption remains undocumented") are broader than this single row and are **not** claimed as met here.
 
@@ -61,5 +61,7 @@ Wave 2's first deliverable — the CEF binding/C++ decision — is now backed by
 | CEF lifecycle assumptions documented | DEBT — partial | cef-runtime, Wave 2 (in progress) | `docs/cef/knowledge/subprocess-and-shutdown.md` now has one real (non-speculative) finding — SIGTERM shutdown is not instantaneous, don't false-positive an immediate post-signal check — but it is explicitly flagged as not yet backed by a committed/CI-run test, per the doc's own evidence-link discipline. Exit condition: a real test + CI job, not just a spike observation. |
 | Early Accessibility Gate | Not yet attempted | cef-runtime, Wave 2 | Out of this spike's scope entirely — no accessibility tree/API integration was touched. |
 | Sandbox posture | Not yet attempted | desktop-security, Wave 2/3 (roadmap §12) | Spike explicitly ran with `no_sandbox=true`; zero evidence either way on this row. |
+| CEF SDK fetch/verify + version diagnostics automated | **PASS** | cef-runtime | `🧪 CEF Learning Harness` CI job (`.github/workflows/cef-learning-harness.yml`) fetches the pinned CEF SDK, verifies its checksum, and parses real version macros out of the extracted `include/cef_version.h` — a genuine CI-run check, not a doc claim. Does not build or run the CEF host itself yet (see ADR-0020 Consequences for that follow-up). |
+| Linux dependency inventory — clean-machine data point | DEBT — partial | cef-runtime | Same CI job runs the package-presence check against a stock `ubuntu-latest` runner before any `apt-get`, adding a real second data point beyond the spike's one already-configured dev machine. Still narrow: `dpkg` package-presence only (not `ldd` against the actual shipped `.so` files), one distro/runner image. |
 
-**Overall for this snapshot**: 1 PASS, 2 explicit DEBT-in-progress rows (each with a concrete exit condition, not open-ended), 2 not-yet-attempted rows correctly left blank rather than assumed. No row is marked PASS without the evidence cited above.
+**Overall for this snapshot**: 2 PASS, 3 explicit DEBT-in-progress rows (each with a concrete exit condition, not open-ended), 2 not-yet-attempted rows correctly left blank rather than assumed. No row is marked PASS without the evidence cited above.
