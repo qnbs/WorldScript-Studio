@@ -1,0 +1,153 @@
+# CEF documentation ownership manifest
+#
+# Per ROADMAP-CEF-DESKTOP-MIGRATION.md §80.1 / Appendix M.3.
+# Tier A = release/security-critical (90-day review cadence).
+# Tier B = architecture/reference (180-day review cadence).
+# Tier C = explanatory/how-to (as-needed).
+#
+# `driftCheckTool` for every entry below is intentionally "planned — not implemented"
+# as of Wave 0 (see roadmap §80.1.3): building a docs:cef-check stub now would add an
+# npm script and CI job with nothing real to check drift against, since no CEF code
+# exists yet. Revisit at Wave 1, not silently forgotten.
+
+documents:
+  - path: docs/adr/0019-cef-desktop-runtime-strategy.md
+    tier: A
+    owner_role: desktop-architecture
+    backup_role: cef-runtime
+    last_verified:
+      worldscript: "v1.27.1"
+      cef: "not applicable — pre-CEF-selection"
+    review_days: 90
+    related_ci: []
+    driftCheckTool: "planned — not implemented, see Wave 1"
+
+  - path: docs/cef/ROADMAP-CEF-DESKTOP-MIGRATION.md
+    tier: A
+    owner_role: desktop-architecture
+    backup_role: cef-runtime
+    last_verified:
+      worldscript: "v1.27.1"
+      cef: "not applicable — pre-CEF-selection"
+    review_days: 90
+    related_ci: []
+    driftCheckTool: "planned — not implemented, see Wave 1"
+
+  - path: docs/cef/CEF-RISK-REGISTER.md
+    tier: A
+    owner_role: desktop-architecture
+    backup_role: desktop-security
+    last_verified:
+      worldscript: "v1.27.1"
+      cef: "not applicable — pre-CEF-selection"
+    review_days: 90
+    related_ci: []
+    driftCheckTool: "planned — not implemented, see Wave 1"
+
+  - path: docs/cef/CEF-RUST-COMPETENCY-MATRIX.md
+    tier: A
+    owner_role: cef-runtime
+    backup_role: rust-core
+    last_verified:
+      worldscript: "v1.27.1"
+      cef: "not applicable — pre-CEF-selection"
+    review_days: 90
+    related_ci:
+      - cef-learning-harness
+      - cef-competency-gate
+    driftCheckTool: "planned — not implemented, see Wave 1"
+
+  - path: docs/cef/TAURI-COUPLING-INVENTORY.md
+    tier: B
+    owner_role: desktop-architecture
+    backup_role: rust-core
+    last_verified:
+      worldscript: "v1.27.1"
+      cef: "not applicable"
+    review_days: 180
+    related_ci: []
+    driftCheckTool: "planned — not implemented, see Wave 1"
+
+  - path: docs/cef/knowledge/cef-architecture-primer.md
+    tier: A
+    owner_role: cef-runtime
+    backup_role: rust-core
+    last_verified: null
+    review_days: 90
+    related_ci:
+      - cef-learning-harness
+    driftCheckTool: "planned — not implemented, see Wave 1"
+    note: "Skeleton only — Status: Not started"
+
+  - path: docs/cef/knowledge/cef-rust-binding-cookbook.md
+    tier: A
+    owner_role: rust-core
+    backup_role: cef-runtime
+    last_verified: null
+    review_days: 90
+    related_ci:
+      - cef-learning-harness
+    driftCheckTool: "planned — not implemented, see Wave 1"
+    note: "Skeleton only — Status: Not started"
+
+  - path: docs/cef/knowledge/threading-and-lifetimes.md
+    tier: A
+    owner_role: cef-runtime
+    backup_role: rust-core
+    last_verified: null
+    review_days: 90
+    related_ci:
+      - cef-learning-harness
+      - cef-competency-gate
+    driftCheckTool: "planned — not implemented, see Wave 1"
+    note: "Skeleton only — Status: Not started"
+
+  - path: docs/cef/knowledge/subprocess-and-shutdown.md
+    tier: A
+    owner_role: cef-runtime
+    backup_role: rust-core
+    last_verified: null
+    review_days: 90
+    related_ci:
+      - cef-learning-harness
+    driftCheckTool: "planned — not implemented, see Wave 1"
+    note: "Skeleton only — Status: Not started"
+
+  - path: docs/cef/knowledge/linux-runtime-notes.md
+    tier: A
+    owner_role: cef-runtime
+    backup_role: desktop-architecture
+    last_verified: null
+    review_days: 90
+    related_ci: []
+    driftCheckTool: "planned — not implemented, see Wave 1"
+    note: "Skeleton only — Status: Not started"
+
+  - path: docs/cef/knowledge/debugging-and-crash-playbook.md
+    tier: A
+    owner_role: desktop-security
+    backup_role: cef-runtime
+    last_verified: null
+    review_days: 90
+    related_ci: []
+    driftCheckTool: "planned — not implemented, see Wave 1"
+    note: "Skeleton only — Status: Not started"
+
+  - path: docs/cef/knowledge/binding-upgrade-playbook.md
+    tier: A
+    owner_role: rust-core
+    backup_role: cef-runtime
+    last_verified: null
+    review_days: 90
+    related_ci: []
+    driftCheckTool: "planned — not implemented, see Wave 1"
+    note: "Skeleton only — Status: Not started"
+
+# Owner/backup roles above are role placeholders (roadmap §80.1.8: prefer role/subsystem
+# ownership over one person's name, e.g. via CODEOWNERS mapping). Assigning real
+# maintainer handles to each role is Wave 1+ operational work, not a Wave 0 blocker.
+roles:
+  desktop-architecture: "unassigned — maps to whoever owns ADR-0019 and the roadmap"
+  cef-runtime: "unassigned — maps to whoever implements the CEF host (Wave 2+)"
+  rust-core: "unassigned — maps to whoever owns worldscript-core/-storage/-crypto"
+  desktop-security: "unassigned — maps to whoever owns the CEF security review (Wave 14)"

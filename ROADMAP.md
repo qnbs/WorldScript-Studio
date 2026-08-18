@@ -22,6 +22,16 @@ Benchmarks from the UI/PWA deep-dive (implemented in repo, no new mandatory docs
 ---
 
 
+## Desktop runtime — CEF migration (PLANNED, Wave 0 in progress)
+
+WorldScript Studio intends to migrate its desktop runtime from Tauri 2 / system WebView to Chromium
+Embedded Framework (CEF) as a long, gated, multi-wave program — not part of the v2.0 Foundation
+scope below, tracked separately. Full strategy, waves, and gates:
+[ADR-0019](docs/adr/0019-cef-desktop-runtime-strategy.md) ·
+[`docs/cef/ROADMAP-CEF-DESKTOP-MIGRATION.md`](docs/cef/ROADMAP-CEF-DESKTOP-MIGRATION.md).
+
+---
+
 ## Upcoming — v2.0 Foundation (PLANNED)
 
 Forward-looking work carried out of the v1.24 cycle (i18n expansion and the six-PR hardening

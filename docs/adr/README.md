@@ -23,6 +23,8 @@ than editing history.
 | [0015](0015-worker-generation-consolidation.md) | Worker-generation consolidation: v1 retired, WorkerBus v2 is the sole generation | Accepted |
 | [0016](0016-native-grok-and-claude-providers.md) | Native Grok provider + split Claude fix (desktop native-HTTP, web serverless proxy) | Accepted |
 | [0017](0017-pwa-browser-ollama-opt-in.md) | Opt-in direct browser→Ollama connection in the web/PWA build | Accepted |
+| [0018](0018-idb-encryption-lifecycle-and-recovery.md) | IndexedDB encryption lifecycle and recovery | Accepted |
+| [0019](0019-cef-desktop-runtime-strategy.md) | CEF as the next-generation WorldScript Studio desktop runtime | Accepted |
 
 **Format:** Context → Decision → Consequences (incl. rejected alternatives). Keep each ADR to one
 decision. Link related records with `[[slug]]`.
