@@ -33,6 +33,8 @@ const cycles = cyclesArgIdx === -1 ? 3 : Number(cyclesArg);
 
 const STARTUP_GRACE_MS = 4000;
 const SHUTDOWN_GRACE_MS = 6000;
+// QNBS-v3: extra buffer after the main process exits — a renderer/GPU subprocess can take a moment longer to actually be reaped than its parent (docs/cef/knowledge/subprocess-and-shutdown.md's own "not instantaneous" finding applies to the whole tree, not just the browser process).
+const ORPHAN_CHECK_GRACE_MS = 3000;
 const FFI_PROOF_LINE = 'rust_core ping = 424242';
 const EXPECTED_TITLE_LINE = 'title = WorldScript Studio';
 
@@ -123,6 +125,7 @@ async function runCycle(index) {
     );
   }
 
+  await sleep(ORPHAN_CHECK_GRACE_MS);
   if (processTreeAlive()) {
     logStderr(index, stderr);
     throw new Error(`Cycle ${index + 1}: orphaned worldscript_host process(es) still running.`);
