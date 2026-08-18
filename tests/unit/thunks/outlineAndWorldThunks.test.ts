@@ -32,7 +32,9 @@ import {
 } from '../../../features/project/thunks/outlineThunks';
 import { loadAiProvider, loadPrompts } from '../../../features/project/thunks/thunkUtils';
 import {
+  generateWorldImageThunk,
   generateWorldProfileThunk,
+  regenerateWorldFieldThunk,
   uploadWorldImageThunk,
 } from '../../../features/project/thunks/worldThunks';
 import settingsReducer from '../../../features/settings/settingsSlice';
@@ -60,6 +62,8 @@ function makeStore() {
 
 const mockGetPrompts = vi.fn();
 const mockGenerateJson = vi.fn();
+const mockGenerateText = vi.fn();
+const mockGenerateImage = vi.fn();
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -67,8 +71,8 @@ beforeEach(() => {
   vi.mocked(loadPrompts).mockResolvedValue({ getPrompts: mockGetPrompts } as never);
   vi.mocked(loadAiProvider).mockResolvedValue({
     generateJson: mockGenerateJson,
-    generateText: vi.fn(),
-    generateImage: vi.fn(),
+    generateText: mockGenerateText,
+    generateImage: mockGenerateImage,
     streamText: vi.fn(),
   } as never);
   mockGetPrompts.mockReturnValue({ prompt: 'test-prompt', schema: {} });
@@ -190,6 +194,88 @@ describe('generateWorldProfileThunk', () => {
   });
 });
 
+describe('regenerateWorldFieldThunk', () => {
+  const world = {
+    id: 'w1',
+    name: 'Eldoria',
+    description: 'Old description',
+    geography: '',
+    magicSystem: '',
+    culture: '',
+    notes: '',
+    timeline: [],
+    locations: [],
+  };
+
+  it('dispatches fulfilled with { field, value }', async () => {
+    mockGenerateText.mockResolvedValueOnce('New description text');
+    const store = makeStore();
+    const action = await store.dispatch(
+      regenerateWorldFieldThunk({ world, field: 'description', lang: 'en' }),
+    );
+
+    expect(action.type).toBe('project/regenerateWorldField/fulfilled');
+    const payload = (action as { payload: { field: string; value: string } }).payload;
+    expect(payload.field).toBe('description');
+    expect(payload.value).toBe('New description text');
+  });
+
+  it('passes the world and field to getPrompts', async () => {
+    mockGenerateText.mockResolvedValueOnce('value');
+    const store = makeStore();
+    await store.dispatch(regenerateWorldFieldThunk({ world, field: 'description', lang: 'de' }));
+
+    expect(mockGetPrompts).toHaveBeenCalledWith(
+      'regenerateWorldField',
+      expect.objectContaining({ world, field: 'description', lang: 'de' }),
+    );
+  });
+
+  it('rejects on AI error', async () => {
+    mockGenerateText.mockRejectedValueOnce(new Error('AI down'));
+    const store = makeStore();
+    const action = await store.dispatch(
+      regenerateWorldFieldThunk({ world, field: 'description', lang: 'en' }),
+    );
+
+    expect(action.type).toBe('project/regenerateWorldField/rejected');
+  });
+});
+
+describe('generateWorldImageThunk', () => {
+  it('dispatches fulfilled with worldId', async () => {
+    mockGenerateImage.mockResolvedValueOnce('worldimagebase64');
+    const store = makeStore();
+    const action = await store.dispatch(
+      generateWorldImageThunk({ worldId: 'w1', description: 'A misty forest', lang: 'en' }),
+    );
+
+    expect(action.type).toBe('project/generateWorldImage/fulfilled');
+    expect((action as { payload: { worldId: string } }).payload.worldId).toBe('w1');
+  });
+
+  it('saves the generated image via storageService', async () => {
+    mockGenerateImage.mockResolvedValueOnce('worldimagedata');
+    const store = makeStore();
+    await store.dispatch(
+      generateWorldImageThunk({ worldId: 'w42', description: 'A volcanic wasteland', lang: 'en' }),
+    );
+
+    expect(storageService.saveImage).toHaveBeenCalledWith('w42', 'worldimagedata');
+  });
+
+  it('rejects on AI error', async () => {
+    mockGenerateImage.mockRejectedValueOnce(new Error('generation failed'));
+    const store = makeStore();
+    const action = await store.dispatch(
+      generateWorldImageThunk({ worldId: 'w1', description: 'A sunken city', lang: 'en' }),
+    );
+
+    expect(action.type).toBe('project/generateWorldImage/rejected');
+    expect(storageService.saveImage).not.toHaveBeenCalled();
+  });
+});
+
 // QNBS-v3: FileReader error/abort and storageService.saveImage-rejection coverage prevents the upload thunk's Promise from hanging forever on any terminal failure path.
 describe('uploadWorldImageThunk', () => {
   it('reads file as a MIME-preserving data URL', async () => {
@@ -226,6 +312,25 @@ describe('uploadWorldImageThunk', () => {
 
     expect(action.type).toBe('project/uploadWorldImage/rejected');
     expect(storageService.saveImage).not.toHaveBeenCalled();
+  });
+
+  it('rejects with a fallback error when the FileReader errors without a reader.error', async () => {
+    vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(function (this: FileReader) {
+      Object.defineProperty(this, 'error', { value: null, configurable: true });
+      void Promise.resolve().then(() => {
+        if (typeof this.onerror === 'function')
+          this.onerror(new ProgressEvent('error') as ProgressEvent<FileReader>);
+      });
+    });
+
+    const store = makeStore();
+    const file = new File(['data'], 'broken.png', { type: 'image/png' });
+    const action = await store.dispatch(uploadWorldImageThunk({ worldId: 'w8', file }));
+
+    expect(action.type).toBe('project/uploadWorldImage/rejected');
+    expect((action as { error: { message?: string } }).error.message).toBe(
+      'FileReader failed to read the file',
+    );
   });
 
   it('rejects when the FileReader is aborted', async () => {

@@ -495,6 +495,25 @@ describe('uploadCharacterImageThunk', () => {
     expect(storageService.saveImage).not.toHaveBeenCalled();
   });
 
+  it('rejects with a fallback error when the FileReader errors without a reader.error', async () => {
+    vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(function (this: FileReader) {
+      Object.defineProperty(this, 'error', { value: null, configurable: true });
+      void Promise.resolve().then(() => {
+        if (typeof this.onerror === 'function')
+          this.onerror(new ProgressEvent('error') as ProgressEvent<FileReader>);
+      });
+    });
+
+    const store = makeStore();
+    const file = new File(['data'], 'broken.png', { type: 'image/png' });
+    const action = await store.dispatch(uploadCharacterImageThunk({ characterId: 'c8', file }));
+
+    expect(action.type).toBe('project/uploadCharacterImage/rejected');
+    expect((action as { error: { message?: string } }).error.message).toBe(
+      'FileReader failed to read the file',
+    );
+  });
+
   it('rejects when the FileReader is aborted', async () => {
     vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(function (this: FileReader) {
       void Promise.resolve().then(() => {
