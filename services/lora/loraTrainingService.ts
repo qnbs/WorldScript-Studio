@@ -1,8 +1,5 @@
-/**
- * LoRA Training Service
- * QNBS-v3: Desktop-platform-adapter bridge for Python/Unsloth training + progress streaming.
- *          Gracefully degrades on web build (returns isDesktopOnly: true).
- */
+/** LoRA Training Service — desktop-platform-adapter bridge for Python/Unsloth training + progress streaming. */
+// QNBS-v3: gracefully degrades on the web build (returns isDesktopOnly: true).
 
 import type {
   LoraTrainingEnvironmentResult,

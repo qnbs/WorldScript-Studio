@@ -69,13 +69,14 @@ const ALLOWED_FILES = new Set(
 );
 
 // Real import/require syntax only — not comment mentions, JSDoc, or regex literals like
-// `/^@tauri-apps\//` (vite.config.ts's external-packages matcher). Matches:
+// `/^@tauri-apps\//` (vite.config.ts's external-packages matcher). Matches, including when the
+// specifier is on a different line than `import(`/`from`/`require(` (\s already spans newlines):
 //   import '@tauri-apps/...';        (bare side-effect import)
 //   import x from '@tauri-apps/...';
 //   import('@tauri-apps/...');
 //   require('@tauri-apps/...');
 const IMPORT_RE =
-  /(?:^\s*import\s+['"]|from\s+['"]|import\(\s*['"]|require\(\s*['"])@tauri-apps\//m;
+  /(?:^\s*import\s+['"]|from\s+['"]|import\(\s*['"]|require\(\s*['"])@tauri-apps\//gm;
 
 // QNBS-v3: scans first-party TS/TSX source (not node_modules/tests/build config) since the guardrail's job is bounding application-owned coupling, not third-party or test-mock code
 /** Recursively collect first-party .ts/.tsx files. */
@@ -133,11 +134,14 @@ for (const file of files) {
   const text = fs.readFileSync(file, 'utf8');
   const lines = text.split('\n');
   const inComment = commentLineMask(text);
-  for (let i = 0; i < lines.length; i++) {
-    if (inComment[i]) continue;
-    if (IMPORT_RE.test(lines[i])) {
-      violations.push({ file: path.relative(root, file), line: i + 1, text: lines[i].trim() });
-    }
+  // QNBS-v3: scans the whole (comment-blanked) file as one string, not line-by-line — \s in
+  // IMPORT_RE already spans newlines, so this also catches a multiline `import(\n  '@tauri-apps/…'\n)`
+  // that a strictly per-line test would miss (the previous implementation's gap).
+  const codeText = lines.map((line, i) => (inComment[i] ? '' : line)).join('\n');
+  IMPORT_RE.lastIndex = 0;
+  for (const match of codeText.matchAll(IMPORT_RE)) {
+    const line = codeText.slice(0, match.index).split('\n').length;
+    violations.push({ file: path.relative(root, file), line, text: lines[line - 1].trim() });
   }
 }
 

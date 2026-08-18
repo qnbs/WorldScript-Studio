@@ -44,8 +44,16 @@ vi.mock('../../../contexts/FeatureFlagsContext', () => ({
   useFeatureFlags: () => ({ enableDebugMode: false }),
 }));
 
+const { h } = vi.hoisted(() => ({
+  h: { isTauri: false, getAppVersion: vi.fn(async () => '9.9.9-test') },
+}));
+
 vi.mock('../../../services/tauriRuntime', () => ({
-  isTauriRuntime: () => false,
+  isTauriRuntime: () => h.isTauri,
+}));
+
+vi.mock('../../../services/desktopPlatform', () => ({
+  desktopPlatform: { diagnostics: { getAppVersion: () => h.getAppVersion() } },
 }));
 
 const { mockUsePWA } = vi.hoisted(() => ({
@@ -220,6 +228,8 @@ describe('AppearanceSection', () => {
 describe('AboutSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    h.isTauri = false;
+    h.getAppVersion.mockResolvedValue('9.9.9-test');
   });
 
   it('renders the about title', async () => {
@@ -236,12 +246,21 @@ describe('AboutSection', () => {
     // (e.g. packageJson.version no longer shown) fails this test as its name implies.
     expect(screen.getByText(packageJson.version, { exact: false })).toBeInTheDocument();
   });
+
+  // QNBS-v3: regression guard for the Wave 1 migration — TauriVersionLine's desktop-runtime path must actually call desktopPlatform.diagnostics.getAppVersion(), not just the web no-op path above.
+  it('renders the desktop Tauri version via desktopPlatform.diagnostics.getAppVersion() in a Tauri runtime', async () => {
+    h.isTauri = true;
+    render(<AboutSection />);
+    expect(await screen.findByText(/9\.9\.9-test/)).toBeInTheDocument();
+    expect(h.getAppVersion).toHaveBeenCalledTimes(1);
+  });
 });
 
 // QNBS-v3: PWAInstallCard — added to GeneralSection for persistent install access.
 describe('GeneralSection — PWAInstallCard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    h.isTauri = false;
   });
 
   it('renders the PWA install title on web (non-Tauri)', () => {

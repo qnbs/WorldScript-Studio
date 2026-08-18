@@ -603,6 +603,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
       });
       return;
     }
+    // QNBS-v3: routes through desktopPlatform.lifecycle instead of the direct @tauri-apps/plugin-process import it replaced
     await desktopPlatform.lifecycle.quit();
   }, [store]);
 

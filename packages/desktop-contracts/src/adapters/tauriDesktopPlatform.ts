@@ -385,25 +385,19 @@ const tasks: DesktopTasks = {
     const { invoke } = await import('@tauri-apps/api/core');
     return invoke<string>('train_lora', { payload: request });
   },
+  // QNBS-v3: deliberately does NOT catch-and-noop like the other subscription facets (menu/deepLinks/lifecycle) — a failed subscription here must abort startTraining before the long-running native job starts, matching the pre-migration tauriListen()'s uncaught-rejection behavior.
   onLoraTrainingProgress: async (handler) => {
-    try {
-      const { listen } = await import('@tauri-apps/api/event');
-      const stop = await listen('lora-progress', (event) => {
-        if (!isLoraTrainingProgressEvent(event.payload)) {
-          logger.warn('desktopPlatform.tasks: ignoring malformed LoRA training progress payload', {
-            payload: event.payload,
-          });
-          return;
-        }
-        handler(event.payload);
-      });
-      return stop;
-    } catch (error) {
-      logger.warn('desktopPlatform.tasks: failed to subscribe to LoRA training progress', {
-        error,
-      });
-      return () => {};
-    }
+    const { listen } = await import('@tauri-apps/api/event');
+    const stop = await listen('lora-progress', (event) => {
+      if (!isLoraTrainingProgressEvent(event.payload)) {
+        logger.warn('desktopPlatform.tasks: ignoring malformed LoRA training progress payload', {
+          payload: event.payload,
+        });
+        return;
+      }
+      handler(event.payload);
+    });
+    return stop;
   },
   abortLoraTraining: async () => {
     const { invoke } = await import('@tauri-apps/api/core');

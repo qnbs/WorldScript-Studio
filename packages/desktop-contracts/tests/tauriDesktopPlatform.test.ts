@@ -543,11 +543,12 @@ describe('tauriDesktopPlatform', () => {
       expect(handler).toHaveBeenCalledWith({ event: 'progress', progress_percent: 42 });
     });
 
-    it('onLoraTrainingProgress resolves a no-op unsubscribe (and logs) when the event API is unavailable', async () => {
+    // QNBS-v3: regression guard — a swallowed subscription failure would let startTraining launch train_lora blind, with no way to receive progress; it must reject instead.
+    it('onLoraTrainingProgress rejects (not a silent no-op) when the event API is unavailable', async () => {
       h.listen.mockRejectedValueOnce(new Error('event API unavailable'));
-      const unsubscribe = await tauriDesktopPlatform.tasks.onLoraTrainingProgress(vi.fn());
-      expect(() => unsubscribe()).not.toThrow();
-      expect(h.loggerWarn).toHaveBeenCalled();
+      await expect(tauriDesktopPlatform.tasks.onLoraTrainingProgress(vi.fn())).rejects.toThrow(
+        'event API unavailable',
+      );
     });
 
     it('onLoraTrainingProgress drops (and logs) a malformed payload instead of forwarding it', async () => {

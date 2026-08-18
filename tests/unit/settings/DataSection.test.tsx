@@ -67,6 +67,18 @@ vi.mock('../../../contexts/SettingsViewContext', () => ({
   useSettingsViewContext: () => mockUseSettingsViewContext(),
 }));
 
+const { desktopPlatformMocks } = vi.hoisted(() => ({
+  desktopPlatformMocks: { isTauri: false, openDataDirectory: vi.fn(async () => true) },
+}));
+vi.mock('../../../services/tauriRuntime', () => ({
+  isTauriRuntime: () => desktopPlatformMocks.isTauri,
+}));
+vi.mock('../../../services/desktopPlatform', () => ({
+  desktopPlatform: {
+    diagnostics: { openDataDirectory: () => desktopPlatformMocks.openDataDirectory() },
+  },
+}));
+
 // QNBS-v3 (T3): the encrypted library export's notification branch dynamically imports this service — mock it for deterministic tests.
 const mockSendDesktopNotification = vi.fn().mockResolvedValue(true);
 vi.mock('../../../services/desktop/desktopNotifications', () => ({
@@ -122,6 +134,11 @@ vi.mock('../../../constants', () => ({
 // ---------------------------------------------------------------------------
 
 describe('DataSection', () => {
+  beforeEach(() => {
+    desktopPlatformMocks.isTauri = false;
+    desktopPlatformMocks.openDataDirectory.mockClear();
+  });
+
   it('renders without throwing', () => {
     expect(() => render(<DataSection />)).not.toThrow();
   });
@@ -165,11 +182,26 @@ describe('DataSection', () => {
     // t('settings.data.projectSize', ...) returns the key with interpolation
     expect(screen.getByText(/settings.data.projectSize/)).toBeTruthy();
   });
+
+  it('does not show the open-data-folder button on the web (non-Tauri)', () => {
+    render(<DataSection />);
+    expect(screen.queryByText('settings.data.openDataFolder')).not.toBeInTheDocument();
+  });
+
+  // QNBS-v3: regression guard for the Wave 1 migration — the button's click handler must actually call desktopPlatform.diagnostics.openDataDirectory(), not just render.
+  it('calls desktopPlatform.diagnostics.openDataDirectory() when the open-data-folder button is clicked in a Tauri runtime', async () => {
+    desktopPlatformMocks.isTauri = true;
+    const user = userEvent.setup();
+    render(<DataSection />);
+    await user.click(screen.getByText('settings.data.openDataFolder'));
+    expect(desktopPlatformMocks.openDataDirectory).toHaveBeenCalledTimes(1);
+  });
 });
 
 // QNBS-v3: a raw settings import previously bypassed sanitization entirely, letting a legacy/crafted openRouter.apiKey reach Redux (and then autosave) unfiltered.
 describe('DataSection settings-file import sanitization', () => {
   beforeEach(async () => {
+    desktopPlatformMocks.isTauri = false;
     mockDispatch.mockClear();
     const { normalizePersistedSettings } = await import(
       '../../../services/storage/idbProjectStore'
@@ -246,6 +278,7 @@ describe('DataSection encrypted library export desktop notification', () => {
   }
 
   beforeEach(() => {
+    desktopPlatformMocks.isTauri = false;
     mockSendDesktopNotification.mockClear();
     mockSendDesktopNotification.mockResolvedValue(true);
   });
