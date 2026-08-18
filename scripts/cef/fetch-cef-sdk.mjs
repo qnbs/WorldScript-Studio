@@ -26,6 +26,9 @@ const pin = JSON.parse(fs.readFileSync(path.join(__dirname, 'cef-version.json'),
 
 const argCacheDirIdx = process.argv.indexOf('--cache-dir');
 const cacheDirArg = argCacheDirIdx !== -1 ? process.argv[argCacheDirIdx + 1] : undefined;
+if (argCacheDirIdx !== -1 && (!cacheDirArg || cacheDirArg.startsWith('--'))) {
+  throw new Error('[fetch-cef-sdk] --cache-dir requires a directory path');
+}
 const { cacheDir, archivePath, extractedDir, extractedDirName } = resolveCefPaths(pin, cacheDirArg);
 const markerPath = path.join(extractedDir, '.fetch-cef-sdk-verified');
 
