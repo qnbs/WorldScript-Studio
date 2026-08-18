@@ -1,8 +1,5 @@
-/**
- * Tests for hooks/useTauriUpdater.ts
- * QNBS-v3: Mocks isTauriRuntime + Tauri plugin-updater/api/app to test
- * checkForUpdate, installUpdate, and autoCheck behaviour.
- */
+/** Tests for hooks/useTauriUpdater.ts */
+// QNBS-v3: Wave 1 — mocks isTauriRuntime + services/desktopPlatform's updater facet, not @tauri-apps/plugin-updater/api-app directly.
 
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -45,16 +42,14 @@ const mockCheck = vi.fn();
 const mockDownloadAndInstall = vi.fn().mockResolvedValue(undefined);
 const mockRelaunch = vi.fn().mockResolvedValue(undefined);
 
-vi.mock('@tauri-apps/api/app', () => ({
-  getVersion: (...args: unknown[]) => mockGetVersion(...args),
-}));
-
-vi.mock('@tauri-apps/plugin-updater', () => ({
-  check: (...args: unknown[]) => mockCheck(...args),
-}));
-
-vi.mock('@tauri-apps/plugin-process', () => ({
-  relaunch: (...args: unknown[]) => mockRelaunch(...args),
+vi.mock('../../../services/desktopPlatform', () => ({
+  desktopPlatform: {
+    updater: {
+      getAppVersion: (...args: unknown[]) => mockGetVersion(...args),
+      check: (...args: unknown[]) => mockCheck(...args),
+      relaunch: (...args: unknown[]) => mockRelaunch(...args),
+    },
+  },
 }));
 
 // ---------------------------------------------------------------------------

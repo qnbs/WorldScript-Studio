@@ -37,27 +37,4 @@ export function applyDesktopRuntimeFlags(): void {
   if (os) document.body.dataset['os'] = os;
 }
 
-export async function getTauriAppVersion(): Promise<string | null> {
-  if (!isTauriRuntime()) return null;
-  try {
-    const { getVersion } = await import('@tauri-apps/api/app');
-    return getVersion();
-  } catch {
-    return null;
-  }
-}
-
-/** Opens the application data directory in the system file manager. */
-export async function openTauriDataDirectory(): Promise<boolean> {
-  if (!isTauriRuntime()) return false;
-  try {
-    const { appDataDir, join } = await import('@tauri-apps/api/path');
-    const { open } = await import('@tauri-apps/plugin-shell');
-    const dir = await appDataDir();
-    const path = await join(dir, '');
-    await open(path);
-    return true;
-  } catch {
-    return false;
-  }
-}
+// QNBS-v3: Wave 1 PR B — getTauriAppVersion/openTauriDataDirectory moved into desktopPlatform.diagnostics (packages/desktop-contracts); their call sites (GeneralSections.tsx, DataSection.tsx) now import desktopPlatform directly instead of re-exporting a wrapper here, which would have required a circular import back into desktopPlatform.ts.

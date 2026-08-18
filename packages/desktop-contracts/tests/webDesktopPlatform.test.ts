@@ -95,6 +95,8 @@ describe('webDesktopPlatform', () => {
       }),
     ).rejects.toThrow(/unavailable/);
     await expect(webDesktopPlatform.tasks.abortLoraTraining()).rejects.toThrow(/unavailable/);
+    const unsubscribe = await webDesktopPlatform.tasks.onLoraTrainingProgress(() => {});
+    expect(() => unsubscribe()).not.toThrow();
     await expect(
       webDesktopPlatform.tasks.mergeLora({
         baseModel: 'm',

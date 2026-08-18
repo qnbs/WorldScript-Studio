@@ -3,10 +3,49 @@
  * QNBS-v3: Tauri deep link service for native file associations.
  */
 
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AppDispatch } from '../../../app/store';
+import type { I18nTranslate } from '../../../services/commands/commandTypes';
+
+// QNBS-v3: Wave 1 — mocks services/desktopPlatform's deepLinks/filesystem facets, not @tauri-apps/api/event + plugin-fs directly.
+const h = vi.hoisted(() => ({
+  isDesktop: { value: true },
+  onDeepLink: vi.fn(async (_cb: (urls: string[]) => void | Promise<void>) => () => {}),
+  exists: vi.fn(async (_path: string) => true),
+  readTextFile: vi.fn(async (_path: string) => '{"title":"Imported"}'),
+}));
+
+vi.mock('../../../services/desktopPlatform', () => ({
+  get desktopPlatform() {
+    return {
+      runtime: {
+        get isDesktop() {
+          return h.isDesktop.value;
+        },
+        os: null,
+      },
+      deepLinks: { onDeepLink: (cb: (urls: string[]) => void | Promise<void>) => h.onDeepLink(cb) },
+      filesystem: {
+        exists: (p: string) => h.exists(p),
+        readTextFile: (p: string) => h.readTextFile(p),
+      },
+    };
+  },
+}));
+
+vi.mock('../../../features/project/thunks/projectManagementThunks', () => ({
+  importProjectThunk: Object.assign(
+    vi.fn(() => ({ type: 'project/importProject/pending' })),
+    {
+      fulfilled: { match: (action: { type: string }) => action.type.endsWith('/fulfilled') },
+    },
+  ),
+}));
+
 import {
   deepLinkUrlToPath,
   getProjectIdFromPath,
+  initTauriDeepLink,
   isWorldScriptProjectFile,
 } from '../../../services/tauriDeepLink';
 
@@ -100,6 +139,56 @@ describe('tauriDeepLink', () => {
 
     it('handles path without extension', () => {
       expect(getProjectIdFromPath('/path/to/project')).toBe('project');
+    });
+  });
+
+  describe('initTauriDeepLink', () => {
+    const dispatchMock = vi.fn((action: unknown) => action);
+    const dispatch = dispatchMock as unknown as AppDispatch;
+    const t = ((key: string) => key) as I18nTranslate;
+
+    beforeEach(() => {
+      dispatchMock.mockClear();
+      h.isDesktop.value = true;
+      h.onDeepLink.mockClear();
+      h.exists.mockReset().mockResolvedValue(true);
+      h.readTextFile.mockReset().mockResolvedValue('{"title":"Imported"}');
+    });
+
+    it('returns a no-op cleanup on the web without subscribing', async () => {
+      h.isDesktop.value = false;
+      const cleanup = await initTauriDeepLink(dispatch, t);
+      expect(h.onDeepLink).not.toHaveBeenCalled();
+      expect(() => cleanup()).not.toThrow();
+    });
+
+    it('imports the file and navigates on a fulfilled import', async () => {
+      await initTauriDeepLink(dispatch, t);
+      const handler = h.onDeepLink.mock.calls[0]?.[0] as (urls: string[]) => Promise<void>;
+      dispatchMock.mockReturnValueOnce({ type: 'project/importProject/fulfilled' });
+      await handler(['worldscript:///home/user/novel.worldscript']);
+      expect(h.exists).toHaveBeenCalledWith('/home/user/novel.worldscript');
+      expect(h.readTextFile).toHaveBeenCalledWith('/home/user/novel.worldscript');
+    });
+
+    it('dispatches an error notification when the file does not exist', async () => {
+      h.exists.mockResolvedValue(false);
+      await initTauriDeepLink(dispatch, t);
+      const handler = h.onDeepLink.mock.calls[0]?.[0] as (urls: string[]) => Promise<void>;
+      await handler(['worldscript:///missing.worldscript']);
+      expect(dispatchMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'status/addNotification',
+          payload: expect.objectContaining({ type: 'error' }),
+        }),
+      );
+    });
+
+    it('skips empty URLs in the payload without throwing', async () => {
+      await initTauriDeepLink(dispatch, t);
+      const handler = h.onDeepLink.mock.calls[0]?.[0] as (urls: string[]) => Promise<void>;
+      await expect(handler([''])).resolves.toBeUndefined();
+      expect(h.exists).not.toHaveBeenCalled();
     });
   });
 });

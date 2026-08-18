@@ -35,6 +35,7 @@
     "docs:check": "node scripts/check-doc-metrics.mjs",
     "suppressions:check": "node scripts/check-suppressions.mjs",
     "token:audit": "node scripts/audit-tokens.mjs",
+    "guardrail:desktop-imports": "node scripts/check-tauri-import-boundary.mjs",
     "sync:readme": "node scripts/sync-readme-metrics.mjs",
     "graphify": "node scripts/graphify-cli.mjs",
     "graphify:install": "node scripts/graphify-cli.mjs install",

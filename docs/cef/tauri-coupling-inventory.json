@@ -1,118 +1,52 @@
 {
   "$schema": "informal — see docs/cef/TAURI-COUPLING-INVENTORY.md for field definitions",
   "verifiedAt": "2026-08-18",
-  "verifiedAgainst": "main (v1.27.1)",
-  "method": "rg -l \"from ['\\\"]@tauri-apps|import\\\\(['\\\"]@tauri-apps\" -g '*.ts' -g '*.tsx' -g '!*.test.ts' -g '!*.test.tsx' -g '!tests/**' ., cross-checked per-file with rg -oE \"@tauri-apps/[a-zA-Z0-9/_-]*\"",
+  "verifiedAgainst": "refactor/desktop-platform-adapter-migration (Wave 1 PR B, post packages/desktop-contracts merge)",
+  "method": "rg -l \"from ['\\\"]@tauri-apps|import\\\\(['\\\"]@tauri-apps\" -g '*.ts' -g '*.tsx' -g '!*.test.ts' -g '!*.test.tsx' -g '!tests/**' ., cross-checked per-file with rg -oE \"@tauri-apps/[a-zA-Z0-9/_-]*\". Superseded going forward by the mechanically-enforced `pnpm run guardrail:desktop-imports` (scripts/check-tauri-import-boundary.mjs) — this JSON stays as the historical/planning snapshot, re-verified at this Wave 1 PR B checkpoint per the migration's own verification checklist.",
   "directApiCoupling": [
     {
-      "file": "App.tsx",
-      "tauriApis": ["@tauri-apps/plugin-process"],
-      "category": "lifecycle",
-      "migrationTier": "Wave 8 (lifecycle/menu parity)"
-    },
-    {
-      "file": "hooks/useTauriUpdater.ts",
+      "file": "packages/desktop-contracts/src/adapters/tauriDesktopPlatform.ts",
       "tauriApis": [
         "@tauri-apps/api/app",
+        "@tauri-apps/api/core",
+        "@tauri-apps/api/event",
+        "@tauri-apps/api/menu",
+        "@tauri-apps/api/path",
+        "@tauri-apps/api/tray",
+        "@tauri-apps/api/window",
+        "@tauri-apps/plugin-dialog",
+        "@tauri-apps/plugin-fs",
+        "@tauri-apps/plugin-notification",
         "@tauri-apps/plugin-process",
+        "@tauri-apps/plugin-shell",
         "@tauri-apps/plugin-updater"
       ],
-      "category": "updater",
-      "migrationTier": "Wave 11 (updater)"
+      "category": "the approved DesktopPlatform boundary itself",
+      "migrationTier": "n/a — this IS the Wave 1 abstraction; every other file routes desktop-capability access through it"
+    },
+    {
+      "file": "packages/desktop-contracts/src/types.ts",
+      "tauriApis": ["@tauri-apps/api/app", "@tauri-apps/api/menu", "@tauri-apps/api/tray"],
+      "category": "type-only (typeof import(...) for the menu/tray builder contract types)",
+      "migrationTier": "n/a — same approved boundary as the adapter above"
     },
     {
       "file": "services/ai/fetchAdapter.ts",
       "tauriApis": ["@tauri-apps/plugin-http"],
       "category": "http",
-      "migrationTier": "Wave 10 (AI/local AI parity) — CORS-bypass fetch"
-    },
-    {
-      "file": "services/desktop/desktopMenu.ts",
-      "tauriApis": ["@tauri-apps/api/menu"],
-      "category": "menu",
-      "migrationTier": "Wave 8 (desktop integration parity)"
-    },
-    {
-      "file": "services/desktop/desktopNotifications.ts",
-      "tauriApis": ["@tauri-apps/plugin-notification"],
-      "category": "notifications",
-      "migrationTier": "Wave 8 (desktop integration parity)"
-    },
-    {
-      "file": "services/desktop/desktopTray.ts",
-      "tauriApis": [
-        "@tauri-apps/api/app",
-        "@tauri-apps/api/menu",
-        "@tauri-apps/api/tray",
-        "@tauri-apps/api/window"
-      ],
-      "category": "tray+menu+window",
-      "migrationTier": "Wave 8 (desktop integration parity)"
-    },
-    {
-      "file": "services/fs/fsCore.ts",
-      "tauriApis": [
-        "@tauri-apps/api/core",
-        "@tauri-apps/api/path",
-        "@tauri-apps/plugin-dialog",
-        "@tauri-apps/plugin-fs"
-      ],
-      "category": "filesystem+dialog+invoke",
-      "migrationTier": "Wave 5 (persistence vertical slice) — the largest single coupling point"
+      "migrationTier": "PERMANENT exception — HTTP is intentionally not a DesktopPlatform facet (roadmap §8 has no HTTP facet); Wave 10 owns the fetch-adapter work itself, not a migration into this boundary"
     },
     {
       "file": "services/localServerHttp.ts",
       "tauriApis": ["@tauri-apps/plugin-http"],
       "category": "http",
-      "migrationTier": "Wave 10 (AI/local AI parity) — CORS-bypass fetch for local AI servers"
+      "migrationTier": "PERMANENT exception — same reasoning as services/ai/fetchAdapter.ts above"
     },
     {
       "file": "services/logger.ts",
       "tauriApis": ["@tauri-apps/api/path", "@tauri-apps/plugin-fs"],
       "category": "filesystem",
-      "migrationTier": "Wave 5/7 — JSONL log sink under $APPDATA/logs"
-    },
-    {
-      "file": "services/lora/loraTrainingService.ts",
-      "tauriApis": ["@tauri-apps/api/core", "@tauri-apps/api/event", "@tauri-apps/plugin-dialog"],
-      "category": "invoke+events+dialog",
-      "migrationTier": "Wave 9 (task runtime) — LoRA training sidecar bridge"
-    },
-    {
-      "file": "services/pandocTauri.ts",
-      "tauriApis": ["@tauri-apps/api/core"],
-      "category": "invoke",
-      "migrationTier": "Wave 9 (task runtime)"
-    },
-    {
-      "file": "services/tauriDeepLink.ts",
-      "tauriApis": ["@tauri-apps/api/event", "@tauri-apps/plugin-fs"],
-      "category": "events+filesystem",
-      "migrationTier": "Wave 8 (deep links / file associations)"
-    },
-    {
-      "file": "services/tauriMenuService.ts",
-      "tauriApis": ["@tauri-apps/api/event"],
-      "category": "events",
-      "migrationTier": "Wave 8 (menu parity) — native menu-action bridge"
-    },
-    {
-      "file": "services/tauriRuntime.ts",
-      "tauriApis": ["@tauri-apps/api/app", "@tauri-apps/api/path", "@tauri-apps/plugin-shell"],
-      "category": "runtime-detection+version+shell",
-      "migrationTier": "Wave 1 (DesktopPlatform boundary) — the thin facade other modules should route through"
-    },
-    {
-      "file": "services/tauriTaskBridge.ts",
-      "tauriApis": ["@tauri-apps/api/core"],
-      "category": "invoke",
-      "migrationTier": "Wave 9 (task runtime) — bridges to src-tauri task_supervisor"
-    },
-    {
-      "file": "services/tauriTrayService.ts",
-      "tauriApis": ["@tauri-apps/api/window"],
-      "category": "window",
-      "migrationTier": "Wave 8 (desktop integration parity)"
+      "migrationTier": "DEBT, Wave 5/7 — see docs/architecture/native-readiness.md's Wave 1 PR B snapshot for the exit condition (packages/desktop-contracts needs its own logging port before logger.ts can depend on desktopPlatform without a circular import)"
     },
     {
       "file": "vite.config.ts",
@@ -121,6 +55,86 @@
       "migrationTier": "n/a — build config, not app coupling"
     }
   ],
+  "resolvedWave1PrB": {
+    "note": "Migrated to route through desktopPlatform (@domain/desktop-contracts) this PR — kept here for historical traceability of the original directApiCoupling entries rather than deleting them outright.",
+    "files": [
+      { "file": "App.tsx", "tauriApis": ["@tauri-apps/plugin-process"], "category": "lifecycle" },
+      {
+        "file": "hooks/useTauriUpdater.ts",
+        "tauriApis": [
+          "@tauri-apps/api/app",
+          "@tauri-apps/plugin-process",
+          "@tauri-apps/plugin-updater"
+        ],
+        "category": "updater"
+      },
+      {
+        "file": "services/desktop/desktopMenu.ts",
+        "tauriApis": ["@tauri-apps/api/menu"],
+        "category": "menu"
+      },
+      {
+        "file": "services/desktop/desktopNotifications.ts",
+        "tauriApis": ["@tauri-apps/plugin-notification"],
+        "category": "notifications"
+      },
+      {
+        "file": "services/desktop/desktopTray.ts",
+        "tauriApis": [
+          "@tauri-apps/api/app",
+          "@tauri-apps/api/menu",
+          "@tauri-apps/api/tray",
+          "@tauri-apps/api/window"
+        ],
+        "category": "tray+menu+window"
+      },
+      {
+        "file": "services/fs/fsCore.ts",
+        "tauriApis": [
+          "@tauri-apps/api/core",
+          "@tauri-apps/api/path",
+          "@tauri-apps/plugin-dialog",
+          "@tauri-apps/plugin-fs"
+        ],
+        "category": "filesystem+dialog+invoke — the largest single coupling point; migrated last, per plan, with full end-to-end test coverage through the real store chain"
+      },
+      {
+        "file": "services/lora/loraTrainingService.ts",
+        "tauriApis": ["@tauri-apps/api/core", "@tauri-apps/api/event", "@tauri-apps/plugin-dialog"],
+        "category": "invoke+events+dialog — motivated a new DesktopTasks.onLoraTrainingProgress facet method (no prior facet covered progress-event subscription)"
+      },
+      {
+        "file": "services/pandocTauri.ts",
+        "tauriApis": ["@tauri-apps/api/core"],
+        "category": "invoke"
+      },
+      {
+        "file": "services/tauriDeepLink.ts",
+        "tauriApis": ["@tauri-apps/api/event", "@tauri-apps/plugin-fs"],
+        "category": "events+filesystem"
+      },
+      {
+        "file": "services/tauriMenuService.ts",
+        "tauriApis": ["@tauri-apps/api/event"],
+        "category": "events"
+      },
+      {
+        "file": "services/tauriRuntime.ts",
+        "tauriApis": ["@tauri-apps/api/app", "@tauri-apps/api/path", "@tauri-apps/plugin-shell"],
+        "category": "runtime-detection+version+shell — only getTauriAppVersion/openTauriDataDirectory imported @tauri-apps/* directly; both moved into desktopPlatform.diagnostics (call sites GeneralSections.tsx/DataSection.tsx updated directly, avoiding a circular import back through desktopPlatform.ts). isTauriRuntime/getDesktopOs/applyDesktopRuntimeFlags never imported @tauri-apps/* and correctly stay untouched."
+      },
+      {
+        "file": "services/tauriTaskBridge.ts",
+        "tauriApis": ["@tauri-apps/api/core"],
+        "category": "invoke"
+      },
+      {
+        "file": "services/tauriTrayService.ts",
+        "tauriApis": ["@tauri-apps/api/window"],
+        "category": "window"
+      }
+    ]
+  },
   "detectionOnly": [
     {
       "file": "components/settings/AiProviderCard.tsx",
@@ -129,8 +143,8 @@
     },
     {
       "file": "components/settings/DataSection.tsx",
-      "detects": "isTauriRuntime()",
-      "note": "no direct @tauri-apps import; added 2026-08-18 correction"
+      "detects": "isTauriRuntime() (gate) + desktopPlatform.diagnostics.openDataDirectory() (Wave 1 PR B — was openTauriDataDirectory() from services/tauriRuntime.ts)",
+      "note": "no direct @tauri-apps import"
     },
     {
       "file": "components/settings/DesktopSection.tsx",
@@ -144,8 +158,8 @@
     },
     {
       "file": "components/settings/GeneralSections.tsx",
-      "detects": "isTauriRuntime()",
-      "note": "no direct @tauri-apps import; added 2026-08-18 correction"
+      "detects": "isTauriRuntime() (gate) + desktopPlatform.diagnostics.getAppVersion() (Wave 1 PR B — was getTauriAppVersion() from services/tauriRuntime.ts)",
+      "note": "no direct @tauri-apps import"
     },
     {
       "file": "hooks/useNativeNotifications.ts",

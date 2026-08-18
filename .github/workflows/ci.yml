@@ -127,6 +127,9 @@ jobs:
       - name: Feature parity audit
         run: pnpm run parity:check
 
+      - name: DesktopPlatform import-boundary gate (Wave 1)
+        run: pnpm run guardrail:desktop-imports
+
       - name: Typecheck (tsgo)
         run: npx tsgo --project tsconfig.tsgo.json --noEmit --checkers 4
 

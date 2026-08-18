@@ -6,8 +6,9 @@ import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
 import { defaultThemeCustomization } from '../../features/settings/settingsSlice';
 import { usePWA } from '../../hooks/usePWA';
 import packageJson from '../../package.json';
+import { desktopPlatform } from '../../services/desktopPlatform';
 import { storageService } from '../../services/storageService';
-import { getTauriAppVersion, isTauriRuntime } from '../../services/tauriRuntime';
+import { isTauriRuntime } from '../../services/tauriRuntime';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { LanguageSelector } from '../ui/LanguageSelector';
@@ -415,7 +416,8 @@ const TauriVersionLine: FC = () => {
 
   useEffect(() => {
     if (!isTauriRuntime()) return;
-    void getTauriAppVersion().then(setTauriVersion);
+    // QNBS-v3: routes through desktopPlatform.diagnostics instead of the removed tauriRuntime.getTauriAppVersion() wrapper
+    void desktopPlatform.diagnostics.getAppVersion().then(setTauriVersion);
   }, []);
 
   if (!tauriVersion) return null;

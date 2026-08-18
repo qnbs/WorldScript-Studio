@@ -462,14 +462,118 @@ describe('tauriDesktopPlatform', () => {
     });
 
     it('abortLoraTraining, checkLoraEnvironment, setLoraPythonPath invoke the named commands', async () => {
-      await tauriDesktopPlatform.tasks.abortLoraTraining();
+      h.invoke.mockResolvedValueOnce('confirmed');
+      await expect(tauriDesktopPlatform.tasks.abortLoraTraining()).resolves.toBe('confirmed');
       expect(h.invoke).toHaveBeenCalledWith('abort_lora_training');
-      await tauriDesktopPlatform.tasks.checkLoraEnvironment();
+
+      const envResult = {
+        python_available: true,
+        unsloth_available: false,
+        cuda_available: true,
+        vram_gb: 24,
+        python_version: '3.12.1',
+      };
+      h.invoke.mockResolvedValueOnce(envResult);
+      await expect(tauriDesktopPlatform.tasks.checkLoraEnvironment()).resolves.toEqual(envResult);
       expect(h.invoke).toHaveBeenCalledWith('check_lora_environment');
-      await tauriDesktopPlatform.tasks.setLoraPythonPath('/usr/bin/python3');
+
+      h.invoke.mockResolvedValueOnce(envResult);
+      await expect(
+        tauriDesktopPlatform.tasks.setLoraPythonPath('/usr/bin/python3'),
+      ).resolves.toEqual(envResult);
       expect(h.invoke).toHaveBeenCalledWith('set_lora_python_path', {
         pythonPath: '/usr/bin/python3',
       });
+    });
+
+    // QNBS-v3: native command responses must be validated before trusting result shapes — a malformed response throws instead of being passed through unchecked.
+    it('abortLoraTraining/checkLoraEnvironment/setLoraPythonPath reject a malformed native response', async () => {
+      h.invoke.mockResolvedValueOnce('not-a-real-outcome');
+      await expect(tauriDesktopPlatform.tasks.abortLoraTraining()).rejects.toThrow(
+        'abort_lora_training returned an unexpected response',
+      );
+
+      h.invoke.mockResolvedValueOnce({ ok: true });
+      await expect(tauriDesktopPlatform.tasks.checkLoraEnvironment()).rejects.toThrow(
+        'check_lora_environment returned an unexpected response',
+      );
+
+      h.invoke.mockResolvedValueOnce({ ok: true });
+      await expect(
+        tauriDesktopPlatform.tasks.setLoraPythonPath('/usr/bin/python3'),
+      ).rejects.toThrow('set_lora_python_path returned an unexpected response');
+    });
+
+    it('checkLoraEnvironment/setLoraPythonPath reject a present-but-wrongly-typed optional field', async () => {
+      const baseResult = {
+        python_available: true,
+        unsloth_available: false,
+        cuda_available: true,
+        vram_gb: 24,
+        python_version: '3.12.1',
+      };
+
+      h.invoke.mockResolvedValueOnce({ ...baseResult, python_path: 123 });
+      await expect(tauriDesktopPlatform.tasks.checkLoraEnvironment()).rejects.toThrow(
+        'check_lora_environment returned an unexpected response',
+      );
+
+      h.invoke.mockResolvedValueOnce({ ...baseResult, last_error: 42 });
+      await expect(
+        tauriDesktopPlatform.tasks.setLoraPythonPath('/usr/bin/python3'),
+      ).rejects.toThrow('set_lora_python_path returned an unexpected response');
+
+      // string or explicit null are both valid — not rejected.
+      h.invoke.mockResolvedValueOnce({ ...baseResult, python_path: null, last_error: null });
+      await expect(tauriDesktopPlatform.tasks.checkLoraEnvironment()).resolves.toEqual({
+        ...baseResult,
+        python_path: null,
+        last_error: null,
+      });
+    });
+
+    it('onLoraTrainingProgress subscribes to lora-progress and forwards the payload', async () => {
+      const handler = vi.fn();
+      h.listen.mockImplementationOnce(async (_event, cb) => {
+        cb({ payload: { event: 'progress', progress_percent: 42 } });
+        return () => {};
+      });
+      await tauriDesktopPlatform.tasks.onLoraTrainingProgress(handler);
+      expect(h.listen).toHaveBeenCalledWith('lora-progress', expect.any(Function));
+      expect(handler).toHaveBeenCalledWith({ event: 'progress', progress_percent: 42 });
+    });
+
+    // QNBS-v3: regression guard — a swallowed subscription failure would let startTraining launch train_lora blind, with no way to receive progress; it must reject instead.
+    it('onLoraTrainingProgress rejects (not a silent no-op) when the event API is unavailable', async () => {
+      h.listen.mockRejectedValueOnce(new Error('event API unavailable'));
+      await expect(tauriDesktopPlatform.tasks.onLoraTrainingProgress(vi.fn())).rejects.toThrow(
+        'event API unavailable',
+      );
+    });
+
+    it('onLoraTrainingProgress drops (and logs) a malformed payload instead of forwarding it', async () => {
+      const handler = vi.fn();
+      h.listen.mockImplementationOnce(async (_event, cb) => {
+        cb({ payload: { progress_percent: 42 } }); // no valid `event` key
+        cb({ payload: 'not-an-object' });
+        return () => {};
+      });
+      await tauriDesktopPlatform.tasks.onLoraTrainingProgress(handler);
+      expect(handler).not.toHaveBeenCalled();
+      expect(h.loggerWarn).toHaveBeenCalled();
+    });
+
+    it('onLoraTrainingProgress drops a payload with a valid event kind but a wrongly-typed optional field', async () => {
+      const handler = vi.fn();
+      h.listen.mockImplementationOnce(async (_event, cb) => {
+        cb({ payload: { event: 'progress', progress_percent: '42' } }); // string, not number
+        cb({ payload: { event: 'completed', adapter_path: 123 } }); // number, not string
+        cb({ payload: { event: 'error', message: { detail: 'failed' } } }); // object, not string
+        return () => {};
+      });
+      await tauriDesktopPlatform.tasks.onLoraTrainingProgress(handler);
+      expect(handler).not.toHaveBeenCalled();
+      expect(h.loggerWarn).toHaveBeenCalledTimes(3);
     });
   });
 

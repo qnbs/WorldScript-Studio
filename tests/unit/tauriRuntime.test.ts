@@ -3,7 +3,7 @@
  * QNBS-v3: Covers isTauriRuntime detection and non-Tauri fallback paths.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 describe('isTauriRuntime', () => {
   afterEach(() => {
@@ -37,28 +37,6 @@ describe('isTauriRuntime', () => {
   });
 });
 
-describe('getTauriAppVersion', () => {
-  beforeEach(() => vi.resetModules());
-  afterEach(() => vi.unstubAllGlobals());
-
-  it('returns null when not in Tauri runtime', async () => {
-    vi.stubGlobal('window', {});
-    const { getTauriAppVersion } = await import('../../services/tauriRuntime');
-    await expect(getTauriAppVersion()).resolves.toBeNull();
-  });
-});
-
-describe('openTauriDataDirectory', () => {
-  beforeEach(() => vi.resetModules());
-  afterEach(() => vi.unstubAllGlobals());
-
-  it('returns false when not in Tauri runtime', async () => {
-    vi.stubGlobal('window', {});
-    const { openTauriDataDirectory } = await import('../../services/tauriRuntime');
-    await expect(openTauriDataDirectory()).resolves.toBe(false);
-  });
-});
-
 describe('getDesktopOs', () => {
   afterEach(() => vi.unstubAllGlobals());
 
@@ -79,16 +57,15 @@ describe('getDesktopOs', () => {
     expect(getDesktopOs()).toBe(expected);
   });
 
-  it.each([
-    [''],
-    ['Some Unknown WebView/1.0'],
-    ['SunOS sparc'],
-  ])('returns null for unrecognized/empty UA %j (no silent linux misclassification)', async (userAgent) => {
-    vi.stubGlobal('window', { __TAURI__: {} });
-    vi.stubGlobal('navigator', { userAgent });
-    const { getDesktopOs } = await import('../../services/tauriRuntime');
-    expect(getDesktopOs()).toBeNull();
-  });
+  it.each([[''], ['Some Unknown WebView/1.0'], ['SunOS sparc']])(
+    'returns null for unrecognized/empty UA %j (no silent linux misclassification)',
+    async (userAgent) => {
+      vi.stubGlobal('window', { __TAURI__: {} });
+      vi.stubGlobal('navigator', { userAgent });
+      const { getDesktopOs } = await import('../../services/tauriRuntime');
+      expect(getDesktopOs()).toBeNull();
+    },
+  );
 });
 
 describe('applyDesktopRuntimeFlags', () => {
