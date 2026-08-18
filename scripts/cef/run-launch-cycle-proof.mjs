@@ -25,9 +25,20 @@
  * callback-based signal this harness would have checked for does not exist; see
  * docs/cef/knowledge/cef-architecture-primer.md for the real, honestly-documented blocker.
  *
+ * After the repeated cycles, one additional crash-reporting proof runs
+ * (runCrashReportingProofCycle): launches with chrome://crash to deliberately crash
+ * the renderer subprocess, verifies CefCrashReportingEnabled() was true, verifies the
+ * browser process survived (CefRequestHandler::OnRenderProcessTerminated fired instead
+ * of the whole process dying), and verifies a real dump file was written to a
+ * BREAKPAD_DUMP_LOCATION-overridden directory. Full symbolization (dump_syms /
+ * minidump_stackwalk) needs a complete Chromium source checkout and is genuinely out of
+ * reach of this project's minimal-CEF-SDK-only CI setup — see the primer doc.
+ *
  * Run: node scripts/cef/run-launch-cycle-proof.mjs <binary-path> <url> [--cycles N]
  */
 import { execFileSync, spawn } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 const [binaryPath, url] = process.argv.slice(2);
@@ -44,6 +55,11 @@ const SHUTDOWN_GRACE_MS = 6000;
 const ORPHAN_CHECK_GRACE_MS = 3000;
 const FFI_PROOF_LINE = 'rust_core ping = 424242';
 const EXPECTED_TITLE_LINE = 'title = WorldScript Studio';
+
+// QNBS-v3: crash-reporting/symbolization competency-gate proof (CEF-RUST-COMPETENCY-MATRIX.md) — mechanism verified against real CEF 151 source (libcef/common/crash_reporting.cc, crash_reporter_client.cc), not assumed; see docs/cef/knowledge/cef-architecture-primer.md.
+const CRASH_REPORTING_ENABLED_LINE = 'crash_reporting_enabled = true';
+const RENDERER_TERMINATED_PROOF_PREFIX = 'renderer_terminated status=';
+const CRASH_URL = 'chrome://crash';
 
 if (!binaryPath || !url) {
   console.error(
@@ -81,8 +97,22 @@ function processTreeAlive() {
   }
 }
 
-function logStderr(index, stderr) {
-  if (stderr) console.error(`[launch-cycle-proof] Cycle ${index + 1} stderr:\n${stderr}`);
+function logStderr(label, stderr) {
+  if (stderr) console.error(`[launch-cycle-proof] ${label} stderr:\n${stderr}`);
+}
+
+// QNBS-v3: recursive, not a flat readdir — Crashpad's on-disk database nests reports under subdirectories (e.g. completed/, pending/, attachments/) whose exact layout isn't asserted on here; presence of any file is the proof.
+function findFilesRecursive(dir) {
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  return entries.flatMap((entry) => {
+    const full = path.join(dir, entry.name);
+    return entry.isDirectory() ? findFilesRecursive(full) : [full];
+  });
 }
 
 async function runCycle(index) {
@@ -110,7 +140,7 @@ async function runCycle(index) {
   // QNBS-v3: races against the startup grace period so an immediate crash is caught here, distinct from a deliberate SIGTERM-driven exit later — Qodo review finding on PR #388 ("crashed cycles count clean").
   const earlyExit = await Promise.race([exited, sleep(STARTUP_GRACE_MS).then(() => null)]);
   if (earlyExit) {
-    logStderr(index, stderr);
+    logStderr(`Cycle ${index + 1}`, stderr);
     throw new Error(
       `Cycle ${index + 1}: exited during startup (code=${earlyExit.code}, signal=${earlyExit.signal}) instead of staying up — likely a crash, not a deliberate shutdown.`,
     );
@@ -119,14 +149,14 @@ async function runCycle(index) {
   child.kill('SIGTERM');
   const shutdownResult = await Promise.race([exited, sleep(SHUTDOWN_GRACE_MS).then(() => null)]);
   if (!shutdownResult) {
-    logStderr(index, stderr);
+    logStderr(`Cycle ${index + 1}`, stderr);
     throw new Error(`Cycle ${index + 1}: process did not exit within the shutdown grace period.`);
   }
 
   // QNBS-v3: accepts either "died from the SIGTERM we sent" or "exited 0 on its own" as clean — anything else (e.g. SIGSEGV) is a real crash during shutdown, not evidence this proof should accept.
   const cleanShutdown = shutdownResult.signal === 'SIGTERM' || shutdownResult.code === 0;
   if (!cleanShutdown) {
-    logStderr(index, stderr);
+    logStderr(`Cycle ${index + 1}`, stderr);
     throw new Error(
       `Cycle ${index + 1}: abnormal exit during shutdown (code=${shutdownResult.code}, signal=${shutdownResult.signal}).`,
     );
@@ -134,23 +164,117 @@ async function runCycle(index) {
 
   await sleep(ORPHAN_CHECK_GRACE_MS);
   if (processTreeAlive()) {
-    logStderr(index, stderr);
+    logStderr(`Cycle ${index + 1}`, stderr);
     throw new Error(`Cycle ${index + 1}: orphaned worldscript_host process(es) still running.`);
   }
 
   // QNBS-v3: required per cycle, not aggregated across the whole run — Qodo review finding on PR #388 ("FFI proof is not repeated"); one cycle's success must never mask another cycle's failure.
   if (!stdout.includes(FFI_PROOF_LINE)) {
-    logStderr(index, stderr);
+    logStderr(`Cycle ${index + 1}`, stderr);
     throw new Error(`Cycle ${index + 1}: no FFI boundary proof ("${FFI_PROOF_LINE}") observed.`);
   }
   if (!stdout.includes(EXPECTED_TITLE_LINE)) {
-    logStderr(index, stderr);
+    logStderr(`Cycle ${index + 1}`, stderr);
     throw new Error(
       `Cycle ${index + 1}: expected "${EXPECTED_TITLE_LINE}" not observed — the production bundle may not have rendered (a CEF error page would not produce this specific title).`,
     );
   }
   console.log(
     `[launch-cycle-proof] Cycle ${index + 1}/${cycles}: clean exit (signal=${shutdownResult.signal}), FFI + rendering proofs both present.`,
+  );
+}
+
+// QNBS-v3: separate function, not a mode flag on runCycle — keeps the already-proven repeated-cycle proof completely untouched (the accessibility-attempt regression on PR #391 was caused by exactly this kind of shared-code coupling).
+async function runCrashReportingProofCycle() {
+  console.log(
+    `[launch-cycle-proof] Crash-reporting proof: launching with ${CRASH_URL} to deliberately crash the renderer…`,
+  );
+  // QNBS-v3: fresh, empty-at-start temp dir — BREAKPAD_DUMP_LOCATION (verified in libcef/common/crash_reporter_client.cc) overrides where CEF/Crashpad writes dumps on Linux/POSIX, so "any file appears here" is unambiguous evidence, no need to guess CEF's default directory layout.
+  const dumpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'worldscript-crash-dumps-'));
+
+  const child = spawn(binaryPath, [`--url=${CRASH_URL}`, '--enable-logging=stderr', '--v=1'], {
+    cwd: path.dirname(binaryPath),
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, BREAKPAD_DUMP_LOCATION: dumpDir },
+  });
+
+  let stdout = '';
+  let stderr = '';
+  child.stdout.on('data', (chunk) => {
+    stdout += chunk.toString();
+  });
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk.toString();
+  });
+
+  const exited = new Promise((resolve) =>
+    child.once('exit', (code, signal) => resolve({ code, signal })),
+  );
+
+  const rendererTerminated = await Promise.race([
+    (async () => {
+      while (!stdout.includes(RENDERER_TERMINATED_PROOF_PREFIX)) {
+        await sleep(200);
+      }
+      return true;
+    })(),
+    exited.then(() => false),
+    sleep(STARTUP_GRACE_MS).then(() => false),
+  ]);
+
+  if (!rendererTerminated) {
+    logStderr('Crash-reporting proof', stderr);
+    throw new Error(
+      `Crash-reporting proof: "${RENDERER_TERMINATED_PROOF_PREFIX}" not observed within ${STARTUP_GRACE_MS}ms (or the process exited early) — stdout so far:\n${stdout}`,
+    );
+  }
+
+  // QNBS-v3: the actual "renderer termination observed and handled" evidence (CEF-RUST-COMPETENCY-MATRIX.md) — only the renderer subprocess should have died; the browser process and its message loop must still be running.
+  if (!processTreeAlive()) {
+    logStderr('Crash-reporting proof', stderr);
+    throw new Error(
+      'Crash-reporting proof: browser process is not alive after the renderer crash — process isolation did not hold.',
+    );
+  }
+
+  if (!stdout.includes(CRASH_REPORTING_ENABLED_LINE)) {
+    logStderr('Crash-reporting proof', stderr);
+    throw new Error(
+      `Crash-reporting proof: "${CRASH_REPORTING_ENABLED_LINE}" not observed — crash_reporter.cfg (apps/desktop-cef/resources/crash_reporter.cfg) was not found/parsed next to the binary.`,
+    );
+  }
+
+  child.kill('SIGTERM');
+  const shutdownResult = await Promise.race([exited, sleep(SHUTDOWN_GRACE_MS).then(() => null)]);
+  if (!shutdownResult) {
+    logStderr('Crash-reporting proof', stderr);
+    throw new Error(
+      'Crash-reporting proof: process did not exit within the shutdown grace period after the renderer crash.',
+    );
+  }
+
+  await sleep(ORPHAN_CHECK_GRACE_MS);
+  if (processTreeAlive()) {
+    logStderr('Crash-reporting proof', stderr);
+    throw new Error(
+      'Crash-reporting proof: orphaned worldscript_host process(es) still running after shutdown.',
+    );
+  }
+
+  const dumpFiles = findFilesRecursive(dumpDir);
+  console.log(
+    `[launch-cycle-proof] Crash-reporting proof: dump location (${dumpDir}) after the crash: ${dumpFiles.length > 0 ? dumpFiles.join(', ') : '(empty)'}`,
+  );
+  if (dumpFiles.length === 0) {
+    logStderr('Crash-reporting proof', stderr);
+    throw new Error(
+      `Crash-reporting proof: no file was written under BREAKPAD_DUMP_LOCATION (${dumpDir}) despite crash_reporting_enabled=true and an observed renderer crash.`,
+    );
+  }
+
+  console.log(
+    '[launch-cycle-proof] Crash-reporting proof: OK — crash reporting enabled, renderer crash observed and handled (browser process survived), ' +
+      `${dumpFiles.length} file(s) written to the crash dump location. Full symbolization (dump_syms/minidump_stackwalk) requires a complete Chromium source checkout and is out of scope — see docs/cef/knowledge/cef-architecture-primer.md.`,
   );
 }
 
@@ -162,6 +286,8 @@ async function main() {
   console.log(
     `[launch-cycle-proof] OK — ${cycles}/${cycles} repeated start/close cycles clean, FFI boundary and real rendering both proven in every cycle.`,
   );
+
+  await runCrashReportingProofCycle();
 }
 
 main().catch((err) => {
