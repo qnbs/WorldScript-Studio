@@ -42,7 +42,7 @@ CI validation of this block ("fail CI when a required item for the active progra
 [x] Unpackaged CEF resource layout proven          — PR #388, real filesystem listing in CI (real shipped/installer packaging remains separate, unproven, later scope)
 [x] Repeated startup/shutdown harness green        — PR #388, 3/3 cycles, cef-learning-harness CI job
 [ ] Renderer crash observation green
-[ ] Accessibility smoke green
+[ ] Accessibility smoke green                      (attempted, real blocker — see cef-architecture-primer.md's "Accessibility API" section)
 [ ] Crash-reporting/symbolization smoke green
 [ ] Linux dependency inventory complete            (inventoried, not yet proven sufficient — see native-readiness.md)
 [ ] X11/Wayland initial smoke complete             (X11 only; Wayland zero evidence)
@@ -62,7 +62,7 @@ CI validation of this block ("fail CI when a required item for the active progra
 [ ] renderer termination observed and handled       (not proven — PR #388 exercised normal shutdown only; no test deliberately terminates/crashes a renderer, per Qodo review finding on PR #389)
 [ ] sandbox development plan validated
 [ ] Linux runtime dependencies inventoried           (inventoried but not yet proven sufficient — see native-readiness.md)
-[ ] at least one accessibility smoke test performed
+[ ] at least one accessibility smoke test performed        (attempted, real blocker — see cef-architecture-primer.md's "Accessibility API" section)
 [ ] at least one crash-reporting/symbolization path proven
 [ ] upgrade playbook exists
 ```
