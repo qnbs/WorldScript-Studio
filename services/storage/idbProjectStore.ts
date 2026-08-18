@@ -15,7 +15,7 @@ import {
   defaultDesktopSettings,
   defaultVoiceSettings,
 } from '../../features/settings/settingsDefaults';
-import type { Settings, StoryProject } from '../../types';
+import type { OpenRouterSettings, Settings, StoryProject } from '../../types';
 import { DEFAULT_WEBRTC_SIGNALING_URLS } from '../collaborationService';
 import { APP_DATA_STORE } from '../dbConstants';
 import { logger } from '../logger';
@@ -157,14 +157,19 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
       desktopNotifications: validSettings.desktop.desktopNotifications === true,
     };
   }
-  // QNBS-v3: openRouter added in OpenRouter integration — backfill for older persisted settings.
-  if (!validSettings.openRouter || typeof validSettings.openRouter !== 'object') {
-    validSettings.openRouter = {
-      enabled: false,
-      apiKey: '',
-      preferredModel: 'deepseek/deepseek-r1:free',
-    };
-  }
+  // QNBS-v3: rebuild (never trust-cast) openRouter every time — discards any legacy/imported apiKey (the real key lives only in the dedicated per-provider key store) and guarantees enabled/preferredModel are always present, even for a credentials-only legacy object like `{ apiKey: "..." }`.
+  const incomingOpenRouter =
+    validSettings.openRouter && typeof validSettings.openRouter === 'object'
+      ? (validSettings.openRouter as unknown as Record<string, unknown>)
+      : {};
+  const rebuiltOpenRouter: OpenRouterSettings = {
+    enabled: incomingOpenRouter['enabled'] === true,
+    preferredModel:
+      typeof incomingOpenRouter['preferredModel'] === 'string'
+        ? incomingOpenRouter['preferredModel']
+        : 'deepseek/deepseek-r1:free',
+  };
+  validSettings.openRouter = rebuiltOpenRouter;
 
   return validSettings;
 }

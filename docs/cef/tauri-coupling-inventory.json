@@ -124,27 +124,67 @@
   "detectionOnly": [
     {
       "file": "components/settings/AiProviderCard.tsx",
-      "detects": "__TAURI_INTERNALS__/__TAURI__ or isTauriRuntime()",
+      "detects": "isTauriRuntime()",
       "note": "no direct @tauri-apps import"
     },
     {
+      "file": "components/settings/DataSection.tsx",
+      "detects": "isTauriRuntime()",
+      "note": "no direct @tauri-apps import; added 2026-08-18 correction"
+    },
+    {
+      "file": "components/settings/DesktopSection.tsx",
+      "detects": "isTauriRuntime()",
+      "note": "no direct @tauri-apps import; added 2026-08-18 correction"
+    },
+    {
+      "file": "components/settings/FeatureFlagsSection.tsx",
+      "detects": "isTauriRuntime()",
+      "note": "no direct @tauri-apps import; added 2026-08-18 correction"
+    },
+    {
+      "file": "components/settings/GeneralSections.tsx",
+      "detects": "isTauriRuntime()",
+      "note": "no direct @tauri-apps import; added 2026-08-18 correction"
+    },
+    {
+      "file": "hooks/useNativeNotifications.ts",
+      "detects": "isTauriRuntime()",
+      "note": "no direct @tauri-apps import; added 2026-08-18 correction"
+    },
+    {
       "file": "register-sw.ts",
-      "detects": "__TAURI_INTERNALS__/__TAURI__ or isTauriRuntime()",
+      "detects": "__TAURI_INTERNALS__/__TAURI__/__TAURI_METADATA__ (raw globals, not the isTauriRuntime() helper)",
       "note": "no direct @tauri-apps import"
     },
     {
       "file": "services/ai/localAiDeviceProfiler.ts",
-      "detects": "__TAURI_INTERNALS__/__TAURI__ or isTauriRuntime()",
+      "detects": "isTauriRuntime()",
       "note": "no direct @tauri-apps import"
     },
     {
       "file": "services/aiProviderService.ts",
-      "detects": "__TAURI_INTERNALS__/__TAURI__ or isTauriRuntime()",
+      "detects": "isTauriRuntime()",
       "note": "no direct @tauri-apps import"
     },
     {
+      "file": "services/appBootstrap.ts",
+      "detects": "isTauriRuntime()",
+      "note": "no direct @tauri-apps import; added 2026-08-18 correction"
+    },
+    {
+      "file": "services/factoryResetService.ts",
+      "detects": "isTauriRuntime()",
+      "note": "no direct @tauri-apps import; added 2026-08-18 correction"
+    },
+    {
+      "file": "services/ollamaService.ts",
+      "detects": "isTauriRuntime()",
+      "note": "no direct @tauri-apps import; added 2026-08-18 correction"
+    },
+    {
       "file": "services/storageService.ts",
-      "detects": "__TAURI_INTERNALS__/__TAURI__ or isTauriRuntime()",
+      "detects": "isTauriRuntime()",
       "note": "no direct @tauri-apps import"
     }
   ],
@@ -169,13 +209,15 @@
       "Entitlements.plist",
       "fuzz/Cargo.toml",
       "osv-scanner.toml",
+      "src/commands/mod.rs",
+      "src/commands/task_supervisor.rs",
       "src/lib.rs",
       "src/lora.rs",
       "src/main.rs",
       "src/pandoc.rs",
       "tauri.conf.json"
     ],
-    "note": "icons/ (11 image files) omitted from this list — asset-only, no coupling"
+    "note": "icons/ (11 image files) omitted from this list — asset-only, no coupling. commands/mod.rs and commands/task_supervisor.rs added 2026-08-18 correction (omitted from first pass; task_supervisor.rs defines worldscript_task_supervisor_ping/submit, registered in lib.rs; used by services/tauriTaskBridge.ts)"
   },
   "packageJsonScripts": {
     "existing": ["tauri", "tauri:dev", "tauri:build", "dev:tauri"],

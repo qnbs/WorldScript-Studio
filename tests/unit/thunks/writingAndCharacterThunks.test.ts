@@ -434,6 +434,7 @@ describe('generateCharacterPortraitThunk', () => {
 // ---------------------------------------------------------------------------
 // uploadCharacterImageThunk
 // ---------------------------------------------------------------------------
+// QNBS-v3: FileReader error/abort and storageService.saveImage-rejection coverage prevents the upload thunk's Promise from hanging forever on any terminal failure path.
 describe('uploadCharacterImageThunk', () => {
   it('reads file as a MIME-preserving data URL', async () => {
     const fakeBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAA';
@@ -443,8 +444,8 @@ describe('uploadCharacterImageThunk', () => {
     vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(function (this: FileReader) {
       Object.defineProperty(this, 'result', { value: fakeDataUrl, configurable: true });
       void Promise.resolve().then(() => {
-        if (typeof this.onloadend === 'function')
-          this.onloadend(new ProgressEvent('loadend') as ProgressEvent<FileReader>);
+        if (typeof this.onload === 'function')
+          this.onload(new ProgressEvent('load') as ProgressEvent<FileReader>);
       });
     });
 
@@ -463,8 +464,8 @@ describe('uploadCharacterImageThunk', () => {
         configurable: true,
       });
       void Promise.resolve().then(() => {
-        if (typeof this.onloadend === 'function')
-          this.onloadend(new ProgressEvent('loadend') as ProgressEvent<FileReader>);
+        if (typeof this.onload === 'function')
+          this.onload(new ProgressEvent('load') as ProgressEvent<FileReader>);
       });
     });
 
@@ -474,5 +475,95 @@ describe('uploadCharacterImageThunk', () => {
 
     expect((action as { payload: { characterId: string } }).payload?.characterId).toBe('c7');
     expect(storageService.saveImage).toHaveBeenCalledWith('c7', 'data:image/jpeg;base64,abc123');
+  });
+
+  it('rejects when the FileReader errors', async () => {
+    const readerError = new Error('read failed');
+    vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(function (this: FileReader) {
+      Object.defineProperty(this, 'error', { value: readerError, configurable: true });
+      void Promise.resolve().then(() => {
+        if (typeof this.onerror === 'function')
+          this.onerror(new ProgressEvent('error') as ProgressEvent<FileReader>);
+      });
+    });
+
+    const store = makeStore();
+    const file = new File(['data'], 'broken.png', { type: 'image/png' });
+    const action = await store.dispatch(uploadCharacterImageThunk({ characterId: 'c1', file }));
+
+    expect(action.type).toBe('project/uploadCharacterImage/rejected');
+    expect(storageService.saveImage).not.toHaveBeenCalled();
+  });
+
+  it('rejects with a fallback error when the FileReader errors without a reader.error', async () => {
+    vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(function (this: FileReader) {
+      Object.defineProperty(this, 'error', { value: null, configurable: true });
+      void Promise.resolve().then(() => {
+        if (typeof this.onerror === 'function')
+          this.onerror(new ProgressEvent('error') as ProgressEvent<FileReader>);
+      });
+    });
+
+    const store = makeStore();
+    const file = new File(['data'], 'broken.png', { type: 'image/png' });
+    const action = await store.dispatch(uploadCharacterImageThunk({ characterId: 'c8', file }));
+
+    expect(action.type).toBe('project/uploadCharacterImage/rejected');
+    expect((action as { error: { message?: string } }).error.message).toBe(
+      'FileReader failed to read the file',
+    );
+  });
+
+  it('rejects when the FileReader is aborted', async () => {
+    vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(function (this: FileReader) {
+      void Promise.resolve().then(() => {
+        if (typeof this.onabort === 'function')
+          this.onabort(new ProgressEvent('abort') as ProgressEvent<FileReader>);
+      });
+    });
+
+    const store = makeStore();
+    const file = new File(['data'], 'aborted.png', { type: 'image/png' });
+    const action = await store.dispatch(uploadCharacterImageThunk({ characterId: 'c3', file }));
+
+    expect(action.type).toBe('project/uploadCharacterImage/rejected');
+    expect(storageService.saveImage).not.toHaveBeenCalled();
+  });
+
+  it('rejects when onload fires but reader.result is not a string', async () => {
+    vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(function (this: FileReader) {
+      Object.defineProperty(this, 'result', { value: null, configurable: true });
+      void Promise.resolve().then(() => {
+        if (typeof this.onload === 'function')
+          this.onload(new ProgressEvent('load') as ProgressEvent<FileReader>);
+      });
+    });
+
+    const store = makeStore();
+    const file = new File(['data'], 'weird.png', { type: 'image/png' });
+    const action = await store.dispatch(uploadCharacterImageThunk({ characterId: 'c4', file }));
+
+    expect(action.type).toBe('project/uploadCharacterImage/rejected');
+    expect(storageService.saveImage).not.toHaveBeenCalled();
+  });
+
+  it('rejects (does not hang) when storageService.saveImage fails', async () => {
+    vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(function (this: FileReader) {
+      Object.defineProperty(this, 'result', {
+        value: 'data:image/png;base64,abc',
+        configurable: true,
+      });
+      void Promise.resolve().then(() => {
+        if (typeof this.onload === 'function')
+          this.onload(new ProgressEvent('load') as ProgressEvent<FileReader>);
+      });
+    });
+    vi.mocked(storageService.saveImage).mockRejectedValueOnce(new Error('disk full'));
+
+    const store = makeStore();
+    const file = new File(['data'], 'portrait.png', { type: 'image/png' });
+    const action = await store.dispatch(uploadCharacterImageThunk({ characterId: 'c2', file }));
+
+    expect(action.type).toBe('project/uploadCharacterImage/rejected');
   });
 });

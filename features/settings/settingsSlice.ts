@@ -34,9 +34,9 @@ const getSystemThemePreference = (): Theme => {
   return 'dark';
 };
 
+// QNBS-v3: no apiKey default here — OpenRouterSettings dropped that field (see types.ts), the real key lives only in the dedicated per-provider key store.
 export const DEFAULT_OPENROUTER_SETTINGS: OpenRouterSettings = {
   enabled: false,
-  apiKey: '',
   // QNBS-v3: DeepSeek R1 free tier — strong reasoning + no cost, ideal default (zero friction).
   preferredModel: 'deepseek/deepseek-r1:free',
 };
