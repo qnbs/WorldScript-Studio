@@ -19,12 +19,11 @@
  *     so this catches "CEF started but the app didn't actually render" failures the
  *     FFI proof alone cannot.
  *
- * Early Accessibility Gate (roadmap §3142): apps/desktop-cef requests real accessibility
- * tree construction (SetAccessibilityState + --force-renderer-accessibility), but this
- * harness does not yet assert any observable proof of it — CefClient has no
- * GetAccessibilityHandler() in this CEF version (151.3.18), so the callback-based signal
- * this file originally checked for does not exist; see docs/cef/knowledge/cef-architecture-primer.md
- * for the real, honestly-documented blocker.
+ * Early Accessibility Gate (roadmap §3142): apps/desktop-cef does not request accessibility
+ * tree construction today — an attempt was made and fully reverted after CefClient turned
+ * out to have no GetAccessibilityHandler() in this CEF version (151.3.18), so the
+ * callback-based signal this harness would have checked for does not exist; see
+ * docs/cef/knowledge/cef-architecture-primer.md for the real, honestly-documented blocker.
  *
  * Run: node scripts/cef/run-launch-cycle-proof.mjs <binary-path> <url> [--cycles N]
  */
