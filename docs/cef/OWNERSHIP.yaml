@@ -143,6 +143,29 @@ documents:
     driftCheckTool: "planned — not implemented, see Wave 1"
     note: "Skeleton only — Status: Not started"
 
+  - path: docs/cef/UI-DOMAIN-STATE-CLASSIFICATION.md
+    tier: B
+    owner_role: desktop-architecture
+    backup_role: cef-runtime
+    last_verified:
+      worldscript: "v1.27.1"
+      cef: "not applicable — pre-CEF-selection"
+    review_days: 180
+    related_ci: []
+    driftCheckTool: "planned — not implemented, see Wave 1"
+
+  - path: docs/architecture/native-readiness.md
+    tier: B
+    owner_role: desktop-architecture
+    backup_role: desktop-security
+    last_verified:
+      worldscript: "v1.27.1"
+      cef: "not applicable — pre-CEF-selection"
+    review_days: 180
+    related_ci: []
+    driftCheckTool: "planned — not implemented, see Wave 1"
+    note: "Living scorecard — re-score at every architecture-changing PR and wave exit (§7.4.5), not just on a review-day cadence."
+
 # Owner/backup roles above are role placeholders (roadmap §80.1.8: prefer role/subsystem
 # ownership over one person's name, e.g. via CODEOWNERS mapping). Assigning real
 # maintainer handles to each role is Wave 1+ operational work, not a Wave 0 blocker.

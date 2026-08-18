@@ -774,7 +774,8 @@ See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the full dev setup, Biome / Vit
 | [`docs/DEEPSOURCE-REVIEW-LOOP.md`](docs/DEEPSOURCE-REVIEW-LOOP.md) | DeepSource static-analysis correction loop (living runbook; complements the CodeAnt loop) |
 | [`docs/DEEPSOURCE-REMEDIATION-PLAN.md`](docs/DEEPSOURCE-REMEDIATION-PLAN.md) | Prioritised DeepSource backlog tracker (P0-security→P5-docs) with triage decisions |
 | [`docs/adr/`](docs/adr/README.md) | Architecture Decision Records — state-management boundaries, local-AI stack layering, WorkerBus v2 hybrid routing |
-| [`docs/cef/ROADMAP-CEF-DESKTOP-MIGRATION.md`](docs/cef/ROADMAP-CEF-DESKTOP-MIGRATION.md) | CEF desktop-runtime migration roadmap (ADR-0019) — 22-wave plan to succeed Tauri; risk register, competency matrix, and Tauri-coupling inventory live alongside it in `docs/cef/` |
+| [`docs/cef/ROADMAP-CEF-DESKTOP-MIGRATION.md`](docs/cef/ROADMAP-CEF-DESKTOP-MIGRATION.md) | CEF desktop-runtime migration roadmap (ADR-0019) — 22-wave plan to succeed Tauri; risk register, competency matrix, Tauri-coupling inventory, and UI/domain-state classification live alongside it in `docs/cef/` |
+| [`docs/architecture/native-readiness.md`](docs/architecture/native-readiness.md) | Native-Readiness scorecard (CEF roadmap §7.4.5) — cross-cutting architecture-quality checklist, re-scored at every architecture-changing PR |
 | [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md) | A11y architecture (live regions, focus, WCAG 2.2, Lighthouse 0.95 gate) |
 | [`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md) | Engineering + content guidelines, glossary, CI parity checklist |
 | [`docs/Design-System.md`](docs/Design-System.md) | Tokens, Tailwind preset, UI primitives under `components/ui` |
