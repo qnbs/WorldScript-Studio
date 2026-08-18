@@ -55,6 +55,7 @@ const SRC_EXT = new Set(['.ts', '.tsx']);
 //     tauriDesktopPlatform -> logger). Exit condition: give packages/desktop-contracts its own
 //     lightweight logging port (injected callback or plain console.warn) so it stops depending on
 //     the app-level logger, then migrate logger.ts's JSONL sink onto desktopPlatform.filesystem.
+// QNBS-v3: reported separately (not one flat ALLOWED_FILES count) so the success message can't hide a boundary file quietly becoming an "exception" or vice versa.
 const BOUNDARY_FILES = [
   'packages/desktop-contracts/src/types.ts',
   'packages/desktop-contracts/src/adapters/tauriDesktopPlatform.ts',
@@ -102,6 +103,7 @@ function collect(dir, out) {
  * produces false positives/negatives, which is worse than the narrower gap it would close. This
  * only needs to know "is this whole line commented out," not parse an AST.
  */
+// QNBS-v3: masking must run before IMPORT_RE matching — otherwise a comment merely mentioning a Tauri import (e.g. this file's own docstrings) would be flagged as a real violation.
 function commentLineMask(text) {
   const lines = text.split('\n');
   const inComment = new Array(lines.length).fill(false);

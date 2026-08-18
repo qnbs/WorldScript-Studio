@@ -562,6 +562,19 @@ describe('tauriDesktopPlatform', () => {
       expect(handler).not.toHaveBeenCalled();
       expect(h.loggerWarn).toHaveBeenCalled();
     });
+
+    it('onLoraTrainingProgress drops a payload with a valid event kind but a wrongly-typed optional field', async () => {
+      const handler = vi.fn();
+      h.listen.mockImplementationOnce(async (_event, cb) => {
+        cb({ payload: { event: 'progress', progress_percent: '42' } }); // string, not number
+        cb({ payload: { event: 'completed', adapter_path: 123 } }); // number, not string
+        cb({ payload: { event: 'error', message: { detail: 'failed' } } }); // object, not string
+        return () => {};
+      });
+      await tauriDesktopPlatform.tasks.onLoraTrainingProgress(handler);
+      expect(handler).not.toHaveBeenCalled();
+      expect(h.loggerWarn).toHaveBeenCalledTimes(3);
+    });
   });
 
   describe('diagnostics', () => {

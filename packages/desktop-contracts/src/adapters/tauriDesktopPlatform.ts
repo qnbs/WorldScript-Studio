@@ -334,10 +334,27 @@ const LORA_PROGRESS_EVENT_KINDS = new Set([
   'error',
 ]);
 
+function isOptionalTypedField(value: unknown, type: 'string' | 'number'): boolean {
+  return value === undefined || typeof value === type;
+}
+
+// QNBS-v3: validates every present field's type, not just `event` — a malformed sub-field (e.g. a stringified progress_percent) must not reach typed consumers as if it were the real type.
 function isLoraTrainingProgressEvent(value: unknown): value is LoraTrainingProgressEvent {
   if (typeof value !== 'object' || value === null) return false;
   const v = value as Record<string, unknown>;
-  return typeof v['event'] === 'string' && LORA_PROGRESS_EVENT_KINDS.has(v['event']);
+  return (
+    typeof v['event'] === 'string' &&
+    LORA_PROGRESS_EVENT_KINDS.has(v['event']) &&
+    isOptionalTypedField(v['model'], 'string') &&
+    isOptionalTypedField(v['size'], 'number') &&
+    isOptionalTypedField(v['epoch'], 'number') &&
+    isOptionalTypedField(v['step'], 'number') &&
+    isOptionalTypedField(v['loss'], 'number') &&
+    isOptionalTypedField(v['progress_percent'], 'number') &&
+    isOptionalTypedField(v['adapter_path'], 'string') &&
+    isOptionalTypedField(v['gguf_path'], 'string') &&
+    isOptionalTypedField(v['message'], 'string')
+  );
 }
 
 function isLoraTrainingEnvironmentResult(value: unknown): value is LoraTrainingEnvironmentResult {
