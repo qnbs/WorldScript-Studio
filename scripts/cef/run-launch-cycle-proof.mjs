@@ -38,8 +38,10 @@ function sleep(ms) {
 
 function processTreeAlive() {
   try {
-    // QNBS-v3: excludes this Node process's own PID — it received binaryPath as a CLI arg, so a naive `pgrep -f` match on that string would always match itself.
-    const out = execFileSync('pgrep', ['-f', binaryPath], { stdio: ['ignore', 'pipe', 'ignore'] })
+    // QNBS-v3: anchored to the start of the command line — xvfb-run's own wrapper process also carries binaryPath as an argument it forwards, so an unanchored match false-flags it as a leaked worldscript_host.
+    const out = execFileSync('pgrep', ['-f', `^${binaryPath}`], {
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
       .toString()
       .trim();
     const remaining = out
@@ -58,10 +60,13 @@ async function runCycle(index) {
   const child = spawn(binaryPath, [`--url=${url}`], { stdio: ['ignore', 'pipe', 'pipe'] });
 
   let stdout = '';
+  let stderr = '';
   child.stdout.on('data', (chunk) => {
     stdout += chunk.toString();
   });
-  child.stderr.on('data', () => {}); // GPU-fallback warnings etc. — not this proof's concern.
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk.toString();
+  });
 
   const exited = new Promise((resolve) =>
     child.once('exit', (code, signal) => resolve({ code, signal })),
@@ -78,10 +83,12 @@ async function runCycle(index) {
 
   const result = await Promise.race([exited, sleep(1000).then(() => null)]);
   if (!result) {
+    if (stderr) console.error(`[launch-cycle-proof] Cycle ${index + 1} stderr:\n${stderr}`);
     throw new Error(`Cycle ${index + 1}: process did not exit within the shutdown grace period.`);
   }
 
   if (processTreeAlive()) {
+    if (stderr) console.error(`[launch-cycle-proof] Cycle ${index + 1} stderr:\n${stderr}`);
     throw new Error(`Cycle ${index + 1}: orphaned worldscript_host process(es) still running.`);
   }
 
