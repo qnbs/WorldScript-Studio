@@ -26,6 +26,7 @@ log "pnpm store: ${PNPM_STORE_DIR}"
 
 pnpm install --frozen-lockfile
 pnpm run lint
+pnpm run guardrail:desktop-imports
 pnpm run i18n:check
 pnpm run typecheck
 pnpm run build-storybook

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppSelector } from '../app/hooks';
 import { sendDesktopNotification } from '../services/desktop/desktopNotifications';
+import { desktopPlatform } from '../services/desktopPlatform';
 import { isTauriRuntime } from '../services/tauriRuntime';
 import { useTranslation } from './useTranslation';
 
@@ -35,10 +36,8 @@ export function useTauriUpdater(options?: { autoCheck?: boolean }) {
     setChecking(true);
     setError(null);
     try {
-      const { check } = await import('@tauri-apps/plugin-updater');
-      const { getVersion } = await import('@tauri-apps/api/app');
-      const currentVersion = await getVersion();
-      const result = await check();
+      const currentVersion = (await desktopPlatform.updater.getAppVersion()) ?? '';
+      const result = await desktopPlatform.updater.check();
       if (result) {
         setUpdate({
           version: result.version,
@@ -70,12 +69,10 @@ export function useTauriUpdater(options?: { autoCheck?: boolean }) {
     setInstalling(true);
     setError(null);
     try {
-      const { check } = await import('@tauri-apps/plugin-updater');
-      const pending = await check();
+      const pending = await desktopPlatform.updater.check();
       if (!pending) return;
       await pending.downloadAndInstall();
-      const { relaunch } = await import('@tauri-apps/plugin-process');
-      await relaunch();
+      await desktopPlatform.updater.relaunch();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

@@ -88,6 +88,7 @@ const tasks: DesktopTasks = {
   pingSupervisor: async () => tasksUnavailable(),
   convertMarkdownToEpub: async () => null,
   trainLora: async () => tasksUnavailable(),
+  onLoraTrainingProgress: async () => () => {},
   abortLoraTraining: async () => tasksUnavailable(),
   mergeLora: async () => tasksUnavailable(),
   checkLoraEnvironment: async () => tasksUnavailable(),

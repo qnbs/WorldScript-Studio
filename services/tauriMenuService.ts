@@ -1,4 +1,4 @@
-import { isTauriRuntime } from './tauriRuntime';
+import { desktopPlatform } from './desktopPlatform';
 
 // QNBS-v3 (#187): 'menu-quit' is intentionally NOT in this union — Quit is a PredefinedMenuItem
 // handled natively by the OS and never emitted as a 'menu-action', so exposing it would invite
@@ -14,7 +14,7 @@ type MenuHandler = (action: TauriMenuAction) => void;
 let handler: MenuHandler | null = null;
 let unlisten: (() => void) | null = null;
 // QNBS-v3 (CodeAnt/CodeRabbit #363): generation guard, mirroring desktopMenu.ts's menuInstallToken —
-// registerTauriMenuHandler is async (dynamic import + listen()), so an unregister (or a second,
+// registerTauriMenuHandler is async (onMenuAction() subscription), so an unregister (or a second,
 // overlapping call) can land while a prior call is still pending. Without this, a stale completion
 // could install a listener after cleanup, or two overlapping calls could both end up registered,
 // double-dispatching a single menu click.
@@ -22,14 +22,12 @@ let registrationToken = 0;
 
 /** Registers a handler for native menu events emitted from the Tauri shell. */
 export async function registerTauriMenuHandler(onAction: MenuHandler): Promise<void> {
-  if (!isTauriRuntime()) return;
+  if (!desktopPlatform.runtime.isDesktop) return;
   handler = onAction;
   if (unlisten) return;
   const myToken = ++registrationToken;
   try {
-    const { listen } = await import('@tauri-apps/api/event');
-    const stop = await listen<string>('menu-action', (event) => {
-      const id = event.payload;
+    const stop = await desktopPlatform.menu.onMenuAction((id) => {
       // QNBS-v3: 'menu-quit' is intentionally absent — Quit is a PredefinedMenuItem in the Rust menu,
       // handled natively by the OS (it never emits a 'menu-action' event), so forwarding it would be a
       // dead branch that misrepresents the backend contract.

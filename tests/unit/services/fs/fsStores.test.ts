@@ -2,7 +2,9 @@
  * Tests for the services/fs/ Tauri filesystem store chain
  * (FsProjectStore → FsAssetStore → FsSnapshotStore → FsCodexStore → FsSettingsStore → FsCore).
  * QNBS-v3 (Phase 2): an in-memory fake `TauriApis` drives real round-trips (compress, AES-GCM
- * key encryption, JSON) through the real store logic — only `loadTauriApis` is mocked.
+ * key encryption, JSON) through the real store logic — only `desktopPlatform` is mocked
+ * (Wave 1 PR B: loadTauriApis now delegates through desktopPlatform instead of importing
+ * @tauri-apps/* plugin modules directly).
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,30 +14,35 @@ import type { TauriApis } from '../../../../services/fs/fsCore';
 // real value is set in beforeEach before any mock is invoked.
 const { fsHolder } = vi.hoisted(() => ({ fsHolder: { current: null as unknown as TauriApis } }));
 
-// QNBS-v3: mock the @tauri-apps plugin modules so the REAL loadTauriApis assembles a TauriApis
-// whose methods delegate to the per-test in-memory fake FS (memoization-safe — each call reads
-// fsHolder.current). This exercises the real store logic AND loadTauriApis itself.
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: (cmd: string, args?: Record<string, unknown>) => fsHolder.current.invoke(cmd, args),
-}));
-vi.mock('@tauri-apps/plugin-fs', () => ({
-  readTextFile: (p: string) => fsHolder.current.readTextFile(p),
-  writeTextFile: (p: string, c: string) => fsHolder.current.writeTextFile(p, c),
-  readFile: (p: string) => fsHolder.current.readFile(p),
-  writeFile: (p: string, d: Uint8Array) => fsHolder.current.writeFile(p, d),
-  mkdir: (p: string, opts?: { recursive?: boolean }) => fsHolder.current.mkdir(p, opts),
-  exists: (p: string) => fsHolder.current.exists(p),
-  readDir: (p: string) => fsHolder.current.readDir(p),
-  remove: (p: string, opts?: { recursive?: boolean }) => fsHolder.current.remove(p, opts),
-  rename: (from: string, to: string) => fsHolder.current.rename(from, to),
-}));
-vi.mock('@tauri-apps/plugin-dialog', () => ({
-  open: (opts?: Record<string, unknown>) => fsHolder.current.open(opts),
-  save: (opts?: Record<string, unknown>) => fsHolder.current.save(opts),
-}));
-vi.mock('@tauri-apps/api/path', () => ({
-  appDataDir: () => fsHolder.current.appDataDir(),
-  join: (...parts: string[]) => fsHolder.current.join(...parts),
+// QNBS-v3: mock desktopPlatform (not the raw @tauri-apps/* modules) so the REAL loadTauriApis
+// assembles a TauriApis whose methods delegate to the per-test in-memory fake FS
+// (memoization-safe — each call reads fsHolder.current). This exercises the real store logic AND
+// loadTauriApis itself.
+vi.mock('../../../../services/desktopPlatform', () => ({
+  get desktopPlatform() {
+    return {
+      runtime: { isDesktop: true, os: null },
+      filesystem: {
+        readTextFile: (p: string) => fsHolder.current.readTextFile(p),
+        writeTextFile: (p: string, c: string) => fsHolder.current.writeTextFile(p, c),
+        readFile: (p: string) => fsHolder.current.readFile(p),
+        writeFile: (p: string, d: Uint8Array) => fsHolder.current.writeFile(p, d),
+        mkdir: (p: string, opts?: { recursive?: boolean }) => fsHolder.current.mkdir(p, opts),
+        exists: (p: string) => fsHolder.current.exists(p),
+        readDir: (p: string) => fsHolder.current.readDir(p),
+        remove: (p: string, opts?: { recursive?: boolean }) => fsHolder.current.remove(p, opts),
+        rename: (from: string, to: string) => fsHolder.current.rename(from, to),
+      },
+      dialogs: {
+        openFilePicker: (opts?: Record<string, unknown>) => fsHolder.current.open(opts),
+        saveFilePicker: (opts?: Record<string, unknown>) => fsHolder.current.save(opts),
+      },
+      persistence: {
+        appDataDir: () => fsHolder.current.appDataDir(),
+        join: (...parts: string[]) => fsHolder.current.join(...parts),
+      },
+    };
+  },
 }));
 vi.mock('../../../../services/logger', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../../services/logger')>();
@@ -111,7 +118,6 @@ function makeFakeFs(): FakeFs {
     readDir: (p: string) => Promise.resolve(under(p).map((name) => ({ name, isDirectory: false }))),
     open: () => Promise.resolve(null),
     save: () => Promise.resolve(null),
-    invoke: () => Promise.resolve(undefined),
   };
   return { apis, text, bin };
 }

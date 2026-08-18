@@ -68,6 +68,7 @@ import { approximateManuscriptWordCount } from './services/commands/wordCountApp
 import { DESKTOP_COMMANDS } from './services/desktop/desktopEvents';
 import { installDesktopMenu } from './services/desktop/desktopMenu';
 import { installCloseToTray, installDesktopTray } from './services/desktop/desktopTray';
+import { desktopPlatform } from './services/desktopPlatform';
 import { logger } from './services/logger';
 import { pluginRegistry } from './services/pluginRegistry';
 import { repairProjectI18nFields } from './services/projectI18nRepair';
@@ -602,8 +603,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
       });
       return;
     }
-    const { exit } = await import('@tauri-apps/plugin-process');
-    await exit(0);
+    await desktopPlatform.lifecycle.quit();
   }, [store]);
 
   // QNBS-v3: executeCommandRef synced in its own effect (never assigned during render) so the menu

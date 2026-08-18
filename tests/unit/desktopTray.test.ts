@@ -1,7 +1,8 @@
 /**
  * Tests for services/desktop/desktopTray.ts
- * QNBS-v3 (T2): Mocks @tauri-apps/api/{tray,menu,app,window} + isTauriRuntime + tauriTrayService —
- * asserts tray creation, left-click focus, the close-to-tray handler, and web no-op.
+ * QNBS-v3 (T2, Wave 1): Mocks services/desktopPlatform's tray.loadTrayBuilder(),
+ * lifecycle.onCloseRequested(), and window.hide() — asserts tray creation, left-click focus, the
+ * close-to-tray handler, and web no-op.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -20,47 +21,64 @@ const h = vi.hoisted(() => ({
   } | null,
   setVisible: vi.fn(),
   closeCb: null as ((e: { preventDefault: () => void }) => void | Promise<void>) | null,
-  hide: vi.fn(),
+  windowHide: vi.fn(),
   setMenu: vi.fn(),
   setTooltip: vi.fn(),
   trayNew: vi.fn(),
-  isTauri: { value: true },
+  isDesktop: { value: true },
 }));
 
-vi.mock('../../services/tauriRuntime', () => ({ isTauriRuntime: () => h.isTauri.value }));
 vi.mock('../../services/tauriTrayService', () => ({
   setTauriMainWindowVisible: (v: boolean) => h.setVisible(v),
 }));
-vi.mock('@tauri-apps/api/tray', () => ({
-  TrayIcon: {
-    new: vi.fn(async (o: typeof h.trayOpts) => {
-      h.trayOpts = o;
-      h.trayNew();
-      return { setMenu: h.setMenu, setTooltip: h.setTooltip };
-    }),
-  },
-}));
-vi.mock('@tauri-apps/api/menu', () => ({
-  Menu: { new: vi.fn(async (o: unknown) => ({ ...(o as object) })) },
-  MenuItem: {
-    new: vi.fn(async (o: ItemOpts) => {
-      h.itemCalls.push(o);
-      return { ...o };
-    }),
-  },
-  PredefinedMenuItem: { new: vi.fn(async (o: unknown) => ({ ...(o as object) })) },
-}));
-vi.mock('@tauri-apps/api/app', () => ({ defaultWindowIcon: vi.fn(async () => null) }));
-vi.mock('@tauri-apps/api/window', () => ({
-  getCurrentWindow: () => ({
-    onCloseRequested: vi.fn(
-      async (cb: (e: { preventDefault: () => void }) => void | Promise<void>) => {
-        h.closeCb = cb;
-        return () => {};
+
+vi.mock('../../services/desktopPlatform', () => ({
+  get desktopPlatform() {
+    return {
+      runtime: {
+        get isDesktop() {
+          return h.isDesktop.value;
+        },
+        os: null,
       },
-    ),
-    hide: () => h.hide(),
-  }),
+      window: {
+        show: vi.fn(async () => {}),
+        hide: () => h.windowHide(),
+        setFocus: vi.fn(async () => {}),
+      },
+      tray: {
+        loadTrayBuilder: async () => {
+          if (!h.isDesktop.value) return null;
+          return {
+            TrayIcon: {
+              new: vi.fn(async (o: typeof h.trayOpts) => {
+                h.trayOpts = o;
+                h.trayNew();
+                return { setMenu: h.setMenu, setTooltip: h.setTooltip };
+              }),
+            },
+            Menu: { new: vi.fn(async (o: unknown) => ({ ...(o as object) })) },
+            MenuItem: {
+              new: vi.fn(async (o: ItemOpts) => {
+                h.itemCalls.push(o);
+                return { ...o };
+              }),
+            },
+            PredefinedMenuItem: { new: vi.fn(async (o: unknown) => ({ ...(o as object) })) },
+            defaultWindowIcon: vi.fn(async () => null),
+          };
+        },
+      },
+      lifecycle: {
+        onCloseRequested: async (
+          cb: (e: { preventDefault: () => void }) => void | Promise<void>,
+        ) => {
+          h.closeCb = cb;
+          return () => {};
+        },
+      },
+    };
+  },
 }));
 
 import {
@@ -77,12 +95,12 @@ describe('installDesktopTray', () => {
     h.setMenu.mockClear();
     h.setTooltip.mockClear();
     h.trayNew.mockClear();
-    h.isTauri.value = true;
+    h.isDesktop.value = true;
     _resetTrayInstalledForTest();
   });
 
   it('returns false on the web (no Tauri runtime)', async () => {
-    h.isTauri.value = false;
+    h.isDesktop.value = false;
     expect(
       await installDesktopTray(
         (k) => k,
@@ -177,13 +195,13 @@ describe('installDesktopTray', () => {
 
 describe('installCloseToTray', () => {
   beforeEach(() => {
-    h.hide.mockClear();
+    h.windowHide.mockClear();
     h.closeCb = null;
-    h.isTauri.value = true;
+    h.isDesktop.value = true;
   });
 
   it('returns null on the web', async () => {
-    h.isTauri.value = false;
+    h.isDesktop.value = false;
     expect(await installCloseToTray(() => true, vi.fn())).toBeNull();
   });
 
@@ -193,7 +211,7 @@ describe('installCloseToTray', () => {
     const preventDefault = vi.fn();
     await h.closeCb?.({ preventDefault });
     expect(preventDefault).toHaveBeenCalled();
-    expect(h.hide).toHaveBeenCalled();
+    expect(h.windowHide).toHaveBeenCalled();
     expect(flush).not.toHaveBeenCalled();
   });
 
@@ -203,7 +221,7 @@ describe('installCloseToTray', () => {
     const preventDefault = vi.fn();
     await h.closeCb?.({ preventDefault });
     expect(preventDefault).not.toHaveBeenCalled();
-    expect(h.hide).not.toHaveBeenCalled();
+    expect(h.windowHide).not.toHaveBeenCalled();
   });
 
   it('keeps the window open (fail closed) when the flush rejects, instead of quitting anyway', async () => {

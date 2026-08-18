@@ -9,9 +9,9 @@
  * session; subsequent calls RELABEL the existing tray (e.g. on language change) rather than recreating.
  */
 
-import type { TrayIcon as TrayIconHandle } from '@tauri-apps/api/tray';
+import type { TauriTrayBuilderApi } from '@domain/desktop-contracts';
+import { desktopPlatform } from '../desktopPlatform';
 import { createLogger } from '../logger';
-import { isTauriRuntime } from '../tauriRuntime';
 import { setTauriMainWindowVisible } from '../tauriTrayService';
 import { DESKTOP_COMMANDS } from './desktopEvents';
 
@@ -30,7 +30,10 @@ let trayInstalled = false;
 let trayInstalling = false;
 // QNBS-v3 (#190): the created tray handle, kept so a re-call can relabel it (setMenu/setTooltip) on
 // language change instead of being a no-op that leaves labels stuck in the old locale until restart.
-let trayHandle: TrayIconHandle | null = null;
+// QNBS-v3: TrayIcon has a private constructor (Tauri's real class is only constructible via the
+// static TrayIcon.new() factory) — InstanceType<> rejects that, so derive the handle type from
+// new()'s own return type instead.
+let trayHandle: Awaited<ReturnType<TauriTrayBuilderApi['TrayIcon']['new']>> | null = null;
 
 /** @internal test-only reset for the once-per-session guard. */
 export function _resetTrayInstalledForTest(): void {
@@ -49,15 +52,12 @@ export async function installDesktopTray(
   runCommand: TrayCommandRunner,
   quitApp: DesktopQuitFn,
 ): Promise<boolean> {
-  if (!isTauriRuntime() || trayInstalling) return false;
+  if (!desktopPlatform.runtime.isDesktop || trayInstalling) return false;
   trayInstalling = true;
   try {
-    const [{ TrayIcon }, { Menu, MenuItem, PredefinedMenuItem }, { defaultWindowIcon }] =
-      await Promise.all([
-        import('@tauri-apps/api/tray'),
-        import('@tauri-apps/api/menu'),
-        import('@tauri-apps/api/app'),
-      ]);
+    const builder = await desktopPlatform.tray.loadTrayBuilder();
+    if (!builder) return false;
+    const { TrayIcon, Menu, MenuItem, PredefinedMenuItem, defaultWindowIcon } = builder;
 
     const menu = await Menu.new({
       items: [
@@ -138,14 +138,12 @@ export async function installCloseToTray(
   shouldMinimizeToTray: () => boolean,
   flushPendingState: () => Promise<void>,
 ): Promise<(() => void) | null> {
-  if (!isTauriRuntime()) return null;
+  if (!desktopPlatform.runtime.isDesktop) return null;
   try {
-    const { getCurrentWindow } = await import('@tauri-apps/api/window');
-    const win = getCurrentWindow();
-    return await win.onCloseRequested(async (event) => {
+    return await desktopPlatform.lifecycle.onCloseRequested(async (event) => {
       if (shouldMinimizeToTray()) {
         event.preventDefault();
-        void win.hide();
+        void desktopPlatform.window.hide();
         return;
       }
       try {

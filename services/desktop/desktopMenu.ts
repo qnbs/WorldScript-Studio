@@ -10,8 +10,8 @@
  * No-op on the web (guarded by `isTauriRuntime()`), so the PWA is untouched.
  */
 
+import { desktopPlatform } from '../desktopPlatform';
 import { createLogger } from '../logger';
-import { isTauriRuntime } from '../tauriRuntime';
 import { DESKTOP_COMMANDS } from './desktopEvents';
 
 const log = createLogger('desktop-menu');
@@ -44,10 +44,12 @@ export async function installDesktopMenu(
   runCommand: MenuCommandRunner,
   quitApp: DesktopQuitFn,
 ): Promise<boolean> {
-  if (!isTauriRuntime()) return false;
+  if (!desktopPlatform.runtime.isDesktop) return false;
   const myToken = ++menuInstallToken;
   try {
-    const { Menu, Submenu, MenuItem, PredefinedMenuItem } = await import('@tauri-apps/api/menu');
+    const builder = await desktopPlatform.menu.loadMenuBuilder();
+    if (!builder) return false;
+    const { Menu, Submenu, MenuItem, PredefinedMenuItem } = builder;
 
     const fileMenu = await Submenu.new({
       text: t('desktop.menu.file'),

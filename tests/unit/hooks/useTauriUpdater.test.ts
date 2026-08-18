@@ -45,16 +45,14 @@ const mockCheck = vi.fn();
 const mockDownloadAndInstall = vi.fn().mockResolvedValue(undefined);
 const mockRelaunch = vi.fn().mockResolvedValue(undefined);
 
-vi.mock('@tauri-apps/api/app', () => ({
-  getVersion: (...args: unknown[]) => mockGetVersion(...args),
-}));
-
-vi.mock('@tauri-apps/plugin-updater', () => ({
-  check: (...args: unknown[]) => mockCheck(...args),
-}));
-
-vi.mock('@tauri-apps/plugin-process', () => ({
-  relaunch: (...args: unknown[]) => mockRelaunch(...args),
+vi.mock('../../../services/desktopPlatform', () => ({
+  desktopPlatform: {
+    updater: {
+      getAppVersion: (...args: unknown[]) => mockGetVersion(...args),
+      check: (...args: unknown[]) => mockCheck(...args),
+      relaunch: (...args: unknown[]) => mockRelaunch(...args),
+    },
+  },
 }));
 
 // ---------------------------------------------------------------------------

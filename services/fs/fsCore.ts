@@ -4,9 +4,12 @@
  */
 
 import LZString from 'lz-string';
+import { desktopPlatform } from '../desktopPlatform';
 import { logger } from '../logger';
 
-// Dynamic imports for Tauri v2 plugin APIs — fail gracefully in browser
+// QNBS-v3: Wave 1 PR B — delegates through desktopPlatform instead of importing @tauri-apps/* plugin
+// modules directly; the shape stays identical so the 5 fs-store consumers + factoryResetService.ts
+// need zero call-site changes.
 export type TauriApis = {
   readTextFile: (path: string) => Promise<string>;
   writeTextFile: (path: string, content: string) => Promise<void>;
@@ -21,40 +24,32 @@ export type TauriApis = {
   save: (opts?: Record<string, unknown>) => Promise<string | null>;
   appDataDir: () => Promise<string>;
   join: (...parts: string[]) => Promise<string>;
-  invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
 };
 
 let tauriApis: TauriApis | null = null;
 
 export async function loadTauriApis(): Promise<TauriApis> {
   if (tauriApis) return tauriApis;
-  try {
-    const [coreModule, fsModule, dialogModule, pathModule] = await Promise.all([
-      import('@tauri-apps/api/core'),
-      import('@tauri-apps/plugin-fs'),
-      import('@tauri-apps/plugin-dialog'),
-      import('@tauri-apps/api/path'),
-    ]);
-    tauriApis = {
-      invoke: coreModule.invoke as TauriApis['invoke'],
-      readTextFile: fsModule.readTextFile,
-      writeTextFile: fsModule.writeTextFile,
-      readFile: fsModule.readFile,
-      writeFile: fsModule.writeFile,
-      mkdir: fsModule.mkdir,
-      exists: fsModule.exists,
-      readDir: fsModule.readDir as TauriApis['readDir'],
-      remove: fsModule.remove,
-      rename: fsModule.rename,
-      open: dialogModule.open as TauriApis['open'],
-      save: dialogModule.save as TauriApis['save'],
-      appDataDir: pathModule.appDataDir,
-      join: pathModule.join,
-    };
-    return tauriApis;
-  } catch {
+  if (!desktopPlatform.runtime.isDesktop) {
     throw new Error('Tauri APIs not available in this environment');
   }
+  tauriApis = {
+    readTextFile: (path) => desktopPlatform.filesystem.readTextFile(path),
+    writeTextFile: (path, content) => desktopPlatform.filesystem.writeTextFile(path, content),
+    readFile: (path) =>
+      desktopPlatform.filesystem.readFile(path) as Promise<Uint8Array<ArrayBuffer>>,
+    writeFile: (path, data) => desktopPlatform.filesystem.writeFile(path, data),
+    mkdir: (path, opts) => desktopPlatform.filesystem.mkdir(path, opts),
+    exists: (path) => desktopPlatform.filesystem.exists(path),
+    readDir: (path) => desktopPlatform.filesystem.readDir(path),
+    remove: (path, opts) => desktopPlatform.filesystem.remove(path, opts),
+    rename: (oldPath, newPath) => desktopPlatform.filesystem.rename(oldPath, newPath),
+    open: (opts) => desktopPlatform.dialogs.openFilePicker(opts),
+    save: (opts) => desktopPlatform.dialogs.saveFilePicker(opts),
+    appDataDir: () => desktopPlatform.persistence.appDataDir(),
+    join: (...parts) => desktopPlatform.persistence.join(...parts),
+  };
+  return tauriApis;
 }
 
 // --- Retry helper for transient filesystem errors ---

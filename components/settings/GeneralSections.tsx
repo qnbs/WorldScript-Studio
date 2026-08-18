@@ -6,8 +6,9 @@ import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
 import { defaultThemeCustomization } from '../../features/settings/settingsSlice';
 import { usePWA } from '../../hooks/usePWA';
 import packageJson from '../../package.json';
+import { desktopPlatform } from '../../services/desktopPlatform';
 import { storageService } from '../../services/storageService';
-import { getTauriAppVersion, isTauriRuntime } from '../../services/tauriRuntime';
+import { isTauriRuntime } from '../../services/tauriRuntime';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { LanguageSelector } from '../ui/LanguageSelector';
@@ -415,7 +416,7 @@ const TauriVersionLine: FC = () => {
 
   useEffect(() => {
     if (!isTauriRuntime()) return;
-    void getTauriAppVersion().then(setTauriVersion);
+    void desktopPlatform.diagnostics.getAppVersion().then(setTauriVersion);
   }, []);
 
   if (!tauriVersion) return null;

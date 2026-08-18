@@ -9,8 +9,8 @@ import type { AppDispatch } from '../app/store';
 import { importProjectThunk } from '../features/project/thunks/projectManagementThunks';
 import { statusActions } from '../features/status/statusSlice';
 import type { I18nTranslate } from './commands/commandTypes';
+import { desktopPlatform } from './desktopPlatform';
 import { createLogger } from './logger';
-import { isTauriRuntime } from './tauriRuntime';
 
 const log = createLogger('tauriDeepLink');
 
@@ -28,17 +28,13 @@ export async function initTauriDeepLink(
   dispatch: AppDispatch,
   t: I18nTranslate,
 ): Promise<() => void> {
-  if (!isTauriRuntime()) {
+  if (!desktopPlatform.runtime.isDesktop) {
     return () => {};
   }
 
   try {
-    const { listen } = await import('@tauri-apps/api/event');
     // Listen for deep-link://new-url event (emitted by tauri-plugin-deep-link)
-    unlisten = await listen<string[] | string>('deep-link://new-url', async (event) => {
-      // Handle both array and string payloads
-      const urls = Array.isArray(event.payload) ? event.payload : [event.payload];
-
+    unlisten = await desktopPlatform.deepLinks.onDeepLink(async (urls) => {
       // Process all URLs in the payload (user may have selected multiple files)
       for (const url of urls) {
         if (!url) {
@@ -57,14 +53,11 @@ export async function initTauriDeepLink(
           // or handle direct file paths if passed.
           const filePath = deepLinkUrlToPath(url);
 
-          // Read file via Tauri FS plugin
-          const { readTextFile, exists } = await import('@tauri-apps/plugin-fs');
-
-          if (!(await exists(filePath))) {
+          if (!(await desktopPlatform.filesystem.exists(filePath))) {
             throw new Error('File not found');
           }
 
-          const content = await readTextFile(filePath);
+          const content = await desktopPlatform.filesystem.readTextFile(filePath);
           const fileName = filePath.split(/[/\\]/).pop() || 'project.json';
 
           // Create a File object for the existing import flow

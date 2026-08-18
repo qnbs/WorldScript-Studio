@@ -86,3 +86,7 @@ Existing scripts: `tauri`, `tauri:dev`, `tauri:build`, `dev:tauri`. No `cef:*` s
 ## Not in scope for this document
 
 No behavior changes, no refactoring, no new abstractions. This is a snapshot, not an implementation — re-run the methodology above before relying on these counts once Wave 1 work begins moving files.
+
+## Update: Wave 1 PR B re-verification
+
+The methodology above was re-run at the Wave 1 PR B checkpoint (`packages/desktop-contracts` + `services/desktopPlatform.ts` + consumer migration). Of the 16 direct-coupling files listed above, 13 now route through `desktopPlatform` (all except `services/ai/fetchAdapter.ts` and `services/localServerHttp.ts`, permanently out of the boundary by design — HTTP is not a `DesktopPlatform` facet — and `services/logger.ts`, scheduled debt pending a logging-port decoupling; see `docs/architecture/native-readiness.md`'s Wave 1 PR B snapshot). The counts and per-category tables above are the **Wave 0 baseline** and are intentionally left as-is for historical comparison — the current, mechanically-enforced state lives in `tauri-coupling-inventory.json`'s `directApiCoupling` (now-remaining coupling) and `resolvedWave1PrB` (what migrated) arrays, and is continuously verified going forward by `pnpm run guardrail:desktop-imports` in CI, not by re-running this document's manual `rg` methodology.

@@ -46,7 +46,6 @@ vi.mock('../../../contexts/FeatureFlagsContext', () => ({
 
 vi.mock('../../../services/tauriRuntime', () => ({
   isTauriRuntime: () => false,
-  getTauriAppVersion: vi.fn().mockResolvedValue('1.0.0'),
 }));
 
 const { mockUsePWA } = vi.hoisted(() => ({

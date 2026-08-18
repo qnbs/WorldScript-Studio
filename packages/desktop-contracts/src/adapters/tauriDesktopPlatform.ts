@@ -15,8 +15,10 @@ import type {
   DesktopTray,
   DesktopUpdater,
   DesktopWindow,
+  LoraAbortOutcome,
   LoraMergeRequest,
   LoraOllamaModelfileRequest,
+  LoraTrainingEnvironmentResult,
   LoraTrainRequest,
 } from '../types';
 
@@ -311,6 +313,25 @@ const lifecycle: DesktopLifecycle = {
 
 // --- tasks ---------------------------------------------------------------------------------------
 
+// QNBS-v3: validate native Rust responses at the adapter boundary rather than trusting an unchecked cast — a malformed response throws here and is handled by the caller's existing error path, instead of a bogus shape being trusted downstream.
+function isLoraAbortOutcome(value: unknown): value is LoraAbortOutcome {
+  return (
+    value === 'confirmed' || value === 'pending_start_cancelled' || value === 'nothing_to_cancel'
+  );
+}
+
+function isLoraTrainingEnvironmentResult(value: unknown): value is LoraTrainingEnvironmentResult {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v['python_available'] === 'boolean' &&
+    typeof v['unsloth_available'] === 'boolean' &&
+    typeof v['cuda_available'] === 'boolean' &&
+    typeof v['vram_gb'] === 'number' &&
+    typeof v['python_version'] === 'string'
+  );
+}
+
 const tasks: DesktopTasks = {
   submitTask: async (request) => {
     const { invoke } = await import('@tauri-apps/api/core');
@@ -342,9 +363,25 @@ const tasks: DesktopTasks = {
     const { invoke } = await import('@tauri-apps/api/core');
     return invoke<string>('train_lora', { payload: request });
   },
+  onLoraTrainingProgress: async (handler) => {
+    try {
+      const { listen } = await import('@tauri-apps/api/event');
+      const stop = await listen('lora-progress', (event) => handler(event.payload));
+      return stop;
+    } catch (error) {
+      logger.warn('desktopPlatform.tasks: failed to subscribe to LoRA training progress', {
+        error,
+      });
+      return () => {};
+    }
+  },
   abortLoraTraining: async () => {
     const { invoke } = await import('@tauri-apps/api/core');
-    return invoke('abort_lora_training');
+    const result = await invoke('abort_lora_training');
+    if (!isLoraAbortOutcome(result)) {
+      throw new Error('abort_lora_training returned an unexpected response');
+    }
+    return result;
   },
   // QNBS-v3: merge_lora/generateOllamaModelfile bind flat camelCase args (no serde rename) — spread the request object directly, matching loraTrainingService.ts.
   mergeLora: async (request: LoraMergeRequest) => {
@@ -353,11 +390,19 @@ const tasks: DesktopTasks = {
   },
   checkLoraEnvironment: async () => {
     const { invoke } = await import('@tauri-apps/api/core');
-    return invoke('check_lora_environment');
+    const result = await invoke('check_lora_environment');
+    if (!isLoraTrainingEnvironmentResult(result)) {
+      throw new Error('check_lora_environment returned an unexpected response');
+    }
+    return result;
   },
   setLoraPythonPath: async (pythonPath) => {
     const { invoke } = await import('@tauri-apps/api/core');
-    return invoke('set_lora_python_path', { pythonPath });
+    const result = await invoke('set_lora_python_path', { pythonPath });
+    if (!isLoraTrainingEnvironmentResult(result)) {
+      throw new Error('set_lora_python_path returned an unexpected response');
+    }
+    return result;
   },
   generateOllamaModelfile: async (request: LoraOllamaModelfileRequest) => {
     const { invoke } = await import('@tauri-apps/api/core');
