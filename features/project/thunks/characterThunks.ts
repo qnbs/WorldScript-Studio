@@ -91,9 +91,7 @@ export const uploadCharacterImageThunk = createAsyncThunk(
   async ({ characterId, file }: { characterId: string; file: File }) => {
     return new Promise<{ characterId: string }>((resolve, reject) => {
       const reader = new FileReader();
-      // QNBS-v3: onload (not onloadend, which also fires on error/abort with a null result) plus an
-      // explicit try/catch around saveImage — a rejected save previously left this Promise pending
-      // forever (the async onloadend handler's rejection was detached from the outer resolve/reject).
+      // QNBS-v3: onload/onerror/onabort (not onloadend) plus Promise.catch(reject) so every terminal FileReader/saveImage outcome settles this Promise instead of leaving it pending.
       reader.onload = () => {
         const result = reader.result;
         if (typeof result !== 'string') {
@@ -108,6 +106,7 @@ export const uploadCharacterImageThunk = createAsyncThunk(
       };
       reader.onerror = () =>
         reject(reader.error ?? new Error('FileReader failed to read the file'));
+      reader.onabort = () => reject(new Error('FileReader aborted'));
       reader.readAsDataURL(file);
     });
   },

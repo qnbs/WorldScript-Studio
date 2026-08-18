@@ -73,8 +73,9 @@ vi.mock('../../../services/desktop/desktopNotifications', () => ({
   sendDesktopNotification: (...args: unknown[]) => mockSendDesktopNotification(...args),
 }));
 
+const mockDispatch = vi.fn();
 vi.mock('../../../app/hooks', () => ({
-  useAppDispatch: vi.fn(() => vi.fn()),
+  useAppDispatch: vi.fn(() => mockDispatch),
   useAppSelector: vi.fn(() => ({})),
 }));
 
@@ -83,6 +84,11 @@ vi.mock('../../../features/settings/settingsSlice', () => ({
     setSettings: vi.fn((x: unknown) => ({ type: 'settings/setSettings', payload: x })),
   },
   default: (s = {}) => s,
+}));
+
+vi.mock('../../../services/storage/idbProjectStore', () => ({
+  // QNBS-v3: identity pass-through — this integration test only asserts the import path *calls* the sanitizer; normalizePersistedSettings' own stripping logic is unit-tested separately.
+  normalizePersistedSettings: vi.fn((s: unknown) => s),
 }));
 
 vi.mock('../../../features/settings/keyboardShortcutsDefaults', () => ({
@@ -158,6 +164,62 @@ describe('DataSection', () => {
     render(<DataSection />);
     // t('settings.data.projectSize', ...) returns the key with interpolation
     expect(screen.getByText(/settings.data.projectSize/)).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// QNBS-v3: settings-file import must route through normalizePersistedSettings
+// before dispatch — a raw import previously bypassed sanitization entirely,
+// letting a legacy/crafted openRouter.apiKey reach Redux (and then autosave)
+// unfiltered.
+// ---------------------------------------------------------------------------
+describe('DataSection settings-file import sanitization', () => {
+  beforeEach(async () => {
+    mockDispatch.mockClear();
+    const { normalizePersistedSettings } = await import(
+      '../../../services/storage/idbProjectStore'
+    );
+    vi.mocked(normalizePersistedSettings).mockClear();
+  });
+
+  it('routes an imported settings file through normalizePersistedSettings before dispatching', async () => {
+    const { parseSettingsImportEnvelope } = await import('../../../services/settingsExchange');
+    const importedPartial = { openRouter: { apiKey: 'sk-should-be-stripped', enabled: true } };
+    vi.mocked(parseSettingsImportEnvelope).mockReturnValueOnce(importedPartial as never);
+
+    render(<DataSection />);
+    const fileInput = document.querySelector('input[type="file"][accept=".json,application/json"]');
+    expect(fileInput).toBeTruthy();
+
+    const file = new File(
+      [JSON.stringify({ worldscriptSettingsExportVersion: 1, settings: {} })],
+      'settings.json',
+      {
+        type: 'application/json',
+      },
+    );
+    vi.spyOn(FileReader.prototype, 'readAsText').mockImplementation(function (this: FileReader) {
+      Object.defineProperty(this, 'result', { value: '{}', configurable: true });
+      void Promise.resolve().then(() => {
+        if (typeof this.onload === 'function')
+          this.onload(new ProgressEvent('load') as ProgressEvent<FileReader>);
+      });
+    });
+
+    fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
+
+    const { normalizePersistedSettings } = await import(
+      '../../../services/storage/idbProjectStore'
+    );
+    await waitFor(() => expect(normalizePersistedSettings).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(normalizePersistedSettings).mock.calls[0]?.[0]).toMatchObject(importedPartial);
+
+    await waitFor(() => expect(mockDispatch).toHaveBeenCalledTimes(1));
+    expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'settings/setSettings',
+      // QNBS-v3: identity-mocked normalizePersistedSettings returns its input unchanged — this asserts wiring, not the sanitizer's own stripping (covered in normalizePersistedSettings.test.ts).
+      payload: { ...baseContextValue.settings, ...importedPartial },
+    });
   });
 });
 

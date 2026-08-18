@@ -62,7 +62,7 @@ src-tauri/
 ├── src/
 │   ├── commands/
 │   │   ├── mod.rs
-│   │   └── task_supervisor.rs   (registers worldscript_task_supervisor_ping/submit — active native task-dispatch surface used by services/tauriTaskBridge.ts)
+│   │   └── task_supervisor.rs   (defines worldscript_task_supervisor_ping/submit — registered in lib.rs; active native task-dispatch surface used by services/tauriTaskBridge.ts)
 │   ├── lib.rs
 │   ├── lora.rs
 │   ├── main.rs

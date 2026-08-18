@@ -10,6 +10,7 @@ import {
   buildSettingsExportEnvelope,
   parseSettingsImportEnvelope,
 } from '../../services/settingsExchange';
+import { normalizePersistedSettings } from '../../services/storage/idbProjectStore';
 import { isTauriRuntime, openTauriDataDirectory } from '../../services/tauriRuntime';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
@@ -104,7 +105,10 @@ export const DataSection: FC = () => {
         const parsed = JSON.parse(String(reader.result ?? ''));
         const partial = parseSettingsImportEnvelope(parsed);
         if (!partial) return;
-        dispatch(settingsActions.setSettings({ ...settings, ...partial }));
+        // QNBS-v3: route through the same sanitizer as IDB rehydration — a raw import spreads arbitrary fields into Redux otherwise, which autosave would then persist unchanged (e.g. a legacy openRouter.apiKey straight into plaintext desktop settings.json).
+        dispatch(
+          settingsActions.setSettings(normalizePersistedSettings({ ...settings, ...partial })),
+        );
       } catch {
         /* invalid file */
       }

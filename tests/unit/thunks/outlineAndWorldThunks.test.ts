@@ -190,6 +190,7 @@ describe('generateWorldProfileThunk', () => {
   });
 });
 
+// QNBS-v3: FileReader error/abort and storageService.saveImage-rejection coverage prevents the upload thunk's Promise from hanging forever on any terminal failure path.
 describe('uploadWorldImageThunk', () => {
   it('reads file as a MIME-preserving data URL', async () => {
     const fakeDataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA';
@@ -222,6 +223,22 @@ describe('uploadWorldImageThunk', () => {
     const store = makeStore();
     const file = new File(['data'], 'broken.png', { type: 'image/png' });
     const action = await store.dispatch(uploadWorldImageThunk({ worldId: 'w1', file }));
+
+    expect(action.type).toBe('project/uploadWorldImage/rejected');
+    expect(storageService.saveImage).not.toHaveBeenCalled();
+  });
+
+  it('rejects when the FileReader is aborted', async () => {
+    vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(function (this: FileReader) {
+      void Promise.resolve().then(() => {
+        if (typeof this.onabort === 'function')
+          this.onabort(new ProgressEvent('abort') as ProgressEvent<FileReader>);
+      });
+    });
+
+    const store = makeStore();
+    const file = new File(['data'], 'aborted.png', { type: 'image/png' });
+    const action = await store.dispatch(uploadWorldImageThunk({ worldId: 'w3', file }));
 
     expect(action.type).toBe('project/uploadWorldImage/rejected');
     expect(storageService.saveImage).not.toHaveBeenCalled();

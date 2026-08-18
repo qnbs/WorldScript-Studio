@@ -625,6 +625,7 @@ export interface VoiceSettings {
 }
 
 /** OpenRouter provider settings — model controls free-vs-paid selection. */
+// QNBS-v3: no `apiKey` field here on purpose — it was never populated by any reducer or read anywhere; the real key lives only in the dedicated per-provider key store (see idbProjectStore.ts#normalizePersistedSettings, which strips a legacy/imported apiKey).
 export interface OpenRouterSettings {
   /** Whether OpenRouter is enabled as a provider in the routing chain. */
   enabled: boolean;
@@ -634,14 +635,6 @@ export interface OpenRouterSettings {
    */
   preferredModel: string;
 }
-// QNBS-v3: no `apiKey` field here on purpose — the key lives exclusively in the dedicated
-// per-provider key store (storageService.saveApiKey('openrouter', ...) -> dbService/idbKeyStore
-// on web, dedicated backstop on desktop). This type previously declared an `apiKey: string` field
-// that no reducer ever populated and no code ever read, but a settings import/export round-trip
-// (services/settingsExchange.ts spreads the whole Settings object) could have carried a stray
-// value straight into bulk-persisted settings.json (plaintext on desktop) or IDB. Removed rather
-// than patched — see normalizePersistedSettings in idbProjectStore.ts, which now actively strips
-// any legacy `apiKey` key instead of only backfilling a missing object.
 
 /** QNBS-v3 (T2): Desktop-only (Tauri) behavior. Ignored on the web. Extended by later native phases. */
 export interface DesktopSettings {

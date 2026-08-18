@@ -434,6 +434,7 @@ describe('generateCharacterPortraitThunk', () => {
 // ---------------------------------------------------------------------------
 // uploadCharacterImageThunk
 // ---------------------------------------------------------------------------
+// QNBS-v3: FileReader error/abort and storageService.saveImage-rejection coverage prevents the upload thunk's Promise from hanging forever on any terminal failure path.
 describe('uploadCharacterImageThunk', () => {
   it('reads file as a MIME-preserving data URL', async () => {
     const fakeBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAA';
@@ -489,6 +490,22 @@ describe('uploadCharacterImageThunk', () => {
     const store = makeStore();
     const file = new File(['data'], 'broken.png', { type: 'image/png' });
     const action = await store.dispatch(uploadCharacterImageThunk({ characterId: 'c1', file }));
+
+    expect(action.type).toBe('project/uploadCharacterImage/rejected');
+    expect(storageService.saveImage).not.toHaveBeenCalled();
+  });
+
+  it('rejects when the FileReader is aborted', async () => {
+    vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(function (this: FileReader) {
+      void Promise.resolve().then(() => {
+        if (typeof this.onabort === 'function')
+          this.onabort(new ProgressEvent('abort') as ProgressEvent<FileReader>);
+      });
+    });
+
+    const store = makeStore();
+    const file = new File(['data'], 'aborted.png', { type: 'image/png' });
+    const action = await store.dispatch(uploadCharacterImageThunk({ characterId: 'c3', file }));
 
     expect(action.type).toBe('project/uploadCharacterImage/rejected');
     expect(storageService.saveImage).not.toHaveBeenCalled();

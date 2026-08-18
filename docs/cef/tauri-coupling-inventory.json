@@ -217,7 +217,7 @@
       "src/pandoc.rs",
       "tauri.conf.json"
     ],
-    "note": "icons/ (11 image files) omitted from this list — asset-only, no coupling. commands/mod.rs and commands/task_supervisor.rs added 2026-08-18 correction (omitted from first pass; registers worldscript_task_supervisor_ping/submit, used by services/tauriTaskBridge.ts)"
+    "note": "icons/ (11 image files) omitted from this list — asset-only, no coupling. commands/mod.rs and commands/task_supervisor.rs added 2026-08-18 correction (omitted from first pass; task_supervisor.rs defines worldscript_task_supervisor_ping/submit, registered in lib.rs; used by services/tauriTaskBridge.ts)"
   },
   "packageJsonScripts": {
     "existing": ["tauri", "tauri:dev", "tauri:build", "dev:tauri"],

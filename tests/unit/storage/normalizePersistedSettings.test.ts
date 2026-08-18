@@ -177,15 +177,23 @@ describe('normalizePersistedSettings', () => {
   });
 
   it('strips a legacy/imported apiKey field from an existing openRouter object', () => {
-    // QNBS-v3: a settings import/export round-trip (services/settingsExchange.ts) spreads Settings
-    // wholesale, so a crafted or pre-key-store-migration payload could carry a real secret here —
-    // the real key lives only in the dedicated per-provider key store, never in Settings.
+    // QNBS-v3: a settings import/export round-trip could otherwise carry a real secret straight through — the real key lives only in the dedicated per-provider key store, never in Settings.
     const result = normalizePersistedSettings({
       openRouter: { enabled: true, apiKey: 'sk-should-never-persist', preferredModel: 'x/y:free' },
     });
     expect(result.openRouter).not.toHaveProperty('apiKey');
     expect(result.openRouter?.enabled).toBe(true);
     expect(result.openRouter?.preferredModel).toBe('x/y:free');
+  });
+
+  it('restores enabled/preferredModel defaults for a credentials-only legacy object', () => {
+    // QNBS-v3: a legacy payload with only `apiKey` (no enabled/preferredModel) must not leave those required fields undefined after stripping.
+    const result = normalizePersistedSettings({
+      openRouter: { apiKey: 'sk-legacy-only' },
+    });
+    expect(result.openRouter).not.toHaveProperty('apiKey');
+    expect(result.openRouter?.enabled).toBe(false);
+    expect(result.openRouter?.preferredModel).toBe('deepseek/deepseek-r1:free');
   });
 
   // ── fully absent settings (completely old project) ────────────────────────
