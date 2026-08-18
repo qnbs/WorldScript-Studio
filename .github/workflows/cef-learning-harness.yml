@@ -105,6 +105,9 @@ jobs:
           cmake -S "$BUILD_SRC_DIR" -B build -DCMAKE_BUILD_TYPE=Release
           cmake --build build --target worldscript_host --parallel "$(nproc)"
 
+      - name: List worldscript_host output directory (diagnostic)
+        run: ls -la build/worldscript_host/
+
       - name: Serve production bundle + repeated launch/close proof
         run: |
           python3 -m http.server 8080 --directory dist &
