@@ -278,9 +278,11 @@ On any non-trivial code change add a single-line comment explaining **why**, not
 | TS / JS | `// QNBS-v3: <reason / impact>` |
 | TSX / JSX | `// QNBS-v3: …` above the changed line; `{/* QNBS-v3: … */}` only when needed inside JSX |
 | CSS | `/* QNBS-v3: … */` |
-| Pure config (JSON, YAML) | No inline comment — explain in the commit message |
+| C++ / Rust (`apps/desktop-cef/`) | `// QNBS-v3: <reason / impact>` |
+| CMake (`CMakeLists.txt`) | `# QNBS-v3: <reason / impact>` |
+| Pure config (JSON, YAML, TOML — e.g. `package.json`, workflow `.yml`, `Cargo.toml`) | No inline comment — explain in the commit message |
 
-**Hard rule — one physical line, never wrapped:** a `// QNBS-v3: …` comment MUST fit on a single line, however long. Never split it across two `//` lines (`// QNBS-v3: foo\n// bar`) — CodeRabbit flags this as a nitpick on every PR that does it. If the reason doesn't fit on one line, shorten it; don't wrap it.
+**Hard rule — one physical line, never wrapped, in every syntax above:** a `QNBS-v3: …` comment MUST fit on a single physical line, however long, regardless of which comment syntax (`//`, `#`, `/* */`) the language uses. Never split it across two lines (`// QNBS-v3: foo\n// bar`) — CodeRabbit and Qodo both flag this as a nitpick on every PR that does it, and it has recurred across TS/JS, YAML, and C++ files in this repo's history. If the reason doesn't fit on one line, shorten it; don't wrap it. This applies the first time a new language/file type is touched too — don't wait for a review bot to point out that the language wasn't in the table yet before applying the same one-line discipline.
 
 Skip for pure formatting, lockfile updates, or generated artefacts.
 
