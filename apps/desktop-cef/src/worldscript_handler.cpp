@@ -3,7 +3,7 @@
 #include <cstdio>
 
 #include "include/cef_app.h"
-#include "include/wrapper/cef_closure_task.h"
+#include "include/cef_task.h"
 #include "include/wrapper/cef_helpers.h"
 
 #include "shutdown_signal.h"
@@ -12,7 +12,22 @@
 extern "C" int worldscript_rust_ping();
 
 namespace {
+
 constexpr int kShutdownPollIntervalMs = 100;
+
+// QNBS-v3: plain CefTask subclass instead of base::BindOnce — CEF's own ref-counting scheme hit real base::Bind template/header issues (caught by CI, not locally); this is simpler and avoids that machinery entirely.
+class PollShutdownTask : public CefTask {
+ public:
+  explicit PollShutdownTask(CefRefPtr<WorldScriptHandler> handler) : handler_(handler) {}
+  void Execute() override { handler_->PollShutdownFlag(); }
+
+ private:
+  CefRefPtr<WorldScriptHandler> handler_;
+
+  IMPLEMENT_REFCOUNTING(PollShutdownTask);
+  DISALLOW_COPY_AND_ASSIGN(PollShutdownTask);
+};
+
 }  // namespace
 
 WorldScriptHandler::WorldScriptHandler() = default;
@@ -31,9 +46,7 @@ void WorldScriptHandler::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
   printf("[worldscript_host] rust_core ping = %d\n", worldscript_rust_ping());
   fflush(stdout);
 
-  CefPostDelayedTask(TID_UI,
-                     base::BindOnce(&WorldScriptHandler::PollShutdownFlag, base::Unretained(this)),
-                     kShutdownPollIntervalMs);
+  CefPostDelayedTask(TID_UI, new PollShutdownTask(this), kShutdownPollIntervalMs);
 }
 
 void WorldScriptHandler::PollShutdownFlag() {
@@ -46,9 +59,7 @@ void WorldScriptHandler::PollShutdownFlag() {
     return;  // Closing now — no need to keep polling.
   }
   if (!browser_list_.empty()) {
-    CefPostDelayedTask(TID_UI,
-                       base::BindOnce(&WorldScriptHandler::PollShutdownFlag, base::Unretained(this)),
-                       kShutdownPollIntervalMs);
+    CefPostDelayedTask(TID_UI, new PollShutdownTask(this), kShutdownPollIntervalMs);
   }
 }
 
