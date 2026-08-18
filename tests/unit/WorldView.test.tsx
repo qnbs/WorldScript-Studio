@@ -1,6 +1,7 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { WorldView } from '../../components/WorldView';
+import { storageService } from '../../services/storageService';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -119,5 +120,79 @@ describe('WorldView', () => {
     // Only the two AddNewCard buttons visible
     const addBtns = screen.getAllByText(/worlds\.addNew/);
     expect(addBtns.length).toBeGreaterThanOrEqual(2);
+  });
+
+  // ── useStoredImage (QNBS-v3: storageService-backed, MIME-preserving) ──────
+
+  it('renders a data:image/-prefixed ambiance image as-is, without re-wrapping it as PNG', async () => {
+    vi.mocked(storageService.getImage).mockResolvedValueOnce('data:image/jpeg;base64,abc123');
+    const { useWorldView } = await import('../../hooks/useWorldView');
+    vi.mocked(useWorldView).mockReturnValueOnce({
+      ...baseContextValue,
+      worlds: [
+        {
+          id: 'w-jpeg',
+          name: 'Aetheria',
+          description: '',
+          geography: '',
+          magicSystem: '',
+          notes: '',
+          hasAmbianceImage: true,
+          locations: [],
+          timeline: [],
+        },
+      ],
+    } as never);
+    render(<WorldView />);
+    const img = await waitFor(() => screen.getByAltText('Aetheria'));
+    expect(img).toHaveAttribute('src', 'data:image/jpeg;base64,abc123');
+  });
+
+  it('falls back to a PNG data URL for a legacy raw-base64 ambiance image with no MIME prefix', async () => {
+    vi.mocked(storageService.getImage).mockResolvedValueOnce('legacyRawBase64Payload');
+    const { useWorldView } = await import('../../hooks/useWorldView');
+    vi.mocked(useWorldView).mockReturnValueOnce({
+      ...baseContextValue,
+      worlds: [
+        {
+          id: 'w-legacy',
+          name: 'Boralis',
+          description: '',
+          geography: '',
+          magicSystem: '',
+          notes: '',
+          hasAmbianceImage: true,
+          locations: [],
+          timeline: [],
+        },
+      ],
+    } as never);
+    render(<WorldView />);
+    const img = await waitFor(() => screen.getByAltText('Boralis'));
+    expect(img).toHaveAttribute('src', 'data:image/png;base64,legacyRawBase64Payload');
+  });
+
+  it('keeps the placeholder icon instead of throwing when storageService.getImage rejects', async () => {
+    vi.mocked(storageService.getImage).mockRejectedValueOnce(new Error('read failed'));
+    const { useWorldView } = await import('../../hooks/useWorldView');
+    vi.mocked(useWorldView).mockReturnValueOnce({
+      ...baseContextValue,
+      worlds: [
+        {
+          id: 'w-broken',
+          name: 'Cindralis',
+          description: '',
+          geography: '',
+          magicSystem: '',
+          notes: '',
+          hasAmbianceImage: true,
+          locations: [],
+          timeline: [],
+        },
+      ],
+    } as never);
+    render(<WorldView />);
+    await waitFor(() => expect(storageService.getImage).toHaveBeenCalledWith('w-broken'));
+    expect(screen.queryByAltText('Cindralis')).toBeNull();
   });
 });
