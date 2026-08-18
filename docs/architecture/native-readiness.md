@@ -49,3 +49,17 @@ The Wave 1 PR A snapshot left three DEBT rows marked "not yet scheduled to a spe
 ## Next scoring checkpoint
 
 Re-score "Platform APIs adapter-contained" again once `services/logger.ts`'s JSONL sink migrates (Wave 5/7, see above). Re-score the three newly-scheduled rows at each wave's exit (Wave 4 typed-IPC-v1, Wave 5 domain extraction).
+
+## Snapshot: Wave 2 binding spike (ADR-0020, `docs/cef/CEF-BINDING-DECISION-SCORECARD.md`)
+
+Wave 2's first deliverable — the CEF binding/C++ decision — is now backed by a real hands-on spike, not a desk pick. Full scorecard: `docs/cef/CEF-BINDING-DECISION-SCORECARD.md`. This snapshot only tracks what changes for *this* readiness table; the roadmap's own Wave 2 exit criteria (Early Accessibility Gate, "no production-critical lifecycle assumption remains undocumented") are broader than this single row and are **not** claimed as met here.
+
+| Check | Result | Owner | Notes |
+|---|---|---|---|
+| CEF binding/integration approach decided | **PASS** | cef-runtime | Option B (thin C++ CEF host + Rust core) chosen and spiked with real evidence: builds against CEF's own binary-distribution CMake macros, launches under Xvfb, survives 3 repeated start/close cycles with a clean process tree, and its core premise (a working Rust↔C++ FFI boundary) is proven in isolation. See ADR-0020. |
+| CEF renders reliably on Linux dev systems | DEBT — partial | cef-runtime, Wave 2 (in progress) | One data point only: one dev machine, one GPU (Intel integrated, software-fallback path exercised), X11/Xvfb only, no sandbox. Exit condition (unchanged from roadmap §2's Wave 2 exit criteria): broader Linux/GPU/display-server matrix coverage (Appendix A.3) before this can flip to PASS. |
+| CEF lifecycle assumptions documented | DEBT — partial | cef-runtime, Wave 2 (in progress) | `docs/cef/knowledge/subprocess-and-shutdown.md` now has one real (non-speculative) finding — SIGTERM shutdown is not instantaneous, don't false-positive an immediate post-signal check — but it is explicitly flagged as not yet backed by a committed/CI-run test, per the doc's own evidence-link discipline. Exit condition: a real test + CI job, not just a spike observation. |
+| Early Accessibility Gate | Not yet attempted | cef-runtime, Wave 2 | Out of this spike's scope entirely — no accessibility tree/API integration was touched. |
+| Sandbox posture | Not yet attempted | desktop-security, Wave 2/3 (roadmap §12) | Spike explicitly ran with `no_sandbox=true`; zero evidence either way on this row. |
+
+**Overall for this snapshot**: 1 PASS, 3 explicit DEBT-in-progress rows (each with a concrete exit condition, not open-ended), 1 not-yet-attempted row correctly left blank rather than assumed. No row is marked PASS without the evidence cited above.

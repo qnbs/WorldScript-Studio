@@ -68,6 +68,29 @@ documents:
     related_ci: []
     driftCheckTool: "planned — not implemented, see Wave 1"
 
+  - path: docs/adr/0020-cef-binding-choice-thin-cpp-host.md
+    tier: A
+    owner_role: cef-runtime
+    backup_role: desktop-architecture
+    last_verified:
+      worldscript: "v1.27.1"
+      cef: "151.3.18+gbeff58d+chromium-151.0.7922.138"
+    review_days: 90
+    related_ci: []
+    driftCheckTool: "planned — not implemented, see Wave 1"
+
+  - path: docs/cef/CEF-BINDING-DECISION-SCORECARD.md
+    tier: A
+    owner_role: cef-runtime
+    backup_role: desktop-architecture
+    last_verified:
+      worldscript: "v1.27.1"
+      cef: "151.3.18+gbeff58d+chromium-151.0.7922.138"
+    review_days: 90
+    related_ci: []
+    driftCheckTool: "planned — not implemented, see Wave 1"
+    note: "Appendix H scorecard, filled in per ADR-0020 — re-score triggers are listed in the doc itself, not just the review_days cadence."
+
   - path: docs/cef/knowledge/cef-architecture-primer.md
     tier: A
     owner_role: cef-runtime
@@ -106,22 +129,26 @@ documents:
     tier: A
     owner_role: cef-runtime
     backup_role: rust-core
-    last_verified: null
+    last_verified:
+      worldscript: "v1.27.1"
+      cef: "151.3.18+gbeff58d+chromium-151.0.7922.138"
     review_days: 90
     related_ci:
       - cef-learning-harness
     driftCheckTool: "planned — not implemented, see Wave 1"
-    note: "Skeleton only — Status: Not started"
+    note: "Preliminary spike evidence only (ADR-0020) — not yet backed by a committed/CI-run test; see the doc's own evidence-link discipline note."
 
   - path: docs/cef/knowledge/linux-runtime-notes.md
     tier: A
     owner_role: cef-runtime
     backup_role: desktop-architecture
-    last_verified: null
+    last_verified:
+      worldscript: "v1.27.1"
+      cef: "151.3.18+gbeff58d+chromium-151.0.7922.138"
     review_days: 90
     related_ci: []
     driftCheckTool: "planned — not implemented, see Wave 1"
-    note: "Skeleton only — Status: Not started"
+    note: "Preliminary spike evidence only (ADR-0020) — one machine, one GPU, X11 only; not a compatibility contract yet."
 
   - path: docs/cef/knowledge/debugging-and-crash-playbook.md
     tier: A
