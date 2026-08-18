@@ -22,6 +22,7 @@
  * Run: node scripts/cef/run-launch-cycle-proof.mjs <binary-path> <url> [--cycles N]
  */
 import { execFileSync, spawn } from 'node:child_process';
+import path from 'node:path';
 
 const [binaryPath, url] = process.argv.slice(2);
 
@@ -77,8 +78,10 @@ function logStderr(index, stderr) {
 
 async function runCycle(index) {
   console.log(`[launch-cycle-proof] Cycle ${index + 1}/${cycles}: launching…`);
+  // QNBS-v3: cwd set to the binary's own directory — Chromium resolves several resource paths (icudtl.dat et al.) relative to cwd, not the executable's location; without this, "Invalid file descriptor to ICU data received" crashes it on startup even though every file is correctly present.
   // QNBS-v3: verbose CEF/Chromium logging to stderr — an early crash otherwise produces zero diagnostic output, making root-causing it impossible from this harness's own log.
   const child = spawn(binaryPath, [`--url=${url}`, '--enable-logging=stderr', '--v=1'], {
+    cwd: path.dirname(binaryPath),
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
