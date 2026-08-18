@@ -46,9 +46,6 @@ void WorldScriptHandler::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
   printf("[worldscript_host] rust_core ping = %d\n", worldscript_rust_ping());
   fflush(stdout);
 
-  // QNBS-v3: Early Accessibility Gate smoke test (roadmap §3142) — requests real tree construction; --force-renderer-accessibility (worldscript_app.cpp) is the defense-in-depth companion. No observable signal exists yet for this call's effect — CefClient has no GetAccessibilityHandler() in this CEF version, unlike CodeAnt's initial diagnosis of the comment.
-  browser->GetHost()->SetAccessibilityState(STATE_ENABLED);
-
   CefPostDelayedTask(TID_UI, new PollShutdownTask(this), kShutdownPollIntervalMs);
 }
 

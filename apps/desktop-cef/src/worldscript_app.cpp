@@ -68,9 +68,3 @@ void WorldScriptApp::OnContextInitialized() {
 
   CefWindow::CreateTopLevelWindow(new WorldScriptWindowDelegate(browser_view));
 }
-
-void WorldScriptApp::OnBeforeCommandLineProcessing(const CefString& process_type,
-                                                    CefRefPtr<CefCommandLine> command_line) {
-  // QNBS-v3: applies to every process type (browser + re-exec'd subprocesses) — the renderer is what actually needs it, but appending unconditionally is harmless and matches common CEF usage for this exact flag.
-  command_line->AppendSwitch("force-renderer-accessibility");
-}
