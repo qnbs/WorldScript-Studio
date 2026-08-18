@@ -164,6 +164,35 @@ export interface LoraOllamaModelfileRequest {
   name: string;
 }
 
+// QNBS-v3: these three types replace what were previously Promise<unknown>/unchecked-cast task results, closing the "validate native responses before trusting result shapes" gap for LoRA.
+/** Matches `check_lora_environment` / `set_lora_python_path`'s native response shape (snake_case, no serde rename). Validated at the adapter boundary — never an unchecked cast of the raw invoke() result. */
+export interface LoraTrainingEnvironmentResult {
+  python_available: boolean;
+  unsloth_available: boolean;
+  cuda_available: boolean;
+  vram_gb: number;
+  python_version: string;
+  python_path?: string | null;
+  last_error?: string | null;
+}
+
+/** Matches `abort_lora_training`'s three-way native result — 'pending_start_cancelled' means the run was still starting (no process yet) but the cancellation was recorded, unlike 'nothing_to_cancel' which is a true no-op. */
+export type LoraAbortOutcome = 'confirmed' | 'pending_start_cancelled' | 'nothing_to_cancel';
+
+/** Shape of the native `lora-progress` event payload — validated at the adapter boundary before reaching the handler, never an unchecked cast of the raw event payload. */
+export interface LoraTrainingProgressEvent {
+  event: 'loading_model' | 'dataset_loaded' | 'progress' | 'completed' | 'error';
+  model?: string;
+  size?: number;
+  epoch?: number;
+  step?: number;
+  loss?: number;
+  progress_percent?: number;
+  adapter_path?: string;
+  gguf_path?: string;
+  message?: string;
+}
+
 export interface DesktopTasks {
   /** Dispatches a typed task to the Rust TaskSupervisor (`worldscript_task_supervisor_submit`). */
   submitTask(request: RustTaskRequest): Promise<RustTaskResultEvent>;
@@ -173,10 +202,14 @@ export interface DesktopTasks {
   convertMarkdownToEpub(markdown: string): Promise<Uint8Array | null>;
   /** LoRA training (`train_lora`) — Rust expects the whole request wrapped under a top-level `payload` key; the adapter does that wrapping, not the caller. */
   trainLora(request: LoraTrainRequest): Promise<string>;
-  abortLoraTraining(): Promise<unknown>;
+  /** Subscribes to LoRA training progress events (`lora-progress`); returns an unsubscribe function. Malformed native payloads are logged and dropped, never forwarded to the handler. */
+  onLoraTrainingProgress(
+    handler: (payload: LoraTrainingProgressEvent) => void,
+  ): Promise<() => void>;
+  abortLoraTraining(): Promise<LoraAbortOutcome>;
   mergeLora(request: LoraMergeRequest): Promise<void>;
-  checkLoraEnvironment(): Promise<unknown>;
-  setLoraPythonPath(pythonPath: string): Promise<unknown>;
+  checkLoraEnvironment(): Promise<LoraTrainingEnvironmentResult>;
+  setLoraPythonPath(pythonPath: string): Promise<LoraTrainingEnvironmentResult>;
   generateOllamaModelfile(request: LoraOllamaModelfileRequest): Promise<string>;
 }
 

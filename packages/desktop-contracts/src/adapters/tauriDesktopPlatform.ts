@@ -15,8 +15,11 @@ import type {
   DesktopTray,
   DesktopUpdater,
   DesktopWindow,
+  LoraAbortOutcome,
   LoraMergeRequest,
   LoraOllamaModelfileRequest,
+  LoraTrainingEnvironmentResult,
+  LoraTrainingProgressEvent,
   LoraTrainRequest,
 } from '../types';
 
@@ -311,6 +314,63 @@ const lifecycle: DesktopLifecycle = {
 
 // --- tasks ---------------------------------------------------------------------------------------
 
+// QNBS-v3: validate native Rust responses at the adapter boundary rather than trusting an unchecked cast — a malformed response throws here and is handled by the caller's existing error path, instead of a bogus shape being trusted downstream.
+function isLoraAbortOutcome(value: unknown): value is LoraAbortOutcome {
+  return (
+    value === 'confirmed' || value === 'pending_start_cancelled' || value === 'nothing_to_cancel'
+  );
+}
+
+// QNBS-v3: python_path/last_error are optional-but-typed on the wire (string | null | absent) — a present value of any other type must reject, not silently pass through as a truthy non-string.
+function isOptionalStringOrNull(value: unknown): boolean {
+  return value === undefined || value === null || typeof value === 'string';
+}
+
+const LORA_PROGRESS_EVENT_KINDS = new Set([
+  'loading_model',
+  'dataset_loaded',
+  'progress',
+  'completed',
+  'error',
+]);
+
+function isOptionalTypedField(value: unknown, type: 'string' | 'number'): boolean {
+  return value === undefined || typeof value === type;
+}
+
+// QNBS-v3: validates every present field's type, not just `event` — a malformed sub-field (e.g. a stringified progress_percent) must not reach typed consumers as if it were the real type.
+function isLoraTrainingProgressEvent(value: unknown): value is LoraTrainingProgressEvent {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v['event'] === 'string' &&
+    LORA_PROGRESS_EVENT_KINDS.has(v['event']) &&
+    isOptionalTypedField(v['model'], 'string') &&
+    isOptionalTypedField(v['size'], 'number') &&
+    isOptionalTypedField(v['epoch'], 'number') &&
+    isOptionalTypedField(v['step'], 'number') &&
+    isOptionalTypedField(v['loss'], 'number') &&
+    isOptionalTypedField(v['progress_percent'], 'number') &&
+    isOptionalTypedField(v['adapter_path'], 'string') &&
+    isOptionalTypedField(v['gguf_path'], 'string') &&
+    isOptionalTypedField(v['message'], 'string')
+  );
+}
+
+function isLoraTrainingEnvironmentResult(value: unknown): value is LoraTrainingEnvironmentResult {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v['python_available'] === 'boolean' &&
+    typeof v['unsloth_available'] === 'boolean' &&
+    typeof v['cuda_available'] === 'boolean' &&
+    typeof v['vram_gb'] === 'number' &&
+    typeof v['python_version'] === 'string' &&
+    isOptionalStringOrNull(v['python_path']) &&
+    isOptionalStringOrNull(v['last_error'])
+  );
+}
+
 const tasks: DesktopTasks = {
   submitTask: async (request) => {
     const { invoke } = await import('@tauri-apps/api/core');
@@ -342,9 +402,27 @@ const tasks: DesktopTasks = {
     const { invoke } = await import('@tauri-apps/api/core');
     return invoke<string>('train_lora', { payload: request });
   },
+  // QNBS-v3: deliberately does NOT catch-and-noop like the other subscription facets (menu/deepLinks/lifecycle) — a failed subscription here must abort startTraining before the long-running native job starts, matching the pre-migration tauriListen()'s uncaught-rejection behavior.
+  onLoraTrainingProgress: async (handler) => {
+    const { listen } = await import('@tauri-apps/api/event');
+    const stop = await listen('lora-progress', (event) => {
+      if (!isLoraTrainingProgressEvent(event.payload)) {
+        logger.warn('desktopPlatform.tasks: ignoring malformed LoRA training progress payload', {
+          payload: event.payload,
+        });
+        return;
+      }
+      handler(event.payload);
+    });
+    return stop;
+  },
   abortLoraTraining: async () => {
     const { invoke } = await import('@tauri-apps/api/core');
-    return invoke('abort_lora_training');
+    const result = await invoke('abort_lora_training');
+    if (!isLoraAbortOutcome(result)) {
+      throw new Error('abort_lora_training returned an unexpected response');
+    }
+    return result;
   },
   // QNBS-v3: merge_lora/generateOllamaModelfile bind flat camelCase args (no serde rename) — spread the request object directly, matching loraTrainingService.ts.
   mergeLora: async (request: LoraMergeRequest) => {
@@ -353,11 +431,19 @@ const tasks: DesktopTasks = {
   },
   checkLoraEnvironment: async () => {
     const { invoke } = await import('@tauri-apps/api/core');
-    return invoke('check_lora_environment');
+    const result = await invoke('check_lora_environment');
+    if (!isLoraTrainingEnvironmentResult(result)) {
+      throw new Error('check_lora_environment returned an unexpected response');
+    }
+    return result;
   },
   setLoraPythonPath: async (pythonPath) => {
     const { invoke } = await import('@tauri-apps/api/core');
-    return invoke('set_lora_python_path', { pythonPath });
+    const result = await invoke('set_lora_python_path', { pythonPath });
+    if (!isLoraTrainingEnvironmentResult(result)) {
+      throw new Error('set_lora_python_path returned an unexpected response');
+    }
+    return result;
   },
   generateOllamaModelfile: async (request: LoraOllamaModelfileRequest) => {
     const { invoke } = await import('@tauri-apps/api/core');

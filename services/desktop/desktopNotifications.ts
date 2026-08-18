@@ -8,8 +8,8 @@
  * failure must not break the calling flow (export, backup, pipeline, updater).
  */
 
+import { desktopPlatform } from '../desktopPlatform';
 import { createLogger } from '../logger';
-import { isTauriRuntime } from '../tauriRuntime';
 
 const log = createLogger('desktop-notifications');
 
@@ -26,10 +26,9 @@ export function _resetNotificationStateForTest(): void {
  * the plugin call fails (never throws).
  */
 export async function isNotificationPermissionGranted(): Promise<boolean> {
-  if (!isTauriRuntime()) return false;
   try {
-    const { isPermissionGranted } = await import('@tauri-apps/plugin-notification');
-    return await isPermissionGranted();
+    // QNBS-v3: no separate isTauriRuntime() guard needed — desktopPlatform.notifications already resolves to a safe false-returning no-op on web
+    return await desktopPlatform.notifications.isPermissionGranted();
   } catch (error) {
     log.warn('Failed to read notification permission state', { error: String(error) });
     return false;
@@ -42,17 +41,11 @@ export async function isNotificationPermissionGranted(): Promise<boolean> {
  * previously denied the request, or on any plugin failure.
  */
 export async function requestNotificationPermission(): Promise<boolean> {
-  if (!isTauriRuntime()) return false;
   if (permissionRequestInFlight) return permissionRequestInFlight;
 
   permissionRequestInFlight = (async () => {
     try {
-      const { isPermissionGranted, requestPermission } = await import(
-        '@tauri-apps/plugin-notification'
-      );
-      if (await isPermissionGranted()) return true;
-      const permission = await requestPermission();
-      return permission === 'granted';
+      return await desktopPlatform.notifications.requestPermission();
     } catch (error) {
       log.warn('Failed to request notification permission', { error: String(error) });
       return false;
@@ -70,14 +63,8 @@ export async function requestNotificationPermission(): Promise<boolean> {
  * `desktop.desktopNotifications` user setting before calling this.
  */
 export async function sendDesktopNotification(title: string, body: string): Promise<boolean> {
-  if (!isTauriRuntime()) return false;
   try {
-    const { isPermissionGranted, sendNotification } = await import(
-      '@tauri-apps/plugin-notification'
-    );
-    if (!(await isPermissionGranted())) return false;
-    sendNotification({ title, body });
-    return true;
+    return await desktopPlatform.notifications.send(title, body);
   } catch (error) {
     log.warn('Failed to send desktop notification', { error: String(error) });
     return false;

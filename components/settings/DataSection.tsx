@@ -5,13 +5,14 @@ import { APP_FILE_SLUG, ICONS } from '../../constants';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
 import { settingsActions } from '../../features/settings/settingsSlice';
 import { statusActions } from '../../features/status/statusSlice';
+import { desktopPlatform } from '../../services/desktopPlatform';
 import { buildEncryptedLibraryZipBlob } from '../../services/libraryBackupService';
 import {
   buildSettingsExportEnvelope,
   parseSettingsImportEnvelope,
 } from '../../services/settingsExchange';
 import { normalizePersistedSettings } from '../../services/storage/idbProjectStore';
-import { isTauriRuntime, openTauriDataDirectory } from '../../services/tauriRuntime';
+import { isTauriRuntime } from '../../services/tauriRuntime';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { Input } from '../ui/Input';
@@ -157,10 +158,11 @@ export const DataSection: FC = () => {
           </div>
           {isTauriRuntime() && (
             <div className="mt-4 space-y-2">
+              {/* QNBS-v3: routes through desktopPlatform.diagnostics instead of the removed tauriRuntime.openTauriDataDirectory() wrapper */}
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => void openTauriDataDirectory()}
+                onClick={() => void desktopPlatform.diagnostics.openDataDirectory()}
               >
                 {t('settings.data.openDataFolder')}
               </Button>

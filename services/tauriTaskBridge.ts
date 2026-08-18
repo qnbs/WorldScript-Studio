@@ -3,8 +3,8 @@
 //          src-tauri/src/commands/task_supervisor.rs. Gracefully unavailable in web-browser context.
 
 import type { RustTaskRequest, RustTaskResultEvent } from '@domain/worker-bus';
+import { desktopPlatform } from './desktopPlatform';
 import { createLogger } from './logger';
-import { isTauriRuntime } from './tauriRuntime';
 
 const log = createLogger('tauriTaskBridge');
 
@@ -13,14 +13,12 @@ const log = createLogger('tauriTaskBridge');
  * Throws if not in a Tauri context or if the Rust command is unavailable.
  */
 export async function invokeRustTask(request: RustTaskRequest): Promise<RustTaskResultEvent> {
-  if (!isTauriRuntime()) {
+  if (!desktopPlatform.runtime.isDesktop) {
     throw new Error('[tauriTaskBridge] Rust compute unavailable — not in Tauri context');
   }
   try {
-    const { invoke } = await import('@tauri-apps/api/core');
-    const result = await invoke<RustTaskResultEvent>('worldscript_task_supervisor_submit', {
-      request,
-    });
+    // QNBS-v3: submits through desktopPlatform.tasks instead of the direct @tauri-apps/api/core invoke() it replaced
+    const result = await desktopPlatform.tasks.submitTask(request);
     log.info('Rust TaskSupervisor completed task', {
       taskId: request.taskId,
       taskType: request.taskType,
@@ -41,14 +39,13 @@ const RUST_CHECK_TTL_MS = 60_000;
  * Result is cached for RUST_CHECK_TTL_MS to avoid repeated IPC round-trips.
  */
 export async function isRustComputeAvailable(): Promise<boolean> {
-  if (!isTauriRuntime()) return false;
+  if (!desktopPlatform.runtime.isDesktop) return false;
   const now = Date.now();
   if (_rustAvailableCache !== null && now - _rustAvailableCache.checkedAt < RUST_CHECK_TTL_MS) {
     return _rustAvailableCache.value;
   }
   try {
-    const { invoke } = await import('@tauri-apps/api/core');
-    await invoke('worldscript_task_supervisor_ping');
+    await desktopPlatform.tasks.pingSupervisor();
     _rustAvailableCache = { value: true, checkedAt: now };
     return true;
   } catch {

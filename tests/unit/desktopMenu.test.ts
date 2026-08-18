@@ -1,8 +1,5 @@
-/**
- * Tests for services/desktop/desktopMenu.ts
- * QNBS-v3 (T1): Mocks @tauri-apps/api/menu + isTauriRuntime — asserts the localized menu structure,
- * the app-menu install, and that custom items route to executeCommand with the right command ids.
- */
+/** Tests for services/desktop/desktopMenu.ts */
+// QNBS-v3 (T1, Wave 1): mocks services/desktopPlatform's menu.loadMenuBuilder(), not @tauri-apps/api/menu directly.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -21,30 +18,51 @@ const h = vi.hoisted(() => ({
   submenuCalls: [] as SubmenuOpts[],
   predefinedCalls: [] as Array<{ item?: string }>,
   setAsAppMenu: vi.fn(),
-  isTauri: { value: true },
+  isDesktop: { value: true },
+  menuNewImpl: null as ((o: unknown) => Promise<unknown>) | null,
 }));
 
-vi.mock('../../services/tauriRuntime', () => ({ isTauriRuntime: () => h.isTauri.value }));
+const defaultMenuNew = vi.fn(async (o: unknown) => ({
+  ...(o as object),
+  setAsAppMenu: h.setAsAppMenu,
+}));
 
-vi.mock('@tauri-apps/api/menu', () => ({
-  Menu: { new: vi.fn(async (o: unknown) => ({ ...(o as object), setAsAppMenu: h.setAsAppMenu })) },
-  Submenu: {
-    new: vi.fn(async (o: SubmenuOpts) => {
-      h.submenuCalls.push(o);
-      return { ...o };
-    }),
-  },
-  MenuItem: {
-    new: vi.fn(async (o: ItemOpts) => {
-      h.itemCalls.push(o);
-      return { ...o };
-    }),
-  },
-  PredefinedMenuItem: {
-    new: vi.fn(async (o: { item?: string }) => {
-      h.predefinedCalls.push(o);
-      return { ...o };
-    }),
+vi.mock('../../services/desktopPlatform', () => ({
+  get desktopPlatform() {
+    return {
+      runtime: {
+        get isDesktop() {
+          return h.isDesktop.value;
+        },
+        os: null,
+      },
+      menu: {
+        loadMenuBuilder: async () => {
+          if (!h.isDesktop.value) return null;
+          return {
+            Menu: { new: (o: unknown) => (h.menuNewImpl ?? defaultMenuNew)(o) },
+            Submenu: {
+              new: vi.fn(async (o: SubmenuOpts) => {
+                h.submenuCalls.push(o);
+                return { ...o };
+              }),
+            },
+            MenuItem: {
+              new: vi.fn(async (o: ItemOpts) => {
+                h.itemCalls.push(o);
+                return { ...o };
+              }),
+            },
+            PredefinedMenuItem: {
+              new: vi.fn(async (o: { item?: string }) => {
+                h.predefinedCalls.push(o);
+                return { ...o };
+              }),
+            },
+          };
+        },
+      },
+    };
   },
 }));
 
@@ -59,12 +77,13 @@ describe('installDesktopMenu', () => {
     h.submenuCalls.length = 0;
     h.predefinedCalls.length = 0;
     h.setAsAppMenu.mockClear();
-    h.isTauri.value = true;
+    h.isDesktop.value = true;
+    h.menuNewImpl = null;
     _resetMenuInstallTokenForTest();
   });
 
   it('returns false on the web (no Tauri runtime)', async () => {
-    h.isTauri.value = false;
+    h.isDesktop.value = false;
     const ok = await installDesktopMenu(
       (k) => k,
       vi.fn(),
@@ -161,8 +180,9 @@ describe('installDesktopMenu', () => {
   });
 
   it('returns false (and does not throw) when the menu API rejects', async () => {
-    const mod = await import('@tauri-apps/api/menu');
-    vi.mocked(mod.Menu.new).mockRejectedValueOnce(new Error('boom'));
+    h.menuNewImpl = async () => {
+      throw new Error('boom');
+    };
     const ok = await installDesktopMenu(
       (k) => k,
       vi.fn(),

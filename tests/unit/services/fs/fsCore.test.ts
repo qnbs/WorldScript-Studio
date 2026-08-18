@@ -69,7 +69,6 @@ describe('writeTextFileAtomic', () => {
       save: vi.fn(),
       appDataDir: vi.fn(),
       join: vi.fn(),
-      invoke: vi.fn(),
       ...overrides,
     };
   }

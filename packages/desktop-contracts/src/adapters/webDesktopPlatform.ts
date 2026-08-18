@@ -88,6 +88,8 @@ const tasks: DesktopTasks = {
   pingSupervisor: async () => tasksUnavailable(),
   convertMarkdownToEpub: async () => null,
   trainLora: async () => tasksUnavailable(),
+  // QNBS-v3: no-op unsubscribe, not tasksUnavailable() — subscribing itself never fails on web, it just never fires
+  onLoraTrainingProgress: async () => () => {},
   abortLoraTraining: async () => tasksUnavailable(),
   mergeLora: async () => tasksUnavailable(),
   checkLoraEnvironment: async () => tasksUnavailable(),
