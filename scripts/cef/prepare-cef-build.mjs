@@ -41,9 +41,14 @@ fs.mkdirSync(cmakeSourceDir, { recursive: true });
 for (const entry of fs.readdirSync(cefDir, { withFileTypes: true })) {
   if (entry.name === 'CMakeLists.txt') continue;
   const target = path.join(cmakeSourceDir, entry.name);
-  if (!fs.existsSync(target)) {
-    fs.symlinkSync(path.join(cefDir, entry.name), target);
+  // QNBS-v3: existsSync follows symlinks, so a dangling link from an earlier run (stale target) reads as absent and symlinkSync then throws EEXIST — lstatSync + remove first makes this idempotent (CodeRabbit review finding on PR #388).
+  try {
+    fs.lstatSync(target);
+    fs.rmSync(target, { recursive: true, force: true });
+  } catch {
+    // No existing entry — nothing to remove.
   }
+  fs.symlinkSync(path.join(cefDir, entry.name), target);
 }
 
 const desktopCefAbsPath = path.join(repoRoot, 'apps', 'desktop-cef');

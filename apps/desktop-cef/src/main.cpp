@@ -3,6 +3,7 @@
 
 #include "include/cef_app.h"
 
+#include "shutdown_signal.h"
 #include "worldscript_app.h"
 
 namespace {
@@ -31,6 +32,9 @@ int main(int argc, char* argv[]) {
   if (exit_code >= 0) {
     return exit_code;
   }
+
+  // QNBS-v3: installed only in the real browser process (past the subprocess check above) — CodeRabbit review finding on PR #388: a raw, unhandled SIGTERM bypassed OnBeforeClose/CefQuitMessageLoop/CefShutdown entirely.
+  InstallShutdownSignalHandlers();
 
   CefSettings settings;
   settings.no_sandbox = true;  // ADR-0020: sandbox posture deliberately deferred (roadmap §12).

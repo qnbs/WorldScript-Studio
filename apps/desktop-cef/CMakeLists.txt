@@ -25,6 +25,8 @@ corrosion_import_crate(MANIFEST_PATH "${CMAKE_CURRENT_SOURCE_DIR}/rust-core/Carg
 
 set(WORLDSCRIPT_HOST_SRCS
   src/main.cpp
+  src/shutdown_signal.h
+  src/shutdown_signal.cpp
   src/worldscript_app.h
   src/worldscript_app.cpp
   src/worldscript_handler.h

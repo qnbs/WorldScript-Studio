@@ -77,7 +77,10 @@ function logStderr(index, stderr) {
 
 async function runCycle(index) {
   console.log(`[launch-cycle-proof] Cycle ${index + 1}/${cycles}: launching…`);
-  const child = spawn(binaryPath, [`--url=${url}`], { stdio: ['ignore', 'pipe', 'pipe'] });
+  // QNBS-v3: verbose CEF/Chromium logging to stderr — an early crash otherwise produces zero diagnostic output, making root-causing it impossible from this harness's own log.
+  const child = spawn(binaryPath, [`--url=${url}`, '--enable-logging=stderr', '--v=1'], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
 
   let stdout = '';
   let stderr = '';

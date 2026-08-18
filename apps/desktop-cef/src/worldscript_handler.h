@@ -22,6 +22,9 @@ class WorldScriptHandler : public CefClient,
   void OnBeforeClose(CefRefPtr<CefBrowser> browser) override;
 
  private:
+  // QNBS-v3: polls g_worldscript_shutdown_requested from the UI thread (never from the signal handler itself) and, when set, requests a graceful close on every tracked browser via TryCloseBrowser.
+  void PollShutdownFlag();
+
   std::list<CefRefPtr<CefBrowser>> browser_list_;
 
   IMPLEMENT_REFCOUNTING(WorldScriptHandler);

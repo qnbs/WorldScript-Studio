@@ -3,10 +3,17 @@
 #include <cstdio>
 
 #include "include/cef_app.h"
+#include "include/wrapper/cef_closure_task.h"
 #include "include/wrapper/cef_helpers.h"
+
+#include "shutdown_signal.h"
 
 // QNBS-v3: declared not defined — implemented in rust-core, linked in by Corrosion; this is the whole FFI boundary ADR-0020 proves (C++ never implements WorldScript logic itself).
 extern "C" int worldscript_rust_ping();
+
+namespace {
+constexpr int kShutdownPollIntervalMs = 100;
+}  // namespace
 
 WorldScriptHandler::WorldScriptHandler() = default;
 
@@ -23,6 +30,24 @@ void WorldScriptHandler::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
   // QNBS-v3: moved here from OnTitleChange (Qodo review finding on PR #388) — this fires deterministically once per browser regardless of page content, so the FFI-boundary proof no longer depends on the loaded page setting/changing a title.
   printf("[worldscript_host] rust_core ping = %d\n", worldscript_rust_ping());
   fflush(stdout);
+
+  CefPostDelayedTask(TID_UI, base::BindOnce(&WorldScriptHandler::PollShutdownFlag, this),
+                     kShutdownPollIntervalMs);
+}
+
+void WorldScriptHandler::PollShutdownFlag() {
+  CEF_REQUIRE_UI_THREAD();
+  if (g_worldscript_shutdown_requested) {
+    // QNBS-v3: TryCloseBrowser (not CloseBrowser(false) directly) — it respects unload handlers and re-signals CanClose once ready, matching cefsimple's real close protocol (CodeRabbit review finding on PR #388).
+    for (const auto& browser : browser_list_) {
+      browser->GetHost()->TryCloseBrowser();
+    }
+    return;  // Closing now — no need to keep polling.
+  }
+  if (!browser_list_.empty()) {
+    CefPostDelayedTask(TID_UI, base::BindOnce(&WorldScriptHandler::PollShutdownFlag, this),
+                       kShutdownPollIntervalMs);
+  }
 }
 
 bool WorldScriptHandler::DoClose(CefRefPtr<CefBrowser> browser) {

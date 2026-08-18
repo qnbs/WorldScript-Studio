@@ -11,7 +11,7 @@
 
 namespace {
 
-// QNBS-v3: window-close policy only (cefsimple convention) — CanClose triggers the real browser close as a side effect, then always returns true rather than re-deriving the answer.
+// QNBS-v3: window-close policy only (cefsimple convention) — CanClose returns TryCloseBrowser's own result, not an unconditional true.
 class WorldScriptWindowDelegate : public CefWindowDelegate {
  public:
   explicit WorldScriptWindowDelegate(CefRefPtr<CefBrowserView> browser_view)
@@ -26,9 +26,10 @@ class WorldScriptWindowDelegate : public CefWindowDelegate {
   void OnWindowDestroyed(CefRefPtr<CefWindow> window) override { browser_view_ = nullptr; }
 
   bool CanClose(CefRefPtr<CefWindow> window) override {
+    // QNBS-v3: TryCloseBrowser (not CloseBrowser(false) + unconditional true) — an unconditional true let the window close before CEF's own unload-handler sequence finished, matching cefsimple's real pattern (CodeRabbit review finding on PR #388).
     CefRefPtr<CefBrowser> browser = browser_view_ ? browser_view_->GetBrowser() : nullptr;
     if (browser) {
-      browser->GetHost()->CloseBrowser(false);
+      return browser->GetHost()->TryCloseBrowser();
     }
     return true;
   }
