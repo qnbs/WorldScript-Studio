@@ -21,10 +21,10 @@ class WorldScriptHandler : public CefClient,
   bool DoClose(CefRefPtr<CefBrowser> browser) override;
   void OnBeforeClose(CefRefPtr<CefBrowser> browser) override;
 
- private:
-  // QNBS-v3: polls g_worldscript_shutdown_requested from the UI thread (never from the signal handler itself) and, when set, requests a graceful close on every tracked browser via TryCloseBrowser.
+  // QNBS-v3: public (not private) — called from PollShutdownTask::Execute(), an unrelated class in worldscript_handler.cpp's anonymous namespace; polls g_worldscript_shutdown_requested from the UI thread and requests a graceful close via TryCloseBrowser when set.
   void PollShutdownFlag();
 
+ private:
   std::list<CefRefPtr<CefBrowser>> browser_list_;
 
   IMPLEMENT_REFCOUNTING(WorldScriptHandler);
