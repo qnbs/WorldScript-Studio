@@ -5,16 +5,25 @@
 # (CEF binding choice — the Wave 2 spike this harness formalizes into a real,
 # repo-committed, CI-run check per §61.1.4's evidence-link discipline).
 #
-# Scope of this first increment: fetch + verify the pinned CEF SDK, report a
-# clean-machine Linux runtime-dependency inventory (before any apt-get — a genuinely
-# new data point vs. the spike's already-configured dev machine), and print real
-# version diagnostics parsed from the fetched SDK itself. The actual CEF host
-# build/run/shutdown proof (§4.11.3's "isolated learning harness") is deliberately
-# NOT part of this increment — see ADR-0020's Consequences for why that needs its
-# own CMake/Cargo bootstrap PR.
+# Two increments live here:
+# 1. Fetch + verify the pinned CEF SDK, report a clean-machine Linux runtime-
+#    dependency inventory (before any apt-get), and print real version diagnostics.
+# 2. Build apps/desktop-cef's worldscript_host against that SDK, serve the real
+#    production bundle (pnpm run build's dist/), and run repeated start/close
+#    cycles against it under Xvfb — the roadmap's literal "isolated learning
+#    harness" / "safe repeated startup/shutdown" / "existing dist/" deliverables,
+#    plus the FFI boundary proven from inside the real host, not just in isolation.
 #
 # Advisory only: not part of the required `ci-success` aggregator. Wave 2 is still
 # in progress; this harness informs it rather than gating unrelated PRs on it.
+#
+# Trigger scope is deliberately asymmetric: `pull_request` stays path-scoped to
+# CEF-specific files, so this ~30-minute, ~300MB-download job doesn't tax every
+# unrelated content/feature PR. `push` to main has NO path filter — it runs the
+# real production bundle through worldscript_host on every merge, so a
+# CEF-rendering regression introduced by an unrelated app-source PR is still
+# caught promptly (informationally, non-blocking), not silently missed until
+# someone next happens to touch a CEF-specific path.
 # ============================================================
 
 name: 🧪 CEF Learning Harness
@@ -23,15 +32,12 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'apps/desktop-cef/**'
       - 'scripts/cef/**'
       - 'docs/cef/**'
       - '.github/workflows/cef-learning-harness.yml'
   push:
     branches: [main]
-    paths:
-      - 'scripts/cef/**'
-      - 'docs/cef/**'
-      - '.github/workflows/cef-learning-harness.yml'
   workflow_dispatch:
 
 permissions:
@@ -43,9 +49,9 @@ concurrency:
 
 jobs:
   harness:
-    name: 🧪 Fetch CEF SDK + dependency inventory + version diagnostics
+    name: 🧪 CEF host build, dependency inventory, launch-cycle proof
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
         with:
@@ -76,11 +82,47 @@ jobs:
       - name: Print CEF version diagnostics
         run: node scripts/cef/print-cef-version-diagnostics.mjs "$CEF_DIR"
 
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: stable
+
+      - name: Install worldscript_host build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libx11-dev xvfb
+
+      - uses: ./.github/actions/setup
+
+      - name: Build WorldScript Studio production bundle
+        run: pnpm run build
+        env:
+          NODE_ENV: production
+
+      - name: Configure + build worldscript_host
+        run: |
+          set -o pipefail
+          BUILD_SRC_DIR=$(node scripts/cef/prepare-cef-build.mjs "$CEF_DIR" build | tail -1)
+          cmake -S "$BUILD_SRC_DIR" -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target worldscript_host --parallel "$(nproc)"
+
+      - name: List worldscript_host output directory (diagnostic)
+        run: ls -la build/worldscript_host/
+
+      - name: Serve production bundle + repeated launch/close proof
+        run: |
+          python3 -m http.server 8080 --directory dist &
+          SERVER_PID=$!
+          sleep 1
+          xvfb-run -a node scripts/cef/run-launch-cycle-proof.mjs \
+            "$(pwd)/build/worldscript_host/worldscript_host" \
+            "http://localhost:8080/" --cycles 3
+          kill "$SERVER_PID"
+
       - name: Summary
         run: |
           echo "## 🧪 CEF Learning Harness" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- Pinned SDK: \`$(node -e "console.log(require('./scripts/cef/cef-version.json').cefVersion)")\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Cache hit: \`${{ steps.cef-cache.outputs.cache-hit }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Scope: fetch/verify + clean-machine dependency inventory + version diagnostics only." >> "$GITHUB_STEP_SUMMARY"
-          echo "- Not yet in scope: CEF host build/run/shutdown proof (see ADR-0020 Consequences)." >> "$GITHUB_STEP_SUMMARY"
+          echo "- worldscript_host built and repeated launch/close cycles proven against the real production bundle (dist/), under Xvfb." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Not yet in scope: X11/Wayland matrix beyond this one runner, sandbox posture, accessibility smoke, crash-reporting proof." >> "$GITHUB_STEP_SUMMARY"
