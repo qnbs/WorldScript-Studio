@@ -97,35 +97,41 @@ documents:
     tier: A
     owner_role: cef-runtime
     backup_role: rust-core
-    last_verified: null
+    last_verified:
+      worldscript: "v1.27.1"
+      cef: "151.3.18+gbeff58d+chromium-151.0.7922.138"
     review_days: 90
     related_ci:
       - cef-learning-harness
     driftCheckTool: "planned — not implemented, see Wave 1"
-    note: "Skeleton only — Status: Not started"
+    note: "Real evidence from PR #388 for process model, message loop, subprocess packaging. Sandbox config and a directly-observed process-tree snapshot remain open."
 
   - path: docs/cef/knowledge/cef-rust-binding-cookbook.md
     tier: A
     owner_role: rust-core
     backup_role: cef-runtime
-    last_verified: null
+    last_verified:
+      worldscript: "v1.27.1"
+      cef: "151.3.18+gbeff58d+chromium-151.0.7922.138"
     review_days: 90
     related_ci:
       - cef-learning-harness
     driftCheckTool: "planned — not implemented, see Wave 1"
-    note: "Skeleton only — Status: Not started"
+    note: "Real evidence from apps/desktop-cef/rust-core/ (PR #388) — but the FFI surface is one trivial function, not representative of real API coverage."
 
   - path: docs/cef/knowledge/threading-and-lifetimes.md
     tier: A
     owner_role: cef-runtime
     backup_role: rust-core
-    last_verified: null
+    last_verified:
+      worldscript: "v1.27.1"
+      cef: "151.3.18+gbeff58d+chromium-151.0.7922.138"
     review_days: 90
     related_ci:
       - cef-learning-harness
       # cef-competency-gate: no such CI workflow/job exists yet — planned, not implemented (CodeRabbit review finding on PR #389). Re-add once it's a real job.
     driftCheckTool: "planned — not implemented, see Wave 1"
-    note: "Skeleton only — Status: Not started"
+    note: "Real evidence from PR #388 for UI-thread callback discipline and CEF ref-counting/callback-lifetime patterns. IO-thread and render-process-side rules untouched; full dual-review (§4.11.4) not yet done."
 
   - path: docs/cef/knowledge/subprocess-and-shutdown.md
     tier: A
