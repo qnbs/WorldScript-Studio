@@ -10,9 +10,12 @@
 # Real @tauri-apps/* imports (static or dynamic)
 rg -l "from ['\"]@tauri-apps|import\(['\"]@tauri-apps" -g '*.ts' -g '*.tsx' -g '!*.test.ts' -g '!*.test.tsx' -g '!tests/**' .
 
-# Files that only check the Tauri-presence globals, with no direct API import
-rg -l "__TAURI_INTERNALS__|__TAURI__" -g '*.ts' -g '*.tsx' -g '!*.test.ts' -g '!*.test.tsx' -g '!tests/**' .
-# ...then diffed against the first list
+# Files that only check Tauri presence, with no direct API import — TWO detection methods, both
+# required (the first pass only covered the raw-global check and undercounted; corrected 2026-08-18):
+rg -l "isTauriRuntime\(\)" -g '*.ts' -g '*.tsx' -g '!*.test.ts' -g '!*.test.tsx' -g '!tests/**' .          # the helper function
+rg -l "__TAURI_INTERNALS__|__TAURI__|__TAURI_METADATA__" -g '*.ts' -g '*.tsx' -g '!*.test.ts' -g '!*.test.tsx' -g '!tests/**' .  # raw globals (e.g. register-sw.ts)
+# ...both diffed against the first list; comment-only matches (e.g. a docstring mentioning
+# isTauriRuntime()) manually excluded after inspection.
 ```
 
 Per-file API breakdown was extracted with `rg -oE "@tauri-apps/[a-zA-Z0-9/_-]*"` on each matched file. Full structured result: [`tauri-coupling-inventory.json`](tauri-coupling-inventory.json).
@@ -25,7 +28,7 @@ Tauri coupling is **real but not centralized**. `services/tauriRuntime.ts` — t
 |---|---|---|
 | Direct `@tauri-apps/*` API imports | 16 | see table below |
 | Build-time externalization only | 1 | `vite.config.ts` |
-| Detection-only (`isTauriRuntime()`/`__TAURI__`, no direct API import) | 5 | `components/settings/AiProviderCard.tsx`, `register-sw.ts`, `services/ai/localAiDeviceProfiler.ts`, `services/aiProviderService.ts`, `services/storageService.ts` |
+| Detection-only (`isTauriRuntime()`/`__TAURI__`, no direct API import) | 13 | `components/settings/AiProviderCard.tsx`, `components/settings/DataSection.tsx`, `components/settings/DesktopSection.tsx`, `components/settings/FeatureFlagsSection.tsx`, `components/settings/GeneralSections.tsx`, `hooks/useNativeNotifications.ts`, `register-sw.ts`, `services/ai/localAiDeviceProfiler.ts`, `services/aiProviderService.ts`, `services/appBootstrap.ts`, `services/factoryResetService.ts`, `services/ollamaService.ts`, `services/storageService.ts` |
 | Ambient type declarations | 1 | `types/tauri-plugins.d.ts` |
 
 ## Direct API coupling by category
@@ -57,6 +60,9 @@ src-tauri/
 ├── fuzz/Cargo.toml            (filename-sanitization fuzz harness)
 ├── osv-scanner.toml
 ├── src/
+│   ├── commands/
+│   │   ├── mod.rs
+│   │   └── task_supervisor.rs   (registers worldscript_task_supervisor_ping/submit — active native task-dispatch surface used by services/tauriTaskBridge.ts)
 │   ├── lib.rs
 │   ├── lora.rs
 │   ├── main.rs
@@ -65,7 +71,7 @@ src-tauri/
 └── icons/                     (11 image assets, no coupling)
 ```
 
-4 Rust source files. This is the entire native surface being migrated — small relative to the JS/TS coupling above, but it is where `WS-CEF-*` Rust work (§66 workstream catalogue) eventually lands.
+6 Rust source files (corrected 2026-08-18 — the `commands/` module was omitted from the first pass). This is the entire native surface being migrated — small relative to the JS/TS coupling above, but it is where `WS-CEF-*` Rust work (§66 workstream catalogue) eventually lands.
 
 ## `package.json`
 

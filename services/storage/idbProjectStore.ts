@@ -161,9 +161,19 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
   if (!validSettings.openRouter || typeof validSettings.openRouter !== 'object') {
     validSettings.openRouter = {
       enabled: false,
-      apiKey: '',
       preferredModel: 'deepseek/deepseek-r1:free',
     };
+  } else if ('apiKey' in validSettings.openRouter) {
+    // QNBS-v3: strip a stray `apiKey` field from an *existing* openRouter object — a settings
+    // import/export round-trip (services/settingsExchange.ts) spreads Settings wholesale, so a
+    // legacy or crafted payload could otherwise carry a real key straight into bulk-persisted
+    // settings.json (plaintext on desktop) or IDB. The real key lives only in the dedicated
+    // per-provider key store (storageService.saveApiKey('openrouter', ...)) — never here.
+    const { apiKey: _discardedLegacyApiKey, ...rest } = validSettings.openRouter as Record<
+      string,
+      unknown
+    >;
+    validSettings.openRouter = rest as unknown as typeof validSettings.openRouter;
   }
 
   return validSettings;

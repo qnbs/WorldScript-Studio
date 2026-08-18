@@ -84,12 +84,23 @@ export const uploadWorldImageThunk = createAsyncThunk(
   async ({ worldId, file }: { worldId: string; file: File }) => {
     return new Promise<{ worldId: string }>((resolve, reject) => {
       const reader = new FileReader();
-      reader.onloadend = async () => {
+      // QNBS-v3: onload (not onloadend, which also fires on error/abort with a null result) plus an
+      // explicit try/catch around saveImage — a rejected save previously left this Promise pending
+      // forever (the async onloadend handler's rejection was detached from the outer resolve/reject).
+      reader.onload = () => {
+        const result = reader.result;
+        if (typeof result !== 'string') {
+          reject(new Error('FileReader did not produce a string result'));
+          return;
+        }
         // QNBS-v3: retain the data-URL MIME type so uploaded JPEG/WebP images survive filesystem round-trips.
-        await storageService.saveImage(worldId, reader.result as string);
-        resolve({ worldId });
+        storageService
+          .saveImage(worldId, result)
+          .then(() => resolve({ worldId }))
+          .catch(reject);
       };
-      reader.onerror = reject;
+      reader.onerror = () =>
+        reject(reader.error ?? new Error('FileReader failed to read the file'));
       reader.readAsDataURL(file);
     });
   },

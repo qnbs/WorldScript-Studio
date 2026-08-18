@@ -16,6 +16,12 @@ vi.mock('../../../features/project/thunks/thunkUtils', () => ({
   buildAiCreativity: vi.fn().mockReturnValue('Balanced'),
 }));
 
+vi.mock('../../../services/storageService', () => ({
+  storageService: {
+    saveImage: vi.fn(),
+  },
+}));
+
 import featureFlagsReducer from '../../../features/featureFlags/featureFlagsSlice';
 import projectReducer, { projectActions } from '../../../features/project/projectSlice';
 import {
@@ -25,11 +31,15 @@ import {
   regenerateOutlineSectionThunk,
 } from '../../../features/project/thunks/outlineThunks';
 import { loadAiProvider, loadPrompts } from '../../../features/project/thunks/thunkUtils';
-import { generateWorldProfileThunk } from '../../../features/project/thunks/worldThunks';
+import {
+  generateWorldProfileThunk,
+  uploadWorldImageThunk,
+} from '../../../features/project/thunks/worldThunks';
 import settingsReducer from '../../../features/settings/settingsSlice';
 import statusReducer from '../../../features/status/statusSlice';
 import versionControlReducer from '../../../features/versionControl/versionControlSlice';
 import writerReducer from '../../../features/writer/writerSlice';
+import { storageService } from '../../../services/storageService';
 
 // ---------------------------------------------------------------------------
 // Store factory
@@ -63,6 +73,7 @@ beforeEach(() => {
   } as never);
   mockGetPrompts.mockReturnValue({ prompt: 'test-prompt', schema: {} });
   mockGenerateJson.mockResolvedValue([]);
+  vi.mocked(storageService.saveImage).mockResolvedValue(undefined);
 });
 
 // ---------------------------------------------------------------------------
@@ -176,5 +187,63 @@ describe('generateWorldProfileThunk', () => {
       generateWorldProfileThunk({ concept: 'space', lang: 'en' }),
     );
     expect(result.type).toBe('project/generateWorldProfile/rejected');
+  });
+});
+
+describe('uploadWorldImageThunk', () => {
+  it('reads file as a MIME-preserving data URL', async () => {
+    const fakeDataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA';
+    vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(function (this: FileReader) {
+      Object.defineProperty(this, 'result', { value: fakeDataUrl, configurable: true });
+      void Promise.resolve().then(() => {
+        if (typeof this.onload === 'function')
+          this.onload(new ProgressEvent('load') as ProgressEvent<FileReader>);
+      });
+    });
+
+    const store = makeStore();
+    const file = new File(['fake image data'], 'atlas.png', { type: 'image/png' });
+    const action = await store.dispatch(uploadWorldImageThunk({ worldId: 'w99', file }));
+
+    expect(action.type).toBe('project/uploadWorldImage/fulfilled');
+    expect(storageService.saveImage).toHaveBeenCalledWith('w99', fakeDataUrl);
+  });
+
+  it('rejects when the FileReader errors', async () => {
+    const readerError = new Error('read failed');
+    vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(function (this: FileReader) {
+      Object.defineProperty(this, 'error', { value: readerError, configurable: true });
+      void Promise.resolve().then(() => {
+        if (typeof this.onerror === 'function')
+          this.onerror(new ProgressEvent('error') as ProgressEvent<FileReader>);
+      });
+    });
+
+    const store = makeStore();
+    const file = new File(['data'], 'broken.png', { type: 'image/png' });
+    const action = await store.dispatch(uploadWorldImageThunk({ worldId: 'w1', file }));
+
+    expect(action.type).toBe('project/uploadWorldImage/rejected');
+    expect(storageService.saveImage).not.toHaveBeenCalled();
+  });
+
+  it('rejects (does not hang) when storageService.saveImage fails', async () => {
+    vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(function (this: FileReader) {
+      Object.defineProperty(this, 'result', {
+        value: 'data:image/png;base64,abc',
+        configurable: true,
+      });
+      void Promise.resolve().then(() => {
+        if (typeof this.onload === 'function')
+          this.onload(new ProgressEvent('load') as ProgressEvent<FileReader>);
+      });
+    });
+    vi.mocked(storageService.saveImage).mockRejectedValueOnce(new Error('disk full'));
+
+    const store = makeStore();
+    const file = new File(['data'], 'atlas.png', { type: 'image/png' });
+    const action = await store.dispatch(uploadWorldImageThunk({ worldId: 'w2', file }));
+
+    expect(action.type).toBe('project/uploadWorldImage/rejected');
   });
 });

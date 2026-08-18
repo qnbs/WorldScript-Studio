@@ -624,21 +624,24 @@ export interface VoiceSettings {
   voiceWasmDownloadError?: string;
 }
 
-/** OpenRouter provider settings — key stored encrypted, model controls free-vs-paid selection. */
+/** OpenRouter provider settings — model controls free-vs-paid selection. */
 export interface OpenRouterSettings {
   /** Whether OpenRouter is enabled as a provider in the routing chain. */
   enabled: boolean;
-  /**
-   * OpenRouter API key (encrypted at rest via IDB AES-256-GCM when enableIdbAtRestEncryption is on).
-   * Never logged; sanitizeLogContext redacts it automatically.
-   */
-  apiKey: string;
   /**
    * Preferred model identifier. Use `:free` suffix for the free tier
    * (e.g. `"deepseek/deepseek-r1:free"`, `"meta-llama/llama-3.3-70b-instruct:free"`).
    */
   preferredModel: string;
 }
+// QNBS-v3: no `apiKey` field here on purpose — the key lives exclusively in the dedicated
+// per-provider key store (storageService.saveApiKey('openrouter', ...) -> dbService/idbKeyStore
+// on web, dedicated backstop on desktop). This type previously declared an `apiKey: string` field
+// that no reducer ever populated and no code ever read, but a settings import/export round-trip
+// (services/settingsExchange.ts spreads the whole Settings object) could have carried a stray
+// value straight into bulk-persisted settings.json (plaintext on desktop) or IDB. Removed rather
+// than patched — see normalizePersistedSettings in idbProjectStore.ts, which now actively strips
+// any legacy `apiKey` key instead of only backfilling a missing object.
 
 /** QNBS-v3 (T2): Desktop-only (Tauri) behavior. Ignored on the web. Extended by later native phases. */
 export interface DesktopSettings {
@@ -655,7 +658,7 @@ export interface Settings {
   writingSurfaceStyle: WritingSurfaceStyle;
   /** AI execution routing mode — hybrid (default), cloud-only, local-only, or eco (tiny models). */
   aiMode: AiMode;
-  /** OpenRouter cloud provider settings — enabled/disabled, API key, preferred model. */
+  /** OpenRouter cloud provider settings — enabled/disabled, preferred model. Key stored separately, see OpenRouterSettings. */
   openRouter?: OpenRouterSettings;
   editorFont: EditorFont;
   fontSize: number;

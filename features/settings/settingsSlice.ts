@@ -36,7 +36,6 @@ const getSystemThemePreference = (): Theme => {
 
 export const DEFAULT_OPENROUTER_SETTINGS: OpenRouterSettings = {
   enabled: false,
-  apiKey: '',
   // QNBS-v3: DeepSeek R1 free tier — strong reasoning + no cost, ideal default (zero friction).
   preferredModel: 'deepseek/deepseek-r1:free',
 };
