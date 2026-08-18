@@ -187,7 +187,7 @@ documents:
     backup_role: desktop-security
     last_verified:
       worldscript: "v1.27.1"
-      cef: "not applicable — pre-CEF-selection"
+      cef: "151.3.18+gbeff58d+chromium-151.0.7922.138"
     review_days: 180
     related_ci: []
     driftCheckTool: "planned — not implemented, see Wave 1"

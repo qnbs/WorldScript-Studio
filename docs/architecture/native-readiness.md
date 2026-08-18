@@ -62,4 +62,4 @@ Wave 2's first deliverable — the CEF binding/C++ decision — is now backed by
 | Early Accessibility Gate | Not yet attempted | cef-runtime, Wave 2 | Out of this spike's scope entirely — no accessibility tree/API integration was touched. |
 | Sandbox posture | Not yet attempted | desktop-security, Wave 2/3 (roadmap §12) | Spike explicitly ran with `no_sandbox=true`; zero evidence either way on this row. |
 
-**Overall for this snapshot**: 1 PASS, 3 explicit DEBT-in-progress rows (each with a concrete exit condition, not open-ended), 1 not-yet-attempted row correctly left blank rather than assumed. No row is marked PASS without the evidence cited above.
+**Overall for this snapshot**: 1 PASS, 2 explicit DEBT-in-progress rows (each with a concrete exit condition, not open-ended), 2 not-yet-attempted rows correctly left blank rather than assumed. No row is marked PASS without the evidence cited above.
