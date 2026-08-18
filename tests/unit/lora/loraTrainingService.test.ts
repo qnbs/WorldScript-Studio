@@ -8,7 +8,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const h = vi.hoisted(() => ({
   isDesktop: { value: true },
   trainLora: vi.fn(async (_request: unknown) => 'training_completed'),
-  onLoraTrainingProgress: vi.fn(async (_cb: (payload: unknown) => void) => () => {}),
+  // QNBS-v3: unsubscribeLoraProgress is a trackable vi.fn(), not an inline arrow — so tests can assert startTraining's cleanup path actually calls it, not just that a function was returned.
+  unsubscribeLoraProgress: vi.fn(),
+  onLoraTrainingProgress: vi.fn(
+    async (_cb: (payload: unknown) => void): Promise<() => void> => h.unsubscribeLoraProgress,
+  ),
   abortLoraTraining: vi.fn(
     async (): Promise<'confirmed' | 'pending_start_cancelled' | 'nothing_to_cancel'> => 'confirmed',
   ),
@@ -144,6 +148,7 @@ describe('loraTrainingService — desktop build', () => {
     expect(result.adapterPath).toBe('/out/adapter');
     expect(result.ggufPath).toBe('/out/adapter.gguf');
     expect(h.onLoraTrainingProgress).toHaveBeenCalledTimes(1);
+    expect(h.unsubscribeLoraProgress).toHaveBeenCalledTimes(1);
   });
 
   it('startTraining forwards progress events to onProgress', async () => {
@@ -198,8 +203,7 @@ describe('loraTrainingService — desktop build', () => {
   });
 
   it('passes through the native pending-start-cancelled result', async () => {
-    // QNBS-v3 regression: a cancel during startup is a recorded cancellation, not a no-op — the
-    // caller must be able to tell it apart from 'nothing_to_cancel'.
+    // QNBS-v3 regression: a startup-time cancel is a recorded cancellation, not a no-op — callers must be able to tell it apart from 'nothing_to_cancel'.
     h.abortLoraTraining.mockResolvedValueOnce('pending_start_cancelled');
     await expect(abortTraining()).resolves.toBe('pending_start_cancelled');
   });

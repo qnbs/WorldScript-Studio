@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppDispatch } from '../../../app/store';
 import type { I18nTranslate } from '../../../services/commands/commandTypes';
 
+// QNBS-v3: Wave 1 — mocks services/desktopPlatform's deepLinks/filesystem facets, not @tauri-apps/api/event + plugin-fs directly.
 const h = vi.hoisted(() => ({
   isDesktop: { value: true },
   onDeepLink: vi.fn(async (_cb: (urls: string[]) => void | Promise<void>) => () => {}),

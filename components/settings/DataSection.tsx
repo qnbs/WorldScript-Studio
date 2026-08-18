@@ -158,6 +158,7 @@ export const DataSection: FC = () => {
           </div>
           {isTauriRuntime() && (
             <div className="mt-4 space-y-2">
+              {/* QNBS-v3: routes through desktopPlatform.diagnostics instead of the removed tauriRuntime.openTauriDataDirectory() wrapper */}
               <Button
                 type="button"
                 variant="secondary"

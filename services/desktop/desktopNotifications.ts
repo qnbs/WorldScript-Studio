@@ -27,6 +27,7 @@ export function _resetNotificationStateForTest(): void {
  */
 export async function isNotificationPermissionGranted(): Promise<boolean> {
   try {
+    // QNBS-v3: no separate isTauriRuntime() guard needed — desktopPlatform.notifications already resolves to a safe false-returning no-op on web
     return await desktopPlatform.notifications.isPermissionGranted();
   } catch (error) {
     log.warn('Failed to read notification permission state', { error: String(error) });

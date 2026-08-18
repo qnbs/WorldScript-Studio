@@ -504,6 +504,34 @@ describe('tauriDesktopPlatform', () => {
       ).rejects.toThrow('set_lora_python_path returned an unexpected response');
     });
 
+    it('checkLoraEnvironment/setLoraPythonPath reject a present-but-wrongly-typed optional field', async () => {
+      const baseResult = {
+        python_available: true,
+        unsloth_available: false,
+        cuda_available: true,
+        vram_gb: 24,
+        python_version: '3.12.1',
+      };
+
+      h.invoke.mockResolvedValueOnce({ ...baseResult, python_path: 123 });
+      await expect(tauriDesktopPlatform.tasks.checkLoraEnvironment()).rejects.toThrow(
+        'check_lora_environment returned an unexpected response',
+      );
+
+      h.invoke.mockResolvedValueOnce({ ...baseResult, last_error: 42 });
+      await expect(
+        tauriDesktopPlatform.tasks.setLoraPythonPath('/usr/bin/python3'),
+      ).rejects.toThrow('set_lora_python_path returned an unexpected response');
+
+      // string or explicit null are both valid — not rejected.
+      h.invoke.mockResolvedValueOnce({ ...baseResult, python_path: null, last_error: null });
+      await expect(tauriDesktopPlatform.tasks.checkLoraEnvironment()).resolves.toEqual({
+        ...baseResult,
+        python_path: null,
+        last_error: null,
+      });
+    });
+
     it('onLoraTrainingProgress subscribes to lora-progress and forwards the payload', async () => {
       const handler = vi.fn();
       h.listen.mockImplementationOnce(async (_event, cb) => {
@@ -519,6 +547,18 @@ describe('tauriDesktopPlatform', () => {
       h.listen.mockRejectedValueOnce(new Error('event API unavailable'));
       const unsubscribe = await tauriDesktopPlatform.tasks.onLoraTrainingProgress(vi.fn());
       expect(() => unsubscribe()).not.toThrow();
+      expect(h.loggerWarn).toHaveBeenCalled();
+    });
+
+    it('onLoraTrainingProgress drops (and logs) a malformed payload instead of forwarding it', async () => {
+      const handler = vi.fn();
+      h.listen.mockImplementationOnce(async (_event, cb) => {
+        cb({ payload: { progress_percent: 42 } }); // no valid `event` key
+        cb({ payload: 'not-an-object' });
+        return () => {};
+      });
+      await tauriDesktopPlatform.tasks.onLoraTrainingProgress(handler);
+      expect(handler).not.toHaveBeenCalled();
       expect(h.loggerWarn).toHaveBeenCalled();
     });
   });

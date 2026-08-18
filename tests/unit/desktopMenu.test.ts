@@ -1,9 +1,5 @@
-/**
- * Tests for services/desktop/desktopMenu.ts
- * QNBS-v3 (T1, Wave 1): Mocks services/desktopPlatform's menu.loadMenuBuilder() — asserts the
- * localized menu structure, the app-menu install, and that custom items route to executeCommand
- * with the right command ids.
- */
+/** Tests for services/desktop/desktopMenu.ts */
+// QNBS-v3 (T1, Wave 1): mocks services/desktopPlatform's menu.loadMenuBuilder(), not @tauri-apps/api/menu directly.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

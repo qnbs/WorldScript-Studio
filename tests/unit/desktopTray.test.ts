@@ -1,9 +1,5 @@
-/**
- * Tests for services/desktop/desktopTray.ts
- * QNBS-v3 (T2, Wave 1): Mocks services/desktopPlatform's tray.loadTrayBuilder(),
- * lifecycle.onCloseRequested(), and window.hide() — asserts tray creation, left-click focus, the
- * close-to-tray handler, and web no-op.
- */
+/** Tests for services/desktop/desktopTray.ts */
+// QNBS-v3 (T2, Wave 1): mocks services/desktopPlatform's tray/lifecycle/window facets, not @tauri-apps/* directly.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

@@ -416,6 +416,7 @@ const TauriVersionLine: FC = () => {
 
   useEffect(() => {
     if (!isTauriRuntime()) return;
+    // QNBS-v3: routes through desktopPlatform.diagnostics instead of the removed tauriRuntime.getTauriAppVersion() wrapper
     void desktopPlatform.diagnostics.getAppVersion().then(setTauriVersion);
   }, []);
 

@@ -19,6 +19,7 @@ import type {
   LoraMergeRequest,
   LoraOllamaModelfileRequest,
   LoraTrainingEnvironmentResult,
+  LoraTrainingProgressEvent,
   LoraTrainRequest,
 } from '../types';
 
@@ -320,6 +321,25 @@ function isLoraAbortOutcome(value: unknown): value is LoraAbortOutcome {
   );
 }
 
+// QNBS-v3: python_path/last_error are optional-but-typed on the wire (string | null | absent) — a present value of any other type must reject, not silently pass through as a truthy non-string.
+function isOptionalStringOrNull(value: unknown): boolean {
+  return value === undefined || value === null || typeof value === 'string';
+}
+
+const LORA_PROGRESS_EVENT_KINDS = new Set([
+  'loading_model',
+  'dataset_loaded',
+  'progress',
+  'completed',
+  'error',
+]);
+
+function isLoraTrainingProgressEvent(value: unknown): value is LoraTrainingProgressEvent {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return typeof v['event'] === 'string' && LORA_PROGRESS_EVENT_KINDS.has(v['event']);
+}
+
 function isLoraTrainingEnvironmentResult(value: unknown): value is LoraTrainingEnvironmentResult {
   if (typeof value !== 'object' || value === null) return false;
   const v = value as Record<string, unknown>;
@@ -328,7 +348,9 @@ function isLoraTrainingEnvironmentResult(value: unknown): value is LoraTrainingE
     typeof v['unsloth_available'] === 'boolean' &&
     typeof v['cuda_available'] === 'boolean' &&
     typeof v['vram_gb'] === 'number' &&
-    typeof v['python_version'] === 'string'
+    typeof v['python_version'] === 'string' &&
+    isOptionalStringOrNull(v['python_path']) &&
+    isOptionalStringOrNull(v['last_error'])
   );
 }
 
@@ -366,7 +388,15 @@ const tasks: DesktopTasks = {
   onLoraTrainingProgress: async (handler) => {
     try {
       const { listen } = await import('@tauri-apps/api/event');
-      const stop = await listen('lora-progress', (event) => handler(event.payload));
+      const stop = await listen('lora-progress', (event) => {
+        if (!isLoraTrainingProgressEvent(event.payload)) {
+          logger.warn('desktopPlatform.tasks: ignoring malformed LoRA training progress payload', {
+            payload: event.payload,
+          });
+          return;
+        }
+        handler(event.payload);
+      });
       return stop;
     } catch (error) {
       logger.warn('desktopPlatform.tasks: failed to subscribe to LoRA training progress', {

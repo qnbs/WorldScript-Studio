@@ -36,6 +36,7 @@ export function useTauriUpdater(options?: { autoCheck?: boolean }) {
     setChecking(true);
     setError(null);
     try {
+      // QNBS-v3: routes through desktopPlatform.updater instead of the direct @tauri-apps/plugin-updater/api-app imports it replaced
       const currentVersion = (await desktopPlatform.updater.getAppVersion()) ?? '';
       const result = await desktopPlatform.updater.check();
       if (result) {

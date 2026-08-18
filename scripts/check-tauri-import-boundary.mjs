@@ -55,14 +55,17 @@ const SRC_EXT = new Set(['.ts', '.tsx']);
 //     tauriDesktopPlatform -> logger). Exit condition: give packages/desktop-contracts its own
 //     lightweight logging port (injected callback or plain console.warn) so it stops depending on
 //     the app-level logger, then migrate logger.ts's JSONL sink onto desktopPlatform.filesystem.
+const BOUNDARY_FILES = [
+  'packages/desktop-contracts/src/types.ts',
+  'packages/desktop-contracts/src/adapters/tauriDesktopPlatform.ts',
+];
+const EXCEPTION_FILES = [
+  'services/ai/fetchAdapter.ts',
+  'services/localServerHttp.ts',
+  'services/logger.ts',
+];
 const ALLOWED_FILES = new Set(
-  [
-    'packages/desktop-contracts/src/types.ts',
-    'packages/desktop-contracts/src/adapters/tauriDesktopPlatform.ts',
-    'services/ai/fetchAdapter.ts',
-    'services/localServerHttp.ts',
-    'services/logger.ts',
-  ].map((p) => path.join(root, p)),
+  [...BOUNDARY_FILES, ...EXCEPTION_FILES].map((p) => path.join(root, p)),
 );
 
 // Real import/require syntax only — not comment mentions, JSDoc, or regex literals like
@@ -74,6 +77,7 @@ const ALLOWED_FILES = new Set(
 const IMPORT_RE =
   /(?:^\s*import\s+['"]|from\s+['"]|import\(\s*['"]|require\(\s*['"])@tauri-apps\//m;
 
+// QNBS-v3: scans first-party TS/TSX source (not node_modules/tests/build config) since the guardrail's job is bounding application-owned coupling, not third-party or test-mock code
 /** Recursively collect first-party .ts/.tsx files. */
 function collect(dir, out) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -87,6 +91,39 @@ function collect(dir, out) {
   return out;
 }
 
+/**
+ * Marks which lines are entirely inside a comment (`//...` or a `/* ... *\/` block, tracked across
+ * lines so a multi-line block is caught even when a continuation line doesn't start with `*`).
+ * Deliberately line-based, not a character-level tokenizer: distinguishing a `/` regex-literal
+ * delimiter from a division operator or a comment starter is a genuinely hard JS-tokenization
+ * problem (this file's own `external: isTauri ? [] : [/^@tauri-apps\//]` and the `manualChunks`
+ * regex filters are exactly this kind of literal) — a naive character scanner misreads them and
+ * produces false positives/negatives, which is worse than the narrower gap it would close. This
+ * only needs to know "is this whole line commented out," not parse an AST.
+ */
+function commentLineMask(text) {
+  const lines = text.split('\n');
+  const inComment = new Array(lines.length).fill(false);
+  let insideBlock = false;
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    if (insideBlock) {
+      inComment[i] = true;
+      if (trimmed.includes('*/')) insideBlock = false;
+      continue;
+    }
+    if (trimmed.startsWith('//') || trimmed.startsWith('*')) {
+      inComment[i] = true;
+      continue;
+    }
+    if (trimmed.startsWith('/*')) {
+      inComment[i] = true;
+      if (!trimmed.includes('*/')) insideBlock = true;
+    }
+  }
+  return inComment;
+}
+
 const files = collect(root, []);
 /** @type {{ file: string, line: number, text: string }[]} */
 const violations = [];
@@ -95,12 +132,11 @@ for (const file of files) {
   if (ALLOWED_FILES.has(file)) continue;
   const text = fs.readFileSync(file, 'utf8');
   const lines = text.split('\n');
+  const inComment = commentLineMask(text);
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trimStart();
-    if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) continue;
-    if (IMPORT_RE.test(line)) {
-      violations.push({ file: path.relative(root, file), line: i + 1, text: line.trim() });
+    if (inComment[i]) continue;
+    if (IMPORT_RE.test(lines[i])) {
+      violations.push({ file: path.relative(root, file), line: i + 1, text: lines[i].trim() });
     }
   }
 }
@@ -121,5 +157,5 @@ if (violations.length > 0) {
 }
 
 console.log(
-  `[guardrail:desktop-imports] OK — 0 direct @tauri-apps/* imports outside the DesktopPlatform boundary (${files.length} files scanned, ${ALLOWED_FILES.size} documented exceptions).`,
+  `[guardrail:desktop-imports] OK — 0 direct @tauri-apps/* imports outside the DesktopPlatform boundary (${files.length} files scanned, ${BOUNDARY_FILES.length} approved boundary files, ${EXCEPTION_FILES.length} documented exceptions).`,
 );

@@ -55,6 +55,7 @@ export async function installDesktopTray(
   if (!desktopPlatform.runtime.isDesktop || trayInstalling) return false;
   trayInstalling = true;
   try {
+    // QNBS-v3: loads the builder through desktopPlatform.tray instead of the direct @tauri-apps/api/tray+menu+app imports it replaced
     const builder = await desktopPlatform.tray.loadTrayBuilder();
     if (!builder) return false;
     const { TrayIcon, Menu, MenuItem, PredefinedMenuItem, defaultWindowIcon } = builder;
@@ -143,7 +144,11 @@ export async function installCloseToTray(
     return await desktopPlatform.lifecycle.onCloseRequested(async (event) => {
       if (shouldMinimizeToTray()) {
         event.preventDefault();
-        void desktopPlatform.window.hide();
+        try {
+          await desktopPlatform.window.hide();
+        } catch (err) {
+          log.warn('Failed to hide window for close-to-tray', { error: String(err) });
+        }
         return;
       }
       try {

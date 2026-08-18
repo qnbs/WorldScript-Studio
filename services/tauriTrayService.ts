@@ -1,3 +1,4 @@
+// QNBS-v3: routes through desktopPlatform.window instead of the direct @tauri-apps/api/window import it replaced
 import { desktopPlatform } from './desktopPlatform';
 
 /** Show or hide the main window (system tray integration on desktop). */

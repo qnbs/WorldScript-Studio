@@ -11,6 +11,7 @@ import { isTauriRuntime } from './tauriRuntime';
 class DesktopPlatformManager {
   readonly platform: DesktopPlatform;
 
+  // QNBS-v3: resolved once at construction, not per-call, so every consumer gets a stable adapter without re-checking isTauriRuntime() itself
   constructor() {
     this.platform = isTauriRuntime() ? tauriDesktopPlatform : webDesktopPlatform;
   }

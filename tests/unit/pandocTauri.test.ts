@@ -1,3 +1,4 @@
+// QNBS-v3: Wave 1 — mocks services/desktopPlatform, not @tauri-apps/api/core directly, matching pandocTauri.ts's own migration.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const h = vi.hoisted(() => ({

@@ -1,8 +1,5 @@
-/**
- * Tests for hooks/useTauriUpdater.ts
- * QNBS-v3: Mocks isTauriRuntime + Tauri plugin-updater/api/app to test
- * checkForUpdate, installUpdate, and autoCheck behaviour.
- */
+/** Tests for hooks/useTauriUpdater.ts */
+// QNBS-v3: Wave 1 — mocks isTauriRuntime + services/desktopPlatform's updater facet, not @tauri-apps/plugin-updater/api-app directly.
 
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';

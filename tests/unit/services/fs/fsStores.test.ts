@@ -14,10 +14,7 @@ import type { TauriApis } from '../../../../services/fs/fsCore';
 // real value is set in beforeEach before any mock is invoked.
 const { fsHolder } = vi.hoisted(() => ({ fsHolder: { current: null as unknown as TauriApis } }));
 
-// QNBS-v3: mock desktopPlatform (not the raw @tauri-apps/* modules) so the REAL loadTauriApis
-// assembles a TauriApis whose methods delegate to the per-test in-memory fake FS
-// (memoization-safe — each call reads fsHolder.current). This exercises the real store logic AND
-// loadTauriApis itself.
+// QNBS-v3: mocks desktopPlatform, not the raw @tauri-apps/* modules, so the REAL loadTauriApis assembles a TauriApis delegating to the per-test in-memory fake FS — exercises loadTauriApis itself too.
 vi.mock('../../../../services/desktopPlatform', () => ({
   get desktopPlatform() {
     return {

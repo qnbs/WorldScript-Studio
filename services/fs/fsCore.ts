@@ -7,9 +7,7 @@ import LZString from 'lz-string';
 import { desktopPlatform } from '../desktopPlatform';
 import { logger } from '../logger';
 
-// QNBS-v3: Wave 1 PR B — delegates through desktopPlatform instead of importing @tauri-apps/* plugin
-// modules directly; the shape stays identical so the 5 fs-store consumers + factoryResetService.ts
-// need zero call-site changes.
+// QNBS-v3: delegates through desktopPlatform now, not @tauri-apps/* directly — shape unchanged, so the 5 fs-store consumers need zero call-site changes.
 export type TauriApis = {
   readTextFile: (path: string) => Promise<string>;
   writeTextFile: (path: string, content: string) => Promise<void>;

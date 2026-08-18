@@ -1,8 +1,5 @@
 /** Tests for services/desktop/desktopNotifications.ts */
-// QNBS-v3: Wave 1 — mocks services/desktopPlatform (not @tauri-apps/plugin-notification directly)
-// since the Tauri-vs-web decision now lives in desktopPlatform's adapter selection (covered by
-// packages/desktop-contracts' own tests + tests/unit/services/desktopPlatform.test.ts). This file
-// only needs to assert its own remaining responsibilities: error-swallowing and in-flight dedupe.
+// QNBS-v3: Wave 1 — mocks services/desktopPlatform, not @tauri-apps/plugin-notification directly; asserts only this file's own error-swallowing and in-flight dedupe.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

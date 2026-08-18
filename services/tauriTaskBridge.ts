@@ -17,6 +17,7 @@ export async function invokeRustTask(request: RustTaskRequest): Promise<RustTask
     throw new Error('[tauriTaskBridge] Rust compute unavailable — not in Tauri context');
   }
   try {
+    // QNBS-v3: submits through desktopPlatform.tasks instead of the direct @tauri-apps/api/core invoke() it replaced
     const result = await desktopPlatform.tasks.submitTask(request);
     log.info('Rust TaskSupervisor completed task', {
       taskId: request.taskId,

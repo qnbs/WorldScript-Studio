@@ -1,3 +1,4 @@
+// QNBS-v3: only mocks isTauriRuntime (the one real dependency of desktopPlatform's resolve-once selection) — the two adapters themselves are exercised by their own package tests.
 import { describe, expect, it, vi } from 'vitest';
 
 const h = vi.hoisted(() => ({ isTauri: { value: true } }));

@@ -34,6 +34,7 @@ export async function initTauriDeepLink(
 
   try {
     // Listen for deep-link://new-url event (emitted by tauri-plugin-deep-link)
+    // QNBS-v3: subscribes through desktopPlatform.deepLinks instead of the direct @tauri-apps/api/event listen() it replaced
     unlisten = await desktopPlatform.deepLinks.onDeepLink(async (urls) => {
       // Process all URLs in the payload (user may have selected multiple files)
       for (const url of urls) {

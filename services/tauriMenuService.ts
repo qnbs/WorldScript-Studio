@@ -27,6 +27,7 @@ export async function registerTauriMenuHandler(onAction: MenuHandler): Promise<v
   if (unlisten) return;
   const myToken = ++registrationToken;
   try {
+    // QNBS-v3: subscribes through desktopPlatform.menu instead of the direct @tauri-apps/api/event listen() it replaced
     const stop = await desktopPlatform.menu.onMenuAction((id) => {
       // QNBS-v3: 'menu-quit' is intentionally absent — Quit is a PredefinedMenuItem in the Rust menu,
       // handled natively by the OS (it never emits a 'menu-action' event), so forwarding it would be a

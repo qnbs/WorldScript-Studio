@@ -4,7 +4,10 @@
  *          Gracefully degrades on web build (returns isDesktopOnly: true).
  */
 
-import type { LoraTrainingEnvironmentResult } from '@domain/desktop-contracts';
+import type {
+  LoraTrainingEnvironmentResult,
+  LoraTrainingProgressEvent,
+} from '@domain/desktop-contracts';
 import { v4 as uuid } from 'uuid';
 import type { HyperparamPreset } from '../../features/lora/types';
 import { desktopPlatform } from '../desktopPlatform';
@@ -22,18 +25,8 @@ export interface TrainingJobConfig {
   customMaxSeqLen?: number;
 }
 
-export interface TrainingProgressEvent {
-  event: 'loading_model' | 'dataset_loaded' | 'progress' | 'completed' | 'error';
-  model?: string;
-  size?: number;
-  epoch?: number;
-  step?: number;
-  loss?: number;
-  progress_percent?: number;
-  adapter_path?: string;
-  gguf_path?: string;
-  message?: string;
-}
+// QNBS-v3: alias, not a duplicate shape — the adapter already validates and types this at the desktopPlatform boundary (see packages/desktop-contracts/src/types.ts), so this service consumes the typed payload directly instead of casting it.
+export type TrainingProgressEvent = LoraTrainingProgressEvent;
 
 export interface TrainingResult {
   runId: string;
@@ -60,9 +53,7 @@ export async function startTraining(
   const runId = uuid();
   logger.info('loraTrainingService: starting training run', { runId, preset: config.preset.id });
 
-  const unlisten = await desktopPlatform.tasks.onLoraTrainingProgress((payload) => {
-    onProgress(payload as TrainingProgressEvent);
-  });
+  const unlisten = await desktopPlatform.tasks.onLoraTrainingProgress(onProgress);
 
   try {
     await desktopPlatform.tasks.trainLora({

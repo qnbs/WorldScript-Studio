@@ -1,8 +1,5 @@
-/**
- * Tests for services/tauriMenuService.ts and services/tauriTrayService.ts
- * QNBS-v3: Wave 1 — mocks services/desktopPlatform (not @tauri-apps/* / isTauriRuntime directly);
- * the Tauri-vs-web decision now lives in desktopPlatform's adapter selection.
- */
+/** Tests for services/tauriMenuService.ts and services/tauriTrayService.ts */
+// QNBS-v3: Wave 1 — mocks services/desktopPlatform, not @tauri-apps/*/isTauriRuntime directly; the Tauri-vs-web decision now lives in desktopPlatform's adapter selection.
 
 import { waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -94,9 +91,7 @@ describe('registerTauriMenuHandler', () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
-  // QNBS-v3 (CodeAnt/CodeRabbit #363): registration is async (onMenuAction() subscription) — an
-  // unregister landing while it's still pending must tear down the stale listener instead of
-  // letting its late completion install one anyway (which would survive past "unregistered").
+  // QNBS-v3 (CodeAnt/CodeRabbit #363): a stale async registration must tear itself down on late completion, not install a listener that survives past "unregistered".
   it('tears down a stale listener whose registration resolves after an unregister', async () => {
     mockIsDesktop = true;
     let resolveOnMenuAction: ((stop: () => void) => void) | undefined;

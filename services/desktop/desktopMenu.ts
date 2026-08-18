@@ -47,6 +47,7 @@ export async function installDesktopMenu(
   if (!desktopPlatform.runtime.isDesktop) return false;
   const myToken = ++menuInstallToken;
   try {
+    // QNBS-v3: loads the builder through desktopPlatform.menu instead of the direct @tauri-apps/api/menu import it replaced
     const builder = await desktopPlatform.menu.loadMenuBuilder();
     if (!builder) return false;
     const { Menu, Submenu, MenuItem, PredefinedMenuItem } = builder;

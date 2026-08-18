@@ -26,6 +26,7 @@ export type {
   LoraMergeRequest,
   LoraOllamaModelfileRequest,
   LoraTrainingEnvironmentResult,
+  LoraTrainingProgressEvent,
   LoraTrainRequest,
   RuntimeInfo,
   TauriMenuBuilderApi,
