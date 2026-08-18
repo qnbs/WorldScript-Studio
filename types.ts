@@ -624,15 +624,11 @@ export interface VoiceSettings {
   voiceWasmDownloadError?: string;
 }
 
-/** OpenRouter provider settings — key stored encrypted, model controls free-vs-paid selection. */
+/** OpenRouter provider settings — model controls free-vs-paid selection. */
+// QNBS-v3: no `apiKey` field here on purpose — it was never populated by any reducer or read anywhere; the real key lives only in the dedicated per-provider key store (see idbProjectStore.ts#normalizePersistedSettings, which strips a legacy/imported apiKey).
 export interface OpenRouterSettings {
   /** Whether OpenRouter is enabled as a provider in the routing chain. */
   enabled: boolean;
-  /**
-   * OpenRouter API key (encrypted at rest via IDB AES-256-GCM when enableIdbAtRestEncryption is on).
-   * Never logged; sanitizeLogContext redacts it automatically.
-   */
-  apiKey: string;
   /**
    * Preferred model identifier. Use `:free` suffix for the free tier
    * (e.g. `"deepseek/deepseek-r1:free"`, `"meta-llama/llama-3.3-70b-instruct:free"`).
@@ -655,7 +651,7 @@ export interface Settings {
   writingSurfaceStyle: WritingSurfaceStyle;
   /** AI execution routing mode — hybrid (default), cloud-only, local-only, or eco (tiny models). */
   aiMode: AiMode;
-  /** OpenRouter cloud provider settings — enabled/disabled, API key, preferred model. */
+  /** OpenRouter cloud provider settings — enabled/disabled, preferred model. Key stored separately, see OpenRouterSettings. */
   openRouter?: OpenRouterSettings;
   editorFont: EditorFont;
   fontSize: number;

@@ -1,6 +1,7 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { CharacterView } from '../../components/CharacterView';
+import { storageService } from '../../services/storageService';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -123,5 +124,76 @@ describe('CharacterView', () => {
     const cards = screen.queryAllByRole('button', { name: /characters/ });
     // Only AddNewCard buttons + no character cards
     expect(cards.length).toBeLessThanOrEqual(2);
+  });
+
+  // ── useStoredImage (QNBS-v3: storageService-backed, MIME-preserving) ──────
+
+  it('renders a data:image/-prefixed avatar as-is, without re-wrapping it as PNG', async () => {
+    vi.mocked(storageService.getImage).mockResolvedValueOnce('data:image/jpeg;base64,abc123');
+    const { useCharacterView } = await import('../../hooks/useCharacterView');
+    vi.mocked(useCharacterView).mockReturnValueOnce({
+      ...baseContextValue,
+      characters: [
+        {
+          id: 'c-jpeg',
+          name: 'Jamie',
+          appearance: '',
+          motivation: '',
+          backstory: '',
+          notes: '',
+          personalityTraits: '',
+          hasAvatar: true,
+        },
+      ],
+    } as never);
+    render(<CharacterView />);
+    const img = await waitFor(() => screen.getByAltText('Jamie'));
+    expect(img).toHaveAttribute('src', 'data:image/jpeg;base64,abc123');
+  });
+
+  it('falls back to a PNG data URL for a legacy raw-base64 avatar with no MIME prefix', async () => {
+    vi.mocked(storageService.getImage).mockResolvedValueOnce('legacyRawBase64Payload');
+    const { useCharacterView } = await import('../../hooks/useCharacterView');
+    vi.mocked(useCharacterView).mockReturnValueOnce({
+      ...baseContextValue,
+      characters: [
+        {
+          id: 'c-legacy',
+          name: 'Lee',
+          appearance: '',
+          motivation: '',
+          backstory: '',
+          notes: '',
+          personalityTraits: '',
+          hasAvatar: true,
+        },
+      ],
+    } as never);
+    render(<CharacterView />);
+    const img = await waitFor(() => screen.getByAltText('Lee'));
+    expect(img).toHaveAttribute('src', 'data:image/png;base64,legacyRawBase64Payload');
+  });
+
+  it('keeps the placeholder icon instead of throwing when storageService.getImage rejects', async () => {
+    vi.mocked(storageService.getImage).mockRejectedValueOnce(new Error('read failed'));
+    const { useCharacterView } = await import('../../hooks/useCharacterView');
+    vi.mocked(useCharacterView).mockReturnValueOnce({
+      ...baseContextValue,
+      characters: [
+        {
+          id: 'c-broken',
+          name: 'Robin',
+          appearance: '',
+          motivation: '',
+          backstory: '',
+          notes: '',
+          personalityTraits: '',
+          hasAvatar: true,
+        },
+      ],
+    } as never);
+    render(<CharacterView />);
+    await waitFor(() => expect(storageService.getImage).toHaveBeenCalledWith('c-broken'));
+    expect(screen.queryByAltText('Robin')).toBeNull();
   });
 });
