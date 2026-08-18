@@ -16,6 +16,14 @@
 #
 # Advisory only: not part of the required `ci-success` aggregator. Wave 2 is still
 # in progress; this harness informs it rather than gating unrelated PRs on it.
+#
+# Trigger scope is deliberately asymmetric: `pull_request` stays path-scoped to
+# CEF-specific files, so this ~30-minute, ~300MB-download job doesn't tax every
+# unrelated content/feature PR. `push` to main has NO path filter — it runs the
+# real production bundle through worldscript_host on every merge, so a
+# CEF-rendering regression introduced by an unrelated app-source PR is still
+# caught promptly (informationally, non-blocking), not silently missed until
+# someone next happens to touch a CEF-specific path.
 # ============================================================
 
 name: 🧪 CEF Learning Harness
@@ -30,11 +38,6 @@ on:
       - '.github/workflows/cef-learning-harness.yml'
   push:
     branches: [main]
-    paths:
-      - 'apps/desktop-cef/**'
-      - 'scripts/cef/**'
-      - 'docs/cef/**'
-      - '.github/workflows/cef-learning-harness.yml'
   workflow_dispatch:
 
 permissions:

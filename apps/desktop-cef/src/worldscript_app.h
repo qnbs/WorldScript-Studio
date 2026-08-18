@@ -5,10 +5,7 @@
 
 #include "include/cef_app.h"
 
-// WorldScriptApp: bootstraps a single top-level window via CEF's Views framework
-// (cross-platform window toolkit — avoids raw X11/GTK window code, matching the
-// modern cefsimple convention). C++ owns CEF integration only (ADR-0020); no
-// WorldScript business logic belongs here.
+// QNBS-v3: bootstraps a single top-level window via CEF's Views framework (avoids raw X11/GTK code, matching cefsimple) — C++ owns CEF integration only (ADR-0020), no WorldScript logic here.
 class WorldScriptApp : public CefApp, public CefBrowserProcessHandler {
  public:
   explicit WorldScriptApp(std::string start_url);

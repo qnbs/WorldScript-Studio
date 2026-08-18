@@ -5,9 +5,7 @@
 
 #include "include/cef_client.h"
 
-// WorldScriptHandler: browser-process lifecycle/display callbacks only (ADR-0020
-// scorecard — "browser-process handlers exercised"; renderer-process-specific
-// handlers like CefRenderProcessHandler are explicitly out of scope for this proof).
+// QNBS-v3: browser-process lifecycle/display callbacks only (ADR-0020 scorecard) — renderer-process-specific handlers (CefRenderProcessHandler) are explicitly out of scope for this proof.
 class WorldScriptHandler : public CefClient,
                             public CefLifeSpanHandler,
                             public CefDisplayHandler {

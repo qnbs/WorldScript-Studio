@@ -11,9 +11,7 @@
 
 namespace {
 
-// Window-close policy only (cefsimple convention): request the browser close,
-// then always allow the window itself to close — CanClose is not a place to
-// re-derive that answer, it just triggers the real close and lets it proceed.
+// QNBS-v3: window-close policy only (cefsimple convention) — CanClose triggers the real browser close as a side effect, then always returns true rather than re-deriving the answer.
 class WorldScriptWindowDelegate : public CefWindowDelegate {
  public:
   explicit WorldScriptWindowDelegate(CefRefPtr<CefBrowserView> browser_view)

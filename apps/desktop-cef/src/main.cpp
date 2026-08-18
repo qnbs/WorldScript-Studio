@@ -1,3 +1,4 @@
+#include <cstdio>
 #include <string>
 
 #include "include/cef_app.h"
@@ -6,8 +7,7 @@
 
 namespace {
 
-// Defaults to about:blank so a bare invocation (e.g. a subprocess re-exec) never
-// depends on --url being present; the real harness always passes it explicitly.
+// QNBS-v3: defaults to about:blank so a bare invocation (e.g. a subprocess re-exec) never depends on --url being present.
 std::string ParseStartUrl(int argc, char* argv[]) {
   const std::string prefix = "--url=";
   for (int i = 1; i < argc; ++i) {
@@ -26,10 +26,7 @@ int main(int argc, char* argv[]) {
 
   CefRefPtr<WorldScriptApp> app(new WorldScriptApp(ParseStartUrl(argc, argv)));
 
-  // Every CEF host re-executes itself for renderer/GPU/utility subprocesses; this
-  // must run before CefInitialize (ADR-0020's documented multi-process architecture
-  // note). A non-negative return means this invocation *was* one of those
-  // subprocesses, already run to completion.
+  // QNBS-v3: every CEF host re-executes itself for renderer/GPU/utility subprocesses — must run before CefInitialize; non-negative return means this invocation *was* one of those, already run to completion.
   int exit_code = CefExecuteProcess(main_args, app.get(), nullptr);
   if (exit_code >= 0) {
     return exit_code;
@@ -38,7 +35,12 @@ int main(int argc, char* argv[]) {
   CefSettings settings;
   settings.no_sandbox = true;  // ADR-0020: sandbox posture deliberately deferred (roadmap §12).
 
-  CefInitialize(main_args, settings, app.get(), nullptr);
+  // QNBS-v3: CefInitialize's return value was previously ignored, masking init failure (missing display/resources) as a normal exit — CodeAnt review finding on PR #388.
+  if (!CefInitialize(main_args, settings, app.get(), nullptr)) {
+    fprintf(stderr, "[worldscript_host] CefInitialize failed\n");
+    return 1;
+  }
+
   CefRunMessageLoop();
   CefShutdown();
 

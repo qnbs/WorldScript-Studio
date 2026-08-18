@@ -7,7 +7,6 @@
 
 #[no_mangle]
 pub extern "C" fn worldscript_rust_ping() -> i32 {
-    // Arbitrary non-trivial sentinel so a stub or miscompiled stand-in can't accidentally
-    // match by coincidence (e.g. a default-zeroed return would read as success).
+    // QNBS-v3: non-trivial sentinel so a stub/miscompiled stand-in can't accidentally match by coincidence (e.g. a default-zeroed return reading as success).
     424242
 }

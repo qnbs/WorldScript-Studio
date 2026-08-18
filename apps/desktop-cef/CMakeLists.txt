@@ -1,4 +1,4 @@
-# Wave 2 CEF host (ADR-0020, Option B: thin C++ host + Rust core).
+# QNBS-v3: subdirectory CMakeLists.txt reusing CEF's own proven CMake macros rather than reinventing its platform bootstrap (ADR-0020, Option B).
 #
 # This file is a SUBDIRECTORY CMakeLists.txt, added via add_subdirectory() from
 # a *copy* of CEF's own root CMakeLists.txt at build time (see
@@ -12,6 +12,7 @@
 # macros already being defined by that parent scope by the time this runs — exactly
 # what CEF's own bundled sample targets (cefsimple, cefclient) rely on too.
 
+# QNBS-v3: fetched via CMake FetchContent (small, MIT-licensed CMake module, not a binary) rather than vendored — replaces the ADR-0020 spike's hardcoded .a path with real Cargo<->CMake integration.
 include(FetchContent)
 FetchContent_Declare(
   Corrosion
