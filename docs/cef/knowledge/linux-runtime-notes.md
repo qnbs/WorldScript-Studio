@@ -1,21 +1,29 @@
 # CEF Linux Runtime Notes
 
-**Status:** Not started — no CEF integration exists yet in this repository.
+**Status:** Preliminary spike evidence only (2026-08-18, ADR-0020) — one dev machine, one CEF version, X11 only. Not a compatibility contract yet; do not treat any number below as a floor until packaged builds prove it (§44.1).
 **Scope:** The Linux Runtime Compatibility Contract for WorldScript's CEF build — minimum supported distribution/runtime baseline, CPU architectures, required dynamic libraries/packages, `libcef.so`/resource layout, loader/rpath policy, X11 vs. Wayland policy, Ozone/backend policy, GPU/driver expectations, installer dependency behavior.
 **Tier:** A (release/security-critical) — see [`../OWNERSHIP.yaml`](../OWNERSHIP.yaml).
 **Roadmap context:** [`../ROADMAP-CEF-DESKTOP-MIGRATION.md`](../ROADMAP-CEF-DESKTOP-MIGRATION.md) §44.1–§44.5 (Linux runtime compatibility as its own workstream), Appendix A.3 (compatibility matrix template).
 
-## Outline (to be filled in during Wave 2/3)
+## Spike evidence (2026-08-18, one machine only — see status above)
 
-- Selected CEF distribution and its documented Linux dependency baseline
-- Minimum distro/glibc floor **as proven by packaged builds**, not assumed
-- `libcef.so` and resource layout for our packaging
-- X11 and Wayland smoke-test results (KDE, GNOME × NVIDIA, AMD, Intel — Appendix A.3 matrix)
-- Sandbox requirements observed on Linux
-- Clean-machine dependency test results (§44.3)
+- **Distribution/version tested:** CEF 151.3.18 (Chromium 151.0.7922.138), linux64 **minimal** distribution, on Ubuntu 22.04 (glibc-based) — matches CEF's own officially-tested target for this CEF version per its shipped `CMakeLists.txt`.
+- **Runtime shared-library dependencies:** every package CEF's build docs call out (`libnss3`, `libnspr4`, `libatk1.0-0`, `libatk-bridge2.0-0`, `libcups2`, `libdrm2`, `libgbm1`, `libxcomposite1`, `libxdamage1`, `libxfixes3`, `libxrandr2`, `libxkbcommon0`, `libpango-1.0-0`, `libcairo2`, `libasound2`, `libgtk-3-0`, `libx11-xcb1`, `libxcb1`) were **already present** on this dev machine at their latest Ubuntu 22.04 package versions — none needed fresh installation. This is one data point, not proof these are sufficient on a clean/minimal install (§44.3's clean-machine test is still open).
+- **Build-time-only dependency, not a runtime one:** `libx11-dev` (for `pkg-config --exists x11`, used only by the CMake build's `FIND_LINUX_LIBRARIES` macro) — this is a compile-time header/pkg-config need, not something the *packaged* app requires on an end-user machine.
+- **Display server:** X11 only, via Xvfb (virtual framebuffer, headless). **Wayland was not tested at all.** Do not extrapolate X11-working to Wayland-working — the roadmap's own explicit warning applies: "CEF uses Chromium" is not proof of Wayland correctness.
+- **GPU:** integrated Intel graphics on this machine reported `Bay Trail Vulkan support is incomplete` and `Installed VAAPI version is too old (min 1.17, installed 1.14)`. Chromium fell back to software rendering (bundled SwiftShader) rather than crashing. This is a real, reproducible data point for exactly the kind of older/constrained-GPU Linux hardware the roadmap's compatibility matrix (Appendix A.3) needs to cover — not yet placed into that matrix formally since only one GPU/driver combination was observed.
+- **Sandbox:** not exercised (`no_sandbox=true` for this spike). No data point here at all.
 
 ## Explicit warning carried from the roadmap
 
 > "CEF uses Chromium" is not accepted as proof of Wayland/X11 correctness (§44.2). Do not fill in this document with assumptions extrapolated from generic Chromium behavior — every claim here must come from an actual test run against WorldScript's build.
 
-Do not hardcode a glibc/distro minimum here until packaged builds have proven it (§44.1).
+Do not hardcode a glibc/distro minimum here until packaged builds have proven it (§44.1). The Ubuntu 22.04 data point above is a spike observation on one machine, not a floor.
+
+## Remaining outline (not yet done)
+
+- Minimum distro/glibc floor **as proven by packaged builds**, not assumed (still open — Ubuntu 22.04 above is one dev-machine spike observation, not a proof)
+- `libcef.so` and resource layout for our actual packaging (not yet designed — this spike used CEF's own unpackaged build-output layout)
+- X11 and Wayland smoke-test results across KDE, GNOME × NVIDIA, AMD, Intel (Appendix A.3 matrix) — this spike covers exactly one cell (X11/Xvfb, Intel integrated) of that matrix
+- Sandbox requirements observed on Linux (not exercised this spike)
+- Clean-machine dependency test results (§44.3) — this spike ran on an already-configured dev machine, not a clean install
