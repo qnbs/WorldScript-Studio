@@ -511,6 +511,23 @@ describe('uploadCharacterImageThunk', () => {
     expect(storageService.saveImage).not.toHaveBeenCalled();
   });
 
+  it('rejects when onload fires but reader.result is not a string', async () => {
+    vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(function (this: FileReader) {
+      Object.defineProperty(this, 'result', { value: null, configurable: true });
+      void Promise.resolve().then(() => {
+        if (typeof this.onload === 'function')
+          this.onload(new ProgressEvent('load') as ProgressEvent<FileReader>);
+      });
+    });
+
+    const store = makeStore();
+    const file = new File(['data'], 'weird.png', { type: 'image/png' });
+    const action = await store.dispatch(uploadCharacterImageThunk({ characterId: 'c4', file }));
+
+    expect(action.type).toBe('project/uploadCharacterImage/rejected');
+    expect(storageService.saveImage).not.toHaveBeenCalled();
+  });
+
   it('rejects (does not hang) when storageService.saveImage fails', async () => {
     vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(function (this: FileReader) {
       Object.defineProperty(this, 'result', {
