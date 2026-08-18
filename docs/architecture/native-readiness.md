@@ -48,4 +48,4 @@ The Wave 1 PR A snapshot left three DEBT rows marked "not yet scheduled to a spe
 
 ## Next scoring checkpoint
 
-Re-score "Platform APIs adapter-contained" again once `services/logger.ts`'s JSONL sink migrates (Wave 5/7, see above). Re-score the three newly-scheduled rows at their respective wave's exit (Wave 4 typed-IPC-v1, Wave 5 domain extraction).
+Re-score "Platform APIs adapter-contained" again once `services/logger.ts`'s JSONL sink migrates (Wave 5/7, see above). Re-score the three newly-scheduled rows at each wave's exit (Wave 4 typed-IPC-v1, Wave 5 domain extraction).

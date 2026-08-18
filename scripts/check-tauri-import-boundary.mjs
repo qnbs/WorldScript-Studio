@@ -66,8 +66,13 @@ const ALLOWED_FILES = new Set(
 );
 
 // Real import/require syntax only — not comment mentions, JSDoc, or regex literals like
-// `/^@tauri-apps\//` (vite.config.ts's external-packages matcher).
-const IMPORT_RE = /(?:from\s+['"]|import\(\s*['"]|require\(\s*['"])@tauri-apps\//;
+// `/^@tauri-apps\//` (vite.config.ts's external-packages matcher). Matches:
+//   import '@tauri-apps/...';        (bare side-effect import)
+//   import x from '@tauri-apps/...';
+//   import('@tauri-apps/...');
+//   require('@tauri-apps/...');
+const IMPORT_RE =
+  /(?:^\s*import\s+['"]|from\s+['"]|import\(\s*['"]|require\(\s*['"])@tauri-apps\//m;
 
 /** Recursively collect first-party .ts/.tsx files. */
 function collect(dir, out) {
