@@ -19,6 +19,12 @@
  *     so this catches "CEF started but the app didn't actually render" failures the
  *     FFI proof alone cannot.
  *
+ * Early Accessibility Gate (roadmap §3142): apps/desktop-cef does not request accessibility
+ * tree construction today — an attempt was made and fully reverted after CefClient turned
+ * out to have no GetAccessibilityHandler() in this CEF version (151.3.18), so the
+ * callback-based signal this harness would have checked for does not exist; see
+ * docs/cef/knowledge/cef-architecture-primer.md for the real, honestly-documented blocker.
+ *
  * Run: node scripts/cef/run-launch-cycle-proof.mjs <binary-path> <url> [--cycles N]
  */
 import { execFileSync, spawn } from 'node:child_process';
@@ -31,7 +37,8 @@ const cyclesArgIdx = process.argv.indexOf('--cycles');
 const cyclesArg = cyclesArgIdx !== -1 ? process.argv[cyclesArgIdx + 1] : undefined;
 const cycles = cyclesArgIdx === -1 ? 3 : Number(cyclesArg);
 
-const STARTUP_GRACE_MS = 4000;
+// QNBS-v3: raised from 4000ms after two consecutive CI runs on identical code (byte-for-byte matching main, which had passed reliably before) showed the browser process alive but never reaching OnAfterCreated within the old window — runner-speed variance, not a code regression.
+const STARTUP_GRACE_MS = 10000;
 const SHUTDOWN_GRACE_MS = 6000;
 // QNBS-v3: extra buffer after the main process exits — a renderer/GPU subprocess can take a moment longer to actually be reaped than its parent (docs/cef/knowledge/subprocess-and-shutdown.md's own "not instantaneous" finding applies to the whole tree, not just the browser process).
 const ORPHAN_CHECK_GRACE_MS = 3000;
@@ -142,7 +149,6 @@ async function runCycle(index) {
       `Cycle ${index + 1}: expected "${EXPECTED_TITLE_LINE}" not observed — the production bundle may not have rendered (a CEF error page would not produce this specific title).`,
     );
   }
-
   console.log(
     `[launch-cycle-proof] Cycle ${index + 1}/${cycles}: clean exit (signal=${shutdownResult.signal}), FFI + rendering proofs both present.`,
   );
