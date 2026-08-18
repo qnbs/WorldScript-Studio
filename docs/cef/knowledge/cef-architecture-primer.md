@@ -1,19 +1,47 @@
 # CEF Architecture Primer
 
-**Status:** Not started — no CEF integration exists yet in this repository.
-**Scope:** How CEF's multi-process architecture (browser process, renderer process, GPU/utility processes; browser/frame/client ownership; message-loop integration; subprocess launch and packaging; sandbox model) maps onto WorldScript Studio's specific host and build, written from our actual integration once it exists — not a generic CEF tutorial.
+**Status:** Real evidence from `apps/desktop-cef/` (PR #388) for process model, message loop, and subprocess packaging. Sandbox configuration and a directly-observed full process-tree snapshot remain open.
+**Scope:** How CEF's multi-process architecture (browser process, renderer process, GPU/utility processes; browser/frame/client ownership; message-loop integration; subprocess launch and packaging; sandbox model) maps onto WorldScript Studio's specific host and build, written from our actual integration — not a generic CEF tutorial.
 **Tier:** A (release/security-critical) — see [`../OWNERSHIP.yaml`](../OWNERSHIP.yaml).
 **Roadmap context:** [`../ROADMAP-CEF-DESKTOP-MIGRATION.md`](../ROADMAP-CEF-DESKTOP-MIGRATION.md) §4.11.1 ("CEF architecture" domain), §4.11.2, Wave 2.
 
-## Outline (to be filled in during Wave 2)
+## Process model, as implemented (`apps/desktop-cef/src/main.cpp`)
 
-- Process model as implemented in WorldScript's host (which processes exist, what each owns)
-- Browser/frame/client object ownership in our integration
-- Message-loop choice and why
-- Subprocess launch and packaging specifics for our build
-- Sandbox configuration as shipped
-- Diagram: our actual process tree (not the generic CEF one)
+`worldscript_host` is a single executable re-executed by CEF itself for every process role — there is no separate subprocess binary. `main()` calls `CefExecuteProcess(main_args, app.get(), nullptr)` *before* anything else; a non-negative return means *this invocation* is a subprocess (renderer/GPU/utility) that has already run to completion, and `main()` returns immediately. Only when that call returns `-1` (this is the actual browser process) does the code proceed to install the shutdown-signal handler, call `CefInitialize`, and enter the message loop.
 
-## Do not fill this in speculatively
+This single-binary-multi-role design is directly why `scripts/cef/run-launch-cycle-proof.mjs`'s orphan check anchors its `pgrep` pattern to the *start* of the binary's own path (`^${binaryPath}`) — every subprocess CEF spawns re-execs that exact same path with different flags (e.g. `--type=renderer`), so they're all catchable by one pattern, and nothing else on the system should share that literal path prefix.
 
-This document should describe **our real, built integration** once Wave 2 exists. Until then, leave sections empty rather than guessing — a wrong architecture primer is worse than a missing one (see risk register R-10, documentation drift).
+**Directly observed evidence a renderer process exists and runs the real page**: the CI log for a real production-bundle load shows a `[INFO:CONSOLE:95]` line — a JavaScript console message relayed from the renderer process back to the browser process via CEF's own IPC, not something the browser process could produce itself. **GPU process**: not directly observed by name (no `ps`/`--type=gpu-process` capture was taken), but the build output includes `libvk_swiftshader.so`/`libvulkan.so.1` (Vulkan software rendering) and the ADR-0020 spike separately observed real GPU-fallback warnings (`Bay Trail Vulkan support is incomplete`) — consistent with a GPU process existing and falling back to software rendering, not confirmed as a distinct observed process in this specific proof.
+
+## Browser/frame/client ownership, as implemented
+
+- `WorldScriptApp::OnContextInitialized` creates exactly **one** `CefBrowserView` (`CefBrowserView::CreateBrowserView`) wrapped in exactly one top-level `CefWindow` (`CefWindow::CreateTopLevelWindow`) — single-window, single-browser, by design; nothing in this host creates additional windows or popups.
+- `WorldScriptHandler` is the `CefClient` implementation and the sole owner of browser-lifecycle bookkeeping: a `std::list<CefRefPtr<CefBrowser>> browser_list_`, appended to in `OnAfterCreated` and pruned in `OnBeforeClose`. The list shape supports more than one browser in principle, but only one is ever created today.
+- Frame-level ownership (multiple frames per browser, cross-frame navigation) has not been touched at all — the production bundle loads as a single top-level document.
+
+## Message-loop choice and why
+
+`CefRunMessageLoop()` (the blocking, OS-native-integrated variant) — not `CefDoMessageLoopWork()` in a manual polling loop — matching the standard `cefsimple` convention and avoiding a busy-poll CPU cost. `WorldScriptHandler::OnBeforeClose` calls `CefQuitMessageLoop()` only once `browser_list_` becomes empty, which is the actual mechanism that makes `CefRunMessageLoop()` in `main()` return — the real, CI-proven signal that it's safe to call `CefShutdown()`. See `docs/cef/knowledge/subprocess-and-shutdown.md` for the full shutdown sequence.
+
+## Subprocess launch and packaging, as implemented
+
+`apps/desktop-cef/CMakeLists.txt` runs two `COPY_FILES` calls (`CEF_BINARY_FILES`, `CEF_RESOURCE_FILES`) that land everything the runtime needs next to the executable — confirmed via a real `ls -la` in CI (PR #388), not just assumed from the macro's documented behavior: `libcef.so`, `icudtl.dat`, `resources.pak`, `chrome_100_percent.pak`, `chrome_200_percent.pak`, `v8_context_snapshot.bin`, `locales/`, `libEGL.so`, `libGLESv2.so`, `libvk_swiftshader.so`, `libvulkan.so.1`, and `chrome-sandbox`. **This is CEF's own unpackaged build-output layout** (`cmake --build` output, run in place) — not a real installer's layout, which is separate, later, unproven scope.
+
+A real launch-path bug was found and fixed here too: Chromium resolves several of these resource paths relative to the process's *working directory*, not the executable's own location — launching the binary from a different cwd produced an ICU-init crash despite every file being correctly present. See `docs/cef/knowledge/linux-runtime-notes.md` for the full finding.
+
+## Sandbox configuration, as shipped
+
+`chrome-sandbox` is present in the output directory (copied automatically as part of `CEF_BINARY_FILES`) but is **not used** — `main.cpp` sets `CefSettings.no_sandbox = true` unconditionally. Zero evidence exists on real sandbox posture; this is explicitly tracked as "Not yet attempted" in `docs/architecture/native-readiness.md` and `false` in the competency manifest.
+
+## Process tree — what we can honestly claim
+
+```text
+worldscript_host (browser process, no_sandbox=true)
+└── worldscript_host --type=renderer ... (confirmed indirectly: console-log IPC observed;
+    not directly captured by ps/process-name in this proof)
+└── (likely) worldscript_host --type=gpu-process ... (consistent with SwiftShader/Vulkan
+    files present and GPU-fallback warnings from the ADR-0020 spike; not directly observed
+    by process name in PR #388's own CI run)
+```
+
+Not a diagram of the generic CEF process model — this is what PR #388's evidence actually supports, with each claim's confidence level stated rather than assumed. A real `ps`/process-tree capture during a live run would upgrade the two `(likely)`/"not directly observed" lines to confirmed evidence; that capture has not been taken yet.
