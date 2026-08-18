@@ -85,8 +85,8 @@ importers:
         specifier: ^5.3.0
         version: 5.3.0
       '@fontsource/noto-naskh-arabic':
-        specifier: ^5.2.11
-        version: 5.2.11
+        specifier: ^5.3.0
+        version: 5.3.0
       '@fontsource/noto-sans':
         specifier: ^5.3.0
         version: 5.3.0
@@ -1704,8 +1704,8 @@ packages:
   '@fontsource/merriweather@5.3.0':
     resolution: {integrity: sha512-9LpPsNTYzRALj468Uj1K9Usl5eXk991L/kKmcpdWbTF1na9NfMyAXMgUABlMReViU1MYBz9kJ8jEzEOtX9qGDg==}
 
-  '@fontsource/noto-naskh-arabic@5.2.11':
-    resolution: {integrity: sha512-mi4QOG3EK+iho//vjB+13Ww4Oy1ulkgBgUuVpVZQBjBPkaMoHOJZBpSIZOXTzL7ZFTvMPzdSTvt0juE9NVl+PA==}
+  '@fontsource/noto-naskh-arabic@5.3.0':
+    resolution: {integrity: sha512-S/GDgQ6mh/PKo4mz5+eXNYbEarvpI7yh6eCdOz8tTVbeM7+OUiacIEscaYEibr/+egDtGbO2ZB00sjy1bJC1kQ==}
 
   '@fontsource/noto-sans-arabic@5.2.10':
     resolution: {integrity: sha512-Hgj3NwQJ0NquIADW3hFboFjsts4UvEOJQ8tOX0bhQZgpNKHsMawjv/1SZnq0QvRbP6efHTZM/A1k7tdy9S6sbA==}
@@ -4640,8 +4640,8 @@ packages:
   electron-to-chromium@1.5.366:
     resolution: {integrity: sha512-OlRuhb688YTCzzU3gXPLn6nGyd+F+53INE1qaKKlu6kETErE8FYsyDh0XqXEU+uBRn0MpCzz2vfNwORhkap8qg==}
 
-  electron-to-chromium@1.5.403:
-    resolution: {integrity: sha512-MQsYmdaLzvaCX5j+ZZBr5Fm6uCCnPQcRtlvmvRlWqrXy+BH2O4ffXIAScF+JQznQWB9brWp4lSD9Z4yNmaf2BA==}
+  electron-to-chromium@1.5.404:
+    resolution: {integrity: sha512-3WJtd7/lVq2Jnuz6wed1l9+1ZD2u2Tet1/1NBc4Iedkmgbu+I7YuAqdAQ8T+VZtnwysMsAf3IqSq9D1gyZjA2g==}
 
   emittery@0.13.1:
     resolution: {integrity: sha512-DeWwawk6r5yR9jFgnDKYt4sLS0LmHJJi3ZOnb5/JdbYwj3nW+FxQnHIjhBKz8YLC7oRNPVM9NQ47I3CVx34eqQ==}
@@ -9363,7 +9363,7 @@ snapshots:
 
   '@fontsource/merriweather@5.3.0': {}
 
-  '@fontsource/noto-naskh-arabic@5.2.11': {}
+  '@fontsource/noto-naskh-arabic@5.3.0': {}
 
   '@fontsource/noto-sans-arabic@5.2.10': {}
 
@@ -11591,7 +11591,7 @@ snapshots:
     dependencies:
       baseline-browser-mapping: 2.11.13
       caniuse-lite: 1.0.30001809
-      electron-to-chromium: 1.5.403
+      electron-to-chromium: 1.5.404
       node-releases: 2.0.53
       update-browserslist-db: 1.3.1(browserslist@4.28.8)
 
@@ -12143,7 +12143,7 @@ snapshots:
 
   electron-to-chromium@1.5.366: {}
 
-  electron-to-chromium@1.5.403: {}
+  electron-to-chromium@1.5.404: {}
 
   emittery@0.13.1: {}
 
