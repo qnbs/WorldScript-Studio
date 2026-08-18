@@ -38,7 +38,8 @@ const cyclesArgIdx = process.argv.indexOf('--cycles');
 const cyclesArg = cyclesArgIdx !== -1 ? process.argv[cyclesArgIdx + 1] : undefined;
 const cycles = cyclesArgIdx === -1 ? 3 : Number(cyclesArg);
 
-const STARTUP_GRACE_MS = 4000;
+// QNBS-v3: raised from 4000ms after two consecutive CI runs on identical code (byte-for-byte matching main, which had passed reliably before) showed the browser process alive but never reaching OnAfterCreated within the old window — runner-speed variance, not a code regression.
+const STARTUP_GRACE_MS = 10000;
 const SHUTDOWN_GRACE_MS = 6000;
 // QNBS-v3: extra buffer after the main process exits — a renderer/GPU subprocess can take a moment longer to actually be reaped than its parent (docs/cef/knowledge/subprocess-and-shutdown.md's own "not instantaneous" finding applies to the whole tree, not just the browser process).
 const ORPHAN_CHECK_GRACE_MS = 3000;
