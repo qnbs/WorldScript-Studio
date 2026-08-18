@@ -9,7 +9,7 @@
  * (docs/cef/knowledge/subprocess-and-shutdown.md): an immediate post-signal check is
  * a false positive, not evidence of a hang.
  *
- * Each cycle must independently show three proofs, not just "at least one cycle across
+ * Each cycle must independently show two proofs, not just "at least one cycle across
  * the whole run" (a real review finding — masking a later cycle's failure behind an
  * earlier success would make the proof meaningless):
  *   - FFI boundary: apps/desktop-cef/src/worldscript_handler.cpp's OnAfterCreated
@@ -18,9 +18,13 @@
  *     error page (bad bundle, load failure) would not produce that specific title,
  *     so this catches "CEF started but the app didn't actually render" failures the
  *     FFI proof alone cannot.
- *   - Early Accessibility Gate smoke: CefAccessibilityHandler::OnAccessibilityTreeChange
- *     actually fires (with --force-renderer-accessibility forcing tree construction even
- *     with no AT client attached) — roadmap §3142's Wave 2 accessibility deliverable.
+ *
+ * Early Accessibility Gate (roadmap §3142): apps/desktop-cef requests real accessibility
+ * tree construction (SetAccessibilityState + --force-renderer-accessibility), but this
+ * harness does not yet assert any observable proof of it — CefClient has no
+ * GetAccessibilityHandler() in this CEF version (151.3.18), so the callback-based signal
+ * this file originally checked for does not exist; see docs/cef/knowledge/cef-architecture-primer.md
+ * for the real, honestly-documented blocker.
  *
  * Run: node scripts/cef/run-launch-cycle-proof.mjs <binary-path> <url> [--cycles N]
  */
@@ -40,7 +44,6 @@ const SHUTDOWN_GRACE_MS = 6000;
 const ORPHAN_CHECK_GRACE_MS = 3000;
 const FFI_PROOF_LINE = 'rust_core ping = 424242';
 const EXPECTED_TITLE_LINE = 'title = WorldScript Studio';
-const ACCESSIBILITY_PROOF_LINE = 'accessibility tree change observed';
 
 if (!binaryPath || !url) {
   console.error(
@@ -146,14 +149,8 @@ async function runCycle(index) {
       `Cycle ${index + 1}: expected "${EXPECTED_TITLE_LINE}" not observed — the production bundle may not have rendered (a CEF error page would not produce this specific title).`,
     );
   }
-  // QNBS-v3: Early Accessibility Gate smoke test (roadmap §3142) — real evidence CEF's accessibility tree was actually built, not just requested via --force-renderer-accessibility.
-  if (!stdout.includes(ACCESSIBILITY_PROOF_LINE)) {
-    logStderr(index, stderr);
-    throw new Error(`Cycle ${index + 1}: no accessibility tree change observed.`);
-  }
-
   console.log(
-    `[launch-cycle-proof] Cycle ${index + 1}/${cycles}: clean exit (signal=${shutdownResult.signal}), FFI + rendering + accessibility proofs all present.`,
+    `[launch-cycle-proof] Cycle ${index + 1}/${cycles}: clean exit (signal=${shutdownResult.signal}), FFI + rendering proofs both present.`,
   );
 }
 
@@ -163,7 +160,7 @@ async function main() {
   }
 
   console.log(
-    `[launch-cycle-proof] OK — ${cycles}/${cycles} repeated start/close cycles clean, FFI boundary, real rendering, and accessibility all proven in every cycle.`,
+    `[launch-cycle-proof] OK — ${cycles}/${cycles} repeated start/close cycles clean, FFI boundary and real rendering both proven in every cycle.`,
   );
 }
 

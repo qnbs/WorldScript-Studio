@@ -46,18 +46,10 @@ void WorldScriptHandler::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
   printf("[worldscript_host] rust_core ping = %d\n", worldscript_rust_ping());
   fflush(stdout);
 
-  // QNBS-v3: Early Accessibility Gate smoke test — Chromium normally builds the accessibility tree lazily only when an AT client is detected, so this alone may not be sufficient; --force-renderer-accessibility (main.cpp) is the defense-in-depth companion.
+  // QNBS-v3: Early Accessibility Gate smoke test (roadmap §3142) — requests real tree construction; --force-renderer-accessibility (worldscript_app.cpp) is the defense-in-depth companion. No observable signal exists yet for this call's effect — CefClient has no GetAccessibilityHandler() in this CEF version, unlike CodeAnt's initial diagnosis of the comment.
   browser->GetHost()->SetAccessibilityState(STATE_ENABLED);
 
   CefPostDelayedTask(TID_UI, new PollShutdownTask(this), kShutdownPollIntervalMs);
-}
-
-void WorldScriptHandler::OnAccessibilityTreeChange(CefRefPtr<CefValue> value) {
-  CEF_REQUIRE_UI_THREAD();
-  if (accessibility_tree_change_logged_) return;  // One proof line is enough — this can fire often.
-  accessibility_tree_change_logged_ = true;
-  printf("[worldscript_host] accessibility tree change observed\n");
-  fflush(stdout);
 }
 
 void WorldScriptHandler::PollShutdownFlag() {
