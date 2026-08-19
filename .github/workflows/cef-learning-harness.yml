@@ -174,14 +174,18 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p symtools
-          curl -sL "https://github.com/mozilla/dump_syms/releases/download/v2.3.9/dump_syms-x86_64-unknown-linux-gnu.tar.xz" -o symtools/dump_syms.tar.xz
-          curl -sL "https://github.com/rust-minidump/rust-minidump/releases/download/v0.27.0/minidump-stackwalk-x86_64-unknown-linux-gnu.tar.xz" -o symtools/mds.tar.xz
+          curl -sSL --fail --retry 3 --retry-all-errors "https://github.com/mozilla/dump_syms/releases/download/v2.3.9/dump_syms-x86_64-unknown-linux-gnu.tar.xz" -o symtools/dump_syms.tar.xz
+          curl -sSL --fail --retry 3 --retry-all-errors "https://github.com/rust-minidump/rust-minidump/releases/download/v0.27.0/minidump-stackwalk-x86_64-unknown-linux-gnu.tar.xz" -o symtools/mds.tar.xz
           echo "0fc852a86b00337407d9d423cc388a24c3b489ccaaedcf92623cad57af5ca8ad  symtools/dump_syms.tar.xz" | sha256sum -c -
           echo "0020324c54cc359596e927ee907204f4c8d4da6718765536edcabaa1622122ad  symtools/mds.tar.xz" | sha256sum -c -
           tar xf symtools/dump_syms.tar.xz -C symtools
           tar xf symtools/mds.tar.xz -C symtools
-          echo "DUMP_SYMS_BIN=$(pwd)/$(find symtools -name dump_syms -type f)" >> "$GITHUB_ENV"
-          echo "MINIDUMP_STACKWALK_BIN=$(pwd)/$(find symtools -name minidump-stackwalk -type f)" >> "$GITHUB_ENV"
+          DUMP_SYMS_BIN=$(find symtools -name dump_syms -type f -print -quit)
+          MINIDUMP_STACKWALK_BIN=$(find symtools -name minidump-stackwalk -type f -print -quit)
+          test -x "$DUMP_SYMS_BIN" || { echo "dump_syms binary not found in archive" >&2; exit 1; }
+          test -x "$MINIDUMP_STACKWALK_BIN" || { echo "minidump-stackwalk binary not found in archive" >&2; exit 1; }
+          echo "DUMP_SYMS_BIN=$(pwd)/$DUMP_SYMS_BIN" >> "$GITHUB_ENV"
+          echo "MINIDUMP_STACKWALK_BIN=$(pwd)/$MINIDUMP_STACKWALK_BIN" >> "$GITHUB_ENV"
 
       - name: Serve production bundle + repeated launch/close proof
         run: |
