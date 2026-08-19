@@ -38,6 +38,16 @@
 # or type error fails in ~2-3min instead of after the full ~30min SDK+CMake+Rust+Xvfb
 # cycle. `Swatinem/rust-cache` caches cargo's registry/git dirs for the rust-core
 # crate Corrosion builds via CMake, cutting redundant crates.io re-fetches.
+#
+# QNBS-v3: CMAKE_BUILD_TYPE stays Release (RelWithDebInfo broke CEF's own chrome-sandbox
+# copy step — the fetched SDK's prebuilt binaries only ship Release/ and Debug/
+# subdirectories, so CEF's build macros looked for a nonexistent RelWithDebInfo/ source
+# path; a real CI failure, not a guess). worldscript_host gets its own -g flag directly
+# (apps/desktop-cef/CMakeLists.txt) instead, for the crash-symbolization proof
+# (scripts/cef/run-symbolization-proof.mjs)'s dump_syms/minidump-stackwalk to resolve
+# function names against. Both tools are standalone Rust projects with tiny prebuilt
+# Linux binaries — neither needs a Chromium checkout, confirmed by reading their
+# own READMEs directly.
 # ============================================================
 
 name: 🧪 CEF Learning Harness
@@ -157,6 +167,26 @@ jobs:
       - name: Linux runtime linkage check (ldd against shipped .so files)
         run: node scripts/cef/check-linux-runtime-linkage.mjs build/worldscript_host
 
+      # QNBS-v3: pinned prebuilt release binaries (~3.6MB each), sha256-verified — not built from
+      # source (would need a slow cargo build for two more Rust tools) and not a Chromium
+      # checkout (neither tool needs one; see the header comment).
+      - name: Fetch dump_syms + minidump-stackwalk (crash-symbolization tools)
+        run: |
+          set -euo pipefail
+          mkdir -p symtools
+          curl -sSL --fail --retry 3 --retry-all-errors "https://github.com/mozilla/dump_syms/releases/download/v2.3.9/dump_syms-x86_64-unknown-linux-gnu.tar.xz" -o symtools/dump_syms.tar.xz
+          curl -sSL --fail --retry 3 --retry-all-errors "https://github.com/rust-minidump/rust-minidump/releases/download/v0.27.0/minidump-stackwalk-x86_64-unknown-linux-gnu.tar.xz" -o symtools/mds.tar.xz
+          echo "0fc852a86b00337407d9d423cc388a24c3b489ccaaedcf92623cad57af5ca8ad  symtools/dump_syms.tar.xz" | sha256sum -c -
+          echo "0020324c54cc359596e927ee907204f4c8d4da6718765536edcabaa1622122ad  symtools/mds.tar.xz" | sha256sum -c -
+          tar xf symtools/dump_syms.tar.xz -C symtools
+          tar xf symtools/mds.tar.xz -C symtools
+          DUMP_SYMS_BIN=$(find symtools -name dump_syms -type f -print -quit)
+          MINIDUMP_STACKWALK_BIN=$(find symtools -name minidump-stackwalk -type f -print -quit)
+          test -x "$DUMP_SYMS_BIN" || { echo "dump_syms binary not found in archive" >&2; exit 1; }
+          test -x "$MINIDUMP_STACKWALK_BIN" || { echo "minidump-stackwalk binary not found in archive" >&2; exit 1; }
+          echo "DUMP_SYMS_BIN=$(pwd)/$DUMP_SYMS_BIN" >> "$GITHUB_ENV"
+          echo "MINIDUMP_STACKWALK_BIN=$(pwd)/$MINIDUMP_STACKWALK_BIN" >> "$GITHUB_ENV"
+
       - name: Serve production bundle + repeated launch/close proof
         run: |
           python3 -m http.server 8080 --directory dist &
@@ -166,6 +196,13 @@ jobs:
             "$(pwd)/build/worldscript_host/worldscript_host" \
             "http://localhost:8080/" --cycles 3
           kill "$SERVER_PID"
+
+      - name: Crash-symbolization proof (dump_syms + minidump-stackwalk)
+        run: |
+          xvfb-run -a node scripts/cef/run-symbolization-proof.mjs \
+            "$(pwd)/build/worldscript_host/worldscript_host" \
+            "$DUMP_SYMS_BIN" \
+            "$MINIDUMP_STACKWALK_BIN"
 
       - name: Best-effort Wayland launch smoke (roadmap §44.2)
         id: wayland-smoke
@@ -189,5 +226,6 @@ jobs:
           echo "- Cache hit: \`${{ steps.cef-cache.outputs.cache-hit }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- worldscript_host built and repeated launch/close cycles proven against the real production bundle (dist/), under Xvfb." >> "$GITHUB_STEP_SUMMARY"
           echo "- Linux runtime linkage (ldd against the shipped worldscript_host + libcef.so, not just dpkg package presence): see the \"Linux runtime linkage check\" step above." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Crash-symbolization proof: a self-induced browser-process crash resolved via dump_syms + minidump-stackwalk against our own DWARF debug info — Chromium/CEF-internal frames remain unsymbolized (no debug-symbols archive is published for this distribution)." >> "$GITHUB_STEP_SUMMARY"
           echo "- Wayland smoke (best-effort, roadmap §44.2): \`${{ steps.wayland-smoke.outcome }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Not yet in scope: X11/Wayland matrix beyond this one runner, sandbox posture, accessibility smoke." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Not yet in scope: X11/Wayland matrix beyond this one runner, sandbox posture, accessibility-tree observability (AT-SPI — state enablement is proven, see the launch-cycle-proof step)." >> "$GITHUB_STEP_SUMMARY"

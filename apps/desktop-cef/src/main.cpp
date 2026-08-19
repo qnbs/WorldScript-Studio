@@ -7,6 +7,10 @@
 #include "shutdown_signal.h"
 #include "worldscript_app.h"
 
+// QNBS-v3: crash-symbolization proof (Wave 2 exit criterion) — only ever invoked behind
+// --debug-crash-self below, never reachable in normal operation.
+extern "C" void worldscript_rust_debug_crash_self_test();
+
 namespace {
 
 // QNBS-v3: defaults to about:blank so a bare invocation (e.g. a subprocess re-exec) never depends on --url being present.
@@ -21,11 +25,21 @@ std::string ParseStartUrl(int argc, char* argv[]) {
   return "about:blank";
 }
 
+bool HasDebugCrashSelfFlag(int argc, char* argv[]) {
+  for (int i = 1; i < argc; ++i) {
+    if (std::string(argv[i]) == "--debug-crash-self") {
+      return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
   CefMainArgs main_args(argc, argv);
 
+  const bool debug_crash_self = HasDebugCrashSelfFlag(argc, argv);
   CefRefPtr<WorldScriptApp> app(new WorldScriptApp(ParseStartUrl(argc, argv)));
 
   // QNBS-v3: every CEF host re-executes itself for renderer/GPU/utility subprocesses — must run before CefInitialize; non-negative return means this invocation *was* one of those, already run to completion.
@@ -50,6 +64,15 @@ int main(int argc, char* argv[]) {
   printf("[worldscript_host] crash_reporting_enabled = %s\n",
          CefCrashReportingEnabled() ? "true" : "false");
   fflush(stdout);
+
+  // QNBS-v3: Wave 2 crash-symbolization proof only — deliberately crashes the browser
+  // process itself (not a renderer subprocess) so the resulting dump's stack is our own
+  // code, not Chromium/CEF internals we have no debug symbols for.
+  if (debug_crash_self) {
+    printf("[worldscript_host] debug_crash_self_test = triggering\n");
+    fflush(stdout);
+    worldscript_rust_debug_crash_self_test();
+  }
 
   CefRunMessageLoop();
   CefShutdown();

@@ -10,3 +10,13 @@ pub extern "C" fn worldscript_rust_ping() -> i32 {
     // QNBS-v3: non-trivial sentinel so a stub/miscompiled stand-in can't accidentally match by coincidence (e.g. a default-zeroed return reading as success).
     424242
 }
+
+/// Deliberate, distinctively-named crash for the CI crash-symbolization proof
+/// (docs/cef/ROADMAP-CEF-DESKTOP-MIGRATION.md Wave 2 exit criterion). Only ever called
+/// behind the `--debug-crash-self` CLI flag (see apps/desktop-cef/src/main.cpp) — never
+/// reachable in normal operation. `panic = "abort"` (this crate's release profile) turns
+/// this into a real SIGABRT Crashpad can catch, not an unwind.
+#[no_mangle]
+pub extern "C" fn worldscript_rust_debug_crash_self_test() {
+    panic!("worldscript_rust_debug_crash_self_test: deliberate self-test crash");
+}
