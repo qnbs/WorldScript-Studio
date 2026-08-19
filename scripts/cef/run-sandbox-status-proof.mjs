@@ -135,6 +135,21 @@ function classifyRole(pid) {
   return typeArg ? typeArg.slice('--type='.length) : 'browser';
 }
 
+// QNBS-v3: the acceptance bar in cef-architecture-primer.md explicitly disallows trading no_sandbox=true for a narrower blanket disable (e.g. --disable-setuid-sandbox) while still claiming this row proven — this makes that prose rule a real, automated check against every observed process's actual command line, not just a promise nothing in main.cpp passes these.
+const FORBIDDEN_SANDBOX_WEAKENING_FLAGS = [
+  '--no-sandbox',
+  '--disable-setuid-sandbox',
+  '--disable-seccomp-filter-sandbox',
+  '--disable-namespace-sandbox',
+  '--disable-gpu-sandbox',
+];
+
+function findForbiddenFlags(pid) {
+  const cmdline = readCmdline(pid);
+  if (!cmdline) return [];
+  return cmdline.filter((arg) => FORBIDDEN_SANDBOX_WEAKENING_FLAGS.includes(arg));
+}
+
 async function main() {
   console.log(
     '[sandbox-status-proof] Launching worldscript_host with sandboxing enabled (no_sandbox=false)…',
@@ -181,6 +196,18 @@ async function main() {
   const roles = pids
     .map((pid) => ({ pid, role: classifyRole(pid) }))
     .filter((p) => p.role !== null);
+
+  const forbiddenFlagHits = roles
+    .map(({ pid, role }) => ({ pid, role, flags: findForbiddenFlags(pid) }))
+    .filter((r) => r.flags.length > 0);
+  if (forbiddenFlagHits.length > 0) {
+    const detail = forbiddenFlagHits
+      .map((r) => `pid=${r.pid} role=${r.role} flags=${r.flags.join(',')}`)
+      .join('; ');
+    throw new Error(
+      `sandbox-weakening flag(s) observed on the actual process command line — this would misrepresent what's protected, exactly what the acceptance bar disallows: ${detail}`,
+    );
+  }
 
   console.log(
     `[sandbox-status-proof] Observed process tree (${roles.length} matching process(es)):`,
