@@ -39,12 +39,37 @@ if (!binaryPath || !url) {
 // QNBS-v3: same grace period rationale as run-launch-cycle-proof.mjs's STARTUP_GRACE_MS — CI-runner-speed variance, not a code concern this script has any control over.
 const LAUNCH_GRACE_MS = 10000;
 const COMPOSITOR_SOCKET_GRACE_MS = 5000;
+// QNBS-v3: a process created in the gap between the first pgrep snapshot and its SIGKILL (or one still exiting) wouldn't be caught by a single one-shot sweep — CodeAnt review finding on PR #393. This is how long the second, verifying pass waits before re-sweeping.
+const CLEANUP_RECHECK_GRACE_MS = 2000;
 const FFI_PROOF_LINE = 'rust_core ping = 424242';
 const EXPECTED_TITLE_LINE = 'title = WorldScript Studio';
 const WAYLAND_SOCKET_NAME = 'wayland-smoke-0';
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// QNBS-v3: shared by the two cleanup passes below — CEF re-execs the same binary for renderer/GPU/crashpad-handler subprocesses, none of which carry WAYLAND_SOCKET_NAME in their own command line (it's passed via env var, not argv), so a name-based pkill never matched them — CodeAnt review finding on PR #393. Same pattern run-launch-cycle-proof.mjs uses for the identical problem.
+function sweepMatchingProcesses() {
+  try {
+    const out = execFileSync('pgrep', ['-f', `^${binaryPath}`], {
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .toString()
+      .trim();
+    const pids = out.split('\n').filter(Boolean).map(Number);
+    for (const pid of pids) {
+      if (pid === process.pid) continue;
+      try {
+        process.kill(pid, 'SIGKILL');
+      } catch {
+        // Already gone — fine.
+      }
+    }
+    return pids.filter((pid) => pid !== process.pid).length > 0;
+  } catch {
+    return false; // pgrep exits 1 when nothing matches — nothing to kill.
+  }
 }
 
 // QNBS-v3: trusts an already-set XDG_RUNTIME_DIR as-is (GitHub Actions runners provide a real one, e.g. /run/user/<uid>) rather than chmod'ing a directory this script doesn't own — CodeRabbit review finding on PR #393. Only falls back to creating (and owning) its own via mkdtempSync, never a fixed predictable /tmp path.
@@ -62,6 +87,14 @@ async function main() {
   const xdgRuntimeDir = ensureXdgRuntimeDir();
   const env = { ...process.env, XDG_RUNTIME_DIR: xdgRuntimeDir };
 
+  // QNBS-v3: a stale socket left by a previous crashed/killed run would otherwise satisfy the existsSync check below immediately, without this Weston instance ever actually starting — CodeAnt review finding on PR #393. Removing it first means "socket exists" can only mean "this Weston instance created it".
+  const socketPath = path.join(xdgRuntimeDir, WAYLAND_SOCKET_NAME);
+  try {
+    fs.unlinkSync(socketPath);
+  } catch {
+    // Nothing there — the expected common case.
+  }
+
   console.log('[wayland-smoke] Starting headless Weston compositor…');
   // QNBS-v3: Weston's headless backend needs no real display/GPU — the Wayland-side equivalent of Xvfb, same reasoning as run-launch-cycle-proof.mjs uses xvfb-run for X11.
   const weston = spawn(
@@ -73,6 +106,10 @@ async function main() {
     },
   );
   let westonStderr = '';
+  let westonExited = false;
+  weston.once('exit', () => {
+    westonExited = true;
+  });
   // QNBS-v3: spawn() reports a missing/non-executable program via an async 'error' event, not a thrown exception — without a listener Node crashes with a raw ENOENT stack trace instead of this script's own FAIL diagnostic, exactly the failure mode this probe exists to report cleanly — CodeRabbit review finding on PR #393.
   weston.on('error', (err) => {
     westonStderr += `spawn error: ${err.message}\n`;
@@ -81,13 +118,15 @@ async function main() {
     westonStderr += chunk.toString();
   });
 
-  const socketPath = path.join(xdgRuntimeDir, WAYLAND_SOCKET_NAME);
   const socketDeadline = Date.now() + COMPOSITOR_SOCKET_GRACE_MS;
-  while (!fs.existsSync(socketPath) && Date.now() < socketDeadline) {
+  // QNBS-v3: also bails out early if Weston itself already exited — otherwise this loop would keep polling for a socket a dead process will never create, wasting the whole grace period on a doomed wait — CodeAnt review finding on PR #393 (the same "verify the process is actually alive" half of the finding).
+  while (!fs.existsSync(socketPath) && !westonExited && Date.now() < socketDeadline) {
     await sleep(200);
   }
-  if (!fs.existsSync(socketPath)) {
-    console.error(`[wayland-smoke] FAIL — Weston did not create ${socketPath} in time.`);
+  if (westonExited || !fs.existsSync(socketPath)) {
+    console.error(
+      `[wayland-smoke] FAIL — Weston ${westonExited ? 'exited before creating' : 'did not create'} ${socketPath} in time.`,
+    );
     if (westonStderr) console.error(`[wayland-smoke] Weston stderr:\n${westonStderr}`);
     weston.kill('SIGKILL');
     process.exit(1);
@@ -134,23 +173,13 @@ async function main() {
   ]);
 
   weston.kill('SIGKILL');
-  // QNBS-v3: sweeps every process matching the binary path, not just the one tracked child PID — CodeAnt review finding on PR #393 (CEF re-execs the same binary for renderer/GPU/crashpad-handler subprocesses; none of them carry WAYLAND_SOCKET_NAME in their own command line since it's passed via env var, not argv, so the previous pkill -f pattern never matched them). Same pattern as run-launch-cycle-proof.mjs's killAllMatchingProcesses().
-  try {
-    const out = execFileSync('pgrep', ['-f', `^${binaryPath}`], {
-      stdio: ['ignore', 'pipe', 'ignore'],
-    })
-      .toString()
-      .trim();
-    for (const pid of out.split('\n').filter(Boolean).map(Number)) {
-      if (pid === process.pid) continue;
-      try {
-        process.kill(pid, 'SIGKILL');
-      } catch {
-        // Already gone — fine.
-      }
-    }
-  } catch {
-    // pgrep exits 1 when nothing matches — nothing to kill.
+  sweepMatchingProcesses();
+  // QNBS-v3: verify-and-resweep, not a single one-shot pass — CodeAnt review finding on PR #393 (a subprocess created between the first pgrep snapshot and its kill, or one still in the middle of exiting, would otherwise survive undetected).
+  await sleep(CLEANUP_RECHECK_GRACE_MS);
+  if (sweepMatchingProcesses()) {
+    console.error(
+      '[wayland-smoke] WARNING — worldscript_host process(es) still matched after cleanup; sent a second SIGKILL sweep.',
+    );
   }
 
   if (!rendered) {
