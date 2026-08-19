@@ -108,6 +108,9 @@ jobs:
       - name: List worldscript_host output directory (diagnostic)
         run: ls -la build/worldscript_host/
 
+      - name: Linux runtime linkage check (ldd against shipped .so files)
+        run: node scripts/cef/check-linux-runtime-linkage.mjs build/worldscript_host
+
       - name: Serve production bundle + repeated launch/close proof
         run: |
           python3 -m http.server 8080 --directory dist &
@@ -139,5 +142,6 @@ jobs:
           echo "- Pinned SDK: \`$(node -e "console.log(require('./scripts/cef/cef-version.json').cefVersion)")\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Cache hit: \`${{ steps.cef-cache.outputs.cache-hit }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- worldscript_host built and repeated launch/close cycles proven against the real production bundle (dist/), under Xvfb." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Linux runtime linkage (ldd against the shipped worldscript_host + libcef.so, not just dpkg package presence): see the \"Linux runtime linkage check\" step above." >> "$GITHUB_STEP_SUMMARY"
           echo "- Wayland smoke (best-effort, roadmap §44.2): \`${{ steps.wayland-smoke.outcome }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Not yet in scope: X11/Wayland matrix beyond this one runner, sandbox posture, accessibility smoke." >> "$GITHUB_STEP_SUMMARY"
