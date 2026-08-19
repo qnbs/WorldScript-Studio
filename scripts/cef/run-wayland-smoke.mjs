@@ -24,6 +24,7 @@
  */
 import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 const [binaryPath, url] = process.argv.slice(2);
@@ -46,10 +47,13 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// QNBS-v3: systemd/Wayland both refuse to operate against a XDG_RUNTIME_DIR that isn't mode 0700 and owned by the current user — a real, well-documented requirement, not optional hardening. GitHub Actions runners don't set this by default (no logind session), so it's created explicitly here.
+// QNBS-v3: trusts an already-set XDG_RUNTIME_DIR as-is (GitHub Actions runners provide a real one, e.g. /run/user/<uid>) rather than chmod'ing a directory this script doesn't own — CodeRabbit review finding on PR #393. Only falls back to creating (and owning) its own via mkdtempSync, never a fixed predictable /tmp path.
 function ensureXdgRuntimeDir() {
-  const dir = process.env.XDG_RUNTIME_DIR || '/tmp/wayland-smoke-xdg-runtime';
-  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const existing = process.env.XDG_RUNTIME_DIR;
+  if (existing && fs.existsSync(existing)) {
+    return existing;
+  }
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wayland-smoke-xdg-runtime-'));
   fs.chmodSync(dir, 0o700);
   return dir;
 }
@@ -69,6 +73,10 @@ async function main() {
     },
   );
   let westonStderr = '';
+  // QNBS-v3: spawn() reports a missing/non-executable program via an async 'error' event, not a thrown exception — without a listener Node crashes with a raw ENOENT stack trace instead of this script's own FAIL diagnostic, exactly the failure mode this probe exists to report cleanly — CodeRabbit review finding on PR #393.
+  weston.on('error', (err) => {
+    westonStderr += `spawn error: ${err.message}\n`;
+  });
   weston.stderr.on('data', (chunk) => {
     westonStderr += chunk.toString();
   });
@@ -99,6 +107,10 @@ async function main() {
 
   let stdout = '';
   let stderr = '';
+  // QNBS-v3: same rationale as weston's 'error' listener above — a missing/non-executable binaryPath must surface through this script's own FAIL diagnostic, not an unhandled ENOENT crash.
+  child.on('error', (err) => {
+    stderr += `spawn error: ${err.message}\n`;
+  });
   child.stdout.on('data', (chunk) => {
     stdout += chunk.toString();
   });
@@ -121,12 +133,24 @@ async function main() {
     sleep(LAUNCH_GRACE_MS).then(() => false),
   ]);
 
-  child.kill('SIGKILL');
   weston.kill('SIGKILL');
+  // QNBS-v3: sweeps every process matching the binary path, not just the one tracked child PID — CodeAnt review finding on PR #393 (CEF re-execs the same binary for renderer/GPU/crashpad-handler subprocesses; none of them carry WAYLAND_SOCKET_NAME in their own command line since it's passed via env var, not argv, so the previous pkill -f pattern never matched them). Same pattern as run-launch-cycle-proof.mjs's killAllMatchingProcesses().
   try {
-    execFileSync('pkill', ['-9', '-f', WAYLAND_SOCKET_NAME], { stdio: 'ignore' });
+    const out = execFileSync('pgrep', ['-f', `^${binaryPath}`], {
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .toString()
+      .trim();
+    for (const pid of out.split('\n').filter(Boolean).map(Number)) {
+      if (pid === process.pid) continue;
+      try {
+        process.kill(pid, 'SIGKILL');
+      } catch {
+        // Already gone — fine.
+      }
+    }
   } catch {
-    // Nothing left matching — fine.
+    // pgrep exits 1 when nothing matches — nothing to kill.
   }
 
   if (!rendered) {
