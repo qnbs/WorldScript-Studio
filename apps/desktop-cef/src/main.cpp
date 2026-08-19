@@ -1,6 +1,9 @@
 #include <cstdio>
 #include <string>
 
+#include <linux/prctl.h>
+#include <sys/prctl.h>
+
 #include "include/cef_app.h"
 #include "include/cef_crash_util.h"
 
@@ -37,6 +40,18 @@ bool HasDebugCrashSelfFlag(int argc, char* argv[]) {
 }  // namespace
 
 int main(int argc, char* argv[]) {
+  // QNBS-v3: real fix attempt for the renderer-crash-dump-under-sandbox regression (PR #404) —
+  // must run before CefExecuteProcess since every subprocess role (renderer/GPU/utility) re-execs
+  // through this exact same main() entry point. PR_SET_PTRACER_ANY is the real, documented
+  // Chromium/Linux-kernel mechanism for exactly this scenario (Yama LSM docs; real-world precedent
+  // in Chromium's own Linux crash-dumping architecture, which needs it because the crash handler
+  // runs external to a sandboxed renderer's own PID namespace): it lets ANY process attach via
+  // ptrace, bypassing the requirement to declare one specific, namespace-relative PID that a
+  // PID-namespaced renderer cannot correctly resolve for an externally-running crash handler.
+  // Best-effort: failure here (e.g. Yama LSM not loaded on this kernel) does not abort startup —
+  // it only means this specific mitigation is unavailable, same as before this fix existed.
+  prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY, 0, 0, 0);
+
   CefMainArgs main_args(argc, argv);
 
   const bool debug_crash_self = HasDebugCrashSelfFlag(argc, argv);
