@@ -54,7 +54,13 @@ const cyclesArg = cyclesArgIdx !== -1 ? process.argv[cyclesArgIdx + 1] : undefin
 const cycles = cyclesArgIdx === -1 ? 3 : Number(cyclesArg);
 
 // QNBS-v3: raised from 4000ms after two consecutive CI runs on identical code (byte-for-byte matching main, which had passed reliably before) showed the browser process alive but never reaching OnAfterCreated within the old window — runner-speed variance, not a code regression.
-const STARTUP_GRACE_MS = 10000;
+// QNBS-v3: raised again from 10000ms after the same "Cycle 1: no FFI boundary proof" symptom
+// recurred on a main push right after PR #400 added -g to worldscript_host — real, measured
+// evidence: the binary grew from 1.34MB to 6.33MB (target_compile_options in
+// apps/desktop-cef/CMakeLists.txt), a plausible contributor to slower first-launch I/O on a
+// loaded runner. Cycles 2/3 in the same run always passed at the old window — this only ever
+// hits the cold first launch.
+const STARTUP_GRACE_MS = 15000;
 const SHUTDOWN_GRACE_MS = 6000;
 // QNBS-v3: extra buffer after the main process exits — a renderer/GPU subprocess can take a moment longer to actually be reaped than its parent (docs/cef/knowledge/subprocess-and-shutdown.md's own "not instantaneous" finding applies to the whole tree, not just the browser process).
 const ORPHAN_CHECK_GRACE_MS = 3000;
