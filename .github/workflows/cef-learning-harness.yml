@@ -144,6 +144,13 @@ jobs:
         with:
           workspaces: apps/desktop-cef/rust-core -> target
 
+      # QNBS-v3: /var/cache/apt/archives is root-owned by default — actions/cache's restore
+      # (tar extraction) runs as the unprivileged runner user and fails with "Permission denied"
+      # on every file without this, silently degrading to a cache miss every time (real CI
+      # evidence: "Cache hit" followed immediately by "Cache not found" from the failed tar).
+      - name: Make apt archive cache dir writable by the runner user
+        run: sudo mkdir -p /var/cache/apt/archives/partial && sudo chmod -R 777 /var/cache/apt/archives
+
       - name: Cache apt packages (CEF host + Wayland build deps)
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:

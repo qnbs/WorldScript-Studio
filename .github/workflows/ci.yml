@@ -237,6 +237,13 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: src-tauri -> target
+      # QNBS-v3: /var/cache/apt/archives is root-owned by default — actions/cache's restore
+      # (tar extraction) runs as the unprivileged runner user and fails with "Permission denied"
+      # on every file without this, silently degrading to a cache miss every time (real CI
+      # evidence: "Cache hit" followed immediately by "Cache not found" from the failed tar).
+      - name: Make apt archive cache dir writable by the runner user
+        run: sudo mkdir -p /var/cache/apt/archives/partial && sudo chmod -R 777 /var/cache/apt/archives
+
       - name: Cache apt packages (Tauri Linux build deps)
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -291,6 +298,13 @@ jobs:
       # key across every `playwright install --with-deps` call site in this workflow, since they all
       # install the same system packages on the same runner image. actions/cache/save on a fresh
       # write here also warms the cache for e2e/e2e-deep/storybook/vrt below.
+      # QNBS-v3: /var/cache/apt/archives is root-owned by default — actions/cache's restore
+      # (tar extraction) runs as the unprivileged runner user and fails with "Permission denied"
+      # on every file without this, silently degrading to a cache miss every time (real CI
+      # evidence: "Cache hit" followed immediately by "Cache not found" from the failed tar).
+      - name: Make apt archive cache dir writable by the runner user
+        run: sudo mkdir -p /var/cache/apt/archives/partial && sudo chmod -R 777 /var/cache/apt/archives
+
       - name: Cache apt packages (Playwright system deps)
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -432,6 +446,13 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
 
+      # QNBS-v3: /var/cache/apt/archives is root-owned by default — actions/cache's restore
+      # (tar extraction) runs as the unprivileged runner user and fails with "Permission denied"
+      # on every file without this, silently degrading to a cache miss every time (real CI
+      # evidence: "Cache hit" followed immediately by "Cache not found" from the failed tar).
+      - name: Make apt archive cache dir writable by the runner user
+        run: sudo mkdir -p /var/cache/apt/archives/partial && sudo chmod -R 777 /var/cache/apt/archives
+
       - name: Cache apt packages (Playwright system deps)
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -491,6 +512,13 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+
+      # QNBS-v3: /var/cache/apt/archives is root-owned by default — actions/cache's restore
+      # (tar extraction) runs as the unprivileged runner user and fails with "Permission denied"
+      # on every file without this, silently degrading to a cache miss every time (real CI
+      # evidence: "Cache hit" followed immediately by "Cache not found" from the failed tar).
+      - name: Make apt archive cache dir writable by the runner user
+        run: sudo mkdir -p /var/cache/apt/archives/partial && sudo chmod -R 777 /var/cache/apt/archives
 
       - name: Cache apt packages (Playwright system deps)
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -589,6 +617,13 @@ jobs:
       - name: Build Storybook
         run: pnpm exec storybook build --output-dir storybook-static
 
+      # QNBS-v3: /var/cache/apt/archives is root-owned by default — actions/cache's restore
+      # (tar extraction) runs as the unprivileged runner user and fails with "Permission denied"
+      # on every file without this, silently degrading to a cache miss every time (real CI
+      # evidence: "Cache hit" followed immediately by "Cache not found" from the failed tar).
+      - name: Make apt archive cache dir writable by the runner user
+        run: sudo mkdir -p /var/cache/apt/archives/partial && sudo chmod -R 777 /var/cache/apt/archives
+
       - name: Cache apt packages (Playwright system deps)
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -657,6 +692,13 @@ jobs:
         with:
           name: dist
           path: dist/
+
+      # QNBS-v3: /var/cache/apt/archives is root-owned by default — actions/cache's restore
+      # (tar extraction) runs as the unprivileged runner user and fails with "Permission denied"
+      # on every file without this, silently degrading to a cache miss every time (real CI
+      # evidence: "Cache hit" followed immediately by "Cache not found" from the failed tar).
+      - name: Make apt archive cache dir writable by the runner user
+        run: sudo mkdir -p /var/cache/apt/archives/partial && sudo chmod -R 777 /var/cache/apt/archives
 
       - name: Cache apt packages (Playwright system deps)
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
