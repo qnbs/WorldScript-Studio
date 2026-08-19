@@ -174,13 +174,16 @@ function readPidNsForChildrenId(pid) {
   }
 }
 
-// QNBS-v3: real bug caught in review — this previously returned the generic 'browser' fallback for ANY process lacking --type=, including a positively-identified Crashpad handler passed in via isCrashpadCandidate, so the 'crashpad-handler(?)' label in logProcessTreeDiagnostic's `?? (...)` was unreachable dead code whenever a handler's cmdline was readable at all (nearly always). isCrashpadCandidate now takes precedence over the --type=-based guess.
-function classifyRole(pid, isCrashpadCandidate) {
+// QNBS-v3: real bug caught in review (second pass) — Chromium propagates --crashpad-handler-pid=<pid> to CLIENT processes (renderer/GPU/utility) too, so they can declare the handler via PR_SET_PTRACER; a broad "does cmdline contain crashpad anywhere" match (the original isCrashpadCandidate design) would misclassify the actual renderer as the handler, corrupting exactly the renderer-vs-handler comparison this file exists to make. --type= is Chromium's own authoritative subprocess-type declaration and always takes precedence when present (covers the handler too, if this CEF/Crashpad build gives it --type=crashpad-handler). Only when --type= is ABSENT does this fall back to handler-SPECIFIC flags — --initial-client-fd / --shared-client-connection are received only by the handler at its own spawn time, never by its clients (which only ever receive the client-side --crashpad-handler-pid=<pid>).
+function classifyRole(pid) {
   const cmdline = readCmdline(pid);
   if (!cmdline) return null;
-  if (isCrashpadCandidate) return 'crashpad-handler';
   const typeArg = cmdline.find((a) => a.startsWith('--type='));
-  return typeArg ? typeArg.slice('--type='.length) : 'browser';
+  if (typeArg) return typeArg.slice('--type='.length);
+  const looksLikeHandler = cmdline.some(
+    (a) => a.startsWith('--initial-client-fd') || a.startsWith('--shared-client-connection'),
+  );
+  return looksLikeHandler ? 'crashpad-handler' : 'browser';
 }
 
 // QNBS-v3: readlink of the resolved binary, distinct from (and more trustworthy than) the cmdline-based guess above — real, auditable proof of which executable a PID actually is, requested in review alongside cmdline for identity verification.
@@ -192,8 +195,8 @@ function readExePath(pid) {
   }
 }
 
-// QNBS-v3: the Crashpad handler may not match binaryPathPattern at all (it can be a distinct re-exec path, not necessarily worldscript_host itself) — a broad, unanchored, case-insensitive search is deliberately used here (unlike listMatchingPids' anchored one) specifically to still find it for this diagnostic even if our own-binary assumption doesn't hold.
-function listCrashpadHandlerPids() {
+// QNBS-v3: corroborating/informational only, deliberately NOT used to drive classifyRole's own judgment (see that function's comment for why a broad substring match is unsafe here) — kept only to widen the pgrep-based process enumeration in case the handler doesn't match binaryPathPattern at all (a distinct re-exec path, not necessarily worldscript_host itself).
+function listCrashpadCmdlineMatchPids() {
   try {
     const out = execFileSync('pgrep', ['-if', 'crashpad'], {
       stdio: ['ignore', 'pipe', 'ignore'],
@@ -214,16 +217,15 @@ function logProcessTreeDiagnostic(label) {
   const ownUserNs = readUserNsId(process.pid);
   const ownPidNs = readPidNsId(process.pid);
   const matchedPids = listMatchingPids();
-  const crashpadPids = listCrashpadHandlerPids();
+  const crashpadCmdlinePids = listCrashpadCmdlineMatchPids();
   // QNBS-v3: real evidence request from PR #404's review — NSpid (nesting depth) and ns/pid (actual namespace identity/inode) are both captured from THIS (ambient) namespace, which can see the full nesting chain even without joining any child namespace. Equal NSpid vector *length* does not prove two processes share a namespace — only a matching ns/pid identity does; that's the real test the PID-namespace-mismatch hypothesis needs, not an inference from Seccomp/user-ns alone.
-  const allPids = [...new Set([...matchedPids, ...crashpadPids])];
+  const allPids = [...new Set([...matchedPids, ...crashpadCmdlinePids])];
   console.log(
-    `[launch-cycle-proof] ${label}: ${matchedPids.length} worldscript_host-matching process(es), ${crashpadPids.length} crashpad-cmdline-matching process(es) (may overlap).`,
+    `[launch-cycle-proof] ${label}: ${matchedPids.length} worldscript_host-matching process(es), ${crashpadCmdlinePids.length} crashpad-cmdline-matching process(es) (informational only — role classification below never uses this list, see classifyRole's own comment).`,
   );
   const seen = [];
   for (const pid of allPids) {
-    const isCrashpadCandidate = crashpadPids.includes(pid);
-    const role = classifyRole(pid, isCrashpadCandidate) ?? '(unreadable)';
+    const role = classifyRole(pid) ?? '(unreadable)';
     const ppid = readProcStatusField(pid, 'PPid');
     const seccomp = readProcStatusField(pid, 'Seccomp');
     const noNewPrivs = readProcStatusField(pid, 'NoNewPrivs');
