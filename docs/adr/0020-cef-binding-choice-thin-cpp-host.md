@@ -1,6 +1,6 @@
 # ADR 0020: CEF integration choice — thin C++ host + Rust core (Option B)
 
-**Status:** Accepted, backed by a real hands-on spike (not a desk decision). Scope: the Wave 2 "constrained spike" required by `docs/cef/ROADMAP-CEF-DESKTOP-MIGRATION.md` §10 and its Appendix H decision scorecard. This ADR does not add CEF to the production build — no `src-tauri/` or app code changed. The spike lives outside the repository (disk-space reasons, see Consequences) and is not committed.
+**Status:** Superseded by [ADR-0021](0021-qt-gpui-native-desktop-strategy.md) — CEF retired from the target architecture, migrated 2026-08-20. Preserved below as the historical record of a real, evidence-backed spike; do not treat it as current direction. See `docs/historical/cef/README.md` for what was removed.
 
 ## Context
 

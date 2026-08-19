@@ -1,6 +1,6 @@
 # ADR 0019: CEF as the next-generation WorldScript Studio desktop runtime
 
-**Status:** Accepted (strategy only — no implementation yet). This ADR locks the direction; it does not add any CEF code, dependency, or build target. Full context, waves, and gates: `docs/cef/ROADMAP-CEF-DESKTOP-MIGRATION.md`.
+**Status:** Superseded by [ADR-0021](0021-qt-gpui-native-desktop-strategy.md) — CEF retired from the target architecture, migrated 2026-08-20. Preserved below as the historical record of the original decision and its reasoning; do not treat it as current direction. See `docs/historical/cef/README.md` for what was removed.
 
 ## Context
 
