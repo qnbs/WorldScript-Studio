@@ -108,6 +108,12 @@ jobs:
       - name: Clean-machine Linux dependency inventory
         run: node scripts/cef/check-linux-runtime-deps.mjs
 
+      # QNBS-v3: diagnostic-only, no behavior change — real evidence on whether this runner can
+      # even support Chromium's Linux sandbox (Sandbox posture row, native-readiness.md, "Not yet
+      # attempted") before any attempt to actually enable it. Non-fatal by design.
+      - name: Linux sandbox feasibility inventory (diagnostic only)
+        run: node scripts/cef/check-linux-sandbox-inventory.mjs
+
       - name: Restore CEF SDK cache
         id: cef-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -227,5 +233,6 @@ jobs:
           echo "- worldscript_host built and repeated launch/close cycles proven against the real production bundle (dist/), under Xvfb." >> "$GITHUB_STEP_SUMMARY"
           echo "- Linux runtime linkage (ldd against the shipped worldscript_host + libcef.so, not just dpkg package presence): see the \"Linux runtime linkage check\" step above." >> "$GITHUB_STEP_SUMMARY"
           echo "- Crash-symbolization proof: a self-induced browser-process crash resolved via dump_syms + minidump-stackwalk against our own DWARF debug info — Chromium/CEF-internal frames remain unsymbolized (no debug-symbols archive is published for this distribution)." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Linux sandbox feasibility inventory (diagnostic only, no sandbox behavior attempted yet): see the \"Linux sandbox feasibility inventory\" step above." >> "$GITHUB_STEP_SUMMARY"
           echo "- Wayland smoke (best-effort, roadmap §44.2): \`${{ steps.wayland-smoke.outcome }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Not yet in scope: X11/Wayland matrix beyond this one runner, sandbox posture, accessibility-tree observability (AT-SPI — state enablement is proven, see the launch-cycle-proof step)." >> "$GITHUB_STEP_SUMMARY"
