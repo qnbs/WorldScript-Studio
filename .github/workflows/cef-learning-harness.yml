@@ -39,11 +39,14 @@
 # cycle. `Swatinem/rust-cache` caches cargo's registry/git dirs for the rust-core
 # crate Corrosion builds via CMake, cutting redundant crates.io re-fetches.
 #
-# QNBS-v3: build type is RelWithDebInfo, not Release — the crash-symbolization proof
-# (scripts/cef/run-symbolization-proof.mjs) needs real DWARF debug info in
-# worldscript_host to resolve function names via dump_syms. dump_syms/minidump-stackwalk
-# are standalone Rust tools (mozilla/dump_syms, rust-minidump/rust-minidump) with tiny
-# prebuilt Linux binaries — neither needs a Chromium checkout, confirmed by reading their
+# QNBS-v3: CMAKE_BUILD_TYPE stays Release (RelWithDebInfo broke CEF's own chrome-sandbox
+# copy step — the fetched SDK's prebuilt binaries only ship Release/ and Debug/
+# subdirectories, so CEF's build macros looked for a nonexistent RelWithDebInfo/ source
+# path; a real CI failure, not a guess). worldscript_host gets its own -g flag directly
+# (apps/desktop-cef/CMakeLists.txt) instead, for the crash-symbolization proof
+# (scripts/cef/run-symbolization-proof.mjs)'s dump_syms/minidump-stackwalk to resolve
+# function names against. Both tools are standalone Rust projects with tiny prebuilt
+# Linux binaries — neither needs a Chromium checkout, confirmed by reading their
 # own READMEs directly.
 # ============================================================
 
@@ -155,7 +158,7 @@ jobs:
         run: |
           set -o pipefail
           BUILD_SRC_DIR=$(node scripts/cef/prepare-cef-build.mjs "$CEF_DIR" build | tail -1)
-          cmake -S "$BUILD_SRC_DIR" -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          cmake -S "$BUILD_SRC_DIR" -B build -DCMAKE_BUILD_TYPE=Release
           cmake --build build --target worldscript_host --parallel "$(nproc)"
 
       - name: List worldscript_host output directory (diagnostic)
