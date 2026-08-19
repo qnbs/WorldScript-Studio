@@ -60,9 +60,14 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// QNBS-v3: pgrep -f treats its argument as an extended regex — an unescaped binaryPath would let
+// any '.'/'+'/etc. in the runner's workspace path match arbitrary characters, risking a false
+// "orphaned process" match. CodeRabbit finding on PR #400.
+const binaryPathPattern = binaryPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 function listMatchingPids() {
   try {
-    const out = execFileSync('pgrep', ['-f', `^${binaryPath}`], {
+    const out = execFileSync('pgrep', ['-f', `^${binaryPathPattern}`], {
       stdio: ['ignore', 'pipe', 'ignore'],
     })
       .toString()
@@ -216,9 +221,25 @@ async function main() {
       ['--json', dumpFiles[0], symbolsDir],
       { encoding: 'utf8' },
     );
-    if (!stackwalkOutput.includes(CRASH_FUNCTION_NAME)) {
+    // QNBS-v3: parses the JSON and checks crashing_thread.frames[].function specifically, rather
+    // than a raw substring match over the whole document — the schema (rust-minidump/minidump-
+    // processor/json-schema.md) also has module names/file paths/assertion strings the name could
+    // coincidentally appear in outside an actual resolved frame. CodeRabbit finding on PR #400.
+    let report;
+    try {
+      report = JSON.parse(stackwalkOutput);
+    } catch (parseErr) {
       throw new Error(
-        `minidump-stackwalk's output does not contain "${CRASH_FUNCTION_NAME}" — the crash frame was not symbolized. Output:\n${stackwalkOutput.slice(0, 4000)}`,
+        `minidump-stackwalk's --json output did not parse as JSON: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}. Output:\n${stackwalkOutput.slice(0, 4000)}`,
+      );
+    }
+    const frames = report?.crashing_thread?.frames ?? [];
+    const resolved = frames.some(
+      (frame) => typeof frame.function === 'string' && frame.function.includes(CRASH_FUNCTION_NAME),
+    );
+    if (!resolved) {
+      throw new Error(
+        `no crashing_thread frame's "function" field contains "${CRASH_FUNCTION_NAME}" — the crash frame was not symbolized. Output:\n${stackwalkOutput.slice(0, 4000)}`,
       );
     }
 
