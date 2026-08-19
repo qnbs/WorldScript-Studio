@@ -259,6 +259,28 @@ jobs:
             "$(pwd)/build/worldscript_host/worldscript_host" \
             "http://localhost:8082/" | tee "$RUNNER_TEMP/cef-sandbox-status.txt"
 
+      # QNBS-v3: real diagnostic experiment for R-19, per real pinned-source root-cause research (PR #404) — Crashpad's crash-time ptracer declaration (crashpad_client_linux.cc HandleCrashImpl) is a documented "backup" for its primary pthread_atfork-registered mechanism (SetPtracerAtFork); neither one runs inside the actual renderer, because Chromium's zygote model forks an already-running process via a raw clone(CLONE_NEWPID|CLONE_NEWUSER, ...) rather than re-executing worldscript_host's own main() — confirmed by testing a main()-level PR_SET_PTRACER_ANY call, which had zero effect (same EINVAL, unchanged). --no-zygote is a real, documented, non-security Chromium switch that changes only the process-SPAWN mechanism (fork+exec per subprocess instead of zygote-fork) — it does not touch no_sandbox, seccomp, or namespace flags directly, but the zygote is also documented as responsible for "bookkeeping the namespace sandbox," so this step tests BOTH axes together and treats a Seccomp regression as a hard rejection of this candidate, not just a crash-dump pass. continue-on-error: true — genuinely unverified, must not become steady-state until BOTH checks are confirmed green with zero regression.
+      - name: R-19 diagnostic — --no-zygote candidate (tests sandbox AND crash-dump together)
+        id: no-zygote-experiment
+        continue-on-error: true
+        if: always()
+        env:
+          EXTRA_CEF_ARGS: --no-zygote
+        run: |
+          set -o pipefail
+          python3 -m http.server 8084 --directory dist &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          sleep 1
+          echo "--- sandbox-status (must still show Seccomp=2 — a regression here rejects this candidate) ---"
+          xvfb-run -a node scripts/cef/run-sandbox-status-proof.mjs \
+            "$(pwd)/build/worldscript_host/worldscript_host" \
+            "http://localhost:8084/" | tee "$RUNNER_TEMP/cef-no-zygote-sandbox.txt"
+          echo "--- crash-reporting (does a real .dmp now appear?) ---"
+          xvfb-run -a node scripts/cef/run-launch-cycle-proof.mjs \
+            "$(pwd)/build/worldscript_host/worldscript_host" \
+            "http://localhost:8084/" --only-crash-reporting | tee "$RUNNER_TEMP/cef-no-zygote-crash.txt"
+
       - name: Best-effort Wayland launch smoke (roadmap §44.2)
         id: wayland-smoke
         continue-on-error: true
@@ -293,5 +315,11 @@ jobs:
           tail -c 100000 "$RUNNER_TEMP/cef-sandbox-status.txt" >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "(sandbox-status output unavailable)" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           echo "- **Sandbox-compatible Crashpad renderer-crash-dump generation** (real ptrace_scope, no diagnostic relaxation — a currently-open, separately-tracked regression, not conflated with sandbox enforcement above): \`${{ steps.crash-reporting-under-sandbox.outcome }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **R-19 diagnostic — --no-zygote candidate** (real root-cause-informed experiment, NOT yet adopted as steady state; a Seccomp regression here would reject this candidate outright, not just a crash-dump pass): \`${{ steps.no-zygote-experiment.outcome }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          tail -c 60000 "$RUNNER_TEMP/cef-no-zygote-sandbox.txt" >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "(no-zygote sandbox output unavailable)" >> "$GITHUB_STEP_SUMMARY"
+          echo "---" >> "$GITHUB_STEP_SUMMARY"
+          tail -c 40000 "$RUNNER_TEMP/cef-no-zygote-crash.txt" >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "(no-zygote crash-reporting output unavailable)" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
           echo "- Wayland smoke (best-effort, roadmap §44.2): \`${{ steps.wayland-smoke.outcome }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Not yet in scope: X11/Wayland matrix beyond this one runner, full real-hardware/GPU/display-server sandbox matrix, accessibility-tree observability (AT-SPI — state enablement is proven, see the launch-cycle-proof step)." >> "$GITHUB_STEP_SUMMARY"

@@ -62,6 +62,8 @@ if (skipCrashReporting && onlyCrashReporting) {
   );
   process.exit(1);
 }
+// QNBS-v3: real diagnostic-experiment mechanism for R-19 — same EXTRA_CEF_ARGS convention as run-sandbox-status-proof.mjs, kept in sync deliberately. CI-diagnostic-step opt-in only, never set in the hard-gated steps.
+const extraCefArgs = (process.env.EXTRA_CEF_ARGS ?? '').split(' ').filter(Boolean);
 
 // QNBS-v3: raised from 4000ms after two consecutive CI runs on identical code (byte-for-byte matching main, which had passed reliably before) showed the browser process alive but never reaching OnAfterCreated within the old window — runner-speed variance, not a code regression.
 // QNBS-v3: raised again from 10000ms after the same "Cycle 1: no FFI boundary proof" symptom
@@ -309,10 +311,14 @@ async function runCycle(index) {
   console.log(`[launch-cycle-proof] Cycle ${index + 1}/${cycles}: launching…`);
   // QNBS-v3: cwd set to the binary's own directory — Chromium resolves several resource paths (icudtl.dat et al.) relative to cwd, not the executable's location; without this, "Invalid file descriptor to ICU data received" crashes it on startup even though every file is correctly present.
   // QNBS-v3: verbose CEF/Chromium logging to stderr — an early crash otherwise produces zero diagnostic output, making root-causing it impossible from this harness's own log.
-  const child = spawn(binaryPath, [`--url=${url}`, '--enable-logging=stderr', '--v=1'], {
-    cwd: path.dirname(binaryPath),
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  const child = spawn(
+    binaryPath,
+    [`--url=${url}`, '--enable-logging=stderr', '--v=1', ...extraCefArgs],
+    {
+      cwd: path.dirname(binaryPath),
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  );
 
   let stdout = '';
   let stderr = '';
@@ -403,11 +409,15 @@ async function runCrashReportingProofCycle() {
   const dumpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'worldscript-crash-dumps-'));
 
   // QNBS-v3: --v=2 (not runCycle's --v=1) specifically for this cycle — PR #404's investigation needs any VLOG(2)-level Crashpad-internal logging (PR_SET_PTRACER/broker decisions) that --v=1 doesn't surface; scoped to this cycle only so the already-proven lifecycle proof's log volume/behavior stays untouched.
-  const child = spawn(binaryPath, [`--url=${CRASH_URL}`, '--enable-logging=stderr', '--v=2'], {
-    cwd: path.dirname(binaryPath),
-    stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, BREAKPAD_DUMP_LOCATION: dumpDir },
-  });
+  const child = spawn(
+    binaryPath,
+    [`--url=${CRASH_URL}`, '--enable-logging=stderr', '--v=2', ...extraCefArgs],
+    {
+      cwd: path.dirname(binaryPath),
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, BREAKPAD_DUMP_LOCATION: dumpDir },
+    },
+  );
 
   let stdout = '';
   let stderr = '';

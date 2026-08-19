@@ -66,6 +66,9 @@ import path from 'node:path';
 
 const [binaryPath, url] = process.argv.slice(2);
 
+// QNBS-v3: real diagnostic-experiment mechanism for R-19 (crash-dump-under-sandbox investigation) — space-separated extra Chromium/CEF switches to append to the spawned binary's own argv, e.g. EXTRA_CEF_ARGS="--no-zygote" to test whether bypassing zygote-forking (which never re-executes worldscript_host's own main() for renderer/GPU/utility children) restores per-process crash-handler declarations, WITHOUT ever changing this script's own default (unset) behavior. Never set in the hard-gated steps — CI-diagnostic-step opt-in only.
+const extraCefArgs = (process.env.EXTRA_CEF_ARGS ?? '').split(' ').filter(Boolean);
+
 // QNBS-v3: matches run-launch-cycle-proof.mjs's own tuned value — the same runner-speed-variance rationale applies to this harness's cold launch too.
 const STARTUP_GRACE_MS = 15000;
 const SHUTDOWN_GRACE_MS = 6000;
@@ -178,12 +181,16 @@ function findForbiddenFlags(pid) {
 
 async function main() {
   console.log(
-    '[sandbox-status-proof] Launching worldscript_host with sandboxing enabled (no_sandbox=false)…',
+    `[sandbox-status-proof] Launching worldscript_host with sandboxing enabled (no_sandbox=false)${extraCefArgs.length ? `, extra args: ${extraCefArgs.join(' ')}` : ''}…`,
   );
-  const child = spawn(binaryPath, [`--url=${url}`, '--enable-logging=stderr', '--v=1'], {
-    cwd: path.dirname(binaryPath),
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  const child = spawn(
+    binaryPath,
+    [`--url=${url}`, '--enable-logging=stderr', '--v=1', ...extraCefArgs],
+    {
+      cwd: path.dirname(binaryPath),
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  );
 
   let stdout = '';
   let stderr = '';
