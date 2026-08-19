@@ -220,6 +220,20 @@ jobs:
             "$DUMP_SYMS_BIN" \
             "$MINIDUMP_STACKWALK_BIN"
 
+      - name: Real Linux sandbox-status proof (no_sandbox=false)
+        id: sandbox-status
+        # QNBS-v3: first real attempt, genuinely unverified against live CI — continue-on-error keeps a failure here from also blocking the Wayland smoke step below (same lesson as the accessibility PR #391→#397 regression); remove once this has real, reliable green evidence.
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          python3 -m http.server 8082 --directory dist &
+          SERVER_PID=$!
+          sleep 1
+          xvfb-run -a node scripts/cef/run-sandbox-status-proof.mjs \
+            "$(pwd)/build/worldscript_host/worldscript_host" \
+            "http://localhost:8082/" | tee "$RUNNER_TEMP/cef-sandbox-status.txt"
+          kill "$SERVER_PID"
+
       - name: Best-effort Wayland launch smoke (roadmap §44.2)
         id: wayland-smoke
         continue-on-error: true
@@ -243,9 +257,13 @@ jobs:
           echo "- worldscript_host built and repeated launch/close cycles proven against the real production bundle (dist/), under Xvfb." >> "$GITHUB_STEP_SUMMARY"
           echo "- Linux runtime linkage (ldd against the shipped worldscript_host + libcef.so, not just dpkg package presence): see the \"Linux runtime linkage check\" step above." >> "$GITHUB_STEP_SUMMARY"
           echo "- Crash-symbolization proof: a self-induced browser-process crash resolved via dump_syms + minidump-stackwalk against our own DWARF debug info — Chromium/CEF-internal frames remain unsymbolized (no debug-symbols archive is published for this distribution)." >> "$GITHUB_STEP_SUMMARY"
-          echo "- Linux sandbox feasibility inventory (diagnostic only, no sandbox behavior attempted yet):" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Linux sandbox feasibility inventory (diagnostic only, pre-dates the real enable attempt below):" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           cat "$RUNNER_TEMP/cef-sandbox-inventory.txt" >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "(inventory output unavailable)" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "- Real Linux sandbox-status proof (no_sandbox=false, per-process Seccomp/NoNewPrivs/user-ns evidence): \`${{ steps.sandbox-status.outcome }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat "$RUNNER_TEMP/cef-sandbox-status.txt" >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "(sandbox-status output unavailable)" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
           echo "- Wayland smoke (best-effort, roadmap §44.2): \`${{ steps.wayland-smoke.outcome }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Not yet in scope: X11/Wayland matrix beyond this one runner, sandbox posture, accessibility-tree observability (AT-SPI — state enablement is proven, see the launch-cycle-proof step)." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Not yet in scope: X11/Wayland matrix beyond this one runner, full real-hardware/GPU/display-server sandbox matrix, accessibility-tree observability (AT-SPI — state enablement is proven, see the launch-cycle-proof step)." >> "$GITHUB_STEP_SUMMARY"

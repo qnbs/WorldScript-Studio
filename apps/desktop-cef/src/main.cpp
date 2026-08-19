@@ -52,7 +52,13 @@ int main(int argc, char* argv[]) {
   InstallShutdownSignalHandlers();
 
   CefSettings settings;
-  settings.no_sandbox = true;  // ADR-0020: sandbox posture deliberately deferred (roadmap §12).
+  // QNBS-v3: real sandbox-enable attempt (Wave 2 exit criterion) — ADR-0020's spike ran with
+  // no_sandbox=true unconditionally; PR #402's feasibility inventory confirmed unprivileged
+  // user-namespace sandboxing is functionally reachable on the CI runner (unshare succeeded),
+  // so this attempt lets CEF/Chromium's own sandbox init run for real rather than assuming it
+  // would fail. scripts/cef/run-sandbox-status-proof.mjs reads real per-process evidence
+  // (Seccomp/NoNewPrivs, user-namespace identity) rather than trusting a clean launch alone.
+  settings.no_sandbox = false;
 
   // QNBS-v3: CefInitialize's return value was previously ignored, masking init failure (missing display/resources) as a normal exit — CodeAnt review finding on PR #388.
   if (!CefInitialize(main_args, settings, app.get(), nullptr)) {
