@@ -172,110 +172,127 @@ async function main() {
     child.once('exit', (code, signal) => resolve({ code, signal })),
   );
 
-  const earlyExit = await Promise.race([exited, sleep(STARTUP_GRACE_MS).then(() => null)]);
-  if (earlyExit) {
-    logStderr('startup', stderr);
-    throw new Error(
-      `exited during startup (code=${earlyExit.code}, signal=${earlyExit.signal}) instead of staying up — a sandbox-init failure is a real, plausible cause here, not assumed unrelated.`,
-    );
-  }
+  // QNBS-v3: every throw below is caught by this try and swept up in the finally block — CodeRabbit-class finding raised on this PR (missing guaranteed cleanup), mirroring run-launch-cycle-proof.mjs's runCrashReportingProofCycle try/finally pattern. Without this, an assertion failure could leave a sandboxed CEF process tree running past this step, contaminating the Wayland smoke proof that runs after it (this step is continue-on-error).
+  try {
+    const earlyExit = await Promise.race([exited, sleep(STARTUP_GRACE_MS).then(() => null)]);
+    if (earlyExit) {
+      logStderr('startup', stderr);
+      throw new Error(
+        `exited during startup (code=${earlyExit.code}, signal=${earlyExit.signal}) instead of staying up — a sandbox-init failure is a real, plausible cause here, not assumed unrelated.`,
+      );
+    }
 
-  if (!stdout.includes(FFI_PROOF_LINE) || !stdout.includes(EXPECTED_TITLE_LINE)) {
-    logStderr('startup', stderr);
-    throw new Error(
-      `sandboxed launch did not reach the same FFI/rendering proofs the unsandboxed lifecycle harness relies on — a real regression, not acceptable even though the process stayed alive. stdout so far:\n${stdout}`,
-    );
-  }
-  console.log(
-    '[sandbox-status-proof] FFI boundary and real rendering proofs both present under a sandboxed launch — zero regression to the existing lifecycle proof.',
-  );
-
-  // QNBS-v3: the harness process itself runs in the same ambient/initial user namespace the (unsandboxed-by-design) browser process runs in — comparing a child's namespace against this value is equivalent to comparing it against the browser's own, without needing a second /proc read.
-  const ambientUserNs = readUserNsId(process.pid);
-  const pids = listMatchingPids();
-  const roles = pids
-    .map((pid) => ({ pid, role: classifyRole(pid) }))
-    .filter((p) => p.role !== null);
-
-  const forbiddenFlagHits = roles
-    .map(({ pid, role }) => ({ pid, role, flags: findForbiddenFlags(pid) }))
-    .filter((r) => r.flags.length > 0);
-  if (forbiddenFlagHits.length > 0) {
-    const detail = forbiddenFlagHits
-      .map((r) => `pid=${r.pid} role=${r.role} flags=${r.flags.join(',')}`)
-      .join('; ');
-    throw new Error(
-      `sandbox-weakening flag(s) observed on the actual process command line — this would misrepresent what's protected, exactly what the acceptance bar disallows: ${detail}`,
-    );
-  }
-
-  console.log(
-    `[sandbox-status-proof] Observed process tree (${roles.length} matching process(es)):`,
-  );
-  const evidence = [];
-  for (const { pid, role } of roles) {
-    const seccomp = readProcStatusField(pid, 'Seccomp');
-    const noNewPrivs = readProcStatusField(pid, 'NoNewPrivs');
-    const userNs = readUserNsId(pid);
-    const distinctUserNs = userNs !== null && userNs !== ambientUserNs;
+    if (!stdout.includes(FFI_PROOF_LINE) || !stdout.includes(EXPECTED_TITLE_LINE)) {
+      logStderr('startup', stderr);
+      throw new Error(
+        `sandboxed launch did not reach the same FFI/rendering proofs the unsandboxed lifecycle harness relies on — a real regression, not acceptable even though the process stayed alive. stdout so far:\n${stdout}`,
+      );
+    }
     console.log(
-      `  pid=${pid} role=${role} Seccomp=${seccomp ?? '(unreadable)'} NoNewPrivs=${noNewPrivs ?? '(unreadable)'} ` +
-        `user-ns=${userNs ?? '(unreadable)'} distinct-from-ambient=${distinctUserNs}`,
+      '[sandbox-status-proof] FFI boundary and real rendering proofs both present under a sandboxed launch — zero regression to the existing lifecycle proof.',
     );
-    evidence.push({ pid, role, seccomp, noNewPrivs, distinctUserNs });
-  }
 
-  child.kill('SIGTERM');
-  const shutdownResult = await Promise.race([exited, sleep(SHUTDOWN_GRACE_MS).then(() => null)]);
-  if (!shutdownResult) {
-    logStderr('shutdown', stderr);
-    killAllMatchingProcesses();
-    throw new Error('process did not exit within the shutdown grace period.');
-  }
-  // QNBS-v3: accepts either "died from the SIGTERM we sent" or "exited 0 on its own" as clean — same convention as run-launch-cycle-proof.mjs.
-  const cleanShutdown = shutdownResult.signal === 'SIGTERM' || shutdownResult.code === 0;
-  if (!cleanShutdown) {
-    logStderr('shutdown', stderr);
-    throw new Error(
-      `abnormal exit during shutdown (code=${shutdownResult.code}, signal=${shutdownResult.signal}).`,
+    // QNBS-v3: the harness process itself runs in the same ambient/initial user namespace the (unsandboxed-by-design) browser process runs in — comparing a child's namespace against this value is equivalent to comparing it against the browser's own, without needing a second /proc read.
+    const ambientUserNs = readUserNsId(process.pid);
+    const pids = listMatchingPids();
+    const roles = pids
+      .map((pid) => ({ pid, role: classifyRole(pid) }))
+      .filter((p) => p.role !== null);
+
+    const forbiddenFlagHits = roles
+      .map(({ pid, role }) => ({ pid, role, flags: findForbiddenFlags(pid) }))
+      .filter((r) => r.flags.length > 0);
+    if (forbiddenFlagHits.length > 0) {
+      const detail = forbiddenFlagHits
+        .map((r) => `pid=${r.pid} role=${r.role} flags=${r.flags.join(',')}`)
+        .join('; ');
+      throw new Error(
+        `sandbox-weakening flag(s) observed on the actual process command line — this would misrepresent what's protected, exactly what the acceptance bar disallows: ${detail}`,
+      );
+    }
+
+    console.log(
+      `[sandbox-status-proof] Observed process tree (${roles.length} matching process(es)):`,
     );
-  }
-  await sleep(ORPHAN_CHECK_GRACE_MS);
-  if (processTreeAlive()) {
-    killAllMatchingProcesses();
-    throw new Error('orphaned worldscript_host process(es) still running after shutdown.');
-  }
+    const evidence = [];
+    for (const { pid, role } of roles) {
+      const seccomp = readProcStatusField(pid, 'Seccomp');
+      const noNewPrivs = readProcStatusField(pid, 'NoNewPrivs');
+      const userNs = readUserNsId(pid);
+      const distinctUserNs = userNs !== null && userNs !== ambientUserNs;
+      console.log(
+        `  pid=${pid} role=${role} Seccomp=${seccomp ?? '(unreadable)'} NoNewPrivs=${noNewPrivs ?? '(unreadable)'} ` +
+          `user-ns=${userNs ?? '(unreadable)'} distinct-from-ambient=${distinctUserNs}`,
+      );
+      evidence.push({ pid, role, seccomp, noNewPrivs, distinctUserNs });
+    }
 
-  const nonBrowserEvidence = evidence.filter((e) => e.role !== 'browser');
-  if (nonBrowserEvidence.length === 0) {
-    throw new Error(
-      'no renderer/GPU/utility subprocess was observed while the browser was running — this proof requires at least one non-browser process to assert real evidence on, not just the browser process itself.',
+    child.kill('SIGTERM');
+    const shutdownResult = await Promise.race([exited, sleep(SHUTDOWN_GRACE_MS).then(() => null)]);
+    if (!shutdownResult) {
+      logStderr('shutdown', stderr);
+      throw new Error('process did not exit within the shutdown grace period.');
+    }
+    // QNBS-v3: accepts either "died from the SIGTERM we sent" or "exited 0 on its own" as clean — same convention as run-launch-cycle-proof.mjs.
+    const cleanShutdown = shutdownResult.signal === 'SIGTERM' || shutdownResult.code === 0;
+    if (!cleanShutdown) {
+      logStderr('shutdown', stderr);
+      throw new Error(
+        `abnormal exit during shutdown (code=${shutdownResult.code}, signal=${shutdownResult.signal}).`,
+      );
+    }
+    await sleep(ORPHAN_CHECK_GRACE_MS);
+    if (processTreeAlive()) {
+      throw new Error('orphaned worldscript_host process(es) still running after shutdown.');
+    }
+
+    const nonBrowserEvidence = evidence.filter((e) => e.role !== 'browser');
+    if (nonBrowserEvidence.length === 0) {
+      throw new Error(
+        'no renderer/GPU/utility subprocess was observed while the browser was running — this proof requires at least one non-browser process to assert real evidence on, not just the browser process itself.',
+      );
+    }
+
+    // QNBS-v3: Linux's Seccomp status field is 0=disabled/1=strict/2=filter — Chromium's own seccomp-BPF layer specifically means filter mode (2). Accepting 1 (strict mode, a different and much rarer kernel feature) as BPF evidence would overclaim; a raw non-zero check was a real precision gap flagged on this PR before it could become a false sandbox_smoke=true claim later.
+    const seccompBpfFiltered = nonBrowserEvidence.filter((e) => e.seccomp === '2');
+    const withDistinctUserNs = nonBrowserEvidence.filter((e) => e.distinctUserNs);
+
+    console.log(
+      `[sandbox-status-proof] ${nonBrowserEvidence.length} non-browser process(es) observed; ` +
+        `${seccompBpfFiltered.length} with Seccomp=2 (real seccomp-BPF filter mode, layer-2 evidence); ` +
+        `${withDistinctUserNs.length} in a user namespace distinct from the ambient one (layer-1 evidence).`,
     );
-  }
 
-  const seccompFiltered = nonBrowserEvidence.filter((e) => e.seccomp !== null && e.seccomp !== '0');
-  const withDistinctUserNs = nonBrowserEvidence.filter((e) => e.distinctUserNs);
+    if (seccompBpfFiltered.length === 0 && withDistinctUserNs.length === 0) {
+      throw new Error(
+        'zero layer-1 (namespace) or layer-2 (seccomp-BPF filter, Seccomp=2 specifically) evidence found on any ' +
+          'renderer/GPU/utility subprocess — no_sandbox=false did not produce an observable change in process ' +
+          'isolation on this runner. Per the acceptance bar in cef-architecture-primer.md, a clean launch alone ' +
+          'does not count as proof.',
+      );
+    }
 
-  console.log(
-    `[sandbox-status-proof] ${nonBrowserEvidence.length} non-browser process(es) observed; ` +
-      `${seccompFiltered.length} with a non-zero Seccomp field (layer-2 evidence); ` +
-      `${withDistinctUserNs.length} in a user namespace distinct from the ambient one (layer-1 evidence).`,
-  );
-
-  if (seccompFiltered.length === 0 && withDistinctUserNs.length === 0) {
-    throw new Error(
-      'zero layer-1 (namespace) or layer-2 (seccomp) evidence found on any renderer/GPU/utility subprocess — ' +
-        'no_sandbox=false did not produce an observable change in process isolation on this runner. Per the ' +
-        'acceptance bar in cef-architecture-primer.md, a clean launch alone does not count as proof.',
+    console.log(
+      '[sandbox-status-proof] OK — real per-process evidence collected for at least one Linux sandbox layer ' +
+        '(namespace isolation and/or seccomp-BPF filter mode) on a renderer/GPU/utility subprocess, with zero ' +
+        'regression to the existing FFI/rendering lifecycle proof. This is CI-runner feasibility evidence, not a ' +
+        'production-packaging sandbox proof — see cef-architecture-primer.md\'s "two separate gates" note. This ' +
+        'first attempt intentionally accepts any single non-browser process showing either layer as a diagnostic ' +
+        'pass — a stricter per-role (renderer vs. GPU vs. utility) requirement is deferred to the follow-up that ' +
+        'actually flips sandbox_smoke to true, once this real evidence is reviewed.',
     );
+  } finally {
+    // QNBS-v3: unconditional safety net — CodeRabbit-class finding on this PR. Runs whether the try block succeeded, threw before ever attempting graceful shutdown, or threw after it. killAllMatchingProcesses() sweeps the whole binary-path-matching tree (not just the tracked child), same as run-launch-cycle-proof.mjs's crash-reporting-cycle cleanup.
+    if (processTreeAlive()) {
+      killAllMatchingProcesses();
+      await sleep(ORPHAN_CHECK_GRACE_MS);
+      if (processTreeAlive()) {
+        console.error(
+          '[sandbox-status-proof] WARNING — worldscript_host process(es) still running after failure cleanup.',
+        );
+      }
+    }
   }
-
-  console.log(
-    '[sandbox-status-proof] OK — real per-process evidence collected for at least one Linux sandbox layer ' +
-      '(namespace isolation and/or seccomp-BPF) on a renderer/GPU/utility subprocess, with zero regression to ' +
-      'the existing FFI/rendering lifecycle proof. This is CI-runner feasibility evidence, not a production-' +
-      'packaging sandbox proof — see cef-architecture-primer.md\'s "two separate gates" note.',
-  );
 }
 
 main().catch((err) => {

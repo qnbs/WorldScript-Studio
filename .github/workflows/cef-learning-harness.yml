@@ -180,6 +180,13 @@ jobs:
       - name: List worldscript_host output directory (diagnostic)
         run: ls -la build/worldscript_host/
 
+      # QNBS-v3: CEF's own COPY_FILES step copies chrome-sandbox with normal permissions — real CI evidence (PR #404) showed Chromium's setuid_sandbox_host.cc treats a present-but-misconfigured helper as FATAL rather than silently falling back to unprivileged user namespaces, so this standard CEF/Chromium packaging step (chown root + mode 4755) is required before any sandboxed launch, matching how a real .deb/AppImage installer would need to set this up too.
+      - name: Set up SUID sandbox helper (chrome-sandbox)
+        run: |
+          sudo chown root:root build/worldscript_host/chrome-sandbox
+          sudo chmod 4755 build/worldscript_host/chrome-sandbox
+          ls -la build/worldscript_host/chrome-sandbox
+
       - name: Linux runtime linkage check (ldd against shipped .so files)
         run: node scripts/cef/check-linux-runtime-linkage.mjs build/worldscript_host
 
@@ -207,11 +214,12 @@ jobs:
         run: |
           python3 -m http.server 8080 --directory dist &
           SERVER_PID=$!
+          # QNBS-v3: GitHub Actions runs bash steps with -e by default — a failing node proof would previously skip the plain `kill` below entirely, leaking the http.server past this step. Real gap found alongside PR #404's sandbox work; applied here too, not just the new step.
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
           sleep 1
           xvfb-run -a node scripts/cef/run-launch-cycle-proof.mjs \
             "$(pwd)/build/worldscript_host/worldscript_host" \
             "http://localhost:8080/" --cycles 3
-          kill "$SERVER_PID"
 
       - name: Crash-symbolization proof (dump_syms + minidump-stackwalk)
         run: |
@@ -228,11 +236,11 @@ jobs:
           set -o pipefail
           python3 -m http.server 8082 --directory dist &
           SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
           sleep 1
           xvfb-run -a node scripts/cef/run-sandbox-status-proof.mjs \
             "$(pwd)/build/worldscript_host/worldscript_host" \
             "http://localhost:8082/" | tee "$RUNNER_TEMP/cef-sandbox-status.txt"
-          kill "$SERVER_PID"
 
       - name: Best-effort Wayland launch smoke (roadmap §44.2)
         id: wayland-smoke
@@ -241,11 +249,11 @@ jobs:
           sudo apt-get install -y weston
           python3 -m http.server 8081 --directory dist &
           SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
           sleep 1
           node scripts/cef/run-wayland-smoke.mjs \
             "$(pwd)/build/worldscript_host/worldscript_host" \
             "http://localhost:8081/"
-          kill "$SERVER_PID"
 
       - name: Summary
         if: always()
