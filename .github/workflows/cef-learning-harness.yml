@@ -24,6 +24,11 @@
 # CEF-rendering regression introduced by an unrelated app-source PR is still
 # caught promptly (informationally, non-blocking), not silently missed until
 # someone next happens to touch a CEF-specific path.
+#
+# QNBS-v3: docs/cef/** deliberately excluded from the PR path list — a docs-only
+# change (e.g. updating the competency matrix) can't regress the built host, so it
+# doesn't need a ~30min rebuild; code changes under apps/desktop-cef/** or
+# scripts/cef/** still trigger this regardless of whether docs are also touched.
 # ============================================================
 
 name: 🧪 CEF Learning Harness
@@ -34,7 +39,6 @@ on:
     paths:
       - 'apps/desktop-cef/**'
       - 'scripts/cef/**'
-      - 'docs/cef/**'
       - '.github/workflows/cef-learning-harness.yml'
   push:
     branches: [main]
@@ -85,6 +89,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           toolchain: stable
+
+      - name: Cache apt packages (CEF host + Wayland build deps)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /var/cache/apt/archives/*.deb
+          # QNBS-v3: bump the -v suffix if either apt-get install package list in this job changes
+          key: apt-cef-harness-deps-v1
 
       - name: Install worldscript_host build dependencies
         run: |

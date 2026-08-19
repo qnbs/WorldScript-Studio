@@ -86,6 +86,43 @@ jobs:
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5
 
   # ----------------------------------------------------------
+  # 0b. CHANGE DETECTION: path-scopes rust-tauri so a docs/frontend-only PR
+  # doesn't pay for a Rust toolchain + apt-get(libgtk/libwebkit) build it can't
+  # affect. Fails OPEN (tauri=true) on any ambiguity — base SHA missing/unreachable
+  # — so a detection error runs the real gate instead of silently skipping it.
+  # ----------------------------------------------------------
+  changes:
+    name: 📂 Detect changed paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tauri: ${{ steps.filter.outputs.tauri }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Detect src-tauri changes
+        id: filter
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+          fi
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BASE" 2>/dev/null; then
+            echo "::notice::No usable base SHA to diff against — defaulting to tauri=true (fail open)"
+            echo "tauri=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git diff --name-only "$BASE" "${{ github.sha }}" | grep -qE '^(src-tauri/|\.github/workflows/ci\.yml$)'; then
+            echo "tauri=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "tauri=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ----------------------------------------------------------
   # 1. QUALITY GATE: Lint + Typecheck + Tests (parallel matrix)
   # ----------------------------------------------------------
   quality:
@@ -177,16 +214,15 @@ jobs:
           fail_ci_if_error: false
 
   # ----------------------------------------------------------
-  # 2. BUILD: Production build + Pages artifact upload
-  # QNBS-v3: Stryker mutation removed from the PR/CI pipeline (2026-06-02) — it added noise as a
-  #          flaky, non-gating check. Mutation now runs ONLY via the manual `.github/workflows/
-  #          mutation.yml` (workflow_dispatch). To be re-integrated in a later iteration.
+  # 1b. RUST-TAURI: Tauri Rust Gate (fmt/check/clippy/test), path-scoped via `changes`
   # ----------------------------------------------------------
   rust-tauri:
     name: 🦀 Tauri Rust Gate
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: [security]
+    needs: [security, changes]
+    # QNBS-v3: skips for PRs that don't touch src-tauri/** — ci-success treats 'skipped' as pass for this job only
+    if: needs.changes.outputs.tauri == 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
         with:
@@ -195,6 +231,12 @@ jobs:
         with:
           toolchain: stable
           components: rustfmt, clippy
+      - name: Cache apt packages (Tauri Linux build deps)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /var/cache/apt/archives/*.deb
+          # QNBS-v3: bump the -v suffix if the apt-get install package list below changes
+          key: apt-tauri-linux-deps-v1
       - name: Install Linux Tauri build dependencies
         run: |
           sudo apt-get update
@@ -212,6 +254,12 @@ jobs:
         working-directory: src-tauri
         run: cargo test --locked
 
+  # ----------------------------------------------------------
+  # 2. BUILD: Production build + Pages artifact upload
+  # QNBS-v3: Stryker mutation removed from the PR/CI pipeline (2026-06-02) — it added noise as a
+  #          flaky, non-gating check. Mutation now runs ONLY via the manual `.github/workflows/
+  #          mutation.yml` (workflow_dispatch). To be re-integrated in a later iteration.
+  # ----------------------------------------------------------
   build:
     name: 🏗️ Build
     runs-on: ubuntu-latest
@@ -290,33 +338,40 @@ jobs:
           path: ./dist
 
   # ----------------------------------------------------------
-  # 3. CI SUCCESS: single required-status aggregator (security + quality + build)
+  # 3. CI SUCCESS: single required-status aggregator (security + quality + changes + rust-tauri + build + e2e + vrt)
   # ----------------------------------------------------------
   ci-success:
     name: ✅ CI Success
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [security, quality, rust-tauri, build, e2e, vrt]
+    needs: [security, quality, changes, rust-tauri, build, e2e, vrt]
     if: always()
     steps:
+      # QNBS-v3: rust-tauri may legitimately be 'skipped' (changes.outputs.tauri == 'false') — that's a pass, not a failure
       - name: Verify all required jobs succeeded
         run: |
-          if [ "${{ needs.security.result }}" != "success" ] || \
-             [ "${{ needs.quality.result }}" != "success" ] || \
-             [ "${{ needs.rust-tauri.result }}" != "success" ] || \
-             [ "${{ needs.build.result }}" != "success" ] || \
-             [ "${{ needs.e2e.result }}" != "success" ] || \
-             [ "${{ needs.vrt.result }}" != "success" ]; then
+          FAIL=0
+          [ "${{ needs.security.result }}" = "success" ] || FAIL=1
+          [ "${{ needs.quality.result }}" = "success" ] || FAIL=1
+          [ "${{ needs.changes.result }}" = "success" ] || FAIL=1
+          if [ "${{ needs.rust-tauri.result }}" != "success" ] && [ "${{ needs.rust-tauri.result }}" != "skipped" ]; then
+            FAIL=1
+          fi
+          [ "${{ needs.build.result }}" = "success" ] || FAIL=1
+          [ "${{ needs.e2e.result }}" = "success" ] || FAIL=1
+          [ "${{ needs.vrt.result }}" = "success" ] || FAIL=1
+          if [ "$FAIL" = "1" ]; then
             echo "One or more required jobs did not succeed:"
             echo "  security: ${{ needs.security.result }}"
             echo "  quality:  ${{ needs.quality.result }}"
-            echo "  rust-tauri: ${{ needs.rust-tauri.result }}"
+            echo "  changes:  ${{ needs.changes.result }}"
+            echo "  rust-tauri: ${{ needs.rust-tauri.result }} (skipped = OK, src-tauri untouched)"
             echo "  build:    ${{ needs.build.result }}"
             echo "  e2e:      ${{ needs.e2e.result }}"
             echo "  vrt:      ${{ needs.vrt.result }}"
             exit 1
           fi
-          echo "All required jobs succeeded."
+          echo "All required jobs succeeded (or were legitimately skipped)."
 
   # ----------------------------------------------------------
   # 4. DEPLOY: GitHub Pages (only on main push)
