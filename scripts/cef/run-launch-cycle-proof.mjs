@@ -58,8 +58,11 @@ const EXPECTED_TITLE_LINE = 'title = WorldScript Studio';
 
 // QNBS-v3: crash-reporting/symbolization competency-gate proof (CEF-RUST-COMPETENCY-MATRIX.md) — mechanism verified against real CEF 151 source (libcef/common/crash_reporting.cc, crash_reporter_client.cc), not assumed; see docs/cef/knowledge/cef-architecture-primer.md.
 const CRASH_REPORTING_ENABLED_LINE = 'crash_reporting_enabled = true';
-const RENDERER_TERMINATED_PROOF_PREFIX = 'renderer_terminated status=';
+// QNBS-v3: requires the specific TS_PROCESS_CRASHED value, not a bare "status=" prefix — CodeAnt review finding on PR #392 (TS_LAUNCH_FAILED/TS_PROCESS_WAS_KILLED/TS_ABNORMAL_TERMINATION would otherwise also satisfy the proof).
+const RENDERER_CRASHED_PROOF_LINE = 'renderer_terminated status=TS_PROCESS_CRASHED';
 const CRASH_URL = 'chrome://crash';
+// QNBS-v3: Crashpad's dump finalization is asynchronous relative to OnRenderProcessTerminated — CodeAnt review finding on PR #392; this is how long the harness waits for a real .dmp file before giving up, separate from SHUTDOWN_GRACE_MS's own meaning.
+const DUMP_WRITE_GRACE_MS = 5000;
 
 if (!binaryPath || !url) {
   console.error(
@@ -101,7 +104,7 @@ function logStderr(label, stderr) {
   if (stderr) console.error(`[launch-cycle-proof] ${label} stderr:\n${stderr}`);
 }
 
-// QNBS-v3: recursive, not a flat readdir — Crashpad's on-disk database nests reports under subdirectories (e.g. completed/, pending/, attachments/) whose exact layout isn't asserted on here; presence of any file is the proof.
+// QNBS-v3: recursive, not a flat readdir — Crashpad's on-disk database nests reports under subdirectories (e.g. pending/, completed/, attachments/) whose exact layout isn't asserted on here; callers filter the result to *.dmp specifically (settings.dat/lock/.meta files are written during normal init and are not evidence of a dump).
 function findFilesRecursive(dir) {
   let entries;
   try {
@@ -189,7 +192,7 @@ async function runCrashReportingProofCycle() {
   console.log(
     `[launch-cycle-proof] Crash-reporting proof: launching with ${CRASH_URL} to deliberately crash the renderer…`,
   );
-  // QNBS-v3: fresh, empty-at-start temp dir — BREAKPAD_DUMP_LOCATION (verified in libcef/common/crash_reporter_client.cc) overrides where CEF/Crashpad writes dumps on Linux/POSIX, so "any file appears here" is unambiguous evidence, no need to guess CEF's default directory layout.
+  // QNBS-v3: fresh, empty-at-start temp dir — BREAKPAD_DUMP_LOCATION (verified in libcef/common/crash_reporter_client.cc) overrides where CEF/Crashpad writes dumps on Linux/POSIX, so a *.dmp file appearing here is unambiguous evidence, no need to guess CEF's default directory layout.
   const dumpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'worldscript-crash-dumps-'));
 
   const child = spawn(binaryPath, [`--url=${CRASH_URL}`, '--enable-logging=stderr', '--v=1'], {
@@ -211,71 +214,94 @@ async function runCrashReportingProofCycle() {
     child.once('exit', (code, signal) => resolve({ code, signal })),
   );
 
-  const rendererTerminated = await Promise.race([
-    (async () => {
-      while (!stdout.includes(RENDERER_TERMINATED_PROOF_PREFIX)) {
-        await sleep(200);
-      }
-      return true;
-    })(),
-    exited.then(() => false),
-    sleep(STARTUP_GRACE_MS).then(() => false),
-  ]);
+  // QNBS-v3: every throw below is caught here so the child is always reaped, even on a failed proof — CodeAnt/Qodo review finding on PR #392 (a thrown assertion left the browser and its subprocesses orphaned).
+  try {
+    // QNBS-v3: requires the specific TS_PROCESS_CRASHED value, not just any termination status — CodeAnt review finding on PR #392 (TS_LAUNCH_FAILED/TS_PROCESS_WAS_KILLED/TS_ABNORMAL_TERMINATION would otherwise also satisfy a bare prefix match). chrome://crash triggers a real SIGSEGV in the renderer, confirmed against CEF's own cefclient reference usage of this exact URL.
+    const rendererCrashed = await Promise.race([
+      (async () => {
+        while (!stdout.includes(RENDERER_CRASHED_PROOF_LINE)) {
+          await sleep(200);
+        }
+        return true;
+      })(),
+      exited.then(() => false),
+      sleep(STARTUP_GRACE_MS).then(() => false),
+    ]);
 
-  if (!rendererTerminated) {
-    logStderr('Crash-reporting proof', stderr);
-    throw new Error(
-      `Crash-reporting proof: "${RENDERER_TERMINATED_PROOF_PREFIX}" not observed within ${STARTUP_GRACE_MS}ms (or the process exited early) — stdout so far:\n${stdout}`,
+    if (!rendererCrashed) {
+      throw new Error(
+        `"${RENDERER_CRASHED_PROOF_LINE}" not observed within ${STARTUP_GRACE_MS}ms (or the process exited early) — stdout so far:\n${stdout}`,
+      );
+    }
+    // QNBS-v3: echoed on the success path too, not just via logStderr on failure — the raw child stdout is otherwise invisible in the CI log (Qodo/CodeAnt review context on PR #392: nothing here previously proved which status value was actually observed).
+    console.log(
+      `[launch-cycle-proof] Crash-reporting proof: observed "${RENDERER_CRASHED_PROOF_LINE}".`,
     );
-  }
 
-  // QNBS-v3: the actual "renderer termination observed and handled" evidence (CEF-RUST-COMPETENCY-MATRIX.md) — only the renderer subprocess should have died; the browser process and its message loop must still be running.
-  if (!processTreeAlive()) {
-    logStderr('Crash-reporting proof', stderr);
-    throw new Error(
-      'Crash-reporting proof: browser process is not alive after the renderer crash — process isolation did not hold.',
+    // QNBS-v3: the actual "renderer termination observed and handled" evidence (CEF-RUST-COMPETENCY-MATRIX.md) — only the renderer subprocess should have died; the browser process and its message loop must still be running.
+    if (!processTreeAlive()) {
+      throw new Error(
+        'browser process is not alive after the renderer crash — process isolation did not hold.',
+      );
+    }
+
+    if (!stdout.includes(CRASH_REPORTING_ENABLED_LINE)) {
+      throw new Error(
+        `"${CRASH_REPORTING_ENABLED_LINE}" not observed — crash_reporter.cfg (apps/desktop-cef/resources/crash_reporter.cfg) was not found/parsed next to the binary.`,
+      );
+    }
+
+    // QNBS-v3: Crashpad's dump finalization is asynchronous relative to OnRenderProcessTerminated — CodeAnt review finding on PR #392 (shutting down the browser immediately raced the dump actually being written). Wait for a real *.dmp file, bounded, before sending SIGTERM.
+    const dumpAppeared = await Promise.race([
+      (async () => {
+        while (findFilesRecursive(dumpDir).filter((f) => f.endsWith('.dmp')).length === 0) {
+          await sleep(200);
+        }
+        return true;
+      })(),
+      sleep(DUMP_WRITE_GRACE_MS).then(() => false),
+    ]);
+    // QNBS-v3: filtered to .dmp specifically — CodeAnt/Qodo review finding on PR #392 (Crashpad's settings.dat/lock/.meta files are written during normal init and would otherwise falsely count as "a dump produced").
+    const dumpFiles = findFilesRecursive(dumpDir).filter((f) => f.endsWith('.dmp'));
+    if (!dumpAppeared || dumpFiles.length === 0) {
+      throw new Error(
+        `no .dmp file appeared under BREAKPAD_DUMP_LOCATION (${dumpDir}) within ${DUMP_WRITE_GRACE_MS}ms despite crash_reporting_enabled=true and an observed renderer crash.`,
+      );
+    }
+    console.log(
+      `[launch-cycle-proof] Crash-reporting proof: dump file(s) confirmed before shutdown: ${dumpFiles.join(', ')}`,
     );
-  }
 
-  if (!stdout.includes(CRASH_REPORTING_ENABLED_LINE)) {
-    logStderr('Crash-reporting proof', stderr);
-    throw new Error(
-      `Crash-reporting proof: "${CRASH_REPORTING_ENABLED_LINE}" not observed — crash_reporter.cfg (apps/desktop-cef/resources/crash_reporter.cfg) was not found/parsed next to the binary.`,
+    child.kill('SIGTERM');
+    const shutdownResult = await Promise.race([exited, sleep(SHUTDOWN_GRACE_MS).then(() => null)]);
+    if (!shutdownResult) {
+      throw new Error(
+        'process did not exit within the shutdown grace period after the renderer crash.',
+      );
+    }
+    // QNBS-v3: same clean-shutdown check as runCycle — Qodo review finding on PR #392 (the crash cycle accepted any exit, including an abnormal one, as a successful isolation proof).
+    const cleanShutdown = shutdownResult.signal === 'SIGTERM' || shutdownResult.code === 0;
+    if (!cleanShutdown) {
+      throw new Error(
+        `abnormal exit during shutdown (code=${shutdownResult.code}, signal=${shutdownResult.signal}).`,
+      );
+    }
+
+    await sleep(ORPHAN_CHECK_GRACE_MS);
+    if (processTreeAlive()) {
+      throw new Error('orphaned worldscript_host process(es) still running after shutdown.');
+    }
+
+    console.log(
+      '[launch-cycle-proof] Crash-reporting proof: OK — crash reporting enabled, renderer crash observed and handled (browser process survived), ' +
+        `${dumpFiles.length} dump file(s) written to the crash dump location. Full symbolization (dump_syms/minidump_stackwalk) requires a complete Chromium source checkout and is out of scope — see docs/cef/knowledge/cef-architecture-primer.md.`,
     );
-  }
-
-  child.kill('SIGTERM');
-  const shutdownResult = await Promise.race([exited, sleep(SHUTDOWN_GRACE_MS).then(() => null)]);
-  if (!shutdownResult) {
+  } catch (err) {
     logStderr('Crash-reporting proof', stderr);
-    throw new Error(
-      'Crash-reporting proof: process did not exit within the shutdown grace period after the renderer crash.',
-    );
+    // QNBS-v3: unconditional, not `if (!child.killed)` — .killed only reflects whether kill() was ever called, not whether the process actually died (e.g. SIGTERM already sent but the shutdown-grace-period/orphan checks below still failed); kill() on an already-exited process is a harmless no-op.
+    child.kill('SIGKILL');
+    throw new Error(`Crash-reporting proof: ${err instanceof Error ? err.message : String(err)}`);
   }
-
-  await sleep(ORPHAN_CHECK_GRACE_MS);
-  if (processTreeAlive()) {
-    logStderr('Crash-reporting proof', stderr);
-    throw new Error(
-      'Crash-reporting proof: orphaned worldscript_host process(es) still running after shutdown.',
-    );
-  }
-
-  const dumpFiles = findFilesRecursive(dumpDir);
-  console.log(
-    `[launch-cycle-proof] Crash-reporting proof: dump location (${dumpDir}) after the crash: ${dumpFiles.length > 0 ? dumpFiles.join(', ') : '(empty)'}`,
-  );
-  if (dumpFiles.length === 0) {
-    logStderr('Crash-reporting proof', stderr);
-    throw new Error(
-      `Crash-reporting proof: no file was written under BREAKPAD_DUMP_LOCATION (${dumpDir}) despite crash_reporting_enabled=true and an observed renderer crash.`,
-    );
-  }
-
-  console.log(
-    '[launch-cycle-proof] Crash-reporting proof: OK — crash reporting enabled, renderer crash observed and handled (browser process survived), ' +
-      `${dumpFiles.length} file(s) written to the crash dump location. Full symbolization (dump_syms/minidump_stackwalk) requires a complete Chromium source checkout and is out of scope — see docs/cef/knowledge/cef-architecture-primer.md.`,
-  );
 }
 
 async function main() {
