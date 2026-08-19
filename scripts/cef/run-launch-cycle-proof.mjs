@@ -9,7 +9,7 @@
  * (docs/cef/knowledge/subprocess-and-shutdown.md): an immediate post-signal check is
  * a false positive, not evidence of a hang.
  *
- * Each cycle must independently show two proofs, not just "at least one cycle across
+ * Each cycle must independently show three proofs, not just "at least one cycle across
  * the whole run" (a real review finding — masking a later cycle's failure behind an
  * earlier success would make the proof meaningless):
  *   - FFI boundary: apps/desktop-cef/src/worldscript_handler.cpp's OnAfterCreated
@@ -18,12 +18,17 @@
  *     error page (bad bundle, load failure) would not produce that specific title,
  *     so this catches "CEF started but the app didn't actually render" failures the
  *     FFI proof alone cannot.
+ *   - Accessibility state requested: SetAccessibilityState(STATE_ENABLED) is called on
+ *     every cycle (see the Early Accessibility Gate note below).
  *
- * Early Accessibility Gate (roadmap §3142): apps/desktop-cef does not request accessibility
- * tree construction today — an attempt was made and fully reverted after CefClient turned
- * out to have no GetAccessibilityHandler() in this CEF version (151.3.18), so the
- * callback-based signal this harness would have checked for does not exist; see
- * docs/cef/knowledge/cef-architecture-primer.md for the real, honestly-documented blocker.
+ * Early Accessibility Gate (roadmap §3142): apps/desktop-cef's OnAfterCreated calls
+ * browser->GetHost()->SetAccessibilityState(STATE_ENABLED) on every cycle — the real,
+ * windowed-mode-appropriate API (CefClient has no GetAccessibilityHandler(); that method
+ * is on CefRenderHandler, which is OSR-only and doesn't apply to this Views-based host —
+ * see docs/cef/knowledge/cef-architecture-primer.md). This proves accessibility state can
+ * be enabled intentionally (roadmap §23.1's first bullet); it does not yet prove the
+ * platform accessibility tree is actually observable — that needs OS-level AT-SPI
+ * introspection, not a CEF callback, and is separate follow-up work.
  *
  * After the repeated cycles, one additional crash-reporting proof runs
  * (runCrashReportingProofCycle): launches with chrome://crash to deliberately crash
@@ -55,6 +60,8 @@ const SHUTDOWN_GRACE_MS = 6000;
 const ORPHAN_CHECK_GRACE_MS = 3000;
 const FFI_PROOF_LINE = 'rust_core ping = 424242';
 const EXPECTED_TITLE_LINE = 'title = WorldScript Studio';
+// QNBS-v3: proves SetAccessibilityState(STATE_ENABLED) is requested on every cycle, not just once — same "no cycle can mask another" discipline as the FFI/title proofs above.
+const ACCESSIBILITY_STATE_PROOF_LINE = 'accessibility_state_requested = true';
 
 // QNBS-v3: crash-reporting/symbolization competency-gate proof (CEF-RUST-COMPETENCY-MATRIX.md) — mechanism verified against real CEF 151 source (libcef/common/crash_reporting.cc, crash_reporter_client.cc), not assumed; see docs/cef/knowledge/cef-architecture-primer.md.
 const CRASH_REPORTING_ENABLED_LINE = 'crash_reporting_enabled = true';
@@ -196,8 +203,14 @@ async function runCycle(index) {
       `Cycle ${index + 1}: expected "${EXPECTED_TITLE_LINE}" not observed — the production bundle may not have rendered (a CEF error page would not produce this specific title).`,
     );
   }
+  if (!stdout.includes(ACCESSIBILITY_STATE_PROOF_LINE)) {
+    logStderr(`Cycle ${index + 1}`, stderr);
+    throw new Error(
+      `Cycle ${index + 1}: expected "${ACCESSIBILITY_STATE_PROOF_LINE}" not observed — SetAccessibilityState(STATE_ENABLED) was not requested.`,
+    );
+  }
   console.log(
-    `[launch-cycle-proof] Cycle ${index + 1}/${cycles}: clean exit (signal=${shutdownResult.signal}), FFI + rendering proofs both present.`,
+    `[launch-cycle-proof] Cycle ${index + 1}/${cycles}: clean exit (signal=${shutdownResult.signal}), FFI + rendering + accessibility-state proofs all present.`,
   );
 }
 
@@ -348,7 +361,7 @@ async function main() {
   }
 
   console.log(
-    `[launch-cycle-proof] OK — ${cycles}/${cycles} repeated start/close cycles clean, FFI boundary and real rendering both proven in every cycle.`,
+    `[launch-cycle-proof] OK — ${cycles}/${cycles} repeated start/close cycles clean, FFI boundary, real rendering, and accessibility-state request all proven in every cycle.`,
   );
 
   await runCrashReportingProofCycle();

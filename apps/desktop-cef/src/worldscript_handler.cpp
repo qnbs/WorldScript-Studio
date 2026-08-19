@@ -61,6 +61,11 @@ void WorldScriptHandler::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
   printf("[worldscript_host] rust_core ping = %d\n", worldscript_rust_ping());
   fflush(stdout);
 
+  // QNBS-v3: CefClient::GetAccessibilityHandler doesn't exist (PR #391's real finding) — that method is on CefRenderHandler instead, which is OSR-only ("when window rendering is disabled", include/cef_render_handler.h) and doesn't apply to this Views-based windowed host. SetAccessibilityState's own doc comment (include/cef_browser.h) confirms windowed browsers need only this one call: "all platform accessibility objects will be created and managed by Chromium's internal implementation" — no CefAccessibilityHandler required.
+  browser->GetHost()->SetAccessibilityState(STATE_ENABLED);
+  printf("[worldscript_host] accessibility_state_requested = true\n");
+  fflush(stdout);
+
   CefPostDelayedTask(TID_UI, new PollShutdownTask(this), kShutdownPollIntervalMs);
 }
 
