@@ -29,6 +29,15 @@
 # change (e.g. updating the competency matrix) can't regress the built host, so it
 # doesn't need a ~30min rebuild; code changes under apps/desktop-cef/** or
 # scripts/cef/** still trigger this regardless of whether docs are also touched.
+# The push-to-main trigger stays deliberately unscoped (no `paths:`) precisely so an
+# unrelated app-source change that alters dist/'s real inputs is still caught after
+# merge — narrowing that trigger to apps/desktop-cef/** only would reintroduce the
+# PR #388 gap this design already closed.
+#
+# QNBS-v3: `fast-gate` (lint+typecheck) runs before `harness` so a trivial code-style
+# or type error fails in ~2-3min instead of after the full ~30min SDK+CMake+Rust+Xvfb
+# cycle. `Swatinem/rust-cache` caches cargo's registry/git dirs for the rust-core
+# crate Corrosion builds via CMake, cutting redundant crates.io re-fetches.
 # ============================================================
 
 name: 🧪 CEF Learning Harness
@@ -52,10 +61,29 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # QNBS-v3: fast, cheap checks (lint/typecheck) gate the ~30min CEF build so a trivial
+  # code-style or type error doesn't burn the full SDK-fetch+CMake+Rust+Xvfb cycle before
+  # surfacing. Duplicates a subset of ci.yml's quality job (which runs in parallel anyway) —
+  # deliberate trade: a couple extra lint/typecheck minutes vs. up to 30 wasted on a fail-fast case.
+  fast-gate:
+    name: ⚡ Fast gate (lint + typecheck)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Lint (Biome)
+        run: pnpm run lint
+      - name: Typecheck (tsgo)
+        run: npx tsgo --project tsconfig.tsgo.json --noEmit --checkers 4
+
   harness:
     name: 🧪 CEF host build, dependency inventory, launch-cycle proof
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    needs: [fast-gate]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
         with:
@@ -89,6 +117,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           toolchain: stable
+
+      # QNBS-v3: rust-core (apps/desktop-cef/rust-core) is built via CMake's corrosion_import_crate,
+      # invoking cargo under the hood — this caches the global registry/git dirs cargo uses regardless
+      # of where Corrosion places its target/ output, so repeat runs skip re-fetching crates.io deps.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: apps/desktop-cef/rust-core -> target
 
       - name: Cache apt packages (CEF host + Wayland build deps)
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
