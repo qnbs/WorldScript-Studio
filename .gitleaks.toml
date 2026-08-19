@@ -20,6 +20,16 @@ useDefault = true
 # broadening the exemption to "anything in that file" rather than narrowing it. The exact leaked
 # value alone is already a highly-specific, non-generic string that cannot coincidentally match a
 # real secret elsewhere, so it's the narrowest correct scope available in this schema.
+#
+# apt-cef-harness-deps-v1 / apt-tauri-linux-deps-v1
+# (.github/workflows/cef-learning-harness.yml, ci.yml) are actions/cache `key:` values for apt
+# archive caching — static, non-secret cache-namespace strings. Flagged by the same generic-api-key
+# heuristic: YAML `key:` field name next to a hyphenated alphanumeric string. Reviewed 2026-08-19:
+# both are cache keys with a fixed literal suffix (`-v1`), not credentials.
 [allowlist]
-description = "PASSPHRASE_SENTINEL_RECORD_KEY test mock — static IDB record-key identifier, not a credential"
-regexes = ['''^idb_passphrase_sentinel_v1$''']
+description = "Cache-key / record-key literals flagged by generic-api-key's key-adjacent-string heuristic — not credentials"
+regexes = [
+  '''^idb_passphrase_sentinel_v1$''',
+  '''^apt-cef-harness-deps-v1$''',
+  '''^apt-tauri-linux-deps-v1$''',
+]
