@@ -4,6 +4,7 @@
 #include <unordered_map>
 
 #include "include/cef_app.h"
+#include "include/cef_browser.h"
 #include "include/cef_task.h"
 #include "include/wrapper/cef_helpers.h"
 
