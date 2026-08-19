@@ -56,7 +56,7 @@ documents:
       - cef-learning-harness
       # cef-competency-gate: no such CI workflow/job exists yet — planned, not implemented (CodeRabbit review finding on PR #389). Re-add once it's a real job.
     driftCheckTool: "planned — not implemented, see Wave 1"
-    note: "Updated in place for Wave 2 (PR #386/#387/#388/#391/#392/#393/#397/#400/#402) — 5 of 7 cef_competency items now true with linked evidence (lifetime_model_reviewed, renderer_crash_ci, crash_symbolization_smoke added); doc-sync fix flipped 2 more Appendix A.1/gate items to checked once cef-architecture-primer.md/threading-and-lifetimes.md were noticed to already have real content from PR #390 (previously left unchecked on a stale 'no dedicated doc yet' annotation); Wayland smoke checked in Appendix A.1 (PR #393); accessibility_smoke stays false (PR #397 proved state enablement only, not tree observability); crash_symbolization_smoke flipped true (PR #400 — self-induced crash in our own code resolved end-to-end via dump_syms + minidump-stackwalk, neither tool needs a Chromium checkout despite the earlier assumption; Chromium-internal frames remain genuinely unsymbolized, no distribution ships debug symbols); PR #402: sandbox development plan validated (real feasibility test succeeds on the CI runner, explicit acceptance bar documented — sandbox_smoke itself stays false) AND the Linux-dependency gate item split into a Wave-2-scoped half (now checked — PR #395's inventory+ldd work was already complete, just conflated with a different later goal) and a separate packaged-installer half (stays unchecked, correctly later scope) — competency gate still not satisfied (10/13, was 8/12 before the split; sandbox_smoke, accessibility-tree observability, Linux packaged-installer declaration, upgrade playbook remain open)."
+    note: "Updated in place for Wave 2 (PR #386/#387/#388/#391/#392/#393/#397/#400/#402) — 5 of 7 cef_competency items now true with linked evidence (lifetime_model_reviewed, renderer_crash_ci, crash_symbolization_smoke added); doc-sync fix flipped 2 more Appendix A.1/gate items to checked once cef-architecture-primer.md/threading-and-lifetimes.md were noticed to already have real content from PR #390 (previously left unchecked on a stale 'no dedicated doc yet' annotation); Wayland smoke checked in Appendix A.1 (PR #393); accessibility_smoke stays false (PR #397 proved state enablement only, not tree observability); crash_symbolization_smoke flipped true (PR #400 — self-induced crash in our own code resolved end-to-end via dump_syms + minidump-stackwalk, neither tool needs a Chromium checkout despite the earlier assumption; Chromium-internal frames remain genuinely unsymbolized, no distribution ships debug symbols); PR #402: sandbox development plan validated (real feasibility test succeeds on the CI runner, explicit acceptance bar documented — sandbox_smoke itself stays false); the Linux-dependency gate item split into a Wave-2-scoped half (now checked — PR #395's inventory+ldd work was already complete, just conflated with a different later goal) and a separate packaged-installer half (stays unchecked, correctly later scope); and binding-upgrade-playbook.md written proactively with a real 15-step executable procedure (resolving a circular dependency — the gate required a playbook that could previously only be written after the first upgrade it was meant to gate), so 'upgrade playbook exists'/'Upgrade playbook written' both flip to checked — competency gate still not satisfied (11/13, was 8/12 before the split; sandbox_smoke, accessibility-tree observability, Linux packaged-installer declaration remain open)."
 
   - path: docs/cef/TAURI-COUPLING-INVENTORY.md
     tier: B
@@ -173,11 +173,14 @@ documents:
     tier: A
     owner_role: rust-core
     backup_role: cef-runtime
-    last_verified: null
+    last_verified:
+      worldscript: "v1.27.1"
+      cef: "151.3.18+gbeff58d+chromium-151.0.7922.138"
     review_days: 90
-    related_ci: []
+    related_ci:
+      - cef-learning-harness
     driftCheckTool: "planned — not implemented, see Wave 1"
-    note: "Skeleton only — Status: Not started"
+    note: "Written proactively (PR #402), not left blank pending the first real upgrade — resolves a circular dependency (the competency gate required this doc to exist before Wave 4, but it could previously only be written after the first upgrade it was meant to gate). 15-step executable procedure mapping to real scripts/CI steps from Wave 2's own proof work (SDK pin/fetch/verify, build, lifecycle harness, sandbox, crash, symbolization, accessibility, X11, Wayland, dependency/linkage diff, docs, rollback). Not yet exercised against a real upgrade — must be enriched with what actually broke the first time one happens, honestly noted in the doc itself."
 
   - path: docs/cef/UI-DOMAIN-STATE-CLASSIFICATION.md
     tier: B

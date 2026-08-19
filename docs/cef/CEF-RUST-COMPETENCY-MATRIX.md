@@ -47,7 +47,7 @@ CI validation of this block ("fail CI when a required item for the active progra
 [x] Linux dependency inventory (Wave 2 scope) complete — PR #395: package presence + real `ldd` against the CI-built runtime artifacts (`worldscript_host`, `libcef.so`), both fully resolved on the CI runner — matches this project's own established convention (see the X11/Wayland item below: proven on what Wave 2 actually needs, one CI runner, not blocked pending a broader matrix). Previously conflated with the separate item below; split out 2026-08-19 per the same "two separate gates" distinction just documented for sandbox.
 [ ] Linux packaged-installer dependency declaration (multi-distro compatibility contract for an eventual real installer) — separate, later packaging-wave scope, not Wave 2; zero evidence, correctly unchecked; see native-readiness.md
 [x] X11/Wayland initial smoke complete             — PR #393: X11 proven since PR #388 (Xvfb); Wayland now also proven (headless Weston compositor, --ozone-platform=wayland, same FFI+title checks, cef-learning-harness CI job). Real-hardware/compositor matrix (roadmap §44.2/§44.5 — NVIDIA/AMD/Intel × KDE/GNOME, real graphics hardware) remains unproven; this is one virtual-CI runner only.
-[ ] Upgrade playbook written
+[x] Upgrade playbook written                       — PR #402: docs/cef/knowledge/binding-upgrade-playbook.md written proactively (a 15-step executable procedure mapping to real scripts/CI steps from Wave 2's own proof work), resolving the circular dependency where the gate required a playbook that could only be written after the first upgrade it was meant to gate. To be enriched with real lessons after the first actual upgrade — not yet exercised for real, honestly noted in the doc itself.
 [ ] External-expertise escalation path documented
 ```
 
@@ -66,10 +66,10 @@ CI validation of this block ("fail CI when a required item for the active progra
 [ ] Linux packaged-installer dependency declaration  (multi-distro compatibility contract for an eventual real installer — separate, later packaging-wave scope, not Wave 2; zero evidence, correctly unchecked; see native-readiness.md)
 [ ] at least one accessibility smoke test performed        (state enablement proven, PR #397, 3/3 CI cycles, zero regression; tree observability — AT-SPI introspection — still open, see cef-architecture-primer.md's "Accessibility API" section)
 [x] at least one crash-reporting/symbolization path proven  — PR #392: crash-reporting path proven end-to-end (real Crashpad dump produced in CI); PR #400: symbolization also proven — a self-induced crash in our own code resolved end-to-end via dump_syms + minidump-stackwalk (Chromium/CEF-internal frames remain unsymbolized, honestly scoped)
-[ ] upgrade playbook exists
+[x] upgrade playbook exists                         — PR #402: docs/cef/knowledge/binding-upgrade-playbook.md, a real 15-step executable procedure, not a skeleton — see the Appendix A.1 entry above for the full rationale
 ```
 
-This gate is **not** satisfied yet — 10 of 13 items checked (13, not 12 — the Linux dependency item was split into a Wave-2-scoped half now checked and a separate packaged-installer half, see below), several with explicit caveats above. `WS-CEF-IPC` (Wave 4) remains blocked.
+This gate is **not** satisfied yet — 11 of 13 items checked (13, not 12 — the Linux dependency item was split into a Wave-2-scoped half now checked and a separate packaged-installer half, see below), several with explicit caveats above. `WS-CEF-IPC` (Wave 4) remains blocked.
 
 ## What this snapshot (Wave 2, 2026-08-18/19) does NOT claim
 
