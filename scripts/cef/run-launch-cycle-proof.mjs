@@ -81,7 +81,7 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function processTreeAlive() {
+function listMatchingPids() {
   try {
     // QNBS-v3: anchored to the start of the command line — xvfb-run's own wrapper process also carries binaryPath as an argument it forwards, so an unanchored match false-flags it as a leaked worldscript_host.
     const out = execFileSync('pgrep', ['-f', `^${binaryPath}`], {
@@ -89,14 +89,28 @@ function processTreeAlive() {
     })
       .toString()
       .trim();
-    const remaining = out
+    return out
       .split('\n')
       .filter(Boolean)
       .map(Number)
       .filter((pid) => pid !== process.pid);
-    return remaining.length > 0;
   } catch {
-    return false; // pgrep exits 1 when nothing matches — that's the clean state.
+    return []; // pgrep exits 1 when nothing matches — that's the clean state.
+  }
+}
+
+function processTreeAlive() {
+  return listMatchingPids().length > 0;
+}
+
+// QNBS-v3: CEF re-execs the same binary for every subprocess role (renderer/GPU/crashpad-handler) — CodeAnt review finding on PR #392: SIGKILLing only the one tracked child PID can leave those descendants (including a Crashpad handler still writing to the dump directory) alive. This sweeps and kills everything matching the binary path, not just the direct child.
+function killAllMatchingProcesses() {
+  for (const pid of listMatchingPids()) {
+    try {
+      process.kill(pid, 'SIGKILL');
+    } catch {
+      // Already gone between the pgrep snapshot and this call — fine.
+    }
   }
 }
 
@@ -309,16 +323,21 @@ async function runCrashReportingProofCycle() {
     logStderr('Crash-reporting proof', stderr);
     // QNBS-v3: unconditional, not `if (!child.killed)` — .killed only reflects whether kill() was ever called, not whether the process actually died (e.g. SIGTERM already sent but the shutdown-grace-period/orphan checks below still failed); kill() on an already-exited process is a harmless no-op.
     child.kill('SIGKILL');
-    // QNBS-v3: await + verify, not fire-and-forget — CodeAnt review finding on PR #392 (the normal shutdown path waits and checks for orphans; the failure path didn't, so a failed proof could leave CEF subprocesses running after the harness exits). Logged only, never thrown here — the original failure stays the reported cause.
+    // QNBS-v3: await + verify, not fire-and-forget — CodeAnt review finding on PR #392 (the normal shutdown path waits and checks for orphans; the failure path didn't, so a failed proof could leave CEF subprocesses running after the harness exits).
     await Promise.race([exited, sleep(SHUTDOWN_GRACE_MS)]);
+    // QNBS-v3: sweeps every process matching the binary path, not just the tracked child — CodeAnt review finding on PR #392 (a surviving renderer/GPU/crashpad-handler descendant could still be using dumpDir when the finally block below removes it). Runs before that removal, not after.
     if (processTreeAlive()) {
-      console.error(
-        '[launch-cycle-proof] Crash-reporting proof: WARNING — worldscript_host process(es) still running after failure cleanup.',
-      );
+      killAllMatchingProcesses();
+      await sleep(ORPHAN_CHECK_GRACE_MS);
+      if (processTreeAlive()) {
+        console.error(
+          '[launch-cycle-proof] Crash-reporting proof: WARNING — worldscript_host process(es) still running after failure cleanup.',
+        );
+      }
     }
     throw new Error(`Crash-reporting proof: ${err instanceof Error ? err.message : String(err)}`);
   } finally {
-    // QNBS-v3: CodeRabbit review finding on PR #392 — the dump directory (which can contain real browser memory) was never removed on success or failure.
+    // QNBS-v3: CodeRabbit review finding on PR #392 — the dump directory (which can contain real browser memory) was never removed on success or failure. Runs after the process-tree sweep above, not before, so it never races a still-running Crashpad handler.
     fs.rmSync(dumpDir, { recursive: true, force: true });
   }
 }
