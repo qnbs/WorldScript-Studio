@@ -1,7 +1,7 @@
 # CEF/Rust Competency Matrix
 
 **Companion to:** [`ROADMAP-CEF-DESKTOP-MIGRATION.md`](ROADMAP-CEF-DESKTOP-MIGRATION.md) §4.11, §61.1, Appendix A.1 · [ADR-0019](../adr/0019-cef-desktop-runtime-strategy.md)
-**Established:** Wave 0, 2026-08-18. **Baseline was: nothing done yet.** Updated in place, 2026-08-18/19 (Wave 2, ADR-0020 spike + PR #386/#387/#388/#391/#392/#393/#397/#400), per this doc's own "Update discipline" below — items flip to `true` only with a linked evidence commit, in the same commit as the flip. This file exists so future waves have a live, gradeable target instead of re-deriving the checklist from the roadmap prose each time.
+**Established:** Wave 0, 2026-08-18. **Baseline was: nothing done yet.** Updated in place, 2026-08-18/19 (Wave 2, ADR-0020 spike + PR #386/#387/#388/#391/#392/#393/#397/#400/#402), per this doc's own "Update discipline" below — items flip to `true` only with a linked evidence commit, in the same commit as the flip. This file exists so future waves have a live, gradeable target instead of re-deriving the checklist from the roadmap prose each time.
 
 This is an engineering gate (roadmap §4.11.6), not a training checklist. `WS-CEF-IPC` (Wave 4) and any production storage capability exposing privileged native operations may not proceed until the relevant items below are `true` with linked evidence.
 
@@ -13,7 +13,7 @@ cef_competency:
   lifetime_model_reviewed: true    # docs/cef/knowledge/threading-and-lifetimes.md (PR #390) — UI-thread callbacks + ref-counting/callback-lifetime; IO thread and async cancellation still untouched
   repeated_shutdown_ci: true       # scripts/cef/run-launch-cycle-proof.mjs, cef-learning-harness CI job (PR #388)
   renderer_crash_ci: true          # chrome://crash + OnRenderProcessTerminated + browser-process survival, cef-learning-harness CI job (PR #392)
-  sandbox_smoke: false
+  sandbox_smoke: false     # feasibility-only (PR #402): unshare --user --pid --fork functionally succeeds on the CI runner (kernel 6.17, unprivileged_userns_clone=1) — real evidence the sandbox is reachable, not a sandbox-enable attempt. Stays false until a follow-up PR proves browser/renderer/GPU processes actually run sandboxed (per-process status, not just "launched without complaining"), with zero regression to existing proofs — see cef-architecture-primer.md's "Sandbox configuration" section for the full acceptance bar
   accessibility_smoke: false       # state ENABLEMENT is proven (PR #397, SetAccessibilityState, 3/3 CI cycles) — this field is specifically about the platform accessibility tree being observable, which needs OS-level AT-SPI introspection and was not attempted
   crash_symbolization_smoke: true  # PR #400 — a self-induced crash inside our own code (rust-core's worldscript_rust_debug_crash_self_test, --debug-crash-self) was symbolized end-to-end via dump_syms + minidump-stackwalk (both standalone Rust tools, no Chromium checkout needed — that earlier assumption was wrong, see cef-architecture-primer.md). Chromium/CEF-internal frames remain unsymbolized — no distribution type ships a separate debug-symbols archive (verified against cef-builds.spotifycdn.com/index.json) — so this is honestly scoped to our own code, not the whole stack.
 ```
@@ -44,7 +44,8 @@ CI validation of this block ("fail CI when a required item for the active progra
 [x] Renderer crash observation green               — PR #392, chrome://crash + OnRenderProcessTerminated (TS_PROCESS_CRASHED), browser process survived, cef-learning-harness CI job
 [ ] Accessibility smoke green                      (state enablement proven, PR #397, 3/3 CI cycles, zero regression; tree observability — AT-SPI introspection — still open, see cef-architecture-primer.md's "Accessibility API" section)
 [x] Crash-reporting/symbolization smoke green       — PR #392 (crash reporting: real Crashpad dump produced in CI) + PR #400 (symbolization: a self-induced crash in our own code resolved end-to-end via dump_syms + minidump-stackwalk); Chromium/CEF-internal frames remain unsymbolized — see cef-architecture-primer.md
-[ ] Linux dependency inventory complete            (inventoried + ldd-verified against the real CI-built runtime artifacts (worldscript_host, libcef.so), PR #395 — still one distro/runner image, no packaged-installer declaration; see native-readiness.md)
+[x] Linux dependency inventory (Wave 2 scope) complete — PR #395: package presence + real `ldd` against the CI-built runtime artifacts (`worldscript_host`, `libcef.so`), both fully resolved on the CI runner — matches this project's own established convention (see the X11/Wayland item below: proven on what Wave 2 actually needs, one CI runner, not blocked pending a broader matrix). Previously conflated with the separate item below; split out 2026-08-19 per the same "two separate gates" distinction just documented for sandbox.
+[ ] Linux packaged-installer dependency declaration (multi-distro compatibility contract for an eventual real installer) — separate, later packaging-wave scope, not Wave 2; zero evidence, correctly unchecked; see native-readiness.md
 [x] X11/Wayland initial smoke complete             — PR #393: X11 proven since PR #388 (Xvfb); Wayland now also proven (headless Weston compositor, --ozone-platform=wayland, same FFI+title checks, cef-learning-harness CI job). Real-hardware/compositor matrix (roadmap §44.2/§44.5 — NVIDIA/AMD/Intel × KDE/GNOME, real graphics hardware) remains unproven; this is one virtual-CI runner only.
 [ ] Upgrade playbook written
 [ ] External-expertise escalation path documented
@@ -60,14 +61,15 @@ CI validation of this block ("fail CI when a required item for the active progra
 [x] threading/lifetime map reviewed                 — PR #390, docs/cef/knowledge/threading-and-lifetimes.md (IO thread/async-cancellation still untouched — see domains table)
 [x] clean repeated startup/shutdown proven          — PR #388, 3/3 cycles, cef-learning-harness CI job
 [x] renderer termination observed and handled       — PR #392, chrome://crash deliberately crashes the renderer, OnRenderProcessTerminated fires, browser process/message loop survive, cef-learning-harness CI job
-[ ] sandbox development plan validated
-[ ] Linux runtime dependencies inventoried           (inventoried + ldd-verified against the real CI-built runtime artifacts (worldscript_host, libcef.so), PR #395 — still one distro/runner image, no packaged-installer declaration; see native-readiness.md)
+[x] sandbox development plan validated              — PR #402: CEF has no Linux sandbox API (confirmed against docs/sandbox_setup.md); real functional feasibility test (unshare --user --pid --fork) succeeds on the CI runner; explicit acceptance bar documented for the follow-up enable attempt (cef-architecture-primer.md's "Sandbox configuration" section) — a validated plan, not yet the sandbox itself (sandbox_smoke stays false)
+[x] Linux runtime dependencies inventoried (Wave 2 scope) — PR #395: package presence + real `ldd` against the CI-built runtime artifacts (`worldscript_host`, `libcef.so`), both fully resolved on the CI runner. Split 2026-08-19 from the packaged-installer item below — conflating Wave 2's own inventory goal with later packaging-wave scope was the same "two separate gates" issue just resolved for sandbox.
+[ ] Linux packaged-installer dependency declaration  (multi-distro compatibility contract for an eventual real installer — separate, later packaging-wave scope, not Wave 2; zero evidence, correctly unchecked; see native-readiness.md)
 [ ] at least one accessibility smoke test performed        (state enablement proven, PR #397, 3/3 CI cycles, zero regression; tree observability — AT-SPI introspection — still open, see cef-architecture-primer.md's "Accessibility API" section)
 [x] at least one crash-reporting/symbolization path proven  — PR #392: crash-reporting path proven end-to-end (real Crashpad dump produced in CI); PR #400: symbolization also proven — a self-induced crash in our own code resolved end-to-end via dump_syms + minidump-stackwalk (Chromium/CEF-internal frames remain unsymbolized, honestly scoped)
 [ ] upgrade playbook exists
 ```
 
-This gate is **not** satisfied yet — 8 of 12 items checked, several with explicit caveats above. `WS-CEF-IPC` (Wave 4) remains blocked.
+This gate is **not** satisfied yet — 10 of 13 items checked (13, not 12 — the Linux dependency item was split into a Wave-2-scoped half now checked and a separate packaged-installer half, see below), several with explicit caveats above. `WS-CEF-IPC` (Wave 4) remains blocked.
 
 ## What this snapshot (Wave 2, 2026-08-18/19) does NOT claim
 
