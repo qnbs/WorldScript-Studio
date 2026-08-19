@@ -130,9 +130,15 @@ function listMatchingPids() {
 }
 
 // QNBS-v3: PR #404's real per-process diagnostic evidence (Seccomp/NoNewPrivs/CapEff/user-ns) for the crash-reporting-under-sandbox investigation — logged, never asserted on here (that assertion belongs to run-sandbox-status-proof.mjs), purely so a failed dump-write attempt leaves behind the exact process topology needed to diagnose it instead of just a bare timeout message.
+// QNBS-v3: real bug caught by reading this PR's own captured evidence — Chromium's zygote-forked children (renderer/gpu-process/utility) rewrite their own argv memory for `ps`-friendly display (a common multi-process-app trick), which collapses the normally NUL-separated /proc/<pid>/cmdline into a single space-joined string with no NUL separators at all. A bare split('\0') then returns a one-element array whose lone entry never startsWith('--type='), silently defaulting classifyRole to 'browser' for every zygote-forked process — real renderer/gpu-process/utility entries were mislabeled 'browser' in this file's earlier runs. Falls back to a whitespace split specifically for that single-element shape.
 function readCmdline(pid) {
   try {
-    return fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0').filter(Boolean);
+    const raw = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8');
+    const nulSplit = raw.split('\0').filter(Boolean);
+    if (nulSplit.length === 1 && nulSplit[0].includes(' ')) {
+      return nulSplit[0].split(' ').filter(Boolean);
+    }
+    return nulSplit;
   } catch {
     return null;
   }
