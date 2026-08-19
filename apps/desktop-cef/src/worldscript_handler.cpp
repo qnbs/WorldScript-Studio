@@ -1,6 +1,7 @@
 #include "worldscript_handler.h"
 
 #include <cstdio>
+#include <unordered_map>
 
 #include "include/cef_app.h"
 #include "include/cef_task.h"
@@ -14,6 +15,20 @@ extern "C" int worldscript_rust_ping();
 namespace {
 
 constexpr int kShutdownPollIntervalMs = 100;
+
+// QNBS-v3: lookup table (repo convention) over an if/else chain — six real, verified enum values from include/internal/cef_types.h in the pinned CEF branch.
+const char* TerminationStatusToString(cef_termination_status_t status) {
+  static const std::unordered_map<cef_termination_status_t, const char*> kNames = {
+      {TS_ABNORMAL_TERMINATION, "TS_ABNORMAL_TERMINATION"},
+      {TS_PROCESS_WAS_KILLED, "TS_PROCESS_WAS_KILLED"},
+      {TS_PROCESS_CRASHED, "TS_PROCESS_CRASHED"},
+      {TS_PROCESS_OOM, "TS_PROCESS_OOM"},
+      {TS_LAUNCH_FAILED, "TS_LAUNCH_FAILED"},
+      {TS_INTEGRITY_FAILURE, "TS_INTEGRITY_FAILURE"},
+  };
+  const auto it = kNames.find(status);
+  return it != kNames.end() ? it->second : "TS_UNKNOWN";
+}
 
 // QNBS-v3: plain CefTask subclass instead of base::BindOnce — CEF's own ref-counting scheme hit real base::Bind template/header issues (caught by CI, not locally); this is simpler and avoids that machinery entirely.
 class PollShutdownTask : public CefTask {
@@ -61,6 +76,17 @@ void WorldScriptHandler::PollShutdownFlag() {
   if (!browser_list_.empty()) {
     CefPostDelayedTask(TID_UI, new PollShutdownTask(this), kShutdownPollIntervalMs);
   }
+}
+
+void WorldScriptHandler::OnRenderProcessTerminated(CefRefPtr<CefBrowser> browser,
+                                                     TerminationStatus status,
+                                                     int error_code,
+                                                     const CefString& error_string) {
+  CEF_REQUIRE_UI_THREAD();
+  // QNBS-v3: proof line for the CI harness's crash cycle — the browser process reaching this line at all is itself the "renderer termination observed and handled" evidence (CEF-RUST-COMPETENCY-MATRIX.md), since only the renderer subprocess died.
+  printf("[worldscript_host] renderer_terminated status=%s error_code=%d\n",
+         TerminationStatusToString(status), error_code);
+  fflush(stdout);
 }
 
 bool WorldScriptHandler::DoClose(CefRefPtr<CefBrowser> browser) {
