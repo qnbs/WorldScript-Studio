@@ -216,17 +216,21 @@ async function runCrashReportingProofCycle() {
 
   // QNBS-v3: every throw below is caught here so the child is always reaped, even on a failed proof — CodeAnt/Qodo review finding on PR #392 (a thrown assertion left the browser and its subprocesses orphaned).
   try {
+    // QNBS-v3: `stopPolling` lets each while-loop below notice its own Promise.race already settled — CodeRabbit review finding on PR #392 (an abandoned loop kept scheduling sleep(200) forever after the race resolved via the other arm, keeping the Node process alive indefinitely on a failed/timed-out proof).
+    let stopPolling = false;
+
     // QNBS-v3: requires the specific TS_PROCESS_CRASHED value, not just any termination status — CodeAnt review finding on PR #392 (TS_LAUNCH_FAILED/TS_PROCESS_WAS_KILLED/TS_ABNORMAL_TERMINATION would otherwise also satisfy a bare prefix match). chrome://crash triggers a real SIGSEGV in the renderer, confirmed against CEF's own cefclient reference usage of this exact URL.
     const rendererCrashed = await Promise.race([
       (async () => {
-        while (!stdout.includes(RENDERER_CRASHED_PROOF_LINE)) {
+        while (!stopPolling && !stdout.includes(RENDERER_CRASHED_PROOF_LINE)) {
           await sleep(200);
         }
-        return true;
+        return stdout.includes(RENDERER_CRASHED_PROOF_LINE);
       })(),
       exited.then(() => false),
       sleep(STARTUP_GRACE_MS).then(() => false),
     ]);
+    stopPolling = true;
 
     if (!rendererCrashed) {
       throw new Error(
@@ -252,15 +256,20 @@ async function runCrashReportingProofCycle() {
     }
 
     // QNBS-v3: Crashpad's dump finalization is asynchronous relative to OnRenderProcessTerminated — CodeAnt review finding on PR #392 (shutting down the browser immediately raced the dump actually being written). Wait for a real *.dmp file, bounded, before sending SIGTERM.
+    stopPolling = false;
     const dumpAppeared = await Promise.race([
       (async () => {
-        while (findFilesRecursive(dumpDir).filter((f) => f.endsWith('.dmp')).length === 0) {
+        while (
+          !stopPolling &&
+          findFilesRecursive(dumpDir).filter((f) => f.endsWith('.dmp')).length === 0
+        ) {
           await sleep(200);
         }
-        return true;
+        return findFilesRecursive(dumpDir).some((f) => f.endsWith('.dmp'));
       })(),
       sleep(DUMP_WRITE_GRACE_MS).then(() => false),
     ]);
+    stopPolling = true;
     // QNBS-v3: filtered to .dmp specifically — CodeAnt/Qodo review finding on PR #392 (Crashpad's settings.dat/lock/.meta files are written during normal init and would otherwise falsely count as "a dump produced").
     const dumpFiles = findFilesRecursive(dumpDir).filter((f) => f.endsWith('.dmp'));
     if (!dumpAppeared || dumpFiles.length === 0) {
@@ -300,7 +309,17 @@ async function runCrashReportingProofCycle() {
     logStderr('Crash-reporting proof', stderr);
     // QNBS-v3: unconditional, not `if (!child.killed)` — .killed only reflects whether kill() was ever called, not whether the process actually died (e.g. SIGTERM already sent but the shutdown-grace-period/orphan checks below still failed); kill() on an already-exited process is a harmless no-op.
     child.kill('SIGKILL');
+    // QNBS-v3: await + verify, not fire-and-forget — CodeAnt review finding on PR #392 (the normal shutdown path waits and checks for orphans; the failure path didn't, so a failed proof could leave CEF subprocesses running after the harness exits). Logged only, never thrown here — the original failure stays the reported cause.
+    await Promise.race([exited, sleep(SHUTDOWN_GRACE_MS)]);
+    if (processTreeAlive()) {
+      console.error(
+        '[launch-cycle-proof] Crash-reporting proof: WARNING — worldscript_host process(es) still running after failure cleanup.',
+      );
+    }
     throw new Error(`Crash-reporting proof: ${err instanceof Error ? err.message : String(err)}`);
+  } finally {
+    // QNBS-v3: CodeRabbit review finding on PR #392 — the dump directory (which can contain real browser memory) was never removed on success or failure.
+    fs.rmSync(dumpDir, { recursive: true, force: true });
   }
 }
 
