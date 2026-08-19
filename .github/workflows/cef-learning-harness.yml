@@ -112,6 +112,7 @@ jobs:
       # even support Chromium's Linux sandbox (Sandbox posture row, native-readiness.md, "Not yet
       # attempted") before any attempt to actually enable it. Non-fatal by design.
       - name: Linux sandbox feasibility inventory (diagnostic only)
+        continue-on-error: true
         run: node scripts/cef/check-linux-sandbox-inventory.mjs | tee "$RUNNER_TEMP/cef-sandbox-inventory.txt"
 
       - name: Restore CEF SDK cache
