@@ -177,10 +177,11 @@ not resolved by this ADR. No Qt code ships until that decision is made.
 
 The Wave 1 `DesktopPlatform` boundary (`packages/desktop-contracts`, merged via PR #384/#385) is
 unaffected — it was designed renderer-neutral from the start and needs no rework for Qt/GPUI to
-consume it later. `apps/desktop-cef/`, `scripts/cef/`, and 14 of 15 `docs/cef/` files are removed
-(git history is the archive; see `docs/historical/cef/README.md`); `docs/cef/UI-DOMAIN-STATE-CLASSIFICATION.md`
-is relocated to `docs/native/` because its Redux domain/UI-state classification remains directly
-useful for the future Core migration-priority work.
+consume it later. `apps/desktop-cef/`, `scripts/cef/`, and 14 of 15 `docs/cef/` files will be removed
+in the companion Wave 0 cleanup PR (git history will be the archive; see
+`docs/historical/cef/README.md`); `docs/cef/UI-DOMAIN-STATE-CLASSIFICATION.md` will be relocated to
+`docs/native/` because its Redux domain/UI-state classification remains directly useful for the
+future Core migration-priority work. This ADR alone does not remove any of those paths.
 
 ## Operational consequences
 
@@ -217,11 +218,13 @@ precedent — a superseding ADR citing concrete evidence, not an undocumented pi
   risk register / readiness scorecard / ownership artifacts as those waves begin), mirroring the
   structure `docs/cef/` used, per the same doc-drift-ownership lesson.
 - Every subsequent Qt/GPUI-labeled PR should cite this ADR and the relevant roadmap wave/gate.
-- PR #404 is closed unmerged (superseded, not a quality judgment on the investigative work); Issue
-  #405 is closed as "no longer applicable to the target architecture," explicitly not "fixed" — the
-  Crashpad root cause remains real and correctly diagnosed.
-- `apps/desktop-cef/`, `scripts/cef/`, and `.github/workflows/cef-learning-harness.yml` are removed
-  in the companion cleanup PR; git history is the archive, per `docs/historical/cef/README.md`.
+- PR #404 will be closed unmerged (superseded, not a quality judgment on the investigative work);
+  Issue #405 will be closed as "no longer applicable to the target architecture," explicitly not
+  "fixed" — the Crashpad root cause remains real and correctly diagnosed. Both remain open as of this
+  ADR's adoption; their closure is companion Wave 0 PR B's action, not this ADR's.
+- `apps/desktop-cef/`, `scripts/cef/`, and `.github/workflows/cef-learning-harness.yml` will be
+  removed in the companion cleanup PR; git history will be the archive, per
+  `docs/historical/cef/README.md`.
 - The `DesktopPlatform` boundary, `packages/desktop-contracts`, and `scripts/check-tauri-import-boundary.mjs`
   are unaffected and remain load-bearing for whatever native renderer eventually adopts them.
 
