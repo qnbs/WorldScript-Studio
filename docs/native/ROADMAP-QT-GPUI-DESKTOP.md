@@ -2214,8 +2214,8 @@ Create/supersede ADRs for:
 # 37. Immediate transition plan from the current repository state
 
 **Status: IN PROGRESS.** Items 1–3 and 8–9 below reflect completed analysis/pre-existing state; items
-4–7 are PR B scope and have not started; item 5 (this document + ADR-0021) is written but not yet
-merged.
+4 and 6–7 are PR B scope and have not started; item 5 (this document + ADR-0021) is PR A scope and
+is written but not yet merged.
 
 The first implementation sequence after adopting this roadmap is:
 
