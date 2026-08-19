@@ -39,10 +39,11 @@ documents:
     backup_role: desktop-security
     last_verified:
       worldscript: "v1.27.1"
-      cef: "not applicable — pre-CEF-selection"
+      cef: "151.3.18+gbeff58d+chromium-151.0.7922.138"
     review_days: 90
     related_ci: []
     driftCheckTool: "planned — not implemented, see Wave 1"
+    note: "Wave 2 checkpoint (2026-08-19, external review feedback): R-06 (CEF/Rust/C++ lifetime defects) and R-13 (accessibility regression) had drifted — real Wave 2 implementation/CI evidence existed for both while they stayed *unassigned*/OPEN, past the point this register's own rule allows ('assign before the corresponding wave begins, not before' — Wave 2 has begun). Both assigned real role-based owners and moved to MITIGATING with linked evidence; the remaining rows correctly stay unassigned/OPEN since their waves haven't begun."
 
   - path: docs/cef/CEF-RUST-COMPETENCY-MATRIX.md
     tier: A
