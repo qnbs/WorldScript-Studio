@@ -16,7 +16,8 @@
     "RUN_DEEP_E2E",
     "RUN_MOBILE_E2E",
     "RUN_REAL_VOICE_E2E",
-    "SMOKE_PORT"
+    "SMOKE_PORT",
+    "XDG_RUNTIME_DIR"
   ],
   "tasks": {
     "build": {
