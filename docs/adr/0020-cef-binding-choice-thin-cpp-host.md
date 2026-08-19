@@ -1,6 +1,6 @@
 # ADR 0020: CEF integration choice — thin C++ host + Rust core (Option B)
 
-**Status:** Superseded by [ADR-0021](0021-qt-gpui-native-desktop-strategy.md) — CEF retired from the target architecture, migrated 2026-08-20. Preserved below as the historical record of a real, evidence-backed spike; do not treat it as current direction. See `docs/historical/cef/README.md` for what was removed.
+**Status:** Superseded by [ADR-0021](0021-qt-gpui-native-desktop-strategy.md), adopted 2026-08-20 — CEF is no longer WorldScript Studio's target desktop-runtime decision. This status change reflects the *decision*, not completed execution: ADR-0021's companion cleanup PR (Wave 0 PR B) removes the actual CEF source/CI separately. Preserved below as the historical record of a real, evidence-backed spike; do not treat it as current direction. See `docs/historical/cef/README.md` for what is being retired.
 
 ## Context
 

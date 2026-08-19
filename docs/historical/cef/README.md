@@ -28,7 +28,7 @@ required `ci-success` gate), and 14 of the 15 files under `docs/cef/` (roadmap, 
 competency matrix, ownership manifest, binding scorecard, and knowledge-base articles).
 
 `docs/cef/UI-DOMAIN-STATE-CLASSIFICATION.md` will **not** be deleted — it will be relocated to
-[`docs/native/UI-DOMAIN-STATE-CLASSIFICATION.md`](../native/UI-DOMAIN-STATE-CLASSIFICATION.md)
+[`docs/native/UI-DOMAIN-STATE-CLASSIFICATION.md`](../../native/UI-DOMAIN-STATE-CLASSIFICATION.md)
 because its Redux domain/UI-state classification is independent of renderer and remains directly
 useful for the future Rust Core migration-priority work.
 

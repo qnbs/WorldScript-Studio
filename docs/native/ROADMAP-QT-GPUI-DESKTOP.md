@@ -1,7 +1,9 @@
 # WorldScript Studio — Qt + GPUI Multi-Renderer Desktop Roadmap & Realization Concept
 
-**Status:** Adopted, binding strategic architecture and execution roadmap — see
-[ADR-0021](../adr/0021-qt-gpui-native-desktop-strategy.md).
+**Status:** Adopted as the binding strategic architecture via ADR-0021 (Wave 0 PR A) — see
+[ADR-0021](../adr/0021-qt-gpui-native-desktop-strategy.md). Adoption of the *decision* is distinct
+from *execution*: Wave 0's actual CEF source/CI retirement (PR B) has not started as of this
+writing — see §15 below for the current per-wave status.
 **Repository:** `qnbs/WorldScript-Studio`
 **Roadmap generation date:** 2026-08-20
 **Supersedes:** the CEF-first desktop migration strategy and all CEF-dependent execution sequencing

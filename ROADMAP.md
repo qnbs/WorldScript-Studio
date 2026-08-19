@@ -27,9 +27,10 @@ Benchmarks from the UI/PWA deep-dive (implemented in repo, no new mandatory docs
 WorldScript Studio's desktop runtime plan is React/PWA (first-class web product) → Tauri 2
 (transitional only, retired once Qt reaches Stable) → an authoritative Rust Core → Qt 6/Qt Quick
 (QML) as the primary native desktop product → GPUI admitted later as a secondary native product
-behind a strict gate. CEF was evaluated and retired from the target architecture (Crashpad crash
-diagnostics cannot work under a genuinely sandboxed Linux renderer — R-19). Not part of the v2.0
-Foundation scope below, tracked separately. Full strategy, waves, and gates:
+behind a strict gate. CEF was evaluated and retired from the target architecture because Crashpad
+cannot produce sandboxed-renderer crash dumps under Linux's default Yama `ptrace_scope=1` without
+weakening the sandbox — R-19. Not part of the v2.0 Foundation scope below, tracked separately. Full
+strategy, waves, and gates:
 [ADR-0021](docs/adr/0021-qt-gpui-native-desktop-strategy.md) ·
 [`docs/native/ROADMAP-QT-GPUI-DESKTOP.md`](docs/native/ROADMAP-QT-GPUI-DESKTOP.md). Superseded CEF
 decision record: [ADR-0019](docs/adr/0019-cef-desktop-runtime-strategy.md) ·
