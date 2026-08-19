@@ -149,6 +149,15 @@ function readUserNsId(pid) {
   }
 }
 
+// QNBS-v3: real review refinement — NSpid's vector *length* only proves nesting depth, not namespace *identity*; two processes can sit at equal depth in different sibling PID namespaces. The PID-namespace inode (readlink /proc/<pid>/ns/pid) is the actual identity comparison the PID-namespace-mismatch hypothesis needs — a separate namespace type from ns/user, not a substitute for it.
+function readPidNsId(pid) {
+  try {
+    return fs.readlinkSync(`/proc/${pid}/ns/pid`);
+  } catch {
+    return null;
+  }
+}
+
 function classifyRole(pid) {
   const cmdline = readCmdline(pid);
   if (!cmdline) return null;
@@ -176,13 +185,15 @@ function listCrashpadHandlerPids() {
 
 function logProcessTreeDiagnostic(label) {
   const ownUserNs = readUserNsId(process.pid);
+  const ownPidNs = readPidNsId(process.pid);
   const matchedPids = listMatchingPids();
   const crashpadPids = listCrashpadHandlerPids();
-  // QNBS-v3: real evidence request from PR #404's review — NSpid (outermost-to-innermost PID across every nested PID namespace the process belongs to) is captured from THIS (ambient) namespace, which can see the full nesting chain even without joining any child namespace. A renderer inside its own PID namespace shows two values ("<ambient-pid> <own-ns-pid>"); a handler that never entered a nested namespace shows only one — a real, direct signal for the PID-namespace-mismatch hypothesis, not an inference from Seccomp/user-ns alone.
+  // QNBS-v3: real evidence request from PR #404's review — NSpid (nesting depth) and ns/pid (actual namespace identity/inode) are both captured from THIS (ambient) namespace, which can see the full nesting chain even without joining any child namespace. Equal NSpid vector *length* does not prove two processes share a namespace — only a matching ns/pid identity does; that's the real test the PID-namespace-mismatch hypothesis needs, not an inference from Seccomp/user-ns alone.
   const allPids = [...new Set([...matchedPids, ...crashpadPids])];
   console.log(
     `[launch-cycle-proof] ${label}: ${matchedPids.length} worldscript_host-matching process(es), ${crashpadPids.length} crashpad-cmdline-matching process(es) (may overlap).`,
   );
+  const seen = [];
   for (const pid of allPids) {
     const role =
       classifyRole(pid) ?? (crashpadPids.includes(pid) ? 'crashpad-handler(?)' : '(unreadable)');
@@ -191,11 +202,23 @@ function logProcessTreeDiagnostic(label) {
     const capEff = readProcStatusField(pid, 'CapEff');
     const nsPid = readProcStatusField(pid, 'NSpid');
     const userNs = readUserNsId(pid);
+    const pidNs = readPidNsId(pid);
     console.log(
-      `  pid=${pid} role=${role} NSpid=${nsPid ?? '(unreadable)'} Seccomp=${seccomp ?? '(unreadable)'} ` +
+      `  pid=${pid} role=${role} NSpid=${nsPid ?? '(unreadable)'} pid-ns=${pidNs ?? '(unreadable)'} Seccomp=${seccomp ?? '(unreadable)'} ` +
         `NoNewPrivs=${noNewPrivs ?? '(unreadable)'} CapEff=${capEff ?? '(unreadable)'} user-ns=${userNs ?? '(unreadable)'} ` +
-        `distinct-from-harness=${userNs !== null && userNs !== ownUserNs}`,
+        `distinct-pid-ns-from-harness=${pidNs !== null && pidNs !== ownPidNs} distinct-user-ns-from-harness=${userNs !== null && userNs !== ownUserNs}`,
     );
+    seen.push({ pid, role, pidNs });
+  }
+  // QNBS-v3: the decisive comparison — actual pid-ns *identity* between whichever processes classified as renderer vs. crashpad-handler(?), not just each one's distance from the harness.
+  const renderers = seen.filter((p) => p.role === 'renderer' && p.pidNs !== null);
+  const handlers = seen.filter((p) => p.role === 'crashpad-handler(?)' && p.pidNs !== null);
+  for (const r of renderers) {
+    for (const h of handlers) {
+      console.log(
+        `  [pid-ns identity check] renderer pid=${r.pid} pid-ns=${r.pidNs} vs. handler(?) pid=${h.pid} pid-ns=${h.pidNs}: ${r.pidNs === h.pidNs ? 'SAME namespace (rejects the mismatch hypothesis for this pair)' : 'DIFFERENT namespaces (supports the mismatch hypothesis for this pair)'}`,
+      );
+    }
   }
 }
 
