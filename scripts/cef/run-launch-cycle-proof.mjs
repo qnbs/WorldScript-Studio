@@ -160,6 +160,8 @@ async function runCycle(index) {
   const exited = new Promise((resolve) =>
     child.once('exit', (code, signal) => resolve({ code, signal })),
   );
+  // QNBS-v3: 'exit' fires as soon as the process terminates but its stdio streams can still be open (buffered output not yet fully delivered); 'close' is the guarantee all of it has arrived — CodeRabbit review finding on PR #397, backed by real Node.js child_process docs and a reproduction. Only gates the stdout marker checks below, not the exit/signal checks above, which are legitimately about process termination itself.
+  const closed = new Promise((resolve) => child.once('close', () => resolve()));
 
   // QNBS-v3: races against the startup grace period so an immediate crash is caught here, distinct from a deliberate SIGTERM-driven exit later — Qodo review finding on PR #388 ("crashed cycles count clean").
   const earlyExit = await Promise.race([exited, sleep(STARTUP_GRACE_MS).then(() => null)]);
@@ -190,6 +192,18 @@ async function runCycle(index) {
   if (processTreeAlive()) {
     logStderr(`Cycle ${index + 1}`, stderr);
     throw new Error(`Cycle ${index + 1}: orphaned worldscript_host process(es) still running.`);
+  }
+
+  // QNBS-v3: waits for 'close' (all stdio fully drained), not just 'exit' — see the QNBS-v3 comment where `closed` is declared above. Bounded rather than awaited outright, matching this file's established defensive-timeout convention even though close should already have fired well within ORPHAN_CHECK_GRACE_MS in practice.
+  const streamsClosed = await Promise.race([
+    closed.then(() => true),
+    sleep(2000).then(() => false),
+  ]);
+  if (!streamsClosed) {
+    logStderr(`Cycle ${index + 1}`, stderr);
+    throw new Error(
+      `Cycle ${index + 1}: stdio streams did not close within 2000ms after process exit.`,
+    );
   }
 
   // QNBS-v3: required per cycle, not aggregated across the whole run — Qodo review finding on PR #388 ("FFI proof is not repeated"); one cycle's success must never mask another cycle's failure.

@@ -29,7 +29,7 @@ This single-binary-multi-role design is directly why `scripts/cef/run-launch-cyc
 
 A real launch-path bug was found and fixed here too: Chromium resolves several of these resource paths relative to the process's *working directory*, not the executable's own location — launching the binary from a different cwd produced an ICU-init crash despite every file being correctly present. See `docs/cef/knowledge/linux-runtime-notes.md` for the full finding.
 
-## Accessibility API — first blocker found and root-caused, second attempt in progress
+## Accessibility API — state enablement proven; tree observability open
 
 **First attempt (2026-08-19, PR #391)**: implemented `CefAccessibilityHandler` on `WorldScriptHandler`, returned from a `CefClient::GetAccessibilityHandler()` override, following the pattern every other handler type in this codebase uses (`GetLifeSpanHandler`, `GetDisplayHandler`). **This does not compile against CEF 151.3.18** — the actual compiler error was explicit: `'CefRefPtr<CefAccessibilityHandler> WorldScriptHandler::GetAccessibilityHandler()' marked 'override', but does not override`. A same-PR fallback (`SetAccessibilityState` + `--force-renderer-accessibility`, no observability) caused an unrelated regression in the FFI/rendering proofs; both changes were fully reverted rather than left half-working.
 
