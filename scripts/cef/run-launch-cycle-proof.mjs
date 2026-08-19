@@ -55,6 +55,13 @@ const cycles = cyclesArgIdx === -1 ? 3 : Number(cyclesArg);
 // QNBS-v3: PR #404 finding — under the real Linux sandbox, Crashpad's ptrace-based renderer-crash-dump path is a separately-tracked, currently-open regression (prctl(PR_SET_PTRACER) EINVAL, likely a PID-namespace-relative mismatch) unrelated to the 3-cycle lifecycle proof's own health. These flags let CI run the two as independent steps with independent pass/fail status instead of one proof's failure hiding the other's real result — default (neither flag) keeps prior behavior unchanged.
 const skipCrashReporting = process.argv.includes('--skip-crash-reporting');
 const onlyCrashReporting = process.argv.includes('--only-crash-reporting');
+// QNBS-v3: real false-green risk flagged in review — both flags together would skip the lifecycle loop (onlyCrashReporting) AND the crash-reporting cycle (skipCrashReporting), so main() would do nothing at all and exit 0 having tested nothing.
+if (skipCrashReporting && onlyCrashReporting) {
+  console.error(
+    '[launch-cycle-proof] --skip-crash-reporting and --only-crash-reporting are mutually exclusive — together they would run neither proof and exit 0.',
+  );
+  process.exit(1);
+}
 
 // QNBS-v3: raised from 4000ms after two consecutive CI runs on identical code (byte-for-byte matching main, which had passed reliably before) showed the browser process alive but never reaching OnAfterCreated within the old window — runner-speed variance, not a code regression.
 // QNBS-v3: raised again from 10000ms after the same "Cycle 1: no FFI boundary proof" symptom
@@ -167,11 +174,22 @@ function readPidNsForChildrenId(pid) {
   }
 }
 
-function classifyRole(pid) {
+// QNBS-v3: real bug caught in review — this previously returned the generic 'browser' fallback for ANY process lacking --type=, including a positively-identified Crashpad handler passed in via isCrashpadCandidate, so the 'crashpad-handler(?)' label in logProcessTreeDiagnostic's `?? (...)` was unreachable dead code whenever a handler's cmdline was readable at all (nearly always). isCrashpadCandidate now takes precedence over the --type=-based guess.
+function classifyRole(pid, isCrashpadCandidate) {
   const cmdline = readCmdline(pid);
   if (!cmdline) return null;
+  if (isCrashpadCandidate) return 'crashpad-handler';
   const typeArg = cmdline.find((a) => a.startsWith('--type='));
   return typeArg ? typeArg.slice('--type='.length) : 'browser';
+}
+
+// QNBS-v3: readlink of the resolved binary, distinct from (and more trustworthy than) the cmdline-based guess above — real, auditable proof of which executable a PID actually is, requested in review alongside cmdline for identity verification.
+function readExePath(pid) {
+  try {
+    return fs.readlinkSync(`/proc/${pid}/exe`);
+  } catch {
+    return null;
+  }
 }
 
 // QNBS-v3: the Crashpad handler may not match binaryPathPattern at all (it can be a distinct re-exec path, not necessarily worldscript_host itself) — a broad, unanchored, case-insensitive search is deliberately used here (unlike listMatchingPids' anchored one) specifically to still find it for this diagnostic even if our own-binary assumption doesn't hold.
@@ -204,8 +222,8 @@ function logProcessTreeDiagnostic(label) {
   );
   const seen = [];
   for (const pid of allPids) {
-    const role =
-      classifyRole(pid) ?? (crashpadPids.includes(pid) ? 'crashpad-handler(?)' : '(unreadable)');
+    const isCrashpadCandidate = crashpadPids.includes(pid);
+    const role = classifyRole(pid, isCrashpadCandidate) ?? '(unreadable)';
     const ppid = readProcStatusField(pid, 'PPid');
     const seccomp = readProcStatusField(pid, 'Seccomp');
     const noNewPrivs = readProcStatusField(pid, 'NoNewPrivs');
@@ -214,10 +232,12 @@ function logProcessTreeDiagnostic(label) {
     const userNs = readUserNsId(pid);
     const pidNs = readPidNsId(pid);
     const pidNsForChildren = readPidNsForChildrenId(pid);
+    const exePath = readExePath(pid);
+    const cmdline = readCmdline(pid);
     console.log(
-      `  pid=${pid} ppid=${ppid ?? '(unreadable)'} role=${role} NSpid=${nsPid ?? '(unreadable)'} pid-ns=${pidNs ?? '(unreadable)'} ` +
-        `pid-ns-for-children=${pidNsForChildren ?? '(unreadable)'} Seccomp=${seccomp ?? '(unreadable)'} NoNewPrivs=${noNewPrivs ?? '(unreadable)'} ` +
-        `CapEff=${capEff ?? '(unreadable)'} user-ns=${userNs ?? '(unreadable)'} ` +
+      `  pid=${pid} ppid=${ppid ?? '(unreadable)'} role=${role} exe=${exePath ?? '(unreadable)'} cmdline=${cmdline ? JSON.stringify(cmdline) : '(unreadable)'} ` +
+        `NSpid=${nsPid ?? '(unreadable)'} pid-ns=${pidNs ?? '(unreadable)'} pid-ns-for-children=${pidNsForChildren ?? '(unreadable)'} ` +
+        `Seccomp=${seccomp ?? '(unreadable)'} NoNewPrivs=${noNewPrivs ?? '(unreadable)'} CapEff=${capEff ?? '(unreadable)'} user-ns=${userNs ?? '(unreadable)'} ` +
         `distinct-pid-ns-from-harness=${pidNs !== null && pidNs !== ownPidNs} distinct-user-ns-from-harness=${userNs !== null && userNs !== ownUserNs}`,
     );
     seen.push({ pid, role, pidNs });
@@ -225,7 +245,7 @@ function logProcessTreeDiagnostic(label) {
   // QNBS-v3: the decisive comparisons per PR #404's review — actual pid-ns *identity*, not just distance-from-harness. renderer-vs-handler tests the core mismatch hypothesis directly; browser-vs-handler is the strongest corroborating signal (if they match while renderer differs, that elegantly explains why only the sandboxed renderer's PR_SET_PTRACER call ever sees EINVAL). Neither comparison alone proves the *exact* numeric handler_pid value is unresolvable inside the renderer's namespace (that would need a live syscall trace, deliberately not attempted — see the "no strace" note on this function's own commit) — this is strong, non-invasive supporting or refuting evidence for the hypothesis, stated as such, not a definitive syscall-level proof.
   const browsers = seen.filter((p) => p.role === 'browser' && p.pidNs !== null);
   const renderers = seen.filter((p) => p.role === 'renderer' && p.pidNs !== null);
-  const handlers = seen.filter((p) => p.role === 'crashpad-handler(?)' && p.pidNs !== null);
+  const handlers = seen.filter((p) => p.role === 'crashpad-handler' && p.pidNs !== null);
   for (const h of handlers) {
     for (const r of renderers) {
       console.log(
@@ -380,6 +400,7 @@ async function runCrashReportingProofCycle() {
   let stdout = '';
   let stderr = '';
   // QNBS-v3: PR #404's own captured log shows the crash → prctl(PR_SET_PTRACER) EINVAL → ptrace EPERM sequence completes in well under 200ms — the stdout-polling snapshot below (200ms cadence) risks firing after the Crashpad handler process has already exited on failure. This stderr-event-driven snapshot fires the instant the relevant log line is flushed, maximizing the chance of catching it still alive. Fires at most once (ptraceDiagnosticLogged guard) even though multiple matching lines can appear across renderer respawns.
+  // QNBS-v3: real regex miss caught in review — the actual EARLIEST failure line in this PR's own captured log ("crashpad_client_linux.cc:376] prctl: Invalid argument (22)") contains neither "ptrace" nor "PR_SET_PTRACER" nor "scoped_ptrace_attach" as substrings (prctl is a distinct syscall name from the LATER ptrace() call), so the original regex only ever fired on the second, later failure line — missing the earliest, most diagnostically valuable moment entirely.
   let ptraceDiagnosticLogged = false;
   child.stdout.on('data', (chunk) => {
     stdout += chunk.toString();
@@ -387,9 +408,14 @@ async function runCrashReportingProofCycle() {
   child.stderr.on('data', (chunk) => {
     const text = chunk.toString();
     stderr += text;
-    if (!ptraceDiagnosticLogged && /ptrace|PR_SET_PTRACER|scoped_ptrace_attach/i.test(text)) {
+    if (
+      !ptraceDiagnosticLogged &&
+      /ptrace|PR_SET_PTRACER|scoped_ptrace_attach|crashpad_client_linux|prctl:/i.test(text)
+    ) {
       ptraceDiagnosticLogged = true;
-      logProcessTreeDiagnostic('Process tree at the instant a ptrace-related log line appeared');
+      logProcessTreeDiagnostic(
+        'Process tree at the instant a ptrace/prctl-related log line appeared',
+      );
     }
   });
 
