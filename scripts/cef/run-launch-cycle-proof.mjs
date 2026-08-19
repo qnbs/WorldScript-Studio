@@ -158,6 +158,15 @@ function readPidNsId(pid) {
   }
 }
 
+// QNBS-v3: ns/pid (this process's OWN membership) vs. ns/pid_for_children (the namespace any NEW child it forks would join) can legitimately differ — that's exactly the zygote/sandbox-setup shape (a still-ambient-namespace parent about to fork a child into a freshly-created one), real topology evidence distinct from ns/pid alone.
+function readPidNsForChildrenId(pid) {
+  try {
+    return fs.readlinkSync(`/proc/${pid}/ns/pid_for_children`);
+  } catch {
+    return null;
+  }
+}
+
 function classifyRole(pid) {
   const cmdline = readCmdline(pid);
   if (!cmdline) return null;
@@ -197,26 +206,35 @@ function logProcessTreeDiagnostic(label) {
   for (const pid of allPids) {
     const role =
       classifyRole(pid) ?? (crashpadPids.includes(pid) ? 'crashpad-handler(?)' : '(unreadable)');
+    const ppid = readProcStatusField(pid, 'PPid');
     const seccomp = readProcStatusField(pid, 'Seccomp');
     const noNewPrivs = readProcStatusField(pid, 'NoNewPrivs');
     const capEff = readProcStatusField(pid, 'CapEff');
     const nsPid = readProcStatusField(pid, 'NSpid');
     const userNs = readUserNsId(pid);
     const pidNs = readPidNsId(pid);
+    const pidNsForChildren = readPidNsForChildrenId(pid);
     console.log(
-      `  pid=${pid} role=${role} NSpid=${nsPid ?? '(unreadable)'} pid-ns=${pidNs ?? '(unreadable)'} Seccomp=${seccomp ?? '(unreadable)'} ` +
-        `NoNewPrivs=${noNewPrivs ?? '(unreadable)'} CapEff=${capEff ?? '(unreadable)'} user-ns=${userNs ?? '(unreadable)'} ` +
+      `  pid=${pid} ppid=${ppid ?? '(unreadable)'} role=${role} NSpid=${nsPid ?? '(unreadable)'} pid-ns=${pidNs ?? '(unreadable)'} ` +
+        `pid-ns-for-children=${pidNsForChildren ?? '(unreadable)'} Seccomp=${seccomp ?? '(unreadable)'} NoNewPrivs=${noNewPrivs ?? '(unreadable)'} ` +
+        `CapEff=${capEff ?? '(unreadable)'} user-ns=${userNs ?? '(unreadable)'} ` +
         `distinct-pid-ns-from-harness=${pidNs !== null && pidNs !== ownPidNs} distinct-user-ns-from-harness=${userNs !== null && userNs !== ownUserNs}`,
     );
     seen.push({ pid, role, pidNs });
   }
-  // QNBS-v3: the decisive comparison — actual pid-ns *identity* between whichever processes classified as renderer vs. crashpad-handler(?), not just each one's distance from the harness.
+  // QNBS-v3: the decisive comparisons per PR #404's review — actual pid-ns *identity*, not just distance-from-harness. renderer-vs-handler tests the core mismatch hypothesis directly; browser-vs-handler is the strongest corroborating signal (if they match while renderer differs, that elegantly explains why only the sandboxed renderer's PR_SET_PTRACER call ever sees EINVAL). Neither comparison alone proves the *exact* numeric handler_pid value is unresolvable inside the renderer's namespace (that would need a live syscall trace, deliberately not attempted — see the "no strace" note on this function's own commit) — this is strong, non-invasive supporting or refuting evidence for the hypothesis, stated as such, not a definitive syscall-level proof.
+  const browsers = seen.filter((p) => p.role === 'browser' && p.pidNs !== null);
   const renderers = seen.filter((p) => p.role === 'renderer' && p.pidNs !== null);
   const handlers = seen.filter((p) => p.role === 'crashpad-handler(?)' && p.pidNs !== null);
-  for (const r of renderers) {
-    for (const h of handlers) {
+  for (const h of handlers) {
+    for (const r of renderers) {
       console.log(
         `  [pid-ns identity check] renderer pid=${r.pid} pid-ns=${r.pidNs} vs. handler(?) pid=${h.pid} pid-ns=${h.pidNs}: ${r.pidNs === h.pidNs ? 'SAME namespace (rejects the mismatch hypothesis for this pair)' : 'DIFFERENT namespaces (supports the mismatch hypothesis for this pair)'}`,
+      );
+    }
+    for (const b of browsers) {
+      console.log(
+        `  [pid-ns identity check] browser pid=${b.pid} pid-ns=${b.pidNs} vs. handler(?) pid=${h.pid} pid-ns=${h.pidNs}: ${b.pidNs === h.pidNs ? 'SAME namespace' : 'DIFFERENT namespaces'} (browser sharing the handler's namespace while the renderer above does not would explain why only the sandboxed renderer's PR_SET_PTRACER ever sees EINVAL)`,
       );
     }
   }
