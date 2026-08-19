@@ -36,6 +36,13 @@ set(WORLDSCRIPT_HOST_SRCS
 add_executable(worldscript_host ${WORLDSCRIPT_HOST_SRCS})
 add_dependencies(worldscript_host libcef_dll_wrapper)
 
+# QNBS-v3: -g directly on this target only, not CMAKE_BUILD_TYPE=RelWithDebInfo — that broke
+# CEF's own chrome-sandbox copy step (the fetched SDK's prebuilt binaries only ship Release/ and
+# Debug/ subdirectories, not RelWithDebInfo/; a real CI failure, not a guess). This keeps CEF's
+# own macros on the Release path they expect while still giving our own crash-symbolization proof
+# (scripts/cef/run-symbolization-proof.mjs) real DWARF debug info to resolve function names from.
+target_compile_options(worldscript_host PRIVATE -g)
+
 ADD_LOGICAL_TARGET("libcef_lib" "${CEF_LIB_DEBUG}" "${CEF_LIB_RELEASE}")
 
 target_link_libraries(worldscript_host
