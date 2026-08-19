@@ -13,10 +13,20 @@
  * launch, which is exactly the failure mode the primer doc's acceptance bar disallows.
  *
  * Per docs/cef/knowledge/cef-architecture-primer.md's "Acceptance bar for the follow-up enable
- * attempt": must show renderer/GPU/utility processes actually running under sandbox
- * restrictions, must distinguish namespace isolation (layer 1) from seccomp-BPF (layer 2)
- * since Chromium treats them independently, and must cause zero regression to the existing
- * lifecycle proof (FFI boundary, rendering).
+ * attempt": must show renderer processes actually running under sandbox restrictions, must
+ * distinguish namespace isolation (layer 1) from seccomp-BPF (layer 2) since Chromium treats
+ * them independently, and must cause zero regression to the existing lifecycle proof (FFI
+ * boundary, rendering).
+ *
+ * PROMOTED (second pass, same PR) from "any non-browser process shows either layer" to a real
+ * renderer-specific acceptance test: real CI evidence on this PR showed GPU-process and
+ * network-utility processes legitimately run with Seccomp=0 while renderer and storage-utility
+ * processes show Seccomp=2 — accepting evidence from ANY non-browser role risked a false
+ * sandbox_smoke=true claim satisfied entirely by a GPU/utility process while the renderer itself
+ * was never actually verified. At least one observed --type=renderer process must show
+ * Seccomp=2 (real seccomp-BPF filter mode, not the unrelated strict mode) for this proof to
+ * pass. GPU/utility evidence is still collected and logged (real, useful diagnostic signal) but
+ * never asserted on absent a documented per-role requirement.
  *
  * The browser process itself is intentionally NOT asserted on for sandbox evidence — Chromium's
  * own architecture never sandboxes the browser process; it is the trusted coordinator that sets
@@ -30,7 +40,18 @@
  *     own namespace (which is the same ambient namespace the unsandboxed browser process itself
  *     runs in) — a distinct inode is real evidence a new user namespace was created for that
  *     child (layer-1 isolation). The two layers are reported separately, never collapsed into
- *     one pass/fail, since a process can show one without the other.
+ *     one pass/fail, since a process can show one without the other. Real CI evidence on this PR
+ *     also showed the kernel can deny this readlink entirely for a sandboxed renderer — the same
+ *     ptrace_may_access-family access-control check that also gates the ptrace(2) syscall itself
+ *     (a different, stronger access mode than the plain procfs read this uses, so this denial
+ *     corroborates but does not prove the exact mechanism blocking Crashpad's own ptrace attach
+ *     — see run-launch-cycle-proof.mjs's crash-reporting investigation). An unreadable namespace
+ *     is logged as such and never treated as a fabricated "not distinct" negative result.
+ *
+ * This proof does NOT establish anything about sandbox-compatible Crashpad renderer-crash-dump
+ * generation, which real evidence on this PR shows is a separate, currently-open regression
+ * under the real (unmodified) ptrace_scope — see run-launch-cycle-proof.mjs's own
+ * --only-crash-reporting proof and step.
  *
  * This is CI-runner feasibility evidence, not a production-packaging sandbox proof — see the
  * primer doc's "two separate gates" note. A GitHub Actions runner proving our CEF configuration
@@ -101,10 +122,15 @@ function logStderr(label, stderr) {
   if (stderr) console.error(`[sandbox-status-proof] ${label} stderr:\n${stderr}`);
 }
 
-// QNBS-v3: /proc/<pid>/cmdline is NUL-separated, not space-separated — splitting on spaces would break on any argument containing one (e.g. a --url value).
+// QNBS-v3: /proc/<pid>/cmdline is NUL-separated, not space-separated — splitting on spaces would break on any argument containing one (e.g. a --url value). Chromium's zygote-forked children (renderer/gpu-process/utility) rewrite their own argv memory for ps-friendly display, which collapses the NUL separation into one space-joined string with no NUL bytes at all — real bug found in run-launch-cycle-proof.mjs's identical helper (same PR), applied here too for consistency between both harnesses.
 function readCmdline(pid) {
   try {
-    return fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0').filter(Boolean);
+    const raw = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8');
+    const nulSplit = raw.split('\0').filter(Boolean);
+    if (nulSplit.length === 1 && nulSplit[0].includes(' ')) {
+      return nulSplit[0].split(' ').filter(Boolean);
+    }
+    return nulSplit;
   } catch {
     return null; // Process exited between the pgrep snapshot and this read — expected raciness, not an error.
   }
@@ -246,40 +272,43 @@ async function main() {
       throw new Error('orphaned worldscript_host process(es) still running after shutdown.');
     }
 
-    const nonBrowserEvidence = evidence.filter((e) => e.role !== 'browser');
-    if (nonBrowserEvidence.length === 0) {
+    // QNBS-v3: promoted from "any non-browser process" to a real renderer-specific acceptance test (PR #404 review) — real CI evidence (this same PR) showed GPU-process and network-utility legitimately run with Seccomp=0 while renderer and storage-utility show Seccomp=2, so accepting ANY non-browser process risked a false sandbox_smoke=true from a GPU/utility process alone while the renderer itself was never actually verified. The browser process is intentionally excluded (never sandboxed by Chromium's own design, see this file's header comment); GPU/utility evidence stays diagnostic-only (logged, not asserted on) absent a documented per-role requirement.
+    const renderers = evidence.filter((e) => e.role === 'renderer');
+    if (renderers.length === 0) {
       throw new Error(
-        'no renderer/GPU/utility subprocess was observed while the browser was running — this proof requires at least one non-browser process to assert real evidence on, not just the browser process itself.',
+        'no --type=renderer subprocess was observed while the browser was running — this proof requires real renderer-specific evidence, not just any non-browser process (a GPU-process or utility process alone must not be able to satisfy this).',
       );
     }
 
     // QNBS-v3: Linux's Seccomp status field is 0=disabled/1=strict/2=filter — Chromium's own seccomp-BPF layer specifically means filter mode (2). Accepting 1 (strict mode, a different and much rarer kernel feature) as BPF evidence would overclaim; a raw non-zero check was a real precision gap flagged on this PR before it could become a false sandbox_smoke=true claim later.
-    const seccompBpfFiltered = nonBrowserEvidence.filter((e) => e.seccomp === '2');
-    const withDistinctUserNs = nonBrowserEvidence.filter((e) => e.distinctUserNs);
+    const renderersWithSeccompFilter = renderers.filter((e) => e.seccomp === '2');
+    // QNBS-v3: pid/user-ns readability is reported, never asserted on — real evidence from this PR shows the kernel denies readlink(/proc/<pid>/ns/*) for the same access-control reasons it denies Crashpad's ptrace attach (both use ptrace_may_access-family checks), so "unreadable" here is expected kernel-enforced denial, not a harness failure; treating it as a hard negative would be fabricating a result the observation genuinely cannot make.
+    const renderersWithDistinctUserNs = renderers.filter((e) => e.distinctUserNs);
+    const nonBrowserEvidence = evidence.filter((e) => e.role !== 'browser');
 
     console.log(
-      `[sandbox-status-proof] ${nonBrowserEvidence.length} non-browser process(es) observed; ` +
-        `${seccompBpfFiltered.length} with Seccomp=2 (real seccomp-BPF filter mode, layer-2 evidence); ` +
-        `${withDistinctUserNs.length} in a user namespace distinct from the ambient one (layer-1 evidence).`,
+      `[sandbox-status-proof] ${renderers.length} renderer process(es) observed (pids: ${renderers.map((r) => r.pid).join(', ')}); ` +
+        `${renderersWithSeccompFilter.length} with Seccomp=2 (real seccomp-BPF filter mode); ` +
+        `${renderersWithDistinctUserNs.length} with a user-ns distinct from ambient (where readable — see the unreadable-is-not-negative note above). ` +
+        `${nonBrowserEvidence.length} total non-browser process(es) observed (GPU/utility included, diagnostic only, not asserted on).`,
     );
 
-    if (seccompBpfFiltered.length === 0 && withDistinctUserNs.length === 0) {
+    if (renderersWithSeccompFilter.length === 0) {
       throw new Error(
-        'zero layer-1 (namespace) or layer-2 (seccomp-BPF filter, Seccomp=2 specifically) evidence found on any ' +
-          'renderer/GPU/utility subprocess — no_sandbox=false did not produce an observable change in process ' +
-          'isolation on this runner. Per the acceptance bar in cef-architecture-primer.md, a clean launch alone ' +
-          'does not count as proof.',
+        `no observed --type=renderer process shows Seccomp=2 (real seccomp-BPF filter mode) — no_sandbox=false did ` +
+          `not produce verifiable renderer-specific sandbox enforcement on this runner. Per the acceptance bar in ` +
+          `cef-architecture-primer.md, a clean launch alone (or GPU/utility evidence alone) does not count as proof; ` +
+          `renderer evidence observed: ${JSON.stringify(renderers.map((r) => ({ pid: r.pid, seccomp: r.seccomp, noNewPrivs: r.noNewPrivs })))}`,
       );
     }
 
     console.log(
-      '[sandbox-status-proof] OK — real per-process evidence collected for at least one Linux sandbox layer ' +
-        '(namespace isolation and/or seccomp-BPF filter mode) on a renderer/GPU/utility subprocess, with zero ' +
-        'regression to the existing FFI/rendering lifecycle proof. This is CI-runner feasibility evidence, not a ' +
-        'production-packaging sandbox proof — see cef-architecture-primer.md\'s "two separate gates" note. This ' +
-        'first attempt intentionally accepts any single non-browser process showing either layer as a diagnostic ' +
-        'pass — a stricter per-role (renderer vs. GPU vs. utility) requirement is deferred to the follow-up that ' +
-        'actually flips sandbox_smoke to true, once this real evidence is reviewed.',
+      '[sandbox-status-proof] OK — real renderer-specific sandbox enforcement confirmed (Seccomp=2, real seccomp-BPF ' +
+        'filter mode) on at least one observed --type=renderer process, with zero regression to the existing ' +
+        'FFI/rendering lifecycle proof. This is CI-runner feasibility evidence, not a production-packaging sandbox ' +
+        'proof — see cef-architecture-primer.md\'s "two separate gates" note. This does NOT establish anything about ' +
+        'sandbox-compatible Crashpad renderer-crash-dump generation, which is tracked as a separate, currently-open ' +
+        "item — see scripts/cef/run-launch-cycle-proof.mjs's --only-crash-reporting proof and its own step.",
     );
   } finally {
     // QNBS-v3: unconditional safety net — CodeRabbit-class finding on this PR. Runs whether the try block succeeded, threw before ever attempting graceful shutdown, or threw after it. killAllMatchingProcesses() sweeps the whole binary-path-matching tree (not just the tracked child), same as run-launch-cycle-proof.mjs's crash-reporting-cycle cleanup.
