@@ -156,19 +156,45 @@ function classifyRole(pid) {
   return typeArg ? typeArg.slice('--type='.length) : 'browser';
 }
 
+// QNBS-v3: the Crashpad handler may not match binaryPathPattern at all (it can be a distinct re-exec path, not necessarily worldscript_host itself) — a broad, unanchored, case-insensitive search is deliberately used here (unlike listMatchingPids' anchored one) specifically to still find it for this diagnostic even if our own-binary assumption doesn't hold.
+function listCrashpadHandlerPids() {
+  try {
+    const out = execFileSync('pgrep', ['-if', 'crashpad'], {
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .toString()
+      .trim();
+    return out
+      .split('\n')
+      .filter(Boolean)
+      .map(Number)
+      .filter((pid) => pid !== process.pid);
+  } catch {
+    return [];
+  }
+}
+
 function logProcessTreeDiagnostic(label) {
   const ownUserNs = readUserNsId(process.pid);
-  const pids = listMatchingPids();
-  console.log(`[launch-cycle-proof] ${label}: ${pids.length} matching process(es).`);
-  for (const pid of pids) {
-    const role = classifyRole(pid) ?? '(unreadable)';
+  const matchedPids = listMatchingPids();
+  const crashpadPids = listCrashpadHandlerPids();
+  // QNBS-v3: real evidence request from PR #404's review — NSpid (outermost-to-innermost PID across every nested PID namespace the process belongs to) is captured from THIS (ambient) namespace, which can see the full nesting chain even without joining any child namespace. A renderer inside its own PID namespace shows two values ("<ambient-pid> <own-ns-pid>"); a handler that never entered a nested namespace shows only one — a real, direct signal for the PID-namespace-mismatch hypothesis, not an inference from Seccomp/user-ns alone.
+  const allPids = [...new Set([...matchedPids, ...crashpadPids])];
+  console.log(
+    `[launch-cycle-proof] ${label}: ${matchedPids.length} worldscript_host-matching process(es), ${crashpadPids.length} crashpad-cmdline-matching process(es) (may overlap).`,
+  );
+  for (const pid of allPids) {
+    const role =
+      classifyRole(pid) ?? (crashpadPids.includes(pid) ? 'crashpad-handler(?)' : '(unreadable)');
     const seccomp = readProcStatusField(pid, 'Seccomp');
     const noNewPrivs = readProcStatusField(pid, 'NoNewPrivs');
     const capEff = readProcStatusField(pid, 'CapEff');
+    const nsPid = readProcStatusField(pid, 'NSpid');
     const userNs = readUserNsId(pid);
     console.log(
-      `  pid=${pid} role=${role} Seccomp=${seccomp ?? '(unreadable)'} NoNewPrivs=${noNewPrivs ?? '(unreadable)'} ` +
-        `CapEff=${capEff ?? '(unreadable)'} user-ns=${userNs ?? '(unreadable)'} distinct-from-harness=${userNs !== null && userNs !== ownUserNs}`,
+      `  pid=${pid} role=${role} NSpid=${nsPid ?? '(unreadable)'} Seccomp=${seccomp ?? '(unreadable)'} ` +
+        `NoNewPrivs=${noNewPrivs ?? '(unreadable)'} CapEff=${capEff ?? '(unreadable)'} user-ns=${userNs ?? '(unreadable)'} ` +
+        `distinct-from-harness=${userNs !== null && userNs !== ownUserNs}`,
     );
   }
 }
@@ -312,11 +338,18 @@ async function runCrashReportingProofCycle() {
 
   let stdout = '';
   let stderr = '';
+  // QNBS-v3: PR #404's own captured log shows the crash → prctl(PR_SET_PTRACER) EINVAL → ptrace EPERM sequence completes in well under 200ms — the stdout-polling snapshot below (200ms cadence) risks firing after the Crashpad handler process has already exited on failure. This stderr-event-driven snapshot fires the instant the relevant log line is flushed, maximizing the chance of catching it still alive. Fires at most once (ptraceDiagnosticLogged guard) even though multiple matching lines can appear across renderer respawns.
+  let ptraceDiagnosticLogged = false;
   child.stdout.on('data', (chunk) => {
     stdout += chunk.toString();
   });
   child.stderr.on('data', (chunk) => {
-    stderr += chunk.toString();
+    const text = chunk.toString();
+    stderr += text;
+    if (!ptraceDiagnosticLogged && /ptrace|PR_SET_PTRACER|scoped_ptrace_attach/i.test(text)) {
+      ptraceDiagnosticLogged = true;
+      logProcessTreeDiagnostic('Process tree at the instant a ptrace-related log line appeared');
+    }
   });
 
   const exited = new Promise((resolve) =>
