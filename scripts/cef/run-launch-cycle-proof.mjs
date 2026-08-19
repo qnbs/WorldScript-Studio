@@ -248,10 +248,11 @@ function logProcessTreeDiagnostic(label) {
         `Seccomp=${seccomp ?? '(unreadable)'} NoNewPrivs=${noNewPrivs ?? '(unreadable)'} CapEff=${capEff ?? '(unreadable)'} user-ns=${userNs ?? '(unreadable)'} ` +
         `distinct-pid-ns-from-harness=${pidNs !== null && pidNs !== ownPidNs} distinct-user-ns-from-harness=${userNs !== null && userNs !== ownUserNs}`,
     );
-    seen.push({ pid, role, pidNs });
+    // QNBS-v3: CodeRabbit finding, PR #404 — listCrashpadCmdlineMatchPids' unanchored pgrep -if crashpad can return unrelated runner processes; without this flag, a foreign process with no --type= and no handler-specific flag would fall through to role='browser' and enter the comparison below, producing a misleading namespace-mismatch line against a process that was never part of this host's own tree.
+    seen.push({ pid, role, pidNs, hostMatched: matchedPids.includes(pid) });
   }
   // QNBS-v3: the decisive comparisons per PR #404's review — actual pid-ns *identity*, not just distance-from-harness. renderer-vs-handler tests the core mismatch hypothesis directly; browser-vs-handler is the strongest corroborating signal (if they match while renderer differs, that elegantly explains why only the sandboxed renderer's PR_SET_PTRACER call ever sees EINVAL). Neither comparison alone proves the *exact* numeric handler_pid value is unresolvable inside the renderer's namespace (that would need a live syscall trace, deliberately not attempted — see the "no strace" note on this function's own commit) — this is strong, non-invasive supporting or refuting evidence for the hypothesis, stated as such, not a definitive syscall-level proof.
-  const browsers = seen.filter((p) => p.role === 'browser' && p.pidNs !== null);
+  const browsers = seen.filter((p) => p.role === 'browser' && p.pidNs !== null && p.hostMatched);
   const renderers = seen.filter((p) => p.role === 'renderer' && p.pidNs !== null);
   const handlers = seen.filter((p) => p.role === 'crashpad-handler' && p.pidNs !== null);
   for (const h of handlers) {
