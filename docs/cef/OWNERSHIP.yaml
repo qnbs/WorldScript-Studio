@@ -56,7 +56,7 @@ documents:
       - cef-learning-harness
       # cef-competency-gate: no such CI workflow/job exists yet — planned, not implemented (CodeRabbit review finding on PR #389). Re-add once it's a real job.
     driftCheckTool: "planned — not implemented, see Wave 1"
-    note: "Updated in place for Wave 2 (PR #386/#387/#388/#391/#392) — 3 of 7 cef_competency items now true with linked evidence (renderer_crash_ci added, PR #392); competency gate still not satisfied (6/12)."
+    note: "Updated in place for Wave 2 (PR #386/#387/#388/#391/#392/#393) — 3 of 7 cef_competency items now true with linked evidence (renderer_crash_ci added, PR #392); Wayland smoke checked in Appendix A.1 (PR #393, no dedicated cef_competency field for it per the roadmap's own §61.1.3 shape); competency gate still not satisfied (6/12)."
 
   - path: docs/cef/TAURI-COUPLING-INVENTORY.md
     tier: B
@@ -104,7 +104,7 @@ documents:
     related_ci:
       - cef-learning-harness
     driftCheckTool: "planned — not implemented, see Wave 1"
-    note: "Real evidence from PR #388 for process model, message loop, subprocess packaging; crash reporting proven in CI (PR #392). Sandbox config, symbolization, and a directly-observed process-tree snapshot remain open."
+    note: "Real evidence from PR #388 for process model, message loop, subprocess packaging; crash reporting proven in CI (PR #392); Wayland display-server smoke proven in CI (PR #393). Sandbox config, symbolization, a real GPU/compositor matrix, and a directly-observed process-tree snapshot remain open."
 
   - path: docs/cef/knowledge/cef-rust-binding-cookbook.md
     tier: A

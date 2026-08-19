@@ -1,7 +1,7 @@
 # CEF/Rust Competency Matrix
 
 **Companion to:** [`ROADMAP-CEF-DESKTOP-MIGRATION.md`](ROADMAP-CEF-DESKTOP-MIGRATION.md) §4.11, §61.1, Appendix A.1 · [ADR-0019](../adr/0019-cef-desktop-runtime-strategy.md)
-**Established:** Wave 0, 2026-08-18. **Baseline was: nothing done yet.** Updated in place, 2026-08-18/19 (Wave 2, ADR-0020 spike + PR #386/#387/#388/#391/#392), per this doc's own "Update discipline" below — items flip to `true` only with a linked evidence commit, in the same commit as the flip. This file exists so future waves have a live, gradeable target instead of re-deriving the checklist from the roadmap prose each time.
+**Established:** Wave 0, 2026-08-18. **Baseline was: nothing done yet.** Updated in place, 2026-08-18/19 (Wave 2, ADR-0020 spike + PR #386/#387/#388/#391/#392/#393), per this doc's own "Update discipline" below — items flip to `true` only with a linked evidence commit, in the same commit as the flip. This file exists so future waves have a live, gradeable target instead of re-deriving the checklist from the roadmap prose each time.
 
 This is an engineering gate (roadmap §4.11.6), not a training checklist. `WS-CEF-IPC` (Wave 4) and any production storage capability exposing privileged native operations may not proceed until the relevant items below are `true` with linked evidence.
 
@@ -45,7 +45,7 @@ CI validation of this block ("fail CI when a required item for the active progra
 [ ] Accessibility smoke green                      (attempted, real blocker — see cef-architecture-primer.md's "Accessibility API" section)
 [ ] Crash-reporting/symbolization smoke green       (crash-reporting half proven — PR #392, real Crashpad dump produced in CI; symbolization/decoding the dump not attempted, needs a full Chromium source checkout — see cef-architecture-primer.md)
 [ ] Linux dependency inventory complete            (inventoried, not yet proven sufficient — see native-readiness.md)
-[ ] X11/Wayland initial smoke complete             (X11 only; Wayland zero evidence)
+[x] X11/Wayland initial smoke complete             — PR #393: X11 proven since PR #388 (Xvfb); Wayland now also proven (headless Weston compositor, --ozone-platform=wayland, same FFI+title checks, cef-learning-harness CI job). Real-hardware/compositor matrix (roadmap §44.2/§44.5 — NVIDIA/AMD/Intel × KDE/GNOME, real graphics hardware) remains unproven; this is one virtual-CI runner only.
 [ ] Upgrade playbook written
 [ ] External-expertise escalation path documented
 ```

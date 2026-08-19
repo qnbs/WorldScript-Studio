@@ -118,11 +118,26 @@ jobs:
             "http://localhost:8080/" --cycles 3
           kill "$SERVER_PID"
 
+      - name: Best-effort Wayland launch smoke (roadmap §44.2)
+        id: wayland-smoke
+        continue-on-error: true
+        run: |
+          sudo apt-get install -y weston
+          python3 -m http.server 8081 --directory dist &
+          SERVER_PID=$!
+          sleep 1
+          node scripts/cef/run-wayland-smoke.mjs \
+            "$(pwd)/build/worldscript_host/worldscript_host" \
+            "http://localhost:8081/"
+          kill "$SERVER_PID"
+
       - name: Summary
+        if: always()
         run: |
           echo "## 🧪 CEF Learning Harness" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- Pinned SDK: \`$(node -e "console.log(require('./scripts/cef/cef-version.json').cefVersion)")\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Cache hit: \`${{ steps.cef-cache.outputs.cache-hit }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- worldscript_host built and repeated launch/close cycles proven against the real production bundle (dist/), under Xvfb." >> "$GITHUB_STEP_SUMMARY"
-          echo "- Not yet in scope: X11/Wayland matrix beyond this one runner, sandbox posture, accessibility smoke, crash-reporting proof." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Wayland smoke (best-effort, roadmap §44.2): \`${{ steps.wayland-smoke.outcome }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Not yet in scope: X11/Wayland matrix beyond this one runner, sandbox posture, accessibility smoke." >> "$GITHUB_STEP_SUMMARY"
