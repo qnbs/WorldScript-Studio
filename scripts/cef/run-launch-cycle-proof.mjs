@@ -254,7 +254,10 @@ function logProcessTreeDiagnostic(label) {
   // QNBS-v3: the decisive comparisons per PR #404's review — actual pid-ns *identity*, not just distance-from-harness. renderer-vs-handler tests the core mismatch hypothesis directly; browser-vs-handler is the strongest corroborating signal (if they match while renderer differs, that elegantly explains why only the sandboxed renderer's PR_SET_PTRACER call ever sees EINVAL). Neither comparison alone proves the *exact* numeric handler_pid value is unresolvable inside the renderer's namespace (that would need a live syscall trace, deliberately not attempted — see the "no strace" note on this function's own commit) — this is strong, non-invasive supporting or refuting evidence for the hypothesis, stated as such, not a definitive syscall-level proof.
   const browsers = seen.filter((p) => p.role === 'browser' && p.pidNs !== null && p.hostMatched);
   const renderers = seen.filter((p) => p.role === 'renderer' && p.pidNs !== null);
-  const handlers = seen.filter((p) => p.role === 'crashpad-handler' && p.pidNs !== null);
+  // QNBS-v3: CodeRabbit finding, PR #404 (second pass) — same reasoning as the browsers filter above applies here too: an unanchored foreign Crashpad-cmdline match from another runner process must not be allowed to produce a renderer-vs-handler namespace comparison for this host.
+  const handlers = seen.filter(
+    (p) => p.role === 'crashpad-handler' && p.pidNs !== null && p.hostMatched,
+  );
   for (const h of handlers) {
     for (const r of renderers) {
       console.log(

@@ -1,7 +1,7 @@
 # CEF/Rust Competency Matrix
 
 **Companion to:** [`ROADMAP-CEF-DESKTOP-MIGRATION.md`](ROADMAP-CEF-DESKTOP-MIGRATION.md) §4.11, §61.1, Appendix A.1 · [ADR-0019](../adr/0019-cef-desktop-runtime-strategy.md)
-**Established:** Wave 0, 2026-08-18. **Baseline was: nothing done yet.** Updated in place, 2026-08-18/19/20 (Wave 2, ADR-0020 spike + PR #386/#387/#388/#391/#392/#393/#397/#400/#402/#404), per this doc's own "Update discipline" below — items flip to `true` only with a linked evidence commit, in the same commit as the flip. This file exists so future waves have a live, gradeable target instead of re-deriving the checklist from the roadmap prose each time.
+**Established:** Wave 0, 2026-08-18. **Baseline was: nothing done yet.** Updated in place, 2026-08-18/19 (Wave 2, ADR-0020 spike + PR #386/#387/#388/#391/#392/#393/#397/#400/#402/#404), per this doc's own "Update discipline" below — items flip to `true` only with a linked evidence commit, in the same commit as the flip. This file exists so future waves have a live, gradeable target instead of re-deriving the checklist from the roadmap prose each time.
 
 This is an engineering gate (roadmap §4.11.6), not a training checklist. `WS-CEF-IPC` (Wave 4) and any production storage capability exposing privileged native operations may not proceed until the relevant items below are `true` with linked evidence.
 
