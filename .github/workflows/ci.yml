@@ -287,6 +287,16 @@ jobs:
         env:
           NODE_ENV: production
 
+      # QNBS-v3: caches the apt .deb archives `--with-deps` fetches (fonts, libx11, etc.) — shared
+      # key across every `playwright install --with-deps` call site in this workflow, since they all
+      # install the same system packages on the same runner image. actions/cache/save on a fresh
+      # write here also warms the cache for e2e/e2e-deep/storybook/vrt below.
+      - name: Cache apt packages (Playwright system deps)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /var/cache/apt/archives/*.deb
+          key: apt-playwright-chromium-deps-v1
+
       # QNBS-v3: The E2E suite runs `vite dev`, so prod-only rolldown bundling crashes (e.g. the
       # zod DCE "init_locales is not defined" blank screen) never surface there. This guard loads
       # the real production bundle in headless Chromium and fails if React does not mount.
@@ -422,6 +432,12 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
 
+      - name: Cache apt packages (Playwright system deps)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /var/cache/apt/archives/*.deb
+          key: apt-playwright-chromium-deps-v1
+
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 
@@ -475,6 +491,12 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+
+      - name: Cache apt packages (Playwright system deps)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /var/cache/apt/archives/*.deb
+          key: apt-playwright-chromium-deps-v1
 
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
@@ -567,6 +589,12 @@ jobs:
       - name: Build Storybook
         run: pnpm exec storybook build --output-dir storybook-static
 
+      - name: Cache apt packages (Playwright system deps)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /var/cache/apt/archives/*.deb
+          key: apt-playwright-chromium-deps-v1
+
       # QNBS-v3: Chromium-only; test-runner v0.24+ is async-compatible with Storybook v10.
       - name: Install Playwright browsers (test-runner)
         run: pnpm exec playwright install --with-deps chromium
@@ -629,6 +657,12 @@ jobs:
         with:
           name: dist
           path: dist/
+
+      - name: Cache apt packages (Playwright system deps)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /var/cache/apt/archives/*.deb
+          key: apt-playwright-chromium-deps-v1
 
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
