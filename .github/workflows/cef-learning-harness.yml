@@ -190,6 +190,10 @@ jobs:
       - name: Linux runtime linkage check (ldd against shipped .so files)
         run: node scripts/cef/check-linux-runtime-linkage.mjs build/worldscript_host
 
+      # QNBS-v3: real CI evidence (PR #404) — under the now-real sandbox, Crashpad's Linux ptrace-based dump generation FATALs with "ptrace: Operation not permitted"; Yama LSM's default ptrace_scope=1 restricts ptrace to direct-descendant relationships and cross-namespace ptrace additionally needs CAP_SYS_PTRACE within the *target's* own user namespace, which the (now also sandboxed) crash handler no longer has for a renderer in a different namespace — this relaxes only the CI-runner's own Yama policy (a distro/kernel hardening layer, separate from and unaffected by Chromium's own sandbox flags) to isolate whether Yama alone is the blocker, diagnostic-only, never shipped to users.
+      - name: Relax Yama ptrace_scope for Crashpad-under-sandbox diagnostic (CI-only)
+        run: sudo sysctl -w kernel.yama.ptrace_scope=0
+
       # QNBS-v3: pinned prebuilt release binaries (~3.6MB each), sha256-verified — not built from
       # source (would need a slow cargo build for two more Rust tools) and not a Chromium
       # checkout (neither tool needs one; see the header comment).
