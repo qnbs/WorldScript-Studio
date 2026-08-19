@@ -54,6 +54,13 @@ SET_EXECUTABLE_TARGET_PROPERTIES(worldscript_host)
 COPY_FILES("worldscript_host" "${CEF_BINARY_FILES}" "${CEF_BINARY_DIR}" "${CMAKE_CURRENT_BINARY_DIR}")
 COPY_FILES("worldscript_host" "${CEF_RESOURCE_FILES}" "${CEF_RESOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}")
 
+# QNBS-v3: our own file, not a CEF SDK one, so COPY_FILES (which only knows CEF_BINARY_DIR/CEF_RESOURCE_DIR) doesn't apply — CEF requires crash_reporter.cfg next to the executable on Linux (include/cef_crash_util.h).
+configure_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/resources/crash_reporter.cfg"
+  "${CMAKE_CURRENT_BINARY_DIR}/crash_reporter.cfg"
+  COPYONLY
+)
+
 if(OS_LINUX)
   FIND_LINUX_LIBRARIES("x11")
 endif()

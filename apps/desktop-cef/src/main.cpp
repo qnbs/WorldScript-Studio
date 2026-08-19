@@ -2,6 +2,7 @@
 #include <string>
 
 #include "include/cef_app.h"
+#include "include/cef_crash_util.h"
 
 #include "shutdown_signal.h"
 #include "worldscript_app.h"
@@ -44,6 +45,11 @@ int main(int argc, char* argv[]) {
     fprintf(stderr, "[worldscript_host] CefInitialize failed\n");
     return 1;
   }
+
+  // QNBS-v3: CefCrashReportingEnabled() reflects whether crash_reporter.cfg (copied next to this binary by CMakeLists.txt) was found and parsed — the CI harness asserts on this line, not just on the .cfg file existing on disk.
+  printf("[worldscript_host] crash_reporting_enabled = %s\n",
+         CefCrashReportingEnabled() ? "true" : "false");
+  fflush(stdout);
 
   CefRunMessageLoop();
   CefShutdown();
