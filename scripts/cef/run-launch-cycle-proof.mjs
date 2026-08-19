@@ -61,8 +61,8 @@ const CRASH_REPORTING_ENABLED_LINE = 'crash_reporting_enabled = true';
 // QNBS-v3: requires the specific TS_PROCESS_CRASHED value, not a bare "status=" prefix — CodeAnt review finding on PR #392 (TS_LAUNCH_FAILED/TS_PROCESS_WAS_KILLED/TS_ABNORMAL_TERMINATION would otherwise also satisfy the proof).
 const RENDERER_CRASHED_PROOF_LINE = 'renderer_terminated status=TS_PROCESS_CRASHED';
 const CRASH_URL = 'chrome://crash';
-// QNBS-v3: Crashpad's dump finalization is asynchronous relative to OnRenderProcessTerminated — CodeAnt review finding on PR #392; this is how long the harness waits for a real .dmp file before giving up, separate from SHUTDOWN_GRACE_MS's own meaning.
-const DUMP_WRITE_GRACE_MS = 5000;
+// QNBS-v3: Crashpad's dump finalization is asynchronous relative to OnRenderProcessTerminated — CodeAnt review finding on PR #392; this is how long the harness waits for a real .dmp file before giving up, separate from SHUTDOWN_GRACE_MS's own meaning. Set generously (not the original 5000ms) per the same CI-runner-speed-variance lesson that forced STARTUP_GRACE_MS up from 4000ms to 10000ms in this same file — proactive, not waiting for a flaky failure to prove it (second CodeAnt finding, same PR).
+const DUMP_WRITE_GRACE_MS = 8000;
 
 if (!binaryPath || !url) {
   console.error(
