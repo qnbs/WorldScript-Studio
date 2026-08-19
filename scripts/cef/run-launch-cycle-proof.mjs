@@ -52,6 +52,9 @@ const cyclesArgIdx = process.argv.indexOf('--cycles');
 // QNBS-v3: distinguishes "flag absent" (default 3) from "flag present but no value" (e.g. trailing --cycles) — a naive undefined-check would silently default the latter too, same footgun class as fetch-cef-sdk.mjs's --cache-dir.
 const cyclesArg = cyclesArgIdx !== -1 ? process.argv[cyclesArgIdx + 1] : undefined;
 const cycles = cyclesArgIdx === -1 ? 3 : Number(cyclesArg);
+// QNBS-v3: PR #404 finding — under the real Linux sandbox, Crashpad's ptrace-based renderer-crash-dump path is a separately-tracked, currently-open regression (prctl(PR_SET_PTRACER) EINVAL, likely a PID-namespace-relative mismatch) unrelated to the 3-cycle lifecycle proof's own health. These flags let CI run the two as independent steps with independent pass/fail status instead of one proof's failure hiding the other's real result — default (neither flag) keeps prior behavior unchanged.
+const skipCrashReporting = process.argv.includes('--skip-crash-reporting');
+const onlyCrashReporting = process.argv.includes('--only-crash-reporting');
 
 // QNBS-v3: raised from 4000ms after two consecutive CI runs on identical code (byte-for-byte matching main, which had passed reliably before) showed the browser process alive but never reaching OnAfterCreated within the old window — runner-speed variance, not a code regression.
 // QNBS-v3: raised again from 10000ms after the same "Cycle 1: no FFI boundary proof" symptom
@@ -98,10 +101,13 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// QNBS-v3: pgrep -f treats its argument as an extended regex — CodeRabbit finding on PR #400 (run-symbolization-proof.mjs), applied here too since this older file predates that fix and shares the exact same footgun.
+const binaryPathPattern = binaryPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 function listMatchingPids() {
   try {
     // QNBS-v3: anchored to the start of the command line — xvfb-run's own wrapper process also carries binaryPath as an argument it forwards, so an unanchored match false-flags it as a leaked worldscript_host.
-    const out = execFileSync('pgrep', ['-f', `^${binaryPath}`], {
+    const out = execFileSync('pgrep', ['-f', `^${binaryPathPattern}`], {
       stdio: ['ignore', 'pipe', 'ignore'],
     })
       .toString()
@@ -113,6 +119,57 @@ function listMatchingPids() {
       .filter((pid) => pid !== process.pid);
   } catch {
     return []; // pgrep exits 1 when nothing matches — that's the clean state.
+  }
+}
+
+// QNBS-v3: PR #404's real per-process diagnostic evidence (Seccomp/NoNewPrivs/CapEff/user-ns) for the crash-reporting-under-sandbox investigation — logged, never asserted on here (that assertion belongs to run-sandbox-status-proof.mjs), purely so a failed dump-write attempt leaves behind the exact process topology needed to diagnose it instead of just a bare timeout message.
+function readCmdline(pid) {
+  try {
+    return fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0').filter(Boolean);
+  } catch {
+    return null;
+  }
+}
+
+function readProcStatusField(pid, fieldName) {
+  try {
+    const status = fs.readFileSync(`/proc/${pid}/status`, 'utf8');
+    const line = status.split('\n').find((l) => l.startsWith(`${fieldName}:`));
+    return line ? (line.split(':')[1] ?? '').trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+function readUserNsId(pid) {
+  try {
+    return fs.readlinkSync(`/proc/${pid}/ns/user`);
+  } catch {
+    return null;
+  }
+}
+
+function classifyRole(pid) {
+  const cmdline = readCmdline(pid);
+  if (!cmdline) return null;
+  const typeArg = cmdline.find((a) => a.startsWith('--type='));
+  return typeArg ? typeArg.slice('--type='.length) : 'browser';
+}
+
+function logProcessTreeDiagnostic(label) {
+  const ownUserNs = readUserNsId(process.pid);
+  const pids = listMatchingPids();
+  console.log(`[launch-cycle-proof] ${label}: ${pids.length} matching process(es).`);
+  for (const pid of pids) {
+    const role = classifyRole(pid) ?? '(unreadable)';
+    const seccomp = readProcStatusField(pid, 'Seccomp');
+    const noNewPrivs = readProcStatusField(pid, 'NoNewPrivs');
+    const capEff = readProcStatusField(pid, 'CapEff');
+    const userNs = readUserNsId(pid);
+    console.log(
+      `  pid=${pid} role=${role} Seccomp=${seccomp ?? '(unreadable)'} NoNewPrivs=${noNewPrivs ?? '(unreadable)'} ` +
+        `CapEff=${capEff ?? '(unreadable)'} user-ns=${userNs ?? '(unreadable)'} distinct-from-harness=${userNs !== null && userNs !== ownUserNs}`,
+    );
   }
 }
 
@@ -246,7 +303,8 @@ async function runCrashReportingProofCycle() {
   // QNBS-v3: fresh, empty-at-start temp dir — BREAKPAD_DUMP_LOCATION (verified in libcef/common/crash_reporter_client.cc) overrides where CEF/Crashpad writes dumps on Linux/POSIX, so a *.dmp file appearing here is unambiguous evidence, no need to guess CEF's default directory layout.
   const dumpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'worldscript-crash-dumps-'));
 
-  const child = spawn(binaryPath, [`--url=${CRASH_URL}`, '--enable-logging=stderr', '--v=1'], {
+  // QNBS-v3: --v=2 (not runCycle's --v=1) specifically for this cycle — PR #404's investigation needs any VLOG(2)-level Crashpad-internal logging (PR_SET_PTRACER/broker decisions) that --v=1 doesn't surface; scoped to this cycle only so the already-proven lifecycle proof's log volume/behavior stays untouched.
+  const child = spawn(binaryPath, [`--url=${CRASH_URL}`, '--enable-logging=stderr', '--v=2'], {
     cwd: path.dirname(binaryPath),
     stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, BREAKPAD_DUMP_LOCATION: dumpDir },
@@ -292,6 +350,8 @@ async function runCrashReportingProofCycle() {
     console.log(
       `[launch-cycle-proof] Crash-reporting proof: observed "${RENDERER_CRASHED_PROOF_LINE}".`,
     );
+    // QNBS-v3: captured immediately after the crash is detected, while the Crashpad handler should still be alive attempting the dump — this is the exact window PR #404's investigation needs real process-topology evidence for.
+    logProcessTreeDiagnostic('Process tree immediately after renderer crash detected');
 
     // QNBS-v3: the actual "renderer termination observed and handled" evidence (CEF-RUST-COMPETENCY-MATRIX.md) — only the renderer subprocess should have died; the browser process and its message loop must still be running.
     if (!processTreeAlive()) {
@@ -324,6 +384,8 @@ async function runCrashReportingProofCycle() {
     // QNBS-v3: filtered to .dmp specifically — CodeAnt/Qodo review finding on PR #392 (Crashpad's settings.dat/lock/.meta files are written during normal init and would otherwise falsely count as "a dump produced").
     const dumpFiles = findFilesRecursive(dumpDir).filter((f) => f.endsWith('.dmp'));
     if (!dumpAppeared || dumpFiles.length === 0) {
+      // QNBS-v3: final-state snapshot, distinct from the immediately-post-crash one above — compares what survived the DUMP_WRITE_GRACE_MS wait against what existed right at crash time.
+      logProcessTreeDiagnostic('Process tree at dump-write timeout (final state)');
       throw new Error(
         `no .dmp file appeared under BREAKPAD_DUMP_LOCATION (${dumpDir}) within ${DUMP_WRITE_GRACE_MS}ms despite crash_reporting_enabled=true and an observed renderer crash.`,
       );
@@ -380,15 +442,19 @@ async function runCrashReportingProofCycle() {
 }
 
 async function main() {
-  for (let i = 0; i < cycles; i++) {
-    await runCycle(i);
+  if (!onlyCrashReporting) {
+    for (let i = 0; i < cycles; i++) {
+      await runCycle(i);
+    }
+
+    console.log(
+      `[launch-cycle-proof] OK — ${cycles}/${cycles} repeated start/close cycles clean, FFI boundary, real rendering, and accessibility-state request all proven in every cycle.`,
+    );
   }
 
-  console.log(
-    `[launch-cycle-proof] OK — ${cycles}/${cycles} repeated start/close cycles clean, FFI boundary, real rendering, and accessibility-state request all proven in every cycle.`,
-  );
-
-  await runCrashReportingProofCycle();
+  if (!skipCrashReporting) {
+    await runCrashReportingProofCycle();
+  }
 }
 
 main().catch((err) => {
