@@ -62,9 +62,17 @@ console.log(
   `  unshare --user --pid --fork (functional test): ${unshareWorks ? 'succeeded' : 'FAILED'}`,
 );
 
-const aaEnabled = fs.existsSync('/sys/module/apparmor/parameters/enabled')
-  ? fs.readFileSync('/sys/module/apparmor/parameters/enabled', 'utf8').trim()
-  : null;
+// QNBS-v3: existsSync is not a guarantee the following read succeeds (TOCTOU, permissions) —
+// an unguarded readFileSync throwing here would abort this entire diagnostic script before it
+// even reaches CEF SDK setup. CodeRabbit finding on PR #402.
+let aaEnabled = null;
+if (fs.existsSync('/sys/module/apparmor/parameters/enabled')) {
+  try {
+    aaEnabled = fs.readFileSync('/sys/module/apparmor/parameters/enabled', 'utf8').trim();
+  } catch {
+    aaEnabled = '(read failed)';
+  }
+}
 console.log(`  AppArmor module enabled: ${aaEnabled ?? '(not present)'}`);
 
 console.log(
