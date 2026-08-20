@@ -953,9 +953,10 @@ Required:
 ## G1 — Core Native-Ready
 
 ```text
-[ ] DesktopPlatform capability inventory complete (already true — packages/desktop-contracts)
-[ ] direct Tauri imports constrained (already true — guardrail:desktop-imports, zero-tolerance)
-[ ] project/storage/crypto/migration headless APIs exist
+[x] DesktopPlatform capability inventory complete (packages/desktop-contracts)
+[x] direct Tauri imports constrained (guardrail:desktop-imports, zero-tolerance)
+[~] project headless API exists — crates/worldscript-project (schema/validation/migration/plain I/O);
+    storage (fs/IDB parity) and crypto remain, see docs/native/CORE-MIGRATION-LEDGER.md
 [ ] R-15 architecture approved
 [ ] task supervision renderer-neutral
 [ ] diagnostics renderer-neutral
@@ -1101,27 +1102,38 @@ Shared product code cannot casually import Tauri, Qt or GPUI.
 
 ## Wave 2 — Rust Core extraction and headless harness
 
-**Status: PLANNED — not started.**
+**Status: IN PROGRESS — first slice shipped.** `crates/worldscript-project` (a new, independent
+Cargo workspace — see `docs/native/CORE-MIGRATION-LEDGER.md` for why it's not unified with
+`src-tauri`) implements project schema, validation, a minimal versioned-migration mechanism, and
+plain JSON load/save, proven by a headless `cargo test` suite and a `wsproj demo-lifecycle` CLI with
+zero GUI/Tauri dependencies. This satisfies the wave's exit criterion below. Task orchestration, full
+storage-backend parity, diagnostics, and AI request model extraction are explicitly deferred — see
+the ledger's priority order — so this wave stays "in progress," not "complete," until at least the
+next fast-follow slice (logger/diagnostics, per the ledger) lands.
 
 **Goal:** establish authoritative renderer-neutral execution.
 
-Actions:
+Actions (checked = this slice, per `docs/native/CORE-MIGRATION-LEDGER.md`):
 
-- project load/save;
-- validation;
-- schema;
-- migration;
-- storage;
-- task orchestration;
-- diagnostics;
-- AI request model;
-- headless CLI/test harness.
+- [x] project load/save (plain JSON, no compression/atomicity — that's Wave 3);
+- [x] validation;
+- [x] schema;
+- [x] migration (minimal versioned mechanism, one synthetic migration proving it);
+- [ ] storage (fs backend parity, IDB backend — deferred);
+- [ ] task orchestration (deferred fast-follow);
+- [ ] diagnostics (deferred fast-follow);
+- [ ] AI request model (out of scope for all of Wave 2 — see ledger);
+- [x] headless CLI/test harness.
 
 Exit:
 
 ```text
 Representative project lifecycle executes without any GUI runtime.
 ```
+
+Met by this slice: `cargo test` in `crates/` (9 tests: lifecycle + golden-master fixture parity) and
+`cargo run --bin wsproj -- demo-lifecycle` both run with zero GUI/Tauri dependency in the crate's
+`cargo tree`.
 
 ## Wave 3 — Storage correctness and R-15 design
 

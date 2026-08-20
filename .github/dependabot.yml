@@ -53,6 +53,16 @@ updates:
           - 'wry'
           - 'tao'
 
+  # Cargo / Rust (renderer-neutral Core, independent workspace — see docs/native/CORE-MIGRATION-LEDGER.md)
+  - package-ecosystem: cargo
+    directory: /crates
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+
   # GitHub Actions
   - package-ecosystem: github-actions
     directory: /

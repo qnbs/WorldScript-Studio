@@ -34,6 +34,9 @@ tests/bench/baseline/
 
 # Tauri build output
 src-tauri/target/
+
+# crates/ (Wave 2 Rust Core workspace) build output
+crates/target/
 .env
 
 test-results/
