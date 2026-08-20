@@ -704,7 +704,8 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 | `mutation`   | after `quality`      | Stryker (`pnpm run mutation`); `break: 75` enforced (high: 85, low: 70) |
 | `lighthouse` | after `build`        | LHCI against `dist` — accessibility `error:0.95`, CLS `error:0.1`, performance `warn:0.4`, SEO `warn:0.8` |
 | `storybook`  | after `quality`      | Static Storybook build artifact |
-| `deploy`     | `main` only          | GitHub Pages after **`build` + `e2e`** succeed |
+| `ci-success` | after required gates | Authoritative aggregate gate; fails when any required prerequisite fails |
+| `deploy`     | `main` only          | GitHub Pages after **`ci-success`** succeeds |
 | `scorecard`  | weekly + `main` push | OpenSSF Scorecard — SARIF uploaded to GitHub Code Scanning |
 
 **Current test metrics (2026-07-30, CI-reported):**
