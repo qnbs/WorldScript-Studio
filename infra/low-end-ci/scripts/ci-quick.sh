@@ -40,7 +40,12 @@ pnpm run build-storybook
 
 if [[ "${WITH_UNIT}" == true ]]; then
   if [[ "${WITH_COVERAGE}" == true ]]; then
-    pnpm exec vitest run "${UNIT_PATH}" --coverage
+    # QNBS-v3: targeted coverage is diagnostic only, so it must not inherit full-suite gates.
+    pnpm exec vitest run "${UNIT_PATH}" --coverage \
+      --coverage.thresholds.lines=0 \
+      --coverage.thresholds.functions=0 \
+      --coverage.thresholds.branches=0 \
+      --coverage.thresholds.statements=0
   else
     pnpm exec vitest run "${UNIT_PATH}"
   fi

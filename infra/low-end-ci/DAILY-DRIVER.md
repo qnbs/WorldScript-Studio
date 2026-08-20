@@ -123,8 +123,8 @@ Only **one** Node axis: `lts/*` (corresponds to Node 22 in act-22.04 image). Do 
 | Alias | Action |
 |-------|--------|
 | `sc-ci` | Quick tier |
-| `sc-ci-unit` | Quick + Vitest |
-| `sc-ci-cov` | Quick + coverage |
+| `sc-ci-unit` | Quick + targeted Vitest (`VITEST_PATH` required) |
+| `sc-ci-cov` | Quick + targeted coverage (`VITEST_PATH` required; no full-suite threshold) |
 | `sc-act` | act sequential (PR) |
 | `sc-act-full` | act + storybook + Chromium-only E2E |
 | `sc-eco-on` / `sc-eco-off` | Forgejo start/stop + prune |

@@ -245,7 +245,9 @@ pnpm install --frozen-lockfile
 pnpm run lint
 pnpm run i18n:check
 pnpm run typecheck
-pnpm exec vitest run <path> --coverage  # targeted local coverage only
+pnpm exec vitest run <path> --coverage \
+  --coverage.thresholds.lines=0 --coverage.thresholds.functions=0 \
+  --coverage.thresholds.branches=0 --coverage.thresholds.statements=0  # targeted only
 pnpm run build
 pnpm run bundle:budget
 pnpm run analyze   # optional locally; CI uploads HTML report

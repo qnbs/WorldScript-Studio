@@ -13,15 +13,13 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import coverageThresholds from './coverage-thresholds.json' with { type: 'json' };
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const SUMMARY_PATH = join(root, 'coverage', 'coverage-summary.json');
 
-// QNBS-v3: mirrors vitest.config.ts's `coverage.thresholds` — that file isn't a plain-data module
-// (it's a defineConfig() call), so this can't import it directly. Keep both in sync by hand; a
-// mismatch here only makes a suggestion's "vs. threshold" number wrong, it can't mask a real
-// coverage regression (vitest.config.ts's own thresholds still gate the actual build).
-const THRESHOLDS = { lines: 74, functions: 67, branches: 60, statements: 72 };
+// QNBS-v3: Vitest and this advisory report share one threshold source.
+const THRESHOLDS = coverageThresholds;
 const RATCHET_GAP = 2;
 
 // QNBS-v3: every exit path is a `return`, never `process.exit(1)` — this is advisory-only, so a missing/malformed/all-clean summary must all fall through to the same non-blocking outcome.
