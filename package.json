@@ -155,7 +155,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
-    "@biomejs/biome": "^2.5.7",
+    "@biomejs/biome": "^2.5.8",
     "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.62.1",
     "@storybook/addon-a11y": "^10.5.7",
