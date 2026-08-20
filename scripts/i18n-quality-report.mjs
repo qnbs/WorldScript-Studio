@@ -111,6 +111,16 @@ if (maxLengthOutliers !== null) {
     if (r.lenOutliers > maxLengthOutliers) outlierFailures++;
   }
 }
+if (coverageFailures > 0) {
+  console.error(
+    `\n✖ ${coverageFailures} locale(s) are below the ${minCoverage}% translation coverage floor.`,
+  );
+}
+if (outlierFailures > 0) {
+  console.error(
+    `✖ ${outlierFailures} locale(s) exceed the ${maxLengthOutliers} length-outlier floor.`,
+  );
+}
 console.log(
   `\n${rows.length} non-English locales · reference = ${REF_LANG} · ${modules.length} modules`,
 );

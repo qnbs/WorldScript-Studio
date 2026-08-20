@@ -26,8 +26,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`storycraft://` deep links:** the legacy scheme remains accepted for this release and displays
   a migration notice; it is scheduled for removal in the next release.
 
-### Added
-
 - **Renderer-neutral Rust Core seed:** `crates/worldscript-project` now provides headless project
   schema, validation, migration, plain JSON I/O, and a test/CLI harness, with one narrow Tauri
   validation command wired through the cross-workspace path dependency.
