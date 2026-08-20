@@ -15,7 +15,7 @@ README documented Grok and Claude as working cloud AI providers; neither was rea
 [ADR-0016](../adr/0016-native-grok-and-claude-providers.md) and
 [ADR-0017](../adr/0017-pwa-browser-ollama-opt-in.md); see `[1.25.0]` in
 [CHANGELOG.md](../../CHANGELOG.md) for the user-facing summary. Execution plan:
-[`GROK-PROVIDER-INTEGRATION-PLAN.md`](../../GROK-PROVIDER-INTEGRATION-PLAN.md).
+[`GROK-PROVIDER-INTEGRATION-PLAN.md`](GROK-PROVIDER-INTEGRATION-PLAN.md).
 
 - ✅ **Phase 1 — Grok**: wired into the primary provider dropdown + `providerFactory.ts`; the
   backend (`streamGrok()`) already worked, this was purely a UI/wiring gap.

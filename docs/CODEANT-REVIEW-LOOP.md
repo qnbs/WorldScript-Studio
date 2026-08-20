@@ -3,7 +3,7 @@
 > **Canonical, agent-agnostic workflow.** This is the single source of truth for how *every*
 > agent (Claude Code, Kimi, Cursor, Copilot, Gemini, human) handles inline PR review comments on
 > this repository — from CodeAnt AI **and any other reviewer or bot**. All instruction files
-> (`CLAUDE.md`, `AGENTS.md`, `KIMI-INSTRUCT.md`, `.cursorrules`, `.github/copilot-instructions.md`)
+> (`CLAUDE.md`, `AGENTS.md`, `docs/history/KIMI-INSTRUCT.md`, `.cursorrules`, `.github/copilot-instructions.md`)
 > point here. Keep this file current when the workflow or tooling changes.
 >
 > **See also:** [`DEEPSOURCE-REVIEW-LOOP.md`](DEEPSOURCE-REVIEW-LOOP.md) — the complementary,

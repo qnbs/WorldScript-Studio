@@ -200,7 +200,8 @@ Coverage, E2E, Lighthouse, Stryker, and Storybook test-runner are **CI gate jobs
 
 ### Local vs CI (low-end friendly)
 
-- **Before every push (recommended):** `pnpm run lint`, `pnpm run typecheck`, `pnpm run i18n:check`. Optional: `pnpm exec vitest run` **without** `--coverage` for a quick smoke.
+- **Before every push (recommended):** `pnpm run lint`, `pnpm run typecheck`, `pnpm run i18n:check`. Optional: targeted `pnpm exec vitest run <path>` for a quick smoke.
+- **Vitest hard rule:** Never invoke `pnpm test`, `npm run test`, or a bare Vitest wrapper; watch mode hangs constrained hardware. Use an explicit targeted `pnpm exec vitest run <path>` command.
 - **Full gate:** GitHub Actions runs Vitest **with** coverage thresholds, Playwright (desktop + mobile emulation in CI), Lighthouse, etc. A **green CI run** is the merge bar — you are **not** required to pass full E2E or LHCI on a weak laptop.
 - **Optional local E2E:** `CI=true pnpm run test:e2e` when debugging; optional mobile project: `RUN_MOBILE_E2E=1` (see [`docs/CI.md`](docs/CI.md)).
 - **CI artifacts:** When Playwright, coverage, or Lighthouse fails remotely, open **GitHub Actions → the workflow run → Artifacts** and inspect the uploaded reports locally — faster than reproducing the full heavy stack on low-end hardware.
@@ -208,9 +209,8 @@ Coverage, E2E, Lighthouse, Stryker, and Storybook test-runner are **CI gate jobs
 ### Unit Tests (Vitest)
 
 ```bash
-pnpm run test         # Run in watch mode
-pnpm run test:run     # Run once (CI mode)
-pnpm run test:coverage  # With coverage report (same as CI quality job — heavier)
+pnpm exec vitest run <path>             # Targeted single-file run
+pnpm exec vitest run <path> --coverage  # Targeted coverage debugging
 ```
 
 ### Bundle size (matches CI `build` job)
@@ -228,7 +228,7 @@ On **2–4 GB RAM** (e.g. Ubuntu 20.04), use the bundled **act + Eco-Forgejo** s
 
 - **Install:** [`infra/low-end-ci/INSTALL.md`](infra/low-end-ci/INSTALL.md)
 - **Daily workflow:** [`infra/low-end-ci/DAILY-DRIVER.md`](infra/low-end-ci/DAILY-DRIVER.md)
-- **Quick gate (no Docker):** `pnpm run ci:quick` or `pnpm run ci:quick:unit`
+- **Quick gate (no Docker):** `pnpm run ci:quick`; for one targeted unit file use `VITEST_PATH=tests/unit/example.test.ts pnpm run ci:quick:unit`
 - **Full `ci.yml` locally:** `pnpm run ci:act` (sequential act jobs)
 
 Manual [Act](https://github.com/nektos/act) example:
@@ -385,7 +385,7 @@ Open a **focused PR per theme** (storage vs. i18n vs. collaboration) to keep rev
 
 1. Fork the repository and create a feature branch
 2. Write or update tests for your changes
-3. Run the full test suite: `pnpm run test:run`
+3. Let CI run the full test suite; locally use only targeted `pnpm exec vitest run <path>`.
 4. Ensure Biome passes: `pnpm run lint`
 5. Ensure i18n parity: `pnpm run i18n:check`
 6. Ensure types compile: `pnpm run typecheck`

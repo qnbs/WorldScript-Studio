@@ -14,12 +14,25 @@ For historical optimization notes (targets may predate the live workflow), see [
 
 | Tier | Where | Commands / scope |
 |------|--------|------------------|
-| **Quick (local)** | Developer laptop | `pnpm run lint`, `pnpm run typecheck`, `pnpm run i18n:check`; optional `pnpm exec vitest run` **without** `--coverage` for a fast smoke |
+| **Quick (local)** | Developer laptop | `pnpm run lint`, `pnpm run typecheck`, `pnpm run i18n:check`; optional targeted `pnpm exec vitest run <path>` for a fast smoke |
 | **Heavy (CI)** | `ci.yml` | Vitest **with** `--coverage` and thresholds, Playwright E2E (`CI=true`) including **mobile emulation** (Pixel 5 / Chromium), Lighthouse CI, Storybook static build, bundle budget + analyze. Mutation testing (Stryker) is **not** part of this pipeline — see [Mutation testing status](#mutation-testing-status). |
 
 **Merge readiness:** A green workflow run on the PR/branch matters more than reproducing every E2E or LHCI step locally. Use CI **artifacts** (Playwright HTML report, coverage, Lighthouse output) to debug failures.
 
-**Optional local deep dive:** `CI=true pnpm run test:e2e`, `pnpm exec vitest run --coverage`, `pnpm exec lhci autorun` — only when the machine has enough CPU/RAM and time. Mobile Playwright project locally: set `RUN_MOBILE_E2E=1` (see [`playwright.config.ts`](../playwright.config.ts)).
+**Local deep dive:** E2E, full-suite coverage, Lighthouse, and Storybook are CI-only on constrained hardware. For a focused local investigation, use `pnpm exec vitest run <path>` or `pnpm exec vitest run <path> --coverage`; never invoke `pnpm test`, `npm run test`, or a bare Vitest wrapper.
+
+### Gate authority
+
+`✅ CI Success` is the required branch-protection status and aggregates `security`, `quality`,
+`changes`, `rust-tauri`, `core-rust`, `build`, `e2e`, and `vrt`. The `deploy` job depends only on
+that aggregate and remains main-push-only.
+
+`storybook` and `lighthouse` are currently visible, separately executed advisory jobs rather than
+members of the aggregate. Their failures must still be investigated before merge under the
+repository's full-suite policy; this explicit distinction prevents a red visible job from having
+an undefined authority model. Storybook's test-runner and Lighthouse's desktop performance step
+remain non-blocking under the exit criteria documented below. `e2e-deep` and the coverage ratchet
+are also intentionally advisory.
 
 **Post-merge doc update workflow:**
 1. Push the commit → CI starts automatically.
@@ -225,20 +238,21 @@ longer runs a root `prepare` command. `pnpm-workspace.yaml` sets `verifyDepsBefo
 
 ## Local checks (without Act)
 
-On **low-resource** machines, stop at the **Quick** tier (see [Cloud CI-first vs local development](#cloud-ci-first-vs-local-development)): **`pnpm run lint`**, **`pnpm run typecheck`**, **`pnpm run i18n:check`**, and optionally **`pnpm exec vitest run`** without `--coverage`. Treat **`CI=true pnpm run test:e2e`** (desktop + mobile projects in CI), **Lighthouse**, and **coverage threshold enforcement** as **CI-owned** unless you have a powerful workstation.
+On **low-resource** machines, stop at the **Quick** tier (see [Cloud CI-first vs local development](#cloud-ci-first-vs-local-development)): **`pnpm run lint`**, **`pnpm run typecheck`**, **`pnpm run i18n:check`**, and optionally targeted **`pnpm exec vitest run <path>`**. Treat **`CI=true pnpm run test:e2e`** (desktop + mobile projects in CI), **Lighthouse**, and **coverage threshold enforcement** as **CI-owned**.
 
 ```bash
 pnpm install --frozen-lockfile
 pnpm run lint
 pnpm run i18n:check
 pnpm run typecheck
-pnpm exec vitest run --coverage
+pnpm exec vitest run <path> --coverage  # targeted local coverage only
 pnpm run build
 pnpm run bundle:budget
 pnpm run analyze   # optional locally; CI uploads HTML report
-CI=true pnpm run test:e2e
-pnpm exec lhci autorun   # after build + serve/preview as configured in .lighthouserc.cjs
 ```
+
+Playwright E2E, Lighthouse, Storybook, and full-suite coverage are intentionally omitted from
+the local block above; GitHub Actions owns those heavy checks on this hardware.
 
 ### Node 24+ Compatibility Troubleshooting
 
@@ -252,10 +266,10 @@ pnpm exec lhci autorun   # after build + serve/preview as configured in .lightho
 
 ```bash
 # Simuliere CI-Bedingungen exakt
-NODE_OPTIONS="--no-experimental-webstorage" pnpm exec vitest run --coverage --reporter=json --outputFile=test-results.json
+NODE_OPTIONS="--no-experimental-webstorage" pnpm exec vitest run <path> --coverage
 
 # Ohne Coverage für schnelles Feedback
-pnpm exec vitest run
+pnpm exec vitest run <path>
 ```
 
 **Coverage Ratchet Mechanism:**
@@ -270,7 +284,7 @@ For **Ubuntu 20.04 / 2–4 GB RAM** laptops: run the **Quick tier** natively (no
 
 | Tier | Command | When |
 |------|---------|------|
-| **Quick (daily)** | `pnpm run ci:quick` / `ci:quick:unit` | Every commit |
+| **Quick (daily)** | `pnpm run ci:quick`; optional targeted `VITEST_PATH=tests/unit/example.test.ts pnpm run ci:quick:unit` | Every commit |
 | **Full workflow (on-demand)** | `pnpm run ci:act` | Before release / weekly |
 | **Eco Git** | `infra/low-end-ci/scripts/ci-eco-start.sh` | Only when pushing to local Forgejo |
 

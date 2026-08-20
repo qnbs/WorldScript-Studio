@@ -17,7 +17,7 @@ Practical checklist for Ubuntu 20.04 Mate (2–4 GB RAM). **Primarily local**; G
 ```bash
 cd ~/githubcursor/WorldScript-Studio
 pnpm run ci:quick              # lint + i18n + typecheck
-pnpm run ci:quick:unit         # + Vitest without coverage
+VITEST_PATH=tests/unit/example.test.ts pnpm run ci:quick:unit  # + one targeted Vitest file
 ```
 
 Individual tests:
@@ -33,7 +33,7 @@ pnpm exec vitest run tests/unit/duckdbClient.test.ts
 ## Before commit / push (Forgejo)
 
 ```bash
-pnpm run ci:quick:unit         # recommended
+VITEST_PATH=tests/unit/example.test.ts pnpm run ci:quick:unit  # recommended targeted check
 git add … && git commit -m "…"
 git push forgejo main          # primary remote
 ```

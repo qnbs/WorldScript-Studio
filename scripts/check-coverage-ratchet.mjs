@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Non-blocking: compares coverage/coverage-summary.json (produced by `pnpm run test:coverage`,
+ * Non-blocking: compares coverage/coverage-summary.json (produced by the CI quality job,
  * the json-summary reporter in vitest.config.ts) against the configured coverage thresholds, and
  * prints a suggestion when a metric sits comfortably above its threshold. The ratchet-up decision
  * stays with the maintainer (vitest.config.ts's own comment documents a "3 consecutive green runs,
@@ -28,7 +28,7 @@ const RATCHET_GAP = 2;
 function main() {
   if (!existsSync(SUMMARY_PATH)) {
     process.stdout.write(
-      '[coverage-ratchet] No coverage/coverage-summary.json found — run `pnpm run test:coverage` first. Skipping (non-blocking).\n',
+      '[coverage-ratchet] No coverage/coverage-summary.json found — CI has not produced the summary yet. Skipping (non-blocking).\n',
     );
     return;
   }

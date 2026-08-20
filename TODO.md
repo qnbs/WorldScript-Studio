@@ -8,7 +8,26 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ---
 
-## Release — v1.25.0 published (2026-08-01)
+## Current Sprint — Native desktop consolidation and Wave 2 G1 (2026-08-20)
+
+> **Status: 🔄 in progress.** The authoritative native sequence is maintained in
+> [`docs/native/ROADMAP-QT-GPUI-DESKTOP.md`](docs/native/ROADMAP-QT-GPUI-DESKTOP.md), with the
+> next Rust-Core capability choice recorded in [`docs/native/CORE-MIGRATION-LEDGER.md`](docs/native/CORE-MIGRATION-LEDGER.md).
+
+- ✅ P0 CI/deployment authority stabilization merged in PR #427 at `0309a255`.
+- ✅ Cross-workspace Tauri path-dependency coverage and aggregate deployment gating are now
+  regression-tested in the quality job.
+- 🔄 G1 remains partial: task supervision, diagnostics, contract versioning, and future R-15
+  architecture remain open; no Qt or GPUI implementation is admitted yet.
+- ⏭️ Next capability slice, after this consolidation pass: choose the smallest evidence-producing
+  logger/diagnostics or task-orchestration increment from the migration ledger.
+
+## Archived sprint history
+
+The completed release and infrastructure sections below are retained for provenance. They are not
+the current sprint plan; long-term native sequencing belongs in the linked roadmap and ledger.
+
+## Archived — Release v1.25.0 published (2026-08-01)
 
 > **Status: ✅ Done.** Tagged, released, and live — see the GitHub Release link below.
 

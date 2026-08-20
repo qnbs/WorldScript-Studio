@@ -7,9 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Renderer-neutral Rust Core seed:** `crates/worldscript-project` now provides headless project
+  schema, validation, migration, plain JSON I/O, and a test/CLI harness, with one narrow Tauri
+  validation command wired through the cross-workspace path dependency.
+
+### Changed
+
+- **Native desktop strategy:** ADR-0021 adopts Qt 6/Qt Quick as the future primary native product,
+  keeps React/PWA first-class, makes Tauri transitional, admits GPUI later behind a gate, and
+  retires CEF from the target architecture.
+- **DesktopPlatform boundary:** direct Tauri imports are mechanically constrained by the zero-
+  tolerance guardrail while the renderer-neutral contract becomes the native transition surface.
+
 ### Fixed
 
 - **CI authority closure:** Core path changes now select the Tauri consumer gate, workflow-policy tests protect local path-dependency coverage and aggregate deployment gating, and Pages deployment waits for `ci-success`.
+- **Accessibility contrast:** command-palette heading contrast was corrected to meet the intended
+  WCAG threshold.
+
+### Security
+
+- **CI supply-chain policy:** CodeQL action references and token permissions were hardened and
+  Dependabot grouping was corrected so related action paths move together.
 
 ## [1.27.1] — 2026-08-14
 
@@ -329,7 +350,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   DuckDB excerpt-encryption wiring above, and the Claude serverless proxy section gains an explicit
   monitoring recommendation (platform-native Vercel/Cloudflare request analytics — no in-app
   logging, which would violate the proxy's zero-console-call stateless guarantee).
-- **`GROK-PROVIDER-INTEGRATION-PLAN.md`** status header updated from "Plan only — do not implement
+- **`docs/history/GROK-PROVIDER-INTEGRATION-PLAN.md`** status header updated from "Plan only — do not implement
   yet" to reflect that all phases shipped; retained as the historical design record.
 - **`TODO.md`** reworded the open tag/publish bullet so it no longer embeds the literal `v1.25.0`
   version string on the `- ⬜` bullet line itself, removing the risk that
