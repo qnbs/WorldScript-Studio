@@ -26,6 +26,8 @@ The harness must remain disposable and isolated:
 - no generic command executor, broad FFI, or renderer-owned product truth;
 - a provisional bridge candidate may be used for the probe, while G2 retains the final bridge
   scorecard confirmation informed by the Wave 4.5 evidence;
+- all signing, updater, and security fixtures use ephemeral runtime-injected throwaway credentials;
+  no production secret or persistent test key may enter source, artifacts, logs, or secret stores;
 - no production packaging promise, Tauri retirement, or G2/G3/G4 checklist shortcut follows from
   a passing probe.
 
