@@ -28,14 +28,23 @@ it was drafted against:
    guardrail (wired into `.github/workflows/ci.yml`, `pnpm run guardrail:desktop-imports`) all shipped
    via PR #384 and PR #385. See the Wave 1 entry below for the corrected status marker, and
    `docs/architecture/native-readiness.md` for the live scorecard.
-2. **The R-15 desktop at-rest-encryption deliverable (§9) has concrete, already-tracked open gaps to
-   close**, not an abstract future risk: GitHub issues **#357** (atomic writes need fsync of temp
-   file + parent directory), **#359** (fs-data key-rotation migration not crash-resumable), **#360**
-   (fs reads/writes don't participate in the encryption-migration admission lock), and **#361** (fs
-   ciphertext has no AAD/identity binding, enabling cross-file substitution) are all open, Tauri-
-   scoped issues today. R-15 implementation work (Wave 3–4) must close them, not merely avoid
-   regressing them. **Issue #332** (a live, user-reported Tauri `.deb` sluggishness report) remains
-   open as the historical/ongoing performance baseline referenced throughout this document.
+2. **The R-15 desktop at-rest-encryption deliverable (§9) has a concrete, already-tracked reference
+   design and gap list to build from**, not an abstract future risk — but correcting an overstatement
+   from this document's first draft: desktop fs-backed project data (`project.json`, snapshots,
+   Codex, images, RAG vectors) has **no encryption at all today** on `main`
+   (`services/fs/fsCore.ts#encryptText`/`decryptText` exist but are dead code — zero call sites
+   outside their own unit tests); desktop API-key fs storage is disabled outright
+   (`FsSettingsStore#saveApiKey` throws `"...use storageService instead"`). GitHub issues **#357**
+   (atomic writes need fsync of temp file + parent directory), **#359** (fs-data key-rotation
+   migration not crash-resumable), **#360** (fs reads/writes don't participate in the
+   encryption-migration admission lock), and **#361** (fs ciphertext has no AAD/identity binding,
+   enabling cross-file substitution) describe gaps in a **closed, unmerged reference design**
+   (`fix/desktop-project-data-encryption`, PR #356, closed 2026-08-18 as superseded, explicitly
+   meant to be rebuilt from scratch on the Rust Core) — not a live production path. All four issues
+   remain open and are real, valid inputs to the Wave 3–4 crypto design; only the "this exists today
+   with bugs" framing was wrong. **Issue #332** (a live, user-reported Tauri `.deb` sluggishness
+   report) remains open as the historical/ongoing performance baseline referenced throughout this
+   document.
 
 Everything else below is the roadmap as adopted, unmodified.
 
@@ -647,8 +656,11 @@ Required properties:
 - secure deletion claims avoided unless actually supportable;
 - tests for interruption and partial writes.
 
-**Concrete open gaps this must close (see Document status note above):** issues #357, #359, #360,
-#361 — all open on the current Tauri fs-backed encryption path as of Wave 0.
+**Concrete open gaps this must close (see Document status note above):** issues #357, #359, #360, and #361
+are all open, describing gaps in the closed/unmerged reference design (PR #356), not a live path.
+Desktop fs-backed project data has no encryption at all on `main` today; this deliverable is a
+from-scratch build informed by that reference design and by the mature, "Accepted and implemented"
+IDB-side scheme (ADR-0018), not a bug-fix pass on existing production encryption.
 
 ## 8.2 Historical #359/#360/#361 requirements
 
@@ -663,10 +675,11 @@ YES / NO
 Evidence:
 ```
 
-**Current status (2026-08-20):** all three issues are open on GitHub, each documenting a real,
-unresolved correctness gap in the Tauri fs-backed encryption path (crash-resumability, admission-lock
-participation, AAD/identity binding respectively). None are fixed by Wave 0 — they remain concrete
-inputs to the future Core storage/crypto design.
+**Current status (2026-08-20):** all three issues are open on GitHub, each documenting a real gap
+(crash-resumability, admission-lock participation, AAD/identity binding respectively) in the closed,
+unmerged reference design (PR #356) — not in a live production path, since desktop fs-backed
+encryption does not exist on `main` today. None are fixed by Wave 0 — they remain concrete inputs to
+the future Core storage/crypto design.
 
 ## 8.3 #332
 
@@ -2799,8 +2812,7 @@ R-15 is promoted to an early native-program gate.
 
 Qt Stable is forbidden without the approved desktop at-rest encryption posture.
 
-GPUI inherits the same implementation from Core. **Concrete tracked instances: #357, #359, #360,
-#361 (see §8.1–8.2).**
+GPUI inherits the same implementation from Core. **Concrete tracked instances: #357, #359, #360, and #361 — see §8.1–8.2.**
 
 ---
 
@@ -2814,7 +2826,8 @@ Before the first Qt project-write path:
 - link those tests from native migration documentation.
 
 Historical closure does not remove their lessons. **Current status (2026-08-20): all three open on
-GitHub, unresolved on the Tauri fs-backed encryption path. See §8.2.**
+GitHub, describing gaps in the closed/unmerged reference design (PR #356) rather than a live path —
+desktop fs-backed encryption does not exist on `main` today. See §8.2.**
 
 ---
 
