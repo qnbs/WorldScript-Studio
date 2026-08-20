@@ -960,6 +960,7 @@ Required:
 [x] direct Tauri imports constrained (guardrail:desktop-imports, zero-tolerance)
 [~] project headless API exists — crates/worldscript-project (schema/validation/migration/plain I/O);
     storage (fs/IDB parity) and crypto remain, see docs/native/CORE-MIGRATION-LEDGER.md
+[ ] Array↔EntityState compatibility adapter scoped and proven at the Core boundary (ledger row 9)
 [ ] R-15 architecture approved
 [ ] task supervision renderer-neutral
 [ ] diagnostics renderer-neutral
@@ -1113,7 +1114,10 @@ plain JSON load/save, proven by a headless `cargo test` suite and a `wsproj demo
 zero GUI/Tauri dependencies. This satisfies the wave's exit criterion below. Task orchestration, full
 storage-backend parity, diagnostics, and AI request model extraction are explicitly deferred — see
 the ledger's priority order — so this wave stays "in progress," not "complete," until at least the
-next fast-follow slice (logger/diagnostics, per the ledger) lands.
+next fast-follow slice (logger/diagnostics, per the ledger) lands. Before G1 is evaluated, the
+separate row-9 compatibility position must also define and prove the Array↔EntityState boundary:
+the current Core `Vec` model is intentionally renderer-neutral, while production Redux state uses
+`EntityState` for characters and worlds.
 
 **Goal:** establish authoritative renderer-neutral execution.
 
@@ -1124,6 +1128,8 @@ Actions (checked = this slice, per `docs/native/CORE-MIGRATION-LEDGER.md`):
 - [x] schema;
 - [x] migration (minimal versioned mechanism, one synthetic migration proving it);
 - [ ] storage (fs backend parity, IDB backend — deferred);
+- [ ] Array↔EntityState compatibility adapter contract and fixtures (reject duplicate/missing/orphan
+      IDs for characters and worlds; required before G1 evaluation);
 - [ ] task orchestration (deferred fast-follow);
 - [ ] diagnostics (deferred fast-follow);
 - [ ] AI request model (out of scope for all of Wave 2 — see ledger);
