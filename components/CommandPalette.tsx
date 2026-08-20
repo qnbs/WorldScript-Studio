@@ -218,7 +218,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                     {row.kind === 'heading' ? (
                       <div
                         role="presentation"
-                        className="px-3 py-2 text-xs font-semibold text-[var(--sc-text-muted)] uppercase tracking-wider bg-[var(--sc-surface-raised)]/95 backdrop-blur-sm"
+                        className="px-3 py-2 text-xs font-semibold text-[var(--sc-text-muted)] uppercase tracking-wider bg-[var(--sc-surface-raised)]"
                       >
                         {row.label}
                       </div>
