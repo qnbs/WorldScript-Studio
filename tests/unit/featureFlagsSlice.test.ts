@@ -25,8 +25,7 @@ import featureFlagsReducer, {
 // Shared initial state — must include ALL 23 flags (strict TypeScript)
 // ---------------------------------------------------------------------------
 
-// QNBS-v3: full feature set on by default EXCEPT the six user-opt-in flags
-// (RTL, voice, voice-WASM, ProForge, global copilot, local-first sync). 17 on / 6 off.
+// QNBS-v3: eight opt-in flags remain off by default; the other 15 flags are on.
 const initialState: FeatureFlagsState = {
   enableStoryBibleAdvanced: true,
   enableBinderResearch: true,
@@ -48,7 +47,7 @@ const initialState: FeatureFlagsState = {
   enableAdaptiveAiEngine: true,
   enableComputeShaders: true,
   enableWorkerBusV2: true,
-  enableRustCompute: true,
+  enableRustCompute: false,
   enableGlobalCopilot: false,
   enableLocalFirstSync: false,
   enableBrowserOllama: false,
@@ -91,19 +90,20 @@ describe('featureFlagsSlice', () => {
     expect(state.enableStoryBibleAdvanced).toBe(false);
   });
 
-  it('defaults to 16 flags on and 7 user-opt-in flags off', () => {
+  it('defaults to 15 flags on and 8 user-opt-in flags off', () => {
     const state = featureFlagsReducer(undefined, { type: '@@INIT' });
     const values = Object.values(state);
     // QNBS-v3: WebNN flag (a ghost/no-op toggle) was removed; enableBrowserOllama (ADR-0017) added
-    // → 23 flags (16 on / 7 opt-in off).
+    // → 23 flags (15 on / 8 opt-in off).
     expect(values).toHaveLength(23);
-    expect(values.filter((v) => v === true)).toHaveLength(16);
-    expect(values.filter((v) => v === false)).toHaveLength(7);
-    // The seven opt-in flags are exactly these:
+    expect(values.filter((v) => v === true)).toHaveLength(15);
+    expect(values.filter((v) => v === false)).toHaveLength(8);
+    // The eight opt-in flags are exactly these:
     expect(state.enableRtlLayout).toBe(false);
     expect(state.enableVoiceSupport).toBe(false);
     expect(state.enableVoiceWasm).toBe(false);
     expect(state.enableProForge).toBe(false);
+    expect(state.enableRustCompute).toBe(false);
     expect(state.enableGlobalCopilot).toBe(false);
     expect(state.enableLocalFirstSync).toBe(false);
     expect(state.enableBrowserOllama).toBe(false);

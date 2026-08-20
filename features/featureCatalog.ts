@@ -514,8 +514,8 @@ const RAW_FEATURE_CATALOG: CatalogEntryInput[] = [
     flagKey: 'enableRustCompute',
     name: 'Rust Compute (Desktop)',
     description:
-      'Offload heavy tasks (text analysis, embeddings) to the Tauri Rust TaskSupervisor. No-ops on web — desktop only.',
-    maturity: 'experimental',
+      'Qualification-only Rust TaskSupervisor proof for bounded text analysis and diff; no production caller yet.',
+    maturity: 'stub',
     tier: 'performance',
     riskLevel: 'medium',
     requiresDesktop: true,
@@ -526,11 +526,11 @@ const RAW_FEATURE_CATALOG: CatalogEntryInput[] = [
       },
       {
         file: 'services/rustTaskSupervisor.ts:38',
-        description: 'Bails out unless the Tauri runtime exposes the supervisor',
+        description: 'Proof-only wrappers bail out unless the Tauri runtime exposes the supervisor',
       },
       {
         file: 'app/listenerMiddleware.ts:528',
-        description: 'Invalidates the Rust-availability cache when the flag toggles',
+        description: 'Invalidates the Rust-availability cache when the qualification flag toggles',
       },
     ],
     implementedIn: [
@@ -539,7 +539,13 @@ const RAW_FEATURE_CATALOG: CatalogEntryInput[] = [
       'services/tauriTaskBridge.ts',
       'src-tauri/',
     ],
-    drifts: [],
+    drifts: [
+      {
+        severity: 'info',
+        description: 'No production caller currently opts into the proof-only wrappers',
+        fix: 'Wire and validate a real caller before enabling this flag by default',
+      },
+    ],
   },
 
   // ── Voice ─────────────────────────────────────────────────────────────────

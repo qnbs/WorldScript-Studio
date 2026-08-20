@@ -8,6 +8,29 @@ import { createLogger } from './logger';
 
 const log = createLogger('tauriTaskBridge');
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return Promise.reject(new Error(`[tauriTaskBridge] Invalid timeout: ${timeoutMs}ms`));
+  }
+
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`[tauriTaskBridge] Rust TaskSupervisor timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 /**
  * Submit a task to the Rust TaskSupervisor via Tauri invoke.
  * Throws if not in a Tauri context or if the Rust command is unavailable.
@@ -18,7 +41,8 @@ export async function invokeRustTask(request: RustTaskRequest): Promise<RustTask
   }
   try {
     // QNBS-v3: submits through desktopPlatform.tasks instead of the direct @tauri-apps/api/core invoke() it replaced
-    const result = await desktopPlatform.tasks.submitTask(request);
+    // QNBS-v3: bound the bridge wait even though Tauri invoke cannot cancel an in-flight native command yet.
+    const result = await withTimeout(desktopPlatform.tasks.submitTask(request), request.timeoutMs);
     log.info('Rust TaskSupervisor completed task', {
       taskId: request.taskId,
       taskType: request.taskType,

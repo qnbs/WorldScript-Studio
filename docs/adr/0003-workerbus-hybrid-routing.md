@@ -44,8 +44,9 @@ This ADR records the v2 architecture and the routing/degradation contract. Phase
    (`enqueue/cancel/dequeue/getTelemetry`) onto the v2 bus so existing callers keep working unchanged
    during migration (Strangler pattern).
 5. **Rust TaskSupervisor** (`src-tauri/src/commands/task_supervisor.rs`) — `…_ping` (availability) and
-   `…_submit` (taskType dispatcher) Tauri commands. First native task: `text.analyze`. Contract mirrors
-   `@domain/worker-bus` `RustTaskRequest` → `RustTaskResultEvent` (serde camelCase).
+   `…_submit` (taskType dispatcher) Tauri commands. The bounded native tasks are `text.analyze` and
+   `text.diff`; both preserve the `@domain/worker-bus` `RustTaskRequest` → `RustTaskResultEvent`
+   contract (serde camelCase), while typed wrappers retain the TypeScript fallback path.
 
 ### Honest-failure contract
 
