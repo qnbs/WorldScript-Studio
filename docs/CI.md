@@ -248,13 +248,19 @@ pnpm run typecheck
 pnpm exec vitest run <path> --coverage \
   --coverage.thresholds.lines=0 --coverage.thresholds.functions=0 \
   --coverage.thresholds.branches=0 --coverage.thresholds.statements=0  # targeted only
-pnpm run build
-pnpm run bundle:budget
-pnpm run analyze   # optional locally; CI uploads HTML report
 ```
 
 Playwright E2E, Lighthouse, Storybook, and full-suite coverage are intentionally omitted from
 the local block above; GitHub Actions owns those heavy checks on this hardware.
+
+On standard hardware, or when debugging a build-affecting change, run the build-specific checks
+separately; CI remains authoritative for the complete build and artifact checks:
+
+```bash
+pnpm run build
+pnpm run bundle:budget
+pnpm run analyze
+```
 
 ### Node 24+ Compatibility Troubleshooting
 

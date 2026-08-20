@@ -210,7 +210,9 @@ Coverage, E2E, Lighthouse, Stryker, and Storybook test-runner are **CI gate jobs
 
 ```bash
 pnpm exec vitest run <path>             # Targeted single-file run
-pnpm exec vitest run <path> --coverage  # Targeted coverage debugging
+pnpm exec vitest run <path> --coverage \
+  --coverage.thresholds.lines=0 --coverage.thresholds.functions=0 \
+  --coverage.thresholds.branches=0 --coverage.thresholds.statements=0  # Targeted coverage debugging
 ```
 
 ### Bundle size (matches CI `build` job)
@@ -389,7 +391,7 @@ Open a **focused PR per theme** (storage vs. i18n vs. collaboration) to keep rev
 4. Ensure Biome passes: `pnpm run lint`
 5. Ensure i18n parity: `pnpm run i18n:check`
 6. Ensure types compile: `pnpm run typecheck`
-7. Ensure the build succeeds: `pnpm run build`
+7. Ensure the build succeeds when build-affecting files changed; GitHub Actions runs the canonical build gate for every PR.
 8. Submit a PR against `main` with a clear description
 9. Request review from at least one maintainer
 

@@ -201,9 +201,10 @@ pnpm run lint         # Biome lint check
 pnpm run lint:fix     # Biome auto-fix (lint + format)
 pnpm run format       # Biome format
 pnpm run typecheck    # TypeScript type checking (tsc --noEmit)
-pnpm run test         # Vitest watch mode
 pnpm exec vitest run <path>             # Targeted Vitest single run
-pnpm exec vitest run <path> --coverage  # Targeted coverage debugging
+pnpm exec vitest run <path> --coverage \
+  --coverage.thresholds.lines=0 --coverage.thresholds.functions=0 \
+  --coverage.thresholds.branches=0 --coverage.thresholds.statements=0  # Targeted coverage debugging
 pnpm run test:e2e     # Playwright E2E (requires CI=true per package.json scripts)
 pnpm run storybook    # Storybook on port 6006
 ```
