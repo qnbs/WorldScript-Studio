@@ -1,7 +1,7 @@
 # ADR 0021: Qt 6 + GPUI as the native desktop strategy; CEF retired
 
-**Status:** Accepted (decision locked; CEF source/CI retirement execution staged in companion Wave 0
-PR B, not yet merged — see `docs/native/ROADMAP-QT-GPUI-DESKTOP.md` §15 Wave 0 for current status).
+**Status:** Accepted and executed (Wave 0 complete — CEF source/CI/docs retirement shipped in
+companion PR #407; see `docs/native/ROADMAP-QT-GPUI-DESKTOP.md` §15 Wave 0).
 **Supersedes:** [[0019-cef-desktop-runtime-strategy]], [[0020-cef-binding-choice-thin-cpp-host]].
 This ADR does not add any Qt, GPUI, or Rust-Core code — it locks direction only, exactly as
 ADR-0019 and ADR-0020 did for CEF. Full strategy, waves, and gates:
