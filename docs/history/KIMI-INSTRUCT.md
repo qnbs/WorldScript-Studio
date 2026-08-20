@@ -38,7 +38,7 @@ Dieses Projekt läuft auf Low-End-Hardware. Beachte strikt:
 
 ## 3. CodeAnt AI PR-Review-Correction-Loop
 
-Dieser Workflow ist die Standardvorgehensweise, wenn der Nutzer um Behebung von CodeAnt-Kommentaren bittet.
+Dieser Workflow gilt für jeden offenen Pull Request: Review-Kommentare werden proaktiv geprüft und bearbeitet, auch ohne gesonderte Nutzeraufforderung.
 
 > **Kanonische Quelle:** Die vollständige, agenten-unabhängige Prozedur (inkl. GraphQL-Snippets, PR-Split
 > bei >100 Dateien, Merge-Regeln) lebt in **`docs/CODEANT-REVIEW-LOOP.md`**; der komplementäre,

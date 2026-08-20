@@ -961,7 +961,7 @@ Required:
 [ ] task supervision renderer-neutral
 [ ] diagnostics renderer-neutral
 [ ] contract versioning policy established
-[ ] native-readiness CI gate active (already true — see docs/architecture/native-readiness.md)
+[ ] native-readiness CI gate active
 ```
 
 ## G2 — Qt Implementation Admission
