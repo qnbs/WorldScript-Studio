@@ -6676,6 +6676,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "worldscript-project"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "worldscript-studio"
 version = "1.27.1"
 dependencies = [
@@ -6699,6 +6707,7 @@ dependencies = [
  "tauri-plugin-updater",
  "tauri-plugin-window-state",
  "tokio",
+ "worldscript-project",
 ]
 
 [[package]]

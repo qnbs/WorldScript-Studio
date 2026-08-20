@@ -166,6 +166,7 @@ pub fn run() {
             lora::set_lora_python_path,
             commands::task_supervisor::worldscript_task_supervisor_ping,
             commands::task_supervisor::worldscript_task_supervisor_submit,
+            commands::project_core::worldscript_project_validate,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

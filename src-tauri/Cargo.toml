@@ -40,6 +40,7 @@ tauri-plugin-process = "2"
 tokio = { version = "1", features = ["sync", "time", "process", "rt-multi-thread"] }
 candle-core = { version = "0.11", optional = true }
 candle-nn = { version = "0.11", optional = true }
+worldscript-project = { path = "../crates/worldscript-project" }
 
 [profile.release]
 # QNBS-v3: Aggressive size + speed optimizations for desktop bundles
