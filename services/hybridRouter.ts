@@ -45,6 +45,10 @@ export async function routeTask<TResult = unknown>(
   // QNBS-v3: Rust path — only when explicitly targeted or 'any' with rust flag on
   if (rustComputeEnabled && (target === 'rust' || target === 'any')) {
     const rustAvailable = await isRustComputeAvailable();
+    if (!rustAvailable && !allowWebFallback) {
+      log.warn('Rust route unavailable — native-only route returned null', { taskType });
+      return null;
+    }
     if (rustAvailable) {
       try {
         const request: RustTaskRequest = {

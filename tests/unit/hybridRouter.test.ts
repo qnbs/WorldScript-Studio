@@ -93,6 +93,23 @@ describe('hybridRouter', () => {
     expect(mockEnqueue).toHaveBeenCalled();
   });
 
+  it('returns null for native-only routes when Rust is unavailable', async () => {
+    mockIsRustAvailable.mockResolvedValue(false);
+    mockGetWorkerBus.mockReturnValue({ enqueue: mockEnqueue });
+    const { routeTask } = await import('../../services/hybridRouter');
+    const result = await routeTask(
+      'text.diff',
+      { oldText: 'old', newText: 'new' },
+      {
+        target: 'rust',
+        rustComputeEnabled: true,
+        allowWebFallback: false,
+      },
+    );
+    expect(result).toBeNull();
+    expect(mockEnqueue).not.toHaveBeenCalled();
+  });
+
   it('falls back to web worker when Rust invoke throws', async () => {
     mockIsRustAvailable.mockResolvedValue(true);
     mockInvokeRustTask.mockRejectedValue(new Error('IPC error'));

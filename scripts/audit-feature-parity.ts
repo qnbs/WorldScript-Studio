@@ -13,7 +13,7 @@
  * Exit 0 = all checks pass; Exit 1 = drifts found
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -44,7 +44,7 @@ function read(path: string): string {
 
 function grep(pattern: string): string {
   try {
-    const result = execSync(`git -C "${ROOT}" grep -I -E -l -- "${pattern}"`, {
+    const result = execFileSync('git', ['-C', ROOT, 'grep', '-I', '-E', '-l', '--', pattern], {
       encoding: 'utf-8',
     });
     return result
@@ -56,7 +56,7 @@ function grep(pattern: string): string {
           !/(^|\/)(tests|node_modules|dist)\//.test(path) &&
           !/\.(test|spec)\.[cm]?[jt]sx?$/.test(path) &&
           !/\.d\.ts$/.test(path) &&
-          !/(featureFlagsSlice|FeatureFlagsSection|useSettingsView|featureCatalog|audit-feature-parity)\.ts/.test(
+          !/(featureFlagsSlice|FeatureFlagsSection|useSettingsView|featureCatalog|audit-feature-parity)\.(?:ts|tsx)$/.test(
             path,
           ),
       )
@@ -183,8 +183,20 @@ function hasRuntimeConsumption(flag: string): boolean {
 
 function hasRustComputeReachability(): boolean {
   try {
-    const result = execSync(
-      `git -C "${ROOT}" grep -I -E -l -- 'analyzeTextViaRust|diffTextViaRust' -- '*.ts' '*.tsx'`,
+    const result = execFileSync(
+      'git',
+      [
+        '-C',
+        ROOT,
+        'grep',
+        '-I',
+        '-E',
+        '-l',
+        '--',
+        'analyzeTextViaRust|diffTextViaRust',
+        '*.ts',
+        '*.tsx',
+      ],
       { encoding: 'utf-8' },
     );
     return result

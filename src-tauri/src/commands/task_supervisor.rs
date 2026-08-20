@@ -253,7 +253,8 @@ fn tokenize_words_and_spaces(text: &str) -> Vec<String> {
 
     for character in text.chars() {
         // QNBS-v3: Match JavaScript whitespace semantics so Rust and TS tokens stay equivalent.
-        let is_whitespace = character.is_whitespace() || character == '\u{FEFF}';
+        let is_whitespace =
+            (character.is_whitespace() && character != '\u{0085}') || character == '\u{FEFF}';
         if current_is_whitespace.is_some_and(|previous| previous != is_whitespace) {
             tokens.push(std::mem::take(&mut current));
         }
@@ -534,5 +535,15 @@ mod tests {
         assert_eq!(ops[2].token, "b");
         assert_eq!(ops[3].op_type, "insert");
         assert_eq!(ops[3].token, "c");
+    }
+
+    #[test]
+    fn text_diff_matches_javascript_for_next_line_character() {
+        let ops = diff_text("a\u{0085}b", "a\u{0085}c").unwrap();
+        assert_eq!(ops.len(), 2);
+        assert_eq!(ops[0].op_type, "delete");
+        assert_eq!(ops[0].token, "a\u{0085}b");
+        assert_eq!(ops[1].op_type, "insert");
+        assert_eq!(ops[1].token, "a\u{0085}c");
     }
 }
