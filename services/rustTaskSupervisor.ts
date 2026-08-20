@@ -22,6 +22,7 @@ export interface RustTextAnalysis {
   readonly readingTimeMinutes: number;
 }
 
+// QNBS-v3: Keep native diff operations typed so callers can preserve the JS fallback contract.
 export type RustTextDiffOp =
   | { readonly type: 'equal'; readonly token: string }
   | { readonly type: 'delete'; readonly token: string }
@@ -69,10 +70,16 @@ export async function diffTextViaRust(
   if (!(await isRustComputeAvailable())) return null;
 
   try {
+    // QNBS-v3: Native-only probing prevents router failures from changing diff authority.
     const handle = await routeTask<readonly RustTextDiffOp[]>(
       'text.diff',
       { oldText, newText },
-      { target: 'rust', rustComputeEnabled: true, priority: 'low' },
+      {
+        target: 'rust',
+        rustComputeEnabled: true,
+        allowWebFallback: false,
+        priority: 'low',
+      },
     );
     if (handle === null) return null;
     return await handle.result;

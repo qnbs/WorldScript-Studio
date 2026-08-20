@@ -30,6 +30,7 @@ describe('hybridRouter', () => {
   beforeEach(() => {
     vi.resetModules();
     mockGetWorkerBus.mockReturnValue(null);
+    mockEnqueue.mockClear();
     mockIsRustAvailable.mockResolvedValue(false);
     mockEnqueue.mockReturnValue(mockHandle);
     mockInvalidateCache.mockReset();
@@ -105,6 +106,24 @@ describe('hybridRouter', () => {
       },
     );
     expect(result).toBe(mockHandle);
+  });
+
+  it('returns null for native-only probes when Rust invoke throws', async () => {
+    mockIsRustAvailable.mockResolvedValue(true);
+    mockInvokeRustTask.mockRejectedValue(new Error('IPC error'));
+    mockGetWorkerBus.mockReturnValue({ enqueue: mockEnqueue });
+    const { routeTask } = await import('../../services/hybridRouter');
+    const result = await routeTask(
+      'text.diff',
+      { oldText: 'old', newText: 'new' },
+      {
+        target: 'rust',
+        rustComputeEnabled: true,
+        allowWebFallback: false,
+      },
+    );
+    expect(result).toBeNull();
+    expect(mockEnqueue).not.toHaveBeenCalled();
   });
 
   it('skips Rust path when rustComputeEnabled is false even if target:rust', async () => {

@@ -246,7 +246,8 @@ fn tokenize_words_and_spaces(text: &str) -> Vec<String> {
     let mut current_is_whitespace: Option<bool> = None;
 
     for character in text.chars() {
-        let is_whitespace = character.is_whitespace();
+        // QNBS-v3: Match JavaScript whitespace semantics so Rust and TS tokens stay equivalent.
+        let is_whitespace = character.is_whitespace() || character == '\u{FEFF}';
         if current_is_whitespace.is_some_and(|previous| previous != is_whitespace) {
             tokens.push(std::mem::take(&mut current));
         }
@@ -498,5 +499,18 @@ mod tests {
         let oversized = "x".repeat(MAX_DIFF_INPUT_CHARS + 1);
         let error = diff_text(&oversized, "").unwrap_err();
         assert!(error.contains("at most 200000 characters"));
+    }
+
+    #[test]
+    fn text_diff_treats_byte_order_mark_as_whitespace() {
+        let ops = diff_text("a\u{FEFF}b", "a\u{FEFF}c").unwrap();
+        assert_eq!(ops[0].op_type, "equal");
+        assert_eq!(ops[0].token, "a");
+        assert_eq!(ops[1].op_type, "equal");
+        assert_eq!(ops[1].token, "\u{FEFF}");
+        assert_eq!(ops[2].op_type, "delete");
+        assert_eq!(ops[2].token, "b");
+        assert_eq!(ops[3].op_type, "insert");
+        assert_eq!(ops[3].token, "c");
     }
 }

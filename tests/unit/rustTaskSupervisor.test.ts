@@ -135,7 +135,11 @@ describe('rustTaskSupervisor — diffTextViaRust', () => {
     expect(routeTask).toHaveBeenCalledWith(
       'text.diff',
       { oldText: 'the cat', newText: 'the dog' },
-      expect.objectContaining({ target: 'rust', rustComputeEnabled: true }),
+      expect.objectContaining({
+        target: 'rust',
+        rustComputeEnabled: true,
+        allowWebFallback: false,
+      }),
     );
   });
 
@@ -147,5 +151,20 @@ describe('rustTaskSupervisor — diffTextViaRust', () => {
 
     await expect(diffTextViaRust('old', 'new', { rustComputeEnabled: true })).resolves.toBeNull();
     expect(routeTask).not.toHaveBeenCalled();
+  });
+
+  it('returns null when the native result rejects for TypeScript fallback', async () => {
+    const { isRustComputeAvailable } = await import('../../services/tauriTaskBridge');
+    const { routeTask } = await import('../../services/hybridRouter');
+    vi.mocked(isRustComputeAvailable).mockResolvedValue(true);
+    vi.mocked(routeTask).mockResolvedValue({
+      taskId: 't-diff-failed',
+      result: Promise.reject(new Error('native diff failed')),
+      progress: (async function* () {})(),
+      cancel: vi.fn(),
+    });
+    const { diffTextViaRust } = await import('../../services/rustTaskSupervisor');
+
+    await expect(diffTextViaRust('old', 'new', { rustComputeEnabled: true })).resolves.toBeNull();
   });
 });

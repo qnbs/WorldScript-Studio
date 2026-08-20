@@ -20,6 +20,8 @@ export interface HybridRouteOptions extends Omit<EnqueueOptions, 'target'> {
   readonly target?: 'web' | 'rust' | 'any';
   /** Pass selectEnableRustCompute value here — keeps the router free of Redux coupling. */
   readonly rustComputeEnabled?: boolean;
+  /** Keep native-only probes from silently changing authority by falling back to WorkerBus. */
+  readonly allowWebFallback?: boolean;
 }
 
 // QNBS-v3: Empty async generator to satisfy AsyncIterable<TaskProgress> for Rust task handles.
@@ -38,7 +40,7 @@ export async function routeTask<TResult = unknown>(
   payload: unknown,
   opts: HybridRouteOptions = {},
 ): Promise<TaskHandle<TResult> | null> {
-  const { target = 'any', rustComputeEnabled = false, ...busOpts } = opts;
+  const { target = 'any', rustComputeEnabled = false, allowWebFallback = true, ...busOpts } = opts;
 
   // QNBS-v3: Rust path — only when explicitly targeted or 'any' with rust flag on
   if (rustComputeEnabled && (target === 'rust' || target === 'any')) {
@@ -71,6 +73,7 @@ export async function routeTask<TResult = unknown>(
         return rustHandle;
       } catch (err) {
         log.warn('Rust route failed — falling back to web worker pool', { taskType, err });
+        if (!allowWebFallback) return null;
         // Fall through to web worker path
       }
     }
