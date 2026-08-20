@@ -16,6 +16,8 @@
 
 The app supports a multi-provider AI stack (Gemini, OpenAI, Claude, Grok, OpenRouter, Ollama, WebLLM, ONNX Runtime Web, Transformers.js), four AI execution modes (Hybrid / Cloud / Local / Eco), real-time collaboration with E2E encryption, a Plot Board v2 with swimlane/canvas/timeline modes, character/world management, manuscript export, voice dictation, and a 19-locale i18n layer.
 
+**Native desktop strategy is changing (ADR-0021, 2026-08-20) — read before touching desktop/native code.** CEF is retired from the target architecture. Current direction: React/PWA stays the web product → Tauri 2 is **transitional only** (itself retired once Qt reaches Stable) → an authoritative Rust Core (`crates/`, an independent Cargo workspace from `src-tauri/`) → Qt 6/Qt Quick as the primary native product → GPUI admitted later, behind a strict gate. Full plan: `docs/native/ROADMAP-QT-GPUI-DESKTOP.md`; decision record: `docs/adr/0021-qt-gpui-native-desktop-strategy.md`. Extraction has started: `crates/worldscript-project` (renderer-neutral project schema/validation/migration, headless — no GUI deps) is wired to one real Tauri command (`worldscript_project_validate` in `src-tauri/src/commands/project_core.rs`) via a cross-workspace Cargo path dependency, with no frontend caller yet. Priority order for what gets extracted next: `docs/native/CORE-MIGRATION-LEDGER.md`.
+
 ---
 
 ## ⚠️ Critical Execution Environment Warning (Agent Must Follow)
@@ -31,7 +33,8 @@ The app supports a multi-provider AI stack (Gemini, OpenAI, Claude, Grok, OpenRo
    ```bash
    pnpm run lint && pnpm run typecheck && pnpm run i18n:check
    ```
-   Optional: `pnpm exec vitest run` **without** `--coverage` for a fast smoke test.
+   Optional targeted smoke test: `pnpm exec vitest run <path>` **without** `--coverage`.
+   **Hard rule:** Never invoke `pnpm test`, `npm run test`, or a bare Vitest wrapper; always use an explicit `pnpm exec vitest run <path>` command to avoid watch-mode hangs on constrained hardware.
 4. **Audit cloud CI logs, fix locally, then re-push** – If the cloud CI run fails, inspect the logs via GitHub web UI or `gh run watch`, reproduce the specific failing test or lint error in isolation, fix it locally (quick tier to verify), commit, and push again for another cloud CI run.
 5. **Sequential execution** – Do not parallelize builds, tests, or processes locally. Use single-threaded modes and avoid background tasks that compete for RAM/CPU.
 6. **Resource budget** – Avoid spinning up the dev server (`pnpm run dev`) for extended periods if not needed. Prefer one-off commands (`pnpm run build`, `pnpm run typecheck`) and stop the server when done.
@@ -170,9 +173,8 @@ pnpm run parity:check       # Feature parity audit
 pnpm run suppressions:check # Biome-ignore count ratchet
 
 # Testing
-pnpm run test               # Vitest watch mode
-pnpm run test:run           # Vitest single run (no coverage)
-pnpm run test:coverage      # Vitest with V8 coverage (enforces thresholds)
+pnpm exec vitest run <path> # Targeted Vitest single run (no coverage)
+pnpm exec vitest run <path> --coverage # Targeted Vitest run with V8 coverage
 pnpm run test:e2e           # Playwright E2E (CI=true required; CI-only by policy)
 pnpm run test:e2e:ui        # Playwright E2E UI mode (CI=true required)
 pnpm run test:e2e:deep      # Deep E2E feature-flag matrix (CI=true required)
@@ -268,7 +270,8 @@ files via `simple-git-hooks` + `lint-staged`; CI remains mandatory when hooks ar
 ### Philosophy
 
 - **Cloud CI-first:** The canonical quality gate is GitHub Actions. Low-end local machines should run only the "Quick" tier.
-- **Quick tier (local, before every push):** `pnpm run lint && pnpm run typecheck && pnpm run i18n:check`. Optionally: `pnpm exec vitest run` **without** `--coverage`.
+- **Quick tier (local, before every push):** `pnpm run lint && pnpm run typecheck && pnpm run i18n:check`. Optionally: `pnpm exec vitest run <path>` **without** `--coverage`.
+- **Vitest watch-mode hard rule:** Never invoke `pnpm test`, `npm run test`, or a bare Vitest wrapper; use an explicit targeted `pnpm exec vitest run <path>` command so constrained hardware never waits on watch mode.
 - **Heavy tier (CI):** Vitest with coverage thresholds, Playwright E2E (desktop + mobile emulation), Lighthouse CI, Stryker mutation, Storybook static build, bundle budget + analyze.
 
 ### Unit Tests (Vitest)
@@ -326,8 +329,10 @@ deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
 
 | Job | Purpose |
 |-----|---------|
-| `security` | `pnpm audit --audit-level=high`, OSV scanner (pnpm + Cargo lockfiles), gitleaks secrets scan, dependency review on PRs |
+| `security` | `pnpm audit --audit-level=high`, OSV scanner (pnpm + `src-tauri/` + `crates/` Cargo lockfiles), gitleaks secrets scan, dependency review on PRs |
 | `quality` | Node 22 + 24 matrix → Biome lint, suppression-debt ratchet, `i18n:check`, `parity:check`, `tsgo --noEmit`, Storybook build, Vitest + coverage, Codecov upload |
+| `rust-tauri` | `fmt`/`check`/`clippy`/`test` for `src-tauri/`; path-scoped (skips on PRs that don't touch it), needs GTK/WebKit apt-get steps |
+| `core-rust` | Same `fmt`/`check`/`clippy`/`test` for `crates/worldscript-project` (renderer-neutral Rust Core); path-scoped, no GUI deps so no apt-get steps needed |
 | `build` | Production build, smoke-test prod build in Chromium, bundle budget, rollup analyze artifact; on `main`: SLSA build provenance attestation + Pages artifact |
 | `e2e` | Playwright Chromium desktop + mobile emulation (`CI=true`); JUnit artifact for PR annotations |
 | `e2e-deep` | Feature-flag matrix + error paths; non-blocking (`continue-on-error: true`) |
@@ -356,6 +361,24 @@ Edge builds run `scripts/build-edge.mjs` which sets `DEPLOY_TARGET=edge` and pat
 
 ---
 
+## PR Review & Merge Discipline
+
+Never commit directly to `main` — always a feature branch + PR, even for a single-file edit. Wait for the **full CI suite to go green, including non-required/advisory jobs** (E2E, E2E Deep Coverage, Storybook, Lighthouse, Visual Regression), not just the branch-protection-required checks. Any `FAILURE` status — required or advisory — is zero-tolerance: investigate the actual root cause (pull the coverage report / job log) before deciding how to proceed; never assume a failing check is "probably fine" because your own latest commit looked unrelated — e.g. `codecov/patch` evaluates the PR's **entire accumulated diff**, not just your last commit.
+
+**Review-comment completeness — check three independent channels before declaring a PR review-clean, every time:** (1) GraphQL `reviewThreads` for inline per-line comments; (2) `gh api repos/<owner>/<repo>/issues/<PR>/comments` for plain top-level bot comments (qodo-code-review posts its real findings only here, never as `reviewThreads`); (3) `gh api repos/<owner>/<repo>/pulls/<PR>/reviews`, reading each review's full `.body` text (CodeRabbit's "🧹 Nitpick comments" and outside-diff-range findings live here, collapsed, invisible to the other two channels). A bot using one channel on a PR doesn't mean the others are covered.
+
+**Known review bots on this repo** (confirm still installed — this list can drift): CodeRabbit (`@coderabbitai review` to re-trigger), CodeAnt AI (5 CI status checks only — `CodeAnt - Quality Gates/SAST/SCA/SCR/Test Coverage` — not inline PR comments here), qodo-code-review (top-level comments, see above), Amazon Q Developer (`/q review` as a fresh top-level comment — not inside an existing thread; quota-conscious — call it once CodeRabbit/CodeAnt's own loop has already reached quiescence, not after every fix commit), Graphite AI Reviews (automatic, no confirmed manual trigger), chatgpt-codex-connector (intermittent/quota-limited availability — verify it's currently active rather than assuming silence means "nothing to report"). A bot's silence is not a clean pass by itself — for security/sandbox/IPC/FFI/packaging-adjacent PRs, verify at least one bot produced real review output (its actual comment/review text), not just a green check-run.
+
+**PR size:** keep every PR's changed-file count under ~100 — several review bots skip inline comments above that threshold. Check with `git diff --name-only <base>...HEAD | wc -l` before pushing; split into the fewest stacked PRs that stay under the limit if needed.
+
+**Known GitHub merge-gate quirks on this repo:**
+- **Mergeable-state cache lag:** `gh pr merge` can fail with "base branch policy prohibits the merge" even after every check (required and advisory) shows concluded `success`, `mergeable: MERGEABLE`, and 0 unresolved review threads. Re-poll a few times (~60s) before concluding it's stuck.
+- **Zombie `QUEUED` check-suites:** several installed GitHub Apps (Renovate, Cursor, Claude, Greptile, CodeAnt AI, Cloudflare Pages, coderabbitai, Codecov, Amazon Q Developer) can leave a check-suite stuck at `status: QUEUED` on a PR that never actually triggers their logic — invisible via `gh pr checks` (named checks look fine), only visible via GraphQL `commits(last:1){nodes{commit{checkSuites(first:20){nodes{app{name} status}}}}}`.
+- **Stacked-PR auto-close on squash-merge + `--delete-branch`:** can auto-*close* (not retarget) a downstream PR based on the deleted branch. Recovery: temporarily restore the ref (`git push origin <sha>:refs/heads/<deleted-branch>`), `gh pr reopen`, `gh pr edit --base main`, delete the temp ref once nothing else depends on it. The reopened branch's history still contains the original un-squashed commits, so a plain `git rebase origin/main` re-conflicts even though the diff is clean — rebase only what's after the merged base's old tip: `git rebase --onto origin/main <old-base-tip-sha> <branch>`.
+- Neither quirk is authorization to bypass branch protection casually — `--admin` requires a maintainer's fresh, explicit go-ahead for that specific merge.
+
+---
+
 ## Security Considerations
 
 - **No build-time secrets.** API keys are entered via Settings UI and stored encrypted in IndexedDB (AES-256-GCM via Web Crypto API). Do not put AI keys in `.env` or host environment variables for inference.
@@ -367,7 +390,7 @@ Edge builds run `scripts/build-edge.mjs` which sets `DEPLOY_TARGET=edge` and pat
 - **Service Worker:** AI hosts are network-only (`public/sw.js`). WASM/ONNX chunks are excluded from precache.
 - **Supply-chain:** SHA-pinned GitHub Actions, Dependabot weekly updates, OpenSSF Scorecard, CodeQL SAST, SLSA build provenance on `main`.
 - **Collaboration:** Yjs + `packages/collab-transport` (vendor fork of y-webrtc 10.3.0) with AES-256-GCM E2E encryption baked in (PBKDF2, 600k iterations, `extractable: false`). Signaling URLs are user-configurable.
-- **Tauri isolation:** `vite.config.ts` externalizes `/^@tauri-apps//` so web builds never bundle Tauri APIs. Abstract Tauri calls through `services/tauriRuntime.ts`.
+- **Tauri isolation:** `vite.config.ts` externalizes `/^@tauri-apps\//` so web builds never bundle Tauri APIs. Abstract Tauri calls through `services/desktopPlatform.ts` (the `DesktopPlatform` interface from `packages/desktop-contracts`) — new code must not import `@tauri-apps/*` directly outside `components/ui/`; enforced by `pnpm run guardrail:desktop-imports`.
 - **IDB at-rest encryption:** Optional feature (`featureFlags.enableIdbAtRestEncryption`) encrypts all project data, snapshots, and settings with AES-256-GCM + PBKDF2-derived key (600k iterations, SHA-256, 32-byte random salt). Web build uses passphrase unlock screen; Tauri build uses OS keychain via `tauri-plugin-stronghold`.
 - **Encrypted library backup:** One-click encrypted ZIP export from Settings → Data; `vault.bin` encrypted with AES-256-GCM, passphrase-derived key via PBKDF2.
 - **Vulnerability reporting:** GitHub Private Vulnerability Reporting preferred. 90-day coordinated disclosure embargo.
@@ -525,6 +548,11 @@ Central orchestration layer for all background worker tasks — since ADR-0015, 
 | `CONTRIBUTING.md` | Dev setup, Biome/Vitest/Playwright, architecture notes |
 | `CHANGELOG.md` | Keep a Changelog–style release notes |
 | `docs/CI.md` | GitHub Actions jobs, Node/pnpm parity, Act examples |
+| `docs/CODEANT-REVIEW-LOOP.md` | Canonical PR review-correction loop procedure (any bot) |
+| `docs/DEPENDABOT-TRIAGE.md` | Dependabot PR triage policy — ecosystem/grouping config, why there's no auto-merge, merge sequencing |
+| `docs/adr/` | Architecture Decision Records, incl. ADR-0021 (Qt/GPUI native desktop strategy) |
+| `docs/native/ROADMAP-QT-GPUI-DESKTOP.md` | Qt 6 + GPUI native desktop roadmap — 24-wave plan superseding Tauri, CEF retired |
+| `docs/native/CORE-MIGRATION-LEDGER.md` | Rust Core extraction priority order (what's moved out of TS vs. deferred) |
 | `docs/DEPLOYMENT.md` | GitHub Pages + Vercel + Cloudflare Pages |
 | `docs/ACCESSIBILITY.md` | A11y architecture (live regions, focus, WCAG 2.2, Lighthouse 0.95 gate) |
 | `docs/BEST-PRACTICES.md` | Engineering + content guidelines, glossary, CI parity checklist |
