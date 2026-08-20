@@ -11,6 +11,7 @@
 use std::fs;
 use std::path::PathBuf;
 use worldscript_project::schema::{Coordinates, LocationType, StoryProject};
+use worldscript_project::validate;
 
 fn fixtures_dir() -> PathBuf {
     // crates/worldscript-project/tests/ -> crates/worldscript-project -> crates -> <repo root>
@@ -30,12 +31,9 @@ fn read_fixture(name: &str) -> String {
 #[test]
 fn empty_project_is_accepted() {
     let text = read_fixture("empty-project.json");
-    let project: Result<StoryProject, _> = serde_json::from_str(&text);
-    assert!(
-        project.is_ok(),
-        "empty-project.json should be accepted, got: {:?}",
-        project.err()
-    );
+    let project: StoryProject =
+        serde_json::from_str(&text).expect("empty-project.json should be accepted");
+    validate(&project).expect("empty-project.json must also pass structural validation");
 }
 
 #[test]
@@ -45,6 +43,7 @@ fn typical_project_is_accepted() {
         serde_json::from_str(&text).expect("typical-project.json should be accepted");
     assert_eq!(project.characters.len(), 2);
     assert_eq!(project.manuscript.len(), 2);
+    validate(&project).expect("typical-project.json must also pass structural validation");
 }
 
 #[test]
@@ -81,6 +80,7 @@ fn large_project_is_accepted_and_preserves_counts() {
         serde_json::from_str(&text).expect("large-project.json should be accepted");
     assert_eq!(project.manuscript.len(), 250);
     assert_eq!(project.characters.len(), 30);
+    validate(&project).expect("large-project.json must also pass structural validation");
 }
 
 #[test]

@@ -47,8 +47,18 @@ fn sample_section() -> StorySection {
         content: "It was a dark and stormy night.".to_string(),
         summary: None,
         notes: None,
+        prompt: None,
+        color: None,
+        position: None,
+        character_ids: None,
+        world_ids: None,
         word_count: None,
         status: None,
+        act: None,
+        scene_start: None,
+        scene_duration: None,
+        scene_location_id: None,
+        pov_character_id: None,
     }
 }
 

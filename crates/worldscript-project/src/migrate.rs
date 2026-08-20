@@ -45,6 +45,11 @@ pub enum MigrationError {
     /// are dropped (serde ignores unknown fields on deserialize). Reject instead of round-tripping
     /// destructively.
     FutureVersion { version: u32, current: u32 },
+    /// A registered [`Migration::apply`] returned an envelope whose `schema_version` did not
+    /// increase — the trait contract requires exactly +1 per step, but nothing else enforces it.
+    /// Without this check, a buggy future migration would make `migrate_to_latest`'s loop match
+    /// the same step forever (a hang, not an error) instead of failing loudly.
+    NonAdvancing { version: u32 },
 }
 
 impl fmt::Display for MigrationError {
@@ -57,6 +62,10 @@ impl fmt::Display for MigrationError {
             MigrationError::FutureVersion { version, current } => write!(
                 f,
                 "schema version {version} is newer than this build understands (current: {current}); refusing to load to avoid silently discarding unknown fields on re-save"
+            ),
+            MigrationError::NonAdvancing { version } => write!(
+                f,
+                "migration registered for schema version {version} did not advance schema_version; refusing to loop forever"
             ),
         }
     }
@@ -81,13 +90,15 @@ pub fn migrate_to_latest(mut envelope: ProjectEnvelope) -> Result<ProjectEnvelop
     }
     let migrations = registry();
     while envelope.schema_version < CURRENT_SCHEMA_VERSION {
+        let before = envelope.schema_version;
         let step = migrations
             .iter()
-            .find(|m| m.source_version() == envelope.schema_version)
-            .ok_or(MigrationError::NoMigrationFrom {
-                version: envelope.schema_version,
-            })?;
+            .find(|m| m.source_version() == before)
+            .ok_or(MigrationError::NoMigrationFrom { version: before })?;
         envelope = step.apply(envelope);
+        if envelope.schema_version <= before {
+            return Err(MigrationError::NonAdvancing { version: before });
+        }
     }
     Ok(envelope)
 }

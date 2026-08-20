@@ -65,7 +65,6 @@ jobs:
       - name: Vendor fork invariant guard
         run: pnpm run verify:vendor
 
-      # QNBS-v3: osv-scanner.toml (in src-tauri/) suppresses accepted RUSTSEC advisories for Cargo.lock; scan all three lockfiles so npm + both Rust workspaces' advisories are caught on every push.
       - name: OSV vulnerability scan
         uses: google/osv-scanner-action/osv-scanner-action@8deb546fdb875b9996d27d4950be7312dac076a1 # v2.5.0
         with:
@@ -277,14 +276,12 @@ jobs:
 
   # ----------------------------------------------------------
   # 1c. CORE-RUST: worldscript-project crate Gate (fmt/check/clippy/test), path-scoped via `changes`
-  # QNBS-v3: independent workspace from src-tauri (crates/Cargo.toml) — zero GUI/Tauri deps, so unlike rust-tauri above, no GTK/WebKit apt-get install steps are needed here.
   # ----------------------------------------------------------
   core-rust:
     name: 🧩 Core Rust Gate
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: [security, changes]
-    # QNBS-v3: skips for PRs that don't touch crates/** — ci-success treats 'skipped' as pass for this job only
     if: needs.changes.outputs.crates == 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -421,7 +418,6 @@ jobs:
     needs: [security, quality, changes, rust-tauri, core-rust, build, e2e, vrt]
     if: always()
     steps:
-      # QNBS-v3: rust-tauri/core-rust may legitimately be 'skipped' (their changes.outputs.* is 'false') — that's a pass, not a failure
       - name: Verify all required jobs succeeded
         run: |
           FAIL=0

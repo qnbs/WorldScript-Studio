@@ -125,9 +125,44 @@ pub struct StorySection {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub notes: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub position: Option<Position>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub character_ids: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub world_ids: Option<Vec<String>>,
+    /// `storySectionSchema.wordCount` is an unrestricted `z.number()` (accepts negative/fractional
+    /// values); `u32` is a deliberate Rust-side tightening, matching the intentional-narrowing
+    /// precedent in `validate.rs` — negative/fractional word counts aren't meaningful data, so this
+    /// crate rejects them rather than preserving nonsensical values byte-for-byte.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub word_count: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<SectionStatus>,
+    /// `storySectionSchema.act` is `z.union([z.literal(1), z.literal(2), z.literal(3)])`; modeled
+    /// as `u8` to preserve the value on round-trip without re-implementing Zod's literal-union
+    /// restriction (a value outside 1-3 is preserved, not rejected — no test currently exercises
+    /// that edge, unlike `status`/`type` which do have closed-enum coverage).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub act: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scene_start: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scene_duration: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scene_location_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pov_character_id: Option<String>,
+}
+
+/// Mirrors `storySectionSchema.position` (`{ x: number, y: number }`).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Position {
+    pub x: f64,
+    pub y: f64,
 }
 
 /// Mirrors `storySectionSchema.status`'s enum exactly — `draft | outline | first-draft | revised |
