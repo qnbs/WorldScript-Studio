@@ -1,0 +1,67 @@
+{
+  "title": "The Clockwork Garden",
+  "logline": "A gardener discovers her greenhouse runs on stolen time.",
+  "author": "Test Author",
+  "characters": [
+    {
+      "id": "char-elin",
+      "name": "Elin Vasko",
+      "backstory": "Third-generation gardener.",
+      "motivation": "Wants to understand the clockwork roots.",
+      "appearance": "Soil-stained hands, silver hair.",
+      "personalityTraits": "Curious, stubborn.",
+      "flaws": "Ignores warnings from those who love her.",
+      "notes": "",
+      "characterArc": "Learns to let go of control.",
+      "relationships": ""
+    },
+    {
+      "id": "char-tomas",
+      "name": "Tomas Reyk",
+      "backstory": "The previous gardener, now missing.",
+      "motivation": "",
+      "appearance": "",
+      "personalityTraits": "",
+      "flaws": "",
+      "notes": "",
+      "characterArc": "",
+      "relationships": ""
+    }
+  ],
+  "worlds": [
+    {
+      "id": "world-greenhouse",
+      "name": "The Vasko Greenhouse",
+      "description": "A glass structure older than the town around it.",
+      "geography": "Built into a hillside.",
+      "magicSystem": "Time flows differently near the clockwork roots.",
+      "culture": "",
+      "notes": "",
+      "timeline": [],
+      "locations": [
+        {
+          "id": "loc-roots",
+          "name": "The Root Cellar",
+          "description": "Where the clockwork mechanism is buried.",
+          "type": "other"
+        }
+      ]
+    }
+  ],
+  "manuscript": [
+    {
+      "id": "sec-1",
+      "title": "Chapter One: Inheritance",
+      "content": "Elin found the letter tucked beneath a loose floorboard.",
+      "wordCount": 9,
+      "status": "draft"
+    },
+    {
+      "id": "sec-2",
+      "title": "Chapter Two: The Root Cellar",
+      "content": "The door had not been opened in a decade.",
+      "wordCount": 8,
+      "status": "draft"
+    }
+  ]
+}
