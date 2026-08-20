@@ -46,6 +46,10 @@ export default defineConfig({
       // scripts/check-coverage-ratchet.mjs (non-blocking CI step suggesting when to ratchet up).
       reporter: ['text', 'lcov', 'html', 'json-summary'],
       include: [
+        // QNBS-v3: Measure the application shell so root composition and PWA lifecycle code cannot evade coverage.
+        'App.tsx',
+        'index.tsx',
+        'register-sw.ts',
         'app/**/*.{ts,tsx}',
         'components/**/*.{ts,tsx}',
         'features/**/*.{ts,tsx}',
@@ -80,10 +84,12 @@ export default defineConfig({
       //   per metric per the quarterly cap below rather than the full ~1pt-below-measured jump,
       //   since the straight ~1pt margin would have exceeded +5 on statements. First ratchet of
       //   Q3 2026 — the prior entries above are all Q2, so this is not a same-quarter stack-up).
+      // → L80/F72/B66/S78 (2026-08-20: expanded scope CI measured L81.63/F74.26/B67.75/S79.55;
+      //   floor(measured − 1.5) per docs/COVERAGE-POLICY.md; Node 24 also passed).
       // P1 target: L85/B75/F80 — next ratchet after verification.
       // RATCHET RULE: After 3 consecutive green CI runs on both Node versions, increase each threshold
       // by 1 point (max 5 points per quarter). Document the new baseline in this comment.
-      // QNBS-v3 (CodeRabbit): raising these enforces the new, stricter CI floor going forward — any PR that drops coverage below L79/F72/B65/S77 now fails the quality gate instead of silently regressing under the old L74/F67/B60/S72 bar.
+      // QNBS-v3 (CodeRabbit): this floor includes the root application/PWA shell and blocks regressions below L80/F72/B66/S78.
       thresholds: {
         ...coverageThresholds,
         perFile: false,
