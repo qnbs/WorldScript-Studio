@@ -1107,14 +1107,13 @@ Shared product code cannot casually import Tauri, Qt or GPUI.
 
 ## Wave 2 — Rust Core extraction and headless harness
 
-**Status: IN PROGRESS — first slice shipped.** `crates/worldscript-project` (a new, independent
+**Status: IN PROGRESS — first slice shipped; bounded task proof also merged.** `crates/worldscript-project` (a new, independent
 Cargo workspace — see `docs/native/CORE-MIGRATION-LEDGER.md` for why it's not unified with
 `src-tauri`) implements project schema, validation, a minimal versioned-migration mechanism, and
 plain JSON load/save, proven by a headless `cargo test` suite and a `wsproj demo-lifecycle` CLI with
-zero GUI/Tauri dependencies. This satisfies the wave's exit criterion below. Task orchestration, full
-storage-backend parity, diagnostics, and AI request model extraction are explicitly deferred — see
-the ledger's priority order — so this wave stays "in progress," not "complete," until at least the
-next fast-follow slice (logger/diagnostics, per the ledger) lands. Before G1 is evaluated, the
+zero GUI/Tauri dependencies. This satisfies the wave's exit criterion below. Full task orchestration,
+storage-backend parity, diagnostics sink migration, and AI request model extraction remain deferred —
+see the ledger's priority order — so this wave stays "in progress," not "complete." Before G1 is evaluated, the
 separate row-9 compatibility position must also define and prove the Array↔EntityState boundary:
 the current Core `Vec` model is intentionally renderer-neutral, while production Redux state uses
 `EntityState` for characters and worlds.
@@ -1130,8 +1129,10 @@ Actions (checked = this slice, per `docs/native/CORE-MIGRATION-LEDGER.md`):
 - [ ] storage (fs backend parity, IDB backend — deferred);
 - [ ] Array↔EntityState compatibility adapter contract and fixtures (reject duplicate/missing/orphan
       IDs for characters and worlds; required before G1 evaluation);
-- [ ] task orchestration (deferred fast-follow);
-- [ ] diagnostics (deferred fast-follow);
+- [x] bounded task-supervisor proof (`text.analyze`/`text.diff`, structured failures and input
+      limits; #430) — full worker-bus extraction remains deferred;
+- [~] diagnostics structured model/redaction Core proof (`crates/worldscript-diagnostics`) — sink
+      migration and authority switch remain deferred;
 - [ ] AI request model (out of scope for all of Wave 2 — see ledger);
 - [x] headless CLI/test harness.
 
