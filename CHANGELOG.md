@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **CI authority closure:** Core path changes now select the Tauri consumer gate, workflow-policy tests protect local path-dependency coverage and aggregate deployment gating, and Pages deployment waits for `ci-success`.
+
 ## [1.27.1] — 2026-08-14
 
 > Desktop persistence/security stabilization (#363) — atomic writes and fail-closed key routing

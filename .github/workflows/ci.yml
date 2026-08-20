@@ -2,7 +2,7 @@
 # WorldScript Studio – CI/CD Pipeline
 # security → quality (lint, i18n, tsgo, vitest+coverage) → build (+chunk budget, rollup analyze)
 #   ├→ e2e | storybook (parallel) ; lighthouse after build
-# deploy (main): needs ci-success + build artifact → GitHub Pages
+# deploy (main): needs ci-success → GitHub Pages
 # ============================================================
 
 name: CI / CD
@@ -119,7 +119,16 @@ jobs:
             exit 0
           fi
           CHANGED=$(git diff --name-only "$BASE" "${{ github.sha }}")
-          printf '%s\n' "$CHANGED" | node scripts/check-ci-invariants.mjs >> "$GITHUB_OUTPUT"
+          if grep -qE '^(src-tauri/|crates/|\.github/workflows/ci\.yml$)' <<< "$CHANGED"; then
+            echo "tauri=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "tauri=false" >> "$GITHUB_OUTPUT"
+          fi
+          if grep -qE '^(crates/|tests/fixtures/project-golden-masters/|\.github/workflows/ci\.yml$)' <<< "$CHANGED"; then
+            echo "crates=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "crates=false" >> "$GITHUB_OUTPUT"
+          fi
 
   # ----------------------------------------------------------
   # 1. QUALITY GATE: Lint + Typecheck + Tests (parallel matrix)
@@ -446,7 +455,7 @@ jobs:
     name: 🚀 Deploy to GitHub Pages
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [ci-success, build]
+    needs: [ci-success]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.ci-success.result == 'success'
     permissions:
       contents: read
