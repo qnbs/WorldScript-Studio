@@ -502,7 +502,7 @@
   "settings.featureFlags.enableProForge": "ProForge Pipeline (8-stage agentic editing)",
   "settings.featureFlags.enableProjectHealthScore": "Project health score (Dashboard)",
   "settings.featureFlags.enableRtlLayout": "RTL layout (experimental)",
-  "settings.featureFlags.enableRustCompute": "Rust Compute (Tauri TaskSupervisor offloading — Phase 2)",
+  "settings.featureFlags.enableRustCompute": "Rust Compute qualification stub (no production caller yet)",
   "settings.featureFlags.enableStoryBibleAdvanced": "Story Bible advanced (graph + hints in Codex)",
   "settings.featureFlags.enableVoiceSupport": "Voice commands & dictation",
   "settings.featureFlags.enableVoiceWasm": "Voice WASM engine (Whisper.cpp — offline)",

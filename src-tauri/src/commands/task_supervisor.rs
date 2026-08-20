@@ -5,8 +5,8 @@
 //! `worldscript_task_supervisor_submit` / `worldscript_task_supervisor_ping` when
 //! `enableRustCompute` is on and a Tauri runtime is detected. This module supplies
 //! the missing native half: a deterministic, dependency-light task dispatcher plus
-//! one real CPU-bound task (`text.analyze`) that is genuinely worth offloading the
-//! main thread for on large manuscripts.
+//! two bounded CPU-bound tasks (`text.analyze` and `text.diff`) that are genuinely
+//! worth offloading the main thread for large manuscripts and revision comparisons.
 //!
 //! Contract (mirrors `@domain/worker-bus` `types.ts:213-238`, serde camelCase):
 //!   RustTaskRequest { taskId, taskType, payload, priority, target, timeoutMs, retryPolicy? }
@@ -22,6 +22,9 @@ use std::time::Instant;
 
 /// Bumped when the wire contract or task registry changes; surfaced via `ping`.
 const SUPERVISOR_VERSION: &str = "1.0.0";
+const MAX_TEXT_INPUT_CHARS: usize = 200_000;
+const MAX_DIFF_DP_CELLS: usize = 80_000;
+const MAX_DIFF_INPUT_CHARS: usize = MAX_TEXT_INPUT_CHARS;
 
 /// Incoming task request from the TS hybrid router (camelCase on the wire).
 #[derive(Debug, Deserialize)]
@@ -68,6 +71,15 @@ pub struct TextAnalysis {
     pub reading_time_minutes: f64,
 }
 
+/// Renderer-neutral word/whitespace diff operation.
+#[derive(Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TextDiffOp {
+    #[serde(rename = "type")]
+    pub op_type: String,
+    pub token: String,
+}
+
 /// Health-check command. Any non-error response signals the supervisor is reachable;
 /// the TS bridge treats a successful resolve as "Rust compute available".
 #[tauri::command]
@@ -89,6 +101,7 @@ pub fn worldscript_task_supervisor_submit(
 
     let outcome: Result<Value, String> = match request.task_type.as_str() {
         "text.analyze" => run_text_analyze(&request.payload),
+        "text.diff" => run_text_diff(&request.payload),
         other => Err(format!("Unknown task type: {other}")),
     };
 
@@ -118,9 +131,140 @@ fn run_text_analyze(payload: &Value) -> Result<Value, String> {
         .get("text")
         .and_then(Value::as_str)
         .ok_or_else(|| "text.analyze requires payload.text to be a string".to_string())?;
+    if text.chars().count() > MAX_TEXT_INPUT_CHARS {
+        return Err(format!(
+            "text.analyze input must be at most {MAX_TEXT_INPUT_CHARS} characters"
+        ));
+    }
 
     let analysis = analyze_text(text);
     serde_json::to_value(&analysis).map_err(|e| e.to_string())
+}
+
+/// `text.diff` handler: expects `{ "oldText": String, "newText": String }`.
+fn run_text_diff(payload: &Value) -> Result<Value, String> {
+    let old_text = payload
+        .get("oldText")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "text.diff requires payload.oldText to be a string".to_string())?;
+    let new_text = payload
+        .get("newText")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "text.diff requires payload.newText to be a string".to_string())?;
+
+    serde_json::to_value(diff_text(old_text, new_text)?).map_err(|e| e.to_string())
+}
+
+/// Pure word/whitespace diff matching `services/wordDiff.ts`'s deterministic LCS contract.
+/// The explicit input and DP budgets keep untrusted revision payloads bounded on low-end hosts.
+pub fn diff_text(old_text: &str, new_text: &str) -> Result<Vec<TextDiffOp>, String> {
+    if old_text.chars().count() > MAX_DIFF_INPUT_CHARS
+        || new_text.chars().count() > MAX_DIFF_INPUT_CHARS
+    {
+        return Err(format!(
+            "text.diff inputs must be at most {MAX_DIFF_INPUT_CHARS} characters each"
+        ));
+    }
+
+    let old_tokens = tokenize_words_and_spaces(old_text);
+    let new_tokens = tokenize_words_and_spaces(new_text);
+    let old_len = old_tokens.len();
+    let new_len = new_tokens.len();
+
+    if old_len == 0 && new_len == 0 {
+        return Ok(Vec::new());
+    }
+
+    let exceeds_dp_budget = old_len
+        .checked_mul(new_len)
+        .map_or(true, |cells| cells > MAX_DIFF_DP_CELLS);
+    if exceeds_dp_budget {
+        let mut ops = Vec::with_capacity(2);
+        if old_len > 0 {
+            ops.push(TextDiffOp {
+                op_type: "delete".to_string(),
+                token: old_tokens.concat(),
+            });
+        }
+        if new_len > 0 {
+            ops.push(TextDiffOp {
+                op_type: "insert".to_string(),
+                token: new_tokens.concat(),
+            });
+        }
+        return Ok(ops);
+    }
+
+    let mut dp = vec![vec![0usize; new_len + 1]; old_len + 1];
+    for (old_index, old_token) in old_tokens.iter().enumerate() {
+        for (new_index, new_token) in new_tokens.iter().enumerate() {
+            let row = old_index + 1;
+            let column = new_index + 1;
+            dp[row][column] = if old_token == new_token {
+                dp[row - 1][column - 1] + 1
+            } else {
+                dp[row - 1][column].max(dp[row][column - 1])
+            };
+        }
+    }
+
+    let mut reversed = Vec::new();
+    let mut old_index = old_len;
+    let mut new_index = new_len;
+    while old_index > 0 || new_index > 0 {
+        let old_token = old_index.checked_sub(1).map(|index| &old_tokens[index]);
+        let new_token = new_index.checked_sub(1).map(|index| &new_tokens[index]);
+        if let (Some(old_token), Some(new_token)) = (old_token, new_token) {
+            if old_token == new_token {
+                reversed.push(TextDiffOp {
+                    op_type: "equal".to_string(),
+                    token: old_token.clone(),
+                });
+                old_index -= 1;
+                new_index -= 1;
+                continue;
+            }
+        }
+        if new_index > 0
+            && (old_index == 0 || dp[old_index][new_index - 1] >= dp[old_index - 1][new_index])
+        {
+            reversed.push(TextDiffOp {
+                op_type: "insert".to_string(),
+                token: new_tokens[new_index - 1].clone(),
+            });
+            new_index -= 1;
+        } else if old_index > 0 {
+            reversed.push(TextDiffOp {
+                op_type: "delete".to_string(),
+                token: old_tokens[old_index - 1].clone(),
+            });
+            old_index -= 1;
+        }
+    }
+
+    reversed.reverse();
+    Ok(reversed)
+}
+
+fn tokenize_words_and_spaces(text: &str) -> Vec<String> {
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+    let mut current_is_whitespace: Option<bool> = None;
+
+    for character in text.chars() {
+        // QNBS-v3: Match JavaScript whitespace semantics so Rust and TS tokens stay equivalent.
+        let is_whitespace =
+            (character.is_whitespace() && character != '\u{0085}') || character == '\u{FEFF}';
+        if current_is_whitespace.is_some_and(|previous| previous != is_whitespace) {
+            tokens.push(std::mem::take(&mut current));
+        }
+        current.push(character);
+        current_is_whitespace = Some(is_whitespace);
+    }
+    if !current.is_empty() {
+        tokens.push(current);
+    }
+    tokens
 }
 
 /// Pure, deterministic text statistics — no allocation beyond the word iterator.
@@ -306,5 +450,100 @@ mod tests {
         let res = worldscript_task_supervisor_submit(req).unwrap();
         assert!(!res.success);
         assert!(res.error.unwrap().contains("payload.text"));
+    }
+
+    #[test]
+    fn submit_text_analyze_rejects_oversized_input() {
+        let req = RustTaskRequest {
+            task_id: "t-analyze-large".into(),
+            task_type: "text.analyze".into(),
+            payload: json!({ "text": "x".repeat(MAX_TEXT_INPUT_CHARS + 1) }),
+            priority: "normal".into(),
+            target: "rust".into(),
+            timeout_ms: 1000,
+            retry_policy: None,
+        };
+        let res = worldscript_task_supervisor_submit(req).unwrap();
+        assert!(!res.success);
+        assert!(res.error.unwrap().contains("at most 200000 characters"));
+    }
+
+    #[test]
+    fn submit_text_diff_returns_renderer_neutral_operations() {
+        let req = RustTaskRequest {
+            task_id: "t4".into(),
+            task_type: "text.diff".into(),
+            payload: json!({ "oldText": "the cat", "newText": "the dog" }),
+            priority: "low".into(),
+            target: "rust".into(),
+            timeout_ms: 1000,
+            retry_policy: None,
+        };
+        let res = worldscript_task_supervisor_submit(req).unwrap();
+        assert!(res.success);
+        assert_eq!(res.payload[0]["type"], json!("equal"));
+        assert_eq!(res.payload[0]["token"], json!("the"));
+        assert_eq!(res.payload[2]["type"], json!("delete"));
+        assert_eq!(res.payload[3]["type"], json!("insert"));
+    }
+
+    #[test]
+    fn submit_text_diff_rejects_missing_text_pair() {
+        let req = RustTaskRequest {
+            task_id: "t5".into(),
+            task_type: "text.diff".into(),
+            payload: json!({ "oldText": "only one side" }),
+            priority: "low".into(),
+            target: "rust".into(),
+            timeout_ms: 1000,
+            retry_policy: None,
+        };
+        let res = worldscript_task_supervisor_submit(req).unwrap();
+        assert!(!res.success);
+        assert!(res.error.unwrap().contains("payload.newText"));
+    }
+
+    #[test]
+    fn text_diff_uses_bounded_replacement_for_large_token_sets() {
+        let old_text = (0..300)
+            .map(|index| format!("old{index} "))
+            .collect::<String>();
+        let new_text = (0..300)
+            .map(|index| format!("new{index} "))
+            .collect::<String>();
+        let ops = diff_text(&old_text, &new_text).unwrap();
+        assert_eq!(ops.len(), 2);
+        assert_eq!(ops[0].op_type, "delete");
+        assert_eq!(ops[1].op_type, "insert");
+    }
+
+    #[test]
+    fn text_diff_rejects_oversized_input_before_tokenization() {
+        let oversized = "x".repeat(MAX_DIFF_INPUT_CHARS + 1);
+        let error = diff_text(&oversized, "").unwrap_err();
+        assert!(error.contains("at most 200000 characters"));
+    }
+
+    #[test]
+    fn text_diff_treats_byte_order_mark_as_whitespace() {
+        let ops = diff_text("a\u{FEFF}b", "a\u{FEFF}c").unwrap();
+        assert_eq!(ops[0].op_type, "equal");
+        assert_eq!(ops[0].token, "a");
+        assert_eq!(ops[1].op_type, "equal");
+        assert_eq!(ops[1].token, "\u{FEFF}");
+        assert_eq!(ops[2].op_type, "delete");
+        assert_eq!(ops[2].token, "b");
+        assert_eq!(ops[3].op_type, "insert");
+        assert_eq!(ops[3].token, "c");
+    }
+
+    #[test]
+    fn text_diff_matches_javascript_for_next_line_character() {
+        let ops = diff_text("a\u{0085}b", "a\u{0085}c").unwrap();
+        assert_eq!(ops.len(), 2);
+        assert_eq!(ops[0].op_type, "delete");
+        assert_eq!(ops[0].token, "a\u{0085}b");
+        assert_eq!(ops[1].op_type, "insert");
+        assert_eq!(ops[1].token, "a\u{0085}c");
     }
 }

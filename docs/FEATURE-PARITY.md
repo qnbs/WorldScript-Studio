@@ -51,7 +51,7 @@
 | `enableWebnnInference` | ON | ✅ | ✅ | ✅ | ✅ | ⚠️ | Toggle + handler only — **no runtime gate reads `selectEnableWebnnInference`**. WebNN code lives in `packages/ai-core/src/webnnBridge.ts` but is not gated on this flag (ghost/stub) *(corrected 2026-06-21)* | 🟡 Partial |
 | `enableComputeShaders` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | `computeShaderFactory.ts`; `localRagService.ts` GPU cosine; `useAdaptiveAi` *(added 2026-05-31)* | 🟢 OK |
 | `enableWorkerBusV2` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | `packages/worker-bus` orchestration; `ensureWebLlmPool()` / WorkerBus init | 🟢 OK |
-| `enableRustCompute` | ON | ✅ | ✅ | ✅ | ✅ | ✅ | Tauri Rust compute (`src-tauri/`); verified via `tauri-build.yml` (no PR-CI gate) | 🟢 OK |
+| `enableRustCompute` | **OFF** | ✅ | ✅ | ✅ | ✅ | ✅ | Qualification-only bounded `text.analyze`/`text.diff` proof in `src-tauri/`; no production caller yet | 🟡 Partial |
 | `enableRtlLayout` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `App.tsx:271` | 🟢 OK |
 | `enableVoiceSupport` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `App.tsx:568` | 🟢 OK |
 | `enableVoiceWasm` | OFF | ✅ | ✅ | ✅ | ✅ | ✅ | `useVoice.ts:29` + handler added *(fixed 2026-05-29)* | 🟢 OK |

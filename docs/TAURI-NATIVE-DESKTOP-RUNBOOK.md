@@ -81,11 +81,18 @@
   `services/desktop/globalShortcuts.ts` + `hooks/useGlobalShortcuts.ts`; register configurable
   hotkeys (**default off / opt-in**) → `executeCommand` (open palette, new project, show/focus).
   Conflict-safe unregister on teardown. Settings to enable/configure.
-- **Rust-compute expansion** (`src-tauri/src/commands/task_supervisor.rs`): honor `timeout_ms`,
+- **Rust-compute expansion** (`src-tauri/src/commands/task_supervisor.rs`): native task waits are
+  bounded by `timeout_ms` in `services/tauriTaskBridge.ts`; Tauri invoke itself cannot abort an
+  already-running native command yet, so timeout does not provide native cancellation,
   add run-scoped **progress events** + **cancellation** (Tokio channel → Tauri event, ADR-D4), and
-  2–3 high-value tasks (e.g. whole-manuscript batch `text.analyze`, a heavier metric/diff). Update
-  `services/hybridRouter.ts` to stream real progress + support `cancel()` by `runId` (replace the
-  empty generator / no-op). Typed wrappers à la `services/rustTaskSupervisor.ts`.
+  add further bounded tasks only after their contracts are proven. `text.analyze` and the bounded
+  `text.diff` proof now exist; remaining work is whole-manuscript batching/other metrics plus
+  updating `services/hybridRouter.ts` to stream real progress and support `cancel()` by `runId`
+  (replace the empty generator / no-op). Typed wrappers à la `services/rustTaskSupervisor.ts`.
+- **Current caller status:** `analyzeTextViaRust` and `diffTextViaRust` are qualification wrappers
+  with deterministic unit/CI/build evidence, not production authority switches. No production caller
+  currently opts into either wrapper; do not describe the Rust flag as shipped text-analysis or
+  embedding offload until a real caller, parity proof, timeout policy, and fallback path are wired.
 - i18n: `desktop.shortcuts.*`. Tests: shortcut service + hybridRouter progress/cancel + Rust
   `#[cfg(test)]`. Rust change → `tauri-build.yml` dispatch.
 
