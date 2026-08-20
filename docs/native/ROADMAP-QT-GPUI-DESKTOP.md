@@ -960,7 +960,7 @@ Required:
 [x] direct Tauri imports constrained (guardrail:desktop-imports, zero-tolerance)
 [~] project headless API exists — crates/worldscript-project (schema/validation/migration/plain I/O);
     storage (fs/IDB parity) and crypto remain, see docs/native/CORE-MIGRATION-LEDGER.md
-[ ] Array↔EntityState compatibility adapter scoped and proven at the Core boundary (ledger row 9)
+[x] Array↔EntityState compatibility adapter scoped and proven at the Core boundary (ledger row 9; production caller and authority switch remain deferred)
 [ ] R-15 architecture approved
 [ ] task supervision renderer-neutral
 [ ] diagnostics renderer-neutral
@@ -1116,7 +1116,9 @@ storage-backend parity, diagnostics sink migration, and AI request model extract
 see the ledger's priority order — so this wave stays "in progress," not "complete." Before G1 is evaluated, the
 separate row-9 compatibility position must also define and prove the Array↔EntityState boundary:
 the current Core `Vec` model is intentionally renderer-neutral, while production Redux state uses
-`EntityState` for characters and worlds.
+`EntityState` for characters and worlds. The typed boundary adapter and deterministic rejection
+fixtures are now implemented in `features/project/coreBoundaryAdapter.ts`; no production caller or
+authority switch is claimed.
 
 **Goal:** establish authoritative renderer-neutral execution.
 
@@ -1127,7 +1129,7 @@ Actions (checked = this slice, per `docs/native/CORE-MIGRATION-LEDGER.md`):
 - [x] schema;
 - [x] migration (minimal versioned mechanism, one synthetic migration proving it);
 - [ ] storage (fs backend parity, IDB backend — deferred);
-- [ ] Array↔EntityState compatibility adapter contract and fixtures (reject duplicate/missing/orphan
+- [x] Array↔EntityState compatibility adapter contract and fixtures (reject duplicate/missing/orphan
       IDs for characters and worlds; required before G1 evaluation);
 - [x] bounded task-supervisor proof (`text.analyze`/`text.diff`, structured failures and input
       limits; #430) — full worker-bus extraction remains deferred;

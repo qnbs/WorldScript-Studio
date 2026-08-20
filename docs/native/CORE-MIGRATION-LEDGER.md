@@ -16,7 +16,7 @@ scope shifts — it is a living decision record, not a one-time snapshot.
 | 6 | Storage — IDB backend (all encryption) | TS, `services/storage/` (18 files, 5,363 lines) — mature AES-256-GCM, ADR-0018 "Accepted and implemented" | High — IndexedDB is browser-only, not portable to Qt/GPUI as-is | High, mature | High | Medium | Low as literally written; high as a design reference | **Deferred to Wave 3-4** | None in Wave 2. ADR-0018's 6 invariants are required reading for Wave 3 crypto design | None in Wave 2 |
 | 7 | `features/project/` domain logic | TS, `features/project/` (24 files, 2,114 lines) — real logic concentrated in `thunks/` + `projectSelectors.ts` (~450-500 lines); `reducers/` (11 files) is CRUD bookkeeping | High — Redux-store-shape/dispatch bound; `reducers/` stays TS-side permanently | Low | Medium (import/restore orchestration) | Low-medium | Medium (only the thunks/selectors subset) | Deferred | Candidate after the schema crate is proven; only thunks/selectors, never `reducers/` | Not started |
 | 8 | AI services | TS, `services/ai/` (44 files, 5,401 lines), mixed portability (retry/routing/error-taxonomy renderer-neutral vs. `computeShaderFactory.ts`/`webGpuDetectorService.ts`/`.wgsl` inherently WebGPU-coupled) | Mixed | Medium-high (API keys) | Low-medium | Medium | Uncertain — too large/mixed to assess narrowly | **Out of scope for all of Wave 2** | None proposed | None |
-| 9 | Project state-shape compatibility adapter | TS, `features/project` selectors/adapters at the Core boundary + Rust, `crates/worldscript-project` schema | High at the boundary — production Redux `EntityState` must be translated without importing Redux into Core | Low | High — ID/order preservation is part of project identity | Medium | High — every native renderer needs the same conversion contract | **2 — Wave 2 prerequisite before G1 evaluation** | Define a typed adapter that normalizes Redux `EntityState` to the Core's renderer-neutral arrays and reconstructs the TS-side shape only at the integration boundary; Core remains unaware of Redux and no authority switch occurs in the scoping slice | Golden fixtures for array and `EntityState` inputs; round-trip ID/order preservation; duplicate IDs, missing `ids` references, and orphaned entities are rejected for both characters and worlds |
+| 9 | Project state-shape compatibility adapter | TS, `features/project/coreBoundaryAdapter.ts` at the Core boundary + Rust, `crates/worldscript-project` schema | High at the boundary — production Redux `EntityState` must be translated without importing Redux into Core | Low | High — ID/order preservation is part of project identity | Medium | High — every native renderer needs the same conversion contract | **2 — Wave 2 prerequisite before G1 evaluation** | **In progress — typed adapter and fixtures locally proven; no production caller or authority switch**; normalizes Redux `EntityState` to renderer-neutral arrays and reconstructs the TS-side shape only at the integration boundary | `tests/unit/features/project/coreBoundaryAdapter.test.ts` covers array and `EntityState` inputs, round-trip ID/order preservation, and rejection of duplicate IDs, missing references, and orphaned entities for both characters and worlds |
 
 ## Decisions this table records
 
@@ -34,11 +34,12 @@ scope shifts — it is a living decision record, not a one-time snapshot.
   `Vec`-based model is not yet the production Redux `EntityState` shape; the adapter contract and
   its ID/order fixtures must be scoped and proven at the boundary before G1 can claim a native-ready
   project lifecycle. This does not move Redux reducers or make `EntityState` part of Core.
-- **Row 9 boundary policy is deterministic for both `characters` and `worlds`.** Array-to-
-  `EntityState` conversion rejects duplicate or missing stable IDs. `EntityState`-to-array
-  conversion rejects an `ids` entry without a matching entity, an entity absent from `ids`, or
-  duplicate IDs; it never silently drops, synthesizes, or last-write-wins. Valid input preserves
-  the declared `ids` order and entity IDs in the golden fixtures.
+- **Row 9 boundary policy is deterministic for both `characters` and `worlds` and is now
+  implemented in `features/project/coreBoundaryAdapter.ts`.** Array-to-`EntityState` conversion
+  rejects duplicate or missing stable IDs. `EntityState`-to-array conversion rejects an `ids`
+  entry without a matching entity, an entity absent from `ids`, or duplicate IDs; it never silently
+  drops, synthesizes, or last-write-wins. Valid input preserves the declared `ids` order and
+  entity IDs in the boundary fixtures. This proves the contract, not a production authority switch.
 - **Row 4 has a narrow Core proof in progress.** `crates/worldscript-diagnostics` owns only the
   typed structured-log model and the existing top-level key-redaction semantics. IDB, Tauri JSONL,
   and development-console sinks remain TS-side; no production caller or authority switch is claimed.
@@ -52,8 +53,8 @@ reconciling it with fs storage. No `packages/worker-bus` subsumption or `task_su
 registry expansion. No `services/ai/*` work. No changes to `src-tauri/src/lora.rs` or `pandoc.rs`. No
 Qt/GPUI code. No unifying `src-tauri/Cargo.toml` into one repo-root Cargo workspace (see
 `crates/Cargo.toml`'s own scope note). No replacing `projectFsStore.ts`/`storageService.ts`'s
-dispatch — any future Tauri-command wiring is additive-and-unused-by-default only. No Row-9 adapter
-implementation or authority switch is included in this slice; it only makes the compatibility
-prerequisite explicit. No sink migration, Tauri adapter rewiring, or authority switch is included
-in the logger proof. No compression-format parity with the existing `.wsproj` files (open question,
-not solved here).
+dispatch — any future Tauri-command wiring is additive-and-unused-by-default only. No Row-9
+production caller, Rust schema change, or authority switch is included in this slice; the typed
+boundary contract and fixtures are proven independently. No sink migration, Tauri adapter
+rewiring, or authority switch is included in the logger proof. No compression-format parity with
+the existing `.wsproj` files (open question, not solved here).
