@@ -2,7 +2,7 @@
 # WorldScript Studio – CI/CD Pipeline
 # security → quality (lint, i18n, tsgo, vitest+coverage) → build (+chunk budget, rollup analyze)
 #   ├→ e2e | storybook (parallel) ; lighthouse after build
-# deploy (main): needs build + e2e → GitHub Pages
+# deploy (main): needs ci-success + build artifact → GitHub Pages
 # ============================================================
 
 name: CI / CD
@@ -85,7 +85,7 @@ jobs:
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5
 
   # ----------------------------------------------------------
-  # 0b. CHANGE DETECTION: path-scopes rust-tauri so a docs/frontend-only PR
+  # 0b. CHANGE DETECTION: path-scopes Rust gates so a docs/frontend-only PR
   # doesn't pay for a Rust toolchain + apt-get(libgtk/libwebkit) build it can't
   # affect. Fails OPEN (tauri=true) on any ambiguity — base SHA missing/unreachable
   # — so a detection error runs the real gate instead of silently skipping it.
@@ -106,6 +106,7 @@ jobs:
       - name: Detect src-tauri / crates changes
         id: filter
         run: |
+          node scripts/check-ci-invariants.mjs --self-test --check-workflow
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE="${{ github.event.pull_request.base.sha }}"
           else
@@ -118,16 +119,7 @@ jobs:
             exit 0
           fi
           CHANGED=$(git diff --name-only "$BASE" "${{ github.sha }}")
-          if grep -qE '^(src-tauri/|\.github/workflows/ci\.yml$)' <<< "$CHANGED"; then
-            echo "tauri=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "tauri=false" >> "$GITHUB_OUTPUT"
-          fi
-          if grep -qE '^(crates/|tests/fixtures/project-golden-masters/|\.github/workflows/ci\.yml$)' <<< "$CHANGED"; then
-            echo "crates=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "crates=false" >> "$GITHUB_OUTPUT"
-          fi
+          printf '%s\n' "$CHANGED" | node scripts/check-ci-invariants.mjs >> "$GITHUB_OUTPUT"
 
   # ----------------------------------------------------------
   # 1. QUALITY GATE: Lint + Typecheck + Tests (parallel matrix)
@@ -454,8 +446,8 @@ jobs:
     name: 🚀 Deploy to GitHub Pages
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [build, e2e]
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: [ci-success, build]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.ci-success.result == 'success'
     permissions:
       contents: read
       pages: write

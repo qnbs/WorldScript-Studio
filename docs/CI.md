@@ -83,7 +83,7 @@ e2e ──────┤
 vrt ──────┘
 
 build (main, non-PR) ──► upload-pages-artifact
-deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
+ci-success + build artifact (main, non-PR) ──► deploy ──► GitHub Pages
 ```
 
 Mutation testing (Stryker) is **not** in this graph — it runs only via manual `workflow_dispatch` on [`mutation.yml`](../.github/workflows/mutation.yml). See [Mutation testing status](#mutation-testing-status).
@@ -98,8 +98,8 @@ Mutation testing (Stryker) is **not** in this graph — it runs only via manual 
 | `lighthouse` | `build` | LHCI (mobile): **accessibility error gate** `minScore: 0.95`; **CLS error** ≤ 0.1; performance/SEO warn. Desktop run: `continue-on-error: true` until baselines stabilise. Timeout 25 min. |
 | `storybook` | `quality` | Cloud-first — Storybook build + test-runner only run in CI (not locally); Playwright browser cache `v5`; `--maxWorkers=2 --junit` (non-blocking, `continue-on-error: true` — see [exit criteria](#non-blocking-gates--exit-criteria-f-13)); artifacts uploaded always. Debug: manual `storybook-debug.yml` workflow. |
 | `vrt` | `build` | Visual regression against production `dist`; `toHaveScreenshot()` with committed PNG baselines (4 views × Chromium); artifacts uploaded always |
-| `ci-success` | `security`, `quality`, `rust-tauri`, `build`, `e2e`, `vrt` | Required-status **aggregator** — `if: always()`, fails if any required release-safety job does not resolve to `success`; Storybook, Lighthouse and deep-E2E remain informational until their stability criteria are met. |
-| `deploy` | `build`, `e2e` | **Only** `main` push (not PR): `deploy-pages` |
+| `ci-success` | `security`, `quality`, `changes`, `rust-tauri`, `core-rust`, `build`, `e2e`, `vrt` | Required-status **aggregator** — `if: always()`, fails if any required release-safety job does not resolve to `success`; Storybook, Lighthouse and deep-E2E remain informational until their stability criteria are met. Rust jobs are legitimately skipped when their paths are untouched. |
+| `deploy` | `ci-success`, `build` | **Only** `main` push (not PR), and only after the aggregate gate succeeds; retains the direct `build` dependency for the Pages artifact. |
 
 > **Desktop:** On-demand / tag-driven Tauri bundles live in [`tauri-build.yml`](../.github/workflows/tauri-build.yml); **`v*` tags** additionally publish installers on a **GitHub Release**. See [`docs/TAURI-CI.md`](TAURI-CI.md). Desktop CI does not block the web deploy graph above.
 >
