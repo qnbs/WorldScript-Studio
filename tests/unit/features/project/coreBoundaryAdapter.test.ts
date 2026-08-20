@@ -121,6 +121,92 @@ describe('project Core boundary adapter', () => {
   it.each([
     [
       'characters',
+      () => entityStateToCoreArray(malformedEntityState({ ids: [''], entities: {} }), 'characters'),
+    ],
+    [
+      'worlds',
+      () => entityStateToCoreArray(malformedEntityState({ ids: [''], entities: {} }), 'worlds'),
+    ],
+  ])('rejects missing %s stable IDs in EntityState ids', (_collection, convert) => {
+    expect(convert).toThrow(/missing a stable id/);
+  });
+
+  it.each([
+    [
+      'characters',
+      () =>
+        entityStateToCoreArray(
+          malformedEntityState({ ids: ['empty'], entities: { empty: undefined } }),
+          'characters',
+        ),
+    ],
+    [
+      'worlds',
+      () =>
+        entityStateToCoreArray(
+          malformedEntityState({ ids: ['empty'], entities: { empty: undefined } }),
+          'worlds',
+        ),
+    ],
+  ])('rejects %s EntityState entries with no value', (_collection, convert) => {
+    expect(convert).toThrow(/has no value/);
+  });
+
+  it.each([
+    [
+      'characters',
+      () =>
+        entityStateToCoreArray(
+          malformedEntityState({ ids: ['listed'], entities: { listed: character('') } }),
+          'characters',
+        ),
+    ],
+    [
+      'worlds',
+      () =>
+        entityStateToCoreArray(
+          malformedEntityState({ ids: ['listed'], entities: { listed: world('') } }),
+          'worlds',
+        ),
+    ],
+  ])('rejects %s entities with missing stable IDs', (_collection, convert) => {
+    expect(convert).toThrow(/missing a stable id/);
+  });
+
+  it.each([
+    [
+      'characters',
+      () =>
+        entityStateToCoreArray(
+          malformedEntityState({ ids: ['listed'], entities: { listed: character('other') } }),
+          'characters',
+        ),
+    ],
+    [
+      'worlds',
+      () =>
+        entityStateToCoreArray(
+          malformedEntityState({ ids: ['listed'], entities: { listed: world('other') } }),
+          'worlds',
+        ),
+    ],
+  ])('rejects %s entity key and ID mismatches', (_collection, convert) => {
+    expect(convert).toThrow(/does not match entity id/);
+  });
+
+  it.each([
+    [
+      'characters',
+      () => coreArrayToEntityState([undefined] as unknown as Character[], 'characters'),
+    ],
+    ['worlds', () => coreArrayToEntityState([undefined] as unknown as World[], 'worlds')],
+  ])('rejects %s array entries without stable IDs', (_collection, convert) => {
+    expect(convert).toThrow(/missing a stable id/);
+  });
+
+  it.each([
+    [
+      'characters',
       () =>
         entityStateToCoreArray(
           malformedEntityState({
