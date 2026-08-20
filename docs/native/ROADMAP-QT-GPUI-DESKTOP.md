@@ -83,6 +83,9 @@ Rust-authoritative Core
 Storage / Crypto / Migration / Tasks / AI / Diagnostics
         │
         ▼
+Qt early killer-gate qualification
+        │
+        ▼
 Qt architecture + executable learning harness
         │
         ▼
@@ -970,6 +973,7 @@ Required:
 [ ] Qt license strategy approved
 [ ] Qt version/LTS strategy approved
 [ ] bridge technology selected by scorecard
+[ ] Wave 4.5 Qt Early Killer-Gate qualification accepted — see `docs/native/QT-EARLY-KILLER-GATES.md`
 [ ] Qt learning harness passes
 [ ] IME feasibility passes
 [ ] accessibility feasibility passes
@@ -1179,9 +1183,37 @@ Required tests:
 Exit: desktop project data uses the approved encrypted path where required; #357/#359/#360/#361 all
 closed with evidence.
 
+## Wave 4.5 — Qt Early Killer-Gate Qualification
+
+**Status: PLANNED — required before substantial Qt implementation.**
+
+This additive qualification wave front-loads the highest-cost-to-discover Qt risks before Wave 5's
+learning harness grows into a product shell. It is intentionally smaller than a Qt port and does
+not claim production readiness. The complete test matrix, kill criteria, evidence package, and
+maturity vocabulary live in [`docs/native/QT-EARLY-KILLER-GATES.md`](QT-EARLY-KILLER-GATES.md).
+
+Required order:
+
+1. inventory the Qt/Core contract, process, permission, and threat boundaries;
+2. run a minimal executable lifecycle/bridge spike with cancellation and repeated shutdown;
+3. prove accessibility-tree observability plus keyboard, IME, RTL/BiDi, focus, and error behavior;
+4. test clean packaged launch, signing identity, updater trust, tamper rejection, and rollback;
+5. prove crash diagnostics, project-owned symbolization, and deterministic recovery;
+6. prove least-privilege filesystem/network/IPC behavior with negative tests;
+7. record residual risk, owners, retest conditions, and an explicit GO/NO-GO decision.
+
+**Exit:** each kill gate is locally and CI-proven at the required level, packaged trust and
+recovery evidence exists, no Critical/High security blocker remains, and the admission scorecard
+authorizes Wave 5. A failed gate stops Qt work and triggers architecture review; it does not get
+papered over by checking a later G2/G4 box.
+
+This wave does not renumber the established program. It is a deliberate qualification checkpoint
+between Core/R-15 work and Qt enablement, so storage and security semantics are settled before the
+native bridge is exercised and the bridge is falsified before feature UI creates sunk cost.
+
 ## Wave 5 — Qt enablement / executable learning harness
 
-**Status: PLANNED — not started. Gated behind G2.**
+**Status: PLANNED — not started. Gated behind Wave 4.5 and G2.**
 
 Create a minimal isolated Qt 6 application proving:
 

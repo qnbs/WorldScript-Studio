@@ -778,6 +778,7 @@ See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the full dev setup, Biome / Vit
 | [`docs/DEEPSOURCE-REMEDIATION-PLAN.md`](docs/DEEPSOURCE-REMEDIATION-PLAN.md) | Prioritised DeepSource backlog tracker (P0-security→P5-docs) with triage decisions |
 | [`docs/adr/`](docs/adr/README.md) | Architecture Decision Records — state-management boundaries, local-AI stack layering, WorkerBus v2 hybrid routing |
 | [`docs/native/ROADMAP-QT-GPUI-DESKTOP.md`](docs/native/ROADMAP-QT-GPUI-DESKTOP.md) | Qt 6 + GPUI native desktop roadmap (ADR-0021) — 24-wave plan: renderer-neutral Rust Core → Qt Hardened Edition → GPUI Vision Edition, succeeding Tauri; CEF retired, historical record in `docs/historical/cef/` |
+| [`docs/native/QT-EARLY-KILLER-GATES.md`](docs/native/QT-EARLY-KILLER-GATES.md) | Evidence-first Qt feasibility qualification — lifecycle, accessibility/input, packaging/update trust, crash/recovery, and security checks before substantial native UI investment |
 | [`docs/native/CORE-MIGRATION-LEDGER.md`](docs/native/CORE-MIGRATION-LEDGER.md) | Rust Core extraction priority order — what's moved out of TypeScript vs. deferred, and why |
 | [`docs/architecture/native-readiness.md`](docs/architecture/native-readiness.md) | Native-Readiness scorecard (see ADR-0021) — cross-cutting architecture-quality checklist, re-scored at every architecture-changing PR |
 | [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md) | A11y architecture (live regions, focus, WCAG 2.2, Lighthouse 0.95 gate) |
