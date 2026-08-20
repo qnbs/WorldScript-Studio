@@ -167,7 +167,7 @@ Wrap each major view root with `components/ui/ViewErrorBoundary.tsx` — provide
 
 **Container queries:** Resizable panels set `containerType: 'inline-size'` via inline style. Use `@container` CSS queries or the Tailwind `@container` variant for responsive panel content.
 
-**Tauri build isolation:** `vite.config.ts` uses `external: [/^@tauri-apps\//]` (regex) to exclude all Tauri packages from the web build. When adding new Tauri plugin imports to `services/tauriRuntime.ts`, the regex already covers them.
+**Tauri build isolation:** `vite.config.ts` uses `external: [/^@tauri-apps\//]` (regex) to exclude all Tauri packages from the web build. The regex covers any `@tauri-apps/*` import, but new Tauri capability access should go through `packages/desktop-contracts` (the `DesktopPlatform` interface, consumed via `services/desktopPlatform.ts`) rather than a direct import — enforced by `pnpm run guardrail:desktop-imports` (`scripts/check-tauri-import-boundary.mjs`), a zero-tolerance CI gate.
 
 **Tauri CSP:** When adding a new external endpoint, extend `connect-src` in `src-tauri/tauri.conf.json`. Web `fetch` alone is not enough.
 
@@ -309,7 +309,7 @@ All `.md` guides listed in **[`README.md`](README.md#-documentation-hub) § Docu
 - Gemini API calls must use `NetworkOnly` caching (never cache AI responses in the Service Worker).
 - Use `focus-visible:ring-2` for keyboard focus styles.
 - `dangerouslySetInnerHTML` only with DOMPurify-sanitized content — never raw.
-- No direct `@tauri-apps/api` imports in `components/ui/` atoms; abstract through `services/tauriRuntime.ts`.
+- No direct `@tauri-apps/api` imports in `components/ui/` atoms; abstract through the `DesktopPlatform` interface (`packages/desktop-contracts`, consumed via `services/desktopPlatform.ts`), mechanically enforced by `pnpm run guardrail:desktop-imports`.
 - File size target: **200–700 lines**. Over 700 → split into submodules, hooks, or selectors.
 - Never skip failing tests to green CI — fix the root cause. `it.skip` requires a file-level comment with reason + ticket.
 - **Modus operandi — tests:** When you modify, add, or delete a code file, check whether a corresponding test file exists (`tests/unit/` or `tests/e2e/`). If it does, update it. If it doesn't and the change is non-trivial, create it. Run with `pnpm exec vitest run <path>` to verify. Write fully deterministic tests: mock `Date.now()` / fake timers; no real network; reset Redux store + IDB in `beforeEach` (patterns from `tests/setup.ts`). Use `@testing-library/user-event` for interactions; `findBy*` / `waitFor` for async assertions.
