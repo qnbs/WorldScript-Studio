@@ -9,7 +9,7 @@ opt-in, experimental feature flag letting the PWA attempt direct browser-to-Olla
 matching the "technically: yes" option the maintainer already described in that issue's comment
 thread.
 **Status:** ✅ Complete — merged 2026-07-30, see `[Unreleased]`/`[1.25.0]` in
-[CHANGELOG.md](CHANGELOG.md) for the user-facing summary.
+[CHANGELOG.md](../../CHANGELOG.md) for the user-facing summary.
 **Execution:** All phases below (Grok wiring, Claude desktop + web proxy, Ollama-in-PWA opt-in
 addendum) have shipped. This file is retained as the historical design record; do not treat any
 "do not implement yet" language below as current.
@@ -167,7 +167,7 @@ use the Tauri desktop app for Anthropic calls"*). Track B (the actual new archit
    and for the UI's desktop-vs-web conditional rendering.
 
 **Track A Definition of Done:**
-- [ ] `streamAnthropic()` (+ image-gen + connection-test) branch on `isTauriRuntime()`; desktop calls Anthropic natively, no CORS error
+- [ ] `streamAnthropic()` (+ connection-test) branches on `isTauriRuntime()`; desktop calls Anthropic natively, no CORS error
 - [ ] `src-tauri/tauri.conf.json` CSP includes `https://api.anthropic.com`
 - [ ] Desktop Settings UI shows a real API-key/model-selector flow for Claude instead of the warning block
 - [ ] Web/PWA UI unchanged by this track (still shows the warning, pointing at Track B once it exists)
@@ -304,7 +304,7 @@ correctly `'anthropic'` throughout (`AIProvider` type, `aiProviderService.ts`'s 
   unavailable state, confirm it doesn't silently break).
 
 **Claude Definition of Done (Track A — desktop, ships first):**
-- [ ] `streamAnthropic()` (+ image-gen + connection-test) branch on `isTauriRuntime()`; desktop calls Anthropic natively, no CORS error
+- [ ] `streamAnthropic()` (+ connection-test) branches on `isTauriRuntime()`; desktop calls Anthropic natively, no CORS error
 - [ ] `src-tauri/tauri.conf.json` CSP includes `https://api.anthropic.com`
 - [ ] Desktop Settings UI shows a real API-key/model-selector flow for Claude instead of the warning block
 - [ ] Unit tests for both runtime branches

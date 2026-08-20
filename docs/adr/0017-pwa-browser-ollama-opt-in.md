@@ -6,7 +6,7 @@
 - **Context tags:** ai, ollama, cors, pwa, feature-flag
 - **Related:** [Issue #266](https://github.com/qnbs/WorldScript-Studio/issues/266) (comment thread,
   2026-07-28/29) · narrowly widens [ADR 0012](0012-local-server-connectivity-tauri-http.md) · see
-  also [`GROK-PROVIDER-INTEGRATION-PLAN.md`](../../GROK-PROVIDER-INTEGRATION-PLAN.md) §7 (the
+  also [`GROK-PROVIDER-INTEGRATION-PLAN.md`](../history/GROK-PROVIDER-INTEGRATION-PLAN.md) §7 (the
   execution plan this ADR formalizes)
 
 ## Context
@@ -95,5 +95,5 @@ this ADR adds a *client-side* opt-in, not a backend.
 - [[0012-local-server-connectivity-tauri-http]] — the desktop-only default this ADR narrowly widens
 - [[0016-native-grok-and-claude-providers]] — why the same proxy pattern does *not* transfer here
   (§ Context above)
-- [`GROK-PROVIDER-INTEGRATION-PLAN.md`](../../GROK-PROVIDER-INTEGRATION-PLAN.md) §7 — full addendum
+- [`GROK-PROVIDER-INTEGRATION-PLAN.md`](../history/GROK-PROVIDER-INTEGRATION-PLAN.md) §7 — full addendum
   this ADR formalizes

@@ -3,6 +3,7 @@
 import path from 'node:path';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
+import coverageThresholds from './scripts/coverage-thresholds.json' with { type: 'json' };
 
 export default defineConfig({
   plugins: [react()],
@@ -84,10 +85,7 @@ export default defineConfig({
       // by 1 point (max 5 points per quarter). Document the new baseline in this comment.
       // QNBS-v3 (CodeRabbit): raising these enforces the new, stricter CI floor going forward — any PR that drops coverage below L79/F72/B65/S77 now fails the quality gate instead of silently regressing under the old L74/F67/B60/S72 bar.
       thresholds: {
-        lines: 79,
-        functions: 72,
-        branches: 65,
-        statements: 77,
+        ...coverageThresholds,
         perFile: false,
       },
     },

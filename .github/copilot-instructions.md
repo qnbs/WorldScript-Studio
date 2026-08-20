@@ -170,6 +170,7 @@ On any non-trivial code change add a single-line comment explaining **why**, not
 - Pre-commit: after explicit `pnpm run hooks:install`, `simple-git-hooks` runs Biome on staged files; CI is mandatory regardless
 - **⚠️ Constrained local hardware — do NOT run heavy suites locally.** This machine has ~3–4 GB RAM. **Never** run the full Vitest **coverage** suite, **Playwright E2E**, **Stryker mutation**, **Lighthouse CI**, or the **Storybook test-runner** locally — they are **CI-only by design**. Run **one heavy command at a time** (no parallel `vitest`/`biome`/`tsc`/`vite`).
 - Local preflight (sequential, minimal): `pnpm run lint` → `pnpm run typecheck` → `pnpm run i18n:check` (only when locale JSON changed) → **targeted** `pnpm exec vitest run <path>` (no `--coverage`). Run `pnpm run build && pnpm run smoke:prod` only when you touched `vite.config.ts`, `packages/ai-core`, or `workers/`. Coverage, E2E, Lighthouse, Stryker, and Storybook are **CI gate jobs** — let GitHub Actions run them.
+- **Vitest watch-mode hard rule:** Never run `pnpm test`, `npm run test`, a bare Vitest command, or an untargeted wrapper. Always use `pnpm exec vitest run <path>`; CI is the only place that runs the full coverage suite.
 - CI pipeline (see [`docs/CI.md`](../docs/CI.md)): **`security` → `quality`** (Biome + `tsc` + Vitest matrix) **→ `build` / `e2e` / `storybook` in parallel** → **`lighthouse`** after build → **`deploy`** on `main` after build+e2e
 - Branch protection should require the **`quality`** job (and other checks your team enables); job ids match `.github/workflows/ci.yml`
 - CI runs **`pnpm audit`** every workflow; **dependency-review** on pull requests
@@ -200,9 +201,10 @@ pnpm run lint         # Biome lint check
 pnpm run lint:fix     # Biome auto-fix (lint + format)
 pnpm run format       # Biome format
 pnpm run typecheck    # TypeScript type checking (tsc --noEmit)
-pnpm run test         # Vitest watch mode
-pnpm run test:run     # Vitest single run
-pnpm run test:coverage # Vitest with V8 coverage
+pnpm exec vitest run <path>             # Targeted Vitest single run
+pnpm exec vitest run <path> --coverage \
+  --coverage.thresholds.lines=0 --coverage.thresholds.functions=0 \
+  --coverage.thresholds.branches=0 --coverage.thresholds.statements=0  # Targeted coverage debugging
 pnpm run test:e2e     # Playwright E2E (requires CI=true per package.json scripts)
 pnpm run storybook    # Storybook on port 6006
 ```

@@ -17,7 +17,7 @@ Practical checklist for Ubuntu 20.04 Mate (2–4 GB RAM). **Primarily local**; G
 ```bash
 cd ~/githubcursor/WorldScript-Studio
 pnpm run ci:quick              # lint + i18n + typecheck
-pnpm run ci:quick:unit         # + Vitest without coverage
+VITEST_PATH=tests/unit/example.test.ts pnpm run ci:quick:unit  # + one targeted Vitest file
 ```
 
 Individual tests:
@@ -33,7 +33,7 @@ pnpm exec vitest run tests/unit/duckdbClient.test.ts
 ## Before commit / push (Forgejo)
 
 ```bash
-pnpm run ci:quick:unit         # recommended
+VITEST_PATH=tests/unit/example.test.ts pnpm run ci:quick:unit  # recommended targeted check
 git add … && git commit -m "…"
 git push forgejo main          # primary remote
 ```
@@ -123,8 +123,8 @@ Only **one** Node axis: `lts/*` (corresponds to Node 22 in act-22.04 image). Do 
 | Alias | Action |
 |-------|--------|
 | `sc-ci` | Quick tier |
-| `sc-ci-unit` | Quick + Vitest |
-| `sc-ci-cov` | Quick + coverage |
+| `sc-ci-unit` | Quick + targeted Vitest (`VITEST_PATH` required) |
+| `sc-ci-cov` | Quick + targeted coverage (`VITEST_PATH` required; no full-suite threshold) |
 | `sc-act` | act sequential (PR) |
 | `sc-act-full` | act + storybook + Chromium-only E2E |
 | `sc-eco-on` / `sc-eco-off` | Forgejo start/stop + prune |

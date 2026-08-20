@@ -5,8 +5,8 @@ export WORLDSCRIPT_REPO="${HOME}/githubcursor/WorldScript-Studio"
 export PATH="${WORLDSCRIPT_REPO}/infra/low-end-ci/scripts:${PATH}"
 
 alias sc-ci='cd "${WORLDSCRIPT_REPO}" && ci-quick.sh'
-alias sc-ci-unit='cd "${WORLDSCRIPT_REPO}" && ci-quick.sh --unit'
-alias sc-ci-cov='cd "${WORLDSCRIPT_REPO}" && ci-quick.sh --unit --coverage'
+alias sc-ci-unit='cd "${WORLDSCRIPT_REPO}" && ci-quick.sh --unit="${VITEST_PATH:-}"'
+alias sc-ci-cov='cd "${WORLDSCRIPT_REPO}" && ci-quick.sh --unit="${VITEST_PATH:-}" --coverage'
 alias sc-act='cd "${WORLDSCRIPT_REPO}" && ci-act-sequential.sh pull_request'
 alias sc-act-full='cd "${WORLDSCRIPT_REPO}" && ci-act-sequential.sh pull_request --with-storybook --e2e-chromium-only'
 alias sc-eco-on='ci-eco-start.sh'

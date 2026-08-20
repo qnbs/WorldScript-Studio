@@ -31,7 +31,7 @@ This document summarizes the **current inventory** and **stabilization measures*
 | pnpm | `package.json` `packageManager` | **11.5.2** |
 | Lint | Biome | `pnpm run lint` |
 | i18n | `scripts/check-i18n-keys.mjs` | `pnpm run i18n:check` |
-| Unit | Vitest + V8 | `pnpm exec vitest run --coverage` |
+| Unit | Vitest + V8 | CI: `pnpm exec vitest run --coverage`; local: targeted `pnpm exec vitest run <path>` |
 | E2E | Playwright | `CI=true pnpm run test:e2e` |
 | Bundle | `scripts/check-bundle-budget.mjs` | max **7000 KB** per chunk, max **4500 KB** entry (`index-*.js`) |
 | Lighthouse | `.lighthouserc.cjs` | Accessibility **error** ≥ 0.95; CLS **error** ≤ 0.1; Performance **warn** |
@@ -54,7 +54,7 @@ This document summarizes the **current inventory** and **stabilization measures*
 
 ```bash
 pnpm run lint && pnpm run i18n:check && pnpm run typecheck
-# optional: pnpm exec vitest run   # without --coverage
+# optional targeted file: pnpm exec vitest run <path>
 ```
 
 **Heavy (CI parity):**

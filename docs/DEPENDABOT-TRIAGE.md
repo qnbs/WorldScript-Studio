@@ -79,6 +79,19 @@ Coverage, Storybook, Lighthouse where applicable) — not just the required-chec
 [`CLAUDE.md`](../CLAUDE.md)'s branching-discipline section for the general "wait for advisory jobs
 too" rule; it applies to dependency PRs exactly as it does to feature PRs.
 
+## OSV ignore-expiry review
+
+The 2026-08-20 consolidation review found **19** entries in `src-tauri/osv-scanner.toml`, all
+currently sharing the `2026-11-30T00:00:00Z` review deadline. This is a synchronized review cliff,
+not evidence that the risks were extended or resolved. The entries remain grouped by their real
+reason: legacy GTK3/WebKit bindings, build-time `proc-macro-error`/`paste`, archived Unicode data
+crates, and the transitive `extract-zip` advisory.
+
+No ignore deadline was extended in this pass. `extract-zip` remains a transitive Playwright browser
+download dependency with no patched release and no production-runtime footprint; it must still be
+rechecked before expiry and removed as soon as an upstream fix or dependency-path change makes that
+possible. Review each cluster against current upstream status before changing any deadline.
+
 ## Special-attention dependencies
 
 These need more than a changelog skim because of documented quirks elsewhere in this repo:
@@ -90,6 +103,7 @@ These need more than a changelog skim because of documented quirks elsewhere in 
 | `react` / `react-dom` | Already grouped — must stay in lockstep, split bumps cause version-mismatch errors at test time. |
 | `tauri*` / `wry` / `tao` | Already grouped (`tauri-deps`) — same lockstep concern for the desktop backend. |
 | `github/codeql-action*` | Already grouped — see incident above. |
+| `@biomejs/biome` | Check the installed package version against `biome.json`'s `$schema` URL after every bump; the schema URL is versioned independently from the npm dependency declaration. |
 | Any WASM/WebGPU-adjacent package (`@huggingface/transformers`, `@mlc-ai/web-llm`, `onnxruntime-web`) | These ship in `vendor-*` SW-excluded chunks (`vite.config.ts` `globIgnores`) — verify a version bump didn't change the package's exported chunk structure in a way that breaks the manual-chunk mapping. |
 
 ## Merge discipline — one at a time, sequenced

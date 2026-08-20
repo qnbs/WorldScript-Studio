@@ -4,7 +4,7 @@
 - **Date:** 2026-07-30
 - **Deciders:** Maintainer + Claude Code
 - **Context tags:** ai, grok, anthropic, claude, cors, tauri, proxy, backend
-- **Related:** [`GROK-PROVIDER-INTEGRATION-PLAN.md`](../../GROK-PROVIDER-INTEGRATION-PLAN.md) (execution plan this ADR formalizes) · extends [ADR 0012](0012-local-server-connectivity-tauri-http.md) · see also [ADR 0004](0004-csp-connect-src-byok-tradeoff.md)
+- **Related:** [`GROK-PROVIDER-INTEGRATION-PLAN.md`](../history/GROK-PROVIDER-INTEGRATION-PLAN.md) (archived execution plan this ADR formalizes) · extends [ADR 0012](0012-local-server-connectivity-tauri-http.md) · see also [ADR 0004](0004-csp-connect-src-byok-tradeoff.md)
 
 ## Context
 
@@ -127,7 +127,7 @@ for the full design.
 
 ## References
 
-- [`GROK-PROVIDER-INTEGRATION-PLAN.md`](../../GROK-PROVIDER-INTEGRATION-PLAN.md) — full phased execution plan
+- [`GROK-PROVIDER-INTEGRATION-PLAN.md`](../history/GROK-PROVIDER-INTEGRATION-PLAN.md) — archived full phased execution plan
 - [[0012-local-server-connectivity-tauri-http]] — the native-HTTP pattern Track A reuses
 - [[0004-csp-connect-src-byok-tradeoff]] — why the web CSP's `https:` scheme-source already covers Grok
 - [Issue #266](https://github.com/qnbs/WorldScript-Studio/issues/266) — origin of both the ADR-0012 pattern and the Ollama-in-PWA follow-up
