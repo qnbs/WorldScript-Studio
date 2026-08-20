@@ -16,6 +16,7 @@ describe('tauriTaskBridge', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   describe('invokeRustTask', () => {
@@ -74,6 +75,28 @@ describe('tauriTaskBridge', () => {
           timeoutMs: 5000,
         }),
       ).rejects.toThrow('Rust TaskSupervisor failed');
+    });
+
+    it('rejects when the native task exceeds timeoutMs', async () => {
+      vi.useFakeTimers();
+      const { isTauriRuntime } = await import('../../services/tauriRuntime');
+      vi.mocked(isTauriRuntime).mockReturnValue(true);
+      const { invoke } = await import('@tauri-apps/api/core');
+      vi.mocked(invoke).mockImplementation(() => new Promise(() => undefined));
+      const { invokeRustTask } = await import('../../services/tauriTaskBridge');
+      const pending = expect(
+        invokeRustTask({
+          taskId: '00000000-0000-0000-0000-000000000004',
+          taskType: 'inference.text',
+          payload: {},
+          priority: 'normal',
+          target: 'rust',
+          timeoutMs: 25,
+        }),
+      ).rejects.toThrow('timed out after 25ms');
+
+      await vi.advanceTimersByTimeAsync(25);
+      await pending;
     });
   });
 

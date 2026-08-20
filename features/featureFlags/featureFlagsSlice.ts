@@ -44,7 +44,7 @@ export interface FeatureFlagsState {
   enableComputeShaders: boolean;
   /** WorkerBus v2 — unified worker orchestration backbone (default: true). */
   enableWorkerBusV2: boolean;
-  /** Rust Compute — offload heavy tasks to Tauri Rust TaskSupervisor (default: true). */
+  /** Rust Compute qualification path — no production caller yet (default: false). */
   enableRustCompute: boolean;
   /** Global AI Copilot — beginner-friendly, context-aware, local-first in-app live assistant (default: false — ambient AI, user opt-in). */
   enableGlobalCopilot: boolean;
@@ -58,7 +58,8 @@ export interface FeatureFlagsState {
 // instead of hand-keying it (which drifted: catalog said false while the slice said true for ~12 flags).
 export const defaultFeatureFlagsState: FeatureFlagsState = {
   // QNBS-v3: flags default on so new installs get the full feature set immediately, EXCEPT the
-  // user-opt-in set (RTL, voice, voice-WASM, ProForge, global copilot, local-first sync).
+  // user-opt-in set (RTL, voice, voice-WASM, ProForge, Rust qualification, global copilot,
+  // local-first sync, and browser Ollama).
   enableStoryBibleAdvanced: true,
   enableBinderResearch: true,
   enableCompileWizard: true,
@@ -83,7 +84,8 @@ export const defaultFeatureFlagsState: FeatureFlagsState = {
   enableAdaptiveAiEngine: true,
   enableComputeShaders: true,
   enableWorkerBusV2: true,
-  enableRustCompute: true,
+  // QNBS-v3: keep the proof-only native wrappers opt-in until a production caller is wired and validated.
+  enableRustCompute: false,
   // QNBS-v3: global copilot off by default — ambient AI; user opt-in per privacy preference
   enableGlobalCopilot: false,
   // QNBS-v3: local-first sync off by default — experimental shadow projection (B1.1); Redux stays SoT

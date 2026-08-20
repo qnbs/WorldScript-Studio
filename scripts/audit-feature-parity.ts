@@ -29,22 +29,6 @@ const SECTION_FILE = join(ROOT, 'components/settings/FeatureFlagsSection.tsx');
 const CATALOG_FILE = join(ROOT, 'features/featureCatalog.ts');
 const SETTINGS_HOOK = join(ROOT, 'hooks/useSettingsView.ts');
 
-// Files/dirs excluded from runtime-gate grep (tests, type declarations, config)
-const GREP_EXCLUDE = [
-  '--exclude=*.test.ts',
-  '--exclude=*.test.tsx',
-  '--exclude=*.spec.ts',
-  '--exclude=*.d.ts',
-  '--exclude-dir=node_modules',
-  '--exclude-dir=dist',
-  '--exclude-dir=.git',
-  '--exclude=featureFlagsSlice.ts',
-  '--exclude=FeatureFlagsSection.tsx',
-  '--exclude=useSettingsView.ts',
-  '--exclude=featureCatalog.ts',
-  '--exclude=audit-feature-parity.ts',
-].join(' ');
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -58,11 +42,25 @@ function read(path: string): string {
   return readFileSync(path, 'utf-8');
 }
 
-function grep(pattern: string, dir = ROOT): string {
+function grep(pattern: string): string {
   try {
-    return execSync(`grep -rn ${GREP_EXCLUDE} -l "${pattern}" "${dir}" 2>/dev/null`, {
+    const result = execSync(`git -C "${ROOT}" grep -I -E -l -- "${pattern}"`, {
       encoding: 'utf-8',
-    }).trim();
+    });
+    return result
+      .trim()
+      .split('\n')
+      .filter(Boolean)
+      .filter(
+        (path) =>
+          !/(^|\/)(tests|node_modules|dist)\//.test(path) &&
+          !/\.(test|spec)\.[cm]?[jt]sx?$/.test(path) &&
+          !/\.d\.ts$/.test(path) &&
+          !/(featureFlagsSlice|FeatureFlagsSection|useSettingsView|featureCatalog|audit-feature-parity)\.ts/.test(
+            path,
+          ),
+      )
+      .join('\n');
   } catch {
     return '';
   }
@@ -92,6 +90,17 @@ function extractDefaultsFromSlice(src: string): Set<string> {
     defaultsMatch[1]
       .split('\n')
       .map((line) => line.match(/^\s+(enable\w+)\s*:/)?.[1])
+      .filter((f): f is string => f !== undefined),
+  );
+}
+
+function extractDefaultOnFlags(src: string): Set<string> {
+  const defaultsMatch = src.match(/const defaultFeatureFlagsState[^=]*=\s*\{([^}]+)\}/s);
+  if (!defaultsMatch?.[1]) throw new Error('Could not parse defaultFeatureFlagsState');
+  return new Set(
+    defaultsMatch[1]
+      .split('\n')
+      .map((line) => line.match(/^\s+(enable\w+)\s*:\s*true\s*,?/)?.[1])
       .filter((f): f is string => f !== undefined),
   );
 }
@@ -172,6 +181,28 @@ function hasRuntimeConsumption(flag: string): boolean {
   return result.trim().length > 0;
 }
 
+function hasRustComputeReachability(): boolean {
+  try {
+    const result = execSync(
+      `git -C "${ROOT}" grep -I -E -l -- 'analyzeTextViaRust|diffTextViaRust' -- '*.ts' '*.tsx'`,
+      { encoding: 'utf-8' },
+    );
+    return result
+      .trim()
+      .split('\n')
+      .filter(Boolean)
+      .some(
+        (path) =>
+          !/(^|\/)tests\//.test(path) &&
+          !/\.(test|spec)\.[cm]?[jt]sx?$/.test(path) &&
+          !path.endsWith('scripts/audit-feature-parity.ts') &&
+          !path.endsWith('services/rustTaskSupervisor.ts'),
+      );
+  } catch {
+    return false;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Main audit
 // ---------------------------------------------------------------------------
@@ -184,6 +215,7 @@ const hookSrc = read(SETTINGS_HOOK);
 
 const sliceFlags = extractFlagsFromSlice(sliceSrc);
 const defaultFlags = extractDefaultsFromSlice(sliceSrc);
+const defaultOnFlags = extractDefaultOnFlags(sliceSrc);
 const localeFlags = extractLocaleFlags(localeSrc);
 const sectionFlags = extractSectionFlags(sectionSrc, catalogSrc);
 // QNBS-v3: tracked separately from sectionFlags so a dedicated-elsewhere toggle doesn't get conflated with the generic catalog-driven list.
@@ -205,6 +237,8 @@ const rows: Array<{
   hasDedicatedUi: boolean;
   inHandler: boolean;
   hasRuntime: boolean;
+  defaultOn: boolean;
+  reachability: boolean | null;
 }> = [];
 
 for (const flag of sliceFlags) {
@@ -215,7 +249,18 @@ for (const flag of sliceFlags) {
   const hasDedicatedUi = dedicatedUiFlags.has(flag);
   const inHandler = handlerFlags.has(flag);
   const hasRuntime = hasRuntimeConsumption(flag);
-  rows.push({ flag, inDefaults, inLocale, inSection, hasDedicatedUi, inHandler, hasRuntime });
+  const reachability = flag === 'enableRustCompute' ? hasRustComputeReachability() : null;
+  rows.push({
+    flag,
+    inDefaults,
+    inLocale,
+    inSection,
+    hasDedicatedUi,
+    inHandler,
+    hasRuntime,
+    defaultOn: defaultOnFlags.has(flag),
+    reachability,
+  });
 }
 
 // Print table header
@@ -226,6 +271,7 @@ console.log(
     'i18n'.padEnd(8),
     'Section'.padEnd(10),
     'Handler'.padEnd(10),
+    'Reachable'.padEnd(12),
     'Runtime',
   ].join(''),
 );
@@ -236,6 +282,8 @@ for (const row of rows) {
   const runtimeCheck = row.hasRuntime ? green('✅') : yellow('⚠️ ');
   // QNBS-v3: a dedicated toggle elsewhere (e.g. PrivacySection.tsx) is real UI, not a flat "no toggle" ❌ — shown distinctly as ◆.
   const sectionCheck = row.inSection ? green('✅') : row.hasDedicatedUi ? green('◆') : red('❌');
+  const reachabilityCheck =
+    row.reachability === null ? '—' : row.reachability ? green('✅') : yellow('⚠️ ');
 
   const flagLabel = row.flag.padEnd(34);
   const line = [
@@ -244,6 +292,7 @@ for (const row of rows) {
     check(row.inLocale).padEnd(16),
     sectionCheck.padEnd(18),
     check(row.inHandler).padEnd(18),
+    reachabilityCheck.padEnd(20),
     runtimeCheck,
   ].join('');
 
@@ -259,6 +308,25 @@ for (const row of rows) {
 }
 
 console.log('─'.repeat(90));
+
+const rustComputeRow = rows.find((row) => row.flag === 'enableRustCompute');
+if (rustComputeRow && !rustComputeRow.reachability) {
+  if (rustComputeRow.defaultOn) {
+    console.log(
+      red(
+        'CRITICAL — enableRustCompute is default-on without a production caller for analyzeTextViaRust or diffTextViaRust.',
+      ),
+    );
+    console.log(red('  Fix: wire a production caller or keep the qualification flag default-off.'));
+    errors++;
+  } else {
+    console.log(
+      green(
+        'INFO — enableRustCompute is an explicit default-off qualification stub; no production caller is claimed.',
+      ),
+    );
+  }
+}
 
 // Detailed findings
 console.log('\n' + bold('=== Detailed Findings ===\n'));

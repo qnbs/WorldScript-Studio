@@ -81,7 +81,9 @@
   `services/desktop/globalShortcuts.ts` + `hooks/useGlobalShortcuts.ts`; register configurable
   hotkeys (**default off / opt-in**) → `executeCommand` (open palette, new project, show/focus).
   Conflict-safe unregister on teardown. Settings to enable/configure.
-- **Rust-compute expansion** (`src-tauri/src/commands/task_supervisor.rs`): honor `timeout_ms`,
+- **Rust-compute expansion** (`src-tauri/src/commands/task_supervisor.rs`): native task waits are
+  bounded by `timeout_ms` in `services/tauriTaskBridge.ts`; Tauri invoke itself cannot abort an
+  already-running native command yet, so timeout does not provide native cancellation,
   add run-scoped **progress events** + **cancellation** (Tokio channel → Tauri event, ADR-D4), and
   add further bounded tasks only after their contracts are proven. `text.analyze` and the bounded
   `text.diff` proof now exist; remaining work is whole-manuscript batching/other metrics plus
