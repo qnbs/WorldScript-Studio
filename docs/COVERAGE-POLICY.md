@@ -27,14 +27,18 @@ measured value, with a margin that absorbs run-to-run variance (Node 22 vs 24, f
 4. **Record the move.** Every change to `coverage.thresholds` updates the history comment in
    `vitest.config.ts` with the date, the CI-measured value it was derived from, and the new floor.
 
-## Current state (2026-06-09)
+## Current state (2026-08-20)
+
+The scope now includes the root application/PWA shell (`App.tsx`, `index.tsx`, and
+`register-sw.ts`). The Node 22 CI artifact measured the expanded scope below; Node 24's
+quality gate also passed. Floors use `floor(measured − 1.5)` as required by this policy.
 
 | Metric | Threshold (floor) | CI-measured (last full run) | Margin |
 |--------|-------------------|-----------------------------|--------|
-| Lines | 74 | 76.59 | ~2.6 |
-| Statements | 72 | 74.60 | ~2.6 |
-| Functions | 67 | 69.08 | ~2.1 |
-| Branches | 60 | 62.31 | ~2.3 |
+| Lines | 80 | 81.63 | ~1.6 |
+| Statements | 78 | 79.55 | ~1.6 |
+| Functions | 72 | 74.26 | ~2.3 |
+| Branches | 66 | 67.75 | ~1.8 |
 
 **P1 stretch target:** `L85 / B75 / F80` — reached by ratcheting per the rule above, never by a
 one-time jump that would risk inverting the gate again.
