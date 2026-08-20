@@ -1,14 +1,14 @@
-# UI / Domain / Durable-Preference State Classification (Wave 1 baseline)
+# UI / Domain / Durable-Preference State Classification
 
-Wave 1 deliverable per `docs/cef/ROADMAP-CEF-DESKTOP-MIGRATION.md` §3126 ("initial UI-state/domain-state classification") and §7.4.1's three-state model. This is a **classification exercise, not a refactor** — no slice code changes in Wave 1. It documents where the app's actual truth lives today so later waves (5 "persistence core," 7 "crypto," 9 "task runtime") know what to extract into the renderer-neutral core, and what can safely stay React-local forever.
+Originally produced as a Wave 1 deliverable during the (now-retired) CEF desktop-runtime program; relocated to `docs/native/` under [ADR-0021](../adr/0021-qt-gpui-native-desktop-strategy.md) because the classification itself is renderer-neutral and remains directly useful for the Qt/GPUI roadmap's Rust Core migration-priority work (`docs/native/ROADMAP-QT-GPUI-DESKTOP.md` §8 "Core Migration Ledger"). This is a **classification exercise, not a refactor** — no slice code changes accompanied it. It documents where the app's actual truth lives today so future Core-extraction work knows what to move into the renderer-neutral core, and what can safely stay React-local forever.
 
-## The three states (roadmap §7.4.1)
+## The three states
 
 - **Domain/business state** — renderer-neutral, ideally core-owned. Project entities, manuscript structure, persisted history.
 - **Presentation/UI state** — renderer-specific, allowed to stay in React. Open panel, modal visibility, hover, current tab, transient form focus.
 - **Durable user preference state** — renderer-neutral *semantics* even if each frontend renders the setting differently. Locale, AI provider selection, editor preferences.
 
-> Do not put domain truth into transient React component state (§7.4.1).
+> Do not put domain truth into transient React component state.
 
 ## Redux slices
 
@@ -36,11 +36,11 @@ Wave 1 deliverable per `docs/cef/ROADMAP-CEF-DESKTOP-MIGRATION.md` §3126 ("init
 |---|---|---|
 | `app/transientUiStore.ts` (Zustand) | **Presentation/UI** | `isCommandPaletteOpen`, `isCrossProjectSearchOpen`, `flowMode` — explicitly named transient; correctly kept out of Redux/undo. |
 
-## What this means for later waves
+## What this means for the Qt/GPUI roadmap
 
-No action required in Wave 1. This table is the input for:
-- **Wave 5** (persistence core vertical slice) — `project`'s domain state is the first candidate for a renderer-neutral, core-owned representation (open → edit → native save → quit → relaunch → restore).
-- **Wave 7** (crypto/credentials) — encrypting domain state at rest on desktop (the #356 gap) operates on exactly the "Domain" rows above, not the Presentation/UI ones.
-- **Wave 9** (task runtime) — `proForge`'s live-progress projection is a template for how a future core-owned task's progress should be surfaced into React without becoming the source of truth itself.
+This table is the input for (`docs/native/ROADMAP-QT-GPUI-DESKTOP.md`'s wave numbering):
+- **Wave 2** (Rust Core extraction and headless harness) — `project`'s domain state is the first candidate for a renderer-neutral, core-owned representation (open → edit → native save → quit → relaunch → restore).
+- **Wave 3–4** (storage correctness and R-15 encryption) — encrypting domain state at rest on desktop (concrete open gaps: issues #357, #359, #360, #361) operates on exactly the "Domain" rows above, not the Presentation/UI ones.
+- **Wave 13** (task supervisor and native services) — `proForge`'s live-progress projection is a template for how a future core-owned task's progress should be surfaced into any renderer without becoming the source of truth itself.
 
-Re-classify any slice whose shape changes materially before relying on this table for a later wave's scope decisions — it is a snapshot, not a live-checked contract (see `docs/cef/OWNERSHIP.yaml`, `driftCheckTool: planned`).
+Re-classify any slice whose shape changes materially before relying on this table for a later wave's scope decisions — it is a snapshot, not a live-checked contract.
