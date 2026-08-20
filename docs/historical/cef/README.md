@@ -7,10 +7,8 @@ supersedes [ADR-0019](../../adr/0019-cef-desktop-runtime-strategy.md) (CEF as ne
 [ADR-0020](../../adr/0020-cef-binding-choice-thin-cpp-host.md) (thin C++ host + Rust core binding
 choice).
 
-**Status of this document:** ADR-0021 and the strategic-reset decision merged as Wave 0 PR A (PR
-#406). The actual removal described below is staged in the companion Wave 0 PR B (this PR), open
-and pending merge as of this writing. Until PR B merges, the paths named below still exist on
-`main`.
+**Status of this document:** Wave 0 is complete. ADR-0021 and the strategic-reset decision merged as
+PR A (`#406`); the removal described below merged as PR B (`#407`).
 
 ## Why
 
@@ -20,7 +18,7 @@ surfaced a structural blocker tracked as **R-19 / Issue #405**: under Linux's de
 without weakening the sandbox. That trade was not acceptable. ADR-0021 has the full decision record,
 including the alternatives considered and why each was rejected.
 
-## What is removed (Wave 0 PR B, staged in this PR pending merge)
+## What was removed (Wave 0 PR B, #407)
 
 `apps/desktop-cef/` (the C++ host + FFI-boundary Rust scaffold), `scripts/cef/` (SDK-fetch/build/
 proof tooling), `.github/workflows/cef-learning-harness.yml` (advisory-only CI, never part of the

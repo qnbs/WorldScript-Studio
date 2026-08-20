@@ -2,8 +2,8 @@
 /**
  * DesktopPlatform contract (docs/native/ROADMAP-QT-GPUI-DESKTOP.md).
  * Renderer-neutral typed interface all desktop capability access should route through.
- * Wave 1 scope: relocate today's exact Tauri behavior behind this interface (TauriDesktopPlatform)
- * plus a safe no-op web/PWA implementation (WebDesktopPlatform). No Qt or GPUI adapter exists yet —
+ * Wave 1 scope: relocate today's exact Tauri behavior behind this interface (`tauriDesktopPlatform`)
+ * plus a safe no-op web/PWA implementation (`webDesktopPlatform`). No Qt or GPUI adapter exists yet —
  * those are admitted later per the roadmap's gates. HTTP (`services/ai/fetchAdapter.ts`,
  * `services/localServerHttp.ts`) is intentionally NOT a facet here — this interface has no HTTP
  * facet by design; those files keep importing `@tauri-apps/plugin-http` directly, a permanent,

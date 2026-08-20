@@ -7,8 +7,10 @@
  * point of the DesktopPlatform boundary: a future Qt or GPUI adapter slots in without touching any
  * consumer again. This is a strict zero-tolerance gate (unlike the suppression ratchet in
  * check-suppressions.mjs): any real `@tauri-apps/*` import specifier found in application source
- * outside the explicitly approved locations below fails the build. Comment-only mentions (JSDoc,
+ * outside the explicitly approved locations below fails the build. Whole-line comments (JSDoc,
  * `//` notes) are not flagged — only actual `import ... from`, `import(...)`, `require(...)`.
+ * Note: an inline C-style block comment placed mid-line on real code is NOT masked and would be
+ * flagged — `commentLineMask` only recognizes lines whose trimmed content starts a comment.
  *
  * Run: node scripts/check-tauri-import-boundary.mjs
  */

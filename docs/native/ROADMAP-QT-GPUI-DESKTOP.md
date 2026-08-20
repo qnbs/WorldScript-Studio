@@ -1,8 +1,8 @@
 # WorldScript Studio — Qt + GPUI Multi-Renderer Desktop Roadmap & Realization Concept
 
-**Status:** Adopted as the binding strategic architecture via ADR-0021 (merged, PR #406). Adoption of
-the *decision* is distinct from *execution*: Wave 0's actual CEF source/CI retirement (PR B) is open
-and pending merge as of this writing — see §15 below for the current per-wave status.
+**Status:** Adopted as the binding strategic architecture via ADR-0021 (merged, PR #406). Wave 0
+(both the decision and its CEF source/CI retirement execution) is complete — see §15 below for the
+full per-wave status.
 **Repository:** `qnbs/WorldScript-Studio`
 **Roadmap generation date:** 2026-08-20
 **Supersedes:** the CEF-first desktop migration strategy and all CEF-dependent execution sequencing
@@ -921,20 +921,20 @@ docs/native/
 
 ## G0 — CEF Exit / Strategy Reset
 
-**Status: IN PROGRESS** — met only once PR B merges. See the Wave 0 status note above.
+**Status: COMPLETE.** PR A (#406) and PR B (#407) both merged.
 
 Required:
 
 ```text
-[x] new ADR (ADR-0021) supersedes CEF production strategy — merged (PR A, PR #406)
+[x] new ADR (ADR-0021) supersedes CEF production strategy — merged (PR A, #406)
 [x] CEF PR/issue reconciled: PR #404 closed unmerged, Issue #405 closed as superseded — done
-[~] no useful renderer-neutral work lost — DesktopPlatform boundary unaffected (already true,
-    independent of this reset); UI-DOMAIN-STATE-CLASSIFICATION.md relocation staged in PR B, pending merge
-[~] CEF-only CI removed (cef-learning-harness.yml, advisory-only) — staged in PR B, pending merge
-[~] CEF-only dependencies no longer required by product build (apps/desktop-cef/, scripts/cef/
-    removal staged in PR B) — pending merge
+[x] no useful renderer-neutral work lost — DesktopPlatform boundary unaffected (already true,
+    independent of this reset); UI-DOMAIN-STATE-CLASSIFICATION.md relocated (PR B, #407)
+[x] CEF-only CI removed (cef-learning-harness.yml, advisory-only) — removed (PR B, #407)
+[x] CEF-only dependencies no longer required by product build (apps/desktop-cef/, scripts/cef/
+    removed, PR B #407)
 [x] Tauri remains functional during transition — true throughout, unaffected by either PR
-[x] Qt/GPUI roadmap adopted (this document) — merged (PR A, PR #406)
+[x] Qt/GPUI roadmap adopted (this document) — merged (PR A, #406)
 ```
 
 ## G1 — Core Native-Ready
@@ -1026,15 +1026,13 @@ discipline while replacing CEF-specific work with Qt/GPUI-native milestones.
 
 ## Wave 0 — Strategy reset and CEF retirement reconciliation
 
-**Status: IN PROGRESS — PR B open, pending merge.** Wave 0 executed as two PRs. **PR A** (this
-document, ADR-0021, ADR-0019/0020 supersession, `ROADMAP.md`/`README.md` pointer updates)
-established the strategic reset and merged as PR #406. Issue #405 and companion PR #404 are closed
-(#404 unmerged, superseded; #405 as no-longer-applicable, not "fixed") — both real GitHub state as
-of this writing, independent of PR B's merge status. **PR B** (removal of `apps/desktop-cef/`,
-`scripts/cef/`, `.github/workflows/cef-learning-harness.yml`, and 14 of 15 `docs/cef/` files;
-relocation of `docs/cef/UI-DOMAIN-STATE-CLASSIFICATION.md` to `docs/native/`; this doc-sync itself)
-is open, pending CI and merge. This wave is COMPLETE only once PR B actually merges — this status
-line will be updated to COMPLETE/CI-PROVEN in that same PR once CI is green, not before.
+**Status: COMPLETE — CI-PROVEN.** Wave 0 executed as two PRs. **PR A** (#406: ADR-0021,
+ADR-0019/0020 supersession, `ROADMAP.md`/`README.md` pointer updates) established the strategic
+reset. Issue #405 and companion PR #404 are closed (#404 unmerged, superseded; #405 as
+no-longer-applicable, not "fixed"). **PR B** (#407: removal of `apps/desktop-cef/`, `scripts/cef/`,
+`.github/workflows/cef-learning-harness.yml`, and 14 of 15 `docs/cef/` files; relocation of
+`docs/cef/UI-DOMAIN-STATE-CLASSIFICATION.md` to `docs/native/`; this doc-sync) performed the actual
+CEF source/CI/docs retirement. Both PRs merged, `main` CI green.
 
 **Goal:** change direction without losing valid work.
 
@@ -2212,20 +2210,19 @@ Create/supersede ADRs for:
 
 # 37. Immediate transition plan from the current repository state
 
-**Status: IN PROGRESS.** Items 1–5 and 8–9 below are done; item 4's PR/issue closure is done
-independent of PR B's own merge status; items 6–7 are staged in PR B, pending its merge.
+**Status: COMPLETE.** All items below are done.
 
 The first implementation sequence after adopting this roadmap is:
 
 ```text
 1. Freeze new CEF feature work.                                              [DONE]
 2. Inventory current CEF PR(s), especially any Draft work.                   [DONE]
-3. Extract only renderer-neutral improvements.                               [DONE — relocation staged in PR B]
+3. Extract only renderer-neutral improvements.                               [DONE — PR B, #407]
 4. Close/supersede CEF-specific PRs with a clear historical note.            [DONE — #404 closed unmerged, #405 closed as superseded]
 5. Adopt new ADR + this roadmap.                                             [DONE — merged, PR #406]
 6. Rename/generalize CEF-only governance docs where their content remains
-   useful.                                                                   [STAGED IN PR B — UI-DOMAIN-STATE-CLASSIFICATION.md relocated to docs/native/, pending merge]
-7. Re-run main CI.                                                           [PENDING — PR B CI in progress]
+   useful.                                                                   [DONE — UI-DOMAIN-STATE-CLASSIFICATION.md relocated to docs/native/, PR #407]
+7. Re-run main CI.                                                           [DONE — green]
 8. Re-audit DesktopPlatform/Tauri import boundary.                           [ALREADY TRUE — Wave 1 complete]
 9. Start Wave 1.                                                             [ALREADY COMPLETE before Wave 0]
 10. Do not begin Qt UI until Wave 1/2 prerequisites are sufficiently proven.  [Wave 2 not yet started]
@@ -2661,7 +2658,7 @@ These are sequencing goals, not date guarantees.
 ## First horizon
 
 - strategy reset; **[DONE — PR #406]**
-- CEF reconciliation; **[PR B open, pending merge]**
+- CEF reconciliation; **[DONE — PR #407]**
 - DesktopPlatform boundary; **[ALREADY DONE, pre-Wave-0]**
 - Core headless extraction;
 - R-15/storage architecture;
