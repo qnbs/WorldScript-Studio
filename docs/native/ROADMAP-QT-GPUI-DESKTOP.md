@@ -1128,7 +1128,8 @@ Actions (checked = this slice, per `docs/native/CORE-MIGRATION-LEDGER.md`):
 - [x] schema;
 - [x] migration (minimal versioned mechanism, one synthetic migration proving it);
 - [ ] storage (fs backend parity, IDB backend — deferred);
-- [ ] Array↔EntityState compatibility adapter contract and fixtures (required before G1 evaluation);
+- [ ] Array↔EntityState compatibility adapter contract and fixtures (reject duplicate/missing/orphan
+      IDs for characters and worlds; required before G1 evaluation);
 - [ ] task orchestration (deferred fast-follow);
 - [ ] diagnostics (deferred fast-follow);
 - [ ] AI request model (out of scope for all of Wave 2 — see ledger);
