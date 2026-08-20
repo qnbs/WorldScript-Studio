@@ -15,9 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Qt Early Killer-Gate qualification:** the native roadmap now requires cheap, evidence-backed
   lifecycle, accessibility/input, packaging/update-trust, crash/recovery, and security checks
   before substantial Qt UI work can create sunk cost.
-- **Rust TaskSupervisor bounded diff:** adds the renderer-neutral `text.diff` task and typed
-  TypeScript wrapper with a deterministic LCS contract, resource bounds, and fallback to the
-  existing TypeScript word-diff path.
+- **Rust TaskSupervisor bounded text proof:** adds bounded renderer-neutral `text.analyze` and
+  `text.diff` tasks, typed qualification wrappers, deterministic LCS/whitespace contracts, and
+  explicit fallback to the existing TypeScript path; no production caller is switched yet.
 
 ### Changed
 

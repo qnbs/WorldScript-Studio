@@ -22,8 +22,9 @@ use std::time::Instant;
 
 /// Bumped when the wire contract or task registry changes; surfaced via `ping`.
 const SUPERVISOR_VERSION: &str = "1.0.0";
+const MAX_TEXT_INPUT_CHARS: usize = 200_000;
 const MAX_DIFF_DP_CELLS: usize = 80_000;
-const MAX_DIFF_INPUT_CHARS: usize = 200_000;
+const MAX_DIFF_INPUT_CHARS: usize = MAX_TEXT_INPUT_CHARS;
 
 /// Incoming task request from the TS hybrid router (camelCase on the wire).
 #[derive(Debug, Deserialize)]
@@ -130,6 +131,11 @@ fn run_text_analyze(payload: &Value) -> Result<Value, String> {
         .get("text")
         .and_then(Value::as_str)
         .ok_or_else(|| "text.analyze requires payload.text to be a string".to_string())?;
+    if text.chars().count() > MAX_TEXT_INPUT_CHARS {
+        return Err(format!(
+            "text.analyze input must be at most {MAX_TEXT_INPUT_CHARS} characters"
+        ));
+    }
 
     let analysis = analyze_text(text);
     serde_json::to_value(&analysis).map_err(|e| e.to_string())
@@ -443,6 +449,22 @@ mod tests {
         let res = worldscript_task_supervisor_submit(req).unwrap();
         assert!(!res.success);
         assert!(res.error.unwrap().contains("payload.text"));
+    }
+
+    #[test]
+    fn submit_text_analyze_rejects_oversized_input() {
+        let req = RustTaskRequest {
+            task_id: "t-analyze-large".into(),
+            task_type: "text.analyze".into(),
+            payload: json!({ "text": "x".repeat(MAX_TEXT_INPUT_CHARS + 1) }),
+            priority: "normal".into(),
+            target: "rust".into(),
+            timeout_ms: 1000,
+            retry_policy: None,
+        };
+        let res = worldscript_task_supervisor_submit(req).unwrap();
+        assert!(!res.success);
+        assert!(res.error.unwrap().contains("at most 200000 characters"));
     }
 
     #[test]

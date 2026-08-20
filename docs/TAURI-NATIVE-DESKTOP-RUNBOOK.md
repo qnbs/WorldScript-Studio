@@ -87,6 +87,10 @@
   `text.diff` proof now exist; remaining work is whole-manuscript batching/other metrics plus
   updating `services/hybridRouter.ts` to stream real progress and support `cancel()` by `runId`
   (replace the empty generator / no-op). Typed wrappers à la `services/rustTaskSupervisor.ts`.
+- **Current caller status:** `analyzeTextViaRust` and `diffTextViaRust` are qualification wrappers
+  with deterministic unit/CI/build evidence, not production authority switches. No production caller
+  currently opts into either wrapper; do not describe the Rust flag as shipped text-analysis or
+  embedding offload until a real caller, parity proof, timeout policy, and fallback path are wired.
 - i18n: `desktop.shortcuts.*`. Tests: shortcut service + hybridRouter progress/cancel + Rust
   `#[cfg(test)]`. Rust change → `tauri-build.yml` dispatch.
 

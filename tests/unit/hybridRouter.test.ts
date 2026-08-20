@@ -144,13 +144,35 @@ describe('hybridRouter', () => {
       error: 'task supervisor error',
       latencyMs: 5,
     });
+    mockGetWorkerBus.mockReturnValue({ enqueue: mockEnqueue });
     const { routeTask } = await import('../../services/hybridRouter');
     const result = await routeTask(
       'inference.text',
       {},
       { target: 'rust', rustComputeEnabled: true },
     );
-    await expect(result!.result).rejects.toThrow('task supervisor error');
+    expect(result).toBe(mockHandle);
+    expect(mockEnqueue).toHaveBeenCalledWith('inference.text', {}, { target: 'web' });
+  });
+
+  it('returns null for structured Rust failures on native-only probes', async () => {
+    mockIsRustAvailable.mockResolvedValue(true);
+    mockInvokeRustTask.mockResolvedValue({
+      taskId: 'rust-fail-native-only',
+      success: false,
+      payload: null,
+      error: 'task supervisor error',
+      latencyMs: 5,
+    });
+    mockGetWorkerBus.mockReturnValue({ enqueue: mockEnqueue });
+    const { routeTask } = await import('../../services/hybridRouter');
+    const result = await routeTask(
+      'text.diff',
+      {},
+      { target: 'rust', rustComputeEnabled: true, allowWebFallback: false },
+    );
+    expect(result).toBeNull();
+    expect(mockEnqueue).not.toHaveBeenCalled();
   });
 
   it('invalidateRustAvailabilityCache is re-exported', async () => {

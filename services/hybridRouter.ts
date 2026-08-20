@@ -56,25 +56,34 @@ export async function routeTask<TResult = unknown>(
           timeoutMs: opts.timeoutMs ?? 300_000,
         };
         const rustResult = await invokeRustTask(request);
-        const rustHandle: TaskHandle<TResult> = {
+        if (rustResult.success) {
+          const rustHandle: TaskHandle<TResult> = {
+            taskId: request.taskId,
+            result: Promise.resolve(rustResult.payload as TResult),
+            progress: _emptyProgress(),
+            // QNBS-v3: Rust tasks are not cancellable in Phase 2 (Tauri invoke is synchronous)
+            cancel: () => {
+              log.warn('cancel() called on Rust task — not supported in Phase 2', {
+                taskId: request.taskId,
+              });
+            },
+          };
+          log.info('Task routed to Rust TaskSupervisor', { taskType, taskId: request.taskId });
+          return rustHandle;
+        }
+
+        log.warn('Rust TaskSupervisor returned a structured failure', {
+          taskType,
           taskId: request.taskId,
-          result: rustResult.success
-            ? Promise.resolve(rustResult.payload as TResult)
-            : Promise.reject(new Error(rustResult.error ?? 'Rust TaskSupervisor failed')),
-          progress: _emptyProgress(),
-          // QNBS-v3: Rust tasks are not cancellable in Phase 2 (Tauri invoke is synchronous)
-          cancel: () => {
-            log.warn('cancel() called on Rust task — not supported in Phase 2', {
-              taskId: request.taskId,
-            });
-          },
-        };
-        log.info('Task routed to Rust TaskSupervisor', { taskType, taskId: request.taskId });
-        return rustHandle;
-      } catch (err) {
-        log.warn('Rust route failed — falling back to web worker pool', { taskType, err });
+          error: rustResult.error,
+        });
         if (!allowWebFallback) return null;
-        // Fall through to web worker path
+      } catch (err) {
+        if (!allowWebFallback) {
+          log.warn('Rust route failed — native-only route returned null', { taskType, err });
+          return null;
+        }
+        log.warn('Rust route failed — falling back to web worker pool', { taskType, err });
       }
     }
   }
