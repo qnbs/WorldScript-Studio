@@ -142,3 +142,17 @@ fn duplicate_character_ids_are_rejected() {
         ValidationError::DuplicateCharacterId("char-1".to_string())
     );
 }
+
+#[test]
+fn same_id_across_different_record_types_is_allowed() {
+    // Documents the intentional design: uniqueness is checked within each record type
+    // independently (characters/worlds/sections), not globally across the whole project.
+    let mut project = StoryProject::new("Cross-Type Test", "logline");
+    let mut character = sample_character();
+    character.id = "shared-id".to_string();
+    let mut section = sample_section();
+    section.id = "shared-id".to_string();
+    project.characters.push(character);
+    project.manuscript.push(section);
+    validate(&project).expect("a character and a section may share an id");
+}
