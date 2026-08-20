@@ -97,13 +97,14 @@ jobs:
     timeout-minutes: 5
     outputs:
       tauri: ${{ steps.filter.outputs.tauri }}
+      crates: ${{ steps.filter.outputs.crates }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Detect src-tauri changes
+      - name: Detect src-tauri / crates changes
         id: filter
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -112,14 +113,21 @@ jobs:
             BASE="${{ github.event.before }}"
           fi
           if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BASE" 2>/dev/null; then
-            echo "::notice::No usable base SHA to diff against — defaulting to tauri=true (fail open)"
+            echo "::notice::No usable base SHA to diff against — defaulting to tauri=true, crates=true (fail open)"
             echo "tauri=true" >> "$GITHUB_OUTPUT"
+            echo "crates=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if git diff --name-only "$BASE" "${{ github.sha }}" | grep -qE '^(src-tauri/|\.github/workflows/ci\.yml$)'; then
+          CHANGED=$(git diff --name-only "$BASE" "${{ github.sha }}")
+          if grep -qE '^(src-tauri/|\.github/workflows/ci\.yml$)' <<< "$CHANGED"; then
             echo "tauri=true" >> "$GITHUB_OUTPUT"
           else
             echo "tauri=false" >> "$GITHUB_OUTPUT"
+          fi
+          if grep -qE '^(crates/|\.github/workflows/ci\.yml$)' <<< "$CHANGED"; then
+            echo "crates=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "crates=false" >> "$GITHUB_OUTPUT"
           fi
 
   # ----------------------------------------------------------
@@ -268,6 +276,42 @@ jobs:
         run: cargo test --locked
 
   # ----------------------------------------------------------
+  # 1c. CORE-RUST: worldscript-project crate Gate (fmt/check/clippy/test), path-scoped via `changes`
+  # QNBS-v3: independent workspace from src-tauri (crates/Cargo.toml) — zero GUI/Tauri deps, so no
+  # GTK/WebKit apt-get install steps are needed here, unlike rust-tauri above.
+  # ----------------------------------------------------------
+  core-rust:
+    name: 🧩 Core Rust Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [security, changes]
+    # QNBS-v3: skips for PRs that don't touch crates/** — ci-success treats 'skipped' as pass for this job only
+    if: needs.changes.outputs.crates == 'true'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: crates -> target
+      - name: Rust format check
+        working-directory: crates
+        run: cargo fmt --check
+      - name: Rust compile check
+        working-directory: crates
+        run: cargo check --locked
+      - name: Rust clippy
+        working-directory: crates
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Rust tests
+        working-directory: crates
+        run: cargo test --locked
+
+  # ----------------------------------------------------------
   # 2. BUILD: Production build + Pages artifact upload
   # QNBS-v3: Stryker mutation removed from the PR/CI pipeline (2026-06-02) — it added noise as a
   #          flaky, non-gating check. Mutation now runs ONLY via the manual `.github/workflows/
@@ -368,16 +412,18 @@ jobs:
           path: ./dist
 
   # ----------------------------------------------------------
-  # 3. CI SUCCESS: single required-status aggregator (security + quality + changes + rust-tauri + build + e2e + vrt)
+  # 3. CI SUCCESS: single required-status aggregator
+  #    (security + quality + changes + rust-tauri + core-rust + build + e2e + vrt)
   # ----------------------------------------------------------
   ci-success:
     name: ✅ CI Success
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [security, quality, changes, rust-tauri, build, e2e, vrt]
+    needs: [security, quality, changes, rust-tauri, core-rust, build, e2e, vrt]
     if: always()
     steps:
-      # QNBS-v3: rust-tauri may legitimately be 'skipped' (changes.outputs.tauri == 'false') — that's a pass, not a failure
+      # QNBS-v3: rust-tauri/core-rust may legitimately be 'skipped' (their changes.outputs.* is
+      # 'false') — that's a pass, not a failure
       - name: Verify all required jobs succeeded
         run: |
           FAIL=0
@@ -385,6 +431,9 @@ jobs:
           [ "${{ needs.quality.result }}" = "success" ] || FAIL=1
           [ "${{ needs.changes.result }}" = "success" ] || FAIL=1
           if [ "${{ needs.rust-tauri.result }}" != "success" ] && [ "${{ needs.rust-tauri.result }}" != "skipped" ]; then
+            FAIL=1
+          fi
+          if [ "${{ needs.core-rust.result }}" != "success" ] && [ "${{ needs.core-rust.result }}" != "skipped" ]; then
             FAIL=1
           fi
           [ "${{ needs.build.result }}" = "success" ] || FAIL=1
@@ -396,6 +445,7 @@ jobs:
             echo "  quality:  ${{ needs.quality.result }}"
             echo "  changes:  ${{ needs.changes.result }}"
             echo "  rust-tauri: ${{ needs.rust-tauri.result }} (skipped = OK, src-tauri untouched)"
+            echo "  core-rust: ${{ needs.core-rust.result }} (skipped = OK, crates/ untouched)"
             echo "  build:    ${{ needs.build.result }}"
             echo "  e2e:      ${{ needs.e2e.result }}"
             echo "  vrt:      ${{ needs.vrt.result }}"
