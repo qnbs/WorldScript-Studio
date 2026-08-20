@@ -656,8 +656,8 @@ Required properties:
 - secure deletion claims avoided unless actually supportable;
 - tests for interruption and partial writes.
 
-**Concrete open gaps this must close (see Document status note above):** issues #357, #359, #360,
-#361 — all open, describing gaps in the closed/unmerged reference design (PR #356), not a live path.
+**Concrete open gaps this must close (see Document status note above):** issues #357, #359, #360, and #361
+are all open, describing gaps in the closed/unmerged reference design (PR #356), not a live path.
 Desktop fs-backed project data has no encryption at all on `main` today; this deliverable is a
 from-scratch build informed by that reference design and by the mature, "Accepted and implemented"
 IDB-side scheme (ADR-0018), not a bug-fix pass on existing production encryption.
@@ -2812,8 +2812,7 @@ R-15 is promoted to an early native-program gate.
 
 Qt Stable is forbidden without the approved desktop at-rest encryption posture.
 
-GPUI inherits the same implementation from Core. **Concrete tracked instances: #357, #359, #360,
-#361 (see §8.1–8.2).**
+GPUI inherits the same implementation from Core. **Concrete tracked instances: #357, #359, #360, and #361 — see §8.1–8.2.**
 
 ---
 
