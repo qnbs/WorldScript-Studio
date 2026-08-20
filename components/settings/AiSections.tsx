@@ -10,6 +10,7 @@ import {
 } from '../../features/featureFlags/featureFlagsSlice';
 import { selectProjectData } from '../../features/project/projectSelectors';
 import { statusActions } from '../../features/status/statusSlice';
+import { ANTHROPIC_MODEL_OPTIONS, OPENAI_MODEL_OPTIONS } from '../../services/ai/cloudModelCatalog';
 import { RECOMMENDED_OLLAMA_MODEL_IDS } from '../../services/ai/modelRecommendations';
 import { generateLocalText } from '../../services/localAiFacade';
 import { rebuildHybridRagIndex } from '../../services/localRagService';
@@ -82,9 +83,9 @@ export const AiSection: FC = () => {
           } else if (p === 'gemini') {
             newModel = currentModel.startsWith('ollama/') ? 'gemini-3.5-flash' : currentModel;
           } else if (p === 'openai') {
-            newModel = currentModel.startsWith('gpt-') ? currentModel : 'gpt-4o-mini';
+            newModel = currentModel.startsWith('gpt-') ? currentModel : 'gpt-5.4-mini';
           } else if (p === 'anthropic') {
-            newModel = currentModel.startsWith('claude-') ? currentModel : 'claude-haiku-4-5';
+            newModel = currentModel.startsWith('claude-') ? currentModel : 'claude-sonnet-5';
           } else if (p === 'webllm') {
             // QNBS-v3: default to first curated MLC model; 'webllm/browser' kept as legacy fallback
             newModel = WEBLLM_SUPPORTED_MODELS[0].id;
@@ -379,11 +380,7 @@ export const AdvancedAiSection: FC = () => {
               }}
               {...(settings.advancedAi.provider === 'anthropic'
                 ? {
-                    options: [
-                      { value: 'claude-opus-4-7', label: 'Claude Opus 4.7' },
-                      { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
-                      { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
-                    ],
+                    options: ANTHROPIC_MODEL_OPTIONS,
                   }
                 : settings.advancedAi.provider === 'webllm'
                   ? {
@@ -452,31 +449,7 @@ export const AdvancedAiSection: FC = () => {
                               },
                             ]
                           : settings.advancedAi.provider === 'openai'
-                            ? [
-                                {
-                                  label: 'GPT-4.1 (2025)',
-                                  options: [
-                                    { value: 'gpt-4.1', label: 'GPT-4.1' },
-                                    { value: 'gpt-4.1-mini', label: 'GPT-4.1 Mini' },
-                                    { value: 'gpt-4.1-nano', label: 'GPT-4.1 Nano' },
-                                  ],
-                                },
-                                {
-                                  label: 'o-Series Reasoning',
-                                  options: [
-                                    { value: 'o3', label: 'o3' },
-                                    { value: 'o4-mini', label: 'o4-mini' },
-                                    { value: 'o3-mini', label: 'o3-mini' },
-                                  ],
-                                },
-                                {
-                                  label: 'Legacy',
-                                  options: [
-                                    { value: 'gpt-4o', label: 'GPT-4o' },
-                                    { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
-                                  ],
-                                },
-                              ]
+                            ? [{ label: 'GPT-5 — Current', options: OPENAI_MODEL_OPTIONS }]
                             : [
                                 {
                                   label: 'Gemini 3 — Latest',

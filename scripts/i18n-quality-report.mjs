@@ -13,6 +13,10 @@ import { getLocales, getModules, REF_LANG } from './i18n-locales.mjs';
 
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const strict = process.argv.includes('--strict');
+const minCoverageArg = process.argv.indexOf('--min-coverage');
+const minCoverage = minCoverageArg >= 0 ? Number(process.argv[minCoverageArg + 1]) : null;
+const maxOutliersArg = process.argv.indexOf('--max-length-outliers');
+const maxLengthOutliers = maxOutliersArg >= 0 ? Number(process.argv[maxOutliersArg + 1]) : null;
 
 function load(lang, mod) {
   const p = join(ROOT, 'locales', lang, `${mod}.json`);
@@ -44,6 +48,8 @@ const modules = getModules().filter((m) => m !== 'help');
 const glossary = loadGlossary();
 
 let placeholderIssues = 0;
+let coverageFailures = 0;
+let outlierFailures = 0;
 const rows = [];
 
 for (const lang of langs) {
@@ -95,6 +101,16 @@ for (const r of rows) {
     `| ${r.lang} | ${r.pct}% | ${r.untranslated} | ${r.phIssues} | ${r.lenOutliers} | ${r.glossaryTerms} |`,
   );
 }
+if (minCoverage !== null) {
+  for (const r of rows) {
+    if (r.pct < minCoverage) coverageFailures++;
+  }
+}
+if (maxLengthOutliers !== null) {
+  for (const r of rows) {
+    if (r.lenOutliers > maxLengthOutliers) outlierFailures++;
+  }
+}
 console.log(
   `\n${rows.length} non-English locales · reference = ${REF_LANG} · ${modules.length} modules`,
 );
@@ -104,3 +120,4 @@ if (placeholderIssues > 0) {
   );
 }
 if (strict && placeholderIssues > 0) process.exit(1);
+if (coverageFailures > 0 || outlierFailures > 0) process.exit(1);

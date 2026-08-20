@@ -264,7 +264,7 @@ describe('worldScriptCompletionFetch — success (grok)', () => {
     );
   });
 
-  it('defaults modelId to grok-3 when the stored model is not a grok- id', async () => {
+  it('defaults modelId to the current Grok model when the stored model is not a grok- id', async () => {
     mockProviderToKind.mockReturnValue('grok');
     mockGetApiKey.mockResolvedValue('grok-key');
     await worldScriptCompletionFetch(
@@ -272,7 +272,7 @@ describe('worldScriptCompletionFetch — success (grok)', () => {
       makeInit(makeBody({ provider: 'grok', model: 'some-other-id' })),
     );
     expect(mockCreateLanguageModelForWorldScript).toHaveBeenCalledWith(
-      expect.objectContaining({ modelId: 'grok-3' }),
+      expect.objectContaining({ modelId: 'grok-4.5' }),
     );
   });
 });

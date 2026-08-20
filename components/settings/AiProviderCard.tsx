@@ -2,6 +2,7 @@ import { ONNX_SUPPORTED_MODELS, WEBLLM_SUPPORTED_MODELS } from '@domain/ai-core'
 import type { FC } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
+import { GROK_MODEL_OPTIONS } from '../../services/ai/cloudModelCatalog';
 import { LOCAL_BACKEND_PRESET_DEFAULT_URL } from '../../services/ai/localBackendPresets';
 import type { WebGpuAdapterInfo } from '../../services/ai/webGpuDetectorService';
 import { detectWebGpuDetails } from '../../services/ai/webGpuDetectorService';
@@ -602,10 +603,7 @@ export const AiProviderCard: FC<AiProviderCardProps> = ({
               id="grok-model"
               value={advancedAi.model}
               onChange={(v) => onModelSelect?.(v)}
-              options={[
-                { value: 'grok-3', label: 'Grok 3' },
-                { value: 'grok-3-mini', label: 'Grok 3 Mini' },
-              ]}
+              options={GROK_MODEL_OPTIONS}
             />
           </div>
         )}

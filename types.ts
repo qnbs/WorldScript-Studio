@@ -384,17 +384,30 @@ export type AiModel =
   | 'gemini-2.0-flash-lite'
   | 'gemini-1.5-flash'
   | 'gemini-1.5-pro'
-  // Anthropic – Claude 4.x
+  // Anthropic – current catalog
+  | 'claude-opus-4-8'
+  | 'claude-opus-5'
+  | 'claude-sonnet-5'
+  | 'claude-fable-5'
+  // Anthropic – previous catalog (backward compat for stored values)
   | 'claude-opus-4-7'
   | 'claude-sonnet-4-6'
   | 'claude-haiku-4-5'
   // Anthropic – Claude 3.x (backward compat for stored values)
   | 'claude-3-sonnet'
   | 'claude-3-haiku'
-  // OpenAI
+  // OpenAI – current catalog
+  | 'gpt-5.5'
+  | 'gpt-5.4'
+  | 'gpt-5.4-mini'
+  | 'gpt-5.4-nano'
+  // OpenAI – previous catalog (backward compat for stored values)
   | 'gpt-4o'
   | 'gpt-4o-mini'
-  // Grok (xAI)
+  // Grok (xAI) – current catalog
+  | 'grok-4.6'
+  | 'grok-4.5'
+  // Grok (xAI) – previous catalog (backward compat for stored values)
   | 'grok-3'
   | 'grok-3-mini'
   // Ollama – any local model (e.g. "ollama/gemma3" or "ollama/qwen3:8b")

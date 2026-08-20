@@ -1,5 +1,6 @@
 import type { FC } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
+import { ANTHROPIC_MODEL_OPTIONS } from '../../services/ai/cloudModelCatalog';
 import { Button } from '../ui/Button';
 import { Icon } from '../ui/Icon';
 import { Input } from '../ui/Input';
@@ -79,11 +80,7 @@ export const AnthropicProviderFields: FC<AnthropicProviderFieldsProps> = ({
         id="anthropic-model"
         value={model}
         onChange={(v) => onModelSelect?.(v)}
-        options={[
-          { value: 'claude-opus-4-7', label: 'Claude Opus 4.7' },
-          { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
-          { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
-        ]}
+        options={ANTHROPIC_MODEL_OPTIONS}
       />
     </div>
   );

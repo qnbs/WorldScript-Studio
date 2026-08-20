@@ -40,6 +40,10 @@ interface IconProps extends React.SVGAttributes<SVGSVGElement> {
   title?: string;
 }
 
+export interface CustomIconProps extends React.SVGAttributes<SVGSVGElement> {
+  children: React.ReactNode;
+}
+
 const SIZE_MAP = {
   sm: 'h-icon-sc-sm w-icon-sc-sm',
   md: 'h-icon-sc-md w-icon-sc-md',
@@ -235,3 +239,19 @@ export const Icon: React.FC<IconProps> = ({
   </svg>
 );
 Icon.displayName = 'Icon';
+
+/** QNBS-v3: share the SVG shell when a central registry supplies a custom path. */
+export const CustomIcon: React.FC<CustomIconProps> = ({ children, className = '', ...props }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    viewBox="0 0 24 24"
+    strokeWidth={1.5}
+    stroke="currentColor"
+    className={className}
+    {...props}
+  >
+    {children}
+  </svg>
+);
+CustomIcon.displayName = 'CustomIcon';

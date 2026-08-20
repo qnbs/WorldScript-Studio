@@ -9,6 +9,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import { storageService } from '../services/storageService';
 import type { View } from '../types';
 import { Button } from './ui/Button';
+import { CustomIcon } from './ui/Icon';
 import { LanguageSelector } from './ui/LanguageSelector';
 
 interface WelcomePortalProps {
@@ -32,16 +33,7 @@ const NewProjectOption: React.FC<{
       className="bg-[var(--sc-surface-raised)]/80 p-6 rounded-lg border border-[var(--sc-border-subtle)] hover:border-[var(--sc-accent)] hover:bg-[var(--sc-surface-raised)] transition-all cursor-pointer flex items-start space-x-4 w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
     >
       <div className="flex-shrink-0 bg-[var(--sc-surface-overlay)] p-3 rounded-lg">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          strokeWidth={1.5}
-          stroke="currentColor"
-          className="w-8 h-8 text-[var(--sc-accent)]"
-        >
-          {icon}
-        </svg>
+        <CustomIcon className="w-8 h-8 text-[var(--sc-accent)]">{icon}</CustomIcon>
       </div>
       <div>
         <h3 className="text-lg font-bold text-[var(--sc-text-primary)]">{title}</h3>
@@ -59,17 +51,9 @@ const FeatureHighlight: React.FC<{
 }> = ({ icon, title, description }) => (
   <div className="rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)]/50 p-4 text-left">
     <div className="mb-2 inline-flex rounded-lg bg-[var(--sc-accent-subtle)] p-2 text-[var(--sc-accent)]">
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        fill="none"
-        viewBox="0 0 24 24"
-        strokeWidth={1.5}
-        stroke="currentColor"
-        className="h-5 w-5"
-        aria-hidden="true"
-      >
+      <CustomIcon className="h-5 w-5" aria-hidden="true">
         {icon}
-      </svg>
+      </CustomIcon>
     </div>
     <h3 className="text-sm font-bold text-[var(--sc-text-primary)]">{title}</h3>
     <p className="mt-0.5 text-xs leading-relaxed text-[var(--sc-text-muted)]">{description}</p>
@@ -198,16 +182,9 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
 
   const renderMainView = () => (
     <div className="text-center">
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        fill="none"
-        viewBox="0 0 24 24"
-        strokeWidth={1.5}
-        stroke="currentColor"
-        className="w-16 h-16 text-[var(--sc-accent)] mx-auto mb-4"
-      >
+      <CustomIcon className="w-16 h-16 text-[var(--sc-accent)] mx-auto mb-4">
         {ICONS.WRITER}
-      </svg>
+      </CustomIcon>
       <h1 className="text-4xl md:text-5xl font-bold text-[var(--sc-text-primary)]">
         {t('portal.welcome.title')}
       </h1>
@@ -239,21 +216,13 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
         />
       </div>
       <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)]/60 px-4 py-1.5 text-sm text-[var(--sc-text-secondary)]">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          strokeWidth={1.5}
-          stroke="currentColor"
-          className="h-4 w-4 text-[var(--sc-success-fg)]"
-          aria-hidden="true"
-        >
+        <CustomIcon className="h-4 w-4 text-[var(--sc-success-fg)]" aria-hidden="true">
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
             d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
           />
-        </svg>
+        </CustomIcon>
         {t('portal.welcome.privacyBadge')}
       </p>
       {!hasExistingSession && (
@@ -307,16 +276,9 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
         onClick={() => setView('main')}
         className="flex items-center space-x-2 text-[var(--sc-accent)] hover:text-[var(--sc-accent-hover)] mb-6"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          strokeWidth={1.5}
-          stroke="currentColor"
-          className="w-5 h-5"
-        >
+        <CustomIcon className="w-5 h-5">
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-        </svg>
+        </CustomIcon>
         <span>{t('portal.back')}</span>
       </button>
       <h2 className="text-3xl font-bold text-[var(--sc-text-primary)] mb-2">
@@ -359,16 +321,9 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
         onClick={() => setView('main')}
         className="flex items-center space-x-2 text-[var(--sc-accent)] hover:text-[var(--sc-accent-hover)] mb-6"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          strokeWidth={1.5}
-          stroke="currentColor"
-          className="w-5 h-5"
-        >
+        <CustomIcon className="w-5 h-5">
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-        </svg>
+        </CustomIcon>
         <span>{t('portal.back')}</span>
       </button>
       <h2 className="text-3xl font-bold text-[var(--sc-text-primary)] mb-2">

@@ -1148,7 +1148,7 @@ export async function testAIConnection(
                 'content-type': 'application/json',
               },
               body: JSON.stringify({
-                model: 'claude-haiku-4-5',
+                model: 'claude-sonnet-5',
                 max_tokens: 1,
                 messages: [{ role: 'user', content: 'ping' }],
               }),
@@ -1159,7 +1159,7 @@ export async function testAIConnection(
               headers: { 'content-type': 'application/json' },
               body: JSON.stringify({
                 apiKey,
-                model: 'claude-haiku-4-5',
+                model: 'claude-sonnet-5',
                 maxTokens: 1,
                 messages: [{ role: 'user', content: 'ping' }],
               }),

@@ -2,9 +2,11 @@
 /**
  * Bundle-budget gate (audit finding F-8 — single source of truth).
  *
- * Two independent ceilings, both measured on RAW (uncompressed) per-file KB under dist/assets:
- *   --max-kb       (default 6200): any NON-entry JS chunk (`lib-*`, vendor, lazy views).
- *   --max-entry-kb (default 2500): the `index-*` entry chunk only.
+ * Differentiated ceilings, measured on RAW (uncompressed) per-file KB under dist/assets:
+ *   --max-entry-kb (default 2500): the `index-*` entry chunk.
+ *   --max-vendor-kb (default 6200): vendor JS, including local-AI runtime bundles.
+ *   --max-chunk-kb (default 2500): other JS chunks.
+ *   --max-wasm-kb (default 30000): individual WASM modules.
  *
  * The package.json `bundle:budget` script passes these same values explicitly — defaults and
  * invocation are kept in lockstep so there is ONE budget, not two. Do not diverge them.
@@ -26,15 +28,25 @@ const root = path.join(__dirname, '..');
 const assetsDir = path.join(root, 'dist', 'assets');
 
 const argv = process.argv.slice(2);
-let maxKb = 6200;
 let maxEntryKb = 2500;
+let maxVendorKb = 6200;
+let maxChunkKb = 2500;
+let maxWasmKb = 30000;
 for (let i = 0; i < argv.length; i++) {
-  if (argv[i] === '--max-kb' && argv[i + 1]) {
-    maxKb = Number(argv[i + 1]);
-    i++;
-  }
   if (argv[i] === '--max-entry-kb' && argv[i + 1]) {
     maxEntryKb = Number(argv[i + 1]);
+    i++;
+  }
+  if (argv[i] === '--max-vendor-kb' && argv[i + 1]) {
+    maxVendorKb = Number(argv[i + 1]);
+    i++;
+  }
+  if (argv[i] === '--max-chunk-kb' && argv[i + 1]) {
+    maxChunkKb = Number(argv[i + 1]);
+    i++;
+  }
+  if (argv[i] === '--max-wasm-kb' && argv[i + 1]) {
+    maxWasmKb = Number(argv[i + 1]);
     i++;
   }
 }
@@ -44,19 +56,30 @@ if (!fs.existsSync(assetsDir)) {
   process.exit(0);
 }
 
-const files = fs.readdirSync(assetsDir).filter((f) => f.endsWith('.js'));
+const files = fs.readdirSync(assetsDir).filter((f) => f.endsWith('.js') || f.endsWith('.wasm'));
 let failed = false;
 for (const f of files) {
   const full = path.join(assetsDir, f);
   const kb = fs.statSync(full).size / 1024;
-  // QNBS-v3: Only index-* is the real entry point; lib-* are vendor chunks checked against maxKb
-  if (f.startsWith('index-') && kb > maxEntryKb) {
+  if (f.endsWith('.wasm') && kb > maxWasmKb) {
+    console.error(
+      `[bundle:budget] WASM module exceeds ${maxWasmKb} KB: ${f} (${kb.toFixed(1)} KB)`,
+    );
+    failed = true;
+  } else if (f.startsWith('index-') && kb > maxEntryKb) {
     console.error(
       `[bundle:budget] Entry chunk exceeds ${maxEntryKb} KB: ${f} (${kb.toFixed(1)} KB)`,
     );
     failed = true;
-  } else if (kb > maxKb) {
-    console.error(`[bundle:budget] Chunk exceeds ${maxKb} KB: ${f} (${kb.toFixed(1)} KB)`);
+  } else if (f.startsWith('vendor-') || f.includes('-vendor')) {
+    if (kb > maxVendorKb) {
+      console.error(
+        `[bundle:budget] Vendor chunk exceeds ${maxVendorKb} KB: ${f} (${kb.toFixed(1)} KB)`,
+      );
+      failed = true;
+    }
+  } else if (f.endsWith('.js') && kb > maxChunkKb) {
+    console.error(`[bundle:budget] JS chunk exceeds ${maxChunkKb} KB: ${f} (${kb.toFixed(1)} KB)`);
     failed = true;
   }
 }
@@ -64,4 +87,4 @@ for (const f of files) {
 if (failed) {
   process.exit(1);
 }
-console.log(`[bundle:budget] OK — ${files.length} JS chunks ≤ ${maxKb} KB.`);
+console.log(`[bundle:budget] OK — ${files.length} JS/WASM assets within differentiated limits.`);

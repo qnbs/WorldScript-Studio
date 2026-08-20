@@ -9,7 +9,7 @@ import { useAiUsage } from '../../hooks/useAiUsage';
 import { useTranslation } from '../../hooks/useTranslation';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
-import { Icon } from '../ui/Icon';
+import { CustomIcon, Icon } from '../ui/Icon';
 import { Select } from '../ui/Select';
 import { GrammarCheckPanel } from './GrammarCheckPanel';
 import { ToolInputs } from './ToolInputs';
@@ -141,17 +141,9 @@ const ToolsPanel: FC = React.memo(() => {
                 aria-label={tool.title}
                 aria-pressed={activeTool === tool.id}
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={1.5}
-                  stroke="currentColor"
-                  className="w-6 h-6 mb-1"
-                  aria-hidden="true"
-                >
+                <CustomIcon className="w-6 h-6 mb-1" aria-hidden="true">
                   {tool.icon}
-                </svg>
+                </CustomIcon>
                 <span className="text-[10px] text-center leading-none hidden sm:block">
                   {tool.title.split(' ')[0]}
                 </span>
@@ -217,20 +209,13 @@ const ToolsPanel: FC = React.memo(() => {
                 variant="danger"
                 className="w-full py-3 text-base shadow-lg animate-pulse"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={1.5}
-                  stroke="currentColor"
-                  className="w-5 h-5 mr-2"
-                >
+                <CustomIcon className="w-5 h-5 mr-2">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     d="M5.25 7.5A2.25 2.25 0 017.5 5.25h9a2.25 2.25 0 012.25 2.25v9a2.25 2.25 0 01-2.25 2.25h-9a2.25 2.25 0 01-2.25-2.25v-9z"
                   />
-                </svg>
+                </CustomIcon>
                 {t('writer.stopGenerating')}
               </Button>
             ) : (

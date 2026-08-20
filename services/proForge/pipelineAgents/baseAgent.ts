@@ -154,9 +154,9 @@ ${prompt}`;
 
     const modelMap: Partial<Record<AIProvider, AiModel>> = {
       gemini: 'gemini-2.5-flash',
-      openai: 'gpt-4o-mini',
-      anthropic: 'claude-haiku-4-5',
-      grok: 'grok-3-mini',
+      openai: 'gpt-5.4-mini',
+      anthropic: 'claude-sonnet-5',
+      grok: 'grok-4.5',
     };
     // QNBS-v3: eco mode OR local routing override → use the local fallback model.
     const routingOverrideActive = shouldRouteLocally() && !LOCAL_PROVIDERS.has(configuredProvider);

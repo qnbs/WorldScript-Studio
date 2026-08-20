@@ -238,22 +238,22 @@ describe('BaseAgent', () => {
       expect(opts.maxTokens).toBe(4000);
     });
 
-    it('returns gpt-4o-mini for openai provider', () => {
+    it('returns the current compact GPT model for openai provider', () => {
       const ctx = makeContext({ config: { ...DEFAULT_CONFIG, aiProvider: 'openai' } });
       const a = new StubAgent(ctx);
-      expect(a.publicBuildAiOpts().model).toBe('gpt-4o-mini');
+      expect(a.publicBuildAiOpts().model).toBe('gpt-5.4-mini');
     });
 
-    it('returns claude-haiku-4-5 for anthropic provider', () => {
+    it('returns the current Sonnet model for anthropic provider', () => {
       const ctx = makeContext({ config: { ...DEFAULT_CONFIG, aiProvider: 'anthropic' } });
       const a = new StubAgent(ctx);
-      expect(a.publicBuildAiOpts().model).toBe('claude-haiku-4-5');
+      expect(a.publicBuildAiOpts().model).toBe('claude-sonnet-5');
     });
 
-    it('returns grok-3-mini for grok provider', () => {
+    it('returns the current compact Grok model for grok provider', () => {
       const ctx = makeContext({ config: { ...DEFAULT_CONFIG, aiProvider: 'grok' } });
       const a = new StubAgent(ctx);
-      expect(a.publicBuildAiOpts().model).toBe('grok-3-mini');
+      expect(a.publicBuildAiOpts().model).toBe('grok-4.5');
     });
 
     it('falls back to gemini-2.5-flash for unknown provider', () => {

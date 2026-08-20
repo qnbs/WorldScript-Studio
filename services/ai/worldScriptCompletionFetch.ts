@@ -92,7 +92,7 @@ async function resolveModelConfig(
       provider: 'openaiCompatible',
       baseURL: 'https://api.x.ai/v1',
       apiKey,
-      modelId: model.startsWith('grok-') ? model : 'grok-3',
+      modelId: model.startsWith('grok-') ? model : 'grok-4.5',
     };
   }
   if (kind === 'gemini') {
@@ -125,7 +125,7 @@ async function resolveModelConfig(
     return {
       provider: 'openai',
       apiKey,
-      modelId: model.startsWith('gpt-') ? model : 'gpt-4o-mini',
+      modelId: model.startsWith('gpt-') ? model : 'gpt-5.4-mini',
       ...(extraHeaders !== undefined ? { headers: extraHeaders } : {}),
     };
   }

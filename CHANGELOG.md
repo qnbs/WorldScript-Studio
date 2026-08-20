@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.28.0] — 2026-08-21
+
+### Added
+
+- **Cloud model catalog defense-in-depth:** current Anthropic, OpenAI, and xAI model IDs now
+  share one typed catalog across settings, fallbacks, and the Claude proxy allowlist.
+- **Native bundle and translation-quality floors:** bundle budgets now distinguish entry, vendor,
+  regular JS, and WASM assets; CI also enforces the existing translation coverage/outlier floor.
+
+### Fixed
+
+- **Spotlight tour theme:** the post-rebrand driver.js popover now binds to its WorldScript CSS
+  selector, with a regression test protecting the binding.
+
+### Deprecated
+
+- **`storycraft://` deep links:** the legacy scheme remains accepted for this release and displays
+  a migration notice; it is scheduled for removal in the next release.
+
 ### Added
 
 - **Renderer-neutral Rust Core seed:** `crates/worldscript-project` now provides headless project
