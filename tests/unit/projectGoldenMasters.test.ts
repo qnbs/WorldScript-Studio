@@ -4,13 +4,11 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { parseImportedProjectJson } from '../../services/projectImportSchema';
 
-// QNBS-v3: path.join (not `new URL(relative, import.meta.url)`) — Vite's static analysis rewrites
-// that exact call shape into a dev-server asset URL for .json targets, breaking fileURLToPath.
+// QNBS-v3: path.join, not `new URL(relative, import.meta.url)` — Vite rewrites that call shape into a dev-server asset URL for .json targets, breaking fileURLToPath.
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const fixturesDir = path.join(currentDir, '../fixtures/project-golden-masters');
 
-// QNBS-v3: same fixture files as crates/worldscript-project/tests/fixtures_test.rs — this freezes
-// current Zod accept/reject behavior as the golden-master oracle the Rust side is compared against.
+// QNBS-v3: same fixture files as crates/worldscript-project/tests/fixtures_test.rs — freezes current Zod accept/reject behavior as the Rust side's oracle.
 function readFixture(name: string): string {
   return readFileSync(path.join(fixturesDir, name), 'utf8');
 }

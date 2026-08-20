@@ -65,8 +65,7 @@ jobs:
       - name: Vendor fork invariant guard
         run: pnpm run verify:vendor
 
-      # QNBS-v3: osv-scanner.toml (in src-tauri/) suppresses accepted RUSTSEC advisories for Cargo.lock;
-      # scan both lockfiles so npm + Rust advisories are caught on every push
+      # QNBS-v3: osv-scanner.toml (in src-tauri/) suppresses accepted RUSTSEC advisories for Cargo.lock; scan all three lockfiles so npm + both Rust workspaces' advisories are caught on every push.
       - name: OSV vulnerability scan
         uses: google/osv-scanner-action/osv-scanner-action@8deb546fdb875b9996d27d4950be7312dac076a1 # v2.5.0
         with:
@@ -74,6 +73,7 @@ jobs:
             --config=src-tauri/osv-scanner.toml
             --lockfile=pnpm-lock.yaml
             --lockfile=src-tauri/Cargo.lock
+            --lockfile=crates/Cargo.lock
 
       # QNBS-v3: gitleaks scans git history for secrets; GITHUB_TOKEN is enough for PR annotations.
       - name: Scan for leaked secrets (gitleaks)
@@ -124,7 +124,7 @@ jobs:
           else
             echo "tauri=false" >> "$GITHUB_OUTPUT"
           fi
-          if grep -qE '^(crates/|\.github/workflows/ci\.yml$)' <<< "$CHANGED"; then
+          if grep -qE '^(crates/|tests/fixtures/project-golden-masters/|\.github/workflows/ci\.yml$)' <<< "$CHANGED"; then
             echo "crates=true" >> "$GITHUB_OUTPUT"
           else
             echo "crates=false" >> "$GITHUB_OUTPUT"
@@ -277,8 +277,7 @@ jobs:
 
   # ----------------------------------------------------------
   # 1c. CORE-RUST: worldscript-project crate Gate (fmt/check/clippy/test), path-scoped via `changes`
-  # QNBS-v3: independent workspace from src-tauri (crates/Cargo.toml) — zero GUI/Tauri deps, so no
-  # GTK/WebKit apt-get install steps are needed here, unlike rust-tauri above.
+  # QNBS-v3: independent workspace from src-tauri (crates/Cargo.toml) — zero GUI/Tauri deps, so unlike rust-tauri above, no GTK/WebKit apt-get install steps are needed here.
   # ----------------------------------------------------------
   core-rust:
     name: 🧩 Core Rust Gate
@@ -422,8 +421,7 @@ jobs:
     needs: [security, quality, changes, rust-tauri, core-rust, build, e2e, vrt]
     if: always()
     steps:
-      # QNBS-v3: rust-tauri/core-rust may legitimately be 'skipped' (their changes.outputs.* is
-      # 'false') — that's a pass, not a failure
+      # QNBS-v3: rust-tauri/core-rust may legitimately be 'skipped' (their changes.outputs.* is 'false') — that's a pass, not a failure
       - name: Verify all required jobs succeeded
         run: |
           FAIL=0

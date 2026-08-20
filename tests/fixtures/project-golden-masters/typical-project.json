@@ -43,7 +43,9 @@
           "id": "loc-roots",
           "name": "The Root Cellar",
           "description": "Where the clockwork mechanism is buried.",
-          "type": "other"
+          "coordinates": { "lat": 12.5, "lng": -3.25 },
+          "type": "other",
+          "population": 1200
         }
       ]
     }

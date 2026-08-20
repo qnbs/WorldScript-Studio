@@ -53,6 +53,17 @@ updates:
           - 'wry'
           - 'tao'
 
+  # Cargo / Rust (renderer-neutral Core, independent workspace — see docs/native/CORE-MIGRATION-LEDGER.md)
+  # QNBS-v3: separate directory entry — crates/ is its own Cargo workspace, not a member of src-tauri/.
+  - package-ecosystem: cargo
+    directory: /crates
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+
   # GitHub Actions
   - package-ecosystem: github-actions
     directory: /

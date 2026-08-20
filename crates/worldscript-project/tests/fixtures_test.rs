@@ -10,7 +10,7 @@
 
 use std::fs;
 use std::path::PathBuf;
-use worldscript_project::schema::StoryProject;
+use worldscript_project::schema::{Coordinates, LocationType, StoryProject};
 
 fn fixtures_dir() -> PathBuf {
     // crates/worldscript-project/tests/ -> crates/worldscript-project -> crates -> <repo root>
@@ -45,6 +45,33 @@ fn typical_project_is_accepted() {
         serde_json::from_str(&text).expect("typical-project.json should be accepted");
     assert_eq!(project.characters.len(), 2);
     assert_eq!(project.manuscript.len(), 2);
+}
+
+#[test]
+fn typical_project_round_trip_preserves_location_fields() {
+    // A prior schema draft left `WorldLocation.type`/`coordinates`/`population` unmodeled, so serde
+    // silently dropped them on save even though `services/projectImportSchema.ts` requires `type` —
+    // this locks in that a save/reload round trip keeps them intact.
+    let text = read_fixture("typical-project.json");
+    let project: StoryProject =
+        serde_json::from_str(&text).expect("typical-project.json should be accepted");
+    let location = &project.worlds[0].locations[0];
+    assert_eq!(location.location_type, LocationType::Other);
+    assert_eq!(location.population, Some(1200));
+    assert_eq!(
+        location.coordinates,
+        Some(Coordinates {
+            lat: 12.5,
+            lng: -3.25
+        })
+    );
+
+    let serialized = serde_json::to_string(&project).expect("serialize round-trip");
+    let reloaded: StoryProject = serde_json::from_str(&serialized).expect("reparse round-trip");
+    assert_eq!(
+        reloaded, project,
+        "save/reload must not lose location fields"
+    );
 }
 
 #[test]

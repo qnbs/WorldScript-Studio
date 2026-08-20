@@ -41,7 +41,36 @@ pub struct WorldLocation {
     pub name: String,
     pub description: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coordinates: Option<Coordinates>,
+    /// `worldLocationSchema.type` is a required enum in `services/projectImportSchema.ts`, not an
+    /// optional free-form string — mirrored precisely so an unmodeled value is rejected, not dropped.
+    #[serde(rename = "type")]
+    pub location_type: LocationType,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub population: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub significance: Option<String>,
+}
+
+/// Mirrors `worldLocationSchema.coordinates` (`{ lat: number, lng: number }`).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Coordinates {
+    pub lat: f64,
+    pub lng: f64,
+}
+
+/// Mirrors `worldLocationSchema.type`'s enum exactly — `city | village | forest | mountain |
+/// castle | temple | other`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LocationType {
+    City,
+    Village,
+    Forest,
+    Mountain,
+    Castle,
+    Temple,
+    Other,
 }
 
 /// Mirrors `types.ts`'s `WorldTimelineEvent` interface.
@@ -98,7 +127,20 @@ pub struct StorySection {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub word_count: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub status: Option<String>,
+    pub status: Option<SectionStatus>,
+}
+
+/// Mirrors `storySectionSchema.status`'s enum exactly — `draft | outline | first-draft | revised |
+/// final`. Modeled as a closed enum (not `Option<String>`) so an unsupported value like
+/// `"published"` is rejected at parse time instead of silently accepted, matching Zod's rejection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SectionStatus {
+    Draft,
+    Outline,
+    FirstDraft,
+    Revised,
+    Final,
 }
 
 /// Mirrors `types.ts`'s `StoryProject` interface. Deliberately narrower than the full TS shape —
