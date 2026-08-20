@@ -972,7 +972,7 @@ Required:
 ```text
 [ ] Qt license strategy approved
 [ ] Qt version/LTS strategy approved
-[ ] bridge technology selected by scorecard
+[ ] bridge technology confirmed by scorecard, informed by Wave 4.5 evidence
 [ ] Wave 4.5 Qt Early Killer-Gate qualification accepted — see `docs/native/QT-EARLY-KILLER-GATES.md`
 [ ] Qt learning harness passes
 [ ] IME feasibility passes
@@ -1037,7 +1037,7 @@ architecture at this point** — the end state is Web/PWA + Qt + GPUI only.
 
 ---
 
-# 15. 24-wave execution roadmap
+# 15. 26-wave execution roadmap (Wave 0–24 plus Wave 4.5)
 
 The roadmap intentionally preserves the original program's small, reviewable, reversible wave
 discipline while replacing CEF-specific work with Qt/GPUI-native milestones.
@@ -1185,22 +1185,27 @@ closed with evidence.
 
 ## Wave 4.5 — Qt Early Killer-Gate Qualification
 
-**Status: PLANNED — required before substantial Qt implementation.**
+**Status: PLANNED — early lanes may start in parallel with Waves 3/4; full qualification exit is
+required before substantial Qt implementation.**
 
 This additive qualification wave front-loads the highest-cost-to-discover Qt risks before Wave 5's
 learning harness grows into a product shell. It is intentionally smaller than a Qt port and does
 not claim production readiness. The complete test matrix, kill criteria, evidence package, and
 maturity vocabulary live in [`docs/native/QT-EARLY-KILLER-GATES.md`](QT-EARLY-KILLER-GATES.md).
 
-Required order:
+Dependency-aware order:
 
-1. inventory the Qt/Core contract, process, permission, and threat boundaries;
-2. run a minimal executable lifecycle/bridge spike with cancellation and repeated shutdown;
+1. once Wave 2 exposes a typed Core probe call, start the contract/threat inventory and select one
+   explicitly **provisional bridge candidate** in parallel with Waves 3/4; document alternatives
+   and the fact that this is not the final G2 scorecard decision;
+2. run the minimal executable lifecycle/bridge spike with cancellation and repeated shutdown;
 3. prove accessibility-tree observability plus keyboard, IME, RTL/BiDi, focus, and error behavior;
-4. test clean packaged launch, signing identity, updater trust, tamper rejection, and rollback;
+4. after Wave 4's relevant storage/recovery semantics exist, test clean packaged launch, signing
+   identity, updater trust, tamper rejection, and rollback;
 5. prove crash diagnostics, project-owned symbolization, and deterministic recovery;
 6. prove least-privilege filesystem/network/IPC behavior with negative tests;
-7. record residual risk, owners, retest conditions, and an explicit GO/NO-GO decision.
+7. use the complete evidence to confirm or reject the bridge through the G2 scorecard, then record
+   residual risk, owners, retest conditions, and an explicit GO/NO-GO decision.
 
 **Exit:** each kill gate is locally and CI-proven at the required level, packaged trust and
 recovery evidence exists, no Critical/High security blocker remains, and the admission scorecard
@@ -1208,32 +1213,32 @@ authorizes Wave 5. A failed gate stops Qt work and triggers architecture review;
 papered over by checking a later G2/G4 box.
 
 This wave does not renumber the established program. It is a deliberate qualification checkpoint
-between Core/R-15 work and Qt enablement, so storage and security semantics are settled before the
-native bridge is exercised and the bridge is falsified before feature UI creates sunk cost.
+between Core/R-15 work and Qt enablement. Its early contract/lifecycle lanes falsify bridge risk
+before storage work creates sunk cost; its later packaging/recovery/security lanes wait for the
+storage and R-15 semantics they genuinely depend on.
 
 ## Wave 5 — Qt enablement / executable learning harness
 
 **Status: PLANNED — not started. Gated behind Wave 4.5 and G2.**
 
-Create a minimal isolated Qt 6 application proving:
+Wave 5 builds on the accepted Wave-4.5 probes and does not replace or re-prove their kill gates.
+It turns the disposable feasibility evidence into a reusable, isolated Qt 6 learning harness and
+adds the capability checks that Wave 4.5 intentionally leaves out:
 
-- window creation;
-- QML load;
-- Rust call;
-- Rust event→QML;
-- async operation;
-- cancellation;
-- clean shutdown;
-- repeated launch/close;
 - file dialog;
 - clipboard;
-- keyboard;
-- IME smoke;
-- accessibility smoke.
+- packaging of the accepted lifecycle, bridge, accessibility, and input probes into one repeatable
+  harness;
+- test/CI artifact collection and a stable evidence report for the accepted bridge/lifetime/threading
+  model;
+- repeated execution of the already-accepted probes as regression protection, not as a second
+  admission decision.
 
 No WorldScript feature migration yet.
 
-Exit: bridge/lifetime/threading model is evidence-backed.
+Exit: the reusable harness includes the Wave-4.5 evidence, proves file-dialog and clipboard
+behavior, runs deterministically in the supported developer and CI environments, and preserves the
+evidence-backed bridge/lifetime/threading model without duplicating the Wave-4.5 qualification.
 
 ## Wave 6 — Qt shell and design-system foundation
 

@@ -10,6 +10,8 @@ sunk cost.
 The qualification is an additive prerequisite between Wave 4 (R-15 implementation) and Wave 5
 (the Qt executable learning harness). It does not replace the later G2, G3, or G4 production gates.
 Those gates remain necessary because a small feasibility spike cannot prove production completeness.
+The pre-G2 authorization boundary is recorded as the clarifying amendment
+[`ADR-0022`](../adr/0022-qt-pre-g2-qualification-harness.md); it does not supersede ADR-0021.
 
 ## Decision rule
 
@@ -26,31 +28,38 @@ the smallest possible investment and returns the program to architecture review.
 
 ## Qualification order
 
-The order is deliberately front-loaded by cost and irreversibility:
+The order is deliberately front-loaded by cost and irreversibility. The formal Wave 4.5 exit is
+recorded after Wave 4, but its dependency-aware lanes start earlier:
 
-1. **Contract and threat-boundary review** — static and design evidence before a toolkit spike.
-2. **Executable lifecycle/bridge spike** — prove that a minimal Qt process can safely host the
+1. **Contract and threat-boundary review** — static and design evidence after the typed Core probe
+   exists; may run in parallel with Waves 3 and 4.
+2. **Provisional bridge selection** — choose one candidate implementation for the disposable probe,
+   record rejected alternatives, and state that G2 retains the final scorecard decision.
+3. **Executable lifecycle/bridge spike** — prove that a minimal Qt process can safely host the
    renderer-neutral Core boundary.
-3. **Accessibility and input feasibility** — falsify the most important writing-workflow risks
+4. **Accessibility and input feasibility** — falsify the most important writing-workflow risks
    before custom controls are built.
-4. **Packaging, updater, and rollback trust** — test the distribution trust model with throwaway
+5. **Packaging, updater, and rollback trust** — test the distribution trust model with throwaway
    artifacts before product packaging work grows around it.
-5. **Crash diagnostics and recovery feasibility** — prove useful failure evidence without weakening
+6. **Crash diagnostics and recovery feasibility** — prove useful failure evidence without weakening
    the sandbox or recovery invariants.
-6. **Security and permission posture** — validate IPC/FFI, filesystem, network, and updater
+7. **Security and permission posture** — validate IPC/FFI, filesystem, network, and updater
    boundaries under the intended runtime conditions.
-7. **Admission review** — accept the evidence, record residual risks, and only then begin larger
+8. **Admission review** — use the evidence to confirm or reject the bridge scorecard, record
+   residual risks, and only then begin larger
    Qt shell or feature work.
 
-The checks may run in parallel after the lifecycle spike has established a runnable harness, but
-the admission decision remains conjunctive: one unresolved kill gate blocks Qt implementation.
+Gates 1–2 may begin once Wave 2 has a typed Core probe call and do not depend on R-15. Gate 3 may
+follow the lifecycle probe. Gates 4–6 wait for the relevant Wave 4 storage/crypto/recovery and
+security semantics; Gate 8 waits for every lane. The admission decision remains conjunctive: one
+unresolved kill gate blocks Qt implementation.
 
 ## Gate matrix
 
 | Gate | Minimum proof | Kill condition |
 |---|---|---|
 | Contract/threat boundary | Qt-facing contract inventory identifies every IPC/FFI crossing, data owner, permission, cancellation path, and failure mode; no domain truth moves into QML/C++. | The bridge requires renderer-specific domain rules, arbitrary command execution, or a new broad unsafe/FFI architecture. |
-| Lifecycle and Core bridge | Minimal Qt 6/QML executable proves window creation, QML load, typed Rust call, Rust event to QML, async operation, cancellation, clean shutdown, and repeated launch/close cycles. | Lifetime/threading behavior is nondeterministic, cancellation cannot be bounded, or the Core cannot remain GUI-independent. |
+| Lifecycle and Core bridge | A disposable Qt 6/QML probe proves the minimum viability path: process/window creation, QML load, one typed Rust call, one Rust event to QML, one bounded async/cancellation path, clean shutdown, and three repeated launch/close cycles. It records the bridge/lifetime/threading model; it does not build the reusable Wave 5 harness. | Lifetime/threading behavior is nondeterministic, cancellation cannot be bounded, or the Core cannot remain GUI-independent. |
 | Accessibility and input | A real Qt Quick control sample exposes a stable accessibility tree and proves keyboard/focus, accessible errors, high contrast, scalable text, RTL/BiDi, and IME smoke behavior on a supported Linux environment. | Required semantics are not observable, custom controls require inaccessible workarounds, or IME/BiDi breaks core writing input. |
 | Packaging and updater trust | A packaged hello-world/Core roundtrip starts from a clean environment; signed update metadata, artifact identity, downgrade policy, rollback, and tamper rejection are exercised with test credentials. | Artifact identity or rollback cannot be trusted, updates accept tampered input, or the packaging model requires bypassing repository signing policy. |
 | Crash and recovery | An intentional harness crash produces actionable diagnostics and symbols for project-owned code; restart/recovery behavior is deterministic and does not corrupt test data. | Diagnostics require weakening sandbox/process isolation, recovery loses acknowledged data, or failures cannot be reproduced from packaged evidence. |
@@ -63,8 +72,8 @@ The qualification work should produce a small, reviewable package rather than a 
 framework:
 
 - `qt-early-killer-gates.md` scorecard with commit/run links and maturity labels;
-- one isolated Qt learning harness, with no WorldScript feature UI and no Qt WebEngine;
-- deterministic lifecycle tests covering repeated start/close, cancellation, and clean shutdown;
+- disposable Qt feasibility probes, with no WorldScript feature UI and no Qt WebEngine;
+- deterministic probe results covering repeated start/close, cancellation, and clean shutdown;
 - an accessibility/input fixture with machine-observable tree and keyboard/IME assertions;
 - a clean-environment packaged artifact and a test-key update/rollback fixture;
 - a crash fixture with a project-owned symbolized frame and recovery-state assertion;
@@ -102,7 +111,10 @@ repeat the meaningful checks in CI:
 
 ## Relationship to later gates
 
-Wave 4.5 answers **“is Qt still technically and operationally plausible?”** cheaply. G2 answers
+Wave 4.5 answers **“is Qt still technically and operationally plausible?”** cheaply and supplies
+the evidence needed to confirm or reject the provisional bridge candidate. Wave 5
+turns the accepted disposable probes into the reusable executable learning harness and adds the
+remaining file-dialog and clipboard evidence; it does not repeat Wave 4.5's kill-gate work. G2 answers
 **“is Qt admitted for implementation?”** with the approved license/version/bridge strategy and
 the learning harness. G3 and G4 still require project compatibility, accessibility, security,
 packaging, updater, recovery, performance, signing, support, and field evidence at production

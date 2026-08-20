@@ -322,7 +322,7 @@ security ──► quality ──┬──► build ──► lighthouse
                        ├──► storybook
                        └──► vrt
 build (main, non-PR) ──► upload-pages-artifact
-deploy (main, non-PR) needs: build + e2e ──► GitHub Pages
+deploy (main, non-PR) needs: ci-success ──► GitHub Pages
 ```
 
 ### Jobs
@@ -551,7 +551,7 @@ Central orchestration layer for all background worker tasks — since ADR-0015, 
 | `docs/CODEANT-REVIEW-LOOP.md` | Canonical PR review-correction loop procedure (any bot) |
 | `docs/DEPENDABOT-TRIAGE.md` | Dependabot PR triage policy — ecosystem/grouping config, why there's no auto-merge, merge sequencing |
 | `docs/adr/` | Architecture Decision Records, incl. ADR-0021 (Qt/GPUI native desktop strategy) |
-| `docs/native/ROADMAP-QT-GPUI-DESKTOP.md` | Qt 6 + GPUI native desktop roadmap — 24-wave plan superseding Tauri, CEF retired |
+| `docs/native/ROADMAP-QT-GPUI-DESKTOP.md` | Qt 6 + GPUI native desktop roadmap — 26-wave plan (Wave 0–24 plus Wave 4.5) superseding Tauri, CEF retired |
 | `docs/native/CORE-MIGRATION-LEDGER.md` | Rust Core extraction priority order (what's moved out of TS vs. deferred) |
 | `docs/DEPLOYMENT.md` | GitHub Pages + Vercel + Cloudflare Pages |
 | `docs/ACCESSIBILITY.md` | A11y architecture (live regions, focus, WCAG 2.2, Lighthouse 0.95 gate) |
