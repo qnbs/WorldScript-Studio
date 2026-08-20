@@ -77,7 +77,9 @@ security ──► quality ──┬──► build ──┬──► lighthous
 
 security ─┬
 quality ──┼──► ci-success (required-status aggregator)
+changes ──┤
 rust ────┤
+core-rust ┤
 build ────┤
 e2e ──────┤
 vrt ──────┘
