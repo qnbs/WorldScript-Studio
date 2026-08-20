@@ -167,4 +167,14 @@ describe('rustTaskSupervisor — diffTextViaRust', () => {
 
     await expect(diffTextViaRust('old', 'new', { rustComputeEnabled: true })).resolves.toBeNull();
   });
+
+  it('returns null when native routing rejects for TypeScript fallback', async () => {
+    const { isRustComputeAvailable } = await import('../../services/tauriTaskBridge');
+    const { routeTask } = await import('../../services/hybridRouter');
+    vi.mocked(isRustComputeAvailable).mockResolvedValue(true);
+    vi.mocked(routeTask).mockRejectedValue(new Error('native routing failed'));
+    const { diffTextViaRust } = await import('../../services/rustTaskSupervisor');
+
+    await expect(diffTextViaRust('old', 'new', { rustComputeEnabled: true })).resolves.toBeNull();
+  });
 });
