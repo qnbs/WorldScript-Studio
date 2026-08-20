@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * DesktopPlatform import-boundary gate (Wave 1, docs/cef/ROADMAP-CEF-DESKTOP-MIGRATION.md §8).
+ * DesktopPlatform import-boundary gate (Wave 1, docs/native/ROADMAP-QT-GPUI-DESKTOP.md).
  *
  * Application source should route all desktop-capability access through `desktopPlatform`
  * (`@domain/desktop-contracts`) instead of importing `@tauri-apps/*` directly — that's the whole
- * point of the DesktopPlatform boundary: a future CEF adapter slots in without touching any
+ * point of the DesktopPlatform boundary: a future Qt or GPUI adapter slots in without touching any
  * consumer again. This is a strict zero-tolerance gate (unlike the suppression ratchet in
  * check-suppressions.mjs): any real `@tauri-apps/*` import specifier found in application source
  * outside the explicitly approved locations below fails the build. Comment-only mentions (JSDoc,

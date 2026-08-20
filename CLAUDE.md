@@ -278,7 +278,7 @@ On any non-trivial code change add a single-line comment explaining **why**, not
 | TS / JS | `// QNBS-v3: <reason / impact>` |
 | TSX / JSX | `// QNBS-v3: …` above the changed line; `{/* QNBS-v3: … */}` only when needed inside JSX |
 | CSS | `/* QNBS-v3: … */` |
-| C++ / Rust (`apps/desktop-cef/`) | `// QNBS-v3: <reason / impact>` |
+| C++ / Rust | `// QNBS-v3: <reason / impact>` |
 | CMake (`CMakeLists.txt`) | `# QNBS-v3: <reason / impact>` |
 | Pure config (JSON, YAML, TOML — e.g. `package.json`, workflow `.yml`, `Cargo.toml`) | No inline comment — explain in the commit message |
 

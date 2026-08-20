@@ -1,12 +1,13 @@
 // QNBS-v3: Wave 1 renderer-neutral DesktopPlatform contract — every desktop capability access should route through this interface instead of a direct @tauri-apps/* import.
 /**
- * DesktopPlatform contract (roadmap §8, docs/cef/ROADMAP-CEF-DESKTOP-MIGRATION.md).
+ * DesktopPlatform contract (docs/native/ROADMAP-QT-GPUI-DESKTOP.md).
  * Renderer-neutral typed interface all desktop capability access should route through.
  * Wave 1 scope: relocate today's exact Tauri behavior behind this interface (TauriDesktopPlatform)
- * plus a safe no-op web/PWA implementation (WebDesktopPlatform). No CEF adapter exists yet — that's
- * Wave 2+. HTTP (`services/ai/fetchAdapter.ts`, `services/localServerHttp.ts`) is intentionally NOT a
- * facet here — the roadmap's own §8 sketch has no HTTP facet, and the coupling inventory tags both
- * files as Wave 10 scope; they keep importing `@tauri-apps/plugin-http` directly until then.
+ * plus a safe no-op web/PWA implementation (WebDesktopPlatform). No Qt or GPUI adapter exists yet —
+ * those are admitted later per the roadmap's gates. HTTP (`services/ai/fetchAdapter.ts`,
+ * `services/localServerHttp.ts`) is intentionally NOT a facet here — this interface has no HTTP
+ * facet by design; those files keep importing `@tauri-apps/plugin-http` directly, a permanent,
+ * documented exception in the import-boundary guardrail.
  */
 
 import type { RustTaskRequest, RustTaskResultEvent } from '@domain/worker-bus';
