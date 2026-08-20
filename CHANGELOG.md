@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Coverage and token ratchets:** coverage now measures the root application/PWA shell, and the
+  token audit baseline was ratcheted down from 160 to the verified current count of 159.
 - **Native desktop strategy:** ADR-0021 adopts Qt 6/Qt Quick as the future primary native product,
   keeps React/PWA first-class, makes Tauri transitional, admits GPUI later behind a gate, and
   retires CEF from the target architecture.

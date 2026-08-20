@@ -46,6 +46,10 @@ export default defineConfig({
       // scripts/check-coverage-ratchet.mjs (non-blocking CI step suggesting when to ratchet up).
       reporter: ['text', 'lcov', 'html', 'json-summary'],
       include: [
+        // QNBS-v3: Measure the application shell so root composition and PWA lifecycle code cannot evade coverage.
+        'App.tsx',
+        'index.tsx',
+        'register-sw.ts',
         'app/**/*.{ts,tsx}',
         'components/**/*.{ts,tsx}',
         'features/**/*.{ts,tsx}',
