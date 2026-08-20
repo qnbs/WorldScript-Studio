@@ -551,7 +551,8 @@ Central orchestration layer for all background worker tasks — since ADR-0015, 
 | `docs/CODEANT-REVIEW-LOOP.md` | Canonical PR review-correction loop procedure (any bot) |
 | `docs/DEPENDABOT-TRIAGE.md` | Dependabot PR triage policy — ecosystem/grouping config, why there's no auto-merge, merge sequencing |
 | `docs/adr/` | Architecture Decision Records, incl. ADR-0021 (Qt/GPUI native desktop strategy) |
-| `docs/native/ROADMAP-QT-GPUI-DESKTOP.md` | Qt 6 + GPUI native desktop roadmap — 26-wave plan (Wave 0–24 plus Wave 4.5) superseding Tauri, CEF retired |
+| `docs/native/ROADMAP-QT-GPUI-DESKTOP.md` | Qt-first native desktop roadmap — 22-entry execution plan (Wave 0–20 plus Wave 4.5); GPUI is preserved separately in `docs/native/GPUI-EXPLORATIONS.md`, CEF retired |
+| `docs/native/GPUI-EXPLORATIONS.md` | Deferred GPUI feasibility targets and re-entry criteria — exploratory only, not a numbered implementation wave |
 | `docs/native/CORE-MIGRATION-LEDGER.md` | Rust Core extraction priority order (what's moved out of TS vs. deferred) |
 | `docs/DEPLOYMENT.md` | GitHub Pages + Vercel + Cloudflare Pages |
 | `docs/ACCESSIBILITY.md` | A11y architecture (live regions, focus, WCAG 2.2, Lighthouse 0.95 gate) |

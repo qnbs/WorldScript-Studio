@@ -1,4 +1,4 @@
-# WorldScript Studio — Qt + GPUI Multi-Renderer Desktop Roadmap & Realization Concept
+# WorldScript Studio — Qt-First Native Desktop Roadmap & GPUI Exploration Boundary
 
 **Status:** Adopted as the binding strategic architecture via ADR-0021 (merged, PR #406). Wave 0
 (both the decision and its CEF source/CI retirement execution) is complete — see §15 below for the
@@ -10,11 +10,12 @@ full per-wave status.
 **Transitional desktop runtime:** Tauri 2 / system WebView, retained only as a reference/fallback
 until Qt admission and cutover gates are satisfied, **and itself retired once Qt reaches Stable**
 **Primary native desktop line:** Qt 6 / Qt Quick (QML) — Hardened / Accessible / Long-Lived Edition
-**Secondary native desktop line:** GPUI — Vision / High-Performance Edition
+**Deferred native exploration:** GPUI — Vision / High-Performance Edition (not a numbered execution commitment)
 **Web line:** React + Vite PWA, retained as a first-class product surface and behavioral reference
 **Authoritative product core:** Rust
 **Architecture rule:** no domain/business logic duplication across renderers
-**Revision:** 1 — CEF-free strategic reset
+**Revision:** 2 — early killer-gate sequencing and GPUI exploration boundary
+**Revision date:** 2026-08-21
 
 ## Document status and corrections applied at adoption (Wave 0, 2026-08-20)
 
@@ -46,7 +47,18 @@ it was drafted against:
    report) remains open as the historical/ongoing performance baseline referenced throughout this
    document.
 
-Everything else below is the roadmap as adopted, unmodified.
+The baseline below remains the adopted roadmap record; the sequencing reconciliation in this
+revision is recorded explicitly before the detailed sections it changes.
+
+## Revision 2 — evidence-first sequencing reconciliation (2026-08-21)
+
+The three cheapest Qt feasibility risks — lifecycle/bridge, accessibility/input, and
+crash/recovery — are now explicit early lanes before formal Wave 4.5. Wave 4.5 retains the
+packaging, security, and admission work that depends on later Core semantics. Wave 5 is reduced to
+the reusable harness and its remaining file-dialog/clipboard proof. GPUI Waves 21–24 are removed
+from the numbered execution roadmap and preserved in `docs/native/GPUI-EXPLORATIONS.md` as a
+deferred, separately gated exploration. This does not change the Core-first Wave-2 priority or
+authorize production Qt UI before G2.
 
 > **Decision summary:** WorldScript Studio will not continue the CEF desktop-runtime program. The
 > product will instead mature into a renderer-independent Rust platform with two native desktop
@@ -60,7 +72,8 @@ Everything else below is the roadmap as adopted, unmodified.
 
 # 0. Executive decision
 
-WorldScript Studio adopts a **Core First → Qt Stable → GPUI Expansion** strategy.
+WorldScript Studio adopts a **Core First → Qt Stable** strategy, with GPUI retained as a separately
+gated exploration rather than a concurrent execution commitment.
 
 The previous CEF-first path is retired as an implementation target. Work already completed during the
 CEF investigation is not discarded blindly: renderer-neutral contracts, lifecycle lessons, process
@@ -103,22 +116,11 @@ Qt Stable
         ▼
 Tauri retirement review
         │
-        ├──────────────────────────────┐
-        │                              │
-        ▼                              ▼
-Web/PWA continues                GPUI admission
-                                      │
-                                      ▼
-                               GPUI vertical slices
-                                      │
-                                      ▼
-                               GPUI packaged beta
-                                      │
-                                      ▼
-                               GPUI parity/hardening
-                                      │
-                                      ▼
-                                GPUI Stable
+        ├──────────────────────────────────────────┐
+        │                                          │
+        ▼                                          ▼
+Web/PWA continues                         GPUI exploration record
+                                           (separate admission decision)
 ```
 
 The end state is deliberately multi-renderer:
@@ -229,9 +231,9 @@ isolated capability after a separate architecture/security/license review. Reint
 Chromium-backed primary application surface through Qt WebEngine would defeat the purpose of this
 reset.
 
-## 2.2 GPUI is the second native product line
+## 2.2 GPUI is a deferred exploration track
 
-GPUI is selected as the strategic high-performance Rust-native track because it aligns strongly with:
+GPUI remains a candidate high-performance Rust-native track because it aligns strongly with:
 
 - Rust ownership;
 - GPU-accelerated UI;
@@ -241,8 +243,11 @@ GPUI is selected as the strategic high-performance Rust-native track because it 
 - native state/entity models;
 - direct reuse of the Rust core without a C++/QML boundary.
 
-However, GPUI remains an actively evolving, pre-1.0 framework. Therefore GPUI is not allowed to
-become the first replacement for the production desktop until its own admission gates are satisfied.
+However, GPUI remains an actively evolving, pre-1.0 framework, and the first native product has not
+yet completed a Qt wave. GPUI therefore has no numbered implementation commitment at this stage;
+its proof targets and re-entry conditions live in [`docs/native/GPUI-EXPLORATIONS.md`](GPUI-EXPLORATIONS.md).
+It cannot become a production desktop line until a separate admission decision is made after Qt
+evidence exists.
 
 The project must not assume a stable React→GPUI binding ecosystem. React reuse means, in descending
 order of reliability:
@@ -295,9 +300,9 @@ Examples:
 - collaboration state;
 - diagnostics state.
 
-## 3.2 Qt first, GPUI second
+## 3.2 Qt first; GPUI remains exploratory
 
-Qt is the first native production target. GPUI implementation does not race Qt to parity.
+Qt is the only current native production target. GPUI implementation does not race Qt to parity.
 
 Before Qt Stable, GPUI work is limited to:
 
@@ -308,7 +313,8 @@ Before Qt Stable, GPUI work is limited to:
 - text/input/accessibility feasibility;
 - contract compatibility checks.
 
-No second full feature-parity program begins before the GPUI Admission Gate.
+No GPUI feature-parity program begins unless the separate GPUI exploration record is re-admitted as
+an execution plan after Qt evidence and a signed GPUI Admission Gate decision.
 
 ## 3.3 No renderer-specific business rules
 
@@ -965,7 +971,7 @@ Required:
 [ ] task supervision renderer-neutral
 [ ] diagnostics renderer-neutral
 [ ] contract versioning policy established
-[ ] native-readiness CI gate active
+[x] native-readiness CI gate active — enforced by `pnpm run native-readiness:check`
 ```
 
 ## G2 — Qt Implementation Admission
@@ -1038,10 +1044,12 @@ architecture at this point** — the end state is Web/PWA + Qt + GPUI only.
 
 ---
 
-# 15. 26-wave execution roadmap (Wave 0–24 plus Wave 4.5)
+# 15. 22-entry Qt-first execution roadmap (Wave 0–20 plus Wave 4.5)
 
 The roadmap intentionally preserves the original program's small, reviewable, reversible wave
-discipline while replacing CEF-specific work with Qt/GPUI-native milestones.
+discipline while replacing CEF-specific work with Qt-first milestones. GPUI is deliberately not
+counted as a numbered execution commitment; its retained proof targets live in the separate
+[`docs/native/GPUI-EXPLORATIONS.md`](GPUI-EXPLORATIONS.md) record.
 
 ## Wave 0 — Strategy reset and CEF retirement reconciliation
 
@@ -1148,6 +1156,34 @@ Met by this slice: `cargo test` in `crates/` (9 tests: lifecycle + golden-master
 `cargo run --bin wsproj -- demo-lifecycle` both run with zero GUI/Tauri dependency in the crate's
 `cargo tree`.
 
+## Early Native Feasibility Lanes (pre-Wave-4.5, not a numbered execution wave)
+
+**Status: PLANNED — bounded risk-discovery work may start once Wave 2 exposes a typed Core probe.**
+
+These three disposable lanes are deliberately pulled forward so the most dangerous Qt runtime
+assumptions can be falsified while Waves 3 and 4 remain in progress. They are qualification
+evidence, not production Qt implementation, and they must not grow into a product shell. Each lane
+retains the maturity progression `planned → locally proven → CI-proven → packaged-proven → admitted`;
+no lane is considered passed from documentation alone.
+
+Execution order:
+
+1. **Lifecycle and bridge spike** — prove a minimal Qt 6/QML process can create a window, load QML,
+   make one typed Rust call, receive one Rust event, bound one async/cancellation path, shut down
+   cleanly, and repeat launch/close three times. Use a provisional bridge candidate only; G2 retains
+   the final scorecard decision.
+2. **Accessibility and input feasibility** — prove a machine-observable Qt Quick accessibility tree,
+   keyboard/focus, accessible errors, scalable/high-contrast text, RTL/BiDi, and IME smoke behavior
+   on the supported Linux environment.
+3. **Crash diagnostics and recovery feasibility** — intentionally exercise a disposable crash path,
+   produce actionable project-owned diagnostics/symbols, and prove deterministic restart/recovery
+   without corrupting test data or weakening sandbox/process isolation.
+
+**Exit:** all three lanes have evidence at their honest maturity level, a named owner, and explicit
+kill criteria. A failed lane stops Qt investment and returns the program to architecture review.
+The formal Wave 4.5 qualification consumes these results and adds packaging/update trust and
+security/permission evidence; it does not silently re-run the same feasibility work.
+
 ## Wave 3 — Storage correctness and R-15 design
 
 **Status: PLANNED — not started.**
@@ -1192,28 +1228,27 @@ Required tests:
 Exit: desktop project data uses the approved encrypted path where required; #357/#359/#360/#361 all
 closed with evidence.
 
-## Wave 4.5 — Qt Early Killer-Gate Qualification
+## Wave 4.5 — Qt Early Killer-Gate Formal Qualification
 
-**Status: PLANNED — early lanes may start in parallel with Waves 3/4; full qualification exit is
-required before substantial Qt implementation.**
+**Status: PLANNED — formal qualification consumes the earlier lanes; its exit is required before
+substantial Qt implementation.**
 
-This additive qualification wave front-loads the highest-cost-to-discover Qt risks before Wave 5's
-learning harness grows into a product shell. It is intentionally smaller than a Qt port and does
-not claim production readiness. The complete test matrix, kill criteria, evidence package, and
-maturity vocabulary live in [`docs/native/QT-EARLY-KILLER-GATES.md`](QT-EARLY-KILLER-GATES.md).
+This formal checkpoint closes the remaining qualification gaps after the early lifecycle,
+accessibility/input, and crash/recovery lanes have produced evidence. It is intentionally smaller
+than a Qt port and does not claim production readiness. The complete test matrix, kill criteria,
+evidence package, and maturity vocabulary live in
+[`docs/native/QT-EARLY-KILLER-GATES.md`](QT-EARLY-KILLER-GATES.md).
 
-Dependency-aware order:
+Formal qualification order:
 
-1. once Wave 2 exposes a typed Core probe call, start the contract/threat inventory and select one
-   explicitly **provisional bridge candidate** in parallel with Waves 3/4; document alternatives
-   and the fact that this is not the final G2 scorecard decision;
-2. run the minimal executable lifecycle/bridge spike with cancellation and repeated shutdown;
-3. prove accessibility-tree observability plus keyboard, IME, RTL/BiDi, focus, and error behavior;
-4. after Wave 4's relevant storage/recovery semantics exist, test clean packaged launch, signing
+1. review the early-lane evidence, complete the contract/threat inventory, and record the
+   **provisional bridge candidate** plus rejected alternatives; G2 retains the final scorecard
+   decision;
+2. after Wave 4's relevant storage/recovery semantics exist, test clean packaged launch, signing
    identity, updater trust, tamper rejection, and rollback;
-5. prove crash diagnostics, project-owned symbolization, and deterministic recovery;
-6. prove least-privilege filesystem/network/IPC behavior with negative tests;
-7. use the complete evidence to confirm or reject the bridge through the G2 scorecard, then record
+3. prove least-privilege filesystem/network/IPC behavior with negative tests and confirm that the
+   early crash/recovery evidence did not weaken sandbox or identity-binding invariants;
+4. use the complete evidence to confirm or reject the bridge through the G2 scorecard, then record
    residual risk, owners, retest conditions, and an explicit GO/NO-GO decision.
 
 **Exit:** each kill gate is locally and CI-proven at the required level, packaged trust and
@@ -1221,33 +1256,32 @@ recovery evidence exists, no Critical/High security blocker remains, and the adm
 authorizes Wave 5. A failed gate stops Qt work and triggers architecture review; it does not get
 papered over by checking a later G2/G4 box.
 
-This wave does not renumber the established program. It is a deliberate qualification checkpoint
-between Core/R-15 work and Qt enablement. Its early contract/lifecycle lanes falsify bridge risk
-before storage work creates sunk cost; its later packaging/recovery/security lanes wait for the
-storage and R-15 semantics they genuinely depend on.
+This wave does not claim the early lanes as later gate completions. It is the formal qualification
+checkpoint between Core/R-15 work and Qt enablement: the cheap lifecycle, accessibility/input, and
+crash/recovery risks were already tested before storage work creates sunk cost, while packaging,
+updater, and security lanes wait for the storage and R-15 semantics they genuinely depend on.
 
 ## Wave 5 — Qt enablement / executable learning harness
 
 **Status: PLANNED — not started. Gated behind Wave 4.5 and G2.**
 
-Wave 5 builds on the accepted Wave-4.5 probes and does not replace or re-prove their kill gates.
-It turns the disposable feasibility evidence into a reusable, isolated Qt 6 learning harness and
-adds the capability checks that Wave 4.5 intentionally leaves out:
+Wave 5 builds on the accepted early-lane and formal Wave-4.5 evidence. It does not repeat or
+re-prove the early lifecycle, accessibility/input, or crash gates. It turns the disposable
+feasibility evidence into a reusable, isolated Qt 6 learning harness and adds only the capability
+checks intentionally left out of qualification:
 
 - file dialog;
 - clipboard;
-- packaging of the accepted lifecycle, bridge, accessibility, and input probes into one repeatable
-  harness;
+- packaging of the accepted probes into one repeatable harness;
 - test/CI artifact collection and a stable evidence report for the accepted bridge/lifetime/threading
   model;
-- repeated execution of the already-accepted probes as regression protection, not as a second
-  admission decision.
+- repeated execution only as harness regression protection, not as a second admission decision.
 
 No WorldScript feature migration yet.
 
-Exit: the reusable harness includes the Wave-4.5 evidence, proves file-dialog and clipboard
-behavior, runs deterministically in the supported developer and CI environments, and preserves the
-evidence-backed bridge/lifetime/threading model without duplicating the Wave-4.5 qualification.
+Exit: the reusable harness includes the accepted qualification evidence, proves file-dialog and
+clipboard behavior, runs deterministically in the supported developer and CI environments, and
+preserves the evidence-backed bridge/lifetime/threading model without duplicating qualification.
 
 ## Wave 6 — Qt shell and design-system foundation
 
@@ -1554,84 +1588,13 @@ Actions:
 
 Exit: Qt is primary desktop; **Tauri is fully removed, not kept as a parallel runtime.**
 
-## Wave 21 — GPUI admission spikes
+## GPUI exploration boundary (not a numbered execution wave)
 
-**Status: PLANNED — not started. Gated behind G6.**
-
-Now perform focused, disposable proofs:
-
-- app/window lifecycle;
-- manuscript editor;
-- text shaping;
-- IME;
-- RTL/BiDi;
-- accessibility;
-- clipboard;
-- drag/drop;
-- virtualized list;
-- graph/board;
-- GPU;
-- 120-Hz target;
-- large project;
-- Rust Core consumption.
-
-Evaluate GPUI itself and optional `gpui-component` independently.
-
-Exit: G6 GO/NO-GO.
-
-## Wave 22 — GPUI shell + manuscript vertical slice
-
-**Status: PLANNED — not started.**
-
-If admitted:
-
-- shell;
-- commands;
-- design tokens;
-- editor;
-- project lifecycle;
-- Core contracts;
-- diagnostics.
-
-The manuscript editor is first because GPUI's strategic value must be proven where it matters most.
-
-## Wave 23 — GPUI capability expansion
-
-**Status: PLANNED — not started.**
-
-Add:
-
-- Binder;
-- knowledge surfaces;
-- Plot Board;
-- graphs;
-- AI;
-- tasks;
-- settings;
-- import/export;
-- accessibility;
-- packaging/updater.
-
-Every capability remains Core-backed.
-
-## Wave 24 — Multi-renderer maturity
-
-**Status: PLANNED — not started.**
-
-Establish:
-
-- Web/PWA stable;
-- Qt Hardened stable;
-- GPUI Vision stable;
-- shared project format;
-- shared collaboration protocol;
-- contract compatibility;
-- cross-renderer migration tests;
-- renderer-specific SLOs;
-- release-train governance.
-
-No requirement for identical release cadence. **Tauri is no longer part of the architecture at this
-stage.**
+GPUI Waves 21–24 are removed from the active numbered execution roadmap. Their proof targets,
+non-goals, and explicit re-entry conditions are preserved in
+[`docs/native/GPUI-EXPLORATIONS.md`](GPUI-EXPLORATIONS.md). This is a scope correction, not a
+claim that GPUI has been rejected: no GPUI implementation begins until the separate exploration
+record is reviewed after Qt evidence and G6 is explicitly admitted.
 
 ---
 

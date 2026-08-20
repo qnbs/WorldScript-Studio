@@ -168,6 +168,9 @@ jobs:
       - name: Doc metrics drift gate (locale/key counts, stale PLANNED status)
         run: pnpm run docs:check
 
+      - name: Native-readiness roadmap policy gate
+        run: pnpm run native-readiness:check
+
       - name: Feature parity audit
         run: pnpm run parity:check
 

@@ -35,6 +35,16 @@ This is an additive clarification, not a reversal or replacement of ADR-0021. Th
 prohibition on production Qt/GPUI UI before admission remains unchanged, and all later production
 gates remain mandatory.
 
+## Sequencing amendment (2026-08-21)
+
+The lifecycle/bridge, accessibility/input, and crash/recovery checks are now explicit early
+feasibility lanes. The early feasibility lanes are allowed before the formal Wave 4.5 checkpoint
+and may run in parallel with Waves 3 and 4 once Wave 2 exposes a typed Core probe. Formal Wave 4.5
+consumes their evidence and completes packaging/update-trust, permission, and admission review; it
+does not duplicate those lanes. Wave 5 builds the reusable harness and adds file-dialog and
+clipboard evidence only. This sequencing amendment preserves the same pre-G2 authorization boundary
+and does not authorize a product shell or broad Qt UI work.
+
 ## Consequences
 
 - Agents have an explicit authorization boundary for early Qt feasibility work.
