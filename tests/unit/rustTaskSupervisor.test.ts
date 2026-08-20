@@ -1,4 +1,4 @@
-// QNBS-v3: Phase 3 — tests for the Rust TaskSupervisor front-end (analyzeTextViaRust).
+// QNBS-v3: Phase 3 — tests for the Rust TaskSupervisor front-end wrappers.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../services/tauriTaskBridge', () => ({
@@ -99,5 +99,53 @@ describe('rustTaskSupervisor — analyzeTextViaRust', () => {
     const { analyzeTextViaRust } = await import('../../services/rustTaskSupervisor');
 
     expect(await analyzeTextViaRust('x', { rustComputeEnabled: true })).toBeNull();
+  });
+});
+
+describe('rustTaskSupervisor — diffTextViaRust', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('routes the typed diff payload to Rust', async () => {
+    const { isRustComputeAvailable } = await import('../../services/tauriTaskBridge');
+    const { routeTask } = await import('../../services/hybridRouter');
+    vi.mocked(isRustComputeAvailable).mockResolvedValue(true);
+    const diff = [
+      { type: 'equal' as const, token: 'the' },
+      { type: 'delete' as const, token: ' cat' },
+      { type: 'insert' as const, token: ' dog' },
+    ];
+    vi.mocked(routeTask).mockResolvedValue({
+      taskId: 't-diff',
+      result: Promise.resolve(diff),
+      progress: (async function* () {})(),
+      cancel: vi.fn(),
+    });
+    const { diffTextViaRust } = await import('../../services/rustTaskSupervisor');
+
+    await expect(
+      diffTextViaRust('the cat', 'the dog', { rustComputeEnabled: true }),
+    ).resolves.toEqual(diff);
+    expect(routeTask).toHaveBeenCalledWith(
+      'text.diff',
+      { oldText: 'the cat', newText: 'the dog' },
+      expect.objectContaining({ target: 'rust', rustComputeEnabled: true }),
+    );
+  });
+
+  it('returns null when the Rust diff is unavailable or fails', async () => {
+    const { isRustComputeAvailable } = await import('../../services/tauriTaskBridge');
+    const { routeTask } = await import('../../services/hybridRouter');
+    vi.mocked(isRustComputeAvailable).mockResolvedValue(false);
+    const { diffTextViaRust } = await import('../../services/rustTaskSupervisor');
+
+    await expect(diffTextViaRust('old', 'new', { rustComputeEnabled: true })).resolves.toBeNull();
+    expect(routeTask).not.toHaveBeenCalled();
   });
 });

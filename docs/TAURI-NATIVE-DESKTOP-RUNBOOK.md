@@ -83,9 +83,10 @@
   Conflict-safe unregister on teardown. Settings to enable/configure.
 - **Rust-compute expansion** (`src-tauri/src/commands/task_supervisor.rs`): honor `timeout_ms`,
   add run-scoped **progress events** + **cancellation** (Tokio channel → Tauri event, ADR-D4), and
-  2–3 high-value tasks (e.g. whole-manuscript batch `text.analyze`, a heavier metric/diff). Update
-  `services/hybridRouter.ts` to stream real progress + support `cancel()` by `runId` (replace the
-  empty generator / no-op). Typed wrappers à la `services/rustTaskSupervisor.ts`.
+  add further bounded tasks only after their contracts are proven. `text.analyze` and the bounded
+  `text.diff` proof now exist; remaining work is whole-manuscript batching/other metrics plus
+  updating `services/hybridRouter.ts` to stream real progress and support `cancel()` by `runId`
+  (replace the empty generator / no-op). Typed wrappers à la `services/rustTaskSupervisor.ts`.
 - i18n: `desktop.shortcuts.*`. Tests: shortcut service + hybridRouter progress/cancel + Rust
   `#[cfg(test)]`. Rust change → `tauri-build.yml` dispatch.
 

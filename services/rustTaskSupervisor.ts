@@ -22,6 +22,11 @@ export interface RustTextAnalysis {
   readonly readingTimeMinutes: number;
 }
 
+export type RustTextDiffOp =
+  | { readonly type: 'equal'; readonly token: string }
+  | { readonly type: 'delete'; readonly token: string }
+  | { readonly type: 'insert'; readonly token: string };
+
 /**
  * Analyze text via the native Rust TaskSupervisor.
  *
@@ -47,6 +52,32 @@ export async function analyzeTextViaRust(
     return await handle.result;
   } catch (err) {
     log.warn('Rust text.analyze failed — caller should use JS fallback', { err });
+    return null;
+  }
+}
+
+/**
+ * Run the bounded word/whitespace diff through Rust when native compute is available.
+ * A null result keeps the existing TypeScript diff as the compatibility fallback.
+ */
+export async function diffTextViaRust(
+  oldText: string,
+  newText: string,
+  opts: { rustComputeEnabled: boolean },
+): Promise<readonly RustTextDiffOp[] | null> {
+  if (!opts.rustComputeEnabled) return null;
+  if (!(await isRustComputeAvailable())) return null;
+
+  try {
+    const handle = await routeTask<readonly RustTextDiffOp[]>(
+      'text.diff',
+      { oldText, newText },
+      { target: 'rust', rustComputeEnabled: true, priority: 'low' },
+    );
+    if (handle === null) return null;
+    return await handle.result;
+  } catch (err) {
+    log.warn('Rust text.diff failed — caller should use JS fallback', { err });
     return null;
   }
 }
