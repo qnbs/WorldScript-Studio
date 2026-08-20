@@ -5,6 +5,13 @@
 //! `services/fs/projectFsStore.ts`/`services/storageService.ts`'s dispatch are untouched by this
 //! PR. The point of this command is proving the Tauri <-> Rust Core boundary compiles, links, and
 //! runs correctly before any UI wiring is attempted.
+//!
+//! **Cannot yet validate a live persisted project as-is.** `worldscript_project::schema` models
+//! `characters`/`worlds` as plain arrays, not the `Character[] | EntityState<Character, string>`
+//! union `types.ts` uses (Redux normalizes to `EntityState` at runtime) — see that module's own
+//! doc comment. A real frontend caller will need a normalization adapter (array <-> EntityState)
+//! before this command can validate what's actually persisted; that adapter is intentionally not
+//! built here, matching this PR's no-frontend-call-site scope.
 
 use serde::Serialize;
 use worldscript_project::{migrate_to_latest, parse_envelope, validate};
