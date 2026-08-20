@@ -38,6 +38,7 @@ const world = (id: string): World => ({
 const malformedEntityState = <T extends { id: string }>(state: unknown) =>
   state as EntityState<T, string>;
 
+// QNBS-v3: Verify ordered Core boundary round-trips and rejection of malformed Redux collections.
 describe('project Core boundary adapter', () => {
   it('preserves array order and IDs for both collections in both directions', () => {
     const source = {
