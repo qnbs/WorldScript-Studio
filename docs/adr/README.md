@@ -27,6 +27,7 @@ than editing history.
 | [0019](0019-cef-desktop-runtime-strategy.md) | CEF as the next-generation WorldScript Studio desktop runtime | Superseded by 0021 |
 | [0020](0020-cef-binding-choice-thin-cpp-host.md) | CEF integration choice — thin C++ host + Rust core (Option B) | Superseded by 0021 |
 | [0021](0021-qt-gpui-native-desktop-strategy.md) | Qt 6 + GPUI native desktop strategy; CEF retired | Accepted |
+| [0022](0022-qt-pre-g2-qualification-harness.md) | Bounded pre-G2 Qt qualification harness | Accepted clarification of 0021 |
 
 **Format:** Context → Decision → Consequences (incl. rejected alternatives). Keep each ADR to one
 decision. Link related records with `[[slug]]`.

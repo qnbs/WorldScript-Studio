@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Renderer-neutral Rust Core seed:** `crates/worldscript-project` now provides headless project
   schema, validation, migration, plain JSON I/O, and a test/CLI harness, with one narrow Tauri
   validation command wired through the cross-workspace path dependency.
+- **Qt Early Killer-Gate qualification:** the native roadmap now requires cheap, evidence-backed
+  lifecycle, accessibility/input, packaging/update-trust, crash/recovery, and security checks
+  before substantial Qt UI work can create sunk cost.
 
 ### Changed
 
