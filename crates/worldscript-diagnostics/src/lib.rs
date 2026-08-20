@@ -51,9 +51,11 @@ pub fn sanitize_context(context: &Map<String, Value>) -> Map<String, Value> {
 }
 
 /// Return a sanitized copy of a structured log entry without mutating its input.
-pub fn sanitize_entry(mut entry: LogEntry) -> LogEntry {
-    entry.context = entry.context.as_ref().map(sanitize_context);
-    entry
+pub fn sanitize_entry(entry: &LogEntry) -> LogEntry {
+    LogEntry {
+        context: entry.context.as_ref().map(sanitize_context),
+        ..entry.clone()
+    }
 }
 
 fn is_sensitive_key(key: &str) -> bool {
@@ -117,16 +119,17 @@ mod tests {
 
     #[test]
     fn entry_serializes_with_wire_compatible_field_names() {
-        let entry = sanitize_entry(LogEntry {
+        let entry = LogEntry {
             ts: 1_700_000_000_000,
             level: LogLevel::Warn,
             module: "test".to_string(),
             message: "warning".to_string(),
             context: Some(serde_json::from_value(json!({ "apiKey": "secret" })).unwrap()),
-        });
+        };
+        let sanitized = sanitize_entry(&entry);
 
         assert_eq!(
-            serde_json::to_value(entry).unwrap(),
+            serde_json::to_value(sanitized).unwrap(),
             json!({
                 "ts": 1_700_000_000_000u64,
                 "level": "warn",
@@ -135,5 +138,6 @@ mod tests {
                 "context": { "apiKey": REDACTED }
             })
         );
+        assert_eq!(entry.context.as_ref().unwrap()["apiKey"], json!("secret"));
     }
 }
