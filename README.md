@@ -641,11 +641,11 @@ pnpm run build
 # Preview the production build locally
 pnpm run preview
 
-# Run unit tests
-pnpm run test:run
+# Run one targeted unit-test file
+pnpm exec vitest run <path>
 
-# Run unit tests with coverage
-pnpm run test:coverage
+# Run one targeted unit-test file with coverage
+pnpm exec vitest run <path> --coverage
 
 # Type check
 pnpm run typecheck
@@ -714,13 +714,15 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 
 **CI-cloud-first workflow (recommended):** On constrained hardware run **`pnpm run lint && pnpm run i18n:check && pnpm run typecheck`** locally, then push and let CI handle coverage, E2E, Lighthouse, and Stryker. Authoritative numbers come from CI artifacts (Codecov, JUnit). After CI goes green, update the README badges and `AUDIT.md` quality-gate line from the reported metrics. See **[`docs/CI.md`](docs/CI.md) § Cloud CI-first vs local development** for the full post-merge doc-update checklist.
 
-**Low-resource / laptop workflow:** **`pnpm run test:run`** exercises Vitest without `--coverage` — fast and memory-light. Full coverage (`pnpm exec vitest run --coverage`) is intentionally RAM-heavy; rely on the CI `quality` job unless you are debugging a specific threshold.
+**Low-resource / laptop workflow:** Use **`pnpm exec vitest run <path>`** for one targeted file without `--coverage` — fast and memory-light. Never invoke `pnpm test`, `npm run test`, or a bare Vitest wrapper: Vitest enters watch mode and hangs the session on constrained hardware. Full-suite coverage is CI-only; for local debugging, use `pnpm exec vitest run <path> --coverage` on the specific file.
 
 **Quality-gate parity (matches CI `quality` job exactly):**
 
 ```bash
-pnpm run lint && pnpm run i18n:check && pnpm run typecheck && pnpm exec vitest run --coverage
+pnpm run lint && pnpm run i18n:check && pnpm run typecheck
 ```
+
+CI adds full-suite coverage; local validation must keep Vitest targeted with `pnpm exec vitest run <path> [--coverage]`.
 
 **Simulate CI locally with [Act](https://github.com/nektos/act):**
 
@@ -776,6 +778,7 @@ See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the full dev setup, Biome / Vit
 | [`docs/DEEPSOURCE-REMEDIATION-PLAN.md`](docs/DEEPSOURCE-REMEDIATION-PLAN.md) | Prioritised DeepSource backlog tracker (P0-security→P5-docs) with triage decisions |
 | [`docs/adr/`](docs/adr/README.md) | Architecture Decision Records — state-management boundaries, local-AI stack layering, WorkerBus v2 hybrid routing |
 | [`docs/native/ROADMAP-QT-GPUI-DESKTOP.md`](docs/native/ROADMAP-QT-GPUI-DESKTOP.md) | Qt 6 + GPUI native desktop roadmap (ADR-0021) — 24-wave plan: renderer-neutral Rust Core → Qt Hardened Edition → GPUI Vision Edition, succeeding Tauri; CEF retired, historical record in `docs/historical/cef/` |
+| [`docs/native/CORE-MIGRATION-LEDGER.md`](docs/native/CORE-MIGRATION-LEDGER.md) | Rust Core extraction priority order — what's moved out of TypeScript vs. deferred, and why |
 | [`docs/architecture/native-readiness.md`](docs/architecture/native-readiness.md) | Native-Readiness scorecard (see ADR-0021) — cross-cutting architecture-quality checklist, re-scored at every architecture-changing PR |
 | [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md) | A11y architecture (live regions, focus, WCAG 2.2, Lighthouse 0.95 gate) |
 | [`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md) | Engineering + content guidelines, glossary, CI parity checklist |
