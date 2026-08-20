@@ -4,7 +4,7 @@
 use std::env;
 use std::sync::atomic::{AtomicU32, Ordering};
 use worldscript_project::envelope::parse_envelope;
-use worldscript_project::migrate::migrate_to_latest;
+use worldscript_project::migrate::{migrate_to_latest, MigrationError};
 use worldscript_project::schema::{Character, StorySection};
 use worldscript_project::validate::{validate, ValidationError};
 use worldscript_project::{io, ProjectEnvelope, StoryProject};
@@ -111,6 +111,26 @@ fn full_lifecycle_round_trips_with_no_data_loss() {
 }
 
 #[test]
+fn section_and_world_missing_optional_string_fields_default_to_empty() {
+    // Matches services/projectImportSchema.ts: storySectionSchema.content and worldSchema.description
+    // are both `z.string().optional().default('')` — a section/world omitting them must still parse,
+    // not be rejected as missing a required field.
+    let json = r#"{
+        "schemaVersion": 2,
+        "project": {
+            "title": "T", "logline": "L",
+            "characters": [],
+            "worlds": [{"id": "w1", "name": "World One"}],
+            "manuscript": [{"id": "sec-1", "title": "Untitled"}]
+        }
+    }"#;
+    let envelope =
+        parse_envelope(json).expect("omitted content/description must default, not fail");
+    assert_eq!(envelope.project.manuscript[0].content, "");
+    assert_eq!(envelope.project.worlds[0].description, "");
+}
+
+#[test]
 fn corrupt_json_fails_without_panicking() {
     let result = parse_envelope("{ this is not valid json");
     assert!(
@@ -140,6 +160,31 @@ fn duplicate_character_ids_are_rejected() {
     assert_eq!(
         err,
         ValidationError::DuplicateCharacterId("char-1".to_string())
+    );
+}
+
+#[test]
+fn future_schema_version_is_rejected_not_silently_passed_through() {
+    let future_json = r#"{
+        "schemaVersion": 99,
+        "project": {
+            "title": "From The Future",
+            "logline": "Written by a newer build.",
+            "characters": [],
+            "worlds": [],
+            "manuscript": []
+        }
+    }"#;
+    let envelope = parse_envelope(future_json)
+        .expect("parsing itself succeeds — unknown fields are just ignored");
+    let err = migrate_to_latest(envelope)
+        .expect_err("a future schema version must be rejected, not silently treated as current");
+    assert_eq!(
+        err,
+        MigrationError::FutureVersion {
+            version: 99,
+            current: worldscript_project::envelope::CURRENT_SCHEMA_VERSION,
+        }
     );
 }
 

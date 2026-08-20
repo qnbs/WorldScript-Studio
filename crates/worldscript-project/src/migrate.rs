@@ -34,37 +34,57 @@ impl Migration for V1ToV2 {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct UnknownSchemaVersionError {
-    pub version: u32,
+pub enum MigrationError {
+    /// No migration is registered starting from this (older) version — a genuine gap in the
+    /// registry.
+    NoMigrationFrom { version: u32 },
+    /// The envelope's `schema_version` is *newer* than [`CURRENT_SCHEMA_VERSION`] — this build
+    /// doesn't understand it. Without this check the migration loop's `while version < CURRENT`
+    /// condition is simply false for a future version, so it would silently return the envelope
+    /// unchanged; if that envelope is later re-saved, any fields this crate doesn't know about
+    /// are dropped (serde ignores unknown fields on deserialize). Reject instead of round-tripping
+    /// destructively.
+    FutureVersion { version: u32, current: u32 },
 }
 
-impl fmt::Display for UnknownSchemaVersionError {
+impl fmt::Display for MigrationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "no migration registered starting from schema version {}",
-            self.version
-        )
+        match self {
+            MigrationError::NoMigrationFrom { version } => write!(
+                f,
+                "no migration registered starting from schema version {version}"
+            ),
+            MigrationError::FutureVersion { version, current } => write!(
+                f,
+                "schema version {version} is newer than this build understands (current: {current}); refusing to load to avoid silently discarding unknown fields on re-save"
+            ),
+        }
     }
 }
 
-impl std::error::Error for UnknownSchemaVersionError {}
+impl std::error::Error for MigrationError {}
 
 fn registry() -> Vec<Box<dyn Migration>> {
     vec![Box::new(V1ToV2)]
 }
 
 /// Applies registered migrations sequentially until `envelope.schema_version` reaches
-/// [`CURRENT_SCHEMA_VERSION`]. A no-op if the envelope is already current.
-pub fn migrate_to_latest(
-    mut envelope: ProjectEnvelope,
-) -> Result<ProjectEnvelope, UnknownSchemaVersionError> {
+/// [`CURRENT_SCHEMA_VERSION`]. A no-op if the envelope is already current. Rejects a
+/// `schema_version` newer than [`CURRENT_SCHEMA_VERSION`] rather than passing it through
+/// unchanged — see [`MigrationError::FutureVersion`].
+pub fn migrate_to_latest(mut envelope: ProjectEnvelope) -> Result<ProjectEnvelope, MigrationError> {
+    if envelope.schema_version > CURRENT_SCHEMA_VERSION {
+        return Err(MigrationError::FutureVersion {
+            version: envelope.schema_version,
+            current: CURRENT_SCHEMA_VERSION,
+        });
+    }
     let migrations = registry();
     while envelope.schema_version < CURRENT_SCHEMA_VERSION {
         let step = migrations
             .iter()
             .find(|m| m.source_version() == envelope.schema_version)
-            .ok_or(UnknownSchemaVersionError {
+            .ok_or(MigrationError::NoMigrationFrom {
                 version: envelope.schema_version,
             })?;
         envelope = step.apply(envelope);

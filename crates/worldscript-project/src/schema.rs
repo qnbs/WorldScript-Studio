@@ -62,6 +62,9 @@ pub struct WorldTimelineEvent {
 pub struct World {
     pub id: String,
     pub name: String,
+    /// `services/projectImportSchema.ts`'s `worldSchema` has `description: z.string().optional()
+    /// .default('')`, unlike `WorldLocation.description` (required there) — mirrored precisely.
+    #[serde(default)]
     pub description: String,
     #[serde(default)]
     pub geography: String,
@@ -83,6 +86,10 @@ pub struct World {
 pub struct StorySection {
     pub id: String,
     pub title: String,
+    /// `services/projectImportSchema.ts`'s `storySectionSchema` has `content: z.string().optional()
+    /// .default('')` — mirrored here so a section JSON that omits `content` (valid to the TS
+    /// importer) is accepted here too, not rejected as a missing required field.
+    #[serde(default)]
     pub content: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
