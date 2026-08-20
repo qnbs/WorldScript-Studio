@@ -2210,7 +2210,9 @@ Create/supersede ADRs for:
 
 # 37. Immediate transition plan from the current repository state
 
-**Status: COMPLETE.** All items below are done.
+**Status: COMPLETE for the Wave 0 transition steps (items 1–9).** Item 10 is a standing guardrail
+for later waves, not a Wave 0 task — it stays in effect until Wave 2 actually proves out; its
+bracket note is not a sign of incomplete Wave-0 work.
 
 The first implementation sequence after adopting this roadmap is:
 
