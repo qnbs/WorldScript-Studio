@@ -72,3 +72,8 @@ updates:
     cooldown:
       default-days: 7
     open-pull-requests-limit: 5
+    groups:
+      # init/autobuild/analyze/upload-sarif subpaths must move together — see docs/DEPENDABOT-TRIAGE.md
+      codeql-action:
+        patterns:
+          - 'github/codeql-action*'

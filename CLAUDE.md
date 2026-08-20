@@ -463,6 +463,6 @@ Rules:
 
 - **Feature flags:** After any flag change run `pnpm exec tsx scripts/audit-feature-parity.ts` — must report 0 drifts.
 - **CSP:** After modifying CSP directives in `src-tauri/tauri.conf.json` or `index.html`, validate at `https://csp-evaluator.withgoogle.com`. No `*` in `default-src`, `connect-src`, or `img-src`; WebSocket sources must be explicit hostnames.
-- **Dependencies:** After adding a dep run `pnpm audit --audit-level=high`. Override vulnerabilities via `pnpm.overrides`; document accepted risk in `AUDIT.md`.
+- **Dependencies:** After adding a dep run `pnpm audit --audit-level=high`. Override vulnerabilities via `pnpm.overrides`; document accepted risk in `AUDIT.md`. **Dependabot PRs:** no auto-merge — every PR gets manual review per [`docs/DEPENDABOT-TRIAGE.md`](docs/DEPENDABOT-TRIAGE.md) (ecosystem/grouping config, triage-by-semver-level matrix, merge-one-at-a-time-then-wait-for-main-CI discipline).
 - **Vendor forks:** After modifying `packages/collab-transport/`, update `VENDOR-FORKS.md` + run `pnpm run verify:vendor`.
 - **Settings / Storage:** New nested settings objects need default-merge guards in both `services/storage/idbProjectStore.ts → normalizePersistedSettings` AND `features/settings/settingsSlice.ts → setSettings`. Components use `?? defaults`.

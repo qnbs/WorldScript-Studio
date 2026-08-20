@@ -770,6 +770,7 @@ See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the full dev setup, Biome / Vit
 | [`AUDIT.md`](AUDIT.md) | Security & quality audit trail + scorecard |
 | [`docs/AUDIT-PERFECTION-PLAN-v1.23.md`](docs/AUDIT-PERFECTION-PLAN-v1.23.md) | Living master plan for the v1.23 audit/perfection engagement (phase status + batch log) |
 | [`docs/CI.md`](docs/CI.md) | GitHub Actions jobs, Node/pnpm parity, Act examples |
+| [`docs/DEPENDABOT-TRIAGE.md`](docs/DEPENDABOT-TRIAGE.md) | Dependabot PR triage strategy — ecosystem/grouping config, why there's no auto-merge, merge sequencing discipline |
 | [`docs/CODEANT-REVIEW-LOOP.md`](docs/CODEANT-REVIEW-LOOP.md) | Canonical, agent-agnostic PR review correction loop (CodeRabbit/CodeAnt/any bot) — GraphQL fetch/reply/resolve, PR-size split, merge rules |
 | [`docs/DEEPSOURCE-REVIEW-LOOP.md`](docs/DEEPSOURCE-REVIEW-LOOP.md) | DeepSource static-analysis correction loop (living runbook; complements the CodeAnt loop) |
 | [`docs/DEEPSOURCE-REMEDIATION-PLAN.md`](docs/DEEPSOURCE-REMEDIATION-PLAN.md) | Prioritised DeepSource backlog tracker (P0-security→P5-docs) with triage decisions |
