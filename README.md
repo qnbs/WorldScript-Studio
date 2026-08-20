@@ -710,7 +710,7 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 
 **Current test metrics (2026-07-30, CI-reported):**
 - **6477+ unit tests** across **549 test files** — all passing
-- Coverage thresholds: lines ≥ 74 · branches ≥ 60 · functions ≥ 67 · statements ≥ 72 — enforced in CI (see Codecov badge for live metrics)
+- Coverage thresholds: lines ≥ 80 · branches ≥ 66 · functions ≥ 72 · statements ≥ 78 — enforced in CI (see Codecov badge for live metrics)
 - i18n: **2919 keys × 19 locales** (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu/ru/ko Beta)
 
 **CI-cloud-first workflow (recommended):** On constrained hardware run **`pnpm run lint && pnpm run i18n:check && pnpm run typecheck`** locally, then push and let CI handle coverage, E2E, Lighthouse, and Stryker. Authoritative numbers come from CI artifacts (Codecov, JUnit). After CI goes green, update the README badges and `AUDIT.md` quality-gate line from the reported metrics. See **[`docs/CI.md`](docs/CI.md) § Cloud CI-first vs local development** for the full post-merge doc-update checklist.
@@ -755,7 +755,7 @@ Shared Playwright helpers (`waitForSpaReady`, `ensureBlankProject`, `clickNavIte
 - **🐛 Report Bugs** — Open a GitHub Issue with details and reproduction steps
 - **💡 Suggest Features** — Open a Discussion or Issue
 - **🌍 Improve Translations** — Five core locale trees (`en` is the reference); native polish for FR/ES/IT especially welcome in PRs
-- **🧪 Write Tests** — Coverage thresholds: branches ≥ 60 %, functions ≥ 67 %, lines ≥ 74 %; contributions to large components (collaboration, AI streaming paths, OpenRouter provider) are particularly valuable
+- **🧪 Write Tests** — Coverage thresholds: branches ≥ 66 %, functions ≥ 72 %, lines ≥ 80 %; contributions to large components (collaboration, AI streaming paths, OpenRouter provider) are particularly valuable
 
 See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the full dev setup, Biome / Vitest / Playwright guide, and architecture notes.
 
