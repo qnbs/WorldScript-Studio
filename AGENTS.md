@@ -33,7 +33,7 @@ The app supports a multi-provider AI stack (Gemini, OpenAI, Claude, Grok, OpenRo
    ```bash
    pnpm run ci:prepush
    ```
-   This gate is mandatory before every push and after every local correction before re-pushing; both commands must exit successfully. A targeted test or changed-file lint run alone is not push evidence. The pre-commit hook checks staged files with Biome; the full repository lint remains CI-authoritative because a full local scan is not reliable on this hardware. If branch switching or a lockfile/package-manifest change makes pnpm report dependency verification errors, repair first with `pnpm install --frozen-lockfile` and rerun the complete pre-push gate.
+   This gate is mandatory before every push and after every local correction before re-pushing; all three checks must exit successfully. A targeted test or changed-file lint run alone is not push evidence. The pre-commit hook checks staged files with Biome, while the pre-push gate runs the full repository lint before typecheck and i18n validation. If branch switching or a lockfile/package-manifest change makes pnpm report dependency verification errors, repair first with `pnpm install --frozen-lockfile` and rerun the complete pre-push gate.
    Optional targeted smoke test: `pnpm exec vitest run <path>` **without** `--coverage`.
    **Hard rule:** Never invoke `pnpm test`, `npm run test`, or a bare Vitest wrapper; always use an explicit `pnpm exec vitest run <path>` command to avoid watch-mode hangs on constrained hardware.
 4. **Audit cloud CI logs, fix locally, then re-push** – If the cloud CI run fails, inspect the logs via GitHub web UI or `gh run watch`, reproduce the specific failing test or lint error in isolation, fix it locally (quick tier to verify), commit, and push again for another cloud CI run.
@@ -273,9 +273,9 @@ hooks are not installed.
 ### Philosophy
 
 - **Cloud CI-first:** The canonical quality gate is GitHub Actions. Low-end local machines should run only the "Quick" tier.
-- **Quick tier (local, before every push):** `pnpm run ci:prepush` runs the exact CI typecheck and i18n
-  checks sequentially. Staged-file Biome validation runs in pre-commit; the full repository lint
-  remains CI-authoritative because a full local scan is not reliable on this hardware. Run the gate
+- **Quick tier (local, before every push):** `pnpm run ci:prepush` runs the full repository lint, then
+  the exact CI typecheck and i18n checks sequentially. Staged-file Biome validation still runs in
+  pre-commit. Run the gate
   again after every correction before re-pushing; do not push based only on a targeted test or a
   changed-file lint run. Optionally: `pnpm exec vitest run <path>`
   **without** `--coverage`.

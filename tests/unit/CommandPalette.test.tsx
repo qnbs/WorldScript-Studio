@@ -220,6 +220,7 @@ describe('CommandPalette', () => {
     ).not.toThrow();
   });
 
+  // QNBS-v3: prevent accessible-contrast regressions in inactive and selected palette tokens.
   it('keeps populated option states on the accessible palette theme tokens', async () => {
     const user = userEvent.setup();
     const pinnedCommand = {

@@ -60,8 +60,8 @@ contract, packaging/update-trust, permission, and admission review work:
 3. **Security and permission posture** — validate IPC/FFI, filesystem, network, and updater
    boundaries under the intended runtime conditions.
 4. **Admission review** — use all evidence to confirm or reject the bridge scorecard, record
-   residual risks, and only then begin larger
-   Qt shell or feature work.
+   residual risks, and produce the G2 decision package. Larger Qt shell or feature work begins
+   only after G2 passes.
 
 The formal packaging and security lanes wait for the relevant Wave 4 storage/crypto/recovery
 semantics; the admission decision remains conjunctive: one unresolved kill gate blocks Qt

@@ -224,6 +224,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                       </div>
                     ) : (
                       (() => {
+                        // QNBS-v3: preserve contrast for inactive and selected palette tokens across themes.
                         const isActive = row.optionIndex === selectedIndex;
                         const cmd = row.cmd;
                         return (

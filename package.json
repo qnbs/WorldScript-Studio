@@ -20,7 +20,7 @@
   },
   "scripts": {
     "hooks:install": "simple-git-hooks",
-    "ci:prepush": "pnpm run typecheck && pnpm run i18n:check",
+    "ci:prepush": "pnpm run lint && pnpm run typecheck && pnpm run i18n:check",
     "predev": "node scripts/sync-sw-version.mjs && node scripts/sync-tauri-version.mjs && node scripts/sync-readme-metrics.mjs && node scripts/build-i18n.mjs && node scripts/copy-duckdb-assets.mjs",
     "dev": "vite",
     "dev:turbo": "turbo run dev --parallel",
