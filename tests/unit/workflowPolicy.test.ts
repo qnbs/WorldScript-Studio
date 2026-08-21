@@ -18,6 +18,12 @@ const tauriManifestSource = readFileSync(tauriManifestPath, 'utf8');
 
 // QNBS-v3: Keep CI path and deployment authority policy executable against the real workflow files.
 describe('CI workflow policy', () => {
+  it('runs Vitest once so first-attempt failures cannot be hidden by retry', () => {
+    const vitestRun = workflowSource.match(/run:\s*pnpm exec vitest run[^\n]*/)?.[0];
+    expect(vitestRun).toBeDefined();
+    expect(vitestRun).not.toContain('--retry');
+  });
+
   it('covers every local Tauri path dependency with the Tauri classifier', () => {
     const { tauri } = extractRustClassifiers(workflowSource);
     for (const dependencyPath of extractLocalPathDependencies(tauriManifestSource)) {

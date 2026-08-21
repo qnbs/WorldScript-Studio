@@ -5,6 +5,8 @@ import {
   getTemplateForArchetype,
 } from '../../services/characterInterviewTemplates';
 
+const UNKNOWN_ARCHETYPE = 'unknown' as unknown as Parameters<typeof getTemplateForArchetype>[0];
+
 describe('characterInterviewTemplates', () => {
   it('getAllTemplates returns 9 templates', () => {
     expect(getAllTemplates()).toHaveLength(9);
@@ -24,8 +26,7 @@ describe('characterInterviewTemplates', () => {
   });
 
   it('getTemplateForArchetype returns undefined for unknown archetype', () => {
-    // biome-ignore lint/suspicious/noExplicitAny: test boundary
-    expect(getTemplateForArchetype('unknown' as any)).toBeUndefined();
+    expect(getTemplateForArchetype(UNKNOWN_ARCHETYPE)).toBeUndefined();
   });
 
   it('getQuestionsForArchetype returns questions array for villain', () => {
@@ -38,7 +39,6 @@ describe('characterInterviewTemplates', () => {
   });
 
   it('getQuestionsForArchetype returns empty array for unknown archetype', () => {
-    // biome-ignore lint/suspicious/noExplicitAny: test boundary
-    expect(getQuestionsForArchetype('unknown' as any)).toHaveLength(0);
+    expect(getQuestionsForArchetype(UNKNOWN_ARCHETYPE)).toHaveLength(0);
   });
 });

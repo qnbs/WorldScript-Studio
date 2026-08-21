@@ -45,6 +45,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **CSP egress parity:** Web/PWA and Tauri now use one explicit provider, local-service, and Yjs
+  signaling origin allowlist; arbitrary HTTPS egress and the contradictory loopback upgrade policy
+  are no longer accepted. New BYOK endpoints require an explicit CSP policy update.
 - **Qt Early Killer-Gate qualification:** the native roadmap now requires cheap, evidence-backed
   lifecycle, accessibility/input, packaging/update-trust, crash/recovery, and security checks
   before substantial Qt UI work can create sunk cost.

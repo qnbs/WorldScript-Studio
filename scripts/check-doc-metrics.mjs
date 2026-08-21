@@ -29,6 +29,9 @@ const TARGET_FILES = [
   '.github/copilot-instructions.md',
 ];
 
+const TEST_FILE_PATTERN = /\.(?:test|spec)\.(?:ts|tsx)$/;
+const TEST_ROOTS = ['tests', 'components'];
+
 // QNBS-v3: this repo marks "done" several different ways — Keep-a-Changelog `## [x.y.z]`,
 // `## vX.Y.Z … RELEASED …`, a heading suffixed with ✅ (`### Phase 3A … ✅`), a `**Status:** ✅
 // Released/Completed …` line just below a plain `## vX.Y — <title>` heading, or a dated heading
@@ -92,6 +95,68 @@ export function getActualKeyCount() {
     for (const k of Object.keys(data)) keys.add(k);
   }
   return keys.size;
+}
+
+function countTestSources(directory) {
+  if (!existsSync(directory)) return [];
+  const sources = [];
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'dist') continue;
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      if (path === join(root, 'tests', 'e2e')) continue;
+      sources.push(...countTestSources(path));
+    } else if (entry.isFile() && TEST_FILE_PATTERN.test(entry.name)) {
+      sources.push(path);
+    }
+  }
+  return sources;
+}
+
+function getTestSources() {
+  const sources = TEST_ROOTS.flatMap((directory) => countTestSources(join(root, directory)));
+  const packagesRoot = join(root, 'packages');
+  for (const entry of readdirSync(packagesRoot, { withFileTypes: true })) {
+    if (entry.isDirectory())
+      sources.push(...countTestSources(join(packagesRoot, entry.name, 'tests')));
+  }
+  return sources;
+}
+
+export function getActualTestFileCount() {
+  return getTestSources().length;
+}
+
+export function getActualTestCaseCount() {
+  return getTestSources().reduce((count, path) => {
+    const source = readFileSync(path, 'utf8');
+    return count + (source.match(/\b(?:it|test)\s*\(/g)?.length ?? 0);
+  }, 0);
+}
+
+export function scanReadmeTestMetrics(readme) {
+  const expectedFiles = getActualTestFileCount();
+  const expectedTests = getActualTestCaseCount();
+  const findings = [];
+  const patterns = [
+    /Tests-(\d+)%2B_%2F_(\d+)_files/g,
+    /(\d+)\+ tests \/ (\d+) files/g,
+    /Vitest 4\.x \((\d+)\+ tests \/ (\d+) files\)/g,
+    /Vitest unit tests \((\d+)\+ tests, (\d+) files\)/g,
+    /\*\*(\d+)\+ unit tests\*\* across \*\*(\d+) test files\*\*/g,
+  ];
+  for (const pattern of patterns) {
+    for (const match of readme.matchAll(pattern)) {
+      const tests = Number(match[1]);
+      const files = Number(match[2]);
+      if (tests !== expectedTests || files !== expectedFiles) {
+        findings.push(
+          `README.md — test metrics report ${tests} tests/${files} files, expected ${expectedTests} tests/${expectedFiles} files from the Vitest source set`,
+        );
+      }
+    }
+  }
+  return findings;
 }
 
 // QNBS-v3 (F-10): the sole source of truth for the canonical production URL — see constants/brand.ts.
@@ -440,6 +505,7 @@ function main() {
   allFindings.push(
     ...scanReadmeReleaseTruth(readFileSync(join(root, 'README.md'), 'utf8'), taggedVersions),
   );
+  allFindings.push(...scanReadmeTestMetrics(readFileSync(join(root, 'README.md'), 'utf8')));
   for (const relPath of TARGET_FILES) {
     const abs = join(root, relPath);
     let content;

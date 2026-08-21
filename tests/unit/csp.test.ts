@@ -15,11 +15,8 @@ import {
 // header CSP now actually exists on all three, is identical across them, and is never looser than
 // the meta CSP (a divergence would make the meta tag misleading — see docs/DEPLOYMENT.md).
 
-// QNBS-v3: Regression guard for ADR-0004 (audit finding F-2). The web PWA connect-src keeps a
-// `https:` scheme-source ON PURPOSE — it is required by the shipped BYOK `openAiCompatibleBaseUrl`
-// feature (arbitrary user-configured HTTPS proxies that cannot be enumerated in a meta CSP). The
-// per-provider HTTPS entries were removed as dead allowlist entries (redundant under `https:`).
-// The native Tauri CSP must stay strict (NO `https:` blanket). These assertions lock that contract.
+// QNBS-v3: all web and native surfaces use the same explicit origin allowlist; no arbitrary HTTPS
+// egress or scheme wildcard may be introduced as a shortcut for an unlisted BYOK endpoint.
 
 const webHtml = readFileSync(fileURLToPath(new URL('../../index.html', import.meta.url)), 'utf8');
 const tauriConf = readFileSync(
@@ -51,12 +48,12 @@ function tauriCsp(): string {
   return csp as string;
 }
 
-describe('CSP connect-src — ADR-0004 BYOK tradeoff', () => {
+describe('CSP connect-src — shared explicit egress policy', () => {
   describe('web PWA (index.html)', () => {
     const tokens = connectSrcTokens(webCsp());
 
-    it('keeps the intentional `https:` scheme-source (required by BYOK openAiCompatibleBaseUrl)', () => {
-      expect(tokens).toContain('https:');
+    it('does not allow arbitrary HTTPS egress', () => {
+      expect(tokens).not.toContain('https:');
     });
 
     it('has no `http:` or `ws:` scheme-wildcards (cleartext exfiltration stays blocked)', () => {
@@ -66,23 +63,27 @@ describe('CSP connect-src — ADR-0004 BYOK tradeoff', () => {
       expect(tokens).not.toContain('ws:');
     });
 
-    it('removed the redundant explicit cloud-provider endpoints (covered by `https:`)', () => {
-      for (const dead of [
+    it('enumerates every supported cloud provider explicitly', () => {
+      for (const origin of [
         'https://generativelanguage.googleapis.com',
         'https://api.openai.com',
         'https://api.x.ai',
+        'https://api.anthropic.com',
         'https://api.groq.com',
         'https://openrouter.ai',
         'https://api.openrouter.ai',
+        'https://huggingface.co',
+        'https://us.aws.cdn.hf.co',
       ]) {
-        expect(tokens).not.toContain(dead);
+        expect(tokens).toContain(origin);
       }
     });
 
-    it('keeps the local-inference origins `https:` does not cover', () => {
+    it('keeps the explicitly supported local-service origins', () => {
       expect(tokens).toContain('http://localhost:11434'); // Ollama
       expect(tokens).toContain('http://localhost:1234'); // LM Studio
       expect(tokens).toContain('http://localhost:8000'); // local AI
+      expect(tokens).toContain('http://localhost:8010'); // LanguageTool
     });
   });
 

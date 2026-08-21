@@ -4,7 +4,7 @@
  * QNBS-v3: protects the drift gate from historical-section regressions — an untested exclusion heuristic would turn it into noise.
  */
 
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -12,6 +12,7 @@ import {
   getTaggedVersions,
   scanForDrift,
   scanForUrlDrift,
+  scanReadmeTestMetrics,
   scanReleaseTruth,
   stripHistoricalSections,
   VERCEL_URL_PATTERN,
@@ -124,6 +125,18 @@ describe('README release truth', () => {
         new Set(['1.27.1']),
       ),
     ).toEqual([expect.stringContaining('release badge advertises v1.29.0')]);
+  });
+});
+
+describe('README test metrics truth', () => {
+  it('accepts the current deterministic Vitest source metrics', () => {
+    expect(
+      scanReadmeTestMetrics(readFileSync(new URL('../../README.md', import.meta.url), 'utf8')),
+    ).toEqual([]);
+  });
+
+  it('rejects stale test counts instead of silently preserving them', () => {
+    expect(scanReadmeTestMetrics('![Tests-1%2B_%2F_1_files](badge.svg)')).not.toEqual([]);
   });
 });
 

@@ -56,6 +56,34 @@ function getTestFileCount() {
   );
 }
 
+/** Count executable it()/test() declarations in the same Vitest source set as the file metric. */
+function countTestCases(dir) {
+  if (!existsSync(dir)) return 0;
+  let count = 0;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'dist') continue;
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      count += countTestCases(full);
+    } else if (entry.isFile() && TEST_FILE.test(entry.name)) {
+      const source = readFileSync(full, 'utf8');
+      count += source.match(/\b(?:it|test)\s*\(/g)?.length ?? 0;
+    }
+  }
+  return count;
+}
+
+function getSourceTestCaseCount() {
+  return (
+    countTestCases(join(root, 'tests')) -
+    countTestCases(join(root, 'tests', 'e2e')) +
+    countTestCases(join(root, 'components')) +
+    readdirSync(join(root, 'packages'), { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .reduce((acc, pkg) => acc + countTestCases(join(root, 'packages', pkg.name, 'tests')), 0)
+  );
+}
+
 // QNBS-v3: Set-based dedup across module files — a key defined in two files (e.g. a shared
 // key living in both settings.json and its canonical home module) must count once, matching
 // check-i18n-keys.mjs's loadBundleKeys(). A per-file leaf sum double-counted such keys, which is
@@ -79,7 +107,7 @@ function getLocaleCount() {
     .length;
 }
 
-/** numTotalTests from test-results.json, else the current README badge value (preserve). */
+/** Prefer a current CI JSON result; locally derive the deterministic source count, never stale prose. */
 function getTestCaseCount(readme) {
   const resultsPath = join(root, 'test-results.json');
   if (existsSync(resultsPath) && statSync(resultsPath).isFile()) {
@@ -89,9 +117,11 @@ function getTestCaseCount(readme) {
         return results.numTotalTests;
       }
     } catch {
-      // fall through to README value
+      // fall through to the source count
     }
   }
+  const sourceCount = getSourceTestCaseCount();
+  if (sourceCount > 0) return sourceCount;
   const m = readme.match(/Tests-(\d+)%2B_%2F_\d+_files/);
   return m ? Number(m[1]) : null;
 }

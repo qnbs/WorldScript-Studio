@@ -1,10 +1,16 @@
 # ADR 0004 — CSP `connect-src` and the BYOK `https:` tradeoff
 
-- **Status:** Accepted
+- **Status:** Superseded (2026-08-21)
 - **Date:** 2026-06-10
 - **Revised: 2026-07-28** — corrected a false Consequences claim (see below); no change to the Decision.
 - **Deciders:** Maintainer + Claude Code
 - **Context tags:** security, csp, networking, byok, tauri
+
+> **Current policy:** The historical BYOK tradeoff below was superseded by the explicit
+> cross-surface allowlist in [`scripts/csp-policy.mjs`](../../scripts/csp-policy.mjs). Web and
+> Tauri now share the same enumerated origins; arbitrary custom HTTPS endpoints are not a supported
+> browser transport until a controlled proxy/native transport exists. `pnpm run csp:check` verifies
+> every meta/header/Tauri surface and intentionally rejects `https:`, `http:`, and `ws:` wildcards.
 
 ## Context
 
@@ -34,7 +40,7 @@ The native **Tauri** build is different: `src-tauri/tauri.conf.json` already shi
 The desktop app has OS-level egress controls and a narrower threat model, so the broad scheme is not
 needed there.
 
-## Decision
+## Historical decision (superseded)
 
 **Option B — keep `https:`, remove the redundant explicit cloud endpoints, document the tradeoff.**
 

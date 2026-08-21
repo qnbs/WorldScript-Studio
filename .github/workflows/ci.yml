@@ -183,11 +183,10 @@ jobs:
       - name: Typecheck (tsgo)
         run: npx tsgo --project tsconfig.tsgo.json --noEmit --checkers 4
 
-      # QNBS-v3: Vitest mit --retry=2 für stabile Runs + NODE_OPTIONS für Node 24 Kompatibilität.
-      # --no-experimental-webstorage deaktiviert native Node 24+ Web Storage API (verhindert localStorage.clear() Fehler).
-      # Best Practice 2026: Retry-Logik fängt transiente Fehler ab, die bei CI-Runner-Überlastung auftreten können.
-      - name: Unit tests (Vitest)
-        run: pnpm exec vitest run --coverage --reporter=json --outputFile=test-results.json --retry=2
+      # QNBS-v3: no retry — a first-attempt failure remains visible instead of being masked as a pass.
+      # --no-experimental-webstorage disables Node 24's native Web Storage API for deterministic setup.
+      - name: Unit tests (Vitest, no retry)
+        run: pnpm exec vitest run --coverage --reporter=json --outputFile=test-results.json
         env:
           NODE_OPTIONS: "--no-experimental-webstorage --max-old-space-size=4096"
           CI: "true"

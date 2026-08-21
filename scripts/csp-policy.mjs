@@ -1,0 +1,25 @@
+// QNBS-v3: keep browser and Tauri egress origins identical so a new provider cannot silently bypass one surface's policy.
+export const CSP_CONNECT_SRC = Object.freeze([
+  "'self'",
+  'https://generativelanguage.googleapis.com',
+  'https://api.openai.com',
+  'https://api.x.ai',
+  'https://api.anthropic.com',
+  'https://openrouter.ai',
+  'https://api.openrouter.ai',
+  'https://api.groq.com',
+  'https://huggingface.co',
+  'https://us.aws.cdn.hf.co',
+  'http://localhost:11434',
+  'http://127.0.0.1:11434',
+  'http://localhost:1234',
+  'http://127.0.0.1:1234',
+  'http://localhost:8000',
+  'http://127.0.0.1:8000',
+  'http://localhost:8010',
+  'http://127.0.0.1:8010',
+  'wss://y-webrtc-signaling.fly.dev',
+  'wss://signaling.yjs.dev',
+]);
+
+export const CSP_CONNECT_SRC_DIRECTIVE = `connect-src ${CSP_CONNECT_SRC.join(' ')};`;

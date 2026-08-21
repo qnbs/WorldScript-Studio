@@ -39,6 +39,7 @@
     "content:guard": "node scripts/content-guard.mjs",
     "parity:check": "tsx scripts/audit-feature-parity.ts",
     "docs:check": "node scripts/check-doc-metrics.mjs",
+    "csp:check": "node scripts/check-csp-policy.mjs",
     "native-readiness:check": "node scripts/check-native-readiness.mjs",
     "suppressions:check": "node scripts/check-suppressions.mjs",
     "token:audit": "node scripts/audit-tokens.mjs",

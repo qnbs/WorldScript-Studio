@@ -1,6 +1,9 @@
 export function stripHistoricalSections(markdown: string): string;
 export function getActualLocaleCount(): number;
 export function getActualKeyCount(): number;
+export function getActualTestFileCount(): number;
+export function getActualTestCaseCount(): number;
+export function scanReadmeTestMetrics(readme: string): string[];
 export function getLatestReleasedVersion(): string | null;
 export function getTaggedVersions(): Set<string>;
 export function scanReleaseTruth(

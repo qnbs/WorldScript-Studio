@@ -407,9 +407,7 @@ Never commit directly to `main` — always a feature branch + PR, even for a sin
 ## Security Considerations
 
 - **No build-time secrets.** API keys are entered via Settings UI and stored encrypted in IndexedDB (AES-256-GCM via Web Crypto API). Do not put AI keys in `.env` or host environment variables for inference.
-- **CSP:**
-  - Web (`index.html`): `connect-src` includes `https:` scheme-source to support BYOK custom base URLs, plus explicit localhost endpoints for Ollama/LM Studio/local AI and explicit `wss://` signaling endpoints. See ADR-0004 for the web-vs-Tauri rationale.
-  - Tauri (`src-tauri/tauri.conf.json`): strict `connect-src` with enumerated cloud provider endpoints, no `https:` blanket.
+- **CSP:** Web and Tauri use the same explicit `connect-src` origin allowlist from `scripts/csp-policy.mjs`; arbitrary `https:`, `http:`, and `ws:` scheme wildcards are forbidden. Run `pnpm run csp:check` after changing a provider, local service, or signaling endpoint. Browser BYOK endpoints must be explicitly admitted to that allowlist.
 - **No `dangerouslySetInnerHTML` without DOMPurify.** Biome flags `noDangerouslySetInnerHtml` as error.
 - **Never log API keys, IVs, or plaintext payloads.** Use `services/logger.ts` (`createLogger(module)` factory — IDB + Tauri JSONL + DEV console sinks; GDPR `sanitizeLogContext`). `console.log` is blocked by Biome in production paths.
 - **Service Worker:** AI hosts are network-only (`public/sw.js`). WASM/ONNX chunks are excluded from precache.
