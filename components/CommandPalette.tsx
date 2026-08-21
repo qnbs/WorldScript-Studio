@@ -218,7 +218,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                     {row.kind === 'heading' ? (
                       <div
                         role="presentation"
-                        className="px-3 py-2 text-xs font-semibold text-[var(--sc-text-muted)] uppercase tracking-wider bg-[var(--sc-surface-raised)]"
+                        className="px-3 py-2 text-xs font-semibold text-[var(--sc-text-secondary)] uppercase tracking-wider bg-[var(--sc-surface-raised)]"
                       >
                         {row.label}
                       </div>
@@ -241,7 +241,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                             }}
                             className={`w-full flex items-center justify-between px-3 py-3 rounded-lg text-start transition-all duration-150 group ${
                               isActive
-                                ? 'bg-[var(--sc-accent)] text-[var(--sc-text-on-accent)] shadow-md'
+                                ? 'bg-[var(--sc-accent-hover)] text-[var(--sc-text-on-accent)] shadow-md'
                                 : 'text-[var(--sc-text-primary)] hover:bg-[var(--sc-surface-overlay)]'
                             }`}
                           >
@@ -262,7 +262,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                                 </div>
                                 {row.suggestionReasonKey && !query ? (
                                   <div
-                                    className={`text-xs truncate ${isActive ? 'text-[var(--sc-text-on-accent)]' : 'text-[var(--sc-text-muted)]'}`}
+                                    className={`text-xs truncate ${isActive ? 'text-[var(--sc-text-on-accent)]' : 'text-[var(--sc-text-secondary)]'}`}
                                   >
                                     {t(row.suggestionReasonKey)}
                                   </div>
@@ -273,7 +273,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                               {row.isPinned ? (
                                 <span
                                   // QNBS-v3: text-[var(--sc-text-on-accent)]/70 fails WCAG AA contrast on --sc-accent background; use full-opacity white.
-                                  className={`text-[10px] uppercase tracking-wide ${isActive ? 'text-[var(--sc-text-on-accent)]' : 'text-[var(--sc-text-muted)]'}`}
+                                  className={`text-[10px] uppercase tracking-wide ${isActive ? 'text-[var(--sc-text-on-accent)]' : 'text-[var(--sc-text-secondary)]'}`}
                                 >
                                   {t('palette.pin.badge')}
                                 </span>
@@ -283,7 +283,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                                   {cmd.shortcutDisplay.map((k) => (
                                     <kbd
                                       key={k}
-                                      className={`px-1.5 py-0.5 text-xs rounded border ${isActive ? 'border-[var(--glass-highlight)] bg-[var(--glass-bg-hover)] text-[var(--sc-text-on-accent)]' : 'border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] text-[var(--sc-text-muted)]'}`}
+                                      className={`px-1.5 py-0.5 text-xs rounded border ${isActive ? 'border-[var(--glass-highlight)] bg-[var(--glass-bg-hover)] text-[var(--sc-text-on-accent)]' : 'border-[var(--sc-border-subtle)] bg-[var(--sc-surface-base)] text-[var(--sc-text-secondary)]'}`}
                                     >
                                       {k}
                                     </kbd>
