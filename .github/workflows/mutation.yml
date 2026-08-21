@@ -165,6 +165,7 @@ jobs:
         env:
           SELECTOR: ${{ github.event.inputs.module || 'all' }}
         run: |
+          set -o pipefail
           if [ "${{ needs.stryker.result }}" != "success" ]; then
             echo "Stryker matrix completed with: ${{ needs.stryker.result }}; the summary remains informational and this job will fail closed." >&2
           fi

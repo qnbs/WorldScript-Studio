@@ -44,6 +44,7 @@ describe('Stryker workflow policy', () => {
     expect(workflow).toContain(
       'node scripts/aggregate-stryker-reports.mjs all-reports --selector "$SELECTOR"',
     );
+    expect(workflow).toContain('set -o pipefail');
     expect(workflow).toContain('--selector "$SELECTOR"');
     expect(workflow).toContain('SELECTOR: $' + "{{ github.event.inputs.module || 'all' }}");
     expect(workflow).not.toContain('force-all-modules');
