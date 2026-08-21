@@ -8,7 +8,8 @@ must be able to falsify its most dangerous assumptions before the project has ac
 sunk cost.
 
 The formal qualification is an additive checkpoint after the early feasibility lanes and before
-Wave 5 (the Qt executable learning harness). It does not replace the later G2, G3, or G4 production
+Wave 5 (the reusable Qt learning harness). The disposable pre-G2 qualification probe is the only
+pre-G2 artifact; Wave 5 is a distinct later deliverable. It does not replace the later G2, G3, or G4 production
 gates. Those gates remain necessary because a small feasibility spike cannot prove production
 completeness. The early lanes are explicitly allowed before the formal Wave 4.5 checkpoint so the
 cheapest fatal runtime risks are tested before storage and UI sunk cost.
