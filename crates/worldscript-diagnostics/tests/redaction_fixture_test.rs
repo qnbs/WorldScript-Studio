@@ -3,13 +3,16 @@
 use serde::Deserialize;
 use serde_json::{Map, Value};
 use std::{fs, path::PathBuf};
-use worldscript_diagnostics::sanitize_context;
+use worldscript_diagnostics::{sanitize_context, sanitize_entry, LogEntry};
 
 #[derive(Debug, Deserialize)]
 struct RedactionFixture {
     name: String,
     context: Map<String, Value>,
     sanitized: Map<String, Value>,
+    entry: LogEntry,
+    #[serde(rename = "sanitizedEntry")]
+    sanitized_entry: Value,
 }
 
 fn fixture_path() -> PathBuf {
@@ -34,6 +37,13 @@ fn rust_redaction_matches_the_shared_typescript_fixture_contract() {
             sanitize_context(&fixture.context),
             fixture.sanitized,
             "Rust redaction diverged for fixture {}",
+            fixture.name
+        );
+        assert_eq!(
+            serde_json::to_value(sanitize_entry(&fixture.entry))
+                .expect("sanitized log entry must serialize"),
+            fixture.sanitized_entry,
+            "Rust log-entry serialization diverged for fixture {}",
             fixture.name
         );
     }

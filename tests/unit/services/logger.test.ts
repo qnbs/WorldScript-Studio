@@ -39,6 +39,18 @@ describe('sanitizeLogContext', () => {
     },
   );
 
+  // QNBS-v3: Locks LogEntry field names and sanitized payloads before any renderer-specific sink writes them.
+  it.each(diagnosticRedactionFixtures)(
+    'matches the shared $name log-entry wire fixture',
+    ({ entry, sanitizedEntry }) => {
+      const wireEntry = {
+        ...entry,
+        context: sanitizeLogContext(entry.context),
+      };
+      expect(JSON.parse(JSON.stringify(wireEntry))).toEqual(sanitizedEntry);
+    },
+  );
+
   it('redacts keys matching sensitive pattern', () => {
     const ctx = { apiKey: 'secret', userToken: 'tok', myPassword: 'pw' };
     const out = sanitizeLogContext(ctx);
