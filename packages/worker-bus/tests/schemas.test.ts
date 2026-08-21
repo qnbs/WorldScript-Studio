@@ -110,10 +110,10 @@ describe('schemas', () => {
       expect(result.success).toBe(true);
     });
 
-    it('rejects invalid UUID', () => {
+    it('rejects an empty task ID', () => {
       const result = RustTaskRequestSchema.safeParse({
         contractVersion: RUST_TASK_CONTRACT_VERSION,
-        taskId: 'not-a-uuid',
+        taskId: '',
         taskType: 'export.epub',
         payload: {},
         priority: 'normal',

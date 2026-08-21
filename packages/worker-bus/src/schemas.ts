@@ -95,7 +95,7 @@ export type WorkerMessage = z.infer<typeof WorkerMessageSchema>;
 // --- Rust IPC Schemas -------------------------------------------------------
 export const RustTaskRequestSchema = z.object({
   contractVersion: z.literal(RUST_TASK_CONTRACT_VERSION),
-  taskId: z.string().uuid(),
+  taskId: z.string().min(1),
   taskType: z.string().min(1),
   payload: z.record(z.string(), z.unknown()),
   priority: TaskPrioritySchema,
