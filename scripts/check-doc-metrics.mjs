@@ -168,10 +168,7 @@ export function scanReleaseTruth(changelog, packageVersion, taggedVersions) {
   const latestTagged = [...taggedVersions].sort(semverCompare).at(-1) ?? null;
   for (const version of releaseVersions) {
     // QNBS-v3: retain historical changelog entries even when old tags were pruned; enforce the tag invariant from the current release frontier onward.
-    if (
-      !taggedVersions.has(version) &&
-      (!latestTagged || semverCompare(version, latestTagged) >= 0)
-    ) {
+    if (latestTagged && !taggedVersions.has(version) && semverCompare(version, latestTagged) >= 0) {
       findings.push(
         `CHANGELOG.md — dated release [${version}] has no matching git tag v${version}; move it to [Unreleased] or create the release tag after review`,
       );

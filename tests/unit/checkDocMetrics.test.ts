@@ -34,6 +34,12 @@ describe('scanReleaseTruth', () => {
       [],
     );
   });
+
+  it('skips dated-release tag checks in a tagless checkout', () => {
+    expect(
+      scanReleaseTruth('## [1.20.0] — 2025-01-01\n## [1.28.0] — 2026-08-21\n', '1.28.0', new Set()),
+    ).toEqual([]);
+  });
 });
 
 describe('getTaggedVersions', () => {
