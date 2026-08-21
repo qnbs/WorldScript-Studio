@@ -92,4 +92,31 @@ describe('useIdbUnlockStartupGuard', () => {
       errorType: 'Error',
     });
   });
+
+  it('fails closed when the initial journal lookup fails', async () => {
+    mockReadJournal.mockRejectedValueOnce('journal lookup failed');
+    const dispatch = vi.fn();
+    renderHook(() => useIdbUnlockStartupGuard({ ...options, dispatch }));
+    await waitFor(() =>
+      expect(mockWarn).toHaveBeenCalledWith('IDB encryption journal check failed during startup', {
+        errorType: 'string',
+      }),
+    );
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(mockSetOpen).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the journal changes check fails after the sentinel lookup', async () => {
+    mockReadJournal.mockResolvedValueOnce(null).mockRejectedValueOnce(new Error('journal changed'));
+    renderHook(() => useIdbUnlockStartupGuard(options));
+    await waitFor(() =>
+      expect(mockWarn).toHaveBeenCalledWith(
+        'IDB encryption journal recheck failed during startup',
+        {
+          errorType: 'Error',
+        },
+      ),
+    );
+    expect(mockSetOpen).not.toHaveBeenCalled();
+  });
 });

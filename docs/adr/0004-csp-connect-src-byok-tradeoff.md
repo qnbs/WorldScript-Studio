@@ -7,10 +7,15 @@
 - **Context tags:** security, csp, networking, byok, tauri
 
 > **Current policy:** The historical BYOK tradeoff below was superseded by the explicit
-> cross-surface allowlist in [`scripts/csp-policy.mjs`](../../scripts/csp-policy.mjs). Web and
-> Tauri now share the same enumerated origins; arbitrary custom HTTPS endpoints are not a supported
-> browser transport until a controlled proxy/native transport exists. `pnpm run csp:check` verifies
-> every meta/header/Tauri surface and intentionally rejects `https:`, `http:`, and `ws:` wildcards.
+> cross-surface allowlist in [`config/csp-connect-src.json`](../../config/csp-connect-src.json).
+> Web and Tauri share the same enumerated origins. Runtime endpoint preflight rejects an unlisted
+> custom origin with an actionable error; arbitrary custom HTTPS endpoints are not a supported
+> browser transport until a controlled proxy/native transport exists. `pnpm run csp:verify`
+> regenerates and checks every meta/header/Tauri surface in CI and rejects `https:`, `http:`, and
+> `ws:` wildcards.
+> `upgrade-insecure-requests` is intentionally absent: loopback HTTP is potentially trustworthy,
+> but the global directive would still make the explicit HTTP-loopback exception policy dependent on
+> scheme-upgrade behavior instead of keeping that exception visible and mechanically checked.
 
 ## Context
 
@@ -26,16 +31,17 @@ flagged the explicit list, added in commit `364025e`, as functionally inert: the
 vector it appeared to close (an attacker forcing a `fetch` to an arbitrary HTTPS endpoint, e.g. via
 AI prompt injection) remained open for all HTTPS targets.
 
-The obvious "fix" — drop `https:` and keep only the explicit allowlist — **breaks a shipped
-feature**. WorldScript ships **BYOK** (bring-your-own-key) with a user-configurable
+The obvious "fix" — drop `https:` and keep only the explicit allowlist — **changes a shipped
+feature's supported endpoint set**. WorldScript ships **BYOK** (bring-your-own-key) with a user-configurable
 `openAiCompatibleBaseUrl` (Settings → AI → custom base URL; see `features/settings/settingsSlice.ts`,
 `components/settings/AiProviderCard.tsx`, `services/ai/worldScriptCompletionFetch.ts`,
 `services/aiProviderService.ts`, `types.ts`). Users point the app at arbitrary self-hosted or
 third-party OpenAI-compatible proxies. Those origins are user data — they cannot be statically
-enumerated in a `<meta>` CSP shipped in the bundle. A strict allowlist would silently break every
-user running a custom proxy.
+enumerated in a `<meta>` CSP shipped in the bundle. The current product therefore rejects an
+unlisted custom proxy before fetch and explains that the origin needs an explicit policy update;
+it does not fail as an opaque network error.
 
-The native **Tauri** build is different: `src-tauri/tauri.conf.json` already ships a strict
+The native **Tauri** build uses the same declared origin set: `src-tauri/tauri.conf.json` ships a strict
 `connect-src` with no `https:` blanket (only the enumerated provider + localhost + wss origins).
 The desktop app has OS-level egress controls and a narrower threat model, so the broad scheme is not
 needed there.
@@ -78,18 +84,20 @@ needed there.
   enforcement point there, and `Permissions-Policy` has no meta-tag equivalent at all, so it cannot be
   set on GitHub Pages under any circumstance. Any future claim in this ADR about host-level hardening
   must be checked against all four surfaces, not assumed.
-- **Maintenance rule:** when adding a new **localhost** or **wss** endpoint, update **both**
-  `index.html` and `src-tauri/tauri.conf.json`, and extend `tests/unit/csp.test.ts`. New **cloud
-  HTTPS** providers need no `connect-src` change on web (covered by `https:`) but **do** need an
-  explicit entry in the strict Tauri `connect-src`. **New header-origin or directive change:** update
+- **Maintenance rule:** when adding a new endpoint, update `config/csp-connect-src.json`, run
+  `pnpm run csp:sync`, and extend `tests/unit/csp.test.ts`; CI runs `pnpm run csp:verify` to reject
+  drift. Runtime settings must call the shared endpoint preflight before fetch. **New
+  header-origin or directive change:** update
   `vercel.json`, `public/_headers`, and `nginx.conf` together, plus `tests/unit/csp.test.ts` and
   `tests/unit/deploymentHeaders.test.ts` — a divergence between the header CSP and the meta CSP makes
   the meta tag misleading (see `docs/DEPLOYMENT.md` § Header invariants per host).
 
 ## Rejected alternatives
 
-- **Option A — strict allowlist (drop `https:`):** breaks the shipped `openAiCompatibleBaseUrl` BYOK
-  feature for every user running a self-hosted or alternate proxy. Rejected.
+- **Option A — strict allowlist (drop `https:`):** changes the shipped `openAiCompatibleBaseUrl`
+  BYOK feature for users running an unlisted self-hosted or alternate proxy. Accepted with explicit
+  runtime preflight and an actionable unsupported-origin error; arbitrary browser egress is not
+  silently permitted.
 - **Option C — dynamic/build-time CSP generation** from the provider registry plus a
   settings-validated custom endpoint: the correct long-term fix but significant new build machinery;
   deferred to v2.0.

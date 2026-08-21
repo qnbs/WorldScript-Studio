@@ -21,6 +21,20 @@ For historical optimization notes (targets may predate the live workflow), see [
 
 **Local deep dive:** E2E, full-suite coverage, Lighthouse, and Storybook are CI-only on constrained hardware. For a focused local investigation, use `pnpm exec vitest run <path>` or `pnpm exec vitest run <path> --coverage`; never invoke `pnpm test`, `npm run test`, or a bare Vitest wrapper.
 
+### First-attempt failures and flake quarantine
+
+The required Vitest CI step intentionally runs without `--retry`: a first-attempt failure is
+authoritative evidence and must not be converted into a green result by an automatic retry. A
+suspected flake remains merge-blocking until reproduced or dispositioned. Do not add `skip`, `todo`,
+or a retry merely to hide it.
+
+Temporary quarantine is allowed only when all of the following are present: a dedicated issue with
+the `flaky-test` label, the test's owner and reproduction evidence, an adjacent one-line
+`QNBS-v3` comment naming the issue and an expiry date no more than 14 days away, and a visible CI
+summary entry. The quarantine must be removed or renewed explicitly with new evidence; it is not a
+permanent suppression mechanism. The normal observation period is ten successful first-attempt
+CI runs for the affected test path before removing a temporary quarantine.
+
 ### Gate authority
 
 `✅ CI Success` is the required branch-protection status and aggregates `security`, `quality`,
@@ -106,7 +120,7 @@ Mutation testing (Stryker) is **not** in this graph — it runs only via manual 
 | Job | Needs | Purpose |
 |-----|--------|---------|
 | `security` | — | `pnpm audit --audit-level=high`; **OSV scanner** (`google/osv-scanner-action`) for npm + Rust lockfiles; `gitleaks` secrets scan; on PRs: `dependency-review-action` |
-| `quality` | `security` | Matrix **Node 22** and **24** → Biome lint, **`pnpm run i18n:check`**, **`pnpm run docs:check`**, **`pnpm run parity:check`**, `pnpm run typecheck`, Vitest + coverage (+ non-blocking coverage-ratchet suggestion), Codecov (optional token), coverage artifact |
+| `quality` | `security` | Matrix **Node 22** and **24** → Biome lint, **`pnpm run i18n:check`**, **`pnpm run docs:check`**, **`pnpm run csp:verify`**, **`pnpm run parity:check`**, `pnpm run typecheck`, Vitest + coverage (+ non-blocking coverage-ratchet suggestion), Codecov (optional token), coverage artifact |
 | `rust-tauri` | `security` | Rust `cargo fmt --check`, `cargo check --locked`, `cargo clippy --locked --all-targets -- -D warnings`, and `cargo test --locked`; compile/lint signal for Tauri changes without building installers on every PR |
 | `build` | `quality` | Production `pnpm run build`, **`bundle:budget`**, **`analyze`** (upload `bundle-analysis.html`), **`pnpm run smoke:prod`** (headless-Chromium prod-build + CSP-runtime gate — see below), `dist` artifact; on `main` (non-PR): Pages artifact + **SLSA build provenance attestation**. No `if:` on the job itself — `smoke:prod` runs on every PR, not just `main` pushes. |
 | `e2e` | `quality` | Playwright **Chromium** + **Mobile Chrome** (Pixel 5) — `CI=true`, 2× retries, 50 min timeout; browser cache via `actions/cache@v5`. Firefox optional locally. `PLAYWRIGHT_SKIP_VRT=true` (VRT is its own job). |

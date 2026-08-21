@@ -25,6 +25,10 @@ describe('CI workflow policy', () => {
     expect(vitestRun).not.toContain('--retry');
   });
 
+  it('runs the CSP generator drift check in the cloud quality gate', () => {
+    expect(workflowSource).toContain('run: pnpm run csp:verify');
+  });
+
   it('covers every local Tauri path dependency with the Tauri classifier', () => {
     const { tauri } = extractRustClassifiers(workflowSource);
     for (const dependencyPath of extractLocalPathDependencies(tauriManifestSource)) {

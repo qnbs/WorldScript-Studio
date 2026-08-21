@@ -124,7 +124,7 @@ HTTP response headers are **not** portable across targets — each host has its 
 | **Cloudflare Pages** | [`public/_headers`](../public/_headers) | `microphone=(self)` | header set, mirrors the `index.html` meta CSP |
 | **Docker / nginx** (`.github/workflows/docker.yml` image) | [`nginx.conf`](../nginx.conf) | `microphone=(self)` | header set, mirrors the `index.html` meta CSP |
 
-When both a header CSP and the `index.html` meta CSP are present, the browser enforces **both simultaneously** — a resource load must satisfy every active policy, so if the two diverge on an overlapping directive, the *more restrictive* result applies (not "the header wins and the meta tag is ignored"). The exception is `frame-ancestors` (and `sandbox`/`report-uri`): the CSP spec explicitly disallows these in a `<meta>`-delivered policy, so they only take effect via the header — that's why adding the header is a real hardening, not just a duplicate. If the two policies ever diverge on a directive both can express, keep them identical (see [ADR-0004](adr/0004-csp-connect-src-byok-tradeoff.md) and the regression tests in `tests/unit/csp.test.ts` / `tests/unit/deploymentHeaders.test.ts`) so the effective policy stays predictable rather than silently intersecting two different allowlists. **New header-origin rule:** any new external endpoint or directive change must be applied to all three header configs plus both test files, not just `index.html`.
+When both a header CSP and the `index.html` meta CSP are present, the browser enforces **both simultaneously** — a resource load must satisfy every active policy, so if the two diverge on an overlapping directive, the *more restrictive* result applies (not "the header wins and the meta tag is ignored"). The exception is `frame-ancestors` (and `sandbox`/`report-uri`): the CSP spec explicitly disallows these in a `<meta>`-delivered policy, so they only take effect via the header — that's why adding the header is a real hardening, not just a duplicate. If the two policies ever diverge on a directive both can express, keep them identical (see [ADR-0004](adr/0004-csp-connect-src-byok-tradeoff.md) and the regression tests in `tests/unit/csp.test.ts` / `tests/unit/deploymentHeaders.test.ts`) so the effective policy stays predictable rather than silently intersecting two different allowlists. **New endpoint rule:** add origins to [`config/csp-connect-src.json`](../config/csp-connect-src.json), run `pnpm run csp:sync`, and let `pnpm run csp:verify` prove all surfaces are synchronized; do not edit only `index.html`.
 
 ---
 
@@ -152,7 +152,7 @@ success and error paths), a JS-level guard independent of CSP. See ADR-0013 for 
 ## Security notes
 
 - No server-side storage of manuscripts or API keys.
-- CSP in [`index.html`](../index.html) / Tauri [`tauri.conf.json`](../src-tauri/tauri.conf.json) — extend `connect-src` only when adding new AI hosts.
+- CSP origins are declared in [`config/csp-connect-src.json`](../config/csp-connect-src.json) and generated into [`index.html`](../index.html), headers, and Tauri [`tauri.conf.json`](../src-tauri/tauri.conf.json); runtime preflight rejects unlisted configured endpoints before fetch.
 - Service worker: AI hosts are **network-only** ([`public/sw.js`](../public/sw.js)); WASM/ONNX not precached.
 
 ---

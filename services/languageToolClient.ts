@@ -4,11 +4,13 @@
  */
 
 import type { Settings } from '../types';
+import { assertCspConnectEndpointAllowed } from './network/cspOriginPolicy';
 
 export function assertLanguageToolAllowed(settings: Settings, baseUrl: string): void {
   if (!settings.integrations.languageToolEnabled) {
     throw new Error('LanguageTool is disabled in settings.');
   }
+  assertCspConnectEndpointAllowed(baseUrl, 'LanguageTool endpoint');
   let host = '';
   try {
     host = new URL(baseUrl.trim()).hostname;

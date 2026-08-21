@@ -289,6 +289,24 @@ describe('worldScriptCompletionFetch — success (openai)', () => {
       expect.objectContaining({ modelId: 'gpt-5.4-mini' }),
     );
   });
+
+  it('returns a clear CSP policy error before using an unlisted custom endpoint', async () => {
+    mockProviderToKind.mockReturnValue('openai');
+    const res = await worldScriptCompletionFetch(
+      'worldscript-internal://completion',
+      makeInit(
+        makeBody({
+          provider: 'openai',
+          model: 'gpt-5.4-mini',
+          openAiCompatibleBaseUrl: 'https://custom-proxy.example.test/v1',
+        }),
+      ),
+    );
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toEqual(
+      expect.objectContaining({ code: 'CSP_CONNECT_ORIGIN_BLOCKED' }),
+    );
+  });
 });
 
 describe('worldScriptCompletionFetch — unexpected error', () => {

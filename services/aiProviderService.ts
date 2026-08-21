@@ -43,6 +43,7 @@ import {
 import { generateLocalText } from './localAiFacade';
 import { LocalServerError, localServerFetch } from './localServerHttp';
 import { createLogger } from './logger';
+import { assertCspConnectEndpointAllowed } from './network/cspOriginPolicy';
 import {
   listOllamaModels as listOllamaModelsFromService,
   streamOllama,
@@ -195,6 +196,7 @@ async function streamOpenAI(
     : [{ role: 'user', content: sanitizePromptValue(prompt) }];
 
   const apiRoot = resolveOpenAiCompatibleRoot(opts.openAiCompatibleBaseUrl);
+  assertCspConnectEndpointAllowed(apiRoot, 'OpenAI-compatible endpoint');
   const refererHeaders = buildOpenRouterStyleHeaders(opts.openAiSiteUrl, opts.openAiSiteTitle);
   const res = await fetch(`${apiRoot}/chat/completions`, {
     method: 'POST',
@@ -272,6 +274,9 @@ async function streamOpenAiCompatibleLocal(
   const endpoint = normalizeOpenAiCompatibleBaseUrl(
     opts.ollamaBaseUrl?.trim() || 'http://localhost:1234',
   );
+  if (!isTauriRuntime()) {
+    assertCspConnectEndpointAllowed(endpoint, 'Local OpenAI-compatible endpoint');
+  }
   const messages = opts.systemPrompt
     ? [
         { role: 'system', content: sanitizePromptValue(opts.systemPrompt) },
@@ -1071,6 +1076,7 @@ export async function testAIConnection(
           };
         }
         const root = resolveOpenAiCompatibleRoot(opts.openAiCompatibleBaseUrl);
+        assertCspConnectEndpointAllowed(root, 'OpenAI-compatible endpoint');
         const res = await fetch(`${root}/models`, {
           headers: { Authorization: `Bearer ${apiKey}` },
           signal: AbortSignal.timeout(8000),

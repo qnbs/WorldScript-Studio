@@ -189,7 +189,7 @@ Wrap each major view root with `components/ui/ViewErrorBoundary.tsx` — provide
 
 **Tauri build isolation:** `vite.config.ts` uses `external: [/^@tauri-apps\//]` (regex) to exclude all Tauri packages from the web build. The regex covers any `@tauri-apps/*` import, but new Tauri capability access should go through `packages/desktop-contracts` (the `DesktopPlatform` interface, consumed via `services/desktopPlatform.ts`) rather than a direct import — enforced by `pnpm run guardrail:desktop-imports` (`scripts/check-tauri-import-boundary.mjs`), a zero-tolerance CI gate.
 
-**CSP:** When adding a new external endpoint, extend `scripts/csp-policy.mjs`, run `pnpm run csp:sync`, then `pnpm run csp:check` for every web and Tauri surface. Web `fetch` alone is not enough; arbitrary scheme wildcards are forbidden.
+**CSP:** When adding a new external endpoint, extend `config/csp-connect-src.json`, run `pnpm run csp:sync`, then `pnpm run csp:check` for every web and Tauri surface. CI runs `pnpm run csp:verify` to reject generated-file drift, and runtime preflight must reject unlisted configured origins clearly. Web `fetch` alone is not enough; arbitrary scheme wildcards are forbidden.
 
 ### AI Services
 

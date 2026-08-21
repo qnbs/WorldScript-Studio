@@ -27,7 +27,7 @@ for (const relativePath of surfaces) {
   for (const actual of directives) {
     const actualSet = new Set(actual);
     if (actualSet.size !== expected.size || actual.some((token) => !expected.has(token))) {
-      failures.push(`${relativePath}: connect-src differs from scripts/csp-policy.mjs`);
+      failures.push(`${relativePath}: connect-src differs from config/csp-connect-src.json`);
     }
     for (const wildcard of ['https:', 'http:', 'ws:']) {
       if (actualSet.has(wildcard)) failures.push(`${relativePath}: forbidden ${wildcard} wildcard`);
@@ -35,7 +35,7 @@ for (const relativePath of surfaces) {
   }
   if (/(?:^|;)\s*upgrade-insecure-requests/.test(source)) {
     failures.push(
-      `${relativePath}: upgrade-insecure-requests conflicts with supported HTTP loopback origins`,
+      `${relativePath}: upgrade-insecure-requests conflicts with the explicit HTTP-loopback exception policy`,
     );
   }
 }

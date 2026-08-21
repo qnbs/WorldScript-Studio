@@ -30,7 +30,11 @@ vi.mock('../../../components/ui/ErrorBoundary', () => ({
 }));
 
 vi.mock('../../../components/settings/IdbUnlockModal', () => ({
-  IdbUnlockModal: () => <div data-testid="idb-unlock-modal" />,
+  IdbUnlockModal: ({ onUnlocked }: { onUnlocked: () => void }) => (
+    <button type="button" data-testid="idb-unlock-modal" onClick={onUnlocked}>
+      unlock
+    </button>
+  ),
 }));
 
 import { IdbUnlockModalGate } from '../../../components/settings/IdbUnlockModalGate';
@@ -50,5 +54,18 @@ describe('IdbUnlockModalGate', () => {
     mockIsDesktop.value = true;
     render(<IdbUnlockModalGate isOpen encryptionEnabled hasRecoveryJournal={false} />);
     expect(screen.queryByTestId('idb-unlock-modal')).not.toBeInTheDocument();
+  });
+
+  it('suppresses the prompt when the transient open state is false', () => {
+    render(<IdbUnlockModalGate isOpen={false} encryptionEnabled hasRecoveryJournal={false} />);
+    expect(screen.queryByTestId('idb-unlock-modal')).not.toBeInTheDocument();
+  });
+
+  it('closes the transient state after a successful unlock', async () => {
+    const modal = render(
+      <IdbUnlockModalGate isOpen encryptionEnabled hasRecoveryJournal={false} />,
+    );
+    modal.getByTestId('idb-unlock-modal').click();
+    expect(mockSetOpen).toHaveBeenCalledWith(false);
   });
 });

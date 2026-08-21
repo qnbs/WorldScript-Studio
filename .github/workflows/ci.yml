@@ -171,6 +171,9 @@ jobs:
       - name: Doc metrics drift gate (locale/key counts, stale PLANNED status)
         run: pnpm run docs:check
 
+      - name: CSP source synchronization and parity
+        run: pnpm run csp:verify
+
       - name: Native-readiness roadmap policy gate
         run: pnpm run native-readiness:check
 

@@ -63,9 +63,12 @@ modes were reported in #266:
    the PWA performs **zero** localhost requests — the CORS console noise disappears by
    construction. Instead the PWA shows a quiet banner explaining the restriction plus a
    "Download the desktop app" CTA.
-5. **CSP stays unchanged.** The WebView CSP is bypassed for plugin-http traffic (native stack);
-   the web CSP keeps its explicit localhost entries for defense-in-depth documentation, and the
-   `https:` BYOK trade-off from ADR 0004 is unaffected.
+5. **CSP is explicit and runtime-checked.** The WebView CSP is bypassed for plugin-http traffic
+   (native stack), so Tauri local-server capability scope remains the native enforcement boundary;
+   browser requests are checked against the shared `config/csp-connect-src.json` policy before
+   fetch. Unlisted browser BYOK origins and browser-local endpoints fail with an actionable policy
+   error rather than an opaque network error. The same origin source generates the web headers and
+   Tauri CSP; arbitrary BYOK origins require an explicit policy update.
 6. **Capability scope is pinned explicitly** in `src-tauri/capabilities/default.json`. Audit finding
    during this work: `http:default` alone grants **no URL scope at all** (the plugin's
    `Scope::is_allowed` requires a matching allow entry), so every plugin-http call — including the

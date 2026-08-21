@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { CSP_CONNECT_SRC } from '../../scripts/csp-policy.mjs';
 import {
   extractHeadersFileValue,
   extractNginxHeaderValue,
@@ -22,6 +23,8 @@ const cspCheckerSource = readFileSync(
   fileURLToPath(new URL('../../scripts/check-csp-policy.mjs', import.meta.url)),
   'utf8',
 );
+
+const expectedConnectSrc = new Set(CSP_CONNECT_SRC);
 
 /** Pull the `connect-src …;` directive value out of a CSP string, normalized to whitespace tokens. */
 function connectSrcTokens(csp: string): string[] {
@@ -48,6 +51,31 @@ function tauriCsp(): string {
 }
 
 describe('CSP connect-src — shared explicit egress policy', () => {
+  it('keeps every deployed CSP surface exactly equal to the shared policy source', () => {
+    const surfaces = [
+      webCsp(),
+      tauriCsp(),
+      extractVercelHeaderValue(
+        readFileSync(fileURLToPath(new URL('../../vercel.json', import.meta.url)), 'utf8'),
+        'Content-Security-Policy',
+      ),
+      extractHeadersFileValue(
+        readFileSync(fileURLToPath(new URL('../../public/_headers', import.meta.url)), 'utf8'),
+        'Content-Security-Policy',
+      ),
+      ...[
+        ...readFileSync(
+          fileURLToPath(new URL('../../nginx.conf', import.meta.url)),
+          'utf8',
+        ).matchAll(/add_header Content-Security-Policy "([^"]*)"/g),
+      ].map((match) => match[1] ?? ''),
+    ];
+    expect(surfaces).toHaveLength(7);
+    for (const csp of surfaces) {
+      expect(new Set(connectSrcTokens(csp))).toEqual(expectedConnectSrc);
+    }
+  });
+
   // QNBS-v3: keep the Tauri loopback policy fail-closed instead of trusting a surface-specific exception.
   it('checks upgrade-insecure-requests on the Tauri surface too', () => {
     expect(tauriCsp()).not.toContain('upgrade-insecure-requests');

@@ -294,6 +294,7 @@ hooks are not installed.
   repository lint/tests, E2E, coverage, Lighthouse, and mutation testing are cloud-CI work unless
   the user explicitly requests a narrowly scoped local run.
 - **Vitest watch-mode hard rule:** Never invoke `pnpm test`, `npm run test`, or a bare Vitest wrapper; use an explicit targeted `pnpm exec vitest run <path>` command so constrained hardware never waits on watch mode.
+- **First-attempt CI evidence:** The required Vitest job intentionally has no `--retry`; a first-attempt failure remains authoritative. Do not hide a suspected flake with `skip`/`todo` or retries. Temporary quarantine requires a `flaky-test` issue, owner, reproduction evidence, adjacent QNBS-v3 issue/expiry comment, visible CI summary, and removal or explicit renewal within 14 days; see `docs/CI.md`.
 - **Heavy tier (CI):** Vitest with coverage thresholds, Playwright E2E (desktop + mobile emulation), Lighthouse CI, Stryker mutation, Storybook static build, bundle budget + analyze.
 
 ### Unit Tests (Vitest)
@@ -353,7 +354,7 @@ deploy (main, non-PR) needs: ci-success ──► GitHub Pages
 | Job | Purpose |
 |-----|---------|
 | `security` | `pnpm audit --audit-level=high`, OSV scanner (pnpm + `src-tauri/` + `crates/` Cargo lockfiles), gitleaks secrets scan, dependency review on PRs |
-| `quality` | Node 22 + 24 matrix → Biome lint, suppression-debt ratchet, `i18n:check`, `parity:check`, `tsgo --noEmit`, Storybook build, Vitest + coverage, Codecov upload |
+| `quality` | Node 22 + 24 matrix → Biome lint, suppression-debt ratchet, `i18n:check`, `docs:check`, `csp:verify`, `parity:check`, `tsgo --noEmit`, Storybook build, Vitest + coverage, Codecov upload |
 | `rust-tauri` | `fmt`/`check`/`clippy`/`test` for `src-tauri/`; path-scoped (skips on PRs that don't touch it), needs GTK/WebKit apt-get steps |
 | `core-rust` | Same `fmt`/`check`/`clippy`/`test` for `crates/worldscript-project` (renderer-neutral Rust Core); path-scoped, no GUI deps so no apt-get steps needed |
 | `build` | Production build, smoke-test prod build in Chromium, bundle budget, rollup analyze artifact; on `main`: SLSA build provenance attestation + Pages artifact |
@@ -407,7 +408,7 @@ Never commit directly to `main` — always a feature branch + PR, even for a sin
 ## Security Considerations
 
 - **No build-time secrets.** API keys are entered via Settings UI and stored encrypted in IndexedDB (AES-256-GCM via Web Crypto API). Do not put AI keys in `.env` or host environment variables for inference.
-- **CSP:** Web and Tauri use the same explicit `connect-src` origin allowlist from `scripts/csp-policy.mjs`; arbitrary `https:`, `http:`, and `ws:` scheme wildcards are forbidden. Run `pnpm run csp:sync` followed by `pnpm run csp:check` after changing a provider, local service, or signaling endpoint. Browser BYOK endpoints must be explicitly admitted to that allowlist.
+- **CSP:** Web and Tauri use the same explicit `connect-src` origin allowlist from `config/csp-connect-src.json`; arbitrary `https:`, `http:`, and `ws:` scheme wildcards are forbidden. Run `pnpm run csp:sync` followed by `pnpm run csp:check` after changing a provider, local service, or signaling endpoint; CI enforces the non-mutating `pnpm run csp:verify` drift check. Runtime preflight rejects unlisted browser BYOK endpoints with an actionable error.
 - **No `dangerouslySetInnerHTML` without DOMPurify.** Biome flags `noDangerouslySetInnerHtml` as error.
 - **Never log API keys, IVs, or plaintext payloads.** Use `services/logger.ts` (`createLogger(module)` factory — IDB + Tauri JSONL + DEV console sinks; GDPR `sanitizeLogContext`). `console.log` is blocked by Biome in production paths.
 - **Service Worker:** AI hosts are network-only (`public/sw.js`). WASM/ONNX chunks are excluded from precache.
