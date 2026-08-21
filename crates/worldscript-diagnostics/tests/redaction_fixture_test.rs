@@ -12,7 +12,7 @@ struct RedactionFixture {
     sanitized: Map<String, Value>,
     entry: LogEntry,
     #[serde(rename = "sanitizedEntry")]
-    sanitized_entry: LogEntry,
+    sanitized_entry: Value,
 }
 
 fn fixture_path() -> PathBuf {
@@ -40,7 +40,8 @@ fn rust_redaction_matches_the_shared_typescript_fixture_contract() {
             fixture.name
         );
         assert_eq!(
-            sanitize_entry(&fixture.entry),
+            serde_json::to_value(sanitize_entry(&fixture.entry))
+                .expect("sanitized log entry must serialize"),
             fixture.sanitized_entry,
             "Rust log-entry serialization diverged for fixture {}",
             fixture.name
