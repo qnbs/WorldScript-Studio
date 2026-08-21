@@ -22,6 +22,7 @@ const scopeScriptPath = fileURLToPath(
 describe('Stryker workflow policy', () => {
   it('uses one explicit target source for config and the matrix', () => {
     expect(config.mutate).toEqual(mutationFiles);
+    expect(config['vitest']).toEqual(expect.objectContaining({ related: true }));
     expect(mutationModules).toHaveLength(8);
     expect(new Set(mutationFiles).size).toBe(25);
     expect(mutationModules.every(({ riskTier }) => ['A', 'B'].includes(riskTier))).toBe(true);
@@ -39,6 +40,7 @@ describe('Stryker workflow policy', () => {
     expect(workflow).toContain('merge-multiple: false');
     expect(workflow).toContain('if-no-files-found: error');
     expect(workflow).toContain('needs.stryker.result');
+    expect(workflow).toContain('the summary remains informational and this job will fail closed');
     expect(workflow).toContain(
       'node scripts/aggregate-stryker-reports.mjs all-reports --selector "$SELECTOR"',
     );

@@ -5,6 +5,8 @@ import { mutationModules, selectMutationModules } from './stryker-scope.mjs';
 
 // QNBS-v3: Reject partial or inconsistent shard reports before aggregation can false-green.
 const metricNames = [
+  'pending',
+  'ignored',
   'killed',
   'survived',
   'timeout',
@@ -21,10 +23,64 @@ const metricNames = [
 
 function readMetric(report, metricName) {
   const value = report.metrics?.[metricName];
+  if (value === undefined && ['pending', 'ignored'].includes(metricName)) return 0;
   if (!Number.isInteger(value) || value < 0) {
     throw new Error(`Stryker report has invalid metrics.${metricName}.`);
   }
   return value;
+}
+
+function deriveMetricsFromMutants(report, reportPath) {
+  if (!report.files || typeof report.files !== 'object') {
+    throw new Error(`Stryker report has neither metrics nor files: ${reportPath}`);
+  }
+  const statusCounts = Object.create(null);
+  const knownStatuses = new Set([
+    'CompileError',
+    'Ignored',
+    'Killed',
+    'NoCoverage',
+    'Pending',
+    'RuntimeError',
+    'Survived',
+    'Timeout',
+  ]);
+  for (const file of Object.values(report.files)) {
+    if (!file || !Array.isArray(file.mutants)) {
+      throw new Error(`Stryker report has an invalid mutants list: ${reportPath}`);
+    }
+    for (const mutant of file.mutants) {
+      if (!mutant || typeof mutant.status !== 'string' || !knownStatuses.has(mutant.status)) {
+        throw new Error(`Stryker report has an unknown mutant status: ${reportPath}`);
+      }
+      statusCounts[mutant.status] = (statusCounts[mutant.status] ?? 0) + 1;
+    }
+  }
+  const metrics = Object.fromEntries([
+    ['pending', statusCounts.Pending ?? 0],
+    ['ignored', statusCounts.Ignored ?? 0],
+    ['killed', statusCounts.Killed ?? 0],
+    ['survived', statusCounts.Survived ?? 0],
+    ['timeout', statusCounts.Timeout ?? 0],
+    ['noCoverage', statusCounts.NoCoverage ?? 0],
+    ['runtimeErrors', statusCounts.RuntimeError ?? 0],
+    ['compileErrors', statusCounts.CompileError ?? 0],
+  ]);
+  metrics.totalDetected = metrics.killed + metrics.timeout;
+  metrics.totalUndetected = metrics.survived + metrics.noCoverage;
+  metrics.totalCovered = metrics.totalDetected + metrics.survived;
+  metrics.totalValid = metrics.totalDetected + metrics.totalUndetected;
+  metrics.totalInvalid = metrics.runtimeErrors + metrics.compileErrors;
+  metrics.totalMutants =
+    metrics.totalValid + metrics.totalInvalid + metrics.ignored + metrics.pending;
+  return metrics;
+}
+
+function readReportMetrics(report, reportPath) {
+  if (report.metrics && typeof report.metrics === 'object') {
+    return Object.fromEntries(metricNames.map((name) => [name, readMetric(report, name)]));
+  }
+  return deriveMetricsFromMutants(report, reportPath);
 }
 
 function validateMetricRelationships(metrics, reportPath) {
@@ -34,7 +90,7 @@ function validateMetricRelationships(metrics, reportPath) {
     ['totalCovered', metrics.totalDetected + metrics.survived],
     ['totalValid', metrics.totalDetected + metrics.totalUndetected],
     ['totalInvalid', metrics.runtimeErrors + metrics.compileErrors],
-    ['totalMutants', metrics.totalValid + metrics.totalInvalid],
+    ['totalMutants', metrics.totalValid + metrics.totalInvalid + metrics.ignored + metrics.pending],
   ];
   for (const [name, expected] of relationships) {
     if (metrics[name] !== expected) {
@@ -61,10 +117,10 @@ export function readStrykerReports(rootDirectory, selectedModules = mutationModu
     } catch (error) {
       throw new Error(`Cannot parse ${reportPath}: ${error.message}`);
     }
-    if (!report || typeof report.metrics !== 'object') {
-      throw new Error(`Stryker report has no metrics object: ${reportPath}`);
+    if (!report || typeof report !== 'object') {
+      throw new Error(`Stryker report is not an object: ${reportPath}`);
     }
-    const metrics = Object.fromEntries(metricNames.map((name) => [name, readMetric(report, name)]));
+    const metrics = readReportMetrics(report, reportPath);
     validateMetricRelationships(metrics, reportPath);
     const score = metrics.totalValid > 0 ? (metrics.totalDetected / metrics.totalValid) * 100 : 0;
     reports.push({ name: module.name, metrics, mutationScore: score });
@@ -91,18 +147,18 @@ export function formatSummary(result) {
   const lines = [
     '## 🧬 Stryker Mutation Results',
     '',
-    '| Module | Score | Killed | Survived | Timeout | No Cov | Errors |',
-    '|--------|------:|-------:|---------:|--------:|-------:|-------:|',
+    '| Module | Score | Killed | Survived | Timeout | No Cov | Ignored | Pending | Errors |',
+    '|--------|------:|-------:|---------:|--------:|-------:|--------:|--------:|-------:|',
   ];
   for (const report of result.reports) {
     const { metrics } = report;
     const errors = metrics.runtimeErrors + metrics.compileErrors;
     lines.push(
-      `| ${report.name} | ${report.mutationScore.toFixed(1)}% | ${metrics.killed} | ${metrics.survived} | ${metrics.timeout} | ${metrics.noCoverage} | ${errors} |`,
+      `| ${report.name} | ${report.mutationScore.toFixed(1)}% | ${metrics.killed} | ${metrics.survived} | ${metrics.timeout} | ${metrics.noCoverage} | ${metrics.ignored} | ${metrics.pending} | ${errors} |`,
     );
   }
   lines.push(
-    `| **Total** | **${result.mutationScore.toFixed(1)}%** | **${result.totals.killed}** | **${result.totals.survived}** | **${result.totals.timeout}** | **${result.totals.noCoverage}** | **${result.totals.runtimeErrors + result.totals.compileErrors}** |`,
+    `| **Total** | **${result.mutationScore.toFixed(1)}%** | **${result.totals.killed}** | **${result.totals.survived}** | **${result.totals.timeout}** | **${result.totals.noCoverage}** | **${result.totals.ignored}** | **${result.totals.pending}** | **${result.totals.runtimeErrors + result.totals.compileErrors}** |`,
     '',
     '> Every expected matrix shard produced a valid report; missing or invalid reports fail this job.',
   );

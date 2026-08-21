@@ -215,9 +215,11 @@ Incremental runs pass Stryker's supported `--incrementalFile` option and cache o
 the cache is not inferred from an arbitrary environment variable. `force` removes the selected
 module cache before running, so it is the explicit no-cache mode for release, security, and major
 refactor audits. Reports are uploaded under unique `stryker-report-<module>` artifact directories;
-the aggregate job requires a successful matrix and fails loudly on any missing, malformed, or
-incomplete expected report. The summary keeps killed, survived, timeout, no-coverage, and error
-counts visible instead of treating timeout/no-coverage as equivalent evidence.
+the aggregate job derives metrics from real mutant statuses under `files`, keeps the summary visible
+when a shard fails, and fails loudly on any missing, malformed, or incomplete expected report. The
+summary keeps killed, survived, timeout, no-coverage, ignored, pending, and error counts visible
+instead of treating timeout/no-coverage as equivalent evidence. `vitest.related: true` is enabled
+so each mutant uses related tests instead of rerunning the full suite.
 
 The current operational thresholds are `break: 75`, `high: 85`, and `low: 70`. They are preserved
 until a trusted force run establishes measured module/global baselines; they must not be changed to
@@ -228,7 +230,7 @@ unused checker would add cost without an accepted compatibility baseline.
 **Re-integration criterion:** bring it back into the `quality` job (or a separate required check)
 once a manual run demonstrates the flakiness is resolved — concretely, three consecutive manual
 `workflow_dispatch` runs on `main` completing without a spurious failure or timeout, at the current
-40-target mutate scope. Until then, treat a manual run's score as informational only, not a gate.
+25-target mutate scope. Until then, treat a manual run's score as informational only, not a gate.
 
 ---
 

@@ -166,10 +166,12 @@ jobs:
           SELECTOR: ${{ github.event.inputs.module || 'all' }}
         run: |
           if [ "${{ needs.stryker.result }}" != "success" ]; then
-            echo "Stryker matrix did not complete successfully: ${{ needs.stryker.result }}" >&2
-            exit 1
+            echo "Stryker matrix completed with: ${{ needs.stryker.result }}; the summary remains informational and this job will fail closed." >&2
           fi
           node scripts/aggregate-stryker-reports.mjs all-reports --selector "$SELECTOR" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "${{ needs.stryker.result }}" != "success" ]; then
+            exit 1
+          fi
           echo "> Mode: \`${{ github.event.inputs.mode || 'incremental' }}\` | Concurrency: \`${{ github.event.inputs.per_job_concurrency || '2' }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "> Threshold: break ≥ 75 | low ≥ 70 | high ≥ 85" >> "$GITHUB_STEP_SUMMARY"
           echo "> Individual HTML/JSON reports are available as artifacts." >> "$GITHUB_STEP_SUMMARY"

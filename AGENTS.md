@@ -53,7 +53,7 @@ The app supports a multi-provider AI stack (Gemini, OpenAI, Claude, Grok, OpenRo
 | Type checker | `tsgo` (TypeScript Go port) via `tsconfig.tsgo.json` with 4 checkers (`pnpm run typecheck`) |
 | Styling | Tailwind CSS `^4.3.1` via `@tailwindcss/vite` + semantic CSS custom properties (`index.css`) |
 | State | Redux Toolkit `^2.12.0` + `redux-undo` (project slice only); Zustand `^5.0.14` for transient UI (`app/transientUiStore.ts`) |
-| Testing | Vitest `^4.1.10` (jsdom, `maxWorkers: 1`), Playwright `^1.61.1` (E2E, CI-only), Stryker `^9.2.0` (mutation, manual workflow only) |
+| Testing | Vitest `^4.1.10` (jsdom, `maxWorkers: 1`), Playwright `^1.61.1` (E2E, CI-only), Stryker `9.6.1` (mutation, manual workflow only) |
 | Lint/Format | Biome `^2.5.4` (`biome.json`) — single toolchain for JS/TS/CSS |
 | AI | Multi-provider: Google Gemini (`@google/genai`), OpenAI, Anthropic Claude, Grok, OpenRouter, Ollama, WebLLM, ONNX Runtime Web, Transformers.js |
 | Voice | Web Speech API (fallback); WASM engines: Whisper.cpp (STT), Kokoro (TTS), Silero VAD; gated by `featureFlags.enableVoiceWasm` |
@@ -321,8 +321,8 @@ hooks are not installed.
 
 - Config: `stryker.config.mjs`, with the authoritative target/risk registry in `stryker-scope.json`.
 - Scope: 25 production files across 8 modules; Tier A is pure/domain/policy logic, Tier B is bounded adapter/orchestration logic. Generated, type-only, test, and presentation-only glue stays out of scope.
-- Incremental mode uses Stryker's supported `--incrementalFile` option and one cache file per module. `mutation:force` intentionally bypasses that cache for release, security, or major-refactor audits.
-- The manual workflow supports `module: all`, `tier-a`, or one module name. Matrix artifacts retain module identity; aggregation fails if any expected shard/report is missing or invalid and exposes killed, survived, timeout, no-coverage, and error counts separately.
+- Incremental mode uses Stryker's supported `--incrementalFile` option and one cache file per module; `vitest.related: true` keeps each mutant on related tests instead of rerunning the full suite. `mutation:force` intentionally bypasses that cache for release, security, or major-refactor audits.
+- The manual workflow supports `module: all`, `tier-a`, or one module name. Matrix artifacts retain module identity; aggregation derives canonical metrics from mutant statuses, fails if any expected shard/report is missing or invalid, and exposes killed, survived, timeout, no-coverage, ignored, pending, and error counts separately.
 - `break: 75`, `low: 70`, and `high: 85` remain the current operational thresholds; they are not a claimed measured baseline until a trusted force run records one. Do not change them to make a run green.
 - **Removed from PR/CI pipeline** (2026-06-02) — mutation runs only via manual `.github/workflows/mutation.yml` (`workflow_dispatch`). Routine local validation must never run broad Stryker; cloud CI owns incremental, force, and report aggregation.
 

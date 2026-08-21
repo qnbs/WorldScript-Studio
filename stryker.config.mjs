@@ -6,7 +6,7 @@ export default {
   testRunner: 'vitest',
   vitest: {
     configFile: 'vitest.config.ts',
-    related: false,
+    related: true,
   },
   coverageAnalysis: 'perTest',
   ignoreStatic: true,

@@ -22,6 +22,8 @@ function createReportRoot() {
 
 function writeReport(root: string, moduleName: string, overrides: Record<string, number> = {}) {
   const metrics = {
+    pending: 0,
+    ignored: 0,
     killed: 8,
     survived: 1,
     timeout: 1,
@@ -119,5 +121,50 @@ describe('Stryker report aggregation', () => {
     });
 
     expect(aggregateStrykerReports(root, selectedModules).mutationScore).toBe(0);
+  });
+
+  it('derives canonical metrics from Stryker mutant statuses', async () => {
+    const root = createReportRoot();
+    const reportDirectory = join(root, 'stryker-report-services-commands');
+    mkdirSync(reportDirectory, { recursive: true });
+    writeFileSync(
+      join(reportDirectory, 'mutation.json'),
+      JSON.stringify({
+        files: {
+          'services/commands/example.ts': {
+            mutants: [
+              { status: 'Killed' },
+              { status: 'Timeout' },
+              { status: 'Survived' },
+              { status: 'NoCoverage' },
+              { status: 'RuntimeError' },
+              { status: 'CompileError' },
+              { status: 'Ignored' },
+              { status: 'Pending' },
+            ],
+          },
+        },
+      }),
+    );
+    const { selectMutationModules } = await import('../../../scripts/stryker-scope.mjs');
+    const result = aggregateStrykerReports(root, selectMutationModules('services-commands'));
+
+    const report = result.reports[0];
+    expect(report).toBeDefined();
+    if (!report) throw new Error('Expected one services-commands report.');
+    expect(report.metrics).toMatchObject({
+      killed: 1,
+      timeout: 1,
+      survived: 1,
+      noCoverage: 1,
+      runtimeErrors: 1,
+      compileErrors: 1,
+      ignored: 1,
+      pending: 1,
+      totalValid: 4,
+      totalInvalid: 2,
+      totalMutants: 8,
+    });
+    expect(result.mutationScore).toBe(50);
   });
 });

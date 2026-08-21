@@ -1,5 +1,7 @@
 // QNBS-v3: Keep report and aggregate types aligned with the fail-closed validator.
 export interface StrykerMetrics {
+  pending: number;
+  ignored: number;
   killed: number;
   survived: number;
   timeout: number;

@@ -288,9 +288,10 @@ Tests live in `tests/e2e/`. Playwright tests verify core user flows:
 
 Targets are defined once in [`stryker-scope.json`](stryker-scope.json) and consumed by
 [`stryker.config.mjs`](stryker.config.mjs): 25 production files across 8 risk-tiered modules.
-The manual workflow can run `all`, `tier-a`, or one module. Reports are kept under
-`reports/mutation/` and uploaded with module identity; the aggregate fails on missing or invalid
-shards and shows killed, survived, timeout, no-coverage, and error counts. Current operational
+The manual workflow can run `all`, `tier-a`, or one module. Related-test selection avoids rerunning
+the full Vitest suite for every mutant. Reports are kept under `reports/mutation/` and uploaded
+with module identity; the aggregate derives metrics from mutant statuses and fails on missing or
+invalid shards while showing killed, survived, timeout, no-coverage, ignored, pending, and error counts. Current operational
 thresholds are `break: 75`, `low: 70`, and `high: 85`; they are not a measured baseline until a
 trusted force run establishes one.
 
