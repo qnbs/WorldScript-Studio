@@ -73,6 +73,7 @@ describe('webDesktopPlatform', () => {
     await expect(webDesktopPlatform.tasks.convertMarkdownToEpub('# x')).resolves.toBeNull();
     await expect(
       webDesktopPlatform.tasks.submitTask({
+        contractVersion: '1.0.0',
         taskId: '1',
         taskType: 'text.analyze',
         payload: {},

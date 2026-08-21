@@ -2,6 +2,7 @@
 //          Used for runtime validation of postMessage payloads and Rust IPC.
 
 import { z } from 'zod';
+import { RUST_TASK_CONTRACT_VERSION } from './constants';
 
 // --- Primitives -------------------------------------------------------------
 export const TaskPrioritySchema = z.enum(['critical', 'high', 'normal', 'low']);
@@ -93,7 +94,9 @@ export type WorkerMessage = z.infer<typeof WorkerMessageSchema>;
 
 // --- Rust IPC Schemas -------------------------------------------------------
 export const RustTaskRequestSchema = z.object({
-  taskId: z.string().uuid(),
+  // QNBS-v3: Reject incompatible requests before native dispatch.
+  contractVersion: z.literal(RUST_TASK_CONTRACT_VERSION),
+  taskId: z.string().min(1),
   taskType: z.string().min(1),
   payload: z.record(z.string(), z.unknown()),
   priority: TaskPrioritySchema,
@@ -112,6 +115,8 @@ export const RustTaskProgressEventSchema = z.object({
 });
 
 export const RustTaskResultEventSchema = z.object({
+  // QNBS-v3: Reject incompatible native results before application code trusts them.
+  contractVersion: z.literal(RUST_TASK_CONTRACT_VERSION),
   taskId: z.string().min(1),
   success: z.boolean(),
   payload: z.unknown(),
