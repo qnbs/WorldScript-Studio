@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-<!-- release-candidate: v1.28.0 — the tag is created only after the release PR merges. -->
+### Changed
+
+- **Post-release documentation truth:** the audit report and README now reflect the published
+  v1.28.0 release, current test/i18n metrics, and the explicit distinction between protected
+  encryption mechanisms and the still-plaintext desktop filesystem path.
 
 ## [1.28.0] — 2026-08-21
 
