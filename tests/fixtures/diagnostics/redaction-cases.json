@@ -20,6 +20,26 @@
       "nested": {
         "token": "nested-value-remains-owned-by-the-nested-value"
       }
+    },
+    "entry": {
+      "ts": 1700000000000,
+      "level": "warn",
+      "module": "auth",
+      "message": "request rejected",
+      "context": {
+        "apiKey": "secret",
+        "userId": 42
+      }
+    },
+    "sanitizedEntry": {
+      "ts": 1700000000000,
+      "level": "warn",
+      "module": "auth",
+      "message": "request rejected",
+      "context": {
+        "apiKey": "[REDACTED]",
+        "userId": 42
+      }
     }
   },
   {
@@ -39,6 +59,26 @@
       "PASSphraseBackup": "[REDACTED]",
       "keyboardLayout": "[REDACTED]",
       "userId": 7
+    },
+    "entry": {
+      "ts": 1700000001000,
+      "level": "info",
+      "module": "editor",
+      "message": "selection updated",
+      "context": {
+        "keyboardLayout": "safe",
+        "userId": 7
+      }
+    },
+    "sanitizedEntry": {
+      "ts": 1700000001000,
+      "level": "info",
+      "module": "editor",
+      "message": "selection updated",
+      "context": {
+        "keyboardLayout": "[REDACTED]",
+        "userId": 7
+      }
     }
   }
 ]
