@@ -72,6 +72,33 @@ fn is_sensitive_key(key: &str) -> bool {
         || lowercase.contains("token")
         || lowercase.contains("password")
         || lowercase.contains("passphrase")
+        || is_iv_key(key)
+        || lowercase.contains("initializationvector")
+        || lowercase.contains("initialvector")
+}
+
+fn is_iv_key(key: &str) -> bool {
+    let bytes = key.as_bytes();
+    let is_iv = |index: usize| bytes.get(index).is_some_and(|b| *b == b'i' || *b == b'I')
+        && bytes.get(index + 1).is_some_and(|b| *b == b'v' || *b == b'V');
+    for index in 0..bytes.len().saturating_sub(1) {
+        if !is_iv(index) {
+            continue;
+        }
+        let before_ok = index == 0
+            || bytes[index - 1] == b'_'
+            || bytes[index - 1] == b'-'
+            || bytes[index - 1].is_ascii_lowercase();
+        let after = bytes.get(index + 2).copied();
+        let after_ok = after.is_none()
+            || after == Some(b'_')
+            || after == Some(b'-')
+            || after.is_some_and(|b| b.is_ascii_uppercase());
+        if before_ok && after_ok {
+            return true;
+        }
+    }
+    false
 }
 
 #[cfg(test)]
@@ -144,5 +171,27 @@ mod tests {
             })
         );
         assert_eq!(entry.context.as_ref().unwrap()["apiKey"], json!("secret"));
+    }
+
+    #[test]
+    fn redacts_iv_variants_without_redacting_ordinary_words() {
+        let context = serde_json::from_value(json!({
+            "iv": "one",
+            "ivHex": "two",
+            "encryptionIv": "three",
+            "initializationVector": "four",
+            "ivory": "safe",
+            "privilege": "safe"
+        }))
+        .expect("fixture context is an object");
+
+        let sanitized = sanitize_context(&context);
+
+        assert_eq!(sanitized["iv"], json!(REDACTED));
+        assert_eq!(sanitized["ivHex"], json!(REDACTED));
+        assert_eq!(sanitized["encryptionIv"], json!(REDACTED));
+        assert_eq!(sanitized["initializationVector"], json!(REDACTED));
+        assert_eq!(sanitized["ivory"], json!("safe"));
+        assert_eq!(sanitized["privilege"], json!("safe"));
     }
 }

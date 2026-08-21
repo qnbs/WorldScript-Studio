@@ -116,4 +116,22 @@ describe('renderer-specific diagnostics sinks', () => {
     expect(h.writeTextFile.mock.calls[1]?.[1]).toContain('second');
     expect(h.writeTextFile.mock.calls[0]?.[2]).toEqual({ append: true, create: true });
   });
+
+  it('swallows an IndexedDB open failure so logging never rejects the caller', async () => {
+    const request = { error: new Error('IndexedDB unavailable') } as unknown as IDBOpenDBRequest;
+    const open = vi.fn(() => {
+      queueMicrotask(() => request.onerror?.({ target: request } as unknown as Event));
+      return request;
+    });
+    Object.defineProperty(globalThis, 'indexedDB', {
+      configurable: true,
+      value: { open },
+      writable: true,
+    });
+    const { writeLogEntryToSinks } = await import('../../../../services/diagnostics/logSinks');
+
+    expect(() => writeLogEntryToSinks(entry('diagnostic failure'))).not.toThrow();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(open).toHaveBeenCalledWith('worldscript-logs-db', 1);
+  });
 });

@@ -371,7 +371,7 @@
   "proforge.progress.totals": "Pipeline Totals",
   "proforge.review.accept": "قبول",
   "proforge.review.acceptAll": "قبول الكل",
-  "proforge.review.acceptAllCritical": "قبول كل الحرج",
+  "proforge.review.acceptAllCritical": "قبول كل المشكلات الحرجة",
   "proforge.review.announceSubmitted": "تم إرسال مراجعة {{stage}}",
   "proforge.review.confidence": "ثقة بنسبة {{percent}}%",
   "proforge.review.counts": "{{pending}} قيد الانتظار · {{accepted}} مقبول · {{rejected}} مرفوض",

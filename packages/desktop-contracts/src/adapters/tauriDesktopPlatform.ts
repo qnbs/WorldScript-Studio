@@ -1,5 +1,6 @@
 import { RUST_TASK_CONTRACT_VERSION } from '../../../worker-bus/src/constants';
 import { RustTaskRequestSchema, RustTaskResultEventSchema } from '../../../worker-bus/src/schemas';
+import { sanitizeDiagnosticsValue } from '../diagnostics';
 import type {
   DesktopClipboard,
   DesktopDeepLinks,
@@ -25,10 +26,13 @@ import type {
 } from '../types';
 
 function warnNativeAdapter(message: string, context?: unknown): void {
-  // QNBS-v3: keep adapter diagnostics renderer-neutral so desktopPlatform cannot cycle through the app logger.
+  // QNBS-v3: sanitize adapter context before console delivery so raw native errors never bypass the diagnostics boundary.
   if (typeof console !== 'undefined' && typeof console.warn === 'function') {
-    if (context === undefined) console.warn(message);
-    else console.warn(message, context);
+    if (context === undefined) {
+      console.warn(message);
+    } else {
+      console.warn(message, sanitizeDiagnosticsValue(context));
+    }
   }
 }
 

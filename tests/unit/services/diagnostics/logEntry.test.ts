@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createLogEntry, sanitizeLogContext } from '../../../../services/diagnostics/logEntry';
+import {
+  createLogEntry,
+  safeStringify,
+  sanitizeLogContext,
+} from '../../../../services/diagnostics/logEntry';
 
 describe('renderer-neutral log entry boundary', () => {
   beforeEach(() => {
@@ -50,8 +54,13 @@ describe('renderer-neutral log entry boundary', () => {
       iv: 'direct-iv-secret',
       encryptionIv: 'encryption-iv-secret',
       initializationVector: 'initialization-vector-secret',
+      ivory: 'safe-word',
+      privilege: 'safe-word',
       classValue: new SensitiveContainer(),
+      circular: {} as Record<string, unknown>,
     };
+    const circular = context.circular;
+    circular['self'] = circular;
 
     expect(sanitizeLogContext(context)).toEqual({
       nested: { token: '[REDACTED]' },
@@ -61,11 +70,22 @@ describe('renderer-neutral log entry boundary', () => {
       iv: '[REDACTED]',
       encryptionIv: '[REDACTED]',
       initializationVector: '[REDACTED]',
+      ivory: 'safe-word',
+      privilege: 'safe-word',
       classValue: '[Unserializable]',
+      circular: { self: { '[CIRCULAR]': '[REDACTED]' } },
     });
     expect(context.nested.token).toBe('nested-secret');
     expect(context.array[0]?.password).toBe('array-secret');
     expect(context.array[0]?.ivHex).toBe('array-iv-secret');
     expect(context.passphrase).toBe('secret');
+  });
+
+  it('returns a safe marker when JSON serialization cannot produce a value', () => {
+    const circular: Record<string, unknown> = {};
+    circular['self'] = circular;
+
+    expect(safeStringify(undefined)).toBe('[Unserializable]');
+    expect(safeStringify(circular)).toBe('[Unserializable]');
   });
 });

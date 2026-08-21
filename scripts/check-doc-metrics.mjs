@@ -8,8 +8,8 @@
  *
  * Run: node scripts/check-doc-metrics.mjs
  */
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getModules, REF_LANG } from './i18n-locales.mjs';
 
@@ -194,16 +194,41 @@ export function scanReleaseTruth(changelog, packageVersion, taggedVersions) {
   return findings;
 }
 
-export function getTaggedVersions() {
+/**
+ * @param {string} [repositoryRoot]
+ * @returns {string}
+ */
+export function resolveGitCommonDir(repositoryRoot = root) {
+  const dotGit = join(repositoryRoot, '.git');
+  if (!existsSync(dotGit)) return dotGit;
+  if (statSync(dotGit).isDirectory()) return dotGit;
+
+  const gitdirLine = readFileSync(dotGit, 'utf8').trim();
+  const match = /^gitdir:\s*(.+)$/i.exec(gitdirLine);
+  if (!match) return dotGit;
+
+  const gitDir = resolve(repositoryRoot, match[1]);
+  const commondirPath = join(gitDir, 'commondir');
+  if (!existsSync(commondirPath)) return gitDir;
+  const commondir = readFileSync(commondirPath, 'utf8').trim();
+  return commondir ? resolve(gitDir, commondir) : gitDir;
+}
+
+/**
+ * @param {string} [repositoryRoot]
+ * @returns {Set<string>}
+ */
+export function getTaggedVersions(repositoryRoot = root) {
   const refs = new Set();
-  const packedRefs = join(root, '.git', 'packed-refs');
+  const gitDir = resolveGitCommonDir(repositoryRoot);
+  const packedRefs = join(gitDir, 'packed-refs');
   if (existsSync(packedRefs)) {
     for (const line of readFileSync(packedRefs, 'utf8').split('\n')) {
       const match = line.match(/^[0-9a-f]+ refs\/tags\/(v\d+\.\d+\.\d+)$/);
       if (match) refs.add(match[1].slice(1));
     }
   }
-  const tagsRoot = join(root, '.git', 'refs', 'tags');
+  const tagsRoot = join(gitDir, 'refs', 'tags');
   const collectLooseTags = (directory, prefix = '') => {
     if (!existsSync(directory)) return;
     for (const entry of readdirSync(directory, { withFileTypes: true })) {

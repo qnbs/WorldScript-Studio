@@ -414,6 +414,7 @@ describe('tauriDesktopPlatform', () => {
       expect(h.invoke).toHaveBeenCalledWith('worldscript_task_supervisor_ping');
     });
 
+    // QNBS-v3: warning assertions verify native errors cannot bypass the shared redaction boundary.
     it('rejects a native result with an unknown contract version', async () => {
       h.invoke.mockResolvedValueOnce({
         contractVersion: '2.0.0',
@@ -433,10 +434,9 @@ describe('tauriDesktopPlatform', () => {
           timeoutMs: 5000,
         }),
       ).rejects.toThrow(/unsupported contract version/);
-      expect(h.loggerWarn).toHaveBeenCalledWith(
-        'desktopPlatform.tasks: submitTask failed',
-        expect.objectContaining({ error: expect.any(Error) }),
-      );
+      expect(h.loggerWarn).toHaveBeenCalledWith('desktopPlatform.tasks: submitTask failed', {
+        error: '[Unserializable]',
+      });
     });
 
     it('rejects an invalid request contract before invoking native code', async () => {
@@ -546,6 +546,17 @@ describe('tauriDesktopPlatform', () => {
       });
     });
 
+    it('generateOllamaModelfile rejects a non-string native response', async () => {
+      h.invoke.mockResolvedValueOnce({ content: 'not a modelfile' });
+      await expect(
+        tauriDesktopPlatform.tasks.generateOllamaModelfile({
+          baseModel: 'base',
+          adapterPath: '/adapter',
+          name: 'MyAssistant',
+        }),
+      ).rejects.toThrow('generate_ollama_modelfile returned a non-string response');
+    });
+
     it('abortLoraTraining, checkLoraEnvironment, setLoraPythonPath invoke the named commands', async () => {
       h.invoke.mockResolvedValueOnce('confirmed');
       await expect(tauriDesktopPlatform.tasks.abortLoraTraining()).resolves.toBe('confirmed');
@@ -636,15 +647,20 @@ describe('tauriDesktopPlatform', () => {
       );
     });
 
+    // QNBS-v3: malformed native payloads must be redacted before adapter warnings reach the console.
     it('onLoraTrainingProgress drops (and logs) a malformed payload instead of forwarding it', async () => {
       const handler = vi.fn();
       h.listen.mockImplementationOnce(async (_event, cb) => {
-        cb({ payload: { progress_percent: 42 } }); // no valid `event` key
+        cb({ payload: { progress_percent: 42, apiKey: 'secret' } }); // no valid `event` key
         cb({ payload: 'not-an-object' });
         return () => {};
       });
       await tauriDesktopPlatform.tasks.onLoraTrainingProgress(handler);
       expect(handler).not.toHaveBeenCalled();
+      expect(h.loggerWarn).toHaveBeenCalledWith(
+        'desktopPlatform.tasks: ignoring malformed LoRA training progress payload',
+        { payload: { progress_percent: 42, apiKey: '[REDACTED]' } },
+      );
       expect(h.loggerWarn).toHaveBeenCalled();
     });
 
