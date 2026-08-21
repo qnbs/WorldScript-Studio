@@ -38,3 +38,6 @@ export const MIN_WORKERS = 1;
 
 /** Message protocol version. */
 export const PROTOCOL_VERSION = 2;
+
+/** Version of the typed Rust TaskSupervisor request/result contract. */
+export const RUST_TASK_CONTRACT_VERSION = '1.0.0' as const;

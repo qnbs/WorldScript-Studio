@@ -387,8 +387,16 @@ describe('tauriDesktopPlatform', () => {
 
   describe('tasks', () => {
     it('submitTask/pingSupervisor invoke the named Rust commands', async () => {
-      await tauriDesktopPlatform.tasks.submitTask({
+      h.invoke.mockResolvedValueOnce({
+        contractVersion: '1.0.0',
         taskId: '1',
+        success: true,
+        payload: {},
+        latencyMs: 0,
+      });
+      await tauriDesktopPlatform.tasks.submitTask({
+        contractVersion: '1.0.0',
+        taskId: '550e8400-e29b-41d4-a716-446655440001',
         taskType: 'text.analyze',
         payload: {},
         priority: 'normal',
@@ -396,10 +404,31 @@ describe('tauriDesktopPlatform', () => {
         timeoutMs: 5000,
       });
       expect(h.invoke).toHaveBeenCalledWith('worldscript_task_supervisor_submit', {
-        request: expect.objectContaining({ taskId: '1' }),
+        request: expect.objectContaining({ taskId: '550e8400-e29b-41d4-a716-446655440001' }),
       });
       await tauriDesktopPlatform.tasks.pingSupervisor();
       expect(h.invoke).toHaveBeenCalledWith('worldscript_task_supervisor_ping');
+    });
+
+    it('rejects a native result with an unknown contract version', async () => {
+      h.invoke.mockResolvedValueOnce({
+        contractVersion: '2.0.0',
+        taskId: '1',
+        success: true,
+        payload: {},
+        latencyMs: 0,
+      });
+      await expect(
+        tauriDesktopPlatform.tasks.submitTask({
+          contractVersion: '1.0.0',
+          taskId: '550e8400-e29b-41d4-a716-446655440001',
+          taskType: 'text.analyze',
+          payload: {},
+          priority: 'normal',
+          target: 'rust',
+          timeoutMs: 5000,
+        }),
+      ).rejects.toThrow(/unsupported contract version/);
     });
 
     it('convertMarkdownToEpub decodes the base64 response', async () => {

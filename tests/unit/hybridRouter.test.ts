@@ -58,6 +58,7 @@ describe('hybridRouter', () => {
   it('routes to Rust when rustComputeEnabled + target:rust + Rust available', async () => {
     mockIsRustAvailable.mockResolvedValue(true);
     mockInvokeRustTask.mockResolvedValue({
+      contractVersion: '1.0.0',
       taskId: 'rust-tid',
       success: true,
       payload: { answer: 42 },
@@ -155,6 +156,7 @@ describe('hybridRouter', () => {
   it('Rust result promise rejects when success is false', async () => {
     mockIsRustAvailable.mockResolvedValue(true);
     mockInvokeRustTask.mockResolvedValue({
+      contractVersion: '1.0.0',
       taskId: 'rust-fail',
       success: false,
       payload: null,
@@ -175,6 +177,7 @@ describe('hybridRouter', () => {
   it('returns null for structured Rust failures on native-only probes', async () => {
     mockIsRustAvailable.mockResolvedValue(true);
     mockInvokeRustTask.mockResolvedValue({
+      contractVersion: '1.0.0',
       taskId: 'rust-fail-native-only',
       success: false,
       payload: null,

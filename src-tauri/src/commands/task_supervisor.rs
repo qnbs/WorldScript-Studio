@@ -9,8 +9,8 @@
 //! worth offloading the main thread for large manuscripts and revision comparisons.
 //!
 //! Contract (mirrors `@domain/worker-bus` `types.ts:213-238`, serde camelCase):
-//!   RustTaskRequest { taskId, taskType, payload, priority, target, timeoutMs, retryPolicy? }
-//!     -> RustTaskResultEvent { taskId, success, payload, error?, latencyMs }
+//!   RustTaskRequest { contractVersion, taskId, taskType, payload, priority, target, timeoutMs, retryPolicy? }
+//!     -> RustTaskResultEvent { contractVersion, taskId, success, payload, error?, latencyMs }
 //!
 //! Unknown task types resolve with `success: false` (never a hard `Err`) so the
 //! router's caller sees a structured failure it can fall back from, matching the
@@ -21,7 +21,7 @@ use serde_json::Value;
 use std::time::Instant;
 
 /// Bumped when the wire contract or task registry changes; surfaced via `ping`.
-const SUPERVISOR_VERSION: &str = "1.0.0";
+const TASK_CONTRACT_VERSION: &str = "1.0.0";
 const MAX_TEXT_INPUT_CHARS: usize = 200_000;
 const MAX_DIFF_DP_CELLS: usize = 80_000;
 const MAX_DIFF_INPUT_CHARS: usize = MAX_TEXT_INPUT_CHARS;
@@ -31,9 +31,10 @@ const MAX_DIFF_INPUT_CHARS: usize = MAX_TEXT_INPUT_CHARS;
 #[serde(rename_all = "camelCase")]
 // QNBS-v3: priority/target/timeoutMs/retryPolicy are part of the worker-bus wire contract
 //          and accepted from the TS router, but the current dispatcher only reads
-//          task_id/task_type/payload — allow(dead_code) until the retry/timeout path lands.
+//          contract_version/task_id/task_type/payload — allow(dead_code) until the retry/timeout path lands.
 #[allow(dead_code)]
 pub struct RustTaskRequest {
+    pub contract_version: String,
     pub task_id: String,
     pub task_type: String,
     pub payload: Value,
@@ -48,6 +49,7 @@ pub struct RustTaskRequest {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RustTaskResultEvent {
+    pub contract_version: &'static str,
     pub task_id: String,
     pub success: bool,
     pub payload: Value,
@@ -84,7 +86,7 @@ pub struct TextDiffOp {
 /// the TS bridge treats a successful resolve as "Rust compute available".
 #[tauri::command]
 pub fn worldscript_task_supervisor_ping() -> Result<String, String> {
-    Ok(SUPERVISOR_VERSION.to_string())
+    Ok(TASK_CONTRACT_VERSION.to_string())
 }
 
 /// Dispatch a single task to its native handler.
@@ -96,6 +98,12 @@ pub fn worldscript_task_supervisor_ping() -> Result<String, String> {
 pub fn worldscript_task_supervisor_submit(
     request: RustTaskRequest,
 ) -> Result<RustTaskResultEvent, String> {
+    if request.contract_version != TASK_CONTRACT_VERSION {
+        return Err(format!(
+            "unsupported task supervisor contract version: {}",
+            request.contract_version
+        ));
+    }
     let started = Instant::now();
     let task_id = request.task_id.clone();
 
@@ -109,6 +117,7 @@ pub fn worldscript_task_supervisor_submit(
 
     Ok(match outcome {
         Ok(payload) => RustTaskResultEvent {
+            contract_version: TASK_CONTRACT_VERSION,
             task_id,
             success: true,
             payload,
@@ -116,6 +125,7 @@ pub fn worldscript_task_supervisor_submit(
             latency_ms,
         },
         Err(err) => RustTaskResultEvent {
+            contract_version: TASK_CONTRACT_VERSION,
             task_id,
             success: false,
             payload: Value::Null,
@@ -404,6 +414,7 @@ mod tests {
     #[test]
     fn submit_unknown_task_resolves_as_honest_failure() {
         let req = RustTaskRequest {
+            contract_version: TASK_CONTRACT_VERSION.into(),
             task_id: "t1".into(),
             task_type: "does.not.exist".into(),
             payload: Value::Null,
@@ -416,11 +427,29 @@ mod tests {
         assert!(!res.success);
         assert!(res.error.is_some());
         assert_eq!(res.payload, Value::Null);
+        assert_eq!(res.contract_version, TASK_CONTRACT_VERSION);
+    }
+
+    #[test]
+    fn submit_rejects_unsupported_contract_version() {
+        let req = RustTaskRequest {
+            contract_version: "2.0.0".into(),
+            task_id: "future".into(),
+            task_type: "text.analyze".into(),
+            payload: json!({ "text": "hello" }),
+            priority: "normal".into(),
+            target: "rust".into(),
+            timeout_ms: 1000,
+            retry_policy: None,
+        };
+        let error = worldscript_task_supervisor_submit(req).unwrap_err();
+        assert!(error.contains("unsupported task supervisor contract version"));
     }
 
     #[test]
     fn submit_text_analyze_returns_stats_payload() {
         let req = RustTaskRequest {
+            contract_version: TASK_CONTRACT_VERSION.into(),
             task_id: "t2".into(),
             task_type: "text.analyze".into(),
             payload: json!({ "text": "Hello world. This is fine." }),
@@ -439,6 +468,7 @@ mod tests {
     #[test]
     fn submit_text_analyze_rejects_missing_text() {
         let req = RustTaskRequest {
+            contract_version: TASK_CONTRACT_VERSION.into(),
             task_id: "t3".into(),
             task_type: "text.analyze".into(),
             payload: json!({ "notText": 1 }),
@@ -455,6 +485,7 @@ mod tests {
     #[test]
     fn submit_text_analyze_rejects_oversized_input() {
         let req = RustTaskRequest {
+            contract_version: TASK_CONTRACT_VERSION.into(),
             task_id: "t-analyze-large".into(),
             task_type: "text.analyze".into(),
             payload: json!({ "text": "x".repeat(MAX_TEXT_INPUT_CHARS + 1) }),
@@ -471,6 +502,7 @@ mod tests {
     #[test]
     fn submit_text_diff_returns_renderer_neutral_operations() {
         let req = RustTaskRequest {
+            contract_version: TASK_CONTRACT_VERSION.into(),
             task_id: "t4".into(),
             task_type: "text.diff".into(),
             payload: json!({ "oldText": "the cat", "newText": "the dog" }),
@@ -490,6 +522,7 @@ mod tests {
     #[test]
     fn submit_text_diff_rejects_missing_text_pair() {
         let req = RustTaskRequest {
+            contract_version: TASK_CONTRACT_VERSION.into(),
             task_id: "t5".into(),
             task_type: "text.diff".into(),
             payload: json!({ "oldText": "only one side" }),
