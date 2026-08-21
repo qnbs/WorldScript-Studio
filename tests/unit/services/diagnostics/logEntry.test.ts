@@ -26,18 +26,22 @@ describe('renderer-neutral log entry boundary', () => {
     expect(Object.keys(entry)).toEqual(['ts', 'level', 'module', 'message', 'context']);
   });
 
-  it('preserves the existing top-level redaction scope', () => {
+  it('redacts sensitive keys recursively without mutating the input', () => {
     const context = {
-      nested: { token: 'kept as an opaque value' },
+      nested: { token: 'nested-secret' },
+      array: [{ password: 'array-secret' }],
       userId: 'user-1',
       passphrase: 'secret',
     };
 
     expect(sanitizeLogContext(context)).toEqual({
-      nested: { token: 'kept as an opaque value' },
+      nested: { token: '[REDACTED]' },
+      array: [{ password: '[REDACTED]' }],
       userId: 'user-1',
       passphrase: '[REDACTED]',
     });
+    expect(context.nested.token).toBe('nested-secret');
+    expect(context.array[0]?.password).toBe('array-secret');
     expect(context.passphrase).toBe('secret');
   });
 });

@@ -32,10 +32,10 @@ pub struct LogEntry {
     pub context: Option<Map<String, Value>>,
 }
 
-/// Redact sensitive top-level context keys using the existing TypeScript contract.
+/// Redact sensitive keys recursively in JSON objects and arrays.
 ///
-/// The current TS implementation intentionally redacts keys only, not values nested under
-/// otherwise-safe keys. Keeping that scope exact avoids an unreviewed wire-contract change.
+/// This mirrors the TypeScript diagnostics boundary so sensitive values cannot bypass redaction
+/// by being placed below an otherwise-safe object key.
 pub fn sanitize_context(context: &Map<String, Value>) -> Map<String, Value> {
     context
         .iter()
@@ -43,11 +43,19 @@ pub fn sanitize_context(context: &Map<String, Value>) -> Map<String, Value> {
             let sanitized = if is_sensitive_key(key) {
                 Value::String(REDACTED.to_string())
             } else {
-                value.clone()
+                sanitize_value(value)
             };
             (key.clone(), sanitized)
         })
         .collect()
+}
+
+fn sanitize_value(value: &Value) -> Value {
+    match value {
+        Value::Object(object) => Value::Object(sanitize_context(object)),
+        Value::Array(items) => Value::Array(items.iter().map(sanitize_value).collect()),
+        _ => value.clone(),
+    }
 }
 
 /// Return a sanitized copy of a structured log entry without mutating its input.
@@ -90,10 +98,7 @@ mod tests {
         assert_eq!(sanitized["myPassword"], json!(REDACTED));
         assert_eq!(sanitized["recoveryPassphrase"], json!(REDACTED));
         assert_eq!(sanitized["userId"], json!(42));
-        assert_eq!(
-            sanitized["nested"],
-            json!({ "token": "still-owned-by-the-nested-value" })
-        );
+        assert_eq!(sanitized["nested"], json!({ "token": REDACTED }));
         assert_eq!(context["apiKey"], json!("secret"));
     }
 

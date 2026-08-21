@@ -971,8 +971,8 @@ Required:
 [~] task supervision renderer-neutral — bounded `text.analyze`/`text.diff` proof is CI-proven;
     full worker-bus extraction and authority switch remain open
 [~] diagnostics renderer-neutral — Core model/redaction and TS/Rust parity are CI-proven;
-    typed TS sink boundary is locally proven in #441 and CI merge-gated; sink migration and
-    authority switch remain open
+    recursive redaction and typed TS sink boundary are locally proven in #441 and CI merge-gated;
+    sink migration and authority switch remain open
 [x] contract versioning policy established — bounded TaskSupervisor request/result contract v1.0.0 is validated at the typed boundary; see docs/native/CONTRACT-VERSIONING-POLICY.md
 [x] native-readiness CI gate active — enforced by `pnpm run native-readiness:check`
 ```
