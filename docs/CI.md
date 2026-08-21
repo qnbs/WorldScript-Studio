@@ -205,9 +205,25 @@ gh workflow run mutation.yml
 ```
 
 `mutation.yml` is `workflow_dispatch`-only — it never runs automatically on push or PR. This means
-the mutation score is **not continuously tracked**; it's a point-in-time snapshot whenever someone
-runs it manually. [`stryker.conf.json`](../stryker.conf.json) still defines the thresholds
-(`break: 75`, `high: 85`, `low: 70`) that would apply if it ran.
+the mutation score is **not continuously tracked**; it is a point-in-time snapshot whenever someone
+runs it manually. [`stryker.config.mjs`](../stryker.config.mjs) consumes the single authoritative
+scope in [`stryker-scope.json`](../stryker-scope.json): 25 production targets across 8 modules.
+Each module is marked Tier A (pure/domain/policy logic) or Tier B (bounded adapter/orchestration
+logic), and the workflow accepts `all`, `tier-a`, or one module name for a bounded diagnostic run.
+
+Incremental runs pass Stryker's supported `--incrementalFile` option and cache one file per module;
+the cache is not inferred from an arbitrary environment variable. `force` removes the selected
+module cache before running, so it is the explicit no-cache mode for release, security, and major
+refactor audits. Reports are uploaded under unique `stryker-report-<module>` artifact directories;
+the aggregate job requires a successful matrix and fails loudly on any missing, malformed, or
+incomplete expected report. The summary keeps killed, survived, timeout, no-coverage, and error
+counts visible instead of treating timeout/no-coverage as equivalent evidence.
+
+The current operational thresholds are `break: 75`, `high: 85`, and `low: 70`. They are preserved
+until a trusted force run establishes measured module/global baselines; they must not be changed to
+make a run green. The installed TypeScript checker is intentionally not used: Stryker's Vitest
+runner and the repository's tsgo gate provide the supported compile/type signal, while enabling the
+unused checker would add cost without an accepted compatibility baseline.
 
 **Re-integration criterion:** bring it back into the `quality` job (or a separate required check)
 once a manual run demonstrates the flakiness is resolved — concretely, three consecutive manual
@@ -374,7 +390,7 @@ act pull_request -j quality -s CODECOV_TOKEN="$CODECOV_TOKEN" -W .github/workflo
 | `tests/e2e/collaboration.spec.ts` | Collaboration panel security warning banner pre-connect |
 | `services/commands/` | Command registry backing the palette (fuzzy search — regression-sensitive if E2E targets palette copy) |
 | `hooks/useGlobalKeyboardShortcuts.ts` | Global shortcut listener — keep in sync with **Settings → Shortcuts** defaults |
-| `stryker.conf.json` | Mutation testing targets + thresholds (`break: 75`, `high: 85`, `low: 70`; 40 mutate targets as of v1.19.0) |
+| `stryker.config.mjs` / `stryker-scope.json` | Curated 25-file mutation scope across 8 risk-tiered modules; current thresholds are `break: 75`, `high: 85`, `low: 70` |
 
 ---
 

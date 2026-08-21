@@ -2,7 +2,11 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { mutationFiles, mutationModules } from '../../../scripts/stryker-scope.mjs';
+import {
+  mutationFiles,
+  mutationModules,
+  selectMutationModules,
+} from '../../../scripts/stryker-scope.mjs';
 import config from '../../../stryker.config.mjs';
 
 const workflowPath = fileURLToPath(
@@ -15,6 +19,9 @@ describe('Stryker workflow policy', () => {
     expect(config.mutate).toEqual(mutationFiles);
     expect(mutationModules).toHaveLength(8);
     expect(new Set(mutationFiles).size).toBe(25);
+    expect(mutationModules.every(({ riskTier }) => ['A', 'B'].includes(riskTier))).toBe(true);
+    expect(selectMutationModules('tier-a').every(({ riskTier }) => riskTier === 'A')).toBe(true);
+    expect(selectMutationModules('services-commands')).toHaveLength(1);
   });
 
   it('uses supported incremental plumbing and preserves shard identity', () => {
@@ -24,5 +31,7 @@ describe('Stryker workflow policy', () => {
     expect(workflow).toContain('if-no-files-found: error');
     expect(workflow).toContain('needs.stryker.result');
     expect(workflow).toContain('node scripts/aggregate-stryker-reports.mjs all-reports');
+    expect(workflow).toContain('--selector "$SELECTOR"');
+    expect(workflow).not.toContain('force-all-modules');
   });
 });

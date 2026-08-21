@@ -1,9 +1,8 @@
 # ============================================================
 # WorldScript Studio – Mutation Testing (Stryker) — Parallel + Incremental
 # QNBS-v3: Matrix-parallel Stryker with per-module caches and fail-safe aggregation.
-# Run manually via workflow_dispatch. Each matrix job targets one module
-# to keep wall-clock time low (~5–15 min per job vs. 30–45 min single job).
-# Incremental caching skips unchanged mutants on re-runs (50–80% speedup).
+# Run manually via workflow_dispatch. Each matrix job targets one curated module;
+# runtime and score remain measured outputs rather than undocumented promises.
 # ============================================================
 
 name: 🧬 Mutation Tests (Stryker)
@@ -19,7 +18,10 @@ on:
         options:
           - incremental
           - force
-          - force-all-modules
+      module:
+        description: 'Scope selector: all, tier-a, or one module name'
+        required: false
+        default: 'all'
       per_job_concurrency:
         description: 'Concurrency per job (default: 2)'
         required: false
@@ -45,8 +47,9 @@ jobs:
       - id: scope
         shell: bash
         run: |
-          node scripts/stryker-scope.mjs
-          echo "matrix=$(node scripts/stryker-scope.mjs --matrix)" >> "$GITHUB_OUTPUT"
+          SELECTOR="${{ github.event.inputs.module || 'all' }}"
+          node scripts/stryker-scope.mjs --selector "$SELECTOR"
+          echo "matrix=$(node scripts/stryker-scope.mjs --matrix --selector "$SELECTOR")" >> "$GITHUB_OUTPUT"
 
   # ============================================
   # PARALLEL MATRIX JOBS (one per module)
@@ -84,7 +87,7 @@ jobs:
         run: |
           mkdir -p reports
           MODE="${{ github.event.inputs.mode || 'incremental' }}"
-          if [ "$MODE" = "force" ] || [ "$MODE" = "force-all-modules" ]; then
+          if [ "$MODE" = "force" ]; then
             echo "🧹 Force mode → clearing incremental cache for ${{ matrix.name }}"
             rm -f reports/stryker-incremental-${{ matrix.name }}.json
           elif [ -f "reports/stryker-incremental-${{ matrix.name }}.json" ]; then
@@ -97,7 +100,7 @@ jobs:
         run: |
           MODE="${{ github.event.inputs.mode || 'incremental' }}"
           FORCE_FLAG=""
-          if [ "$MODE" = "force" ] || [ "$MODE" = "force-all-modules" ]; then
+          if [ "$MODE" = "force" ]; then
             FORCE_FLAG="--force"
           fi
 

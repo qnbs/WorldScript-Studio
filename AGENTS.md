@@ -144,7 +144,7 @@ WorldScript-Studio/
 - `playwright.config.ts` — E2E projects: Chromium desktop + Pixel 5 mobile in CI; Firefox + optional mobile locally
 - `turbo.json` — task graph for `build`, `dev`, `lint`, `typecheck`, `test`, `mutation`
 - `pnpm-workspace.yaml` — workspace packages + pnpm v11 `allowBuilds` default-deny map
-- `stryker.conf.json` — ~20 mutation targets (services + features), `break: 75`
+- `stryker.config.mjs` + `stryker-scope.json` — 25 curated production targets across 8 risk-tiered modules, `break: 75`
 - `.lighthouserc.cjs` — accessibility `error` ≥ 0.95, CLS `error` ≤ 0.1, performance/SEO `warn`
 - `src-tauri/tauri.conf.json` / `Cargo.toml` — desktop window config, CSP, updater endpoints, rust-compute feature
 
@@ -181,7 +181,9 @@ pnpm run test:e2e           # Playwright E2E (CI=true required; CI-only by polic
 pnpm run test:e2e:ui        # Playwright E2E UI mode (CI=true required)
 pnpm run test:e2e:deep      # Deep E2E feature-flag matrix (CI=true required)
 pnpm run test:vrt           # Visual regression (Chromium only)
-pnpm run mutation           # Stryker mutation testing (CI-only; manual workflow)
+pnpm run mutation           # Stryker incremental mutation testing (CI-only; manual workflow)
+pnpm run mutation:force     # Stryker force/no-cache audit (CI-only)
+pnpm run mutation:report    # Aggregate downloaded reports; fails on missing/invalid shards
 
 # Analysis / budgets
 pnpm run analyze            # Rollup visualizer → dist/bundle-analysis.html
@@ -317,11 +319,12 @@ hooks are not installed.
 
 ### Mutation Testing (Stryker)
 
-- Config: `stryker.conf.json`
-- Targets: ~20 files across `services/`, `features/`, `services/copilot/`, `services/ai/providers/`
-- `ignoreStatic: true` drops runtime from ~90 min to ~10 min.
-- `break: 75` — score below 75 fails the mutation job.
-- **Removed from PR/CI pipeline** (2026-06-02) — now runs only via manual `.github/workflows/mutation.yml` (`workflow_dispatch`).
+- Config: `stryker.config.mjs`, with the authoritative target/risk registry in `stryker-scope.json`.
+- Scope: 25 production files across 8 modules; Tier A is pure/domain/policy logic, Tier B is bounded adapter/orchestration logic. Generated, type-only, test, and presentation-only glue stays out of scope.
+- Incremental mode uses Stryker's supported `--incrementalFile` option and one cache file per module. `mutation:force` intentionally bypasses that cache for release, security, or major-refactor audits.
+- The manual workflow supports `module: all`, `tier-a`, or one module name. Matrix artifacts retain module identity; aggregation fails if any expected shard/report is missing or invalid and exposes killed, survived, timeout, no-coverage, and error counts separately.
+- `break: 75`, `low: 70`, and `high: 85` remain the current operational thresholds; they are not a claimed measured baseline until a trusted force run records one. Do not change them to make a run green.
+- **Removed from PR/CI pipeline** (2026-06-02) — mutation runs only via manual `.github/workflows/mutation.yml` (`workflow_dispatch`). Routine local validation must never run broad Stryker; cloud CI owns incremental, force, and report aggregation.
 
 ### Storybook
 
