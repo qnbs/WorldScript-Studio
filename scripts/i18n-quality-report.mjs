@@ -14,9 +14,32 @@ import { getLocales, getModules, REF_LANG } from './i18n-locales.mjs';
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const strict = process.argv.includes('--strict');
 const minCoverageArg = process.argv.indexOf('--min-coverage');
-const minCoverage = minCoverageArg >= 0 ? Number(process.argv[minCoverageArg + 1]) : null;
 const maxOutliersArg = process.argv.indexOf('--max-length-outliers');
-const maxLengthOutliers = maxOutliersArg >= 0 ? Number(process.argv[maxOutliersArg + 1]) : null;
+function parseOptionalThreshold(flag, index, { min, max, integer = false }) {
+  if (index < 0) return null;
+  const rawValue = process.argv[index + 1];
+  const value = Number(rawValue);
+  if (
+    rawValue === undefined ||
+    rawValue.startsWith('--') ||
+    !Number.isFinite(value) ||
+    value < min ||
+    value > max ||
+    (integer && !Number.isInteger(value))
+  ) {
+    console.error(
+      `[i18n:quality] ${flag} requires a finite number between ${min} and ${max}${integer ? ' (integer)' : ''}.`,
+    );
+    process.exit(1);
+  }
+  return value;
+}
+const minCoverage = parseOptionalThreshold('--min-coverage', minCoverageArg, { min: 0, max: 100 });
+const maxLengthOutliers = parseOptionalThreshold('--max-length-outliers', maxOutliersArg, {
+  min: 0,
+  max: Number.MAX_SAFE_INTEGER,
+  integer: true,
+});
 
 function load(lang, mod) {
   const p = join(ROOT, 'locales', lang, `${mod}.json`);

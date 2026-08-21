@@ -174,6 +174,8 @@
   "error.db.quotaExceeded": "Arakatzailearen biltegia beteta dago. Ezabatu proiektu zaharrak edo argazkiak.",
   "error.db.unknown": "Errore ezezaguna datu-basera sartzean.",
   "error.deepLink.title": "Ezin izan da proiektuaren fitxategia ireki",
+  "error.deepLink.legacyTitle": "Deep link eskema zaharra",
+  "error.deepLink.legacyDescription": "storycraft:// estekak zaharkituta daude eta hurrengo bertsioan kenduko dira. Sortu esteka berriro worldscript:// erabiliz.",
   "error.deepLink.unknown": "Errore ezezaguna",
   "error.fallback.generic": "AI is unavailable — used built-in assistance.",
   "error.fallback.offline": "You're offline — used built-in assistance.",

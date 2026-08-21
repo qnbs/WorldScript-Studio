@@ -10,7 +10,13 @@ import {
 } from '../../features/featureFlags/featureFlagsSlice';
 import { selectProjectData } from '../../features/project/projectSelectors';
 import { statusActions } from '../../features/status/statusSlice';
-import { ANTHROPIC_MODEL_OPTIONS, OPENAI_MODEL_OPTIONS } from '../../services/ai/cloudModelCatalog';
+// QNBS-v3: shared catalog keeps settings options and provider fallbacks on the same IDs.
+import {
+  ANTHROPIC_MODEL_OPTIONS,
+  DEFAULT_ANTHROPIC_MODEL_ID,
+  DEFAULT_OPENAI_MODEL_ID,
+  OPENAI_MODEL_OPTIONS,
+} from '../../services/ai/cloudModelCatalog';
 import { RECOMMENDED_OLLAMA_MODEL_IDS } from '../../services/ai/modelRecommendations';
 import { generateLocalText } from '../../services/localAiFacade';
 import { rebuildHybridRagIndex } from '../../services/localRagService';
@@ -83,9 +89,13 @@ export const AiSection: FC = () => {
           } else if (p === 'gemini') {
             newModel = currentModel.startsWith('ollama/') ? 'gemini-3.5-flash' : currentModel;
           } else if (p === 'openai') {
-            newModel = currentModel.startsWith('gpt-') ? currentModel : 'gpt-5.4-mini';
+            // QNBS-v3: migrate incompatible OpenAI selections to the current supported default.
+            newModel = currentModel.startsWith('gpt-') ? currentModel : DEFAULT_OPENAI_MODEL_ID;
           } else if (p === 'anthropic') {
-            newModel = currentModel.startsWith('claude-') ? currentModel : 'claude-sonnet-5';
+            // QNBS-v3: migrate incompatible Anthropic selections to the current supported default.
+            newModel = currentModel.startsWith('claude-')
+              ? currentModel
+              : DEFAULT_ANTHROPIC_MODEL_ID;
           } else if (p === 'webllm') {
             // QNBS-v3: default to first curated MLC model; 'webllm/browser' kept as legacy fallback
             newModel = WEBLLM_SUPPORTED_MODELS[0].id;
@@ -380,6 +390,7 @@ export const AdvancedAiSection: FC = () => {
               }}
               {...(settings.advancedAi.provider === 'anthropic'
                 ? {
+                    // QNBS-v3: render the shared Anthropic catalog instead of a second option list.
                     options: ANTHROPIC_MODEL_OPTIONS,
                   }
                 : settings.advancedAi.provider === 'webllm'
@@ -449,7 +460,12 @@ export const AdvancedAiSection: FC = () => {
                               },
                             ]
                           : settings.advancedAi.provider === 'openai'
-                            ? [{ label: 'GPT-5 — Current', options: OPENAI_MODEL_OPTIONS }]
+                            ? [
+                                {
+                                  label: t('settings.ai.modelGroups.gpt5Current'),
+                                  options: OPENAI_MODEL_OPTIONS,
+                                },
+                              ]
                             : [
                                 {
                                   label: 'Gemini 3 — Latest',

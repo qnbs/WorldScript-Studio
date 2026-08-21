@@ -140,6 +140,24 @@ describe('normalizePersistedSettings', () => {
     expect(result.advancedAi.temperature).toBe(0.7); // default preserved
   });
 
+  it('migrates removed cloud model IDs to the current provider defaults', () => {
+    expect(
+      normalizePersistedSettings({
+        advancedAi: { provider: 'anthropic', model: 'claude-haiku-4-5' },
+      }).advancedAi.model,
+    ).toBe('claude-sonnet-5');
+    expect(
+      normalizePersistedSettings({
+        advancedAi: { provider: 'openai', model: 'gpt-4o' },
+      }).advancedAi.model,
+    ).toBe('gpt-5.4-mini');
+    expect(
+      normalizePersistedSettings({
+        advancedAi: { provider: 'grok', model: 'grok-3' },
+      }).advancedAi.model,
+    ).toBe('grok-4.5');
+  });
+
   // ── collaboration ─────────────────────────────────────────────────────────
 
   it('provides default collaboration signaling URLs when empty', () => {

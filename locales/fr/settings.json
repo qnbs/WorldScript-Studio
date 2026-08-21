@@ -138,6 +138,7 @@
   "settings.ai.gpu.troubleshootQueue": "Plusieurs tâches IA sont en file d'attente. Une seule s'exécute à la fois pour éviter les collisions VRAM. Attendez la fin de la tâche en cours.",
   "settings.ai.gpu.waitingConsumers": "En attente",
   "settings.ai.grokKey": "Clé API Grok",
+  "settings.ai.modelGroups.gpt5Current": "GPT-5 — Actuel",
   "settings.ai.hybridFallbackHint": "Si le fournisseur principal échoue, WorldScript essaie les replis listés. La diffusion en continu de l'écrivain utilise uniquement votre fournisseur principal.",
   "settings.ai.hybridFallbackTitle": "Repli hybride (outils IA du projet)",
   "settings.ai.hybridFallbackToggle": "Activer la chaîne de repli",

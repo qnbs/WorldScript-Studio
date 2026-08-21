@@ -1,4 +1,5 @@
 import type React from 'react';
+import { forwardRef } from 'react';
 
 export type IconName =
   | 'close'
@@ -40,6 +41,7 @@ interface IconProps extends React.SVGAttributes<SVGSVGElement> {
   title?: string;
 }
 
+// QNBS-v3: expose SVG props so migrated inline icons retain accessible and styling attributes.
 export interface CustomIconProps extends React.SVGAttributes<SVGSVGElement> {
   children: React.ReactNode;
 }
@@ -240,18 +242,21 @@ export const Icon: React.FC<IconProps> = ({
 );
 Icon.displayName = 'Icon';
 
-/** QNBS-v3: share the SVG shell when a central registry supplies a custom path. */
-export const CustomIcon: React.FC<CustomIconProps> = ({ children, className = '', ...props }) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    fill="none"
-    viewBox="0 0 24 24"
-    strokeWidth={1.5}
-    stroke="currentColor"
-    className={className}
-    {...props}
-  >
-    {children}
-  </svg>
+// QNBS-v3: forward refs so migrated inline icons remain compatible with focus and measurement code.
+export const CustomIcon = forwardRef<SVGSVGElement, CustomIconProps>(
+  ({ children, className = '', ...props }, ref) => (
+    <svg
+      ref={ref}
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+      strokeWidth={1.5}
+      stroke="currentColor"
+      className={className}
+      {...props}
+    >
+      {children}
+    </svg>
+  ),
 );
 CustomIcon.displayName = 'CustomIcon';

@@ -209,7 +209,8 @@ const ToolsPanel: FC = React.memo(() => {
                 variant="danger"
                 className="w-full py-3 text-base shadow-lg animate-pulse"
               >
-                <CustomIcon className="w-5 h-5 mr-2">
+                {/* QNBS-v3: button text labels the decorative stop glyph. */}
+                <CustomIcon className="w-5 h-5 mr-2" aria-hidden="true">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"

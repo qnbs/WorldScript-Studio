@@ -32,21 +32,33 @@ let maxEntryKb = 2500;
 let maxVendorKb = 6200;
 let maxChunkKb = 2500;
 let maxWasmKb = 30000;
+function parseThreshold(flag, rawValue) {
+  if (rawValue === undefined || rawValue.startsWith('--')) {
+    console.error(`[bundle:budget] ${flag} requires a non-negative finite number.`);
+    process.exit(1);
+  }
+  const value = Number(rawValue);
+  if (!Number.isFinite(value) || value < 0) {
+    console.error(`[bundle:budget] ${flag} requires a non-negative finite number.`);
+    process.exit(1);
+  }
+  return value;
+}
 for (let i = 0; i < argv.length; i++) {
-  if (argv[i] === '--max-entry-kb' && argv[i + 1]) {
-    maxEntryKb = Number(argv[i + 1]);
+  if (argv[i] === '--max-entry-kb') {
+    maxEntryKb = parseThreshold(argv[i], argv[i + 1]);
     i++;
   }
-  if (argv[i] === '--max-vendor-kb' && argv[i + 1]) {
-    maxVendorKb = Number(argv[i + 1]);
+  if (argv[i] === '--max-vendor-kb') {
+    maxVendorKb = parseThreshold(argv[i], argv[i + 1]);
     i++;
   }
-  if (argv[i] === '--max-chunk-kb' && argv[i + 1]) {
-    maxChunkKb = Number(argv[i + 1]);
+  if (argv[i] === '--max-chunk-kb') {
+    maxChunkKb = parseThreshold(argv[i], argv[i + 1]);
     i++;
   }
-  if (argv[i] === '--max-wasm-kb' && argv[i + 1]) {
-    maxWasmKb = Number(argv[i + 1]);
+  if (argv[i] === '--max-wasm-kb') {
+    maxWasmKb = parseThreshold(argv[i], argv[i + 1]);
     i++;
   }
 }

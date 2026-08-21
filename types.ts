@@ -384,6 +384,7 @@ export type AiModel =
   | 'gemini-2.0-flash-lite'
   | 'gemini-1.5-flash'
   | 'gemini-1.5-pro'
+  // QNBS-v3: centralize current cloud IDs while retaining legacy stored values for migration.
   // Anthropic – current catalog
   | 'claude-opus-4-8'
   | 'claude-opus-5'

@@ -33,6 +33,7 @@ const PWAInstallCard: FC = () => {
     <Card>
       <CardHeader>
         <div className="flex items-center gap-2">
+          {/* QNBS-v3: shared CustomIcon keeps the PWA section glyph on the tokenized shell. */}
           <CustomIcon className="h-5 w-5 text-[var(--sc-text-accent)]" aria-hidden="true">
             {/* device-phone-mobile — represents PWA / home screen install */}
             <path

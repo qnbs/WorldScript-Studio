@@ -16,6 +16,14 @@ import {
   defaultVoiceSettings,
 } from '../../features/settings/settingsDefaults';
 import type { OpenRouterSettings, Settings, StoryProject } from '../../types';
+import {
+  ANTHROPIC_MODEL_IDS,
+  DEFAULT_ANTHROPIC_MODEL_ID,
+  DEFAULT_GROK_MODEL_ID,
+  DEFAULT_OPENAI_MODEL_ID,
+  GROK_MODEL_IDS,
+  OPENAI_MODEL_IDS,
+} from '../ai/cloudModelCatalog';
 import { DEFAULT_WEBRTC_SIGNALING_URLS } from '../collaborationService';
 import { APP_DATA_STORE } from '../dbConstants';
 import { logger } from '../logger';
@@ -133,6 +141,25 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
     ...advancedAiDefaults,
     ...(incoming['advancedAi'] as Partial<Settings['advancedAi']> | undefined),
   };
+  // QNBS-v3: migrate stored cloud IDs removed from the selectable catalog to safe current defaults.
+  if (
+    validSettings.advancedAi.provider === 'anthropic' &&
+    !ANTHROPIC_MODEL_IDS.includes(
+      validSettings.advancedAi.model as (typeof ANTHROPIC_MODEL_IDS)[number],
+    )
+  ) {
+    validSettings.advancedAi.model = DEFAULT_ANTHROPIC_MODEL_ID;
+  } else if (
+    validSettings.advancedAi.provider === 'openai' &&
+    !OPENAI_MODEL_IDS.includes(validSettings.advancedAi.model as (typeof OPENAI_MODEL_IDS)[number])
+  ) {
+    validSettings.advancedAi.model = DEFAULT_OPENAI_MODEL_ID;
+  } else if (
+    validSettings.advancedAi.provider === 'grok' &&
+    !GROK_MODEL_IDS.includes(validSettings.advancedAi.model as (typeof GROK_MODEL_IDS)[number])
+  ) {
+    validSettings.advancedAi.model = DEFAULT_GROK_MODEL_ID;
+  }
 
   if (!Array.isArray(validSettings.keyboardShortcuts)) {
     validSettings.keyboardShortcuts = getDefaultKeyboardShortcuts();

@@ -1,5 +1,6 @@
 import type { FC } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
+// QNBS-v3: source Anthropic choices from the shared catalog used by the proxy allowlist.
 import { ANTHROPIC_MODEL_OPTIONS } from '../../services/ai/cloudModelCatalog';
 import { Button } from '../ui/Button';
 import { Icon } from '../ui/Icon';
@@ -76,6 +77,7 @@ export const AnthropicProviderFields: FC<AnthropicProviderFieldsProps> = ({
       >
         {t('settings.advancedAi.model')}
       </label>
+      {/* QNBS-v3: the shared option list is the same allowlist enforced by the proxy. */}
       <Select
         id="anthropic-model"
         value={model}

@@ -50,9 +50,8 @@ export async function initTauriDeepLink(
           dispatch(
             statusActions.addNotification({
               type: 'info',
-              title: 'Legacy deep link scheme',
-              description:
-                'storycraft:// links are deprecated and will be removed in the next release. Recreate the link with worldscript://.',
+              title: t('error.deepLink.legacyTitle'),
+              description: t('error.deepLink.legacyDescription'),
             }),
           );
         }

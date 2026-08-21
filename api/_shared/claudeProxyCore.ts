@@ -1,17 +1,11 @@
-// QNBS-v3 (ADR-0016 Track B): platform-agnostic relay core, shared by the Vercel Edge Function
-// (api/claude-proxy.ts) and the Cloudflare Pages Function (functions/api/claude-proxy.ts) so the
-// abuse-control logic — the actual security-relevant part — is written and tested exactly once.
-// Web-standard Request/Response only; no platform-specific types, so it needs neither @vercel/node
-// nor @cloudflare/workers-types as a new dependency.
+// QNBS-v3: one platform-agnostic relay core keeps Claude abuse controls and tests identical.
 import { z } from 'zod';
 import { ANTHROPIC_MODEL_IDS } from '../../services/ai/cloudModelCatalog';
 
 const ANTHROPIC_MESSAGES_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
 
-// QNBS-v3: mirrors the model dropdown in AiProviderCard.tsx (Track A) — keeping the enum in sync
-// is a deliberate defense-in-depth constraint, not just laziness: it stops the public endpoint from
-// being used to probe/relay requests for arbitrary future Anthropic model ids.
+// QNBS-v3: proxy allowlist mirrors the catalog as a defense-in-depth boundary.
 export const ALLOWED_MODELS = ANTHROPIC_MODEL_IDS;
 
 // QNBS-v3: this app only ever sends a single user message (see streamAnthropic in

@@ -15,11 +15,13 @@ const mockDriverInstance = {
 
 vi.mock('driver.js', () => ({
   driver: vi.fn((options: { popoverClass?: string }) => {
+    // QNBS-v3: capture runtime options so the stylesheet selector contract is testable.
     capturedDriverOptions = options;
     return mockDriverInstance;
   }),
 }));
 
+// QNBS-v3: stylesheet is mocked because jsdom cannot load driver.js CSS.
 vi.mock('driver.js/dist/driver.css', () => ({}));
 
 import {
@@ -30,6 +32,7 @@ import {
 } from '../../services/spotlightTour';
 
 beforeEach(() => {
+  // QNBS-v3: isolate captured driver configuration between tour assertions.
   localStorage.clear();
   capturedDriverOptions = undefined;
   vi.clearAllMocks();
@@ -89,6 +92,7 @@ describe('startSpotlightTour', () => {
   });
 
   it('uses the themed popover selector declared by the tour stylesheet', async () => {
+    // QNBS-v3: assert the runtime-to-stylesheet selector contract to prevent rebrand drift.
     startSpotlightTour(t, 'default');
     expect(capturedDriverOptions?.popoverClass).toBe('worldscript-driver-popover');
 

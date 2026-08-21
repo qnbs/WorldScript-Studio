@@ -5,6 +5,8 @@ import { createLogger } from '../logger';
 import { storageService } from '../storageService';
 import { assertCloudAiAllowed } from './aiPolicy';
 import { aiUsageTracker } from './aiUsageTracker';
+// QNBS-v3: fallback IDs stay aligned with the selectable cloud catalog.
+import { DEFAULT_GROK_MODEL_ID, DEFAULT_OPENAI_MODEL_ID } from './cloudModelCatalog';
 import { CREATIVITY_TO_TEMPERATURE } from './creativityTemperature';
 import {
   buildOpenRouterStyleHeaders,
@@ -92,7 +94,8 @@ async function resolveModelConfig(
       provider: 'openaiCompatible',
       baseURL: 'https://api.x.ai/v1',
       apiKey,
-      modelId: model.startsWith('grok-') ? model : 'grok-4.5',
+      // QNBS-v3: retain the intentional workhorse fallback for incompatible stored models.
+      modelId: model.startsWith('grok-') ? model : DEFAULT_GROK_MODEL_ID,
     };
   }
   if (kind === 'gemini') {
@@ -125,7 +128,8 @@ async function resolveModelConfig(
     return {
       provider: 'openai',
       apiKey,
-      modelId: model.startsWith('gpt-') ? model : 'gpt-5.4-mini',
+      // QNBS-v3: retain the intentional workhorse fallback for incompatible stored models.
+      modelId: model.startsWith('gpt-') ? model : DEFAULT_OPENAI_MODEL_ID,
       ...(extraHeaders !== undefined ? { headers: extraHeaders } : {}),
     };
   }

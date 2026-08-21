@@ -6,6 +6,12 @@
 import type { PipelineStage, StageResult } from '../../../features/proForge/types';
 import type { AIProvider, AiModel } from '../../../types';
 import { getLocalFallbackModel, isEcoMode, shouldRouteLocally } from '../../ai/aiModeService';
+// QNBS-v3: ProForge defaults must follow the same provider catalog as the settings UI.
+import {
+  DEFAULT_ANTHROPIC_MODEL_ID,
+  DEFAULT_GROK_MODEL_ID,
+  DEFAULT_OPENAI_MODEL_ID,
+} from '../../ai/cloudModelCatalog';
 // QNBS-v3: type-only import — the singleton is loaded lazily in getGateway() so that running an
 // agent with an injected context.gateway (Node/MCP, tests) never eagerly pulls aiProviderService
 // and its browser-only deps (@domain/ai-core, localAiFacade, storageService) at module eval.
@@ -152,11 +158,12 @@ ${prompt}`;
         ? 'webllm'
         : configuredProvider;
 
+    // QNBS-v3: use named catalog defaults so ProForge cannot drift from selectable models.
     const modelMap: Partial<Record<AIProvider, AiModel>> = {
       gemini: 'gemini-2.5-flash',
-      openai: 'gpt-5.4-mini',
-      anthropic: 'claude-sonnet-5',
-      grok: 'grok-4.5',
+      openai: DEFAULT_OPENAI_MODEL_ID,
+      anthropic: DEFAULT_ANTHROPIC_MODEL_ID,
+      grok: DEFAULT_GROK_MODEL_ID,
     };
     // QNBS-v3: eco mode OR local routing override → use the local fallback model.
     const routingOverrideActive = shouldRouteLocally() && !LOCAL_PROVIDERS.has(configuredProvider);

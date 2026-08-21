@@ -93,7 +93,11 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={onOpenPalette}
             className="w-full h-11 rounded-xl bg-[var(--sc-surface-overlay)]/50 border border-[var(--sc-border-subtle)] hover:border-[var(--border-interactive)] hover:bg-[var(--sc-surface-overlay)] hover:shadow-[var(--sc-shadow-sm)] transition-all flex items-center px-4 text-sm text-[var(--sc-text-muted)] group shadow-sm"
           >
-            <CustomIcon className="w-4 h-4 mr-3 group-hover:text-[var(--sc-text-primary)] transition-colors">
+            {/* QNBS-v3: decorative palette glyph is hidden because the button has a text label. */}
+            <CustomIcon
+              className="w-4 h-4 mr-3 group-hover:text-[var(--sc-text-primary)] transition-colors"
+              aria-hidden="true"
+            >
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -168,7 +172,10 @@ export const Header: React.FC<HeaderProps> = ({
             aria-label={t('common.undo')}
             title={t('common.undo')}
           >
-            <CustomIcon className="w-5 h-5">{ICONS.UNDO}</CustomIcon>
+            {/* QNBS-v3: the undo button's accessible name comes from its label, not its glyph. */}
+            <CustomIcon className="w-5 h-5" aria-hidden="true">
+              {ICONS.UNDO}
+            </CustomIcon>
           </button>
           <button
             type="button"

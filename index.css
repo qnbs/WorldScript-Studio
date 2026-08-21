@@ -811,7 +811,7 @@ select option {
 }
 
 /* ── driver.js spotlight tour ─────────────────────────── */
-/* QNBS-v3: Two-class selectors beat driver.js `.driver-popover` (one class); no !important. */
+/* QNBS-v3: two-class selectors beat driver.js specificity without !important. */
 .driver-popover.worldscript-driver-popover,
 .driver-popover.storycraft-driver-popover {
   background: var(--sc-surface-raised);

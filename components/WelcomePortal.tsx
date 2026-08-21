@@ -33,7 +33,10 @@ const NewProjectOption: React.FC<{
       className="bg-[var(--sc-surface-raised)]/80 p-6 rounded-lg border border-[var(--sc-border-subtle)] hover:border-[var(--sc-accent)] hover:bg-[var(--sc-surface-raised)] transition-all cursor-pointer flex items-start space-x-4 w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]"
     >
       <div className="flex-shrink-0 bg-[var(--sc-surface-overlay)] p-3 rounded-lg">
-        <CustomIcon className="w-8 h-8 text-[var(--sc-accent)]">{icon}</CustomIcon>
+        {/* QNBS-v3: option text provides the accessible name for this decorative glyph. */}
+        <CustomIcon className="w-8 h-8 text-[var(--sc-accent)]" aria-hidden="true">
+          {icon}
+        </CustomIcon>
       </div>
       <div>
         <h3 className="text-lg font-bold text-[var(--sc-text-primary)]">{title}</h3>
@@ -182,7 +185,8 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
 
   const renderMainView = () => (
     <div className="text-center">
-      <CustomIcon className="w-16 h-16 text-[var(--sc-accent)] mx-auto mb-4">
+      {/* QNBS-v3: branding glyph is decorative beside the welcome heading. */}
+      <CustomIcon className="w-16 h-16 text-[var(--sc-accent)] mx-auto mb-4" aria-hidden="true">
         {ICONS.WRITER}
       </CustomIcon>
       <h1 className="text-4xl md:text-5xl font-bold text-[var(--sc-text-primary)]">
@@ -276,7 +280,8 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
         onClick={() => setView('main')}
         className="flex items-center space-x-2 text-[var(--sc-accent)] hover:text-[var(--sc-accent-hover)] mb-6"
       >
-        <CustomIcon className="w-5 h-5">
+        {/* QNBS-v3: the back button text labels this decorative navigation glyph. */}
+        <CustomIcon className="w-5 h-5" aria-hidden="true">
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
         </CustomIcon>
         <span>{t('portal.back')}</span>
@@ -321,7 +326,8 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
         onClick={() => setView('main')}
         className="flex items-center space-x-2 text-[var(--sc-accent)] hover:text-[var(--sc-accent-hover)] mb-6"
       >
-        <CustomIcon className="w-5 h-5">
+        {/* QNBS-v3: the back button text labels this decorative navigation glyph. */}
+        <CustomIcon className="w-5 h-5" aria-hidden="true">
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
         </CustomIcon>
         <span>{t('portal.back')}</span>

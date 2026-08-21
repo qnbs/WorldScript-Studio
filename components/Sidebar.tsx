@@ -58,7 +58,8 @@ const NavItem: React.FC<{
           }`}
           aria-hidden="true"
         >
-          <CustomIcon className="w-4 h-4" strokeWidth={isActive ? 2 : 1.5}>
+          {/* QNBS-v3: the surrounding navigation item supplies the accessible label. */}
+          <CustomIcon className="w-4 h-4" strokeWidth={isActive ? 2 : 1.5} aria-hidden="true">
             {icon}
           </CustomIcon>
         </div>

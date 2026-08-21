@@ -154,7 +154,13 @@ describe('tauriDeepLink', () => {
   describe('initTauriDeepLink', () => {
     const dispatchMock = vi.fn((action: unknown) => action);
     const dispatch = dispatchMock as unknown as AppDispatch;
-    const t = ((key: string) => key) as I18nTranslate;
+    const t = ((key: string) => {
+      if (key === 'error.deepLink.legacyTitle') return 'Legacy deep link scheme';
+      if (key === 'error.deepLink.legacyDescription') {
+        return 'storycraft:// links are deprecated; recreate the link with worldscript://.';
+      }
+      return key;
+    }) as I18nTranslate;
 
     beforeEach(() => {
       dispatchMock.mockClear();
@@ -183,12 +189,24 @@ describe('tauriDeepLink', () => {
     it('announces the legacy scheme during the one-release compatibility window', async () => {
       await initTauriDeepLink(dispatch, t);
       const handler = h.onDeepLink.mock.calls[0]?.[0] as (urls: string[]) => Promise<void>;
-      dispatchMock.mockReturnValueOnce({ type: 'project/importProject/fulfilled' });
+      dispatchMock.mockReturnValueOnce(undefined).mockReturnValueOnce({
+        type: 'project/importProject/fulfilled',
+      });
       await handler(['storycraft:///home/user/novel.worldscript']);
       expect(dispatchMock).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'status/addNotification',
-          payload: expect.objectContaining({ type: 'info', title: 'Legacy deep link scheme' }),
+          payload: expect.objectContaining({
+            type: 'info',
+            title: 'Legacy deep link scheme',
+            description: expect.stringContaining('worldscript://'),
+          }),
+        }),
+      );
+      expect(dispatchMock).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'status/addNotification',
+          payload: expect.objectContaining({ type: 'error' }),
         }),
       );
     });

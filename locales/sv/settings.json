@@ -138,6 +138,7 @@
   "settings.ai.gpu.troubleshootQueue": "Flera AI-uppgifter står i kö. Endast en kör åt gången för att undvika VRAM-kollisioner. Vänta tills den aktuella uppgiften är klar.",
   "settings.ai.gpu.waitingConsumers": "Väntan",
   "settings.ai.grokKey": "Grok API Key",
+  "settings.ai.modelGroups.gpt5Current": "GPT-5 — Aktuell",
   "settings.ai.hybridFallbackHint": "Om den primära leverantören misslyckas, försöker WorldScript de listade fallbacks (scengeneratorer, codexverktyg). Writer-strömning använder endast din primära leverantör.",
   "settings.ai.hybridFallbackTitle": "Hybrid fallback (projekt AI-verktyg)",
   "settings.ai.hybridFallbackToggle": "Aktivera reservkedja",
