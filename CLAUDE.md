@@ -23,7 +23,9 @@ pnpm run bench         # Vitest perf benchmarks (tests/bench) — baseline gate 
 pnpm run content:guard # Validate community templates for secrets / eval payloads
 pnpm run i18n:check    # Locale key parity + bundle rebuild (runs in CI quality job)
 pnpm run i18n:bundle   # Rebuild public/locales/<lang>/bundle.json from source JSON
-pnpm run mutation      # Stryker mutation — CI-ONLY; trigger via: gh workflow run mutation.yml
+pnpm run mutation      # Stryker incremental mutation — CI-ONLY; trigger mutation.yml
+pnpm run mutation:force # Stryker force/no-cache audit — CI-ONLY
+pnpm run mutation:report # Aggregate downloaded module reports; fails on missing shards
 pnpm run test:e2e      # Playwright E2E tests (CI=true required; CI-only)
 pnpm run test:e2e:deep # Deep coverage suite — feature-flag matrix + error paths (CI-only; non-blocking)
 pnpm run test:storybook # Storybook test-runner (CI; needs Storybook running or built)
@@ -48,7 +50,7 @@ pnpm run token:audit        # audit-tokens.mjs — design-token usage gate (CI b
 **CI-cloud-first workflow (constrained local hardware only):** On low-end hardware, run only `ci:prepush` locally before pushing. Coverage, E2E, Lighthouse, and Stryker are CI-gate jobs. After each push, update README.md badges and AUDIT.md quality-gate line with CI-reported numbers. Local CI simulation: `act pull_request --job quality` (Docker + `act`; see `infra/low-end-ci/DAILY-DRIVER.md`).
 
 **CI audit & housekeeping policy (ALL CI runs must be fully green):**
-- After every commit, monitor ALL CI jobs: security (OSV + CodeQL), quality (Biome + tsc + Vitest), build, e2e, lighthouse, deploy, mutation, storybook.
+- After every commit, monitor all jobs for the active workflow. Stryker is a separate manual workflow, not a routine PR check; monitor it when explicitly dispatched for an incremental, Tier-A, module, or force audit.
 - **CodeQL scanning**: Check `https://github.com/qnbs/WorldScript-Studio/security/code-scanning` after every push. Fix the root cause — do not just suppress alerts.
 - **Token-Permissions**: All GitHub Actions workflows must set top-level `permissions: contents: read`; write permissions belong at the job level, never top-level.
 - **OSV vulnerabilities**: Run `pnpm audit` or check the security CI job. Add `pnpm.overrides` with pinned exact versions.
