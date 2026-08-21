@@ -51,9 +51,7 @@ const h = vi.hoisted(() => {
   };
 });
 
-vi.mock('../../../services/logger', () => ({
-  logger: { warn: (...args: unknown[]) => h.loggerWarn(...args), error: vi.fn(), info: vi.fn() },
-}));
+vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => h.loggerWarn(...args));
 vi.mock('@tauri-apps/plugin-fs', () => ({
   readTextFile: h.readTextFile,
   writeTextFile: h.writeTextFile,
@@ -122,6 +120,8 @@ import { tauriDesktopPlatform } from '../src/adapters/tauriDesktopPlatform';
 describe('tauriDesktopPlatform', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // QNBS-v3: restore the adapter-boundary spy after the shared setup silences console warnings.
+    vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => h.loggerWarn(...args));
     h.menuImportShouldFail.value = false;
     h.trayImportShouldFail.value = false;
   });

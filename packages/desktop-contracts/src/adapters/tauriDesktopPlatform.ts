@@ -24,9 +24,12 @@ import type {
   LoraTrainRequest,
 } from '../types';
 
-function warnNativeAdapter(message: string): void {
+function warnNativeAdapter(message: string, context?: unknown): void {
   // QNBS-v3: keep adapter diagnostics renderer-neutral so desktopPlatform cannot cycle through the app logger.
-  if (typeof console !== 'undefined' && typeof console.warn === 'function') console.warn(message);
+  if (typeof console !== 'undefined' && typeof console.warn === 'function') {
+    if (context === undefined) console.warn(message);
+    else console.warn(message, context);
+  }
 }
 
 const adapterLogger = { warn: warnNativeAdapter };
@@ -200,8 +203,8 @@ const menu: DesktopMenu = {
     try {
       const { Menu, Submenu, MenuItem, PredefinedMenuItem } = await import('@tauri-apps/api/menu');
       return { Menu, Submenu, MenuItem, PredefinedMenuItem };
-    } catch {
-      adapterLogger.warn('desktopPlatform.menu: failed to load the native menu builder');
+    } catch (error) {
+      adapterLogger.warn('desktopPlatform.menu: failed to load the native menu builder', { error });
       return null;
     }
   },
@@ -226,8 +229,8 @@ const tray: DesktopTray = {
           import('@tauri-apps/api/app'),
         ]);
       return { TrayIcon, Menu, MenuItem, PredefinedMenuItem, defaultWindowIcon };
-    } catch {
-      adapterLogger.warn('desktopPlatform.tray: failed to load the native tray builder');
+    } catch (error) {
+      adapterLogger.warn('desktopPlatform.tray: failed to load the native tray builder', { error });
       return null;
     }
   },
@@ -241,8 +244,10 @@ const notifications: DesktopNotifications = {
     try {
       const { isPermissionGranted } = await import('@tauri-apps/plugin-notification');
       return await isPermissionGranted();
-    } catch {
-      adapterLogger.warn('desktopPlatform.notifications: failed to read permission state');
+    } catch (error) {
+      adapterLogger.warn('desktopPlatform.notifications: failed to read permission state', {
+        error,
+      });
       return false;
     }
   },
@@ -254,8 +259,8 @@ const notifications: DesktopNotifications = {
       if (await isPermissionGranted()) return true;
       const permission = await requestPermission();
       return permission === 'granted';
-    } catch {
-      adapterLogger.warn('desktopPlatform.notifications: failed to request permission');
+    } catch (error) {
+      adapterLogger.warn('desktopPlatform.notifications: failed to request permission', { error });
       return false;
     }
   },
@@ -267,8 +272,8 @@ const notifications: DesktopNotifications = {
       if (!(await isPermissionGranted())) return false;
       sendNotification({ title, body });
       return true;
-    } catch {
-      adapterLogger.warn('desktopPlatform.notifications: failed to send');
+    } catch (error) {
+      adapterLogger.warn('desktopPlatform.notifications: failed to send', { error });
       return false;
     }
   },
@@ -307,13 +312,18 @@ const lifecycle: DesktopLifecycle = {
       return await win.onCloseRequested(async (event) => {
         try {
           await handler({ preventDefault: () => event.preventDefault() });
-        } catch {
-          adapterLogger.warn('desktopPlatform.lifecycle: onCloseRequested handler failed');
+        } catch (error) {
+          adapterLogger.warn('desktopPlatform.lifecycle: onCloseRequested handler failed', {
+            error,
+          });
         }
       });
-    } catch {
+    } catch (error) {
       adapterLogger.warn(
         'desktopPlatform.lifecycle: failed to install the close-requested handler',
+        {
+          error,
+        },
       );
       return () => {};
     }
@@ -412,7 +422,7 @@ const tasks: DesktopTasks = {
       }
       return result.data;
     } catch (error) {
-      adapterLogger.warn('desktopPlatform.tasks: submitTask failed');
+      adapterLogger.warn('desktopPlatform.tasks: submitTask failed', { error });
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(`worldscript_task_supervisor_submit failed: ${message}`);
     }
@@ -431,8 +441,8 @@ const tasks: DesktopTasks = {
       const bytes = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
       return bytes;
-    } catch {
-      adapterLogger.warn('desktopPlatform.tasks: convertMarkdownToEpub failed');
+    } catch (error) {
+      adapterLogger.warn('desktopPlatform.tasks: convertMarkdownToEpub failed', { error });
       return null;
     }
   },
@@ -448,6 +458,9 @@ const tasks: DesktopTasks = {
       if (!isLoraTrainingProgressEvent(event.payload)) {
         adapterLogger.warn(
           'desktopPlatform.tasks: ignoring malformed LoRA training progress payload',
+          {
+            payload: event.payload,
+          },
         );
         return;
       }
@@ -502,8 +515,8 @@ const diagnostics: DesktopDiagnostics = {
     try {
       const { getVersion } = await import('@tauri-apps/api/app');
       return await getVersion();
-    } catch {
-      adapterLogger.warn('desktopPlatform.diagnostics: failed to read the app version');
+    } catch (error) {
+      adapterLogger.warn('desktopPlatform.diagnostics: failed to read the app version', { error });
       return null;
     }
   },
@@ -514,8 +527,10 @@ const diagnostics: DesktopDiagnostics = {
       const dir = await appDataDir();
       await open(dir);
       return true;
-    } catch {
-      adapterLogger.warn('desktopPlatform.diagnostics: failed to open the data directory');
+    } catch (error) {
+      adapterLogger.warn('desktopPlatform.diagnostics: failed to open the data directory', {
+        error,
+      });
       return false;
     }
   },
@@ -539,14 +554,14 @@ const deepLinks: DesktopDeepLinks = {
         void (async () => {
           try {
             await handler(urls.filter((url): url is string => Boolean(url)));
-          } catch {
-            adapterLogger.warn('desktopPlatform.deepLinks: handler failed');
+          } catch (error) {
+            adapterLogger.warn('desktopPlatform.deepLinks: handler failed', { error });
           }
         })();
       });
       return stop;
-    } catch {
-      adapterLogger.warn('desktopPlatform.deepLinks: failed to subscribe');
+    } catch (error) {
+      adapterLogger.warn('desktopPlatform.deepLinks: failed to subscribe', { error });
       return () => {};
     }
   },
