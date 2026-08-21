@@ -15,6 +15,7 @@
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { getVitestTestCaseCount, getVitestTestFileCount } from './test-metrics.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -22,67 +23,9 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 // (README prose uses "2 594", "5 475") so the regex matches both old and freshly-written forms.
 const NUM = '[\\d\\u00A0\\u202F\\u2009\\u2007 ,]+';
 
-// QNBS-v3: count only the files Vitest actually runs (see vitest.config.ts include/exclude),
-// so the file metric shares the same domain as numTotalTests — Playwright E2E under
-// tests/e2e/ is excluded (CodeAnt #139: unit-test count must not be paired with E2E specs).
-const TEST_FILE = /\.(test|spec)\.(ts|tsx)$/;
-const E2E_DIR = join(root, 'tests', 'e2e');
-
-/** Recursively count Vitest test files under `dir`, skipping node_modules/.git/dist and tests/e2e. */
-function countTestFiles(dir) {
-  if (!existsSync(dir)) return 0;
-  let count = 0;
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'dist') continue;
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      if (full === E2E_DIR) continue; // vitest.config.ts exclude: ['tests/e2e/**']
-      count += countTestFiles(full);
-    } else if (entry.isFile() && TEST_FILE.test(entry.name)) {
-      count += 1;
-    }
-  }
-  return count;
-}
-
-function getTestFileCount() {
-  // Mirror the three vitest.config.ts include roots; tests/e2e is excluded inside countTestFiles.
-  return (
-    countTestFiles(join(root, 'tests')) +
-    countTestFiles(join(root, 'components')) +
-    readdirSync(join(root, 'packages'), { withFileTypes: true })
-      .filter((e) => e.isDirectory())
-      .reduce((acc, pkg) => acc + countTestFiles(join(root, 'packages', pkg.name, 'tests')), 0)
-  );
-}
-
-/** Count executable it()/test() declarations in the same Vitest source set as the file metric. */
-function countTestCases(dir) {
-  if (!existsSync(dir)) return 0;
-  let count = 0;
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'dist') continue;
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      count += countTestCases(full);
-    } else if (entry.isFile() && TEST_FILE.test(entry.name)) {
-      const source = readFileSync(full, 'utf8');
-      count += source.match(/\b(?:it|test)\s*\(/g)?.length ?? 0;
-    }
-  }
-  return count;
-}
-
-function getSourceTestCaseCount() {
-  return (
-    countTestCases(join(root, 'tests')) -
-    countTestCases(join(root, 'tests', 'e2e')) +
-    countTestCases(join(root, 'components')) +
-    readdirSync(join(root, 'packages'), { withFileTypes: true })
-      .filter((e) => e.isDirectory())
-      .reduce((acc, pkg) => acc + countTestCases(join(root, 'packages', pkg.name, 'tests')), 0)
-  );
-}
+// QNBS-v3: source-derived metrics stay stable when CI JSON is unavailable on a low-end checkout.
+const getTestFileCount = () => getVitestTestFileCount(root);
+const getSourceTestCaseCount = () => getVitestTestCaseCount(root);
 
 // QNBS-v3: Set-based dedup across module files — a key defined in two files (e.g. a shared
 // key living in both settings.json and its canonical home module) must count once, matching
@@ -107,7 +50,7 @@ function getLocaleCount() {
     .length;
 }
 
-/** Prefer a current CI JSON result; locally derive the deterministic source count, never stale prose. */
+// QNBS-v3: prefer current CI JSON, then deterministic source counting, and only use prose as a last-resort empty-checkout fallback.
 function getTestCaseCount(readme) {
   const resultsPath = join(root, 'test-results.json');
   if (existsSync(resultsPath) && statSync(resultsPath).isFile()) {
@@ -130,6 +73,7 @@ const readmePath = join(root, 'README.md');
 let readme = readFileSync(readmePath, 'utf8');
 const original = readme;
 
+// QNBS-v3: compute all source metrics once so every badge and prose occurrence receives one consistent value.
 const fileCount = getTestFileCount();
 const keyCount = getKeyCount();
 const localeCount = getLocaleCount();

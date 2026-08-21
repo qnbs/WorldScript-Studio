@@ -33,10 +33,7 @@ for (const relativePath of surfaces) {
       if (actualSet.has(wildcard)) failures.push(`${relativePath}: forbidden ${wildcard} wildcard`);
     }
   }
-  if (
-    relativePath !== 'src-tauri/tauri.conf.json' &&
-    /(?:^|;)\s*upgrade-insecure-requests/.test(source)
-  ) {
+  if (/(?:^|;)\s*upgrade-insecure-requests/.test(source)) {
     failures.push(
       `${relativePath}: upgrade-insecure-requests conflicts with supported HTTP loopback origins`,
     );

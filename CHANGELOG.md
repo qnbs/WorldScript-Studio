@@ -71,6 +71,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Mutation-test plumbing:** the manual Stryker workflow now uses explicit per-module incremental
   files, preserves module report identity, validates aggregate metrics, fails closed on missing
   shards, and propagates aggregation failures through the summary pipeline.
+- **Quality-gate truth:** Vitest CI no longer retries the suite, the suppression ratchet was
+  reduced from 52 to 48 through real test-mock cleanup, and docs checks now validate README test
+  file/case metrics against the current Vitest source set.
 
 ### Security
 

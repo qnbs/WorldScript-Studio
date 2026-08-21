@@ -9,18 +9,17 @@ import {
   group1,
 } from '../utils/deploymentConfigParsers';
 
-// QNBS-v3: Regression guard for the ADR-0004 revision (2026-07-28) — the ADR previously claimed
-// "the host tightens CSP further via HTTP response headers in production", which was false: none
-// of vercel.json/_headers/nginx.conf set a Content-Security-Policy header. This block asserts the
-// header CSP now actually exists on all three, is identical across them, and is never looser than
-// the meta CSP (a divergence would make the meta tag misleading — see docs/DEPLOYMENT.md).
+// QNBS-v3: keep deployment headers present, aligned, and no looser than the meta CSP after the ADR-0004 correction.
 
-// QNBS-v3: all web and native surfaces use the same explicit origin allowlist; no arbitrary HTTPS
-// egress or scheme wildcard may be introduced as a shortcut for an unlisted BYOK endpoint.
+// QNBS-v3: all web and native surfaces share explicit origins so unlisted BYOK endpoints cannot widen egress.
 
 const webHtml = readFileSync(fileURLToPath(new URL('../../index.html', import.meta.url)), 'utf8');
 const tauriConf = readFileSync(
   fileURLToPath(new URL('../../src-tauri/tauri.conf.json', import.meta.url)),
+  'utf8',
+);
+const cspCheckerSource = readFileSync(
+  fileURLToPath(new URL('../../scripts/check-csp-policy.mjs', import.meta.url)),
   'utf8',
 );
 
@@ -49,6 +48,12 @@ function tauriCsp(): string {
 }
 
 describe('CSP connect-src — shared explicit egress policy', () => {
+  // QNBS-v3: keep the Tauri loopback policy fail-closed instead of trusting a surface-specific exception.
+  it('checks upgrade-insecure-requests on the Tauri surface too', () => {
+    expect(tauriCsp()).not.toContain('upgrade-insecure-requests');
+    expect(cspCheckerSource).not.toContain("relativePath !== 'src-tauri/tauri.conf.json'");
+  });
+
   describe('web PWA (index.html)', () => {
     const tokens = connectSrcTokens(webCsp());
 

@@ -129,12 +129,14 @@ describe('README release truth', () => {
 });
 
 describe('README test metrics truth', () => {
+  // QNBS-v3: ensure every README test-count presentation stays synchronized with the shared Vitest source set.
   it('accepts the current deterministic Vitest source metrics', () => {
     expect(
       scanReadmeTestMetrics(readFileSync(new URL('../../README.md', import.meta.url), 'utf8')),
     ).toEqual([]);
   });
 
+  // QNBS-v3: stale badges must fail docs:check instead of preserving an old count during local sync.
   it('rejects stale test counts instead of silently preserving them', () => {
     expect(scanReadmeTestMetrics('![Tests-1%2B_%2F_1_files](badge.svg)')).not.toEqual([]);
   });

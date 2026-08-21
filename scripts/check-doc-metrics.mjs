@@ -13,12 +13,11 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getModules, REF_LANG } from './i18n-locales.mjs';
+import { getVitestTestCaseCount, getVitestTestFileCount } from './test-metrics.mjs';
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 
-// QNBS-v3: every file the header comment names as a past drift site must actually be scanned —
-// CodeRabbit caught .github/copilot-instructions.md missing here, which would let that exact
-// regression recur silently past this gate.
+// QNBS-v3: scan every documented drift site so stale locale, release, and metric claims cannot bypass this gate.
 const TARGET_FILES = [
   'README.md',
   'ROADMAP.md',
@@ -28,9 +27,6 @@ const TARGET_FILES = [
   '.github/CONTRIBUTING.md',
   '.github/copilot-instructions.md',
 ];
-
-const TEST_FILE_PATTERN = /\.(?:test|spec)\.(?:ts|tsx)$/;
-const TEST_ROOTS = ['tests', 'components'];
 
 // QNBS-v3: this repo marks "done" several different ways — Keep-a-Changelog `## [x.y.z]`,
 // `## vX.Y.Z … RELEASED …`, a heading suffixed with ✅ (`### Phase 3A … ✅`), a `**Status:** ✅
@@ -97,43 +93,11 @@ export function getActualKeyCount() {
   return keys.size;
 }
 
-function countTestSources(directory) {
-  if (!existsSync(directory)) return [];
-  const sources = [];
-  for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'dist') continue;
-    const path = join(directory, entry.name);
-    if (entry.isDirectory()) {
-      if (path === join(root, 'tests', 'e2e')) continue;
-      sources.push(...countTestSources(path));
-    } else if (entry.isFile() && TEST_FILE_PATTERN.test(entry.name)) {
-      sources.push(path);
-    }
-  }
-  return sources;
-}
+// QNBS-v3: validate the same shared Vitest source contract used by README synchronization.
+export const getActualTestFileCount = () => getVitestTestFileCount(root);
+export const getActualTestCaseCount = () => getVitestTestCaseCount(root);
 
-function getTestSources() {
-  const sources = TEST_ROOTS.flatMap((directory) => countTestSources(join(root, directory)));
-  const packagesRoot = join(root, 'packages');
-  for (const entry of readdirSync(packagesRoot, { withFileTypes: true })) {
-    if (entry.isDirectory())
-      sources.push(...countTestSources(join(packagesRoot, entry.name, 'tests')));
-  }
-  return sources;
-}
-
-export function getActualTestFileCount() {
-  return getTestSources().length;
-}
-
-export function getActualTestCaseCount() {
-  return getTestSources().reduce((count, path) => {
-    const source = readFileSync(path, 'utf8');
-    return count + (source.match(/\b(?:it|test)\s*\(/g)?.length ?? 0);
-  }, 0);
-}
-
+// QNBS-v3: compare every supported README test-metric form against executable source counts so prose drift fails deterministically.
 export function scanReadmeTestMetrics(readme) {
   const expectedFiles = getActualTestFileCount();
   const expectedTests = getActualTestCaseCount();

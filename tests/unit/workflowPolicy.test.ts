@@ -18,6 +18,7 @@ const tauriManifestSource = readFileSync(tauriManifestPath, 'utf8');
 
 // QNBS-v3: Keep CI path and deployment authority policy executable against the real workflow files.
 describe('CI workflow policy', () => {
+  // QNBS-v3: preserve first-attempt Vitest failures as visible CI evidence instead of masking flakes with retries.
   it('runs Vitest once so first-attempt failures cannot be hidden by retry', () => {
     const vitestRun = workflowSource.match(/run:\s*pnpm exec vitest run[^\n]*/)?.[0];
     expect(vitestRun).toBeDefined();

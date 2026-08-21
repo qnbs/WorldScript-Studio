@@ -1,9 +1,11 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockSetOpen, mockHasSentinel } = vi.hoisted(() => ({
+const { mockSetOpen, mockHasSentinel, mockReadJournal, mockWarn } = vi.hoisted(() => ({
   mockSetOpen: vi.fn(),
   mockHasSentinel: vi.fn(),
+  mockReadJournal: vi.fn(),
+  mockWarn: vi.fn(),
 }));
 
 vi.mock('../../../app/transientUiStore', () => ({
@@ -13,6 +15,14 @@ vi.mock('../../../app/transientUiStore', () => ({
 
 vi.mock('../../../services/storage/storageEncryptionService', () => ({
   hasPassphraseSentinel: mockHasSentinel,
+}));
+
+vi.mock('../../../services/storage/encryptionMigrationJournal', () => ({
+  readEncryptionMigrationJournal: mockReadJournal,
+}));
+
+vi.mock('../../../services/logger', () => ({
+  createLogger: () => ({ warn: mockWarn }),
 }));
 
 vi.mock('../../../features/featureFlags/featureFlagsSlice', () => ({
@@ -34,6 +44,7 @@ const options = {
 describe('useIdbUnlockStartupGuard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockReadJournal.mockResolvedValue(null);
     mockHasSentinel.mockResolvedValue(true);
   });
 
@@ -56,5 +67,29 @@ describe('useIdbUnlockStartupGuard', () => {
       expect(dispatch).toHaveBeenCalledWith({ type: 'flags/set', payload: false }),
     );
     expect(mockSetOpen).not.toHaveBeenCalled();
+  });
+
+  // QNBS-v3: a recovery journal resolving during the sentinel lookup must prevent a destructive flag change.
+  it('keeps encryption enabled when recovery starts during the sentinel lookup', async () => {
+    mockReadJournal.mockResolvedValueOnce(null).mockResolvedValueOnce({ phase: 'migrating' });
+    mockHasSentinel.mockResolvedValue(false);
+    const dispatch = vi.fn();
+    renderHook(() => useIdbUnlockStartupGuard({ ...options, dispatch }));
+    await waitFor(() => expect(mockReadJournal).toHaveBeenCalledTimes(2));
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(mockSetOpen).not.toHaveBeenCalled();
+  });
+
+  // QNBS-v3: sentinel storage failures stay fail-closed and become sanitized diagnostics, not unhandled rejections.
+  it('does not mutate flags or open the prompt when sentinel lookup fails', async () => {
+    mockHasSentinel.mockRejectedValue(new Error('sentinel lookup failed'));
+    const dispatch = vi.fn();
+    renderHook(() => useIdbUnlockStartupGuard({ ...options, dispatch }));
+    await waitFor(() => expect(mockWarn).toHaveBeenCalled());
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(mockSetOpen).not.toHaveBeenCalled();
+    expect(mockWarn).toHaveBeenCalledWith('IDB encryption sentinel check failed during startup', {
+      errorType: 'Error',
+    });
   });
 });
