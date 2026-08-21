@@ -19,8 +19,7 @@ import { getVitestTestCaseCount, getVitestTestFileCount } from './test-metrics.m
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-// QNBS-v3: generic digit token — tolerates thin-space / nbsp / narrow-nbsp / comma separators
-// (README prose uses "2 594", "5 475") so the regex matches both old and freshly-written forms.
+// QNBS-v3: tolerate the separators used by README prose when synchronizing numeric metrics.
 const NUM = '[\\d\\u00A0\\u202F\\u2009\\u2007 ,]+';
 
 // QNBS-v3: source-derived metrics stay stable when CI JSON is unavailable on a low-end checkout.

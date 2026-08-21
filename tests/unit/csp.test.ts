@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { CSP_CONNECT_SRC } from '../../scripts/csp-policy.mjs';
+import { CSP_CONNECT_SRC, validateCspConnectSrcPolicy } from '../../scripts/csp-policy.mjs';
 import {
   extractHeadersFileValue,
   extractNginxHeaderValue,
@@ -51,6 +51,13 @@ function tauriCsp(): string {
 }
 
 describe('CSP connect-src — shared explicit egress policy', () => {
+  // QNBS-v3: scheme-only sources must never enter the shared policy and fan out to production surfaces.
+  it('rejects wildcard and scheme-only policy entries', () => {
+    for (const source of ['*', 'https:', 'http:', 'ws:', 'wss:']) {
+      expect(() => validateCspConnectSrcPolicy([source])).toThrow('explicit source strings');
+    }
+  });
+
   it('keeps every deployed CSP surface exactly equal to the shared policy source', () => {
     const surfaces = [
       webCsp(),

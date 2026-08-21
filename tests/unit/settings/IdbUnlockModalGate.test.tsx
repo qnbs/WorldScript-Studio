@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { mockIsDesktop, mockSetOpen } = vi.hoisted(() => ({
@@ -62,10 +63,11 @@ describe('IdbUnlockModalGate', () => {
   });
 
   it('closes the transient state after a successful unlock', async () => {
+    const user = userEvent.setup();
     const modal = render(
       <IdbUnlockModalGate isOpen encryptionEnabled hasRecoveryJournal={false} />,
     );
-    modal.getByTestId('idb-unlock-modal').click();
+    await user.click(modal.getByTestId('idb-unlock-modal'));
     expect(mockSetOpen).toHaveBeenCalledWith(false);
   });
 });

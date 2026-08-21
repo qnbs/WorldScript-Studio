@@ -26,6 +26,7 @@ export function assertCspConnectEndpointAllowed(endpoint: string, label: string)
     throw new CspConnectPolicyError(label, 'invalid');
   }
 
+  // QNBS-v3: runtime checks must match emitted CSP so configured endpoints cannot widen egress.
   if (url.username !== '' || url.password !== '' || !allowedOrigins.has(url.origin)) {
     throw new CspConnectPolicyError(label, 'unsupported');
   }

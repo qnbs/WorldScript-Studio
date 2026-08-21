@@ -141,11 +141,10 @@ async function resolveModelConfig(
       ...(extraHeaders !== undefined ? { headers: extraHeaders } : {}),
     };
   }
-  assertCspConnectEndpointAllowed(
-    ollamaBaseUrl?.trim() || 'http://localhost:11434',
-    'Ollama endpoint',
-  );
-  const baseURL = normalizeOpenAiCompatibleBaseUrl(ollamaBaseUrl ?? 'http://localhost:11434');
+  // QNBS-v3: validate and configure one normalized Ollama endpoint so blank settings cannot bypass the policy.
+  const resolvedOllamaBaseUrl = ollamaBaseUrl?.trim() || 'http://localhost:11434';
+  assertCspConnectEndpointAllowed(resolvedOllamaBaseUrl, 'Ollama endpoint');
+  const baseURL = normalizeOpenAiCompatibleBaseUrl(resolvedOllamaBaseUrl);
   const modelId = normalizeOllamaModelId(model as AiModel);
   return {
     provider: 'openaiCompatible',

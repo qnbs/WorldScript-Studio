@@ -25,6 +25,7 @@ describe('CI workflow policy', () => {
     expect(vitestRun).not.toContain('--retry');
   });
 
+  // QNBS-v3: keep the shared CSP generator drift check in the authoritative cloud quality gate.
   it('runs the CSP generator drift check in the cloud quality gate', () => {
     expect(workflowSource).toContain('run: pnpm run csp:verify');
   });

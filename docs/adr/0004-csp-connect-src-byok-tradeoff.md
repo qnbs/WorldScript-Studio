@@ -10,9 +10,9 @@
 > cross-surface allowlist in [`config/csp-connect-src.json`](../../config/csp-connect-src.json).
 > Web and Tauri share the same enumerated origins. Runtime endpoint preflight rejects an unlisted
 > custom origin with an actionable error; arbitrary custom HTTPS endpoints are not a supported
-> browser transport until a controlled proxy/native transport exists. `pnpm run csp:verify`
-> regenerates and checks every meta/header/Tauri surface in CI and rejects `https:`, `http:`, and
-> `ws:` wildcards.
+> browser transport until a controlled proxy/native transport exists. Locally, `pnpm run csp:sync`
+> regenerates the surfaces and `pnpm run csp:check` validates them; CI uses `pnpm run csp:verify`
+> to regenerate, fail on generated drift, and reject `https:`, `http:`, `ws:`, and `wss:` wildcards.
 > `upgrade-insecure-requests` is intentionally absent: loopback HTTP is potentially trustworthy,
 > but the global directive would still make the explicit HTTP-loopback exception policy dependent on
 > scheme-upgrade behavior instead of keeping that exception visible and mechanically checked.

@@ -118,8 +118,8 @@ export async function localServerFetch(
   url: string,
   init: LocalServerFetchInit = {},
 ): Promise<Response> {
-  // QNBS-v3: browser-local inference must fail clearly before CSP turns the request into a generic network error.
-  if (!isTauriRuntime()) assertCspConnectEndpointAllowed(url, 'Local server endpoint');
+  // QNBS-v3: native transport must share browser endpoint policy so the CSP boundary is not bypassed.
+  assertCspConnectEndpointAllowed(url, 'Local server endpoint');
   const fetchImpl = await resolveFetch();
   const requestInit: RequestInit = {
     ...(init.method !== undefined ? { method: init.method } : {}),

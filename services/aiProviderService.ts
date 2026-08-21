@@ -196,6 +196,7 @@ async function streamOpenAI(
     : [{ role: 'user', content: sanitizePromptValue(prompt) }];
 
   const apiRoot = resolveOpenAiCompatibleRoot(opts.openAiCompatibleBaseUrl);
+  // QNBS-v3: custom OpenAI-compatible roots must be admitted before any request leaves the renderer.
   assertCspConnectEndpointAllowed(apiRoot, 'OpenAI-compatible endpoint');
   const refererHeaders = buildOpenRouterStyleHeaders(opts.openAiSiteUrl, opts.openAiSiteTitle);
   const res = await fetch(`${apiRoot}/chat/completions`, {
@@ -275,6 +276,7 @@ async function streamOpenAiCompatibleLocal(
     opts.ollamaBaseUrl?.trim() || 'http://localhost:1234',
   );
   if (!isTauriRuntime()) {
+    // QNBS-v3: browser local endpoints are rejected before transport can become an opaque CORS error.
     assertCspConnectEndpointAllowed(endpoint, 'Local OpenAI-compatible endpoint');
   }
   const messages = opts.systemPrompt
@@ -1085,6 +1087,7 @@ export async function testAIConnection(
           };
         }
         const root = resolveOpenAiCompatibleRoot(opts.openAiCompatibleBaseUrl);
+        // QNBS-v3: connection tests reuse the same endpoint policy as production requests.
         assertCspConnectEndpointAllowed(root, 'OpenAI-compatible endpoint');
         const res = await fetch(`${root}/models`, {
           headers: { Authorization: `Bearer ${apiKey}` },

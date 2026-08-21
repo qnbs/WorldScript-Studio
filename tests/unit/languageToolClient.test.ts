@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { normalizeAccessibilitySettings } from '../../features/settings/accessibilitySchema';
-import { assertLanguageToolAllowed } from '../../services/languageToolClient';
+import { assertLanguageToolAllowed, languageToolPing } from '../../services/languageToolClient';
 import type { Settings } from '../../types';
 
 const baseSettings = (): Settings => ({
@@ -100,6 +100,16 @@ const baseSettings = (): Settings => ({
 });
 
 describe('languageToolClient', () => {
+  it('blocks a ping before sending sample text to an unlisted origin', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(languageToolPing('https://unlisted.example.test')).rejects.toThrow(
+      /blocked.*CSP network policy/i,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
   it('allows localhost when local-only privacy is on', () => {
     expect(() =>
       assertLanguageToolAllowed(baseSettings(), 'http://localhost:8010/v2/check'),

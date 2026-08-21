@@ -29,7 +29,7 @@ for (const relativePath of surfaces) {
     if (actualSet.size !== expected.size || actual.some((token) => !expected.has(token))) {
       failures.push(`${relativePath}: connect-src differs from config/csp-connect-src.json`);
     }
-    for (const wildcard of ['https:', 'http:', 'ws:']) {
+    for (const wildcard of ['https:', 'http:', 'ws:', 'wss:']) {
       if (actualSet.has(wildcard)) failures.push(`${relativePath}: forbidden ${wildcard} wildcard`);
     }
   }

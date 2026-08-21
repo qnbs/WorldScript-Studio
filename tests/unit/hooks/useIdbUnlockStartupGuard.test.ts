@@ -106,9 +106,11 @@ describe('useIdbUnlockStartupGuard', () => {
     expect(mockSetOpen).not.toHaveBeenCalled();
   });
 
+  // QNBS-v3: an indeterminate journal recheck must not disable encryption or reopen the prompt.
   it('fails closed when the journal changes check fails after the sentinel lookup', async () => {
     mockReadJournal.mockResolvedValueOnce(null).mockRejectedValueOnce(new Error('journal changed'));
-    renderHook(() => useIdbUnlockStartupGuard(options));
+    const dispatch = vi.fn();
+    renderHook(() => useIdbUnlockStartupGuard({ ...options, dispatch }));
     await waitFor(() =>
       expect(mockWarn).toHaveBeenCalledWith(
         'IDB encryption journal recheck failed during startup',
@@ -117,6 +119,30 @@ describe('useIdbUnlockStartupGuard', () => {
         },
       ),
     );
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(mockSetOpen).not.toHaveBeenCalled();
+  });
+
+  // QNBS-v3: superseded startup reads must not mutate encryption state after a dependency change.
+  it('ignores a pending journal read after the guard is superseded', async () => {
+    let resolveJournal!: (journal: null) => void;
+    const pendingJournal = new Promise<null>((resolve) => {
+      resolveJournal = resolve;
+    });
+    mockReadJournal.mockReturnValueOnce(pendingJournal);
+    const dispatch = vi.fn();
+    const { rerender } = renderHook(
+      ({ encryptionReady }: { encryptionReady: boolean }) =>
+        useIdbUnlockStartupGuard({ ...options, encryptionReady, dispatch }),
+      { initialProps: { encryptionReady: false } },
+    );
+
+    rerender({ encryptionReady: true });
+    await act(async () => {
+      resolveJournal(null);
+      await pendingJournal;
+    });
+    expect(dispatch).not.toHaveBeenCalled();
     expect(mockSetOpen).not.toHaveBeenCalled();
   });
 });

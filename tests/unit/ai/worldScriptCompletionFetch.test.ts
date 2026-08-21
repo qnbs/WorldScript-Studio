@@ -306,6 +306,9 @@ describe('worldScriptCompletionFetch — success (openai)', () => {
     await expect(res.json()).resolves.toEqual(
       expect.objectContaining({ code: 'CSP_CONNECT_ORIGIN_BLOCKED' }),
     );
+    // QNBS-v3: blocked endpoint validation must prevent model construction and outbound execution.
+    expect(mockCreateLanguageModelForWorldScript).not.toHaveBeenCalled();
+    expect(mockStreamText).not.toHaveBeenCalled();
   });
 });
 

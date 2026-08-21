@@ -42,6 +42,7 @@ export function useIdbUnlockStartupGuard({
       })
     )
       return;
+    let active = true;
     void (async () => {
       let journalBeforeSentinel: Awaited<ReturnType<typeof readEncryptionMigrationJournal>>;
       try {
@@ -52,6 +53,7 @@ export function useIdbUnlockStartupGuard({
         });
         return;
       }
+      if (!active) return;
       if (journalBeforeSentinel || recoveryJournalRef.current) return;
 
       let hasSentinel: boolean;
@@ -63,6 +65,7 @@ export function useIdbUnlockStartupGuard({
         });
         return;
       }
+      if (!active) return;
 
       let journalAfterSentinel: Awaited<ReturnType<typeof readEncryptionMigrationJournal>>;
       try {
@@ -73,13 +76,19 @@ export function useIdbUnlockStartupGuard({
         });
         return;
       }
+      if (!active) return;
       if (journalAfterSentinel || recoveryJournalRef.current) return;
       if (!hasSentinel) {
+        if (!active) return;
         dispatch(featureFlagsActions.setEnableIdbAtRestEncryption(false));
         return;
       }
+      if (!active) return;
       setIdbUnlockOpen(true);
     })();
+    return () => {
+      active = false;
+    };
   }, [
     dispatch,
     encryptionEnabled,
