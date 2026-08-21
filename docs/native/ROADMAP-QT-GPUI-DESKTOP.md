@@ -968,8 +968,10 @@ Required:
     storage (fs/IDB parity) and crypto remain, see docs/native/CORE-MIGRATION-LEDGER.md
 [x] Array↔EntityState compatibility adapter scoped and proven at the Core boundary (ledger row 9; production caller and authority switch remain deferred)
 [ ] R-15 architecture approved
-[ ] task supervision renderer-neutral
-[ ] diagnostics renderer-neutral
+[~] task supervision renderer-neutral — bounded `text.analyze`/`text.diff` proof is CI-proven;
+    full worker-bus extraction and authority switch remain open
+[~] diagnostics renderer-neutral — Core model/redaction and TS/Rust parity are CI-proven;
+    sink migration and authority switch remain open
 [ ] contract versioning policy established
 [x] native-readiness CI gate active — enforced by `pnpm run native-readiness:check`
 ```
