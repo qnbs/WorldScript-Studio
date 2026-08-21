@@ -12,7 +12,9 @@ import {
   getTaggedVersions,
   scanForDrift,
   scanForUrlDrift,
+  scanReadmeReleaseTruth,
   scanReleaseTruth,
+  scanUnreleasedTruth,
   stripHistoricalSections,
   VERCEL_URL_PATTERN,
 } from '../../scripts/check-doc-metrics.mjs';
@@ -35,9 +37,58 @@ describe('scanReleaseTruth', () => {
     );
   });
 
+  it('accepts a package version equal to the latest release tag', () => {
+    expect(scanReleaseTruth('## [1.27.1] — 2026-08-14\n', '1.27.1', new Set(['1.27.1']))).toEqual(
+      [],
+    );
+  });
+
+  it('rejects a package version older than the latest release tag', () => {
+    expect(scanReleaseTruth('## [Unreleased]\n', '1.27.0', new Set(['1.27.1']))).toEqual([
+      expect.stringContaining('older than the latest git tag v1.27.1'),
+    ]);
+  });
+
+  it('accepts valid historical headings below the current release frontier', () => {
+    expect(scanReleaseTruth('## [1.20.0] — 2026-06-07\n', '1.27.1', new Set(['1.27.1']))).toEqual(
+      [],
+    );
+  });
+
   it('skips dated-release tag checks in a tagless checkout', () => {
     expect(
       scanReleaseTruth('## [1.20.0] — 2025-01-01\n## [1.28.0] — 2026-08-21\n', '1.28.0', new Set()),
+    ).toEqual([]);
+  });
+});
+
+describe('README release truth', () => {
+  it('rejects a released-version badge without a matching tag', () => {
+    expect(scanReadmeReleaseTruth('![Release v1.28.0](badge.svg)', new Set(['1.27.1']))).toEqual([
+      expect.stringContaining('release badge advertises v1.28.0'),
+    ]);
+  });
+
+  it('allows an explicitly unreleased development badge', () => {
+    expect(
+      scanReadmeReleaseTruth(
+        '<img alt="Next v1.28.0 (unreleased)" src="Next-v1.28.0-blue">',
+        new Set(['1.27.1']),
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe('Unreleased truth', () => {
+  it('rejects post-release commits when Unreleased has no meaningful content', () => {
+    expect(scanUnreleasedTruth('## [Unreleased]\n\n### Added\n', ['feat: new feature'])).toEqual([
+      expect.stringContaining('[Unreleased] is empty'),
+    ]);
+  });
+
+  it('accepts populated Unreleased content after the latest release', () => {
+    expect(
+      scanUnreleasedTruth('## [Unreleased]\n\n### Added\n\n- New feature\n', ['feat: new feature']),
     ).toEqual([]);
   });
 });
