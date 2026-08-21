@@ -2351,6 +2351,7 @@
   "settings.privacy.encryptionSetAction": "암호 설정",
   "settings.privacy.encryptionSetButton": "활성화 및 암호화",
   "settings.privacy.encryptionSetup": "이 장치에 저장된 모든 원고, 스냅샷 및 설정을 암호화하려면 암호를 설정하세요.",
+  "settings.privacy.encryptionDesktopScope": "데스크톱: 이 보호 기능은 IndexedDB에만 적용됩니다. R-15 데스크톱 암호화가 제공될 때까지 디스크의 프로젝트 파일은 평문으로 남습니다.",
   "settings.privacy.encryptionSetupFailed": "암호화 설정을 저장할 수 없습니다 — 이 브라우저가 로컬 저장소를 허용하는지 확인한 후 다시 시도하세요",
   "settings.privacy.encryptionTooManyAttempts": "실패한 시도가 너무 많습니다. {{seconds}}초만 기다려주세요.",
   "settings.privacy.encryptionTooShort": "암호는 8자 이상이어야 합니다.",

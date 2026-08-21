@@ -2351,6 +2351,7 @@
   "settings.privacy.encryptionSetAction": "عبارت عبور را تنظیم کنید",
   "settings.privacy.encryptionSetButton": "فعال و رمزگذاری",
   "settings.privacy.encryptionSetup": "یک عبارت عبور برای رمزگذاری همه دست نوشته ها، عکس های فوری و تنظیمات ذخیره شده در این دستگاه تنظیم کنید.",
+  "settings.privacy.encryptionDesktopScope": "دسکتاپ: این قابلیت فقط از IndexedDB محافظت می‌کند. فایل‌های پروژه روی دیسک تا زمان ارائه رمزگذاری دسکتاپ R-15 به‌صورت متن ساده باقی می‌مانند.",
   "settings.privacy.encryptionSetupFailed": "راه‌اندازی رمزگذاری ذخیره نشد — بررسی کنید که این مرورگر اجازه ذخیره‌سازی محلی را می‌دهد، سپس دوباره امتحان کنید",
   "settings.privacy.encryptionTooManyAttempts": "تلاش های ناموفق بسیار زیاد. لطفا {{seconds}} ثانیه صبر کنید.",
   "settings.privacy.encryptionTooShort": "عبارت عبور باید حداقل 8 کاراکتر باشد",

@@ -77,6 +77,7 @@ import {
   type EncryptionMigrationJournal,
   readEncryptionMigrationJournal,
 } from './services/storage/encryptionMigrationJournal';
+import { shouldShowIdbUnlockModal } from './services/storage/idbEncryptionUi';
 import {
   hasPassphraseSentinel,
   isIdbEncryptionReady,
@@ -382,9 +383,16 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     })();
   }, []);
 
-  // QNBS-v3: B-1 sentinel guard (async) — skips if flag off/unlocked/recovery-pending, auto-disables on a missing sentinel, else shows the unlock modal.
+  // QNBS-v3: desktop project files remain plaintext until R-15; never present the IDB unlock as a project-file protection gate.
   useEffect(() => {
-    if (!featureFlags.enableIdbAtRestEncryption || isIdbEncryptionReady() || recoveryJournal)
+    if (
+      !shouldShowIdbUnlockModal({
+        isDesktop: desktopPlatform.runtime.isDesktop,
+        encryptionEnabled: featureFlags.enableIdbAtRestEncryption,
+        encryptionReady: isIdbEncryptionReady(),
+        hasRecoveryJournal: Boolean(recoveryJournal),
+      })
+    )
       return;
     void (async () => {
       const hasSentinel = await hasPassphraseSentinel();
@@ -907,11 +915,17 @@ const App: FC<AppProps> = ({ isNewUser }) => {
                   />
                 </ErrorBoundary>
               )}
-              {isIdbUnlockOpen && !recoveryJournal && (
-                <ErrorBoundary onReset={() => setIdbUnlockOpen(false)}>
-                  <IdbUnlockModal onUnlocked={() => setIdbUnlockOpen(false)} />
-                </ErrorBoundary>
-              )}
+              {isIdbUnlockOpen &&
+                shouldShowIdbUnlockModal({
+                  isDesktop: desktopPlatform.runtime.isDesktop,
+                  encryptionEnabled: featureFlags.enableIdbAtRestEncryption,
+                  encryptionReady: isIdbEncryptionReady(),
+                  hasRecoveryJournal: Boolean(recoveryJournal),
+                }) && (
+                  <ErrorBoundary onReset={() => setIdbUnlockOpen(false)}>
+                    <IdbUnlockModal onUnlocked={() => setIdbUnlockOpen(false)} />
+                  </ErrorBoundary>
+                )}
             </div>
           </AppContext.Provider>
         </ToastProvider>

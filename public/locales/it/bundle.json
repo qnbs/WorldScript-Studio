@@ -2351,6 +2351,7 @@
   "settings.privacy.encryptionSetAction": "Imposta passphrase",
   "settings.privacy.encryptionSetButton": "Attiva e cifra",
   "settings.privacy.encryptionSetup": "Imposta una passphrase per cifrare tutti i manoscritti, le istantanee e le impostazioni memorizzati su questo dispositivo.",
+  "settings.privacy.encryptionDesktopScope": "Desktop: questa protezione copre solo IndexedDB. I file del progetto sul disco restano in chiaro finché non sarà disponibile la cifratura desktop R-15.",
   "settings.privacy.encryptionSetupFailed": "Impossibile salvare la configurazione della crittografia — verifica che questo browser consenta l’archiviazione locale, quindi riprova",
   "settings.privacy.encryptionTooManyAttempts": "Troppi tentativi falliti. Attendi {{seconds}} secondi.",
   "settings.privacy.encryptionTooShort": "La passphrase deve essere di almeno 8 caratteri",

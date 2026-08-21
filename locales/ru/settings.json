@@ -703,6 +703,7 @@
   "settings.privacy.encryptionSetAction": "Установить парольную фразу",
   "settings.privacy.encryptionSetButton": "Включить и зашифровать",
   "settings.privacy.encryptionSetup": "Установите парольную фразу для шифрования всех рукописей, снимков и настроек, хранящихся на этом устройстве.",
+  "settings.privacy.encryptionDesktopScope": "Рабочий стол: защита действует только для IndexedDB. Файлы проектов на диске остаются открытым текстом до выхода шифрования рабочего стола R-15.",
   "settings.privacy.encryptionSetupFailed": "Не удалось сохранить настройку шифрования — убедитесь, что этот браузер разрешает локальное хранилище, и повторите попытку",
   "settings.privacy.encryptionTooManyAttempts": "Слишком много неудачных попыток. Пожалуйста, подождите {{seconds}} секунд.",
   "settings.privacy.encryptionTooShort": "Парольная фраза должна содержать не менее 8 символов.",

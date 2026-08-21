@@ -703,6 +703,7 @@
   "settings.privacy.encryptionSetAction": "הגדרת ביטוי סיסמה",
   "settings.privacy.encryptionSetButton": "הפעלה והצפנה",
   "settings.privacy.encryptionSetup": "הגדירו ביטוי סיסמה כדי להצפין את כל כתבי היד, תמונות המצב וההגדרות המאוחסנים במכשיר זה.",
+  "settings.privacy.encryptionDesktopScope": "שולחן עבודה: ההגנה הזו חלה רק על IndexedDB. קובצי הפרויקט בדיסק נשארים בטקסט גלוי עד להצפנת שולחן העבודה של R-15.",
   "settings.privacy.encryptionSetupFailed": "לא ניתן היה לשמור את הגדרת ההצפנה — ודאו שדפדפן זה מאפשר אחסון מקומי ונסו שוב",
   "settings.privacy.encryptionTooManyAttempts": "יותר מדי ניסיונות כושלים. אנא המתינו {{seconds}} שניות.",
   "settings.privacy.encryptionTooShort": "ביטוי הסיסמה חייב להכיל לפחות 8 תווים",

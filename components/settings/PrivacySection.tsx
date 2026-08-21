@@ -1,5 +1,6 @@
 import type { FC } from 'react';
 import { useSettingsViewContext } from '../../contexts/SettingsViewContext';
+import { desktopPlatform } from '../../services/desktopPlatform';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { PassphraseModal } from './PassphraseModal';
@@ -91,6 +92,11 @@ export const PrivacySection: FC = () => {
           <p className="text-sm text-[var(--sc-text-secondary)]">
             {t('settings.privacy.encryptionSetup')}
           </p>
+          {desktopPlatform.runtime.isDesktop && (
+            <p className="text-sm text-[var(--sc-warning-fg)]" role="note">
+              {t('settings.privacy.encryptionDesktopScope')}
+            </p>
+          )}
 
           <p className={`text-sm font-medium ${statusColor}`}>{statusText}</p>
 

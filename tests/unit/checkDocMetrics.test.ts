@@ -43,6 +43,16 @@ describe('scanReleaseTruth', () => {
     );
   });
 
+  it('allows an explicitly marked release candidate before the merge-time tag is created', () => {
+    expect(
+      scanReleaseTruth(
+        '## [Unreleased]\n\n<!-- release-candidate: v1.28.0 -->\n## [1.28.0] — 2026-08-21\n',
+        '1.28.0',
+        new Set(['1.27.1']),
+      ),
+    ).toEqual([]);
+  });
+
   it('accepts a package version equal to the latest release tag', () => {
     expect(scanReleaseTruth('## [1.27.1] — 2026-08-14\n', '1.27.1', new Set(['1.27.1']))).toEqual(
       [],
@@ -88,6 +98,16 @@ describe('README release truth', () => {
     ).toEqual([]);
   });
 
+  it('allows a release badge with the matching release-candidate marker before tagging', async () => {
+    const { scanReadmeReleaseTruth } = await loadReleaseTruthModule();
+    expect(
+      scanReadmeReleaseTruth(
+        '<!-- release-candidate: v1.28.0 -->\n![Release v1.28.0](release.svg)',
+        new Set(['1.27.1']),
+      ),
+    ).toEqual([]);
+  });
+
   // QNBS-v3: inspect every badge in one row so a valid Next badge cannot mask an invalid Release badge.
   it('checks a later released badge after a development badge', async () => {
     const { scanReadmeReleaseTruth } = await loadReleaseTruthModule();
@@ -114,6 +134,16 @@ describe('Unreleased truth', () => {
     const { scanUnreleasedTruth } = await loadReleaseTruthModule();
     expect(
       scanUnreleasedTruth('## [Unreleased]\n\n### Added\n\n- New feature\n', ['feat: new feature']),
+    ).toEqual([]);
+  });
+
+  it('accepts an empty Unreleased section while an explicitly marked release candidate is pending its tag', async () => {
+    const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+    expect(
+      scanUnreleasedTruth(
+        '## [Unreleased]\n\n<!-- release-candidate: v1.28.0 -->\n\n## [1.28.0] — 2026-08-21\n',
+        ['fix: release candidate'],
+      ),
     ).toEqual([]);
   });
 

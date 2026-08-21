@@ -703,6 +703,7 @@
   "settings.privacy.encryptionSetAction": "パスフレーズを設定する",
   "settings.privacy.encryptionSetButton": "有効化と暗号化",
   "settings.privacy.encryptionSetup": "このデバイスに保存されているすべての原稿、スナップショット、設定を暗号化するためのパスフレーズを設定します。",
+  "settings.privacy.encryptionDesktopScope": "デスクトップ: 保護されるのは IndexedDB のみです。R-15 のデスクトップ暗号化が実装されるまで、ディスク上のプロジェクト ファイルは平文のままです。",
   "settings.privacy.encryptionSetupFailed": "暗号化の設定を保存できませんでした — このブラウザでローカルストレージが許可されているか確認してから、もう一度お試しください",
   "settings.privacy.encryptionTooManyAttempts": "失敗した試行が多すぎます。 {{seconds}}秒待ってください。",
   "settings.privacy.encryptionTooShort": "パスフレーズは 8 文字以上である必要があります",

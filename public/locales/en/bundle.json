@@ -2351,6 +2351,7 @@
   "settings.privacy.encryptionSetAction": "Set Passphrase",
   "settings.privacy.encryptionSetButton": "Enable & Encrypt",
   "settings.privacy.encryptionSetup": "Set a passphrase to encrypt all manuscripts, snapshots and settings stored on this device.",
+  "settings.privacy.encryptionDesktopScope": "Desktop: this protects IndexedDB only. Project files on disk remain plaintext until R-15 desktop encryption ships.",
   "settings.privacy.encryptionSetupFailed": "Could not save the encryption setup — check that this browser allows local storage, then try again",
   "settings.privacy.encryptionTooManyAttempts": "Too many failed attempts. Please wait {{seconds}} seconds.",
   "settings.privacy.encryptionTooShort": "Passphrase must be at least 8 characters",

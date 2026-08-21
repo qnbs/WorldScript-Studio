@@ -703,6 +703,7 @@
   "settings.privacy.encryptionSetAction": "设置密码",
   "settings.privacy.encryptionSetButton": "启用和加密",
   "settings.privacy.encryptionSetup": "设置密码以加密存储在该设备上的所有手稿、快照和设置。",
+  "settings.privacy.encryptionDesktopScope": "桌面端：此保护仅适用于 IndexedDB。在 R-15 桌面加密功能上线前，磁盘上的项目文件仍为明文。",
   "settings.privacy.encryptionSetupFailed": "无法保存加密设置 — 请检查此浏览器是否允许本地存储，然后重试",
   "settings.privacy.encryptionTooManyAttempts": "失败的尝试太多了。请等待{{seconds}}秒。",
   "settings.privacy.encryptionTooShort": "密码必须至少为 8 个字符",

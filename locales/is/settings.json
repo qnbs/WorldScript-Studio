@@ -703,6 +703,7 @@
   "settings.privacy.encryptionSetAction": "Stilltu lykilorð",
   "settings.privacy.encryptionSetButton": "Virkja og dulkóða",
   "settings.privacy.encryptionSetup": "Stilltu lykilorð til að dulkóða öll handrit, skyndimyndir og stillingar sem vistaðar eru á þessu tæki.",
+  "settings.privacy.encryptionDesktopScope": "Skjáborð: þetta verndar aðeins IndexedDB. Verkefnaskrár á disknum eru áfram ódulkóðaðar þar til R-15 skjáborðsdulkóðun er tilbúin.",
   "settings.privacy.encryptionSetupFailed": "Ekki tókst að vista dulkóðunarstillinguna — athugaðu hvort þessi vafri leyfir staðbundna geymslu og reyndu aftur",
   "settings.privacy.encryptionTooManyAttempts": "Of margar misheppnaðar tilraunir. Vinsamlegast bíddu í {{seconds}} sekúndur.",
   "settings.privacy.encryptionTooShort": "Aðgangsorð verður að vera að minnsta kosti 8 stafir",

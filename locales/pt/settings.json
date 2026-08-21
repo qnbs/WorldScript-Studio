@@ -703,6 +703,7 @@
   "settings.privacy.encryptionSetAction": "Definir senha",
   "settings.privacy.encryptionSetButton": "Habilitar e criptografar",
   "settings.privacy.encryptionSetup": "Defina uma senha para criptografar todos os manuscritos, instantâneos e configurações armazenados neste dispositivo.",
+  "settings.privacy.encryptionDesktopScope": "Desktop: esta proteção cobre apenas o IndexedDB. Os arquivos do projeto no disco permanecem em texto simples até a criptografia desktop do R-15.",
   "settings.privacy.encryptionSetupFailed": "Não foi possível salvar a configuração de criptografia — verifique se este navegador permite armazenamento local e tente novamente",
   "settings.privacy.encryptionTooManyAttempts": "Muitas tentativas fracassadas. Aguarde {{seconds}} segundos.",
   "settings.privacy.encryptionTooShort": "A senha deve ter pelo menos 8 caracteres",

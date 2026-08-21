@@ -7,12 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+<!-- release-candidate: v1.28.0 — the tag is created only after the release PR merges. -->
+
+## [1.28.0] — 2026-08-21
+
 ### Added
 
 - **Cloud model catalog defense-in-depth:** current Anthropic, OpenAI, and xAI model IDs now
   share one typed catalog across settings, fallbacks, and the Claude proxy allowlist.
 - **Native bundle and translation-quality floors:** bundle budgets now distinguish entry, vendor,
   regular JS, and WASM assets; CI also enforces the existing translation coverage/outlier floor.
+- **Renderer-neutral Rust Core seed:** `crates/worldscript-project` now provides headless project
+  schema, validation, migration, plain JSON I/O, and a test/CLI harness, with one narrow Tauri
+  validation command wired through the cross-workspace path dependency.
+- **Rust TaskSupervisor bounded text proof:** adds bounded renderer-neutral `text.analyze` and
+  `text.diff` tasks, typed qualification wrappers, deterministic LCS/whitespace contracts, and
+  explicit fallback to the existing TypeScript path; no production caller is switched yet.
 
 ### Fixed
 
@@ -21,23 +31,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tagless or shallow checkouts as a false failure.
 - **Spotlight tour theme:** the post-rebrand driver.js popover now binds to its WorldScript CSS
   selector, with a regression test protecting the binding.
+- **Desktop encryption scope truth:** desktop project files remain explicitly documented as
+  plaintext until the renderer-neutral R-15 storage work ships; the IndexedDB passphrase flow no
+  longer presents itself as a project-file encryption gate on Tauri.
+- **CI authority closure:** Core path changes now select the Tauri consumer gate, workflow-policy tests protect local path-dependency coverage and aggregate deployment gating, and Pages deployment waits for `ci-success`.
+- **Accessibility contrast:** command-palette heading contrast was corrected to meet the intended
+  WCAG threshold.
 
 ### Deprecated
 
 - **`storycraft://` deep links:** the legacy scheme remains accepted for this release and displays
   a migration notice; it is scheduled for removal in the next release.
 
-- **Renderer-neutral Rust Core seed:** `crates/worldscript-project` now provides headless project
-  schema, validation, migration, plain JSON I/O, and a test/CLI harness, with one narrow Tauri
-  validation command wired through the cross-workspace path dependency.
+### Changed
+
 - **Qt Early Killer-Gate qualification:** the native roadmap now requires cheap, evidence-backed
   lifecycle, accessibility/input, packaging/update-trust, crash/recovery, and security checks
   before substantial Qt UI work can create sunk cost.
-- **Rust TaskSupervisor bounded text proof:** adds bounded renderer-neutral `text.analyze` and
-  `text.diff` tasks, typed qualification wrappers, deterministic LCS/whitespace contracts, and
-  explicit fallback to the existing TypeScript path; no production caller is switched yet.
-
-### Changed
 
 - **Diagnostics sink boundary:** structured log construction and recursive redaction now remain
   portable before serialized IDB, Tauri JSONL, and development-console adapters receive the record;
@@ -55,17 +65,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   versions before native execution (#437, #439, #440).
 - **Native maturity evidence:** the G1 qualification ledger now records the partial, evidence-backed
   status of the native migration without claiming a production authority switch (#438).
-
-### Fixed
-
-- **CI authority closure:** Core path changes now select the Tauri consumer gate, workflow-policy tests protect local path-dependency coverage and aggregate deployment gating, and Pages deployment waits for `ci-success`.
-- **Accessibility contrast:** command-palette heading contrast was corrected to meet the intended
-  WCAG threshold.
+- **Mutation-test plumbing:** the manual Stryker workflow now uses explicit per-module incremental
+  files, preserves module report identity, validates aggregate metrics, fails closed on missing
+  shards, and propagates aggregation failures through the summary pipeline.
 
 ### Security
 
 - **CI supply-chain policy:** CodeQL action references and token permissions were hardened and
   Dependabot grouping was corrected so related action paths move together.
+- **Diagnostics redaction:** sensitive nested diagnostic context is recursively redacted before
+  serialized IDB, Tauri JSONL, or development-console sinks receive it.
 
 ## [1.27.1] — 2026-08-14
 

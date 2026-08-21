@@ -16,6 +16,10 @@ const { mockHandleSettingChange, mockSetPassphraseModal } = vi.hoisted(() => ({
   mockSetPassphraseModal: vi.fn(),
 }));
 
+const { mockIsDesktop } = vi.hoisted(() => ({
+  mockIsDesktop: { value: false },
+}));
+
 const makeCtx = (overrides?: Record<string, unknown>) => ({
   t: (k: string) => k,
   settings: {
@@ -40,6 +44,16 @@ vi.mock('../../../contexts/SettingsViewContext', () => ({
   useSettingsViewContext: vi.fn(() => makeCtx()),
 }));
 
+vi.mock('../../../services/desktopPlatform', () => ({
+  desktopPlatform: {
+    runtime: {
+      get isDesktop() {
+        return mockIsDesktop.value;
+      },
+    },
+  },
+}));
+
 // ---------------------------------------------------------------------------
 // Import after mocks
 // ---------------------------------------------------------------------------
@@ -56,6 +70,7 @@ const mockCtx = vi.mocked(useSettingsViewContext);
 describe('PrivacySection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockIsDesktop.value = false;
     mockCtx.mockReturnValue(makeCtx() as unknown as ReturnType<typeof useSettingsViewContext>);
   });
 
@@ -99,6 +114,17 @@ describe('PrivacySection', () => {
   it('shows encryption disabled status when flag is off', () => {
     render(<PrivacySection />);
     expect(screen.getByText('settings.privacy.encryptionDisabledStatus')).toBeInTheDocument();
+  });
+
+  it('warns desktop users that project files remain plaintext until R-15', () => {
+    mockIsDesktop.value = true;
+    render(<PrivacySection />);
+    expect(screen.getByText('settings.privacy.encryptionDesktopScope')).toBeInTheDocument();
+  });
+
+  it('does not show the desktop-only storage scope warning on the web', () => {
+    render(<PrivacySection />);
+    expect(screen.queryByText('settings.privacy.encryptionDesktopScope')).not.toBeInTheDocument();
   });
 
   it('shows "Set Passphrase" button when encryption is disabled', () => {

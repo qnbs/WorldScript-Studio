@@ -703,6 +703,7 @@
   "settings.privacy.encryptionSetAction": "Ställ in lösenordsfras",
   "settings.privacy.encryptionSetButton": "Aktivera och kryptera",
   "settings.privacy.encryptionSetup": "Ställ in en lösenordsfras för att kryptera alla manuskript, ögonblicksbilder och inställningar som lagras på den här enheten.",
+  "settings.privacy.encryptionDesktopScope": "Skrivbord: detta skyddar endast IndexedDB. Projektfiler på disken förblir okrypterade tills R-15:s skrivbordskryptering är klar.",
   "settings.privacy.encryptionSetupFailed": "Det gick inte att spara krypteringsinställningen — kontrollera att den här webbläsaren tillåter lokal lagring och försök igen",
   "settings.privacy.encryptionTooManyAttempts": "För många misslyckade försök. Vänta {{seconds}} sekunder.",
   "settings.privacy.encryptionTooShort": "Lösenfrasen måste bestå av minst 8 tecken",

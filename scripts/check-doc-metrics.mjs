@@ -169,7 +169,16 @@ export function scanReleaseTruth(changelog, packageVersion, taggedVersions) {
   const latestTagged = [...taggedVersions].sort(semverCompare).at(-1) ?? null;
   for (const version of releaseVersions) {
     // QNBS-v3: retain historical changelog entries even when old tags were pruned; enforce the tag invariant from the current release frontier onward.
-    if (latestTagged && !taggedVersions.has(version) && semverCompare(version, latestTagged) >= 0) {
+    const isReleaseCandidate = new RegExp(
+      `<!--\\s*release-candidate:\\s*v${version.replaceAll('.', '\\.')}(?:\\s|-->)`,
+      'i',
+    ).test(changelog);
+    if (
+      latestTagged &&
+      !taggedVersions.has(version) &&
+      semverCompare(version, latestTagged) >= 0 &&
+      !isReleaseCandidate
+    ) {
       findings.push(
         `CHANGELOG.md — dated release [${version}] has no matching git tag v${version}; move it to [Unreleased] or create the release tag after review`,
       );
@@ -221,7 +230,11 @@ export function scanReadmeReleaseTruth(readme, taggedVersions) {
       if (!match || /\b(?:next|unreleased|development|dev|pre[- ]?release)\b/i.test(badgeText))
         continue;
       const version = match[1];
-      if (!taggedVersions.has(version)) {
+      const isReleaseCandidate = new RegExp(
+        `<!--\\s*release-candidate:\\s*v${version.replaceAll('.', '\\.')}(?:\\s|-->)`,
+        'i',
+      ).test(readme);
+      if (!taggedVersions.has(version) && !isReleaseCandidate) {
         findings.push(
           `README.md:${index + 1} — release badge advertises v${version}, but no matching git tag exists`,
         );
@@ -270,6 +283,8 @@ export function getPostReleaseCommitSubjects(repositoryRoot = root) {
 
 export function scanUnreleasedTruth(changelog, postReleaseCommitSubjects) {
   if (!postReleaseCommitSubjects || postReleaseCommitSubjects.length === 0) return [];
+  // QNBS-v3: a release PR intentionally moves the accumulated history into its dated candidate section before its merge-time tag exists.
+  if (/<!--\s*release-candidate:\s*v\d+\.\d+\.\d+\b/i.test(changelog)) return [];
   if (hasMeaningfulUnreleasedContent(changelog)) return [];
   return [
     `CHANGELOG.md — ${postReleaseCommitSubjects.length} commit(s) exist after the latest release tag, but [Unreleased] is empty`,

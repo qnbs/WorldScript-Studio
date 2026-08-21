@@ -2351,6 +2351,7 @@
   "settings.privacy.encryptionSetAction": "Aseta tunnuslause",
   "settings.privacy.encryptionSetButton": "Ota käyttöön ja salaa",
   "settings.privacy.encryptionSetup": "Aseta tunnuslause, joka salaa kaikki tähän laitteeseen tallennetut käsikirjoitukset, tilannevedokset ja asetukset.",
+  "settings.privacy.encryptionDesktopScope": "Työpöytä: tämä suojaa vain IndexedDB:tä. Levyn projektitiedostot pysyvät salaamattomina, kunnes R-15-työpöytäsalaus valmistuu.",
   "settings.privacy.encryptionSetupFailed": "Salauksen määritystä ei voitu tallentaa — tarkista, että tämä selain sallii paikallisen tallennustilan, ja yritä uudelleen",
   "settings.privacy.encryptionTooManyAttempts": "Liian monta epäonnistunutta yritystä. Odota {{seconds}} sekuntia.",
   "settings.privacy.encryptionTooShort": "Tunnuslauseessa on oltava vähintään 8 merkkiä",

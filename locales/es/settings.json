@@ -703,6 +703,7 @@
   "settings.privacy.encryptionSetAction": "Establecer contraseña",
   "settings.privacy.encryptionSetButton": "Activar y cifrar",
   "settings.privacy.encryptionSetup": "Establece una contraseña para cifrar todos los manuscritos, instantáneas y ajustes almacenados en este dispositivo.",
+  "settings.privacy.encryptionDesktopScope": "Escritorio: esto solo protege IndexedDB. Los archivos del proyecto en el disco siguen en texto plano hasta que llegue el cifrado de escritorio de R-15.",
   "settings.privacy.encryptionSetupFailed": "No se pudo guardar la configuración de cifrado — comprueba que este navegador permite el almacenamiento local e inténtalo de nuevo",
   "settings.privacy.encryptionTooManyAttempts": "Demasiados intentos fallidos. Espera {{seconds}} segundos.",
   "settings.privacy.encryptionTooShort": "La contraseña debe tener al menos 8 caracteres",

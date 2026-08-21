@@ -2351,6 +2351,7 @@
   "settings.privacy.encryptionSetAction": "Ezarri pasaesaldia",
   "settings.privacy.encryptionSetButton": "Gaitu eta enkriptatu",
   "settings.privacy.encryptionSetup": "Ezarri pasaesaldi bat gailu honetan gordetako eskuizkribu, argazki eta ezarpen guztiak enkriptatzeko.",
+  "settings.privacy.encryptionDesktopScope": "Mahaigaina: honek IndexedDB bakarrik babesten du. Diskoko proiektu-fitxategiak testu arruntean daude R-15 mahaigaineko enkriptatzea iritsi arte.",
   "settings.privacy.encryptionSetupFailed": "Ezin izan da enkriptazioaren konfigurazioa gorde — egiaztatu nabigatzaile honek biltegiratze lokala onartzen duela, eta saiatu berriro",
   "settings.privacy.encryptionTooManyAttempts": "Porrot egindako saiakera gehiegi. Mesedez, itxaron {{seconds}} segundo.",
   "settings.privacy.encryptionTooShort": "Pasaesaldiek 8 karaktere izan behar dituzte gutxienez",
