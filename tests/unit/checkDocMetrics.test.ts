@@ -12,14 +12,18 @@ import {
   getTaggedVersions,
   scanForDrift,
   scanForUrlDrift,
-  scanReadmeReleaseTruth,
   scanReleaseTruth,
-  scanUnreleasedTruth,
   stripHistoricalSections,
   VERCEL_URL_PATTERN,
 } from '../../scripts/check-doc-metrics.mjs';
 
 const getTaggedVersionsAt = getTaggedVersions as unknown as (repositoryRoot: string) => Set<string>;
+type ReleaseTruthModule = {
+  scanReadmeReleaseTruth: (readme: string, taggedVersions: Set<string>) => string[];
+  scanUnreleasedTruth: (changelog: string, subjects: string[] | null) => string[];
+};
+const loadReleaseTruthModule = async () =>
+  (await import('../../scripts/check-doc-metrics.mjs')) as unknown as ReleaseTruthModule;
 
 // QNBS-v3: release truth must remain correct in normal repositories and linked worktrees.
 describe('scanReleaseTruth', () => {
@@ -63,13 +67,15 @@ describe('scanReleaseTruth', () => {
 });
 
 describe('README release truth', () => {
-  it('rejects a released-version badge without a matching tag', () => {
+  it('rejects a released-version badge without a matching tag', async () => {
+    const { scanReadmeReleaseTruth } = await loadReleaseTruthModule();
     expect(scanReadmeReleaseTruth('![Release v1.28.0](badge.svg)', new Set(['1.27.1']))).toEqual([
       expect.stringContaining('release badge advertises v1.28.0'),
     ]);
   });
 
-  it('allows an explicitly unreleased development badge', () => {
+  it('allows an explicitly unreleased development badge', async () => {
+    const { scanReadmeReleaseTruth } = await loadReleaseTruthModule();
     expect(
       scanReadmeReleaseTruth(
         '<img alt="Next v1.28.0 (unreleased)" src="Next-v1.28.0-blue">',
@@ -80,13 +86,15 @@ describe('README release truth', () => {
 });
 
 describe('Unreleased truth', () => {
-  it('rejects post-release commits when Unreleased has no meaningful content', () => {
+  it('rejects post-release commits when Unreleased has no meaningful content', async () => {
+    const { scanUnreleasedTruth } = await loadReleaseTruthModule();
     expect(scanUnreleasedTruth('## [Unreleased]\n\n### Added\n', ['feat: new feature'])).toEqual([
       expect.stringContaining('[Unreleased] is empty'),
     ]);
   });
 
-  it('accepts populated Unreleased content after the latest release', () => {
+  it('accepts populated Unreleased content after the latest release', async () => {
+    const { scanUnreleasedTruth } = await loadReleaseTruthModule();
     expect(
       scanUnreleasedTruth('## [Unreleased]\n\n### Added\n\n- New feature\n', ['feat: new feature']),
     ).toEqual([]);
