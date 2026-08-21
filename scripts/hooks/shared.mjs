@@ -2,9 +2,10 @@ import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 import { verifyDependencyState } from '../dependency-state.mjs';
 
-const projectRoot = resolve(new URL('../..', import.meta.url).pathname);
+const projectRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 
 export function ensureDependencyState() {
   try {

@@ -79,6 +79,7 @@ describe('renderer-specific diagnostics sinks', () => {
     vi.restoreAllMocks();
   });
 
+  // QNBS-v3: isolated sink tests prove serialized writes preserve ordering and the bounded ring buffer.
   it('writes entries to IndexedDB and keeps the ring buffer bounded', async () => {
     const { writeLogEntryToSinks } = await import('../../../../services/diagnostics/logSinks');
 

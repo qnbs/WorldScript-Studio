@@ -8,9 +8,26 @@ import {
   getCanonicalProductionUrl,
   scanForDrift,
   scanForUrlDrift,
+  scanReleaseTruth,
   stripHistoricalSections,
   VERCEL_URL_PATTERN,
 } from '../../scripts/check-doc-metrics.mjs';
+
+describe('scanReleaseTruth', () => {
+  it('rejects a dated changelog release without a matching tag', () => {
+    expect(scanReleaseTruth('## [1.28.0] — 2026-08-21\n', '1.28.0', new Set(['1.27.1']))).toEqual([
+      expect.stringContaining('no matching git tag v1.28.0'),
+      expect.stringContaining('no [Unreleased] section exists'),
+    ]);
+  });
+
+  it('accepts a newer package version only when it remains under Unreleased', () => {
+    expect(scanReleaseTruth('## [Unreleased]\n', '1.28.0', new Set(['1.27.1']))).toEqual([]);
+    expect(scanReleaseTruth('## [1.28.0] — 2026-08-21\n', '1.28.0', new Set(['1.28.0']))).toEqual(
+      [],
+    );
+  });
+});
 
 describe('stripHistoricalSections', () => {
   it('blanks a Keep-a-Changelog-style `## [x.y.z]` section', () => {

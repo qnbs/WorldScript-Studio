@@ -17,7 +17,7 @@
   "lora.dataset.notEnough": "Χρειάζεστε τουλάχιστον 50 αποδεκτές συμμετοχές πριν από την εκπαίδευση. Δοκιμάστε να δημιουργήσετε συνθετικά ζεύγη.",
   "lora.dataset.rejected": "Απορρίφθηκε",
   "lora.dataset.synthetic": "συνθετικός",
-  "lora.dataset.title": "Εργαλείο δημιουργίας συνόλου δεδομένων",
+  "lora.dataset.title": "Εργαλείο dataset",
   "lora.dataset.total": "Σύνολο",
   "lora.errors.cloudBlocked": "Τα μοντέλα που φιλοξενούνται στο cloud δεν μπορούν να χρησιμοποιηθούν για εκπαίδευση. Επιλέξτε ένα τοπικό μοντέλο.",
   "lora.errors.insufficientVram": "Ανεπαρκής VRAM για αυτήν την προεπιλογή. Αυτή η προεπιλογή απαιτεί {{required}} GB.",

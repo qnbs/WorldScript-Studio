@@ -7,14 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-
-- **Diagnostics sink boundary:** structured log construction and recursive redaction now remain
-  portable before serialized IDB, Tauri JSONL, and development-console adapters receive the record;
-  legacy logger APIs remain compatible and no sink authority switch is claimed.
-
-## [1.28.0] — 2026-08-21
-
 ### Added
 
 - **Cloud model catalog defense-in-depth:** current Anthropic, OpenAI, and xAI model IDs now
@@ -44,6 +36,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Diagnostics sink boundary:** structured log construction and recursive redaction now remain
+  portable before serialized IDB, Tauri JSONL, and development-console adapters receive the record;
+  legacy logger APIs remain compatible and no sink authority switch is claimed.
 - **Coverage scope and threshold calibration:** coverage now measures the root application/PWA
   shell; CI recalibrated floors to L80/F72/B66/S78 from the expanded-scope measurement, and the
   token audit baseline was ratcheted down from 160 to the verified current count of 159.
@@ -52,6 +47,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   retires CEF from the target architecture.
 - **DesktopPlatform boundary:** direct Tauri imports are mechanically constrained by the zero-
   tolerance guardrail while the renderer-neutral contract becomes the native transition surface.
+- **Diagnostics parity and task contracts:** Rust/TypeScript wire-shape and redaction fixtures now
+  cover the diagnostics boundary, and TaskSupervisor requests/results reject unsupported contract
+  versions before native execution (#437, #439, #440).
+- **Native maturity evidence:** the G1 qualification ledger now records the partial, evidence-backed
+  status of the native migration without claiming a production authority switch (#438).
 
 ### Fixed
 

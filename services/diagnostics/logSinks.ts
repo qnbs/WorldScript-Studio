@@ -40,6 +40,7 @@ function openLogDb(): Promise<IDBDatabase> {
   return _idbOpenPromise;
 }
 
+// QNBS-v3: serialize IDB writes and track a bounded count to prevent burst logging from blocking or exhausting storage.
 function writeToIdb(entry: LogEntry): void {
   if (typeof indexedDB === 'undefined') return;
   _idbWriteQueue = _idbWriteQueue
@@ -103,6 +104,7 @@ let _tauriLogDir: string | null = null;
 
 let _tauriWriteQueue: Promise<void> = Promise.resolve();
 
+// QNBS-v3: queue JSONL appends and safe-stringify entries so concurrent native writes remain valid and non-throwing.
 function writeToTauri(entry: LogEntry): void {
   _tauriWriteQueue = _tauriWriteQueue
     .then(async () => {

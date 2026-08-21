@@ -33,7 +33,7 @@ The app supports a multi-provider AI stack (Gemini, OpenAI, Claude, Grok, OpenRo
    ```bash
    pnpm run ci:prepush
    ```
-   This gate is mandatory before every push and after every local correction before re-pushing; it runs sequentially with staged-file linting, a single-checker project typecheck, i18n validation, and lightweight native guardrails. Full repository lint, coverage, E2E, Storybook, Lighthouse, and mutation checks belong to cloud CI. If branch switching or a lockfile/package-manifest change makes pnpm report dependency verification errors, run `node scripts/dependency-state.mjs reconcile` and rerun the complete pre-push gate.
+   This gate is mandatory before every push and after every local correction before re-pushing; it runs sequentially with a single-checker project typecheck, i18n parity/quality and bundle checks, release/doc truth, and lightweight native guardrails. The pre-commit hook separately runs staged-file Biome checks. Full repository lint, coverage, E2E, Storybook, Lighthouse, and mutation checks belong to cloud CI. If branch switching or a lockfile/package-manifest change makes pnpm report dependency verification errors, run `node scripts/dependency-state.mjs reconcile` and rerun the complete pre-push gate.
    Optional targeted smoke test: `pnpm exec vitest run <path>` **without** `--coverage`.
    **Hard rule:** Never invoke `pnpm test`, `npm run test`, or a bare Vitest wrapper; always use an explicit `pnpm exec vitest run <path>` command to avoid watch-mode hangs on constrained hardware. Never start multiple heavyweight processes concurrently.
 4. **Audit cloud CI logs, fix locally, then re-push** – If the cloud CI run fails, inspect the logs via GitHub web UI or `gh run watch`, reproduce the specific failing test or lint error in isolation, fix it locally (quick tier to verify), commit, and push again for another cloud CI run.
@@ -276,9 +276,10 @@ hooks are not installed.
 ### Philosophy
 
 - **Cloud CI-first:** The canonical quality gate is GitHub Actions. Low-end local machines should run only the "Quick" tier.
-- **Quick tier (local, before every push):** `pnpm run ci:prepush` runs staged-file linting, the
-  project typecheck with one checker, i18n parity/bundle/content checks, and lightweight desktop
-  guardrails sequentially. Run the gate again after every correction before re-pushing; do not
+- **Quick tier (local, before every push):** `pnpm run ci:prepush` runs the project typecheck with
+  one checker, i18n parity/quality/bundle/content checks, release/doc truth, and lightweight desktop guardrails sequentially;
+  the pre-commit hook separately runs staged-file Biome checks. Run the gate again after every
+  correction before re-pushing; do not
   push based only on a targeted test or a changed-file lint run. Optionally:
   `pnpm exec vitest run <path>` **without** `--coverage`.
 - **Dependency state:** `pnpm run deps:verify` compares a content fingerprint of dependency
@@ -385,6 +386,8 @@ Edge builds run `scripts/build-edge.mjs` which sets `DEPLOY_TARGET=edge` and pat
 Never commit directly to `main` — always a feature branch + PR, even for a single-file edit. Wait for the **full CI suite to go green, including non-required/advisory jobs** (E2E, E2E Deep Coverage, Storybook, Lighthouse, Visual Regression), not just the branch-protection-required checks. Any `FAILURE` status — required or advisory — is zero-tolerance: investigate the actual root cause (pull the coverage report / job log) before deciding how to proceed; never assume a failing check is "probably fine" because your own latest commit looked unrelated — e.g. `codecov/patch` evaluates the PR's **entire accumulated diff**, not just your last commit.
 
 **Review-comment completeness — check three independent channels before declaring a PR review-clean, every time:** (1) GraphQL `reviewThreads` for inline per-line comments; (2) `gh api repos/<owner>/<repo>/issues/<PR>/comments` for plain top-level bot comments (qodo-code-review posts its real findings only here, never as `reviewThreads`); (3) `gh api repos/<owner>/<repo>/pulls/<PR>/reviews`, reading each review's full `.body` text (CodeRabbit's "🧹 Nitpick comments" and outside-diff-range findings live here, collapsed, invisible to the other two channels). A bot using one channel on a PR doesn't mean the others are covered.
+
+**Squash-merge verification:** Never infer a missing merge from `git merge-base --is-ancestor` alone. For every PR, verify `state=MERGED`, `merged_at`, and the resulting `merge_commit_sha`; compare the base commit immediately before the merge with that resulting `main` commit, including changed files, additions, and deletions. Use patch/tree equivalence as an optional corroboration. This is required because GitHub squash merges intentionally produce a new commit whose SHA is not the PR head SHA.
 
 **Known review bots on this repo** (confirm still installed — this list can drift): CodeRabbit (`@coderabbitai review` to re-trigger), CodeAnt AI (5 CI status checks only — `CodeAnt - Quality Gates/SAST/SCA/SCR/Test Coverage` — not inline PR comments here), qodo-code-review (top-level comments, see above), Amazon Q Developer (`/q review` as a fresh top-level comment — not inside an existing thread; quota-conscious — call it once CodeRabbit/CodeAnt's own loop has already reached quiescence, not after every fix commit), Graphite AI Reviews (automatic, no confirmed manual trigger), chatgpt-codex-connector (intermittent/quota-limited availability — verify it's currently active rather than assuming silence means "nothing to report"). A bot's silence is not a clean pass by itself — for security/sandbox/IPC/FFI/packaging-adjacent PRs, verify at least one bot produced real review output (its actual comment/review text), not just a green check-run.
 

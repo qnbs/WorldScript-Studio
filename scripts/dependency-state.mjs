@@ -12,9 +12,9 @@ import {
 } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import process from 'node:process';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const projectRoot = resolve(new URL('..', import.meta.url).pathname);
+const projectRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fingerprintRelativePath = 'node_modules/.worldscript-deps-fingerprint';
 
 function walkFiles(directory) {

@@ -36,22 +36,36 @@ describe('renderer-neutral log entry boundary', () => {
     expect(entry.message).toBe('routing {"transcriptLength":12,"apiKey":"[REDACTED]"}');
   });
 
+  // QNBS-v3: object arguments and recursive redaction protect every synchronous logging boundary.
   it('redacts sensitive keys recursively without mutating the input', () => {
+    class SensitiveContainer {
+      apiKey = 'class-secret';
+    }
+
     const context = {
       nested: { token: 'nested-secret' },
-      array: [{ password: 'array-secret' }],
+      array: [{ password: 'array-secret', ivHex: 'array-iv-secret' }],
       userId: 'user-1',
       passphrase: 'secret',
+      iv: 'direct-iv-secret',
+      encryptionIv: 'encryption-iv-secret',
+      initializationVector: 'initialization-vector-secret',
+      classValue: new SensitiveContainer(),
     };
 
     expect(sanitizeLogContext(context)).toEqual({
       nested: { token: '[REDACTED]' },
-      array: [{ password: '[REDACTED]' }],
+      array: [{ password: '[REDACTED]', ivHex: '[REDACTED]' }],
       userId: 'user-1',
       passphrase: '[REDACTED]',
+      iv: '[REDACTED]',
+      encryptionIv: '[REDACTED]',
+      initializationVector: '[REDACTED]',
+      classValue: '[Unserializable]',
     });
     expect(context.nested.token).toBe('nested-secret');
     expect(context.array[0]?.password).toBe('array-secret');
+    expect(context.array[0]?.ivHex).toBe('array-iv-secret');
     expect(context.passphrase).toBe('secret');
   });
 });
