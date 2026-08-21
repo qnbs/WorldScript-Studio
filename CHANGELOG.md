@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Diagnostics sink boundary:** structured log construction and redaction now remain portable
+  before IDB, Tauri JSONL, and development-console adapters receive the record; legacy logger APIs
+  remain compatible and no sink authority switch is claimed.
+
 ## [1.28.0] — 2026-08-21
 
 ### Added
