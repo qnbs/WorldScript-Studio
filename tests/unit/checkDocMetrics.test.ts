@@ -21,7 +21,12 @@ const getTaggedVersionsAt = getTaggedVersions as unknown as (repositoryRoot: str
 // QNBS-v3: keep executable-script exports typed locally while tsgo resolves the declaration file.
 type ReleaseTruthModule = {
   scanReadmeReleaseTruth: (readme: string, taggedVersions: Set<string>) => string[];
-  scanUnreleasedTruth: (changelog: string, subjects: string[] | null) => string[];
+  scanUnreleasedTruth: (
+    changelog: string,
+    subjects: string[] | null,
+    packageVersion?: string,
+    taggedVersions?: Set<string>,
+  ) => string[];
 };
 // QNBS-v3: load the runtime-only scanners without making tsgo infer untyped .mjs exports.
 const loadReleaseTruthModule = async () =>
@@ -43,6 +48,7 @@ describe('scanReleaseTruth', () => {
     );
   });
 
+  // QNBS-v3: verify pre-tag release documentation without weakening tagged-release validation.
   it('allows an explicitly marked release candidate before the merge-time tag is created', () => {
     expect(
       scanReleaseTruth(
@@ -98,6 +104,7 @@ describe('README release truth', () => {
     ).toEqual([]);
   });
 
+  // QNBS-v3: verify README release badges during the merge-time candidate window.
   it('allows a release badge with the matching release-candidate marker before tagging', async () => {
     const { scanReadmeReleaseTruth } = await loadReleaseTruthModule();
     expect(
@@ -137,14 +144,43 @@ describe('Unreleased truth', () => {
     ).toEqual([]);
   });
 
+  // QNBS-v3: verify the candidate marker permits empty Unreleased only during pre-tag release preparation.
   it('accepts an empty Unreleased section while an explicitly marked release candidate is pending its tag', async () => {
     const { scanUnreleasedTruth } = await loadReleaseTruthModule();
     expect(
       scanUnreleasedTruth(
         '## [Unreleased]\n\n<!-- release-candidate: v1.28.0 -->\n\n## [1.28.0] — 2026-08-21\n',
         ['fix: release candidate'],
+        '1.28.0',
+        new Set(['1.27.1']),
       ),
     ).toEqual([]);
+  });
+
+  // QNBS-v3: ensure tagging the candidate immediately restores the normal Unreleased-history requirement.
+  it('rejects an empty Unreleased section after the candidate is tagged', async () => {
+    const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+    expect(
+      scanUnreleasedTruth(
+        '## [Unreleased]\n\n<!-- release-candidate: v1.28.0 -->\n\n## [1.28.0] — 2026-08-21\n',
+        ['fix: post-release correction'],
+        '1.28.0',
+        new Set(['1.27.1', '1.28.0']),
+      ),
+    ).toEqual([expect.stringContaining('[Unreleased] is empty')]);
+  });
+
+  // QNBS-v3: prevent a stale or unrelated candidate marker from suppressing post-release drift.
+  it('rejects an empty Unreleased section for a different candidate marker', async () => {
+    const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+    expect(
+      scanUnreleasedTruth(
+        '## [Unreleased]\n\n<!-- release-candidate: v1.27.0 -->\n\n## [1.27.0] — 2026-08-14\n',
+        ['fix: post-release correction'],
+        '1.28.0',
+        new Set(['1.27.1']),
+      ),
+    ).toEqual([expect.stringContaining('[Unreleased] is empty')]);
   });
 
   // QNBS-v3: treat multiline HTML comments as non-content in the release-history check.

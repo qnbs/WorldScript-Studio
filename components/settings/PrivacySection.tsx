@@ -92,6 +92,7 @@ export const PrivacySection: FC = () => {
           <p className="text-sm text-[var(--sc-text-secondary)]">
             {t('settings.privacy.encryptionSetup')}
           </p>
+          {/* QNBS-v3: explain that desktop project files remain plaintext while R-15 storage is pending. */}
           {desktopPlatform.runtime.isDesktop && (
             <p className="text-sm text-[var(--sc-warning-fg)]" role="note">
               {t('settings.privacy.encryptionDesktopScope')}

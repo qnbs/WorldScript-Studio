@@ -16,6 +16,7 @@ const { mockHandleSettingChange, mockSetPassphraseModal } = vi.hoisted(() => ({
   mockSetPassphraseModal: vi.fn(),
 }));
 
+// QNBS-v3: isolate desktop and web branches so the plaintext-scope warning cannot regress.
 const { mockIsDesktop } = vi.hoisted(() => ({
   mockIsDesktop: { value: false },
 }));
@@ -116,12 +117,14 @@ describe('PrivacySection', () => {
     expect(screen.getByText('settings.privacy.encryptionDisabledStatus')).toBeInTheDocument();
   });
 
+  // QNBS-v3: verify desktop users see the limitation instead of an implied encryption promise.
   it('warns desktop users that project files remain plaintext until R-15', () => {
     mockIsDesktop.value = true;
     render(<PrivacySection />);
     expect(screen.getByText('settings.privacy.encryptionDesktopScope')).toBeInTheDocument();
   });
 
+  // QNBS-v3: verify web-only IndexedDB encryption does not show a desktop filesystem warning.
   it('does not show the desktop-only storage scope warning on the web', () => {
     render(<PrivacySection />);
     expect(screen.queryByText('settings.privacy.encryptionDesktopScope')).not.toBeInTheDocument();

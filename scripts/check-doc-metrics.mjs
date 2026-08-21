@@ -230,6 +230,7 @@ export function scanReadmeReleaseTruth(readme, taggedVersions) {
       if (!match || /\b(?:next|unreleased|development|dev|pre[- ]?release)\b/i.test(badgeText))
         continue;
       const version = match[1];
+      // QNBS-v3: allow the release badge before its matching tag is created after the release PR merges.
       const isReleaseCandidate = new RegExp(
         `<!--\\s*release-candidate:\\s*v${version.replaceAll('.', '\\.')}(?:\\s|-->)`,
         'i',
@@ -281,10 +282,27 @@ export function getPostReleaseCommitSubjects(repositoryRoot = root) {
   }
 }
 
-export function scanUnreleasedTruth(changelog, postReleaseCommitSubjects) {
+export function scanUnreleasedTruth(
+  changelog,
+  postReleaseCommitSubjects,
+  packageVersion,
+  taggedVersions,
+) {
   if (!postReleaseCommitSubjects || postReleaseCommitSubjects.length === 0) return [];
-  // QNBS-v3: a release PR intentionally moves the accumulated history into its dated candidate section before its merge-time tag exists.
-  if (/<!--\s*release-candidate:\s*v\d+\.\d+\.\d+\b/i.test(changelog)) return [];
+  const candidateVersion = changelog.match(
+    /<!--\s*release-candidate:\s*v(\d+\.\d+\.\d+)(?:\s|-->)/i,
+  )?.[1];
+  const latestTagged = taggedVersions ? [...taggedVersions].sort(semverCompare).at(-1) : null;
+  const isActiveUntaggedCandidate =
+    candidateVersion &&
+    packageVersion &&
+    taggedVersions &&
+    latestTagged &&
+    candidateVersion === packageVersion &&
+    !taggedVersions.has(candidateVersion) &&
+    semverCompare(candidateVersion, latestTagged) > 0;
+  // QNBS-v3: only the current untagged release candidate may defer Unreleased history until merge-time tagging.
+  if (isActiveUntaggedCandidate) return [];
   if (hasMeaningfulUnreleasedContent(changelog)) return [];
   return [
     `CHANGELOG.md — ${postReleaseCommitSubjects.length} commit(s) exist after the latest release tag, but [Unreleased] is empty`,
@@ -412,7 +430,12 @@ function main() {
   const allFindings = [];
   allFindings.push(
     ...scanReleaseTruth(changelog, packageVersion, taggedVersions),
-    ...scanUnreleasedTruth(changelog, getPostReleaseCommitSubjects()),
+    ...scanUnreleasedTruth(
+      changelog,
+      getPostReleaseCommitSubjects(),
+      packageVersion,
+      taggedVersions,
+    ),
   );
   allFindings.push(
     ...scanReadmeReleaseTruth(readFileSync(join(root, 'README.md'), 'utf8'), taggedVersions),

@@ -12,6 +12,8 @@ export function scanReadmeReleaseTruth(readme: string, taggedVersions: Set<strin
 export function scanUnreleasedTruth(
   changelog: string,
   postReleaseCommitSubjects: string[] | null,
+  packageVersion?: string,
+  taggedVersions?: Set<string>,
 ): string[];
 export function scanForDrift(
   content: string,

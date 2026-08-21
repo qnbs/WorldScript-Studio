@@ -703,7 +703,7 @@
   "settings.privacy.encryptionSetAction": "Ορίστε τη φράση πρόσβασης",
   "settings.privacy.encryptionSetButton": "Ενεργοποίηση & Κρυπτογράφηση",
   "settings.privacy.encryptionSetup": "Ορίστε μια φράση πρόσβασης για να κρυπτογραφήσετε όλα τα χειρόγραφα, τα στιγμιότυπα και τις ρυθμίσεις που είναι αποθηκευμένα σε αυτήν τη συσκευή.",
-  "settings.privacy.encryptionDesktopScope": "Desktop: αυτή η προστασία καλύπτει μόνο το IndexedDB. Τα αρχεία έργων στον δίσκο παραμένουν απλά μέχρι να υλοποιηθεί η κρυπτογράφηση desktop του R-15.",
+  "settings.privacy.encryptionDesktopScope": "Desktop: αυτή η προστασία καλύπτει μόνο το IndexedDB. Τα αρχεία έργων στον δίσκο παραμένουν μη κρυπτογραφημένα μέχρι να υλοποιηθεί η κρυπτογράφηση desktop του R-15.",
   "settings.privacy.encryptionSetupFailed": "Δεν ήταν δυνατή η αποθήκευση της ρύθμισης κρυπτογράφησης — ελέγξτε ότι αυτό το πρόγραμμα περιήγησης επιτρέπει την τοπική αποθήκευση και δοκιμάστε ξανά",
   "settings.privacy.encryptionTooManyAttempts": "Πάρα πολλές αποτυχημένες προσπάθειες. Περιμένετε {{seconds}} δευτερόλεπτα.",
   "settings.privacy.encryptionTooShort": "Η φράση πρόσβασης πρέπει να αποτελείται από τουλάχιστον 8 χαρακτήρες",

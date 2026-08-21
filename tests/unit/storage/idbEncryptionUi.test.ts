@@ -8,6 +8,7 @@ const baseState = {
   hasRecoveryJournal: false,
 };
 
+// QNBS-v3: cover every modal gate so desktop and recovery states cannot reopen the prompt.
 describe('shouldShowIdbUnlockModal', () => {
   it('shows the blocking unlock prompt for locked web IndexedDB storage', () => {
     expect(shouldShowIdbUnlockModal(baseState)).toBe(true);
