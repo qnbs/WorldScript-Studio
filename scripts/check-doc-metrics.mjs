@@ -196,6 +196,7 @@ export function scanReleaseTruth(changelog, packageVersion, taggedVersions) {
  * @returns {string}
  */
 export function resolveGitCommonDir(repositoryRoot = root) {
+  // QNBS-v3: linked worktrees require resolving gitdir and commondir before tag discovery.
   const dotGit = join(repositoryRoot, '.git');
   if (!existsSync(dotGit)) return dotGit;
   if (statSync(dotGit).isDirectory()) return dotGit;

@@ -68,13 +68,15 @@ pub fn sanitize_entry(entry: &LogEntry) -> LogEntry {
 
 fn is_sensitive_key(key: &str) -> bool {
     let lowercase = key.to_ascii_lowercase();
+    // QNBS-v3: normalize separator variants so native redaction matches the shared diagnostics contract.
+    let compact = lowercase.replace(['_', '-'], "");
     lowercase.contains("key")
         || lowercase.contains("token")
         || lowercase.contains("password")
         || lowercase.contains("passphrase")
         || is_iv_key(key)
-        || lowercase.contains("initializationvector")
-        || lowercase.contains("initialvector")
+        || compact.contains("initializationvector")
+        || compact.contains("initialvector")
 }
 
 fn is_iv_key(key: &str) -> bool {
@@ -184,6 +186,10 @@ mod tests {
             "ivHex": "two",
             "encryptionIv": "three",
             "initializationVector": "four",
+            "initialization_vector": "five",
+            "initialization-vector": "six",
+            "initial_vector": "seven",
+            "initial-vector": "eight",
             "ivory": "safe",
             "privilege": "safe"
         }))
@@ -195,6 +201,10 @@ mod tests {
         assert_eq!(sanitized["ivHex"], json!(REDACTED));
         assert_eq!(sanitized["encryptionIv"], json!(REDACTED));
         assert_eq!(sanitized["initializationVector"], json!(REDACTED));
+        assert_eq!(sanitized["initialization_vector"], json!(REDACTED));
+        assert_eq!(sanitized["initialization-vector"], json!(REDACTED));
+        assert_eq!(sanitized["initial_vector"], json!(REDACTED));
+        assert_eq!(sanitized["initial-vector"], json!(REDACTED));
         assert_eq!(sanitized["ivory"], json!("safe"));
         assert_eq!(sanitized["privilege"], json!("safe"));
     }
