@@ -65,17 +65,25 @@ export function selectMutationModules(selector = 'all') {
 // QNBS-v3: Generate the CI matrix from the same target definition used by Stryker itself.
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const selectorIndex = process.argv.indexOf('--selector');
-  const selector = selectorIndex === -1 ? 'all' : process.argv[selectorIndex + 1];
-  const selectedModules = selectMutationModules(selector);
-  if (process.argv.includes('--matrix')) {
-    process.stdout.write(`${JSON.stringify({ include: selectedModules })}\n`);
-  } else if (process.argv.includes('--files')) {
-    process.stdout.write(
-      `${selectedModules.flatMap(({ mutate }) => mutate.split(',')).join(',')}\n`,
-    );
-  } else {
-    process.stdout.write(
-      `Validated ${selectedModules.reduce((count, { mutate }) => count + mutate.split(',').length, 0)} Stryker targets across ${selectedModules.length} modules.\n`,
-    );
+  try {
+    const selector = selectorIndex === -1 ? 'all' : process.argv[selectorIndex + 1];
+    if (!selector || selector.startsWith('--')) {
+      throw new Error('--selector requires a value: all, tier-a, or a module name.');
+    }
+    const selectedModules = selectMutationModules(selector);
+    if (process.argv.includes('--matrix')) {
+      process.stdout.write(`${JSON.stringify({ include: selectedModules })}\n`);
+    } else if (process.argv.includes('--files')) {
+      process.stdout.write(
+        `${selectedModules.flatMap(({ mutate }) => mutate.split(',')).join(',')}\n`,
+      );
+    } else {
+      process.stdout.write(
+        `Validated ${selectedModules.reduce((count, { mutate }) => count + mutate.split(',').length, 0)} Stryker targets across ${selectedModules.length} modules.\n`,
+      );
+    }
+  } catch (error) {
+    console.error(`Stryker scope validation failed: ${error.message}`);
+    process.exitCode = 1;
   }
 }

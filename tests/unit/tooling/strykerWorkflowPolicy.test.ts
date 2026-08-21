@@ -18,6 +18,7 @@ const scopeScriptPath = fileURLToPath(
   new URL('../../../scripts/stryker-scope.mjs', import.meta.url),
 );
 
+// QNBS-v3: Lock workflow/config invariants so mutation plumbing cannot silently drift.
 describe('Stryker workflow policy', () => {
   it('uses one explicit target source for config and the matrix', () => {
     expect(config.mutate).toEqual(mutationFiles);
@@ -38,8 +39,11 @@ describe('Stryker workflow policy', () => {
     expect(workflow).toContain('merge-multiple: false');
     expect(workflow).toContain('if-no-files-found: error');
     expect(workflow).toContain('needs.stryker.result');
-    expect(workflow).toContain('node scripts/aggregate-stryker-reports.mjs all-reports');
+    expect(workflow).toContain(
+      'node scripts/aggregate-stryker-reports.mjs all-reports --selector "$SELECTOR"',
+    );
     expect(workflow).toContain('--selector "$SELECTOR"');
+    expect(workflow).toContain('SELECTOR: $' + "{{ github.event.inputs.module || 'all' }}");
     expect(workflow).not.toContain('force-all-modules');
   });
 });

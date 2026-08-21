@@ -46,10 +46,13 @@ jobs:
           persist-credentials: false
       - id: scope
         shell: bash
+        env:
+          SELECTOR: ${{ github.event.inputs.module || 'all' }}
         run: |
-          SELECTOR="${{ github.event.inputs.module || 'all' }}"
           node scripts/stryker-scope.mjs --selector "$SELECTOR"
-          echo "matrix=$(node scripts/stryker-scope.mjs --matrix --selector "$SELECTOR")" >> "$GITHUB_OUTPUT"
+          printf 'matrix=%s\n' \
+            "$(node scripts/stryker-scope.mjs --matrix --selector "$SELECTOR")" \
+            >> "$GITHUB_OUTPUT"
 
   # ============================================
   # PARALLEL MATRIX JOBS (one per module)
@@ -159,12 +162,14 @@ jobs:
           merge-multiple: false
 
       - name: Build combined summary
+        env:
+          SELECTOR: ${{ github.event.inputs.module || 'all' }}
         run: |
           if [ "${{ needs.stryker.result }}" != "success" ]; then
             echo "Stryker matrix did not complete successfully: ${{ needs.stryker.result }}" >&2
             exit 1
           fi
-          node scripts/aggregate-stryker-reports.mjs all-reports | tee -a "$GITHUB_STEP_SUMMARY"
+          node scripts/aggregate-stryker-reports.mjs all-reports --selector "$SELECTOR" | tee -a "$GITHUB_STEP_SUMMARY"
           echo "> Mode: \`${{ github.event.inputs.mode || 'incremental' }}\` | Concurrency: \`${{ github.event.inputs.per_job_concurrency || '2' }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "> Threshold: break ≥ 75 | low ≥ 70 | high ≥ 85" >> "$GITHUB_STEP_SUMMARY"
           echo "> Individual HTML/JSON reports are available as artifacts." >> "$GITHUB_STEP_SUMMARY"

@@ -1,3 +1,4 @@
+// QNBS-v3: Keep report and aggregate types aligned with the fail-closed validator.
 export interface StrykerMetrics {
   killed: number;
   survived: number;
@@ -25,6 +26,12 @@ export interface StrykerAggregateResult {
   mutationScore: number;
 }
 
-export function readStrykerReports(rootDirectory: string): StrykerModuleReport[];
-export function aggregateStrykerReports(rootDirectory: string): StrykerAggregateResult;
+export function readStrykerReports(
+  rootDirectory: string,
+  selectedModules?: import('./stryker-scope.mjs').StrykerMutationModule[],
+): StrykerModuleReport[];
+export function aggregateStrykerReports(
+  rootDirectory: string,
+  selectedModules?: import('./stryker-scope.mjs').StrykerMutationModule[],
+): StrykerAggregateResult;
 export function formatSummary(result: StrykerAggregateResult): string;

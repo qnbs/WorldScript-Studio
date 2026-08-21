@@ -1,8 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { mutationModules } from './stryker-scope.mjs';
+import { mutationModules, selectMutationModules } from './stryker-scope.mjs';
 
+// QNBS-v3: Reject partial or inconsistent shard reports before aggregation can false-green.
 const metricNames = [
   'killed',
   'survived',
@@ -26,11 +27,29 @@ function readMetric(report, metricName) {
   return value;
 }
 
-export function readStrykerReports(rootDirectory) {
+function validateMetricRelationships(metrics, reportPath) {
+  const relationships = [
+    ['totalDetected', metrics.killed + metrics.timeout],
+    ['totalUndetected', metrics.survived + metrics.noCoverage],
+    ['totalCovered', metrics.totalDetected + metrics.survived],
+    ['totalValid', metrics.totalDetected + metrics.totalUndetected],
+    ['totalInvalid', metrics.runtimeErrors + metrics.compileErrors],
+    ['totalMutants', metrics.totalValid + metrics.totalInvalid],
+  ];
+  for (const [name, expected] of relationships) {
+    if (metrics[name] !== expected) {
+      throw new Error(
+        `Stryker report has inconsistent metrics.${name}: expected ${expected}, got ${metrics[name]} (${reportPath}).`,
+      );
+    }
+  }
+}
+
+export function readStrykerReports(rootDirectory, selectedModules = mutationModules) {
   const reports = [];
   const missing = [];
 
-  for (const module of mutationModules) {
+  for (const module of selectedModules) {
     const reportPath = path.join(rootDirectory, `stryker-report-${module.name}`, 'mutation.json');
     if (!existsSync(reportPath)) {
       missing.push(`${module.name}/mutation.json`);
@@ -46,10 +65,8 @@ export function readStrykerReports(rootDirectory) {
       throw new Error(`Stryker report has no metrics object: ${reportPath}`);
     }
     const metrics = Object.fromEntries(metricNames.map((name) => [name, readMetric(report, name)]));
-    const score = report.metrics.mutationScore;
-    if (typeof score !== 'number' || !Number.isFinite(score)) {
-      throw new Error(`Stryker report has no finite mutation score: ${reportPath}`);
-    }
+    validateMetricRelationships(metrics, reportPath);
+    const score = metrics.totalValid > 0 ? (metrics.totalDetected / metrics.totalValid) * 100 : 0;
     reports.push({ name: module.name, metrics, mutationScore: score });
   }
 
@@ -59,14 +76,14 @@ export function readStrykerReports(rootDirectory) {
   return reports;
 }
 
-export function aggregateStrykerReports(rootDirectory) {
-  const reports = readStrykerReports(rootDirectory);
+export function aggregateStrykerReports(rootDirectory, selectedModules = mutationModules) {
+  const reports = readStrykerReports(rootDirectory, selectedModules);
   const totals = Object.fromEntries(metricNames.map((name) => [name, 0]));
   for (const report of reports) {
     for (const name of metricNames) totals[name] += report.metrics[name];
   }
   const mutationScore =
-    totals.totalValid > 0 ? (totals.totalDetected / totals.totalValid) * 100 : 100;
+    totals.totalValid > 0 ? (totals.totalDetected / totals.totalValid) * 100 : 0;
   return { reports, totals, mutationScore };
 }
 
@@ -94,8 +111,13 @@ export function formatSummary(result) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const rootDirectory = process.argv[2] ?? 'all-reports';
+  const selectorIndex = process.argv.indexOf('--selector');
+  const selectorValue = selectorIndex === -1 ? 'all' : process.argv[selectorIndex + 1];
   try {
-    const result = aggregateStrykerReports(rootDirectory);
+    if (!selectorValue || selectorValue.startsWith('--')) {
+      throw new Error('--selector requires a value: all, tier-a, or a module name.');
+    }
+    const result = aggregateStrykerReports(rootDirectory, selectMutationModules(selectorValue));
     const summary = formatSummary(result);
     process.stdout.write(summary);
   } catch (error) {

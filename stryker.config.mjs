@@ -1,5 +1,6 @@
 import { mutationFiles } from './scripts/stryker-scope.mjs';
 
+// QNBS-v3: Share the validated risk-based mutation configuration between local tooling and CI.
 export default {
   packageManager: 'pnpm',
   testRunner: 'vitest',

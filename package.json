@@ -165,6 +165,7 @@
     "@storybook/react": "^10.5.7",
     "@storybook/react-vite": "^10.5.7",
     "@storybook/test-runner": "^0.24.4",
+    "@stryker-mutator/api": "^9.6.1",
     "@stryker-mutator/core": "^9.2.0",
     "@stryker-mutator/vitest-runner": "^9.2.0",
     "@tailwindcss/vite": "^4.3.3",

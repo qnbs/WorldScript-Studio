@@ -232,6 +232,9 @@ importers:
       '@storybook/test-runner':
         specifier: ^0.24.4
         version: 0.24.4(@swc/helpers@0.5.21)(@types/node@25.9.2)(storybook@10.5.7(@types/react@19.2.18)(prettier@3.8.3)(react@19.2.8))
+      '@stryker-mutator/api':
+        specifier: ^9.6.1
+        version: 9.6.1
       '@stryker-mutator/core':
         specifier: ^9.2.0
         version: 9.6.1(@types/node@25.9.2)

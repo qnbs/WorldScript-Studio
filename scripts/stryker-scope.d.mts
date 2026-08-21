@@ -1,5 +1,6 @@
 export type StrykerRiskTier = 'A' | 'B';
 
+// QNBS-v3: Type the scope registry and selectors consumed by the CI matrix.
 export interface StrykerMutationModule {
   name: string;
   riskTier: StrykerRiskTier;
