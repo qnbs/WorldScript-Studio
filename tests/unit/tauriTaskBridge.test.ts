@@ -1,5 +1,6 @@
 // QNBS-v3: Tests for tauriTaskBridge — Rust TaskSupervisor Tauri invoke wrapper.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { RUST_TASK_CONTRACT_VERSION } from '../../packages/worker-bus/src/constants';
 
 vi.mock('../../services/tauriRuntime', () => ({
   isTauriRuntime: vi.fn(() => false),
@@ -26,7 +27,8 @@ describe('tauriTaskBridge', () => {
       const { invokeRustTask } = await import('../../services/tauriTaskBridge');
       await expect(
         invokeRustTask({
-          taskId: '00000000-0000-0000-0000-000000000001',
+          contractVersion: '1.0.0',
+          taskId: '550e8400-e29b-41d4-a716-446655440001',
           taskType: 'inference.text',
           payload: { input: 'hello' },
           priority: 'normal',
@@ -41,6 +43,7 @@ describe('tauriTaskBridge', () => {
       vi.mocked(isTauriRuntime).mockReturnValue(true);
       const { invoke } = await import('@tauri-apps/api/core');
       vi.mocked(invoke).mockResolvedValue({
+        contractVersion: '1.0.0',
         taskId: 'tid-1',
         success: true,
         payload: { result: 'done' },
@@ -48,7 +51,8 @@ describe('tauriTaskBridge', () => {
       });
       const { invokeRustTask } = await import('../../services/tauriTaskBridge');
       const result = await invokeRustTask({
-        taskId: '00000000-0000-0000-0000-000000000002',
+        contractVersion: '1.0.0',
+        taskId: '550e8400-e29b-41d4-a716-446655440002',
         taskType: 'inference.text',
         payload: { input: 'hello' },
         priority: 'normal',
@@ -56,7 +60,9 @@ describe('tauriTaskBridge', () => {
         timeoutMs: 5000,
       });
       expect(result.success).toBe(true);
-      expect(invoke).toHaveBeenCalledWith('worldscript_task_supervisor_submit', expect.any(Object));
+      expect(invoke).toHaveBeenCalledWith('worldscript_task_supervisor_submit', {
+        request: expect.objectContaining({ contractVersion: RUST_TASK_CONTRACT_VERSION }),
+      });
     });
 
     it('wraps Tauri invoke errors with context message', async () => {
@@ -67,7 +73,8 @@ describe('tauriTaskBridge', () => {
       const { invokeRustTask } = await import('../../services/tauriTaskBridge');
       await expect(
         invokeRustTask({
-          taskId: '00000000-0000-0000-0000-000000000003',
+          contractVersion: '1.0.0',
+          taskId: '550e8400-e29b-41d4-a716-446655440003',
           taskType: 'inference.text',
           payload: {},
           priority: 'normal',
@@ -86,7 +93,8 @@ describe('tauriTaskBridge', () => {
       const { invokeRustTask } = await import('../../services/tauriTaskBridge');
       const pending = expect(
         invokeRustTask({
-          taskId: '00000000-0000-0000-0000-000000000004',
+          contractVersion: '1.0.0',
+          taskId: '550e8400-e29b-41d4-a716-446655440004',
           taskType: 'inference.text',
           payload: {},
           priority: 'normal',

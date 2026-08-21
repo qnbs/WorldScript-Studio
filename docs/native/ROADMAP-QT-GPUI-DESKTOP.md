@@ -972,7 +972,7 @@ Required:
     full worker-bus extraction and authority switch remain open
 [~] diagnostics renderer-neutral — Core model/redaction and TS/Rust parity are CI-proven;
     sink migration and authority switch remain open
-[ ] contract versioning policy established
+[x] contract versioning policy established — bounded TaskSupervisor request/result contract v1.0.0 is validated at the typed boundary; see docs/native/CONTRACT-VERSIONING-POLICY.md
 [x] native-readiness CI gate active — enforced by `pnpm run native-readiness:check`
 ```
 

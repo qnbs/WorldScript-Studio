@@ -4,7 +4,13 @@
 //          Falls back to web silently on any Rust failure. Returns null only when
 //          WorkerBus v2 is not initialized (flag off or startup race).
 
-import type { EnqueueOptions, RustTaskRequest, TaskHandle, TaskProgress } from '@domain/worker-bus';
+import {
+  type EnqueueOptions,
+  RUST_TASK_CONTRACT_VERSION,
+  type RustTaskRequest,
+  type TaskHandle,
+  type TaskProgress,
+} from '@domain/worker-bus';
 import { createLogger } from './logger';
 import {
   invalidateRustAvailabilityCache,
@@ -52,6 +58,8 @@ export async function routeTask<TResult = unknown>(
     if (rustAvailable) {
       try {
         const request: RustTaskRequest = {
+          // QNBS-v3: Put the shared version on every request before crossing into native code.
+          contractVersion: RUST_TASK_CONTRACT_VERSION,
           taskId: crypto.randomUUID(),
           taskType,
           payload,

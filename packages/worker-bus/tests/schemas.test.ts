@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { RUST_TASK_CONTRACT_VERSION } from '../src/constants';
 import {
   RetryPolicySchema,
   RustTaskProgressEventSchema,
@@ -98,6 +99,7 @@ describe('schemas', () => {
   describe('RustTaskRequestSchema', () => {
     it('accepts valid rust task request', () => {
       const result = RustTaskRequestSchema.safeParse({
+        contractVersion: RUST_TASK_CONTRACT_VERSION,
         taskId: '550e8400-e29b-41d4-a716-446655440000',
         taskType: 'export.epub',
         payload: { markdown: '# Hello' },
@@ -108,9 +110,22 @@ describe('schemas', () => {
       expect(result.success).toBe(true);
     });
 
-    it('rejects invalid UUID', () => {
+    it('rejects an empty task ID', () => {
       const result = RustTaskRequestSchema.safeParse({
-        taskId: 'not-a-uuid',
+        contractVersion: RUST_TASK_CONTRACT_VERSION,
+        taskId: '',
+        taskType: 'export.epub',
+        payload: {},
+        priority: 'normal',
+        target: 'rust',
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects an unsupported contract version', () => {
+      const result = RustTaskRequestSchema.safeParse({
+        contractVersion: '2.0.0',
+        taskId: '550e8400-e29b-41d4-a716-446655440000',
         taskType: 'export.epub',
         payload: {},
         priority: 'normal',
@@ -147,6 +162,7 @@ describe('schemas', () => {
   describe('RustTaskResultEventSchema', () => {
     it('accepts valid result event', () => {
       const result = RustTaskResultEventSchema.safeParse({
+        contractVersion: RUST_TASK_CONTRACT_VERSION,
         taskId: 't-1',
         success: true,
         payload: { base64: 'abc' },

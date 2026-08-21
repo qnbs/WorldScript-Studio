@@ -1,5 +1,6 @@
 // QNBS-v3: covers every TauriDesktopPlatform facet's success + failure paths, incl. the never-throw notification guarantee, the LoRA Rust argument shapes, and logged (not silent) fallback catches.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { RUST_TASK_CONTRACT_VERSION } from '../../worker-bus/src/constants';
 
 const h = vi.hoisted(() => {
   const getCurrentWindowShow = vi.fn(async () => {});
@@ -387,8 +388,16 @@ describe('tauriDesktopPlatform', () => {
 
   describe('tasks', () => {
     it('submitTask/pingSupervisor invoke the named Rust commands', async () => {
-      await tauriDesktopPlatform.tasks.submitTask({
+      h.invoke.mockResolvedValueOnce({
+        contractVersion: '1.0.0',
         taskId: '1',
+        success: true,
+        payload: {},
+        latencyMs: 0,
+      });
+      await tauriDesktopPlatform.tasks.submitTask({
+        contractVersion: '1.0.0',
+        taskId: '550e8400-e29b-41d4-a716-446655440001',
         taskType: 'text.analyze',
         payload: {},
         priority: 'normal',
@@ -396,10 +405,86 @@ describe('tauriDesktopPlatform', () => {
         timeoutMs: 5000,
       });
       expect(h.invoke).toHaveBeenCalledWith('worldscript_task_supervisor_submit', {
-        request: expect.objectContaining({ taskId: '1' }),
+        request: expect.objectContaining({
+          contractVersion: RUST_TASK_CONTRACT_VERSION,
+          taskId: '550e8400-e29b-41d4-a716-446655440001',
+        }),
       });
       await tauriDesktopPlatform.tasks.pingSupervisor();
       expect(h.invoke).toHaveBeenCalledWith('worldscript_task_supervisor_ping');
+    });
+
+    it('rejects a native result with an unknown contract version', async () => {
+      h.invoke.mockResolvedValueOnce({
+        contractVersion: '2.0.0',
+        taskId: '1',
+        success: true,
+        payload: {},
+        latencyMs: 0,
+      });
+      await expect(
+        tauriDesktopPlatform.tasks.submitTask({
+          contractVersion: '1.0.0',
+          taskId: '550e8400-e29b-41d4-a716-446655440001',
+          taskType: 'text.analyze',
+          payload: {},
+          priority: 'normal',
+          target: 'rust',
+          timeoutMs: 5000,
+        }),
+      ).rejects.toThrow(/unsupported contract version/);
+      expect(h.loggerWarn).toHaveBeenCalledWith(
+        'desktopPlatform.tasks: submitTask failed',
+        expect.objectContaining({ error: expect.any(Error) }),
+      );
+    });
+
+    it('rejects an invalid request contract before invoking native code', async () => {
+      await expect(
+        tauriDesktopPlatform.tasks.submitTask({
+          contractVersion: RUST_TASK_CONTRACT_VERSION,
+          taskId: '',
+          taskType: 'text.analyze',
+          payload: {},
+          priority: 'normal',
+          target: 'rust',
+          timeoutMs: 5000,
+        }),
+      ).rejects.toThrow(/invalid request contract/);
+      expect(h.invoke).not.toHaveBeenCalled();
+      expect(h.loggerWarn).toHaveBeenCalled();
+    });
+
+    it('rejects and logs a malformed native result', async () => {
+      h.invoke.mockResolvedValueOnce({ contractVersion: RUST_TASK_CONTRACT_VERSION });
+      await expect(
+        tauriDesktopPlatform.tasks.submitTask({
+          contractVersion: RUST_TASK_CONTRACT_VERSION,
+          taskId: 'task-1',
+          taskType: 'text.analyze',
+          payload: {},
+          priority: 'normal',
+          target: 'rust',
+          timeoutMs: 5000,
+        }),
+      ).rejects.toThrow(/invalid result contract/);
+      expect(h.loggerWarn).toHaveBeenCalled();
+    });
+
+    it('logs and wraps native invocation failures', async () => {
+      h.invoke.mockRejectedValueOnce(new Error('IPC unavailable'));
+      await expect(
+        tauriDesktopPlatform.tasks.submitTask({
+          contractVersion: RUST_TASK_CONTRACT_VERSION,
+          taskId: 'task-2',
+          taskType: 'text.analyze',
+          payload: {},
+          priority: 'normal',
+          target: 'rust',
+          timeoutMs: 5000,
+        }),
+      ).rejects.toThrow(/worldscript_task_supervisor_submit failed: IPC unavailable/);
+      expect(h.loggerWarn).toHaveBeenCalled();
     });
 
     it('convertMarkdownToEpub decodes the base64 response', async () => {

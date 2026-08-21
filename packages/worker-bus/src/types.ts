@@ -1,6 +1,8 @@
 // QNBS-v3: WorkerBus v2 core types — strongly typed task orchestration layer.
 //          All messages are versioned and validated via Zod (schemas.ts).
 
+import type { RUST_TASK_CONTRACT_VERSION } from './constants';
+
 // --- Priorities -------------------------------------------------------------
 export type TaskPriority = 'critical' | 'high' | 'normal' | 'low';
 
@@ -216,6 +218,8 @@ export interface TaskHandler {
 
 // --- Rust Bridge Types ------------------------------------------------------
 export interface RustTaskRequest {
+  // QNBS-v3: Keep the request version typed so native callers cannot omit the boundary marker.
+  readonly contractVersion: typeof RUST_TASK_CONTRACT_VERSION;
   readonly taskId: string;
   readonly taskType: string;
   readonly payload: unknown;
@@ -235,9 +239,11 @@ export interface RustTaskProgressEvent {
 }
 
 export interface RustTaskResultEvent {
+  // QNBS-v3: Keep the result version typed so consumers cannot trust an unversioned response.
+  readonly contractVersion: typeof RUST_TASK_CONTRACT_VERSION;
   readonly taskId: string;
   readonly success: boolean;
   readonly payload: unknown;
-  readonly error?: string;
+  readonly error?: string | undefined;
   readonly latencyMs: number;
 }
