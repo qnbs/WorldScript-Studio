@@ -138,6 +138,7 @@
   "settings.ai.gpu.troubleshootQueue": "Useita tekoälytehtäviä on jonossa. Vain yksi toimii kerrallaan VRAM-törmäysten välttämiseksi. Odota nykyisen tehtävän valmistumista.",
   "settings.ai.gpu.waitingConsumers": "Odottaa",
   "settings.ai.grokKey": "Grok API Key",
+  "settings.ai.modelGroups.gpt5Current": "GPT-5 — Nykyinen",
   "settings.ai.hybridFallbackHint": "Jos ensisijainen toimittaja epäonnistuu, WorldScript yrittää lueteltuja varavaihtoehtoja (kohtausgeneraattorit, codex-työkalut). Writer-suoratoisto käyttää vain ensisijaista palveluntarjoajaasi.",
   "settings.ai.hybridFallbackTitle": "Hybridivaraus (projektin tekoälytyökalut)",
   "settings.ai.hybridFallbackToggle": "Ota varaketju käyttöön",

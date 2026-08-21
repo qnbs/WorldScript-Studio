@@ -10,6 +10,19 @@ import {
 } from '../../features/featureFlags/featureFlagsSlice';
 import { selectProjectData } from '../../features/project/projectSelectors';
 import { statusActions } from '../../features/status/statusSlice';
+// QNBS-v3: shared catalog keeps settings options and provider fallbacks on the same IDs.
+import {
+  ANTHROPIC_MODEL_IDS,
+  ANTHROPIC_MODEL_OPTIONS,
+  DEFAULT_ANTHROPIC_MODEL_ID,
+  DEFAULT_GROK_MODEL_ID,
+  DEFAULT_OPENAI_MODEL_ID,
+  GROK_MODEL_IDS,
+  GROK_MODEL_OPTIONS,
+  isModelInCatalog,
+  OPENAI_MODEL_IDS,
+  OPENAI_MODEL_OPTIONS,
+} from '../../services/ai/cloudModelCatalog';
 import { RECOMMENDED_OLLAMA_MODEL_IDS } from '../../services/ai/modelRecommendations';
 import { generateLocalText } from '../../services/localAiFacade';
 import { rebuildHybridRagIndex } from '../../services/localRagService';
@@ -82,9 +95,20 @@ export const AiSection: FC = () => {
           } else if (p === 'gemini') {
             newModel = currentModel.startsWith('ollama/') ? 'gemini-3.5-flash' : currentModel;
           } else if (p === 'openai') {
-            newModel = currentModel.startsWith('gpt-') ? currentModel : 'gpt-4o-mini';
+            // QNBS-v3: migrate incompatible OpenAI selections to the current supported default.
+            newModel = isModelInCatalog(OPENAI_MODEL_IDS, currentModel)
+              ? currentModel
+              : DEFAULT_OPENAI_MODEL_ID;
           } else if (p === 'anthropic') {
-            newModel = currentModel.startsWith('claude-') ? currentModel : 'claude-haiku-4-5';
+            // QNBS-v3: migrate incompatible Anthropic selections to the current supported default.
+            newModel = isModelInCatalog(ANTHROPIC_MODEL_IDS, currentModel)
+              ? currentModel
+              : DEFAULT_ANTHROPIC_MODEL_ID;
+          } else if (p === 'grok') {
+            // QNBS-v3: migrate incompatible Grok selections to the current supported default.
+            newModel = isModelInCatalog(GROK_MODEL_IDS, currentModel)
+              ? currentModel
+              : DEFAULT_GROK_MODEL_ID;
           } else if (p === 'webllm') {
             // QNBS-v3: default to first curated MLC model; 'webllm/browser' kept as legacy fallback
             newModel = WEBLLM_SUPPORTED_MODELS[0].id;
@@ -379,137 +403,121 @@ export const AdvancedAiSection: FC = () => {
               }}
               {...(settings.advancedAi.provider === 'anthropic'
                 ? {
-                    options: [
-                      { value: 'claude-opus-4-7', label: 'Claude Opus 4.7' },
-                      { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
-                      { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
-                    ],
+                    // QNBS-v3: render the shared Anthropic catalog instead of a second option list.
+                    options: ANTHROPIC_MODEL_OPTIONS,
                   }
-                : settings.advancedAi.provider === 'webllm'
+                : settings.advancedAi.provider === 'grok'
                   ? {
-                      options: WEBLLM_SUPPORTED_MODELS.map((m) => ({
-                        value: m.id,
-                        label: m.label,
-                      })),
+                      // QNBS-v3: expose only the current Grok catalog for the Grok provider.
+                      options: GROK_MODEL_OPTIONS,
                     }
-                  : {
-                      groups:
-                        settings.advancedAi.provider === 'ollama'
-                          ? [
-                              {
-                                label: 'Gemma',
-                                options: [
-                                  { value: 'ollama/gemma3', label: 'Gemma 3 4B' },
-                                  { value: 'ollama/gemma3:12b', label: 'Gemma 3 12B' },
-                                  { value: 'ollama/gemma3:27b', label: 'Gemma 3 27B' },
-                                ],
-                              },
-                              {
-                                label: 'Llama',
-                                options: [
-                                  { value: 'ollama/llama3.3', label: 'Llama 3.3' },
-                                  { value: 'ollama/llama3.2', label: 'Llama 3.2 3B' },
-                                  { value: 'ollama/llama4:scout', label: 'Llama 4 Scout 17B' },
-                                ],
-                              },
-                              {
-                                label: 'Mistral',
-                                options: [
-                                  { value: 'ollama/mistral', label: 'Mistral 7B' },
-                                  {
-                                    value: 'ollama/mistral-small3.2:24b',
-                                    label: 'Mistral Small 3.2 24B',
-                                  },
-                                ],
-                              },
-                              {
-                                label: 'Qwen',
-                                options: [
-                                  { value: 'ollama/qwen3:8b', label: 'Qwen3 8B' },
-                                  { value: 'ollama/qwen3:14b', label: 'Qwen3 14B' },
-                                  { value: 'ollama/qwen3:30b-a3b', label: 'Qwen3 30B-A3B (MoE)' },
-                                ],
-                              },
-                              {
-                                label: 'DeepSeek',
-                                options: [
-                                  { value: 'ollama/deepseek-r1:7b', label: 'DeepSeek-R1 7B' },
-                                  { value: 'ollama/deepseek-r1:14b', label: 'DeepSeek-R1 14B' },
-                                ],
-                              },
-                              {
-                                label: 'Phi',
-                                options: [
-                                  { value: 'ollama/phi4', label: 'Phi-4 14B' },
-                                  { value: 'ollama/phi4-mini:3.8b', label: 'Phi-4 Mini 3.8B' },
-                                ],
-                              },
-                              {
-                                label: 'Other',
-                                options: [
-                                  { value: 'ollama/custom', label: t('settings.ai.customModel') },
-                                ],
-                              },
-                            ]
-                          : settings.advancedAi.provider === 'openai'
+                  : settings.advancedAi.provider === 'webllm'
+                    ? {
+                        options: WEBLLM_SUPPORTED_MODELS.map((m) => ({
+                          value: m.id,
+                          label: m.label,
+                        })),
+                      }
+                    : {
+                        groups:
+                          settings.advancedAi.provider === 'ollama'
                             ? [
                                 {
-                                  label: 'GPT-4.1 (2025)',
+                                  label: 'Gemma',
                                   options: [
-                                    { value: 'gpt-4.1', label: 'GPT-4.1' },
-                                    { value: 'gpt-4.1-mini', label: 'GPT-4.1 Mini' },
-                                    { value: 'gpt-4.1-nano', label: 'GPT-4.1 Nano' },
+                                    { value: 'ollama/gemma3', label: 'Gemma 3 4B' },
+                                    { value: 'ollama/gemma3:12b', label: 'Gemma 3 12B' },
+                                    { value: 'ollama/gemma3:27b', label: 'Gemma 3 27B' },
                                   ],
                                 },
                                 {
-                                  label: 'o-Series Reasoning',
+                                  label: 'Llama',
                                   options: [
-                                    { value: 'o3', label: 'o3' },
-                                    { value: 'o4-mini', label: 'o4-mini' },
-                                    { value: 'o3-mini', label: 'o3-mini' },
+                                    { value: 'ollama/llama3.3', label: 'Llama 3.3' },
+                                    { value: 'ollama/llama3.2', label: 'Llama 3.2 3B' },
+                                    { value: 'ollama/llama4:scout', label: 'Llama 4 Scout 17B' },
                                   ],
                                 },
                                 {
-                                  label: 'Legacy',
+                                  label: 'Mistral',
                                   options: [
-                                    { value: 'gpt-4o', label: 'GPT-4o' },
-                                    { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
+                                    { value: 'ollama/mistral', label: 'Mistral 7B' },
+                                    {
+                                      value: 'ollama/mistral-small3.2:24b',
+                                      label: 'Mistral Small 3.2 24B',
+                                    },
+                                  ],
+                                },
+                                {
+                                  label: 'Qwen',
+                                  options: [
+                                    { value: 'ollama/qwen3:8b', label: 'Qwen3 8B' },
+                                    { value: 'ollama/qwen3:14b', label: 'Qwen3 14B' },
+                                    { value: 'ollama/qwen3:30b-a3b', label: 'Qwen3 30B-A3B (MoE)' },
+                                  ],
+                                },
+                                {
+                                  label: 'DeepSeek',
+                                  options: [
+                                    { value: 'ollama/deepseek-r1:7b', label: 'DeepSeek-R1 7B' },
+                                    { value: 'ollama/deepseek-r1:14b', label: 'DeepSeek-R1 14B' },
+                                  ],
+                                },
+                                {
+                                  label: 'Phi',
+                                  options: [
+                                    { value: 'ollama/phi4', label: 'Phi-4 14B' },
+                                    { value: 'ollama/phi4-mini:3.8b', label: 'Phi-4 Mini 3.8B' },
+                                  ],
+                                },
+                                {
+                                  label: 'Other',
+                                  options: [
+                                    { value: 'ollama/custom', label: t('settings.ai.customModel') },
                                   ],
                                 },
                               ]
-                            : [
-                                {
-                                  label: 'Gemini 3 — Latest',
-                                  options: [
-                                    { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash ✦' },
-                                    {
-                                      value: 'gemini-3.1-pro-preview',
-                                      label: 'Gemini 3.1 Pro Preview',
-                                    },
-                                    { value: 'gemini-3.1-flash', label: 'Gemini 3.1 Flash' },
-                                    {
-                                      value: 'gemini-3.1-flash-lite',
-                                      label: 'Gemini 3.1 Flash-Lite',
-                                    },
-                                  ],
-                                },
-                                {
-                                  label: 'Gemini 2.5 — Stable',
-                                  options: [
-                                    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-                                    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-                                  ],
-                                },
-                                {
-                                  label: 'Legacy',
-                                  options: [
-                                    { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
-                                    { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
-                                    { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
-                                  ],
-                                },
-                              ],
-                    })}
+                            : settings.advancedAi.provider === 'openai'
+                              ? [
+                                  {
+                                    // QNBS-v3: keep the OpenAI selector values sourced from the shared catalog.
+                                    label: t('settings.ai.modelGroups.gpt5Current'),
+                                    options: OPENAI_MODEL_OPTIONS,
+                                  },
+                                ]
+                              : [
+                                  {
+                                    label: 'Gemini 3 — Latest',
+                                    options: [
+                                      { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash ✦' },
+                                      {
+                                        value: 'gemini-3.1-pro-preview',
+                                        label: 'Gemini 3.1 Pro Preview',
+                                      },
+                                      { value: 'gemini-3.1-flash', label: 'Gemini 3.1 Flash' },
+                                      {
+                                        value: 'gemini-3.1-flash-lite',
+                                        label: 'Gemini 3.1 Flash-Lite',
+                                      },
+                                    ],
+                                  },
+                                  {
+                                    label: 'Gemini 2.5 — Stable',
+                                    options: [
+                                      { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+                                      { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+                                    ],
+                                  },
+                                  {
+                                    label: 'Legacy',
+                                    options: [
+                                      { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
+                                      { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
+                                      { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
+                                    ],
+                                  },
+                                ],
+                      })}
             />
 
             {/* Custom Ollama model input */}

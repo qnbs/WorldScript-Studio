@@ -138,6 +138,7 @@
   "settings.ai.gpu.troubleshootQueue": "多个 AI 任务排队。一次仅运行一个以避免 VRAM 冲突。等待当前任务完成。",
   "settings.ai.gpu.waitingConsumers": "等待",
   "settings.ai.grokKey": "Grok API Key",
+  "settings.ai.modelGroups.gpt5Current": "GPT-5 — 当前",
   "settings.ai.hybridFallbackHint": "如果主要提供程序失败，WorldScript 会尝试列出的后备方案（场景生成器、法典工具）。作家流媒体仅使用您的主要提供商。",
   "settings.ai.hybridFallbackTitle": "混合后备（项目 AI 工具）",
   "settings.ai.hybridFallbackToggle": "启用后备链",

@@ -18,6 +18,8 @@ import {
   shouldUseOpenRouter,
 } from './ai/aiModeService';
 import { assertCloudAiAllowed } from './ai/aiPolicy';
+// QNBS-v3: connection tests use the same current Anthropic default as the catalog and proxy.
+import { DEFAULT_ANTHROPIC_MODEL_ID } from './ai/cloudModelCatalog';
 import type { HeuristicContext } from './ai/heuristicFallback';
 import { applyHeuristicFallback } from './ai/heuristicFallback';
 import { resolveProviderFallbackChain } from './ai/hybridFallback';
@@ -1148,7 +1150,7 @@ export async function testAIConnection(
                 'content-type': 'application/json',
               },
               body: JSON.stringify({
-                model: 'claude-haiku-4-5',
+                model: DEFAULT_ANTHROPIC_MODEL_ID,
                 max_tokens: 1,
                 messages: [{ role: 'user', content: 'ping' }],
               }),
@@ -1159,7 +1161,7 @@ export async function testAIConnection(
               headers: { 'content-type': 'application/json' },
               body: JSON.stringify({
                 apiKey,
-                model: 'claude-haiku-4-5',
+                model: DEFAULT_ANTHROPIC_MODEL_ID,
                 maxTokens: 1,
                 messages: [{ role: 'user', content: 'ping' }],
               }),

@@ -138,6 +138,7 @@
   "settings.ai.gpu.troubleshootQueue": "Mörg gervigreind verkefni eru í biðröð. Aðeins einn keyrir í einu til að forðast VRAM árekstra. Bíddu þar til núverandi verkefni lýkur.",
   "settings.ai.gpu.waitingConsumers": "Bíður",
   "settings.ai.grokKey": "Grok API Key",
+  "settings.ai.modelGroups.gpt5Current": "GPT-5 — Núverandi",
   "settings.ai.hybridFallbackHint": "Ef aðalveitan mistakast, reynir WorldScript upptaldar fallbacks (senuframleiðendur, kóðaxverkfæri). Writer streymi notar eingöngu aðalveituna þína.",
   "settings.ai.hybridFallbackTitle": "Hybrid fallback (verkfæri gervigreindarverkefnis)",
   "settings.ai.hybridFallbackToggle": "Virkja afturkeðju",

@@ -3,6 +3,7 @@ import { ICONS } from '../constants';
 import { APP_SECTIONS } from '../constants/sections';
 import { useTranslation } from '../hooks/useTranslation';
 import type { View } from '../types';
+import { CustomIcon } from './ui/Icon';
 
 interface SidebarProps {
   currentView: View;
@@ -57,16 +58,10 @@ const NavItem: React.FC<{
           }`}
           aria-hidden="true"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={isActive ? 2 : 1.5}
-            stroke="currentColor"
-            className="w-4 h-4"
-          >
+          {/* QNBS-v3: the surrounding navigation item supplies the accessible label. */}
+          <CustomIcon className="w-4 h-4" strokeWidth={isActive ? 2 : 1.5} aria-hidden="true">
             {icon}
-          </svg>
+          </CustomIcon>
         </div>
         <span className="text-sm tracking-wide">{label}</span>
       </div>
@@ -96,17 +91,13 @@ const BottomTabItem: React.FC<{
       }`}
       aria-current={isActive ? 'page' : undefined}
     >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        fill="none"
-        viewBox="0 0 24 24"
-        strokeWidth={isActive ? 2 : 1.5}
-        stroke="currentColor"
+      <CustomIcon
         className={`w-5 h-5 transition-transform duration-200 ${isActive ? 'scale-110' : iconColor}`}
+        strokeWidth={isActive ? 2 : 1.5}
         aria-hidden="true"
       >
         {icon}
-      </svg>
+      </CustomIcon>
       <span
         className={`text-[10px] mt-0.5 leading-tight ${isActive ? 'font-semibold' : 'font-medium'}`}
       >

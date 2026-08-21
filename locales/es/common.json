@@ -174,6 +174,8 @@
   "error.db.quotaExceeded": "El almacenamiento del navegador está lleno. Elimina proyectos o instantáneas antiguas.",
   "error.db.unknown": "Error desconocido al acceder a la base de datos.",
   "error.deepLink.title": "Error al abrir el archivo del proyecto",
+  "error.deepLink.legacyTitle": "Esquema de enlace profundo antiguo",
+  "error.deepLink.legacyDescription": "Los enlaces storycraft:// están obsoletos y se eliminarán en la próxima versión. Vuelve a crear el enlace con worldscript://.",
   "error.deepLink.unknown": "Error desconocido",
   "error.fallback.generic": "La IA no está disponible: se usó la asistencia integrada.",
   "error.fallback.offline": "Estás sin conexión: se usó la asistencia integrada.",

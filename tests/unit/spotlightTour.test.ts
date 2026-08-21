@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
@@ -6,15 +7,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockDriverStart = vi.fn();
 const mockDriverDestroy = vi.fn();
+let capturedDriverOptions: { popoverClass?: string } | undefined;
 const mockDriverInstance = {
   drive: mockDriverStart,
   destroy: mockDriverDestroy,
 };
 
 vi.mock('driver.js', () => ({
-  driver: vi.fn(() => mockDriverInstance),
+  driver: vi.fn((options: { popoverClass?: string }) => {
+    // QNBS-v3: capture runtime options so the stylesheet selector contract is testable.
+    capturedDriverOptions = options;
+    return mockDriverInstance;
+  }),
 }));
 
+// QNBS-v3: stylesheet is mocked because jsdom cannot load driver.js CSS.
 vi.mock('driver.js/dist/driver.css', () => ({}));
 
 import {
@@ -25,7 +32,9 @@ import {
 } from '../../services/spotlightTour';
 
 beforeEach(() => {
+  // QNBS-v3: isolate captured driver configuration between tour assertions.
   localStorage.clear();
+  capturedDriverOptions = undefined;
   vi.clearAllMocks();
 });
 
@@ -80,5 +89,14 @@ describe('startSpotlightTour', () => {
   it('calls driver().drive() when tourId is omitted', () => {
     startSpotlightTour(t);
     expect(mockDriverStart).toHaveBeenCalled();
+  });
+
+  it('uses the themed popover selector declared by the tour stylesheet', async () => {
+    // QNBS-v3: assert the runtime-to-stylesheet selector contract to prevent rebrand drift.
+    startSpotlightTour(t, 'default');
+    expect(capturedDriverOptions?.popoverClass).toBe('worldscript-driver-popover');
+
+    const css = readFileSync('index.css', 'utf8');
+    expect(css).toContain(`.driver-popover.${capturedDriverOptions?.popoverClass}`);
   });
 });
