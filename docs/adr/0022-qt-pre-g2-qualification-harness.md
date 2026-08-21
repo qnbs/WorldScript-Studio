@@ -1,4 +1,4 @@
-# ADR 0022: Bounded pre-G2 Qt qualification harness
+# ADR 0022: Bounded pre-G2 Qt qualification probe
 
 **Status:** Accepted — clarifying amendment to [ADR-0021](0021-qt-gpui-native-desktop-strategy.md)
 **Date:** 2026-08-20
@@ -13,13 +13,14 @@ block a necessary early risk check or let a pre-G2 spike grow into an unadmitted
 
 ## Decision
 
-A bounded, non-product Qt learning/qualification harness under Wave 4.5 is explicitly permitted
-before G2 and is not “production UI code”. It exists only to falsify lifecycle, provisional bridge,
-accessibility/input, packaging/update trust, crash/recovery, and security-boundary assumptions at
+A bounded, non-product Qt pre-G2 qualification probe under Wave 4.5 is explicitly permitted before
+G2 and is not “production UI code”. The probe is a disposable learning/qualification artifact; it
+exists only to falsify lifecycle, provisional bridge, accessibility/input, packaging/update trust,
+crash/recovery, and security-boundary assumptions at
 the smallest useful cost. Its non-goals and evidence limits are defined in
 [`docs/native/QT-EARLY-KILLER-GATES.md`](../native/QT-EARLY-KILLER-GATES.md).
 
-The harness must remain disposable and isolated:
+The probe must remain disposable and isolated:
 
 - no editor, plot board, AI panel, design-system port, or product shell;
 - no Qt WebEngine or embedded browser shortcut;
@@ -35,6 +36,16 @@ This is an additive clarification, not a reversal or replacement of ADR-0021. Th
 prohibition on production Qt/GPUI UI before admission remains unchanged, and all later production
 gates remain mandatory.
 
+## Sequencing amendment (2026-08-20)
+
+The lifecycle/bridge, accessibility/input, and crash/recovery checks are now explicit early
+feasibility lanes. The early feasibility lanes are allowed before the formal Wave 4.5 checkpoint
+and may run in parallel with Waves 3 and 4 once Wave 2 exposes a typed Core probe. Formal Wave 4.5
+consumes their evidence and completes packaging/update-trust, permission, and admission review; it
+does not duplicate those lanes. Wave 5 builds the distinct reusable Qt learning harness and adds file-dialog and
+clipboard evidence only. This sequencing amendment preserves the same pre-G2 authorization boundary
+and does not authorize a product shell or broad Qt UI work.
+
 ## Consequences
 
 - Agents have an explicit authorization boundary for early Qt feasibility work.
@@ -43,7 +54,7 @@ gates remain mandatory.
   for the relevant Core semantics.
 - Wave 4.5 can falsify fatal assumptions before feature-port sunk cost without becoming a hidden
   Qt implementation wave.
-- Wave 5 turns accepted probes into a reusable learning harness and adds its remaining capability
+- Wave 5 turns accepted probe evidence into a reusable learning harness and adds its remaining capability
   checks; it does not duplicate the Wave 4.5 admission decision.
 - G2 remains the formal Qt implementation-admission gate, including final license, version, bridge,
   learning-harness, IME, accessibility, and packaged roundtrip decisions.

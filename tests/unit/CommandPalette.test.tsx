@@ -1,4 +1,5 @@
-import { render, renderHook, screen } from '@testing-library/react';
+import { render, renderHook, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CommandPalette } from '../../components/CommandPalette';
@@ -110,6 +111,25 @@ vi.mock('../../services/commands/fuzzyScore', () => ({
   scoreAgainstQuery: vi.fn(() => 0),
 }));
 
+// QNBS-v3: jsdom has 0-height containers, so render every virtualized palette row for class assertions.
+vi.mock('@tanstack/react-virtual', () => ({
+  defaultRangeExtractor: ({ start, end }: { start: number; end: number }) =>
+    Array.from({ length: end - start + 1 }, (_, i) => start + i),
+  useVirtualizer: ({ count }: { count: number }) => ({
+    getVirtualItems: () =>
+      Array.from({ length: count }, (_, i) => ({
+        index: i,
+        start: i * 64,
+        size: 64,
+        key: i,
+        lane: 0,
+      })),
+    getTotalSize: () => count * 64,
+    measureElement: vi.fn((_element: unknown) => {}),
+    scrollToIndex: vi.fn(),
+  }),
+}));
+
 vi.mock('../../features/featureFlags/featureFlagsSlice', () => ({
   selectFeatureFlags: vi.fn((s: { featureFlags: unknown }) => s.featureFlags),
 }));
@@ -128,18 +148,22 @@ const mockOnNavigate = vi.fn();
 // QNBS-v3: keep the default empty-list mock for the smoke tests; populated per-test below.
 afterEach(() => {
   vi.mocked(buildPaletteCommandModels).mockReturnValue([]);
+  vi.mocked(loadPalettePreferences).mockReturnValue({ pinnedIds: [], recentIds: [] });
+  vi.mocked(getLocalAiSuggestions).mockReturnValue([]);
+});
+
+const makeCommand = (id: string, title: string): PaletteCommandModel => ({
+  id,
+  title,
+  categoryLabel: 'palette.category.global',
+  category: 'global',
+  icon: null,
+  keywords: [],
+  run: vi.fn(),
 });
 
 const makeCommands = (n: number): PaletteCommandModel[] =>
-  Array.from({ length: n }, (_, i) => ({
-    id: `cmd-${i}`,
-    title: `Command ${i}`,
-    categoryLabel: 'palette.category.global',
-    category: 'global',
-    icon: null,
-    keywords: [],
-    run: vi.fn(),
-  }));
+  Array.from({ length: n }, (_, i) => makeCommand(`cmd-${i}`, `Command ${i}`));
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -194,6 +218,76 @@ describe('CommandPalette', () => {
         />,
       ),
     ).not.toThrow();
+  });
+
+  // QNBS-v3: prevent accessible-contrast regressions in inactive and selected palette tokens.
+  it('keeps populated option states on the accessible palette theme tokens', async () => {
+    const user = userEvent.setup();
+    const pinnedCommand = {
+      ...makeCommand('cmd-pinned', 'Pinned command'),
+      id: 'cmd-pinned',
+      title: 'Pinned command',
+      shortcutDisplay: ['Ctrl', 'P'],
+    };
+    const suggestedCommand = {
+      ...makeCommand('cmd-suggested', 'Suggested command'),
+      id: 'cmd-suggested',
+      title: 'Suggested command',
+      shortcutDisplay: ['Ctrl', 'S'],
+    };
+    const regularCommand = {
+      ...makeCommand('cmd-regular', 'Regular command'),
+      id: 'cmd-regular',
+      title: 'Regular command',
+      shortcutDisplay: ['Ctrl', 'R'],
+    };
+    vi.mocked(buildPaletteCommandModels).mockReturnValue([
+      pinnedCommand,
+      suggestedCommand,
+      regularCommand,
+    ]);
+    vi.mocked(loadPalettePreferences).mockReturnValue({ pinnedIds: ['cmd-pinned'], recentIds: [] });
+    vi.mocked(getLocalAiSuggestions).mockReturnValue([
+      { id: 'cmd-suggested', reasonKey: 'palette.reason.x' },
+    ]);
+
+    render(
+      <CommandPalette
+        isOpen={true}
+        onClose={mockOnClose}
+        onNavigate={mockOnNavigate}
+        currentView="dashboard"
+      />,
+    );
+
+    expect(screen.getByText('palette.section.suggestions')).toHaveClass(
+      'text-[var(--sc-text-secondary)]',
+    );
+    const suggestedOption = screen.getByRole('option', { name: /Suggested command/ });
+    expect(suggestedOption).toHaveClass('bg-[var(--sc-accent-hover)]');
+    expect(screen.getByText('palette.reason.x')).toHaveClass('text-[var(--sc-text-on-accent)]');
+    expect(within(suggestedOption).getByText('Ctrl')).toHaveClass(
+      'text-[var(--sc-text-on-accent)]',
+    );
+
+    const pinnedOption = screen.getByRole('option', { name: /Pinned command/ });
+    expect(within(pinnedOption).getByText('palette.pin.badge')).toHaveClass(
+      'text-[var(--sc-text-secondary)]',
+    );
+    expect(within(pinnedOption).getByText('Ctrl')).toHaveClass('text-[var(--sc-text-secondary)]');
+
+    await user.hover(pinnedOption);
+
+    expect(suggestedOption).toHaveClass('text-[var(--sc-text-primary)]');
+    expect(screen.getByText('palette.reason.x')).toHaveClass('text-[var(--sc-text-secondary)]');
+    expect(within(suggestedOption).getByText('Ctrl')).toHaveClass(
+      'text-[var(--sc-text-secondary)]',
+    );
+    expect(pinnedOption).toHaveClass('bg-[var(--sc-accent-hover)]');
+    expect(within(pinnedOption).getByText('palette.pin.badge')).toHaveClass(
+      'text-[var(--sc-text-on-accent)]',
+    );
+    expect(within(pinnedOption).getByText('Ctrl')).toHaveClass('text-[var(--sc-text-on-accent)]');
   });
 
   // QNBS-v3: the virtualized refactor flattens blocks into a single row list. Verify the hook's

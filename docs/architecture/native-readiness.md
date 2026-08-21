@@ -4,6 +4,11 @@ First instance of the recurring native-readiness check, now defined by [ADR-0021
 
 **A `DEBT` result is allowed during migration but must have an owner.** This scorecard is scored honestly against the codebase as it stands at each snapshot below — it is not aspirational.
 
+**Current mechanical gate:** `pnpm run native-readiness:check` runs in the CI quality job and
+validates the ordered early Qt feasibility lanes, the qualification maturity vocabulary, the
+separate GPUI exploration boundary, and the Wave-5 non-duplication rule. This policy check protects
+roadmap sequencing; it does not promote any planned lane to a higher maturity level.
+
 > **Historical context (added at Wave 0 CEF retirement, ADR-0021):** the Wave 2 snapshot below documents real work performed against `apps/desktop-cef/`, `scripts/cef/`, `.github/workflows/cef-learning-harness.yml`, and every `docs/cef/*` file it cites — all of those paths were removed per ADR-0021; see [`docs/historical/cef/README.md`](../historical/cef/README.md). Do not treat any file path in the Wave 2 section below as still present in the repository. The evidence rows are preserved unedited as an audit trail of what was actually verified, not rewritten to imply it didn't happen. The Wave 1 snapshot below is unaffected in substance — it concerns the `DesktopPlatform` boundary, which is renderer-neutral and remains current — but its remaining citations of `docs/cef/OWNERSHIP.yaml` and `docs/cef/TAURI-COUPLING-INVENTORY.md`/`tauri-coupling-inventory.json` are now historical-only references to removed files (the coupling inventory's own job is superseded by the live `pnpm run guardrail:desktop-imports` gate); `docs/cef/UI-DOMAIN-STATE-CLASSIFICATION.md` is the one exception — it was relocated, not deleted, and its reference below has been updated to its new path.
 
 ## Snapshot: Wave 1 PR A (`packages/desktop-contracts` contracts only, before migration)
