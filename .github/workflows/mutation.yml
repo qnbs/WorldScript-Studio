@@ -1,6 +1,6 @@
 # ============================================================
 # WorldScript Studio – Mutation Testing (Stryker) — Parallel + Incremental
-# QNBS-v3: Matrix-parallel Stryker with per-module incremental caching.
+# QNBS-v3: Matrix-parallel Stryker with per-module caches and fail-safe aggregation.
 # Run manually via workflow_dispatch. Each matrix job targets one module
 # to keep wall-clock time low (~5–15 min per job vs. 30–45 min single job).
 # Incremental caching skips unchanged mutants on re-runs (50–80% speedup).
@@ -33,6 +33,21 @@ permissions:
   contents: read
 
 jobs:
+  scope:
+    name: 🧬 Validate Stryker Scope
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.scope.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: scope
+        shell: bash
+        run: |
+          node scripts/stryker-scope.mjs
+          echo "matrix=$(node scripts/stryker-scope.mjs --matrix)" >> "$GITHUB_OUTPUT"
+
   # ============================================
   # PARALLEL MATRIX JOBS (one per module)
   # ============================================
@@ -40,24 +55,10 @@ jobs:
     name: 🧬 Stryker ${{ matrix.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    needs: scope
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - name: services-commands
-            mutate: "services/commands/**/*.ts"
-          - name: services-core
-            mutate: "services/{help/helpDocRetrieval,plotBoardService,promptLibrary,deepLinkService}.ts"
-          - name: services-ai-core
-            mutate: "services/ai/{modelRecommendations,aiPolicy,aiRetry,fetchAdapter,routingLogger,aiModeService}.ts"
-          - name: services-ai-providers
-            mutate: "services/ai/providers/openrouterProvider.ts"
-          - name: features-project
-            mutate: "features/project/**/*.ts"
-          - name: features-misc
-            mutate: "features/{settings,progressTracker,featureFlags,proForge}/**/*.ts"
-          - name: copilot
-            mutate: "services/copilot/**/*.ts"
+      matrix: ${{ fromJSON(needs.scope.outputs.matrix) }}
 
     permissions:
       contents: read
@@ -107,10 +108,13 @@ jobs:
           echo "   Concurrency: $CONCURRENCY"
           echo "   Mode: $MODE"
 
-          # QNBS-v3: each matrix job uses its own incremental file
-          export STRYKER_INCREMENTAL_FILE="reports/stryker-incremental-${{ matrix.name }}.json"
+          # QNBS-v3: pass the supported CLI option; arbitrary env vars are not Stryker config.
+          INCREMENTAL_FILE="reports/stryker-incremental-${{ matrix.name }}.json"
 
           pnpm exec stryker run \
+            stryker.config.mjs \
+            --incremental \
+            --incrementalFile "$INCREMENTAL_FILE" \
             $FORCE_FLAG \
             --concurrency "$CONCURRENCY" \
             --mutate "${{ matrix.mutate }}" \
@@ -124,7 +128,7 @@ jobs:
         with:
           name: stryker-report-${{ matrix.name }}
           path: reports/mutation/
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 30
 
   # ============================================
@@ -133,50 +137,31 @@ jobs:
   aggregate:
     name: 📊 Stryker Aggregate Report
     runs-on: ubuntu-latest
-    needs: stryker
+    needs: [scope, stryker]
     if: always()
     timeout-minutes: 10
     permissions:
       contents: read
 
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - name: Download all Stryker reports
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           path: all-reports
           pattern: stryker-report-*
-          merge-multiple: true
+          merge-multiple: false
 
       - name: Build combined summary
         run: |
-          echo "## 🧬 Stryker Mutation Results (Parallel)" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Module | Score | Killed | Survived | Timeout | No Cov |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|--------|-------|--------|----------|---------|--------|" >> "$GITHUB_STEP_SUMMARY"
-
-          for dir in all-reports/stryker-report-*/; do
-            [ -d "$dir" ] || continue
-            MODULE=$(basename "$dir" | sed 's/stryker-report-//')
-            REPORT="${dir}mutation.json"
-
-            if [ -f "$REPORT" ]; then
-              SCORE=$(node -e "
-                const r = require('./$REPORT');
-                const m = r.metrics || {};
-                console.log((m.mutationScore ?? 0).toFixed(1) + '%');
-              " 2>/dev/null || echo "N/A")
-              KILLED=$(node -e "const r=require('./$REPORT'); console.log(r.metrics?.killed ?? 'N/A')" 2>/dev/null || echo "N/A")
-              SURVIVED=$(node -e "const r=require('./$REPORT'); console.log(r.metrics?.survived ?? 'N/A')" 2>/dev/null || echo "N/A")
-              TIMEOUT=$(node -e "const r=require('./$REPORT'); console.log(r.metrics?.timeout ?? 'N/A')" 2>/dev/null || echo "N/A")
-              NOCOV=$(node -e "const r=require('./$REPORT'); console.log(r.metrics?.noCoverage ?? 'N/A')" 2>/dev/null || echo "N/A")
-
-              echo "| $MODULE | $SCORE | $KILLED | $SURVIVED | $TIMEOUT | $NOCOV |" >> "$GITHUB_STEP_SUMMARY"
-            else
-              echo "| $MODULE | N/A | N/A | N/A | N/A | N/A |" >> "$GITHUB_STEP_SUMMARY"
-            fi
-          done
-
-          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ needs.stryker.result }}" != "success" ]; then
+            echo "Stryker matrix did not complete successfully: ${{ needs.stryker.result }}" >&2
+            exit 1
+          fi
+          node scripts/aggregate-stryker-reports.mjs all-reports | tee -a "$GITHUB_STEP_SUMMARY"
           echo "> Mode: \`${{ github.event.inputs.mode || 'incremental' }}\` | Concurrency: \`${{ github.event.inputs.per_job_concurrency || '2' }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "> Threshold: break ≥ 75 | low ≥ 70 | high ≥ 85" >> "$GITHUB_STEP_SUMMARY"
           echo "> Individual HTML/JSON reports are available as artifacts." >> "$GITHUB_STEP_SUMMARY"

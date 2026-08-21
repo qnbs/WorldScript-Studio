@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "modules": [
+    {
+      "name": "services-commands",
+      "mutate": [
+        "services/commands/fuzzyScore.ts",
+        "services/commands/palettePreferences.ts",
+        "services/commands/commandBuilder.ts"
+      ]
+    },
+    {
+      "name": "services-core",
+      "mutate": [
+        "services/help/helpDocRetrieval.ts",
+        "services/plotBoardService.ts",
+        "services/promptLibrary.ts",
+        "services/deepLinkService.ts"
+      ]
+    },
+    {
+      "name": "services-ai-core",
+      "mutate": [
+        "services/ai/modelRecommendations.ts",
+        "services/ai/aiPolicy.ts",
+        "services/ai/aiRetry.ts",
+        "services/ai/fetchAdapter.ts",
+        "services/ai/routingLogger.ts",
+        "services/ai/aiModeService.ts"
+      ]
+    },
+    {
+      "name": "services-ai-providers",
+      "mutate": ["services/ai/providers/openrouterProvider.ts"]
+    },
+    {
+      "name": "features-project",
+      "mutate": [
+        "features/project/projectSelectors.ts",
+        "features/project/sectionRestoreHelpers.ts"
+      ]
+    },
+    {
+      "name": "features-misc",
+      "mutate": [
+        "features/settings/accessibilitySchema.ts",
+        "features/progressTracker/progressTrackerSlice.ts",
+        "features/featureFlags/featureFlagsSlice.ts",
+        "features/proForge/proForgeSlice.ts"
+      ]
+    },
+    {
+      "name": "copilot",
+      "mutate": [
+        "services/copilot/heuristicEngine.ts",
+        "services/copilot/insightGenerator.ts",
+        "services/copilot/actionApplier.ts",
+        "services/copilot/copilotContextService.ts"
+      ]
+    },
+    {
+      "name": "services-plugin",
+      "mutate": ["services/pluginRegistry.ts"]
+    }
+  ]
+}
