@@ -63,18 +63,22 @@ modes were reported in #266:
    the PWA performs **zero** localhost requests — the CORS console noise disappears by
    construction. Instead the PWA shows a quiet banner explaining the restriction plus a
    "Download the desktop app" CTA.
-5. **CSP stays unchanged.** The WebView CSP is bypassed for plugin-http traffic (native stack);
-   the web CSP keeps its explicit localhost entries for defense-in-depth documentation, and the
-   `https:` BYOK trade-off from ADR 0004 is unaffected.
+5. **CSP is explicit and runtime-checked.** The WebView CSP is bypassed for plugin-http traffic
+   (native stack), but `localServerFetch` still checks every native and browser endpoint against the
+   shared `config/csp-connect-src.json` policy before transport. Tauri capability scope remains a
+   second native enforcement boundary. Unlisted BYOK origins and local endpoints fail with an
+   actionable policy error rather than an opaque network error. The same origin source generates the
+   web headers and Tauri CSP; arbitrary BYOK origins require an explicit policy update.
 6. **Capability scope is pinned explicitly** in `src-tauri/capabilities/default.json`. Audit finding
    during this work: `http:default` alone grants **no URL scope at all** (the plugin's
    `Scope::is_allowed` requires a matching allow entry), so every plugin-http call — including the
    existing AI-SDK `fetchAdapter` cloud calls on desktop — was silently denied. The scope now
-   allows `http://localhost:*/*` + `http://127.0.0.1:*/*` (all three well-known ports plus
-   user-configured custom ports on loopback) and the enumerated cloud endpoints that mirror the
-   Tauri CSP `connect-src` (Gemini, OpenAI, x.ai, OpenRouter, Groq). Known limitation (status quo,
-   unchanged): LAN-IP servers (`http://192.168.…`) and arbitrary BYOK cloud base URLs remain
-   outside the scope; widening is a separate, deliberate decision.
+   allows `http://localhost:*/*` + `http://127.0.0.1:*/*` as a defense-in-depth envelope plus the
+   enumerated cloud endpoints that mirror the Tauri CSP `connect-src` (Gemini, OpenAI, x.ai,
+   OpenRouter, Groq). The shared runtime policy narrows local requests to the explicitly supported
+   ports before plugin-http is called. Known limitation (status quo, unchanged): LAN-IP servers
+   (`http://192.168.…`) and arbitrary BYOK cloud base URLs remain outside the scope; widening is a
+   separate, deliberate decision.
 
 ## Consequences
 

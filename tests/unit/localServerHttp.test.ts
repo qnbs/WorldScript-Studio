@@ -98,6 +98,15 @@ describe('localServerFetch (tauri branch)', () => {
     );
     expect(fetch).not.toHaveBeenCalled();
   });
+
+  // QNBS-v3: native HTTP cannot bypass the shared explicit-origin policy.
+  it('rejects an unlisted Tauri endpoint before invoking the native plugin', async () => {
+    isTauriRuntimeMock.mockReturnValue(true);
+    await expect(localServerFetch('http://192.168.1.20:11434/api/tags')).rejects.toMatchObject({
+      code: 'CSP_CONNECT_ORIGIN_BLOCKED',
+    });
+    expect(tauriFetchMock).not.toHaveBeenCalled();
+  });
 });
 
 // ─── error classification ─────────────────────────────────────────────────────

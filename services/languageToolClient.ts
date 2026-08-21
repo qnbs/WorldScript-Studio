@@ -4,11 +4,13 @@
  */
 
 import type { Settings } from '../types';
+import { assertCspConnectEndpointAllowed } from './network/cspOriginPolicy';
 
 export function assertLanguageToolAllowed(settings: Settings, baseUrl: string): void {
   if (!settings.integrations.languageToolEnabled) {
     throw new Error('LanguageTool is disabled in settings.');
   }
+  assertCspConnectEndpointAllowed(baseUrl, 'LanguageTool endpoint');
   let host = '';
   try {
     host = new URL(baseUrl.trim()).hostname;
@@ -26,7 +28,9 @@ export async function languageToolPing(
   baseUrl: string,
   sampleText = 'Hello world.',
 ): Promise<boolean> {
-  const url = `${baseUrl.replace(/\/+$/, '')}/v2/check`;
+  // QNBS-v3: validate the ping target before putting sample text on the network.
+  const allowedBaseUrl = assertCspConnectEndpointAllowed(baseUrl, 'LanguageTool endpoint');
+  const url = `${allowedBaseUrl.toString().replace(/\/+$/, '')}/v2/check`;
   const body = new URLSearchParams();
   body.set('text', sampleText.slice(0, 400));
   body.set('language', 'en-US');

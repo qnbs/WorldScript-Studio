@@ -16,6 +16,7 @@
  * `components/settings/AiProviderCard.tsx` — not the transport layer.
  */
 import { createLogger } from './logger';
+import { assertCspConnectEndpointAllowed } from './network/cspOriginPolicy';
 import { isTauriRuntime } from './tauriRuntime';
 
 const log = createLogger('localServerHttp');
@@ -117,6 +118,8 @@ export async function localServerFetch(
   url: string,
   init: LocalServerFetchInit = {},
 ): Promise<Response> {
+  // QNBS-v3: native transport must share browser endpoint policy so the CSP boundary is not bypassed.
+  assertCspConnectEndpointAllowed(url, 'Local server endpoint');
   const fetchImpl = await resolveFetch();
   const requestInit: RequestInit = {
     ...(init.method !== undefined ? { method: init.method } : {}),

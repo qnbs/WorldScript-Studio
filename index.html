@@ -57,22 +57,9 @@
       - style-src: eigene + unsafe-inline (React inline-styles) — keine Fremd-Font-CDN mehr,
         CJK/Greek sind über @fontsource self-hosted (siehe index.tsx)
       - font-src: self + data: — keine Fremd-Font-CDN mehr nötig (self-hosted, siehe index.tsx)
-      - connect-src: 'self'
-                    + https:  — intentional broad HTTPS scheme-source. REQUIRED by the
-                      shipped BYOK feature `openAiCompatibleBaseUrl` (Settings → AI →
-                      custom base URL): users point WorldScript at arbitrary self-hosted
-                      or third-party OpenAI-compatible proxies that cannot be statically
-                      enumerated in a meta CSP. Because `https:` already covers every
-                      HTTPS origin, the explicit cloud-provider endpoints (Gemini,
-                      OpenAI, xAI, Groq, OpenRouter) were REMOVED as dead allowlist
-                      entries — keeping them implied a hardening that `https:` negates.
-                      Decision recorded in docs/adr/0004-csp-connect-src-byok-tradeoff.md.
-                    + http://localhost|127.0.0.1 (:11434 Ollama, :1234 LM Studio,
-                      :8000 local AI) — NOT covered by `https:`, so kept explicit.
-                    + wss:// Yjs signaling — explicit endpoints only, no ws: wildcard.
-                    The native Tauri build (src-tauri/tauri.conf.json) keeps a STRICT
-                    connect-src with no `https:` blanket; only the web PWA accepts the
-                    broader scheme for BYOK. See ADR-0004 for the web-vs-Tauri rationale.
+      - connect-src 'self' https://generativelanguage.googleapis.com https://api.openai.com https://api.x.ai https://api.anthropic.com https://openrouter.ai https://api.openrouter.ai https://api.groq.com https://huggingface.co https://us.aws.cdn.hf.co https://api.languagetool.org http://localhost:11434 http://127.0.0.1:11434 http://localhost:1234 http://127.0.0.1:1234 http://localhost:8000 http://127.0.0.1:8000 http://localhost:8010 http://127.0.0.1:8010 wss://y-webrtc-signaling.fly.dev wss://signaling.yjs.dev; arbitrary HTTPS egress and scheme wildcards are forbidden.
+        The allowlist is maintained in config/csp-connect-src.json, synchronized by csp:sync,
+        and verified by csp:verify. Runtime preflight rejects unlisted BYOK endpoints clearly.
       - img-src: data: URLs für Base64-Bilder erlaubt
       - Produktions-CSP wird über HTTP-Header des Hosts verschärft (siehe ADR-0004, docs/DEPLOYMENT.md)
     -->
@@ -83,7 +70,7 @@
             style-src   'self' 'unsafe-inline';
             font-src    'self' data:;
             img-src     'self' data: blob:;
-            connect-src 'self' https: http://localhost:11434 http://127.0.0.1:11434 http://localhost:1234 http://127.0.0.1:1234 http://localhost:8000 http://127.0.0.1:8000 http://localhost:8010 http://127.0.0.1:8010 wss://y-webrtc-signaling.fly.dev wss://signaling.yjs.dev;
+            connect-src 'self' https://generativelanguage.googleapis.com https://api.openai.com https://api.x.ai https://api.anthropic.com https://openrouter.ai https://api.openrouter.ai https://api.groq.com https://huggingface.co https://us.aws.cdn.hf.co https://api.languagetool.org http://localhost:11434 http://127.0.0.1:11434 http://localhost:1234 http://127.0.0.1:1234 http://localhost:8000 http://127.0.0.1:8000 http://localhost:8010 http://127.0.0.1:8010 wss://y-webrtc-signaling.fly.dev wss://signaling.yjs.dev;
             worker-src  'self' blob:;
             frame-src   'self' blob:;
             manifest-src 'self';
@@ -91,7 +78,6 @@
             base-uri    'self';
             form-action 'self';
             frame-ancestors 'none';
-            upgrade-insecure-requests;
           " />
 
     <!-- QNBS-v3: CJK/Greek self-hosted via @fontsource in index.tsx (no external font CDN) — "Noto Sans GR" doesn't exist at Google Fonts and 400'd the combined request, silently dropping JP/KR too. -->

@@ -47,8 +47,9 @@ const MOCK_STATE = {
 
 vi.mock('../../app/hooks', () => ({
   useAppDispatch: vi.fn(() => mockDispatch),
-  // biome-ignore lint/suspicious/noExplicitAny: test mock
-  useAppSelector: vi.fn((selector: (s: any) => unknown) => selector(MOCK_STATE)),
+  useAppSelector: vi.fn((selector: (s: import('../../app/store').RootState) => unknown) =>
+    selector(MOCK_STATE as unknown as import('../../app/store').RootState),
+  ),
 }));
 
 vi.mock('../../features/project/projectSelectors', () => ({

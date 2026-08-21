@@ -151,23 +151,22 @@ Goal: Recover a user's cloud-provider API key from the Tauri desktop install
 | `logger.ts` | I,R | GDPR sanitization, no key logging | ✅ Complete |
 | `sw.js` | I | Network-only for AI hosts | ✅ Complete |
 | `tauri.conf.json` | I | Strict CSP — explicit `connect-src` allowlist, no `https:` blanket | ✅ Complete |
-| `index.html` (web PWA) | I | CSP `connect-src 'self' https:` — broad HTTPS by design for BYOK; no `http:`/`ws:` wildcards | ⚠️ Documented tradeoff ([ADR-0004](adr/0004-csp-connect-src-byok-tradeoff.md)) |
+| `index.html` (web PWA) | I | CSP `connect-src` uses the explicit shared origin list; no `https:`/`http:`/`ws:` wildcards; runtime preflight rejects unlisted configured endpoints | ✅ Complete ([ADR-0004](adr/0004-csp-connect-src-byok-tradeoff.md)) |
 | `vercel.json` / `public/_headers` / `nginx.conf` | I | `Content-Security-Policy` response header, mirrors the meta CSP (`frame-ancestors 'none'` only takes effect as a header) | ✅ Complete on Vercel/CF/Docker. **GitHub Pages cannot set response headers at all** — the `index.html` meta CSP is the sole enforcement there. |
 | `script-src` (all 5 CSP surfaces) | D (denial of advertised functionality) | `'wasm-unsafe-eval'` (not `'unsafe-eval'`) — WebAssembly compile/instantiate for WebLLM/ONNX/Transformers.js/DuckDB-WASM/Whisper/Kokoro; plugin-sandbox WASM denial (`workers/plugin.worker.ts`) is a separate JS-level guard, unaffected | ✅ Complete ([ADR-0013](adr/0013-csp-wasm-and-blob-frames.md)) — was absent 2026-05-27 to 2026-07-29, blocking the entire local-inference stack in production (F-01/F-02) |
 | `api/_shared/claudeProxyCore.ts` (Vercel Edge Function + Cloudflare Pages Function) | I, D | Schema validation, body-size cap, same-origin check, per-client rate limit, outbound timeout, no logging of key/prompt/response on any path | ✅ Complete ([ADR-0016](adr/0016-native-grok-and-claude-providers.md) Track B) |
 
-### CSP connect-src: web-vs-Tauri asymmetry (ADR-0004)
+### CSP connect-src: shared allowlist and endpoint preflight (ADR-0004)
 
-The web PWA's `connect-src` intentionally allows the `https:` scheme-source because the shipped BYOK
-feature `openAiCompatibleBaseUrl` (Settings → AI → custom base URL) lets users target arbitrary
-self-hosted/third-party OpenAI-compatible proxies that cannot be statically enumerated in a `<meta>`
-CSP. The redundant explicit cloud-provider entries were removed (they changed nothing under `https:`
-and implied a hardening the policy did not provide). **Residual risk:** a `fetch` driven in the web
-PWA (e.g. via AI prompt injection) can reach any HTTPS origin. Mitigations: no secrets in
-`connect-src`-reachable globals; keys encrypted at rest and only attached to the user's chosen
-provider request; AI output never `eval`'d. `http:`/`ws:` scheme-wildcards remain disallowed
-(cleartext exfiltration blocked). The native **Tauri** CSP stays strict (no `https:`). Closing this
-fully = build-time CSP generation (Option C, v2.0). Regression test: `tests/unit/csp.test.ts`.
+The web PWA and Tauri surfaces now use the same explicit origin list from
+`config/csp-connect-src.json`, generated into every deployment surface by `scripts/sync-csp.mjs`.
+The shipped `openAiCompatibleBaseUrl` feature therefore supports only explicitly admitted origins;
+an arbitrary custom proxy is rejected before fetch with a clear policy error rather than appearing as
+an opaque network failure. `http:`/`ws:` scheme-wildcards remain disallowed (cleartext exfiltration
+blocked). Tauri's native HTTP plugin is a separate transport and may be used for admitted local
+desktop endpoints; browser-local requests are checked by the same runtime preflight. Regression
+coverage includes the shared policy, all seven emitted CSP strings, and endpoint rejection in
+`tests/unit/csp.test.ts`, `tests/unit/cspCorrectness.test.ts`, and `tests/unit/cspOriginPolicy.test.ts`.
 
 **Host header CSP (2026-07-28):** `vercel.json`, `public/_headers`, and `nginx.conf` now set a real
 `Content-Security-Policy` response header, identical to the meta CSP above — `connect-src` is
@@ -248,7 +247,7 @@ platform dashboard, not in application code.
 - [x] IV uniqueness per operation (random 12-byte)
 - [x] No API keys in localStorage/sessionStorage
 - [x] No console.log of sensitive data
-- [x] CSP connect-src: Tauri strict (known hosts); web PWA `https:` by design for BYOK, no `http:`/`ws:` wildcards (ADR-0004)
+- [x] CSP connect-src: shared explicit origins on all surfaces; runtime preflight rejects unlisted endpoints (ADR-0004)
 - [x] Collaboration requires password in production
 - [x] Plugin system permission-gated
 - [x] Plugin system Worker-isolated (P0-2) — `workers/plugin.worker.ts`

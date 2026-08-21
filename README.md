@@ -9,11 +9,12 @@
   <img src="https://img.shields.io/badge/TypeScript-7.x_(tsgo)-3178C6?logo=typescript&logoColor=white" alt="TypeScript 7 (tsgo)">
   <img src="https://img.shields.io/badge/AI-Gemini_%7C_OpenAI_%7C_OpenRouter_%7C_Ollama_%7C_WebLLM-4285F4?logo=google" alt="Gemini · OpenAI · OpenRouter · Ollama · WebLLM">
   <img src="https://img.shields.io/badge/Local_AI-WebGPU_%7C_ONNX_%7C_Transformers.js-8B5CF6" alt="WebGPU · ONNX · Transformers.js">
-  <img src="https://img.shields.io/badge/Next-v1.28.0-6366F1" alt="Next v1.28.0 (unreleased)">
+  <!-- release-candidate: v1.28.0 — the tag is created only after the release PR merges. -->
+  <img src="https://img.shields.io/badge/Release-v1.28.0-6366F1" alt="Release v1.28.0">
   <img src="https://img.shields.io/badge/Storage-IndexedDB_v8-F59E0B" alt="IndexedDB v8">
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
-  <img src="https://img.shields.io/badge/i18n-19_locales-2922_keys-0EA5E9" alt="i18n 19 locales — 2922 keys">
-  <img src="https://img.shields.io/badge/Tests-6477%2B_%2F_549_files-22C55E" alt="6477+ tests / 549 files">
+  <img src="https://img.shields.io/badge/i18n-19_locales-2924_keys-0EA5E9" alt="i18n 19 locales — 2924 keys">
+  <img src="https://img.shields.io/badge/Tests-6888%2B_%2F_565_files-22C55E" alt="6888+ tests / 565 files">
   <img src="https://img.shields.io/codecov/c/github/qnbs/WorldScript-Studio?logo=codecov&label=Coverage" alt="Codecov Coverage">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">
   <img src="https://img.shields.io/github/actions/workflow/status/qnbs/WorldScript-Studio/.github/workflows/ci.yml?branch=main&logo=github" alt="CI Status">
@@ -302,7 +303,8 @@ Real-time P2P co-editing via **Yjs + collab-transport** (vendor fork of y-webrtc
 
 1. Deploy a y-webrtc-compatible signaling worker using an established open-source recipe.
 2. Add your endpoint to `SIGNALING_SERVERS` in `services/collaborationService.ts`.
-3. Allow your endpoint in the CSP `connect-src` directive in `index.html`.
+3. Add the endpoint to `config/csp-connect-src.json` and run `pnpm run csp:sync`; CI rejects
+   deployment-surface drift via `pnpm run csp:verify`.
 4. Keep at least one fallback endpoint during migration to avoid downtime.
 
 ### 🔒 IDB At-Rest Encryption _(B-1, v1.19.0)_
@@ -399,7 +401,7 @@ Infrastructure-level features that keep the app fast and extensible as projects 
 
 ### 🌐 Full Multi-Language Support
 
-Shipped UI locales with **2922 i18n keys** across all 19 languages — zero hardcoded user-facing strings:
+Shipped UI locales with **2924 i18n keys** across all 19 languages — zero hardcoded user-facing strings:
 
 - 🇩🇪 **German** (Deutsch)
 - 🇬🇧 **English**
@@ -508,8 +510,8 @@ The Settings → AI panel shows a live GPU status badge with adapter details and
 | **PDF Export**       | jsPDF                                                     | Client-side, configurable PDF document generation                    |
 | **Document Export**  | docx + jszip                                              | Word-compatible `.docx` generation (lazy-loaded)                     |
 | **PWA**              | Service Worker + Web App Manifest v3                     | Offline support, installability, Workbox chunking                    |
-| **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 2922 keys × 19 locales (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu/ru/ko Beta); EN fallback; `localStorage` persistence |
-| **Testing**          | Vitest 4.x (6477+ tests / 549 files) + Playwright E2E     | Unit/integration + cross-browser E2E; Stryker mutation (manual workflow)          |
+| **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 2924 keys × 19 locales (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu/ru/ko Beta); EN fallback; `localStorage` persistence |
+| **Testing**          | Vitest 4.x (6888+ tests / 565 files) + Playwright E2E     | Unit/integration + cross-browser E2E; Stryker mutation (manual workflow)          |
 | **Code Quality**     | Biome (lint + format) + TypeScript 7 (tsgo) strict       | `--error-on-warnings` in CI; zero `any` policy                      |
 | **Visualization**    | Force-directed graph                                      | Interactive character relationship network                           |
 | **Desktop**          | Tauri v2                                                  | Cross-platform installer; auto-updater via `latest.json`             |
@@ -547,7 +549,7 @@ WorldScript-Studio/
 │   ├── sw.js             # PWA Service Worker
 │   └── manifest.json     # PWA Web App Manifest v3
 ├── tests/
-│   ├── unit/             # Vitest unit tests (6477+ tests, 549 files) — count spans tests/, components/, packages/*/tests/, not just this folder
+│   ├── unit/             # Vitest unit tests (6888+ tests, 565 files) — count spans tests/, components/, packages/*/tests/, not just this folder
 │   │   ├── ai/           # aiSmallModules, aiCoreFallbackPaths
 │   │   └── settings/     # WebLlmPanel, AiSections
 │   └── e2e/              # Playwright specs + helpers.ts
@@ -708,10 +710,10 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 | `deploy`     | `main` only          | GitHub Pages after **`ci-success`** succeeds |
 | `scorecard`  | weekly + `main` push | OpenSSF Scorecard — SARIF uploaded to GitHub Code Scanning |
 
-**Current test metrics (2026-07-30, CI-reported):**
-- **6477+ unit tests** across **549 test files** — all passing
+**Current test metrics (2026-08-21, source-synchronized; CI remains authoritative for pass/fail):**
+- **6888+ unit tests** across **565 test files** — all passing
 - Coverage thresholds: lines ≥ 80 · branches ≥ 66 · functions ≥ 72 · statements ≥ 78 — enforced in CI (see Codecov badge for live metrics)
-- i18n: **2922 keys × 19 locales** (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu/ru/ko Beta)
+- i18n: **2924 keys × 19 locales** (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu/ru/ko Beta)
 
 **CI-cloud-first workflow (recommended):** On constrained hardware run **`pnpm run lint && pnpm run i18n:check && pnpm run typecheck`** locally, then push and let CI handle coverage, E2E, Lighthouse, and Stryker. Authoritative numbers come from CI artifacts (Codecov, JUnit). After CI goes green, update the README badges and `AUDIT.md` quality-gate line from the reported metrics. See **[`docs/CI.md`](docs/CI.md) § Cloud CI-first vs local development** for the full post-merge doc-update checklist.
 

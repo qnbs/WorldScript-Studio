@@ -43,6 +43,7 @@ import {
 import { generateLocalText } from './localAiFacade';
 import { LocalServerError, localServerFetch } from './localServerHttp';
 import { createLogger } from './logger';
+import { assertCspConnectEndpointAllowed, CspConnectPolicyError } from './network/cspOriginPolicy';
 import {
   listOllamaModels as listOllamaModelsFromService,
   streamOllama,
@@ -195,6 +196,8 @@ async function streamOpenAI(
     : [{ role: 'user', content: sanitizePromptValue(prompt) }];
 
   const apiRoot = resolveOpenAiCompatibleRoot(opts.openAiCompatibleBaseUrl);
+  // QNBS-v3: custom OpenAI-compatible roots must be admitted before any request leaves the renderer.
+  assertCspConnectEndpointAllowed(apiRoot, 'OpenAI-compatible endpoint');
   const refererHeaders = buildOpenRouterStyleHeaders(opts.openAiSiteUrl, opts.openAiSiteTitle);
   const res = await fetch(`${apiRoot}/chat/completions`, {
     method: 'POST',
@@ -272,6 +275,10 @@ async function streamOpenAiCompatibleLocal(
   const endpoint = normalizeOpenAiCompatibleBaseUrl(
     opts.ollamaBaseUrl?.trim() || 'http://localhost:1234',
   );
+  if (!isTauriRuntime()) {
+    // QNBS-v3: browser local endpoints are rejected before transport can become an opaque CORS error.
+    assertCspConnectEndpointAllowed(endpoint, 'Local OpenAI-compatible endpoint');
+  }
   const messages = opts.systemPrompt
     ? [
         { role: 'system', content: sanitizePromptValue(opts.systemPrompt) },
@@ -900,6 +907,14 @@ function localServerFailure(
       params: { url: endpoint },
     };
   }
+  if (error instanceof CspConnectPolicyError) {
+    return {
+      ok: false,
+      error: error.message,
+      kind: 'policyBlocked',
+      params: { url: endpoint },
+    };
+  }
   return {
     ok: false,
     error: `Local server not reachable (${endpoint})`,
@@ -1036,6 +1051,7 @@ export type TestConnectionErrorKind =
   | 'httpError'
   | 'timeout'
   | 'unreachable'
+  | 'policyBlocked'
   | 'pluginUnavailable'
   | 'desktopRequired'
   | 'proxyUnavailableStaticHost'
@@ -1071,6 +1087,8 @@ export async function testAIConnection(
           };
         }
         const root = resolveOpenAiCompatibleRoot(opts.openAiCompatibleBaseUrl);
+        // QNBS-v3: connection tests reuse the same endpoint policy as production requests.
+        assertCspConnectEndpointAllowed(root, 'OpenAI-compatible endpoint');
         const res = await fetch(`${root}/models`, {
           headers: { Authorization: `Bearer ${apiKey}` },
           signal: AbortSignal.timeout(8000),
