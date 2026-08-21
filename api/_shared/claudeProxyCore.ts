@@ -8,9 +8,7 @@ const ANTHROPIC_VERSION = '2023-06-01';
 // QNBS-v3: proxy allowlist mirrors the catalog as a defense-in-depth boundary.
 export const ALLOWED_MODELS = ANTHROPIC_MODEL_IDS;
 
-// QNBS-v3: this app only ever sends a single user message (see streamAnthropic in
-// aiProviderService.ts) — the small array cap leaves room for a future multi-turn use case without
-// letting the body-size/message-count limits do any real abuse-prevention work.
+// QNBS-v3: cap message arrays while leaving room for a future multi-turn use case.
 const MAX_MESSAGES = 20;
 const MAX_MESSAGE_CHARS = 100_000;
 const MAX_BODY_BYTES = 262_144; // 256 KiB

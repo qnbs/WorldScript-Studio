@@ -462,6 +462,7 @@ export const AdvancedAiSection: FC = () => {
                           : settings.advancedAi.provider === 'openai'
                             ? [
                                 {
+                                  // QNBS-v3: keep the OpenAI selector values sourced from the shared catalog.
                                   label: t('settings.ai.modelGroups.gpt5Current'),
                                   options: OPENAI_MODEL_OPTIONS,
                                 },
