@@ -124,6 +124,20 @@ Mutation testing (Stryker) is **not** in this graph — it runs only via manual 
 > Settings → Branches → `main` → Required status checks → remove the 4 individual entries, add
 > `✅ CI Success`.
 
+### Release-truth checks
+
+`pnpm run docs:check` treats `v1.27.1` (the latest stable tag) as the release frontier. A dated
+Keep-a-Changelog heading at or beyond that frontier must have its matching tag; a package version
+behind the frontier fails, while a newer development version requires an `[Unreleased]` section;
+when post-release commits exist, that section must contain meaningful history. README badges may use an explicit `Next`/`unreleased` development label,
+but a released-version badge must resolve to an existing tag. Historical headings below the
+frontier remain valid when old tags are no longer present.
+
+The gate intentionally skips version-based assertions when no tags are available, because a
+tagless or shallow checkout cannot establish a release frontier. CI uses `fetch-tags: true` so the
+authoritative quality job does not silently lose this evidence. Release tags must be created only
+after the release-truth PR is merged and the exact target SHA has passed the release prerequisites.
+
 ---
 
 ## CSP gates — which layer catches which failure class

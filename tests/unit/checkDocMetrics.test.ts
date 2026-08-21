@@ -18,6 +18,14 @@ import {
 } from '../../scripts/check-doc-metrics.mjs';
 
 const getTaggedVersionsAt = getTaggedVersions as unknown as (repositoryRoot: string) => Set<string>;
+// QNBS-v3: keep executable-script exports typed locally while tsgo resolves the declaration file.
+type ReleaseTruthModule = {
+  scanReadmeReleaseTruth: (readme: string, taggedVersions: Set<string>) => string[];
+  scanUnreleasedTruth: (changelog: string, subjects: string[] | null) => string[];
+};
+// QNBS-v3: load the runtime-only scanners without making tsgo infer untyped .mjs exports.
+const loadReleaseTruthModule = async () =>
+  (await import('../../scripts/check-doc-metrics.mjs')) as unknown as ReleaseTruthModule;
 
 // QNBS-v3: release truth must remain correct in normal repositories and linked worktrees.
 describe('scanReleaseTruth', () => {
@@ -35,10 +43,88 @@ describe('scanReleaseTruth', () => {
     );
   });
 
+  it('accepts a package version equal to the latest release tag', () => {
+    expect(scanReleaseTruth('## [1.27.1] — 2026-08-14\n', '1.27.1', new Set(['1.27.1']))).toEqual(
+      [],
+    );
+  });
+
+  it('rejects a package version older than the latest release tag', () => {
+    expect(scanReleaseTruth('## [Unreleased]\n', '1.27.0', new Set(['1.27.1']))).toEqual([
+      expect.stringContaining('older than the latest git tag v1.27.1'),
+    ]);
+  });
+
+  it('accepts valid historical headings below the current release frontier', () => {
+    expect(scanReleaseTruth('## [1.20.0] — 2026-06-07\n', '1.27.1', new Set(['1.27.1']))).toEqual(
+      [],
+    );
+  });
+
   it('skips dated-release tag checks in a tagless checkout', () => {
     expect(
       scanReleaseTruth('## [1.20.0] — 2025-01-01\n## [1.28.0] — 2026-08-21\n', '1.28.0', new Set()),
     ).toEqual([]);
+  });
+});
+
+describe('README release truth', () => {
+  // QNBS-v3: exercise the release badge invariant independently from changelog and package checks.
+  it('rejects a released-version badge without a matching tag', async () => {
+    const { scanReadmeReleaseTruth } = await loadReleaseTruthModule();
+    expect(scanReadmeReleaseTruth('![Release v1.28.0](badge.svg)', new Set(['1.27.1']))).toEqual([
+      expect.stringContaining('release badge advertises v1.28.0'),
+    ]);
+  });
+
+  // QNBS-v3: preserve the explicit development-label exception for prerelease badges.
+  it('allows an explicitly unreleased development badge', async () => {
+    const { scanReadmeReleaseTruth } = await loadReleaseTruthModule();
+    expect(
+      scanReadmeReleaseTruth(
+        '<img alt="Next v1.28.0 (unreleased)" src="Next-v1.28.0-blue">',
+        new Set(['1.27.1']),
+      ),
+    ).toEqual([]);
+  });
+
+  // QNBS-v3: inspect every badge in one row so a valid Next badge cannot mask an invalid Release badge.
+  it('checks a later released badge after a development badge', async () => {
+    const { scanReadmeReleaseTruth } = await loadReleaseTruthModule();
+    expect(
+      scanReadmeReleaseTruth(
+        '![Next v1.28.0 (unreleased)](next.svg) ![Release v1.29.0](release.svg)',
+        new Set(['1.27.1']),
+      ),
+    ).toEqual([expect.stringContaining('release badge advertises v1.29.0')]);
+  });
+});
+
+describe('Unreleased truth', () => {
+  // QNBS-v3: require real changelog history after a release instead of accepting comment-only placeholders.
+  it('rejects post-release commits when Unreleased has no meaningful content', async () => {
+    const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+    expect(scanUnreleasedTruth('## [Unreleased]\n\n### Added\n', ['feat: new feature'])).toEqual([
+      expect.stringContaining('[Unreleased] is empty'),
+    ]);
+  });
+
+  // QNBS-v3: keep a populated Unreleased section valid for development versions.
+  it('accepts populated Unreleased content after the latest release', async () => {
+    const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+    expect(
+      scanUnreleasedTruth('## [Unreleased]\n\n### Added\n\n- New feature\n', ['feat: new feature']),
+    ).toEqual([]);
+  });
+
+  // QNBS-v3: treat multiline HTML comments as non-content in the release-history check.
+  it('rejects multiline-comment-only Unreleased content', async () => {
+    const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+    expect(
+      scanUnreleasedTruth('## [Unreleased]\n\n<!--\nplaceholder\ncomment\n-->\n', [
+        'fix: post-release correction',
+      ]),
+    ).toEqual([expect.stringContaining('[Unreleased] is empty')]);
   });
 });
 

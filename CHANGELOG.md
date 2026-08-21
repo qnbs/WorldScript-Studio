@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Release-truth guard:** `docs:check` now verifies the release-tag frontier, package/tag
+  relationship, README release badges, and non-empty `[Unreleased]` history without treating
+  tagless or shallow checkouts as a false failure.
 - **Spotlight tour theme:** the post-rebrand driver.js popover now binds to its WorldScript CSS
   selector, with a regression test protecting the binding.
 

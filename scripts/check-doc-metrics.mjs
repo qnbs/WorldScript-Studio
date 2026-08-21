@@ -1,10 +1,11 @@
 #!/usr/bin/env node
+import { execFileSync } from 'node:child_process';
 /**
  * Fails if a doc file states a locale/key count or a release-status claim that no longer matches
  * reality — the drift this audit found repeatedly (ROADMAP.md/TRANSLATION-GUIDE.md/TODO.md/
  * CONTRIBUTING.md/.github/copilot-instructions.md all said "17 locales" after the 17→19 expansion).
- * Historical/dated entries (CHANGELOG-style `## [x.y.z]` headings, or `## vX.Y.Z … RELEASED …`
- * section headings) are exempt — they correctly describe a past state, not the present one.
+ * Historical/dated entries remain exempt from present-tense metric scans, while release truth is
+ * checked separately at the latest tag frontier.
  *
  * Run: node scripts/check-doc-metrics.mjs
  */
@@ -192,6 +193,90 @@ export function scanReleaseTruth(changelog, packageVersion, taggedVersions) {
 }
 
 /**
+ * A version badge may advertise the current development line, but must not present an untagged
+ * version as a released version. Keep this separate from prose drift so the README convention is
+ * explicit and testable.
+ */
+export function scanReadmeReleaseTruth(readme, taggedVersions) {
+  const findings = [];
+  const latestTagged = [...taggedVersions].sort(semverCompare).at(-1) ?? null;
+  if (!latestTagged) return findings;
+
+  // QNBS-v3: extract each badge label independently so a valid development badge cannot hide a later invalid release badge on the same line.
+  const badgePattern = /\b(?:Next|Release|Version|Current)[-_ ]v?(\d+\.\d+\.\d+)/i;
+  const getBadgeTexts = (line) => {
+    const badgeTexts = [];
+    for (const match of line.matchAll(/!\[([^\]]*)\]/g)) badgeTexts.push(match[1]);
+    for (const match of line.matchAll(/<img\b[^>]*\balt=(['"])(.*?)\1[^>]*>/gi)) {
+      badgeTexts.push(match[2]);
+    }
+    for (const match of line.matchAll(/\b(?:Next|Release|Version|Current)[-_ ]v?\d+\.\d+\.\d+/gi)) {
+      badgeTexts.push(match[0]);
+    }
+    return [...new Set(badgeTexts)];
+  };
+  for (const [index, line] of readme.split('\n').entries()) {
+    for (const badgeText of getBadgeTexts(line)) {
+      const match = badgeText.match(badgePattern);
+      if (!match || /\b(?:next|unreleased|development|dev|pre[- ]?release)\b/i.test(badgeText))
+        continue;
+      const version = match[1];
+      if (!taggedVersions.has(version)) {
+        findings.push(
+          `README.md:${index + 1} — release badge advertises v${version}, but no matching git tag exists`,
+        );
+      }
+    }
+  }
+  return findings;
+}
+
+function hasMeaningfulUnreleasedContent(changelog) {
+  const heading = /^## \[Unreleased\]\s*$/m.exec(changelog);
+  if (!heading) return false;
+  const afterHeading = changelog.slice(heading.index + heading[0].length);
+  const nextHeading = afterHeading.search(/^##\s/m);
+  const section = nextHeading === -1 ? afterHeading : afterHeading.slice(0, nextHeading);
+  const withoutHtmlComments = section.replace(/<!--[\s\S]*?(?:-->|$)/g, '');
+  return withoutHtmlComments.split('\n').some((line) => {
+    const trimmed = line.trim();
+    return trimmed.length > 0 && !trimmed.startsWith('<!--') && !trimmed.startsWith('###');
+  });
+}
+
+/**
+ * Return post-release commit subjects when the checkout has enough history to answer reliably.
+ * A tagless or shallow checkout intentionally returns null, so CI does not turn missing history
+ * into a false release failure.
+ */
+export function getPostReleaseCommitSubjects(repositoryRoot = root) {
+  const taggedVersions = getTaggedVersions(repositoryRoot);
+  const latestTagged = [...taggedVersions].sort(semverCompare).at(-1);
+  if (!latestTagged) return null;
+  try {
+    const output = execFileSync('git', ['log', '--format=%s', `v${latestTagged}..HEAD`], {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    return output
+      .split('\n')
+      .map((subject) => subject.trim())
+      .filter(Boolean);
+  } catch {
+    return null;
+  }
+}
+
+export function scanUnreleasedTruth(changelog, postReleaseCommitSubjects) {
+  if (!postReleaseCommitSubjects || postReleaseCommitSubjects.length === 0) return [];
+  if (hasMeaningfulUnreleasedContent(changelog)) return [];
+  return [
+    `CHANGELOG.md — ${postReleaseCommitSubjects.length} commit(s) exist after the latest release tag, but [Unreleased] is empty`,
+  ];
+}
+
+/**
  * @param {string} [repositoryRoot]
  * @returns {string}
  */
@@ -307,13 +392,15 @@ function main() {
   const canonicalUrl = getCanonicalProductionUrl();
   const packageVersion = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 
+  const taggedVersions = getTaggedVersions();
+  const changelog = readFileSync(join(root, 'CHANGELOG.md'), 'utf8');
   const allFindings = [];
   allFindings.push(
-    ...scanReleaseTruth(
-      readFileSync(join(root, 'CHANGELOG.md'), 'utf8'),
-      packageVersion,
-      getTaggedVersions(),
-    ),
+    ...scanReleaseTruth(changelog, packageVersion, taggedVersions),
+    ...scanUnreleasedTruth(changelog, getPostReleaseCommitSubjects()),
+  );
+  allFindings.push(
+    ...scanReadmeReleaseTruth(readFileSync(join(root, 'README.md'), 'utf8'), taggedVersions),
   );
   for (const relPath of TARGET_FILES) {
     const abs = join(root, relPath);
