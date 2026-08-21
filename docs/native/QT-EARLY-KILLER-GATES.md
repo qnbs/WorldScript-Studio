@@ -7,9 +7,12 @@ substantial Qt feature porting. It applies the lesson from the retired CEF path:
 must be able to falsify its most dangerous assumptions before the project has accumulated UI
 sunk cost.
 
-The qualification is an additive prerequisite between Wave 4 (R-15 implementation) and Wave 5
-(the Qt executable learning harness). It does not replace the later G2, G3, or G4 production gates.
-Those gates remain necessary because a small feasibility spike cannot prove production completeness.
+The formal qualification is an additive checkpoint after the early feasibility lanes and before
+Wave 5 (the reusable Qt learning harness). The disposable pre-G2 qualification probe is the only
+pre-G2 artifact; Wave 5 is a distinct later deliverable. It does not replace the later G2, G3, or G4 production
+gates. Those gates remain necessary because a small feasibility spike cannot prove production
+completeness. The early lanes are explicitly allowed before the formal Wave 4.5 checkpoint so the
+cheapest fatal runtime risks are tested before storage and UI sunk cost.
 The pre-G2 authorization boundary is recorded as the clarifying amendment
 [`ADR-0022`](../adr/0022-qt-pre-g2-qualification-harness.md); it does not supersede ADR-0021.
 
@@ -26,33 +29,43 @@ Documentation alone is not a pass. A gate that is not applicable must include a 
 and an architecture decision; it must not be silently skipped. A failed kill gate stops Qt work at
 the smallest possible investment and returns the program to architecture review.
 
-## Qualification order
+## Early lanes and formal qualification order
 
-The order is deliberately front-loaded by cost and irreversibility. The formal Wave 4.5 exit is
-recorded after Wave 4, but its dependency-aware lanes start earlier:
+The order is deliberately front-loaded by cost and irreversibility. Once Wave 2 exposes a typed
+Core probe, the following disposable lanes may run in parallel with Waves 3 and 4:
 
-1. **Contract and threat-boundary review** — static and design evidence after the typed Core probe
-   exists; may run in parallel with Waves 3 and 4.
-2. **Provisional bridge selection** — choose one candidate implementation for the disposable probe,
-   record rejected alternatives, and state that G2 retains the final scorecard decision.
-3. **Executable lifecycle/bridge spike** — prove that a minimal Qt process can safely host the
-   renderer-neutral Core boundary.
-4. **Accessibility and input feasibility** — falsify the most important writing-workflow risks
-   before custom controls are built.
-5. **Packaging, updater, and rollback trust** — test the distribution trust model with throwaway
+### Early feasibility lanes (before formal Wave 4.5)
+
+1. **Lifecycle and bridge spike** — prove window creation, QML load, one typed Rust call, one Rust
+   event to QML, bounded async/cancellation, clean shutdown, and repeated launch/close using one
+   explicitly provisional bridge candidate.
+2. **Accessibility and input feasibility** — prove an observable accessibility tree, keyboard/focus,
+   accessible errors, scalable/high-contrast text, RTL/BiDi, and IME smoke behavior.
+3. **Crash diagnostics and recovery feasibility** — prove project-owned diagnostics/symbolization and
+   deterministic restart/recovery without weakening sandbox/process isolation or corrupting test data.
+
+These lanes retain their own evidence and maturity labels; they are not checked off as G2/G3/G4
+production gates. A failed lane stops Qt investment and returns the program to architecture review.
+
+### Formal Wave 4.5 qualification
+
+The formal Wave 4.5 qualification consumes the early-lane evidence and completes the remaining
+contract, packaging/update-trust, permission, and admission review work:
+
+1. **Contract and threat-boundary review** — complete the inventory after the early typed Core probe,
+   record the provisional bridge and rejected alternatives, and state that G2 retains the final
+   scorecard decision.
+2. **Packaging, updater, and rollback trust** — test the distribution trust model with throwaway
    artifacts before product packaging work grows around it.
-6. **Crash diagnostics and recovery feasibility** — prove useful failure evidence without weakening
-   the sandbox or recovery invariants.
-7. **Security and permission posture** — validate IPC/FFI, filesystem, network, and updater
+3. **Security and permission posture** — validate IPC/FFI, filesystem, network, and updater
    boundaries under the intended runtime conditions.
-8. **Admission review** — use the evidence to confirm or reject the bridge scorecard, record
-   residual risks, and only then begin larger
-   Qt shell or feature work.
+4. **Admission review** — use all evidence to confirm or reject the bridge scorecard, record
+   residual risks, and produce the G2 decision package. Larger Qt shell or feature work begins
+   only after G2 passes.
 
-Gates 1–2 may begin once Wave 2 has a typed Core probe call and do not depend on R-15. Gate 3 may
-follow the lifecycle probe. Gates 4–6 wait for the relevant Wave 4 storage/crypto/recovery and
-security semantics; Gate 8 waits for every lane. The admission decision remains conjunctive: one
-unresolved kill gate blocks Qt implementation.
+The formal packaging and security lanes wait for the relevant Wave 4 storage/crypto/recovery
+semantics; the admission decision remains conjunctive: one unresolved kill gate blocks Qt
+implementation.
 
 ## Gate matrix
 
@@ -65,6 +78,10 @@ unresolved kill gate blocks Qt implementation.
 | Crash and recovery | An intentional harness crash produces actionable diagnostics and symbols for project-owned code; restart/recovery behavior is deterministic and does not corrupt test data. | Diagnostics require weakening sandbox/process isolation, recovery loses acknowledged data, or failures cannot be reproduced from packaged evidence. |
 | Security and permissions | Runtime review covers sandbox/process boundaries, typed IPC/FFI allowlists and versioning, filesystem/network permissions, secret injection/storage/zeroization, updater privileges and signing trust, temporary-file permissions/cleanup, and the approved Core encryption/identity-binding invariants; negative tests prove denied operations stay denied. | A capability needs arbitrary native execution, broad filesystem/network access, plaintext secret exposure, persistent test credentials, or weakened encryption/identity binding. |
 | Admission decision | A signed/ reviewed scorecard records evidence links, residual risks, owners, expiry/retest conditions, and explicit GO/NO-GO for Wave 5. | Any Critical/High security issue, unowned residual risk, or missing evidence remains at the decision meeting. |
+
+The lifecycle/bridge, accessibility/input, and crash/recovery rows are owned by the early lanes
+when they run before Wave 4.5. Formal Wave 4.5 reviews their evidence and fills any gaps; it does
+not manufacture a second pass merely to satisfy the later checkpoint.
 
 ## Minimum evidence package
 
@@ -112,10 +129,12 @@ repeat the meaningful checks in CI:
 
 ## Relationship to later gates
 
-Wave 4.5 answers **“is Qt still technically and operationally plausible?”** cheaply and supplies
-the evidence needed to confirm or reject the provisional bridge candidate. Wave 5
-turns the accepted disposable probes into the reusable executable learning harness and adds the
-remaining file-dialog and clipboard evidence; it does not repeat Wave 4.5's kill-gate work. G2 answers
+The early feasibility lanes answer **“is Qt still technically and operationally plausible?”** at the
+cheapest useful point. Formal Wave 4.5 consumes that evidence and completes the packaging, security,
+and admission review needed to confirm or reject the provisional bridge candidate. Wave 5 turns the
+accepted disposable probes into the reusable executable learning harness and adds the remaining
+file-dialog and clipboard evidence; it does not repeat the early lanes or Wave 4.5's kill-gate work.
+G2 answers
 **“is Qt admitted for implementation?”** with the approved license/version/bridge strategy and
 the learning harness. G3 and G4 still require project compatibility, accessibility, security,
 packaging, updater, recovery, performance, signing, support, and field evidence at production
