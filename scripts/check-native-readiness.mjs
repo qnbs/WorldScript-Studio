@@ -7,6 +7,7 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'u
 const roadmap = read('docs/native/ROADMAP-QT-GPUI-DESKTOP.md');
 const earlyGates = read('docs/native/QT-EARLY-KILLER-GATES.md');
 const adr0022 = read('docs/adr/0022-qt-pre-g2-qualification-harness.md');
+const nativeReadiness = read('docs/architecture/native-readiness.md');
 
 const failures = [];
 const requireText = (source, expected, message) => {
@@ -78,6 +79,16 @@ requireText(
   adr0022,
   'The early feasibility lanes are allowed before the formal Wave 4.5 checkpoint',
   'ADR-0022 must document the earlier bounded qualification lanes.',
+);
+requireText(
+  nativeReadiness,
+  '`pnpm run native-readiness:check` runs in the CI quality job',
+  'Native-readiness documentation must describe the CI policy gate.',
+);
+requireText(
+  nativeReadiness,
+  'roadmap sequencing; it does not promote any planned lane to a higher maturity level.',
+  'Native-readiness documentation must not promote planned work to a higher maturity level.',
 );
 
 if (failures.length > 0) {

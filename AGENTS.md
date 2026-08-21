@@ -31,8 +31,9 @@ The app supports a multi-provider AI stack (Gemini, OpenAI, Claude, Grok, OpenRo
 2. **CI-Cloud-First Workflow** – The canonical quality gate is GitHub Actions (cloud CI). After making changes, push to a branch and let the cloud runners execute the heavy tier.
 3. **Local quick tier only** – Locally, run only the lightweight sanity checks:
    ```bash
-   pnpm run lint && pnpm run typecheck && pnpm run i18n:check
+   pnpm run ci:prepush
    ```
+   This gate is mandatory before every push and after every local correction before re-pushing; all three checks must exit successfully. A targeted test or changed-file lint run alone is not push evidence. The pre-commit hook checks staged files with Biome, while the pre-push gate runs the full repository lint before typecheck and i18n validation. If branch switching or a lockfile/package-manifest change makes pnpm report dependency verification errors, repair first with `pnpm install --frozen-lockfile` and rerun the complete pre-push gate.
    Optional targeted smoke test: `pnpm exec vitest run <path>` **without** `--coverage`.
    **Hard rule:** Never invoke `pnpm test`, `npm run test`, or a bare Vitest wrapper; always use an explicit `pnpm exec vitest run <path>` command to avoid watch-mode hangs on constrained hardware.
 4. **Audit cloud CI logs, fix locally, then re-push** – If the cloud CI run fails, inspect the logs via GitHub web UI or `gh run watch`, reproduce the specific failing test or lint error in isolation, fix it locally (quick tier to verify), commit, and push again for another cloud CI run.
@@ -261,7 +262,9 @@ On any non-trivial change, add a single-line comment explaining **why**, not wha
 
 Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`.
 After an explicit `pnpm run hooks:install`, the pre-commit hook runs `biome check --write` on staged
-files via `simple-git-hooks` + `lint-staged`; CI remains mandatory when hooks are not installed.
+files via `simple-git-hooks` + `lint-staged`, and the pre-push hook runs `pnpm run ci:prepush`.
+The pre-commit hook is not a substitute for the complete pre-push gate; CI remains mandatory when
+hooks are not installed.
 
 ---
 
@@ -270,7 +273,12 @@ files via `simple-git-hooks` + `lint-staged`; CI remains mandatory when hooks ar
 ### Philosophy
 
 - **Cloud CI-first:** The canonical quality gate is GitHub Actions. Low-end local machines should run only the "Quick" tier.
-- **Quick tier (local, before every push):** `pnpm run lint && pnpm run typecheck && pnpm run i18n:check`. Optionally: `pnpm exec vitest run <path>` **without** `--coverage`.
+- **Quick tier (local, before every push):** `pnpm run ci:prepush` runs the full repository lint, then
+  the exact CI typecheck and i18n checks sequentially. Staged-file Biome validation still runs in
+  pre-commit. Run the gate
+  again after every correction before re-pushing; do not push based only on a targeted test or a
+  changed-file lint run. Optionally: `pnpm exec vitest run <path>`
+  **without** `--coverage`.
 - **Vitest watch-mode hard rule:** Never invoke `pnpm test`, `npm run test`, or a bare Vitest wrapper; use an explicit targeted `pnpm exec vitest run <path>` command so constrained hardware never waits on watch mode.
 - **Heavy tier (CI):** Vitest with coverage thresholds, Playwright E2E (desktop + mobile emulation), Lighthouse CI, Stryker mutation, Storybook static build, bundle budget + analyze.
 

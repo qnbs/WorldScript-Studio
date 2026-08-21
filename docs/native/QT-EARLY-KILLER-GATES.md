@@ -8,7 +8,8 @@ must be able to falsify its most dangerous assumptions before the project has ac
 sunk cost.
 
 The formal qualification is an additive checkpoint after the early feasibility lanes and before
-Wave 5 (the Qt executable learning harness). It does not replace the later G2, G3, or G4 production
+Wave 5 (the reusable Qt learning harness). The disposable pre-G2 qualification probe is the only
+pre-G2 artifact; Wave 5 is a distinct later deliverable. It does not replace the later G2, G3, or G4 production
 gates. Those gates remain necessary because a small feasibility spike cannot prove production
 completeness. The early lanes are explicitly allowed before the formal Wave 4.5 checkpoint so the
 cheapest fatal runtime risks are tested before storage and UI sunk cost.
@@ -59,8 +60,8 @@ contract, packaging/update-trust, permission, and admission review work:
 3. **Security and permission posture** — validate IPC/FFI, filesystem, network, and updater
    boundaries under the intended runtime conditions.
 4. **Admission review** — use all evidence to confirm or reject the bridge scorecard, record
-   residual risks, and only then begin larger
-   Qt shell or feature work.
+   residual risks, and produce the G2 decision package. Larger Qt shell or feature work begins
+   only after G2 passes.
 
 The formal packaging and security lanes wait for the relevant Wave 4 storage/crypto/recovery
 semantics; the admission decision remains conjunctive: one unresolved kill gate blocks Qt

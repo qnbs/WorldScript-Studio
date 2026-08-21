@@ -981,7 +981,7 @@ Required:
 [ ] Qt version/LTS strategy approved
 [ ] bridge technology confirmed by scorecard, informed by Wave 4.5 evidence
 [ ] Wave 4.5 Qt Early Killer-Gate qualification accepted — see `docs/native/QT-EARLY-KILLER-GATES.md`
-[ ] Qt learning harness passes
+[ ] disposable pre-G2 Qt qualification probe and Wave 4.5 evidence accepted
 [ ] IME feasibility passes
 [ ] accessibility feasibility passes
 [ ] packaged hello-world/native-core roundtrip passes
@@ -1261,13 +1261,13 @@ checkpoint between Core/R-15 work and Qt enablement: the cheap lifecycle, access
 crash/recovery risks were already tested before storage work creates sunk cost, while packaging,
 updater, and security lanes wait for the storage and R-15 semantics they genuinely depend on.
 
-## Wave 5 — Qt enablement / executable learning harness
+## Wave 5 — Qt enablement / reusable learning harness
 
 **Status: PLANNED — not started. Gated behind Wave 4.5 and G2.**
 
 Wave 5 builds on the accepted early-lane and formal Wave-4.5 evidence. It does not repeat or
 re-prove the early lifecycle, accessibility/input, or crash gates. It turns the disposable
-feasibility evidence into a reusable, isolated Qt 6 learning harness and adds only the capability
+feasibility evidence into a distinct reusable, isolated Qt 6 learning harness and adds only the capability
 checks intentionally left out of qualification:
 
 - file dialog;
