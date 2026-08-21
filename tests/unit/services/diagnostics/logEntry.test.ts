@@ -88,4 +88,27 @@ describe('renderer-neutral log entry boundary', () => {
     expect(safeStringify(undefined)).toBe('[Unserializable]');
     expect(safeStringify(circular)).toBe('[Unserializable]');
   });
+
+  it('returns a safe marker when primitive string conversion throws', () => {
+    const originalString = globalThis.String;
+    Object.defineProperty(globalThis, 'String', {
+      configurable: true,
+      value: () => {
+        throw new Error('string conversion failed');
+      },
+      writable: true,
+    });
+
+    try {
+      expect(createLogEntry('info', 'diagnostics', ['unsafe primitive']).message).toBe(
+        '[Unserializable]',
+      );
+    } finally {
+      Object.defineProperty(globalThis, 'String', {
+        configurable: true,
+        value: originalString,
+        writable: true,
+      });
+    }
+  });
 });

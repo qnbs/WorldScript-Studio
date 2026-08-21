@@ -25,14 +25,10 @@ import type {
   LoraTrainRequest,
 } from '../types';
 
-function warnNativeAdapter(message: string, context?: unknown): void {
+function warnNativeAdapter(message: string, context: unknown): void {
   // QNBS-v3: sanitize adapter context before console delivery so raw native errors never bypass the diagnostics boundary.
   if (typeof console !== 'undefined' && typeof console.warn === 'function') {
-    if (context === undefined) {
-      console.warn(message);
-    } else {
-      console.warn(message, sanitizeDiagnosticsValue(context));
-    }
+    console.warn(message, sanitizeDiagnosticsValue(context));
   }
 }
 
