@@ -8,9 +8,8 @@
  *
  * Run: node scripts/check-doc-metrics.mjs
  */
-import { execSync } from 'node:child_process';
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getModules, REF_LANG } from './i18n-locales.mjs';
 
@@ -139,14 +138,7 @@ export function scanForUrlDrift(content, filePath, canonicalUrl) {
 /** Latest released version tag (e.g. "1.24.1"), or null if no tags exist (e.g. a shallow clone). */
 // QNBS-v3: null (not a thrown error) on a shallow/tagless checkout — callers must treat "no tags" as "skip the PLANNED check", never as a drift finding of its own.
 export function getLatestReleasedVersion() {
-  try {
-    const tag = execSync('git tag --sort=-v:refname', { cwd: root, encoding: 'utf8' })
-      .split('\n')
-      .find((t) => t.trim().length > 0);
-    return tag ? tag.trim().replace(/^v/, '') : null;
-  } catch {
-    return null;
-  }
+  return [...getTaggedVersions()].sort(semverCompare).at(-1) ?? null;
 }
 
 function semverLte(a, b) {
@@ -156,6 +148,96 @@ function semverLte(a, b) {
     if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) < (pb[i] ?? 0);
   }
   return true; // equal
+}
+
+function semverCompare(a, b) {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    const delta = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (delta !== 0) return delta;
+  }
+  return 0;
+}
+
+export function scanReleaseTruth(changelog, packageVersion, taggedVersions) {
+  const findings = [];
+  const releaseVersions = [...changelog.matchAll(/^## \[(\d+\.\d+\.\d+)\]/gm)].map(
+    (match) => match[1],
+  );
+  const latestTagged = [...taggedVersions].sort(semverCompare).at(-1) ?? null;
+  for (const version of releaseVersions) {
+    // QNBS-v3: retain historical changelog entries even when old tags were pruned; enforce the tag invariant from the current release frontier onward.
+    if (latestTagged && !taggedVersions.has(version) && semverCompare(version, latestTagged) >= 0) {
+      findings.push(
+        `CHANGELOG.md — dated release [${version}] has no matching git tag v${version}; move it to [Unreleased] or create the release tag after review`,
+      );
+    }
+  }
+  if (latestTagged && semverCompare(packageVersion, latestTagged) < 0) {
+    findings.push(
+      `package.json — version ${packageVersion} is older than the latest git tag v${latestTagged}`,
+    );
+  }
+  if (
+    latestTagged &&
+    semverCompare(packageVersion, latestTagged) > 0 &&
+    !/^## \[Unreleased\]/m.test(changelog)
+  ) {
+    findings.push(
+      `CHANGELOG.md — package.json version ${packageVersion} is newer than latest git tag v${latestTagged}, but no [Unreleased] section exists`,
+    );
+  }
+  return findings;
+}
+
+/**
+ * @param {string} [repositoryRoot]
+ * @returns {string}
+ */
+export function resolveGitCommonDir(repositoryRoot = root) {
+  // QNBS-v3: linked worktrees require resolving gitdir and commondir before tag discovery.
+  const dotGit = join(repositoryRoot, '.git');
+  if (!existsSync(dotGit)) return dotGit;
+  if (statSync(dotGit).isDirectory()) return dotGit;
+
+  const gitdirLine = readFileSync(dotGit, 'utf8').trim();
+  const match = /^gitdir:\s*(.+)$/i.exec(gitdirLine);
+  if (!match) return dotGit;
+
+  const gitDir = resolve(repositoryRoot, match[1]);
+  const commondirPath = join(gitDir, 'commondir');
+  if (!existsSync(commondirPath)) return gitDir;
+  const commondir = readFileSync(commondirPath, 'utf8').trim();
+  return commondir ? resolve(gitDir, commondir) : gitDir;
+}
+
+/**
+ * @param {string} [repositoryRoot]
+ * @returns {Set<string>}
+ */
+export function getTaggedVersions(repositoryRoot = root) {
+  const refs = new Set();
+  const gitDir = resolveGitCommonDir(repositoryRoot);
+  const packedRefs = join(gitDir, 'packed-refs');
+  if (existsSync(packedRefs)) {
+    for (const line of readFileSync(packedRefs, 'utf8').split('\n')) {
+      const match = line.match(/^[0-9a-f]+ refs\/tags\/(v\d+\.\d+\.\d+)$/);
+      if (match) refs.add(match[1].slice(1));
+    }
+  }
+  const tagsRoot = join(gitDir, 'refs', 'tags');
+  const collectLooseTags = (directory, prefix = '') => {
+    if (!existsSync(directory)) return;
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const name = prefix ? `${prefix}/${entry.name}` : entry.name;
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) collectLooseTags(path, name);
+      else if (/^v\d+\.\d+\.\d+$/.test(name)) refs.add(name.slice(1));
+    }
+  };
+  collectLooseTags(tagsRoot);
+  return refs;
 }
 
 /**
@@ -223,8 +305,16 @@ function main() {
   const keyCount = getActualKeyCount();
   const latestVersion = getLatestReleasedVersion();
   const canonicalUrl = getCanonicalProductionUrl();
+  const packageVersion = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 
   const allFindings = [];
+  allFindings.push(
+    ...scanReleaseTruth(
+      readFileSync(join(root, 'CHANGELOG.md'), 'utf8'),
+      packageVersion,
+      getTaggedVersions(),
+    ),
+  );
   for (const relPath of TARGET_FILES) {
     const abs = join(root, relPath);
     let content;

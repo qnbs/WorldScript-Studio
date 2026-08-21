@@ -8,8 +8,13 @@
       "recoveryPassphrase": "phrase",
       "userId": 42,
       "nested": {
-        "token": "nested-value-remains-owned-by-the-nested-value"
-      }
+        "token": "nested-secret"
+      },
+      "array": [
+        {
+          "password": "array-secret"
+        }
+      ]
     },
     "sanitized": {
       "apiKey": "[REDACTED]",
@@ -18,8 +23,13 @@
       "recoveryPassphrase": "[REDACTED]",
       "userId": 42,
       "nested": {
-        "token": "nested-value-remains-owned-by-the-nested-value"
-      }
+        "token": "[REDACTED]"
+      },
+      "array": [
+        {
+          "password": "[REDACTED]"
+        }
+      ]
     },
     "entry": {
       "ts": 1700000000000,

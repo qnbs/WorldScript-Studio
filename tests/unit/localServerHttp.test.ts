@@ -3,13 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // QNBS-v3 (#266): covers the runtime routing (Tauri plugin-http vs web fetch) and the
 // transport-error contract (unreachable/timeout classified, caller aborts rethrown unchanged).
 
-const tauriFetchMock = vi.fn();
+// QNBS-v3: hoisted factories need mock state initialized before ESM imports execute.
+const { isTauriRuntimeMock, tauriFetchMock } = vi.hoisted(() => ({
+  isTauriRuntimeMock: vi.fn(() => false),
+  tauriFetchMock: vi.fn(),
+}));
 
 vi.mock('@tauri-apps/plugin-http', () => ({
   fetch: (...args: unknown[]) => tauriFetchMock(...args),
 }));
 
-const isTauriRuntimeMock = vi.fn(() => false);
 vi.mock('../../services/tauriRuntime', () => ({
   isTauriRuntime: () => isTauriRuntimeMock(),
 }));

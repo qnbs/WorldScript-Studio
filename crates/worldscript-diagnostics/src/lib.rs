@@ -32,10 +32,10 @@ pub struct LogEntry {
     pub context: Option<Map<String, Value>>,
 }
 
-/// Redact sensitive top-level context keys using the existing TypeScript contract.
+/// Redact sensitive keys recursively in JSON objects and arrays.
 ///
-/// The current TS implementation intentionally redacts keys only, not values nested under
-/// otherwise-safe keys. Keeping that scope exact avoids an unreviewed wire-contract change.
+/// This mirrors the TypeScript diagnostics boundary so sensitive values cannot bypass redaction
+/// by being placed below an otherwise-safe object key.
 pub fn sanitize_context(context: &Map<String, Value>) -> Map<String, Value> {
     context
         .iter()
@@ -43,11 +43,19 @@ pub fn sanitize_context(context: &Map<String, Value>) -> Map<String, Value> {
             let sanitized = if is_sensitive_key(key) {
                 Value::String(REDACTED.to_string())
             } else {
-                value.clone()
+                sanitize_value(value)
             };
             (key.clone(), sanitized)
         })
         .collect()
+}
+
+fn sanitize_value(value: &Value) -> Value {
+    match value {
+        Value::Object(object) => Value::Object(sanitize_context(object)),
+        Value::Array(items) => Value::Array(items.iter().map(sanitize_value).collect()),
+        _ => value.clone(),
+    }
 }
 
 /// Return a sanitized copy of a structured log entry without mutating its input.
@@ -60,10 +68,43 @@ pub fn sanitize_entry(entry: &LogEntry) -> LogEntry {
 
 fn is_sensitive_key(key: &str) -> bool {
     let lowercase = key.to_ascii_lowercase();
+    // QNBS-v3: normalize separator variants so native redaction matches the shared diagnostics contract.
+    let compact = lowercase.replace(['_', '-'], "");
     lowercase.contains("key")
         || lowercase.contains("token")
         || lowercase.contains("password")
         || lowercase.contains("passphrase")
+        || is_iv_key(key)
+        || compact.contains("initializationvector")
+        || compact.contains("initialvector")
+}
+
+fn is_iv_key(key: &str) -> bool {
+    let bytes = key.as_bytes();
+    let is_iv = |index: usize| {
+        bytes.get(index).is_some_and(|b| *b == b'i' || *b == b'I')
+            && bytes
+                .get(index + 1)
+                .is_some_and(|b| *b == b'v' || *b == b'V')
+    };
+    for index in 0..bytes.len().saturating_sub(1) {
+        if !is_iv(index) {
+            continue;
+        }
+        let before_ok = index == 0
+            || bytes[index - 1] == b'_'
+            || bytes[index - 1] == b'-'
+            || bytes[index - 1].is_ascii_lowercase();
+        let after = bytes.get(index + 2).copied();
+        let after_ok = after.is_none()
+            || after == Some(b'_')
+            || after == Some(b'-')
+            || after.is_some_and(|b| b.is_ascii_uppercase());
+        if before_ok && after_ok {
+            return true;
+        }
+    }
+    false
 }
 
 #[cfg(test)]
@@ -90,10 +131,7 @@ mod tests {
         assert_eq!(sanitized["myPassword"], json!(REDACTED));
         assert_eq!(sanitized["recoveryPassphrase"], json!(REDACTED));
         assert_eq!(sanitized["userId"], json!(42));
-        assert_eq!(
-            sanitized["nested"],
-            json!({ "token": "still-owned-by-the-nested-value" })
-        );
+        assert_eq!(sanitized["nested"], json!({ "token": REDACTED }));
         assert_eq!(context["apiKey"], json!("secret"));
     }
 
@@ -139,5 +177,35 @@ mod tests {
             })
         );
         assert_eq!(entry.context.as_ref().unwrap()["apiKey"], json!("secret"));
+    }
+
+    #[test]
+    fn redacts_iv_variants_without_redacting_ordinary_words() {
+        let context = serde_json::from_value(json!({
+            "iv": "one",
+            "ivHex": "two",
+            "encryptionIv": "three",
+            "initializationVector": "four",
+            "initialization_vector": "five",
+            "initialization-vector": "six",
+            "initial_vector": "seven",
+            "initial-vector": "eight",
+            "ivory": "safe",
+            "privilege": "safe"
+        }))
+        .expect("fixture context is an object");
+
+        let sanitized = sanitize_context(&context);
+
+        assert_eq!(sanitized["iv"], json!(REDACTED));
+        assert_eq!(sanitized["ivHex"], json!(REDACTED));
+        assert_eq!(sanitized["encryptionIv"], json!(REDACTED));
+        assert_eq!(sanitized["initializationVector"], json!(REDACTED));
+        assert_eq!(sanitized["initialization_vector"], json!(REDACTED));
+        assert_eq!(sanitized["initialization-vector"], json!(REDACTED));
+        assert_eq!(sanitized["initial_vector"], json!(REDACTED));
+        assert_eq!(sanitized["initial-vector"], json!(REDACTED));
+        assert_eq!(sanitized["ivory"], json!("safe"));
+        assert_eq!(sanitized["privilege"], json!("safe"));
     }
 }

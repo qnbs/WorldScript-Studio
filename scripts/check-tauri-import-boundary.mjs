@@ -50,23 +50,14 @@ const SRC_EXT = new Set(['.ts', '.tsx']);
 //     intentionally NOT part of DesktopPlatform (roadmap §8 has no HTTP facet; both files are
 //     tagged Wave 10 in the coupling inventory) — see packages/desktop-contracts/src/types.ts's
 //     file header. This is a stable architecture decision, not deferred debt.
-//   - services/logger.ts: SCHEDULED DEBT (Wave 5/7, see docs/architecture/native-readiness.md) —
-//     packages/desktop-contracts's own Tauri adapter imports services/logger for its
-//     logger.warn(...) failure-observability calls. If logger.ts also imported desktopPlatform for
-//     its JSONL sink, that would be a circular import (logger -> desktopPlatform ->
-//     tauriDesktopPlatform -> logger). Exit condition: give packages/desktop-contracts its own
-//     lightweight logging port (injected callback or plain console.warn) so it stops depending on
-//     the app-level logger, then migrate logger.ts's JSONL sink onto desktopPlatform.filesystem.
+//   - The desktop contract adapter uses a renderer-neutral warning port so services/logger.ts can
+//     route its JSONL sink through desktopPlatform.filesystem without a circular dependency.
 // QNBS-v3: reported separately (not one flat ALLOWED_FILES count) so the success message can't hide a boundary file quietly becoming an "exception" or vice versa.
 const BOUNDARY_FILES = [
   'packages/desktop-contracts/src/types.ts',
   'packages/desktop-contracts/src/adapters/tauriDesktopPlatform.ts',
 ];
-const EXCEPTION_FILES = [
-  'services/ai/fetchAdapter.ts',
-  'services/localServerHttp.ts',
-  'services/logger.ts',
-];
+const EXCEPTION_FILES = ['services/ai/fetchAdapter.ts', 'services/localServerHttp.ts'];
 const ALLOWED_FILES = new Set(
   [...BOUNDARY_FILES, ...EXCEPTION_FILES].map((p) => path.join(root, p)),
 );

@@ -33,9 +33,9 @@ The app supports a multi-provider AI stack (Gemini, OpenAI, Claude, Grok, OpenRo
    ```bash
    pnpm run ci:prepush
    ```
-   This gate is mandatory before every push and after every local correction before re-pushing; all three checks must exit successfully. A targeted test or changed-file lint run alone is not push evidence. The pre-commit hook checks staged files with Biome, while the pre-push gate runs the full repository lint before typecheck and i18n validation. If branch switching or a lockfile/package-manifest change makes pnpm report dependency verification errors, repair first with `pnpm install --frozen-lockfile` and rerun the complete pre-push gate.
+   This gate is mandatory before every push and after every local correction before re-pushing; it runs sequentially with a single-checker project typecheck, i18n parity/quality and bundle checks, release/doc truth, and lightweight native guardrails. The pre-commit hook separately runs staged-file Biome checks. Full repository lint, coverage, E2E, Storybook, Lighthouse, and mutation checks belong to cloud CI. If branch switching or a lockfile/package-manifest change makes pnpm report dependency verification errors, run `node scripts/dependency-state.mjs reconcile` and rerun the complete pre-push gate.
    Optional targeted smoke test: `pnpm exec vitest run <path>` **without** `--coverage`.
-   **Hard rule:** Never invoke `pnpm test`, `npm run test`, or a bare Vitest wrapper; always use an explicit `pnpm exec vitest run <path>` command to avoid watch-mode hangs on constrained hardware.
+   **Hard rule:** Never invoke `pnpm test`, `npm run test`, or a bare Vitest wrapper; always use an explicit `pnpm exec vitest run <path>` command to avoid watch-mode hangs on constrained hardware. Never start multiple heavyweight processes concurrently.
 4. **Audit cloud CI logs, fix locally, then re-push** – If the cloud CI run fails, inspect the logs via GitHub web UI or `gh run watch`, reproduce the specific failing test or lint error in isolation, fix it locally (quick tier to verify), commit, and push again for another cloud CI run.
 5. **Sequential execution** – Do not parallelize builds, tests, or processes locally. Use single-threaded modes and avoid background tasks that compete for RAM/CPU.
 6. **Resource budget** – Avoid spinning up the dev server (`pnpm run dev`) for extended periods if not needed. Prefer one-off commands (`pnpm run build`, `pnpm run typecheck`) and stop the server when done.
@@ -169,6 +169,7 @@ pnpm run lint               # Biome lint (--error-on-warnings)
 pnpm run lint:fix           # Biome check --write (lint + format)
 pnpm run format             # Biome format --write
 pnpm run typecheck          # tsgo --project tsconfig.tsgo.json --noEmit --checkers 4
+pnpm run typecheck:single   # local low-end typecheck: one checker, sequential
 pnpm run i18n:check         # Locale key parity vs English + rebuild bundles + content guard
 pnpm run parity:check       # Feature parity audit
 pnpm run suppressions:check # Biome-ignore count ratchet
@@ -261,8 +262,10 @@ On any non-trivial change, add a single-line comment explaining **why**, not wha
 ### Commit Messages
 
 Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`.
-After an explicit `pnpm run hooks:install`, the pre-commit hook runs `biome check --write` on staged
-files via `simple-git-hooks` + `lint-staged`, and the pre-push hook runs `pnpm run ci:prepush`.
+After an explicit `pnpm run hooks:install`, the pre-commit hook runs `lint-staged` on staged files
+through `node scripts/hooks/pre-commit.mjs`; the pre-push hook runs
+`node scripts/hooks/pre-push.mjs`. These direct Node entrypoints verify the content fingerprint
+and invoke local binaries without pnpm's workspace-state preflight in the hook path.
 The pre-commit hook is not a substitute for the complete pre-push gate; CI remains mandatory when
 hooks are not installed.
 
@@ -273,12 +276,21 @@ hooks are not installed.
 ### Philosophy
 
 - **Cloud CI-first:** The canonical quality gate is GitHub Actions. Low-end local machines should run only the "Quick" tier.
-- **Quick tier (local, before every push):** `pnpm run ci:prepush` runs the full repository lint, then
-  the exact CI typecheck and i18n checks sequentially. Staged-file Biome validation still runs in
-  pre-commit. Run the gate
-  again after every correction before re-pushing; do not push based only on a targeted test or a
-  changed-file lint run. Optionally: `pnpm exec vitest run <path>`
-  **without** `--coverage`.
+- **Quick tier (local, before every push):** `pnpm run ci:prepush` runs the project typecheck with
+  one checker, i18n parity/quality/bundle/content checks, release/doc truth, and lightweight desktop guardrails sequentially;
+  the pre-commit hook separately runs staged-file Biome checks. Run the gate again after every
+  correction before re-pushing; do not
+  push based only on a targeted test or a changed-file lint run. Optionally:
+  `pnpm exec vitest run <path>` **without** `--coverage`.
+- **Dependency state:** `pnpm run deps:verify` compares a content fingerprint of dependency
+  manifests, workspace package manifests, and patches. After a dependency-related branch switch,
+  run `node scripts/dependency-state.mjs reconcile` (or `pnpm run deps:reconcile` when pnpm can
+  start); never use `--no-verify` as the
+  normal recovery path.
+- **Low-resource policy:** Never run Biome, multiple TypeScript checkers, Vitest, Cargo, Vite,
+  Storybook, or other heavyweight processes concurrently on the development workstation. Full
+  repository lint/tests, E2E, coverage, Lighthouse, and mutation testing are cloud-CI work unless
+  the user explicitly requests a narrowly scoped local run.
 - **Vitest watch-mode hard rule:** Never invoke `pnpm test`, `npm run test`, or a bare Vitest wrapper; use an explicit targeted `pnpm exec vitest run <path>` command so constrained hardware never waits on watch mode.
 - **Heavy tier (CI):** Vitest with coverage thresholds, Playwright E2E (desktop + mobile emulation), Lighthouse CI, Stryker mutation, Storybook static build, bundle budget + analyze.
 
@@ -374,6 +386,8 @@ Edge builds run `scripts/build-edge.mjs` which sets `DEPLOY_TARGET=edge` and pat
 Never commit directly to `main` — always a feature branch + PR, even for a single-file edit. Wait for the **full CI suite to go green, including non-required/advisory jobs** (E2E, E2E Deep Coverage, Storybook, Lighthouse, Visual Regression), not just the branch-protection-required checks. Any `FAILURE` status — required or advisory — is zero-tolerance: investigate the actual root cause (pull the coverage report / job log) before deciding how to proceed; never assume a failing check is "probably fine" because your own latest commit looked unrelated — e.g. `codecov/patch` evaluates the PR's **entire accumulated diff**, not just your last commit.
 
 **Review-comment completeness — check three independent channels before declaring a PR review-clean, every time:** (1) GraphQL `reviewThreads` for inline per-line comments; (2) `gh api repos/<owner>/<repo>/issues/<PR>/comments` for plain top-level bot comments (qodo-code-review posts its real findings only here, never as `reviewThreads`); (3) `gh api repos/<owner>/<repo>/pulls/<PR>/reviews`, reading each review's full `.body` text (CodeRabbit's "🧹 Nitpick comments" and outside-diff-range findings live here, collapsed, invisible to the other two channels). A bot using one channel on a PR doesn't mean the others are covered.
+
+**Squash-merge verification:** Never infer a missing merge from `git merge-base --is-ancestor` alone. For every PR, verify `state=MERGED`, `merged_at`, and the resulting `merge_commit_sha`; compare the base commit immediately before the merge with that resulting `main` commit, including changed files, additions, and deletions. Use patch/tree equivalence as an optional corroboration. This is required because GitHub squash merges intentionally produce a new commit whose SHA is not the PR head SHA.
 
 **Known review bots on this repo** (confirm still installed — this list can drift): CodeRabbit (`@coderabbitai review` to re-trigger), CodeAnt AI (5 CI status checks only — `CodeAnt - Quality Gates/SAST/SCA/SCR/Test Coverage` — not inline PR comments here), qodo-code-review (top-level comments, see above), Amazon Q Developer (`/q review` as a fresh top-level comment — not inside an existing thread; quota-conscious — call it once CodeRabbit/CodeAnt's own loop has already reached quiescence, not after every fix commit), Graphite AI Reviews (automatic, no confirmed manual trigger), chatgpt-codex-connector (intermittent/quota-limited availability — verify it's currently active rather than assuming silence means "nothing to report"). A bot's silence is not a clean pass by itself — for security/sandbox/IPC/FFI/packaging-adjacent PRs, verify at least one bot produced real review output (its actual comment/review text), not just a green check-run.
 
