@@ -439,6 +439,54 @@ describe('tauriDesktopPlatform', () => {
       );
     });
 
+    it('rejects an invalid request contract before invoking native code', async () => {
+      await expect(
+        tauriDesktopPlatform.tasks.submitTask({
+          contractVersion: RUST_TASK_CONTRACT_VERSION,
+          taskId: '',
+          taskType: 'text.analyze',
+          payload: {},
+          priority: 'normal',
+          target: 'rust',
+          timeoutMs: 5000,
+        }),
+      ).rejects.toThrow(/invalid request contract/);
+      expect(h.invoke).not.toHaveBeenCalled();
+      expect(h.loggerWarn).toHaveBeenCalled();
+    });
+
+    it('rejects and logs a malformed native result', async () => {
+      h.invoke.mockResolvedValueOnce({ contractVersion: RUST_TASK_CONTRACT_VERSION });
+      await expect(
+        tauriDesktopPlatform.tasks.submitTask({
+          contractVersion: RUST_TASK_CONTRACT_VERSION,
+          taskId: 'task-1',
+          taskType: 'text.analyze',
+          payload: {},
+          priority: 'normal',
+          target: 'rust',
+          timeoutMs: 5000,
+        }),
+      ).rejects.toThrow(/invalid result contract/);
+      expect(h.loggerWarn).toHaveBeenCalled();
+    });
+
+    it('logs and wraps native invocation failures', async () => {
+      h.invoke.mockRejectedValueOnce(new Error('IPC unavailable'));
+      await expect(
+        tauriDesktopPlatform.tasks.submitTask({
+          contractVersion: RUST_TASK_CONTRACT_VERSION,
+          taskId: 'task-2',
+          taskType: 'text.analyze',
+          payload: {},
+          priority: 'normal',
+          target: 'rust',
+          timeoutMs: 5000,
+        }),
+      ).rejects.toThrow(/worldscript_task_supervisor_submit failed: IPC unavailable/);
+      expect(h.loggerWarn).toHaveBeenCalled();
+    });
+
     it('convertMarkdownToEpub decodes the base64 response', async () => {
       h.invoke.mockResolvedValueOnce({ base64: btoa('epub-bytes') });
       const bytes = await tauriDesktopPlatform.tasks.convertMarkdownToEpub('# Title');
