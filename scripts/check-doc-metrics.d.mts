@@ -8,6 +8,11 @@ export function scanReleaseTruth(
   packageVersion: string,
   taggedVersions: Set<string>,
 ): string[];
+export function scanReadmeReleaseTruth(readme: string, taggedVersions: Set<string>): string[];
+export function scanUnreleasedTruth(
+  changelog: string,
+  postReleaseCommitSubjects: string[] | null,
+): string[];
 export function scanForDrift(
   content: string,
   filePath: string,
