@@ -3,14 +3,84 @@
  * Tests for scripts/check-doc-metrics.mjs
  * QNBS-v3: protects the drift gate from historical-section regressions — an untested exclusion heuristic would turn it into noise.
  */
+
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   getCanonicalProductionUrl,
+  getTaggedVersions,
   scanForDrift,
   scanForUrlDrift,
+  scanReleaseTruth,
   stripHistoricalSections,
   VERCEL_URL_PATTERN,
 } from '../../scripts/check-doc-metrics.mjs';
+
+const getTaggedVersionsAt = getTaggedVersions as unknown as (repositoryRoot: string) => Set<string>;
+
+// QNBS-v3: release truth must remain correct in normal repositories and linked worktrees.
+describe('scanReleaseTruth', () => {
+  it('rejects a dated changelog release without a matching tag', () => {
+    expect(scanReleaseTruth('## [1.28.0] — 2026-08-21\n', '1.28.0', new Set(['1.27.1']))).toEqual([
+      expect.stringContaining('no matching git tag v1.28.0'),
+      expect.stringContaining('no [Unreleased] section exists'),
+    ]);
+  });
+
+  it('accepts a newer package version only when it remains under Unreleased', () => {
+    expect(scanReleaseTruth('## [Unreleased]\n', '1.28.0', new Set(['1.27.1']))).toEqual([]);
+    expect(scanReleaseTruth('## [1.28.0] — 2026-08-21\n', '1.28.0', new Set(['1.28.0']))).toEqual(
+      [],
+    );
+  });
+
+  it('skips dated-release tag checks in a tagless checkout', () => {
+    expect(
+      scanReleaseTruth('## [1.20.0] — 2025-01-01\n## [1.28.0] — 2026-08-21\n', '1.28.0', new Set()),
+    ).toEqual([]);
+  });
+});
+
+describe('getTaggedVersions', () => {
+  it('reads packed and loose tags from a standard repository', () => {
+    const repositoryRoot = mkdtempSync(join(process.cwd(), '.tmp-worldscript-doc-metrics-'));
+    try {
+      mkdirSync(join(repositoryRoot, '.git', 'refs', 'tags'), { recursive: true });
+      writeFileSync(
+        join(repositoryRoot, '.git', 'packed-refs'),
+        `# pack-refs with: peeled fully-peeled\n${'a'.repeat(40)} refs/tags/v1.27.1\n`,
+      );
+      writeFileSync(join(repositoryRoot, '.git', 'refs', 'tags', 'v1.28.0'), `${'b'.repeat(40)}\n`);
+
+      expect(getTaggedVersionsAt(repositoryRoot)).toEqual(new Set(['1.27.1', '1.28.0']));
+    } finally {
+      rmSync(repositoryRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('follows linked-worktree gitdir and commondir pointers', () => {
+    const repositoryRoot = mkdtempSync(
+      join(process.cwd(), '.tmp-worldscript-doc-metrics-worktree-'),
+    );
+    const worktreeRoot = join(repositoryRoot, 'worktree');
+    const worktreeGitDir = join(repositoryRoot, 'main.git', 'worktrees', 'linked');
+    const commonGitDir = join(repositoryRoot, 'main.git');
+    try {
+      mkdirSync(worktreeRoot, { recursive: true });
+      mkdirSync(worktreeGitDir, { recursive: true });
+      mkdirSync(join(commonGitDir, 'refs', 'tags'), { recursive: true });
+      writeFileSync(join(worktreeRoot, '.git'), 'gitdir: ../main.git/worktrees/linked\n');
+      writeFileSync(join(worktreeGitDir, 'commondir'), '../..\n');
+      writeFileSync(join(commonGitDir, 'packed-refs'), `${'c'.repeat(40)} refs/tags/v1.27.1\n`);
+      writeFileSync(join(commonGitDir, 'refs', 'tags', 'v1.28.0'), `${'d'.repeat(40)}\n`);
+
+      expect(getTaggedVersionsAt(worktreeRoot)).toEqual(new Set(['1.27.1', '1.28.0']));
+    } finally {
+      rmSync(repositoryRoot, { recursive: true, force: true });
+    }
+  });
+});
 
 describe('stripHistoricalSections', () => {
   it('blanks a Keep-a-Changelog-style `## [x.y.z]` section', () => {

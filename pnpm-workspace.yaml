@@ -3,6 +3,7 @@
 # All other dependency build scripts are denied by default under pnpm v11.
 # QNBS-v3: TS7 migration - disabled strictPeerDependencies for tsgo preview compatibility
 strictPeerDependencies: false
+# QNBS-v3: Keep pnpm's dependency-state guard strict; Git hooks run local Node entrypoints so a stale pnpm timestamp cannot bypass checks.
 verifyDepsBeforeRun: error
 autoInstallPeers: true
 ignoreScripts: false

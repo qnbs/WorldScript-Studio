@@ -125,7 +125,7 @@
       }
     },
     {
-      "includes": ["services/logger.ts"],
+      "includes": ["services/logger.ts", "services/diagnostics/logSinks.ts"],
       "linter": {
         "rules": {
           "suspicious": {

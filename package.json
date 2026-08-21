@@ -16,11 +16,15 @@
   "packageManager": "pnpm@11.5.2",
   "engines": {
     "node": ">=22.0.0",
-    "pnpm": ">=11.0.0"
+    "pnpm": "11.5.2"
   },
   "scripts": {
     "hooks:install": "simple-git-hooks",
-    "ci:prepush": "pnpm run lint && pnpm run typecheck && pnpm run i18n:check",
+    "toolchain:check": "node scripts/check-pnpm-toolchain.mjs",
+    "deps:verify": "node scripts/dependency-state.mjs verify",
+    "deps:reconcile": "node scripts/dependency-state.mjs reconcile",
+    "ci:prepush": "node scripts/ci-prepush-lowend.mjs",
+    "ci:local:full": "pnpm run lint && pnpm run typecheck && pnpm run i18n:check && pnpm run guardrail:desktop-imports && pnpm run native-readiness:check",
     "predev": "node scripts/sync-sw-version.mjs && node scripts/sync-tauri-version.mjs && node scripts/sync-readme-metrics.mjs && node scripts/build-i18n.mjs && node scripts/copy-duckdb-assets.mjs",
     "dev": "vite",
     "dev:turbo": "turbo run dev --parallel",
@@ -200,8 +204,8 @@
     "y-protocols": "^1.0.7"
   },
   "simple-git-hooks": {
-    "pre-commit": "pnpm exec lint-staged",
-    "pre-push": "pnpm run ci:prepush"
+    "pre-commit": "node scripts/hooks/pre-commit.mjs",
+    "pre-push": "node scripts/hooks/pre-push.mjs"
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs,css,md,json}": "biome check --write --error-on-warnings --no-errors-on-unmatched --files-ignore-unknown=true",

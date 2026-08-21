@@ -189,7 +189,7 @@ Run the smallest gate that matches your change — sequentially, one heavy comma
 
 | Your change… | Run locally before pushing |
 |---|---|
-| **Always** | `pnpm run lint` · `pnpm run typecheck` · targeted `pnpm exec vitest run <path>` (no `--coverage`) |
+| **Always** | `pnpm run ci:prepush` |
 | **Touched any locale JSON** | `pnpm run i18n:check` (parity + bundle rebuild) |
 | **Added/removed a feature flag** | `pnpm exec tsx scripts/audit-feature-parity.ts` (must report 0 drifts) |
 | **Touched `packages/ai-core`, `workers/`, or `vite.config.ts`** | `pnpm run build && pnpm run smoke:prod` (prod-only crash guard) |
@@ -200,7 +200,9 @@ Coverage, E2E, Lighthouse, Stryker, and Storybook test-runner are **CI gate jobs
 
 ### Local vs CI (low-end friendly)
 
-- **Before every push (recommended):** `pnpm run lint`, `pnpm run typecheck`, `pnpm run i18n:check`. Optional: targeted `pnpm exec vitest run <path>` for a quick smoke.
+- **Before every push:** `pnpm run ci:prepush` (sequential single-checker typecheck, i18n parity/quality, release/doc truth, and lightweight guardrails); the pre-commit hook runs staged Biome checks. Optional: targeted `pnpm exec vitest run <path>` for a quick smoke.
+- **Full local gate (manual):** `pnpm run ci:local:full`; full tests, coverage, E2E, Storybook, Lighthouse, and mutation testing remain CI-owned on low-end hardware.
+- **Dependency recovery:** run `node scripts/dependency-state.mjs reconcile` when pnpm reports stale dependency state. It performs the frozen install and records the content fingerprint atomically; `pnpm run deps:reconcile` is the convenience wrapper when pnpm can launch.
 - **Vitest hard rule:** Never invoke `pnpm test`, `npm run test`, or a bare Vitest wrapper; watch mode hangs constrained hardware. Use an explicit targeted `pnpm exec vitest run <path>` command.
 - **Full gate:** GitHub Actions runs Vitest **with** coverage thresholds, Playwright (desktop + mobile emulation in CI), Lighthouse, etc. A **green CI run** is the merge bar — you are **not** required to pass full E2E or LHCI on a weak laptop.
 - **Optional local E2E:** `CI=true pnpm run test:e2e` when debugging; optional mobile project: `RUN_MOBILE_E2E=1` (see [`docs/CI.md`](docs/CI.md)).
@@ -387,13 +389,11 @@ Open a **focused PR per theme** (storage vs. i18n vs. collaboration) to keep rev
 
 1. Fork the repository and create a feature branch
 2. Write or update tests for your changes
-3. Let CI run the full test suite; locally use only targeted `pnpm exec vitest run <path>`.
-4. Ensure Biome passes: `pnpm run lint`
-5. Ensure i18n parity: `pnpm run i18n:check`
-6. Ensure types compile: `pnpm run typecheck`
-7. Ensure the build succeeds when build-affecting files changed; GitHub Actions runs the canonical build gate for every PR.
-8. Submit a PR against `main` with a clear description
-9. Request review from at least one maintainer
+3. Run the sequential local gate: `pnpm run ci:prepush` (and the optional targeted `pnpm exec vitest run <path>` when useful).
+4. Let CI run the full lint and test suite; it is authoritative for the heavy tier.
+5. Ensure the build succeeds when build-affecting files changed; GitHub Actions runs the canonical build gate for every PR.
+6. Submit a PR against `main` with a clear description
+7. Request review from at least one maintainer
 
 The CI pipeline will automatically run lint, i18n check, typecheck, tests, and build on every PR.
 

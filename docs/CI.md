@@ -14,7 +14,7 @@ For historical optimization notes (targets may predate the live workflow), see [
 
 | Tier | Where | Commands / scope |
 |------|--------|------------------|
-| **Quick (local)** | Developer laptop | `pnpm run lint`, `pnpm run typecheck`, `pnpm run i18n:check`; optional targeted `pnpm exec vitest run <path>` for a fast smoke |
+| **Quick (local)** | Developer laptop | `pnpm run ci:prepush` (single-checker typecheck, i18n quality, release/doc truth, and lightweight guardrails); the pre-commit hook runs staged Biome checks; optional targeted `pnpm exec vitest run <path>` for a fast smoke |
 | **Heavy (CI)** | `ci.yml` | Vitest **with** `--coverage` and thresholds, Playwright E2E (`CI=true`) including **mobile emulation** (Pixel 5 / Chromium), Lighthouse CI, Storybook static build, bundle budget + analyze. Mutation testing (Stryker) is **not** part of this pipeline — see [Mutation testing status](#mutation-testing-status). |
 
 **Merge readiness:** A green workflow run on the PR/branch matters more than reproducing every E2E or LHCI step locally. Use CI **artifacts** (Playwright HTML report, coverage, Lighthouse output) to debug failures.
@@ -238,16 +238,13 @@ longer runs a root `prepare` command. `pnpm-workspace.yaml` sets `verifyDepsBefo
 
 ## Local checks (without Act)
 
-On **low-resource** machines, stop at the **Quick** tier (see [Cloud CI-first vs local development](#cloud-ci-first-vs-local-development)): **`pnpm run lint`**, **`pnpm run typecheck`**, **`pnpm run i18n:check`**, and optionally targeted **`pnpm exec vitest run <path>`**. Treat **`CI=true pnpm run test:e2e`** (desktop + mobile projects in CI), **Lighthouse**, and **coverage threshold enforcement** as **CI-owned**.
+On **low-resource** machines, stop at the **Quick** tier (see [Cloud CI-first vs local development](#cloud-ci-first-vs-local-development)): **`pnpm run ci:prepush`**, and optionally targeted **`pnpm exec vitest run <path>`**. Never run multiple heavyweight local processes concurrently. Treat **`CI=true pnpm run test:e2e`** (desktop + mobile projects in CI), **Lighthouse**, coverage, Storybook, and mutation testing as **CI-owned**.
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm run lint
-pnpm run i18n:check
-pnpm run typecheck
-pnpm exec vitest run <path> --coverage \
-  --coverage.thresholds.lines=0 --coverage.thresholds.functions=0 \
-  --coverage.thresholds.branches=0 --coverage.thresholds.statements=0  # targeted only
+pnpm run deps:verify
+pnpm run ci:prepush
+pnpm exec vitest run <path>  # optional targeted smoke, no coverage
 ```
 
 Playwright E2E, Lighthouse, Storybook, and full-suite coverage are intentionally omitted from

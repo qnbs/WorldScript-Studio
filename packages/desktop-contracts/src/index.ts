@@ -2,6 +2,7 @@
 
 export { tauriDesktopPlatform } from './adapters/tauriDesktopPlatform';
 export { webDesktopPlatform } from './adapters/webDesktopPlatform';
+export { sanitizeDiagnosticsContext, sanitizeDiagnosticsValue } from './diagnostics';
 export type {
   DesktopClipboard,
   DesktopCloseRequestedEvent,
