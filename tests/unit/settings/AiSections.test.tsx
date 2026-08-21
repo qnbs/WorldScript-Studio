@@ -26,6 +26,7 @@ const baseAdvancedAi = {
   hybridFallbackChain: [] as string[],
   ragMode: 'hybrid' as const,
 };
+// QNBS-v3: Keeps provider transitions observable so fallback migration cannot regress silently.
 const mockProviderState = {
   provider: 'gemini' as 'gemini' | 'grok',
   model: 'gemini-2.5-flash',
@@ -72,6 +73,7 @@ vi.mock('../../../components/ApiKeySection', () => ({
 }));
 
 vi.mock('../../../components/settings/AiProviderCard', () => ({
+  // QNBS-v3: Exercises the interactive provider transition without loading the card's heavy UI dependencies.
   AiProviderCard: ({ onProviderChange }: { onProviderChange?: (provider: 'grok') => void }) => (
     <button type="button" data-testid="ai-provider-card" onClick={() => onProviderChange?.('grok')}>
       AiProviderCard
@@ -93,6 +95,7 @@ vi.mock('@domain/ai-core', () => ({
 }));
 
 vi.mock('../../../components/ui/Select', () => ({
+  // QNBS-v3: Exposes grouped catalog options through a native control for deterministic selector assertions.
   Select: vi.fn(
     ({
       children,
@@ -146,6 +149,7 @@ import { AdvancedAiSection, AiSection } from '../../../components/settings/AiSec
 // ---------------------------------------------------------------------------
 
 describe('AiSection', () => {
+  // QNBS-v3: Resets the mutable mock between tests to prevent provider state leakage.
   beforeEach(() => {
     vi.clearAllMocks();
     mockProviderState.provider = 'gemini';
@@ -153,6 +157,7 @@ describe('AiSection', () => {
   });
 
   it('sets the current Grok fallback when the provider changes to Grok', async () => {
+    // QNBS-v3: Proves a provider switch selects a supported model instead of preserving a stale ID.
     const user = userEvent.setup();
     render(<AiSection />);
     await user.click(screen.getByTestId('ai-provider-card'));
@@ -203,6 +208,7 @@ describe('AiSection', () => {
 // ---------------------------------------------------------------------------
 
 describe('AdvancedAiSection', () => {
+  // QNBS-v3: Resets catalog-provider state before each advanced-settings assertion.
   beforeEach(() => {
     vi.clearAllMocks();
     mockProviderState.provider = 'gemini';
@@ -243,6 +249,7 @@ describe('AdvancedAiSection', () => {
   });
 
   it('renders current Grok catalog options for the Grok provider', () => {
+    // QNBS-v3: Locks the visible Grok catalog to the server-accepted model IDs.
     mockProviderState.provider = 'grok';
     mockProviderState.model = 'grok-4.6';
     render(<AdvancedAiSection />);
