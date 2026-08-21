@@ -152,16 +152,18 @@ afterEach(() => {
   vi.mocked(getLocalAiSuggestions).mockReturnValue([]);
 });
 
+const makeCommand = (id: string, title: string): PaletteCommandModel => ({
+  id,
+  title,
+  categoryLabel: 'palette.category.global',
+  category: 'global',
+  icon: null,
+  keywords: [],
+  run: vi.fn(),
+});
+
 const makeCommands = (n: number): PaletteCommandModel[] =>
-  Array.from({ length: n }, (_, i) => ({
-    id: `cmd-${i}`,
-    title: `Command ${i}`,
-    categoryLabel: 'palette.category.global',
-    category: 'global',
-    icon: null,
-    keywords: [],
-    run: vi.fn(),
-  }));
+  Array.from({ length: n }, (_, i) => makeCommand(`cmd-${i}`, `Command ${i}`));
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -221,19 +223,19 @@ describe('CommandPalette', () => {
   it('keeps populated option states on the accessible palette theme tokens', async () => {
     const user = userEvent.setup();
     const pinnedCommand = {
-      ...makeCommands(1)[0],
+      ...makeCommand('cmd-pinned', 'Pinned command'),
       id: 'cmd-pinned',
       title: 'Pinned command',
       shortcutDisplay: ['Ctrl', 'P'],
     };
     const suggestedCommand = {
-      ...makeCommands(1)[0],
+      ...makeCommand('cmd-suggested', 'Suggested command'),
       id: 'cmd-suggested',
       title: 'Suggested command',
       shortcutDisplay: ['Ctrl', 'S'],
     };
     const regularCommand = {
-      ...makeCommands(1)[0],
+      ...makeCommand('cmd-regular', 'Regular command'),
       id: 'cmd-regular',
       title: 'Regular command',
       shortcutDisplay: ['Ctrl', 'R'],
