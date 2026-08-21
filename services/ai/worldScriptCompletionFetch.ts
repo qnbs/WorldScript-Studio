@@ -2,6 +2,7 @@ import { streamText } from 'ai';
 import { z } from 'zod';
 import type { AIProvider, AiCreativity, AiModel } from '../../types';
 import { createLogger } from '../logger';
+import { assertCspConnectEndpointAllowed, CspConnectPolicyError } from '../network/cspOriginPolicy';
 import { storageService } from '../storageService';
 import { assertCloudAiAllowed } from './aiPolicy';
 import { aiUsageTracker } from './aiUsageTracker';
@@ -123,6 +124,7 @@ async function resolveModelConfig(
     );
     const customRoot = openAiExtras.openAiCompatibleBaseUrl?.trim();
     if (customRoot) {
+      assertCspConnectEndpointAllowed(customRoot, 'OpenAI-compatible endpoint');
       return {
         provider: 'openaiCompatible',
         baseURL: normalizeOpenAiCompatibleBaseUrl(customRoot),
@@ -139,7 +141,10 @@ async function resolveModelConfig(
       ...(extraHeaders !== undefined ? { headers: extraHeaders } : {}),
     };
   }
-  const baseURL = normalizeOpenAiCompatibleBaseUrl(ollamaBaseUrl ?? 'http://localhost:11434');
+  // QNBS-v3: validate and configure one normalized Ollama endpoint so blank settings cannot bypass the policy.
+  const resolvedOllamaBaseUrl = ollamaBaseUrl?.trim() || 'http://localhost:11434';
+  assertCspConnectEndpointAllowed(resolvedOllamaBaseUrl, 'Ollama endpoint');
+  const baseURL = normalizeOpenAiCompatibleBaseUrl(resolvedOllamaBaseUrl);
   const modelId = normalizeOllamaModelId(model as AiModel);
   return {
     provider: 'openaiCompatible',
@@ -231,6 +236,12 @@ export async function worldScriptCompletionFetch(
     if (err instanceof z.ZodError) {
       return new Response(JSON.stringify({ error: 'Invalid completion request payload.' }), {
         status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (err instanceof CspConnectPolicyError) {
+      return new Response(JSON.stringify({ code: err.code, error: err.message }), {
+        status: 422,
         headers: { 'Content-Type': 'application/json' },
       });
     }

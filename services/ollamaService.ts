@@ -5,6 +5,7 @@ import {
   normalizeLocalBaseUrl,
 } from './localServerHttp';
 import { createLogger } from './logger';
+import { CspConnectPolicyError } from './network/cspOriginPolicy';
 import { isTauriRuntime } from './tauriRuntime';
 
 // QNBS-v3 (#266): canonical normalization lives in localServerHttp (shared with the scanner).
@@ -81,6 +82,7 @@ export async function pullOllamaModel(name: string, opts: OllamaPullOptions = {}
     });
   } catch (err) {
     if (isAbortError(err)) throw err;
+    if (err instanceof CspConnectPolicyError) throw err;
     throw new Error(
       `Ollama not reachable (${baseUrl}). Make sure Ollama is running: ollama serve`,
       { cause: err as Error },
@@ -162,6 +164,7 @@ export type TestConnectionErrorKind =
   | 'httpError'
   | 'timeout'
   | 'unreachable'
+  | 'policyBlocked'
   | 'pluginUnavailable'
   | 'invalidResponse';
 
@@ -220,6 +223,14 @@ export async function testOllamaConnection(baseUrl?: string): Promise<TestConnec
     };
   } catch (error: unknown) {
     // QNBS-v3 (#266): classified failures — distinguish a hanging server from a missing one.
+    if (error instanceof CspConnectPolicyError) {
+      return {
+        ok: false,
+        error: error.message,
+        kind: 'policyBlocked',
+        params: { url: resolvedUrl },
+      };
+    }
     if (error instanceof LocalServerError && error.kind === 'timeout') {
       return {
         ok: false,
@@ -285,6 +296,7 @@ export async function streamOllama(
     // 'not reachable' would push a deliberate cancel into the fallback chain. localServerFetch
     // already rethrows AbortError untouched; keep it that way here.
     if (isAbortError(err)) throw err;
+    if (err instanceof CspConnectPolicyError) throw err;
     const error = new Error(
       `Ollama not reachable (${baseUrl}). Make sure Ollama is running: ollama serve`,
       { cause: err as Error },

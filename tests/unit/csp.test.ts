@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { CSP_CONNECT_SRC, validateCspConnectSrcPolicy } from '../../scripts/csp-policy.mjs';
 import {
   extractHeadersFileValue,
   extractNginxHeaderValue,
@@ -9,23 +10,21 @@ import {
   group1,
 } from '../utils/deploymentConfigParsers';
 
-// QNBS-v3: Regression guard for the ADR-0004 revision (2026-07-28) — the ADR previously claimed
-// "the host tightens CSP further via HTTP response headers in production", which was false: none
-// of vercel.json/_headers/nginx.conf set a Content-Security-Policy header. This block asserts the
-// header CSP now actually exists on all three, is identical across them, and is never looser than
-// the meta CSP (a divergence would make the meta tag misleading — see docs/DEPLOYMENT.md).
+// QNBS-v3: keep deployment headers present, aligned, and no looser than the meta CSP after the ADR-0004 correction.
 
-// QNBS-v3: Regression guard for ADR-0004 (audit finding F-2). The web PWA connect-src keeps a
-// `https:` scheme-source ON PURPOSE — it is required by the shipped BYOK `openAiCompatibleBaseUrl`
-// feature (arbitrary user-configured HTTPS proxies that cannot be enumerated in a meta CSP). The
-// per-provider HTTPS entries were removed as dead allowlist entries (redundant under `https:`).
-// The native Tauri CSP must stay strict (NO `https:` blanket). These assertions lock that contract.
+// QNBS-v3: all web and native surfaces share explicit origins so unlisted BYOK endpoints cannot widen egress.
 
 const webHtml = readFileSync(fileURLToPath(new URL('../../index.html', import.meta.url)), 'utf8');
 const tauriConf = readFileSync(
   fileURLToPath(new URL('../../src-tauri/tauri.conf.json', import.meta.url)),
   'utf8',
 );
+const cspCheckerSource = readFileSync(
+  fileURLToPath(new URL('../../scripts/check-csp-policy.mjs', import.meta.url)),
+  'utf8',
+);
+
+const expectedConnectSrc = new Set(CSP_CONNECT_SRC);
 
 /** Pull the `connect-src …;` directive value out of a CSP string, normalized to whitespace tokens. */
 function connectSrcTokens(csp: string): string[] {
@@ -51,12 +50,50 @@ function tauriCsp(): string {
   return csp as string;
 }
 
-describe('CSP connect-src — ADR-0004 BYOK tradeoff', () => {
+describe('CSP connect-src — shared explicit egress policy', () => {
+  // QNBS-v3: scheme-only sources must never enter the shared policy and fan out to production surfaces.
+  it('rejects wildcard and scheme-only policy entries', () => {
+    for (const source of ['*', 'https:', 'http:', 'ws:', 'wss:']) {
+      expect(() => validateCspConnectSrcPolicy([source])).toThrow('explicit source strings');
+    }
+  });
+
+  it('keeps every deployed CSP surface exactly equal to the shared policy source', () => {
+    const surfaces = [
+      webCsp(),
+      tauriCsp(),
+      extractVercelHeaderValue(
+        readFileSync(fileURLToPath(new URL('../../vercel.json', import.meta.url)), 'utf8'),
+        'Content-Security-Policy',
+      ),
+      extractHeadersFileValue(
+        readFileSync(fileURLToPath(new URL('../../public/_headers', import.meta.url)), 'utf8'),
+        'Content-Security-Policy',
+      ),
+      ...[
+        ...readFileSync(
+          fileURLToPath(new URL('../../nginx.conf', import.meta.url)),
+          'utf8',
+        ).matchAll(/add_header Content-Security-Policy "([^"]*)"/g),
+      ].map((match) => match[1] ?? ''),
+    ];
+    expect(surfaces).toHaveLength(7);
+    for (const csp of surfaces) {
+      expect(new Set(connectSrcTokens(csp))).toEqual(expectedConnectSrc);
+    }
+  });
+
+  // QNBS-v3: keep the Tauri loopback policy fail-closed instead of trusting a surface-specific exception.
+  it('checks upgrade-insecure-requests on the Tauri surface too', () => {
+    expect(tauriCsp()).not.toContain('upgrade-insecure-requests');
+    expect(cspCheckerSource).not.toContain("relativePath !== 'src-tauri/tauri.conf.json'");
+  });
+
   describe('web PWA (index.html)', () => {
     const tokens = connectSrcTokens(webCsp());
 
-    it('keeps the intentional `https:` scheme-source (required by BYOK openAiCompatibleBaseUrl)', () => {
-      expect(tokens).toContain('https:');
+    it('does not allow arbitrary HTTPS egress', () => {
+      expect(tokens).not.toContain('https:');
     });
 
     it('has no `http:` or `ws:` scheme-wildcards (cleartext exfiltration stays blocked)', () => {
@@ -66,23 +103,27 @@ describe('CSP connect-src — ADR-0004 BYOK tradeoff', () => {
       expect(tokens).not.toContain('ws:');
     });
 
-    it('removed the redundant explicit cloud-provider endpoints (covered by `https:`)', () => {
-      for (const dead of [
+    it('enumerates every supported cloud provider explicitly', () => {
+      for (const origin of [
         'https://generativelanguage.googleapis.com',
         'https://api.openai.com',
         'https://api.x.ai',
+        'https://api.anthropic.com',
         'https://api.groq.com',
         'https://openrouter.ai',
         'https://api.openrouter.ai',
+        'https://huggingface.co',
+        'https://us.aws.cdn.hf.co',
       ]) {
-        expect(tokens).not.toContain(dead);
+        expect(tokens).toContain(origin);
       }
     });
 
-    it('keeps the local-inference origins `https:` does not cover', () => {
+    it('keeps the explicitly supported local-service origins', () => {
       expect(tokens).toContain('http://localhost:11434'); // Ollama
       expect(tokens).toContain('http://localhost:1234'); // LM Studio
       expect(tokens).toContain('http://localhost:8000'); // local AI
+      expect(tokens).toContain('http://localhost:8010'); // LanguageTool
     });
   });
 

@@ -13,12 +13,11 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getModules, REF_LANG } from './i18n-locales.mjs';
+import { getVitestTestCaseCount, getVitestTestFileCount } from './test-metrics.mjs';
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 
-// QNBS-v3: every file the header comment names as a past drift site must actually be scanned —
-// CodeRabbit caught .github/copilot-instructions.md missing here, which would let that exact
-// regression recur silently past this gate.
+// QNBS-v3: scan every documented drift site so stale locale, release, and metric claims cannot bypass this gate.
 const TARGET_FILES = [
   'README.md',
   'ROADMAP.md',
@@ -92,6 +91,36 @@ export function getActualKeyCount() {
     for (const k of Object.keys(data)) keys.add(k);
   }
   return keys.size;
+}
+
+// QNBS-v3: validate the same shared Vitest source contract used by README synchronization.
+export const getActualTestFileCount = () => getVitestTestFileCount(root);
+export const getActualTestCaseCount = () => getVitestTestCaseCount(root);
+
+// QNBS-v3: compare every supported README test-metric form against executable source counts so prose drift fails deterministically.
+export function scanReadmeTestMetrics(readme) {
+  const expectedFiles = getActualTestFileCount();
+  const expectedTests = getActualTestCaseCount();
+  const findings = [];
+  const patterns = [
+    /Tests-(\d+)%2B_%2F_(\d+)_files/g,
+    /(\d+)\+ tests \/ (\d+) files/g,
+    /Vitest 4\.x \((\d+)\+ tests \/ (\d+) files\)/g,
+    /Vitest unit tests \((\d+)\+ tests, (\d+) files\)/g,
+    /\*\*(\d+)\+ unit tests\*\* across \*\*(\d+) test files\*\*/g,
+  ];
+  for (const pattern of patterns) {
+    for (const match of readme.matchAll(pattern)) {
+      const tests = Number(match[1]);
+      const files = Number(match[2]);
+      if (tests !== expectedTests || files !== expectedFiles) {
+        findings.push(
+          `README.md — test metrics report ${tests} tests/${files} files, expected ${expectedTests} tests/${expectedFiles} files from the Vitest source set`,
+        );
+      }
+    }
+  }
+  return findings;
 }
 
 // QNBS-v3 (F-10): the sole source of truth for the canonical production URL — see constants/brand.ts.
@@ -169,7 +198,16 @@ export function scanReleaseTruth(changelog, packageVersion, taggedVersions) {
   const latestTagged = [...taggedVersions].sort(semverCompare).at(-1) ?? null;
   for (const version of releaseVersions) {
     // QNBS-v3: retain historical changelog entries even when old tags were pruned; enforce the tag invariant from the current release frontier onward.
-    if (latestTagged && !taggedVersions.has(version) && semverCompare(version, latestTagged) >= 0) {
+    const isReleaseCandidate = new RegExp(
+      `<!--\\s*release-candidate:\\s*v${version.replaceAll('.', '\\.')}(?:\\s|-->)`,
+      'i',
+    ).test(changelog);
+    if (
+      latestTagged &&
+      !taggedVersions.has(version) &&
+      semverCompare(version, latestTagged) >= 0 &&
+      !isReleaseCandidate
+    ) {
       findings.push(
         `CHANGELOG.md — dated release [${version}] has no matching git tag v${version}; move it to [Unreleased] or create the release tag after review`,
       );
@@ -221,7 +259,12 @@ export function scanReadmeReleaseTruth(readme, taggedVersions) {
       if (!match || /\b(?:next|unreleased|development|dev|pre[- ]?release)\b/i.test(badgeText))
         continue;
       const version = match[1];
-      if (!taggedVersions.has(version)) {
+      // QNBS-v3: allow the release badge before its matching tag is created after the release PR merges.
+      const isReleaseCandidate = new RegExp(
+        `<!--\\s*release-candidate:\\s*v${version.replaceAll('.', '\\.')}(?:\\s|-->)`,
+        'i',
+      ).test(readme);
+      if (!taggedVersions.has(version) && !isReleaseCandidate) {
         findings.push(
           `README.md:${index + 1} — release badge advertises v${version}, but no matching git tag exists`,
         );
@@ -268,8 +311,27 @@ export function getPostReleaseCommitSubjects(repositoryRoot = root) {
   }
 }
 
-export function scanUnreleasedTruth(changelog, postReleaseCommitSubjects) {
+export function scanUnreleasedTruth(
+  changelog,
+  postReleaseCommitSubjects,
+  packageVersion,
+  taggedVersions,
+) {
   if (!postReleaseCommitSubjects || postReleaseCommitSubjects.length === 0) return [];
+  const candidateVersion = changelog.match(
+    /<!--\s*release-candidate:\s*v(\d+\.\d+\.\d+)(?:\s|-->)/i,
+  )?.[1];
+  const latestTagged = taggedVersions ? [...taggedVersions].sort(semverCompare).at(-1) : null;
+  const isActiveUntaggedCandidate =
+    candidateVersion &&
+    packageVersion &&
+    taggedVersions &&
+    latestTagged &&
+    candidateVersion === packageVersion &&
+    !taggedVersions.has(candidateVersion) &&
+    semverCompare(candidateVersion, latestTagged) > 0;
+  // QNBS-v3: only the current untagged release candidate may defer Unreleased history until merge-time tagging.
+  if (isActiveUntaggedCandidate) return [];
   if (hasMeaningfulUnreleasedContent(changelog)) return [];
   return [
     `CHANGELOG.md — ${postReleaseCommitSubjects.length} commit(s) exist after the latest release tag, but [Unreleased] is empty`,
@@ -397,11 +459,17 @@ function main() {
   const allFindings = [];
   allFindings.push(
     ...scanReleaseTruth(changelog, packageVersion, taggedVersions),
-    ...scanUnreleasedTruth(changelog, getPostReleaseCommitSubjects()),
+    ...scanUnreleasedTruth(
+      changelog,
+      getPostReleaseCommitSubjects(),
+      packageVersion,
+      taggedVersions,
+    ),
   );
   allFindings.push(
     ...scanReadmeReleaseTruth(readFileSync(join(root, 'README.md'), 'utf8'), taggedVersions),
   );
+  allFindings.push(...scanReadmeTestMetrics(readFileSync(join(root, 'README.md'), 'utf8')));
   for (const relPath of TARGET_FILES) {
     const abs = join(root, relPath);
     let content;

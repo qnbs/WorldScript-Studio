@@ -11,7 +11,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // ---------------------------------------------------------------------------
 
 const mockDispatch = vi.fn();
-let mockProjectData = { id: 'proj-1', title: 'My Novel' };
+let mockProjectData: { id: string; title: string } | null = {
+  id: 'proj-1',
+  title: 'My Novel',
+};
 
 vi.mock('../../../app/hooks', () => ({
   useAppDispatch: () => mockDispatch,
@@ -82,8 +85,7 @@ describe('usePlotBoardAi', () => {
   });
 
   it('does not dispatch when project is null', async () => {
-    // biome-ignore lint/suspicious/noExplicitAny: test cast
-    mockProjectData = null as any;
+    mockProjectData = null;
     const { result } = renderHook(() => usePlotBoardAi('Some summary', []));
     await act(async () => {
       await result.current.suggestNextBeat();

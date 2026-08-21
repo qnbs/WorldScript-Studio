@@ -61,6 +61,10 @@ ERROR: Coverage for branches (3.24%) ... (60%)
   *threshold* check, not a test failure), they simply don't run.
 - CI vitest command (from the Quality Gate job):
   `pnpm exec vitest run --coverage --reporter=json --outputFile=test-results.json --retry=2`
+
+  **Historical snapshot:** this command records the pre-#444 CI behavior. The
+  current workflow intentionally runs Vitest without `--retry`, so first-attempt
+  failures remain visible and flake analysis is not masked.
   The `--reporter=json` suppresses all stdout, so the per-file pass/fail detail is **only** in
   `test-results.json` (a CI artifact we have not yet inspected). The 5-min runtime + JSON-written line +
   threshold error are all we see in the raw log.
@@ -71,7 +75,8 @@ the coverage-threshold path (i.e. not as a hard test failure). Candidates, in pr
 1. **A global setup / `tests/setup.ts` / environment-resolution error** that makes every jsdom file fail
    *collection* and get dropped, while node-env files survive. Check whether a recent dep resolution (the
    `pnpm-lock.yaml` churn) changed `jsdom`/`happy-dom`/`@vitest/coverage-v8`/`vitest` versions.
-2. **`--retry=2` + json reporter swallowing collection errors** — verify by reading `test-results.json` from
+2. **Historical `--retry=2` + JSON reporter swallowing collection errors** — this was a pre-#444
+   failure mode; the current no-retry workflow must be verified by reading `test-results.json` from
    CI (download the run's artifacts, or re-run a job and `cat` it before the threshold step).
 3. **A test-file glob / environment comment regression** — but config is unchanged by the docs commit, so
    this is lower probability unless a dep changed vitest's default environment behavior.

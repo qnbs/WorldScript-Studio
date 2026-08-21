@@ -166,10 +166,8 @@ describe('CSP correctness — Layer B (functional directives, not cross-surface 
 });
 
 describe('CSP correctness — connect-src completeness (F-08)', () => {
-  // QNBS-v3: LanguageTool's default self-hosted URL is `http://localhost:8010` — an HTTP origin,
-  // which the web PWA's `https:` scheme-source does NOT cover either (different scheme). This was
-  // missing on ALL 5 surfaces, not just Tauri as the source audit assumed (its "the web `https:`
-  // masks the gap" reasoning only holds for HTTPS-reachable hosts). Fixed everywhere 2026-07-29.
+  // QNBS-v3: LanguageTool's loopback origin is explicit because the shared policy has no HTTP
+  // wildcard; omitting either localhost entry would break the supported self-hosted path.
   it.each(namedCsps)(
     '%s: allows LanguageTool default self-hosted port 8010 (features/settings/settingsSlice.ts:105)',
     (_name, csp) => {
@@ -179,9 +177,8 @@ describe('CSP correctness — connect-src completeness (F-08)', () => {
     },
   );
 
-  // QNBS-v3: the web PWA's `connect-src 'self' https: ...` DOES implicitly cover these HTTPS hosts
-  // (ADR-0004) — only the strict Tauri connect-src (no `https:` blanket) needs them enumerated.
-  describe('Tauri-only: Hugging Face Hub hosts (no https: blanket to fall back on)', () => {
+  // QNBS-v3: Hugging Face origins are explicit on every surface; no web `https:` blanket exists.
+  describe('Hugging Face Hub hosts', () => {
     const tauriConnectSrc = directiveTokens(tauriCsp(), 'connect-src') ?? [];
 
     it('allows the Hugging Face Hub host that WebLLM/Transformers.js resolve models from (their library defaults)', () => {

@@ -8,8 +8,8 @@ import type { ProjectSnapshot, StorySection } from '../../../types';
 // ---------------------------------------------------------------------------
 // vi.hoisted — thunk match fns
 // ---------------------------------------------------------------------------
-const { mockImportMatch, mockRestoreMatch, stableT, stableToast, stableEmptyArray } = vi.hoisted(
-  () => ({
+const { mockImportMatch, mockRestoreMatch, stableT, stableToast, stableEmptyArray, mockIsDesktop } =
+  vi.hoisted(() => ({
     mockImportMatch: vi.fn((_: unknown) => true),
     mockRestoreMatch: vi.fn((_: unknown) => true),
     // QNBS-v3 (#332/D5): the real I18nContext memoizes `t` — a fresh arrow function here would defeat the useSettingsView useMemo identity test below.
@@ -17,8 +17,8 @@ const { mockImportMatch, mockRestoreMatch, stableT, stableToast, stableEmptyArra
     stableToast: { info: vi.fn(), success: vi.fn(), error: vi.fn() },
     // QNBS-v3 (#332/D5): real EntityAdapter selectAll() selectors return the same array reference when entities are unchanged — a fresh `[]` here would defeat the identity test for an unrelated reason.
     stableEmptyArray: [] as unknown[],
-  }),
-);
+    mockIsDesktop: { value: false },
+  }));
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -197,6 +197,16 @@ vi.mock('../../../services/logger', () => ({
   logger: { warn: (...args: unknown[]) => mockLoggerWarn(...args) },
 }));
 
+vi.mock('../../../services/desktopPlatform', () => ({
+  desktopPlatform: {
+    runtime: {
+      get isDesktop() {
+        return mockIsDesktop.value;
+      },
+    },
+  },
+}));
+
 vi.mock('../../../services/storage/storageEncryptionService', () => ({
   clearIdbEncryptionKey: () => mockClearIdbEncryptionKey(),
   isIdbEncryptionReady: () => mockIsIdbEncryptionReady(),
@@ -243,6 +253,7 @@ beforeEach(() => {
     author: undefined,
     manuscript: [],
   };
+  mockIsDesktop.value = false;
 });
 
 // ---------------------------------------------------------------------------
@@ -752,6 +763,15 @@ describe('handleLockSession', () => {
     });
     expect(useTransientUiStore.getState().isIdbUnlockOpen).toBe(true);
     expect(mockToastInfo).toHaveBeenCalledWith('settings.privacy.encryptionLockedStatus');
+  });
+
+  it('does not open the IDB unlock modal on desktop', () => {
+    mockIsDesktop.value = true;
+    const { result } = renderHook(() => useSettingsView());
+    act(() => {
+      result.current.handleLockSession();
+    });
+    expect(useTransientUiStore.getState().isIdbUnlockOpen).toBe(false);
   });
 });
 

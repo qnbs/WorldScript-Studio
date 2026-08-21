@@ -402,7 +402,7 @@ describe('testAIConnection — ollama desktop branch', () => {
       new Response(JSON.stringify({ data: { id: 'not-an-array' } }), { status: 200 }),
     );
 
-    const result = await testOpenAiCompatibleLocalConnection('http://127.0.0.1:9999');
+    const result = await testOpenAiCompatibleLocalConnection('http://127.0.0.1:1234');
 
     expect(result).toMatchObject({ ok: false, kind: 'invalidResponse' });
   });
@@ -411,7 +411,7 @@ describe('testAIConnection — ollama desktop branch', () => {
     (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
     mockPluginHttpFetch.mockResolvedValueOnce(new Response('not json', { status: 200 }));
 
-    const result = await testOpenAiCompatibleLocalConnection('http://127.0.0.1:9999');
+    const result = await testOpenAiCompatibleLocalConnection('http://127.0.0.1:1234');
 
     expect(result).toMatchObject({ ok: false, kind: 'invalidResponse' });
   });
@@ -574,7 +574,7 @@ describe('streamText — LM Studio/vLLM/custom OpenAI-compatible local streaming
       {
         provider: 'ollama',
         model: 'ollama/local-model',
-        ollamaBaseUrl: 'http://localhost:9999',
+        ollamaBaseUrl: 'http://localhost:8000',
         localBackendPreset: 'custom',
       },
       { onChunk: (chunk) => chunks.push(chunk) },
@@ -582,7 +582,7 @@ describe('streamText — LM Studio/vLLM/custom OpenAI-compatible local streaming
 
     expect(chunks).toEqual(['hi']);
     expect(mockPluginHttpFetch).toHaveBeenCalledWith(
-      'http://localhost:9999/v1/chat/completions',
+      'http://localhost:8000/v1/chat/completions',
       expect.objectContaining({ method: 'POST' }),
     );
   });

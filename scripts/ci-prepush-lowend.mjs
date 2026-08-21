@@ -22,6 +22,7 @@ const checks = [
       ]),
   ],
   ['release/doc truth', () => runNodeScript('scripts/check-doc-metrics.mjs')],
+  ['CSP policy', () => runNodeScript('scripts/check-csp-policy.mjs')],
   ['desktop import boundary', () => runNodeScript('scripts/check-tauri-import-boundary.mjs')],
   ['native readiness', () => runNodeScript('scripts/check-native-readiness.mjs')],
 ];

@@ -32,7 +32,7 @@ import {
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { EncryptionRecoveryModal } from './components/settings/EncryptionRecoveryModal';
-import { IdbUnlockModal } from './components/settings/IdbUnlockModal';
+import { IdbUnlockModalGate } from './components/settings/IdbUnlockModalGate';
 import { Button } from './components/ui/Button';
 import { DuckDbMigrationBanner } from './components/ui/DuckDbMigrationBanner';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
@@ -59,6 +59,7 @@ import { projectActions } from './features/project/projectSlice';
 import { statusActions } from './features/status/statusSlice';
 import { useApp } from './hooks/useApp';
 import { useGlobalKeyboardShortcuts } from './hooks/useGlobalKeyboardShortcuts';
+import { useIdbUnlockStartupGuard } from './hooks/useIdbUnlockStartupGuard';
 import { useNativeNotifications } from './hooks/useNativeNotifications';
 import { usePushToTalk } from './hooks/usePushToTalk';
 import { useTranslation } from './hooks/useTranslation';
@@ -77,10 +78,7 @@ import {
   type EncryptionMigrationJournal,
   readEncryptionMigrationJournal,
 } from './services/storage/encryptionMigrationJournal';
-import {
-  hasPassphraseSentinel,
-  isIdbEncryptionReady,
-} from './services/storage/storageEncryptionService';
+import { isIdbEncryptionReady } from './services/storage/storageEncryptionService';
 import { initTauriDeepLink } from './services/tauriDeepLink';
 import {
   registerTauriMenuHandler,
@@ -382,21 +380,14 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     })();
   }, []);
 
-  // QNBS-v3: B-1 sentinel guard (async) — skips if flag off/unlocked/recovery-pending, auto-disables on a missing sentinel, else shows the unlock modal.
-  useEffect(() => {
-    if (!featureFlags.enableIdbAtRestEncryption || isIdbEncryptionReady() || recoveryJournal)
-      return;
-    void (async () => {
-      const hasSentinel = await hasPassphraseSentinel();
-      if (!hasSentinel) {
-        dispatch(featureFlagsActions.setEnableIdbAtRestEncryption(false));
-        return;
-      }
-      // QNBS-v3 (CodeAnt #342): re-check via the ref, not the closed-over `recoveryJournal`, since the sibling journal-check effect may have resolved mid-await.
-      if (recoveryJournalRef.current) return;
-      setIdbUnlockOpen(true);
-    })();
-  }, [featureFlags.enableIdbAtRestEncryption, recoveryJournal, dispatch, setIdbUnlockOpen]);
+  // QNBS-v3: desktop project files remain plaintext until R-15; the startup guard is web-only.
+  useIdbUnlockStartupGuard({
+    isDesktop: desktopPlatform.runtime.isDesktop,
+    encryptionEnabled: featureFlags.enableIdbAtRestEncryption,
+    encryptionReady: isIdbEncryptionReady(),
+    hasRecoveryJournal: Boolean(recoveryJournal),
+    dispatch,
+  });
 
   // QNBS-v3: PWA share_target GET params → toast + stash for Writer paste flows; strip query to avoid leaking shared text in URL bar.
   useEffect(() => {
@@ -907,11 +898,11 @@ const App: FC<AppProps> = ({ isNewUser }) => {
                   />
                 </ErrorBoundary>
               )}
-              {isIdbUnlockOpen && !recoveryJournal && (
-                <ErrorBoundary onReset={() => setIdbUnlockOpen(false)}>
-                  <IdbUnlockModal onUnlocked={() => setIdbUnlockOpen(false)} />
-                </ErrorBoundary>
-              )}
+              <IdbUnlockModalGate
+                isOpen={isIdbUnlockOpen}
+                encryptionEnabled={featureFlags.enableIdbAtRestEncryption}
+                hasRecoveryJournal={Boolean(recoveryJournal)}
+              />
             </div>
           </AppContext.Provider>
         </ToastProvider>

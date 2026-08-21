@@ -17,6 +17,7 @@ import {
 import { settingsActions } from '../features/settings/settingsSlice';
 import { statusActions } from '../features/status/statusSlice';
 import { useTranslation } from '../hooks/useTranslation';
+import { desktopPlatform } from '../services/desktopPlatform';
 import { wipeAllAppData } from '../services/factoryResetService';
 import { logger } from '../services/logger';
 import type { ProtectedStoreMigrationProgress } from '../services/storage/protectedStoreMigration';
@@ -426,8 +427,8 @@ export const useSettingsView = () => {
     clearIdbEncryptionKey();
     setEncryptionReady(false);
     toast.info(t('settings.privacy.encryptionLockedStatus'));
-    // QNBS-v3: without this, a subsequent autosave silently fails closed with no route back to the unlock UI — surface the same global unlock modal App.tsx shows on a locked cold start.
-    setIdbUnlockOpen(true);
+    // QNBS-v3: desktop project files remain plaintext until R-15, so desktop unlock stays scoped to the Privacy card instead of implying project-file protection.
+    if (!desktopPlatform.runtime.isDesktop) setIdbUnlockOpen(true);
   }, [toast, t, setIdbUnlockOpen]);
 
   // QNBS-v3 (#332/D5): stabilizes the context value's identity so unrelated global-state renders (e.g. a background autosave write) don't force every Settings-tree consumer to re-render.
