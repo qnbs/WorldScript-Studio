@@ -72,6 +72,8 @@
   "error.fileImportError": "File Import Error",
   "error.snapshotError": "Snapshot Error",
   "error.deepLink.title": "Failed to open project file",
+  "error.deepLink.legacyTitle": "Legacy deep link scheme",
+  "error.deepLink.legacyDescription": "storycraft:// links are deprecated and will be removed in the next release. Recreate the link with worldscript://.",
   "error.deepLink.unknown": "Unknown error",
   "palette.placeholder": "Type a command or search...",
   "palette.noResults": "No results found.",

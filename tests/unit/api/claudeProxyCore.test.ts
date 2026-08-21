@@ -31,7 +31,7 @@ function makeRequest(
 function validBody(overrides: Record<string, unknown> = {}) {
   return {
     apiKey: VALID_API_KEY,
-    model: 'claude-haiku-4-5',
+    model: 'claude-sonnet-5',
     messages: [{ role: 'user', content: 'Hello Claude' }],
     ...overrides,
   };
@@ -169,7 +169,7 @@ describe('handleClaudeProxyRequest', () => {
     expect(sentHeaders['x-api-key']).toBe(VALID_API_KEY);
     expect(sentHeaders['anthropic-version']).toBe('2023-06-01');
     const sentBody = JSON.parse(init.body as string);
-    expect(sentBody.model).toBe('claude-haiku-4-5');
+    expect(sentBody.model).toBe('claude-sonnet-5');
     expect(sentBody.max_tokens).toBe(2048);
     expect(sentBody.messages).toEqual([{ role: 'user', content: 'Hello Claude' }]);
   });

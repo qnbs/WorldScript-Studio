@@ -138,6 +138,7 @@
   "settings.ai.gpu.troubleshootQueue": "여러 AI 작업이 대기열에 추가됩니다. VRAM 충돌을 피하기 위해 한 번에 하나만 실행됩니다. 현재 작업이 완료될 때까지 기다립니다.",
   "settings.ai.gpu.waitingConsumers": "대기 중",
   "settings.ai.grokKey": "Grok API Key",
+  "settings.ai.modelGroups.gpt5Current": "GPT-5 — 현재",
   "settings.ai.hybridFallbackHint": "기본 공급자가 실패하면 WorldScript는 나열된 폴백(장면 생성기, 코덱스 도구)을 시도합니다. 작성자 스트리밍은 기본 공급자만 사용합니다.",
   "settings.ai.hybridFallbackTitle": "하이브리드 폴백(프로젝트 AI 도구)",
   "settings.ai.hybridFallbackToggle": "대체 체인 활성화",

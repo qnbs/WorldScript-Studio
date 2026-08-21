@@ -779,7 +779,7 @@ describe('Anthropic — desktop (Track A) and web proxy (Track B) branches (ADR-
     const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
     expect(JSON.parse(init.body as string)).toMatchObject({
       apiKey: 'anthropic-key',
-      model: 'claude-haiku-4-5',
+      model: 'claude-sonnet-5',
       maxTokens: 1,
     });
     expect(mockPluginHttpFetch).not.toHaveBeenCalled();

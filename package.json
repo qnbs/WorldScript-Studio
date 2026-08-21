@@ -1,7 +1,7 @@
 {
   "name": "worldscript-studio",
   "private": true,
-  "version": "1.27.1",
+  "version": "1.28.0",
   "description": "WorldScript Studio — offline-first, AI-powered creative writing application.",
   "author": "QNBS",
   "keywords": [
@@ -29,6 +29,7 @@
     "i18n:bundle": "node scripts/build-i18n.mjs",
     "i18n:check": "node scripts/check-i18n-keys.mjs && node scripts/build-i18n.mjs && node scripts/content-guard.mjs",
     "i18n:report": "node scripts/i18n-quality-report.mjs",
+    "i18n:quality": "node scripts/i18n-quality-report.mjs --strict --min-coverage 75 --max-length-outliers 8",
     "verify:vendor": "node scripts/verify-vendor-fork.mjs",
     "i18n:status": "tsx scripts/i18n-status-dashboard.ts",
     "content:guard": "node scripts/content-guard.mjs",
@@ -89,7 +90,7 @@
     "test:storybook": "test-storybook",
     "test:vrt": "PLAYWRIGHT_REUSE_SERVER=true playwright test tests/e2e/visual-regression.spec.ts --project=chromium",
     "analyze": "ANALYZE=true vite build",
-    "bundle:budget": "node scripts/check-bundle-budget.mjs --max-kb 6200 --max-entry-kb 2500",
+    "bundle:budget": "node scripts/check-bundle-budget.mjs --max-entry-kb 2500 --max-vendor-kb 6200 --max-chunk-kb 2500 --max-wasm-kb 30000",
     "bundle:report": "node scripts/bundle-report.mjs",
     "dev:tauri": "tauri dev",
     "ci:quick": "bash infra/low-end-ci/scripts/ci-quick.sh",

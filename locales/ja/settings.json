@@ -138,6 +138,7 @@
   "settings.ai.gpu.troubleshootQueue": "複数の AI タスクがキューに入れられます。 VRAM の衝突を避けるために、一度に 1 つだけが実行されます。現在のタスクが完了するまで待ちます。",
   "settings.ai.gpu.waitingConsumers": "待っている",
   "settings.ai.grokKey": "Grok API Key",
+  "settings.ai.modelGroups.gpt5Current": "GPT-5 — 現在",
   "settings.ai.hybridFallbackHint": "プライマリ プロバイダーが失敗した場合、WorldScript はリストされているフォールバック (シーン ジェネレーター、コーデックス ツール) を試行します。ライター ストリーミングでは、プライマリ プロバイダーのみが使用されます。",
   "settings.ai.hybridFallbackTitle": "ハイブリッド フォールバック (プロジェクト AI ツール)",
   "settings.ai.hybridFallbackToggle": "フォールバック チェーンを有効にする",

@@ -138,6 +138,7 @@
   "settings.ai.gpu.troubleshootQueue": "Multiple AI tasks are queued. Only one runs at a time to avoid VRAM collisions. Wait for the current task to finish.",
   "settings.ai.gpu.waitingConsumers": "Waiting",
   "settings.ai.grokKey": "Grok API Key",
+  "settings.ai.modelGroups.gpt5Current": "GPT-5 — Current",
   "settings.ai.hybridFallbackHint": "If the primary provider fails, WorldScript tries the listed fallbacks (scene generators, codex tools). Writer streaming uses your primary provider only.",
   "settings.ai.hybridFallbackTitle": "Hybrid fallback (project AI tools)",
   "settings.ai.hybridFallbackToggle": "Enable fallback chain",

@@ -138,6 +138,7 @@
   "settings.ai.gpu.troubleshootQueue": "מספר משימות AI בתור. רק אחת רצה בכל פעם כדי להימנע מהתנגשויות VRAM. המתינו לסיום המשימה הנוכחית.",
   "settings.ai.gpu.waitingConsumers": "ממתין",
   "settings.ai.grokKey": "Grok API Key",
+  "settings.ai.modelGroups.gpt5Current": "GPT-5 — נוכחי",
   "settings.ai.hybridFallbackHint": "אם הספק הראשי נכשל, WorldScript מנסה את החלופות הרשומות (מחוללי סצנות, כלי קודקס). הזרמת הכותב משתמשת בספק הראשי שלכם בלבד.",
   "settings.ai.hybridFallbackTitle": "חלופה היברידית (כלי AI של הפרויקט)",
   "settings.ai.hybridFallbackToggle": "הפעלת שרשרת חלופות",

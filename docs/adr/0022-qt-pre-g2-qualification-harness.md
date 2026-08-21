@@ -36,7 +36,7 @@ This is an additive clarification, not a reversal or replacement of ADR-0021. Th
 prohibition on production Qt/GPUI UI before admission remains unchanged, and all later production
 gates remain mandatory.
 
-## Sequencing amendment (2026-08-20)
+## Sequencing amendment (2026-08-21)
 
 The lifecycle/bridge, accessibility/input, and crash/recovery checks are now explicit early
 feasibility lanes. The early feasibility lanes are allowed before the formal Wave 4.5 checkpoint

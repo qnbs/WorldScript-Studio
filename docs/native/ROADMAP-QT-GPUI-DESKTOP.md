@@ -15,7 +15,7 @@ until Qt admission and cutover gates are satisfied, **and itself retired once Qt
 **Authoritative product core:** Rust
 **Architecture rule:** no domain/business logic duplication across renderers
 **Revision:** 2 — early killer-gate sequencing and GPUI exploration boundary
-**Revision date:** 2026-08-20
+**Revision date:** 2026-08-21
 
 ## Document status and corrections applied at adoption (Wave 0, 2026-08-20)
 
@@ -50,7 +50,7 @@ it was drafted against:
 The baseline below remains the adopted roadmap record; the sequencing reconciliation in this
 revision is recorded explicitly before the detailed sections it changes.
 
-## Revision 2 — evidence-first sequencing reconciliation (2026-08-20)
+## Revision 2 — evidence-first sequencing reconciliation (2026-08-21)
 
 The three cheapest Qt feasibility risks — lifecycle/bridge, accessibility/input, and
 crash/recovery — are now explicit early lanes before formal Wave 4.5. Wave 4.5 retains the

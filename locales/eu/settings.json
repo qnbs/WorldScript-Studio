@@ -138,6 +138,7 @@
   "settings.ai.gpu.troubleshootQueue": "AI ataza anitz daude ilaran. Bat bakarrik exekutatzen da aldi berean VRAM talkak saihesteko. Itxaron uneko zeregina amaitu arte.",
   "settings.ai.gpu.waitingConsumers": "Zain",
   "settings.ai.grokKey": "Grok API Key",
+  "settings.ai.modelGroups.gpt5Current": "GPT-5 — Unekoa",
   "settings.ai.hybridFallbackHint": "Hornitzaile nagusiak huts egiten badu, WorldScript-ek zerrendatutako ordezkapenak probatzen ditu (eszena-sortzaileak, kodex-tresnak). Writer-ek zure hornitzaile nagusia soilik erabiltzen du.",
   "settings.ai.hybridFallbackTitle": "Erreplika hibridoa (proiektuaren AI tresnak)",
   "settings.ai.hybridFallbackToggle": "Gaitu ordezko katea",

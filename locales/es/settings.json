@@ -138,6 +138,7 @@
   "settings.ai.gpu.troubleshootQueue": "Varias tareas de IA están en cola. Solo una se ejecuta a la vez para evitar colisiones de VRAM. Espere a que termine la tarea actual.",
   "settings.ai.gpu.waitingConsumers": "En espera",
   "settings.ai.grokKey": "Clave API de Grok",
+  "settings.ai.modelGroups.gpt5Current": "GPT-5 — Actual",
   "settings.ai.hybridFallbackHint": "Si el proveedor principal falla, WorldScript prueba los respaldos enumerados (generadores de escenas, herramientas de codex). La transmisión del escritor usa solo tu proveedor principal.",
   "settings.ai.hybridFallbackTitle": "Respaldo híbrido (herramientas de IA del proyecto)",
   "settings.ai.hybridFallbackToggle": "Activar cadena de respaldo",

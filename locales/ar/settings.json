@@ -138,6 +138,7 @@
   "settings.ai.gpu.troubleshootQueue": "هناك مهام ذكاء اصطناعي متعدّدة في الطابور. تعمل واحدة فقط في كل مرة لتجنّب تصادمات ذاكرة الرسوميات. انتظر انتهاء المهمة الحالية.",
   "settings.ai.gpu.waitingConsumers": "في الانتظار",
   "settings.ai.grokKey": "Grok API Key",
+  "settings.ai.modelGroups.gpt5Current": "GPT-5 — الحالي",
   "settings.ai.hybridFallbackHint": "إذا فشل المزوّد الأساسي، يجرّب WorldScript الاحتياطيات المدرجة (مولّدات المشاهد، أدوات الفهرس). يستخدم بثّ الكاتب مزوّدك الأساسي فقط.",
   "settings.ai.hybridFallbackTitle": "الاحتياطي الهجين (أدوات الذكاء الاصطناعي للمشروع)",
   "settings.ai.hybridFallbackToggle": "تفعيل سلسلة الاحتياطي",

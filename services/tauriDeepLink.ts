@@ -45,6 +45,17 @@ export async function initTauriDeepLink(
 
         log.info('Received deep-link event', { url });
 
+        if (isLegacyStorycraftDeepLink(url)) {
+          // QNBS-v3: keep one release of compatibility while making the branded scheme migration visible.
+          dispatch(
+            statusActions.addNotification({
+              type: 'info',
+              title: t('error.deepLink.legacyTitle'),
+              description: t('error.deepLink.legacyDescription'),
+            }),
+          );
+        }
+
         // Parse the URL to get the file path (storycraft://path/to/file.worldscript)
         // The deep-link plugin handles custom schemes, but for file associations we need
         // to handle the case where the file path is passed as a CLI argument
@@ -127,6 +138,11 @@ export function deepLinkUrlToPath(url: string): string {
   }
   // POSIX path — collapse any leading slashes to a single root slash.
   return filePath.replace(/^\/+/, '/');
+}
+
+/** True for the one-release compatibility scheme retained after the rebrand. */
+export function isLegacyStorycraftDeepLink(url: string): boolean {
+  return /^storycraft:/i.test(url);
 }
 
 /**

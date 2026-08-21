@@ -69,7 +69,7 @@ const mockOnProviderChange = vi.fn();
 
 const ollamaAdvancedAi = { ...mockAdvancedAi, provider: 'ollama' as const };
 // QNBS-v3: fixture for the grok-provider describe block below.
-const grokAdvancedAi = { ...mockAdvancedAi, provider: 'grok' as const, model: 'grok-3' as const };
+const grokAdvancedAi = { ...mockAdvancedAi, provider: 'grok' as const, model: 'grok-4.6' as const };
 const webllmAdvancedAi = { ...mockAdvancedAi, provider: 'webllm' as const };
 
 function setDesktopRuntime(enabled: boolean): void {
@@ -646,9 +646,9 @@ describe('AiProviderCard — grok provider', () => {
       />,
     );
     expect(screen.getByLabelText('settings.ai.grokKey')).toBeTruthy();
-    // QNBS-v3: the Select renders only the currently-selected option's label when closed, so "Grok 3 Mini" isn't asserted here.
+    // QNBS-v3: the Select renders only the currently-selected option's label when closed, so "Grok 4.5" isn't asserted here.
     await waitFor(() => {
-      expect(screen.getByText('Grok 3')).toBeTruthy();
+      expect(screen.getByText('Grok 4.6')).toBeTruthy();
     });
   });
 
@@ -678,7 +678,7 @@ describe('AiProviderCard — anthropic provider (ADR-0016)', () => {
   const anthropicAdvancedAi = {
     ...mockAdvancedAi,
     provider: 'anthropic' as const,
-    model: 'claude-haiku-4-5' as const,
+    model: 'claude-sonnet-5' as const,
   };
   const originalBaseUrl = import.meta.env.BASE_URL;
 
@@ -712,7 +712,7 @@ describe('AiProviderCard — anthropic provider (ADR-0016)', () => {
       />,
     );
     expect(screen.getByLabelText('settings.ai.anthropicKey')).toBeTruthy();
-    expect(screen.getByText('Claude Haiku 4.5')).toBeTruthy();
+    expect(screen.getByText('Claude Sonnet 5')).toBeTruthy();
     expect(screen.getByText('settings.ai.anthropicProxyNote')).toBeTruthy();
     expect(screen.queryByText('settings.ai.corsRestriction')).toBeNull();
   });
@@ -747,7 +747,7 @@ describe('AiProviderCard — anthropic provider (ADR-0016)', () => {
       />,
     );
     expect(screen.getByLabelText('settings.ai.anthropicKey')).toBeTruthy();
-    expect(screen.getByText('Claude Haiku 4.5')).toBeTruthy();
+    expect(screen.getByText('Claude Sonnet 5')).toBeTruthy();
     expect(screen.queryByText('settings.ai.corsRestriction')).toBeNull();
     expect(screen.queryByText('settings.ai.anthropicProxyNote')).toBeNull();
   });

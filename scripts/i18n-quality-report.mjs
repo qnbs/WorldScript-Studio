@@ -13,6 +13,34 @@ import { getLocales, getModules, REF_LANG } from './i18n-locales.mjs';
 
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const strict = process.argv.includes('--strict');
+const minCoverageArg = process.argv.indexOf('--min-coverage');
+const maxOutliersArg = process.argv.indexOf('--max-length-outliers');
+function parseOptionalThreshold(flag, index, { min, max, integer = false }) {
+  if (index < 0) return null;
+  const rawValue = process.argv[index + 1];
+  const value = Number(rawValue);
+  if (
+    typeof rawValue !== 'string' ||
+    rawValue.trim() === '' ||
+    rawValue.startsWith('--') ||
+    !Number.isFinite(value) ||
+    value < min ||
+    value > max ||
+    (integer && !Number.isInteger(value))
+  ) {
+    console.error(
+      `[i18n:quality] ${flag} requires a finite number between ${min} and ${max}${integer ? ' (integer)' : ''}.`,
+    );
+    process.exit(1);
+  }
+  return value;
+}
+const minCoverage = parseOptionalThreshold('--min-coverage', minCoverageArg, { min: 0, max: 100 });
+const maxLengthOutliers = parseOptionalThreshold('--max-length-outliers', maxOutliersArg, {
+  min: 0,
+  max: Number.MAX_SAFE_INTEGER,
+  integer: true,
+});
 
 function load(lang, mod) {
   const p = join(ROOT, 'locales', lang, `${mod}.json`);
@@ -44,6 +72,8 @@ const modules = getModules().filter((m) => m !== 'help');
 const glossary = loadGlossary();
 
 let placeholderIssues = 0;
+let coverageFailures = 0;
+let outlierFailures = 0;
 const rows = [];
 
 for (const lang of langs) {
@@ -95,6 +125,26 @@ for (const r of rows) {
     `| ${r.lang} | ${r.pct}% | ${r.untranslated} | ${r.phIssues} | ${r.lenOutliers} | ${r.glossaryTerms} |`,
   );
 }
+if (minCoverage !== null) {
+  for (const r of rows) {
+    if (r.pct < minCoverage) coverageFailures++;
+  }
+}
+if (maxLengthOutliers !== null) {
+  for (const r of rows) {
+    if (r.lenOutliers > maxLengthOutliers) outlierFailures++;
+  }
+}
+if (coverageFailures > 0) {
+  console.error(
+    `\n✖ ${coverageFailures} locale(s) are below the ${minCoverage}% translation coverage floor.`,
+  );
+}
+if (outlierFailures > 0) {
+  console.error(
+    `✖ ${outlierFailures} locale(s) exceed the ${maxLengthOutliers} length-outlier floor.`,
+  );
+}
 console.log(
   `\n${rows.length} non-English locales · reference = ${REF_LANG} · ${modules.length} modules`,
 );
@@ -104,3 +154,4 @@ if (placeholderIssues > 0) {
   );
 }
 if (strict && placeholderIssues > 0) process.exit(1);
+if (coverageFailures > 0 || outlierFailures > 0) process.exit(1);

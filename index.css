@@ -811,26 +811,33 @@ select option {
 }
 
 /* ── driver.js spotlight tour ─────────────────────────── */
-/* QNBS-v3: Two-class selectors beat driver.js `.driver-popover` (one class); no !important. */
+/* QNBS-v3: two-class selectors beat driver.js specificity without !important. */
+.driver-popover.worldscript-driver-popover,
 .driver-popover.storycraft-driver-popover {
   background: var(--sc-surface-raised);
   color: var(--sc-text-primary);
   border: 1px solid var(--sc-border-subtle);
   box-shadow: var(--sc-shadow-md, 0 12px 40px rgba(0, 0, 0, 0.35));
 }
+.driver-popover.worldscript-driver-popover .driver-popover-title,
 .driver-popover.storycraft-driver-popover .driver-popover-title {
   color: var(--sc-text-primary);
 }
+.driver-popover.worldscript-driver-popover .driver-popover-description,
 .driver-popover.storycraft-driver-popover .driver-popover-description {
   color: var(--sc-text-secondary);
 }
+.driver-popover.worldscript-driver-popover .driver-popover-navigation-btns button,
 .driver-popover.storycraft-driver-popover .driver-popover-navigation-btns button {
   text-shadow: none;
 }
+.driver-popover.worldscript-driver-popover button.driver-popover-next-btn,
 .driver-popover.storycraft-driver-popover button.driver-popover-next-btn {
   background: var(--sc-accent);
   color: var(--sc-text-on-accent);
 }
+.driver-popover.worldscript-driver-popover button.driver-popover-prev-btn,
+.driver-popover.worldscript-driver-popover button.driver-popover-close-btn,
 .driver-popover.storycraft-driver-popover button.driver-popover-prev-btn,
 .driver-popover.storycraft-driver-popover button.driver-popover-close-btn {
   color: var(--sc-text-secondary);

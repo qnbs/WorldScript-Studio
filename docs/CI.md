@@ -55,7 +55,7 @@ are also intentionally advisory.
 | Unit tests | **Vitest** with V8 coverage (`pnpm exec vitest run --coverage`) |
 | E2E | **Playwright** (`pnpm run test:e2e` with `CI=true`) |
 | Performance budgets | **Lighthouse CI** via `@lhci/cli` (`.lighthouserc.cjs`) — **accessibility** asserted at **`error`** level `minScore: 0.95` (blocks CI); performance `warn` ≥ 0.4; SEO `warn` ≥ 0.8; CLS `error` ≤ 0.1; FCP `warn` ≤ 5 s; LCP `warn` ≤ 7 s |
-| Bundle guardrails | **`pnpm run bundle:budget`** (max chunk KB) + **`pnpm run analyze`** (rollup visualizer → `dist/bundle-analysis.html`, artifact in CI) |
+| Bundle guardrails | **`pnpm run bundle:budget`** (entry/vendor/JS/WASM ceilings) + **`pnpm run analyze`** (rollup visualizer → `dist/bundle-analysis.html`, artifact in CI) |
 
 ---
 

@@ -138,6 +138,7 @@
   "settings.ai.gpu.troubleshootQueue": "چندین کار هوش مصنوعی در صف قرار می گیرند. فقط یکی در یک زمان اجرا می شود تا از برخورد VRAM جلوگیری شود. منتظر بمانید تا کار فعلی تمام شود.",
   "settings.ai.gpu.waitingConsumers": "در انتظار",
   "settings.ai.grokKey": "Grok API Key",
+  "settings.ai.modelGroups.gpt5Current": "GPT-5 — فعلی",
   "settings.ai.hybridFallbackHint": "اگر ارائه‌دهنده اصلی شکست بخورد، WorldScript موارد بازگشتی فهرست شده (مولد صحنه، ابزار کدکس) را امتحان می‌کند. پخش جریانی نویسنده فقط از ارائه دهنده اصلی شما استفاده می کند.",
   "settings.ai.hybridFallbackTitle": "بازگشت ترکیبی (ابزارهای هوش مصنوعی پروژه)",
   "settings.ai.hybridFallbackToggle": "فعال کردن زنجیره بازگشتی",

@@ -8,6 +8,8 @@ import { useTranslation } from '../hooks/useTranslation';
 import { useVoice } from '../hooks/useVoice';
 import { viewNavigationLabelKey } from '../services/viewNavigationLabels';
 import type { View } from '../types';
+// QNBS-v3: the shared icon wrapper keeps action glyphs decorative and ref-safe.
+import { CustomIcon } from './ui/Icon';
 import { SaveStatusIndicator } from './ui/SaveStatusIndicator';
 import { SectionIcon } from './ui/SectionIcon';
 import { Tooltip } from './ui/Tooltip';
@@ -69,17 +71,9 @@ export const Header: React.FC<HeaderProps> = ({
           aria-controls="sidebar"
           aria-expanded={isSidebarOpen}
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-            className="w-6 h-6"
-            aria-hidden="true"
-          >
+          <CustomIcon className="w-6 h-6" aria-hidden="true">
             {ICONS.MENU}
-          </svg>
+          </CustomIcon>
         </button>
         <div className="flex items-center gap-3">
           {/* QNBS-v3: dynamic section icon — color derives from APP_SECTIONS SSOT per currentView */}
@@ -100,20 +94,17 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={onOpenPalette}
             className="w-full h-11 rounded-xl bg-[var(--sc-surface-overlay)]/50 border border-[var(--sc-border-subtle)] hover:border-[var(--border-interactive)] hover:bg-[var(--sc-surface-overlay)] hover:shadow-[var(--sc-shadow-sm)] transition-all flex items-center px-4 text-sm text-[var(--sc-text-muted)] group shadow-sm"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
+            {/* QNBS-v3: decorative palette glyph is hidden because the button has a text label. */}
+            <CustomIcon
               className="w-4 h-4 mr-3 group-hover:text-[var(--sc-text-primary)] transition-colors"
+              aria-hidden="true"
             >
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 001.061 1.061z"
               />
-            </svg>
+            </CustomIcon>
             <span className="flex-grow text-left group-hover:text-[var(--sc-text-secondary)] transition-colors">
               {t('palette.placeholder')}...
             </span>
@@ -133,21 +124,13 @@ export const Header: React.FC<HeaderProps> = ({
           className="sm:hidden p-2 text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)]"
           aria-label={t('palette.placeholder')}
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-            className="w-6 h-6"
-            aria-hidden="true"
-          >
+          <CustomIcon className="w-6 h-6" aria-hidden="true">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
               d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 001.061 1.061z"
             />
-          </svg>
+          </CustomIcon>
         </button>
 
         {/* Voice Control Button — only shown when voice is enabled in feature flags */}
@@ -166,22 +149,14 @@ export const Header: React.FC<HeaderProps> = ({
               }
             }}
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-              className="w-6 h-6"
-              aria-hidden="true"
-            >
+            <CustomIcon className="w-6 h-6" aria-hidden="true">
               {/* QNBS-v3: Heroicons microphone icon — replaces incorrect bookmark-shaped placeholder */}
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"
               />
-            </svg>
+            </CustomIcon>
           </button>
         )}
 
@@ -198,16 +173,10 @@ export const Header: React.FC<HeaderProps> = ({
             aria-label={t('common.undo')}
             title={t('common.undo')}
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-              className="w-5 h-5"
-            >
+            {/* QNBS-v3: the undo button's accessible name comes from its label, not its glyph. */}
+            <CustomIcon className="w-5 h-5" aria-hidden="true">
               {ICONS.UNDO}
-            </svg>
+            </CustomIcon>
           </button>
           <button
             type="button"
@@ -217,16 +186,10 @@ export const Header: React.FC<HeaderProps> = ({
             aria-label={t('common.redo')}
             title={t('common.redo')}
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-              className="w-5 h-5"
-            >
+            {/* QNBS-v3: the redo button's accessible name comes from its label, not its glyph. */}
+            <CustomIcon className="w-5 h-5" aria-hidden="true">
               {ICONS.REDO}
-            </svg>
+            </CustomIcon>
           </button>
         </div>
       </div>

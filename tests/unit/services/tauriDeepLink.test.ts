@@ -46,6 +46,7 @@ import {
   deepLinkUrlToPath,
   getProjectIdFromPath,
   initTauriDeepLink,
+  isLegacyStorycraftDeepLink,
   isWorldScriptProjectFile,
 } from '../../../services/tauriDeepLink';
 
@@ -57,6 +58,7 @@ describe('tauriDeepLink', () => {
       );
     });
 
+    // QNBS-v3: retain coverage for the one-release legacy deep-link migration notice.
     it('still strips the legacy storycraft:// scheme during migration', () => {
       expect(deepLinkUrlToPath('storycraft:///home/user/my-novel.worldscript')).toBe(
         '/home/user/my-novel.worldscript',
@@ -93,6 +95,14 @@ describe('tauriDeepLink', () => {
     it('returns non-scheme inputs (raw CLI paths) unchanged', () => {
       expect(deepLinkUrlToPath('/home/user/file.json')).toBe('/home/user/file.json');
       expect(deepLinkUrlToPath('C:/Users/me/file.json')).toBe('C:/Users/me/file.json');
+    });
+  });
+
+  describe('isLegacyStorycraftDeepLink', () => {
+    it('identifies the compatibility scheme without matching worldscript links', () => {
+      expect(isLegacyStorycraftDeepLink('storycraft:///home/user/file.json')).toBe(true);
+      expect(isLegacyStorycraftDeepLink('StoryCraft://C:/file.json')).toBe(true);
+      expect(isLegacyStorycraftDeepLink('worldscript:///home/user/file.json')).toBe(false);
     });
   });
 
@@ -145,7 +155,13 @@ describe('tauriDeepLink', () => {
   describe('initTauriDeepLink', () => {
     const dispatchMock = vi.fn((action: unknown) => action);
     const dispatch = dispatchMock as unknown as AppDispatch;
-    const t = ((key: string) => key) as I18nTranslate;
+    const t = ((key: string) => {
+      if (key === 'error.deepLink.legacyTitle') return 'Legacy deep link scheme';
+      if (key === 'error.deepLink.legacyDescription') {
+        return 'storycraft:// links are deprecated; recreate the link with worldscript://.';
+      }
+      return key;
+    }) as I18nTranslate;
 
     beforeEach(() => {
       dispatchMock.mockClear();
@@ -169,6 +185,31 @@ describe('tauriDeepLink', () => {
       await handler(['worldscript:///home/user/novel.worldscript']);
       expect(h.exists).toHaveBeenCalledWith('/home/user/novel.worldscript');
       expect(h.readTextFile).toHaveBeenCalledWith('/home/user/novel.worldscript');
+    });
+
+    it('announces the legacy scheme during the one-release compatibility window', async () => {
+      await initTauriDeepLink(dispatch, t);
+      const handler = h.onDeepLink.mock.calls[0]?.[0] as (urls: string[]) => Promise<void>;
+      dispatchMock.mockReturnValueOnce(undefined).mockReturnValueOnce({
+        type: 'project/importProject/fulfilled',
+      });
+      await handler(['storycraft:///home/user/novel.worldscript']);
+      expect(dispatchMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'status/addNotification',
+          payload: expect.objectContaining({
+            type: 'info',
+            title: 'Legacy deep link scheme',
+            description: expect.stringContaining('worldscript://'),
+          }),
+        }),
+      );
+      expect(dispatchMock).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'status/addNotification',
+          payload: expect.objectContaining({ type: 'error' }),
+        }),
+      );
     });
 
     it('dispatches an error notification when the file does not exist', async () => {
