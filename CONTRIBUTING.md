@@ -286,11 +286,25 @@ Tests live in `tests/e2e/`. Playwright tests verify core user flows:
 
 ### Mutation testing (Stryker)
 
-Targets service files (see [`stryker.conf.json`](stryker.conf.json)): `codexService`, `dbMigration`, `fuzzyScore`, `palettePreferences`, `commandBuilder`, `hybridFallback`, `providerFactory`, `helpDocRetrieval`, `listenerMiddleware`. HTML report: `reports/mutation/`. `thresholds.break` is `60` — CI fails if mutation score falls below this value.
+Targets are defined once in [`stryker-scope.json`](stryker-scope.json) and consumed by
+[`stryker.config.mjs`](stryker.config.mjs): 25 production files across 8 risk-tiered modules.
+The manual workflow can run `all`, `tier-a`, or one module. Related-test selection avoids rerunning
+the full Vitest suite for every mutant. Reports are kept under `reports/mutation/` and uploaded
+with module identity; the aggregate derives metrics from mutant statuses and fails on missing or
+invalid shards while showing killed, survived, timeout, no-coverage, ignored, pending, and error counts. Current operational
+thresholds are `break: 75`, `low: 70`, and `high: 85`; they are not a measured baseline until a
+trusted force run establishes one.
 
 ```bash
-pnpm run mutation
+pnpm run mutation        # incremental; CI-only
+pnpm run mutation:force  # no-cache force audit; CI-only
+pnpm run mutation:report # aggregate downloaded reports
 ```
+
+Do not run broad Stryker locally on constrained hardware. Use targeted tests locally and dispatch
+the workflow for PR-related Tier-A/module diagnostics, recurring incremental checks, or release /
+security force audits. Treat equivalent mutants as a documented survivor class; never hide
+NoCoverage or timeout results and never change thresholds merely to make CI green.
 
 ### Storybook
 

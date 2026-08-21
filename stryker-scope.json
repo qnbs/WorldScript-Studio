@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "modules": [
+    {
+      "name": "services-commands",
+      "riskTier": "A",
+      "mutate": [
+        "services/commands/fuzzyScore.ts",
+        "services/commands/palettePreferences.ts",
+        "services/commands/commandBuilder.ts"
+      ]
+    },
+    {
+      "name": "services-core",
+      "riskTier": "B",
+      "mutate": [
+        "services/help/helpDocRetrieval.ts",
+        "services/plotBoardService.ts",
+        "services/promptLibrary.ts",
+        "services/deepLinkService.ts"
+      ]
+    },
+    {
+      "name": "services-ai-core",
+      "riskTier": "A",
+      "mutate": [
+        "services/ai/modelRecommendations.ts",
+        "services/ai/aiPolicy.ts",
+        "services/ai/aiRetry.ts",
+        "services/ai/fetchAdapter.ts",
+        "services/ai/routingLogger.ts",
+        "services/ai/aiModeService.ts"
+      ]
+    },
+    {
+      "name": "services-ai-providers",
+      "riskTier": "B",
+      "mutate": ["services/ai/providers/openrouterProvider.ts"]
+    },
+    {
+      "name": "features-project",
+      "riskTier": "A",
+      "mutate": [
+        "features/project/projectSelectors.ts",
+        "features/project/sectionRestoreHelpers.ts"
+      ]
+    },
+    {
+      "name": "features-misc",
+      "riskTier": "B",
+      "mutate": [
+        "features/settings/accessibilitySchema.ts",
+        "features/progressTracker/progressTrackerSlice.ts",
+        "features/featureFlags/featureFlagsSlice.ts",
+        "features/proForge/proForgeSlice.ts"
+      ]
+    },
+    {
+      "name": "copilot",
+      "riskTier": "A",
+      "mutate": [
+        "services/copilot/heuristicEngine.ts",
+        "services/copilot/insightGenerator.ts",
+        "services/copilot/actionApplier.ts",
+        "services/copilot/copilotContextService.ts"
+      ]
+    },
+    {
+      "name": "services-plugin",
+      "riskTier": "B",
+      "mutate": ["services/pluginRegistry.ts"]
+    }
+  ]
+}
