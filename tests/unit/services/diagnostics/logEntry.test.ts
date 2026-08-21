@@ -22,8 +22,18 @@ describe('renderer-neutral log entry boundary', () => {
       module: 'diagnostics',
       context: { requestId: 'req-1', apiKey: '[REDACTED]' },
     });
-    expect(entry.message).toContain('failed boom Error: boom');
+    expect(entry.message).toContain('failed boom');
+    expect(entry.message).toContain('boom');
     expect(Object.keys(entry)).toEqual(['ts', 'level', 'module', 'message', 'context']);
+  });
+
+  it('serializes object arguments with the same redaction boundary', () => {
+    const entry = createLogEntry('info', 'diagnostics', [
+      'routing',
+      { transcriptLength: 12, apiKey: 'secret' },
+    ]);
+
+    expect(entry.message).toBe('routing {"transcriptLength":12,"apiKey":"[REDACTED]"}');
   });
 
   it('redacts sensitive keys recursively without mutating the input', () => {

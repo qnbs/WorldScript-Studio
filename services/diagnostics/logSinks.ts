@@ -1,7 +1,7 @@
 // QNBS-v3: Keep browser/Tauri sink dispatch behind an adapter boundary around portable LogEntry.
 
-import { isTauriRuntime } from '../tauriRuntime';
-import type { LogEntry } from './logEntry';
+import { desktopPlatform } from '../desktopPlatform';
+import { type LogEntry, safeStringify } from './logEntry';
 
 const isDev = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
 
@@ -13,6 +13,8 @@ const IDB_CAP = 1_000;
 
 let _idbDb: IDBDatabase | null = null;
 let _idbOpenPromise: Promise<IDBDatabase> | null = null;
+let _idbRecordCount: number | null = null;
+let _idbWriteQueue: Promise<void> = Promise.resolve();
 
 function openLogDb(): Promise<IDBDatabase> {
   if (_idbDb) return Promise.resolve(_idbDb);
@@ -40,90 +42,91 @@ function openLogDb(): Promise<IDBDatabase> {
 
 function writeToIdb(entry: LogEntry): void {
   if (typeof indexedDB === 'undefined') return;
-  void openLogDb()
-    .then((db) => {
-      const tx = db.transaction(IDB_STORE, 'readwrite');
-      const store = tx.objectStore(IDB_STORE);
-      store.add(entry);
-      // LRU eviction: prune oldest entries when over capacity
-      const countReq = store.count();
-      countReq.onsuccess = () => {
-        const excess = countReq.result - IDB_CAP;
-        if (excess <= 0) return;
-        const cursorReq = store.openCursor();
-        let deleted = 0;
-        cursorReq.onsuccess = (e) => {
-          const cursor = (e.target as IDBRequest<IDBCursorWithValue | null>).result;
-          if (cursor && deleted < excess) {
-            cursor.delete();
-            deleted++;
-            cursor.continue();
-          }
-        };
-      };
+  _idbWriteQueue = _idbWriteQueue
+    .then(async () => {
+      const db = await openLogDb();
+      if (_idbRecordCount === null) {
+        _idbRecordCount = await countIdbRecords(db);
+      }
+      await addIdbRecord(db, entry);
+      _idbRecordCount += 1;
+      const excess = _idbRecordCount - IDB_CAP;
+      if (excess > 0) {
+        _idbRecordCount -= await deleteOldestIdbRecords(db, excess);
+      }
     })
     .catch(() => {
       // silently skip — logger must never throw
     });
+  void _idbWriteQueue;
+}
+
+function countIdbRecords(db: IDBDatabase): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const request = db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).count();
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function addIdbRecord(db: IDBDatabase, entry: LogEntry): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = db.transaction(IDB_STORE, 'readwrite').objectStore(IDB_STORE).add(entry);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function deleteOldestIdbRecords(db: IDBDatabase, count: number): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(IDB_STORE, 'readwrite');
+    const request = transaction.objectStore(IDB_STORE).openCursor();
+    let deleted = 0;
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (cursor && deleted < count) {
+        cursor.delete();
+        deleted += 1;
+        cursor.continue();
+      } else {
+        resolve(deleted);
+      }
+    };
+    request.onerror = () => reject(request.error);
+    transaction.onerror = () => reject(transaction.error);
+  });
 }
 
 // --- Tauri JSONL sink -------------------------------------------------------
 
-type TauriFsWrite = (path: string, data: string, opts?: Record<string, unknown>) => Promise<void>;
-type TauriMkdir = (path: string, opts?: Record<string, unknown>) => Promise<void>;
-type TauriPathFns = {
-  appDataDir(): Promise<string>;
-  join(...p: string[]): Promise<string>;
-};
-
-let _tauriFs: TauriFsWrite | null = null;
-let _tauriMkdir: TauriMkdir | null = null;
-let _tauriPath: TauriPathFns | null = null;
-let _tauriChecked = false;
 let _tauriLogDir: string | null = null;
 
-async function loadTauriSink(): Promise<{
-  fs: TauriFsWrite;
-  mkdir: TauriMkdir;
-  path: TauriPathFns;
-} | null> {
-  if (_tauriChecked) {
-    return _tauriFs && _tauriMkdir && _tauriPath
-      ? { fs: _tauriFs, mkdir: _tauriMkdir, path: _tauriPath }
-      : null;
-  }
-  _tauriChecked = true;
-  if (!isTauriRuntime()) return null;
-  try {
-    const [fsM, pathM] = await Promise.all([
-      import('@tauri-apps/plugin-fs'),
-      import('@tauri-apps/api/path'),
-    ]);
-    _tauriFs = fsM.writeTextFile as unknown as TauriFsWrite;
-    _tauriMkdir = fsM.mkdir as unknown as TauriMkdir;
-    _tauriPath = { appDataDir: pathM.appDataDir, join: pathM.join };
-    return { fs: _tauriFs, mkdir: _tauriMkdir, path: _tauriPath };
-  } catch {
-    return null;
-  }
-}
+let _tauriWriteQueue: Promise<void> = Promise.resolve();
 
 function writeToTauri(entry: LogEntry): void {
-  void loadTauriSink()
-    .then(async (mods) => {
-      if (!mods) return;
+  _tauriWriteQueue = _tauriWriteQueue
+    .then(async () => {
+      if (!desktopPlatform.runtime.isDesktop) return;
       if (!_tauriLogDir) {
-        const base = await mods.path.appDataDir();
-        _tauriLogDir = await mods.path.join(base, 'logs');
-        await mods.mkdir(_tauriLogDir, { recursive: true });
+        const base = await desktopPlatform.persistence.appDataDir();
+        const logDir = await desktopPlatform.persistence.join(base, 'logs');
+        await desktopPlatform.filesystem.mkdir(logDir, { recursive: true });
+        _tauriLogDir = logDir;
       }
       const date = new Date(entry.ts).toISOString().slice(0, 10);
-      const path = await mods.path.join(_tauriLogDir, `worldscript-${date}.jsonl`);
-      await mods.fs(path, `${JSON.stringify(entry)}\n`, { append: true, create: true });
+      const path = await desktopPlatform.persistence.join(
+        _tauriLogDir,
+        `worldscript-${date}.jsonl`,
+      );
+      await desktopPlatform.filesystem.writeTextFile(path, `${safeStringify(entry)}\n`, {
+        append: true,
+        create: true,
+      });
     })
     .catch(() => {
       // silently skip — Tauri JSONL sink is non-critical
     });
+  void _tauriWriteQueue;
 }
 
 // --- Console sink (DEV only) ------------------------------------------------
@@ -131,7 +134,7 @@ function writeToTauri(entry: LogEntry): void {
 function writeToConsole(entry: LogEntry): void {
   if (!isDev) return;
   const tag = `[WorldScript:${entry.level.toUpperCase()}:${entry.module}]`;
-  const ctx = entry.context ? ` ${JSON.stringify(entry.context)}` : '';
+  const ctx = entry.context ? ` ${safeStringify(entry.context)}` : '';
   const msg = entry.message + ctx;
   switch (entry.level) {
     case 'debug':

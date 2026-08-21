@@ -48,9 +48,29 @@ function sanitizeValue(value: unknown, activeObjects: WeakSet<object>): unknown 
 }
 
 function formatArgs(args: readonly unknown[]): string {
-  return args
-    .map((arg) => (arg instanceof Error ? `${arg.message} ${arg.stack ?? ''}`.trim() : String(arg)))
-    .join(' ');
+  return args.map(formatArg).join(' ');
+}
+
+function formatArg(arg: unknown): string {
+  if (arg instanceof Error) return `${arg.message} ${arg.stack ?? ''}`.trim();
+  if (arg !== null && typeof arg === 'object') {
+    const sanitized = sanitizeLogContext({ value: arg })['value'];
+    return safeStringify(sanitized);
+  }
+  try {
+    return String(arg);
+  } catch {
+    return '[Unserializable]';
+  }
+}
+
+export function safeStringify(value: unknown): string {
+  try {
+    const serialized = JSON.stringify(value);
+    return serialized === undefined ? '[Unserializable]' : serialized;
+  } catch {
+    return '[Unserializable]';
+  }
 }
 
 /** Build the portable structured record before any renderer-specific sink sees it. */
