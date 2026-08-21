@@ -21,6 +21,10 @@ export const DEFAULT_ANTHROPIC_MODEL_ID: AnthropicModelId = 'claude-sonnet-5';
 export const DEFAULT_OPENAI_MODEL_ID: OpenAiModelId = 'gpt-5.4-mini';
 export const DEFAULT_GROK_MODEL_ID: GrokModelId = 'grok-4.5';
 
+// QNBS-v3: catalog membership rejects legacy model IDs that share a provider prefix.
+export const isModelInCatalog = (ids: readonly string[], model: string): boolean =>
+  ids.includes(model);
+
 export const ANTHROPIC_MODEL_OPTIONS: ModelOption<AnthropicModelId>[] = [
   { value: 'claude-opus-4-8', label: 'Claude Opus 4.8' },
   { value: 'claude-opus-5', label: 'Claude Opus 5' },

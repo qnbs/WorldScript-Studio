@@ -33,7 +33,7 @@ let maxVendorKb = 6200;
 let maxChunkKb = 2500;
 let maxWasmKb = 30000;
 function parseThreshold(flag, rawValue) {
-  if (rawValue === undefined || rawValue.startsWith('--')) {
+  if (typeof rawValue !== 'string' || rawValue.trim() === '' || rawValue.startsWith('--')) {
     console.error(`[bundle:budget] ${flag} requires a non-negative finite number.`);
     process.exit(1);
   }

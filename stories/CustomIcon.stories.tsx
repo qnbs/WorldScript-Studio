@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { CustomIcon } from '../components/ui/Icon';
 
+// QNBS-v3: keep the migrated icon in Storybook's accessibility inventory.
 const meta: Meta<typeof CustomIcon> = {
   title: 'UI/CustomIcon',
   component: CustomIcon,

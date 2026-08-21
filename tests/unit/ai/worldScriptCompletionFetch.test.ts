@@ -251,7 +251,7 @@ describe('worldScriptCompletionFetch — success (grok)', () => {
     mockGetApiKey.mockResolvedValue('grok-key');
     const res = await worldScriptCompletionFetch(
       'worldscript-internal://completion',
-      makeInit(makeBody({ provider: 'grok', model: 'grok-3-mini' })),
+      makeInit(makeBody({ provider: 'grok', model: 'grok-4.6' })),
     );
     expect(res.status).toBe(200);
     expect(mockCreateLanguageModelForWorldScript).toHaveBeenCalledWith(
@@ -259,7 +259,7 @@ describe('worldScriptCompletionFetch — success (grok)', () => {
         provider: 'openaiCompatible',
         baseURL: 'https://api.x.ai/v1',
         apiKey: 'grok-key',
-        modelId: 'grok-3-mini',
+        modelId: 'grok-4.6',
       }),
     );
   });
@@ -269,10 +269,24 @@ describe('worldScriptCompletionFetch — success (grok)', () => {
     mockGetApiKey.mockResolvedValue('grok-key');
     await worldScriptCompletionFetch(
       'worldscript-internal://completion',
-      makeInit(makeBody({ provider: 'grok', model: 'some-other-id' })),
+      makeInit(makeBody({ provider: 'grok', model: 'grok-3-mini' })),
     );
     expect(mockCreateLanguageModelForWorldScript).toHaveBeenCalledWith(
       expect.objectContaining({ modelId: 'grok-4.5' }),
+    );
+  });
+});
+
+describe('worldScriptCompletionFetch — success (openai)', () => {
+  it('defaults removed OpenAI model IDs to the current catalog fallback', async () => {
+    mockProviderToKind.mockReturnValue('openai');
+    mockGetApiKey.mockResolvedValue('openai-key');
+    await worldScriptCompletionFetch(
+      'worldscript-internal://completion',
+      makeInit(makeBody({ provider: 'openai', model: 'gpt-4o' })),
+    );
+    expect(mockCreateLanguageModelForWorldScript).toHaveBeenCalledWith(
+      expect.objectContaining({ modelId: 'gpt-5.4-mini' }),
     );
   });
 });

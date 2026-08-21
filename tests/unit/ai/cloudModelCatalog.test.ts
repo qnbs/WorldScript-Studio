@@ -9,6 +9,7 @@ import {
   DEFAULT_OPENAI_MODEL_ID,
   GROK_MODEL_IDS,
   GROK_MODEL_OPTIONS,
+  isModelInCatalog,
   OPENAI_MODEL_IDS,
   OPENAI_MODEL_OPTIONS,
 } from '../../../services/ai/cloudModelCatalog';
@@ -28,5 +29,11 @@ describe('cloud model catalog', () => {
     expect(ANTHROPIC_MODEL_IDS).toContain(DEFAULT_ANTHROPIC_MODEL_ID);
     expect(OPENAI_MODEL_IDS).toContain(DEFAULT_OPENAI_MODEL_ID);
     expect(GROK_MODEL_IDS).toContain(DEFAULT_GROK_MODEL_ID);
+  });
+
+  it('rejects legacy IDs even when they share a provider prefix', () => {
+    expect(isModelInCatalog(GROK_MODEL_IDS, 'grok-3-mini')).toBe(false);
+    expect(isModelInCatalog(OPENAI_MODEL_IDS, 'gpt-4o')).toBe(false);
+    expect(isModelInCatalog(ANTHROPIC_MODEL_IDS, 'claude-haiku-4-5')).toBe(false);
   });
 });

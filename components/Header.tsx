@@ -8,6 +8,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import { useVoice } from '../hooks/useVoice';
 import { viewNavigationLabelKey } from '../services/viewNavigationLabels';
 import type { View } from '../types';
+// QNBS-v3: the shared icon wrapper keeps action glyphs decorative and ref-safe.
 import { CustomIcon } from './ui/Icon';
 import { SaveStatusIndicator } from './ui/SaveStatusIndicator';
 import { SectionIcon } from './ui/SectionIcon';
@@ -185,7 +186,10 @@ export const Header: React.FC<HeaderProps> = ({
             aria-label={t('common.redo')}
             title={t('common.redo')}
           >
-            <CustomIcon className="w-5 h-5">{ICONS.REDO}</CustomIcon>
+            {/* QNBS-v3: the redo button's accessible name comes from its label, not its glyph. */}
+            <CustomIcon className="w-5 h-5" aria-hidden="true">
+              {ICONS.REDO}
+            </CustomIcon>
           </button>
         </div>
       </div>

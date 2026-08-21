@@ -140,6 +140,7 @@ describe('normalizePersistedSettings', () => {
     expect(result.advancedAi.temperature).toBe(0.7); // default preserved
   });
 
+  // QNBS-v3: prove persisted legacy cloud IDs normalize before reaching selectors or providers.
   it('migrates removed cloud model IDs to the current provider defaults', () => {
     expect(
       normalizePersistedSettings({

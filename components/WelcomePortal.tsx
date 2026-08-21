@@ -54,6 +54,7 @@ const FeatureHighlight: React.FC<{
 }> = ({ icon, title, description }) => (
   <div className="rounded-lg border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)]/50 p-4 text-left">
     <div className="mb-2 inline-flex rounded-lg bg-[var(--sc-accent-subtle)] p-2 text-[var(--sc-accent)]">
+      {/* QNBS-v3: feature text supplies the accessible name for this decorative glyph. */}
       <CustomIcon className="h-5 w-5" aria-hidden="true">
         {icon}
       </CustomIcon>
@@ -220,6 +221,7 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
         />
       </div>
       <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--sc-border-subtle)] bg-[var(--sc-surface-raised)]/60 px-4 py-1.5 text-sm text-[var(--sc-text-secondary)]">
+        {/* QNBS-v3: the adjacent privacy text names this decorative status glyph. */}
         <CustomIcon className="h-4 w-4 text-[var(--sc-success-fg)]" aria-hidden="true">
           <path
             strokeLinecap="round"

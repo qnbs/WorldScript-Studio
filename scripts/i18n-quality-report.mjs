@@ -20,7 +20,8 @@ function parseOptionalThreshold(flag, index, { min, max, integer = false }) {
   const rawValue = process.argv[index + 1];
   const value = Number(rawValue);
   if (
-    rawValue === undefined ||
+    typeof rawValue !== 'string' ||
+    rawValue.trim() === '' ||
     rawValue.startsWith('--') ||
     !Number.isFinite(value) ||
     value < min ||

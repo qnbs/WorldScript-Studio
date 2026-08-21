@@ -58,6 +58,7 @@ describe('tauriDeepLink', () => {
       );
     });
 
+    // QNBS-v3: retain coverage for the one-release legacy deep-link migration notice.
     it('still strips the legacy storycraft:// scheme during migration', () => {
       expect(deepLinkUrlToPath('storycraft:///home/user/my-novel.worldscript')).toBe(
         '/home/user/my-novel.worldscript',

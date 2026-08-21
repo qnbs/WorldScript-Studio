@@ -26,13 +26,17 @@ const baseAdvancedAi = {
   hybridFallbackChain: [] as string[],
   ragMode: 'hybrid' as const,
 };
+const mockProviderState = {
+  provider: 'gemini' as 'gemini' | 'grok',
+  model: 'gemini-2.5-flash',
+};
 
 vi.mock('../../../contexts/SettingsViewContext', () => ({
   useSettingsViewContext: () => ({
     t: (k: string) => k,
     settings: {
       aiCreativity: 'Balanced',
-      advancedAi: baseAdvancedAi,
+      advancedAi: { ...baseAdvancedAi, ...mockProviderState },
     },
     featureFlags: { enableDuckDbAnalytics: false },
     handleSettingChange: mockHandleSettingChange,
@@ -68,7 +72,11 @@ vi.mock('../../../components/ApiKeySection', () => ({
 }));
 
 vi.mock('../../../components/settings/AiProviderCard', () => ({
-  AiProviderCard: () => <div data-testid="ai-provider-card">AiProviderCard</div>,
+  AiProviderCard: ({ onProviderChange }: { onProviderChange?: (provider: 'grok') => void }) => (
+    <button type="button" data-testid="ai-provider-card" onClick={() => onProviderChange?.('grok')}>
+      AiProviderCard
+    </button>
+  ),
 }));
 
 vi.mock('../../../components/settings/GpuMetricsPanel', () => ({
@@ -86,9 +94,31 @@ vi.mock('@domain/ai-core', () => ({
 
 vi.mock('../../../components/ui/Select', () => ({
   Select: vi.fn(
-    ({ children, value, onChange, ...rest }: React.SelectHTMLAttributes<HTMLSelectElement>) => (
+    ({
+      children,
+      value,
+      onChange,
+      options,
+      groups,
+      ...rest
+    }: React.SelectHTMLAttributes<HTMLSelectElement> & {
+      options?: readonly { value: string; label: string }[];
+      groups?: readonly { label: string; options: readonly { value: string; label: string }[] }[];
+    }) => (
       <select value={value} onChange={onChange} {...rest}>
         {children}
+        {options?.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+        {groups?.flatMap((group) =>
+          group.options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          )),
+        )}
       </select>
     ),
   ),
@@ -118,6 +148,18 @@ import { AdvancedAiSection, AiSection } from '../../../components/settings/AiSec
 describe('AiSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockProviderState.provider = 'gemini';
+    mockProviderState.model = 'gemini-2.5-flash';
+  });
+
+  it('sets the current Grok fallback when the provider changes to Grok', async () => {
+    const user = userEvent.setup();
+    render(<AiSection />);
+    await user.click(screen.getByTestId('ai-provider-card'));
+    expect(mockHandleSettingChange).toHaveBeenCalledWith(
+      'advancedAi',
+      expect.objectContaining({ provider: 'grok', model: 'grok-4.5' }),
+    );
   });
 
   it('renders the AiProviderCard stub', () => {
@@ -163,6 +205,8 @@ describe('AiSection', () => {
 describe('AdvancedAiSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockProviderState.provider = 'gemini';
+    mockProviderState.model = 'gemini-2.5-flash';
   });
 
   it('renders the advanced AI title', () => {
@@ -196,6 +240,14 @@ describe('AdvancedAiSection', () => {
     // Use getAllByRole since there are multiple selects on the page
     const selects = screen.getAllByRole('combobox');
     expect(selects.length).toBeGreaterThan(0);
+  });
+
+  it('renders current Grok catalog options for the Grok provider', () => {
+    mockProviderState.provider = 'grok';
+    mockProviderState.model = 'grok-4.6';
+    render(<AdvancedAiSection />);
+    expect(screen.getByRole('option', { name: 'Grok 4.6' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Grok 4.5' })).toBeInTheDocument();
   });
 
   it('renders RAG mode selector', () => {
