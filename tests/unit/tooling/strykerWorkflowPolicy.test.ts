@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -13,6 +14,9 @@ const workflowPath = fileURLToPath(
   new URL('../../../.github/workflows/mutation.yml', import.meta.url),
 );
 const workflow = readFileSync(workflowPath, 'utf8');
+const scopeScriptPath = fileURLToPath(
+  new URL('../../../scripts/stryker-scope.mjs', import.meta.url),
+);
 
 describe('Stryker workflow policy', () => {
   it('uses one explicit target source for config and the matrix', () => {
@@ -22,6 +26,10 @@ describe('Stryker workflow policy', () => {
     expect(mutationModules.every(({ riskTier }) => ['A', 'B'].includes(riskTier))).toBe(true);
     expect(selectMutationModules('tier-a').every(({ riskTier }) => riskTier === 'A')).toBe(true);
     expect(selectMutationModules('services-commands')).toHaveLength(1);
+    const matrix = JSON.parse(
+      execFileSync(process.execPath, [scopeScriptPath, '--matrix'], { encoding: 'utf8' }),
+    );
+    expect(matrix.include).toEqual(mutationModules);
   });
 
   it('uses supported incremental plumbing and preserves shard identity', () => {

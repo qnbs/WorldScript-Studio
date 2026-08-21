@@ -68,7 +68,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const selector = selectorIndex === -1 ? 'all' : process.argv[selectorIndex + 1];
   const selectedModules = selectMutationModules(selector);
   if (process.argv.includes('--matrix')) {
-    process.stdout.write(`${JSON.stringify(selectedModules)}\n`);
+    process.stdout.write(`${JSON.stringify({ include: selectedModules })}\n`);
   } else if (process.argv.includes('--files')) {
     process.stdout.write(
       `${selectedModules.flatMap(({ mutate }) => mutate.split(',')).join(',')}\n`,
