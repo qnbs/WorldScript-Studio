@@ -33,9 +33,9 @@ The app supports a multi-provider AI stack (Gemini, OpenAI, Claude, Grok, OpenRo
    ```bash
    pnpm run ci:prepush
    ```
-   This gate is mandatory before every push and after every local correction before re-pushing; all three checks must exit successfully. A targeted test or changed-file lint run alone is not push evidence. The pre-commit hook checks staged files with Biome, while the pre-push gate runs the full repository lint before typecheck and i18n validation. If branch switching or a lockfile/package-manifest change makes pnpm report dependency verification errors, repair first with `pnpm install --frozen-lockfile` and rerun the complete pre-push gate.
+   This gate is mandatory before every push and after every local correction before re-pushing; it runs sequentially with staged-file linting, a single-checker project typecheck, i18n validation, and lightweight native guardrails. Full repository lint, coverage, E2E, Storybook, Lighthouse, and mutation checks belong to cloud CI. If branch switching or a lockfile/package-manifest change makes pnpm report dependency verification errors, run `node scripts/dependency-state.mjs reconcile` and rerun the complete pre-push gate.
    Optional targeted smoke test: `pnpm exec vitest run <path>` **without** `--coverage`.
-   **Hard rule:** Never invoke `pnpm test`, `npm run test`, or a bare Vitest wrapper; always use an explicit `pnpm exec vitest run <path>` command to avoid watch-mode hangs on constrained hardware.
+   **Hard rule:** Never invoke `pnpm test`, `npm run test`, or a bare Vitest wrapper; always use an explicit `pnpm exec vitest run <path>` command to avoid watch-mode hangs on constrained hardware. Never start multiple heavyweight processes concurrently.
 4. **Audit cloud CI logs, fix locally, then re-push** – If the cloud CI run fails, inspect the logs via GitHub web UI or `gh run watch`, reproduce the specific failing test or lint error in isolation, fix it locally (quick tier to verify), commit, and push again for another cloud CI run.
 5. **Sequential execution** – Do not parallelize builds, tests, or processes locally. Use single-threaded modes and avoid background tasks that compete for RAM/CPU.
 6. **Resource budget** – Avoid spinning up the dev server (`pnpm run dev`) for extended periods if not needed. Prefer one-off commands (`pnpm run build`, `pnpm run typecheck`) and stop the server when done.
@@ -169,6 +169,7 @@ pnpm run lint               # Biome lint (--error-on-warnings)
 pnpm run lint:fix           # Biome check --write (lint + format)
 pnpm run format             # Biome format --write
 pnpm run typecheck          # tsgo --project tsconfig.tsgo.json --noEmit --checkers 4
+pnpm run typecheck:single   # local low-end typecheck: one checker, sequential
 pnpm run i18n:check         # Locale key parity vs English + rebuild bundles + content guard
 pnpm run parity:check       # Feature parity audit
 pnpm run suppressions:check # Biome-ignore count ratchet
@@ -261,8 +262,10 @@ On any non-trivial change, add a single-line comment explaining **why**, not wha
 ### Commit Messages
 
 Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`.
-After an explicit `pnpm run hooks:install`, the pre-commit hook runs `biome check --write` on staged
-files via `simple-git-hooks` + `lint-staged`, and the pre-push hook runs `pnpm run ci:prepush`.
+After an explicit `pnpm run hooks:install`, the pre-commit hook runs `lint-staged` on staged files
+through `node scripts/hooks/pre-commit.mjs`; the pre-push hook runs
+`node scripts/hooks/pre-push.mjs`. These direct Node entrypoints verify the content fingerprint
+and invoke local binaries without pnpm's workspace-state preflight in the hook path.
 The pre-commit hook is not a substitute for the complete pre-push gate; CI remains mandatory when
 hooks are not installed.
 
@@ -273,12 +276,20 @@ hooks are not installed.
 ### Philosophy
 
 - **Cloud CI-first:** The canonical quality gate is GitHub Actions. Low-end local machines should run only the "Quick" tier.
-- **Quick tier (local, before every push):** `pnpm run ci:prepush` runs the full repository lint, then
-  the exact CI typecheck and i18n checks sequentially. Staged-file Biome validation still runs in
-  pre-commit. Run the gate
-  again after every correction before re-pushing; do not push based only on a targeted test or a
-  changed-file lint run. Optionally: `pnpm exec vitest run <path>`
-  **without** `--coverage`.
+- **Quick tier (local, before every push):** `pnpm run ci:prepush` runs staged-file linting, the
+  project typecheck with one checker, i18n parity/bundle/content checks, and lightweight desktop
+  guardrails sequentially. Run the gate again after every correction before re-pushing; do not
+  push based only on a targeted test or a changed-file lint run. Optionally:
+  `pnpm exec vitest run <path>` **without** `--coverage`.
+- **Dependency state:** `pnpm run deps:verify` compares a content fingerprint of dependency
+  manifests, workspace package manifests, and patches. After a dependency-related branch switch,
+  run `node scripts/dependency-state.mjs reconcile` (or `pnpm run deps:reconcile` when pnpm can
+  start); never use `--no-verify` as the
+  normal recovery path.
+- **Low-resource policy:** Never run Biome, multiple TypeScript checkers, Vitest, Cargo, Vite,
+  Storybook, or other heavyweight processes concurrently on the development workstation. Full
+  repository lint/tests, E2E, coverage, Lighthouse, and mutation testing are cloud-CI work unless
+  the user explicitly requests a narrowly scoped local run.
 - **Vitest watch-mode hard rule:** Never invoke `pnpm test`, `npm run test`, or a bare Vitest wrapper; use an explicit targeted `pnpm exec vitest run <path>` command so constrained hardware never waits on watch mode.
 - **Heavy tier (CI):** Vitest with coverage thresholds, Playwright E2E (desktop + mobile emulation), Lighthouse CI, Stryker mutation, Storybook static build, bundle budget + analyze.
 
