@@ -79,8 +79,12 @@ fn is_sensitive_key(key: &str) -> bool {
 
 fn is_iv_key(key: &str) -> bool {
     let bytes = key.as_bytes();
-    let is_iv = |index: usize| bytes.get(index).is_some_and(|b| *b == b'i' || *b == b'I')
-        && bytes.get(index + 1).is_some_and(|b| *b == b'v' || *b == b'V');
+    let is_iv = |index: usize| {
+        bytes.get(index).is_some_and(|b| *b == b'i' || *b == b'I')
+            && bytes
+                .get(index + 1)
+                .is_some_and(|b| *b == b'v' || *b == b'V')
+    };
     for index in 0..bytes.len().saturating_sub(1) {
         if !is_iv(index) {
             continue;
