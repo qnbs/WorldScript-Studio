@@ -328,8 +328,8 @@ One-click encrypted export of your entire project library from **Settings → Da
 
 ### 🔑 Encryption — which mechanism protects what
 
-There is no single blanket "encrypted at rest" guarantee — four actual encryption mechanisms
-cover protected data paths, alongside one explicitly documented plaintext desktop filesystem
+There is no single blanket "encrypted at rest" guarantee — four protected data paths
+are covered, alongside one explicitly documented plaintext desktop filesystem
 path. They use different key material, and the desktop filesystem path (marked ⚠️) currently
 provides no encryption despite the legacy helper code still existing:
 
