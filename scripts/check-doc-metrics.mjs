@@ -202,15 +202,30 @@ export function scanReadmeReleaseTruth(readme, taggedVersions) {
   const latestTagged = [...taggedVersions].sort(semverCompare).at(-1) ?? null;
   if (!latestTagged) return findings;
 
+  // QNBS-v3: extract each badge label independently so a valid development badge cannot hide a later invalid release badge on the same line.
   const badgePattern = /\b(?:Next|Release|Version|Current)[-_ ]v?(\d+\.\d+\.\d+)/i;
+  const getBadgeTexts = (line) => {
+    const badgeTexts = [];
+    for (const match of line.matchAll(/!\[([^\]]*)\]/g)) badgeTexts.push(match[1]);
+    for (const match of line.matchAll(/<img\b[^>]*\balt=(['"])(.*?)\1[^>]*>/gi)) {
+      badgeTexts.push(match[2]);
+    }
+    for (const match of line.matchAll(/\b(?:Next|Release|Version|Current)[-_ ]v?\d+\.\d+\.\d+/gi)) {
+      badgeTexts.push(match[0]);
+    }
+    return [...new Set(badgeTexts)];
+  };
   for (const [index, line] of readme.split('\n').entries()) {
-    const match = line.match(badgePattern);
-    if (!match || /\b(?:next|unreleased|development|dev|pre[- ]?release)\b/i.test(line)) continue;
-    const version = match[1];
-    if (!taggedVersions.has(version)) {
-      findings.push(
-        `README.md:${index + 1} — release badge advertises v${version}, but no matching git tag exists`,
-      );
+    for (const badgeText of getBadgeTexts(line)) {
+      const match = badgeText.match(badgePattern);
+      if (!match || /\b(?:next|unreleased|development|dev|pre[- ]?release)\b/i.test(badgeText))
+        continue;
+      const version = match[1];
+      if (!taggedVersions.has(version)) {
+        findings.push(
+          `README.md:${index + 1} — release badge advertises v${version}, but no matching git tag exists`,
+        );
+      }
     }
   }
   return findings;
@@ -222,7 +237,8 @@ function hasMeaningfulUnreleasedContent(changelog) {
   const afterHeading = changelog.slice(heading.index + heading[0].length);
   const nextHeading = afterHeading.search(/^##\s/m);
   const section = nextHeading === -1 ? afterHeading : afterHeading.slice(0, nextHeading);
-  return section.split('\n').some((line) => {
+  const withoutHtmlComments = section.replace(/<!--[\s\S]*?(?:-->|$)/g, '');
+  return withoutHtmlComments.split('\n').some((line) => {
     const trimmed = line.trim();
     return trimmed.length > 0 && !trimmed.startsWith('<!--') && !trimmed.startsWith('###');
   });

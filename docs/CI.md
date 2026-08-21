@@ -128,8 +128,8 @@ Mutation testing (Stryker) is **not** in this graph — it runs only via manual 
 
 `pnpm run docs:check` treats `v1.27.1` (the latest stable tag) as the release frontier. A dated
 Keep-a-Changelog heading at or beyond that frontier must have its matching tag; a package version
-behind the frontier fails, while a newer development version is valid only with a populated
-`[Unreleased]` section. README badges may use an explicit `Next`/`unreleased` development label,
+behind the frontier fails, while a newer development version requires an `[Unreleased]` section;
+when post-release commits exist, that section must contain meaningful history. README badges may use an explicit `Next`/`unreleased` development label,
 but a released-version badge must resolve to an existing tag. Historical headings below the
 frontier remain valid when old tags are no longer present.
 
