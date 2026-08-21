@@ -43,7 +43,7 @@ import {
 import { generateLocalText } from './localAiFacade';
 import { LocalServerError, localServerFetch } from './localServerHttp';
 import { createLogger } from './logger';
-import { assertCspConnectEndpointAllowed } from './network/cspOriginPolicy';
+import { assertCspConnectEndpointAllowed, CspConnectPolicyError } from './network/cspOriginPolicy';
 import {
   listOllamaModels as listOllamaModelsFromService,
   streamOllama,
@@ -905,6 +905,14 @@ function localServerFailure(
       params: { url: endpoint },
     };
   }
+  if (error instanceof CspConnectPolicyError) {
+    return {
+      ok: false,
+      error: error.message,
+      kind: 'policyBlocked',
+      params: { url: endpoint },
+    };
+  }
   return {
     ok: false,
     error: `Local server not reachable (${endpoint})`,
@@ -1041,6 +1049,7 @@ export type TestConnectionErrorKind =
   | 'httpError'
   | 'timeout'
   | 'unreachable'
+  | 'policyBlocked'
   | 'pluginUnavailable'
   | 'desktopRequired'
   | 'proxyUnavailableStaticHost'

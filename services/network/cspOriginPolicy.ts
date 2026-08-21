@@ -11,7 +11,7 @@ export class CspConnectPolicyError extends Error {
     super(
       reason === 'invalid'
         ? `${label} URL is invalid. Enter a complete http(s) URL.`
-        : `${label} origin is not allowed by the current CSP policy. Use a supported origin or request an explicit policy update before using this endpoint.`,
+        : `${label} origin is blocked by the current browser CSP network policy. Use a supported origin or request an explicit policy update before using this endpoint.`,
     );
     this.name = 'CspConnectPolicyError';
   }

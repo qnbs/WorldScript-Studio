@@ -22,7 +22,7 @@ describe('CSP endpoint preflight', () => {
         'https://writer-proxy.example.test/v1',
         'OpenAI-compatible endpoint',
       ),
-    ).toThrow(/not allowed.*CSP policy.*supported origin/i);
+    ).toThrow(/blocked.*CSP network policy.*supported origin/i);
   });
 
   it('rejects credentials and malformed URLs without exposing them in the error', () => {

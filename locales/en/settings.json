@@ -268,6 +268,7 @@
   "settings.ai.testError.noModels": "The local server is reachable but exposes no models.",
   "settings.ai.testError.noWebgpu": "WebGPU unavailable in this browser — WebLLM needs WebGPU (try Chrome/Edge or enable flags).",
   "settings.ai.testError.pluginUnavailable": "Local server networking is unavailable: the desktop HTTP plugin failed to load.",
+  "settings.ai.testError.policyBlocked": "This endpoint is blocked by the browser network policy ({{url}}). Use a supported origin or request an explicit policy update.",
   "settings.ai.testError.proxyUnavailableStaticHost": "Claude is not available on this deployment: it has no serverless proxy (GitHub Pages is static-only). Use the desktop app, or a Vercel/Cloudflare Pages deployment instead.",
   "settings.ai.testError.timeout": "Connection timed out ({{url}})",
   "settings.ai.testError.unexpected": "An unexpected error occurred. Please try again.",

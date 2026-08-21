@@ -65,8 +65,8 @@ describe('listOllamaModels', () => {
     vi.mocked(fetch).mockResolvedValueOnce(
       new Response(JSON.stringify({ models: [] }), { status: 200 }),
     );
-    await listOllamaModels('http://myhost:11434/');
-    expect(fetch).toHaveBeenCalledWith('http://myhost:11434/api/tags', expect.any(Object));
+    await listOllamaModels('http://127.0.0.1:11434/');
+    expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:11434/api/tags', expect.any(Object));
   });
 });
 
@@ -109,6 +109,17 @@ describe('testOllamaConnection', () => {
     // QNBS-v3 (CodeAnt CWE-209): the raw technical message stays in `error` (for logs) only —
     // `params` must never carry it, since it's interpolated into the user-facing i18n string.
     expect(result.params).toEqual({ url: 'http://localhost:11434' });
+  });
+
+  it('classifies an endpoint outside the CSP allowlist as policyBlocked', async () => {
+    const result = await testOllamaConnection('http://ollama-host:11434');
+    expect(result).toMatchObject({
+      ok: false,
+      kind: 'policyBlocked',
+      params: { url: 'http://ollama-host:11434' },
+    });
+    expect(result.error).toMatch(/blocked.*network policy/i);
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it('classifies a TimeoutError-shaped rejection as a timeout (#266)', async () => {
@@ -274,11 +285,21 @@ describe('pullOllamaModel', () => {
 
   it('POSTs to /api/pull with the stripped model name and stream:true', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(ndjsonResponse([{ status: 'success' }]));
-    await pullOllamaModel('ollama/llama3.2:3b', { baseUrl: 'http://host:11434/' });
+    await pullOllamaModel('ollama/llama3.2:3b', { baseUrl: 'http://127.0.0.1:11434/' });
     const [url, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('http://host:11434/api/pull');
+    expect(url).toBe('http://127.0.0.1:11434/api/pull');
     expect(init.method).toBe('POST');
     expect(JSON.parse(init.body as string)).toEqual({ name: 'llama3.2:3b', stream: true });
+  });
+
+  it('preserves a blocked-origin error instead of reporting a generic reachability failure', async () => {
+    await expect(
+      pullOllamaModel('llama3.2:3b', { baseUrl: 'http://ollama-host:11434' }),
+    ).rejects.toMatchObject({
+      name: 'CspConnectPolicyError',
+      code: 'CSP_CONNECT_ORIGIN_BLOCKED',
+    });
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it('throws on an inline {error} line (Ollama reports failures in-band)', async () => {
