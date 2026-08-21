@@ -39,5 +39,6 @@ export const MIN_WORKERS = 1;
 /** Message protocol version. */
 export const PROTOCOL_VERSION = 2;
 
+// QNBS-v3: Centralize the native contract version so TS schemas and routing cannot drift.
 /** Version of the typed Rust TaskSupervisor request/result contract. */
 export const RUST_TASK_CONTRACT_VERSION = '1.0.0' as const;

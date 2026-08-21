@@ -1,5 +1,6 @@
 // QNBS-v3: Tests for tauriTaskBridge — Rust TaskSupervisor Tauri invoke wrapper.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { RUST_TASK_CONTRACT_VERSION } from '../../packages/worker-bus/src/constants';
 
 vi.mock('../../services/tauriRuntime', () => ({
   isTauriRuntime: vi.fn(() => false),
@@ -59,7 +60,9 @@ describe('tauriTaskBridge', () => {
         timeoutMs: 5000,
       });
       expect(result.success).toBe(true);
-      expect(invoke).toHaveBeenCalledWith('worldscript_task_supervisor_submit', expect.any(Object));
+      expect(invoke).toHaveBeenCalledWith('worldscript_task_supervisor_submit', {
+        request: expect.objectContaining({ contractVersion: RUST_TASK_CONTRACT_VERSION }),
+      });
     });
 
     it('wraps Tauri invoke errors with context message', async () => {

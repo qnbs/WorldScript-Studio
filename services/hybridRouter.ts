@@ -58,6 +58,7 @@ export async function routeTask<TResult = unknown>(
     if (rustAvailable) {
       try {
         const request: RustTaskRequest = {
+          // QNBS-v3: Put the shared version on every request before crossing into native code.
           contractVersion: RUST_TASK_CONTRACT_VERSION,
           taskId: crypto.randomUUID(),
           taskType,

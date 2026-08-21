@@ -218,6 +218,7 @@ export interface TaskHandler {
 
 // --- Rust Bridge Types ------------------------------------------------------
 export interface RustTaskRequest {
+  // QNBS-v3: Keep the request version typed so native callers cannot omit the boundary marker.
   readonly contractVersion: typeof RUST_TASK_CONTRACT_VERSION;
   readonly taskId: string;
   readonly taskType: string;
@@ -238,6 +239,7 @@ export interface RustTaskProgressEvent {
 }
 
 export interface RustTaskResultEvent {
+  // QNBS-v3: Keep the result version typed so consumers cannot trust an unversioned response.
   readonly contractVersion: typeof RUST_TASK_CONTRACT_VERSION;
   readonly taskId: string;
   readonly success: boolean;

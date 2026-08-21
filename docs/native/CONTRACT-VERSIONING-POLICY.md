@@ -1,6 +1,6 @@
 # Native contract versioning policy
 
-Status: Locally proven for the bounded Rust TaskSupervisor contract (`1.0.0`); merge-gated CI is the next evidence level.
+Status: TypeScript boundary validation is locally proven for the bounded Rust TaskSupervisor contract (`1.0.0`); Rust compile/test evidence remains merge-gated CI.
 
 This policy applies to renderer-neutral contracts that cross the Tauri/Rust boundary. It does not
 make Tauri authoritative and it does not replace the separate `schemaVersion` used by project

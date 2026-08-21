@@ -94,6 +94,7 @@ export type WorkerMessage = z.infer<typeof WorkerMessageSchema>;
 
 // --- Rust IPC Schemas -------------------------------------------------------
 export const RustTaskRequestSchema = z.object({
+  // QNBS-v3: Reject incompatible requests before native dispatch.
   contractVersion: z.literal(RUST_TASK_CONTRACT_VERSION),
   taskId: z.string().min(1),
   taskType: z.string().min(1),
@@ -114,6 +115,7 @@ export const RustTaskProgressEventSchema = z.object({
 });
 
 export const RustTaskResultEventSchema = z.object({
+  // QNBS-v3: Reject incompatible native results before application code trusts them.
   contractVersion: z.literal(RUST_TASK_CONTRACT_VERSION),
   taskId: z.string().min(1),
   success: z.boolean(),

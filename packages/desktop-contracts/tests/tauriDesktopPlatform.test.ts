@@ -1,5 +1,6 @@
 // QNBS-v3: covers every TauriDesktopPlatform facet's success + failure paths, incl. the never-throw notification guarantee, the LoRA Rust argument shapes, and logged (not silent) fallback catches.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { RUST_TASK_CONTRACT_VERSION } from '../../worker-bus/src/constants';
 
 const h = vi.hoisted(() => {
   const getCurrentWindowShow = vi.fn(async () => {});
@@ -404,7 +405,10 @@ describe('tauriDesktopPlatform', () => {
         timeoutMs: 5000,
       });
       expect(h.invoke).toHaveBeenCalledWith('worldscript_task_supervisor_submit', {
-        request: expect.objectContaining({ taskId: '550e8400-e29b-41d4-a716-446655440001' }),
+        request: expect.objectContaining({
+          contractVersion: RUST_TASK_CONTRACT_VERSION,
+          taskId: '550e8400-e29b-41d4-a716-446655440001',
+        }),
       });
       await tauriDesktopPlatform.tasks.pingSupervisor();
       expect(h.invoke).toHaveBeenCalledWith('worldscript_task_supervisor_ping');
@@ -429,6 +433,10 @@ describe('tauriDesktopPlatform', () => {
           timeoutMs: 5000,
         }),
       ).rejects.toThrow(/unsupported contract version/);
+      expect(h.loggerWarn).toHaveBeenCalledWith(
+        'desktopPlatform.tasks: submitTask failed',
+        expect.objectContaining({ error: expect.any(Error) }),
+      );
     });
 
     it('convertMarkdownToEpub decodes the base64 response', async () => {

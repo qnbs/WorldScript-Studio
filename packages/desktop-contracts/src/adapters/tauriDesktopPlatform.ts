@@ -375,33 +375,41 @@ function isLoraTrainingEnvironmentResult(value: unknown): value is LoraTrainingE
 
 const tasks: DesktopTasks = {
   submitTask: async (request) => {
-    const { invoke } = await import('@tauri-apps/api/core');
-    const parsedRequest = RustTaskRequestSchema.safeParse(request);
-    if (!parsedRequest.success) {
-      const issues = parsedRequest.error.issues
-        .map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`)
-        .join('; ');
-      throw new Error(
-        `worldscript_task_supervisor_submit received an invalid request contract: ${issues}`,
-      );
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      // QNBS-v3: Validate the request before native dispatch so boundary failures stay typed.
+      const parsedRequest = RustTaskRequestSchema.safeParse(request);
+      if (!parsedRequest.success) {
+        const issues = parsedRequest.error.issues
+          .map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`)
+          .join('; ');
+        throw new Error(
+          `worldscript_task_supervisor_submit received an invalid request contract: ${issues}`,
+        );
+      }
+      const rawResult = await invoke('worldscript_task_supervisor_submit', {
+        request: parsedRequest.data,
+      });
+      // QNBS-v3: Check the response version before any result payload is trusted.
+      const rawVersion =
+        typeof rawResult === 'object' && rawResult !== null
+          ? (rawResult as Record<string, unknown>)['contractVersion']
+          : undefined;
+      if (rawVersion !== RUST_TASK_CONTRACT_VERSION) {
+        throw new Error(
+          `worldscript_task_supervisor_submit returned unsupported contract version ${String(rawVersion)}`,
+        );
+      }
+      const result = RustTaskResultEventSchema.safeParse(rawResult);
+      if (!result.success) {
+        throw new Error('worldscript_task_supervisor_submit returned an invalid result contract');
+      }
+      return result.data;
+    } catch (error) {
+      logger.warn('desktopPlatform.tasks: submitTask failed', { error });
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`worldscript_task_supervisor_submit failed: ${message}`);
     }
-    const rawResult = await invoke('worldscript_task_supervisor_submit', {
-      request: parsedRequest.data,
-    });
-    const rawVersion =
-      typeof rawResult === 'object' && rawResult !== null
-        ? (rawResult as Record<string, unknown>)['contractVersion']
-        : undefined;
-    if (rawVersion !== RUST_TASK_CONTRACT_VERSION) {
-      throw new Error(
-        `worldscript_task_supervisor_submit returned unsupported contract version ${String(rawVersion)}`,
-      );
-    }
-    const result = RustTaskResultEventSchema.safeParse(rawResult);
-    if (!result.success) {
-      throw new Error('worldscript_task_supervisor_submit returned an invalid result contract');
-    }
-    return result.data;
   },
   pingSupervisor: async () => {
     const { invoke } = await import('@tauri-apps/api/core');
