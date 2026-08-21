@@ -1,0 +1,44 @@
+[
+  {
+    "name": "top-level sensitive keys",
+    "context": {
+      "apiKey": "secret",
+      "userToken": "token",
+      "myPassword": "password",
+      "recoveryPassphrase": "phrase",
+      "userId": 42,
+      "nested": {
+        "token": "nested-value-remains-owned-by-the-nested-value"
+      }
+    },
+    "sanitized": {
+      "apiKey": "[REDACTED]",
+      "userToken": "[REDACTED]",
+      "myPassword": "[REDACTED]",
+      "recoveryPassphrase": "[REDACTED]",
+      "userId": 42,
+      "nested": {
+        "token": "nested-value-remains-owned-by-the-nested-value"
+      }
+    }
+  },
+  {
+    "name": "case-insensitive substring keys",
+    "context": {
+      "APIKEY": "one",
+      "accessTOKENValue": "two",
+      "PASSWORD_HINT": "three",
+      "PASSphraseBackup": "four",
+      "keyboardLayout": "safe",
+      "userId": 7
+    },
+    "sanitized": {
+      "APIKEY": "[REDACTED]",
+      "accessTOKENValue": "[REDACTED]",
+      "PASSWORD_HINT": "[REDACTED]",
+      "PASSphraseBackup": "[REDACTED]",
+      "keyboardLayout": "[REDACTED]",
+      "userId": 7
+    }
+  }
+]

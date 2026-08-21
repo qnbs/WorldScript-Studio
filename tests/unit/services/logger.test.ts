@@ -14,6 +14,7 @@ import {
   newCorrelationId,
   sanitizeLogContext,
 } from '../../../services/logger';
+import diagnosticRedactionFixtures from '../../fixtures/diagnostics/redaction-cases.json';
 
 describe('newCorrelationId', () => {
   it('returns prefixed, unique, non-empty ids', () => {
@@ -30,6 +31,14 @@ describe('newCorrelationId', () => {
 });
 
 describe('sanitizeLogContext', () => {
+  // QNBS-v3: Keeps the TypeScript sink aligned with the renderer-neutral Rust redaction contract.
+  it.each(diagnosticRedactionFixtures)(
+    'matches the shared $name fixture',
+    ({ context, sanitized }) => {
+      expect(sanitizeLogContext(context)).toEqual(sanitized);
+    },
+  );
+
   it('redacts keys matching sensitive pattern', () => {
     const ctx = { apiKey: 'secret', userToken: 'tok', myPassword: 'pw' };
     const out = sanitizeLogContext(ctx);
