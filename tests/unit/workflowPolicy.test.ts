@@ -8,13 +8,18 @@ import {
   extractLocalPathDependencies,
   extractNeeds,
   extractRustClassifiers,
+  extractStepBlock,
   resolveDependencyPrefix,
 } from '../utils/workflowPolicyParsers';
 
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 const workflowPath = fileURLToPath(new URL('../../.github/workflows/ci.yml', import.meta.url));
+const scheduledSecurityWorkflowPath = fileURLToPath(
+  new URL('../../.github/workflows/security-scheduled.yml', import.meta.url),
+);
 const tauriManifestPath = fileURLToPath(new URL('../../src-tauri/Cargo.toml', import.meta.url));
 const workflowSource = readFileSync(workflowPath, 'utf8');
+const scheduledSecurityWorkflowSource = readFileSync(scheduledSecurityWorkflowPath, 'utf8');
 const tauriManifestSource = readFileSync(tauriManifestPath, 'utf8');
 
 // QNBS-v3: Keep CI path and deployment authority policy executable against the real workflow files.
@@ -100,5 +105,42 @@ describe('CI workflow policy', () => {
       const jobBlock = extractJobBlock(workflowSource, jobName);
       expect(jobBlock).toMatch(/^ {4}continue-on-error: true$/m);
     }
+  });
+
+  // QNBS-v3: Keep unchanged-main vulnerability detection isolated, least-privilege, and fail-closed.
+  it('keeps the scheduled OSV scan deterministic and actionable', () => {
+    const scheduledJob = extractJobBlock(scheduledSecurityWorkflowSource, 'scheduled-osv');
+    const scanStep = extractStepBlock(scheduledJob, 'Scan dependency lockfiles');
+    const summaryStep = extractStepBlock(scheduledJob, 'Summarize OSV findings');
+    const enforcementStep = extractStepBlock(scheduledJob, 'Enforce scheduled OSV result');
+
+    expect(scheduledSecurityWorkflowSource).toMatch(
+      /^on:\n {2}schedule:\n {4}- cron: '17 3 \* \* \*'\n {2}workflow_dispatch:\s*$/m,
+    );
+    expect(scheduledSecurityWorkflowSource).toMatch(/^permissions:\n {2}contents: read\s*$/m);
+    expect(scheduledSecurityWorkflowSource).toContain(
+      'concurrency:\n  group: scheduled-security-scan\n  cancel-in-progress: true',
+    );
+    expect(scheduledSecurityWorkflowSource).not.toMatch(/^\s*security-events:\s*write\s*$/m);
+    expect(scanStep).toContain('id: osv');
+    expect(scanStep).toContain('continue-on-error: true');
+    expect(scanStep).toContain(
+      'google/osv-scanner-action/osv-scanner-action@8deb546fdb875b9996d27d4950be7312dac076a1',
+    );
+    for (const lockfile of ['pnpm-lock.yaml', 'src-tauri/Cargo.lock', 'crates/Cargo.lock']) {
+      expect(scanStep).toContain(`--lockfile=${lockfile}`);
+    }
+    expect(scanStep).toContain('--config=src-tauri/osv-scanner.toml');
+    expect(scanStep).toContain('--format=json');
+    expect(scanStep).toContain('--output-file=osv-results.json');
+    expect(summaryStep).toContain('GITHUB_STEP_SUMMARY');
+    expect(summaryStep).toContain('process.env.GITHUB_WORKSPACE');
+    expect(enforcementStep).toContain('SCANNER_OUTCOME');
+    expect(enforcementStep).toMatch(
+      /if \[ "\$SCANNER_OUTCOME" != "success" \]; then[\s\S]+?exit 1\n\s+fi/,
+    );
+    expect(enforcementStep).toMatch(
+      /if \[ ! -s "\$GITHUB_WORKSPACE\/osv-results\.json" \]; then[\s\S]+?exit 1\n\s+fi/,
+    );
   });
 });
