@@ -30,6 +30,8 @@ const HASH_TO_VIEW: Record<string, View> = {
   mindmap: 'mindmap',
   characterInterviews: 'characterInterviews',
   lora: 'lora',
+  // QNBS-v3: Scenario hashes must restore the projection workspace like other views.
+  scenario: 'scenario',
 };
 
 export interface ParsedDeepLink {

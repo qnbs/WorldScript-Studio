@@ -138,6 +138,13 @@ export const APP_SECTIONS: Record<View, SectionConfig> = {
     textColor: 'text-teal-500',
     accentColor: '#14b8a6',
   },
+  // QNBS-v3: scenario view projects existing StoryProject state without duplicate persistence.
+  scenario: {
+    icon: ICONS.DOCUMENT_TEXT,
+    colorClass: 'text-cyan-500 bg-cyan-500/10',
+    textColor: 'text-cyan-500',
+    accentColor: '#06b6d4',
+  },
   // QNBS-v3: preview + progress views added in v1.6 — stub icons reuse nearest thematic icon.
   preview: {
     icon: ICONS.WRITER,

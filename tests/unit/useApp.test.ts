@@ -15,6 +15,14 @@ describe('useApp', () => {
     expect(result.current.currentView).toBe('dashboard');
   });
 
+  it('restores the Scenario workspace from a hash deep link', () => {
+    window.history.replaceState(null, '', '#/scenario');
+
+    const { result } = renderHook(() => useApp({ isNewUser: false }));
+
+    expect(result.current.currentView).toBe('scenario');
+  });
+
   it('prefers a valid view from the URL query over localStorage', () => {
     const original = `${window.location.pathname}${window.location.search}`;
     window.history.replaceState(null, '', `${window.location.pathname}?view=settings`);

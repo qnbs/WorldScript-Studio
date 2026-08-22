@@ -73,6 +73,7 @@ import { desktopPlatform } from './services/desktopPlatform';
 import { logger } from './services/logger';
 import { pluginRegistry } from './services/pluginRegistry';
 import { repairProjectI18nFields } from './services/projectI18nRepair';
+import { loadScenarioWorkspaceView } from './services/scenarioWorkspaceLoader';
 import { hasCompletedSpotlightTour, startSpotlightTour } from './services/spotlightTour';
 import {
   type EncryptionMigrationJournal,
@@ -168,6 +169,8 @@ const CharacterInterviewsView = lazy(() => import('./components/CharacterIntervi
 const LoraView = lazy(() =>
   import('./components/lora/LoraView').then((m) => ({ default: m.LoraView })),
 );
+// QNBS-v3: Keep Scenario lazy to keep the initial bundle focused on the default workspace.
+const ScenarioWorkspaceView = lazy(loadScenarioWorkspaceView);
 
 // Fallback while a view is loading
 const ViewLoader: FC = () => {
@@ -725,6 +728,9 @@ const App: FC<AppProps> = ({ isNewUser }) => {
         // QNBS-v3: gated like other flag-only views — falls back to Dashboard when off.
         if (!featureFlags.enableLoraAdapters) return <Dashboard onNavigate={handleNavigate} />;
         return <LoraView />;
+      // QNBS-v3: Route Scenario through the canonical projection workspace.
+      case 'scenario':
+        return <ScenarioWorkspaceView onNavigate={handleNavigate} />;
       default:
         return <Dashboard onNavigate={handleNavigate} />;
     }
