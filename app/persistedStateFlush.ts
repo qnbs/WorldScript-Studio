@@ -1,6 +1,7 @@
 import type { ProjectData } from '../features/project/projectSlice';
 import { saveEnvelopeFromProjectData, storageService } from '../services/storageService';
 import type { RootState } from './store';
+import { projectPersistenceCoordinator, settingsPersistenceCoordinator } from './persistenceCoordinator';
 
 /**
  * QNBS-v3 (#332/D3): shared, awaitable flush of pending project+settings state. Used by both the
