@@ -22,6 +22,7 @@ export const VIEW_NAVIGATION_LABEL_KEYS: Partial<Record<View, string>> = {
   mindmap: 'sidebar.mindmap',
   characterInterviews: 'sidebar.characterInterviews',
   lora: 'sidebar.lora',
+  // QNBS-v3: Use the Scenario label for headers and screen-reader announcements.
   scenario: 'sidebar.scenario',
 };
 
