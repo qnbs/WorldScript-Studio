@@ -41,7 +41,7 @@ Core probe, the following disposable lanes may run in parallel with Waves 3 and 
    explicitly provisional bridge candidate.
 2. **Accessibility and input feasibility** — prove an observable accessibility tree, keyboard/focus,
    accessible errors, scalable/high-contrast text, RTL/BiDi, and IME smoke behavior.
-3. **Crash diagnostics and recovery feasibility** — prove project-owned diagnostics/symbolization and
+3. **Crash, hang, lifecycle diagnostics and recovery feasibility** — prove project-owned diagnostics/symbolization and
    deterministic restart/recovery without weakening sandbox/process isolation or corrupting test data.
 
 These lanes retain their own evidence and maturity labels; they are not checked off as G2/G3/G4
@@ -139,3 +139,13 @@ G2 answers
 the learning harness. G3 and G4 still require project compatibility, accessibility, security,
 packaging, updater, recovery, performance, signing, support, and field evidence at production
 quality. Passing this qualification must never be used to check those later boxes early.
+
+## Crash, hang, and lifecycle hardening from #332
+
+The early crash lane also covers live-process hangs and lifecycle suspension. A native probe must distinguish an intentional native crash, a Rust Core panic, a GUI event-loop stall, a stalled Core task, and a renderer or compositor failure without weakening process isolation.
+
+The disposable probe must provide: a bounded UI heartbeat; lifecycle events for focus, blur, background, resume, minimize, restore, and close; correlation IDs for Core requests; bounded cancellation and timeout state; and a privacy-safe diagnostic bundle containing build identity, runtime versions, last lifecycle events, task summaries, heartbeat age, persistence phase, and memory buckets. It must contain no project text, prompts, tokens, keys, private paths, or raw encryption material.
+
+The `GOLDEN-DESKTOP-LIFECYCLE-332` scenario is mandatory input for later Qt qualification: edit a representative project, cross an autosave boundary, background for 5 seconds, return and edit immediately, repeat 20 times, then exercise 30-second/two-minute background intervals, Writer Studio, Settings, minimize/restore, relaunch, and normal close. The required outcome is no UI disappearance, unbounded hang, lost acknowledged edit, orphan process, corruption, or force-kill requirement; first click, caret, and keyboard input must remain responsive.
+
+A hang gate is not passed by browser-only evidence or by an unpackaged developer binary. Results must identify their maturity (`LOCAL_ONLY`, `CI_ONLY`, `PACKAGED_LOCAL`, `PACKAGED_TARGET_ENV`, or `FIELD_OBSERVED`) and include the platform/compositor/GPU context.
