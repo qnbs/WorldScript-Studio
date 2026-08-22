@@ -3,13 +3,17 @@
  * QNBS-v3: createWorldScriptFetch — uses browser globalThis.fetch when not in Tauri.
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 describe('createWorldScriptFetch', () => {
   beforeEach(() => {
     // Ensure no __TAURI__ context
     delete (window as unknown as Record<string, unknown>)['__TAURI__'];
     vi.resetModules();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('uses globalThis.fetch when not in Tauri environment', async () => {
@@ -81,8 +85,8 @@ describe('createWorldScriptFetch', () => {
       const init = mockFetch.mock.calls[0]?.[1] as RequestInit | undefined;
       expect(init?.signal).toBeInstanceOf(AbortSignal);
     } finally {
-      (AbortSignal as unknown as { timeout: typeof originalTimeout }).timeout = originalTimeout;
-      vi.unstubAllGlobals();
+      if (timeoutDescriptor) Object.defineProperty(AbortSignal, 'timeout', timeoutDescriptor);
+      else delete (AbortSignal as { timeout?: unknown }).timeout;
     }
   });
 
@@ -140,11 +144,8 @@ describe('createWorldScriptFetch', () => {
       caller.abort();
       expect(signal?.aborted).toBe(true);
     } finally {
-      Object.defineProperty(AbortSignal, 'any', {
-        configurable: true,
-        value: originalAny,
-      });
-      vi.unstubAllGlobals();
+      if (anyDescriptor) Object.defineProperty(AbortSignal, 'any', anyDescriptor);
+      else delete (AbortSignal as { any?: unknown }).any;
     }
   });
 
@@ -155,7 +156,8 @@ describe('createWorldScriptFetch', () => {
     const { createWorldScriptFetch } = await import('../../../services/ai/fetchAdapter');
     await createWorldScriptFetch({ timeoutMs: 0 })('https://api.example.com/tags');
 
-    expect(mockFetch).toHaveBeenCalledWith('https://api.example.com/tags', undefined);
-    vi.unstubAllGlobals();
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const init = mockFetch.mock.calls[0]?.[1] as RequestInit | undefined;
+    expect(init?.signal).toBeUndefined();
   });
 });
