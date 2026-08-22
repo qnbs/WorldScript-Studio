@@ -73,6 +73,7 @@ test.describe('AI Writer Flow (CI-only)', () => {
 
     const mirror = page.getByTestId('writer-studio-mirror').first();
     await expect(mirror).toBeVisible();
+    await expect(mirror).toContainText('Paragraph 1: the quick brown fox jumps over the lazy dog.');
 
     // The real (invisible) input textarea must never blur the mirror text sitting behind it.
     const backdropFilter = await writerTextbox.evaluate(

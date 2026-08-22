@@ -57,7 +57,18 @@ export const readRenderedTextReadability = async (
     if (effectiveBackground.a === 0) return null;
     const foreground = parseColor(getComputedStyle(element).color);
     if (!foreground) return null;
-    const effectiveForeground = composite(foreground, effectiveBackground);
+    let effectiveOpacity = 1;
+    let opacityElement: Element | null = element;
+    while (opacityElement) {
+      const opacity = Number.parseFloat(getComputedStyle(opacityElement).opacity);
+      if (Number.isFinite(opacity)) effectiveOpacity *= opacity;
+      opacityElement = opacityElement.parentElement;
+    }
+    // QNBS-v3 (#332): include ancestor opacity so transitional mirrors cannot pass on pre-blended colors.
+    const effectiveForeground = composite(
+      { ...foreground, a: foreground.a * effectiveOpacity },
+      effectiveBackground,
+    );
     const channel = (value: number) => {
       const normalized = value / 255;
       return normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;

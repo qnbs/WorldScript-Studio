@@ -45,6 +45,7 @@ test.describe('Manuscript editor rendering (CI-only)', () => {
 
     const mirror = page.getByTestId('manuscript-editor-mirror').first();
     await expect(mirror).toBeVisible();
+    await expect(mirror).toContainText('Paragraph 1: the quick brown fox jumps over the lazy dog.');
 
     const backdropFilter = await manuscriptTextbox.evaluate(
       (el) => getComputedStyle(el).backdropFilter,
