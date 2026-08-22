@@ -22,17 +22,19 @@ import {
   selectPlotSubplots,
   selectPlotTensionOverrides,
   selectProjectAiPreset,
+  selectWritingHistory,
   selectProjectData,
   selectStoryObjects,
   selectStorySections,
   selectTheme,
   selectTotalCharacters,
+  selectTotalWordCount,
   selectTotalWorlds,
   selectWorldIds,
   selectWorldById,
 } from "../../features/project/projectSelectors";
 import { charactersAdapter, worldsAdapter, type ProjectData } from "../../features/project/projectSlice";
-import { buildState } from "../projectSelectors";
+import { buildState } from "./projectSelectors";
 
 const populatedData: Partial<ProjectData> = {
   outline: [{ id: "outline-1", title: "Opening", description: "The story begins" }],
@@ -114,7 +116,7 @@ describe("project selector populated branches", () => {
 
     const disabled = buildState({ aiPreset: { enabled: false, creativity: "Imaginative", temperature: 0.2, maxTokens: 321 } });
     expect(selectEffectiveAiCreativity(disabled)).toBe(selectAiCreativity(disabled));
-    expect(selectEffectiveAiOptions(disabled).temperature).toBe(disabled.settings.temperature);
+    expect(selectEffectiveAiOptions(disabled).temperature).toBe(disabled.settings.advancedAi.temperature);
   });
 
   it("exposes settings-derived selectors without dropping fields", () => {
