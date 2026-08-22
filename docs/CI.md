@@ -119,9 +119,15 @@ ci-success (main, non-PR) ──► deploy ──► GitHub Pages
 
 Mutation testing (Stryker) is **not** in this graph — it runs only via manual `workflow_dispatch` on [`mutation.yml`](../.github/workflows/mutation.yml). See [Mutation testing status](#mutation-testing-status).
 
+The scheduled OSV workflow is intentionally separate from this graph so an unchanged `main` is
+scanned daily without running the full CI matrix. The existing `security` job remains the
+authoritative PR/main vulnerability gate; `pnpm audit` remains advisory because of its documented
+registry gzip-decoding failure mode, while OSV failures remain blocking.
+
 | Job | Needs | Purpose |
 |-----|--------|---------|
 | `security` | — | `pnpm audit --audit-level=high`; **OSV scanner** (`google/osv-scanner-action`) for npm + Rust lockfiles; `gitleaks` secrets scan; on PRs: `dependency-review-action` |
+| `scheduled-osv` | — | Separate daily `.github/workflows/security-scheduled.yml` scan of the same three lockfiles; `contents: read` only; fails closed and writes lockfile/package/advisory details to the step summary |
 | `quality` | `security` | Matrix **Node 22** and **24** → Biome lint, **`pnpm run i18n:check`**, **`pnpm run docs:check`**, **`pnpm run csp:verify`**, **`pnpm run parity:check`**, `pnpm run typecheck`, Vitest + coverage (+ non-blocking coverage-ratchet suggestion), Codecov (optional token), coverage artifact |
 | `rust-tauri` | `security` | Rust `cargo fmt --check`, `cargo check --locked`, `cargo clippy --locked --all-targets -- -D warnings`, and `cargo test --locked`; compile/lint signal for Tauri changes without building installers on every PR |
 | `build` | `quality` | Production `pnpm run build`, **`bundle:budget`**, **`analyze`** (upload `bundle-analysis.html`), **`pnpm run smoke:prod`** (headless-Chromium prod-build + CSP-runtime gate — see below), `dist` artifact; on `main` (non-PR): Pages artifact + **SLSA build provenance attestation**. No `if:` on the job itself — `smoke:prod` runs on every PR, not just `main` pushes. |

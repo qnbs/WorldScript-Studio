@@ -1,0 +1,103 @@
+name: Scheduled Security Scan
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scheduled-security-scan
+  cancel-in-progress: true
+
+jobs:
+  scheduled-osv:
+    name: Scheduled OSV vulnerability scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Scan dependency lockfiles
+        id: osv
+        continue-on-error: true
+        uses: google/osv-scanner-action/osv-scanner-action@8deb546fdb875b9996d27d4950be7312dac076a1 # v2.5.0
+        with:
+          scan-args: |-
+            --config=src-tauri/osv-scanner.toml
+            --lockfile=pnpm-lock.yaml
+            --lockfile=src-tauri/Cargo.lock
+            --lockfile=crates/Cargo.lock
+            --format=json
+            --output-file=/github/workspace/osv-results.json
+
+      - name: Summarize OSV findings
+        if: always()
+        env:
+          SCANNER_OUTCOME: ${{ steps.osv.outcome }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync, existsSync, readFileSync } from 'node:fs';
+
+          const reportPath = '/github/workspace/osv-results.json';
+          const summary = [
+            '## Scheduled OSV/SCA scan',
+            '',
+            '- Lockfiles: `pnpm-lock.yaml`, `src-tauri/Cargo.lock`, `crates/Cargo.lock`',
+            `- Scanner step outcome: \`${process.env.SCANNER_OUTCOME}\``,
+          ];
+
+          if (existsSync(reportPath)) {
+            try {
+              const report = JSON.parse(readFileSync(reportPath, 'utf8'));
+              const findings = [];
+              for (const result of report.results ?? []) {
+                const source = result.source?.path ?? 'unknown lockfile';
+                const lockfile = source.split('/').at(-1) ?? source;
+                for (const entry of result.packages ?? []) {
+                  const ids = new Set([
+                    ...(entry.vulnerabilities ?? []).map((vulnerability) => vulnerability.id),
+                    ...(entry.groups ?? []).flatMap((group) => group.ids ?? []),
+                  ]);
+                  if (ids.size > 0) {
+                    findings.push(
+                      `${lockfile}: ${entry.package?.name ?? 'unknown package'} — ${[...ids].join(', ')}`,
+                    );
+                  }
+                }
+              }
+              if (findings.length === 0) {
+                summary.push('- Result: no OSV advisories reported.');
+              } else {
+                summary.push('- Findings:');
+                for (const finding of findings) summary.push(`  - ${finding}`);
+              }
+            } catch (error) {
+              summary.push(`- Report parsing failed: ${error instanceof Error ? error.message : 'unknown error'}`);
+            }
+          } else {
+            summary.push('- JSON report was not produced; inspect the scanner log for the infrastructure error.');
+            summary.push('- Advisory IDs are unavailable because the scanner produced no report.');
+          }
+
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${summary.join('\n')}\n`);
+          NODE
+
+      - name: Enforce scheduled OSV result
+        if: always()
+        env:
+          SCANNER_OUTCOME: ${{ steps.osv.outcome }}
+        run: |
+          if [ "$SCANNER_OUTCOME" != "success" ]; then
+            echo "::error::Scheduled OSV scan failed; see the summary and scanner log for lockfile and advisory details."
+            exit 1
+          fi
+          if [ ! -s /github/workspace/osv-results.json ]; then
+            echo "::error::Scheduled OSV scan produced no JSON report."
+            exit 1
+          fi

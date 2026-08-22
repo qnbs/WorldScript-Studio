@@ -13,8 +13,12 @@ import {
 
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 const workflowPath = fileURLToPath(new URL('../../.github/workflows/ci.yml', import.meta.url));
+const scheduledSecurityWorkflowPath = fileURLToPath(
+  new URL('../../.github/workflows/security-scheduled.yml', import.meta.url),
+);
 const tauriManifestPath = fileURLToPath(new URL('../../src-tauri/Cargo.toml', import.meta.url));
 const workflowSource = readFileSync(workflowPath, 'utf8');
+const scheduledSecurityWorkflowSource = readFileSync(scheduledSecurityWorkflowPath, 'utf8');
 const tauriManifestSource = readFileSync(tauriManifestPath, 'utf8');
 
 // QNBS-v3: Keep CI path and deployment authority policy executable against the real workflow files.
@@ -100,5 +104,22 @@ describe('CI workflow policy', () => {
       const jobBlock = extractJobBlock(workflowSource, jobName);
       expect(jobBlock).toMatch(/^ {4}continue-on-error: true$/m);
     }
+  });
+
+  // QNBS-v3: Keep unchanged-main vulnerability detection isolated, least-privilege, and fail-closed.
+  it('keeps the scheduled OSV scan deterministic and actionable', () => {
+    expect(scheduledSecurityWorkflowSource).toContain("cron: '17 3 * * *'");
+    expect(scheduledSecurityWorkflowSource).toContain('workflow_dispatch:');
+    expect(scheduledSecurityWorkflowSource).toContain('permissions:\n  contents: read');
+    expect(scheduledSecurityWorkflowSource).not.toContain('security-events: write');
+    expect(scheduledSecurityWorkflowSource).toContain(
+      'google/osv-scanner-action/osv-scanner-action@8deb546fdb875b9996d27d4950be7312dac076a1',
+    );
+    for (const lockfile of ['pnpm-lock.yaml', 'src-tauri/Cargo.lock', 'crates/Cargo.lock']) {
+      expect(scheduledSecurityWorkflowSource).toContain(`--lockfile=${lockfile}`);
+    }
+    expect(scheduledSecurityWorkflowSource).toContain('--config=src-tauri/osv-scanner.toml');
+    expect(scheduledSecurityWorkflowSource).toContain('GITHUB_STEP_SUMMARY');
+    expect(scheduledSecurityWorkflowSource).toContain('Enforce scheduled OSV result');
   });
 });
