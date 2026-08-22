@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  extractJobBlock,
   extractJobNames,
   extractLocalPathDependencies,
   extractNeeds,
@@ -78,21 +79,26 @@ describe('CI workflow policy', () => {
 
   // QNBS-v3: Keep every unconditional CI job explicitly required or advisory so deploy cannot false-green.
   it('keeps required and advisory job authority explicit', () => {
-    const ciSuccessBlock = workflowSource.match(/^ {2}ci-success:[\s\S]*?(?=^ {2}deploy:)/m)?.[0];
-    expect(ciSuccessBlock).toBeDefined();
+    const ciSuccessBlock = extractJobBlock(workflowSource, 'ci-success');
     expect(ciSuccessBlock).toContain(
       'Every unconditional job is either required here or explicitly advisory',
     );
-    expect(ciSuccessBlock).toContain('lighthouse');
-    expect(ciSuccessBlock).not.toContain('needs.e2e-deep');
-    expect(ciSuccessBlock).not.toContain('needs.storybook');
+    expect(extractNeeds(workflowSource, 'ci-success')).toEqual([
+      'security',
+      'quality',
+      'changes',
+      'rust-tauri',
+      'core-rust',
+      'build',
+      'e2e',
+      'lighthouse',
+      'vrt',
+    ]);
+    expect(ciSuccessBlock).toMatch(/\$\{\{\s*needs\.lighthouse\.result\s*\}\}/);
 
     for (const jobName of ['e2e-deep', 'storybook']) {
-      const jobBlock = workflowSource.match(
-        new RegExp(`^  ${jobName}:[\\s\\S]*?(?=\\n  [\\w-]+:)`, 'm'),
-      )?.[0];
-      expect(jobBlock, `${jobName} must have an explicit job block`).toBeDefined();
-      expect(jobBlock).toContain('continue-on-error: true');
+      const jobBlock = extractJobBlock(workflowSource, jobName);
+      expect(jobBlock).toMatch(/^ {4}continue-on-error: true$/m);
     }
   });
 });
