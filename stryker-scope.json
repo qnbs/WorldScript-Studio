@@ -63,6 +63,12 @@
         "services/copilot/insightGenerator.ts",
         "services/copilot/actionApplier.ts",
         "services/copilot/copilotContextService.ts"
+      ],
+      "testFiles": [
+        "tests/unit/copilot/heuristicEngine.test.ts",
+        "tests/unit/copilot/insightGenerator.test.ts",
+        "tests/unit/copilot/actionApplier.test.ts",
+        "tests/unit/copilot/copilotContextService.test.ts"
       ]
     },
     {
