@@ -17,21 +17,24 @@ import {
 
 describe('local signing controls', () => {
   it('parses every pre-push update shape, including deletion', () => {
-    expect(parseRefUpdate('refs/heads/main abc refs/heads/main')).toEqual({
+    const remoteSha = 'c'.repeat(40);
+    expect(
+      parseRefUpdate(`refs/heads/main ${'a'.repeat(40)} refs/heads/main ${remoteSha}`),
+    ).toEqual({
       localRef: 'refs/heads/main',
-      localSha: 'abc',
+      localSha: 'a'.repeat(40),
       remoteRef: 'refs/heads/main',
+      remoteSha,
     });
     expect(
-      parseRefUpdate(
-        '0000000000000000000000000000000000000000 0000000000000000000000000000000000000000 refs/heads/deleted',
-      ),
+      parseRefUpdate(`refs/heads/deleted ${'0'.repeat(40)} refs/heads/deleted ${'d'.repeat(40)}`),
     ).toEqual({
-      localRef: '0000000000000000000000000000000000000000',
-      localSha: '0000000000000000000000000000000000000000',
+      localRef: 'refs/heads/deleted',
+      localSha: '0'.repeat(40),
       remoteRef: 'refs/heads/deleted',
+      remoteSha: 'd'.repeat(40),
     });
-    expect(parseRefUpdate('not enough')).toBeNull();
+    expect(parseRefUpdate('refs/heads/main abc refs/heads/main')).toBeNull();
   });
 
   it('checks only commits introduced beyond the remote tracking base', () => {

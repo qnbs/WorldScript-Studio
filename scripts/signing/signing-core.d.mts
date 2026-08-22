@@ -7,6 +7,7 @@ export interface RefUpdate {
   localRef: string;
   localSha: string;
   remoteRef: string;
+  remoteSha: string;
 }
 
 export interface SigningConfig {

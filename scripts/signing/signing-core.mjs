@@ -218,10 +218,11 @@ export function verifyCommitRange(range, cwd = process.cwd()) {
   }));
 }
 
+// QNBS-v3: Git supplies both object IDs so malformed ref updates fail closed.
 export function parseRefUpdate(line) {
   const fields = line.trim().split(/\s+/);
-  if (fields.length !== 3 || !fields[0] || !fields[1] || !fields[2]) return null;
-  return { localRef: fields[0], localSha: fields[1], remoteRef: fields[2] };
+  if (fields.length !== 4 || !fields[0] || !fields[1] || !fields[2] || !fields[3]) return null;
+  return { localRef: fields[0], localSha: fields[1], remoteRef: fields[2], remoteSha: fields[3] };
 }
 
 function refSha(ref, cwd) {
