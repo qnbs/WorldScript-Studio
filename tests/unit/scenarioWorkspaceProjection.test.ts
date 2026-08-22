@@ -15,11 +15,15 @@ const project: StoryProject = {
 
 describe('buildScenarioWorkspaceProjection', () => {
   it('projects canonical entities and manuscript metrics without creating new state', () => {
-    expect(buildScenarioWorkspaceProjection(project)).toEqual({
+    // QNBS-v3: Verify projection is read-only over canonical state and creates no second store.
+    const before = structuredClone(project);
+    const projection = buildScenarioWorkspaceProjection(project);
+    expect(projection).toEqual({
       title: 'Pilot',
       logline: 'A test logline',
       counts: { characters: 1, worlds: 1, outline: 1, scenes: 1, words: 3 },
       sections: [{ id: 's1', title: 'Opening', summary: 'The opening.' }],
     });
+    expect(project).toEqual(before);
   });
 });
