@@ -30,6 +30,7 @@ const VALID_VIEWS = new Set<View>([
   'mindmap',
   'characterInterviews',
   'lora',
+  'scenario',
 ]);
 
 function isValidView(value: string): value is View {
