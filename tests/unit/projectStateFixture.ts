@@ -8,7 +8,6 @@ import settingsReducer from '../../features/settings/settingsSlice';
 import statusReducer from '../../features/status/statusSlice';
 import versionControlReducer from '../../features/versionControl/versionControlSlice';
 import writerReducer from '../../features/writer/writerSlice';
-import projectReducer, { charactersAdapter, worldsAdapter } from '../../features/project/projectSlice';
 
 // QNBS-v3: Share one realistic Redux fixture so selector tests exercise populated branches without exporting from a test module.
 export function buildState(override: Partial<ProjectData> = {}): RootState {
