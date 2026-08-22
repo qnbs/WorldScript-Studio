@@ -3,7 +3,7 @@ import undoable, { type StateWithHistory } from 'redux-undo';
 import type { RootState } from '../../app/store';
 import featureFlagsReducer from '../../features/featureFlags/featureFlagsSlice';
 import type { ProjectData } from '../../features/project/projectSlice';
-import projectReducer from '../../features/project/projectSlice';
+import projectReducer, { charactersAdapter, worldsAdapter } from '../../features/project/projectSlice';
 import settingsReducer from '../../features/settings/settingsSlice';
 import statusReducer from '../../features/status/statusSlice';
 import versionControlReducer from '../../features/versionControl/versionControlSlice';
