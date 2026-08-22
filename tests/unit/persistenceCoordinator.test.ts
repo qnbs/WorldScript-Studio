@@ -9,6 +9,7 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
   return { promise, resolve };
 }
 
+// QNBS-v3 (#332): isolate coordinator semantics so ordering and supersession cannot regress silently.
 describe('PersistenceCoordinator', () => {
   it('serializes operations for one persistence resource', async () => {
     const coordinator = new PersistenceCoordinator();
@@ -26,9 +27,11 @@ describe('PersistenceCoordinator', () => {
 
     expect(events).toEqual(['first:start']);
     gate.resolve();
-    await Promise.all([first, second]);
+    const [firstResult, secondResult] = await Promise.all([first, second]);
 
     expect(events).toEqual(['first:start', 'first:end', 'second:start']);
+    expect(firstResult).toEqual({ superseded: true });
+    expect(secondResult).toEqual({ superseded: false });
   });
 
   it('supersedes queued snapshots while resolving every caller after the newest save', async () => {
@@ -48,9 +51,12 @@ describe('PersistenceCoordinator', () => {
     });
 
     gate.resolve();
-    await Promise.all([first, second, third]);
+    const [firstResult, secondResult, thirdResult] = await Promise.all([first, second, third]);
 
     expect(saved).toEqual([1, 3]);
+    expect(firstResult).toEqual({ superseded: true });
+    expect(secondResult).toEqual({ superseded: true });
+    expect(thirdResult).toEqual({ superseded: false });
   });
 
   it('rejects the failed generation without hiding later queued work', async () => {
@@ -69,7 +75,7 @@ describe('PersistenceCoordinator', () => {
 
     gate.resolve();
     await expect(first).rejects.toBe(failure);
-    await expect(second).resolves.toBeUndefined();
+    await expect(second).resolves.toEqual({ superseded: false });
     expect(saved).toEqual(['second']);
   });
 });
