@@ -966,7 +966,7 @@ Required:
 [x] direct Tauri imports constrained (guardrail:desktop-imports, zero-tolerance)
 [~] project headless API exists — crates/worldscript-project (schema/validation/migration/plain I/O);
     storage (fs/IDB parity) and crypto remain, see docs/native/CORE-MIGRATION-LEDGER.md
-[x] Array↔EntityState compatibility adapter scoped and proven at the Core boundary (ledger row 9; production caller and authority switch remain deferred)
+[x] Array↔EntityState compatibility adapter scoped and proven at the Core boundary; first observation-only desktop shadow caller wired (ledger row 9; authority switch remains deferred)
 [ ] R-15 architecture approved
 [~] task supervision renderer-neutral — bounded `text.analyze`/`text.diff` proof is CI-proven;
     full worker-bus extraction and authority switch remain open
@@ -1127,9 +1127,11 @@ storage-backend parity, diagnostics sink migration, and AI request model extract
 see the ledger's priority order — so this wave stays "in progress," not "complete." Before G1 is evaluated, the
 separate row-9 compatibility position must also define and prove the Array↔EntityState boundary:
 the current Core `Vec` model is intentionally renderer-neutral, while production Redux state uses
-`EntityState` for characters and worlds. The typed boundary adapter and deterministic rejection
-fixtures are now implemented in `features/project/coreBoundaryAdapter.ts`; no production caller or
-authority switch is claimed.
+`EntityState` for characters and worlds. The typed boundary adapter, deterministic rejection
+fixtures, and an observation-only desktop caller are now implemented in
+`features/project/coreBoundaryAdapter.ts` and `features/project/coreValidationShadow.ts`; no
+authority switch is claimed. The caller validates a synthesized partial envelope, so unknown
+TS-only fields and the persisted project representation remain outside its verdict.
 
 **Goal:** establish authoritative renderer-neutral execution.
 

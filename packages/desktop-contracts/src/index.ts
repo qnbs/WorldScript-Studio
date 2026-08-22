@@ -18,6 +18,7 @@ export type {
   DesktopPendingUpdate,
   DesktopPersistence,
   DesktopPlatform,
+  DesktopProject,
   DesktopTasks,
   DesktopTray,
   DesktopUpdater,
@@ -29,7 +30,9 @@ export type {
   LoraTrainingEnvironmentResult,
   LoraTrainingProgressEvent,
   LoraTrainRequest,
+  ProjectValidationResult,
   RuntimeInfo,
   TauriMenuBuilderApi,
   TauriTrayBuilderApi,
 } from './types';
+export { PROJECT_VALIDATE_CONTRACT_VERSION, ProjectValidationResultSchema } from './types';

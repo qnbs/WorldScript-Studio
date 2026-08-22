@@ -1,26 +1,22 @@
-//! Wave 2 PR B — strangler proof point: wires one real Tauri command to the renderer-neutral
-//! `worldscript-project` Rust Core crate (`docs/native/CORE-MIGRATION-LEDGER.md`).
+//! Wave 2 proof point: wires a typed shadow caller to the renderer-neutral `worldscript-project`
+//! Rust Core crate (`docs/native/CORE-MIGRATION-LEDGER.md`).
 //!
-//! Backend-only. No frontend call site exists yet — `services/desktopPlatform.ts` and
-//! `services/fs/projectFsStore.ts`/`services/storageService.ts`'s dispatch are untouched by this
-//! PR. The point of this command is proving the Tauri <-> Rust Core boundary compiles, links, and
-//! runs correctly before any UI wiring is attempted.
-//!
-//! **Cannot yet validate a live persisted project as-is.** `worldscript_project::schema` models
-//! `characters`/`worlds` as plain arrays, not the `Character[] | EntityState<Character, string>`
-//! union `types.ts` uses (Redux normalizes to `EntityState` at runtime) — see that module's own
-//! doc comment. A real frontend caller will need a normalization adapter (array <-> EntityState)
-//! before this command can validate what's actually persisted; that adapter is intentionally not
-//! built here, matching this PR's no-frontend-call-site scope.
+//! The caller is observation-only. It does not make Rust authoritative and does not claim that
+//! the complete persisted project is validated: the Core schema models only a bounded subset and
+//! does not reject unknown fields. Its `schemaVersion` is synthesized at the boundary rather than
+//! read from a persisted `types.ts` field.
 
 use serde::Serialize;
 use worldscript_project::{migrate_to_latest, parse_envelope, validate};
+
+pub const PROJECT_VALIDATE_CONTRACT_VERSION: &str = "1.0.0";
 
 /// Structured verdict for a project envelope JSON string, mirroring the pipeline a future
 /// desktop load path would run: parse -> migrate to current schema -> validate.
 #[derive(Debug, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectValidationResult {
+    pub contract_version: &'static str,
     pub valid: bool,
     /// The schema version after migration, when parsing succeeded. Absent on parse failure.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -39,6 +35,7 @@ pub fn worldscript_project_validate(project_json: String) -> ProjectValidationRe
         Ok(envelope) => envelope,
         Err(e) => {
             return ProjectValidationResult {
+                contract_version: PROJECT_VALIDATE_CONTRACT_VERSION,
                 valid: false,
                 schema_version: None,
                 error: Some(e.to_string()),
@@ -50,6 +47,7 @@ pub fn worldscript_project_validate(project_json: String) -> ProjectValidationRe
         Ok(migrated) => migrated,
         Err(e) => {
             return ProjectValidationResult {
+                contract_version: PROJECT_VALIDATE_CONTRACT_VERSION,
                 valid: false,
                 schema_version: None,
                 error: Some(e.to_string()),
@@ -59,11 +57,13 @@ pub fn worldscript_project_validate(project_json: String) -> ProjectValidationRe
 
     match validate(&migrated.project) {
         Ok(()) => ProjectValidationResult {
+            contract_version: PROJECT_VALIDATE_CONTRACT_VERSION,
             valid: true,
             schema_version: Some(migrated.schema_version),
             error: None,
         },
         Err(e) => ProjectValidationResult {
+            contract_version: PROJECT_VALIDATE_CONTRACT_VERSION,
             valid: false,
             schema_version: Some(migrated.schema_version),
             error: Some(e.to_string()),
@@ -88,6 +88,7 @@ mod tests {
         assert_eq!(
             result,
             ProjectValidationResult {
+                contract_version: PROJECT_VALIDATE_CONTRACT_VERSION,
                 valid: true,
                 schema_version: Some(2),
                 error: None,
@@ -106,6 +107,7 @@ mod tests {
         }"#;
         let result = worldscript_project_validate(json.to_string());
         assert!(result.valid);
+        assert_eq!(result.contract_version, PROJECT_VALIDATE_CONTRACT_VERSION);
         assert_eq!(result.schema_version, Some(2));
     }
 
@@ -113,6 +115,7 @@ mod tests {
     fn corrupt_json_reports_structured_failure_not_a_panic() {
         let result = worldscript_project_validate("{ not json".to_string());
         assert!(!result.valid);
+        assert_eq!(result.contract_version, PROJECT_VALIDATE_CONTRACT_VERSION);
         assert_eq!(result.schema_version, None);
         assert!(result.error.is_some());
     }
@@ -132,6 +135,7 @@ mod tests {
         }"#;
         let result = worldscript_project_validate(json.to_string());
         assert!(!result.valid);
+        assert_eq!(result.contract_version, PROJECT_VALIDATE_CONTRACT_VERSION);
         assert_eq!(result.schema_version, Some(2));
         assert!(result.error.unwrap().contains("c1"));
     }

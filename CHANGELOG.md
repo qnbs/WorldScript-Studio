@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Core project validation shadow caller:** desktop loads now observe the bounded Rust project
+  validation verdict through `DesktopPlatform`; this is observation-only and does not switch
+  authority from the existing TypeScript path.
+
 ### Changed
 
 - **Post-release documentation truth:** the audit report and README now reflect the published

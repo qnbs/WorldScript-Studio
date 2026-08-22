@@ -1,4 +1,6 @@
 // QNBS-v3: Wave 1 renderer-neutral DesktopPlatform contract — every desktop capability access should route through this interface instead of a direct @tauri-apps/* import.
+import { z } from 'zod';
+
 /**
  * DesktopPlatform contract (docs/native/ROADMAP-QT-GPUI-DESKTOP.md).
  * Renderer-neutral typed interface all desktop capability access should route through.
@@ -18,6 +20,8 @@ export interface RuntimeInfo {
   readonly isDesktop: boolean;
   readonly os: DesktopOsKind | null;
 }
+
+export const PROJECT_VALIDATE_CONTRACT_VERSION = '1.0.0' as const;
 
 // --- filesystem + persistence -----------------------------------------------------------------
 
@@ -214,6 +218,31 @@ export interface DesktopTasks {
   generateOllamaModelfile(request: LoraOllamaModelfileRequest): Promise<string>;
 }
 
+export interface ProjectValidationResult {
+  contractVersion: string;
+  valid: boolean;
+  schemaVersion?: number;
+  error?: string;
+}
+
+export interface DesktopProject {
+  validateProject(envelopeJson: string): Promise<ProjectValidationResult>;
+}
+
+export const ProjectValidationResultSchema = z
+  .object({
+    contractVersion: z.literal(PROJECT_VALIDATE_CONTRACT_VERSION),
+    valid: z.boolean(),
+    schemaVersion: z.number().int().nonnegative().optional(),
+    error: z.string().optional(),
+  })
+  .transform(({ contractVersion, valid, schemaVersion, error }) => ({
+    contractVersion,
+    valid,
+    ...(schemaVersion === undefined ? {} : { schemaVersion }),
+    ...(error === undefined ? {} : { error }),
+  }));
+
 // --- diagnostics ----------------------------------------------------------------------------------
 
 export interface DesktopDiagnostics {
@@ -249,6 +278,7 @@ export interface DesktopPlatform {
   readonly updater: DesktopUpdater;
   readonly lifecycle: DesktopLifecycle;
   readonly tasks: DesktopTasks;
+  readonly project: DesktopProject;
   readonly diagnostics: DesktopDiagnostics;
   readonly clipboard: DesktopClipboard;
   readonly deepLinks: DesktopDeepLinks;

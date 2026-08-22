@@ -1,6 +1,7 @@
 # Native contract versioning policy
 
-Status: TypeScript boundary validation is locally proven for the bounded Rust TaskSupervisor contract (`1.0.0`); Rust compile/test evidence remains merge-gated CI.
+Status: TypeScript boundary validation is locally proven for the bounded Rust TaskSupervisor and
+project-validation contracts (`1.0.0`); Rust compile/test evidence remains merge-gated CI.
 
 This policy applies to renderer-neutral contracts that cross the Tauri/Rust boundary. It does not
 make Tauri authoritative and it does not replace the separate `schemaVersion` used by project
@@ -27,3 +28,8 @@ data migrations.
 successful and structured-failure `RustTaskResultEvent` envelopes. The DesktopPlatform adapter
 validates both request and result envelopes. `text.analyze` and `text.diff` remain bounded proof
 tasks; full worker-bus extraction and an authority switch are still open roadmap work.
+
+The `worldscript_project_validate` command returns
+`PROJECT_VALIDATE_CONTRACT_VERSION = "1.0.0"` on every successful and structured-failure
+`ProjectValidationResult` envelope. Its typed DesktopPlatform caller is an observation-only Wave 2
+shadow path; the Core remains locally proven until this caller's Rust evidence is merge-gated in CI.
