@@ -156,6 +156,8 @@ describe('Textarea', () => {
     it('does not include the reserved bottom padding for the mic button', () => {
       render(<Textarea variant="overlay" data-testid="ta" />);
       expect(screen.getByTestId('ta').className).not.toContain('pb-12');
+      expect(screen.getByTestId('ta').className).not.toContain('transition-all');
+      expect(screen.getByTestId('ta').className).not.toContain('duration-sc-fast');
     });
 
     it('still applies the resolved font family from settings', () => {
