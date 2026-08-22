@@ -124,7 +124,10 @@ describe('createWorldScriptFetch', () => {
     vi.stubGlobal('fetch', mockFetch);
     const caller = new AbortController();
     const originalAny = AbortSignal.any;
-    (AbortSignal as unknown as { any?: typeof AbortSignal.any }).any = undefined;
+    Object.defineProperty(AbortSignal, 'any', {
+      configurable: true,
+      value: undefined,
+    });
 
     try {
       const { createWorldScriptFetch } = await import('../../../services/ai/fetchAdapter');
@@ -137,7 +140,10 @@ describe('createWorldScriptFetch', () => {
       caller.abort();
       expect(signal?.aborted).toBe(true);
     } finally {
-      (AbortSignal as unknown as { any: typeof originalAny }).any = originalAny;
+      Object.defineProperty(AbortSignal, 'any', {
+        configurable: true,
+        value: originalAny,
+      });
       vi.unstubAllGlobals();
     }
   });
