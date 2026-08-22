@@ -21,5 +21,6 @@
   "sidebar.settings": "Asetukset",
   "sidebar.templates": "Mallit",
   "sidebar.world": "Maailmanrakennus",
-  "sidebar.writer": "AI-kirjoitusstudio"
+  "sidebar.writer": "AI-kirjoitusstudio",
+  "sidebar.scenario": "Skenaario / Käsikirjoitus"
 }
