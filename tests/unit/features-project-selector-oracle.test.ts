@@ -34,7 +34,7 @@ import {
   selectWorldById,
 } from "../../features/project/projectSelectors";
 import { charactersAdapter, worldsAdapter, type ProjectData } from "../../features/project/projectSlice";
-import { buildState } from "./projectSelectors";
+import { buildState } from "./projectStateFixture";
 
 const populatedData: Partial<ProjectData> = {
   outline: [{ id: "outline-1", title: "Opening", description: "The story begins" }],
@@ -50,7 +50,7 @@ const populatedData: Partial<ProjectData> = {
   plotConnections: [{ id: "connection-1", fromSectionId: "scene-1", toSectionId: "scene-2", type: "cause-effect" }],
   plotSubplots: [{ id: "subplot-1", name: "B plot", color: "#a855f7", sectionIds: ["scene-2"] }],
   plotTensionOverrides: { "scene-1": 0.75 },
-  aiPreset: { enabled: true, creativity: "Imaginative", temperature: 0.2, maxTokens: 321 },
+  aiPreset: { enabled: true, provider: "openai", model: "gpt-4o-mini", creativity: "Imaginative", temperature: 0.2, maxTokens: 321 },
   storyObjects: [{ id: "object-1", name: "Key", description: "A key", type: "prop", groupIds: [], createdAt: "2026-01-01", updatedAt: "2026-01-01" }],
   objectGroups: [{ id: "group-1", name: "Props", color: "#111111", objectIds: ["object-1"], createdAt: "2026-01-01", updatedAt: "2026-01-01" }],
   mindMaps: [{ id: "map-1", projectId: "default", name: "Map", nodes: [], edges: [], createdAt: "2026-01-01", updatedAt: "2026-01-01" }],
@@ -112,11 +112,11 @@ describe("project selector populated branches", () => {
   it("uses project AI overrides only when enabled and keeps global settings otherwise", () => {
     const enabled = populatedState();
     expect(selectEffectiveAiCreativity(enabled)).toBe("Imaginative");
-    expect(selectEffectiveAiOptions(enabled)).toMatchObject({ temperature: 0.2, maxTokens: 321 });
+    expect(selectEffectiveAiOptions(enabled)).toEqual({ provider: "openai", model: "gpt-4o-mini", temperature: 0.2, maxTokens: 321 });
 
-    const disabled = buildState({ aiPreset: { enabled: false, creativity: "Imaginative", temperature: 0.2, maxTokens: 321 } });
+    const disabled = buildState({ aiPreset: { enabled: false, provider: "openai", model: "gpt-4o-mini", creativity: "Imaginative", temperature: 0.2, maxTokens: 321 } });
     expect(selectEffectiveAiCreativity(disabled)).toBe(selectAiCreativity(disabled));
-    expect(selectEffectiveAiOptions(disabled).temperature).toBe(disabled.settings.advancedAi.temperature);
+    expect(selectEffectiveAiOptions(disabled)).toEqual({ provider: disabled.settings.advancedAi.provider, model: disabled.settings.advancedAi.model, temperature: disabled.settings.advancedAi.temperature, maxTokens: disabled.settings.advancedAi.maxTokens });
   });
 
   it("exposes settings-derived selectors without dropping fields", () => {
