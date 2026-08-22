@@ -24,6 +24,7 @@ import {
   selectProjectAiPreset,
   selectWritingHistory,
   selectProjectData,
+  selectProjectGoals,
   selectStoryObjects,
   selectStorySections,
   selectTheme,
