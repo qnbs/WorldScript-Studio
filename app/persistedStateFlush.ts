@@ -13,6 +13,7 @@ import { projectPersistenceCoordinator, settingsPersistenceCoordinator } from '.
  */
 export async function flushPersistedState(state: RootState): Promise<void> {
   const presentData = state.project.present?.data;
+  // QNBS-v3 (#332): make visibility and quit flushes wait behind both active and queued saves.
   const saves: Promise<unknown>[] = [
     settingsPersistenceCoordinator.enqueue(() => storageService.saveSettings(state.settings)),
   ];
