@@ -162,6 +162,24 @@ fn missing_required_field_is_rejected_with_field_name() {
 }
 
 #[test]
+fn unsupported_world_location_type_is_rejected_at_envelope_parse() {
+    let json = r#"{
+        "schemaVersion": 2,
+        "project": {
+            "title": "T", "logline": "L", "characters": [],
+            "worlds": [{
+                "id": "w1", "name": "World", "locations": [{
+                    "id": "loc1", "name": "Location", "description": "D", "type": "station"
+                }]
+            }],
+            "manuscript": []
+        }
+    }"#;
+    let error = parse_envelope(json).expect_err("unsupported location type must be rejected");
+    assert!(error.to_string().contains("unknown variant"));
+}
+
+#[test]
 fn duplicate_character_ids_are_rejected() {
     let mut project = StoryProject::new("Dup Test", "logline");
     project.characters.push(sample_character());

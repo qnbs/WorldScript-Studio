@@ -40,6 +40,17 @@ const malformedEntityState = <T extends { id: string }>(state: unknown) =>
 
 // QNBS-v3: Verify ordered Core boundary round-trips and rejection of malformed Redux collections.
 describe('project Core boundary adapter', () => {
+  // QNBS-v3: array-input coverage protects the compatibility contract for non-Redux callers.
+  it('accepts the array member of the StoryProject collection union', () => {
+    const core = toCoreProjectCollections({
+      characters: [character('char-1'), character('char-2')],
+      worlds: [world('world-1')],
+    });
+
+    expect(core.characters.map(({ id }) => id)).toEqual(['char-1', 'char-2']);
+    expect(core.worlds.map(({ id }) => id)).toEqual(['world-1']);
+  });
+
   it('preserves array order and IDs for both collections in both directions', () => {
     const source = {
       characters: coreArrayToEntityState([character('char-2'), character('char-1')], 'characters'),

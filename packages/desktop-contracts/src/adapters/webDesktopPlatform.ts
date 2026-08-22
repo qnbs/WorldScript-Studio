@@ -9,6 +9,7 @@ import type {
   DesktopNotifications,
   DesktopPersistence,
   DesktopPlatform,
+  DesktopProject,
   DesktopTasks,
   DesktopTray,
   DesktopUpdater,
@@ -83,6 +84,11 @@ const tasksUnavailable = (): never => {
   throw new Error('DesktopPlatform.tasks is unavailable on the web/PWA build');
 };
 
+// QNBS-v3: validation has no safe browser fallback because only the native Core owns this verdict.
+const projectUnavailable = (): never => {
+  throw new Error('DesktopPlatform.project is unavailable on the web/PWA build');
+};
+
 const tasks: DesktopTasks = {
   submitTask: async () => tasksUnavailable(),
   pingSupervisor: async () => tasksUnavailable(),
@@ -95,6 +101,10 @@ const tasks: DesktopTasks = {
   checkLoraEnvironment: async () => tasksUnavailable(),
   setLoraPythonPath: async () => tasksUnavailable(),
   generateOllamaModelfile: async () => tasksUnavailable(),
+};
+
+const project: DesktopProject = {
+  validateProject: async () => projectUnavailable(),
 };
 
 const diagnostics: DesktopDiagnostics = {
@@ -126,6 +136,7 @@ export const webDesktopPlatform: DesktopPlatform = {
   updater,
   lifecycle,
   tasks,
+  project,
   diagnostics,
   clipboard,
   deepLinks,

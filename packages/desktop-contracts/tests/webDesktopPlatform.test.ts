@@ -118,6 +118,12 @@ describe('webDesktopPlatform', () => {
     ).rejects.toThrow(/unavailable/);
   });
 
+  it('project validation rejects because the Core validator is native-only', async () => {
+    await expect(webDesktopPlatform.project.validateProject('{}')).rejects.toThrow(
+      /DesktopPlatform\.project is unavailable/,
+    );
+  });
+
   it('clipboard is a documented stub', async () => {
     await expect(webDesktopPlatform.clipboard.readText()).resolves.toBeNull();
     await expect(webDesktopPlatform.clipboard.writeText('x')).resolves.toBe(false);

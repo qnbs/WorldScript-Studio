@@ -13,6 +13,7 @@ import type {
   DesktopOsKind,
   DesktopPersistence,
   DesktopPlatform,
+  DesktopProject,
   DesktopTasks,
   DesktopTray,
   DesktopUpdater,
@@ -24,6 +25,7 @@ import type {
   LoraTrainingProgressEvent,
   LoraTrainRequest,
 } from '../types';
+import { PROJECT_VALIDATE_CONTRACT_VERSION, ProjectValidationResultSchema } from '../types';
 
 function warnNativeAdapter(message: string, context: unknown): void {
   // QNBS-v3: sanitize adapter context before console delivery so raw native errors never bypass the diagnostics boundary.
@@ -508,6 +510,34 @@ const tasks: DesktopTasks = {
   },
 };
 
+const project: DesktopProject = {
+  validateProject: async (envelopeJson) => {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const rawResult = await invoke('worldscript_project_validate', {
+        projectJson: envelopeJson,
+      });
+      // QNBS-v3: reject a mismatched native contract before trusting any result field.
+      const rawVersion =
+        typeof rawResult === 'object' && rawResult !== null
+          ? (rawResult as Record<string, unknown>)['contractVersion']
+          : undefined;
+      if (rawVersion !== PROJECT_VALIDATE_CONTRACT_VERSION) {
+        throw new Error('unsupported project validation contract version');
+      }
+      const result = ProjectValidationResultSchema.safeParse(rawResult);
+      if (!result.success) {
+        throw new Error('invalid project validation result contract');
+      }
+      return result.data;
+    } catch (error) {
+      const errorClass = error instanceof Error ? error.name : typeof error;
+      adapterLogger.warn('desktopPlatform.project: validateProject failed', { errorClass });
+      throw new Error(`worldscript_project_validate failed: ${errorClass}`);
+    }
+  },
+};
+
 // --- diagnostics ----------------------------------------------------------------------------------
 
 const diagnostics: DesktopDiagnostics = {
@@ -580,6 +610,7 @@ export const tauriDesktopPlatform: DesktopPlatform = {
   updater,
   lifecycle,
   tasks,
+  project,
   diagnostics,
   clipboard,
   deepLinks,

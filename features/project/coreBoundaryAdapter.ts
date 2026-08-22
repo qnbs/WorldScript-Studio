@@ -105,18 +105,49 @@ export interface ReduxProjectCollections {
   worlds: EntityState<World, string>;
 }
 
+export interface ProjectCollectionsInput {
+  characters: Character[] | EntityState<Character, string>;
+  worlds: World[] | EntityState<World, string>;
+}
+
 export interface CoreProjectCollections {
   characters: Character[];
   worlds: World[];
 }
 
+function validateCoreArray<T extends CoreEntity>(
+  entities: readonly T[],
+  collection: CoreCollection,
+): T[] {
+  // QNBS-v3: accept persisted arrays while retaining stable-ID guarantees before Core receives them.
+  const seenIds = new Set<string>();
+  for (const [index, entity] of entities.entries()) {
+    requireStableId(collection, entity?.id, `entities[${index}].id`);
+    if (seenIds.has(entity.id)) {
+      throw new CoreBoundaryValidationError(collection, `duplicate id "${entity.id}" in array`);
+    }
+    seenIds.add(entity.id);
+  }
+  return [...entities];
+}
+
+function normalizeCoreCollection<T extends CoreEntity>(
+  collection: T[] | EntityState<T, string>,
+  name: CoreCollection,
+): T[] {
+  // QNBS-v3: one normalization path keeps Redux and already-flat project shapes contract-equivalent.
+  return Array.isArray(collection)
+    ? validateCoreArray(collection, name)
+    : entityStateToCoreArray(collection, name);
+}
+
 /** The only collection conversion a future Core caller needs at the Redux boundary. */
 export function toCoreProjectCollections(
-  collections: ReduxProjectCollections,
+  collections: ProjectCollectionsInput,
 ): CoreProjectCollections {
   return {
-    characters: entityStateToCoreArray(collections.characters, 'characters'),
-    worlds: entityStateToCoreArray(collections.worlds, 'worlds'),
+    characters: normalizeCoreCollection(collections.characters, 'characters'),
+    worlds: normalizeCoreCollection(collections.worlds, 'worlds'),
   };
 }
 
