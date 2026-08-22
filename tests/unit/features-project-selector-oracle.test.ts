@@ -40,7 +40,7 @@ import { buildState } from "./projectStateFixture";
 const populatedData: Partial<ProjectData> = {
   outline: [{ id: "outline-1", title: "Opening", description: "The story begins" }],
   manuscript: [
-    { id: "scene-1", title: "One", content: "  alpha\\n beta  ", act: 1 },
+    { id: "scene-1", title: "One", content: "  alpha\n beta  ", act: 1 },
     { id: "scene-2", title: "Two", content: "gamma", act: 2 },
   ],
   relationships: [
