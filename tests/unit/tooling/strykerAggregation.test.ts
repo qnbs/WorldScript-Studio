@@ -48,6 +48,30 @@ function writeReport(root: string, moduleName: string, overrides: Record<string,
   );
 }
 
+function writeFlatReport(root: string) {
+  writeFileSync(
+    join(root, 'mutation.json'),
+    JSON.stringify({
+      metrics: {
+        pending: 0,
+        ignored: 0,
+        killed: 8,
+        survived: 1,
+        timeout: 1,
+        noCoverage: 0,
+        runtimeErrors: 0,
+        compileErrors: 0,
+        totalDetected: 9,
+        totalUndetected: 1,
+        totalCovered: 10,
+        totalValid: 10,
+        totalInvalid: 0,
+        totalMutants: 10,
+      },
+    }),
+  );
+}
+
 describe('Stryker report aggregation', () => {
   it('requires every authoritative scope module', async () => {
     const root = createReportRoot();
@@ -92,6 +116,17 @@ describe('Stryker report aggregation', () => {
       const result = aggregateStrykerReports(root, selectedModules);
       expect(result.reports).toHaveLength(selectedModules.length);
     }
+  });
+
+  it('accepts a flat report when exactly one module is selected', async () => {
+    const root = createReportRoot();
+    writeFlatReport(root);
+    const { selectMutationModules } = await import('../../../scripts/stryker-scope.mjs');
+
+    const result = aggregateStrykerReports(root, selectMutationModules('services-commands'));
+
+    expect(result.reports).toHaveLength(1);
+    expect(result.reports[0]?.name).toBe('services-commands');
   });
 
   it('rejects inconsistent Stryker metrics instead of trusting report scores', async () => {
