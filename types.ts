@@ -24,7 +24,8 @@ export type View =
   | 'objects'
   | 'mindmap'
   | 'characterInterviews'
-  | 'lora';
+  | 'lora'
+  | 'scenario';
 
 export interface Character {
   id: string;

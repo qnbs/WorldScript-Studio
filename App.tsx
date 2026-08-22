@@ -168,6 +168,9 @@ const CharacterInterviewsView = lazy(() => import('./components/CharacterIntervi
 const LoraView = lazy(() =>
   import('./components/lora/LoraView').then((m) => ({ default: m.LoraView })),
 );
+const ScenarioWorkspaceView = lazy(() =>
+  import('./components/ScenarioWorkspaceView').then((m) => ({ default: m.ScenarioWorkspaceView })),
+);
 
 // Fallback while a view is loading
 const ViewLoader: FC = () => {
@@ -725,6 +728,8 @@ const App: FC<AppProps> = ({ isNewUser }) => {
         // QNBS-v3: gated like other flag-only views — falls back to Dashboard when off.
         if (!featureFlags.enableLoraAdapters) return <Dashboard onNavigate={handleNavigate} />;
         return <LoraView />;
+      case 'scenario':
+        return <ScenarioWorkspaceView onNavigate={handleNavigate} />;
       default:
         return <Dashboard onNavigate={handleNavigate} />;
     }
