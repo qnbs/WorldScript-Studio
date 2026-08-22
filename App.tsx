@@ -729,6 +729,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
         // QNBS-v3: gated like other flag-only views — falls back to Dashboard when off.
         if (!featureFlags.enableLoraAdapters) return <Dashboard onNavigate={handleNavigate} />;
         return <LoraView />;
+      // QNBS-v3: Route Scenario through the canonical projection workspace.
       case 'scenario':
         return <ScenarioWorkspaceView onNavigate={handleNavigate} />;
       default:
