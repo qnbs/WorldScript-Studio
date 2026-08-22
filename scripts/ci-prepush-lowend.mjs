@@ -5,7 +5,9 @@ const checks = [
   ['toolchain', () => runNodeScript('scripts/check-pnpm-toolchain.mjs', ['--hook'])],
   [
     'typecheck (single checker)',
-    () => runLocalBinary('tsgo', ['--project', 'tsconfig.tsgo.json', '--noEmit']),
+    // QNBS-v3: Make the low-end resource contract explicit; tsgo's default checker count is not a safe local default.
+    () =>
+      runLocalBinary('tsgo', ['--project', 'tsconfig.tsgo.json', '--noEmit', '--checkers', '1']),
   ],
   ['i18n key parity', () => runNodeScript('scripts/check-i18n-keys.mjs')],
   ['i18n bundle rebuild', () => runNodeScript('scripts/build-i18n.mjs')],

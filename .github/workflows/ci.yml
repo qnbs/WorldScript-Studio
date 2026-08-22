@@ -423,7 +423,8 @@ jobs:
     name: ✅ CI Success
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [security, quality, changes, rust-tauri, core-rust, build, e2e, vrt]
+    # QNBS-v3: Every unconditional job is either required here or explicitly advisory at job level.
+    needs: [security, quality, changes, rust-tauri, core-rust, build, e2e, lighthouse, vrt]
     if: always()
     steps:
       - name: Verify all required jobs succeeded
@@ -440,6 +441,7 @@ jobs:
           fi
           [ "${{ needs.build.result }}" = "success" ] || FAIL=1
           [ "${{ needs.e2e.result }}" = "success" ] || FAIL=1
+          [ "${{ needs.lighthouse.result }}" = "success" ] || FAIL=1
           [ "${{ needs.vrt.result }}" = "success" ] || FAIL=1
           if [ "$FAIL" = "1" ]; then
             echo "One or more required jobs did not succeed:"
@@ -450,6 +452,7 @@ jobs:
             echo "  core-rust: ${{ needs.core-rust.result }} (skipped = OK, crates/ untouched)"
             echo "  build:    ${{ needs.build.result }}"
             echo "  e2e:      ${{ needs.e2e.result }}"
+            echo "  lighthouse: ${{ needs.lighthouse.result }}"
             echo "  vrt:      ${{ needs.vrt.result }}"
             exit 1
           fi
@@ -604,7 +607,6 @@ jobs:
     # QNBS-v3: 25 min — two lhci runs (mobile 3× + desktop 2×); was 15 min for mobile only
     timeout-minutes: 25
     needs: [build]
-    continue-on-error: false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -651,6 +653,8 @@ jobs:
     # QNBS-v3: Cloud-first — Storybook build + test-runner runs only in CI (not local).
     #          25 min = build (~8 min) + server start + test-runner retries + screenshot upload.
     timeout-minutes: 25
+    # QNBS-v3: Storybook remains advisory until ten genuine first-attempt runs establish stability.
+    continue-on-error: true
     needs: [quality]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -694,12 +698,8 @@ jobs:
         # printed --help text, and `|| true` silently turned that into a green step — this gate has
         # produced zero real signal since it was added. Fixed to only pass supported flags.
         # QNBS-v3 (CodeRabbit, 2026-07-29): `|| true` swallowed the exit code so this step showed
-        # green even when it truly failed — literally how the bug above stayed invisible. Moved the
-        # non-blocking behavior to step-level `continue-on-error: true`, which still shows the step
-        # as failed (visible signal for the F-13 "~10 real runs" re-evaluation) without failing the
-        # job. Re-evaluate after ~10 real (non-help-text) runs on main — if none fail on genuine
-        # a11y/story assertions, drop `continue-on-error` and make this blocking.
-        continue-on-error: true
+        # green even when it truly failed — literally how the bug above stayed invisible. The
+        # job-level advisory policy keeps the failed step visible without making it a merge blocker.
         env:
           CI: true
           DEBUG: pw:browser*

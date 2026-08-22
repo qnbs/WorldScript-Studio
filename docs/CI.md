@@ -38,15 +38,15 @@ CI runs for the affected test path before removing a temporary quarantine.
 ### Gate authority
 
 `✅ CI Success` is the required branch-protection status and aggregates `security`, `quality`,
-`changes`, `rust-tauri`, `core-rust`, `build`, `e2e`, and `vrt`. The `deploy` job depends only on
-that aggregate and remains main-push-only.
+`changes`, `rust-tauri`, `core-rust`, `build`, `e2e`, `lighthouse`, and `vrt`. `e2e-deep` and
+`storybook` are explicitly advisory at job level while their stability criteria are measured. The
+`deploy` job depends only on that aggregate and remains main-push-only.
 
-`storybook` and `lighthouse` are currently visible, separately executed advisory jobs rather than
-members of the aggregate. Their failures must still be investigated before merge under the
-repository's full-suite policy; this explicit distinction prevents a red visible job from having
-an undefined authority model. Storybook's test-runner and Lighthouse's desktop performance step
-remain non-blocking under the exit criteria documented below. `e2e-deep` and the coverage ratchet
-are also intentionally advisory.
+`storybook` and `e2e-deep` are separately executed advisory jobs with explicit job-level
+`continue-on-error: true`; their failures remain visible and must still be investigated before merge
+under the repository's full-suite policy. Lighthouse is part of the required aggregate because its
+mobile accessibility and CLS assertions are blocking; only its desktop performance step remains
+non-blocking under the exit criteria documented below. The coverage ratchet remains informational.
 
 **Post-merge doc update workflow:**
 1. Push the commit → CI starts automatically.
@@ -100,7 +100,8 @@ Each job that uses the composite must call `actions/checkout@v6` first (local co
 ```text
 security ──► quality ──┬──► build ──┬──► lighthouse
                        ├──► e2e     └──► vrt
-                       └──► storybook
+                       ├──► e2e-deep (advisory)
+                       └──► storybook (advisory)
 
 security ─┬
 quality ──┼──► ci-success (required-status aggregator)
@@ -109,6 +110,7 @@ rust ────┤
 core-rust ┤
 build ────┤
 e2e ──────┤
+lighthouse ─┤
 vrt ──────┘
 
 build (main, non-PR) ──► upload-pages-artifact
@@ -127,7 +129,7 @@ Mutation testing (Stryker) is **not** in this graph — it runs only via manual 
 | `lighthouse` | `build` | LHCI (mobile): **accessibility error gate** `minScore: 0.95`; **CLS error** ≤ 0.1; performance/SEO warn. Desktop run: `continue-on-error: true` until baselines stabilise. Timeout 25 min. |
 | `storybook` | `quality` | Cloud-first — Storybook build + test-runner only run in CI (not locally); Playwright browser cache `v5`; `--maxWorkers=2 --junit` (non-blocking, `continue-on-error: true` — see [exit criteria](#non-blocking-gates--exit-criteria-f-13)); artifacts uploaded always. Debug: manual `storybook-debug.yml` workflow. |
 | `vrt` | `build` | Visual regression against production `dist`; `toHaveScreenshot()` with committed PNG baselines (4 views × Chromium); artifacts uploaded always |
-| `ci-success` | `security`, `quality`, `changes`, `rust-tauri`, `core-rust`, `build`, `e2e`, `vrt` | Required-status **aggregator** — `if: always()`, fails if any required release-safety job does not resolve to `success`; Storybook, Lighthouse and deep-E2E remain informational until their stability criteria are met. Rust jobs are legitimately skipped when their paths are untouched. |
+| `ci-success` | `security`, `quality`, `changes`, `rust-tauri`, `core-rust`, `build`, `e2e`, `lighthouse`, `vrt` | Required-status **aggregator** — `if: always()`, fails if any required release-safety job does not resolve to `success`; Storybook and deep-E2E are explicitly advisory. Rust jobs are legitimately skipped when their paths are untouched. |
 | `deploy` | `ci-success` | **Only** `main` push (not PR), and only after the aggregate gate succeeds; the Pages artifact is resolved from the same workflow run. |
 
 > **Desktop:** On-demand / tag-driven Tauri bundles live in [`tauri-build.yml`](../.github/workflows/tauri-build.yml); **`v*` tags** additionally publish installers on a **GitHub Release**. See [`docs/TAURI-CI.md`](TAURI-CI.md). Desktop CI does not block the web deploy graph above.
@@ -201,7 +203,7 @@ in `ci.yml` is listed here with why it isn't blocking today and what has to be t
 
 | Gate | Why not blocking today | Exit criterion |
 |------|------------------------|-----------------|
-| Storybook `test-storybook` (`storybook` job, `continue-on-error: true`) | Fixed 2026-07-29 (F-12): the invocation was calling flags this test-runner version doesn't support (`--max-workers`/`--retries`/`--screenshot-on-failure`), so it failed on argument parsing before running a single story, on every prior run. This is the first run where it will actually execute real stories/a11y checks — no track record exists yet. Moved from `\|\| true` to step-level `continue-on-error: true` the same day (CodeRabbit-caught): `\|\| true` swallowed the exit code so the step showed green even while genuinely failing — the exact mechanism that let the F-12 bug go unnoticed. | Re-evaluate after **~10 real (non-argument-error) runs on `main`**; drop `continue-on-error` and make blocking if none fail on a genuine story/a11y assertion. |
+| Storybook `test-storybook` (`storybook` job, `continue-on-error: true`) | Fixed 2026-07-29 (F-12): the invocation was calling flags this test-runner version doesn't support (`--max-workers`/`--retries`/`--screenshot-on-failure`), so it failed on argument parsing before running a single story, on every prior run. This is the first run where it will actually execute real stories/a11y checks — no track record exists yet. Moved from `\|\| true` to job-level `continue-on-error: true` the same day (CodeRabbit-caught): `\|\| true` swallowed the exit code so the step showed green even while genuinely failing — the exact mechanism that let the F-12 bug go unnoticed. | Re-evaluate after **~10 real (non-argument-error) runs on `main`**; drop `continue-on-error` and make blocking if none fail on a genuine story/a11y assertion. |
 | `e2e-deep` (feature-flag matrix job, `continue-on-error: true`) | Deliberately informational by design — parametrizes across the full `testConfigurations` flag matrix (`tests/e2e/config/test-matrix.ts`) specifically to surface flag-interaction regressions that the required `e2e` gate's default-flag-state run cannot see; failures here are diagnostic signal, not necessarily a merge-blocking defect in the default configuration. | Promote a **specific flag combination** to blocking (add it to the required `e2e` spec instead) once it has been stable for **3 consecutive weeks of `main` runs** — do not flip the entire matrix job blocking at once, since that reintroduces the flakiness-cascade risk `e2e-deep` was created to avoid. |
 | Lighthouse **Desktop** step (`lighthouse` job, `continue-on-error: true`) — note: accessibility (`minScore: 0.95`) and CLS (`≤ 0.1`) stay **error**-level gates even on this step; only the broader desktop performance/SEO scores are non-blocking | Desktop performance baselines haven't been formally re-verified as stable since the last CI-runner change | Re-run `pnpm exec lhci autorun --config=.lighthouserc.desktop.cjs` locally or via `storybook-debug.yml`-style manual dispatch across **5 consecutive `main` runs**; if performance/SEO scores stay within the existing `warn` thresholds each time, remove `continue-on-error` for the step. |
 | Coverage ratchet (`scripts/check-coverage-ratchet.mjs`, `continue-on-error: true`) | **Deliberately, permanently advisory** — by design (see `vitest.config.ts`'s ratchet-history comment), it exists to *suggest* the next threshold bump, not to gate a merge on hitting one. | None — this is the one gate above intentionally without an exit criterion; its purpose is met by staying advisory. Reviewed here for completeness so it isn't mistaken for forgotten debt. |

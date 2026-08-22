@@ -1,6 +1,6 @@
 import { dirname, relative, resolve } from 'node:path';
 
-function extractJobBlock(workflowSource: string, jobName: string): string {
+export function extractJobBlock(workflowSource: string, jobName: string): string {
   const lines = workflowSource.split('\n');
   const start = lines.indexOf(`  ${jobName}:`);
   if (start === -1) throw new Error(`Could not find CI job: ${jobName}`);
