@@ -101,4 +101,55 @@ describe('createWorldScriptFetch', () => {
     expect(init?.signal?.aborted).toBe(false);
     vi.unstubAllGlobals();
   });
+
+  it('propagates caller aborts through the composed timeout signal', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', mockFetch);
+    const caller = new AbortController();
+
+    const { createWorldScriptFetch } = await import('../../../services/ai/fetchAdapter');
+    await createWorldScriptFetch({ timeoutMs: 5000 })('https://api.example.com/tags', {
+      signal: caller.signal,
+    });
+
+    const signal = (mockFetch.mock.calls[0]?.[1] as RequestInit | undefined)?.signal;
+    expect(signal?.aborted).toBe(false);
+    caller.abort();
+    expect(signal?.aborted).toBe(true);
+    vi.unstubAllGlobals();
+  });
+
+  it('uses the manual controller when AbortSignal.any is unavailable', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', mockFetch);
+    const caller = new AbortController();
+    const originalAny = AbortSignal.any;
+    (AbortSignal as unknown as { any?: typeof AbortSignal.any }).any = undefined;
+
+    try {
+      const { createWorldScriptFetch } = await import('../../../services/ai/fetchAdapter');
+      await createWorldScriptFetch({ timeoutMs: 5000 })('https://api.example.com/tags', {
+        signal: caller.signal,
+      });
+
+      const signal = (mockFetch.mock.calls[0]?.[1] as RequestInit | undefined)?.signal;
+      expect(signal).toBeInstanceOf(AbortSignal);
+      caller.abort();
+      expect(signal?.aborted).toBe(true);
+    } finally {
+      (AbortSignal as unknown as { any: typeof originalAny }).any = originalAny;
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('does not attach a signal for a non-positive timeout', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', mockFetch);
+
+    const { createWorldScriptFetch } = await import('../../../services/ai/fetchAdapter');
+    await createWorldScriptFetch({ timeoutMs: 0 })('https://api.example.com/tags');
+
+    expect(mockFetch).toHaveBeenCalledWith('https://api.example.com/tags', undefined);
+    vi.unstubAllGlobals();
+  });
 });
