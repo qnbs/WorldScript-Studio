@@ -75,4 +75,24 @@ describe('CI workflow policy', () => {
     visit('deploy');
     expect(visited).toContain('ci-success');
   });
+
+  // QNBS-v3: Keep every unconditional CI job explicitly required or advisory so deploy cannot false-green.
+  it('keeps required and advisory job authority explicit', () => {
+    const ciSuccessBlock = workflowSource.match(/^ {2}ci-success:[\s\S]*?(?=^ {2}deploy:)/m)?.[0];
+    expect(ciSuccessBlock).toBeDefined();
+    expect(ciSuccessBlock).toContain(
+      'Every unconditional job is either required here or explicitly advisory',
+    );
+    expect(ciSuccessBlock).toContain('lighthouse');
+    expect(ciSuccessBlock).not.toContain('needs.e2e-deep');
+    expect(ciSuccessBlock).not.toContain('needs.storybook');
+
+    for (const jobName of ['e2e-deep', 'storybook']) {
+      const jobBlock = workflowSource.match(
+        new RegExp(`^  ${jobName}:[\\s\\S]*?(?=\\n  [\\w-]+:)`, 'm'),
+      )?.[0];
+      expect(jobBlock, `${jobName} must have an explicit job block`).toBeDefined();
+      expect(jobBlock).toContain('continue-on-error: true');
+    }
+  });
 });
