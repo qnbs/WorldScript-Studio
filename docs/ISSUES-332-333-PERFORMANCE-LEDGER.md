@@ -6,16 +6,15 @@ authoritative closure record for the responsiveness portions of
 [#332](https://github.com/qnbs/WorldScript-Studio/issues/332) and
 [#333](https://github.com/qnbs/WorldScript-Studio/issues/333).
 
-## Live baseline — 2026-08-12 (updated after the #336 second-wave CodeRabbit loop and the layering-mistake correction)
+## Live baseline — 2026-08-22 (post-v1.28.0 reporter evidence; parent branch remains separate)
 
 | Ref | Live value |
 | --- | --- |
-| `main` | `804793aa0815a726935785639e4fb139af7c4b59` |
-| PR #335 | `edc3ef13c7f87007f290d3a60ee77b119ffeea57` (review threads: 0 unresolved of 40; all CI green) |
-| PR #336 | `b01564ed77ae1acf9f9cb8c02ee4767e8909ef15` (review threads: 0 unresolved of 68) |
-| PR #337 | `1335e81b` (review threads: 0 unresolved of 61) |
-| PR #310 | `27177ce549d4579f1fc9dfbc4630ebf0c2592f9b` |
-| Issue #332 / #333 | Open / Open; neither has post-report comments |
+| `main` | `fded1e22fd4d4b9140cde5fede0df758ba574ad2` |
+| Release tested by reporter | `v1.28.0` packaged Linux `.deb` |
+| Issue #332 / #333 | Open / Open |
+| Issue #341 | Reopened as a possible v1.28.0 readability reappearance; root cause unconfirmed |
+| Reporter evidence | `#332` comment `5379331811`, received 2026-08-22; independent packaged-runtime evidence, not CI authority |
 
 The `.npmrc`/`pnpm-workspace.yaml` uuid override-range hardening (previously deferred as
 unsafe for this memory-constrained host to resolve via a real `pnpm install`) has since been
@@ -56,6 +55,27 @@ environment is unavailable, record the closest environment and use
 | PERF-333-004 | Python detection/probing contributes to desktop instability | Tauri desktop, terminal versus menu launch | Code inspection required on #336 | Pending candidate count, per-candidate and total duration | Synchronous probe risk must be confirmed or disproved | Pending `spawn_blocking`/timeout/cache assessment | Pending | `ROOT_CAUSE_CONFIRMED_FIX_PENDING` |
 | PERF-333-005 | Duplicate LoRA jobs or cancellation leaves resource load | Tauri desktop | Code inspection required on #336 | Pending concurrent-spawn/termination evidence | Atomic slot and confirmed child termination required | Pending | Pending | `ROOT_CAUSE_CONFIRMED_FIX_PENDING` |
 | PERF-333-006 | Local backend diagnostics cause stale/repeated work | Provider Settings, LM Studio/Ollama/vLLM | Unit/code evidence exists; runtime not measured | Pending request count, timeout and stale-result measurements | Requests must be user-triggered, abortable, deduplicated | #336 review reconciliation complete (0 unresolved of 68 threads at `b01564ed`) | Pending `.deb` | `FIXED_CODE_ONLY_AWAITING_PACKAGED_VERIFICATION` |
+
+### v1.28.0 reporter evidence — 2026-08-22
+
+The following rows intentionally separate the four signals in the current
+report. The reporter tested the released `v1.28.0` `.deb`, not current `main`.
+The PWA remained the responsive comparison surface. No row below is a closure
+claim, and no external reporter is a CI or release dependency.
+
+| Ref | Observation | Evidence state | Required next evidence |
+| --- | --- | --- | --- |
+| PERF-332-A | Navigation between the separate left-side pages is significantly improved in `v1.28.0` | `CONFIRMED_BY_REPORTER` in #332 comment `5379331811`; positive evidence to preserve | Recheck current-main packaged candidate for non-regression |
+| PERF-332-B | Intra-page AI Writing Studio box/highlight feedback lags the click by roughly 100–250 ms | `REPORTED_OPEN`; application event/render latency versus decorative transition is not yet measured | Same-interaction timestamps for click, focus/selection, React commit/frame, visual start and transition completion |
+| PERF-332-C | Alt-Tab away for more than a few seconds can leave the packaged app unresponsive and requiring `kill -9` | `REPORTED_OPEN_HIGH_PRIORITY`; causal split between app lifecycle work, WebKitGTK/compositor, and resource pressure is unresolved | Packaged Linux lifecycle/process telemetry and the hard-freeze acceptance matrix |
+| PERF-332-D | A historical WebKit memory-pressure event was previously observed around 26.7 GB | `HISTORICAL_SIGNAL_ONLY`; not evidence of a WorldScript leak | Separate parent/WebProcess/GPU telemetry and reproducible memory-growth evidence |
+| PERF-332-E | Manuscript/prose text appears black on a dark blue surface unless selected | `REPORTED_POSSIBLE_REGRESSION`; #341 reopened, prior 1.27.0 confirmation remains historical | Computed foreground/effective background, contrast, overlay opacity and WebKitGTK-vs-Chromium comparison |
+| PERF-332-F | PWA remains responsive where the packaged `.deb` is sluggish | `CONFIRMED_BY_REPORTER` differential, not a root-cause proof | Equivalent current-main PWA/package measurements; use as a Qt qualification baseline |
+
+The incident lane must not convert these observations into a broad Tauri
+rewrite or a PWA-only strategy. Transitional Tauri work is limited to proven
+reliability/readability/high-ROI fixes; PWA remains first-class and the
+renderer-neutral Core plus gated Qt direction remains unchanged.
 
 ## Required packaged desktop matrix
 

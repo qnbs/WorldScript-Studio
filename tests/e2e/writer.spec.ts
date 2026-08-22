@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { readRenderedTextReadability } from './editorReadability';
 import {
   clickNavItem,
   ensureBlankProject,
@@ -72,6 +73,7 @@ test.describe('AI Writer Flow (CI-only)', () => {
 
     const mirror = page.getByTestId('writer-studio-mirror').first();
     await expect(mirror).toBeVisible();
+    await expect(mirror).toContainText('Paragraph 1: the quick brown fox jumps over the lazy dog.');
 
     // The real (invisible) input textarea must never blur the mirror text sitting behind it.
     const backdropFilter = await writerTextbox.evaluate(
@@ -79,9 +81,9 @@ test.describe('AI Writer Flow (CI-only)', () => {
     );
     expect(backdropFilter === 'none' || backdropFilter === '').toBeTruthy();
 
-    // The mirror's rendered text color must be a real, non-transparent color.
-    const mirrorColor = await mirror.evaluate((el) => getComputedStyle(el).color);
-    expect(mirrorColor).not.toMatch(/rgba\(0,\s*0,\s*0,\s*0\)|transparent/);
+    const readability = await readRenderedTextReadability(mirror);
+    expect(readability).not.toBeNull();
+    expect(readability?.ratio ?? 0).toBeGreaterThanOrEqual(4.5);
 
     // Scroll parity: scrolling the real textarea must move the mirror by the same amount.
     await writerTextbox.evaluate((el) => {
