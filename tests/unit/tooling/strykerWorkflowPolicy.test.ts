@@ -30,6 +30,7 @@ describe('Stryker workflow policy', () => {
     expect(mutationModules).toHaveLength(8);
     expect(new Set(mutationFiles).size).toBe(25);
     expect(mutationModules.every(({ riskTier }) => ['A', 'B'].includes(riskTier))).toBe(true);
+    // QNBS-v3: [Validate the services-commands Stryker mapping / prevent test-scope drift / make the policy contract explicit]
     expect(selectMutationModules('services-commands')[0]?.testFiles).toEqual([
       'tests/unit/commands/fuzzyScore.test.ts',
       'tests/unit/commands/palettePreferences.test.ts',
