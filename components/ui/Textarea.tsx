@@ -30,11 +30,11 @@ const DEFAULT_CLASSES = `
 `;
 
 // QNBS-v3 (#341): no glass/blur/shadow/hover-bg/reserved padding — the caller's own className fully controls appearance (typically text-transparent, sitting over a visible mirror layer).
+// QNBS-v3 (#332): overlay focus feedback must not wait for decorative transitions.
 const OVERLAY_CLASSES = `
     flex min-h-[120px] w-full rounded-sc-lg
     border border-[var(--sc-border-subtle)]
     text-sm placeholder:text-[var(--sc-text-muted)]
-    transition-all duration-sc-fast
     focus-visible:outline-none focus-visible:border-[var(--border-interactive)] focus-visible:ring-2 focus-visible:ring-[var(--sc-ring-focus)]
     disabled:opacity-50 disabled:cursor-not-allowed
     scrollbar-thin scrollbar-thumb-rounded-md

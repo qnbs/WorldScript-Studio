@@ -115,6 +115,7 @@ vi.mock('../../../components/ui/DebouncedInput', () => ({
 
 // QNBS-v3 (#341): captured so tests can assert variant="overlay" is passed and invoke onScroll manually to verify the mirror scroll-sync wiring.
 let lastEditorTextareaVariant: string | undefined;
+let lastEditorTextareaClassName: string | undefined;
 let lastEditorTextareaOnScroll: ((e: React.UIEvent<HTMLTextAreaElement>) => void) | undefined;
 
 // Stub Textarea
@@ -124,6 +125,7 @@ vi.mock('../../../components/ui/Textarea', () => ({
     onChange,
     placeholder,
     variant,
+    className,
     onScroll,
     // QNBS-v3 (#341): destructured out (not spread) so this mock's own stable "editor-textarea" testid always wins over the real component's data-testid.
     'data-testid': _dataTestId,
@@ -133,11 +135,13 @@ vi.mock('../../../components/ui/Textarea', () => ({
     onChange?: React.ChangeEventHandler<HTMLTextAreaElement>;
     placeholder?: string;
     variant?: string;
+    className?: string;
     onScroll?: (e: React.UIEvent<HTMLTextAreaElement>) => void;
     'data-testid'?: string;
     [k: string]: unknown;
   }) => {
     lastEditorTextareaVariant = variant;
+    lastEditorTextareaClassName = className;
     lastEditorTextareaOnScroll = onScroll;
     return (
       <textarea
@@ -145,6 +149,7 @@ vi.mock('../../../components/ui/Textarea', () => ({
         value={value}
         onChange={onChange}
         placeholder={placeholder}
+        className={className}
         onScroll={onScroll}
         {...(rest as object)}
       />
@@ -302,6 +307,8 @@ describe('ManuscriptEditor', () => {
     it('passes variant="overlay" to the real textarea', () => {
       render(<ManuscriptEditor isFocusMode={false} />);
       expect(lastEditorTextareaVariant).toBe('overlay');
+      expect(lastEditorTextareaClassName).not.toContain('transition-all');
+      expect(lastEditorTextareaClassName).not.toContain('duration-500');
     });
 
     it('syncs the mirror scroll position when the real textarea scrolls', () => {
