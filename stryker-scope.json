@@ -8,6 +8,11 @@
         "services/commands/fuzzyScore.ts",
         "services/commands/palettePreferences.ts",
         "services/commands/commandBuilder.ts"
+      ],
+      "testFiles": [
+        "tests/unit/commands/fuzzyScore.test.ts",
+        "tests/unit/commands/palettePreferences.test.ts",
+        "tests/unit/services/commandBuilder.test.ts"
       ]
     },
     {
