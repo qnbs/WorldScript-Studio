@@ -60,7 +60,7 @@ gh run view <run-id> --log-failed
 5. **Do not use** `npx wrangler deploy` (Workers) nor `wrangler pages deploy` in the deploy step — redundant and often fails on API token scope in the build container.
 6. If the UI forces a deploy command, use: `pnpm run deploy:cloudflare` — it **exits 0** on Cloudflare (`CF_PAGES=1`) without calling Wrangler.
 7. Remove **`CLOUDFLARE_API_TOKEN`** from Pages **build** environment variables unless you have a dedicated manual deploy workflow; it is not needed for Git-based Pages.
-8. **Environment variables (build):** `NODE_VERSION=22`, `PNPM_VERSION=10` (or Corepack).
+8. **Environment variables (build):** `NODE_VERSION=22`, `PNPM_VERSION=11.22.0` (or Corepack using the exact `packageManager` pin).
 9. **Root:** repository root; **Package manager:** pnpm.
 
 > **Status:** Optional GitHub workflow [`.github/workflows/deploy-cloudflare-pages.yml`](../.github/workflows/deploy-cloudflare-pages.yml) is **paused** (`if: false`). Prefer dashboard-only Pages deploy.

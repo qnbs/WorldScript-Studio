@@ -47,7 +47,7 @@ The app supports a multi-provider AI stack (Gemini, OpenAI, Claude, Grok, OpenRo
 
 | Layer | Technology |
 |-------|------------|
-| Runtime | Node.js `>=22.0.0` (`.nvmrc` → `22`), pnpm `>=11.0.0` (`packageManager: pnpm@11.5.2`) |
+| Runtime | Node.js `>=22.0.0` (`.nvmrc` → `22`), pnpm `11.22.0` (`packageManager: pnpm@11.22.0`) |
 | Framework | React `^19.2.7`, TypeScript 7 via `@typescript/native-preview` (tsgo, strict) — no pinned classic `typescript` package |
 | Build tool | Vite `^8.0.16` (`vite.config.ts`) |
 | Type checker | `tsgo` (TypeScript Go port) via `tsconfig.tsgo.json` with 4 checkers (`pnpm run typecheck`) |
