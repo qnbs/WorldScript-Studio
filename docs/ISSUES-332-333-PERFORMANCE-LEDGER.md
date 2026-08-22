@@ -2,7 +2,7 @@
 
 Status: **active — no performance closure claim**. This ledger records measured
 runtime evidence separately from code review and unit tests. It is the
-authoritative closure record for the responsiveness portions of
+authoritative evidence record for the active responsiveness portions of
 [#332](https://github.com/qnbs/WorldScript-Studio/issues/332) and
 [#333](https://github.com/qnbs/WorldScript-Studio/issues/333).
 
@@ -10,9 +10,9 @@ authoritative closure record for the responsiveness portions of
 
 | Ref | Live value |
 | --- | --- |
-| `main` | `fded1e22fd4d4b9140cde5fede0df758ba574ad2` |
+| `main` | `a6e22e536240f8500d8ce976aa9d1c3dc96e522b` |
 | Release tested by reporter | `v1.28.0` packaged Linux `.deb` |
-| Issue #332 / #333 | Open / Open |
+| Issue #332 / #333 | Open / Closed |
 | Issue #341 | Reopened as a possible v1.28.0 readability reappearance; root cause unconfirmed |
 | Reporter evidence | `#332` comment `5379331811`, received 2026-08-22; independent packaged-runtime evidence, not CI authority |
 
@@ -52,8 +52,8 @@ environment is unavailable, record the closest environment and use
 | PERF-333-001 | Local-AI acquisition appears frozen | Local-AI Settings and packaged desktop | Not yet measured on candidate package | Pending first-progress, progress-event gap, terminal state, cancel/retry settlement | Acquisition and inference progress must be distinct; code review identifies stuck-state risks | Existing retry/cancel changes require terminal-path proof | Pending `.deb` | `FIXED_CODE_ONLY_AWAITING_PACKAGED_VERIFICATION` |
 | PERF-333-002 | General UI freeze/slowness | Browser, Tauri dev, installed `.deb` | Not yet | Pending long tasks, paint/layout, native invokes, idle CPU | May overlap PERF-332-001; no shared cause claimed before trace. See PERF-332-001's D4/D5 entries — the same `SettingsView` re-render and `backdrop-blur` factors apply wherever those primitives/selectors are used outside Settings too | Same D4/D5 fixes as PERF-332-001 (not scoped to Settings alone) | Pending | `NOT_REPRODUCED_ENVIRONMENT_LIMITED` |
 | PERF-333-003 | Scrolling/panel/text overlap | Required resolution/zoom/locale/RTL matrix | Not yet | Screenshot/visual and overflow inspection pending | Layout root cause unknown for this issue. Note: a related but distinct manuscript/writer-studio text-legibility defect (issue #341 — occlusion, font mismatch, no scroll sync) was independently root-caused and fixed in PR `fix/341-writer-studio-rendering` (merged as PR #344) — do not conflate the two; #341's fix does not close this row | Existing desktop audit is hypothesis-only for this specific symptom | Pending | `NOT_REPRODUCED_ENVIRONMENT_LIMITED` |
-| PERF-333-004 | Python detection/probing contributes to desktop instability | Tauri desktop, terminal versus menu launch | Code inspection required on #336 | Pending candidate count, per-candidate and total duration | Synchronous probe risk must be confirmed or disproved | Pending `spawn_blocking`/timeout/cache assessment | Pending | `ROOT_CAUSE_CONFIRMED_FIX_PENDING` |
-| PERF-333-005 | Duplicate LoRA jobs or cancellation leaves resource load | Tauri desktop | Code inspection required on #336 | Pending concurrent-spawn/termination evidence | Atomic slot and confirmed child termination required | Pending | Pending | `ROOT_CAUSE_CONFIRMED_FIX_PENDING` |
+| PERF-333-004 | Python detection/probing contributes to desktop instability | Tauri desktop, terminal versus menu launch | Code path shipped in #336; packaged behavior still unverified | Pending candidate count, per-candidate and total duration | Synchronous probe risk must be confirmed or disproved | Pending `spawn_blocking`/timeout/cache assessment | Pending | `FIXED_CODE_ONLY_AWAITING_PACKAGED_VERIFICATION` |
+| PERF-333-005 | Duplicate LoRA jobs or cancellation leaves resource load | Tauri desktop | Code path shipped in #336; packaged behavior still unverified | Pending concurrent-spawn/termination evidence | Atomic slot and confirmed child termination required | Pending | Pending | `FIXED_CODE_ONLY_AWAITING_PACKAGED_VERIFICATION` |
 | PERF-333-006 | Local backend diagnostics cause stale/repeated work | Provider Settings, LM Studio/Ollama/vLLM | Unit/code evidence exists; runtime not measured | Pending request count, timeout and stale-result measurements | Requests must be user-triggered, abortable, deduplicated | #336 review reconciliation complete (0 unresolved of 68 threads at `b01564ed`) | Pending `.deb` | `FIXED_CODE_ONLY_AWAITING_PACKAGED_VERIFICATION` |
 
 ### v1.28.0 reporter evidence — 2026-08-22
