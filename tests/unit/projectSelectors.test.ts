@@ -1,1 +1,151 @@
-aW1wb3J0IHsgY29uZmlndXJlU3RvcmUgfSBmcm9tICdAcmVkdXhqcy90b29sa2l0JzsKaW1wb3J0IHVuZG9hYmxlLCB7IHR5cGUgU3RhdGVXaXRoSGlzdG9yeSB9IGZyb20gJ3JlZHV4LXVuZG8nOwppbXBvcnQgeyBkZXNjcmliZSwgZXhwZWN0LCBpdCB9IGZyb20gJ3ZpdGVzdCc7XG5pbXBvcnQgeyBidWlsZFN0YXRlIH0gZnJvbSAnLi9wcm9qZWN0U3RhdGVGaXh0dXJlJzsKaW1wb3J0IHR5cGUgeyBSb290U3RhdGUgfSBmcm9tICcuLi8uLi9hcHAvc3RvcmUnOwppbXBvcnQgZmVhdHVyZUZsYWdzUmVkdWNlciBmcm9tICcuLi8uLi9mZWF0dXJlcy9mZWF0dXJlRmxhZ3MvZmVhdHVyZUZsYWdzU2xpY2UnOwppbXBvcnQgewogIHNlbGVjdEFsbENoYXJhY3RlcnMsCiAgc2VsZWN0QWxsV29ybGRzLAogIHNlbGVjdENhblJlZG8sCiAgc2VsZWN0Q2FuVW5kbywKICBzZWxlY3RDaGFyYWN0ZXJzRm9yR3JhcGgsCiAgc2VsZWN0TWFudXNjcmlwdCwKICBzZWxlY3RPdXRsaW5lLAogIHNlbGVjdFByb2plY3RHb2FscywKICBzZWxlY3RSZWxhdGlvbnNoaXBzLAogIHNlbGVjdFRvdGFsV29yZENvdW50LAogIHNlbGVjdFdyaXRpbmdIaXN0b3J5LAp9IGZyb20gJy4uLy4uL2ZlYXR1cmVzL3Byb2plY3QvcHJvamVjdFNlbGVjdG9ycyc7CmltcG9ydCB0eXBlIHsgUHJvamVjdERhdGEgfSBmcm9tICcuLi8uLi9mZWF0dXJlcy9wcm9qZWN0L3Byb2plY3RTbGljZSc7CmltcG9ydCBwcm9qZWN0UmVkdWNlciwgewogIGNoYXJhY3RlcnNBZGFwdGVyLAogIHdvcmxkc0FkYXB0ZXIsCn0gZnJvbSAnLi4vLi4vZmVhdHVyZXMvcHJvamVjdC9wcm9qZWN0U2xpY2UnOwppbXBvcnQgc2V0dGluZ3NSZWR1Y2VyIGZyb20gJy4uLy4uL2ZlYXR1cmVzL3NldHRpbmdzL3NldHRpbmdzU2xpY2UnOwppbXBvcnQgc3RhdHVzUmVkdWNlciBmcm9tICcuLi8uLi9mZWF0dXJlcy9zdGF0dXMvc3RhdHVzU2xpY2UnOwppbXBvcnQgdmVyc2lvbkNvbnRyb2xSZWR1Y2VyIGZyb20gJy4uLy4uL2ZlYXR1cmVzL3ZlcnNpb25Db250cm9sL3ZlcnNpb25Db250cm9sU2xpY2UnOwppbXBvcnQgd3JpdGVyUmVkdWNlciBmcm9tICcuLi8uLi9mZWF0dXJlcy93cml0ZXIvd3JpdGVyU2xpY2UnOwoKY29uc3QgbWFrZUNoYXIgPSAoaWQ6IHN0cmluZywgbmFtZTogc3RyaW5nKSA9PiAoewogIGlkLAogIG5hbWUsCiAgYmFja3N0b3J5OiAnJywKICBtb3RpdmF0aW9uOiAnJywKICBhcHBlYXJhbmNlOiAnJywKICBwZXJzb25hbGl0eVRyYWl0czogJycsCiAgZmxhd3M6ICcnLAogIG5vdGVzOiAnJywKICBjaGFyYWN0ZXJBcmM6ICcnLAogIHJlbGF0aW9uc2hpcHM6ICcnLAp9KTsKCmNvbnN0IG1ha2VXb3JsZCA9IChpZDogc3RyaW5nLCBuYW1lOiBzdHJpbmcpID0+ICh7CiAgaWQsCiAgbmFtZSwKICBkZXNjcmlwdGlvbjogJycsCiAgZ2VvZ3JhcGh5OiAnJywKICBtYWdpY1N5c3RlbTogJycsCiAgY3VsdHVyZTogJycsCiAgbm90ZXM6ICcnLAogIHRpbWVsaW5lOiBbXSwKICBsb2NhdGlvbnM6IFtdLAp9KTsKCmRlc2NyaWJlKCd1bmRvL3JlZG8gc2VsZWN0b3JzJywgKCkgPT4gewogIGl0KCdzZWxlY3RDYW5VbmRvIGlzIGZhbHNlIHdoZW4gcGFzdCBpcyBlbXB0eScsICgpID0+IHsKICAgIGV4cGVjdChzZWxlY3RDYW5VbmRvKGJ1aWxkU3RhdGUoKSkpLnRvQmUoZmFsc2UpOwogIH0pOwoKICBpdCgnc2VsZWN0Q2FuUmVkbyBpcyBmYWxzZSB3aGVuIGZ1dHVyZSBpcyBlbXB0eScsICgpID0+IHsKICAgIGV4cGVjdChzZWxlY3RDYW5SZWRvKGJ1aWxkU3RhdGUoKSkpLnRvQmUoZmFsc2UpOwogIH0pOwp9KTsKCmRlc2NyaWJlKCdtYW51c2NyaXB0IHNlbGVjdG9ycycsICgpID0+IHsKICBpdCgnc2VsZWN0TWFudXNjcmlwdCByZXR1cm5zIGVtcHR5IGFycmF5IGJ5IGRlZmF1bHQnLCAoKSA9PiB7CiAgICBleHBlY3Qoc2VsZWN0TWFudXNjcmlwdChidWlsZFN0YXRlKCkpKS50b0VxdWFsKFtdKTsKICB9KTsKCiAgaXQoJ3NlbGVjdE1hbnVzY3JpcHQgcmV0dXJucyBzZWN0aW9ucycsICgpID0+IHsKICAgIGNvbnN0IG1hbnVzY3JpcHQgPSBbeyBpZDogJ3MxJywgdGl0bGU6ICdDaDEnLCBjb250ZW50OiAnaGVsbG8gd29ybGQnIH1dOwogICAgZXhwZWN0KHNlbGVjdE1hbnVzY3JpcHQoYnVpbGRTdGF0ZSh7IG1hbnVzY3JpcHQgfSkpKS50b0VxdWFsKG1hbnVzY3JpcHQpOwogIH0pOwp9KTsKCmRlc2NyaWJlKCdzZWxlY3RUb3RhbFdvcmRDb3VudCcsICgpID0+IHsKICBpdCgnY291bnRzIHdvcmRzIGFjcm9zcyBhbGwgc2VjdGlvbnMnLCAoKSA9PiB7CiAgICBjb25zdCBtYW51c2NyaXB0ID0gWwogICAgICB7IGlkOiAnczEnLCB0aXRsZTogJ0NoMScsIGNvbnRlbnQ6ICdoZWxsbyB3b3JsZCcgfSwKICAgICAgeyBpZDogJ3MyJywgdGl0bGU6ICdDaDInLCBjb250ZW50OiAnb25lIHR3byB0aHJlZScgfSwKICAgIF07CiAgICBleHBlY3Qoc2VsZWN0VG90YWxXb3JkQ291bnQoYnVpbGRTdGF0ZSh7IG1hbnVzY3JpcHQgfSkpKS50b0JlKDUpOwogIH0pOwoKICBpdCgncmV0dXJucyAwIGZvciBlbXB0eSBtYW51c2NyaXB0JywgKCkgPT4gewogICAgZXhwZWN0KHNlbGVjdFRvdGFsV29yZENvdW50KGJ1aWxkU3RhdGUoKSkpLnRvQmUoMCk7CiAgfSk7Cn0pOwoKZGVzY3JpYmUoJ3NlbGVjdE91dGxpbmUnLCAoKSA9PiB7CiAgaXQoJ3JldHVybnMgZW1wdHkgYXJyYXkgYnkgZGVmYXVsdCcsICgpID0+IHsKICAgIGV4cGVjdChzZWxlY3RPdXRsaW5lKGJ1aWxkU3RhdGUoKSkpLnRvRXF1YWwoW10pOwogIH0pOwp9KTsKCmRlc2NyaWJlKCdzZWxlY3RXcml0aW5nSGlzdG9yeScsICgpID0+IHsKICBpdCgncmV0dXJucyBlbXB0eSBhcnJheSBieSBkZWZhdWx0JywgKCkgPT4gewogICAgZXhwZWN0KHNlbGVjdFdyaXRpbmdIaXN0b3J5KGJ1aWxkU3RhdGUoKSkpLnRvRXF1YWwoW10pOwogIH0pOwp9KTsKCmRlc2NyaWJlKCdzZWxlY3RQcm9qZWN0R29hbHMnLCAoKSA9PiB7CiAgaXQoJ3JldHVybnMgZGVmYXVsdCBnb2FscycsICgpID0+IHsKICAgIGV4cGVjdChzZWxlY3RQcm9qZWN0R29hbHMoYnVpbGRTdGF0ZSgpKSkudG9FcXVhbCh7CiAgICAgIHRvdGFsV29yZENvdW50OiA1MDAwMCwKICAgICAgdGFyZ2V0RGF0ZTogbnVsbCwKICAgIH0pOwogIH0pOwp9KTsKCmRlc2NyaWJlKCdjaGFyYWN0ZXIgc2VsZWN0b3JzJywgKCkgPT4gewogIGl0KCdzZWxlY3RBbGxDaGFyYWN0ZXJzIHJldHVybnMgZW1wdHkgYXJyYXkgYnkgZGVmYXVsdCcsICgpID0+IHsKICAgIGV4cGVjdChzZWxlY3RBbGxDaGFyYWN0ZXJzKGJ1aWxkU3RhdGUoKSkpLnRvRXF1YWwoW10pOwogIH0pOwoKICBpdCgnc2VsZWN0QWxsQ2hhcmFjdGVycyByZXR1cm5zIGFkZGVkIGNoYXJhY3RlcnMnLCAoKSA9PiB7CiAgICBjb25zdCBjaGFyYWN0ZXJzID0gY2hhcmFjdGVyc0FkYXB0ZXIuYWRkTWFueShjaGFyYWN0ZXJzQWRhcHRlci5nZXRJbml0aWFsU3RhdGUoKSwgWwogICAgICBtYWtlQ2hhcignYzEnLCAnQWxpY2UnKSwKICAgICAgbWFrZUNoYXIoJ2MyJywgJ0JvYicpLAogICAgXSk7CiAgICBjb25zdCBzdGF0ZSA9IGJ1aWxkU3RhdGUoeyBjaGFyYWN0ZXJzIH0pOwogICAgZXhwZWN0KHNlbGVjdEFsbENoYXJhY3RlcnMoc3RhdGUpKS50b0hhdmVMZW5ndGgoMik7CiAgICBleHBlY3Qoc2VsZWN0QWxsQ2hhcmFjdGVycyhzdGF0ZSlbMF0/Lm5hbWUpLnRvQmUoJ0FsaWNlJyk7CiAgfSk7Cn0pOwoKZGVzY3JpYmUoJ3dvcmxkIHNlbGVjdG9ycycsICgpID0+IHsKICBpdCgnc2VsZWN0QWxsV29ybGRzIHJldHVybnMgZW1wdHkgYXJyYXkgYnkgZGVmYXVsdCcsICgpID0+IHsKICAgIGV4cGVjdChzZWxlY3RBbGxXb3JsZHMoYnVpbGRTdGF0ZSgpKSkudG9FcXVhbChbXSk7CiAgfSk7CgogIGl0KCdzZWxlY3RBbGxXb3JsZHMgcmV0dXJucyBhZGRlZCB3b3JsZHMnLCAoKSA9PiB7CiAgICBjb25zdCB3b3JsZHMgPSB3b3JsZHNBZGFwdGVyLmFkZE1hbnkod29ybGRzQWRhcHRlci5nZXRJbml0aWFsU3RhdGUoKSwgWwogICAgICBtYWtlV29ybGQoJ3cxJywgJ01pZGRsZSBFYXJ0aCcpLAogICAgXSk7CiAgICBleHBlY3Qoc2VsZWN0QWxsV29ybGRzKGJ1aWxkU3RhdGUoeyB3b3JsZHMgfSkpKS50b0hhdmVMZW5ndGgoMSk7CiAgfSk7Cn0pOwoKZGVzY3JpYmUoJ3NlbGVjdFJlbGF0aW9uc2hpcHMnLCAoKSA9PiB7CiAgaXQoJ3JldHVybnMgZW1wdHkgYXJyYXkgYnkgZGVmYXVsdCcsICgpID0+IHsKICAgIGV4cGVjdChzZWxlY3RSZWxhdGlvbnNoaXBzKGJ1aWxkU3RhdGUoKSkpLnRvRXF1YWwoW10pOwogIH0pOwp9KTsKCmRlc2NyaWJlKCdzZWxlY3RDaGFyYWN0ZXJzRm9yR3JhcGgnLCAoKSA9PiB7CiAgaXQoJ3JldHVybnMgY2hhcmFjdGVycyBhbmQgcmVsYXRpb25zaGlwcyB0b2dldGhlcicsICgpID0+IHsKICAgIGNvbnN0IHJlc3VsdCA9IHNlbGVjdENoYXJhY3RlcnNGb3JHcmFwaChidWlsZFN0YXRlKCkpOwogICAgZXhwZWN0KHJlc3VsdCkudG9IYXZlUHJvcGVydHkoJ2NoYXJhY3RlcnMnKTsKICAgIGV4cGVjdChyZXN1bHQpLnRvSGF2ZVByb3BlcnR5KCdyZWxhdGlvbnNoaXBzJyk7CiAgfSk7Cn0pOw==
+import { configureStore } from '@reduxjs/toolkit';
+import undoable, { type StateWithHistory } from 'redux-undo';
+import { describe, expect, it } from 'vitest';\nimport { buildState } from './projectStateFixture';
+import type { RootState } from '../../app/store';
+import featureFlagsReducer from '../../features/featureFlags/featureFlagsSlice';
+import {
+  selectAllCharacters,
+  selectAllWorlds,
+  selectCanRedo,
+  selectCanUndo,
+  selectCharactersForGraph,
+  selectManuscript,
+  selectOutline,
+  selectProjectGoals,
+  selectRelationships,
+  selectTotalWordCount,
+  selectWritingHistory,
+} from '../../features/project/projectSelectors';
+import type { ProjectData } from '../../features/project/projectSlice';
+import projectReducer, {
+  charactersAdapter,
+  worldsAdapter,
+} from '../../features/project/projectSlice';
+import settingsReducer from '../../features/settings/settingsSlice';
+import statusReducer from '../../features/status/statusSlice';
+import versionControlReducer from '../../features/versionControl/versionControlSlice';
+import writerReducer from '../../features/writer/writerSlice';
+
+const makeChar = (id: string, name: string) => ({
+  id,
+  name,
+  backstory: '',
+  motivation: '',
+  appearance: '',
+  personalityTraits: '',
+  flaws: '',
+  notes: '',
+  characterArc: '',
+  relationships: '',
+});
+
+const makeWorld = (id: string, name: string) => ({
+  id,
+  name,
+  description: '',
+  geography: '',
+  magicSystem: '',
+  culture: '',
+  notes: '',
+  timeline: [],
+  locations: [],
+});
+
+describe('undo/redo selectors', () => {
+  it('selectCanUndo is false when past is empty', () => {
+    expect(selectCanUndo(buildState())).toBe(false);
+  });
+
+  it('selectCanRedo is false when future is empty', () => {
+    expect(selectCanRedo(buildState())).toBe(false);
+  });
+});
+
+describe('manuscript selectors', () => {
+  it('selectManuscript returns empty array by default', () => {
+    expect(selectManuscript(buildState())).toEqual([]);
+  });
+
+  it('selectManuscript returns sections', () => {
+    const manuscript = [{ id: 's1', title: 'Ch1', content: 'hello world' }];
+    expect(selectManuscript(buildState({ manuscript }))).toEqual(manuscript);
+  });
+});
+
+describe('selectTotalWordCount', () => {
+  it('counts words across all sections', () => {
+    const manuscript = [
+      { id: 's1', title: 'Ch1', content: 'hello world' },
+      { id: 's2', title: 'Ch2', content: 'one two three' },
+    ];
+    expect(selectTotalWordCount(buildState({ manuscript }))).toBe(5);
+  });
+
+  it('returns 0 for empty manuscript', () => {
+    expect(selectTotalWordCount(buildState())).toBe(0);
+  });
+});
+
+describe('selectOutline', () => {
+  it('returns empty array by default', () => {
+    expect(selectOutline(buildState())).toEqual([]);
+  });
+});
+
+describe('selectWritingHistory', () => {
+  it('returns empty array by default', () => {
+    expect(selectWritingHistory(buildState())).toEqual([]);
+  });
+});
+
+describe('selectProjectGoals', () => {
+  it('returns default goals', () => {
+    expect(selectProjectGoals(buildState())).toEqual({
+      totalWordCount: 50000,
+      targetDate: null,
+    });
+  });
+});
+
+describe('character selectors', () => {
+  it('selectAllCharacters returns empty array by default', () => {
+    expect(selectAllCharacters(buildState())).toEqual([]);
+  });
+
+  it('selectAllCharacters returns added characters', () => {
+    const characters = charactersAdapter.addMany(charactersAdapter.getInitialState(), [
+      makeChar('c1', 'Alice'),
+      makeChar('c2', 'Bob'),
+    ]);
+    const state = buildState({ characters });
+    expect(selectAllCharacters(state)).toHaveLength(2);
+    expect(selectAllCharacters(state)[0]?.name).toBe('Alice');
+  });
+});
+
+describe('world selectors', () => {
+  it('selectAllWorlds returns empty array by default', () => {
+    expect(selectAllWorlds(buildState())).toEqual([]);
+  });
+
+  it('selectAllWorlds returns added worlds', () => {
+    const worlds = worldsAdapter.addMany(worldsAdapter.getInitialState(), [
+      makeWorld('w1', 'Middle Earth'),
+    ]);
+    expect(selectAllWorlds(buildState({ worlds }))).toHaveLength(1);
+  });
+});
+
+describe('selectRelationships', () => {
+  it('returns empty array by default', () => {
+    expect(selectRelationships(buildState())).toEqual([]);
+  });
+});
+
+describe('selectCharactersForGraph', () => {
+  it('returns characters and relationships together', () => {
+    const result = selectCharactersForGraph(buildState());
+    expect(result).toHaveProperty('characters');
+    expect(result).toHaveProperty('relationships');
+  });
+});
