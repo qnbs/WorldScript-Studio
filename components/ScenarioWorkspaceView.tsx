@@ -1,1 +1,132 @@
-import type { FC } from 'react';\nimport { useAppSelector } from '../app/hooks';\nimport { selectProjectData } from '../features/project/projectSelectors';\nimport { useTranslation } from '../hooks/useTranslation';\nimport { buildScenarioWorkspaceProjection } from '../services/scenarioWorkspaceProjection';\nimport type { View } from '../types';\nimport { Button } from './ui/Button';\nimport { Card, CardContent, CardHeader } from './ui/Card';\nimport { PageContainer } from './ui/PageContainer';\nimport { SectionIcon } from './ui/SectionIcon';\n\ninterface ScenarioWorkspaceViewProps {\n  onNavigate: (view: View) => void;\n}\n\nconst ProjectionCard: FC<{\n  label: string;\n  count: number;\n  view: View;\n  onNavigate: (view: View) => void;\n}> = ({ label, count, view, onNavigate }) => (\n  <Card className="h-full">\n    <CardContent className="flex h-full flex-col gap-4">\n      <div className="flex items-center justify-between gap-3">\n        <h2 className="font-semibold text-[var(--sc-text-primary)]">{label}</h2>\n        <span\n          className="text-2xl font-bold text-[var(--sc-accent)]"\n          aria-label={`${label}: ${count}`}\n        >\n          {count}\n        </span>\n      </div>\n      <Button variant="outline" size="sm" onClick={() => onNavigate(view)} className="mt-auto">\n        {label}\n      </Button>\n    </CardContent>\n  </Card>\n);\n\nexport const ScenarioWorkspaceView: FC<ScenarioWorkspaceViewProps> = ({ onNavigate }) => {\n  const { t } = useTranslation();\n  const project = useAppSelector(selectProjectData);\n\n  if (!project) return null;\n  const projection = buildScenarioWorkspaceProjection(project);\n\n  return (\n    <PageContainer width="wide" className="space-y-6">\n      <header className="flex items-start gap-4">\n        <SectionIcon section="scenario" size="lg" />\n        <div>\n          <p className="text-sm font-medium text-[var(--sc-text-muted)]">{projection.title}</p>\n          <h1 className="text-3xl font-bold text-[var(--sc-text-primary)]">\n            {t('sidebar.scenario')}\n          </h1>\n        </div>\n      </header>\n\n      <Card>\n        <CardHeader>\n          <h2 className="text-lg font-semibold text-[var(--sc-text-primary)]">\n            {t('dashboard.details.logline')}\n          </h2>\n        </CardHeader>\n        <CardContent>\n          <p className="text-[var(--sc-text-secondary)]">\n            {projection.logline || t('dashboard.noLogline')}\n          </p>\n        </CardContent>\n      </Card>\n\n      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">\n        <ProjectionCard\n          label={t('sidebar.characters')}\n          count={projection.counts.characters}\n          view="characters"\n          onNavigate={onNavigate}\n        />\n        <ProjectionCard\n          label={t('sidebar.world')}\n          count={projection.counts.worlds}\n          view="world"\n          onNavigate={onNavigate}\n        />\n        <ProjectionCard\n          label={t('sidebar.outline')}\n          count={projection.counts.outline}\n          view="outline"\n          onNavigate={onNavigate}\n        />\n        <ProjectionCard\n          label={t('sidebar.sceneboard')}\n          count={projection.counts.scenes}\n          view="sceneboard"\n          onNavigate={onNavigate}\n        />\n        <ProjectionCard\n          label={t('sidebar.manuscript')}\n          count={projection.counts.words}\n          view="manuscript"\n          onNavigate={onNavigate}\n        />\n      </div>\n\n      <Card>\n        <CardHeader>\n          <h2 className="text-lg font-semibold text-[var(--sc-text-primary)]">\n            {t('sidebar.manuscript')}\n          </h2>\n        </CardHeader>\n        <CardContent>\n          <ul className="space-y-2" aria-label={t('sidebar.manuscript')}>\n            {projection.sections.map((section) => (\n              <li\n                key={section.id}\n                className="rounded-sc-lg border border-[var(--sc-border-subtle)] p-3"\n              >\n                <p className="font-medium text-[var(--sc-text-primary)]">{section.title}</p>\n                {section.summary && (\n                  <p className="mt-1 text-sm text-[var(--sc-text-muted)]">{section.summary}</p>\n                )}\n              </li>\n            ))}\n          </ul>\n          {projection.sections.length === 0 && (\n            <p className="text-[var(--sc-text-muted)]">{t('empty.manuscript.description')}</p>\n          )}\n        </CardContent>\n      </Card>\n    </PageContainer>\n  );\n};\n
+import type { FC } from 'react';
+import { useAppSelector } from '../app/hooks';
+import { selectProjectData } from '../features/project/projectSelectors';
+import { useTranslation } from '../hooks/useTranslation';
+import { buildScenarioWorkspaceProjection } from '../services/scenarioWorkspaceProjection';
+import type { View } from '../types';
+import { Button } from './ui/Button';
+import { Card, CardContent, CardHeader } from './ui/Card';
+import { PageContainer } from './ui/PageContainer';
+import { SectionIcon } from './ui/SectionIcon';
+
+interface ScenarioWorkspaceViewProps {
+  onNavigate: (view: View) => void;
+}
+
+const ProjectionCard: FC<{
+  label: string;
+  count: number;
+  view: View;
+  onNavigate: (view: View) => void;
+}> = ({ label, count, view, onNavigate }) => (
+  <Card className="h-full">
+    <CardContent className="flex h-full flex-col gap-4">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="font-semibold text-[var(--sc-text-primary)]">{label}</h2>
+        <span
+          className="text-2xl font-bold text-[var(--sc-accent)]"
+          aria-label={`${label}: ${count}`}
+        >
+          {count}
+        </span>
+      </div>
+      <Button variant="outline" size="sm" onClick={() => onNavigate(view)} className="mt-auto">
+        {label}
+      </Button>
+    </CardContent>
+  </Card>
+);
+
+export const ScenarioWorkspaceView: FC<ScenarioWorkspaceViewProps> = ({ onNavigate }) => {
+  const { t } = useTranslation();
+  const project = useAppSelector(selectProjectData);
+
+  if (!project) return null;
+  const projection = buildScenarioWorkspaceProjection(project);
+
+  return (
+    <PageContainer width="wide" className="space-y-6">
+      <header className="flex items-start gap-4">
+        <SectionIcon section="scenario" size="lg" />
+        <div>
+          <p className="text-sm font-medium text-[var(--sc-text-muted)]">{projection.title}</p>
+          <h1 className="text-3xl font-bold text-[var(--sc-text-primary)]">
+            {t('sidebar.scenario')}
+          </h1>
+        </div>
+      </header>
+
+      <Card>
+        <CardHeader>
+          <h2 className="text-lg font-semibold text-[var(--sc-text-primary)]">
+            {t('dashboard.details.logline')}
+          </h2>
+        </CardHeader>
+        <CardContent>
+          <p className="text-[var(--sc-text-secondary)]">
+            {projection.logline || t('dashboard.noLogline')}
+          </p>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <ProjectionCard
+          label={t('sidebar.characters')}
+          count={projection.counts.characters}
+          view="characters"
+          onNavigate={onNavigate}
+        />
+        <ProjectionCard
+          label={t('sidebar.world')}
+          count={projection.counts.worlds}
+          view="world"
+          onNavigate={onNavigate}
+        />
+        <ProjectionCard
+          label={t('sidebar.outline')}
+          count={projection.counts.outline}
+          view="outline"
+          onNavigate={onNavigate}
+        />
+        <ProjectionCard
+          label={t('sidebar.sceneboard')}
+          count={projection.counts.scenes}
+          view="sceneboard"
+          onNavigate={onNavigate}
+        />
+        <ProjectionCard
+          label={t('sidebar.manuscript')}
+          count={projection.counts.words}
+          view="manuscript"
+          onNavigate={onNavigate}
+        />
+      </div>
+
+      <Card>
+        <CardHeader>
+          <h2 className="text-lg font-semibold text-[var(--sc-text-primary)]">
+            {t('sidebar.manuscript')}
+          </h2>
+        </CardHeader>
+        <CardContent>
+          <ul className="space-y-2" aria-label={t('sidebar.manuscript')}>
+            {projection.sections.map((section) => (
+              <li
+                key={section.id}
+                className="rounded-sc-lg border border-[var(--sc-border-subtle)] p-3"
+              >
+                <p className="font-medium text-[var(--sc-text-primary)]">{section.title}</p>
+                {section.summary && (
+                  <p className="mt-1 text-sm text-[var(--sc-text-muted)]">{section.summary}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+          {projection.sections.length === 0 && (
+            <p className="text-[var(--sc-text-muted)]">{t('empty.manuscript.description')}</p>
+          )}
+        </CardContent>
+      </Card>
+    </PageContainer>
+  );
+};
