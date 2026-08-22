@@ -124,6 +124,26 @@ describe('parseRetryAfterMs', () => {
     expect(parseRetryAfterMs({ retryAfter: 'not-a-date' })).toBeNull();
   });
 
+  it('falls back to a valid header when the direct string is invalid', () => {
+    expect(
+      parseRetryAfterMs({
+        retryAfter: 'not-a-date',
+        headers: { get: () => '2' },
+      }),
+    ).toBe(2000);
+  });
+
+  it('parses a future HTTP-date and clamps negative delays to zero', () => {
+    const now = 1_700_000_000_000;
+    const restoreNow = vi.spyOn(Date, 'now').mockReturnValue(now);
+    try {
+      expect(parseRetryAfterMs({ retryAfter: new Date(now + 2500).toUTCString() })).toBe(2000);
+      expect(parseRetryAfterMs({ retryAfterMs: -1 })).toBe(0);
+    } finally {
+      restoreNow.mockRestore();
+    }
+  });
+
   it('ignores zero-length header values', () => {
     expect(parseRetryAfterMs({ headers: { get: () => '' } })).toBeNull();
   });

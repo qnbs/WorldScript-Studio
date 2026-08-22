@@ -56,6 +56,24 @@ describe('shouldRouteLocally()', () => {
     // Hybrid is cloud-first: _localModelsReady does NOT promote to local while online.
     expect(shouldRouteLocally()).toBe(false);
   });
+
+  it('routes cloud and hybrid locally while offline', () => {
+    // QNBS-v3: Offline routing must override cloud-first mode without depending on a real network.
+    const online = Object.getOwnPropertyDescriptor(navigator, 'onLine');
+    try {
+      // QNBS-v3: Force the offline branch so cloud-only mode cannot be misclassified as network-available.
+      Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false });
+      setActiveAiMode('cloud');
+      expect(shouldRouteLocally()).toBe(true);
+      expect(isCloudOnlyMode()).toBe(false);
+      setActiveAiMode('hybrid');
+      expect(shouldRouteLocally()).toBe(true);
+      expect(isCloudOnlyMode()).toBe(false);
+    } finally {
+      if (online) Object.defineProperty(navigator, 'onLine', online);
+      else delete (navigator as { onLine?: boolean }).onLine;
+    }
+  });
 });
 
 describe('notifyLocalModelsReady() / getLocalModelsReady()', () => {
