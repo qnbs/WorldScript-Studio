@@ -46,7 +46,7 @@ describe('CI workflow policy', () => {
     expect(actionIndex).toBeLessThan(nodeIndex);
     expect(setupActionSource).not.toContain('corepack enable');
     expect(setupActionSource).toContain('pnpm install --frozen-lockfile');
-    expect(setupActionSource).toContain('pnpm run toolchain:check');
+    expect(setupActionSource).toContain('node scripts/check-pnpm-toolchain.mjs');
   });
   // QNBS-v3: preserve first-attempt Vitest failures as visible CI evidence instead of masking flakes with retries.
   it('runs Vitest once so first-attempt failures cannot be hidden by retry', () => {

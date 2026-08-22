@@ -31,7 +31,7 @@ runs:
         cache: pnpm
 
     - name: Assert toolchain
-      run: pnpm run toolchain:check
+      run: node scripts/check-pnpm-toolchain.mjs
       shell: bash
 
     - name: Install dependencies
