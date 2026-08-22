@@ -144,7 +144,7 @@ addDebouncedListener(
         /* non-critical */
       }
 
-      await storageService.saveProject(projectDataToSave);
+      await projectPersistenceCoordinator.enqueue(() => storageService.saveProject(projectDataToSave));
 
       // QNBS-v3: enableCrossProjectSearch promoted to permanent core — the IDB search index always
       // updates on save. The DuckDB mirror is analytics persistence, so it honours the same privacy
@@ -226,7 +226,7 @@ addDebouncedListener(
     if (state.settings === api.getOriginalState().settings) return;
 
     try {
-      await storageService.saveSettings(state.settings);
+      await settingsPersistenceCoordinator.enqueue(() => storageService.saveSettings(state.settings));
     } catch (error) {
       logger.error('Auto-save (settings) failed:', error);
       // QNBS-v3: Mirror the project auto-save toast so the user knows settings weren't persisted.
