@@ -17,12 +17,16 @@ const workflowPath = fileURLToPath(new URL('../../.github/workflows/ci.yml', imp
 const setupActionPath = fileURLToPath(
   new URL('../../.github/actions/setup/action.yml', import.meta.url),
 );
+const cloudflareWorkflowPath = fileURLToPath(
+  new URL('../../.github/workflows/deploy-cloudflare-pages.yml.disabled', import.meta.url),
+);
 const scheduledSecurityWorkflowPath = fileURLToPath(
   new URL('../../.github/workflows/security-scheduled.yml', import.meta.url),
 );
 const tauriManifestPath = fileURLToPath(new URL('../../src-tauri/Cargo.toml', import.meta.url));
 const workflowSource = readFileSync(workflowPath, 'utf8');
 const setupActionSource = readFileSync(setupActionPath, 'utf8');
+const cloudflareWorkflowSource = readFileSync(cloudflareWorkflowPath, 'utf8');
 const scheduledSecurityWorkflowSource = readFileSync(scheduledSecurityWorkflowPath, 'utf8');
 const packageJson = JSON.parse(
   readFileSync(fileURLToPath(new URL('../../package.json', import.meta.url)), 'utf8'),
@@ -45,8 +49,21 @@ describe('CI workflow policy', () => {
     expect(actionIndex).toBeGreaterThanOrEqual(0);
     expect(actionIndex).toBeLessThan(nodeIndex);
     expect(setupActionSource).not.toContain('corepack enable');
-    expect(setupActionSource).toContain('pnpm install --frozen-lockfile');
-    expect(setupActionSource).toContain('node scripts/check-pnpm-toolchain.mjs');
+    const setupToolchainIndex = setupActionSource.indexOf(
+      'export npm_config_user_agent="pnpm/$(pnpm --version)"',
+    );
+    const setupInstallIndex = setupActionSource.indexOf('pnpm install --frozen-lockfile');
+    expect(setupToolchainIndex).toBeGreaterThanOrEqual(0);
+    expect(setupToolchainIndex).toBeLessThan(setupInstallIndex);
+
+    const cloudflareToolchainIndex = cloudflareWorkflowSource.indexOf(
+      'export npm_config_user_agent="pnpm/$(pnpm --version)"',
+    );
+    const cloudflareInstallIndex = cloudflareWorkflowSource.indexOf(
+      'pnpm install --frozen-lockfile',
+    );
+    expect(cloudflareToolchainIndex).toBeGreaterThanOrEqual(0);
+    expect(cloudflareToolchainIndex).toBeLessThan(cloudflareInstallIndex);
   });
   // QNBS-v3: preserve first-attempt Vitest failures as visible CI evidence instead of masking flakes with retries.
   it('runs Vitest once so first-attempt failures cannot be hidden by retry', () => {

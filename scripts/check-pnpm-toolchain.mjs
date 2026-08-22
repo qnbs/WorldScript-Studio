@@ -1,4 +1,5 @@
 import process from 'node:process';
+import { isVersionAtLeast } from './pnpm-version-policy.mjs';
 
 const projectPackage = JSON.parse(
   await (await import('node:fs/promises')).readFile('package.json', 'utf8'),
@@ -8,23 +9,6 @@ const expectedPnpmVersion = expectedPackageManager?.startsWith('pnpm@')
   ? expectedPackageManager.slice('pnpm@'.length)
   : null;
 const minimumSecurePnpmVersion = '11.11.0';
-
-function parseVersion(version) {
-  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
-  return match ? match.slice(1).map(Number) : null;
-}
-
-function isVersionAtLeast(version, minimum) {
-  const actualParts = parseVersion(version);
-  const minimumParts = parseVersion(minimum);
-  if (!actualParts || !minimumParts) return false;
-  return (
-    actualParts.some((part, index) => {
-      if (part !== minimumParts[index]) return part > minimumParts[index];
-      return false;
-    }) || actualParts.every((part, index) => part === minimumParts[index])
-  );
-}
 
 if (!expectedPnpmVersion) {
   console.error('[toolchain] package.json must pin packageManager to pnpm@<exact-version>.');
@@ -57,10 +41,6 @@ if (actualNodeMajor < minimumNodeMajor) {
 
 const isDirectHook = process.argv.includes('--hook');
 const userAgentVersion = process.env.npm_config_user_agent?.match(/(?:^|\s)pnpm\/(\S+)/)?.[1];
-if (userAgentVersion && userAgentVersion !== expectedPnpmVersion) {
-  console.error(`[toolchain] pnpm ${expectedPnpmVersion} is required; found ${userAgentVersion}.`);
-  process.exit(1);
-}
 
 if (!userAgentVersion) {
   if (isDirectHook) {
@@ -73,6 +53,9 @@ if (!userAgentVersion) {
     );
     process.exit(1);
   }
+} else if (userAgentVersion !== expectedPnpmVersion) {
+  console.error(`[toolchain] pnpm ${expectedPnpmVersion} is required; found ${userAgentVersion}.`);
+  process.exit(1);
 } else {
   console.log(
     `[toolchain] Node ${process.versions.node} and pnpm ${userAgentVersion} match the project pin.`,

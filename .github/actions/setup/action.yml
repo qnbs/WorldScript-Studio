@@ -31,7 +31,9 @@ runs:
         cache: pnpm
 
     - name: Assert toolchain
-      run: node scripts/check-pnpm-toolchain.mjs
+      run: |
+        export npm_config_user_agent="pnpm/$(pnpm --version)"
+        node scripts/check-pnpm-toolchain.mjs
       shell: bash
 
     - name: Install dependencies

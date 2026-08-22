@@ -54,6 +54,11 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - name: Assert toolchain
+        run: |
+          export npm_config_user_agent="pnpm/$(pnpm --version)"
+          node scripts/check-pnpm-toolchain.mjs
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
