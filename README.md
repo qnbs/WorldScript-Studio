@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/Storage-IndexedDB_v8-F59E0B" alt="IndexedDB v8">
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
   <img src="https://img.shields.io/badge/i18n-19_locales-2925_keys-0EA5E9" alt="i18n 19 locales — 2925 keys">
-  <img src="https://img.shields.io/badge/Tests-6928%2B_%2F_570_files-22C55E" alt="6928+ tests / 571 files">
+  <img src="https://img.shields.io/badge/Tests-6928%2B_%2F_571_files-22C55E" alt="6928+ tests / 571 files">
   <img src="https://img.shields.io/codecov/c/github/qnbs/WorldScript-Studio?logo=codecov&label=Coverage" alt="Codecov Coverage">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">
   <img src="https://img.shields.io/github/actions/workflow/status/qnbs/WorldScript-Studio/.github/workflows/ci.yml?branch=main&logo=github" alt="CI Status">
@@ -711,7 +711,7 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 | `scorecard`  | weekly + `main` push | OpenSSF Scorecard — SARIF uploaded to GitHub Code Scanning |
 
 **Current test metrics (2026-08-21, source-synchronized; CI remains authoritative for pass/fail):**
-- **6928+ unit tests** across **570 test files** — CI is authoritative for pass/fail
+- **6928+ unit tests** across **571 test files** — CI is authoritative for pass/fail
 - Coverage thresholds: lines ≥ 80 · branches ≥ 66 · functions ≥ 72 · statements ≥ 78 — enforced in CI (see Codecov badge for live metrics)
 - i18n: **2925 keys × 19 locales** (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu/ru/ko Beta)
 
