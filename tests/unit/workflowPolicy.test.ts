@@ -132,14 +132,15 @@ describe('CI workflow policy', () => {
     }
     expect(scanStep).toContain('--config=src-tauri/osv-scanner.toml');
     expect(scanStep).toContain('--format=json');
-    expect(scanStep).toContain('--output-file=/github/workspace/osv-results.json');
+    expect(scanStep).toContain('--output-file=osv-results.json');
     expect(summaryStep).toContain('GITHUB_STEP_SUMMARY');
+    expect(summaryStep).toContain('process.env.GITHUB_WORKSPACE');
     expect(enforcementStep).toContain('SCANNER_OUTCOME');
     expect(enforcementStep).toMatch(
       /if \[ "\$SCANNER_OUTCOME" != "success" \]; then[\s\S]+?exit 1\n\s+fi/,
     );
     expect(enforcementStep).toMatch(
-      /if \[ ! -s \/github\/workspace\/osv-results\.json \]; then[\s\S]+?exit 1\n\s+fi/,
+      /if \[ ! -s "\$GITHUB_WORKSPACE\/osv-results\.json" \]; then[\s\S]+?exit 1\n\s+fi/,
     );
   });
 });

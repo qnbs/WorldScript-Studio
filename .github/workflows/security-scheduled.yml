@@ -34,7 +34,7 @@ jobs:
             --lockfile=src-tauri/Cargo.lock
             --lockfile=crates/Cargo.lock
             --format=json
-            --output-file=/github/workspace/osv-results.json
+            --output-file=osv-results.json
 
       - name: Summarize OSV findings
         if: always()
@@ -44,7 +44,8 @@ jobs:
           node --input-type=module <<'NODE'
           import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 
-          const reportPath = '/github/workspace/osv-results.json';
+          const runnerWorkspace = process.env.GITHUB_WORKSPACE ?? '/github/workspace';
+          const reportPath = `${runnerWorkspace}/osv-results.json`;
           const summary = [
             '## Scheduled OSV/SCA scan',
             '',
@@ -58,10 +59,9 @@ jobs:
               const findings = [];
               for (const result of report.results ?? []) {
                 const source = result.source?.path ?? 'unknown lockfile';
-                const workspacePath = '/github/workspace/';
-                const lockfile = source.startsWith(workspacePath)
-                  ? source.slice(workspacePath.length)
-                  : source;
+                const workspacePaths = [`${runnerWorkspace}/`, '/github/workspace/'];
+                const workspacePath = workspacePaths.find((candidate) => source.startsWith(candidate));
+                const lockfile = workspacePath ? source.slice(workspacePath.length) : source;
                 for (const entry of result.packages ?? []) {
                   const ids = new Set([
                     ...(entry.vulnerabilities ?? []).map((vulnerability) => vulnerability.id),
@@ -100,7 +100,7 @@ jobs:
             echo "::error::Scheduled OSV scan failed; see the summary and scanner log for lockfile and advisory details."
             exit 1
           fi
-          if [ ! -s /github/workspace/osv-results.json ]; then
+          if [ ! -s "$GITHUB_WORKSPACE/osv-results.json" ]; then
             echo "::error::Scheduled OSV scan produced no JSON report."
             exit 1
           fi
