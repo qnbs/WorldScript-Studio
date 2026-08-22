@@ -9,6 +9,7 @@ full per-wave status.
 (ADR-0019, ADR-0020 — see [`docs/historical/cef/README.md`](../historical/cef/README.md))
 **Transitional desktop runtime:** Tauri 2 / system WebView, retained only as a reference/fallback
 until Qt admission and cutover gates are satisfied, **and itself retired once Qt reaches Stable**
+**Transitional maintenance policy:** [`TAURI-TRANSITIONAL-MAINTENANCE.md`](TAURI-TRANSITIONAL-MAINTENANCE.md) defines the TM-0..TM-3 support boundary, #332 evidence rules, and retirement conditions.
 **Primary native desktop line:** Qt 6 / Qt Quick (QML) — Hardened / Accessible / Long-Lived Edition
 **Deferred native exploration:** GPUI — Vision / High-Performance Edition (not a numbered execution commitment)
 **Web line:** React + Vite PWA, retained as a first-class product surface and behavioral reference
