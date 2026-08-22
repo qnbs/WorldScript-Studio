@@ -154,6 +154,20 @@ describe('getOllamaModelForDevice', () => {
     expect(rec.downgradedForBattery).toBe(true);
   });
 
+  it('does not downgrade at the exact low-battery threshold', () => {
+    // QNBS-v3: The strict threshold boundary prevents a one-point battery change from altering tiers unexpectedly.
+    const rec = getOllamaModelForDevice({
+      ...baseReport,
+      deviceClass: 'high-end',
+      batteryLevel: 0.2,
+    });
+    expect(rec).toMatchObject({
+      modelId: 'qwen2.5:7b',
+      tier: 'high-end',
+      downgradedForBattery: false,
+    });
+  });
+
   it('does not downgrade below low-end and does not flag when battery is unknown', () => {
     const lowEndLowBattery = getOllamaModelForDevice({
       ...baseReport,
