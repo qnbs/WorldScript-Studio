@@ -20,6 +20,9 @@
   },
   "scripts": {
     "hooks:install": "simple-git-hooks",
+    "signing:doctor": "node scripts/signing/doctor.mjs",
+    "signing:check-range": "node scripts/signing/check-range.mjs",
+    "signing:verify-remote": "node scripts/signing/verify-remote.mjs",
     "toolchain:check": "node scripts/check-pnpm-toolchain.mjs",
     "deps:verify": "node scripts/dependency-state.mjs verify",
     "deps:reconcile": "node scripts/dependency-state.mjs reconcile",

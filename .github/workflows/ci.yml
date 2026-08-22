@@ -129,6 +129,24 @@ jobs:
             echo "crates=false" >> "$GITHUB_OUTPUT"
           fi
 
+  signatures:
+    name: 🔏 Verified Signatures
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [security]
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify every introduced GitHub commit and release tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/signing/verify-github-signatures.mjs
+
   # ----------------------------------------------------------
   # 1. QUALITY GATE: Lint + Typecheck + Tests (parallel matrix)
   # ----------------------------------------------------------
@@ -417,20 +435,21 @@ jobs:
 
   # ----------------------------------------------------------
   # 3. CI SUCCESS: single required-status aggregator
-  #    (security + quality + changes + rust-tauri + core-rust + build + e2e + vrt)
+  #    (security + signatures + quality + changes + rust-tauri + core-rust + build + e2e + vrt)
   # ----------------------------------------------------------
   ci-success:
     name: ✅ CI Success
     runs-on: ubuntu-latest
     timeout-minutes: 5
     # QNBS-v3: Every unconditional job is either required here or explicitly advisory at job level.
-    needs: [security, quality, changes, rust-tauri, core-rust, build, e2e, lighthouse, vrt]
+    needs: [security, signatures, quality, changes, rust-tauri, core-rust, build, e2e, lighthouse, vrt]
     if: always()
     steps:
       - name: Verify all required jobs succeeded
         run: |
           FAIL=0
           [ "${{ needs.security.result }}" = "success" ] || FAIL=1
+          [ "${{ needs.signatures.result }}" = "success" ] || FAIL=1
           [ "${{ needs.quality.result }}" = "success" ] || FAIL=1
           [ "${{ needs.changes.result }}" = "success" ] || FAIL=1
           if [ "${{ needs.rust-tauri.result }}" != "success" ] && [ "${{ needs.rust-tauri.result }}" != "skipped" ]; then
@@ -446,6 +465,7 @@ jobs:
           if [ "$FAIL" = "1" ]; then
             echo "One or more required jobs did not succeed:"
             echo "  security: ${{ needs.security.result }}"
+            echo "  signatures: ${{ needs.signatures.result }}"
             echo "  quality:  ${{ needs.quality.result }}"
             echo "  changes:  ${{ needs.changes.result }}"
             echo "  rust-tauri: ${{ needs.rust-tauri.result }} (skipped = OK, src-tauri untouched)"
