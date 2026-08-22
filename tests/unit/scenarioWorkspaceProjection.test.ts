@@ -30,4 +30,22 @@ describe('buildScenarioWorkspaceProjection', () => {
     });
     expect(project).toEqual(before);
   });
+
+  it('supports normalized entity collections and projects an empty outline safely', () => {
+    // QNBS-v3: Keep Scenario compatible with canonical Redux entity adapters and sparse projects.
+    const normalizedProject = {
+      ...project,
+      characters: { ids: ['c1', 'c2'], entities: {} },
+      worlds: { ids: ['w1', 'w2', 'w3'], entities: {} },
+      outline: undefined,
+      manuscript: [],
+    } as unknown as StoryProject;
+
+    expect(buildScenarioWorkspaceProjection(normalizedProject)).toEqual({
+      title: 'Pilot',
+      logline: 'A test logline',
+      counts: { characters: 2, worlds: 3, outline: 0, scenes: 0, words: 0 },
+      sections: [],
+    });
+  });
 });

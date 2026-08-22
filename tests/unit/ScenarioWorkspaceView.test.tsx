@@ -63,7 +63,28 @@ describe('ScenarioWorkspaceView', () => {
     expect(screen.queryByText('empty.manuscript.description')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'sidebar.characters' }));
-    expect(onNavigate).toHaveBeenCalledWith('characters');
+    await user.click(screen.getByRole('button', { name: 'sidebar.world' }));
+    await user.click(screen.getByRole('button', { name: 'sidebar.outline' }));
+    await user.click(screen.getByRole('button', { name: 'sidebar.sceneboard' }));
+    await user.click(screen.getByRole('button', { name: 'sidebar.manuscript' }));
+    expect(onNavigate).toHaveBeenNthCalledWith(1, 'characters');
+    expect(onNavigate).toHaveBeenNthCalledWith(2, 'world');
+    expect(onNavigate).toHaveBeenNthCalledWith(3, 'outline');
+    expect(onNavigate).toHaveBeenNthCalledWith(4, 'sceneboard');
+    expect(onNavigate).toHaveBeenNthCalledWith(5, 'manuscript');
+  });
+
+  it('renders populated logline and section summary content', () => {
+    vi.mocked(useAppSelector).mockImplementationOnce(() => ({
+      ...project,
+      logline: 'A populated logline',
+      manuscript: [{ ...project.manuscript[0], summary: 'A populated summary' }],
+    }));
+
+    render(<ScenarioWorkspaceView onNavigate={vi.fn()} />);
+
+    expect(screen.getByText('A populated logline')).toBeInTheDocument();
+    expect(screen.getByText('A populated summary')).toBeInTheDocument();
   });
 
   it('renders the empty manuscript state and returns null without a project', () => {

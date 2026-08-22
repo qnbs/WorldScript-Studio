@@ -73,6 +73,7 @@ import { desktopPlatform } from './services/desktopPlatform';
 import { logger } from './services/logger';
 import { pluginRegistry } from './services/pluginRegistry';
 import { repairProjectI18nFields } from './services/projectI18nRepair';
+import { loadScenarioWorkspaceView } from './services/scenarioWorkspaceLoader';
 import { hasCompletedSpotlightTour, startSpotlightTour } from './services/spotlightTour';
 import {
   type EncryptionMigrationJournal,
@@ -169,9 +170,7 @@ const LoraView = lazy(() =>
   import('./components/lora/LoraView').then((m) => ({ default: m.LoraView })),
 );
 // QNBS-v3: Keep Scenario lazy to keep the initial bundle focused on the default workspace.
-const ScenarioWorkspaceView = lazy(() =>
-  import('./components/ScenarioWorkspaceView').then((m) => ({ default: m.ScenarioWorkspaceView })),
-);
+const ScenarioWorkspaceView = lazy(loadScenarioWorkspaceView);
 
 // Fallback while a view is loading
 const ViewLoader: FC = () => {
