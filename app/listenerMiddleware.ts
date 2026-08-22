@@ -22,6 +22,7 @@ import { storageService } from '../services/storageService';
 import type { Character, StorySection, World } from '../types';
 import { isAnalyticsPersistenceAllowed } from './analyticsGate';
 import type { AppDispatch, RootState } from './store';
+import { projectPersistenceCoordinator, settingsPersistenceCoordinator } from './persistenceCoordinator';
 import { appStoreRef } from './storeRef';
 import { useTransientUiStore } from './transientUiStore';
 
