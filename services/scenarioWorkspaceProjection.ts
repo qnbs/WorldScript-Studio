@@ -1,1 +1,42 @@
-import type { StoryProject } from '../types';\n\nexport interface ScenarioWorkspaceProjection {\n  title: string;\n  logline: string;\n  counts: {\n    characters: number;\n    worlds: number;\n    outline: number;\n    scenes: number;\n    words: number;\n  };\n  sections: Array<{ id: string; title: string; summary: string }>;\n}\n\nconst countEntities = <T,>(value: T[] | { ids: string[] }): number =>\n  Array.isArray(value) ? value.length : value.ids.length;\n\nexport function buildScenarioWorkspaceProjection(project: StoryProject): ScenarioWorkspaceProjection {\n  // QNBS-v3: project views derive from canonical StoryProject state so screenplay planning cannot drift from manuscript data.\n  const sections = project.manuscript.map((section) => ({\n    id: section.id,\n    title: section.title,\n    summary: section.summary ?? section.notes ?? '',\n  }));\n  const words = project.manuscript.reduce(\n    (total, section) => total + section.content.trim().split(/\\s+/).filter(Boolean).length,\n    0,\n  );\n  return {\n    title: project.title,\n    logline: project.logline,\n    counts: {\n      characters: countEntities(project.characters),\n      worlds: countEntities(project.worlds),\n      outline: project.outline?.length ?? 0,\n      scenes: sections.length,\n      words,\n    },\n    sections,\n  };\n}\n
+import type { StoryProject } from '../types';
+
+export interface ScenarioWorkspaceProjection {
+  title: string;
+  logline: string;
+  counts: {
+    characters: number;
+    worlds: number;
+    outline: number;
+    scenes: number;
+    words: number;
+  };
+  sections: Array<{ id: string; title: string; summary: string }>;
+}
+
+const countEntities = <T,>(value: T[] | { ids: string[] }): number =>
+  Array.isArray(value) ? value.length : value.ids.length;
+
+export function buildScenarioWorkspaceProjection(project: StoryProject): ScenarioWorkspaceProjection {
+  // QNBS-v3: project views derive from canonical StoryProject state so screenplay planning cannot drift from manuscript data.
+  const sections = project.manuscript.map((section) => ({
+    id: section.id,
+    title: section.title,
+    summary: section.summary ?? section.notes ?? '',
+  }));
+  const words = project.manuscript.reduce(
+    (total, section) => total + section.content.trim().split(/\\s+/).filter(Boolean).length,
+    0,
+  );
+  return {
+    title: project.title,
+    logline: project.logline,
+    counts: {
+      characters: countEntities(project.characters),
+      worlds: countEntities(project.worlds),
+      outline: project.outline?.length ?? 0,
+      scenes: sections.length,
+      words,
+    },
+    sections,
+  };
+}
