@@ -3,6 +3,7 @@
  */
 import { expect, test } from '@playwright/test';
 
+import { readRenderedTextReadability } from './editorReadability';
 import {
   clickNavItem,
   ensureBlankProject,
@@ -44,14 +45,16 @@ test.describe('Manuscript editor rendering (CI-only)', () => {
 
     const mirror = page.getByTestId('manuscript-editor-mirror').first();
     await expect(mirror).toBeVisible();
+    await expect(mirror).toContainText('Paragraph 1: the quick brown fox jumps over the lazy dog.');
 
     const backdropFilter = await manuscriptTextbox.evaluate(
       (el) => getComputedStyle(el).backdropFilter,
     );
     expect(backdropFilter === 'none' || backdropFilter === '').toBeTruthy();
 
-    const mirrorColor = await mirror.evaluate((el) => getComputedStyle(el).color);
-    expect(mirrorColor).not.toMatch(/rgba\(0,\s*0,\s*0,\s*0\)|transparent/);
+    const readability = await readRenderedTextReadability(mirror);
+    expect(readability).not.toBeNull();
+    expect(readability?.ratio ?? 0).toBeGreaterThanOrEqual(4.5);
 
     await manuscriptTextbox.evaluate((el) => {
       const textarea = el as HTMLTextAreaElement;
