@@ -8,6 +8,7 @@ import {
   extractLocalPathDependencies,
   extractNeeds,
   extractRustClassifiers,
+  extractStepBlock,
   resolveDependencyPrefix,
 } from '../utils/workflowPolicyParsers';
 
@@ -108,18 +109,28 @@ describe('CI workflow policy', () => {
 
   // QNBS-v3: Keep unchanged-main vulnerability detection isolated, least-privilege, and fail-closed.
   it('keeps the scheduled OSV scan deterministic and actionable', () => {
-    expect(scheduledSecurityWorkflowSource).toContain("cron: '17 3 * * *'");
-    expect(scheduledSecurityWorkflowSource).toContain('workflow_dispatch:');
-    expect(scheduledSecurityWorkflowSource).toContain('permissions:\n  contents: read');
-    expect(scheduledSecurityWorkflowSource).not.toContain('security-events: write');
-    expect(scheduledSecurityWorkflowSource).toContain(
+    const scheduledJob = extractJobBlock(scheduledSecurityWorkflowSource, 'scheduled-osv');
+    const scanStep = extractStepBlock(scheduledJob, 'Scan dependency lockfiles');
+    const summaryStep = extractStepBlock(scheduledJob, 'Summarize OSV findings');
+    const enforcementStep = extractStepBlock(scheduledJob, 'Enforce scheduled OSV result');
+
+    expect(scheduledSecurityWorkflowSource).toMatch(
+      /^on:\n {2}schedule:\n {4}- cron: '17 3 \* \* \*'\n {2}workflow_dispatch:\s*$/m,
+    );
+    expect(scheduledSecurityWorkflowSource).toMatch(/^permissions:\n {2}contents: read\s*$/m);
+    expect(scheduledSecurityWorkflowSource).not.toMatch(/^\s*security-events:\s*write\s*$/m);
+    expect(scanStep).toContain('id: osv');
+    expect(scanStep).toContain('continue-on-error: true');
+    expect(scanStep).toContain(
       'google/osv-scanner-action/osv-scanner-action@8deb546fdb875b9996d27d4950be7312dac076a1',
     );
     for (const lockfile of ['pnpm-lock.yaml', 'src-tauri/Cargo.lock', 'crates/Cargo.lock']) {
-      expect(scheduledSecurityWorkflowSource).toContain(`--lockfile=${lockfile}`);
+      expect(scanStep).toContain(`--lockfile=${lockfile}`);
     }
-    expect(scheduledSecurityWorkflowSource).toContain('--config=src-tauri/osv-scanner.toml');
-    expect(scheduledSecurityWorkflowSource).toContain('GITHUB_STEP_SUMMARY');
-    expect(scheduledSecurityWorkflowSource).toContain('Enforce scheduled OSV result');
+    expect(scanStep).toContain('--config=src-tauri/osv-scanner.toml');
+    expect(summaryStep).toContain('GITHUB_STEP_SUMMARY');
+    expect(enforcementStep).toContain('SCANNER_OUTCOME');
+    expect(enforcementStep).toContain('osv-results.json');
+    expect(enforcementStep).toContain('exit 1');
   });
 });

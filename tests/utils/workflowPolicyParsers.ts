@@ -8,6 +8,14 @@ export function extractJobBlock(workflowSource: string, jobName: string): string
   return lines.slice(start, end === -1 ? lines.length : end).join('\n');
 }
 
+export function extractStepBlock(jobBlock: string, stepName: string): string {
+  const lines = jobBlock.split('\n');
+  const start = lines.indexOf(`      - name: ${stepName}`);
+  if (start === -1) throw new Error(`Could not find workflow step: ${stepName}`);
+  const end = lines.findIndex((line, index) => index > start && /^ {6}- name: /.test(line));
+  return lines.slice(start, end === -1 ? lines.length : end).join('\n');
+}
+
 export function extractRustClassifiers(workflowSource: string): {
   tauri: RegExp;
   crates: RegExp;
