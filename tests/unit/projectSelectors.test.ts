@@ -1,5 +1,8 @@
+import { configureStore } from '@reduxjs/toolkit';
+import undoable, { type StateWithHistory } from 'redux-undo';
 import { describe, expect, it } from 'vitest';
-import { buildState } from './projectStateFixture';
+import type { RootState } from '../../app/store';
+import featureFlagsReducer from '../../features/featureFlags/featureFlagsSlice';
 import {
   selectAllCharacters,
   selectAllWorlds,
@@ -13,7 +16,15 @@ import {
   selectTotalWordCount,
   selectWritingHistory,
 } from '../../features/project/projectSelectors';
-import { charactersAdapter, worldsAdapter } from '../../features/project/projectSlice';
+import type { ProjectData } from '../../features/project/projectSlice';
+import projectReducer, {
+  charactersAdapter,
+  worldsAdapter,
+} from '../../features/project/projectSlice';
+import settingsReducer from '../../features/settings/settingsSlice';
+import statusReducer from '../../features/status/statusSlice';
+import versionControlReducer from '../../features/versionControl/versionControlSlice';
+import writerReducer from '../../features/writer/writerSlice';
 
 const makeChar = (id: string, name: string) => ({
   id,
