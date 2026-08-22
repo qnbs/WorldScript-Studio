@@ -35,6 +35,14 @@
         "services/ai/fetchAdapter.ts",
         "services/ai/routingLogger.ts",
         "services/ai/aiModeService.ts"
+      ],
+      "testFiles": [
+        "tests/unit/ai/modelRecommendations.test.ts",
+        "tests/unit/ai/aiPolicy.test.ts",
+        "tests/unit/ai/aiRetry.test.ts",
+        "tests/unit/services/fetchAdapter.test.ts",
+        "tests/unit/ai/routingLogger.test.ts",
+        "tests/unit/ai/aiModeService.test.ts"
       ]
     },
     {

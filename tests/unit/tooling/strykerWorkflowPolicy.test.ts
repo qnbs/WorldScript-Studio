@@ -38,6 +38,15 @@ describe('Stryker workflow policy', () => {
     ]);
     expect(selectMutationModules('tier-a').every(({ riskTier }) => riskTier === 'A')).toBe(true);
     expect(selectMutationModules('services-commands')).toHaveLength(1);
+    // QNBS-v3: [Validate the services-ai-core Stryker mapping / prevent weak related-test selection / bind Tier-A mutants to direct tests]
+    expect(selectMutationModules('services-ai-core')[0]?.testFiles).toEqual([
+      'tests/unit/ai/modelRecommendations.test.ts',
+      'tests/unit/ai/aiPolicy.test.ts',
+      'tests/unit/ai/aiRetry.test.ts',
+      'tests/unit/services/fetchAdapter.test.ts',
+      'tests/unit/ai/routingLogger.test.ts',
+      'tests/unit/ai/aiModeService.test.ts',
+    ]);
     expect(selectMutationModules('copilot')[0]?.testFiles).toEqual([
       'tests/unit/copilot/heuristicEngine.test.ts',
       'tests/unit/copilot/insightGenerator.test.ts',
