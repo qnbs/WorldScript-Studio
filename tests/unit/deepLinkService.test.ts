@@ -8,6 +8,7 @@ describe('deepLinkService', () => {
       expect(result).toEqual({ view: 'dashboard', sectionId: null, action: null });
     });
 
+    // QNBS-v3: Protect bookmark and browser-hash restoration for the Scenario workspace.
     it('resolves the Scenario workspace hash route', () => {
       expect(parseHash('#/scenario')).toEqual({
         view: 'scenario',

@@ -45,6 +45,7 @@ vi.mock('../../components/ui/SectionIcon', () => ({
   SectionIcon: ({ section }: { section: string }) => <span data-testid={`icon-${section}`} />,
 }));
 
+// QNBS-v3: Protect canonical Scenario rendering and card navigation from regressions.
 describe('ScenarioWorkspaceView', () => {
   beforeEach(() => {
     vi.mocked(useAppSelector).mockImplementation(() => project);

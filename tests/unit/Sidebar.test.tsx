@@ -97,13 +97,18 @@ describe('Sidebar', () => {
     expect(activeButtons.length).toBeGreaterThan(0);
   });
 
+  // QNBS-v3: Protect the primary navigation path to the Scenario workspace.
   it('renders and navigates to the Scenario workspace', async () => {
     const user = userEvent.setup();
     const onNavigate = vi.fn();
 
     render(<Sidebar {...defaultProps} onNavigate={onNavigate} />);
     const scenarioButtons = screen.getAllByRole('button', { name: 'sidebar.scenario' });
-    await user.click(scenarioButtons[0]!);
+    const scenarioButton = scenarioButtons[0];
+    if (!scenarioButton) {
+      throw new Error('Scenario button is not rendered');
+    }
+    await user.click(scenarioButton);
 
     expect(onNavigate).toHaveBeenCalledWith('scenario');
   });
