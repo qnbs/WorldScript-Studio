@@ -24,7 +24,7 @@ export function buildScenarioWorkspaceProjection(project: StoryProject): Scenari
     summary: section.summary ?? section.notes ?? '',
   }));
   const words = project.manuscript.reduce(
-    (total, section) => total + section.content.trim().split(/\\s+/).filter(Boolean).length,
+    (total, section) => total + section.content.trim().split(/\s+/).filter(Boolean).length,
     0,
   );
   return {
