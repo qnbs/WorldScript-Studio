@@ -29,6 +29,17 @@ fn read_fixture(name: &str) -> String {
 }
 
 #[test]
+fn core_validation_envelope_is_accepted_after_migration() {
+    let text = read_fixture("core-validation-envelope.json");
+    let envelope = worldscript_project::parse_envelope(&text)
+        .expect("the TypeScript Core envelope fixture should parse");
+    let migrated = worldscript_project::migrate_to_latest(envelope)
+        .expect("the Core envelope fixture should migrate");
+    worldscript_project::validate(&migrated.project)
+        .expect("the Core envelope fixture should validate");
+}
+
+#[test]
 fn empty_project_is_accepted() {
     let text = read_fixture("empty-project.json");
     let project: StoryProject =
