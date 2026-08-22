@@ -30,6 +30,7 @@ const VALID_VIEWS = new Set<View>([
   'mindmap',
   'characterInterviews',
   'lora',
+  // QNBS-v3: Scenario must survive deep links and persisted-view restoration.
   'scenario',
 ]);
 
