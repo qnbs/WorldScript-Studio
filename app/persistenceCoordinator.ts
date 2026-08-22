@@ -1,6 +1,3 @@
-import type { SaveProjectInput } from '../services/storageBackend';
-import type { Settings } from '../features/settings/settingsSlice';
-
 type SaveOperation = () => Promise<void>;
 type Waiter = {
   generation: number;
@@ -76,5 +73,3 @@ export class PersistenceCoordinator {
 
 export const projectPersistenceCoordinator = new PersistenceCoordinator();
 export const settingsPersistenceCoordinator = new PersistenceCoordinator();
-
-export type { SaveProjectInput, Settings };
