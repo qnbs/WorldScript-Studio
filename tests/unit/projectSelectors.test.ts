@@ -51,7 +51,7 @@ const makeWorld = (id: string, name: string) => ({
   locations: [],
 });
 
-function buildState(override: Partial<ProjectData> = {}): RootState {
+export function buildState(override: Partial<ProjectData> = {}): RootState {
   const data: ProjectData = {
     title: 'Test',
     logline: '',
