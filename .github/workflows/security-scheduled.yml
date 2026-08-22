@@ -58,7 +58,10 @@ jobs:
               const findings = [];
               for (const result of report.results ?? []) {
                 const source = result.source?.path ?? 'unknown lockfile';
-                const lockfile = source.split('/').at(-1) ?? source;
+                const workspacePath = '/github/workspace/';
+                const lockfile = source.startsWith(workspacePath)
+                  ? source.slice(workspacePath.length)
+                  : source;
                 for (const entry of result.packages ?? []) {
                   const ids = new Set([
                     ...(entry.vulnerabilities ?? []).map((vulnerability) => vulnerability.id),

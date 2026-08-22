@@ -118,6 +118,9 @@ describe('CI workflow policy', () => {
       /^on:\n {2}schedule:\n {4}- cron: '17 3 \* \* \*'\n {2}workflow_dispatch:\s*$/m,
     );
     expect(scheduledSecurityWorkflowSource).toMatch(/^permissions:\n {2}contents: read\s*$/m);
+    expect(scheduledSecurityWorkflowSource).toContain(
+      'concurrency:\n  group: scheduled-security-scan\n  cancel-in-progress: true',
+    );
     expect(scheduledSecurityWorkflowSource).not.toMatch(/^\s*security-events:\s*write\s*$/m);
     expect(scanStep).toContain('id: osv');
     expect(scanStep).toContain('continue-on-error: true');
@@ -128,9 +131,15 @@ describe('CI workflow policy', () => {
       expect(scanStep).toContain(`--lockfile=${lockfile}`);
     }
     expect(scanStep).toContain('--config=src-tauri/osv-scanner.toml');
+    expect(scanStep).toContain('--format=json');
+    expect(scanStep).toContain('--output-file=/github/workspace/osv-results.json');
     expect(summaryStep).toContain('GITHUB_STEP_SUMMARY');
     expect(enforcementStep).toContain('SCANNER_OUTCOME');
-    expect(enforcementStep).toContain('osv-results.json');
-    expect(enforcementStep).toContain('exit 1');
+    expect(enforcementStep).toMatch(
+      /if \[ "\$SCANNER_OUTCOME" != "success" \]; then[\s\S]+?exit 1\n\s+fi/,
+    );
+    expect(enforcementStep).toMatch(
+      /if \[ ! -s \/github\/workspace\/osv-results\.json \]; then[\s\S]+?exit 1\n\s+fi/,
+    );
   });
 });

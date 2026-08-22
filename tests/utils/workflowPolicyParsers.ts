@@ -8,6 +8,7 @@ export function extractJobBlock(workflowSource: string, jobName: string): string
   return lines.slice(start, end === -1 ? lines.length : end).join('\n');
 }
 
+// QNBS-v3: Named step extraction keeps policy assertions scoped to the active workflow step.
 export function extractStepBlock(jobBlock: string, stepName: string): string {
   const lines = jobBlock.split('\n');
   const start = lines.indexOf(`      - name: ${stepName}`);
