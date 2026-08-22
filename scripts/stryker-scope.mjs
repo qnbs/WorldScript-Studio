@@ -7,7 +7,7 @@ const scopePath = path.join(repositoryRoot, 'stryker-scope.json');
 
 export const scope = JSON.parse(readFileSync(scopePath, 'utf8'));
 
-function validateScope(scopeDefinition) {
+export function validateScope(scopeDefinition) {
   if (!Array.isArray(scopeDefinition.modules) || scopeDefinition.modules.length === 0) {
     throw new Error('Stryker scope must define at least one module.');
   }
@@ -27,6 +27,9 @@ function validateScope(scopeDefinition) {
     moduleNames.add(module.name);
     if (module.mutate.length === 0)
       throw new Error(`Stryker module has no targets: ${module.name}`);
+    if (module.testFiles !== undefined && !Array.isArray(module.testFiles)) {
+      throw new Error(`Stryker testFiles must be an array: ${module.name}`);
+    }
     for (const file of module.mutate) {
       if (typeof file !== 'string' || mutationFiles.has(file)) {
         throw new Error(`Duplicate or invalid Stryker target: ${file}`);
@@ -36,16 +39,22 @@ function validateScope(scopeDefinition) {
       }
       mutationFiles.add(file);
     }
+    for (const file of module.testFiles ?? []) {
+      if (typeof file !== 'string' || !existsSync(path.join(repositoryRoot, file))) {
+        throw new Error(`Stryker test file does not exist: ${file}`);
+      }
+    }
   }
   return { moduleNames, mutationFiles };
 }
 
 const validatedScope = validateScope(scope);
 export const mutationFiles = [...validatedScope.mutationFiles];
-export const mutationModules = scope.modules.map(({ name, riskTier, mutate }) => ({
+export const mutationModules = scope.modules.map(({ name, riskTier, mutate, testFiles = [] }) => ({
   name,
   riskTier,
   mutate: mutate.join(','),
+  testFiles,
 }));
 
 export function selectMutationModules(selector = 'all') {

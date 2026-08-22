@@ -5,8 +5,13 @@ export interface StrykerMutationModule {
   name: string;
   riskTier: StrykerRiskTier;
   mutate: string;
+  testFiles: string[];
 }
 
 export const mutationFiles: string[];
 export const mutationModules: StrykerMutationModule[];
 export function selectMutationModules(selector?: string): StrykerMutationModule[];
+export function validateScope(scopeDefinition: unknown): {
+  moduleNames: Set<string>;
+  mutationFiles: Set<string>;
+};

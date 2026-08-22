@@ -7,6 +7,7 @@ import {
   mutationFiles,
   mutationModules,
   selectMutationModules,
+  validateScope,
 } from '../../../scripts/stryker-scope.mjs';
 import config from '../../../stryker.config.mjs';
 
@@ -17,17 +18,26 @@ const workflow = readFileSync(workflowPath, 'utf8');
 const scopeScriptPath = fileURLToPath(
   new URL('../../../scripts/stryker-scope.mjs', import.meta.url),
 );
+const githubExpression = (expression: string) => '$' + '{{ ' + expression + ' }}';
 
 // QNBS-v3: Lock workflow/config invariants so mutation plumbing cannot silently drift.
 describe('Stryker workflow policy', () => {
   it('uses one explicit target source for config and the matrix', () => {
     expect(config.mutate).toEqual(mutationFiles);
     expect(config['vitest']).toEqual(expect.objectContaining({ related: true }));
+    expect(config.ignorePatterns).not.toContain('**/*.test.ts');
+    expect(config.ignorePatterns).not.toContain('**/*.spec.ts');
     expect(mutationModules).toHaveLength(8);
     expect(new Set(mutationFiles).size).toBe(25);
     expect(mutationModules.every(({ riskTier }) => ['A', 'B'].includes(riskTier))).toBe(true);
     expect(selectMutationModules('tier-a').every(({ riskTier }) => riskTier === 'A')).toBe(true);
     expect(selectMutationModules('services-commands')).toHaveLength(1);
+    expect(selectMutationModules('copilot')[0]?.testFiles).toEqual([
+      'tests/unit/copilot/heuristicEngine.test.ts',
+      'tests/unit/copilot/insightGenerator.test.ts',
+      'tests/unit/copilot/actionApplier.test.ts',
+      'tests/unit/copilot/copilotContextService.test.ts',
+    ]);
     const matrix = JSON.parse(
       execFileSync(process.execPath, [scopeScriptPath, '--matrix'], { encoding: 'utf8' }),
     );
@@ -36,6 +46,17 @@ describe('Stryker workflow policy', () => {
 
   it('uses supported incremental plumbing and preserves shard identity', () => {
     expect(workflow).toContain('--incrementalFile "$INCREMENTAL_FILE"');
+    expect(workflow).toContain('MATRIX_NAME: ' + githubExpression('matrix.name'));
+    expect(workflow).toContain('MATRIX_MUTATE: ' + githubExpression('matrix.mutate'));
+    expect(workflow).toContain(
+      'MATRIX_TEST_FILES: ' + githubExpression("join(matrix.testFiles, ',')"),
+    );
+    expect(workflow).toContain('TEST_FILE_ARGS+=(--testFiles "$TEST_FILES")');
+    expect(workflow).toContain('"${' + 'TEST_FILE_ARGS[@]}"');
+    expect(workflow).not.toContain(
+      'rm -f reports/stryker-incremental-' + githubExpression('matrix.name') + '.json',
+    );
+    expect(workflow).not.toContain('--mutate "' + githubExpression('matrix.mutate') + '"');
     expect(workflow).not.toContain('STRYKER_INCREMENTAL_FILE=');
     expect(workflow).toContain('merge-multiple: false');
     expect(workflow).toContain('if-no-files-found: error');
@@ -48,5 +69,24 @@ describe('Stryker workflow policy', () => {
     expect(workflow).toContain('--selector "$SELECTOR"');
     expect(workflow).toContain('SELECTOR: $' + "{{ github.event.inputs.module || 'all' }}");
     expect(workflow).not.toContain('force-all-modules');
+  });
+
+  it('validates optional module test-file mappings fail closed', () => {
+    const validModule = {
+      name: 'test-module',
+      riskTier: 'A' as const,
+      mutate: ['services/commands/fuzzyScore.ts'],
+    };
+
+    expect(() => validateScope({ modules: [validModule] })).not.toThrow();
+    expect(() =>
+      validateScope({ modules: [{ ...validModule, testFiles: 'not-an-array' }] }),
+    ).toThrow('Stryker testFiles must be an array');
+    expect(() => validateScope({ modules: [{ ...validModule, testFiles: [42] }] })).toThrow(
+      'Stryker test file does not exist',
+    );
+    expect(() =>
+      validateScope({ modules: [{ ...validModule, testFiles: ['tests/unit/missing.test.ts'] }] }),
+    ).toThrow('Stryker test file does not exist');
   });
 });

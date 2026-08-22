@@ -87,35 +87,76 @@ jobs:
             stryker-incremental-${{ matrix.name }}-
 
       - name: Prepare incremental file
+        env:
+          MATRIX_NAME: ${{ matrix.name }}
+          MODE_INPUT: ${{ github.event.inputs.mode || 'incremental' }}
         run: |
+          if [[ ! "$MATRIX_NAME" =~ ^[a-z0-9-]+$ ]]; then
+            echo "Invalid Stryker module name: $MATRIX_NAME" >&2
+            exit 1
+          fi
+          INCREMENTAL_FILE="reports/stryker-incremental-${MATRIX_NAME}.json"
           mkdir -p reports
-          MODE="${{ github.event.inputs.mode || 'incremental' }}"
+          MODE="$MODE_INPUT"
+          if [[ "$MODE" != "incremental" && "$MODE" != "force" ]]; then
+            echo "Invalid Stryker mode: $MODE" >&2
+            exit 1
+          fi
           if [ "$MODE" = "force" ]; then
-            echo "🧹 Force mode → clearing incremental cache for ${{ matrix.name }}"
-            rm -f reports/stryker-incremental-${{ matrix.name }}.json
-          elif [ -f "reports/stryker-incremental-${{ matrix.name }}.json" ]; then
-            echo "♻️ Using existing incremental cache for ${{ matrix.name }}"
+            echo "🧹 Force mode → clearing incremental cache for $MATRIX_NAME"
+            rm -f "$INCREMENTAL_FILE"
+          elif [ -f "$INCREMENTAL_FILE" ]; then
+            echo "♻️ Using existing incremental cache for $MATRIX_NAME"
           else
             echo "🆕 No incremental cache found — will create new one"
           fi
 
       - name: Run Stryker (${{ matrix.name }})
+        env:
+          MATRIX_NAME: ${{ matrix.name }}
+          MATRIX_MUTATE: ${{ matrix.mutate }}
+          MATRIX_TEST_FILES: ${{ join(matrix.testFiles, ',') }}
+          MODE_INPUT: ${{ github.event.inputs.mode || 'incremental' }}
+          CONCURRENCY_INPUT: ${{ github.event.inputs.per_job_concurrency || '2' }}
+          STRYKER_DASHBOARD_API_KEY: ${{ secrets.STRYKER_DASHBOARD_API_KEY }}
         run: |
-          MODE="${{ github.event.inputs.mode || 'incremental' }}"
+          if [[ ! "$MATRIX_NAME" =~ ^[a-z0-9-]+$ ]]; then
+            echo "Invalid Stryker module name: $MATRIX_NAME" >&2
+            exit 1
+          fi
+          MODE="$MODE_INPUT"
+          if [[ "$MODE" != "incremental" && "$MODE" != "force" ]]; then
+            echo "Invalid Stryker mode: $MODE" >&2
+            exit 1
+          fi
           FORCE_FLAG=""
           if [ "$MODE" = "force" ]; then
             FORCE_FLAG="--force"
           fi
 
-          CONCURRENCY="${{ github.event.inputs.per_job_concurrency || '2' }}"
+          CONCURRENCY="$CONCURRENCY_INPUT"
+          if [[ ! "$CONCURRENCY" =~ ^[0-9]+%?$ ]]; then
+            echo "Invalid Stryker concurrency: $CONCURRENCY" >&2
+            exit 1
+          fi
 
-          echo "▶️ Module: ${{ matrix.name }}"
-          echo "   Pattern: ${{ matrix.mutate }}"
+          echo "▶️ Module: $MATRIX_NAME"
+          echo "   Pattern: $MATRIX_MUTATE"
+          TEST_FILES="$MATRIX_TEST_FILES"
+          if [ -n "$TEST_FILES" ]; then
+            echo "   Test files: $TEST_FILES"
+          else
+            echo "   Test files: Vitest related selection"
+          fi
           echo "   Concurrency: $CONCURRENCY"
           echo "   Mode: $MODE"
 
           # QNBS-v3: pass the supported CLI option; arbitrary env vars are not Stryker config.
-          INCREMENTAL_FILE="reports/stryker-incremental-${{ matrix.name }}.json"
+          INCREMENTAL_FILE="reports/stryker-incremental-${MATRIX_NAME}.json"
+          TEST_FILE_ARGS=()
+          if [ -n "$TEST_FILES" ]; then
+            TEST_FILE_ARGS+=(--testFiles "$TEST_FILES")
+          fi
 
           pnpm exec stryker run \
             stryker.config.mjs \
@@ -123,10 +164,9 @@ jobs:
             --incrementalFile "$INCREMENTAL_FILE" \
             $FORCE_FLAG \
             --concurrency "$CONCURRENCY" \
-            --mutate "${{ matrix.mutate }}" \
+            --mutate "$MATRIX_MUTATE" \
+            "${TEST_FILE_ARGS[@]}" \
             --reporters progress,json,html
-        env:
-          STRYKER_DASHBOARD_API_KEY: ${{ secrets.STRYKER_DASHBOARD_API_KEY }}
 
       - name: Upload Stryker report
         if: always()

@@ -37,8 +37,6 @@ export default {
   ignorePatterns: [
     '**/dist/**',
     '**/node_modules/**',
-    '**/*.test.ts',
-    '**/*.spec.ts',
     '**/playwright-report/**',
     '**/storybook-static/**',
   ],

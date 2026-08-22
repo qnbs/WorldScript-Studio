@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mutationModules, selectMutationModules } from './stryker-scope.mjs';
@@ -101,13 +101,37 @@ function validateMetricRelationships(metrics, reportPath) {
   }
 }
 
+function findReportPath(rootDirectory, moduleName, selectedModuleCount) {
+  const preferredPath = path.join(rootDirectory, `stryker-report-${moduleName}`, 'mutation.json');
+  if (existsSync(preferredPath)) return preferredPath;
+  if (!existsSync(rootDirectory)) return undefined;
+
+  const candidates = [];
+  const visit = (directory, depth) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const entryPath = path.join(directory, entry.name);
+      if (entry.isDirectory() && depth < 5) {
+        visit(entryPath, depth + 1);
+        continue;
+      }
+      if (!entry.isFile() || entry.name !== 'mutation.json') continue;
+      const relativeSegments = path.relative(rootDirectory, entryPath).split(path.sep);
+      const preservesModuleIdentity = relativeSegments.includes(`stryker-report-${moduleName}`);
+      if (preservesModuleIdentity || selectedModuleCount === 1) candidates.push(entryPath);
+    }
+  };
+  visit(rootDirectory, 0);
+
+  return candidates.length === 1 ? candidates[0] : undefined;
+}
+
 export function readStrykerReports(rootDirectory, selectedModules = mutationModules) {
   const reports = [];
   const missing = [];
 
   for (const module of selectedModules) {
-    const reportPath = path.join(rootDirectory, `stryker-report-${module.name}`, 'mutation.json');
-    if (!existsSync(reportPath)) {
+    const reportPath = findReportPath(rootDirectory, module.name, selectedModules.length);
+    if (!reportPath) {
       missing.push(`${module.name}/mutation.json`);
       continue;
     }
