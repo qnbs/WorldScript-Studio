@@ -25,7 +25,6 @@ const ProjectionCard: FC<{
         <h2 className="font-semibold text-[var(--sc-text-primary)]">{label}</h2>
         <span
           className="text-2xl font-bold text-[var(--sc-accent)]"
-          aria-label={`${label}: ${count}`}
         >
           {count}
         </span>
