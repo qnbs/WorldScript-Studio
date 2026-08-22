@@ -7,9 +7,39 @@ const expectedPackageManager = projectPackage.packageManager;
 const expectedPnpmVersion = expectedPackageManager?.startsWith('pnpm@')
   ? expectedPackageManager.slice('pnpm@'.length)
   : null;
+const minimumSecurePnpmVersion = '11.11.0';
+
+function parseVersion(version) {
+  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
+  return match ? match.slice(1).map(Number) : null;
+}
+
+function isVersionAtLeast(version, minimum) {
+  const actualParts = parseVersion(version);
+  const minimumParts = parseVersion(minimum);
+  if (!actualParts || !minimumParts) return false;
+  return (
+    actualParts.some((part, index) => {
+      if (part !== minimumParts[index]) return part > minimumParts[index];
+      return false;
+    }) || actualParts.every((part, index) => part === minimumParts[index])
+  );
+}
 
 if (!expectedPnpmVersion) {
   console.error('[toolchain] package.json must pin packageManager to pnpm@<exact-version>.');
+  process.exit(1);
+}
+
+if (projectPackage.engines?.pnpm !== expectedPnpmVersion) {
+  console.error('[toolchain] engines.pnpm must exactly match packageManager.');
+  process.exit(1);
+}
+
+if (!isVersionAtLeast(expectedPnpmVersion, minimumSecurePnpmVersion)) {
+  console.error(
+    `[toolchain] pnpm ${expectedPnpmVersion} is below the security floor ${minimumSecurePnpmVersion}.`,
+  );
   process.exit(1);
 }
 

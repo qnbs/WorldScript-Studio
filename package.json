@@ -13,10 +13,10 @@
     "tauri"
   ],
   "type": "module",
-  "packageManager": "pnpm@11.5.2",
+  "packageManager": "pnpm@11.22.0",
   "engines": {
     "node": ">=22.0.0",
-    "pnpm": "11.5.2"
+    "pnpm": "11.22.0"
   },
   "scripts": {
     "hooks:install": "simple-git-hooks",

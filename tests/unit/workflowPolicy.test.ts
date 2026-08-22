@@ -14,16 +14,40 @@ import {
 
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 const workflowPath = fileURLToPath(new URL('../../.github/workflows/ci.yml', import.meta.url));
+const setupActionPath = fileURLToPath(
+  new URL('../../.github/actions/setup/action.yml', import.meta.url),
+);
 const scheduledSecurityWorkflowPath = fileURLToPath(
   new URL('../../.github/workflows/security-scheduled.yml', import.meta.url),
 );
 const tauriManifestPath = fileURLToPath(new URL('../../src-tauri/Cargo.toml', import.meta.url));
 const workflowSource = readFileSync(workflowPath, 'utf8');
+const setupActionSource = readFileSync(setupActionPath, 'utf8');
 const scheduledSecurityWorkflowSource = readFileSync(scheduledSecurityWorkflowPath, 'utf8');
+const packageJson = JSON.parse(
+  readFileSync(fileURLToPath(new URL('../../package.json', import.meta.url)), 'utf8'),
+) as {
+  packageManager: string;
+};
 const tauriManifestSource = readFileSync(tauriManifestPath, 'utf8');
 
 // QNBS-v3: Keep CI path and deployment authority policy executable against the real workflow files.
 describe('CI workflow policy', () => {
+  // QNBS-v3: the first package-manager binary must be patched and explicit before repository caching/install.
+  it('bootstraps the exact secure pnpm before setup-node cache or install', () => {
+    const expectedVersion = packageJson.packageManager.replace('pnpm@', '');
+    const actionIndex = setupActionSource.indexOf('pnpm/action-setup@');
+    const nodeIndex = setupActionSource.indexOf('actions/setup-node@');
+    expect(setupActionSource).toContain(
+      'pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86',
+    );
+    expect(setupActionSource).toContain(`version: ${expectedVersion}`);
+    expect(actionIndex).toBeGreaterThanOrEqual(0);
+    expect(actionIndex).toBeLessThan(nodeIndex);
+    expect(setupActionSource).not.toContain('corepack enable');
+    expect(setupActionSource).toContain('pnpm install --frozen-lockfile');
+    expect(setupActionSource).toContain('pnpm run toolchain:check');
+  });
   // QNBS-v3: preserve first-attempt Vitest failures as visible CI evidence instead of masking flakes with retries.
   it('runs Vitest once so first-attempt failures cannot be hidden by retry', () => {
     const vitestRun = workflowSource.match(/run:\s*pnpm exec vitest run[^\n]*/)?.[0];
