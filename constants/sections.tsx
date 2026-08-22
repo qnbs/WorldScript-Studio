@@ -138,7 +138,7 @@ export const APP_SECTIONS: Record<View, SectionConfig> = {
     textColor: 'text-teal-500',
     accentColor: '#14b8a6',
   },
-  // QNBS-v3: preview + progress views added in v1.6 — stub icons reuse nearest thematic icon.
+  scenario: {\n    icon: ICONS.DOCUMENT_TEXT,\n    colorClass: \x27text-cyan-500 bg-cyan-500/10\x27,\n    textColor: \x27text-cyan-500\x27,\n    accentColor: \x27#06b6d4\x27,\n  },\n  // QNBS-v3: preview + progress views added in v1.6 — stub icons reuse nearest thematic icon.
   preview: {
     icon: ICONS.WRITER,
     colorClass: 'text-lime-500 bg-lime-500/10',
