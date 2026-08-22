@@ -678,6 +678,61 @@ describe('tauriDesktopPlatform', () => {
     });
   });
 
+  describe('project validation', () => {
+    it('invokes the native project validator with the camelCase argument and validates the result', async () => {
+      h.invoke.mockResolvedValueOnce({
+        contractVersion: '1.0.0',
+        valid: true,
+        schemaVersion: 2,
+      });
+
+      await expect(
+        tauriDesktopPlatform.project.validateProject('{"schemaVersion":2}'),
+      ).resolves.toEqual({
+        contractVersion: '1.0.0',
+        valid: true,
+        schemaVersion: 2,
+      });
+      expect(h.invoke).toHaveBeenCalledWith('worldscript_project_validate', {
+        projectJson: '{"schemaVersion":2}',
+      });
+    });
+
+    it('rejects an unsupported contract before trusting result fields', async () => {
+      h.invoke.mockResolvedValueOnce({ contractVersion: '2.0.0', valid: true, schemaVersion: 2 });
+
+      await expect(tauriDesktopPlatform.project.validateProject('{}')).rejects.toThrow(
+        /worldscript_project_validate failed/,
+      );
+      expect(h.loggerWarn).toHaveBeenCalledWith('desktopPlatform.project: validateProject failed', {
+        errorClass: 'Error',
+      });
+    });
+
+    it('rejects a malformed native result', async () => {
+      h.invoke.mockResolvedValueOnce({ contractVersion: '1.0.0', valid: 'yes' });
+
+      await expect(tauriDesktopPlatform.project.validateProject('{}')).rejects.toThrow(
+        /worldscript_project_validate failed/,
+      );
+    });
+
+    it('wraps native invocation failures without logging raw native details', async () => {
+      h.invoke.mockRejectedValueOnce(new Error('entity-id-secret'));
+
+      await expect(tauriDesktopPlatform.project.validateProject('{}')).rejects.toThrow(
+        /worldscript_project_validate failed/,
+      );
+      expect(h.loggerWarn).toHaveBeenCalledWith('desktopPlatform.project: validateProject failed', {
+        errorClass: 'Error',
+      });
+      expect(h.loggerWarn).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ error: expect.stringContaining('entity-id-secret') }),
+      );
+    });
+  });
+
   describe('diagnostics', () => {
     it('getAppVersion returns the plugin version, null (and logs) on failure', async () => {
       await expect(tauriDesktopPlatform.diagnostics.getAppVersion()).resolves.toBe('1.0.0');
