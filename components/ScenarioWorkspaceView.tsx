@@ -41,6 +41,7 @@ export const ScenarioWorkspaceView: FC<ScenarioWorkspaceViewProps> = ({ onNaviga
   const project = useAppSelector(selectProjectData);
 
   if (!project) return null;
+  // QNBS-v3: Render a read-only projection so canonical project state stays authoritative.
   const projection = buildScenarioWorkspaceProjection(project);
 
   return (
