@@ -76,10 +76,10 @@ describe('createWorldScriptFetch', () => {
   it('falls back to AbortController when AbortSignal.timeout is unavailable', async () => {
     const mockFetch = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
     vi.stubGlobal('fetch', mockFetch);
-    const originalTimeout = AbortSignal.timeout;
+    const timeoutDescriptor = Object.getOwnPropertyDescriptor(AbortSignal, 'timeout');
     // Simulate a runtime where AbortSignal exists but the static timeout helper does not.
-    (AbortSignal as unknown as { timeout?: unknown }).timeout = undefined;
     try {
+      Object.defineProperty(AbortSignal, 'timeout', { configurable: true, value: undefined });
       const { createWorldScriptFetch } = await import('../../../services/ai/fetchAdapter');
       await createWorldScriptFetch({ timeoutMs: 1000 })('https://api.example.com/tags');
       const init = mockFetch.mock.calls[0]?.[1] as RequestInit | undefined;
@@ -107,33 +107,42 @@ describe('createWorldScriptFetch', () => {
   });
 
   it('propagates caller aborts through the composed timeout signal', async () => {
-    const mockFetch = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    // QNBS-v3 (#459): keep the request pending so caller abort is verified as an observable rejection.
+    const mockFetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          'abort',
+          () => reject(new DOMException('The operation was aborted.', 'AbortError')),
+          { once: true },
+        );
+      }),
+    );
     vi.stubGlobal('fetch', mockFetch);
     const caller = new AbortController();
 
     const { createWorldScriptFetch } = await import('../../../services/ai/fetchAdapter');
-    await createWorldScriptFetch({ timeoutMs: 5000 })('https://api.example.com/tags', {
+    const request = createWorldScriptFetch({ timeoutMs: 5000 })('https://api.example.com/tags', {
       signal: caller.signal,
     });
+    const rejection = expect(request).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1));
 
     const signal = (mockFetch.mock.calls[0]?.[1] as RequestInit | undefined)?.signal;
+    expect(signal).toBeInstanceOf(AbortSignal);
     expect(signal?.aborted).toBe(false);
     caller.abort();
     expect(signal?.aborted).toBe(true);
-    vi.unstubAllGlobals();
+    await rejection;
   });
 
   it('uses the manual controller when AbortSignal.any is unavailable', async () => {
     const mockFetch = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
     vi.stubGlobal('fetch', mockFetch);
     const caller = new AbortController();
-    const originalAny = AbortSignal.any;
-    Object.defineProperty(AbortSignal, 'any', {
-      configurable: true,
-      value: undefined,
-    });
+    const anyDescriptor = Object.getOwnPropertyDescriptor(AbortSignal, 'any');
 
     try {
+      Object.defineProperty(AbortSignal, 'any', { configurable: true, value: undefined });
       const { createWorldScriptFetch } = await import('../../../services/ai/fetchAdapter');
       await createWorldScriptFetch({ timeoutMs: 5000 })('https://api.example.com/tags', {
         signal: caller.signal,
