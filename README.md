@@ -549,7 +549,7 @@ WorldScript-Studio/
 │   ├── sw.js             # PWA Service Worker
 │   └── manifest.json     # PWA Web App Manifest v3
 ├── tests/
-│   ├── unit/             # Vitest unit tests (6919+ tests, 568 files) — count spans tests/, components/, packages/*/tests/, not just this folder
+│   ├── unit/             # Vitest unit tests (6924+ tests, 569 files) — count spans tests/, components/, packages/*/tests/, not just this folder
 │   │   ├── ai/           # aiSmallModules, aiCoreFallbackPaths
 │   │   └── settings/     # WebLlmPanel, AiSections
 │   └── e2e/              # Playwright specs + helpers.ts
@@ -711,7 +711,7 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 | `scorecard`  | weekly + `main` push | OpenSSF Scorecard — SARIF uploaded to GitHub Code Scanning |
 
 **Current test metrics (2026-08-21, source-synchronized; CI remains authoritative for pass/fail):**
-- **6924+ unit tests** across **568 test files** — CI is authoritative for pass/fail
+- **6924+ unit tests** across **569 test files** — CI is authoritative for pass/fail
 - Coverage thresholds: lines ≥ 80 · branches ≥ 66 · functions ≥ 72 · statements ≥ 78 — enforced in CI (see Codecov badge for live metrics)
 - i18n: **2924 keys × 19 locales** (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu/ru/ko Beta)
 
