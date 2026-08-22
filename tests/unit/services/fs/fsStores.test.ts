@@ -12,7 +12,10 @@ import type { TauriApis } from '../../../../services/fs/fsCore';
 
 // QNBS-v3: typed via `unknown` (not `any`) so the mock factories see a non-null TauriApis; the
 // real value is set in beforeEach before any mock is invoked.
-const { fsHolder } = vi.hoisted(() => ({ fsHolder: { current: null as unknown as TauriApis } }));
+const { fsHolder, shadowValidation } = vi.hoisted(() => ({
+  fsHolder: { current: null as unknown as TauriApis },
+  shadowValidation: vi.fn(),
+}));
 
 // QNBS-v3: mocks desktopPlatform, not the raw @tauri-apps/* modules, so the REAL loadTauriApis assembles a TauriApis delegating to the per-test in-memory fake FS — exercises loadTauriApis itself too.
 vi.mock('../../../../services/desktopPlatform', () => ({
@@ -41,9 +44,12 @@ vi.mock('../../../../services/desktopPlatform', () => ({
     };
   },
 }));
+vi.mock('../../../../features/project/coreValidationShadow', () => ({
+  observeCoreProjectValidation: shadowValidation,
+}));
 vi.mock('../../../../services/logger', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../../services/logger')>();
-  return { ...actual, logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } };
+  return { ...actual, logger: { debug: vi.fn(), warn: vi.fn(), info: vi.fn(), error: vi.fn() } };
 });
 
 import { appStoreRef } from '../../../../app/storeRef';
@@ -157,6 +163,15 @@ describe('FsProjectStore — projects', () => {
   it('returns null for a missing project and [] when no projects dir', async () => {
     expect(await store.loadProject('nope')).toBeNull();
     expect(await store.listProjects()).toEqual([]);
+  });
+
+  it('returns the decoded project without waiting for or adopting the shadow verdict', async () => {
+    await store.saveProject(project as never);
+    const loaded = await store.loadProject('p1');
+
+    expect(loaded).toEqual(expect.objectContaining({ title: 'My Novel' }));
+    expect(shadowValidation).toHaveBeenCalledTimes(1);
+    expect(shadowValidation).toHaveBeenCalledWith(expect.objectContaining({ title: 'My Novel' }));
   });
 
   // QNBS-v3 (#332): saveProject records the active-project marker so cold boot doesn't pick an arbitrary readDir() entry.

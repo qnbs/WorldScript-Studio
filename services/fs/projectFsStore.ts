@@ -5,6 +5,7 @@
  */
 
 import type { EntityState } from '@reduxjs/toolkit';
+import { observeCoreProjectValidation } from '../../features/project/coreValidationShadow';
 import type { Character, StoryProject, World } from '../../types';
 import { logger } from '../logger';
 import { parseImportedProjectJson } from '../projectImportSchema';
@@ -94,7 +95,9 @@ export class FsProjectStore extends FsAssetStore {
       }
 
       const content = await retryFs(() => apis.readTextFile(projectFile));
-      return decompressData<StoryProject>(content);
+      const project = decompressData<StoryProject>(content);
+      observeCoreProjectValidation(project);
+      return project;
     } catch (error) {
       logger.error('Failed to load project:', error);
       return null;
