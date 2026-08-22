@@ -145,6 +145,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'characters', label: t('sidebar.characters'), icon: ICONS.CHARACTERS },
     { id: 'world', label: t('sidebar.world'), icon: ICONS.WORLD },
     { id: 'sceneboard', label: t('sidebar.sceneboard'), icon: ICONS.SCENEBOARD },
+    { id: 'scenario', label: t('sidebar.scenario'), icon: ICONS.DOCUMENT_TEXT },
     { id: 'characterGraph', label: t('sidebar.characterGraph'), icon: ICONS.CHARACTERGRAPH },
     {
       id: 'consistencyChecker',
