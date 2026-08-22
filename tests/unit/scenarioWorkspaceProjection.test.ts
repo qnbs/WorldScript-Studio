@@ -9,7 +9,8 @@ const project: StoryProject = {
   worlds: [{ id: 'w1', name: 'World' }] as unknown as StoryProject['worlds'],
   outline: [{ id: 'o1', title: 'Act I', description: '', isTwist: false }],
   manuscript: [
-    { id: 's1', title: 'Opening', content: 'one two three', summary: 'The opening.' },
+    { id: 's1', title: 'Opening', content: 'one \n two\tthree', summary: 'The opening.' },
+    { id: 's2', title: 'Interlude', content: ' \n\t', notes: 'Fallback note' },
   ],
 };
 
@@ -21,8 +22,11 @@ describe('buildScenarioWorkspaceProjection', () => {
     expect(projection).toEqual({
       title: 'Pilot',
       logline: 'A test logline',
-      counts: { characters: 1, worlds: 1, outline: 1, scenes: 1, words: 3 },
-      sections: [{ id: 's1', title: 'Opening', summary: 'The opening.' }],
+      counts: { characters: 1, worlds: 1, outline: 1, scenes: 2, words: 3 },
+      sections: [
+        { id: 's1', title: 'Opening', summary: 'The opening.' },
+        { id: 's2', title: 'Interlude', summary: 'Fallback note' },
+      ],
     });
     expect(project).toEqual(before);
   });

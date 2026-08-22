@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Sidebar } from '../../components/Sidebar';
 
@@ -94,5 +95,16 @@ describe('Sidebar', () => {
     const activeButtons = buttons.filter((b) => b.getAttribute('aria-current') === 'page');
     // At least one active item must exist
     expect(activeButtons.length).toBeGreaterThan(0);
+  });
+
+  it('renders and navigates to the Scenario workspace', async () => {
+    const user = userEvent.setup();
+    const onNavigate = vi.fn();
+
+    render(<Sidebar {...defaultProps} onNavigate={onNavigate} />);
+    const scenarioButtons = screen.getAllByRole('button', { name: 'sidebar.scenario' });
+    await user.click(scenarioButtons[0]!);
+
+    expect(onNavigate).toHaveBeenCalledWith('scenario');
   });
 });

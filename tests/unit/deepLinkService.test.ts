@@ -8,6 +8,14 @@ describe('deepLinkService', () => {
       expect(result).toEqual({ view: 'dashboard', sectionId: null, action: null });
     });
 
+    it('resolves the Scenario workspace hash route', () => {
+      expect(parseHash('#/scenario')).toEqual({
+        view: 'scenario',
+        sectionId: null,
+        action: null,
+      });
+    });
+
     it('maps the board alias to sceneboard', () => {
       const result = parseHash('#/board');
       expect(result).toEqual({ view: 'sceneboard', sectionId: null, action: null });
@@ -78,6 +86,7 @@ describe('deepLinkService', () => {
         ['progress', 'progress'],
         ['analytics', 'analytics'],
         ['zen', 'zen'],
+        ['scenario', 'scenario'],
       ];
       for (const [hash, view] of routes) {
         expect(parseHash(`#/${hash}`).view).toBe(view);
@@ -126,6 +135,11 @@ describe('deepLinkService', () => {
     it('omits sectionId segment when undefined', () => {
       pushHash('progress');
       expect(replaceSpy).toHaveBeenCalledWith(null, '', '#/progress');
+    });
+
+    it('writes the Scenario workspace hash route', () => {
+      pushHash('scenario');
+      expect(replaceSpy).toHaveBeenCalledWith(null, '', '#/scenario');
     });
   });
 

@@ -20,6 +20,7 @@ describe('viewNavigationLabelKey', () => {
     expect(viewNavigationLabelKey('characterGraph')).toBe('sidebar.characterGraph');
     expect(viewNavigationLabelKey('consistencyChecker')).toBe('sidebar.consistencyChecker');
     expect(viewNavigationLabelKey('critic')).toBe('sidebar.critic');
+    expect(viewNavigationLabelKey('scenario')).toBe('sidebar.scenario');
   });
 
   it('falls back to sidebar.dashboard for unknown views', () => {
