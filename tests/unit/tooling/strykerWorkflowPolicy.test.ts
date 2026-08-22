@@ -25,6 +25,8 @@ describe('Stryker workflow policy', () => {
   it('uses one explicit target source for config and the matrix', () => {
     expect(config.mutate).toEqual(mutationFiles);
     expect(config['vitest']).toEqual(expect.objectContaining({ related: true }));
+    expect(config.ignorePatterns).not.toContain('**/*.test.ts');
+    expect(config.ignorePatterns).not.toContain('**/*.spec.ts');
     expect(mutationModules).toHaveLength(8);
     expect(new Set(mutationFiles).size).toBe(25);
     expect(mutationModules.every(({ riskTier }) => ['A', 'B'].includes(riskTier))).toBe(true);
