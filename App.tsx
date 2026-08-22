@@ -168,6 +168,7 @@ const CharacterInterviewsView = lazy(() => import('./components/CharacterIntervi
 const LoraView = lazy(() =>
   import('./components/lora/LoraView').then((m) => ({ default: m.LoraView })),
 );
+// QNBS-v3: Keep Scenario lazy to keep the initial bundle focused on the default workspace.
 const ScenarioWorkspaceView = lazy(() =>
   import('./components/ScenarioWorkspaceView').then((m) => ({ default: m.ScenarioWorkspaceView })),
 );
