@@ -12,7 +12,9 @@ import type { RootState } from './store';
  */
 export async function flushPersistedState(state: RootState): Promise<void> {
   const presentData = state.project.present?.data;
-  const saves: Promise<unknown>[] = [storageService.saveSettings(state.settings)];
+  const saves: Promise<unknown>[] = [
+    settingsPersistenceCoordinator.enqueue(() => storageService.saveSettings(state.settings)),
+  ];
   if (presentData) {
     const enriched: ProjectData = {
       ...presentData,
@@ -22,7 +24,11 @@ export async function flushPersistedState(state: RootState): Promise<void> {
         currentBranchId: state.versionControl.currentBranchId,
       },
     };
-    saves.push(storageService.saveProject(saveEnvelopeFromProjectData(enriched)));
+    saves.push(
+      projectPersistenceCoordinator.enqueue(() =>
+        storageService.saveProject(saveEnvelopeFromProjectData(enriched)),
+      ),
+    );
   }
   await Promise.all(saves);
 }
