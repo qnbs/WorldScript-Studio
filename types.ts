@@ -25,6 +25,7 @@ export type View =
   | 'mindmap'
   | 'characterInterviews'
   | 'lora'
+  // QNBS-v3: Scenario is a shared navigation contract for the projection workspace.
   | 'scenario';
 
 export interface Character {
