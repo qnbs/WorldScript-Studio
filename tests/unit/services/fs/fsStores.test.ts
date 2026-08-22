@@ -45,7 +45,7 @@ vi.mock('../../../../services/desktopPlatform', () => ({
   },
 }));
 vi.mock('../../../../features/project/coreValidationShadow', () => ({
-  observeCoreProjectValidation: shadowValidation,
+  scheduleCoreProjectValidation: shadowValidation,
 }));
 vi.mock('../../../../services/logger', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../../services/logger')>();
@@ -165,6 +165,7 @@ describe('FsProjectStore — projects', () => {
     expect(await store.listProjects()).toEqual([]);
   });
 
+  // QNBS-v3: the store test protects the non-blocking scheduling seam without asserting a verdict authority.
   it('returns the decoded project without waiting for or adopting the shadow verdict', async () => {
     await store.saveProject(project as never);
     const loaded = await store.loadProject('p1');

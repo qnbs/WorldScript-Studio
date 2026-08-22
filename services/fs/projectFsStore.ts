@@ -5,7 +5,7 @@
  */
 
 import type { EntityState } from '@reduxjs/toolkit';
-import { observeCoreProjectValidation } from '../../features/project/coreValidationShadow';
+import { scheduleCoreProjectValidation } from '../../features/project/coreValidationShadow';
 import type { Character, StoryProject, World } from '../../types';
 import { logger } from '../logger';
 import { parseImportedProjectJson } from '../projectImportSchema';
@@ -96,7 +96,8 @@ export class FsProjectStore extends FsAssetStore {
 
       const content = await retryFs(() => apis.readTextFile(projectFile));
       const project = decompressData<StoryProject>(content);
-      observeCoreProjectValidation(project);
+      // QNBS-v3: schedule observation after this async load resolves so validation cannot delay or alter the load result.
+      scheduleCoreProjectValidation(project);
       return project;
     } catch (error) {
       logger.error('Failed to load project:', error);

@@ -26,6 +26,7 @@ vi.mock('../../../../services/logger', () => ({
 import {
   CORE_VALIDATION_MAX_ENVELOPE_BYTES,
   observeCoreProjectValidation,
+  scheduleCoreProjectValidation,
 } from '../../../../features/project/coreValidationShadow';
 
 const project: StoryProject = {
@@ -163,5 +164,15 @@ describe('observeCoreProjectValidation', () => {
       durationMs: expect.any(Number),
       skipReason: 'size-cap',
     });
+  });
+
+  // QNBS-v3: timer scheduling proves shadow serialization cannot delay the authoritative load turn.
+  it('defers observation work until after the caller turn', async () => {
+    h.validateProject.mockResolvedValueOnce(validResult);
+    scheduleCoreProjectValidation(project);
+
+    expect(h.validateProject).not.toHaveBeenCalled();
+    await flushShadow();
+    expect(h.validateProject).toHaveBeenCalledTimes(1);
   });
 });

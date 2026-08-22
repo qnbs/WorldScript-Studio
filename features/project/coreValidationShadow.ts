@@ -43,6 +43,7 @@ export function observeCoreProjectValidation(project: StoryProject): void {
 
   const startedAt = Date.now();
   try {
+    // QNBS-v3: build and size-check only inside the deferred observer so project loading stays authoritative and responsive.
     const envelopeJson = buildCoreProjectEnvelope(project);
     const byteLength = new TextEncoder().encode(envelopeJson).byteLength;
     if (byteLength > CORE_VALIDATION_MAX_ENVELOPE_BYTES) {
@@ -78,4 +79,9 @@ export function observeCoreProjectValidation(project: StoryProject): void {
       durationMs: elapsedMs(startedAt),
     });
   }
+}
+
+export function scheduleCoreProjectValidation(project: StoryProject): void {
+  // QNBS-v3: a timer task runs after the load promise settles, preventing shadow serialization from delaying callers.
+  setTimeout(() => observeCoreProjectValidation(project), 0);
 }

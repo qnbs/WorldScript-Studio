@@ -40,6 +40,7 @@ const malformedEntityState = <T extends { id: string }>(state: unknown) =>
 
 // QNBS-v3: Verify ordered Core boundary round-trips and rejection of malformed Redux collections.
 describe('project Core boundary adapter', () => {
+  // QNBS-v3: array-input coverage protects the compatibility contract for non-Redux callers.
   it('accepts the array member of the StoryProject collection union', () => {
     const core = toCoreProjectCollections({
       characters: [character('char-1'), character('char-2')],

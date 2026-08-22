@@ -119,6 +119,7 @@ function validateCoreArray<T extends CoreEntity>(
   entities: readonly T[],
   collection: CoreCollection,
 ): T[] {
+  // QNBS-v3: accept persisted arrays while retaining stable-ID guarantees before Core receives them.
   const seenIds = new Set<string>();
   for (const [index, entity] of entities.entries()) {
     requireStableId(collection, entity?.id, `entities[${index}].id`);
@@ -134,6 +135,7 @@ function normalizeCoreCollection<T extends CoreEntity>(
   collection: T[] | EntityState<T, string>,
   name: CoreCollection,
 ): T[] {
+  // QNBS-v3: one normalization path keeps Redux and already-flat project shapes contract-equivalent.
   return Array.isArray(collection)
     ? validateCoreArray(collection, name)
     : entityStateToCoreArray(collection, name);

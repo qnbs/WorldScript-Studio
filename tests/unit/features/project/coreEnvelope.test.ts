@@ -19,6 +19,7 @@ if (!firstCharacter || !firstWorld) {
 }
 
 describe('buildCoreProjectEnvelope', () => {
+  // QNBS-v3: golden and rejection cases protect the synthetic envelope's Core compatibility boundary.
   it('serializes the empty project envelope at the current synthetic schema version', () => {
     const project: StoryProject = {
       title: 'Empty',
