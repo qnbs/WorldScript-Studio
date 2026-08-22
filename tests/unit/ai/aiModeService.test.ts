@@ -61,6 +61,7 @@ describe('shouldRouteLocally()', () => {
     // QNBS-v3: Offline routing must override cloud-first mode without depending on a real network.
     const online = Object.getOwnPropertyDescriptor(navigator, 'onLine');
     try {
+      // QNBS-v3: Force the offline branch so cloud-only mode cannot be misclassified as network-available.
       Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false });
       setActiveAiMode('cloud');
       expect(shouldRouteLocally()).toBe(true);
