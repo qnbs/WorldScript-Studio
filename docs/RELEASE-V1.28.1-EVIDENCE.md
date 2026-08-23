@@ -73,5 +73,6 @@ validated with `merged_at` and a merge commit equal to the corresponding range c
 
 The source-signing control (every introduced source commit GitHub Verified) and release-tag
 signing control (the annotated tag object plus its target commit) are separate evidence items.
-Neither one substitutes for the other. #332 packaged Linux lifecycle/Alt+Tab/persistence and
-#341 packaged dark/sepia/readability validation remain pending regardless of CI or publication.
+Neither one substitutes for the other. Issue #332 packaged Linux lifecycle/Alt+Tab/persistence
+and Issue #341 packaged dark/sepia/readability validation remain pending regardless of CI or
+publication.

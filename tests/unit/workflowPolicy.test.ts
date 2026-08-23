@@ -228,6 +228,8 @@ describe('Tauri release workflow policy', () => {
     expect(release).toContain('generate_release_notes: false');
     expect(release).toContain('Check out the exact release tag');
     expect(release).toContain('Release notes claim #332 or #341 closure');
+    expect(release).toContain('index($0, "## [" version "] — ")');
+    expect(release).not.toContain('2026-08-23');
   });
 
   it('preserves the authoritative CI Success status gate', () => {

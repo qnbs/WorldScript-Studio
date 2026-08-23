@@ -9,7 +9,7 @@ Single reference for maintainers: architecture touchpoints, content rules, secur
 - **AI:** `services/ai/index.ts` (Vercel AI SDK layer, canonical entry). `geminiService` / `aiProviderService` — legacy path. Multi-provider routing: Gemini, OpenAI, OpenRouter (Cloud 5, circuit breaker, free-tier `:free` models), Claude, Grok, Ollama, WebLLM, ONNX, Transformers.js. **AI Execution Modes** (`aiModeService.ts`): `hybrid | cloud | local | eco` — routing strategy persisted to `settings.aiMode`. 4-layer local inference stack: WebLLM (WebGPU) → ONNX (WASM) → Transformers.js → heuristic fallback.
 - **Copilot:** `services/copilot/` — `heuristicEngine.ts` (8 manuscript analysis rules), `insightGenerator.ts`, `copilotContextService.ts`, `actionApplier.ts` (apply-to-chapter, offset-safe). Flag: `enableGlobalCopilot`. Docs: `docs/COPILOT.md`, `docs/HEURISTIC-RULES.md`.
 - **Commands:** `services/commands/` registry; execution via `CommandExecutorProvider` / `runCommandById`.
-- **i18n:** Source modules under `locales/<lang>/*.json`; runtime bundles `public/locales/<lang>/bundle.json` rebuilt by `pnpm run i18n:bundle` / `i18n:check`. **2 594 keys × 11 locales** (de/en/es/fr/it core + ar/he RTL Beta + el/ja/pt/zh Beta).
+- **i18n:** Source modules under `locales/<lang>/*.json`; runtime bundles `public/locales/<lang>/bundle.json` rebuilt by `pnpm run i18n:bundle` / `i18n:check`. **2 925 keys × 19 locales** (de/en/es/fr/it core + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu/ru/ko Beta).
 
 ## Content & copy
 
