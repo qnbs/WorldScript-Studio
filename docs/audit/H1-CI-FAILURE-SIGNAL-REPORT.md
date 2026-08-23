@@ -175,3 +175,21 @@ The run logs provide explicit primary-key cache-hit and restoration evidence for
 pnpm/Node cache and the applicable Playwright browser and APT caches. Historical cache hit/miss
 distribution remains `UNKNOWN`, and this checkpoint adds no failure, cancellation, rerun,
 lane-exclusive, or downstream unique-defect signal. No H1-B decision is made.
+
+## Post-#476 checkpoint boundary
+
+Main push run `32660607709` on
+`fdd60c9465d7515dabc713d4e11f8ff2662fc5c4` completed successfully on `run_attempt=1` in
+approximately 22m29s. Security, Verified Signatures, Node 22, Node 24, Build, E2E, Deep E2E,
+Storybook, Visual Regression, Lighthouse, and `✅ CI Success` all completed successfully; the
+Tauri Rust and Core Rust gates were correctly skipped for this docs-only merge. CodeQL run
+`32660607683` also succeeded on the same head.
+
+The logs provide explicit primary-key cache-hit and restoration evidence for the shared pnpm/Node,
+Playwright browser, and Playwright APT caches in the applicable jobs. Historical cache hit/miss
+distribution remains `UNKNOWN`. The checkpoint adds no failure, cancellation, rerun,
+lane-exclusive, or downstream unique-defect signal, so no H1-B decision is made.
+
+The 50 original sample IDs were re-queried against both pages of the declared capture window. All
+50 reported `run_attempt=1`; observed reruns in the retained sample are therefore `0`. This is a
+sample-scoped result and does not make claims about runs outside the declared window.

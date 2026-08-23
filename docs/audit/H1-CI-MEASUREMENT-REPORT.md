@@ -285,6 +285,51 @@ This checkpoint is within the original workflow-wall-clock P95 and adds no failu
 rerun, lane-exclusive, or downstream unique-defect signal. The original sample's unique signal
 therefore remains `UNKNOWN`, and no H1-B authority decision is made.
 
+## Post-#476 main checkpoint
+
+This is a fourth separate `POST_MERGE_CHECKPOINT` evidence class. It follows the normal protected
+squash merge of PR #476 and is not appended to, substituted for, or used to recalculate the
+original 50-run sample or the earlier checkpoints.
+
+| Field | Value |
+| --- | --- |
+| Workflow run | `32660607709` (`CI / CD`) |
+| Event | `push` |
+| Head SHA | `fdd60c9465d7515dabc713d4e11f8ff2662fc5c4` |
+| Run attempt | `1` |
+| Created | `2026-08-23T19:14:22Z` |
+| Completed | `2026-08-23T19:36:51Z` |
+| Conclusion | `success` |
+| CodeQL | Run `32660607683`, push on the same head, attempt `1`, success |
+
+The checkpoint wall-clock was approximately 22m29s from workflow creation to completion. The
+terminal job records show Node 22 and Node 24 quality success, Build, E2E, Deep E2E, Storybook,
+Visual Regression, Lighthouse, and `✅ CI Success` success. The Tauri Rust and Core Rust gates were
+correctly skipped for this documentation-only merge.
+
+| Job | Started | Completed | Duration |
+| --- | --- | --- | ---: |
+| Security Audit | 19:14:24Z | 19:15:27Z | 1m03s |
+| Verified Signatures | 19:15:29Z | 19:15:41Z | 0m12s |
+| Quality Gate (Node 24) | 19:15:29Z | 19:26:41Z | 11m12s |
+| Quality Gate (Node 22) | 19:15:29Z | 19:27:52Z | 12m23s |
+| Storybook | 19:27:55Z | 19:29:30Z | 1m35s |
+| Build | 19:27:55Z | 19:29:45Z | 1m50s |
+| E2E Deep Coverage | 19:27:55Z | 19:30:01Z | 2m06s |
+| Visual Regression | 19:29:48Z | 19:31:00Z | 1m12s |
+| Lighthouse CI | 19:29:47Z | 19:31:56Z | 2m09s |
+| E2E Tests | 19:27:54Z | 19:36:45Z | 8m51s |
+| `✅ CI Success` | 19:36:48Z | 19:36:50Z | 0m02s |
+
+The logs explicitly reported primary-key cache hits and successful restoration for the shared
+pnpm/Node cache, Playwright browser caches, and Playwright APT dependency caches in the applicable
+jobs. Post-job logs reported primary-key hits rather than new cache saves. This is checkpoint
+evidence only and does not retroactively establish the historical 50-run cache distribution.
+
+This checkpoint adds no failure, cancellation, rerun, lane-exclusive, or downstream unique-defect
+signal. The original sample's unique signal therefore remains `UNKNOWN`, and no H1-B authority
+decision is made.
+
 ## Timing measurements
 
 Durations are calculated from GitHub-created timestamps and job start/completion timestamps. Runner
@@ -350,7 +395,12 @@ artifacts, check-runs, review threads, or billing data are independently classif
 
 ## Reliability and review limitations
 
-- First-attempt versus rerun status was not exposed in the retained run-list fields: `UNKNOWN`.
+- The historical sample's run IDs were re-queried against both pages of the declared UTC capture
+  window. All 50 retained IDs reported `run_attempt=1`; the sample therefore contains 0 observed
+  reruns. This does not prove that no related workflow run outside the declared sample was rerun.
+- Historical per-job cache hit/miss distribution remains `UNKNOWN` because the original capture
+  retained run metadata and IDs, not job logs. The four later post-merge checkpoints have separate
+  explicit cache observations and must not be projected backward onto the original sample.
 - Cancellation and supersession are observed through cancelled conclusions and close timestamps;
   exact concurrency-cancellation causality is `UNKNOWN` without per-run event correlation.
 - External reviewer silence, rate limits, skipped integrations, and billing/quota failures are not
