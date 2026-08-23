@@ -161,3 +161,17 @@ cache observations are recorded in
 This checkpoint does not alter the original 50-run outcome distribution, the 43 paired-run result,
 or the `UNKNOWN` unique-defect signal. It adds no failure/cancellation or lane-exclusive signal,
 and no H1-B decision is made.
+
+## Post-#475 checkpoint boundary
+
+Main push run `32657261089` on
+`3378fa4327e79bb77bcd98e1213dfe56acaefd09` completed successfully on `run_attempt=1` in
+approximately 23m09s. Security, Verified Signatures, Node 22, Node 24, Build, E2E, Deep E2E,
+Storybook, Visual Regression, Lighthouse, and `✅ CI Success` all completed successfully; the
+Tauri Rust and Core Rust gates were correctly skipped for this docs-only merge. CodeQL run
+`32657261084` also succeeded on the same head.
+
+The run logs provide explicit primary-key cache-hit and restoration evidence for the shared
+pnpm/Node cache and the applicable Playwright browser and APT caches. Historical cache hit/miss
+distribution remains `UNKNOWN`, and this checkpoint adds no failure, cancellation, rerun,
+lane-exclusive, or downstream unique-defect signal. No H1-B decision is made.
