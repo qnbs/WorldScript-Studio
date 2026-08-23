@@ -8,12 +8,12 @@ separates locally implemented evidence from hosted or merge-dependent evidence.
 | Field | Value |
 | --- | --- |
 | Program boundary | Post-v1.28.1; immutable release boundary preserved |
-| Current stage | H1-A measurement evidence + H1-F0 governance inventory active; H0 remains complete |
-| Local state | H1-A 50-run CI evidence report captured on a fresh verified-main branch; no Node lane, required-status, DAG, build, or advisory policy change made |
-| Last reconciled main checkpoint | `391dc506fb654d0ea289edb426c633782d141efe` (post-#471 verified main; not a perpetual live-main claim) |
-| PR / branch | PR #469 merged from `chore/post-v1.28.1-h0-baseline`; final PR head `3a140cb3a019b83e643aef5b5d67a8937c790691` |
-| Merge SHA | `476c0ce5adf33302b65bb77391835813017a62fc`; resulting tree `49919d853814a863194a6918058349e0931fdd34`; merged `2026-08-23T09:22:17Z` |
-| Hosted CI / CodeQL / Security | PR CI `32629355521` was green on the final PR head; fresh main CI `32630810142` was fully green, including `✅ CI Success`; CodeQL `32630810130` was successful |
+| Current stage | H1-A failure/cancellation and unique-signal classification + H1-F0 governance inventory active; H0 remains complete |
+| Local state | PR #472 integrated the reconciled 50-run H1-A report; this branch records failure/cancellation evidence; no Node lane, required-status, DAG, build, or advisory policy change made |
+| Last reconciled main checkpoint | `5f4cd85faf853370a958955e88a0f3afebc03907` (post-#472 verified main; not a perpetual live-main claim) |
+| Latest completed PR / branch | PR #472 merged from `h1-a-measurement-evidence`; final PR head `87d8273c02f9598d3f37a2d5c6280fcfcc017228` |
+| Latest completed merge | `5f4cd85faf853370a958955e88a0f3afebc03907`; resulting tree `da90504d11857359ed167ce6f48af8d3a3c1be6e`; merged `2026-08-23T13:32:37Z` |
+| Hosted CI / CodeQL / Security | PR #472 final head `87d8273c…` merged normally; fresh main CI `32642666084` and CodeQL `32642666044` were successful on merge SHA `5f4cd85f…`, including `✅ CI Success` |
 | Affected issues | None claimed closed or remediated by H0 |
 | Release impact | None; no tag, release, updater metadata, or published asset changed |
 
@@ -57,13 +57,15 @@ The first evidence-only H1 slice is also recorded with immutable evidence. Its m
 | Stage | PR | Head | Merge SHA | Main after merge | CI / security evidence | Next exact task |
 | --- | --- | --- | --- | --- | --- | --- |
 | H1-A / H1-F0 evidence | #471 | `6cf9780a9b0a43c6a8a8802b6b93727d162ebab4` | `391dc506fb654d0ea289edb426c633782d141efe` | `391dc506fb654d0ea289edb426c633782d141efe` / tree `a9ee707c6ac497e22509efae8c822a2f6a257503` | PR CI `32636290349`; post-merge main CI `32637402322`; CodeQL `32637402303`; all five material review threads resolved; CodeRabbit rate-limited, Sourcery/DeepSource skipped | Classify sampled failures/cancellations and unique lane/advisory signal before any H1-B/DAG decision |
+| H1-A measurement evidence | #472 | `87d8273c02f9598d3f37a2d5c6280fcfcc017228` | `5f4cd85faf853370a958955e88a0f3afebc03907` | `5f4cd85faf853370a958955e88a0f3afebc03907` / tree `da90504d11857359ed167ce6f48af8d3a3c1be6e` | PR CI `32640865997`; post-merge main CI `32642666084`; CodeQL `32642666044`; current-head review threads resolved; squash commit GitHub Verified | Classify sampled failures/cancellations and unique lane/advisory signal before any H1-B/DAG decision |
 
 ## Next exact resume procedure
 
-1. From a fresh branch based on verified `391dc506…`, classify the H1-A sample's failed,
-   cancelled, and missing-job causes using authoritative job logs and artifacts.
-2. Compare Node-22/24 overlap and Storybook/Deep E2E/VRT/Lighthouse signal; do not infer a lane
-   decision from timing alone.
+1. From a fresh branch based on verified `5f4cd85f…`, record the classified H1-A failure,
+   cancellation, and unique-signal evidence in
+   [`H1-CI-FAILURE-SIGNAL-REPORT.md`](H1-CI-FAILURE-SIGNAL-REPORT.md).
+2. Preserve the observed Node-22/24 overlap and the `UNKNOWN` advisory unique-signal state; do
+   not infer a lane decision from timing or correlated outcomes alone.
 3. Keep H1-F0 inventory current and defer H1-F1 canonicalization until H1-A through H1-E decisions
    are measured and verified; carry the H1-F DevOps operating-model augmentation as binding.
 
@@ -81,13 +83,14 @@ The first evidence-only H1 slice is also recorded with immutable evidence. Its m
 | Direct single-checker `tsgo` | Exit 0; no diagnostics |
 | `pnpm run ci:prepush` | Exit 0; all sequential low-end checks passed |
 | Hosted CI / PR / signing | PR #469 final head was GitHub Verified and all five material review threads were resolved; PR CI `32629355521` passed; fresh main CI `32630810142` and CodeQL `32630810130` passed; normal protected squash merge produced GitHub Verified commit `476c0ce5…` |
-| H1-A measurement report | Historical replay reconciled the omitted successful run `32613719445`; the report now accounts for 50 unique runs with 26/9/15 outcomes and explicit skipped advisory jobs; aggregate metrics remain unchanged; no lane/DAG policy change |
+| H1-A measurement report | Historical replay reconciled omitted success `32613719445`; PR #472 integrated 50 unique runs with 26/9/15 outcomes and explicit skipped advisory jobs; fresh main evidence is green; no lane/DAG policy change |
+| H1-A failure/signal report | 9 first-attempt failures classified into four root-cause classes; 15 first-attempt cancellations classified as concurrency supersession by same-branch chronology; 0 lane-exclusive failures; advisory failure signal 0, unique signal `UNKNOWN` |
 
 ## Program stop/go constraints
 
-H0 is complete. H1-A measurement is captured but its lane decision remains pending: the sample shows
-substantial Node-22/24 overlap and no lane-exclusive failure, but unique defect signal and failure
-causes are not yet classified. Residual risks carried forward are the unavailable independent
+H0 is complete. H1-A measurement is integrated and failure/cancellation evidence is classified, but
+its lane decision remains pending: the sample shows substantial Node-22/24 overlap and no
+lane-exclusive failure, while unique defect signal remains `UNKNOWN`. Residual risks carried forward are the unavailable independent
 updater verifier, fail-closed bundle-budget work deferred to H2-C, Intel qualification, and the later
 R-15/native, plugin, collaboration, Scenario, and Qt evidence gates.
 The restricted Codex sandbox incident remains an execution-environment limitation, not repository
