@@ -1,6 +1,6 @@
 # H1-A CI failure, cancellation, and unique-signal report
 
-Status: evidence slice in progress. This report classifies the 9 failed and 15 cancelled runs
+Status: evidence slice complete for the currently observable sample. This report classifies the 9 failed and 15 cancelled runs
 from the 50-run H1-A sample. It proposes no Node-lane, required-status, DAG, build, or advisory
 policy change.
 
@@ -133,3 +133,15 @@ failure is available in this sample to support promotion or demotion.
 
 The next H1-A evidence task is to broaden causal failure review where logs/artifacts provide new
 information and to preserve the distinction between observed overlap and unique defect signal.
+
+## Post-#473 checkpoint boundary
+
+Main push run `32648286172` on `a536aeebc09f97b45a3094e05c51dfa8e32922df` completed successfully
+on `run_attempt=1` in approximately 22m37s. Node 22, Node 24, Build, E2E, Deep E2E, Storybook,
+Visual Regression, Lighthouse, Security, Verified Signatures, and `✅ CI Success` all completed
+successfully. Its job timings and explicit cache observations are recorded separately in
+[`H1-CI-MEASUREMENT-REPORT.md`](H1-CI-MEASUREMENT-REPORT.md) as `POST_MERGE_CHECKPOINT` evidence.
+
+This checkpoint does not alter the original 50-run outcome distribution, the 43 paired-run result,
+or the `UNKNOWN` unique-defect signal. It also does not provide historical cache hit/miss
+distribution or a unique-defect comparison, so no H1-B decision is made.
