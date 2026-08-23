@@ -32,6 +32,8 @@ const IGNORE_DIRS = new Set([
   'storybook-static',
   'coverage',
   '.git',
+  // QNBS-v3: linked worktrees are separate checkout artifacts, not application source.
+  '.worktrees',
   'reports',
   'graphify-out',
   '.codegraph',

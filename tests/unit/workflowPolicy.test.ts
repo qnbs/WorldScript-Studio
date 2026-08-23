@@ -131,6 +131,7 @@ describe('CI workflow policy', () => {
     );
     expect(extractNeeds(workflowSource, 'ci-success')).toEqual([
       'security',
+      'signatures',
       'quality',
       'changes',
       'rust-tauri',
@@ -140,6 +141,7 @@ describe('CI workflow policy', () => {
       'lighthouse',
       'vrt',
     ]);
+    expect(ciSuccessBlock).toMatch(/\$\{\{\s*needs\.signatures\.result\s*\}\}/);
     expect(ciSuccessBlock).toMatch(/\$\{\{\s*needs\.lighthouse\.result\s*\}\}/);
 
     for (const jobName of ['e2e-deep', 'storybook']) {
