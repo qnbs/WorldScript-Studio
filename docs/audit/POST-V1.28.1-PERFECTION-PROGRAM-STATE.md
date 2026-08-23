@@ -11,9 +11,9 @@ separates locally implemented evidence from hosted or merge-dependent evidence.
 | Current stage | H1-A signal/timing/cache/rerun evidence integrated for the observable sample + H1-F0 governance inventory active; H0 remains complete |
 | Local state | This evidence branch preserves the original 50-run sample and records post-#473 checkpoint `32648286172`; no Node lane, required-status, DAG, build, or advisory policy change made |
 | Last reconciled main checkpoint | `a536aeebc09f97b45a3094e05c51dfa8e32922df` (post-#473 verified main at the recorded checkpoint; not a perpetual live-main claim) |
-| Latest completed PR / branch | PR #472 merged from `h1-a-measurement-evidence`; final PR head `87d8273c02f9598d3f37a2d5c6280fcfcc017228` |
-| Latest completed merge | `5f4cd85faf853370a958955e88a0f3afebc03907`; resulting tree `da90504d11857359ed167ce6f48af8d3a3c1be6e`; merged `2026-08-23T13:32:37Z` |
-| Hosted CI / CodeQL / Security | PR #472 final head `87d8273c…` merged normally; fresh main CI `32642666084` and CodeQL `32642666044` were successful on merge SHA `5f4cd85f…`, including `✅ CI Success` |
+| Latest completed PR / branch | PR #473 merged from `h1-a-failure-signal-evidence`; final PR head `41099f89b1617ac646d78a415609a8e0b32b7ade` |
+| Latest completed merge | `a536aeebc09f97b45a3094e05c51dfa8e32922df`; resulting tree `9cd48b1c78104eb75fcf782431819e4d58935d89`; merged `2026-08-23T15:21:15Z` |
+| Hosted CI / CodeQL / Security | PR #473 final head `41099f89…` merged normally; fresh main CI `32648286172` and CodeQL `32648286205` were successful on merge SHA `a536aeeb…`, including `✅ CI Success` |
 | Affected issues | None claimed closed or remediated by H0 |
 | Release impact | None; no tag, release, updater metadata, or published asset changed |
 
