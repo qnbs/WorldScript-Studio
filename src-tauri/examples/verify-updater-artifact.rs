@@ -1,4 +1,4 @@
-use std::{env, fs, process};
+use std::{env, fs, path::PathBuf, process};
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use minisign_verify::{PublicKey, Signature};
@@ -7,7 +7,7 @@ const WRONG_PUBLIC_KEY_TEXT: &str = "untrusted comment: minisign public key E762
 
 fn usage() -> ! {
     eprintln!(concat!(
-        "usage: verify-updater-artifact <tauri-public-key> <artifact> <signature> ",
+        "usage: verify-updater-artifact <artifact> <signature> ",
         "[--expect-failure] [--tamper] [--wrong-key]"
     ));
     process::exit(2);
@@ -21,16 +21,29 @@ fn decode_configured_public_key(encoded: &str) -> Result<PublicKey, String> {
     PublicKey::decode(&text).map_err(|error| format!("public-key minisign encoding: {error:?}"))
 }
 
+fn configured_public_key() -> Result<PublicKey, String> {
+    let config_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tauri.conf.json");
+    let config_text =
+        fs::read_to_string(&config_path).map_err(|error| format!("Tauri config read: {error}"))?;
+    let config: serde_json::Value = serde_json::from_str(&config_text)
+        .map_err(|error| format!("Tauri config JSON: {error}"))?;
+    let encoded_key = config
+        .pointer("/plugins/updater/pubkey")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| "Tauri config updater.pubkey is missing or not a string".to_string())?;
+    decode_configured_public_key(encoded_key)
+}
+
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
-    if args.len() < 3 {
+    if args.len() < 2 {
         usage();
     }
 
     let expect_failure = args.iter().any(|argument| argument == "--expect-failure");
     let tamper = args.iter().any(|argument| argument == "--tamper");
     let wrong_key = args.iter().any(|argument| argument == "--wrong-key");
-    if args.iter().skip(3).any(|argument| {
+    if args.iter().skip(2).any(|argument| {
         !matches!(
             argument.as_str(),
             "--expect-failure" | "--tamper" | "--wrong-key"
@@ -45,11 +58,11 @@ fn main() {
         ));
         decode_configured_public_key(&wrong_key_config)
     } else {
-        decode_configured_public_key(&args[0])
+        configured_public_key()
     };
 
     let verification = public_key.and_then(|public_key| {
-        let mut artifact = fs::read(&args[1]).map_err(|error| format!("artifact read: {error}"))?;
+        let mut artifact = fs::read(&args[0]).map_err(|error| format!("artifact read: {error}"))?;
         if tamper {
             let index = artifact.len() / 2;
             let byte = artifact
@@ -59,7 +72,7 @@ fn main() {
         }
 
         let signature_config =
-            fs::read_to_string(&args[2]).map_err(|error| format!("signature read: {error}"))?;
+            fs::read_to_string(&args[1]).map_err(|error| format!("signature read: {error}"))?;
         let signature_text = STANDARD
             .decode(signature_config.trim())
             .map_err(|error| format!("signature base64: {error}"))
@@ -74,7 +87,11 @@ fn main() {
 
     match (expect_failure, verification) {
         (false, Ok(true)) => println!("verified"),
-        (true, Ok(false)) | (true, Err(_)) => println!("rejected as expected"),
+        (true, Ok(false)) => println!("rejected as expected"),
+        (true, Err(error)) => {
+            eprintln!("verification error in negative test: {error}");
+            process::exit(1);
+        }
         (false, Ok(false)) => {
             eprintln!("signature rejected");
             process::exit(1);
