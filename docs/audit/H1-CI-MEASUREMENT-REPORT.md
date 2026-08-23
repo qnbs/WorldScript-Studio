@@ -66,7 +66,7 @@ Success:
 ```text
 32637402322 32636290349 32634953308 32633166716 32632186268
 32630810142 32629355521 32628238890 32619581413 32618585506
-32617412680 32616003387 32614783075 32609989706 32608499439
+32617412680 32616003387 32614783075 32613719445 32609989706 32608499439
 32603228681 32597183439 32595925936 32593093074 32590481499
 32589107539 32588393183 32587547255 32586837622 32586260186
 ```
@@ -85,6 +85,26 @@ Cancelled:
 32593014591 32593011287 32593009191 32593002260 32592756224
 32589061759 32588853161 32588821869 32586591497 32585988531
 ```
+
+The historical replay found one omitted successful run in the retained list: `32613719445`.
+It is part of the original 50-run selection, not a newly substituted run. The authoritative run
+record is:
+
+| Field | Value |
+| --- | --- |
+| Database ID | `32613719445` |
+| Workflow | `CI / CD` (`.github/workflows/ci.yml`) |
+| Event | `pull_request` |
+| Status / conclusion | `completed` / `success` |
+| Head SHA | `9af3fa5b46ff129c2b3e9abfbe6552fac816621c` |
+| Head branch | `release/v1.28.1` |
+| Created / updated | `2026-08-23T02:47:19Z` / `2026-08-23T03:05:56Z` |
+| URL | <https://github.com/qnbs/WorldScript-Studio/actions/runs/32613719445> |
+
+The historical replay used the declared window and an expanded run inventory to recover the
+original selection; it did not replace the sample with today's latest 50 runs. The restored
+outcome groups now contain 26 success IDs, 9 failure IDs, and 15 cancelled IDs: 50 unique IDs with
+disjoint groups.
 
 The complete run identity, head SHA, branch, event, URL, and timestamps remain reproducible from
 the query in the method document using these IDs. The most relevant current transition runs are:
@@ -105,7 +125,6 @@ the query in the method document using these IDs. The most relevant current tran
 | 32591940113 | pull request | Scenario MVP | `907957c4…` | failure |
 | 32588393183 | push | `main` | `40860803…` | success |
 | 32585988531 | pull request | #332 overlay | `9cfe0c98…` | cancelled |
-```
 
 ## Timing measurements
 
@@ -147,20 +166,24 @@ authority change is made here.
 
 ## Advisory and downstream job evidence
 
-The following jobs were observable in 45 of the 50 runs. Missing jobs are retained as missing or
-path/concurrency effects, not treated as successful results.
+The following jobs emitted a job record in 45 of the 50 runs. `Observed` counts emitted job
+records, and the outcome columns are mutually exclusive and exhaustive for those records. The
+remaining 5 runs emitted no record for each listed job; absence is not treated as success. Timing
+percentiles use the 36 non-skipped records with a usable positive duration. Skipped records are
+reported explicitly and are not included in timing percentiles.
 
-| Job | Observed | Success | Failure | Cancelled | Median | P95 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Storybook | 45 | 27 | 0 | 9 | 1.63 min | 1.92 min |
-| E2E Deep Coverage | 45 | 27 | 0 | 9 | 2.27 min | 2.72 min |
-| Visual Regression | 45 | 26 | 0 | 10 | 1.22 min | 1.58 min |
-| Lighthouse CI | 45 | 26 | 0 | 10 | 2.19 min | 2.47 min |
-| E2E Tests | 45 | 26 | 0 | 10 | 8.75 min | 9.32 min |
+| Job | Observed | Success | Failure | Cancelled | Skipped | Other/Unknown | Timed | Median | P95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Storybook | 45 | 27 | 0 | 9 | 9 | 0 | 36 | 1.63 min | 1.92 min |
+| E2E Deep Coverage | 45 | 27 | 0 | 9 | 9 | 0 | 36 | 2.27 min | 2.72 min |
+| Visual Regression | 45 | 26 | 0 | 10 | 9 | 0 | 36 | 1.22 min | 1.58 min |
+| Lighthouse CI | 45 | 26 | 0 | 10 | 9 | 0 | 36 | 2.19 min | 2.47 min |
+| E2E Tests | 45 | 26 | 0 | 10 | 9 | 0 | 36 | 8.75 min | 9.32 min |
 
-The `✅ CI Success` job was observed in 45 runs: 26 success and 19 failure conclusions. That
-aggregator result reflects the workflow's handling of failed/cancelled upstream evidence; it is not
-used to erase the underlying run outcome distribution.
+The `✅ CI Success` job was observed in 45 runs: 26 success, 19 failure, 0 cancelled, 0 skipped,
+and 0 other/unknown conclusions. Its timing sample was 45 jobs, with a median of 0.05 minutes and
+P95 of 0.07 minutes. That aggregator result reflects the workflow's handling of failed/cancelled
+upstream evidence; it is not used to erase the underlying run outcome distribution.
 
 No unique-defect labels, reviewer findings, cache hit/miss facts, or billed runner-minute values are
 available from this aggregate query. Those fields remain `UNKNOWN` until the relevant job logs,

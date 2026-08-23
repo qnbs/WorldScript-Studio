@@ -81,7 +81,7 @@ The first evidence-only H1 slice is also recorded with immutable evidence. Its m
 | Direct single-checker `tsgo` | Exit 0; no diagnostics |
 | `pnpm run ci:prepush` | Exit 0; all sequential low-end checks passed |
 | Hosted CI / PR / signing | PR #469 final head was GitHub Verified and all five material review threads were resolved; PR CI `32629355521` passed; fresh main CI `32630810142` and CodeQL `32630810130` passed; normal protected squash merge produced GitHub Verified commit `476c0ce5…` |
-| H1-A measurement report | 50 CI/CD runs selected in the declared inclusive UTC window; aggregate metrics and raw run IDs recorded in `H1-CI-MEASUREMENT-REPORT.md`; no lane/DAG policy change |
+| H1-A measurement report | Historical replay reconciled the omitted successful run `32613719445`; the report now accounts for 50 unique runs with 26/9/15 outcomes and explicit skipped advisory jobs; aggregate metrics remain unchanged; no lane/DAG policy change |
 
 ## Program stop/go constraints
 
