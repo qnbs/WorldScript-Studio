@@ -2,7 +2,7 @@
 /**
  * Suppression-debt ratchet gate (audit finding F-4).
  *
- * Counts `biome-ignore` directives across the TS/TSX source tree, grouped by rule, and fails CI
+ * Counts `biome-ignore` directives across Git-tracked TS/TSX source files, grouped by rule, and fails CI
  * when the total exceeds the committed baseline in `suppressions-baseline.json`. The baseline may
  * only ever DECREASE — this stops the suppression count (162x noExplicitAny at baseline time) from
  * silently growing the way it did Mar→Jun 2026 (137 → 186). No gate previously prevented that.
@@ -17,62 +17,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { collectTrackedSourceFiles, scanSuppressionFiles } from './suppression-scanner.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
 
-// Directories that never contain first-party source we want to count.
-const IGNORE_DIRS = new Set([
-  'node_modules',
-  'dist',
-  'dist-storybook',
-  'storybook-static',
-  'coverage',
-  '.git',
-  'reports',
-  'graphify-out',
-  '.codegraph',
-  'playwright-report',
-  'test-results',
-  'src-tauri', // Rust + target/, no .ts
-]);
-
-const SRC_EXT = new Set(['.ts', '.tsx']);
-const BIOME_IGNORE = /biome-ignore(?:-start|-end)?\s+([a-zA-Z][\w/]*)/;
-
-/** Recursively collect first-party .ts/.tsx files. */
-function collect(dir, out) {
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.isDirectory()) {
-      if (IGNORE_DIRS.has(entry.name)) continue;
-      collect(path.join(dir, entry.name), out);
-    } else if (SRC_EXT.has(path.extname(entry.name))) {
-      out.push(path.join(dir, entry.name));
-    }
-  }
-  return out;
-}
-
-const files = collect(root, []);
-/** @type {Record<string, number>} */
-const byRule = {};
-/** @type {Record<string, Record<string, number>>} */
-const byFile = {};
-let total = 0;
-for (const file of files) {
-  const text = fs.readFileSync(file, 'utf8');
-  for (const line of text.split('\n')) {
-    if (!line.includes('biome-ignore')) continue;
-    const m = line.match(BIOME_IGNORE);
-    const rule = m ? m[1] : 'unknown';
-    byRule[rule] = (byRule[rule] ?? 0) + 1;
-    total++;
-    if (!byFile[file]) byFile[file] = {};
-    byFile[file][rule] = (byFile[file][rule] ?? 0) + 1;
-  }
-}
-
-const sorted = Object.fromEntries(Object.entries(byRule).sort((a, b) => b[1] - a[1]));
+const files = collectTrackedSourceFiles({ root });
+const { total, byRule: sorted, byFile } = scanSuppressionFiles(files);
 const report = {
   total,
   byRule: sorted,
