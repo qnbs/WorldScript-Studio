@@ -150,7 +150,7 @@ registry gzip-decoding failure mode, while OSV failures remain blocking.
 
 ### Release-truth checks
 
-`pnpm run docs:check` treats `v1.27.1` (the latest stable tag) as the release frontier. A dated
+`pnpm run docs:check` treats the latest available stable tag as the release frontier. A dated
 Keep-a-Changelog heading at or beyond that frontier must have its matching tag; a package version
 behind the frontier fails, while a newer development version requires an `[Unreleased]` section;
 when post-release commits exist, that section must contain meaningful history. README badges may use an explicit `Next`/`unreleased` development label,

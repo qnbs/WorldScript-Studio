@@ -14,6 +14,9 @@ import {
 
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 const workflowPath = fileURLToPath(new URL('../../.github/workflows/ci.yml', import.meta.url));
+const tauriWorkflowPath = fileURLToPath(
+  new URL('../../.github/workflows/tauri-build.yml', import.meta.url),
+);
 const setupActionPath = fileURLToPath(
   new URL('../../.github/actions/setup/action.yml', import.meta.url),
 );
@@ -25,6 +28,7 @@ const scheduledSecurityWorkflowPath = fileURLToPath(
 );
 const tauriManifestPath = fileURLToPath(new URL('../../src-tauri/Cargo.toml', import.meta.url));
 const workflowSource = readFileSync(workflowPath, 'utf8');
+const tauriWorkflowSource = readFileSync(tauriWorkflowPath, 'utf8');
 const setupActionSource = readFileSync(setupActionPath, 'utf8');
 const cloudflareWorkflowSource = readFileSync(cloudflareWorkflowPath, 'utf8');
 const scheduledSecurityWorkflowSource = readFileSync(scheduledSecurityWorkflowPath, 'utf8');
@@ -185,5 +189,52 @@ describe('CI workflow policy', () => {
     expect(enforcementStep).toMatch(
       /if \[ ! -s "\$GITHUB_WORKSPACE\/osv-results\.json" \]; then[\s\S]+?exit 1\n\s+fi/,
     );
+  });
+});
+
+// QNBS-v3: keep desktop publication causally downstream of independently verified annotated tags.
+describe('Tauri release workflow policy', () => {
+  it('runs the signature verifier only for real version-tag pushes with read-only access', () => {
+    const verifier = extractJobBlock(tauriWorkflowSource, 'verify-release-tag');
+    expect(verifier).toMatch(
+      /^ {4}if: >-\n {6}\$\{\{ github\.event_name == 'push' && github\.ref_type == 'tag' && startsWith\(github\.ref, 'refs\/tags\/v'\) \}\}$/m,
+    );
+    expect(verifier).toContain('scripts/signing/verify-github-signatures.mjs');
+    expect(verifier).toMatch(/^ {4}permissions:\n {6}contents: read\s*$/m);
+    expect(verifier).not.toContain('workflow_dispatch');
+  });
+
+  it('requires successful tag verification before tagged bundles, while allowing manual builds', () => {
+    const bundle = extractJobBlock(tauriWorkflowSource, 'bundle');
+    expect(extractNeeds(tauriWorkflowSource, 'bundle')).toEqual(['verify-release-tag']);
+    expect(bundle).toContain('always()');
+    expect(bundle).toContain('!cancelled()');
+    expect(bundle).toMatch(/github\.event_name == 'workflow_dispatch'/);
+    expect(bundle).toMatch(/needs\.verify-release-tag\.result == 'success'/);
+    expect(bundle).toMatch(
+      /always\(\)\s*&&\s*!cancelled\(\)[\s\S]+github\.event_name == 'workflow_dispatch'[\s\S]+needs\.verify-release-tag\.result == 'success'/,
+    );
+    expect(bundle).toContain('Skip updater signing for workflow_dispatch test builds');
+  });
+
+  it('keeps release publication tag-only and downstream of bundle output', () => {
+    const release = extractJobBlock(tauriWorkflowSource, 'release');
+    expect(extractNeeds(tauriWorkflowSource, 'release')).toEqual(['bundle']);
+    expect(release).toMatch(
+      /^ {4}if: >-\n {6}\$\{\{ github\.event_name == 'push' && github\.ref_type == 'tag' && startsWith\(github\.ref, 'refs\/tags\/v'\) \}\}$/m,
+    );
+    expect(release).not.toContain('workflow_dispatch');
+    expect(release).toContain('body_path: release-notes.md');
+    expect(release).toContain('generate_release_notes: false');
+    expect(release).toContain('Check out the exact release tag');
+    expect(release).toContain('Release notes claim #332 or #341 closure');
+    expect(release).toContain('index($0, "## [" version "] — ")');
+    expect(release).not.toContain('2026-08-23');
+  });
+
+  it('preserves the authoritative CI Success status gate', () => {
+    const ciSuccess = extractJobBlock(workflowSource, 'ci-success');
+    expect(ciSuccess).toContain('✅ CI Success');
+    expect(workflowSource).toContain('name: ✅ CI Success');
   });
 });
