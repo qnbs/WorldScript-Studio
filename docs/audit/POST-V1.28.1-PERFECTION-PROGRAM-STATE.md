@@ -9,11 +9,11 @@ separates locally implemented evidence from hosted or merge-dependent evidence.
 | --- | --- |
 | Program boundary | Post-v1.28.1; immutable release boundary preserved |
 | Current stage | H1-A signal/timing/cache/rerun evidence integrated for the observable sample + H1-F0 governance inventory active; H0 remains complete |
-| Local state | This evidence branch preserves the original 50-run sample and records post-#473 checkpoint `32648286172`; no Node lane, required-status, DAG, build, or advisory policy change made |
-| Last reconciled main checkpoint | `a536aeebc09f97b45a3094e05c51dfa8e32922df` (post-#473 verified main at the recorded checkpoint; not a perpetual live-main claim) |
-| Latest completed PR / branch | PR #473 merged from `h1-a-failure-signal-evidence`; final PR head `41099f89b1617ac646d78a415609a8e0b32b7ade` |
-| Latest completed merge | `a536aeebc09f97b45a3094e05c51dfa8e32922df`; resulting tree `9cd48b1c78104eb75fcf782431819e4d58935d89`; merged `2026-08-23T15:21:15Z` |
-| Hosted CI / CodeQL / Security | PR #473 final head `41099f89…` merged normally; fresh main CI `32648286172` and CodeQL `32648286205` were successful on merge SHA `a536aeeb…`, including `✅ CI Success` |
+| Local state | This evidence branch preserves the original 50-run sample and records separate post-#473 `32648286172` and post-#474 `32654048692` checkpoints; no Node lane, required-status, DAG, build, or advisory policy change made |
+| Last reconciled main checkpoint | `8223d04e0b51443c6490695b0d08a4189bffe3ee` (post-#474 verified main at the recorded checkpoint; not a perpetual live-main claim) |
+| Latest completed PR / branch | PR #474 merged from `h1-a-remaining-signal-evidence`; final PR head `d53aabfd9c3d06bd7c02610127548352d6d9b2da` |
+| Latest completed merge | `8223d04e0b51443c6490695b0d08a4189bffe3ee`; resulting tree `6ab3a6143f872be2da2e1509225deca759b0bc7f`; merged `2026-08-23T17:11:42Z` |
+| Hosted CI / CodeQL / Security | PR #474 final head `d53aabfd…` merged normally; PR CI `32652726821`, PR CodeQL `32652726773`; fresh main CI `32654048692` and CodeQL `32654048709` were successful on merge SHA `8223d04e…`, including `✅ CI Success` |
 | Affected issues | None claimed closed or remediated by H0 |
 | Release impact | None; no tag, release, updater metadata, or published asset changed |
 
@@ -59,14 +59,15 @@ The first evidence-only H1 slice is also recorded with immutable evidence. Its m
 | H1-A / H1-F0 evidence | #471 | `6cf9780a9b0a43c6a8a8802b6b93727d162ebab4` | `391dc506fb654d0ea289edb426c633782d141efe` | `391dc506fb654d0ea289edb426c633782d141efe` / tree `a9ee707c6ac497e22509efae8c822a2f6a257503` | PR CI `32636290349`; post-merge main CI `32637402322`; CodeQL `32637402303`; all five material review threads resolved; CodeRabbit rate-limited, Sourcery/DeepSource skipped | Classify sampled failures/cancellations and unique lane/advisory signal before any H1-B/DAG decision |
 | H1-A measurement evidence | #472 | `87d8273c02f9598d3f37a2d5c6280fcfcc017228` | `5f4cd85faf853370a958955e88a0f3afebc03907` | `5f4cd85faf853370a958955e88a0f3afebc03907` / tree `da90504d11857359ed167ce6f48af8d3a3c1be6e` | PR CI `32640865997`; post-merge main CI `32642666084`; CodeQL `32642666044`; current-head review threads resolved; squash commit GitHub Verified | Classify sampled failures/cancellations and unique lane/advisory signal before any H1-B/DAG decision |
 | H1-A failure/signal evidence | #473 | `41099f89b1617ac646d78a415609a8e0b32b7ade` | `a536aeebc09f97b45a3094e05c51dfa8e32922df` | `a536aeebc09f97b45a3094e05c51dfa8e32922df` / tree `9cd48b1c78104eb75fcf782431819e4d58935d89` | PR CI `32646942326`; post-merge main CI `32648286172`; CodeQL `32648286205`; 9 failures and 15 cancellations classified; unique signal remains `UNKNOWN` | Preserve the separate post-#473 checkpoint and do not advance H1-B without unique-signal authority evidence |
+| H1-A checkpoint reconciliation | #474 | `d53aabfd9c3d06bd7c02610127548352d6d9b2da` | `8223d04e0b51443c6490695b0d08a4189bffe3ee` | `8223d04e0b51443c6490695b0d08a4189bffe3ee` / tree `6ab3a6143f872be2da2e1509225deca759b0bc7f` | PR CI `32652726821`; PR CodeQL `32652726773`; post-merge main CI `32654048692`; CodeQL `32654048709`; corrected ledger checkpoint, fresh main run ~22m17s, cache hits recorded, GitHub Verified | Continue H1-A evidence only where it can classify unique signal or historical cache/rerun behavior; do not advance H1-B/DAG authority |
 
 ## Next exact resume procedure
 
 1. Preserve the original 50-run sample and the separate `POST_MERGE_CHECKPOINT` evidence for
-   #473; all 50 sample runs and the checkpoint are first attempts (`run_attempt=1`).
-2. Preserve the observed Node-22/24 overlap, checkpoint cache hits, historical cache `UNKNOWN`,
-   and the `UNKNOWN` downstream unique-signal state; do not infer a lane decision from timing or
-   correlated outcomes alone.
+   #473 and #474; all 50 sample runs and both checkpoints are first attempts (`run_attempt=1`).
+2. Preserve the observed Node-22/24 overlap, explicit cache hits on both post-merge checkpoints,
+   historical cache `UNKNOWN`, and the `UNKNOWN` downstream unique-signal state; do not infer a
+   lane decision from timing or correlated outcomes alone.
 3. Keep H1-F0 inventory current and defer H1-F1 canonicalization until H1-A through H1-E decisions
    are measured and verified; carry the H1-F DevOps operating-model augmentation as binding.
 
