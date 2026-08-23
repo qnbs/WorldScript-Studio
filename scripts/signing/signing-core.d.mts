@@ -89,6 +89,10 @@ export function pushCommitShas(
   cwd?: string,
   rangeResolver?: (range: string, cwd?: string) => string[],
 ): string[];
+export function parseAnnotatedTag(
+  sha: string,
+  cwd?: string,
+): { objectType: 'commit'; target: string } | { objectType: 'tag'; target: string; targetType: string } | null;
 export function verifyTagObject(sha: string, cwd?: string): VerificationResult;
 export function remoteTrackingBases(remote: string, remoteRef: string, cwd?: string): string[];
 export function outgoingBaseShas(update: RefUpdate, fallbackBases: string[]): string[];
