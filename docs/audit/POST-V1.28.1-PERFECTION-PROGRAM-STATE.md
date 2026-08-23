@@ -61,10 +61,10 @@ The first evidence-only H1 slice is also recorded with immutable evidence. Its m
 
 ## Next exact resume procedure
 
-1. From a fresh branch based on verified `5f4cd85f…`, record the classified H1-A failure,
-   cancellation, and unique-signal evidence in
-   [`H1-CI-FAILURE-SIGNAL-REPORT.md`](H1-CI-FAILURE-SIGNAL-REPORT.md).
-2. Preserve the observed Node-22/24 overlap and the `UNKNOWN` advisory unique-signal state; do
+1. Reconcile the 43 separately identifiable Node pairs and the seven explicitly categorized
+   cancellation runs in [`H1-CI-FAILURE-SIGNAL-REPORT.md`](H1-CI-FAILURE-SIGNAL-REPORT.md), then
+   review remaining timing, cache, rerun, and unique-signal evidence.
+2. Preserve the observed Node-22/24 overlap and the `UNKNOWN` downstream unique-signal state; do
    not infer a lane decision from timing or correlated outcomes alone.
 3. Keep H1-F0 inventory current and defer H1-F1 canonicalization until H1-A through H1-E decisions
    are measured and verified; carry the H1-F DevOps operating-model augmentation as binding.

@@ -106,8 +106,8 @@ The current evidence record and next tasks are:
    [`H1-CI-MEASUREMENT-REPORT.md`](H1-CI-MEASUREMENT-REPORT.md).
 2. Failure/cancellation evidence is recorded in
    [`H1-CI-FAILURE-SIGNAL-REPORT.md`](H1-CI-FAILURE-SIGNAL-REPORT.md): all investigated runs are
-   first attempts, cancellations are concurrency-supersession evidence, and advisory unique
-   signal remains `UNKNOWN`.
+   first attempts, cancellations are concurrency-supersession evidence, and downstream
+   unique-defect signal remains `UNKNOWN`.
 3. Continue classifying timing, cache, rerun, overlap, and unique-signal evidence without
    cherry-picking only green runs; use a future meaningful H1 PR to reconcile the checkpoint and
    inventory as needed, never a
