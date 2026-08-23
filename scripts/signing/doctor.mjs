@@ -30,7 +30,7 @@ if (jsonMode) {
     `identity: ${identity.name && identity.email ? 'configured' : 'missing'} (${isGitHubCompatibleEmail(identity.email) ? 'GitHub noreply-compatible' : 'GitHub identity requires account verification'})`,
   );
   console.log(
-    `hooks: ${summary.hooks.pathConfigured ? 'custom path configured' : 'default path'} (${summary.hooks.preCommitInstalled ? 'available' : 'not installed'})`,
+    `hooks: ${summary.hooks.pathConfigured ? 'custom path configured' : 'default path'} (${summary.hooks.hooksInstalled ? 'available' : 'not installed'})`,
   );
   console.log(
     `unsafe config overrides: ${unsafeOverrides.length ? unsafeOverrides.join(', ') : 'none detected'}`,

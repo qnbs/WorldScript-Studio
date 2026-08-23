@@ -110,24 +110,31 @@ export async function verifyRemoteTag({ owner, repo, tag, token = '', fetchImpl 
   );
   const object = ref.object;
   if (!object?.sha || !object.type) throw new Error('GitHub tag ref response was incomplete');
-  let tagReport = null;
-  let targetSha = object.sha;
-  if (object.type === 'tag') {
-    const tagObject = await fetchJson(
-      fetchImpl,
-      `${API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/tags/${encodeURIComponent(object.sha)}`,
-      token,
-    );
-    tagReport = {
+  if (object.type !== 'tag') {
+    const report = {
       sha: safeSha(object.sha),
       subject: safeText(`tag ${tag}`, 160),
-      verified: tagObject.verification?.verified === true,
-      reason: safeText(tagObject.verification?.reason ?? 'missing tag verification result'),
+      verified: false,
+      reason: 'release tag is not an annotated tag object',
     };
-    targetSha = tagObject.object?.sha;
-    if (tagObject.object?.type !== 'commit' || !targetSha)
-      throw new Error('annotated tag does not target a commit');
+    return { ok: false, reports: [report], reason: `${report.sha}: ${report.reason}` };
   }
+  let tagReport = null;
+  let targetSha = object.sha;
+  const tagObject = await fetchJson(
+    fetchImpl,
+    `${API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/tags/${encodeURIComponent(object.sha)}`,
+    token,
+  );
+  tagReport = {
+    sha: safeSha(object.sha),
+    subject: safeText(`tag ${tag}`, 160),
+    verified: tagObject.verification?.verified === true,
+    reason: safeText(tagObject.verification?.reason ?? 'missing tag verification result'),
+  };
+  targetSha = tagObject.object?.sha;
+  if (tagObject.object?.type !== 'commit' || !targetSha)
+    throw new Error('annotated tag does not target a commit');
   const commit = await fetchJson(
     fetchImpl,
     `${API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits/${encodeURIComponent(targetSha)}`,

@@ -5,8 +5,12 @@ import {
   getSigningConfig,
   hasCommitSignature,
   isGitHubCompatibleEmail,
+  outgoingBaseShas,
   parseRefUpdate,
+  pushCommitShas,
+  pushEventRange,
   selectIntroducedCommits,
+  verifyOutgoingUpdates,
 } from '../../scripts/signing/signing-core.mjs';
 import {
   hasCompleteCommitRange,
@@ -43,6 +47,107 @@ describe('local signing controls', () => {
     expect(selectIntroducedCommits([base, introduced], [base])).toEqual([introduced]);
   });
 
+  it('uses the Git-advertised remote SHA before new-branch fallbacks', () => {
+    const remoteSha = 'c'.repeat(40);
+    const fallback = ['d'.repeat(40)];
+    expect(
+      outgoingBaseShas(
+        {
+          localRef: 'refs/heads/main',
+          localSha: 'a'.repeat(40),
+          remoteRef: 'refs/heads/main',
+          remoteSha,
+        },
+        fallback,
+      ),
+    ).toEqual([remoteSha]);
+    expect(
+      outgoingBaseShas(
+        {
+          localRef: 'refs/heads/new',
+          localSha: 'a'.repeat(40),
+          remoteRef: 'refs/heads/new',
+          remoteSha: '0'.repeat(40),
+        },
+        fallback,
+      ),
+    ).toEqual(fallback);
+  });
+
+  it('covers deletion, malformed, tag, and branch pre-push routing', () => {
+    const zero = '0'.repeat(40);
+    const commit = 'a'.repeat(40);
+    const remote = 'b'.repeat(40);
+    expect(
+      verifyOutgoingUpdates(
+        [`refs/heads/deleted ${zero} refs/heads/deleted ${remote}`],
+        'origin',
+        process.cwd(),
+        {
+          introducedCommits: () => {
+            throw new Error('deletions must be skipped');
+          },
+        },
+      ),
+    ).toMatchObject({ ok: true, reports: [] });
+    expect(verifyOutgoingUpdates(['malformed'], 'origin')).toMatchObject({
+      ok: false,
+      reason: 'invalid pre-push ref-update input',
+    });
+    expect(
+      verifyOutgoingUpdates(
+        [`refs/tags/v1.0.0 ${commit} refs/tags/v1.0.0 ${zero}`],
+        'origin',
+        process.cwd(),
+        {
+          verifyTagObject: () => ({ ok: true, reason: 'tag and target commit verified' }),
+          introducedCommits: () => {
+            throw new Error('tags must not enumerate branch commits');
+          },
+        },
+      ),
+    ).toMatchObject({ ok: true, reports: [{ sha: commit, subject: 'refs/tags/v1.0.0' }] });
+    expect(
+      verifyOutgoingUpdates(
+        [`refs/heads/main ${commit} refs/heads/main ${remote}`],
+        'origin',
+        process.cwd(),
+        {
+          introducedCommits: (update) => {
+            expect(update.remoteSha).toBe(remote);
+            return [commit];
+          },
+          verifyCommitObject: () => ({ ok: true, reason: 'Git-native signature verified' }),
+        },
+      ),
+    ).toMatchObject({ ok: true, reports: [{ sha: commit }] });
+  });
+
+  it('derives an exact push range and rejects an unverified earlier commit', () => {
+    const before = '0'.repeat(40);
+    const after = 'f'.repeat(40);
+    expect(pushEventRange({ before, after })).toEqual({ before, after });
+    expect(
+      pushCommitShas({ before: '1'.repeat(40), after }, process.cwd(), () => [
+        '1'.repeat(40),
+        'e'.repeat(40),
+        after,
+      ]),
+    ).toEqual(['1'.repeat(40), 'e'.repeat(40), after]);
+    const result = verifyRemoteCommitReports([
+      {
+        sha: '1'.repeat(40),
+        commit: { message: 'earlier', verification: { verified: false, reason: 'unsigned' } },
+      },
+      {
+        sha: after,
+        commit: { message: 'head', verification: { verified: true, reason: 'valid' } },
+      },
+    ]);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('111111111111: unsigned');
+  });
+
   it('requires both an annotated tag signature and its target commit signature', () => {
     const unsignedCommit = { ok: false, reason: 'commit has no signature object' };
     expect(
@@ -61,6 +166,14 @@ describe('local signing controls', () => {
         commitVerification: { ok: true, reason: 'verified' },
       }),
     ).toMatchObject({ ok: false });
+    expect(
+      classifyTagVerification({
+        objectType: 'commit',
+        targetType: 'commit',
+        tagVerificationStatus: 0,
+        commitVerification: { ok: true, reason: 'verified' },
+      }),
+    ).toMatchObject({ ok: false, reason: 'release tag is not an annotated tag object' });
   });
 
   it('distinguishes unsigned and malformed signed commit objects', () => {
@@ -162,5 +275,17 @@ describe('GitHub signature API controls', () => {
     });
     expect(tag.ok).toBe(true);
     expect(tag.reports).toHaveLength(2);
+
+    const lightweight = await verifyRemoteTag({
+      owner: 'qnbs',
+      repo: 'WorldScript-Studio',
+      tag: 'v1.0.0-lightweight',
+      fetchImpl: async () =>
+        new Response(JSON.stringify({ object: { sha: targetSha, type: 'commit' } }), {
+          status: 200,
+        }),
+    });
+    expect(lightweight.ok).toBe(false);
+    expect(lightweight.reason).toContain('not an annotated tag object');
   });
 });

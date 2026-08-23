@@ -10,7 +10,8 @@ but different checks:
 - GitHub's `verification.verified` result is the release and merge gate. It covers GitHub's
   signature parser, key association, and account identity rules.
 - Annotated release tags have two objects to verify: the tag object and its target commit.
-  Lightweight release tags still require their target commit to be verified.
+  Lightweight release tags are rejected because they have no independently verifiable tag
+  object; a verified target commit alone is insufficient for a release tag.
 
 ## Local setup and recovery
 
@@ -65,5 +66,6 @@ with the release evidence when refreshing these figures.
 This snapshot intentionally distinguishes the signed squash result from the source history that
 preceded it. Open and merged PR source histories should be audited separately when investigating
 legacy unsigned commits. The counts were collected on 2026-08-23 with GitHub's REST commits API,
-`sha=main`, UTC windows ending `2026-08-23T23:59:59Z`, and the `commit.verification.verified`
+`sha=main`, at collection time `2026-08-23T00:15:24Z`, with cutoff
+`2026-08-23T00:15:24Z` and trailing UTC windows, using the `commit.verification.verified`
 boolean; they are not inferred from local Git trust.

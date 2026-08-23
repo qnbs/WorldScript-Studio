@@ -96,6 +96,9 @@ export function isSigningEnabled(config) {
 
 export function getSigningConfig(cwd = process.cwd()) {
   const config = getConfig(cwd);
+  const allowedSignersFile = config['gpg.ssh.allowedSignersFile']
+    ? gitOutput(['config', '--path', '--get', 'gpg.ssh.allowedSignersFile'], { cwd })
+    : '';
   return {
     format: config['gpg.format'] || 'openpgp',
     keyConfigured: Boolean(config['user.signingkey']),
@@ -103,6 +106,7 @@ export function getSigningConfig(cwd = process.cwd()) {
     allowedSignersConfigured: Boolean(config['gpg.ssh.allowedSignersFile']),
     enabled: isSigningEnabled(config),
     keyDisplay: config['user.signingkey'] ? basename(config['user.signingkey']) : '',
+    allowedSignersFile,
     config,
   };
 }
@@ -118,6 +122,8 @@ function configureProbeRepository(repo, signing, identity) {
   if (signing.config['user.signingkey'])
     settings.push(['user.signingkey', signing.config['user.signingkey']]);
   if (signing.config['gpg.program']) settings.push(['gpg.program', signing.config['gpg.program']]);
+  if (signing.allowedSignersFile)
+    settings.push(['gpg.ssh.allowedSignersFile', signing.allowedSignersFile]);
   for (const [key, value] of settings) {
     const result = runGit(['config', key, value], { cwd: repo });
     if (result.status !== 0) return false;
@@ -218,6 +224,20 @@ export function verifyCommitRange(range, cwd = process.cwd()) {
   }));
 }
 
+export function pushEventRange(payload) {
+  const before = payload?.before;
+  const after = payload?.after;
+  if (!isSha(before)) throw new Error('push event is missing an exact before SHA');
+  if (!isSha(after) || isZeroSha(after))
+    throw new Error('push event is missing an exact after SHA');
+  return { before, after };
+}
+
+export function pushCommitShas(payload, cwd = process.cwd(), rangeResolver = commitsInRange) {
+  const { before, after } = pushEventRange(payload);
+  return isZeroSha(before) ? [after] : rangeResolver(`${before}..${after}`, cwd);
+}
+
 // QNBS-v3: Git supplies both object IDs so malformed ref updates fail closed.
 export function parseRefUpdate(line) {
   const fields = line.trim().split(/\s+/);
@@ -250,12 +270,20 @@ export function remoteTrackingBases(remote, remoteRef, cwd = process.cwd()) {
   return bases;
 }
 
+export function outgoingBaseShas(update, fallbackBases) {
+  if (!isZeroSha(update.remoteSha)) {
+    if (!isSha(update.remoteSha)) throw new Error('invalid remote SHA in pre-push update');
+    return [update.remoteSha];
+  }
+  return fallbackBases;
+}
+
 export function introducedCommits(update, remote, cwd = process.cwd()) {
   if (update.remoteRef.startsWith('refs/tags/')) return [];
   if (!update.remoteRef.startsWith('refs/heads/')) {
     throw new Error(`unsupported outgoing ref ${update.remoteRef}`);
   }
-  const bases = remoteTrackingBases(remote, update.remoteRef, cwd);
+  const bases = outgoingBaseShas(update, remoteTrackingBases(remote, update.remoteRef, cwd));
   const args = ['rev-list', '--reverse', update.localSha, ...bases.map((base) => `^${base}`)];
   const result = runGit(args, { cwd });
   if (result.status !== 0)
@@ -281,7 +309,8 @@ export function parseAnnotatedTag(sha, cwd = process.cwd()) {
 export function verifyTagObject(sha, cwd = process.cwd()) {
   const tag = parseAnnotatedTag(sha, cwd);
   if (!tag) return { ok: false, reason: 'tag target is not a commit or annotated tag' };
-  if (tag.objectType === 'commit') return verifyCommitObject(tag.target, cwd);
+  if (tag.objectType === 'commit')
+    return { ok: false, reason: 'release tag is not an annotated tag object' };
   if (!tag.target || tag.targetType !== 'commit')
     return { ok: false, reason: 'annotated tag does not target a commit' };
   const verifiedTag = runGit(['verify-tag', '--raw', sha], { cwd });
@@ -299,7 +328,8 @@ export function classifyTagVerification({
   tagVerificationStatus,
   commitVerification,
 }) {
-  if (objectType === 'commit') return commitVerification;
+  if (objectType === 'commit')
+    return { ok: false, reason: 'release tag is not an annotated tag object' };
   if (objectType !== 'tag' || targetType !== 'commit')
     return { ok: false, reason: 'annotated tag does not target a commit' };
   if (tagVerificationStatus !== 0)
@@ -309,7 +339,11 @@ export function classifyTagVerification({
     : commitVerification;
 }
 
-export function verifyOutgoingUpdates(lines, remote, cwd = process.cwd()) {
+export function verifyOutgoingUpdates(lines, remote, cwd = process.cwd(), dependencies = {}) {
+  const verifyCommit = dependencies.verifyCommitObject ?? ((sha) => verifyCommitObject(sha, cwd));
+  const verifyTag = dependencies.verifyTagObject ?? ((sha) => verifyTagObject(sha, cwd));
+  const getIntroducedCommits =
+    dependencies.introducedCommits ?? ((update) => introducedCommits(update, remote, cwd));
   const updates = lines.map(parseRefUpdate);
   if (updates.some((update) => !update))
     return { ok: false, reason: 'invalid pre-push ref-update input' };
@@ -319,15 +353,15 @@ export function verifyOutgoingUpdates(lines, remote, cwd = process.cwd()) {
     if (!isSha(update.localSha))
       return { ok: false, reason: `invalid outgoing SHA for ${update.remoteRef}` };
     if (update.remoteRef.startsWith('refs/tags/')) {
-      const verification = verifyTagObject(update.localSha, cwd);
+      const verification = verifyTag(update.localSha);
       reports.push({ sha: update.localSha, subject: update.remoteRef, verification });
       if (!verification.ok)
         return { ok: false, reports, reason: `${update.remoteRef}: ${verification.reason}` };
       continue;
     }
-    const commits = introducedCommits(update, remote, cwd);
+    const commits = getIntroducedCommits(update);
     for (const sha of commits) {
-      const verification = verifyCommitObject(sha, cwd);
+      const verification = verifyCommit(sha);
       const report = { sha, subject: commitSubject(sha, cwd), verification };
       reports.push(report);
       if (!verification.ok)
@@ -340,10 +374,12 @@ export function verifyOutgoingUpdates(lines, remote, cwd = process.cwd()) {
 export function safeConfigSummary(cwd = process.cwd()) {
   const signing = getSigningConfig(cwd);
   const identity = getIdentity(cwd);
-  const hooks = getGitDirectory(cwd);
+  const gitDir = getGitDirectory(cwd);
   const hookDir = signing.config['core.hooksPath']
     ? resolve(cwd, signing.config['core.hooksPath'])
-    : hooks;
+    : gitDir
+      ? join(gitDir, 'hooks')
+      : null;
   const hookNames = ['pre-commit', 'pre-push'];
   return {
     signing: {
@@ -362,7 +398,7 @@ export function safeConfigSummary(cwd = process.cwd()) {
     hooks: {
       pathConfigured: Boolean(signing.config['core.hooksPath']),
       directory: hookDir ? basename(hookDir) : '',
-      preCommitInstalled: Boolean(
+      hooksInstalled: Boolean(
         hookDir && hookNames.every((name) => existsSync(join(hookDir, name))),
       ),
     },

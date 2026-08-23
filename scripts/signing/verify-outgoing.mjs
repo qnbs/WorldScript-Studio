@@ -4,7 +4,9 @@ import { verifyOutgoingUpdates } from './signing-core.mjs';
 
 const remote = process.argv[2];
 if (!remote) {
-  console.error('pre-push signing check requires the remote name');
+  console.error(
+    'pre-push signing check requires the remote name. Run "pnpm run hooks:install" to refresh the installed hook.',
+  );
   process.exit(1);
 }
 let input = '';

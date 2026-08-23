@@ -37,8 +37,8 @@ CI runs for the affected test path before removing a temporary quarantine.
 
 ### Gate authority
 
-`✅ CI Success` is the required branch-protection status and aggregates `security`, `quality`,
-`changes`, `rust-tauri`, `core-rust`, `build`, `e2e`, `lighthouse`, and `vrt`. `e2e-deep` and
+`✅ CI Success` is the required branch-protection status and aggregates `security`, `signatures`,
+`quality`, `changes`, `rust-tauri`, `core-rust`, `build`, `e2e`, `lighthouse`, and `vrt`. `e2e-deep` and
 `storybook` are explicitly advisory at job level while their stability criteria are measured. The
 `deploy` job depends only on that aggregate and remains main-push-only.
 
@@ -104,6 +104,7 @@ security ──► quality ──┬──► build ──┬──► lighthous
                        └──► storybook (advisory)
 
 security ─┬
+signatures ─┤
 quality ──┼──► ci-success (required-status aggregator)
 changes ──┤
 rust ────┤

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
 import process from 'node:process';
-import { commitsInRange } from './signing-core.mjs';
+import { commitsInRange, pushCommitShas } from './signing-core.mjs';
 import {
   hasCompleteCommitRange,
   verifyRemoteCommitRange,
@@ -19,12 +19,24 @@ function fail(message) {
   process.exit(1);
 }
 
+function readEventPayload() {
+  const eventPath = process.env.GITHUB_EVENT_PATH;
+  if (!eventPath) fail('GITHUB_EVENT_PATH is unavailable');
+  try {
+    return JSON.parse(readFileSync(eventPath, 'utf8'));
+  } catch (error) {
+    fail(
+      `cannot read GitHub event payload: ${error instanceof Error ? error.message : 'invalid JSON'}`,
+    );
+  }
+}
+
 if (!owner || !repo) fail('GITHUB_REPOSITORY is unavailable');
 
 try {
   let result;
   if (event === 'pull_request') {
-    const payload = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
+    const payload = readEventPayload();
     const number = payload.pull_request?.number;
     const before = payload.pull_request?.base?.sha;
     const after = payload.pull_request?.head?.sha;
@@ -44,11 +56,7 @@ try {
       fetchImpl,
     });
   } else {
-    const before = process.env.GITHUB_EVENT_BEFORE;
-    const after = process.env.GITHUB_SHA;
-    if (!after) fail('push event is missing its after SHA');
-    const shas =
-      before && !/^0{40}$/.test(before) ? commitsInRange(`${before}..${after}`) : [after];
+    const shas = pushCommitShas(readEventPayload());
     result = await verifyRemoteCommitRange({ owner, repo, shas, token, fetchImpl });
   }
   for (const report of result.reports) {
