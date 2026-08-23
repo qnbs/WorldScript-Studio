@@ -237,6 +237,54 @@ signatures, and `✅ CI Success`. It contributes no new failure, cancellation, r
 lane-exclusive defect signal. The original sample's unique Node/advisory defect signal therefore
 remains `UNKNOWN`, and H1-B authority decisions remain pending.
 
+## Post-#475 main checkpoint
+
+This is a third separate `POST_MERGE_CHECKPOINT` evidence class. It follows the normal protected
+squash merge of PR #475 and is not appended to, substituted for, or used to recalculate either the
+original 50-run sample or the earlier checkpoints.
+
+| Field | Value |
+| --- | --- |
+| Workflow run | `32657261089` (`CI / CD`) |
+| Event | `push` |
+| Head SHA | `3378fa4327e79bb77bcd98e1213dfe56acaefd09` |
+| Run attempt | `1` |
+| Created / started | `2026-08-23T18:11:50Z` / `2026-08-23T18:11:50Z` |
+| Completed | `2026-08-23T18:34:59Z` |
+| Conclusion | `success` |
+| CodeQL | Run `32657261084`, push on the same head, attempt `1`, success |
+
+The checkpoint wall-clock was approximately 23m09s. Job timing from the immutable job records was:
+
+| Job | Started | Completed | Duration |
+| --- | --- | --- | ---: |
+| Security Audit | 18:11:52Z | 18:12:39Z | 0m47s |
+| Verified Signatures | 18:12:41Z | 18:12:52Z | 0m11s |
+| Quality Gate (Node 24) | 18:12:41Z | 18:24:02Z | 11m21s |
+| Quality Gate (Node 22) | 18:12:41Z | 18:25:55Z | 13m14s |
+| Build | 18:25:57Z | 18:27:47Z | 1m50s |
+| E2E Deep Coverage | 18:25:57Z | 18:28:22Z | 2m25s |
+| Storybook | 18:25:57Z | 18:27:36Z | 1m39s |
+| Visual Regression | 18:27:50Z | 18:29:16Z | 1m26s |
+| Lighthouse CI | 18:27:49Z | 18:30:01Z | 2m12s |
+| E2E Tests | 18:25:58Z | 18:34:53Z | 8m55s |
+| `✅ CI Success` | 18:34:56Z | 18:34:58Z | 0m02s |
+
+The Tauri Rust and Core Rust gates were correctly skipped for this documentation-only merge.
+Security, signatures, both Node lanes, Build, E2E, Deep E2E, Storybook, Visual Regression,
+Lighthouse, and `✅ CI Success` all completed successfully.
+
+The logs explicitly reported primary-key cache hits and successful restoration for the shared
+pnpm/Node cache in Security, both quality lanes, Build, E2E, Deep E2E, Storybook, Lighthouse, and
+Visual Regression. E2E and Deep E2E also restored the Playwright browser and APT caches; Storybook
+and Visual Regression restored their Playwright/apt caches where configured. Post-run logs reported
+primary-key hits rather than new cache saves. This is checkpoint evidence only; the historical
+50-run cache distribution remains `UNKNOWN`.
+
+This checkpoint is within the original workflow-wall-clock P95 and adds no failure, cancellation,
+rerun, lane-exclusive, or downstream unique-defect signal. The original sample's unique signal
+therefore remains `UNKNOWN`, and no H1-B authority decision is made.
+
 ## Timing measurements
 
 Durations are calculated from GitHub-created timestamps and job start/completion timestamps. Runner
