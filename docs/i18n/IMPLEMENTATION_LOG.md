@@ -1,7 +1,9 @@
 # i18n Program — Implementation Log
 
 Chronological record of the i18n language-addition + perfection program. Each PR runs the
-[CodeAnt correction loop](../CODEANT-REVIEW-LOOP.md) to quiescence, then admin-squash-merges.
+[active review loops](../CODEANT-REVIEW-LOOP.md) to quiescence (CodeAnt and DeepSource when
+enabled), then normal protected squash-merges; any protection bypass requires fresh,
+incident-specific maintainer authorization.
 
 ## PR1 — Infrastructure, SSOT & audit (in progress)
 

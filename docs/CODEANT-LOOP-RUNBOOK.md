@@ -22,12 +22,14 @@ once led an external analysis astray. The reality, documented correctly in the c
 
 - **CodeAnt was unresponsive** (no check-run / status / comment on PRs even after manual triggers) —
   an **outage / exhausted free-tier quota**, not a trigger-name problem. The free-tier **CI Action**
-  token cannot be issued. Procedure while it is down: proceed under the standing
-  hung/unresponsive-check rule (all required CI green + 0 unresolved → admin squash-merge), exactly as
-  the canonical runbook §8 describes.
+  token cannot be issued. This historical note does not authorize an admin merge: diagnose the
+  outage and use the normal protected path; any protection bypass requires fresh, incident-specific
+  maintainer authorization.
 - A **token-free second review layer** was added — DeepSource — with its own living runbook:
   **[`DEEPSOURCE-REVIEW-LOOP.md`](DEEPSOURCE-REVIEW-LOOP.md)**. When both tools are live, a PR is
-  review-quiescent only when **both** loops are satisfied.
+  review-quiescent only when **both** loops are satisfied. The historical admin-bypass text above
+  is superseded: current policy is normal protected merge, with any bypass requiring fresh,
+  incident-specific maintainer authorization.
 
 _(File kept at this path so existing links resolve; do not add new content here — update the canonical
 runbook instead.)_
