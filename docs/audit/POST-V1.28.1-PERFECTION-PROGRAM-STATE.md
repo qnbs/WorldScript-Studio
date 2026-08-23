@@ -10,7 +10,7 @@ separates locally implemented evidence from hosted or merge-dependent evidence.
 | Program boundary | Post-v1.28.1; immutable release boundary preserved |
 | Current stage | H0 complete — forensic baseline and tracked-source suppression correction |
 | Local state | H0 implementation, access-reliability record, focused tests, typecheck, complete pre-push gate, signed merge, and post-merge verification passed |
-| Current main | `476c0ce5adf33302b65bb77391835813017a62fc` (local `main` = `origin/main`) |
+| Last reconciled main checkpoint | `c91e37691409aa4b5febbf527219c891256b6487` (H1-A/H1-F0 branch base; not a perpetual live-main claim) |
 | PR / branch | PR #469 merged from `chore/post-v1.28.1-h0-baseline`; final PR head `3a140cb3a019b83e643aef5b5d67a8937c790691` |
 | Merge SHA | `476c0ce5adf33302b65bb77391835813017a62fc`; resulting tree `49919d853814a863194a6918058349e0931fdd34`; merged `2026-08-23T09:22:17Z` |
 | Hosted CI / CodeQL / Security | PR CI `32629355521` was green on the final PR head; fresh main CI `32630810142` was fully green, including `✅ CI Success`; CodeQL `32630810130` was successful |
@@ -20,6 +20,10 @@ separates locally implemented evidence from hosted or merge-dependent evidence.
 The Git/GitHub access root cause and preflight are recorded in
 [`GIT-GITHUB-ACCESS-RELIABILITY.md`](GIT-GITHUB-ACCESS-RELIABILITY.md). The repository itself did
 not require a permission, lock, worktree, hook, signing, remote, or global-config repair.
+
+Live repository state is never inferred from a stored checkpoint in this ledger. Re-query GitHub
+and `origin` before execution decisions; completed stage evidence remains immutable even when a
+later merge advances `main`.
 
 ## H0 acceptance ledger
 
