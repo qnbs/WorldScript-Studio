@@ -63,7 +63,7 @@ query in a later session:
 | Surface | Inventory result | Classification | H1 action |
 | --- | --- | --- | --- |
 | `AGENTS.md` | Detailed local-resource, signing, review, merge, and CI instructions; also contains a rigid PR-size heuristic | CURRENT constraints plus DUPLICATED/TIME-SENSITIVE policy | Thin synchronization in H1-F2; remove universal file-count framing |
-| `CLAUDE.md` | Detailed CI/reviewer/merge-quirk manual; includes standing admin-squash wording and rigid ~100-file rule | CONTRADICTORY P1 process drift plus DUPLICATED policy | Admin bypass wording corrected in this evidence slice; broader consolidation in H1-F2 |
+| `CLAUDE.md` | Detailed CI/reviewer/merge-quirk manual; prior admin-squash wording was corrected in this slice; rigid ~100-file rule remains | DUPLICATED/TIME-SENSITIVE policy with a remaining P1 framing issue | Preserve the safety correction; broader consolidation in H1-F2 |
 | `.github/copilot-instructions.md` | Agent guidance and targeted coverage-debug examples | CURRENT plus DUPLICATED policy | Reconcile with canonical docs in H1-F2 |
 | `.cursorrules`, `.cursor/rules/**` | Cursor-wide and topic-specific architecture/testing instructions | CURRENT architecture plus DUPLICATED policy | Inventory retained; thin entrypoint work in H1-F2 |
 | `.github/CONTRIBUTING.md` | Contributor workflow entrypoint | CURRENT contributor surface; completeness to verify | Align after canonical H1-F1 model exists |

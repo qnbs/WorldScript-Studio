@@ -14,7 +14,17 @@ pre-judge, the Node 22/24/26 and required/advisory decisions.
 
 Workflow definitions and GitHub run/job APIs are the measurement authorities. Repository prose is
 used only to explain a result. Run data is read through the authenticated GitHub CLI; credentials
-and tokens must never be written to output or files.
+and tokens must never be written to output or files. Before classifying a check as required or
+advisory, capture the UTC query time and the protected-base policy from GitHub:
+
+```bash
+date -u +%Y-%m-%dT%H:%M:%SZ
+gh api repos/OWNER/REPO/branches/main/protection
+gh api 'repos/OWNER/REPO/rulesets?includes_parents=true'
+```
+
+Retain the relevant policy fields and query timestamp in the H1-A report. If either policy query is
+unavailable, record `UNKNOWN` with the error; run success is not evidence of required status.
 
 The repeatable run inventory query is:
 
@@ -29,10 +39,28 @@ For every included run, capture job-level evidence with:
 gh run view RUN_ID --json databaseId,workflowName,event,status,conclusion,headSha,headBranch,createdAt,updatedAt,jobs,url
 ```
 
+For each sampled pull request/head, capture independent check and review evidence rather than
+inferring it from workflow runs:
+
+```bash
+gh pr checks PR_NUMBER
+gh api repos/OWNER/REPO/commits/HEAD_SHA/check-runs --paginate
+gh api repos/OWNER/REPO/commits/HEAD_SHA/statuses --paginate
+gh api repos/OWNER/REPO/pulls/PR_NUMBER/comments --paginate
+gh api repos/OWNER/REPO/issues/PR_NUMBER/comments --paginate
+gh api repos/OWNER/REPO/pulls/PR_NUMBER/reviews --paginate
+gh api graphql -F owner=OWNER -F repo=REPO -F number=PR_NUMBER \
+  -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved isOutdated}}}}}'
+```
+
 If the API, authentication, or retention window prevents observation, record `UNKNOWN` and the
 query failure. Unavailable observation is not a pass, a zero, or a clean run.
 
 ## Sample-selection rules
+
+The H1-A report must declare an inclusive UTC `from` and `to` time window *before* selecting runs
+or applying exclusions. Every included and excluded run is evaluated against that fixed window.
+The report records the query timestamp separately from the sample window.
 
 Include enough variation to represent:
 
@@ -44,8 +72,8 @@ Include enough variation to represent:
   checks when present.
 
 Do not silently exclude a failed or cancelled run. Exclusions require a recorded reason such as
-duplicate API pagination, a run outside the declared time window, or an unrelated workflow. A
-sample is not representative merely because every included run is green.
+duplicate API pagination, a run outside the declared inclusive UTC window, or an unrelated
+workflow. A sample is not representative merely because every included run is green.
 
 ## Required fields
 
