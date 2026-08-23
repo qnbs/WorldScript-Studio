@@ -9,7 +9,7 @@ Single reference for maintainers: architecture touchpoints, content rules, secur
 - **AI:** `services/ai/index.ts` (Vercel AI SDK layer, canonical entry). `geminiService` / `aiProviderService` — legacy path. Multi-provider routing: Gemini, OpenAI, OpenRouter (Cloud 5, circuit breaker, free-tier `:free` models), Claude, Grok, Ollama, WebLLM, ONNX, Transformers.js. **AI Execution Modes** (`aiModeService.ts`): `hybrid | cloud | local | eco` — routing strategy persisted to `settings.aiMode`. 4-layer local inference stack: WebLLM (WebGPU) → ONNX (WASM) → Transformers.js → heuristic fallback.
 - **Copilot:** `services/copilot/` — `heuristicEngine.ts` (8 manuscript analysis rules), `insightGenerator.ts`, `copilotContextService.ts`, `actionApplier.ts` (apply-to-chapter, offset-safe). Flag: `enableGlobalCopilot`. Docs: `docs/COPILOT.md`, `docs/HEURISTIC-RULES.md`.
 - **Commands:** `services/commands/` registry; execution via `CommandExecutorProvider` / `runCommandById`.
-- **i18n:** Source modules under `locales/<lang>/*.json`; runtime bundles `public/locales/<lang>/bundle.json` rebuilt by `pnpm run i18n:bundle` / `i18n:check`. **2 594 keys × 11 locales** (de/en/es/fr/it core + ar/he RTL Beta + el/ja/pt/zh Beta).
+- **i18n:** Source modules under `locales/<lang>/*.json`; runtime bundles `public/locales/<lang>/bundle.json` rebuilt by `pnpm run i18n:bundle` / `i18n:check`. **2 925 keys × 19 locales** (de/en/es/fr/it core + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu/ru/ko Beta).
 
 ## Content & copy
 
@@ -46,7 +46,7 @@ Single reference for maintainers: architecture touchpoints, content rules, secur
 
 ## Testing & coverage
 
-- **Unit/integration:** Vitest; global coverage thresholds in `vitest.config.ts` are a regression floor. Current (v1.28.0): lines ≥ 80 / branches ≥ 66 / functions ≥ 72 / statements ≥ 78 (CI-measured after adding the root application/PWA shell). **5 475+ tests / 449 files**. Target for v2.0: lines 85 / branches 75 / functions 80 (C-7).
+- **Unit/integration:** Vitest; global coverage thresholds in `vitest.config.ts` are a regression floor. Current (v1.28.1 candidate): lines ≥ 80 / branches ≥ 66 / functions ≥ 72 / statements ≥ 78 (CI-measured after adding the root application/PWA shell). **6 951+ tests / 574 files**. Target for v2.0: lines 85 / branches 75 / functions 80 (C-7).
 - **Risk-hotspots** (aim for focused tests when touching): `dbService`, `dbMigration`, `aiProviderService`, `sceneRevisionService`, `plotBoardService`, `deepLinkService`, project import/export, `storageService` / `storageBackend`.
 - **IDB test isolation:** `sceneRevisionService` and similar IDB tests require `@vitest-environment node` + per-test `IDBFactory` + `_resetDbForTest()`. See `CLAUDE.md § IDB unit tests`.
 - **Custom Select testing:** Components using `Select` or `LanguageSelector` should mock them as native `<select>` elements in tests for compatibility with testing-library queries. See `docs/UI-MODERNIZATION.md` Testing section for the mock pattern.
