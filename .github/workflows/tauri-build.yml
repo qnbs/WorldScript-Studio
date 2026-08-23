@@ -17,8 +17,41 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  verify-release-tag:
+    name: Verify release tag
+    if: >-
+      ${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify GitHub signatures for the release tag
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_REF_TYPE: ${{ github.ref_type }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/signing/verify-github-signatures.mjs
+
   bundle:
     name: Bundle (${{ matrix.os }})
+    needs: [verify-release-tag]
+    if: >-
+      ${{
+        always() &&
+        !cancelled() &&
+        (
+          github.event_name == 'workflow_dispatch' ||
+          needs.verify-release-tag.result == 'success'
+        )
+      }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
@@ -113,18 +146,46 @@ jobs:
   release:
     name: GitHub Release
     needs: [bundle]
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: >-
+      ${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: write
     steps:
+      - name: Check out the exact release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Download all bundle artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: tauri-bundle-*
           path: downloaded
           merge-multiple: true
+
+      - name: Extract deterministic release notes
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v version="$VERSION" '
+            $0 == "## [" version "] — 2026-08-23" { in_release = 1 }
+            in_release && $0 ~ /^## \[/ && $0 != "## [" version "] — 2026-08-23" { exit }
+            in_release { print }
+          ' CHANGELOG.md > release-notes.md
+          test -s release-notes.md
+          grep -Fq "## [$VERSION] — 2026-08-23" release-notes.md
+          if grep -Eiq '(#332|#341).*(closed|resolved|complete|shipped|fixed)|(#332|#341).*(closure|done)' release-notes.md; then
+            echo "::error::Release notes claim #332 or #341 closure"
+            exit 1
+          fi
+          if grep -Eiq '(macOS|Mac)[^\n]*(Intel|x86_64)[^\n]*(supported|available|provided|published|built)|Intel[^\n]*(macOS|Mac)[^\n]*(supported|available|provided|published|built)' release-notes.md; then
+            echo "::error::Release notes claim unsupported Intel macOS support"
+            exit 1
+          fi
 
       - name: Collect release assets
         id: collect
@@ -150,7 +211,8 @@ jobs:
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           files: release-assets/*
-          generate_release_notes: true
+          body_path: release-notes.md
+          generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

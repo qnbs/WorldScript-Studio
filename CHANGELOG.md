@@ -7,17 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+<!-- release-candidate: v1.28.1 -->
+
+## [1.28.1] — 2026-08-23
+
 ### Added
 
+- **Scenario/Screenplay canonical projection workspace:** the new workspace exposes a
+  renderer-neutral projection for scenario and screenplay work while keeping the existing
+  TypeScript authority intact.
 - **Core project validation shadow caller:** desktop loads now observe the bounded Rust project
   validation verdict through `DesktopPlatform`; this is observation-only and does not switch
   authority from the existing TypeScript path.
 
-### Changed
+### Fixed
 
-- **Post-release documentation truth:** the audit report and README now reflect the published
-  v1.28.0 release, current test/i18n metrics, and the explicit distinction between protected
-  encryption mechanisms and the still-plaintext desktop filesystem path.
+- **Writing-overlay immediacy:** overlay feedback is now visible without waiting for a later
+  render cycle.
+- **Serialized persistence protection:** overlapping persistence writes are coordinated so a
+  later save cannot race an earlier save and corrupt the durable project state.
+
+### Security
+
+- **Verified release source history:** signing doctor, local commit/push enforcement, exact-range
+  verification, annotated-tag enforcement, and GitHub Verified checks now form the release-source
+  trust boundary.
+- **Supply-chain monitoring:** the daily OSV workflow and hardened pnpm bootstrap/version pinning
+  extend the existing dependency and CI security controls.
+
+### Quality and governance
+
+- **Policy and mutation coverage:** CI authority, selector/AI-core mutation oracles, and the
+  packaged editor readability oracle were strengthened for this release line.
+- **Native lifecycle truth:** the #332 lifecycle evidence and Qt early-killer gates are documented
+  without claiming packaged closure.
+
+### Release boundaries
+
+- Packaged Linux lifecycle/Alt+Tab validation for **#332 remains pending**; reporters should
+  validate the new `.deb` using the documented lifecycle, Alt+Tab, and persistence protocol.
+- Packaged dark/sepia/PWA-versus-packaged readability validation for **#341 remains pending**;
+  publication or CI does not close that issue.
+- PWA remains first-class, Tauri remains transitional, and Qt remains the future native target
+  behind its evidence gates.
+- No unsupported macOS Intel artifact is claimed; only artifacts actually produced by the release
+  workflow belong in updater metadata.
 
 ## [1.28.0] — 2026-08-21
 
