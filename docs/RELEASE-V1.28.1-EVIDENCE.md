@@ -1,8 +1,6 @@
 # v1.28.1 release evidence ledger
 
-Status: release candidate; this ledger is intentionally incomplete until the protected release
-PR is merged, the annotated tag is independently verified, and the tag-triggered desktop workflow
-publishes its actual assets.
+Status: published and independently verified release checkpoint.
 
 ## Verified release base
 
@@ -48,31 +46,80 @@ validated with `merged_at` and a merge commit equal to the corresponding range c
 | --- | --- |
 | `pnpm run signing:doctor` | passed with SSH signing probe |
 | Focused policy/signing/version tests | 72/72 passed (`workflowPolicy`, `checkDocMetrics`, `signing`) |
-| `pnpm run docs:check` | passed; 19 locales, 2925 keys, latest tag v1.28.0 |
+| `pnpm run docs:check` | passed; 19 locales, 2925 keys, latest tag v1.28.1 |
 | `pnpm run build` | passed; Vite production build completed |
 | `pnpm run ci:prepush` | passed sequentially |
-| Release PR | pending creation |
-| Release PR head / merge SHA / merge tree | pending protected merge |
+| Release PR | [#467](https://github.com/qnbs/WorldScript-Studio/pull/467), merged normally by protected squash merge |
+| Release PR head | `9af3fa5b46ff129c2b3e9abfbe6552fac816621c` (GitHub Verified) |
+| Release merge SHA / tree | `b6c40aa322d56a7e8c337d02394b52962f1e6ef6` / `f622a0804ae5a78bdd46e0f965eea6068ab2ecfa` (GitHub Verified) |
+| Post-merge main CI | run `32614783075`, conclusion `success`; `✅ CI Success` job `97136128385` |
 
-## Publication evidence to fill after protected merge
+## Publication evidence
 
-- [ ] Re-fetch `origin`; confirm local `main` equals the verified release-PR squash SHA and its
-  reviewed tree before tag creation.
-- [ ] Confirm no local or remote `v1.28.1` tag collision.
-- [ ] Record annotated tag object SHA and target SHA.
-- [ ] Independently verify tag object and target commit through GitHub (`verified=true`,
-  `reason=valid` for each).
-- [ ] Record tag-gate, main CI, security/CodeQL, and Tauri workflow run IDs and conclusions.
-- [ ] Record actual `.deb`, AppImage, RPM, Windows, macOS ARM, updater, and `.sig` asset inventory.
-- [ ] Validate every `latest.json` URL/signature/version/platform mapping; do not add a
-  `darwin-x86_64` entry without an actual Intel artifact.
-- [ ] Record official Tauri/minisign-compatible artifact verification, or the exact installed
-  tool/version and documented limitation if no official verifier is exposed.
-- [ ] Record the published release URL, deterministic changelog-note comparison, and fallback
-  `latest.json` URL if one is part of publication.
+| Evidence | Result |
+| --- | --- |
+| Final target before tag creation | `main == origin/main == b6c40aa322d56a7e8c337d02394b52962f1e6ef6`; tree `f622a0804ae5a78bdd46e0f965eea6068ab2ecfa`; GitHub `verified=true`, `reason=valid` |
+| Pre-existing `v1.28.1` collision | none locally or remotely before creation |
+| Annotated tag object / target | `78e6e19168b86b810952f3db7fe092a8dfed168b` / `b6c40aa322d56a7e8c337d02394b52962f1e6ef6` |
+| Tag object verification | GitHub `verified=true`, `reason=valid`; object type `tag` |
+| Tag target verification | GitHub `verified=true`, `reason=valid`; tree matches reviewed release tree |
+| Tauri workflow | run `32616003394`, conclusion `success` |
+| Release-tag gate | job `97136729353`, conclusion `success` |
+| Ubuntu bundle | job `97136760231`, conclusion `success`, 18m36s |
+| Windows bundle | job `97136760230`, conclusion `success`, 15m51s |
+| macOS ARM bundle | job `97136760252`, conclusion `success`, 9m11s |
+| GitHub Release publication | job `97138727477`, conclusion `success`; published `2026-08-23T04:01:28Z` |
+| GitHub Release | [v1.28.1](https://github.com/qnbs/WorldScript-Studio/releases/tag/v1.28.1), published, non-draft, non-prerelease |
+
+The release contains these non-empty assets (sizes are the published byte sizes):
+
+| Asset | Size |
+| --- | ---: |
+| `latest.json` | 1,928 |
+| `WorldScript.Studio_1.28.1_amd64.AppImage` | 162,765,304 |
+| `WorldScript.Studio_1.28.1_amd64.AppImage.sig` | 436 |
+| `WorldScript.Studio_1.28.1_amd64.deb` | 85,249,438 |
+| `WorldScript.Studio_1.28.1_amd64.deb.sig` | 428 |
+| `WorldScript.Studio-1.28.1-1.x86_64.rpm` | 85,250,694 |
+| `WorldScript.Studio-1.28.1-1.x86_64.rpm.sig` | 432 |
+| `WorldScript.Studio_1.28.1_x64-setup.exe` | 83,189,573 |
+| `WorldScript.Studio_1.28.1_x64-setup.exe.sig` | 432 |
+| `WorldScript.Studio_1.28.1_x64_en-US.msi` | 84,484,096 |
+| `WorldScript.Studio_1.28.1_x64_en-US.msi.sig` | 432 |
+| `WorldScript.Studio_1.28.1_aarch64.dmg` | 84,745,084 |
+| `WorldScript.Studio.app.tar.gz` | 84,781,830 |
+| `WorldScript.Studio.app.tar.gz.sig` | 420 |
+
+The public fallback URL `https://github.com/qnbs/WorldScript-Studio/releases/latest/download/latest.json`
+was fetched successfully. Its `version` is `1.28.1`, its publication timestamp is valid, and its
+three platform mappings are structurally complete:
+
+| Platform key | Updater artifact | Signature asset | URL / asset check |
+| --- | --- | --- | --- |
+| `linux-x86_64` | `WorldScript.Studio_1.28.1_amd64.AppImage` | matching `.sig` (436 bytes) | versioned release URL, HTTP 200 |
+| `windows-x86_64` | `WorldScript.Studio_1.28.1_x64-setup.exe` | matching `.sig` (432 bytes) | versioned release URL, HTTP 200 |
+| `darwin-aarch64` | `WorldScript.Studio.app.tar.gz` | matching `.sig` (420 bytes) | versioned release URL, HTTP 200 |
+
+No `darwin-x86_64` entry exists because no Intel macOS artifact was produced or claimed. The
+corresponding updater artifact and signature URLs were each matched to actual non-empty GitHub
+Release assets; `.deb`, AppImage, RPM, Windows `.exe`/`.msi`, and macOS ARM `.dmg` assets are also
+present.
+
+Deterministic release notes were extracted from the committed `v1.28.1` changelog section with
+`generate_release_notes: false` and match the published release body. The notes retain the
+pending status of #332 and #341 and make no unsupported macOS Intel claim.
+
+The installed official toolchain is `tauri-cli 2.11.4`. It exposes `tauri signer sign` and
+`tauri signer generate`, but no artifact verification command; neither `minisign` nor `signify`
+is installed. Accordingly, structural, asset, URL, version, HTTP, and non-empty-signature checks
+are complete, but this checkpoint does not claim independent cryptographic verification of the
+updater artifacts. No private key material was accessed or exposed.
 
 The source-signing control (every introduced source commit GitHub Verified) and release-tag
 signing control (the annotated tag object plus its target commit) are separate evidence items.
-Neither one substitutes for the other. Issue #332 packaged Linux lifecycle/Alt+Tab/persistence
-and Issue #341 packaged dark/sepia/readability validation remain pending regardless of CI or
+Neither one substitutes for the other. Final branch protection remains unchanged: required
+signatures enabled, required status exactly `✅ CI Success`, force-pushes disabled, deletions
+disabled, and required conversation resolution enabled. No admin bypass, force-update, unsigned
+fallback, or hook bypass was used. Issue #332 packaged Linux lifecycle/Alt+Tab/persistence and
+Issue #341 packaged dark/sepia/readability validation remain pending regardless of CI or
 publication.
