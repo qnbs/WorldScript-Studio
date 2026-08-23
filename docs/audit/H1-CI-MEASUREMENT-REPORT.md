@@ -182,6 +182,61 @@ Success`. It contributes no new failure or lane-exclusive defect signal. The ori
 unique Node/advisory defect signal therefore remains `UNKNOWN`, and H1-B authority decisions remain
 pending.
 
+## Post-#474 main checkpoint
+
+This is a second separate `POST_MERGE_CHECKPOINT` evidence class. It follows the merge of PR #474
+and is not appended to, substituted for, or used to recalculate either the original 50-run sample
+or the post-#473 checkpoint.
+
+| Field | Value |
+| --- | --- |
+| Workflow run | `32654048692` (`CI / CD`) |
+| Event | `push` |
+| Head SHA | `8223d04e0b51443c6490695b0d08a4189bffe3ee` |
+| Run attempt | `1` |
+| Created / started | `2026-08-23T17:11:44Z` / `2026-08-23T17:11:44Z` |
+| Completed | `2026-08-23T17:34:01Z` |
+| Conclusion | `success` |
+| CodeQL | Run `32654048709`, push on the same head, attempt `1`, success |
+
+The checkpoint wall-clock was approximately 22m17s. Job timing from the immutable job records was:
+
+| Job | Started | Completed | Duration |
+| --- | --- | --- | ---: |
+| Security Audit | 17:11:46Z | 17:12:40Z | 0m54s |
+| Verified Signatures | 17:12:42Z | 17:12:56Z | 0m14s |
+| Quality Gate (Node 24) | 17:12:42Z | 17:21:16Z | 8m34s |
+| Quality Gate (Node 22) | 17:12:42Z | 17:25:07Z | 12m25s |
+| Build | 17:25:10Z | 17:27:09Z | 1m59s |
+| E2E Deep Coverage | 17:25:10Z | 17:27:38Z | 2m28s |
+| Storybook | 17:25:10Z | 17:26:50Z | 1m40s |
+| Visual Regression | 17:27:11Z | 17:28:32Z | 1m21s |
+| Lighthouse CI | 17:27:11Z | 17:29:36Z | 2m25s |
+| E2E Tests | 17:25:10Z | 17:33:53Z | 8m43s |
+| `✅ CI Success` | 17:33:57Z | 17:34:01Z | 0m04s |
+
+The 22m17s checkpoint is within the original workflow-wall-clock P95 and is close to the earlier
+22m37s post-#473 checkpoint. It is useful timing evidence, but it does not by itself justify a
+Node-lane, required-status, or DAG decision.
+
+### Attempt, rerun, and cache evidence
+
+The GitHub run API reported `run_attempt=1` for this checkpoint. No rerun attempt is represented in
+the checkpoint record; this does not prove that no later run for the same branch or change succeeded.
+
+The checkpoint logs explicitly reported successful restoration of the pnpm/Node cache in both Node
+quality lanes. The E2E and Deep E2E jobs also restored the pnpm/Node cache, Playwright browser cache,
+and Playwright APT dependency cache. Their post-job logs reported cache hits on the primary keys,
+not cache saves. The original 50-run sample still has `UNKNOWN` historical cache hit/miss
+distribution because its per-job logs were not retained.
+
+### Signal interpretation
+
+The checkpoint passed all applicable jobs, including both Node lanes, browser jobs, security,
+signatures, and `✅ CI Success`. It contributes no new failure, cancellation, rerun, or
+lane-exclusive defect signal. The original sample's unique Node/advisory defect signal therefore
+remains `UNKNOWN`, and H1-B authority decisions remain pending.
+
 ## Timing measurements
 
 Durations are calculated from GitHub-created timestamps and job start/completion timestamps. Runner

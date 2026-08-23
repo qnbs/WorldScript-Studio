@@ -145,3 +145,19 @@ successfully. Its job timings and explicit cache observations are recorded separ
 This checkpoint does not alter the original 50-run outcome distribution, the 43 paired-run result,
 or the `UNKNOWN` unique-defect signal. It also does not provide historical cache hit/miss
 distribution or a unique-defect comparison, so no H1-B decision is made.
+
+## Post-#474 checkpoint boundary
+
+Main push run `32654048692` on
+`8223d04e0b51443c6490695b0d08a4189bffe3ee` completed successfully on `run_attempt=1` in
+approximately 22m17s. Node 22, Node 24, Build, E2E, Deep E2E, Storybook, Visual Regression,
+Lighthouse, Security, Verified Signatures, and `✅ CI Success` all completed successfully. The
+checkpoint restored the pnpm/Node cache in both quality lanes and restored the pnpm/Node,
+Playwright-browser, and Playwright-APT caches in E2E and Deep E2E. The immutable job timings and
+cache observations are recorded in
+[`H1-CI-MEASUREMENT-REPORT.md`](H1-CI-MEASUREMENT-REPORT.md) as a separate
+`POST_MERGE_CHECKPOINT` evidence class; CodeQL run `32654048709` also succeeded on the same head.
+
+This checkpoint does not alter the original 50-run outcome distribution, the 43 paired-run result,
+or the `UNKNOWN` unique-defect signal. It adds no failure/cancellation or lane-exclusive signal,
+and no H1-B decision is made.
