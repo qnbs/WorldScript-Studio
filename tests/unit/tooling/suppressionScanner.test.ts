@@ -6,6 +6,7 @@ import {
   scanSuppressionText,
 } from '../../../scripts/suppression-scanner.mjs';
 
+// QNBS-v3: Inject tracked-file output so copied or untracked worktrees cannot inflate the ratchet.
 describe('suppression scanner', () => {
   const marker = ['biome', 'ignore'].join('-');
 

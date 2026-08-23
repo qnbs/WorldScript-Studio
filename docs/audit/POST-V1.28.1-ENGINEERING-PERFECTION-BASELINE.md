@@ -8,9 +8,10 @@ claim that the later H1–H8 workstreams are complete.
 The historical release boundary remains immutable. Local Git facts below were checked in the
 checkout at capture time. Release publication, branch protection, issue/PR state, and hosted CI
 facts are transcribed from [`RELEASE-V1.28.1-EVIDENCE.md`](../RELEASE-V1.28.1-EVIDENCE.md), which
-was the completed release checkpoint. A fresh remote/API read in the authorized context confirmed
-the current main, protection, issue, and PR facts below. The restricted sandbox still cannot be
-used for PR-producing work; the cause and preflight are in the reliability record.
+was the completed release checkpoint. An authorized remote/API read at H0 capture confirmed the
+main, protection, issue, and PR facts below; the later correction pass opened H0 PR #469. The
+restricted sandbox still cannot be used for PR-producing work; the cause and preflight are in the
+reliability record.
 
 The complete Git/GitHub access diagnosis and safe recovery procedure is recorded in
 [`GIT-GITHUB-ACCESS-RELIABILITY.md`](GIT-GITHUB-ACCESS-RELIABILITY.md). The failure was caused by
@@ -22,11 +23,11 @@ permission or Git configuration repair was justified.
 | Current local `main` commit | `2d63a91dcda5d094a7573bff8ae3f723a21bebfa` | `git rev-parse HEAD`; local `origin/main` points at the same commit |
 | Current local main tree | `2d36d20bae5dfc533cd3000c4bcb6f253d6e9857` | `git rev-parse HEAD^{tree}` |
 | Historical release tag | `v1.28.1` | Annotated tag is present locally |
-| Release tag object / target | `78e6e19168b86b810952f3db7fe092a8dfed168b` / `b6c40aa322d56a7e8c337d02394b52962f1e6ef6` | `git rev-parse v1.28.1` and `v1.28.1^{};` release ledger independently records GitHub verification |
+| Release tag object / target | `78e6e19168b86b810952f3db7fe092a8dfed168b` / `b6c40aa322d56a7e8c337d02394b52962f1e6ef6` | `git rev-parse v1.28.1` and `git rev-parse v1.28.1^{}`; release ledger independently records GitHub verification |
 | Release assets | 14 non-empty assets | Published-release ledger; no asset is being changed |
 | Application version | `1.28.1` | `package.json`, release ledger |
 | Branch protection | Required signatures; exactly `✅ CI Success`; conversation resolution; force-pushes and deletions disabled | Live API read in authorized context |
-| Remote PR state | 0 open PRs | Live `gh pr list` |
+| Remote PR state | 0 open PRs at initial H0 capture; H0 PR #469 is now open for correction review | Live `gh pr list` at capture, then PR #469 state |
 | Remote issue state | 16 open issues | Live `gh issue list` |
 
 The preserved untracked `.worktrees/` and `recovery-artifacts/` directories are intentionally not
@@ -80,7 +81,7 @@ discrepancy:
 ```text
 raw local recursive traversal:       144 suppression directives
 authoritative Git-tracked source:     48 suppression directives
-tracked TypeScript/TSX files:        1256 files
+tracked TypeScript/TSX files:        1256 before H0; 1257 after the new tracked regression test
 tracked paths under preserved copies:   0
 committed ratchet baseline:           48 directives
 ```
@@ -96,10 +97,16 @@ following invariants:
 4. the baseline remains 48 until a real tracked suppression is removed; and
 5. a newly tracked suppression still exceeds the ratchet and fails the gate.
 
-The shell evidence above was used because this sandbox prevents Node from spawning Git with
-`child_process.execFileSync` (it returns `EPERM` despite the Git process producing status-0
-output). Hosted CI is expected to exercise the normal Node CLI path; this local execution caveat
-is recorded rather than weakening the production invariant.
+The evidence comes from two explicitly different execution contexts. In the restricted Codex
+sandbox, the working tree was writable but `.git`, DNS, keyring, and GitHub API access were
+restricted; Node's `child_process.execFileSync` Git collection returned `EPERM`, while an
+independent shell-derived tracked-source scan still reproduced the 48 directives across the
+pre-change 1,256 tracked source files. In the later authorized writable context,
+`node scripts/check-suppressions.mjs` completed normally with 48 directives across 1,257 tracked
+source files (the added H0 regression test accounts for the one-file increase), direct
+single-checker `tsgo` exited 0, and
+`pnpm run ci:prepush` exited 0. Hosted CI is expected to exercise the same normal Node CLI path;
+the restricted limitation remains recorded rather than weakening the production invariant.
 
 The bundle checker has a separate stale assumption: when `dist/assets` is absent it prints a
 warning and exits successfully. H0 records that behavior but does not broaden this PR into H2-C;
@@ -150,5 +157,6 @@ acceptance criteria. No H1–H8 completion is implied by this baseline.
   are unproved.
 - R-15 secure storage, hostile plugin runtime admission, strict collaboration revocation, and Qt
   lifecycle/accessibility gates remain future work.
-- The local `.git` directory is read-only in this execution environment, so a signed branch,
-  commit, PR, push, hosted CI run, and merge ledger cannot be created here.
+- The restricted sandbox remains unqualified for PR-producing work because its `.git` mount,
+  keyring, and network are constrained; the signed branch, commits, push, and PR were created in
+  the separately verified authorized writable context. H0 merge evidence remains pending.

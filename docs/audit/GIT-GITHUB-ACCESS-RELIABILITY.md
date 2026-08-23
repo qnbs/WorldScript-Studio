@@ -55,12 +55,40 @@ gh repo view qnbs/WorldScript-Studio --json nameWithOwner,defaultBranchRef
 pnpm run signing:doctor
 ```
 
-The first PR-producing command must also perform a narrow temporary write probe in the working
-tree and Git common directory. Remove only those exact probe files after success. If `.git` is
-read-only or GitHub DNS/keyring access is unavailable, stop before branch creation and resume in an
-authorized writable context. Preserve the working-tree H0 files; do not repair the condition with
-`sudo git`, broad ownership changes, unsafe `safe.directory` wildcards, token-bearing URLs, hook
-bypasses, or force pushes.
+The first PR-producing command must also perform the following narrow temporary write probe in the
+working tree and Git common directory. Run it before branch creation; `set -euo pipefail` makes any
+failed creation or validation stop the shell before a branch can be created. The probe does not
+touch refs, the index, or config, and cleanup removes only the two exact uniquely named files:
+
+```bash
+set -euo pipefail
+repo_root="$(git rev-parse --show-toplevel)"
+git_common="$(git rev-parse --path-format=absolute --git-common-dir)"
+
+work_probe="$repo_root/.wss-git-write-probe.$$"
+git_probe="$git_common/.wss-git-write-probe.$$"
+
+cleanup_probes() {
+  rm -f -- "$work_probe" "$git_probe"
+}
+trap cleanup_probes EXIT INT TERM
+
+umask 077
+: > "$work_probe"
+: > "$git_probe"
+
+test -f "$work_probe"
+test -f "$git_probe"
+
+rm -f -- "$work_probe" "$git_probe"
+trap - EXIT INT TERM
+```
+
+Keep the remote, auth, and signing probes below after this write probe. If `.git` is read-only or
+GitHub DNS/keyring access is unavailable, stop before branch creation and resume in an authorized
+writable context. Preserve the working-tree H0 files; do not repair the condition with `sudo git`,
+broad ownership changes, unsafe `safe.directory` wildcards, token-bearing URLs, hook bypasses, or
+force pushes.
 
 ## Repeated verification
 
