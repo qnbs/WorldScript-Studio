@@ -225,10 +225,11 @@ then go back to §3.
 Once DeepSource is quiescent **and** all CI is green:
 
 - Prefer **auto-merge (squash)**: `gh pr merge PR_NUMBER --auto --squash --delete-branch`.
-- Admin squash-merge is acceptable **only after** CI is green and the loop is quiescent, e.g. if
-  branch protection leaves the PR `BLOCKED` despite green required checks
-  (`gh pr merge PR_NUMBER --squash --admin --delete-branch`).
-- **Never** admin-merge while CI is running or red.
+- If GitHub presents a `BLOCKED` merge state after checks conclude, re-read the exact head,
+  checks, reviews, protection, rulesets, and check suites and use a normal policy-enforced merge
+  endpoint only after revalidation. There is no standing admin-merge fallback.
+- An admin/protection bypass requires fresh, explicit maintainer authorization for that specific
+  incident; it is not a routine review-loop step.
 - If a DeepSource check is configured as **required** and is legitimately green/neutral, it gates
   merge normally; if it is *informational* (not required) it does not block — confirm which via the
   required-checks list on the head SHA before merging.

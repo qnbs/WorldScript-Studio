@@ -207,10 +207,12 @@ earlier real review). **Wait for the fresh review**, then go back to step 2. Rep
 Once the loop is quiescent (0 new comments + 0 unresolved) **and** CI is fully green:
 
 - Prefer **auto-merge (squash)**: `gh pr merge PR_NUMBER --auto --squash --delete-branch`.
-- If branch protection leaves the PR `BLOCKED` despite green required checks and 0 required
-  approvals (a known state here), an **admin squash-merge** is acceptable **only after** CI is
-  green and the loop is quiescent: `gh pr merge PR_NUMBER --squash --admin --delete-branch`.
-- **Never** admin-merge a PR whose CI is still running or red — that defeats the gate.
+- If branch protection presents the PR as `BLOCKED` despite green required checks, stop and
+  re-read the live head, checks, reviews, protection, rulesets, and check suites. Use a normal
+  GitHub policy-enforced merge endpoint only after the exact head is revalidated; there is no
+  standing admin-merge fallback in this repository.
+- An admin/protection bypass requires a fresh, explicit maintainer authorization for that specific
+  incident and is not part of the normal correction loop.
 
 ## 9. Branch housekeeping (after merges)
 

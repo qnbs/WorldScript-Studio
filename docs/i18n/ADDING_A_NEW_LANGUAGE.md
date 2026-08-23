@@ -67,8 +67,9 @@ The registry-integrity test (`tests/unit/i18n/localesRegistry.test.ts`) fails if
 - Run the app, switch to `<code>`: bundle loads, `<html lang>`/`<dir>` correct, glyphs render (no
   tofu), no console errors, selector shows flag + exonym + Beta badge.
 - Update the README language list (Beta tag). Counts auto-sync via `scripts/sync-readme-metrics.mjs`.
-- Open a PR **under ~100 files** (one language ≈ 22 files + wiring → comfortably under). Run the
-  CodeAnt correction loop to quiescence, then admin-squash-merge. See
+- Open a focused, coherent PR and run the CodeAnt correction loop to quiescence, then use the
+  normal protected squash-merge path. Any protection bypass requires fresh, incident-specific
+  maintainer authorization. See
   [`docs/CODEANT-REVIEW-LOOP.md`](../CODEANT-REVIEW-LOOP.md).
 
 ## 6. Elevate quality (later)
