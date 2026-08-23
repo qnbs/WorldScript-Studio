@@ -42,6 +42,9 @@ candle-core = { version = "0.11", optional = true }
 candle-nn = { version = "0.11", optional = true }
 worldscript-project = { path = "../crates/worldscript-project" }
 
+[dev-dependencies]
+minisign-verify = "0.2.5"
+
 [profile.release]
 # QNBS-v3: Aggressive size + speed optimizations for desktop bundles
 opt-level = 3
