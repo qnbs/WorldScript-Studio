@@ -1,6 +1,7 @@
 # v1.28.1 release evidence ledger
 
-Status: published and independently verified release checkpoint.
+Status: published release checkpoint with structural and asset verification; independent updater
+cryptographic verification remains an H1-E residual risk.
 
 ## Verified release base
 

@@ -1,7 +1,7 @@
 # H1-F0 DevOps and governance inventory
 
-Status: evidence inventory in progress; H1-A failure/signal evidence is now recorded; no H1-B/C/D/E
-decision is claimed here.
+Status: evidence inventory in progress; H1-A failure/signal evidence is recorded and H1-E updater
+verification capability has been re-audited; no H1-B/C/D decision is claimed here.
 
 Captured from a verified `main` checkpoint on 2026-08-23, branch
 `h1-a-f0-evidence`, based on `c91e37691409aa4b5febbf527219c891256b6487`.
@@ -50,7 +50,7 @@ query in a later session:
 | --- | --- | --- | --- |
 | `.github/workflows/ci.yml` | Push, pull-request, and dispatch workflow with Security, path classification, Verified Signatures, Node 22/24 Quality matrix, path-scoped Rust gates, Build, browser/release evidence jobs, and fail-closed `✅ CI Success` aggregation | CURRENT; MACHINE-DERIVABLE | H1-A measures before H1-B changes the DAG or lane authority |
 | `.github/workflows/codeql.yml` | Push, pull-request, and weekly scheduled JavaScript/TypeScript CodeQL analysis; job-scoped `security-events: write` | CURRENT; MACHINE-DERIVABLE | Preserve as independent security evidence |
-| `.github/workflows/tauri-build.yml` | Workflow dispatch and `v*` tag triggers; Linux, Windows, and `macos-latest` bundle matrix; release publication and updater metadata | CURRENT; MACHINE-DERIVABLE | H1-D/E qualify future Intel/verifier claims; do not mutate v1.28.1 |
+| `.github/workflows/tauri-build.yml` | Workflow dispatch and `v*` tag triggers; Linux, Windows, and `macos-latest` bundle matrix; release publication and updater metadata | CURRENT; MACHINE-DERIVABLE | H1-D owns non-publishing Intel qualification; H1-E records verifier residual risk; do not mutate v1.28.1 |
 | `.github/workflows/mutation.yml` | Manual `workflow_dispatch`; incremental/force modes and scoped matrix | CURRENT; MACHINE-DERIVABLE | H2 owns mutation evidence |
 | Scheduled/support workflows | `security-scheduled.yml`, `scorecard.yml`, `voice-nightly.yml`, `prune-deployments.yml`, `docker.yml`, and debug/deploy surfaces also exist | CURRENT; TIME-SENSITIVE | Include trigger/permission review in H1-F1 |
 | `.github/actions/setup/action.yml` | Shared Node/pnpm/install setup action | CURRENT; MACHINE-DERIVABLE | Treat as Level 0 toolchain authority |
@@ -88,7 +88,7 @@ query in a later session:
 | Intel macOS runner assumptions | P2 | Tauri workflow currently publishes only `macos-latest`; comments record removed Intel hosting and no qualification path | CURRENT pending state; MACHINE-DERIVABLE | H1-D owns non-publishing qualification; no production support claim |
 | Reviewer role/availability assumptions | P2 | Live #470 showed CodeRabbit/Amazon Q/CodeAnt evidence, Qodo billing-blocked, Sourcery rate-limited | EXTERNAL and TIME-SENSITIVE | Canonical registry must distinguish silence, quota, billing, pending, and substantive review |
 | Required/advisory duplication | P1 | Branch protection requires `✅ CI Success`; docs and workflow separately describe advisory jobs and aggregator semantics | DUPLICATED, MACHINE-DERIVABLE | H1-B decides final semantics; H1-F1 documents layers separately |
-| Signing terminology ambiguity | P1 | Source signatures, GitHub squash verification, tag signing, updater signatures, Apple signing, and notarization appear in separate surfaces | DUPLICATED/NOT-AUTHORITATIVE when collapsed | Canonical release/trust model in H1-F1 after H1-E evidence |
+| Signing terminology ambiguity | P1 | Source signatures, GitHub squash verification, tag signing, updater signatures, Apple signing, and notarization appear in separate surfaces | DUPLICATED/NOT-AUTHORITATIVE when collapsed | H1-E report records updater verification as residual risk; canonical release/trust model remains H1-F1 work |
 | Merge-state quirks mixed with policy | P1 | #469 and older audit records show `BLOCKED` presentation despite normal server merge; older docs describe admin fallback | HISTORICAL evidence mixed with current policy | Preserve #469 as an observed instance; never make REST or admin a universal rule |
 | Current versus historical CI audits | P2/P3 | `.github/CI-AUDIT.md`, `.github/ACTIONS-OPTIMIZATIONS.md`, and dated handoffs contain snapshots | HISTORICAL/AUDIT | Label and link; preserve accurate historical evidence |
 | Git/GitHub sandbox assumptions | P1 | H0 restricted sandbox had read-only `.git`/blocked API; authorized context passed probes and signed push | EXTERNAL execution-environment incident | Canonical preflight must detect and classify this before long PR-producing work |
@@ -96,8 +96,9 @@ query in a later session:
 ## H1-F0 boundaries and next work
 
 This inventory does not decide the Node canonical lane, required/advisory promotion, build
-authority, Intel production support, or independent updater verification. Those decisions require
-H1-A through H1-E evidence. It does not authorize H2/H3/H4/H7 implementation, release work,
+authority, or Intel production support. H1-E verifier capability has been re-audited and remains
+`PARTIAL / RESIDUAL RISK`; the independent cryptographic claim is not made. The remaining
+decisions require H1-A through H1-D evidence. It does not authorize H2/H3/H4/H7 implementation, release work,
 product changes, Qt/GPUI work, licensing, or #332/#341 remediation.
 
 The current evidence record and next tasks are:
@@ -112,7 +113,10 @@ The current evidence record and next tasks are:
    cherry-picking only green runs; use a future meaningful H1 PR to reconcile the checkpoint and
    inventory as needed, never a
    recursive ledger-only PR;
-4. defer H1-F1 canonical docs and H1-F2 agent synchronization until the relevant H1 decisions are
+4. retain [`H1-E-UPDATER-VERIFICATION-REPORT.md`](H1-E-UPDATER-VERIFICATION-REPORT.md) as the
+   authoritative H1-E capability result: no verifier was available, so the release claim remains
+   structural-only with residual risk;
+5. defer H1-F1 canonical docs and H1-F2 agent synchronization until the relevant H1 decisions are
    verified, except for the early admin-bypass safety correction already made here.
 
 ## Resume invariant
