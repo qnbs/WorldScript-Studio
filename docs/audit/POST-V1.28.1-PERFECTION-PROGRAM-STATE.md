@@ -8,9 +8,9 @@ separates locally implemented evidence from hosted or merge-dependent evidence.
 | Field | Value |
 | --- | --- |
 | Program boundary | Post-v1.28.1; immutable release boundary preserved |
-| Current stage | H0 complete — forensic baseline and tracked-source suppression correction |
-| Local state | H0 implementation, access-reliability record, focused tests, typecheck, complete pre-push gate, signed merge, and post-merge verification passed |
-| Last reconciled main checkpoint | `c91e37691409aa4b5febbf527219c891256b6487` (H1-A/H1-F0 branch base; not a perpetual live-main claim) |
+| Current stage | H1-A measurement evidence + H1-F0 governance inventory active; H0 remains complete |
+| Local state | H1-A 50-run CI evidence report captured on a fresh verified-main branch; no Node lane, required-status, DAG, build, or advisory policy change made |
+| Last reconciled main checkpoint | `391dc506fb654d0ea289edb426c633782d141efe` (post-#471 verified main; not a perpetual live-main claim) |
 | PR / branch | PR #469 merged from `chore/post-v1.28.1-h0-baseline`; final PR head `3a140cb3a019b83e643aef5b5d67a8937c790691` |
 | Merge SHA | `476c0ce5adf33302b65bb77391835813017a62fc`; resulting tree `49919d853814a863194a6918058349e0931fdd34`; merged `2026-08-23T09:22:17Z` |
 | Hosted CI / CodeQL / Security | PR CI `32629355521` was green on the final PR head; fresh main CI `32630810142` was fully green, including `✅ CI Success`; CodeQL `32630810130` was successful |
@@ -51,13 +51,21 @@ The PR should contain only the H0 baseline documents, the scanner extraction, an
 regression test. It should not change `suppressions-baseline.json`, workflow lanes, product
 behavior, release metadata, or preserved artifacts.
 
+The first evidence-only H1 slice is also recorded with immutable evidence. Its merge advanced
+`main` and therefore does not make any stored SHA a live-state claim:
+
+| Stage | PR | Head | Merge SHA | Main after merge | CI / security evidence | Next exact task |
+| --- | --- | --- | --- | --- | --- | --- |
+| H1-A / H1-F0 evidence | #471 | `6cf9780a9b0a43c6a8a8802b6b93727d162ebab4` | `391dc506fb654d0ea289edb426c633782d141efe` | `391dc506fb654d0ea289edb426c633782d141efe` / tree `a9ee707c6ac497e22509efae8c822a2f6a257503` | PR CI `32636290349`; post-merge main CI `32637402322`; CodeQL `32637402303`; all five material review threads resolved; CodeRabbit rate-limited, Sourcery/DeepSource skipped | Classify sampled failures/cancellations and unique lane/advisory signal before any H1-B/DAG decision |
+
 ## Next exact resume procedure
 
-1. Start H1-A from a fresh branch based on newly verified `main`.
-2. Run H1-F0 inventory/evidence collection alongside H1-A without changing CI lanes, required
-   status authority, advisory status, or build semantics.
-3. Defer H1-F1 canonicalization until the H1-A through H1-E decisions are measured and verified;
-   carry the H1-F DevOps operating-model augmentation as a binding H1 workstream.
+1. From a fresh branch based on verified `391dc506…`, classify the H1-A sample's failed,
+   cancelled, and missing-job causes using authoritative job logs and artifacts.
+2. Compare Node-22/24 overlap and Storybook/Deep E2E/VRT/Lighthouse signal; do not infer a lane
+   decision from timing alone.
+3. Keep H1-F0 inventory current and defer H1-F1 canonicalization until H1-A through H1-E decisions
+   are measured and verified; carry the H1-F DevOps operating-model augmentation as binding.
 
 ## Verification record for the current working tree
 
@@ -73,12 +81,15 @@ behavior, release metadata, or preserved artifacts.
 | Direct single-checker `tsgo` | Exit 0; no diagnostics |
 | `pnpm run ci:prepush` | Exit 0; all sequential low-end checks passed |
 | Hosted CI / PR / signing | PR #469 final head was GitHub Verified and all five material review threads were resolved; PR CI `32629355521` passed; fresh main CI `32630810142` and CodeQL `32630810130` passed; normal protected squash merge produced GitHub Verified commit `476c0ce5…` |
+| H1-A measurement report | Historical replay reconciled the omitted successful run `32613719445`; the report now accounts for 50 unique runs with 26/9/15 outcomes and explicit skipped advisory jobs; aggregate metrics remain unchanged; no lane/DAG policy change |
 
 ## Program stop/go constraints
 
-H0 is complete. Residual risks carried forward are the unavailable independent updater verifier,
-the unmeasured H1-A Node-lane decision, the fail-closed bundle-budget work deferred to H2-C, Intel
-qualification, and the later R-15/native, plugin, collaboration, Scenario, and Qt evidence gates.
+H0 is complete. H1-A measurement is captured but its lane decision remains pending: the sample shows
+substantial Node-22/24 overlap and no lane-exclusive failure, but unique defect signal and failure
+causes are not yet classified. Residual risks carried forward are the unavailable independent
+updater verifier, fail-closed bundle-budget work deferred to H2-C, Intel qualification, and the later
+R-15/native, plugin, collaboration, Scenario, and Qt evidence gates.
 The restricted Codex sandbox incident remains an execution-environment limitation, not repository
 corruption; the authorized writable context completed the signed branch/commit/push and GitHub
 verification sequence. Stop and re-plan if a later stage discovers a release-boundary mutation,
