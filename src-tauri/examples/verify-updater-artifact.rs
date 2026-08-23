@@ -7,8 +7,8 @@ const WRONG_PUBLIC_KEY_TEXT: &str = "untrusted comment: minisign public key E762
 
 fn usage() -> ! {
     eprintln!(concat!(
-        "usage: verify-updater-artifact <artifact> <signature> ",
-        "[--expect-failure] [--tamper] [--wrong-key]"
+        "usage: verify-updater-artifact <artifact> <signature-file-or-manifest> ",
+        "[--manifest-platform <platform>] [--expect-failure] [--tamper] [--wrong-key]"
     ));
     process::exit(2);
 }
@@ -21,6 +21,7 @@ fn decode_configured_public_key(encoded: &str) -> Result<PublicKey, String> {
     PublicKey::decode(&text).map_err(|error| format!("public-key minisign encoding: {error:?}"))
 }
 
+// QNBS-v3: bind audit verification to the production updater key and published manifest data.
 fn configured_public_key() -> Result<PublicKey, String> {
     let config_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tauri.conf.json");
     let config_text =
@@ -34,22 +35,55 @@ fn configured_public_key() -> Result<PublicKey, String> {
     decode_configured_public_key(encoded_key)
 }
 
+fn signature_source(path: &str, manifest_platform: Option<&str>) -> Result<String, String> {
+    let source =
+        fs::read_to_string(path).map_err(|error| format!("signature source read: {error}"))?;
+    let Some(platform) = manifest_platform else {
+        return Ok(source);
+    };
+
+    let manifest: serde_json::Value =
+        serde_json::from_str(&source).map_err(|error| format!("latest.json JSON: {error}"))?;
+    manifest
+        .get("platforms")
+        .and_then(serde_json::Value::as_object)
+        .and_then(|platforms| platforms.get(platform))
+        .and_then(serde_json::Value::as_object)
+        .and_then(|entry| entry.get("signature"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| format!("latest.json signature missing for platform {platform}"))
+}
+
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
     if args.len() < 2 {
         usage();
     }
 
-    let expect_failure = args.iter().any(|argument| argument == "--expect-failure");
-    let tamper = args.iter().any(|argument| argument == "--tamper");
-    let wrong_key = args.iter().any(|argument| argument == "--wrong-key");
-    if args.iter().skip(2).any(|argument| {
-        !matches!(
-            argument.as_str(),
-            "--expect-failure" | "--tamper" | "--wrong-key"
-        )
-    }) {
-        usage();
+    let mut expect_failure = false;
+    let mut tamper = false;
+    let mut wrong_key = false;
+    let mut manifest_platform = None;
+    let mut option_index = 2;
+    while option_index < args.len() {
+        match args[option_index].as_str() {
+            "--expect-failure" => expect_failure = true,
+            "--tamper" => tamper = true,
+            "--wrong-key" => wrong_key = true,
+            "--manifest-platform" => {
+                let Some(platform) = args.get(option_index + 1) else {
+                    usage();
+                };
+                if platform.starts_with("--") {
+                    usage();
+                }
+                manifest_platform = Some(platform.as_str());
+                option_index += 1;
+            }
+            _ => usage(),
+        }
+        option_index += 1;
     }
 
     let public_key = if wrong_key {
@@ -71,8 +105,7 @@ fn main() {
             *byte ^= 0x01;
         }
 
-        let signature_config =
-            fs::read_to_string(&args[1]).map_err(|error| format!("signature read: {error}"))?;
+        let signature_config = signature_source(&args[1], manifest_platform)?;
         let signature_text = STANDARD
             .decode(signature_config.trim())
             .map_err(|error| format!("signature base64: {error}"))

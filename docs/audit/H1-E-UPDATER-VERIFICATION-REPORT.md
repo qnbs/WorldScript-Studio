@@ -95,23 +95,36 @@ The exact harness invocations were:
 ```bash
 cargo run --manifest-path src-tauri/Cargo.toml --locked --example verify-updater-artifact -- \
   "$VERIFY_DIR/WorldScript.Studio_1.28.1_amd64.AppImage" \
-  "$VERIFY_DIR/WorldScript.Studio_1.28.1_amd64.AppImage.sig"
+  "$VERIFY_DIR/latest.json" --manifest-platform linux-x86_64
 cargo run --manifest-path src-tauri/Cargo.toml --locked --example verify-updater-artifact -- \
   "$VERIFY_DIR/WorldScript.Studio_1.28.1_x64-setup.exe" \
-  "$VERIFY_DIR/WorldScript.Studio_1.28.1_x64-setup.exe.sig"
+  "$VERIFY_DIR/latest.json" --manifest-platform windows-x86_64
 cargo run --manifest-path src-tauri/Cargo.toml --locked --example verify-updater-artifact -- \
   "$VERIFY_DIR/WorldScript.Studio.app.tar.gz" \
-  "$VERIFY_DIR/WorldScript.Studio.app.tar.gz.sig"
+  "$VERIFY_DIR/latest.json" --manifest-platform darwin-aarch64
 cargo run --manifest-path src-tauri/Cargo.toml --locked --example verify-updater-artifact -- \
   "$VERIFY_DIR/WorldScript.Studio_1.28.1_amd64.AppImage" \
-  "$VERIFY_DIR/WorldScript.Studio_1.28.1_amd64.AppImage.sig" --expect-failure --tamper
+  "$VERIFY_DIR/latest.json" --manifest-platform linux-x86_64 --expect-failure --tamper
 cargo run --manifest-path src-tauri/Cargo.toml --locked --example verify-updater-artifact -- \
   "$VERIFY_DIR/WorldScript.Studio_1.28.1_amd64.AppImage" \
-  "$VERIFY_DIR/WorldScript.Studio_1.28.1_amd64.AppImage.sig" --expect-failure --wrong-key
+  "$VERIFY_DIR/latest.json" --manifest-platform linux-x86_64 --expect-failure --wrong-key
 cargo run --manifest-path src-tauri/Cargo.toml --locked --example verify-updater-artifact -- \
   "$VERIFY_DIR/WorldScript.Studio_1.28.1_amd64.AppImage" \
-  "$VERIFY_DIR/WorldScript.Studio_1.28.1_x64-setup.exe.sig" --expect-failure
+  "$VERIFY_DIR/latest.json" --manifest-platform windows-x86_64 --expect-failure
 ```
+
+Each manifest signature was also compared with its published sidecar after decoding the outer
+Base64 representation. The decoded SHA-256 and byte length matched for all three platforms:
+
+| Platform | Manifest signature decoded SHA-256 | Decoded bytes | Sidecar match |
+| --- | --- | ---: | --- |
+| `linux-x86_64` | `ad52be57357eb0381e7135dda5d49a5367da507a23c080adcbe609ede576a4d3` | 325 | `yes` |
+| `windows-x86_64` | `9aae27463d52dabc9f94598931faef07da90a79b2e636e6d179533c440490c90` | 324 | `yes` |
+| `darwin-aarch64` | `a70ae9536a872be2a41e9b20b0fc698f6f7488d146ba87e917594b9a1f772a02` | 314 | `yes` |
+
+The positive and negative harness cases therefore consume the exact signature strings embedded in
+the immutable published manifest; the sidecar comparison is retained as corroborating release
+asset evidence.
 
 ## Verification results
 
