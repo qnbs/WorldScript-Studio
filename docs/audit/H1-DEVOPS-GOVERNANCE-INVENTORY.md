@@ -1,6 +1,7 @@
 # H1-F0 DevOps and governance inventory
 
-Status: evidence inventory in progress; no H1-B/C/D/E decision is claimed here.
+Status: evidence inventory in progress; H1-A failure/signal evidence is now recorded; no H1-B/C/D/E
+decision is claimed here.
 
 Captured from a verified `main` checkpoint on 2026-08-23, branch
 `h1-a-f0-evidence`, based on `c91e37691409aa4b5febbf527219c891256b6487`.
@@ -99,13 +100,17 @@ authority, Intel production support, or independent updater verification. Those 
 H1-A through H1-E evidence. It does not authorize H2/H3/H4/H7 implementation, release work,
 product changes, Qt/GPUI work, licensing, or #332/#341 remediation.
 
-The next evidence tasks are:
+The current evidence record and next tasks are:
 
-1. collect a defensible 30–50-run CI sample using the method in
-   [`H1-CI-MEASUREMENT-METHOD.md`](H1-CI-MEASUREMENT-METHOD.md);
-2. classify run/job timing, cache, first-attempt, rerun, cancellation, overlap, and unique-signal
-   evidence without cherry-picking only green runs;
-3. use a future meaningful H1 PR to reconcile the checkpoint and inventory as needed, never a
+1. The reconciled 50-run sample is recorded in
+   [`H1-CI-MEASUREMENT-REPORT.md`](H1-CI-MEASUREMENT-REPORT.md).
+2. Failure/cancellation evidence is recorded in
+   [`H1-CI-FAILURE-SIGNAL-REPORT.md`](H1-CI-FAILURE-SIGNAL-REPORT.md): all investigated runs are
+   first attempts, cancellations are concurrency-supersession evidence, and downstream
+   unique-defect signal remains `UNKNOWN`.
+3. Continue classifying timing, cache, rerun, overlap, and unique-signal evidence without
+   cherry-picking only green runs; use a future meaningful H1 PR to reconcile the checkpoint and
+   inventory as needed, never a
    recursive ledger-only PR;
 4. defer H1-F1 canonical docs and H1-F2 agent synchronization until the relevant H1 decisions are
    verified, except for the early admin-bypass safety correction already made here.
