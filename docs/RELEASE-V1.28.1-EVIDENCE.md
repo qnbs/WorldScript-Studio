@@ -90,9 +90,13 @@ The release contains these non-empty assets (sizes are the published byte sizes)
 | `WorldScript.Studio.app.tar.gz` | 84,781,830 |
 | `WorldScript.Studio.app.tar.gz.sig` | 420 |
 
-The public fallback URL `https://github.com/qnbs/WorldScript-Studio/releases/latest/download/latest.json`
-was fetched successfully. Its `version` is `1.28.1`, its publication timestamp is valid, and its
-three platform mappings are structurally complete:
+The immutable versioned URL
+`https://github.com/qnbs/WorldScript-Studio/releases/download/v1.28.1/latest.json`
+was fetched successfully and is the primary historical updater evidence. Its `version` is
+`1.28.1`, its publication timestamp is valid, and its three platform mappings are structurally
+complete. The public fallback URL
+`https://github.com/qnbs/WorldScript-Studio/releases/latest/download/latest.json` was also fetched
+successfully as a separate time-of-check fallback probe; it resolved to the same `1.28.1` metadata.
 
 | Platform key | Updater artifact | Signature asset | URL / asset check |
 | --- | --- | --- | --- |
