@@ -271,6 +271,23 @@ and invoke local binaries without pnpm's workspace-state preflight in the hook p
 The pre-commit hook is not a substitute for the complete pre-push gate; CI remains mandatory when
 hooks are not installed.
 
+### Verified signing cutover
+
+`required_signatures` remains enabled on `main`. Before creating or pushing new history, run
+`pnpm run signing:doctor` and install the hooks with `pnpm run hooks:install`. The pre-commit hook
+fails closed when the effective signing configuration cannot create and Git-verify a signed commit;
+the pre-push hook verifies every commit introduced by every ref update and verifies both annotated
+release tags and their target commits. CI verifies GitHub's `commit.verification.verified` result
+for the complete introduced range and includes that gate in `✅ CI Success`.
+
+Local Git verification and GitHub Verified status are distinct: a local `git verify-commit` pass is
+necessary but cannot establish GitHub account/key association. Never use `--no-gpg-sign`, `--no-verify`,
+unsigned temporary commits, or unsigned release tags as recovery. Squash merges create a new signed
+result and do not rewrite or retroactively verify legacy unsigned source commits. Worktree-local Git
+configuration overrides repository and global configuration; the doctor reports unsafe environment
+overrides. See [`docs/VERIFIED-SIGNING.md`](docs/VERIFIED-SIGNING.md) for the recovery and audit
+procedure.
+
 ---
 
 ## Testing Instructions

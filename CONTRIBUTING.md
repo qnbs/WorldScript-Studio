@@ -511,3 +511,12 @@ The tool will automatically appear in `WriterView` if added to the tool list in 
 ## License
 
 [MIT](LICENSE)
+## Signed commits and tags
+
+New commits, outgoing pushes, and release tags must be signed. Run `pnpm run signing:doctor`
+before installing hooks or when a signing operation fails, then install the repository hooks with
+`pnpm run hooks:install`. The hooks reject missing or invalid local signatures; CI additionally
+requires GitHub's `verification.verified` result for every introduced commit and for both an
+annotated tag and its target commit. Do not bypass these checks with `--no-gpg-sign`, `--no-verify`,
+or unsigned fallback objects. See [`docs/VERIFIED-SIGNING.md`](docs/VERIFIED-SIGNING.md) for
+configuration precedence, recovery, and squash-history semantics.
