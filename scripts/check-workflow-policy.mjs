@@ -112,7 +112,8 @@ const ciJobBlocks = extractCiJobBlocks(ci);
 for (const [jobName, block] of ciJobBlocks) {
   if (jobName === 'ci-success') continue;
   const executableBlock = block.split('\n').map(stripWorkflowComment).join('\n');
-  const conditional = /^ {4}if:\s*/m.test(executableBlock) && !isSemanticallyUnconditionalIf(block);
+  const conditional =
+    /^ {4}if:\s*/m.test(executableBlock) && !isSemanticallyUnconditionalIf(executableBlock);
   const advisory = /^ {4}continue-on-error:\s*true\s*$/m.test(executableBlock);
   if (!conditional && !ciNeeds.includes(jobName) && !advisory)
     failures.push(

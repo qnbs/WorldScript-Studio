@@ -53,6 +53,7 @@ export function isSemanticallyUnconditionalIf(block) {
   const match = block.match(/^ {4}if:\s*(.+)$/m);
   if (!match) return false;
   const expression = match[1]
+    .replace(/\s+#.*$/, '')
     .trim()
     .replace(/^\$\{\{\s*/, '')
     .replace(/\s*\}\}$/, '')

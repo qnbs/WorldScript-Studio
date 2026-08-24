@@ -246,6 +246,8 @@ describe('Tauri release workflow policy', () => {
   it('distinguishes semantically unconditional job conditions', () => {
     expect(isSemanticallyUnconditionalIf('    if: true')).toBe(true);
     expect(isSemanticallyUnconditionalIf('    if: $' + '{{ always() }}')).toBe(true);
+    expect(isSemanticallyUnconditionalIf('    if: true # always run')).toBe(true);
+    expect(isSemanticallyUnconditionalIf('    if: $' + '{{ always() }} # aggregate')).toBe(true);
     expect(isSemanticallyUnconditionalIf("    if: needs.changes.outputs.tauri == 'true'")).toBe(
       false,
     );

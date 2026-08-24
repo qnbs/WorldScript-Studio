@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { closeSync, lstatSync, openSync, readSync } from 'node:fs';
 import process from 'node:process';
+import { pathToFileURL } from 'node:url';
 
 const MAX_DIAGNOSTICS_PER_FILE = 20;
 
@@ -17,7 +18,7 @@ function runGitCheck(args, label) {
 }
 
 // QNBS-v3: scan untracked files incrementally so binary assets cannot exhaust local admission memory.
-function checkUntrackedFile(path) {
+export function checkUntrackedFile(path) {
   if (!lstatSync(path).isFile()) return [];
   const errors = [];
   const chunk = Buffer.allocUnsafe(64 * 1024);
@@ -28,6 +29,8 @@ function checkUntrackedFile(path) {
   let inIndentation = true;
   let indentationHasSpace = false;
   let startsWithSpaceThenTab = false;
+  let lineHasBytes = false;
+  let trailingBlankLines = 0;
   let previousByte = null;
   let lastByte = null;
   let diagnosticLimitReached = false;
@@ -38,11 +41,14 @@ function checkUntrackedFile(path) {
       errors.push(`${path}:${lineNumber}: trailing whitespace`);
     if (startsWithSpaceThenTab)
       errors.push(`${path}:${lineNumber}: space before tab in indentation`);
+    if (lineHasBytes) trailingBlankLines = 0;
+    else trailingBlankLines += 1;
     lineNumber += 1;
     lineStarted = false;
     inIndentation = true;
     indentationHasSpace = false;
     startsWithSpaceThenTab = false;
+    lineHasBytes = false;
     previousByte = null;
     lastByte = null;
     diagnosticLimitReached = errors.length >= MAX_DIAGNOSTICS_PER_FILE;
@@ -59,6 +65,7 @@ function checkUntrackedFile(path) {
           if (diagnosticLimitReached) break;
           continue;
         }
+        if (byte !== 13) lineHasBytes = true;
         previousByte = lastByte;
         lastByte = byte;
         if (!lineStarted) {
@@ -75,6 +82,9 @@ function checkUntrackedFile(path) {
       if (diagnosticLimitReached) break;
     } while (bytesRead > 0);
     if (!diagnosticLimitReached && (lineStarted || lastByte !== null)) finishLine();
+    if (!diagnosticLimitReached && trailingBlankLines > 0) {
+      errors.push(`${path}:${lineNumber - trailingBlankLines}: new blank line at EOF`);
+    }
   } finally {
     if (descriptor !== undefined) closeSync(descriptor);
   }
@@ -86,7 +96,7 @@ function checkUntrackedFile(path) {
   return errors;
 }
 
-try {
+function runCheck() {
   if (!runGitCheck(['diff', '--check', 'HEAD'], 'working-tree diff check')) process.exit(1);
 
   const explicitRanges = (process.env.WORLD_SCRIPT_PREPUSH_DIFF_RANGES ?? '')
@@ -135,6 +145,12 @@ try {
     console.error(errors.join('\n'));
     process.exit(1);
   }
-} catch {
-  process.exit(1);
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  try {
+    runCheck();
+  } catch {
+    process.exit(1);
+  }
 }
