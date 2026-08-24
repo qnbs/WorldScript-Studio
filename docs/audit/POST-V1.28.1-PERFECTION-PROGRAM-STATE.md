@@ -8,12 +8,12 @@ separates locally implemented evidence from hosted or merge-dependent evidence.
 | Field | Value |
 | --- | --- |
 | Program boundary | Post-v1.28.1; immutable release boundary preserved |
-| Current stage | H1-A signal/timing/cache/rerun evidence integrated for the observable sample; H1-E updater-payload verification `PASS`; H1-F0 governance inventory active; H0 remains complete |
-| Local state | This evidence branch preserves the original 50-run sample, verifies 0 observed reruns among those IDs, and records separate post-#473 `32648286172`, post-#474 `32654048692`, post-#475 `32657261089`, and post-#476 `32660607709` checkpoints; no Node lane, required-status, DAG, build, or advisory policy change made |
-| Last reconciled main checkpoint | `fdd60c9465d7515dabc713d4e11f8ff2662fc5c4` (post-#476 verified main at the recorded checkpoint; not a perpetual live-main claim) |
-| Latest completed PR / branch | PR #476 merged from `h1-a-failure-cause-evidence`; final PR head `84b5c187ab2040b1edcc7418ae6ee46ee324ffa1` |
-| Latest completed merge | `fdd60c9465d7515dabc713d4e11f8ff2662fc5c4`; resulting tree `f0d24290765c4eb5e132941b2472117e7cfc3316`; merged `2026-08-23T19:14:20Z` |
-| Hosted CI / CodeQL / Security | PR #476 final head `84b5c187…` merged normally; PR CI `32659129361`, PR CodeQL `32659129403`; fresh main CI `32660607709` and CodeQL `32660607683` were successful on merge SHA `fdd60c94…`, including `✅ CI Success`; historical sample rerun count is 0 and historical cache distribution remains `UNKNOWN` |
+| Current stage | H1-A signal/timing/cache/rerun evidence integrated for the observable sample; H1-E updater-payload verification `PASS`; H1-D Intel qualification workflow is present but unexecuted/not promoted; H1-F0 governance inventory active; H0 remains complete |
+| Local state | This branch adds only non-publishing H1-D qualification workflow/docs. The original 50-run sample and separate post-#473 through post-#476 checkpoints remain immutable; no Node lane, required-status, DAG, build authority, release, or advisory policy change made |
+| Last reconciled main checkpoint | `5806bd7ec6566661e575833f13f86b8e192f0ff4` (post-#490 verified main at the recorded checkpoint; not a perpetual live-main claim) |
+| Latest completed PR / branch | PR #490 merged from `h1-e-updater-verification-evidence`; final PR head `014a3942595f84d4c36ab6de2281d4ff866a3d73` |
+| Latest completed merge | `5806bd7ec6566661e575833f13f86b8e192f0ff4`; resulting tree `e10d9c87cb32b0bac2f8835b0315af911f43c814`; merged `2026-08-24T02:32:42Z` |
+| Hosted CI / CodeQL / Security | PR #490 final head `014a3942…` merged normally; fresh main CI `32683407818` and CodeQL `32683407903` succeeded on merge SHA `5806bd7e…`, including `✅ CI Success`; historical sample rerun count is 0 and historical cache distribution remains `UNKNOWN` |
 | Affected issues | None claimed closed or remediated by H0 |
 | Release impact | None; no tag, release, updater metadata, or published asset changed; H1-E independently verified the three published updater payloads without private-key access |
 
@@ -62,6 +62,7 @@ The first evidence-only H1 slice is also recorded with immutable evidence. Its m
 | H1-A checkpoint reconciliation | #474 | `d53aabfd9c3d06bd7c02610127548352d6d9b2da` | `8223d04e0b51443c6490695b0d08a4189bffe3ee` | `8223d04e0b51443c6490695b0d08a4189bffe3ee` / tree `6ab3a6143f872be2da2e1509225deca759b0bc7f` | PR CI `32652726821`; PR CodeQL `32652726773`; post-merge main CI `32654048692`; CodeQL `32654048709`; corrected ledger checkpoint, fresh main run ~22m17s, cache hits recorded, GitHub Verified | Continue H1-A evidence only where it can classify unique signal or historical cache/rerun behavior; do not advance H1-B/DAG authority |
 | H1-A post-#475 checkpoint evidence | #475 | `c088318c4c434b5e2238ce26db1804e290b4f493` | `3378fa4327e79bb77bcd98e1213dfe56acaefd09` | `3378fa4327e79bb77bcd98e1213dfe56acaefd09` / tree `d09334ae0e691d5d5cef8f214717a50634946f68` | PR CI `32655915753`; PR CodeQL `32655915784`; post-merge main CI `32657261089`; CodeQL `32657261084`; fresh main run ~23m09s, explicit cache hits, GitHub Verified | Preserve original sample and separate checkpoints; historical cache distribution and unique signal remain `UNKNOWN`; do not advance H1-B/DAG authority |
 | H1-A post-#476 checkpoint and rerun reconciliation | #476 | `84b5c187ab2040b1edcc7418ae6ee46ee324ffa1` | `fdd60c9465d7515dabc713d4e11f8ff2662fc5c4` | `fdd60c9465d7515dabc713d4e11f8ff2662fc5c4` / tree `f0d24290765c4eb5e132941b2472117e7cfc3316` | PR CI `32659129361`; PR CodeQL `32659129403`; post-merge main CI `32660607709`; CodeQL `32660607683`; fresh main run ~22m29s, explicit cache hits, GitHub Verified; all 50 original sample IDs are run attempt 1 | Treat sample-scoped rerun count as 0; retain historical cache distribution and unique signal as `UNKNOWN`; no H1-B/DAG authority decision |
+| H1-E updater payload verification | #490 | `014a3942595f84d4c36ab6de2281d4ff866a3d73` | `5806bd7ec6566661e575833f13f86b8e192f0ff4` | `5806bd7ec6566661e575833f13f86b8e192f0ff4` / tree `e10d9c87cb32b0bac2f8835b0315af911f43c814` | PR CodeQL and required CI green; fresh main CI `32683407818`, CodeQL `32683407903`; squash commit GitHub Verified; 3 positive and 3 negative manifest-fed verifier cases; all material review threads resolved | Execute non-publishing H1-D Intel qualification on exact refs; do not promote production support from workflow presence alone |
 
 ## Next exact resume procedure
 
@@ -77,6 +78,9 @@ The first evidence-only H1 slice is also recorded with immutable evidence. Its m
    production-compatible `minisign-verify 0.2.5` harness passed all three positive and three
    negative tests. H1-E is complete for updater-payload verification; platform code-signing,
    notarization, and Intel qualification remain separate evidence questions.
+5. H1-D workflow presence is not qualification evidence. Dispatch it only on exact refs, inspect
+   both runner results, and require three clean independent `macos-15-intel` candidate runs before
+   any future `darwin-x86_64` promotion decision; `macos-26-intel` remains advisory.
 
 ## Verification record for the current working tree
 
@@ -90,7 +94,8 @@ The first evidence-only H1 slice is also recorded with immutable evidence. Its m
 | Release/doc truth | Passed after source-synchronized metric update: 7 files match |
 | CSP, desktop import boundary, native readiness | Passed |
 | Direct single-checker `tsgo` | Exit 0; no diagnostics |
-| `pnpm run ci:prepush` | Exit 0; all sequential low-end checks passed |
+| Historical `pnpm run ci:prepush` before change-aware admission | Exit 0; all sequential low-end checks passed on the earlier H1-D working tree |
+| Change-aware local admission recovery | Direct `node scripts/ci-prepush-lowend.mjs` passed on the current H1-D working tree as `NON_CODE_ONLY`; policy guards passed; TypeScript was explicitly `DEFERRED_TO_REQUIRED_CI`; no full-project `tsgo` launched. The `pnpm run ci:prepush` wrapper remains unavailable in this sandbox because pnpm cannot open its SQLite store / reports lockfile verification before invoking the script. |
 | Hosted CI / PR / signing | PR #469 final head was GitHub Verified and all five material review threads were resolved; PR CI `32629355521` passed; fresh main CI `32630810142` and CodeQL `32630810130` passed; normal protected squash merge produced GitHub Verified commit `476c0ce5…` |
 | H1-A measurement report | Historical replay reconciled omitted success `32613719445`; PR #472 integrated 50 unique runs with 26/9/15 outcomes and explicit skipped advisory jobs; fresh main evidence is green; no lane/DAG policy change |
 | H1-A failure/signal report | 9 first-attempt failures classified into four root-cause classes; 15 first-attempt cancellations classified as concurrency supersession by same-branch chronology; 0 lane-exclusive failures; advisory failure signal 0, unique signal `UNKNOWN`; post-#473 checkpoint `32648286172` successful with explicit checkpoint cache hits |

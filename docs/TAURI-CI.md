@@ -29,6 +29,29 @@ tolerates a missing arch (per-arch warning, hard-fail only if *no* arch signs), 
 Intel runner option exists again (self-hosted, `macos-latest-large`, or a new hosted image), re-adding
 it to the matrix needs no other changes. Tracked as a re-opened follow-up in `TODO.md`.
 
+### Intel qualification (non-publishing)
+
+Intel support is qualified separately from the production bundle matrix by the manual
+[`tauri-intel-qualification.yml`](../.github/workflows/tauri-intel-qualification.yml) workflow:
+
+| Runner | Role | Release authority |
+|--------|------|-------------------|
+| `macos-15-intel` | Primary `x86_64` production candidate | None during qualification |
+| `macos-26-intel` | Advisory forward-compatibility/toolchain probe | None |
+
+The workflow must be dispatched against an exact branch, tag, or SHA. It builds without publishing
+a GitHub Release, updater manifest, or `darwin-x86_64` asset, and uploads only retained qualification
+evidence. It mechanically checks the host architecture, app executable architecture, DMG output,
+and effective macOS deployment target (`11.0`). The updater `.app.tar.gz` is intentionally not
+produced in this non-publishing path; updater trust remains covered by the independent payload
+verification evidence in [`docs/audit/H1-E-UPDATER-VERIFICATION-REPORT.md`](audit/H1-E-UPDATER-VERIFICATION-REPORT.md).
+
+This does not establish production support. Promotion requires at least three clean independent
+qualification runs for the selected candidate, exact-ref evidence, architecture and deployment
+target inspection, and an explicit decision that exactly one Intel producer may own the future
+`darwin-x86_64` release authority. Until that gate passes, `macos-latest` remains the only
+production macOS builder and v1.28.1 remains immutable.
+
 ## Outputs
 
 Each matrix job uploads **`tauri-bundle-<os>`** containing `src-tauri/target/release/bundle/` (`.deb`, `.msi`/`.exe`, `.dmg`/`.app` depending on OS).

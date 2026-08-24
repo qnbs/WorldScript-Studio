@@ -1,0 +1,132 @@
+# Non-publishing Intel qualification; this workflow never creates a release or latest.json.
+name: Tauri Intel qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      qualification_ref:
+        description: Exact branch, tag, or SHA to qualify (defaults to the dispatched ref)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tauri-intel-qualification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualify:
+    name: ${{ matrix.role }} (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15-intel
+            role: primary-production-candidate
+          - runner: macos-26-intel
+            role: advisory-forward-compatibility
+
+    steps:
+      - name: Check out the exact qualification ref
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.qualification_ref || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Record source ref
+        run: |
+          set -euo pipefail
+          printf 'source_ref=%s\n' "$(git rev-parse HEAD)" > qualification-source.txt
+          printf 'requested_ref=%s\n' "${{ inputs.qualification_ref || github.sha }}" >> qualification-source.txt
+          cat qualification-source.txt
+
+      - uses: ./.github/actions/setup
+
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+
+      - uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16 # v2
+        with:
+          workspaces: src-tauri
+          cache-all-crates: true
+          prefix-key: "intel-qualification-v1"
+
+      - name: Install macOS packaging dependency
+        run: brew install create-dmg
+
+      - name: Prepare non-publishing bundle configuration
+        run: |
+          set -euo pipefail
+          # QNBS-v3: qualification must not publish or mutate release metadata.
+          jq '.bundle.createUpdaterArtifacts = false' src-tauri/tauri.conf.json > src-tauri/tauri.conf.json.tmp
+          mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
+          printf 'updater_artifacts=disabled\n' > qualification-config.txt
+          printf 'release_publication=disabled\n' >> qualification-config.txt
+          cat qualification-config.txt
+
+      - name: Build non-publishing Tauri bundle
+        run: |
+          set -euo pipefail
+          pnpm exec tauri build
+
+      - name: Verify Intel architecture and deployment target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -s)" = "Darwin"
+          host_arch="$(uname -m)"
+          test "$host_arch" = "x86_64"
+
+          app="$(find src-tauri/target/release/bundle -type d -name '*.app' -print -quit)"
+          test -n "$app"
+          executable_name="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")"
+          executable="$app/Contents/MacOS/$executable_name"
+          test -x "$executable"
+
+          file "$executable" | tee qualification-file.txt
+          grep -Eq 'x86_64|64-bit executable' qualification-file.txt
+          lipo -info "$executable" | tee qualification-lipo.txt
+          grep -Eq 'x86_64|Non-fat file' qualification-lipo.txt
+
+          load_commands="$(otool -l "$executable")"
+          printf '%s\n' "$load_commands" > qualification-otool.txt
+          minimum_os="$(awk '/LC_BUILD_VERSION/{mode="build"; next} /LC_VERSION_MIN_MACOSX/{mode="legacy"; next} mode == "build" && $1 == "minos"{print $2; exit} mode == "legacy" && $1 == "version"{print $2; exit}' qualification-otool.txt)"
+          test "$minimum_os" = "11.0"
+
+          dmg="$(find src-tauri/target/release/bundle -type f -name '*.dmg' -print -quit)"
+          test -n "$dmg"
+          test -s "$dmg"
+
+          cat > qualification-result.json <<EOF
+          {
+            "runner": "${{ matrix.runner }}",
+            "role": "${{ matrix.role }}",
+            "sourceRef": "$(git rev-parse HEAD)",
+            "hostArchitecture": "$host_arch",
+            "binaryArchitecture": "x86_64",
+            "minimumMacOS": "$minimum_os",
+            "appBundle": "$app",
+            "dmg": "$dmg",
+            "updaterBundle": "NOT_PRODUCED: non-publishing qualification",
+            "releasePublication": false
+          }
+          EOF
+          cat qualification-result.json
+
+      - name: Upload qualification evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tauri-intel-qualification-${{ matrix.runner }}
+          path: |
+            qualification-source.txt
+            qualification-config.txt
+            qualification-result.json
+            qualification-file.txt
+            qualification-lipo.txt
+            qualification-otool.txt
+          if-no-files-found: error
+          retention-days: 30

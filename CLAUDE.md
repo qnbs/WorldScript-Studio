@@ -16,7 +16,9 @@ pnpm run build         # Production build to dist/
 pnpm run smoke:prod    # Headless mount check on dist/ (run AFTER build; catches prod-only crashes)
 pnpm run lint          # Biome lint (--error-on-warnings — warnings fail like CI)
 pnpm run lint:fix      # Biome auto-fix (lint + format)
-pnpm run typecheck     # TypeScript type check — EXACT CI command (tsgo --project tsconfig.tsgo.json --noEmit --checkers 4). typecheck:single = lighter single-checker (may miss errors the gate catches; do not trust for the gate)
+pnpm run typecheck     # Full TypeScript check (cloud quality authority; tsgo --project tsconfig.tsgo.json --noEmit --checkers 4)
+pnpm run ci:prepush    # Change-aware local admission; docs/workflow-only changes defer TS to required CI
+node scripts/ci-prepush-lowend.mjs --full # Complete local admission on capable hardware
 pnpm exec vitest run <path> # Targeted Vitest single run (CI mode)
 pnpm exec vitest run <path> --coverage # Targeted Vitest coverage run
 pnpm run bench         # Vitest perf benchmarks (tests/bench) — baseline gate for the Y.Doc-as-SoT / Local-First migration
@@ -41,9 +43,9 @@ pnpm run token:audit        # audit-tokens.mjs — design-token usage gate (CI b
 
 **Vitest watch-mode hard rule:** Never invoke `pnpm test`, `npm run test`, or a bare Vitest wrapper. Always use an explicit targeted `pnpm exec vitest run <path>` command; watch mode hangs the constrained development hardware.
 
-**Mandatory pre-push gate:** Run `pnpm run ci:prepush` before every push and again after every local correction before re-pushing. It runs the full repository lint, then the exact CI typecheck and i18n checks sequentially. A targeted test or changed-file lint run alone is insufficient. If pnpm reports dependency verification after a branch or lockfile change, run `pnpm install --frozen-lockfile` first. The pre-commit hook does not replace this gate.
+**Mandatory pre-push gate:** Run `pnpm run ci:prepush` before every push and again after every local correction before re-pushing. It performs change-aware, bounded local admission and emits explicit `PASS`, `FAIL`, `DEFERRED_TO_REQUIRED_CI`, or `LOCAL_RESOURCE_FAILURE` states. Docs/workflow/tooling-only changes do not launch the full TypeScript project scan; required GitHub CI remains the merge authority. Use `node scripts/ci-prepush-lowend.mjs --full` for complete local admission on capable hardware. If pnpm reports dependency verification after a branch or lockfile change, run `pnpm run deps:reconcile` first. The pre-commit hook does not replace this gate.
 
-**Quality gate (local pre-push subset):** `pnpm run ci:prepush` runs the full repository lint followed by the exact CI typecheck and i18n checks; CI additionally runs full-suite coverage and heavy jobs. Locally use only the targeted form `pnpm exec vitest run <path> --coverage` when debugging coverage. Full pipeline graph: [`docs/CI.md`](docs/CI.md). Coverage thresholds: lines 74, branches 60, functions 67, statements 72 (see `vitest.config.ts`).
+**Quality gate (local pre-push subset):** `pnpm run ci:prepush` runs applicable policy guards and only the TypeScript validation justified by the outgoing change class; deferred TypeScript is explicitly closed by required cloud CI. CI additionally runs full-suite coverage and heavy jobs. Full pipeline graph: [`docs/CI.md`](docs/CI.md). Coverage thresholds: lines 74, branches 60, functions 67, statements 72 (see `vitest.config.ts`).
 
 **CI pipeline order:** `security` → `quality` (Biome + tsgo + Vitest matrix) → `build` / `e2e` / `storybook` (parallel) → `lighthouse` (after build) → `deploy` on `main`. `ci-success` is a required-status aggregator (`needs: [security, quality, build]`) so branch protection can require one context instead of three/four individual ones — see `docs/CI.md`. Two additional jobs run in parallel with `quality`, both path-scoped via the `changes` job (legitimately `skipping` on PRs that don't touch their directory, which `ci-success` treats as a pass for that job only): `rust-tauri` (`src-tauri/**` — fmt/check/clippy/test, needs the GTK/WebKit apt-get steps) and `core-rust` (`crates/**` — same fmt/check/clippy/test for the renderer-neutral Rust Core, no GUI deps so no apt-get steps needed).
 

@@ -14,7 +14,7 @@ For historical optimization notes (targets may predate the live workflow), see [
 
 | Tier | Where | Commands / scope |
 |------|--------|------------------|
-| **Quick (local)** | Developer laptop | `pnpm run ci:prepush` (single-checker typecheck, i18n quality, release/doc truth, and lightweight guardrails); the pre-commit hook runs staged Biome checks; optional targeted `pnpm exec vitest run <path>` for a fast smoke |
+| **Quick (local)** | Developer laptop | `pnpm run ci:prepush` (change-aware bounded admission, applicable policy guards, and targeted TypeScript); docs/workflow-only changes report `DEFERRED_TO_REQUIRED_CI`; optional targeted `pnpm exec vitest run <path>` for a fast smoke |
 | **Heavy (CI)** | `ci.yml` | Vitest **with** `--coverage` and thresholds, Playwright E2E (`CI=true`) including **mobile emulation** (Pixel 5 / Chromium), Lighthouse CI, Storybook static build, bundle budget + analyze. Mutation testing (Stryker) is **not** part of this pipeline — see [Mutation testing status](#mutation-testing-status). |
 
 **Merge readiness:** A green workflow run on the PR/branch matters more than reproducing every E2E or LHCI step locally. Use CI **artifacts** (Playwright HTML report, coverage, Lighthouse output) to debug failures.
@@ -294,7 +294,7 @@ longer runs a root `prepare` command. `pnpm-workspace.yaml` sets `verifyDepsBefo
 
 ## Local checks (without Act)
 
-On **low-resource** machines, stop at the **Quick** tier (see [Cloud CI-first vs local development](#cloud-ci-first-vs-local-development)): **`pnpm run ci:prepush`**, and optionally targeted **`pnpm exec vitest run <path>`**. Never run multiple heavyweight local processes concurrently. Treat **`CI=true pnpm run test:e2e`** (desktop + mobile projects in CI), **Lighthouse**, coverage, Storybook, and mutation testing as **CI-owned**.
+On **low-resource** machines, stop at the **Quick** tier (see [Cloud CI-first vs local development](#cloud-ci-first-vs-local-development)): **`pnpm run ci:prepush`**, and optionally targeted **`pnpm exec vitest run <path>`**. The local gate classifies the outgoing change set; it does not launch a complete project `tsgo` scan for provably docs/workflow/tooling-only changes and prints `DEFERRED_TO_REQUIRED_CI` instead. Any timeout, signal termination, or resource kill is `LOCAL_RESOURCE_FAILURE`, never PASS. Use **`node scripts/ci-prepush-lowend.mjs --full`** only on capable hardware. Never run multiple heavyweight local processes concurrently. Treat **`CI=true pnpm run test:e2e`** (desktop + mobile projects in CI), **Lighthouse**, coverage, Storybook, and mutation testing as **CI-owned**.
 
 ```bash
 pnpm install --frozen-lockfile
@@ -302,6 +302,29 @@ pnpm run deps:verify
 pnpm run ci:prepush
 pnpm exec vitest run <path>  # optional targeted smoke, no coverage
 ```
+
+### Change-aware local admission
+
+`ci:prepush` is local admission, not a replacement for merge CI. It always checks dependency
+state, toolchain, diff integrity, documentation/release truth, CSP, the DesktopPlatform import
+boundary, and native-readiness. Workflow changes also run the offline workflow-policy checker;
+locale changes run applicable i18n integrity checks. The change classifier uses the safer class for
+mixed or unknown paths.
+
+The result states are deliberately distinct:
+
+- `PASS` — the applicable local check completed successfully;
+- `FAIL` — the check completed and found a defect;
+- `DEFERRED_TO_REQUIRED_CI` — a provably unrelated expensive check was not run locally and remains
+  mandatory in GitHub CI;
+- `LOCAL_RESOURCE_FAILURE` — timeout, signal termination, or resource exhaustion; this is never a
+  pass and requires recovery or use of the full tier on capable hardware.
+
+For TypeScript-impacting, dependency, build, native-contract, mixed, or ambiguous changes, the
+default gate runs bounded single-checker `tsgo`. For docs/workflow-only changes it prints
+`TypeScript DEFERRED_TO_REQUIRED_CI` with the reason `no TypeScript-impacting changes detected`.
+The complete local tier is `pnpm run ci:prepush:full`; GitHub Actions remains the authoritative
+full TypeScript, quality, security, CodeQL, build, test, and required-aggregate gate.
 
 Playwright E2E, Lighthouse, Storybook, and full-suite coverage are intentionally omitted from
 the local block above; GitHub Actions owns those heavy checks on this hardware.

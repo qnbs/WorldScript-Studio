@@ -54,8 +54,8 @@ query in a later session:
 | `.github/workflows/mutation.yml` | Manual `workflow_dispatch`; incremental/force modes and scoped matrix | CURRENT; MACHINE-DERIVABLE | H2 owns mutation evidence |
 | Scheduled/support workflows | `security-scheduled.yml`, `scorecard.yml`, `voice-nightly.yml`, `prune-deployments.yml`, `docker.yml`, and debug/deploy surfaces also exist | CURRENT; TIME-SENSITIVE | Include trigger/permission review in H1-F1 |
 | `.github/actions/setup/action.yml` | Shared Node/pnpm/install setup action | CURRENT; MACHINE-DERIVABLE | Treat as Level 0 toolchain authority |
-| `package.json` | pnpm `11.22.0`, Node `>=22`, local `ci:prepush`, `typecheck:single`, i18n/docs/CSP/native guards, build and CI-only heavy commands | CURRENT; MACHINE-DERIVABLE | Derive commands rather than duplicating them in agent files |
-| Hooks and signing | `simple-git-hooks`, `scripts/hooks/pre-commit.mjs`, `scripts/hooks/pre-push.mjs`, `pnpm run signing:doctor`; SSH signing enabled | CURRENT; MACHINE-DERIVABLE | Preserve signed-source and GitHub verification distinction |
+| `package.json` | pnpm `11.22.0`, Node `>=22`, change-aware local `ci:prepush`, `typecheck:single`, i18n/docs/CSP/native guards, build and CI-only heavy commands | CURRENT; MACHINE-DERIVABLE | Derive commands rather than duplicating them in agent files; full local admission uses `node scripts/ci-prepush-lowend.mjs --full` |
+| Hooks and signing | `simple-git-hooks`, bounded `scripts/hooks/pre-commit.mjs`/`pre-push.mjs`, `pnpm run signing:doctor`; SSH signing enabled | CURRENT; MACHINE-DERIVABLE | Preserve signed-source and GitHub verification distinction; timeout/resource failures are never PASS |
 | Test/build config | `vitest.config.ts` imports `scripts/coverage-thresholds.json`: lines 80, functions 72, branches 66, statements 78 | CURRENT executable truth | Reconcile stale prose in H1-F2/F4; do not lower thresholds |
 | Desktop/native config | `src-tauri/`, `crates/`, `src-tauri/tauri.conf.json`, native roadmap/ADRs | CURRENT architecture plus future gates | Do not make H1 a product/native implementation stage |
 
@@ -98,7 +98,8 @@ query in a later session:
 This inventory does not decide the Node canonical lane, required/advisory promotion, build
 authority, or Intel production support. H1-E updater-payload verification is `PASS` using the
 production-compatible `minisign-verify 0.2.5` path and its positive/negative artifact matrix. The
-remaining H1 decisions require H1-A through H1-D evidence. It does not authorize H2/H3/H4/H7 implementation, release work,
+H1-D qualification workflow is now present but has not promoted an Intel producer. The remaining
+H1 decisions require H1-A through H1-D evidence. It does not authorize H2/H3/H4/H7 implementation, release work,
 product changes, Qt/GPUI work, licensing, or #332/#341 remediation.
 
 The current evidence record and next tasks are:
@@ -118,6 +119,8 @@ The current evidence record and next tasks are:
    code-signing, notarization, and Intel qualification as separate evidence questions;
 5. defer H1-F1 canonical docs and H1-F2 agent synchronization until the relevant H1 decisions are
    verified, except for the early admin-bypass safety correction already made here.
+6. Run the manual Intel qualification workflow on exact refs. Treat `macos-15-intel` as the
+   primary candidate and `macos-26-intel` as advisory; do not publish either runner's output.
 
 ## Resume invariant
 

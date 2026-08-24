@@ -120,7 +120,7 @@ types.ts          → Core shared interfaces and types
   3. Implement the real **root-cause** fix (code **+ tests + i18n + docs**), or reply with evidence
      if false-positive / by-design. **Never** add a new `biome-ignore` (suppression ratchet fails
      CI — refactor instead; run `node scripts/check-suppressions.mjs`).
-  4. Local gate (sequential): lint + typecheck + targeted vitest green.
+  4. Local admission (sequential): `pnpm run ci:prepush`; it is change-aware and may explicitly defer TypeScript to required cloud CI for docs/workflow-only changes.
   5. Commit + push; reply to **every** thread citing the resolving commit, then resolve it → **0 unresolved**.
   6. Re-trigger: `gh pr comment <N> --body "@coderabbitai review"`; check the **full** review history,
      not just the latest status (a rate-limited latest status can hide an earlier real review).
@@ -169,7 +169,7 @@ On any non-trivial code change add a single-line comment explaining **why**, not
 - Conventional Commits format: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`
 - Pre-commit: after explicit `pnpm run hooks:install`, `simple-git-hooks` runs Biome on staged files; CI is mandatory regardless
 - **⚠️ Constrained local hardware — do NOT run heavy suites locally.** This machine has ~3–4 GB RAM. **Never** run the full Vitest **coverage** suite, **Playwright E2E**, **Stryker mutation**, **Lighthouse CI**, or the **Storybook test-runner** locally — they are **CI-only by design**. Run **one heavy command at a time** (no parallel `vitest`/`biome`/`tsc`/`vite`).
-- Local preflight (sequential, minimal): `pnpm run lint` → `pnpm run typecheck` → `pnpm run i18n:check` (only when locale JSON changed) → **targeted** `pnpm exec vitest run <path>` (no `--coverage`). Run `pnpm run build && pnpm run smoke:prod` only when you touched `vite.config.ts`, `packages/ai-core`, or `workers/`. Coverage, E2E, Lighthouse, Stryker, and Storybook are **CI gate jobs** — let GitHub Actions run them.
+- Local preflight (sequential, minimal): `pnpm run ci:prepush` → optional targeted `pnpm exec vitest run <path>` (no `--coverage`). The admission gate classifies changes and reports `DEFERRED_TO_REQUIRED_CI` for provably docs/workflow/tooling-only TypeScript impact; use `node scripts/ci-prepush-lowend.mjs --full` on capable hardware. Run `pnpm run build && pnpm run smoke:prod` only when you touched `vite.config.ts`, `packages/ai-core`, or `workers/`. Coverage, E2E, Lighthouse, Stryker, and Storybook are **CI gate jobs** — let GitHub Actions run them.
 - **Vitest watch-mode hard rule:** Never run `pnpm test`, `npm run test`, a bare Vitest command, or an untargeted wrapper. Always use `pnpm exec vitest run <path>`; CI is the only place that runs the full coverage suite.
 - CI pipeline (see [`docs/CI.md`](../docs/CI.md)): **`security` → `quality`** (Biome + `tsc` + Vitest matrix) **→ `build` / `e2e` / `storybook` in parallel** → **`lighthouse`** after build → **`deploy`** on `main` after build+e2e
 - Branch protection should require the **`quality`** job (and other checks your team enables); job ids match `.github/workflows/ci.yml`

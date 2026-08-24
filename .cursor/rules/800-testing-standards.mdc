@@ -37,7 +37,7 @@ alwaysApply: false
 
 | Tier | Befehle |
 |------|---------|
-| **Lokal schnell** | `lint`, `typecheck`, `i18n:check`; optional `pnpm exec vitest run` **ohne** `--coverage` |
+| **Lokal schnell** | `pnpm run ci:prepush` (änderungsbewusst; `DEFERRED_TO_REQUIRED_CI` für Docs/Workflows/Tooling); optional `pnpm exec vitest run <path>` **ohne** `--coverage` |
 | **CI schwer** | Vitest **mit** Coverage (Schwellen 63/55/54/62 — lines/branches/functions/statements), `CI=true pnpm run test:e2e`, LHCI, `bundle:budget` |
 
 - Merge-Bar = **grüner GitHub-Workflow**, nicht voller lokaler E2E auf schwacher Hardware.
