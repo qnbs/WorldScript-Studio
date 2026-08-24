@@ -163,6 +163,8 @@ describe('CI workflow policy', () => {
     ]) {
       const resultToken = `needs.${jobName}.result`;
       expect(ciSuccessBlock, `${jobName} result assertion`).toContain(resultToken);
+      const assertionStart = ciSuccessBlock.indexOf(resultToken);
+      expect(ciSuccessBlock.slice(assertionStart, assertionStart + 180)).toContain('FAIL=1');
       if (['rust-tauri', 'core-rust'].includes(jobName)) {
         expect(ciSuccessBlock).toMatch(new RegExp(`${resultToken}[^\\n]*!=\\s*["']success["']`));
         expect(ciSuccessBlock).toMatch(new RegExp(`${resultToken}[^\\n]*!=\\s*["']skipped["']`));
@@ -252,6 +254,14 @@ describe('Tauri release workflow policy', () => {
     expect(isReleasePublishingCommand('gh api /repos/org/repo/releases --field tag_name=v9')).toBe(
       true,
     );
+    expect(isReleasePublishingCommand('gh api /repos/org/repo/releases --input release.json')).toBe(
+      true,
+    );
+    expect(
+      isReleasePublishingCommand(
+        'curl --json @release.json https://api.github.com/repos/org/repo/releases',
+      ),
+    ).toBe(true);
     expect(
       isReleasePublishingCommand(`run: >-
   gh release

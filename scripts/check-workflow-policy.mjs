@@ -138,15 +138,18 @@ for (const [name, pattern] of [
 }
 
 function hasAggregateResultAssertion(block, dependency, allowsSkipped) {
-  // QNBS-v3: require semantic aggregate outcomes instead of incidental text matches.
-  const lines = block.split('\n').filter((line) => line.includes(`needs.${dependency}.result`));
-  if (allowsSkipped) {
-    return (
-      lines.some((line) => /!=\s*['"]success['"]/.test(line)) &&
-      lines.some((line) => /!=\s*['"]skipped['"]/.test(line))
-    );
-  }
-  return lines.some((line) => /\s=\s*['"]success['"]/.test(line));
+  // QNBS-v3: require each aggregate failure branch to set FAIL=1, not just mention a result token.
+  const lines = block.split('\n');
+  const token = `needs.${dependency}.result`;
+  return lines.some((line, index) => {
+    if (!line.includes(token)) return false;
+    const context = lines.slice(index, index + 5).join('\n');
+    if (!/FAIL\s*=\s*1/.test(context)) return false;
+    if (allowsSkipped) {
+      return /!=\s*['"]success['"]/.test(line) && /!=\s*['"]skipped['"]/.test(line);
+    }
+    return /\s=\s*['"]success['"]/.test(line);
+  });
 }
 
 for (const dependency of requiredAggregateJobs) {
