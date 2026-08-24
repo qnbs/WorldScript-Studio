@@ -308,6 +308,16 @@ describe('Tauri release workflow policy', () => {
     ).toBe(true);
     expect(
       isReleasePublishingCommand(
+        'curl --data-raw \'{"tag_name":"v9"}\' https://api.github.com/repos/org/repo/releases',
+      ),
+    ).toBe(true);
+    expect(
+      isReleasePublishingCommand(
+        'curl --data-urlencode tag_name=v9 https://api.github.com/repos/org/repo/releases',
+      ),
+    ).toBe(true);
+    expect(
+      isReleasePublishingCommand(
         'wget --post-data=tag_name=v9 https://api.github.com/repos/org/repo/releases',
       ),
     ).toBe(true);

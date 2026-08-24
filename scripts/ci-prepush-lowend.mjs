@@ -24,14 +24,25 @@ function git(args, { allowFailure = false } = {}) {
   throw result.error ?? new Error(`git ${args.join(' ')} failed with status ${result.status}`);
 }
 
+function gitRaw(args, { allowFailure = false } = {}) {
+  const result = spawnSync('git', args, { cwd: projectRoot, encoding: 'utf8' });
+  if (result.status === 0) return result.stdout ?? '';
+  if (allowFailure) return '';
+  throw result.error ?? new Error(`git ${args.join(' ')} failed with status ${result.status}`);
+}
+
+function parseNulDelimitedPaths(output) {
+  return output.split('\0').filter(Boolean);
+}
+
 function changedFilesFromWorkingTree() {
-  return git(['diff', '--no-renames', '--name-only', 'HEAD'], { allowFailure: true })
-    .split('\n')
-    .filter(Boolean)
+  return parseNulDelimitedPaths(
+    gitRaw(['diff', '--no-renames', '--name-only', '-z', 'HEAD'], { allowFailure: true }),
+  )
     .concat(
-      git(['ls-files', '--others', '--exclude-standard'], { allowFailure: true })
-        .split('\n')
-        .filter(Boolean),
+      parseNulDelimitedPaths(
+        gitRaw(['ls-files', '--others', '--exclude-standard', '-z'], { allowFailure: true }),
+      ),
     )
     .filter((file) => !file.startsWith('.worktrees/') && !file.startsWith('recovery-artifacts/'));
 }
@@ -39,9 +50,9 @@ function changedFilesFromWorkingTree() {
 function changedFilesFromRef(target, base) {
   // QNBS-v3: compare exact pushed tips so local admission matches the outgoing ref update.
   if (!target || !base) throw new Error('outgoing comparison base or target is unresolved');
-  return git(['diff', '--no-renames', '--name-only', `${base}..${target}`])
-    .split('\n')
-    .filter(Boolean);
+  return parseNulDelimitedPaths(
+    gitRaw(['diff', '--no-renames', '--name-only', '-z', `${base}..${target}`]),
+  );
 }
 
 function parsePrePushUpdates(raw) {

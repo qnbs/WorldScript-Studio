@@ -31,13 +31,13 @@ export function checkUntrackedFile(path) {
   let startsWithSpaceThenTab = false;
   let lineHasBytes = false;
   let trailingBlankLines = 0;
-  let previousByte = null;
   let lastByte = null;
   let diagnosticLimitReached = false;
 
   const finishLine = () => {
-    const contentEnd = lastByte === 13 ? previousByte : lastByte;
-    if (contentEnd === 32 || contentEnd === 9)
+    // QNBS-v3: match git diff --check by treating CR as trailing whitespace unless explicitly configured otherwise.
+    const contentEnd = lastByte;
+    if (contentEnd === 32 || contentEnd === 9 || contentEnd === 13)
       errors.push(`${path}:${lineNumber}: trailing whitespace`);
     if (startsWithSpaceThenTab)
       errors.push(`${path}:${lineNumber}: space before tab in indentation`);
@@ -49,7 +49,6 @@ export function checkUntrackedFile(path) {
     indentationHasSpace = false;
     startsWithSpaceThenTab = false;
     lineHasBytes = false;
-    previousByte = null;
     lastByte = null;
     diagnosticLimitReached = errors.length >= MAX_DIAGNOSTICS_PER_FILE;
   };
@@ -66,7 +65,6 @@ export function checkUntrackedFile(path) {
           continue;
         }
         if (byte !== 13) lineHasBytes = true;
-        previousByte = lastByte;
         lastByte = byte;
         if (!lineStarted) {
           if (inIndentation && byte === 32) {

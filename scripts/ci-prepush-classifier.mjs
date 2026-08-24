@@ -106,7 +106,11 @@ export function classifyFile(file) {
 
 // QNBS-v3: classify only the outgoing impact so local admission stays resource-safe without weakening cloud authority.
 export function classifyChangedFiles(files) {
-  const normalizedFiles = [...new Set(files.map((file) => file.trim()).filter(Boolean))].sort();
+  const normalizedFiles = [
+    ...new Set(
+      files.map((file) => file.replaceAll('\\', '/').replace(/^\.\//, '')).filter(Boolean),
+    ),
+  ].sort();
   const categories = [...new Set(normalizedFiles.map(classifyFile))];
 
   if (normalizedFiles.length === 0)

@@ -3,7 +3,7 @@ const releaseTargetPattern =
 
 // QNBS-v3: detect explicit and implicit GitHub release mutations before qualification can pass.
 const mutatingReleaseCommandPattern =
-  /\b(?:gh\s+release\s+(?:create|upload|edit|delete)|gh\s+api\b(?=[^\n]*(?:(?:--method(?:=|\s+)|-X\s+)(?:POST|PUT|PATCH|DELETE)\b|(?:--raw-field|--field|-F|-f|--input)(?:=|\s+)))(?=[^\n]*(?:\breleases?\b|\bassets?\b))[^\n]*|(?:curl|wget)\b[^\n]*(?:--upload-file|-T\s|--data(?:-binary)?\s|-d\s|--json(?:=|\s+)|--post-(?:data|file)(?:=|\s+)|--method(?:=|\s+)(?:POST|PUT|PATCH|DELETE)\b|-X\s*(?:POST|PUT|PATCH|DELETE)|--request(?:=|\s+)(?:POST|PUT|PATCH|DELETE)\b)[^\n]*(?:release|asset|uploads\.github\.com|api\.github\.com)|(?:cp|mv|install|scp|aws\s+s3\s+cp|az\s+storage\s+blob\s+upload)\b[^\n]*\b(?:release|releases|artifact|artifacts|latest\.json)\b)/i;
+  /\b(?:gh\s+release\s+(?:create|upload|edit|delete)|gh\s+api\b(?=[^\n]*(?:(?:--method(?:=|\s+)|-X\s+)(?:POST|PUT|PATCH|DELETE)\b|(?:--raw-field|--field|-F|-f|--input)(?:=|\s+)))(?=[^\n]*(?:\breleases?\b|\bassets?\b))[^\n]*|(?:curl|wget)\b[^\n]*(?:--upload-file|-T\s|--data(?:-binary|-raw|-urlencode)?(?:=|\s+)|-d\s|--json(?:=|\s+)|--post-(?:data|file)(?:=|\s+)|--method(?:=|\s+)(?:POST|PUT|PATCH|DELETE)\b|-X\s*(?:POST|PUT|PATCH|DELETE)|--request(?:=|\s+)(?:POST|PUT|PATCH|DELETE)\b)[^\n]*(?:release|asset|uploads\.github\.com|api\.github\.com)|(?:cp|mv|install|scp|aws\s+s3\s+cp|az\s+storage\s+blob\s+upload)\b[^\n]*\b(?:release|releases|artifact|artifacts|latest\.json)\b)/i;
 
 function normalizeYamlFoldedRuns(source) {
   const lines = source.split(/\r?\n/);
