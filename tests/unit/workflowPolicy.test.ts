@@ -261,6 +261,16 @@ describe('Tauri release workflow policy', () => {
     expect(
       hasAggregateResultAssertion(`[ "${needsBuild}" = "success" ] && FAIL=1`, 'build', false),
     ).toBe(false);
+    expect(
+      hasAggregateResultAssertion(`# [ "${needsBuild}" = "success" ] || FAIL=1`, 'build', false),
+    ).toBe(false);
+    expect(
+      hasAggregateResultAssertion(
+        `[ "${needsBuild}" = "success" ] || FAIL=1 # enforce aggregate failure`,
+        'build',
+        false,
+      ),
+    ).toBe(true);
   });
 
   // QNBS-v3: cover multiline and option-form release mutation detection.

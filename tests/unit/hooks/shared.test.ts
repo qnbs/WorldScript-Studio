@@ -5,6 +5,7 @@ import { runBounded } from '../../../scripts/hooks/shared.mjs';
 
 describe('bounded hook subprocesses', () => {
   it('does not treat a clean timeout shutdown as a successful run', async () => {
+    const startedAt = performance.now();
     const result = await runBounded(
       process.execPath,
       ['-e', "process.on('SIGTERM', () => process.exit(0)); setInterval(() => {}, 10_000);"],
@@ -12,6 +13,7 @@ describe('bounded hook subprocesses', () => {
     );
 
     expect(result.timedOut).toBe(true);
+    expect(performance.now() - startedAt).toBeLessThan(900);
   });
 
   // QNBS-v3: prove repeated parent signals clean detached children without accepting cancellation as pass.

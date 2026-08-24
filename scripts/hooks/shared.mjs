@@ -33,7 +33,6 @@ export function runBounded(command, args, { timeoutMs = 120_000, env, input, she
     let terminationRequested = false;
     let settled = false;
     let forceTimer;
-    let pendingFinish;
     const terminate = (signal) => {
       if (process.platform !== 'win32' && child.pid) {
         try {
@@ -57,11 +56,7 @@ export function runBounded(command, args, { timeoutMs = 120_000, env, input, she
       forceTimer = setTimeout(() => {
         forceTimer = undefined;
         terminate('SIGKILL');
-        if (pendingFinish) {
-          const result = pendingFinish;
-          pendingFinish = undefined;
-          complete(...result);
-        } else complete(null, 'SIGKILL');
+        complete(null, 'SIGKILL');
       }, 1_000);
     };
     const requestTermination = (signal, reason) => {
@@ -74,11 +69,7 @@ export function runBounded(command, args, { timeoutMs = 120_000, env, input, she
           clearTimeout(forceTimer);
           forceTimer = undefined;
         }
-        if (pendingFinish) {
-          const result = pendingFinish;
-          pendingFinish = undefined;
-          complete(...result);
-        }
+        complete(null, 'SIGKILL');
         return;
       }
       terminationRequested = true;
@@ -117,8 +108,10 @@ export function runBounded(command, args, { timeoutMs = 120_000, env, input, she
     const finish = (status, signal, error = null) => {
       if (settled) return;
       if (forceTimer) {
-        pendingFinish = [status, signal, error];
-        return;
+        clearTimeout(forceTimer);
+        forceTimer = undefined;
+        // QNBS-v3: clean child exit must still reap detached descendants immediately after termination.
+        terminate('SIGKILL');
       }
       complete(status, signal, error);
     };

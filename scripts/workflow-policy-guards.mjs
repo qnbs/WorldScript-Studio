@@ -63,7 +63,9 @@ export function isSemanticallyUnconditionalIf(block) {
 
 export function hasAggregateResultAssertion(block, dependency, allowsSkipped) {
   // QNBS-v3: require the result comparison to route failure into FAIL=1, not merely mention a token.
-  const lines = block.split('\n');
+  const lines = block
+    .split('\n')
+    .map((line) => line.replace(/^\s*#.*$/, '').replace(/\s+#.*$/, ''));
   const token = `needs.${dependency}.result`;
   return lines.some((line, index) => {
     if (!line.includes(token)) return false;
