@@ -39,9 +39,14 @@ function normalizeShellContinuations(source) {
 }
 
 export function extractActionReferences(source) {
-  return [...source.matchAll(/\buses\s*:\s*([^\s,}]+)/g)].map(([, rawReference]) =>
+  return [...source.matchAll(/\b["']?uses["']?\s*:\s*([^\s,}]+)/g)].map(([, rawReference]) =>
     rawReference.replace(/^(['"])(.*)\1$/, '$2'),
   );
+}
+
+export function extractTopLevelJobName(line) {
+  const match = line.match(/^ {2}(?:"([^"]+)"|'([^']+)'|([A-Za-z0-9_-]+)):\s*$/);
+  return match?.[1] ?? match?.[2] ?? match?.[3] ?? null;
 }
 
 export function isSemanticallyUnconditionalIf(block) {

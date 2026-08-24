@@ -3,6 +3,7 @@ import { join, relative } from 'node:path';
 import process from 'node:process';
 import {
   extractActionReferences,
+  extractTopLevelJobName,
   hasAggregateResultAssertion,
   isReleasePublishingCommand,
   isSemanticallyUnconditionalIf,
@@ -72,9 +73,9 @@ const ci = readFileSync(ciPath, 'utf8');
 // QNBS-v3: ignore YAML comments so disabled commands cannot satisfy cloud authority checks.
 const executableCi = ci.split('\n').map(stripWorkflowComment).join('\n');
 const ciLines = ci.split('\n');
-const ciSuccessStart = ciLines.findIndex((line) => /^\s{2}ci-success:\s*$/.test(line));
+const ciSuccessStart = ciLines.findIndex((line) => extractTopLevelJobName(line) === 'ci-success');
 const nextJob = ciLines.findIndex(
-  (line, index) => index > ciSuccessStart && /^\s{2}[A-Za-z0-9_-]+:\s*$/.test(line),
+  (line, index) => index > ciSuccessStart && extractTopLevelJobName(line) !== null,
 );
 const ciSuccessBlock =
   ciSuccessStart >= 0
@@ -95,9 +96,9 @@ function extractCiJobBlocks(content) {
   let currentName = '';
   if (jobsStart < 0) return blocks;
   for (const line of lines.slice(jobsStart + 1)) {
-    const match = line.match(/^ {2}([A-Za-z0-9_-]+):\s*$/);
-    if (match) {
-      currentName = match[1];
+    const jobName = extractTopLevelJobName(line);
+    if (jobName !== null) {
+      currentName = jobName;
       blocks.set(currentName, []);
     } else if (currentName) {
       blocks.get(currentName).push(line);

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   extractActionReferences,
+  extractTopLevelJobName,
   hasAggregateResultAssertion,
   isReleasePublishingCommand,
   isSemanticallyUnconditionalIf,
@@ -232,6 +233,14 @@ describe('Tauri release workflow policy', () => {
     const pinned = `actions/checkout@${'a'.repeat(40)}`;
     expect(extractActionReferences(`uses : "${pinned}"`)).toEqual([pinned]);
     expect(extractActionReferences(`- { uses : ${pinned} }`)).toEqual([pinned]);
+    expect(extractActionReferences(`- "uses": ${pinned}`)).toEqual([pinned]);
+  });
+
+  it('normalizes quoted top-level job identifiers', () => {
+    expect(extractTopLevelJobName('  "quoted-gate":')).toBe('quoted-gate');
+    expect(extractTopLevelJobName("  'quoted-gate':")).toBe('quoted-gate');
+    expect(extractTopLevelJobName('  ordinary-gate:')).toBe('ordinary-gate');
+    expect(extractTopLevelJobName('    nested:')).toBe(null);
   });
 
   it('distinguishes semantically unconditional job conditions', () => {
