@@ -55,7 +55,7 @@ for (const file of files) {
   for (const rawLine of content.split('\n')) {
     const line = stripWorkflowComment(rawLine);
     for (const match of line.matchAll(/\buses:\s*([^\s,}]+)/g)) {
-      const reference = match[1];
+      const reference = match[1].replace(/^(['"])(.*)\1$/, '$2');
       if (reference.startsWith('./') || reference.startsWith('docker://')) continue;
       if (!/@[0-9a-f]{40}$/i.test(reference))
         failures.push(`${label}: unpinned action ${reference}`);
@@ -104,10 +104,21 @@ function extractCiJobBlocks(content) {
 
 // QNBS-v3: require every unconditional CI job to have an explicit required or advisory disposition.
 const ciJobBlocks = extractCiJobBlocks(ci);
+function isSemanticallyUnconditionalIf(block) {
+  const match = block.match(/^ {4}if:\s*(.+)$/m);
+  if (!match) return false;
+  const expression = match[1]
+    .trim()
+    .replace(/^\$\{\{\s*/, '')
+    .replace(/\s*\}\}$/, '')
+    .trim();
+  return /^(?:always\(\)|true)$/i.test(expression);
+}
+
 for (const [jobName, block] of ciJobBlocks) {
   if (jobName === 'ci-success') continue;
   const executableBlock = block.split('\n').map(stripWorkflowComment).join('\n');
-  const conditional = /^ {4}if:\s*/m.test(executableBlock);
+  const conditional = /^ {4}if:\s*/m.test(executableBlock) && !isSemanticallyUnconditionalIf(block);
   const advisory = /^ {4}continue-on-error:\s*true\s*$/m.test(executableBlock);
   if (!conditional && !ciNeeds.includes(jobName) && !advisory)
     failures.push(

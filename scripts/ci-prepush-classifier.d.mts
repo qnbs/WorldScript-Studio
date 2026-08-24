@@ -28,6 +28,7 @@ export interface ChangeClassification {
 export interface ProcessResult {
   status: number | null;
   signal: string | null;
+  error?: { code?: string } | null;
   timedOut?: boolean;
   interrupted?: boolean;
 }

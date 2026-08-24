@@ -2,6 +2,8 @@ import { spawnSync } from 'node:child_process';
 import { closeSync, lstatSync, openSync, readSync } from 'node:fs';
 import process from 'node:process';
 
+const MAX_DIAGNOSTICS_PER_FILE = 20;
+
 function runGitCheck(args, label) {
   const result = spawnSync('git', args, { cwd: process.cwd(), encoding: 'utf8' });
   if (result.status === 0) return true;
@@ -28,6 +30,7 @@ function checkUntrackedFile(path) {
   let startsWithSpaceThenTab = false;
   let previousByte = null;
   let lastByte = null;
+  let diagnosticLimitReached = false;
 
   const finishLine = () => {
     const contentEnd = lastByte === 13 ? previousByte : lastByte;
@@ -42,6 +45,7 @@ function checkUntrackedFile(path) {
     startsWithSpaceThenTab = false;
     previousByte = null;
     lastByte = null;
+    diagnosticLimitReached = errors.length >= MAX_DIAGNOSTICS_PER_FILE;
   };
 
   try {
@@ -51,6 +55,7 @@ function checkUntrackedFile(path) {
         if (byte === 0) return [];
         if (byte === 10) {
           finishLine();
+          if (diagnosticLimitReached) break;
           continue;
         }
         previousByte = lastByte;
@@ -66,10 +71,16 @@ function checkUntrackedFile(path) {
           }
         }
       }
+      if (diagnosticLimitReached) break;
     } while (bytesRead > 0);
-    if (lineStarted || lastByte !== null) finishLine();
+    if (!diagnosticLimitReached && (lineStarted || lastByte !== null)) finishLine();
   } finally {
     closeSync(descriptor);
+  }
+  if (diagnosticLimitReached) {
+    errors.push(
+      `${path}: additional whitespace diagnostics suppressed after ${MAX_DIAGNOSTICS_PER_FILE}`,
+    );
   }
   return errors;
 }

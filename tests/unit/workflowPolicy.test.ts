@@ -18,6 +18,9 @@ const workflowPath = fileURLToPath(new URL('../../.github/workflows/ci.yml', imp
 const tauriWorkflowPath = fileURLToPath(
   new URL('../../.github/workflows/tauri-build.yml', import.meta.url),
 );
+const intelWorkflowPath = fileURLToPath(
+  new URL('../../.github/workflows/tauri-intel-qualification.yml', import.meta.url),
+);
 const setupActionPath = fileURLToPath(
   new URL('../../.github/actions/setup/action.yml', import.meta.url),
 );
@@ -30,6 +33,7 @@ const scheduledSecurityWorkflowPath = fileURLToPath(
 const tauriManifestPath = fileURLToPath(new URL('../../src-tauri/Cargo.toml', import.meta.url));
 const workflowSource = readFileSync(workflowPath, 'utf8');
 const tauriWorkflowSource = readFileSync(tauriWorkflowPath, 'utf8');
+const intelWorkflowSource = readFileSync(intelWorkflowPath, 'utf8');
 const setupActionSource = readFileSync(setupActionPath, 'utf8');
 const cloudflareWorkflowSource = readFileSync(cloudflareWorkflowPath, 'utf8');
 const scheduledSecurityWorkflowSource = readFileSync(scheduledSecurityWorkflowPath, 'utf8');
@@ -263,6 +267,16 @@ describe('Tauri release workflow policy', () => {
       ),
     ).toBe(true);
     expect(
+      isReleasePublishingCommand(
+        'wget --post-data=tag_name=v9 https://api.github.com/repos/org/repo/releases',
+      ),
+    ).toBe(true);
+    expect(
+      isReleasePublishingCommand(
+        'wget --post-file release.json --method POST https://api.github.com/repos/org/repo/releases',
+      ),
+    ).toBe(true);
+    expect(
       isReleasePublishingCommand(`run: >-
   gh release
   create "$TAG"`),
@@ -316,5 +330,12 @@ describe('Tauri release workflow policy', () => {
     const ciSuccess = extractJobBlock(workflowSource, 'ci-success');
     expect(ciSuccess).toContain('✅ CI Success');
     expect(workflowSource).toContain('name: ✅ CI Success');
+  });
+
+  it('does not continue qualification evidence uploads after cancellation', () => {
+    const uploadStart = intelWorkflowSource.indexOf('name: Upload qualification evidence');
+    const uploadBlock = intelWorkflowSource.slice(uploadStart, uploadStart + 500);
+    expect(uploadBlock).toContain('if: $' + '{{ !cancelled() }}');
+    expect(uploadBlock).not.toContain('if: always()');
   });
 });

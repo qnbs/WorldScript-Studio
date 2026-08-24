@@ -148,6 +148,7 @@ export function requiresTypecheck(classification, { full = false } = {}) {
 export function classifyProcessResult(result) {
   // QNBS-v3: classify timeout, interruption, and signal termination as non-pass local resource failures.
   if (
+    ['EAGAIN', 'ENOMEM'].includes(result.error?.code) ||
     result.timedOut ||
     result.interrupted ||
     result.signal ||
