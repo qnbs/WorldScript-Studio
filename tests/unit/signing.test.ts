@@ -118,6 +118,54 @@ describe('local signing controls', () => {
     ).toMatchObject({ ok: true, reports: [{ sha: commit, subject: 'refs/tags/v1.0.0' }] });
     expect(
       verifyOutgoingUpdates(
+        [`refs/tags/v1.0.1 ${commit} refs/tags/v1.0.1 ${remote}`],
+        'origin',
+        process.cwd(),
+        { verifyTagObject: () => ({ ok: true, reason: 'tag and target commit verified' }) },
+      ),
+    ).toMatchObject({ ok: true, reports: [{ sha: commit, subject: 'refs/tags/v1.0.1' }] });
+    let tagVerificationCalled = false;
+    expect(
+      verifyOutgoingUpdates(
+        [
+          {
+            localRef: 'refs/tags/v1.0.2',
+            localSha: commit,
+            remoteRef: 'refs/tags/v1.0.2',
+            remoteSha: 'invalid-remote-sha',
+          },
+        ],
+        'origin',
+        process.cwd(),
+        {
+          verifyTagObject: () => {
+            tagVerificationCalled = true;
+            return { ok: true, reason: 'tag and target commit verified' };
+          },
+        },
+      ),
+    ).toMatchObject({ ok: false });
+    expect(tagVerificationCalled).toBe(false);
+    expect(
+      verifyOutgoingUpdates(
+        [
+          {
+            localRef: 'refs/heads/main',
+            localSha: commit,
+            remoteRef: 'refs/heads/main',
+            remoteSha: 'invalid-remote-sha',
+          },
+        ],
+        'origin',
+        process.cwd(),
+        {
+          introducedCommits: () => [commit],
+          verifyCommitObject: () => ({ ok: true, reason: 'Git-native signature verified' }),
+        },
+      ),
+    ).toMatchObject({ ok: false });
+    expect(
+      verifyOutgoingUpdates(
         [`refs/heads/main ${commit} refs/heads/main ${remote}`],
         'origin',
         process.cwd(),
