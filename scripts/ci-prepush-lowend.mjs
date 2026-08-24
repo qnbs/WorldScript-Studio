@@ -23,7 +23,7 @@ function git(args, { allowFailure = false } = {}) {
 }
 
 function changedFilesFromWorkingTree() {
-  return git(['diff', '--name-only', 'HEAD'], { allowFailure: true })
+  return git(['diff', '--no-renames', '--name-only', 'HEAD'], { allowFailure: true })
     .split('\n')
     .filter(Boolean)
     .concat(
@@ -36,7 +36,7 @@ function changedFilesFromWorkingTree() {
 
 function changedFilesFromRef(target, base) {
   if (!target || !base) throw new Error('outgoing comparison base or target is unresolved');
-  return git(['diff', '--name-only', `${base}...${target}`])
+  return git(['diff', '--no-renames', '--name-only', `${base}...${target}`])
     .split('\n')
     .filter(Boolean);
 }

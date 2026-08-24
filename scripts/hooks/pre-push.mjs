@@ -10,4 +10,9 @@ if (
 )
   process.exit(1);
 process.env.WORLD_SCRIPT_PREPUSH_UPDATES = updates;
-process.exit(await runNodeScript('scripts/ci-prepush-lowend.mjs', [], { env: process.env }));
+process.exit(
+  await runNodeScript('scripts/ci-prepush-lowend.mjs', [], {
+    env: process.env,
+    timeoutMs: 900_000,
+  }),
+);

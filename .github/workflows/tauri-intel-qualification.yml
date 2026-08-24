@@ -39,10 +39,12 @@ jobs:
           persist-credentials: false
 
       - name: Record source ref
+        env:
+          REQUESTED_REF: ${{ inputs.qualification_ref || github.sha }}
         run: |
           set -euo pipefail
           printf 'source_ref=%s\n' "$(git rev-parse HEAD)" > qualification-source.txt
-          printf 'requested_ref=%s\n' "${{ inputs.qualification_ref || github.sha }}" >> qualification-source.txt
+          printf 'requested_ref=%s\n' "$REQUESTED_REF" >> qualification-source.txt
           cat qualification-source.txt
 
       - uses: ./.github/actions/setup
