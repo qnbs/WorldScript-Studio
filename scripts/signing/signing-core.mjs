@@ -333,6 +333,8 @@ export function resolvePushEvidence(input, cwd = process.cwd(), dependencies = {
         (!isSha(update.remoteSha) && !isZeroSha(update.remoteSha))
       )
         throw new Error(`invalid SHA in update for ${update.remoteRef}`);
+      if (!update.remoteRef.startsWith('refs/heads/') && !update.remoteRef.startsWith('refs/tags/'))
+        throw new Error(`unsupported outgoing ref ${update.remoteRef}`);
       if (isZeroSha(update.localSha)) {
         evidenceUpdates.push({ ...update, disposition: 'DELETED' });
         continue;
@@ -343,8 +345,6 @@ export function resolvePushEvidence(input, cwd = process.cwd(), dependencies = {
         evidenceUpdates.push({ ...update, disposition: 'TAG' });
         continue;
       }
-      if (!update.remoteRef.startsWith('refs/heads/'))
-        throw new Error(`unsupported outgoing ref ${update.remoteRef}`);
       if (!commitExists(update.localSha))
         throw new Error(`local outgoing commit is unavailable for ${update.localRef}`);
       const base = isZeroSha(update.remoteSha) ? EMPTY_TREE : update.remoteSha;
@@ -467,10 +467,9 @@ export function verifyOutgoingUpdates(input, remote, cwd = process.cwd(), depend
   const verifyTag = dependencies.verifyTagObject ?? ((sha) => verifyTagObject(sha, cwd));
   const getIntroducedCommits =
     dependencies.introducedCommits ?? ((update) => introducedCommits(update, remote, cwd));
-  let updates;
+  const reports = [];
   try {
-    updates = normalizePrePushUpdates(input);
-    const reports = [];
+    const updates = normalizePrePushUpdates(input);
     for (const update of updates) {
       if (isZeroSha(update.localSha)) continue;
       if (!isSha(update.localSha))
@@ -495,7 +494,7 @@ export function verifyOutgoingUpdates(input, remote, cwd = process.cwd(), depend
   } catch (error) {
     return {
       ok: false,
-      reports: [],
+      reports,
       reason: error instanceof Error ? error.message : 'invalid pre-push ref-update input',
     };
   }

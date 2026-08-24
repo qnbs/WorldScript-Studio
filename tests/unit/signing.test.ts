@@ -132,6 +132,7 @@ describe('local signing controls', () => {
     ).toMatchObject({ ok: true, reports: [{ sha: commit }] });
   });
 
+  // QNBS-v3: lock the pre-push evidence contract against malformed or unresolved input.
   it('normalizes raw, line-array, structured, and empty public inputs', () => {
     const zero = '0'.repeat(40);
     const line = `refs/heads/main ${'a'.repeat(40)} refs/heads/main ${'b'.repeat(40)}`;
@@ -209,6 +210,13 @@ describe('local signing controls', () => {
         { commitExists: () => true },
       ).evidenceState,
     ).toBe('INVALID');
+    expect(
+      resolvePushEvidence([
+        parseRefUpdate(
+          `refs/remotes/origin/x ${'0'.repeat(40)} refs/remotes/origin/x ${'b'.repeat(40)}`,
+        )!,
+      ]).evidenceState,
+    ).toBe('INVALID');
   });
 
   it('round-trips the same immutable artifact for both consumers', () => {
@@ -225,6 +233,7 @@ describe('local signing controls', () => {
     try {
       writePrePushEvidenceFile(file, [line]);
       expect(statSync(file).mode & 0o777).toBe(0o600);
+      expect(() => writePrePushEvidenceFile(file, [line])).toThrow();
       const serialized = readFileSync(file, 'utf8');
       expect(parsePrePushEvidence(serialized)).toEqual(normalizePrePushUpdates([line]));
       expect(readPrePushEvidenceFile(file)).toEqual(normalizePrePushUpdates([line]));
