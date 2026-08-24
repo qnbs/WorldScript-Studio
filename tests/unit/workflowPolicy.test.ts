@@ -147,6 +147,22 @@ describe('CI workflow policy', () => {
     ]);
     expect(ciSuccessBlock).toMatch(/\$\{\{\s*needs\.signatures\.result\s*\}\}/);
     expect(ciSuccessBlock).toMatch(/\$\{\{\s*needs\.lighthouse\.result\s*\}\}/);
+    for (const jobName of [
+      'security',
+      'signatures',
+      'quality',
+      'changes',
+      'rust-tauri',
+      'core-rust',
+      'build',
+      'e2e',
+      'lighthouse',
+      'vrt',
+    ]) {
+      expect(ciSuccessBlock, `${jobName} result assertion`).toMatch(
+        new RegExp(`(?:\\[|if\\s+\\[)[^\\n]*needs\\.${jobName}\\.result[^\\n]*(?:success|skipped)`),
+      );
+    }
 
     for (const jobName of ['e2e-deep', 'storybook']) {
       const jobBlock = extractJobBlock(workflowSource, jobName);

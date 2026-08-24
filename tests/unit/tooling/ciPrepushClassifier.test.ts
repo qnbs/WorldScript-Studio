@@ -45,6 +45,9 @@ describe('local admission result semantics', () => {
     expect(classifyProcessResult({ status: null, signal: null, timedOut: true })).toBe(
       'LOCAL_RESOURCE_FAILURE',
     );
+    expect(classifyProcessResult({ status: 0, signal: null, timedOut: true })).toBe(
+      'LOCAL_RESOURCE_FAILURE',
+    );
     expect(classifySignatureResult(false)).toBe('FAIL');
     expect(classifySignatureResult(true)).toBe('PASS');
   });

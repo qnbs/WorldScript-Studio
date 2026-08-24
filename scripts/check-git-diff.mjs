@@ -12,27 +12,33 @@ function runGitCheck(args, label) {
 try {
   if (!runGitCheck(['diff', '--check', 'HEAD'], 'working-tree diff check')) process.exit(1);
 
-  const updates = (process.env.WORLD_SCRIPT_PREPUSH_UPDATES ?? '')
+  const explicitRanges = (process.env.WORLD_SCRIPT_PREPUSH_DIFF_RANGES ?? '')
     .split('\n')
-    .map((line) => line.trim().split(/\s+/))
-    .filter((parts) => parts.length >= 4)
-    .map(([, localSha, , remoteSha]) => ({ localSha, remoteSha }));
-  for (const { localSha, remoteSha } of updates) {
-    if (/^0+$/.test(localSha)) continue;
-    let base = remoteSha;
-    if (/^0+$/.test(base)) {
-      const originMain = spawnSync('git', ['rev-parse', 'origin/main'], {
-        cwd: process.cwd(),
-        encoding: 'utf8',
-      });
-      if (originMain.status !== 0) {
-        console.error('outgoing diff check cannot resolve origin/main for a new ref');
-        process.exit(1);
-      }
-      base = originMain.stdout.trim();
-    }
-    if (!base || !runGitCheck(['diff', '--check', `${base}...${localSha}`], 'outgoing diff check'))
+    .map((range) => range.trim())
+    .filter(Boolean);
+  const ranges =
+    explicitRanges.length > 0
+      ? explicitRanges
+      : (process.env.WORLD_SCRIPT_PREPUSH_UPDATES ?? '')
+          .split('\n')
+          .map((line) => line.trim().split(/\s+/))
+          .filter((parts) => parts.length >= 4)
+          .filter(([, localSha]) => !/^0+$/.test(localSha))
+          .map(([, localSha, , remoteSha]) => {
+            if (!/^0+$/.test(remoteSha)) return `${remoteSha}...${localSha}`;
+            const originMain = spawnSync('git', ['rev-parse', 'origin/main'], {
+              cwd: process.cwd(),
+              encoding: 'utf8',
+            });
+            if (originMain.status !== 0) throw new Error('origin/main cannot be resolved');
+            return `${originMain.stdout.trim()}...${localSha}`;
+          });
+  for (const range of ranges) {
+    if (!/^[0-9a-f]+\.\.\.[0-9a-f]+$/i.test(range)) {
+      console.error(`outgoing diff check received an invalid range: ${range}`);
       process.exit(1);
+    }
+    if (!runGitCheck(['diff', '--check', range], 'outgoing diff check')) process.exit(1);
   }
 
   const untrackedResult = spawnSync('git', ['ls-files', '--others', '--exclude-standard', '-z'], {

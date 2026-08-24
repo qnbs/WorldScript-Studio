@@ -57,11 +57,13 @@ function parsePrePushUpdates(raw) {
 // QNBS-v3: combine committed outgoing refs with safe working-tree changes without scanning preserved evidence trees.
 function resolveChangeSet() {
   const files = new Set(changedFilesFromWorkingTree());
+  const ranges = [];
   const updates = parsePrePushUpdates(process.env.WORLD_SCRIPT_PREPUSH_UPDATES ?? '');
   let unresolved = false;
 
   function addRefFiles(target, base) {
     try {
+      ranges.push(`${base}...${target}`);
       for (const file of changedFilesFromRef(target, base)) files.add(file);
     } catch (error) {
       unresolved = true;
@@ -107,7 +109,7 @@ function resolveChangeSet() {
     addRefFiles(head, base);
   }
 
-  return { files: [...files], updates, unresolved };
+  return { files: [...files], ranges, updates, unresolved };
 }
 
 function report(name, status, detail = '') {
@@ -115,15 +117,17 @@ function report(name, status, detail = '') {
   return status;
 }
 
-async function runNodeCheck(name, script, args = [], timeoutMs = 120_000) {
-  const result = await runNodeScriptDetailed(script, args, { timeoutMs });
+async function runNodeCheck(name, script, args = [], timeoutMs = 120_000, env = {}) {
+  const result = await runNodeScriptDetailed(script, args, { timeoutMs, env });
   const status = classifyProcessResult(result);
   report(name, status, result.timedOut ? `timeout after ${timeoutMs}ms` : (result.signal ?? ''));
   return status;
 }
 
-async function runGitDiffCheck() {
-  return runNodeCheck('Diff integrity', 'scripts/check-git-diff.mjs', [], 15_000);
+async function runGitDiffCheck(ranges) {
+  return runNodeCheck('Diff integrity', 'scripts/check-git-diff.mjs', [], 15_000, {
+    WORLD_SCRIPT_PREPUSH_DIFF_RANGES: ranges.join('\n'),
+  });
 }
 
 function shouldRunI18n(classification) {
@@ -159,7 +163,7 @@ results.push(['Dependency state', 'PASS']);
 
 const mandatoryChecks = [
   ['Toolchain', () => runNodeCheck('Toolchain', 'scripts/check-pnpm-toolchain.mjs', ['--hook'])],
-  ['Diff integrity', runGitDiffCheck],
+  ['Diff integrity', () => runGitDiffCheck(changes.ranges)],
   ['Docs/release truth', () => runNodeCheck('Docs/release truth', 'scripts/check-doc-metrics.mjs')],
   ['CSP policy', () => runNodeCheck('CSP policy', 'scripts/check-csp-policy.mjs')],
   [
@@ -232,11 +236,20 @@ for (const [name, status] of results) console.log(`${name.padEnd(26)} ${status}`
 console.log(`Outgoing signatures       ${isPrePush ? 'PASS' : 'SIGNING_HOOK_REQUIRED'}`);
 console.log('Cloud validation required YES');
 console.log(`Classification             ${classification.kind}`);
-console.log(`TypeScript full local     ${typecheckRequired ? 'REQUIRED' : 'DEFERRED'}`);
+console.log(
+  `TypeScript local tier     ${
+    typecheckRequired
+      ? full
+        ? 'FULL (4 checkers)'
+        : 'BOUNDED (1 checker)'
+      : 'DEFERRED_TO_REQUIRED_CI'
+  }`,
+);
 console.log(
   `LOCAL_ADMISSION_JSON ${JSON.stringify({
     classification,
     full,
+    typecheckMode: typecheckRequired ? (full ? 'FULL' : 'BOUNDED') : 'DEFERRED_TO_REQUIRED_CI',
     isPrePush,
     results: Object.fromEntries(results),
     outgoingSignatures: isPrePush ? 'PASS' : 'SIGNING_HOOK_REQUIRED',

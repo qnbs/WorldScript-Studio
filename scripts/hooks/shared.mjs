@@ -57,7 +57,8 @@ function runBounded(command, args, { timeoutMs = 120_000, env, input, shell = fa
       if (settled) return;
       settled = true;
       clearTimeout(timeoutTimer);
-      if (forceTimer) clearTimeout(forceTimer);
+      // QNBS-v3: retain forced process-group cleanup after timeout even when the leader exits early.
+      if (forceTimer && !timedOut) clearTimeout(forceTimer);
       for (const [parentSignal, handler] of signalHandlers) {
         process.removeListener(parentSignal, handler);
       }

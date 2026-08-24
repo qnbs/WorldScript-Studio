@@ -68,6 +68,18 @@ const ciNeedsMatch = ciSuccessBlock.match(/^\s+needs:\s*(.+)$/m);
 const ciNeeds = ciNeedsMatch
   ? [...ciNeedsMatch[1].matchAll(/[A-Za-z0-9_-]+/g)].map(([value]) => value)
   : [];
+const requiredAggregateJobs = [
+  'security',
+  'signatures',
+  'quality',
+  'changes',
+  'rust-tauri',
+  'core-rust',
+  'build',
+  'e2e',
+  'lighthouse',
+  'vrt',
+];
 for (const [name, pattern] of [
   ['required aggregate name', /name:\s*["']?✅ CI Success/],
   [
@@ -77,19 +89,14 @@ for (const [name, pattern] of [
 ]) {
   if (!pattern.test(ci)) failures.push(`.github/workflows/ci.yml: missing ${name}`);
 }
-for (const dependency of [
-  'security',
-  'signatures',
-  'quality',
-  'build',
-  'e2e',
-  'lighthouse',
-  'vrt',
-  'rust-tauri',
-  'core-rust',
-]) {
+for (const dependency of requiredAggregateJobs) {
   if (!ciNeeds.includes(dependency))
     failures.push(`.github/workflows/ci.yml: ci-success missing ${dependency} dependency`);
+  const resultAssertion = new RegExp(
+    `(?:\\[|if\\s+\\[)[^\\n]*needs\\.${dependency}\\.result[^\\n]*(?:success|skipped)`,
+  );
+  if (!resultAssertion.test(ciSuccessBlock))
+    failures.push(`.github/workflows/ci.yml: ci-success does not assert ${dependency} result`);
 }
 
 const intelPath = join(workflowRoot, 'tauri-intel-qualification.yml');
