@@ -289,7 +289,11 @@ function changedFilesBetween(base, head, cwd) {
 
 export function resolvePushEvidence(input, cwd = process.cwd(), dependencies = {}) {
   try {
-    const updates = Array.isArray(input) ? input : parsePrePushInput(input);
+    const updates = Array.isArray(input)
+      ? input.every((item) => typeof item === 'string')
+        ? parsePrePushInput(input.join('\n'))
+        : input
+      : parsePrePushInput(input);
     if (updates.length === 0 || updates.some((update) => !update))
       throw new Error('pre-push updates are empty or invalid');
     const commitExists =
@@ -318,7 +322,7 @@ export function resolvePushEvidence(input, cwd = process.cwd(), dependencies = {
       if (!update.remoteRef.startsWith('refs/heads/'))
         throw new Error(`unsupported outgoing ref ${update.remoteRef}`);
       const base = isZeroSha(update.remoteSha) ? EMPTY_TREE : update.remoteSha;
-      if (!isZeroSha(base) && !commitExists(base))
+      if (!isZeroSha(base) && base !== EMPTY_TREE && !commitExists(base))
         throw new Error(`remote base object is unavailable for ${update.remoteRef}`);
       for (const path of resolveFiles(base, update.localSha)) changedFiles.add(path);
       evidenceUpdates.push({

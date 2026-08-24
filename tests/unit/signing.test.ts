@@ -69,7 +69,7 @@ describe('local signing controls', () => {
     const branch = parseRefUpdate(`refs/heads/new ${'a'.repeat(40)} refs/heads/new ${zero}`)!;
     const deletion = parseRefUpdate(`refs/heads/old ${zero} refs/heads/old ${'b'.repeat(40)}`)!;
     const result = resolvePushEvidence([branch, deletion], process.cwd(), {
-      commitExists: () => true,
+      commitExists: (sha) => sha !== '4b825dc642cb6eb9a060e54bf8d69288fbee4904',
       changedFilesBetween: (base) =>
         base === '4b825dc642cb6eb9a060e54bf8d69288fbee4904' ? ['new.ts'] : [],
     });
@@ -77,6 +77,14 @@ describe('local signing controls', () => {
     expect(result.updates.map(({ disposition }) => disposition)).toEqual(['NEW_BRANCH', 'DELETED']);
     expect(result.changedFiles).toEqual(['new.ts']);
     expect(resolvePushEvidence('malformed').evidenceState).toBe('INVALID');
+    const localSha = 'a'.repeat(40);
+    const line = `refs/heads/new ${localSha} refs/heads/new ${zero}`;
+    const legacyResult = resolvePushEvidence([line], process.cwd(), {
+      commitExists: (sha) => sha !== '4b825dc642cb6eb9a060e54bf8d69288fbee4904',
+      changedFilesBetween: (base, head) =>
+        base === '4b825dc642cb6eb9a060e54bf8d69288fbee4904' && head === localSha ? ['new.ts'] : [],
+    });
+    expect(legacyResult).toMatchObject({ evidenceState: 'RESOLVED', changedFiles: ['new.ts'] });
   });
 
   it('fails closed for missing objects and Git path-resolution failures', () => {
