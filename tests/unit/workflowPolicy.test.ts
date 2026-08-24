@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  containsSecretReference,
   extractActionReferences,
   extractTopLevelJobName,
   hasAggregateResultAssertion,
@@ -253,6 +254,7 @@ describe('Tauri release workflow policy', () => {
     );
   });
 
+  // QNBS-v3: ensure aggregate dependencies fail closed on missing or malformed result checks.
   it('requires aggregate success checks to route failures through FAIL=1', () => {
     const needsBuild = '$' + '{{ needs.build.result }}';
     expect(
@@ -271,6 +273,15 @@ describe('Tauri release workflow policy', () => {
         false,
       ),
     ).toBe(true);
+  });
+
+  it('rejects dot- and bracket-indexed secret references', () => {
+    const dotReference = '$' + '{{ secrets.QUALIFICATION_TOKEN }}';
+    const bracketReference = '$' + "{{ secrets['QUALIFICATION_TOKEN'] }}";
+    const envReference = '$' + '{{ env.QUALIFICATION_TOKEN }}';
+    expect(containsSecretReference(dotReference)).toBe(true);
+    expect(containsSecretReference(bracketReference)).toBe(true);
+    expect(containsSecretReference(envReference)).toBe(false);
   });
 
   // QNBS-v3: cover multiline and option-form release mutation detection.

@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { lstatSync, mkdtempSync, rmSync } from 'node:fs';
+import { lstatSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
@@ -29,7 +29,15 @@ function runGitCheck(args, label, env = {}) {
 function withTemporaryIndex(callback) {
   const directory = mkdtempSync(join(process.cwd(), '.tmp-git-index-'));
   const index = join(directory, 'index');
-  const env = { GIT_INDEX_FILE: index };
+  const objectDirectory = join(directory, 'objects');
+  mkdirSync(objectDirectory);
+  const objectStore = runGit(['rev-parse', '--git-path', 'objects']);
+  if (objectStore.status !== 0) throw new Error('Git object store cannot be resolved');
+  const env = {
+    GIT_INDEX_FILE: index,
+    GIT_OBJECT_DIRECTORY: objectDirectory,
+    GIT_ALTERNATE_OBJECT_DIRECTORIES: objectStore.stdout.trim(),
+  };
   try {
     return callback(env);
   } finally {
@@ -55,7 +63,16 @@ function checkWorkingTree() {
     if (!runGitCheck(['read-tree', 'HEAD'], 'temporary index initialization', env)) return false;
     if (
       !runGitCheck(
-        ['add', '-A', '--', '.', ':(exclude).worktrees/**', ':(exclude)recovery-artifacts/**'],
+        [
+          'add',
+          '-A',
+          '--',
+          '.',
+          ':(exclude).worktrees/**',
+          ':(exclude)recovery-artifacts/**',
+          ':(exclude).tmp-git-index-*/**',
+          ':(exclude).tmp-prepush-tree-*/**',
+        ],
         'temporary index staging',
         env,
       )

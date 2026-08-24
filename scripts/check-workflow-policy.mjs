@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import process from 'node:process';
 import {
+  containsSecretReference,
   hasAggregateResultAssertion,
   isReleasePublishingCommand,
   isSemanticallyUnconditionalIf,
@@ -56,13 +57,6 @@ function hasWriteCapability(workflow) {
   return collectValuesByKey(workflow, 'permissions').some((value) =>
     permissionValues(value).some((permission) => permission.toLowerCase().endsWith('write')),
   );
-}
-
-function containsSecretReference(value) {
-  if (typeof value === 'string') return /\bsecrets\./.test(value);
-  if (Array.isArray(value)) return value.some(containsSecretReference);
-  if (value && typeof value === 'object') return Object.values(value).some(containsSecretReference);
-  return false;
 }
 
 function actionReferences(workflow) {

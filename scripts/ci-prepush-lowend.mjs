@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import process from 'node:process';
 import { shouldRunAdmissionCheck } from './ci-prepush-check-registry.mjs';
@@ -18,6 +18,7 @@ const projectRoot = process.cwd();
 const full = process.argv.includes('--full');
 const isPrePush = Boolean(process.env.WORLD_SCRIPT_PREPUSH_UPDATES);
 const isExactTree = process.env.WORLD_SCRIPT_PREPUSH_EXACT_TREE === '1';
+const pushRemoteName = process.env.WORLD_SCRIPT_PREPUSH_REMOTE_NAME ?? 'origin';
 
 function git(args, { allowFailure = false } = {}) {
   const result = spawnSync('git', args, { cwd: projectRoot, encoding: 'utf8' });
@@ -59,7 +60,15 @@ function changedFilesFromRef(target, base) {
 
 function resolveComparisonBase(remoteSha) {
   if (!/^0+$/.test(remoteSha)) return remoteSha;
-  return git(['rev-parse', 'origin/main']);
+  const remoteHead = git(['symbolic-ref', '--quiet', `refs/remotes/${pushRemoteName}/HEAD`], {
+    allowFailure: true,
+  });
+  if (remoteHead) return git(['rev-parse', remoteHead]);
+  for (const candidate of [`${pushRemoteName}/main`, `${pushRemoteName}/master`]) {
+    const resolved = git(['rev-parse', candidate], { allowFailure: true });
+    if (resolved) return resolved;
+  }
+  throw new Error(`default branch for remote ${pushRemoteName} cannot be resolved`);
 }
 
 function parsePrePushUpdates(raw) {
@@ -91,7 +100,7 @@ function resolveChangeSet() {
       files: [...files],
       ranges,
       updates,
-      unresolved: files.size === 0,
+      unresolved: false,
     };
 
   // QNBS-v3: retain unresolved range state so incomplete change discovery cannot pass.
@@ -184,14 +193,20 @@ async function runExactTreeAdmission(localSha, changedFiles) {
     }
     worktreeAdded = true;
     // QNBS-v3: validate the immutable pushed tree with the existing reconciled dependency store.
-    symlinkSync(`${projectRoot}/node_modules`, join(treeRoot, 'node_modules'), 'dir');
+    symlinkSync(
+      `${projectRoot}/node_modules`,
+      join(treeRoot, 'node_modules'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
     const exactTypeScriptConfig = join(treeRoot, '.tsconfig-exact-tree.json');
-    const exactTypeScriptFiles = changedFiles.filter((file) => /\.(?:c|m)?tsx?$/.test(file));
+    const exactTypeScriptFiles = changedFiles.filter(
+      (file) => /\.(?:c|m)?tsx?$/.test(file) && existsSync(join(treeRoot, file)),
+    );
     writeFileSync(
       exactTypeScriptConfig,
       JSON.stringify({
         extends: './tsconfig.tsgo.json',
-        include: exactTypeScriptFiles.length > 0 ? exactTypeScriptFiles : ['tsconfig.tsgo.json'],
+        include: exactTypeScriptFiles.length > 0 ? exactTypeScriptFiles : ['.'],
         exclude: ['node_modules', 'dist', '.storybook', '.mcp', 'storybook-static'],
         compilerOptions: {
           types: ['react', 'react-dom', 'node'],
@@ -240,6 +255,8 @@ if (isPrePush && !isExactTree && changes.updates.length > 0) {
     { WORLD_SCRIPT_PREPUSH_DIFF_RANGES: '' },
   );
   if (workingTreeStatus !== 'PASS') process.exit(1);
+  const outgoingRangeStatus = await runGitDiffCheck(changes.ranges);
+  if (outgoingRangeStatus !== 'PASS') process.exit(1);
   for (const { localSha, remoteSha } of changes.updates) {
     if (/^0+$/.test(localSha)) continue;
     let base;
