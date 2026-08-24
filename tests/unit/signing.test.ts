@@ -1,3 +1,6 @@
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   classifyCommitObject,
@@ -5,12 +8,18 @@ import {
   getSigningConfig,
   hasCommitSignature,
   isGitHubCompatibleEmail,
+  normalizePrePushUpdates,
   outgoingBaseShas,
+  parsePrePushEvidence,
   parseRefUpdate,
   pushCommitShas,
   pushEventRange,
+  readPrePushEvidenceFile,
+  resolvePushEvidence,
   selectIntroducedCommits,
+  serializePrePushEvidence,
   verifyOutgoingUpdates,
+  writePrePushEvidenceFile,
 } from '../../scripts/signing/signing-core.mjs';
 import {
   hasCompleteCommitRange,
@@ -121,6 +130,123 @@ describe('local signing controls', () => {
         },
       ),
     ).toMatchObject({ ok: true, reports: [{ sha: commit }] });
+  });
+
+  it('normalizes raw, line-array, structured, and empty public inputs', () => {
+    const zero = '0'.repeat(40);
+    const line = `refs/heads/main ${'a'.repeat(40)} refs/heads/main ${'b'.repeat(40)}`;
+    const structured = parseRefUpdate(line)!;
+    expect(normalizePrePushUpdates('')).toEqual([]);
+    expect(normalizePrePushUpdates(line)).toEqual([structured]);
+    expect(normalizePrePushUpdates([line])).toEqual([structured]);
+    expect(normalizePrePushUpdates([structured])).toEqual([structured]);
+    expect(
+      verifyOutgoingUpdates('', 'origin', process.cwd(), {
+        introducedCommits: () => {
+          throw new Error('no-op must not enumerate commits');
+        },
+      }),
+    ).toMatchObject({ ok: true, reports: [] });
+    expect(
+      normalizePrePushUpdates(`refs/heads/deleted ${zero} refs/heads/deleted ${'c'.repeat(40)}`),
+    ).toHaveLength(1);
+    expect(() => normalizePrePushUpdates('malformed')).toThrow('invalid pre-push ref-update input');
+    expect(() => normalizePrePushUpdates('\n')).toThrow('invalid pre-push ref-update input');
+  });
+
+  it('resolves branch, new-branch, deletion, tag, and multi-ref evidence losslessly', () => {
+    const zero = '0'.repeat(40);
+    const updates = [
+      parseRefUpdate(`refs/heads/main ${'a'.repeat(40)} refs/heads/main ${'b'.repeat(40)}`)!,
+      parseRefUpdate(`refs/heads/new ${'c'.repeat(40)} refs/heads/new ${zero}`)!,
+      parseRefUpdate(`refs/heads/deleted ${zero} refs/heads/deleted ${'d'.repeat(40)}`)!,
+      parseRefUpdate(`refs/tags/v1 ${'e'.repeat(40)} refs/tags/v1 ${zero}`)!,
+    ];
+    const result = resolvePushEvidence(updates, process.cwd(), {
+      commitExists: (sha) => sha !== '4b825dc642cb6eb9a060e54bf8d69288fbee4904',
+      objectExists: () => true,
+      changedFilesBetween: (base) =>
+        base === '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
+          ? ['new\nfile.ts']
+          : ['src/with\t tab.ts', '世界 file.ts', 'src/with\t tab.ts'],
+    });
+    expect(result.evidenceState).toBe('RESOLVED');
+    expect(result.updates.map(({ disposition }) => disposition)).toEqual([
+      'UPDATED',
+      'NEW_BRANCH',
+      'DELETED',
+      'TAG',
+    ]);
+    expect(result.changedFiles).toEqual(['src/with\t tab.ts', '世界 file.ts', 'new\nfile.ts']);
+  });
+
+  it('fails closed for missing objects, bases, Git failures, and unsupported evidence', () => {
+    const update = parseRefUpdate(
+      `refs/heads/main ${'a'.repeat(40)} refs/heads/main ${'b'.repeat(40)}`,
+    )!;
+    expect(resolvePushEvidence([update]).evidenceState).toBe('INVALID');
+    expect(
+      resolvePushEvidence([update], process.cwd(), {
+        commitExists: (sha) => sha === 'a'.repeat(40),
+      }).evidenceState,
+    ).toBe('INVALID');
+    expect(
+      resolvePushEvidence([update], process.cwd(), {
+        commitExists: () => true,
+        changedFilesBetween: () => {
+          throw new Error('git diff failed');
+        },
+      }).evidenceState,
+    ).toBe('INVALID');
+    expect(
+      resolvePushEvidence(
+        [
+          parseRefUpdate(
+            `refs/remotes/origin/x ${'a'.repeat(40)} refs/remotes/origin/x ${'b'.repeat(40)}`,
+          )!,
+        ],
+        process.cwd(),
+        { commitExists: () => true },
+      ).evidenceState,
+    ).toBe('INVALID');
+  });
+
+  it('round-trips the same immutable artifact for both consumers', () => {
+    let dir: string;
+    try {
+      dir = mkdtempSync(join(tmpdir(), 'worldscript-s3a-test-'));
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes('read-only file system'))
+        throw error;
+      dir = mkdtempSync(join(process.cwd(), '.worldscript-s3a-test-'));
+    }
+    const file = join(dir, 'evidence.json');
+    const line = `refs/heads/main ${'a'.repeat(40)} refs/heads/main ${'b'.repeat(40)}`;
+    try {
+      writePrePushEvidenceFile(file, [line]);
+      expect(statSync(file).mode & 0o777).toBe(0o600);
+      const serialized = readFileSync(file, 'utf8');
+      expect(parsePrePushEvidence(serialized)).toEqual(normalizePrePushUpdates([line]));
+      expect(readPrePushEvidenceFile(file)).toEqual(normalizePrePushUpdates([line]));
+      expect(() => readPrePushEvidenceFile(join(dir, 'missing.json'))).toThrow();
+      writeFileSync(file, '{"version":1,"updates":', { flag: 'w' });
+      expect(() => readPrePushEvidenceFile(file)).toThrow('not valid JSON');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+    expect(() => readPrePushEvidenceFile(file)).toThrow();
+  });
+
+  it('keeps large multi-ref evidence in the artifact contract, not process environment', () => {
+    const updates = Array.from({ length: 200 }, (_, index) => ({
+      localRef: `refs/heads/feature-${index}`,
+      localSha: index.toString(16).padStart(40, '0'),
+      remoteRef: `refs/heads/feature-${index}`,
+      remoteSha: '0'.repeat(40),
+    }));
+    const artifact = serializePrePushEvidence(updates);
+    expect(artifact.length).toBeGreaterThan(10_000);
+    expect(parsePrePushEvidence(artifact)).toEqual(updates);
   });
 
   it('derives an exact push range and rejects an unverified earlier commit', () => {
