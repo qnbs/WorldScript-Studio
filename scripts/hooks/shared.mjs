@@ -66,7 +66,12 @@ function runBounded(command, args, { timeoutMs = 120_000, env, input, shell = fa
     };
     child.once('error', (error) => finish(null, null, error));
     child.once('close', (status, signal) => finish(status, signal));
-    if (input !== undefined) child.stdin.end(input);
+    if (input !== undefined) {
+      child.stdin.once('error', (error) => {
+        if (!['EPIPE', 'ERR_STREAM_DESTROYED'].includes(error.code)) finish(null, null, error);
+      });
+      child.stdin.end(input);
+    }
   });
 }
 

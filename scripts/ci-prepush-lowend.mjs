@@ -63,8 +63,9 @@ function resolveChangeSet() {
 
   function addRefFiles(target, base) {
     try {
+      const changed = changedFilesFromRef(target, base);
       ranges.push(`${base}...${target}`);
-      for (const file of changedFilesFromRef(target, base)) files.add(file);
+      for (const file of changed) files.add(file);
     } catch (error) {
       unresolved = true;
       console.error(`[local-admission] outgoing change range unresolved: ${error.message}`);
@@ -81,7 +82,12 @@ function resolveChangeSet() {
         } catch (error) {
           unresolved = true;
           console.error(`[local-admission] origin/main unresolved: ${error.message}`);
+          continue;
         }
+      }
+      if (!base) {
+        unresolved = true;
+        continue;
       }
       addRefFiles(localSha, base);
     }
@@ -106,7 +112,8 @@ function resolveChangeSet() {
       unresolved = true;
       console.error(`[local-admission] HEAD unresolved: ${error.message}`);
     }
-    addRefFiles(head, base);
+    if (head && base) addRefFiles(head, base);
+    else unresolved = true;
   }
 
   return { files: [...files], ranges, updates, unresolved };

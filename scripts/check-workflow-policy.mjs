@@ -110,9 +110,20 @@ if (files.includes(intelPath)) {
     if (!pattern.test(intel))
       failures.push(`${relative(process.cwd(), intelPath)}: missing ${name}`);
   }
+  const executableIntelLines = intel
+    .split('\n')
+    .map((line) =>
+      line
+        .replace(/^\s*#.*$/, '')
+        .replace(/\s+#.*$/, '')
+        .trim(),
+    )
+    .filter(Boolean);
   if (
-    /contents:\s*write|softprops\/action-gh-release|(?:^|[|;&])\s*(?:cp|mv|rm|curl|wget)\b[^\n]*latest\.json/.test(
-      intel,
+    executableIntelLines.some(
+      (line) =>
+        /contents:\s*write|softprops\/action-gh-release/.test(line) ||
+        /\blatest\.json\b/.test(line),
     )
   ) {
     failures.push(
