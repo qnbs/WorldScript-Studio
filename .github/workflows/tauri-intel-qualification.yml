@@ -53,7 +53,7 @@ jobs:
         with:
           workspaces: src-tauri
           cache-all-crates: true
-          prefix-key: "intel-qualification-v1"
+          prefix-key: "intel-qual-v1"
 
       - name: Install macOS packaging dependency
         run: brew install create-dmg
