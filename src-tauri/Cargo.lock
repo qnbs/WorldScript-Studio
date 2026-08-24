@@ -6691,6 +6691,7 @@ dependencies = [
  "candle-core",
  "candle-nn",
  "log",
+ "minisign-verify",
  "serde",
  "serde_json",
  "tauri",
