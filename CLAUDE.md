@@ -17,7 +17,7 @@ pnpm run smoke:prod    # Headless mount check on dist/ (run AFTER build; catches
 pnpm run lint          # Biome lint (--error-on-warnings — warnings fail like CI)
 pnpm run lint:fix      # Biome auto-fix (lint + format)
 pnpm run typecheck     # Full TypeScript check (cloud quality authority; tsgo --project tsconfig.tsgo.json --noEmit --checkers 4)
-pnpm run ci:prepush    # Change-aware local admission; docs/workflow-only changes defer TS to required CI
+pnpm run ci:prepush    # Change-aware local admission; non-code, Rust/Tauri, tooling, and test-only changes defer TS to required CI
 node scripts/ci-prepush-lowend.mjs --full # Complete local admission on capable hardware
 pnpm exec vitest run <path> # Targeted Vitest single run (CI mode)
 pnpm exec vitest run <path> --coverage # Targeted Vitest coverage run

@@ -9,6 +9,7 @@ function runGitCheck(args, label) {
   return false;
 }
 
+// QNBS-v3: scan untracked files incrementally so binary assets cannot exhaust local admission memory.
 function checkUntrackedFile(path) {
   const descriptor = openSync(path, 'r');
   const errors = [];

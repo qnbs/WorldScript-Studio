@@ -3,6 +3,7 @@ import process from 'node:process';
 import {
   classifyChangedFiles,
   classifyProcessResult,
+  isWorkflowPolicyFile,
   requiresTypecheck,
 } from './ci-prepush-classifier.mjs';
 import {
@@ -143,8 +144,18 @@ function shouldRunI18n(classification) {
   );
 }
 
-function hasWorkflowChange(classification) {
-  return classification.categories.includes('WORKFLOW');
+function shouldRunWorkflowPolicy(classification) {
+  return (
+    classification.categories.includes('WORKFLOW') ||
+    classification.files.some(isWorkflowPolicyFile)
+  );
+}
+
+function shouldRunContentGuard(classification) {
+  return classification.files.some(
+    (file) =>
+      file === 'community-templates/index.json' || file === 'public/community-templates/index.json',
+  );
 }
 
 const changes = resolveChangeSet();
@@ -189,7 +200,7 @@ for (const [name, check] of mandatoryChecks) {
   if (status !== 'PASS') process.exit(1);
 }
 
-if (hasWorkflowChange(classification)) {
+if (shouldRunWorkflowPolicy(classification)) {
   const status = await runNodeCheck('Workflow policy', 'scripts/check-workflow-policy.mjs');
   results.push(['Workflow policy', status]);
   if (status !== 'PASS') process.exit(1);
@@ -201,7 +212,6 @@ if (full || shouldRunI18n(classification)) {
     ...(full
       ? [
           ['i18n bundle rebuild', 'scripts/build-i18n.mjs', [], 180_000],
-          ['i18n content guard', 'scripts/content-guard.mjs', [], 120_000],
           [
             'i18n translation quality',
             'scripts/i18n-quality-report.mjs',
@@ -216,6 +226,12 @@ if (full || shouldRunI18n(classification)) {
     results.push([name, status]);
     if (status !== 'PASS') process.exit(1);
   }
+}
+
+if (full || shouldRunContentGuard(classification)) {
+  const status = await runNodeCheck('Content guard', 'scripts/content-guard.mjs', [], 120_000);
+  results.push(['Content guard', status]);
+  if (status !== 'PASS') process.exit(1);
 }
 
 if (typecheckRequired) {

@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import process from 'node:process';
@@ -39,6 +39,13 @@ function runBounded(command, args, { timeoutMs = 120_000, env, input, shell = fa
         } catch {
           // Fall back to the direct child when a process group is unavailable.
         }
+      } else if (process.platform === 'win32' && child.pid) {
+        const result = spawnSync(
+          'taskkill',
+          ['/pid', String(child.pid), '/t', ...(signal === 'SIGKILL' ? ['/f'] : [])],
+          { windowsHide: true, stdio: 'ignore' },
+        );
+        if (result.status === 0) return;
       }
       child.kill(signal);
     };

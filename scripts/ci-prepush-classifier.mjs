@@ -6,6 +6,7 @@ const WORKFLOW_ROOTS = ['.github/workflows/', '.github/actions/'];
 const RUST_ROOTS = ['src-tauri/', 'crates/'];
 const TOOLING_ROOTS = ['scripts/'];
 const TOOLING_FILES = new Set(['.gitleaks.toml']);
+const WORKFLOW_POLICY_FILE = 'scripts/check-workflow-policy.mjs';
 const NATIVE_CONTRACT_ROOTS = [
   'packages/desktop-contracts/',
   'services/desktop/',
@@ -35,6 +36,10 @@ const BUILD_CONFIG_FILES = new Set([
 
 function startsWithRoot(file, roots) {
   return roots.some((root) => file.startsWith(root));
+}
+
+export function isWorkflowPolicyFile(file) {
+  return file.replaceAll('\\', '/').replace(/^\.\//, '') === WORKFLOW_POLICY_FILE;
 }
 
 function isInstructionFile(file) {

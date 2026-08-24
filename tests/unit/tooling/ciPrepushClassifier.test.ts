@@ -4,6 +4,7 @@ import {
   classifyChangedFiles,
   classifyProcessResult,
   classifySignatureResult,
+  isWorkflowPolicyFile,
   requiresTypecheck,
 } from '../../../scripts/ci-prepush-classifier.mjs';
 
@@ -33,6 +34,13 @@ describe('change-aware local admission classification', () => {
   it('forces full TypeScript validation for the explicit full tier', () => {
     const classification = classifyChangedFiles(['docs/CI.md']);
     expect(requiresTypecheck(classification, { full: true })).toBe(true);
+  });
+
+  it('keeps workflow-policy checker changes on the workflow guard path', () => {
+    const classification = classifyChangedFiles(['scripts/check-workflow-policy.mjs']);
+    expect(classification.kind).toBe('TOOLING');
+    expect(classification.files).toContain('scripts/check-workflow-policy.mjs');
+    expect(isWorkflowPolicyFile('scripts/check-workflow-policy.mjs')).toBe(true);
   });
 });
 
