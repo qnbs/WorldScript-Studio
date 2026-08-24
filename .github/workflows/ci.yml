@@ -489,6 +489,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [ci-success]
+    # QNBS-v3: deployment is explicitly outside the aggregate and gated by its successful result.
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.ci-success.result == 'success'
     permissions:
       contents: read

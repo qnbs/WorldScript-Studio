@@ -1,5 +1,14 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import process from 'node:process';
 import { shouldRunAdmissionCheck } from './ci-prepush-check-registry.mjs';
@@ -8,6 +17,7 @@ import {
   classifyProcessResult,
   requiresTypecheck,
 } from './ci-prepush-classifier.mjs';
+import { calculateDependencyFingerprint, writeStoredFingerprint } from './dependency-state.mjs';
 import {
   ensureDependencyState,
   runLocalBinaryDetailed,
@@ -178,6 +188,21 @@ async function runNodeCheck(name, script, args = [], timeoutMs = 120_000, env = 
   return status;
 }
 
+function symlinkTargetType(source) {
+  if (process.platform !== 'win32') return 'dir';
+  return statSync(source).isDirectory() ? 'junction' : 'file';
+}
+
+function mirrorInstalledDependencies(sourceRoot, targetRoot) {
+  mkdirSync(targetRoot, { recursive: true });
+  for (const entry of readdirSync(sourceRoot, { withFileTypes: true })) {
+    if (entry.name === '.worldscript-deps-fingerprint') continue;
+    const source = join(sourceRoot, entry.name);
+    const target = join(targetRoot, entry.name);
+    symlinkSync(source, target, symlinkTargetType(source));
+  }
+}
+
 async function runExactTreeAdmission(localSha, changedFiles) {
   const treeRoot = mkdtempSync(join(projectRoot, '.tmp-prepush-tree-'));
   let worktreeAdded = false;
@@ -192,12 +217,15 @@ async function runExactTreeAdmission(localSha, changedFiles) {
       return false;
     }
     worktreeAdded = true;
-    // QNBS-v3: validate the immutable pushed tree with the existing reconciled dependency store.
-    symlinkSync(
-      `${projectRoot}/node_modules`,
-      join(treeRoot, 'node_modules'),
-      process.platform === 'win32' ? 'junction' : 'dir',
-    );
+    const sourceNodeModules = join(projectRoot, 'node_modules');
+    const exactNodeModules = join(treeRoot, 'node_modules');
+    if (!existsSync(sourceNodeModules)) {
+      report('Exact pushed tree', 'FAIL', 'installed dependencies are missing');
+      return false;
+    }
+    // QNBS-v3: share immutable package entries but create a fingerprint for this exact tree.
+    mirrorInstalledDependencies(sourceNodeModules, exactNodeModules);
+    writeStoredFingerprint(treeRoot, calculateDependencyFingerprint(treeRoot));
     // QNBS-v3: mirror installed workspace links so full-tree typechecking resolves package-local dependencies.
     for (const entry of readdirSync(join(projectRoot, 'packages'), { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;

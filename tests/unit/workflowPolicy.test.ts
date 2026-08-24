@@ -8,6 +8,7 @@ import {
   extractTopLevelJobName,
   hasAggregateResultAssertion,
   hasExecutableCloudTypecheckCommand,
+  isDeploymentTimeConditionalIf,
   isReleasePublishingCommand,
   isSemanticallyUnconditionalIf,
 } from '../../scripts/workflow-policy-guards.mjs';
@@ -138,6 +139,12 @@ describe('CI workflow policy', () => {
 
     visit('deploy');
     expect(visited).toContain('ci-success');
+  });
+
+  it('gives deployment-time conditionals an explicit aggregate disposition', () => {
+    const deployBlock = extractJobBlock(workflowSource, 'deploy');
+    expect(isDeploymentTimeConditionalIf(deployBlock)).toBe(true);
+    expect(deployBlock).toContain('deployment is explicitly outside the aggregate');
   });
 
   // QNBS-v3: Keep every unconditional CI job explicitly required or advisory so deploy cannot false-green.
@@ -277,6 +284,9 @@ describe('Tauri release workflow policy', () => {
         false,
       ),
     ).toBe(true);
+    expect(
+      hasAggregateResultAssertion(`echo [ "${needsBuild}" = "success" ] || FAIL=1`, 'build', false),
+    ).toBe(false);
     expect(
       hasAggregateResultAssertion(`[ "${needsBuild}" = "success" ] || echo FAIL=1`, 'build', false),
     ).toBe(false);

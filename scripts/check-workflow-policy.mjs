@@ -5,6 +5,7 @@ import {
   containsSecretReference,
   hasAggregateResultAssertion,
   hasExecutableCloudTypecheckCommand,
+  isDeploymentTimeConditionalIf,
   isReleasePublishingCommand,
   isSemanticallyUnconditionalIf,
 } from './workflow-policy-guards.mjs';
@@ -105,14 +106,23 @@ const ciSuccessRuns = workflowSteps({ jobs: { 'ci-success': ciSuccess } })
   .map((step) => step.run)
   .filter((value) => typeof value === 'string');
 
-// QNBS-v3: require every unconditional CI job to have an explicit required or advisory disposition.
+// QNBS-v3: deployment-time conditionals also need an explicit aggregate disposition.
+const explicitlyOutsideAggregateJobs = new Set(['deploy']);
 for (const [jobName, job] of ciJobs) {
   if (jobName === 'ci-success') continue;
   const conditional = typeof job.if === 'string' && !isSemanticallyUnconditionalIf(job.if);
+  const deploymentTimeConditional =
+    typeof job.if === 'string' && isDeploymentTimeConditionalIf(job.if);
   const advisory = job['continue-on-error'] === true;
-  if (!conditional && !ciNeeds.includes(jobName) && !advisory)
+  const requiresDisposition = !conditional || deploymentTimeConditional;
+  if (
+    requiresDisposition &&
+    !ciNeeds.includes(jobName) &&
+    !advisory &&
+    !explicitlyOutsideAggregateJobs.has(jobName)
+  )
     failures.push(
-      `.github/workflows/ci.yml: unconditional job ${jobName} lacks required/advisory disposition`,
+      `.github/workflows/ci.yml: job ${jobName} lacks required/advisory/explicit-outside disposition`,
     );
 }
 

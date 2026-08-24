@@ -86,6 +86,19 @@ export function isSemanticallyUnconditionalIf(block) {
   return /^(?:always\(\)|true)(?:\s*&&\s*(?:always\(\)|true))*$/i.test(expression);
 }
 
+export function isDeploymentTimeConditionalIf(block) {
+  const match = block.match(/^\s*if:\s*(.+)$/m);
+  const rawExpression = match?.[1] ?? (block.trim() ? block : null);
+  if (!rawExpression) return false;
+  const expression = rawExpression
+    .replace(/\s+#.*$/, '')
+    .trim()
+    .replace(/^\$\{\{\s*/, '')
+    .replace(/\s*\}\}$/, '')
+    .trim();
+  return /\bgithub\.(?:ref|ref_name|event_name)\b|\bneeds\.ci-success\.result\b/.test(expression);
+}
+
 export function hasAggregateResultAssertion(block, dependency, allowsSkipped) {
   // QNBS-v3: require the result comparison to route failure into FAIL=1, not merely mention a token.
   const source = Array.isArray(block) ? block.join('\n') : block;
@@ -108,6 +121,7 @@ export function hasAggregateResultAssertion(block, dependency, allowsSkipped) {
       );
     }
     return (
+      /^\s*(?:\[\[?\s|test\s)/.test(line) &&
       /\s=\s*['"]success['"]/.test(line) &&
       /(?:^|\n).*\|\|\s*(?:\{\s*)?FAIL\s*=\s*1\s*(?:;?\s*\}\s*)?(?:#.*)?$/m.test(context)
     );
