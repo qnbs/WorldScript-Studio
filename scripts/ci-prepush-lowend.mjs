@@ -167,7 +167,7 @@ function report(name, status, detail = '') {
 
 async function runNodeCheck(name, script, args = [], timeoutMs = 120_000, env = {}) {
   // QNBS-v3: surface parent interruption distinctly from ordinary check failure.
-  const result = await runNodeScriptDetailed(script, args, { timeoutMs, env });
+  const result = await runNodeScriptDetailed(script, args, { timeoutMs, env, detached: false });
   const status = classifyProcessResult(result);
   const detail = result.timedOut
     ? `timeout after ${timeoutMs}ms`
@@ -225,6 +225,7 @@ async function runExactTreeAdmission(localSha, changedFiles) {
         WORLD_SCRIPT_PREPUSH_EXACT_FILES: changedFiles.join('\n'),
         WORLD_SCRIPT_PREPUSH_PROJECT_CONFIG: exactTypeScriptConfig,
       },
+      detached: false,
     });
     const status = classifyProcessResult(result);
     report('Exact pushed tree', status, localSha.slice(0, 12));
@@ -367,7 +368,7 @@ if (typecheckRequired) {
       '--checkers',
       full ? '4' : '1',
     ],
-    { timeoutMs: full ? 600_000 : 180_000 },
+    { timeoutMs: full ? 600_000 : 180_000, detached: false },
   );
   const status = classifyProcessResult(result);
   const detail = result.timedOut

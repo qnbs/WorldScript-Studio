@@ -1,6 +1,7 @@
 import { isI18nPolicyFile } from './ci-prepush-classifier.mjs';
 
 const routingAuthority = 'scripts/ci-prepush-check-registry.mjs';
+const isGithubYaml = (file) => file.startsWith('.github/') && /\.(?:yml|yaml)$/i.test(file);
 
 export const admissionCheckRegistry = Object.freeze([
   {
@@ -11,7 +12,8 @@ export const admissionCheckRegistry = Object.freeze([
   },
   {
     name: 'workflowPolicy',
-    matches: (file) => file.startsWith('.github/workflows/') || file.startsWith('.github/actions/'),
+    // QNBS-v3: route every parsed GitHub YAML policy input through its governing check.
+    matches: isGithubYaml,
     implementationFiles: new Set([
       routingAuthority,
       'scripts/ci-prepush-classifier.mjs',

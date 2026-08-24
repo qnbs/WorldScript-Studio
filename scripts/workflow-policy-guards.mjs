@@ -1,11 +1,28 @@
 const releaseTargetPattern =
   /\b(?:release|releases|artifact|artifacts|latest\.json|uploads\.github\.com|api\.github\.com)\b/i;
 
-export function containsSecretReference(value) {
-  if (typeof value === 'string') return /\bsecrets(?:\.|\[)/.test(value);
+export function containsSecretReference(value, contextKey = '') {
+  if (typeof value === 'string') {
+    return (
+      (contextKey === 'secrets' && value.trim().toLowerCase() === 'inherit') ||
+      /\bsecrets(?:\.|\[)/.test(value)
+    );
+  }
   if (Array.isArray(value)) return value.some(containsSecretReference);
-  if (value && typeof value === 'object') return Object.values(value).some(containsSecretReference);
+  if (value && typeof value === 'object')
+    return Object.entries(value).some(([key, entry]) => containsSecretReference(entry, key));
   return false;
+}
+
+export function hasExecutableCloudTypecheckCommand(value) {
+  const sources = Array.isArray(value) ? value : [value];
+  const commandPattern =
+    /^(?:(?:pnpm\s+exec|npx)\s+)?tsgo\s+--project\s+tsconfig\.tsgo\.json\s+--noEmit\s+--checkers\s+4(?:\s|$)/;
+  return sources.some(
+    (source) =>
+      typeof source === 'string' &&
+      source.split(/\r?\n/).some((line) => commandPattern.test(line.trim())),
+  );
 }
 
 // QNBS-v3: detect explicit and implicit GitHub release mutations before qualification can pass.
@@ -84,10 +101,14 @@ export function hasAggregateResultAssertion(block, dependency, allowsSkipped) {
       return (
         /!=\s*['"]success['"]/.test(line) &&
         /!=\s*['"]skipped['"]/.test(line) &&
-        /\bthen\b/.test(context)
+        /\bthen\b/.test(context) &&
+        /^\s*(?:\{\s*)?FAIL\s*=\s*1\s*;?\s*(?:\}\s*)?(?:#.*)?$/m.test(context)
       );
     }
-    return /\s=\s*['"]success['"]/.test(line) && /\|\|[^\n]*FAIL\s*=\s*1/.test(context);
+    return (
+      /\s=\s*['"]success['"]/.test(line) &&
+      /(?:^|\n).*\|\|\s*(?:\{\s*)?FAIL\s*=\s*1\s*(?:;?\s*\}\s*)?(?:#.*)?$/m.test(context)
+    );
   });
 }
 

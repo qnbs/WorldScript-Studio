@@ -22,14 +22,21 @@ export function ensureDependencyState(root = projectRoot) {
 export function runBounded(
   command,
   args,
-  { timeoutMs = 120_000, env, input, shell = false, cwd = projectRoot } = {},
+  {
+    timeoutMs = 120_000,
+    env,
+    input,
+    shell = false,
+    cwd = projectRoot,
+    detached = process.platform !== 'win32',
+  } = {},
 ) {
   return new Promise((resolveResult) => {
     const child = spawn(command, args, {
       cwd,
       env: { ...process.env, ...env },
       shell,
-      detached: process.platform !== 'win32',
+      detached: detached && process.platform !== 'win32',
       stdio: input === undefined ? 'inherit' : ['pipe', 'inherit', 'inherit'],
     });
     let timedOut = false;

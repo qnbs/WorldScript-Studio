@@ -1,9 +1,10 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import process from 'node:process';
 import {
   containsSecretReference,
   hasAggregateResultAssertion,
+  hasExecutableCloudTypecheckCommand,
   isReleasePublishingCommand,
   isSemanticallyUnconditionalIf,
 } from './workflow-policy-guards.mjs';
@@ -23,7 +24,9 @@ const files = [];
 function collect(directory) {
   for (const entry of readdirSync(directory)) {
     const path = join(directory, entry);
-    if (statSync(path).isDirectory()) collect(path);
+    const stat = lstatSync(path);
+    if (stat.isSymbolicLink()) continue;
+    if (stat.isDirectory()) collect(path);
     else if (/\.(?:yml|yaml)$/.test(entry)) files.push(path);
   }
 }
@@ -114,14 +117,14 @@ for (const [jobName, job] of ciJobs) {
 }
 
 const ciSource = readFileSync(ciPath, 'utf8').replace(/^\s*#.*$/gm, '');
-for (const [name, pattern] of [
-  ['required aggregate name', /name:\s*["']?✅ CI Success/],
-  [
-    'full cloud TypeScript authority',
-    /tsgo\s+--project\s+tsconfig\.tsgo\.json\s+--noEmit\s+--checkers\s+4/,
-  ],
-]) {
-  if (!pattern.test(ciSource)) failures.push(`.github/workflows/ci.yml: missing ${name}`);
+if (!/name:\s*["']?✅ CI Success/.test(ciSource)) {
+  failures.push('.github/workflows/ci.yml: missing required aggregate name');
+}
+const qualityRuns = workflowSteps({ jobs: { quality: asRecord(ciJobs.get('quality')) } })
+  .map((step) => step.run)
+  .filter((value) => typeof value === 'string');
+if (!hasExecutableCloudTypecheckCommand(qualityRuns)) {
+  failures.push('.github/workflows/ci.yml: missing full cloud TypeScript authority');
 }
 
 const requiredAggregateJobs = [

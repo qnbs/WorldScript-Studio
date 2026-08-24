@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
+import { shouldRunAdmissionCheck } from '../../../scripts/ci-prepush-check-registry.mjs';
 import {
   classifyChangedFiles,
   classifyProcessResult,
@@ -49,6 +50,15 @@ describe('change-aware local admission classification', () => {
   it('keeps i18n checker implementations on the i18n guard path', () => {
     expect(isI18nPolicyFile('scripts/check-i18n-keys.mjs')).toBe(true);
     expect(isI18nPolicyFile('scripts/i18n-locales.mjs')).toBe(true);
+  });
+
+  // QNBS-v3: every parsed GitHub YAML input must activate the workflow policy guard.
+  it('routes non-workflow GitHub YAML through workflow policy admission', () => {
+    expect(shouldRunAdmissionCheck('workflowPolicy', ['.github/dependabot.yml'])).toBe(true);
+    expect(shouldRunAdmissionCheck('workflowPolicy', ['.github/ISSUE_TEMPLATE/bug.yml'])).toBe(
+      true,
+    );
+    expect(shouldRunAdmissionCheck('workflowPolicy', ['README.md'])).toBe(false);
   });
 });
 

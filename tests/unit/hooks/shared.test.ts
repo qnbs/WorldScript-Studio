@@ -16,6 +16,17 @@ describe('bounded hook subprocesses', () => {
     expect(performance.now() - startedAt).toBeLessThan(900);
   });
 
+  // QNBS-v3: keep nested admission checks in the parent's process group for outer cleanup.
+  it('supports foreground children for nested admission checks', async () => {
+    const result = await runBounded(process.execPath, ['-e', 'setInterval(() => {}, 10_000);'], {
+      timeoutMs: 100,
+      detached: false,
+    });
+
+    expect(result.timedOut).toBe(true);
+    expect(result.status === 0).toBe(false);
+  });
+
   // QNBS-v3: prove repeated parent signals clean detached children without accepting cancellation as pass.
   it('preserves parent cancellation and force-cleans after repeated signals', async () => {
     const resultPromise = runBounded(

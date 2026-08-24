@@ -7,6 +7,7 @@ import {
   extractActionReferences,
   extractTopLevelJobName,
   hasAggregateResultAssertion,
+  hasExecutableCloudTypecheckCommand,
   isReleasePublishingCommand,
   isSemanticallyUnconditionalIf,
 } from '../../scripts/workflow-policy-guards.mjs';
@@ -273,6 +274,16 @@ describe('Tauri release workflow policy', () => {
         false,
       ),
     ).toBe(true);
+    expect(
+      hasAggregateResultAssertion(`[ "${needsBuild}" = "success" ] || echo FAIL=1`, 'build', false),
+    ).toBe(false);
+    expect(
+      hasAggregateResultAssertion(
+        `if [ "${needsBuild}" != "success" ] || [ "${needsBuild}" != "skipped" ]; then\n  FAIL=1\nfi`,
+        'build',
+        true,
+      ),
+    ).toBe(true);
   });
 
   it('rejects dot- and bracket-indexed secret references', () => {
@@ -282,6 +293,22 @@ describe('Tauri release workflow policy', () => {
     expect(containsSecretReference(dotReference)).toBe(true);
     expect(containsSecretReference(bracketReference)).toBe(true);
     expect(containsSecretReference(envReference)).toBe(false);
+    expect(containsSecretReference({ secrets: 'inherit' })).toBe(true);
+    expect(containsSecretReference({ env: { QUALIFICATION_TOKEN: 'inherit' } })).toBe(false);
+  });
+
+  // QNBS-v3: require the executable cloud typecheck rather than a quoted or echoed token.
+  it('recognizes only the real four-checker cloud TypeScript command', () => {
+    expect(
+      hasExecutableCloudTypecheckCommand(
+        'npx tsgo --project tsconfig.tsgo.json --noEmit --checkers 4',
+      ),
+    ).toBe(true);
+    expect(
+      hasExecutableCloudTypecheckCommand(
+        "echo 'npx tsgo --project tsconfig.tsgo.json --noEmit --checkers 4'",
+      ),
+    ).toBe(false);
   });
 
   // QNBS-v3: cover multiline and option-form release mutation detection.

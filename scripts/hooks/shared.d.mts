@@ -17,5 +17,6 @@ export function runBounded(
     shell?: boolean;
     cwd?: string;
     root?: string;
+    detached?: boolean;
   },
 ): Promise<BoundedResult>;
