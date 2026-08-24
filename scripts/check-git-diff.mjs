@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { closeSync, openSync, readSync } from 'node:fs';
+import { closeSync, lstatSync, openSync, readSync } from 'node:fs';
 import process from 'node:process';
 
 function runGitCheck(args, label) {
@@ -11,6 +11,7 @@ function runGitCheck(args, label) {
 
 // QNBS-v3: scan untracked files incrementally so binary assets cannot exhaust local admission memory.
 function checkUntrackedFile(path) {
+  if (!lstatSync(path).isFile()) return [];
   const descriptor = openSync(path, 'r');
   const errors = [];
   const chunk = Buffer.allocUnsafe(64 * 1024);

@@ -154,7 +154,9 @@ function shouldRunWorkflowPolicy(classification) {
 function shouldRunContentGuard(classification) {
   return classification.files.some(
     (file) =>
-      file === 'community-templates/index.json' || file === 'public/community-templates/index.json',
+      file === 'scripts/content-guard.mjs' ||
+      file === 'community-templates/index.json' ||
+      file === 'public/community-templates/index.json',
   );
 }
 

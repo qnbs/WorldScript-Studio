@@ -31,6 +31,7 @@ function runBounded(command, args, { timeoutMs = 120_000, env, input, shell = fa
     let timedOut = false;
     let settled = false;
     let forceTimer;
+    let pendingFinish;
     const terminate = (signal) => {
       if (process.platform !== 'win32' && child.pid) {
         try {
@@ -52,7 +53,15 @@ function runBounded(command, args, { timeoutMs = 120_000, env, input, shell = fa
     const timeoutTimer = setTimeout(() => {
       timedOut = true;
       terminate('SIGTERM');
-      forceTimer = setTimeout(() => terminate('SIGKILL'), 1_000);
+      forceTimer = setTimeout(() => {
+        forceTimer = undefined;
+        terminate('SIGKILL');
+        if (pendingFinish) {
+          const result = pendingFinish;
+          pendingFinish = undefined;
+          complete(...result);
+        }
+      }, 1_000);
     }, timeoutMs);
     const signalHandlers = new Map();
     for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
@@ -60,16 +69,26 @@ function runBounded(command, args, { timeoutMs = 120_000, env, input, shell = fa
       signalHandlers.set(signal, handler);
       process.once(signal, handler);
     }
-    const finish = (status, signal, error = null) => {
+    const complete = (status, signal, error = null) => {
       if (settled) return;
       settled = true;
       clearTimeout(timeoutTimer);
-      // QNBS-v3: retain forced process-group cleanup after timeout even when the leader exits early.
-      if (forceTimer && !timedOut) clearTimeout(forceTimer);
+      if (forceTimer) {
+        clearTimeout(forceTimer);
+        forceTimer = undefined;
+      }
       for (const [parentSignal, handler] of signalHandlers) {
         process.removeListener(parentSignal, handler);
       }
       resolveResult({ status: error ? null : status, signal, error, timedOut, command });
+    };
+    const finish = (status, signal, error = null) => {
+      if (settled) return;
+      if (timedOut && forceTimer) {
+        pendingFinish = [status, signal, error];
+        return;
+      }
+      complete(status, signal, error);
     };
     child.once('error', (error) => finish(null, null, error));
     child.once('close', (status, signal) => finish(status, signal));

@@ -17,6 +17,10 @@ function collect(directory) {
 collect(root);
 // QNBS-v3: keep workflow governance checks offline and narrow so CI remains the authoritative execution gate.
 const failures = [];
+function stripWorkflowComment(line) {
+  return line.replace(/^\s*#.*$/, '').replace(/\s+#.*$/, '');
+}
+
 function hasReadOnlyTopLevelPermissions(content) {
   const lines = content.split('\n');
   const index = lines.findIndex((line) => /^permissions:\s*/.test(line));
@@ -62,7 +66,10 @@ const nextJob = ciLines.findIndex(
 );
 const ciSuccessBlock =
   ciSuccessStart >= 0
-    ? ciLines.slice(ciSuccessStart, nextJob >= 0 ? nextJob : undefined).join('\n')
+    ? ciLines
+        .slice(ciSuccessStart, nextJob >= 0 ? nextJob : undefined)
+        .map(stripWorkflowComment)
+        .join('\n')
     : '';
 const ciNeedsMatch = ciSuccessBlock.match(/^\s+needs:\s*(.+)$/m);
 const ciNeeds = ciNeedsMatch

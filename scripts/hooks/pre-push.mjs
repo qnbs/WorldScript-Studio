@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import process from 'node:process';
 import { runNodeScript } from './shared.mjs';
 
+// QNBS-v3: preserve the one-shot ref update stream so admission checks validate the exact outgoing range.
 const updates = readFileSync(0, 'utf8');
 const options = { input: updates };
 
