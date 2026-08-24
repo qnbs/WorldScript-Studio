@@ -256,6 +256,22 @@ function isRefUpdate(value) {
   );
 }
 
+function validatePrePushUpdate(update) {
+  if (!isRefUpdate(update)) throw new Error('pre-push update array contains an invalid record');
+  if (
+    (!isSha(update.localSha) && !isZeroSha(update.localSha)) ||
+    (!isSha(update.remoteSha) && !isZeroSha(update.remoteSha))
+  )
+    throw new Error(`invalid SHA in update for ${update.remoteRef}`);
+  if (!update.remoteRef.startsWith('refs/heads/') && !update.remoteRef.startsWith('refs/tags/'))
+    throw new Error(`unsupported outgoing ref ${update.remoteRef}`);
+  return update;
+}
+
+function validatedPrePushUpdates(input) {
+  return normalizePrePushUpdates(input).map(validatePrePushUpdate);
+}
+
 // QNBS-v3: normalize every public input form through one fail-closed parser.
 export function normalizePrePushUpdates(input) {
   if (typeof input === 'string') {
@@ -275,7 +291,7 @@ export function normalizePrePushUpdates(input) {
 }
 
 export function serializePrePushEvidence(input) {
-  return JSON.stringify({ version: 1, updates: normalizePrePushUpdates(input) });
+  return JSON.stringify({ version: 1, updates: validatedPrePushUpdates(input) });
 }
 
 export function parsePrePushEvidence(serialized) {
@@ -316,7 +332,7 @@ function changedFilesBetween(base, head, cwd) {
 
 export function resolvePushEvidence(input, cwd = process.cwd(), dependencies = {}) {
   try {
-    const updates = normalizePrePushUpdates(input);
+    const updates = validatedPrePushUpdates(input);
     const commitExists =
       dependencies.commitExists ??
       ((sha) => isSha(sha) && runGit(['cat-file', '-e', `${sha}^{commit}`], { cwd }).status === 0);
@@ -328,13 +344,6 @@ export function resolvePushEvidence(input, cwd = process.cwd(), dependencies = {
     const changedFiles = new Set();
     const evidenceUpdates = [];
     for (const update of updates) {
-      if (
-        (!isSha(update.localSha) && !isZeroSha(update.localSha)) ||
-        (!isSha(update.remoteSha) && !isZeroSha(update.remoteSha))
-      )
-        throw new Error(`invalid SHA in update for ${update.remoteRef}`);
-      if (!update.remoteRef.startsWith('refs/heads/') && !update.remoteRef.startsWith('refs/tags/'))
-        throw new Error(`unsupported outgoing ref ${update.remoteRef}`);
       if (isZeroSha(update.localSha)) {
         evidenceUpdates.push({ ...update, disposition: 'DELETED' });
         continue;
@@ -469,11 +478,9 @@ export function verifyOutgoingUpdates(input, remote, cwd = process.cwd(), depend
     dependencies.introducedCommits ?? ((update) => introducedCommits(update, remote, cwd));
   const reports = [];
   try {
-    const updates = normalizePrePushUpdates(input);
+    const updates = validatedPrePushUpdates(input);
     for (const update of updates) {
       if (isZeroSha(update.localSha)) continue;
-      if (!isSha(update.localSha))
-        return { ok: false, reports, reason: `invalid outgoing SHA for ${update.remoteRef}` };
       if (update.remoteRef.startsWith('refs/tags/')) {
         const verification = verifyTag(update.localSha);
         reports.push({ sha: update.localSha, subject: update.remoteRef, verification });
