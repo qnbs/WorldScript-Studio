@@ -1,6 +1,7 @@
 # v1.28.1 release evidence ledger
 
-Status: published and independently verified release checkpoint.
+Status: published release checkpoint with structural, asset, and independent updater-payload
+cryptographic verification; platform code-signing and notarization remain separate claims.
 
 ## Verified release base
 
@@ -114,10 +115,13 @@ Deterministic release notes were extracted from the committed `v1.28.1` changelo
 pending status of #332 and #341 and make no unsupported macOS Intel claim.
 
 The installed official toolchain is `tauri-cli 2.11.4`. It exposes `tauri signer sign` and
-`tauri signer generate`, but no artifact verification command; neither `minisign` nor `signify`
-is installed. Accordingly, structural, asset, URL, version, HTTP, and non-empty-signature checks
-are complete, but this checkpoint does not claim independent cryptographic verification of the
-updater artifacts. No private key material was accessed or exposed.
+`tauri signer generate`, but no standalone artifact verification command; neither `minisign` nor
+`signify` is installed. H1-E therefore uses the production-compatible `minisign-verify 0.2.5`
+library already selected by `tauri-plugin-updater 2.10.1`, through the development-only audit
+harness documented in [`H1-E-UPDATER-VERIFICATION-REPORT.md`](audit/H1-E-UPDATER-VERIFICATION-REPORT.md).
+The Linux, Windows, and macOS ARM updater payloads each verified successfully; tampered bytes,
+an unrelated public key, and cross-substituted signatures were rejected. No private key material
+was accessed or exposed.
 
 The source-signing control (every introduced source commit GitHub Verified) and release-tag
 signing control (the annotated tag object plus its target commit) are separate evidence items.

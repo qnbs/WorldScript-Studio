@@ -8,14 +8,14 @@ separates locally implemented evidence from hosted or merge-dependent evidence.
 | Field | Value |
 | --- | --- |
 | Program boundary | Post-v1.28.1; immutable release boundary preserved |
-| Current stage | H1-A signal/timing/cache/rerun evidence integrated for the observable sample + H1-F0 governance inventory active; H0 remains complete |
+| Current stage | H1-A signal/timing/cache/rerun evidence integrated for the observable sample; H1-E updater-payload verification `PASS`; H1-F0 governance inventory active; H0 remains complete |
 | Local state | This evidence branch preserves the original 50-run sample, verifies 0 observed reruns among those IDs, and records separate post-#473 `32648286172`, post-#474 `32654048692`, post-#475 `32657261089`, and post-#476 `32660607709` checkpoints; no Node lane, required-status, DAG, build, or advisory policy change made |
 | Last reconciled main checkpoint | `fdd60c9465d7515dabc713d4e11f8ff2662fc5c4` (post-#476 verified main at the recorded checkpoint; not a perpetual live-main claim) |
 | Latest completed PR / branch | PR #476 merged from `h1-a-failure-cause-evidence`; final PR head `84b5c187ab2040b1edcc7418ae6ee46ee324ffa1` |
 | Latest completed merge | `fdd60c9465d7515dabc713d4e11f8ff2662fc5c4`; resulting tree `f0d24290765c4eb5e132941b2472117e7cfc3316`; merged `2026-08-23T19:14:20Z` |
 | Hosted CI / CodeQL / Security | PR #476 final head `84b5c187…` merged normally; PR CI `32659129361`, PR CodeQL `32659129403`; fresh main CI `32660607709` and CodeQL `32660607683` were successful on merge SHA `fdd60c94…`, including `✅ CI Success`; historical sample rerun count is 0 and historical cache distribution remains `UNKNOWN` |
 | Affected issues | None claimed closed or remediated by H0 |
-| Release impact | None; no tag, release, updater metadata, or published asset changed |
+| Release impact | None; no tag, release, updater metadata, or published asset changed; H1-E independently verified the three published updater payloads without private-key access |
 
 The Git/GitHub access root cause and preflight are recorded in
 [`GIT-GITHUB-ACCESS-RELIABILITY.md`](GIT-GITHUB-ACCESS-RELIABILITY.md). The repository itself did
@@ -73,6 +73,10 @@ The first evidence-only H1 slice is also recorded with immutable evidence. Its m
    lane decision from timing or correlated outcomes alone.
 3. Keep H1-F0 inventory current and defer H1-F1 canonicalization until H1-A through H1-E decisions
    are measured and verified; carry the H1-F DevOps operating-model augmentation as binding.
+4. Preserve [`H1-E-UPDATER-VERIFICATION-REPORT.md`](H1-E-UPDATER-VERIFICATION-REPORT.md): the
+   production-compatible `minisign-verify 0.2.5` harness passed all three positive and three
+   negative tests. H1-E is complete for updater-payload verification; platform code-signing,
+   notarization, and Intel qualification remain separate evidence questions.
 
 ## Verification record for the current working tree
 
@@ -95,8 +99,10 @@ The first evidence-only H1 slice is also recorded with immutable evidence. Its m
 
 H0 is complete. H1-A measurement is integrated and failure/cancellation evidence is classified, but
 its lane decision remains pending: the sample shows substantial Node-22/24 overlap and no
-lane-exclusive failure, while unique defect signal remains `UNKNOWN`. Residual risks carried forward are the unavailable independent
-updater verifier, fail-closed bundle-budget work deferred to H2-C, Intel qualification, and the later
+lane-exclusive failure, while unique defect signal remains `UNKNOWN`. H1-E is `PASS` for independent
+updater-payload verification through the production-compatible verifier; platform code-signing and
+notarization remain separate. Residual risks carried forward are fail-closed bundle-budget work
+deferred to H2-C, Intel qualification, and the later
 R-15/native, plugin, collaboration, Scenario, and Qt evidence gates.
 The restricted Codex sandbox incident remains an execution-environment limitation, not repository
 corruption; the authorized writable context completed the signed branch/commit/push and GitHub
