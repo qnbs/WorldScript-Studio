@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import process from 'node:process';
 import { shouldRunAdmissionCheck } from './ci-prepush-check-registry.mjs';
@@ -198,15 +198,24 @@ async function runExactTreeAdmission(localSha, changedFiles) {
       join(treeRoot, 'node_modules'),
       process.platform === 'win32' ? 'junction' : 'dir',
     );
+    // QNBS-v3: mirror installed workspace links so full-tree typechecking resolves package-local dependencies.
+    for (const entry of readdirSync(join(projectRoot, 'packages'), { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const source = join(projectRoot, 'packages', entry.name, 'node_modules');
+      if (!existsSync(source)) continue;
+      symlinkSync(
+        source,
+        join(treeRoot, 'packages', entry.name, 'node_modules'),
+        process.platform === 'win32' ? 'junction' : 'dir',
+      );
+    }
     const exactTypeScriptConfig = join(treeRoot, '.tsconfig-exact-tree.json');
-    const exactTypeScriptFiles = changedFiles.filter(
-      (file) => /\.(?:c|m)?tsx?$/.test(file) && existsSync(join(treeRoot, file)),
-    );
     writeFileSync(
       exactTypeScriptConfig,
       JSON.stringify({
         extends: './tsconfig.tsgo.json',
-        include: exactTypeScriptFiles.length > 0 ? exactTypeScriptFiles : ['.'],
+        // QNBS-v3: validate reverse dependents in the immutable tree, not only changed sources.
+        include: ['**/*.ts', '**/*.tsx', '**/*.mts', '**/*.cts'],
         exclude: ['node_modules', 'dist', '.storybook', '.mcp', 'storybook-static'],
         compilerOptions: {
           types: ['react', 'react-dom', 'node'],

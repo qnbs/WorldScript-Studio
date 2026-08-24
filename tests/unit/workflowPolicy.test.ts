@@ -245,11 +245,14 @@ describe('Tauri release workflow policy', () => {
     expect(extractTopLevelJobName('    nested:')).toBe(null);
   });
 
+  // QNBS-v3: accept compound conditions only when their always-true terms remain conjunctive.
   it('distinguishes semantically unconditional job conditions', () => {
     expect(isSemanticallyUnconditionalIf('    if: true')).toBe(true);
     expect(isSemanticallyUnconditionalIf('    if: $' + '{{ always() }}')).toBe(true);
     expect(isSemanticallyUnconditionalIf('    if: true # always run')).toBe(true);
     expect(isSemanticallyUnconditionalIf('    if: $' + '{{ always() }} # aggregate')).toBe(true);
+    expect(isSemanticallyUnconditionalIf('    if: $' + '{{ always() && true }}')).toBe(true);
+    expect(isSemanticallyUnconditionalIf('    if: $' + '{{ true && always() }}')).toBe(true);
     expect(isSemanticallyUnconditionalIf("    if: needs.changes.outputs.tauri == 'true'")).toBe(
       false,
     );
@@ -283,9 +286,17 @@ describe('Tauri release workflow policy', () => {
         'build',
         true,
       ),
+    ).toBe(false);
+    expect(
+      hasAggregateResultAssertion(
+        `if [ "${needsBuild}" != "success" ] && [ "${needsBuild}" != "skipped" ]; then\n  FAIL=1\nfi`,
+        'build',
+        true,
+      ),
     ).toBe(true);
   });
 
+  // QNBS-v3: cover dot, bracket, and inherited secret references across parsed YAML shapes.
   it('rejects dot- and bracket-indexed secret references', () => {
     const dotReference = '$' + '{{ secrets.QUALIFICATION_TOKEN }}';
     const bracketReference = '$' + "{{ secrets['QUALIFICATION_TOKEN'] }}";
@@ -309,6 +320,16 @@ describe('Tauri release workflow policy', () => {
         "echo 'npx tsgo --project tsconfig.tsgo.json --noEmit --checkers 4'",
       ),
     ).toBe(false);
+    expect(
+      hasExecutableCloudTypecheckCommand(
+        'npx tsgo --project tsconfig.tsgo.json --noEmit --checkers 4 || true',
+      ),
+    ).toBe(false);
+    expect(
+      hasExecutableCloudTypecheckCommand(
+        'npx tsgo --project tsconfig.tsgo.json --noEmit --checkers 4 # authoritative',
+      ),
+    ).toBe(true);
   });
 
   // QNBS-v3: cover multiline and option-form release mutation detection.

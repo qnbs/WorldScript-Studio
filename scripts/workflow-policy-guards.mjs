@@ -17,7 +17,7 @@ export function containsSecretReference(value, contextKey = '') {
 export function hasExecutableCloudTypecheckCommand(value) {
   const sources = Array.isArray(value) ? value : [value];
   const commandPattern =
-    /^(?:(?:pnpm\s+exec|npx)\s+)?tsgo\s+--project\s+tsconfig\.tsgo\.json\s+--noEmit\s+--checkers\s+4(?:\s|$)/;
+    /^(?:(?:pnpm\s+exec|npx)\s+)?tsgo\s+--project\s+tsconfig\.tsgo\.json\s+--noEmit\s+--checkers\s+4(?:\s+#.*)?$/;
   return sources.some(
     (source) =>
       typeof source === 'string' &&
@@ -83,7 +83,7 @@ export function isSemanticallyUnconditionalIf(block) {
     .replace(/^\$\{\{\s*/, '')
     .replace(/\s*\}\}$/, '')
     .trim();
-  return /^(?:always\(\)|true)$/i.test(expression);
+  return /^(?:always\(\)|true)(?:\s*&&\s*(?:always\(\)|true))*$/i.test(expression);
 }
 
 export function hasAggregateResultAssertion(block, dependency, allowsSkipped) {
@@ -101,6 +101,8 @@ export function hasAggregateResultAssertion(block, dependency, allowsSkipped) {
       return (
         /!=\s*['"]success['"]/.test(line) &&
         /!=\s*['"]skipped['"]/.test(line) &&
+        /&&/.test(line) &&
+        !/\|\|/.test(line) &&
         /\bthen\b/.test(context) &&
         /^\s*(?:\{\s*)?FAIL\s*=\s*1\s*;?\s*(?:\}\s*)?(?:#.*)?$/m.test(context)
       );
