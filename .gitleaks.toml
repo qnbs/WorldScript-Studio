@@ -26,10 +26,13 @@ useDefault = true
 # archive caching — static, non-secret cache-namespace strings. Flagged by the same generic-api-key
 # heuristic: YAML `key:` field name next to a hyphenated alphanumeric string. Reviewed 2026-08-19:
 # both are cache keys with a fixed literal suffix (`-v1`), not credentials.
+# intel-qualification-v1 was the original non-secret Rust-cache namespace in this PR; the current
+# workflow uses intel-qual-v1, but the historical commit remains in the PR scan range.
 [allowlist]
 description = "Cache-key / record-key literals flagged by generic-api-key's key-adjacent-string heuristic — not credentials"
 regexes = [
   '''^idb_passphrase_sentinel_v1$''',
   '''^apt-cef-harness-deps-v1$''',
   '''^apt-tauri-linux-deps-v1$''',
+  '''^intel-qualification-v1$''',
 ]

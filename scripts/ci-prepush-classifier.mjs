@@ -5,6 +5,7 @@ const DOC_ROOTS = ['docs/', '.cursor/rules/'];
 const WORKFLOW_ROOTS = ['.github/workflows/', '.github/actions/'];
 const RUST_ROOTS = ['src-tauri/', 'crates/'];
 const TOOLING_ROOTS = ['scripts/'];
+const TOOLING_FILES = new Set(['.gitleaks.toml']);
 const NATIVE_CONTRACT_ROOTS = [
   'packages/desktop-contracts/',
   'services/desktop/',
@@ -72,6 +73,7 @@ export function classifyFile(file) {
     return 'DESKTOP_NATIVE_CONTRACT';
   }
   if (normalized.startsWith('tests/')) return 'TEST_ONLY';
+  if (TOOLING_FILES.has(normalized)) return 'TOOLING';
   if (startsWithRoot(normalized, TOOLING_ROOTS)) return 'TOOLING';
   if (
     DEPENDENCY_FILES.has(base) ||

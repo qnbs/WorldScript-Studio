@@ -14,6 +14,7 @@ describe('change-aware local admission classification', () => {
     [['.github/workflows/ci.yml'], 'WORKFLOW_ONLY', false],
     [['docs/CI.md', '.github/workflows/ci.yml'], 'NON_CODE_ONLY', false],
     [['scripts/ci-prepush-lowend.mjs'], 'TOOLING', false],
+    [['.gitleaks.toml'], 'TOOLING', false],
     [['tests/unit/tooling/ciPrepushClassifier.test.ts'], 'TEST_ONLY', false],
     [['components/Editor.tsx'], 'TYPESCRIPT_APPLICATION', true],
     [['packages/desktop-contracts/src/index.ts'], 'DESKTOP_NATIVE_CONTRACT', true],

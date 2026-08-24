@@ -20,10 +20,14 @@ const failures = [];
 for (const file of files) {
   const content = readFileSync(file, 'utf8');
   const label = relative(process.cwd(), file);
-  if (/^\s*permissions:\s*write-all\s*$/m.test(content))
+  if (
+    content
+      .split('\n')
+      .some((line) => /^\s*permissions:\s*write-all\s*$/.test(line.replace(/\s+#.*$/, '')))
+  )
     failures.push(`${label}: write-all permissions`);
   for (const line of content.split('\n')) {
-    const match = line.match(/^\s*uses:\s*([^\s#]+)\s*$/);
+    const match = line.replace(/\s+#.*$/, '').match(/^\s*uses:\s*(\S+)\s*$/);
     if (!match || match[1].startsWith('./') || match[1].startsWith('docker://')) continue;
     if (!/@[0-9a-f]{40}$/i.test(match[1])) failures.push(`${label}: unpinned action ${match[1]}`);
   }
@@ -31,21 +35,39 @@ for (const file of files) {
 
 const ciPath = join(workflowRoot, 'ci.yml');
 const ci = readFileSync(ciPath, 'utf8');
+const ciLines = ci.split('\n');
+const ciSuccessStart = ciLines.findIndex((line) => /^\s{2}ci-success:\s*$/.test(line));
+const nextJob = ciLines.findIndex(
+  (line, index) => index > ciSuccessStart && /^\s{2}[A-Za-z0-9_-]+:\s*$/.test(line),
+);
+const ciSuccessBlock =
+  ciSuccessStart >= 0
+    ? ciLines.slice(ciSuccessStart, nextJob >= 0 ? nextJob : undefined).join('\n')
+    : '';
+const ciNeedsMatch = ciSuccessBlock.match(/^\s+needs:\s*(.+)$/m);
+const ciNeeds = ciNeedsMatch
+  ? [...ciNeedsMatch[1].matchAll(/[A-Za-z0-9_-]+/g)].map(([value]) => value)
+  : [];
 for (const [name, pattern] of [
   ['required aggregate name', /name:\s*["']?✅ CI Success/],
   [
     'full cloud TypeScript authority',
     /tsgo\s+--project\s+tsconfig\.tsgo\.json\s+--noEmit\s+--checkers\s+4/,
   ],
-  ['security dependency', /ci-success[\s\S]*needs:[\s\S]*security/],
-  ['signature dependency', /ci-success[\s\S]*needs:[\s\S]*signatures/],
-  ['quality dependency', /ci-success[\s\S]*needs:[\s\S]*quality/],
-  ['build dependency', /ci-success[\s\S]*needs:[\s\S]*build/],
-  ['E2E dependency', /ci-success[\s\S]*needs:[\s\S]*e2e/],
-  ['Lighthouse dependency', /ci-success[\s\S]*needs:[\s\S]*lighthouse/],
-  ['VRT dependency', /ci-success[\s\S]*needs:[\s\S]*vrt/],
 ]) {
   if (!pattern.test(ci)) failures.push(`.github/workflows/ci.yml: missing ${name}`);
+}
+for (const dependency of [
+  'security',
+  'signatures',
+  'quality',
+  'build',
+  'e2e',
+  'lighthouse',
+  'vrt',
+]) {
+  if (!ciNeeds.includes(dependency))
+    failures.push(`.github/workflows/ci.yml: ci-success missing ${dependency} dependency`);
 }
 
 const intelPath = join(workflowRoot, 'tauri-intel-qualification.yml');
