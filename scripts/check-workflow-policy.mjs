@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import process from 'node:process';
+import { isReleasePublishingCommand } from './workflow-policy-guards.mjs';
 
 const root = join(process.cwd(), '.github');
 const workflowRoot = join(root, 'workflows');
@@ -130,7 +131,8 @@ if (files.includes(intelPath)) {
     executableIntelLines.some(
       (line) =>
         /contents:\s*write|softprops\/action-gh-release/.test(line) ||
-        /\blatest\.json\b/.test(line),
+        /\blatest\.json\b/.test(line) ||
+        isReleasePublishingCommand(line),
     )
   ) {
     failures.push(

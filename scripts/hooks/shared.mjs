@@ -50,9 +50,8 @@ function runBounded(command, args, { timeoutMs = 120_000, env, input, shell = fa
       }
       child.kill(signal);
     };
-    const timeoutTimer = setTimeout(() => {
-      timedOut = true;
-      terminate('SIGTERM');
+    const scheduleForceTermination = () => {
+      if (forceTimer) clearTimeout(forceTimer);
       forceTimer = setTimeout(() => {
         forceTimer = undefined;
         terminate('SIGKILL');
@@ -62,10 +61,18 @@ function runBounded(command, args, { timeoutMs = 120_000, env, input, shell = fa
           complete(...result);
         }
       }, 1_000);
+    };
+    const timeoutTimer = setTimeout(() => {
+      timedOut = true;
+      terminate('SIGTERM');
+      scheduleForceTermination();
     }, timeoutMs);
     const signalHandlers = new Map();
     for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
-      const handler = () => terminate(signal);
+      const handler = () => {
+        terminate(signal);
+        scheduleForceTermination();
+      };
       signalHandlers.set(signal, handler);
       process.once(signal, handler);
     }
@@ -84,7 +91,7 @@ function runBounded(command, args, { timeoutMs = 120_000, env, input, shell = fa
     };
     const finish = (status, signal, error = null) => {
       if (settled) return;
-      if (timedOut && forceTimer) {
+      if (forceTimer) {
         pendingFinish = [status, signal, error];
         return;
       }

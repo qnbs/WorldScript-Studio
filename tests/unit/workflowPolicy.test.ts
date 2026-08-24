@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { isReleasePublishingCommand } from '../../scripts/workflow-policy-guards.mjs';
 import {
   extractJobBlock,
   extractJobNames,
@@ -210,6 +211,21 @@ describe('CI workflow policy', () => {
 
 // QNBS-v3: keep desktop publication causally downstream of independently verified annotated tags.
 describe('Tauri release workflow policy', () => {
+  it('rejects mutating release commands in the non-publishing Intel workflow', () => {
+    expect(isReleasePublishingCommand('    gh release create "$TAG"')).toBe(true);
+    expect(isReleasePublishingCommand('    gh release upload "$TAG" artifact.dmg')).toBe(true);
+    expect(
+      isReleasePublishingCommand(
+        '    curl --upload-file artifact.dmg https://uploads.github.com/repos/org/repo/releases/assets',
+      ),
+    ).toBe(true);
+    expect(
+      isReleasePublishingCommand(
+        '          mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json',
+      ),
+    ).toBe(false);
+  });
+
   it('runs the signature verifier only for real version-tag pushes with read-only access', () => {
     const verifier = extractJobBlock(tauriWorkflowSource, 'verify-release-tag');
     expect(verifier).toMatch(

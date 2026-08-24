@@ -17,7 +17,7 @@ pnpm run smoke:prod    # Headless mount check on dist/ (run AFTER build; catches
 pnpm run lint          # Biome lint (--error-on-warnings — warnings fail like CI)
 pnpm run lint:fix      # Biome auto-fix (lint + format)
 pnpm run typecheck     # Full TypeScript check (cloud quality authority; tsgo --project tsconfig.tsgo.json --noEmit --checkers 4)
-pnpm run ci:prepush    # Change-aware local admission; non-code, Rust/Tauri, tooling, and test-only changes defer TS to required CI
+pnpm run ci:prepush    # Change-aware local admission; non-code, Rust/Tauri, tooling, and non-TypeScript test-only changes defer TS to required CI
 node scripts/ci-prepush-lowend.mjs --full # Complete local admission on capable hardware
 pnpm exec vitest run <path> # Targeted Vitest single run (CI mode)
 pnpm exec vitest run <path> --coverage # Targeted Vitest coverage run
@@ -43,7 +43,7 @@ pnpm run token:audit        # audit-tokens.mjs — design-token usage gate (CI b
 
 **Vitest watch-mode hard rule:** Never invoke `pnpm test`, `npm run test`, or a bare Vitest wrapper. Always use an explicit targeted `pnpm exec vitest run <path>` command; watch mode hangs the constrained development hardware.
 
-**Mandatory pre-push gate:** Run `pnpm run ci:prepush` before every push and again after every local correction before re-pushing. It performs change-aware, bounded local admission and emits explicit `PASS`, `FAIL`, `DEFERRED_TO_REQUIRED_CI`, or `LOCAL_RESOURCE_FAILURE` states. `DOCS_ONLY`, `WORKFLOW_ONLY`, `NON_CODE_ONLY`, `RUST_TAURI`, `TOOLING`, and `TEST_ONLY` changes do not launch the full TypeScript project scan; required GitHub CI remains the merge authority. Use `node scripts/ci-prepush-lowend.mjs --full` for complete local admission on capable hardware. If pnpm reports dependency verification after a branch or lockfile change, run `pnpm run deps:reconcile` first. The pre-commit hook does not replace this gate.
+**Mandatory pre-push gate:** Run `pnpm run ci:prepush` before every push and again after every local correction before re-pushing. It performs change-aware, bounded local admission and emits explicit `PASS`, `FAIL`, `DEFERRED_TO_REQUIRED_CI`, or `LOCAL_RESOURCE_FAILURE` states. `DOCS_ONLY`, `WORKFLOW_ONLY`, `NON_CODE_ONLY`, `RUST_TAURI`, `TOOLING`, and non-TypeScript `TEST_ONLY` changes do not launch the full TypeScript project scan; required GitHub CI remains the merge authority. Use `node scripts/ci-prepush-lowend.mjs --full` for complete local admission on capable hardware. If pnpm reports dependency verification after a branch or lockfile change, run `pnpm run deps:reconcile` first. The pre-commit hook does not replace this gate.
 
 **Quality gate (local pre-push subset):** `pnpm run ci:prepush` runs applicable policy guards and only the TypeScript validation justified by the outgoing change class; `DOCS_ONLY`, `WORKFLOW_ONLY`, `NON_CODE_ONLY`, `RUST_TAURI`, `TOOLING`, and non-TypeScript `TEST_ONLY` changes explicitly defer TypeScript to required cloud CI. CI additionally runs full-suite coverage and heavy jobs. Full pipeline graph: [`docs/CI.md`](docs/CI.md). Coverage thresholds: lines 74, branches 60, functions 67, statements 72 (see `vitest.config.ts`).
 

@@ -155,8 +155,8 @@ function shouldRunContentGuard(classification) {
   return classification.files.some(
     (file) =>
       file === 'scripts/content-guard.mjs' ||
-      file === 'community-templates/index.json' ||
-      file === 'public/community-templates/index.json',
+      file.startsWith('community-templates/') ||
+      file.startsWith('public/community-templates/'),
   );
 }
 
