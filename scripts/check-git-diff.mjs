@@ -5,6 +5,7 @@ import process from 'node:process';
 function runGitCheck(args, label) {
   const result = spawnSync('git', args, { cwd: process.cwd(), encoding: 'utf8' });
   if (result.status === 0) return true;
+  // QNBS-v3: preserve Git's stdout diagnostics so rejected lines are actionable.
   const diagnostics = [result.stdout, result.stderr]
     .filter((value) => value?.trim())
     .map((value) => value.trim())
@@ -76,6 +77,7 @@ try {
     .map((range) => range.trim())
     .filter(Boolean);
   const hasExplicitRanges = Object.hasOwn(process.env, 'WORLD_SCRIPT_PREPUSH_DIFF_RANGES');
+  // QNBS-v3: compare exact remote and local tips for outgoing diff integrity.
   const ranges = hasExplicitRanges
     ? explicitRanges
     : (process.env.WORLD_SCRIPT_PREPUSH_UPDATES ?? '')

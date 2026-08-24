@@ -9,7 +9,7 @@ separates locally implemented evidence from hosted or merge-dependent evidence.
 | --- | --- |
 | Program boundary | Post-v1.28.1; immutable release boundary preserved |
 | Current stage | H1-A signal/timing/cache/rerun evidence integrated for the observable sample; H1-E updater-payload verification `PASS`; H1-D Intel qualification workflow is present but unexecuted/not promoted; H1-F0 governance inventory active; H0 remains complete |
-| Local state | This branch adds only non-publishing H1-D qualification workflow/docs. The original 50-run sample and separate post-#473 through post-#476 checkpoints remain immutable; no Node lane, required-status, DAG, build authority, release, or advisory policy change made |
+| Local state | This branch adds non-publishing H1-D qualification workflow/docs plus resource-safe, change-aware local admission, bounded hook execution, outgoing-diff/workflow policy guards, and their focused tests. The original 50-run sample and separate post-#473 through post-#476 checkpoints remain immutable; no Node lane, required-status, DAG, build authority, release, or advisory policy change made |
 | Last reconciled main checkpoint | `5806bd7ec6566661e575833f13f86b8e192f0ff4` (post-#490 verified main at the recorded checkpoint; not a perpetual live-main claim) |
 | Latest completed PR / branch | PR #490 merged from `h1-e-updater-verification-evidence`; final PR head `014a3942595f84d4c36ab6de2281d4ff866a3d73` |
 | Latest completed merge | `5806bd7ec6566661e575833f13f86b8e192f0ff4`; resulting tree `e10d9c87cb32b0bac2f8835b0315af911f43c814`; merged `2026-08-24T02:32:42Z` |

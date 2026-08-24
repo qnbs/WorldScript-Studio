@@ -17,9 +17,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  resolve-ref:
+    name: Resolve qualification ref
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - name: Resolve requested ref once
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.qualification_ref || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Export immutable qualification SHA
+        id: resolve
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          git cat-file -e "$sha^{commit}"
+          printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
+          printf 'resolved_sha=%s\n' "$sha" > qualification-resolved-ref.txt
+          cat qualification-resolved-ref.txt
+
   qualify:
     name: ${{ matrix.role }} (${{ matrix.runner }})
     runs-on: ${{ matrix.runner }}
+    needs: [resolve-ref]
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -34,17 +58,19 @@ jobs:
       - name: Check out the exact qualification ref
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.qualification_ref || github.sha }}
+          ref: ${{ needs.resolve-ref.outputs.sha }}
           fetch-depth: 1
           persist-credentials: false
 
       - name: Record source ref
         env:
           REQUESTED_REF: ${{ inputs.qualification_ref || github.sha }}
+          RESOLVED_REF: ${{ needs.resolve-ref.outputs.sha }}
         run: |
           set -euo pipefail
           printf 'source_ref=%s\n' "$(git rev-parse HEAD)" > qualification-source.txt
           printf 'requested_ref=%s\n' "$REQUESTED_REF" >> qualification-source.txt
+          printf 'resolved_ref=%s\n' "$RESOLVED_REF" >> qualification-source.txt
           cat qualification-source.txt
 
       - uses: ./.github/actions/setup
@@ -120,6 +146,7 @@ jobs:
           cat qualification-result.json
 
       - name: Upload qualification evidence
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: tauri-intel-qualification-${{ matrix.runner }}
@@ -130,5 +157,5 @@ jobs:
             qualification-file.txt
             qualification-lipo.txt
             qualification-otool.txt
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30

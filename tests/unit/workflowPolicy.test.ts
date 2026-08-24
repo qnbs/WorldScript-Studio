@@ -148,6 +148,7 @@ describe('CI workflow policy', () => {
     ]);
     expect(ciSuccessBlock).toMatch(/\$\{\{\s*needs\.signatures\.result\s*\}\}/);
     expect(ciSuccessBlock).toMatch(/\$\{\{\s*needs\.lighthouse\.result\s*\}\}/);
+    // QNBS-v3: cover exact required and success-or-skipped aggregate semantics.
     for (const jobName of [
       'security',
       'signatures',
@@ -216,6 +217,7 @@ describe('CI workflow policy', () => {
 
 // QNBS-v3: keep desktop publication causally downstream of independently verified annotated tags.
 describe('Tauri release workflow policy', () => {
+  // QNBS-v3: cover multiline and option-form release mutation detection.
   it('rejects mutating release commands in the non-publishing Intel workflow', () => {
     expect(isReleasePublishingCommand('    gh release create "$TAG"')).toBe(true);
     expect(isReleasePublishingCommand('    gh release upload "$TAG" artifact.dmg')).toBe(true);
@@ -226,7 +228,7 @@ describe('Tauri release workflow policy', () => {
     ).toBe(true);
     expect(
       isReleasePublishingCommand(
-        '    curl --upload-file artifact.dmg \\\n+          https://uploads.github.com/repos/org/repo/releases/assets',
+        '    curl --upload-file artifact.dmg \\\n          https://uploads.github.com/repos/org/repo/releases/assets',
       ),
     ).toBe(true);
     expect(
@@ -239,6 +241,17 @@ describe('Tauri release workflow policy', () => {
         'curl --request=PATCH https://api.github.com/repos/org/repo/releases/42',
       ),
     ).toBe(true);
+    expect(isReleasePublishingCommand('gh api --method DELETE /repos/org/repo/releases/42')).toBe(
+      true,
+    );
+    expect(isReleasePublishingCommand('gh api --method=DELETE /repos/org/repo/releases/42')).toBe(
+      true,
+    );
+    expect(isReleasePublishingCommand('gh api -X DELETE /repos/org/repo/assets/42')).toBe(true);
+    expect(isReleasePublishingCommand('gh api /repos/org/repo/releases -f tag_name=v9')).toBe(true);
+    expect(isReleasePublishingCommand('gh api /repos/org/repo/releases --field tag_name=v9')).toBe(
+      true,
+    );
     expect(
       isReleasePublishingCommand(
         '          mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json',

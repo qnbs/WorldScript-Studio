@@ -48,18 +48,24 @@ for (const file of files) {
   if (
     content
       .split('\n')
-      .some((line) => /^\s*permissions:\s*write-all\s*$/.test(line.replace(/\s+#.*$/, '')))
+      .some((line) => /^\s*permissions:\s*write-all\s*$/.test(stripWorkflowComment(line).trim()))
   )
     failures.push(`${label}: write-all permissions`);
-  for (const line of content.split('\n')) {
-    const match = line.replace(/\s+#.*$/, '').match(/^\s*(?:-\s*)?uses:\s*(\S+)\s*$/);
-    if (!match || match[1].startsWith('./') || match[1].startsWith('docker://')) continue;
-    if (!/@[0-9a-f]{40}$/i.test(match[1])) failures.push(`${label}: unpinned action ${match[1]}`);
+  // QNBS-v3: inspect ordinary and flow-mapping action references for immutable pins.
+  for (const rawLine of content.split('\n')) {
+    const line = stripWorkflowComment(rawLine);
+    for (const match of line.matchAll(/\buses:\s*([^\s,}]+)/g)) {
+      const reference = match[1];
+      if (reference.startsWith('./') || reference.startsWith('docker://')) continue;
+      if (!/@[0-9a-f]{40}$/i.test(reference))
+        failures.push(`${label}: unpinned action ${reference}`);
+    }
   }
 }
 
 const ciPath = join(workflowRoot, 'ci.yml');
 const ci = readFileSync(ciPath, 'utf8');
+// QNBS-v3: ignore YAML comments so disabled commands cannot satisfy cloud authority checks.
 const executableCi = ci.split('\n').map(stripWorkflowComment).join('\n');
 const ciLines = ci.split('\n');
 const ciSuccessStart = ciLines.findIndex((line) => /^\s{2}ci-success:\s*$/.test(line));
@@ -77,6 +83,38 @@ const ciNeedsMatch = ciSuccessBlock.match(/^\s+needs:\s*(.+)$/m);
 const ciNeeds = ciNeedsMatch
   ? [...ciNeedsMatch[1].matchAll(/[A-Za-z0-9_-]+/g)].map(([value]) => value)
   : [];
+
+function extractCiJobBlocks(content) {
+  const lines = content.split('\n');
+  const jobsStart = lines.findIndex((line) => /^jobs:\s*$/.test(line));
+  const blocks = new Map();
+  let currentName = '';
+  if (jobsStart < 0) return blocks;
+  for (const line of lines.slice(jobsStart + 1)) {
+    const match = line.match(/^ {2}([A-Za-z0-9_-]+):\s*$/);
+    if (match) {
+      currentName = match[1];
+      blocks.set(currentName, []);
+    } else if (currentName) {
+      blocks.get(currentName).push(line);
+    }
+  }
+  return new Map([...blocks].map(([name, linesForJob]) => [name, linesForJob.join('\n')]));
+}
+
+// QNBS-v3: require every unconditional CI job to have an explicit required or advisory disposition.
+const ciJobBlocks = extractCiJobBlocks(ci);
+for (const [jobName, block] of ciJobBlocks) {
+  if (jobName === 'ci-success') continue;
+  const executableBlock = block.split('\n').map(stripWorkflowComment).join('\n');
+  const conditional = /^ {4}if:\s*/m.test(executableBlock);
+  const advisory = /^ {4}continue-on-error:\s*true\s*$/m.test(executableBlock);
+  if (!conditional && !ciNeeds.includes(jobName) && !advisory)
+    failures.push(
+      `.github/workflows/ci.yml: unconditional job ${jobName} lacks required/advisory disposition`,
+    );
+}
+
 const requiredAggregateJobs = [
   'security',
   'signatures',
@@ -100,6 +138,7 @@ for (const [name, pattern] of [
 }
 
 function hasAggregateResultAssertion(block, dependency, allowsSkipped) {
+  // QNBS-v3: require semantic aggregate outcomes instead of incidental text matches.
   const lines = block.split('\n').filter((line) => line.includes(`needs.${dependency}.result`));
   if (allowsSkipped) {
     return (
@@ -134,6 +173,7 @@ if (files.includes(intelPath)) {
     if (!pattern.test(intel))
       failures.push(`${relative(process.cwd(), intelPath)}: missing ${name}`);
   }
+  // QNBS-v3: scan complete normalized workflow commands for release mutation paths.
   const executableIntelLines = intel
     .split('\n')
     .map((line) =>

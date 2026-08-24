@@ -37,6 +37,7 @@ function changedFilesFromWorkingTree() {
 }
 
 function changedFilesFromRef(target, base) {
+  // QNBS-v3: compare exact pushed tips so local admission matches the outgoing ref update.
   if (!target || !base) throw new Error('outgoing comparison base or target is unresolved');
   return git(['diff', '--no-renames', '--name-only', `${base}..${target}`])
     .split('\n')
@@ -63,6 +64,7 @@ function resolveChangeSet() {
   const updates = parsePrePushUpdates(process.env.WORLD_SCRIPT_PREPUSH_UPDATES ?? '');
   let unresolved = false;
 
+  // QNBS-v3: retain unresolved range state so incomplete change discovery cannot pass.
   function addRefFiles(target, base) {
     try {
       const changed = changedFilesFromRef(target, base);
@@ -127,6 +129,7 @@ function report(name, status, detail = '') {
 }
 
 async function runNodeCheck(name, script, args = [], timeoutMs = 120_000, env = {}) {
+  // QNBS-v3: surface parent interruption distinctly from ordinary check failure.
   const result = await runNodeScriptDetailed(script, args, { timeoutMs, env });
   const status = classifyProcessResult(result);
   const detail = result.timedOut
@@ -177,6 +180,7 @@ const classification = changes.unresolved
     }
   : baseClassification;
 if (changes.unresolved) {
+  // QNBS-v3: fail closed before checks run when outgoing scope is incomplete.
   report('Change-set resolution', 'FAIL', 'outgoing tips or comparison base could not be resolved');
   process.exit(1);
 }

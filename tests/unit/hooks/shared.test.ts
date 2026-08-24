@@ -14,6 +14,7 @@ describe('bounded hook subprocesses', () => {
     expect(result.timedOut).toBe(true);
   });
 
+  // QNBS-v3: prove repeated parent signals clean detached children without accepting cancellation as pass.
   it('preserves parent cancellation and force-cleans after repeated signals', async () => {
     const resultPromise = runBounded(
       process.execPath,
