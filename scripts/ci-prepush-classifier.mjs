@@ -6,7 +6,12 @@ const WORKFLOW_ROOTS = ['.github/workflows/', '.github/actions/'];
 const RUST_ROOTS = ['src-tauri/', 'crates/'];
 const TOOLING_ROOTS = ['scripts/'];
 const TOOLING_FILES = new Set(['.gitleaks.toml']);
-const WORKFLOW_POLICY_FILE = 'scripts/check-workflow-policy.mjs';
+const WORKFLOW_POLICY_FILES = new Set([
+  'scripts/check-workflow-policy.mjs',
+  'scripts/workflow-policy-guards.mjs',
+  'scripts/workflow-policy-guards.d.mts',
+]);
+const I18N_POLICY_FILES = new Set(['scripts/check-i18n-keys.mjs', 'scripts/i18n-locales.mjs']);
 const NATIVE_CONTRACT_ROOTS = [
   'packages/desktop-contracts/',
   'services/desktop/',
@@ -39,7 +44,11 @@ function startsWithRoot(file, roots) {
 }
 
 export function isWorkflowPolicyFile(file) {
-  return file.replaceAll('\\', '/').replace(/^\.\//, '') === WORKFLOW_POLICY_FILE;
+  return WORKFLOW_POLICY_FILES.has(file.replaceAll('\\', '/').replace(/^\.\//, ''));
+}
+
+export function isI18nPolicyFile(file) {
+  return I18N_POLICY_FILES.has(file.replaceAll('\\', '/').replace(/^\.\//, ''));
 }
 
 function isInstructionFile(file) {

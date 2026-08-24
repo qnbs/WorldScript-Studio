@@ -33,6 +33,7 @@ export interface ProcessResult {
 
 export function classifyFile(file: string): ChangeCategory;
 export function isWorkflowPolicyFile(file: string): boolean;
+export function isI18nPolicyFile(file: string): boolean;
 export function classifyChangedFiles(files: string[]): ChangeClassification;
 export function requiresTypecheck(
   classification: ChangeClassification,

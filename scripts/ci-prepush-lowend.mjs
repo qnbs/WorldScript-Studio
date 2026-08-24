@@ -3,6 +3,7 @@ import process from 'node:process';
 import {
   classifyChangedFiles,
   classifyProcessResult,
+  isI18nPolicyFile,
   isWorkflowPolicyFile,
   requiresTypecheck,
 } from './ci-prepush-classifier.mjs';
@@ -140,7 +141,8 @@ async function runGitDiffCheck(ranges) {
 
 function shouldRunI18n(classification) {
   return classification.files.some(
-    (file) => file.startsWith('locales/') || file.startsWith('public/locales/'),
+    (file) =>
+      file.startsWith('locales/') || file.startsWith('public/locales/') || isI18nPolicyFile(file),
   );
 }
 

@@ -4,6 +4,7 @@ import {
   classifyChangedFiles,
   classifyProcessResult,
   classifySignatureResult,
+  isI18nPolicyFile,
   isWorkflowPolicyFile,
   requiresTypecheck,
 } from '../../../scripts/ci-prepush-classifier.mjs';
@@ -41,6 +42,13 @@ describe('change-aware local admission classification', () => {
     expect(classification.kind).toBe('TOOLING');
     expect(classification.files).toContain('scripts/check-workflow-policy.mjs');
     expect(isWorkflowPolicyFile('scripts/check-workflow-policy.mjs')).toBe(true);
+    expect(isWorkflowPolicyFile('scripts/workflow-policy-guards.mjs')).toBe(true);
+    expect(isWorkflowPolicyFile('scripts/workflow-policy-guards.d.mts')).toBe(true);
+  });
+
+  it('keeps i18n checker implementations on the i18n guard path', () => {
+    expect(isI18nPolicyFile('scripts/check-i18n-keys.mjs')).toBe(true);
+    expect(isI18nPolicyFile('scripts/i18n-locales.mjs')).toBe(true);
   });
 });
 
