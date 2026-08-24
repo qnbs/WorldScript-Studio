@@ -183,12 +183,16 @@ if (files.includes(intelPath)) {
         .trim(),
     )
     .filter(Boolean);
+  const executableIntelSource = intel
+    .split('\n')
+    .map((line) => line.replace(/^\s*#.*$/, '').replace(/\s+#.*$/, ''))
+    .join('\n');
   if (
     executableIntelLines.some(
       (line) =>
         /contents:\s*write|softprops\/action-gh-release/.test(line) ||
         /\blatest\.json\b/.test(line) ||
-        isReleasePublishingCommand(executableIntelLines.join('\n')),
+        isReleasePublishingCommand(executableIntelSource),
     )
   ) {
     failures.push(

@@ -129,6 +129,10 @@ jobs:
           test -n "$dmg"
           test -s "$dmg"
 
+          updater_bundles="$(find src-tauri/target/release/bundle -type f \( -name '*.app.tar.gz' -o -name '*.app.tar.gz.sig' \) -print)"
+          printf 'updater_bundles=%s\n' "$updater_bundles" > qualification-updater-check.txt
+          test -z "$updater_bundles"
+
           cat > qualification-result.json <<EOF
           {
             "runner": "${{ matrix.runner }}",
@@ -154,6 +158,7 @@ jobs:
             qualification-source.txt
             qualification-config.txt
             qualification-result.json
+            qualification-updater-check.txt
             qualification-file.txt
             qualification-lipo.txt
             qualification-otool.txt

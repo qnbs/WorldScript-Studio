@@ -23,7 +23,8 @@ function checkUntrackedFile(path) {
   let bytesRead;
   let lineNumber = 1;
   let lineStarted = false;
-  let leadingSpaces = 0;
+  let inIndentation = true;
+  let indentationHasSpace = false;
   let startsWithSpaceThenTab = false;
   let previousByte = null;
   let lastByte = null;
@@ -36,7 +37,8 @@ function checkUntrackedFile(path) {
       errors.push(`${path}:${lineNumber}: space before tab in indentation`);
     lineNumber += 1;
     lineStarted = false;
-    leadingSpaces = 0;
+    inIndentation = true;
+    indentationHasSpace = false;
     startsWithSpaceThenTab = false;
     previousByte = null;
     lastByte = null;
@@ -54,9 +56,12 @@ function checkUntrackedFile(path) {
         previousByte = lastByte;
         lastByte = byte;
         if (!lineStarted) {
-          if (byte === 32) leadingSpaces += 1;
-          else {
-            startsWithSpaceThenTab = leadingSpaces > 0 && byte === 9;
+          if (inIndentation && byte === 32) {
+            indentationHasSpace = true;
+          } else if (inIndentation && byte === 9) {
+            startsWithSpaceThenTab ||= indentationHasSpace;
+          } else {
+            inIndentation = false;
             lineStarted = true;
           }
         }

@@ -253,6 +253,11 @@ describe('Tauri release workflow policy', () => {
       true,
     );
     expect(
+      isReleasePublishingCommand(`run: >-
+  gh release
+  create "$TAG"`),
+    ).toBe(true);
+    expect(
       isReleasePublishingCommand(
         '          mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json',
       ),
