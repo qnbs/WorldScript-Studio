@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import process from 'node:process';
@@ -20,34 +20,56 @@ export function ensureDependencyState() {
 
 // QNBS-v3: bound hook children so timeout or resource termination is observable instead of an implicit pass.
 function runBounded(command, args, { timeoutMs = 120_000, env, input, shell = false } = {}) {
-  const result = spawnSync(command, args, {
-    cwd: projectRoot,
-    env: { ...process.env, ...env },
-    input,
-    shell,
-    stdio: input === undefined ? 'inherit' : ['pipe', 'inherit', 'inherit'],
-    timeout: timeoutMs,
-    killSignal: 'SIGTERM',
+  return new Promise((resolveResult) => {
+    const child = spawn(command, args, {
+      cwd: projectRoot,
+      env: { ...process.env, ...env },
+      shell,
+      detached: process.platform !== 'win32',
+      stdio: input === undefined ? 'inherit' : ['pipe', 'inherit', 'inherit'],
+    });
+    let timedOut = false;
+    let settled = false;
+    let forceTimer;
+    const terminate = (signal) => {
+      if (process.platform !== 'win32' && child.pid) {
+        try {
+          process.kill(-child.pid, signal);
+          return;
+        } catch {
+          // Fall back to the direct child when a process group is unavailable.
+        }
+      }
+      child.kill(signal);
+    };
+    const timeoutTimer = setTimeout(() => {
+      timedOut = true;
+      terminate('SIGTERM');
+      forceTimer = setTimeout(() => terminate('SIGKILL'), 1_000);
+    }, timeoutMs);
+    const finish = (status, signal, error = null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutTimer);
+      if (forceTimer) clearTimeout(forceTimer);
+      resolveResult({ status: error ? null : status, signal, error, timedOut, command });
+    };
+    child.once('error', (error) => finish(null, null, error));
+    child.once('close', (status, signal) => finish(status, signal));
+    if (input !== undefined) child.stdin.end(input);
   });
-  return {
-    status: result.error ? null : result.status,
-    signal: result.signal,
-    error: result.error,
-    timedOut: result.error?.code === 'ETIMEDOUT',
-    command,
-  };
 }
 
-export function runNodeScriptDetailed(script, args = [], options = {}) {
+export async function runNodeScriptDetailed(script, args = [], options = {}) {
   return runBounded(process.execPath, [resolve(projectRoot, script), ...args], options);
 }
 
-export function runNodeScript(script, args = [], options = {}) {
-  const result = runNodeScriptDetailed(script, args, options);
+export async function runNodeScript(script, args = [], options = {}) {
+  const result = await runNodeScriptDetailed(script, args, options);
   return result.error ? 1 : (result.status ?? 1);
 }
 
-export function runLocalBinaryDetailed(binary, args = [], options = {}) {
+export async function runLocalBinaryDetailed(binary, args = [], options = {}) {
   const command = resolve(
     projectRoot,
     'node_modules',
@@ -69,7 +91,7 @@ export function runLocalBinaryDetailed(binary, args = [], options = {}) {
   return runBounded(command, args, { ...options, shell: process.platform === 'win32' });
 }
 
-export function runLocalBinary(binary, args = [], options = {}) {
-  const result = runLocalBinaryDetailed(binary, args, options);
+export async function runLocalBinary(binary, args = [], options = {}) {
+  const result = await runLocalBinaryDetailed(binary, args, options);
   return result.error ? 1 : (result.status ?? 1);
 }

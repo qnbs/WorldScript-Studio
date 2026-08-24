@@ -17,9 +17,28 @@ function collect(directory) {
 collect(root);
 // QNBS-v3: keep workflow governance checks offline and narrow so CI remains the authoritative execution gate.
 const failures = [];
+function hasReadOnlyTopLevelPermissions(content) {
+  const lines = content.split('\n');
+  const index = lines.findIndex((line) => /^permissions:\s*/.test(line));
+  if (index < 0) return false;
+  const inline = lines[index]
+    .replace(/\s+#.*$/, '')
+    .replace(/^permissions:\s*/, '')
+    .trim();
+  if (inline) return inline === '{ contents: read }';
+  const block = [];
+  for (const line of lines.slice(index + 1)) {
+    if (line && !/^\s{2}/.test(line)) break;
+    block.push(line);
+  }
+  return block.some((line) => /^\s{2}contents:\s*read\s*(?:#.*)?$/.test(line));
+}
+
 for (const file of files) {
   const content = readFileSync(file, 'utf8');
   const label = relative(process.cwd(), file);
+  if (file.startsWith(workflowRoot) && !hasReadOnlyTopLevelPermissions(content))
+    failures.push(`${label}: top-level permissions must include contents: read`);
   if (
     content
       .split('\n')
@@ -27,7 +46,7 @@ for (const file of files) {
   )
     failures.push(`${label}: write-all permissions`);
   for (const line of content.split('\n')) {
-    const match = line.replace(/\s+#.*$/, '').match(/^\s*uses:\s*(\S+)\s*$/);
+    const match = line.replace(/\s+#.*$/, '').match(/^\s*(?:-\s*)?uses:\s*(\S+)\s*$/);
     if (!match || match[1].startsWith('./') || match[1].startsWith('docker://')) continue;
     if (!/@[0-9a-f]{40}$/i.test(match[1])) failures.push(`${label}: unpinned action ${match[1]}`);
   }

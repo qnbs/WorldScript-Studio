@@ -6,8 +6,9 @@ on:
     - cron: '30 4 * * 1'   # every Monday 04:30 UTC
   workflow_dispatch:
 
-# Minimal read-all default; individual job overrides what it needs.
-permissions: read-all
+# QNBS-v3: top-level read-only; the analysis job scopes its extra permissions explicitly.
+permissions:
+  contents: read
 
 jobs:
   analysis:

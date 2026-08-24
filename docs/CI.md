@@ -14,7 +14,7 @@ For historical optimization notes (targets may predate the live workflow), see [
 
 | Tier | Where | Commands / scope |
 |------|--------|------------------|
-| **Quick (local)** | Developer laptop | `pnpm run ci:prepush` (change-aware bounded admission, applicable policy guards, and targeted TypeScript); docs/workflow-only changes report `DEFERRED_TO_REQUIRED_CI`; optional targeted `pnpm exec vitest run <path>` for a fast smoke |
+| **Quick (local)** | Developer laptop | `pnpm run ci:prepush` (change-aware bounded admission, applicable policy guards, and targeted TypeScript); `DOCS_ONLY`, `WORKFLOW_ONLY`, `NON_CODE_ONLY`, `RUST_TAURI`, `TOOLING`, and non-TypeScript `TEST_ONLY` changes report `DEFERRED_TO_REQUIRED_CI`; optional targeted `pnpm exec vitest run <path>` for a fast smoke |
 | **Heavy (CI)** | `ci.yml` | Vitest **with** `--coverage` and thresholds, Playwright E2E (`CI=true`) including **mobile emulation** (Pixel 5 / Chromium), Lighthouse CI, Storybook static build, bundle budget + analyze. Mutation testing (Stryker) is **not** part of this pipeline — see [Mutation testing status](#mutation-testing-status). |
 
 **Merge readiness:** A green workflow run on the PR/branch matters more than reproducing every E2E or LHCI step locally. Use CI **artifacts** (Playwright HTML report, coverage, Lighthouse output) to debug failures.
@@ -294,7 +294,7 @@ longer runs a root `prepare` command. `pnpm-workspace.yaml` sets `verifyDepsBefo
 
 ## Local checks (without Act)
 
-On **low-resource** machines, stop at the **Quick** tier (see [Cloud CI-first vs local development](#cloud-ci-first-vs-local-development)): **`pnpm run ci:prepush`**, and optionally targeted **`pnpm exec vitest run <path>`**. The local gate classifies the outgoing change set; it does not launch a complete project `tsgo` scan for provably docs/workflow/tooling-only changes and prints `DEFERRED_TO_REQUIRED_CI` instead. Any timeout, signal termination, or resource kill is `LOCAL_RESOURCE_FAILURE`, never PASS. Use **`node scripts/ci-prepush-lowend.mjs --full`** only on capable hardware. Never run multiple heavyweight local processes concurrently. Treat **`CI=true pnpm run test:e2e`** (desktop + mobile projects in CI), **Lighthouse**, coverage, Storybook, and mutation testing as **CI-owned**.
+On **low-resource** machines, stop at the **Quick** tier (see [Cloud CI-first vs local development](#cloud-ci-first-vs-local-development)): **`pnpm run ci:prepush`**, and optionally targeted **`pnpm exec vitest run <path>`**. The local gate classifies the outgoing change set; `DOCS_ONLY`, `WORKFLOW_ONLY`, `NON_CODE_ONLY`, `RUST_TAURI`, `TOOLING`, and non-TypeScript `TEST_ONLY` changes do not launch a complete project `tsgo` scan and print `DEFERRED_TO_REQUIRED_CI` instead. Any timeout, signal termination, or resource kill is `LOCAL_RESOURCE_FAILURE`, never PASS. Use **`node scripts/ci-prepush-lowend.mjs --full`** only on capable hardware. Never run multiple heavyweight local processes concurrently. Treat **`CI=true pnpm run test:e2e`** (desktop + mobile projects in CI), **Lighthouse**, coverage, Storybook, and mutation testing as **CI-owned**.
 
 ```bash
 pnpm install --frozen-lockfile
@@ -321,9 +321,10 @@ The result states are deliberately distinct:
   pass and requires recovery or use of the full tier on capable hardware.
 
 For TypeScript-impacting, dependency, build, native-contract, mixed, or ambiguous changes, the
-default gate runs bounded single-checker `tsgo`. For docs/workflow-only changes it prints
+default gate runs bounded single-checker `tsgo`. For `DOCS_ONLY`, `WORKFLOW_ONLY`, `NON_CODE_ONLY`,
+`RUST_TAURI`, `TOOLING`, and non-TypeScript `TEST_ONLY` changes it prints
 `TypeScript DEFERRED_TO_REQUIRED_CI` with the reason `no TypeScript-impacting changes detected`.
-The complete local tier is `pnpm run ci:prepush:full`; GitHub Actions remains the authoritative
+The complete local tier is `node scripts/ci-prepush-lowend.mjs --full`; GitHub Actions remains the authoritative
 full TypeScript, quality, security, CodeQL, build, test, and required-aggregate gate.
 
 Playwright E2E, Lighthouse, Storybook, and full-suite coverage are intentionally omitted from

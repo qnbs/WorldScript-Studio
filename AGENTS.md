@@ -33,7 +33,7 @@ The app supports a multi-provider AI stack (Gemini, OpenAI, Claude, Grok, OpenRo
    ```bash
    pnpm run ci:prepush
    ```
-   This gate is mandatory before every push and after every local correction before re-pushing; it is change-aware: docs/workflow/tooling-only changes explicitly defer TypeScript to required CI, while application, contract, dependency, build, mixed, or ambiguous changes run bounded single-checker `tsgo` locally. It always runs the cheap policy guards applicable to the change. The pre-commit hook separately runs staged-file Biome checks. Full repository lint, coverage, E2E, Storybook, Lighthouse, and mutation checks belong to cloud CI. Use `node scripts/ci-prepush-lowend.mjs --full` for complete local admission on capable hardware. If branch switching or a lockfile/package-manifest change makes pnpm report dependency verification errors, run `node scripts/dependency-state.mjs reconcile` and rerun the complete pre-push gate.
+   This gate is mandatory before every push and after every local correction before re-pushing; it is change-aware: `DOCS_ONLY`, `WORKFLOW_ONLY`, `NON_CODE_ONLY`, `RUST_TAURI`, `TOOLING`, and non-TypeScript `TEST_ONLY` changes explicitly defer TypeScript to required CI, while application, contract, dependency, build, mixed, ambiguous, or TypeScript test changes run bounded single-checker `tsgo` locally. It always runs the cheap policy guards applicable to the change. The pre-commit hook separately runs staged-file Biome checks. Full repository lint, coverage, E2E, Storybook, Lighthouse, and mutation checks belong to cloud CI. Use `node scripts/ci-prepush-lowend.mjs --full` for complete local admission on capable hardware. If branch switching or a lockfile/package-manifest change makes pnpm report dependency verification errors, run `node scripts/dependency-state.mjs reconcile` and rerun the complete pre-push gate.
    Optional targeted smoke test: `pnpm exec vitest run <path>` **without** `--coverage`.
    **Hard rule:** Never invoke `pnpm test`, `npm run test`, or a bare Vitest wrapper; always use an explicit `pnpm exec vitest run <path>` command to avoid watch-mode hangs on constrained hardware. Never start multiple heavyweight processes concurrently.
 4. **Audit cloud CI logs, fix locally, then re-push** – If the cloud CI run fails, inspect the logs via GitHub web UI or `gh run watch`, reproduce the specific failing test or lint error in isolation, fix it locally (quick tier to verify), commit, and push again for another cloud CI run.
@@ -297,8 +297,9 @@ procedure.
 - **Cloud CI-first:** The canonical quality gate is GitHub Actions. Low-end local machines should run only the "Quick" tier.
 - **Quick tier (local, before every push):** `pnpm run ci:prepush` performs change-aware admission with
   bounded policy checks. It runs one-checker TypeScript validation only for TypeScript-impacting,
-  dependency, build, native-contract, mixed, or ambiguous changes. For provably docs/workflow-only
-  changes it reports `DEFERRED_TO_REQUIRED_CI` rather than launching a full project scan. The complete
+  dependency, build, native-contract, mixed, ambiguous, or TypeScript test changes. For
+  `DOCS_ONLY`, `WORKFLOW_ONLY`, `NON_CODE_ONLY`, `RUST_TAURI`, `TOOLING`, and non-TypeScript
+  `TEST_ONLY` changes it reports `DEFERRED_TO_REQUIRED_CI` rather than launching a full project scan. The complete
   local tier is `node scripts/ci-prepush-lowend.mjs --full` on capable hardware;
   the pre-commit hook separately runs staged-file Biome checks. Run the gate again after every
   correction before re-pushing; do not

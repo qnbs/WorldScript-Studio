@@ -17,8 +17,7 @@ const isPrePush = Boolean(process.env.WORLD_SCRIPT_PREPUSH_UPDATES);
 
 function git(args, { allowFailure = false } = {}) {
   const result = spawnSync('git', args, { cwd: projectRoot, encoding: 'utf8' });
-  if (result.stdout) return result.stdout.trim();
-  if (result.status === 0 && !result.error) return '';
+  if (result.status === 0) return result.stdout?.trim() ?? '';
   if (allowFailure) return '';
   throw result.error ?? new Error(`git ${args.join(' ')} failed with status ${result.status}`);
 }
@@ -36,8 +35,8 @@ function changedFilesFromWorkingTree() {
 }
 
 function changedFilesFromRef(target, base) {
-  if (!target || !base) return [];
-  return git(['diff', '--name-only', `${base}...${target}`], { allowFailure: true })
+  if (!target || !base) throw new Error('outgoing comparison base or target is unresolved');
+  return git(['diff', '--name-only', `${base}...${target}`])
     .split('\n')
     .filter(Boolean);
 }
@@ -59,27 +58,56 @@ function parsePrePushUpdates(raw) {
 function resolveChangeSet() {
   const files = new Set(changedFilesFromWorkingTree());
   const updates = parsePrePushUpdates(process.env.WORLD_SCRIPT_PREPUSH_UPDATES ?? '');
+  let unresolved = false;
+
+  function addRefFiles(target, base) {
+    try {
+      for (const file of changedFilesFromRef(target, base)) files.add(file);
+    } catch (error) {
+      unresolved = true;
+      console.error(`[local-admission] outgoing change range unresolved: ${error.message}`);
+    }
+  }
 
   if (updates.length > 0) {
     for (const { localSha, remoteSha } of updates) {
       if (/^0+$/.test(localSha)) continue;
-      const base = /^0+$/.test(remoteSha)
-        ? git(['rev-parse', 'origin/main'], { allowFailure: true })
-        : remoteSha;
-      for (const file of changedFilesFromRef(localSha, base)) files.add(file);
+      let base = remoteSha;
+      if (/^0+$/.test(base)) {
+        try {
+          base = git(['rev-parse', 'origin/main']);
+        } catch (error) {
+          unresolved = true;
+          console.error(`[local-admission] origin/main unresolved: ${error.message}`);
+        }
+      }
+      addRefFiles(localSha, base);
     }
   } else {
-    const upstream = git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], {
-      allowFailure: true,
-    });
-    const base = git([...(upstream ? ['rev-parse', upstream] : ['rev-parse', 'origin/main'])], {
-      allowFailure: true,
-    });
-    const head = git(['rev-parse', 'HEAD'], { allowFailure: true });
-    for (const file of changedFilesFromRef(head, base)) files.add(file);
+    let upstream = '';
+    try {
+      upstream = git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}']);
+    } catch {
+      // A detached or new branch may not have an upstream yet; origin/main is the safe fallback.
+    }
+    let base = '';
+    try {
+      base = git([...(upstream ? ['rev-parse', upstream] : ['rev-parse', 'origin/main'])]);
+    } catch (error) {
+      unresolved = true;
+      console.error(`[local-admission] comparison base unresolved: ${error.message}`);
+    }
+    let head = '';
+    try {
+      head = git(['rev-parse', 'HEAD']);
+    } catch (error) {
+      unresolved = true;
+      console.error(`[local-admission] HEAD unresolved: ${error.message}`);
+    }
+    addRefFiles(head, base);
   }
 
-  return { files: [...files], updates };
+  return { files: [...files], updates, unresolved };
 }
 
 function report(name, status, detail = '') {
@@ -87,14 +115,14 @@ function report(name, status, detail = '') {
   return status;
 }
 
-function runNodeCheck(name, script, args = [], timeoutMs = 120_000) {
-  const result = runNodeScriptDetailed(script, args, { timeoutMs });
+async function runNodeCheck(name, script, args = [], timeoutMs = 120_000) {
+  const result = await runNodeScriptDetailed(script, args, { timeoutMs });
   const status = classifyProcessResult(result);
   report(name, status, result.timedOut ? `timeout after ${timeoutMs}ms` : (result.signal ?? ''));
   return status;
 }
 
-function runGitDiffCheck() {
+async function runGitDiffCheck() {
   return runNodeCheck('Diff integrity', 'scripts/check-git-diff.mjs', [], 15_000);
 }
 
@@ -109,7 +137,14 @@ function hasWorkflowChange(classification) {
 }
 
 const changes = resolveChangeSet();
-const classification = classifyChangedFiles(changes.files);
+const baseClassification = classifyChangedFiles(changes.files);
+const classification = changes.unresolved
+  ? {
+      ...baseClassification,
+      kind: 'AMBIGUOUS',
+      categories: [...new Set([...baseClassification.categories, 'UNKNOWN'])],
+    }
+  : baseClassification;
 const typecheckRequired = requiresTypecheck(classification, { full });
 const results = [];
 
@@ -138,13 +173,13 @@ const mandatoryChecks = [
 ];
 
 for (const [name, check] of mandatoryChecks) {
-  const status = check();
+  const status = await check();
   results.push([name, status]);
   if (status !== 'PASS') process.exit(1);
 }
 
 if (hasWorkflowChange(classification)) {
-  const status = runNodeCheck('Workflow policy', 'scripts/check-workflow-policy.mjs');
+  const status = await runNodeCheck('Workflow policy', 'scripts/check-workflow-policy.mjs');
   results.push(['Workflow policy', status]);
   if (status !== 'PASS') process.exit(1);
 }
@@ -166,14 +201,14 @@ if (full || shouldRunI18n(classification)) {
       : []),
   ];
   for (const [name, script, args, timeoutMs] of i18nChecks) {
-    const status = runNodeCheck(name, script, args, timeoutMs);
+    const status = await runNodeCheck(name, script, args, timeoutMs);
     results.push([name, status]);
     if (status !== 'PASS') process.exit(1);
   }
 }
 
 if (typecheckRequired) {
-  const result = runLocalBinaryDetailed(
+  const result = await runLocalBinaryDetailed(
     'tsgo',
     ['--project', 'tsconfig.tsgo.json', '--noEmit', '--checkers', full ? '4' : '1'],
     { timeoutMs: full ? 600_000 : 180_000 },

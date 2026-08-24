@@ -72,7 +72,8 @@ export function classifyFile(file) {
   ) {
     return 'DESKTOP_NATIVE_CONTRACT';
   }
-  if (normalized.startsWith('tests/')) return 'TEST_ONLY';
+  if (normalized.startsWith('tests/'))
+    return TS_FILE.test(normalized) ? 'TYPESCRIPT_APPLICATION' : 'TEST_ONLY';
   if (TOOLING_FILES.has(normalized)) return 'TOOLING';
   if (startsWithRoot(normalized, TOOLING_ROOTS)) return 'TOOLING';
   if (

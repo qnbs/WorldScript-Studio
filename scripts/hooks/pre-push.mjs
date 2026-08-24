@@ -5,7 +5,9 @@ import { runNodeScript } from './shared.mjs';
 const updates = readFileSync(0, 'utf8');
 const options = { input: updates };
 
-if (runNodeScript('scripts/signing/verify-outgoing.mjs', process.argv.slice(2), options) !== 0)
+if (
+  (await runNodeScript('scripts/signing/verify-outgoing.mjs', process.argv.slice(2), options)) !== 0
+)
   process.exit(1);
 process.env.WORLD_SCRIPT_PREPUSH_UPDATES = updates;
-process.exit(runNodeScript('scripts/ci-prepush-lowend.mjs', [], { env: process.env }));
+process.exit(await runNodeScript('scripts/ci-prepush-lowend.mjs', [], { env: process.env }));
