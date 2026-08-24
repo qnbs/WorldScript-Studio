@@ -245,6 +245,99 @@ export function parseRefUpdate(line) {
   return { localRef: fields[0], localSha: fields[1], remoteRef: fields[2], remoteSha: fields[3] };
 }
 
+// QNBS-v3: parse the hook stream once so signing and admission consume identical push evidence.
+export function parsePrePushInput(input) {
+  if (typeof input !== 'string') throw new Error('pre-push input must be text');
+  const lines = input.split(/\r?\n/).filter((line) => line.length > 0);
+  if (lines.length === 0) throw new Error('pre-push input is empty');
+  const updates = lines.map(parseRefUpdate);
+  if (updates.some((update) => !update)) throw new Error('invalid pre-push ref-update input');
+  return updates;
+}
+
+export function serializePrePushUpdates(updates) {
+  if (!Array.isArray(updates) || updates.length === 0)
+    throw new Error('pre-push updates are empty');
+  const lines = updates.map((update) => {
+    const fields = [update.localRef, update.localSha, update.remoteRef, update.remoteSha];
+    if (fields.some((field) => typeof field !== 'string' || field.length === 0))
+      throw new Error('pre-push update contains an invalid field');
+    return fields.join(' ');
+  });
+  return JSON.stringify(lines);
+}
+
+export function parseSerializedPrePushUpdates(serialized) {
+  if (typeof serialized !== 'string' || serialized.length === 0)
+    throw new Error('serialized pre-push input is missing');
+  let lines;
+  try {
+    lines = JSON.parse(serialized);
+  } catch {
+    throw new Error('serialized pre-push input is not valid JSON');
+  }
+  if (!Array.isArray(lines) || lines.some((line) => typeof line !== 'string'))
+    throw new Error('serialized pre-push input must contain text lines');
+  return parsePrePushInput(lines.join('\n'));
+}
+
+function changedFilesBetween(base, head, cwd) {
+  const result = runGit(['diff', '--no-renames', '--name-only', '-z', base, head, '--'], { cwd });
+  if (result.status !== 0) throw new Error('cannot resolve changed paths for outgoing ref');
+  return result.stdout.split('\0').filter((path) => path.length > 0);
+}
+
+export function resolvePushEvidence(input, cwd = process.cwd(), dependencies = {}) {
+  try {
+    const updates = Array.isArray(input) ? input : parsePrePushInput(input);
+    if (updates.length === 0 || updates.some((update) => !update))
+      throw new Error('pre-push updates are empty or invalid');
+    const commitExists =
+      dependencies.commitExists ??
+      ((sha) => isSha(sha) && runGit(['cat-file', '-e', `${sha}^{commit}`], { cwd }).status === 0);
+    const resolveFiles =
+      dependencies.changedFilesBetween ?? ((base, head) => changedFilesBetween(base, head, cwd));
+    const changedFiles = new Set();
+    const evidenceUpdates = [];
+    for (const update of updates) {
+      if (
+        (!isSha(update.localSha) && !isZeroSha(update.localSha)) ||
+        (!isSha(update.remoteSha) && !isZeroSha(update.remoteSha))
+      )
+        throw new Error(`invalid SHA in update for ${update.remoteRef}`);
+      if (isZeroSha(update.localSha)) {
+        evidenceUpdates.push({ ...update, disposition: 'DELETED' });
+        continue;
+      }
+      if (!commitExists(update.localSha))
+        throw new Error(`local outgoing object is unavailable for ${update.localRef}`);
+      if (update.remoteRef.startsWith('refs/tags/')) {
+        evidenceUpdates.push({ ...update, disposition: 'TAG' });
+        continue;
+      }
+      if (!update.remoteRef.startsWith('refs/heads/'))
+        throw new Error(`unsupported outgoing ref ${update.remoteRef}`);
+      const base = isZeroSha(update.remoteSha) ? EMPTY_TREE : update.remoteSha;
+      if (!isZeroSha(base) && !commitExists(base))
+        throw new Error(`remote base object is unavailable for ${update.remoteRef}`);
+      for (const path of resolveFiles(base, update.localSha)) changedFiles.add(path);
+      evidenceUpdates.push({
+        ...update,
+        base,
+        disposition: isZeroSha(update.remoteSha) ? 'NEW_BRANCH' : 'UPDATED',
+      });
+    }
+    return { updates: evidenceUpdates, changedFiles: [...changedFiles], evidenceState: 'RESOLVED' };
+  } catch (error) {
+    return {
+      updates: [],
+      changedFiles: [],
+      evidenceState: 'INVALID',
+      reason: error instanceof Error ? error.message : 'invalid push evidence',
+    };
+  }
+}
+
 function refSha(ref, cwd) {
   const sha = gitOutput(['rev-parse', '--verify', `${ref}^{commit}`], { cwd });
   return isSha(sha) ? sha : null;
@@ -339,14 +432,25 @@ export function classifyTagVerification({
     : commitVerification;
 }
 
-export function verifyOutgoingUpdates(lines, remote, cwd = process.cwd(), dependencies = {}) {
+export function verifyOutgoingUpdates(input, remote, cwd = process.cwd(), dependencies = {}) {
   const verifyCommit = dependencies.verifyCommitObject ?? ((sha) => verifyCommitObject(sha, cwd));
   const verifyTag = dependencies.verifyTagObject ?? ((sha) => verifyTagObject(sha, cwd));
   const getIntroducedCommits =
     dependencies.introducedCommits ?? ((update) => introducedCommits(update, remote, cwd));
-  const updates = lines.map(parseRefUpdate);
-  if (updates.some((update) => !update))
-    return { ok: false, reason: 'invalid pre-push ref-update input' };
+  let updates;
+  try {
+    updates =
+      Array.isArray(input) && input.every((item) => typeof item === 'string')
+        ? parsePrePushInput(input.join('\n'))
+        : input;
+    if (!Array.isArray(updates) || updates.length === 0 || updates.some((update) => !update))
+      throw new Error('invalid pre-push ref-update input');
+  } catch (error) {
+    return {
+      ok: false,
+      reason: error instanceof Error ? error.message : 'invalid pre-push ref-update input',
+    };
+  }
   const reports = [];
   for (const update of updates) {
     if (isZeroSha(update.localSha)) continue;

@@ -6,10 +6,14 @@ import {
   hasCommitSignature,
   isGitHubCompatibleEmail,
   outgoingBaseShas,
+  parsePrePushInput,
   parseRefUpdate,
+  parseSerializedPrePushUpdates,
   pushCommitShas,
   pushEventRange,
+  resolvePushEvidence,
   selectIntroducedCommits,
+  serializePrePushUpdates,
   verifyOutgoingUpdates,
 } from '../../scripts/signing/signing-core.mjs';
 import {
@@ -39,6 +43,55 @@ describe('local signing controls', () => {
       remoteSha: 'd'.repeat(40),
     });
     expect(parseRefUpdate('refs/heads/main abc refs/heads/main')).toBeNull();
+  });
+
+  it('round-trips one canonical structured update stream for both consumers', () => {
+    const updates = parsePrePushInput(
+      `refs/heads/main ${'a'.repeat(40)} refs/heads/main ${'b'.repeat(40)}\n`,
+    );
+    expect(parseSerializedPrePushUpdates(serializePrePushUpdates(updates))).toEqual(updates);
+  });
+
+  it('resolves committed paths independently of a clean or dirty worktree', () => {
+    const update = parseRefUpdate(
+      `refs/heads/main ${'a'.repeat(40)} refs/heads/main ${'b'.repeat(40)}`,
+    )!;
+    const result = resolvePushEvidence([update], process.cwd(), {
+      commitExists: () => true,
+      changedFilesBetween: () => ['src/with\nnewline.ts', '世界 file.ts', 'with\t tab.ts'],
+    });
+    expect(result).toMatchObject({ evidenceState: 'RESOLVED' });
+    expect(result.changedFiles).toEqual(['src/with\nnewline.ts', '世界 file.ts', 'with\t tab.ts']);
+  });
+
+  it('handles new branches, deletions, multiple refs, and invalid input explicitly', () => {
+    const zero = '0'.repeat(40);
+    const branch = parseRefUpdate(`refs/heads/new ${'a'.repeat(40)} refs/heads/new ${zero}`)!;
+    const deletion = parseRefUpdate(`refs/heads/old ${zero} refs/heads/old ${'b'.repeat(40)}`)!;
+    const result = resolvePushEvidence([branch, deletion], process.cwd(), {
+      commitExists: () => true,
+      changedFilesBetween: (base) =>
+        base === '4b825dc642cb6eb9a060e54bf8d69288fbee4904' ? ['new.ts'] : [],
+    });
+    expect(result.evidenceState).toBe('RESOLVED');
+    expect(result.updates.map(({ disposition }) => disposition)).toEqual(['NEW_BRANCH', 'DELETED']);
+    expect(result.changedFiles).toEqual(['new.ts']);
+    expect(resolvePushEvidence('malformed').evidenceState).toBe('INVALID');
+  });
+
+  it('fails closed for missing objects and Git path-resolution failures', () => {
+    const update = parseRefUpdate(
+      `refs/heads/main ${'a'.repeat(40)} refs/heads/main ${'b'.repeat(40)}`,
+    )!;
+    expect(resolvePushEvidence([update]).evidenceState).toBe('INVALID');
+    expect(
+      resolvePushEvidence([update], process.cwd(), {
+        commitExists: () => true,
+        changedFilesBetween: () => {
+          throw new Error('git diff failed');
+        },
+      }).evidenceState,
+    ).toBe('INVALID');
   });
 
   it('checks only commits introduced beyond the remote tracking base', () => {

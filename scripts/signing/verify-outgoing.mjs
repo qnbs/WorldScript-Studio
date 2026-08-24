@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 import process from 'node:process';
-import { verifyOutgoingUpdates } from './signing-core.mjs';
+import {
+  parsePrePushInput,
+  parseSerializedPrePushUpdates,
+  verifyOutgoingUpdates,
+} from './signing-core.mjs';
 
 const remote = process.argv[2];
 if (!remote) {
@@ -9,12 +13,17 @@ if (!remote) {
   );
   process.exit(1);
 }
-let input = '';
-process.stdin.setEncoding('utf8');
-for await (const chunk of process.stdin) input += chunk;
-const lines = input.split(/\r?\n/).filter(Boolean);
 try {
-  const result = verifyOutgoingUpdates(lines, remote);
+  let updates;
+  const serialized = process.env.WORLD_SCRIPT_PREPUSH_UPDATES;
+  if (serialized) updates = parseSerializedPrePushUpdates(serialized);
+  else {
+    let input = '';
+    process.stdin.setEncoding('utf8');
+    for await (const chunk of process.stdin) input += chunk;
+    updates = parsePrePushInput(input);
+  }
+  const result = verifyOutgoingUpdates(updates, remote);
   if (!result.ok) {
     console.error(`pre-push signing check rejected the update: ${result.reason}`);
     process.exit(1);

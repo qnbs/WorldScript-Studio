@@ -1,5 +1,24 @@
 import process from 'node:process';
 import { ensureDependencyState, runLocalBinary, runNodeScript } from './hooks/shared.mjs';
+import { parseSerializedPrePushUpdates, resolvePushEvidence } from './signing/signing-core.mjs';
+
+const serializedUpdates = process.env.WORLD_SCRIPT_PREPUSH_UPDATES;
+if (serializedUpdates) {
+  let evidence;
+  try {
+    evidence = resolvePushEvidence(parseSerializedPrePushUpdates(serializedUpdates), process.cwd());
+  } catch (error) {
+    console.error(`[local-lowend] outgoing evidence capture failed closed: ${error.message}`);
+    process.exit(1);
+  }
+  if (evidence.evidenceState !== 'RESOLVED') {
+    console.error(`[local-lowend] outgoing evidence is invalid: ${evidence.reason}`);
+    process.exit(1);
+  }
+  console.log(
+    `[local-lowend] outgoing evidence resolved: ${evidence.updates.length} update(s), ${evidence.changedFiles.length} changed path(s)`,
+  );
+}
 
 const checks = [
   ['toolchain', () => runNodeScript('scripts/check-pnpm-toolchain.mjs', ['--hook'])],
