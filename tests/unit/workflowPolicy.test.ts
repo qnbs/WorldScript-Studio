@@ -160,9 +160,14 @@ describe('CI workflow policy', () => {
       'lighthouse',
       'vrt',
     ]) {
-      expect(ciSuccessBlock, `${jobName} result assertion`).toMatch(
-        new RegExp(`(?:\\[|if\\s+\\[)[^\\n]*needs\\.${jobName}\\.result[^\\n]*(?:success|skipped)`),
-      );
+      const resultToken = `needs.${jobName}.result`;
+      expect(ciSuccessBlock, `${jobName} result assertion`).toContain(resultToken);
+      if (['rust-tauri', 'core-rust'].includes(jobName)) {
+        expect(ciSuccessBlock).toMatch(new RegExp(`${resultToken}[^\\n]*!=\\s*["']success["']`));
+        expect(ciSuccessBlock).toMatch(new RegExp(`${resultToken}[^\\n]*!=\\s*["']skipped["']`));
+      } else {
+        expect(ciSuccessBlock).toMatch(new RegExp(`${resultToken}[^\\n]*\\s=\\s*["']success["']`));
+      }
     }
 
     for (const jobName of ['e2e-deep', 'storybook']) {

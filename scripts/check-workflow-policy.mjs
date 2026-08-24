@@ -98,13 +98,28 @@ for (const [name, pattern] of [
 ]) {
   if (!pattern.test(executableCi)) failures.push(`.github/workflows/ci.yml: missing ${name}`);
 }
+
+function hasAggregateResultAssertion(block, dependency, allowsSkipped) {
+  const lines = block.split('\n').filter((line) => line.includes(`needs.${dependency}.result`));
+  if (allowsSkipped) {
+    return (
+      lines.some((line) => /!=\s*['"]success['"]/.test(line)) &&
+      lines.some((line) => /!=\s*['"]skipped['"]/.test(line))
+    );
+  }
+  return lines.some((line) => /\s=\s*['"]success['"]/.test(line));
+}
+
 for (const dependency of requiredAggregateJobs) {
   if (!ciNeeds.includes(dependency))
     failures.push(`.github/workflows/ci.yml: ci-success missing ${dependency} dependency`);
-  const resultAssertion = new RegExp(
-    `(?:\\[|if\\s+\\[)[^\\n]*needs\\.${dependency}\\.result[^\\n]*(?:success|skipped)`,
-  );
-  if (!resultAssertion.test(ciSuccessBlock))
+  if (
+    !hasAggregateResultAssertion(
+      ciSuccessBlock,
+      dependency,
+      ['rust-tauri', 'core-rust'].includes(dependency),
+    )
+  )
     failures.push(`.github/workflows/ci.yml: ci-success does not assert ${dependency} result`);
 }
 

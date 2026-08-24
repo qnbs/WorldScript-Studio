@@ -38,7 +38,7 @@ function changedFilesFromWorkingTree() {
 
 function changedFilesFromRef(target, base) {
   if (!target || !base) throw new Error('outgoing comparison base or target is unresolved');
-  return git(['diff', '--no-renames', '--name-only', `${base}...${target}`])
+  return git(['diff', '--no-renames', '--name-only', `${base}..${target}`])
     .split('\n')
     .filter(Boolean);
 }
@@ -66,7 +66,7 @@ function resolveChangeSet() {
   function addRefFiles(target, base) {
     try {
       const changed = changedFilesFromRef(target, base);
-      ranges.push(`${base}...${target}`);
+      ranges.push(`${base}..${target}`);
       for (const file of changed) files.add(file);
     } catch (error) {
       unresolved = true;
@@ -176,6 +176,10 @@ const classification = changes.unresolved
       categories: [...new Set([...baseClassification.categories, 'UNKNOWN'])],
     }
   : baseClassification;
+if (changes.unresolved) {
+  report('Change-set resolution', 'FAIL', 'outgoing tips or comparison base could not be resolved');
+  process.exit(1);
+}
 const typecheckRequired = requiresTypecheck(classification, { full });
 const results = [];
 

@@ -84,16 +84,16 @@ try {
         .filter((parts) => parts.length >= 4)
         .filter(([, localSha]) => !/^0+$/.test(localSha))
         .map(([, localSha, , remoteSha]) => {
-          if (!/^0+$/.test(remoteSha)) return `${remoteSha}...${localSha}`;
+          if (!/^0+$/.test(remoteSha)) return `${remoteSha}..${localSha}`;
           const originMain = spawnSync('git', ['rev-parse', 'origin/main'], {
             cwd: process.cwd(),
             encoding: 'utf8',
           });
           if (originMain.status !== 0) throw new Error('origin/main cannot be resolved');
-          return `${originMain.stdout.trim()}...${localSha}`;
+          return `${originMain.stdout.trim()}..${localSha}`;
         });
   for (const range of ranges) {
-    if (!/^[0-9a-f]+\.\.\.[0-9a-f]+$/i.test(range)) {
+    if (!/^[0-9a-f]+\.\.[0-9a-f]+$/i.test(range)) {
       console.error(`outgoing diff check received an invalid range: ${range}`);
       process.exit(1);
     }
