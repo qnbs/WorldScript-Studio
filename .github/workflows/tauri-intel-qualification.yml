@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: tauri-intel-qualification-${{ github.ref }}
+  group: tauri-intel-qualification-${{ github.ref }}-${{ inputs.qualification_ref || github.sha }}
   cancel-in-progress: true
 
 jobs:

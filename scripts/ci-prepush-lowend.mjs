@@ -229,7 +229,7 @@ if (typecheckRequired) {
 
 console.log('\nLOCAL ADMISSION RESULT');
 for (const [name, status] of results) console.log(`${name.padEnd(26)} ${status}`);
-console.log('Outgoing signatures       SIGNING_HOOK_REQUIRED');
+console.log(`Outgoing signatures       ${isPrePush ? 'PASS' : 'SIGNING_HOOK_REQUIRED'}`);
 console.log('Cloud validation required YES');
 console.log(`Classification             ${classification.kind}`);
 console.log(`TypeScript full local     ${typecheckRequired ? 'REQUIRED' : 'DEFERRED'}`);

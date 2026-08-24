@@ -47,11 +47,20 @@ function runBounded(command, args, { timeoutMs = 120_000, env, input, shell = fa
       terminate('SIGTERM');
       forceTimer = setTimeout(() => terminate('SIGKILL'), 1_000);
     }, timeoutMs);
+    const signalHandlers = new Map();
+    for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+      const handler = () => terminate(signal);
+      signalHandlers.set(signal, handler);
+      process.once(signal, handler);
+    }
     const finish = (status, signal, error = null) => {
       if (settled) return;
       settled = true;
       clearTimeout(timeoutTimer);
       if (forceTimer) clearTimeout(forceTimer);
+      for (const [parentSignal, handler] of signalHandlers) {
+        process.removeListener(parentSignal, handler);
+      }
       resolveResult({ status: error ? null : status, signal, error, timedOut, command });
     };
     child.once('error', (error) => finish(null, null, error));

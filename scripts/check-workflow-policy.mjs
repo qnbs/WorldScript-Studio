@@ -28,10 +28,11 @@ function hasReadOnlyTopLevelPermissions(content) {
   if (inline) return inline === '{ contents: read }';
   const block = [];
   for (const line of lines.slice(index + 1)) {
-    if (line && !/^\s{2}/.test(line)) break;
-    block.push(line);
+    const uncommented = line.replace(/\s+#.*$/, '').trimEnd();
+    if (uncommented && !/^\s{2}/.test(uncommented)) break;
+    if (uncommented.trim()) block.push(uncommented.trim());
   }
-  return block.some((line) => /^\s{2}contents:\s*read\s*(?:#.*)?$/.test(line));
+  return block.length === 1 && /^contents:\s*read$/.test(block[0]);
 }
 
 for (const file of files) {
@@ -84,6 +85,8 @@ for (const dependency of [
   'e2e',
   'lighthouse',
   'vrt',
+  'rust-tauri',
+  'core-rust',
 ]) {
   if (!ciNeeds.includes(dependency))
     failures.push(`.github/workflows/ci.yml: ci-success missing ${dependency} dependency`);
