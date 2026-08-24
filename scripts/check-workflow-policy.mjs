@@ -60,6 +60,7 @@ for (const file of files) {
 
 const ciPath = join(workflowRoot, 'ci.yml');
 const ci = readFileSync(ciPath, 'utf8');
+const executableCi = ci.split('\n').map(stripWorkflowComment).join('\n');
 const ciLines = ci.split('\n');
 const ciSuccessStart = ciLines.findIndex((line) => /^\s{2}ci-success:\s*$/.test(line));
 const nextJob = ciLines.findIndex(
@@ -95,7 +96,7 @@ for (const [name, pattern] of [
     /tsgo\s+--project\s+tsconfig\.tsgo\.json\s+--noEmit\s+--checkers\s+4/,
   ],
 ]) {
-  if (!pattern.test(ci)) failures.push(`.github/workflows/ci.yml: missing ${name}`);
+  if (!pattern.test(executableCi)) failures.push(`.github/workflows/ci.yml: missing ${name}`);
 }
 for (const dependency of requiredAggregateJobs) {
   if (!ciNeeds.includes(dependency))
@@ -132,7 +133,7 @@ if (files.includes(intelPath)) {
       (line) =>
         /contents:\s*write|softprops\/action-gh-release/.test(line) ||
         /\blatest\.json\b/.test(line) ||
-        isReleasePublishingCommand(line),
+        isReleasePublishingCommand(executableIntelLines.join('\n')),
     )
   ) {
     failures.push(

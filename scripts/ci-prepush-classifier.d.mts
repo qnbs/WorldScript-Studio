@@ -29,6 +29,7 @@ export interface ProcessResult {
   status: number | null;
   signal: string | null;
   timedOut?: boolean;
+  interrupted?: boolean;
 }
 
 export function classifyFile(file: string): ChangeCategory;

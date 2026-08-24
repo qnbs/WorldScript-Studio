@@ -5,7 +5,11 @@ import process from 'node:process';
 function runGitCheck(args, label) {
   const result = spawnSync('git', args, { cwd: process.cwd(), encoding: 'utf8' });
   if (result.status === 0) return true;
-  console.error(`${label} failed${result.stderr ? `: ${result.stderr.trim()}` : ''}`);
+  const diagnostics = [result.stdout, result.stderr]
+    .filter((value) => value?.trim())
+    .map((value) => value.trim())
+    .join('\n');
+  console.error(`${label} failed${diagnostics ? `:\n${diagnostics}` : ''}`);
   return false;
 }
 

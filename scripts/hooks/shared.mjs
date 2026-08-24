@@ -19,7 +19,7 @@ export function ensureDependencyState() {
 }
 
 // QNBS-v3: bound hook children so timeout or resource termination is observable instead of an implicit pass.
-function runBounded(command, args, { timeoutMs = 120_000, env, input, shell = false } = {}) {
+export function runBounded(command, args, { timeoutMs = 120_000, env, input, shell = false } = {}) {
   return new Promise((resolveResult) => {
     const child = spawn(command, args, {
       cwd: projectRoot,
@@ -29,6 +29,8 @@ function runBounded(command, args, { timeoutMs = 120_000, env, input, shell = fa
       stdio: input === undefined ? 'inherit' : ['pipe', 'inherit', 'inherit'],
     });
     let timedOut = false;
+    let interrupted = false;
+    let terminationRequested = false;
     let settled = false;
     let forceTimer;
     let pendingFinish;
@@ -59,22 +61,38 @@ function runBounded(command, args, { timeoutMs = 120_000, env, input, shell = fa
           const result = pendingFinish;
           pendingFinish = undefined;
           complete(...result);
-        }
+        } else complete(null, 'SIGKILL');
       }, 1_000);
     };
-    const timeoutTimer = setTimeout(() => {
-      timedOut = true;
-      terminate('SIGTERM');
+    const requestTermination = (signal, reason) => {
+      if (reason === 'timeout') timedOut = true;
+      else interrupted = true;
+      if (terminationRequested) {
+        // QNBS-v3: a repeated parent signal must force-clean detached children before the grace timer.
+        terminate('SIGKILL');
+        if (forceTimer) {
+          clearTimeout(forceTimer);
+          forceTimer = undefined;
+        }
+        if (pendingFinish) {
+          const result = pendingFinish;
+          pendingFinish = undefined;
+          complete(...result);
+        }
+        return;
+      }
+      terminationRequested = true;
+      terminate(signal);
       scheduleForceTermination();
-    }, timeoutMs);
+    };
+    const timeoutTimer = setTimeout(() => requestTermination('SIGTERM', 'timeout'), timeoutMs);
     const signalHandlers = new Map();
     for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
       const handler = () => {
-        terminate(signal);
-        scheduleForceTermination();
+        requestTermination(signal, 'interrupt');
       };
       signalHandlers.set(signal, handler);
-      process.once(signal, handler);
+      process.on(signal, handler);
     }
     const complete = (status, signal, error = null) => {
       if (settled) return;
@@ -87,7 +105,14 @@ function runBounded(command, args, { timeoutMs = 120_000, env, input, shell = fa
       for (const [parentSignal, handler] of signalHandlers) {
         process.removeListener(parentSignal, handler);
       }
-      resolveResult({ status: error ? null : status, signal, error, timedOut, command });
+      resolveResult({
+        status: error ? null : status,
+        signal,
+        error,
+        timedOut,
+        interrupted,
+        command,
+      });
     };
     const finish = (status, signal, error = null) => {
       if (settled) return;
@@ -114,7 +139,7 @@ export async function runNodeScriptDetailed(script, args = [], options = {}) {
 
 export async function runNodeScript(script, args = [], options = {}) {
   const result = await runNodeScriptDetailed(script, args, options);
-  return result.error ? 1 : (result.status ?? 1);
+  return result.error || result.timedOut || result.interrupted ? 1 : (result.status ?? 1);
 }
 
 export async function runLocalBinaryDetailed(binary, args = [], options = {}) {
@@ -133,6 +158,7 @@ export async function runLocalBinaryDetailed(binary, args = [], options = {}) {
       signal: null,
       error: new Error(`Missing local binary: ${binary}`),
       timedOut: false,
+      interrupted: false,
       command,
     };
   }
@@ -141,5 +167,5 @@ export async function runLocalBinaryDetailed(binary, args = [], options = {}) {
 
 export async function runLocalBinary(binary, args = [], options = {}) {
   const result = await runLocalBinaryDetailed(binary, args, options);
-  return result.error ? 1 : (result.status ?? 1);
+  return result.error || result.timedOut || result.interrupted ? 1 : (result.status ?? 1);
 }

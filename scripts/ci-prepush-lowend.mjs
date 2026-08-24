@@ -129,7 +129,12 @@ function report(name, status, detail = '') {
 async function runNodeCheck(name, script, args = [], timeoutMs = 120_000, env = {}) {
   const result = await runNodeScriptDetailed(script, args, { timeoutMs, env });
   const status = classifyProcessResult(result);
-  report(name, status, result.timedOut ? `timeout after ${timeoutMs}ms` : (result.signal ?? ''));
+  const detail = result.timedOut
+    ? `timeout after ${timeoutMs}ms`
+    : result.interrupted
+      ? 'interrupted by parent signal'
+      : (result.signal ?? '');
+  report(name, status, detail);
   return status;
 }
 

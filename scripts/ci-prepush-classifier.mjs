@@ -146,7 +146,13 @@ export function requiresTypecheck(classification, { full = false } = {}) {
 }
 
 export function classifyProcessResult(result) {
-  if (result.timedOut || result.signal || result.status === 137 || result.status === 143) {
+  if (
+    result.timedOut ||
+    result.interrupted ||
+    result.signal ||
+    result.status === 137 ||
+    result.status === 143
+  ) {
     return 'LOCAL_RESOURCE_FAILURE';
   }
   if (result.status === 0) return 'PASS';

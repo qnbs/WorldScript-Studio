@@ -221,6 +221,21 @@ describe('Tauri release workflow policy', () => {
     ).toBe(true);
     expect(
       isReleasePublishingCommand(
+        '    curl --upload-file artifact.dmg \\\n+          https://uploads.github.com/repos/org/repo/releases/assets',
+      ),
+    ).toBe(true);
+    expect(
+      isReleasePublishingCommand(
+        'curl --request DELETE https://api.github.com/repos/org/repo/releases/42',
+      ),
+    ).toBe(true);
+    expect(
+      isReleasePublishingCommand(
+        'curl --request=PATCH https://api.github.com/repos/org/repo/releases/42',
+      ),
+    ).toBe(true);
+    expect(
+      isReleasePublishingCommand(
         '          mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json',
       ),
     ).toBe(false);
