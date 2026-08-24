@@ -2,7 +2,12 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { isReleasePublishingCommand } from '../../scripts/workflow-policy-guards.mjs';
+import {
+  extractActionReferences,
+  hasAggregateResultAssertion,
+  isReleasePublishingCommand,
+  isSemanticallyUnconditionalIf,
+} from '../../scripts/workflow-policy-guards.mjs';
 import {
   extractJobBlock,
   extractJobNames,
@@ -223,6 +228,30 @@ describe('CI workflow policy', () => {
 
 // QNBS-v3: keep desktop publication causally downstream of independently verified annotated tags.
 describe('Tauri release workflow policy', () => {
+  it('normalizes quoted action references and whitespace before mapping colons', () => {
+    const pinned = `actions/checkout@${'a'.repeat(40)}`;
+    expect(extractActionReferences(`uses : "${pinned}"`)).toEqual([pinned]);
+    expect(extractActionReferences(`- { uses : ${pinned} }`)).toEqual([pinned]);
+  });
+
+  it('distinguishes semantically unconditional job conditions', () => {
+    expect(isSemanticallyUnconditionalIf('    if: true')).toBe(true);
+    expect(isSemanticallyUnconditionalIf('    if: $' + '{{ always() }}')).toBe(true);
+    expect(isSemanticallyUnconditionalIf("    if: needs.changes.outputs.tauri == 'true'")).toBe(
+      false,
+    );
+  });
+
+  it('requires aggregate success checks to route failures through FAIL=1', () => {
+    const needsBuild = '$' + '{{ needs.build.result }}';
+    expect(
+      hasAggregateResultAssertion(`[ "${needsBuild}" = "success" ] || FAIL=1`, 'build', false),
+    ).toBe(true);
+    expect(
+      hasAggregateResultAssertion(`[ "${needsBuild}" = "success" ] && FAIL=1`, 'build', false),
+    ).toBe(false);
+  });
+
   // QNBS-v3: cover multiline and option-form release mutation detection.
   it('rejects mutating release commands in the non-publishing Intel workflow', () => {
     expect(isReleasePublishingCommand('    gh release create "$TAG"')).toBe(true);

@@ -38,6 +38,42 @@ function normalizeShellContinuations(source) {
   return normalizeYamlFoldedRuns(source).replace(/\\\r?\n[ \t]*/g, ' ');
 }
 
+export function extractActionReferences(source) {
+  return [...source.matchAll(/\buses\s*:\s*([^\s,}]+)/g)].map(([, rawReference]) =>
+    rawReference.replace(/^(['"])(.*)\1$/, '$2'),
+  );
+}
+
+export function isSemanticallyUnconditionalIf(block) {
+  const match = block.match(/^ {4}if:\s*(.+)$/m);
+  if (!match) return false;
+  const expression = match[1]
+    .trim()
+    .replace(/^\$\{\{\s*/, '')
+    .replace(/\s*\}\}$/, '')
+    .trim();
+  return /^(?:always\(\)|true)$/i.test(expression);
+}
+
+export function hasAggregateResultAssertion(block, dependency, allowsSkipped) {
+  // QNBS-v3: require the result comparison to route failure into FAIL=1, not merely mention a token.
+  const lines = block.split('\n');
+  const token = `needs.${dependency}.result`;
+  return lines.some((line, index) => {
+    if (!line.includes(token)) return false;
+    const context = lines.slice(index, index + 5).join('\n');
+    if (!/FAIL\s*=\s*1/.test(context)) return false;
+    if (allowsSkipped) {
+      return (
+        /!=\s*['"]success['"]/.test(line) &&
+        /!=\s*['"]skipped['"]/.test(line) &&
+        /\bthen\b/.test(context)
+      );
+    }
+    return /\s=\s*['"]success['"]/.test(line) && /\|\|[^\n]*FAIL\s*=\s*1/.test(context);
+  });
+}
+
 export function isReleasePublishingCommand(source) {
   return normalizeShellContinuations(source)
     .split(/\r?\n/)

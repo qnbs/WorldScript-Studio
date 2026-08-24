@@ -1,7 +1,12 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import process from 'node:process';
-import { isReleasePublishingCommand } from './workflow-policy-guards.mjs';
+import {
+  extractActionReferences,
+  hasAggregateResultAssertion,
+  isReleasePublishingCommand,
+  isSemanticallyUnconditionalIf,
+} from './workflow-policy-guards.mjs';
 
 const root = join(process.cwd(), '.github');
 const workflowRoot = join(root, 'workflows');
@@ -54,8 +59,7 @@ for (const file of files) {
   // QNBS-v3: inspect ordinary and flow-mapping action references for immutable pins.
   for (const rawLine of content.split('\n')) {
     const line = stripWorkflowComment(rawLine);
-    for (const match of line.matchAll(/\buses:\s*([^\s,}]+)/g)) {
-      const reference = match[1].replace(/^(['"])(.*)\1$/, '$2');
+    for (const reference of extractActionReferences(line)) {
       if (reference.startsWith('./') || reference.startsWith('docker://')) continue;
       if (!/@[0-9a-f]{40}$/i.test(reference))
         failures.push(`${label}: unpinned action ${reference}`);
@@ -104,17 +108,6 @@ function extractCiJobBlocks(content) {
 
 // QNBS-v3: require every unconditional CI job to have an explicit required or advisory disposition.
 const ciJobBlocks = extractCiJobBlocks(ci);
-function isSemanticallyUnconditionalIf(block) {
-  const match = block.match(/^ {4}if:\s*(.+)$/m);
-  if (!match) return false;
-  const expression = match[1]
-    .trim()
-    .replace(/^\$\{\{\s*/, '')
-    .replace(/\s*\}\}$/, '')
-    .trim();
-  return /^(?:always\(\)|true)$/i.test(expression);
-}
-
 for (const [jobName, block] of ciJobBlocks) {
   if (jobName === 'ci-success') continue;
   const executableBlock = block.split('\n').map(stripWorkflowComment).join('\n');
@@ -146,21 +139,6 @@ for (const [name, pattern] of [
   ],
 ]) {
   if (!pattern.test(executableCi)) failures.push(`.github/workflows/ci.yml: missing ${name}`);
-}
-
-function hasAggregateResultAssertion(block, dependency, allowsSkipped) {
-  // QNBS-v3: require each aggregate failure branch to set FAIL=1, not just mention a result token.
-  const lines = block.split('\n');
-  const token = `needs.${dependency}.result`;
-  return lines.some((line, index) => {
-    if (!line.includes(token)) return false;
-    const context = lines.slice(index, index + 5).join('\n');
-    if (!/FAIL\s*=\s*1/.test(context)) return false;
-    if (allowsSkipped) {
-      return /!=\s*['"]success['"]/.test(line) && /!=\s*['"]skipped['"]/.test(line);
-    }
-    return /\s=\s*['"]success['"]/.test(line);
-  });
 }
 
 for (const dependency of requiredAggregateJobs) {
