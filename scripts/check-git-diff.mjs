@@ -19,9 +19,9 @@ function runGitCheck(args, label) {
 // QNBS-v3: scan untracked files incrementally so binary assets cannot exhaust local admission memory.
 function checkUntrackedFile(path) {
   if (!lstatSync(path).isFile()) return [];
-  const descriptor = openSync(path, 'r');
   const errors = [];
   const chunk = Buffer.allocUnsafe(64 * 1024);
+  let descriptor;
   let bytesRead;
   let lineNumber = 1;
   let lineStarted = false;
@@ -49,6 +49,7 @@ function checkUntrackedFile(path) {
   };
 
   try {
+    descriptor = openSync(path, 'r');
     do {
       bytesRead = readSync(descriptor, chunk, 0, chunk.length, null);
       for (const byte of chunk.subarray(0, bytesRead)) {
@@ -75,7 +76,7 @@ function checkUntrackedFile(path) {
     } while (bytesRead > 0);
     if (!diagnosticLimitReached && (lineStarted || lastByte !== null)) finishLine();
   } finally {
-    closeSync(descriptor);
+    if (descriptor !== undefined) closeSync(descriptor);
   }
   if (diagnosticLimitReached) {
     errors.push(
