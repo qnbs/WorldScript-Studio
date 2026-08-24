@@ -71,6 +71,33 @@ export function getSigningConfig(cwd?: string): SigningConfig;
 export function hasCommitSignature(commitText: string): boolean;
 export function isGitHubCompatibleEmail(email: string): boolean;
 export function parseRefUpdate(line: string): RefUpdate | null;
+export function normalizePrePushUpdates(input: string | string[] | RefUpdate[]): RefUpdate[];
+export function serializePrePushEvidence(input: string | string[] | RefUpdate[]): string;
+export function parsePrePushEvidence(serialized: string): RefUpdate[];
+export function readPrePushEvidenceFile(file: string): RefUpdate[];
+export function writePrePushEvidenceFile(
+  file: string,
+  input: string | string[] | RefUpdate[],
+): void;
+export interface PushEvidenceUpdate extends RefUpdate {
+  base?: string;
+  disposition: 'DELETED' | 'TAG' | 'NEW_BRANCH' | 'UPDATED';
+}
+export interface PushEvidence {
+  updates: PushEvidenceUpdate[];
+  changedFiles: string[];
+  evidenceState: 'RESOLVED' | 'INVALID';
+  reason?: string;
+}
+export function resolvePushEvidence(
+  input: string | string[] | RefUpdate[],
+  cwd?: string,
+  dependencies?: {
+    commitExists?: (sha: string) => boolean;
+    objectExists?: (sha: string) => boolean;
+    changedFilesBetween?: (base: string, head: string) => string[];
+  },
+): PushEvidence;
 export function selectIntroducedCommits(commits: string[], reachableFromBase: string[]): string[];
 export function runSigningProbe(cwd?: string): { ok: boolean; reason?: string; commit?: string };
 export function verifyCommitObject(sha: string, cwd?: string): VerificationResult;
@@ -92,7 +119,10 @@ export function pushCommitShas(
 export function parseAnnotatedTag(
   sha: string,
   cwd?: string,
-): { objectType: 'commit'; target: string } | { objectType: 'tag'; target: string; targetType: string } | null;
+):
+  | { objectType: 'commit'; target: string }
+  | { objectType: 'tag'; target: string; targetType: string }
+  | null;
 export function verifyTagObject(sha: string, cwd?: string): VerificationResult;
 export function remoteTrackingBases(remote: string, remoteRef: string, cwd?: string): string[];
 export function outgoingBaseShas(update: RefUpdate, fallbackBases: string[]): string[];
@@ -111,7 +141,7 @@ export function safeConfigSummary(cwd?: string): {
   unsafeOverrides: string[];
 };
 export function verifyOutgoingUpdates(
-  lines: string[],
+  input: string | string[] | RefUpdate[],
   remote: string,
   cwd?: string,
   dependencies?: {

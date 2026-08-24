@@ -1,5 +1,21 @@
 import process from 'node:process';
 import { ensureDependencyState, runLocalBinary, runNodeScript } from './hooks/shared.mjs';
+import { readPrePushEvidenceFile, resolvePushEvidence } from './signing/signing-core.mjs';
+
+const evidenceIndex = process.argv.indexOf('--prepush-evidence-file');
+if (evidenceIndex >= 0) {
+  try {
+    const evidence = resolvePushEvidence(
+      readPrePushEvidenceFile(process.argv[evidenceIndex + 1]),
+      process.cwd(),
+    );
+    if (evidence.evidenceState !== 'RESOLVED')
+      throw new Error(evidence.reason ?? 'invalid evidence');
+  } catch (error) {
+    console.error(`[local-lowend] outgoing evidence rejected: ${error.message}`);
+    process.exit(1);
+  }
+}
 
 const checks = [
   ['toolchain', () => runNodeScript('scripts/check-pnpm-toolchain.mjs', ['--hook'])],
