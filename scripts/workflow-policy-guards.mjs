@@ -3,7 +3,7 @@ const releaseTargetPattern =
 
 // QNBS-v3: detect explicit and implicit GitHub release mutations before qualification can pass.
 const mutatingReleaseCommandPattern =
-  /\b(?:gh\s+release\s+(?:create|upload|edit|delete)|gh\s+api\b(?=[^\n]*(?:(?:--method(?:=|\s+)|-X\s+)(?:POST|PUT|PATCH|DELETE)\b|(?:--raw-field|--field|-F|-f|--input)(?:=|\s+)))(?=[^\n]*(?:\breleases?\b|\bassets?\b))[^\n]*|(?:curl|wget)\b[^\n]*(?:--upload-file|-T\s|--data(?:-binary|-raw|-urlencode)?(?:=|\s+)|-d\s|--json(?:=|\s+)|--post-(?:data|file)(?:=|\s+)|--method(?:=|\s+)(?:POST|PUT|PATCH|DELETE)\b|-X\s*(?:POST|PUT|PATCH|DELETE)|--request(?:=|\s+)(?:POST|PUT|PATCH|DELETE)\b)[^\n]*(?:release|asset|uploads\.github\.com|api\.github\.com)|(?:cp|mv|install|scp|aws\s+s3\s+cp|az\s+storage\s+blob\s+upload)\b[^\n]*\b(?:release|releases|artifact|artifacts|latest\.json)\b)/i;
+  /\b(?:gh\s+release\s+(?:new|create|upload|edit|delete)|gh\s+api\b(?=[^\n]*(?:(?:--method(?:=|\s+)|-X\s+)(?:POST|PUT|PATCH|DELETE)\b|(?:--raw-field|--field|-F|-f|--input)(?:=|\s+)))(?=[^\n]*(?:\breleases?\b|\bassets?\b))[^\n]*|(?:curl|wget)\b[^\n]*(?:--upload-file|-T\s|--data(?:-binary|-raw|-urlencode)?(?:=|\s+)|-d\s|--json(?:=|\s+)|--post-(?:data|file)(?:=|\s+)|--method(?:=|\s+)(?:POST|PUT|PATCH|DELETE)\b|-X\s*(?:POST|PUT|PATCH|DELETE)|--request(?:=|\s+)(?:POST|PUT|PATCH|DELETE)\b)[^\n]*(?:release|asset|uploads\.github\.com|api\.github\.com)|(?:cp|mv|install|scp|aws\s+s3\s+cp|az\s+storage\s+blob\s+upload)\b[^\n]*\b(?:release|releases|artifact|artifacts|latest\.json)\b)/i;
 
 function normalizeYamlFoldedRuns(source) {
   const lines = source.split(/\r?\n/);
@@ -50,9 +50,10 @@ export function extractTopLevelJobName(line) {
 }
 
 export function isSemanticallyUnconditionalIf(block) {
-  const match = block.match(/^ {4}if:\s*(.+)$/m);
-  if (!match) return false;
-  const expression = match[1]
+  const match = block.match(/^\s*if:\s*(.+)$/m);
+  const rawExpression = match?.[1] ?? (block.trim() ? block : null);
+  if (!rawExpression) return false;
+  const expression = rawExpression
     .replace(/\s+#.*$/, '')
     .trim()
     .replace(/^\$\{\{\s*/, '')
@@ -63,7 +64,8 @@ export function isSemanticallyUnconditionalIf(block) {
 
 export function hasAggregateResultAssertion(block, dependency, allowsSkipped) {
   // QNBS-v3: require the result comparison to route failure into FAIL=1, not merely mention a token.
-  const lines = block
+  const source = Array.isArray(block) ? block.join('\n') : block;
+  const lines = source
     .split('\n')
     .map((line) => line.replace(/^\s*#.*$/, '').replace(/\s+#.*$/, ''));
   const token = `needs.${dependency}.result`;
@@ -83,7 +85,8 @@ export function hasAggregateResultAssertion(block, dependency, allowsSkipped) {
 }
 
 export function isReleasePublishingCommand(source) {
-  return normalizeShellContinuations(source)
+  const normalizedSource = Array.isArray(source) ? source.join('\n') : source;
+  return normalizeShellContinuations(normalizedSource)
     .split(/\r?\n/)
     .some((line) => {
       const uncommented = line

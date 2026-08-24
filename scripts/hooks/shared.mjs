@@ -7,9 +7,9 @@ import { verifyDependencyState } from '../dependency-state.mjs';
 
 const projectRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 
-export function ensureDependencyState() {
+export function ensureDependencyState(root = projectRoot) {
   try {
-    verifyDependencyState(projectRoot);
+    verifyDependencyState(root);
     return true;
   } catch (error) {
     console.error(`[hook] ${error instanceof Error ? error.message : String(error)}`);
@@ -19,10 +19,14 @@ export function ensureDependencyState() {
 }
 
 // QNBS-v3: bound hook children so timeout or resource termination is observable instead of an implicit pass.
-export function runBounded(command, args, { timeoutMs = 120_000, env, input, shell = false } = {}) {
+export function runBounded(
+  command,
+  args,
+  { timeoutMs = 120_000, env, input, shell = false, cwd = projectRoot } = {},
+) {
   return new Promise((resolveResult) => {
     const child = spawn(command, args, {
-      cwd: projectRoot,
+      cwd,
       env: { ...process.env, ...env },
       shell,
       detached: process.platform !== 'win32',
@@ -31,6 +35,10 @@ export function runBounded(command, args, { timeoutMs = 120_000, env, input, she
     let timedOut = false;
     let interrupted = false;
     let terminationRequested = false;
+    let cleanupStarted = false;
+    let cleanupDeadline = 0;
+    let pendingFinish = null;
+    let state = 'RUNNING';
     let settled = false;
     let forceTimer;
     const terminate = (signal) => {
@@ -49,30 +57,63 @@ export function runBounded(command, args, { timeoutMs = 120_000, env, input, she
         );
         if (result.status === 0) return;
       }
-      child.kill(signal);
+      try {
+        child.kill(signal);
+      } catch {
+        // The child may have exited between process-group and direct cleanup attempts.
+      }
+    };
+    const cleanupComplete = () => {
+      if (!child.pid || process.platform === 'win32') return true;
+      try {
+        process.kill(-child.pid, 0);
+        return false;
+      } catch (error) {
+        return error?.code === 'ESRCH';
+      }
+    };
+    const finishAfterCleanup = () => {
+      if (!cleanupComplete() && Date.now() < cleanupDeadline) {
+        setTimeout(finishAfterCleanup, 20);
+        return;
+      }
+      complete(
+        pendingFinish?.status ?? null,
+        pendingFinish?.signal ?? 'SIGKILL',
+        pendingFinish?.error ?? null,
+      );
+    };
+    const beginForceCleanup = () => {
+      if (cleanupStarted || state === 'SETTLED') return;
+      cleanupStarted = true;
+      state = 'FORCE_CLEANUP_RUNNING';
+      if (forceTimer) {
+        clearTimeout(forceTimer);
+        forceTimer = undefined;
+      }
+      terminate('SIGKILL');
+      cleanupDeadline = Date.now() + 1_000;
+      finishAfterCleanup();
     };
     const scheduleForceTermination = () => {
       if (forceTimer) clearTimeout(forceTimer);
+      state = 'FORCE_CLEANUP_PENDING';
       forceTimer = setTimeout(() => {
         forceTimer = undefined;
-        terminate('SIGKILL');
-        complete(null, 'SIGKILL');
+        beginForceCleanup();
       }, 1_000);
     };
-    const requestTermination = (signal, reason) => {
+    const requestTermination = (signal, reason, error = null) => {
       if (reason === 'timeout') timedOut = true;
-      else interrupted = true;
+      else if (reason === 'interrupt') interrupted = true;
+      if (error) pendingFinish = { status: null, signal: null, error };
       if (terminationRequested) {
         // QNBS-v3: a repeated parent signal must force-clean detached children before the grace timer.
-        terminate('SIGKILL');
-        if (forceTimer) {
-          clearTimeout(forceTimer);
-          forceTimer = undefined;
-        }
-        complete(null, 'SIGKILL');
+        beginForceCleanup();
         return;
       }
       terminationRequested = true;
+      state = 'TERMINATION_REQUESTED';
       terminate(signal);
       scheduleForceTermination();
     };
@@ -88,6 +129,7 @@ export function runBounded(command, args, { timeoutMs = 120_000, env, input, she
     const complete = (status, signal, error = null) => {
       if (settled) return;
       settled = true;
+      state = 'SETTLED';
       clearTimeout(timeoutTimer);
       if (forceTimer) {
         clearTimeout(forceTimer);
@@ -107,11 +149,12 @@ export function runBounded(command, args, { timeoutMs = 120_000, env, input, she
     };
     const finish = (status, signal, error = null) => {
       if (settled) return;
-      if (forceTimer) {
-        clearTimeout(forceTimer);
-        forceTimer = undefined;
-        // QNBS-v3: clean child exit must still reap detached descendants immediately after termination.
-        terminate('SIGKILL');
+      if (terminationRequested) {
+        // QNBS-v3: leader close never proves descendants are gone; force cleanup remains authoritative.
+        pendingFinish ??= { status, signal, error };
+        state = 'CLOSED';
+        beginForceCleanup();
+        return;
       }
       complete(status, signal, error);
     };
@@ -119,7 +162,8 @@ export function runBounded(command, args, { timeoutMs = 120_000, env, input, she
     child.once('close', (status, signal) => finish(status, signal));
     if (input !== undefined) {
       child.stdin.once('error', (error) => {
-        if (!['EPIPE', 'ERR_STREAM_DESTROYED'].includes(error.code)) finish(null, null, error);
+        if (!['EPIPE', 'ERR_STREAM_DESTROYED'].includes(error.code))
+          requestTermination('SIGTERM', 'resource', error);
       });
       child.stdin.end(input);
     }
@@ -127,7 +171,8 @@ export function runBounded(command, args, { timeoutMs = 120_000, env, input, she
 }
 
 export async function runNodeScriptDetailed(script, args = [], options = {}) {
-  return runBounded(process.execPath, [resolve(projectRoot, script), ...args], options);
+  const root = options.root ?? projectRoot;
+  return runBounded(process.execPath, [resolve(root, script), ...args], { ...options, cwd: root });
 }
 
 export async function runNodeScript(script, args = [], options = {}) {
@@ -136,8 +181,9 @@ export async function runNodeScript(script, args = [], options = {}) {
 }
 
 export async function runLocalBinaryDetailed(binary, args = [], options = {}) {
+  const root = options.root ?? projectRoot;
   const command = resolve(
-    projectRoot,
+    root,
     'node_modules',
     '.bin',
     `${binary}${process.platform === 'win32' ? '.cmd' : ''}`,
@@ -155,7 +201,7 @@ export async function runLocalBinaryDetailed(binary, args = [], options = {}) {
       command,
     };
   }
-  return runBounded(command, args, { ...options, shell: process.platform === 'win32' });
+  return runBounded(command, args, { ...options, cwd: root, shell: process.platform === 'win32' });
 }
 
 export async function runLocalBinary(binary, args = [], options = {}) {

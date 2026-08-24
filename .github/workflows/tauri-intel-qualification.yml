@@ -118,7 +118,8 @@ jobs:
           file "$executable" | tee qualification-file.txt
           grep -Eq 'x86_64' qualification-file.txt
           lipo -info "$executable" | tee qualification-lipo.txt
-          grep -Eq 'x86_64' qualification-lipo.txt
+          lipo_archs="$(lipo -archs "$executable")"
+          test "$lipo_archs" = "x86_64"
 
           load_commands="$(otool -l "$executable")"
           printf '%s\n' "$load_commands" > qualification-otool.txt

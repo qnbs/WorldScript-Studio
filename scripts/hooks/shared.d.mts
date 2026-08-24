@@ -15,5 +15,7 @@ export function runBounded(
     env?: NodeJS.ProcessEnv;
     input?: string;
     shell?: boolean;
+    cwd?: string;
+    root?: string;
   },
 ): Promise<BoundedResult>;

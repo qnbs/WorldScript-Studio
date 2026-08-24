@@ -276,6 +276,7 @@ describe('Tauri release workflow policy', () => {
   // QNBS-v3: cover multiline and option-form release mutation detection.
   it('rejects mutating release commands in the non-publishing Intel workflow', () => {
     expect(isReleasePublishingCommand('    gh release create "$TAG"')).toBe(true);
+    expect(isReleasePublishingCommand('gh release new v9')).toBe(true);
     expect(isReleasePublishingCommand('    gh release upload "$TAG" artifact.dmg')).toBe(true);
     expect(
       isReleasePublishingCommand(
@@ -346,6 +347,11 @@ describe('Tauri release workflow policy', () => {
         '          mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json',
       ),
     ).toBe(false);
+  });
+
+  it('requires exact Intel architecture evidence for qualification', () => {
+    expect(intelWorkflowSource).toContain('lipo_archs="$(lipo -archs "$executable")"');
+    expect(intelWorkflowSource).toContain('test "$lipo_archs" = "x86_64"');
   });
 
   it('runs the signature verifier only for real version-tag pushes with read-only access', () => {

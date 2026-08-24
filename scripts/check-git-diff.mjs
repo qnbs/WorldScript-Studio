@@ -1,101 +1,72 @@
 import { spawnSync } from 'node:child_process';
-import { closeSync, lstatSync, openSync, readSync } from 'node:fs';
+import { lstatSync, mkdtempSync, rmSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 
-const MAX_DIAGNOSTICS_PER_FILE = 20;
+function runGit(args, env = {}) {
+  return spawnSync('git', args, {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    env: { ...process.env, ...env },
+  });
+}
 
-function runGitCheck(args, label) {
-  const result = spawnSync('git', args, { cwd: process.cwd(), encoding: 'utf8' });
-  if (result.status === 0) return true;
-  // QNBS-v3: preserve Git's stdout diagnostics so rejected lines are actionable.
-  const diagnostics = [result.stdout, result.stderr]
+function diagnostics(result) {
+  return [result.stdout, result.stderr]
     .filter((value) => value?.trim())
-    .map((value) => value.trim())
-    .join('\n');
-  console.error(`${label} failed${diagnostics ? `:\n${diagnostics}` : ''}`);
+    .flatMap((value) => value.trim().split(/\r?\n/));
+}
+
+function runGitCheck(args, label, env = {}) {
+  const result = runGit(args, env);
+  if (result.status === 0) return true;
+  const messages = diagnostics(result);
+  console.error(`${label} failed${messages.length > 0 ? `:\n${messages.join('\n')}` : ''}`);
   return false;
 }
 
-// QNBS-v3: scan untracked files incrementally so binary assets cannot exhaust local admission memory.
-export function checkUntrackedFile(path) {
-  if (!lstatSync(path).isFile()) return [];
-  const errors = [];
-  const chunk = Buffer.allocUnsafe(64 * 1024);
-  let descriptor;
-  let bytesRead;
-  let lineNumber = 1;
-  let lineStarted = false;
-  let inIndentation = true;
-  let indentationHasSpace = false;
-  let startsWithSpaceThenTab = false;
-  let lineHasBytes = false;
-  let trailingBlankLines = 0;
-  let lastByte = null;
-  let diagnosticLimitReached = false;
-
-  const finishLine = () => {
-    // QNBS-v3: match git diff --check by treating CR as trailing whitespace unless explicitly configured otherwise.
-    const contentEnd = lastByte;
-    if (contentEnd === 32 || contentEnd === 9 || contentEnd === 13)
-      errors.push(`${path}:${lineNumber}: trailing whitespace`);
-    if (startsWithSpaceThenTab)
-      errors.push(`${path}:${lineNumber}: space before tab in indentation`);
-    if (lineHasBytes) trailingBlankLines = 0;
-    else trailingBlankLines += 1;
-    lineNumber += 1;
-    lineStarted = false;
-    inIndentation = true;
-    indentationHasSpace = false;
-    startsWithSpaceThenTab = false;
-    lineHasBytes = false;
-    lastByte = null;
-    diagnosticLimitReached = errors.length >= MAX_DIAGNOSTICS_PER_FILE;
-  };
-
+function withTemporaryIndex(callback) {
+  const directory = mkdtempSync(join(process.cwd(), '.tmp-git-index-'));
+  const index = join(directory, 'index');
+  const env = { GIT_INDEX_FILE: index };
   try {
-    descriptor = openSync(path, 'r');
-    do {
-      bytesRead = readSync(descriptor, chunk, 0, chunk.length, null);
-      for (const byte of chunk.subarray(0, bytesRead)) {
-        if (byte === 0) return [];
-        if (byte === 10) {
-          finishLine();
-          if (diagnosticLimitReached) break;
-          continue;
-        }
-        if (byte !== 13) lineHasBytes = true;
-        lastByte = byte;
-        if (!lineStarted) {
-          if (inIndentation && byte === 32) {
-            indentationHasSpace = true;
-          } else if (inIndentation && byte === 9) {
-            startsWithSpaceThenTab ||= indentationHasSpace;
-          } else {
-            inIndentation = false;
-            lineStarted = true;
-          }
-        }
-      }
-      if (diagnosticLimitReached) break;
-    } while (bytesRead > 0);
-    if (!diagnosticLimitReached && (lineStarted || lastByte !== null)) finishLine();
-    if (!diagnosticLimitReached && trailingBlankLines > 0) {
-      errors.push(`${path}:${lineNumber - trailingBlankLines}: new blank line at EOF`);
-    }
+    return callback(env);
   } finally {
-    if (descriptor !== undefined) closeSync(descriptor);
+    rmSync(directory, { recursive: true, force: true });
   }
-  if (diagnosticLimitReached) {
-    errors.push(
-      `${path}: additional whitespace diagnostics suppressed after ${MAX_DIAGNOSTICS_PER_FILE}`,
-    );
-  }
-  return errors;
+}
+
+// QNBS-v3: ask Git to evaluate untracked content through an isolated index instead of reimplementing diff semantics.
+export function checkUntrackedFile(filePath) {
+  if (!lstatSync(filePath).isFile()) return [];
+  const relativePath = relative(process.cwd(), filePath);
+  return withTemporaryIndex((env) => {
+    const initial = runGit(['read-tree', '--empty'], env);
+    if (initial.status !== 0) return diagnostics(initial);
+    const add = runGit(['add', '--', relativePath], env);
+    if (add.status !== 0) return diagnostics(add);
+    return diagnostics(runGit(['diff', '--cached', '--check', '--', relativePath], env));
+  });
+}
+
+function checkWorkingTree() {
+  return withTemporaryIndex((env) => {
+    if (!runGitCheck(['read-tree', 'HEAD'], 'temporary index initialization', env)) return false;
+    if (
+      !runGitCheck(
+        ['add', '-A', '--', '.', ':(exclude).worktrees/**', ':(exclude)recovery-artifacts/**'],
+        'temporary index staging',
+        env,
+      )
+    )
+      return false;
+    return runGitCheck(['diff', '--cached', '--check'], 'working-tree diff check', env);
+  });
 }
 
 function runCheck() {
-  if (!runGitCheck(['diff', '--check', 'HEAD'], 'working-tree diff check')) process.exit(1);
+  if (!checkWorkingTree()) process.exit(1);
 
   const explicitRanges = (process.env.WORLD_SCRIPT_PREPUSH_DIFF_RANGES ?? '')
     .split('\n')
@@ -112,10 +83,7 @@ function runCheck() {
         .filter(([, localSha]) => !/^0+$/.test(localSha))
         .map(([, localSha, , remoteSha]) => {
           if (!/^0+$/.test(remoteSha)) return `${remoteSha}..${localSha}`;
-          const originMain = spawnSync('git', ['rev-parse', 'origin/main'], {
-            cwd: process.cwd(),
-            encoding: 'utf8',
-          });
+          const originMain = runGit(['rev-parse', 'origin/main']);
           if (originMain.status !== 0) throw new Error('origin/main cannot be resolved');
           return `${originMain.stdout.trim()}..${localSha}`;
         });
@@ -125,23 +93,6 @@ function runCheck() {
       process.exit(1);
     }
     if (!runGitCheck(['diff', '--check', range], 'outgoing diff check')) process.exit(1);
-  }
-
-  const untrackedResult = spawnSync('git', ['ls-files', '--others', '--exclude-standard', '-z'], {
-    cwd: process.cwd(),
-    encoding: 'utf8',
-  });
-  if (untrackedResult.status !== 0) process.exit(1);
-  const untracked = (untrackedResult.stdout ?? '')
-    .split('\0')
-    .filter(
-      (path) => path && !path.startsWith('.worktrees/') && !path.startsWith('recovery-artifacts/'),
-    );
-  const errors = [];
-  for (const path of untracked) errors.push(...checkUntrackedFile(path));
-  if (errors.length > 0) {
-    console.error(errors.join('\n'));
-    process.exit(1);
   }
 }
 

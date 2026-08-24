@@ -1,10 +1,11 @@
 import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import process from 'node:process';
+import { shouldRunAdmissionCheck } from './ci-prepush-check-registry.mjs';
 import {
   classifyChangedFiles,
   classifyProcessResult,
-  isI18nPolicyFile,
-  isWorkflowPolicyFile,
   requiresTypecheck,
 } from './ci-prepush-classifier.mjs';
 import {
@@ -16,6 +17,7 @@ import {
 const projectRoot = process.cwd();
 const full = process.argv.includes('--full');
 const isPrePush = Boolean(process.env.WORLD_SCRIPT_PREPUSH_UPDATES);
+const isExactTree = process.env.WORLD_SCRIPT_PREPUSH_EXACT_TREE === '1';
 
 function git(args, { allowFailure = false } = {}) {
   const result = spawnSync('git', args, { cwd: projectRoot, encoding: 'utf8' });
@@ -55,6 +57,11 @@ function changedFilesFromRef(target, base) {
   );
 }
 
+function resolveComparisonBase(remoteSha) {
+  if (!/^0+$/.test(remoteSha)) return remoteSha;
+  return git(['rev-parse', 'origin/main']);
+}
+
 function parsePrePushUpdates(raw) {
   return raw
     .split('\n')
@@ -70,10 +77,22 @@ function parsePrePushUpdates(raw) {
 
 // QNBS-v3: combine committed outgoing refs with safe working-tree changes without scanning preserved evidence trees.
 function resolveChangeSet() {
-  const files = new Set(changedFilesFromWorkingTree());
+  const exactFiles = (process.env.WORLD_SCRIPT_PREPUSH_EXACT_FILES ?? '')
+    .split('\n')
+    .map((file) => file.trim())
+    .filter(Boolean);
+  const files = new Set(isExactTree ? exactFiles : changedFilesFromWorkingTree());
   const ranges = [];
   const updates = parsePrePushUpdates(process.env.WORLD_SCRIPT_PREPUSH_UPDATES ?? '');
   let unresolved = false;
+
+  if (isExactTree)
+    return {
+      files: [...files],
+      ranges,
+      updates,
+      unresolved: files.size === 0,
+    };
 
   // QNBS-v3: retain unresolved range state so incomplete change discovery cannot pass.
   function addRefFiles(target, base) {
@@ -90,15 +109,13 @@ function resolveChangeSet() {
   if (updates.length > 0) {
     for (const { localSha, remoteSha } of updates) {
       if (/^0+$/.test(localSha)) continue;
-      let base = remoteSha;
-      if (/^0+$/.test(base)) {
-        try {
-          base = git(['rev-parse', 'origin/main']);
-        } catch (error) {
-          unresolved = true;
-          console.error(`[local-admission] origin/main unresolved: ${error.message}`);
-          continue;
-        }
+      let base;
+      try {
+        base = resolveComparisonBase(remoteSha);
+      } catch (error) {
+        unresolved = true;
+        console.error(`[local-admission] comparison base unresolved: ${error.message}`);
+        continue;
       }
       if (!base) {
         unresolved = true;
@@ -152,36 +169,97 @@ async function runNodeCheck(name, script, args = [], timeoutMs = 120_000, env = 
   return status;
 }
 
+async function runExactTreeAdmission(localSha, changedFiles) {
+  const treeRoot = mkdtempSync(join(projectRoot, '.tmp-prepush-tree-'));
+  let worktreeAdded = false;
+  try {
+    const add = spawnSync('git', ['worktree', 'add', '--detach', treeRoot, localSha], {
+      cwd: projectRoot,
+      encoding: 'utf8',
+      stdio: 'inherit',
+    });
+    if (add.status !== 0) {
+      report('Exact pushed tree', 'FAIL', `cannot materialize ${localSha}`);
+      return false;
+    }
+    worktreeAdded = true;
+    // QNBS-v3: validate the immutable pushed tree with the existing reconciled dependency store.
+    symlinkSync(`${projectRoot}/node_modules`, join(treeRoot, 'node_modules'), 'dir');
+    const exactTypeScriptConfig = join(treeRoot, '.tsconfig-exact-tree.json');
+    const exactTypeScriptFiles = changedFiles.filter((file) => /\.(?:c|m)?tsx?$/.test(file));
+    writeFileSync(
+      exactTypeScriptConfig,
+      JSON.stringify({
+        extends: './tsconfig.tsgo.json',
+        include: exactTypeScriptFiles.length > 0 ? exactTypeScriptFiles : ['tsconfig.tsgo.json'],
+        exclude: ['node_modules', 'dist', '.storybook', '.mcp', 'storybook-static'],
+        compilerOptions: {
+          types: ['react', 'react-dom', 'node'],
+          typeRoots: ['./types', './node_modules/@types'],
+        },
+      }),
+    );
+    const result = await runNodeScriptDetailed('scripts/ci-prepush-lowend.mjs', [], {
+      timeoutMs: 900_000,
+      cwd: treeRoot,
+      root: treeRoot,
+      env: {
+        ...process.env,
+        WORLD_SCRIPT_PREPUSH_UPDATES: '',
+        WORLD_SCRIPT_PREPUSH_EXACT_TREE: '1',
+        WORLD_SCRIPT_PREPUSH_EXACT_FILES: changedFiles.join('\n'),
+        WORLD_SCRIPT_PREPUSH_PROJECT_CONFIG: exactTypeScriptConfig,
+      },
+    });
+    const status = classifyProcessResult(result);
+    report('Exact pushed tree', status, localSha.slice(0, 12));
+    return status === 'PASS';
+  } finally {
+    if (worktreeAdded)
+      spawnSync('git', ['worktree', 'remove', '--force', treeRoot], {
+        cwd: projectRoot,
+        stdio: 'ignore',
+      });
+    rmSync(treeRoot, { recursive: true, force: true });
+  }
+}
+
 async function runGitDiffCheck(ranges) {
   return runNodeCheck('Diff integrity', 'scripts/check-git-diff.mjs', [], 15_000, {
     WORLD_SCRIPT_PREPUSH_DIFF_RANGES: ranges.join('\n'),
   });
 }
 
-function shouldRunI18n(classification) {
-  return classification.files.some(
-    (file) =>
-      file.startsWith('locales/') || file.startsWith('public/locales/') || isI18nPolicyFile(file),
-  );
-}
-
-function shouldRunWorkflowPolicy(classification) {
-  return (
-    classification.categories.includes('WORKFLOW') ||
-    classification.files.some(isWorkflowPolicyFile)
-  );
-}
-
-function shouldRunContentGuard(classification) {
-  return classification.files.some(
-    (file) =>
-      file === 'scripts/content-guard.mjs' ||
-      file.startsWith('community-templates/') ||
-      file.startsWith('public/community-templates/'),
-  );
-}
-
 const changes = resolveChangeSet();
+if (isPrePush && !isExactTree && changes.updates.length > 0) {
+  const workingTreeStatus = await runNodeCheck(
+    'Working-tree diff integrity',
+    'scripts/check-git-diff.mjs',
+    [],
+    15_000,
+    { WORLD_SCRIPT_PREPUSH_DIFF_RANGES: '' },
+  );
+  if (workingTreeStatus !== 'PASS') process.exit(1);
+  for (const { localSha, remoteSha } of changes.updates) {
+    if (/^0+$/.test(localSha)) continue;
+    let base;
+    try {
+      base = resolveComparisonBase(remoteSha);
+    } catch (error) {
+      report('Exact pushed tree', 'FAIL', `comparison base unresolved: ${error.message}`);
+      process.exit(1);
+    }
+    let exactFiles;
+    try {
+      exactFiles = changedFilesFromRef(localSha, base);
+    } catch (error) {
+      report('Exact pushed tree', 'FAIL', `changed paths unresolved: ${error.message}`);
+      process.exit(1);
+    }
+    if (!(await runExactTreeAdmission(localSha, exactFiles))) process.exit(1);
+  }
+  process.exit(0);
+}
 const baseClassification = classifyChangedFiles(changes.files);
 const classification = changes.unresolved
   ? {
@@ -228,13 +306,13 @@ for (const [name, check] of mandatoryChecks) {
   if (status !== 'PASS') process.exit(1);
 }
 
-if (shouldRunWorkflowPolicy(classification)) {
+if (shouldRunAdmissionCheck('workflowPolicy', classification.files)) {
   const status = await runNodeCheck('Workflow policy', 'scripts/check-workflow-policy.mjs');
   results.push(['Workflow policy', status]);
   if (status !== 'PASS') process.exit(1);
 }
 
-if (full || shouldRunI18n(classification)) {
+if (full || shouldRunAdmissionCheck('i18n', classification.files)) {
   const i18nChecks = [
     ['i18n key parity', 'scripts/check-i18n-keys.mjs', [], 180_000],
     ...(full
@@ -256,7 +334,7 @@ if (full || shouldRunI18n(classification)) {
   }
 }
 
-if (full || shouldRunContentGuard(classification)) {
+if (full || shouldRunAdmissionCheck('contentGuard', classification.files)) {
   const status = await runNodeCheck('Content guard', 'scripts/content-guard.mjs', [], 120_000);
   results.push(['Content guard', status]);
   if (status !== 'PASS') process.exit(1);
@@ -265,7 +343,13 @@ if (full || shouldRunContentGuard(classification)) {
 if (typecheckRequired) {
   const result = await runLocalBinaryDetailed(
     'tsgo',
-    ['--project', 'tsconfig.tsgo.json', '--noEmit', '--checkers', full ? '4' : '1'],
+    [
+      '--project',
+      process.env.WORLD_SCRIPT_PREPUSH_PROJECT_CONFIG ?? 'tsconfig.tsgo.json',
+      '--noEmit',
+      '--checkers',
+      full ? '4' : '1',
+    ],
     { timeoutMs: full ? 600_000 : 180_000 },
   );
   const status = classifyProcessResult(result);

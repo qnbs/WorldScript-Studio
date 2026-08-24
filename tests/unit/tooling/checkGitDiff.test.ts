@@ -13,6 +13,7 @@ describe('untracked diff integrity', () => {
     ['text with one terminating newline', 'content\n', false],
     ['text with an extra blank line at EOF', 'content\n\n', true],
     ['CRLF line ending matches git whitespace policy', 'content\r\nnext\r\n', true],
+    ['conflict marker is diagnosed', '<<<<<<< HEAD\nclean content\n=======\n', true],
   ])('%s', (_label, content, shouldFail) => {
     const directory = mkdtempSync(join(repositoryRoot, '.tmp-check-git-diff-'));
     try {

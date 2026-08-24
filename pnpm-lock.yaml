@@ -322,6 +322,9 @@ importers:
       wait-on:
         specifier: ^9.1.0
         version: 9.1.0
+      yaml:
+        specifier: ^2.9.0
+        version: 2.9.0
       wrangler:
         specifier: ^4.120.1
         version: 4.120.1(@types/node@25.9.2)
