@@ -76,15 +76,28 @@ export function calculateDependencyFingerprint(root = projectRoot) {
   return hashManifests(entries);
 }
 
-// QNBS-v3: -z avoids path C-quoting; exported so verify-exact-tree.mjs reuses this, not a second parser.
-export function listTreeFiles(sha, cwd) {
-  const result = spawnSync('git', ['ls-tree', '-r', '--full-tree', '--name-only', '-z', sha], {
+// QNBS-v3: -z avoids path C-quoting; includes mode so callers (e.g. symlink detection) don't need a second parser.
+export function listTreeEntries(sha, cwd) {
+  const result = spawnSync('git', ['ls-tree', '-r', '--full-tree', '-z', sha], {
     cwd,
     encoding: 'utf8',
     timeout: 5000,
   });
   if (result.error || result.status !== 0) return null;
-  return result.stdout.split('\0').filter(Boolean);
+  return result.stdout
+    .split('\0')
+    .filter(Boolean)
+    .map((entry) => {
+      const tabIndex = entry.indexOf('\t');
+      const [mode, type, hash] = entry.slice(0, tabIndex).split(' ');
+      return { mode, type, hash, path: entry.slice(tabIndex + 1) };
+    });
+}
+
+// QNBS-v3: exported so verify-exact-tree.mjs reuses this authority instead of a second parser.
+export function listTreeFiles(sha, cwd) {
+  const entries = listTreeEntries(sha, cwd);
+  return entries === null ? null : entries.map((entry) => entry.path);
 }
 
 // QNBS-v3: diagnostic-only; mirrors dependencyFiles' inclusion rules against a commit, not disk.
@@ -101,8 +114,8 @@ export function dependencyFilesFromRef(sha, root = projectRoot, dependencies = {
     .sort();
 }
 
-// QNBS-v3: no encoding -- raw Buffer stdout, matching readFileSync's raw bytes for invalid UTF-8 safety.
-function defaultReadFileAtRef(sha, relativePath, cwd) {
+// QNBS-v3: raw Buffer stdout for UTF-8 safety; exported so verify-exact-tree.mjs reuses this, not a second reader.
+export function readFileAtRef(sha, relativePath, cwd) {
   const result = spawnSync('git', ['show', `${sha}:${relativePath}`], {
     cwd,
     timeout: 5000,
@@ -117,7 +130,7 @@ export function calculateDependencyFingerprintFromRef(sha, root = projectRoot, d
   const listFiles = dependencies.dependencyFilesFromRef ?? (() => dependencyFilesFromRef(sha, root, dependencies));
   const files = listFiles(sha);
   if (files === null) return null;
-  const readContent = dependencies.readFileAtRef ?? ((path) => defaultReadFileAtRef(sha, path, root));
+  const readContent = dependencies.readFileAtRef ?? ((path) => readFileAtRef(sha, path, root));
   const entries = [];
   for (const relativePath of files) {
     const content = readContent(relativePath);

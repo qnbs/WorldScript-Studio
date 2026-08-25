@@ -1,4 +1,4 @@
-import type { DependencyState } from './dependency-state.d.mts';
+import type { DependencyState, TreeEntry } from './dependency-state.d.mts';
 import type { BoundedResult } from './hooks/shared.d.mts';
 import type { GitOptions, GitResult } from './signing/signing-core.d.mts';
 
@@ -34,15 +34,17 @@ export interface VerifyExactTreeDependencies {
   tsgoArgs?: string[];
   tsgoTimeoutMs?: number;
   repoRoot?: string;
-  // QNBS-v3: reuses dependency-state.mjs's git-tree enumeration authority -- not a second parser.
-  listTreeFiles?: (sha: string, cwd: string) => string[] | null;
+  // QNBS-v3: reuses dependency-state.mjs's mode-aware git-tree enumeration authority -- not a second parser.
+  listTreeEntries?: (sha: string, cwd: string) => TreeEntry[] | null;
+  // QNBS-v3: reuses dependency-state.mjs's git-object blob reader for symlink target content.
+  readBlobAtRef?: (sha: string, relativePath: string, cwd: string) => Buffer | null;
   // QNBS-v3: reuses #502's manifest-compatibility authority to gate which tsgo binary may be trusted.
   computeDependencyState?: (sha: string, root: string) => DependencyState;
+  // QNBS-v3: the trusted checkout installDependencies resolves the pinned store-dir from -- never the worktree.
+  trustedRepoRoot?: string;
   // QNBS-v3: bypasses the real `pnpm store path` query in tests; undefined means "resolve it for real".
   storeDir?: string | null;
-  resolveStoreDir?: (dependencies?: VerifyExactTreeDependencies) => Promise<string | null> | string | null;
-  // QNBS-v3: a separate temp dir authority for the neutral store-dir query -- distinct from mkdtempFn/mkdtempHooksFn.
-  mkdtempStoreDirFn?: () => Promise<string>;
+  resolveStoreDir?: (trustedRepoRoot: string | undefined) => Promise<string | null> | string | null;
 }
 
 export function createIsolatedWorktree(

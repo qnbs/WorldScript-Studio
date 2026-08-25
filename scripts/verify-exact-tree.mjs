@@ -1,10 +1,10 @@
 import { spawnSync } from 'node:child_process';
 import { mkdtemp as mkdtempAsync, rm as rmAsync } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, posix, resolve } from 'node:path';
 import process from 'node:process';
 import { isMainModule } from './ci-prepush-range-resolver.mjs';
-import { computeDependencyState, listTreeFiles } from './dependency-state.mjs';
+import { computeDependencyState, listTreeEntries, readFileAtRef } from './dependency-state.mjs';
 import { runBounded, runLocalBinaryDetailed } from './hooks/shared.mjs';
 import { runGit as defaultRunGit } from './signing/signing-core.mjs';
 
@@ -39,23 +39,41 @@ function tsgoResultUnknown(result) {
 // QNBS-v3: sweeps entries orphaned by a prior crashed/killed run before creating a new one.
 async function pruneStaleWorktrees(repoRoot, dependencies = {}) {
   const runGit = dependencies.runBounded ?? runBounded;
-  await runGit('git', ['worktree', 'prune'], { cwd: repoRoot });
+  const result = await runGit('git', ['worktree', 'prune'], { cwd: repoRoot });
+  if (result.interrupted) throw new ExactTreeInterrupted();
 }
 
 // QNBS-v3: an arbitrary ref can force-track a node_modules path anywhere; could execute/redirect. Fail closed.
-function hasTrackedNodeModules(paths) {
+function hasTrackedNodeModules(entries) {
   // QNBS-v3: case-insensitive -- NODE_MODULES aliases node_modules on Windows/macOS checkouts.
-  return paths.some((path) =>
-    path.split('/').some((segment) => segment.toLowerCase() === 'node_modules'),
+  return entries.some((entry) =>
+    entry.path.split('/').some((segment) => segment.toLowerCase() === 'node_modules'),
   );
 }
 
+// QNBS-v3: a tracked symlink whose target escapes the tree root would let tsgo read live/external content.
+function hasEscapingSymlink(entries, sha, repoRoot, dependencies) {
+  const readBlob = dependencies.readBlobAtRef ?? readFileAtRef;
+  for (const entry of entries) {
+    if (entry.mode !== '120000') continue;
+    const targetBuffer = readBlob(sha, entry.path, repoRoot);
+    if (targetBuffer === null) return true; // unreadable target -- fail closed, treat as escaping.
+    const target = targetBuffer.toString('utf8').trim();
+    if (posix.isAbsolute(target)) return true;
+    const resolved = posix.normalize(posix.join(posix.dirname(entry.path), target));
+    if (resolved.startsWith('..') || posix.isAbsolute(resolved)) return true;
+  }
+  return false;
+}
+
 // QNBS-v3: checked against the exact commit's own git objects, before any worktree/pnpm step touches disk.
-function verifyNoTrackedNodeModules(sha, repoRoot, dependencies = {}) {
-  const listTree = dependencies.listTreeFiles ?? listTreeFiles;
-  const paths = listTree(sha, repoRoot);
-  if (paths === null) return false; // an unreadable tree can never be proven clean.
-  return !hasTrackedNodeModules(paths);
+function verifyExactTreePreflight(sha, repoRoot, dependencies = {}) {
+  const listEntries = dependencies.listTreeEntries ?? listTreeEntries;
+  const entries = listEntries(sha, repoRoot);
+  if (entries === null) return false; // an unreadable tree can never be proven clean.
+  if (hasTrackedNodeModules(entries)) return false;
+  if (hasEscapingSymlink(entries, sha, repoRoot, dependencies)) return false;
+  return true;
 }
 
 // QNBS-v3: hook-free dir so 'git worktree add' can't run repo/user hooks -- scoped via -c, not global config.
@@ -66,29 +84,18 @@ async function createEmptyHooksDir(dependencies = {}) {
   return makeHooksDir();
 }
 
-// QNBS-v3: fresh empty temp dir -- 'pnpm store path' loads .pnpmfile.cjs too and has no --ignore-pnpmfile flag.
-async function defaultResolveStoreDir(dependencies = {}) {
-  const makeTempDir =
-    dependencies.mkdtempStoreDirFn ??
-    (() => mkdtempAsync(join(tmpdir(), 'worldscript-exact-tree-storequery-')));
-  const removeDir = dependencies.rmFn ?? ((p) => rmAsync(p, { recursive: true, force: true }));
-  let neutralDir;
-  try {
-    neutralDir = await makeTempDir();
-  } catch {
-    return null;
-  }
-  try {
-    const result = spawnSync('pnpm', ['store', 'path'], { cwd: neutralDir, encoding: 'utf8', timeout: 10_000 });
-    if (result.error || result.status !== 0) return null;
-    return result.stdout.trim();
-  } finally {
-    try {
-      await removeDir(neutralDir);
-    } catch {
-      // Best-effort: nothing more can be done from here; the directory is under os.tmpdir().
-    }
-  }
+// QNBS-v3: resolved from the trusted repoRoot -- picks up its pinned packageManager, and a .pnpmfile.cjs there is the developer's own code.
+function defaultResolveStoreDir(trustedRepoRoot) {
+  if (!trustedRepoRoot) return null; // no trusted root to resolve the pinned toolchain from -- fail closed.
+  const result = spawnSync('pnpm', ['store', 'path'], {
+    cwd: trustedRepoRoot,
+    encoding: 'utf8',
+    timeout: 10_000,
+    shell: process.platform === 'win32',
+    env: { ...process.env, COREPACK_ENABLE_NETWORK: '0' },
+  });
+  if (result.error || result.status !== 0) return null;
+  return result.stdout.trim();
 }
 
 export async function createIsolatedWorktree(sha, repoRoot, dependencies = {}) {
@@ -114,7 +121,14 @@ export async function createIsolatedWorktree(sha, repoRoot, dependencies = {}) {
     const result = await runGit(
       'git',
       ['-c', `core.hooksPath=${hooksDir}`, 'worktree', 'add', '--detach', path, sha],
-      { cwd: repoRoot },
+      {
+        cwd: repoRoot,
+        // QNBS-v3: core.hooksPath disables hooks only, not smudge/clean filters (e.g. LFS) -- nonexistent global/system config makes any referenced filter a no-op.
+        env: {
+          GIT_CONFIG_GLOBAL: join(hooksDir, 'no-global-config'),
+          GIT_CONFIG_SYSTEM: join(hooksDir, 'no-system-config'),
+        },
+      },
     );
     // QNBS-v3: reported via the return shape, not a throw -- the caller must still clean up this path.
     if (result.interrupted) return { ok: false, path, interrupted: true };
@@ -160,7 +174,9 @@ export async function installDependencies(worktreePath, dependencies = {}) {
   const timeoutMs = dependencies.installTimeoutMs ?? DEFAULT_INSTALL_TIMEOUT_MS;
   const resolveStoreDir = dependencies.resolveStoreDir ?? defaultResolveStoreDir;
   const storeDir =
-    dependencies.storeDir !== undefined ? dependencies.storeDir : await resolveStoreDir(dependencies);
+    dependencies.storeDir !== undefined
+      ? dependencies.storeDir
+      : await resolveStoreDir(dependencies.trustedRepoRoot);
   if (storeDir === null) return false; // could not establish a trusted store-dir -- fail closed.
 
   const result = await runPnpm(
@@ -208,8 +224,8 @@ export async function verifyExactTreeTypecheck(sha, repoRoot = process.cwd(), de
   // QNBS-v3: a relative repoRoot would produce ambiguous git-cwd and install-cwd semantics.
   const absoluteRepoRoot = resolve(repoRoot);
   try {
-    // QNBS-v3: refuse before any materialization -- a tracked node_modules must never reach pnpm/tsgo.
-    if (!verifyNoTrackedNodeModules(sha, absoluteRepoRoot, dependencies)) return 'UNKNOWN';
+    // QNBS-v3: refuse before any materialization -- tracked node_modules or an escaping symlink must never reach pnpm/tsgo.
+    if (!verifyExactTreePreflight(sha, absoluteRepoRoot, dependencies)) return 'UNKNOWN';
 
     // QNBS-v3: the checked ref may supply source/types/deps but never the compiler that certifies it.
     const computeState = dependencies.computeDependencyState ?? computeDependencyState;
@@ -223,7 +239,10 @@ export async function verifyExactTreeTypecheck(sha, repoRoot = process.cwd(), de
     }
 
     try {
-      const installed = await installDependencies(created.path, dependencies);
+      const installed = await installDependencies(created.path, {
+        ...dependencies,
+        trustedRepoRoot: absoluteRepoRoot,
+      });
       if (!installed) return 'UNKNOWN';
 
       const runDetailed = dependencies.runLocalBinaryDetailed ?? runLocalBinaryDetailed;

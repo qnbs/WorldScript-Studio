@@ -221,7 +221,7 @@ describe('installDependencies (workspace-package soundness -- the core regressio
     const created = await createIsolatedWorktree(sha, root, {});
     assert.equal(created.ok, true);
     try {
-      const installed = await installDependencies(created.path, {});
+      const installed = await installDependencies(created.path, { trustedRepoRoot: root });
       assert.equal(installed, true);
 
       // QNBS-v3: root workspace link (node_modules/@fixture/demo-pkg) resolving into the isolated tree.
@@ -264,11 +264,13 @@ describe('installDependencies (workspace-package soundness -- the core regressio
     git(root, ['add', '-A']);
     git(root, ['-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'add pnpmfile']);
     const pnpmfileSha = git(root, ['rev-parse', 'HEAD']).trim();
+    // QNBS-v3: store-dir resolution runs in repoRoot's own dir; the commit object is unaffected either way.
+    rmSync(join(root, '.pnpmfile.cjs'), { force: true });
 
     const created = await createIsolatedWorktree(pnpmfileSha, root, {});
     assert.equal(created.ok, true);
     try {
-      const installed = await installDependencies(created.path, {});
+      const installed = await installDependencies(created.path, { trustedRepoRoot: root });
       assert.equal(installed, true);
       assert.equal(existsSync(markerFile), false, '.pnpmfile.cjs must not have executed');
     } finally {
@@ -299,6 +301,19 @@ describe('installDependencies (workspace-package soundness -- the core regressio
     });
     assert.equal(installed, false);
   });
+
+  it('resolves store-dir from trustedRepoRoot, never the untrusted worktree, so the pinned pnpm version is used', async () => {
+    let seenTrustedRoot;
+    await installDependencies('/tmp/worldscript-exact-tree-fake-worktree', {
+      trustedRepoRoot: '/repo',
+      resolveStoreDir: (trustedRepoRoot) => {
+        seenTrustedRoot = trustedRepoRoot;
+        return '/fake-store';
+      },
+      runBounded: async () => ({ status: 0, error: null, signal: null, timedOut: false, interrupted: false }),
+    });
+    assert.equal(seenTrustedRoot, '/repo', 'must resolve store-dir from the trusted repoRoot, not the worktree');
+  });
 });
 
 describe('installDependencies (P1: contain pnpm output paths against an escaping .npmrc)', () => {
@@ -307,7 +322,7 @@ describe('installDependencies (P1: contain pnpm output paths against an escaping
     const created = await createIsolatedWorktree(sha, root, {});
     assert.equal(created.ok, true);
     try {
-      const installed = await installDependencies(created.path, {});
+      const installed = await installDependencies(created.path, { trustedRepoRoot: root });
       assert.equal(installed, true);
       assert.equal(
         existsSync(join(created.path, '..', 'ESCAPE-modules')),
@@ -324,7 +339,7 @@ describe('installDependencies (P1: contain pnpm output paths against an escaping
     const created = await createIsolatedWorktree(sha, root, {});
     assert.equal(created.ok, true);
     try {
-      const installed = await installDependencies(created.path, {});
+      const installed = await installDependencies(created.path, { trustedRepoRoot: root });
       assert.equal(installed, true);
       assert.equal(
         existsSync(join(created.path, '..', 'ESCAPE-virtualstore')),
@@ -340,7 +355,7 @@ describe('installDependencies (P1: contain pnpm output paths against an escaping
 describe('verifyExactTreeTypecheck (fail-closed lifecycle, signal/status semantics -- DI only)', () => {
   it('reports UNKNOWN when git worktree add fails', async () => {
     const state = await verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
-      listTreeFiles: () => [],
+      listTreeEntries: () => [],
       computeDependencyState: () => 'MATCHES',
       runBounded: (_command, args) => {
         if (args.includes('add')) return { status: 1, error: null, signal: null, timedOut: false, interrupted: false };
@@ -353,7 +368,7 @@ describe('verifyExactTreeTypecheck (fail-closed lifecycle, signal/status semanti
 
   it('reports UNKNOWN, never a false PASS/FAIL, when the install fails', async () => {
     const state = await verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
-      listTreeFiles: () => [],
+      listTreeEntries: () => [],
       computeDependencyState: () => 'MATCHES',
       storeDir: '/fake-store',
       mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
@@ -372,7 +387,7 @@ describe('verifyExactTreeTypecheck (fail-closed lifecycle, signal/status semanti
   it('reports PASS/FAIL correctly from a genuine tsgo exit status once install succeeds (DI)', async () => {
     const runBounded = () => ({ status: 0, error: null, signal: null, timedOut: false, interrupted: false });
     const pass = await verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
-      listTreeFiles: () => [],
+      listTreeEntries: () => [],
       computeDependencyState: () => 'MATCHES',
       storeDir: '/fake-store',
       mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
@@ -388,7 +403,7 @@ describe('verifyExactTreeTypecheck (fail-closed lifecycle, signal/status semanti
     assert.equal(pass, 'PASS');
 
     const fail = await verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
-      listTreeFiles: () => [],
+      listTreeEntries: () => [],
       computeDependencyState: () => 'MATCHES',
       storeDir: '/fake-store',
       mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
@@ -406,7 +421,7 @@ describe('verifyExactTreeTypecheck (fail-closed lifecycle, signal/status semanti
 
   it('reports UNKNOWN, not FAIL, when tsgo is terminated by a signal (e.g. external OOM kill)', async () => {
     const state = await verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
-      listTreeFiles: () => [],
+      listTreeEntries: () => [],
       computeDependencyState: () => 'MATCHES',
       storeDir: '/fake-store',
       mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
@@ -424,7 +439,7 @@ describe('verifyExactTreeTypecheck (fail-closed lifecycle, signal/status semanti
 
   it('reports UNKNOWN, not FAIL, on a null status with no signal (defensive)', async () => {
     const state = await verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
-      listTreeFiles: () => [],
+      listTreeEntries: () => [],
       computeDependencyState: () => 'MATCHES',
       storeDir: '/fake-store',
       mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
@@ -444,7 +459,7 @@ describe('verifyExactTreeTypecheck (fail-closed lifecycle, signal/status semanti
     const runBounded = () => ({ status: 0, error: null, signal: null, timedOut: false, interrupted: false });
     let seenTimeoutMs;
     await verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
-      listTreeFiles: () => [],
+      listTreeEntries: () => [],
       computeDependencyState: () => 'MATCHES',
       storeDir: '/fake-store',
       mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
@@ -459,7 +474,7 @@ describe('verifyExactTreeTypecheck (fail-closed lifecycle, signal/status semanti
 
     let overriddenTimeoutMs;
     await verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
-      listTreeFiles: () => [],
+      listTreeEntries: () => [],
       computeDependencyState: () => 'MATCHES',
       storeDir: '/fake-store',
       mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
@@ -476,7 +491,7 @@ describe('verifyExactTreeTypecheck (fail-closed lifecycle, signal/status semanti
   it('canonicalizes a relative repoRoot to an absolute path before any git/install/dependencyState call', async () => {
     const seenCwds = [];
     await verifyExactTreeTypecheck('a'.repeat(40), '.', {
-      listTreeFiles: (_sha, cwd) => {
+      listTreeEntries: (_sha, cwd) => {
         seenCwds.push(cwd);
         return [];
       },
@@ -500,7 +515,7 @@ describe('verifyExactTreeTypecheck (P1: the checked ref must never supply the co
     let seenRoot;
     let seenCwd;
     const state = await verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
-      listTreeFiles: () => [],
+      listTreeEntries: () => [],
       computeDependencyState: () => 'MATCHES',
       storeDir: '/fake-store',
       mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
@@ -520,7 +535,7 @@ describe('verifyExactTreeTypecheck (P1: the checked ref must never supply the co
     for (const dependencyState of ['DIVERGED', 'UNKNOWN', 'NOT_APPLICABLE']) {
       let worktreeCalls = 0;
       const state = await verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
-        listTreeFiles: () => [],
+        listTreeEntries: () => [],
         computeDependencyState: () => dependencyState,
         runBounded: () => {
           worktreeCalls += 1;
@@ -540,7 +555,7 @@ describe('verifyExactTreeTypecheck (P1: the checked ref must never supply the co
   });
 });
 
-describe('verifyNoTrackedNodeModules (P1: refuse before any materialization touches disk)', () => {
+describe('verifyExactTreePreflight (P1: refuse before any materialization touches disk)', () => {
   function makeRepoWithTrackedPath(relativePath, { symlink } = {}) {
     const root = mkdtempSync(join(process.cwd(), '.worldscript-exact-tree-nm-'));
     temporaryRoots.push(root);
@@ -623,9 +638,56 @@ describe('verifyNoTrackedNodeModules (P1: refuse before any materialization touc
     assert.equal(worktreeAddCalled, true);
     assert.equal(state, 'UNKNOWN'); // fake path -- worktree add itself is mocked to fail, but it was reached.
   });
+
+  function makeRepoWithTrackedSymlink(linkPath, target) {
+    const root = mkdtempSync(join(process.cwd(), '.worldscript-exact-tree-symlink-'));
+    temporaryRoots.push(root);
+    git(root, ['init', '--quiet', '--initial-branch=main']);
+    git(root, ['config', 'user.email', 'test@example.com']);
+    git(root, ['config', 'user.name', 'test']);
+    writeFileSync(join(root, 'real.txt'), 'inside the tree\n');
+    const fullPath = join(root, linkPath);
+    mkdirSync(join(fullPath, '..'), { recursive: true });
+    execFileSync('ln', ['-s', target, fullPath]);
+    git(root, ['add', '-A']);
+    git(root, ['-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'test']);
+    const sha = git(root, ['rev-parse', 'HEAD']).trim();
+    return { root, sha };
+  }
+
+  it('refuses a tracked symlink whose relative target escapes the isolated tree (UNKNOWN, no materialization)', async () => {
+    const { root, sha } = makeRepoWithTrackedSymlink('sub/escaping-link', '../../../outside-target');
+    const spy = refusingMaterializationSpy();
+    const state = await verifyExactTreeTypecheck(sha, root, spy);
+    assert.equal(state, 'UNKNOWN');
+    assert.equal(spy.calls.runBounded, 0, 'materialization must never start for an escaping symlink commit');
+  });
+
+  it('refuses a tracked symlink with an absolute target (UNKNOWN, no materialization)', async () => {
+    const { root, sha } = makeRepoWithTrackedSymlink('escaping-abs-link', '/etc/passwd');
+    const spy = refusingMaterializationSpy();
+    const state = await verifyExactTreeTypecheck(sha, root, spy);
+    assert.equal(state, 'UNKNOWN');
+    assert.equal(spy.calls.runBounded, 0, 'materialization must never start for an escaping symlink commit');
+  });
+
+  it('leaves a commit with an ordinary, non-escaping tracked symlink eligible for materialization', async () => {
+    const { root, sha } = makeRepoWithTrackedSymlink('safe-link', 'real.txt');
+    let worktreeAddCalled = false;
+    const state = await verifyExactTreeTypecheck(sha, root, {
+      computeDependencyState: () => 'MATCHES',
+      mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
+      runBounded: (_command, args) => {
+        if (args.includes('add')) worktreeAddCalled = true;
+        return { status: 1, error: null, signal: null, timedOut: false, interrupted: false };
+      },
+    });
+    assert.equal(worktreeAddCalled, true);
+    assert.equal(state, 'UNKNOWN'); // fake path -- worktree add itself is mocked to fail, but it was reached.
+  });
 });
 
-describe('createIsolatedWorktree (P2: post-checkout hooks must not execute)', () => {
+describe('createIsolatedWorktree (P1/P2: post-checkout hooks and checkout filters must not execute)', () => {
   it('does not execute a configured post-checkout hook while materializing the isolated worktree', async () => {
     const { root, sha } = makeTinyTsRepo('const x: number = 1;\n');
     const markerRoot = mkdtempSync(join(process.cwd(), '.worldscript-exact-tree-hookmark-'));
@@ -641,6 +703,42 @@ describe('createIsolatedWorktree (P2: post-checkout hooks must not execute)', ()
       assert.equal(existsSync(markerFile), false, 'post-checkout hook must not have run');
     } finally {
       await removeIsolatedWorktree(created.path, root, {});
+    }
+  });
+
+  it('does not execute a configured smudge/checkout filter (e.g. Git LFS-style) while materializing the isolated worktree', async () => {
+    const markerRoot = mkdtempSync(join(process.cwd(), '.worldscript-exact-tree-filtermark-'));
+    temporaryRoots.push(markerRoot);
+    const markerFile = join(markerRoot, 'filter-ran.txt');
+
+    const root = mkdtempSync(join(process.cwd(), '.worldscript-exact-tree-filter-'));
+    temporaryRoots.push(root);
+    git(root, ['init', '--quiet', '--initial-branch=main']);
+    git(root, ['config', 'user.email', 'test@example.com']);
+    git(root, ['config', 'user.name', 'test']);
+    writeFileSync(join(root, '.gitattributes'), 'tracked.bin filter=evilfilter\n');
+    writeFileSync(join(root, 'tracked.bin'), 'secret content\n');
+    git(root, ['add', '-A']);
+    git(root, ['-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'test']);
+    const sha = git(root, ['rev-parse', 'HEAD']).trim();
+
+    // QNBS-v3: simulates a developer with an LFS-style filter registered globally (as `git lfs install` would).
+    const fakeHome = mkdtempSync(join(process.cwd(), '.worldscript-exact-tree-fakehome-'));
+    temporaryRoots.push(fakeHome);
+    const filterCommand = `sh -c "echo ran > '${markerFile}'; cat"`;
+    git(root, ['config', '--file', join(fakeHome, '.gitconfig'), 'filter.evilfilter.smudge', filterCommand]);
+    git(root, ['config', '--file', join(fakeHome, '.gitconfig'), 'filter.evilfilter.required', 'true']);
+
+    const originalHome = process.env.HOME;
+    process.env.HOME = fakeHome;
+    let created;
+    try {
+      created = await createIsolatedWorktree(sha, root, {});
+      assert.equal(created.ok, true);
+      assert.equal(existsSync(markerFile), false, 'the configured smudge filter must not have run');
+    } finally {
+      process.env.HOME = originalHome;
+      if (created) await removeIsolatedWorktree(created.path, root, {});
     }
   });
 });
@@ -673,7 +771,7 @@ describe('verifyExactTreeForShas (dedup, sequential, aggregation)', () => {
   it('deduplicates identical SHAs so the underlying check runs once', async () => {
     let calls = 0;
     const state = await verifyExactTreeForShas(['a'.repeat(40), 'a'.repeat(40)], '/repo', {
-      listTreeFiles: () => [],
+      listTreeEntries: () => [],
       computeDependencyState: () => 'MATCHES',
       mkdtempFn: async () => {
         calls += 1;
@@ -696,7 +794,7 @@ describe('verifyExactTreeForShas (dedup, sequential, aggregation)', () => {
     // QNBS-v3: sequential processing -- alternate by call order for one genuine FAIL, one UNKNOWN.
     let tsgoCallCount = 0;
     const state = await verifyExactTreeForShas(['a'.repeat(40), 'b'.repeat(40)], '/repo', {
-      listTreeFiles: () => [],
+      listTreeEntries: () => [],
       computeDependencyState: () => 'MATCHES',
       storeDir: '/fake-store',
       mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
@@ -715,6 +813,24 @@ describe('verifyExactTreeForShas (dedup, sequential, aggregation)', () => {
 });
 
 describe('interruption handling (P2: explicit user intent must stop the whole run)', () => {
+  it('rejects when the initial stale-worktree prune is interrupted, before any worktree is created', async () => {
+    let addCalled = false;
+    await assert.rejects(
+      verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
+        listTreeEntries: () => [],
+        computeDependencyState: () => 'MATCHES',
+        mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
+        runBounded: (_command, args) => {
+          if (args.includes('prune')) return { status: null, error: null, signal: null, timedOut: false, interrupted: true };
+          if (args.includes('add')) addCalled = true;
+          return { status: 0, error: null, signal: null, timedOut: false, interrupted: false };
+        },
+      }),
+      { name: 'ExactTreeInterrupted' },
+    );
+    assert.equal(addCalled, false, 'worktree add must never start after the prune step is interrupted');
+  });
+
   it('createIsolatedWorktree reports interrupted:true in its return shape, not a generic failure', async () => {
     const created = await createIsolatedWorktree('a'.repeat(40), '/repo', {
       mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
@@ -730,7 +846,7 @@ describe('interruption handling (P2: explicit user intent must stop the whole ru
   it('verifyExactTreeTypecheck rejects (does not return UNKNOWN) when worktree creation is interrupted', async () => {
     await assert.rejects(
       verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
-        listTreeFiles: () => [],
+        listTreeEntries: () => [],
         computeDependencyState: () => 'MATCHES',
         mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
         runBounded: (_command, args) => {
@@ -746,7 +862,7 @@ describe('interruption handling (P2: explicit user intent must stop the whole ru
     let removeCalled = false;
     await assert.rejects(
       verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
-        listTreeFiles: () => [],
+        listTreeEntries: () => [],
         computeDependencyState: () => 'MATCHES',
         storeDir: '/fake-store',
         mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
@@ -766,7 +882,7 @@ describe('interruption handling (P2: explicit user intent must stop the whole ru
     let removeCalled = false;
     await assert.rejects(
       verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
-        listTreeFiles: () => [],
+        listTreeEntries: () => [],
         computeDependencyState: () => 'MATCHES',
         storeDir: '/fake-store',
         mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
@@ -791,7 +907,7 @@ describe('interruption handling (P2: explicit user intent must stop the whole ru
     let worktreeAddCalls = 0;
     await assert.rejects(
       verifyExactTreeForShas(['a'.repeat(40), 'b'.repeat(40)], '/repo', {
-        listTreeFiles: () => [],
+        listTreeEntries: () => [],
         computeDependencyState: () => 'MATCHES',
         mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
         runBounded: (_command, args) => {
@@ -816,7 +932,7 @@ describe('interruption handling (P2: explicit user intent must stop the whole ru
     try {
       await main(['HEAD'], {
         repoRoot: '/repo',
-        listTreeFiles: () => [],
+        listTreeEntries: () => [],
         computeDependencyState: () => 'MATCHES',
         runGit: () => ({ status: 0, stdout: `${'a'.repeat(40)}\n`, stderr: '', error: undefined }),
         mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
@@ -843,7 +959,7 @@ describe('main (real CLI entry path, realistic DI)', () => {
     try {
       await main([], {
         repoRoot: '/repo',
-        listTreeFiles: () => [],
+        listTreeEntries: () => [],
         computeDependencyState: () => 'MATCHES',
         runGit: () => ({ status: 0, stdout: `${'a'.repeat(40)}\n`, stderr: '', error: undefined }),
         runBounded: (_command, args) => {
@@ -866,7 +982,7 @@ describe('main (real CLI entry path, realistic DI)', () => {
     try {
       await main(['main', 'feature-branch'], {
         repoRoot: '/repo',
-        listTreeFiles: () => [],
+        listTreeEntries: () => [],
         computeDependencyState: () => 'MATCHES',
         runGit: (args) => {
           resolvedRefs.push(args[2]);
@@ -911,7 +1027,7 @@ describe('main (real CLI entry path, realistic DI)', () => {
     try {
       await main(['HEAD'], {
         repoRoot: '/repo',
-        listTreeFiles: () => [],
+        listTreeEntries: () => [],
         computeDependencyState: () => 'MATCHES',
         storeDir: '/fake-store',
         runGit: () => ({ status: 0, stdout: `${'a'.repeat(40)}\n`, stderr: '', error: undefined }),
