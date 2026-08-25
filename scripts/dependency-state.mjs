@@ -76,8 +76,8 @@ export function calculateDependencyFingerprint(root = projectRoot) {
   return hashManifests(entries);
 }
 
-// QNBS-v3: --full-tree ignores cwd-subdirectory scoping; -z disables git's default path C-quoting.
-function defaultListTreeFiles(sha, cwd) {
+// QNBS-v3: -z avoids path C-quoting; exported so verify-exact-tree.mjs reuses this, not a second parser.
+export function listTreeFiles(sha, cwd) {
   const result = spawnSync('git', ['ls-tree', '-r', '--full-tree', '--name-only', '-z', sha], {
     cwd,
     encoding: 'utf8',
@@ -89,7 +89,7 @@ function defaultListTreeFiles(sha, cwd) {
 
 // QNBS-v3: diagnostic-only; mirrors dependencyFiles' inclusion rules against a commit, not disk.
 export function dependencyFilesFromRef(sha, root = projectRoot, dependencies = {}) {
-  const listTree = dependencies.listTree ?? ((ref) => defaultListTreeFiles(ref, root));
+  const listTree = dependencies.listTree ?? ((ref) => listTreeFiles(ref, root));
   const allPaths = listTree(sha);
   if (allPaths === null) return null;
   const rootFiles = new Set(['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml']);

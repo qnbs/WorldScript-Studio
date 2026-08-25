@@ -1,6 +1,7 @@
 // QNBS-v3: diagnostic-only dimension, independent of resolvePushEvidence's canonical evidence validity.
 export type DependencyState = 'MATCHES' | 'DIVERGED' | 'NOT_APPLICABLE' | 'UNKNOWN';
 
+export function listTreeFiles(sha: string, cwd?: string): string[] | null;
 export function dependencyFiles(root?: string): string[];
 export function calculateDependencyFingerprint(root?: string): string;
 export function fingerprintPath(root?: string): string;

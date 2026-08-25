@@ -87,7 +87,7 @@
     "test:turbo": "turbo run test",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:node": "node --test tests/unit/tooling/dependency-state.test.mjs tests/unit/tooling/verify-exact-tree.test.mjs",
+    "test:node": "node --test --test-concurrency=1 tests/unit/tooling/dependency-state.test.mjs tests/unit/tooling/verify-exact-tree.test.mjs",
     "bench": "vitest bench --run tests/bench",
     "test:e2e": "node -e \"if (process.env.CI !== 'true') { console.error('E2E tests are CI-only. Set CI=true or run via GitHub Actions.'); process.exit(1); }\" && playwright test",
     "test:e2e:ui": "node -e \"if (process.env.CI !== 'true') { console.error('E2E tests are CI-only. Set CI=true or run via GitHub Actions.'); process.exit(1); }\" && playwright test --ui",

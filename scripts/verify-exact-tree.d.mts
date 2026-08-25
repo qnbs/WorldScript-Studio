@@ -26,10 +26,15 @@ export interface VerifyExactTreeDependencies {
   // QNBS-v3: a distinct, pre-existing (#494) synchronous/output-capturing wrapper -- not BoundedResult.
   runGit?: (args: string[], options?: GitOptions) => GitResult;
   mkdtempFn?: () => Promise<string>;
+  // QNBS-v3: a separate temp dir authority from mkdtempFn -- distinct lifecycle (hooks dir vs. worktree dir).
+  mkdtempHooksFn?: () => Promise<string>;
   rmFn?: (path: string) => Promise<void>;
   installTimeoutMs?: number;
   tsgoArgs?: string[];
+  tsgoTimeoutMs?: number;
   repoRoot?: string;
+  // QNBS-v3: reuses dependency-state.mjs's git-tree enumeration authority -- not a second parser.
+  listTreeFiles?: (sha: string, cwd: string) => string[] | null;
 }
 
 export function createIsolatedWorktree(

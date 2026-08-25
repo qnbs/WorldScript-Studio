@@ -3,12 +3,15 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import process from 'node:process';
 import { isMainModule } from './ci-prepush-range-resolver.mjs';
+import { listTreeFiles } from './dependency-state.mjs';
 import { runBounded, runLocalBinaryDetailed } from './hooks/shared.mjs';
 import { runGit as defaultRunGit } from './signing/signing-core.mjs';
 
 const DEFAULT_TSGO_ARGS = ['--project', 'tsconfig.tsgo.json', '--noEmit', '--checkers', '1'];
 // QNBS-v3: measured ~2m20s for the full project on this hardware with a warm store; 5min gives margin.
 const DEFAULT_INSTALL_TIMEOUT_MS = 300_000;
+// QNBS-v3: single-checker measured ~56s; docs cite ~300s for full typecheck -- 6min clears both with margin.
+const DEFAULT_TSGO_TIMEOUT_MS = 360_000;
 
 // QNBS-v3: lifecycle commands (worktree/install) -- any non-zero or unreadable exit fails outright.
 function boundedCommandFailed(result) {
@@ -30,10 +33,32 @@ async function pruneStaleWorktrees(repoRoot, dependencies = {}) {
   await runGit('git', ['worktree', 'prune'], { cwd: repoRoot });
 }
 
+// QNBS-v3: an arbitrary ref can force-track a node_modules path anywhere; could execute/redirect. Fail closed.
+function hasTrackedNodeModules(paths) {
+  return paths.some((path) => path.split('/').includes('node_modules'));
+}
+
+// QNBS-v3: checked against the exact commit's own git objects, before any worktree/pnpm step touches disk.
+function verifyNoTrackedNodeModules(sha, repoRoot, dependencies = {}) {
+  const listTree = dependencies.listTreeFiles ?? listTreeFiles;
+  const paths = listTree(sha, repoRoot);
+  if (paths === null) return false; // an unreadable tree can never be proven clean.
+  return !hasTrackedNodeModules(paths);
+}
+
+// QNBS-v3: hook-free dir so 'git worktree add' can't run repo/user hooks -- scoped via -c, not global config.
+async function createEmptyHooksDir(dependencies = {}) {
+  const makeHooksDir =
+    dependencies.mkdtempHooksFn ??
+    (() => mkdtempAsync(join(tmpdir(), 'worldscript-exact-tree-hooks-')));
+  return makeHooksDir();
+}
+
 export async function createIsolatedWorktree(sha, repoRoot, dependencies = {}) {
   const runGit = dependencies.runBounded ?? runBounded;
   const makeTempDir =
     dependencies.mkdtempFn ?? (() => mkdtempAsync(join(tmpdir(), 'worldscript-exact-tree-')));
+  const removeDir = dependencies.rmFn ?? ((p) => rmAsync(p, { recursive: true, force: true }));
   await pruneStaleWorktrees(repoRoot, dependencies);
   let path;
   try {
@@ -41,9 +66,28 @@ export async function createIsolatedWorktree(sha, repoRoot, dependencies = {}) {
   } catch {
     return { ok: false, path: undefined };
   }
-  const result = await runGit('git', ['worktree', 'add', '--detach', path, sha], { cwd: repoRoot });
-  if (boundedCommandFailed(result)) return { ok: false, path };
-  return { ok: true, path };
+
+  let hooksDir;
+  try {
+    hooksDir = await createEmptyHooksDir(dependencies);
+  } catch {
+    return { ok: false, path };
+  }
+  try {
+    const result = await runGit(
+      'git',
+      ['-c', `core.hooksPath=${hooksDir}`, 'worktree', 'add', '--detach', path, sha],
+      { cwd: repoRoot },
+    );
+    if (boundedCommandFailed(result)) return { ok: false, path };
+    return { ok: true, path };
+  } finally {
+    try {
+      await removeDir(hooksDir);
+    } catch {
+      // Best-effort: nothing more can be done from here; the directory is under os.tmpdir().
+    }
+  }
 }
 
 // QNBS-v3: fail-closed -- git's own removal failing falls back to a raw sweep plus a metadata prune.
@@ -77,8 +121,8 @@ export async function installDependencies(worktreePath, dependencies = {}) {
   const timeoutMs = dependencies.installTimeoutMs ?? DEFAULT_INSTALL_TIMEOUT_MS;
   const result = await runPnpm(
     'pnpm',
-    // QNBS-v3: verifying an arbitrary ref must never run that ref's lifecycle scripts as the developer.
-    ['install', '--frozen-lockfile', '--offline', '--ignore-scripts'],
+    // QNBS-v3: verifying an arbitrary ref must never run that ref's scripts or .pnpmfile.cjs hooks.
+    ['install', '--frozen-lockfile', '--offline', '--ignore-scripts', '--ignore-pnpmfile'],
     {
       cwd: worktreePath,
       timeoutMs,
@@ -104,6 +148,9 @@ export async function verifyExactTreeTypecheck(sha, repoRoot = process.cwd(), de
   // QNBS-v3: a relative repoRoot would produce ambiguous git-cwd and install-cwd semantics.
   const absoluteRepoRoot = resolve(repoRoot);
   try {
+    // QNBS-v3: refuse before any materialization -- a tracked node_modules must never reach pnpm/tsgo.
+    if (!verifyNoTrackedNodeModules(sha, absoluteRepoRoot, dependencies)) return 'UNKNOWN';
+
     const created = await createIsolatedWorktree(sha, absoluteRepoRoot, dependencies);
     if (!created.ok) {
       await removeIsolatedWorktree(created.path, absoluteRepoRoot, dependencies);
@@ -115,9 +162,11 @@ export async function verifyExactTreeTypecheck(sha, repoRoot = process.cwd(), de
 
       const runDetailed = dependencies.runLocalBinaryDetailed ?? runLocalBinaryDetailed;
       const tsgoArgs = dependencies.tsgoArgs ?? DEFAULT_TSGO_ARGS;
+      const tsgoTimeoutMs = dependencies.tsgoTimeoutMs ?? DEFAULT_TSGO_TIMEOUT_MS;
       const result = await runDetailed('tsgo', tsgoArgs, {
         root: created.path,
         cwd: created.path,
+        timeoutMs: tsgoTimeoutMs,
       });
       // QNBS-v3: a signal (including an external OOM kill) must yield UNKNOWN, never a false FAIL.
       if (tsgoResultUnknown(result)) return 'UNKNOWN';
