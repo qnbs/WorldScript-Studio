@@ -220,6 +220,7 @@ describe('local signing controls', () => {
           : ['src/with\t tab.ts', '世界 file.ts', 'src/with\t tab.ts'],
     });
     expect(result.evidenceState).toBe('RESOLVED');
+    expect(result.pathEvidenceState).toBe('PARTIAL');
     expect(result.updates.map(({ disposition }) => disposition)).toEqual([
       'UPDATED',
       'NEW_BRANCH',
@@ -227,6 +228,72 @@ describe('local signing controls', () => {
       'TAG',
     ]);
     expect(result.changedFiles).toEqual(['src/with\t tab.ts', '世界 file.ts', 'new\nfile.ts']);
+  });
+
+  it('reports complete path evidence for branch, new-branch, and deletion updates', () => {
+    const zero = '0'.repeat(40);
+    const updates = [
+      parseRefUpdate(`refs/heads/main ${'a'.repeat(40)} refs/heads/main ${'b'.repeat(40)}`)!,
+      parseRefUpdate(`refs/heads/new ${'c'.repeat(40)} refs/heads/new ${zero}`)!,
+      parseRefUpdate(`refs/heads/deleted ${zero} refs/heads/deleted ${'d'.repeat(40)}`)!,
+    ];
+    const result = resolvePushEvidence(updates, process.cwd(), {
+      commitExists: () => true,
+      changedFilesBetween: () => ['src/example.ts'],
+    });
+
+    expect(result.evidenceState).toBe('RESOLVED');
+    expect(result.pathEvidenceState).toBe('COMPLETE');
+  });
+
+  it('marks lightweight and annotated tag evidence partial without inventing paths', () => {
+    const commit = 'a'.repeat(40);
+    const lightweight = parseRefUpdate(`refs/tags/v1 ${commit} refs/tags/v1 ${'0'.repeat(40)}`)!;
+    const annotated = parseRefUpdate(
+      `refs/tags/v2 ${'b'.repeat(40)} refs/tags/v2 ${'c'.repeat(40)}`,
+    )!;
+
+    for (const update of [lightweight, annotated]) {
+      const result = resolvePushEvidence([update], process.cwd(), {
+        objectExists: () => true,
+      });
+      expect(result.evidenceState).toBe('RESOLVED');
+      expect(result.pathEvidenceState).toBe('PARTIAL');
+      expect(result.changedFiles).toEqual([]);
+    }
+  });
+
+  it('marks mixed branch and tag evidence partial', () => {
+    const zero = '0'.repeat(40);
+    const result = resolvePushEvidence(
+      [
+        parseRefUpdate(`refs/heads/main ${'a'.repeat(40)} refs/heads/main ${'b'.repeat(40)}`)!,
+        parseRefUpdate(`refs/tags/v1 ${'c'.repeat(40)} refs/tags/v1 ${zero}`)!,
+      ],
+      process.cwd(),
+      {
+        commitExists: () => true,
+        objectExists: () => true,
+        changedFilesBetween: () => ['src/a.ts'],
+      },
+    );
+
+    expect(result.evidenceState).toBe('RESOLVED');
+    expect(result.pathEvidenceState).toBe('PARTIAL');
+    expect(result.changedFiles).toEqual(['src/a.ts']);
+  });
+
+  it('keeps empty evidence complete and rejects an unavailable tag object', () => {
+    expect(resolvePushEvidence([]).pathEvidenceState).toBe('COMPLETE');
+
+    const result = resolvePushEvidence(
+      [parseRefUpdate(`refs/tags/v1 ${'a'.repeat(40)} refs/tags/v1 ${'0'.repeat(40)}`)!],
+      process.cwd(),
+      { objectExists: () => false },
+    );
+
+    expect(result.evidenceState).toBe('INVALID');
+    expect(result.pathEvidenceState).toBe('PARTIAL');
   });
 
   it('fails closed for missing objects, bases, Git failures, and unsupported evidence', () => {

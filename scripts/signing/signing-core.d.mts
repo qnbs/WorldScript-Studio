@@ -87,6 +87,7 @@ export interface PushEvidence {
   updates: PushEvidenceUpdate[];
   changedFiles: string[];
   evidenceState: 'RESOLVED' | 'INVALID';
+  pathEvidenceState: 'COMPLETE' | 'PARTIAL';
   reason?: string;
 }
 export function resolvePushEvidence(
