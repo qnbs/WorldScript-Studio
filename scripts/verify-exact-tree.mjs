@@ -25,12 +25,12 @@ function tsgoResultUnknown(result) {
 }
 
 // QNBS-v3: sweeps entries orphaned by a prior crashed/killed run before creating a new one.
-async function pruneStaleWorktrees(repoRoot, dependencies) {
+async function pruneStaleWorktrees(repoRoot, dependencies = {}) {
   const runGit = dependencies.runBounded ?? runBounded;
   await runGit('git', ['worktree', 'prune'], { cwd: repoRoot });
 }
 
-export async function createIsolatedWorktree(sha, repoRoot, dependencies) {
+export async function createIsolatedWorktree(sha, repoRoot, dependencies = {}) {
   const runGit = dependencies.runBounded ?? runBounded;
   const makeTempDir =
     dependencies.mkdtempFn ?? (() => mkdtempAsync(join(tmpdir(), 'worldscript-exact-tree-')));
@@ -47,7 +47,7 @@ export async function createIsolatedWorktree(sha, repoRoot, dependencies) {
 }
 
 // QNBS-v3: fail-closed -- git's own removal failing falls back to a raw sweep plus a metadata prune.
-export async function removeIsolatedWorktree(worktreePath, repoRoot, dependencies) {
+export async function removeIsolatedWorktree(worktreePath, repoRoot, dependencies = {}) {
   if (!worktreePath) return;
   const runGit = dependencies.runBounded ?? runBounded;
   const removeDir = dependencies.rmFn ?? ((path) => rmAsync(path, { recursive: true, force: true }));
@@ -72,13 +72,21 @@ export async function removeIsolatedWorktree(worktreePath, repoRoot, dependencie
 }
 
 // QNBS-v3: real pnpm install, not a hand-reconstructed symlink graph -- offline, fails to UNKNOWN below.
-export async function installDependencies(worktreePath, dependencies) {
+export async function installDependencies(worktreePath, dependencies = {}) {
   const runPnpm = dependencies.runBounded ?? runBounded;
   const timeoutMs = dependencies.installTimeoutMs ?? DEFAULT_INSTALL_TIMEOUT_MS;
-  const result = await runPnpm('pnpm', ['install', '--frozen-lockfile', '--offline'], {
-    cwd: worktreePath,
-    timeoutMs,
-  });
+  const result = await runPnpm(
+    'pnpm',
+    // QNBS-v3: verifying an arbitrary ref must never run that ref's lifecycle scripts as the developer.
+    ['install', '--frozen-lockfile', '--offline', '--ignore-scripts'],
+    {
+      cwd: worktreePath,
+      timeoutMs,
+      shell: process.platform === 'win32',
+      // QNBS-v3: pnpm here is a Corepack shim, which can itself reach the network before --offline applies.
+      env: { COREPACK_ENABLE_NETWORK: '0' },
+    },
+  );
   return !boundedCommandFailed(result);
 }
 

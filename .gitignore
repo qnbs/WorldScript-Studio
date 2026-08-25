@@ -109,6 +109,9 @@ voice-spike/
 *.crt
 *.der
 .storycraft-*
+# Test fixture temp roots created under cwd by dependency-state/signing/verify-exact-tree tests --
+# normally cleaned up in afterEach, but an interrupted run can leave these visible to git status.
+.worldscript-*
 ~/
 
 .playwright-mcp/

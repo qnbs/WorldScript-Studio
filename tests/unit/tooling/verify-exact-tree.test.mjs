@@ -64,6 +64,8 @@ function makeWorkspaceFixture(innerContent) {
     '{"name":"@fixture/inner-pkg","version":"1.0.0"}\n',
   );
   writeFileSync(join(root, 'packages', 'inner-pkg', 'index.js'), `export const INNER = '${innerContent}';\n`);
+  // QNBS-v3: load-bearing -- without this, git add -A commits the symlinks and a bare checkout alone would pass.
+  writeFileSync(join(root, '.gitignore'), 'node_modules\n');
   // QNBS-v3: generates a real, valid lockfile for this fixture -- workspace-only, no network needed.
   execFileSync('pnpm', ['install', '--offline'], { cwd: root, stdio: 'ignore' });
   git(root, ['init', '--quiet', '--initial-branch=main']);
