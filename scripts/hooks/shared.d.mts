@@ -7,14 +7,18 @@ export interface BoundedResult {
   command: string;
 }
 
-export interface RunOptions {
+export interface BoundedOptions {
   timeoutMs?: number;
   env?: NodeJS.ProcessEnv;
   input?: string;
   shell?: boolean;
   cwd?: string;
-  root?: string;
   detached?: boolean;
+}
+
+// QNBS-v3: root is a wrapper-only option; runBounded's runtime destructuring never consumes it.
+export interface RunOptions extends BoundedOptions {
+  root?: string;
 }
 
 export function ensureDependencyState(root?: string): boolean;
@@ -22,7 +26,7 @@ export function ensureDependencyState(root?: string): boolean;
 export function runBounded(
   command: string,
   args: string[],
-  options?: RunOptions,
+  options?: BoundedOptions,
 ): Promise<BoundedResult>;
 
 export function runNodeScriptDetailed(

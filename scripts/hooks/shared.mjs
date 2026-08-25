@@ -48,6 +48,10 @@ export function runBounded(
     let state = 'RUNNING';
     let settled = false;
     let forceTimer;
+    let childExited = false;
+    child.once('exit', () => {
+      childExited = true;
+    });
     const terminate = (signal) => {
       if (process.platform !== 'win32' && child.pid) {
         try {
@@ -83,8 +87,8 @@ export function runBounded(
         process.kill(-child.pid, 0);
         return false;
       } catch (error) {
-        // QNBS-v3: EPERM means the group still exists; only ESRCH proves it is gone.
-        return error?.code === 'ESRCH' || error?.code === 'EPERM';
+        // QNBS-v3: only ESRCH proves the group is gone; EPERM/unknown errors must not short-circuit polling.
+        return error?.code === 'ESRCH';
       }
     };
     const finishAfterCleanup = () => {
@@ -177,8 +181,9 @@ export function runBounded(
     child.once('close', (status, signal) => finish(status, signal));
     if (input !== undefined) {
       child.stdin.once('error', (error) => {
-        if (!['EPIPE', 'ERR_STREAM_DESTROYED'].includes(error.code))
-          requestTermination('SIGTERM', 'resource', error);
+        // QNBS-v3: a broken pipe only proves the child was already done reading, not that delivery mid-run is safe to ignore.
+        const benign = childExited && ['EPIPE', 'ERR_STREAM_DESTROYED'].includes(error.code);
+        if (!benign) requestTermination('SIGTERM', 'resource', error);
       });
       child.stdin.end(input);
     }

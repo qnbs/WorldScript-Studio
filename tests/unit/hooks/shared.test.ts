@@ -1,7 +1,10 @@
 // @vitest-environment node
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import process from 'node:process';
-import { describe, expect, it } from 'vitest';
-import { runBounded } from '../../../scripts/hooks/shared.mjs';
+import { afterEach, describe, expect, it } from 'vitest';
+import { runBounded, runNodeScriptDetailed } from '../../../scripts/hooks/shared.mjs';
 
 describe('bounded hook subprocesses', () => {
   it('does not treat a clean timeout shutdown as a successful run', async () => {
@@ -45,5 +48,31 @@ describe('bounded hook subprocesses', () => {
       clearTimeout(firstSignal);
       clearTimeout(repeatedSignal);
     }
+  });
+
+  describe('runNodeScriptDetailed cwd handling', () => {
+    const scratchDirs: string[] = [];
+    afterEach(async () => {
+      await Promise.all(scratchDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+    });
+
+    it('preserves an explicit cwd separate from root', async () => {
+      const scriptRoot = await mkdtemp(join(tmpdir(), 'worldscript-hook-root-'));
+      const workingDir = await mkdtemp(join(tmpdir(), 'worldscript-hook-cwd-'));
+      scratchDirs.push(scriptRoot, workingDir);
+      await writeFile(
+        join(scriptRoot, 'write-marker.mjs'),
+        "import { writeFileSync } from 'node:fs'; writeFileSync('marker.txt', 'ok');",
+        'utf8',
+      );
+
+      const result = await runNodeScriptDetailed('write-marker.mjs', [], {
+        root: scriptRoot,
+        cwd: workingDir,
+      });
+
+      expect(result.status).toBe(0);
+      await expect(readFile(join(workingDir, 'marker.txt'), 'utf8')).resolves.toBe('ok');
+    });
   });
 });
