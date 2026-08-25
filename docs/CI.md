@@ -14,7 +14,7 @@ For historical optimization notes (targets may predate the live workflow), see [
 
 | Tier | Where | Commands / scope |
 |------|--------|------------------|
-| **Quick (local)** | Developer laptop | `pnpm run ci:prepush` (change-aware: single-checker typecheck and i18n/content-guard checks run only when the outgoing change classification requires them, see [`ci:prepush` change-aware routing](#ci-prepush-change-aware-routing); release/doc truth and lightweight guardrails run unconditionally); the pre-commit hook runs staged Biome checks; optional targeted `pnpm exec vitest run <path>` for a fast smoke |
+| **Quick (local)** | Developer laptop | `pnpm run ci:prepush` (change-aware: single-checker typecheck and i18n/content-guard checks run only when the outgoing change classification requires them, see [`ci:prepush` change-aware routing](#ciprepush-change-aware-routing); release/doc truth and lightweight guardrails run unconditionally); the pre-commit hook runs staged Biome checks; optional targeted `pnpm exec vitest run <path>` for a fast smoke |
 | **Heavy (CI)** | `ci.yml` | Vitest **with** `--coverage` and thresholds, Playwright E2E (`CI=true`) including **mobile emulation** (Pixel 5 / Chromium), Lighthouse CI, Storybook static build, bundle budget + analyze. Mutation testing (Stryker) is **not** part of this pipeline — see [Mutation testing status](#mutation-testing-status). |
 
 **Merge readiness:** A green workflow run on the PR/branch matters more than reproducing every E2E or LHCI step locally. Use CI **artifacts** (Playwright HTML report, coverage, Lighthouse output) to debug failures.
