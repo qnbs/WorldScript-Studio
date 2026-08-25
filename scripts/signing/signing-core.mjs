@@ -335,6 +335,7 @@ export function computeWorkingTreeState(sha, cwd, dependencies = {}) {
   const runGitFn = dependencies.runGit ?? runGit;
   let result;
   try {
+    // QNBS-v3: intentionally tracked-content only -- untracked files never make MATCHES a proof.
     result = runGitFn(['diff', '--quiet', sha, '--'], { cwd });
   } catch {
     return 'UNKNOWN';
