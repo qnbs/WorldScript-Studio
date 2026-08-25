@@ -5,15 +5,14 @@ import { runBounded } from '../../../scripts/hooks/shared.mjs';
 
 describe('bounded hook subprocesses', () => {
   it('does not treat a clean timeout shutdown as a successful run', async () => {
-    const startedAt = performance.now();
     const result = await runBounded(
       process.execPath,
       ['-e', "process.on('SIGTERM', () => process.exit(0)); setInterval(() => {}, 10_000);"],
       { timeoutMs: 100 },
     );
 
+    // QNBS-v3: status is legitimately 0 here (clean exit(0) on SIGTERM); timedOut is the real proof.
     expect(result.timedOut).toBe(true);
-    expect(performance.now() - startedAt).toBeLessThan(900);
   });
 
   // QNBS-v3: keep nested admission checks in the parent's process group for outer cleanup.

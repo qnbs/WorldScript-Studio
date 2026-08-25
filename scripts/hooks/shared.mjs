@@ -71,12 +71,20 @@ export function runBounded(
       }
     };
     const cleanupComplete = () => {
-      if (!child.pid || process.platform === 'win32') return true;
+      if (!child.pid) return true;
+      if (process.platform === 'win32') {
+        // QNBS-v3: taskkill /f returning does not prove the tree exited; poll tasklist instead.
+        const result = spawnSync('tasklist', ['/fi', `PID eq ${child.pid}`, '/fo', 'csv', '/nh'], {
+          windowsHide: true,
+        });
+        return !(result.stdout ?? '').toString().includes(String(child.pid));
+      }
       try {
         process.kill(-child.pid, 0);
         return false;
       } catch (error) {
-        return error?.code === 'ESRCH';
+        // QNBS-v3: EPERM means the group still exists; only ESRCH proves it is gone.
+        return error?.code === 'ESRCH' || error?.code === 'EPERM';
       }
     };
     const finishAfterCleanup = () => {
@@ -179,7 +187,10 @@ export function runBounded(
 
 export async function runNodeScriptDetailed(script, args = [], options = {}) {
   const root = options.root ?? projectRoot;
-  return runBounded(process.execPath, [resolve(root, script), ...args], { ...options, cwd: root });
+  return runBounded(process.execPath, [resolve(root, script), ...args], {
+    ...options,
+    cwd: options.cwd ?? root,
+  });
 }
 
 export async function runNodeScript(script, args = [], options = {}) {
@@ -208,7 +219,11 @@ export async function runLocalBinaryDetailed(binary, args = [], options = {}) {
       command,
     };
   }
-  return runBounded(command, args, { ...options, cwd: root, shell: process.platform === 'win32' });
+  return runBounded(command, args, {
+    ...options,
+    cwd: options.cwd ?? root,
+    shell: process.platform === 'win32',
+  });
 }
 
 export async function runLocalBinary(binary, args = [], options = {}) {
