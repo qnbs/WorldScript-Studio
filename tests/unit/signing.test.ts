@@ -230,6 +230,7 @@ describe('local signing controls', () => {
     expect(result.changedFiles).toEqual(['src/with\t tab.ts', '世界 file.ts', 'new\nfile.ts']);
   });
 
+  // QNBS-v3: branch/new-branch/deletion diff real content; tags can't without inventing paths.
   it('reports complete path evidence for branch, new-branch, and deletion updates', () => {
     const zero = '0'.repeat(40);
     const updates = [
