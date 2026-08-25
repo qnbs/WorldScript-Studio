@@ -18,8 +18,8 @@ try {
   evidenceFile = join(evidenceDir, 'evidence.json');
   writePrePushEvidenceFile(evidenceFile, updates);
   const childArgs = [...process.argv.slice(2), '--prepush-evidence-file', evidenceFile];
-  exitCode = runNodeScript('scripts/signing/verify-outgoing.mjs', childArgs);
-  if (exitCode === 0) exitCode = runNodeScript('scripts/ci-prepush-lowend.mjs', childArgs);
+  exitCode = await runNodeScript('scripts/signing/verify-outgoing.mjs', childArgs);
+  if (exitCode === 0) exitCode = await runNodeScript('scripts/ci-prepush-lowend.mjs', childArgs);
 } catch (error) {
   console.error(
     `pre-push evidence capture failed closed: ${error instanceof Error ? error.message : 'invalid input'}`,

@@ -13,13 +13,13 @@ function report(name, status, detail = '') {
   return status;
 }
 
-function runCheck(name, run) {
-  const status = run();
+async function runCheck(name, run) {
+  const status = await run();
   report(name, status === 0 ? 'PASS' : 'FAIL');
   if (status !== 0) process.exit(status ?? 1);
 }
 
-function main() {
+async function main() {
   const evidenceIndex = process.argv.indexOf('--prepush-evidence-file');
   const evidenceFile = evidenceIndex >= 0 ? process.argv[evidenceIndex + 1] : undefined;
   const fullRequested = process.argv.includes('--full');
@@ -51,18 +51,18 @@ function main() {
   }
   report('Dependency state', 'PASS');
 
-  runCheck('Toolchain', () => runNodeScript('scripts/check-pnpm-toolchain.mjs', ['--hook']));
-  runCheck('Docs/release truth', () => runNodeScript('scripts/check-doc-metrics.mjs'));
-  runCheck('CSP policy', () => runNodeScript('scripts/check-csp-policy.mjs'));
-  runCheck('Desktop import boundary', () =>
+  await runCheck('Toolchain', () => runNodeScript('scripts/check-pnpm-toolchain.mjs', ['--hook']));
+  await runCheck('Docs/release truth', () => runNodeScript('scripts/check-doc-metrics.mjs'));
+  await runCheck('CSP policy', () => runNodeScript('scripts/check-csp-policy.mjs'));
+  await runCheck('Desktop import boundary', () =>
     runNodeScript('scripts/check-tauri-import-boundary.mjs'),
   );
-  runCheck('Native readiness', () => runNodeScript('scripts/check-native-readiness.mjs'));
+  await runCheck('Native readiness', () => runNodeScript('scripts/check-native-readiness.mjs'));
 
   if (shouldRunAdmissionCheck('i18n', classification.files) || full) {
-    runCheck('i18n key parity', () => runNodeScript('scripts/check-i18n-keys.mjs'));
-    runCheck('i18n bundle rebuild', () => runNodeScript('scripts/build-i18n.mjs'));
-    runCheck('i18n translation quality', () =>
+    await runCheck('i18n key parity', () => runNodeScript('scripts/check-i18n-keys.mjs'));
+    await runCheck('i18n bundle rebuild', () => runNodeScript('scripts/build-i18n.mjs'));
+    await runCheck('i18n translation quality', () =>
       runNodeScript('scripts/i18n-quality-report.mjs', [
         '--strict',
         '--min-coverage',
@@ -74,10 +74,10 @@ function main() {
   }
 
   if (shouldRunAdmissionCheck('contentGuard', classification.files) || full)
-    runCheck('Content guard', () => runNodeScript('scripts/content-guard.mjs'));
+    await runCheck('Content guard', () => runNodeScript('scripts/content-guard.mjs'));
 
   if (typecheckRequired) {
-    runCheck('TypeScript (single checker)', () =>
+    await runCheck('TypeScript (single checker)', () =>
       // QNBS-v3: one checker bounds memory use on constrained developer machines.
       runLocalBinary('tsgo', ['--project', 'tsconfig.tsgo.json', '--noEmit', '--checkers', '1']),
     );
@@ -92,4 +92,4 @@ function main() {
 }
 
 // QNBS-v3: guard execution so this module can be imported for testing without running the CLI.
-if (isMainModule(process.argv[1], import.meta.url)) main();
+if (isMainModule(process.argv[1], import.meta.url)) await main();
