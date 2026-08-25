@@ -35,7 +35,10 @@ async function pruneStaleWorktrees(repoRoot, dependencies = {}) {
 
 // QNBS-v3: an arbitrary ref can force-track a node_modules path anywhere; could execute/redirect. Fail closed.
 function hasTrackedNodeModules(paths) {
-  return paths.some((path) => path.split('/').includes('node_modules'));
+  // QNBS-v3: case-insensitive -- NODE_MODULES aliases node_modules on Windows/macOS checkouts.
+  return paths.some((path) =>
+    path.split('/').some((segment) => segment.toLowerCase() === 'node_modules'),
+  );
 }
 
 // QNBS-v3: checked against the exact commit's own git objects, before any worktree/pnpm step touches disk.

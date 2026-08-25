@@ -424,6 +424,14 @@ describe('verifyNoTrackedNodeModules (P1: refuse before any materialization touc
     assert.equal(spy.calls.runBounded, 0, 'materialization must never start for a tracked node_modules commit');
   });
 
+  it('refuses a case-variant NODE_MODULES/.bin/tsgo (aliases node_modules on case-insensitive filesystems)', async () => {
+    const { root, sha } = makeRepoWithTrackedPath('NODE_MODULES/.bin/tsgo');
+    const spy = refusingMaterializationSpy();
+    const state = await verifyExactTreeTypecheck(sha, root, spy);
+    assert.equal(state, 'UNKNOWN');
+    assert.equal(spy.calls.runBounded, 0, 'materialization must never start for a tracked node_modules commit');
+  });
+
   it('leaves an ordinary commit with no tracked node_modules eligible for materialization', async () => {
     const { root, sha } = makeTinyTsRepo('const x: number = 1;\n');
     let worktreeAddCalled = false;
