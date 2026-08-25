@@ -295,12 +295,18 @@ procedure.
 ### Philosophy
 
 - **Cloud CI-first:** The canonical quality gate is GitHub Actions. Low-end local machines should run only the "Quick" tier.
-- **Quick tier (local, before every push):** `pnpm run ci:prepush` runs the project typecheck with
-  one checker, i18n parity/quality/bundle/content checks, release/doc truth, and lightweight desktop guardrails sequentially;
-  the pre-commit hook separately runs staged-file Biome checks. Run the gate again after every
-  correction before re-pushing; do not
-  push based only on a targeted test or a changed-file lint run. Optionally:
-  `pnpm exec vitest run <path>` **without** `--coverage`.
+- **Quick tier (local, before every push):** `pnpm run ci:prepush` always resolves a change-aware
+  classification from the outgoing evidence, then runs release/doc truth and lightweight desktop
+  guardrails sequentially unconditionally. The one-checker project typecheck and i18n
+  parity/quality/bundle/content checks run only when the classification requires them —
+  `DOCS_ONLY`/`WORKFLOW_ONLY`/`NON_CODE_ONLY`/`RUST_TAURI`/`TOOLING`/non-TypeScript `TEST_ONLY`
+  changes report typecheck as deferred to required CI instead, and i18n/content-guard checks run
+  only for their own governed paths; incomplete or unresolved path evidence fails closed into
+  running everything. Required GitHub CI remains the unconditional authority for the full
+  typecheck and i18n validation. The pre-commit hook separately runs staged-file Biome checks. Run
+  the gate again after every correction before re-pushing; do not push based only on a targeted
+  test or a changed-file lint run. Optionally: `pnpm exec vitest run <path>` **without**
+  `--coverage`.
 - **Dependency state:** `pnpm run deps:verify` compares a content fingerprint of dependency
   manifests, workspace package manifests, and patches. After a dependency-related branch switch,
   run `node scripts/dependency-state.mjs reconcile` (or `pnpm run deps:reconcile` when pnpm can

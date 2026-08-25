@@ -306,6 +306,27 @@ pnpm exec vitest run <path>  # optional targeted smoke, no coverage
 Playwright E2E, Lighthouse, Storybook, and full-suite coverage are intentionally omitted from
 the local block above; GitHub Actions owns those heavy checks on this hardware.
 
+### `ci:prepush` change-aware routing
+
+`pnpm run ci:prepush` always resolves a change classification from the outgoing evidence first
+(`scripts/ci-prepush-classifier.mjs`), then runs lint, docs/release-truth, CSP, desktop-import
+boundary, native-readiness, and dependency-state checks unconditionally on every invocation. Two
+check groups are conditional on that classification instead of always running:
+
+- **TypeScript (single-checker)** — skipped, reporting `DEFERRED_TO_REQUIRED_CI`, when the
+  classification is `DOCS_ONLY`, `WORKFLOW_ONLY`, `NON_CODE_ONLY`, `RUST_TAURI`, `TOOLING`, or
+  non-TypeScript `TEST_ONLY`. Runs for every other classification, including `AMBIGUOUS`/`MIXED`.
+- **i18n (key parity, bundle rebuild, translation quality) and content-guard** — run only when the
+  changed files match their own governed paths or implementation files
+  (`scripts/ci-prepush-check-registry.mjs`), independent of the TypeScript decision above.
+
+**Fail-closed by design:** whenever outgoing path evidence is incomplete — the manual committed
+range can't be resolved, a Git diff command fails, or pre-push-hook evidence reports partial path
+completeness (e.g. a tag-only push) — the gate does not defer anything; it falls back to running
+every check, matching a `--full` invocation. Deferring a check locally never changes what required
+GitHub CI validates: the complete TypeScript and i18n checks always run in CI regardless of what
+the local gate ran or deferred, and CI remains the merge authority.
+
 On standard hardware, or when debugging a build-affecting change, run the build-specific checks
 separately; CI remains authoritative for the complete build and artifact checks:
 
