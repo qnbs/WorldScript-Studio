@@ -366,12 +366,22 @@ export function resolvePushEvidence(input, cwd = process.cwd(), dependencies = {
         disposition: isZeroSha(update.remoteSha) ? 'NEW_BRANCH' : 'UPDATED',
       });
     }
-    return { updates: evidenceUpdates, changedFiles: [...changedFiles], evidenceState: 'RESOLVED' };
+    // QNBS-v3: tag updates prove object validity but not a complete changed-path set.
+    const pathEvidenceState = evidenceUpdates.some(({ disposition }) => disposition === 'TAG')
+      ? 'PARTIAL'
+      : 'COMPLETE';
+    return {
+      updates: evidenceUpdates,
+      changedFiles: [...changedFiles],
+      evidenceState: 'RESOLVED',
+      pathEvidenceState,
+    };
   } catch (error) {
     return {
       updates: [],
       changedFiles: [],
       evidenceState: 'INVALID',
+      pathEvidenceState: 'PARTIAL',
       reason: error instanceof Error ? error.message : 'invalid push evidence',
     };
   }
