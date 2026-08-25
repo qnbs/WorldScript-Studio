@@ -1,6 +1,15 @@
 import { spawnSync } from 'node:child_process';
+import { resolve } from 'node:path';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 import { readPrePushEvidenceFile, resolvePushEvidence } from './signing/signing-core.mjs';
+
+// QNBS-v3: resolve() normalizes a relative argv1 (e.g. `node scripts/x.mjs`) before comparing —
+// a bare `argv1 === fileURLToPath(moduleUrl)` is always false for a relative invocation, which
+// silently skips main() and makes the whole admission gate a no-op.
+export function isMainModule(argv1, moduleUrl) {
+  return argv1 !== undefined && resolve(argv1) === fileURLToPath(moduleUrl);
+}
 
 function parseNulDelimitedPaths(output) {
   return output.split('\0').filter(Boolean);
@@ -20,15 +29,18 @@ function defaultDiffNames(range) {
   return parseNulDelimitedPaths(result.stdout ?? '');
 }
 
+// QNBS-v3: returns null (not []) on failure — same fail-closed contract as defaultDiffNames.
 function defaultWorkingTreeFiles() {
   const staged = spawnSync('git', ['diff', '--no-renames', '--name-only', '-z', 'HEAD'], {
     encoding: 'utf8',
   });
+  if (staged.status !== 0) return null;
   const untracked = spawnSync('git', ['ls-files', '--others', '--exclude-standard', '-z'], {
     encoding: 'utf8',
   });
-  return parseNulDelimitedPaths(staged.status === 0 ? (staged.stdout ?? '') : '').concat(
-    parseNulDelimitedPaths(untracked.status === 0 ? (untracked.stdout ?? '') : ''),
+  if (untracked.status !== 0) return null;
+  return parseNulDelimitedPaths(staged.stdout ?? '').concat(
+    parseNulDelimitedPaths(untracked.stdout ?? ''),
   );
 }
 
@@ -41,7 +53,9 @@ export function changedFilesFromManualRange(dependencies = {}) {
   if (!upstream) return { files: [], rangeResolved: false };
   const diffFiles = diffNames(`${upstream}..HEAD`);
   if (diffFiles === null) return { files: [], rangeResolved: false };
-  return { files: diffFiles.concat(workingTreeFiles()), rangeResolved: true };
+  const workingFiles = workingTreeFiles();
+  if (workingFiles === null) return { files: [], rangeResolved: false };
+  return { files: diffFiles.concat(workingFiles), rangeResolved: true };
 }
 
 export function resolveManualEvidence(evidenceFile, dependencies = {}) {

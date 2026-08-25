@@ -59,8 +59,13 @@ export function classifyFile(file) {
   ) {
     return 'RUST_TAURI';
   }
+  // QNBS-v3: tests/fixtures/**/*.json is imported with inferred TS types (e.g. logger.test.ts),
+  // confirmed by grep — typecheck it conservatively rather than treating it as safe test data.
   if (normalized.startsWith('tests/'))
-    return TS_FILE.test(normalized) ? 'TYPESCRIPT_APPLICATION' : 'TEST_ONLY';
+    return TS_FILE.test(normalized) ||
+      (normalized.startsWith('tests/fixtures/') && normalized.endsWith('.json'))
+      ? 'TYPESCRIPT_APPLICATION'
+      : 'TEST_ONLY';
   if (TS_FILE.test(normalized)) return 'TYPESCRIPT_APPLICATION';
   if (TYPED_CONFIG_INPUTS.has(normalized)) return 'TYPESCRIPT_APPLICATION';
   if (TOOLING_FILES.has(normalized) || startsWithRoot(normalized, TOOLING_ROOTS)) return 'TOOLING';

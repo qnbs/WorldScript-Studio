@@ -1,12 +1,11 @@
 import process from 'node:process';
-import { fileURLToPath } from 'node:url';
 import { shouldRunAdmissionCheck } from './ci-prepush-check-registry.mjs';
 import {
   classifyChangedFiles,
   manualAdmissionNeedsFullValidation,
   requiresTypecheck,
 } from './ci-prepush-classifier.mjs';
-import { resolveManualEvidence } from './ci-prepush-range-resolver.mjs';
+import { isMainModule, resolveManualEvidence } from './ci-prepush-range-resolver.mjs';
 import { ensureDependencyState, runLocalBinary, runNodeScript } from './hooks/shared.mjs';
 
 function report(name, status, detail = '') {
@@ -93,5 +92,4 @@ function main() {
 }
 
 // QNBS-v3: guard execution so this module can be imported for testing without running the CLI.
-const isMainModule = process.argv[1] === fileURLToPath(import.meta.url);
-if (isMainModule) main();
+if (isMainModule(process.argv[1], import.meta.url)) main();

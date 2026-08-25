@@ -6,7 +6,7 @@ export interface ManualChangeEvidence {
 export interface ManualRangeDependencies {
   readonly resolveUpstream?: () => string | null;
   readonly diffNames?: (range: string) => readonly string[] | null;
-  readonly workingTreeFiles?: () => readonly string[];
+  readonly workingTreeFiles?: () => readonly string[] | null;
 }
 
 export interface ManualEvidenceDependencies extends ManualRangeDependencies {
@@ -14,6 +14,7 @@ export interface ManualEvidenceDependencies extends ManualRangeDependencies {
   readonly readPrePushEvidenceFile?: (file: string) => unknown;
 }
 
+export function isMainModule(argv1: string | undefined, moduleUrl: string): boolean;
 export function changedFilesFromManualRange(
   dependencies?: ManualRangeDependencies,
 ): ManualChangeEvidence;

@@ -7,7 +7,8 @@ const i18nPolicyFiles = new Set([
   'scripts/i18n-quality-report.mjs',
 ]);
 
-export const admissionCheckRegistry = Object.freeze([
+// QNBS-v3: not exported — shouldRunAdmissionCheck is the public API, nothing else consumes this.
+const admissionCheckRegistry = Object.freeze([
   {
     name: 'i18n',
     matches: (file) =>
@@ -18,6 +19,7 @@ export const admissionCheckRegistry = Object.freeze([
       routingAuthority,
       runnerAuthority,
       'scripts/ci-prepush-classifier.mjs',
+      'scripts/ci-prepush-range-resolver.mjs',
     ]),
   },
   {
@@ -30,6 +32,7 @@ export const admissionCheckRegistry = Object.freeze([
       routingAuthority,
       runnerAuthority,
       'scripts/ci-prepush-classifier.mjs',
+      'scripts/ci-prepush-range-resolver.mjs',
     ]),
   },
 ]);

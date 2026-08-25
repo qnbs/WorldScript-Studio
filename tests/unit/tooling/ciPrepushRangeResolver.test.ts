@@ -1,8 +1,34 @@
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   changedFilesFromManualRange,
+  isMainModule,
   resolveManualEvidence,
 } from '../../../scripts/ci-prepush-range-resolver.mjs';
+
+describe('isMainModule', () => {
+  const relativeArgv1 = 'scripts/ci-prepush-lowend.mjs';
+  const absoluteArgv1 = resolve(relativeArgv1);
+  const moduleUrl = pathToFileURL(absoluteArgv1).href;
+
+  // QNBS-v3: regression — package.json's ci:prepush script invokes with a relative argv[1].
+  it('recognizes a relative argv1 invocation as the same file (e.g. `node scripts/x.mjs`)', () => {
+    expect(isMainModule(relativeArgv1, moduleUrl)).toBe(true);
+  });
+
+  it('recognizes an absolute argv1 invocation', () => {
+    expect(isMainModule(absoluteArgv1, moduleUrl)).toBe(true);
+  });
+
+  it('is false when imported rather than executed (no argv1)', () => {
+    expect(isMainModule(undefined, moduleUrl)).toBe(false);
+  });
+
+  it('is false for a different file entirely', () => {
+    expect(isMainModule('scripts/other.mjs', moduleUrl)).toBe(false);
+  });
+});
 
 describe('manual committed-range resolution', () => {
   it('is unresolved when no upstream is configured', () => {
