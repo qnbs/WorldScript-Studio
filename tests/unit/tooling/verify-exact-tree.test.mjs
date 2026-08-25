@@ -114,6 +114,34 @@ describe('createIsolatedWorktree / removeIsolatedWorktree (real git, no pnpm)', 
   });
 });
 
+describe('bare-call regressions (dependencies argument omitted, matching resolveRef)', () => {
+  it('createIsolatedWorktree does not throw when called without a dependencies argument', async () => {
+    const { root, sha } = makeTinyTsRepo('const x: number = 1;\n');
+    const created = await createIsolatedWorktree(sha, root);
+    assert.equal(created.ok, true);
+    await removeIsolatedWorktree(created.path, root);
+  });
+
+  it('removeIsolatedWorktree does not throw when called without a dependencies argument', async () => {
+    const { root, sha } = makeTinyTsRepo('const x: number = 1;\n');
+    const created = await createIsolatedWorktree(sha, root, {});
+    await assert.doesNotReject(() => removeIsolatedWorktree(created.path, root));
+  });
+
+  it('installDependencies does not throw when called without a dependencies argument', async () => {
+    // QNBS-v3: an unreachable repoRoot fails fast, but the call itself must not throw on undefined deps.
+    await assert.doesNotReject(() => installDependencies('/tmp/worldscript-exact-tree-nonexistent'));
+  });
+
+  it('pruneStaleWorktrees (via createIsolatedWorktree) does not throw with dependencies omitted', async () => {
+    const { root, sha } = makeTinyTsRepo('const x: number = 1;\n');
+    // QNBS-v3: createIsolatedWorktree forwards dependencies to pruneStaleWorktrees internally.
+    const created = await createIsolatedWorktree(sha, root);
+    assert.equal(created.ok, true);
+    await removeIsolatedWorktree(created.path, root);
+  });
+});
+
 describe('installDependencies (workspace-package soundness -- the core regression)', () => {
   it('resolves workspace packages to the isolated worktree\'s committed source, never the live checkout, including a transitive package-local link', async () => {
     const { root, sha } = makeWorkspaceFixture('committed');
