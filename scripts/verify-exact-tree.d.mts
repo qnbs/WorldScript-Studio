@@ -1,3 +1,4 @@
+import type { DependencyState } from './dependency-state.d.mts';
 import type { BoundedResult } from './hooks/shared.d.mts';
 import type { GitOptions, GitResult } from './signing/signing-core.d.mts';
 
@@ -35,13 +36,20 @@ export interface VerifyExactTreeDependencies {
   repoRoot?: string;
   // QNBS-v3: reuses dependency-state.mjs's git-tree enumeration authority -- not a second parser.
   listTreeFiles?: (sha: string, cwd: string) => string[] | null;
+  // QNBS-v3: reuses #502's manifest-compatibility authority to gate which tsgo binary may be trusted.
+  computeDependencyState?: (sha: string, root: string) => DependencyState;
+  // QNBS-v3: bypasses the real `pnpm store path` query in tests; undefined means "resolve it for real".
+  storeDir?: string | null;
+  resolveStoreDir?: (dependencies?: VerifyExactTreeDependencies) => Promise<string | null> | string | null;
+  // QNBS-v3: a separate temp dir authority for the neutral store-dir query -- distinct from mkdtempFn/mkdtempHooksFn.
+  mkdtempStoreDirFn?: () => Promise<string>;
 }
 
 export function createIsolatedWorktree(
   sha: string,
   repoRoot: string,
   dependencies?: VerifyExactTreeDependencies,
-): Promise<{ ok: boolean; path: string | undefined }>;
+): Promise<{ ok: boolean; path: string | undefined; interrupted?: boolean }>;
 
 export function removeIsolatedWorktree(
   worktreePath: string | undefined,

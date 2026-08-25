@@ -77,6 +77,72 @@ function makeWorkspaceFixture(innerContent) {
   return { root, sha };
 }
 
+// QNBS-v3: .npmrc added AFTER the setup install, so fixture setup itself never escapes -- only the tested install can.
+function makeEscapingNpmrcFixture(npmrcContent) {
+  const root = mkdtempSync(join(process.cwd(), '.worldscript-exact-tree-npmrc-'));
+  temporaryRoots.push(root);
+  mkdirSync(join(root, 'packages', 'demo-pkg'), { recursive: true });
+  writeFileSync(
+    join(root, 'package.json'),
+    '{"name":"fixture-root","private":true,"dependencies":{"@fixture/demo-pkg":"workspace:*"}}\n',
+  );
+  writeFileSync(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - packages/*\n');
+  writeFileSync(join(root, 'packages', 'demo-pkg', 'package.json'), '{"name":"@fixture/demo-pkg","version":"1.0.0"}\n');
+  writeFileSync(join(root, 'packages', 'demo-pkg', 'index.js'), "export const DEMO = 'ok';\n");
+  writeFileSync(join(root, '.gitignore'), 'node_modules\n');
+  execFileSync('pnpm', ['install', '--offline'], { cwd: root, stdio: 'ignore' });
+  writeFileSync(join(root, '.npmrc'), npmrcContent);
+  git(root, ['init', '--quiet', '--initial-branch=main']);
+  git(root, ['config', 'user.email', 'test@example.com']);
+  git(root, ['config', 'user.name', 'test']);
+  git(root, ['add', '-A']);
+  git(root, ['-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'escaping npmrc']);
+  const sha = git(root, ['rev-parse', 'HEAD']).trim();
+  return { root, sha };
+}
+
+// QNBS-v3: a workspace package legitimately providing a "tsgo" bin -- bin-linking isn't a lifecycle script.
+function makeMaliciousTsgoFixture() {
+  const root = mkdtempSync(join(process.cwd(), '.worldscript-exact-tree-eviltsgo-'));
+  temporaryRoots.push(root);
+  const markerRoot = mkdtempSync(join(process.cwd(), '.worldscript-exact-tree-eviltsgomark-'));
+  temporaryRoots.push(markerRoot);
+  const markerFile = join(markerRoot, 'evil-tsgo-ran.txt');
+
+  mkdirSync(join(root, 'packages', 'evil-tsgo'), { recursive: true });
+  writeFileSync(
+    join(root, 'package.json'),
+    '{"name":"fixture-root","private":true,"dependencies":{"@fixture/evil-tsgo":"workspace:*"}}\n',
+  );
+  writeFileSync(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - packages/*\n');
+  writeFileSync(
+    join(root, 'packages', 'evil-tsgo', 'package.json'),
+    '{"name":"@fixture/evil-tsgo","version":"1.0.0","bin":{"tsgo":"./evil.js"}}\n',
+  );
+  writeFileSync(
+    join(root, 'packages', 'evil-tsgo', 'evil.js'),
+    `require('fs').writeFileSync(${JSON.stringify(markerFile)}, 'executed');\n`,
+  );
+  writeFileSync(join(root, '.gitignore'), 'node_modules\n');
+  execFileSync('pnpm', ['install', '--offline'], { cwd: root, stdio: 'ignore' });
+  git(root, ['init', '--quiet', '--initial-branch=main']);
+  git(root, ['config', 'user.email', 'test@example.com']);
+  git(root, ['config', 'user.name', 'test']);
+  git(root, ['add', '-A']);
+  git(root, [
+    '-c',
+    'commit.gpgsign=false',
+    'commit',
+    '--quiet',
+    '-m',
+    'malicious: workspace package provides a fake tsgo bin',
+  ]);
+  const maliciousSha = git(root, ['rev-parse', 'HEAD']).trim();
+  // QNBS-v3: the setup install above also installs at the fixture root -- delete it so it stays untainted.
+  rmSync(join(root, 'node_modules'), { recursive: true, force: true });
+  return { root, maliciousSha, markerFile };
+}
+
 describe('createIsolatedWorktree / removeIsolatedWorktree (real git, no pnpm)', () => {
   it('creates a worktree at the exact commit and leaves nothing registered after cleanup', async () => {
     const { root, sha } = makeTinyTsRepo('const x: number = 1;\n');
@@ -212,6 +278,7 @@ describe('installDependencies (workspace-package soundness -- the core regressio
 
   it('returns false (mapped to UNKNOWN by callers) when the frozen-lockfile install fails', async () => {
     const installed = await installDependencies('/tmp/worldscript-exact-tree-fake', {
+      storeDir: '/fake-store',
       runBounded: async () => ({
         status: 1,
         error: null,
@@ -222,12 +289,59 @@ describe('installDependencies (workspace-package soundness -- the core regressio
     });
     assert.equal(installed, false);
   });
+
+  it('returns false (mapped to UNKNOWN) when the trusted store-dir cannot be resolved', async () => {
+    const installed = await installDependencies('/tmp/worldscript-exact-tree-fake', {
+      resolveStoreDir: () => null,
+      runBounded: async () => {
+        throw new Error('must not be called -- an unresolved store-dir must fail closed first');
+      },
+    });
+    assert.equal(installed, false);
+  });
+});
+
+describe('installDependencies (P1: contain pnpm output paths against an escaping .npmrc)', () => {
+  it('does not let modules-dir escape the isolated worktree', async () => {
+    const { root, sha } = makeEscapingNpmrcFixture('modules-dir=../ESCAPE-modules\n');
+    const created = await createIsolatedWorktree(sha, root, {});
+    assert.equal(created.ok, true);
+    try {
+      const installed = await installDependencies(created.path, {});
+      assert.equal(installed, true);
+      assert.equal(
+        existsSync(join(created.path, '..', 'ESCAPE-modules')),
+        false,
+        'modules-dir must not escape the isolated worktree',
+      );
+    } finally {
+      await removeIsolatedWorktree(created.path, root, {});
+    }
+  });
+
+  it('does not let virtual-store-dir escape the isolated worktree', async () => {
+    const { root, sha } = makeEscapingNpmrcFixture('virtual-store-dir=../ESCAPE-virtualstore\n');
+    const created = await createIsolatedWorktree(sha, root, {});
+    assert.equal(created.ok, true);
+    try {
+      const installed = await installDependencies(created.path, {});
+      assert.equal(installed, true);
+      assert.equal(
+        existsSync(join(created.path, '..', 'ESCAPE-virtualstore')),
+        false,
+        'virtual-store-dir must not escape the isolated worktree',
+      );
+    } finally {
+      await removeIsolatedWorktree(created.path, root, {});
+    }
+  });
 });
 
 describe('verifyExactTreeTypecheck (fail-closed lifecycle, signal/status semantics -- DI only)', () => {
   it('reports UNKNOWN when git worktree add fails', async () => {
     const state = await verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
       listTreeFiles: () => [],
+      computeDependencyState: () => 'MATCHES',
       runBounded: (_command, args) => {
         if (args.includes('add')) return { status: 1, error: null, signal: null, timedOut: false, interrupted: false };
         return { status: 0, error: null, signal: null, timedOut: false, interrupted: false };
@@ -240,6 +354,8 @@ describe('verifyExactTreeTypecheck (fail-closed lifecycle, signal/status semanti
   it('reports UNKNOWN, never a false PASS/FAIL, when the install fails', async () => {
     const state = await verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
       listTreeFiles: () => [],
+      computeDependencyState: () => 'MATCHES',
+      storeDir: '/fake-store',
       mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
       runBounded: (_command, args) => {
         if (args.includes('worktree')) return { status: 0, error: null, signal: null, timedOut: false, interrupted: false };
@@ -257,6 +373,8 @@ describe('verifyExactTreeTypecheck (fail-closed lifecycle, signal/status semanti
     const runBounded = () => ({ status: 0, error: null, signal: null, timedOut: false, interrupted: false });
     const pass = await verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
       listTreeFiles: () => [],
+      computeDependencyState: () => 'MATCHES',
+      storeDir: '/fake-store',
       mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
       runBounded,
       runLocalBinaryDetailed: async () => ({
@@ -271,6 +389,8 @@ describe('verifyExactTreeTypecheck (fail-closed lifecycle, signal/status semanti
 
     const fail = await verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
       listTreeFiles: () => [],
+      computeDependencyState: () => 'MATCHES',
+      storeDir: '/fake-store',
       mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
       runBounded,
       runLocalBinaryDetailed: async () => ({
@@ -287,6 +407,8 @@ describe('verifyExactTreeTypecheck (fail-closed lifecycle, signal/status semanti
   it('reports UNKNOWN, not FAIL, when tsgo is terminated by a signal (e.g. external OOM kill)', async () => {
     const state = await verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
       listTreeFiles: () => [],
+      computeDependencyState: () => 'MATCHES',
+      storeDir: '/fake-store',
       mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
       runBounded: () => ({ status: 0, error: null, signal: null, timedOut: false, interrupted: false }),
       runLocalBinaryDetailed: async () => ({
@@ -303,6 +425,8 @@ describe('verifyExactTreeTypecheck (fail-closed lifecycle, signal/status semanti
   it('reports UNKNOWN, not FAIL, on a null status with no signal (defensive)', async () => {
     const state = await verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
       listTreeFiles: () => [],
+      computeDependencyState: () => 'MATCHES',
+      storeDir: '/fake-store',
       mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
       runBounded: () => ({ status: 0, error: null, signal: null, timedOut: false, interrupted: false }),
       runLocalBinaryDetailed: async () => ({
@@ -321,6 +445,8 @@ describe('verifyExactTreeTypecheck (fail-closed lifecycle, signal/status semanti
     let seenTimeoutMs;
     await verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
       listTreeFiles: () => [],
+      computeDependencyState: () => 'MATCHES',
+      storeDir: '/fake-store',
       mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
       runBounded,
       runLocalBinaryDetailed: async (_binary, _args, options) => {
@@ -334,6 +460,8 @@ describe('verifyExactTreeTypecheck (fail-closed lifecycle, signal/status semanti
     let overriddenTimeoutMs;
     await verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
       listTreeFiles: () => [],
+      computeDependencyState: () => 'MATCHES',
+      storeDir: '/fake-store',
       mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
       runBounded,
       tsgoTimeoutMs: 42_000,
@@ -345,12 +473,16 @@ describe('verifyExactTreeTypecheck (fail-closed lifecycle, signal/status semanti
     assert.equal(overriddenTimeoutMs, 42_000);
   });
 
-  it('canonicalizes a relative repoRoot to an absolute path before any git/install call', async () => {
+  it('canonicalizes a relative repoRoot to an absolute path before any git/install/dependencyState call', async () => {
     const seenCwds = [];
     await verifyExactTreeTypecheck('a'.repeat(40), '.', {
       listTreeFiles: (_sha, cwd) => {
         seenCwds.push(cwd);
         return [];
+      },
+      computeDependencyState: (_sha, root) => {
+        seenCwds.push(root);
+        return 'MATCHES';
       },
       mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
       runBounded: (_command, _args, options) => {
@@ -360,6 +492,51 @@ describe('verifyExactTreeTypecheck (fail-closed lifecycle, signal/status semanti
     });
     assert.ok(seenCwds.length > 0);
     for (const cwd of seenCwds) assert.equal(cwd, resolve('.'), `expected absolute cwd, got ${cwd}`);
+  });
+});
+
+describe('verifyExactTreeTypecheck (P1: the checked ref must never supply the compiler that certifies it)', () => {
+  it('invokes tsgo using the trusted repoRoot, never the isolated worktree, once dependencyState proves MATCHES', async () => {
+    let seenRoot;
+    let seenCwd;
+    const state = await verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
+      listTreeFiles: () => [],
+      computeDependencyState: () => 'MATCHES',
+      storeDir: '/fake-store',
+      mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
+      runBounded: () => ({ status: 0, error: null, signal: null, timedOut: false, interrupted: false }),
+      runLocalBinaryDetailed: async (_binary, _args, options) => {
+        seenRoot = options?.root;
+        seenCwd = options?.cwd;
+        return { status: 0, error: null, signal: null, timedOut: false, interrupted: false };
+      },
+    });
+    assert.equal(state, 'PASS');
+    assert.equal(seenRoot, '/repo', 'the compiler binary must resolve from the trusted repoRoot');
+    assert.equal(seenCwd, '/tmp/worldscript-exact-tree-fake', 'the compile must still analyze the isolated tree');
+  });
+
+  it('refuses (UNKNOWN) without creating any worktree when dependencyState is not MATCHES', async () => {
+    for (const dependencyState of ['DIVERGED', 'UNKNOWN', 'NOT_APPLICABLE']) {
+      let worktreeCalls = 0;
+      const state = await verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
+        listTreeFiles: () => [],
+        computeDependencyState: () => dependencyState,
+        runBounded: () => {
+          worktreeCalls += 1;
+          return { status: 0, error: null, signal: null, timedOut: false, interrupted: false };
+        },
+      });
+      assert.equal(state, 'UNKNOWN', `expected UNKNOWN for dependencyState=${dependencyState}`);
+      assert.equal(worktreeCalls, 0, `expected no worktree materialization for dependencyState=${dependencyState}`);
+    }
+  });
+
+  it('never executes a workspace-supplied tsgo binary or yields PASS, even via a legitimate frozen install', async () => {
+    const { root, maliciousSha, markerFile } = makeMaliciousTsgoFixture();
+    const state = await verifyExactTreeTypecheck(maliciousSha, root, {});
+    assert.notEqual(state, 'PASS', 'a ref-supplied compiler must never certify itself');
+    assert.equal(existsSync(markerFile), false, 'the ref-supplied tsgo bin must never execute');
   });
 });
 
@@ -436,6 +613,7 @@ describe('verifyNoTrackedNodeModules (P1: refuse before any materialization touc
     const { root, sha } = makeTinyTsRepo('const x: number = 1;\n');
     let worktreeAddCalled = false;
     const state = await verifyExactTreeTypecheck(sha, root, {
+      computeDependencyState: () => 'MATCHES',
       mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
       runBounded: (_command, args) => {
         if (args.includes('add')) worktreeAddCalled = true;
@@ -496,6 +674,7 @@ describe('verifyExactTreeForShas (dedup, sequential, aggregation)', () => {
     let calls = 0;
     const state = await verifyExactTreeForShas(['a'.repeat(40), 'a'.repeat(40)], '/repo', {
       listTreeFiles: () => [],
+      computeDependencyState: () => 'MATCHES',
       mkdtempFn: async () => {
         calls += 1;
         return '/tmp/worldscript-exact-tree-fake';
@@ -518,6 +697,8 @@ describe('verifyExactTreeForShas (dedup, sequential, aggregation)', () => {
     let tsgoCallCount = 0;
     const state = await verifyExactTreeForShas(['a'.repeat(40), 'b'.repeat(40)], '/repo', {
       listTreeFiles: () => [],
+      computeDependencyState: () => 'MATCHES',
+      storeDir: '/fake-store',
       mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
       runBounded: () => ({ status: 0, error: null, signal: null, timedOut: false, interrupted: false }),
       runLocalBinaryDetailed: async () => {
@@ -533,6 +714,127 @@ describe('verifyExactTreeForShas (dedup, sequential, aggregation)', () => {
   });
 });
 
+describe('interruption handling (P2: explicit user intent must stop the whole run)', () => {
+  it('createIsolatedWorktree reports interrupted:true in its return shape, not a generic failure', async () => {
+    const created = await createIsolatedWorktree('a'.repeat(40), '/repo', {
+      mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
+      runBounded: (_command, args) => {
+        if (args.includes('add')) return { status: null, error: null, signal: null, timedOut: false, interrupted: true };
+        return { status: 0, error: null, signal: null, timedOut: false, interrupted: false };
+      },
+    });
+    assert.equal(created.ok, false);
+    assert.equal(created.interrupted, true);
+  });
+
+  it('verifyExactTreeTypecheck rejects (does not return UNKNOWN) when worktree creation is interrupted', async () => {
+    await assert.rejects(
+      verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
+        listTreeFiles: () => [],
+        computeDependencyState: () => 'MATCHES',
+        mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
+        runBounded: (_command, args) => {
+          if (args.includes('add')) return { status: null, error: null, signal: null, timedOut: false, interrupted: true };
+          return { status: 0, error: null, signal: null, timedOut: false, interrupted: false };
+        },
+      }),
+      { name: 'ExactTreeInterrupted' },
+    );
+  });
+
+  it('verifyExactTreeTypecheck rejects when the pnpm install is interrupted, and still cleans up the worktree', async () => {
+    let removeCalled = false;
+    await assert.rejects(
+      verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
+        listTreeFiles: () => [],
+        computeDependencyState: () => 'MATCHES',
+        storeDir: '/fake-store',
+        mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
+        runBounded: (_command, args) => {
+          if (args.includes('remove')) removeCalled = true;
+          if (args.includes('worktree')) return { status: 0, error: null, signal: null, timedOut: false, interrupted: false };
+          // QNBS-v3: the pnpm install call.
+          return { status: null, error: null, signal: null, timedOut: false, interrupted: true };
+        },
+      }),
+      { name: 'ExactTreeInterrupted' },
+    );
+    assert.equal(removeCalled, true, 'cleanup must still run even when interrupted mid-install');
+  });
+
+  it('verifyExactTreeTypecheck rejects when tsgo itself is interrupted, and still cleans up the worktree', async () => {
+    let removeCalled = false;
+    await assert.rejects(
+      verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
+        listTreeFiles: () => [],
+        computeDependencyState: () => 'MATCHES',
+        storeDir: '/fake-store',
+        mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
+        runBounded: (_command, args) => {
+          if (args.includes('remove')) removeCalled = true;
+          return { status: 0, error: null, signal: null, timedOut: false, interrupted: false };
+        },
+        runLocalBinaryDetailed: async () => ({
+          status: null,
+          error: null,
+          signal: null,
+          timedOut: false,
+          interrupted: true,
+        }),
+      }),
+      { name: 'ExactTreeInterrupted' },
+    );
+    assert.equal(removeCalled, true, 'cleanup must still run even when interrupted mid-typecheck');
+  });
+
+  it('verifyExactTreeForShas stops processing remaining SHAs immediately when one is interrupted', async () => {
+    let worktreeAddCalls = 0;
+    await assert.rejects(
+      verifyExactTreeForShas(['a'.repeat(40), 'b'.repeat(40)], '/repo', {
+        listTreeFiles: () => [],
+        computeDependencyState: () => 'MATCHES',
+        mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
+        runBounded: (_command, args) => {
+          if (args.includes('add')) {
+            worktreeAddCalls += 1;
+            return { status: null, error: null, signal: null, timedOut: false, interrupted: true };
+          }
+          return { status: 0, error: null, signal: null, timedOut: false, interrupted: false };
+        },
+      }),
+      { name: 'ExactTreeInterrupted' },
+    );
+    assert.equal(worktreeAddCalls, 1, 'the second SHA must never start a worktree add after the first is interrupted');
+  });
+
+  it('main() reports an interrupted outcome and exits 130 instead of continuing or printing a normal result', async () => {
+    const logs = [];
+    const originalLog = console.log;
+    console.log = (message) => logs.push(message);
+    const originalExitCode = process.exitCode;
+    process.exitCode = 0;
+    try {
+      await main(['HEAD'], {
+        repoRoot: '/repo',
+        listTreeFiles: () => [],
+        computeDependencyState: () => 'MATCHES',
+        runGit: () => ({ status: 0, stdout: `${'a'.repeat(40)}\n`, stderr: '', error: undefined }),
+        mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
+        runBounded: (_command, args) => {
+          if (args.includes('add')) return { status: null, error: null, signal: null, timedOut: false, interrupted: true };
+          return { status: 0, error: null, signal: null, timedOut: false, interrupted: false };
+        },
+      });
+      assert.equal(process.exitCode, 130);
+    } finally {
+      console.log = originalLog;
+      process.exitCode = originalExitCode;
+    }
+    assert.ok(logs.some((line) => line.includes('interrupted')), logs.join('\n'));
+    assert.ok(!logs.some((line) => line.includes('result:')), 'must not print a normal PASS/FAIL/UNKNOWN result line');
+  });
+});
+
 describe('main (real CLI entry path, realistic DI)', () => {
   it('resolves HEAD by default, verifies it, and prints the result without crashing', async () => {
     const logs = [];
@@ -542,6 +844,7 @@ describe('main (real CLI entry path, realistic DI)', () => {
       await main([], {
         repoRoot: '/repo',
         listTreeFiles: () => [],
+        computeDependencyState: () => 'MATCHES',
         runGit: () => ({ status: 0, stdout: `${'a'.repeat(40)}\n`, stderr: '', error: undefined }),
         runBounded: (_command, args) => {
           if (args.includes('add')) return { status: 1, error: null, signal: null, timedOut: false, interrupted: false };
@@ -564,6 +867,7 @@ describe('main (real CLI entry path, realistic DI)', () => {
       await main(['main', 'feature-branch'], {
         repoRoot: '/repo',
         listTreeFiles: () => [],
+        computeDependencyState: () => 'MATCHES',
         runGit: (args) => {
           resolvedRefs.push(args[2]);
           return { status: 0, stdout: `${'a'.repeat(40)}\n`, stderr: '', error: undefined };
@@ -608,6 +912,8 @@ describe('main (real CLI entry path, realistic DI)', () => {
       await main(['HEAD'], {
         repoRoot: '/repo',
         listTreeFiles: () => [],
+        computeDependencyState: () => 'MATCHES',
+        storeDir: '/fake-store',
         runGit: () => ({ status: 0, stdout: `${'a'.repeat(40)}\n`, stderr: '', error: undefined }),
         runBounded: () => ({ status: 0, error: null, signal: null, timedOut: false, interrupted: false }),
         mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',

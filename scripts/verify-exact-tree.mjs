@@ -1,11 +1,20 @@
+import { spawnSync } from 'node:child_process';
 import { mkdtemp as mkdtempAsync, rm as rmAsync } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import process from 'node:process';
 import { isMainModule } from './ci-prepush-range-resolver.mjs';
-import { listTreeFiles } from './dependency-state.mjs';
+import { computeDependencyState, listTreeFiles } from './dependency-state.mjs';
 import { runBounded, runLocalBinaryDetailed } from './hooks/shared.mjs';
 import { runGit as defaultRunGit } from './signing/signing-core.mjs';
+
+// QNBS-v3: distinct from every other UNKNOWN cause -- explicit user intent must stop the whole run.
+class ExactTreeInterrupted extends Error {
+  constructor() {
+    super('verify-exact-tree: interrupted');
+    this.name = 'ExactTreeInterrupted';
+  }
+}
 
 const DEFAULT_TSGO_ARGS = ['--project', 'tsconfig.tsgo.json', '--noEmit', '--checkers', '1'];
 // QNBS-v3: measured ~2m20s for the full project on this hardware with a warm store; 5min gives margin.
@@ -57,6 +66,31 @@ async function createEmptyHooksDir(dependencies = {}) {
   return makeHooksDir();
 }
 
+// QNBS-v3: fresh empty temp dir -- 'pnpm store path' loads .pnpmfile.cjs too and has no --ignore-pnpmfile flag.
+async function defaultResolveStoreDir(dependencies = {}) {
+  const makeTempDir =
+    dependencies.mkdtempStoreDirFn ??
+    (() => mkdtempAsync(join(tmpdir(), 'worldscript-exact-tree-storequery-')));
+  const removeDir = dependencies.rmFn ?? ((p) => rmAsync(p, { recursive: true, force: true }));
+  let neutralDir;
+  try {
+    neutralDir = await makeTempDir();
+  } catch {
+    return null;
+  }
+  try {
+    const result = spawnSync('pnpm', ['store', 'path'], { cwd: neutralDir, encoding: 'utf8', timeout: 10_000 });
+    if (result.error || result.status !== 0) return null;
+    return result.stdout.trim();
+  } finally {
+    try {
+      await removeDir(neutralDir);
+    } catch {
+      // Best-effort: nothing more can be done from here; the directory is under os.tmpdir().
+    }
+  }
+}
+
 export async function createIsolatedWorktree(sha, repoRoot, dependencies = {}) {
   const runGit = dependencies.runBounded ?? runBounded;
   const makeTempDir =
@@ -82,6 +116,8 @@ export async function createIsolatedWorktree(sha, repoRoot, dependencies = {}) {
       ['-c', `core.hooksPath=${hooksDir}`, 'worktree', 'add', '--detach', path, sha],
       { cwd: repoRoot },
     );
+    // QNBS-v3: reported via the return shape, not a throw -- the caller must still clean up this path.
+    if (result.interrupted) return { ok: false, path, interrupted: true };
     if (boundedCommandFailed(result)) return { ok: false, path };
     return { ok: true, path };
   } finally {
@@ -122,10 +158,30 @@ export async function removeIsolatedWorktree(worktreePath, repoRoot, dependencie
 export async function installDependencies(worktreePath, dependencies = {}) {
   const runPnpm = dependencies.runBounded ?? runBounded;
   const timeoutMs = dependencies.installTimeoutMs ?? DEFAULT_INSTALL_TIMEOUT_MS;
+  const resolveStoreDir = dependencies.resolveStoreDir ?? defaultResolveStoreDir;
+  const storeDir =
+    dependencies.storeDir !== undefined ? dependencies.storeDir : await resolveStoreDir(dependencies);
+  if (storeDir === null) return false; // could not establish a trusted store-dir -- fail closed.
+
   const result = await runPnpm(
     'pnpm',
-    // QNBS-v3: verifying an arbitrary ref must never run that ref's scripts or .pnpmfile.cjs hooks.
-    ['install', '--frozen-lockfile', '--offline', '--ignore-scripts', '--ignore-pnpmfile'],
+    [
+      'install',
+      '--frozen-lockfile',
+      '--offline',
+      // QNBS-v3: verifying an arbitrary ref must never run that ref's scripts or .pnpmfile.cjs hooks.
+      '--ignore-scripts',
+      '--ignore-pnpmfile',
+      // QNBS-v3: pins every pnpm output path -- CLI flags outrank a target-controlled .npmrc, containing writes.
+      '--modules-dir',
+      'node_modules',
+      '--virtual-store-dir',
+      'node_modules/.pnpm',
+      '--lockfile-dir',
+      worktreePath,
+      '--store-dir',
+      storeDir,
+    ],
     {
       cwd: worktreePath,
       timeoutMs,
@@ -134,6 +190,7 @@ export async function installDependencies(worktreePath, dependencies = {}) {
       env: { COREPACK_ENABLE_NETWORK: '0' },
     },
   );
+  if (result.interrupted) throw new ExactTreeInterrupted();
   return !boundedCommandFailed(result);
 }
 
@@ -146,7 +203,7 @@ function aggregateExactTreeState(states) {
   return 'PASS';
 }
 
-// QNBS-v3: never throws -- an opt-in diagnostic tool must fail closed to UNKNOWN, not crash the caller.
+// QNBS-v3: never throws UNKNOWN-worthy failures -- only ExactTreeInterrupted escapes, to stop the whole run.
 export async function verifyExactTreeTypecheck(sha, repoRoot = process.cwd(), dependencies = {}) {
   // QNBS-v3: a relative repoRoot would produce ambiguous git-cwd and install-cwd semantics.
   const absoluteRepoRoot = resolve(repoRoot);
@@ -154,30 +211,39 @@ export async function verifyExactTreeTypecheck(sha, repoRoot = process.cwd(), de
     // QNBS-v3: refuse before any materialization -- a tracked node_modules must never reach pnpm/tsgo.
     if (!verifyNoTrackedNodeModules(sha, absoluteRepoRoot, dependencies)) return 'UNKNOWN';
 
+    // QNBS-v3: the checked ref may supply source/types/deps but never the compiler that certifies it.
+    const computeState = dependencies.computeDependencyState ?? computeDependencyState;
+    if (computeState(sha, absoluteRepoRoot, dependencies) !== 'MATCHES') return 'UNKNOWN';
+
     const created = await createIsolatedWorktree(sha, absoluteRepoRoot, dependencies);
     if (!created.ok) {
       await removeIsolatedWorktree(created.path, absoluteRepoRoot, dependencies);
+      if (created.interrupted) throw new ExactTreeInterrupted();
       return 'UNKNOWN';
     }
 
     try {
-      if (!(await installDependencies(created.path, dependencies))) return 'UNKNOWN';
+      const installed = await installDependencies(created.path, dependencies);
+      if (!installed) return 'UNKNOWN';
 
       const runDetailed = dependencies.runLocalBinaryDetailed ?? runLocalBinaryDetailed;
       const tsgoArgs = dependencies.tsgoArgs ?? DEFAULT_TSGO_ARGS;
       const tsgoTimeoutMs = dependencies.tsgoTimeoutMs ?? DEFAULT_TSGO_TIMEOUT_MS;
       const result = await runDetailed('tsgo', tsgoArgs, {
-        root: created.path,
+        // QNBS-v3: root is the TRUSTED checkout's own tsgo -- cwd stays the isolated tree being analyzed.
+        root: absoluteRepoRoot,
         cwd: created.path,
         timeoutMs: tsgoTimeoutMs,
       });
+      if (result.interrupted) throw new ExactTreeInterrupted();
       // QNBS-v3: a signal (including an external OOM kill) must yield UNKNOWN, never a false FAIL.
       if (tsgoResultUnknown(result)) return 'UNKNOWN';
       return result.status === 0 ? 'PASS' : 'FAIL';
     } finally {
       await removeIsolatedWorktree(created.path, absoluteRepoRoot, dependencies);
     }
-  } catch {
+  } catch (error) {
+    if (error instanceof ExactTreeInterrupted) throw error;
     return 'UNKNOWN';
   }
 }
@@ -215,7 +281,18 @@ export async function main(argv = process.argv.slice(2), dependencies = {}) {
     shas.push(sha);
   }
   console.log(`[verify-exact-tree] verifying ${shas.length} commit(s) in isolated worktree(s)...`);
-  const state = await verifyExactTreeForShas(shas, repoRoot, dependencies);
+  let state;
+  try {
+    state = await verifyExactTreeForShas(shas, repoRoot, dependencies);
+  } catch (error) {
+    // QNBS-v3: explicit user intent -- stop here, never continue to another multi-minute verification.
+    if (error instanceof ExactTreeInterrupted) {
+      console.log('[verify-exact-tree] interrupted; stopping without completing verification.');
+      process.exitCode = 130;
+      return;
+    }
+    throw error;
+  }
   console.log(`[verify-exact-tree] result: ${state}`);
   if (state === 'UNKNOWN') {
     console.log(
