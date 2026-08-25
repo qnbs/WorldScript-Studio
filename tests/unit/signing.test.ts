@@ -220,6 +220,7 @@ describe('local signing controls', () => {
           ? ['new\nfile.ts']
           : ['src/with\t tab.ts', '世界 file.ts', 'src/with\t tab.ts'],
       worktreeMatchesCommit: () => 'MATCHES',
+      dependencyStateForRef: () => 'MATCHES',
     });
     expect(result.evidenceState).toBe('RESOLVED');
     expect(result.pathEvidenceState).toBe('PARTIAL');
@@ -244,6 +245,7 @@ describe('local signing controls', () => {
       commitExists: () => true,
       changedFilesBetween: () => ['src/example.ts'],
       worktreeMatchesCommit: () => 'MATCHES',
+      dependencyStateForRef: () => 'MATCHES',
     });
 
     expect(result.evidenceState).toBe('RESOLVED');
@@ -261,12 +263,14 @@ describe('local signing controls', () => {
       const result = resolvePushEvidence([update], process.cwd(), {
         objectExists: () => true,
         worktreeMatchesCommit: () => 'MATCHES',
+        dependencyStateForRef: () => 'MATCHES',
       });
       expect(result.evidenceState).toBe('RESOLVED');
       expect(result.pathEvidenceState).toBe('PARTIAL');
       expect(result.changedFiles).toEqual([]);
       // QNBS-v3: tags are no longer excluded from divergence detection (unlike pathEvidenceState).
       expect(result.updates[0]?.workingTreeState).toBe('MATCHES');
+      expect(result.updates[0]?.dependencyState).toBe('MATCHES');
     }
   });
 
@@ -283,6 +287,7 @@ describe('local signing controls', () => {
         objectExists: () => true,
         changedFilesBetween: () => ['src/a.ts'],
         worktreeMatchesCommit: () => 'MATCHES',
+        dependencyStateForRef: () => 'MATCHES',
       },
     );
 
@@ -296,6 +301,7 @@ describe('local signing controls', () => {
     expect(empty.pathEvidenceState).toBe('COMPLETE');
     // QNBS-v3: nothing was compared, not "compared and found equal" — see aggregation precedence.
     expect(empty.workingTreeState).toBe('NOT_APPLICABLE');
+    expect(empty.dependencyState).toBe('NOT_APPLICABLE');
 
     const result = resolvePushEvidence(
       [parseRefUpdate(`refs/tags/v1 ${'a'.repeat(40)} refs/tags/v1 ${'0'.repeat(40)}`)!],
@@ -407,6 +413,7 @@ describe('local signing controls', () => {
         commitExists: () => true,
         changedFilesBetween: () => ['src/example.ts'],
         worktreeMatchesCommit: () => 'UNKNOWN',
+        dependencyStateForRef: () => 'MATCHES',
       });
 
       // QNBS-v3: this is the regression guard for the diagnostic-isolation correction specifically.
@@ -422,11 +429,16 @@ describe('local signing controls', () => {
         worktreeMatchesCommit: () => {
           throw new Error('must not be called for a deletion');
         },
+        dependencyStateForRef: () => {
+          throw new Error('must not be called for a deletion');
+        },
       });
 
       expect(result.evidenceState).toBe('RESOLVED');
       expect(result.updates[0]?.workingTreeState).toBe('NOT_APPLICABLE');
+      expect(result.updates[0]?.dependencyState).toBe('NOT_APPLICABLE');
       expect(result.workingTreeState).toBe('NOT_APPLICABLE');
+      expect(result.dependencyState).toBe('NOT_APPLICABLE');
     });
 
     it('aggregates with DIVERGED outranking UNKNOWN, and UNKNOWN outranking MATCHES', () => {
@@ -441,12 +453,14 @@ describe('local signing controls', () => {
       const divergedPlusUnknown = resolvePushEvidence([updateA, updateB], process.cwd(), {
         ...shared,
         worktreeMatchesCommit: (sha) => (sha === updateA.localSha ? 'DIVERGED' : 'UNKNOWN'),
+        dependencyStateForRef: () => 'MATCHES',
       });
       expect(divergedPlusUnknown.workingTreeState).toBe('DIVERGED');
 
       const matchesPlusUnknown = resolvePushEvidence([updateA, updateB], process.cwd(), {
         ...shared,
         worktreeMatchesCommit: (sha) => (sha === updateA.localSha ? 'MATCHES' : 'UNKNOWN'),
+        dependencyStateForRef: () => 'MATCHES',
       });
       expect(matchesPlusUnknown.workingTreeState).toBe('UNKNOWN');
     });
@@ -462,6 +476,118 @@ describe('local signing controls', () => {
       );
       expect(result.evidenceState).toBe('RESOLVED');
       expect(result.workingTreeState).toBe('NOT_APPLICABLE');
+      expect(result.dependencyState).toBe('NOT_APPLICABLE');
+    });
+
+    // QNBS-v3: an injected worktreeMatchesCommit that throws must not corrupt canonical evidence.
+    it('reports UNKNOWN rather than corrupting canonical evidence when the injected resolver throws', () => {
+      const update = parseRefUpdate(
+        `refs/heads/main ${'a'.repeat(40)} refs/heads/main ${'b'.repeat(40)}`,
+      )!;
+      const result = resolvePushEvidence([update], process.cwd(), {
+        commitExists: () => true,
+        changedFilesBetween: () => ['src/example.ts'],
+        worktreeMatchesCommit: () => {
+          throw new Error('spawn EMFILE');
+        },
+        dependencyStateForRef: () => 'MATCHES',
+      });
+
+      expect(result.evidenceState).toBe('RESOLVED');
+      expect(result.pathEvidenceState).toBe('COMPLETE');
+      expect(result.workingTreeState).toBe('UNKNOWN');
+    });
+  });
+
+  describe('dependencyState (diagnostic dimension, never affects canonical evidence validity)', () => {
+    it('does not mutate evidenceState or pathEvidenceState when the diagnostic reports UNKNOWN', () => {
+      const update = parseRefUpdate(
+        `refs/heads/main ${'a'.repeat(40)} refs/heads/main ${'b'.repeat(40)}`,
+      )!;
+      const result = resolvePushEvidence([update], process.cwd(), {
+        commitExists: () => true,
+        changedFilesBetween: () => ['package.json'],
+        worktreeMatchesCommit: () => 'MATCHES',
+        dependencyStateForRef: () => 'UNKNOWN',
+      });
+
+      // QNBS-v3: mirrors the workingTreeState isolation guard, for the dependencyState dimension.
+      expect(result.evidenceState).toBe('RESOLVED');
+      expect(result.pathEvidenceState).toBe('COMPLETE');
+      expect(result.dependencyState).toBe('UNKNOWN');
+    });
+
+    it('assigns DELETED updates NOT_APPLICABLE without calling the diagnostic', () => {
+      const zero = '0'.repeat(40);
+      const deletion = parseRefUpdate(`refs/heads/old ${zero} refs/heads/old ${'b'.repeat(40)}`)!;
+      const result = resolvePushEvidence([deletion], process.cwd(), {
+        worktreeMatchesCommit: () => {
+          throw new Error('must not be called for a deletion');
+        },
+        dependencyStateForRef: () => {
+          throw new Error('must not be called for a deletion');
+        },
+      });
+
+      expect(result.evidenceState).toBe('RESOLVED');
+      expect(result.updates[0]?.dependencyState).toBe('NOT_APPLICABLE');
+      expect(result.dependencyState).toBe('NOT_APPLICABLE');
+    });
+
+    it('aggregates with DIVERGED outranking UNKNOWN, and UNKNOWN outranking MATCHES', () => {
+      const updateA = parseRefUpdate(
+        `refs/heads/a ${'a'.repeat(40)} refs/heads/a ${'b'.repeat(40)}`,
+      )!;
+      const updateB = parseRefUpdate(
+        `refs/heads/b ${'c'.repeat(40)} refs/heads/b ${'d'.repeat(40)}`,
+      )!;
+      const shared = { commitExists: () => true, changedFilesBetween: () => [] };
+
+      const divergedPlusUnknown = resolvePushEvidence([updateA, updateB], process.cwd(), {
+        ...shared,
+        worktreeMatchesCommit: () => 'MATCHES',
+        dependencyStateForRef: (sha) => (sha === updateA.localSha ? 'DIVERGED' : 'UNKNOWN'),
+      });
+      expect(divergedPlusUnknown.dependencyState).toBe('DIVERGED');
+
+      const matchesPlusUnknown = resolvePushEvidence([updateA, updateB], process.cwd(), {
+        ...shared,
+        worktreeMatchesCommit: () => 'MATCHES',
+        dependencyStateForRef: (sha) => (sha === updateA.localSha ? 'MATCHES' : 'UNKNOWN'),
+      });
+      expect(matchesPlusUnknown.dependencyState).toBe('UNKNOWN');
+    });
+
+    it('aggregates a push containing only deletions as NOT_APPLICABLE', () => {
+      const zero = '0'.repeat(40);
+      const result = resolvePushEvidence(
+        [
+          parseRefUpdate(`refs/heads/a ${zero} refs/heads/a ${'a'.repeat(40)}`)!,
+          parseRefUpdate(`refs/heads/b ${zero} refs/heads/b ${'b'.repeat(40)}`)!,
+        ],
+        process.cwd(),
+      );
+      expect(result.evidenceState).toBe('RESOLVED');
+      expect(result.dependencyState).toBe('NOT_APPLICABLE');
+    });
+
+    // QNBS-v3: regression for the CodeRabbit finding -- an injected resolver throw must map to UNKNOWN.
+    it('reports UNKNOWN rather than corrupting canonical evidence when the injected resolver throws', () => {
+      const update = parseRefUpdate(
+        `refs/heads/main ${'a'.repeat(40)} refs/heads/main ${'b'.repeat(40)}`,
+      )!;
+      const result = resolvePushEvidence([update], process.cwd(), {
+        commitExists: () => true,
+        changedFilesBetween: () => ['package.json'],
+        worktreeMatchesCommit: () => 'MATCHES',
+        dependencyStateForRef: () => {
+          throw new Error('git show failed');
+        },
+      });
+
+      expect(result.evidenceState).toBe('RESOLVED');
+      expect(result.pathEvidenceState).toBe('COMPLETE');
+      expect(result.dependencyState).toBe('UNKNOWN');
     });
   });
 

@@ -57,6 +57,19 @@ async function main() {
       'UNKNOWN',
       'could not determine whether local results reflect the exact pushed commit(s); required CI remains authoritative',
     );
+  // QNBS-v3: informational only — compares the pushed commit's manifests to the local reconciled baseline.
+  if (manualEvidence.dependencyState === 'DIVERGED')
+    report(
+      'Dependency manifests vs. push',
+      'DIVERGED',
+      'pushed commit(s) declare dependencies not yet reconciled locally; required CI remains authoritative',
+    );
+  else if (manualEvidence.dependencyState === 'UNKNOWN')
+    report(
+      'Dependency manifests vs. push',
+      'UNKNOWN',
+      'could not compare pushed dependency manifests to the local baseline; required CI remains authoritative',
+    );
 
   if (!ensureDependencyState()) {
     report('Dependency state', 'FAIL');

@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
+import { computeDependencyState } from '../dependency-state.mjs';
 
 const SHA = /^[0-9a-f]{40}$/i;
 const ZERO_SHA = /^0{40}$/;
@@ -346,11 +347,21 @@ export function computeWorkingTreeState(sha, cwd, dependencies = {}) {
   return 'UNKNOWN';
 }
 
-function aggregateWorkingTreeState(evidenceUpdates) {
-  const relevant = evidenceUpdates.filter((update) => update.workingTreeState !== 'NOT_APPLICABLE');
+// QNBS-v3: an injected diagnostic resolver that throws must not corrupt canonical evidence validity.
+function safeDiagnostic(resolver, sha) {
+  try {
+    return resolver(sha);
+  } catch {
+    return 'UNKNOWN';
+  }
+}
+
+// QNBS-v3: shared by every diagnostic-only dimension so precedence can never drift between them.
+function aggregateDiagnosticState(states) {
+  const relevant = states.filter((state) => state !== 'NOT_APPLICABLE');
   if (relevant.length === 0) return 'NOT_APPLICABLE';
-  if (relevant.some((update) => update.workingTreeState === 'DIVERGED')) return 'DIVERGED';
-  if (relevant.some((update) => update.workingTreeState === 'UNKNOWN')) return 'UNKNOWN';
+  if (relevant.includes('DIVERGED')) return 'DIVERGED';
+  if (relevant.includes('UNKNOWN')) return 'UNKNOWN';
   return 'MATCHES';
 }
 
@@ -367,11 +378,18 @@ export function resolvePushEvidence(input, cwd = process.cwd(), dependencies = {
       dependencies.changedFilesBetween ?? ((base, head) => changedFilesBetween(base, head, cwd));
     const matchesWorktree =
       dependencies.worktreeMatchesCommit ?? ((sha) => computeWorkingTreeState(sha, cwd));
+    const matchesDependencyState =
+      dependencies.dependencyStateForRef ?? ((sha) => computeDependencyState(sha, cwd));
     const changedFiles = new Set();
     const evidenceUpdates = [];
     for (const update of updates) {
       if (isZeroSha(update.localSha)) {
-        evidenceUpdates.push({ ...update, disposition: 'DELETED', workingTreeState: 'NOT_APPLICABLE' });
+        evidenceUpdates.push({
+          ...update,
+          disposition: 'DELETED',
+          workingTreeState: 'NOT_APPLICABLE',
+          dependencyState: 'NOT_APPLICABLE',
+        });
         continue;
       }
       if (update.remoteRef.startsWith('refs/tags/')) {
@@ -380,7 +398,8 @@ export function resolvePushEvidence(input, cwd = process.cwd(), dependencies = {
         evidenceUpdates.push({
           ...update,
           disposition: 'TAG',
-          workingTreeState: matchesWorktree(update.localSha),
+          workingTreeState: safeDiagnostic(matchesWorktree, update.localSha),
+          dependencyState: safeDiagnostic(matchesDependencyState, update.localSha),
         });
         continue;
       }
@@ -394,7 +413,8 @@ export function resolvePushEvidence(input, cwd = process.cwd(), dependencies = {
         ...update,
         base,
         disposition: isZeroSha(update.remoteSha) ? 'NEW_BRANCH' : 'UPDATED',
-        workingTreeState: matchesWorktree(update.localSha),
+        workingTreeState: safeDiagnostic(matchesWorktree, update.localSha),
+        dependencyState: safeDiagnostic(matchesDependencyState, update.localSha),
       });
     }
     // QNBS-v3: tag updates prove object validity but not a complete changed-path set.
@@ -406,7 +426,8 @@ export function resolvePushEvidence(input, cwd = process.cwd(), dependencies = {
       changedFiles: [...changedFiles],
       evidenceState: 'RESOLVED',
       pathEvidenceState,
-      workingTreeState: aggregateWorkingTreeState(evidenceUpdates),
+      workingTreeState: aggregateDiagnosticState(evidenceUpdates.map((u) => u.workingTreeState)),
+      dependencyState: aggregateDiagnosticState(evidenceUpdates.map((u) => u.dependencyState)),
     };
   } catch (error) {
     return {
@@ -415,6 +436,7 @@ export function resolvePushEvidence(input, cwd = process.cwd(), dependencies = {
       evidenceState: 'INVALID',
       pathEvidenceState: 'PARTIAL',
       workingTreeState: 'NOT_APPLICABLE',
+      dependencyState: 'NOT_APPLICABLE',
       reason: error instanceof Error ? error.message : 'invalid push evidence',
     };
   }

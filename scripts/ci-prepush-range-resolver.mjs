@@ -48,19 +48,14 @@ export function changedFilesFromManualRange(dependencies = {}) {
   const workingTreeFiles = dependencies.workingTreeFiles ?? defaultWorkingTreeFiles;
 
   // QNBS-v3: no push event or localSha exists in this mode, so nothing is ever compared.
+  const notApplicable = { workingTreeState: 'NOT_APPLICABLE', dependencyState: 'NOT_APPLICABLE' };
   const upstream = resolveUpstream();
-  if (!upstream) return { files: [], rangeResolved: false, workingTreeState: 'NOT_APPLICABLE' };
+  if (!upstream) return { files: [], rangeResolved: false, ...notApplicable };
   const diffFiles = diffNames(`${upstream}..HEAD`);
-  if (diffFiles === null)
-    return { files: [], rangeResolved: false, workingTreeState: 'NOT_APPLICABLE' };
+  if (diffFiles === null) return { files: [], rangeResolved: false, ...notApplicable };
   const workingFiles = workingTreeFiles();
-  if (workingFiles === null)
-    return { files: [], rangeResolved: false, workingTreeState: 'NOT_APPLICABLE' };
-  return {
-    files: diffFiles.concat(workingFiles),
-    rangeResolved: true,
-    workingTreeState: 'NOT_APPLICABLE',
-  };
+  if (workingFiles === null) return { files: [], rangeResolved: false, ...notApplicable };
+  return { files: diffFiles.concat(workingFiles), rangeResolved: true, ...notApplicable };
 }
 
 export function resolveManualEvidence(evidenceFile, dependencies = {}) {
@@ -74,5 +69,6 @@ export function resolveManualEvidence(evidenceFile, dependencies = {}) {
     files: evidence.changedFiles,
     rangeResolved: evidence.pathEvidenceState === 'COMPLETE',
     workingTreeState: evidence.workingTreeState,
+    dependencyState: evidence.dependencyState,
   };
 }

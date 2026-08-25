@@ -1,9 +1,11 @@
+import type { DependencyState } from './dependency-state.d.mts';
 import type { WorkingTreeState } from './signing/signing-core.d.mts';
 
 export interface ManualChangeEvidence {
   readonly files: readonly string[];
   readonly rangeResolved: boolean;
   readonly workingTreeState: WorkingTreeState;
+  readonly dependencyState: DependencyState;
 }
 
 export interface ManualRangeDependencies {

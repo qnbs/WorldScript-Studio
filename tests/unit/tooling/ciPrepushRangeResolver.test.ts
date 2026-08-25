@@ -31,10 +31,13 @@ describe('isMainModule', () => {
 });
 
 describe('manual committed-range resolution', () => {
+  // QNBS-v3: no push event/localSha exists in manual mode — NOT_APPLICABLE for both dimensions.
+  const notApplicable = { workingTreeState: 'NOT_APPLICABLE', dependencyState: 'NOT_APPLICABLE' };
+
   it('is unresolved when no upstream is configured', () => {
     const result = changedFilesFromManualRange({ resolveUpstream: () => null });
 
-    expect(result).toEqual({ files: [], rangeResolved: false, workingTreeState: 'NOT_APPLICABLE' });
+    expect(result).toEqual({ files: [], rangeResolved: false, ...notApplicable });
   });
 
   it('resolves and merges working-tree changes when the diff succeeds', () => {
@@ -47,11 +50,10 @@ describe('manual committed-range resolution', () => {
       workingTreeFiles: () => ['src/dirty.ts'],
     });
 
-    // QNBS-v3: no push event/localSha exists in manual mode — NOT_APPLICABLE, never MATCHES.
     expect(result).toEqual({
       files: ['src/committed.ts', 'src/dirty.ts'],
       rangeResolved: true,
-      workingTreeState: 'NOT_APPLICABLE',
+      ...notApplicable,
     });
   });
 
@@ -65,7 +67,7 @@ describe('manual committed-range resolution', () => {
       },
     });
 
-    expect(result).toEqual({ files: [], rangeResolved: false, workingTreeState: 'NOT_APPLICABLE' });
+    expect(result).toEqual({ files: [], rangeResolved: false, ...notApplicable });
   });
 
   it('treats a genuinely empty diff as a resolved, complete range', () => {
@@ -75,7 +77,7 @@ describe('manual committed-range resolution', () => {
       workingTreeFiles: () => [],
     });
 
-    expect(result).toEqual({ files: [], rangeResolved: true, workingTreeState: 'NOT_APPLICABLE' });
+    expect(result).toEqual({ files: [], rangeResolved: true, ...notApplicable });
   });
 
   // QNBS-v3: regression — a successful committed-range diff must not mask a working-tree failure.
@@ -86,17 +88,19 @@ describe('manual committed-range resolution', () => {
       workingTreeFiles: () => null,
     });
 
-    expect(result).toEqual({ files: [], rangeResolved: false, workingTreeState: 'NOT_APPLICABLE' });
+    expect(result).toEqual({ files: [], rangeResolved: false, ...notApplicable });
   });
 });
 
 describe('resolveManualEvidence', () => {
+  const notApplicable = { workingTreeState: 'NOT_APPLICABLE', dependencyState: 'NOT_APPLICABLE' };
+
   it('falls back to the manual committed-range resolver when no evidence file is given', () => {
     const result = resolveManualEvidence(undefined, {
       resolveUpstream: () => null,
     });
 
-    expect(result).toEqual({ files: [], rangeResolved: false, workingTreeState: 'NOT_APPLICABLE' });
+    expect(result).toEqual({ files: [], rangeResolved: false, ...notApplicable });
   });
 
   it('trusts changedFiles as complete when pathEvidenceState is COMPLETE', () => {
@@ -110,6 +114,7 @@ describe('resolveManualEvidence', () => {
         pathEvidenceState: 'COMPLETE',
         changedFiles: ['src/example.ts'],
         workingTreeState: 'MATCHES',
+        dependencyState: 'MATCHES',
       }),
     });
 
@@ -117,6 +122,7 @@ describe('resolveManualEvidence', () => {
       files: ['src/example.ts'],
       rangeResolved: true,
       workingTreeState: 'MATCHES',
+      dependencyState: 'MATCHES',
     });
   });
 
@@ -128,11 +134,11 @@ describe('resolveManualEvidence', () => {
         evidenceState: 'RESOLVED',
         pathEvidenceState: 'PARTIAL',
         changedFiles: [],
-        workingTreeState: 'NOT_APPLICABLE',
+        ...notApplicable,
       }),
     });
 
-    expect(result).toEqual({ files: [], rangeResolved: false, workingTreeState: 'NOT_APPLICABLE' });
+    expect(result).toEqual({ files: [], rangeResolved: false, ...notApplicable });
   });
 
   // QNBS-v3: proves the two signals are orthogonal, not coupled to `full` via pathEvidenceState.
@@ -145,11 +151,31 @@ describe('resolveManualEvidence', () => {
           pathEvidenceState: 'COMPLETE',
           changedFiles: ['src/example.ts'],
           workingTreeState,
+          dependencyState: 'MATCHES',
         }),
       });
 
       expect(result.rangeResolved).toBe(true);
       expect(result.workingTreeState).toBe(workingTreeState);
+    }
+  });
+
+  // QNBS-v3: proves dependencyState propagates independently of workingTreeState/pathEvidenceState.
+  it('propagates DIVERGED and UNKNOWN dependencyState independently of the other signals', () => {
+    for (const dependencyState of ['DIVERGED', 'UNKNOWN']) {
+      const result = resolveManualEvidence('/tmp/evidence.json', {
+        readPrePushEvidenceFile: () => 'raw',
+        resolvePushEvidence: () => ({
+          evidenceState: 'RESOLVED',
+          pathEvidenceState: 'COMPLETE',
+          changedFiles: ['src/example.ts'],
+          workingTreeState: 'MATCHES',
+          dependencyState,
+        }),
+      });
+
+      expect(result.rangeResolved).toBe(true);
+      expect(result.dependencyState).toBe(dependencyState);
     }
   });
 
@@ -161,7 +187,7 @@ describe('resolveManualEvidence', () => {
           evidenceState: 'INVALID',
           pathEvidenceState: 'PARTIAL',
           changedFiles: [],
-          workingTreeState: 'NOT_APPLICABLE',
+          ...notApplicable,
           reason: 'boom',
         }),
       }),
