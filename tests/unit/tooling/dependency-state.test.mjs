@@ -1,4 +1,5 @@
 import { strict as assert } from 'node:assert';
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, it } from 'node:test';
@@ -82,6 +83,30 @@ describe('dependencyFilesFromRef (git-object-only, no worktree)', () => {
 
   it('returns null (not []) when the tree listing fails', () => {
     assert.equal(dependencyFilesFromRef('deadbeef', '/repo', { listTree: () => null }), null);
+  });
+});
+
+describe('dependencyFilesFromRef (real git invocation, default listTree)', () => {
+  // QNBS-v3: regression -- git's default C-quoting of non-ASCII paths must not exclude real files.
+  it('includes a non-ASCII patch filename via the real git default (no listTree injected)', () => {
+    const root = mkdtempSync(join(process.cwd(), '.worldscript-deps-git-'));
+    temporaryRoots.push(root);
+    const git = (args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
+    git(['init', '--quiet', '--initial-branch=main']);
+    git(['config', 'user.email', 'test@example.com']);
+    git(['config', 'user.name', 'test']);
+    mkdirSync(join(root, 'patches'), { recursive: true });
+    writeFileSync(join(root, 'patches', 'café.patch'), 'patch\n');
+    git(['add', '-A']);
+    git(['-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'test']);
+    const sha = git(['rev-parse', 'HEAD']).trim();
+
+    const files = dependencyFilesFromRef(sha, root);
+
+    assert.ok(
+      files?.includes('patches/café.patch'),
+      `expected patches/café.patch in ${JSON.stringify(files)}`,
+    );
   });
 });
 

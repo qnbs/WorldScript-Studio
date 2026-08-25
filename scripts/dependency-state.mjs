@@ -76,14 +76,15 @@ export function calculateDependencyFingerprint(root = projectRoot) {
   return hashManifests(entries);
 }
 
+// QNBS-v3: --full-tree ignores cwd-subdirectory scoping; -z disables git's default path C-quoting.
 function defaultListTreeFiles(sha, cwd) {
-  const result = spawnSync('git', ['ls-tree', '-r', '--name-only', sha], {
+  const result = spawnSync('git', ['ls-tree', '-r', '--full-tree', '--name-only', '-z', sha], {
     cwd,
     encoding: 'utf8',
     timeout: 5000,
   });
   if (result.error || result.status !== 0) return null;
-  return result.stdout.split('\n').filter(Boolean);
+  return result.stdout.split('\0').filter(Boolean);
 }
 
 // QNBS-v3: diagnostic-only; mirrors dependencyFiles' inclusion rules against a commit, not disk.
