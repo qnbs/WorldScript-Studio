@@ -135,7 +135,7 @@
       }
     },
     {
-      "includes": ["tests/**/*.ts", "tests/**/*.tsx"],
+      "includes": ["tests/**/*.ts", "tests/**/*.tsx", "tests/**/*.mjs"],
       "linter": {
         "rules": {
           "suspicious": {

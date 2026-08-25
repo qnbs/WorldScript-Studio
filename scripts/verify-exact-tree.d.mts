@@ -1,3 +1,4 @@
+import type { BoundedResult } from './hooks/shared.d.mts';
 import type { GitOptions, GitResult } from './signing/signing-core.d.mts';
 
 // QNBS-v3: absolute correctness check, not a comparison -- distinct vocabulary from WorkingTreeState.
@@ -7,21 +8,46 @@ export interface VerifyExactTreeDependencies {
   runBounded?: (
     command: string,
     args: string[],
-    options?: GitOptions & { timeoutMs?: number },
-  ) => Promise<GitResult & { timedOut: boolean; interrupted: boolean }>;
+    options?: {
+      timeoutMs?: number;
+      cwd?: string;
+      env?: NodeJS.ProcessEnv;
+      input?: string;
+      shell?: boolean;
+      root?: string;
+      detached?: boolean;
+    },
+  ) => Promise<BoundedResult>;
   runLocalBinaryDetailed?: (
     binary: string,
     args: string[],
     options?: { root?: string; cwd?: string; timeoutMs?: number },
-  ) => Promise<GitResult & { timedOut: boolean; interrupted: boolean }>;
+  ) => Promise<BoundedResult>;
+  // QNBS-v3: a distinct, pre-existing (#494) synchronous/output-capturing wrapper -- not BoundedResult.
+  runGit?: (args: string[], options?: GitOptions) => GitResult;
   mkdtempFn?: () => Promise<string>;
   rmFn?: (path: string) => Promise<void>;
-  symlinkFn?: (target: string, linkPath: string) => void;
-  dependencyStateForRef?: (sha: string) => string;
-  nodeModulesSource?: string;
+  installTimeoutMs?: number;
   tsgoArgs?: string[];
-  runGitSync?: (args: string[]) => { status: number | null; stdout: string };
+  repoRoot?: string;
 }
+
+export function createIsolatedWorktree(
+  sha: string,
+  repoRoot: string,
+  dependencies?: VerifyExactTreeDependencies,
+): Promise<{ ok: boolean; path: string | undefined }>;
+
+export function removeIsolatedWorktree(
+  worktreePath: string | undefined,
+  repoRoot: string,
+  dependencies?: VerifyExactTreeDependencies,
+): Promise<void>;
+
+export function installDependencies(
+  worktreePath: string,
+  dependencies?: VerifyExactTreeDependencies,
+): Promise<boolean>;
 
 export function verifyExactTreeTypecheck(
   sha: string,
@@ -35,4 +61,10 @@ export function verifyExactTreeForShas(
   dependencies?: VerifyExactTreeDependencies,
 ): Promise<ExactTreeState>;
 
-export function main(argv?: string[]): Promise<void>;
+export function resolveRef(
+  ref: string,
+  repoRoot: string,
+  dependencies?: VerifyExactTreeDependencies,
+): string | null;
+
+export function main(argv?: string[], dependencies?: VerifyExactTreeDependencies): Promise<void>;

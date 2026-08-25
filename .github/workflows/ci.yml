@@ -212,6 +212,11 @@ jobs:
           NODE_OPTIONS: "--no-experimental-webstorage --max-old-space-size=4096"
           CI: "true"
 
+      # QNBS-v3: node:test tooling scripts (.mjs) fall outside Vitest's include glob (.ts/.tsx only) --
+      # this is the one authoritative step admitting them to routine CI, not ad-hoc scattered invocation.
+      - name: Unit tests (node:test, tooling scripts)
+        run: pnpm run test:node
+
       - name: Coverage ratchet check (informational, non-blocking)
         if: always()
         continue-on-error: true
