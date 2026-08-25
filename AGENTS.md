@@ -33,7 +33,17 @@ The app supports a multi-provider AI stack (Gemini, OpenAI, Claude, Grok, OpenRo
    ```bash
    pnpm run ci:prepush
    ```
-   This gate is mandatory before every push and after every local correction before re-pushing; it runs sequentially with a single-checker project typecheck, i18n parity/quality and bundle checks, release/doc truth, and lightweight native guardrails. The pre-commit hook separately runs staged-file Biome checks. Full repository lint, coverage, E2E, Storybook, Lighthouse, and mutation checks belong to cloud CI. If branch switching or a lockfile/package-manifest change makes pnpm report dependency verification errors, run `node scripts/dependency-state.mjs reconcile` and rerun the complete pre-push gate.
+   This gate is mandatory before every push and after every local correction before re-pushing: it
+   always resolves a change-aware classification from the outgoing evidence first, then runs
+   release/doc truth and lightweight native guardrails sequentially and unconditionally. The
+   single-checker project typecheck and the i18n parity/quality/bundle checks run only when that
+   classification requires them (e.g. deferred for docs-, workflow-, tooling-, or non-TypeScript
+   test-only changes); incomplete or unresolved path evidence fails closed into running every
+   conditional check. The pre-commit hook separately runs staged-file Biome checks. Full repository
+   lint, coverage, E2E, Storybook, Lighthouse, and mutation checks belong to cloud CI, which also
+   re-runs the complete typecheck and i18n checks regardless of what the local gate deferred. If
+   branch switching or a lockfile/package-manifest change makes pnpm report dependency verification
+   errors, run `node scripts/dependency-state.mjs reconcile` and rerun the complete pre-push gate.
    Optional targeted smoke test: `pnpm exec vitest run <path>` **without** `--coverage`.
    **Hard rule:** Never invoke `pnpm test`, `npm run test`, or a bare Vitest wrapper; always use an explicit `pnpm exec vitest run <path>` command to avoid watch-mode hangs on constrained hardware. Never start multiple heavyweight processes concurrently.
 4. **Audit cloud CI logs, fix locally, then re-push** – If the cloud CI run fails, inspect the logs via GitHub web UI or `gh run watch`, reproduce the specific failing test or lint error in isolation, fix it locally (quick tier to verify), commit, and push again for another cloud CI run.
@@ -295,12 +305,18 @@ procedure.
 ### Philosophy
 
 - **Cloud CI-first:** The canonical quality gate is GitHub Actions. Low-end local machines should run only the "Quick" tier.
-- **Quick tier (local, before every push):** `pnpm run ci:prepush` runs the project typecheck with
-  one checker, i18n parity/quality/bundle/content checks, release/doc truth, and lightweight desktop guardrails sequentially;
-  the pre-commit hook separately runs staged-file Biome checks. Run the gate again after every
-  correction before re-pushing; do not
-  push based only on a targeted test or a changed-file lint run. Optionally:
-  `pnpm exec vitest run <path>` **without** `--coverage`.
+- **Quick tier (local, before every push):** `pnpm run ci:prepush` always resolves a change-aware
+  classification from the outgoing evidence, then runs release/doc truth and lightweight desktop
+  guardrails sequentially unconditionally. The one-checker project typecheck and i18n
+  parity/quality/bundle/content checks run only when the classification requires them —
+  `DOCS_ONLY`/`WORKFLOW_ONLY`/`NON_CODE_ONLY`/`RUST_TAURI`/`TOOLING`/non-TypeScript `TEST_ONLY`
+  changes report typecheck as deferred to required CI instead, and i18n/content-guard checks run
+  only for their own governed paths; incomplete or unresolved path evidence fails closed into
+  running everything. Required GitHub CI remains the unconditional authority for the full
+  typecheck and i18n validation. The pre-commit hook separately runs staged-file Biome checks. Run
+  the gate again after every correction before re-pushing; do not push based only on a targeted
+  test or a changed-file lint run. Optionally: `pnpm exec vitest run <path>` **without**
+  `--coverage`.
 - **Dependency state:** `pnpm run deps:verify` compares a content fingerprint of dependency
   manifests, workspace package manifests, and patches. After a dependency-related branch switch,
   run `node scripts/dependency-state.mjs reconcile` (or `pnpm run deps:reconcile` when pnpm can
