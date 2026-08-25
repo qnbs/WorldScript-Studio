@@ -111,6 +111,42 @@ describe('calculateDependencyFingerprintFromRef (git-object-only, no worktree)',
     });
     assert.equal(result, null);
   });
+
+  // QNBS-v3: regression -- git-object read must hash raw bytes, not a lossy UTF-8-decoded string.
+  it('matches the filesystem fingerprint byte-for-byte, including invalid UTF-8 content', () => {
+    const root = makeDependencyRoot();
+    const invalidUtf8 = Buffer.from([0x70, 0x61, 0x74, 0x63, 0x68, 0x0a, 0xff]);
+    writeFileSync(join(root, 'patches', 'demo.patch'), invalidUtf8);
+    const filesystemFingerprint = calculateDependencyFingerprint(root);
+
+    const contentByPath = {
+      'package.json': Buffer.from('{}\n'),
+      'pnpm-lock.yaml': Buffer.from("lockfileVersion: '9.0'\n"),
+      'pnpm-workspace.yaml': Buffer.from('packages:\n  - packages/*\n'),
+      'packages/demo/package.json': Buffer.from('{"name":"demo"}\n'),
+      'patches/demo.patch': invalidUtf8,
+    };
+    const refFingerprint = calculateDependencyFingerprintFromRef('deadbeef', root, {
+      listTree: () => Object.keys(contentByPath),
+      readFileAtRef: (relativePath) => contentByPath[relativePath],
+    });
+
+    assert.equal(refFingerprint, filesystemFingerprint);
+  });
+
+  // QNBS-v3: regression -- core.autocrlf CRLF checkout vs. LF git blob must not report false DIVERGED.
+  it('produces the same fingerprint for content differing only by CRLF vs. LF line endings', () => {
+    const lf = calculateDependencyFingerprintFromRef('deadbeef', '/repo', {
+      listTree: () => ['package.json'],
+      readFileAtRef: () => Buffer.from('{\n  "name": "demo"\n}\n'),
+    });
+    const crlf = calculateDependencyFingerprintFromRef('deadbeef', '/repo', {
+      listTree: () => ['package.json'],
+      readFileAtRef: () => Buffer.from('{\r\n  "name": "demo"\r\n}\r\n'),
+    });
+
+    assert.equal(crlf, lf);
+  });
 });
 
 describe('computeDependencyState (diagnostic-only, isolated from canonical evidence)', () => {

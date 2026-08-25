@@ -347,6 +347,15 @@ export function computeWorkingTreeState(sha, cwd, dependencies = {}) {
   return 'UNKNOWN';
 }
 
+// QNBS-v3: an injected diagnostic resolver that throws must not corrupt canonical evidence validity.
+function safeDiagnostic(resolver, sha) {
+  try {
+    return resolver(sha);
+  } catch {
+    return 'UNKNOWN';
+  }
+}
+
 // QNBS-v3: shared by every diagnostic-only dimension so precedence can never drift between them.
 function aggregateDiagnosticState(states) {
   const relevant = states.filter((state) => state !== 'NOT_APPLICABLE');
@@ -389,8 +398,8 @@ export function resolvePushEvidence(input, cwd = process.cwd(), dependencies = {
         evidenceUpdates.push({
           ...update,
           disposition: 'TAG',
-          workingTreeState: matchesWorktree(update.localSha),
-          dependencyState: matchesDependencyState(update.localSha),
+          workingTreeState: safeDiagnostic(matchesWorktree, update.localSha),
+          dependencyState: safeDiagnostic(matchesDependencyState, update.localSha),
         });
         continue;
       }
@@ -404,8 +413,8 @@ export function resolvePushEvidence(input, cwd = process.cwd(), dependencies = {
         ...update,
         base,
         disposition: isZeroSha(update.remoteSha) ? 'NEW_BRANCH' : 'UPDATED',
-        workingTreeState: matchesWorktree(update.localSha),
-        dependencyState: matchesDependencyState(update.localSha),
+        workingTreeState: safeDiagnostic(matchesWorktree, update.localSha),
+        dependencyState: safeDiagnostic(matchesDependencyState, update.localSha),
       });
     }
     // QNBS-v3: tag updates prove object validity but not a complete changed-path set.

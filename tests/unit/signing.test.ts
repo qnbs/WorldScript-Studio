@@ -478,6 +478,25 @@ describe('local signing controls', () => {
       expect(result.workingTreeState).toBe('NOT_APPLICABLE');
       expect(result.dependencyState).toBe('NOT_APPLICABLE');
     });
+
+    // QNBS-v3: an injected worktreeMatchesCommit that throws must not corrupt canonical evidence.
+    it('reports UNKNOWN rather than corrupting canonical evidence when the injected resolver throws', () => {
+      const update = parseRefUpdate(
+        `refs/heads/main ${'a'.repeat(40)} refs/heads/main ${'b'.repeat(40)}`,
+      )!;
+      const result = resolvePushEvidence([update], process.cwd(), {
+        commitExists: () => true,
+        changedFilesBetween: () => ['src/example.ts'],
+        worktreeMatchesCommit: () => {
+          throw new Error('spawn EMFILE');
+        },
+        dependencyStateForRef: () => 'MATCHES',
+      });
+
+      expect(result.evidenceState).toBe('RESOLVED');
+      expect(result.pathEvidenceState).toBe('COMPLETE');
+      expect(result.workingTreeState).toBe('UNKNOWN');
+    });
   });
 
   describe('dependencyState (diagnostic dimension, never affects canonical evidence validity)', () => {
@@ -550,6 +569,25 @@ describe('local signing controls', () => {
       );
       expect(result.evidenceState).toBe('RESOLVED');
       expect(result.dependencyState).toBe('NOT_APPLICABLE');
+    });
+
+    // QNBS-v3: regression for the CodeRabbit finding -- an injected resolver throw must map to UNKNOWN.
+    it('reports UNKNOWN rather than corrupting canonical evidence when the injected resolver throws', () => {
+      const update = parseRefUpdate(
+        `refs/heads/main ${'a'.repeat(40)} refs/heads/main ${'b'.repeat(40)}`,
+      )!;
+      const result = resolvePushEvidence([update], process.cwd(), {
+        commitExists: () => true,
+        changedFilesBetween: () => ['package.json'],
+        worktreeMatchesCommit: () => 'MATCHES',
+        dependencyStateForRef: () => {
+          throw new Error('git show failed');
+        },
+      });
+
+      expect(result.evidenceState).toBe('RESOLVED');
+      expect(result.pathEvidenceState).toBe('COMPLETE');
+      expect(result.dependencyState).toBe('UNKNOWN');
     });
   });
 

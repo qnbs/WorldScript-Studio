@@ -21,7 +21,7 @@ export function dependencyFilesFromRef(
 
 export interface DependencyFingerprintFromRefDependencies extends DependencyFilesFromRefDependencies {
   dependencyFilesFromRef?: (sha: string) => string[] | null;
-  readFileAtRef?: (relativePath: string) => string | null;
+  readFileAtRef?: (relativePath: string) => Buffer | null;
 }
 
 export function calculateDependencyFingerprintFromRef(

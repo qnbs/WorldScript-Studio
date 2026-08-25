@@ -50,12 +50,19 @@ export function dependencyFiles(root = projectRoot) {
   return files.filter((file) => existsSync(file)).sort();
 }
 
+// QNBS-v3: byte-safe CRLF->LF normalization; a latin1 round-trip preserves every byte value 0-255.
+function normalizeLineEndings(content) {
+  const buffer = Buffer.isBuffer(content) ? content : Buffer.from(content, 'utf8');
+  return Buffer.from(buffer.toString('latin1').replaceAll('\r\n', '\n'), 'latin1');
+}
+
 // QNBS-v3: shared by both the filesystem and git-ref fingerprint paths so they can never drift.
 function hashManifests(entries) {
   const hash = createHash('sha256');
   for (const [relativePath, content] of [...entries].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
     hash.update(`${relativePath}\0`);
-    hash.update(content);
+    // QNBS-v3: normalizes a core.autocrlf checkout vs. the LF-stored git blob to the same bytes.
+    hash.update(normalizeLineEndings(content));
     hash.update('\0');
   }
   return hash.digest('hex');
@@ -93,10 +100,10 @@ export function dependencyFilesFromRef(sha, root = projectRoot, dependencies = {
     .sort();
 }
 
+// QNBS-v3: no encoding -- raw Buffer stdout, matching readFileSync's raw bytes for invalid UTF-8 safety.
 function defaultReadFileAtRef(sha, relativePath, cwd) {
   const result = spawnSync('git', ['show', `${sha}:${relativePath}`], {
     cwd,
-    encoding: 'utf8',
     timeout: 5000,
     maxBuffer: 16 * 1024 * 1024,
   });
