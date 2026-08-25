@@ -14,7 +14,7 @@ For historical optimization notes (targets may predate the live workflow), see [
 
 | Tier | Where | Commands / scope |
 |------|--------|------------------|
-| **Quick (local)** | Developer laptop | `pnpm run ci:prepush` (single-checker typecheck, i18n quality, release/doc truth, and lightweight guardrails); the pre-commit hook runs staged Biome checks; optional targeted `pnpm exec vitest run <path>` for a fast smoke |
+| **Quick (local)** | Developer laptop | `pnpm run ci:prepush` (change-aware: single-checker typecheck and i18n/content-guard checks run only when the outgoing change classification requires them, see [`ci:prepush` change-aware routing](#ci-prepush-change-aware-routing); release/doc truth and lightweight guardrails run unconditionally); the pre-commit hook runs staged Biome checks; optional targeted `pnpm exec vitest run <path>` for a fast smoke |
 | **Heavy (CI)** | `ci.yml` | Vitest **with** `--coverage` and thresholds, Playwright E2E (`CI=true`) including **mobile emulation** (Pixel 5 / Chromium), Lighthouse CI, Storybook static build, bundle budget + analyze. Mutation testing (Stryker) is **not** part of this pipeline — see [Mutation testing status](#mutation-testing-status). |
 
 **Merge readiness:** A green workflow run on the PR/branch matters more than reproducing every E2E or LHCI step locally. Use CI **artifacts** (Playwright HTML report, coverage, Lighthouse output) to debug failures.
@@ -309,9 +309,11 @@ the local block above; GitHub Actions owns those heavy checks on this hardware.
 ### `ci:prepush` change-aware routing
 
 `pnpm run ci:prepush` always resolves a change classification from the outgoing evidence first
-(`scripts/ci-prepush-classifier.mjs`), then runs lint, docs/release-truth, CSP, desktop-import
-boundary, native-readiness, and dependency-state checks unconditionally on every invocation. Two
-check groups are conditional on that classification instead of always running:
+(`scripts/ci-prepush-classifier.mjs`), then runs docs/release-truth, CSP, desktop-import boundary,
+native-readiness, and dependency-state checks unconditionally on every invocation. It does **not**
+run Biome lint — full-repository lint stays CI-owned (`quality` job); only staged files are linted
+locally, by the separate pre-commit hook (`lint-staged`). Two check groups are conditional on the
+change classification instead of always running:
 
 - **TypeScript (single-checker)** — skipped, reporting `DEFERRED_TO_REQUIRED_CI`, when the
   classification is `DOCS_ONLY`, `WORKFLOW_ONLY`, `NON_CODE_ONLY`, `RUST_TAURI`, `TOOLING`, or
@@ -324,8 +326,8 @@ check groups are conditional on that classification instead of always running:
 range can't be resolved, a Git diff command fails, or pre-push-hook evidence reports partial path
 completeness (e.g. a tag-only push) — the gate does not defer anything; it falls back to running
 every check, matching a `--full` invocation. Deferring a check locally never changes what required
-GitHub CI validates: the complete TypeScript and i18n checks always run in CI regardless of what
-the local gate ran or deferred, and CI remains the merge authority.
+GitHub CI validates: the complete lint, TypeScript, and i18n checks always run in CI regardless of
+what the local gate ran or deferred, and CI remains the merge authority.
 
 On standard hardware, or when debugging a build-affecting change, run the build-specific checks
 separately; CI remains authoritative for the complete build and artifact checks:
