@@ -1,4 +1,5 @@
 const routingAuthority = 'scripts/ci-prepush-check-registry.mjs';
+const runnerAuthority = 'scripts/ci-prepush-lowend.mjs';
 const i18nPolicyFiles = new Set([
   'scripts/check-i18n-keys.mjs',
   'scripts/i18n-locales.mjs',
@@ -13,7 +14,11 @@ export const admissionCheckRegistry = Object.freeze([
       file.startsWith('locales/') ||
       file.startsWith('public/locales/') ||
       i18nPolicyFiles.has(file),
-    implementationFiles: new Set([routingAuthority, 'scripts/ci-prepush-classifier.mjs']),
+    implementationFiles: new Set([
+      routingAuthority,
+      runnerAuthority,
+      'scripts/ci-prepush-classifier.mjs',
+    ]),
   },
   {
     name: 'contentGuard',
@@ -21,7 +26,11 @@ export const admissionCheckRegistry = Object.freeze([
       file === 'scripts/content-guard.mjs' ||
       file.startsWith('community-templates/') ||
       file.startsWith('public/community-templates/'),
-    implementationFiles: new Set([routingAuthority, 'scripts/ci-prepush-classifier.mjs']),
+    implementationFiles: new Set([
+      routingAuthority,
+      runnerAuthority,
+      'scripts/ci-prepush-classifier.mjs',
+    ]),
   },
 ]);
 

@@ -30,6 +30,18 @@ function gitRaw(args) {
   return result.stdout ?? '';
 }
 
+function gitRequired(args, description) {
+  const result = spawnSync('git', args, { encoding: 'utf8' });
+  if (result.status !== 0)
+    throw new Error(`${description} failed${result.stderr ? `: ${result.stderr.trim()}` : ''}`);
+  return result.stdout ?? '';
+}
+
+function gitOptional(args) {
+  const result = spawnSync('git', args, { encoding: 'utf8' });
+  return result.status === 0 ? (result.stdout ?? '') : null;
+}
+
 function parseNulDelimitedPaths(output) {
   return output.split('\0').filter(Boolean);
 }
@@ -38,6 +50,25 @@ function changedFilesFromWorkingTree() {
   return parseNulDelimitedPaths(
     gitRaw(['diff', '--no-renames', '--name-only', '-z', 'HEAD']),
   ).concat(parseNulDelimitedPaths(gitRaw(['ls-files', '--others', '--exclude-standard', '-z'])));
+}
+
+function changedFilesFromManualRange() {
+  const upstream = gitOptional(['rev-parse', '--verify', '@{upstream}'])?.trim();
+  if (upstream)
+    return parseNulDelimitedPaths(
+      gitRequired(
+        ['diff', '--no-renames', '--name-only', '-z', `${upstream}..HEAD`],
+        'resolve manual committed range',
+      ),
+    ).concat(changedFilesFromWorkingTree());
+
+  const head = gitRequired(['rev-parse', '--verify', 'HEAD'], 'resolve HEAD').trim();
+  return parseNulDelimitedPaths(
+    gitRequired(
+      ['diff-tree', '--root', '--no-commit-id', '--name-only', '-r', '-z', head],
+      'resolve manual HEAD changes',
+    ),
+  ).concat(changedFilesFromWorkingTree());
 }
 
 function report(name, status, detail = '') {
@@ -51,7 +82,7 @@ function runCheck(name, run) {
   if (status !== 0) process.exit(status ?? 1);
 }
 
-const files = evidenceIndex >= 0 ? evidenceChangedFiles : changedFilesFromWorkingTree();
+const files = evidenceIndex >= 0 ? evidenceChangedFiles : changedFilesFromManualRange();
 const classification = classifyChangedFiles(files);
 const typecheckRequired = requiresTypecheck(classification, { full });
 
@@ -89,6 +120,7 @@ if (shouldRunAdmissionCheck('contentGuard', classification.files) || full)
 
 if (typecheckRequired) {
   runCheck('TypeScript (single checker)', () =>
+    // QNBS-v3: one checker bounds memory use on constrained developer machines.
     runLocalBinary('tsgo', ['--project', 'tsconfig.tsgo.json', '--noEmit', '--checkers', '1']),
   );
 } else {

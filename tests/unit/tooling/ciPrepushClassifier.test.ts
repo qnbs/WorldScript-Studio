@@ -47,6 +47,8 @@ describe('change-aware local admission classifier', () => {
     expect(shouldRunAdmissionCheck('i18n', ['scripts/i18n-quality-report.mjs'])).toBe(true);
     expect(shouldRunAdmissionCheck('contentGuard', ['community-templates/index.json'])).toBe(true);
     expect(shouldRunAdmissionCheck('contentGuard', ['README.md'])).toBe(false);
+    expect(shouldRunAdmissionCheck('i18n', ['scripts/ci-prepush-lowend.mjs'])).toBe(true);
+    expect(shouldRunAdmissionCheck('contentGuard', ['scripts/ci-prepush-lowend.mjs'])).toBe(true);
   });
 
   it('keeps TypeScript tooling files in the typecheck-required class', () => {
