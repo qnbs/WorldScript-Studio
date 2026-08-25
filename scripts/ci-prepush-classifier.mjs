@@ -109,3 +109,7 @@ export function requiresTypecheck(classification, { full = false } = {}) {
     'TEST_ONLY',
   ].includes(classification.kind);
 }
+
+export function manualAdmissionNeedsFullValidation(rangeResolved) {
+  return !rangeResolved;
+}

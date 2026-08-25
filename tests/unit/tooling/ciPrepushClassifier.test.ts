@@ -3,6 +3,7 @@ import { shouldRunAdmissionCheck } from '../../../scripts/ci-prepush-check-regis
 import {
   classifyChangedFiles,
   classifyFile,
+  manualAdmissionNeedsFullValidation,
   requiresTypecheck,
 } from '../../../scripts/ci-prepush-classifier.mjs';
 
@@ -59,5 +60,18 @@ describe('change-aware local admission classifier', () => {
 
     expect(classification.kind).toBe('TYPESCRIPT_APPLICATION');
     expect(requiresTypecheck(classification)).toBe(true);
+  });
+
+  it('requires conservative full admission when the manual range is unresolved', () => {
+    expect(manualAdmissionNeedsFullValidation(true)).toBe(false);
+    expect(manualAdmissionNeedsFullValidation(false)).toBe(true);
+
+    const earlierTypeScript = classifyChangedFiles(['src/app.tsx']);
+    const earlierI18n = classifyChangedFiles(['locales/en/common.json']);
+    const earlierContent = classifyChangedFiles(['community-templates/index.json']);
+
+    expect(requiresTypecheck(earlierTypeScript)).toBe(true);
+    expect(earlierI18n.kind).toBe('AMBIGUOUS');
+    expect(earlierContent.kind).toBe('AMBIGUOUS');
   });
 });

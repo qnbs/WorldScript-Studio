@@ -24,3 +24,4 @@ export function requiresTypecheck(
   classification: ChangeClassification,
   options?: { readonly full?: boolean },
 ): boolean;
+export function manualAdmissionNeedsFullValidation(rangeResolved: boolean): boolean;

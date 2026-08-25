@@ -1,7 +1,11 @@
 import { spawnSync } from 'node:child_process';
 import process from 'node:process';
 import { shouldRunAdmissionCheck } from './ci-prepush-check-registry.mjs';
-import { classifyChangedFiles, requiresTypecheck } from './ci-prepush-classifier.mjs';
+import {
+  classifyChangedFiles,
+  manualAdmissionNeedsFullValidation,
+  requiresTypecheck,
+} from './ci-prepush-classifier.mjs';
 import { ensureDependencyState, runLocalBinary, runNodeScript } from './hooks/shared.mjs';
 import { readPrePushEvidenceFile, resolvePushEvidence } from './signing/signing-core.mjs';
 
@@ -22,18 +26,11 @@ if (evidenceIndex >= 0) {
   }
 }
 
-const full = process.argv.includes('--full');
+const fullRequested = process.argv.includes('--full');
 
 function gitRaw(args) {
   const result = spawnSync('git', args, { encoding: 'utf8' });
   if (result.status !== 0) return '';
-  return result.stdout ?? '';
-}
-
-function gitRequired(args, description) {
-  const result = spawnSync('git', args, { encoding: 'utf8' });
-  if (result.status !== 0)
-    throw new Error(`${description} failed${result.stderr ? `: ${result.stderr.trim()}` : ''}`);
   return result.stdout ?? '';
 }
 
@@ -55,20 +52,14 @@ function changedFilesFromWorkingTree() {
 function changedFilesFromManualRange() {
   const upstream = gitOptional(['rev-parse', '--verify', '@{upstream}'])?.trim();
   if (upstream)
-    return parseNulDelimitedPaths(
-      gitRequired(
-        ['diff', '--no-renames', '--name-only', '-z', `${upstream}..HEAD`],
-        'resolve manual committed range',
-      ),
-    ).concat(changedFilesFromWorkingTree());
+    return {
+      files: parseNulDelimitedPaths(
+        gitRaw(['diff', '--no-renames', '--name-only', '-z', `${upstream}..HEAD`]),
+      ).concat(changedFilesFromWorkingTree()),
+      rangeResolved: true,
+    };
 
-  const head = gitRequired(['rev-parse', '--verify', 'HEAD'], 'resolve HEAD').trim();
-  return parseNulDelimitedPaths(
-    gitRequired(
-      ['diff-tree', '--root', '--no-commit-id', '--name-only', '-r', '-z', head],
-      'resolve manual HEAD changes',
-    ),
-  ).concat(changedFilesFromWorkingTree());
+  return { files: [], rangeResolved: false };
 }
 
 function report(name, status, detail = '') {
@@ -82,12 +73,24 @@ function runCheck(name, run) {
   if (status !== 0) process.exit(status ?? 1);
 }
 
-const files = evidenceIndex >= 0 ? evidenceChangedFiles : changedFilesFromManualRange();
-const classification = classifyChangedFiles(files);
+const manualEvidence =
+  evidenceIndex >= 0
+    ? { files: evidenceChangedFiles, rangeResolved: true }
+    : changedFilesFromManualRange();
+const full =
+  fullRequested || (!manualEvidence.rangeResolved && manualAdmissionNeedsFullValidation(false));
+const files = manualEvidence.files;
+const classification = manualEvidence.rangeResolved
+  ? classifyChangedFiles(files)
+  : { kind: 'AMBIGUOUS', categories: ['UNKNOWN'], files: [] };
 const typecheckRequired = requiresTypecheck(classification, { full });
 
 console.log(`[local-admission] change class: ${classification.kind}`);
 console.log(`[local-admission] files considered: ${classification.files.length}`);
+if (!manualEvidence.rangeResolved && evidenceIndex < 0)
+  console.log(
+    '[local-admission] manual committed range unresolved; using conservative full admission',
+  );
 
 if (!ensureDependencyState()) {
   report('Dependency state', 'FAIL');
