@@ -79,17 +79,26 @@ export function writePrePushEvidenceFile(
   file: string,
   input: string | string[] | RefUpdate[],
 ): void;
+// QNBS-v3: diagnostic-only dimension, independent of evidenceState/pathEvidenceState validity.
+export type WorkingTreeState = 'MATCHES' | 'DIVERGED' | 'NOT_APPLICABLE' | 'UNKNOWN';
 export interface PushEvidenceUpdate extends RefUpdate {
   base?: string;
   disposition: 'DELETED' | 'TAG' | 'NEW_BRANCH' | 'UPDATED';
+  workingTreeState: WorkingTreeState;
 }
 export interface PushEvidence {
   updates: PushEvidenceUpdate[];
   changedFiles: string[];
   evidenceState: 'RESOLVED' | 'INVALID';
   pathEvidenceState: 'COMPLETE' | 'PARTIAL';
+  workingTreeState: WorkingTreeState;
   reason?: string;
 }
+export function computeWorkingTreeState(
+  sha: string,
+  cwd?: string,
+  dependencies?: { runGit?: (args: string[], options?: GitOptions) => GitResult },
+): WorkingTreeState;
 export function resolvePushEvidence(
   input: string | string[] | RefUpdate[],
   cwd?: string,
@@ -97,6 +106,7 @@ export function resolvePushEvidence(
     commitExists?: (sha: string) => boolean;
     objectExists?: (sha: string) => boolean;
     changedFilesBetween?: (base: string, head: string) => string[];
+    worktreeMatchesCommit?: (sha: string) => WorkingTreeState;
   },
 ): PushEvidence;
 export function selectIntroducedCommits(commits: string[], reachableFromBase: string[]): string[];

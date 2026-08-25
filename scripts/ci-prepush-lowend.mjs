@@ -44,6 +44,19 @@ async function main() {
     console.log(
       '[local-admission] change evidence incomplete or unresolved; using conservative full admission',
     );
+  // QNBS-v3: informational only — required CI remains authoritative regardless of this signal.
+  if (manualEvidence.workingTreeState === 'DIVERGED')
+    report(
+      'Working tree vs. push',
+      'DIVERGED',
+      'local results do not verify the exact pushed commit(s); required CI remains authoritative',
+    );
+  else if (manualEvidence.workingTreeState === 'UNKNOWN')
+    report(
+      'Working tree vs. push',
+      'UNKNOWN',
+      'could not determine whether local results reflect the exact pushed commit(s); required CI remains authoritative',
+    );
 
   if (!ensureDependencyState()) {
     report('Dependency state', 'FAIL');
