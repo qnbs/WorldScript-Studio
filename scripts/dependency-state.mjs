@@ -14,7 +14,15 @@ import { join, relative, resolve } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const projectRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
+// QNBS-v3: import.meta.url isn't always a file: URL under Vitest's transform; cwd is the repo root there.
+function resolveProjectRoot() {
+  try {
+    return resolve(fileURLToPath(new URL('..', import.meta.url)));
+  } catch {
+    return process.cwd();
+  }
+}
+const projectRoot = resolveProjectRoot();
 const fingerprintRelativePath = 'node_modules/.worldscript-deps-fingerprint';
 
 function walkFiles(directory) {
@@ -42,14 +50,91 @@ export function dependencyFiles(root = projectRoot) {
   return files.filter((file) => existsSync(file)).sort();
 }
 
-export function calculateDependencyFingerprint(root = projectRoot) {
+// QNBS-v3: shared by both the filesystem and git-ref fingerprint paths so they can never drift.
+function hashManifests(entries) {
   const hash = createHash('sha256');
-  for (const file of dependencyFiles(root)) {
-    hash.update(`${relative(root, file).replaceAll('\\', '/')}\0`);
-    hash.update(readFileSync(file));
+  for (const [relativePath, content] of [...entries].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+    hash.update(`${relativePath}\0`);
+    hash.update(content);
     hash.update('\0');
   }
   return hash.digest('hex');
+}
+
+export function calculateDependencyFingerprint(root = projectRoot) {
+  const entries = dependencyFiles(root).map((file) => [
+    relative(root, file).replaceAll('\\', '/'),
+    readFileSync(file),
+  ]);
+  return hashManifests(entries);
+}
+
+function defaultListTreeFiles(sha, cwd) {
+  const result = spawnSync('git', ['ls-tree', '-r', '--name-only', sha], {
+    cwd,
+    encoding: 'utf8',
+    timeout: 5000,
+  });
+  if (result.error || result.status !== 0) return null;
+  return result.stdout.split('\n').filter(Boolean);
+}
+
+// QNBS-v3: diagnostic-only; mirrors dependencyFiles' inclusion rules against a commit, not disk.
+export function dependencyFilesFromRef(sha, root = projectRoot, dependencies = {}) {
+  const listTree = dependencies.listTree ?? ((ref) => defaultListTreeFiles(ref, root));
+  const allPaths = listTree(sha);
+  if (allPaths === null) return null;
+  const rootFiles = new Set(['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml']);
+  const packagePattern = /^packages\/[^/]+\/package\.json$/;
+  return allPaths
+    .filter(
+      (path) => rootFiles.has(path) || path.startsWith('patches/') || packagePattern.test(path),
+    )
+    .sort();
+}
+
+function defaultReadFileAtRef(sha, relativePath, cwd) {
+  const result = spawnSync('git', ['show', `${sha}:${relativePath}`], {
+    cwd,
+    encoding: 'utf8',
+    timeout: 5000,
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  if (result.error || result.status !== 0) return null;
+  return result.stdout;
+}
+
+// QNBS-v3: diagnostic-only; reads localSha's committed manifests via git objects, no worktree.
+export function calculateDependencyFingerprintFromRef(sha, root = projectRoot, dependencies = {}) {
+  const listFiles = dependencies.dependencyFilesFromRef ?? (() => dependencyFilesFromRef(sha, root, dependencies));
+  const files = listFiles(sha);
+  if (files === null) return null;
+  const readContent = dependencies.readFileAtRef ?? ((path) => defaultReadFileAtRef(sha, path, root));
+  const entries = [];
+  for (const relativePath of files) {
+    const content = readContent(relativePath);
+    if (content === null) return null;
+    entries.push([relativePath, content]);
+  }
+  return hashManifests(entries);
+}
+
+// QNBS-v3: diagnostic-only signal; never throws, so it cannot corrupt canonical evidence validity.
+export function computeDependencyState(sha, root = projectRoot, dependencies = {}) {
+  try {
+    const readStored = dependencies.readStoredFingerprint ?? (() => readStoredFingerprint(root));
+    const storedFingerprint = readStored();
+    // QNBS-v3: no baseline reconciled yet on this machine -- an honest unknown, not "no comparison".
+    if (!storedFingerprint) return 'UNKNOWN';
+    const fingerprintFromRef =
+      dependencies.calculateDependencyFingerprintFromRef ??
+      ((ref) => calculateDependencyFingerprintFromRef(ref, root, dependencies));
+    const refFingerprint = fingerprintFromRef(sha);
+    if (refFingerprint === null) return 'UNKNOWN';
+    return refFingerprint === storedFingerprint ? 'MATCHES' : 'DIVERGED';
+  } catch {
+    return 'UNKNOWN';
+  }
 }
 
 export function fingerprintPath(root = projectRoot) {
