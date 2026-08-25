@@ -1,5 +1,5 @@
 const DOC_FILE = /\.(?:md|mdx)$/i;
-const TS_FILE = /\.(?:c|m)?tsx?$|\.(?:c|m)?jsx?$/i;
+const TS_FILE = /\.(?:c|m)?tsx?$/i;
 const WORKFLOW_ROOTS = ['.github/workflows/', '.github/actions/'];
 const RUST_ROOTS = ['src-tauri/', 'crates/'];
 const TOOLING_ROOTS = ['scripts/'];
@@ -59,6 +59,7 @@ export function classifyFile(file) {
   }
   if (normalized.startsWith('tests/'))
     return TS_FILE.test(normalized) ? 'TYPESCRIPT_APPLICATION' : 'TEST_ONLY';
+  if (TS_FILE.test(normalized)) return 'TYPESCRIPT_APPLICATION';
   if (TOOLING_FILES.has(normalized) || startsWithRoot(normalized, TOOLING_ROOTS)) return 'TOOLING';
   if (
     DEPENDENCY_FILES.has(base) ||
@@ -68,7 +69,6 @@ export function classifyFile(file) {
     return 'DEPENDENCY_TOOLCHAIN';
   }
   if (BUILD_CONFIG_FILES.has(base)) return 'BUILD_CONFIGURATION';
-  if (TS_FILE.test(normalized)) return 'TYPESCRIPT_APPLICATION';
   return 'UNKNOWN';
 }
 

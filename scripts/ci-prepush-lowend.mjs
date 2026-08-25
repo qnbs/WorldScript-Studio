@@ -6,6 +6,7 @@ import { ensureDependencyState, runLocalBinary, runNodeScript } from './hooks/sh
 import { readPrePushEvidenceFile, resolvePushEvidence } from './signing/signing-core.mjs';
 
 const evidenceIndex = process.argv.indexOf('--prepush-evidence-file');
+let evidenceChangedFiles;
 if (evidenceIndex >= 0) {
   try {
     const evidence = resolvePushEvidence(
@@ -14,6 +15,7 @@ if (evidenceIndex >= 0) {
     );
     if (evidence.evidenceState !== 'RESOLVED')
       throw new Error(evidence.reason ?? 'invalid evidence');
+    evidenceChangedFiles = evidence.changedFiles;
   } catch (error) {
     console.error(`[local-lowend] outgoing evidence rejected: ${error.message}`);
     process.exit(1);
@@ -49,7 +51,7 @@ function runCheck(name, run) {
   if (status !== 0) process.exit(status ?? 1);
 }
 
-const files = changedFilesFromWorkingTree();
+const files = evidenceIndex >= 0 ? evidenceChangedFiles : changedFilesFromWorkingTree();
 const classification = classifyChangedFiles(files);
 const typecheckRequired = requiresTypecheck(classification, { full });
 

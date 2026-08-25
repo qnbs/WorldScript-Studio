@@ -1,5 +1,10 @@
 const routingAuthority = 'scripts/ci-prepush-check-registry.mjs';
-const i18nPolicyFiles = new Set(['scripts/check-i18n-keys.mjs', 'scripts/i18n-locales.mjs']);
+const i18nPolicyFiles = new Set([
+  'scripts/check-i18n-keys.mjs',
+  'scripts/i18n-locales.mjs',
+  'scripts/build-i18n.mjs',
+  'scripts/i18n-quality-report.mjs',
+]);
 
 export const admissionCheckRegistry = Object.freeze([
   {

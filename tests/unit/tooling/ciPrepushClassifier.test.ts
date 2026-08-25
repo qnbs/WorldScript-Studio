@@ -43,7 +43,19 @@ describe('change-aware local admission classifier', () => {
     expect(shouldRunAdmissionCheck('i18n', ['locales/en/common.json'])).toBe(true);
     expect(shouldRunAdmissionCheck('i18n', ['README.md'])).toBe(false);
     expect(shouldRunAdmissionCheck('i18n', ['scripts/ci-prepush-classifier.mjs'])).toBe(true);
+    expect(shouldRunAdmissionCheck('i18n', ['scripts/build-i18n.mjs'])).toBe(true);
+    expect(shouldRunAdmissionCheck('i18n', ['scripts/i18n-quality-report.mjs'])).toBe(true);
     expect(shouldRunAdmissionCheck('contentGuard', ['community-templates/index.json'])).toBe(true);
     expect(shouldRunAdmissionCheck('contentGuard', ['README.md'])).toBe(false);
+  });
+
+  it('keeps TypeScript tooling files in the typecheck-required class', () => {
+    const classification = classifyChangedFiles([
+      'scripts/check-tooling.ts',
+      'scripts/types.d.mts',
+    ]);
+
+    expect(classification.kind).toBe('TYPESCRIPT_APPLICATION');
+    expect(requiresTypecheck(classification)).toBe(true);
   });
 });
