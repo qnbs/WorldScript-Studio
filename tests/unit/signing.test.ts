@@ -385,6 +385,17 @@ describe('local signing controls', () => {
         }),
       ).toBe('UNKNOWN');
     });
+
+    // QNBS-v3: an injected runner that throws must not escape into the canonical evidence catch.
+    it('reports UNKNOWN rather than propagating a throw from an injected runner', () => {
+      expect(
+        computeWorkingTreeState(sha, process.cwd(), {
+          runGit: () => {
+            throw new Error('spawn EMFILE');
+          },
+        }),
+      ).toBe('UNKNOWN');
+    });
   });
 
   describe('workingTreeState (diagnostic dimension, never affects canonical evidence validity)', () => {

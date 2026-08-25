@@ -333,7 +333,12 @@ function changedFilesBetween(base, head, cwd) {
 // QNBS-v3: diagnostic-only signal; never throws, so it cannot corrupt canonical evidence validity.
 export function computeWorkingTreeState(sha, cwd, dependencies = {}) {
   const runGitFn = dependencies.runGit ?? runGit;
-  const result = runGitFn(['diff', '--quiet', sha, '--'], { cwd });
+  let result;
+  try {
+    result = runGitFn(['diff', '--quiet', sha, '--'], { cwd });
+  } catch {
+    return 'UNKNOWN';
+  }
   if (result.error) return 'UNKNOWN';
   if (result.status === 0) return 'MATCHES';
   if (result.status === 1) return 'DIVERGED';
