@@ -330,6 +330,24 @@ function changedFilesBetween(base, head, cwd) {
   return result.stdout.split('\0').filter((path) => path.length > 0);
 }
 
+// QNBS-v3: diagnostic-only signal; never throws, so it cannot corrupt canonical evidence validity.
+export function computeWorkingTreeState(sha, cwd, dependencies = {}) {
+  const runGitFn = dependencies.runGit ?? runGit;
+  const result = runGitFn(['diff', '--quiet', sha, '--'], { cwd });
+  if (result.error) return 'UNKNOWN';
+  if (result.status === 0) return 'MATCHES';
+  if (result.status === 1) return 'DIVERGED';
+  return 'UNKNOWN';
+}
+
+function aggregateWorkingTreeState(evidenceUpdates) {
+  const relevant = evidenceUpdates.filter((update) => update.workingTreeState !== 'NOT_APPLICABLE');
+  if (relevant.length === 0) return 'NOT_APPLICABLE';
+  if (relevant.some((update) => update.workingTreeState === 'DIVERGED')) return 'DIVERGED';
+  if (relevant.some((update) => update.workingTreeState === 'UNKNOWN')) return 'UNKNOWN';
+  return 'MATCHES';
+}
+
 export function resolvePushEvidence(input, cwd = process.cwd(), dependencies = {}) {
   try {
     const updates = validatedPrePushUpdates(input);
@@ -341,17 +359,23 @@ export function resolvePushEvidence(input, cwd = process.cwd(), dependencies = {
       ((sha) => isSha(sha) && runGit(['cat-file', '-e', `${sha}^{object}`], { cwd }).status === 0);
     const resolveFiles =
       dependencies.changedFilesBetween ?? ((base, head) => changedFilesBetween(base, head, cwd));
+    const matchesWorktree =
+      dependencies.worktreeMatchesCommit ?? ((sha) => computeWorkingTreeState(sha, cwd));
     const changedFiles = new Set();
     const evidenceUpdates = [];
     for (const update of updates) {
       if (isZeroSha(update.localSha)) {
-        evidenceUpdates.push({ ...update, disposition: 'DELETED' });
+        evidenceUpdates.push({ ...update, disposition: 'DELETED', workingTreeState: 'NOT_APPLICABLE' });
         continue;
       }
       if (update.remoteRef.startsWith('refs/tags/')) {
         if (!objectExists(update.localSha))
           throw new Error(`local outgoing object is unavailable for ${update.localRef}`);
-        evidenceUpdates.push({ ...update, disposition: 'TAG' });
+        evidenceUpdates.push({
+          ...update,
+          disposition: 'TAG',
+          workingTreeState: matchesWorktree(update.localSha),
+        });
         continue;
       }
       if (!commitExists(update.localSha))
@@ -364,6 +388,7 @@ export function resolvePushEvidence(input, cwd = process.cwd(), dependencies = {
         ...update,
         base,
         disposition: isZeroSha(update.remoteSha) ? 'NEW_BRANCH' : 'UPDATED',
+        workingTreeState: matchesWorktree(update.localSha),
       });
     }
     // QNBS-v3: tag updates prove object validity but not a complete changed-path set.
@@ -375,6 +400,7 @@ export function resolvePushEvidence(input, cwd = process.cwd(), dependencies = {
       changedFiles: [...changedFiles],
       evidenceState: 'RESOLVED',
       pathEvidenceState,
+      workingTreeState: aggregateWorkingTreeState(evidenceUpdates),
     };
   } catch (error) {
     return {
@@ -382,6 +408,7 @@ export function resolvePushEvidence(input, cwd = process.cwd(), dependencies = {
       changedFiles: [],
       evidenceState: 'INVALID',
       pathEvidenceState: 'PARTIAL',
+      workingTreeState: 'NOT_APPLICABLE',
       reason: error instanceof Error ? error.message : 'invalid push evidence',
     };
   }

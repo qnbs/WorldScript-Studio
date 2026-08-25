@@ -34,7 +34,7 @@ describe('manual committed-range resolution', () => {
   it('is unresolved when no upstream is configured', () => {
     const result = changedFilesFromManualRange({ resolveUpstream: () => null });
 
-    expect(result).toEqual({ files: [], rangeResolved: false });
+    expect(result).toEqual({ files: [], rangeResolved: false, workingTreeState: 'NOT_APPLICABLE' });
   });
 
   it('resolves and merges working-tree changes when the diff succeeds', () => {
@@ -47,7 +47,12 @@ describe('manual committed-range resolution', () => {
       workingTreeFiles: () => ['src/dirty.ts'],
     });
 
-    expect(result).toEqual({ files: ['src/committed.ts', 'src/dirty.ts'], rangeResolved: true });
+    // QNBS-v3: no push event/localSha exists in manual mode — NOT_APPLICABLE, never MATCHES.
+    expect(result).toEqual({
+      files: ['src/committed.ts', 'src/dirty.ts'],
+      rangeResolved: true,
+      workingTreeState: 'NOT_APPLICABLE',
+    });
   });
 
   // QNBS-v3: regression for the fail-open bug — a failed diff must not read as an empty resolved range.
@@ -60,7 +65,7 @@ describe('manual committed-range resolution', () => {
       },
     });
 
-    expect(result).toEqual({ files: [], rangeResolved: false });
+    expect(result).toEqual({ files: [], rangeResolved: false, workingTreeState: 'NOT_APPLICABLE' });
   });
 
   it('treats a genuinely empty diff as a resolved, complete range', () => {
@@ -70,7 +75,7 @@ describe('manual committed-range resolution', () => {
       workingTreeFiles: () => [],
     });
 
-    expect(result).toEqual({ files: [], rangeResolved: true });
+    expect(result).toEqual({ files: [], rangeResolved: true, workingTreeState: 'NOT_APPLICABLE' });
   });
 
   // QNBS-v3: regression — a successful committed-range diff must not mask a working-tree failure.
@@ -81,7 +86,7 @@ describe('manual committed-range resolution', () => {
       workingTreeFiles: () => null,
     });
 
-    expect(result).toEqual({ files: [], rangeResolved: false });
+    expect(result).toEqual({ files: [], rangeResolved: false, workingTreeState: 'NOT_APPLICABLE' });
   });
 });
 
@@ -91,7 +96,7 @@ describe('resolveManualEvidence', () => {
       resolveUpstream: () => null,
     });
 
-    expect(result).toEqual({ files: [], rangeResolved: false });
+    expect(result).toEqual({ files: [], rangeResolved: false, workingTreeState: 'NOT_APPLICABLE' });
   });
 
   it('trusts changedFiles as complete when pathEvidenceState is COMPLETE', () => {
@@ -104,10 +109,15 @@ describe('resolveManualEvidence', () => {
         evidenceState: 'RESOLVED',
         pathEvidenceState: 'COMPLETE',
         changedFiles: ['src/example.ts'],
+        workingTreeState: 'MATCHES',
       }),
     });
 
-    expect(result).toEqual({ files: ['src/example.ts'], rangeResolved: true });
+    expect(result).toEqual({
+      files: ['src/example.ts'],
+      rangeResolved: true,
+      workingTreeState: 'MATCHES',
+    });
   });
 
   // QNBS-v3: wiring check — a PARTIAL tag push must not be treated as a complete file list.
@@ -118,10 +128,29 @@ describe('resolveManualEvidence', () => {
         evidenceState: 'RESOLVED',
         pathEvidenceState: 'PARTIAL',
         changedFiles: [],
+        workingTreeState: 'NOT_APPLICABLE',
       }),
     });
 
-    expect(result).toEqual({ files: [], rangeResolved: false });
+    expect(result).toEqual({ files: [], rangeResolved: false, workingTreeState: 'NOT_APPLICABLE' });
+  });
+
+  // QNBS-v3: proves the two signals are orthogonal, not coupled to `full` via pathEvidenceState.
+  it('propagates DIVERGED and UNKNOWN independently of pathEvidenceState being COMPLETE', () => {
+    for (const workingTreeState of ['DIVERGED', 'UNKNOWN']) {
+      const result = resolveManualEvidence('/tmp/evidence.json', {
+        readPrePushEvidenceFile: () => 'raw',
+        resolvePushEvidence: () => ({
+          evidenceState: 'RESOLVED',
+          pathEvidenceState: 'COMPLETE',
+          changedFiles: ['src/example.ts'],
+          workingTreeState,
+        }),
+      });
+
+      expect(result.rangeResolved).toBe(true);
+      expect(result.workingTreeState).toBe(workingTreeState);
+    }
   });
 
   it('throws for INVALID evidence', () => {
@@ -132,6 +161,7 @@ describe('resolveManualEvidence', () => {
           evidenceState: 'INVALID',
           pathEvidenceState: 'PARTIAL',
           changedFiles: [],
+          workingTreeState: 'NOT_APPLICABLE',
           reason: 'boom',
         }),
       }),

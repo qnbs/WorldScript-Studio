@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   classifyCommitObject,
   classifyTagVerification,
+  computeWorkingTreeState,
   getSigningConfig,
   hasCommitSignature,
   isGitHubCompatibleEmail,
@@ -218,6 +219,7 @@ describe('local signing controls', () => {
         base === '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
           ? ['new\nfile.ts']
           : ['src/with\t tab.ts', '世界 file.ts', 'src/with\t tab.ts'],
+      worktreeMatchesCommit: () => 'MATCHES',
     });
     expect(result.evidenceState).toBe('RESOLVED');
     expect(result.pathEvidenceState).toBe('PARTIAL');
@@ -241,6 +243,7 @@ describe('local signing controls', () => {
     const result = resolvePushEvidence(updates, process.cwd(), {
       commitExists: () => true,
       changedFilesBetween: () => ['src/example.ts'],
+      worktreeMatchesCommit: () => 'MATCHES',
     });
 
     expect(result.evidenceState).toBe('RESOLVED');
@@ -257,10 +260,13 @@ describe('local signing controls', () => {
     for (const update of [lightweight, annotated]) {
       const result = resolvePushEvidence([update], process.cwd(), {
         objectExists: () => true,
+        worktreeMatchesCommit: () => 'MATCHES',
       });
       expect(result.evidenceState).toBe('RESOLVED');
       expect(result.pathEvidenceState).toBe('PARTIAL');
       expect(result.changedFiles).toEqual([]);
+      // QNBS-v3: tags are no longer excluded from divergence detection (unlike pathEvidenceState).
+      expect(result.updates[0]?.workingTreeState).toBe('MATCHES');
     }
   });
 
@@ -276,6 +282,7 @@ describe('local signing controls', () => {
         commitExists: () => true,
         objectExists: () => true,
         changedFilesBetween: () => ['src/a.ts'],
+        worktreeMatchesCommit: () => 'MATCHES',
       },
     );
 
@@ -285,7 +292,10 @@ describe('local signing controls', () => {
   });
 
   it('keeps empty evidence complete and rejects an unavailable tag object', () => {
-    expect(resolvePushEvidence([]).pathEvidenceState).toBe('COMPLETE');
+    const empty = resolvePushEvidence([]);
+    expect(empty.pathEvidenceState).toBe('COMPLETE');
+    // QNBS-v3: nothing was compared, not "compared and found equal" — see aggregation precedence.
+    expect(empty.workingTreeState).toBe('NOT_APPLICABLE');
 
     const result = resolvePushEvidence(
       [parseRefUpdate(`refs/tags/v1 ${'a'.repeat(40)} refs/tags/v1 ${'0'.repeat(40)}`)!],
@@ -333,6 +343,115 @@ describe('local signing controls', () => {
         )!,
       ]).evidenceState,
     ).toBe('INVALID');
+  });
+
+  describe('computeWorkingTreeState (diagnostic-only, isolated from canonical evidence)', () => {
+    const sha = 'a'.repeat(40);
+
+    it('reports MATCHES for a genuine exit code 0 with no process error', () => {
+      expect(
+        computeWorkingTreeState(sha, process.cwd(), {
+          runGit: () => ({ status: 0, stdout: '', stderr: '' }),
+        }),
+      ).toBe('MATCHES');
+    });
+
+    it('reports DIVERGED for a genuine exit code 1 with no process error', () => {
+      expect(
+        computeWorkingTreeState(sha, process.cwd(), {
+          runGit: () => ({ status: 1, stdout: '', stderr: '' }),
+        }),
+      ).toBe('DIVERGED');
+    });
+
+    // QNBS-v3: runGit maps a killed/failed spawn's status:null to 1 via `?? 1` — error must win first.
+    it('reports UNKNOWN on a process error, even though runGit maps its status to 1', () => {
+      expect(
+        computeWorkingTreeState(sha, process.cwd(), {
+          runGit: () => ({ status: 1, stdout: '', stderr: '', error: new Error('spawn timeout') }),
+        }),
+      ).toBe('UNKNOWN');
+      expect(
+        computeWorkingTreeState(sha, process.cwd(), {
+          runGit: () => ({ status: 0, stdout: '', stderr: '', error: new Error('spawn timeout') }),
+        }),
+      ).toBe('UNKNOWN');
+    });
+
+    it('reports UNKNOWN for any other exit code (e.g. a tag peeling to a non-commit)', () => {
+      expect(
+        computeWorkingTreeState(sha, process.cwd(), {
+          runGit: () => ({ status: 128, stdout: '', stderr: 'fatal: bad revision' }),
+        }),
+      ).toBe('UNKNOWN');
+    });
+  });
+
+  describe('workingTreeState (diagnostic dimension, never affects canonical evidence validity)', () => {
+    it('does not mutate evidenceState or pathEvidenceState when the diagnostic reports UNKNOWN', () => {
+      const update = parseRefUpdate(
+        `refs/heads/main ${'a'.repeat(40)} refs/heads/main ${'b'.repeat(40)}`,
+      )!;
+      const result = resolvePushEvidence([update], process.cwd(), {
+        commitExists: () => true,
+        changedFilesBetween: () => ['src/example.ts'],
+        worktreeMatchesCommit: () => 'UNKNOWN',
+      });
+
+      // QNBS-v3: this is the regression guard for the diagnostic-isolation correction specifically.
+      expect(result.evidenceState).toBe('RESOLVED');
+      expect(result.pathEvidenceState).toBe('COMPLETE');
+      expect(result.workingTreeState).toBe('UNKNOWN');
+    });
+
+    it('assigns DELETED updates NOT_APPLICABLE without calling the diagnostic', () => {
+      const zero = '0'.repeat(40);
+      const deletion = parseRefUpdate(`refs/heads/old ${zero} refs/heads/old ${'b'.repeat(40)}`)!;
+      const result = resolvePushEvidence([deletion], process.cwd(), {
+        worktreeMatchesCommit: () => {
+          throw new Error('must not be called for a deletion');
+        },
+      });
+
+      expect(result.evidenceState).toBe('RESOLVED');
+      expect(result.updates[0]?.workingTreeState).toBe('NOT_APPLICABLE');
+      expect(result.workingTreeState).toBe('NOT_APPLICABLE');
+    });
+
+    it('aggregates with DIVERGED outranking UNKNOWN, and UNKNOWN outranking MATCHES', () => {
+      const updateA = parseRefUpdate(
+        `refs/heads/a ${'a'.repeat(40)} refs/heads/a ${'b'.repeat(40)}`,
+      )!;
+      const updateB = parseRefUpdate(
+        `refs/heads/b ${'c'.repeat(40)} refs/heads/b ${'d'.repeat(40)}`,
+      )!;
+      const shared = { commitExists: () => true, changedFilesBetween: () => [] };
+
+      const divergedPlusUnknown = resolvePushEvidence([updateA, updateB], process.cwd(), {
+        ...shared,
+        worktreeMatchesCommit: (sha) => (sha === updateA.localSha ? 'DIVERGED' : 'UNKNOWN'),
+      });
+      expect(divergedPlusUnknown.workingTreeState).toBe('DIVERGED');
+
+      const matchesPlusUnknown = resolvePushEvidence([updateA, updateB], process.cwd(), {
+        ...shared,
+        worktreeMatchesCommit: (sha) => (sha === updateA.localSha ? 'MATCHES' : 'UNKNOWN'),
+      });
+      expect(matchesPlusUnknown.workingTreeState).toBe('UNKNOWN');
+    });
+
+    it('aggregates a push containing only deletions as NOT_APPLICABLE', () => {
+      const zero = '0'.repeat(40);
+      const result = resolvePushEvidence(
+        [
+          parseRefUpdate(`refs/heads/a ${zero} refs/heads/a ${'a'.repeat(40)}`)!,
+          parseRefUpdate(`refs/heads/b ${zero} refs/heads/b ${'b'.repeat(40)}`)!,
+        ],
+        process.cwd(),
+      );
+      expect(result.evidenceState).toBe('RESOLVED');
+      expect(result.workingTreeState).toBe('NOT_APPLICABLE');
+    });
   });
 
   it('round-trips the same immutable artifact for both consumers', () => {

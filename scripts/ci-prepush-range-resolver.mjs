@@ -47,13 +47,20 @@ export function changedFilesFromManualRange(dependencies = {}) {
   const diffNames = dependencies.diffNames ?? defaultDiffNames;
   const workingTreeFiles = dependencies.workingTreeFiles ?? defaultWorkingTreeFiles;
 
+  // QNBS-v3: no push event or localSha exists in this mode, so nothing is ever compared.
   const upstream = resolveUpstream();
-  if (!upstream) return { files: [], rangeResolved: false };
+  if (!upstream) return { files: [], rangeResolved: false, workingTreeState: 'NOT_APPLICABLE' };
   const diffFiles = diffNames(`${upstream}..HEAD`);
-  if (diffFiles === null) return { files: [], rangeResolved: false };
+  if (diffFiles === null)
+    return { files: [], rangeResolved: false, workingTreeState: 'NOT_APPLICABLE' };
   const workingFiles = workingTreeFiles();
-  if (workingFiles === null) return { files: [], rangeResolved: false };
-  return { files: diffFiles.concat(workingFiles), rangeResolved: true };
+  if (workingFiles === null)
+    return { files: [], rangeResolved: false, workingTreeState: 'NOT_APPLICABLE' };
+  return {
+    files: diffFiles.concat(workingFiles),
+    rangeResolved: true,
+    workingTreeState: 'NOT_APPLICABLE',
+  };
 }
 
 export function resolveManualEvidence(evidenceFile, dependencies = {}) {
@@ -63,5 +70,9 @@ export function resolveManualEvidence(evidenceFile, dependencies = {}) {
   const evidence = resolveEvidence(readEvidenceFile(evidenceFile), process.cwd());
   if (evidence.evidenceState !== 'RESOLVED') throw new Error(evidence.reason ?? 'invalid evidence');
   // QNBS-v3: pathEvidenceState, not evidenceState, tells us whether changedFiles is trustworthy.
-  return { files: evidence.changedFiles, rangeResolved: evidence.pathEvidenceState === 'COMPLETE' };
+  return {
+    files: evidence.changedFiles,
+    rangeResolved: evidence.pathEvidenceState === 'COMPLETE',
+    workingTreeState: evidence.workingTreeState,
+  };
 }
