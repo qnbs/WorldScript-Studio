@@ -27,6 +27,7 @@
     "deps:verify": "node scripts/dependency-state.mjs verify",
     "deps:reconcile": "node scripts/dependency-state.mjs reconcile",
     "ci:prepush": "node scripts/ci-prepush-lowend.mjs",
+    "verify:exact-tree": "node scripts/verify-exact-tree.mjs",
     "ci:local:full": "pnpm run lint && pnpm run typecheck && pnpm run i18n:check && pnpm run guardrail:desktop-imports && pnpm run native-readiness:check",
     "predev": "node scripts/sync-csp.mjs && node scripts/sync-sw-version.mjs && node scripts/sync-tauri-version.mjs && node scripts/sync-readme-metrics.mjs && node scripts/build-i18n.mjs && node scripts/copy-duckdb-assets.mjs",
     "dev": "vite",
