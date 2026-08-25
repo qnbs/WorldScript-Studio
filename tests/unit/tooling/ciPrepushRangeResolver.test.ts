@@ -72,6 +72,17 @@ describe('manual committed-range resolution', () => {
 
     expect(result).toEqual({ files: [], rangeResolved: true });
   });
+
+  // QNBS-v3: regression — a successful committed-range diff must not mask a working-tree failure.
+  it('fails closed when the committed-range diff succeeds but working-tree discovery fails', () => {
+    const result = changedFilesFromManualRange({
+      resolveUpstream: () => 'origin/main',
+      diffNames: () => ['src/committed.ts'],
+      workingTreeFiles: () => null,
+    });
+
+    expect(result).toEqual({ files: [], rangeResolved: false });
+  });
 });
 
 describe('resolveManualEvidence', () => {

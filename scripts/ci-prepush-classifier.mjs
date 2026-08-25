@@ -1,6 +1,13 @@
 const DOC_FILE = /\.(?:md|mdx)$/i;
 const TS_FILE = /\.(?:c|m)?tsx?$/i;
 const WORKFLOW_ROOTS = ['.github/workflows/', '.github/actions/'];
+// QNBS-v3: matches the i18n/contentGuard registry's own routing so both stay in sync.
+const NON_CODE_ROOTS = [
+  'locales/',
+  'public/locales/',
+  'community-templates/',
+  'public/community-templates/',
+];
 const RUST_ROOTS = ['src-tauri/', 'crates/'];
 const TOOLING_ROOTS = ['scripts/'];
 const TOOLING_FILES = new Set(['.gitleaks.toml']);
@@ -59,8 +66,8 @@ export function classifyFile(file) {
   ) {
     return 'RUST_TAURI';
   }
-  // QNBS-v3: tests/fixtures/**/*.json is imported with inferred TS types (e.g. logger.test.ts),
-  // confirmed by grep — typecheck it conservatively rather than treating it as safe test data.
+  if (startsWithRoot(normalized, NON_CODE_ROOTS)) return 'NON_CODE_ONLY';
+  // QNBS-v3: tests/fixtures/**/*.json gets inferred TS types (e.g. logger.test.ts) — typecheck it.
   if (normalized.startsWith('tests/'))
     return TS_FILE.test(normalized) ||
       (normalized.startsWith('tests/fixtures/') && normalized.endsWith('.json'))
@@ -97,7 +104,9 @@ export function classifyChangedFiles(files) {
     return { kind: categories[0], categories, files: normalizedFiles };
   }
   if (
-    categories.every((category) => ['DOCS', 'WORKFLOW', 'TOOLING', 'TEST_ONLY'].includes(category))
+    categories.every((category) =>
+      ['DOCS', 'WORKFLOW', 'TOOLING', 'TEST_ONLY', 'NON_CODE_ONLY'].includes(category),
+    )
   )
     return { kind: 'NON_CODE_ONLY', categories, files: normalizedFiles };
   if (categories.includes('UNKNOWN'))

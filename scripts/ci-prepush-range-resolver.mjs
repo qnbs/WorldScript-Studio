@@ -4,9 +4,7 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { readPrePushEvidenceFile, resolvePushEvidence } from './signing/signing-core.mjs';
 
-// QNBS-v3: resolve() normalizes a relative argv1 (e.g. `node scripts/x.mjs`) before comparing —
-// a bare `argv1 === fileURLToPath(moduleUrl)` is always false for a relative invocation, which
-// silently skips main() and makes the whole admission gate a no-op.
+// QNBS-v3: resolve() normalizes a relative argv1 so it still matches an always-absolute moduleUrl.
 export function isMainModule(argv1, moduleUrl) {
   return argv1 !== undefined && resolve(argv1) === fileURLToPath(moduleUrl);
 }

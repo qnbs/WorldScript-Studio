@@ -18,9 +18,27 @@ describe('change-aware local admission classifier', () => {
     ['src-tauri/src/lib.rs', 'RUST_TAURI'],
     ['scripts/check-example.mjs', 'TOOLING'],
     ['scripts/coverage-thresholds.json', 'TYPESCRIPT_APPLICATION'],
+    ['locales/en/common.json', 'NON_CODE_ONLY'],
+    ['public/locales/en/bundle.json', 'NON_CODE_ONLY'],
+    ['community-templates/index.json', 'NON_CODE_ONLY'],
+    ['public/community-templates/index.json', 'NON_CODE_ONLY'],
     ['unknown-extension.data', 'UNKNOWN'],
   ])('classifies %s as %s', (file, expected) => {
     expect(classifyFile(file)).toBe(expected);
+  });
+
+  // QNBS-v3: i18n/content-template-only pushes must not trigger typecheck (efficiency, not safety).
+  it('does not require typecheck for i18n or community-template-only changes', () => {
+    const i18nOnly = classifyChangedFiles(['locales/en/common.json', 'locales/de/common.json']);
+    const templateOnly = classifyChangedFiles(['community-templates/index.json']);
+    const i18nWithDocs = classifyChangedFiles(['locales/en/common.json', 'README.md']);
+
+    expect(i18nOnly.kind).toBe('NON_CODE_ONLY');
+    expect(requiresTypecheck(i18nOnly)).toBe(false);
+    expect(templateOnly.kind).toBe('NON_CODE_ONLY');
+    expect(requiresTypecheck(templateOnly)).toBe(false);
+    expect(i18nWithDocs.kind).toBe('NON_CODE_ONLY');
+    expect(requiresTypecheck(i18nWithDocs)).toBe(false);
   });
 
   it('runs TypeScript for TypeScript tests but defers non-TypeScript, non-JSON test assets', () => {
@@ -33,8 +51,7 @@ describe('change-aware local admission classifier', () => {
     expect(requiresTypecheck(snapshot)).toBe(false);
   });
 
-  // QNBS-v3: fixtures like tests/fixtures/diagnostics/redaction-cases.json get inferred TS types
-  // where a logger test destructures their fields; typecheck fixture JSON conservatively.
+  // QNBS-v3: redaction-cases.json gets inferred TS types in logger.test.ts — typecheck fixture JSON.
   it('requires typecheck for a JSON test fixture despite living under tests/', () => {
     const classification = classifyChangedFiles([
       'tests/fixtures/diagnostics/redaction-cases.json',
@@ -93,11 +110,7 @@ describe('change-aware local admission classifier', () => {
     expect(manualAdmissionNeedsFullValidation(false)).toBe(true);
 
     const earlierTypeScript = classifyChangedFiles(['src/app.tsx']);
-    const earlierI18n = classifyChangedFiles(['locales/en/common.json']);
-    const earlierContent = classifyChangedFiles(['community-templates/index.json']);
 
     expect(requiresTypecheck(earlierTypeScript)).toBe(true);
-    expect(earlierI18n.kind).toBe('AMBIGUOUS');
-    expect(earlierContent.kind).toBe('AMBIGUOUS');
   });
 });
