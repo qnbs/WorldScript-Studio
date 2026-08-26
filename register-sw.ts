@@ -186,12 +186,22 @@ const registerServiceWorker = async (): Promise<void> => {
       announceUpdateAvailable(registration.waiting);
     }
 
-    // QNBS-v3 (DA-02): the 1s debounced autosave never fires mid-typing — flush before reloading or edits can be lost.
+    // QNBS-v3 (DA-02): only the visible tab flushes — a hidden tab's stale write could race a fresher one.
     let refreshing = false;
+    let reloadPendingWhileHidden = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!refreshing) {
+      if (refreshing) return;
+      if (document.visibilityState !== 'visible') {
+        reloadPendingWhileHidden = true;
+        return;
+      }
+      refreshing = true;
+      void flushLatestStateThenReload();
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (reloadPendingWhileHidden && document.visibilityState === 'visible' && !refreshing) {
         refreshing = true;
-        void flushThenReload();
+        void flushLatestStateThenReload();
       }
     });
 
@@ -226,17 +236,29 @@ const registerServiceWorker = async (): Promise<void> => {
   }
 };
 
-// QNBS-v3 (DA-02): mirrors index.tsx's visibilitychange flush — a failed flush defers the reload instead of discarding edits.
-async function flushThenReload(): Promise<void> {
-  try {
-    const store = appStoreRef.current;
-    if (store) {
-      await flushPersistedState(store.getState() as RootState);
-    }
-    window.location.reload();
-  } catch (error) {
-    appLogger.error('[SW] Pre-reload state flush failed — reload deferred to avoid data loss:', error);
+// QNBS-v3 (DA-02): loops until a flush completes against state that provably hasn't changed since — a single snapshot could miss edits made while the async write was still in flight.
+const MAX_FLUSH_ATTEMPTS = 5;
+
+async function flushLatestState(): Promise<void> {
+  const store = appStoreRef.current;
+  if (!store) return;
+  let snapshot = store.getState();
+  for (let attempt = 0; attempt < MAX_FLUSH_ATTEMPTS; attempt++) {
+    await flushPersistedState(snapshot as RootState);
+    const latest = store.getState();
+    if (latest === snapshot) return;
+    snapshot = latest;
   }
+}
+
+// QNBS-v3 (DA-02): the reload always proceeds — activation already pruned old-version caches by the time controllerchange fires, so staying on the old bundle risks missing-chunk failures too.
+async function flushLatestStateThenReload(): Promise<void> {
+  try {
+    await flushLatestState();
+  } catch (error) {
+    appLogger.error('[SW] Pre-reload state flush failed (reloading anyway):', error);
+  }
+  window.location.reload();
 }
 
 if (typeof window !== 'undefined') {

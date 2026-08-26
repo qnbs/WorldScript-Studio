@@ -1,4 +1,4 @@
-// QNBS-v3 (DA-02): proves controllerchange flushes this tab's pending state before reloading.
+// QNBS-v3 (DA-02): proves controllerchange flushes the latest visible-tab state before reloading.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../services/logger', async (importOriginal) => {
@@ -16,6 +16,10 @@ async function flushMicrotasks(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+function setVisibility(value: 'visible' | 'hidden'): void {
+  Object.defineProperty(document, 'visibilityState', { value, configurable: true });
+}
+
 describe('register-sw — controllerchange flush-then-reload (DA-02)', () => {
   let controllerChangeHandler: (() => void) | undefined;
   let reloadSpy: ReturnType<typeof vi.fn>;
@@ -23,6 +27,7 @@ describe('register-sw — controllerchange flush-then-reload (DA-02)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     controllerChangeHandler = undefined;
+    setVisibility('visible');
 
     for (const key of ['__TAURI_INTERNALS__', '__TAURI__', '__TAURI_METADATA__']) {
       delete (window as unknown as Record<string, unknown>)[key];
@@ -54,8 +59,11 @@ describe('register-sw — controllerchange flush-then-reload (DA-02)', () => {
       configurable: true,
     });
 
+    // QNBS-v3: a stable reference — a fresh object on every call would never satisfy the
+    // "state hasn't changed since the last flush" stop condition and loop until MAX_FLUSH_ATTEMPTS.
+    const stableState = { fake: 'state' };
     appStoreRef.current = {
-      getState: () => ({ fake: 'state' }) as never,
+      getState: () => stableState as never,
       dispatch: vi.fn() as never,
     };
   });
@@ -64,9 +72,10 @@ describe('register-sw — controllerchange flush-then-reload (DA-02)', () => {
     appStoreRef.current = null;
     // @ts-expect-error — test-only cleanup of a property this suite defines itself.
     delete navigator.serviceWorker;
+    setVisibility('visible');
   });
 
-  it('flushes pending state and reloads, in that order, when a new SW takes control', async () => {
+  it('flushes pending state and reloads, in that order, when the visible tab takes control', async () => {
     mockFlushPersistedState.mockResolvedValue(undefined);
     await registerServiceWorker();
     expect(controllerChangeHandler).toBeTypeOf('function');
@@ -81,7 +90,7 @@ describe('register-sw — controllerchange flush-then-reload (DA-02)', () => {
     expect(flushOrder).toBeLessThan(reloadOrder);
   });
 
-  it('defers the reload when the flush fails, instead of discarding unflushed edits', async () => {
+  it('reloads even when the flush fails, rather than staying on a bundle whose old cache is already pruned', async () => {
     mockFlushPersistedState.mockRejectedValue(new Error('IDB write failed'));
     await registerServiceWorker();
 
@@ -89,7 +98,7 @@ describe('register-sw — controllerchange flush-then-reload (DA-02)', () => {
     await flushMicrotasks();
 
     expect(mockFlushPersistedState).toHaveBeenCalledTimes(1);
-    expect(reloadSpy).not.toHaveBeenCalled();
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
   });
 
   it('ignores a second controllerchange event (single-flight)', async () => {
@@ -113,5 +122,47 @@ describe('register-sw — controllerchange flush-then-reload (DA-02)', () => {
 
     expect(mockFlushPersistedState).not.toHaveBeenCalled();
     expect(reloadSpy).toHaveBeenCalledTimes(1);
+  });
+
+  // QNBS-v3 (codex P1): a hidden tab's state can't be fresher than what's already persisted — only the visible tab flushes.
+  it('defers both flush and reload while the tab is hidden, then runs both once it becomes visible', async () => {
+    mockFlushPersistedState.mockResolvedValue(undefined);
+    await registerServiceWorker();
+    setVisibility('hidden');
+
+    controllerChangeHandler?.();
+    await flushMicrotasks();
+
+    expect(mockFlushPersistedState).not.toHaveBeenCalled();
+    expect(reloadSpy).not.toHaveBeenCalled();
+
+    setVisibility('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await flushMicrotasks();
+
+    expect(mockFlushPersistedState).toHaveBeenCalledTimes(1);
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+  });
+
+  // QNBS-v3 (CodeAnt/codex): a single snapshot could miss an edit made while the async write is still in flight.
+  it('re-flushes with the latest state when it changes during the pending flush, before reloading', async () => {
+    const stateA = { v: 'a' };
+    const stateB = { v: 'b' };
+    // 1st getState(): stateA. 2nd (after flush #1): stateB (changed — retry). 3rd (after flush #2): stateB (stable — stop).
+    const getStateMock = vi.fn().mockReturnValueOnce(stateA).mockReturnValueOnce(stateB).mockReturnValue(stateB);
+    appStoreRef.current = { getState: getStateMock, dispatch: vi.fn() as never };
+    mockFlushPersistedState.mockResolvedValue(undefined);
+
+    await registerServiceWorker();
+    controllerChangeHandler?.();
+    await flushMicrotasks();
+
+    expect(mockFlushPersistedState).toHaveBeenCalledTimes(2);
+    expect(mockFlushPersistedState).toHaveBeenNthCalledWith(1, stateA);
+    expect(mockFlushPersistedState).toHaveBeenNthCalledWith(2, stateB);
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+    const lastFlushOrder = mockFlushPersistedState.mock.invocationCallOrder[1] as number;
+    const reloadOrder = reloadSpy.mock.invocationCallOrder[0] as number;
+    expect(lastFlushOrder).toBeLessThan(reloadOrder);
   });
 });
