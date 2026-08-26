@@ -49,8 +49,9 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      # QNBS-v3: no lifecycle/.pnpmfile.cjs hooks — install must not run repo code before the gate.
+      - name: Install dependencies (no lifecycle scripts)
+        run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
       - name: Workflow-policy structural gate (permissions, needs graph, action pins)
         run: pnpm run workflow-policy:check
 

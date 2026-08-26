@@ -46,10 +46,13 @@ export function listActionFiles(root = projectRoot, dependencies = {}) {
   if (!existsSync(dir)) return [];
   const results = [];
   // QNBS-v3: recurse any depth — a composite action can nest below its group directory.
+  // QNBS-v3: a symlink here could redirect a governed action outside .github/actions unseen — reject it.
   const walk = (currentDir) => {
     for (const entry of listDir(currentDir, { withFileTypes: true })) {
       const entryPath = join(currentDir, entry.name);
-      if (entry.isDirectory()) {
+      if (entry.isSymbolicLink?.()) {
+        throw new Error(`symlink not allowed under .github/actions: ${entryPath}`);
+      } else if (entry.isDirectory()) {
         walk(entryPath);
       } else if (entry.name === 'action.yml' || entry.name === 'action.yaml') {
         results.push(entryPath);
@@ -87,6 +90,14 @@ function resolveSteps(stepsNode, doc) {
   const resolved = resolveNode(stepsNode, doc);
   const items = resolved?.items ?? [];
   return items.map((item) => resolveNode(item, doc));
+}
+
+// QNBS-v3: resolves a needs: node (possibly aliased, e.g. shared via &deps/*deps) to a string array.
+function resolveNeedsList(needsNode, doc) {
+  const resolved = resolveNode(needsNode, doc);
+  if (!resolved) return [];
+  const value = resolved.toJSON();
+  return Array.isArray(value) ? value : [value];
 }
 
 // QNBS-v3: an aliased *perms block resolves to Alias, not YAMLMap — must dereference before use.
@@ -161,12 +172,7 @@ export function checkNeedsGraph(fileName, doc, failures) {
   const jobNames = new Set(jobs.keys());
   const needsOf = new Map();
   for (const [jobName, jobNode] of jobs) {
-    const needsNode = jobNode?.get?.('needs', true);
-    const needs = !needsNode
-      ? []
-      : Array.isArray(needsNode.toJSON())
-        ? needsNode.toJSON()
-        : [needsNode.toJSON()];
+    const needs = resolveNeedsList(jobNode?.get?.('needs', true), doc);
     for (const dependency of needs) {
       if (!jobNames.has(dependency)) {
         failures.push({
@@ -218,7 +224,8 @@ function checkUsesRef({ usesNode, containerNode, doc, fileName, lineCounter, fai
   const resolvedNode = resolveNode(usesNode, doc);
   if (!resolvedNode || typeof resolvedNode.value !== 'string') return;
   const ref = resolvedNode.value;
-  if (ref.startsWith('./')) return; // local action/reusable workflow, no @ pin possible
+  // QNBS-v3: local/build-from-source refs have no registry pin concept — already pinned by the commit.
+  if (ref.startsWith('./') || ref === 'Dockerfile') return;
   const line =
     lineCounter && Array.isArray(usesNode.range)
       ? lineCounter.linePos(usesNode.range[0]).line
@@ -275,13 +282,21 @@ export function checkActionPins(fileName, doc, failures, options = {}) {
       checkUsesRef({ usesNode, containerNode: jobNode, doc, fileName, lineCounter, failures });
     }
   }
+  // QNBS-v3: a Docker action (runs.using: docker) has no steps — its own image: needs the same pin.
+  if (fileKind === 'action') {
+    const runsNode = resolveNode(doc.get('runs', true), doc);
+    const imageNode = runsNode?.get?.('image', true);
+    if (imageNode) {
+      checkUsesRef({ usesNode: imageNode, containerNode: runsNode, doc, fileName, lineCounter, failures });
+    }
+  }
 }
 
 // QNBS-v3: always()/failure()/cancelled() (incl. negated !cancelled()) all bypass default success-gating.
 const NON_DEFAULT_GATING_PATTERN = /\b(?:always|failure|cancelled)\s*\(\)/;
 
-function jobHasNonDefaultGatingCondition(jobNode) {
-  const ifNode = jobNode?.get?.('if', true);
+function jobHasNonDefaultGatingCondition(jobNode, doc) {
+  const ifNode = resolveNode(jobNode?.get?.('if', true), doc);
   return typeof ifNode?.value === 'string' && NON_DEFAULT_GATING_PATTERN.test(ifNode.value);
 }
 
@@ -312,12 +327,11 @@ function collectNeedsResultReferences(jobNode, doc) {
 }
 
 // QNBS-v3: excludes the full downstream closure (not just direct dependents) from ci-success.needs.
-function computeAggregatorDescendants(jobs) {
+function computeAggregatorDescendants(jobs, doc) {
   const dependents = new Map();
   for (const [jobName, jobNode] of jobs) {
-    const needsNode = jobNode?.get?.('needs', true);
-    const needsValue = needsNode ? needsNode.toJSON() : [];
-    for (const dependency of Array.isArray(needsValue) ? needsValue : [needsValue]) {
+    const needs = resolveNeedsList(jobNode?.get?.('needs', true), doc);
+    for (const dependency of needs) {
       if (!dependents.has(dependency)) dependents.set(dependency, []);
       dependents.get(dependency).push(jobName);
     }
@@ -340,11 +354,9 @@ export function checkAggregatorNeeds(fileName, doc, failures) {
   const jobs = jobMap(doc);
   if (!jobs.has('ci-success')) return;
   const aggregatorNode = jobs.get('ci-success');
-  const needsNode = aggregatorNode?.get?.('needs', true);
-  const needsValue = needsNode ? needsNode.toJSON() : [];
   // QNBS-v3: needs: quality (bare string) must not decompose into per-character Set entries.
-  const declaredNeeds = new Set(Array.isArray(needsValue) ? needsValue : [needsValue]);
-  const descendants = computeAggregatorDescendants(jobs);
+  const declaredNeeds = new Set(resolveNeedsList(aggregatorNode?.get?.('needs', true), doc));
+  const descendants = computeAggregatorDescendants(jobs, doc);
   const expectedNeeds = new Set();
   for (const [jobName, jobNode] of jobs) {
     if (jobName === 'ci-success') continue;
@@ -364,7 +376,7 @@ export function checkAggregatorNeeds(fileName, doc, failures) {
       message: `ci-success.needs lists "${name}", which is not a gating job (advisory or self-referential)`,
     });
   }
-  if (jobHasNonDefaultGatingCondition(aggregatorNode)) {
+  if (jobHasNonDefaultGatingCondition(aggregatorNode, doc)) {
     const checkedResults = collectNeedsResultReferences(aggregatorNode, doc);
     for (const name of expectedNeeds) {
       if (declaredNeeds.has(name) && !checkedResults.has(name)) {
@@ -449,7 +461,16 @@ export function checkActionFile(filePath, dependencies = {}) {
 
 export function checkAllWorkflows(root = projectRoot, dependencies = {}) {
   const workflowFiles = dependencies.listWorkflowFiles?.(root) ?? listWorkflowFiles(root, dependencies);
-  const actionFiles = dependencies.listActionFiles?.(root) ?? listActionFiles(root, dependencies);
+  // QNBS-v3: fail-closed — a rejected symlink must surface as a failure, never crash the whole check.
+  let actionFiles;
+  try {
+    actionFiles = dependencies.listActionFiles?.(root) ?? listActionFiles(root, dependencies);
+  } catch (error) {
+    return [
+      ...workflowFiles.flatMap((filePath) => checkWorkflowFile(filePath, dependencies)),
+      { file: '.github/actions', message: error.message },
+    ];
+  }
   return [
     ...workflowFiles.flatMap((filePath) => checkWorkflowFile(filePath, dependencies)),
     ...actionFiles.flatMap((filePath) => checkActionFile(filePath, dependencies)),

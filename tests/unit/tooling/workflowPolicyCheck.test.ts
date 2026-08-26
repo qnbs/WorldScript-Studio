@@ -154,6 +154,27 @@ describe('checkNeedsGraph', () => {
     );
     expect(failures.some((f) => f.message.includes('cycle detected'))).toBe(true);
   });
+
+  // QNBS-v3: an aliased needs: list (c.needs: *deps) is an Alias node until resolved.
+  it('resolves an aliased needs: list shared between two jobs', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkNeedsGraph(
+      'x.yml',
+      doc('jobs:\n  a: {}\n  b:\n    needs: &deps [a]\n  c:\n    needs: *deps\n'),
+      failures,
+    );
+    expect(failures).toEqual([]);
+  });
+
+  it('fails for an orphaned reference inside an aliased needs: list', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkNeedsGraph(
+      'x.yml',
+      doc('jobs:\n  a: {}\n  b:\n    needs: &deps [ghost]\n  c:\n    needs: *deps\n'),
+      failures,
+    );
+    expect(failures.filter((f) => f.message.includes('unknown job "ghost"'))).toHaveLength(2);
+  });
 });
 
 // QNBS-v3: walks the parsed step tree so block AND flow-mapping uses: forms both get pin-checked.
@@ -235,6 +256,35 @@ describe('checkActionPins', () => {
   it('ignores jobs.*.steps when fileKind is "action" (composite actions have no jobs)', () => {
     const failures: WorkflowPolicyFailure[] = [];
     checkActionPins('action.yml', doc(wrap('uses: actions/checkout@v4 # v4')), failures, {
+      fileKind: 'action',
+    });
+    expect(failures).toEqual([]);
+  });
+
+  // QNBS-v3: a Docker action has no steps: at all — its own runs.image needs the same pin check.
+  it('fails for a mutable docker image on a Docker action (runs.using: docker)', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkActionPins('action.yml', doc('runs:\n  using: docker\n  image: docker://alpine:latest\n'), failures, {
+      fileKind: 'action',
+    });
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.message).toMatch(/@sha256/);
+  });
+
+  it('passes a Docker action image pinned to an immutable @sha256 digest', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkActionPins(
+      'action.yml',
+      doc(`runs:\n  using: docker\n  image: docker://alpine@sha256:${'a'.repeat(64)}\n`),
+      failures,
+      { fileKind: 'action' },
+    );
+    expect(failures).toEqual([]);
+  });
+
+  it('passes a Docker action built from a local Dockerfile (no registry pin concept)', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkActionPins('action.yml', doc('runs:\n  using: docker\n  image: Dockerfile\n'), failures, {
       fileKind: 'action',
     });
     expect(failures).toEqual([]);
@@ -476,6 +526,24 @@ describe('checkAggregatorNeeds', () => {
     );
     expect(failures).toHaveLength(1);
   });
+
+  // QNBS-v3: an aliased if: condition (if: *cond) is an Alias node until resolved.
+  it('fails when an aliased if: condition resolves to always()', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    const content = [
+      'x: &cond always()',
+      'jobs:',
+      '  a: {}',
+      '  ci-success:',
+      '    if: *cond',
+      '    needs: [a]',
+      '    steps:',
+      '      - run: echo ok',
+      '',
+    ].join('\n');
+    checkAggregatorNeeds('ci.yml', doc(content), failures);
+    expect(failures).toHaveLength(1);
+  });
 });
 
 // QNBS-v3: scalar write-all implicitly grants contents:write and must not evade this boundary.
@@ -626,6 +694,17 @@ describe('listActionFiles', () => {
       files.some((f) => f.endsWith(join('.github', 'actions', 'release', 'setup', 'action.yml'))),
     ).toBe(true);
   });
+
+  // QNBS-v3: a symlinked directory could redirect a governed action outside .github/actions unseen.
+  it('throws when a symlink is found under .github/actions', () => {
+    const readdirSync = (dirPath: string) => {
+      if (dirPath.endsWith(join('.github', 'actions'))) {
+        return [{ name: 'setup', isDirectory: () => false, isSymbolicLink: () => true }];
+      }
+      return [];
+    };
+    expect(() => listActionFiles(undefined, { readdirSync })).toThrow(/symlink/i);
+  });
 });
 
 describe('checkAllWorkflows', () => {
@@ -667,5 +746,17 @@ describe('checkAllWorkflows', () => {
     expect(failures).toHaveLength(1);
     expect(failures[0]?.file).toBe('action.yml');
     expect(failures[0]?.message).toMatch(/40-hex-char SHA/);
+  });
+
+  // QNBS-v3: a thrown symlink rejection must surface as a failure, never crash the whole check.
+  it('fail-closes a symlink rejection from listActionFiles into a failure, not a crash', () => {
+    const failures = checkAllWorkflows('/repo', {
+      listWorkflowFiles: () => [],
+      listActionFiles: () => {
+        throw new Error('symlink not allowed under .github/actions: /repo/.github/actions/setup');
+      },
+    });
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.message).toMatch(/symlink/i);
   });
 });
