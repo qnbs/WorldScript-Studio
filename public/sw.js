@@ -12,11 +12,11 @@ const CACHE_DYNAMIC = `worldscript-dynamic-v${APP_VERSION}`;
 const CACHE_IMAGES  = `worldscript-images-v${APP_VERSION}`;
 const ALL_CACHES    = [CACHE_STATIC, CACHE_DYNAMIC, CACHE_IMAGES];
 
-// QNBS-v3: exact owned families — a shared origin (qnbs.github.io) can host other apps' caches too.
-const OWNED_CACHE_FAMILIES = ['worldscript-static-v', 'worldscript-dynamic-v', 'worldscript-images-v'];
+// QNBS-v3: anchored regex — startsWith('worldscript-static-v') also matched 'worldscript-static-vendor-cache'.
+const OWNED_CACHE_NAME_RE = /^worldscript-(?:static|dynamic|images)-v\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/;
 
 function isWorldScriptOwnedCache(name) {
-  return OWNED_CACHE_FAMILIES.some((family) => name.startsWith(family));
+  return OWNED_CACHE_NAME_RE.test(name);
 }
 
 const BASE = self.location.pathname.replace(/sw\.js$/, '');

@@ -18,6 +18,8 @@ const CURRENT_DYNAMIC = `worldscript-dynamic-v${APP_VERSION}`;
 const CURRENT_IMAGES = `worldscript-images-v${APP_VERSION}`;
 const STALE_STATIC = 'worldscript-static-v0.0.0-stale-test';
 const FOREIGN_CACHE = 'some-other-github-pages-app-cache-v1';
+// QNBS-v3: a startsWith('worldscript-static-v') predicate would wrongly treat this as owned.
+const COLLIDING_FOREIGN_CACHE = 'worldscript-static-vendor-cache';
 
 interface FakeCaches {
   keys(): Promise<string[]>;
@@ -194,5 +196,28 @@ describe('service worker — cache ownership (activate / CLEAR_CACHE never delet
     await runWaitUntil(getHandler('activate'));
     expect(fakeCaches.attemptedDeletes).not.toContain(FOREIGN_CACHE);
     expect(fakeCaches.names()).toContain(FOREIGN_CACHE);
+  });
+
+  it('non-Tauri activate: never deletes a foreign cache whose name shares the owned prefix', async () => {
+    const { getHandler, fakeCaches } = loadServiceWorker({
+      protocol: 'https:',
+      hostname: 'qnbs.github.io',
+      initialCacheNames: [CURRENT_STATIC, COLLIDING_FOREIGN_CACHE],
+    });
+    await runWaitUntil(getHandler('activate'));
+    expect(fakeCaches.attemptedDeletes).not.toContain(COLLIDING_FOREIGN_CACHE);
+    expect(fakeCaches.names()).toContain(COLLIDING_FOREIGN_CACHE);
+  });
+
+  it('CLEAR_CACHE: never deletes a foreign cache whose name shares the owned prefix', async () => {
+    const { getHandler, fakeCaches } = loadServiceWorker({
+      protocol: 'https:',
+      hostname: 'qnbs.github.io',
+      initialCacheNames: [CURRENT_STATIC, COLLIDING_FOREIGN_CACHE],
+    });
+    await getHandler('message')({ data: { type: 'CLEAR_CACHE' }, source: { postMessage: () => {} } });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fakeCaches.attemptedDeletes).not.toContain(COLLIDING_FOREIGN_CACHE);
+    expect(fakeCaches.names()).toContain(COLLIDING_FOREIGN_CACHE);
   });
 });
