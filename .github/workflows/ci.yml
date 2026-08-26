@@ -159,6 +159,55 @@ jobs:
             echo "crates=false" >> "$GITHUB_OUTPUT"
           fi
 
+  # ----------------------------------------------------------
+  # PR SIZE GOVERNANCE: advisory below the absolute ceiling, blocking above it.
+  # QNBS-v3: runs the BASE ref's checker copy — a PR touching it can't raise its own limits.
+  # ----------------------------------------------------------
+  pr-size:
+    name: 📏 PR Size Governance
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Evaluate PR size (base-ref checker)
+        id: size
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/base-scripts
+          git show "$BASE_SHA:scripts/check-pr-size.mjs" > /tmp/base-scripts/check-pr-size.mjs
+          git show "$BASE_SHA:scripts/ci-prepush-classifier.mjs" > /tmp/base-scripts/ci-prepush-classifier.mjs
+          set +e
+          node /tmp/base-scripts/check-pr-size.mjs "$BASE_SHA" "$HEAD_SHA" | tee /tmp/pr-size-report.txt
+          exit_code=${PIPESTATUS[0]}
+          set -e
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+
+      # QNBS-v3: stays silent when within target — only comments when there's something to say.
+      - name: Post PR size comment (advisory or blocking tiers only)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if grep -qE 'within target' /tmp/pr-size-report.txt; then
+            exit 0
+          fi
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file /tmp/pr-size-report.txt
+
+      - name: Fail only on an absolute-ceiling violation
+        if: steps.size.outputs.exit_code == '1'
+        run: exit 1
+
   signatures:
     name: 🔏 Verified Signatures
     runs-on: ubuntu-latest
@@ -475,6 +524,7 @@ jobs:
     needs:
       [
         workflow-policy,
+        pr-size,
         security,
         signatures,
         quality,
@@ -492,6 +542,9 @@ jobs:
         run: |
           FAIL=0
           [ "${{ needs.workflow-policy.result }}" = "success" ] || FAIL=1
+          if [ "${{ needs.pr-size.result }}" != "success" ] && [ "${{ needs.pr-size.result }}" != "skipped" ]; then
+            FAIL=1
+          fi
           [ "${{ needs.security.result }}" = "success" ] || FAIL=1
           [ "${{ needs.signatures.result }}" = "success" ] || FAIL=1
           [ "${{ needs.quality.result }}" = "success" ] || FAIL=1
@@ -509,6 +562,7 @@ jobs:
           if [ "$FAIL" = "1" ]; then
             echo "One or more required jobs did not succeed:"
             echo "  workflow-policy: ${{ needs.workflow-policy.result }}"
+            echo "  pr-size: ${{ needs.pr-size.result }} (skipped = OK, not a pull_request event)"
             echo "  security: ${{ needs.security.result }}"
             echo "  signatures: ${{ needs.signatures.result }}"
             echo "  quality:  ${{ needs.quality.result }}"

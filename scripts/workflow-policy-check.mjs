@@ -18,6 +18,7 @@ const WRITE_SCOPE_ALLOWLIST = {
   'ci.yml': {
     build: new Set(['attestations', 'id-token']),
     deploy: new Set(['pages', 'id-token']),
+    'pr-size': new Set(['pull-requests']),
   },
   'docker.yml': { 'build-push': new Set(['packages']) },
   'prune-deployments.yml': { prune: new Set(['deployments']) },

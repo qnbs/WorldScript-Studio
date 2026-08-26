@@ -47,6 +47,7 @@
     "csp:verify": "node scripts/sync-csp.mjs && git diff --exit-code -- index.html nginx.conf public/_headers vercel.json src-tauri/tauri.conf.json && node scripts/check-csp-policy.mjs",
     "native-readiness:check": "node scripts/check-native-readiness.mjs",
     "workflow-policy:check": "node scripts/workflow-policy-check.mjs",
+    "pr-size:check": "node scripts/check-pr-size.mjs",
     "suppressions:check": "node scripts/check-suppressions.mjs",
     "token:audit": "node scripts/audit-tokens.mjs",
     "guardrail:desktop-imports": "node scripts/check-tauri-import-boundary.mjs",
