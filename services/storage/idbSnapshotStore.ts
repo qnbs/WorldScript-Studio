@@ -22,6 +22,8 @@ import {
 
 export class IdbSnapshotStore extends IdbCodexStore {
   protected lastAutoSnapshotTime = Date.now();
+  // QNBS-v3: guards against concurrent saveProject() calls each starting their own auto-snapshot before the first one's success callback updates lastAutoSnapshotTime.
+  protected autoSnapshotInFlight = false;
   protected readonly AUTO_SNAPSHOT_INTERVAL = 5 * 60 * 1000; // 5 minutes
   protected readonly MAX_AUTO_SNAPSHOTS = 20;
 
