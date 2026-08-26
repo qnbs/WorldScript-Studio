@@ -211,10 +211,11 @@ jobs:
           PR="${{ github.event.pull_request.number }}"
           REPO="${{ github.repository }}"
           MARKER="<!-- pr-size-governance -->"
-          # QNBS-v3: --paginate concatenates every page — a marker comment past page 1 must still be found.
-          OWNED_ID=$(gh api --paginate "repos/$REPO/issues/$PR/comments" \
-            --jq "[.[] | select(.user.login == \"github-actions[bot]\" and (.body | contains(\"$MARKER\")))] | last | .id // empty" \
-            2>/dev/null || echo "")
+          # QNBS-v3: --paginate + --jq filters each page separately — pipe to external jq -s to combine first.
+          OWNED_ID=$(gh api --paginate "repos/$REPO/issues/$PR/comments" 2>/dev/null \
+            | jq -s --arg marker "$MARKER" \
+              '[.[][] | select(.user.login == "github-actions[bot]" and (.body | contains($marker)))] | last | .id // empty' \
+            || echo "")
           if grep -qE 'within target' /tmp/pr-size-report.txt; then
             if [ -n "$OWNED_ID" ]; then
               printf '%s\nPR size is back within target — previous warning below is resolved.\n' "$MARKER" > /tmp/pr-size-resolved.txt

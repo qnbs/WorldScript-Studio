@@ -343,12 +343,15 @@ describe('getChangedFilesNumstat (gitattributes evasion protection, real git rep
       git('config', 'user.email', 'test@test.com');
       git('config', 'user.name', 'test');
       writeFile(join(dir, 'file.txt'), 'line1\nline2\nline3\n');
+      writeFile(join(dir, 'binary.bin'), Buffer.from([0, 1, 2, 3, 255, 254, 0, 0, 1]));
       git('add', '-A');
       git('commit', '-q', '-m', 'init');
       const base = git('rev-parse', 'HEAD').stdout.trim();
 
       writeFile(join(dir, '.gitattributes'), 'file.txt -diff\n');
       writeFile(join(dir, 'file.txt'), 'line1\nline2 CHANGED\nline3\nline4\n');
+      // QNBS-v3: an ordinary binary edit, no gitattributes entry — must stay auto-detected as binary too.
+      writeFile(join(dir, 'binary.bin'), Buffer.from([9, 8, 7, 6, 255, 254, 0, 0, 2, 3, 4]));
       git('add', '-A');
       git('commit', '-q', '-m', 'hide this change via -diff');
       const head = git('rev-parse', 'HEAD').stdout.trim();
@@ -379,6 +382,10 @@ describe('getChangedFilesNumstat (gitattributes evasion protection, real git rep
       const rows = JSON.parse(child.stdout) as Array<{ path: string; added: number; removed: number }>;
       const revealedRow = rows.find((row) => row.path === 'file.txt');
       expect(revealedRow?.added).toBeGreaterThan(0);
+
+      // QNBS-v3: "!diff" unspecifies rather than forces text — a genuine binary must not get fake line counts.
+      const binaryRow = rows.find((row) => row.path === 'binary.bin');
+      expect(binaryRow).toEqual({ path: 'binary.bin', added: 0, removed: 0 });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -26,7 +26,8 @@ function resolveInfoAttributesPath(dependencies = {}) {
 }
 
 // QNBS-v3: a PR-controlled "path -diff" in .gitattributes hides edits from numstat — override locally.
-function withForcedTextDiff(dependencies, fn) {
+// QNBS-v3: "!diff" unspecifies (not forces-true) so genuine binaries still auto-detect, unlike a bare "diff".
+function withNeutralizedDiffAttribute(dependencies, fn) {
   const readFile = dependencies.readFileSync ?? readFileSync;
   const writeFile = dependencies.writeFileSync ?? writeFileSync;
   const exists = dependencies.existsSync ?? existsSync;
@@ -37,7 +38,7 @@ function withForcedTextDiff(dependencies, fn) {
   const original = hadFile ? readFile(attrPath, 'utf8') : '';
   try {
     const separator = original && !original.endsWith('\n') ? '\n' : '';
-    writeFile(attrPath, `${original}${separator}* diff\n`);
+    writeFile(attrPath, `${original}${separator}* !diff\n`);
   } catch {
     return fn(); // best-effort — proceed unprotected rather than fail the whole check
   }
@@ -55,7 +56,7 @@ function withForcedTextDiff(dependencies, fn) {
 
 // QNBS-v3: -z gives raw UTF-8 paths (git otherwise octal-escapes non-ASCII) and keeps rename detection.
 export function getChangedFilesNumstat(base, head, dependencies = {}) {
-  return withForcedTextDiff(dependencies, () =>
+  return withNeutralizedDiffAttribute(dependencies, () =>
     runGit(['diff', '--numstat', '-z', `${base}...${head}`], dependencies),
   );
 }
