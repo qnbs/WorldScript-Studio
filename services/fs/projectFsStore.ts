@@ -30,13 +30,27 @@ export class ProjectLoadError extends Error {
   }
 }
 
-// QNBS-v3 (DA-01): rejects parsed JSON that isn't project-shaped at all (e.g. an unrelated file, or a prior empty-object substitution bug) instead of silently hydrating a near-blank project.
-function looksLikeStoryProject(value: unknown): value is StoryProject {
+// QNBS-v3 (CodeAnt/CodeRabbit): array-or-EntityState — characters/worlds may be either shape in a real saved project.
+function isArrayOrEntityState(value: unknown): boolean {
+  if (Array.isArray(value)) return true;
   return (
     typeof value === 'object' &&
     value !== null &&
-    typeof (value as Record<string, unknown>)['title'] === 'string' &&
-    Array.isArray((value as Record<string, unknown>)['manuscript'])
+    Array.isArray((value as Record<string, unknown>)['ids']) &&
+    typeof (value as Record<string, unknown>)['entities'] === 'object'
+  );
+}
+
+// QNBS-v3 (DA-01): rejects parsed JSON that isn't project-shaped at all (e.g. an unrelated file, or a prior empty-object substitution bug) instead of silently hydrating a near-blank project.
+function looksLikeStoryProject(value: unknown): value is StoryProject {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v['title'] === 'string' &&
+    typeof v['logline'] === 'string' &&
+    Array.isArray(v['manuscript']) &&
+    isArrayOrEntityState(v['characters']) &&
+    isArrayOrEntityState(v['worlds'])
   );
 }
 
@@ -115,12 +129,12 @@ export class FsProjectStore extends FsAssetStore {
     const safeProjectId = sanitizePathSegment(projectId);
     const projectFile = await apis.join(appDataPath, 'projects', safeProjectId, 'project.json');
 
-    if (!(await apis.exists(projectFile))) {
-      return null;
-    }
-
+    // QNBS-v3 (CodeRabbit/codex): exists() rejecting is an I/O failure too, not absence — classify it the same as a readTextFile failure rather than letting it escape raw.
     let content: string;
     try {
+      if (!(await apis.exists(projectFile))) {
+        return null;
+      }
       content = await retryFs(() => apis.readTextFile(projectFile));
     } catch (error) {
       logger.error('Failed to read project file (I/O error):', error);

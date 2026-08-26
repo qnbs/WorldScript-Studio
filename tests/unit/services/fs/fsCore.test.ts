@@ -144,9 +144,13 @@ describe('compressData / decompressData', () => {
     expect(() => decompressData('\x00lz1\x00@@not-valid@@')).toThrow(DecompressionError);
   });
 
-  it('throws a native parse error when decompression succeeds but the result is not valid JSON', () => {
+  it('throws DecompressionError (not a bare SyntaxError) when decompression succeeds but the result is not valid JSON', () => {
     const raw = `\x00lz1\x00${LZString.compressToUTF16('this is not valid json {{{')}`;
-    expect(() => decompressData(raw)).toThrow(SyntaxError);
+    expect(() => decompressData(raw)).toThrow(DecompressionError);
+  });
+
+  it('throws DecompressionError (not a bare SyntaxError) for malformed uncompressed JSON', () => {
+    expect(() => decompressData('this is not json {{{')).toThrow(DecompressionError);
   });
 });
 

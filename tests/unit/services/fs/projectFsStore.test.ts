@@ -78,7 +78,7 @@ describe('FsProjectStore.loadProject — DA-01 fail-closed behavior', () => {
     await expect(promise).rejects.toMatchObject({ reason: 'corrupt' });
   });
 
-  it('throws ProjectLoadError("corrupt") on valid JSON that is not project-shaped', async () => {
+  it('throws ProjectLoadError("corrupt") on valid JSON that is not project-shaped at all', async () => {
     const { FsProjectStore, ProjectLoadError } = await import(
       '../../../../services/fs/projectFsStore'
     );
@@ -92,7 +92,34 @@ describe('FsProjectStore.loadProject — DA-01 fail-closed behavior', () => {
     await expect(promise).rejects.toMatchObject({ reason: 'corrupt' });
   });
 
-  it('resolves the real project on a valid save', async () => {
+  // QNBS-v3 (CodeAnt/CodeRabbit): the guard previously accepted this truncated shape — logline/characters/worlds are also required.
+  it('throws ProjectLoadError("corrupt") on a truncated project missing logline/characters/worlds', async () => {
+    const { FsProjectStore, ProjectLoadError } = await import(
+      '../../../../services/fs/projectFsStore'
+    );
+    mockDesktopPlatform.filesystem.exists.mockResolvedValue(true);
+    mockDesktopPlatform.filesystem.readTextFile.mockResolvedValue(
+      JSON.stringify({ title: 'x', manuscript: [] }),
+    );
+    const store = new FsProjectStore();
+    const promise = store.loadProject('truncated-id');
+    await expect(promise).rejects.toThrow(ProjectLoadError);
+    await expect(promise).rejects.toMatchObject({ reason: 'corrupt' });
+  });
+
+  // QNBS-v3 (codex/CodeRabbit): exists() rejecting (not just resolving false) must classify as io-error too.
+  it('throws ProjectLoadError("io-error") when the existence probe itself rejects', async () => {
+    const { FsProjectStore, ProjectLoadError } = await import(
+      '../../../../services/fs/projectFsStore'
+    );
+    mockDesktopPlatform.filesystem.exists.mockRejectedValue(new Error('EACCES: stat failed'));
+    const store = new FsProjectStore();
+    const promise = store.loadProject('unreadable-dir-id');
+    await expect(promise).rejects.toThrow(ProjectLoadError);
+    await expect(promise).rejects.toMatchObject({ reason: 'io-error' });
+  });
+
+  it('resolves the real project on a valid save with array-shaped characters/worlds', async () => {
     const { FsProjectStore } = await import('../../../../services/fs/projectFsStore');
     const validProject = {
       title: 'My Book',
@@ -105,5 +132,20 @@ describe('FsProjectStore.loadProject — DA-01 fail-closed behavior', () => {
     mockDesktopPlatform.filesystem.readTextFile.mockResolvedValue(compressData(validProject));
     const store = new FsProjectStore();
     await expect(store.loadProject('good-id')).resolves.toEqual(validProject);
+  });
+
+  it('resolves the real project on a valid save with EntityState-shaped characters/worlds', async () => {
+    const { FsProjectStore } = await import('../../../../services/fs/projectFsStore');
+    const validProject = {
+      title: 'My Book',
+      logline: 'L',
+      characters: { ids: [], entities: {} },
+      worlds: { ids: [], entities: {} },
+      manuscript: [],
+    };
+    mockDesktopPlatform.filesystem.exists.mockResolvedValue(true);
+    mockDesktopPlatform.filesystem.readTextFile.mockResolvedValue(compressData(validProject));
+    const store = new FsProjectStore();
+    await expect(store.loadProject('good-entity-state-id')).resolves.toEqual(validProject);
   });
 });

@@ -4,6 +4,7 @@
  */
 import JSZip from 'jszip';
 import type { Settings, StoryProject } from '../types';
+import { ProjectLoadError } from './fs/projectFsStore';
 import { logger } from './logger';
 import type { BinderAssetPayload } from './storageBackend';
 import { storageService } from './storageService';
@@ -131,9 +132,12 @@ export async function collectLibraryBackupPayload(
     try {
       project = await storageService.loadProject(projectId);
     } catch (error) {
+      // QNBS-v3 (codex P1): only the expected corruption/I-O case is swallowed — an unexpected bug must still surface, not be silently absorbed as "skip this project".
+      if (!(error instanceof ProjectLoadError)) throw error;
       logger.warn('collectLibraryBackupPayload: skipping unreadable project', {
         projectId,
-        error: error instanceof Error ? error.message : String(error),
+        reason: error.reason,
+        error: error.message,
       });
       project = null;
     }
