@@ -4,12 +4,14 @@
  * sanitization, and word counting — no Tauri APIs required.
  */
 
+import LZString from 'lz-string';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TauriApis } from '../../../../services/fs/fsCore';
 import {
   compressData,
   countProjectWords,
   decompressData,
+  DecompressionError,
   decryptText,
   encryptText,
   retryFs,
@@ -137,8 +139,18 @@ describe('compressData / decompressData', () => {
     expect(decompressData(raw)).toEqual(data);
   });
 
-  it('decompresses a corrupt lz payload to an empty object', () => {
-    expect(decompressData('\x00lz1\x00@@not-valid@@')).toEqual({});
+  // QNBS-v3 (DA-01): was 'decompresses a corrupt lz payload to an empty object' — must fail closed instead.
+  it('throws DecompressionError on a corrupt/truncated lz payload instead of substituting {}', () => {
+    expect(() => decompressData('\x00lz1\x00@@not-valid@@')).toThrow(DecompressionError);
+  });
+
+  it('throws DecompressionError (not a bare SyntaxError) when decompression succeeds but the result is not valid JSON', () => {
+    const raw = `\x00lz1\x00${LZString.compressToUTF16('this is not valid json {{{')}`;
+    expect(() => decompressData(raw)).toThrow(DecompressionError);
+  });
+
+  it('throws DecompressionError (not a bare SyntaxError) for malformed uncompressed JSON', () => {
+    expect(() => decompressData('this is not json {{{')).toThrow(DecompressionError);
   });
 });
 
