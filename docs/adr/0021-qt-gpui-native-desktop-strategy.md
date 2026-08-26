@@ -5,7 +5,8 @@ companion PR #407; see `docs/native/ROADMAP-QT-GPUI-DESKTOP.md` §15 Wave 0).
 **Supersedes:** [[0019-cef-desktop-runtime-strategy]], [[0020-cef-binding-choice-thin-cpp-host]].
 This ADR does not add any Qt, GPUI, or Rust-Core code — it locks direction only, exactly as
 ADR-0019 and ADR-0020 did for CEF. Full strategy, waves, and gates:
-`docs/native/ROADMAP-QT-GPUI-DESKTOP.md`.
+`docs/native/ROADMAP-QT-GPUI-DESKTOP.md`, amended by the binding
+`docs/native/DESKTOP-MIGRATION-ROADMAP-REV3.md` (gates G1.5/G2.5, Wave 2.5).
 
 ## Context
 
