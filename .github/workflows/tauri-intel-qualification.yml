@@ -1,0 +1,62 @@
+# Intel macOS (x86_64) build-qualification lane — NOT part of the production release matrix.
+# See docs/TAURI-CI.md "Follow-ups" and docs/native/INTEL-MACOS-QUALIFICATION.md for context.
+
+name: Tauri Intel macOS qualification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tauri-intel-qualification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualify:
+    name: Build qualification (macos-15-intel)
+    runs-on: macos-15-intel
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # QNBS-v3: composite action handles pnpm/node setup + frozen install.
+      - uses: ./.github/actions/setup
+
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+
+      - uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16 # v2
+        with:
+          workspaces: src-tauri
+          cache-all-crates: true
+          prefix-key: "v1-intel"
+
+      - name: Install macOS dependencies (create-dmg)
+        run: brew install create-dmg
+
+      # QNBS-v3: qualification-only, no updater secrets — disables updater artifacts, never publishes.
+      - name: Build Tauri app (qualification, no updater artifacts)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v jq &>/dev/null; then
+            echo "::error::jq is required for Tauri build configuration but not installed"
+            exit 1
+          fi
+          jq '.bundle.createUpdaterArtifacts = false' src-tauri/tauri.conf.json > src-tauri/tauri.conf.json.tmp
+          mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
+          echo "Building Tauri app for macos-15-intel (qualification only)..."
+          pnpm exec tauri build
+          echo "Tauri build completed successfully"
+
+      # QNBS-v3: a missing bundle means the qualification claim itself is false — error, not warn.
+      - name: Upload bundle directory (qualification evidence, not a release asset)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tauri-bundle-macos-15-intel-qualification
+          path: src-tauri/target/release/bundle/
+          if-no-files-found: error
+          retention-days: 14

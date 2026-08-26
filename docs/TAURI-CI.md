@@ -17,17 +17,27 @@ Workflow: [`.github/workflows/tauri-build.yml`](../.github/workflows/tauri-build
 | `windows-latest` | x86_64 (NSIS `-setup.exe`, MSI fallback) | `windows-x86_64` |
 | `macos-latest` | **aarch64** (Apple Silicon) | `darwin-aarch64` |
 
-**Native Intel-Mac (x86_64) builds are currently unavailable.** `macos-13` (the last GitHub-hosted
-Intel runner) was removed from the matrix on 2026-07-28: 3 consecutive tagged-release runs each had
-the `macos-13` job sit in GitHub's runner queue indefinitely (never reaching `in_progress`, so the
-job's own `timeout-minutes: 45` never applied) until GitHub's ~24h queue ceiling auto-cancelled it —
-and because the `release` job's `needs: [bundle]` only resolves once every matrix leg reaches a
-terminal state, this blocked the entire release for 24h even though Ubuntu/Windows/macOS-ARM all
-finished in ~12 minutes. This is a GitHub-hosted-runner availability issue (Intel macOS images are
-being phased out), not a bug in this repo's build logic — the `latest.json` generator already
-tolerates a missing arch (per-arch warning, hard-fail only if *no* arch signs), so once a working
-Intel runner option exists again (self-hosted, `macos-latest-large`, or a new hosted image), re-adding
-it to the matrix needs no other changes. Tracked as a re-opened follow-up in `TODO.md`.
+**Native Intel-Mac (x86_64) builds are not in the production release matrix.** `macos-13` (the last
+GitHub-hosted Intel runner using that label) was removed from the matrix on 2026-07-28: 3 consecutive
+tagged-release runs each had the `macos-13` job sit in GitHub's runner queue indefinitely (never
+reaching `in_progress`, so the job's own `timeout-minutes: 45` never applied) until GitHub's ~24h
+queue ceiling auto-cancelled it — and because the `release` job's `needs: [bundle]` only resolves
+once every matrix leg reaches a terminal state, this blocked the entire release for 24h even though
+Ubuntu/Windows/macOS-ARM all finished in ~12 minutes. This was a GitHub-hosted-runner availability
+issue (Intel macOS images were being phased out), not a bug in this repo's build logic.
+
+**Update (empirically re-verified):** GitHub's replacement label `macos-15-intel` (introduced
+2025-09-18, available through August 2027) does schedule and run successfully on this org's plan — a
+throwaway `workflow_dispatch` probe completed in full. A separate, qualification-only workflow,
+[`tauri-intel-qualification.yml`](../.github/workflows/tauri-intel-qualification.yml), builds the
+app on `macos-15-intel` to confirm the toolchain still works there; it is deliberately **not** wired
+into the production release matrix or `latest.json` — one successful build proves the runner label
+works, not that it's ready for regular release qualification (soak testing, artifact size/behavior
+parity with the ARM build, and a decision on ongoing maintenance cost are still open). Promoting it
+into the release matrix is tracked separately — see `docs/native/INTEL-MACOS-QUALIFICATION.md` and
+the Follow-ups section below. The `latest.json` generator already tolerates a missing arch (per-arch
+warning, hard-fail only if *no* arch signs), so re-adding Intel to the release matrix needs no other
+changes once that decision is made.
 
 ## Outputs
 
@@ -183,3 +193,4 @@ See [`docs/TAURI-UPDATER.md`](TAURI-UPDATER.md) for full secrets reference and p
 
 - macOS notarization requires `APPLE_*` secrets — see [`docs/TAURI-UPDATER.md`](TAURI-UPDATER.md) § macOS code signing.
 - Windows Authenticode signing requires a CA-issued Authenticode certificate — track in [`TODO.md`](../TODO.md).
+- Promoting `tauri-intel-qualification.yml`'s `macos-15-intel` build into the production release matrix (real `latest.json` entry, `darwin-x86_64` updater key, ongoing soak testing) — see `docs/native/INTEL-MACOS-QUALIFICATION.md` for current status and the tracking issue.
