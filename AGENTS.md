@@ -373,11 +373,11 @@ procedure.
 ### Pipeline Graph
 
 ```
-security ──► quality ──┬──► build ──► lighthouse
-                       ├──► e2e
-                       ├──► e2e-deep (non-blocking)
-                       ├──► storybook
-                       └──► vrt
+workflow-policy ──► security ──► quality ──┬──► build ──► lighthouse
+                                           ├──► e2e
+                                           ├──► e2e-deep (non-blocking)
+                                           ├──► storybook
+                                           └──► vrt
 build (main, non-PR) ──► upload-pages-artifact
 deploy (main, non-PR) needs: ci-success ──► GitHub Pages
 ```
@@ -386,6 +386,7 @@ deploy (main, non-PR) needs: ci-success ──► GitHub Pages
 
 | Job | Purpose |
 |-----|---------|
+| `workflow-policy` | Structural gate on `.github/workflows/*.yml` + `.github/actions/**/action.yml` (`scripts/workflow-policy-check.mjs`) — permissions, needs graph, SHA-pinned action references, publishing boundary. Runs first, before any job invokes the governed `./.github/actions/setup` composite; sets up pnpm/Node with external SHA-pinned actions directly instead of that composite. |
 | `security` | `pnpm audit --audit-level=high`, OSV scanner (pnpm + `src-tauri/` + `crates/` Cargo lockfiles), gitleaks secrets scan, dependency review on PRs |
 | `quality` | Node 22 + 24 matrix → Biome lint, suppression-debt ratchet, `i18n:check`, `docs:check`, `csp:verify`, `parity:check`, `tsgo --noEmit`, Storybook build, Vitest + coverage, Codecov upload |
 | `rust-tauri` | `fmt`/`check`/`clippy`/`test` for `src-tauri/`; path-scoped (skips on PRs that don't touch it), needs GTK/WebKit apt-get steps |

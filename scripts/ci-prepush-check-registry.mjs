@@ -35,6 +35,19 @@ const admissionCheckRegistry = Object.freeze([
       'scripts/ci-prepush-range-resolver.mjs',
     ]),
   },
+  {
+    name: 'workflowPolicy',
+    // QNBS-v3: composite actions carry the same uses:-pin risk as workflows themselves.
+    matches: (file) =>
+      file.startsWith('.github/workflows/') || file.startsWith('.github/actions/'),
+    implementationFiles: new Set([
+      routingAuthority,
+      runnerAuthority,
+      'scripts/ci-prepush-classifier.mjs',
+      'scripts/ci-prepush-range-resolver.mjs',
+      'scripts/workflow-policy-check.mjs',
+    ]),
+  },
 ]);
 
 export function shouldRunAdmissionCheck(name, files) {

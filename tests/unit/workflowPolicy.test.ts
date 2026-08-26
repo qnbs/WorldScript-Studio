@@ -134,6 +134,7 @@ describe('CI workflow policy', () => {
       'Every unconditional job is either required here or explicitly advisory',
     );
     expect(extractNeeds(workflowSource, 'ci-success')).toEqual([
+      'workflow-policy',
       'security',
       'signatures',
       'quality',
