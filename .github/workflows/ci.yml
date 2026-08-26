@@ -166,6 +166,7 @@ jobs:
   pr-size:
     name: 📏 PR Size Governance
     if: github.event_name == 'pull_request'
+    needs: [workflow-policy]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -200,15 +201,24 @@ jobs:
           set -e
           echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
 
-      # QNBS-v3: stays silent when within target — only comments when there's something to say.
+      # QNBS-v3: fork PRs get a read-only token — a failed comment must never fail this advisory job.
+      # QNBS-v3: --edit-last upserts one comment (stable bot identity) instead of accumulating new ones.
       - name: Post PR size comment (advisory or blocking tiers only)
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          PR="${{ github.event.pull_request.number }}"
+          MARKER="<!-- pr-size-governance -->"
           if grep -qE 'within target' /tmp/pr-size-report.txt; then
+            printf '%s\nPR size is back within target — previous warning below is resolved.\n' "$MARKER" > /tmp/pr-size-resolved.txt
+            gh pr comment "$PR" --edit-last --body-file /tmp/pr-size-resolved.txt || true
             exit 0
           fi
-          gh pr comment "${{ github.event.pull_request.number }}" --body-file /tmp/pr-size-report.txt
+          { printf '%s\n' "$MARKER"; cat /tmp/pr-size-report.txt; } > /tmp/pr-size-marked.txt
+          gh pr comment "$PR" --edit-last --body-file /tmp/pr-size-marked.txt \
+            || gh pr comment "$PR" --body-file /tmp/pr-size-marked.txt \
+            || true
 
       - name: Fail only on an absolute-ceiling violation
         if: steps.size.outputs.exit_code == '1'
@@ -548,7 +558,10 @@ jobs:
         run: |
           FAIL=0
           [ "${{ needs.workflow-policy.result }}" = "success" ] || FAIL=1
-          if [ "${{ needs.pr-size.result }}" != "success" ] && [ "${{ needs.pr-size.result }}" != "skipped" ]; then
+          # QNBS-v3: pr-size's own if: matches this event check — unconditional skip-tolerance would let a tampered if: pass.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            [ "${{ needs.pr-size.result }}" = "success" ] || FAIL=1
+          elif [ "${{ needs.pr-size.result }}" != "success" ] && [ "${{ needs.pr-size.result }}" != "skipped" ]; then
             FAIL=1
           fi
           [ "${{ needs.security.result }}" = "success" ] || FAIL=1

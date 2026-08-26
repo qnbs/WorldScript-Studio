@@ -9,10 +9,10 @@ import {
 } from '../../../scripts/check-pr-size.mjs';
 import type { NumstatRow } from '../../../scripts/check-pr-size.d.mts';
 
-// QNBS-v3: numstat uses "-\t-\tpath" for binary files — must parse as 0, not NaN.
+// QNBS-v3: -z is NUL-delimited (git diff --numstat -z), not newline-delimited — matches real output.
 describe('parseNumstat', () => {
   it('parses added/removed counts per file', () => {
-    const rows = parseNumstat('10\t2\tsrc/foo.ts\n5\t0\tsrc/bar.ts\n');
+    const rows = parseNumstat('10\t2\tsrc/foo.ts\x005\t0\tsrc/bar.ts\x00');
     expect(rows).toEqual([
       { path: 'src/foo.ts', added: 10, removed: 2 },
       { path: 'src/bar.ts', added: 5, removed: 0 },
@@ -20,13 +20,30 @@ describe('parseNumstat', () => {
   });
 
   it('treats a binary file row (-\\t-\\tpath) as 0 added/0 removed', () => {
-    const rows = parseNumstat('-\t-\tsrc-tauri/icons/icon.png\n');
+    const rows = parseNumstat('-\t-\tsrc-tauri/icons/icon.png\x00');
     expect(rows).toEqual([{ path: 'src-tauri/icons/icon.png', added: 0, removed: 0 }]);
   });
 
-  it('ignores blank lines', () => {
-    const rows = parseNumstat('1\t1\ta.ts\n\n2\t2\tb.ts\n');
+  it('ignores stray empty tokens', () => {
+    const rows = parseNumstat('1\t1\ta.ts\x00\x002\t2\tb.ts\x00');
     expect(rows).toHaveLength(2);
+  });
+
+  // QNBS-v3: -z rename records are "nums\t\t" + old-path + new-path as 3 separate NUL-terminated tokens.
+  it('parses a pure rename as one row under the new path, not delete+add', () => {
+    const rows = parseNumstat('0\t0\t\x00old-name.ts\x00new-name.ts\x00');
+    expect(rows).toEqual([{ path: 'new-name.ts', added: 0, removed: 0 }]);
+  });
+
+  it('parses a rename-with-edit as one row with the real delta, not the full file twice', () => {
+    const rows = parseNumstat('3\t1\t\x00src/old.ts\x00src/new.ts\x00');
+    expect(rows).toEqual([{ path: 'src/new.ts', added: 3, removed: 1 }]);
+  });
+
+  it('preserves raw UTF-8 paths instead of git\'s octal-quoted representation', () => {
+    // -z output is raw UTF-8; the quoted "docs/\303\251.md" form only appears without -z.
+    const rows = parseNumstat('1\t0\tdocs/spécial.md\x00');
+    expect(rows).toEqual([{ path: 'docs/spécial.md', added: 1, removed: 0 }]);
   });
 });
 
@@ -39,13 +56,22 @@ describe('computeMeaningfulLines', () => {
     expect(computeMeaningfulLines(rows)).toBe(19);
   });
 
-  // QNBS-v3: a locale bundle rebuild can churn thousands of lines without being a "real" change.
-  it('zeroes out NON_CODE_ONLY files (e.g. locale bundles)', () => {
+  // QNBS-v3: a rebuilt public/ bundle can churn thousands of lines without being a "real" change.
+  it('zeroes out generated public/locales bundles', () => {
     const rows: NumstatRow[] = [
       { path: 'public/locales/de/writer/bundle.json', added: 5000, removed: 5000 },
       { path: 'scripts/foo.mjs', added: 10, removed: 5 },
     ];
     expect(computeMeaningfulLines(rows)).toBe(15);
+  });
+
+  // QNBS-v3: locales/**/*.json is translator-authored source, not generated — must still count.
+  it('still counts source locales/**/*.json edits as meaningful (not the generated bundle)', () => {
+    const rows: NumstatRow[] = [
+      { path: 'locales/de/writer.json', added: 200, removed: 50 },
+      { path: 'public/locales/de/writer/bundle.json', added: 5000, removed: 5000 },
+    ];
+    expect(computeMeaningfulLines(rows)).toBe(250);
   });
 
   it('zeroes out pnpm-lock.yaml regardless of its classification', () => {
@@ -158,7 +184,7 @@ describe('evaluatePrSize', () => {
     const spawnSync = () => {
       call += 1;
       return call === 1
-        ? { ...okGit(), stdout: '10\t2\tscripts/foo.mjs\n' }
+        ? { ...okGit(), stdout: '10\t2\tscripts/foo.mjs\x00' }
         : { ...okGit(), stdout: '2\n' };
     };
     const result = evaluatePrSize('base', 'head', { spawnSync });
@@ -181,7 +207,7 @@ describe('evaluatePrSize', () => {
     const spawnSync = () => {
       call += 1;
       return call === 1
-        ? { ...okGit(), stdout: '10\t2\tscripts/foo.mjs\n' }
+        ? { ...okGit(), stdout: '10\t2\tscripts/foo.mjs\x00' }
         : { status: 1, stdout: '', stderr: 'fatal: bad range' };
     };
     const result = evaluatePrSize('base', 'head', { spawnSync });

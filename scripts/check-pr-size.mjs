@@ -18,8 +18,9 @@ function runGit(args, dependencies = {}) {
   return result.stdout;
 }
 
+// QNBS-v3: -z gives raw UTF-8 paths (git otherwise octal-escapes non-ASCII) and keeps rename detection.
 export function getChangedFilesNumstat(base, head, dependencies = {}) {
-  return runGit(['diff', '--no-renames', '--numstat', `${base}...${head}`], dependencies);
+  return runGit(['diff', '--numstat', '-z', `${base}...${head}`], dependencies);
 }
 
 export function getCommitCount(base, head, dependencies = {}) {
@@ -29,28 +30,44 @@ export function getCommitCount(base, head, dependencies = {}) {
   return Number.isFinite(count) ? count : null;
 }
 
-// QNBS-v3: binary files report "-\t-\tpath" in numstat — treated as 0 meaningful lines, not NaN.
+const NUMSTAT_HEADER = /^(-|\d+)\t(-|\d+)\t(.*)$/s;
+
+// QNBS-v3: binary files report "-\t-\t..." — treated as 0 meaningful lines, not NaN.
+// QNBS-v3: -z rename records are 3 NUL-separated tokens (numbers, old path, new path) — not 1.
 export function parseNumstat(numstatOutput) {
+  const tokens = numstatOutput.split('\0').filter((token) => token.length > 0);
   const rows = [];
-  for (const line of numstatOutput.split('\n')) {
-    if (!line.trim()) continue;
-    const [added, removed, ...pathParts] = line.split('\t');
-    const path = pathParts.join('\t');
-    rows.push({
-      path,
-      added: added === '-' ? 0 : Number.parseInt(added, 10),
-      removed: removed === '-' ? 0 : Number.parseInt(removed, 10),
-    });
+  let i = 0;
+  while (i < tokens.length) {
+    const match = NUMSTAT_HEADER.exec(tokens[i]);
+    if (!match) {
+      i += 1;
+      continue;
+    }
+    const [, addedRaw, removedRaw, inlinePath] = match;
+    const added = addedRaw === '-' ? 0 : Number.parseInt(addedRaw, 10);
+    const removed = removedRaw === '-' ? 0 : Number.parseInt(removedRaw, 10);
+    if (inlinePath) {
+      rows.push({ path: inlinePath, added, removed });
+      i += 1;
+    } else {
+      // Renamed: this record's numbers token has an empty path — old/new path follow as separate tokens.
+      const newPath = tokens[i + 2] ?? '';
+      rows.push({ path: newPath, added, removed });
+      i += 3;
+    }
   }
   return rows;
 }
 
-// QNBS-v3: zeroes generated/non-code diffs so e.g. a locale bundle rebuild can't trip this gate.
+// QNBS-v3: only rebuilt public/ bundles are generated — locales/**/community-templates/** source content still counts.
+const GENERATED_ARTIFACT_ROOTS = ['public/locales/', 'public/community-templates/'];
+
 export function computeMeaningfulLines(rows) {
   let total = 0;
   for (const row of rows) {
     if (row.path.split('/').pop() === 'pnpm-lock.yaml') continue;
-    if (classifyFile(row.path) === 'NON_CODE_ONLY') continue;
+    if (GENERATED_ARTIFACT_ROOTS.some((root) => row.path.startsWith(root))) continue;
     total += row.added + row.removed;
   }
   return total;
