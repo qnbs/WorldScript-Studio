@@ -210,15 +210,24 @@ jobs:
         run: |
           PR="${{ github.event.pull_request.number }}"
           MARKER="<!-- pr-size-governance -->"
+          # QNBS-v3: only --edit-last when it's actually ours — never overwrite an unrelated job's comment.
+          LAST_BODY=$(gh api "repos/${{ github.repository }}/issues/$PR/comments" \
+            --jq '[.[] | select(.user.login == "github-actions[bot]")] | last | .body // ""' 2>/dev/null || echo "")
+          LAST_IS_OURS=false
+          printf '%s' "$LAST_BODY" | grep -qF "$MARKER" && LAST_IS_OURS=true
           if grep -qE 'within target' /tmp/pr-size-report.txt; then
-            printf '%s\nPR size is back within target — previous warning below is resolved.\n' "$MARKER" > /tmp/pr-size-resolved.txt
-            gh pr comment "$PR" --edit-last --body-file /tmp/pr-size-resolved.txt || true
+            if [ "$LAST_IS_OURS" = "true" ]; then
+              printf '%s\nPR size is back within target — previous warning below is resolved.\n' "$MARKER" > /tmp/pr-size-resolved.txt
+              gh pr comment "$PR" --edit-last --body-file /tmp/pr-size-resolved.txt || true
+            fi
             exit 0
           fi
           { printf '%s\n' "$MARKER"; cat /tmp/pr-size-report.txt; } > /tmp/pr-size-marked.txt
-          gh pr comment "$PR" --edit-last --body-file /tmp/pr-size-marked.txt \
-            || gh pr comment "$PR" --body-file /tmp/pr-size-marked.txt \
-            || true
+          if [ "$LAST_IS_OURS" = "true" ]; then
+            gh pr comment "$PR" --edit-last --body-file /tmp/pr-size-marked.txt || true
+          else
+            gh pr comment "$PR" --body-file /tmp/pr-size-marked.txt || true
+          fi
 
       - name: Fail only on an absolute-ceiling violation
         if: steps.size.outputs.exit_code == '1'

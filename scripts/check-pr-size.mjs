@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 import { classifyFile } from './ci-prepush-classifier.mjs';
@@ -18,9 +19,45 @@ function runGit(args, dependencies = {}) {
   return result.stdout;
 }
 
+// QNBS-v3: $GIT_DIR/info/attributes outranks the PR's own tracked .gitattributes and is never versioned.
+function resolveInfoAttributesPath(dependencies = {}) {
+  const output = runGit(['rev-parse', '--git-path', 'info/attributes'], dependencies);
+  return output === null ? null : output.trim();
+}
+
+// QNBS-v3: a PR-controlled "path -diff" in .gitattributes hides edits from numstat — override locally.
+function withForcedTextDiff(dependencies, fn) {
+  const readFile = dependencies.readFileSync ?? readFileSync;
+  const writeFile = dependencies.writeFileSync ?? writeFileSync;
+  const exists = dependencies.existsSync ?? existsSync;
+  const unlink = dependencies.unlinkSync ?? unlinkSync;
+  const attrPath = resolveInfoAttributesPath(dependencies);
+  if (!attrPath) return fn();
+  const hadFile = exists(attrPath);
+  const original = hadFile ? readFile(attrPath, 'utf8') : '';
+  try {
+    const separator = original && !original.endsWith('\n') ? '\n' : '';
+    writeFile(attrPath, `${original}${separator}* diff\n`);
+  } catch {
+    return fn(); // best-effort — proceed unprotected rather than fail the whole check
+  }
+  try {
+    return fn();
+  } finally {
+    try {
+      if (hadFile) writeFile(attrPath, original);
+      else unlink(attrPath);
+    } catch {
+      // best-effort restore; a leftover override in a CI-ephemeral checkout is harmless
+    }
+  }
+}
+
 // QNBS-v3: -z gives raw UTF-8 paths (git otherwise octal-escapes non-ASCII) and keeps rename detection.
 export function getChangedFilesNumstat(base, head, dependencies = {}) {
-  return runGit(['diff', '--numstat', '-z', `${base}...${head}`], dependencies);
+  return withForcedTextDiff(dependencies, () =>
+    runGit(['diff', '--numstat', '-z', `${base}...${head}`], dependencies),
+  );
 }
 
 export function getCommitCount(base, head, dependencies = {}) {

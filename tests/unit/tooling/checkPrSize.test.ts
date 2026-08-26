@@ -180,12 +180,11 @@ describe('evaluatePrSize', () => {
   });
 
   it('evaluates a small change as ok, using injected git output', () => {
-    let call = 0;
-    const spawnSync = () => {
-      call += 1;
-      return call === 1
-        ? { ...okGit(), stdout: '10\t2\tscripts/foo.mjs\x00' }
-        : { ...okGit(), stdout: '2\n' };
+    // QNBS-v3: fail the info/attributes git-path lookup to skip that filesystem side effect here.
+    const spawnSync = (_cmd: string, args: string[]) => {
+      if (args.includes('--git-path')) return { status: 1, stdout: '', stderr: '' };
+      if (args[0] === 'diff') return { ...okGit(), stdout: '10\t2\tscripts/foo.mjs\x00' };
+      return { ...okGit(), stdout: '2\n' };
     };
     const result = evaluatePrSize('base', 'head', { spawnSync });
     expect(result.ok).toBe(true);
@@ -196,19 +195,20 @@ describe('evaluatePrSize', () => {
   });
 
   it('fails closed (ok: false) when git diff fails', () => {
-    const spawnSync = () => ({ status: 1, stdout: '', stderr: 'fatal: bad range' });
+    const spawnSync = (_cmd: string, args: string[]) => {
+      if (args.includes('--git-path')) return { status: 1, stdout: '', stderr: '' };
+      return { status: 1, stdout: '', stderr: 'fatal: bad range' };
+    };
     const result = evaluatePrSize('base', 'head', { spawnSync });
     expect(result.ok).toBe(false);
     expect(result.error).toBeTruthy();
   });
 
   it('fails closed (ok: false) when git rev-list fails', () => {
-    let call = 0;
-    const spawnSync = () => {
-      call += 1;
-      return call === 1
-        ? { ...okGit(), stdout: '10\t2\tscripts/foo.mjs\x00' }
-        : { status: 1, stdout: '', stderr: 'fatal: bad range' };
+    const spawnSync = (_cmd: string, args: string[]) => {
+      if (args.includes('--git-path')) return { status: 1, stdout: '', stderr: '' };
+      if (args[0] === 'diff') return { ...okGit(), stdout: '10\t2\tscripts/foo.mjs\x00' };
+      return { status: 1, stdout: '', stderr: 'fatal: bad range' };
     };
     const result = evaluatePrSize('base', 'head', { spawnSync });
     expect(result.ok).toBe(false);
@@ -218,5 +218,63 @@ describe('evaluatePrSize', () => {
     const spawnSync = () => ({ status: null, error: new Error('spawn git ENOENT'), stdout: '', stderr: '' });
     const result = evaluatePrSize('base', 'head', { spawnSync });
     expect(result.ok).toBe(false);
+  });
+});
+
+// QNBS-v3: real git repo test — proves the info/attributes override defeats a PR-controlled -diff.
+describe('getChangedFilesNumstat (gitattributes evasion protection, real git repo)', () => {
+  it('still counts a change hidden by a PR-controlled "-diff" gitattributes entry', async () => {
+    const { mkdtempSync, writeFileSync: writeFile, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const { spawnSync: realSpawnSync } = await import('node:child_process');
+    const { pathToFileURL } = await import('node:url');
+
+    const dir = mkdtempSync(join(tmpdir(), 'pr-size-attr-test-'));
+    const git = (...args: string[]) => realSpawnSync('git', args, { cwd: dir, encoding: 'utf8' });
+    try {
+      git('init', '-q');
+      git('config', 'user.email', 'test@test.com');
+      git('config', 'user.name', 'test');
+      writeFile(join(dir, 'file.txt'), 'line1\nline2\nline3\n');
+      git('add', '-A');
+      git('commit', '-q', '-m', 'init');
+      const base = git('rev-parse', 'HEAD').stdout.trim();
+
+      writeFile(join(dir, '.gitattributes'), 'file.txt -diff\n');
+      writeFile(join(dir, 'file.txt'), 'line1\nline2 CHANGED\nline3\nline4\n');
+      git('add', '-A');
+      git('commit', '-q', '-m', 'hide this change via -diff');
+      const head = git('rev-parse', 'HEAD').stdout.trim();
+
+      const { parseNumstat } = await import('../../../scripts/check-pr-size.mjs');
+
+      const numstatWithoutFix = realSpawnSync(
+        'git',
+        ['diff', '--numstat', '-z', `${base}...${head}`],
+        { cwd: dir, encoding: 'utf8' },
+      ).stdout;
+      const rowsWithoutFix = parseNumstat(numstatWithoutFix);
+      const hiddenRow = rowsWithoutFix.find((row) => row.path === 'file.txt');
+      expect(hiddenRow).toEqual({ path: 'file.txt', added: 0, removed: 0 });
+
+      // QNBS-v3: process.chdir isn't supported in Vitest workers — spawn a real child node with cwd: dir instead.
+      const scriptPath = join(process.cwd(), 'scripts', 'check-pr-size.mjs');
+      const inline = `
+        import { getChangedFilesNumstat, parseNumstat } from ${JSON.stringify(pathToFileURL(scriptPath).href)};
+        const out = getChangedFilesNumstat(${JSON.stringify(base)}, ${JSON.stringify(head)}, {});
+        console.log(JSON.stringify(parseNumstat(out)));
+      `;
+      const child = realSpawnSync(process.execPath, ['--input-type=module', '-e', inline], {
+        cwd: dir,
+        encoding: 'utf8',
+      });
+      expect(child.status).toBe(0);
+      const rows = JSON.parse(child.stdout) as Array<{ path: string; added: number; removed: number }>;
+      const revealedRow = rows.find((row) => row.path === 'file.txt');
+      expect(revealedRow?.added).toBeGreaterThan(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
