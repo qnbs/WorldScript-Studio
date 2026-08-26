@@ -318,14 +318,16 @@ procedure.
   test or a changed-file lint run. Optionally: `pnpm exec vitest run <path>` **without**
   `--coverage`.
 - **Dependency state:** `pnpm run deps:verify` compares a content fingerprint of dependency
-  manifests, workspace package manifests, and patches. After a dependency-related branch switch,
-  run `node scripts/dependency-state.mjs reconcile` (or `pnpm run deps:reconcile` when pnpm can
-  start); never use `--no-verify` as the
-  normal recovery path. This same reconcile command — never a bare `pnpm install` — is also the
-  correct way to bootstrap `node_modules` on a brand-new worktree: the bare form skips
-  `--frozen-lockfile` and can silently rewrite `pnpm-lock.yaml` on any drift instead of failing
-  loudly, which is worst exactly on a branch that isn't supposed to touch dependencies at all
-  (e.g. a GitHub-Actions-only Dependabot bump).
+  manifests, workspace package manifests, and patches — checked only by `deps:verify`,
+  `ci:prepush`, and the pre-commit hook, not by arbitrary `pnpm run <script>` calls. After a
+  dependency-related branch switch, run `node scripts/dependency-state.mjs reconcile` (or
+  `pnpm run deps:reconcile` when pnpm can start); never use `--no-verify` as the normal recovery
+  path. This same reconcile command — never a bare `pnpm install` — is also the correct way to
+  bootstrap `node_modules` on a brand-new worktree: the bare form skips `--frozen-lockfile` and
+  can silently rewrite `pnpm-lock.yaml` on any drift instead of failing loudly, which is worst
+  exactly on a branch that isn't supposed to touch dependencies at all (e.g. a GitHub-Actions-only
+  Dependabot bump) — a stale fingerprint from that bare install goes undetected until one of the
+  three commands above actually runs.
 - **Low-resource policy:** Never run Biome, multiple TypeScript checkers, Vitest, Cargo, Vite,
   Storybook, or other heavyweight processes concurrently on the development workstation. Full
   repository lint/tests, E2E, coverage, Lighthouse, and mutation testing are cloud-CI work unless

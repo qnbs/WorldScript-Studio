@@ -26,8 +26,10 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 - ✅ Dependabot backlog cleared: #495 (`osv-scanner-action` 2.5.0→2.5.1 — plus a real pre-existing
   test-oracle fix for the hardcoded SHA it changed) and #496 (`docker/setup-buildx-action`
   4.2.0→4.3.0) merged.
-- 🔄 Documentation truth pass (this update — `AUDIT.md`/`TODO.md`) and a full signed release cut
-  remain open for this sprint.
+- ✅ Documentation truth pass (`AUDIT.md`/`TODO.md`, this update).
+- 🔄 A new release cut for this sprint's accumulated work (reconstruction reconciliation,
+  Dependabot integration, this documentation pass) remains open — a new version, not a repeat of
+  the already-published `v1.28.1` above.
 
 ## Archived sprint history
 
