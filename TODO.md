@@ -8,24 +8,43 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ---
 
-## Current Sprint — Native desktop consolidation and Wave 2 G1 (2026-08-20)
+## Current Sprint — Post-#477 reconstruction reconciliation, Dependabot, and documentation truth (2026-08-26)
 
-> **Status: 🔄 in progress.** The authoritative native sequence is maintained in
+> **Status: 🔄 in progress.** The authoritative native sequence remains
 > [`docs/native/ROADMAP-QT-GPUI-DESKTOP.md`](docs/native/ROADMAP-QT-GPUI-DESKTOP.md), with the
-> next Rust-Core capability choice recorded in [`docs/native/CORE-MIGRATION-LEDGER.md`](docs/native/CORE-MIGRATION-LEDGER.md).
+> next Rust-Core capability choice recorded in [`docs/native/CORE-MIGRATION-LEDGER.md`](docs/native/CORE-MIGRATION-LEDGER.md);
+> no Qt or GPUI implementation work is part of this sprint.
 
-- ✅ P0 CI/deployment authority stabilization merged in PR #427 at `0309a255`.
-- ✅ Cross-workspace Tauri path-dependency coverage and aggregate deployment gating are now
-  regression-tested in the quality job.
-- 🔄 G1 remains partial: task supervision, diagnostics, contract versioning, and future R-15
-  architecture remain open; no Qt or GPUI implementation is admitted yet.
-- ⏭️ Next capability slice, after this consolidation pass: choose the smallest evidence-producing
-  logger/diagnostics or task-orchestration increment from the migration ledger.
+- ✅ PR #477 (Qt/PWA architecture-governance roadmap) merged; `v1.28.1` released 2026-08-23.
+- ✅ Reconstruction reconciliation: the frozen PR #491 bundle's three genuinely-still-required
+  residual pieces were rebuilt fresh against current `main` and merged — structural
+  workflow-policy YAML authority (#505, S4), Intel macOS qualification-only build lane (#508,
+  S5), and tiered PR-size governance (#509, plus an incidental lint-info cleanup #511). #491 and
+  #493 were closed with terminal reconciliation ledgers; every other frozen cluster was either
+  already shipped via #494/#498–#502, or is a deliberately deferred architecture question with
+  durable tracking (isolated-worktree hermetic-sandbox verification, issue #504).
+- ✅ Dependabot backlog cleared: #495 (`osv-scanner-action` 2.5.0→2.5.1 — plus a real pre-existing
+  test-oracle fix for the hardcoded SHA it changed) and #496 (`docker/setup-buildx-action`
+  4.2.0→4.3.0) merged.
+- ✅ Documentation truth pass (`AUDIT.md`/`TODO.md`, this update).
+- 🔄 A new release cut for this sprint's accumulated work (reconstruction reconciliation,
+  Dependabot integration, this documentation pass) remains open — a new version, not a repeat of
+  the already-published `v1.28.1` above.
 
 ## Archived sprint history
 
 The completed release and infrastructure sections below are retained for provenance. They are not
 the current sprint plan; long-term native sequencing belongs in the linked roadmap and ledger.
+
+## Archived — Native desktop consolidation and Wave 2 G1 (2026-08-20)
+
+> **Status: ✅ Superseded by the current sprint above.**
+
+- ✅ P0 CI/deployment authority stabilization merged in PR #427 at `0309a255`.
+- ✅ Cross-workspace Tauri path-dependency coverage and aggregate deployment gating are now
+  regression-tested in the quality job.
+- ✅ G1 partial-completion items (task supervision, diagnostics, contract versioning) were carried
+  forward into PR #477's architecture-governance roadmap, now merged.
 
 ## Archived — Release v1.25.0 published (2026-08-01)
 
