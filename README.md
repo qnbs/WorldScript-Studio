@@ -812,6 +812,7 @@ See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the full dev setup, Biome / Vit
 | [`docs/PWA-AUDIT.md`](docs/PWA-AUDIT.md) | PWA manifest, service worker, share-target checklist |
 | [`infra/low-end-ci/`](infra/low-end-ci/) | Local CI on low-end hardware (act + Eco-Forgejo) |
 | [`docs/TAURI-CI.md`](docs/TAURI-CI.md) | Tauri desktop workflow: manual/tag builds, 7-step first-release checklist |
+| [`docs/native/INTEL-MACOS-QUALIFICATION.md`](docs/native/INTEL-MACOS-QUALIFICATION.md) | Intel macOS (x86_64) qualification-only build lane status (`macos-15-intel`), not yet in the release matrix |
 | [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md) | Tauri plugin-updater: secrets table, `latest.json` auto-generation, signing |
 | [`docs/graphify.md`](docs/graphify.md) | Graphify knowledge graph — multi-modal AST graph (`pnpm run graphify:update`) |
 | [`docs/codegraph.md`](docs/codegraph.md) | CodeGraph semantic code intelligence — MCP-powered symbol graph (`pnpm run codegraph:update`) |
