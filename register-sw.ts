@@ -201,7 +201,8 @@ const registerServiceWorker = async (): Promise<void> => {
     document.addEventListener('visibilitychange', () => {
       if (reloadPendingWhileHidden && document.visibilityState === 'visible' && !refreshing) {
         refreshing = true;
-        void flushLatestStateThenReload();
+        // QNBS-v3 (codex): no flush here — index.tsx already flushed this tab's edits when it went hidden; re-flushing now could clobber a fresher write.
+        window.location.reload();
       }
     });
 
@@ -249,6 +250,8 @@ async function flushLatestState(): Promise<void> {
     if (latest === snapshot) return;
     snapshot = latest;
   }
+  // QNBS-v3 (codex): the loop above can exhaust its budget mid-churn — one final flush of whatever's freshest right now, rather than silently dropping it.
+  await flushPersistedState(store.getState() as RootState);
 }
 
 // QNBS-v3 (DA-02): the reload always proceeds — activation already pruned old-version caches by the time controllerchange fires, so staying on the old bundle risks missing-chunk failures too.

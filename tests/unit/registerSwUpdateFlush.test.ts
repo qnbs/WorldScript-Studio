@@ -59,8 +59,7 @@ describe('register-sw — controllerchange flush-then-reload (DA-02)', () => {
       configurable: true,
     });
 
-    // QNBS-v3: a stable reference — a fresh object on every call would never satisfy the
-    // "state hasn't changed since the last flush" stop condition and loop until MAX_FLUSH_ATTEMPTS.
+    // QNBS-v3: a stable reference — a fresh object each call would never satisfy the "unchanged" stop condition.
     const stableState = { fake: 'state' };
     appStoreRef.current = {
       getState: () => stableState as never,
@@ -125,7 +124,7 @@ describe('register-sw — controllerchange flush-then-reload (DA-02)', () => {
   });
 
   // QNBS-v3 (codex P1): a hidden tab's state can't be fresher than what's already persisted — only the visible tab flushes.
-  it('defers both flush and reload while the tab is hidden, then runs both once it becomes visible', async () => {
+  it('defers reload while the tab is hidden, then reloads once visible without flushing again', async () => {
     mockFlushPersistedState.mockResolvedValue(undefined);
     await registerServiceWorker();
     setVisibility('hidden');
@@ -140,7 +139,8 @@ describe('register-sw — controllerchange flush-then-reload (DA-02)', () => {
     document.dispatchEvent(new Event('visibilitychange'));
     await flushMicrotasks();
 
-    expect(mockFlushPersistedState).toHaveBeenCalledTimes(1);
+    // QNBS-v3 (codex): index.tsx's own visibilitychange listener already flushed this tab when it went hidden — flushing its possibly-stale copy again here could clobber a fresher write from another tab.
+    expect(mockFlushPersistedState).not.toHaveBeenCalled();
     expect(reloadSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -164,5 +164,23 @@ describe('register-sw — controllerchange flush-then-reload (DA-02)', () => {
     const lastFlushOrder = mockFlushPersistedState.mock.invocationCallOrder[1] as number;
     const reloadOrder = reloadSpy.mock.invocationCallOrder[0] as number;
     expect(lastFlushOrder).toBeLessThan(reloadOrder);
+  });
+
+  // QNBS-v3 (codex P2): the retry loop can exhaust its budget while state keeps changing — one guaranteed final flush must still capture whatever's freshest, not silently drop it.
+  it('performs one final guaranteed flush of the freshest state after exhausting the retry budget', async () => {
+    const states = Array.from({ length: 7 }, (_, i) => ({ v: i }));
+    const getStateMock = vi.fn();
+    for (const s of states) getStateMock.mockReturnValueOnce(s);
+    appStoreRef.current = { getState: getStateMock, dispatch: vi.fn() as never };
+    mockFlushPersistedState.mockResolvedValue(undefined);
+
+    await registerServiceWorker();
+    controllerChangeHandler?.();
+    await flushMicrotasks();
+
+    // 5 in-loop attempts (states[0..4]) + 1 guaranteed final flush of the freshest state (states[6]).
+    expect(mockFlushPersistedState).toHaveBeenCalledTimes(6);
+    expect(mockFlushPersistedState).toHaveBeenNthCalledWith(6, states[6]);
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
   });
 });
