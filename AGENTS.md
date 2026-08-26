@@ -321,7 +321,11 @@ procedure.
   manifests, workspace package manifests, and patches. After a dependency-related branch switch,
   run `node scripts/dependency-state.mjs reconcile` (or `pnpm run deps:reconcile` when pnpm can
   start); never use `--no-verify` as the
-  normal recovery path.
+  normal recovery path. This same reconcile command — never a bare `pnpm install` — is also the
+  correct way to bootstrap `node_modules` on a brand-new worktree: the bare form skips
+  `--frozen-lockfile` and can silently rewrite `pnpm-lock.yaml` on any drift instead of failing
+  loudly, which is worst exactly on a branch that isn't supposed to touch dependencies at all
+  (e.g. a GitHub-Actions-only Dependabot bump).
 - **Low-resource policy:** Never run Biome, multiple TypeScript checkers, Vitest, Cargo, Vite,
   Storybook, or other heavyweight processes concurrently on the development workstation. Full
   repository lint/tests, E2E, coverage, Lighthouse, and mutation testing are cloud-CI work unless
