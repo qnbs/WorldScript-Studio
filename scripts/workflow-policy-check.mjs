@@ -277,9 +277,12 @@ export function checkActionPins(fileName, doc, failures, options = {}) {
   }
 }
 
-function jobHasAlwaysCondition(jobNode) {
+// QNBS-v3: always()/failure()/cancelled() (incl. negated !cancelled()) all bypass default success-gating.
+const NON_DEFAULT_GATING_PATTERN = /\b(?:always|failure|cancelled)\s*\(\)/;
+
+function jobHasNonDefaultGatingCondition(jobNode) {
   const ifNode = jobNode?.get?.('if', true);
-  return typeof ifNode?.value === 'string' && ifNode.value.includes('always()');
+  return typeof ifNode?.value === 'string' && NON_DEFAULT_GATING_PATTERN.test(ifNode.value);
 }
 
 const NEEDS_RESULT_PATTERN = /needs\.([A-Za-z0-9_-]+)\.result/g;
@@ -361,13 +364,13 @@ export function checkAggregatorNeeds(fileName, doc, failures) {
       message: `ci-success.needs lists "${name}", which is not a gating job (advisory or self-referential)`,
     });
   }
-  if (jobHasAlwaysCondition(aggregatorNode)) {
+  if (jobHasNonDefaultGatingCondition(aggregatorNode)) {
     const checkedResults = collectNeedsResultReferences(aggregatorNode, doc);
     for (const name of expectedNeeds) {
       if (declaredNeeds.has(name) && !checkedResults.has(name)) {
         failures.push({
           file: fileName,
-          message: `ci-success uses if: always() but its run steps never check needs.${name}.result — a failure of "${name}" would not fail the aggregator`,
+          message: `ci-success's if: condition overrides default success-gating but its run steps never check needs.${name}.result — a failure of "${name}" would not fail the aggregator`,
         });
       }
     }

@@ -455,6 +455,27 @@ describe('checkAggregatorNeeds', () => {
     );
     expect(failures).toEqual([]);
   });
+
+  // QNBS-v3: failure()/cancelled() bypass default gating exactly like always() — must be caught too.
+  it('fails when if: failure() is set but the run script never checks a gating job\'s result', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkAggregatorNeeds(
+      'ci.yml',
+      doc('jobs:\n  a: {}\n  ci-success:\n    if: failure()\n    needs: [a]\n    steps:\n      - run: echo ok\n'),
+      failures,
+    );
+    expect(failures).toHaveLength(1);
+  });
+
+  it('fails when if: !cancelled() is set but the run script never checks a gating job\'s result', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkAggregatorNeeds(
+      'ci.yml',
+      doc('jobs:\n  a: {}\n  ci-success:\n    if: "!cancelled()"\n    needs: [a]\n    steps:\n      - run: echo ok\n'),
+      failures,
+    );
+    expect(failures).toHaveLength(1);
+  });
 });
 
 // QNBS-v3: scalar write-all implicitly grants contents:write and must not evade this boundary.

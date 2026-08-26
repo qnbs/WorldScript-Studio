@@ -28,12 +28,40 @@ concurrency:
 
 jobs:
   # ----------------------------------------------------------
+  # -1. WORKFLOW POLICY GATE: runs before any job invokes the governed
+  # ./.github/actions/setup composite (first used by "security" below), so a
+  # PR that tampers with that composite — or any other workflow/action file —
+  # is rejected before its own tampered code ever executes. Uses only
+  # external, SHA-pinned actions directly, never the composite it gates.
+  # ----------------------------------------------------------
+  workflow-policy:
+    name: 📜 Workflow Policy Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 11.22.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Workflow-policy structural gate (permissions, needs graph, action pins)
+        run: pnpm run workflow-policy:check
+
+  # ----------------------------------------------------------
   # 0. SECURITY: pnpm audit + gitleaks + dependency review
   # ----------------------------------------------------------
   security:
     name: 🔒 Security Audit
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    needs: [workflow-policy]
     # QNBS-v3: dependency-review-action needs readable PR metadata — otherwise the job fails unnecessarily on external PRs/scopes.
     permissions:
       contents: read
@@ -194,9 +222,6 @@ jobs:
 
       - name: Native-readiness roadmap policy gate
         run: pnpm run native-readiness:check
-
-      - name: Workflow-policy structural gate (permissions, needs graph, action pins)
-        run: pnpm run workflow-policy:check
 
       - name: Feature parity audit
         run: pnpm run parity:check
@@ -445,12 +470,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     # QNBS-v3: Every unconditional job is either required here or explicitly advisory at job level.
-    needs: [security, signatures, quality, changes, rust-tauri, core-rust, build, e2e, lighthouse, vrt]
+    needs:
+      [
+        workflow-policy,
+        security,
+        signatures,
+        quality,
+        changes,
+        rust-tauri,
+        core-rust,
+        build,
+        e2e,
+        lighthouse,
+        vrt,
+      ]
     if: always()
     steps:
       - name: Verify all required jobs succeeded
         run: |
           FAIL=0
+          [ "${{ needs.workflow-policy.result }}" = "success" ] || FAIL=1
           [ "${{ needs.security.result }}" = "success" ] || FAIL=1
           [ "${{ needs.signatures.result }}" = "success" ] || FAIL=1
           [ "${{ needs.quality.result }}" = "success" ] || FAIL=1
@@ -467,6 +506,7 @@ jobs:
           [ "${{ needs.vrt.result }}" = "success" ] || FAIL=1
           if [ "$FAIL" = "1" ]; then
             echo "One or more required jobs did not succeed:"
+            echo "  workflow-policy: ${{ needs.workflow-policy.result }}"
             echo "  security: ${{ needs.security.result }}"
             echo "  signatures: ${{ needs.signatures.result }}"
             echo "  quality:  ${{ needs.quality.result }}"
