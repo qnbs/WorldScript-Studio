@@ -211,7 +211,7 @@ At that point record `RUNTIME-LIMITED` or `ENVIRONMENT-LIMITED`, retain only a s
 
 ## Qt handoff rule
 
-#332 is a **Qt migration acceptance baseline**, not a requirement to perfect Tauri before Qt begins.
+`#332` is a **Qt migration acceptance baseline**, not a requirement to perfect Tauri before Qt begins.
 
 The Qt target in ADR-0021 is Qt Quick/QML with Rust Core; Qt WebEngine is not the principal UI architecture. Therefore a WebKitGTK-specific failure is not automatically portable to Qt, while app/Core/lifecycle invariants are.
 

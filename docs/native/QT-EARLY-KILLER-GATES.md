@@ -50,7 +50,9 @@ Core probe, the following disposable lanes may run in parallel with Waves 3 and 
    available, record Qt Quick graphics backend, GPU/driver selection, multi-GPU behavior where
    exposed, Alt-Tab/minimize/restore behavior, and a bounded memory trend. Compare against the same
    semantic PWA/Tauri workload without turning renderer-specific implementation details into shared
-   product architecture.
+   product architecture. If representative hardware is genuinely unavailable for a given run, this
+   lane follows the Decision rule above — a written rationale and architecture decision, never a
+   silent skip.
 
 These lanes retain their own evidence and maturity labels; they are not checked off as G2/G2.5/G3/G4
 production gates. A failed lane stops Qt investment and returns the program to architecture review.
@@ -123,9 +125,14 @@ repeat the meaningful checks in CI:
    backend checks on the supported Linux desktop used for development.
 2. **Linux CI:** clean build, repeated lifecycle, headless display/compositor smoke, security
    negative tests, crash artifact collection, and deterministic result assertions.
-3. **Representative Linux graphics target:** where the #332 lineage applies, use real
-   Linux/Wayland/NVIDIA hardware to capture backend/GPU/driver identity and the reduced
-   `GOLDEN-DESKTOP-LIFECYCLE-332` differential before broad Qt UI investment.
+3. **Representative Linux graphics target:** where the `#332` lineage applies, use real
+   Linux/Wayland/NVIDIA hardware to capture backend/GPU/driver identity and run
+   `GOLDEN-DESKTOP-LIFECYCLE-332-QF-D` — a named, fixed subset of the full
+   `GOLDEN-DESKTOP-LIFECYCLE-332` scenario (§5.5 of `DESKTOP-MIGRATION-ROADMAP-REV3.md`) scoped to
+   the Alt-Tab and minimize/restore cycles plus a bounded memory-trend sample, not an ad hoc
+   reduction — before broad Qt UI investment. The full fourteen-step scenario, including the
+   30-minute and longer soak runs, remains the mandatory input for later Qt qualification described
+   below; a `-QF-D` run must never be substituted for it.
 4. **Clean packaged runtime:** install/launch/update/rollback/tamper tests against the actual
    artifact layout rather than the build tree.
 5. **Later platform evidence:** Windows UI Automation, macOS VoiceOver/accessibility APIs, and
@@ -170,10 +177,12 @@ runtime versions, last lifecycle events, task summaries, heartbeat age, persiste
 memory buckets. It must contain no project text, prompts, tokens, keys, private paths, or raw
 encryption material.
 
-The `GOLDEN-DESKTOP-LIFECYCLE-332` scenario is mandatory input for later Qt qualification: edit a
-representative project, cross an autosave boundary, background for 5 seconds, return and edit
-immediately, repeat 20 times, then exercise 30-second/two-minute background intervals, Writer Studio,
-Settings, minimize/restore, relaunch, and normal close. The required outcome is no UI disappearance,
+The `GOLDEN-DESKTOP-LIFECYCLE-332` scenario (full definition: §5.5 of
+`DESKTOP-MIGRATION-ROADMAP-REV3.md` — not the `-QF-D` early-lane subset above) is mandatory input
+for later Qt qualification: edit a representative project, cross an autosave boundary, background
+for 5 seconds, return and edit immediately, repeat 20 times, then exercise 30-second/two-minute
+background intervals, Writer Studio, Settings, minimize/restore, relaunch, and normal close. The
+required outcome is no UI disappearance,
 unbounded hang, lost acknowledged edit, orphan process, corruption, or force-kill requirement; first
 click, caret, and keyboard input must remain responsive. **For Qt admission, memory/resource growth
 must be bounded under the admitted fixture and duration; an explanation of unbounded growth is

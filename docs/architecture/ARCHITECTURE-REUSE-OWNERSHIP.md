@@ -260,7 +260,7 @@ Existing logging, diagnostic-model, sink, and redaction facilities remain the se
 
 ### 8.1 #489 — capability/admission facade
 
-#489 is an aggregation and explanation layer, not a second set of low-level probes.
+`#489` is an aggregation and explanation layer, not a second set of low-level probes.
 
 It should compose existing subsystem probes and expose normalized runtime facts. Workflow-specific admission remains in the owning subsystem.
 
@@ -384,7 +384,7 @@ Qt must consume the resulting authority, not create another schema.
 
 Keep #445 as the integration/closure issue for native renderer-neutral encryption, durability, recovery, migration admission, and record identity.
 
-#357/#359/#360/#361 remain detailed requirements and provenance. Do not create Qt-private or new Tauri-private crypto/storage authority.
+`#357`/`#359`/`#360`/`#361` remain detailed requirements and provenance. Do not create Qt-private or new Tauri-private crypto/storage authority.
 
 ### 9.3 Tasks
 

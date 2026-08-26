@@ -1,6 +1,6 @@
 # WorldScript Studio — Desktop Migration Roadmap Revision 3
 
-**Status:** Proposed binding refinement to ADR-0021 and `ROADMAP-QT-GPUI-DESKTOP.md`  
+**Status:** Adopted binding refinement to ADR-0021 and `ROADMAP-QT-GPUI-DESKTOP.md`  
 **Repository:** `qnbs/WorldScript-Studio`  
 **Date:** 2026-08-24  
 **Primary native target:** Qt 6 + Qt Quick/QML  
@@ -899,7 +899,7 @@ Qt succeeds only if it demonstrates:
 - target Windows/macOS evidence as applicable;
 - no reintroduction of renderer-specific domain authority.
 
-#332-derived scenarios become positive proof that the migration escaped the old renderer failure class without carrying portable defects forward.
+`#332`-derived scenarios become positive proof that the migration escaped the old renderer failure class without carrying portable defects forward.
 
 ---
 

@@ -64,7 +64,7 @@ No new PWA enhancement may silently create a second project, schema, crypto, mig
 
 ## 3. PWA workstream / issue graph
 
-#478 is the umbrella. Child work should remain traceable to the following dependency model:
+`#478` is the umbrella. Child work should remain traceable to the following dependency model:
 
 ```text
 #478 PWA excellence
