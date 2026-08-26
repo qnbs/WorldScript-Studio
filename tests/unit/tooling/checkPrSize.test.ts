@@ -82,6 +82,19 @@ describe('computeMeaningfulLines', () => {
     ];
     expect(computeMeaningfulLines(rows)).toBe(15);
   });
+
+  // QNBS-v3: only index.json mirrors community-templates/ — content-guard.mjs never touches the locale variants.
+  it('zeroes out only the content-guard-mirrored community-templates/index.json', () => {
+    const rows: NumstatRow[] = [{ path: 'public/community-templates/index.json', added: 300, removed: 300 }];
+    expect(computeMeaningfulLines(rows)).toBe(0);
+  });
+
+  it('still counts hand-authored localized community-templates/index.<locale>.json as meaningful', () => {
+    const rows: NumstatRow[] = [
+      { path: 'public/community-templates/index.de.json', added: 300, removed: 100 },
+    ];
+    expect(computeMeaningfulLines(rows)).toBe(400);
+  });
 });
 
 // QNBS-v3: a locale-parity edit always touches 19 rebuilt bundles — the file ceiling must exclude them too.
@@ -106,6 +119,15 @@ describe('computeGovernedFileCount', () => {
     const rows: NumstatRow[] = [
       { path: 'pnpm-lock.yaml', added: 2000, removed: 100 },
       { path: 'scripts/foo.mjs', added: 10, removed: 5 },
+    ];
+    expect(computeGovernedFileCount(rows)).toBe(1);
+  });
+
+  // QNBS-v3: index.<locale>.json has no source-of-truth to regenerate from — it must stay governed.
+  it('counts hand-authored localized community-templates/index.<locale>.json but not the index.json mirror', () => {
+    const rows: NumstatRow[] = [
+      { path: 'public/community-templates/index.json', added: 300, removed: 300 },
+      { path: 'public/community-templates/index.de.json', added: 300, removed: 100 },
     ];
     expect(computeGovernedFileCount(rows)).toBe(1);
   });

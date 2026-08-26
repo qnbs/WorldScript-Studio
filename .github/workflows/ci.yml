@@ -211,8 +211,8 @@ jobs:
           PR="${{ github.event.pull_request.number }}"
           REPO="${{ github.repository }}"
           MARKER="<!-- pr-size-governance -->"
-          # QNBS-v3: find OUR comment by marker, anywhere in history — not just whichever bot comment is last.
-          OWNED_ID=$(gh api "repos/$REPO/issues/$PR/comments" \
+          # QNBS-v3: --paginate concatenates every page — a marker comment past page 1 must still be found.
+          OWNED_ID=$(gh api --paginate "repos/$REPO/issues/$PR/comments" \
             --jq "[.[] | select(.user.login == \"github-actions[bot]\" and (.body | contains(\"$MARKER\")))] | last | .id // empty" \
             2>/dev/null || echo "")
           if grep -qE 'within target' /tmp/pr-size-report.txt; then
