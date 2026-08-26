@@ -186,10 +186,16 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/base-scripts
-          git show "$BASE_SHA:scripts/check-pr-size.mjs" > /tmp/base-scripts/check-pr-size.mjs
-          git show "$BASE_SHA:scripts/ci-prepush-classifier.mjs" > /tmp/base-scripts/ci-prepush-classifier.mjs
+          # QNBS-v3: bootstrap fallback — the PR introducing this checker has no base-ref copy yet.
+          if git show "$BASE_SHA:scripts/check-pr-size.mjs" > /tmp/base-scripts/check-pr-size.mjs 2>/dev/null \
+             && git show "$BASE_SHA:scripts/ci-prepush-classifier.mjs" > /tmp/base-scripts/ci-prepush-classifier.mjs 2>/dev/null; then
+            CHECKER=/tmp/base-scripts/check-pr-size.mjs
+          else
+            echo "::notice::check-pr-size.mjs not found on base ref (bootstrap PR) — using this PR's own copy this one time."
+            CHECKER=scripts/check-pr-size.mjs
+          fi
           set +e
-          node /tmp/base-scripts/check-pr-size.mjs "$BASE_SHA" "$HEAD_SHA" | tee /tmp/pr-size-report.txt
+          node "$CHECKER" "$BASE_SHA" "$HEAD_SHA" | tee /tmp/pr-size-report.txt
           exit_code=${PIPESTATUS[0]}
           set -e
           echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
