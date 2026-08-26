@@ -226,6 +226,25 @@ export function checkActionPins(fileName, doc, failures, options = {}) {
   }
 }
 
+function jobHasAlwaysCondition(jobNode) {
+  const ifNode = jobNode?.get?.('if', true);
+  return typeof ifNode?.value === 'string' && ifNode.value.includes('always()');
+}
+
+const NEEDS_RESULT_PATTERN = /needs\.([A-Za-z0-9_-]+)\.result/g;
+
+// QNBS-v3: if: always() disables GH's automatic dependency-gating, so the run script must re-check.
+function collectNeedsResultReferences(jobNode) {
+  const stepsNode = jobNode?.get?.('steps', true);
+  const references = new Set();
+  for (const step of stepsNode?.items ?? []) {
+    const runNode = step?.get?.('run', true);
+    if (typeof runNode?.value !== 'string') continue;
+    for (const match of runNode.value.matchAll(NEEDS_RESULT_PATTERN)) references.add(match[1]);
+  }
+  return references;
+}
+
 export function checkAggregatorNeeds(fileName, doc, failures) {
   const jobs = jobMap(doc);
   if (!jobs.has('ci-success')) return;
@@ -257,6 +276,17 @@ export function checkAggregatorNeeds(fileName, doc, failures) {
       file: fileName,
       message: `ci-success.needs lists "${name}", which is not a gating job (advisory or self-referential)`,
     });
+  }
+  if (jobHasAlwaysCondition(aggregatorNode)) {
+    const checkedResults = collectNeedsResultReferences(aggregatorNode);
+    for (const name of expectedNeeds) {
+      if (declaredNeeds.has(name) && !checkedResults.has(name)) {
+        failures.push({
+          file: fileName,
+          message: `ci-success uses if: always() but its run steps never check needs.${name}.result — a failure of "${name}" would not fail the aggregator`,
+        });
+      }
+    }
   }
 }
 

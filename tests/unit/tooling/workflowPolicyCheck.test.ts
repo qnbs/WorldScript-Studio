@@ -16,6 +16,8 @@ import {
 import type { WorkflowPolicyFailure } from '../../../scripts/workflow-policy-check.d.mts';
 
 const doc = (yaml: string) => parseDocument(yaml, { uniqueKeys: true });
+// QNBS-v3: split like strykerWorkflowPolicy.test.ts's helper so Biome doesn't misread this as a JS template.
+const githubExpression = (expression: string) => '$' + '{{ ' + expression + ' }}';
 
 // QNBS-v3: contents:read is the only safe top-level default — every other form is a policy gap.
 describe('checkTopLevelPermissions', () => {
@@ -257,6 +259,54 @@ describe('checkAggregatorNeeds', () => {
     checkAggregatorNeeds(
       'ci.yml',
       doc('jobs:\n  quality: {}\n  ci-success:\n    needs: quality\n'),
+      failures,
+    );
+    expect(failures).toEqual([]);
+  });
+
+  it('fails when if: always() is set but the run script never checks a gating job\'s result', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkAggregatorNeeds(
+      'ci.yml',
+      doc(
+        'jobs:\n  a: {}\n  ci-success:\n    if: always()\n    needs: [a]\n    steps:\n      - run: echo ok\n',
+      ),
+      failures,
+    );
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.message).toMatch(/never check needs\.a\.result/);
+  });
+
+  it('passes when if: always() is set and the run script checks every gating job\'s result', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    const runLine = `[ \\"${githubExpression('needs.a.result')}\\" = success ] || exit 1`;
+    checkAggregatorNeeds(
+      'ci.yml',
+      doc(`jobs:\n  a: {}\n  ci-success:\n    if: always()\n    needs: [a]\n    steps:\n      - run: "${runLine}"\n`),
+      failures,
+    );
+    expect(failures).toEqual([]);
+  });
+
+  it('does not require a result check when if: always() is absent (default GH gating applies)', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkAggregatorNeeds(
+      'ci.yml',
+      doc('jobs:\n  a: {}\n  ci-success:\n    needs: [a]\n    steps:\n      - run: echo ok\n'),
+      failures,
+    );
+    expect(failures).toEqual([]);
+  });
+
+  it('finds a result check split across multiple run steps', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    const stepA = `- run: "echo ${githubExpression('needs.a.result')}"`;
+    const stepB = `- run: "echo ${githubExpression('needs.b.result')}"`;
+    checkAggregatorNeeds(
+      'ci.yml',
+      doc(
+        `jobs:\n  a: {}\n  b: {}\n  ci-success:\n    if: always()\n    needs: [a, b]\n    steps:\n      ${stepA}\n      ${stepB}\n`,
+      ),
       failures,
     );
     expect(failures).toEqual([]);
