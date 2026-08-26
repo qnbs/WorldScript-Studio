@@ -17,7 +17,7 @@ import {
 import type { WorkflowPolicyFailure } from '../../../scripts/workflow-policy-check.d.mts';
 
 const doc = (yaml: string) => parseDocument(yaml, { uniqueKeys: true });
-// QNBS-v3: split like strykerWorkflowPolicy.test.ts's helper so Biome doesn't misread this as a JS template.
+// QNBS-v3: stays string concat — a template literal here is `${{ ${expr} }}`, a JS SyntaxError, not just a style nit.
 const githubExpression = (expression: string) => '$' + '{{ ' + expression + ' }}';
 
 // QNBS-v3: contents:read is the only safe top-level default — every other form is a policy gap.
