@@ -68,17 +68,25 @@ export function parseWorkflowFile(filePath, dependencies = {}) {
   return { filePath, content, doc, lineCounter };
 }
 
+// QNBS-v3: single alias-resolution point — every value read from a parsed tree must pass through here.
+function resolveNode(node, doc) {
+  return node && isAlias(node) ? node.resolve(doc) : node;
+}
+
+// QNBS-v3: resolves each job VALUE so an aliased whole job (ci-success: *base) isn't skipped downstream.
 function jobMap(doc) {
   const jobs = doc.get('jobs', true);
   if (!jobs || typeof jobs.items === 'undefined') return new Map();
   const map = new Map();
-  for (const pair of jobs.items) map.set(String(pair.key), pair.value);
+  for (const pair of jobs.items) map.set(String(pair.key), resolveNode(pair.value, doc));
   return map;
 }
 
-// QNBS-v3: single alias-resolution point — every value read from a parsed tree must pass through here.
-function resolveNode(node, doc) {
-  return node && isAlias(node) ? node.resolve(doc) : node;
+// QNBS-v3: resolves a steps: node (possibly aliased) and each item in it (also possibly aliased).
+function resolveSteps(stepsNode, doc) {
+  const resolved = resolveNode(stepsNode, doc);
+  const items = resolved?.items ?? [];
+  return items.map((item) => resolveNode(item, doc));
 }
 
 // QNBS-v3: an aliased *perms block resolves to Alias, not YAMLMap — must dereference before use.
@@ -192,15 +200,15 @@ function collectWorkflowSteps(doc) {
   const steps = [];
   for (const [, jobNode] of jobMap(doc)) {
     const stepsNode = jobNode?.get?.('steps', true);
-    if (stepsNode?.items) steps.push(...stepsNode.items);
+    steps.push(...resolveSteps(stepsNode, doc));
   }
   return steps;
 }
 
 function collectActionSteps(doc) {
-  const runsNode = doc.get('runs', true);
+  const runsNode = resolveNode(doc.get('runs', true), doc);
   const stepsNode = runsNode?.get?.('steps', true);
-  return stepsNode?.items ?? [];
+  return resolveSteps(stepsNode, doc);
 }
 
 const DOCKER_DIGEST_PATTERN = /@sha256:[0-9a-f]{64}$/;
@@ -277,18 +285,52 @@ function jobHasAlwaysCondition(jobNode) {
 const NEEDS_RESULT_PATTERN = /needs\.([A-Za-z0-9_-]+)\.result/g;
 const FAILURE_EXIT_PATTERN = /\bexit\s+(?:\$\S+|[1-9]\d*)/;
 
-// QNBS-v3: if: always() disables GH's automatic dependency-gating, so the run script must re-check.
-function collectNeedsResultReferences(jobNode) {
+// QNBS-v3: a whole-line shell comment can't affect control flow — strip before pattern-matching.
+function stripCommentLines(script) {
+  return script
+    .split('\n')
+    .filter((line) => !/^\s*#/.test(line))
+    .join('\n');
+}
+
+// QNBS-v3: text heuristic, not a shell parser — an exit in an unrelated branch can still false-pass.
+function collectNeedsResultReferences(jobNode, doc) {
   const stepsNode = jobNode?.get?.('steps', true);
   const references = new Set();
-  for (const step of stepsNode?.items ?? []) {
+  for (const step of resolveSteps(stepsNode, doc)) {
     const runNode = step?.get?.('run', true);
     if (typeof runNode?.value !== 'string') continue;
+    const script = stripCommentLines(runNode.value);
     // QNBS-v3: a bare reference (e.g. echo) can't fail the job — only count it alongside a real exit.
-    if (!FAILURE_EXIT_PATTERN.test(runNode.value)) continue;
-    for (const match of runNode.value.matchAll(NEEDS_RESULT_PATTERN)) references.add(match[1]);
+    if (!FAILURE_EXIT_PATTERN.test(script)) continue;
+    for (const match of script.matchAll(NEEDS_RESULT_PATTERN)) references.add(match[1]);
   }
   return references;
+}
+
+// QNBS-v3: excludes the full downstream closure (not just direct dependents) from ci-success.needs.
+function computeAggregatorDescendants(jobs) {
+  const dependents = new Map();
+  for (const [jobName, jobNode] of jobs) {
+    const needsNode = jobNode?.get?.('needs', true);
+    const needsValue = needsNode ? needsNode.toJSON() : [];
+    for (const dependency of Array.isArray(needsValue) ? needsValue : [needsValue]) {
+      if (!dependents.has(dependency)) dependents.set(dependency, []);
+      dependents.get(dependency).push(jobName);
+    }
+  }
+  const descendants = new Set();
+  const queue = ['ci-success'];
+  while (queue.length > 0) {
+    const current = queue.pop();
+    for (const dependent of dependents.get(current) ?? []) {
+      if (!descendants.has(dependent)) {
+        descendants.add(dependent);
+        queue.push(dependent);
+      }
+    }
+  }
+  return descendants;
 }
 
 export function checkAggregatorNeeds(fileName, doc, failures) {
@@ -299,17 +341,13 @@ export function checkAggregatorNeeds(fileName, doc, failures) {
   const needsValue = needsNode ? needsNode.toJSON() : [];
   // QNBS-v3: needs: quality (bare string) must not decompose into per-character Set entries.
   const declaredNeeds = new Set(Array.isArray(needsValue) ? needsValue : [needsValue]);
+  const descendants = computeAggregatorDescendants(jobs);
   const expectedNeeds = new Set();
   for (const [jobName, jobNode] of jobs) {
     if (jobName === 'ci-success') continue;
     const continueOnError = jobNode?.get?.('continue-on-error', true);
     if (continueOnError?.toJSON?.() === true) continue; // advisory job, not gating
-    const jobNeedsNode = jobNode?.get?.('needs', true);
-    const jobNeeds = jobNeedsNode ? jobNeedsNode.toJSON() : [];
-    const dependsOnAggregator = Array.isArray(jobNeeds)
-      ? jobNeeds.includes('ci-success')
-      : jobNeeds === 'ci-success';
-    if (dependsOnAggregator) continue; // downstream of the aggregator, e.g. deploy
+    if (descendants.has(jobName)) continue; // downstream of the aggregator, direct or transitive
     expectedNeeds.add(jobName);
   }
   const missing = [...expectedNeeds].filter((name) => !declaredNeeds.has(name));
@@ -324,7 +362,7 @@ export function checkAggregatorNeeds(fileName, doc, failures) {
     });
   }
   if (jobHasAlwaysCondition(aggregatorNode)) {
-    const checkedResults = collectNeedsResultReferences(aggregatorNode);
+    const checkedResults = collectNeedsResultReferences(aggregatorNode, doc);
     for (const name of expectedNeeds) {
       if (declaredNeeds.has(name) && !checkedResults.has(name)) {
         failures.push({

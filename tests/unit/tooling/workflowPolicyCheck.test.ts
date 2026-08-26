@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseDocument } from 'yaml';
 import {
@@ -111,6 +112,21 @@ describe('checkJobWriteScopeAllowlist', () => {
     checkJobWriteScopeAllowlist('ci.yml', doc(content), failures);
     expect(failures).toHaveLength(1);
     expect(failures[0]?.message).toMatch(/contents/);
+  });
+
+  // QNBS-v3: an aliased whole job (ci-success: *base) is an Alias node, not a map, until resolved.
+  it('resolves an aliased whole-job node before checking its permissions', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    const content = [
+      'jobs:',
+      '  base: &base',
+      '    permissions:',
+      '      contents: write',
+      '  copy: *base',
+      '',
+    ].join('\n');
+    checkJobWriteScopeAllowlist('ci.yml', doc(content), failures);
+    expect(failures.some((f) => f.message.includes('"copy"'))).toBe(true);
   });
 });
 
@@ -286,6 +302,22 @@ describe('checkActionPins', () => {
     checkActionPins('x.yml', doc(content), failures);
     expect(failures).toEqual([]);
   });
+
+  // QNBS-v3: an aliased whole steps: list (steps: *shared) is an Alias node, not a sequence, until resolved.
+  it('checks an aliased steps: list, not just an aliased individual step', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    const content = [
+      'x: &shared_steps',
+      '  - uses: actions/checkout@v4',
+      'jobs:',
+      '  a:',
+      '    steps: *shared_steps',
+      '',
+    ].join('\n');
+    checkActionPins('x.yml', doc(content), failures);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.message).toMatch(/40-hex-char SHA/);
+  });
 });
 
 // QNBS-v3: needs: quality (bare string) must resolve as one dependency, not per-character Set entries.
@@ -399,6 +431,29 @@ describe('checkAggregatorNeeds', () => {
       failures,
     );
     expect(failures).toHaveLength(2);
+  });
+
+  // QNBS-v3: a commented-out exit can't affect real control flow — must not count as a check.
+  it('rejects a result reference whose only exit is inside a shell comment', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    const runLine = `echo ${githubExpression('needs.a.result')}\\n# exit 1`;
+    checkAggregatorNeeds(
+      'ci.yml',
+      doc(`jobs:\n  a: {}\n  ci-success:\n    if: always()\n    needs: [a]\n    steps:\n      - run: "${runLine}"\n`),
+      failures,
+    );
+    expect(failures).toHaveLength(1);
+  });
+
+  // QNBS-v3: smoke needs deploy needs ci-success — smoke is a transitive, not just direct, descendant.
+  it('excludes a transitive descendant of ci-success, not only a direct one', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkAggregatorNeeds(
+      'ci.yml',
+      doc('jobs:\n  a: {}\n  ci-success:\n    needs: [a]\n  deploy:\n    needs: [ci-success]\n  smoke:\n    needs: [deploy]\n'),
+      failures,
+    );
+    expect(failures).toEqual([]);
   });
 });
 
@@ -525,27 +580,30 @@ describe('listActionFiles', () => {
   it('discovers the repository\'s real .github/actions/setup/action.yml', () => {
     // QNBS-v3: existsSync isn't DI'd (matches listWorkflowFiles), so this hits the real fs.
     const files = listActionFiles();
-    expect(files.some((filePath) => filePath.endsWith('.github/actions/setup/action.yml'))).toBe(
-      true,
-    );
+    expect(
+      files.some((filePath) => filePath.endsWith(join('.github', 'actions', 'setup', 'action.yml'))),
+    ).toBe(true);
   });
 
   // QNBS-v3: existsSync isn't DI'd, so the real dir must exist for this fake readdirSync to fire.
+  // QNBS-v3: join(), not a literal "/", so the suffix matches join()'s separator on every platform.
   it('discovers a composite action nested below its group directory (recursive)', () => {
     const readdirSync = (dirPath: string) => {
-      if (dirPath.endsWith('.github/actions')) {
+      if (dirPath.endsWith(join('.github', 'actions'))) {
         return [{ name: 'release', isDirectory: () => true }];
       }
-      if (dirPath.endsWith('.github/actions/release')) {
+      if (dirPath.endsWith(join('.github', 'actions', 'release'))) {
         return [{ name: 'setup', isDirectory: () => true }];
       }
-      if (dirPath.endsWith('.github/actions/release/setup')) {
+      if (dirPath.endsWith(join('.github', 'actions', 'release', 'setup'))) {
         return [{ name: 'action.yml', isDirectory: () => false }];
       }
       return [];
     };
     const files = listActionFiles(undefined, { readdirSync });
-    expect(files.some((f) => f.endsWith('.github/actions/release/setup/action.yml'))).toBe(true);
+    expect(
+      files.some((f) => f.endsWith(join('.github', 'actions', 'release', 'setup', 'action.yml'))),
+    ).toBe(true);
   });
 });
 
