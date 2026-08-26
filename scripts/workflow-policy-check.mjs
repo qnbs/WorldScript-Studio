@@ -45,11 +45,18 @@ export function listActionFiles(root = projectRoot, dependencies = {}) {
   const listDir = dependencies.readdirSync ?? readdirSync;
   if (!existsSync(dir)) return [];
   const results = [];
-  for (const name of listDir(dir)) {
-    for (const candidate of [join(dir, name, 'action.yml'), join(dir, name, 'action.yaml')]) {
-      if (existsSync(candidate)) results.push(candidate);
+  // QNBS-v3: recurse any depth — a composite action can nest below its group directory.
+  const walk = (currentDir) => {
+    for (const entry of listDir(currentDir, { withFileTypes: true })) {
+      const entryPath = join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        walk(entryPath);
+      } else if (entry.name === 'action.yml' || entry.name === 'action.yaml') {
+        results.push(entryPath);
+      }
     }
-  }
+  };
+  walk(dir);
   return results.sort();
 }
 
@@ -69,16 +76,24 @@ function jobMap(doc) {
   return map;
 }
 
+// QNBS-v3: single alias-resolution point — every value read from a parsed tree must pass through here.
+function resolveNode(node, doc) {
+  return node && isAlias(node) ? node.resolve(doc) : node;
+}
+
 // QNBS-v3: an aliased *perms block resolves to Alias, not YAMLMap — must dereference before use.
 function permissionEntries(node, doc) {
-  if (!node) return null;
-  const resolved = isAlias(node) ? node.resolve(doc) : node;
+  const resolved = resolveNode(node, doc);
   if (!resolved) return null;
   if (typeof resolved.toJSON === 'function' && typeof resolved.items === 'undefined') {
     return { scalar: resolved.toJSON() };
   }
   const map = {};
-  for (const pair of resolved.items ?? []) map[String(pair.key)] = String(pair.value);
+  // QNBS-v3: a per-key value can itself be an alias (e.g. contents: *grant) — resolve each one too.
+  for (const pair of resolved.items ?? []) {
+    const value = resolveNode(pair.value, doc);
+    map[String(pair.key)] = value !== undefined ? String(value) : String(pair.value);
+  }
   return { map };
 }
 
@@ -188,40 +203,68 @@ function collectActionSteps(doc) {
   return stepsNode?.items ?? [];
 }
 
-// QNBS-v3: walks the parsed tree (not raw text) so flow-mapping steps can't bypass pin enforcement.
+const DOCKER_DIGEST_PATTERN = /@sha256:[0-9a-f]{64}$/;
+
+// QNBS-v3: checks one uses: value, resolving aliases first so *ref hides no bypass step 6/2 found.
+function checkUsesRef({ usesNode, containerNode, doc, fileName, lineCounter, failures }) {
+  const resolvedNode = resolveNode(usesNode, doc);
+  if (!resolvedNode || typeof resolvedNode.value !== 'string') return;
+  const ref = resolvedNode.value;
+  if (ref.startsWith('./')) return; // local action/reusable workflow, no @ pin possible
+  const line =
+    lineCounter && Array.isArray(usesNode.range)
+      ? lineCounter.linePos(usesNode.range[0]).line
+      : undefined;
+  const loc = line ? `line ${line}: ` : '';
+  if (ref.startsWith('docker://')) {
+    // QNBS-v3: a mutable docker tag is as unpinned as a floating action tag — require a digest.
+    if (!DOCKER_DIGEST_PATTERN.test(ref)) {
+      failures.push({
+        file: fileName,
+        message: `${loc}docker reference "${ref}" must pin an immutable @sha256 digest, not a mutable tag`,
+      });
+    }
+    return;
+  }
+  const atIndex = ref.indexOf('@');
+  if (atIndex === -1) {
+    failures.push({ file: fileName, message: `${loc}action reference "${ref}" is missing an @ pin` });
+    return;
+  }
+  const pin = ref.slice(atIndex + 1);
+  if (!/^[0-9a-f]{40}$/.test(pin)) {
+    failures.push({
+      file: fileName,
+      message: `${loc}action reference "${ref}" must pin a 40-hex-char SHA`,
+    });
+    return;
+  }
+  // QNBS-v3: an alias's comment can live at the anchor definition or the use site — accept either.
+  const comment =
+    usesNode.comment ?? resolvedNode.comment ?? (containerNode?.flow ? containerNode.comment : undefined);
+  if (!comment || !/\S/.test(comment)) {
+    failures.push({
+      file: fileName,
+      message: `${loc}SHA-pinned action "${ref}" is missing a trailing # comment`,
+    });
+  }
+}
+
+// QNBS-v3: walks the parsed tree (not raw text) so flow-mapping/alias steps can't bypass enforcement.
 export function checkActionPins(fileName, doc, failures, options = {}) {
   const { fileKind = 'workflow', lineCounter } = options;
   const steps = fileKind === 'action' ? collectActionSteps(doc) : collectWorkflowSteps(doc);
   for (const step of steps) {
     const usesNode = step?.get?.('uses', true);
-    if (!usesNode || typeof usesNode.value !== 'string') continue;
-    const ref = usesNode.value;
-    if (ref.startsWith('./') || ref.startsWith('docker://')) continue; // local/docker action
-    const line =
-      lineCounter && Array.isArray(usesNode.range)
-        ? lineCounter.linePos(usesNode.range[0]).line
-        : undefined;
-    const loc = line ? `line ${line}: ` : '';
-    const atIndex = ref.indexOf('@');
-    if (atIndex === -1) {
-      failures.push({ file: fileName, message: `${loc}action reference "${ref}" is missing an @ pin` });
-      continue;
-    }
-    const pin = ref.slice(atIndex + 1);
-    if (!/^[0-9a-f]{40}$/.test(pin)) {
-      failures.push({
-        file: fileName,
-        message: `${loc}action reference "${ref}" must pin a 40-hex-char SHA`,
-      });
-      continue;
-    }
-    // QNBS-v3: a flow-mapping step's trailing comment attaches to the map node, not the uses scalar.
-    const comment = usesNode.comment ?? (step.flow ? step.comment : undefined);
-    if (!comment || !/\S/.test(comment)) {
-      failures.push({
-        file: fileName,
-        message: `${loc}SHA-pinned action "${ref}" is missing a trailing # comment`,
-      });
+    if (!usesNode) continue;
+    checkUsesRef({ usesNode, containerNode: step, doc, fileName, lineCounter, failures });
+  }
+  // QNBS-v3: a job can itself call a reusable workflow via jobs.<id>.uses — same pin risk as a step.
+  if (fileKind === 'workflow') {
+    for (const [, jobNode] of jobMap(doc)) {
+      const usesNode = jobNode?.get?.('uses', true);
+      if (!usesNode) continue;
+      checkUsesRef({ usesNode, containerNode: jobNode, doc, fileName, lineCounter, failures });
     }
   }
 }
@@ -232,6 +275,7 @@ function jobHasAlwaysCondition(jobNode) {
 }
 
 const NEEDS_RESULT_PATTERN = /needs\.([A-Za-z0-9_-]+)\.result/g;
+const FAILURE_EXIT_PATTERN = /\bexit\s+(?:\$\S+|[1-9]\d*)/;
 
 // QNBS-v3: if: always() disables GH's automatic dependency-gating, so the run script must re-check.
 function collectNeedsResultReferences(jobNode) {
@@ -240,6 +284,8 @@ function collectNeedsResultReferences(jobNode) {
   for (const step of stepsNode?.items ?? []) {
     const runNode = step?.get?.('run', true);
     if (typeof runNode?.value !== 'string') continue;
+    // QNBS-v3: a bare reference (e.g. echo) can't fail the job — only count it alongside a real exit.
+    if (!FAILURE_EXIT_PATTERN.test(runNode.value)) continue;
     for (const match of runNode.value.matchAll(NEEDS_RESULT_PATTERN)) references.add(match[1]);
   }
   return references;

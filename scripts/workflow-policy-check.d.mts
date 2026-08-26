@@ -14,7 +14,15 @@ export function listWorkflowFiles(
   dependencies?: ListWorkflowFilesDependencies,
 ): string[];
 
-export type ListActionFilesDependencies = ListWorkflowFilesDependencies;
+export interface DirEntryLike {
+  name: string;
+  isDirectory(): boolean;
+}
+
+export interface ListActionFilesDependencies {
+  // QNBS-v3: recursive discovery needs Dirent-shaped entries, not listWorkflowFiles' flat string[].
+  readdirSync?: (dir: string, options: { withFileTypes: true }) => DirEntryLike[];
+}
 
 export function listActionFiles(
   root?: string,
@@ -99,7 +107,8 @@ export function checkActionFile(
 ): WorkflowPolicyFailure[];
 
 export type CheckAllWorkflowsDependencies = CheckWorkflowFileDependencies &
-  ListWorkflowFilesDependencies & {
+  ListWorkflowFilesDependencies &
+  ListActionFilesDependencies & {
     listWorkflowFiles?: (root: string) => string[];
     listActionFiles?: (root: string) => string[];
   };

@@ -101,6 +101,17 @@ describe('checkJobWriteScopeAllowlist', () => {
     expect(failures).toHaveLength(1);
     expect(failures[0]?.message).toMatch(/scalar permissions "write-all"/);
   });
+
+  // QNBS-v3: a per-key alias (contents: *grant) must resolve to "write", not the literal "*grant".
+  it('resolves a per-key alias inside a job permissions map', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    const content = ['x: &grant write', 'jobs:', '  build:', '    permissions:', '      contents: *grant', ''].join(
+      '\n',
+    );
+    checkJobWriteScopeAllowlist('ci.yml', doc(content), failures);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.message).toMatch(/contents/);
+  });
 });
 
 // QNBS-v3: needs-graph resolution/cycle-detection protects the aggregator sync check downstream.
@@ -212,6 +223,69 @@ describe('checkActionPins', () => {
     });
     expect(failures).toEqual([]);
   });
+
+  // QNBS-v3: a job calling a reusable workflow carries the same mutable-ref risk as a step's uses:.
+  it('fails for an unpinned job-level reusable-workflow reference', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkActionPins(
+      'x.yml',
+      doc('jobs:\n  call:\n    uses: owner/repo/.github/workflows/file.yml@main\n'),
+      failures,
+    );
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.message).toMatch(/40-hex-char SHA/);
+  });
+
+  it('passes a SHA-pinned job-level reusable-workflow reference', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkActionPins(
+      'x.yml',
+      doc(
+        'jobs:\n  call:\n    uses: owner/repo/.github/workflows/file.yml@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n',
+      ),
+      failures,
+    );
+    expect(failures).toEqual([]);
+  });
+
+  // QNBS-v3: a mutable docker tag is as unpinned as a floating action tag — must require a digest.
+  it('fails for a mutable docker:// tag reference', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkActionPins('x.yml', doc(wrap('uses: docker://alpine:latest')), failures);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.message).toMatch(/@sha256/);
+  });
+
+  it('passes a docker:// reference pinned to an immutable @sha256 digest', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkActionPins('x.yml', doc(wrap(`uses: docker://alpine@sha256:${'a'.repeat(64)}`)), failures);
+    expect(failures).toEqual([]);
+  });
+
+  // QNBS-v3: GitHub resolves *action_ref before running the step — the checker must do the same.
+  it('fails for an unpinned action reference hidden behind an alias', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    const content = ['x: &action_ref actions/checkout@v4', 'jobs:', '  a:', '    steps:', '      - uses: *action_ref', ''].join(
+      '\n',
+    );
+    checkActionPins('x.yml', doc(content), failures);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.message).toMatch(/40-hex-char SHA/);
+  });
+
+  it('passes a SHA-pinned action reference behind an alias, comment at the anchor definition', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    const content = [
+      'x: &action_ref actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1',
+      'jobs:',
+      '  a:',
+      '    steps:',
+      '      - uses: *action_ref',
+      '',
+    ].join('\n');
+    checkActionPins('x.yml', doc(content), failures);
+    expect(failures).toEqual([]);
+  });
 });
 
 // QNBS-v3: needs: quality (bare string) must resolve as one dependency, not per-character Set entries.
@@ -300,6 +374,21 @@ describe('checkAggregatorNeeds', () => {
 
   it('finds a result check split across multiple run steps', () => {
     const failures: WorkflowPolicyFailure[] = [];
+    const stepA = `- run: "[ \\"${githubExpression('needs.a.result')}\\" = success ] || exit 1"`;
+    const stepB = `- run: "[ \\"${githubExpression('needs.b.result')}\\" = success ] || exit 1"`;
+    checkAggregatorNeeds(
+      'ci.yml',
+      doc(
+        `jobs:\n  a: {}\n  b: {}\n  ci-success:\n    if: always()\n    needs: [a, b]\n    steps:\n      ${stepA}\n      ${stepB}\n`,
+      ),
+      failures,
+    );
+    expect(failures).toEqual([]);
+  });
+
+  // QNBS-v3: a bare reference (e.g. echo) logs the result but can't fail the job — must be rejected.
+  it('rejects a result reference that is only logged, never used to control failure', () => {
+    const failures: WorkflowPolicyFailure[] = [];
     const stepA = `- run: "echo ${githubExpression('needs.a.result')}"`;
     const stepB = `- run: "echo ${githubExpression('needs.b.result')}"`;
     checkAggregatorNeeds(
@@ -309,7 +398,7 @@ describe('checkAggregatorNeeds', () => {
       ),
       failures,
     );
-    expect(failures).toEqual([]);
+    expect(failures).toHaveLength(2);
   });
 });
 
@@ -439,6 +528,24 @@ describe('listActionFiles', () => {
     expect(files.some((filePath) => filePath.endsWith('.github/actions/setup/action.yml'))).toBe(
       true,
     );
+  });
+
+  // QNBS-v3: existsSync isn't DI'd, so the real dir must exist for this fake readdirSync to fire.
+  it('discovers a composite action nested below its group directory (recursive)', () => {
+    const readdirSync = (dirPath: string) => {
+      if (dirPath.endsWith('.github/actions')) {
+        return [{ name: 'release', isDirectory: () => true }];
+      }
+      if (dirPath.endsWith('.github/actions/release')) {
+        return [{ name: 'setup', isDirectory: () => true }];
+      }
+      if (dirPath.endsWith('.github/actions/release/setup')) {
+        return [{ name: 'action.yml', isDirectory: () => false }];
+      }
+      return [];
+    };
+    const files = listActionFiles(undefined, { readdirSync });
+    expect(files.some((f) => f.endsWith('.github/actions/release/setup/action.yml'))).toBe(true);
   });
 });
 
