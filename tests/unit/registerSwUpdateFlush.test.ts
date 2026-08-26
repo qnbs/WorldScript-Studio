@@ -208,4 +208,22 @@ describe('register-sw — controllerchange flush-then-reload (DA-02)', () => {
     expect(mockFlushPersistedState).toHaveBeenCalledTimes(1);
     expect(reloadSpy).toHaveBeenCalledTimes(1);
   });
+
+  // QNBS-v3 (codex P2): an unbounded wait (e.g. queued behind another tab's exclusive Web Lock) must not hang the reload forever on an already-cache-pruned bundle.
+  it('reloads once the flush timeout elapses if the flush never settles', async () => {
+    vi.useFakeTimers();
+    try {
+      mockFlushPersistedState.mockImplementation(() => new Promise(() => {}));
+      await registerServiceWorker();
+      controllerChangeHandler?.();
+
+      await vi.advanceTimersByTimeAsync(0);
+      expect(reloadSpy).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(8000);
+      expect(reloadSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

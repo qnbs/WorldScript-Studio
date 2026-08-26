@@ -273,10 +273,18 @@ async function flushLatestState(): Promise<void> {
   await flushPersistedState(store.getState() as RootState);
 }
 
+// QNBS-v3 (codex): bounds the flush — an unbounded wait (e.g. queued behind another tab's exclusive Web Lock) would hang forever on an already-cache-pruned bundle, defeating the always-reload policy below.
+const FLUSH_TIMEOUT_MS = 8000;
+
 // QNBS-v3 (DA-02): the reload always proceeds — activation already pruned old-version caches by the time controllerchange fires, so staying on the old bundle risks missing-chunk failures too.
 async function flushLatestStateThenReload(): Promise<void> {
   try {
-    await flushLatestState();
+    await Promise.race([
+      flushLatestState(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Pre-reload flush timed out after ${FLUSH_TIMEOUT_MS}ms`)), FLUSH_TIMEOUT_MS),
+      ),
+    ]);
   } catch (error) {
     appLogger.error('[SW] Pre-reload state flush failed (reloading anyway):', error);
   }
