@@ -46,6 +46,7 @@
     "csp:check": "node scripts/check-csp-policy.mjs",
     "csp:verify": "node scripts/sync-csp.mjs && git diff --exit-code -- index.html nginx.conf public/_headers vercel.json src-tauri/tauri.conf.json && node scripts/check-csp-policy.mjs",
     "native-readiness:check": "node scripts/check-native-readiness.mjs",
+    "workflow-policy:check": "node scripts/workflow-policy-check.mjs",
     "suppressions:check": "node scripts/check-suppressions.mjs",
     "token:audit": "node scripts/audit-tokens.mjs",
     "guardrail:desktop-imports": "node scripts/check-tauri-import-boundary.mjs",
@@ -202,7 +203,8 @@
     "vitest": "^4.1.10",
     "wait-on": "^9.1.0",
     "wrangler": "^4.120.1",
-    "y-protocols": "^1.0.7"
+    "y-protocols": "^1.0.7",
+    "yaml": "^2.9.0"
   },
   "simple-git-hooks": {
     "pre-commit": "node scripts/hooks/pre-commit.mjs",

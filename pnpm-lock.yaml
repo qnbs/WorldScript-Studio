@@ -328,6 +328,9 @@ importers:
       y-protocols:
         specifier: ^1.0.7
         version: 1.0.7(yjs@13.6.31)
+      yaml:
+        specifier: ^2.9.0
+        version: 2.9.0
 
   packages/ai-core:
     optionalDependencies:
@@ -15777,8 +15780,7 @@ snapshots:
 
   yallist@3.1.1: {}
 
-  yaml@2.9.0:
-    optional: true
+  yaml@2.9.0: {}
 
   yargs-parser@13.1.2:
     dependencies:

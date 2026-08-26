@@ -102,6 +102,9 @@ async function main() {
   if (shouldRunAdmissionCheck('contentGuard', classification.files) || full)
     await runCheck('Content guard', () => runNodeScript('scripts/content-guard.mjs'));
 
+  if (shouldRunAdmissionCheck('workflowPolicy', classification.files) || full)
+    await runCheck('Workflow policy', () => runNodeScript('scripts/workflow-policy-check.mjs'));
+
   if (typecheckRequired) {
     await runCheck('TypeScript (single checker)', () =>
       // QNBS-v3: one checker bounds memory use on constrained developer machines.
