@@ -52,8 +52,9 @@ jobs:
       # QNBS-v3: no lifecycle/.pnpmfile.cjs hooks — install must not run repo code before the gate.
       - name: Install dependencies (no lifecycle scripts)
         run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
+      # QNBS-v3: node directly — pnpm run's own pre-run check rejects an --ignore-pnpmfile install.
       - name: Workflow-policy structural gate (permissions, needs graph, action pins)
-        run: pnpm run workflow-policy:check
+        run: node scripts/workflow-policy-check.mjs
 
   # ----------------------------------------------------------
   # 0. SECURITY: pnpm audit + gitleaks + dependency review
