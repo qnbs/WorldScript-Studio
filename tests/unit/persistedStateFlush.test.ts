@@ -3,7 +3,9 @@
  * QNBS-v3 (#332/D3): shared flush helper used by both index.tsx's visibilitychange handler and the
  * desktop close-to-tray quit flush — verifies it saves project+settings via storageService, always
  * saves settings even with no project data yet (fresh/new-user state), and fails closed on any
- * rejected save (Promise.all, not Promise.allSettled) so a failed write is never silently ignored.
+ * rejected save (Promise.allSettled, waiting for both to settle before rejecting) so a failed
+ * write is never silently ignored and a caller that reloads immediately after never tears down
+ * the page while the other save is still in flight.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -80,5 +82,37 @@ describe('flushPersistedState', () => {
   it('propagates a rejection when saveSettings fails (fail-closed, not swallowed)', async () => {
     h.saveSettings.mockRejectedValueOnce(new Error('disk full'));
     await expect(flushPersistedState(buildState())).rejects.toThrow('disk full');
+  });
+
+  // QNBS-v3 (codex): an immediate-reload caller must never tear down the page while the other save is still in flight.
+  it('waits for the other save to settle before rejecting, instead of rejecting as soon as one fails', async () => {
+    const order: string[] = [];
+    h.saveProject.mockImplementation(async () => {
+      order.push('project-rejected');
+      throw new Error('project save failed');
+    });
+    let resolveSettings: () => void = () => {};
+    h.saveSettings.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSettings = () => {
+            order.push('settings-resolved');
+            resolve();
+          };
+        }),
+    );
+
+    const flushPromise = flushPersistedState(buildState()).catch((err: unknown) => {
+      order.push('flush-rejected');
+      throw err;
+    });
+
+    // QNBS-v3: a macrotask boundary drains every microtask the real coordinator's drain loop schedules, however many ticks deep.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(order).toEqual(['project-rejected']);
+
+    resolveSettings();
+    await expect(flushPromise).rejects.toThrow('project save failed');
+    expect(order).toEqual(['project-rejected', 'settings-resolved', 'flush-rejected']);
   });
 });

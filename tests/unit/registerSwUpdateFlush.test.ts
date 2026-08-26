@@ -59,8 +59,8 @@ describe('register-sw — controllerchange flush-then-reload (DA-02)', () => {
       configurable: true,
     });
 
-    // QNBS-v3: a stable reference — a fresh object each call would never satisfy the "unchanged" stop condition.
-    const stableState = { fake: 'state' };
+    // QNBS-v3: a stable reference with real RootState shape — persistedSlices() reads project.present, matching production where project is never undefined.
+    const stableState = { project: { present: { fake: 'state' } }, versionControl: {}, settings: {} };
     appStoreRef.current = {
       getState: () => stableState as never,
       dispatch: vi.fn() as never,
@@ -146,8 +146,8 @@ describe('register-sw — controllerchange flush-then-reload (DA-02)', () => {
 
   // QNBS-v3 (CodeAnt/codex): a single snapshot could miss an edit made while the async write is still in flight.
   it('re-flushes with the latest state when it changes during the pending flush, before reloading', async () => {
-    const stateA = { v: 'a' };
-    const stateB = { v: 'b' };
+    const stateA = { project: { present: { v: 'a' } }, versionControl: {}, settings: {} };
+    const stateB = { project: { present: { v: 'b' } }, versionControl: {}, settings: {} };
     // 1st getState(): stateA. 2nd (after flush #1): stateB (changed — retry). 3rd (after flush #2): stateB (stable — stop).
     const getStateMock = vi.fn().mockReturnValueOnce(stateA).mockReturnValueOnce(stateB).mockReturnValue(stateB);
     appStoreRef.current = { getState: getStateMock, dispatch: vi.fn() as never };
@@ -168,7 +168,11 @@ describe('register-sw — controllerchange flush-then-reload (DA-02)', () => {
 
   // QNBS-v3 (codex P2): the retry loop can exhaust its budget while state keeps changing — one guaranteed final flush must still capture whatever's freshest, not silently drop it.
   it('performs one final guaranteed flush of the freshest state after exhausting the retry budget', async () => {
-    const states = Array.from({ length: 7 }, (_, i) => ({ v: i }));
+    const states = Array.from({ length: 7 }, (_, i) => ({
+      project: { present: { v: i } },
+      versionControl: {},
+      settings: {},
+    }));
     const getStateMock = vi.fn();
     for (const s of states) getStateMock.mockReturnValueOnce(s);
     appStoreRef.current = { getState: getStateMock, dispatch: vi.fn() as never };
@@ -181,6 +185,27 @@ describe('register-sw — controllerchange flush-then-reload (DA-02)', () => {
     // 5 in-loop attempts (states[0..4]) + 1 guaranteed final flush of the freshest state (states[6]).
     expect(mockFlushPersistedState).toHaveBeenCalledTimes(6);
     expect(mockFlushPersistedState).toHaveBeenNthCalledWith(6, states[6]);
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+  });
+
+  // QNBS-v3 (codex P2): comparing the whole root state retried on unrelated non-persisted churn (e.g. status.saving), wasting the retry budget on noise instead of real edits.
+  it('does not retry when only a non-persisted slice changes between getState() calls', async () => {
+    const project = { present: { v: 'a' } };
+    const versionControl = {};
+    const settings = {};
+    // Same persisted slices every call — only the non-persisted `status` field differs.
+    const getStateMock = vi
+      .fn()
+      .mockReturnValueOnce({ project, versionControl, settings, status: { saving: 'saving' } })
+      .mockReturnValue({ project, versionControl, settings, status: { saving: 'saved' } });
+    appStoreRef.current = { getState: getStateMock, dispatch: vi.fn() as never };
+    mockFlushPersistedState.mockResolvedValue(undefined);
+
+    await registerServiceWorker();
+    controllerChangeHandler?.();
+    await flushMicrotasks();
+
+    expect(mockFlushPersistedState).toHaveBeenCalledTimes(1);
     expect(reloadSpy).toHaveBeenCalledTimes(1);
   });
 });

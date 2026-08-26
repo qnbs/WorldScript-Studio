@@ -268,8 +268,12 @@ export class IdbProjectStore extends IdbAssetStore {
       const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
       return new Promise<void>((resolve, reject) => {
         const request = store.put(payload, sliceName);
-        request.onsuccess = () => resolve();
+        const transaction = store.transaction;
+        // QNBS-v3 (codex): resolve on transaction commit, not request success — onsuccess fires before the write is durable, which now matters since a caller can immediately reload.
         request.onerror = () => reject(request.error);
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error ?? new Error('IDB transaction aborted'));
       });
     });
   }

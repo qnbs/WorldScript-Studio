@@ -32,5 +32,10 @@ export async function flushPersistedState(state: RootState): Promise<void> {
       ),
     );
   }
-  await Promise.all(saves);
+  // QNBS-v3 (codex): allSettled — Promise.all's fail-fast let a caller reload before the other save finished; both must settle first, still failing closed if either rejected.
+  const results = await Promise.allSettled(saves);
+  const rejected = results.find(
+    (result): result is PromiseRejectedResult => result.status === 'rejected',
+  );
+  if (rejected) throw rejected.reason;
 }

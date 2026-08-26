@@ -240,15 +240,34 @@ const registerServiceWorker = async (): Promise<void> => {
 // QNBS-v3 (DA-02): loops until a flush completes against state that provably hasn't changed since — a single snapshot could miss edits made while the async write was still in flight.
 const MAX_FLUSH_ATTEMPTS = 5;
 
+// QNBS-v3 (codex): mirrors exactly what flushPersistedState reads/persists — comparing the whole root state would retry on unrelated non-persisted churn (e.g. status.saving) and waste the retry budget.
+function persistedSlices(state: RootState) {
+  return {
+    project: state.project.present,
+    versionControl: state.versionControl,
+    settings: state.settings,
+  };
+}
+
+function persistedSlicesUnchanged(
+  a: ReturnType<typeof persistedSlices>,
+  b: ReturnType<typeof persistedSlices>,
+): boolean {
+  return a.project === b.project && a.versionControl === b.versionControl && a.settings === b.settings;
+}
+
 async function flushLatestState(): Promise<void> {
   const store = appStoreRef.current;
   if (!store) return;
-  let snapshot = store.getState();
+  let snapshot = store.getState() as RootState;
+  let snapshotSlices = persistedSlices(snapshot);
   for (let attempt = 0; attempt < MAX_FLUSH_ATTEMPTS; attempt++) {
-    await flushPersistedState(snapshot as RootState);
-    const latest = store.getState();
-    if (latest === snapshot) return;
+    await flushPersistedState(snapshot);
+    const latest = store.getState() as RootState;
+    const latestSlices = persistedSlices(latest);
+    if (persistedSlicesUnchanged(snapshotSlices, latestSlices)) return;
     snapshot = latest;
+    snapshotSlices = latestSlices;
   }
   // QNBS-v3 (codex, residual risk #518): narrows but doesn't eliminate the race — a keystroke during this final await is still possible to lose.
   await flushPersistedState(store.getState() as RootState);
