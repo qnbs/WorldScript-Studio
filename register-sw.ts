@@ -186,7 +186,7 @@ const registerServiceWorker = async (): Promise<void> => {
       announceUpdateAvailable(registration.waiting);
     }
 
-    // QNBS-v3 (DA-02): only the visible tab flushes — a hidden tab's stale write could race a fresher one (residual multi-window gap: #518).
+    // QNBS-v3: only the visible tab flushes — a hidden tab's stale write could race a fresher one (residual multi-window gap: #518).
     let refreshing = false;
     let reloadPendingWhileHidden = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
@@ -201,7 +201,7 @@ const registerServiceWorker = async (): Promise<void> => {
     document.addEventListener('visibilitychange', () => {
       if (reloadPendingWhileHidden && document.visibilityState === 'visible' && !refreshing) {
         refreshing = true;
-        // QNBS-v3 (DA-02, residual risk tracked in #518): no flush here — index.tsx's best-effort hide-time flush may have failed, but re-flushing this possibly-stale copy risks clobbering a fresher write from another tab, which is the worse failure mode of the two.
+        // QNBS-v3: no flush here — index.tsx's best-effort hide-time flush may have failed, but re-flushing risks clobbering a fresher write from another tab, the worse failure mode of the two (#518).
         window.location.reload();
       }
     });
@@ -237,10 +237,10 @@ const registerServiceWorker = async (): Promise<void> => {
   }
 };
 
-// QNBS-v3 (DA-02): loops until a flush completes against state that provably hasn't changed since — a single snapshot could miss edits made while the async write was still in flight.
+// QNBS-v3: loops until a flush completes against state that provably hasn't changed since — a single snapshot could miss edits made while the async write was still in flight.
 const MAX_FLUSH_ATTEMPTS = 5;
 
-// QNBS-v3 (codex): mirrors exactly what flushPersistedState reads/persists — comparing the whole root state would retry on unrelated non-persisted churn (e.g. status.saving) and waste the retry budget.
+// QNBS-v3: mirrors exactly what flushPersistedState reads/persists — comparing the whole root state would retry on unrelated non-persisted churn (e.g. status.saving) and waste the retry budget.
 function persistedSlices(state: RootState) {
   return {
     project: state.project.present,
@@ -269,14 +269,14 @@ async function flushLatestState(): Promise<void> {
     snapshot = latest;
     snapshotSlices = latestSlices;
   }
-  // QNBS-v3 (codex, residual risk #518): narrows but doesn't eliminate the race — a keystroke during this final await is still possible to lose.
+  // QNBS-v3: narrows but doesn't eliminate the race — a keystroke during this final await is still possible to lose (#518).
   await flushPersistedState(store.getState() as RootState);
 }
 
-// QNBS-v3 (codex): bounds the flush — an unbounded wait (e.g. queued behind another tab's exclusive Web Lock) would hang forever on an already-cache-pruned bundle, defeating the always-reload policy below.
+// QNBS-v3: bounds the flush — an unbounded wait (e.g. queued behind another tab's exclusive Web Lock) would hang forever on an already-cache-pruned bundle, defeating the always-reload policy below.
 const FLUSH_TIMEOUT_MS = 8000;
 
-// QNBS-v3 (DA-02): the reload always proceeds — activation already pruned old-version caches by the time controllerchange fires, so staying on the old bundle risks missing-chunk failures too.
+// QNBS-v3: the reload always proceeds — activation already pruned old-version caches by the time controllerchange fires, so staying on the old bundle risks missing-chunk failures too.
 async function flushLatestStateThenReload(): Promise<void> {
   try {
     await Promise.race([

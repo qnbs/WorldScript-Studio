@@ -269,7 +269,7 @@ export class IdbProjectStore extends IdbAssetStore {
       return new Promise<void>((resolve, reject) => {
         const request = store.put(payload, sliceName);
         const transaction = store.transaction;
-        // QNBS-v3 (codex): resolve on transaction commit, not request success — onsuccess fires before the write is durable, which now matters since a caller can immediately reload.
+        // QNBS-v3: resolve on transaction commit, not request success — onsuccess fires before the write is durable, which now matters since a caller can immediately reload.
         request.onerror = () => reject(request.error);
         transaction.oncomplete = () => resolve();
         transaction.onerror = () => reject(transaction.error);

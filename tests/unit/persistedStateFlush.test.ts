@@ -84,7 +84,7 @@ describe('flushPersistedState', () => {
     await expect(flushPersistedState(buildState())).rejects.toThrow('disk full');
   });
 
-  // QNBS-v3 (codex): an immediate-reload caller must never tear down the page while the other save is still in flight.
+  // QNBS-v3: an immediate-reload caller must never tear down the page while the other save is still in flight.
   it('waits for the other save to settle before rejecting, instead of rejecting as soon as one fails', async () => {
     const order: string[] = [];
     h.saveProject.mockImplementation(async () => {

@@ -1,4 +1,4 @@
-// QNBS-v3 (DA-02): proves controllerchange flushes the latest visible-tab state before reloading.
+// QNBS-v3: proves controllerchange flushes the latest visible-tab state before reloading.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../services/logger', async (importOriginal) => {
@@ -123,7 +123,7 @@ describe('register-sw — controllerchange flush-then-reload (DA-02)', () => {
     expect(reloadSpy).toHaveBeenCalledTimes(1);
   });
 
-  // QNBS-v3 (codex P1): a hidden tab's state can't be fresher than what's already persisted — only the visible tab flushes.
+  // QNBS-v3: only the visible tab flushes — a hidden tab's state can't safely be assumed fresher than what's already persisted.
   it('defers reload while the tab is hidden, then reloads once visible without flushing again', async () => {
     mockFlushPersistedState.mockResolvedValue(undefined);
     await registerServiceWorker();
@@ -139,12 +139,12 @@ describe('register-sw — controllerchange flush-then-reload (DA-02)', () => {
     document.dispatchEvent(new Event('visibilitychange'));
     await flushMicrotasks();
 
-    // QNBS-v3 (codex): index.tsx's own visibilitychange listener already flushed this tab when it went hidden — flushing its possibly-stale copy again here could clobber a fresher write from another tab.
+    // QNBS-v3: index.tsx's own visibilitychange listener already attempted a flush when this tab went hidden — flushing its possibly-stale copy again could clobber a fresher write from another tab.
     expect(mockFlushPersistedState).not.toHaveBeenCalled();
     expect(reloadSpy).toHaveBeenCalledTimes(1);
   });
 
-  // QNBS-v3 (CodeAnt/codex): a single snapshot could miss an edit made while the async write is still in flight.
+  // QNBS-v3: a single snapshot could miss an edit made while the async write is still in flight.
   it('re-flushes with the latest state when it changes during the pending flush, before reloading', async () => {
     const stateA = { project: { present: { v: 'a' } }, versionControl: {}, settings: {} };
     const stateB = { project: { present: { v: 'b' } }, versionControl: {}, settings: {} };
@@ -166,7 +166,7 @@ describe('register-sw — controllerchange flush-then-reload (DA-02)', () => {
     expect(lastFlushOrder).toBeLessThan(reloadOrder);
   });
 
-  // QNBS-v3 (codex P2): the retry loop can exhaust its budget while state keeps changing — one guaranteed final flush must still capture whatever's freshest, not silently drop it.
+  // QNBS-v3: the retry loop can exhaust its budget while state keeps changing — one guaranteed final flush must still capture whatever's freshest, not silently drop it.
   it('performs one final guaranteed flush of the freshest state after exhausting the retry budget', async () => {
     const states = Array.from({ length: 7 }, (_, i) => ({
       project: { present: { v: i } },
@@ -188,7 +188,7 @@ describe('register-sw — controllerchange flush-then-reload (DA-02)', () => {
     expect(reloadSpy).toHaveBeenCalledTimes(1);
   });
 
-  // QNBS-v3 (codex P2): comparing the whole root state retried on unrelated non-persisted churn (e.g. status.saving), wasting the retry budget on noise instead of real edits.
+  // QNBS-v3: comparing the whole root state retried on unrelated non-persisted churn (e.g. status.saving), wasting the retry budget on noise instead of real edits.
   it('does not retry when only a non-persisted slice changes between getState() calls', async () => {
     const project = { present: { v: 'a' } };
     const versionControl = {};
@@ -209,7 +209,7 @@ describe('register-sw — controllerchange flush-then-reload (DA-02)', () => {
     expect(reloadSpy).toHaveBeenCalledTimes(1);
   });
 
-  // QNBS-v3 (codex P2): an unbounded wait (e.g. queued behind another tab's exclusive Web Lock) must not hang the reload forever on an already-cache-pruned bundle.
+  // QNBS-v3: an unbounded wait (e.g. queued behind another tab's exclusive Web Lock) must not hang the reload forever on an already-cache-pruned bundle.
   it('reloads once the flush timeout elapses if the flush never settles', async () => {
     vi.useFakeTimers();
     try {

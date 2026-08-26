@@ -111,7 +111,7 @@ async function offlineFallback(request) {
 // INSTALL — Precache shell
 // ════════════════════════════════════════════════════════════
 self.addEventListener('install', (event) => {
-  // QNBS-v3 (DA-02): activates immediately, no waiting — register-sw.ts owns the bounded pre-reload flush mitigation, residual risk tracked in #518.
+  // QNBS-v3: activates immediately, no waiting — register-sw.ts owns the bounded pre-reload flush mitigation, residual risk tracked in #518.
   self.skipWaiting();
   // QNBS-v3: Never precache inside Tauri — the desktop app serves its shell from the bundle.
   if (IS_TAURI) return;
