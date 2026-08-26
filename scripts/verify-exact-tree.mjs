@@ -16,7 +16,21 @@ class ExactTreeInterrupted extends Error {
   }
 }
 
-const DEFAULT_TSGO_ARGS = ['--project', 'tsconfig.tsgo.json', '--noEmit', '--checkers', '1'];
+// QNBS-v3: refs/replace/<sha> would substitute a different tree; set globally so every git call in this process inherits it.
+process.env.GIT_NO_REPLACE_OBJECTS = '1';
+
+const DEFAULT_TSGO_ARGS = [
+  '--project',
+  'tsconfig.tsgo.json',
+  '--noEmit',
+  '--checkers',
+  '1',
+  // QNBS-v3: CLI flags outrank the checked ref's own tsconfig -- must not disable checking or redirect build-info writes.
+  '--noCheck',
+  'false',
+  '--tsBuildInfoFile',
+  '.tsbuildinfo',
+];
 // QNBS-v3: measured ~2m20s for the full project on this hardware with a warm store; 5min gives margin.
 const DEFAULT_INSTALL_TIMEOUT_MS = 300_000;
 // QNBS-v3: single-checker measured ~56s; docs cite ~300s for full typecheck -- 6min clears both with margin.
@@ -51,6 +65,11 @@ function hasTrackedNodeModules(entries) {
   );
 }
 
+// QNBS-v3: a Windows checkout recreates backslash/drive-letter/UNC targets literally -- posix alone misses them.
+function looksLikeWindowsEscapingTarget(target) {
+  return /^[a-zA-Z]:[\\/]/.test(target) || target.startsWith('\\\\') || target.includes('\\');
+}
+
 // QNBS-v3: a tracked symlink whose target escapes the tree root would let tsgo read live/external content.
 function hasEscapingSymlink(entries, sha, repoRoot, dependencies) {
   const readBlob = dependencies.readBlobAtRef ?? readFileAtRef;
@@ -59,11 +78,77 @@ function hasEscapingSymlink(entries, sha, repoRoot, dependencies) {
     const targetBuffer = readBlob(sha, entry.path, repoRoot);
     if (targetBuffer === null) return true; // unreadable target -- fail closed, treat as escaping.
     const target = targetBuffer.toString('utf8').trim();
+    if (looksLikeWindowsEscapingTarget(target)) return true;
     if (posix.isAbsolute(target)) return true;
     const resolved = posix.normalize(posix.join(posix.dirname(entry.path), target));
     if (resolved.startsWith('..') || posix.isAbsolute(resolved)) return true;
   }
   return false;
+}
+
+// QNBS-v3: an uninitialized submodule leaves its path silently empty -- tsgo could exit 0 while omitting it.
+function hasUnmaterializedGitlink(entries) {
+  return entries.some((entry) => entry.type === 'commit');
+}
+
+// QNBS-v3: git has no clean way to force a filter driver to a no-op (smudge vs. process differ); refuse instead.
+function defaultIsFilterConfigured(name, repoRoot) {
+  for (const key of ['smudge', 'clean', 'process']) {
+    const result = spawnSync('git', ['config', '--get', `filter.${name}.${key}`], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      timeout: 5000,
+    });
+    if (!result.error && result.status === 0) return true;
+  }
+  return false;
+}
+
+// QNBS-v3: a tracked .gitattributes selecting a filter configured in ANY scope (local/global/system) would run it.
+function hasActiveTrackedFilter(entries, sha, repoRoot, dependencies) {
+  const readBlob = dependencies.readBlobAtRef ?? readFileAtRef;
+  const isFilterConfigured = dependencies.isFilterConfigured ?? defaultIsFilterConfigured;
+  const filterNames = new Set();
+  for (const entry of entries) {
+    if (entry.path !== '.gitattributes' && !entry.path.endsWith('/.gitattributes')) continue;
+    const contentBuffer = readBlob(sha, entry.path, repoRoot);
+    if (contentBuffer === null) return true; // unreadable .gitattributes -- fail closed.
+    for (const line of contentBuffer.toString('utf8').split('\n')) {
+      const match = line.match(/(?:^|\s)filter=(\S+)/);
+      if (match) filterNames.add(match[1]);
+    }
+  }
+  for (const name of filterNames) {
+    if (isFilterConfigured(name, repoRoot)) return true;
+  }
+  return false;
+}
+
+// QNBS-v3: partial mitigation for the tsconfig-level vector; an escaping source-level import is a documented residual (needs OS sandboxing).
+function hasEscapingTsconfigScope(entries, sha, repoRoot, dependencies) {
+  const readBlob = dependencies.readBlobAtRef ?? readFileAtRef;
+  const tsconfigEntry = entries.find((entry) => entry.path === 'tsconfig.tsgo.json');
+  if (!tsconfigEntry) return false; // a missing tsconfig fails the install/tsgo steps on their own terms.
+  const contentBuffer = readBlob(sha, 'tsconfig.tsgo.json', repoRoot);
+  if (contentBuffer === null) return true; // unreadable -- fail closed.
+  let parsed;
+  try {
+    parsed = JSON.parse(contentBuffer.toString('utf8'));
+  } catch {
+    return true; // unparseable -- refuse rather than let tsgo interpret it unexamined.
+  }
+  const values = [
+    ...(Array.isArray(parsed.include) ? parsed.include : []),
+    ...(Array.isArray(parsed.exclude) ? parsed.exclude : []),
+    ...(Array.isArray(parsed.files) ? parsed.files : []),
+    ...(typeof parsed.extends === 'string' ? [parsed.extends] : []),
+  ].filter((value) => typeof value === 'string');
+  return values.some(
+    (value) =>
+      looksLikeWindowsEscapingTarget(value) ||
+      posix.isAbsolute(value) ||
+      posix.normalize(value).startsWith('..'),
+  );
 }
 
 // QNBS-v3: checked against the exact commit's own git objects, before any worktree/pnpm step touches disk.
@@ -72,7 +157,10 @@ function verifyExactTreePreflight(sha, repoRoot, dependencies = {}) {
   const entries = listEntries(sha, repoRoot);
   if (entries === null) return false; // an unreadable tree can never be proven clean.
   if (hasTrackedNodeModules(entries)) return false;
+  if (hasUnmaterializedGitlink(entries)) return false;
   if (hasEscapingSymlink(entries, sha, repoRoot, dependencies)) return false;
+  if (hasActiveTrackedFilter(entries, sha, repoRoot, dependencies)) return false;
+  if (hasEscapingTsconfigScope(entries, sha, repoRoot, dependencies)) return false;
   return true;
 }
 
@@ -95,7 +183,9 @@ function defaultResolveStoreDir(trustedRepoRoot) {
     env: { ...process.env, COREPACK_ENABLE_NETWORK: '0' },
   });
   if (result.error || result.status !== 0) return null;
-  return result.stdout.trim();
+  const storePath = result.stdout.trim();
+  // QNBS-v3: an empty store path would resolve --store-dir '' relative to the untrusted worktree cwd.
+  return storePath === '' ? null : storePath;
 }
 
 export async function createIsolatedWorktree(sha, repoRoot, dependencies = {}) {
@@ -143,7 +233,7 @@ export async function createIsolatedWorktree(sha, repoRoot, dependencies = {}) {
   }
 }
 
-// QNBS-v3: fail-closed -- git's own removal failing falls back to a raw sweep plus a metadata prune.
+// QNBS-v3: fail-closed removal fallback; cleanup always finishes even when interrupted, then re-raises it.
 export async function removeIsolatedWorktree(worktreePath, repoRoot, dependencies = {}) {
   if (!worktreePath) return;
   const runGit = dependencies.runBounded ?? runBounded;
@@ -151,13 +241,16 @@ export async function removeIsolatedWorktree(worktreePath, repoRoot, dependencie
   const result = await runGit('git', ['worktree', 'remove', '--force', worktreePath], {
     cwd: repoRoot,
   });
+  let interrupted = Boolean(result.interrupted);
   if (boundedCommandFailed(result)) {
     try {
       await removeDir(worktreePath);
     } catch {
       // Best-effort: nothing more can be done from here; the directory is under os.tmpdir().
     }
-    await runGit('git', ['worktree', 'prune'], { cwd: repoRoot });
+    const pruneResult = await runGit('git', ['worktree', 'prune'], { cwd: repoRoot });
+    interrupted ||= Boolean(pruneResult.interrupted);
+    if (interrupted) throw new ExactTreeInterrupted();
     return;
   }
   // QNBS-v3: git leaves the now-empty mkdtemp-created dir in place after remove -- sweep it too.
@@ -166,6 +259,7 @@ export async function removeIsolatedWorktree(worktreePath, repoRoot, dependencie
   } catch {
     // Best-effort: nothing more can be done from here; the directory is under os.tmpdir().
   }
+  if (interrupted) throw new ExactTreeInterrupted();
 }
 
 // QNBS-v3: real pnpm install, not a hand-reconstructed symlink graph -- offline, fails to UNKNOWN below.

@@ -508,6 +508,22 @@ describe('verifyExactTreeTypecheck (fail-closed lifecycle, signal/status semanti
     assert.ok(seenCwds.length > 0);
     for (const cwd of seenCwds) assert.equal(cwd, resolve('.'), `expected absolute cwd, got ${cwd}`);
   });
+
+  it('forces --noCheck false and a worktree-local --tsBuildInfoFile on the tsgo invocation, outranking the checked ref\'s own tsconfig', async () => {
+    let seenArgs;
+    await verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
+      listTreeEntries: () => [],
+      computeDependencyState: () => 'MATCHES',
+      storeDir: '/fake-store',
+      mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
+      runBounded: () => ({ status: 0, error: null, signal: null, timedOut: false, interrupted: false }),
+      runLocalBinaryDetailed: async (_binary, args) => {
+        seenArgs = args;
+        return { status: 0, error: null, signal: null, timedOut: false, interrupted: false };
+      },
+    });
+    assert.deepEqual(seenArgs.slice(seenArgs.indexOf('--noCheck')), ['--noCheck', 'false', '--tsBuildInfoFile', '.tsbuildinfo']);
+  });
 });
 
 describe('verifyExactTreeTypecheck (P1: the checked ref must never supply the compiler that certifies it)', () => {
@@ -547,9 +563,17 @@ describe('verifyExactTreeTypecheck (P1: the checked ref must never supply the co
     }
   });
 
-  it('never executes a workspace-supplied tsgo binary or yields PASS, even via a legitimate frozen install', async () => {
+  it('refuses (UNKNOWN) a workspace-supplied tsgo binary via the default dependencyState gate, before any install', async () => {
     const { root, maliciousSha, markerFile } = makeMaliciousTsgoFixture();
     const state = await verifyExactTreeTypecheck(maliciousSha, root, {});
+    assert.equal(state, 'UNKNOWN');
+    assert.equal(existsSync(markerFile), false, 'the ref-supplied tsgo bin must never execute');
+  });
+
+  it('never executes a workspace-supplied tsgo binary even via a real, legitimate frozen install (dependencyState mocked to MATCHES)', async () => {
+    const { root, maliciousSha, markerFile } = makeMaliciousTsgoFixture();
+    // QNBS-v3: bypasses the gate above -- root's own tsgo lookup finds nothing, so the isolated tree's real, freshly-installed evil bin is still never touched.
+    const state = await verifyExactTreeTypecheck(maliciousSha, root, { computeDependencyState: () => 'MATCHES' });
     assert.notEqual(state, 'PASS', 'a ref-supplied compiler must never certify itself');
     assert.equal(existsSync(markerFile), false, 'the ref-supplied tsgo bin must never execute');
   });
@@ -673,6 +697,153 @@ describe('verifyExactTreePreflight (P1: refuse before any materialization touche
 
   it('leaves a commit with an ordinary, non-escaping tracked symlink eligible for materialization', async () => {
     const { root, sha } = makeRepoWithTrackedSymlink('safe-link', 'real.txt');
+    let worktreeAddCalled = false;
+    const state = await verifyExactTreeTypecheck(sha, root, {
+      computeDependencyState: () => 'MATCHES',
+      mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
+      runBounded: (_command, args) => {
+        if (args.includes('add')) worktreeAddCalled = true;
+        return { status: 1, error: null, signal: null, timedOut: false, interrupted: false };
+      },
+    });
+    assert.equal(worktreeAddCalled, true);
+    assert.equal(state, 'UNKNOWN'); // fake path -- worktree add itself is mocked to fail, but it was reached.
+  });
+
+  function makeRepoWithGitattributesFilter(filterName, attributesPath = '.gitattributes') {
+    const root = mkdtempSync(join(process.cwd(), '.worldscript-exact-tree-filterattr-'));
+    temporaryRoots.push(root);
+    git(root, ['init', '--quiet', '--initial-branch=main']);
+    git(root, ['config', 'user.email', 'test@example.com']);
+    git(root, ['config', 'user.name', 'test']);
+    const fullAttrPath = join(root, attributesPath);
+    mkdirSync(join(fullAttrPath, '..'), { recursive: true });
+    writeFileSync(fullAttrPath, `tracked.bin filter=${filterName}\n`);
+    writeFileSync(join(root, 'tracked.bin'), 'secret content\n');
+    git(root, ['add', '-A']);
+    git(root, ['-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'test']);
+    const sha = git(root, ['rev-parse', 'HEAD']).trim();
+    return { root, sha };
+  }
+
+  it('refuses (UNKNOWN, no materialization) when a tracked .gitattributes selects a LOCALLY-configured filter', async () => {
+    const { root, sha } = makeRepoWithGitattributesFilter('evilfilter');
+    // QNBS-v3: --local specifically, not --global -- proves this closes the local-scope gap too.
+    git(root, ['config', '--local', 'filter.evilfilter.smudge', 'cat']);
+    const spy = refusingMaterializationSpy();
+    const state = await verifyExactTreeTypecheck(sha, root, spy);
+    assert.equal(state, 'UNKNOWN');
+    assert.equal(spy.calls.runBounded, 0, 'materialization must never start when a configured filter is selected');
+  });
+
+  it('refuses (UNKNOWN, no materialization) when a NESTED tracked .gitattributes selects a configured filter', async () => {
+    const { root, sha } = makeRepoWithGitattributesFilter('nestedfilter', 'sub/.gitattributes');
+    git(root, ['config', '--local', 'filter.nestedfilter.process', 'cat']);
+    const spy = refusingMaterializationSpy();
+    const state = await verifyExactTreeTypecheck(sha, root, spy);
+    assert.equal(state, 'UNKNOWN');
+    assert.equal(spy.calls.runBounded, 0, 'materialization must never start when a configured filter is selected');
+  });
+
+  it('leaves a commit eligible when its .gitattributes selects a filter name that is not configured anywhere', async () => {
+    const { root, sha } = makeRepoWithGitattributesFilter('totally-undefined-filter-name');
+    let worktreeAddCalled = false;
+    const state = await verifyExactTreeTypecheck(sha, root, {
+      computeDependencyState: () => 'MATCHES',
+      mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
+      runBounded: (_command, args) => {
+        if (args.includes('add')) worktreeAddCalled = true;
+        return { status: 1, error: null, signal: null, timedOut: false, interrupted: false };
+      },
+    });
+    assert.equal(worktreeAddCalled, true);
+    assert.equal(state, 'UNKNOWN'); // fake path -- worktree add itself is mocked to fail, but it was reached.
+  });
+
+  it('refuses (UNKNOWN) a commit containing an unmaterialized gitlink (submodule)', async () => {
+    const root = mkdtempSync(join(process.cwd(), '.worldscript-exact-tree-gitlink-'));
+    temporaryRoots.push(root);
+    git(root, ['init', '--quiet', '--initial-branch=main']);
+    git(root, ['config', 'user.email', 'test@example.com']);
+    git(root, ['config', 'user.name', 'test']);
+    writeFileSync(join(root, 'real.ts'), 'const x: number = 1;\n');
+    // QNBS-v3: a real submodule commit hash object need not exist locally -- ls-tree/mode is what matters.
+    git(root, ['update-index', '--add', '--cacheinfo', '160000', 'a'.repeat(40), 'sub-module']);
+    git(root, ['add', 'real.ts']);
+    git(root, ['-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'test']);
+    const sha = git(root, ['rev-parse', 'HEAD']).trim();
+    const spy = refusingMaterializationSpy();
+    const state = await verifyExactTreeTypecheck(sha, root, spy);
+    assert.equal(state, 'UNKNOWN');
+    assert.equal(spy.calls.runBounded, 0, 'materialization must never start when a gitlink is present');
+  });
+
+  it('refuses (UNKNOWN) a tracked symlink with a Windows-style backslash-relative escaping target', async () => {
+    const { root, sha } = makeRepoWithTrackedSymlink('sub/escaping-link', '..\\..\\..\\outside-target');
+    const spy = refusingMaterializationSpy();
+    const state = await verifyExactTreeTypecheck(sha, root, spy);
+    assert.equal(state, 'UNKNOWN');
+    assert.equal(spy.calls.runBounded, 0, 'materialization must never start for an escaping symlink commit');
+  });
+
+  it('refuses (UNKNOWN) a tracked symlink with a Windows drive-letter absolute target', async () => {
+    const { root, sha } = makeRepoWithTrackedSymlink('escaping-drive-link', 'C:\\Windows\\System32\\drivers\\etc\\hosts');
+    const spy = refusingMaterializationSpy();
+    const state = await verifyExactTreeTypecheck(sha, root, spy);
+    assert.equal(state, 'UNKNOWN');
+    assert.equal(spy.calls.runBounded, 0, 'materialization must never start for an escaping symlink commit');
+  });
+
+  it('refuses (UNKNOWN) a tracked symlink with a UNC path target', async () => {
+    const { root, sha } = makeRepoWithTrackedSymlink('escaping-unc-link', '\\\\attacker-host\\share\\payload');
+    const spy = refusingMaterializationSpy();
+    const state = await verifyExactTreeTypecheck(sha, root, spy);
+    assert.equal(state, 'UNKNOWN');
+    assert.equal(spy.calls.runBounded, 0, 'materialization must never start for an escaping symlink commit');
+  });
+
+  function makeRepoWithTsconfigScope(tsconfigContent) {
+    const root = mkdtempSync(join(process.cwd(), '.worldscript-exact-tree-tsconfigscope-'));
+    temporaryRoots.push(root);
+    git(root, ['init', '--quiet', '--initial-branch=main']);
+    git(root, ['config', 'user.email', 'test@example.com']);
+    git(root, ['config', 'user.name', 'test']);
+    writeFileSync(join(root, 'tsconfig.tsgo.json'), tsconfigContent);
+    writeFileSync(join(root, 'index.ts'), 'const x: number = 1;\n');
+    git(root, ['add', '-A']);
+    git(root, ['-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'test']);
+    const sha = git(root, ['rev-parse', 'HEAD']).trim();
+    return { root, sha };
+  }
+
+  it('refuses (UNKNOWN) when tsconfig.tsgo.json include escapes the tree via ../..', async () => {
+    const { root, sha } = makeRepoWithTsconfigScope(
+      JSON.stringify({ include: ['../../../etc/**/*.ts'] }),
+    );
+    const spy = refusingMaterializationSpy();
+    const state = await verifyExactTreeTypecheck(sha, root, spy);
+    assert.equal(state, 'UNKNOWN');
+    assert.equal(spy.calls.runBounded, 0, 'materialization must never start for an escaping tsconfig scope');
+  });
+
+  it('refuses (UNKNOWN) when tsconfig.tsgo.json extends an absolute path', async () => {
+    const { root, sha } = makeRepoWithTsconfigScope(JSON.stringify({ extends: '/etc/tsconfig-base.json' }));
+    const spy = refusingMaterializationSpy();
+    const state = await verifyExactTreeTypecheck(sha, root, spy);
+    assert.equal(state, 'UNKNOWN');
+    assert.equal(spy.calls.runBounded, 0, 'materialization must never start for an escaping tsconfig scope');
+  });
+
+  it('refuses (UNKNOWN) when tsconfig.tsgo.json is not valid JSON', async () => {
+    const { root, sha } = makeRepoWithTsconfigScope('{ not valid json');
+    const spy = refusingMaterializationSpy();
+    const state = await verifyExactTreeTypecheck(sha, root, spy);
+    assert.equal(state, 'UNKNOWN');
+    assert.equal(spy.calls.runBounded, 0, 'materialization must never start for an unparseable tsconfig');
+  });
+
+  it('leaves a commit eligible when tsconfig.tsgo.json only uses ordinary in-tree relative paths', async () => {
+    const { root, sha } = makeRepoWithTsconfigScope(JSON.stringify({ include: ['index.ts'] }));
     let worktreeAddCalled = false;
     const state = await verifyExactTreeTypecheck(sha, root, {
       computeDependencyState: () => 'MATCHES',
@@ -843,6 +1014,34 @@ describe('interruption handling (P2: explicit user intent must stop the whole ru
     assert.equal(created.interrupted, true);
   });
 
+  it('removeIsolatedWorktree still completes cleanup, then rejects, when git worktree remove is interrupted', async () => {
+    let removeCalled = false;
+    let pruneCalled = false;
+    let rmCalled = false;
+    await assert.rejects(
+      removeIsolatedWorktree('/tmp/worldscript-exact-tree-fake', '/repo', {
+        runBounded: (_command, args) => {
+          if (args.includes('remove')) {
+            removeCalled = true;
+            return { status: null, error: null, signal: null, timedOut: false, interrupted: true };
+          }
+          if (args.includes('prune')) {
+            pruneCalled = true;
+            return { status: 0, error: null, signal: null, timedOut: false, interrupted: false };
+          }
+          return { status: 0, error: null, signal: null, timedOut: false, interrupted: false };
+        },
+        rmFn: async () => {
+          rmCalled = true;
+        },
+      }),
+      { name: 'ExactTreeInterrupted' },
+    );
+    assert.equal(removeCalled, true);
+    assert.equal(rmCalled, true, 'the fallback sweep must still run even though remove was interrupted');
+    assert.equal(pruneCalled, true, 'the fallback prune must still run even though remove was interrupted');
+  });
+
   it('verifyExactTreeTypecheck rejects (does not return UNKNOWN) when worktree creation is interrupted', async () => {
     await assert.rejects(
       verifyExactTreeTypecheck('a'.repeat(40), '/repo', {
@@ -948,6 +1147,41 @@ describe('interruption handling (P2: explicit user intent must stop the whole ru
     }
     assert.ok(logs.some((line) => line.includes('interrupted')), logs.join('\n'));
     assert.ok(!logs.some((line) => line.includes('result:')), 'must not print a normal PASS/FAIL/UNKNOWN result line');
+  });
+});
+
+describe('git replace refs (P1: exact-tree checks must not be fooled by refs/replace)', () => {
+  it('operates on the original tree, not a git-replace substitute, when the preflight lists tracked entries', async () => {
+    const root = mkdtempSync(join(process.cwd(), '.worldscript-exact-tree-replace-'));
+    temporaryRoots.push(root);
+    git(root, ['init', '--quiet', '--initial-branch=main']);
+    git(root, ['config', 'user.email', 'test@example.com']);
+    git(root, ['config', 'user.name', 'test']);
+    writeFileSync(join(root, 'README.md'), 'original\n');
+    git(root, ['add', '-A']);
+    git(root, ['-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'original']);
+    const originalSha = git(root, ['rev-parse', 'HEAD']).trim();
+
+    // QNBS-v3: if refs/replace were honored, the preflight would see the replacement's node_modules and refuse.
+    mkdirSync(join(root, 'node_modules', '.bin'), { recursive: true });
+    writeFileSync(join(root, 'node_modules', '.bin', 'tsgo'), '#!/bin/sh\necho attacker\n');
+    git(root, ['add', '-A']);
+    git(root, ['-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'replacement']);
+    const replacedSha = git(root, ['rev-parse', 'HEAD']).trim();
+    git(root, ['reset', '--hard', '--quiet', originalSha]);
+    git(root, ['replace', originalSha, replacedSha]);
+
+    let worktreeAddCalled = false;
+    const state = await verifyExactTreeTypecheck(originalSha, root, {
+      computeDependencyState: () => 'MATCHES',
+      mkdtempFn: async () => '/tmp/worldscript-exact-tree-fake',
+      runBounded: (_command, args) => {
+        if (args.includes('add')) worktreeAddCalled = true;
+        return { status: 1, error: null, signal: null, timedOut: false, interrupted: false };
+      },
+    });
+    assert.equal(worktreeAddCalled, true, 'must operate on the original tree, not the git-replace substitute');
+    assert.equal(state, 'UNKNOWN'); // fake path -- worktree add itself is mocked to fail, but it was reached.
   });
 });
 

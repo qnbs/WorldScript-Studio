@@ -36,8 +36,10 @@ export interface VerifyExactTreeDependencies {
   repoRoot?: string;
   // QNBS-v3: reuses dependency-state.mjs's mode-aware git-tree enumeration authority -- not a second parser.
   listTreeEntries?: (sha: string, cwd: string) => TreeEntry[] | null;
-  // QNBS-v3: reuses dependency-state.mjs's git-object blob reader for symlink target content.
+  // QNBS-v3: reuses dependency-state.mjs's git-object blob reader for symlink/.gitattributes content.
   readBlobAtRef?: (sha: string, relativePath: string, cwd: string) => Buffer | null;
+  // QNBS-v3: checks any scope (local/global/system) for a tracked .gitattributes filter name.
+  isFilterConfigured?: (name: string, repoRoot: string) => boolean;
   // QNBS-v3: reuses #502's manifest-compatibility authority to gate which tsgo binary may be trusted.
   computeDependencyState?: (sha: string, root: string) => DependencyState;
   // QNBS-v3: the trusted checkout installDependencies resolves the pinned store-dir from -- never the worktree.
