@@ -52,10 +52,11 @@ jobs:
           pnpm exec tauri build
           echo "Tauri build completed successfully"
 
+      # QNBS-v3: a missing bundle means the qualification claim itself is false — error, not warn.
       - name: Upload bundle directory (qualification evidence, not a release asset)
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: tauri-bundle-macos-15-intel-qualification
           path: src-tauri/target/release/bundle/
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 14
