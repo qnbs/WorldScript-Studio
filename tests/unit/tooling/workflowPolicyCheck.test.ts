@@ -203,10 +203,18 @@ describe('checkActionPins', () => {
     expect(failures).toEqual([]);
   });
 
-  it('skips a local composite action reference', () => {
+  it('skips a local composite action reference under the governed directory', () => {
     const failures: WorkflowPolicyFailure[] = [];
     checkActionPins('x.yml', doc(wrap('uses: ./.github/actions/setup')), failures);
     expect(failures).toEqual([]);
+  });
+
+  // QNBS-v3: only .github/actions/** is scanned by listActionFiles — anywhere else is unchecked.
+  it('fails for a local action reference outside .github/actions/', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkActionPins('x.yml', doc(wrap('uses: ./ci/setup')), failures);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.message).toMatch(/outside the governed \.github\/actions\//);
   });
 
   it('fails for a floating tag instead of a SHA', () => {
@@ -548,14 +556,28 @@ describe('checkAggregatorNeeds', () => {
 
 // QNBS-v3: scalar write-all implicitly grants contents:write and must not evade this boundary.
 describe('checkPublishingBoundary', () => {
-  it('passes for contents:write on an allowlisted publishing job', () => {
+  it('passes for contents:write on an allowlisted, tag-restricted publishing job', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkPublishingBoundary(
+      'tauri-build.yml',
+      doc(
+        `jobs:\n  release:\n    if: ${githubExpression("github.ref_type == 'tag'")}\n    permissions:\n      contents: write\n`,
+      ),
+      failures,
+    );
+    expect(failures).toEqual([]);
+  });
+
+  // QNBS-v3: allowlisting by (file, job) name alone survives the gate being loosened/removed.
+  it('fails for an allowlisted publishing job whose tag-only if: condition was removed', () => {
     const failures: WorkflowPolicyFailure[] = [];
     checkPublishingBoundary(
       'tauri-build.yml',
       doc('jobs:\n  release:\n    permissions:\n      contents: write\n'),
       failures,
     );
-    expect(failures).toEqual([]);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.message).toMatch(/no longer restricts it to a tag push/);
   });
 
   it('fails for contents:write on a job not on the publishing allowlist', () => {

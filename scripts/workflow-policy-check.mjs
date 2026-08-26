@@ -224,13 +224,22 @@ function checkUsesRef({ usesNode, containerNode, doc, fileName, lineCounter, fai
   const resolvedNode = resolveNode(usesNode, doc);
   if (!resolvedNode || typeof resolvedNode.value !== 'string') return;
   const ref = resolvedNode.value;
-  // QNBS-v3: local/build-from-source refs have no registry pin concept — already pinned by the commit.
-  if (ref.startsWith('./') || ref === 'Dockerfile') return;
   const line =
     lineCounter && Array.isArray(usesNode.range)
       ? lineCounter.linePos(usesNode.range[0]).line
       : undefined;
   const loc = line ? `line ${line}: ` : '';
+  // QNBS-v3: build-from-source has no registry pin concept — already pinned by being in the commit.
+  if (ref === 'Dockerfile') return;
+  if (ref.startsWith('./')) {
+    // QNBS-v3: only .github/actions/** is scanned by listActionFiles — any other local ref is unchecked.
+    if (ref.startsWith('./.github/actions/')) return;
+    failures.push({
+      file: fileName,
+      message: `${loc}local action reference "${ref}" is outside the governed .github/actions/ directory and is never pin-checked`,
+    });
+    return;
+  }
   if (ref.startsWith('docker://')) {
     // QNBS-v3: a mutable docker tag is as unpinned as a floating action tag — require a digest.
     if (!DOCKER_DIGEST_PATTERN.test(ref)) {
@@ -389,6 +398,9 @@ export function checkAggregatorNeeds(fileName, doc, failures) {
   }
 }
 
+// QNBS-v3: a tag-restricted ref check — allowlisting by name alone can't survive that gate loosening.
+const TAG_ONLY_CONDITION_PATTERN = /refs\/tags\/|ref_type\s*==\s*['"]tag['"]/;
+
 export function checkPublishingBoundary(fileName, doc, failures) {
   const allowlist = PUBLISHING_ALLOWLIST[fileName] ?? new Set();
   for (const [jobName, jobNode] of jobMap(doc)) {
@@ -397,10 +409,20 @@ export function checkPublishingBoundary(fileName, doc, failures) {
     const hasContentsWrite =
       permissions?.map?.contents === 'write' ||
       (permissions?.scalar !== undefined && permissions.scalar !== 'read-all');
-    if (hasContentsWrite && !allowlist.has(jobName)) {
+    if (!hasContentsWrite) continue;
+    if (!allowlist.has(jobName)) {
       failures.push({
         file: fileName,
         message: `job "${jobName}" declares contents:write but is not on the publishing allowlist`,
+      });
+      continue;
+    }
+    // QNBS-v3: allowlisting by name is only sound while the job itself stays tag-push-restricted.
+    const ifNode = resolveNode(jobNode?.get?.('if', true), doc);
+    if (typeof ifNode?.value !== 'string' || !TAG_ONLY_CONDITION_PATTERN.test(ifNode.value)) {
+      failures.push({
+        file: fileName,
+        message: `publishing job "${jobName}" is on the allowlist but its if: condition no longer restricts it to a tag push — loosening or removing that condition would expose contents:write outside a verified release`,
       });
     }
   }
