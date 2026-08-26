@@ -17,6 +17,7 @@ until Qt admission and cutover gates are satisfied, **and itself retired once Qt
 **Architecture rule:** no domain/business logic duplication across renderers
 **Revision:** 2 — early killer-gate sequencing and GPUI exploration boundary
 **Revision date:** 2026-08-21
+**Amended by Revision 3:** [`DESKTOP-MIGRATION-ROADMAP-REV3.md`](DESKTOP-MIGRATION-ROADMAP-REV3.md) is a binding amendment to this roadmap — it adds gates G1.5 and G2.5 and Wave 2.5, and must be read together with this document, not as an optional standalone note.
 
 ## Document status and corrections applied at adoption (Wave 0, 2026-08-20)
 

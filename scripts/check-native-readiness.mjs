@@ -42,6 +42,7 @@ const rev3Wave25 = section(
   '### Wave 2.5 — Desktop differential baseline & #332 classification — NEW',
   '### Wave 3 — Storage correctness and R-15 design',
 );
+const gateMatrix = section(earlyGates, '## Gate matrix', '## Minimum evidence package');
 const earlyOrder = [
   'Lifecycle and bridge spike',
   'Accessibility and input feasibility',
@@ -187,9 +188,14 @@ requireText(
   'Wave 4.5 must consume early-lane evidence instead of silently duplicating it.',
 );
 requireText(
-  earlyGates,
+  gateMatrix,
   'Linux graphics differential',
-  'Qt qualification must include the Revision-3 Linux graphics differential lane.',
+  'The Gate matrix must include a Linux graphics differential row, not just an early-lane mention.',
+);
+requireText(
+  gateMatrix,
+  /unbounded resource growth \(explained or not/,
+  'The Linux graphics differential kill condition must reject unbounded growth whether or not it is explained.',
 );
 requireText(
   waveFive,
