@@ -1,8 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { parseDocument } from 'yaml';
+import { LineCounter, isAlias, parseDocument } from 'yaml';
 
 function resolveProjectRoot() {
   try {
@@ -39,11 +39,26 @@ export function listWorkflowFiles(root = projectRoot, dependencies = {}) {
     .map((name) => join(dir, name));
 }
 
+// QNBS-v3: composite actions carry the same uses:-pin risk but have no jobs/permissions to check.
+export function listActionFiles(root = projectRoot, dependencies = {}) {
+  const dir = join(root, '.github/actions');
+  const listDir = dependencies.readdirSync ?? readdirSync;
+  if (!existsSync(dir)) return [];
+  const results = [];
+  for (const name of listDir(dir)) {
+    for (const candidate of [join(dir, name, 'action.yml'), join(dir, name, 'action.yaml')]) {
+      if (existsSync(candidate)) results.push(candidate);
+    }
+  }
+  return results.sort();
+}
+
 export function parseWorkflowFile(filePath, dependencies = {}) {
   const readFile = dependencies.readFileSync ?? readFileSync;
   const content = readFile(filePath, 'utf8');
-  const doc = parseDocument(content, { uniqueKeys: true });
-  return { filePath, content, doc };
+  const lineCounter = new LineCounter();
+  const doc = parseDocument(content, { uniqueKeys: true, lineCounter });
+  return { filePath, content, doc, lineCounter };
 }
 
 function jobMap(doc) {
@@ -54,19 +69,21 @@ function jobMap(doc) {
   return map;
 }
 
-function permissionEntries(node) {
-  // QNBS-v3: "read-all" (OSSF Scorecard's own convention) is a valid zero-write scalar form.
+// QNBS-v3: an aliased *perms block resolves to Alias, not YAMLMap — must dereference before use.
+function permissionEntries(node, doc) {
   if (!node) return null;
-  if (typeof node.toJSON === 'function' && typeof node.items === 'undefined') {
-    return { scalar: node.toJSON() };
+  const resolved = isAlias(node) ? node.resolve(doc) : node;
+  if (!resolved) return null;
+  if (typeof resolved.toJSON === 'function' && typeof resolved.items === 'undefined') {
+    return { scalar: resolved.toJSON() };
   }
   const map = {};
-  for (const pair of node.items ?? []) map[String(pair.key)] = String(pair.value);
+  for (const pair of resolved.items ?? []) map[String(pair.key)] = String(pair.value);
   return { map };
 }
 
 export function checkTopLevelPermissions(fileName, doc, failures) {
-  const permissions = permissionEntries(doc.get('permissions', true));
+  const permissions = permissionEntries(doc.get('permissions', true), doc);
   if (!permissions) {
     failures.push({ file: fileName, message: 'missing top-level `permissions:` block' });
     return;
@@ -92,8 +109,18 @@ export function checkTopLevelPermissions(fileName, doc, failures) {
 export function checkJobWriteScopeAllowlist(fileName, doc, failures) {
   const allowlist = WRITE_SCOPE_ALLOWLIST[fileName] ?? {};
   for (const [jobName, jobNode] of jobMap(doc)) {
-    const permissions = permissionEntries(jobNode?.get?.('permissions', true));
-    if (!permissions?.map) continue;
+    const permissions = permissionEntries(jobNode?.get?.('permissions', true), doc);
+    if (!permissions) continue;
+    // QNBS-v3: scalar write-all grants every scope at once, which no job's allowlist ever lists.
+    if (permissions.scalar !== undefined) {
+      if (permissions.scalar !== 'read-all') {
+        failures.push({
+          file: fileName,
+          message: `job "${jobName}" declares scalar permissions "${permissions.scalar}", which is never allowlisted (only "read-all" is a valid job-level scalar)`,
+        });
+      }
+      continue;
+    }
     const allowedWrites = allowlist[jobName] ?? new Set();
     for (const [key, value] of Object.entries(permissions.map)) {
       if (value === 'write' && !allowedWrites.has(key)) {
@@ -146,34 +173,54 @@ export function checkNeedsGraph(fileName, doc, failures) {
   for (const jobName of jobNames) visit(jobName, []);
 }
 
-// QNBS-v3: dtolnay/rust-toolchain pins "# stable", not vX.Y.Z — require any comment, not that shape.
-export function checkActionPins(fileName, content, failures) {
-  const lines = content.split('\n');
-  for (const [index, line] of lines.entries()) {
-    const match = line.match(/^\s*-?\s*uses:\s*(\S+)(.*)$/);
-    if (!match) continue;
-    const [, ref, rest] = match;
+function collectWorkflowSteps(doc) {
+  const steps = [];
+  for (const [, jobNode] of jobMap(doc)) {
+    const stepsNode = jobNode?.get?.('steps', true);
+    if (stepsNode?.items) steps.push(...stepsNode.items);
+  }
+  return steps;
+}
+
+function collectActionSteps(doc) {
+  const runsNode = doc.get('runs', true);
+  const stepsNode = runsNode?.get?.('steps', true);
+  return stepsNode?.items ?? [];
+}
+
+// QNBS-v3: walks the parsed tree (not raw text) so flow-mapping steps can't bypass pin enforcement.
+export function checkActionPins(fileName, doc, failures, options = {}) {
+  const { fileKind = 'workflow', lineCounter } = options;
+  const steps = fileKind === 'action' ? collectActionSteps(doc) : collectWorkflowSteps(doc);
+  for (const step of steps) {
+    const usesNode = step?.get?.('uses', true);
+    if (!usesNode || typeof usesNode.value !== 'string') continue;
+    const ref = usesNode.value;
     if (ref.startsWith('./') || ref.startsWith('docker://')) continue; // local/docker action
+    const line =
+      lineCounter && Array.isArray(usesNode.range)
+        ? lineCounter.linePos(usesNode.range[0]).line
+        : undefined;
+    const loc = line ? `line ${line}: ` : '';
     const atIndex = ref.indexOf('@');
     if (atIndex === -1) {
-      failures.push({
-        file: fileName,
-        message: `line ${index + 1}: action reference "${ref}" is missing an @ pin`,
-      });
+      failures.push({ file: fileName, message: `${loc}action reference "${ref}" is missing an @ pin` });
       continue;
     }
     const pin = ref.slice(atIndex + 1);
     if (!/^[0-9a-f]{40}$/.test(pin)) {
       failures.push({
         file: fileName,
-        message: `line ${index + 1}: action reference "${ref}" must pin a 40-hex-char SHA`,
+        message: `${loc}action reference "${ref}" must pin a 40-hex-char SHA`,
       });
       continue;
     }
-    if (!/#\s*\S+/.test(rest)) {
+    // QNBS-v3: a flow-mapping step's trailing comment attaches to the map node, not the uses scalar.
+    const comment = usesNode.comment ?? (step.flow ? step.comment : undefined);
+    if (!comment || !/\S/.test(comment)) {
       failures.push({
         file: fileName,
-        message: `line ${index + 1}: SHA-pinned action "${ref}" is missing a trailing # comment`,
+        message: `${loc}SHA-pinned action "${ref}" is missing a trailing # comment`,
       });
     }
   }
@@ -184,7 +231,9 @@ export function checkAggregatorNeeds(fileName, doc, failures) {
   if (!jobs.has('ci-success')) return;
   const aggregatorNode = jobs.get('ci-success');
   const needsNode = aggregatorNode?.get?.('needs', true);
-  const declaredNeeds = new Set(needsNode ? needsNode.toJSON() : []);
+  const needsValue = needsNode ? needsNode.toJSON() : [];
+  // QNBS-v3: needs: quality (bare string) must not decompose into per-character Set entries.
+  const declaredNeeds = new Set(Array.isArray(needsValue) ? needsValue : [needsValue]);
   const expectedNeeds = new Set();
   for (const [jobName, jobNode] of jobs) {
     if (jobName === 'ci-success') continue;
@@ -214,8 +263,11 @@ export function checkAggregatorNeeds(fileName, doc, failures) {
 export function checkPublishingBoundary(fileName, doc, failures) {
   const allowlist = PUBLISHING_ALLOWLIST[fileName] ?? new Set();
   for (const [jobName, jobNode] of jobMap(doc)) {
-    const permissions = permissionEntries(jobNode?.get?.('permissions', true));
-    const hasContentsWrite = permissions?.map?.contents === 'write';
+    const permissions = permissionEntries(jobNode?.get?.('permissions', true), doc);
+    // QNBS-v3: scalar write-all implicitly grants contents:write too — must not evade this check.
+    const hasContentsWrite =
+      permissions?.map?.contents === 'write' ||
+      (permissions?.scalar !== undefined && permissions.scalar !== 'read-all');
     if (hasContentsWrite && !allowlist.has(jobName)) {
       failures.push({
         file: fileName,
@@ -245,9 +297,9 @@ export function getTriggers(doc) {
 }
 
 export function checkWorkflowFile(filePath, dependencies = {}) {
-  const fileName = filePath.split('/').pop();
+  const fileName = basename(filePath);
   const failures = [];
-  const { content, doc } = parseWorkflowFile(filePath, dependencies);
+  const { doc, lineCounter } = parseWorkflowFile(filePath, dependencies);
   if (doc.errors.length > 0) {
     for (const error of doc.errors) {
       failures.push({ file: fileName, message: `YAML parse error: ${error.message}` });
@@ -257,15 +309,34 @@ export function checkWorkflowFile(filePath, dependencies = {}) {
   checkTopLevelPermissions(fileName, doc, failures);
   checkJobWriteScopeAllowlist(fileName, doc, failures);
   checkNeedsGraph(fileName, doc, failures);
-  checkActionPins(fileName, content, failures);
+  checkActionPins(fileName, doc, failures, { fileKind: 'workflow', lineCounter });
   checkAggregatorNeeds(fileName, doc, failures);
   checkPublishingBoundary(fileName, doc, failures);
   return failures;
 }
 
+// QNBS-v3: composite actions have no jobs/permissions — only the SHA-pin check applies to them.
+export function checkActionFile(filePath, dependencies = {}) {
+  const fileName = basename(filePath);
+  const failures = [];
+  const { doc, lineCounter } = parseWorkflowFile(filePath, dependencies);
+  if (doc.errors.length > 0) {
+    for (const error of doc.errors) {
+      failures.push({ file: fileName, message: `YAML parse error: ${error.message}` });
+    }
+    return failures;
+  }
+  checkActionPins(fileName, doc, failures, { fileKind: 'action', lineCounter });
+  return failures;
+}
+
 export function checkAllWorkflows(root = projectRoot, dependencies = {}) {
-  const files = dependencies.listWorkflowFiles?.(root) ?? listWorkflowFiles(root, dependencies);
-  return files.flatMap((filePath) => checkWorkflowFile(filePath, dependencies));
+  const workflowFiles = dependencies.listWorkflowFiles?.(root) ?? listWorkflowFiles(root, dependencies);
+  const actionFiles = dependencies.listActionFiles?.(root) ?? listActionFiles(root, dependencies);
+  return [
+    ...workflowFiles.flatMap((filePath) => checkWorkflowFile(filePath, dependencies)),
+    ...actionFiles.flatMap((filePath) => checkActionFile(filePath, dependencies)),
+  ];
 }
 
 export function main() {

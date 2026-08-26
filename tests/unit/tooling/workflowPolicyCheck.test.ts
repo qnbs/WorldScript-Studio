@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseDocument } from 'yaml';
 import {
+  checkActionFile,
   checkActionPins,
   checkAggregatorNeeds,
   checkAllWorkflows,
@@ -10,11 +11,13 @@ import {
   checkTopLevelPermissions,
   checkWorkflowFile,
   getTriggers,
+  listActionFiles,
 } from '../../../scripts/workflow-policy-check.mjs';
 import type { WorkflowPolicyFailure } from '../../../scripts/workflow-policy-check.d.mts';
 
 const doc = (yaml: string) => parseDocument(yaml, { uniqueKeys: true });
 
+// QNBS-v3: contents:read is the only safe top-level default — every other form is a policy gap.
 describe('checkTopLevelPermissions', () => {
   it('passes for the canonical {contents: read} form', () => {
     const failures: WorkflowPolicyFailure[] = [];
@@ -47,6 +50,7 @@ describe('checkTopLevelPermissions', () => {
   });
 });
 
+// QNBS-v3: job-level scalar write-all must be caught here too, not only rejected at top level.
 describe('checkJobWriteScopeAllowlist', () => {
   it('allows an allowlisted job/permission pair', () => {
     const failures: WorkflowPolicyFailure[] = [];
@@ -78,8 +82,26 @@ describe('checkJobWriteScopeAllowlist', () => {
     );
     expect(failures).toHaveLength(1);
   });
+
+  it('passes for the job-level scalar "read-all"', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkJobWriteScopeAllowlist('ci.yml', doc('jobs:\n  build:\n    permissions: read-all\n'), failures);
+    expect(failures).toEqual([]);
+  });
+
+  it('fails for the job-level scalar "write-all" (grants every scope, never allowlisted)', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkJobWriteScopeAllowlist(
+      'ci.yml',
+      doc('jobs:\n  build:\n    permissions: write-all\n'),
+      failures,
+    );
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.message).toMatch(/scalar permissions "write-all"/);
+  });
 });
 
+// QNBS-v3: needs-graph resolution/cycle-detection protects the aggregator sync check downstream.
 describe('checkNeedsGraph', () => {
   it('passes when every needs reference resolves to a real job', () => {
     const failures: WorkflowPolicyFailure[] = [];
@@ -105,14 +127,16 @@ describe('checkNeedsGraph', () => {
   });
 });
 
+// QNBS-v3: walks the parsed step tree so block AND flow-mapping uses: forms both get pin-checked.
 describe('checkActionPins', () => {
   const wrap = (usesLine: string) => `jobs:\n  a:\n    steps:\n      - ${usesLine}\n`;
+  const runsWrap = (usesLine: string) => `runs:\n  using: composite\n  steps:\n    - ${usesLine}\n`;
 
   it('passes a 40-hex SHA pin with a trailing comment', () => {
     const failures: WorkflowPolicyFailure[] = [];
     checkActionPins(
       'x.yml',
-      wrap('uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1'),
+      doc(wrap('uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1')),
       failures,
     );
     expect(failures).toEqual([]);
@@ -123,7 +147,7 @@ describe('checkActionPins', () => {
     const failures: WorkflowPolicyFailure[] = [];
     checkActionPins(
       'x.yml',
-      wrap('uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable'),
+      doc(wrap('uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable')),
       failures,
     );
     expect(failures).toEqual([]);
@@ -131,13 +155,13 @@ describe('checkActionPins', () => {
 
   it('skips a local composite action reference', () => {
     const failures: WorkflowPolicyFailure[] = [];
-    checkActionPins('x.yml', wrap('uses: ./.github/actions/setup'), failures);
+    checkActionPins('x.yml', doc(wrap('uses: ./.github/actions/setup')), failures);
     expect(failures).toEqual([]);
   });
 
   it('fails for a floating tag instead of a SHA', () => {
     const failures: WorkflowPolicyFailure[] = [];
-    checkActionPins('x.yml', wrap('uses: actions/checkout@v4 # v4'), failures);
+    checkActionPins('x.yml', doc(wrap('uses: actions/checkout@v4 # v4')), failures);
     expect(failures).toHaveLength(1);
     expect(failures[0]?.message).toMatch(/40-hex-char SHA/);
   });
@@ -146,14 +170,49 @@ describe('checkActionPins', () => {
     const failures: WorkflowPolicyFailure[] = [];
     checkActionPins(
       'x.yml',
-      wrap('uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'),
+      doc(wrap('uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1')),
       failures,
     );
     expect(failures).toHaveLength(1);
     expect(failures[0]?.message).toMatch(/missing a trailing # comment/);
   });
+
+  it('fails for an unpinned action reference written as a flow-mapping step', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkActionPins('x.yml', doc(wrap('{ uses: actions/checkout@v4 }')), failures);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.message).toMatch(/40-hex-char SHA/);
+  });
+
+  it('passes a SHA-pinned flow-mapping step whose comment trails the flow map', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkActionPins(
+      'x.yml',
+      doc(wrap('{ uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 } # v7.0.1')),
+      failures,
+    );
+    expect(failures).toEqual([]);
+  });
+
+  it('checks a composite action\'s runs.steps when fileKind is "action"', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkActionPins('action.yml', doc(runsWrap('uses: actions/checkout@v4 # v4')), failures, {
+      fileKind: 'action',
+    });
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.message).toMatch(/40-hex-char SHA/);
+  });
+
+  it('ignores jobs.*.steps when fileKind is "action" (composite actions have no jobs)', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkActionPins('action.yml', doc(wrap('uses: actions/checkout@v4 # v4')), failures, {
+      fileKind: 'action',
+    });
+    expect(failures).toEqual([]);
+  });
 });
 
+// QNBS-v3: needs: quality (bare string) must resolve as one dependency, not per-character Set entries.
 describe('checkAggregatorNeeds', () => {
   it('no-ops when the workflow has no ci-success aggregator', () => {
     const failures: WorkflowPolicyFailure[] = [];
@@ -192,8 +251,19 @@ describe('checkAggregatorNeeds', () => {
     expect(failures).toHaveLength(1);
     expect(failures[0]?.message).toMatch(/not a gating job/);
   });
+
+  it('treats a bare-string ci-success.needs as a single one-item dependency, not characters', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkAggregatorNeeds(
+      'ci.yml',
+      doc('jobs:\n  quality: {}\n  ci-success:\n    needs: quality\n'),
+      failures,
+    );
+    expect(failures).toEqual([]);
+  });
 });
 
+// QNBS-v3: scalar write-all implicitly grants contents:write and must not evade this boundary.
 describe('checkPublishingBoundary', () => {
   it('passes for contents:write on an allowlisted publishing job', () => {
     const failures: WorkflowPolicyFailure[] = [];
@@ -215,8 +285,22 @@ describe('checkPublishingBoundary', () => {
     expect(failures).toHaveLength(1);
     expect(failures[0]?.message).toMatch(/not on the publishing allowlist/);
   });
+
+  it('fails for the job-level scalar "write-all" on a job not on the publishing allowlist', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkPublishingBoundary('ci.yml', doc('jobs:\n  build:\n    permissions: write-all\n'), failures);
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.message).toMatch(/not on the publishing allowlist/);
+  });
+
+  it('passes for the job-level scalar "read-all" (no implied contents:write)', () => {
+    const failures: WorkflowPolicyFailure[] = [];
+    checkPublishingBoundary('ci.yml', doc('jobs:\n  build:\n    permissions: read-all\n'), failures);
+    expect(failures).toEqual([]);
+  });
 });
 
+// QNBS-v3: workflow_dispatch/tag-push recognition feeds the S5 qualification-lane boundary check.
 describe('getTriggers', () => {
   it('recognizes workflow_dispatch', () => {
     expect(getTriggers(doc('on:\n  workflow_dispatch: {}\njobs: {}\n')).workflowDispatch).toBe(
@@ -257,6 +341,55 @@ describe('checkWorkflowFile (duplicate keys / YAML-level errors)', () => {
     const failures = checkWorkflowFile('anchors.yml', { readFileSync: () => content });
     expect(failures).toEqual([]);
   });
+
+  it('extracts the filename via basename(), not a hardcoded "/" split, given a nested path', () => {
+    // QNBS-v3: basename() is symmetric with join()'s platform separator; a bare split('/') was not.
+    const failures = checkWorkflowFile('/repo/.github/workflows/missing-perms.yml', {
+      readFileSync: () => 'jobs: {}\n',
+    });
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.file).toBe('missing-perms.yml');
+  });
+});
+
+// QNBS-v3: composite actions are a distinct file kind — only the pin check applies to them.
+describe('checkActionFile', () => {
+  it('reports an unpinned action reference in a composite action', () => {
+    const content = 'runs:\n  using: composite\n  steps:\n    - uses: actions/checkout@v4\n';
+    const failures = checkActionFile('.github/actions/setup/action.yml', {
+      readFileSync: () => content,
+    });
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.file).toBe('action.yml');
+  });
+
+  it('passes a fully SHA-pinned composite action', () => {
+    const content =
+      'runs:\n  using: composite\n  steps:\n    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n';
+    const failures = checkActionFile('.github/actions/setup/action.yml', {
+      readFileSync: () => content,
+    });
+    expect(failures).toEqual([]);
+  });
+
+  it('reports a YAML parse error for a malformed composite action', () => {
+    const content = 'runs: [\n';
+    const failures = checkActionFile('.github/actions/broken/action.yml', {
+      readFileSync: () => content,
+    });
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.message).toMatch(/YAML parse error/);
+  });
+});
+
+describe('listActionFiles', () => {
+  it('discovers the repository\'s real .github/actions/setup/action.yml', () => {
+    // QNBS-v3: existsSync isn't DI'd (matches listWorkflowFiles), so this hits the real fs.
+    const files = listActionFiles();
+    expect(files.some((filePath) => filePath.endsWith('.github/actions/setup/action.yml'))).toBe(
+      true,
+    );
+  });
 });
 
 describe('checkAllWorkflows', () => {
@@ -267,6 +400,7 @@ describe('checkAllWorkflows', () => {
     ]);
     const failures = checkAllWorkflows('/repo', {
       listWorkflowFiles: () => [...files.keys()],
+      listActionFiles: () => [],
       readFileSync: (filePath: string) => {
         const content = files.get(filePath);
         if (content === undefined) throw new Error(`unexpected path: ${filePath}`);
@@ -275,5 +409,27 @@ describe('checkAllWorkflows', () => {
     });
     expect(failures).toHaveLength(1);
     expect(failures[0]?.file).toBe('a.yml');
+  });
+
+  it('also aggregates failures from injected composite action files', () => {
+    const files = new Map<string, string>([
+      ['/repo/.github/workflows/a.yml', 'permissions:\n  contents: read\njobs: {}\n'],
+      [
+        '/repo/.github/actions/setup/action.yml',
+        'runs:\n  using: composite\n  steps:\n    - uses: actions/checkout@v4\n',
+      ],
+    ]);
+    const failures = checkAllWorkflows('/repo', {
+      listWorkflowFiles: () => ['/repo/.github/workflows/a.yml'],
+      listActionFiles: () => ['/repo/.github/actions/setup/action.yml'],
+      readFileSync: (filePath: string) => {
+        const content = files.get(filePath);
+        if (content === undefined) throw new Error(`unexpected path: ${filePath}`);
+        return content;
+      },
+    });
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.file).toBe('action.yml');
+    expect(failures[0]?.message).toMatch(/40-hex-char SHA/);
   });
 });

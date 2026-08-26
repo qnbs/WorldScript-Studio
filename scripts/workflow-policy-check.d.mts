@@ -1,4 +1,4 @@
-import type { Document } from 'yaml';
+import type { Document, LineCounter } from 'yaml';
 
 export interface WorkflowPolicyFailure {
   file: string;
@@ -14,6 +14,13 @@ export function listWorkflowFiles(
   dependencies?: ListWorkflowFilesDependencies,
 ): string[];
 
+export type ListActionFilesDependencies = ListWorkflowFilesDependencies;
+
+export function listActionFiles(
+  root?: string,
+  dependencies?: ListActionFilesDependencies,
+): string[];
+
 export interface ParseWorkflowFileDependencies {
   readFileSync?: (filePath: string, encoding: 'utf8') => string;
 }
@@ -22,6 +29,7 @@ export interface ParsedWorkflowFile {
   filePath: string;
   content: string;
   doc: Document;
+  lineCounter: LineCounter;
 }
 
 export function parseWorkflowFile(
@@ -47,10 +55,16 @@ export function checkNeedsGraph(
   failures: WorkflowPolicyFailure[],
 ): void;
 
+export interface CheckActionPinsOptions {
+  fileKind?: 'workflow' | 'action';
+  lineCounter?: LineCounter;
+}
+
 export function checkActionPins(
   fileName: string,
-  content: string,
+  doc: Document,
   failures: WorkflowPolicyFailure[],
+  options?: CheckActionPinsOptions,
 ): void;
 
 export function checkAggregatorNeeds(
@@ -79,9 +93,15 @@ export function checkWorkflowFile(
   dependencies?: CheckWorkflowFileDependencies,
 ): WorkflowPolicyFailure[];
 
+export function checkActionFile(
+  filePath: string,
+  dependencies?: CheckWorkflowFileDependencies,
+): WorkflowPolicyFailure[];
+
 export type CheckAllWorkflowsDependencies = CheckWorkflowFileDependencies &
   ListWorkflowFilesDependencies & {
     listWorkflowFiles?: (root: string) => string[];
+    listActionFiles?: (root: string) => string[];
   };
 
 export function checkAllWorkflows(
