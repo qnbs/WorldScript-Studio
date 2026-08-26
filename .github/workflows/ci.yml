@@ -159,6 +159,82 @@ jobs:
             echo "crates=false" >> "$GITHUB_OUTPUT"
           fi
 
+  # ----------------------------------------------------------
+  # PR SIZE GOVERNANCE: advisory below the absolute ceiling, blocking above it.
+  # QNBS-v3: runs the BASE ref's checker copy — a PR touching it can't raise its own limits.
+  # ----------------------------------------------------------
+  pr-size:
+    name: 📏 PR Size Governance
+    if: github.event_name == 'pull_request'
+    needs: [workflow-policy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Evaluate PR size (base-ref checker)
+        id: size
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/base-scripts
+          # QNBS-v3: bootstrap fallback — the PR introducing this checker has no base-ref copy yet.
+          if git show "$BASE_SHA:scripts/check-pr-size.mjs" > /tmp/base-scripts/check-pr-size.mjs 2>/dev/null \
+             && git show "$BASE_SHA:scripts/ci-prepush-classifier.mjs" > /tmp/base-scripts/ci-prepush-classifier.mjs 2>/dev/null; then
+            CHECKER=/tmp/base-scripts/check-pr-size.mjs
+          else
+            echo "::notice::check-pr-size.mjs not found on base ref (bootstrap PR) — using this PR's own copy this one time."
+            CHECKER=scripts/check-pr-size.mjs
+          fi
+          set +e
+          node "$CHECKER" "$BASE_SHA" "$HEAD_SHA" | tee /tmp/pr-size-report.txt
+          exit_code=${PIPESTATUS[0]}
+          set -e
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+
+      # QNBS-v3: fork PRs get a read-only token — a failed comment must never fail this advisory job.
+      # QNBS-v3: edits by owned comment ID (not --edit-last) so an intervening bot comment can't be overwritten.
+      - name: Post PR size comment (advisory or blocking tiers only)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR="${{ github.event.pull_request.number }}"
+          REPO="${{ github.repository }}"
+          MARKER="<!-- pr-size-governance -->"
+          # QNBS-v3: --paginate + --jq filters each page separately — pipe to external jq -s to combine first.
+          OWNED_ID=$(gh api --paginate "repos/$REPO/issues/$PR/comments" 2>/dev/null \
+            | jq -s --arg marker "$MARKER" \
+              '[.[][] | select(.user.login == "github-actions[bot]" and (.body | contains($marker)))] | last | .id // empty' \
+            || echo "")
+          if grep -qE 'within target' /tmp/pr-size-report.txt; then
+            if [ -n "$OWNED_ID" ]; then
+              printf '%s\nPR size is back within target — previous warning below is resolved.\n' "$MARKER" > /tmp/pr-size-resolved.txt
+              gh api "repos/$REPO/issues/comments/$OWNED_ID" -X PATCH -F body=@/tmp/pr-size-resolved.txt || true
+            fi
+            exit 0
+          fi
+          { printf '%s\n' "$MARKER"; cat /tmp/pr-size-report.txt; } > /tmp/pr-size-marked.txt
+          if [ -n "$OWNED_ID" ]; then
+            gh api "repos/$REPO/issues/comments/$OWNED_ID" -X PATCH -F body=@/tmp/pr-size-marked.txt || true
+          else
+            gh pr comment "$PR" --body-file /tmp/pr-size-marked.txt || true
+          fi
+
+      # QNBS-v3: any nonzero exit (crash, OOM-kill, etc.) must fail, not just the literal '1' ceiling code.
+      - name: Fail on a checker crash or an absolute-ceiling violation
+        if: steps.size.outputs.exit_code != '0'
+        run: exit 1
+
   signatures:
     name: 🔏 Verified Signatures
     runs-on: ubuntu-latest
@@ -475,6 +551,7 @@ jobs:
     needs:
       [
         workflow-policy,
+        pr-size,
         security,
         signatures,
         quality,
@@ -492,6 +569,12 @@ jobs:
         run: |
           FAIL=0
           [ "${{ needs.workflow-policy.result }}" = "success" ] || FAIL=1
+          # QNBS-v3: pr-size's own if: matches this event check — unconditional skip-tolerance would let a tampered if: pass.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            [ "${{ needs.pr-size.result }}" = "success" ] || FAIL=1
+          elif [ "${{ needs.pr-size.result }}" != "success" ] && [ "${{ needs.pr-size.result }}" != "skipped" ]; then
+            FAIL=1
+          fi
           [ "${{ needs.security.result }}" = "success" ] || FAIL=1
           [ "${{ needs.signatures.result }}" = "success" ] || FAIL=1
           [ "${{ needs.quality.result }}" = "success" ] || FAIL=1
@@ -509,6 +592,7 @@ jobs:
           if [ "$FAIL" = "1" ]; then
             echo "One or more required jobs did not succeed:"
             echo "  workflow-policy: ${{ needs.workflow-policy.result }}"
+            echo "  pr-size: ${{ needs.pr-size.result }} (skipped = OK, not a pull_request event)"
             echo "  security: ${{ needs.security.result }}"
             echo "  signatures: ${{ needs.signatures.result }}"
             echo "  quality:  ${{ needs.quality.result }}"

@@ -37,8 +37,9 @@ CI runs for the affected test path before removing a temporary quarantine.
 
 ### Gate authority
 
-`✅ CI Success` is the required branch-protection status and aggregates `workflow-policy`, `security`,
-`signatures`, `quality`, `changes`, `rust-tauri`, `core-rust`, `build`, `e2e`, `lighthouse`, and `vrt`. `e2e-deep` and
+`✅ CI Success` is the required branch-protection status and aggregates `workflow-policy`, `pr-size`,
+`security`, `signatures`, `quality`, `changes`, `rust-tauri`, `core-rust`, `build`, `e2e`, `lighthouse`, and `vrt` (`pr-size`
+only runs on `pull_request` events — legitimately skipped otherwise). `e2e-deep` and
 `storybook` are explicitly advisory at job level while their stability criteria are measured. The
 `deploy` job depends only on that aggregate and remains main-push-only.
 
@@ -100,12 +101,13 @@ Each job that uses the composite must call `actions/checkout@v6` first (local co
 ## Job graph
 
 ```text
-workflow-policy ──► security ──► quality ──┬──► build ──┬──► lighthouse
-                                           ├──► e2e     └──► vrt
-                                           ├──► e2e-deep (advisory)
-                                           └──► storybook (advisory)
+workflow-policy ─┬─► security ──► quality ──┬──► build ──┬──► lighthouse
+                 │                          ├──► e2e     └──► vrt
+                 └──► pr-size (pull_request  ├──► e2e-deep (advisory)
+                      only)                  └──► storybook (advisory)
 
 workflow-policy ─┐
+pr-size (needs workflow-policy) ─┤ (pull_request only — skipped otherwise)
 security ────────┤
 signatures ──────┤
 quality ─────────┼──► ci-success (required-status aggregator)
@@ -131,6 +133,7 @@ registry gzip-decoding failure mode, while OSV failures remain blocking.
 | Job | Needs | Purpose |
 |-----|--------|---------|
 | `workflow-policy` | — | Structural (real-parser, not regex) validation of every `.github/workflows/*.yml` and `.github/actions/**/action.yml` — permissions, needs graph, SHA-pinned action references, publishing boundary (`scripts/workflow-policy-check.mjs`). Runs first, before any job invokes the governed `./.github/actions/setup` composite, using only external SHA-pinned actions directly (never that composite) and an `--ignore-scripts --ignore-pnpmfile` install, so a PR tampering with the composite (or its own install hooks) can't execute before the gate evaluates it. |
+| `pr-size` | `workflow-policy` | PR-size governance (`scripts/check-pr-size.mjs`) — tiered file/line/commit limits, advisory below the absolute ceiling and blocking only above it. `pull_request` only. Runs the **base ref's** own copy of the checker (never the PR's working-tree copy) when it exists there, so a PR touching it can't raise its own limits; falls back to the PR's own copy one time only, for the introducing PR whose base ref has no checker yet. |
 | `security` | `workflow-policy` | `pnpm audit --audit-level=high`; **OSV scanner** (`google/osv-scanner-action`) for npm + Rust lockfiles; `gitleaks` secrets scan; on PRs: `dependency-review-action` |
 | `scheduled-osv` | — | Separate daily and manually triggerable (`workflow_dispatch`) `.github/workflows/security-scheduled.yml` scan of the same three lockfiles; `contents: read` only; fails closed and writes lockfile/package/advisory details to the step summary |
 | `quality` | `security` | Matrix **Node 22** and **24** → Biome lint, **`pnpm run i18n:check`**, **`pnpm run docs:check`**, **`pnpm run csp:verify`**, **`pnpm run parity:check`**, `pnpm run typecheck`, Vitest + coverage (+ non-blocking coverage-ratchet suggestion), Codecov (optional token), coverage artifact |
@@ -141,7 +144,7 @@ registry gzip-decoding failure mode, while OSV failures remain blocking.
 | `storybook` | `quality` | Cloud-first — Storybook build + test-runner only run in CI (not locally); Playwright browser cache `v5`; `--maxWorkers=2 --junit` (non-blocking, `continue-on-error: true` — see [exit criteria](#non-blocking-gates--exit-criteria-f-13)); artifacts uploaded always. Debug: manual `storybook-debug.yml` workflow. |
 | `vrt` | `build` | Visual regression against production `dist`; `toHaveScreenshot()` with committed PNG baselines (4 views × Chromium); artifacts uploaded always |
 | `signatures` | `security` | Read-only GitHub API verification of every commit in the complete introduced range; pull-request commit pagination; and annotated release-tag plus target-commit verification. |
-| `ci-success` | `workflow-policy`, `security`, `signatures`, `quality`, `changes`, `rust-tauri`, `core-rust`, `build`, `e2e`, `lighthouse`, `vrt` | Required-status **aggregator** — `if: always()`, fails if any required release-safety job does not resolve to `success`; signature verification is authoritative; Storybook and deep-E2E are explicitly advisory. Rust jobs are legitimately skipped when their paths are untouched. |
+| `ci-success` | `workflow-policy`, `pr-size`, `security`, `signatures`, `quality`, `changes`, `rust-tauri`, `core-rust`, `build`, `e2e`, `lighthouse`, `vrt` | Required-status **aggregator** — `if: always()`, fails if any required release-safety job does not resolve to `success`; signature verification is authoritative; Storybook and deep-E2E are explicitly advisory. Rust jobs are legitimately skipped when their paths are untouched; `pr-size` is legitimately skipped only on non-`pull_request` events. |
 | `deploy` | `ci-success` | **Only** `main` push (not PR), and only after the aggregate gate succeeds; the Pages artifact is resolved from the same workflow run. |
 
 > **Desktop:** On-demand / tag-driven Tauri bundles live in [`tauri-build.yml`](../.github/workflows/tauri-build.yml); **`v*` tags** additionally publish installers on a **GitHub Release**. See [`docs/TAURI-CI.md`](TAURI-CI.md). Desktop CI does not block the web deploy graph above.

@@ -1,0 +1,410 @@
+import { describe, expect, it } from 'vitest';
+import {
+  computeGovernedFileCount,
+  computeMeaningfulLines,
+  evaluatePrSize,
+  formatReport,
+  isAllDocs,
+  parseNumstat,
+  selectSeverity,
+} from '../../../scripts/check-pr-size.mjs';
+import type { NumstatRow } from '../../../scripts/check-pr-size.d.mts';
+
+// QNBS-v3: -z is NUL-delimited (git diff --numstat -z), not newline-delimited — matches real output.
+describe('parseNumstat', () => {
+  it('parses added/removed counts per file', () => {
+    const rows = parseNumstat('10\t2\tsrc/foo.ts\x005\t0\tsrc/bar.ts\x00');
+    expect(rows).toEqual([
+      { path: 'src/foo.ts', added: 10, removed: 2 },
+      { path: 'src/bar.ts', added: 5, removed: 0 },
+    ]);
+  });
+
+  it('treats a binary file row (-\\t-\\tpath) as 0 added/0 removed', () => {
+    const rows = parseNumstat('-\t-\tsrc-tauri/icons/icon.png\x00');
+    expect(rows).toEqual([{ path: 'src-tauri/icons/icon.png', added: 0, removed: 0 }]);
+  });
+
+  it('ignores stray empty tokens', () => {
+    const rows = parseNumstat('1\t1\ta.ts\x00\x002\t2\tb.ts\x00');
+    expect(rows).toHaveLength(2);
+  });
+
+  // QNBS-v3: -z rename records are "nums\t\t" + old-path + new-path as 3 separate NUL-terminated tokens.
+  it('parses a pure rename as one row under the new path, not delete+add', () => {
+    const rows = parseNumstat('0\t0\t\x00old-name.ts\x00new-name.ts\x00');
+    expect(rows).toEqual([{ path: 'new-name.ts', added: 0, removed: 0 }]);
+  });
+
+  it('parses a rename-with-edit as one row with the real delta, not the full file twice', () => {
+    const rows = parseNumstat('3\t1\t\x00src/old.ts\x00src/new.ts\x00');
+    expect(rows).toEqual([{ path: 'src/new.ts', added: 3, removed: 1 }]);
+  });
+
+  it('preserves raw UTF-8 paths instead of git\'s octal-quoted representation', () => {
+    // -z output is raw UTF-8; the quoted "docs/\303\251.md" form only appears without -z.
+    const rows = parseNumstat('1\t0\tdocs/spécial.md\x00');
+    expect(rows).toEqual([{ path: 'docs/spécial.md', added: 1, removed: 0 }]);
+  });
+});
+
+describe('computeMeaningfulLines', () => {
+  it('sums added+removed for ordinary code files', () => {
+    const rows: NumstatRow[] = [
+      { path: 'scripts/foo.mjs', added: 10, removed: 5 },
+      { path: 'scripts/bar.mjs', added: 3, removed: 1 },
+    ];
+    expect(computeMeaningfulLines(rows)).toBe(19);
+  });
+
+  // QNBS-v3: a rebuilt public/ bundle can churn thousands of lines without being a "real" change.
+  it('zeroes out generated public/locales/<lang>/bundle.json bundles', () => {
+    const rows: NumstatRow[] = [
+      { path: 'public/locales/de/bundle.json', added: 5000, removed: 5000 },
+      { path: 'scripts/foo.mjs', added: 10, removed: 5 },
+    ];
+    expect(computeMeaningfulLines(rows)).toBe(15);
+  });
+
+  // QNBS-v3: locales/**/*.json is translator-authored source, not generated — must still count.
+  it('still counts source locales/**/*.json edits as meaningful (not the generated bundle)', () => {
+    const rows: NumstatRow[] = [
+      { path: 'locales/de/writer.json', added: 200, removed: 50 },
+      { path: 'public/locales/de/bundle.json', added: 5000, removed: 5000 },
+    ];
+    expect(computeMeaningfulLines(rows)).toBe(250);
+  });
+
+  // QNBS-v3: build-i18n.mjs only ever writes <lang>/bundle.json — a same-named non-bundle file must still count.
+  it('still counts a non-bundle file that happens to live under public/locales/<lang>/', () => {
+    const rows: NumstatRow[] = [
+      { path: 'public/locales/en/metadata.json', added: 300, removed: 100 },
+      { path: 'public/locales/de/bundle.json', added: 5000, removed: 5000 },
+    ];
+    expect(computeMeaningfulLines(rows)).toBe(400);
+  });
+
+  it('zeroes out pnpm-lock.yaml regardless of its classification', () => {
+    const rows: NumstatRow[] = [
+      { path: 'pnpm-lock.yaml', added: 2000, removed: 100 },
+      { path: 'scripts/foo.mjs', added: 10, removed: 5 },
+    ];
+    expect(computeMeaningfulLines(rows)).toBe(15);
+  });
+
+  // QNBS-v3: only index.json mirrors community-templates/ — content-guard.mjs never touches the locale variants.
+  it('zeroes out only the content-guard-mirrored community-templates/index.json', () => {
+    const rows: NumstatRow[] = [{ path: 'public/community-templates/index.json', added: 300, removed: 300 }];
+    expect(computeMeaningfulLines(rows)).toBe(0);
+  });
+
+  it('still counts hand-authored localized community-templates/index.<locale>.json as meaningful', () => {
+    const rows: NumstatRow[] = [
+      { path: 'public/community-templates/index.de.json', added: 300, removed: 100 },
+    ];
+    expect(computeMeaningfulLines(rows)).toBe(400);
+  });
+});
+
+// QNBS-v3: a locale-parity edit always touches 19 rebuilt bundles — the file ceiling must exclude them too.
+describe('computeGovernedFileCount', () => {
+  it('counts ordinary code files', () => {
+    const rows: NumstatRow[] = [
+      { path: 'scripts/foo.mjs', added: 10, removed: 5 },
+      { path: 'scripts/bar.mjs', added: 3, removed: 1 },
+    ];
+    expect(computeGovernedFileCount(rows)).toBe(2);
+  });
+
+  it('excludes generated public/locales/<lang>/bundle.json from the count', () => {
+    const rows: NumstatRow[] = [
+      { path: 'locales/de/writer.json', added: 200, removed: 50 },
+      { path: 'public/locales/de/bundle.json', added: 5000, removed: 5000 },
+    ];
+    expect(computeGovernedFileCount(rows)).toBe(1);
+  });
+
+  it('still counts a non-bundle file under public/locales/<lang>/ in the file count too', () => {
+    const rows: NumstatRow[] = [
+      { path: 'public/locales/en/metadata.json', added: 300, removed: 100 },
+      { path: 'public/locales/de/bundle.json', added: 5000, removed: 5000 },
+    ];
+    expect(computeGovernedFileCount(rows)).toBe(1);
+  });
+
+  it('excludes pnpm-lock.yaml from the count', () => {
+    const rows: NumstatRow[] = [
+      { path: 'pnpm-lock.yaml', added: 2000, removed: 100 },
+      { path: 'scripts/foo.mjs', added: 10, removed: 5 },
+    ];
+    expect(computeGovernedFileCount(rows)).toBe(1);
+  });
+
+  // QNBS-v3: index.<locale>.json has no source-of-truth to regenerate from — it must stay governed.
+  it('counts hand-authored localized community-templates/index.<locale>.json but not the index.json mirror', () => {
+    const rows: NumstatRow[] = [
+      { path: 'public/community-templates/index.json', added: 300, removed: 300 },
+      { path: 'public/community-templates/index.de.json', added: 300, removed: 100 },
+    ];
+    expect(computeGovernedFileCount(rows)).toBe(1);
+  });
+});
+
+describe('isAllDocs', () => {
+  it('is true when every changed file classifies as DOCS', () => {
+    expect(isAllDocs([{ path: 'docs/CI.md', added: 1, removed: 1 }])).toBe(true);
+  });
+
+  it('is false when at least one file is not DOCS', () => {
+    expect(
+      isAllDocs([
+        { path: 'docs/CI.md', added: 1, removed: 1 },
+        { path: 'scripts/foo.mjs', added: 1, removed: 1 },
+      ]),
+    ).toBe(false);
+  });
+
+  it('is false for an empty change set (nothing to call "all docs")', () => {
+    expect(isAllDocs([])).toBe(false);
+  });
+});
+
+// QNBS-v3: absolute is a fixed ceiling; docsGovernance replaces hard (not target) for all-DOCS PRs.
+describe('selectSeverity', () => {
+  it('returns ok when within target', () => {
+    const result = selectSeverity({ fileCount: 3, lineCount: 100, commitCount: 2, allDocs: false });
+    expect(result.tier).toBe('ok');
+    expect(result.blocking).toBe(false);
+  });
+
+  it('returns target when over target but within hard (normal profile)', () => {
+    const result = selectSeverity({ fileCount: 10, lineCount: 500, commitCount: 7, allDocs: false });
+    expect(result.tier).toBe('target');
+    expect(result.blocking).toBe(false);
+  });
+
+  it('returns hard when over hard but within absolute (normal profile)', () => {
+    const result = selectSeverity({ fileCount: 25, lineCount: 500, commitCount: 7, allDocs: false });
+    expect(result.tier).toBe('hard');
+    expect(result.blocking).toBe(false);
+  });
+
+  it('returns absolute (blocking) when over the absolute ceiling', () => {
+    const result = selectSeverity({ fileCount: 35, lineCount: 500, commitCount: 7, allDocs: false });
+    expect(result.tier).toBe('absolute');
+    expect(result.blocking).toBe(true);
+  });
+
+  it('uses the docsGovernance profile (not hard) for an all-DOCS PR', () => {
+    // Same borderline lineCount (over hard's 1200, under docsGovernance's 2400) classifies
+    // differently by profile: 'hard' for code, only 'target' (the uniform baseline) for docs.
+    const input = { fileCount: 5, lineCount: 1500, commitCount: 5 };
+    expect(selectSeverity({ ...input, allDocs: false }).tier).toBe('hard');
+    expect(selectSeverity({ ...input, allDocs: true }).tier).toBe('target');
+  });
+
+  it('flags docsGovernance when an all-DOCS PR exceeds its own limits', () => {
+    const result = selectSeverity({ fileCount: 18, lineCount: 500, commitCount: 5, allDocs: true });
+    expect(result.tier).toBe('docsGovernance');
+    expect(result.blocking).toBe(false);
+  });
+
+  it('still applies the absolute ceiling to an all-DOCS PR', () => {
+    const result = selectSeverity({ fileCount: 35, lineCount: 500, commitCount: 5, allDocs: true });
+    expect(result.tier).toBe('absolute');
+    expect(result.blocking).toBe(true);
+  });
+});
+
+describe('formatReport', () => {
+  it('reports "within target" for an ok result', () => {
+    const severity = selectSeverity({ fileCount: 3, lineCount: 100, commitCount: 2, allDocs: false });
+    const report = formatReport({
+      fileCount: 3,
+      totalFileCount: 3,
+      lineCount: 100,
+      commitCount: 2,
+      allDocs: false,
+      severity,
+    });
+    expect(report).toMatch(/within target/);
+  });
+
+  it('reports a blocking message for the absolute tier', () => {
+    const severity = selectSeverity({ fileCount: 35, lineCount: 500, commitCount: 7, allDocs: false });
+    const report = formatReport({
+      fileCount: 35,
+      totalFileCount: 35,
+      lineCount: 500,
+      commitCount: 7,
+      allDocs: false,
+      severity,
+    });
+    expect(report).toMatch(/exceeds the absolute ceiling/);
+    expect(report).toMatch(/Split this PR/);
+  });
+
+  it('reports a non-blocking suggestion for the target/hard tiers', () => {
+    const severity = selectSeverity({ fileCount: 25, lineCount: 500, commitCount: 7, allDocs: false });
+    const report = formatReport({
+      fileCount: 25,
+      totalFileCount: 25,
+      lineCount: 500,
+      commitCount: 7,
+      allDocs: false,
+      severity,
+    });
+    expect(report).toMatch(/is over the hard tier/);
+    expect(report).toMatch(/Consider splitting/);
+  });
+
+  // QNBS-v3: surfaces the excluded generated count so the report isn't silently smaller than the real diff.
+  it('notes the total file count when it exceeds the governed count', () => {
+    const severity = selectSeverity({ fileCount: 3, lineCount: 100, commitCount: 2, allDocs: false });
+    const report = formatReport({
+      fileCount: 3,
+      totalFileCount: 41,
+      lineCount: 100,
+      commitCount: 2,
+      allDocs: false,
+      severity,
+    });
+    expect(report).toMatch(/41 total incl\. generated/);
+  });
+});
+
+describe('evaluatePrSize', () => {
+  // QNBS-v3: omits error entirely (not error: undefined) — required under exactOptionalPropertyTypes.
+  const okGit = () => ({
+    status: 0,
+    stdout: '',
+    stderr: '',
+  });
+
+  it('evaluates a small change as ok, using injected git output', () => {
+    // QNBS-v3: fail the info/attributes git-path lookup to skip that filesystem side effect here.
+    const spawnSync = (_cmd: string, args: string[]) => {
+      if (args.includes('--git-path')) return { status: 1, stdout: '', stderr: '' };
+      if (args[0] === 'diff') return { ...okGit(), stdout: '10\t2\tscripts/foo.mjs\x00' };
+      return { ...okGit(), stdout: '2\n' };
+    };
+    const result = evaluatePrSize('base', 'head', { spawnSync });
+    expect(result.ok).toBe(true);
+    expect(result.fileCount).toBe(1);
+    expect(result.lineCount).toBe(12);
+    expect(result.commitCount).toBe(2);
+    expect(result.severity?.tier).toBe('ok');
+  });
+
+  it('fails closed (ok: false) when git diff fails', () => {
+    const spawnSync = (_cmd: string, args: string[]) => {
+      if (args.includes('--git-path')) return { status: 1, stdout: '', stderr: '' };
+      return { status: 1, stdout: '', stderr: 'fatal: bad range' };
+    };
+    const result = evaluatePrSize('base', 'head', { spawnSync });
+    expect(result.ok).toBe(false);
+    expect(result.error).toBeTruthy();
+  });
+
+  it('fails closed (ok: false) when git rev-list fails', () => {
+    const spawnSync = (_cmd: string, args: string[]) => {
+      if (args.includes('--git-path')) return { status: 1, stdout: '', stderr: '' };
+      if (args[0] === 'diff') return { ...okGit(), stdout: '10\t2\tscripts/foo.mjs\x00' };
+      return { status: 1, stdout: '', stderr: 'fatal: bad range' };
+    };
+    const result = evaluatePrSize('base', 'head', { spawnSync });
+    expect(result.ok).toBe(false);
+  });
+
+  it('fails closed (ok: false) on a spawn error (e.g. git not found)', () => {
+    const spawnSync = () => ({ status: null, error: new Error('spawn git ENOENT'), stdout: '', stderr: '' });
+    const result = evaluatePrSize('base', 'head', { spawnSync });
+    expect(result.ok).toBe(false);
+  });
+
+  // QNBS-v3: a real atomic i18n edit (1 source file/locale + its rebuilt bundle) must not trip the file ceiling.
+  it('does not block an atomic locale-parity change on the generated-bundle fan-out', () => {
+    const langs = Array.from({ length: 19 }, (_, i) => `lang${i}`);
+    const numstat = langs
+      .flatMap((lang) => [
+        `2\t0\tlocales/${lang}/writer.json\x00`,
+        `40\t40\tpublic/locales/${lang}/bundle.json\x00`,
+      ])
+      .join('');
+    const spawnSync = (_cmd: string, args: string[]) => {
+      if (args.includes('--git-path')) return { status: 1, stdout: '', stderr: '' };
+      if (args[0] === 'diff') return { ...okGit(), stdout: numstat };
+      return { ...okGit(), stdout: '1\n' };
+    };
+    const result = evaluatePrSize('base', 'head', { spawnSync });
+    expect(result.ok).toBe(true);
+    expect(result.totalFileCount).toBe(38);
+    expect(result.fileCount).toBe(19);
+    expect(result.severity?.tier).not.toBe('absolute');
+  });
+});
+
+// QNBS-v3: real git repo test — proves the info/attributes override defeats a PR-controlled -diff.
+describe('getChangedFilesNumstat (gitattributes evasion protection, real git repo)', () => {
+  it('still counts a change hidden by a PR-controlled "-diff" gitattributes entry', async () => {
+    const { mkdtempSync, writeFileSync: writeFile, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const { spawnSync: realSpawnSync } = await import('node:child_process');
+    const { pathToFileURL } = await import('node:url');
+
+    const dir = mkdtempSync(join(tmpdir(), 'pr-size-attr-test-'));
+    const git = (...args: string[]) => realSpawnSync('git', args, { cwd: dir, encoding: 'utf8' });
+    try {
+      git('init', '-q');
+      git('config', 'user.email', 'test@test.com');
+      git('config', 'user.name', 'test');
+      writeFile(join(dir, 'file.txt'), 'line1\nline2\nline3\n');
+      writeFile(join(dir, 'binary.bin'), Buffer.from([0, 1, 2, 3, 255, 254, 0, 0, 1]));
+      git('add', '-A');
+      git('commit', '-q', '-m', 'init');
+      const base = git('rev-parse', 'HEAD').stdout.trim();
+
+      writeFile(join(dir, '.gitattributes'), 'file.txt -diff\n');
+      writeFile(join(dir, 'file.txt'), 'line1\nline2 CHANGED\nline3\nline4\n');
+      // QNBS-v3: an ordinary binary edit, no gitattributes entry — must stay auto-detected as binary too.
+      writeFile(join(dir, 'binary.bin'), Buffer.from([9, 8, 7, 6, 255, 254, 0, 0, 2, 3, 4]));
+      git('add', '-A');
+      git('commit', '-q', '-m', 'hide this change via -diff');
+      const head = git('rev-parse', 'HEAD').stdout.trim();
+
+      const { parseNumstat } = await import('../../../scripts/check-pr-size.mjs');
+
+      const numstatWithoutFix = realSpawnSync(
+        'git',
+        ['diff', '--numstat', '-z', `${base}...${head}`],
+        { cwd: dir, encoding: 'utf8' },
+      ).stdout;
+      const rowsWithoutFix = parseNumstat(numstatWithoutFix);
+      const hiddenRow = rowsWithoutFix.find((row) => row.path === 'file.txt');
+      expect(hiddenRow).toEqual({ path: 'file.txt', added: 0, removed: 0 });
+
+      // QNBS-v3: process.chdir isn't supported in Vitest workers — spawn a real child node with cwd: dir instead.
+      const scriptPath = join(process.cwd(), 'scripts', 'check-pr-size.mjs');
+      const inline = `
+        import { getChangedFilesNumstat, parseNumstat } from ${JSON.stringify(pathToFileURL(scriptPath).href)};
+        const out = getChangedFilesNumstat(${JSON.stringify(base)}, ${JSON.stringify(head)}, {});
+        console.log(JSON.stringify(parseNumstat(out)));
+      `;
+      const child = realSpawnSync(process.execPath, ['--input-type=module', '-e', inline], {
+        cwd: dir,
+        encoding: 'utf8',
+      });
+      expect(child.status).toBe(0);
+      const rows = JSON.parse(child.stdout) as Array<{ path: string; added: number; removed: number }>;
+      const revealedRow = rows.find((row) => row.path === 'file.txt');
+      expect(revealedRow?.added).toBeGreaterThan(0);
+
+      // QNBS-v3: "!diff" unspecifies rather than forces text — a genuine binary must not get fake line counts.
+      const binaryRow = rows.find((row) => row.path === 'binary.bin');
+      expect(binaryRow).toEqual({ path: 'binary.bin', added: 0, removed: 0 });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

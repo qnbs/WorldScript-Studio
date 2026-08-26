@@ -135,6 +135,7 @@ describe('CI workflow policy', () => {
     );
     expect(extractNeeds(workflowSource, 'ci-success')).toEqual([
       'workflow-policy',
+      'pr-size',
       'security',
       'signatures',
       'quality',
