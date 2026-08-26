@@ -1,3 +1,6 @@
+import type { RootState } from './app/store';
+import { appStoreRef } from './app/storeRef';
+import { flushPersistedState } from './app/persistedStateFlush';
 import { logger as appLogger } from './services/logger';
 
 // ============================================================
@@ -183,14 +186,12 @@ const registerServiceWorker = async (): Promise<void> => {
       announceUpdateAvailable(registration.waiting);
     }
 
-    // QNBS-v3: Reload on any SW controller change — install now calls skipWaiting() automatically,
-    // so controllerchange fires whenever a new SW activates (not just on user-initiated updates).
-    // The app auto-saves to IDB so a mid-session reload is safe and always serves fresh assets.
+    // QNBS-v3 (DA-02): the 1s debounced autosave never fires mid-typing — flush before reloading or edits can be lost.
     let refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (!refreshing) {
         refreshing = true;
-        window.location.reload();
+        void flushThenReload();
       }
     });
 
@@ -224,6 +225,19 @@ const registerServiceWorker = async (): Promise<void> => {
     appLogger.error('[SW] Registration failed:', error);
   }
 };
+
+// QNBS-v3 (DA-02): mirrors index.tsx's visibilitychange flush — a failed flush defers the reload instead of discarding edits.
+async function flushThenReload(): Promise<void> {
+  try {
+    const store = appStoreRef.current;
+    if (store) {
+      await flushPersistedState(store.getState() as RootState);
+    }
+    window.location.reload();
+  } catch (error) {
+    appLogger.error('[SW] Pre-reload state flush failed — reload deferred to avoid data loss:', error);
+  }
+}
 
 if (typeof window !== 'undefined') {
   window.addEventListener('load', registerServiceWorker);
