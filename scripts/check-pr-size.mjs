@@ -98,15 +98,15 @@ export function parseNumstat(numstatOutput) {
   return rows;
 }
 
-// QNBS-v3: every public/locales/** file is i18n:bundle output — the whole subtree is safe to exclude.
-const GENERATED_ARTIFACT_ROOTS = ['public/locales/'];
+// QNBS-v3: build-i18n.mjs only ever writes <lang>/bundle.json — a same-named non-bundle file must still count.
+const LOCALE_BUNDLE_PATTERN = /^public\/locales\/[^/]+\/bundle\.json$/;
 // QNBS-v3: only index.json is content-guard's mirror of community-templates/ — index.<locale>.json are hand-authored.
 const GENERATED_ARTIFACT_EXACT_PATHS = ['public/community-templates/index.json'];
 
 function isGovernanceExcluded(path) {
   if (path.split('/').pop() === 'pnpm-lock.yaml') return true;
   if (GENERATED_ARTIFACT_EXACT_PATHS.includes(path)) return true;
-  return GENERATED_ARTIFACT_ROOTS.some((root) => path.startsWith(root));
+  return LOCALE_BUNDLE_PATTERN.test(path);
 }
 
 export function computeMeaningfulLines(rows) {

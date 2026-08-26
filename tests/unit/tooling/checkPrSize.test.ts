@@ -58,9 +58,9 @@ describe('computeMeaningfulLines', () => {
   });
 
   // QNBS-v3: a rebuilt public/ bundle can churn thousands of lines without being a "real" change.
-  it('zeroes out generated public/locales bundles', () => {
+  it('zeroes out generated public/locales/<lang>/bundle.json bundles', () => {
     const rows: NumstatRow[] = [
-      { path: 'public/locales/de/writer/bundle.json', added: 5000, removed: 5000 },
+      { path: 'public/locales/de/bundle.json', added: 5000, removed: 5000 },
       { path: 'scripts/foo.mjs', added: 10, removed: 5 },
     ];
     expect(computeMeaningfulLines(rows)).toBe(15);
@@ -70,9 +70,18 @@ describe('computeMeaningfulLines', () => {
   it('still counts source locales/**/*.json edits as meaningful (not the generated bundle)', () => {
     const rows: NumstatRow[] = [
       { path: 'locales/de/writer.json', added: 200, removed: 50 },
-      { path: 'public/locales/de/writer/bundle.json', added: 5000, removed: 5000 },
+      { path: 'public/locales/de/bundle.json', added: 5000, removed: 5000 },
     ];
     expect(computeMeaningfulLines(rows)).toBe(250);
+  });
+
+  // QNBS-v3: build-i18n.mjs only ever writes <lang>/bundle.json — a same-named non-bundle file must still count.
+  it('still counts a non-bundle file that happens to live under public/locales/<lang>/', () => {
+    const rows: NumstatRow[] = [
+      { path: 'public/locales/en/metadata.json', added: 300, removed: 100 },
+      { path: 'public/locales/de/bundle.json', added: 5000, removed: 5000 },
+    ];
+    expect(computeMeaningfulLines(rows)).toBe(400);
   });
 
   it('zeroes out pnpm-lock.yaml regardless of its classification', () => {
@@ -107,10 +116,18 @@ describe('computeGovernedFileCount', () => {
     expect(computeGovernedFileCount(rows)).toBe(2);
   });
 
-  it('excludes generated public/locales bundles from the count', () => {
+  it('excludes generated public/locales/<lang>/bundle.json from the count', () => {
     const rows: NumstatRow[] = [
       { path: 'locales/de/writer.json', added: 200, removed: 50 },
-      { path: 'public/locales/de/writer/bundle.json', added: 5000, removed: 5000 },
+      { path: 'public/locales/de/bundle.json', added: 5000, removed: 5000 },
+    ];
+    expect(computeGovernedFileCount(rows)).toBe(1);
+  });
+
+  it('still counts a non-bundle file under public/locales/<lang>/ in the file count too', () => {
+    const rows: NumstatRow[] = [
+      { path: 'public/locales/en/metadata.json', added: 300, removed: 100 },
+      { path: 'public/locales/de/bundle.json', added: 5000, removed: 5000 },
     ];
     expect(computeGovernedFileCount(rows)).toBe(1);
   });
@@ -311,7 +328,7 @@ describe('evaluatePrSize', () => {
     const numstat = langs
       .flatMap((lang) => [
         `2\t0\tlocales/${lang}/writer.json\x00`,
-        `40\t40\tpublic/locales/${lang}/writer/bundle.json\x00`,
+        `40\t40\tpublic/locales/${lang}/bundle.json\x00`,
       ])
       .join('');
     const spawnSync = (_cmd: string, args: string[]) => {
