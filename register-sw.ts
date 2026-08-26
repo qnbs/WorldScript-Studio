@@ -102,6 +102,11 @@ const isTauriEnvironment = (): boolean => {
   );
 };
 
+// QNBS-v3: mirrors public/sw.js's isWorldScriptOwnedCache — duplicated since sw.js is a classic (non-module) script.
+const OWNED_CACHE_NAME_RE = /^worldscript-(?:static|dynamic|images)-v\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/;
+
+export const isWorldScriptOwnedCacheName = (name: string): boolean => OWNED_CACHE_NAME_RE.test(name);
+
 // ── Core registration ─────────────────────────────────────────
 const registerServiceWorker = async (): Promise<void> => {
   // QNBS-v3: In Tauri, never register — and proactively tear down any SW + caches a prior build
@@ -114,7 +119,7 @@ const registerServiceWorker = async (): Promise<void> => {
         if (typeof caches !== 'undefined') {
           const keys = await caches.keys();
           await Promise.all(
-            keys.filter((k) => k.startsWith('worldscript-')).map((k) => caches.delete(k)),
+            keys.filter(isWorldScriptOwnedCacheName).map((k) => caches.delete(k)),
           );
         }
         appLogger.info(
