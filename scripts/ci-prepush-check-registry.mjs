@@ -35,6 +35,17 @@ const admissionCheckRegistry = Object.freeze([
       'scripts/ci-prepush-range-resolver.mjs',
     ]),
   },
+  {
+    name: 'workflowPolicy',
+    matches: (file) => file.startsWith('.github/workflows/'),
+    implementationFiles: new Set([
+      routingAuthority,
+      runnerAuthority,
+      'scripts/ci-prepush-classifier.mjs',
+      'scripts/ci-prepush-range-resolver.mjs',
+      'scripts/workflow-policy-check.mjs',
+    ]),
+  },
 ]);
 
 export function shouldRunAdmissionCheck(name, files) {

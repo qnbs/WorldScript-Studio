@@ -138,7 +138,7 @@ jobs:
       contents: read
       pull-requests: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -194,6 +194,9 @@ jobs:
 
       - name: Native-readiness roadmap policy gate
         run: pnpm run native-readiness:check
+
+      - name: Workflow-policy structural gate (permissions, needs graph, action pins)
+        run: pnpm run workflow-policy:check
 
       - name: Feature parity audit
         run: pnpm run parity:check
