@@ -186,7 +186,7 @@ const registerServiceWorker = async (): Promise<void> => {
       announceUpdateAvailable(registration.waiting);
     }
 
-    // QNBS-v3 (DA-02): only the visible tab flushes — a hidden tab's stale write could race a fresher one.
+    // QNBS-v3 (DA-02): only the visible tab flushes — a hidden tab's stale write could race a fresher one (residual multi-window gap: #518).
     let refreshing = false;
     let reloadPendingWhileHidden = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
@@ -201,7 +201,7 @@ const registerServiceWorker = async (): Promise<void> => {
     document.addEventListener('visibilitychange', () => {
       if (reloadPendingWhileHidden && document.visibilityState === 'visible' && !refreshing) {
         refreshing = true;
-        // QNBS-v3 (codex): no flush here — index.tsx already flushed this tab's edits when it went hidden; re-flushing now could clobber a fresher write.
+        // QNBS-v3 (DA-02, residual risk tracked in #518): no flush here — index.tsx's best-effort hide-time flush may have failed, but re-flushing this possibly-stale copy risks clobbering a fresher write from another tab, which is the worse failure mode of the two.
         window.location.reload();
       }
     });
@@ -250,7 +250,7 @@ async function flushLatestState(): Promise<void> {
     if (latest === snapshot) return;
     snapshot = latest;
   }
-  // QNBS-v3 (codex): the loop above can exhaust its budget mid-churn — one final flush of whatever's freshest right now, rather than silently dropping it.
+  // QNBS-v3 (codex, residual risk #518): narrows but doesn't eliminate the race — a keystroke during this final await is still possible to lose.
   await flushPersistedState(store.getState() as RootState);
 }
 

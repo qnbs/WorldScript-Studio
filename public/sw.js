@@ -111,9 +111,7 @@ async function offlineFallback(request) {
 // INSTALL — Precache shell
 // ════════════════════════════════════════════════════════════
 self.addEventListener('install', (event) => {
-  // QNBS-v3: skipWaiting immediately so a new SW never sits in "waiting" state behind a stale
-  // active SW that serves cached v.old assets. The app auto-saves to IDB so a mid-session
-  // reload is safe. Paired with clients.claim() in activate this ensures all tabs get new code.
+  // QNBS-v3 (DA-02): activates immediately, no waiting — register-sw.ts owns the bounded pre-reload flush mitigation, residual risk tracked in #518.
   self.skipWaiting();
   // QNBS-v3: Never precache inside Tauri — the desktop app serves its shell from the bundle.
   if (IS_TAURI) return;
