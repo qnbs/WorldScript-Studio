@@ -100,14 +100,23 @@ export function parseNumstat(numstatOutput) {
 // QNBS-v3: only rebuilt public/ bundles are generated — locales/**/community-templates/** source content still counts.
 const GENERATED_ARTIFACT_ROOTS = ['public/locales/', 'public/community-templates/'];
 
+function isGovernanceExcluded(path) {
+  if (path.split('/').pop() === 'pnpm-lock.yaml') return true;
+  return GENERATED_ARTIFACT_ROOTS.some((root) => path.startsWith(root));
+}
+
 export function computeMeaningfulLines(rows) {
   let total = 0;
   for (const row of rows) {
-    if (row.path.split('/').pop() === 'pnpm-lock.yaml') continue;
-    if (GENERATED_ARTIFACT_ROOTS.some((root) => row.path.startsWith(root))) continue;
+    if (isGovernanceExcluded(row.path)) continue;
     total += row.added + row.removed;
   }
   return total;
+}
+
+// QNBS-v3: a locale-parity edit always touches 19 rebuilt bundles — exclude them, mirroring lines.
+export function computeGovernedFileCount(rows) {
+  return rows.filter((row) => !isGovernanceExcluded(row.path)).length;
 }
 
 export function isAllDocs(rows) {
@@ -138,14 +147,15 @@ export function selectSeverity({ fileCount, lineCount, commitCount, allDocs }) {
   return { tier: 'ok', blocking: false, limits: TIERS.target };
 }
 
-export function formatReport({ fileCount, lineCount, commitCount, allDocs, severity }) {
+export function formatReport({ fileCount, totalFileCount, lineCount, commitCount, allDocs, severity }) {
   const { tier, blocking, limits } = severity;
+  const filesNote = totalFileCount > fileCount ? ` (${totalFileCount} total incl. generated)` : '';
   if (tier === 'ok') {
-    return `PR size within target: ${fileCount} files, ${lineCount} meaningful lines, ${commitCount} commits (limit: ≤${limits.files}/≤${limits.lines}/≤${limits.commits}).`;
+    return `PR size within target: ${fileCount} files${filesNote}, ${lineCount} meaningful lines, ${commitCount} commits (limit: ≤${limits.files}/≤${limits.lines}/≤${limits.commits}).`;
   }
   const kind = blocking ? 'exceeds the absolute ceiling' : `is over the ${tier} tier`;
   const profile = allDocs ? 'docs/governance' : 'normal';
-  return `PR size ${kind} (${profile} profile): ${fileCount} files, ${lineCount} meaningful lines, ${commitCount} commits — limit ≤${limits.files} files / ≤${limits.lines} lines / ≤${limits.commits} commits. ${blocking ? 'Split this PR into smaller, independently reviewable PRs before merge.' : 'Consider splitting into smaller, independently reviewable PRs.'}`;
+  return `PR size ${kind} (${profile} profile): ${fileCount} files${filesNote}, ${lineCount} meaningful lines, ${commitCount} commits — limit ≤${limits.files} files / ≤${limits.lines} lines / ≤${limits.commits} commits. ${blocking ? 'Split this PR into smaller, independently reviewable PRs before merge.' : 'Consider splitting into smaller, independently reviewable PRs.'}`;
 }
 
 export function evaluatePrSize(base, head, dependencies = {}) {
@@ -155,18 +165,20 @@ export function evaluatePrSize(base, head, dependencies = {}) {
     return { ok: false, error: 'could not resolve diff/commit range via git' };
   }
   const rows = parseNumstat(numstat);
-  const fileCount = rows.length;
+  const totalFileCount = rows.length;
+  const fileCount = computeGovernedFileCount(rows);
   const lineCount = computeMeaningfulLines(rows);
   const allDocs = isAllDocs(rows);
   const severity = selectSeverity({ fileCount, lineCount, commitCount, allDocs });
   return {
     ok: true,
     fileCount,
+    totalFileCount,
     lineCount,
     commitCount,
     allDocs,
     severity,
-    report: formatReport({ fileCount, lineCount, commitCount, allDocs, severity }),
+    report: formatReport({ fileCount, totalFileCount, lineCount, commitCount, allDocs, severity }),
   };
 }
 

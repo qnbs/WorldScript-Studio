@@ -28,6 +28,8 @@ export function parseNumstat(numstatOutput: string): NumstatRow[];
 
 export function computeMeaningfulLines(rows: NumstatRow[]): number;
 
+export function computeGovernedFileCount(rows: NumstatRow[]): number;
+
 export function isAllDocs(rows: NumstatRow[]): boolean;
 
 export interface SizeTierLimits {
@@ -53,6 +55,7 @@ export function selectSeverity(input: {
 
 export function formatReport(input: {
   fileCount: number;
+  totalFileCount: number;
   lineCount: number;
   commitCount: number;
   allDocs: boolean;
@@ -63,6 +66,7 @@ export interface PrSizeEvaluation {
   ok: boolean;
   error?: string;
   fileCount?: number;
+  totalFileCount?: number;
   lineCount?: number;
   commitCount?: number;
   allDocs?: boolean;

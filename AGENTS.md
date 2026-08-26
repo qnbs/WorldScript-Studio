@@ -373,11 +373,11 @@ procedure.
 ### Pipeline Graph
 
 ```
-workflow-policy ──► security ──► quality ──┬──► build ──► lighthouse
-                    │                      ├──► e2e
-                    ▼                      ├──► e2e-deep (non-blocking)
-                  pr-size (pull_request     ├──► storybook
-                  only) ──► ci-success      └──► vrt
+workflow-policy ─┬─► security ──► quality ──┬──► build ──► lighthouse
+                 │                          ├──► e2e
+                 ▼                          ├──► e2e-deep (non-blocking)
+               pr-size (pull_request         ├──► storybook
+               only) ──► ci-success          └──► vrt
 build (main, non-PR) ──► upload-pages-artifact
 deploy (main, non-PR) needs: ci-success ──► GitHub Pages
 ```

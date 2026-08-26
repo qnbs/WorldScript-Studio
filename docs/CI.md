@@ -101,13 +101,13 @@ Each job that uses the composite must call `actions/checkout@v6` first (local co
 ## Job graph
 
 ```text
-workflow-policy ──► security ──► quality ──┬──► build ──┬──► lighthouse
-                                           ├──► e2e     └──► vrt
-                                           ├──► e2e-deep (advisory)
-                                           └──► storybook (advisory)
+workflow-policy ─┬─► security ──► quality ──┬──► build ──┬──► lighthouse
+                 │                          ├──► e2e     └──► vrt
+                 └──► pr-size (pull_request  ├──► e2e-deep (advisory)
+                      only)                  └──► storybook (advisory)
 
 workflow-policy ─┐
-pr-size ─────────┤ (pull_request only — skipped otherwise)
+pr-size (needs workflow-policy) ─┤ (pull_request only — skipped otherwise)
 security ────────┤
 signatures ──────┤
 quality ─────────┼──► ci-success (required-status aggregator)
@@ -133,7 +133,7 @@ registry gzip-decoding failure mode, while OSV failures remain blocking.
 | Job | Needs | Purpose |
 |-----|--------|---------|
 | `workflow-policy` | — | Structural (real-parser, not regex) validation of every `.github/workflows/*.yml` and `.github/actions/**/action.yml` — permissions, needs graph, SHA-pinned action references, publishing boundary (`scripts/workflow-policy-check.mjs`). Runs first, before any job invokes the governed `./.github/actions/setup` composite, using only external SHA-pinned actions directly (never that composite) and an `--ignore-scripts --ignore-pnpmfile` install, so a PR tampering with the composite (or its own install hooks) can't execute before the gate evaluates it. |
-| `pr-size` | `workflow-policy` | PR-size governance (`scripts/check-pr-size.mjs`) — tiered file/line/commit limits, advisory below the absolute ceiling and blocking only above it. `pull_request` only. Runs the **base ref's** own copy of the checker (never the PR's working-tree copy) so a PR touching it can't raise its own limits. |
+| `pr-size` | `workflow-policy` | PR-size governance (`scripts/check-pr-size.mjs`) — tiered file/line/commit limits, advisory below the absolute ceiling and blocking only above it. `pull_request` only. Runs the **base ref's** own copy of the checker (never the PR's working-tree copy) when it exists there, so a PR touching it can't raise its own limits; falls back to the PR's own copy one time only, for the introducing PR whose base ref has no checker yet. |
 | `security` | `workflow-policy` | `pnpm audit --audit-level=high`; **OSV scanner** (`google/osv-scanner-action`) for npm + Rust lockfiles; `gitleaks` secrets scan; on PRs: `dependency-review-action` |
 | `scheduled-osv` | — | Separate daily and manually triggerable (`workflow_dispatch`) `.github/workflows/security-scheduled.yml` scan of the same three lockfiles; `contents: read` only; fails closed and writes lockfile/package/advisory details to the step summary |
 | `quality` | `security` | Matrix **Node 22** and **24** → Biome lint, **`pnpm run i18n:check`**, **`pnpm run docs:check`**, **`pnpm run csp:verify`**, **`pnpm run parity:check`**, `pnpm run typecheck`, Vitest + coverage (+ non-blocking coverage-ratchet suggestion), Codecov (optional token), coverage artifact |

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  computeGovernedFileCount,
   computeMeaningfulLines,
   evaluatePrSize,
   formatReport,
@@ -83,6 +84,33 @@ describe('computeMeaningfulLines', () => {
   });
 });
 
+// QNBS-v3: a locale-parity edit always touches 19 rebuilt bundles — the file ceiling must exclude them too.
+describe('computeGovernedFileCount', () => {
+  it('counts ordinary code files', () => {
+    const rows: NumstatRow[] = [
+      { path: 'scripts/foo.mjs', added: 10, removed: 5 },
+      { path: 'scripts/bar.mjs', added: 3, removed: 1 },
+    ];
+    expect(computeGovernedFileCount(rows)).toBe(2);
+  });
+
+  it('excludes generated public/locales bundles from the count', () => {
+    const rows: NumstatRow[] = [
+      { path: 'locales/de/writer.json', added: 200, removed: 50 },
+      { path: 'public/locales/de/writer/bundle.json', added: 5000, removed: 5000 },
+    ];
+    expect(computeGovernedFileCount(rows)).toBe(1);
+  });
+
+  it('excludes pnpm-lock.yaml from the count', () => {
+    const rows: NumstatRow[] = [
+      { path: 'pnpm-lock.yaml', added: 2000, removed: 100 },
+      { path: 'scripts/foo.mjs', added: 10, removed: 5 },
+    ];
+    expect(computeGovernedFileCount(rows)).toBe(1);
+  });
+});
+
 describe('isAllDocs', () => {
   it('is true when every changed file classifies as DOCS', () => {
     expect(isAllDocs([{ path: 'docs/CI.md', added: 1, removed: 1 }])).toBe(true);
@@ -152,22 +180,57 @@ describe('selectSeverity', () => {
 describe('formatReport', () => {
   it('reports "within target" for an ok result', () => {
     const severity = selectSeverity({ fileCount: 3, lineCount: 100, commitCount: 2, allDocs: false });
-    const report = formatReport({ fileCount: 3, lineCount: 100, commitCount: 2, allDocs: false, severity });
+    const report = formatReport({
+      fileCount: 3,
+      totalFileCount: 3,
+      lineCount: 100,
+      commitCount: 2,
+      allDocs: false,
+      severity,
+    });
     expect(report).toMatch(/within target/);
   });
 
   it('reports a blocking message for the absolute tier', () => {
     const severity = selectSeverity({ fileCount: 35, lineCount: 500, commitCount: 7, allDocs: false });
-    const report = formatReport({ fileCount: 35, lineCount: 500, commitCount: 7, allDocs: false, severity });
+    const report = formatReport({
+      fileCount: 35,
+      totalFileCount: 35,
+      lineCount: 500,
+      commitCount: 7,
+      allDocs: false,
+      severity,
+    });
     expect(report).toMatch(/exceeds the absolute ceiling/);
     expect(report).toMatch(/Split this PR/);
   });
 
   it('reports a non-blocking suggestion for the target/hard tiers', () => {
     const severity = selectSeverity({ fileCount: 25, lineCount: 500, commitCount: 7, allDocs: false });
-    const report = formatReport({ fileCount: 25, lineCount: 500, commitCount: 7, allDocs: false, severity });
+    const report = formatReport({
+      fileCount: 25,
+      totalFileCount: 25,
+      lineCount: 500,
+      commitCount: 7,
+      allDocs: false,
+      severity,
+    });
     expect(report).toMatch(/is over the hard tier/);
     expect(report).toMatch(/Consider splitting/);
+  });
+
+  // QNBS-v3: surfaces the excluded generated count so the report isn't silently smaller than the real diff.
+  it('notes the total file count when it exceeds the governed count', () => {
+    const severity = selectSeverity({ fileCount: 3, lineCount: 100, commitCount: 2, allDocs: false });
+    const report = formatReport({
+      fileCount: 3,
+      totalFileCount: 41,
+      lineCount: 100,
+      commitCount: 2,
+      allDocs: false,
+      severity,
+    });
+    expect(report).toMatch(/41 total incl\. generated/);
   });
 });
 
@@ -218,6 +281,27 @@ describe('evaluatePrSize', () => {
     const spawnSync = () => ({ status: null, error: new Error('spawn git ENOENT'), stdout: '', stderr: '' });
     const result = evaluatePrSize('base', 'head', { spawnSync });
     expect(result.ok).toBe(false);
+  });
+
+  // QNBS-v3: a real atomic i18n edit (1 source file/locale + its rebuilt bundle) must not trip the file ceiling.
+  it('does not block an atomic locale-parity change on the generated-bundle fan-out', () => {
+    const langs = Array.from({ length: 19 }, (_, i) => `lang${i}`);
+    const numstat = langs
+      .flatMap((lang) => [
+        `2\t0\tlocales/${lang}/writer.json\x00`,
+        `40\t40\tpublic/locales/${lang}/writer/bundle.json\x00`,
+      ])
+      .join('');
+    const spawnSync = (_cmd: string, args: string[]) => {
+      if (args.includes('--git-path')) return { status: 1, stdout: '', stderr: '' };
+      if (args[0] === 'diff') return { ...okGit(), stdout: numstat };
+      return { ...okGit(), stdout: '1\n' };
+    };
+    const result = evaluatePrSize('base', 'head', { spawnSync });
+    expect(result.ok).toBe(true);
+    expect(result.totalFileCount).toBe(38);
+    expect(result.fileCount).toBe(19);
+    expect(result.severity?.tier).not.toBe('absolute');
   });
 });
 
