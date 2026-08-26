@@ -18,6 +18,7 @@ const workflow = readFileSync(workflowPath, 'utf8');
 const scopeScriptPath = fileURLToPath(
   new URL('../../../scripts/stryker-scope.mjs', import.meta.url),
 );
+// QNBS-v3: stays string concat — a template literal here is `${{ ${expr} }}`, a JS SyntaxError, not just a style nit.
 const githubExpression = (expression: string) => '$' + '{{ ' + expression + ' }}';
 
 // QNBS-v3: Lock workflow/config invariants so mutation plumbing cannot silently drift.
@@ -61,17 +62,17 @@ describe('Stryker workflow policy', () => {
 
   it('uses supported incremental plumbing and preserves shard identity', () => {
     expect(workflow).toContain('--incrementalFile "$INCREMENTAL_FILE"');
-    expect(workflow).toContain('MATRIX_NAME: ' + githubExpression('matrix.name'));
-    expect(workflow).toContain('MATRIX_MUTATE: ' + githubExpression('matrix.mutate'));
+    expect(workflow).toContain(`MATRIX_NAME: ${githubExpression('matrix.name')}`);
+    expect(workflow).toContain(`MATRIX_MUTATE: ${githubExpression('matrix.mutate')}`);
     expect(workflow).toContain(
-      'MATRIX_TEST_FILES: ' + githubExpression("join(matrix.testFiles, ',')"),
+      `MATRIX_TEST_FILES: ${githubExpression("join(matrix.testFiles, ',')")}`,
     );
     expect(workflow).toContain('TEST_FILE_ARGS+=(--testFiles "$TEST_FILES")');
     expect(workflow).toContain('"${' + 'TEST_FILE_ARGS[@]}"');
     expect(workflow).not.toContain(
-      'rm -f reports/stryker-incremental-' + githubExpression('matrix.name') + '.json',
+      `rm -f reports/stryker-incremental-${githubExpression('matrix.name')}.json`,
     );
-    expect(workflow).not.toContain('--mutate "' + githubExpression('matrix.mutate') + '"');
+    expect(workflow).not.toContain(`--mutate "${githubExpression('matrix.mutate')}"`);
     expect(workflow).not.toContain('STRYKER_INCREMENTAL_FILE=');
     expect(workflow).toContain('merge-multiple: false');
     expect(workflow).toContain('if-no-files-found: error');
