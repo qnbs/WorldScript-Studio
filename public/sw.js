@@ -12,6 +12,13 @@ const CACHE_DYNAMIC = `worldscript-dynamic-v${APP_VERSION}`;
 const CACHE_IMAGES  = `worldscript-images-v${APP_VERSION}`;
 const ALL_CACHES    = [CACHE_STATIC, CACHE_DYNAMIC, CACHE_IMAGES];
 
+// QNBS-v3: exact owned families — a shared origin (qnbs.github.io) can host other apps' caches too.
+const OWNED_CACHE_FAMILIES = ['worldscript-static-v', 'worldscript-dynamic-v', 'worldscript-images-v'];
+
+function isWorldScriptOwnedCache(name) {
+  return OWNED_CACHE_FAMILIES.some((family) => name.startsWith(family));
+}
+
 const BASE = self.location.pathname.replace(/sw\.js$/, '');
 
 // QNBS-v3: Detect the Tauri desktop WebView (served from tauri://localhost or https://tauri.localhost).
@@ -131,8 +138,9 @@ self.addEventListener('activate', (event) => {
     event.waitUntil(
       (async () => {
         try {
+          // QNBS-v3: Tauri origin exclusivity is unproven here — apply the same ownership predicate.
           const keys = await caches.keys();
-          await Promise.all(keys.map((name) => caches.delete(name)));
+          await Promise.all(keys.filter(isWorldScriptOwnedCache).map((name) => caches.delete(name)));
         } catch (err) {
           swLogger.warn('Tauri cache cleanup failed (non-fatal):', err);
         }
@@ -151,7 +159,8 @@ self.addEventListener('activate', (event) => {
       .then((cacheNames) =>
         Promise.all(
           cacheNames
-            .filter((name) => !ALL_CACHES.includes(name))
+            // QNBS-v3: prune only owned-and-stale — never delete a cache we don't positively own.
+            .filter((name) => isWorldScriptOwnedCache(name) && !ALL_CACHES.includes(name))
             .map((name) => {
               swLogger.log('Pruning old cache:', name);
               return caches.delete(name);
@@ -319,8 +328,9 @@ self.addEventListener('message', (event) => {
   }
 
   if (type === 'CLEAR_CACHE') {
+    // QNBS-v3: clear only owned caches — a shared origin can host unrelated apps' caches too.
     caches.keys()
-      .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter(isWorldScriptOwnedCache).map((k) => caches.delete(k))))
       .then(() => event.source?.postMessage({ type: 'CACHE_CLEARED' }));
   }
 
