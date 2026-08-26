@@ -4,6 +4,7 @@
  */
 import JSZip from 'jszip';
 import type { Settings, StoryProject } from '../types';
+import { logger } from './logger';
 import type { BinderAssetPayload } from './storageBackend';
 import { storageService } from './storageService';
 
@@ -125,7 +126,17 @@ export async function collectLibraryBackupPayload(
   onProgress?.('list', 0, total);
 
   for (const projectId of projectIds) {
-    const project = await storageService.loadProject(projectId);
+    // QNBS-v3 (DA-01): loadProject now throws on corrupt/unreadable data rather than returning null — one bad project must not abort the whole backup.
+    let project: StoryProject | null;
+    try {
+      project = await storageService.loadProject(projectId);
+    } catch (error) {
+      logger.warn('collectLibraryBackupPayload: skipping unreadable project', {
+        projectId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      project = null;
+    }
     const codex = await storageService.getStoryCodex(projectId);
     const ragVectors = await storageService.getRagVectors(projectId);
     const binderIds = await storageService.listBinderAssetIds(projectId);

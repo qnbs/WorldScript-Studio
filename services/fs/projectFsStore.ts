@@ -19,6 +19,27 @@ import {
   writeTextFileAtomic,
 } from './fsCore';
 
+// QNBS-v3 (DA-01): distinguishes corrupt/unreadable saved data from genuine absence — callers must never treat this the same as "no project exists yet".
+export class ProjectLoadError extends Error {
+  constructor(
+    public readonly reason: 'corrupt' | 'io-error',
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ProjectLoadError';
+  }
+}
+
+// QNBS-v3 (DA-01): rejects parsed JSON that isn't project-shaped at all (e.g. an unrelated file, or a prior empty-object substitution bug) instead of silently hydrating a near-blank project.
+function looksLikeStoryProject(value: unknown): value is StoryProject {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as Record<string, unknown>)['title'] === 'string' &&
+    Array.isArray((value as Record<string, unknown>)['manuscript'])
+  );
+}
+
 export class FsProjectStore extends FsAssetStore {
   async saveProject(project: SaveProjectInput): Promise<void> {
     const flat = normalizeSaveProjectInputToStoryProject(project);
@@ -83,26 +104,50 @@ export class FsProjectStore extends FsAssetStore {
     }
   }
 
+  /**
+   * Genuine absence (no saved file for this ID) resolves to `null` — legitimate and unchanged.
+   * A corrupt or unreadable file throws `ProjectLoadError` instead: DA-01 requires that this never
+   * collapse into the same `null` a caller would read as "no project exists yet".
+   */
   async loadProject(projectId: string): Promise<StoryProject | null> {
-    try {
-      const apis = await this.getApis();
-      const appDataPath = await this.ensureAppDataPath();
-      const safeProjectId = sanitizePathSegment(projectId);
-      const projectFile = await apis.join(appDataPath, 'projects', safeProjectId, 'project.json');
+    const apis = await this.getApis();
+    const appDataPath = await this.ensureAppDataPath();
+    const safeProjectId = sanitizePathSegment(projectId);
+    const projectFile = await apis.join(appDataPath, 'projects', safeProjectId, 'project.json');
 
-      if (!(await apis.exists(projectFile))) {
-        return null;
-      }
-
-      const content = await retryFs(() => apis.readTextFile(projectFile));
-      const project = decompressData<StoryProject>(content);
-      // QNBS-v3: schedule observation after this async load resolves so validation cannot delay or alter the load result.
-      scheduleCoreProjectValidation(project);
-      return project;
-    } catch (error) {
-      logger.error('Failed to load project:', error);
+    if (!(await apis.exists(projectFile))) {
       return null;
     }
+
+    let content: string;
+    try {
+      content = await retryFs(() => apis.readTextFile(projectFile));
+    } catch (error) {
+      logger.error('Failed to read project file (I/O error):', error);
+      throw new ProjectLoadError(
+        'io-error',
+        `Could not read the project file for "${projectId}" — it may be locked, permission-denied, or otherwise inaccessible.`,
+      );
+    }
+
+    let project: StoryProject;
+    try {
+      const parsed = decompressData<unknown>(content);
+      if (!looksLikeStoryProject(parsed)) {
+        throw new Error('Parsed content is not project-shaped (missing title/manuscript).');
+      }
+      project = parsed;
+    } catch (error) {
+      logger.error('Failed to parse project file (corrupt data):', error);
+      throw new ProjectLoadError(
+        'corrupt',
+        `The saved project file for "${projectId}" appears to be corrupted and could not be read. The file has not been deleted.`,
+      );
+    }
+
+    // QNBS-v3: schedule observation after this async load resolves so validation cannot delay or alter the load result.
+    scheduleCoreProjectValidation(project);
+    return project;
   }
 
   async listProjects(): Promise<string[]> {
