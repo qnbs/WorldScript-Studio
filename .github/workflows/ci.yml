@@ -615,7 +615,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [ci-success]
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.ci-success.result == 'success'
+    # QNBS-v3 (#522): always()+!cancelled() overrides GHA's default skip-propagation from pr-size/rust-tauri/core-rust being legitimately skipped on push, without publishing from a cancelled run — ci-success.result is the real gate.
+    if: >-
+      ${{
+        always() &&
+        !cancelled() &&
+        github.ref == 'refs/heads/main' &&
+        github.event_name != 'pull_request' &&
+        needs.ci-success.result == 'success'
+      }}
     permissions:
       contents: read
       pages: write

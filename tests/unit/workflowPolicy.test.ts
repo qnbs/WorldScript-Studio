@@ -127,6 +127,21 @@ describe('CI workflow policy', () => {
     expect(visited).toContain('ci-success');
   });
 
+  // QNBS-v3 (#522): deploy's default success() gate inherits skip-propagation from pr-size/rust-tauri/core-rust being legitimately skipped on push, even though ci-success itself computed 'success' — always() overrides that and makes ci-success.result the real gate.
+  it('gates deploy on ci-success.result explicitly via always()+!cancelled(), not implicit success()', () => {
+    const deployBlock = extractJobBlock(workflowSource, 'deploy');
+    expect(extractNeeds(workflowSource, 'deploy')).toEqual(['ci-success']);
+    // QNBS-v3 (#522): main push has pr-size/rust-tauri/core-rust legitimately skipped and ci-success == success — deploy must still be eligible, not silently skipped by GHA's default chain propagation.
+    expect(deployBlock).toContain('always()');
+    expect(deployBlock).toContain('!cancelled()');
+    expect(deployBlock).toMatch(/github\.ref == 'refs\/heads\/main'/);
+    expect(deployBlock).toMatch(/github\.event_name != 'pull_request'/);
+    expect(deployBlock).toMatch(/needs\.ci-success\.result == 'success'/);
+    expect(deployBlock).toMatch(
+      /always\(\)[\s\S]+!cancelled\(\)[\s\S]+github\.ref == 'refs\/heads\/main'[\s\S]+github\.event_name != 'pull_request'[\s\S]+needs\.ci-success\.result == 'success'/,
+    );
+  });
+
   // QNBS-v3: Keep every unconditional CI job explicitly required or advisory so deploy cannot false-green.
   it('keeps required and advisory job authority explicit', () => {
     const ciSuccessBlock = extractJobBlock(workflowSource, 'ci-success');
