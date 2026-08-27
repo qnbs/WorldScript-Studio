@@ -188,7 +188,7 @@ source ~/.bashrc
 
 ```bash
 cd ~/githubcursor/WorldScript-Studio
-pnpm install --frozen-lockfile
+node scripts/dependency-state.mjs reconcile
 pnpm run ci:quick          # native quick tier
 # Full workflow parity (slow, needs swap):
 pnpm run ci:act              # act sequential
