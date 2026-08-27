@@ -36,8 +36,7 @@ test.describe('WelcomePortal entry precondition (CI-only)', () => {
       timeout: 10000,
     });
     await page.reload();
-    // Prove this reload really landed back in the main shell, not a fresh WelcomePortal —
-    // otherwise ensureWelcomePortalEntry's early-return branch would make the assertion below vacuous.
+    // QNBS-v3: proves the reload landed in the main shell, not a fresh WelcomePortal, or the assertion below would be vacuous.
     await waitForMainChrome(page);
     await expect(page.getByRole('button', { name: /Start a New Project/i })).not.toBeVisible();
     await ensureWelcomePortalEntry(page);
