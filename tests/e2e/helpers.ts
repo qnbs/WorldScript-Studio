@@ -175,28 +175,30 @@ export async function ensureBlankProject(page: Page): Promise<void> {
 
 // QNBS-v3: guarantees a deterministic WelcomePortal entry precondition when CI cold-boots into the main shell instead.
 /**
- * Deterministically reach the WelcomePortal "Start a New Project" entry point regardless of
- * which of waitForSpaReady()'s two success shapes the app actually booted into. A cold CI boot
- * has landed in an already-mounted main shell with a persisted project instead of the portal —
- * a startup-state precondition gap distinct from the (fixed) portal-activation auto-seed race.
- * Recovers via the real Settings → Data & Backups → Factory Reset flow so no React/Redux/storage
- * internals are touched — only supported app behavior.
+ * Deterministically reach the WelcomePortal entry point regardless of which of
+ * waitForSpaReady()'s two success shapes the app actually booted into. A cold CI boot has landed
+ * in an already-mounted main shell with a persisted project instead of the portal — a startup-
+ * state precondition gap distinct from the (fixed) portal-activation auto-seed race.
+ * Contract: guarantees the portal is reached, locale-independently — it does NOT guarantee
+ * English. A caller needing English selects it itself (export.spec.ts already does this for the
+ * fresh-boot case). Recovers via the real Settings → Data & Backups → Factory Reset flow when
+ * main chrome is active so no React/Redux/storage internals are touched — only supported app
+ * behavior.
  */
 export async function ensureWelcomePortalEntry(page: Page): Promise<void> {
   await waitForSpaReady(page);
-  const startBtn = page.getByRole('button', { name: /Start a New Project/i });
-  // QNBS-v3: check the locale-independent testid, not the translated button text — a non-English WelcomePortal must also early-return here, not fall through into the main-chrome-only recovery flow below.
-  if (
-    await page
-      .getByTestId('welcome-portal')
-      .isVisible({ timeout: 3000 })
-      .catch(() => false)
-  ) {
+  const portal = page.getByTestId('welcome-portal');
+  if (await portal.isVisible({ timeout: 3000 }).catch(() => false)) {
     return;
   }
   // QNBS-v3: force English before the locale-dependent recovery flow below, or a persisted non-EN/DE language would hang it.
   await page.evaluate(() => localStorage.setItem('worldscript-language', 'en'));
   await page.reload();
+  await waitForSpaReady(page);
+  // QNBS-v3: this reload can itself race a pending debounced autosave and land back in WelcomePortal instead of main chrome — accept either state again rather than assuming main chrome.
+  if (await portal.isVisible({ timeout: 3000 }).catch(() => false)) {
+    return;
+  }
   await waitForMainChrome(page);
   await clickNavItem(page, /Settings/i);
   await page
@@ -208,7 +210,7 @@ export async function ensureWelcomePortalEntry(page: Page): Promise<void> {
     .getByRole('button', { name: /Delete everything & restart|Alles löschen & neu starten/i })
     .click();
   await waitForSpaReady(page);
-  await expect(startBtn).toBeVisible({ timeout: 15000 });
+  await expect(portal).toBeVisible({ timeout: 15000 });
 }
 
 /** Desktop sidebar (`md:`); avoids duplicate nav controls vs mobile tab bar. */
