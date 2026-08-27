@@ -35,7 +35,7 @@ This project follows the [Contributor Covenant Code of Conduct](.github/CODE_OF_
 1. Install **Node.js 22+** LTS from [nodejs.org](https://nodejs.org/) (includes Corepack) or use **nvm-windows** and install `22` from [`.nvmrc`](.nvmrc).
 2. Open **PowerShell or CMD as Administrator** once and run: `corepack enable`
 3. In the repo folder: `corepack prepare pnpm@11.22.0 --activate` (version matches `packageManager` in [`package.json`](package.json); adjust if that field changes).
-4. Confirm: `pnpm -v` — then `pnpm install` and use `pnpm run …` for all scripts (hooks expect `pnpm` on `PATH`).
+4. Confirm: `pnpm -v` — then `node scripts/dependency-state.mjs reconcile` (never a bare `pnpm install` — see [Installation](#installation)) and use `pnpm run …` for all scripts (hooks expect `pnpm` on `PATH`).
 
 If `corepack` is not recognized, reinstall Node or enable the “Tools for Native Modules” / standard installation so `corepack.cmd` is on `PATH`.
 
@@ -83,9 +83,11 @@ pnpm run graphs:update        # update both Graphify + CodeGraph
 ```bash
 git clone https://github.com/qnbs/WorldScript-Studio.git
 cd WorldScript-Studio
-pnpm install
+node scripts/dependency-state.mjs reconcile  # frozen-lockfile install — never a bare `pnpm install`
 pnpm run hooks:install  # configures the pre-commit lint-staged hook
 ```
+
+Use `node scripts/dependency-state.mjs reconcile`, not a bare `pnpm install` — the bare form omits `--frozen-lockfile`, so on any manifest/lockfile drift it silently rewrites `pnpm-lock.yaml` instead of failing loudly, and it never writes this repo's own dependency fingerprint that `ci:prepush` and the pre-commit hook check. On a fresh clone, run that `node` form directly rather than `pnpm run deps:reconcile` — `pnpm-workspace.yaml`'s `verifyDepsBeforeRun: error` makes pnpm itself refuse to launch *any* `pnpm run` script while `node_modules` doesn't exist yet, before the wrapped reconcile logic ever runs; `pnpm run deps:reconcile` only works once `node_modules` is already present, e.g. to re-sync after a later lockfile change.
 
 `hooks:install` is a separate, explicit step rather than an automatic `prepare` script: pnpm v11's `allowBuilds` policy denies `simple-git-hooks`' own install-time script by default (supply-chain hardening — see `pnpm-workspace.yaml`), so a `prepare` script that shelled out to it would silently do nothing anyway. Skipping this step means commits bypass the `lint-staged` pre-commit check.
 
