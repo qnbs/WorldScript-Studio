@@ -36,8 +36,9 @@ export function useProjectBootstrapEffect({
   const dispatch = useAppDispatch();
 
   useEffect(() => {
-    if (!shouldRunProjectBootstrap({ project, isInitialLoad, isPortalActive, isI18nReady })) return;
-    if (!project) return;
+    // QNBS-v3: narrows project directly (not via the predicate's own return type) so the redundant post-check codecov flagged as dead code isn't needed.
+    if (!project || !shouldRunProjectBootstrap({ project, isInitialLoad, isPortalActive, isI18nReady }))
+      return;
 
     const repair = repairProjectI18nFields(project, t);
     if (repair) {

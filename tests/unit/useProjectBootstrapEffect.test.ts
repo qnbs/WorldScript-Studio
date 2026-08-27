@@ -156,4 +156,43 @@ describe('useProjectBootstrapEffect', () => {
     );
     expect(dispatch).not.toHaveBeenCalled();
   });
+
+  it('repairs only the fields that actually need it, leaving already-valid fields alone', () => {
+    renderHook(() =>
+      useProjectBootstrapEffect({
+        project: {
+          title: '',
+          logline: 'A real logline',
+          manuscript: [{ id: 'sec-1', title: 'Real Chapter', content: 'real' }],
+        },
+        isInitialLoad: false,
+        isPortalActive: false,
+        isI18nReady: true,
+        t,
+      }),
+    );
+    expect(dispatch).toHaveBeenCalledWith(projectActions.updateTitle('initialProject.title'));
+    expect(dispatch).not.toHaveBeenCalledWith(projectActions.updateLogline(expect.anything()));
+    expect(dispatch).not.toHaveBeenCalledWith(projectActions.setManuscript(expect.anything()));
+    expect(dispatch).toHaveBeenCalledTimes(1);
+  });
+
+  it('repairs only the logline when the title is already valid', () => {
+    renderHook(() =>
+      useProjectBootstrapEffect({
+        project: {
+          title: 'A Real Title',
+          logline: '',
+          manuscript: [{ id: 'sec-1', title: 'Real Chapter', content: 'real' }],
+        },
+        isInitialLoad: false,
+        isPortalActive: false,
+        isI18nReady: true,
+        t,
+      }),
+    );
+    expect(dispatch).not.toHaveBeenCalledWith(projectActions.updateTitle(expect.anything()));
+    expect(dispatch).toHaveBeenCalledWith(projectActions.updateLogline('initialProject.logline'));
+    expect(dispatch).toHaveBeenCalledTimes(1);
+  });
 });
