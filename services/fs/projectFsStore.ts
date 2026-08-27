@@ -7,6 +7,7 @@
 import type { EntityState } from '@reduxjs/toolkit';
 import { scheduleCoreProjectValidation } from '../../features/project/coreValidationShadow';
 import type { Character, StoryProject, World } from '../../types';
+import { getStaticTranslation } from '../i18n/staticTranslate';
 import { logger } from '../logger';
 import { parseImportedProjectJson } from '../projectImportSchema';
 import { normalizeSaveProjectInputToStoryProject, type SaveProjectInput } from '../storageBackend';
@@ -200,23 +201,42 @@ export class FsProjectStore extends FsAssetStore {
     format: 'json' | 'markdown' | 'docx' = 'json',
   ): Promise<void> {
     const apis = await this.getApis();
-    let fileName: string;
+    const fileName = project.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+
+    // QNBS-v3 (DA-05): real DOCX via apis.writeFile (binary) — Packer.toBuffer needs Node's Buffer, unavailable in the Tauri WebView, so use the browser-safe toArrayBuffer path instead.
+    if (format === 'docx') {
+      const { Packer } = await import('docx');
+      const { buildDocxDocument } = await import('../export/docxDocumentBuilder');
+      const [loglineLabel, manuscriptHeading] = await Promise.all([
+        getStaticTranslation('export.loglineLabel'),
+        getStaticTranslation('export.manuscriptLabel'),
+      ]);
+      const doc = buildDocxDocument({
+        title: project.title,
+        loglineLabel,
+        logline: project.logline,
+        manuscript: { heading: manuscriptHeading, sections: project.manuscript },
+      });
+      const arrayBuffer = await Packer.toArrayBuffer(doc);
+      const filePath = await apis.save({
+        defaultPath: `${fileName}.docx`,
+        filters: [{ name: 'DOCX', extensions: ['docx'] }],
+      });
+      if (filePath) {
+        await retryFs(() => apis.writeFile(filePath, new Uint8Array(arrayBuffer)));
+      }
+      return;
+    }
+
     let content: string;
     let extension: string;
 
     switch (format) {
       case 'json':
-        fileName = `${project.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}`;
         content = JSON.stringify(project, null, 2);
         extension = 'json';
         break;
       case 'markdown':
-        fileName = `${project.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}`;
-        content = this.convertToMarkdown(project);
-        extension = 'md';
-        break;
-      case 'docx':
-        fileName = `${project.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}`;
         content = this.convertToMarkdown(project);
         extension = 'md';
         break;
