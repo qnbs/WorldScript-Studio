@@ -268,23 +268,26 @@ export class IdbProjectStore extends IdbAssetStore {
       const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
       return new Promise<void>((resolve, reject) => {
         const request = store.put(payload, sliceName);
-        request.onsuccess = () => resolve();
+        const transaction = store.transaction;
+        // QNBS-v3: resolve on transaction commit, not request success — onsuccess fires before the write is durable, which now matters since a caller can immediately reload.
         request.onerror = () => reject(request.error);
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error ?? new Error('IDB transaction aborted'));
       });
     });
   }
 
   async saveProject(data: SaveProjectInput): Promise<void> {
-    // Check auto-snapshot condition during save
-    if (Date.now() - this.lastAutoSnapshotTime > this.AUTO_SNAPSHOT_INTERVAL) {
+    // QNBS-v3: autoSnapshotInFlight prevents a saveProject() call arriving before the first snapshot's success callback runs from starting a duplicate concurrent snapshot.
+    if (!this.autoSnapshotInFlight && Date.now() - this.lastAutoSnapshotTime > this.AUTO_SNAPSHOT_INTERVAL) {
       // data may arrive as a Redux-undo envelope (PersistedProjectState) or plain StoryProject
       const persisted = data as PersistedProjectState;
       const projectData = persisted.present ? persisted.present.data : persisted.data;
       if (projectData?.manuscript) {
-        // QNBS-v3: Only commit the timestamp after a successful snapshot — an unhandled rejection
-        //          here (e.g. the expected locked-write error) previously suppressed the next
-        //          automatic snapshot for a full interval even though none was actually taken.
+        // QNBS-v3: Only commit the timestamp after a successful snapshot — an unhandled rejection here previously suppressed the next automatic snapshot for a full interval even though none was actually taken.
         const snapshotTime = Date.now();
+        this.autoSnapshotInFlight = true;
         // Fire and forget snapshot to not block UI
         this.createSnapshot(projectData)
           .then(() => {
@@ -293,6 +296,9 @@ export class IdbProjectStore extends IdbAssetStore {
           })
           .catch((error: unknown) => {
             logger.warn('Automatic snapshot failed', { error: String(error) });
+          })
+          .finally(() => {
+            this.autoSnapshotInFlight = false;
           });
       }
     }
