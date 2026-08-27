@@ -209,6 +209,36 @@ describe('register-sw — controllerchange flush-then-reload (DA-02)', () => {
     expect(reloadSpy).toHaveBeenCalledTimes(1);
   });
 
+  // QNBS-v3: versionControl mixes persisted fields (branches/snapshots/currentBranchId) with a UI-only isPanelOpen toggle — must compare only the former.
+  it('does not retry when only versionControl.isPanelOpen changes, not the persisted version-control fields', async () => {
+    const project = { present: { v: 'a' } };
+    const settings = {};
+    const branches = [{ id: 'main' }];
+    const snapshots: unknown[] = [];
+    const currentBranchId = 'main';
+    const getStateMock = vi
+      .fn()
+      .mockReturnValueOnce({
+        project,
+        versionControl: { branches, snapshots, currentBranchId, isPanelOpen: false },
+        settings,
+      })
+      .mockReturnValue({
+        project,
+        versionControl: { branches, snapshots, currentBranchId, isPanelOpen: true },
+        settings,
+      });
+    appStoreRef.current = { getState: getStateMock, dispatch: vi.fn() as never };
+    mockFlushPersistedState.mockResolvedValue(undefined);
+
+    await registerServiceWorker();
+    controllerChangeHandler?.();
+    await flushMicrotasks();
+
+    expect(mockFlushPersistedState).toHaveBeenCalledTimes(1);
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+  });
+
   // QNBS-v3: an unbounded wait (e.g. queued behind another tab's exclusive Web Lock) must not hang the reload forever on an already-cache-pruned bundle.
   it('reloads once the flush timeout elapses if the flush never settles', async () => {
     vi.useFakeTimers();

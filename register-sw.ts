@@ -240,11 +240,13 @@ const registerServiceWorker = async (): Promise<void> => {
 // QNBS-v3: loops until a flush completes against state that provably hasn't changed since — a single snapshot could miss edits made while the async write was still in flight.
 const MAX_FLUSH_ATTEMPTS = 5;
 
-// QNBS-v3: mirrors exactly what flushPersistedState reads/persists — comparing the whole root state would retry on unrelated non-persisted churn (e.g. status.saving) and waste the retry budget.
+// QNBS-v3: mirrors exactly what flushPersistedState reads/persists, field by field — versionControl also carries isPanelOpen (UI-only), so comparing the whole slice would retry on that too.
 function persistedSlices(state: RootState) {
   return {
     project: state.project.present,
-    versionControl: state.versionControl,
+    branches: state.versionControl.branches,
+    snapshots: state.versionControl.snapshots,
+    currentBranchId: state.versionControl.currentBranchId,
     settings: state.settings,
   };
 }
@@ -253,7 +255,13 @@ function persistedSlicesUnchanged(
   a: ReturnType<typeof persistedSlices>,
   b: ReturnType<typeof persistedSlices>,
 ): boolean {
-  return a.project === b.project && a.versionControl === b.versionControl && a.settings === b.settings;
+  return (
+    a.project === b.project &&
+    a.branches === b.branches &&
+    a.snapshots === b.snapshots &&
+    a.currentBranchId === b.currentBranchId &&
+    a.settings === b.settings
+  );
 }
 
 async function flushLatestState(): Promise<void> {
