@@ -72,9 +72,40 @@ export const AdvancedImportExport: React.FC = () => {
     input.click();
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!project) return;
     const safeName = project.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+
+    // QNBS-v3 (DA-05): DOCX must produce a real docx payload — never silently fall through to Markdown.
+    if (exportFormat === 'docx') {
+      setIsProcessing(true);
+      try {
+        const { Packer } = await import('docx');
+        const { buildDocxDocument } = await import('../services/export/docxDocumentBuilder');
+        const doc = buildDocxDocument({
+          title: project.title,
+          loglineLabel: t('export.loglineLabel'),
+          logline: project.logline,
+          manuscript: { heading: t('export.manuscriptLabel'), sections: project.manuscript },
+        });
+        const blob = await Packer.toBlob(doc);
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = `${safeName}.docx`;
+        anchor.click();
+        URL.revokeObjectURL(url);
+        toast.success(t('export.exportSuccess'), project.title);
+        setIsExportModalOpen(false);
+      } catch (error) {
+        logger.error('DOCX export failed:', error);
+        toast.error(t('export.exportFailed'));
+      } finally {
+        setIsProcessing(false);
+      }
+      return;
+    }
+
     let content: string;
     let filename: string;
     if (exportFormat === 'json') {
@@ -96,10 +127,10 @@ export const AdvancedImportExport: React.FC = () => {
       type: exportFormat === 'json' ? 'application/json' : 'text/markdown',
     });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
     URL.revokeObjectURL(url);
     toast.success(t('export.exportSuccess'), project.title);
     setIsExportModalOpen(false);

@@ -81,7 +81,8 @@ vi.mock('jspdf', () => ({
 }));
 
 vi.mock('docx', () => ({
-  Document: vi.fn().mockImplementation(() => ({})),
+  // QNBS-v3: a plain function (not an arrow fn) is required so `new Document(...)` works — arrow functions can't be constructors.
+  Document: vi.fn(function MockDocument() {}),
   Packer: { toBlob: vi.fn().mockResolvedValue(new Blob(['docx'])) },
   Paragraph: vi.fn(),
   TextRun: vi.fn(),
@@ -104,13 +105,6 @@ vi.mock('../../../services/pandocTauri', () => ({
 vi.mock('../../../services/epubApiService', () => ({
   exportEpub: vi.fn().mockResolvedValue(undefined),
 }));
-
-// Stub URL.createObjectURL / URL.revokeObjectURL
-vi.stubGlobal('URL', {
-  ...URL,
-  createObjectURL: vi.fn(() => 'blob:test'),
-  revokeObjectURL: vi.fn(),
-});
 
 // Stub clipboard
 const mockClipboardWrite = vi.fn().mockResolvedValue(undefined);
@@ -156,6 +150,9 @@ function makeWorld(id: string, name: string): World {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // QNBS-v3: spy on the real URL statics — vi.stubGlobal-ing a plain object breaks `new URL(...)`, which Vite's dynamic import needs.
+  vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test');
+  vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
   mockDispatch.mockResolvedValue({ type: 'mock-action' });
   mockProject = {
     id: 'p1',
@@ -316,6 +313,11 @@ describe('handleDownload (pdf format)', () => {
 
 describe('handleDownload (docx format)', () => {
   it('calls Packer.toBlob and creates object URL', async () => {
+    const docxModule = await import('docx');
+    const mockCreateObjectURL = vi.mocked(URL.createObjectURL);
+    mockCreateObjectURL.mockClear();
+    vi.mocked(docxModule.Packer.toBlob).mockClear();
+
     const { result } = renderHook(() => useExportView());
     act(() => {
       result.current.setFormat('docx');
@@ -323,6 +325,9 @@ describe('handleDownload (docx format)', () => {
     await act(async () => {
       await result.current.handleDownload();
     });
+    // QNBS-v3: assert the real docx path actually ran, not just that loading settled either way.
+    expect(docxModule.Packer.toBlob).toHaveBeenCalled();
+    expect(mockCreateObjectURL).toHaveBeenCalled();
     expect(result.current.isExportLoading).toBe(false);
   });
 });

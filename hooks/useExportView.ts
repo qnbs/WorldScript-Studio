@@ -266,57 +266,29 @@ export const useExportView = () => {
   const downloadDocx = useCallback(async (): Promise<boolean> => {
     setIsExportLoading(true);
     try {
-      const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import('docx');
-      const children = [];
+      const { Packer } = await import('docx');
+      const { buildDocxDocument } = await import('../services/export/docxDocumentBuilder');
 
-      // Title
-      children.push(
-        new Paragraph({
-          text: project.title,
-          heading: HeadingLevel.TITLE,
-        }),
-      );
-      children.push(
-        new Paragraph({
-          children: [new TextRun({ text: `Logline: ${project.logline}`, italics: true })],
-        }),
-      );
-
-      if (aiEnhancements.synopsis && synopsis) {
-        children.push(
-          new Paragraph({ text: t('export.ai.synopsisTitle'), heading: HeadingLevel.HEADING_1 }),
-        );
-        children.push(new Paragraph({ text: synopsis }));
-      }
-
-      if (contentToExport.manuscript) {
-        children.push(
-          new Paragraph({ text: t('export.manuscriptLabel'), heading: HeadingLevel.HEADING_1 }),
-        );
-        project.manuscript.forEach((section) => {
-          children.push(new Paragraph({ text: section.title, heading: HeadingLevel.HEADING_2 }));
-          const paragraphs = (section.content || '').split('\n');
-          paragraphs.forEach((p) => {
-            if (p.trim()) children.push(new Paragraph({ text: p }));
-          });
-        });
-      }
-
-      const doc = new Document({
-        sections: [
-          {
-            properties: {},
-            children: children,
-          },
-        ],
+      // QNBS-v3 (DA-05): delegates to the shared builder so every DOCX export path stays consistent.
+      const doc = buildDocxDocument({
+        title: project.title,
+        loglineLabel: t('export.loglineLabel'),
+        logline: project.logline,
+        synopsis:
+          aiEnhancements.synopsis && synopsis
+            ? { heading: t('export.ai.synopsisTitle'), text: synopsis }
+            : null,
+        manuscript: contentToExport.manuscript
+          ? { heading: t('export.manuscriptLabel'), sections: project.manuscript }
+          : null,
       });
 
       const blob = await Packer.toBlob(doc);
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${project.title}.docx`;
-      a.click();
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `${project.title}.docx`;
+      anchor.click();
       URL.revokeObjectURL(url);
       return true;
     } catch (error) {
