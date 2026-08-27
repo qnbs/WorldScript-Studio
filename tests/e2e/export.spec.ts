@@ -2,10 +2,10 @@ import { expect, type Route, test } from '@playwright/test';
 
 import {
   clickNavItem,
+  ensureWelcomePortalEntry,
   flushWriterDebounce,
   seedGeminiApiKey,
   selectFirstEnabledWriterSection,
-  waitForSpaReady,
 } from './helpers';
 
 const isCI = process.env['CI'] === 'true';
@@ -52,16 +52,14 @@ test.describe('End-to-end project flow (CI-only)', () => {
   test.beforeEach(async ({ page }) => {
     test.skip(!isCI, 'CI-only E2E suite');
     await page.route('**/generativelanguage.googleapis.com/**', mockGemini);
+    // QNBS-v3: seeds English before boot — ensureWelcomePortalEntry's contract is locale-independent, and the LanguageSelector trigger's accessible name isn't a reliable /EN/i click target (its aria-label can itself contain "en" as a substring in other locales, e.g. Spanish "bienvenida").
+    await page.addInitScript(() => localStorage.setItem('worldscript-language', 'en'));
     await page.goto('/');
-    await waitForSpaReady(page);
+    // QNBS-v3: a cold CI boot can already be in the main shell instead of WelcomePortal — this guarantees the precondition below assumes.
+    await ensureWelcomePortalEntry(page);
   });
 
   test('full project flow navigates from AI outline to export and settings', async ({ page }) => {
-    const englishButton = page.getByRole('button', { name: /EN/i }).first();
-    if (await englishButton.isVisible()) {
-      await englishButton.click();
-    }
-
     await page.getByRole('button', { name: /Start a New Project/i }).click();
     await page.getByRole('button', { name: /Generate with AI/i }).click();
 
