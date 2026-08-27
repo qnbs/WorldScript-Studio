@@ -16,6 +16,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`33064552219`) that gated this release didn't trigger it; only the separate, later tag-triggered
   CI/CD run did).
 
+### Fixed
+
+- **Onboarding bootstrap-effect race that could skip the welcome portal:** `hooks/useApp.ts`
+  initialized `isPortalActive` to `false` and only flipped it `true` via a mount effect, even
+  though `isNewUser` is already resolved synchronously before `<App>` mounts. A separate
+  project-bootstrap effect (repairs raw-i18n-key project fields, or seeds a fresh blank project)
+  only guarded on `isPortalActive`/`isI18nReady`/`project`, missing the `isInitialLoad` guard a
+  sibling effect in the same file already uses — occasionally letting a blank project get
+  auto-seeded before the portal-activation state change landed, skipping the welcome portal for a
+  new user. Fixed both: synchronous `isPortalActive` initialization, and the missing
+  `isInitialLoad` guard (extracted into `hooks/useProjectBootstrapEffect.ts` for direct test
+  coverage). See issue #527.
+
 ## [1.28.2] — 2026-08-27
 
 ### Fixed
