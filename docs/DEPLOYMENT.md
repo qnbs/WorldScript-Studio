@@ -39,7 +39,7 @@ gh run view <run-id> --log-failed
 
 1. **Import** the Git repository; **Root Directory** = repo root.
 2. Framework: **Other** (or Vite). Settings are overridden by [`vercel.json`](../vercel.json):
-   - **Install:** `pnpm install --frozen-lockfile`
+   - **Install:** `node scripts/dependency-state.mjs reconcile`
    - **Build:** `pnpm run build:edge`
    - **Output:** `dist`
 3. **Node.js** ≥ 22 (Project Settings → General).
