@@ -8,6 +8,17 @@ export function extractJobBlock(workflowSource: string, jobName: string): string
   return lines.slice(start, end === -1 ? lines.length : end).join('\n');
 }
 
+// QNBS-v3 (#522): scoped to the job's own if: value, not the whole block — a QNBS-v3 comment on the preceding line can otherwise contain the same tokens an assertion is checking for, letting a regressed if: expression still pass.
+export function extractJobIf(jobBlock: string): string {
+  const lines = jobBlock.split('\n');
+  const start = lines.findIndex((line) => /^ {4}if: ?/.test(line));
+  if (start === -1) throw new Error('Could not find an if: field in this job block');
+  const firstLine = lines[start] as string;
+  if (!/^ {4}if: >-?\s*$/.test(firstLine)) return firstLine.replace(/^ {4}if: /, '');
+  const end = lines.findIndex((line, index) => index > start && !/^ {5,}/.test(line));
+  return lines.slice(start + 1, end === -1 ? lines.length : end).join('\n');
+}
+
 // QNBS-v3: Named step extraction keeps policy assertions scoped to the active workflow step.
 export function extractStepBlock(jobBlock: string, stepName: string): string {
   const lines = jobBlock.split('\n');
