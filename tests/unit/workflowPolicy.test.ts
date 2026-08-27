@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   extractJobBlock,
+  extractJobIf,
   extractJobNames,
   extractLocalPathDependencies,
   extractNeeds,
@@ -130,14 +131,15 @@ describe('CI workflow policy', () => {
   // QNBS-v3 (#522): deploy's default success() gate inherits skip-propagation from pr-size/rust-tauri/core-rust being legitimately skipped on push, even though ci-success itself computed 'success' — always() overrides that and makes ci-success.result the real gate.
   it('gates deploy on ci-success.result explicitly via always()+!cancelled(), not implicit success()', () => {
     const deployBlock = extractJobBlock(workflowSource, 'deploy');
+    const deployIf = extractJobIf(deployBlock);
     expect(extractNeeds(workflowSource, 'deploy')).toEqual(['ci-success']);
     // QNBS-v3 (#522): main push has pr-size/rust-tauri/core-rust legitimately skipped and ci-success == success — deploy must still be eligible, not silently skipped by GHA's default chain propagation.
-    expect(deployBlock).toContain('always()');
-    expect(deployBlock).toContain('!cancelled()');
-    expect(deployBlock).toMatch(/github\.ref == 'refs\/heads\/main'/);
-    expect(deployBlock).toMatch(/github\.event_name != 'pull_request'/);
-    expect(deployBlock).toMatch(/needs\.ci-success\.result == 'success'/);
-    expect(deployBlock).toMatch(
+    expect(deployIf).toContain('always()');
+    expect(deployIf).toContain('!cancelled()');
+    expect(deployIf).toMatch(/github\.ref == 'refs\/heads\/main'/);
+    expect(deployIf).toMatch(/github\.event_name != 'pull_request'/);
+    expect(deployIf).toMatch(/needs\.ci-success\.result == 'success'/);
+    expect(deployIf).toMatch(
       /always\(\)[\s\S]+!cancelled\(\)[\s\S]+github\.ref == 'refs\/heads\/main'[\s\S]+github\.event_name != 'pull_request'[\s\S]+needs\.ci-success\.result == 'success'/,
     );
   });
