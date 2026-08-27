@@ -36,18 +36,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   auto-seeded before the portal-activation state change landed, skipping the welcome portal for a
   new user. Fixed both: synchronous `isPortalActive` initialization, and the missing
   `isInitialLoad` guard (extracted into `hooks/useProjectBootstrapEffect.ts` for direct test
-  coverage). See issue #527.
+  coverage). Fixes #527, PR #530.
 - **`export.spec.ts` E2E precondition assumed WelcomePortal unconditionally:** `waitForSpaReady()`
   succeeds on either WelcomePortal or an already-mounted main shell, but the test's `beforeEach`
   clicked "Start a New Project" unconditionally, causing spurious CI failures whenever a cold boot
-  landed in the main shell instead (a startup-state precondition gap, not a #527/#530 regression —
-  see issue #532, still open for the unexplained root cause). Added `ensureWelcomePortalEntry()`
-  (`tests/e2e/helpers.ts`), which recovers via the real Settings → Data & Backups → Factory Reset
-  flow when needed — including re-checking both startup shapes after its own internal reload,
-  since that reload can itself race a pending ~1s debounced autosave — and a stable
-  `data-testid="welcome-portal"` on `WelcomePortal.tsx`'s root so portal detection no longer
-  depends on translated button text. Regression coverage for both startup shapes, a non-English
-  persisted-language boot, and the internal-reload race.
+  landed in the main shell instead — a startup-state precondition gap, not a #527/#530 regression.
+  Added `ensureWelcomePortalEntry()` (`tests/e2e/helpers.ts`), which recovers via the real Settings
+  → Data & Backups → Factory Reset flow when needed — including re-checking both startup shapes
+  after its own internal reload, since that reload can itself race a pending ~1s debounced
+  autosave — and a stable `data-testid="welcome-portal"` on `WelcomePortal.tsx`'s root so portal
+  detection no longer depends on translated button text. Regression coverage for both startup
+  shapes, a non-English persisted-language boot, and the internal-reload race. This fixes the
+  test-harness symptom, PR #533; issue #532's root cause (how a persisted project can appear
+  before any test action runs) remains open and unexplained.
 
 ## [1.28.2] — 2026-08-27
 
