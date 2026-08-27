@@ -1,7 +1,4 @@
-// QNBS-v3: On-disk local-model cache management for the Local AI settings UX.
-//          The engine/session release fns in @domain/ai-core only free IN-MEMORY GPU/WASM handles;
-//          the multi-GB downloaded WEIGHTS persist in the Cache API (MLC WebLLM + transformers.js).
-//          This service estimates and clears that on-disk footprint so users can reclaim space.
+// QNBS-v3: on-disk local-model cache management — @domain/ai-core's release fns only free in-memory GPU/WASM handles, so this service estimates/clears the multi-GB downloaded weights that persist in the Cache API.
 
 import {
   releaseAllOnnxSessions,
@@ -10,17 +7,16 @@ import {
 } from '@domain/ai-core';
 import { logger } from '../logger';
 
-// QNBS-v3: Cache API bucket names used by local-inference runtimes. MLC web-llm shards weights across
-//          caches like "webllm/model", "webllm/config", "webllm/wasm" and tvmjs; transformers.js uses
-//          "transformers-cache". Match generously so a runtime cache rename can't silently leak GBs.
+// QNBS-v3: exact vendor CacheStorage bucket names, not a substring match — narrows the false-positive foreign-cache matches a loose regex had, but these names are still vendor-fixed, not app-scoped, so this is not a full positive-ownership proof (tracked separately).
 export const LOCAL_MODEL_CACHE_PATTERNS: readonly RegExp[] = [
-  /webllm/i,
-  /mlc/i,
-  /tvmjs/i,
-  /transformers/i,
+  /^webllm\/model$/,
+  /^webllm\/config$/,
+  /^webllm\/wasm$/,
+  /^transformers-cache$/,
+  /^experimental_transformers-hash-cache$/,
 ];
 
-// QNBS-v3 (#333/Qodo): re-export the canonical @domain/ai-core table instead of maintaining a second, driftable literal — this was a duplicate of the size table now in packages/ai-core/src/index.ts.
+// QNBS-v3: re-export the canonical @domain/ai-core table instead of maintaining a second, driftable literal.
 export { WEBLLM_MODEL_APPROX_MB };
 
 export interface LocalModelStorageEstimate {

@@ -11,6 +11,10 @@
 import { logger } from './logger';
 import { isTauriRuntime } from './tauriRuntime';
 
+// QNBS-v3: mirrors public/sw.js's isWorldScriptOwnedCache/register-sw.ts's isWorldScriptOwnedCacheName — duplicated (not imported) since sw.js is a classic non-module script and register-sw.ts has its own load-time side effect.
+const OWNED_CACHE_NAME_RE = /^worldscript-(?:static|dynamic|images)-v\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/;
+const isWorldScriptOwnedCacheName = (name: string): boolean => OWNED_CACHE_NAME_RE.test(name);
+
 /** All IDB databases the app may have created. */
 const KNOWN_DB_NAMES = [
   'worldscript-db', // legacy — migrated to worldscript-data-db
@@ -51,7 +55,8 @@ async function clearServiceWorkerCaches(): Promise<void> {
   if (!('caches' in globalThis)) return;
   try {
     const keys = await caches.keys();
-    await Promise.all(keys.map((k) => caches.delete(k)));
+    // QNBS-v3: only delete this app's own caches — a shared origin can host unrelated caches this user-triggered reset must never touch.
+    await Promise.all(keys.filter(isWorldScriptOwnedCacheName).map((k) => caches.delete(k)));
   } catch {
     // Non-fatal — caches cleared on next SW registration
   }

@@ -6,10 +6,11 @@
  * automatically after the build. Wrangler must NOT run again (token/permission errors).
  *
  * Dashboard:
- *   Build command:     pnpm install && pnpm run build:edge
+ *   Build command:     node scripts/dependency-state.mjs reconcile && pnpm run build:edge
  *   Build output dir:  dist
  *   Deploy command:    (empty) OR pnpm run deploy:cloudflare  ← no-op on CF Pages CI
  */
+// QNBS-v3: the dashboard build command above runs the reconcile script, not bare pnpm install, so a drifted lockfile fails loudly instead of being silently rewritten mid-deploy.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';

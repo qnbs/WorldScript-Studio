@@ -98,17 +98,35 @@ describe('wipeAllAppData', () => {
     delSpy.mockRestore();
   });
 
-  it('clears service-worker caches when the Cache API is available', async () => {
+  it('clears this app\'s own service-worker caches when the Cache API is available', async () => {
     const del = vi.fn().mockResolvedValue(true);
     vi.stubGlobal('caches', {
-      keys: vi.fn().mockResolvedValue(['static-v1', 'dynamic-v1']),
+      keys: vi.fn().mockResolvedValue(['worldscript-static-v1.28.2', 'worldscript-dynamic-v1.28.2']),
       delete: del,
     });
 
     await runWipe();
 
-    expect(del).toHaveBeenCalledWith('static-v1');
-    expect(del).toHaveBeenCalledWith('dynamic-v1');
+    expect(del).toHaveBeenCalledWith('worldscript-static-v1.28.2');
+    expect(del).toHaveBeenCalledWith('worldscript-dynamic-v1.28.2');
+    expect(reloadMock).toHaveBeenCalledTimes(1);
+  });
+
+  // QNBS-v3: a shared origin can host caches from an unrelated app/tool — factory reset must never delete them.
+  it('never deletes a foreign, non-owned cache on the shared origin', async () => {
+    const del = vi.fn().mockResolvedValue(true);
+    vi.stubGlobal('caches', {
+      keys: vi
+        .fn()
+        .mockResolvedValue(['worldscript-static-v1.28.2', 'some-other-tools-analytics-cache']),
+      delete: del,
+    });
+
+    await runWipe();
+
+    expect(del).toHaveBeenCalledWith('worldscript-static-v1.28.2');
+    expect(del).not.toHaveBeenCalledWith('some-other-tools-analytics-cache');
+    expect(del).toHaveBeenCalledTimes(1);
     expect(reloadMock).toHaveBeenCalledTimes(1);
   });
 

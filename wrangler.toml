@@ -2,7 +2,7 @@
 # https://developers.cloudflare.com/pages/
 #
 # Dashboard (Builds):
-#   Build command:     pnpm install && pnpm run build:edge
+#   Build command:     node scripts/dependency-state.mjs reconcile && pnpm run build:edge
 #   Build output dir:  dist
 #   Deploy command:    LEER (empfohlen) — Cloudflare publiziert dist automatisch
 #                      oder: pnpm run deploy:cloudflare (No-Op wenn CF_PAGES=1)

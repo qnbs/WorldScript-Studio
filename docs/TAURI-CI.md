@@ -52,7 +52,7 @@ This workflow is **independent** of the web PWA pipeline ([`docs/CI.md`](CI.md))
 ## Local parity
 
 ```bash
-pnpm install --frozen-lockfile
+node scripts/dependency-state.mjs reconcile
 pnpm run build          # frontend — also runs via Tauri beforeBuildCommand
 pnpm exec tauri build
 ```

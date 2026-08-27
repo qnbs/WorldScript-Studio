@@ -26,7 +26,7 @@
 git status
 
 # 2. Dependencies aktuell?
-pnpm install
+node scripts/dependency-state.mjs reconcile
 
 # 3. Node-Version prüfen
 node --version  # Sollte >= 22.0.0
