@@ -1,3 +1,6 @@
+import type { RootState } from './app/store';
+import { appStoreRef } from './app/storeRef';
+import { flushPersistedState } from './app/persistedStateFlush';
 import { logger as appLogger } from './services/logger';
 
 // ============================================================
@@ -183,13 +186,22 @@ const registerServiceWorker = async (): Promise<void> => {
       announceUpdateAvailable(registration.waiting);
     }
 
-    // QNBS-v3: Reload on any SW controller change — install now calls skipWaiting() automatically,
-    // so controllerchange fires whenever a new SW activates (not just on user-initiated updates).
-    // The app auto-saves to IDB so a mid-session reload is safe and always serves fresh assets.
+    // QNBS-v3: only the visible tab flushes — a hidden tab's stale write could race a fresher one (residual multi-window gap: #518).
     let refreshing = false;
+    let reloadPendingWhileHidden = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!refreshing) {
+      if (refreshing) return;
+      if (document.visibilityState !== 'visible') {
+        reloadPendingWhileHidden = true;
+        return;
+      }
+      refreshing = true;
+      void flushLatestStateThenReload();
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (reloadPendingWhileHidden && document.visibilityState === 'visible' && !refreshing) {
         refreshing = true;
+        // QNBS-v3: no flush here — index.tsx's best-effort hide-time flush may have failed, but re-flushing risks clobbering a fresher write from another tab, the worse failure mode of the two (#518).
         window.location.reload();
       }
     });
@@ -224,6 +236,68 @@ const registerServiceWorker = async (): Promise<void> => {
     appLogger.error('[SW] Registration failed:', error);
   }
 };
+
+// QNBS-v3: loops until a flush completes against state that provably hasn't changed since — a single snapshot could miss edits made while the async write was still in flight.
+const MAX_FLUSH_ATTEMPTS = 5;
+
+// QNBS-v3: mirrors exactly what flushPersistedState reads/persists, field by field — versionControl also carries isPanelOpen (UI-only), so comparing the whole slice would retry on that too.
+function persistedSlices(state: RootState) {
+  return {
+    project: state.project.present,
+    branches: state.versionControl.branches,
+    snapshots: state.versionControl.snapshots,
+    currentBranchId: state.versionControl.currentBranchId,
+    settings: state.settings,
+  };
+}
+
+function persistedSlicesUnchanged(
+  a: ReturnType<typeof persistedSlices>,
+  b: ReturnType<typeof persistedSlices>,
+): boolean {
+  return (
+    a.project === b.project &&
+    a.branches === b.branches &&
+    a.snapshots === b.snapshots &&
+    a.currentBranchId === b.currentBranchId &&
+    a.settings === b.settings
+  );
+}
+
+async function flushLatestState(): Promise<void> {
+  const store = appStoreRef.current;
+  if (!store) return;
+  let snapshot = store.getState() as RootState;
+  let snapshotSlices = persistedSlices(snapshot);
+  for (let attempt = 0; attempt < MAX_FLUSH_ATTEMPTS; attempt++) {
+    await flushPersistedState(snapshot);
+    const latest = store.getState() as RootState;
+    const latestSlices = persistedSlices(latest);
+    if (persistedSlicesUnchanged(snapshotSlices, latestSlices)) return;
+    snapshot = latest;
+    snapshotSlices = latestSlices;
+  }
+  // QNBS-v3: narrows but doesn't eliminate the race — a keystroke during this final await is still possible to lose (#518).
+  await flushPersistedState(store.getState() as RootState);
+}
+
+// QNBS-v3: bounds the flush — an unbounded wait (e.g. queued behind another tab's exclusive Web Lock) would hang forever on an already-cache-pruned bundle, defeating the always-reload policy below.
+const FLUSH_TIMEOUT_MS = 8000;
+
+// QNBS-v3: the reload always proceeds — activation already pruned old-version caches by the time controllerchange fires, so staying on the old bundle risks missing-chunk failures too.
+async function flushLatestStateThenReload(): Promise<void> {
+  try {
+    await Promise.race([
+      flushLatestState(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Pre-reload flush timed out after ${FLUSH_TIMEOUT_MS}ms`)), FLUSH_TIMEOUT_MS),
+      ),
+    ]);
+  } catch (error) {
+    appLogger.error('[SW] Pre-reload state flush failed (reloading anyway):', error);
+  }
+  window.location.reload();
+}
 
 if (typeof window !== 'undefined') {
   window.addEventListener('load', registerServiceWorker);

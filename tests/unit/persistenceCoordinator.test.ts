@@ -78,4 +78,50 @@ describe('PersistenceCoordinator', () => {
     await expect(second).resolves.toEqual({ superseded: false });
     expect(saved).toEqual(['second']);
   });
+
+  // QNBS-v3: rejectThrough settles the failed generation's own promise immediately, but the coordinator keeps running a superseding queued operation in the background — idle() must wait for that too.
+  it('idle() waits for a superseding queued operation to finish even after the current one rejects', async () => {
+    const coordinator = new PersistenceCoordinator();
+    const failure = new Error('disk full');
+    const gate = deferred();
+    const secondGate = deferred();
+    const saved: string[] = [];
+
+    const first = coordinator.enqueue(async () => {
+      await gate.promise;
+      throw failure;
+    });
+    coordinator.enqueue(async () => {
+      saved.push('second:start');
+      await secondGate.promise;
+      saved.push('second:end');
+    });
+
+    gate.resolve();
+    await expect(first).rejects.toBe(failure);
+    // The failed generation's own promise has already settled, but the superseding second
+    // generation is now running in the background — idle() must not resolve until it finishes too.
+    expect(saved).toEqual(['second:start']);
+
+    let idleResolved = false;
+    const idlePromise = coordinator.idle().then(() => {
+      idleResolved = true;
+    });
+    await Promise.resolve();
+    expect(idleResolved).toBe(false);
+
+    secondGate.resolve();
+    await idlePromise;
+    expect(idleResolved).toBe(true);
+    expect(saved).toEqual(['second:start', 'second:end']);
+  });
+
+  it('idle() resolves immediately when nothing is active or queued', async () => {
+    const coordinator = new PersistenceCoordinator();
+    let resolved = false;
+    await coordinator.idle().then(() => {
+      resolved = true;
+    });
+    expect(resolved).toBe(true);
+  });
 });

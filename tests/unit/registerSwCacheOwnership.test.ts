@@ -1,9 +1,10 @@
 // QNBS-v3: proves the Tauri-teardown cache cleanup in register-sw.ts never deletes an unowned cache.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../services/logger', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-}));
+vi.mock('../../services/logger', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../services/logger')>();
+  return { ...actual, logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } };
+});
 
 import { isWorldScriptOwnedCacheName, registerServiceWorker } from '../../register-sw';
 
