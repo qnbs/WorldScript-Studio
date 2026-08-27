@@ -55,12 +55,12 @@ import {
   selectAllWorlds,
   selectProjectData,
 } from './features/project/projectSelectors';
-import { projectActions } from './features/project/projectSlice';
 import { statusActions } from './features/status/statusSlice';
 import { useApp } from './hooks/useApp';
 import { useGlobalKeyboardShortcuts } from './hooks/useGlobalKeyboardShortcuts';
 import { useIdbUnlockStartupGuard } from './hooks/useIdbUnlockStartupGuard';
 import { useNativeNotifications } from './hooks/useNativeNotifications';
+import { useProjectBootstrapEffect } from './hooks/useProjectBootstrapEffect';
 import { usePushToTalk } from './hooks/usePushToTalk';
 import { useTranslation } from './hooks/useTranslation';
 import { runCommandById } from './services/commands/commandBuilder';
@@ -72,7 +72,6 @@ import { installCloseToTray, installDesktopTray } from './services/desktop/deskt
 import { desktopPlatform } from './services/desktopPlatform';
 import { logger } from './services/logger';
 import { pluginRegistry } from './services/pluginRegistry';
-import { repairProjectI18nFields } from './services/projectI18nRepair';
 import { loadScenarioWorkspaceView } from './services/scenarioWorkspaceLoader';
 import { hasCompletedSpotlightTour, startSpotlightTour } from './services/spotlightTour';
 import {
@@ -445,28 +444,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
     requestAnimationFrame(() => mainRef.current?.focus());
   }, [currentView, announce, t, isInitialLoad, isPortalActive]);
 
-  useEffect(() => {
-    if (!isI18nReady || isPortalActive || !project) return;
-
-    const repair = repairProjectI18nFields(project, t);
-    if (repair) {
-      if (repair.title !== undefined) dispatch(projectActions.updateTitle(repair.title));
-      if (repair.logline !== undefined) dispatch(projectActions.updateLogline(repair.logline));
-      if (repair.manuscript !== undefined)
-        dispatch(projectActions.setManuscript(repair.manuscript));
-      return;
-    }
-
-    if (project.title === '' && project.manuscript.length === 0) {
-      dispatch(
-        projectActions.resetProject({
-          title: t('initialProject.title'),
-          logline: t('initialProject.logline'),
-          chapter1Title: t('initialProject.chapter1'),
-        }),
-      );
-    }
-  }, [project, isPortalActive, isI18nReady, dispatch, t]);
+  useProjectBootstrapEffect({ project, isInitialLoad, isPortalActive, isI18nReady, t });
 
   // QNBS-v3: PR3 — auto-launch the product tour once for first-run installs, after the welcome
   // portal closes and the nav has rendered. Returning users (or anyone who already finished/closed

@@ -67,7 +67,8 @@ export const useApp = ({ isNewUser }: { isNewUser: boolean }) => {
   // category (once inside Help, currentView is 'help' and no longer tells us where the user was).
   const previousViewRef = useRef<View>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isPortalActive, setIsPortalActive] = useState(false);
+  // QNBS-v3: initialize from isNewUser (already stable pre-mount) instead of a hardcoded false, so no transient first commit exposes a stale value to a sibling effect.
+  const [isPortalActive, setIsPortalActive] = useState(isNewUser);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   // QNBS-v3 (CodeAnt): the single place that mutates currentView, so previousView is tracked on
