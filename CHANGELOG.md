@@ -7,12 +7,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-<!-- release-candidate: v1.28.1 -->
+<!-- release-candidate: v1.28.2 -->
+
+## [1.28.2] — 2026-08-27
+
+### Fixed
+
+- **Service-worker cache deletion is now positively ownership-scoped:** every cache-deletion site
+  (non-Tauri activation cleanup, the Tauri unregister path, and the user-initiated "clear cache"
+  action) now matches against an exact, closed set of this app's own cache-name families before
+  deleting anything, closing a shared-origin data-deletion risk where an unrelated cache could be
+  swept up by a blanket prefix or unconditional `caches.keys()` sweep.
+- **Desktop filesystem corruption/I-O failures now fail closed, not silently absent:** a corrupted
+  or unreadable saved project file used to decompress/parse into a fake empty object and be treated
+  as "no saved project" — risking a subsequent autosave silently overwriting the only remaining
+  copy. Corruption and I/O failure are now distinct, typed, thrown errors the caller must handle
+  explicitly; genuine absence is unaffected.
+- **PWA service-worker updates flush pending state before reloading:** the visible tab now
+  retry-flushes in-flight persistence (with a bounded final attempt and timeout) before a
+  forced update reload, instead of reloading unconditionally on the assumption that autosave alone
+  made it safe. This is a bounded mitigation, not a closed invariant — full cross-tab write
+  coordination remains tracked separately (#480/#485); the residual risk after this fix is
+  documented in #518.
+- **DOCX export now produces a real DOCX file everywhere it's offered:** selecting DOCX in the
+  in-app export dialog, the Writer export view, and the desktop file-save export path all
+  previously silently wrote a Markdown-shaped file with a `.docx` extension. All three now build a
+  genuine `docx`-package document and write real binary output.
+- **GitHub Pages deploy no longer silently skips on main pushes:** the deploy job's default
+  admission gate inherited GitHub Actions' skip-propagation from unrelated, legitimately-skipped
+  upstream jobs (PR-only governance checks, path-scoped Rust gates) even when the real required
+  aggregator had genuinely succeeded — the live GitHub Pages mirror had been intermittently stale
+  since 2026-08-20 and consistently stale since 2026-08-26. Now gated explicitly on the
+  aggregator's own result.
 
 ### Documentation
 
-- **Release evidence ledger:** final v1.28.1 publication, artifact, updater, and verification
-  evidence is recorded for the completed release checkpoint.
+- **Onboarding install command corrected:** README/CONTRIBUTING pointed contributors at a bare
+  `pnpm install`, which skips `--frozen-lockfile` and this repo's own dependency-fingerprint check.
+  All onboarding paths now point at the frozen-lockfile reconcile command.
+- **Desktop installer signing language narrowed to match reality:** README claimed desktop
+  installers were generically "signed"; only the auto-update manifest's per-platform Minisign
+  signatures are produced by default — OS-level code signing (Authenticode, notarization) is not
+  currently configured in CI.
+
+### Added
+
+- **Structural workflow-policy YAML authority:** a real-parser (not regex) validator for every
+  `.github/workflows/*.yml` and `.github/actions/**/action.yml` — top-level permissions, the
+  `needs:` graph, SHA-pinned action references, and the publishing boundary. Runs first in CI,
+  before any job invokes the governed `setup` composite action.
+- **Tiered PR-size governance:** advisory `target`/`hard`/`docsGovernance` limits and a blocking
+  `absolute` ceiling on changed files, meaningful lines, and commits, with a dedicated profile for
+  all-documentation PRs. Excludes generated locale bundles, the `pnpm-lock.yaml` churn, and
+  content-guard's own mirrored `community-templates/index.json` from the size calculation so an
+  atomic i18n or lockfile change can't be falsely flagged; runs the base ref's own copy of the
+  checker so a PR touching it can't raise its own limits.
+- **Intel macOS qualification-only build lane:** a `workflow_dispatch`-only, non-publishing
+  verification lane for the `macos-15-intel` runner class (GitHub's current replacement for the
+  retired `macos-13` label), with no signing secrets and no release artifacts.
+
+### Changed
+
+- **Pre-push evidence and local-admission tooling reconstructed** as smaller, independently
+  reviewed slices: canonical path-evidence completeness, change-aware local checks, bounded
+  subprocess lifecycle for the pre-commit/pre-push runners, working-tree-vs-push divergence
+  detection, and exact-localSha dependency-manifest compatibility proof.
+- **Qt/PWA native desktop architecture-governance roadmap reconciled:** Wave 2.5 amendment, gates
+  G1.5/G2.5, and reuse-ownership authority folded into the canonical roadmap and ledger docs.
+
+### Security
+
+- `google/osv-scanner-action` `2.5.0` → `2.5.1`.
+- `docker/setup-buildx-action` `4.2.0` → `4.3.0`.
+
+### Quality and governance
+
+- The frozen reconstruction-source PR was fully reconciled: every still-required piece was rebuilt
+  fresh against current `main` and merged through small, independently reviewed PRs; every other
+  piece was already shipped through a separate implementation or is a deliberately deferred
+  architecture question with durable issue tracking.
 
 ## [1.28.1] — 2026-08-23
 
