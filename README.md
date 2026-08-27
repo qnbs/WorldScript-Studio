@@ -46,7 +46,7 @@ Two always-on hosted builds — open whichever you prefer (identical app, both a
 ### PWA & Desktop
 
 - **Install as PWA:** In Chromium/Edge, open the Live Demo → use the install icon in the address bar (or browser menu) for an offline-capable app shortcut.
-- **Desktop installers:** GitHub **Releases** for tags `v*` include Tauri bundles when the workflow runs — signed `.appimage`, `.msi`, and `.dmg` artifacts with an auto-generated `latest.json` update manifest. **v1.9+** adds a native **File/Help menu**, **window-state restore**, in-app **updater UI** (Settings → About), and **open data folder** (Settings → Data). See [`docs/TAURI-CI.md`](docs/TAURI-CI.md), [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md), and [`docs/history/sprints/SPRINT-V1.10.md`](docs/history/sprints/SPRINT-V1.10.md).
+- **Desktop installers:** GitHub **Releases** for tags `v*` include Tauri bundles when the workflow runs — `.appimage`, `.msi`, and `.dmg` artifacts, with a `latest.json` update manifest containing a **Minisign signature for each platform's bundle** (update-integrity only; OS-level code signing — Windows Authenticode, macOS notarization — is not currently configured in CI). **v1.9+** adds a native **File/Help menu**, **window-state restore**, in-app **updater UI** (Settings → About), and **open data folder** (Settings → Data). See [`docs/TAURI-CI.md`](docs/TAURI-CI.md) § Auto-update & signing, [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md), and [`docs/history/sprints/SPRINT-V1.10.md`](docs/history/sprints/SPRINT-V1.10.md).
 
 ---
 
@@ -64,7 +64,7 @@ Two always-on hosted builds — open whichever you prefer (identical app, both a
 
 > Everything is saved locally in IndexedDB and works offline (PWA). Nothing leaves your device unless you choose a cloud provider.
 
-**Running it yourself?** `pnpm install && pnpm run dev` (Node ≥ 22, pnpm 11) → <http://localhost:3000>. Full setup, deployment, and AI-provider options — including the new **OpenRouter** free-tier gateway — are in [Getting Started](#getting-started).
+**Running it yourself?** `node scripts/dependency-state.mjs reconcile && pnpm run dev` (Node ≥ 22, pnpm 11; frozen-lockfile install — never a bare `pnpm install`) → <http://localhost:3000>. Full setup, deployment, and AI-provider options — including the new **OpenRouter** free-tier gateway — are in [Getting Started](#getting-started).
 
 ---
 
@@ -632,8 +632,8 @@ Vercel is a **first-class** hosting option alongside Pages: connect the repo, us
 git clone https://github.com/qnbs/WorldScript-Studio.git
 cd WorldScript-Studio
 
-# Install dependencies (Node ≥ 22, pnpm 11)
-pnpm install
+# Install dependencies (Node ≥ 22, pnpm 11) — frozen-lockfile install, never a bare `pnpm install`
+node scripts/dependency-state.mjs reconcile
 
 # Start the development server (http://localhost:3000)
 pnpm run dev
