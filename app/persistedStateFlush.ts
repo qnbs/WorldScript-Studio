@@ -34,6 +34,8 @@ export async function flushPersistedState(state: RootState): Promise<void> {
   }
   // QNBS-v3: allSettled, not Promise.all — its fail-fast let a caller reload before the other save finished; both must settle first, still failing closed if either rejected.
   const results = await Promise.allSettled(saves);
+  // QNBS-v3: a coordinator that rejected can already be running a superseding queued save it never told us about — wait for both to genuinely drain before returning or throwing.
+  await Promise.all([settingsPersistenceCoordinator.idle(), projectPersistenceCoordinator.idle()]);
   const rejected = results.find(
     (result): result is PromiseRejectedResult => result.status === 'rejected',
   );

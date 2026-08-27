@@ -16,6 +16,13 @@ export class PersistenceCoordinator {
   private active: PendingOperation | null = null;
   private queued: PendingOperation | null = null;
   private waiters: Waiter[] = [];
+  private idleWaiters: Array<() => void> = [];
+
+  // QNBS-v3: rejectThrough fires immediately on failure without waiting for a superseding queued operation — idle() lets a caller wait for the coordinator to genuinely finish before doing something destructive (e.g. reload).
+  idle(): Promise<void> {
+    if (!this.active && !this.queued) return Promise.resolve();
+    return new Promise((resolve) => this.idleWaiters.push(resolve));
+  }
 
   enqueue(operation: SaveOperation): Promise<PersistenceResult> {
     const generation = ++this.nextGeneration;
@@ -57,6 +64,9 @@ export class PersistenceCoordinator {
       this.resolveThrough(current.generation);
       this.active = null;
     }
+    const idleWaiters = this.idleWaiters;
+    this.idleWaiters = [];
+    for (const resolve of idleWaiters) resolve();
   }
 
   private resolveThrough(generation: number): void {
