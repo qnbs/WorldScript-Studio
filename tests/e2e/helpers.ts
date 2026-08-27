@@ -185,7 +185,13 @@ export async function ensureBlankProject(page: Page): Promise<void> {
 export async function ensureWelcomePortalEntry(page: Page): Promise<void> {
   await waitForSpaReady(page);
   const startBtn = page.getByRole('button', { name: /Start a New Project/i });
-  if (await startBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+  // QNBS-v3: check the locale-independent testid, not the translated button text — a non-English WelcomePortal must also early-return here, not fall through into the main-chrome-only recovery flow below.
+  if (
+    await page
+      .getByTestId('welcome-portal')
+      .isVisible({ timeout: 3000 })
+      .catch(() => false)
+  ) {
     return;
   }
   // QNBS-v3: force English before the locale-dependent recovery flow below, or a persisted non-EN/DE language would hang it.

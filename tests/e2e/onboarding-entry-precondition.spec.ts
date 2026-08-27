@@ -15,6 +15,17 @@ test.describe('WelcomePortal entry precondition (CI-only)', () => {
     await expect(page.getByRole('button', { name: /Start a New Project/i })).toBeVisible();
   });
 
+  test('reaches the entry point when a non-English language is already persisted', async ({
+    page,
+  }) => {
+    // QNBS-v3: proves waitForSpaReady's stable welcome-portal selector survives a non-English boot, not just the translated button label.
+    await page.addInitScript(() => localStorage.setItem('worldscript-language', 'es'));
+    await page.goto('/');
+    await expect(page.getByTestId('welcome-portal')).toBeVisible();
+    await ensureWelcomePortalEntry(page);
+    await expect(page.getByRole('button', { name: /Start a New Project/i })).toBeVisible();
+  });
+
   test('reaches the entry point from an already-mounted main shell with a persisted project', async ({
     page,
   }) => {
