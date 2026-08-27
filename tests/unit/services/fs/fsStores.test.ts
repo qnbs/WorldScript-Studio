@@ -51,6 +51,10 @@ vi.mock('../../../../services/logger', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../../services/logger')>();
   return { ...actual, logger: { debug: vi.fn(), warn: vi.fn(), info: vi.fn(), error: vi.fn() } };
 });
+// QNBS-v3: getStaticTranslation hits the network (fetch) — never call real network in tests.
+vi.mock('../../../../services/i18n/staticTranslate', () => ({
+  getStaticTranslation: (key: string) => Promise.resolve(key === 'export.loglineLabel' ? 'Logline' : 'Manuscript'),
+}));
 
 import { appStoreRef } from '../../../../app/storeRef';
 import { FsProjectStore } from '../../../../services/fs/projectFsStore';
@@ -447,6 +451,11 @@ describe('FsProjectStore — export / import', () => {
     // QNBS-v3 (DA-05): a .docx file is a ZIP container — its first 4 bytes are the ZIP local-file-header signature.
     expect(written?.subarray(0, 4)).toEqual(new Uint8Array([0x50, 0x4b, 0x03, 0x04]));
     expect([...fake.text.keys()]).toHaveLength(0);
+
+    const zip = await import('jszip').then((m) => m.default.loadAsync(written as Uint8Array));
+    const documentXml = await zip.file('word/document.xml')?.async('string');
+    expect(documentXml).toContain('Logline');
+    expect(documentXml).toContain('Manuscript');
   });
 
   it('returns null when the import dialog is cancelled', async () => {

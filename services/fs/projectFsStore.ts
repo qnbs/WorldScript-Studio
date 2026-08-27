@@ -7,6 +7,7 @@
 import type { EntityState } from '@reduxjs/toolkit';
 import { scheduleCoreProjectValidation } from '../../features/project/coreValidationShadow';
 import type { Character, StoryProject, World } from '../../types';
+import { getStaticTranslation } from '../i18n/staticTranslate';
 import { logger } from '../logger';
 import { parseImportedProjectJson } from '../projectImportSchema';
 import { normalizeSaveProjectInputToStoryProject, type SaveProjectInput } from '../storageBackend';
@@ -206,11 +207,15 @@ export class FsProjectStore extends FsAssetStore {
     if (format === 'docx') {
       const { Packer } = await import('docx');
       const { buildDocxDocument } = await import('../export/docxDocumentBuilder');
+      const [loglineLabel, manuscriptHeading] = await Promise.all([
+        getStaticTranslation('export.loglineLabel'),
+        getStaticTranslation('export.manuscriptLabel'),
+      ]);
       const doc = buildDocxDocument({
         title: project.title,
-        loglineLabel: 'Logline',
+        loglineLabel,
         logline: project.logline,
-        manuscript: { heading: 'Manuscript', sections: project.manuscript },
+        manuscript: { heading: manuscriptHeading, sections: project.manuscript },
       });
       const arrayBuffer = await Packer.toArrayBuffer(doc);
       const filePath = await apis.save({
