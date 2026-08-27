@@ -12,8 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Post-release v1.28.2 truth sync:** removed the now-stale release-candidate markers from
   README.md and CHANGELOG.md, and corrected AUDIT.md's release-gate entry (macOS artifacts don't
   each get a Minisign `.sig` — only `.app.tar.gz` does; and issue #527's release-relevance wording
-  was overstated — the affected code shipped in v1.28.2 even though that release's own CI run
-  didn't trigger it).
+  was overstated — the affected code shipped in v1.28.2 even though the main-push verification run
+  (`33064552219`) that gated this release didn't trigger it; only the separate, later tag-triggered
+  CI/CD run did).
 
 ## [1.28.2] — 2026-08-27
 
