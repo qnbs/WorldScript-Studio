@@ -172,6 +172,7 @@ export async function ensureBlankProject(page: Page): Promise<void> {
   await waitForMainChrome(page);
 }
 
+// QNBS-v3: guarantees a deterministic WelcomePortal entry precondition when CI cold-boots into the main shell instead.
 /**
  * Deterministically reach the WelcomePortal "Start a New Project" entry point regardless of
  * which of waitForSpaReady()'s two success shapes the app actually booted into. A cold CI boot

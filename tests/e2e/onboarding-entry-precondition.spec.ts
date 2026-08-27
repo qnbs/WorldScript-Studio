@@ -20,7 +20,17 @@ test.describe('WelcomePortal entry precondition (CI-only)', () => {
   }) => {
     await page.goto('/');
     await ensureBlankProject(page);
+    // QNBS-v3: the 1s debounced autosave must genuinely land before reload or this scenario passes without ever exercising the Factory Reset fallback.
+    await expect(page.getByText(/All changes saved|Alle Änderungen gespeichert/i)).toBeVisible({
+      timeout: 10000,
+    });
     await page.reload();
+    // Prove this reload really landed back in the main shell, not a fresh WelcomePortal —
+    // otherwise ensureWelcomePortalEntry's early-return branch would make the assertion below vacuous.
+    await expect(page.locator('#sidebar').or(page.locator('[data-tour="nav-mobile"]'))).toBeVisible(
+      { timeout: 25000 },
+    );
+    await expect(page.getByRole('button', { name: /Start a New Project/i })).not.toBeVisible();
     await ensureWelcomePortalEntry(page);
     await expect(page.getByRole('button', { name: /Start a New Project/i })).toBeVisible();
   });
