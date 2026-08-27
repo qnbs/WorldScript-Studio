@@ -269,6 +269,7 @@ export const useExportView = () => {
       const { Packer } = await import('docx');
       const { buildDocxDocument } = await import('../services/export/docxDocumentBuilder');
 
+      // QNBS-v3 (DA-05): delegates to the shared builder so every DOCX export path stays consistent.
       const doc = buildDocxDocument({
         title: project.title,
         loglineLabel: t('export.loglineLabel'),

@@ -439,6 +439,16 @@ describe('FsProjectStore — export / import', () => {
     expect([...fake.text.keys()]).toHaveLength(0);
   });
 
+  it('exports to a genuine DOCX (ZIP-signed) binary via writeFile, not text', async () => {
+    fake.apis.save = () => Promise.resolve('/app/out.docx');
+    await store.exportProject(exportable as never, 'docx');
+    const written = fake.bin.get('/app/out.docx');
+    expect(written).toBeDefined();
+    // QNBS-v3 (DA-05): a .docx file is a ZIP container — its first 4 bytes are the ZIP local-file-header signature.
+    expect(written?.subarray(0, 4)).toEqual(new Uint8Array([0x50, 0x4b, 0x03, 0x04]));
+    expect([...fake.text.keys()]).toHaveLength(0);
+  });
+
   it('returns null when the import dialog is cancelled', async () => {
     fake.apis.open = () => Promise.resolve(null);
     expect(await store.importProject()).toBeNull();

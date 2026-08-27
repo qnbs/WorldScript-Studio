@@ -195,24 +195,43 @@ export class FsProjectStore extends FsAssetStore {
 
   // Import/Export functionality
 
-  // QNBS-v3 (DA-05): 'docx' dropped — this store has no binary-write API to produce real DOCX, and the case had 0 production callers, so it silently emitted Markdown mislabeled as .docx.
   async exportProject(
     project: StoryProject,
-    format: 'json' | 'markdown' = 'json',
+    format: 'json' | 'markdown' | 'docx' = 'json',
   ): Promise<void> {
     const apis = await this.getApis();
-    let fileName: string;
+    const fileName = project.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+
+    // QNBS-v3 (DA-05): real DOCX via apis.writeFile (binary) — Packer.toBuffer needs Node's Buffer, unavailable in the Tauri WebView, so use the browser-safe toArrayBuffer path instead.
+    if (format === 'docx') {
+      const { Packer } = await import('docx');
+      const { buildDocxDocument } = await import('../export/docxDocumentBuilder');
+      const doc = buildDocxDocument({
+        title: project.title,
+        loglineLabel: 'Logline',
+        logline: project.logline,
+        manuscript: { heading: 'Manuscript', sections: project.manuscript },
+      });
+      const arrayBuffer = await Packer.toArrayBuffer(doc);
+      const filePath = await apis.save({
+        defaultPath: `${fileName}.docx`,
+        filters: [{ name: 'DOCX', extensions: ['docx'] }],
+      });
+      if (filePath) {
+        await retryFs(() => apis.writeFile(filePath, new Uint8Array(arrayBuffer)));
+      }
+      return;
+    }
+
     let content: string;
     let extension: string;
 
     switch (format) {
       case 'json':
-        fileName = `${project.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}`;
         content = JSON.stringify(project, null, 2);
         extension = 'json';
         break;
       case 'markdown':
-        fileName = `${project.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}`;
         content = this.convertToMarkdown(project);
         extension = 'md';
         break;
