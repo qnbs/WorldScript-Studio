@@ -172,6 +172,33 @@ export async function ensureBlankProject(page: Page): Promise<void> {
   await waitForMainChrome(page);
 }
 
+/**
+ * Deterministically reach the WelcomePortal "Start a New Project" entry point regardless of
+ * which of waitForSpaReady()'s two success shapes the app actually booted into. A cold CI boot
+ * has landed in an already-mounted main shell with a persisted project instead of the portal —
+ * a startup-state precondition gap distinct from the (fixed) portal-activation auto-seed race.
+ * Recovers via the real Settings → Data & Backups → Factory Reset flow so no React/Redux/storage
+ * internals are touched — only supported app behavior.
+ */
+export async function ensureWelcomePortalEntry(page: Page): Promise<void> {
+  await waitForSpaReady(page);
+  const startBtn = page.getByRole('button', { name: /Start a New Project/i });
+  if (await startBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+    return;
+  }
+  await clickNavItem(page, /Settings/i);
+  await page
+    .getByRole('button', { name: /Data & Backups|Daten & Backups/i })
+    .first()
+    .click();
+  await page.getByRole('button', { name: /Factory Reset|Werkseinstellungen/i }).click();
+  await page
+    .getByRole('button', { name: /Delete everything & restart|Alles löschen & neu starten/i })
+    .click();
+  await waitForSpaReady(page);
+  await expect(startBtn).toBeVisible({ timeout: 15000 });
+}
+
 /** Desktop sidebar (`md:`); avoids duplicate nav controls vs mobile tab bar. */
 export function sidebar(page: Page) {
   return page.locator('#sidebar');

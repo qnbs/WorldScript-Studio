@@ -2,10 +2,10 @@ import { expect, type Route, test } from '@playwright/test';
 
 import {
   clickNavItem,
+  ensureWelcomePortalEntry,
   flushWriterDebounce,
   seedGeminiApiKey,
   selectFirstEnabledWriterSection,
-  waitForSpaReady,
 } from './helpers';
 
 const isCI = process.env['CI'] === 'true';
@@ -53,7 +53,8 @@ test.describe('End-to-end project flow (CI-only)', () => {
     test.skip(!isCI, 'CI-only E2E suite');
     await page.route('**/generativelanguage.googleapis.com/**', mockGemini);
     await page.goto('/');
-    await waitForSpaReady(page);
+    // QNBS-v3: a cold CI boot can already be in the main shell instead of WelcomePortal — this guarantees the precondition below assumes.
+    await ensureWelcomePortalEntry(page);
   });
 
   test('full project flow navigates from AI outline to export and settings', async ({ page }) => {
