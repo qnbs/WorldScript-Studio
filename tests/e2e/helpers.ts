@@ -187,6 +187,10 @@ export async function ensureWelcomePortalEntry(page: Page): Promise<void> {
   if (await startBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
     return;
   }
+  // QNBS-v3: force English before the locale-dependent recovery flow below, or a persisted non-EN/DE language would hang it.
+  await page.evaluate(() => localStorage.setItem('worldscript-language', 'en'));
+  await page.reload();
+  await waitForMainChrome(page);
   await clickNavItem(page, /Settings/i);
   await page
     .getByRole('button', { name: /Data & Backups|Daten & Backups/i })
