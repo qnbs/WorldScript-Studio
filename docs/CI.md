@@ -304,7 +304,7 @@ longer runs a root `prepare` command. `pnpm-workspace.yaml` sets `verifyDepsBefo
 On **low-resource** machines, stop at the **Quick** tier (see [Cloud CI-first vs local development](#cloud-ci-first-vs-local-development)): **`pnpm run ci:prepush`**, and optionally targeted **`pnpm exec vitest run <path>`**. Never run multiple heavyweight local processes concurrently. Treat **`CI=true pnpm run test:e2e`** (desktop + mobile projects in CI), **Lighthouse**, coverage, Storybook, and mutation testing as **CI-owned**.
 
 ```bash
-pnpm install --frozen-lockfile
+node scripts/dependency-state.mjs reconcile
 pnpm run deps:verify
 pnpm run ci:prepush
 pnpm exec vitest run <path>  # optional targeted smoke, no coverage

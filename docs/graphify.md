@@ -22,7 +22,7 @@ Pick **one** install path; all provide the `graphify` command (or `python -m gra
 
 ### One-time setup in this repo
 
-From the repository root (after Node deps: `pnpm install`):
+From the repository root (after Node deps: `node scripts/dependency-state.mjs reconcile`):
 
 ```bash
 pnpm run graphify:bootstrap # pip install graphifyy (first machine only; requires Python 3.11+ with pip)

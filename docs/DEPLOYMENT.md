@@ -39,7 +39,7 @@ gh run view <run-id> --log-failed
 
 1. **Import** the Git repository; **Root Directory** = repo root.
 2. Framework: **Other** (or Vite). Settings are overridden by [`vercel.json`](../vercel.json):
-   - **Install:** `pnpm install --frozen-lockfile`
+   - **Install:** `node scripts/dependency-state.mjs reconcile`
    - **Build:** `pnpm run build:edge`
    - **Output:** `dist`
 3. **Node.js** ≥ 22 (Project Settings → General).
@@ -54,7 +54,7 @@ gh run view <run-id> --log-failed
 ### Dashboard (recommended — no Wrangler in CI)
 
 1. [Cloudflare Dashboard](https://dash.cloudflare.com/) → **Workers & Pages** → **Pages** → Connect Git.
-2. **Build command:** `pnpm install && pnpm run build:edge`
+2. **Build command:** `node scripts/dependency-state.mjs reconcile && pnpm run build:edge`
 3. **Build output directory:** `dist`
 4. **Deploy command:** **leave completely empty** — Cloudflare uploads `dist` after a successful build.
 5. **Do not use** `npx wrangler deploy` (Workers) nor `wrangler pages deploy` in the deploy step — redundant and often fails on API token scope in the build container.

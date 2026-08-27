@@ -176,7 +176,7 @@ On any non-trivial code change add a single-line comment explaining **why**, not
 - CI runs **`pnpm audit`** every workflow; **dependency-review** on pull requests
 - CI installs dependencies with `pnpm install --frozen-lockfile`
 - Local CI can be simulated with `act` (requires Docker), e.g. `act pull_request --job security --job quality`
-- Local developers should use `pnpm install` to install dependencies
+- Local developers should use `node scripts/dependency-state.mjs reconcile` (never a bare `pnpm install`) to install dependencies — the bare form skips `--frozen-lockfile` and the repo's dependency-fingerprint check
 - Most repo-facing markdown is English for accessibility; user-facing app strings remain fully i18n-driven
 
 ## Known Technical Debt

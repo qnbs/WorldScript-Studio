@@ -19,7 +19,7 @@ WorldScript Studio uses **two complementary knowledge-graph tools** to provide m
 
 ```bash
 # 1. Node dependencies
-pnpm install
+node scripts/dependency-state.mjs reconcile
 
 # 2. Graphify (requires Python 3.10+)
 pnpm run graphify:bootstrap   # pip install graphifyy
