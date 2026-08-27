@@ -195,9 +195,10 @@ export class FsProjectStore extends FsAssetStore {
 
   // Import/Export functionality
 
+  // QNBS-v3 (DA-05): 'docx' dropped — this store has no binary-write API to produce real DOCX, and the case had 0 production callers, so it silently emitted Markdown mislabeled as .docx.
   async exportProject(
     project: StoryProject,
-    format: 'json' | 'markdown' | 'docx' = 'json',
+    format: 'json' | 'markdown' = 'json',
   ): Promise<void> {
     const apis = await this.getApis();
     let fileName: string;
@@ -211,11 +212,6 @@ export class FsProjectStore extends FsAssetStore {
         extension = 'json';
         break;
       case 'markdown':
-        fileName = `${project.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}`;
-        content = this.convertToMarkdown(project);
-        extension = 'md';
-        break;
-      case 'docx':
         fileName = `${project.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}`;
         content = this.convertToMarkdown(project);
         extension = 'md';
