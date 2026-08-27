@@ -46,7 +46,7 @@ Two always-on hosted builds — open whichever you prefer (identical app, both a
 ### PWA & Desktop
 
 - **Install as PWA:** In Chromium/Edge, open the Live Demo → use the install icon in the address bar (or browser menu) for an offline-capable app shortcut.
-- **Desktop installers:** GitHub **Releases** for tags `v*` include Tauri bundles when the workflow runs — `.appimage`, `.msi`, and `.dmg` artifacts with a **Minisign-signed** `latest.json` update manifest (auto-update integrity only; OS-level code signing — Windows Authenticode, macOS notarization — is opt-in via CI secrets, not enabled by default). **v1.9+** adds a native **File/Help menu**, **window-state restore**, in-app **updater UI** (Settings → About), and **open data folder** (Settings → Data). See [`docs/TAURI-CI.md`](docs/TAURI-CI.md) § Auto-update & signing, [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md), and [`docs/history/sprints/SPRINT-V1.10.md`](docs/history/sprints/SPRINT-V1.10.md).
+- **Desktop installers:** GitHub **Releases** for tags `v*` include Tauri bundles when the workflow runs — `.appimage`, `.msi`, and `.dmg` artifacts, with a `latest.json` update manifest containing a **Minisign signature for each platform's bundle** (update-integrity only; OS-level code signing — Windows Authenticode, macOS notarization — is not currently configured in CI). **v1.9+** adds a native **File/Help menu**, **window-state restore**, in-app **updater UI** (Settings → About), and **open data folder** (Settings → Data). See [`docs/TAURI-CI.md`](docs/TAURI-CI.md) § Auto-update & signing, [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md), and [`docs/history/sprints/SPRINT-V1.10.md`](docs/history/sprints/SPRINT-V1.10.md).
 
 ---
 

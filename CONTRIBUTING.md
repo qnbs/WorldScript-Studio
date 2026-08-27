@@ -87,7 +87,7 @@ node scripts/dependency-state.mjs reconcile  # frozen-lockfile install — never
 pnpm run hooks:install  # configures the pre-commit lint-staged hook
 ```
 
-Use `node scripts/dependency-state.mjs reconcile` (or `pnpm run deps:reconcile`), not a bare `pnpm install` — the bare form omits `--frozen-lockfile`, so on any manifest/lockfile drift it silently rewrites `pnpm-lock.yaml` instead of failing loudly, and it never writes this repo's own dependency fingerprint that `ci:prepush` and the pre-commit hook check.
+Use `node scripts/dependency-state.mjs reconcile`, not a bare `pnpm install` — the bare form omits `--frozen-lockfile`, so on any manifest/lockfile drift it silently rewrites `pnpm-lock.yaml` instead of failing loudly, and it never writes this repo's own dependency fingerprint that `ci:prepush` and the pre-commit hook check. On a fresh clone, run that `node` form directly rather than `pnpm run deps:reconcile` — `pnpm-workspace.yaml`'s `verifyDepsBeforeRun: error` makes pnpm itself refuse to launch *any* `pnpm run` script while `node_modules` doesn't exist yet, before the wrapped reconcile logic ever runs; `pnpm run deps:reconcile` only works once `node_modules` is already present, e.g. to re-sync after a later lockfile change.
 
 `hooks:install` is a separate, explicit step rather than an automatic `prepare` script: pnpm v11's `allowBuilds` policy denies `simple-git-hooks`' own install-time script by default (supply-chain hardening — see `pnpm-workspace.yaml`), so a `prepare` script that shelled out to it would silently do nothing anyway. Skipping this step means commits bypass the `lint-staged` pre-commit check.
 

@@ -195,9 +195,11 @@ function reconcile(root = projectRoot) {
 
   try {
     console.log('[deps] Reconciling with pnpm install --frozen-lockfile …');
+    // QNBS-v3: Windows exposes pnpm as a .cmd shim; spawnSync needs a shell to launch it directly.
     const result = spawnSync('pnpm', ['install', '--frozen-lockfile'], {
       cwd: root,
       stdio: 'inherit',
+      shell: process.platform === 'win32',
     });
     if (result.error) throw result.error;
     if (result.status !== 0) process.exitCode = result.status ?? 1;
