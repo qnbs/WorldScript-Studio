@@ -109,19 +109,18 @@ export async function seedGeminiApiKey(page: Page): Promise<void> {
 
 /**
  * Vite dev server keeps the HMR/WebSocket busy → `networkidle` often never settles.
- * Wait for either the welcome portal primary action or the desktop sidebar shell.
+ * Wait for either the welcome portal or the desktop/mobile sidebar shell.
  * QNBS-v3: Also waits for the body theme class to be applied by the App useEffect so
  *          that CSS custom properties (--sc-text-primary, etc.) are fully resolved before
  *          axe or visual checks run — without this, variables resolve to intermediate values.
  */
 export async function waitForSpaReady(page: Page): Promise<void> {
   await page.waitForLoadState('domcontentloaded');
+  // QNBS-v3: welcome-portal is a stable data-testid, not the translated button label — a non-English boot no longer times out this race.
   await Promise.race([
     page.locator('#sidebar').waitFor({ state: 'visible', timeout: 25000 }),
     page.locator('[data-tour="nav-mobile"]').waitFor({ state: 'visible', timeout: 25000 }),
-    page
-      .getByRole('button', { name: /Start a New Project/i })
-      .waitFor({ state: 'visible', timeout: 25000 }),
+    page.getByTestId('welcome-portal').waitFor({ state: 'visible', timeout: 25000 }),
   ]);
   // QNBS-v3: theme class is applied in App useEffect after first render — wait for it so
   //          CSS variable values are stable (avoids axe false-positives on mid-transition colors).

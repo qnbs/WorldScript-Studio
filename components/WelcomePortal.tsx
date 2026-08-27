@@ -366,11 +366,15 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-[var(--sc-surface-base)] animate-fade-in">
+    <div
+      data-testid="welcome-portal"
+      className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-[var(--sc-surface-base)] animate-fade-in"
+    >
       {/* QNBS-v3: shell is now scrollable (overflow-y-auto) with min-h-full centering — content
           taller than the viewport (e.g. the feature grid on mobile) scrolls instead of being
           clipped by the old fixed `flex items-center` shell. Fixes Mobile-Chrome E2E click
           timeouts where the bottom action buttons were unreachable. */}
+      {/* QNBS-v3: stable, locale-independent selector for E2E readiness checks — the primary action button's label is translated, but this attribute is not. */}
       {/* LanguageSelector now imported from ui/LanguageSelector.tsx with search functionality */}
       <LanguageSelector value={language} onChange={setLanguage} />
       <div className="flex min-h-full items-center justify-center p-4 pt-16 sm:pt-4">
