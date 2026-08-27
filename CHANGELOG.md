@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+<!-- release-candidate: v1.28.3 -->
+## [1.28.3] — 2026-08-27
+
 ### Documentation
 
 - **Post-release v1.28.2 truth sync:** removed the now-stale release-candidate markers from
@@ -32,9 +35,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   succeeds on either WelcomePortal or an already-mounted main shell, but the test's `beforeEach`
   clicked "Start a New Project" unconditionally, causing spurious CI failures whenever a cold boot
   landed in the main shell instead (a startup-state precondition gap, not a #527/#530 regression —
-  see issue #532). Added `ensureWelcomePortalEntry()` (`tests/e2e/helpers.ts`), which recovers via
-  the real Settings → Data & Backups → Factory Reset flow when needed, with regression coverage for
-  both startup shapes.
+  see issue #532, still open for the unexplained root cause). Added `ensureWelcomePortalEntry()`
+  (`tests/e2e/helpers.ts`), which recovers via the real Settings → Data & Backups → Factory Reset
+  flow when needed — including re-checking both startup shapes after its own internal reload,
+  since that reload can itself race a pending ~1s debounced autosave — and a stable
+  `data-testid="welcome-portal"` on `WelcomePortal.tsx`'s root so portal detection no longer
+  depends on translated button text. Regression coverage for both startup shapes, a non-English
+  persisted-language boot, and the internal-reload race.
 
 ## [1.28.2] — 2026-08-27
 
