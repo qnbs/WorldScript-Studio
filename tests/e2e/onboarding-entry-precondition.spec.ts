@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { ensureBlankProject, ensureWelcomePortalEntry } from './helpers';
+import { ensureBlankProject, ensureWelcomePortalEntry, waitForMainChrome } from './helpers';
 
 const isCI = process.env['CI'] === 'true';
 
@@ -27,9 +27,7 @@ test.describe('WelcomePortal entry precondition (CI-only)', () => {
     await page.reload();
     // Prove this reload really landed back in the main shell, not a fresh WelcomePortal —
     // otherwise ensureWelcomePortalEntry's early-return branch would make the assertion below vacuous.
-    await expect(page.locator('#sidebar').or(page.locator('[data-tour="nav-mobile"]'))).toBeVisible(
-      { timeout: 25000 },
-    );
+    await waitForMainChrome(page);
     await expect(page.getByRole('button', { name: /Start a New Project/i })).not.toBeVisible();
     await ensureWelcomePortalEntry(page);
     await expect(page.getByRole('button', { name: /Start a New Project/i })).toBeVisible();

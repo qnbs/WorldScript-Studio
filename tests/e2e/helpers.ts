@@ -137,9 +137,11 @@ export async function waitForSpaReady(page: Page): Promise<void> {
 }
 
 /**
- * Main shell is ready (desktop sidebar or mobile bottom tab bar).
+ * Main shell is ready (desktop sidebar or mobile bottom tab bar). Exported so callers proving
+ * "main shell is visible" don't reach for `locA.or(locB)` — both elements exist in the DOM at
+ * once (only one is CSS-visible per viewport), which trips Playwright's strict-mode violation.
  */
-async function waitForMainChrome(page: Page): Promise<void> {
+export async function waitForMainChrome(page: Page): Promise<void> {
   await Promise.race([
     page.locator('#sidebar').waitFor({ state: 'visible', timeout: 25000 }),
     page.locator('[data-tour="nav-mobile"]').waitFor({ state: 'visible', timeout: 25000 }),
