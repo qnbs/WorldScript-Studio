@@ -57,14 +57,24 @@ afterEach(() => {
 });
 
 describe('LOCAL_MODEL_CACHE_PATTERNS', () => {
-  it('matches WebLLM/MLC/tvmjs/transformers buckets and nothing else', () => {
+  it('matches only the exact vendor-literal WebLLM/transformers.js bucket names', () => {
     const matches = (n: string) => LOCAL_MODEL_CACHE_PATTERNS.some((re) => re.test(n));
     expect(matches('webllm/model')).toBe(true);
-    expect(matches('mlc-chat-config')).toBe(true);
-    expect(matches('tvmjs')).toBe(true);
+    expect(matches('webllm/config')).toBe(true);
+    expect(matches('webllm/wasm')).toBe(true);
     expect(matches('transformers-cache')).toBe(true);
+    expect(matches('experimental_transformers-hash-cache')).toBe(true);
     expect(matches('worldscript-logs-db')).toBe(false);
     expect(matches('workbox-precache')).toBe(false);
+  });
+
+  // QNBS-v3: regression for the false-positive substring match a review found in the previous /webllm|transformers/i regex.
+  it('never matches an unrelated cache that merely contains a vendor substring', () => {
+    const matches = (n: string) => LOCAL_MODEL_CACHE_PATTERNS.some((re) => re.test(n));
+    expect(matches('other-transformers-assets')).toBe(false);
+    expect(matches('some-webllm-other-app')).toBe(false);
+    expect(matches('mlc-chat-config')).toBe(false);
+    expect(matches('tvmjs')).toBe(false);
   });
 });
 
