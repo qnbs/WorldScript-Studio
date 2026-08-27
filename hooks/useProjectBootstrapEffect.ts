@@ -45,17 +45,7 @@ export function useProjectBootstrapEffect({
       if (repair.logline !== undefined) dispatch(projectActions.updateLogline(repair.logline));
       if (repair.manuscript !== undefined)
         dispatch(projectActions.setManuscript(repair.manuscript));
-      return;
     }
-
-    if (project.title === '' && project.manuscript.length === 0) {
-      dispatch(
-        projectActions.resetProject({
-          title: t('initialProject.title'),
-          logline: t('initialProject.logline'),
-          chapter1Title: t('initialProject.chapter1'),
-        }),
-      );
-    }
+    // QNBS-v3: no further branch here — repairProjectI18nFields already treats any blank title/logline/manuscript as needing repair, so it always returns non-null for a blank project; a separate resetProject dispatch for that same condition was unreachable dead code, removed rather than tested around.
   }, [project, isInitialLoad, isPortalActive, isI18nReady, dispatch, t]);
 }

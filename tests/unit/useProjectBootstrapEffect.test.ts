@@ -143,4 +143,17 @@ describe('useProjectBootstrapEffect', () => {
     );
     expect(dispatch).not.toHaveBeenCalled();
   });
+
+  it('does not dispatch anything before a project has loaded', () => {
+    renderHook(() =>
+      useProjectBootstrapEffect({
+        project: null,
+        isInitialLoad: false,
+        isPortalActive: false,
+        isI18nReady: true,
+        t,
+      }),
+    );
+    expect(dispatch).not.toHaveBeenCalled();
+  });
 });
