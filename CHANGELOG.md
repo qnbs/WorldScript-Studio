@@ -28,6 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   new user. Fixed both: synchronous `isPortalActive` initialization, and the missing
   `isInitialLoad` guard (extracted into `hooks/useProjectBootstrapEffect.ts` for direct test
   coverage). See issue #527.
+- **`export.spec.ts` E2E precondition assumed WelcomePortal unconditionally:** `waitForSpaReady()`
+  succeeds on either WelcomePortal or an already-mounted main shell, but the test's `beforeEach`
+  clicked "Start a New Project" unconditionally, causing spurious CI failures whenever a cold boot
+  landed in the main shell instead (a startup-state precondition gap, not a #527/#530 regression —
+  see issue #532). Added `ensureWelcomePortalEntry()` (`tests/e2e/helpers.ts`), which recovers via
+  the real Settings → Data & Backups → Factory Reset flow when needed, with regression coverage for
+  both startup shapes.
 
 ## [1.28.2] — 2026-08-27
 

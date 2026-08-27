@@ -109,19 +109,18 @@ export async function seedGeminiApiKey(page: Page): Promise<void> {
 
 /**
  * Vite dev server keeps the HMR/WebSocket busy → `networkidle` often never settles.
- * Wait for either the welcome portal primary action or the desktop sidebar shell.
+ * Wait for either the welcome portal or the desktop/mobile sidebar shell.
  * QNBS-v3: Also waits for the body theme class to be applied by the App useEffect so
  *          that CSS custom properties (--sc-text-primary, etc.) are fully resolved before
  *          axe or visual checks run — without this, variables resolve to intermediate values.
  */
 export async function waitForSpaReady(page: Page): Promise<void> {
   await page.waitForLoadState('domcontentloaded');
+  // QNBS-v3: welcome-portal is a stable data-testid, not the translated button label — a non-English boot no longer times out this race.
   await Promise.race([
     page.locator('#sidebar').waitFor({ state: 'visible', timeout: 25000 }),
     page.locator('[data-tour="nav-mobile"]').waitFor({ state: 'visible', timeout: 25000 }),
-    page
-      .getByRole('button', { name: /Start a New Project/i })
-      .waitFor({ state: 'visible', timeout: 25000 }),
+    page.getByTestId('welcome-portal').waitFor({ state: 'visible', timeout: 25000 }),
   ]);
   // QNBS-v3: theme class is applied in App useEffect after first render — wait for it so
   //          CSS variable values are stable (avoids axe false-positives on mid-transition colors).
@@ -137,9 +136,11 @@ export async function waitForSpaReady(page: Page): Promise<void> {
 }
 
 /**
- * Main shell is ready (desktop sidebar or mobile bottom tab bar).
+ * Main shell is ready (desktop sidebar or mobile bottom tab bar). Exported so callers proving
+ * "main shell is visible" don't reach for `locA.or(locB)` — both elements exist in the DOM at
+ * once (only one is CSS-visible per viewport), which trips Playwright's strict-mode violation.
  */
-async function waitForMainChrome(page: Page): Promise<void> {
+export async function waitForMainChrome(page: Page): Promise<void> {
   await Promise.race([
     page.locator('#sidebar').waitFor({ state: 'visible', timeout: 25000 }),
     page.locator('[data-tour="nav-mobile"]').waitFor({ state: 'visible', timeout: 25000 }),
@@ -170,6 +171,46 @@ export async function ensureBlankProject(page: Page): Promise<void> {
     return;
   }
   await waitForMainChrome(page);
+}
+
+// QNBS-v3: guarantees a deterministic WelcomePortal entry precondition when CI cold-boots into the main shell instead.
+/**
+ * Deterministically reach the WelcomePortal entry point regardless of which of
+ * waitForSpaReady()'s two success shapes the app actually booted into. A cold CI boot has landed
+ * in an already-mounted main shell with a persisted project instead of the portal — a startup-
+ * state precondition gap distinct from the (fixed) portal-activation auto-seed race.
+ * Contract: guarantees the portal is reached, locale-independently — it does NOT guarantee
+ * English. A caller needing English selects it itself (export.spec.ts already does this for the
+ * fresh-boot case). Recovers via the real Settings → Data & Backups → Factory Reset flow when
+ * main chrome is active so no React/Redux/storage internals are touched — only supported app
+ * behavior.
+ */
+export async function ensureWelcomePortalEntry(page: Page): Promise<void> {
+  await waitForSpaReady(page);
+  const portal = page.getByTestId('welcome-portal');
+  if (await portal.isVisible({ timeout: 3000 }).catch(() => false)) {
+    return;
+  }
+  // QNBS-v3: force English before the locale-dependent recovery flow below, or a persisted non-EN/DE language would hang it.
+  await page.evaluate(() => localStorage.setItem('worldscript-language', 'en'));
+  await page.reload();
+  await waitForSpaReady(page);
+  // QNBS-v3: this reload can itself race a pending debounced autosave and land back in WelcomePortal instead of main chrome — accept either state again rather than assuming main chrome.
+  if (await portal.isVisible({ timeout: 3000 }).catch(() => false)) {
+    return;
+  }
+  await waitForMainChrome(page);
+  await clickNavItem(page, /Settings/i);
+  await page
+    .getByRole('button', { name: /Data & Backups|Daten & Backups/i })
+    .first()
+    .click();
+  await page.getByRole('button', { name: /Factory Reset|Werkseinstellungen/i }).click();
+  await page
+    .getByRole('button', { name: /Delete everything & restart|Alles löschen & neu starten/i })
+    .click();
+  await waitForSpaReady(page);
+  await expect(portal).toBeVisible({ timeout: 15000 });
 }
 
 /** Desktop sidebar (`md:`); avoids duplicate nav controls vs mobile tab bar. */
