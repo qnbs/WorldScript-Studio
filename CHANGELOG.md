@@ -14,10 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Service-worker cache deletion is now positively ownership-scoped:** every cache-deletion site
-  (non-Tauri activation cleanup, the Tauri unregister path, and the user-initiated "clear cache"
-  action) now matches against an exact, closed set of this app's own cache-name families before
-  deleting anything, closing a shared-origin data-deletion risk where an unrelated cache could be
-  swept up by a blanket prefix or unconditional `caches.keys()` sweep.
+  (non-Tauri activation cleanup, the Tauri unregister path, the user-initiated "clear cache" action,
+  and Factory Reset) now matches against an exact, closed set of this app's own cache-name families
+  before deleting anything, closing a shared-origin data-deletion risk where an unrelated cache could
+  be swept up by a blanket prefix or unconditional `caches.keys()` sweep.
 - **Desktop filesystem corruption/I-O failures now fail closed, not silently absent:** a corrupted
   or unreadable saved project file used to decompress/parse into a fake empty object and be treated
   as "no saved project" — risking a subsequent autosave silently overwriting the only remaining

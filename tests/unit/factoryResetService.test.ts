@@ -112,7 +112,7 @@ describe('wipeAllAppData', () => {
     expect(reloadMock).toHaveBeenCalledTimes(1);
   });
 
-  // QNBS-v3 (DA-03 gap): a shared origin can host caches from an unrelated app/tool — factory reset must never delete them.
+  // QNBS-v3: a shared origin can host caches from an unrelated app/tool — factory reset must never delete them.
   it('never deletes a foreign, non-owned cache on the shared origin', async () => {
     const del = vi.fn().mockResolvedValue(true);
     vi.stubGlobal('caches', {
