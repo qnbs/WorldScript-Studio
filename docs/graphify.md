@@ -169,7 +169,7 @@ Graphify can optionally log every `query`/`path`/`explain`/MCP query to `~/.cach
 off regardless of future config, set `GRAPHIFY_QUERY_LOG_DISABLE=1`; `GRAPHIFY_QUERY_LOG_ENABLE=1` /
 `GRAPHIFY_QUERY_LOG=<path>` opt back in if you ever want it. This is a local, per-machine preference —
 never committed to the repo. The default AST-only build/update path (`graphify update .`, everything
-`graphs:update` runs) makes no network calls either way; only the separate semantic/LLM rebuild mode
+`graphs:update` runs) does not require network access; only the separate semantic/LLM rebuild mode
 (`/graphify .` in chat, see [Full semantic rebuild](#full-semantic-rebuild-uses-llm-costs-tokens) above)
 and this query log touch anything outside the local build.
 

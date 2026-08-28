@@ -19,8 +19,9 @@
  * failure.
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { computeSourceFingerprint, ROOT } from './graphSourceFingerprint.mjs';
 
 const POLICY_PATH = join(ROOT, 'config', 'graph-tools-versions.json');
@@ -32,18 +33,60 @@ function loadPolicy() {
   return JSON.parse(readFileSync(POLICY_PATH, 'utf-8'));
 }
 
-function runNode(script, args = []) {
+function runNode(script, args = [], options = {}) {
   return spawnSync(process.execPath, [join(ROOT, 'scripts', script), ...args], {
     cwd: ROOT,
     stdio: 'inherit',
     env: process.env,
+    ...options,
+  });
+}
+
+export function isSupportedCommand(command, availableCommands) {
+  return Boolean(command) && Object.hasOwn(availableCommands, command);
+}
+
+export function strictRefreshFailure({ updateStatus, reportStatus, reportsFresh }) {
+  if (updateStatus !== 0) return 'update stage failed';
+  if (reportStatus !== 0) return 'report stage failed';
+  if (!reportsFresh) return 'final freshness check failed';
+  return null;
+}
+
+function toolCommand(command) {
+  // QNBS-v3: resolve Windows npm shims explicitly while keeping all arguments controlled.
+  return process.platform === 'win32' && command === 'codegraph' ? 'codegraph.cmd' : command;
+}
+
+function runTool(command, args, options = {}) {
+  return spawnSync(toolCommand(command), args, {
+    cwd: ROOT,
+    env: process.env,
+    shell: process.platform === 'win32',
+    ...options,
   });
 }
 
 function commandVersion(cmd, args = ['--version']) {
-  const result = spawnSync(cmd, args, { encoding: 'utf-8' });
-  if (result.error?.code === 'ENOENT' || result.status == null) return null;
+  const result =
+    cmd === 'graphify'
+      ? runNode('graphify-cli.mjs', args, { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] })
+      : runTool(cmd, args, { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] });
+  if (result.error?.code === 'ENOENT' || result.status == null || result.status !== 0) return null;
   return (result.stdout ?? '').trim() || null;
+}
+
+function exactVersion(output, expected) {
+  return new RegExp(`(?:^|\\D)${expected.replaceAll('.', '\\.')}(?:$|\\D)`).test(output);
+}
+
+function requireToolVersion(command, expected) {
+  const output = commandVersion(command);
+  if (!output) throw new Error(`${command} is not available`);
+  if (!exactVersion(output, expected)) {
+    throw new Error(`${command} version mismatch: expected ${expected}, got ${output}`);
+  }
+  return output;
 }
 
 /** Extracts the first `Report schema: N` / `Source fingerprint: sha256:...` / `Tool version: X`
@@ -101,7 +144,14 @@ function doctor() {
 }
 
 function status() {
-  const currentFingerprint = computeSourceFingerprint();
+  const policy = loadPolicy();
+  let currentFingerprint;
+  try {
+    currentFingerprint = computeSourceFingerprint();
+  } catch (error) {
+    console.error(`[graphs:status] FAIL — ${error.message}`);
+    process.exit(1);
+  }
   let anyStale = false;
   for (const [label, path] of [
     ['graphify-out/GRAPH_REPORT.md', GRAPHIFY_REPORT],
@@ -109,12 +159,21 @@ function status() {
   ]) {
     const meta = readReportMetadata(path);
     if (!meta.exists) {
-      console.log(`${label}: SKIPPED_NOT_CONFIGURED`);
+      console.log(`${label}: MISSING`);
+      anyStale = true;
       continue;
     }
-    const isFresh = meta.fingerprint === currentFingerprint;
+    const expectedVersion = label.startsWith('graphify')
+      ? policy.graphifyy.testedVersion
+      : policy.codegraph.testedVersion;
+    const isFresh =
+      meta.schema === String(policy.reportSchemaVersion) &&
+      meta.toolVersion === expectedVersion &&
+      meta.fingerprint === currentFingerprint;
     if (!isFresh) anyStale = true;
-    console.log(`${label}: ${isFresh ? 'FRESH' : 'STALE'}`);
+    console.log(
+      `${label}: ${isFresh ? 'FRESH' : meta.toolVersion !== expectedVersion ? 'VERSION_MISMATCH' : 'STALE'}`,
+    );
   }
   process.exit(anyStale ? 1 : 0);
 }
@@ -123,49 +182,65 @@ function update() {
   const policy = loadPolicy();
   let failed = false;
 
-  if (commandVersion('graphify')) {
-    const r = runNode('graphify-update.mjs');
-    console.log(
-      r.status === 0 ? '[graphs:update] graphify: UPDATED' : '[graphs:update] graphify: FAIL',
+  if (process.env.GRAPHIFY_SKIP === '1') {
+    console.error(
+      '[graphs:update] FAIL — GRAPHIFY_SKIP=1 is not valid for strict dual-graph update.',
     );
-    if (r.status !== 0) failed = true;
-  } else {
-    console.log('[graphs:update] graphify: SKIPPED_NOT_INSTALLED');
+    process.exit(1);
+  }
+  try {
+    requireToolVersion('graphify', policy.graphifyy.testedVersion);
+    const previousReport = existsSync(GRAPHIFY_REPORT) ? readFileSync(GRAPHIFY_REPORT) : null;
+    try {
+      const graphifyResult = runNode('graphify-update.mjs', [], { stdio: 'inherit' });
+      if (graphifyResult.status !== 0) throw new Error('Graphify update failed');
+    } finally {
+      if (previousReport === null) rmSync(GRAPHIFY_REPORT, { force: true });
+      else writeFileSync(GRAPHIFY_REPORT, previousReport);
+    }
+    const restored =
+      previousReport === null
+        ? !existsSync(GRAPHIFY_REPORT)
+        : readFileSync(GRAPHIFY_REPORT).equals(previousReport);
+    if (!restored) throw new Error('committed Graphify report could not be restored');
+    console.log('[graphs:update] graphify: UPDATED (committed report preserved)');
+  } catch (error) {
+    console.error(`[graphs:update] graphify: FAIL — ${error.message}`);
+    failed = true;
   }
 
-  if (existsSync(CODEGRAPH_DB)) {
-    const r = spawnSync('codegraph', ['sync'], { cwd: ROOT, stdio: 'inherit' });
-    console.log(
-      r.status === 0
-        ? '[graphs:update] codegraph: UPDATED (sync)'
-        : '[graphs:update] codegraph: FAIL',
-    );
-    if (r.status !== 0) failed = true;
-  } else if (commandVersion('codegraph')) {
-    console.log('[graphs:update] codegraph: SKIPPED_NOT_INITIALIZED (run `codegraph init` first)');
-  } else {
-    console.log('[graphs:update] codegraph: SKIPPED_NOT_INSTALLED');
+  try {
+    requireToolVersion('codegraph', policy.codegraph.testedVersion);
+    if (!existsSync(CODEGRAPH_DB)) throw new Error('CodeGraph is not initialized');
+    const result = runTool('codegraph', ['sync'], { stdio: 'inherit' });
+    if (result.status !== 0)
+      throw new Error(`CodeGraph sync failed (exit ${result.status ?? 'null'})`);
+    console.log('[graphs:update] codegraph: UPDATED (sync)');
+  } catch (error) {
+    console.error(`[graphs:update] codegraph: FAIL — ${error.message}`);
+    failed = true;
   }
-
-  void policy;
   process.exit(failed ? 1 : 0);
 }
 
 function report() {
-  let failed = false;
-  if (commandVersion('graphify')) {
-    const r = runNode('graphify-report.mjs');
-    if (r.status !== 0) failed = true;
-  } else {
-    console.log('[graphs:report] graphify: SKIPPED_NOT_INSTALLED');
+  const policy = loadPolicy();
+  try {
+    requireToolVersion('graphify', policy.graphifyy.testedVersion);
+    if (!existsSync(CODEGRAPH_DB)) throw new Error('CodeGraph is not initialized');
+    requireToolVersion('codegraph', policy.codegraph.testedVersion);
+    const graphifyResult = runNode('graphify-report.mjs', [], { stdio: 'inherit' });
+    if (graphifyResult.status !== 0) throw new Error('Graphify report generation failed');
+    const codegraphResult = runNode('codegraph-report.mjs', [], { stdio: 'inherit' });
+    if (codegraphResult.status !== 0) throw new Error('CodeGraph report generation failed');
+    if (!existsSync(GRAPHIFY_REPORT) || !existsSync(CODEGRAPH_REPORT)) {
+      throw new Error('required report is absent after generation');
+    }
+    process.exit(0);
+  } catch (error) {
+    console.error(`[graphs:report] FAIL — ${error.message}`);
+    process.exit(1);
   }
-  if (existsSync(CODEGRAPH_DB)) {
-    const r = runNode('codegraph-report.mjs');
-    if (r.status !== 0) failed = true;
-  } else {
-    console.log('[graphs:report] codegraph: SKIPPED_NOT_INITIALIZED');
-  }
-  process.exit(failed ? 1 : 0);
 }
 
 function refresh() {
@@ -194,6 +269,15 @@ function refresh() {
     console.error('[graphs:refresh] FAIL — report stage failed.');
     process.exit(1);
   }
+  const statusResult = spawnSync(
+    process.execPath,
+    [join(ROOT, 'scripts', 'graphs-cli.mjs'), 'status'],
+    { cwd: ROOT, stdio: 'inherit', env: process.env },
+  );
+  if (statusResult.status !== 0) {
+    console.error('[graphs:refresh] FAIL — final freshness check failed.');
+    process.exit(1);
+  }
   console.log('[graphs:refresh] PASS');
 }
 
@@ -204,12 +288,13 @@ function bootstrap() {
   process.exit(failed ? 1 : 0);
 }
 
-const command = process.argv[2];
 const commands = { bootstrap, doctor, status, update, report, refresh };
 
-if (!command || !(command in commands)) {
-  console.error(`Usage: node scripts/graphs-cli.mjs <${Object.keys(commands).join('|')}>`);
-  process.exit(1);
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const command = process.argv[2];
+  if (!isSupportedCommand(command, commands)) {
+    console.error(`Usage: node scripts/graphs-cli.mjs <${Object.keys(commands).join('|')}>`);
+    process.exit(1);
+  }
+  commands[command]();
 }
-
-commands[command]();

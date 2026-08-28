@@ -8,4 +8,5 @@ export function buildMetadataBlock(opts: {
   generationMode: string;
   reportSchemaVersion: number;
   cwd?: string;
+  fingerprint?: string;
 }): string;

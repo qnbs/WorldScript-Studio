@@ -13,6 +13,7 @@ const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const policy = JSON.parse(readFileSync(join(root, 'config', 'graph-tools-versions.json'), 'utf-8'));
 const version = policy.codegraph.testedVersion;
 const pinnedSpec = `@colbymchenry/codegraph@${version}`;
+const codegraphCommand = process.platform === 'win32' ? 'codegraph.cmd' : 'codegraph';
 
 const install = spawnSync('npm', ['install', '-g', pinnedSpec], {
   stdio: 'inherit',
@@ -28,7 +29,12 @@ if (install.status !== 0) {
   process.exit(install.status ?? 1);
 }
 
-const verify = spawnSync('codegraph', ['--version'], { encoding: 'utf-8' });
+// QNBS-v3: keep optional CodeGraph outside app dependencies while verifying the exact shared policy version.
+const verify = spawnSync(codegraphCommand, ['--version'], {
+  encoding: 'utf-8',
+  shell: process.platform === 'win32',
+  env: process.env,
+});
 const installedVersion = (verify.stdout ?? '').trim();
 if (verify.status !== 0 || !installedVersion.includes(version)) {
   process.stderr.write(

@@ -17,67 +17,222 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildMetadataBlock, checkCleanState, ROOT } from './graphSourceFingerprint.mjs';
+import { pathToFileURL } from 'node:url';
+import { sanitize } from './codegraph-report.mjs';
+import {
+  buildMetadataBlock,
+  checkCleanState,
+  computeSourceFingerprint,
+  ROOT,
+} from './graphSourceFingerprint.mjs';
 
 const REPORT_PATH = join(ROOT, 'graphify-out', 'GRAPH_REPORT.md');
 const PREVIOUS_COMPACT_BACKUP = `${REPORT_PATH}.previous-compact`;
 const TOP_N_COMMUNITIES = 20;
 
-const { clean, dirtyPaths } = checkCleanState();
-if (!clean) {
-  console.error(
-    `[graphify-report] DIRTY_UNTRACKED_INPUT — refusing to write a committed report from an ` +
-      `unstable source state. Commit or stash first:\n  ${dirtyPaths.join('\n  ')}`,
-  );
-  process.exit(1);
+function loadPolicy() {
+  return JSON.parse(readFileSync(join(ROOT, 'config', 'graph-tools-versions.json'), 'utf-8'));
 }
 
-// graphify writes its native report to this exact path — but this script overwrites that same
-// path with a compact summary. Move any prior compact summary out of the way first, so that if
-// graphify decides "no topology changes, outputs left untouched" (a real, observed behavior on a
-// no-op re-run), this script doesn't misparse its OWN previous compact output as a fresh native
-// report. If graphify skips writing, the previous compact summary is simply restored unchanged —
-// which is the correct, deterministic outcome for "nothing changed."
-if (existsSync(REPORT_PATH)) {
-  renameSync(REPORT_PATH, PREVIOUS_COMPACT_BACKUP);
+function hasExactVersion(output, version) {
+  return new RegExp(`(?:^|\\D)${version.replaceAll('.', '\\.')}(?:$|\\D)`).test(output);
 }
 
-const updateResult = spawnSync(process.execPath, [join(ROOT, 'scripts', 'graphify-update.mjs')], {
-  cwd: ROOT,
-  stdio: 'inherit',
-  env: process.env,
-});
-if (updateResult.status !== 0) {
-  console.error('[graphify-report] FAIL — graphify update did not complete successfully.');
-  if (existsSync(PREVIOUS_COMPACT_BACKUP)) renameSync(PREVIOUS_COMPACT_BACKUP, REPORT_PATH);
-  process.exit(updateResult.status ?? 1);
+function runGraphify(args, options = {}) {
+  return spawnSync(process.execPath, [join(ROOT, 'scripts', 'graphify-cli.mjs'), ...args], {
+    cwd: ROOT,
+    env: process.env,
+    ...options,
+  });
 }
 
-if (!existsSync(REPORT_PATH)) {
-  // No topology change — graphify left outputs untouched. Restore the previous compact report
-  // as-is; this IS the deterministic no-change outcome, not a failure.
-  if (existsSync(PREVIOUS_COMPACT_BACKUP)) {
+function restorePreviousReport(hasBackup) {
+  rmSync(REPORT_PATH, { force: true });
+  if (hasBackup && existsSync(PREVIOUS_COMPACT_BACKUP)) {
     renameSync(PREVIOUS_COMPACT_BACKUP, REPORT_PATH);
-    console.log('[graphify-report] PASS — no topology change; previous compact report unchanged.');
-    process.exit(0);
   }
-  console.error(
-    '[graphify-report] FAIL — graphify wrote no native report and no previous compact report exists to restore.',
-  );
-  process.exit(1);
 }
 
-const versionResult = spawnSync('graphify', ['--version'], { encoding: 'utf-8' });
-const toolVersion = (versionResult.stdout ?? '').trim() || 'unknown';
+function parseProjectName() {
+  try {
+    const packageJson = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf-8'));
+    return packageJson.name ?? 'project';
+  } catch (error) {
+    throw new Error(`could not parse package.json: ${error?.message ?? String(error)}`);
+  }
+}
 
-let native;
-try {
-  native = readFileSync(REPORT_PATH, 'utf-8');
-} catch (error) {
-  console.error(`[graphify-report] FAIL — could not read native report: ${error.message}`);
-  process.exit(1);
-} finally {
+function reuseTopology(previous, titleLine, metadata) {
+  const generationMarker = previous.indexOf('Generation mode:');
+  const bodyStart = previous.indexOf('\n\n', generationMarker);
+  if (!previous.startsWith('# Graph Report - ') || generationMarker < 0 || bodyStart < 0) {
+    throw new Error('previous compact report has invalid metadata and cannot be reused');
+  }
+  return `${titleLine}\n\n${metadata}${previous.slice(bodyStart)}`;
+}
+
+function writeCandidate(report) {
+  const candidate = `${REPORT_PATH}.tmp-${process.pid}`;
+  writeFileSync(candidate, report);
+  renameSync(candidate, REPORT_PATH);
+}
+
+export function generateReport() {
+  let policy;
+  try {
+    policy = loadPolicy();
+  } catch (error) {
+    console.error(
+      `[graphify-report] FAIL — could not parse graph-tools-versions.json: ${error.message}`,
+    );
+    return 1;
+  }
+  const expectedVersion = policy.graphifyy.testedVersion;
+  const initialState = checkCleanState();
+  if (!initialState.clean) {
+    console.error(
+      `[graphify-report] DIRTY_UNTRACKED_INPUT — refusing to write a committed report from an ` +
+        `unstable source state. Commit or stash first:\n  ${initialState.dirtyPaths.join('\n  ')}`,
+    );
+    return 1;
+  }
+
+  let fingerprintBefore;
+  try {
+    fingerprintBefore = computeSourceFingerprint();
+  } catch (error) {
+    console.error(`[graphify-report] FAIL — ${error.message}`);
+    return 1;
+  }
+
+  let projectName;
+  try {
+    projectName = parseProjectName();
+  } catch (error) {
+    console.error(`[graphify-report] FAIL — ${error.message}`);
+    return 1;
+  }
+  const titleLine = `# Graph Report - ${projectName}`;
+  const hadBackup = existsSync(REPORT_PATH);
+  // QNBS-v3: retain the prior compact report until every generation and stability check succeeds.
   rmSync(PREVIOUS_COMPACT_BACKUP, { force: true });
+  if (hadBackup) renameSync(REPORT_PATH, PREVIOUS_COMPACT_BACKUP);
+
+  try {
+    if (process.env.GRAPHIFY_SKIP === '1') {
+      throw new Error('GRAPHIFY_SKIP=1 is not valid for strict report generation');
+    }
+    const updateResult = runGraphify(['update', '.'], { stdio: 'inherit' });
+    if (updateResult.status !== 0) {
+      throw new Error('graphify update did not complete successfully');
+    }
+
+    const versionResult = runGraphify(['--version'], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const versionOutput = `${versionResult.stdout ?? ''}\n${versionResult.stderr ?? ''}`;
+    if (versionResult.status !== 0 || !hasExactVersion(versionOutput, expectedVersion)) {
+      throw new Error(
+        `Graphify version mismatch: expected ${expectedVersion}, got ${versionOutput.trim() || '(no output)'}`,
+      );
+    }
+
+    if (computeSourceFingerprint() !== fingerprintBefore || !checkCleanState().clean) {
+      throw new Error('SOURCE_CHANGED_DURING_REPORT — source changed during Graphify generation');
+    }
+
+    let native;
+    if (existsSync(REPORT_PATH)) {
+      native = sanitize(readFileSync(REPORT_PATH, 'utf-8'));
+    } else if (hadBackup) {
+      const metadata = buildMetadataBlock({
+        tool: 'graphify',
+        toolVersion: expectedVersion,
+        generationMode: 'AST-only local build (graphify update .)',
+        reportSchemaVersion: policy.reportSchemaVersion,
+        fingerprint: fingerprintBefore,
+      });
+      native = reuseTopology(readFileSync(PREVIOUS_COMPACT_BACKUP, 'utf-8'), titleLine, metadata);
+      writeCandidate(native);
+      if (computeSourceFingerprint() !== fingerprintBefore || !checkCleanState().clean) {
+        throw new Error('SOURCE_CHANGED_DURING_REPORT — source changed before metadata refresh');
+      }
+      rmSync(PREVIOUS_COMPACT_BACKUP, { force: true });
+      console.log(
+        '[graphify-report] PASS — no topology change; compact report metadata refreshed.',
+      );
+      return 0;
+    } else {
+      throw new Error('graphify wrote no native report and no previous compact report exists');
+    }
+
+    const sections = splitSections(native);
+    const KEEP_AS_IS = [
+      'Corpus Check',
+      'Summary',
+      'God Nodes',
+      'Surprising Connections',
+      'Import Cycles',
+      'Knowledge Gaps',
+      'Suggested Questions',
+    ];
+    const communitiesSection = findSection(sections, 'Communities (');
+    let compactCommunitiesBlock = '';
+    let totalCommunities = 0;
+    let keptCommunities = 0;
+    if (communitiesSection) {
+      const totalMatch = communitiesSection.heading.match(/\((\d+) total/);
+      totalCommunities = totalMatch ? Number(totalMatch[1]) : 0;
+      const blocks = communitiesSection.body
+        .join('\n')
+        .split(/(?=^### )/m)
+        .map((block) => block.trim())
+        .filter(Boolean);
+      const ranked = blocks
+        .map((block) => {
+          const nodeCountMatch = block.match(/Nodes \((\d+)\):/);
+          return { block, nodeCount: nodeCountMatch ? Number(nodeCountMatch[1]) : 0 };
+        })
+        .sort((a, b) => b.nodeCount - a.nodeCount);
+      const top = ranked.slice(0, TOP_N_COMMUNITIES);
+      keptCommunities = top.length;
+      compactCommunitiesBlock = top.map((community) => community.block).join('\n\n');
+    }
+    const omittedCount = Math.max(0, totalCommunities - keptCommunities);
+    const communitiesHeading = `## Top ${keptCommunities} Communities by size (of ${totalCommunities} total)`;
+    const communitiesNote =
+      omittedCount > 0
+        ? `\n\n_${omittedCount} smaller communities omitted from this committed summary — full detail in local graphify-out/graph.json / graph.html (gitignored, not committed). Rebuild anytime: \`pnpm run graphify:update\`._`
+        : '';
+    const metadata = buildMetadataBlock({
+      tool: 'graphify',
+      toolVersion: expectedVersion,
+      generationMode: 'AST-only local build (graphify update .)',
+      reportSchemaVersion: policy.reportSchemaVersion,
+      fingerprint: fingerprintBefore,
+    });
+    const keptSectionsMarkdown = KEEP_AS_IS.map((heading) => {
+      const section = findSection(sections, heading);
+      return section ? `## ${section.heading}\n${section.body.join('\n').trim()}` : null;
+    })
+      .filter(Boolean)
+      .join('\n\n');
+    const report = `${titleLine}\n\n${metadata}\n\n${keptSectionsMarkdown}\n\n${communitiesHeading}${communitiesNote}\n\n${compactCommunitiesBlock}\n`;
+    writeCandidate(report);
+    if (computeSourceFingerprint() !== fingerprintBefore || !checkCleanState().clean) {
+      throw new Error('SOURCE_CHANGED_DURING_REPORT — source changed before report commit');
+    }
+    rmSync(PREVIOUS_COMPACT_BACKUP, { force: true });
+    console.log(
+      `[graphify-report] PASS — ${REPORT_PATH} generated (${keptCommunities}/${totalCommunities} communities kept).`,
+    );
+    return 0;
+  } catch (error) {
+    restorePreviousReport(hadBackup);
+    console.error(`[graphify-report] FAIL — ${error?.message ?? String(error)}`);
+    return 1;
+  }
 }
 
 /** Split the native report into ordered sections keyed by their `## Heading` line. */
@@ -99,85 +254,6 @@ function findSection(sections, headingPrefix) {
   return sections.find((s) => s.heading.startsWith(headingPrefix));
 }
 
-const sections = splitSections(native);
-const KEEP_AS_IS = [
-  'Corpus Check',
-  'Summary',
-  'God Nodes',
-  'Surprising Connections',
-  'Import Cycles',
-  'Knowledge Gaps',
-  'Suggested Questions',
-];
-
-const communitiesSection = findSection(sections, 'Communities (');
-let compactCommunitiesBlock = '';
-let totalCommunities = 0;
-let keptCommunities = 0;
-
-if (communitiesSection) {
-  const totalMatch = communitiesSection.heading.match(/\((\d+) total/);
-  totalCommunities = totalMatch ? Number(totalMatch[1]) : 0;
-
-  const blocks = communitiesSection.body
-    .join('\n')
-    .split(/(?=^### )/m)
-    .map((b) => b.trim())
-    .filter(Boolean);
-
-  const ranked = blocks
-    .map((block) => {
-      const nodeCountMatch = block.match(/Nodes \((\d+)\):/);
-      return { block, nodeCount: nodeCountMatch ? Number(nodeCountMatch[1]) : 0 };
-    })
-    .sort((a, b) => b.nodeCount - a.nodeCount);
-
-  const top = ranked.slice(0, TOP_N_COMMUNITIES);
-  keptCommunities = top.length;
-  compactCommunitiesBlock = top.map((c) => c.block).join('\n\n');
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  process.exit(generateReport());
 }
-
-const omittedCount = Math.max(0, totalCommunities - keptCommunities);
-const communitiesHeading = `## Top ${keptCommunities} Communities by size (of ${totalCommunities} total)`;
-const communitiesNote =
-  omittedCount > 0
-    ? `\n\n_${omittedCount} smaller communities omitted from this committed summary — full detail in local graphify-out/graph.json / graph.html (gitignored, not committed). Rebuild anytime: \`pnpm run graphify:update\`._`
-    : '';
-
-const metadata = buildMetadataBlock({
-  tool: 'graphifyy',
-  toolVersion,
-  generationMode: 'AST-only local build (graphify update .)',
-  reportSchemaVersion: 1,
-});
-
-// Graphify infers the project name from the cwd basename, which is "main" inside this repo's
-// worktree layout (.worktrees/main) — use package.json's real name instead, and strip the
-// embedded build date so the title doesn't break determinism across day boundaries.
-const packageJson = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf-8'));
-const projectName = packageJson.name ?? 'project';
-const titleLine = `# Graph Report - ${projectName}`;
-
-const keptSectionsMarkdown = KEEP_AS_IS.map((heading) => {
-  const section = findSection(sections, heading);
-  if (!section) return null;
-  return `## ${section.heading}\n${section.body.join('\n').trim()}`;
-})
-  .filter(Boolean)
-  .join('\n\n');
-
-const report = `${titleLine}
-
-${metadata}
-
-${keptSectionsMarkdown}
-
-${communitiesHeading}${communitiesNote}
-
-${compactCommunitiesBlock}
-`;
-
-writeFileSync(REPORT_PATH, report);
-console.log(
-  `[graphify-report] PASS — ${REPORT_PATH} generated (${keptCommunities}/${totalCommunities} communities kept).`,
-);

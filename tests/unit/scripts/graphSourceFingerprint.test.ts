@@ -1,9 +1,9 @@
 // @vitest-environment node
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+// QNBS-v3: fixture coverage locks worktree deletion and portable content semantics used by reports.
 import {
   buildMetadataBlock,
   checkCleanState,
@@ -18,7 +18,7 @@ function git(args: string[], cwd = fixtureDir) {
 }
 
 function initFixture() {
-  fixtureDir = mkdtempSync(join(tmpdir(), 'graph-fingerprint-test-'));
+  fixtureDir = mkdtempSync(join(process.cwd(), '.graph-fingerprint-test-'));
   git(['init', '-q']);
   git(['config', 'user.email', 'test@example.com']);
   git(['config', 'user.name', 'Test']);
@@ -58,13 +58,35 @@ describe('graphSourceFingerprint', () => {
     expect(after).not.toBe(before);
   });
 
+  it('represents a tracked working-tree deletion without crashing', () => {
+    const before = computeSourceFingerprint(fixtureDir);
+    rmSync(join(fixtureDir, 'a.ts'));
+    const after = computeSourceFingerprint(fixtureDir);
+    expect(after).not.toBe(before);
+    expect(checkCleanState(fixtureDir)).toEqual({ clean: false, dirtyPaths: ['a.ts'] });
+  });
+
+  it('treats equivalent UTF-8 LF and CRLF text as the same content', () => {
+    writeFileSync(join(fixtureDir, 'a.ts'), 'export const a = 2;\n');
+    const lf = computeSourceFingerprint(fixtureDir);
+    writeFileSync(join(fixtureDir, 'a.ts'), 'export const a = 2;\r\n');
+    expect(computeSourceFingerprint(fixtureDir)).toBe(lf);
+  });
+
+  it('keeps binary byte changes meaningful', () => {
+    writeFileSync(join(fixtureDir, 'image.bin'), Buffer.from([0, 10, 13, 255]));
+    const before = computeSourceFingerprint(fixtureDir);
+    writeFileSync(join(fixtureDir, 'image.bin'), Buffer.from([0, 10, 13, 254]));
+    expect(computeSourceFingerprint(fixtureDir)).not.toBe(before);
+  });
+
   it('excludes graphify-out/** and .codegraph/** from the fingerprint', () => {
     const before = computeSourceFingerprint(fixtureDir);
     // Directories are gitignored per the fixture's .gitignore, so these paths must not
     // participate even though they physically exist on disk.
-    execFileSync('mkdir', ['-p', join(fixtureDir, 'graphify-out')]);
+    mkdirSync(join(fixtureDir, 'graphify-out'), { recursive: true });
     writeFileSync(join(fixtureDir, 'graphify-out', 'GRAPH_REPORT.md'), 'irrelevant content');
-    execFileSync('mkdir', ['-p', join(fixtureDir, '.codegraph')]);
+    mkdirSync(join(fixtureDir, '.codegraph'), { recursive: true });
     writeFileSync(join(fixtureDir, '.codegraph', 'CODEGRAPH_REPORT.md'), 'irrelevant content');
     const after = computeSourceFingerprint(fixtureDir);
     expect(after).toBe(before);
@@ -80,7 +102,7 @@ describe('graphSourceFingerprint', () => {
     git(['commit', '-q', '-m', 'second commit, different branch']);
     // Different branch, different HEAD SHA, but the tracked *content* now differs too --
     // add the same file back out to isolate the branch/SHA-independence claim.
-    execFileSync('rm', [join(fixtureDir, 'c.ts')]);
+    rmSync(join(fixtureDir, 'c.ts'));
     git(['add', '-A']);
     git(['commit', '-q', '-m', 'revert content to match main']);
     const onOtherBranch = computeSourceFingerprint(fixtureDir);
@@ -109,7 +131,7 @@ describe('graphSourceFingerprint', () => {
     });
 
     it('does not flag changes confined to excluded graph-output directories', () => {
-      execFileSync('mkdir', ['-p', join(fixtureDir, 'graphify-out')]);
+      mkdirSync(join(fixtureDir, 'graphify-out'), { recursive: true });
       writeFileSync(join(fixtureDir, 'graphify-out', 'graph.json'), '{}');
       const { clean } = checkCleanState(fixtureDir);
       // graphify-out/ is gitignored in the fixture, so git status won't even list it --

@@ -10,14 +10,16 @@
  */
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { lstatSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 
 /** Generated graph output — never part of the fingerprint (reports must never self-reference). */
 const EXCLUDED_PREFIXES = ['graphify-out/', '.codegraph/'];
+// QNBS-v3: bounded retries make freshness fail closed instead of hashing a moving source tree.
+const SNAPSHOT_ATTEMPTS = 3;
 
 function isExcluded(relPath) {
   return EXCLUDED_PREFIXES.some((prefix) => relPath.startsWith(prefix));
@@ -41,20 +43,113 @@ export function listSourcePaths(cwd = ROOT) {
   return [...all].filter((p) => !isExcluded(p)).sort();
 }
 
+function listTrackedPaths(cwd) {
+  return execFileSync('git', ['ls-files', '--cached', '--exclude-standard', '-z'], {
+    cwd,
+    encoding: 'buffer',
+  })
+    .toString('utf8')
+    .split('\0')
+    .filter(Boolean);
+}
+
+function enumerateSourcePaths(cwd) {
+  return { paths: listSourcePaths(cwd), tracked: new Set(listTrackedPaths(cwd)) };
+}
+
+function isText(bytes) {
+  if (bytes.includes(0)) return false;
+  try {
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    const encoded = new TextEncoder().encode(text);
+    return (
+      encoded.length === bytes.length && encoded.every((value, index) => value === bytes[index])
+    );
+  } catch {
+    return false;
+  }
+}
+
+function hashBytes(bytes) {
+  const content = isText(bytes)
+    ? Buffer.from(new TextDecoder().decode(bytes).replace(/\r\n?/g, '\n'), 'utf8')
+    : bytes;
+  return createHash('sha256').update(content).digest('hex');
+}
+
+function hashDeletion(relPath) {
+  return createHash('sha256').update(`deleted:${relPath}`).digest('hex');
+}
+
+function fileSignature(stat) {
+  return `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.mode}`;
+}
+
+function readSnapshot(cwd, enumeration) {
+  const lines = [];
+  for (const relPath of enumeration.paths) {
+    const absolutePath = join(cwd, relPath);
+    let before;
+    try {
+      before = lstatSync(absolutePath);
+    } catch (error) {
+      if (error?.code === 'ENOENT' && enumeration.tracked.has(relPath)) {
+        lines.push(`${hashDeletion(relPath)}:${relPath}`);
+        continue;
+      }
+      throw new Error(`source path disappeared during fingerprinting: ${relPath}`);
+    }
+    if (!before.isFile()) throw new Error(`source path is not a regular file: ${relPath}`);
+    let bytes;
+    try {
+      bytes = readFileSync(absolutePath);
+    } catch (error) {
+      throw new Error(
+        `failed to read ${relPath} during fingerprinting: ${error?.message ?? String(error)}`,
+      );
+    }
+    let after;
+    try {
+      after = lstatSync(absolutePath);
+    } catch {
+      throw new Error(`source path disappeared after reading: ${relPath}`);
+    }
+    if (fileSignature(before) !== fileSignature(after)) {
+      throw new Error(`source path changed while being fingerprinted: ${relPath}`);
+    }
+    lines.push(`${hashBytes(bytes)}:${relPath}`);
+  }
+  return lines;
+}
+
 /**
  * Deterministic SHA-256 over sorted `sha256(content):path` lines for the current on-disk bytes
  * of every source path. Never hashes commit metadata, branch name, or wall-clock time.
  * @param {string} cwd
  */
 export function computeSourceFingerprint(cwd = ROOT) {
-  const paths = listSourcePaths(cwd);
-  const lines = paths.map((relPath) => {
-    const bytes = readFileSync(join(cwd, relPath));
-    const contentHash = createHash('sha256').update(bytes).digest('hex');
-    return `${contentHash}:${relPath}`;
-  });
-  const digest = createHash('sha256').update(lines.join('\n')).digest('hex');
-  return `sha256:${digest}`;
+  let lastError;
+  for (let attempt = 1; attempt <= SNAPSHOT_ATTEMPTS; attempt += 1) {
+    try {
+      const firstEnumeration = enumerateSourcePaths(cwd);
+      const first = readSnapshot(cwd, firstEnumeration);
+      const secondEnumeration = enumerateSourcePaths(cwd);
+      if (firstEnumeration.paths.join('\0') !== secondEnumeration.paths.join('\0')) {
+        throw new Error('source path set changed while fingerprinting');
+      }
+      const second = readSnapshot(cwd, secondEnumeration);
+      if (first.join('\n') !== second.join('\n')) {
+        throw new Error('source content changed while fingerprinting');
+      }
+      const digest = createHash('sha256').update(second.join('\n')).digest('hex');
+      return `sha256:${digest}`;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw new Error(
+    `[graphSourceFingerprint] UNSTABLE_SOURCE — could not capture a stable source snapshot after ${SNAPSHOT_ATTEMPTS} attempts: ${lastError?.message ?? String(lastError)}`,
+  );
 }
 
 /**
@@ -94,7 +189,7 @@ export function buildMetadataBlock({
   ].join('\n');
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const { clean, dirtyPaths } = checkCleanState();
   console.log(`Source fingerprint: ${computeSourceFingerprint()}`);
   console.log(clean ? 'Clean state: YES' : `Clean state: NO (dirty: ${dirtyPaths.join(', ')})`);

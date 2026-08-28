@@ -16,6 +16,10 @@ const policy = JSON.parse(readFileSync(join(root, 'config', 'graph-tools-version
 const version = policy.graphifyy.testedVersion;
 const pinnedSpec = `graphifyy==${version}`;
 
+function hasExactVersion(output) {
+  return new RegExp(`(?:^|\\D)${version.replaceAll('.', '\\.')}(?:$|\\D)`).test(output);
+}
+
 /** @param {string} cmd @param {string[]} args */
 function run(cmd, args) {
   return spawnSync(cmd, args, {
@@ -43,8 +47,20 @@ const attempts = [
 for (const { tool, args } of attempts) {
   const result = run(tool, args);
   if (result.status === 0) {
-    console.log(`[graphify-bootstrap] Installed ${pinnedSpec} via ${tool}.`);
-    process.exit(0);
+    // QNBS-v3: verify the supported fallback launcher resolves the pinned implementation before claiming installation success.
+    const verify = spawnSync(
+      process.execPath,
+      [join(root, 'scripts', 'graphify-cli.mjs'), '--version'],
+      { encoding: 'utf-8', env: process.env },
+    );
+    const output = `${verify.stdout ?? ''}\n${verify.stderr ?? ''}`;
+    if (verify.status === 0 && hasExactVersion(output)) {
+      console.log(`[graphify-bootstrap] Installed ${pinnedSpec} via ${tool} (verified).`);
+      process.exit(0);
+    }
+    process.stderr.write(
+      `[graphify-bootstrap] ${tool} installed ${pinnedSpec}, but the supported launcher did not resolve version ${version}.\n`,
+    );
   }
 }
 

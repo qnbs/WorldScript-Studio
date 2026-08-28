@@ -29,18 +29,21 @@ pnpm run graphs:bootstrap
 # 3. Read-only sanity check: installed versions match policy, report freshness
 pnpm run graphs:doctor
 
-# 4. Initialize CodeGraph's local index for this worktree (one-time; builds the index in this step)
+# 4. Optional privacy controls before the first CodeGraph invocation (local shell only)
+export CODEGRAPH_TELEMETRY=0 CODEGRAPH_NO_UPDATE_CHECK=1
+
+# 5. Initialize CodeGraph's local index for this worktree (one-time; builds the index in this step)
 codegraph init
 
-# 5. Update local runtime state + regenerate the two committed reports (requires a clean tree)
+# 6. Update local runtime state + regenerate the two committed reports (requires a clean tree)
 pnpm run graphs:refresh
 
-# 6. Configure your agent's MCP client (local, machine-personal — not inherited from git)
+# 7. Configure your agent's MCP client (local, machine-personal — not inherited from git)
 # Claude Code → codegraph install --target=claude   (see docs/codegraph.md)
 # Cursor      → codegraph install --target=cursor --yes
 # Kimi Code CLI → add MCP server to ~/.kimi/settings.json (see docs/codegraph.md)
 
-# 7. Choose Graphify (architecture/topology) vs. CodeGraph (symbol/impact) vs. raw grep —
+# 8. Choose Graphify (architecture/topology) vs. CodeGraph (symbol/impact) vs. raw grep —
 #    see "Tool Selection Guide" below.
 ```
 
@@ -188,8 +191,8 @@ workers/              → CodeGraph: worker entrypoints
 
 ## Privacy & Security
 
-- The default AST-only build/update path for both tools (`graphs:update`, `graphs:report`, everything routine) makes **no network calls** — safe to use on proprietary code.
-- **Two specific things are network-touching and opt-in, not default:** Graphify's separate semantic/LLM rebuild mode (`/graphify .` in chat — costs tokens, calls a configured model) and CodeGraph's anonymous usage telemetry (`codegraph telemetry off` / `CODEGRAPH_TELEMETRY=0` disables it locally; full disclosure in [CodeGraph's TELEMETRY.md](https://github.com/colbymchenry/codegraph/blob/main/TELEMETRY.md)).
+- The source parsing and local index for the default AST/code-intelligence paths stay local, but CodeGraph's anonymous usage telemetry is enabled by default and can make network calls. Disable it with `codegraph telemetry off`, `CODEGRAPH_TELEMETRY=0`, or `DO_NOT_TRACK=1`; disable its separate update check with `CODEGRAPH_NO_UPDATE_CHECK=1` (full disclosure in [CodeGraph's TELEMETRY.md](https://github.com/colbymchenry/codegraph/blob/main/TELEMETRY.md)).
+- Graphify's separate semantic/LLM rebuild mode (`/graphify .` in chat) is also networked and provider-dependent; the AST-only Graphify path does not require that mode.
 - No API keys required for either tool's core functionality.
 - Graphify can optionally log queries locally to `~/.cache/graphify-queries.log` — off by default since `graphifyy` v0.9.13 (see `docs/graphify.md`'s Privacy section for the exact env vars).
 - `.codegraph/` and `graphify-out/` are gitignored (only `*_REPORT.md` committed).

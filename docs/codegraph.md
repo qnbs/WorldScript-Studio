@@ -8,7 +8,7 @@ CodeGraph builds a pre-indexed semantic knowledge graph of the codebase using Tr
 
 **Current index stats:** see the committed report's own header — [`.codegraph/CODEGRAPH_REPORT.md`](../.codegraph/CODEGRAPH_REPORT.md). A hardcoded snapshot here always drifts; check `pnpm run graphs:status` for FRESH/STALE at a glance.
 
-**Privacy:** source/index data stays 100% local. **Telemetry is a separate concern** — current CodeGraph versions collect anonymous usage telemetry by default; disable it locally (never committed) with `codegraph telemetry off` (also `CODEGRAPH_TELEMETRY=0` / `DO_NOT_TRACK=1`), see [full disclosure](https://github.com/colbymchenry/codegraph/blob/main/TELEMETRY.md). Update checks are separate again — `CODEGRAPH_NO_UPDATE_CHECK=1` disables the background release check independently of telemetry.
+**Privacy:** source parsing and the local index stay on this machine; CodeGraph's anonymous telemetry is a separate network-capable feature and is on by default. Disable it before the first invocation when required with `codegraph telemetry off`, `CODEGRAPH_TELEMETRY=0`, or `DO_NOT_TRACK=1` (never commit local settings). Disable its separate background update check with `CODEGRAPH_NO_UPDATE_CHECK=1`; see [full disclosure](https://github.com/colbymchenry/codegraph/blob/main/TELEMETRY.md).
 
 **Version policy:** the single source of truth is [`config/graph-tools-versions.json`](../config/graph-tools-versions.json) — currently pinned to `@colbymchenry/codegraph@1.6.0` under a `controlled-upgrade` policy. Don't hardcode the version elsewhere.
 
@@ -19,6 +19,8 @@ CodeGraph builds a pre-indexed semantic knowledge graph of the codebase using Tr
 ```bash
 pnpm run codegraph:bootstrap   # installs the exact pinned version from config/graph-tools-versions.json
 # equivalent manually: npm install -g @colbymchenry/codegraph@<pinned>
+# Optional privacy-first session controls, set before any CodeGraph command:
+export CODEGRAPH_TELEMETRY=0 CODEGRAPH_NO_UPDATE_CHECK=1
 ```
 
 CodeGraph is optional local developer tooling — this never adds it as a `package.json` dependency, and it bundles its own Node runtime (nothing to compile).
