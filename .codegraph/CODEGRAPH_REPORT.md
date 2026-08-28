@@ -1,62 +1,70 @@
 # CodeGraph Report
 
-**Generated:** 2026-06-03T08:20:11.251Z
+Report schema: 1
+Source fingerprint: sha256:c1d44a4509f3611922df3cddfddb56e85f81833b39170388a44599cace03287d
+Tool: codegraph
+Tool version: 1.6.0
+Generation mode: local-index (codegraph status/files)
 
 ## Status
 
 ```
-[1m
 CodeGraph Status
-[0m
-[36mProject:[0m /home/pc/StoryCraft-Studio
 
-[1mIndex Statistics:[0m
-  Files:     959
-  Nodes:     9.358
-  Edges:     20.132
-  DB Size:   17.29 MB
-  Backend:   [32mnode:sqlite — built-in (full WAL)[0m
-  Journal:   [32mwal[0m
+Project: .
 
-[1mNodes by Kind:[0m
-  import          3.564
-  constant        1.571
-  function        1.527
-  file            942
-  method          795
-  interface       403
-  type_alias      257
-  variable        198
-  class           93
-  struct          6
-  enum            1
-  enum_member     1
+Index Statistics:
+  Files:     1.405
+  Nodes:     14.847
+  Edges:     54.509
+  DB Size:   69.30 MB
+  Backend:   node:sqlite — built-in (full WAL)
+  Journal:   wal
 
-[1mFiles by Language:[0m
-  typescript      605
-  tsx             304
-  javascript      23
-  yaml            17
-  rust            8
+Nodes by Kind:
+  import          5.332
+  function        2.808
+  constant        2.478
+  file            1.384
+  method          766
+  interface       675
+  property        487
+  type_alias      365
+  variable        308
+  class           125
+  component       48
+  enum_member     39
+  struct          21
+  enum            10
+  trait           1
+
+Files by Language:
+  typescript      914
+  tsx             378
+  javascript      68
+  rust            21
+  yaml            21
   python          2
+  xml             1
 
-[32m✓[0m Index is up to date
-
-
+✓ Index is up to date
 ```
 
 ## Files by Extension
 
-- **.ts**: 605
-- **.tsx**: 304
-- **.mjs**: 17
-- **.yml**: 15
-- **.rs**: 8
+- **.ts**: 898
+- **.tsx**: 378
+- **.mjs**: 62
+- **.rs**: 21
+- **.yml**: 18
+- **.mts**: 16
 - **.js**: 4
+- **.yaml**: 3
 - **.cjs**: 2
-- **.yaml**: 2
 - **.py**: 2
+- **.xml**: 1
 
 ---
 
-*Regenerate with: `pnpm run codegraph:report`*
+*Regenerate with: `pnpm run graphs:report` (or `pnpm run codegraph:report` directly). Freshness
+check: `pnpm run graphs:status`. Package: worldscript-studio.*
