@@ -123,8 +123,12 @@ const metadata = buildMetadataBlock({
   reportSchemaVersion: 1,
 });
 
-const preamble = sections[0].body.join('\n').trim();
-const titleLine = preamble.split('\n')[0] ?? '# Graph Report';
+// Graphify infers the project name from the cwd basename, which is "main" inside this repo's
+// worktree layout (.worktrees/main) — use package.json's real name instead, and strip the
+// embedded build date so the title doesn't break determinism across day boundaries.
+const packageJson = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf-8'));
+const projectName = packageJson.name ?? 'project';
+const titleLine = `# Graph Report - ${projectName}`;
 
 const keptSectionsMarkdown = KEEP_AS_IS.map((heading) => {
   const section = findSection(sections, heading);
