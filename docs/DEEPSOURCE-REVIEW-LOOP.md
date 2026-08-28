@@ -145,11 +145,12 @@ gh api graphql -f query='mutation($t:ID!){ resolveReviewThread(input:{threadId:$
   -F t="<THREAD_NODE_ID>"
 ```
 
-`comments(first:1)` above is intentional and sufficient only for extracting the original comment's
-`databaseId` to reply into — it is not a completeness check. Before treating a thread as already
-addressed, also inspect its full content (including any later reply) via the flat paginated REST
-query in `PR-CI-MERGE-WORKFLOW.md`'s `UNRESOLVED_REVIEW_THREADS` section
-(`gh api --paginate -X GET .../pulls/PR_NUMBER/comments`).
+`comments(first:1)` above is intentional as a join key — not a completeness check — serving two
+purposes: `databaseId` to reply into, and as `ROOT_REVIEW_COMMENT_ID` for correlating this exact
+thread's replies. Before treating a thread as already addressed, join it to its full content via
+`PR-CI-MERGE-WORKFLOW.md`'s exhaustive REST query (`gh api --paginate -X GET
+.../pulls/PR_NUMBER/comments`) — the REST comment whose `id == ROOT_REVIEW_COMMENT_ID` plus every
+comment whose `in_reply_to_id == ROOT_REVIEW_COMMENT_ID` — never by `path`/`line` alone.
 
 ## 4. Validate, then fix or justify
 

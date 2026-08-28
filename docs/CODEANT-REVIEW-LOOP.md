@@ -146,12 +146,14 @@ gh api graphql --paginate \
 
 This matches the canonical exhaustive query in [`PR-CI-MERGE-WORKFLOW.md`](PR-CI-MERGE-WORKFLOW.md)'s
 `UNRESOLVED_REVIEW_THREADS` definition — keep both in sync if either changes. Its `comments(first: 1)`
-here is intentional and sufficient **only** for extracting the original comment's `databaseId` to
-reply into (step 6) — it is not a completeness check. Before treating a thread as already reconciled,
-also inspect its full content (including any later reply saying a fix is incomplete) via the second,
-flat REST query in `PR-CI-MERGE-WORKFLOW.md`'s `UNRESOLVED_REVIEW_THREADS` section
-(`gh api --paginate -X GET .../pulls/PR_NUMBER/comments`) — a `comments(first: 1)` result alone can
-hide exactly that kind of follow-up.
+here serves two legitimate join-key purposes — **not** completeness — and must never be "fixed" into a
+full-content fetch: (a) `databaseId` to reply into (step 6), and (b) as `ROOT_REVIEW_COMMENT_ID` for
+correlating this exact thread's replies. Before treating a thread as already reconciled, join it to
+its full content via `PR-CI-MERGE-WORKFLOW.md`'s exhaustive REST query
+(`gh api --paginate -X GET .../pulls/PR_NUMBER/comments`) — the REST comment whose `id ==
+ROOT_REVIEW_COMMENT_ID` plus every comment whose `in_reply_to_id == ROOT_REVIEW_COMMENT_ID` — never by
+`path`/`line` alone, which can't disambiguate multiple threads at the same location. A `comments(first:
+1)` result alone hides exactly the kind of later reply ("this fix is incomplete") that matters here.
 
 Keep the **`databaseId`** (REST comment id → for replies) and the thread **`id`** (`PRRT_…` →
 for `resolveReviewThread`) paired for each finding.

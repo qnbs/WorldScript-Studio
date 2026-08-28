@@ -62,11 +62,21 @@ Do not toggle the repository's `delete_branch_on_merge` setting as part of a mer
 
 **Review-comment completeness requires checking three independent channels, every PR, before declaring "review-clean" or merging** — a bot can and does use more than one channel on the very same PR. The three channels are **not interchangeable and do not share a resolution mechanism** — track each with its own explicit state:
 
-- **`UNRESOLVED_REVIEW_THREADS = 0`** — two separate exhaustive queries, not one: (1) **thread resolution state**, GraphQL `reviewThreads`, paginated exhaustively (a single `first:50`/`first:100` page can silently miss an unresolved thread on a PR with a long review history — this PR's own review wave has already exceeded 50); (2) **thread content**, including any later reply saying a fix is incomplete — a nested `comments(first: 1)` inside the query above only exposes each thread's *original* comment, silently hiding follow-ups, and genuinely paginating that nested connection per-thread is needlessly complex. Instead fetch the flat, already-paginated REST endpoint that returns every inline review comment and reply across the whole PR, and cross-reference by `path`/`line`/thread membership as needed. This is the *only* channel with a resolvable state; clear it with `resolveReviewThread` (GraphQL), never applied to the other two channels below. A clean state requires **both** queries below, not just the first:
+**Fail-closed pagination — a fundamental rule across all of the below:** an exhaustive fetch that
+partially succeeds (an early page fetched, a later page's request failing) must never be treated as
+a complete, clean result. `PARTIAL PAGINATION = FAILURE/UNKNOWN, NEVER CLEAN`. `set -o pipefail` (or
+checking `PIPESTATUS[0]`) is required wherever a paginated `gh api` call is piped into anything —
+an ordinary shell without it reports only the final pipeline stage's exit status, so `jq` happily
+aggregating whatever partial pages arrived before an upstream failure would otherwise look like
+success. If any stage of any channel's fetch fails, that channel's state is `UNKNOWN`/`FAILED`, never
+`= YES` or `= 0`.
+
+- **`UNRESOLVED_REVIEW_THREADS = 0`** — two separate exhaustive queries, not one: (1) **thread resolution state**, GraphQL `reviewThreads`, paginated exhaustively (a single `first:50`/`first:100` page can silently miss an unresolved thread on a PR with a long review history — this PR's own review wave has already exceeded 50); (2) **thread content**, including any later reply saying a fix is incomplete — genuinely paginating the nested `comments` connection per-thread is needlessly complex, so content comes from the flat, already-paginated REST endpoint instead (below). `comments(first: 1)` in query (1) is retained, but **only** as a join key — it is explicitly *not* a completeness mechanism, and must never be "fixed" back into a full-content fetch:
 
 ```bash
-# (1) Thread resolution state — walk every page via pageInfo.hasNextPage/endCursor
-# (gh api graphql --paginate follows this cursor convention automatically)
+# (1) Thread resolution state + ROOT_REVIEW_COMMENT_ID (join key only, not content inspection) —
+# walk every page via pageInfo.hasNextPage/endCursor (gh api graphql --paginate does this automatically).
+# Fails closed: a non-zero exit here means UNRESOLVED_REVIEW_THREADS is UNKNOWN, not 0.
 gh api graphql --paginate \
   -f owner="qnbs" -f name="WorldScript-Studio" -F number=<PR_NUMBER> \
   -f query='
@@ -74,7 +84,8 @@ gh api graphql --paginate \
       repository(owner: $owner, name: $name) {
         pullRequest(number: $number) {
           reviewThreads(first: 100, after: $endCursor) {
-            nodes { id isResolved isOutdated path line }
+            nodes { id isResolved isOutdated path line
+              comments(first: 1) { nodes { databaseId } } }
             pageInfo { hasNextPage endCursor }
           }
         }
@@ -83,26 +94,45 @@ gh api graphql --paginate \
 ```
 
 ```bash
-# (2) Full inline comment/reply content, including any later reply on a thread —
-# this REST endpoint is already flat and paginated, no nested per-thread pagination needed.
-gh api --paginate -X GET "repos/<owner>/<repo>/pulls/<PR>/comments" -f per_page=100
+# (2) Full inline comment/reply content, fail-closed — this REST endpoint is already flat and
+# paginated (no nested per-thread pagination needed), joined to (1) via ROOT_REVIEW_COMMENT_ID.
+set -o pipefail
+tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT
+if ! gh api --paginate -X GET "repos/<owner>/<repo>/pulls/<PR>/comments" -f per_page=100 >"$tmp"; then
+  echo "REVIEW_CHANNEL_FETCH_FAILED"; exit 1
+fi
+jq -s 'add' "$tmp"
 ```
 
-A thread reported `isResolved: false` by query (1) whose latest reply (found via query (2), matched
-on `path`/`line`/`in_reply_to_id`) says the fix is incomplete is **not** actionable-clean just
-because the thread exists — read the actual latest content before treating a thread as reconciled.
+**Join:** for each GraphQL thread, `ROOT_REVIEW_COMMENT_ID = comments.nodes[0].databaseId`. From
+query (2)'s exhaustive result, that thread's full content is the REST comment whose `id ==
+ROOT_REVIEW_COMMENT_ID` **plus** every comment whose `in_reply_to_id == ROOT_REVIEW_COMMENT_ID` — never
+correlate by `path`/`line` alone, which cannot disambiguate multiple threads on the same location. A
+thread reported `isResolved: false` whose latest joined reply says the fix is incomplete is **not**
+actionable-clean just because the thread exists — read the complete joined content before treating a
+thread as reconciled.
 
-- **`NO_ACTIONABLE_TOP_LEVEL_ISSUE_COMMENTS = YES`** — plain top-level comments (qodo's real findings live here). These have no GraphQL-resolve mechanism; inspect each, fix/dispose of it, reply where appropriate, and confirm none remain actionable — do not call `resolveReviewThread` on them, there is no thread to resolve. **Paginate exhaustively** — a bare call inspects only the first REST page and can miss a later finding:
+- **`NO_ACTIONABLE_TOP_LEVEL_ISSUE_COMMENTS = YES`** — plain top-level comments (qodo's real findings live here). These have no GraphQL-resolve mechanism; inspect each, fix/dispose of it, reply where appropriate, and confirm none remain actionable — do not call `resolveReviewThread` on them, there is no thread to resolve. **Paginate exhaustively and fail closed** — a bare call inspects only the first REST page, and an unchecked pipe can silently accept a partial result:
   ```bash
-  gh api --paginate -X GET "repos/<owner>/<repo>/issues/<PR>/comments" -f per_page=100
+  set -o pipefail
+  tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT
+  if ! gh api --paginate -X GET "repos/<owner>/<repo>/issues/<PR>/comments" -f per_page=100 >"$tmp"; then
+    echo "REVIEW_CHANNEL_FETCH_FAILED"; exit 1
+  fi
+  jq -s 'add' "$tmp"
   ```
-- **`NO_ACTIONABLE_REVIEW_BODY_FINDINGS = YES`** — reading each review's `.body` field in full (CodeRabbit's nitpick/outside-diff-range sections live here, collapsed, invisible to both of the above). Same treatment as top-level comments: inspect, dispose, reply where useful, confirm nothing actionable remains — no resolve mutation applies here either. **Paginate exhaustively** here too:
+- **`NO_ACTIONABLE_REVIEW_BODY_FINDINGS = YES`** — reading each review's `.body` field in full (CodeRabbit's nitpick/outside-diff-range sections live here, collapsed, invisible to both of the above). Same treatment as top-level comments: inspect, dispose, reply where useful, confirm nothing actionable remains — no resolve mutation applies here either. **Paginate exhaustively and fail closed** here too:
   ```bash
-  gh api --paginate -X GET "repos/<owner>/<repo>/pulls/<PR>/reviews" -f per_page=100
+  set -o pipefail
+  tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT
+  if ! gh api --paginate -X GET "repos/<owner>/<repo>/pulls/<PR>/reviews" -f per_page=100 >"$tmp"; then
+    echo "REVIEW_CHANNEL_FETCH_FAILED"; exit 1
+  fi
+  jq -s 'add' "$tmp"
   ```
-  `gh api --paginate` applies `--jq` to *each page separately* — `--slurp` cannot be combined with `--jq` in the same `gh api` invocation, so there is no single-command way to aggregate. To evaluate one verdict across every page, don't pass `--jq` to `gh api` at all; pipe its raw paginated stream into a separate `jq -s` process instead: `gh api --paginate -X GET "<endpoint>" -f per_page=100 | jq -s 'add'` — the external `jq -s` (slurp) collects every page's array into one before the aggregate filter runs.
+  (`gh api --paginate` applies any `--jq` filter to *each page separately*, and `--slurp` cannot combine with `--jq` in the same invocation — that's why aggregation always happens in a separate `jq -s` process reading a completed, verified-successful file, never in a single piped `gh api ... | jq -s` one-liner that a shell without `pipefail` would report as successful even on a mid-stream failure.)
 
-None of the three implies the others are clean; all three must independently reach their state above — via **exhaustive pagination in all three**, not a first-page sample — before the PR is review-complete. **Reviewer capability/channels are observed live on each PR, never assumed from a static bot roster** — the roster above is a hint of what's been seen before, not an API contract (e.g. CodeAnt's roster entry lists status checks, but it has also posted a genuine inline review thread, confirmed on PR #538); check all three channels every time regardless of what a given bot has "usually" done, and don't skip re-triggering or reconciling a bot just because the roster doesn't mention that channel for it.
+None of the three implies the others are clean; all three must independently reach their state above — via **exhaustive, fail-closed pagination in all three**, not a first-page sample — before the PR is review-complete. **Reviewer capability/channels are observed live on each PR, never assumed from a static bot roster** — the roster above is a hint of what's been seen before, not an API contract (e.g. CodeAnt's roster entry lists status checks, but it has also posted a genuine inline review thread, confirmed on PR #538); check all three channels every time regardless of what a given bot has "usually" done, and don't skip re-triggering or reconciling a bot just because the roster doesn't mention that channel for it.
 
 **A review bot's silence is not the same as a clean pass.** Rate-limited, quota-exhausted, or never-triggered is a different state than "reviewed and found nothing" — verify at least one bot produced *substantive* output (its actual review body/comment text, not just a green check-run) before merging, especially for security/sandbox/IPC/FFI/packaging-adjacent changes. If every independent reviewer is simultaneously silent on such a PR, that's a gap worth surfacing, not something to proceed past as if the loop were satisfied.
 
