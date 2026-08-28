@@ -225,6 +225,36 @@ describe('codegraph-report sanitization', () => {
     ).toBe('STALE');
   });
 
+  it('rejects a truncated Graphify report with otherwise current metadata', () => {
+    const report =
+      '# Graph Report - project\n\nReport schema: 1\nSource fingerprint: sha256:current\n' +
+      'Tool: graphify\nTool version: 0.9.51\nGeneration mode: test\n\n' +
+      '## Summary\n- valid\n\n## Top 1 Communities by size (of 1 total)\n\n' +
+      '## Knowledge Gaps\n- none\n';
+    const metadata = {
+      exists: true,
+      schema: '1',
+      toolVersion: '0.9.51',
+      fingerprint: 'sha256:current',
+      tool: 'graphify',
+      text: report,
+    };
+    expect(
+      graphsCli.reportFreshness(
+        metadata,
+        { reportSchemaVersion: 1, expectedVersion: '0.9.51' },
+        'sha256:current',
+      ),
+    ).toBe('FRESH');
+    expect(
+      graphsCli.reportFreshness(
+        { ...metadata, text: report.replace('\n\n## Knowledge Gaps\n- none\n', '') },
+        { reportSchemaVersion: 1, expectedVersion: '0.9.51' },
+        'sha256:current',
+      ),
+    ).toBe('REPORT_INVALID');
+  });
+
   it('shares exact version matching semantics with graph tooling', () => {
     expect(matchesExactVersion('codegraph 1.6.0', '1.6.0')).toBe(true);
     expect(matchesExactVersion('codegraph 1.6.01', '1.6.0')).toBe(false);
