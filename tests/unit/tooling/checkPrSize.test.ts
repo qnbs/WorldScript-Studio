@@ -1,14 +1,101 @@
 import { describe, expect, it } from 'vitest';
+import type { NumstatRow } from '../../../scripts/check-pr-size.d.mts';
 import {
   computeGovernedFileCount,
   computeMeaningfulLines,
+  computeNonExemptMeaningfulLines,
+  computeSupplementalReportLines,
   evaluatePrSize,
   formatReport,
   isAllDocs,
   parseNumstat,
   selectSeverity,
 } from '../../../scripts/check-pr-size.mjs';
-import type { NumstatRow } from '../../../scripts/check-pr-size.d.mts';
+
+const exception = {
+  id: 'test-exception',
+  repository: 'qnbs/WorldScript-Studio',
+  prNumber: 539,
+  baseRef: 'main',
+  headRef: 'feature',
+  maxFiles: 30,
+  maxCommits: 15,
+  maxNonExemptMeaningfulLines: 3000,
+  supplementalLineAllowances: [
+    { path: 'graphify-out/GRAPH_REPORT.md', maxMeaningfulLines: 5050 },
+    { path: '.codegraph/CODEGRAPH_REPORT.md', maxMeaningfulLines: 150 },
+  ],
+  allowedPaths: [
+    'scripts/tool.mjs',
+    'graphify-out/GRAPH_REPORT.md',
+    '.codegraph/CODEGRAPH_REPORT.md',
+  ],
+  reason: 'test',
+};
+
+function exceptionEvent() {
+  return {
+    GITHUB_EVENT_NAME: 'pull_request',
+    GITHUB_EVENT_PATH: '/tmp/pr-event.json',
+  };
+}
+
+function pullRequestEvent({
+  repository = exception.repository,
+  number = exception.prNumber,
+  baseRef = exception.baseRef,
+  headRef = exception.headRef,
+} = {}) {
+  return {
+    repository: { full_name: repository },
+    number,
+    pull_request: { base: { ref: baseRef }, head: { ref: headRef } },
+  };
+}
+
+function exceptionDependencies({
+  rows,
+  changedPaths = rows.map((row) => row.path),
+  registry = { schemaVersion: 1, exceptions: [exception] },
+  event = pullRequestEvent(),
+  commitCount = 4,
+  registryExists = true,
+  rawRegistry,
+}: {
+  rows: NumstatRow[];
+  changedPaths?: string[];
+  registry?: unknown;
+  event?: unknown;
+  commitCount?: number;
+  registryExists?: boolean;
+  rawRegistry?: string;
+}) {
+  const numstat = rows.map((row) => `${row.added}\t${row.removed}\t${row.path}\x00`).join('');
+  const spawnSync = (_command: string, args: string[]) => {
+    if (args[0] === 'rev-parse' && args[1] === '--git-path')
+      return { status: 1, stdout: '', stderr: '' };
+    if (args[0] === 'diff' && args.includes('--numstat'))
+      return { status: 0, stdout: numstat, stderr: '' };
+    if (args[0] === 'diff' && args.includes('--name-only')) {
+      return { status: 0, stdout: `${changedPaths.join('\x00')}\x00`, stderr: '' };
+    }
+    if (args[0] === 'rev-list') return { status: 0, stdout: `${commitCount}\n`, stderr: '' };
+    if (args[0] === 'rev-parse' && args[1] === '--verify')
+      return { status: 0, stdout: 'base\n', stderr: '' };
+    if (args[0] === 'cat-file') {
+      return { status: registryExists ? 0 : 1, stdout: '', stderr: '' };
+    }
+    if (args[0] === 'show') {
+      return { status: 0, stdout: rawRegistry ?? JSON.stringify(registry), stderr: '' };
+    }
+    return { status: 1, stdout: '', stderr: 'unexpected git call' };
+  };
+  return {
+    spawnSync,
+    env: exceptionEvent(),
+    readFileSync: () => JSON.stringify(event),
+  };
+}
 
 // QNBS-v3: -z is NUL-delimited (git diff --numstat -z), not newline-delimited — matches real output.
 describe('parseNumstat', () => {
@@ -41,7 +128,7 @@ describe('parseNumstat', () => {
     expect(rows).toEqual([{ path: 'src/new.ts', added: 3, removed: 1 }]);
   });
 
-  it('preserves raw UTF-8 paths instead of git\'s octal-quoted representation', () => {
+  it("preserves raw UTF-8 paths instead of git's octal-quoted representation", () => {
     // -z output is raw UTF-8; the quoted "docs/\303\251.md" form only appears without -z.
     const rows = parseNumstat('1\t0\tdocs/spécial.md\x00');
     expect(rows).toEqual([{ path: 'docs/spécial.md', added: 1, removed: 0 }]);
@@ -94,7 +181,9 @@ describe('computeMeaningfulLines', () => {
 
   // QNBS-v3: only index.json mirrors community-templates/ — content-guard.mjs never touches the locale variants.
   it('zeroes out only the content-guard-mirrored community-templates/index.json', () => {
-    const rows: NumstatRow[] = [{ path: 'public/community-templates/index.json', added: 300, removed: 300 }];
+    const rows: NumstatRow[] = [
+      { path: 'public/community-templates/index.json', added: 300, removed: 300 },
+    ];
     expect(computeMeaningfulLines(rows)).toBe(0);
   });
 
@@ -178,19 +267,34 @@ describe('selectSeverity', () => {
   });
 
   it('returns target when over target but within hard (normal profile)', () => {
-    const result = selectSeverity({ fileCount: 10, lineCount: 500, commitCount: 7, allDocs: false });
+    const result = selectSeverity({
+      fileCount: 10,
+      lineCount: 500,
+      commitCount: 7,
+      allDocs: false,
+    });
     expect(result.tier).toBe('target');
     expect(result.blocking).toBe(false);
   });
 
   it('returns hard when over hard but within absolute (normal profile)', () => {
-    const result = selectSeverity({ fileCount: 25, lineCount: 500, commitCount: 7, allDocs: false });
+    const result = selectSeverity({
+      fileCount: 25,
+      lineCount: 500,
+      commitCount: 7,
+      allDocs: false,
+    });
     expect(result.tier).toBe('hard');
     expect(result.blocking).toBe(false);
   });
 
   it('returns absolute (blocking) when over the absolute ceiling', () => {
-    const result = selectSeverity({ fileCount: 35, lineCount: 500, commitCount: 7, allDocs: false });
+    const result = selectSeverity({
+      fileCount: 35,
+      lineCount: 500,
+      commitCount: 7,
+      allDocs: false,
+    });
     expect(result.tier).toBe('absolute');
     expect(result.blocking).toBe(true);
   });
@@ -218,7 +322,12 @@ describe('selectSeverity', () => {
 
 describe('formatReport', () => {
   it('reports "within target" for an ok result', () => {
-    const severity = selectSeverity({ fileCount: 3, lineCount: 100, commitCount: 2, allDocs: false });
+    const severity = selectSeverity({
+      fileCount: 3,
+      lineCount: 100,
+      commitCount: 2,
+      allDocs: false,
+    });
     const report = formatReport({
       fileCount: 3,
       totalFileCount: 3,
@@ -231,7 +340,12 @@ describe('formatReport', () => {
   });
 
   it('reports a blocking message for the absolute tier', () => {
-    const severity = selectSeverity({ fileCount: 35, lineCount: 500, commitCount: 7, allDocs: false });
+    const severity = selectSeverity({
+      fileCount: 35,
+      lineCount: 500,
+      commitCount: 7,
+      allDocs: false,
+    });
     const report = formatReport({
       fileCount: 35,
       totalFileCount: 35,
@@ -245,7 +359,12 @@ describe('formatReport', () => {
   });
 
   it('reports a non-blocking suggestion for the target/hard tiers', () => {
-    const severity = selectSeverity({ fileCount: 25, lineCount: 500, commitCount: 7, allDocs: false });
+    const severity = selectSeverity({
+      fileCount: 25,
+      lineCount: 500,
+      commitCount: 7,
+      allDocs: false,
+    });
     const report = formatReport({
       fileCount: 25,
       totalFileCount: 25,
@@ -260,7 +379,12 @@ describe('formatReport', () => {
 
   // QNBS-v3: surfaces the excluded generated count so the report isn't silently smaller than the real diff.
   it('notes the total file count when it exceeds the governed count', () => {
-    const severity = selectSeverity({ fileCount: 3, lineCount: 100, commitCount: 2, allDocs: false });
+    const severity = selectSeverity({
+      fileCount: 3,
+      lineCount: 100,
+      commitCount: 2,
+      allDocs: false,
+    });
     const report = formatReport({
       fileCount: 3,
       totalFileCount: 41,
@@ -288,7 +412,7 @@ describe('evaluatePrSize', () => {
       if (args[0] === 'diff') return { ...okGit(), stdout: '10\t2\tscripts/foo.mjs\x00' };
       return { ...okGit(), stdout: '2\n' };
     };
-    const result = evaluatePrSize('base', 'head', { spawnSync });
+    const result = evaluatePrSize('base', 'head', { spawnSync, env: {} });
     expect(result.ok).toBe(true);
     expect(result.fileCount).toBe(1);
     expect(result.lineCount).toBe(12);
@@ -301,7 +425,7 @@ describe('evaluatePrSize', () => {
       if (args.includes('--git-path')) return { status: 1, stdout: '', stderr: '' };
       return { status: 1, stdout: '', stderr: 'fatal: bad range' };
     };
-    const result = evaluatePrSize('base', 'head', { spawnSync });
+    const result = evaluatePrSize('base', 'head', { spawnSync, env: {} });
     expect(result.ok).toBe(false);
     expect(result.error).toBeTruthy();
   });
@@ -312,13 +436,18 @@ describe('evaluatePrSize', () => {
       if (args[0] === 'diff') return { ...okGit(), stdout: '10\t2\tscripts/foo.mjs\x00' };
       return { status: 1, stdout: '', stderr: 'fatal: bad range' };
     };
-    const result = evaluatePrSize('base', 'head', { spawnSync });
+    const result = evaluatePrSize('base', 'head', { spawnSync, env: {} });
     expect(result.ok).toBe(false);
   });
 
   it('fails closed (ok: false) on a spawn error (e.g. git not found)', () => {
-    const spawnSync = () => ({ status: null, error: new Error('spawn git ENOENT'), stdout: '', stderr: '' });
-    const result = evaluatePrSize('base', 'head', { spawnSync });
+    const spawnSync = () => ({
+      status: null,
+      error: new Error('spawn git ENOENT'),
+      stdout: '',
+      stderr: '',
+    });
+    const result = evaluatePrSize('base', 'head', { spawnSync, env: {} });
     expect(result.ok).toBe(false);
   });
 
@@ -336,11 +465,219 @@ describe('evaluatePrSize', () => {
       if (args[0] === 'diff') return { ...okGit(), stdout: numstat };
       return { ...okGit(), stdout: '1\n' };
     };
-    const result = evaluatePrSize('base', 'head', { spawnSync });
+    const result = evaluatePrSize('base', 'head', { spawnSync, env: {} });
     expect(result.ok).toBe(true);
     expect(result.totalFileCount).toBe(38);
     expect(result.fileCount).toBe(19);
     expect(result.severity?.tier).not.toBe('absolute');
+  });
+
+  describe('base-governed supplemental report budgets', () => {
+    it('partitions ordinary lines from exact report-path allowances', () => {
+      const rows: NumstatRow[] = [
+        { path: 'scripts/tool.mjs', added: 2900, removed: 0 },
+        { path: 'graphify-out/GRAPH_REPORT.md', added: 4569, removed: 0 },
+        { path: '.codegraph/CODEGRAPH_REPORT.md', added: 92, removed: 0 },
+      ];
+      expect(computeNonExemptMeaningfulLines(rows, exception)).toBe(2900);
+      expect(computeSupplementalReportLines(rows, exception)).toEqual({
+        'graphify-out/GRAPH_REPORT.md': 4569,
+        '.codegraph/CODEGRAPH_REPORT.md': 92,
+      });
+    });
+
+    it('passes valid report churn while keeping non-exempt lines under 3000', () => {
+      const rows: NumstatRow[] = [
+        { path: 'scripts/tool.mjs', added: 2900, removed: 0 },
+        { path: 'graphify-out/GRAPH_REPORT.md', added: 4569, removed: 0 },
+        { path: '.codegraph/CODEGRAPH_REPORT.md', added: 92, removed: 0 },
+      ];
+      const result = evaluatePrSize('base', 'head', exceptionDependencies({ rows }));
+      expect(result.ok).toBe(true);
+      expect(result.severity?.blocking).toBe(false);
+      expect(result.exception).toMatchObject({
+        applied: true,
+        id: 'test-exception',
+        identityMatch: true,
+        pathScopeMatch: true,
+        baseGoverned: true,
+      });
+      expect(result.report).toContain('PR_SIZE_EXCEPTION=APPLIED');
+      expect(result.report).toContain('outcome=within target');
+      expect(result.report).toContain('NON_EXEMPT_MEANINGFUL_LINES=2900/3000');
+    });
+
+    it('blocks when non-exempt lines exceed the ordinary absolute ceiling', () => {
+      const rows: NumstatRow[] = [{ path: 'scripts/tool.mjs', added: 3001, removed: 0 }];
+      const result = evaluatePrSize('base', 'head', exceptionDependencies({ rows }));
+      expect(result.severity?.blocking).toBe(true);
+      expect(result.report).toContain('NON_EXEMPT_MEANINGFUL_LINES=3001/3000');
+    });
+
+    it('blocks when a report exceeds its own supplemental allowance', () => {
+      const rows: NumstatRow[] = [
+        { path: 'graphify-out/GRAPH_REPORT.md', added: 5051, removed: 0 },
+      ];
+      const result = evaluatePrSize('base', 'head', exceptionDependencies({ rows }));
+      expect(result.severity?.blocking).toBe(true);
+      expect(result.report).toContain('graphify-out/GRAPH_REPORT.md=5051/5050');
+    });
+
+    it('cannot transfer unused allowance between report paths', () => {
+      const rows: NumstatRow[] = [
+        { path: 'graphify-out/GRAPH_REPORT.md', added: 5050, removed: 0 },
+        { path: '.codegraph/CODEGRAPH_REPORT.md', added: 151, removed: 0 },
+      ];
+      const result = evaluatePrSize('base', 'head', exceptionDependencies({ rows }));
+      expect(result.severity?.blocking).toBe(true);
+    });
+
+    it('rejects an out-of-scope path, including a same-named report elsewhere', () => {
+      const rows: NumstatRow[] = [{ path: 'other/GRAPH_REPORT.md', added: 4000, removed: 0 }];
+      const result = evaluatePrSize('base', 'head', exceptionDependencies({ rows }));
+      expect(result.exception).toMatchObject({
+        applied: false,
+        identityMatch: true,
+        pathScopeMatch: false,
+      });
+      expect(result.severity?.blocking).toBe(true);
+    });
+
+    it('rejects rename-style scope smuggling through the no-renames path list', () => {
+      const rows: NumstatRow[] = [{ path: 'graphify-out/GRAPH_REPORT.md', added: 10, removed: 10 }];
+      const result = evaluatePrSize(
+        'base',
+        'head',
+        exceptionDependencies({
+          rows,
+          changedPaths: ['old/GRAPH_REPORT.md', 'graphify-out/GRAPH_REPORT.md'],
+        }),
+      );
+      expect(result.exception?.pathScopeMatch).toBe(false);
+    });
+
+    it.each([
+      ['repository', pullRequestEvent({ repository: 'other/repo' })],
+      ['PR number', pullRequestEvent({ number: 540 })],
+      ['base ref', pullRequestEvent({ baseRef: 'develop' })],
+      ['head ref', pullRequestEvent({ headRef: 'other' })],
+    ])('does not apply for a mismatched %s', (_label, event) => {
+      const rows: NumstatRow[] = [{ path: 'scripts/tool.mjs', added: 4000, removed: 0 }];
+      const result = evaluatePrSize('base', 'head', exceptionDependencies({ rows, event }));
+      expect(result.exception?.applied).toBe(false);
+      expect(result.severity?.blocking).toBe(true);
+    });
+
+    it('does not apply without a pull_request event identity', () => {
+      const rows: NumstatRow[] = [{ path: 'scripts/tool.mjs', added: 4000, removed: 0 }];
+      const result = evaluatePrSize('base', 'head', {
+        ...exceptionDependencies({ rows }),
+        env: {},
+      });
+      expect(result.exception?.applied).toBe(false);
+      expect(result.severity?.blocking).toBe(true);
+    });
+
+    it('ignores a registry that exists only on the PR head', () => {
+      const rows: NumstatRow[] = [{ path: 'scripts/tool.mjs', added: 4000, removed: 0 }];
+      const result = evaluatePrSize(
+        'base',
+        'head',
+        exceptionDependencies({ rows, registryExists: false }),
+      );
+      expect(result.exception?.applied).toBe(false);
+      expect(result.severity?.blocking).toBe(true);
+    });
+
+    it('fails closed for a malformed base registry', () => {
+      const rows: NumstatRow[] = [{ path: 'scripts/tool.mjs', added: 10, removed: 0 }];
+      const result = evaluatePrSize(
+        'base',
+        'head',
+        exceptionDependencies({ rows, rawRegistry: '{' }),
+      );
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain('invalid config/pr-size-exceptions.json');
+    });
+
+    it('reports duplicate supplemental paths separately', () => {
+      const rows: NumstatRow[] = [{ path: 'scripts/tool.mjs', added: 10, removed: 0 }];
+      const duplicateAllowance = {
+        ...exception,
+        supplementalLineAllowances: [
+          { path: 'scripts/tool.mjs', maxMeaningfulLines: 10 },
+          { path: 'scripts/tool.mjs', maxMeaningfulLines: 20 },
+        ],
+      };
+      const result = evaluatePrSize(
+        'base',
+        'head',
+        exceptionDependencies({
+          rows,
+          registry: { schemaVersion: 1, exceptions: [duplicateAllowance] },
+        }),
+      );
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain('duplicate supplemental path scripts/tool.mjs');
+      expect(result.error).not.toContain('is not in allowedPaths');
+    });
+
+    it('reports a supplemental path outside allowedPaths separately', () => {
+      const rows: NumstatRow[] = [{ path: 'scripts/tool.mjs', added: 10, removed: 0 }];
+      const outOfScopeAllowance = {
+        ...exception,
+        supplementalLineAllowances: [{ path: 'other/GRAPH_REPORT.md', maxMeaningfulLines: 10 }],
+      };
+      const result = evaluatePrSize(
+        'base',
+        'head',
+        exceptionDependencies({
+          rows,
+          registry: { schemaVersion: 1, exceptions: [outOfScopeAllowance] },
+        }),
+      );
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain(
+        'supplemental path other/GRAPH_REPORT.md is not in allowedPaths',
+      );
+      expect(result.error).not.toContain('duplicate supplemental path');
+    });
+
+    it('fails closed for duplicate matching identities', () => {
+      const rows: NumstatRow[] = [{ path: 'scripts/tool.mjs', added: 10, removed: 0 }];
+      const duplicate = { ...exception, id: 'second-test-exception' };
+      const result = evaluatePrSize(
+        'base',
+        'head',
+        exceptionDependencies({
+          rows,
+          registry: { schemaVersion: 1, exceptions: [exception, duplicate] },
+        }),
+      );
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain('ambiguous');
+    });
+
+    it('still enforces the exception file and commit ceilings', () => {
+      const rows: NumstatRow[] = [
+        { path: 'scripts/tool.mjs', added: 10, removed: 0 },
+        { path: 'graphify-out/GRAPH_REPORT.md', added: 10, removed: 0 },
+        { path: '.codegraph/CODEGRAPH_REPORT.md', added: 10, removed: 0 },
+      ];
+      const narrow = { ...exception, maxFiles: 2, allowedPaths: [...exception.allowedPaths] };
+      const tooManyFiles = evaluatePrSize(
+        'base',
+        'head',
+        exceptionDependencies({ rows, registry: { schemaVersion: 1, exceptions: [narrow] } }),
+      );
+      expect(tooManyFiles.severity?.blocking).toBe(true);
+      const tooManyCommits = evaluatePrSize(
+        'base',
+        'head',
+        exceptionDependencies({ rows, commitCount: 16 }),
+      );
+      expect(tooManyCommits.severity?.blocking).toBe(true);
+    });
   });
 });
 
@@ -396,7 +733,11 @@ describe('getChangedFilesNumstat (gitattributes evasion protection, real git rep
         encoding: 'utf8',
       });
       expect(child.status).toBe(0);
-      const rows = JSON.parse(child.stdout) as Array<{ path: string; added: number; removed: number }>;
+      const rows = JSON.parse(child.stdout) as Array<{
+        path: string;
+        added: number;
+        removed: number;
+      }>;
       const revealedRow = rows.find((row) => row.path === 'file.txt');
       expect(revealedRow?.added).toBeGreaterThan(0);
 
