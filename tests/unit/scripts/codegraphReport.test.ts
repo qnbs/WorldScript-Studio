@@ -1,12 +1,18 @@
 // @vitest-environment node
 
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 // QNBS-v3: focused tests protect committed-report privacy, freshness, and strict orchestration.
-import { redactPaths, sanitize, validateIndexStatus } from '../../../scripts/codegraph-report.mjs';
-import { matchesExactVersion } from '../../../scripts/graphSourceFingerprint.mjs';
+import {
+  formatExtensionLines,
+  redactPaths,
+  sanitize,
+  validateFileList,
+  validateIndexStatus,
+} from '../../../scripts/codegraph-report.mjs';
+import { ROOT } from '../../../scripts/graphSourceFingerprint.mjs';
 
 const graphsCliModulePath = ['..', '..', '..', 'scripts', 'graphs-cli.mjs'].join('/');
 const graphsCli = (await import(graphsCliModulePath)) as unknown as {
@@ -16,6 +22,20 @@ const graphsCli = (await import(graphsCliModulePath)) as unknown as {
     reportStatus: number;
     reportsFresh: boolean;
   }) => string | null;
+  versionProbeStatus: (result: {
+    status: number | null;
+    stdout?: string;
+    stderr?: string;
+    error?: { code?: string };
+  }) => string;
+  shouldSkipGraphifyUpdate: (args: string[], env?: NodeJS.ProcessEnv) => boolean;
+  prepareGraphifyReportBackup: (reportPath?: string, backupPath?: string) => boolean;
+  cleanupGraphifyEphemeralOutputs: (outputDir?: string) => void;
+  restoreGraphifyReportBackup: (
+    hadReport: boolean,
+    reportPath?: string,
+    backupPath?: string,
+  ) => void;
   reportFreshness: (
     meta: {
       exists: boolean;
@@ -25,7 +45,7 @@ const graphsCli = (await import(graphsCliModulePath)) as unknown as {
       tool: string;
       text: string;
     },
-    policy: { reportSchemaVersion: number; expectedVersion: string },
+    policy: { reportSchemaVersion: number; expectedVersion: string; expectedTool: string },
     fingerprint: string,
   ) => string;
 };
@@ -33,7 +53,11 @@ const graphifyReport = (await import(
   ['..', '..', '..', 'scripts', 'graphify-report.mjs'].join('/')
 )) as {
   recoverOrphanedCompactReport: (reportPath: string, backupPath: string) => boolean;
+  validateNativeGraphifyReport: (markdown: string) => boolean;
 };
+const graphifyBootstrap = (await import(
+  ['..', '..', '..', 'scripts', 'graphify-bootstrap.mjs'].join('/')
+)) as unknown as { graphifyVersionCommand: (tool: string) => string[] };
 
 const temporaryDirectories: string[] = [];
 afterEach(() => {
@@ -41,72 +65,82 @@ afterEach(() => {
     rmSync(directory, { recursive: true, force: true });
 });
 
+type ReportMetadata = Parameters<typeof graphsCli.reportFreshness>[0];
+const policy = { reportSchemaVersion: 1 };
+const reportMetadata = (
+  tool: string,
+  toolVersion: string,
+  text: string,
+  fingerprint = 'sha256:current',
+): ReportMetadata => ({ exists: true, schema: '1', toolVersion, fingerprint, tool, text });
+const reportFreshness = (
+  metadata: ReportMetadata,
+  expectedVersion: string,
+  fingerprint = 'sha256:current',
+  expectedTool = metadata.tool,
+) => graphsCli.reportFreshness(metadata, { ...policy, expectedVersion, expectedTool }, fingerprint);
+
 describe('codegraph-report sanitization', () => {
+  it('counts prototype-named extensions without reading inherited properties', () => {
+    expect(formatExtensionLines([{ path: 'one.constructor' }, { path: 'two.constructor' }])).toBe(
+      '- **.constructor**: 2',
+    );
+  });
+
   describe('sanitize (ANSI stripping)', () => {
-    it('strips ANSI color escape codes', () => {
-      const colored = '\x1b[32m✓\x1b[0m Indexed 260 files';
-      expect(sanitize(colored)).toBe('✓ Indexed 260 files');
-    });
-
-    it('strips multiple ANSI sequences in one string', () => {
-      const colored = '\x1b[1m\x1b[36mStatus\x1b[0m: \x1b[32mhealthy\x1b[0m';
-      expect(sanitize(colored)).toBe('Status: healthy');
-    });
-
-    it('leaves plain text untouched', () => {
-      expect(sanitize('no color codes here')).toBe('no color codes here');
-    });
-
-    it('strips non-color CSI and OSC control sequences', () => {
-      expect(sanitize('before\x1b[2Kafter\x1b]0;secret title\x07done')).toBe('beforeafterdone');
-    });
-
-    it('strips OSC sequences terminated by ST', () => {
-      expect(sanitize('before\x1b]0;secret title\x1b\\after')).toBe('beforeafter');
-    });
+    it.each([
+      ['color', '\x1b[32m✓\x1b[0m Indexed 260 files', '✓ Indexed 260 files'],
+      [
+        'multiple colors',
+        '\x1b[1m\x1b[36mStatus\x1b[0m: \x1b[32mhealthy\x1b[0m',
+        'Status: healthy',
+      ],
+      ['plain text', 'no color codes here', 'no color codes here'],
+      ['non-color CSI and OSC', 'before\x1b[2Kafter\x1b]0;secret title\x07done', 'beforeafterdone'],
+      ['OSC terminated by ST', 'before\x1b]0;secret title\x1b\\after', 'beforeafter'],
+    ])('sanitizes %s', (_label, input, expected) => expect(sanitize(input)).toBe(expected));
   });
 
   describe('redactPaths (absolute-path sanitization)', () => {
-    it('redacts the repo root to a relative dot', () => {
-      const text = 'Indexed /home/pc/WorldScript-Studio/.worktrees/main/services/foo.ts';
-      const redacted = redactPaths(text, {
-        root: '/home/pc/WorldScript-Studio/.worktrees/main',
-        home: '',
-      });
-      expect(redacted).toBe('Indexed ./services/foo.ts');
-      expect(redacted).not.toContain('/home/pc');
-    });
-
-    it('redacts the home directory to ~', () => {
-      const text = 'Config at /home/pc/.codegraph/config.json';
-      const redacted = redactPaths(text, { root: '', home: '/home/pc' });
-      expect(redacted).toBe('Config at ~/.codegraph/config.json');
-    });
-
-    it('redacts both root and home when both are present', () => {
-      const text = '/home/pc/WorldScript-Studio/.worktrees/main/foo.ts and /home/pc/.cache/x';
-      const redacted = redactPaths(text, {
-        root: '/home/pc/WorldScript-Studio/.worktrees/main',
-        home: '/home/pc',
-      });
-      expect(redacted).toBe('./foo.ts and ~/.cache/x');
-      expect(redacted).not.toContain('/home/pc');
-    });
-
-    it('does not redact an unrelated substring that only contains the root text', () => {
-      const root = '/home/pc/WorldScript-Studio/.worktrees/main';
-      expect(redactPaths(`x${root}ish ${root}/src/index.ts`, { root, home: '' })).toBe(
-        `x${root}ish ./src/index.ts`,
-      );
-    });
-
-    it('redacts Windows roots with either separator at a path boundary', () => {
-      expect(
-        redactPaths('C:\\Work\\World\\src C:\\Work\\Worldish', {
-          root: 'C:\\Work\\World',
-          home: '',
-        }),
-      ).toBe('.\\src C:\\Work\\Worldish');
+    it.each([
+      [
+        'repo root',
+        'Indexed /home/pc/WorldScript-Studio/.worktrees/main/services/foo.ts',
+        { root: '/home/pc/WorldScript-Studio/.worktrees/main', home: '' },
+        'Indexed ./services/foo.ts',
+      ],
+      [
+        'home directory',
+        'Config at /home/pc/.codegraph/config.json',
+        { root: '', home: '/home/pc' },
+        'Config at ~/.codegraph/config.json',
+      ],
+      [
+        'root and home',
+        '/home/pc/WorldScript-Studio/.worktrees/main/foo.ts and /home/pc/.cache/x',
+        { root: '/home/pc/WorldScript-Studio/.worktrees/main', home: '/home/pc' },
+        './foo.ts and ~/.cache/x',
+      ],
+      [
+        'unrelated substring',
+        'x/home/pc/WorldScript-Studio/.worktrees/mainish /home/pc/WorldScript-Studio/.worktrees/main/src/index.ts',
+        { root: '/home/pc/WorldScript-Studio/.worktrees/main', home: '' },
+        'x/home/pc/WorldScript-Studio/.worktrees/mainish ./src/index.ts',
+      ],
+      [
+        'Windows root',
+        'C:\\Work\\World\\src C:\\Work\\Worldish',
+        { root: 'C:\\Work\\World', home: '' },
+        '.\\src C:\\Work\\Worldish',
+      ],
+      [
+        'UNC root',
+        '\\\\server\\share\\repo\\src\\a.ts',
+        { root: '\\\\SERVER\\Share\\Repo', home: '' },
+        '.\\src\\a.ts',
+      ],
+    ])('redacts %s at a path boundary', (_label, input, options, expected) => {
+      expect(redactPaths(input, options)).toBe(expected);
     });
   });
 
@@ -124,10 +158,14 @@ describe('codegraph-report sanitization', () => {
     });
   });
 
+  // QNBS-v3: freshness tests keep source, index, metadata, and report structure aligned.
   describe('CodeGraph machine-readable freshness contract', () => {
     const current = {
       initialized: true,
       version: '1.6.0',
+      fileCount: 1,
+      nodeCount: 2,
+      edgeCount: 3,
       pendingChanges: { added: 0, modified: 0, removed: 0 },
       worktreeMismatch: null,
       index: { builtWithVersion: '1.6.0', reindexRecommended: false },
@@ -142,12 +180,65 @@ describe('codegraph-report sanitization', () => {
       ['worktree mismatch', { ...current, worktreeMismatch: 'changed' }],
       ['reindex required', { ...current, index: { ...current.index, reindexRecommended: true } }],
       ['version mismatch', { ...current, version: '1.1.3' }],
+      ['decorated status version', { ...current, version: 'v1.6.0' }],
+      [
+        'decorated index version',
+        { ...current, index: { ...current.index, builtWithVersion: 'v1.6.0' } },
+      ],
     ])('rejects %s before report output can be accepted', (_label, status) => {
       expect(() => validateIndexStatus(status, '1.6.0')).toThrow();
+    });
+
+    it('rejects a status payload without complete report counts', () => {
+      expect(() => validateIndexStatus({ ...current, edgeCount: undefined }, '1.6.0')).toThrow(
+        /counts are required/,
+      );
+    });
+
+    it.each([
+      ['truncated', [{ path: 'a.ts' }]],
+      ['duplicate', [{ path: 'a.ts' }, { path: 'a.ts' }]],
+    ])('rejects %s CodeGraph file evidence', (_label, fileList) => {
+      expect(() => validateFileList(fileList, 2)).toThrow(/count/);
+    });
+
+    it.each([
+      ['empty', {}],
+      ['partial', { added: 0, modified: 0 }],
+    ])('rejects %s pending-change counters', (_label, pendingChanges) => {
+      expect(() => validateIndexStatus({ ...current, pendingChanges }, '1.6.0')).toThrow(/stale/);
+    });
+
+    it('rejects filename-derived extensions containing control characters', () => {
+      expect(() => formatExtensionLines([{ path: 'a.ts\n## Injected' }])).toThrow(/unsafe/);
+    });
+
+    it('escapes Markdown punctuation in filename-derived extensions', () => {
+      expect(formatExtensionLines([{ path: 'a.t*s' }])).toBe('- **.t\\*s**: 1');
     });
   });
 
   describe('strict orchestration contracts', () => {
+    it('preserves the direct Graphify update skip contract', () => {
+      expect(graphsCli.shouldSkipGraphifyUpdate(['update', '.'], { GRAPHIFY_SKIP: '1' })).toBe(
+        true,
+      );
+      expect(graphsCli.shouldSkipGraphifyUpdate(['update', '.'], {})).toBe(false);
+      expect(graphsCli.shouldSkipGraphifyUpdate(['--version'], { GRAPHIFY_SKIP: '1' })).toBe(false);
+    });
+
+    it('routes Graphify hook commands through the verified launcher', () => {
+      const packageJson = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf-8')) as {
+        scripts: Record<string, string>;
+      };
+      expect(packageJson.scripts['graphify:hooks']).toBe(
+        'node scripts/graphs-cli.mjs graphify hook install',
+      );
+      expect(packageJson.scripts['graphify:status']).toBe(
+        'node scripts/graphs-cli.mjs graphify hook status',
+      );
+    });
+
     it('rejects inherited command names', () => {
       expect(graphsCli.isSupportedCommand('toString', { refresh: true })).toBe(false);
       expect(graphsCli.isSupportedCommand('refresh', { refresh: true })).toBe(true);
@@ -168,20 +259,42 @@ describe('codegraph-report sanitization', () => {
     });
   });
 
+  it('distinguishes unavailable and broken installed tool probes', () => {
+    expect(graphsCli.versionProbeStatus({ status: null, error: { code: 'ENOENT' } })).toBe(
+      'SKIPPED_NOT_INSTALLED',
+    );
+    expect(graphsCli.versionProbeStatus({ status: 1, stderr: 'runtime failed' })).toBe('FAIL');
+    expect(graphsCli.versionProbeStatus({ status: 0, stdout: 'graphify 0.9.51' })).toBe(
+      'AVAILABLE',
+    );
+  });
+
+  it('cleans Graphify sidecars around the routed runtime update', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'graphs-ephemeral-test-'));
+    temporaryDirectories.push(directory);
+    writeFileSync(join(directory, 'manifest.json'), 'stale');
+    writeFileSync(join(directory, 'cost.json'), 'stale');
+    for (const name of ['transcripts', 'wiki', 'obsidian']) {
+      mkdirSync(join(directory, name));
+    }
+
+    graphsCli.cleanupGraphifyEphemeralOutputs(directory);
+
+    for (const name of ['manifest.json', 'cost.json', 'transcripts', 'wiki', 'obsidian']) {
+      expect(existsSync(join(directory, name))).toBe(false);
+    }
+  });
+
+  // QNBS-v3: structural fixtures prevent metadata-only corruption from being reported fresh.
   it('rejects metadata-only or truncated reports with otherwise current metadata', () => {
-    const metadata = {
-      exists: true,
-      schema: '1',
-      toolVersion: '1.6.0',
-      fingerprint: 'sha256:current',
-      tool: 'codegraph',
-      text: '# CodeGraph Report\n\nReport schema: 1\nSource fingerprint: sha256:current',
-    };
     expect(
-      graphsCli.reportFreshness(
-        metadata,
-        { reportSchemaVersion: 1, expectedVersion: '1.6.0' },
-        'sha256:current',
+      reportFreshness(
+        reportMetadata(
+          'codegraph',
+          '1.6.0',
+          '# CodeGraph Report\n\nReport schema: 1\nSource fingerprint: sha256:current',
+        ),
+        '1.6.0',
       ),
     ).toBe('REPORT_INVALID');
   });
@@ -190,78 +303,85 @@ describe('codegraph-report sanitization', () => {
     const report =
       '# CodeGraph Report\n\nReport schema: 1\nSource fingerprint: sha256:current\n' +
       'Tool: codegraph\nTool version: 1.6.0\nGeneration mode: test\n\n' +
-      '## Status\n\n```text\nInitialized: yes\n```\n\n## Files by Extension\n\n- **.mjs**: 1\n\n' +
+      '## Status\n\n```text\nInitialized: yes\nVersion: 1.6.0\nFiles: 1\nNodes: 2\nEdges: 3\n' +
+      'Pending changes: {"added":0,"modified":0,"removed":0}\n' +
+      'Worktree mismatch: none\nIndex built with: 1.6.0\nReindex required: no\n```\n\n' +
+      '## Files by Extension\n\n- **.mjs**: 1\n\n' +
       '---\n\n*Regenerate with: `pnpm run graphs:report`*';
-    expect(
-      graphsCli.reportFreshness(
-        {
-          exists: true,
-          schema: '1',
-          toolVersion: '1.6.0',
-          fingerprint: 'sha256:current',
-          tool: 'codegraph',
-          text: report,
-        },
-        { reportSchemaVersion: 1, expectedVersion: '1.6.0' },
-        'sha256:current',
-      ),
-    ).toBe('FRESH');
+    expect(reportFreshness(reportMetadata('codegraph', '1.6.0', report), '1.6.0')).toBe('FRESH');
+  });
+
+  it('rejects CodeGraph reports with heading-only status', () => {
+    const report =
+      '# CodeGraph Report\n\nReport schema: 1\nSource fingerprint: sha256:current\n' +
+      'Tool: codegraph\nTool version: 1.6.0\nGeneration mode: test\n\n' +
+      '## Status\n\n```text\nInitialized: yes\n```\n\n## Files by Extension\n\n' +
+      '- **.mjs**: 1\n\n---\n\n*Regenerate with: `pnpm run graphs:report`*';
+    expect(reportFreshness(reportMetadata('codegraph', '1.6.0', report), '1.6.0')).toBe(
+      'REPORT_INVALID',
+    );
   });
 
   it('keeps stale classification ahead of body validation', () => {
     expect(
-      graphsCli.reportFreshness(
-        {
-          exists: true,
-          schema: '1',
-          toolVersion: '1.6.0',
-          fingerprint: 'sha256:old',
-          tool: 'codegraph',
-          text: 'truncated',
-        },
-        { reportSchemaVersion: 1, expectedVersion: '1.6.0' },
-        'sha256:current',
-      ),
+      reportFreshness(reportMetadata('codegraph', '1.6.0', 'truncated', 'sha256:old'), '1.6.0'),
     ).toBe('STALE');
   });
 
-  it('rejects a truncated Graphify report with otherwise current metadata', () => {
+  it('preserves Graphify freshness checks and rejects cross-tool reports', () => {
     const report =
       '# Graph Report - project\n\nReport schema: 1\nSource fingerprint: sha256:current\n' +
       'Tool: graphify\nTool version: 0.9.51\nGeneration mode: test\n\n' +
-      '## Summary\n- valid\n\n## Top 1 Communities by size (of 1 total)\n\n' +
-      '## Knowledge Gaps\n- none\n';
-    const metadata = {
-      exists: true,
-      schema: '1',
-      toolVersion: '0.9.51',
-      fingerprint: 'sha256:current',
-      tool: 'graphify',
-      text: report,
-    };
-    expect(
-      graphsCli.reportFreshness(
-        metadata,
-        { reportSchemaVersion: 1, expectedVersion: '0.9.51' },
-        'sha256:current',
-      ),
-    ).toBe('FRESH');
-    expect(
-      graphsCli.reportFreshness(
-        { ...metadata, text: report.replace('\n\n## Knowledge Gaps\n- none\n', '') },
-        { reportSchemaVersion: 1, expectedVersion: '0.9.51' },
-        'sha256:current',
-      ),
-    ).toBe('REPORT_INVALID');
+      '## Summary\n- valid\n\n## Top 1 Communities by size (of 1 total)\n';
+    const mismatchMetadata = reportMetadata('graphify', '1.6.0', report);
+    const truncatedReport = report.replace('\n\n## Summary\n- valid\n', '');
+    const truncatedMetadata = reportMetadata('graphify', '0.9.51', truncatedReport);
+    expect([
+      reportFreshness(reportMetadata('graphify', '0.9.51', report), '0.9.51'),
+      reportFreshness(truncatedMetadata, '0.9.51'),
+      reportFreshness(mismatchMetadata, '1.6.0', 'sha256:current', 'codegraph'),
+    ]).toEqual(['FRESH', 'REPORT_INVALID', 'REPORT_INVALID']);
   });
 
-  it('shares exact version matching semantics with graph tooling', () => {
-    expect(matchesExactVersion('codegraph 1.6.0', '1.6.0')).toBe(true);
-    expect(matchesExactVersion('codegraph 1.6.01', '1.6.0')).toBe(false);
-    expect(matchesExactVersion('codegraph 1.6.0-rc.1', '1.6.0')).toBe(false);
-    expect(matchesExactVersion('codegraph 1.6.0.1', '1.6.0')).toBe(false);
+  it.each([
+    [
+      'missing communities',
+      '# Graph Report - project\n\n## Summary\n- partial\n\n## Knowledge Gaps\n- none\n',
+      false,
+    ],
+    [
+      'complete empty communities',
+      '# Graph Report - project\n\n## Summary\n- none\n\n## Knowledge Gaps\n- none\n\n## Communities (0 total)\n',
+      true,
+    ],
+    [
+      'missing knowledge gaps',
+      '# Graph Report - project\n\n## Summary\n- none\n\n## Communities (0 total)\n',
+      true,
+    ],
+    [
+      'incomplete declared count',
+      '# Graph Report - project\n\n## Summary\n- none\n\n## Knowledge Gaps\n- none\n\n## Community Hubs (Navigation)\n- Community 1\n- Community 2\n\n## Communities (3 total, 1 thin omitted)\n',
+      false,
+    ],
+    [
+      'complete declared count',
+      '# Graph Report - project\n\n## Summary\n- none\n\n## Community Hubs (Navigation)\n- Community 1\n- Community 2\n\n## Communities (3 total, 1 thin omitted)\n\n### Community 1\n',
+      true,
+    ],
+  ])('validates native Graphify output: %s', (_label, markdown, expected) => {
+    expect(graphifyReport.validateNativeGraphifyReport(markdown)).toBe(expected);
   });
 
+  it.each([
+    ['python', ['-m', 'graphify', '--version']],
+    ['python3', ['-m', 'graphify', '--version']],
+    ['py', ['-3', '-m', 'graphify', '--version']],
+  ])('uses the selected %s interpreter for fallback verification', (tool, args) => {
+    expect(graphifyBootstrap.graphifyVersionCommand(tool)).toEqual(args);
+  });
+
+  // QNBS-v3: recovery fixtures preserve the last valid compact snapshot across interruptions.
   it('recovers a valid orphaned Graphify compact report before a new transaction', () => {
     const directory = mkdtempSync(join(tmpdir(), 'graphify-report-test-'));
     temporaryDirectories.push(directory);
@@ -279,6 +399,19 @@ describe('codegraph-report sanitization', () => {
     expect(existsSync(backupPath)).toBe(false);
   });
 
+  it('preserves an invalid compact report through runtime-only update backup handling', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'graphs-update-test-'));
+    temporaryDirectories.push(directory);
+    const reportPath = join(directory, 'GRAPH_REPORT.md');
+    const backupPath = `${reportPath}.previous-compact`;
+    const invalid = '# Graph Report - interrupted\nmetadata only\n';
+    writeFileSync(reportPath, invalid);
+    expect(graphsCli.prepareGraphifyReportBackup(reportPath, backupPath)).toBe(true);
+    expect(existsSync(reportPath)).toBe(false);
+    graphsCli.restoreGraphifyReportBackup(true, reportPath, backupPath);
+    expect(readFileSync(reportPath, 'utf-8')).toBe(invalid);
+  });
+
   it('recovers a valid compact backup over an interrupted native primary', () => {
     const directory = mkdtempSync(join(tmpdir(), 'graphify-report-test-'));
     temporaryDirectories.push(directory);
@@ -294,6 +427,5 @@ describe('codegraph-report sanitization', () => {
     writeFileSync(backupPath, previous);
     expect(graphifyReport.recoverOrphanedCompactReport(reportPath, backupPath)).toBe(true);
     expect(readFileSync(reportPath, 'utf-8')).toBe(previous);
-    expect(existsSync(backupPath)).toBe(false);
   });
 });

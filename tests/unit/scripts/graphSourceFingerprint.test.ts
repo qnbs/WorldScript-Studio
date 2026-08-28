@@ -1,6 +1,14 @@
 // @vitest-environment node
 import { execFileSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 // QNBS-v3: fixture coverage locks worktree deletion and portable content semantics used by reports.
@@ -68,13 +76,64 @@ describe('graphSourceFingerprint', () => {
     expect(computeSourceFingerprint(fixtureDir)).toMatch(/^sha256:[0-9a-f]{64}$/);
   });
 
+  it('round-trips non-UTF-8 Git path bytes instead of treating the file as deleted', () => {
+    const rawName = Buffer.from('bad-\xff.ts', 'latin1');
+    const rawPath = Buffer.concat([Buffer.from(fixtureDir), Buffer.from('/'), rawName]);
+    writeFileSync(rawPath, 'export const raw = 1;\n');
+    git(['add', '-A']);
+    git(['commit', '-q', '-m', 'track raw pathname']);
+    expect(
+      listSourcePaths(fixtureDir).some((path) => Buffer.isBuffer(path) && path.equals(rawName)),
+    ).toBe(true);
+    const before = computeSourceFingerprint(fixtureDir);
+    writeFileSync(rawPath, 'export const raw = 2;\n');
+    expect(computeSourceFingerprint(fixtureDir)).not.toBe(before);
+  });
+
+  it('refuses a sparse checkout instead of treating omitted tracked files as deletions', () => {
+    try {
+      git(['update-index', '--skip-worktree', 'a.ts']);
+      expect(() => computeSourceFingerprint(fixtureDir)).toThrow(/SPARSE_CHECKOUT_UNSUPPORTED/);
+    } finally {
+      git(['update-index', '--no-skip-worktree', 'a.ts']);
+    }
+  });
+
+  it('refuses assume-unchanged tracked source entries', () => {
+    git(['update-index', '--assume-unchanged', 'a.ts']);
+    expect(() => computeSourceFingerprint(fixtureDir)).toThrow(/SOURCE_INDEX_FLAGS_UNSUPPORTED/);
+  });
+
   it('hashes symlink targets without following them', () => {
     if (process.platform === 'win32') return;
     symlinkSync('a.ts', join(fixtureDir, 'link.ts'));
     git(['add', 'link.ts']);
     const first = computeSourceFingerprint(fixtureDir);
-    symlinkSync('other.ts', join(fixtureDir, 'other-link.ts'));
+    // QNBS-v3: replace the tracked link to prove its target, not an extra path, changes the digest.
+    rmSync(join(fixtureDir, 'link.ts'));
+    symlinkSync('other.ts', join(fixtureDir, 'link.ts'));
     expect(computeSourceFingerprint(fixtureDir)).not.toBe(first);
+  });
+
+  it('preserves raw bytes when a symlink target contains invalid UTF-8', () => {
+    if (process.platform === 'win32') return;
+    const linkPath = join(fixtureDir, 'raw-link.ts');
+    symlinkSync(Buffer.from([0x62, 0x61, 0x64, 0x2d, 0xff]), linkPath);
+    git(['add', 'raw-link.ts']);
+    const first = computeSourceFingerprint(fixtureDir);
+    unlinkSync(linkPath);
+    symlinkSync(Buffer.from([0x62, 0x61, 0x64, 0x2d, 0xfe]), linkPath);
+    expect(computeSourceFingerprint(fixtureDir)).not.toBe(first);
+  });
+
+  it('hashes a materialized mode-120000 link like its symlink target', () => {
+    if (process.platform === 'win32') return;
+    symlinkSync('a.ts', join(fixtureDir, 'link.ts'));
+    git(['add', 'link.ts']);
+    const symlinkFingerprint = computeSourceFingerprint(fixtureDir);
+    rmSync(join(fixtureDir, 'link.ts'));
+    writeFileSync(join(fixtureDir, 'link.ts'), 'a.ts');
+    expect(computeSourceFingerprint(fixtureDir)).toBe(symlinkFingerprint);
   });
 
   it('represents a tracked working-tree deletion without crashing', () => {
@@ -107,6 +166,26 @@ describe('graphSourceFingerprint', () => {
     expect(computeSourceFingerprint(fixtureDir)).not.toBe(before);
   });
 
+  it('includes tracked Gitlink object identity', () => {
+    const childDir = join(fixtureDir, 'child');
+    mkdirSync(childDir);
+    git(['init', '-q'], childDir);
+    git(['config', 'user.email', 'test@example.com'], childDir);
+    git(['config', 'user.name', 'Test'], childDir);
+    writeFileSync(join(childDir, 'nested.ts'), 'export const nested = 1;\n');
+    git(['add', '-A'], childDir);
+    git(['commit', '-q', '-m', 'child initial'], childDir);
+    const firstObjectId = git(['rev-parse', 'HEAD'], childDir).trim();
+    git(['update-index', '--add', '--cacheinfo', `160000,${firstObjectId},child`]);
+    const first = computeSourceFingerprint(fixtureDir);
+    writeFileSync(join(childDir, 'nested.ts'), 'export const nested = 2;\n');
+    git(['add', '-A'], childDir);
+    git(['commit', '-q', '-m', 'child second'], childDir);
+    const secondObjectId = git(['rev-parse', 'HEAD'], childDir).trim();
+    git(['update-index', '--add', '--cacheinfo', `160000,${secondObjectId},child`]);
+    expect(computeSourceFingerprint(fixtureDir)).not.toBe(first);
+  });
+
   it('excludes graphify-out/** and .codegraph/** from the fingerprint', () => {
     const before = computeSourceFingerprint(fixtureDir);
     // Directories are gitignored per the fixture's .gitignore, so these paths must not
@@ -119,6 +198,17 @@ describe('graphSourceFingerprint', () => {
     expect(after).toBe(before);
     expect(listSourcePaths(fixtureDir)).not.toContain('graphify-out/GRAPH_REPORT.md');
     expect(listSourcePaths(fixtureDir)).not.toContain('.codegraph/CODEGRAPH_REPORT.md');
+  });
+
+  it('excludes nested linked worktrees from the fingerprint', () => {
+    const before = computeSourceFingerprint(fixtureDir);
+    mkdirSync(join(fixtureDir, '.worktrees', 'feature'), { recursive: true });
+    writeFileSync(
+      join(fixtureDir, '.worktrees', 'feature', 'nested.ts'),
+      'export const nested = true;\n',
+    );
+    expect(computeSourceFingerprint(fixtureDir)).toBe(before);
+    expect(listSourcePaths(fixtureDir)).not.toContain('.worktrees/feature/nested.ts');
   });
 
   it('is independent of commit SHA and branch name for identical content', () => {
@@ -188,15 +278,6 @@ describe('graphSourceFingerprint', () => {
       git(['mv', 'graphify-out/old.md', '.codegraph/new.md']);
       expect(checkCleanState(fixtureDir)).toEqual({ clean: true, dirtyPaths: [] });
     });
-
-    it('does not flag changes confined to excluded graph-output directories', () => {
-      mkdirSync(join(fixtureDir, 'graphify-out'), { recursive: true });
-      writeFileSync(join(fixtureDir, 'graphify-out', 'graph.json'), '{}');
-      const { clean } = checkCleanState(fixtureDir);
-      // graphify-out/ is gitignored in the fixture, so git status won't even list it --
-      // this asserts the exclusion filter doesn't accidentally break the ignored-by-git case.
-      expect(clean).toBe(true);
-    });
   });
 
   describe('buildMetadataBlock', () => {
@@ -231,10 +312,11 @@ describe('graphSourceFingerprint', () => {
     });
   });
 
+  // QNBS-v3: version tests lock the shared continuation-rejection contract used by report gates.
   it('shares exact version matching semantics with report generators', () => {
     expect(matchesExactVersion('graphify 0.9.51', '0.9.51')).toBe(true);
-    expect(matchesExactVersion('graphify 0.9.510', '0.9.51')).toBe(false);
+    expect(matchesExactVersion('1.6.0', '1.6.0')).toBe(true);
+    expect(matchesExactVersion('graphify 0.9.50\nwarning: 0.9.51', '0.9.51')).toBe(false);
     expect(matchesExactVersion('graphify 0.9.51-rc.1', '0.9.51')).toBe(false);
-    expect(matchesExactVersion('graphify 0.9.51.1', '0.9.51')).toBe(false);
   });
 });

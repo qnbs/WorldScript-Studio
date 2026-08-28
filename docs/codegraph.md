@@ -17,10 +17,10 @@ CodeGraph builds a pre-indexed semantic knowledge graph of the codebase using Tr
 ### One-time global install (pinned)
 
 ```bash
+# Optional privacy-first session controls, set before the first CodeGraph command:
+export CODEGRAPH_TELEMETRY=0 CODEGRAPH_NO_UPDATE_CHECK=1
 pnpm run codegraph:bootstrap   # installs the exact pinned version from config/graph-tools-versions.json
 # equivalent manually: npm install -g @colbymchenry/codegraph@<pinned>
-# Optional privacy-first session controls, set before any CodeGraph command:
-export CODEGRAPH_TELEMETRY=0 CODEGRAPH_NO_UPDATE_CHECK=1
 ```
 
 CodeGraph is optional local developer tooling — this never adds it as a `package.json` dependency, and it bundles its own Node runtime (nothing to compile).
@@ -29,7 +29,7 @@ CodeGraph is optional local developer tooling — this never adds it as a `packa
 
 ```bash
 cd /path/to/WorldScript-Studio
-codegraph init
+pnpm run codegraph:init
 ```
 
 This creates `.codegraph/` and builds the full index in one step (current versions no longer need a
@@ -40,6 +40,7 @@ separate `-i`/`--index` flag — indexing runs by default). It automatically res
 | Script | Purpose |
 |--------|---------|
 | `pnpm run codegraph:bootstrap` | Install the exact pinned version (see `config/graph-tools-versions.json`) |
+| `pnpm run codegraph:init` | Initialize the local index through the verified command resolver |
 | `pnpm run codegraph:status` | Show index statistics |
 | `pnpm run codegraph:sync` | **Routine incremental update** (`codegraph sync`) — what `pnpm run graphs:update` runs |
 | `pnpm run codegraph:update` | **Full rebuild** (`codegraph index --force`) — for large refactors or index corruption recovery, not routine use |
@@ -59,8 +60,8 @@ pnpm run codegraph:sync    # incremental — this is what graphs:update runs for
 
 ```bash
 pnpm run codegraph:update  # full rebuild (codegraph index --force) -- not the routine path
-# or refresh both graphs + regenerate committed reports, strict:
-pnpm run graphs:refresh
+# after the full rebuild, regenerate the committed reports if needed:
+pnpm run graphs:report
 ```
 
 ### Find affected tests before committing
@@ -163,7 +164,7 @@ Following the same policy as Graphify:
 
 | Problem | Solution |
 |---------|----------|
-| **"CodeGraph not initialized"** | Run `codegraph init` in repo root (current versions build the index in this one step) |
+| **"CodeGraph not initialized"** | Run `pnpm run codegraph:init` in repo root (current versions build the index in this one step) |
 | **"database is locked"** | Ensure WAL mode is active (`codegraph status` → `Journal: wal`). If on a network share or WSL2 `/mnt/`, move the project to a local disk |
 | **Missing symbols after save** | Wait for the auto-sync debounce (`CODEGRAPH_WATCH_DEBOUNCE_MS`, default well under a second) or run `codegraph sync` |
 | **MCP server not connecting / `claude mcp list` shows "Disabled"** | Verify `codegraph serve --mcp` responds to a raw `initialize` request from the terminal — if it does, this is the known display quirk above, not a real disablement. Check `~/.claude.json`'s `disabledMcpServers` for the exact repo-path key to confirm the config itself is clean |

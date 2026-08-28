@@ -21,6 +21,7 @@ graphify-out/
 # Local tool config/metadata — never source
 .claude/
 .git/
+.git
 
 # Sibling git worktrees (defensive — this repo is itself checked out under .worktrees/main/)
 .worktrees/

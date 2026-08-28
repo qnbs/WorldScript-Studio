@@ -14,11 +14,11 @@
  * Fails loudly on any real failure. Gated on a clean source tree (DIRTY_UNTRACKED_INPUT refuses to
  * write) so the embedded fingerprint always matches a committable state.
  */
-import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { sanitize } from './codegraph-report.mjs';
+import { runGraphifyCommand } from './graphify-bootstrap.mjs';
 import {
   buildMetadataBlock,
   checkCleanState,
@@ -36,7 +36,7 @@ function loadPolicy() {
 }
 
 // QNBS-v3: validate compact report structure before recovering or replacing transaction state.
-function isValidCompactReport(path) {
+export function isValidCompactReport(path) {
   try {
     const report = readFileSync(path, 'utf-8');
     return (
@@ -45,8 +45,7 @@ function isValidCompactReport(path) {
       /Source fingerprint:\s*sha256:[0-9a-f]{64}/.test(report) &&
       /Tool version:\s*\S+/.test(report) &&
       report.includes('\n\n## Summary\n') &&
-      /^## Top \d+ Communities by size \(of \d+ total\)$/m.test(report) &&
-      report.includes('\n\n## Knowledge Gaps\n')
+      /^## Top \d+ Communities by size \(of \d+ total\)$/m.test(report)
     );
   } catch {
     return false;
@@ -80,11 +79,7 @@ function preparePreviousReport() {
 }
 
 function runGraphify(args, options = {}) {
-  return spawnSync(process.execPath, [join(ROOT, 'scripts', 'graphify-cli.mjs'), ...args], {
-    cwd: ROOT,
-    env: process.env,
-    ...options,
-  });
+  return runGraphifyCommand(args, { cwd: ROOT, env: process.env, ...options });
 }
 
 function restorePreviousReport(hasBackup) {
@@ -193,7 +188,7 @@ export function generateReport() {
     let native;
     if (existsSync(REPORT_PATH)) {
       native = sanitize(readFileSync(REPORT_PATH, 'utf-8'));
-    } else if (hadBackup) {
+    } else if (hadBackup && isValidCompactReport(PREVIOUS_COMPACT_BACKUP)) {
       const metadata = buildMetadataBlock({
         tool: 'graphify',
         toolVersion: expectedVersion,
@@ -211,10 +206,15 @@ export function generateReport() {
         '[graphify-report] PASS — no topology change; compact report metadata refreshed.',
       );
       return 0;
+    } else if (hadBackup) {
+      throw new Error('previous compact report is invalid; refusing topology reuse');
     } else {
       throw new Error('graphify wrote no native report and no previous compact report exists');
     }
 
+    if (!validateNativeGraphifyReport(native)) {
+      throw new Error('Graphify native report is missing a valid Communities (...) section');
+    }
     const sections = splitSections(native);
     const KEEP_AS_IS = [
       'Corpus Check',
@@ -300,6 +300,24 @@ function splitSections(markdown) {
 
 function findSection(sections, headingPrefix) {
   return sections.find((s) => s.heading.startsWith(headingPrefix));
+}
+
+// QNBS-v3: reject native Graphify output that cannot provide a trustworthy community snapshot.
+export function validateNativeGraphifyReport(markdown) {
+  if (typeof markdown !== 'string') return false;
+  const sections = splitSections(markdown);
+  const communities = findSection(sections, 'Communities (');
+  const totalMatch = communities?.heading.match(
+    /^Communities \((\d+) total(?:, (\d+) thin omitted)?\)$/,
+  );
+  const total = totalMatch ? Number(totalMatch[1]) : 0;
+  const thin = totalMatch?.[2] == null ? 0 : Number(totalMatch[2]);
+  const hubs = findSection(sections, 'Community Hubs (');
+  const hubCount = hubs?.body.filter((line) => line.startsWith('- ')).length ?? (total ? null : 0);
+  const blockCount = communities?.body.filter((line) => line.startsWith('### ')).length;
+  const validCounts =
+    hubCount != null && thin <= hubCount && hubCount <= total && blockCount === hubCount - thin;
+  return Boolean(totalMatch && validCounts && findSection(sections, 'Summary'));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

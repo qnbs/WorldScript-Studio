@@ -57,7 +57,7 @@ Tasks are pre-defined in [`.vscode/tasks.json`](../.vscode/tasks.json) (e.g. **G
 | `config/graph-tools-versions.json` | repo root `config/` | Sole version-policy source for both Graphify and CodeGraph |
 | `.graphifyignore` | repo root | Excludes `node_modules/`, `dist/`, `coverage/`, `graphify-out/`, `.codegraph/`, `.claude/`, `.git/`, worktrees, binaries, `.env` |
 | Solo git policy | `.gitignore` | `graphify-out/*` ignored except `GRAPH_REPORT.md` (no multi-MB HTML/JSON history in git) |
-| `graphify-update.mjs` | `scripts/` | Cleans ephemeral outputs, then `graphify update .` (local runtime state only) |
+| `graphify-update.mjs` | `scripts/` | Cleans ephemeral outputs, then runs the heavy direct `graphify update .`; it may replace the native committed report, so prefer `graphs:update` for report-preserving maintenance |
 | `graphify-report.mjs` | `scripts/` | Regenerates the committed compact `GRAPH_REPORT.md`, gated on a clean source tree |
 | `graphify-bootstrap.mjs` | `scripts/` | Portable pinned install (uv → pipx → pip), reads `config/graph-tools-versions.json` |
 | `graphify-cli.mjs` | `scripts/` | PATH-independent launcher used by `pnpm run graphify:*` |
@@ -73,7 +73,7 @@ Tasks are pre-defined in [`.vscode/tasks.json`](../.vscode/tasks.json) (e.g. **G
 |--------|---------|
 | `pnpm run graphify:bootstrap` | Installs the exact pinned version (uv → pipx → pip) |
 | `pnpm run graphify:install` | `graphify install` (skills / editor hooks) — inspect before running with `--project` |
-| `pnpm run graphify:update` | `graphify update .` — refresh AST graph (CPU/RAM heavy; not in pre-commit) |
+| `pnpm run graphify:update` | Direct `graphify update .` refresh (CPU/RAM heavy; may rewrite `GRAPH_REPORT.md`; not in pre-commit) |
 | `GRAPHIFY_SKIP=1 pnpm run graphify:update` | Skip update (no-op) |
 | `pnpm run graphify:hooks` | `graphify hook install` — not recommended by default, see above |
 | `pnpm run graphify:status` | `graphify hook status` |
@@ -96,6 +96,8 @@ see at a glance whether that report is `FRESH` or `STALE` relative to the curren
 ### After code changes (no API cost)
 
 ```bash
+pnpm run graphs:update       # preferred: update local runtimes while preserving compact reports
+# Direct maintenance only: may replace graphify-out/GRAPH_REPORT.md with native output.
 pnpm run graphify:update
 # or, if `graphify` is on your PATH:
 graphify update .
@@ -150,7 +152,7 @@ coexist unpredictably, and it adds latency to every commit on constrained hardwa
 on-demand refresh instead:
 
 ```bash
-pnpm run graphs:update    # local runtime state only (graph.json/graph.html), heavy rebuild
+pnpm run graphs:update    # local runtime state only; Graphify performs a heavy rebuild
 pnpm run graphs:refresh   # update + regenerate the committed report, strict — run before a PR
 pnpm run graphs:status    # fast read-only freshness check (FRESH/STALE), no mutation
 ```
@@ -168,10 +170,12 @@ Graphify can optionally log every `query`/`path`/`explain`/MCP query to `~/.cach
 `graphifyy` v0.9.13 (the pinned `0.9.51` postdates that fix). If you ever want a hard guarantee it stays
 off regardless of future config, set `GRAPHIFY_QUERY_LOG_DISABLE=1`; `GRAPHIFY_QUERY_LOG_ENABLE=1` /
 `GRAPHIFY_QUERY_LOG=<path>` opt back in if you ever want it. This is a local, per-machine preference —
-never committed to the repo. The default AST-only build/update path (`graphify update .`, everything
-`graphs:update` runs) does not require network access; only the separate semantic/LLM rebuild mode
-(`/graphify .` in chat, see [Full semantic rebuild](#full-semantic-rebuild-uses-llm-costs-tokens) above)
-and this query log touch anything outside the local build.
+never committed to the repo. The Graphify AST portion of `graphs:update` does not require network
+access. The combined command also runs CodeGraph synchronization; its default telemetry and
+update-check behavior is controlled by `codegraph telemetry off`, `CODEGRAPH_TELEMETRY=0`,
+`DO_NOT_TRACK=1`, and the separate `CODEGRAPH_NO_UPDATE_CHECK=1` update-check control. Only the
+semantic/LLM rebuild mode (`/graphify .` in chat, see [Full semantic rebuild](#full-semantic-rebuild-uses-llm-costs-tokens)
+above) and this query log touch anything outside the local Graphify build.
 
 ---
 

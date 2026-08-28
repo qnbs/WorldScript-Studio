@@ -23,17 +23,17 @@ Both tools' tested versions live in [`config/graph-tools-versions.json`](../conf
 # 1. Node dependencies
 node scripts/dependency-state.mjs reconcile
 
-# 2. Install both tools at their pinned versions (Graphify needs Python 3.10+; CodeGraph needs Node/npm)
-pnpm run graphs:bootstrap
-
-# 3. Read-only diagnostic: installed versions and any existing report freshness
-pnpm run graphs:doctor
-
-# 4. Optional privacy controls before the first CodeGraph invocation (local shell only)
+# 2. Optional privacy controls before the first CodeGraph invocation (local shell only)
 export CODEGRAPH_TELEMETRY=0 CODEGRAPH_NO_UPDATE_CHECK=1
 
-# 5. Initialize CodeGraph's local index for this worktree (one-time; builds the index in this step)
-codegraph init
+# 3. Install both tools at their pinned versions (Graphify needs Python 3.10+; CodeGraph needs Node/npm)
+pnpm run graphs:bootstrap
+
+# 4. Read-only diagnostic: installed versions and any existing report freshness
+pnpm run graphs:doctor
+
+# 5. Initialize CodeGraph's local index for this worktree through the verified resolver
+pnpm run codegraph:init
 
 # 6. Update local runtime state + regenerate the two committed reports (requires a clean tree)
 pnpm run graphs:refresh

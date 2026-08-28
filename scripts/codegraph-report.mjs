@@ -13,17 +13,35 @@ import {
   buildMetadataBlock,
   checkCleanState,
   computeSourceFingerprint,
-  matchesExactVersion,
   ROOT,
 } from './graphSourceFingerprint.mjs';
 
 export const REPORT_PATH = join(ROOT, '.codegraph', 'CODEGRAPH_REPORT.md');
 export const DB_PATH = join(ROOT, '.codegraph', 'codegraph.db');
 
+function quoteWindowsCommandArg(value) {
+  if (/\r|\n/.test(value)) throw new Error('Windows command arguments cannot contain newlines');
+  return `"${value.replaceAll('"', '\\"')}"`;
+}
+
+function runCommand(command, args, options = {}) {
+  const isWindowsShim = process.platform === 'win32' && command.toLowerCase().endsWith('.cmd');
+  const invocation = isWindowsShim
+    ? {
+        command: process.env.ComSpec ?? 'cmd.exe',
+        args: ['/d', '/s', '/c', `"${[command, ...args].map(quoteWindowsCommandArg).join(' ')}"`],
+      }
+    : { command, args };
+  return spawnSync(invocation.command, invocation.args, {
+    ...options,
+    shell: false,
+  });
+}
+
 // QNBS-v3: resolve the same global executable and Windows shim for every CodeGraph operation.
 export function resolveCodegraphCommand() {
   const fallback = process.platform === 'win32' ? 'codegraph.cmd' : 'codegraph';
-  const prefix = spawnSync('npm', ['prefix', '-g'], {
+  const prefix = runCommand(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['prefix', '-g'], {
     encoding: 'utf-8',
     stdio: ['ignore', 'pipe', 'ignore'],
   });
@@ -36,7 +54,7 @@ export function resolveCodegraphCommand() {
 
 function resolveWindowsCodegraphEntrypoint(command) {
   if (process.platform !== 'win32' || !command.toLowerCase().endsWith('.cmd')) return null;
-  const rootResult = spawnSync('npm', ['root', '-g'], {
+  const rootResult = runCommand('npm.cmd', ['root', '-g'], {
     encoding: 'utf-8',
     stdio: ['ignore', 'pipe', 'ignore'],
   });
@@ -60,7 +78,7 @@ export function executeCodegraph(args, options = {}) {
   const invocation = entrypoint
     ? { command: process.execPath, args: [entrypoint, ...args] }
     : { command, args };
-  return spawnSync(invocation.command, invocation.args, {
+  return runCommand(invocation.command, invocation.args, {
     cwd: ROOT,
     env: { ...process.env, NO_COLOR: '1' },
     ...options,
@@ -88,7 +106,7 @@ export function redactPaths(
     let output = input;
     for (const variant of variants) {
       const escaped = variant.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const flags = /^[A-Za-z]:[\\/]/.test(variant) ? 'gi' : 'g';
+      const flags = /^(?:[A-Za-z]:[\\/]|\\\\|\/\/)/.test(variant) ? 'gi' : 'g';
       output = output.replace(
         new RegExp(`(^|[^A-Za-z0-9._-])${escaped}(?=$|[\\\\/])`, flags),
         (_, prefix) => `${prefix}${replacement}`,
@@ -105,6 +123,7 @@ export function sanitize(text, opts) {
 }
 
 function runCodegraph(args) {
+  // QNBS-v3: preserve child-process failures so report generation cannot turn an unavailable CLI into success.
   const result = executeCodegraph(args, { encoding: 'utf-8' });
   if (result.status !== 0 || result.error) {
     throw new Error(
@@ -118,27 +137,73 @@ function readPolicy() {
   return JSON.parse(readFileSync(join(ROOT, 'config', 'graph-tools-versions.json'), 'utf-8'));
 }
 
+// QNBS-v3: reject pending or mismatched index evidence before it can enter a committed report.
 export function validateIndexStatus(status, expectedVersion) {
   const pending = status?.pendingChanges;
   const index = status?.index;
-  if (status?.initialized !== true || !matchesExactVersion(status.version ?? '', expectedVersion)) {
+  const counts = [status?.fileCount, status?.nodeCount, status?.edgeCount];
+  if (status?.initialized !== true || status.version !== expectedVersion) {
     throw new Error(`CodeGraph version/index mismatch; expected initialized ${expectedVersion}`);
+  }
+  if (counts.some((count) => !Number.isInteger(count) || count < 0)) {
+    throw new Error('CodeGraph status is incomplete: file/node/edge counts are required');
   }
   if (
     !pending ||
-    Object.values(pending).some((count) => typeof count !== 'number' || count !== 0) ||
+    ['added', 'modified', 'removed'].some(
+      (field) => !Number.isInteger(pending[field]) || pending[field] !== 0,
+    ) ||
     status.worktreeMismatch != null
   ) {
     throw new Error('CodeGraph index is stale: pending changes or worktree mismatch reported');
   }
-  if (
-    !index ||
-    !matchesExactVersion(index.builtWithVersion ?? '', expectedVersion) ||
-    index.reindexRecommended !== false
-  ) {
+  if (!index || index.builtWithVersion !== expectedVersion || index.reindexRecommended !== false) {
     throw new Error('CodeGraph index requires reindexing or was built with another version');
   }
   return status;
+}
+
+// QNBS-v3: status counts and file evidence must describe the same complete index snapshot.
+export function validateFileList(fileList, expectedCount) {
+  if (!Array.isArray(fileList) || fileList.some((file) => typeof file?.path !== 'string')) {
+    throw new Error('codegraph files --json returned an invalid file list');
+  }
+  const uniquePaths = new Set(fileList.map((file) => file.path));
+  if (fileList.length !== expectedCount || uniquePaths.size !== expectedCount) {
+    throw new Error('codegraph files --json count does not match codegraph status');
+  }
+  return fileList;
+}
+
+export function formatExtensionLines(fileList) {
+  const byExtension = new Map();
+  for (const file of fileList) {
+    const extension = file.path.split('.').pop() || 'none';
+    // QNBS-v3: reject control characters before filename-derived text reaches Markdown.
+    const hasUnsafeCharacter = [...extension].some((character) => {
+      const codePoint = character.codePointAt(0) ?? -1;
+      return (
+        (codePoint >= 0 && codePoint <= 0x1f) ||
+        (codePoint >= 0x7f && codePoint <= 0x9f) ||
+        codePoint === 0x2028 ||
+        codePoint === 0x2029
+      );
+    });
+    if (hasUnsafeCharacter) {
+      throw new Error('codegraph files --json returned an unsafe filename extension');
+    }
+    byExtension.set(extension, (byExtension.get(extension) ?? 0) + 1);
+  }
+  return (
+    [...byExtension.entries()]
+      // QNBS-v3: code-point ordering keeps equal-count reports identical across host locales.
+      .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+      .map(([extension, count]) => {
+        const safeExtension = extension.replace(/[\\`*_{}[\]()#+.!|>~-]/g, '\\$&');
+        return `- **.${safeExtension}**: ${count}`;
+      })
+      .join('\n')
+  );
 }
 
 function parseStatus(output, expectedVersion) {
@@ -176,6 +241,7 @@ function writeCandidate(report) {
   }
 }
 
+// QNBS-v3: keep the previous report authoritative until stable evidence validates its replacement.
 export function generateReport() {
   if (!existsSync(DB_PATH)) {
     console.error(
@@ -207,9 +273,7 @@ export function generateReport() {
     } catch (error) {
       throw new Error(`could not parse codegraph files --json: ${error.message}`);
     }
-    if (!Array.isArray(fileList) || fileList.some((file) => typeof file?.path !== 'string')) {
-      throw new Error('codegraph files --json returned an invalid file list');
-    }
+    validateFileList(fileList, status.fileCount);
 
     const fingerprintAfter = computeSourceFingerprint();
     const afterState = checkCleanState();
@@ -218,16 +282,7 @@ export function generateReport() {
         'SOURCE_CHANGED_DURING_REPORT — source/index evidence is not one stable snapshot',
       );
     }
-    const byExt = fileList.reduce((acc, file) => {
-      const ext = file.path.split('.').pop() || 'none';
-      acc[ext] = (acc[ext] || 0) + 1;
-      return acc;
-    }, {});
-    const extLines = Object.entries(byExt)
-      // QNBS-v3: code-point ordering keeps equal-count reports identical across host locales.
-      .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
-      .map(([ext, count]) => `- **.${ext}**: ${count}`)
-      .join('\n');
+    const extLines = formatExtensionLines(fileList);
     const metadata = buildMetadataBlock({
       tool: 'codegraph',
       toolVersion: status.version,

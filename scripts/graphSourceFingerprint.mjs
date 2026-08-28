@@ -16,26 +16,92 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 
-/** Generated graph output — never part of the fingerprint (reports must never self-reference). */
-const EXCLUDED_PREFIXES = ['graphify-out/', '.codegraph/'];
+/** Generated graph output and linked worktrees — never part of the fingerprint. */
+const EXCLUDED_PREFIXES = ['graphify-out/', '.codegraph/', '.worktrees/'];
 // QNBS-v3: bounded retries make freshness fail closed instead of hashing a moving source tree.
 const SNAPSHOT_ATTEMPTS = 3;
 
 function isExcluded(relPath) {
-  return EXCLUDED_PREFIXES.some((prefix) => relPath.startsWith(prefix));
+  const comparable = Buffer.isBuffer(relPath) ? relPath.toString('utf8') : relPath;
+  return EXCLUDED_PREFIXES.some((prefix) => comparable.startsWith(prefix));
 }
 
 function parseNulRecords(output) {
-  return output
-    .toString('utf8')
-    .split('\0')
-    .filter((record) => record.length > 0);
+  const bytes = Buffer.isBuffer(output) ? output : Buffer.from(output);
+  const records = [];
+  let start = 0;
+  for (let end = 0; end <= bytes.length; end += 1) {
+    if (end !== bytes.length && bytes[end] !== 0) continue;
+    if (end > start) records.push(bytes.subarray(start, end));
+    start = end + 1;
+  }
+  return records;
+}
+
+function decodeGitPath(bytes) {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    // QNBS-v3: retain undecodable Git pathname bytes so filesystem lookup cannot turn them into a deletion.
+    return Buffer.from(bytes);
+  }
+}
+
+function pathBytes(relPath) {
+  return Buffer.isBuffer(relPath) ? relPath : Buffer.from(relPath, 'utf8');
+}
+
+function pathIdentity(relPath) {
+  return pathBytes(relPath).toString('hex');
+}
+
+function pathLabel(relPath) {
+  return Buffer.isBuffer(relPath) ? `path bytes 0x${relPath.toString('hex')}` : relPath;
+}
+
+function pathForFingerprint(relPath) {
+  const bytes = pathBytes(relPath);
+  // QNBS-v3: length-prefix raw path bytes so newline and delimiter bytes cannot collide.
+  return `${bytes.length}:${bytes.toString('hex')}`;
+}
+
+function compareGitPaths(left, right) {
+  return Buffer.compare(pathBytes(left), pathBytes(right));
+}
+
+function absolutePathFor(cwd, relPath) {
+  return Buffer.isBuffer(relPath)
+    ? Buffer.concat([Buffer.from(`${cwd}/`), relPath])
+    : join(cwd, relPath);
+}
+
+function listSparsePaths(cwd) {
+  return parseNulRecords(
+    execFileSync('git', ['ls-files', '-v', '-z'], {
+      cwd,
+      encoding: 'buffer',
+    }),
+  )
+    .filter((record) => record.subarray(0, 2).toString('ascii') === 'S ')
+    .map((record) => decodeGitPath(record.subarray(2)));
+}
+
+function listAssumeUnchangedPaths(cwd) {
+  return parseNulRecords(
+    execFileSync('git', ['ls-files', '-v', '-z'], {
+      cwd,
+      encoding: 'buffer',
+    }),
+  )
+    .filter((record) => record.length > 1 && record[0] >= 0x61 && record[0] <= 0x7a)
+    .map((record) => decodeGitPath(record.subarray(2)));
 }
 
 /** @param {string} output @param {string} expectedVersion */
 export function matchesExactVersion(output, expectedVersion) {
-  const escaped = expectedVersion.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`(?:^|[^0-9])${escaped}(?![0-9A-Za-z.-])`).test(output);
+  // QNBS-v3: compare the first declared CLI line so later warnings cannot satisfy a version pin.
+  const declared = String(output).trimStart().split(/\r?\n/, 1)[0].trim();
+  return declared === expectedVersion || declared === `graphify ${expectedVersion}`;
 }
 
 /** @param {string} cwd @returns {string[]} sorted, deduplicated repo-relative paths: tracked ∪ untracked-not-ignored. */
@@ -45,15 +111,16 @@ export function listSourcePaths(cwd = ROOT) {
       cwd,
       encoding: 'buffer',
     }),
-  );
+  ).map(decodeGitPath);
   const untracked = parseNulRecords(
     execFileSync('git', ['ls-files', '--others', '--exclude-standard', '-z'], {
       cwd,
       encoding: 'buffer',
     }),
-  );
-  const all = new Set([...tracked, ...untracked]);
-  return [...all].filter((p) => !isExcluded(p)).sort();
+  ).map(decodeGitPath);
+  const all = new Map();
+  for (const path of [...tracked, ...untracked]) all.set(pathIdentity(path), path);
+  return [...all.values()].filter((p) => !isExcluded(p)).sort(compareGitPaths);
 }
 
 function listTrackedEntries(cwd) {
@@ -64,25 +131,43 @@ function listTrackedEntries(cwd) {
       encoding: 'buffer',
     }),
   )) {
-    const separator = record.indexOf('\t');
+    const separator = record.indexOf(9);
     if (separator < 0) throw new Error('git ls-files returned an invalid staged path record');
-    const metadata = record.slice(0, separator).split(' ');
+    const metadata = record.subarray(0, separator).toString('ascii').split(' ');
     const mode = metadata[0];
-    const relPath = record.slice(separator + 1);
+    const objectId = metadata[1];
+    const relPath = decodeGitPath(record.subarray(separator + 1));
     if (!/^(?:100\d{3}|120000|160000)$/.test(mode)) {
-      throw new Error(`invalid tracked file mode ${mode} for ${relPath}`);
+      throw new Error(`invalid tracked file mode ${mode} for ${pathLabel(relPath)}`);
     }
-    entries.set(relPath, mode);
+    if (!/^[0-9a-f]+$/.test(objectId ?? '')) {
+      throw new Error(`invalid tracked object id for ${pathLabel(relPath)}`);
+    }
+    entries.set(pathIdentity(relPath), { mode, objectId });
   }
   return entries;
 }
 
 function enumerateSourcePaths(cwd) {
+  const sparsePaths = listSparsePaths(cwd).filter((relPath) => !isExcluded(relPath));
+  const assumeUnchangedPaths = listAssumeUnchangedPaths(cwd).filter(
+    (relPath) => !isExcluded(relPath),
+  );
+  if (sparsePaths.length > 0) {
+    throw new Error(
+      `SPARSE_CHECKOUT_UNSUPPORTED — tracked source paths are absent from this checkout: ${sparsePaths.map(pathLabel).join(', ')}`,
+    );
+  }
+  if (assumeUnchangedPaths.length > 0) {
+    throw new Error(
+      `SOURCE_INDEX_FLAGS_UNSUPPORTED — tracked source paths have hidden worktree state: ${assumeUnchangedPaths.map(pathLabel).join(', ')}`,
+    );
+  }
   const trackedEntries = listTrackedEntries(cwd);
   return {
-    paths: listSourcePaths(cwd).filter((relPath) => trackedEntries.get(relPath) !== '160000'),
+    paths: listSourcePaths(cwd),
     tracked: new Set(trackedEntries.keys()),
-    modes: trackedEntries,
+    entries: trackedEntries,
   };
 }
 
@@ -107,11 +192,16 @@ function hashBytes(bytes) {
 }
 
 function hashDeletion(relPath) {
-  return createHash('sha256').update(`deleted:${relPath}`).digest('hex');
+  return createHash('sha256').update('deleted:').update(pathBytes(relPath)).digest('hex');
 }
 
 function hashSymlink(target) {
-  return createHash('sha256').update(`symlink:${target}`).digest('hex');
+  // QNBS-v3: raw symlink target bytes preserve source identity for non-UTF-8 link targets.
+  return createHash('sha256').update('symlink:').update(pathBytes(target)).digest('hex');
+}
+
+function hashGitlink(objectId) {
+  return createHash('sha256').update(`gitlink:${objectId}`).digest('hex');
 }
 
 function fileSignature(stat) {
@@ -121,51 +211,84 @@ function fileSignature(stat) {
 function readSnapshot(cwd, enumeration) {
   const lines = [];
   for (const relPath of enumeration.paths) {
-    const absolutePath = join(cwd, relPath);
-    const mode = enumeration.modes.get(relPath) ?? '100644';
+    const absolutePath = absolutePathFor(cwd, relPath);
+    const label = pathLabel(relPath);
+    const entry = enumeration.entries.get(pathIdentity(relPath)) ?? {
+      mode: '100644',
+      objectId: null,
+    };
+    const mode = entry.mode;
+    if (mode === '160000') {
+      // QNBS-v3: hash the Gitlink object identity without depending on a submodule worktree.
+      lines.push(`${mode}:${hashGitlink(entry.objectId)}:${pathForFingerprint(relPath)}`);
+      continue;
+    }
     let before;
     try {
       before = lstatSync(absolutePath);
     } catch (error) {
-      if (error?.code === 'ENOENT' && enumeration.tracked.has(relPath)) {
-        lines.push(`${mode}:${hashDeletion(relPath)}:${relPath}`);
+      if (error?.code === 'ENOENT' && enumeration.tracked.has(pathIdentity(relPath))) {
+        lines.push(`${mode}:${hashDeletion(relPath)}:${pathForFingerprint(relPath)}`);
         continue;
       }
-      throw new Error(`source path disappeared during fingerprinting: ${relPath}`);
+      throw new Error(`source path disappeared during fingerprinting: ${label}`);
     }
     if (before.isSymbolicLink()) {
-      const target = readlinkSync(absolutePath, 'utf8');
+      // QNBS-v3: hash the link target itself so symlink identity is portable and target-sensitive.
+      const target = readlinkSync(absolutePath, { encoding: 'buffer' });
       let after;
       try {
         after = lstatSync(absolutePath);
       } catch {
-        throw new Error(`source path disappeared after reading symlink: ${relPath}`);
+        throw new Error(`source path disappeared after reading symlink: ${label}`);
       }
       if (fileSignature(before) !== fileSignature(after)) {
-        throw new Error(`source symlink changed while being fingerprinted: ${relPath}`);
+        throw new Error(`source symlink changed while being fingerprinted: ${label}`);
       }
-      lines.push(`${mode}:${hashSymlink(target)}:${relPath}`);
+      lines.push(`${mode}:${hashSymlink(target)}:${pathForFingerprint(relPath)}`);
       continue;
     }
-    if (!before.isFile()) throw new Error(`source path is not a regular file: ${relPath}`);
+    if (mode === '120000') {
+      let target;
+      try {
+        target = readFileSync(absolutePath);
+      } catch (error) {
+        throw new Error(
+          `failed to read materialized symlink ${label} during fingerprinting: ${error?.message ?? String(error)}`,
+        );
+      }
+      let after;
+      try {
+        after = lstatSync(absolutePath);
+      } catch {
+        throw new Error(`source path disappeared after reading materialized symlink: ${label}`);
+      }
+      if (fileSignature(before) !== fileSignature(after)) {
+        throw new Error(`materialized symlink changed while being fingerprinted: ${label}`);
+      }
+      // QNBS-v3: core.symlinks=false materializes mode-120000 links as target text.
+      lines.push(`${mode}:${hashSymlink(target)}:${pathForFingerprint(relPath)}`);
+      continue;
+    }
+    if (!before.isFile()) throw new Error(`source path is not a regular file: ${label}`);
     let bytes;
     try {
       bytes = readFileSync(absolutePath);
     } catch (error) {
       throw new Error(
-        `failed to read ${relPath} during fingerprinting: ${error?.message ?? String(error)}`,
+        `failed to read ${label} during fingerprinting: ${error?.message ?? String(error)}`,
       );
     }
     let after;
     try {
       after = lstatSync(absolutePath);
     } catch {
-      throw new Error(`source path disappeared after reading: ${relPath}`);
+      throw new Error(`source path disappeared after reading: ${label}`);
     }
     if (fileSignature(before) !== fileSignature(after)) {
-      throw new Error(`source path changed while being fingerprinted: ${relPath}`);
+      throw new Error(`source path changed while being fingerprinted: ${label}`);
     }
-    lines.push(`${mode}:${hashBytes(bytes)}:${relPath}`);
+    lines.push(`${mode}:${hashBytes(bytes)}:${pathForFingerprint(relPath)}`);
   }
   return lines;
 }
@@ -176,13 +299,19 @@ function readSnapshot(cwd, enumeration) {
  * @param {string} cwd
  */
 export function computeSourceFingerprint(cwd = ROOT) {
+  // QNBS-v3: compare two bounded snapshots so reports never combine evidence from moving inputs.
   let lastError;
   for (let attempt = 1; attempt <= SNAPSHOT_ATTEMPTS; attempt += 1) {
     try {
       const firstEnumeration = enumerateSourcePaths(cwd);
       const first = readSnapshot(cwd, firstEnumeration);
       const secondEnumeration = enumerateSourcePaths(cwd);
-      if (firstEnumeration.paths.join('\0') !== secondEnumeration.paths.join('\0')) {
+      if (
+        firstEnumeration.paths.length !== secondEnumeration.paths.length ||
+        firstEnumeration.paths.some(
+          (path, index) => pathIdentity(path) !== pathIdentity(secondEnumeration.paths[index]),
+        )
+      ) {
         throw new Error('source path set changed while fingerprinting');
       }
       const second = readSnapshot(cwd, secondEnumeration);
@@ -206,13 +335,13 @@ function parsePorcelainZ(output) {
   for (let index = 0; index < records.length; index += 1) {
     const record = records[index];
     if (record.length < 4) throw new Error('git status returned an invalid porcelain record');
-    const status = record.slice(0, 2);
-    const paths = [record.slice(3)];
+    const status = record.subarray(0, 2).toString('ascii');
+    const paths = [decodeGitPath(record.subarray(3))];
     if (status[0] === 'R' || status[0] === 'C' || status[1] === 'R' || status[1] === 'C') {
       const related = records[++index];
       if (related == null)
         throw new Error('git status rename/copy record is missing its peer path');
-      paths.push(related);
+      paths.push(decodeGitPath(related));
     }
     mutations.push(paths);
   }
@@ -234,7 +363,8 @@ export function checkCleanState(cwd = ROOT) {
     ...new Set(
       parsePorcelainZ(statusOutput)
         .filter((paths) => paths.some((relPath) => !isExcluded(relPath)))
-        .flat(),
+        .flat()
+        .map(pathLabel),
     ),
   ];
   return { clean: dirtyPaths.length === 0, dirtyPaths };
