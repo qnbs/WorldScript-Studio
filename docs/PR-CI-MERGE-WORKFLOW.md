@@ -49,7 +49,12 @@ gh api --paginate -X GET "repos/qnbs/WorldScript-Studio/pulls" \
 any `-f`/`-F` parameter is present, and a `POST` to `.../pulls` calls the create-PR endpoint instead
 of listing anything, silently defeating the whole check.)
 
-If that returns nothing, `--delete-branch` is safe as shown above. If a stacked PR *does* depend on this branch, either retarget the dependent PR(s) to `main` first, or omit `--delete-branch` from this merge and delete the branch manually only after retargeting completes — don't knowingly trigger the stacked-PR auto-close quirk documented below and then rely on its recovery procedure as if that were the normal path.
+This repository has **`delete_branch_on_merge = true`** (verified live) — GitHub deletes the merged PR's head branch automatically regardless of whether `--delete-branch` is passed, so **omitting the flag does not preserve the branch and is not a safe fallback**. The rule is fail-closed:
+
+- **`DEPENDENT_OPEN_PRS = 0`** (the query above returns nothing) → normal protected squash auto-merge may proceed, `--delete-branch` included (harmless either way given the repo setting, but explicit).
+- **`DEPENDENT_OPEN_PRS > 0`** → **do not merge the base PR yet.** Retarget every dependent PR to a safe surviving base first (typically `main`, once its resulting diff has been inspected and is correct — GitHub recalculates that diff naturally once the base PR's changes land on `main`). Verify each dependent PR is still open with the intended base/diff. Re-run the exhaustive dependency query. Only merge the base PR once it returns `DEPENDENT_OPEN_PRS = 0`.
+
+Do not toggle the repository's `delete_branch_on_merge` setting as part of a merge, and don't deliberately trigger the stacked-PR auto-close/recovery path documented below and treat its recovery procedure as if that were the normal path.
 
 **Dependabot PRs follow their own, more specific policy — this general auto-merge instruction does not apply to them.** [`DEPENDABOT-TRIAGE.md`](DEPENDABOT-TRIAGE.md) removed this repo's auto-merge workflow outright (multiple independent version bumps in one upstream release made patch-level auto-merge unsafe) and requires manual, one-at-a-time review and merge instead. When `<PR>` is a Dependabot update, follow that doc's triage procedure, not `gh pr merge --auto` — a more specific policy overrides this general lifecycle rule wherever the two would otherwise conflict.
 
@@ -57,9 +62,11 @@ If that returns nothing, `--delete-branch` is safe as shown above. If a stacked 
 
 **Review-comment completeness requires checking three independent channels, every PR, before declaring "review-clean" or merging** — a bot can and does use more than one channel on the very same PR. The three channels are **not interchangeable and do not share a resolution mechanism** — track each with its own explicit state:
 
-- **`UNRESOLVED_REVIEW_THREADS = 0`** — GraphQL `reviewThreads`, paginated exhaustively (a single `first:50`/`first:100` page can silently miss an unresolved thread on a PR with a long review history — this PR's own review wave has already exceeded 50). This is the *only* channel with a resolvable state; clear it with `resolveReviewThread` (GraphQL), never applied to the other two channels below. Canonical paginated query — walk every page via `pageInfo.hasNextPage`/`endCursor` (or `gh api graphql --paginate`, which follows the same cursor convention automatically) before concluding `= 0`:
+- **`UNRESOLVED_REVIEW_THREADS = 0`** — two separate exhaustive queries, not one: (1) **thread resolution state**, GraphQL `reviewThreads`, paginated exhaustively (a single `first:50`/`first:100` page can silently miss an unresolved thread on a PR with a long review history — this PR's own review wave has already exceeded 50); (2) **thread content**, including any later reply saying a fix is incomplete — a nested `comments(first: 1)` inside the query above only exposes each thread's *original* comment, silently hiding follow-ups, and genuinely paginating that nested connection per-thread is needlessly complex. Instead fetch the flat, already-paginated REST endpoint that returns every inline review comment and reply across the whole PR, and cross-reference by `path`/`line`/thread membership as needed. This is the *only* channel with a resolvable state; clear it with `resolveReviewThread` (GraphQL), never applied to the other two channels below. A clean state requires **both** queries below, not just the first:
 
 ```bash
+# (1) Thread resolution state — walk every page via pageInfo.hasNextPage/endCursor
+# (gh api graphql --paginate follows this cursor convention automatically)
 gh api graphql --paginate \
   -f owner="qnbs" -f name="WorldScript-Studio" -F number=<PR_NUMBER> \
   -f query='
@@ -67,14 +74,24 @@ gh api graphql --paginate \
       repository(owner: $owner, name: $name) {
         pullRequest(number: $number) {
           reviewThreads(first: 100, after: $endCursor) {
-            nodes { id isResolved isOutdated path line
-              comments(first: 1) { nodes { databaseId author { login } createdAt body } } }
+            nodes { id isResolved isOutdated path line }
             pageInfo { hasNextPage endCursor }
           }
         }
       }
     }' --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved==false)'
 ```
+
+```bash
+# (2) Full inline comment/reply content, including any later reply on a thread —
+# this REST endpoint is already flat and paginated, no nested per-thread pagination needed.
+gh api --paginate -X GET "repos/<owner>/<repo>/pulls/<PR>/comments" -f per_page=100
+```
+
+A thread reported `isResolved: false` by query (1) whose latest reply (found via query (2), matched
+on `path`/`line`/`in_reply_to_id`) says the fix is incomplete is **not** actionable-clean just
+because the thread exists — read the actual latest content before treating a thread as reconciled.
+
 - **`NO_ACTIONABLE_TOP_LEVEL_ISSUE_COMMENTS = YES`** — plain top-level comments (qodo's real findings live here). These have no GraphQL-resolve mechanism; inspect each, fix/dispose of it, reply where appropriate, and confirm none remain actionable — do not call `resolveReviewThread` on them, there is no thread to resolve. **Paginate exhaustively** — a bare call inspects only the first REST page and can miss a later finding:
   ```bash
   gh api --paginate -X GET "repos/<owner>/<repo>/issues/<PR>/comments" -f per_page=100
@@ -83,7 +100,7 @@ gh api graphql --paginate \
   ```bash
   gh api --paginate -X GET "repos/<owner>/<repo>/pulls/<PR>/reviews" -f per_page=100
   ```
-  `--paginate` streams one JSON array per page to stdout — when piping into `--jq` for a single aggregate verdict, wrap the filter in `[inputs] + [.] | add` (or pipe the whole stream through `jq -s 'add'` first) so the check evaluates every page's items together, not just the first array `--jq` happens to see.
+  `gh api --paginate` applies `--jq` to *each page separately* — `--slurp` cannot be combined with `--jq` in the same `gh api` invocation, so there is no single-command way to aggregate. To evaluate one verdict across every page, don't pass `--jq` to `gh api` at all; pipe its raw paginated stream into a separate `jq -s` process instead: `gh api --paginate -X GET "<endpoint>" -f per_page=100 | jq -s 'add'` — the external `jq -s` (slurp) collects every page's array into one before the aggregate filter runs.
 
 None of the three implies the others are clean; all three must independently reach their state above — via **exhaustive pagination in all three**, not a first-page sample — before the PR is review-complete. **Reviewer capability/channels are observed live on each PR, never assumed from a static bot roster** — the roster above is a hint of what's been seen before, not an API contract (e.g. CodeAnt's roster entry lists status checks, but it has also posted a genuine inline review thread, confirmed on PR #538); check all three channels every time regardless of what a given bot has "usually" done, and don't skip re-triggering or reconciling a bot just because the roster doesn't mention that channel for it.
 

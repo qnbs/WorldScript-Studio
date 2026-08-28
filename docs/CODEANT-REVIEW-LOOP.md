@@ -145,7 +145,13 @@ gh api graphql --paginate \
 ```
 
 This matches the canonical exhaustive query in [`PR-CI-MERGE-WORKFLOW.md`](PR-CI-MERGE-WORKFLOW.md)'s
-`UNRESOLVED_REVIEW_THREADS` definition — keep both in sync if either changes.
+`UNRESOLVED_REVIEW_THREADS` definition — keep both in sync if either changes. Its `comments(first: 1)`
+here is intentional and sufficient **only** for extracting the original comment's `databaseId` to
+reply into (step 6) — it is not a completeness check. Before treating a thread as already reconciled,
+also inspect its full content (including any later reply saying a fix is incomplete) via the second,
+flat REST query in `PR-CI-MERGE-WORKFLOW.md`'s `UNRESOLVED_REVIEW_THREADS` section
+(`gh api --paginate -X GET .../pulls/PR_NUMBER/comments`) — a `comments(first: 1)` result alone can
+hide exactly that kind of follow-up.
 
 Keep the **`databaseId`** (REST comment id → for replies) and the thread **`id`** (`PRRT_…` →
 for `resolveReviewThread`) paired for each finding.

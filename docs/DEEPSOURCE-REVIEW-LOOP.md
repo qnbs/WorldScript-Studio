@@ -145,6 +145,12 @@ gh api graphql -f query='mutation($t:ID!){ resolveReviewThread(input:{threadId:$
   -F t="<THREAD_NODE_ID>"
 ```
 
+`comments(first:1)` above is intentional and sufficient only for extracting the original comment's
+`databaseId` to reply into — it is not a completeness check. Before treating a thread as already
+addressed, also inspect its full content (including any later reply) via the flat paginated REST
+query in `PR-CI-MERGE-WORKFLOW.md`'s `UNRESOLVED_REVIEW_THREADS` section
+(`gh api --paginate -X GET .../pulls/PR_NUMBER/comments`).
+
 ## 4. Validate, then fix or justify
 
 For **each** finding (same discipline as the CodeAnt loop):
@@ -229,7 +235,12 @@ then go back to §3.
 
 ## 9. Merge
 
-Once DeepSource is quiescent **and** all CI is green:
+DeepSource quiescence and green CI satisfy only *this file's* scope. Before merging, the PR must
+also satisfy [`PR-CI-MERGE-WORKFLOW.md`](PR-CI-MERGE-WORKFLOW.md)'s **full** merge-readiness
+classification — final-delta HIGH-RISK/LOW-RISK determination, all three review channels checked
+independently (not just DeepSource's), exact-head validation, security/static gates, the
+dependent-PR check, and the Dependabot exception where applicable. Once DeepSource is quiescent
+**and** all CI is green **and** that full classification is satisfied:
 
 - Prefer **auto-merge (squash)** using the exact command in `PR-CI-MERGE-WORKFLOW.md`'s
   merge-mechanics paragraph (`--match-head-commit <SHA>` pinning; `--delete-branch` only after that
