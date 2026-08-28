@@ -1,7 +1,15 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -9,6 +17,7 @@ import {
   classifyCommitObject,
   classifyTagVerification,
   computeWorkingTreeState,
+  getForeignRepoEnv,
   getSigningConfig,
   hasCommitSignature,
   isGitHubCompatibleEmail,
@@ -812,14 +821,17 @@ describe('signing probe isolation (foreign-repo environment leak hardening)', ()
     return dir;
   }
 
+  // QNBS-v3: fixture setup/snapshot commands must not themselves be redirectable by an ambient hostile env.
   function gitConfigLocal(dir: string, key: string, value: string) {
-    execFileSync('git', ['-C', dir, 'config', '--local', key, value]);
+    execFileSync('git', ['-C', dir, 'config', '--local', key, value], { env: getForeignRepoEnv() });
   }
 
   // QNBS-v3: real SSH-format signing/verification, matching this repo's own gpg.format=ssh setup.
   function createSigningFixture(): { dir: string; email: string } {
     const dir = scratchDir('worldscript-signing-fixture-');
-    execFileSync('git', ['init', '--quiet', '--initial-branch=main', dir]);
+    execFileSync('git', ['init', '--quiet', '--initial-branch=main', dir], {
+      env: getForeignRepoEnv(),
+    });
     const email = 'fixture@users.noreply.github.com';
     const keyPath = join(dir, 'id_ed25519');
     execFileSync('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', keyPath, '-C', email]);
@@ -835,8 +847,10 @@ describe('signing probe isolation (foreign-repo environment leak hardening)', ()
     gitConfigLocal(dir, 'gpg.ssh.allowedSignersFile', allowedSignersFile);
     // QNBS-v3: an empty repo has no refs at all, which makes `git show-ref` exit non-zero -- give it real history.
     writeFileSync(join(dir, 'README.md'), 'fixture\n');
-    execFileSync('git', ['-C', dir, 'add', 'README.md']);
-    execFileSync('git', ['-C', dir, 'commit', '--quiet', '-m', 'initial commit']);
+    execFileSync('git', ['-C', dir, 'add', 'README.md'], { env: getForeignRepoEnv() });
+    execFileSync('git', ['-C', dir, 'commit', '--quiet', '-m', 'initial commit'], {
+      env: getForeignRepoEnv(),
+    });
     return { dir, email };
   }
 
@@ -844,12 +858,22 @@ describe('signing probe isolation (foreign-repo environment leak hardening)', ()
     return {
       config: readFileSync(join(dir, '.git', 'config'), 'utf8'),
       head: readFileSync(join(dir, '.git', 'HEAD'), 'utf8'),
-      refs: execFileSync('git', ['-C', dir, 'show-ref'], { encoding: 'utf8' }),
+      refs: execFileSync('git', ['-C', dir, 'show-ref'], {
+        encoding: 'utf8',
+        env: getForeignRepoEnv(),
+      }),
     };
   }
 
+  // QNBS-v3: sorted, before/after-diffed rather than order- or concurrency-dependent full equality.
   function probeTempDirs(): string[] {
-    return readdirSync(tmpdir()).filter((name) => name.startsWith('worldscript-signing-probe-'));
+    return readdirSync(tmpdir())
+      .filter((name) => name.startsWith('worldscript-signing-probe-'))
+      .sort();
+  }
+
+  function newProbeTempDirsSince(before: string[]): string[] {
+    return probeTempDirs().filter((name) => !before.includes(name));
   }
 
   afterEach(() => {
@@ -873,6 +897,7 @@ describe('signing probe isolation (foreign-repo environment leak hardening)', ()
           expect(() =>
             execFileSync('git', ['-C', dir, 'cat-file', '-e', result.commit as string], {
               stdio: 'ignore',
+              env: getForeignRepoEnv(),
             }),
           ).toThrow();
         } finally {
@@ -889,7 +914,7 @@ describe('signing probe isolation (foreign-repo environment leak hardening)', ()
     const before = probeTempDirs();
     const result = runSigningProbe(dir);
     expect(result.ok).toBe(true);
-    expect(probeTempDirs()).toEqual(before);
+    expect(newProbeTempDirsSince(before)).toEqual([]);
   });
 
   it('cleans up the disposable probe directory even when a probe step fails mid-way', () => {
@@ -899,7 +924,19 @@ describe('signing probe isolation (foreign-repo environment leak hardening)', ()
     const before = probeTempDirs();
     const result = runSigningProbe(dir);
     expect(result.ok).toBe(false);
-    expect(probeTempDirs()).toEqual(before);
+    expect(newProbeTempDirsSince(before)).toEqual([]);
+  });
+
+  // QNBS-v3: regression for the CodeRabbit finding -- an unrelated same-prefixed directory must not defeat the cleanup assertion.
+  it('cleanup assertion ignores an unrelated pre-existing probe-prefixed directory', () => {
+    const { dir } = createSigningFixture();
+    const decoy = scratchDir('worldscript-signing-probe-decoy-');
+    const before = probeTempDirs();
+    expect(before).toContain(basename(decoy));
+    const result = runSigningProbe(dir);
+    expect(result.ok).toBe(true);
+    expect(newProbeTempDirsSince(before)).toEqual([]);
+    expect(existsSync(decoy)).toBe(true);
   });
 
   it('runs two probes concurrently in separate OS processes without interference', async () => {
@@ -967,7 +1004,8 @@ describe('signing probe isolation (foreign-repo environment leak hardening)', ()
       fileCounter += 1;
       const file = join(fixture.dir, `file-${fileCounter}.txt`);
       writeFileSync(file, `content-${fileCounter}`);
-      execFileSync('git', ['-C', fixture.dir, 'add', file]);
+      // QNBS-v3: setup is sanitized, but the commit itself deliberately keeps the ambient/-c env under test.
+      execFileSync('git', ['-C', fixture.dir, 'add', file], { env: getForeignRepoEnv() });
       return spawnSync(
         'git',
         ['-C', fixture.dir, ...extraGitArgs, 'commit', '-m', `test commit ${fileCounter}`],
@@ -999,6 +1037,18 @@ describe('signing probe isolation (foreign-repo environment leak hardening)', ()
       );
       expect(result.stderr).toMatch(
         /isolated signing probe: failed — command-scope override redefines persisted policy for commit\.gpgsign/,
+      );
+    });
+
+    // QNBS-v3: regression for the Codex P1 finding -- a verification-affecting key outside the old 4-key list must also fail closed.
+    it('fails closed on a -c override to gpg.ssh.revocationFile, a verification-affecting key', () => {
+      const result = attemptCommit([
+        '-c',
+        `gpg.ssh.revocationFile=${join(fixture.dir, 'revoked')}`,
+      ]);
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toMatch(
+        /repository policy: mismatch — command-scope override redefines persisted policy for gpg\.ssh\.revocationFile/,
       );
     });
   });
@@ -1054,6 +1104,119 @@ describe('signing probe isolation (foreign-repo environment leak hardening)', ()
         ok: false,
         reason: 'command-scope configuration is malformed',
       });
+    });
+
+    // QNBS-v3: regression for the Codex P2 finding -- git-boolean-equivalent overrides of a persisted "true" must not be treated as raw-string mismatches.
+    it.each(['yes', 'on', '1', 'True', 'YES'])(
+      'is not fatal for a git-boolean-true-equivalent override (%s) against a persisted true',
+      (equivalent) => {
+        const env = {
+          ...process.env,
+          GIT_CONFIG_COUNT: '1',
+          GIT_CONFIG_KEY_0: 'commit.gpgsign',
+          GIT_CONFIG_VALUE_0: equivalent,
+        };
+        expect(auditRepositoryPolicy(fixture.dir, env)).toMatchObject({ ok: true });
+      },
+    );
+
+    // QNBS-v3: git-boolean-false-equivalent overrides of a persisted "false" must likewise not be treated as raw-string mismatches.
+    it.each(['no', 'off', '0', 'False'])(
+      'is not fatal for a git-boolean-false-equivalent override (%s) against a persisted false',
+      (equivalent) => {
+        gitConfigLocal(fixture.dir, 'commit.gpgsign', 'false');
+        const env = {
+          ...process.env,
+          GIT_CONFIG_COUNT: '1',
+          GIT_CONFIG_KEY_0: 'commit.gpgsign',
+          GIT_CONFIG_VALUE_0: equivalent,
+        };
+        expect(auditRepositoryPolicy(fixture.dir, env)).toMatchObject({ ok: true });
+      },
+    );
+
+    it('still fails when a boolean override genuinely flips the persisted value', () => {
+      const env = {
+        ...process.env,
+        GIT_CONFIG_COUNT: '1',
+        GIT_CONFIG_KEY_0: 'commit.gpgsign',
+        GIT_CONFIG_VALUE_0: 'no',
+      };
+      expect(auditRepositoryPolicy(fixture.dir, env)).toMatchObject({
+        ok: false,
+        reason: 'command-scope override redefines persisted policy for commit.gpgsign',
+      });
+    });
+
+    // QNBS-v3: a ~-relative override resolving to the same file as the persisted absolute path must not be a mismatch.
+    it('is not fatal for a semantically equivalent (~-relative) path override', () => {
+      const env = {
+        ...process.env,
+        HOME: fixture.dir,
+        GIT_CONFIG_COUNT: '1',
+        GIT_CONFIG_KEY_0: 'user.signingkey',
+        GIT_CONFIG_VALUE_0: '~/id_ed25519',
+      };
+      expect(auditRepositoryPolicy(fixture.dir, env)).toMatchObject({ ok: true });
+    });
+
+    it('still fails when a path override genuinely points elsewhere', () => {
+      const env = {
+        ...process.env,
+        GIT_CONFIG_COUNT: '1',
+        GIT_CONFIG_KEY_0: 'user.signingkey',
+        GIT_CONFIG_VALUE_0: join(fixture.dir, 'a-different-key'),
+      };
+      expect(auditRepositoryPolicy(fixture.dir, env)).toMatchObject({
+        ok: false,
+        reason: 'command-scope override redefines persisted policy for user.signingkey',
+      });
+    });
+  });
+
+  describe('doctor.mjs mode contract (--hook vs. plain EFFECTIVE_INVOCATION_MODE)', () => {
+    // QNBS-v3: regression for the CodeAnt finding -- a coarse override must not turn the plain diagnostic mode fatal.
+    it('does not fail plain `signing:doctor` (no --hook) merely because a coarse override is present', () => {
+      const { dir } = createSigningFixture();
+      const result = spawnSync(process.execPath, [doctorPath], {
+        cwd: dir,
+        env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1' },
+        encoding: 'utf8',
+      });
+      expect(result.status).toBe(0);
+      expect(result.stdout).toMatch(/isolated signing probe: passed/);
+    });
+
+    it('still fails `signing:doctor --hook` when the same coarse override is present', () => {
+      const { dir } = createSigningFixture();
+      const result = spawnSync(process.execPath, [doctorPath, '--hook'], {
+        cwd: dir,
+        env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1' },
+        encoding: 'utf8',
+      });
+      expect(result.status).not.toBe(0);
+      expect(result.stdout).toMatch(
+        /isolated signing probe: failed — unsafe config override detected/,
+      );
+    });
+  });
+
+  describe('fixture helper isolation (CodeRabbit finding)', () => {
+    // QNBS-v3: the fixture helpers that stand in for "the real repo" must not themselves be redirectable by an ambient hostile env.
+    it('creates the fixture at its real path even under an inherited GIT_DIR pointing elsewhere', () => {
+      const decoy = scratchDir('worldscript-signing-decoy-');
+      const gitDirVar = 'GIT_DIR';
+      const original = process.env[gitDirVar];
+      process.env[gitDirVar] = join(decoy, '.git');
+      let fixture: { dir: string; email: string };
+      try {
+        fixture = createSigningFixture();
+      } finally {
+        if (original === undefined) delete process.env[gitDirVar];
+        else process.env[gitDirVar] = original;
+      }
+      expect(readFileSync(join(fixture.dir, '.git', 'config'), 'utf8')).toContain(fixture.email);
+      expect(existsSync(join(decoy, '.git'))).toBe(false);
     });
   });
 });

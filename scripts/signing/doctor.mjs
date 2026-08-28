@@ -11,11 +11,7 @@ import {
 } from './signing-core.mjs';
 
 const jsonMode = process.argv.includes('--json');
-// REPOSITORY_POLICY_MODE (--hook, invoked by pre-commit.mjs): proves the effective signing
-// config matches WorldScript-Studio's persisted policy, unredefined by command-scope (`git -c`)
-// config. EFFECTIVE_INVOCATION_MODE (no --hook, plain `pnpm run signing:doctor`): diagnostic
-// only -- reports the actual effective config without treating any override as inherently
-// hostile, since a human running it interactively wants to see what would actually happen.
+// QNBS-v3: --hook enforces fail-closed REPOSITORY_POLICY_MODE; without it, plain diagnostic mode never treats an override as fatal.
 const hookMode = process.argv.includes('--hook');
 const cwd = process.cwd();
 const signing = getSigningConfig(cwd);
@@ -24,7 +20,8 @@ const unsafeOverrides = getUnsafeOverrides();
 const policyAudit = hookMode
   ? auditRepositoryPolicy(cwd)
   : { ok: true, reason: 'not audited (EFFECTIVE_INVOCATION_MODE)' };
-const fatalOverride = unsafeOverrides.length > 0 || !policyAudit.ok;
+// QNBS-v3: gate both override classes on hookMode so plain `signing:doctor` never fails from override presence alone.
+const fatalOverride = hookMode && (unsafeOverrides.length > 0 || !policyAudit.ok);
 
 // QNBS-v3: a fatal override must skip the probe entirely, not run it and discard the result.
 const probe = fatalOverride
