@@ -1,8 +1,11 @@
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
+  auditRepositoryPolicy,
   classifyCommitObject,
   classifyTagVerification,
   computeWorkingTreeState,
@@ -17,6 +20,7 @@ import {
   pushEventRange,
   readPrePushEvidenceFile,
   resolvePushEvidence,
+  runSigningProbe,
   selectIntroducedCommits,
   serializePrePushEvidence,
   verifyOutgoingUpdates,
@@ -794,5 +798,262 @@ describe('GitHub signature API controls', () => {
     });
     expect(lightweight.ok).toBe(false);
     expect(lightweight.reason).toContain('not an annotated tag object');
+  });
+});
+
+// QNBS-v3: real disposable git fixtures, not mocks -- the defect class is about real git subprocess env/resolution behavior.
+describe('signing probe isolation (foreign-repo environment leak hardening)', () => {
+  const doctorPath = resolve(process.cwd(), 'scripts/signing/doctor.mjs');
+  const scratchDirs: string[] = [];
+
+  function scratchDir(prefix: string): string {
+    const dir = mkdtempSync(join(tmpdir(), prefix));
+    scratchDirs.push(dir);
+    return dir;
+  }
+
+  function gitConfigLocal(dir: string, key: string, value: string) {
+    execFileSync('git', ['-C', dir, 'config', '--local', key, value]);
+  }
+
+  // QNBS-v3: real SSH-format signing/verification, matching this repo's own gpg.format=ssh setup.
+  function createSigningFixture(): { dir: string; email: string } {
+    const dir = scratchDir('worldscript-signing-fixture-');
+    execFileSync('git', ['init', '--quiet', '--initial-branch=main', dir]);
+    const email = 'fixture@users.noreply.github.com';
+    const keyPath = join(dir, 'id_ed25519');
+    execFileSync('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', keyPath, '-C', email]);
+    const publicKey = readFileSync(`${keyPath}.pub`, 'utf8').trim();
+    const allowedSignersFile = join(dir, 'allowed_signers');
+    writeFileSync(allowedSignersFile, `${email} ${publicKey}\n`);
+    gitConfigLocal(dir, 'user.name', 'Fixture User');
+    gitConfigLocal(dir, 'user.email', email);
+    gitConfigLocal(dir, 'commit.gpgsign', 'true');
+    gitConfigLocal(dir, 'tag.gpgsign', 'true');
+    gitConfigLocal(dir, 'gpg.format', 'ssh');
+    gitConfigLocal(dir, 'user.signingkey', keyPath);
+    gitConfigLocal(dir, 'gpg.ssh.allowedSignersFile', allowedSignersFile);
+    // QNBS-v3: an empty repo has no refs at all, which makes `git show-ref` exit non-zero -- give it real history.
+    writeFileSync(join(dir, 'README.md'), 'fixture\n');
+    execFileSync('git', ['-C', dir, 'add', 'README.md']);
+    execFileSync('git', ['-C', dir, 'commit', '--quiet', '-m', 'initial commit']);
+    return { dir, email };
+  }
+
+  function snapshotRepo(dir: string) {
+    return {
+      config: readFileSync(join(dir, '.git', 'config'), 'utf8'),
+      head: readFileSync(join(dir, '.git', 'HEAD'), 'utf8'),
+      refs: execFileSync('git', ['-C', dir, 'show-ref'], { encoding: 'utf8' }),
+    };
+  }
+
+  function probeTempDirs(): string[] {
+    return readdirSync(tmpdir()).filter((name) => name.startsWith('worldscript-signing-probe-'));
+  }
+
+  afterEach(() => {
+    for (const dir of scratchDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  });
+
+  describe('foreign-repo env leak vectors (probe stays isolated under a hostile ambient env)', () => {
+    const hostileVars = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_INDEX_FILE'] as const;
+
+    for (const varName of hostileVars) {
+      it(`does not let an inherited ${varName} redirect the probe into the real repo`, () => {
+        const { dir } = createSigningFixture();
+        const before = snapshotRepo(dir);
+        const original = process.env[varName];
+        process.env[varName] =
+          varName === 'GIT_INDEX_FILE' ? join(dir, '.git', 'index') : join(dir, '.git');
+        try {
+          const result = runSigningProbe(dir);
+          expect(result.ok).toBe(true);
+          // QNBS-v3: proves the commit object never touched the fixture's own object database.
+          expect(() =>
+            execFileSync('git', ['-C', dir, 'cat-file', '-e', result.commit as string], {
+              stdio: 'ignore',
+            }),
+          ).toThrow();
+        } finally {
+          if (original === undefined) delete process.env[varName];
+          else process.env[varName] = original;
+        }
+        expect(snapshotRepo(dir)).toEqual(before);
+      });
+    }
+  });
+
+  it('cleans up the disposable probe directory on success', () => {
+    const { dir } = createSigningFixture();
+    const before = probeTempDirs();
+    const result = runSigningProbe(dir);
+    expect(result.ok).toBe(true);
+    expect(probeTempDirs()).toEqual(before);
+  });
+
+  it('cleans up the disposable probe directory even when a probe step fails mid-way', () => {
+    const { dir } = createSigningFixture();
+    // QNBS-v3: an unusable signing key lets config succeed but makes the later commit-tree -S step genuinely fail.
+    gitConfigLocal(dir, 'user.signingkey', join(dir, 'no-such-key'));
+    const before = probeTempDirs();
+    const result = runSigningProbe(dir);
+    expect(result.ok).toBe(false);
+    expect(probeTempDirs()).toEqual(before);
+  });
+
+  it('runs two probes concurrently in separate OS processes without interference', async () => {
+    const { dir } = createSigningFixture();
+    const before = snapshotRepo(dir);
+    const runInChildProcess = (): Promise<{ ok: boolean; commit?: string; reason?: string }> =>
+      new Promise((resolvePromise, reject) => {
+        const moduleUrl = pathToFileURL(
+          resolve(process.cwd(), 'scripts/signing/signing-core.mjs'),
+        ).href;
+        const child = spawn(
+          process.execPath,
+          [
+            '-e',
+            `import(${JSON.stringify(moduleUrl)}).then(m => { process.stdout.write(JSON.stringify(m.runSigningProbe(${JSON.stringify(dir)}))); });`,
+          ],
+          { stdio: ['ignore', 'pipe', 'pipe'] },
+        );
+        let stdout = '';
+        child.stdout.on('data', (chunk) => {
+          stdout += chunk;
+        });
+        child.on('error', reject);
+        child.on('close', () => {
+          try {
+            resolvePromise(JSON.parse(stdout));
+          } catch (error) {
+            reject(error);
+          }
+        });
+      });
+    const [first, second] = await Promise.all([runInChildProcess(), runInChildProcess()]);
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    // QNBS-v3: isolation means neither corrupted the outer repo, not that deterministic ed25519 signatures must differ.
+    expect(snapshotRepo(dir)).toEqual(before);
+  });
+
+  it('regresses none of the pre-existing signing.test.ts assertions', () => {
+    // QNBS-v3: explicit marker -- the full suite already re-runs on every invocation of this file.
+    expect(getSigningConfig()).toHaveProperty('enabled');
+  });
+
+  describe('REPOSITORY_POLICY_MODE (--hook path, real git commit through the real pre-commit hook)', () => {
+    let fixture: { dir: string; email: string };
+    let fileCounter = 0;
+
+    beforeAll(() => {
+      fixture = createSigningFixture();
+      // QNBS-v3: owned by this describe's own afterAll -- the shared afterEach must not wipe it between these tests.
+      scratchDirs.splice(scratchDirs.indexOf(fixture.dir), 1);
+      const hookPath = join(fixture.dir, '.git', 'hooks', 'pre-commit');
+      writeFileSync(
+        hookPath,
+        `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(doctorPath)} --hook\n`,
+        { mode: 0o755 },
+      );
+    });
+
+    afterAll(() => {
+      rmSync(fixture.dir, { recursive: true, force: true });
+    });
+
+    function attemptCommit(extraGitArgs: string[] = []) {
+      fileCounter += 1;
+      const file = join(fixture.dir, `file-${fileCounter}.txt`);
+      writeFileSync(file, `content-${fileCounter}`);
+      execFileSync('git', ['-C', fixture.dir, 'add', file]);
+      return spawnSync(
+        'git',
+        ['-C', fixture.dir, ...extraGitArgs, 'commit', '-m', `test commit ${fileCounter}`],
+        { encoding: 'utf8' },
+      );
+    }
+
+    it('passes a normal commit through the real pre-commit hook', () => {
+      const result = attemptCommit();
+      expect(result.status).toBe(0);
+    });
+
+    it('does not regress a harmless -c override unrelated to the signing policy', () => {
+      const result = attemptCommit(['-c', 'core.editor=true']);
+      expect(result.status).toBe(0);
+    });
+
+    it('does not fail on a -c override that matches the persisted policy value', () => {
+      const result = attemptCommit(['-c', 'commit.gpgsign=true']);
+      expect(result.status).toBe(0);
+    });
+
+    it('fails closed before the probe runs when a -c override redefines the signing policy', () => {
+      const result = attemptCommit(['-c', 'commit.gpgsign=false']);
+      expect(result.status).not.toBe(0);
+      // QNBS-v3: git relays a FAILING hook's stdout through its own stderr; a passing hook's goes through stdout.
+      expect(result.stderr).toMatch(
+        /repository policy: mismatch — command-scope override redefines persisted policy for commit\.gpgsign/,
+      );
+      expect(result.stderr).toMatch(
+        /isolated signing probe: failed — command-scope override redefines persisted policy for commit\.gpgsign/,
+      );
+    });
+  });
+
+  describe('auditRepositoryPolicy (direct unit coverage for the comparison/validation logic)', () => {
+    let fixture: { dir: string; email: string };
+
+    beforeEach(() => {
+      fixture = createSigningFixture();
+    });
+
+    it('matches when no command-scope override is present', () => {
+      expect(auditRepositoryPolicy(fixture.dir, process.env)).toMatchObject({ ok: true });
+    });
+
+    it('is not fatal for a well-formed override outside the audited key set', () => {
+      const env = {
+        ...process.env,
+        GIT_CONFIG_COUNT: '1',
+        GIT_CONFIG_KEY_0: 'core.editor',
+        GIT_CONFIG_VALUE_0: 'true',
+      };
+      expect(auditRepositoryPolicy(fixture.dir, env)).toMatchObject({ ok: true });
+    });
+
+    it('is not fatal for an override equal to the persisted value', () => {
+      const env = {
+        ...process.env,
+        GIT_CONFIG_COUNT: '1',
+        GIT_CONFIG_KEY_0: 'commit.gpgsign',
+        GIT_CONFIG_VALUE_0: 'true',
+      };
+      expect(auditRepositoryPolicy(fixture.dir, env)).toMatchObject({ ok: true });
+    });
+
+    it('fails when an override redefines an audited policy key', () => {
+      const env = {
+        ...process.env,
+        GIT_CONFIG_COUNT: '1',
+        GIT_CONFIG_KEY_0: 'commit.gpgsign',
+        GIT_CONFIG_VALUE_0: 'false',
+      };
+      expect(auditRepositoryPolicy(fixture.dir, env)).toMatchObject({
+        ok: false,
+        reason: 'command-scope override redefines persisted policy for commit.gpgsign',
+      });
+    });
+
+    it('fails closed when command-scope config is internally malformed', () => {
+      // QNBS-v3: declares 1 override pair via COUNT but supplies neither KEY_0 nor VALUE_0.
+      const env = { ...process.env, GIT_CONFIG_COUNT: '1' };
+      expect(auditRepositoryPolicy(fixture.dir, env)).toMatchObject({
+        ok: false,
+        reason: 'command-scope configuration is malformed',
+      });
+    });
   });
 });

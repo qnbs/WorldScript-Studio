@@ -8,12 +8,12 @@ const SHA = /^[0-9a-f]{40}$/i;
 const ZERO_SHA = /^0{40}$/;
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 
-export function runGit(args, { cwd = process.cwd(), input = '' } = {}) {
+export function runGit(args, { cwd = process.cwd(), input = '', env } = {}) {
   const result = spawnSync('git', args, {
     cwd,
     encoding: 'utf8',
     env: {
-      ...process.env,
+      ...(env ?? process.env),
       GIT_TERMINAL_PROMPT: '0',
       SSH_ASKPASS: '/bin/false',
       SSH_ASKPASS_REQUIRE: 'force',
@@ -44,6 +44,88 @@ export function isZeroSha(value) {
   return ZERO_SHA.test(value);
 }
 
+// Git's own repository-selection variables (`git rev-parse --local-env-vars`, git 2.45.1).
+// Legitimate for ordinary calls against the real, current repo (git itself sets these for
+// hook subprocesses) -- but must never leak into an operation against a *different*,
+// disposable repository, since they override cwd-based repo discovery entirely.
+const GIT_LOCAL_ENV_VARS = [
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_CONFIG',
+  'GIT_CONFIG_PARAMETERS',
+  'GIT_CONFIG_COUNT',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_IMPLICIT_WORK_TREE',
+  'GIT_GRAFT_FILE',
+  'GIT_INDEX_FILE',
+  'GIT_NO_REPLACE_OBJECTS',
+  'GIT_REPLACE_REF_BASE',
+  'GIT_PREFIX',
+  'GIT_SHALLOW_FILE',
+  'GIT_COMMON_DIR',
+];
+
+// Coarse, wholesale config-source overrides: substitute or suppress an entire config layer.
+// None of these are what a normal `git -c key=value` invocation sets, so treating them as
+// always-unsafe carries negligible false-positive risk against real hook invocations.
+const GIT_COARSE_CONFIG_OVERRIDES = [
+  'GIT_CONFIG',
+  'GIT_CONFIG_SYSTEM',
+  'GIT_CONFIG_GLOBAL',
+  'GIT_CONFIG_NOSYSTEM',
+];
+
+// QNBS-v3: the carrier pair for `-c`-style overrides; stripping only the numbered KEY_n/VALUE_n entries would leave a stale COUNT that git itself treats as malformed.
+const GIT_COMMAND_SCOPE_CARRIERS = ['GIT_CONFIG_COUNT', 'GIT_CONFIG_PARAMETERS'];
+
+// QNBS-v3: detect every GIT_CONFIG_KEY_n/VALUE_n pair present, independent of a possibly-wrong GIT_CONFIG_COUNT.
+function numberedConfigOverrideKeys(env) {
+  const names = new Set();
+  for (const name of Object.keys(env)) {
+    if (/^GIT_CONFIG_(?:KEY|VALUE)_\d+$/.test(name)) names.add(name);
+  }
+  return [...names];
+}
+
+function stripKeys(env, keys) {
+  const copy = { ...env };
+  for (const key of keys) delete copy[key];
+  return copy;
+}
+
+// Foreign-repo (disposable probe) environment: strip everything that could redirect a git
+// invocation away from the probe repository, or inject arbitrary config into it, regardless
+// of whether the surrounding real-invocation context is itself considered safe.
+export function getForeignRepoEnv(baseEnv = process.env) {
+  return stripKeys(baseEnv, [
+    ...GIT_LOCAL_ENV_VARS,
+    ...GIT_COARSE_CONFIG_OVERRIDES,
+    ...numberedConfigOverrideKeys(baseEnv),
+  ]);
+}
+
+// Real-repo policy-baseline environment: strip ONLY command-scope config injection, keep
+// repository-routing vars (GIT_DIR etc.) intact so this still resolves the SAME repository --
+// used to compare "persisted policy" against "effective config" for REPOSITORY_POLICY_MODE.
+export function getPolicyBaselineEnv(baseEnv = process.env) {
+  return stripKeys(baseEnv, [
+    ...GIT_COARSE_CONFIG_OVERRIDES,
+    ...GIT_COMMAND_SCOPE_CARRIERS,
+    ...numberedConfigOverrideKeys(baseEnv),
+  ]);
+}
+
+// Runs a git command against an explicitly-addressed, isolated repository: no ambient
+// environment variable can redirect it elsewhere, and `cwd`/`--git-dir` both name the target.
+export function foreignRepoGit(repo, args, options = {}) {
+  return runGit(['-C', repo, '--git-dir', join(repo, '.git'), ...args], {
+    ...options,
+    cwd: repo,
+    env: getForeignRepoEnv(),
+  });
+}
+
 export function getRepositoryRoot(cwd = process.cwd()) {
   const root = gitOutput(['rev-parse', '--show-toplevel'], { cwd });
   return root ? resolve(root) : null;
@@ -54,19 +136,25 @@ export function getGitDirectory(cwd = process.cwd()) {
   return gitDir ? resolve(cwd, gitDir) : null;
 }
 
+// Single source of truth for "which config keys make up WorldScript-Studio's signing/
+// verification policy" -- used both for normal config reporting (getConfig) and for the
+// REPOSITORY_POLICY_MODE persisted-vs-effective comparison (auditRepositoryPolicy) below.
+export const SIGNING_POLICY_KEYS = [
+  'user.email',
+  'user.name',
+  'user.signingkey',
+  'commit.gpgsign',
+  'tag.gpgsign',
+  'gpg.format',
+  'gpg.program',
+  'gpg.ssh.program',
+  'gpg.ssh.allowedSignersFile',
+  'core.hooksPath',
+];
+
 export function getConfig(cwd = process.cwd()) {
-  const keys = [
-    'user.email',
-    'user.name',
-    'user.signingkey',
-    'commit.gpgsign',
-    'gpg.format',
-    'gpg.program',
-    'gpg.ssh.allowedSignersFile',
-    'core.hooksPath',
-  ];
   const values = Object.fromEntries(
-    keys.map((key) => [key, gitOutput(['config', '--get', key], { cwd })]),
+    SIGNING_POLICY_KEYS.map((key) => [key, gitOutput(['config', '--get', key], { cwd })]),
   );
   return values;
 }
@@ -80,15 +168,60 @@ export function isGitHubCompatibleEmail(email) {
   return /^\d+\+[^@\s]+@users\.noreply\.github\.com$/i.test(email);
 }
 
+// Coarse config-source overrides only -- unconditionally unsafe regardless of invocation mode,
+// since none of these are what a legitimate `git -c key=value` sets (see GIT_COARSE_CONFIG_
+// OVERRIDES above). Surgical, `-c`-style overrides (GIT_CONFIG_COUNT/PARAMETERS/KEY_n/VALUE_n)
+// are deliberately NOT reported here -- their mere presence must never be fatal; see
+// auditRepositoryPolicy() for the narrower, context-aware check that actually governs those.
 export function getUnsafeOverrides(env = process.env) {
-  const names = [
-    'GIT_CONFIG_NOSYSTEM',
-    'GIT_CONFIG_SYSTEM',
-    'GIT_CONFIG_GLOBAL',
-    'GIT_CONFIG_COUNT',
-    'GIT_CONFIG_PARAMETERS',
-  ];
-  return names.filter((name) => env[name] !== undefined).map((name) => name);
+  return GIT_COARSE_CONFIG_OVERRIDES.filter((name) => env[name] !== undefined);
+}
+
+// QNBS-v3: distinguishes "key genuinely unset" (status 1, silent) from "config source unreadable" (any other failure).
+function readConfigValue(key, cwd, env) {
+  const result = runGit(['config', '--get', key], { cwd, env });
+  if (result.status === 0) return { ok: true, value: result.stdout.trim() };
+  if (result.status === 1 && !result.error && !result.stderr) return { ok: true, value: '' };
+  return { ok: false, value: '' };
+}
+
+// QNBS-v3: a wrong/missing GIT_CONFIG_COUNT or a stray numbered pair makes the override unverifiable, not merely absent.
+function commandScopeConfigIsWellFormed(env) {
+  const countRaw = env.GIT_CONFIG_COUNT;
+  const numbered = numberedConfigOverrideKeys(env);
+  if (countRaw === undefined) return numbered.length === 0;
+  const count = Number.parseInt(countRaw, 10);
+  if (!Number.isInteger(count) || count < 0 || String(count) !== countRaw) return false;
+  for (let i = 0; i < count; i += 1) {
+    if (env[`GIT_CONFIG_KEY_${i}`] === undefined || env[`GIT_CONFIG_VALUE_${i}`] === undefined)
+      return false;
+  }
+  return numbered.length === count * 2;
+}
+
+// REPOSITORY_POLICY_MODE: proves the *effective* signing configuration (what git will actually
+// use for this invocation, command-scope overlays included) matches WorldScript-Studio's
+// *persistent* policy (the same repo, read with command-scope config injection stripped) --
+// i.e. that a `git -c ...` override has not semantically redefined it. A well-formed override
+// that happens to set the same value as the persisted policy is not fatal; only an actual
+// mismatch, or malformed command-scope config that makes the comparison itself unreliable, is.
+// Never logs values -- only key names and match/mismatch, mirroring getUnsafeOverrides().
+export function auditRepositoryPolicy(cwd = process.cwd(), env = process.env) {
+  if (!commandScopeConfigIsWellFormed(env)) {
+    return { ok: false, reason: 'command-scope configuration is malformed' };
+  }
+  const baselineEnv = getPolicyBaselineEnv(env);
+  for (const key of SIGNING_POLICY_KEYS) {
+    const effective = readConfigValue(key, cwd, env);
+    const persistent = readConfigValue(key, cwd, baselineEnv);
+    if (!effective.ok || !persistent.ok) {
+      return { ok: false, reason: `policy source for ${key} could not be resolved` };
+    }
+    if (effective.value !== persistent.value) {
+      return { ok: false, reason: `command-scope override redefines persisted policy for ${key}` };
+    }
+  }
+  return { ok: true, reason: 'effective configuration matches persisted policy' };
 }
 
 export function isSigningEnabled(config) {
@@ -126,7 +259,8 @@ function configureProbeRepository(repo, signing, identity) {
   if (signing.allowedSignersFile)
     settings.push(['gpg.ssh.allowedSignersFile', signing.allowedSignersFile]);
   for (const [key, value] of settings) {
-    const result = runGit(['config', key, value], { cwd: repo });
+    // QNBS-v3: --local plus explicit repo addressing keeps every probe config write inside the disposable repo.
+    const result = foreignRepoGit(repo, ['config', '--local', key, value]);
     if (result.status !== 0) return false;
   }
   return true;
@@ -156,16 +290,20 @@ export function runSigningProbe(cwd = process.cwd()) {
     probe = mkdtempSync(join(cwd, '.worldscript-signing-probe-'));
   }
   try {
-    let result = runGit(['init', '--quiet', '--initial-branch=main', probe]);
+    // QNBS-v3: init's target is positional/explicit; the foreign-repo env still guards against a leaked GIT_DIR redirecting it.
+    let result = runGit(['init', '--quiet', '--initial-branch=main', probe], {
+      env: getForeignRepoEnv(),
+    });
     if (result.status !== 0 || !configureProbeRepository(probe, signing, identity)) {
       return { ok: false, reason: 'isolated probe repository could not be configured' };
     }
-    result = runGit(
-      ['commit-tree', '-S', '-m', 'WorldScript signing capability probe', EMPTY_TREE],
-      {
-        cwd: probe,
-      },
-    );
+    result = foreignRepoGit(probe, [
+      'commit-tree',
+      '-S',
+      '-m',
+      'WorldScript signing capability probe',
+      EMPTY_TREE,
+    ]);
     if (result.status !== 0 || !isSha(result.stdout.trim())) {
       return {
         ok: false,
@@ -173,7 +311,9 @@ export function runSigningProbe(cwd = process.cwd()) {
       };
     }
     const commit = result.stdout.trim();
-    const verification = verifyCommitObject(commit, probe);
+    const verification = verifyCommitObject(commit, probe, {
+      runGit: (args, options) => foreignRepoGit(probe, args, options),
+    });
     return verification.ok
       ? { ok: true, commit }
       : { ok: false, reason: `Git-native verification failed: ${verification.reason}` };
@@ -194,11 +334,12 @@ export function classifyCommitObject({ objectType, contents, verificationStatus 
   return { ok: true, reason: 'Git-native signature verified' };
 }
 
-export function verifyCommitObject(sha, cwd = process.cwd()) {
+export function verifyCommitObject(sha, cwd = process.cwd(), dependencies = {}) {
+  const runGitFn = dependencies.runGit ?? runGit;
   if (!isSha(sha)) return { ok: false, reason: 'invalid commit SHA' };
-  const object = runGit(['cat-file', '-t', sha], { cwd });
-  const contents = runGit(['cat-file', '-p', sha], { cwd });
-  const verified = runGit(['verify-commit', '--raw', sha], { cwd });
+  const object = runGitFn(['cat-file', '-t', sha], { cwd });
+  const contents = runGitFn(['cat-file', '-p', sha], { cwd });
+  const verified = runGitFn(['verify-commit', '--raw', sha], { cwd });
   return classifyCommitObject({
     objectType: object.status === 0 ? object.stdout.trim() : '',
     contents: contents.status === 0 ? contents.stdout : '',
