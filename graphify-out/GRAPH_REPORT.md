@@ -1,9 +1,9 @@
 # Graph Report - worldscript-studio
 
 Report schema: 1
-Source fingerprint: sha256:c1d44a4509f3611922df3cddfddb56e85f81833b39170388a44599cace03287d
-Tool: graphifyy
-Tool version: graphify 0.9.51
+Source fingerprint: sha256:4705f95dc7536ab5795e1cc84a20342dfbe02f91cc416e92b0db26b0b5095d67
+Tool: graphify
+Tool version: 0.9.51
 Generation mode: AST-only local build (graphify update .)
 
 ## Corpus Check
