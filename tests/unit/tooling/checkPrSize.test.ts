@@ -412,7 +412,7 @@ describe('evaluatePrSize', () => {
       if (args[0] === 'diff') return { ...okGit(), stdout: '10\t2\tscripts/foo.mjs\x00' };
       return { ...okGit(), stdout: '2\n' };
     };
-    const result = evaluatePrSize('base', 'head', { spawnSync });
+    const result = evaluatePrSize('base', 'head', { spawnSync, env: {} });
     expect(result.ok).toBe(true);
     expect(result.fileCount).toBe(1);
     expect(result.lineCount).toBe(12);
@@ -425,7 +425,7 @@ describe('evaluatePrSize', () => {
       if (args.includes('--git-path')) return { status: 1, stdout: '', stderr: '' };
       return { status: 1, stdout: '', stderr: 'fatal: bad range' };
     };
-    const result = evaluatePrSize('base', 'head', { spawnSync });
+    const result = evaluatePrSize('base', 'head', { spawnSync, env: {} });
     expect(result.ok).toBe(false);
     expect(result.error).toBeTruthy();
   });
@@ -436,7 +436,7 @@ describe('evaluatePrSize', () => {
       if (args[0] === 'diff') return { ...okGit(), stdout: '10\t2\tscripts/foo.mjs\x00' };
       return { status: 1, stdout: '', stderr: 'fatal: bad range' };
     };
-    const result = evaluatePrSize('base', 'head', { spawnSync });
+    const result = evaluatePrSize('base', 'head', { spawnSync, env: {} });
     expect(result.ok).toBe(false);
   });
 
@@ -447,7 +447,7 @@ describe('evaluatePrSize', () => {
       stdout: '',
       stderr: '',
     });
-    const result = evaluatePrSize('base', 'head', { spawnSync });
+    const result = evaluatePrSize('base', 'head', { spawnSync, env: {} });
     expect(result.ok).toBe(false);
   });
 
@@ -465,7 +465,7 @@ describe('evaluatePrSize', () => {
       if (args[0] === 'diff') return { ...okGit(), stdout: numstat };
       return { ...okGit(), stdout: '1\n' };
     };
-    const result = evaluatePrSize('base', 'head', { spawnSync });
+    const result = evaluatePrSize('base', 'head', { spawnSync, env: {} });
     expect(result.ok).toBe(true);
     expect(result.totalFileCount).toBe(38);
     expect(result.fileCount).toBe(19);
