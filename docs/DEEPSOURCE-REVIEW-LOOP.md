@@ -36,9 +36,9 @@ DeepSource has **two** layers:
 
 | Aspect | CodeAnt | DeepSource |
 |---|---|---|
-| Trigger | **static**: automatic on every push, no manual retrigger — CodeAnt is CI-status-only in this repo (no inline comments to re-trigger; see `PR-CI-MERGE-WORKFLOW.md`'s roster) | **static**: auto on every push (the operative layer) · **AI review**: paid feature, unavailable on the free tier — not triggered (§0a) |
-| Where findings appear | GitHub **review threads** (resolvable) | per-analyzer **commit statuses** + the DeepSource **dashboard** **+ inline PR review comments in resolvable threads** (`deepsource-io[bot]`, one per finding) + a summary issue-comment |
-| Resolution mechanism | reply + `resolveReviewThread` (GraphQL) | **fix the code** (status goes green) · `# skipcq` inline · "Ignore" in the dashboard — **then reply citing the commit + `resolveReviewThread`** on the inline thread (same as CodeAnt) so 0 stay unresolved |
+| Trigger | **static**: automatic on every push, no manual retrigger needed — actual output (status checks and/or inline threads) must be inspected live per PR, not assumed from a static roster (see `PR-CI-MERGE-WORKFLOW.md`'s roster) | **static**: auto on every push (the operative layer) · **AI review**: paid feature, unavailable on the free tier — not triggered (§0a) |
+| Where findings appear | may expose 5 CI **status checks** (`CodeAnt - Quality Gates/SAST/SCA/SCR/Test Coverage`) and/or a genuine inline review thread (confirmed 2026-08-28 on PR #538) — check all three review channels regardless of which one it used last time | per-analyzer **commit statuses** + the DeepSource **dashboard** **+ inline PR review comments in resolvable threads** (`deepsource-io[bot]`, one per finding) + a summary issue-comment |
+| Resolution mechanism | fix the code so the status check goes green; **if** it posted an inline thread, reply citing the commit + `resolveReviewThread` on that thread like any other reviewer's thread | **fix the code** (status goes green) · `# skipcq` inline · "Ignore" in the dashboard — **then reply citing the commit + `resolveReviewThread`** on the inline thread so 0 stay unresolved — the same reply+resolve mechanic applies to any reviewer that actually creates a resolvable thread, not a fixed CodeAnt-vs-DeepSource split |
 | Suppression token | `// biome-ignore` | `# skipcq: <ISSUE_CODE>` / `// skipcq: <ISSUE_CODE>` |
 | Per-language split | one review | one **check per analyzer** (`DeepSource: JavaScript`, `Rust`, `Docker`, `CSS`, …) |
 | Autofix | — | **dashboard-driven** — opens its own PR (review it like any PR) |
@@ -203,7 +203,7 @@ Identical to the CodeAnt loop — **one** heavy command per step (OOM guard). Pe
 ```bash
 node scripts/check-suppressions.mjs            # [suppressions] OK
 pnpm run ci:prepush                            # required constrained-hardware gate before every push
-pnpm exec vitest run <affected test files>     # targeted, not the whole suite
+pnpm exec vitest run <affected test files>     # only if the wave touched files with relevant tests
 ```
 
 Developers on more capable hardware MAY additionally run `pnpm run lint` / `pnpm run typecheck` /

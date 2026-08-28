@@ -15,12 +15,16 @@ once led an external analysis astray. The reality, documented correctly in the c
 
 - CodeAnt's GitHub App **auto-reviews on PR open**, but **re-reviews after a push are NOT reliably
   automatic** — you **manually re-trigger** with a PR comment: `@codeant-ai review`.
-  **Correction (added when `PR-CI-MERGE-WORKFLOW.md`'s CodeRabbit semantics were hardened):** this
-  bullet is superseded terminology — per the current roster, CodeAnt AI is CI-status-only in this
-  repo (no inline comments to re-trigger), and CodeRabbit is the bot that posts/re-triggers inline
-  review threads today.
-- A PR is review-quiescent only when a fresh review yields **0 new comments** AND **0 unresolved
-  threads**, with green CI.
+  **Correction (added when `PR-CI-MERGE-WORKFLOW.md`'s CodeRabbit semantics were hardened; revised
+  2026-08-28 when CodeAnt posted a genuine inline thread on PR #538):** this bullet's specific
+  `@codeant-ai review` retrigger command is obsolete terminology either way, but do not replace it
+  with a fixed "CodeAnt never posts inline comments" assumption — that has now been directly
+  disproven. Current reviewer channel usage must be observed per-PR (see
+  `PR-CI-MERGE-WORKFLOW.md`'s roster and three-channel check), not assumed from any static rule
+  written here or anywhere else.
+- **Correction:** the quiescence rule stated here (a fresh review with 0 new comments) is also
+  superseded — see `PR-CI-MERGE-WORKFLOW.md`'s merge-readiness classification for the current
+  evidence-based termination rule.
 
 ## Current operational context (2026-06-24)
 

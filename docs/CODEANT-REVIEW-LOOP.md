@@ -13,23 +13,30 @@
 > **See also:** [`DEEPSOURCE-REVIEW-LOOP.md`](DEEPSOURCE-REVIEW-LOOP.md) — the complementary,
 > token-free static-analysis loop. A PR is "review-quiescent" only when **both** are satisfied.
 >
-> **Which bot actually posts inline comments (2026-07-30 observation):** in practice, **CodeRabbit**
-> is the reviewer posting inline actionable/nitpick/outside-diff-range comments on PRs in this
-> repository — see `PR-CI-MERGE-WORKFLOW.md` for its trigger semantics (automatic incremental review
-> is the normal path; `@coderabbitai review`/`@coderabbitai full review` are not interchangeable
-> rituals). `CodeAnt AI` shows up as five CI **status checks**
-> (`CodeAnt - Quality Gates/SAST/SCA/SCR/Test Coverage`) to verify green, not as a comment thread
-> requiring reply + resolve — it does not need a manual retrigger command. The loop mechanics below
-> apply to whichever bot(s) are actually posting comments on a given PR — check the full review
-> history (not just the latest status) before concluding there's nothing to fix.
+> **Which bot posts inline comments — observed, not fixed by roster (updated 2026-08-28):** in
+> practice, **CodeRabbit** is the reviewer most consistently posting inline actionable/nitpick/
+> outside-diff-range comments on PRs in this repository — see `PR-CI-MERGE-WORKFLOW.md` for its
+> trigger semantics (automatic incremental review is the normal path; `@coderabbitai review`/
+> `@coderabbitai full review` are not interchangeable rituals). `CodeAnt AI` may expose five
+> CI **status checks** (`CodeAnt - Quality Gates/SAST/SCA/SCR/Test Coverage`) to verify green, and may
+> also post a genuine inline review thread (confirmed on PR #538) — inspect its actual current output
+> per PR rather than assuming a fixed channel; when it does post a resolvable thread, that thread gets
+> the same reply-cite-commit-then-resolve treatment as any other reviewer's thread (§6). Don't assume
+> a bot's channel from this note alone — the loop mechanics below apply to
+> whichever bot(s) are actually posting comments on a given PR, on whichever channel(s) they actually
+> use; check the full review history (not just the latest status) before concluding there's nothing
+> to fix.
 
 ## 0. When this runs — proactively, automatically, every PR
 
 This loop is a **standing rule**, not something to wait for the user to request. The moment there
 is an open PR with inline review comments, run the loop **without being asked**. It applies to
 **every** open PR and **every** reviewer/bot (CodeAnt AI, CodeQL, Socket, GitGuardian, human
-reviewers). The goal state is always the same: **0 unresolved review threads** and **0 new
-comments on the latest review pass**, with green CI.
+reviewers). The goal state is the merge-readiness classification in
+[`PR-CI-MERGE-WORKFLOW.md`](PR-CI-MERGE-WORKFLOW.md) — in short, **0 unresolved review threads**
+across all three comment channels, with green CI; "0 new comments on the latest review pass" is
+**not** an independent blanket requirement, since a reviewer correctly reporting no new incremental
+diff on an already-consumed delta is a legitimate terminal state, not a reason to keep waiting.
 
 ## 1. The Iron Rule — loop until quiescent
 
@@ -167,7 +174,7 @@ step; never run vitest/biome/tsgo/vite concurrently (OOM).
 ```bash
 node scripts/check-suppressions.mjs            # [suppressions] OK
 pnpm run ci:prepush                            # required constrained-hardware gate before every push
-pnpm exec vitest run <affected test files>     # targeted, not the whole suite
+pnpm exec vitest run <affected test files>     # only if the wave touched files with relevant tests
 ```
 
 Developers on more capable hardware MAY additionally run `pnpm run lint` / `pnpm run typecheck` /
