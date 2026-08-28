@@ -17,6 +17,7 @@
     "RUN_MOBILE_E2E",
     "RUN_REAL_VOICE_E2E",
     "SMOKE_PORT",
+    "USERPROFILE",
     "XDG_RUNTIME_DIR"
   ],
   "tasks": {

@@ -1,35 +1,44 @@
 # Graphify — Knowledge Graph Setup
 
-WorldScript Studio has a fully configured [graphify](https://github.com/safishamsi/graphify) knowledge graph.  
+WorldScript Studio has a fully configured [graphify](https://github.com/Graphify-Labs/graphify) knowledge graph (repo moved from `safishamsi/graphify`; the old URL still resolves).
 Graph output lives at `graphify-out/`. **Solo-repo policy (this project):** only `graphify-out/GRAPH_REPORT.md` is committed; `graph.json`, `graph.html`, and `cache/` stay local and are regenerated with `pnpm run graphify:update`.
 
 **Other docs:** CI and automation → [`CI.md`](CI.md); full documentation map → [`README.md`](../README.md#-documentation-hub) *Documentation Hub*; inventory of all maintainer `.md` files → [`AUDIT.md`](../AUDIT.md). **Dual-Graph master guide:** [`docs/dual-graph-setup.md`](dual-graph-setup.md) — how Graphify and CodeGraph work together.
 
-**Official PyPI name:** `graphifyy` (double **y**). The CLI is still `graphify`. `pip install graphify` can pull an **unrelated** package — always use `graphifyy`.  
-**Current pinned version:** `graphifyy==0.8.26` — install the same version locally for graph parity.
+**Official PyPI name:** `graphifyy` (double **y**). The CLI is still `graphify`. `pip install graphify` can pull an **unrelated** package — always use `graphifyy`.
+**Version policy:** the single source of truth is [`config/graph-tools-versions.json`](../config/graph-tools-versions.json) — currently pinned to `graphifyy==0.9.51` under a `controlled-upgrade` policy (see that file's `notes` for the evaluated 0.8.26→0.9.51 changes, including a self-migrating node-ID format change in v0.9.0). Don't hardcode the version elsewhere; `pnpm run graphify:bootstrap` reads it from there.
 
 ---
 
 ## Installation (Python)
 
-Pick **one** install path; all provide the `graphify` command (or `python -m graphify`).
+`pnpm run graphify:bootstrap` installs the exact pinned version automatically, trying these in order —
+whichever is available on your machine — and never falling back to an unpinned "latest" install:
 
-| Method | Command | Notes |
-|--------|---------|--------|
-| **pip** (common) | `pip install graphifyy` | On Windows, `graphify.exe` may land in `%APPDATA%\Python\Python3xx\Scripts` — often **not** on `PATH` until you add it. |
-| **pipx** | `pipx install graphifyy` | Isolated env; run `pipx ensurepath` if the CLI is missing. |
-| **uv** | `uv tool install graphifyy` | Often keeps tools on `PATH` without extra setup. |
+| Priority | Method | Command it runs |
+|----------|--------|--------|
+| 1 | **uv** | `uv tool install graphifyy==<pinned>` — keeps tools on `PATH` without extra setup |
+| 2 | **pipx** | `pipx install graphifyy==<pinned>` — isolated env; run `pipx ensurepath` if the CLI is missing |
+| 3 | **pip** | `python -m pip install graphifyy==<pinned>` — on Windows, `graphify.exe` may land in `%APPDATA%\Python\Python3xx\Scripts`, often **not** on `PATH` until added |
+
+All three provide the same `graphify` command (or `python -m graphify`). Which one actually runs on a
+given machine is local evidence of what's installed there, not a portability requirement — a fresh
+clone on a different machine may resolve through a different one of the three, and that's fine.
 
 ### One-time setup in this repo
 
 From the repository root (after Node deps: `node scripts/dependency-state.mjs reconcile`):
 
 ```bash
-pnpm run graphify:bootstrap # pip install graphifyy (first machine only; requires Python 3.11+ with pip)
-pnpm run graphify:install   # registers Claude / VS Code / Copilot integrations (upstream `graphify install`)
-pnpm run graphify:hooks     # optional: install post-commit / post-checkout hooks that run `graphify update .`
+pnpm run graphify:bootstrap # installs the exact pinned version (see config/graph-tools-versions.json)
 pnpm run graphify:update    # generate AST graph under graphify-out/ (no API cost)
+pnpm run graphs:doctor      # read-only: confirm installed version matches policy, check report freshness
 ```
+
+`pnpm run graphify:install` (registers Claude/VS Code/Copilot editor integrations) and
+`pnpm run graphify:hooks` (git post-commit/post-checkout auto-update) are **optional, not part of the
+one-time setup** — see the caution under [Automatic updates](#automatic-updates) below before running
+either.
 
 **Windows:** If `python` opens the Microsoft Store or `graphify` is “not found”, install Python from **python.org** (tick **Add to PATH**), then run `pnpm run graphify:bootstrap` again.
 
@@ -45,48 +54,40 @@ Tasks are pre-defined in [`.vscode/tasks.json`](../.vscode/tasks.json) (e.g. **G
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| `.graphifyignore` | repo root | Excludes `node_modules/`, `dist/`, `coverage/`, `graphify-out/`, binaries, `.env` |
+| `config/graph-tools-versions.json` | repo root `config/` | Sole version-policy source for both Graphify and CodeGraph |
+| `.graphifyignore` | repo root | Excludes `node_modules/`, `dist/`, `coverage/`, `graphify-out/`, `.codegraph/`, `.claude/`, `.git/`, worktrees, binaries, `.env` |
 | Solo git policy | `.gitignore` | `graphify-out/*` ignored except `GRAPH_REPORT.md` (no multi-MB HTML/JSON history in git) |
-| `graphify-update.mjs` | `scripts/` | Cleans ephemeral outputs, then `graphify update .` |
+| `graphify-update.mjs` | `scripts/` | Cleans ephemeral outputs, then `graphify update .` (local runtime state only) |
+| `graphify-report.mjs` | `scripts/` | Regenerates the committed compact `GRAPH_REPORT.md`, gated on a clean source tree |
+| `graphify-bootstrap.mjs` | `scripts/` | Portable pinned install (uv → pipx → pip), reads `config/graph-tools-versions.json` |
 | `graphify-cli.mjs` | `scripts/` | PATH-independent launcher used by `pnpm run graphify:*` |
+| `graphSourceFingerprint.mjs` | `scripts/` | Shared worktree-aware fingerprint module (freshness, both tools) |
+| `graphs-cli.mjs` | `scripts/` | Combined dual-graph orchestrator — `pnpm run graphs:*` |
 | Claude Code integration | `CLAUDE.md` + `graphify install` | PreToolUse hook + instructions |
 | VS Code Copilot integration | `.github/copilot-instructions.md` | Copilot Chat reads the graph |
-| Git hooks | optional, via `pnpm run graphify:hooks` | Auto `graphify update .` after commit/checkout |
+| Git hooks | optional, via `pnpm run graphify:hooks` | Not recommended by default — see [Automatic updates](#automatic-updates) |
 
 ### npm/pnpm scripts
 
 | Script | Purpose |
 |--------|---------|
-| `pnpm run graphify:bootstrap` | `pip install graphifyy` via Python (first-time setup) |
-| `pnpm run graphify:install` | `graphify install` (skills / editor hooks) |
+| `pnpm run graphify:bootstrap` | Installs the exact pinned version (uv → pipx → pip) |
+| `pnpm run graphify:install` | `graphify install` (skills / editor hooks) — inspect before running with `--project` |
 | `pnpm run graphify:update` | `graphify update .` — refresh AST graph (CPU/RAM heavy; not in pre-commit) |
 | `GRAPHIFY_SKIP=1 pnpm run graphify:update` | Skip update (no-op) |
-| `pnpm run graphify:hooks` | `graphify hook install` — git hooks for auto-update |
+| `pnpm run graphify:hooks` | `graphify hook install` — not recommended by default, see above |
 | `pnpm run graphify:status` | `graphify hook status` |
+| `pnpm run graphs:doctor` / `graphs:status` / `graphs:update` / `graphs:report` / `graphs:refresh` / `graphs:bootstrap` | Combined dual-graph interface — see [`dual-graph-setup.md`](dual-graph-setup.md) |
 
 ---
 
-## Graph stats (last build: 2026-04-30)
+## Current graph stats
 
-- **178 files** · ~102,700 words
-- **566 nodes** · **703 edges** · **20 communities**
-- 87 % EXTRACTED · 13 % INFERRED (88 inferred edges, avg confidence 0.8)
-- Build cost: **0 tokens** (AST-only)
-
-### God Nodes (most connected abstractions)
-
-| Rank | Node | Edges |
-|------|------|-------|
-| 1 | `IndexedDBService` | 38 |
-| 2 | `FileSystemService` | 35 |
-| 3 | `StorageManager` | 30 |
-| 4 | `retryFs()` | 26 |
-| 5 | `useTranslation()` | 18 |
-| 6 | `sanitizePathSegment()` | 14 |
-| 7 | `CollaborationService` | 14 |
-| 8 | `useAppDispatch()` | 13 |
-| 9 | `t()` | 13 |
-| 10 | `useToast()` | 8 |
+Hardcoding a stats snapshot here always drifts out of sync with the real graph on the next build —
+this is exactly what happened to this section previously (it showed a build from months earlier).
+**Current stats, God Nodes, and freshness live in the committed report's own header:**
+[`graphify-out/GRAPH_REPORT.md`](../graphify-out/GRAPH_REPORT.md). Check `pnpm run graphs:status` to
+see at a glance whether that report is `FRESH` or `STALE` relative to the current source tree.
 
 ---
 
@@ -141,27 +142,42 @@ Open `graphify-out/graph.html` in any browser — interactive D3 visualization o
 
 ## Automatic updates
 
-After **`pnpm run graphify:hooks`**, Graphify can refresh the graph on **post-commit** and **post-checkout** (see `graphify hook status`). Without hooks, run **`pnpm run graphify:update`** after larger refactors.
+`pnpm run graphify:hooks` (`graphify hook install`) can refresh the graph automatically on
+**post-commit**/**post-checkout** via Graphify's *own* hook-installer — a separate mechanism from this
+repo's `simple-git-hooks` setup. **Not recommended by default:** it appends to whatever hook file
+already exists there rather than replacing it, so two independent hook-installing systems would
+coexist unpredictably, and it adds latency to every commit on constrained hardware. Prefer explicit,
+on-demand refresh instead:
 
 ```bash
-pnpm run graphify:status
+pnpm run graphs:update    # local runtime state only (graph.json/graph.html), fast
+pnpm run graphs:refresh   # update + regenerate the committed report, strict — run before a PR
+pnpm run graphs:status    # fast read-only freshness check (FRESH/STALE), no mutation
 ```
+
+If you've measured a real, compelling benefit from the hooks on your own machine and understand the
+dual-installer risk, `pnpm run graphify:hooks` remains available — but it's an opt-in exception, not
+the default workflow this repo recommends.
+
+---
+
+## Privacy — query logging
+
+Graphify can optionally log every `query`/`path`/`explain`/MCP query to `~/.cache/graphify-queries.log`
+(JSON Lines: timestamp, question, corpus, nodes returned, duration). **This is OFF by default** as of
+`graphifyy` v0.9.13 (the pinned `0.9.51` postdates that fix). If you ever want a hard guarantee it stays
+off regardless of future config, set `GRAPHIFY_QUERY_LOG_DISABLE=1`; `GRAPHIFY_QUERY_LOG_ENABLE=1` /
+`GRAPHIFY_QUERY_LOG=<path>` opt back in if you ever want it. This is a local, per-machine preference —
+never committed to the repo. The default AST-only build/update path (`graphify update .`, everything
+`graphs:update` runs) makes no network calls either way; only the separate semantic/LLM rebuild mode
+(`/graphify .` in chat, see [Full semantic rebuild](#full-semantic-rebuild-uses-llm-costs-tokens) above)
+and this query log touch anything outside the local build.
 
 ---
 
 ## Fine-tuning what gets indexed
 
-Edit `.graphifyignore` (same syntax as `.gitignore`). Current exclusions:
-
-```
-dist/          src-tauri/target/    node_modules/
-coverage/      reports/             test-results/
-playwright-report/                  graphify-out/
-pnpm-lock.yaml  *.lock              *.log
-*.png *.jpg *.woff *.woff2 ...      (binary/media)
-storybook-static/                   .vscode/  .idea/
-.env  .env.*
-```
+Edit `.graphifyignore` (same syntax as `.gitignore`) — see the file itself for the current, authoritative exclusion list (build outputs, `node_modules/`, test artifacts, `graphify-out/` self-exclusion, `.codegraph/`'s own local index, `.claude/`, `.git/`, sibling git worktrees, binaries/media, secrets). Don't duplicate that list here where it can drift out of sync.
 
 ---
 

@@ -1,15 +1,23 @@
 #!/usr/bin/env node
 /**
- * One-shot: pip install graphifyy (official PyPI name has double "y").
- * Run once per machine, then `pnpm run graphify:update`.
- * See docs/graphify.md
+ * Install graphifyy at the exact version pinned in config/graph-tools-versions.json.
+ * Tries uv, then pipx, then pip (in that priority order) — whichever is available on this
+ * machine — always the pinned version. Never falls through to an unpinned "latest" install;
+ * fails loudly instead so version drift is a visible decision, not a silent side effect.
+ * Run once per machine, then `pnpm run graphify:update`. See docs/graphify.md
  */
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const pipInstall = ['-m', 'pip', 'install', '--upgrade', 'graphifyy'];
+const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
+const policy = JSON.parse(readFileSync(join(root, 'config', 'graph-tools-versions.json'), 'utf-8'));
+const version = policy.graphifyy.testedVersion;
+const pinnedSpec = `graphifyy==${version}`;
 
 /** @param {string} cmd @param {string[]} args */
-function pip(cmd, args) {
+function run(cmd, args) {
   return spawnSync(cmd, args, {
     stdio: 'inherit',
     shell: process.platform === 'win32',
@@ -17,20 +25,35 @@ function pip(cmd, args) {
   });
 }
 
-for (const py of process.platform === 'win32' ? ['python', 'python3'] : ['python3', 'python']) {
-  const r = pip(py, pipInstall);
-  if (r.status === 0) process.exit(0);
-}
+const attempts = [
+  { tool: 'uv', args: ['tool', 'install', pinnedSpec] },
+  { tool: 'pipx', args: ['install', pinnedSpec] },
+  ...(process.platform === 'win32'
+    ? [
+        { tool: 'python', args: ['-m', 'pip', 'install', pinnedSpec] },
+        { tool: 'python3', args: ['-m', 'pip', 'install', pinnedSpec] },
+        { tool: 'py', args: ['-3', '-m', 'pip', 'install', pinnedSpec] },
+      ]
+    : [
+        { tool: 'python3', args: ['-m', 'pip', 'install', pinnedSpec] },
+        { tool: 'python', args: ['-m', 'pip', 'install', pinnedSpec] },
+      ]),
+];
 
-if (process.platform === 'win32') {
-  const r = pip('py', ['-3', ...pipInstall]);
-  if (r.status === 0) process.exit(0);
+for (const { tool, args } of attempts) {
+  const result = run(tool, args);
+  if (result.status === 0) {
+    console.log(`[graphify-bootstrap] Installed ${pinnedSpec} via ${tool}.`);
+    process.exit(0);
+  }
 }
 
 process.stderr.write(
-  `[graphify-bootstrap] Could not install graphifyy.\n` +
-    `Install Python 3.11+ from https://www.python.org/downloads/ (enable “Add to PATH”), then:\n` +
-    `  python -m pip install --upgrade graphifyy\n` +
-    `PyPI package name is graphifyy (two y’s), CLI command remains: graphify\n`,
+  `[graphify-bootstrap] Could not install ${pinnedSpec} via uv, pipx, or pip.\n` +
+    `Install one of those tools, or install manually:\n` +
+    `  uv tool install ${pinnedSpec}\n` +
+    `  pipx install ${pinnedSpec}\n` +
+    `  python -m pip install ${pinnedSpec}\n` +
+    `PyPI package name is graphifyy (two y's), CLI command remains: graphify\n`,
 );
 process.exit(1);
