@@ -112,24 +112,41 @@ types.ts          → Core shared interfaces and types
 - **Branch-based development**: All changes MUST be made on feature branches (e.g., `fix/security-vulnerabilities-2026-06-06`). Never commit directly to `main`.
 - **CI verification**: Push to branch and wait for ALL CI jobs (security, quality, build, e2e, lighthouse) to pass before merging.
 - **PR merge**: Only merge to `main` when CI is fully green. Use "Squash and merge" for clean history.
-- **Inline comment handling — the CodeRabbit Correction Loop (proactive, automatic, every PR):**
-  Address ALL inline review comments (CodeRabbit + any other bot/human) **without being asked**. Canonical
-  procedure: [`docs/CODEANT-REVIEW-LOOP.md`](../docs/CODEANT-REVIEW-LOOP.md). Each pass:
-  1. Fetch unresolved threads via GraphQL (`reviewThreads` → `isResolved:false`).
+- **Inline comment handling — the correction loop (proactive, automatic, every PR):**
+  Address ALL inline review comments (CodeRabbit + any other bot/human) **without being asked**.
+  Overall lifecycle authority: [`docs/PR-CI-MERGE-WORKFLOW.md`](../docs/PR-CI-MERGE-WORKFLOW.md);
+  reconciliation-mechanics sub-procedure: [`docs/CODEANT-REVIEW-LOOP.md`](../docs/CODEANT-REVIEW-LOOP.md).
+  Each pass checks all three review channels independently (see `PR-CI-MERGE-WORKFLOW.md` for the
+  full three-channel definitions — only inline threads have a resolve mutation):
+  1. Fetch all three channels **exhaustively** (a single unpaginated page can hide a later finding
+     on any of them) using `PR-CI-MERGE-WORKFLOW.md`'s canonical paginated recipes: GraphQL
+     `reviewThreads` via `gh api graphql --paginate` (cursor pagination, `isResolved:false`) plus the
+     flat paginated `.../pulls/<PR>/comments` REST endpoint for full thread content/replies; top-level
+     issue comments via `gh api --paginate -X GET .../issues/<PR>/comments`; full review bodies via
+     `gh api --paginate -X GET .../pulls/<PR>/reviews` — a bot can use any of the three.
   2. Validate each finding against the **current** code (anchors may be stale).
   3. Implement the real **root-cause** fix (code **+ tests + i18n + docs**), or reply with evidence
      if false-positive / by-design. **Never** add a new `biome-ignore` (suppression ratchet fails
      CI — refactor instead; run `node scripts/check-suppressions.mjs`).
-  4. Local gate (sequential): lint + typecheck + targeted vitest green.
-  5. Commit + push; reply to **every** thread citing the resolving commit, then resolve it → **0 unresolved**.
-  6. Re-trigger: `gh pr comment <N> --body "@coderabbitai review"`; check the **full** review history,
-     not just the latest status (a rate-limited latest status can hide an earlier real review).
-  - **Iron rule — loop until quiescent:** a push triggers a fresh review that often raises NEW
-    findings (a "wave"). Repeat until **BOTH** a fresh review yields **0 new comments** AND **0 threads
-    unresolved**. Never stop while comments still arrive.
-  - CodeAnt AI shows up as 5 CI **status checks** (`CodeAnt - Quality Gates/SAST/SCA/SCR/Test Coverage`)
-    to verify green — it is not the bot posting inline comments in this repo, so don't re-trigger it
-    expecting a comment thread.
+  4. Local gate (sequential): `pnpm run ci:prepush` (required constrained-hardware gate); run
+     targeted vitest only for files with relevant changed tests — full `lint`/`typecheck`/
+     `i18n:check` are CI-owned, not mandatory per wave.
+  5. Commit + push. For inline threads: reply citing the resolving commit, then `resolveReviewThread`
+     → `UNRESOLVED_REVIEW_THREADS = 0`. For top-level comments and review-body findings (no resolve
+     mutation exists for either): reply where useful and confirm none remain actionable →
+     `NO_ACTIONABLE_TOP_LEVEL_ISSUE_COMMENTS = YES` / `NO_ACTIONABLE_REVIEW_BODY_FINDINGS = YES`.
+  6. A push normally **auto-triggers** CodeRabbit's incremental review. Check the **full** review
+     history, not just the latest status. Post `gh pr comment <N> --body "@coderabbitai review"`
+     only when that history shows automatic review is paused/inapplicable — it does not re-review
+     commits it already consumed, so don't post it as a routine "freshness" ritual.
+  - **Iron rule — loop until quiescent:** repeat until all three channel states above hold and
+    either a review of the current delta yields zero new actionable findings, or the delta qualifies
+    as LOW-RISK under `PR-CI-MERGE-WORKFLOW.md`'s precise condition list. `NO_NEW_INCREMENTAL_DIFF`
+    on an already-consumed delta is a legitimate terminal state, not something to wait out forever.
+  - Reviewer capability/channels are **observed live per PR, never assumed from a static roster**.
+    CodeAnt AI may expose 5 CI **status checks** (`CodeAnt - Quality Gates/SAST/SCA/SCR/Test Coverage`)
+    and may also post a genuine inline review thread (confirmed 2026-08-28) — inspect its actual
+    current output; if it creates a resolvable thread, reconcile it exactly like any other reviewer's.
 
 ### Test Stability Guidelines (QNBS-v3)
 
@@ -169,7 +186,7 @@ On any non-trivial code change add a single-line comment explaining **why**, not
 - Conventional Commits format: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`
 - Pre-commit: after explicit `pnpm run hooks:install`, `simple-git-hooks` runs Biome on staged files; CI is mandatory regardless
 - **⚠️ Constrained local hardware — do NOT run heavy suites locally.** This machine has ~3–4 GB RAM. **Never** run the full Vitest **coverage** suite, **Playwright E2E**, **Stryker mutation**, **Lighthouse CI**, or the **Storybook test-runner** locally — they are **CI-only by design**. Run **one heavy command at a time** (no parallel `vitest`/`biome`/`tsc`/`vite`).
-- Local preflight (sequential, minimal): `pnpm run lint` → `pnpm run typecheck` → `pnpm run i18n:check` (only when locale JSON changed) → **targeted** `pnpm exec vitest run <path>` (no `--coverage`). Run `pnpm run build && pnpm run smoke:prod` only when you touched `vite.config.ts`, `packages/ai-core`, or `workers/`. Coverage, E2E, Lighthouse, Stryker, and Storybook are **CI gate jobs** — let GitHub Actions run them.
+- Local preflight (sequential, minimal): `pnpm run ci:prepush` is the required constrained-hardware gate before every push; run **targeted** `pnpm exec vitest run <path>` (no `--coverage`) only when the changed files have a relevant test surface — docs/workflow/tooling/Rust/config-only changes typically have none, so there's no placeholder `<path>` to invoke and none is required. Full `pnpm run lint` / `pnpm run typecheck` / `pnpm run i18n:check` are **CI-owned**, not a mandatory local step per push — only run them locally too if your hardware is capable enough to spare the extra minutes. Run `pnpm run build && pnpm run smoke:prod` only when you touched `vite.config.ts`, `packages/ai-core`, or `workers/`. Coverage, E2E, Lighthouse, Stryker, and Storybook are **CI gate jobs** — let GitHub Actions run them.
 - **Vitest watch-mode hard rule:** Never run `pnpm test`, `npm run test`, a bare Vitest command, or an untargeted wrapper. Always use `pnpm exec vitest run <path>`; CI is the only place that runs the full coverage suite.
 - CI pipeline (see [`docs/CI.md`](../docs/CI.md)): **`security` → `quality`** (Biome + `tsc` + Vitest matrix) **→ `build` / `e2e` / `storybook` in parallel** → **`lighthouse`** after build → **`deploy`** on `main` after build+e2e
 - Branch protection should require the **`quality`** job (and other checks your team enables); job ids match `.github/workflows/ci.yml`

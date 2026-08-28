@@ -36,9 +36,9 @@ DeepSource has **two** layers:
 
 | Aspect | CodeAnt | DeepSource |
 |---|---|---|
-| Trigger | manual `@codeant-ai review` per push | **static**: auto on every push (the operative layer) · **AI review**: paid feature, unavailable on the free tier — not triggered (§0a) |
-| Where findings appear | GitHub **review threads** (resolvable) | per-analyzer **commit statuses** + the DeepSource **dashboard** **+ inline PR review comments in resolvable threads** (`deepsource-io[bot]`, one per finding) + a summary issue-comment |
-| Resolution mechanism | reply + `resolveReviewThread` (GraphQL) | **fix the code** (status goes green) · `# skipcq` inline · "Ignore" in the dashboard — **then reply citing the commit + `resolveReviewThread`** on the inline thread (same as CodeAnt) so 0 stay unresolved |
+| Trigger | **static**: automatic on every push, no manual retrigger needed — actual output (status checks and/or inline threads) must be inspected live per PR, not assumed from a static roster (see `PR-CI-MERGE-WORKFLOW.md`'s roster) | **static**: auto on every push (the operative layer) · **AI review**: paid feature, unavailable on the free tier — not triggered (§0a) |
+| Where findings appear | may expose 5 CI **status checks** (`CodeAnt - Quality Gates/SAST/SCA/SCR/Test Coverage`) and/or a genuine inline review thread (confirmed 2026-08-28 on PR #538) — check all three review channels regardless of which one it used last time | per-analyzer **commit statuses** + the DeepSource **dashboard** **+ inline PR review comments in resolvable threads** (`deepsource-io[bot]`, one per finding) + a summary issue-comment |
+| Resolution mechanism | fix the code so the status check goes green; **if** it posted an inline thread, reply citing the commit + `resolveReviewThread` on that thread like any other reviewer's thread | **fix the code** (status goes green) · `# skipcq` inline · "Ignore" in the dashboard — **then reply citing the commit + `resolveReviewThread`** on the inline thread so 0 stay unresolved — the same reply+resolve mechanic applies to any reviewer that actually creates a resolvable thread, not a fixed CodeAnt-vs-DeepSource split |
 | Suppression token | `// biome-ignore` | `# skipcq: <ISSUE_CODE>` / `// skipcq: <ISSUE_CODE>` |
 | Per-language split | one review | one **check per analyzer** (`DeepSource: JavaScript`, `Rust`, `Docker`, `CSS`, …) |
 | Autofix | — | **dashboard-driven** — opens its own PR (review it like any PR) |
@@ -68,7 +68,8 @@ caused by the fix (a "wave"). Handle each wave like the first.
         │ 3. Fix root cause  OR  justify (# skipcq /   │
         │    dashboard-ignore, with reason)            │
         │ 4. Update tests + i18n + docs (lockstep)     │
-        │ 5. suppressions + lint + typecheck + vitest  │
+        │ 5. suppressions + ci:prepush (required gate) │
+        │    + targeted vitest if relevant tests exist │
         │ 6. Commit + push (one wave = one commit)     │
         │ 7. static re-runs AUTOMATICALLY on push      │
         └───────────────┬─────────────────────────────┘
@@ -124,10 +125,13 @@ stay open (mirrors the CodeAnt loop).
 
 ```bash
 # List unresolved deepsource-io threads on a PR (thread id + first comment's databaseId + path)
-gh api graphql -f query='
-query($pr:Int!){ repository(owner:"qnbs",name:"WorldScript-Studio"){ pullRequest(number:$pr){
-  reviewThreads(first:50){ nodes{ id isResolved
-    comments(first:1){ nodes{ databaseId author{login} path body } } } } } } }' -F pr=PR_NUMBER \
+# --paginate walks every page via endCursor/pageInfo — a single first:N page can miss a thread
+# past the cutoff on a PR with a long review history (see PR-CI-MERGE-WORKFLOW.md's canonical query).
+gh api graphql --paginate -F pr=PR_NUMBER -f query='
+query($pr:Int!,$endCursor:String){ repository(owner:"qnbs",name:"WorldScript-Studio"){ pullRequest(number:$pr){
+  reviewThreads(first:100, after:$endCursor){ nodes{ id isResolved
+    comments(first:1){ nodes{ databaseId author{login} path body } } }
+    pageInfo{ hasNextPage endCursor } } } } }' \
   --jq '.data.repository.pullRequest.reviewThreads.nodes[]
         | select(.isResolved==false and .comments.nodes[0].author.login=="deepsource-io")
         | {threadId:.id, commentDbId:.comments.nodes[0].databaseId, path:.comments.nodes[0].path}'
@@ -140,6 +144,13 @@ gh api repos/qnbs/WorldScript-Studio/pulls/PR_NUMBER/comments/<COMMENT_DB_ID>/re
 gh api graphql -f query='mutation($t:ID!){ resolveReviewThread(input:{threadId:$t}){ thread{ isResolved } } }' \
   -F t="<THREAD_NODE_ID>"
 ```
+
+`comments(first:1)` above is intentional as a join key — not a completeness check — serving two
+purposes: `databaseId` to reply into, and as `ROOT_REVIEW_COMMENT_ID` for correlating this exact
+thread's replies. Before treating a thread as already addressed, join it to its full content via
+`PR-CI-MERGE-WORKFLOW.md`'s exhaustive REST query (`gh api --paginate -X GET
+.../pulls/PR_NUMBER/comments`) — the REST comment whose `id == ROOT_REVIEW_COMMENT_ID` plus every
+comment whose `in_reply_to_id == ROOT_REVIEW_COMMENT_ID` — never by `path`/`line` alone.
 
 ## 4. Validate, then fix or justify
 
@@ -195,17 +206,20 @@ issues — read the change.
 
 ## 7. Local quality gate (low-end hardware — sequential, never parallel)
 
-Identical to the CodeAnt loop — **one** heavy command per step (OOM guard):
+Identical to the CodeAnt loop — **one** heavy command per step (OOM guard). Per
+[`docs/CI.md`](../docs/CI.md) and [`PR-CI-MERGE-WORKFLOW.md`](PR-CI-MERGE-WORKFLOW.md),
+`pnpm run ci:prepush` is the required constrained-hardware gate; full-repository
+`lint`/`typecheck`/`i18n:check` are CI-owned, not a mandatory step of every wave:
 
 ```bash
 node scripts/check-suppressions.mjs            # [suppressions] OK
-pnpm run lint                                  # biome --error-on-warnings → 0
-pnpm run typecheck                             # tsgo → 0
-pnpm run i18n:check                            # only if user-facing strings changed
-pnpm exec vitest run <affected test files>     # targeted, not the whole suite
+pnpm run ci:prepush                            # required constrained-hardware gate before every push
+pnpm exec vitest run <affected test files>     # only if the wave touched files with relevant tests
 ```
 
-Coverage, E2E, Lighthouse, Stryker, Storybook are **CI-only**.
+Developers on more capable hardware MAY additionally run `pnpm run lint` / `pnpm run typecheck` /
+`pnpm run i18n:check` locally, but the low-end policy does not require it. Coverage, E2E, Lighthouse,
+Stryker, Storybook are **CI-only**.
 
 ## 8. Commit & push (DeepSource re-runs automatically)
 
@@ -222,9 +236,17 @@ then go back to §3.
 
 ## 9. Merge
 
-Once DeepSource is quiescent **and** all CI is green:
+DeepSource quiescence and green CI satisfy only *this file's* scope. Before merging, the PR must
+also satisfy [`PR-CI-MERGE-WORKFLOW.md`](PR-CI-MERGE-WORKFLOW.md)'s **full** merge-readiness
+classification — final-delta HIGH-RISK/LOW-RISK determination, all three review channels checked
+independently (not just DeepSource's), exact-head validation, security/static gates, the
+dependent-PR check, and the Dependabot exception where applicable. Once DeepSource is quiescent
+**and** all CI is green **and** that full classification is satisfied:
 
-- Prefer **auto-merge (squash)**: `gh pr merge PR_NUMBER --auto --squash --delete-branch`.
+- Prefer **auto-merge (squash)** using the exact command in `PR-CI-MERGE-WORKFLOW.md`'s
+  merge-mechanics paragraph (`--match-head-commit <SHA>` pinning; `--delete-branch` only after that
+  doc's paginated dependent-PR check confirms nothing depends on this branch) — not restated here to
+  avoid a second, independently drifting copy.
 - If GitHub presents a `BLOCKED` merge state after checks conclude, re-read the exact head,
   checks, reviews, protection, rulesets, and check suites and use a normal policy-enforced merge
   endpoint only after revalidation. There is no standing admin-merge fallback.
