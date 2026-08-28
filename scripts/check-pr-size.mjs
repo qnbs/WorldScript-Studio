@@ -231,9 +231,14 @@ function validateExceptionRegistry(value) {
           `invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} has invalid supplemental allowance`,
         );
       }
-      if (supplementalPaths.has(allowance.path) || !entry.allowedPaths.includes(allowance.path)) {
+      if (supplementalPaths.has(allowance.path)) {
         throw new Error(
-          `invalid ${EXCEPTION_REGISTRY_PATH}: supplemental path is not unique and allowed`,
+          `invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} has a duplicate supplemental path ${allowance.path}`,
+        );
+      }
+      if (!entry.allowedPaths.includes(allowance.path)) {
+        throw new Error(
+          `invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} supplemental path ${allowance.path} is not in allowedPaths`,
         );
       }
       supplementalPaths.add(allowance.path);
@@ -401,7 +406,8 @@ function formatExceptionReport({
     .join(', ');
   const status = blocking ? 'BLOCKED' : 'APPLIED';
   return (
-    `PR_SIZE_EXCEPTION=${status} id=${exception.entry.id} pr=#${exception.entry.prNumber} ` +
+    `PR_SIZE_EXCEPTION=${status} outcome=${blocking ? 'blocked' : 'within target'} ` +
+    `id=${exception.entry.id} pr=#${exception.entry.prNumber} ` +
     `scope=${fileCount}/${exception.entry.maxFiles} files ` +
     `TOTAL_MEANINGFUL_LINES=${totalLineCount} ` +
     `NON_EXEMPT_MEANINGFUL_LINES=${nonExemptLineCount}/${exception.entry.maxNonExemptMeaningfulLines} ` +

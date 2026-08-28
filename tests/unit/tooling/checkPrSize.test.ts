@@ -503,6 +503,7 @@ describe('evaluatePrSize', () => {
         baseGoverned: true,
       });
       expect(result.report).toContain('PR_SIZE_EXCEPTION=APPLIED');
+      expect(result.report).toContain('outcome=within target');
       expect(result.report).toContain('NON_EXEMPT_MEANINGFUL_LINES=2900/3000');
     });
 
@@ -593,6 +594,49 @@ describe('evaluatePrSize', () => {
       const result = evaluatePrSize('base', 'head', exceptionDependencies({ rows, registry: '{' }));
       expect(result.ok).toBe(false);
       expect(result.error).toContain('invalid config/pr-size-exceptions.json');
+    });
+
+    it('reports duplicate supplemental paths separately', () => {
+      const rows: NumstatRow[] = [{ path: 'scripts/tool.mjs', added: 10, removed: 0 }];
+      const duplicateAllowance = {
+        ...exception,
+        supplementalLineAllowances: [
+          { path: 'scripts/tool.mjs', maxMeaningfulLines: 10 },
+          { path: 'scripts/tool.mjs', maxMeaningfulLines: 20 },
+        ],
+      };
+      const result = evaluatePrSize(
+        'base',
+        'head',
+        exceptionDependencies({
+          rows,
+          registry: { schemaVersion: 1, exceptions: [duplicateAllowance] },
+        }),
+      );
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain('duplicate supplemental path scripts/tool.mjs');
+      expect(result.error).not.toContain('is not in allowedPaths');
+    });
+
+    it('reports a supplemental path outside allowedPaths separately', () => {
+      const rows: NumstatRow[] = [{ path: 'scripts/tool.mjs', added: 10, removed: 0 }];
+      const outOfScopeAllowance = {
+        ...exception,
+        supplementalLineAllowances: [{ path: 'other/GRAPH_REPORT.md', maxMeaningfulLines: 10 }],
+      };
+      const result = evaluatePrSize(
+        'base',
+        'head',
+        exceptionDependencies({
+          rows,
+          registry: { schemaVersion: 1, exceptions: [outOfScopeAllowance] },
+        }),
+      );
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain(
+        'supplemental path other/GRAPH_REPORT.md is not in allowedPaths',
+      );
+      expect(result.error).not.toContain('duplicate supplemental path');
     });
 
     it('fails closed for duplicate matching identities', () => {
