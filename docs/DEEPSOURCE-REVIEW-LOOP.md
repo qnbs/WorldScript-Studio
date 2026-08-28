@@ -68,7 +68,8 @@ caused by the fix (a "wave"). Handle each wave like the first.
         │ 3. Fix root cause  OR  justify (# skipcq /   │
         │    dashboard-ignore, with reason)            │
         │ 4. Update tests + i18n + docs (lockstep)     │
-        │ 5. suppressions + lint + typecheck + vitest  │
+        │ 5. suppressions + ci:prepush (required gate) │
+        │    + targeted vitest if relevant tests exist │
         │ 6. Commit + push (one wave = one commit)     │
         │ 7. static re-runs AUTOMATICALLY on push      │
         └───────────────┬─────────────────────────────┘
@@ -124,10 +125,13 @@ stay open (mirrors the CodeAnt loop).
 
 ```bash
 # List unresolved deepsource-io threads on a PR (thread id + first comment's databaseId + path)
-gh api graphql -f query='
-query($pr:Int!){ repository(owner:"qnbs",name:"WorldScript-Studio"){ pullRequest(number:$pr){
-  reviewThreads(first:50){ nodes{ id isResolved
-    comments(first:1){ nodes{ databaseId author{login} path body } } } } } } }' -F pr=PR_NUMBER \
+# --paginate walks every page via endCursor/pageInfo — a single first:N page can miss a thread
+# past the cutoff on a PR with a long review history (see PR-CI-MERGE-WORKFLOW.md's canonical query).
+gh api graphql --paginate -F pr=PR_NUMBER -f query='
+query($pr:Int!,$endCursor:String){ repository(owner:"qnbs",name:"WorldScript-Studio"){ pullRequest(number:$pr){
+  reviewThreads(first:100, after:$endCursor){ nodes{ id isResolved
+    comments(first:1){ nodes{ databaseId author{login} path body } } }
+    pageInfo{ hasNextPage endCursor } } } } }' \
   --jq '.data.repository.pullRequest.reviewThreads.nodes[]
         | select(.isResolved==false and .comments.nodes[0].author.login=="deepsource-io")
         | {threadId:.id, commentDbId:.comments.nodes[0].databaseId, path:.comments.nodes[0].path}'
@@ -227,7 +231,10 @@ then go back to §3.
 
 Once DeepSource is quiescent **and** all CI is green:
 
-- Prefer **auto-merge (squash)**: `gh pr merge PR_NUMBER --auto --squash --delete-branch`.
+- Prefer **auto-merge (squash)** using the exact command in `PR-CI-MERGE-WORKFLOW.md`'s
+  merge-mechanics paragraph (`--match-head-commit <SHA>` pinning; `--delete-branch` only after that
+  doc's paginated dependent-PR check confirms nothing depends on this branch) — not restated here to
+  avoid a second, independently drifting copy.
 - If GitHub presents a `BLOCKED` merge state after checks conclude, re-read the exact head,
   checks, reviews, protection, rulesets, and check suites and use a normal policy-enforced merge
   endpoint only after revalidation. There is no standing admin-merge fallback.

@@ -114,30 +114,38 @@ git branch -m <current> <pr2-branch>             # PR2 continues, base = <pr1-br
 
 ## 2. Fetch unresolved threads
 
-Use GraphQL — REST does not expose thread resolution state. Use a **multi-line** query string
-(single-line inline queries can misparse in some shells):
+Use GraphQL — REST does not expose thread resolution state. **A single `first:N` page is not
+exhaustive** — a PR with more review threads than the page size will silently hide unresolved ones
+past the cutoff, so paginate with `gh api graphql --paginate` (it follows the `pageInfo.hasNextPage`/
+`endCursor` + `$endCursor` cursor convention automatically) rather than just raising `first`:
 
 ```bash
-gh api graphql -f query='
-query {
-  repository(owner:"qnbs", name:"WorldScript-Studio") {
-    pullRequest(number: PR_NUMBER) {
-      reviewThreads(first: 100) {
-        nodes {
-          id
-          isResolved
-          isOutdated
-          path
-          line
-          comments(first: 1) { nodes { databaseId author { login } createdAt body } }
+gh api graphql --paginate \
+  -f owner="qnbs" -f name="WorldScript-Studio" -F number=PR_NUMBER \
+  -f query='
+    query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
+      repository(owner: $owner, name: $name) {
+        pullRequest(number: $number) {
+          reviewThreads(first: 100, after: $endCursor) {
+            nodes {
+              id
+              isResolved
+              isOutdated
+              path
+              line
+              comments(first: 1) { nodes { databaseId author { login } createdAt body } }
+            }
+            pageInfo { hasNextPage endCursor }
+          }
         }
       }
-    }
-  }
-}' --jq '.data.repository.pullRequest.reviewThreads.nodes[]
+    }' --jq '.data.repository.pullRequest.reviewThreads.nodes[]
   | select(.isResolved==false)
   | "THREAD \(.id) | \(.path):\(.line) | id=\(.comments.nodes[0].databaseId) @\(.comments.nodes[0].author.login)"'
 ```
+
+This matches the canonical exhaustive query in [`PR-CI-MERGE-WORKFLOW.md`](PR-CI-MERGE-WORKFLOW.md)'s
+`UNRESOLVED_REVIEW_THREADS` definition — keep both in sync if either changes.
 
 Keep the **`databaseId`** (REST comment id → for replies) and the thread **`id`** (`PRRT_…` →
 for `resolveReviewThread`) paired for each finding.
@@ -235,7 +243,10 @@ Once the termination condition in §1 holds and CI is fully green, apply
 LOW-RISK final delta) and merge-mechanics ordering rule in full — summarized:
 
 - Enable protected squash **auto-merge** only after this repo's stricter internal criteria (not just
-  GitHub's branch-protection floor) are satisfied: `gh pr merge PR_NUMBER --auto --squash --delete-branch`.
+  GitHub's branch-protection floor) are satisfied — use the exact command in
+  `PR-CI-MERGE-WORKFLOW.md`'s merge-mechanics paragraph (`--match-head-commit <SHA>`, and
+  `--delete-branch` only after that doc's paginated dependent-PR check confirms nothing depends on
+  this branch). Not restated here to avoid a second, independently drifting copy of that command.
 - If branch protection presents the PR as `BLOCKED` despite green required checks, stop and
   re-read the live head, checks, reviews, protection, rulesets, and check suites. Use a normal
   GitHub policy-enforced merge endpoint only after the exact head is revalidated; there is no

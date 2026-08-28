@@ -40,10 +40,14 @@ diff) — add the minimal config needed to fix that specific gap, not a speculat
 **`--delete-branch` is not unconditional.** Before arming the merge, check whether any other open PR uses this PR's head branch as its base — do this with a genuinely paginated query, not `gh pr list`'s default 30-item page (`gh pr list --help` documents `--limit`'s default as 30, so an unpaginated/unlimited-unaware check can silently miss an older stacked PR on a repo with enough open PRs):
 
 ```bash
-gh api --paginate "repos/qnbs/WorldScript-Studio/pulls" \
+gh api --paginate -X GET "repos/qnbs/WorldScript-Studio/pulls" \
   -f state=open -f base="<head_branch>" -f per_page=100 \
   --jq '.[].number'
 ```
+
+(`-X GET`/`--method GET` is required — `gh api` switches a request to `POST` automatically the moment
+any `-f`/`-F` parameter is present, and a `POST` to `.../pulls` calls the create-PR endpoint instead
+of listing anything, silently defeating the whole check.)
 
 If that returns nothing, `--delete-branch` is safe as shown above. If a stacked PR *does* depend on this branch, either retarget the dependent PR(s) to `main` first, or omit `--delete-branch` from this merge and delete the branch manually only after retargeting completes — don't knowingly trigger the stacked-PR auto-close quirk documented below and then rely on its recovery procedure as if that were the normal path.
 
@@ -53,7 +57,24 @@ If that returns nothing, `--delete-branch` is safe as shown above. If a stacked 
 
 **Review-comment completeness requires checking three independent channels, every PR, before declaring "review-clean" or merging** — a bot can and does use more than one channel on the very same PR. The three channels are **not interchangeable and do not share a resolution mechanism** — track each with its own explicit state:
 
-- **`UNRESOLVED_REVIEW_THREADS = 0`** — GraphQL `reviewThreads(first:50)` for inline per-line comments. This is the *only* channel with a resolvable state; clear it with `resolveReviewThread` (GraphQL), never applied to the other two channels below.
+- **`UNRESOLVED_REVIEW_THREADS = 0`** — GraphQL `reviewThreads`, paginated exhaustively (a single `first:50`/`first:100` page can silently miss an unresolved thread on a PR with a long review history — this PR's own review wave has already exceeded 50). This is the *only* channel with a resolvable state; clear it with `resolveReviewThread` (GraphQL), never applied to the other two channels below. Canonical paginated query — walk every page via `pageInfo.hasNextPage`/`endCursor` (or `gh api graphql --paginate`, which follows the same cursor convention automatically) before concluding `= 0`:
+
+```bash
+gh api graphql --paginate \
+  -f owner="qnbs" -f name="WorldScript-Studio" -F number=<PR_NUMBER> \
+  -f query='
+    query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
+      repository(owner: $owner, name: $name) {
+        pullRequest(number: $number) {
+          reviewThreads(first: 100, after: $endCursor) {
+            nodes { id isResolved isOutdated path line
+              comments(first: 1) { nodes { databaseId author { login } createdAt body } } }
+            pageInfo { hasNextPage endCursor }
+          }
+        }
+      }
+    }' --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved==false)'
+```
 - **`NO_ACTIONABLE_TOP_LEVEL_ISSUE_COMMENTS = YES`** — `gh api repos/<owner>/<repo>/issues/<PR>/comments` for plain top-level comments (qodo's real findings live here). These have no GraphQL-resolve mechanism; inspect each, fix/dispose of it, reply where appropriate, and confirm none remain actionable — do not call `resolveReviewThread` on them, there is no thread to resolve.
 - **`NO_ACTIONABLE_REVIEW_BODY_FINDINGS = YES`** — `gh api repos/<owner>/<repo>/pulls/<PR>/reviews`, reading each review's `.body` field in full (CodeRabbit's nitpick/outside-diff-range sections live here, collapsed, invisible to both of the above). Same treatment as top-level comments: inspect, dispose, reply where useful, confirm nothing actionable remains — no resolve mutation applies here either.
 
@@ -75,7 +96,7 @@ reviews, rulesets, and check suites before deciding that a merge-state display i
 
 **Known merge-gate quirks (GitHub, this repo):**
 - **Mergeable-state cache lag vs. this repo's own wait-for-everything policy — two different things:** (1) GitHub itself blocks the merge button while *any* check is still `pending`, required or not (a real, observed technical constraint — it clears on its own once every check concludes, pass or fail); separately, once all checks have actually concluded, GitHub's branch protection only re-blocks on a *failing required* check. (2) This repo's own policy above is stricter than that floor: wait for the advisory jobs to *pass*, not just stop being `pending`, before merging. If `gh pr merge` still fails with "base branch policy prohibits the merge" after every job (required and advisory) shows a concluded `success`, and `mergeable: MERGEABLE`, and 0 review threads are unresolved, that's the mergeable-state *cache* lagging behind reality, not either policy above. Re-poll a few times at ~60s spacing. Never use `--admin` to route around any of this without a maintainer's fresh, explicit authorization for that specific merge.
-- **Stacked-PR auto-close on squash-merge:** squash-merging a PR with `--delete-branch` can cause GitHub to **auto-close (not retarget)** a downstream PR whose base was the just-deleted branch, instead of the usual automatic retarget-to-`main`. Recovery: `git push origin <last-known-head-sha>:refs/heads/<deleted-branch-name>` to temporarily restore the ref, `gh pr reopen <n>`, `gh pr edit <n> --base main`, then delete the temp branch once the paginated dependency check above (`gh api --paginate .../pulls -f state=open -f base="<branch>"`) shows nothing still depends on it. **After that recovery, a naive `git rebase origin/main` on the reopened branch re-conflicts** even though the PR's own diff is clean — its history still contains the original un-squashed commits from the now-merged base PR, and a plain rebase tries to replay each individually against main's one squashed commit. Fix: find the merged base branch's last commit SHA (`git log --oneline <stacked-branch>`) and rebase only what's after it — `git rebase --onto origin/main <old-base-tip-sha> <stacked-branch>` — then `git push --force-with-lease`.
+- **Stacked-PR auto-close on squash-merge:** squash-merging a PR with `--delete-branch` can cause GitHub to **auto-close (not retarget)** a downstream PR whose base was the just-deleted branch, instead of the usual automatic retarget-to-`main`. Recovery: `git push origin <last-known-head-sha>:refs/heads/<deleted-branch-name>` to temporarily restore the ref, `gh pr reopen <n>`, `gh pr edit <n> --base main`, then delete the temp branch once the paginated dependency check above shows nothing still depends on it. **After that recovery, a naive `git rebase origin/main` on the reopened branch re-conflicts** even though the PR's own diff is clean — its history still contains the original un-squashed commits from the now-merged base PR, and a plain rebase tries to replay each individually against main's one squashed commit. Fix: find the merged base branch's last commit SHA (`git log --oneline <stacked-branch>`) and rebase only what's after it — `git rebase --onto origin/main <old-base-tip-sha> <stacked-branch>` — then `git push --force-with-lease`.
 - **Zombie `QUEUED` check-suites block `mergeStateStatus`.** Several installed GitHub Apps (Renovate, Cursor, the Claude GitHub App, Greptile, CodeAnt AI, Cloudflare Pages, coderabbitai, Codecov, Amazon Q Developer) can leave their check-suite object stuck at `status: QUEUED` (never `COMPLETED`) on a PR that never triggers their actual logic (e.g. a docs-only PR never fires Renovate). This is **invisible via `gh pr checks`** (named checks all show correctly) — it only shows via GraphQL: `commits(last:1){nodes{commit{checkSuites(first:20){nodes{app{name} status}}}}}`. It can make `gh pr merge` display "the base branch policy prohibits the merge" even when the required check is green. Before assuming this pattern (vs. a real blocker), confirm the required check genuinely concluded `success` and `UNRESOLVED_REVIEW_THREADS = 0` with no actionable findings remaining in the other two channels (see the three-channel definitions above), then re-read the exact head and protection and use a normal policy-enforced merge endpoint. This observed quirk is not authorization for an admin bypass; any bypass requires fresh, incident-specific maintainer authorization.
 - **Any `FAILURE` status — required or advisory — is zero-tolerance; never rationalize it as "probably fine."** `main`'s HEAD commit must never show a red check. In particular, `codecov/patch` evaluates the **entire accumulated diff** against the target branch, not just your latest commit — "my part was docs-only" does not exempt the rest of the PR's diff from needing real coverage. Pull the actual failure detail (coverage report, job log) and understand the root cause before deciding whether to fix it now; never merge (via normal merge, `--auto`, or `--admin`) while any check shows `FAILURE`.
 - **After re-triggering a specific advisory/non-required job, verify that exact job by name before merging** — advisory workflows don't gate `mergeable`/`mergeStateStatus` at all, so a clean `gh pr view --json mergeable` gives zero signal about them, and a large batch of "pass" results from other checks does not imply the specific re-run finished. Grep `gh pr checks <N>`'s output for the exact job name and confirm it individually shows `pass`.
