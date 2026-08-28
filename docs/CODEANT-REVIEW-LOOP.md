@@ -33,8 +33,10 @@ This loop is a **standing rule**, not something to wait for the user to request.
 is an open PR with inline review comments, run the loop **without being asked**. It applies to
 **every** open PR and **every** reviewer/bot (CodeAnt AI, CodeQL, Socket, GitGuardian, human
 reviewers). The goal state is the merge-readiness classification in
-[`PR-CI-MERGE-WORKFLOW.md`](PR-CI-MERGE-WORKFLOW.md) — in short, **0 unresolved review threads**
-across all three comment channels, with green CI; "0 new comments on the latest review pass" is
+[`PR-CI-MERGE-WORKFLOW.md`](PR-CI-MERGE-WORKFLOW.md) — in short, `UNRESOLVED_REVIEW_THREADS = 0`
+(the only channel with a resolve mutation) **and** no actionable findings remain in top-level issue
+comments or review bodies (inspected/dispositioned, not "resolved" — see that doc's three-channel
+definitions), with green CI; "0 new comments on the latest review pass" is
 **not** an independent blanket requirement, since a reviewer correctly reporting no new incremental
 diff on an already-consumed delta is a legitimate terminal state, not a reason to keep waiting.
 
