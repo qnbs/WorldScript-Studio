@@ -36,7 +36,7 @@ DeepSource has **two** layers:
 
 | Aspect | CodeAnt | DeepSource |
 |---|---|---|
-| Trigger | manual `@codeant-ai review` per push | **static**: auto on every push (the operative layer) · **AI review**: paid feature, unavailable on the free tier — not triggered (§0a) |
+| Trigger | **static**: automatic on every push, no manual retrigger — CodeAnt is CI-status-only in this repo (no inline comments to re-trigger; see `PR-CI-MERGE-WORKFLOW.md`'s roster) | **static**: auto on every push (the operative layer) · **AI review**: paid feature, unavailable on the free tier — not triggered (§0a) |
 | Where findings appear | GitHub **review threads** (resolvable) | per-analyzer **commit statuses** + the DeepSource **dashboard** **+ inline PR review comments in resolvable threads** (`deepsource-io[bot]`, one per finding) + a summary issue-comment |
 | Resolution mechanism | reply + `resolveReviewThread` (GraphQL) | **fix the code** (status goes green) · `# skipcq` inline · "Ignore" in the dashboard — **then reply citing the commit + `resolveReviewThread`** on the inline thread (same as CodeAnt) so 0 stay unresolved |
 | Suppression token | `// biome-ignore` | `# skipcq: <ISSUE_CODE>` / `// skipcq: <ISSUE_CODE>` |
@@ -195,17 +195,20 @@ issues — read the change.
 
 ## 7. Local quality gate (low-end hardware — sequential, never parallel)
 
-Identical to the CodeAnt loop — **one** heavy command per step (OOM guard):
+Identical to the CodeAnt loop — **one** heavy command per step (OOM guard). Per
+[`docs/CI.md`](../docs/CI.md) and [`PR-CI-MERGE-WORKFLOW.md`](PR-CI-MERGE-WORKFLOW.md),
+`pnpm run ci:prepush` is the required constrained-hardware gate; full-repository
+`lint`/`typecheck`/`i18n:check` are CI-owned, not a mandatory step of every wave:
 
 ```bash
 node scripts/check-suppressions.mjs            # [suppressions] OK
-pnpm run lint                                  # biome --error-on-warnings → 0
-pnpm run typecheck                             # tsgo → 0
-pnpm run i18n:check                            # only if user-facing strings changed
+pnpm run ci:prepush                            # required constrained-hardware gate before every push
 pnpm exec vitest run <affected test files>     # targeted, not the whole suite
 ```
 
-Coverage, E2E, Lighthouse, Stryker, Storybook are **CI-only**.
+Developers on more capable hardware MAY additionally run `pnpm run lint` / `pnpm run typecheck` /
+`pnpm run i18n:check` locally, but the low-end policy does not require it. Coverage, E2E, Lighthouse,
+Stryker, Storybook are **CI-only**.
 
 ## 8. Commit & push (DeepSource re-runs automatically)
 

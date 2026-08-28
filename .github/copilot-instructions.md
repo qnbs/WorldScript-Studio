@@ -112,21 +112,27 @@ types.ts          → Core shared interfaces and types
 - **Branch-based development**: All changes MUST be made on feature branches (e.g., `fix/security-vulnerabilities-2026-06-06`). Never commit directly to `main`.
 - **CI verification**: Push to branch and wait for ALL CI jobs (security, quality, build, e2e, lighthouse) to pass before merging.
 - **PR merge**: Only merge to `main` when CI is fully green. Use "Squash and merge" for clean history.
-- **Inline comment handling — the CodeRabbit Correction Loop (proactive, automatic, every PR):**
-  Address ALL inline review comments (CodeRabbit + any other bot/human) **without being asked**. Canonical
-  procedure: [`docs/CODEANT-REVIEW-LOOP.md`](../docs/CODEANT-REVIEW-LOOP.md). Each pass:
+- **Inline comment handling — the correction loop (proactive, automatic, every PR):**
+  Address ALL inline review comments (CodeRabbit + any other bot/human) **without being asked**.
+  Overall lifecycle authority: [`docs/PR-CI-MERGE-WORKFLOW.md`](../docs/PR-CI-MERGE-WORKFLOW.md);
+  reconciliation-mechanics sub-procedure: [`docs/CODEANT-REVIEW-LOOP.md`](../docs/CODEANT-REVIEW-LOOP.md).
+  Each pass:
   1. Fetch unresolved threads via GraphQL (`reviewThreads` → `isResolved:false`).
   2. Validate each finding against the **current** code (anchors may be stale).
   3. Implement the real **root-cause** fix (code **+ tests + i18n + docs**), or reply with evidence
      if false-positive / by-design. **Never** add a new `biome-ignore` (suppression ratchet fails
      CI — refactor instead; run `node scripts/check-suppressions.mjs`).
-  4. Local gate (sequential): lint + typecheck + targeted vitest green.
+  4. Local gate (sequential): `pnpm run ci:prepush` (required constrained-hardware gate) + targeted
+     vitest green — full `lint`/`typecheck`/`i18n:check` are CI-owned, not mandatory per wave.
   5. Commit + push; reply to **every** thread citing the resolving commit, then resolve it → **0 unresolved**.
-  6. Re-trigger: `gh pr comment <N> --body "@coderabbitai review"`; check the **full** review history,
-     not just the latest status (a rate-limited latest status can hide an earlier real review).
-  - **Iron rule — loop until quiescent:** a push triggers a fresh review that often raises NEW
-    findings (a "wave"). Repeat until **BOTH** a fresh review yields **0 new comments** AND **0 threads
-    unresolved**. Never stop while comments still arrive.
+  6. A push normally **auto-triggers** CodeRabbit's incremental review. Check the **full** review
+     history, not just the latest status. Post `gh pr comment <N> --body "@coderabbitai review"`
+     only when that history shows automatic review is paused/inapplicable — it does not re-review
+     commits it already consumed, so don't post it as a routine "freshness" ritual.
+  - **Iron rule — loop until quiescent:** repeat until **ZERO** review threads are unresolved and
+    either a review of the current delta yields zero new actionable findings, or the delta qualifies
+    as LOW-RISK under `PR-CI-MERGE-WORKFLOW.md`'s precise condition list. `NO_NEW_INCREMENTAL_DIFF`
+    on an already-consumed delta is a legitimate terminal state, not something to wait out forever.
   - CodeAnt AI shows up as 5 CI **status checks** (`CodeAnt - Quality Gates/SAST/SCA/SCR/Test Coverage`)
     to verify green — it is not the bot posting inline comments in this repo, so don't re-trigger it
     expecting a comment thread.

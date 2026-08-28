@@ -1,21 +1,27 @@
 # CodeAnt AI PR Review Correction Loop
 
-> **Canonical, agent-agnostic workflow.** This is the single source of truth for how *every*
-> agent (Claude Code, Kimi, Cursor, Copilot, Gemini, human) handles inline PR review comments on
-> this repository — from CodeAnt AI **and any other reviewer or bot**. All instruction files
-> (`CLAUDE.md`, `AGENTS.md`, `docs/history/KIMI-INSTRUCT.md`, `.cursorrules`, `.github/copilot-instructions.md`)
-> point here. Keep this file current when the workflow or tooling changes.
+> **Canonical sub-procedure for review-comment reconciliation mechanics** (thread fetch, validate,
+> fix/justify, reply, resolve) — for how *every* agent (Claude Code, Kimi, Cursor, Copilot, Gemini,
+> human) handles inline PR review comments on this repository, from CodeAnt AI **and any other
+> reviewer or bot**. **Overall PR/CI/merge lifecycle authority — including CodeRabbit trigger
+> semantics, reviewer states, merge-readiness classification, and merge mechanics — lives in
+> [`PR-CI-MERGE-WORKFLOW.md`](PR-CI-MERGE-WORKFLOW.md); this file is a scoped supplement, not a
+> competing canonical source.** All instruction files (`CLAUDE.md`, `AGENTS.md`,
+> `docs/history/KIMI-INSTRUCT.md`, `.cursorrules`, `.github/copilot-instructions.md`) point here for
+> the reconciliation mechanics. Keep this file current when the workflow or tooling changes.
 >
 > **See also:** [`DEEPSOURCE-REVIEW-LOOP.md`](DEEPSOURCE-REVIEW-LOOP.md) — the complementary,
 > token-free static-analysis loop. A PR is "review-quiescent" only when **both** are satisfied.
 >
 > **Which bot actually posts inline comments (2026-07-30 observation):** in practice, **CodeRabbit**
 > is the reviewer posting inline actionable/nitpick/outside-diff-range comments on PRs in this
-> repository — re-trigger it with `gh pr comment <N> --body "@coderabbitai review"`. `CodeAnt AI`
-> shows up as five CI **status checks** (`CodeAnt - Quality Gates/SAST/SCA/SCR/Test Coverage`) to
-> verify green, not as a comment thread requiring reply + resolve. The loop mechanics below apply
-> to whichever bot(s) are actually posting comments on a given PR — check the full review history
-> (not just the latest status) before concluding there's nothing to fix.
+> repository — see `PR-CI-MERGE-WORKFLOW.md` for its trigger semantics (automatic incremental review
+> is the normal path; `@coderabbitai review`/`@coderabbitai full review` are not interchangeable
+> rituals). `CodeAnt AI` shows up as five CI **status checks**
+> (`CodeAnt - Quality Gates/SAST/SCA/SCR/Test Coverage`) to verify green, not as a comment thread
+> requiring reply + resolve — it does not need a manual retrigger command. The loop mechanics below
+> apply to whichever bot(s) are actually posting comments on a given PR — check the full review
+> history (not just the latest status) before concluding there's nothing to fix.
 
 ## 0. When this runs — proactively, automatically, every PR
 
@@ -27,16 +33,20 @@ comments on the latest review pass**, with green CI.
 
 ## 1. The Iron Rule — loop until quiescent
 
-**The correction loop does not stop after one pass.** A push that fixes comments triggers a *fresh*
-CodeAnt review, which routinely surfaces **new** findings caused by the fixes themselves (a "wave").
-Each wave is handled exactly like the first.
+**The correction loop does not stop after one pass.** A push that fixes comments is normally picked
+up by automatic incremental review, which routinely surfaces **new** findings caused by the fixes
+themselves (a "wave"). Each wave is handled exactly like the first.
 
-> **Termination condition (BOTH must hold):**
-> 1. A freshly-triggered CodeAnt review produces **ZERO new inline comments**, **and**
-> 2. **ZERO** review threads are unresolved.
+> **Termination condition — see `PR-CI-MERGE-WORKFLOW.md`'s merge-readiness classification for the
+> full rule.** In short: **ZERO** review threads unresolved, all three review channels checked, and
+> either (a) a review of the current delta produced zero new actionable findings, or (b) the current
+> delta qualifies as LOW-RISK per that doc's precise condition list (narrow, reconciles known
+> findings only, independently inspected, no new executable/security/tooling behavior) — a reviewer
+> reporting `NO_NEW_INCREMENTAL_DIFF` on an already-consumed delta is a legitimate terminal state,
+> not something to wait out indefinitely.
 >
-> Until both are true, **keep iterating**. Never declare the PR done while new comments are still
-> arriving or any thread is open.
+> Until the termination condition holds, **keep iterating**. Never declare the PR done while new
+> actionable comments are still arriving or any thread is open.
 
 ```text
         ┌─────────────────────────────────────────────┐
@@ -44,24 +54,27 @@ Each wave is handled exactly like the first.
         │ 2. Validate each against CURRENT code        │
         │ 3. Fix root cause  OR  justify (false +ve)   │
         │ 4. Update tests + i18n + docs (lockstep)     │
-        │ 5. lint + typecheck + targeted vitest green  │
+        │ 5. suppressions + targeted vitest green      │
+        │    (see §4 — full lint/typecheck are CI-owned)│
         │ 6. Commit + push (one wave = one commit)     │
         │ 7. Reply to every thread (cite commit) +     │
         │    resolve it → 0 unresolved                 │
-        │ 8. Re-trigger: `@coderabbitai review`        │
+        │ 8. Push auto-triggers incremental review;    │
+        │    manual `@coderabbitai review` only if     │
+        │    auto-review is paused/inapplicable         │
         └───────────────┬─────────────────────────────┘
-                        │ new comments?
-              ┌── yes ──┘         └── no ──┐
-              ▼                            ▼
-        (next wave, go to 1)        DONE → merge when CI green
+                        │ new actionable findings?
+              ┌── yes ──┘         └── no / NO_NEW_INCREMENTAL_DIFF ──┐
+              ▼                                                     ▼
+        (next wave, go to 1)                        DONE → merge per PR-CI-MERGE-WORKFLOW.md
 ```
 
 ## 1a. Keep every PR under the ~100-file review limit (split when needed)
 
 **CodeAnt does not post inline review comments on a PR that exceeds ~100 changed files** — the
 large-diff check hangs/skips, so the whole correction loop above silently never starts. This repo
-hits the limit easily: any user-facing string change fans out across **17 locale source files +
-17 rebuilt `public/locales/**/bundle.json`** *per module touched*, so a multi-feature branch can
+hits the limit easily: any user-facing string change fans out across **19 locale source files +
+19 rebuilt `public/locales/**/bundle.json`** *per module touched*, so a multi-feature branch can
 cross 100 files from i18n alone.
 
 **Procedure (do this BEFORE opening the PR):**
@@ -145,17 +158,22 @@ new `// biome-ignore` **raises the count and fails the quality gate**. So:
 
 ## 4. Local quality gate (low-end hardware — sequential, never parallel)
 
-Run **one** heavy command per step; never run vitest/biome/tsgo/vite concurrently (OOM).
+This repo's canonical local-validation policy lives in [`docs/CI.md`](CI.md) and
+[`PR-CI-MERGE-WORKFLOW.md`](PR-CI-MERGE-WORKFLOW.md): `pnpm run ci:prepush` is the required
+constrained-hardware admission gate, and full-repository `lint`/`typecheck`/`i18n:check` are
+**CI-owned** — not a mandatory step of every correction-loop wave. Run **one** heavy command per
+step; never run vitest/biome/tsgo/vite concurrently (OOM).
 
 ```bash
 node scripts/check-suppressions.mjs            # [suppressions] OK
-pnpm run lint                                  # biome --error-on-warnings → 0
-pnpm run typecheck                             # tsgo → 0
-pnpm run i18n:check                            # only if user-facing strings changed
+pnpm run ci:prepush                            # required constrained-hardware gate before every push
 pnpm exec vitest run <affected test files>     # targeted, not the whole suite
 ```
 
-Coverage, E2E, Lighthouse, Stryker, Storybook are **CI-only** — do not run locally.
+Developers on more capable hardware MAY additionally run `pnpm run lint` / `pnpm run typecheck` /
+`pnpm run i18n:check` locally before pushing, but the low-end policy does not require it — required
+GitHub CI remains the unconditional authority for full lint/typecheck/i18n validation regardless of
+what ran locally. Coverage, E2E, Lighthouse, Stryker, Storybook are **CI-only** — do not run locally.
 
 ## 5. Commit & push (one wave = one commit)
 
@@ -189,24 +207,26 @@ gh api graphql -f query='mutation { resolveReviewThread(input:{threadId:"PRRT_�
 Leave **0 unresolved**. Every handled thread gets a reply (fix → cite commit; false-positive →
 cite evidence) **and** is resolved.
 
-## 7. Re-trigger the review — then loop
+## 7. After the wave is pushed — check for review, don't ritualistically re-trigger
 
-After all threads are resolved and the wave is pushed:
-
-```bash
-gh pr comment PR_NUMBER --body "@coderabbitai review"
-```
-
-A push usually auto-triggers CodeRabbit; the explicit comment is belt-and-suspenders. Check the
-**full review history**, not just the latest status (a rate-limited latest status can hide an
-earlier real review). **Wait for the fresh review**, then go back to step 2. Repeat until the
-**termination condition** in §1 holds.
+A push normally **auto-triggers** CodeRabbit's incremental review on its own. Check the **full
+review history** (not just the latest status — a rate-limited latest status can hide an earlier
+real review) to see whether it already ran. Post `gh pr comment PR_NUMBER --body "@coderabbitai
+review"` only when that history shows automatic review is paused/inapplicable, or CodeRabbit's own
+reply says the manual trigger is what applies — see `PR-CI-MERGE-WORKFLOW.md`'s CodeRabbit trigger
+semantics for the full rule. Once a review of the current delta lands, go back to step 2. If the
+delta was already incrementally consumed and nothing new is coming, that's `NO_NEW_INCREMENTAL_DIFF`
+— a legitimate reason to move to the merge-readiness classification in step 8, not a reason to keep
+waiting. Repeat until the **termination condition** in §1 holds.
 
 ## 8. Merge
 
-Once the loop is quiescent (0 new comments + 0 unresolved) **and** CI is fully green:
+Once the termination condition in §1 holds and CI is fully green, apply
+[`PR-CI-MERGE-WORKFLOW.md`](PR-CI-MERGE-WORKFLOW.md)'s merge-readiness classification (HIGH-RISK vs.
+LOW-RISK final delta) and merge-mechanics ordering rule in full — summarized:
 
-- Prefer **auto-merge (squash)**: `gh pr merge PR_NUMBER --auto --squash --delete-branch`.
+- Enable protected squash **auto-merge** only after this repo's stricter internal criteria (not just
+  GitHub's branch-protection floor) are satisfied: `gh pr merge PR_NUMBER --auto --squash --delete-branch`.
 - If branch protection presents the PR as `BLOCKED` despite green required checks, stop and
   re-read the live head, checks, reviews, protection, rulesets, and check suites. Use a normal
   GitHub policy-enforced merge endpoint only after the exact head is revalidated; there is no
