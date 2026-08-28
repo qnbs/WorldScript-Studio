@@ -41,56 +41,15 @@ pnpm run token:audit        # audit-tokens.mjs — design-token usage gate (CI b
 
 **Vitest watch-mode hard rule:** Never invoke `pnpm test`, `npm run test`, or a bare Vitest wrapper. Always use an explicit targeted `pnpm exec vitest run <path>` command; watch mode hangs the constrained development hardware.
 
-**Mandatory pre-push gate:** Run `pnpm run ci:prepush` before every push and again after every local correction before re-pushing. It always resolves a change-aware classification (`scripts/ci-prepush-classifier.mjs`) from the outgoing evidence first, then runs docs/release-truth, CSP, desktop-import-boundary, native-readiness, and dependency-state checks unconditionally — it does **not** run Biome lint; that stays the pre-commit hook's job on staged files only (`lint-staged`), and full-repository lint is CI-owned. The single-checker (`--checkers 1`) local typecheck and the i18n/content-guard checks run only when the classification requires them — `DOCS_ONLY`, `WORKFLOW_ONLY`, `NON_CODE_ONLY`, `RUST_TAURI`, `TOOLING`, and non-TypeScript `TEST_ONLY` changes report typecheck as `DEFERRED_TO_REQUIRED_CI` instead of running it locally, and i18n/content-guard checks run only for changes matching their own governed paths or implementation files (see `scripts/ci-prepush-check-registry.mjs`). It is the same `tsgo --noEmit` check as CI, not literally identical to it — CI uses `--checkers 4`. Whenever outgoing path evidence is incomplete, unresolved, or the manual committed-range diff fails, the gate fails closed into full local admission (every conditional check runs) rather than deferring anything. A targeted test or changed-file lint run alone is insufficient. If pnpm reports a dependency verification failure after a branch or lockfile change, run `node scripts/dependency-state.mjs reconcile` (or `pnpm run deps:reconcile`) first, then rerun the gate. The pre-commit hook does not replace this gate. Required GitHub CI remains the unconditional authority for the complete lint, TypeScript, and i18n validation regardless of what the local gate deferred.
-
-**New-worktree / first-time dependency bootstrap — never a bare `pnpm install`:** When materializing `node_modules` for the first time on a new git worktree (or any branch checkout that hasn't been installed yet), always run `node scripts/dependency-state.mjs reconcile` (or `pnpm run deps:reconcile`) — never a bare `pnpm install`. The bare form omits `--frozen-lockfile`, so on any manifest/lockfile drift it silently *rewrites* `pnpm-lock.yaml` instead of failing loudly, and it never writes the repo's own dependency fingerprint (`node_modules/.worldscript-deps-fingerprint`) — that fingerprint is checked only by `pnpm run deps:verify`, `ci:prepush`, and the pre-commit hook, not by arbitrary `pnpm run <script>` calls, so a stale one from a bare install can go undetected until one of those three actually runs. Separately, pnpm's own built-in `verifyDepsBeforeRun` check (unrelated to this repo's fingerprint file; it compares `node_modules` against the lockfile) can independently surface a broader `node_modules`/lockfile mismatch on other `pnpm run` calls as `ERR_PNPM_VERIFY_DEPS_BEFORE_RUN`. This matters most exactly where it looks safest: on a branch that deliberately touches *nothing* dependency-related — a Dependabot GitHub-Actions-only bump, a docs-only PR, a workflow-policy fix — a stray unverified bare install is the one action that could introduce an out-of-scope `pnpm-lock.yaml`/`package.json` change nobody asked for, or run install/postinstall scripts against an unverified graph. `deps:reconcile`'s `--frozen-lockfile` failing loudly is the primary safeguard; after it succeeds, `git status --porcelain` / `git diff --stat -- pnpm-lock.yaml package.json` showing no diff is corroborating evidence, not a substitute for using the right command in the first place — a clean lockfile diff after a bare install proves the graph happened to already be in sync, not that the bare install was the correct or safe choice to make. **Name the worktree directory itself dot-free** (e.g. `release-v1282`, not `release-v1.28.2`) — see the `tsgo` gotcha under Build & bundler gotchas.
-
-**Quality gate (local pre-push subset):** `pnpm run ci:prepush` runs dependency-state/docs/CSP/native-readiness checks unconditionally (never full-repository lint — see the pre-push gate note above for what runs lint locally), and the single-checker local typecheck and i18n/content-guard checks only for changes the classifier marks as potentially impacting them (fail-closed to "run everything conditional" when evidence is incomplete); CI additionally runs full-repository lint, the 4-checker typecheck, full-suite coverage, and heavy jobs regardless of what the local gate ran. Locally use only the targeted form `pnpm exec vitest run <path> --coverage` when debugging coverage. Full pipeline graph: [`docs/CI.md`](docs/CI.md). Coverage thresholds: lines 80, branches 66, functions 72, statements 78 (see `vitest.config.ts`).
-
-**CI pipeline order:** `security` → `quality` (Biome + tsgo + Vitest matrix) → `build` / `e2e` / `storybook` (parallel) → `lighthouse` (after build) → `deploy` on `main`. `ci-success` is a required-status aggregator (`needs: [security, quality, build]`) so branch protection can require one context instead of three/four individual ones — see `docs/CI.md`. Two additional jobs run in parallel with `quality`, both path-scoped via the `changes` job (legitimately `skipping` on PRs that don't touch their directory, which `ci-success` treats as a pass for that job only): `rust-tauri` (`src-tauri/**` — fmt/check/clippy/test, needs the GTK/WebKit apt-get steps) and `core-rust` (`crates/**` — same fmt/check/clippy/test for the renderer-neutral Rust Core, no GUI deps so no apt-get steps needed).
-
-**CI-cloud-first workflow (constrained local hardware only):** On low-end hardware, run only `ci:prepush` locally before pushing. Coverage, E2E, Lighthouse, and Stryker are CI-gate jobs. After each push, update README.md badges and AUDIT.md quality-gate line with CI-reported numbers. Local CI simulation: `act pull_request --job quality` (Docker + `act`; see `infra/low-end-ci/DAILY-DRIVER.md`).
-
-**CI audit & housekeeping policy (ALL CI runs must be fully green):**
-- After every commit, monitor all jobs for the active workflow. Stryker is a separate manual workflow, not a routine PR check; monitor it when explicitly dispatched for an incremental, Tier-A, module, or force audit.
-- **CodeQL scanning**: Check `https://github.com/qnbs/WorldScript-Studio/security/code-scanning` after every push. Fix the root cause — do not just suppress alerts.
-- **Token-Permissions**: All GitHub Actions workflows must set top-level `permissions: contents: read`; write permissions belong at the job level, never top-level.
-- **OSV vulnerabilities**: Run `pnpm audit` or check the security CI job. Add `pnpm.overrides` with pinned exact versions.
-- Correction loop: fix → commit → verify CI → fix until all jobs green.
-
-**PR review-comment policy — the CodeRabbit Correction Loop (proactive, automatic, every PR):** Fix ALL inline comments (CodeRabbit + any other bot/human) on every PR, **without being asked** — this explicitly includes CodeRabbit's collapsed **nitpick** sections and **outside-diff-range** findings (both easy to miss since they're collapsed by default in the review UI), not just its top-level actionable comments. Validate findings against the *current* code (anchors may be stale); implement real **root-cause** fixes (code **+ tests + i18n + docs** in lockstep) or reply with evidence if a false positive. **Never add a new `biome-ignore`** — the suppression ratchet (`scripts/check-suppressions.mjs`) fails the quality gate; refactor so the rule passes honestly. Reply to each thread citing the resolving commit (`POST .../comments/<id>/replies`), resolve it (GraphQL `resolveReviewThread`), leave **0 unresolved**. Then commit, push, and **re-trigger** (`gh pr comment <N> --body "@coderabbitai review"`) — check its **full review history**, not just the latest status (a "rate limited" latest status can hide an earlier real review). **Iron rule — loop until quiescent:** a push triggers a fresh review that often raises NEW findings (a "wave"); repeat the full cycle until **BOTH** a fresh review yields **0 new comments** AND **0 threads unresolved**. Only then use the normal protected squash merge; a protection bypass is not a standing fallback and requires fresh, explicit maintainer authorization for the specific incident. CodeAnt AI shows up as 5 CI **status checks** (`CodeAnt - Quality Gates/SAST/SCA/SCR/Test Coverage`) to verify green — it is not the bot posting inline comments in this repo, so don't re-trigger it expecting a comment thread. Full canonical procedure: [`docs/CODEANT-REVIEW-LOOP.md`](docs/CODEANT-REVIEW-LOOP.md).
-
-**Current review-bot roster (verify still installed before relying on any of these — bots get added/removed over time):** CodeRabbit (`@coderabbitai review` to re-trigger; posts both inline threads for actionable comments AND a separate review-body-only "🧹 Nitpick comments" section — the latter is invisible to a `reviewThreads` check). CodeAnt AI (CI status checks only, not inline comments in this repo — see above). qodo-code-review (posts real findings as **plain top-level PR comments**, `gh api repos/<owner>/<repo>/issues/<PR>/comments`, not as `reviewThreads` at all — a clean `reviewThreads` result does not mean qodo has nothing to say). Amazon Q Developer (manual trigger is `/q review` posted as a **brand-new top-level comment**, not inside an existing thread; also auto-reviews new/reopened PRs after install — **quota-conscious usage**: call it once CodeRabbit/CodeAnt's own loop has already reached quiescence, not after every fix commit; only re-invoke a second time if that fix was substantial). Graphite AI Reviews (automatic on every PR once installed — no confirmed manual re-trigger command). chatgpt-codex-connector (availability is intermittent/quota-limited on its own weekly budget — confirm it's currently active before relying on its silence as a clean pass, and don't spam re-triggers while it's known-suspended).
-
-**Review-comment completeness requires checking three independent channels, every PR, before declaring "review-clean" or merging** — a bot can and does use more than one channel on the very same PR: (1) GraphQL `reviewThreads(first:50)` for inline per-line comments; (2) `gh api repos/<owner>/<repo>/issues/<PR>/comments` for plain top-level comments (qodo's real findings live here); (3) `gh api repos/<owner>/<repo>/pulls/<PR>/reviews`, reading each review's `.body` field in full (CodeRabbit's nitpick/outside-diff-range sections live here, collapsed, invisible to both of the above). None of the three implies the others are clean.
-
-**A review bot's silence is not the same as a clean pass.** Rate-limited, quota-exhausted, or never-triggered is a different state than "reviewed and found nothing" — verify at least one bot produced *substantive* output (its actual review body/comment text, not just a green check-run) before merging, especially for security/sandbox/IPC/FFI/packaging-adjacent changes. If every independent reviewer is simultaneously silent on such a PR, that's a gap worth surfacing, not something to proceed past as if the loop were satisfied.
-
-**PR-size limit — keep every PR under ~100 changed files so CodeAnt actually reviews it.** CodeAnt does **not** post inline review comments on PRs that exceed ~100 changed files (the >100-file check hangs/skips). Since any i18n-touching change fans out across 19 locale source files + 19 rebuilt `bundle.json` per module, a multi-feature branch crosses 100 fast. **Before pushing, run `git diff --name-only <base>...HEAD | wc -l`.** If it is over ~100, split the work into the **fewest** stacked PRs that each stay clearly under the limit — group by which locale module-files they touch so the per-PR fan-out stays small (e.g. P0 batch touching `writer.json`; P1/P2 batch touching `common.json`/`dashboard.json`). Stack them (PR2 base = PR1's branch) so each PR's incremental diff — what CodeAnt sees — is small; when PR1 merges, PR2 auto-retargets to `main`. **Do not** make more PRs than needed: if everything fits under ~100 in one (or two) PRs, use that. Keep commits atomic per concern regardless of how they are bundled into PRs.
-
-**Branching & merge discipline (every change, no exceptions):** Never commit directly to `main` — always create a feature branch, push, and open a PR, even for a single-file doc/config/chore edit. Before merging, wait for the **full CI suite to go green, including non-required/advisory jobs** (`E2E Tests`, `E2E Deep Coverage`, `Storybook`, `Lighthouse`, `Visual Regression`) — not just the branch-protection-required checks (Security Audit, Build, Quality Gate ×2). When doing a structured multi-step sprint (an audit, a migration broken into workstreams), group related small workstreams into the fewest PRs that stay reviewable — by natural/documented boundaries, not one PR per tiny item — while keeping one commit per logical concern inside each PR.
-
-**Protected merge policy (current):** The normal path is a protected squash merge after the exact
-head's complete CI and review evidence is green. No admin/protection bypass is a standing fallback;
-it requires fresh, explicit maintainer authorization for the specific incident. Re-read live
-protection, checks, reviews, rulesets, and check suites before deciding that a merge-state display
-is a platform quirk. This rule supersedes older admin-fallback wording in this file pending the
-H1-F2 instruction consolidation.
-
-**Known merge-gate quirks (GitHub, this repo):**
-- **Mergeable-state cache lag vs. this repo's own wait-for-everything policy — two different things:** (1) GitHub itself blocks the merge button while *any* check is still `pending`, required or not (a real, observed technical constraint — it clears on its own once every check concludes, pass or fail); separately, once all checks have actually concluded, GitHub's branch protection only re-blocks on a *failing required* check. (2) This repo's own policy above is stricter than that floor: wait for the advisory jobs to *pass*, not just stop being `pending`, before merging. If `gh pr merge` still fails with "base branch policy prohibits the merge" after every job (required and advisory) shows a concluded `success`, and `mergeable: MERGEABLE`, and 0 review threads are unresolved, that's the mergeable-state *cache* lagging behind reality, not either policy above. Re-poll a few times at ~60s spacing. Never use `--admin` to route around any of this without a maintainer's fresh, explicit authorization for that specific merge.
-- **Stacked-PR auto-close on squash-merge:** squash-merging a PR with `--delete-branch` can cause GitHub to **auto-close (not retarget)** a downstream PR whose base was the just-deleted branch, instead of the usual automatic retarget-to-`main`. Recovery: `git push origin <last-known-head-sha>:refs/heads/<deleted-branch-name>` to temporarily restore the ref, `gh pr reopen <n>`, `gh pr edit <n> --base main`, then delete the temp branch once `gh pr list --state open --json baseRefName` shows nothing still depends on it. **After that recovery, a naive `git rebase origin/main` on the reopened branch re-conflicts** even though the PR's own diff is clean — its history still contains the original un-squashed commits from the now-merged base PR, and a plain rebase tries to replay each individually against main's one squashed commit. Fix: find the merged base branch's last commit SHA (`git log --oneline <stacked-branch>`) and rebase only what's after it — `git rebase --onto origin/main <old-base-tip-sha> <stacked-branch>` — then `git push --force-with-lease`.
-- **Zombie `QUEUED` check-suites block `mergeStateStatus`.** Several installed GitHub Apps (Renovate, Cursor, the Claude GitHub App, Greptile, CodeAnt AI, Cloudflare Pages, coderabbitai, Codecov, Amazon Q Developer) can leave their check-suite object stuck at `status: QUEUED` (never `COMPLETED`) on a PR that never triggers their actual logic (e.g. a docs-only PR never fires Renovate). This is **invisible via `gh pr checks`** (named checks all show correctly) — it only shows via GraphQL: `commits(last:1){nodes{commit{checkSuites(first:20){nodes{app{name} status}}}}}`. It can make `gh pr merge` display "the base branch policy prohibits the merge" even when the required check is green. Before assuming this pattern (vs. a real blocker), confirm the required check genuinely concluded `success` and 0 review threads are unresolved across all channels (see the PR review-comment policy below), then re-read the exact head and protection and use a normal policy-enforced merge endpoint. This observed quirk is not authorization for an admin bypass; any bypass requires fresh, incident-specific maintainer authorization.
-- **Any `FAILURE` status — required or advisory — is zero-tolerance; never rationalize it as "probably fine."** `main`'s HEAD commit must never show a red check. In particular, `codecov/patch` evaluates the **entire accumulated diff** against the target branch, not just your latest commit — "my part was docs-only" does not exempt the rest of the PR's diff from needing real coverage. Pull the actual failure detail (coverage report, job log) and understand the root cause before deciding whether to fix it now; never merge (via normal merge, `--auto`, or `--admin`) while any check shows `FAILURE`.
-- **After re-triggering a specific advisory/non-required job, verify that exact job by name before merging** — advisory workflows don't gate `mergeable`/`mergeStateStatus` at all, so a clean `gh pr view --json mergeable` gives zero signal about them, and a large batch of "pass" results from other checks does not imply the specific re-run finished. Grep `gh pr checks <N>`'s output for the exact job name and confirm it individually shows `pass`.
-
-**E2E notes:** Do NOT use `networkidle` waits (HMR keeps WebSocket open). Scope sidebar navigation via `#sidebar`. Shared helpers: `tests/e2e/helpers.ts`. Mobile E2E: set `RUN_MOBILE_E2E=1` locally (off by default).
-
-**Feature-flag E2E coverage (anti-pattern guard):** Every test that relies on a specific flag state MUST use `setFeatureFlags(page, {...})` from `helpers.ts` to make that dependency explicit and guard against future default changes. Call it BEFORE `page.goto()` — it uses `addInitScript` so it runs before app JS.
-
-Three E2E layers: (1) feature specs (`proforge-flags.spec.ts`, `voice-flags.spec.ts`, `lora-wizard.spec.ts`) — flag explicitly seeded, required CI gate; (2) deep matrix (`tests/e2e/deep/feature-flag-matrix.spec.ts`) — parametrized smoke across all `testConfigurations` in `test-matrix.ts`, non-blocking `e2e-deep` job; (3) error paths (`tests/e2e/deep/error-paths.spec.ts`) — offline AI, rapid nav, all flags on; also in `e2e-deep`.
-
-When adding a new feature flag: (a) add an entry to `tests/e2e/config/test-matrix.ts`, (b) write at least one test in `tests/e2e/<feature>-flags.spec.ts` that seeds the flag and verifies a critical UI element. Ask: *"If this flag were off by default tomorrow, would CI still catch a regression?"*
+**PR, CI & merge — non-negotiables** (full pre-push/CI mechanics, the review-bot roster, the three-channel comment check, and known GitHub merge-gate quirks with recovery steps: see [`docs/PR-CI-MERGE-WORKFLOW.md`](docs/PR-CI-MERGE-WORKFLOW.md)):
+- **Before any commit, push, PR creation/update, CI triage, review reconciliation, or merge operation, read and follow [`docs/PR-CI-MERGE-WORKFLOW.md`](docs/PR-CI-MERGE-WORKFLOW.md) in full** — it is ordinary tracked documentation, not an auto-loaded skill, so it is only in context once actually read. The bullets below are a condensed summary, not a substitute.
+- Run `pnpm run ci:prepush` before every push and again after every local correction. For a new/uninstalled worktree, never a bare `pnpm install` — use `pnpm run deps:reconcile` (frozen-lockfile); name worktree dirs dot-free (`tsgo` gotcha).
+- Fix ALL PR review comments (every bot and human — inline, top-level, and collapsed nitpick sections) proactively, without being asked, with real root-cause fixes; never add a new suppression to silence a finding. Loop until a fresh review yields 0 new comments and 0 unresolved threads, checked across all 3 comment channels (review threads, issue comments, review bodies) — a bot's silence is not the same as a clean pass.
+- Keep every PR under ~100 changed files so review bots actually run.
+- Never commit directly to `main` — always a feature branch + PR, even for a single-file change. Before merging, wait for the full CI suite green, including advisory jobs, not just required checks.
+- The normal path is a protected squash merge; an admin/protection bypass is never a standing fallback — it needs fresh, explicit maintainer authorization for that specific incident.
+- Any `FAILURE` status, required or advisory, is zero-tolerance — never merge past one.
+- Fix the root cause of CodeQL/security findings — never just suppress. Every GitHub Actions workflow must set top-level `permissions: contents: read`.
 
 Pre-commit hook runs Biome check via `simple-git-hooks` + `lint-staged` on staged files.
 
@@ -283,6 +242,8 @@ Experimental features are gated behind `features/featureFlags/featureFlagsSlice.
 
 **Default on (16):** `enableStoryBibleAdvanced`, `enableBinderResearch`, `enableCompileWizard`, `enableProjectHealthScore`, `enableAppHealthPanel`, `enableDuckDbAnalytics`, `enableObjectsGroups`, `enableMindMaps`, `enableCharacterInterviews`, `enableLoraAdapters`, `enablePluginSystem`, `enableIdbAtRestEncryption` (B-1, passphrase UX complete — Settings › Privacy), `enableAdaptiveAiEngine`, `enableComputeShaders`, `enableWorkerBusV2`, `enableRustCompute`. **User opt-in — default off (7):** `enableProForge` (experimental, token-heavy 8-stage agentic pipeline — flipped to opt-in in v1.24 post-release), `enableVoiceSupport` (requires browser mic permission), `enableVoiceWasm` (B-2, ~57 MB Whisper download), `enableGlobalCopilot` (ambient AI), `enableRtlLayout` (B-5, ar/he stubs only), `enableLocalFirstSync` (shadow Yjs projection, ADR-0008; Redux stays SoT), `enableBrowserOllama` (ADR-0017, Issue #266 — direct browser→Ollama fetch in the web/PWA build, only works if the user's own server has OLLAMA_ORIGINS configured for this origin; advanced/unsupported). The Settings UI groups these by catalog tier; `features/featureCatalog.ts` **derives** each flag's `defaultOn` from the slice (no hand-keyed drift). Note: `enableCloudSync` was **retired** in v1.20 (no UI shipped; `CloudSyncBackend.create()` requires explicit-consent boolean instead).
 
+**Every new feature flag needs E2E coverage — not optional:** add an entry to `tests/e2e/config/test-matrix.ts` and at least one test in `tests/e2e/<feature>-flags.spec.ts` that seeds the flag and verifies a critical UI element, as part of implementing the flag, not as a follow-up. Full 3-layer E2E convention and `setFeatureFlags()` usage: `tests/CLAUDE.md`.
+
 ### Command Center & shortcuts
 
 - **`services/commands/`** — single registry for palette entries: definitions, fuzzy rank/score, recent/pinned prefs, lightweight AI suggestions. **`components/CommandPalette.tsx`** renders from this registry (ARIA combobox/listbox patterns).
@@ -356,109 +317,18 @@ All `.md` guides listed in **[`README.md`](README.md#-documentation-hub) § Docu
 
 ## Current Patterns
 
-### Plot Board
-
-**plotBoardSlice:** `features/plotBoard/plotBoardSlice.ts` — ephemeral viewport/UI state only (zoom/pan/mode/draw). NOT undo-able; persists to `localStorage`. Story content (connections, subplots, tensionOverrides) lives in `projectSlice` — use selectors from `features/project/projectSelectors.ts` and dispatch `projectActions.add/removePlotConnection`, `add/deletePlotSubplot`, `setPlotTensionOverride`.
-
-**plotBoardService:** `services/plotBoardService.ts` — `computeTensionCurve(sections, overrides)`, `autoLayoutScenes(sections)`, `exportBoardAsSvg(svgEl)`.
-
-**Plot Board AI:** `features/project/thunks/plotBoardAiThunks.ts` — `suggestNextBeatThunk` calls `assembleRAGPrompt` then dispatches to AI. Hook: `hooks/usePlotBoardAi.ts`.
-
-**PlotMinimap:** `components/scene-board/PlotMinimap.tsx` — viewport overview overlay. `plotLayoutUtils.ts` provides grid-snap helpers.
-
-### ProForge Pipeline
-
-8-stage agentic editing pipeline. Flag: `enableProForge`. Full docs: `docs/PROFORGE-PIPELINE.md`. Stages: `intake` → `structural` → `lineProse` → `copyEdit` → `proof` → `production` → `publishing` → `analytics`. Pauses at `awaitingReview` — manuscript never auto-modified without user approval. On review submit, accepted `ReviewItem`s for **editing stages** are applied back into the manuscript via `applyReviewEdits.ts` (offset-safe, back-to-front, stale-match skip) before the post-stage snapshot; redux-undo makes them reversible.
-
-**Redux slice** (`features/proForge/proForgeSlice.ts`, root key `proForge`, NOT undo-wrapped, **ephemeral**). Completed/aborted runs persist per project to IDB `proforge-run-history` (`proForgeHistoryStore.ts`, cap 20) and rehydrate via `useProForgeOrchestrator`. **Types** in `features/proForge/types.ts`. **Orchestrator:** `services/proForge/proForgeOrchestrator.ts` — call via `hooks/useProForgeOrchestrator.ts` (reads live state via `appStoreRef` from `app/storeRef.ts`), never instantiate in components. Agents (all 8 extend `BaseAgent`) lazy-loaded per stage; call `this.buildAiOpts({ maxTokens: N })` — `AIRequestOptions` requires `model` + `provider`. `BaseAgent` provides `requireProject()`, `getMemoryBank()`, `selfReflect()`, `elapsed()`, `setRetryFeedback()` (supervisor reasons injected into retry prompts).
-
-**SupervisorAgent**: heuristic gate, no AI calls, gates **all 8 stages**. `evaluate(stage, result)` → `SupervisionDecision { pass, retryRecommended, qualityScore, reasons }`. Detects `isFallback: true` (intake/structural/proof). Hard gate: intake `qualityScore < 30` → fail. All `createFallback*` use 0 scores + `isFallback: true` — never fake mid-range values. **Memory Bank:** IDB `proforge-memory-bank`; `search(query, limit, mode)` honours `ragMode` (`lexical` | `semantic` | `hybrid` via MiniLM embeddings, keyword fallback). **View:** `ProForgeViewContext` + `useProForgeViewContext()`.
-
-### Scene-level services
-
-**sceneRevisionService:** `services/sceneRevisionService.ts` — IDB `scene-revisions`; `saveRevision(sectionId, snapshot, label?)`, `listRevisions(sectionId)`, `deleteRevision(id)`.
-
-**sceneCommentsSlice:** `features/sceneComments/sceneCommentsSlice.ts` — EntityAdapter; `selectCommentsBySection(sectionId)`, `selectUnresolvedCount`, `selectUnresolvedCountBySection(sectionId)`. Root key: `sceneComments`.
-
-**progressTrackerSlice:** `features/progressTracker/progressTrackerSlice.ts` — `startSession`, `endSession`, `setDailyGoal`, `setWeeklyGoal`, `syncStreak`. Exported: `computeStreak(history)`.
-
-**deepLinkService:** `services/deepLinkService.ts` — `parseHash(hash)`, `pushHash(view, sectionId?)`, `readCurrentView()`. Views: `'board' | 'preview' | 'progress' | 'project'`.
-
-### Test mock patterns
-
-**useAppSelectorShallow with plotBoard:** Include `plotBoard: { activeMode: 'swimlane', snapToGrid: false, selectedConnectionId: null, isDrawingConnection: false, drawFromSectionId: null, activeSubplotFilter: null, zoom: 1, panX: 0, panY: 0 }` in mock state. Connections/subplots/tensionOverrides are in `project.present.data`. Add `// biome-ignore lint/suspicious/noExplicitAny: test mock` before `(selector: (s: any) => unknown)` lines.
-
-**FeatureFlagsState mocks:** Always include ALL 23 flags (TypeScript strict rejects partial). Only **seven** default **off**: `enableProForge`, `enableRtlLayout`, `enableVoiceSupport`, `enableVoiceWasm`, `enableGlobalCopilot`, `enableLocalFirstSync`, `enableBrowserOllama` — every other flag (including all edge-AI flags and `enableIdbAtRestEncryption`) defaults **on**. When a test needs a non-default flag state, set it explicitly in the mock — don't assume the default.
-
-**ConnectionLayer test IDs:** `data-testid="connection-group"` — query by testid, not role.
-
-**DuckDB in tests:** Mock `services/duckdb/duckdbClient` with `{ execAsync: vi.fn(), queryAsync: vi.fn() }`. Never initialize real DuckDB-WASM.
-
-**AI thunk tests:** `settingsReducer` defaults to `privacy.localStorageOnly: true` → AI thunks throw. Fix: mock `services/ai/aiPolicy` with `assertCloudAiAllowedSync: vi.fn()` + `assertCloudAiAllowed: vi.fn().mockResolvedValue(undefined)` before all imports.
-
-**Context hooks in component tests:** Mock the context module (`vi.mock('../../../contexts/XyzContext', ...)`) rather than wrapping in the real provider tree. Apply for any `use*ViewContext` hook.
-
-**Custom Select/LanguageSelector mocks:** Mock as native `<select>` element for testing-library compatibility. See canonical pattern in existing settings test files.
-
-### Settings Navigation
-
-`components/SettingsView.tsx` uses `NAV_GROUPS` — typed array of `{ key: string; ids: readonly string[] }` — for semantic sidebar sections (Writing, AI Models, Appearance & Accessibility, Privacy & Data, Connections, System). When adding a new settings tab: add its `id` to the correct group in `NAV_GROUPS`; do not create a flat ungrouped entry.
-
-### Cross-project & backup
-
-**crossProjectIndexService / crossProjectSearchService:** IDB `projects-index-store` (DB_VERSION 8); `searchAcrossProjects()` via fuzzyScore. Indexing triggered on save. UI: `CrossProjectSearchPanel`; Zustand key: `isCrossProjectSearchOpen`.
-
-**libraryBackupService:** one-click encrypted ZIP export (AES-GCM, `META.json` + `vault.bin`). Settings → Data.
-
-### Global AI Copilot (v2)
-
-Flag: `enableGlobalCopilot`. Redux slice: `features/copilot/copilotSlice.ts` (ephemeral, NOT persisted, NOT undo-wrapped). Hook: `hooks/useGlobalCopilot.ts`. Mount: `App.tsx` (lazy, `ErrorBoundary` + `Suspense`).
-
-**Services (`services/copilot/`):**
-- `copilotContextService.ts` — pure system-prompt builder from current view + project metadata
-- `insightGenerator.ts` — debounced heuristic analysis; result LRU-cached per section
-- `heuristicEngine.ts` — 8 built-in manuscript rules (tension-drop, underdeveloped-character, open-loop, slow-pacing, high-repetition, plot-hole, missing-world-context, overlength-scene); zero network calls
-- `actionApplier.ts` — `applyTextEdit(sectionId, newText)`: offset-safe rewrite dispatched into redux-undo; only runs when block ≥ 70 % of section length
-
-**UI (`components/copilot/`):** `CopilotPanel` (dialog/sidebar toggle, persisted to `localStorage`), `CopilotMessageList` (DOMPurify + micro-markdown renderer — no new runtime dep), `InlineAnnotationLayer` (badge inside `ManuscriptEditor`), `CopilotComposer`. ProForge: each `ReviewItemCard` has an ✦ Ask Copilot chip (pre-fills composer with review-item context).
-
-Docs: `docs/COPILOT.md` (feature guide), `docs/HEURISTIC-RULES.md` (8 rules catalogue).
-
-### Voice Full Support
-
-Engines defined in `services/voice/voiceTypes.ts` (`SttEngine`, `TtsEngine`, `VadEngine`, `WakeWordEngine`, `IntentEngine`). Contract: `isAvailable()` → `initialize()` → use → `dispose()`. Web Speech API fallbacks: `WebSpeechSttEngine`, `WebSpeechTtsEngine`, `WebRtcVadEngine` (zero downloads). WASM path (B-2, `enableVoiceWasm`): `WasmSttEngine` (Whisper.cpp) + `SileroVadEngine`; model download via `VoiceModelDownloadModal` + `VoiceCommandService.preloadModel(modelType)`.
-
-**Intent engine:** `HybridIntentEngine.parse(transcript, context)` — exact match → fuzzy Jaccard + slot extraction. **Orchestrator:** `VoiceCommandService` singleton (state machine), dispatches via `runCommandById`, `appStoreRef` for Redux outside React. **Hooks:** `useVoice`, `usePushToTalk` (Ctrl+Shift+V), `useVoiceDictation`, `useVoiceAccessibility`. **Gating:** `settings.voice.enabled && featureFlags.enableVoiceSupport`. **Never log transcripts** (PII → IDB log sink); `startListening` has a single-flight guard (C-P1).
-
-**Voice E2E seam (P1-2):** `services/voice/voiceTestSeam.ts` — `getVoiceTestHarness()` reads `window.__voiceTestHarness` (only ever set by Playwright `addInitScript`; undefined in production). `createSttEngine`/`createVadEngine` return injected mock engines, and `downloadVoiceModels` runs a simulated download, when the harness is present. Installers: `tests/e2e/mocks/voiceMockEngines.ts`. Deterministic suite: `tests/e2e/deep/voice/whisper-stt.spec.ts` (e2e-deep); real-inference nightly: `whisper-real.spec.ts` + `voice-nightly.yml` (`RUN_REAL_VOICE_E2E=1`). Chromium fake-media flags live in `playwright.config.ts`.
-
-### Local inference
-
-`services/localAiFacade.ts` wraps WebLLM with the same provider interface as `aiProviderService.ts`. Model download progress via `onProgress`; mount-guard via `useRef`.
-
-### Plugin System
-
-`services/pluginRegistry.ts` — `PluginRegistry` + singleton. Plugins declare `PluginDescriptor` (Zod-validated: `id`, `version`, `type`, `entrypoint`, `permissions`). `PluginSandboxedApi` gates every method behind declared permissions.
-
-**Execution API:** `execute(id, fn, rawApi)` (sync) · `executeAsync` (async) · `loadPlugin(descriptor, rawApi)` (dynamic import + `run(api)`).
-
-Reference plugins: `wordCountOverlay.plugin.ts`, `sceneAppender.plugin.ts`. Gate: `enablePluginSystem`.
-
-### Cloud Sync (Cloudflare R2)
-
-`services/cloudSync/` — `cloudSyncBackend.ts` (StorageBackend, API keys never sent to cloud), `cloudSyncClient.ts` (fetch + Bearer token), `cloudSyncEncryption.ts` (AES-256-GCM E2E). The `enableCloudSync` feature flag was **retired** in v1.20; use `CloudSyncBackend.create(..., explicitConsent = true)` as the activation gate. This service is not yet wired into `storageService` (v2.0 feature).
-
-### LoRA Adapter Inference
-
-**Wiring (C-3):** `AIRequestOptions.loraModelPath?: string` — when set and `provider === 'ollama'`, `streamProvider()` substitutes it as the Ollama model identifier. `selectActiveLoraOllamaTag` (`features/lora/loraSelectors.ts`) returns active adapter's `ollamaModelTag` or null.
-
-**Prerequisite:** `ollama create <tag> -f Modelfile` before setting `ollamaModelTag`. Training is a Python sidecar.
-
-**Gating:** `enableLoraAdapters` flag. UI: Settings → AI → Fine-Tuning.
-
-### Virtual scrolling
-
 Feature-specific implementation patterns (Plot Board, ProForge Pipeline, scene-level services, LanguageTool, test mock patterns, Settings Navigation, cross-project & backup, Global AI Copilot, Voice Full Support, local inference, Plugin System, Cloud Sync, LoRA Adapter Inference, virtual scrolling) now live in nested `CLAUDE.md` files, loaded automatically only when working under that directory: `features/plotBoard/`, `services/proForge/`, `services/`, `tests/`, `components/`, `services/copilot/`, `services/voice/`, `services/cloudSync/`, `features/lora/`.
+
+**When work touches any feature below — including files outside the nested guide's own directory — read the listed `CLAUDE.md` before editing; it won't auto-load from an external path:**
+- Plot Board → `features/plotBoard/CLAUDE.md` (also governs `services/plotBoardService.ts`, `features/project/thunks/plotBoardAiThunks.ts`, `hooks/usePlotBoardAi.ts`, `components/scene-board/PlotMinimap.tsx`)
+- ProForge → `services/proForge/CLAUDE.md` (also governs `features/proForge/`, `hooks/useProForgeOrchestrator.ts`, `contexts/ProForgeViewContext.ts`)
+- Global AI Copilot → `services/copilot/CLAUDE.md` (also governs `features/copilot/copilotSlice.ts`, `hooks/useGlobalCopilot.ts`, `components/copilot/`)
+- Voice → `services/voice/CLAUDE.md` (also governs the voice hooks under `hooks/` and `tests/e2e/mocks/voiceMockEngines.ts`)
+- LoRA → `features/lora/CLAUDE.md` (also touches the `services/ai/` provider wiring and the Settings AI Fine-Tuning UI)
+- Scene-level services / LanguageTool / cross-project & backup / local inference / Plugin System → `services/CLAUDE.md` (LanguageTool also governs `hooks/useLanguageToolCheck.ts`; scene-level services also governs `features/sceneComments/sceneCommentsSlice.ts` and `features/progressTracker/progressTrackerSlice.ts`)
+- Test mock patterns, E2E conventions → `tests/CLAUDE.md`
+- Settings Navigation, virtual scrolling → `components/CLAUDE.md`
+- Cloud Sync → `services/cloudSync/CLAUDE.md` (self-contained under its own directory)
 
 ## Known Technical Debt
 
