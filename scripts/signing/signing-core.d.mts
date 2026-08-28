@@ -28,9 +28,17 @@ export interface SigningConfig {
   config: Record<string, string>;
 }
 
+export type GitEnv = Record<string, string | undefined>;
+
 export interface GitOptions {
   cwd?: string;
   input?: string;
+  env?: GitEnv;
+}
+
+export interface RepositoryPolicyAudit {
+  ok: boolean;
+  reason: string;
 }
 
 export interface OutgoingReport {
@@ -51,9 +59,14 @@ export function isSha(value: unknown): boolean;
 export function isZeroSha(value: unknown): boolean;
 export function getRepositoryRoot(cwd?: string): string | null;
 export function getGitDirectory(cwd?: string): string | null;
+export const SIGNING_POLICY_KEYS: readonly string[];
 export function getConfig(cwd?: string): Record<string, string>;
 export function getIdentity(cwd?: string): { name: string; email: string };
-export function getUnsafeOverrides(env?: Record<string, string | undefined>): string[];
+export function getForeignRepoEnv(baseEnv?: GitEnv): GitEnv;
+export function getPolicyBaselineEnv(baseEnv?: GitEnv): GitEnv;
+export function foreignRepoGit(repo: string, args: string[], options?: GitOptions): GitResult;
+export function getUnsafeOverrides(env?: GitEnv): string[];
+export function auditRepositoryPolicy(cwd?: string, env?: GitEnv): RepositoryPolicyAudit;
 export function isSigningEnabled(config: Record<string, string>): boolean;
 
 export function classifyCommitObject(input: {
@@ -79,6 +92,7 @@ export function writePrePushEvidenceFile(
   file: string,
   input: string | string[] | RefUpdate[],
 ): void;
+
 import type { DependencyState } from '../dependency-state.d.mts';
 
 // QNBS-v3: diagnostic-only dimension, independent of evidenceState/pathEvidenceState validity.
@@ -116,7 +130,11 @@ export function resolvePushEvidence(
 ): PushEvidence;
 export function selectIntroducedCommits(commits: string[], reachableFromBase: string[]): string[];
 export function runSigningProbe(cwd?: string): { ok: boolean; reason?: string; commit?: string };
-export function verifyCommitObject(sha: string, cwd?: string): VerificationResult;
+export function verifyCommitObject(
+  sha: string,
+  cwd?: string,
+  dependencies?: { runGit?: (args: string[], options?: GitOptions) => GitResult },
+): VerificationResult;
 export function commitSubject(sha: string, cwd?: string): string;
 export function commitsInRange(range: string, cwd?: string): string[];
 export function verifyCommitRange(
