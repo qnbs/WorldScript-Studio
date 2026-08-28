@@ -4,6 +4,11 @@ export interface GitDependencies {
     args: string[],
     options: { encoding: 'utf8' },
   ) => { status: number | null; stdout: string; stderr: string; error?: Error };
+  readFileSync?: (path: string, encoding: 'utf8') => string;
+  existsSync?: (path: string) => boolean;
+  writeFileSync?: (path: string, content: string) => void;
+  unlinkSync?: (path: string) => void;
+  env?: NodeJS.ProcessEnv;
 }
 
 export function getChangedFilesNumstat(
@@ -27,6 +32,35 @@ export interface NumstatRow {
 export function parseNumstat(numstatOutput: string): NumstatRow[];
 
 export function computeMeaningfulLines(rows: NumstatRow[]): number;
+
+export interface SupplementalLineAllowance {
+  path: string;
+  maxMeaningfulLines: number;
+}
+
+export interface PrSizeException {
+  id: string;
+  repository: string;
+  prNumber: number;
+  baseRef: string;
+  headRef: string;
+  maxFiles: number;
+  maxCommits: number;
+  maxNonExemptMeaningfulLines: number;
+  supplementalLineAllowances: SupplementalLineAllowance[];
+  allowedPaths: string[];
+  reason: string;
+}
+
+export function computeNonExemptMeaningfulLines(
+  rows: NumstatRow[],
+  exception?: PrSizeException,
+): number;
+
+export function computeSupplementalReportLines(
+  rows: NumstatRow[],
+  exception: PrSizeException,
+): Record<string, number>;
 
 export function computeGovernedFileCount(rows: NumstatRow[]): number;
 
@@ -70,6 +104,15 @@ export interface PrSizeEvaluation {
   lineCount?: number;
   commitCount?: number;
   allDocs?: boolean;
+  nonExemptLineCount?: number;
+  supplementalReportLines?: Record<string, number>;
+  exception?: {
+    applied: boolean;
+    id?: string;
+    identityMatch: boolean;
+    pathScopeMatch: boolean;
+    baseGoverned: boolean;
+  };
   severity?: SizeSeverity;
   report?: string;
 }
