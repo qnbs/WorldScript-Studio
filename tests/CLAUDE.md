@@ -13,3 +13,11 @@
 **Context hooks in component tests:** Mock the context module (`vi.mock('../../../contexts/XyzContext', ...)`) rather than wrapping in the real provider tree. Apply for any `use*ViewContext` hook.
 
 **Custom Select/LanguageSelector mocks:** Mock as native `<select>` element for testing-library compatibility. See canonical pattern in existing settings test files.
+
+**E2E notes:** Do NOT use `networkidle` waits (HMR keeps WebSocket open). Scope sidebar navigation via `#sidebar`. Shared helpers: `tests/e2e/helpers.ts`. Mobile E2E: set `RUN_MOBILE_E2E=1` locally (off by default).
+
+**Feature-flag E2E coverage (anti-pattern guard):** Every test that relies on a specific flag state MUST use `setFeatureFlags(page, {...})` from `helpers.ts` to make that dependency explicit and guard against future default changes. Call it BEFORE `page.goto()` — it uses `addInitScript` so it runs before app JS.
+
+Three E2E layers: (1) feature specs (`proforge-flags.spec.ts`, `voice-flags.spec.ts`, `lora-wizard.spec.ts`) — flag explicitly seeded, required CI gate; (2) deep matrix (`tests/e2e/deep/feature-flag-matrix.spec.ts`) — parametrized smoke across all `testConfigurations` in `test-matrix.ts`, non-blocking `e2e-deep` job; (3) error paths (`tests/e2e/deep/error-paths.spec.ts`) — offline AI, rapid nav, all flags on; also in `e2e-deep`.
+
+When adding a new feature flag: (a) add an entry to `tests/e2e/config/test-matrix.ts`, (b) write at least one test in `tests/e2e/<feature>-flags.spec.ts` that seeds the flag and verifies a critical UI element. Ask: *"If this flag were off by default tomorrow, would CI still catch a regression?"*
