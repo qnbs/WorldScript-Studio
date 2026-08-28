@@ -8,12 +8,12 @@ const SHA = /^[0-9a-f]{40}$/i;
 const ZERO_SHA = /^0{40}$/;
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 
-export function runGit(args, { cwd = process.cwd(), input = '' } = {}) {
+export function runGit(args, { cwd = process.cwd(), input = '', env } = {}) {
   const result = spawnSync('git', args, {
     cwd,
     encoding: 'utf8',
     env: {
-      ...process.env,
+      ...(env ?? process.env),
       GIT_TERMINAL_PROMPT: '0',
       SSH_ASKPASS: '/bin/false',
       SSH_ASKPASS_REQUIRE: 'force',
@@ -44,6 +44,78 @@ export function isZeroSha(value) {
   return ZERO_SHA.test(value);
 }
 
+// QNBS-v3: git's own repo-selection vars (git rev-parse --local-env-vars, git 2.45.1); legitimate for the real repo, must never leak into a different disposable repository.
+const GIT_LOCAL_ENV_VARS = [
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_CONFIG',
+  'GIT_CONFIG_PARAMETERS',
+  'GIT_CONFIG_COUNT',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_IMPLICIT_WORK_TREE',
+  'GIT_GRAFT_FILE',
+  'GIT_INDEX_FILE',
+  'GIT_NO_REPLACE_OBJECTS',
+  'GIT_REPLACE_REF_BASE',
+  'GIT_PREFIX',
+  'GIT_SHALLOW_FILE',
+  'GIT_COMMON_DIR',
+];
+
+// QNBS-v3: wholesale config-source overrides a normal `git -c` never sets; safe to treat as always-unsafe in any mode.
+const GIT_COARSE_CONFIG_OVERRIDES = [
+  'GIT_CONFIG',
+  'GIT_CONFIG_SYSTEM',
+  'GIT_CONFIG_GLOBAL',
+  'GIT_CONFIG_NOSYSTEM',
+];
+
+// QNBS-v3: the carrier pair for `-c`-style overrides; stripping only the numbered KEY_n/VALUE_n entries would leave a stale COUNT that git itself treats as malformed.
+const GIT_COMMAND_SCOPE_CARRIERS = ['GIT_CONFIG_COUNT', 'GIT_CONFIG_PARAMETERS'];
+
+// QNBS-v3: detect every GIT_CONFIG_KEY_n/VALUE_n pair present, independent of a possibly-wrong GIT_CONFIG_COUNT.
+function numberedConfigOverrideKeys(env) {
+  const names = new Set();
+  for (const name of Object.keys(env)) {
+    if (/^GIT_CONFIG_(?:KEY|VALUE)_\d+$/.test(name)) names.add(name);
+  }
+  return [...names];
+}
+
+function stripKeys(env, keys) {
+  const copy = { ...env };
+  for (const key of keys) delete copy[key];
+  return copy;
+}
+
+// QNBS-v3: strips everything that could redirect or config-inject the probe, independent of whether the real invocation is itself considered safe.
+export function getForeignRepoEnv(baseEnv = process.env) {
+  return stripKeys(baseEnv, [
+    ...GIT_LOCAL_ENV_VARS,
+    ...GIT_COARSE_CONFIG_OVERRIDES,
+    ...numberedConfigOverrideKeys(baseEnv),
+  ]);
+}
+
+// QNBS-v3: strips only command-scope injection, keeping GIT_DIR etc. so this still resolves the same repo as the policy baseline.
+export function getPolicyBaselineEnv(baseEnv = process.env) {
+  return stripKeys(baseEnv, [
+    ...GIT_COARSE_CONFIG_OVERRIDES,
+    ...GIT_COMMAND_SCOPE_CARRIERS,
+    ...numberedConfigOverrideKeys(baseEnv),
+  ]);
+}
+
+// QNBS-v3: explicit -C/--git-dir addressing so no ambient env var can redirect this call elsewhere.
+export function foreignRepoGit(repo, args, options = {}) {
+  return runGit(['-C', repo, '--git-dir', join(repo, '.git'), ...args], {
+    ...options,
+    cwd: repo,
+    env: getForeignRepoEnv(),
+  });
+}
+
 export function getRepositoryRoot(cwd = process.cwd()) {
   const root = gitOutput(['rev-parse', '--show-toplevel'], { cwd });
   return root ? resolve(root) : null;
@@ -54,19 +126,35 @@ export function getGitDirectory(cwd = process.cwd()) {
   return gitDir ? resolve(cwd, gitDir) : null;
 }
 
+// QNBS-v3: single source of truth for signing/verification policy keys (getConfig, auditRepositoryPolicy); excludes gpg.ssh.defaultKeyCommand since it only applies when user.signingkey is unset, which the audited user.signingkey entry already catches.
+export const SIGNING_POLICY_KEYS = [
+  'user.email',
+  'user.name',
+  'user.signingkey',
+  'commit.gpgsign',
+  'tag.gpgsign',
+  'gpg.format',
+  'gpg.program',
+  'gpg.ssh.program',
+  'gpg.ssh.allowedSignersFile',
+  'gpg.ssh.revocationFile',
+  'gpg.minTrustLevel',
+  'core.hooksPath',
+];
+
+// QNBS-v3: canonicalize via git's own --type flag (git-config(1)) instead of ad-hoc string parsing, so e.g. "true" and "yes" compare equal.
+const SIGNING_POLICY_KEY_TYPES = {
+  'commit.gpgsign': 'bool',
+  'tag.gpgsign': 'bool',
+  'user.signingkey': 'path',
+  'gpg.ssh.allowedSignersFile': 'path',
+  'gpg.ssh.revocationFile': 'path',
+  'core.hooksPath': 'path',
+};
+
 export function getConfig(cwd = process.cwd()) {
-  const keys = [
-    'user.email',
-    'user.name',
-    'user.signingkey',
-    'commit.gpgsign',
-    'gpg.format',
-    'gpg.program',
-    'gpg.ssh.allowedSignersFile',
-    'core.hooksPath',
-  ];
   const values = Object.fromEntries(
-    keys.map((key) => [key, gitOutput(['config', '--get', key], { cwd })]),
+    SIGNING_POLICY_KEYS.map((key) => [key, gitOutput(['config', '--get', key], { cwd })]),
   );
   return values;
 }
@@ -80,15 +168,52 @@ export function isGitHubCompatibleEmail(email) {
   return /^\d+\+[^@\s]+@users\.noreply\.github\.com$/i.test(email);
 }
 
+// QNBS-v3: only coarse overrides are reported here (unconditionally unsafe); surgical -c-style overrides are never fatal by mere presence -- see auditRepositoryPolicy().
 export function getUnsafeOverrides(env = process.env) {
-  const names = [
-    'GIT_CONFIG_NOSYSTEM',
-    'GIT_CONFIG_SYSTEM',
-    'GIT_CONFIG_GLOBAL',
-    'GIT_CONFIG_COUNT',
-    'GIT_CONFIG_PARAMETERS',
-  ];
-  return names.filter((name) => env[name] !== undefined).map((name) => name);
+  return GIT_COARSE_CONFIG_OVERRIDES.filter((name) => env[name] !== undefined);
+}
+
+// QNBS-v3: canonicalizes typed keys via git's own --type flag rather than raw strings, so "true"/"yes" or `~`-relative paths compare equal (see SIGNING_POLICY_KEY_TYPES).
+function readConfigValue(key, cwd, env) {
+  const type = SIGNING_POLICY_KEY_TYPES[key];
+  const args = type ? ['config', `--type=${type}`, '--get', key] : ['config', '--get', key];
+  const result = runGit(args, { cwd, env });
+  if (result.status === 0) return { ok: true, value: result.stdout.trim() };
+  if (result.status === 1 && !result.error && !result.stderr) return { ok: true, value: '' };
+  return { ok: false, value: '' };
+}
+
+// QNBS-v3: a wrong/missing GIT_CONFIG_COUNT or a stray numbered pair makes the override unverifiable, not merely absent.
+function commandScopeConfigIsWellFormed(env) {
+  const countRaw = env.GIT_CONFIG_COUNT;
+  const numbered = numberedConfigOverrideKeys(env);
+  if (countRaw === undefined) return numbered.length === 0;
+  const count = Number.parseInt(countRaw, 10);
+  if (!Number.isInteger(count) || count < 0 || String(count) !== countRaw) return false;
+  for (let i = 0; i < count; i += 1) {
+    if (env[`GIT_CONFIG_KEY_${i}`] === undefined || env[`GIT_CONFIG_VALUE_${i}`] === undefined)
+      return false;
+  }
+  return numbered.length === count * 2;
+}
+
+// QNBS-v3: REPOSITORY_POLICY_MODE -- fails only on an actual persisted-vs-effective mismatch or malformed command-scope config, never on override presence alone; never logs values.
+export function auditRepositoryPolicy(cwd = process.cwd(), env = process.env) {
+  if (!commandScopeConfigIsWellFormed(env)) {
+    return { ok: false, reason: 'command-scope configuration is malformed' };
+  }
+  const baselineEnv = getPolicyBaselineEnv(env);
+  for (const key of SIGNING_POLICY_KEYS) {
+    const effective = readConfigValue(key, cwd, env);
+    const persistent = readConfigValue(key, cwd, baselineEnv);
+    if (!effective.ok || !persistent.ok) {
+      return { ok: false, reason: `policy source for ${key} could not be resolved` };
+    }
+    if (effective.value !== persistent.value) {
+      return { ok: false, reason: `command-scope override redefines persisted policy for ${key}` };
+    }
+  }
+  return { ok: true, reason: 'effective configuration matches persisted policy' };
 }
 
 export function isSigningEnabled(config) {
@@ -126,7 +251,8 @@ function configureProbeRepository(repo, signing, identity) {
   if (signing.allowedSignersFile)
     settings.push(['gpg.ssh.allowedSignersFile', signing.allowedSignersFile]);
   for (const [key, value] of settings) {
-    const result = runGit(['config', key, value], { cwd: repo });
+    // QNBS-v3: --local plus explicit repo addressing keeps every probe config write inside the disposable repo.
+    const result = foreignRepoGit(repo, ['config', '--local', key, value]);
     if (result.status !== 0) return false;
   }
   return true;
@@ -156,16 +282,20 @@ export function runSigningProbe(cwd = process.cwd()) {
     probe = mkdtempSync(join(cwd, '.worldscript-signing-probe-'));
   }
   try {
-    let result = runGit(['init', '--quiet', '--initial-branch=main', probe]);
+    // QNBS-v3: init's target is positional/explicit; the foreign-repo env still guards against a leaked GIT_DIR redirecting it.
+    let result = runGit(['init', '--quiet', '--initial-branch=main', probe], {
+      env: getForeignRepoEnv(),
+    });
     if (result.status !== 0 || !configureProbeRepository(probe, signing, identity)) {
       return { ok: false, reason: 'isolated probe repository could not be configured' };
     }
-    result = runGit(
-      ['commit-tree', '-S', '-m', 'WorldScript signing capability probe', EMPTY_TREE],
-      {
-        cwd: probe,
-      },
-    );
+    result = foreignRepoGit(probe, [
+      'commit-tree',
+      '-S',
+      '-m',
+      'WorldScript signing capability probe',
+      EMPTY_TREE,
+    ]);
     if (result.status !== 0 || !isSha(result.stdout.trim())) {
       return {
         ok: false,
@@ -173,7 +303,9 @@ export function runSigningProbe(cwd = process.cwd()) {
       };
     }
     const commit = result.stdout.trim();
-    const verification = verifyCommitObject(commit, probe);
+    const verification = verifyCommitObject(commit, probe, {
+      runGit: (args, options) => foreignRepoGit(probe, args, options),
+    });
     return verification.ok
       ? { ok: true, commit }
       : { ok: false, reason: `Git-native verification failed: ${verification.reason}` };
@@ -194,11 +326,12 @@ export function classifyCommitObject({ objectType, contents, verificationStatus 
   return { ok: true, reason: 'Git-native signature verified' };
 }
 
-export function verifyCommitObject(sha, cwd = process.cwd()) {
+export function verifyCommitObject(sha, cwd = process.cwd(), dependencies = {}) {
+  const runGitFn = dependencies.runGit ?? runGit;
   if (!isSha(sha)) return { ok: false, reason: 'invalid commit SHA' };
-  const object = runGit(['cat-file', '-t', sha], { cwd });
-  const contents = runGit(['cat-file', '-p', sha], { cwd });
-  const verified = runGit(['verify-commit', '--raw', sha], { cwd });
+  const object = runGitFn(['cat-file', '-t', sha], { cwd });
+  const contents = runGitFn(['cat-file', '-p', sha], { cwd });
+  const verified = runGitFn(['verify-commit', '--raw', sha], { cwd });
   return classifyCommitObject({
     objectType: object.status === 0 ? object.stdout.trim() : '',
     contents: contents.status === 0 ? contents.stdout : '',
