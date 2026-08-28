@@ -1,7 +1,7 @@
 # CodeGraph Report
 
 Report schema: 1
-Source fingerprint: sha256:4705f95dc7536ab5795e1cc84a20342dfbe02f91cc416e92b0db26b0b5095d67
+Source fingerprint: sha256:ef128dfb5c5989f2709fd3a5422d9c2c2c303e4720f4824bc367b272e39ef029
 Tool: codegraph
 Tool version: 1.6.0
 Generation mode: local-index (codegraph status --json/files)
@@ -12,8 +12,8 @@ Generation mode: local-index (codegraph status --json/files)
 Initialized: yes
 Version: 1.6.0
 Files: 1407
-Nodes: 14901
-Edges: 54798
+Nodes: 14902
+Edges: 54814
 Pending changes: {"added":0,"modified":0,"removed":0}
 Worktree mismatch: none
 Index built with: 1.6.0
