@@ -23,7 +23,12 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { resolveCodegraphCommand } from './codegraph-report.mjs';
-import { computeSourceFingerprint, ROOT } from './graphSourceFingerprint.mjs';
+import {
+  checkCleanState,
+  computeSourceFingerprint,
+  matchesExactVersion,
+  ROOT,
+} from './graphSourceFingerprint.mjs';
 
 const POLICY_PATH = join(ROOT, 'config', 'graph-tools-versions.json');
 const GRAPHIFY_REPORT = join(ROOT, 'graphify-out', 'GRAPH_REPORT.md');
@@ -77,14 +82,10 @@ function commandVersion(cmd, args = ['--version']) {
   return (result.stdout ?? '').trim() || null;
 }
 
-function exactVersion(output, expected) {
-  return new RegExp(`(?:^|\\D)${expected.replaceAll('.', '\\.')}(?:$|\\D)`).test(output);
-}
-
 function requireToolVersion(command, expected) {
   const output = commandVersion(command);
   if (!output) throw new Error(`${command} is not available`);
-  if (!exactVersion(output, expected)) {
+  if (!matchesExactVersion(output, expected)) {
     throw new Error(`${command} version mismatch: expected ${expected}, got ${output}`);
   }
   return output;
@@ -101,6 +102,14 @@ function readReportMetadata(path) {
   return { exists: true, schema, fingerprint, toolVersion };
 }
 
+export function reportFreshness(meta, { reportSchemaVersion, expectedVersion }, fingerprint) {
+  if (!meta.exists) return 'MISSING';
+  if (meta.schema !== String(reportSchemaVersion) || meta.toolVersion !== expectedVersion) {
+    return 'VERSION_MISMATCH';
+  }
+  return meta.fingerprint === fingerprint ? 'FRESH' : 'STALE';
+}
+
 function doctor() {
   const policy = loadPolicy();
   const graphifyVersion = commandVersion('graphify');
@@ -112,28 +121,38 @@ function doctor() {
     `graphifyy: ${graphifyVersion ? `installed ${graphifyVersion}` : 'SKIPPED_NOT_INSTALLED'} ` +
       `(policy: ${policy.graphifyy.testedVersion}, ${policy.graphifyy.policy})`,
   );
-  if (graphifyVersion && !graphifyVersion.includes(policy.graphifyy.testedVersion)) {
+  if (graphifyVersion && !matchesExactVersion(graphifyVersion, policy.graphifyy.testedVersion)) {
     console.log('  -> VERSION_MISMATCH (run `pnpm run graphify:bootstrap` to align)');
   }
   console.log(
     `@colbymchenry/codegraph: ${codegraphVersion ? `installed ${codegraphVersion}` : 'SKIPPED_NOT_INSTALLED'} ` +
       `(policy: ${policy.codegraph.testedVersion}, ${policy.codegraph.policy})`,
   );
-  if (codegraphVersion && !codegraphVersion.includes(policy.codegraph.testedVersion)) {
+  if (codegraphVersion && !matchesExactVersion(codegraphVersion, policy.codegraph.testedVersion)) {
     console.log('  -> VERSION_MISMATCH (run `pnpm run codegraph:bootstrap` to align)');
   }
   console.log(
     `CodeGraph local index: ${codegraphInitialized ? 'PASS (initialized)' : 'SKIPPED_NOT_INITIALIZED'}`,
   );
 
-  for (const [label, path] of [
+  const reportPaths = [
     ['Graphify report', GRAPHIFY_REPORT],
     ['CodeGraph report', CODEGRAPH_REPORT],
-  ]) {
+  ];
+  let currentFingerprint = null;
+  if (reportPaths.some(([, path]) => existsSync(path))) {
+    try {
+      currentFingerprint = computeSourceFingerprint();
+    } catch (error) {
+      console.log(`Report freshness: UNAVAILABLE (${error.message})`);
+    }
+  }
+  for (const [label, path] of reportPaths) {
     const meta = readReportMetadata(path);
     console.log(
       meta.exists
-        ? `${label}: schema=${meta.schema ?? '?'} toolVersion=${meta.toolVersion ?? '?'} fingerprint=${meta.fingerprint ?? '?'}`
+        ? `${label}: schema=${meta.schema ?? '?'} toolVersion=${meta.toolVersion ?? '?'} fingerprint=${meta.fingerprint ?? '?'} ` +
+            `freshness=${currentFingerprint ? reportFreshness(meta, { reportSchemaVersion: policy.reportSchemaVersion, expectedVersion: label.startsWith('Graphify') ? policy.graphifyy.testedVersion : policy.codegraph.testedVersion }, currentFingerprint) : 'UNAVAILABLE'}`
         : `${label}: SKIPPED_NOT_CONFIGURED (not generated yet)`,
     );
   }
@@ -153,7 +172,12 @@ function status() {
     console.error(`[graphs:status] FAIL — ${error.message}`);
     process.exit(1);
   }
+  const cleanState = checkCleanState();
   let anyStale = false;
+  if (!cleanState.clean) {
+    console.log(`Source state: DIRTY_UNTRACKED_INPUT (${cleanState.dirtyPaths.join(', ')})`);
+    anyStale = true;
+  }
   for (const [label, path] of [
     ['graphify-out/GRAPH_REPORT.md', GRAPHIFY_REPORT],
     ['.codegraph/CODEGRAPH_REPORT.md', CODEGRAPH_REPORT],
@@ -167,14 +191,13 @@ function status() {
     const expectedVersion = label.startsWith('graphify')
       ? policy.graphifyy.testedVersion
       : policy.codegraph.testedVersion;
-    const isFresh =
-      meta.schema === String(policy.reportSchemaVersion) &&
-      meta.toolVersion === expectedVersion &&
-      meta.fingerprint === currentFingerprint;
-    if (!isFresh) anyStale = true;
-    console.log(
-      `${label}: ${isFresh ? 'FRESH' : meta.toolVersion !== expectedVersion ? 'VERSION_MISMATCH' : 'STALE'}`,
+    const freshness = reportFreshness(
+      meta,
+      { reportSchemaVersion: policy.reportSchemaVersion, expectedVersion },
+      currentFingerprint,
     );
+    if (freshness !== 'FRESH') anyStale = true;
+    console.log(`${label}: ${freshness}`);
   }
   process.exit(anyStale ? 1 : 0);
 }

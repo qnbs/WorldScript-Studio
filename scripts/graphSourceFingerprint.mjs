@@ -25,36 +25,65 @@ function isExcluded(relPath) {
   return EXCLUDED_PREFIXES.some((prefix) => relPath.startsWith(prefix));
 }
 
+function parseNulRecords(output) {
+  return output
+    .toString('utf8')
+    .split('\0')
+    .filter((record) => record.length > 0);
+}
+
+/** @param {string} output @param {string} expectedVersion */
+export function matchesExactVersion(output, expectedVersion) {
+  const escaped = expectedVersion.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?:^|\\D)${escaped}(?:$|\\D)`).test(output);
+}
+
 /** @param {string} cwd @returns {string[]} sorted, deduplicated repo-relative paths: tracked ∪ untracked-not-ignored. */
 export function listSourcePaths(cwd = ROOT) {
-  const tracked = execFileSync('git', ['ls-files', '--cached', '--exclude-standard'], {
-    cwd,
-    encoding: 'utf-8',
-  })
-    .split('\n')
-    .filter(Boolean);
-  const untracked = execFileSync('git', ['ls-files', '--others', '--exclude-standard'], {
-    cwd,
-    encoding: 'utf-8',
-  })
-    .split('\n')
-    .filter(Boolean);
+  const tracked = parseNulRecords(
+    execFileSync('git', ['ls-files', '--cached', '--exclude-standard', '-z'], {
+      cwd,
+      encoding: 'buffer',
+    }),
+  );
+  const untracked = parseNulRecords(
+    execFileSync('git', ['ls-files', '--others', '--exclude-standard', '-z'], {
+      cwd,
+      encoding: 'buffer',
+    }),
+  );
   const all = new Set([...tracked, ...untracked]);
   return [...all].filter((p) => !isExcluded(p)).sort();
 }
 
-function listTrackedPaths(cwd) {
-  return execFileSync('git', ['ls-files', '--cached', '--exclude-standard', '-z'], {
-    cwd,
-    encoding: 'buffer',
-  })
-    .toString('utf8')
-    .split('\0')
-    .filter(Boolean);
+function listTrackedEntries(cwd) {
+  const entries = new Map();
+  for (const record of parseNulRecords(
+    execFileSync('git', ['ls-files', '--stage', '-z'], {
+      cwd,
+      encoding: 'buffer',
+    }),
+  )) {
+    const separator = record.indexOf('\t');
+    if (separator < 0) throw new Error('git ls-files returned an invalid staged path record');
+    const metadata = record.slice(0, separator).split(' ');
+    const mode = metadata[0];
+    const relPath = record.slice(separator + 1);
+    if (!/^(?:100\d{3}|120000|160000)$/.test(mode)) {
+      throw new Error(`invalid tracked file mode ${mode} for ${relPath}`);
+    }
+    entries.set(relPath, mode);
+  }
+  return entries;
 }
 
 function enumerateSourcePaths(cwd) {
-  return { paths: listSourcePaths(cwd), tracked: new Set(listTrackedPaths(cwd)) };
+  const trackedEntries = listTrackedEntries(cwd);
+  return {
+    paths: listSourcePaths(cwd),
+    tracked: new Set(trackedEntries.keys()),
+    modes: trackedEntries,
+  };
 }
 
 function isText(bytes) {
@@ -82,19 +111,20 @@ function hashDeletion(relPath) {
 }
 
 function fileSignature(stat) {
-  return `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.mode}`;
+  return `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}`;
 }
 
 function readSnapshot(cwd, enumeration) {
   const lines = [];
   for (const relPath of enumeration.paths) {
     const absolutePath = join(cwd, relPath);
+    const mode = enumeration.modes.get(relPath) ?? '100644';
     let before;
     try {
       before = lstatSync(absolutePath);
     } catch (error) {
       if (error?.code === 'ENOENT' && enumeration.tracked.has(relPath)) {
-        lines.push(`${hashDeletion(relPath)}:${relPath}`);
+        lines.push(`${mode}:${hashDeletion(relPath)}:${relPath}`);
         continue;
       }
       throw new Error(`source path disappeared during fingerprinting: ${relPath}`);
@@ -117,14 +147,14 @@ function readSnapshot(cwd, enumeration) {
     if (fileSignature(before) !== fileSignature(after)) {
       throw new Error(`source path changed while being fingerprinted: ${relPath}`);
     }
-    lines.push(`${hashBytes(bytes)}:${relPath}`);
+    lines.push(`${mode}:${hashBytes(bytes)}:${relPath}`);
   }
   return lines;
 }
 
 /**
- * Deterministic SHA-256 over sorted `sha256(content):path` lines for the current on-disk bytes
- * of every source path. Never hashes commit metadata, branch name, or wall-clock time.
+ * Deterministic SHA-256 over sorted `mode:sha256(content):path` lines for the current source.
+ * Git-normalized modes capture executable-bit semantics without hashing platform stat bits.
  * @param {string} cwd
  */
 export function computeSourceFingerprint(cwd = ROOT) {
@@ -152,22 +182,43 @@ export function computeSourceFingerprint(cwd = ROOT) {
   );
 }
 
+function parsePorcelainZ(output) {
+  const records = parseNulRecords(output);
+  const mutations = [];
+  for (let index = 0; index < records.length; index += 1) {
+    const record = records[index];
+    if (record.length < 4) throw new Error('git status returned an invalid porcelain record');
+    const status = record.slice(0, 2);
+    const paths = [record.slice(3)];
+    if (status[0] === 'R' || status[0] === 'C' || status[1] === 'R' || status[1] === 'C') {
+      const related = records[++index];
+      if (related == null)
+        throw new Error('git status rename/copy record is missing its peer path');
+      paths.push(related);
+    }
+    mutations.push(paths);
+  }
+  return mutations;
+}
+
 /**
- * Git status restricted to relevant (non-excluded) source paths, for the clean-state gate that
- * `graphs:report` requires before writing a committed report.
+ * Git status restricted to relevant source paths; NUL records preserve exact rename endpoints.
  * @param {string} cwd
  * @returns {{clean: boolean, dirtyPaths: string[]}}
  */
 export function checkCleanState(cwd = ROOT) {
-  const statusOutput = execFileSync('git', ['status', '--porcelain', '--untracked-files=all'], {
-    cwd,
-    encoding: 'utf-8',
-  });
-  const dirtyPaths = statusOutput
-    .split('\n')
-    .filter(Boolean)
-    .map((line) => line.slice(3).trim())
-    .filter((relPath) => !isExcluded(relPath));
+  const statusOutput = execFileSync(
+    'git',
+    ['status', '--porcelain=v1', '-z', '--untracked-files=all'],
+    { cwd, encoding: 'buffer' },
+  );
+  const dirtyPaths = [
+    ...new Set(
+      parsePorcelainZ(statusOutput)
+        .filter((paths) => paths.some((relPath) => !isExcluded(relPath)))
+        .flat(),
+    ),
+  ];
   return { clean: dirtyPaths.length === 0, dirtyPaths };
 }
 
@@ -178,11 +229,12 @@ export function buildMetadataBlock({
   generationMode,
   reportSchemaVersion,
   cwd = ROOT,
+  fingerprint,
 }) {
-  const fingerprint = computeSourceFingerprint(cwd);
+  const validatedFingerprint = fingerprint ?? computeSourceFingerprint(cwd);
   return [
     `Report schema: ${reportSchemaVersion}`,
-    `Source fingerprint: ${fingerprint}`,
+    `Source fingerprint: ${validatedFingerprint}`,
     `Tool: ${tool}`,
     `Tool version: ${toolVersion}`,
     `Generation mode: ${generationMode}`,

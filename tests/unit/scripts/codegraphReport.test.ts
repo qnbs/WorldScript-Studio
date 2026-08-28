@@ -1,12 +1,15 @@
 // @vitest-environment node
 
-import { createRequire } from 'node:module';
-import { describe, expect, it } from 'vitest';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 // QNBS-v3: focused tests protect committed-report privacy, freshness, and strict orchestration.
 import { redactPaths, sanitize, validateIndexStatus } from '../../../scripts/codegraph-report.mjs';
+import { matchesExactVersion } from '../../../scripts/graphSourceFingerprint.mjs';
 
-const require = createRequire(import.meta.url);
-const graphsCli = require('../../../scripts/graphs-cli.mjs') as {
+const graphsCliModulePath = ['..', '..', '..', 'scripts', 'graphs-cli.mjs'].join('/');
+const graphsCli = (await import(graphsCliModulePath)) as unknown as {
   isSupportedCommand: (command: string, availableCommands: object) => boolean;
   strictRefreshFailure: (outcome: {
     updateStatus: number;
@@ -14,6 +17,17 @@ const graphsCli = require('../../../scripts/graphs-cli.mjs') as {
     reportsFresh: boolean;
   }) => string | null;
 };
+const graphifyReport = (await import(
+  ['..', '..', '..', 'scripts', 'graphify-report.mjs'].join('/')
+)) as {
+  recoverOrphanedCompactReport: (reportPath: string, backupPath: string) => boolean;
+};
+
+const temporaryDirectories: string[] = [];
+afterEach(() => {
+  for (const directory of temporaryDirectories.splice(0))
+    rmSync(directory, { recursive: true, force: true });
+});
 
 describe('codegraph-report sanitization', () => {
   describe('sanitize (ANSI stripping)', () => {
@@ -33,6 +47,10 @@ describe('codegraph-report sanitization', () => {
 
     it('strips non-color CSI and OSC control sequences', () => {
       expect(sanitize('before\x1b[2Kafter\x1b]0;secret title\x07done')).toBe('beforeafterdone');
+    });
+
+    it('strips OSC sequences terminated by ST', () => {
+      expect(sanitize('before\x1b]0;secret title\x1b\\after')).toBe('beforeafter');
     });
   });
 
@@ -136,5 +154,25 @@ describe('codegraph-report sanitization', () => {
         graphsCli.strictRefreshFailure({ updateStatus: 0, reportStatus: 0, reportsFresh: true }),
       ).toBeNull();
     });
+  });
+
+  it('shares exact version matching semantics with graph tooling', () => {
+    expect(matchesExactVersion('codegraph 1.6.0', '1.6.0')).toBe(true);
+    expect(matchesExactVersion('codegraph 1.6.01', '1.6.0')).toBe(false);
+  });
+
+  it('recovers a valid orphaned Graphify compact report before a new transaction', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'graphify-report-test-'));
+    temporaryDirectories.push(directory);
+    const reportPath = join(directory, 'GRAPH_REPORT.md');
+    const backupPath = `${reportPath}.previous-compact`;
+    const previous =
+      '# Graph Report - project\n\nReport schema: 1\nSource fingerprint: sha256:' +
+      'a'.repeat(64) +
+      '\nTool: graphify\nTool version: 0.9.51\nGeneration mode: test\n';
+    writeFileSync(backupPath, previous);
+    expect(graphifyReport.recoverOrphanedCompactReport(reportPath, backupPath)).toBe(true);
+    expect(readFileSync(reportPath, 'utf-8')).toBe(previous);
+    expect(existsSync(backupPath)).toBe(false);
   });
 });

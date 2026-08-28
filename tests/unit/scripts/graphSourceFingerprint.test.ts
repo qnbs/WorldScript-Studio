@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 // QNBS-v3: fixture coverage locks worktree deletion and portable content semantics used by reports.
@@ -9,6 +9,7 @@ import {
   checkCleanState,
   computeSourceFingerprint,
   listSourcePaths,
+  matchesExactVersion,
 } from '../../../scripts/graphSourceFingerprint.mjs';
 
 let fixtureDir: string;
@@ -58,6 +59,15 @@ describe('graphSourceFingerprint', () => {
     expect(after).not.toBe(before);
   });
 
+  it('preserves exact unusual Git path names through NUL enumeration', () => {
+    writeFileSync(join(fixtureDir, 'fäll.ts'), 'export const umlaut = true;\n');
+    writeFileSync(join(fixtureDir, 'file with spaces.ts'), 'export const spaced = true;\n');
+    expect(listSourcePaths(fixtureDir)).toEqual(
+      expect.arrayContaining(['fäll.ts', 'file with spaces.ts']),
+    );
+    expect(computeSourceFingerprint(fixtureDir)).toMatch(/^sha256:[0-9a-f]{64}$/);
+  });
+
   it('represents a tracked working-tree deletion without crashing', () => {
     const before = computeSourceFingerprint(fixtureDir);
     rmSync(join(fixtureDir, 'a.ts'));
@@ -77,6 +87,14 @@ describe('graphSourceFingerprint', () => {
     writeFileSync(join(fixtureDir, 'image.bin'), Buffer.from([0, 10, 13, 255]));
     const before = computeSourceFingerprint(fixtureDir);
     writeFileSync(join(fixtureDir, 'image.bin'), Buffer.from([0, 10, 13, 254]));
+    expect(computeSourceFingerprint(fixtureDir)).not.toBe(before);
+  });
+
+  it('includes the normalized tracked executable mode', () => {
+    if (process.platform === 'win32') return;
+    const before = computeSourceFingerprint(fixtureDir);
+    chmodSync(join(fixtureDir, 'a.ts'), 0o755);
+    git(['update-index', '--chmod=+x', 'a.ts']);
     expect(computeSourceFingerprint(fixtureDir)).not.toBe(before);
   });
 
@@ -130,6 +148,38 @@ describe('graphSourceFingerprint', () => {
       expect(dirtyPaths).toContain('a.ts');
     });
 
+    it('reports both endpoints when an excluded report is renamed into source', () => {
+      mkdirSync(join(fixtureDir, 'graphify-out'), { recursive: true });
+      writeFileSync(join(fixtureDir, 'graphify-out', 'old.md'), 'report\n');
+      git(['add', '-f', 'graphify-out/old.md']);
+      git(['commit', '-q', '-m', 'track generated report']);
+      git(['mv', 'graphify-out/old.md', 'included.ts']);
+      const result = checkCleanState(fixtureDir);
+      expect(result.clean).toBe(false);
+      expect(result.dirtyPaths).toEqual(
+        expect.arrayContaining(['included.ts', 'graphify-out/old.md']),
+      );
+    });
+
+    it('reports both endpoints when source is renamed into an excluded report path', () => {
+      mkdirSync(join(fixtureDir, 'graphify-out'), { recursive: true });
+      git(['mv', 'a.ts', 'graphify-out/new.md']);
+      const result = checkCleanState(fixtureDir);
+      expect(result.clean).toBe(false);
+      expect(result.dirtyPaths).toContain('graphify-out/new.md');
+      expect(result.dirtyPaths).toContain('a.ts');
+    });
+
+    it('ignores a rename confined to excluded graph-output paths', () => {
+      mkdirSync(join(fixtureDir, 'graphify-out'), { recursive: true });
+      mkdirSync(join(fixtureDir, '.codegraph'), { recursive: true });
+      writeFileSync(join(fixtureDir, 'graphify-out', 'old.md'), 'report\n');
+      git(['add', '-f', 'graphify-out/old.md']);
+      git(['commit', '-q', '-m', 'track generated report']);
+      git(['mv', 'graphify-out/old.md', '.codegraph/new.md']);
+      expect(checkCleanState(fixtureDir)).toEqual({ clean: true, dirtyPaths: [] });
+    });
+
     it('does not flag changes confined to excluded graph-output directories', () => {
       mkdirSync(join(fixtureDir, 'graphify-out'), { recursive: true });
       writeFileSync(join(fixtureDir, 'graphify-out', 'graph.json'), '{}');
@@ -156,5 +206,24 @@ describe('graphSourceFingerprint', () => {
       expect(block).not.toMatch(/Originating commit/i);
       expect(block).not.toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/); // no ISO timestamp
     });
+
+    it('uses a supplied validated fingerprint without recomputing it', () => {
+      const fingerprint = `sha256:${'a'.repeat(64)}`;
+      expect(
+        buildMetadataBlock({
+          tool: 'codegraph',
+          toolVersion: '1.6.0',
+          generationMode: 'test',
+          reportSchemaVersion: 1,
+          cwd: fixtureDir,
+          fingerprint,
+        }),
+      ).toContain(`Source fingerprint: ${fingerprint}`);
+    });
+  });
+
+  it('shares exact version matching semantics with report generators', () => {
+    expect(matchesExactVersion('graphify 0.9.51', '0.9.51')).toBe(true);
+    expect(matchesExactVersion('graphify 0.9.510', '0.9.51')).toBe(false);
   });
 });

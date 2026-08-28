@@ -17,8 +17,8 @@ whichever is available on your machine — and never falling back to an unpinned
 
 | Priority | Method | Command it runs |
 |----------|--------|--------|
-| 1 | **uv** | `uv tool install graphifyy==<pinned>` — keeps tools on `PATH` without extra setup |
-| 2 | **pipx** | `pipx install graphifyy==<pinned>` — isolated env; run `pipx ensurepath` if the CLI is missing |
+| 1 | **uv** | `uv tool install --force graphifyy==<pinned>` — replaces an older exact-pinned tool on `PATH` |
+| 2 | **pipx** | `pipx install --force graphifyy==<pinned>` — replaces an older isolated tool; run `pipx ensurepath` if the CLI is missing |
 | 3 | **pip** | `python -m pip install graphifyy==<pinned>` — on Windows, `graphify.exe` may land in `%APPDATA%\Python\Python3xx\Scripts`, often **not** on `PATH` until added |
 
 All three provide the same `graphify` command (or `python -m graphify`). Which one actually runs on a
@@ -237,7 +237,7 @@ The CLAUDE.md section also instructs Claude to:
 |---------|-----|
 | **Windows:** `graphify` not recognized after `pip install graphifyy` | Pip installs `graphify.exe` under **`%APPDATA%\Python\Python3xx\Scripts`** (see pip’s warning). Add that folder to your **user PATH**, open a new terminal, **or** use `pnpm run graphify:*` / `py -m graphify …` (see [`scripts/graphify-cli.mjs`](../scripts/graphify-cli.mjs)). |
 | **`graphify` / `uv` not on PATH** (uv/pipx) | Add uv’s bin (`uv tool dir` / `%USERPROFILE%\.local\bin`) or run `pipx ensurepath`; restart the terminal. |
-| `graphify: command not found` | Prefer **`pnpm run graphify:update`** / **`pnpm run graphify:install`**, or install via **`pipx install graphifyy`** / **`uv tool install graphifyy`**. |
+| `graphify: command not found` | Prefer **`pnpm run graphify:update`** / **`pnpm run graphify:install`**, or install the pinned package via **`pipx install --force graphifyy==<pinned>`** / **`uv tool install --force graphifyy==<pinned>`**. |
 | Graph is stale | `graphify update .` |
 | Hook not firing | `graphify hook install` |
 | VS Code Copilot not reading graph | `graphify vscode install` |

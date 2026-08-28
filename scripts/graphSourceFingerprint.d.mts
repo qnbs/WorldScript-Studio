@@ -1,6 +1,7 @@
 export const ROOT: string;
 export function listSourcePaths(cwd?: string): string[];
 export function computeSourceFingerprint(cwd?: string): string;
+export function matchesExactVersion(output: string, expectedVersion: string): boolean;
 export function checkCleanState(cwd?: string): { clean: boolean; dirtyPaths: string[] };
 export function buildMetadataBlock(opts: {
   tool: string;

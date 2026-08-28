@@ -26,7 +26,7 @@ node scripts/dependency-state.mjs reconcile
 # 2. Install both tools at their pinned versions (Graphify needs Python 3.10+; CodeGraph needs Node/npm)
 pnpm run graphs:bootstrap
 
-# 3. Read-only sanity check: installed versions match policy, report freshness
+# 3. Read-only diagnostic: installed versions and any existing report freshness
 pnpm run graphs:doctor
 
 # 4. Optional privacy controls before the first CodeGraph invocation (local shell only)
@@ -46,6 +46,12 @@ pnpm run graphs:refresh
 # 8. Choose Graphify (architecture/topology) vs. CodeGraph (symbol/impact) vs. raw grep —
 #    see "Tool Selection Guide" below.
 ```
+
+`graphs:doctor` is safe before initialization: missing reports and an uninitialized CodeGraph index
+are reported diagnostically. When reports exist it also displays their shared freshness diagnosis,
+but it remains non-blocking for onboarding. Use `graphs:status` after setup as the authoritative,
+non-zero freshness check; it requires both committed reports to exist and match the current source
+fingerprint and tested tool versions.
 
 ## Daily Workflow
 

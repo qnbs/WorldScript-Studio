@@ -9,13 +9,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveCodegraphCommand } from './codegraph-report.mjs';
+import { matchesExactVersion } from './graphSourceFingerprint.mjs';
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const policy = JSON.parse(readFileSync(join(root, 'config', 'graph-tools-versions.json'), 'utf-8'));
 const version = policy.codegraph.testedVersion;
 const pinnedSpec = `@colbymchenry/codegraph@${version}`;
-const codegraphCommand = resolveCodegraphCommand();
-
 const install = spawnSync('npm', ['install', '-g', pinnedSpec], {
   stdio: 'inherit',
   shell: process.platform === 'win32',
@@ -31,13 +30,14 @@ if (install.status !== 0) {
 }
 
 // QNBS-v3: keep optional CodeGraph outside app dependencies while verifying the exact shared policy version.
+const codegraphCommand = resolveCodegraphCommand();
 const verify = spawnSync(codegraphCommand, ['--version'], {
   encoding: 'utf-8',
   shell: process.platform === 'win32',
   env: process.env,
 });
 const installedVersion = (verify.stdout ?? '').trim();
-if (verify.status !== 0 || !installedVersion.includes(version)) {
+if (verify.status !== 0 || !matchesExactVersion(installedVersion, version)) {
   process.stderr.write(
     `[codegraph-bootstrap] Installed but version verification failed. ` +
       `Expected ${version}, got: ${installedVersion || '(no output)'}\n`,

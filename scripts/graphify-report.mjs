@@ -23,6 +23,7 @@ import {
   buildMetadataBlock,
   checkCleanState,
   computeSourceFingerprint,
+  matchesExactVersion,
   ROOT,
 } from './graphSourceFingerprint.mjs';
 
@@ -34,8 +35,41 @@ function loadPolicy() {
   return JSON.parse(readFileSync(join(ROOT, 'config', 'graph-tools-versions.json'), 'utf-8'));
 }
 
-function hasExactVersion(output, version) {
-  return new RegExp(`(?:^|\\D)${version.replaceAll('.', '\\.')}(?:$|\\D)`).test(output);
+function isValidCompactReport(path) {
+  try {
+    const report = readFileSync(path, 'utf-8');
+    return (
+      report.startsWith('# Graph Report - ') &&
+      /Report schema:\s*\d+/.test(report) &&
+      /Source fingerprint:\s*sha256:[0-9a-f]{64}/.test(report) &&
+      /Tool version:\s*\S+/.test(report)
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function recoverOrphanedCompactReport(reportPath, backupPath) {
+  if (existsSync(reportPath) || !existsSync(backupPath)) return false;
+  if (!isValidCompactReport(backupPath)) {
+    throw new Error('orphaned compact-report backup is invalid; refusing to discard it');
+  }
+  // QNBS-v3: recover the last valid compact snapshot before opening a new transaction.
+  renameSync(backupPath, reportPath);
+  return true;
+}
+
+function preparePreviousReport() {
+  recoverOrphanedCompactReport(REPORT_PATH, PREVIOUS_COMPACT_BACKUP);
+  const hadBackup = existsSync(REPORT_PATH);
+  if (existsSync(PREVIOUS_COMPACT_BACKUP)) {
+    if (!isValidCompactReport(PREVIOUS_COMPACT_BACKUP)) {
+      throw new Error('existing compact-report backup is invalid; refusing to discard it');
+    }
+    rmSync(PREVIOUS_COMPACT_BACKUP);
+  }
+  if (hadBackup) renameSync(REPORT_PATH, PREVIOUS_COMPACT_BACKUP);
+  return hadBackup;
 }
 
 function runGraphify(args, options = {}) {
@@ -73,8 +107,13 @@ function reuseTopology(previous, titleLine, metadata) {
 
 function writeCandidate(report) {
   const candidate = `${REPORT_PATH}.tmp-${process.pid}`;
-  writeFileSync(candidate, report);
-  renameSync(candidate, REPORT_PATH);
+  try {
+    writeFileSync(candidate, report);
+    renameSync(candidate, REPORT_PATH);
+  } catch (error) {
+    rmSync(candidate, { force: true });
+    throw error;
+  }
 }
 
 export function generateReport() {
@@ -113,11 +152,13 @@ export function generateReport() {
     return 1;
   }
   const titleLine = `# Graph Report - ${projectName}`;
-  const hadBackup = existsSync(REPORT_PATH);
-  // QNBS-v3: retain the prior compact report until every generation and stability check succeeds.
-  rmSync(PREVIOUS_COMPACT_BACKUP, { force: true });
-  if (hadBackup) renameSync(REPORT_PATH, PREVIOUS_COMPACT_BACKUP);
-
+  let hadBackup;
+  try {
+    hadBackup = preparePreviousReport();
+  } catch (error) {
+    console.error(`[graphify-report] FAIL — ${error?.message ?? String(error)}`);
+    return 1;
+  }
   try {
     if (process.env.GRAPHIFY_SKIP === '1') {
       throw new Error('GRAPHIFY_SKIP=1 is not valid for strict report generation');
@@ -132,7 +173,7 @@ export function generateReport() {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     const versionOutput = `${versionResult.stdout ?? ''}\n${versionResult.stderr ?? ''}`;
-    if (versionResult.status !== 0 || !hasExactVersion(versionOutput, expectedVersion)) {
+    if (versionResult.status !== 0 || !matchesExactVersion(versionOutput, expectedVersion)) {
       throw new Error(
         `Graphify version mismatch: expected ${expectedVersion}, got ${versionOutput.trim() || '(no output)'}`,
       );

@@ -13,6 +13,7 @@ import {
   buildMetadataBlock,
   checkCleanState,
   computeSourceFingerprint,
+  matchesExactVersion,
   ROOT,
 } from './graphSourceFingerprint.mjs';
 
@@ -32,9 +33,11 @@ export function resolveCodegraphCommand() {
   return existsSync(candidate) ? candidate : fallback;
 }
 
-// QNBS-v3: sanitize every terminal control sequence before report content becomes committed.
-// biome-ignore lint/suspicious/noControlCharactersInRegex: defensive ANSI-escape strip, not user input
-const ANSI_PATTERN = /\x1b(?:\][\s\S]*?(?:\x07|\x1b\\)|\[[0-?]*[ -/]*[@-~])/g;
+// QNBS-v3: sanitize terminal control sequences without adding a lint suppression for control bytes.
+const ANSI_PATTERN = new RegExp(
+  `${String.fromCharCode(0x1b)}(?:\\][\\s\\S]*?(?:${String.fromCharCode(0x07)}|${String.fromCharCode(0x1b)}\\\\)|\\[[0-?]*[ -/]*[@-~])`,
+  'g',
+);
 
 /** Redact an absolute machine path (repo root or home dir) to a repo-relative or generic form. */
 export function redactPaths(
@@ -85,14 +88,10 @@ function readPolicy() {
   return JSON.parse(readFileSync(join(ROOT, 'config', 'graph-tools-versions.json'), 'utf-8'));
 }
 
-function exactVersion(output, expected) {
-  return new RegExp(`(?:^|\\D)${expected.replaceAll('.', '\\.')}(?:$|\\D)`).test(output);
-}
-
 export function validateIndexStatus(status, expectedVersion) {
   const pending = status?.pendingChanges;
   const index = status?.index;
-  if (status?.initialized !== true || !exactVersion(status.version ?? '', expectedVersion)) {
+  if (status?.initialized !== true || !matchesExactVersion(status.version ?? '', expectedVersion)) {
     throw new Error(`CodeGraph version/index mismatch; expected initialized ${expectedVersion}`);
   }
   if (
@@ -104,7 +103,7 @@ export function validateIndexStatus(status, expectedVersion) {
   }
   if (
     !index ||
-    !exactVersion(index.builtWithVersion ?? '', expectedVersion) ||
+    !matchesExactVersion(index.builtWithVersion ?? '', expectedVersion) ||
     index.reindexRecommended !== false
   ) {
     throw new Error('CodeGraph index requires reindexing or was built with another version');
@@ -138,8 +137,13 @@ function compactStatus(status) {
 
 function writeCandidate(report) {
   const candidate = `${REPORT_PATH}.tmp-${process.pid}`;
-  writeFileSync(candidate, report);
-  renameSync(candidate, REPORT_PATH);
+  try {
+    writeFileSync(candidate, report);
+    renameSync(candidate, REPORT_PATH);
+  } catch (error) {
+    rmSync(candidate, { force: true });
+    throw error;
+  }
 }
 
 export function generateReport() {

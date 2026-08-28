@@ -10,15 +10,12 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { matchesExactVersion } from './graphSourceFingerprint.mjs';
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const policy = JSON.parse(readFileSync(join(root, 'config', 'graph-tools-versions.json'), 'utf-8'));
 const version = policy.graphifyy.testedVersion;
 const pinnedSpec = `graphifyy==${version}`;
-
-function hasExactVersion(output) {
-  return new RegExp(`(?:^|\\D)${version.replaceAll('.', '\\.')}(?:$|\\D)`).test(output);
-}
 
 /** @param {string} cmd @param {string[]} args */
 function run(cmd, args) {
@@ -30,8 +27,8 @@ function run(cmd, args) {
 }
 
 const attempts = [
-  { tool: 'uv', args: ['tool', 'install', pinnedSpec] },
-  { tool: 'pipx', args: ['install', pinnedSpec] },
+  { tool: 'uv', args: ['tool', 'install', '--force', pinnedSpec] },
+  { tool: 'pipx', args: ['install', '--force', pinnedSpec] },
   ...(process.platform === 'win32'
     ? [
         { tool: 'python', args: ['-m', 'pip', 'install', pinnedSpec] },
@@ -54,7 +51,7 @@ for (const { tool, args } of attempts) {
       { encoding: 'utf-8', env: process.env },
     );
     const output = `${verify.stdout ?? ''}\n${verify.stderr ?? ''}`;
-    if (verify.status === 0 && hasExactVersion(output)) {
+    if (verify.status === 0 && matchesExactVersion(output, version)) {
       console.log(`[graphify-bootstrap] Installed ${pinnedSpec} via ${tool} (verified).`);
       process.exit(0);
     }
@@ -67,8 +64,8 @@ for (const { tool, args } of attempts) {
 process.stderr.write(
   `[graphify-bootstrap] Could not install ${pinnedSpec} via uv, pipx, or pip.\n` +
     `Install one of those tools, or install manually:\n` +
-    `  uv tool install ${pinnedSpec}\n` +
-    `  pipx install ${pinnedSpec}\n` +
+    `  uv tool install --force ${pinnedSpec}\n` +
+    `  pipx install --force ${pinnedSpec}\n` +
     `  python -m pip install ${pinnedSpec}\n` +
     `PyPI package name is graphifyy (two y's), CLI command remains: graphify\n`,
 );
