@@ -75,10 +75,17 @@ gh api graphql --paginate \
       }
     }' --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved==false)'
 ```
-- **`NO_ACTIONABLE_TOP_LEVEL_ISSUE_COMMENTS = YES`** — `gh api repos/<owner>/<repo>/issues/<PR>/comments` for plain top-level comments (qodo's real findings live here). These have no GraphQL-resolve mechanism; inspect each, fix/dispose of it, reply where appropriate, and confirm none remain actionable — do not call `resolveReviewThread` on them, there is no thread to resolve.
-- **`NO_ACTIONABLE_REVIEW_BODY_FINDINGS = YES`** — `gh api repos/<owner>/<repo>/pulls/<PR>/reviews`, reading each review's `.body` field in full (CodeRabbit's nitpick/outside-diff-range sections live here, collapsed, invisible to both of the above). Same treatment as top-level comments: inspect, dispose, reply where useful, confirm nothing actionable remains — no resolve mutation applies here either.
+- **`NO_ACTIONABLE_TOP_LEVEL_ISSUE_COMMENTS = YES`** — plain top-level comments (qodo's real findings live here). These have no GraphQL-resolve mechanism; inspect each, fix/dispose of it, reply where appropriate, and confirm none remain actionable — do not call `resolveReviewThread` on them, there is no thread to resolve. **Paginate exhaustively** — a bare call inspects only the first REST page and can miss a later finding:
+  ```bash
+  gh api --paginate -X GET "repos/<owner>/<repo>/issues/<PR>/comments" -f per_page=100
+  ```
+- **`NO_ACTIONABLE_REVIEW_BODY_FINDINGS = YES`** — reading each review's `.body` field in full (CodeRabbit's nitpick/outside-diff-range sections live here, collapsed, invisible to both of the above). Same treatment as top-level comments: inspect, dispose, reply where useful, confirm nothing actionable remains — no resolve mutation applies here either. **Paginate exhaustively** here too:
+  ```bash
+  gh api --paginate -X GET "repos/<owner>/<repo>/pulls/<PR>/reviews" -f per_page=100
+  ```
+  `--paginate` streams one JSON array per page to stdout — when piping into `--jq` for a single aggregate verdict, wrap the filter in `[inputs] + [.] | add` (or pipe the whole stream through `jq -s 'add'` first) so the check evaluates every page's items together, not just the first array `--jq` happens to see.
 
-None of the three implies the others are clean; all three must independently reach their state above before the PR is review-complete. **Reviewer capability/channels are observed live on each PR, never assumed from a static bot roster** — the roster above is a hint of what's been seen before, not an API contract (e.g. CodeAnt's roster entry lists status checks, but it has also posted a genuine inline review thread, confirmed on PR #538); check all three channels every time regardless of what a given bot has "usually" done, and don't skip re-triggering or reconciling a bot just because the roster doesn't mention that channel for it.
+None of the three implies the others are clean; all three must independently reach their state above — via **exhaustive pagination in all three**, not a first-page sample — before the PR is review-complete. **Reviewer capability/channels are observed live on each PR, never assumed from a static bot roster** — the roster above is a hint of what's been seen before, not an API contract (e.g. CodeAnt's roster entry lists status checks, but it has also posted a genuine inline review thread, confirmed on PR #538); check all three channels every time regardless of what a given bot has "usually" done, and don't skip re-triggering or reconciling a bot just because the roster doesn't mention that channel for it.
 
 **A review bot's silence is not the same as a clean pass.** Rate-limited, quota-exhausted, or never-triggered is a different state than "reviewed and found nothing" — verify at least one bot produced *substantive* output (its actual review body/comment text, not just a green check-run) before merging, especially for security/sandbox/IPC/FFI/packaging-adjacent changes. If every independent reviewer is simultaneously silent on such a PR, that's a gap worth surfacing, not something to proceed past as if the loop were satisfied.
 
