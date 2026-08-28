@@ -15,11 +15,12 @@
  * write) so the embedded fingerprint always matches a committable state.
  */
 import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildMetadataBlock, checkCleanState, ROOT } from './graphSourceFingerprint.mjs';
 
 const REPORT_PATH = join(ROOT, 'graphify-out', 'GRAPH_REPORT.md');
+const PREVIOUS_COMPACT_BACKUP = `${REPORT_PATH}.previous-compact`;
 const TOP_N_COMMUNITIES = 20;
 
 const { clean, dirtyPaths } = checkCleanState();
@@ -31,6 +32,16 @@ if (!clean) {
   process.exit(1);
 }
 
+// graphify writes its native report to this exact path — but this script overwrites that same
+// path with a compact summary. Move any prior compact summary out of the way first, so that if
+// graphify decides "no topology changes, outputs left untouched" (a real, observed behavior on a
+// no-op re-run), this script doesn't misparse its OWN previous compact output as a fresh native
+// report. If graphify skips writing, the previous compact summary is simply restored unchanged —
+// which is the correct, deterministic outcome for "nothing changed."
+if (existsSync(REPORT_PATH)) {
+  renameSync(REPORT_PATH, PREVIOUS_COMPACT_BACKUP);
+}
+
 const updateResult = spawnSync(process.execPath, [join(ROOT, 'scripts', 'graphify-update.mjs')], {
   cwd: ROOT,
   stdio: 'inherit',
@@ -38,7 +49,22 @@ const updateResult = spawnSync(process.execPath, [join(ROOT, 'scripts', 'graphif
 });
 if (updateResult.status !== 0) {
   console.error('[graphify-report] FAIL — graphify update did not complete successfully.');
+  if (existsSync(PREVIOUS_COMPACT_BACKUP)) renameSync(PREVIOUS_COMPACT_BACKUP, REPORT_PATH);
   process.exit(updateResult.status ?? 1);
+}
+
+if (!existsSync(REPORT_PATH)) {
+  // No topology change — graphify left outputs untouched. Restore the previous compact report
+  // as-is; this IS the deterministic no-change outcome, not a failure.
+  if (existsSync(PREVIOUS_COMPACT_BACKUP)) {
+    renameSync(PREVIOUS_COMPACT_BACKUP, REPORT_PATH);
+    console.log('[graphify-report] PASS — no topology change; previous compact report unchanged.');
+    process.exit(0);
+  }
+  console.error(
+    '[graphify-report] FAIL — graphify wrote no native report and no previous compact report exists to restore.',
+  );
+  process.exit(1);
 }
 
 const versionResult = spawnSync('graphify', ['--version'], { encoding: 'utf-8' });
@@ -50,6 +76,8 @@ try {
 } catch (error) {
   console.error(`[graphify-report] FAIL — could not read native report: ${error.message}`);
   process.exit(1);
+} finally {
+  rmSync(PREVIOUS_COMPACT_BACKUP, { force: true });
 }
 
 /** Split the native report into ordered sections keyed by their `## Heading` line. */
