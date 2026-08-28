@@ -22,6 +22,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { resolveCodegraphCommand } from './codegraph-report.mjs';
 import { computeSourceFingerprint, ROOT } from './graphSourceFingerprint.mjs';
 
 const POLICY_PATH = join(ROOT, 'config', 'graph-tools-versions.json');
@@ -55,7 +56,7 @@ export function strictRefreshFailure({ updateStatus, reportStatus, reportsFresh 
 
 function toolCommand(command) {
   // QNBS-v3: resolve Windows npm shims explicitly while keeping all arguments controlled.
-  return process.platform === 'win32' && command === 'codegraph' ? 'codegraph.cmd' : command;
+  return command === 'codegraph' ? resolveCodegraphCommand() : command;
 }
 
 function runTool(command, args, options = {}) {

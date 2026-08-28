@@ -19,6 +19,19 @@ import {
 export const REPORT_PATH = join(ROOT, '.codegraph', 'CODEGRAPH_REPORT.md');
 export const DB_PATH = join(ROOT, '.codegraph', 'codegraph.db');
 
+export function resolveCodegraphCommand() {
+  const fallback = process.platform === 'win32' ? 'codegraph.cmd' : 'codegraph';
+  const prefix = spawnSync('npm', ['prefix', '-g'], {
+    encoding: 'utf-8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
+  if (prefix.status !== 0 || prefix.error) return fallback;
+  const globalBin =
+    process.platform === 'win32' ? prefix.stdout.trim() : join(prefix.stdout.trim(), 'bin');
+  const candidate = join(globalBin, process.platform === 'win32' ? 'codegraph.cmd' : 'codegraph');
+  return existsSync(candidate) ? candidate : fallback;
+}
+
 // QNBS-v3: sanitize every terminal control sequence before report content becomes committed.
 // biome-ignore lint/suspicious/noControlCharactersInRegex: defensive ANSI-escape strip, not user input
 const ANSI_PATTERN = /\x1b(?:\][\s\S]*?(?:\x07|\x1b\\)|\[[0-?]*[ -/]*[@-~])/g;
@@ -54,16 +67,12 @@ export function sanitize(text, opts) {
 }
 
 function runCodegraph(args) {
-  const result = spawnSync(
-    process.platform === 'win32' ? 'codegraph.cmd' : 'codegraph',
-    [...args],
-    {
-      cwd: ROOT,
-      encoding: 'utf-8',
-      shell: process.platform === 'win32',
-      env: { ...process.env, NO_COLOR: '1' },
-    },
-  );
+  const result = spawnSync(resolveCodegraphCommand(), [...args], {
+    cwd: ROOT,
+    encoding: 'utf-8',
+    shell: process.platform === 'win32',
+    env: { ...process.env, NO_COLOR: '1' },
+  });
   if (result.status !== 0 || result.error) {
     throw new Error(
       `codegraph ${args.join(' ')} failed (exit ${result.status ?? 'null'}): ${result.stderr ?? result.error?.message ?? ''}`,

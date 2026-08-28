@@ -8,12 +8,13 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveCodegraphCommand } from './codegraph-report.mjs';
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const policy = JSON.parse(readFileSync(join(root, 'config', 'graph-tools-versions.json'), 'utf-8'));
 const version = policy.codegraph.testedVersion;
 const pinnedSpec = `@colbymchenry/codegraph@${version}`;
-const codegraphCommand = process.platform === 'win32' ? 'codegraph.cmd' : 'codegraph';
+const codegraphCommand = resolveCodegraphCommand();
 
 const install = spawnSync('npm', ['install', '-g', pinnedSpec], {
   stdio: 'inherit',
