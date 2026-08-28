@@ -26,6 +26,10 @@ function run(cmd, args) {
   });
 }
 
+function isUnavailable(result) {
+  return result.error?.code === 'ENOENT' || result.status === 127 || result.status === 9009;
+}
+
 const attempts = [
   { tool: 'uv', args: ['tool', 'install', '--force', pinnedSpec] },
   { tool: 'pipx', args: ['install', '--force', pinnedSpec] },
@@ -47,12 +51,13 @@ for (const { tool, args } of attempts) {
     process.stderr.write(`[graphify-bootstrap] ${tool} failed: ${result.error.message}\n`);
     process.exit(1);
   }
-  if (result.status !== 0 && !result.error) {
+  if (result.status !== 0 && !isUnavailable(result)) {
     process.stderr.write(
       `[graphify-bootstrap] ${tool} could not install ${pinnedSpec}; refusing an unintended fallback.\n`,
     );
     process.exit(result.status ?? 1);
   }
+  if (isUnavailable(result)) continue;
   if (result.status === 0) {
     // QNBS-v3: verify the supported fallback launcher resolves the pinned implementation before claiming installation success.
     const verify = spawnSync(

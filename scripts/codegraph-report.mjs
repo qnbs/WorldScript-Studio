@@ -224,7 +224,8 @@ export function generateReport() {
       return acc;
     }, {});
     const extLines = Object.entries(byExt)
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      // QNBS-v3: code-point ordering keeps equal-count reports identical across host locales.
+      .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
       .map(([ext, count]) => `- **.${ext}**: ${count}`)
       .join('\n');
     const metadata = buildMetadataBlock({
