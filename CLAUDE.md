@@ -319,6 +319,17 @@ All `.md` guides listed in **[`README.md`](README.md#-documentation-hub) § Docu
 
 Feature-specific implementation patterns (Plot Board, ProForge Pipeline, scene-level services, LanguageTool, test mock patterns, Settings Navigation, cross-project & backup, Global AI Copilot, Voice Full Support, local inference, Plugin System, Cloud Sync, LoRA Adapter Inference, virtual scrolling) now live in nested `CLAUDE.md` files, loaded automatically only when working under that directory: `features/plotBoard/`, `services/proForge/`, `services/`, `tests/`, `components/`, `services/copilot/`, `services/voice/`, `services/cloudSync/`, `features/lora/`.
 
+**When work touches any feature below — including files outside the nested guide's own directory — read the listed `CLAUDE.md` before editing; it won't auto-load from an external path:**
+- Plot Board → `features/plotBoard/CLAUDE.md` (also governs `services/plotBoardService.ts`, `features/project/thunks/plotBoardAiThunks.ts`, `hooks/usePlotBoardAi.ts`, `components/scene-board/PlotMinimap.tsx`)
+- ProForge → `services/proForge/CLAUDE.md` (also governs `features/proForge/`, `hooks/useProForgeOrchestrator.ts`, `contexts/ProForgeViewContext.ts`)
+- Global AI Copilot → `services/copilot/CLAUDE.md` (also governs `features/copilot/copilotSlice.ts`, `hooks/useGlobalCopilot.ts`, `components/copilot/`)
+- Voice → `services/voice/CLAUDE.md` (also governs the voice hooks under `hooks/` and `tests/e2e/mocks/voiceMockEngines.ts`)
+- LoRA → `features/lora/CLAUDE.md` (also touches the `services/ai/` provider wiring and the Settings AI Fine-Tuning UI)
+- Scene-level services / LanguageTool / cross-project & backup / local inference / Plugin System → `services/CLAUDE.md` (LanguageTool also governs `hooks/useLanguageToolCheck.ts`; scene-level services also governs `features/sceneComments/sceneCommentsSlice.ts` and `features/progressTracker/progressTrackerSlice.ts`)
+- Test mock patterns, E2E conventions → `tests/CLAUDE.md`
+- Settings Navigation, virtual scrolling → `components/CLAUDE.md`
+- Cloud Sync → `services/cloudSync/CLAUDE.md` (self-contained under its own directory)
+
 ## Known Technical Debt
 
 See `AUDIT.md` and `TODO.md`. Key items:
