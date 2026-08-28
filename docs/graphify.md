@@ -150,7 +150,7 @@ coexist unpredictably, and it adds latency to every commit on constrained hardwa
 on-demand refresh instead:
 
 ```bash
-pnpm run graphs:update    # local runtime state only (graph.json/graph.html), fast
+pnpm run graphs:update    # local runtime state only (graph.json/graph.html), heavy rebuild
 pnpm run graphs:refresh   # update + regenerate the committed report, strict — run before a PR
 pnpm run graphs:status    # fast read-only freshness check (FRESH/STALE), no mutation
 ```

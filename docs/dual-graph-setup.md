@@ -53,6 +53,7 @@ but it remains non-blocking for onboarding. Use `graphs:status` after setup as t
 non-zero freshness check; it requires both committed reports to exist and match the current source
 fingerprint and tested tool versions. `graphs:status` can return non-zero for `MISSING`, `STALE`
 (including a fingerprint mismatch), `VERSION_MISMATCH` (report schema or tool version),
+`REPORT_INVALID` (metadata matches but the committed body is not a valid generated report),
 `DIRTY_UNTRACKED_INPUT`, or an unstable source snapshot.
 
 For local admission, run `pnpm run ci:prepush` as required by the constrained-hardware policy. It

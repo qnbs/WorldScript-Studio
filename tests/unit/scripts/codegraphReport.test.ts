@@ -16,6 +16,18 @@ const graphsCli = (await import(graphsCliModulePath)) as unknown as {
     reportStatus: number;
     reportsFresh: boolean;
   }) => string | null;
+  reportFreshness: (
+    meta: {
+      exists: boolean;
+      schema: string;
+      toolVersion: string;
+      fingerprint: string;
+      tool: string;
+      text: string;
+    },
+    policy: { reportSchemaVersion: number; expectedVersion: string },
+    fingerprint: string,
+  ) => string;
 };
 const graphifyReport = (await import(
   ['..', '..', '..', 'scripts', 'graphify-report.mjs'].join('/')
@@ -156,6 +168,63 @@ describe('codegraph-report sanitization', () => {
     });
   });
 
+  it('rejects metadata-only or truncated reports with otherwise current metadata', () => {
+    const metadata = {
+      exists: true,
+      schema: '1',
+      toolVersion: '1.6.0',
+      fingerprint: 'sha256:current',
+      tool: 'codegraph',
+      text: '# CodeGraph Report\n\nReport schema: 1\nSource fingerprint: sha256:current',
+    };
+    expect(
+      graphsCli.reportFreshness(
+        metadata,
+        { reportSchemaVersion: 1, expectedVersion: '1.6.0' },
+        'sha256:current',
+      ),
+    ).toBe('REPORT_INVALID');
+  });
+
+  it('accepts an intact generated CodeGraph report as fresh', () => {
+    const report =
+      '# CodeGraph Report\n\nReport schema: 1\nSource fingerprint: sha256:current\n' +
+      'Tool: codegraph\nTool version: 1.6.0\nGeneration mode: test\n\n' +
+      '## Status\n\n```text\nInitialized: yes\n```\n\n## Files by Extension\n\n- **.mjs**: 1\n\n' +
+      '---\n\n*Regenerate with: `pnpm run graphs:report`*';
+    expect(
+      graphsCli.reportFreshness(
+        {
+          exists: true,
+          schema: '1',
+          toolVersion: '1.6.0',
+          fingerprint: 'sha256:current',
+          tool: 'codegraph',
+          text: report,
+        },
+        { reportSchemaVersion: 1, expectedVersion: '1.6.0' },
+        'sha256:current',
+      ),
+    ).toBe('FRESH');
+  });
+
+  it('keeps stale classification ahead of body validation', () => {
+    expect(
+      graphsCli.reportFreshness(
+        {
+          exists: true,
+          schema: '1',
+          toolVersion: '1.6.0',
+          fingerprint: 'sha256:old',
+          tool: 'codegraph',
+          text: 'truncated',
+        },
+        { reportSchemaVersion: 1, expectedVersion: '1.6.0' },
+        'sha256:current',
+      ),
+    ).toBe('STALE');
+  });
+
   it('shares exact version matching semantics with graph tooling', () => {
     expect(matchesExactVersion('codegraph 1.6.0', '1.6.0')).toBe(true);
     expect(matchesExactVersion('codegraph 1.6.01', '1.6.0')).toBe(false);
@@ -171,7 +240,27 @@ describe('codegraph-report sanitization', () => {
     const previous =
       '# Graph Report - project\n\nReport schema: 1\nSource fingerprint: sha256:' +
       'a'.repeat(64) +
-      '\nTool: graphify\nTool version: 0.9.51\nGeneration mode: test\n';
+      '\nTool: graphify\nTool version: 0.9.51\nGeneration mode: test\n\n' +
+      '## Summary\n- valid\n\n## Top 1 Communities by size (of 1 total)\n\n' +
+      '## Knowledge Gaps\n- none\n';
+    writeFileSync(backupPath, previous);
+    expect(graphifyReport.recoverOrphanedCompactReport(reportPath, backupPath)).toBe(true);
+    expect(readFileSync(reportPath, 'utf-8')).toBe(previous);
+    expect(existsSync(backupPath)).toBe(false);
+  });
+
+  it('recovers a valid compact backup over an interrupted native primary', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'graphify-report-test-'));
+    temporaryDirectories.push(directory);
+    const reportPath = join(directory, 'GRAPH_REPORT.md');
+    const backupPath = `${reportPath}.previous-compact`;
+    const previous =
+      '# Graph Report - project\n\nReport schema: 1\nSource fingerprint: sha256:' +
+      'b'.repeat(64) +
+      '\nTool: graphify\nTool version: 0.9.51\nGeneration mode: test\n\n' +
+      '## Summary\n- valid\n\n## Top 1 Communities by size (of 1 total)\n\n' +
+      '## Knowledge Gaps\n- none\n';
+    writeFileSync(reportPath, '# Native Graphify output\n## Communities (1 total)\n');
     writeFileSync(backupPath, previous);
     expect(graphifyReport.recoverOrphanedCompactReport(reportPath, backupPath)).toBe(true);
     expect(readFileSync(reportPath, 'utf-8')).toBe(previous);

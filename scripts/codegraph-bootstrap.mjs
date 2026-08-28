@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolveCodegraphCommand } from './codegraph-report.mjs';
+import { executeCodegraph } from './codegraph-report.mjs';
 import { matchesExactVersion } from './graphSourceFingerprint.mjs';
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
@@ -30,11 +30,8 @@ if (install.status !== 0) {
 }
 
 // QNBS-v3: keep optional CodeGraph outside app dependencies while verifying the exact shared policy version.
-const codegraphCommand = resolveCodegraphCommand();
-const verify = spawnSync(codegraphCommand, ['--version'], {
+const verify = executeCodegraph(['--version'], {
   encoding: 'utf-8',
-  shell: process.platform === 'win32',
-  env: process.env,
 });
 const installedVersion = (verify.stdout ?? '').trim();
 if (verify.status !== 0 || !matchesExactVersion(installedVersion, version)) {

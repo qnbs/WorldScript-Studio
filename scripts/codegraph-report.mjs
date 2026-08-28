@@ -34,6 +34,40 @@ export function resolveCodegraphCommand() {
   return existsSync(candidate) ? candidate : fallback;
 }
 
+function resolveWindowsCodegraphEntrypoint(command) {
+  if (process.platform !== 'win32' || !command.toLowerCase().endsWith('.cmd')) return null;
+  const rootResult = spawnSync('npm', ['root', '-g'], {
+    encoding: 'utf-8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
+  if (rootResult.status !== 0 || rootResult.error) return null;
+  try {
+    const packageRoot = join(rootResult.stdout.trim(), '@colbymchenry', 'codegraph');
+    const packageJson = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf-8'));
+    const bin = typeof packageJson.bin === 'string' ? packageJson.bin : packageJson.bin?.codegraph;
+    if (typeof bin !== 'string') return null;
+    const entrypoint = join(packageRoot, bin);
+    return existsSync(entrypoint) ? entrypoint : null;
+  } catch {
+    return null;
+  }
+}
+
+// QNBS-v3: invoke Windows shims through their package entrypoint to avoid cmd.exe reparsing paths.
+export function executeCodegraph(args, options = {}) {
+  const command = resolveCodegraphCommand();
+  const entrypoint = resolveWindowsCodegraphEntrypoint(command);
+  const invocation = entrypoint
+    ? { command: process.execPath, args: [entrypoint, ...args] }
+    : { command, args };
+  return spawnSync(invocation.command, invocation.args, {
+    cwd: ROOT,
+    env: { ...process.env, NO_COLOR: '1' },
+    ...options,
+    shell: false,
+  });
+}
+
 // QNBS-v3: sanitize terminal control sequences without adding a lint suppression for control bytes.
 const ANSI_PATTERN = new RegExp(
   `${String.fromCharCode(0x1b)}(?:\\][\\s\\S]*?(?:${String.fromCharCode(0x07)}|${String.fromCharCode(0x1b)}\\\\)|\\[[0-?]*[ -/]*[@-~])`,
@@ -71,12 +105,7 @@ export function sanitize(text, opts) {
 }
 
 function runCodegraph(args) {
-  const result = spawnSync(resolveCodegraphCommand(), [...args], {
-    cwd: ROOT,
-    encoding: 'utf-8',
-    shell: process.platform === 'win32',
-    env: { ...process.env, NO_COLOR: '1' },
-  });
+  const result = executeCodegraph(args, { encoding: 'utf-8' });
   if (result.status !== 0 || result.error) {
     throw new Error(
       `codegraph ${args.join(' ')} failed (exit ${result.status ?? 'null'}): ${result.stderr ?? result.error?.message ?? ''}`,

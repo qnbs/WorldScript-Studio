@@ -43,7 +43,10 @@ function isValidCompactReport(path) {
       report.startsWith('# Graph Report - ') &&
       /Report schema:\s*\d+/.test(report) &&
       /Source fingerprint:\s*sha256:[0-9a-f]{64}/.test(report) &&
-      /Tool version:\s*\S+/.test(report)
+      /Tool version:\s*\S+/.test(report) &&
+      report.includes('\n\n## Summary\n') &&
+      /^## Top \d+ Communities by size \(of \d+ total\)$/m.test(report) &&
+      report.includes('\n\n## Knowledge Gaps\n')
     );
   } catch {
     return false;
@@ -51,10 +54,13 @@ function isValidCompactReport(path) {
 }
 
 export function recoverOrphanedCompactReport(reportPath, backupPath) {
-  if (existsSync(reportPath) || !existsSync(backupPath)) return false;
+  if (!existsSync(backupPath)) return false;
   if (!isValidCompactReport(backupPath)) {
     throw new Error('orphaned compact-report backup is invalid; refusing to discard it');
   }
+  if (existsSync(reportPath) && isValidCompactReport(reportPath)) return false;
+  // QNBS-v3: prefer the last valid compact snapshot over an interrupted native primary.
+  rmSync(reportPath, { force: true });
   // QNBS-v3: recover the last valid compact snapshot before opening a new transaction.
   renameSync(backupPath, reportPath);
   return true;

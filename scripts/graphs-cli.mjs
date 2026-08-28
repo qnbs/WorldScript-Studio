@@ -22,7 +22,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { resolveCodegraphCommand } from './codegraph-report.mjs';
+import { executeCodegraph } from './codegraph-report.mjs';
 import {
   checkCleanState,
   computeSourceFingerprint,
@@ -59,18 +59,9 @@ export function strictRefreshFailure({ updateStatus, reportStatus, reportsFresh 
   return null;
 }
 
-function toolCommand(command) {
-  // QNBS-v3: resolve Windows npm shims explicitly while keeping all arguments controlled.
-  return command === 'codegraph' ? resolveCodegraphCommand() : command;
-}
-
 function runTool(command, args, options = {}) {
-  return spawnSync(toolCommand(command), args, {
-    cwd: ROOT,
-    env: process.env,
-    shell: process.platform === 'win32',
-    ...options,
-  });
+  if (command === 'codegraph') return executeCodegraph(args, options);
+  return spawnSync(command, args, { cwd: ROOT, env: process.env, ...options });
 }
 
 function commandVersion(cmd, args = ['--version']) {
@@ -99,7 +90,29 @@ function readReportMetadata(path) {
   const schema = text.match(/Report schema:\s*(\S+)/)?.[1] ?? null;
   const fingerprint = text.match(/Source fingerprint:\s*(\S+)/)?.[1] ?? null;
   const toolVersion = text.match(/Tool version:\s*(\S+)/)?.[1] ?? null;
-  return { exists: true, schema, fingerprint, toolVersion };
+  const tool = text.match(/Tool:\s*(\S+)/)?.[1] ?? null;
+  return { exists: true, schema, fingerprint, toolVersion, tool, text };
+}
+
+export function validateReportStructure(text, tool) {
+  if (typeof text !== 'string') return false;
+  if (tool === 'graphify') {
+    return (
+      text.startsWith('# Graph Report - ') &&
+      text.includes('\n\n## Summary\n') &&
+      /^## Top \d+ Communities by size \(of \d+ total\)$/m.test(text) &&
+      text.includes('\n\n## Knowledge Gaps\n')
+    );
+  }
+  if (tool === 'codegraph') {
+    return (
+      text.startsWith('# CodeGraph Report\n') &&
+      text.includes('\n\n## Status\n\n```text\n') &&
+      text.includes('\n\n## Files by Extension\n') &&
+      text.includes('\n*Regenerate with: `pnpm run graphs:report`')
+    );
+  }
+  return false;
 }
 
 // QNBS-v3: classify reports from schema, exact tool version, and current source fingerprint.
@@ -108,7 +121,8 @@ export function reportFreshness(meta, { reportSchemaVersion, expectedVersion }, 
   if (meta.schema !== String(reportSchemaVersion) || meta.toolVersion !== expectedVersion) {
     return 'VERSION_MISMATCH';
   }
-  return meta.fingerprint === fingerprint ? 'FRESH' : 'STALE';
+  if (meta.fingerprint !== fingerprint) return 'STALE';
+  return validateReportStructure(meta.text, meta.tool) ? 'FRESH' : 'REPORT_INVALID';
 }
 
 function doctor() {
@@ -254,6 +268,10 @@ function report() {
     requireToolVersion('graphify', policy.graphifyy.testedVersion);
     if (!existsSync(CODEGRAPH_DB)) throw new Error('CodeGraph is not initialized');
     requireToolVersion('codegraph', policy.codegraph.testedVersion);
+    const syncResult = runTool('codegraph', ['sync'], { stdio: 'inherit' });
+    if (syncResult.status !== 0) {
+      throw new Error(`CodeGraph sync failed (exit ${syncResult.status ?? 'null'})`);
+    }
     const graphifyResult = runNode('graphify-report.mjs', [], { stdio: 'inherit' });
     if (graphifyResult.status !== 0) throw new Error('Graphify report generation failed');
     const codegraphResult = runNode('codegraph-report.mjs', [], { stdio: 'inherit' });
@@ -269,19 +287,9 @@ function report() {
 }
 
 function refresh() {
-  console.log('[graphs:refresh] strict mode — update then report, any real failure is fatal.');
-  const updateResult = spawnSync(
-    process.execPath,
-    [join(ROOT, 'scripts', 'graphs-cli.mjs'), 'update'],
-    {
-      cwd: ROOT,
-      stdio: 'inherit',
-    },
+  console.log(
+    '[graphs:refresh] strict mode — synchronize once, report once, any failure is fatal.',
   );
-  if (updateResult.status !== 0) {
-    console.error('[graphs:refresh] FAIL — update stage failed.');
-    process.exit(1);
-  }
   const reportResult = spawnSync(
     process.execPath,
     [join(ROOT, 'scripts', 'graphs-cli.mjs'), 'report'],
@@ -291,7 +299,7 @@ function refresh() {
     },
   );
   if (reportResult.status !== 0) {
-    console.error('[graphs:refresh] FAIL — report stage failed.');
+    console.error('[graphs:refresh] FAIL — synchronized report stage failed.');
     process.exit(1);
   }
   const statusResult = spawnSync(
