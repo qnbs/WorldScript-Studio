@@ -150,6 +150,18 @@ function isValidPositiveInteger(value) {
   return Number.isInteger(value) && value >= 0;
 }
 
+// QNBS-v3: keep every registry path relative, literal, and free of traversal syntax.
+function isSafeRegistryPath(value) {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    !value.startsWith('/') &&
+    !value.includes('\\') &&
+    !value.includes('..') &&
+    !/[*?[\]]/.test(value)
+  );
+}
+
 function validateExceptionRegistry(value) {
   if (
     !value ||
@@ -197,14 +209,7 @@ function validateExceptionRegistry(value) {
       throw new Error(`invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} needs allowedPaths`);
     }
     for (const path of entry.allowedPaths) {
-      if (
-        typeof path !== 'string' ||
-        path.length === 0 ||
-        path.startsWith('/') ||
-        path.includes('\\') ||
-        path.includes('..') ||
-        /[*?[\]]/.test(path)
-      ) {
+      if (!isSafeRegistryPath(path)) {
         throw new Error(
           `invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} has invalid allowed path`,
         );
@@ -219,12 +224,7 @@ function validateExceptionRegistry(value) {
     for (const allowance of entry.supplementalLineAllowances) {
       if (
         !allowance ||
-        typeof allowance.path !== 'string' ||
-        allowance.path.length === 0 ||
-        allowance.path.startsWith('/') ||
-        allowance.path.includes('\\') ||
-        allowance.path.includes('..') ||
-        /[*?[\]]/.test(allowance.path) ||
+        !isSafeRegistryPath(allowance.path) ||
         !isValidPositiveInteger(allowance.maxMeaningfulLines)
       ) {
         throw new Error(
@@ -292,7 +292,10 @@ function readBaseExceptionRegistry(base, dependencies = {}) {
   try {
     return validateExceptionRegistry(JSON.parse(shown.stdout));
   } catch (error) {
-    throw new Error(error instanceof Error ? error.message : `invalid ${EXCEPTION_REGISTRY_PATH}`);
+    if (error instanceof Error && error.message.startsWith(`invalid ${EXCEPTION_REGISTRY_PATH}`)) {
+      throw error;
+    }
+    throw new Error(`invalid ${EXCEPTION_REGISTRY_PATH}: malformed JSON`);
   }
 }
 

@@ -57,13 +57,10 @@ function exceptionDependencies({
   rows,
   changedPaths = rows.map((row) => row.path),
   registry = { schemaVersion: 1, exceptions: [exception] },
-  event = {
-    repository: { full_name: exception.repository },
-    number: exception.prNumber,
-    pull_request: { base: { ref: exception.baseRef }, head: { ref: exception.headRef } },
-  },
+  event = pullRequestEvent(),
   commitCount = 4,
   registryExists = true,
+  rawRegistry,
 }: {
   rows: NumstatRow[];
   changedPaths?: string[];
@@ -71,6 +68,7 @@ function exceptionDependencies({
   event?: unknown;
   commitCount?: number;
   registryExists?: boolean;
+  rawRegistry?: string;
 }) {
   const numstat = rows.map((row) => `${row.added}\t${row.removed}\t${row.path}\x00`).join('');
   const spawnSync = (_command: string, args: string[]) => {
@@ -87,7 +85,9 @@ function exceptionDependencies({
     if (args[0] === 'cat-file') {
       return { status: registryExists ? 0 : 1, stdout: '', stderr: '' };
     }
-    if (args[0] === 'show') return { status: 0, stdout: JSON.stringify(registry), stderr: '' };
+    if (args[0] === 'show') {
+      return { status: 0, stdout: rawRegistry ?? JSON.stringify(registry), stderr: '' };
+    }
     return { status: 1, stdout: '', stderr: 'unexpected git call' };
   };
   return {
@@ -591,7 +591,11 @@ describe('evaluatePrSize', () => {
 
     it('fails closed for a malformed base registry', () => {
       const rows: NumstatRow[] = [{ path: 'scripts/tool.mjs', added: 10, removed: 0 }];
-      const result = evaluatePrSize('base', 'head', exceptionDependencies({ rows, registry: '{' }));
+      const result = evaluatePrSize(
+        'base',
+        'head',
+        exceptionDependencies({ rows, rawRegistry: '{' }),
+      );
       expect(result.ok).toBe(false);
       expect(result.error).toContain('invalid config/pr-size-exceptions.json');
     });
