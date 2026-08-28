@@ -159,6 +159,8 @@ describe('codegraph-report sanitization', () => {
   it('shares exact version matching semantics with graph tooling', () => {
     expect(matchesExactVersion('codegraph 1.6.0', '1.6.0')).toBe(true);
     expect(matchesExactVersion('codegraph 1.6.01', '1.6.0')).toBe(false);
+    expect(matchesExactVersion('codegraph 1.6.0-rc.1', '1.6.0')).toBe(false);
+    expect(matchesExactVersion('codegraph 1.6.0.1', '1.6.0')).toBe(false);
   });
 
   it('recovers a valid orphaned Graphify compact report before a new transaction', () => {

@@ -35,6 +35,7 @@ function loadPolicy() {
   return JSON.parse(readFileSync(join(ROOT, 'config', 'graph-tools-versions.json'), 'utf-8'));
 }
 
+// QNBS-v3: validate compact report structure before recovering or replacing transaction state.
 function isValidCompactReport(path) {
   try {
     const report = readFileSync(path, 'utf-8');

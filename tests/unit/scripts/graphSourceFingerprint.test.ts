@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { execFileSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 // QNBS-v3: fixture coverage locks worktree deletion and portable content semantics used by reports.
@@ -66,6 +66,15 @@ describe('graphSourceFingerprint', () => {
       expect.arrayContaining(['fäll.ts', 'file with spaces.ts']),
     );
     expect(computeSourceFingerprint(fixtureDir)).toMatch(/^sha256:[0-9a-f]{64}$/);
+  });
+
+  it('hashes symlink targets without following them', () => {
+    if (process.platform === 'win32') return;
+    symlinkSync('a.ts', join(fixtureDir, 'link.ts'));
+    git(['add', 'link.ts']);
+    const first = computeSourceFingerprint(fixtureDir);
+    symlinkSync('other.ts', join(fixtureDir, 'other-link.ts'));
+    expect(computeSourceFingerprint(fixtureDir)).not.toBe(first);
   });
 
   it('represents a tracked working-tree deletion without crashing', () => {
@@ -225,5 +234,7 @@ describe('graphSourceFingerprint', () => {
   it('shares exact version matching semantics with report generators', () => {
     expect(matchesExactVersion('graphify 0.9.51', '0.9.51')).toBe(true);
     expect(matchesExactVersion('graphify 0.9.510', '0.9.51')).toBe(false);
+    expect(matchesExactVersion('graphify 0.9.51-rc.1', '0.9.51')).toBe(false);
+    expect(matchesExactVersion('graphify 0.9.51.1', '0.9.51')).toBe(false);
   });
 });

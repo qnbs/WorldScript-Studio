@@ -43,6 +43,16 @@ const attempts = [
 
 for (const { tool, args } of attempts) {
   const result = run(tool, args);
+  if (result.error?.code && result.error.code !== 'ENOENT') {
+    process.stderr.write(`[graphify-bootstrap] ${tool} failed: ${result.error.message}\n`);
+    process.exit(1);
+  }
+  if (result.status !== 0 && !result.error) {
+    process.stderr.write(
+      `[graphify-bootstrap] ${tool} could not install ${pinnedSpec}; refusing an unintended fallback.\n`,
+    );
+    process.exit(result.status ?? 1);
+  }
   if (result.status === 0) {
     // QNBS-v3: verify the supported fallback launcher resolves the pinned implementation before claiming installation success.
     const verify = spawnSync(
@@ -58,6 +68,7 @@ for (const { tool, args } of attempts) {
     process.stderr.write(
       `[graphify-bootstrap] ${tool} installed ${pinnedSpec}, but the supported launcher did not resolve version ${version}.\n`,
     );
+    process.exit(1);
   }
 }
 

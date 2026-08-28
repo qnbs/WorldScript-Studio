@@ -237,7 +237,7 @@ The CLAUDE.md section also instructs Claude to:
 |---------|-----|
 | **Windows:** `graphify` not recognized after `pip install graphifyy` | Pip installs `graphify.exe` under **`%APPDATA%\Python\Python3xx\Scripts`** (see pip’s warning). Add that folder to your **user PATH**, open a new terminal, **or** use `pnpm run graphify:*` / `py -m graphify …` (see [`scripts/graphify-cli.mjs`](../scripts/graphify-cli.mjs)). |
 | **`graphify` / `uv` not on PATH** (uv/pipx) | Add uv’s bin (`uv tool dir` / `%USERPROFILE%\.local\bin`) or run `pipx ensurepath`; restart the terminal. |
-| `graphify: command not found` | Prefer **`pnpm run graphify:update`** / **`pnpm run graphify:install`**, or install the pinned package via **`pipx install --force graphifyy==<pinned>`** / **`uv tool install --force graphifyy==<pinned>`**. |
+| `graphify: command not found` | Run **`pnpm run graphify:bootstrap`** to install the exact policy pin. For a PATH-only failure after installation, prefer **`pnpm run graphify:update`** / **`pnpm run graphify:install`**, whose wrapper also tries supported Python-module fallbacks. |
 | Graph is stale | `graphify update .` |
 | Hook not firing | `graphify hook install` |
 | VS Code Copilot not reading graph | `graphify vscode install` |

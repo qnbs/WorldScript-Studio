@@ -51,7 +51,14 @@ pnpm run graphs:refresh
 are reported diagnostically. When reports exist it also displays their shared freshness diagnosis,
 but it remains non-blocking for onboarding. Use `graphs:status` after setup as the authoritative,
 non-zero freshness check; it requires both committed reports to exist and match the current source
-fingerprint and tested tool versions.
+fingerprint and tested tool versions. `graphs:status` can return non-zero for `MISSING`, `STALE`
+(including a fingerprint mismatch), `VERSION_MISMATCH` (report schema or tool version),
+`DIRTY_UNTRACKED_INPUT`, or an unstable source snapshot.
+
+For local admission, run `pnpm run ci:prepush` as required by the constrained-hardware policy. It
+performs the change-aware lightweight checks and fails closed when evidence is ambiguous; full
+repository lint, complete typecheck, i18n, coverage, E2E, and other heavyweight checks remain
+cloud-CI gates rather than a second full local suite.
 
 ## Daily Workflow
 

@@ -20,6 +20,7 @@ import {
 export const REPORT_PATH = join(ROOT, '.codegraph', 'CODEGRAPH_REPORT.md');
 export const DB_PATH = join(ROOT, '.codegraph', 'codegraph.db');
 
+// QNBS-v3: resolve the same global executable and Windows shim for every CodeGraph operation.
 export function resolveCodegraphCommand() {
   const fallback = process.platform === 'win32' ? 'codegraph.cmd' : 'codegraph';
   const prefix = spawnSync('npm', ['prefix', '-g'], {

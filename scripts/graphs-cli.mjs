@@ -102,6 +102,7 @@ function readReportMetadata(path) {
   return { exists: true, schema, fingerprint, toolVersion };
 }
 
+// QNBS-v3: classify reports from schema, exact tool version, and current source fingerprint.
 export function reportFreshness(meta, { reportSchemaVersion, expectedVersion }, fingerprint) {
   if (!meta.exists) return 'MISSING';
   if (meta.schema !== String(reportSchemaVersion) || meta.toolVersion !== expectedVersion) {

@@ -10,7 +10,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { lstatSync, readFileSync } from 'node:fs';
+import { lstatSync, readFileSync, readlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -35,7 +35,7 @@ function parseNulRecords(output) {
 /** @param {string} output @param {string} expectedVersion */
 export function matchesExactVersion(output, expectedVersion) {
   const escaped = expectedVersion.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`(?:^|\\D)${escaped}(?:$|\\D)`).test(output);
+  return new RegExp(`(?:^|[^0-9])${escaped}(?![0-9A-Za-z.-])`).test(output);
 }
 
 /** @param {string} cwd @returns {string[]} sorted, deduplicated repo-relative paths: tracked ∪ untracked-not-ignored. */
@@ -80,7 +80,7 @@ function listTrackedEntries(cwd) {
 function enumerateSourcePaths(cwd) {
   const trackedEntries = listTrackedEntries(cwd);
   return {
-    paths: listSourcePaths(cwd),
+    paths: listSourcePaths(cwd).filter((relPath) => trackedEntries.get(relPath) !== '160000'),
     tracked: new Set(trackedEntries.keys()),
     modes: trackedEntries,
   };
@@ -110,6 +110,10 @@ function hashDeletion(relPath) {
   return createHash('sha256').update(`deleted:${relPath}`).digest('hex');
 }
 
+function hashSymlink(target) {
+  return createHash('sha256').update(`symlink:${target}`).digest('hex');
+}
+
 function fileSignature(stat) {
   return `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}`;
 }
@@ -128,6 +132,20 @@ function readSnapshot(cwd, enumeration) {
         continue;
       }
       throw new Error(`source path disappeared during fingerprinting: ${relPath}`);
+    }
+    if (before.isSymbolicLink()) {
+      const target = readlinkSync(absolutePath, 'utf8');
+      let after;
+      try {
+        after = lstatSync(absolutePath);
+      } catch {
+        throw new Error(`source path disappeared after reading symlink: ${relPath}`);
+      }
+      if (fileSignature(before) !== fileSignature(after)) {
+        throw new Error(`source symlink changed while being fingerprinted: ${relPath}`);
+      }
+      lines.push(`${mode}:${hashSymlink(target)}:${relPath}`);
+      continue;
     }
     if (!before.isFile()) throw new Error(`source path is not a regular file: ${relPath}`);
     let bytes;
