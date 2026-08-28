@@ -11,12 +11,20 @@
 ## Why this was retired (read if you arrived here from an old link)
 
 This file contained the line **"Each push triggers a new review wave"**, which is **misleading** and
-once led an external analysis astray. The reality, documented correctly in the canonical runbook:
+once led an external analysis astray. The two claims below are this file's **original, now-obsolete**
+content — kept only so a reader arriving from an old link can see exactly what was superseded. **Do
+not act on either claim.** Current guidance lives entirely in the canonical runbook:
 
-- CodeAnt's GitHub App **auto-reviews on PR open**, but **re-reviews after a push are NOT reliably
-  automatic** — you **manually re-trigger** with a PR comment: `@codeant-ai review`.
-- A PR is review-quiescent only when a fresh review yields **0 new comments** AND **0 unresolved
-  threads**, with green CI.
+- ~~CodeAnt's GitHub App auto-reviews on PR open, but re-reviews after a push are NOT reliably
+  automatic — you manually re-trigger with a PR comment: `@codeant-ai review`.~~ **Non-actionable,
+  historical only.** The `@codeant-ai review` retrigger command is obsolete terminology regardless.
+  Do **not** replace it with a fixed "CodeAnt never posts inline comments" assumption either — that
+  has since been directly disproven (CodeAnt posted a genuine inline thread on PR #538, 2026-08-28).
+  Current reviewer channel usage must be observed live, per PR (see `PR-CI-MERGE-WORKFLOW.md`'s
+  roster and three-channel check), never assumed from any static rule written here or anywhere else.
+- ~~A PR is review-quiescent only when a fresh review yields 0 new comments AND 0 unresolved
+  threads.~~ **Non-actionable, historical only.** See `PR-CI-MERGE-WORKFLOW.md`'s merge-readiness
+  classification for the current evidence-based termination rule.
 
 ## Current operational context (2026-06-24)
 
