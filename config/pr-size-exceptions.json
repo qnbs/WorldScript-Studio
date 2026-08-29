@@ -27,6 +27,7 @@
         ".vscode/tasks.json",
         "AUDIT.md",
         "CLAUDE.md",
+        "CONTRIBUTING.md",
         "README.md",
         "config/graph-tools-versions.json",
         "docs/codegraph.md",
