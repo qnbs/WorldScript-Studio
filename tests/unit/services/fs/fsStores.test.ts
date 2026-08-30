@@ -731,12 +731,14 @@ describe('FsProjectStore — projects', () => {
     await expect(store.deleteProject('item')).rejects.toMatchObject({
       name: 'ProjectDeleteError',
     });
-    expect(fake.text.has('/app/projects/item/project.json')).toBe(false);
+    expect(fake.text.has('/app/projects/item/project.json')).toBe(true);
     expect(fake.text.has('/app/projects/project/codex/codex.snap')).toBe(true);
     await expect(store.getStoryCodex('item')).resolves.toEqual(legacyCodex);
 
     fake.apis.remove = originalRemove;
-    await expect(store.deleteProject('item')).resolves.toBeUndefined();
+    const restarted = new FsProjectStore();
+    await expect(restarted.deleteProject('item')).resolves.toBeUndefined();
+    expect(fake.text.has('/app/projects/item/project.json')).toBe(false);
     expect(fake.text.has('/app/projects/project/codex/codex.snap')).toBe(false);
   });
 
@@ -802,10 +804,50 @@ describe('FsProjectStore — projects', () => {
 
     const loaded = await store.loadProject('Legacy-Novel');
 
-    expect((loaded as unknown as Record<string, unknown>)['id']).toBe('Legacy-Novel');
+    expect((loaded as unknown as Record<string, unknown>)['id']).toBeUndefined();
     await store.saveProject({ ...loaded, title: 'Renamed Novel' } as never);
     expect(fake.text.has('/app/projects/Legacy-Novel/project.json')).toBe(true);
     expect(fake.text.has('/app/projects/Renamed-Novel/project.json')).toBe(false);
+  });
+
+  // QNBS-v3: legacy missing-ID saves preserve historical Binder/Codex fallbacks without inventing cross-project ownership.
+  it('keeps missing-ID legacy auxiliary data on its historical fallback paths', async () => {
+    const legacyProject = { ...project, id: undefined, title: 'Legacy Novel' };
+    const legacyCodex = { projectId: 'default', entries: [{ name: 'legacy' }] };
+    await fake.apis.mkdir('/app/projects/Legacy-Novel', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/Legacy-Novel/project.json',
+      compressData(legacyProject),
+    );
+    await fake.apis.mkdir('/app/projects/browser-project/binder', { recursive: true });
+    await fake.apis.writeFile(
+      '/app/projects/browser-project/binder/legacy-asset.bin',
+      new Uint8Array([1]),
+    );
+    await fake.apis.writeTextFile(
+      '/app/projects/browser-project/binder/legacy-asset.meta.json',
+      JSON.stringify({
+        mimeType: 'application/octet-stream',
+        originalFileName: 'legacy.bin',
+        byteSize: 1,
+      }),
+    );
+    await fake.apis.mkdir('/app/projects/default/codex', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/default/codex/codex.snap',
+      compressData(legacyCodex),
+    );
+
+    const loaded = await store.loadProject('Legacy-Novel');
+
+    expect((loaded as unknown as Record<string, unknown>)['id']).toBeUndefined();
+    await expect(store.getBinderAsset('browser-project', 'legacy-asset')).resolves.not.toBeNull();
+    await expect(store.getStoryCodex('default')).resolves.toEqual(legacyCodex);
+    await store.saveProject({ ...loaded, title: 'Renamed Novel' } as never);
+    expect(fake.text.has('/app/projects/Legacy-Novel/project.json')).toBe(true);
+    expect(fake.text.has('/app/projects/Renamed-Novel/project.json')).toBe(false);
+    expect(fake.bin.has('/app/projects/browser-project/binder/legacy-asset.bin')).toBe(true);
+    expect(fake.text.has('/app/projects/default/codex/codex.snap')).toBe(true);
   });
 
   it('does not redirect a legacy project to a legitimate project-identity directory', async () => {

@@ -47,7 +47,7 @@ export class ProjectDeleteError extends Error {
     super(
       reason === 'identity-inspection-failed'
         ? 'Project deletion was not completed because its stored identity could not be safely verified.'
-        : 'Project deletion completed for the main project, but legacy auxiliary cleanup is incomplete.',
+        : 'Project deletion was not completed because legacy auxiliary cleanup is incomplete; project data remains available for retry.',
     );
     this.name = 'ProjectDeleteError';
   }
@@ -105,9 +105,13 @@ function persistedProjectId(project: StoryProject): unknown {
   return (project as unknown as Record<string, unknown>)['id'];
 }
 
-function hasUnusablePersistedProjectId(project: StoryProject): boolean {
-  const rawProjectId = persistedProjectId(project);
-  return typeof rawProjectId !== 'string' || !projectPathSegment(rawProjectId);
+const LEGACY_PROJECT_DIRECTORY_METADATA_KEY = '__worldscriptLegacyProjectDirectory';
+
+function legacyProjectDirectory(project: StoryProject): string | null {
+  const value = (project as unknown as Record<string, unknown>)[
+    LEGACY_PROJECT_DIRECTORY_METADATA_KEY
+  ];
+  return typeof value === 'string' && projectPathSegment(value) === value ? value : null;
 }
 
 function hasLegacyMissingProjectId(project: StoryProject, safeProjectId: string): boolean {
@@ -229,7 +233,18 @@ function migratedProjectIdentity(
   } as StoryProject;
 }
 
+// QNBS-v3: missing-ID legacy projects retain their loaded directory while callers keep historical auxiliary fallbacks.
+function legacyProjectWithDirectory(project: StoryProject, safeProjectId: string): StoryProject {
+  if (legacyProjectDirectory(project) === safeProjectId) return project;
+  return {
+    ...project,
+    [LEGACY_PROJECT_DIRECTORY_METADATA_KEY]: safeProjectId,
+  } as StoryProject;
+}
+
 export class FsProjectStore extends FsAssetStore {
+  private readonly verifiedLegacyProjectDirectories = new Set<string>();
+
   private async inspectLegacyAuxiliaryEvidence(
     project: StoryProject,
     safeProjectId: string,
@@ -353,17 +368,20 @@ export class FsProjectStore extends FsAssetStore {
     } else if (!hasLegacyInvalidId) {
       this.clearLegacyAuxiliaryPolicy(safeProjectId);
     }
-    if (!hasUnusablePersistedProjectId(project)) {
+    const rawProjectId = persistedProjectId(project);
+    if (typeof rawProjectId === 'string' && projectPathSegment(rawProjectId)) {
       if (!persistedMetadata) this.clearLegacyPoliciesTargetingProject(safeProjectId);
       return project;
     }
 
-    const rawProjectId = persistedProjectId(project);
-    if (typeof rawProjectId !== 'string' && !hasLegacyMissingProjectId(project, safeProjectId)) {
+    if (typeof rawProjectId !== 'string') {
       this.clearLegacyAuxiliaryPolicy(safeProjectId);
-      return project;
+      if (!hasLegacyMissingProjectId(project, safeProjectId)) return project;
+      this.verifiedLegacyProjectDirectories.add(safeProjectId);
+      return legacyProjectWithDirectory(project, safeProjectId);
     }
-    if (typeof rawProjectId === 'string' && !projectPathSegment(rawProjectId)) {
+
+    if (!projectPathSegment(rawProjectId)) {
       const evidence = await this.inspectLegacyAuxiliaryEvidence(
         project,
         safeProjectId,
@@ -474,9 +492,14 @@ export class FsProjectStore extends FsAssetStore {
         } as StoryProject;
       } else {
         projectId = safeProjectId;
+        this.verifiedLegacyProjectDirectories.delete(projectId);
       }
     } else {
-      projectId = projectPathSegment(flat.title || '') ?? 'project';
+      const legacyDirectory = legacyProjectDirectory(flat);
+      projectId =
+        legacyDirectory && this.verifiedLegacyProjectDirectories.has(legacyDirectory)
+          ? legacyDirectory
+          : (projectPathSegment(flat.title || '') ?? 'project');
     }
 
     // Auto-snapshot: fire-and-forget, mirrors dbService behaviour
@@ -760,7 +783,6 @@ export class FsProjectStore extends FsAssetStore {
     const projectExists = await apis.exists(projectPath);
     if (projectExists) {
       await this.hydrateLegacyPolicyForDeletion(safeProjectId, projectPath, apis, appDataPath);
-      await retryFs(() => apis.remove(projectPath, { recursive: true }));
     }
 
     try {
@@ -773,6 +795,7 @@ export class FsProjectStore extends FsAssetStore {
       if (this.legacyCodexProjectId(safeProjectId)) {
         await this.deleteStoryCodexStrict(safeProjectId);
       }
+      if (projectExists) await retryFs(() => apis.remove(projectPath, { recursive: true }));
     } catch (error) {
       logger.error('Failed to clean up legacy project data during deletion', {
         projectId: safeProjectId,
@@ -780,6 +803,7 @@ export class FsProjectStore extends FsAssetStore {
       });
       throw new ProjectDeleteError();
     }
+    this.verifiedLegacyProjectDirectories.delete(safeProjectId);
     this.clearLegacyAuxiliaryPolicy(safeProjectId);
   }
 
