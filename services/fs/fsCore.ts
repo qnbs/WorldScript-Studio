@@ -350,12 +350,18 @@ export class FsCore {
     this.legacyAuxiliaryPolicies.delete(projectId);
   }
 
+  private policyFor(projectId: string): LegacyAuxiliaryPolicy | undefined {
+    const safeProjectId = sanitizePathSegment(projectId, '');
+    if (!safeProjectId || safeProjectId === '.' || safeProjectId === '..') return undefined;
+    return this.legacyAuxiliaryPolicies.get(safeProjectId);
+  }
+
   protected resolveAuxiliaryProjectId(
     projectId: string,
     kind: 'binder' | 'codex',
     assetId?: string,
   ): string {
-    const policy = this.legacyAuxiliaryPolicies.get(projectId);
+    const policy = this.policyFor(projectId);
     if (!policy) return projectId;
     if (kind === 'codex' && policy.codex) return policy.legacyProjectId;
     if (kind === 'binder' && assetId && policy.binderAssetIds.has(assetId)) {
@@ -365,16 +371,16 @@ export class FsCore {
   }
 
   protected legacyBinderProjectId(projectId: string): string | null {
-    const policy = this.legacyAuxiliaryPolicies.get(projectId);
+    const policy = this.policyFor(projectId);
     return policy && policy.binderAssetIds.size > 0 ? policy.legacyProjectId : null;
   }
 
   protected legacyCodexProjectId(projectId: string): string | null {
-    const policy = this.legacyAuxiliaryPolicies.get(projectId);
+    const policy = this.policyFor(projectId);
     return policy?.codex ? policy.legacyProjectId : null;
   }
 
   protected legacyBinderAssetIdsForProject(projectId: string): readonly string[] {
-    return [...(this.legacyAuxiliaryPolicies.get(projectId)?.binderAssetIds ?? [])];
+    return [...(this.policyFor(projectId)?.binderAssetIds ?? [])];
   }
 }

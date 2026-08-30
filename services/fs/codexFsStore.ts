@@ -69,10 +69,8 @@ export class FsCodexStore extends FsSettingsStore {
   async saveRagVectors(projectId: string, vectors: unknown[]): Promise<void> {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
-    const safeId = sanitizePathSegment(
-      this.resolveAuxiliaryProjectId(projectId, 'codex'),
-      'project',
-    );
+    // QNBS-v3: vectors.snap has no embedded project provenance, so Codex ownership cannot grant it a legacy fallback route.
+    const safeId = sanitizePathSegment(projectId, 'project');
     const codexDir = await apis.join(appDataPath, 'projects', safeId, 'codex');
     if (!(await apis.exists(codexDir))) await apis.mkdir(codexDir, { recursive: true });
     const vectorsFile = await apis.join(codexDir, 'vectors.snap');
@@ -83,10 +81,7 @@ export class FsCodexStore extends FsSettingsStore {
     try {
       const apis = await this.getApis();
       const appDataPath = await this.ensureAppDataPath();
-      const safeId = sanitizePathSegment(
-        this.resolveAuxiliaryProjectId(projectId, 'codex'),
-        'project',
-      );
+      const safeId = sanitizePathSegment(projectId, 'project');
       const vectorsFile = await apis.join(appDataPath, 'projects', safeId, 'codex', 'vectors.snap');
       if (!(await apis.exists(vectorsFile))) return [];
       const content = await retryFs(() => apis.readTextFile(vectorsFile));
@@ -101,10 +96,7 @@ export class FsCodexStore extends FsSettingsStore {
     try {
       const apis = await this.getApis();
       const appDataPath = await this.ensureAppDataPath();
-      const safeId = sanitizePathSegment(
-        this.resolveAuxiliaryProjectId(projectId, 'codex'),
-        'project',
-      );
+      const safeId = sanitizePathSegment(projectId, 'project');
       const vectorsFile = await apis.join(appDataPath, 'projects', safeId, 'codex', 'vectors.snap');
       if (await apis.exists(vectorsFile)) await retryFs(() => apis.remove(vectorsFile));
     } catch (error) {
