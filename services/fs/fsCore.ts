@@ -350,6 +350,21 @@ export class FsCore {
     this.legacyAuxiliaryPolicies.delete(projectId);
   }
 
+  // QNBS-v3: quarantine can persist only the verified route, never ambiguous fallback contents, for later recovery.
+  protected legacyAuxiliaryPolicyForProject(projectId: string): {
+    legacyProjectId: string;
+    codex: boolean;
+    binderAssetIds: readonly string[];
+  } | null {
+    const policy = this.policyFor(projectId);
+    if (!policy) return null;
+    return {
+      legacyProjectId: policy.legacyProjectId,
+      codex: policy.codex,
+      binderAssetIds: [...policy.binderAssetIds],
+    };
+  }
+
   // QNBS-v3: claiming a real project directory invalidates legacy routes targeting that directory before they can redirect another project into it.
   protected clearLegacyPoliciesTargetingProject(projectId: string): void {
     const safeProjectId = sanitizePathSegment(projectId, '');

@@ -266,6 +266,35 @@ describe('FsProjectStore — projects', () => {
     });
   });
 
+  // QNBS-v3: quarantine retains verified legacy routing without moving ambiguous fallback data into the recovery copy.
+  it('persists verified legacy routing beside a quarantined project', async () => {
+    const legacyProject = { ...project, id: '***' };
+    const legacyCodex = { projectId: '***', entries: [{ name: 'legacy' }] };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+    await fake.apis.mkdir('/app/projects/project/codex', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/project/codex/codex.snap',
+      compressData(legacyCodex),
+    );
+
+    await store.loadProject('item');
+    const result = await store.quarantineProject('item');
+    const quarantineContainer = result.path.slice(0, result.path.lastIndexOf('/'));
+
+    expect(fake.text.get(`${quarantineContainer}/legacy-auxiliary.json`)).toBe(
+      JSON.stringify({
+        projectId: 'item',
+        legacyProjectId: 'project',
+        codex: true,
+        binderAssetIds: [],
+      }),
+    );
+    expect(fake.text.has('/app/projects/project/codex/codex.snap')).toBe(true);
+    expect(fake.text.has(`${result.path}/project.json`)).toBe(true);
+    expect(await store.getStoryCodex('item')).toBeNull();
+  });
+
   it('does not map an unusable project ID to an arbitrary quarantine directory', async () => {
     await expect(store.saveProject({ ...project, id: '***' } as never)).rejects.toThrow(
       'Cannot save a project with an unusable project ID.',
@@ -350,6 +379,61 @@ describe('FsProjectStore — projects', () => {
     expect(fake.text.has('/app/projects/project/codex/codex.snap')).toBe(false);
     expect(fake.text.has('/app/projects/project/codex/vectors.snap')).toBe(true);
     expect(fake.bin.has('/app/projects/project/binder/legacy-asset.bin')).toBe(false);
+  });
+
+  // QNBS-v3: a normalized directory identity remains valid evidence while a legacy main file still carries the raw ID.
+  it('accepts the normalized project identity in a legacy Codex snapshot', async () => {
+    const legacyProject = { ...project, id: '***' };
+    const migratedCodex = { projectId: 'item', entries: [{ name: 'legacy' }] };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+    await fake.apis.mkdir('/app/projects/project/codex', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/project/codex/codex.snap',
+      compressData(migratedCodex),
+    );
+
+    await expect(store.loadProject('item')).resolves.toEqual(
+      expect.objectContaining({ id: 'item' }),
+    );
+    await expect(store.getStoryCodex('item')).resolves.toEqual(migratedCodex);
+  });
+
+  // QNBS-v3: partial Binder enumeration keeps healthy current assets visible when legacy inspection is temporarily unavailable.
+  it('retains current Binder IDs when the legacy directory cannot be listed', async () => {
+    const legacyProject = {
+      ...project,
+      id: '***',
+      binderNodes: [{ binderAssetId: 'legacy-asset' }],
+    };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+    await fake.apis.mkdir('/app/projects/project/binder', { recursive: true });
+    await fake.apis.writeFile('/app/projects/project/binder/legacy-asset.bin', new Uint8Array([1]));
+    await fake.apis.writeTextFile(
+      '/app/projects/project/binder/legacy-asset.meta.json',
+      JSON.stringify({
+        mimeType: 'application/octet-stream',
+        originalFileName: 'legacy.bin',
+        byteSize: 1,
+      }),
+    );
+    await store.loadProject('item');
+    await store.saveBinderAsset('item', 'current-asset', new Uint8Array([2]).buffer, {
+      mimeType: 'application/octet-stream',
+      originalFileName: 'current.bin',
+      byteSize: 1,
+    });
+
+    const originalReadDir = fake.apis.readDir;
+    fake.apis.readDir = async (path: string) => {
+      if (path === '/app/projects/project/binder') {
+        throw new Error('EAGAIN: legacy Binder directory temporarily unavailable');
+      }
+      return originalReadDir(path);
+    };
+
+    await expect(store.listBinderAssetIds('item')).resolves.toEqual(['current-asset']);
   });
 
   // QNBS-v3: persisted legacy provenance keeps coupled filesystem data visible after a desktop restart.

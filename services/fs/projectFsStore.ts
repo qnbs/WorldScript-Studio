@@ -153,6 +153,13 @@ type PersistedLegacyAuxiliaryMetadata = {
   binderAssetIds: string[];
 };
 
+type QuarantineLegacyAuxiliaryManifest = {
+  projectId: string;
+  legacyProjectId: string;
+  codex: boolean;
+  binderAssetIds: string[];
+};
+
 function persistedLegacyAuxiliaryMetadata(
   project: StoryProject,
 ): PersistedLegacyAuxiliaryMetadata | null {
@@ -255,7 +262,8 @@ export class FsProjectStore extends FsAssetStore {
           if (
             typeof legacyCodex === 'object' &&
             legacyCodex !== null &&
-            (legacyCodex as Record<string, unknown>)['projectId'] === rawProjectId
+            ((legacyCodex as Record<string, unknown>)['projectId'] === rawProjectId ||
+              (legacyCodex as Record<string, unknown>)['projectId'] === safeProjectId)
           ) {
             evidence.codex = true;
           }
@@ -603,6 +611,30 @@ export class FsProjectStore extends FsAssetStore {
 
   // QNBS-v3: move the whole folder before reload so corrupt project artifacts remain recoverable.
   /** Move the whole corrupt project directory aside so its manuscript and assets remain recoverable. */
+  private async prepareLegacyQuarantinePolicy(
+    safeProjectId: string,
+    apis: TauriApis,
+    appDataPath: string,
+  ): Promise<{
+    legacyProjectId: string;
+    codex: boolean;
+    binderAssetIds: readonly string[];
+  } | null> {
+    const policy = this.legacyAuxiliaryPolicyForProject(safeProjectId);
+    if (policy?.legacyProjectId !== 'project') return policy;
+    const legacyProjectState = await this.legacyFallbackProjectState(
+      safeProjectId,
+      apis,
+      appDataPath,
+    );
+    if (legacyProjectState === 'confirmed') {
+      this.clearLegacyAuxiliaryPolicy(safeProjectId);
+      return null;
+    }
+    if (legacyProjectState === 'indeterminate') throw new ProjectQuarantineError('io-error');
+    return policy;
+  }
+
   async quarantineProject(projectId: string): Promise<ProjectQuarantineResult> {
     try {
       const apis = await this.getApis();
@@ -617,6 +649,11 @@ export class FsProjectStore extends FsAssetStore {
       const quarantineRoot = await apis.join(appDataPath, 'quarantined-projects');
       await apis.mkdir(quarantineRoot, { recursive: true });
       const timestamp = Date.now();
+      const legacyPolicy = await this.prepareLegacyQuarantinePolicy(
+        safeProjectId,
+        apis,
+        appDataPath,
+      );
       for (let attempt = 0; attempt < 100; attempt++) {
         const suffix = attempt === 0 ? String(timestamp) : `${timestamp}-${attempt}`;
         const quarantinePath = await apis.join(
@@ -657,7 +694,19 @@ export class FsProjectStore extends FsAssetStore {
           }
         };
         try {
+          if (legacyPolicy?.legacyProjectId === 'project') {
+            const manifestPath = await apis.join(quarantinePath, 'legacy-auxiliary.json');
+            const manifest: QuarantineLegacyAuxiliaryManifest = {
+              projectId: safeProjectId,
+              legacyProjectId: legacyPolicy.legacyProjectId,
+              codex: legacyPolicy.codex,
+              binderAssetIds: [...legacyPolicy.binderAssetIds],
+            };
+            // QNBS-v3: durable quarantine metadata preserves verified auxiliary provenance without claiming ownership of ambiguous fallback files.
+            await writeTextFileAtomic(apis, manifestPath, JSON.stringify(manifest));
+          }
           await retryFs(() => apis.rename(projectPath, preservedPath));
+          this.clearLegacyAuxiliaryPolicy(safeProjectId);
           return { projectId, path: preservedPath };
         } catch (error) {
           let sourceExists: boolean;
@@ -672,9 +721,13 @@ export class FsProjectStore extends FsAssetStore {
             });
             throw new ProjectQuarantineError('io-error');
           }
-          if (!sourceExists && preservedExists) return { projectId, path: preservedPath };
+          if (!sourceExists && preservedExists) {
+            this.clearLegacyAuxiliaryPolicy(safeProjectId);
+            return { projectId, path: preservedPath };
+          }
           if (!sourceExists) {
             await releaseReservation();
+            this.clearLegacyAuxiliaryPolicy(safeProjectId);
             throw new ProjectQuarantineError('source-missing');
           }
           await releaseReservation();
