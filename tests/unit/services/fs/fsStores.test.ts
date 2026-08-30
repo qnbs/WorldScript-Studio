@@ -115,6 +115,7 @@ function makeFakeFs(): FakeFs {
       for (const k of [...bin.keys()]) if (k.startsWith(`${p}/`)) bin.delete(k);
       return Promise.resolve();
     },
+    // QNBS-v3: recursive fake moves preserve every project asset so quarantine tests prove full-directory recovery.
     rename: (from: string, to: string) => {
       const fromEntries = [...text.keys(), ...bin.keys(), ...dirs].filter(
         (path, index, paths) =>
@@ -190,6 +191,7 @@ describe('FsProjectStore — projects', () => {
     expect(await store.listProjects()).toEqual([]);
   });
 
+  // QNBS-v3: the regression protects manuscripts and assets from partial or destructive quarantine.
   it('quarantines a complete project directory without deleting or relisting it', async () => {
     await store.saveProject(project as never);
     const original = fake.text.get('/app/projects/p1/project.json');
@@ -312,6 +314,7 @@ describe('FsProjectStore — projects', () => {
     expect(fake.text.has('/app/projects/p2/project.json')).toBe(true);
   });
 
+  // QNBS-v3: failed preservation must leave the affected source available for safe recovery.
   it('leaves the original project intact when quarantine cannot rename it', async () => {
     await store.saveProject(project as never);
     const original = fake.text.get('/app/projects/p1/project.json');
