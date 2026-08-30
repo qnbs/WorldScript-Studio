@@ -9,8 +9,11 @@ import { I18nProvider } from './contexts/I18nContext';
 import { versionControlActions } from './features/versionControl/versionControlSlice';
 import { loadPersistedRootState } from './services/appBootstrap';
 import { initializeStorage, resetAllDatabases } from './services/dbInitialization';
+import { ProjectLoadError } from './services/fs/projectFsStore';
 import { logger } from './services/logger';
 import { IdbStorageLockedError } from './services/storage/storageEncryptionService';
+import { storageService } from './services/storageService';
+import { isTauriRuntime } from './services/tauriRuntime';
 /* ── Self-hosted fonts (@fontsource) ── */
 import '@fontsource/inter/300.css';
 import '@fontsource/inter/400.css';
@@ -103,8 +106,31 @@ window.addEventListener('unhandledrejection', (event) => {
   renderStartupError(message);
 });
 
-/** Recovery UI shown when IndexedDB initialisation fails. Intentionally no i18n dependency. */
-function StorageErrorScreen({ message, onReset }: { message: string; onReset: () => void }) {
+/** Recovery UI shown when storage or project initialisation fails. Intentionally no i18n dependency. */
+function StorageErrorScreen({
+  message,
+  onReset,
+  onRecover,
+}: {
+  message: string;
+  onReset?: () => void;
+  onRecover?: () => Promise<void>;
+}) {
+  const [recoveryError, setRecoveryError] = React.useState<string | null>(null);
+  const [isRecovering, setIsRecovering] = React.useState(false);
+
+  const handleRecover = async () => {
+    if (!onRecover) return;
+    setRecoveryError(null);
+    setIsRecovering(true);
+    try {
+      await onRecover();
+    } catch (error) {
+      setRecoveryError(error instanceof Error ? error.message : String(error));
+      setIsRecovering(false);
+    }
+  };
+
   return (
     <div
       style={{
@@ -123,8 +149,8 @@ function StorageErrorScreen({ message, onReset }: { message: string; onReset: ()
     >
       <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>WorldScript Studio</h1>
       <p style={{ color: '#94a3b8', maxWidth: '32rem' }}>
-        The local database could not be opened. This can happen after a browser update or when
-        storage is full.
+        The local project or database could not be opened. This can happen after a storage or
+        filesystem failure.
       </p>
       <p
         style={{
@@ -155,25 +181,58 @@ function StorageErrorScreen({ message, onReset }: { message: string; onReset: ()
         >
           Reload
         </button>
-        <button
-          type="button"
-          onClick={onReset}
-          style={{
-            padding: '0.5rem 1.25rem',
-            borderRadius: '0.5rem',
-            border: 'none',
-            background: '#dc2626',
-            color: '#fff',
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-          }}
-        >
-          Reset Database &amp; Reload
-        </button>
+        {onRecover && (
+          <button
+            type="button"
+            onClick={() => void handleRecover()}
+            disabled={isRecovering}
+            style={{
+              padding: '0.5rem 1.25rem',
+              borderRadius: '0.5rem',
+              border: 'none',
+              background: '#2563eb',
+              color: '#fff',
+              cursor: isRecovering ? 'wait' : 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            {isRecovering ? 'Preserving Project…' : 'Quarantine Corrupt Project & Reload'}
+          </button>
+        )}
+        {onReset && (
+          <button
+            type="button"
+            onClick={onReset}
+            style={{
+              padding: '0.5rem 1.25rem',
+              borderRadius: '0.5rem',
+              border: 'none',
+              background: '#dc2626',
+              color: '#fff',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            Reset Database &amp; Reload
+          </button>
+        )}
       </div>
-      <p style={{ fontSize: '0.75rem', color: '#475569' }}>
-        Warning: resetting the database will delete all local projects and settings.
-      </p>
+      {onRecover && (
+        <p style={{ fontSize: '0.75rem', color: '#94a3b8', maxWidth: '32rem' }}>
+          The complete project folder will be moved to the app&apos;s quarantined-projects folder;
+          no project data will be deleted.
+        </p>
+      )}
+      {recoveryError && (
+        <p style={{ fontSize: '0.875rem', color: '#fca5a5', maxWidth: '32rem' }}>
+          Project preservation failed. The original project was not deleted. {recoveryError}
+        </p>
+      )}
+      {onReset && (
+        <p style={{ fontSize: '0.75rem', color: '#475569' }}>
+          Warning: resetting the database will delete all local projects and settings.
+        </p>
+      )}
     </div>
   );
 }
@@ -287,14 +346,30 @@ async function bootApp(): Promise<void> {
     }
     logger.error('Failed to initialize the application:', error);
     const msg = error instanceof Error ? error.message : 'Could not load project data.';
+    // QNBS-v3: filesystem corruption gets preserve-first recovery; project I/O failures never expose a destructive IDB reset.
+    const projectLoadError = error instanceof ProjectLoadError ? error : null;
+    const canQuarantine = projectLoadError?.reason === 'corrupt' && isTauriRuntime();
     root.render(
       <React.StrictMode>
         <StorageErrorScreen
           message={msg}
-          onReset={async () => {
-            await resetAllDatabases();
-            window.location.reload();
-          }}
+          onRecover={
+            canQuarantine
+              ? async () => {
+                  const result = await storageService.quarantineProject(projectLoadError.projectId);
+                  if (!result) throw new Error('Desktop filesystem recovery is unavailable.');
+                  window.location.reload();
+                }
+              : undefined
+          }
+          onReset={
+            projectLoadError
+              ? undefined
+              : async () => {
+                  await resetAllDatabases();
+                  window.location.reload();
+                }
+          }
         />
       </React.StrictMode>,
     );
