@@ -10,7 +10,11 @@ import type { Character, StoryProject, World } from '../../types';
 import { getStaticTranslation } from '../i18n/staticTranslate';
 import { logger } from '../logger';
 import { parseImportedProjectJson } from '../projectImportSchema';
-import { normalizeSaveProjectInputToStoryProject, type SaveProjectInput } from '../storageBackend';
+import {
+  normalizeSaveProjectInputToStoryProject,
+  type ProjectQuarantineResult,
+  type SaveProjectInput,
+} from '../storageBackend';
 import { FsAssetStore } from './assetFsStore';
 import {
   compressData,
@@ -25,9 +29,19 @@ export class ProjectLoadError extends Error {
   constructor(
     public readonly reason: 'corrupt' | 'io-error',
     message: string,
+    public readonly projectId: string,
   ) {
     super(message);
     this.name = 'ProjectLoadError';
+  }
+}
+
+export class ProjectQuarantineError extends Error {
+  constructor(
+    public readonly reason: 'not-found' | 'io-error' | 'name-exhausted' | 'already-preserved',
+  ) {
+    super('Project preservation failed. The original project was not deleted.');
+    this.name = 'ProjectQuarantineError';
   }
 }
 
@@ -142,6 +156,7 @@ export class FsProjectStore extends FsAssetStore {
       throw new ProjectLoadError(
         'io-error',
         `Could not read the project file for "${projectId}" — it may be locked, permission-denied, or otherwise inaccessible.`,
+        projectId,
       );
     }
 
@@ -157,6 +172,7 @@ export class FsProjectStore extends FsAssetStore {
       throw new ProjectLoadError(
         'corrupt',
         `The saved project file for "${projectId}" appears to be corrupted and could not be read. The file has not been deleted.`,
+        projectId,
       );
     }
 
@@ -180,6 +196,66 @@ export class FsProjectStore extends FsAssetStore {
     } catch (error) {
       logger.error('Failed to list projects:', error);
       return [];
+    }
+  }
+
+  // QNBS-v3: move the whole folder before reload so corrupt project artifacts remain recoverable.
+  /** Move the whole corrupt project directory aside so its manuscript and assets remain recoverable. */
+  async quarantineProject(projectId: string): Promise<ProjectQuarantineResult> {
+    try {
+      const apis = await this.getApis();
+      const appDataPath = await this.ensureAppDataPath();
+      const safeProjectId = sanitizePathSegment(projectId, 'project');
+      const projectPath = await apis.join(appDataPath, 'projects', safeProjectId);
+      if (!(await apis.exists(projectPath))) {
+        throw new ProjectQuarantineError('not-found');
+      }
+
+      const quarantineRoot = await apis.join(appDataPath, 'quarantined-projects');
+      await apis.mkdir(quarantineRoot, { recursive: true });
+      const timestamp = Date.now();
+      for (let attempt = 0; attempt < 100; attempt++) {
+        const suffix = attempt === 0 ? String(timestamp) : `${timestamp}-${attempt}`;
+        const quarantinePath = await apis.join(
+          quarantineRoot,
+          `${safeProjectId}-corrupt-${suffix}`,
+        );
+        if (await apis.exists(quarantinePath)) continue;
+        try {
+          await retryFs(() => apis.rename(projectPath, quarantinePath));
+          return { projectId, path: quarantinePath };
+        } catch (error) {
+          // QNBS-v3: a concurrent quarantine may claim the checked target between exists and rename.
+          let targetExists: boolean;
+          let sourceExists: boolean;
+          try {
+            targetExists = await apis.exists(quarantinePath);
+            sourceExists = await apis.exists(projectPath);
+          } catch (probeError) {
+            logger.error('Failed to inspect a concurrent quarantine result', {
+              projectId,
+              error: probeError instanceof Error ? probeError.message : String(probeError),
+            });
+            throw new ProjectQuarantineError('io-error');
+          }
+          if (targetExists) continue;
+          if (!sourceExists) throw new ProjectQuarantineError('already-preserved');
+          logger.error('Failed to quarantine project directory', {
+            projectId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          throw new ProjectQuarantineError('io-error');
+        }
+      }
+
+      throw new ProjectQuarantineError('name-exhausted');
+    } catch (error) {
+      if (error instanceof ProjectQuarantineError) throw error;
+      logger.error('Failed to prepare project quarantine', {
+        projectId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new ProjectQuarantineError('io-error');
     }
   }
 

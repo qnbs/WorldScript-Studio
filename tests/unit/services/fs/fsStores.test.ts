@@ -53,7 +53,8 @@ vi.mock('../../../../services/logger', async (importOriginal) => {
 });
 // QNBS-v3: getStaticTranslation hits the network (fetch) — never call real network in tests.
 vi.mock('../../../../services/i18n/staticTranslate', () => ({
-  getStaticTranslation: (key: string) => Promise.resolve(key === 'export.loglineLabel' ? 'Logline' : 'Manuscript'),
+  getStaticTranslation: (key: string) =>
+    Promise.resolve(key === 'export.loglineLabel' ? 'Logline' : 'Manuscript'),
 }));
 
 import { appStoreRef } from '../../../../app/storeRef';
@@ -111,15 +112,31 @@ function makeFakeFs(): FakeFs {
       return Promise.resolve();
     },
     rename: (from: string, to: string) => {
-      if (!text.has(from) && !bin.has(from)) return Promise.reject(new Error(`ENOENT ${from}`));
+      const fromEntries = [...text.keys(), ...bin.keys(), ...dirs].filter(
+        (path, index, paths) =>
+          paths.indexOf(path) === index && (path === from || path.startsWith(`${from}/`)),
+      );
+      if (fromEntries.length === 0) return Promise.reject(new Error(`ENOENT ${from}`));
+      const targetDirectoryExists =
+        dirs.has(to) ||
+        [...text.keys(), ...bin.keys(), ...dirs].some((path) => path.startsWith(`${to}/`));
+      if (targetDirectoryExists) return Promise.reject(new Error(`EEXIST ${to}`));
       text.delete(to);
       bin.delete(to);
-      const textValue = text.get(from);
-      const binaryValue = bin.get(from);
-      if (textValue !== undefined) text.set(to, textValue);
-      if (binaryValue !== undefined) bin.set(to, binaryValue);
-      text.delete(from);
-      bin.delete(from);
+      for (const path of fromEntries) {
+        const target = `${to}${path.slice(from.length)}`;
+        const textValue = text.get(path);
+        const binaryValue = bin.get(path);
+        if (textValue !== undefined) {
+          text.delete(path);
+          text.set(target, textValue);
+        }
+        if (binaryValue !== undefined) {
+          bin.delete(path);
+          bin.set(target, binaryValue);
+        }
+        if (dirs.delete(path)) dirs.add(target);
+      }
       return Promise.resolve();
     },
     readDir: (p: string) => Promise.resolve(under(p).map((name) => ({ name, isDirectory: false }))),
@@ -167,6 +184,73 @@ describe('FsProjectStore — projects', () => {
   it('returns null for a missing project and [] when no projects dir', async () => {
     expect(await store.loadProject('nope')).toBeNull();
     expect(await store.listProjects()).toEqual([]);
+  });
+
+  it('quarantines a complete project directory without deleting or relisting it', async () => {
+    await store.saveProject(project as never);
+    const original = fake.text.get('/app/projects/p1/project.json');
+
+    const result = await store.quarantineProject('p1');
+
+    expect(result.projectId).toBe('p1');
+    expect(result.path).toMatch(/^\/app\/quarantined-projects\/p1-corrupt-/);
+    expect(fake.text.get(`${result.path}/project.json`)).toBe(original);
+    expect(fake.text.has('/app/projects/p1/project.json')).toBe(false);
+    expect(await store.listProjects()).not.toContain('p1');
+    await expect(store.loadProject('p1')).resolves.toBeNull();
+  });
+
+  // QNBS-v3: prove a claimed quarantine target cannot turn preserve-first recovery into data loss.
+  it('tries the next quarantine name when a concurrent rename claims the checked target', async () => {
+    await store.saveProject(project as never);
+    const originalRename = fake.apis.rename;
+    let firstTarget: string | undefined;
+    let racePending = true;
+    fake.apis.rename = (from: string, to: string) => {
+      if (racePending) {
+        racePending = false;
+        firstTarget = to;
+        return fake.apis.mkdir(to).then(() => originalRename(from, to));
+      }
+      return originalRename(from, to);
+    };
+
+    const result = await store.quarantineProject('p1');
+
+    expect(firstTarget).toBeDefined();
+    expect(result.path).not.toBe(firstTarget);
+    expect(fake.text.get(`${result.path}/project.json`)).toBeDefined();
+    expect(fake.text.has('/app/projects/p1/project.json')).toBe(false);
+  });
+
+  // QNBS-v3: report source disappearance as concurrent preservation, without inventing a quarantine path.
+  it('reports when another recovery moved the source before this rename', async () => {
+    await store.saveProject(project as never);
+    fake.apis.rename = async (from: string) => {
+      await fake.apis.remove(from);
+      throw new Error(`ENOENT ${from}`);
+    };
+
+    await expect(store.quarantineProject('p1')).rejects.toMatchObject({
+      name: 'ProjectQuarantineError',
+      reason: 'already-preserved',
+    });
+    expect(await store.listProjects()).not.toContain('p1');
+  });
+
+  it('leaves the original project intact when quarantine cannot rename it', async () => {
+    await store.saveProject(project as never);
+    const original = fake.text.get('/app/projects/p1/project.json');
+    fake.apis.rename = () => Promise.reject(new Error('EACCES: permission denied'));
+
+    await expect(store.quarantineProject('p1')).rejects.toMatchObject({
+      name: 'ProjectQuarantineError',
+      reason: 'io-error',
+      message: 'Project preservation failed. The original project was not deleted.',
+    });
+
+    expect(fake.text.get('/app/projects/p1/project.json')).toBe(original);
+    expect(await store.listProjects()).toContain('p1');
   });
 
   // QNBS-v3: the store test protects the non-blocking scheduling seam without asserting a verdict authority.
