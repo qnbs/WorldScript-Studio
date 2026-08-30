@@ -13,6 +13,7 @@ export interface BinderAssetPayload {
   meta: BinderAssetMeta;
 }
 
+// QNBS-v3: shared result keeps the affected identity and verified quarantine path explicit across backends.
 /** Result of moving a corrupt desktop project out of the active project namespace. */
 export interface ProjectQuarantineResult {
   projectId: string;
@@ -72,7 +73,7 @@ export interface StorageBackend {
   deleteProject(projectId: string): Promise<void>;
   /** QNBS-v3 (#332): optional — only the multi-project Tauri filesystem backend implements this; IndexedDB's single-project contract has no "which one" ambiguity to resolve. */
   getActiveProjectId?(): Promise<string | null>;
-  /** Desktop-only preserve-first recovery; IndexedDB has no filesystem project to quarantine. */
+  // QNBS-v3: optional recovery keeps the filesystem-only quarantine contract out of IndexedDB.
   quarantineProject?(projectId: string): Promise<ProjectQuarantineResult>;
 
   saveImage(id: string, base64Data: string): Promise<void>;

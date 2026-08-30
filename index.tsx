@@ -8,12 +8,13 @@ import { IdbUnlockModal } from './components/settings/IdbUnlockModal';
 import { I18nProvider } from './contexts/I18nContext';
 import { versionControlActions } from './features/versionControl/versionControlSlice';
 import { loadPersistedRootState } from './services/appBootstrap';
-import { initializeStorage, resetAllDatabases } from './services/dbInitialization';
-import { ProjectLoadError } from './services/fs/projectFsStore';
+import { initializeStorage } from './services/dbInitialization';
 import { logger } from './services/logger';
+import {
+  renderProjectInitializationFailure,
+  renderStorageInitializationFailure,
+} from './services/startupRecovery';
 import { IdbStorageLockedError } from './services/storage/storageEncryptionService';
-import { storageService } from './services/storageService';
-import { isTauriRuntime } from './services/tauriRuntime';
 /* ── Self-hosted fonts (@fontsource) ── */
 import '@fontsource/inter/300.css';
 import '@fontsource/inter/400.css';
@@ -106,154 +107,13 @@ window.addEventListener('unhandledrejection', (event) => {
   renderStartupError(message);
 });
 
-/** Recovery UI shown when storage or project initialisation fails. Intentionally no i18n dependency. */
-function StorageErrorScreen({
-  message,
-  onReset,
-  onRecover,
-}: {
-  message: string;
-  onReset?: () => void;
-  onRecover?: () => Promise<void>;
-}) {
-  const [recoveryError, setRecoveryError] = React.useState<string | null>(null);
-  const [isRecovering, setIsRecovering] = React.useState(false);
-
-  const handleRecover = async () => {
-    if (!onRecover) return;
-    setRecoveryError(null);
-    setIsRecovering(true);
-    try {
-      await onRecover();
-    } catch (error) {
-      setRecoveryError(error instanceof Error ? error.message : String(error));
-      setIsRecovering(false);
-    }
-  };
-
-  return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '100vh',
-        padding: '2rem',
-        fontFamily: 'Inter, system-ui, sans-serif',
-        background: '#0f172a',
-        color: '#f1f5f9',
-        textAlign: 'center',
-        gap: '1rem',
-      }}
-    >
-      <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>WorldScript Studio</h1>
-      <p style={{ color: '#94a3b8', maxWidth: '32rem' }}>
-        The local project or database could not be opened. This can happen after a storage or
-        filesystem failure.
-      </p>
-      <p
-        style={{
-          background: '#1e293b',
-          borderRadius: '0.5rem',
-          padding: '0.75rem 1rem',
-          fontSize: '0.875rem',
-          color: '#fca5a5',
-          maxWidth: '32rem',
-          wordBreak: 'break-word',
-        }}
-      >
-        {message}
-      </p>
-      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-        <button
-          type="button"
-          onClick={() => window.location.reload()}
-          style={{
-            padding: '0.5rem 1.25rem',
-            borderRadius: '0.5rem',
-            border: '1px solid #334155',
-            background: '#1e293b',
-            color: '#f1f5f9',
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-          }}
-        >
-          Reload
-        </button>
-        {onRecover && (
-          <button
-            type="button"
-            onClick={() => void handleRecover()}
-            disabled={isRecovering}
-            style={{
-              padding: '0.5rem 1.25rem',
-              borderRadius: '0.5rem',
-              border: 'none',
-              background: '#2563eb',
-              color: '#fff',
-              cursor: isRecovering ? 'wait' : 'pointer',
-              fontFamily: 'inherit',
-            }}
-          >
-            {isRecovering ? 'Preserving Project…' : 'Quarantine Corrupt Project & Reload'}
-          </button>
-        )}
-        {onReset && (
-          <button
-            type="button"
-            onClick={onReset}
-            style={{
-              padding: '0.5rem 1.25rem',
-              borderRadius: '0.5rem',
-              border: 'none',
-              background: '#dc2626',
-              color: '#fff',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}
-          >
-            Reset Database &amp; Reload
-          </button>
-        )}
-      </div>
-      {onRecover && (
-        <p style={{ fontSize: '0.75rem', color: '#94a3b8', maxWidth: '32rem' }}>
-          The complete project folder will be moved to the app&apos;s quarantined-projects folder;
-          no project data will be deleted.
-        </p>
-      )}
-      {recoveryError && (
-        <p style={{ fontSize: '0.875rem', color: '#fca5a5', maxWidth: '32rem' }}>
-          Project preservation failed. The original project was not deleted. {recoveryError}
-        </p>
-      )}
-      {onReset && (
-        <p style={{ fontSize: '0.75rem', color: '#475569' }}>
-          Warning: resetting the database will delete all local projects and settings.
-        </p>
-      )}
-    </div>
-  );
-}
-
 // QNBS-v3: named (not an anonymous IIFE) so a locked-storage catch below can retry the full boot
 // sequence after the user unlocks, without a page reload — a reload would lose the in-memory key.
 async function bootApp(): Promise<void> {
   const initResult = await initializeStorage();
   if (!initResult.success) {
     logger.error('StorageBackend: initializeStorage failed:', initResult.error);
-    root.render(
-      <React.StrictMode>
-        <StorageErrorScreen
-          message={initResult.error ?? 'Unknown storage error.'}
-          onReset={async () => {
-            await resetAllDatabases();
-            window.location.reload();
-          }}
-        />
-      </React.StrictMode>,
-    );
+    await renderStorageInitializationFailure(root);
     return;
   }
 
@@ -344,35 +204,7 @@ async function bootApp(): Promise<void> {
       );
       return;
     }
-    logger.error('Failed to initialize the application:', error);
-    const msg = error instanceof Error ? error.message : 'Could not load project data.';
-    // QNBS-v3: filesystem corruption gets preserve-first recovery; project I/O failures never expose a destructive IDB reset.
-    const projectLoadError = error instanceof ProjectLoadError ? error : null;
-    const canQuarantine = projectLoadError?.reason === 'corrupt' && isTauriRuntime();
-    root.render(
-      <React.StrictMode>
-        <StorageErrorScreen
-          message={msg}
-          {...(canQuarantine
-            ? {
-                onRecover: async () => {
-                  const result = await storageService.quarantineProject(projectLoadError.projectId);
-                  if (!result) throw new Error('Desktop filesystem recovery is unavailable.');
-                  window.location.reload();
-                },
-              }
-            : {})}
-          {...(!projectLoadError
-            ? {
-                onReset: async () => {
-                  await resetAllDatabases();
-                  window.location.reload();
-                },
-              }
-            : {})}
-        />
-      </React.StrictMode>,
-    );
+    await renderProjectInitializationFailure(root, error);
   }
 }
 

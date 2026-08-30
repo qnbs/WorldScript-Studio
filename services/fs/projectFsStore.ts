@@ -36,6 +36,15 @@ export class ProjectLoadError extends Error {
   }
 }
 
+export class ProjectQuarantineError extends Error {
+  constructor(
+    public readonly reason: 'not-found' | 'io-error' | 'name-exhausted' | 'already-preserved',
+  ) {
+    super('Project preservation failed. The original project was not deleted.');
+    this.name = 'ProjectQuarantineError';
+  }
+}
+
 // QNBS-v3 (CodeAnt/CodeRabbit): array-or-EntityState — characters/worlds may be either shape in a real saved project.
 function isArrayOrEntityState(value: unknown): boolean {
   if (Array.isArray(value)) return true;
@@ -193,32 +202,61 @@ export class FsProjectStore extends FsAssetStore {
   // QNBS-v3: move the whole folder before reload so corrupt project artifacts remain recoverable.
   /** Move the whole corrupt project directory aside so its manuscript and assets remain recoverable. */
   async quarantineProject(projectId: string): Promise<ProjectQuarantineResult> {
-    const apis = await this.getApis();
-    const appDataPath = await this.ensureAppDataPath();
-    const safeProjectId = sanitizePathSegment(projectId, 'project');
-    const projectPath = await apis.join(appDataPath, 'projects', safeProjectId);
-    if (!(await apis.exists(projectPath))) {
-      throw new Error(`Could not quarantine project "${projectId}": project directory not found.`);
-    }
-
-    const quarantineRoot = await apis.join(appDataPath, 'quarantined-projects');
-    await apis.mkdir(quarantineRoot, { recursive: true });
-    const timestamp = Date.now();
-    for (let attempt = 0; attempt < 100; attempt++) {
-      const suffix = attempt === 0 ? String(timestamp) : `${timestamp}-${attempt}`;
-      const quarantinePath = await apis.join(quarantineRoot, `${safeProjectId}-corrupt-${suffix}`);
-      if (await apis.exists(quarantinePath)) continue;
-      try {
-        await retryFs(() => apis.rename(projectPath, quarantinePath));
-        return { projectId, path: quarantinePath };
-      } catch (error) {
-        // QNBS-v3: a concurrent quarantine may claim the checked target between exists and rename.
-        if (await apis.exists(quarantinePath)) continue;
-        throw error;
+    try {
+      const apis = await this.getApis();
+      const appDataPath = await this.ensureAppDataPath();
+      const safeProjectId = sanitizePathSegment(projectId, 'project');
+      const projectPath = await apis.join(appDataPath, 'projects', safeProjectId);
+      if (!(await apis.exists(projectPath))) {
+        throw new ProjectQuarantineError('not-found');
       }
-    }
 
-    throw new Error(`Could not quarantine project "${projectId}": recovery target already exists.`);
+      const quarantineRoot = await apis.join(appDataPath, 'quarantined-projects');
+      await apis.mkdir(quarantineRoot, { recursive: true });
+      const timestamp = Date.now();
+      for (let attempt = 0; attempt < 100; attempt++) {
+        const suffix = attempt === 0 ? String(timestamp) : `${timestamp}-${attempt}`;
+        const quarantinePath = await apis.join(
+          quarantineRoot,
+          `${safeProjectId}-corrupt-${suffix}`,
+        );
+        if (await apis.exists(quarantinePath)) continue;
+        try {
+          await retryFs(() => apis.rename(projectPath, quarantinePath));
+          return { projectId, path: quarantinePath };
+        } catch (error) {
+          // QNBS-v3: a concurrent quarantine may claim the checked target between exists and rename.
+          let targetExists: boolean;
+          let sourceExists: boolean;
+          try {
+            targetExists = await apis.exists(quarantinePath);
+            sourceExists = await apis.exists(projectPath);
+          } catch (probeError) {
+            logger.error('Failed to inspect a concurrent quarantine result', {
+              projectId,
+              error: probeError instanceof Error ? probeError.message : String(probeError),
+            });
+            throw new ProjectQuarantineError('io-error');
+          }
+          if (targetExists) continue;
+          if (!sourceExists) throw new ProjectQuarantineError('already-preserved');
+          logger.error('Failed to quarantine project directory', {
+            projectId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          throw new ProjectQuarantineError('io-error');
+        }
+      }
+
+      throw new ProjectQuarantineError('name-exhausted');
+    } catch (error) {
+      if (error instanceof ProjectQuarantineError) throw error;
+      logger.error('Failed to prepare project quarantine', {
+        projectId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new ProjectQuarantineError('io-error');
+    }
   }
 
   async deleteProject(projectId: string): Promise<void> {

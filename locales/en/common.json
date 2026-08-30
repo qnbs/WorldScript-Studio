@@ -695,5 +695,16 @@
   "plotBoard.heuristic.complicate.rationale": "A fresh complication tests the characters and opens new threads.",
   "plotBoard.heuristic.reverse.title": "Add a reversal",
   "plotBoard.heuristic.reverse.description": "Flip an expectation — an ally falters, a win turns sour, or a hidden truth surfaces.",
-  "plotBoard.heuristic.reverse.rationale": "Reversals refresh tension and deepen the arc."
+  "plotBoard.heuristic.reverse.rationale": "Reversals refresh tension and deepen the arc.",
+  "error.startup.description": "The local project or database could not be opened. Reload and try again.",
+  "error.startup.storageUnavailable": "Local storage could not be opened. Reload and try again.",
+  "error.startup.projectUnavailable": "A local project could not be opened. Reload and try again.",
+  "error.startup.reload": "Reload",
+  "error.startup.recover": "Quarantine project and reload",
+  "error.startup.recovering": "Preserving project…",
+  "error.startup.reset": "Reset database and reload",
+  "error.startup.quarantineNotice": "The complete project folder will be moved to quarantine. No project data will be deleted.",
+  "error.startup.recoveryFailed": "Project preservation failed. The original project was not deleted. Reload and try again.",
+  "error.startup.recoveryAlreadyPreserved": "The project appears to have been preserved by another recovery attempt. Reload to continue.",
+  "error.startup.resetWarning": "Resetting the database will delete all local projects and settings."
 }

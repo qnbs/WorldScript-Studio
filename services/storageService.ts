@@ -91,6 +91,7 @@ class StorageManager {
     return (await backend.getActiveProjectId?.()) ?? null;
   }
 
+  // QNBS-v3: delegate supported desktop quarantine and normalize unsupported backends to null.
   async quarantineProject(projectId: string): Promise<ProjectQuarantineResult | null> {
     const backend = await this.getBackend();
     return (await backend.quarantineProject?.(projectId)) ?? null;

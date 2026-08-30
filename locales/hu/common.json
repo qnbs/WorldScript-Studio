@@ -695,5 +695,16 @@
   "voice.stopDictation": "Hagyd abba a diktálást",
   "voice.stopListening": "Ne hallgasson",
   "worlds.emptyState.description": "Építsd fel azokat a helyeket, szabályokat és történeteket, amelyekben a történeted él. Kezdd egy hellyel.",
-  "worlds.emptyState.title": "A világ vár"
+  "worlds.emptyState.title": "A világ vár",
+  "error.startup.description": "The local project or database could not be opened. Reload and try again.",
+  "error.startup.storageUnavailable": "Local storage could not be opened. Reload and try again.",
+  "error.startup.projectUnavailable": "A local project could not be opened. Reload and try again.",
+  "error.startup.reload": "Reload",
+  "error.startup.recover": "Quarantine project and reload",
+  "error.startup.recovering": "Preserving project…",
+  "error.startup.reset": "Reset database and reload",
+  "error.startup.quarantineNotice": "The complete project folder will be moved to quarantine. No project data will be deleted.",
+  "error.startup.recoveryFailed": "Project preservation failed. The original project was not deleted. Reload and try again.",
+  "error.startup.recoveryAlreadyPreserved": "The project appears to have been preserved by another recovery attempt. Reload to continue.",
+  "error.startup.resetWarning": "Resetting the database will delete all local projects and settings."
 }
