@@ -86,6 +86,18 @@ function projectPathSegment(projectId: string): string | null {
 export class FsProjectStore extends FsAssetStore {
   async saveProject(project: SaveProjectInput): Promise<void> {
     const flat = normalizeSaveProjectInputToStoryProject(project);
+    const rawProjectId = (flat as unknown as Record<string, unknown>)['id'];
+    const suppliedProjectId = typeof rawProjectId === 'string';
+    let projectId: string;
+    if (suppliedProjectId) {
+      const safeProjectId = projectPathSegment(rawProjectId);
+      if (!safeProjectId) {
+        throw new Error('Cannot save a project with an unusable project ID.');
+      }
+      projectId = safeProjectId;
+    } else {
+      projectId = projectPathSegment(flat.title || '') ?? 'project';
+    }
 
     // Auto-snapshot: fire-and-forget, mirrors dbService behaviour
     if (Date.now() - this.lastAutoSnapshotTime > this.AUTO_SNAPSHOT_INTERVAL) {
@@ -97,10 +109,6 @@ export class FsProjectStore extends FsAssetStore {
 
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
-    const projectId =
-      projectPathSegment(
-        ((flat as unknown as Record<string, unknown>)['id'] as string) || flat.title || '',
-      ) ?? 'project';
     const projectPath = await apis.join(appDataPath, 'projects', projectId);
 
     if (!(await apis.exists(projectPath))) {

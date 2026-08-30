@@ -230,11 +230,10 @@ describe('FsProjectStore — projects', () => {
   it('reports source-missing when another recovery moved the source elsewhere', async () => {
     await store.saveProject(project as never);
     const original = fake.text.get('/app/projects/p1/project.json');
+    const originalRename = fake.apis.rename;
     fake.apis.rename = async (from: string) => {
       const concurrentPath = '/app/quarantined-projects/p1-corrupt-concurrent';
-      await fake.apis.mkdir(concurrentPath);
-      await fake.apis.writeTextFile(`${concurrentPath}/project.json`, original as string);
-      await fake.apis.remove(from);
+      await originalRename(from, concurrentPath);
       throw new Error(`ENOENT ${from}`);
     };
 
@@ -265,13 +264,17 @@ describe('FsProjectStore — projects', () => {
   });
 
   it('does not map an unusable project ID to an arbitrary quarantine directory', async () => {
-    await store.saveProject({ ...project, id: 'project' } as never);
+    await expect(store.saveProject({ ...project, id: '***' } as never)).rejects.toThrow(
+      'Cannot save a project with an unusable project ID.',
+    );
 
+    await expect(store.loadProject('***')).resolves.toBeNull();
+    await expect(store.deleteProject('***')).resolves.toBeUndefined();
     await expect(store.quarantineProject('***')).rejects.toMatchObject({
       name: 'ProjectQuarantineError',
       reason: 'not-found',
     });
-    expect(fake.text.has('/app/projects/project/project.json')).toBe(true);
+    expect([...fake.text.keys()].some((path) => path.startsWith('/app/projects/'))).toBe(false);
   });
 
   it('leaves the original project intact when quarantine cannot rename it', async () => {
