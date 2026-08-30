@@ -70,8 +70,11 @@ export class FsAssetStore extends FsSnapshotStore {
   private async binderAssetPaths(projectId: string, assetId: string) {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
-    const safeId = sanitizePathSegment(projectId, 'project');
     const safeAsset = sanitizePathSegment(assetId, 'asset');
+    const safeId = sanitizePathSegment(
+      this.resolveAuxiliaryProjectId(projectId, 'binder', safeAsset),
+      'project',
+    );
     const dir = await apis.join(appDataPath, 'projects', safeId, 'binder');
     const binFile = await apis.join(dir, `${safeAsset}.bin`);
     const metaFile = await apis.join(dir, `${safeAsset}.meta.json`);
@@ -135,15 +138,22 @@ export class FsAssetStore extends FsSnapshotStore {
     try {
       const apis = await this.getApis();
       const appDataPath = await this.ensureAppDataPath();
-      const safeId = sanitizePathSegment(projectId, 'project');
-      const dir = await apis.join(appDataPath, 'projects', safeId, 'binder');
-      if (!(await apis.exists(dir))) return [];
-      const entries = await retryFs(() => apis.readDir(dir));
       const ids = new Set<string>();
-      for (const e of entries) {
-        const name = e.name ?? '';
-        if (name.endsWith('.meta.json')) {
-          ids.add(name.replace(/\.meta\.json$/, ''));
+      const legacyProjectId = this.legacyBinderProjectId(projectId);
+      const safeIds = new Set(
+        [projectId, legacyProjectId]
+          .filter((id): id is string => Boolean(id))
+          .map((id) => sanitizePathSegment(id, 'project')),
+      );
+      for (const safeId of safeIds) {
+        const dir = await apis.join(appDataPath, 'projects', safeId, 'binder');
+        if (!(await apis.exists(dir))) continue;
+        const entries = await retryFs(() => apis.readDir(dir));
+        for (const e of entries) {
+          const name = e.name ?? '';
+          if (name.endsWith('.meta.json')) {
+            ids.add(name.replace(/\.meta\.json$/, ''));
+          }
         }
       }
       return [...ids];

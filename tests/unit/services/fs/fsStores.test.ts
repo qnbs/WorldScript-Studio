@@ -293,6 +293,111 @@ describe('FsProjectStore — projects', () => {
     expect(await store.loadProject('item')).toEqual(expect.objectContaining({ title: 'My Novel' }));
   });
 
+  // QNBS-v3: verified legacy evidence keeps coupled filesystem data visible without redirecting unrelated project identities.
+  it('keeps verified legacy Binder, Codex, and RAG data addressable after identity migration', async () => {
+    const legacyProject = {
+      ...project,
+      id: '***',
+      binderNodes: [{ binderAssetId: 'legacy-asset' }],
+    };
+    const legacyCodex = { projectId: '***', entries: [{ name: 'legacy' }] };
+    const legacyVectors = [{ id: 'legacy-vector' }];
+
+    await store.saveStoryCodex(legacyCodex as never);
+    await store.saveRagVectors('***', legacyVectors);
+    await store.saveBinderAsset('***', 'legacy-asset', new Uint8Array([1, 2]).buffer, {
+      mimeType: 'application/octet-stream',
+      originalFileName: 'legacy.bin',
+      byteSize: 2,
+    });
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+
+    const loaded = await store.loadProject('item');
+
+    expect((loaded as unknown as Record<string, unknown>)['id']).toBe('item');
+    expect(await store.getStoryCodex('item')).toEqual(legacyCodex);
+    expect(await store.getRagVectors('item')).toEqual(legacyVectors);
+    expect(await store.listBinderAssetIds('item')).toContain('legacy-asset');
+    expect(await store.getBinderAsset('item', 'legacy-asset')).toEqual(
+      expect.objectContaining({
+        meta: expect.objectContaining({ originalFileName: 'legacy.bin' }),
+      }),
+    );
+
+    await store.saveProject(loaded as never);
+    expect(fake.text.has('/app/projects/item/project.json')).toBe(true);
+    expect(fake.text.has('/app/projects/project/project.json')).toBe(false);
+
+    await store.deleteProject('item');
+    expect(fake.text.has('/app/projects/item/project.json')).toBe(false);
+    expect(fake.text.has('/app/projects/project/codex/codex.snap')).toBe(false);
+    expect(fake.text.has('/app/projects/project/codex/vectors.snap')).toBe(false);
+    expect(fake.bin.has('/app/projects/project/binder/legacy-asset.bin')).toBe(false);
+  });
+
+  it('keeps a missing-ID legacy project bound to its existing title-derived directory', async () => {
+    const legacyProject = { ...project, id: undefined, title: 'Legacy Novel' };
+    await fake.apis.mkdir('/app/projects/Legacy-Novel', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/Legacy-Novel/project.json',
+      compressData(legacyProject),
+    );
+
+    const loaded = await store.loadProject('Legacy-Novel');
+
+    expect((loaded as unknown as Record<string, unknown>)['id']).toBe('Legacy-Novel');
+    await store.saveProject({ ...loaded, title: 'Renamed Novel' } as never);
+    expect(fake.text.has('/app/projects/Legacy-Novel/project.json')).toBe(true);
+    expect(fake.text.has('/app/projects/Renamed-Novel/project.json')).toBe(false);
+  });
+
+  it('does not redirect a legacy project to a legitimate project-identity directory', async () => {
+    const legitimateCodex = { projectId: 'project', entries: [{ name: 'legitimate' }] };
+    const legitimateVectors = [{ id: 'legitimate-vector' }];
+    await store.saveProject({ ...project, id: 'project', title: 'Legitimate Project' } as never);
+    await store.saveStoryCodex(legitimateCodex as never);
+    await store.saveRagVectors('project', legitimateVectors);
+    await store.saveBinderAsset('project', 'legitimate-asset', new Uint8Array([3]).buffer, {
+      mimeType: 'application/octet-stream',
+      originalFileName: 'legitimate.bin',
+      byteSize: 1,
+    });
+
+    const legacyProject = {
+      ...project,
+      id: '***',
+      binderNodes: [{ binderAssetId: 'legitimate-asset' }],
+    };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+
+    await expect(store.loadProject('item')).resolves.toEqual(
+      expect.objectContaining({ title: 'My Novel' }),
+    );
+    expect(await store.getStoryCodex('item')).toBeNull();
+    expect(await store.getRagVectors('item')).toEqual([]);
+    expect(await store.listBinderAssetIds('item')).toEqual([]);
+    expect(await store.getStoryCodex('project')).toEqual(legitimateCodex);
+    expect(await store.getRagVectors('project')).toEqual(legitimateVectors);
+    expect(await store.getBinderAsset('project', 'legitimate-asset')).not.toBeNull();
+  });
+
+  // QNBS-v3: ambiguous auxiliary data stays in place and unassigned rather than being exposed through a guessed legacy identity.
+  it('does not assign auxiliary data without ownership evidence to a legacy project', async () => {
+    const ambiguousVectors = [{ id: 'ambiguous-vector' }];
+    await store.saveRagVectors('project', ambiguousVectors);
+    const legacyProject = { ...project, id: '***' };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+
+    await store.loadProject('item');
+
+    expect(await store.getRagVectors('item')).toEqual([]);
+    expect(await store.getRagVectors('project')).toEqual(ambiguousVectors);
+    expect(fake.text.has('/app/projects/project/codex/vectors.snap')).toBe(true);
+  });
+
   it('rejects dot path segments without touching the project namespace', async () => {
     await store.saveProject(project as never);
     await store.saveProject({ ...project, id: 'p2', title: 'Other Novel' } as never);

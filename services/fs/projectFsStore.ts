@@ -21,6 +21,7 @@ import {
   decompressData,
   retryFs,
   sanitizePathSegment,
+  type TauriApis,
   writeTextFileAtomic,
 } from './fsCore';
 
@@ -84,16 +85,131 @@ function projectPathSegment(projectId: string): string | null {
   return safeProjectId && safeProjectId !== '.' && safeProjectId !== '..' ? safeProjectId : null;
 }
 
-function migrateLegacyProjectIdentity(project: StoryProject, safeProjectId: string): StoryProject {
-  const rawProjectId = (project as unknown as Record<string, unknown>)['id'];
-  if (typeof rawProjectId === 'string' && !projectPathSegment(rawProjectId)) {
-    // QNBS-v3: legacy fallback directories become their stable path identity before autosave, while new invalid IDs remain rejected.
-    return { ...project, id: safeProjectId } as StoryProject;
-  }
-  return project;
+function persistedProjectId(project: StoryProject): unknown {
+  return (project as unknown as Record<string, unknown>)['id'];
 }
 
+function hasUnusablePersistedProjectId(project: StoryProject): boolean {
+  const rawProjectId = persistedProjectId(project);
+  return typeof rawProjectId !== 'string' || !projectPathSegment(rawProjectId);
+}
+
+function hasLegacyMissingProjectId(project: StoryProject, safeProjectId: string): boolean {
+  return (
+    typeof persistedProjectId(project) !== 'string' &&
+    safeProjectId === (projectPathSegment(project.title) ?? 'project')
+  );
+}
+
+function isLegacyInvalidProjectId(project: StoryProject): project is StoryProject & { id: string } {
+  const rawProjectId = persistedProjectId(project);
+  return typeof rawProjectId === 'string' && !projectPathSegment(rawProjectId);
+}
+
+function migratedProjectIdentity(project: StoryProject, safeProjectId: string): StoryProject {
+  // QNBS-v3: legacy fallback directories become their stable path identity before autosave, while new invalid IDs remain rejected.
+  return { ...project, id: safeProjectId } as StoryProject;
+}
+
+function legacyBinderAssetIds(project: StoryProject): string[] {
+  return (project.binderNodes ?? [])
+    .map((node) => node.binderAssetId)
+    .filter((assetId): assetId is string => typeof assetId === 'string')
+    .map((assetId) => sanitizePathSegment(assetId, 'asset'));
+}
+
+type LegacyAuxiliaryEvidence = {
+  codex: boolean;
+  binderAssetIds: Set<string>;
+};
+
 export class FsProjectStore extends FsAssetStore {
+  private async inspectLegacyAuxiliaryEvidence(
+    project: StoryProject,
+    safeProjectId: string,
+    apis: TauriApis,
+    appDataPath: string,
+  ): Promise<LegacyAuxiliaryEvidence> {
+    const evidence: LegacyAuxiliaryEvidence = { codex: false, binderAssetIds: new Set() };
+    const rawProjectId = persistedProjectId(project);
+    if (
+      !isLegacyInvalidProjectId(project) ||
+      safeProjectId === 'project' ||
+      typeof rawProjectId !== 'string'
+    ) {
+      return evidence;
+    }
+
+    try {
+      const legacyProjectPath = await apis.join(appDataPath, 'projects', 'project');
+      const legacyProjectFile = await apis.join(legacyProjectPath, 'project.json');
+      if (await apis.exists(legacyProjectFile)) return evidence;
+
+      const codexFile = await apis.join(legacyProjectPath, 'codex', 'codex.snap');
+      if (await apis.exists(codexFile)) {
+        try {
+          const legacyCodex = decompressData<unknown>(await apis.readTextFile(codexFile));
+          if (
+            typeof legacyCodex === 'object' &&
+            legacyCodex !== null &&
+            (legacyCodex as Record<string, unknown>)['projectId'] === rawProjectId
+          ) {
+            evidence.codex = true;
+          }
+        } catch (error) {
+          logger.warn('Could not verify legacy codex ownership during project load', {
+            projectId: safeProjectId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      const binderPath = await apis.join(legacyProjectPath, 'binder');
+      for (const assetId of new Set(legacyBinderAssetIds(project))) {
+        const binFile = await apis.join(binderPath, `${assetId}.bin`);
+        const metaFile = await apis.join(binderPath, `${assetId}.meta.json`);
+        if ((await apis.exists(binFile)) && (await apis.exists(metaFile))) {
+          evidence.binderAssetIds.add(assetId);
+        }
+      }
+    } catch (error) {
+      logger.warn('Could not inspect legacy auxiliary project data during load', {
+        projectId: safeProjectId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    return evidence;
+  }
+
+  private async migrateLegacyProjectIdentity(
+    project: StoryProject,
+    safeProjectId: string,
+    apis: TauriApis,
+    appDataPath: string,
+  ): Promise<StoryProject> {
+    if (!hasUnusablePersistedProjectId(project)) {
+      this.clearLegacyAuxiliaryPolicy(safeProjectId);
+      return project;
+    }
+
+    const rawProjectId = persistedProjectId(project);
+    if (typeof rawProjectId !== 'string' && !hasLegacyMissingProjectId(project, safeProjectId)) {
+      this.clearLegacyAuxiliaryPolicy(safeProjectId);
+      return project;
+    }
+    if (typeof rawProjectId === 'string' && !projectPathSegment(rawProjectId)) {
+      const evidence = await this.inspectLegacyAuxiliaryEvidence(
+        project,
+        safeProjectId,
+        apis,
+        appDataPath,
+      );
+      this.registerLegacyAuxiliaryPolicy(safeProjectId, 'project', evidence);
+    }
+    return migratedProjectIdentity(project, safeProjectId);
+  }
+
   async saveProject(project: SaveProjectInput): Promise<void> {
     const flat = normalizeSaveProjectInputToStoryProject(project);
     const rawProjectId = (flat as unknown as Record<string, unknown>)['id'];
@@ -176,6 +292,7 @@ export class FsProjectStore extends FsAssetStore {
     const appDataPath = await this.ensureAppDataPath();
     const safeProjectId = projectPathSegment(projectId);
     if (!safeProjectId) return null;
+    this.clearLegacyAuxiliaryPolicy(safeProjectId);
     const projectFile = await apis.join(appDataPath, 'projects', safeProjectId, 'project.json');
 
     // QNBS-v3 (CodeRabbit/codex): exists() rejecting is an I/O failure too, not absence — classify it the same as a readTextFile failure rather than letting it escape raw.
@@ -211,7 +328,12 @@ export class FsProjectStore extends FsAssetStore {
     }
 
     // QNBS-v3: schedule observation after this async load resolves so validation cannot delay or alter the load result.
-    const migratedProject = migrateLegacyProjectIdentity(project, safeProjectId);
+    const migratedProject = await this.migrateLegacyProjectIdentity(
+      project,
+      safeProjectId,
+      apis,
+      appDataPath,
+    );
     scheduleCoreProjectValidation(migratedProject);
     return migratedProject;
   }
@@ -340,6 +462,18 @@ export class FsProjectStore extends FsAssetStore {
     if (await apis.exists(projectPath)) {
       await retryFs(() => apis.remove(projectPath, { recursive: true }));
     }
+
+    const legacyBinderIds = this.legacyBinderAssetIdsForProject(safeProjectId);
+    if (legacyBinderIds.length > 0) {
+      for (const assetId of legacyBinderIds) {
+        await this.deleteBinderAsset(safeProjectId, assetId);
+      }
+    }
+    if (this.legacyCodexProjectId(safeProjectId)) {
+      await this.deleteStoryCodex(safeProjectId);
+      await this.deleteRagVectors(safeProjectId);
+    }
+    this.clearLegacyAuxiliaryPolicy(safeProjectId);
   }
 
   // Import/Export functionality
