@@ -80,7 +80,8 @@ function looksLikeStoryProject(value: unknown): value is StoryProject {
 
 // QNBS-v3: one sanitizer and empty-ID policy keeps every filesystem project operation on the same path identity.
 function projectPathSegment(projectId: string): string | null {
-  return sanitizePathSegment(projectId, '') || null;
+  const safeProjectId = sanitizePathSegment(projectId, '');
+  return safeProjectId && safeProjectId !== '.' && safeProjectId !== '..' ? safeProjectId : null;
 }
 
 export class FsProjectStore extends FsAssetStore {

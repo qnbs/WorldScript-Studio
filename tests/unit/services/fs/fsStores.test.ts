@@ -277,6 +277,27 @@ describe('FsProjectStore — projects', () => {
     expect([...fake.text.keys()].some((path) => path.startsWith('/app/projects/'))).toBe(false);
   });
 
+  it('rejects dot path segments without touching the project namespace', async () => {
+    await store.saveProject(project as never);
+    await store.saveProject({ ...project, id: 'p2', title: 'Other Novel' } as never);
+
+    for (const invalidId of ['.', '..']) {
+      await expect(store.saveProject({ ...project, id: invalidId } as never)).rejects.toThrow(
+        'Cannot save a project with an unusable project ID.',
+      );
+      await expect(store.loadProject(invalidId)).resolves.toBeNull();
+      await expect(store.deleteProject(invalidId)).resolves.toBeUndefined();
+      await expect(store.quarantineProject(invalidId)).rejects.toMatchObject({
+        name: 'ProjectQuarantineError',
+        reason: 'not-found',
+      });
+    }
+
+    expect(await store.listProjects()).toEqual(expect.arrayContaining(['p1', 'p2']));
+    expect(fake.text.has('/app/projects/p1/project.json')).toBe(true);
+    expect(fake.text.has('/app/projects/p2/project.json')).toBe(true);
+  });
+
   it('leaves the original project intact when quarantine cannot rename it', async () => {
     await store.saveProject(project as never);
     const original = fake.text.get('/app/projects/p1/project.json');
