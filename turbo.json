@@ -6,6 +6,7 @@
     "CF_PAGES",
     "CF_PAGES_BRANCH",
     "CF_PAGES_SKIP_WRANGLER",
+    "ComSpec",
     "CLOUDFLARE_MANUAL_DEPLOY",
     "CLOUDFLARE_PAGES_PROJECT",
     "DEPLOY_TARGET",
@@ -17,6 +18,7 @@
     "RUN_MOBILE_E2E",
     "RUN_REAL_VOICE_E2E",
     "SMOKE_PORT",
+    "USERPROFILE",
     "XDG_RUNTIME_DIR"
   ],
   "tasks": {
