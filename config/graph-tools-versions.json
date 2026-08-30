@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "graphifyy": {
+    "testedVersion": "0.9.51",
+    "policy": "controlled-upgrade",
+    "installedFrom": "0.8.26",
+    "notes": "v0.9.0 changed node-ID format (repo-relative path instead of parent-dir+filename); this repo uses no Neo4j/Gephi export, so the only effect is a one-time large diff in graphify-out/GRAPH_REPORT.md on the first graphify update . after upgrading. v0.9.13 fixed the query-log feature (introduced in v0.8.31, after this repo's prior pin) to default OFF; GRAPHIFY_QUERY_LOG_DISABLE=1 is a real, documented hard-off guarantee if ever needed."
+  },
+  "codegraph": {
+    "testedVersion": "1.6.0",
+    "policy": "controlled-upgrade",
+    "installedFrom": "1.1.3",
+    "notes": "Purely additive/corrective between 1.1.3 and 1.6.0 (no removed commands, no engines/dependency-shape change). Run a full `codegraph index` (not just sync) once immediately after upgrading -- several fixes require a re-index to take effect. Gains --no-color/NO_COLOR support (#1281, absent at 1.1.3) and CODEGRAPH_NO_UPDATE_CHECK=1 (#1243)."
+  },
+  "reportSchemaVersion": 1
+}

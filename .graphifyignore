@@ -15,6 +15,17 @@ playwright-report/
 # GraphiPy output (don't re-index the graph itself)
 graphify-out/
 
+# CodeGraph's own local index/DB — a second graph tool's runtime state, not source
+.codegraph/
+
+# Local tool config/metadata — never source
+.claude/
+.git/
+.git
+
+# Sibling git worktrees (defensive — this repo is itself checked out under .worktrees/main/)
+.worktrees/
+
 # Vendored/minified third-party bundles (not our source code; pollutes God Nodes/Communities)
 public/duckdb/
 

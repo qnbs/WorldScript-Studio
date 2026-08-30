@@ -64,6 +64,22 @@
       "problemMatcher": [],
       "presentation": { "reveal": "silent", "panel": "shared" },
       "group": { "kind": "build", "isDefault": false }
+    },
+    {
+      "label": "Dual-Graph: status (freshness check)",
+      "type": "npm",
+      "script": "graphs:status",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "group": "none"
+    },
+    {
+      "label": "Dual-Graph: refresh + regenerate reports",
+      "type": "npm",
+      "script": "graphs:refresh",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "group": { "kind": "build", "isDefault": false }
     }
   ]
 }

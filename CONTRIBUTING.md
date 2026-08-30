@@ -63,8 +63,8 @@ CodeGraph provides **semantic code intelligence** via MCP — symbol-level calle
 **Install:**
 
 ```bash
-npm install -g @colbymchenry/codegraph   # or pnpm add -g
-codegraph init -i                        # in repo root
+pnpm run codegraph:bootstrap              # installs the exact version pinned in config/graph-tools-versions.json
+pnpm run codegraph:init                   # in repo root; initializes the local index through the verified resolver
 ```
 
 **Agent setup (Kimi Code CLI):** add the MCP server to `~/.kimi/settings.json` (see `docs/codegraph.md` § MCP Integration).

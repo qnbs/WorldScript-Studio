@@ -347,7 +347,7 @@ Rules:
 - Before answering architecture or codebase questions, read `graphify-out/GRAPH_REPORT.md` for god nodes and community structure
 - If `graphify-out/wiki/index.md` exists, navigate it instead of reading raw files
 - For cross-module "how does X relate to Y" questions, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep
-- After modifying code files in this session, run `pnpm run graphify:update` (AST-only, no API cost). First-time setup: `pnpm run graphify:bootstrap`.
+- After modifying code files in this session, run `pnpm run graphify:update` (AST-only, no API cost). First-time setup: `pnpm run graphify:bootstrap` (installs the exact version pinned in [`config/graph-tools-versions.json`](config/graph-tools-versions.json)). If in doubt whether the report is current, run `pnpm run graphs:status` first (FRESH/STALE, no mutation).
 
 ## codegraph
 
@@ -357,8 +357,9 @@ Rules:
 - Before answering code-structure, caller/callee, or impact questions, use CodeGraph MCP tools (`codegraph_context`, `codegraph_impact`, `codegraph_trace`)
 - If `.codegraph/` exists, answer directly with CodeGraph — don't delegate exploration to a file-reading sub-agent
 - For "how does X reach Y", use `codegraph_trace` instead of manual Grep + Read chains
-- After modifying code, the graph auto-syncs (2s debounce). For large refactors, run `pnpm run codegraph:update`
+- After modifying code, the graph auto-syncs via a file watcher (debounced). For routine manual updates use `pnpm run codegraph:sync` (incremental) — `pnpm run codegraph:update` is a full rebuild (`codegraph index --force`), for large refactors or index-corruption recovery, not routine use
 - To find affected tests: `pnpm run codegraph:affected`
+- First-time setup: `pnpm run codegraph:bootstrap` (installs the exact version pinned in [`config/graph-tools-versions.json`](config/graph-tools-versions.json)), then `codegraph init`
 
 ### Dual-Graph workflow
 - Architecture questions → `graphify-out/GRAPH_REPORT.md`

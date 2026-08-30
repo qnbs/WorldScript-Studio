@@ -17,22 +17,49 @@ WorldScript Studio uses **two complementary knowledge-graph tools** to provide m
 
 ## Quick Start for New Machines
 
+Both tools' tested versions live in [`config/graph-tools-versions.json`](../config/graph-tools-versions.json) — the bootstrap commands below read from it, never hardcode a version here.
+
 ```bash
 # 1. Node dependencies
 node scripts/dependency-state.mjs reconcile
 
-# 2. Graphify (requires Python 3.10+)
-pnpm run graphify:bootstrap   # pip install graphifyy
-pnpm run graphify:update      # build AST graph
+# 2. Optional privacy controls before the first CodeGraph invocation (local shell only)
+export CODEGRAPH_TELEMETRY=0 CODEGRAPH_NO_UPDATE_CHECK=1
 
-# 3. CodeGraph (requires Node/npm)
-npm install -g @colbymchenry/codegraph
-codegraph init -i
+# 3. Install both tools at their pinned versions (Graphify needs Python 3.10+; CodeGraph needs Node/npm)
+pnpm run graphs:bootstrap
 
-# 4. Configure your agent
+# 4. Read-only diagnostic: installed versions and any existing report freshness
+pnpm run graphs:doctor
+
+# 5. Initialize CodeGraph's local index for this worktree through the verified resolver
+pnpm run codegraph:init
+
+# 6. Update local runtime state + regenerate the two committed reports (requires a clean tree)
+pnpm run graphs:refresh
+
+# 7. Configure your agent's MCP client (local, machine-personal — not inherited from git)
+# Claude Code → codegraph install --target=claude   (see docs/codegraph.md)
+# Cursor      → codegraph install --target=cursor --yes
 # Kimi Code CLI → add MCP server to ~/.kimi/settings.json (see docs/codegraph.md)
-# Cursor → run: codegraph install --target=cursor --yes
+
+# 8. Choose Graphify (architecture/topology) vs. CodeGraph (symbol/impact) vs. raw grep —
+#    see "Tool Selection Guide" below.
 ```
+
+`graphs:doctor` is safe before initialization: missing reports and an uninitialized CodeGraph index
+are reported diagnostically. When reports exist it also displays their shared freshness diagnosis,
+but it remains non-blocking for onboarding. Use `graphs:status` after setup as the authoritative,
+non-zero freshness check; it requires both committed reports to exist and match the current source
+fingerprint and tested tool versions. `graphs:status` can return non-zero for `MISSING`, `STALE`
+(including a fingerprint mismatch), `VERSION_MISMATCH` (report schema or tool version),
+`REPORT_INVALID` (metadata matches but the committed body is not a valid generated report),
+`DIRTY_UNTRACKED_INPUT`, or an unstable source snapshot.
+
+For local admission, run `pnpm run ci:prepush` as required by the constrained-hardware policy. It
+performs the change-aware lightweight checks and fails closed when evidence is ambiguous; full
+repository lint, complete typecheck, i18n, coverage, E2E, and other heavyweight checks remain
+cloud-CI gates rather than a second full local suite.
 
 ## Daily Workflow
 
@@ -50,8 +77,11 @@ Before planning or implementing:
 # Small changes (< 5 files) — nothing needed
 # CodeGraph auto-syncs via file watcher
 
-# Large refactors / new modules:
-pnpm run graphs:update   # updates both Graphify and CodeGraph
+# Large refactors / new modules — local runtime state only, doesn't touch committed reports:
+pnpm run graphs:update
+
+# Before opening a PR — regenerate the committed reports too (requires a clean tree):
+pnpm run graphs:refresh
 ```
 
 ### Before Commits
@@ -60,8 +90,9 @@ pnpm run graphs:update   # updates both Graphify and CodeGraph
 # Optional: see which tests are affected
 pnpm run codegraph:affected
 
-# Full quality gate
-pnpm run lint && pnpm run typecheck && pnpm run i18n:check
+# Required constrained-hardware gate (see docs/PR-CI-MERGE-WORKFLOW.md) — not the full
+# lint/typecheck/i18n suite, which is CI-owned:
+pnpm run ci:prepush
 ```
 
 ## Tool Selection Guide
@@ -77,7 +108,11 @@ pnpm run lint && pnpm run typecheck && pnpm run i18n:check
 | "Find all uses of `useAppDispatch`" | CodeGraph (`codegraph_search`) | — |
 | "Cross-module impact of a new AI provider" | Both | — |
 
-## Prompt Templates for Kimi K2.6
+## Prompt Templates for Kimi K2.6 (optional reference — not required setup)
+
+Claude Code's own graph-usage instructions live directly in `CLAUDE.md` and don't need a separate
+template. The templates below are optional reference material if you're driving this repo through
+Kimi K2.6 or a similarly prompted agent that needs the same guidance spelled out explicitly.
 
 ### Template A: Feature Development
 
@@ -159,20 +194,22 @@ workers/              → CodeGraph: worker entrypoints
 
 | Problem | Solution |
 |---------|----------|
-| Graphify not found | `pnpm run graphify:bootstrap` |
-| CodeGraph not initialized | `codegraph init -i` |
+| Graphify not found | `pnpm run graphify:bootstrap` (or `pnpm run graphs:bootstrap` for both tools) |
+| CodeGraph not initialized | `codegraph init` (builds the index in this one step) |
 | CodeGraph DB locked | Ensure project is on local disk (not WSL `/mnt/` or network share) |
-| Both reports outdated | `pnpm run graphs:update` |
+| Both reports outdated | `pnpm run graphs:status` to confirm, then `pnpm run graphs:refresh` to regenerate (requires a clean tree) |
+| Report generation refused (`DIRTY_UNTRACKED_INPUT`) | Commit or stash the listed paths first — reports are only generated from a stable, committable source state |
 | Slow Graphify build | Check `.graphifyignore`; ensure `node_modules/` is excluded |
 | Agent ignores CodeGraph | Add "Use CodeGraph first" to your session prompt |
+| `claude mcp list` shows CodeGraph "Disabled" | Known display quirk — see `docs/codegraph.md`'s Claude Code section |
 
 ## Privacy & Security
 
-- Both tools are **100% offline**
-- No API keys required
-- No data leaves the machine
-- `.codegraph/` and `graphify-out/` are gitignored (only `*_REPORT.md` committed)
-- Safe to use on proprietary code
+- The source parsing and local index for the default AST/code-intelligence paths stay local, but CodeGraph's anonymous usage telemetry is enabled by default and can make network calls. Disable it with `codegraph telemetry off`, `CODEGRAPH_TELEMETRY=0`, or `DO_NOT_TRACK=1`; disable its separate update check with `CODEGRAPH_NO_UPDATE_CHECK=1` (full disclosure in [CodeGraph's TELEMETRY.md](https://github.com/colbymchenry/codegraph/blob/main/TELEMETRY.md)).
+- Graphify's separate semantic/LLM rebuild mode (`/graphify .` in chat) is also networked and provider-dependent; the AST-only Graphify path does not require that mode.
+- No API keys required for either tool's core functionality.
+- Graphify can optionally log queries locally to `~/.cache/graphify-queries.log` — off by default since `graphifyy` v0.9.13 (see `docs/graphify.md`'s Privacy section for the exact env vars).
+- `.codegraph/` and `graphify-out/` are gitignored (only `*_REPORT.md` committed).
 
 ---
 

@@ -1,49 +1,310 @@
 #!/usr/bin/env node
 /**
- * Generates CODEGRAPH_REPORT.md from codegraph status + query output.
- * QNBS-v3: mirrors graphify's GRAPH_REPORT.md policy for consistency.
+ * Generates the compact, deterministic .codegraph/CODEGRAPH_REPORT.md from a real local index.
+ * Fails loudly on any real failure — never embeds "Unavailable: <error>" into a file that still
+ * looks like a successful report. Gated on a clean source tree (DIRTY_UNTRACKED_INPUT refuses to
+ * write) so the embedded fingerprint always matches a committable state.
  */
-import { execSync } from 'node:child_process';
-import { existsSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import {
+  buildMetadataBlock,
+  checkCleanState,
+  computeSourceFingerprint,
+  ROOT,
+} from './graphSourceFingerprint.mjs';
 
-const REPORT_PATH = '.codegraph/CODEGRAPH_REPORT.md';
+export const REPORT_PATH = join(ROOT, '.codegraph', 'CODEGRAPH_REPORT.md');
+export const DB_PATH = join(ROOT, '.codegraph', 'codegraph.db');
 
-if (!existsSync('.codegraph/codegraph.db')) {
-  console.error('❌ CodeGraph not initialized. Run: codegraph init -i');
-  process.exit(1);
+function quoteWindowsCommandArg(value) {
+  if (/\r|\n/.test(value)) throw new Error('Windows command arguments cannot contain newlines');
+  return `"${value.replaceAll('"', '\\"')}"`;
 }
 
-let report = '# CodeGraph Report\n\n';
-report += `**Generated:** ${new Date().toISOString()}\n\n`;
-
-try {
-  const status = execSync('codegraph status', { encoding: 'utf-8' });
-  report += `## Status\n\n\`\`\`\n${status}\n\`\`\`\n\n`;
-} catch (e) {
-  report += `## Status\n\nUnavailable: ${String(e)}\n\n`;
+function runCommand(command, args, options = {}) {
+  const isWindowsShim = process.platform === 'win32' && command.toLowerCase().endsWith('.cmd');
+  const invocation = isWindowsShim
+    ? {
+        command: process.env.ComSpec ?? 'cmd.exe',
+        args: ['/d', '/s', '/c', `"${[command, ...args].map(quoteWindowsCommandArg).join(' ')}"`],
+      }
+    : { command, args };
+  return spawnSync(invocation.command, invocation.args, {
+    ...options,
+    shell: false,
+  });
 }
 
-try {
-  const files = execSync('codegraph files --json', { encoding: 'utf-8' });
-  const fileList = JSON.parse(files);
-  const byExt = fileList.reduce((acc, f) => {
-    const ext = f.path.split('.').pop() || 'none';
-    acc[ext] = (acc[ext] || 0) + 1;
-    return acc;
-  }, {});
-  report += '## Files by Extension\n\n';
-  Object.entries(byExt)
-    .sort((a, b) => b[1] - a[1])
-    .forEach(([ext, count]) => {
-      report += `- **.${ext}**: ${count}\n`;
+// QNBS-v3: resolve the same global executable and Windows shim for every CodeGraph operation.
+export function resolveCodegraphCommand() {
+  const fallback = process.platform === 'win32' ? 'codegraph.cmd' : 'codegraph';
+  const prefix = runCommand(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['prefix', '-g'], {
+    encoding: 'utf-8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
+  if (prefix.status !== 0 || prefix.error) return fallback;
+  const globalBin =
+    process.platform === 'win32' ? prefix.stdout.trim() : join(prefix.stdout.trim(), 'bin');
+  const candidate = join(globalBin, process.platform === 'win32' ? 'codegraph.cmd' : 'codegraph');
+  return existsSync(candidate) ? candidate : fallback;
+}
+
+function resolveWindowsCodegraphEntrypoint(command) {
+  if (process.platform !== 'win32' || !command.toLowerCase().endsWith('.cmd')) return null;
+  const rootResult = runCommand('npm.cmd', ['root', '-g'], {
+    encoding: 'utf-8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
+  if (rootResult.status !== 0 || rootResult.error) return null;
+  try {
+    const packageRoot = join(rootResult.stdout.trim(), '@colbymchenry', 'codegraph');
+    const packageJson = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf-8'));
+    const bin = typeof packageJson.bin === 'string' ? packageJson.bin : packageJson.bin?.codegraph;
+    if (typeof bin !== 'string') return null;
+    const entrypoint = join(packageRoot, bin);
+    return existsSync(entrypoint) ? entrypoint : null;
+  } catch {
+    return null;
+  }
+}
+
+// QNBS-v3: invoke Windows shims through their package entrypoint to avoid cmd.exe reparsing paths.
+export function executeCodegraph(args, options = {}) {
+  const command = resolveCodegraphCommand();
+  const entrypoint = resolveWindowsCodegraphEntrypoint(command);
+  const invocation = entrypoint
+    ? { command: process.execPath, args: [entrypoint, ...args] }
+    : { command, args };
+  return runCommand(invocation.command, invocation.args, {
+    cwd: ROOT,
+    env: { ...process.env, NO_COLOR: '1' },
+    ...options,
+    shell: false,
+  });
+}
+
+// QNBS-v3: sanitize terminal control sequences without adding a lint suppression for control bytes.
+const ANSI_PATTERN = new RegExp(
+  `${String.fromCharCode(0x1b)}(?:\\][\\s\\S]*?(?:${String.fromCharCode(0x07)}|${String.fromCharCode(0x1b)}\\\\)|\\[[0-?]*[ -/]*[@-~])`,
+  'g',
+);
+
+/** Redact an absolute machine path (repo root or home dir) to a repo-relative or generic form. */
+export function redactPaths(
+  text,
+  { root = ROOT, home = process.env.HOME ?? process.env.USERPROFILE ?? '' } = {},
+) {
+  const replacePrefix = (input, target, replacement) => {
+    if (!target) return input;
+    const normalized = target.replace(/[\\/]$/, '');
+    const variants = [
+      ...new Set([normalized, normalized.replaceAll('/', '\\'), normalized.replaceAll('\\', '/')]),
+    ];
+    let output = input;
+    for (const variant of variants) {
+      const escaped = variant.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const flags = /^(?:[A-Za-z]:[\\/]|\\\\|\/\/)/.test(variant) ? 'gi' : 'g';
+      output = output.replace(
+        new RegExp(`(^|[^A-Za-z0-9._-])${escaped}(?=$|[\\\\/])`, flags),
+        (_, prefix) => `${prefix}${replacement}`,
+      );
+    }
+    return output;
+  };
+  return replacePrefix(replacePrefix(text, root, '.'), home, '~');
+}
+
+/** Strips ANSI escape codes, then redacts absolute paths — the full committed-report safety pass. */
+export function sanitize(text, opts) {
+  return redactPaths(text.replace(ANSI_PATTERN, ''), opts);
+}
+
+function runCodegraph(args) {
+  // QNBS-v3: preserve child-process failures so report generation cannot turn an unavailable CLI into success.
+  const result = executeCodegraph(args, { encoding: 'utf-8' });
+  if (result.status !== 0 || result.error) {
+    throw new Error(
+      `codegraph ${args.join(' ')} failed (exit ${result.status ?? 'null'}): ${result.stderr ?? result.error?.message ?? ''}`,
+    );
+  }
+  return result.stdout;
+}
+
+function readPolicy() {
+  return JSON.parse(readFileSync(join(ROOT, 'config', 'graph-tools-versions.json'), 'utf-8'));
+}
+
+// QNBS-v3: reject pending or mismatched index evidence before it can enter a committed report.
+export function validateIndexStatus(status, expectedVersion) {
+  const pending = status?.pendingChanges;
+  const index = status?.index;
+  const counts = [status?.fileCount, status?.nodeCount, status?.edgeCount];
+  if (status?.initialized !== true || status.version !== expectedVersion) {
+    throw new Error(`CodeGraph version/index mismatch; expected initialized ${expectedVersion}`);
+  }
+  if (counts.some((count) => !Number.isInteger(count) || count < 0)) {
+    throw new Error('CodeGraph status is incomplete: file/node/edge counts are required');
+  }
+  if (
+    !pending ||
+    ['added', 'modified', 'removed'].some(
+      (field) => !Number.isInteger(pending[field]) || pending[field] !== 0,
+    ) ||
+    status.worktreeMismatch != null
+  ) {
+    throw new Error('CodeGraph index is stale: pending changes or worktree mismatch reported');
+  }
+  if (!index || index.builtWithVersion !== expectedVersion || index.reindexRecommended !== false) {
+    throw new Error('CodeGraph index requires reindexing or was built with another version');
+  }
+  return status;
+}
+
+// QNBS-v3: status counts and file evidence must describe the same complete index snapshot.
+export function validateFileList(fileList, expectedCount) {
+  if (!Array.isArray(fileList) || fileList.some((file) => typeof file?.path !== 'string')) {
+    throw new Error('codegraph files --json returned an invalid file list');
+  }
+  const uniquePaths = new Set(fileList.map((file) => file.path));
+  if (fileList.length !== expectedCount || uniquePaths.size !== expectedCount) {
+    throw new Error('codegraph files --json count does not match codegraph status');
+  }
+  return fileList;
+}
+
+export function formatExtensionLines(fileList) {
+  const byExtension = new Map();
+  for (const file of fileList) {
+    const extension = file.path.split('.').pop() || 'none';
+    // QNBS-v3: reject control characters before filename-derived text reaches Markdown.
+    const hasUnsafeCharacter = [...extension].some((character) => {
+      const codePoint = character.codePointAt(0) ?? -1;
+      return (
+        (codePoint >= 0 && codePoint <= 0x1f) ||
+        (codePoint >= 0x7f && codePoint <= 0x9f) ||
+        codePoint === 0x2028 ||
+        codePoint === 0x2029
+      );
     });
-  report += '\n';
-} catch (e) {
-  report += `## Files by Extension\n\nUnavailable: ${String(e)}\n\n`;
+    if (hasUnsafeCharacter) {
+      throw new Error('codegraph files --json returned an unsafe filename extension');
+    }
+    byExtension.set(extension, (byExtension.get(extension) ?? 0) + 1);
+  }
+  return (
+    [...byExtension.entries()]
+      // QNBS-v3: code-point ordering keeps equal-count reports identical across host locales.
+      .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+      .map(([extension, count]) => {
+        const safeExtension = extension.replace(/[\\`*_{}[\]()#+.!|>~-]/g, '\\$&');
+        return `- **.${safeExtension}**: ${count}`;
+      })
+      .join('\n')
+  );
 }
 
-report += '---\n\n';
-report += '*Regenerate with: `pnpm run codegraph:report`*\n';
+function parseStatus(output, expectedVersion) {
+  try {
+    return validateIndexStatus(JSON.parse(output), expectedVersion);
+  } catch (error) {
+    if (error instanceof SyntaxError)
+      throw new Error(`could not parse codegraph status --json: ${error.message}`);
+    throw error;
+  }
+}
 
-writeFileSync(REPORT_PATH, report);
-console.log(`✅ ${REPORT_PATH} generated.`);
+function compactStatus(status) {
+  return [
+    `Initialized: ${status.initialized ? 'yes' : 'no'}`,
+    `Version: ${status.version}`,
+    `Files: ${status.fileCount}`,
+    `Nodes: ${status.nodeCount}`,
+    `Edges: ${status.edgeCount}`,
+    `Pending changes: ${JSON.stringify(status.pendingChanges)}`,
+    `Worktree mismatch: ${status.worktreeMismatch ?? 'none'}`,
+    `Index built with: ${status.index.builtWithVersion}`,
+    `Reindex required: ${status.index.reindexRecommended ? 'yes' : 'no'}`,
+  ].join('\n');
+}
+
+function writeCandidate(report) {
+  const candidate = `${REPORT_PATH}.tmp-${process.pid}`;
+  try {
+    writeFileSync(candidate, report);
+    renameSync(candidate, REPORT_PATH);
+  } catch (error) {
+    rmSync(candidate, { force: true });
+    throw error;
+  }
+}
+
+// QNBS-v3: keep the previous report authoritative until stable evidence validates its replacement.
+export function generateReport() {
+  if (!existsSync(DB_PATH)) {
+    console.error(
+      '[codegraph-report] SKIPPED_NOT_INITIALIZED — no local index. Run: pnpm run codegraph:update',
+    );
+    return 1;
+  }
+
+  const { clean, dirtyPaths } = checkCleanState();
+  if (!clean) {
+    console.error(
+      `[codegraph-report] DIRTY_UNTRACKED_INPUT — refusing to write a committed report from an ` +
+        `unstable source state. Commit or stash first:\n  ${dirtyPaths.join('\n  ')}`,
+    );
+    return 1;
+  }
+
+  const previousReport = existsSync(REPORT_PATH) ? readFileSync(REPORT_PATH) : null;
+  let fingerprintBefore;
+  try {
+    fingerprintBefore = computeSourceFingerprint();
+    const packageJson = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf-8'));
+    const policy = readPolicy();
+    const status = parseStatus(runCodegraph(['status', '--json']), policy.codegraph.testedVersion);
+    const filesOutput = runCodegraph(['files', '--json']);
+    let fileList;
+    try {
+      fileList = JSON.parse(filesOutput);
+    } catch (error) {
+      throw new Error(`could not parse codegraph files --json: ${error.message}`);
+    }
+    validateFileList(fileList, status.fileCount);
+
+    const fingerprintAfter = computeSourceFingerprint();
+    const afterState = checkCleanState();
+    if (!afterState.clean || fingerprintBefore !== fingerprintAfter) {
+      throw new Error(
+        'SOURCE_CHANGED_DURING_REPORT — source/index evidence is not one stable snapshot',
+      );
+    }
+    const extLines = formatExtensionLines(fileList);
+    const metadata = buildMetadataBlock({
+      tool: 'codegraph',
+      toolVersion: status.version,
+      generationMode: 'local-index (codegraph status --json/files)',
+      reportSchemaVersion: policy.reportSchemaVersion,
+      fingerprint: fingerprintAfter,
+    });
+    const report = `# CodeGraph Report\n\n${metadata}\n\n## Status\n\n\`\`\`text\n${compactStatus(status)}\n\`\`\`\n\n## Files by Extension\n\n${extLines}\n\n---\n\n*Regenerate with: \`pnpm run graphs:report\` (or \`pnpm run codegraph:report\` directly). Freshness\ncheck: \`pnpm run graphs:status\`. Package: ${packageJson.name ?? 'worldscript-studio'}.*\n`;
+    writeCandidate(report);
+    if (!checkCleanState().clean || computeSourceFingerprint() !== fingerprintBefore) {
+      throw new Error('SOURCE_CHANGED_DURING_REPORT — source changed before report commit');
+    }
+    console.log(`[codegraph-report] PASS — ${REPORT_PATH} generated.`);
+    return 0;
+  } catch (error) {
+    if (previousReport === null) rmSync(REPORT_PATH, { force: true });
+    else writeFileSync(REPORT_PATH, previousReport);
+    console.error(`[codegraph-report] FAIL — ${error?.message ?? String(error)}`);
+    return 1;
+  }
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  process.exit(generateReport());
+}
