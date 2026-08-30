@@ -39,9 +39,15 @@ export class ProjectLoadError extends Error {
 
 // QNBS-v3: a stable deletion outcome keeps incomplete legacy cleanup retryable without exposing filesystem details.
 export class ProjectDeleteError extends Error {
-  constructor() {
+  constructor(
+    public readonly reason:
+      | 'cleanup-incomplete'
+      | 'identity-inspection-failed' = 'cleanup-incomplete',
+  ) {
     super(
-      'Project deletion completed for the main project, but legacy auxiliary cleanup is incomplete.',
+      reason === 'identity-inspection-failed'
+        ? 'Project deletion was not completed because its stored identity could not be safely verified.'
+        : 'Project deletion completed for the main project, but legacy auxiliary cleanup is incomplete.',
     );
     this.name = 'ProjectDeleteError';
   }
@@ -340,6 +346,7 @@ export class FsProjectStore extends FsAssetStore {
       this.clearLegacyAuxiliaryPolicy(safeProjectId);
     }
     if (!hasUnusablePersistedProjectId(project)) {
+      if (!persistedMetadata) this.clearLegacyPoliciesTargetingProject(safeProjectId);
       return project;
     }
 
@@ -480,6 +487,7 @@ export class FsProjectStore extends FsAssetStore {
 
     const projectFile = await apis.join(projectPath, 'project.json');
     await writeTextFileAtomic(apis, projectFile, compressData(projectToPersist));
+    this.clearLegacyPoliciesTargetingProject(projectId);
     // QNBS-v3 (#332): documented best-effort abort — the project data above already saved; a failed marker write only degrades the next cold-boot's project selection, not worth failing this save over.
     await this.setActiveProjectId(projectId).catch((error) => {
       logger.warn('Failed to persist active-project marker (project save itself succeeded)', {
@@ -696,7 +704,9 @@ export class FsProjectStore extends FsAssetStore {
     if (!safeProjectId) return;
     const projectPath = await apis.join(appDataPath, 'projects', safeProjectId);
 
-    if (await apis.exists(projectPath)) {
+    const projectExists = await apis.exists(projectPath);
+    if (projectExists) {
+      await this.hydrateLegacyPolicyForDeletion(safeProjectId, projectPath, apis, appDataPath);
       await retryFs(() => apis.remove(projectPath, { recursive: true }));
     }
 
@@ -718,6 +728,43 @@ export class FsProjectStore extends FsAssetStore {
       throw new ProjectDeleteError();
     }
     this.clearLegacyAuxiliaryPolicy(safeProjectId);
+  }
+
+  private async hydrateLegacyPolicyForDeletion(
+    safeProjectId: string,
+    projectPath: string,
+    apis: TauriApis,
+    appDataPath: string,
+  ): Promise<void> {
+    if (
+      this.legacyBinderAssetIdsForProject(safeProjectId).length > 0 ||
+      this.legacyCodexProjectId(safeProjectId)
+    ) {
+      return;
+    }
+    let project: StoryProject;
+    try {
+      const projectFile = await apis.join(projectPath, 'project.json');
+      if (!(await apis.exists(projectFile))) return;
+      const parsed = decompressData<unknown>(await retryFs(() => apis.readTextFile(projectFile)));
+      if (!looksLikeStoryProject(parsed)) throw new Error('Stored project is not project-shaped.');
+      project = parsed;
+    } catch (error) {
+      logger.error('Could not inspect project identity before deletion', {
+        projectId: safeProjectId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new ProjectDeleteError('identity-inspection-failed');
+    }
+    try {
+      await this.migrateLegacyProjectIdentity(project, safeProjectId, apis, appDataPath);
+    } catch (error) {
+      logger.error('Could not validate legacy auxiliary data before deletion', {
+        projectId: safeProjectId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new ProjectDeleteError('identity-inspection-failed');
+    }
   }
 
   // Import/Export functionality

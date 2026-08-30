@@ -421,6 +421,7 @@ describe('FsProjectStore — projects', () => {
     const legitimateCodex = { projectId: 'project', entries: [{ name: 'legitimate' }] };
     const legitimateVectors = [{ id: 'legitimate-vector' }];
     await store.saveProject(legitimateProject as never);
+    await expect(store.getStoryCodex('item')).resolves.toBeNull();
     await store.saveStoryCodex(legitimateCodex as never);
     await store.saveRagVectors('project', legitimateVectors);
     await store.saveBinderAsset('project', 'legitimate-asset', new Uint8Array([2]).buffer, {
@@ -653,6 +654,39 @@ describe('FsProjectStore — projects', () => {
     fake.apis.remove = originalRemove;
     await expect(store.deleteProject('item')).resolves.toBeUndefined();
     expect(fake.text.has('/app/projects/project/codex/codex.snap')).toBe(false);
+  });
+
+  // QNBS-v3: deletion revalidates persisted legacy routing so restart-time cleanup cannot orphan verified auxiliary data.
+  it('hydrates persisted legacy routing before deleting an unloaded project', async () => {
+    const legacyProject = { ...project, id: '***' };
+    const legacyCodex = { projectId: '***', entries: [{ name: 'legacy' }] };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+    await fake.apis.mkdir('/app/projects/project/codex', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/project/codex/codex.snap',
+      compressData(legacyCodex),
+    );
+
+    const loaded = await store.loadProject('item');
+    await store.saveProject(loaded as never);
+    const restarted = new FsProjectStore();
+
+    await expect(restarted.deleteProject('item')).resolves.toBeUndefined();
+    expect(fake.text.has('/app/projects/item/project.json')).toBe(false);
+    expect(fake.text.has('/app/projects/project/codex/codex.snap')).toBe(false);
+  });
+
+  // QNBS-v3: deletion fails closed when project identity cannot be inspected, preserving data for a later retry.
+  it('does not delete a project when its identity cannot be inspected', async () => {
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', '{corrupt');
+
+    await expect(store.deleteProject('item')).rejects.toMatchObject({
+      name: 'ProjectDeleteError',
+      reason: 'identity-inspection-failed',
+    });
+    expect(fake.text.has('/app/projects/item/project.json')).toBe(true);
   });
 
   // QNBS-v3: snapshot recovery accepts an invalid legacy identity only when its existing fallback directory proves ownership.

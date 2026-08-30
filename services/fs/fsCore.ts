@@ -350,6 +350,17 @@ export class FsCore {
     this.legacyAuxiliaryPolicies.delete(projectId);
   }
 
+  // QNBS-v3: claiming a real project directory invalidates legacy routes targeting that directory before they can redirect another project into it.
+  protected clearLegacyPoliciesTargetingProject(projectId: string): void {
+    const safeProjectId = sanitizePathSegment(projectId, '');
+    if (!safeProjectId || safeProjectId === '.' || safeProjectId === '..') return;
+    for (const [policyProjectId, policy] of this.legacyAuxiliaryPolicies) {
+      if (policy.legacyProjectId === safeProjectId) {
+        this.legacyAuxiliaryPolicies.delete(policyProjectId);
+      }
+    }
+  }
+
   private policyFor(projectId: string): LegacyAuxiliaryPolicy | undefined {
     const safeProjectId = sanitizePathSegment(projectId, '');
     if (!safeProjectId || safeProjectId === '.' || safeProjectId === '..') return undefined;
