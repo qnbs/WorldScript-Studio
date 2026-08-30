@@ -84,6 +84,15 @@ function projectPathSegment(projectId: string): string | null {
   return safeProjectId && safeProjectId !== '.' && safeProjectId !== '..' ? safeProjectId : null;
 }
 
+function migrateLegacyProjectIdentity(project: StoryProject, safeProjectId: string): StoryProject {
+  const rawProjectId = (project as unknown as Record<string, unknown>)['id'];
+  if (typeof rawProjectId === 'string' && !projectPathSegment(rawProjectId)) {
+    // QNBS-v3: legacy fallback directories become their stable path identity before autosave, while new invalid IDs remain rejected.
+    return { ...project, id: safeProjectId } as StoryProject;
+  }
+  return project;
+}
+
 export class FsProjectStore extends FsAssetStore {
   async saveProject(project: SaveProjectInput): Promise<void> {
     const flat = normalizeSaveProjectInputToStoryProject(project);
@@ -202,8 +211,9 @@ export class FsProjectStore extends FsAssetStore {
     }
 
     // QNBS-v3: schedule observation after this async load resolves so validation cannot delay or alter the load result.
-    scheduleCoreProjectValidation(project);
-    return project;
+    const migratedProject = migrateLegacyProjectIdentity(project, safeProjectId);
+    scheduleCoreProjectValidation(migratedProject);
+    return migratedProject;
   }
 
   async listProjects(): Promise<string[]> {

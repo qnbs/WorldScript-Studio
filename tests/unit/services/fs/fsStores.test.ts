@@ -58,6 +58,7 @@ vi.mock('../../../../services/i18n/staticTranslate', () => ({
 }));
 
 import { appStoreRef } from '../../../../app/storeRef';
+import { compressData } from '../../../../services/fs/fsCore';
 import { FsProjectStore } from '../../../../services/fs/projectFsStore';
 import { logger } from '../../../../services/logger';
 
@@ -275,6 +276,19 @@ describe('FsProjectStore — projects', () => {
       reason: 'not-found',
     });
     expect([...fake.text.keys()].some((path) => path.startsWith('/app/projects/'))).toBe(false);
+  });
+
+  it('migrates a legacy invalid ID to its existing directory identity before save', async () => {
+    const legacyProject = { ...project, id: '***' };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+
+    const loaded = await store.loadProject('item');
+
+    expect((loaded as unknown as Record<string, unknown>)['id']).toBe('item');
+    await expect(store.saveProject(loaded as never)).resolves.toBeUndefined();
+    expect(fake.text.has('/app/projects/item/project.json')).toBe(true);
+    expect(await store.loadProject('item')).toEqual(expect.objectContaining({ title: 'My Novel' }));
   });
 
   it('rejects dot path segments without touching the project namespace', async () => {
