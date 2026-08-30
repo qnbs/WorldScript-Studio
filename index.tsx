@@ -353,23 +353,23 @@ async function bootApp(): Promise<void> {
       <React.StrictMode>
         <StorageErrorScreen
           message={msg}
-          onRecover={
-            canQuarantine
-              ? async () => {
+          {...(canQuarantine
+            ? {
+                onRecover: async () => {
                   const result = await storageService.quarantineProject(projectLoadError.projectId);
                   if (!result) throw new Error('Desktop filesystem recovery is unavailable.');
                   window.location.reload();
-                }
-              : undefined
-          }
-          onReset={
-            projectLoadError
-              ? undefined
-              : async () => {
+                },
+              }
+            : {})}
+          {...(!projectLoadError
+            ? {
+                onReset: async () => {
                   await resetAllDatabases();
                   window.location.reload();
-                }
-          }
+                },
+              }
+            : {})}
         />
       </React.StrictMode>,
     );
