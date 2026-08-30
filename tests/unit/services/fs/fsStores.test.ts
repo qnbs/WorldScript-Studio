@@ -83,7 +83,10 @@ function makeFakeFs(): FakeFs {
     join: (...parts: string[]) => Promise.resolve(parts.join('/')),
     exists: (p: string) =>
       Promise.resolve(text.has(p) || bin.has(p) || dirs.has(p) || under(p).length > 0),
-    mkdir: (p: string) => {
+    mkdir: (p: string, options?: { recursive?: boolean }) => {
+      if (dirs.has(p) && !options?.recursive) {
+        return Promise.reject(new Error(`EEXIST ${p}`));
+      }
       dirs.add(p);
       return Promise.resolve();
     },
@@ -203,16 +206,16 @@ describe('FsProjectStore — projects', () => {
   // QNBS-v3: prove a claimed quarantine target cannot turn preserve-first recovery into data loss.
   it('tries the next quarantine name when a concurrent rename claims the checked target', async () => {
     await store.saveProject(project as never);
-    const originalRename = fake.apis.rename;
+    const originalMkdir = fake.apis.mkdir;
     let firstTarget: string | undefined;
     let racePending = true;
-    fake.apis.rename = (from: string, to: string) => {
-      if (racePending) {
+    fake.apis.mkdir = (path: string, options?: { recursive?: boolean }) => {
+      if (racePending && path.startsWith('/app/quarantined-projects/p1-corrupt-')) {
         racePending = false;
-        firstTarget = to;
-        return fake.apis.mkdir(to).then(() => originalRename(from, to));
+        firstTarget = path;
+        return originalMkdir(path, options).then(() => Promise.reject(new Error(`EEXIST ${path}`)));
       }
-      return originalRename(from, to);
+      return originalMkdir(path, options);
     };
 
     const result = await store.quarantineProject('p1');
@@ -223,8 +226,30 @@ describe('FsProjectStore — projects', () => {
     expect(fake.text.has('/app/projects/p1/project.json')).toBe(false);
   });
 
-  // QNBS-v3: report source disappearance as concurrent preservation, without inventing a quarantine path.
-  it('reports when another recovery moved the source before this rename', async () => {
+  // QNBS-v3: report an unidentifiable concurrent move without claiming a path that was not observed.
+  it('reports source-missing when another recovery moved the source elsewhere', async () => {
+    await store.saveProject(project as never);
+    const original = fake.text.get('/app/projects/p1/project.json');
+    fake.apis.rename = async (from: string) => {
+      const concurrentPath = '/app/quarantined-projects/p1-corrupt-concurrent';
+      await fake.apis.mkdir(concurrentPath);
+      await fake.apis.writeTextFile(`${concurrentPath}/project.json`, original as string);
+      await fake.apis.remove(from);
+      throw new Error(`ENOENT ${from}`);
+    };
+
+    await expect(store.quarantineProject('p1')).rejects.toMatchObject({
+      name: 'ProjectQuarantineError',
+      reason: 'source-missing',
+    });
+    expect(await store.listProjects()).not.toContain('p1');
+    expect(fake.text.get('/app/quarantined-projects/p1-corrupt-concurrent/project.json')).toBe(
+      original,
+    );
+  });
+
+  // QNBS-v3: a vanished source without a verified destination is not evidence of preservation.
+  it('reports source-missing when the source disappears without a quarantine copy', async () => {
     await store.saveProject(project as never);
     fake.apis.rename = async (from: string) => {
       await fake.apis.remove(from);
@@ -233,9 +258,20 @@ describe('FsProjectStore — projects', () => {
 
     await expect(store.quarantineProject('p1')).rejects.toMatchObject({
       name: 'ProjectQuarantineError',
-      reason: 'already-preserved',
+      reason: 'source-missing',
+      message:
+        'The project source is no longer present, but its preservation location could not be confirmed.',
     });
-    expect(await store.listProjects()).not.toContain('p1');
+  });
+
+  it('does not map an unusable project ID to an arbitrary quarantine directory', async () => {
+    await store.saveProject({ ...project, id: 'project' } as never);
+
+    await expect(store.quarantineProject('***')).rejects.toMatchObject({
+      name: 'ProjectQuarantineError',
+      reason: 'not-found',
+    });
+    expect(fake.text.has('/app/projects/project/project.json')).toBe(true);
   });
 
   it('leaves the original project intact when quarantine cannot rename it', async () => {

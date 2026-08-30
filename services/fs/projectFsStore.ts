@@ -38,9 +38,18 @@ export class ProjectLoadError extends Error {
 
 export class ProjectQuarantineError extends Error {
   constructor(
-    public readonly reason: 'not-found' | 'io-error' | 'name-exhausted' | 'already-preserved',
+    public readonly reason:
+      | 'not-found'
+      | 'io-error'
+      | 'name-exhausted'
+      | 'already-preserved'
+      | 'source-missing',
   ) {
-    super('Project preservation failed. The original project was not deleted.');
+    super(
+      reason === 'source-missing'
+        ? 'The project source is no longer present, but its preservation location could not be confirmed.'
+        : 'Project preservation failed. The original project was not deleted.',
+    );
     this.name = 'ProjectQuarantineError';
   }
 }
@@ -69,6 +78,11 @@ function looksLikeStoryProject(value: unknown): value is StoryProject {
   );
 }
 
+// QNBS-v3: one sanitizer and empty-ID policy keeps every filesystem project operation on the same path identity.
+function projectPathSegment(projectId: string): string | null {
+  return sanitizePathSegment(projectId, '') || null;
+}
+
 export class FsProjectStore extends FsAssetStore {
   async saveProject(project: SaveProjectInput): Promise<void> {
     const flat = normalizeSaveProjectInputToStoryProject(project);
@@ -83,9 +97,10 @@ export class FsProjectStore extends FsAssetStore {
 
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
-    const projectId = sanitizePathSegment(
-      ((flat as unknown as Record<string, unknown>)['id'] as string) || flat.title || 'project',
-    );
+    const projectId =
+      projectPathSegment(
+        ((flat as unknown as Record<string, unknown>)['id'] as string) || flat.title || '',
+      ) ?? 'project';
     const projectPath = await apis.join(appDataPath, 'projects', projectId);
 
     if (!(await apis.exists(projectPath))) {
@@ -141,7 +156,8 @@ export class FsProjectStore extends FsAssetStore {
   async loadProject(projectId: string): Promise<StoryProject | null> {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
-    const safeProjectId = sanitizePathSegment(projectId);
+    const safeProjectId = projectPathSegment(projectId);
+    if (!safeProjectId) return null;
     const projectFile = await apis.join(appDataPath, 'projects', safeProjectId, 'project.json');
 
     // QNBS-v3 (CodeRabbit/codex): exists() rejecting is an I/O failure too, not absence — classify it the same as a readTextFile failure rather than letting it escape raw.
@@ -205,7 +221,8 @@ export class FsProjectStore extends FsAssetStore {
     try {
       const apis = await this.getApis();
       const appDataPath = await this.ensureAppDataPath();
-      const safeProjectId = sanitizePathSegment(projectId, 'project');
+      const safeProjectId = projectPathSegment(projectId);
+      if (!safeProjectId) throw new ProjectQuarantineError('not-found');
       const projectPath = await apis.join(appDataPath, 'projects', safeProjectId);
       if (!(await apis.exists(projectPath))) {
         throw new ProjectQuarantineError('not-found');
@@ -220,17 +237,13 @@ export class FsProjectStore extends FsAssetStore {
           quarantineRoot,
           `${safeProjectId}-corrupt-${suffix}`,
         );
-        if (await apis.exists(quarantinePath)) continue;
+        // QNBS-v3: reserve a unique directory atomically so rename cannot replace a concurrent quarantine target.
         try {
-          await retryFs(() => apis.rename(projectPath, quarantinePath));
-          return { projectId, path: quarantinePath };
+          await apis.mkdir(quarantinePath);
         } catch (error) {
-          // QNBS-v3: a concurrent quarantine may claim the checked target between exists and rename.
           let targetExists: boolean;
-          let sourceExists: boolean;
           try {
             targetExists = await apis.exists(quarantinePath);
-            sourceExists = await apis.exists(projectPath);
           } catch (probeError) {
             logger.error('Failed to inspect a concurrent quarantine result', {
               projectId,
@@ -239,7 +252,46 @@ export class FsProjectStore extends FsAssetStore {
             throw new ProjectQuarantineError('io-error');
           }
           if (targetExists) continue;
-          if (!sourceExists) throw new ProjectQuarantineError('already-preserved');
+          logger.error('Failed to reserve quarantine directory', {
+            projectId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          throw new ProjectQuarantineError('io-error');
+        }
+
+        const preservedPath = await apis.join(quarantinePath, safeProjectId);
+        const releaseReservation = async (): Promise<void> => {
+          try {
+            await apis.remove(quarantinePath, { recursive: true });
+          } catch (cleanupError) {
+            logger.warn('Failed to remove reserved quarantine directory after a failed move', {
+              projectId,
+              error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+            });
+          }
+        };
+        try {
+          await retryFs(() => apis.rename(projectPath, preservedPath));
+          return { projectId, path: preservedPath };
+        } catch (error) {
+          let sourceExists: boolean;
+          let preservedExists: boolean;
+          try {
+            sourceExists = await apis.exists(projectPath);
+            preservedExists = await apis.exists(preservedPath);
+          } catch (probeError) {
+            logger.error('Failed to inspect a concurrent quarantine result', {
+              projectId,
+              error: probeError instanceof Error ? probeError.message : String(probeError),
+            });
+            throw new ProjectQuarantineError('io-error');
+          }
+          if (!sourceExists && preservedExists) return { projectId, path: preservedPath };
+          if (!sourceExists) {
+            await releaseReservation();
+            throw new ProjectQuarantineError('source-missing');
+          }
+          await releaseReservation();
           logger.error('Failed to quarantine project directory', {
             projectId,
             error: error instanceof Error ? error.message : String(error),
@@ -262,7 +314,8 @@ export class FsProjectStore extends FsAssetStore {
   async deleteProject(projectId: string): Promise<void> {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
-    const safeProjectId = sanitizePathSegment(projectId);
+    const safeProjectId = projectPathSegment(projectId);
+    if (!safeProjectId) return;
     const projectPath = await apis.join(appDataPath, 'projects', safeProjectId);
 
     if (await apis.exists(projectPath)) {
