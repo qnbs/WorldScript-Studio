@@ -200,6 +200,28 @@ describe('FsProjectStore — projects', () => {
     await expect(store.loadProject('p1')).resolves.toBeNull();
   });
 
+  it('tries the next quarantine name when a concurrent rename claims the checked target', async () => {
+    await store.saveProject(project as never);
+    const originalRename = fake.apis.rename;
+    let firstTarget: string | undefined;
+    let racePending = true;
+    fake.apis.rename = (from: string, to: string) => {
+      if (racePending) {
+        racePending = false;
+        firstTarget = to;
+        return fake.apis.mkdir(to).then(() => originalRename(from, to));
+      }
+      return originalRename(from, to);
+    };
+
+    const result = await store.quarantineProject('p1');
+
+    expect(firstTarget).toBeDefined();
+    expect(result.path).not.toBe(firstTarget);
+    expect(fake.text.get(`${result.path}/project.json`)).toBeDefined();
+    expect(fake.text.has('/app/projects/p1/project.json')).toBe(false);
+  });
+
   it('leaves the original project intact when quarantine cannot rename it', async () => {
     await store.saveProject(project as never);
     const original = fake.text.get('/app/projects/p1/project.json');

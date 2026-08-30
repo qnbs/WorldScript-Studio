@@ -190,6 +190,7 @@ export class FsProjectStore extends FsAssetStore {
     }
   }
 
+  // QNBS-v3: move the whole folder before reload so corrupt project artifacts remain recoverable.
   /** Move the whole corrupt project directory aside so its manuscript and assets remain recoverable. */
   async quarantineProject(projectId: string): Promise<ProjectQuarantineResult> {
     const apis = await this.getApis();
@@ -207,8 +208,14 @@ export class FsProjectStore extends FsAssetStore {
       const suffix = attempt === 0 ? String(timestamp) : `${timestamp}-${attempt}`;
       const quarantinePath = await apis.join(quarantineRoot, `${safeProjectId}-corrupt-${suffix}`);
       if (await apis.exists(quarantinePath)) continue;
-      await retryFs(() => apis.rename(projectPath, quarantinePath));
-      return { projectId, path: quarantinePath };
+      try {
+        await retryFs(() => apis.rename(projectPath, quarantinePath));
+        return { projectId, path: quarantinePath };
+      } catch (error) {
+        // QNBS-v3: a concurrent quarantine may claim the checked target between exists and rename.
+        if (await apis.exists(quarantinePath)) continue;
+        throw error;
+      }
     }
 
     throw new Error(`Could not quarantine project "${projectId}": recovery target already exists.`);
