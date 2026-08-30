@@ -13,6 +13,12 @@ export interface BinderAssetPayload {
   meta: BinderAssetMeta;
 }
 
+/** Result of moving a corrupt desktop project out of the active project namespace. */
+export interface ProjectQuarantineResult {
+  projectId: string;
+  path: string;
+}
+
 /** IndexedDB / filesystem key for binder blobs — stable delimiter avoids UUID clashes. */
 export function makeBinderAssetStorageKey(projectId: string, assetId: string): string {
   const safeProject = projectId.replace(/[\s:]/g, '_').slice(0, 200);
@@ -66,6 +72,8 @@ export interface StorageBackend {
   deleteProject(projectId: string): Promise<void>;
   /** QNBS-v3 (#332): optional — only the multi-project Tauri filesystem backend implements this; IndexedDB's single-project contract has no "which one" ambiguity to resolve. */
   getActiveProjectId?(): Promise<string | null>;
+  /** Desktop-only preserve-first recovery; IndexedDB has no filesystem project to quarantine. */
+  quarantineProject?(projectId: string): Promise<ProjectQuarantineResult>;
 
   saveImage(id: string, base64Data: string): Promise<void>;
   getImage(id: string): Promise<string | null>;

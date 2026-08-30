@@ -63,7 +63,7 @@ describe('FsProjectStore.loadProject — DA-01 fail-closed behavior', () => {
     const store = new FsProjectStore();
     const promise = store.loadProject('locked-id');
     await expect(promise).rejects.toThrow(ProjectLoadError);
-    await expect(promise).rejects.toMatchObject({ reason: 'io-error' });
+    await expect(promise).rejects.toMatchObject({ reason: 'io-error', projectId: 'locked-id' });
   });
 
   it('throws ProjectLoadError("corrupt") on a corrupt/truncated compressed payload', async () => {
@@ -75,7 +75,7 @@ describe('FsProjectStore.loadProject — DA-01 fail-closed behavior', () => {
     const store = new FsProjectStore();
     const promise = store.loadProject('corrupt-id');
     await expect(promise).rejects.toThrow(ProjectLoadError);
-    await expect(promise).rejects.toMatchObject({ reason: 'corrupt' });
+    await expect(promise).rejects.toMatchObject({ reason: 'corrupt', projectId: 'corrupt-id' });
   });
 
   it('throws ProjectLoadError("corrupt") on valid JSON that is not project-shaped at all', async () => {

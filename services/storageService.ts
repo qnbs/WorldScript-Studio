@@ -2,6 +2,7 @@ import type { ProjectSnapshot, Settings, StoryCodex, StoryProject } from '../typ
 import type {
   BinderAssetMeta,
   BinderAssetPayload,
+  ProjectQuarantineResult,
   SaveProjectInput,
   StorageBackend,
 } from './storageBackend';
@@ -9,6 +10,7 @@ import type {
 export type {
   BinderAssetMeta,
   BinderAssetPayload,
+  ProjectQuarantineResult,
   SaveProjectEnvelope,
   SaveProjectInput,
   StorageBackend,
@@ -87,6 +89,11 @@ class StorageManager {
   async getActiveProjectId(): Promise<string | null> {
     const backend = await this.getBackend();
     return (await backend.getActiveProjectId?.()) ?? null;
+  }
+
+  async quarantineProject(projectId: string): Promise<ProjectQuarantineResult | null> {
+    const backend = await this.getBackend();
+    return (await backend.quarantineProject?.(projectId)) ?? null;
   }
 
   async deleteProject(projectId: string): Promise<void> {

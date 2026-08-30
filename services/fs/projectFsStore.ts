@@ -10,7 +10,11 @@ import type { Character, StoryProject, World } from '../../types';
 import { getStaticTranslation } from '../i18n/staticTranslate';
 import { logger } from '../logger';
 import { parseImportedProjectJson } from '../projectImportSchema';
-import { normalizeSaveProjectInputToStoryProject, type SaveProjectInput } from '../storageBackend';
+import {
+  normalizeSaveProjectInputToStoryProject,
+  type ProjectQuarantineResult,
+  type SaveProjectInput,
+} from '../storageBackend';
 import { FsAssetStore } from './assetFsStore';
 import {
   compressData,
@@ -25,6 +29,7 @@ export class ProjectLoadError extends Error {
   constructor(
     public readonly reason: 'corrupt' | 'io-error',
     message: string,
+    public readonly projectId: string,
   ) {
     super(message);
     this.name = 'ProjectLoadError';
@@ -142,6 +147,7 @@ export class FsProjectStore extends FsAssetStore {
       throw new ProjectLoadError(
         'io-error',
         `Could not read the project file for "${projectId}" — it may be locked, permission-denied, or otherwise inaccessible.`,
+        projectId,
       );
     }
 
@@ -157,6 +163,7 @@ export class FsProjectStore extends FsAssetStore {
       throw new ProjectLoadError(
         'corrupt',
         `The saved project file for "${projectId}" appears to be corrupted and could not be read. The file has not been deleted.`,
+        projectId,
       );
     }
 
@@ -181,6 +188,30 @@ export class FsProjectStore extends FsAssetStore {
       logger.error('Failed to list projects:', error);
       return [];
     }
+  }
+
+  /** Move the whole corrupt project directory aside so its manuscript and assets remain recoverable. */
+  async quarantineProject(projectId: string): Promise<ProjectQuarantineResult> {
+    const apis = await this.getApis();
+    const appDataPath = await this.ensureAppDataPath();
+    const safeProjectId = sanitizePathSegment(projectId, 'project');
+    const projectPath = await apis.join(appDataPath, 'projects', safeProjectId);
+    if (!(await apis.exists(projectPath))) {
+      throw new Error(`Could not quarantine project "${projectId}": project directory not found.`);
+    }
+
+    const quarantineRoot = await apis.join(appDataPath, 'quarantined-projects');
+    await apis.mkdir(quarantineRoot, { recursive: true });
+    const timestamp = Date.now();
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const suffix = attempt === 0 ? String(timestamp) : `${timestamp}-${attempt}`;
+      const quarantinePath = await apis.join(quarantineRoot, `${safeProjectId}-corrupt-${suffix}`);
+      if (await apis.exists(quarantinePath)) continue;
+      await retryFs(() => apis.rename(projectPath, quarantinePath));
+      return { projectId, path: quarantinePath };
+    }
+
+    throw new Error(`Could not quarantine project "${projectId}": recovery target already exists.`);
   }
 
   async deleteProject(projectId: string): Promise<void> {
