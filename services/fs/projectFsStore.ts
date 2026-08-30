@@ -37,6 +37,16 @@ export class ProjectLoadError extends Error {
   }
 }
 
+// QNBS-v3: a stable deletion outcome keeps incomplete legacy cleanup retryable without exposing filesystem details.
+export class ProjectDeleteError extends Error {
+  constructor() {
+    super(
+      'Project deletion completed for the main project, but legacy auxiliary cleanup is incomplete.',
+    );
+    this.name = 'ProjectDeleteError';
+  }
+}
+
 export class ProjectQuarantineError extends Error {
   constructor(
     public readonly reason:
@@ -113,6 +123,15 @@ function legacyBinderAssetIds(project: StoryProject): string[] {
     .map((assetId) => sanitizePathSegment(assetId, 'asset'));
 }
 
+// QNBS-v3: Binder IDs become suffixed filenames, so dot segments remain safe here while project directory dots stay rejected.
+function persistedBinderAssetId(assetId: unknown): assetId is string {
+  return (
+    typeof assetId === 'string' &&
+    assetId.length > 0 &&
+    sanitizePathSegment(assetId, 'asset') === assetId
+  );
+}
+
 type LegacyAuxiliaryEvidence = {
   codex: boolean;
   binderAssetIds: Set<string>;
@@ -143,12 +162,7 @@ function persistedLegacyAuxiliaryMetadata(
     projectPathSegment(rawProjectId) ||
     typeof candidate['codex'] !== 'boolean' ||
     !Array.isArray(binderAssetIds) ||
-    binderAssetIds.some(
-      (assetId) =>
-        typeof assetId !== 'string' ||
-        !projectPathSegment(assetId) ||
-        projectPathSegment(assetId) !== assetId,
-    ) ||
+    binderAssetIds.some((assetId) => !persistedBinderAssetId(assetId)) ||
     (!candidate['codex'] && binderAssetIds.length === 0)
   ) {
     return null;
@@ -267,21 +281,21 @@ export class FsProjectStore extends FsAssetStore {
     return evidence;
   }
 
-  private async legacyFallbackHasLegitimateProject(
+  private async legacyFallbackProjectState(
     safeProjectId: string,
     apis: TauriApis,
     appDataPath: string,
-  ): Promise<boolean> {
-    if (safeProjectId === 'project') return true;
+  ): Promise<'confirmed' | 'absent' | 'indeterminate'> {
+    if (safeProjectId === 'project') return 'confirmed';
     try {
       const legacyProjectFile = await apis.join(appDataPath, 'projects', 'project', 'project.json');
-      return await apis.exists(legacyProjectFile);
+      return (await apis.exists(legacyProjectFile)) ? 'confirmed' : 'absent';
     } catch (error) {
       logger.warn('Could not validate persisted legacy auxiliary provenance', {
         projectId: safeProjectId,
         error: error instanceof Error ? error.message : String(error),
       });
-      return true;
+      return 'indeterminate';
     }
   }
 
@@ -302,18 +316,24 @@ export class FsProjectStore extends FsAssetStore {
     ) {
       this.clearLegacyAuxiliaryPolicy(safeProjectId);
     } else if (persistedMetadata) {
-      const legacyProjectIsAvailable = await this.legacyFallbackHasLegitimateProject(
+      const legacyProjectState = await this.legacyFallbackProjectState(
         safeProjectId,
         apis,
         appDataPath,
       );
-      if (legacyProjectIsAvailable) {
+      if (legacyProjectState === 'confirmed') {
         this.clearLegacyAuxiliaryPolicy(safeProjectId);
-      } else {
+      } else if (legacyProjectState === 'absent') {
         this.registerLegacyAuxiliaryPolicy(
           safeProjectId,
           persistedMetadata.legacyProjectId,
           evidenceFromPersistedMetadata(persistedMetadata),
+        );
+      } else {
+        throw new ProjectLoadError(
+          'io-error',
+          'Could not validate legacy auxiliary project ownership while loading this project.',
+          safeProjectId,
         );
       }
     } else if (!hasLegacyInvalidId) {
@@ -361,6 +381,7 @@ export class FsProjectStore extends FsAssetStore {
   ): Promise<{
     projectId: string;
     metadata: PersistedLegacyAuxiliaryMetadata | null;
+    inspectionComplete: boolean;
   } | null> {
     if (!rawProjectId.trim()) return null;
     const legacyProjectId = sanitizePathSegment(rawProjectId, 'item');
@@ -399,6 +420,7 @@ export class FsProjectStore extends FsAssetStore {
     return {
       projectId: legacyProjectId,
       metadata: existingMetadata ?? persistedMetadataFromEvidence(rawProjectId, evidence),
+      inspectionComplete: existingMetadata ? true : evidence.inspectionComplete,
     };
   }
 
@@ -421,6 +443,11 @@ export class FsProjectStore extends FsAssetStore {
         );
         if (!legacyIdentity) {
           throw new Error('Cannot save a project with an unusable project ID.');
+        }
+        if (!legacyIdentity.inspectionComplete) {
+          throw new Error(
+            'Cannot safely save this legacy project until its auxiliary data can be verified.',
+          );
         }
         projectId = legacyIdentity.projectId;
         projectToPersist = {
@@ -673,15 +700,22 @@ export class FsProjectStore extends FsAssetStore {
       await retryFs(() => apis.remove(projectPath, { recursive: true }));
     }
 
-    const legacyBinderIds = this.legacyBinderAssetIdsForProject(safeProjectId);
-    if (legacyBinderIds.length > 0) {
-      for (const assetId of legacyBinderIds) {
-        await this.deleteBinderAsset(safeProjectId, assetId);
+    try {
+      const legacyBinderIds = this.legacyBinderAssetIdsForProject(safeProjectId);
+      if (legacyBinderIds.length > 0) {
+        for (const assetId of legacyBinderIds) {
+          await this.deleteBinderAssetStrict(safeProjectId, assetId);
+        }
       }
-    }
-    if (this.legacyCodexProjectId(safeProjectId)) {
-      await this.deleteStoryCodex(safeProjectId);
-      await this.deleteRagVectors(safeProjectId);
+      if (this.legacyCodexProjectId(safeProjectId)) {
+        await this.deleteStoryCodexStrict(safeProjectId);
+      }
+    } catch (error) {
+      logger.error('Failed to clean up legacy project data during deletion', {
+        projectId: safeProjectId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new ProjectDeleteError();
     }
     this.clearLegacyAuxiliaryPolicy(safeProjectId);
   }

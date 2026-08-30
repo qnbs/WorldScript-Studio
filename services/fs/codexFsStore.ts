@@ -51,17 +51,21 @@ export class FsCodexStore extends FsSettingsStore {
 
   async deleteStoryCodex(projectId: string): Promise<void> {
     try {
-      const apis = await this.getApis();
-      const appDataPath = await this.ensureAppDataPath();
-      const safeId = sanitizePathSegment(
-        this.resolveAuxiliaryProjectId(projectId, 'codex'),
-        'project',
-      );
-      const codexFile = await apis.join(appDataPath, 'projects', safeId, 'codex', 'codex.snap');
-      if (await apis.exists(codexFile)) await retryFs(() => apis.remove(codexFile));
+      await this.deleteStoryCodexStrict(projectId);
     } catch (error) {
       logger.error('Failed to delete story codex:', error);
     }
+  }
+
+  protected async deleteStoryCodexStrict(projectId: string): Promise<void> {
+    const apis = await this.getApis();
+    const appDataPath = await this.ensureAppDataPath();
+    const safeId = sanitizePathSegment(
+      this.resolveAuxiliaryProjectId(projectId, 'codex'),
+      'project',
+    );
+    const codexFile = await apis.join(appDataPath, 'projects', safeId, 'codex', 'codex.snap');
+    if (await apis.exists(codexFile)) await retryFs(() => apis.remove(codexFile));
   }
 
   // RAG Vectors — projects/{projectId}/codex/vectors.snap

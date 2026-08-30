@@ -125,13 +125,16 @@ export class FsAssetStore extends FsSnapshotStore {
 
   async deleteBinderAsset(projectId: string, assetId: string): Promise<void> {
     try {
-      const apis = await this.getApis();
-      const { binFile, metaFile } = await this.binderAssetPaths(projectId, assetId);
-      if (await apis.exists(binFile)) await retryFs(() => apis.remove(binFile));
-      if (await apis.exists(metaFile)) await retryFs(() => apis.remove(metaFile));
+      await this.deleteBinderAssetStrict(projectId, assetId);
     } catch (error) {
       logger.warn('deleteBinderAsset failed:', error);
     }
+  }
+
+  protected async deleteBinderAssetStrict(projectId: string, assetId: string): Promise<void> {
+    const { apis, binFile, metaFile } = await this.binderAssetPaths(projectId, assetId);
+    if (await apis.exists(binFile)) await retryFs(() => apis.remove(binFile));
+    if (await apis.exists(metaFile)) await retryFs(() => apis.remove(metaFile));
   }
 
   async listBinderAssetIds(projectId: string): Promise<string[]> {
