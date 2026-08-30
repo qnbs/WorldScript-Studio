@@ -148,11 +148,15 @@ export class FsAssetStore extends FsSnapshotStore {
       for (const safeId of safeIds) {
         const dir = await apis.join(appDataPath, 'projects', safeId, 'binder');
         if (!(await apis.exists(dir))) continue;
+        const legacyOnly =
+          legacyProjectId !== null && safeId !== sanitizePathSegment(projectId, 'project');
+        const allowed = legacyOnly ? new Set(this.legacyBinderAssetIdsForProject(projectId)) : null;
         const entries = await retryFs(() => apis.readDir(dir));
         for (const e of entries) {
           const name = e.name ?? '';
           if (name.endsWith('.meta.json')) {
-            ids.add(name.replace(/\.meta\.json$/, ''));
+            const id = name.replace(/\.meta\.json$/, '');
+            if (!allowed || allowed.has(id)) ids.add(id);
           }
         }
       }

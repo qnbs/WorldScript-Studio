@@ -106,11 +106,6 @@ function isLegacyInvalidProjectId(project: StoryProject): project is StoryProjec
   return typeof rawProjectId === 'string' && !projectPathSegment(rawProjectId);
 }
 
-function migratedProjectIdentity(project: StoryProject, safeProjectId: string): StoryProject {
-  // QNBS-v3: legacy fallback directories become their stable path identity before autosave, while new invalid IDs remain rejected.
-  return { ...project, id: safeProjectId } as StoryProject;
-}
-
 function legacyBinderAssetIds(project: StoryProject): string[] {
   return (project.binderNodes ?? [])
     .map((node) => node.binderAssetId)
@@ -122,6 +117,86 @@ type LegacyAuxiliaryEvidence = {
   codex: boolean;
   binderAssetIds: Set<string>;
 };
+
+const LEGACY_AUXILIARY_METADATA_KEY = '__worldscriptLegacyAuxiliary';
+
+type PersistedLegacyAuxiliaryMetadata = {
+  legacyProjectId: 'project';
+  legacyRawProjectId: string;
+  codex: boolean;
+  binderAssetIds: string[];
+};
+
+function persistedLegacyAuxiliaryMetadata(
+  project: StoryProject,
+): PersistedLegacyAuxiliaryMetadata | null {
+  const value = (project as unknown as Record<string, unknown>)[LEGACY_AUXILIARY_METADATA_KEY];
+  if (typeof value !== 'object' || value === null) return null;
+  const candidate = value as Record<string, unknown>;
+  const rawProjectId = candidate['legacyRawProjectId'];
+  const binderAssetIds = candidate['binderAssetIds'];
+  if (
+    candidate['legacyProjectId'] !== 'project' ||
+    typeof rawProjectId !== 'string' ||
+    !rawProjectId ||
+    projectPathSegment(rawProjectId) ||
+    typeof candidate['codex'] !== 'boolean' ||
+    !Array.isArray(binderAssetIds) ||
+    binderAssetIds.some(
+      (assetId) =>
+        typeof assetId !== 'string' ||
+        !projectPathSegment(assetId) ||
+        projectPathSegment(assetId) !== assetId,
+    ) ||
+    (!candidate['codex'] && binderAssetIds.length === 0)
+  ) {
+    return null;
+  }
+  return {
+    legacyProjectId: 'project',
+    legacyRawProjectId: rawProjectId,
+    codex: candidate['codex'],
+    binderAssetIds: [...binderAssetIds] as string[],
+  };
+}
+
+function persistedMetadataFromEvidence(
+  rawProjectId: string,
+  evidence: LegacyAuxiliaryEvidence,
+): PersistedLegacyAuxiliaryMetadata | null {
+  if (!evidence.codex && evidence.binderAssetIds.size === 0) return null;
+  return {
+    legacyProjectId: 'project',
+    legacyRawProjectId: rawProjectId,
+    codex: evidence.codex,
+    binderAssetIds: [...evidence.binderAssetIds],
+  };
+}
+
+function evidenceFromPersistedMetadata(
+  metadata: PersistedLegacyAuxiliaryMetadata,
+): LegacyAuxiliaryEvidence {
+  return {
+    codex: metadata.codex,
+    binderAssetIds: new Set(metadata.binderAssetIds),
+  };
+}
+
+function migratedProjectIdentity(
+  project: StoryProject,
+  safeProjectId: string,
+  rawProjectId?: string,
+  evidence?: LegacyAuxiliaryEvidence,
+): StoryProject {
+  const metadata =
+    rawProjectId && evidence ? persistedMetadataFromEvidence(rawProjectId, evidence) : null;
+  // QNBS-v3: legacy fallback directories carry verified auxiliary provenance across restart, while new invalid IDs remain rejected.
+  return {
+    ...project,
+    id: safeProjectId,
+    ...(metadata ? { [LEGACY_AUXILIARY_METADATA_KEY]: metadata } : {}),
+  } as StoryProject;
+}
 
 export class FsProjectStore extends FsAssetStore {
   private async inspectLegacyAuxiliaryEvidence(
@@ -188,8 +263,22 @@ export class FsProjectStore extends FsAssetStore {
     apis: TauriApis,
     appDataPath: string,
   ): Promise<StoryProject> {
-    if (!hasUnusablePersistedProjectId(project)) {
+    const persistedMetadata = persistedLegacyAuxiliaryMetadata(project);
+    const currentProjectId = persistedProjectId(project);
+    if (
+      persistedMetadata &&
+      currentProjectId !== safeProjectId &&
+      currentProjectId !== persistedMetadata.legacyRawProjectId
+    ) {
       this.clearLegacyAuxiliaryPolicy(safeProjectId);
+    } else if (persistedMetadata) {
+      this.registerLegacyAuxiliaryPolicy(
+        safeProjectId,
+        persistedMetadata.legacyProjectId,
+        evidenceFromPersistedMetadata(persistedMetadata),
+      );
+    }
+    if (!hasUnusablePersistedProjectId(project)) {
       return project;
     }
 
@@ -206,8 +295,58 @@ export class FsProjectStore extends FsAssetStore {
         appDataPath,
       );
       this.registerLegacyAuxiliaryPolicy(safeProjectId, 'project', evidence);
+      return migratedProjectIdentity(project, safeProjectId, rawProjectId, evidence);
     }
     return migratedProjectIdentity(project, safeProjectId);
+  }
+
+  private async resolveLegacySaveIdentity(
+    project: StoryProject,
+    rawProjectId: string,
+    apis: TauriApis,
+    appDataPath: string,
+  ): Promise<{
+    projectId: string;
+    metadata: PersistedLegacyAuxiliaryMetadata | null;
+  } | null> {
+    if (!rawProjectId.trim()) return null;
+    const legacyProjectId = sanitizePathSegment(rawProjectId, 'item');
+    if (!legacyProjectId || legacyProjectId === '.' || legacyProjectId === '..') return null;
+    const projectFile = await apis.join(appDataPath, 'projects', legacyProjectId, 'project.json');
+    if (!(await apis.exists(projectFile))) return null;
+
+    let existingProject: StoryProject;
+    try {
+      const parsed = decompressData<unknown>(await retryFs(() => apis.readTextFile(projectFile)));
+      if (!looksLikeStoryProject(parsed)) return null;
+      existingProject = parsed;
+    } catch {
+      return null;
+    }
+    const existingMetadata = persistedLegacyAuxiliaryMetadata(existingProject);
+    const existingRawProjectId = persistedProjectId(existingProject);
+    if (
+      existingRawProjectId !== rawProjectId &&
+      existingMetadata?.legacyRawProjectId !== rawProjectId
+    ) {
+      return null;
+    }
+
+    const evidence = existingMetadata
+      ? evidenceFromPersistedMetadata(existingMetadata)
+      : await this.inspectLegacyAuxiliaryEvidence(
+          {
+            ...existingProject,
+            binderNodes: [...(existingProject.binderNodes ?? []), ...(project.binderNodes ?? [])],
+          },
+          legacyProjectId,
+          apis,
+          appDataPath,
+        );
+    return {
+      projectId: legacyProjectId,
+      metadata: existingMetadata ?? persistedMetadataFromEvidence(rawProjectId, evidence),
+    };
   }
 
   async saveProject(project: SaveProjectInput): Promise<void> {
@@ -215,12 +354,32 @@ export class FsProjectStore extends FsAssetStore {
     const rawProjectId = (flat as unknown as Record<string, unknown>)['id'];
     const suppliedProjectId = typeof rawProjectId === 'string';
     let projectId: string;
+    let projectToPersist = flat;
+    const apis = await this.getApis();
+    const appDataPath = await this.ensureAppDataPath();
     if (suppliedProjectId) {
       const safeProjectId = projectPathSegment(rawProjectId);
       if (!safeProjectId) {
-        throw new Error('Cannot save a project with an unusable project ID.');
+        const legacyIdentity = await this.resolveLegacySaveIdentity(
+          flat,
+          rawProjectId,
+          apis,
+          appDataPath,
+        );
+        if (!legacyIdentity) {
+          throw new Error('Cannot save a project with an unusable project ID.');
+        }
+        projectId = legacyIdentity.projectId;
+        projectToPersist = {
+          ...flat,
+          id: projectId,
+          ...(legacyIdentity.metadata
+            ? { [LEGACY_AUXILIARY_METADATA_KEY]: legacyIdentity.metadata }
+            : {}),
+        } as StoryProject;
+      } else {
+        projectId = safeProjectId;
       }
-      projectId = safeProjectId;
     } else {
       projectId = projectPathSegment(flat.title || '') ?? 'project';
     }
@@ -228,13 +387,11 @@ export class FsProjectStore extends FsAssetStore {
     // Auto-snapshot: fire-and-forget, mirrors dbService behaviour
     if (Date.now() - this.lastAutoSnapshotTime > this.AUTO_SNAPSHOT_INTERVAL) {
       this.lastAutoSnapshotTime = Date.now();
-      this.saveSnapshot('auto', flat)
+      this.saveSnapshot('auto', projectToPersist)
         .then(() => this.pruneAutoSnapshots())
         .catch(() => {});
     }
 
-    const apis = await this.getApis();
-    const appDataPath = await this.ensureAppDataPath();
     const projectPath = await apis.join(appDataPath, 'projects', projectId);
 
     if (!(await apis.exists(projectPath))) {
@@ -242,7 +399,7 @@ export class FsProjectStore extends FsAssetStore {
     }
 
     const projectFile = await apis.join(projectPath, 'project.json');
-    await writeTextFileAtomic(apis, projectFile, compressData(flat));
+    await writeTextFileAtomic(apis, projectFile, compressData(projectToPersist));
     // QNBS-v3 (#332): documented best-effort abort — the project data above already saved; a failed marker write only degrades the next cold-boot's project selection, not worth failing this save over.
     await this.setActiveProjectId(projectId).catch((error) => {
       logger.warn('Failed to persist active-project marker (project save itself succeeded)', {

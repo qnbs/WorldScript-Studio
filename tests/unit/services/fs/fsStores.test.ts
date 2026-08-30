@@ -58,7 +58,7 @@ vi.mock('../../../../services/i18n/staticTranslate', () => ({
 }));
 
 import { appStoreRef } from '../../../../app/storeRef';
-import { compressData } from '../../../../services/fs/fsCore';
+import { compressData, decompressData } from '../../../../services/fs/fsCore';
 import { FsProjectStore } from '../../../../services/fs/projectFsStore';
 import { logger } from '../../../../services/logger';
 
@@ -325,6 +325,21 @@ describe('FsProjectStore — projects', () => {
       }),
     );
 
+    await fake.apis.writeFile('/app/projects/project/binder/unregistered.bin', new Uint8Array([9]));
+    await fake.apis.writeTextFile(
+      '/app/projects/project/binder/unregistered.meta.json',
+      JSON.stringify({
+        mimeType: 'application/octet-stream',
+        originalFileName: 'unregistered.bin',
+        byteSize: 1,
+      }),
+    );
+    expect(await store.listBinderAssetIds('item')).not.toContain('unregistered');
+    await expect(store.getBinderAsset('item', 'unregistered')).resolves.toBeNull();
+    await store.deleteAllBinderAssetsForProject('item');
+    expect(fake.bin.has('/app/projects/project/binder/unregistered.bin')).toBe(true);
+    expect(fake.text.has('/app/projects/project/binder/unregistered.meta.json')).toBe(true);
+
     await store.saveProject(loaded as never);
     expect(fake.text.has('/app/projects/item/project.json')).toBe(true);
     expect(fake.text.has('/app/projects/project/project.json')).toBe(false);
@@ -334,6 +349,69 @@ describe('FsProjectStore — projects', () => {
     expect(fake.text.has('/app/projects/project/codex/codex.snap')).toBe(false);
     expect(fake.text.has('/app/projects/project/codex/vectors.snap')).toBe(false);
     expect(fake.bin.has('/app/projects/project/binder/legacy-asset.bin')).toBe(false);
+  });
+
+  // QNBS-v3: persisted legacy provenance keeps coupled filesystem data visible after a desktop restart.
+  it('persists verified legacy auxiliary routing across normalized saves and reloads', async () => {
+    const legacyProject = {
+      ...project,
+      id: '***',
+      binderNodes: [{ binderAssetId: 'legacy-asset' }],
+    };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+    await fake.apis.mkdir('/app/projects/project/binder', { recursive: true });
+    await fake.apis.writeFile(
+      '/app/projects/project/binder/legacy-asset.bin',
+      new Uint8Array([1, 2]),
+    );
+    await fake.apis.writeTextFile(
+      '/app/projects/project/binder/legacy-asset.meta.json',
+      JSON.stringify({
+        mimeType: 'application/octet-stream',
+        originalFileName: 'legacy.bin',
+        byteSize: 2,
+      }),
+    );
+    const legacyCodex = { projectId: '***', entries: [{ name: 'legacy' }] };
+    await fake.apis.mkdir('/app/projects/project/codex', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/project/codex/codex.snap',
+      compressData(legacyCodex),
+    );
+
+    const loaded = await store.loadProject('item');
+    await store.saveProject(loaded as never);
+
+    const restarted = new FsProjectStore();
+    await expect(restarted.loadProject('item')).resolves.toEqual(
+      expect.objectContaining({ id: 'item' }),
+    );
+    await expect(restarted.getStoryCodex('item')).resolves.toEqual(legacyCodex);
+    await expect(restarted.getBinderAsset('item', 'legacy-asset')).resolves.toEqual(
+      expect.objectContaining({
+        meta: expect.objectContaining({ originalFileName: 'legacy.bin' }),
+      }),
+    );
+  });
+
+  // QNBS-v3: snapshot recovery accepts an invalid legacy identity only when its existing fallback directory proves ownership.
+  it('normalizes a legacy invalid project ID restored from a filesystem snapshot', async () => {
+    const legacyProject = { ...project, id: '***' };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+
+    const snapshotId = await store.saveSnapshot('legacy', legacyProject);
+    const restored = await store.getSnapshotData(snapshotId);
+    await expect(store.saveProject(restored as never)).resolves.toBeUndefined();
+
+    const persisted = decompressData<Record<string, unknown>>(
+      fake.text.get('/app/projects/item/project.json') as string,
+    );
+    expect(persisted['id']).toBe('item');
+    await expect(
+      store.saveProject({ ...project, id: '***', title: 'Unrelated New Project' } as never),
+    ).rejects.toThrow('Cannot save a project with an unusable project ID.');
   });
 
   it('keeps a missing-ID legacy project bound to its existing title-derived directory', async () => {
