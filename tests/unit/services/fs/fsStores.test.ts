@@ -200,6 +200,7 @@ describe('FsProjectStore — projects', () => {
     await expect(store.loadProject('p1')).resolves.toBeNull();
   });
 
+  // QNBS-v3: prove a claimed quarantine target cannot turn preserve-first recovery into data loss.
   it('tries the next quarantine name when a concurrent rename claims the checked target', async () => {
     await store.saveProject(project as never);
     const originalRename = fake.apis.rename;
@@ -222,12 +223,31 @@ describe('FsProjectStore — projects', () => {
     expect(fake.text.has('/app/projects/p1/project.json')).toBe(false);
   });
 
+  // QNBS-v3: report source disappearance as concurrent preservation, without inventing a quarantine path.
+  it('reports when another recovery moved the source before this rename', async () => {
+    await store.saveProject(project as never);
+    fake.apis.rename = async (from: string) => {
+      await fake.apis.remove(from);
+      throw new Error(`ENOENT ${from}`);
+    };
+
+    await expect(store.quarantineProject('p1')).rejects.toMatchObject({
+      name: 'ProjectQuarantineError',
+      reason: 'already-preserved',
+    });
+    expect(await store.listProjects()).not.toContain('p1');
+  });
+
   it('leaves the original project intact when quarantine cannot rename it', async () => {
     await store.saveProject(project as never);
     const original = fake.text.get('/app/projects/p1/project.json');
     fake.apis.rename = () => Promise.reject(new Error('EACCES: permission denied'));
 
-    await expect(store.quarantineProject('p1')).rejects.toThrow('EACCES');
+    await expect(store.quarantineProject('p1')).rejects.toMatchObject({
+      name: 'ProjectQuarantineError',
+      reason: 'io-error',
+      message: 'Project preservation failed. The original project was not deleted.',
+    });
 
     expect(fake.text.get('/app/projects/p1/project.json')).toBe(original);
     expect(await store.listProjects()).toContain('p1');
