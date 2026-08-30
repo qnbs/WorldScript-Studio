@@ -107,6 +107,15 @@ function persistedProjectId(project: StoryProject): unknown {
 
 const LEGACY_PROJECT_DIRECTORY_METADATA_KEY = '__worldscriptLegacyProjectDirectory';
 
+// QNBS-v3: legacy snapshot restoration requires content evidence so an invalid ID cannot claim another project's directory.
+function legacyProjectContent(project: StoryProject): string {
+  const value = { ...(project as unknown as Record<string, unknown>) };
+  delete value['id'];
+  delete value['__worldscriptLegacyAuxiliary'];
+  delete value[LEGACY_PROJECT_DIRECTORY_METADATA_KEY];
+  return JSON.stringify(value) ?? '';
+}
+
 function legacyProjectDirectory(project: StoryProject): string | null {
   const value = (project as unknown as Record<string, unknown>)[
     LEGACY_PROJECT_DIRECTORY_METADATA_KEY
@@ -376,6 +385,10 @@ export class FsProjectStore extends FsAssetStore {
 
     if (typeof rawProjectId !== 'string') {
       this.clearLegacyAuxiliaryPolicy(safeProjectId);
+      if (legacyProjectDirectory(project) === safeProjectId) {
+        this.verifiedLegacyProjectDirectories.add(safeProjectId);
+        return project;
+      }
       if (!hasLegacyMissingProjectId(project, safeProjectId)) return project;
       this.verifiedLegacyProjectDirectories.add(safeProjectId);
       return legacyProjectWithDirectory(project, safeProjectId);
@@ -438,6 +451,7 @@ export class FsProjectStore extends FsAssetStore {
     ) {
       return null;
     }
+    if (legacyProjectContent(existingProject) !== legacyProjectContent(project)) return null;
 
     const evidence = existingMetadata
       ? evidenceFromPersistedMetadata(existingMetadata)
@@ -490,6 +504,13 @@ export class FsProjectStore extends FsAssetStore {
             ? { [LEGACY_AUXILIARY_METADATA_KEY]: legacyIdentity.metadata }
             : {}),
         } as StoryProject;
+        if (legacyIdentity.metadata) {
+          this.registerLegacyAuxiliaryPolicy(
+            projectId,
+            legacyIdentity.metadata.legacyProjectId,
+            evidenceFromPersistedMetadata(legacyIdentity.metadata),
+          );
+        }
       } else {
         projectId = safeProjectId;
         this.verifiedLegacyProjectDirectories.delete(projectId);

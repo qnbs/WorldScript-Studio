@@ -778,12 +778,19 @@ describe('FsProjectStore — projects', () => {
   // QNBS-v3: snapshot recovery accepts an invalid legacy identity only when its existing fallback directory proves ownership.
   it('normalizes a legacy invalid project ID restored from a filesystem snapshot', async () => {
     const legacyProject = { ...project, id: '***' };
+    const legacyCodex = { projectId: '***', entries: [{ name: 'legacy' }] };
     await fake.apis.mkdir('/app/projects/item', { recursive: true });
     await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+    await fake.apis.mkdir('/app/projects/project/codex', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/project/codex/codex.snap',
+      compressData(legacyCodex),
+    );
 
     const snapshotId = await store.saveSnapshot('legacy', legacyProject);
     const restored = await store.getSnapshotData(snapshotId);
     await expect(store.saveProject(restored as never)).resolves.toBeUndefined();
+    await expect(store.getStoryCodex('item')).resolves.toEqual(legacyCodex);
 
     const persisted = decompressData<Record<string, unknown>>(
       fake.text.get('/app/projects/item/project.json') as string,
@@ -808,6 +815,12 @@ describe('FsProjectStore — projects', () => {
     await store.saveProject({ ...loaded, title: 'Renamed Novel' } as never);
     expect(fake.text.has('/app/projects/Legacy-Novel/project.json')).toBe(true);
     expect(fake.text.has('/app/projects/Renamed-Novel/project.json')).toBe(false);
+
+    const restarted = new FsProjectStore();
+    const reloaded = await restarted.loadProject('Legacy-Novel');
+    await restarted.saveProject({ ...reloaded, title: 'Renamed Again' } as never);
+    expect(fake.text.has('/app/projects/Legacy-Novel/project.json')).toBe(true);
+    expect(fake.text.has('/app/projects/Renamed-Again/project.json')).toBe(false);
   });
 
   // QNBS-v3: legacy missing-ID saves preserve historical Binder/Codex fallbacks without inventing cross-project ownership.
