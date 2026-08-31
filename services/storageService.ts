@@ -4,6 +4,7 @@ import type {
   BinderAssetPayload,
   ProjectQuarantineResult,
   SaveProjectInput,
+  SnapshotRestoreTarget,
   StorageBackend,
 } from './storageBackend';
 
@@ -13,6 +14,7 @@ export type {
   ProjectQuarantineResult,
   SaveProjectEnvelope,
   SaveProjectInput,
+  SnapshotRestoreTarget,
   StorageBackend,
 } from './storageBackend';
 export {
@@ -154,6 +156,14 @@ class StorageManager {
 
   async getSnapshotData(id: number): Promise<unknown> {
     const backend = await this.getBackend();
+    return backend.getSnapshotData(id);
+  }
+
+  async restoreSnapshot(id: number, currentProject: SnapshotRestoreTarget): Promise<unknown> {
+    const backend = await this.getBackend();
+    if (backend.restoreSnapshot) {
+      return backend.restoreSnapshot(id, currentProject);
+    }
     return backend.getSnapshotData(id);
   }
 

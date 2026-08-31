@@ -801,6 +801,115 @@ describe('FsProjectStore — projects', () => {
     ).rejects.toThrow('Cannot save a project with an unusable project ID.');
   });
 
+  // QNBS-v3: explicit restore provenance permits older content while keeping the existing filesystem target authoritative.
+  it('restores differing snapshot content into the validated current target, never the payload ID', async () => {
+    await store.saveProject(project as never);
+    const current = await store.loadProject('p1');
+    const snapshotId = await store.saveSnapshot('older', {
+      ...project,
+      id: 'p2',
+      title: 'Older snapshot content',
+      manuscript: [{ id: 's-old', title: 'Older', content: 'previous draft' }],
+    });
+
+    const restored = await store.restoreSnapshot(snapshotId, current as never);
+    const restoredRecord = restored as unknown as Record<string, unknown>;
+
+    expect(restoredRecord['id']).toBe('p1');
+    expect(restored.title).toBe('Older snapshot content');
+    await store.saveProject(restored as never);
+    expect(
+      decompressData<Record<string, unknown>>(
+        fake.text.get('/app/projects/p1/project.json') as string,
+      )['title'],
+    ).toBe('Older snapshot content');
+    expect(fake.text.has('/app/projects/p2/project.json')).toBe(false);
+  });
+
+  // QNBS-v3: target-aware restore uses the normalized directory and target provenance, not mutable legacy snapshot content.
+  it('restores older legacy invalid-ID content and preserves target auxiliary metadata', async () => {
+    const legacyProject = { ...project, id: '***', title: 'Current legacy content' };
+    const legacyCodex = { projectId: '***', entries: [{ name: 'legacy' }] };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+    await fake.apis.mkdir('/app/projects/project/codex', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/project/codex/codex.snap',
+      compressData(legacyCodex),
+    );
+    const current = await store.loadProject('item');
+    const snapshotId = await store.saveSnapshot('older-legacy', {
+      ...legacyProject,
+      id: '***',
+      title: 'Older legacy content',
+      manuscript: [{ id: 's-old', title: 'Older', content: 'previous draft' }],
+      __worldscriptLegacyProjectDirectory: 'project',
+      __worldscriptLegacyAuxiliary: {
+        legacyProjectId: 'project',
+        legacyRawProjectId: '***',
+        codex: false,
+        binderAssetIds: ['fabricated'],
+      },
+    });
+
+    const restored = await store.restoreSnapshot(snapshotId, current as never);
+    const restoredRecord = restored as unknown as Record<string, unknown>;
+    const metadata = restoredRecord['__worldscriptLegacyAuxiliary'] as Record<string, unknown>;
+
+    expect(restoredRecord['id']).toBe('item');
+    expect(restored.title).toBe('Older legacy content');
+    expect(restoredRecord['__worldscriptLegacyProjectDirectory']).toBeUndefined();
+    expect(metadata).toEqual(
+      expect.objectContaining({
+        legacyProjectId: 'project',
+        legacyRawProjectId: '***',
+        codex: true,
+      }),
+    );
+    expect(metadata['binderAssetIds']).toEqual([]);
+  });
+
+  // QNBS-v3: restore fails closed when no safe current filesystem target is available.
+  it.each(['.', '..', '***'])(
+    'rejects unsafe restore target %s without touching projects',
+    async (id) => {
+      const snapshotId = await store.saveSnapshot('unsafe-target', project);
+
+      await expect(
+        store.restoreSnapshot(snapshotId, { ...project, id } as never),
+      ).rejects.toMatchObject({
+        name: 'ProjectSnapshotRestoreError',
+        reason: 'target-unavailable',
+      });
+      expect([...fake.text.keys()].some((path) => path.startsWith('/app/projects/'))).toBe(false);
+    },
+  );
+
+  // QNBS-v3: missing-ID targets retain their storage-owned directory marker through restore/save.
+  it('keeps a target-aware restore bound to a verified missing-ID legacy directory', async () => {
+    const legacyProject = { ...project, id: undefined, title: 'Legacy Novel' };
+    await fake.apis.mkdir('/app/projects/Legacy-Novel', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/Legacy-Novel/project.json',
+      compressData(legacyProject),
+    );
+    const current = await store.loadProject('Legacy-Novel');
+    const snapshotId = await store.saveSnapshot('older-missing-id', {
+      ...legacyProject,
+      title: 'Renamed in older snapshot',
+      id: '***',
+    });
+
+    const restored = await store.restoreSnapshot(snapshotId, current as never);
+    expect((restored as unknown as Record<string, unknown>)['id']).toBeUndefined();
+    expect(
+      (restored as unknown as Record<string, unknown>)['__worldscriptLegacyProjectDirectory'],
+    ).toBe('Legacy-Novel');
+    await store.saveProject(restored as never);
+    expect(fake.text.has('/app/projects/Legacy-Novel/project.json')).toBe(true);
+    expect(fake.text.has('/app/projects/Renamed-in-older-snapshot/project.json')).toBe(false);
+  });
+
   it('keeps a missing-ID legacy project bound to its existing title-derived directory', async () => {
     const legacyProject = { ...project, id: undefined, title: 'Legacy Novel' };
     await fake.apis.mkdir('/app/projects/Legacy-Novel', { recursive: true });

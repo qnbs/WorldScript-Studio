@@ -46,6 +46,11 @@ export interface SaveProjectEnvelope {
  */
 export type SaveProjectInput = StoryProject | SaveProjectEnvelope;
 
+/**
+ * Current project state captured before snapshot I/O; filesystem backends inspect only identity markers.
+ */
+export type SnapshotRestoreTarget = ProjectData | StoryProject;
+
 /** Auto-save from the current `ProjectData` (listener middleware) — returns a properly typed envelope. */
 export function saveEnvelopeFromProjectData(data: ProjectData): SaveProjectEnvelope {
   return { data };
@@ -93,6 +98,8 @@ export interface StorageBackend {
   /** Snapshot IDs: numeric (Date.now / IDB auto-increment). */
   saveSnapshot(snapshotLabel: string, data: unknown): Promise<number>;
   getSnapshotData(snapshotId: number): Promise<unknown>;
+  // QNBS-v3: filesystem restore validates this pre-read target; other backends retain their existing snapshot semantics.
+  restoreSnapshot?(snapshotId: number, currentProject: SnapshotRestoreTarget): Promise<unknown>;
   listSnapshots(): Promise<ProjectSnapshot[]>;
   deleteSnapshot(snapshotId: number): Promise<void>;
 

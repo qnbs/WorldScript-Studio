@@ -14,6 +14,7 @@ import {
   normalizeSaveProjectInputToStoryProject,
   type ProjectQuarantineResult,
   type SaveProjectInput,
+  type SnapshotRestoreTarget,
 } from '../storageBackend';
 import { FsAssetStore } from './assetFsStore';
 import {
@@ -71,6 +72,27 @@ export class ProjectQuarantineError extends Error {
   }
 }
 
+export class ProjectSnapshotRestoreError extends Error {
+  constructor(
+    public readonly reason:
+      | 'target-unavailable'
+      | 'target-mismatch'
+      | 'snapshot-unavailable'
+      | 'snapshot-invalid',
+  ) {
+    super(
+      reason === 'target-mismatch'
+        ? 'Snapshot restoration was not completed because the active project changed.'
+        : reason === 'snapshot-invalid'
+          ? 'Snapshot restoration was not completed because its contents are invalid.'
+          : reason === 'snapshot-unavailable'
+            ? 'Snapshot restoration was not completed because the snapshot could not be read.'
+            : 'Snapshot restoration was not completed because the current project target could not be safely verified.',
+    );
+    this.name = 'ProjectSnapshotRestoreError';
+  }
+}
+
 // QNBS-v3 (CodeAnt/CodeRabbit): array-or-EntityState — characters/worlds may be either shape in a real saved project.
 function isArrayOrEntityState(value: unknown): boolean {
   if (Array.isArray(value)) return true;
@@ -121,6 +143,14 @@ function legacyProjectDirectory(project: StoryProject): string | null {
     LEGACY_PROJECT_DIRECTORY_METADATA_KEY
   ];
   return typeof value === 'string' && projectPathSegment(value) === value ? value : null;
+}
+
+function snapshotRestoreTargetDirectory(project: SnapshotRestoreTarget): string | null {
+  const rawProjectId = (project as unknown as Record<string, unknown>)['id'];
+  if (rawProjectId !== undefined) {
+    return typeof rawProjectId === 'string' ? projectPathSegment(rawProjectId) : null;
+  }
+  return legacyProjectDirectory(project as StoryProject);
 }
 
 function hasLegacyMissingProjectId(project: StoryProject, safeProjectId: string): boolean {
@@ -469,6 +499,70 @@ export class FsProjectStore extends FsAssetStore {
       metadata: existingMetadata ?? persistedMetadataFromEvidence(rawProjectId, evidence),
       inspectionComplete: existingMetadata ? true : evidence.inspectionComplete,
     };
+  }
+
+  async restoreSnapshot(
+    snapshotId: number,
+    currentProject: SnapshotRestoreTarget,
+  ): Promise<StoryProject> {
+    const targetDirectory = snapshotRestoreTargetDirectory(currentProject);
+    if (!targetDirectory) {
+      throw new ProjectSnapshotRestoreError('target-unavailable');
+    }
+
+    const activeProjectId = await this.getActiveProjectId();
+    if (activeProjectId !== null) {
+      const activeDirectory = projectPathSegment(activeProjectId);
+      if (!activeDirectory || activeDirectory !== targetDirectory) {
+        throw new ProjectSnapshotRestoreError('target-mismatch');
+      }
+    }
+
+    let validatedTarget: StoryProject | null;
+    try {
+      validatedTarget = await this.loadProject(targetDirectory);
+    } catch (error) {
+      logger.error('Failed to validate the snapshot restore target', {
+        projectId: targetDirectory,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new ProjectSnapshotRestoreError('target-unavailable');
+    }
+    if (!validatedTarget) {
+      throw new ProjectSnapshotRestoreError('target-unavailable');
+    }
+
+    const snapshot = await super.getSnapshotData(snapshotId);
+    if (!looksLikeStoryProject(snapshot)) {
+      throw new ProjectSnapshotRestoreError(
+        snapshot === null ? 'snapshot-unavailable' : 'snapshot-invalid',
+      );
+    }
+
+    const restored = { ...(snapshot as unknown as Record<string, unknown>) };
+    delete restored['id'];
+    delete restored[LEGACY_PROJECT_DIRECTORY_METADATA_KEY];
+    delete restored[LEGACY_AUXILIARY_METADATA_KEY];
+
+    const validatedTargetId = persistedProjectId(validatedTarget);
+    if (typeof validatedTargetId === 'string') {
+      const safeTargetId = projectPathSegment(validatedTargetId);
+      if (!safeTargetId || safeTargetId !== targetDirectory) {
+        throw new ProjectSnapshotRestoreError('target-unavailable');
+      }
+      restored['id'] = safeTargetId;
+    }
+
+    const validatedTargetDirectory = legacyProjectDirectory(validatedTarget);
+    if (validatedTargetDirectory) {
+      restored[LEGACY_PROJECT_DIRECTORY_METADATA_KEY] = validatedTargetDirectory;
+    }
+    const validatedTargetMetadata = persistedLegacyAuxiliaryMetadata(validatedTarget);
+    if (validatedTargetMetadata) {
+      restored[LEGACY_AUXILIARY_METADATA_KEY] = validatedTargetMetadata;
+    }
+
+    return restored as unknown as StoryProject;
   }
 
   async saveProject(project: SaveProjectInput): Promise<void> {
