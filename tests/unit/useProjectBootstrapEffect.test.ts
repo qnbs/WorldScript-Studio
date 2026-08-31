@@ -28,7 +28,6 @@ describe('shouldRunProjectBootstrap', () => {
     expect(
       shouldRunProjectBootstrap({
         project: blankProject,
-        isNewUser: false,
         isInitialLoad: true,
         isPortalActive: false,
         isI18nReady: true,
@@ -40,7 +39,6 @@ describe('shouldRunProjectBootstrap', () => {
     expect(
       shouldRunProjectBootstrap({
         project: blankProject,
-        isNewUser: false,
         isInitialLoad: false,
         isPortalActive: false,
         isI18nReady: true,
@@ -52,7 +50,6 @@ describe('shouldRunProjectBootstrap', () => {
     expect(
       shouldRunProjectBootstrap({
         project: blankProject,
-        isNewUser: false,
         isInitialLoad: false,
         isPortalActive: true,
         isI18nReady: true,
@@ -64,7 +61,6 @@ describe('shouldRunProjectBootstrap', () => {
     expect(
       shouldRunProjectBootstrap({
         project: blankProject,
-        isNewUser: false,
         isInitialLoad: false,
         isPortalActive: false,
         isI18nReady: false,
@@ -76,7 +72,6 @@ describe('shouldRunProjectBootstrap', () => {
     expect(
       shouldRunProjectBootstrap({
         project: null,
-        isNewUser: false,
         isInitialLoad: false,
         isPortalActive: false,
         isI18nReady: true,
@@ -90,7 +85,7 @@ describe('useProjectBootstrapEffect', () => {
     renderHook(() =>
       useProjectBootstrapEffect({
         project: blankProject,
-        isNewUser: false,
+        allowInitialMetadataSeed: false,
         isInitialLoad: true,
         isPortalActive: false,
         isI18nReady: true,
@@ -104,7 +99,7 @@ describe('useProjectBootstrapEffect', () => {
     renderHook(() =>
       useProjectBootstrapEffect({
         project: blankProject,
-        isNewUser: false,
+        allowInitialMetadataSeed: false,
         isInitialLoad: false,
         isPortalActive: false,
         isI18nReady: true,
@@ -125,7 +120,7 @@ describe('useProjectBootstrapEffect', () => {
       ({ project }) =>
         useProjectBootstrapEffect({
           project,
-          isNewUser: true,
+          allowInitialMetadataSeed: true,
           isInitialLoad: false,
           isPortalActive: false,
           isI18nReady: true,
@@ -150,7 +145,7 @@ describe('useProjectBootstrapEffect', () => {
           logline: 'A real logline',
           manuscript: [{ id: 'sec-1', title: 'Ch1', content: 'Real content' }],
         },
-        isNewUser: false,
+        allowInitialMetadataSeed: false,
         isInitialLoad: false,
         isPortalActive: false,
         isI18nReady: true,
@@ -164,7 +159,7 @@ describe('useProjectBootstrapEffect', () => {
     renderHook(() =>
       useProjectBootstrapEffect({
         project: blankProject,
-        isNewUser: false,
+        allowInitialMetadataSeed: false,
         isInitialLoad: false,
         isPortalActive: true,
         isI18nReady: true,
@@ -178,7 +173,7 @@ describe('useProjectBootstrapEffect', () => {
     renderHook(() =>
       useProjectBootstrapEffect({
         project: null,
-        isNewUser: false,
+        allowInitialMetadataSeed: false,
         isInitialLoad: false,
         isPortalActive: false,
         isI18nReady: true,
@@ -196,7 +191,7 @@ describe('useProjectBootstrapEffect', () => {
           logline: 'A real logline',
           manuscript: [{ id: 'sec-1', title: 'Real Chapter', content: 'real' }],
         },
-        isNewUser: false,
+        allowInitialMetadataSeed: false,
         isInitialLoad: false,
         isPortalActive: false,
         isI18nReady: true,
@@ -217,7 +212,7 @@ describe('useProjectBootstrapEffect', () => {
           logline: 'initialProject.logline',
           manuscript: [{ id: 'sec-1', title: 'Real Chapter', content: 'real' }],
         },
-        isNewUser: false,
+        allowInitialMetadataSeed: false,
         isInitialLoad: false,
         isPortalActive: false,
         isI18nReady: true,

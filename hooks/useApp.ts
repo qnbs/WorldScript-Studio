@@ -61,12 +61,18 @@ function readInitialView(): View {
   return 'dashboard';
 }
 
+// QNBS-v3: portal exit context distinguishes imported content from a project created in this app.
+export interface PortalExitOptions {
+  allowInitialMetadataSeed?: boolean;
+}
+
 export const useApp = ({ isNewUser }: { isNewUser: boolean }) => {
   const [currentView, setCurrentView] = useState<View>(() => readInitialView());
   // QNBS-v3: remember the view navigated away from, so view-aware Help can open to the matching
   // category (once inside Help, currentView is 'help' and no longer tells us where the user was).
   const previousViewRef = useRef<View>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [allowInitialMetadataSeed, setAllowInitialMetadataSeed] = useState(isNewUser);
   // QNBS-v3: initialize from isNewUser (already stable pre-mount) instead of a hardcoded false, so no transient first commit exposes a stale value to a sibling effect.
   const [isPortalActive, setIsPortalActive] = useState(isNewUser);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -131,7 +137,8 @@ export const useApp = ({ isNewUser }: { isNewUser: boolean }) => {
   }, [currentView]);
 
   const handlePortalExit = useCallback(
-    (view?: View) => {
+    (view?: View, options?: PortalExitOptions) => {
+      if (options?.allowInitialMetadataSeed === false) setAllowInitialMetadataSeed(false);
       if (view) {
         switchView(view);
         pushHash(view);
@@ -156,6 +163,7 @@ export const useApp = ({ isNewUser }: { isNewUser: boolean }) => {
     isSidebarOpen,
     isPortalActive,
     isInitialLoad,
+    allowInitialMetadataSeed,
     handlePortalExit,
     handleNavigate,
     setIsSidebarOpen,

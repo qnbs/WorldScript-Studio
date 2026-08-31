@@ -5,6 +5,7 @@ import { ICONS } from '../constants';
 import { projectActions } from '../features/project/projectSlice';
 import { importProjectThunk } from '../features/project/thunks/projectManagementThunks';
 import { statusActions } from '../features/status/statusSlice';
+import type { PortalExitOptions } from '../hooks/useApp';
 import { useTranslation } from '../hooks/useTranslation';
 import { storageService } from '../services/storageService';
 import type { View } from '../types';
@@ -13,7 +14,7 @@ import { CustomIcon } from './ui/Icon';
 import { LanguageSelector } from './ui/LanguageSelector';
 
 interface WelcomePortalProps {
-  onExit: (view?: View) => void;
+  onExit: (view?: View, options?: PortalExitOptions) => void;
 }
 
 type PortalView = 'main' | 'new_project' | 'open_project';
@@ -118,7 +119,7 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
             title: t('settings.data.importSuccess'),
           }),
         );
-        onExit('manuscript');
+        onExit('manuscript', { allowInitialMetadataSeed: false });
       } else {
         dispatch(
           statusActions.addNotification({
@@ -173,7 +174,7 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
           title: t('settings.data.importSuccess'),
         }),
       );
-      onExit('manuscript');
+      onExit('manuscript', { allowInitialMetadataSeed: false });
     } else {
       dispatch(
         statusActions.addNotification({

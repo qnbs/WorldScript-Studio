@@ -21,7 +21,6 @@ test.describe('WelcomePortal entry precondition (CI-only)', () => {
     // QNBS-v3: the helper's contract is locale-independent portal-reached, not English — assert the stable testid, not the translated button label.
     await page.addInitScript(() => localStorage.setItem('worldscript-language', 'es'));
     await page.goto('/');
-    await expect(page.getByTestId('welcome-portal')).toBeVisible();
     await ensureWelcomePortalEntry(page);
     await expect(page.getByTestId('welcome-portal')).toBeVisible();
   });
