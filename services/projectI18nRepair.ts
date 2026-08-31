@@ -15,6 +15,12 @@ export type ProjectI18nRepair = {
   manuscript?: StorySection[];
 };
 
+// QNBS-v3: missing metadata is repairable while empty strings remain valid user intent.
+function shouldRepairMetadata(value: unknown, seedInitialMetadata: boolean): boolean {
+  if (typeof value !== 'string') return true;
+  return (seedInitialMetadata && value === '') || isKnownPersistedTranslationKey(value);
+}
+
 /** Repair raw i18n keys, optionally seeding metadata only for the first fresh-user bootstrap. */
 export function repairProjectI18nFields(
   project: ProjectMetaSlice,
@@ -25,14 +31,11 @@ export function repairProjectI18nFields(
   let changed = false;
 
   // QNBS-v3: only explicit fresh-project authority may fill blanks; raw persisted keys remain independently repairable.
-  if ((seedInitialMetadata && !project.title) || isKnownPersistedTranslationKey(project.title)) {
+  if (shouldRepairMetadata(project.title, seedInitialMetadata)) {
     repair.title = t('initialProject.title');
     changed = true;
   }
-  if (
-    (seedInitialMetadata && !project.logline) ||
-    isKnownPersistedTranslationKey(project.logline)
-  ) {
+  if (shouldRepairMetadata(project.logline, seedInitialMetadata)) {
     repair.logline = t('initialProject.logline');
     changed = true;
   }
