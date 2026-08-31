@@ -14,6 +14,7 @@ import {
   normalizeSaveProjectInputToStoryProject,
   type ProjectQuarantineResult,
   type SaveProjectInput,
+  type SnapshotRestoreTarget,
 } from '../storageBackend';
 import { FsAssetStore } from './assetFsStore';
 import {
@@ -21,8 +22,29 @@ import {
   decompressData,
   retryFs,
   sanitizePathSegment,
+  type TauriApis,
   writeTextFileAtomic,
 } from './fsCore';
+import {
+  evidenceFromPersistedMetadata,
+  hasLegacyMissingProjectId,
+  isLegacyInvalidProjectId,
+  LEGACY_AUXILIARY_METADATA_KEY,
+  LEGACY_PROJECT_DIRECTORY_METADATA_KEY,
+  type LegacyAuxiliaryEvidence,
+  legacyBinderAssetIds,
+  legacyProjectContent,
+  legacyProjectDirectory,
+  legacyProjectWithDirectory,
+  migratedProjectIdentity,
+  type PersistedLegacyAuxiliaryMetadata,
+  persistedLegacyAuxiliaryMetadata,
+  persistedMetadataFromEvidence,
+  persistedProjectId,
+  projectPathSegment,
+  type QuarantineLegacyAuxiliaryManifest,
+  snapshotRestoreTargetDirectory,
+} from './legacyProjectIdentity';
 
 // QNBS-v3 (DA-01): distinguishes corrupt/unreadable saved data from genuine absence — callers must never treat this the same as "no project exists yet".
 export class ProjectLoadError extends Error {
@@ -36,12 +58,64 @@ export class ProjectLoadError extends Error {
   }
 }
 
+// QNBS-v3: a stable deletion outcome keeps incomplete legacy cleanup retryable without exposing filesystem details.
+export class ProjectDeleteError extends Error {
+  constructor(
+    public readonly reason:
+      | 'cleanup-incomplete'
+      | 'identity-inspection-failed' = 'cleanup-incomplete',
+  ) {
+    super(
+      reason === 'identity-inspection-failed'
+        ? 'Project deletion was not completed because its stored identity could not be safely verified.'
+        : 'Project deletion was not completed because legacy auxiliary cleanup is incomplete; project data remains available for retry.',
+    );
+    this.name = 'ProjectDeleteError';
+  }
+}
+
 export class ProjectQuarantineError extends Error {
   constructor(
-    public readonly reason: 'not-found' | 'io-error' | 'name-exhausted' | 'already-preserved',
+    public readonly reason:
+      | 'not-found'
+      | 'io-error'
+      | 'name-exhausted'
+      | 'already-preserved'
+      | 'source-missing',
   ) {
-    super('Project preservation failed. The original project was not deleted.');
+    super(
+      reason === 'source-missing'
+        ? 'The project source is no longer present, but its preservation location could not be confirmed.'
+        : 'Project preservation failed. The original project was not deleted.',
+    );
     this.name = 'ProjectQuarantineError';
+  }
+}
+
+export class ProjectSnapshotRestoreError extends Error {
+  constructor(
+    public readonly reason:
+      | 'target-unavailable'
+      | 'target-mismatch'
+      | 'snapshot-unavailable'
+      | 'snapshot-invalid'
+      | 'snapshot-owner-mismatch'
+      | 'snapshot-owner-unverifiable',
+  ) {
+    super(
+      reason === 'target-mismatch'
+        ? 'Snapshot restoration was not completed because the active project changed.'
+        : reason === 'snapshot-invalid'
+          ? 'Snapshot restoration was not completed because its contents are invalid.'
+          : reason === 'snapshot-unavailable'
+            ? 'Snapshot restoration was not completed because the snapshot could not be read.'
+            : reason === 'snapshot-owner-mismatch'
+              ? 'Snapshot restoration was not completed because it belongs to a different project.'
+              : reason === 'snapshot-owner-unverifiable'
+                ? 'Snapshot restoration was not completed because its project ownership could not be verified.'
+                : 'Snapshot restoration was not completed because the current project target could not be safely verified.',
+    );
+    this.name = 'ProjectSnapshotRestoreError';
   }
 }
 
@@ -69,23 +143,375 @@ function looksLikeStoryProject(value: unknown): value is StoryProject {
   );
 }
 
+// QNBS-v3: one sanitizer and empty-ID policy keeps every filesystem project operation on the same path identity.
 export class FsProjectStore extends FsAssetStore {
+  private readonly verifiedLegacyProjectDirectories = new Set<string>();
+
+  private async inspectLegacyAuxiliaryEvidence(
+    project: StoryProject,
+    safeProjectId: string,
+    apis: TauriApis,
+    appDataPath: string,
+  ): Promise<LegacyAuxiliaryEvidence> {
+    const evidence: LegacyAuxiliaryEvidence = {
+      codex: false,
+      binderAssetIds: new Set(),
+      inspectionComplete: true,
+    };
+    const rawProjectId = persistedProjectId(project);
+    if (
+      !isLegacyInvalidProjectId(project) ||
+      safeProjectId === 'project' ||
+      typeof rawProjectId !== 'string'
+    ) {
+      return evidence;
+    }
+
+    try {
+      const legacyProjectPath = await apis.join(appDataPath, 'projects', 'project');
+      const legacyProjectFile = await apis.join(legacyProjectPath, 'project.json');
+      if (await apis.exists(legacyProjectFile)) return evidence;
+
+      const codexFile = await apis.join(legacyProjectPath, 'codex', 'codex.snap');
+      if (await apis.exists(codexFile)) {
+        try {
+          const legacyCodex = decompressData<unknown>(await apis.readTextFile(codexFile));
+          if (
+            typeof legacyCodex === 'object' &&
+            legacyCodex !== null &&
+            ((legacyCodex as Record<string, unknown>)['projectId'] === rawProjectId ||
+              (legacyCodex as Record<string, unknown>)['projectId'] === safeProjectId)
+          ) {
+            evidence.codex = true;
+          }
+        } catch (error) {
+          evidence.inspectionComplete = false;
+          logger.warn('Could not verify legacy codex ownership during project load', {
+            projectId: safeProjectId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      const binderPath = await apis.join(legacyProjectPath, 'binder');
+      for (const assetId of new Set(legacyBinderAssetIds(project))) {
+        const binFile = await apis.join(binderPath, `${assetId}.bin`);
+        const metaFile = await apis.join(binderPath, `${assetId}.meta.json`);
+        if ((await apis.exists(binFile)) && (await apis.exists(metaFile))) {
+          evidence.binderAssetIds.add(assetId);
+        }
+      }
+    } catch (error) {
+      evidence.inspectionComplete = false;
+      logger.warn('Could not inspect legacy auxiliary project data during load', {
+        projectId: safeProjectId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    return evidence;
+  }
+
+  private async legacyFallbackProjectState(
+    safeProjectId: string,
+    apis: TauriApis,
+    appDataPath: string,
+  ): Promise<'confirmed' | 'absent' | 'indeterminate'> {
+    if (safeProjectId === 'project') return 'confirmed';
+    try {
+      const legacyProjectFile = await apis.join(appDataPath, 'projects', 'project', 'project.json');
+      return (await apis.exists(legacyProjectFile)) ? 'confirmed' : 'absent';
+    } catch (error) {
+      logger.warn('Could not validate persisted legacy auxiliary provenance', {
+        projectId: safeProjectId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return 'indeterminate';
+    }
+  }
+
+  private async migrateLegacyProjectIdentity(
+    project: StoryProject,
+    safeProjectId: string,
+    apis: TauriApis,
+    appDataPath: string,
+  ): Promise<StoryProject> {
+    const persistedMetadata = persistedLegacyAuxiliaryMetadata(project);
+    const currentProjectId = persistedProjectId(project);
+    const hasLegacyInvalidId =
+      typeof currentProjectId === 'string' && !projectPathSegment(currentProjectId);
+    if (
+      persistedMetadata &&
+      currentProjectId !== safeProjectId &&
+      currentProjectId !== persistedMetadata.legacyRawProjectId
+    ) {
+      this.clearLegacyAuxiliaryPolicy(safeProjectId);
+    } else if (persistedMetadata) {
+      const legacyProjectState = await this.legacyFallbackProjectState(
+        safeProjectId,
+        apis,
+        appDataPath,
+      );
+      if (legacyProjectState === 'confirmed') {
+        this.clearLegacyAuxiliaryPolicy(safeProjectId);
+      } else if (legacyProjectState === 'absent') {
+        this.registerLegacyAuxiliaryPolicy(
+          safeProjectId,
+          persistedMetadata.legacyProjectId,
+          evidenceFromPersistedMetadata(persistedMetadata),
+        );
+      } else {
+        throw new ProjectLoadError(
+          'io-error',
+          'Could not validate legacy auxiliary project ownership while loading this project.',
+          safeProjectId,
+        );
+      }
+    } else if (!hasLegacyInvalidId) {
+      this.clearLegacyAuxiliaryPolicy(safeProjectId);
+    }
+    const rawProjectId = persistedProjectId(project);
+    if (typeof rawProjectId === 'string' && projectPathSegment(rawProjectId)) {
+      if (!persistedMetadata) this.clearLegacyPoliciesTargetingProject(safeProjectId);
+      return project;
+    }
+
+    if (typeof rawProjectId !== 'string') {
+      this.clearLegacyAuxiliaryPolicy(safeProjectId);
+      if (legacyProjectDirectory(project) === safeProjectId) {
+        this.verifiedLegacyProjectDirectories.add(safeProjectId);
+        return project;
+      }
+      if (!hasLegacyMissingProjectId(project, safeProjectId)) return project;
+      this.verifiedLegacyProjectDirectories.add(safeProjectId);
+      return legacyProjectWithDirectory(project, safeProjectId);
+    }
+
+    if (!projectPathSegment(rawProjectId)) {
+      const evidence = await this.inspectLegacyAuxiliaryEvidence(
+        project,
+        safeProjectId,
+        apis,
+        appDataPath,
+      );
+      if (!evidence.inspectionComplete) {
+        throw new ProjectLoadError(
+          'io-error',
+          'Could not verify legacy auxiliary project data while loading this project.',
+          safeProjectId,
+        );
+      }
+      this.clearLegacyAuxiliaryPolicy(safeProjectId);
+      this.registerLegacyAuxiliaryPolicy(safeProjectId, 'project', evidence);
+      return migratedProjectIdentity(project, safeProjectId, rawProjectId, evidence);
+    }
+    if (hasLegacyInvalidId) {
+      return project;
+    }
+    this.clearLegacyAuxiliaryPolicy(safeProjectId);
+    return migratedProjectIdentity(project, safeProjectId);
+  }
+
+  private async resolveLegacySaveIdentity(
+    project: StoryProject,
+    rawProjectId: string,
+    apis: TauriApis,
+    appDataPath: string,
+  ): Promise<{
+    projectId: string;
+    metadata: PersistedLegacyAuxiliaryMetadata | null;
+    inspectionComplete: boolean;
+  } | null> {
+    if (!rawProjectId.trim()) return null;
+    const legacyProjectId = sanitizePathSegment(rawProjectId, 'item');
+    if (!legacyProjectId || legacyProjectId === '.' || legacyProjectId === '..') return null;
+    const projectFile = await apis.join(appDataPath, 'projects', legacyProjectId, 'project.json');
+    if (!(await apis.exists(projectFile))) return null;
+
+    let existingProject: StoryProject;
+    try {
+      const parsed = decompressData<unknown>(await retryFs(() => apis.readTextFile(projectFile)));
+      if (!looksLikeStoryProject(parsed)) return null;
+      existingProject = parsed;
+    } catch {
+      return null;
+    }
+    const existingMetadata = persistedLegacyAuxiliaryMetadata(existingProject);
+    const existingRawProjectId = persistedProjectId(existingProject);
+    if (
+      existingRawProjectId !== rawProjectId &&
+      existingMetadata?.legacyRawProjectId !== rawProjectId
+    ) {
+      return null;
+    }
+    if (legacyProjectContent(existingProject) !== legacyProjectContent(project)) return null;
+
+    const evidence = existingMetadata
+      ? evidenceFromPersistedMetadata(existingMetadata)
+      : await this.inspectLegacyAuxiliaryEvidence(
+          {
+            ...existingProject,
+            binderNodes: [...(existingProject.binderNodes ?? []), ...(project.binderNodes ?? [])],
+          },
+          legacyProjectId,
+          apis,
+          appDataPath,
+        );
+    return {
+      projectId: legacyProjectId,
+      metadata: existingMetadata ?? persistedMetadataFromEvidence(rawProjectId, evidence),
+      inspectionComplete: existingMetadata ? true : evidence.inspectionComplete,
+    };
+  }
+
+  async restoreSnapshot(
+    snapshotId: number,
+    currentProject: SnapshotRestoreTarget,
+  ): Promise<StoryProject> {
+    // QNBS-v3: serialize target validation and snapshot ownership checks so routing cannot change mid-restore.
+    return this.withLegacyRoutingOperation(() =>
+      this.restoreSnapshotUnlocked(snapshotId, currentProject),
+    );
+  }
+
+  private async restoreSnapshotUnlocked(
+    snapshotId: number,
+    currentProject: SnapshotRestoreTarget,
+  ): Promise<StoryProject> {
+    const targetDirectory = snapshotRestoreTargetDirectory(currentProject);
+    if (!targetDirectory) {
+      throw new ProjectSnapshotRestoreError('target-unavailable');
+    }
+
+    let validatedTarget: StoryProject | null;
+    try {
+      validatedTarget = await this.loadProjectUnlocked(targetDirectory);
+    } catch (error) {
+      logger.error('Failed to validate the snapshot restore target', {
+        projectId: targetDirectory,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new ProjectSnapshotRestoreError('target-unavailable');
+    }
+    if (!validatedTarget) {
+      throw new ProjectSnapshotRestoreError('target-unavailable');
+    }
+
+    const snapshot = await super.getSnapshotData(snapshotId);
+    if (!looksLikeStoryProject(snapshot)) {
+      throw new ProjectSnapshotRestoreError(
+        snapshot === null ? 'snapshot-unavailable' : 'snapshot-invalid',
+      );
+    }
+
+    const snapshotProjectId = persistedProjectId(snapshot);
+    if (typeof snapshotProjectId !== 'string') {
+      throw new ProjectSnapshotRestoreError('snapshot-owner-unverifiable');
+    }
+    const safeSnapshotProjectId = projectPathSegment(snapshotProjectId);
+    if (!safeSnapshotProjectId) {
+      throw new ProjectSnapshotRestoreError('snapshot-owner-unverifiable');
+    }
+    if (safeSnapshotProjectId !== targetDirectory) {
+      throw new ProjectSnapshotRestoreError('snapshot-owner-mismatch');
+    }
+
+    const restored = { ...(snapshot as unknown as Record<string, unknown>) };
+    delete restored['id'];
+    delete restored[LEGACY_PROJECT_DIRECTORY_METADATA_KEY];
+    delete restored[LEGACY_AUXILIARY_METADATA_KEY];
+
+    const validatedTargetId = persistedProjectId(validatedTarget);
+    if (typeof validatedTargetId === 'string') {
+      const safeTargetId = projectPathSegment(validatedTargetId);
+      if (!safeTargetId || safeTargetId !== targetDirectory) {
+        throw new ProjectSnapshotRestoreError('target-unavailable');
+      }
+      restored['id'] = safeTargetId;
+    }
+
+    const validatedTargetDirectory = legacyProjectDirectory(validatedTarget);
+    if (validatedTargetDirectory) {
+      restored[LEGACY_PROJECT_DIRECTORY_METADATA_KEY] = validatedTargetDirectory;
+    }
+    const validatedTargetMetadata = persistedLegacyAuxiliaryMetadata(validatedTarget);
+    if (validatedTargetMetadata) {
+      restored[LEGACY_AUXILIARY_METADATA_KEY] = validatedTargetMetadata;
+    }
+
+    return restored as unknown as StoryProject;
+  }
+
   async saveProject(project: SaveProjectInput): Promise<void> {
+    return this.withLegacyRoutingOperation(() => this.saveProjectUnlocked(project));
+  }
+
+  private async saveProjectUnlocked(project: SaveProjectInput): Promise<void> {
     const flat = normalizeSaveProjectInputToStoryProject(project);
+    const rawProjectId = (flat as unknown as Record<string, unknown>)['id'];
+    const suppliedProjectId = typeof rawProjectId === 'string';
+    let projectId: string;
+    let projectToPersist = flat;
+    const apis = await this.getApis();
+    const appDataPath = await this.ensureAppDataPath();
+    if (suppliedProjectId) {
+      const safeProjectId = projectPathSegment(rawProjectId);
+      if (!safeProjectId) {
+        const legacyIdentity = await this.resolveLegacySaveIdentity(
+          flat,
+          rawProjectId,
+          apis,
+          appDataPath,
+        );
+        if (!legacyIdentity) {
+          throw new Error('Cannot save a project with an unusable project ID.');
+        }
+        if (!legacyIdentity.inspectionComplete) {
+          throw new Error(
+            'Cannot safely save this legacy project until its auxiliary data can be verified.',
+          );
+        }
+        projectId = legacyIdentity.projectId;
+        projectToPersist = {
+          ...flat,
+          id: projectId,
+          ...(legacyIdentity.metadata
+            ? { [LEGACY_AUXILIARY_METADATA_KEY]: legacyIdentity.metadata }
+            : {}),
+        } as StoryProject;
+        if (legacyIdentity.metadata) {
+          this.registerLegacyAuxiliaryPolicy(
+            projectId,
+            legacyIdentity.metadata.legacyProjectId,
+            evidenceFromPersistedMetadata(legacyIdentity.metadata),
+          );
+        }
+      } else {
+        projectId = safeProjectId;
+        this.verifiedLegacyProjectDirectories.delete(projectId);
+      }
+    } else {
+      const legacyDirectory = legacyProjectDirectory(flat);
+      projectId =
+        legacyDirectory && this.verifiedLegacyProjectDirectories.has(legacyDirectory)
+          ? legacyDirectory
+          : (projectPathSegment(flat.title || '') ?? 'project');
+    }
 
     // Auto-snapshot: fire-and-forget, mirrors dbService behaviour
     if (Date.now() - this.lastAutoSnapshotTime > this.AUTO_SNAPSHOT_INTERVAL) {
       this.lastAutoSnapshotTime = Date.now();
-      this.saveSnapshot('auto', flat)
+      this.saveSnapshot('auto', projectToPersist)
         .then(() => this.pruneAutoSnapshots())
-        .catch(() => {});
+        .catch((error) => {
+          // QNBS-v3: auto-snapshot failure stays non-fatal while remaining visible for recovery diagnostics.
+          logger.warn('Auto-snapshot failed (project save itself is unaffected)', {
+            projectId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
     }
 
-    const apis = await this.getApis();
-    const appDataPath = await this.ensureAppDataPath();
-    const projectId = sanitizePathSegment(
-      ((flat as unknown as Record<string, unknown>)['id'] as string) || flat.title || 'project',
-    );
     const projectPath = await apis.join(appDataPath, 'projects', projectId);
 
     if (!(await apis.exists(projectPath))) {
@@ -93,7 +519,8 @@ export class FsProjectStore extends FsAssetStore {
     }
 
     const projectFile = await apis.join(projectPath, 'project.json');
-    await writeTextFileAtomic(apis, projectFile, compressData(flat));
+    await writeTextFileAtomic(apis, projectFile, compressData(projectToPersist));
+    this.clearLegacyPoliciesTargetingProject(projectId);
     // QNBS-v3 (#332): documented best-effort abort — the project data above already saved; a failed marker write only degrades the next cold-boot's project selection, not worth failing this save over.
     await this.setActiveProjectId(projectId).catch((error) => {
       logger.warn('Failed to persist active-project marker (project save itself succeeded)', {
@@ -139,15 +566,21 @@ export class FsProjectStore extends FsAssetStore {
    * collapse into the same `null` a caller would read as "no project exists yet".
    */
   async loadProject(projectId: string): Promise<StoryProject | null> {
+    return this.withLegacyRoutingOperation(() => this.loadProjectUnlocked(projectId));
+  }
+
+  private async loadProjectUnlocked(projectId: string): Promise<StoryProject | null> {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
-    const safeProjectId = sanitizePathSegment(projectId);
+    const safeProjectId = projectPathSegment(projectId);
+    if (!safeProjectId) return null;
     const projectFile = await apis.join(appDataPath, 'projects', safeProjectId, 'project.json');
 
     // QNBS-v3 (CodeRabbit/codex): exists() rejecting is an I/O failure too, not absence — classify it the same as a readTextFile failure rather than letting it escape raw.
     let content: string;
     try {
       if (!(await apis.exists(projectFile))) {
+        this.clearLegacyAuxiliaryPolicy(safeProjectId);
         return null;
       }
       content = await retryFs(() => apis.readTextFile(projectFile));
@@ -177,8 +610,14 @@ export class FsProjectStore extends FsAssetStore {
     }
 
     // QNBS-v3: schedule observation after this async load resolves so validation cannot delay or alter the load result.
-    scheduleCoreProjectValidation(project);
-    return project;
+    const migratedProject = await this.migrateLegacyProjectIdentity(
+      project,
+      safeProjectId,
+      apis,
+      appDataPath,
+    );
+    scheduleCoreProjectValidation(migratedProject);
+    return migratedProject;
   }
 
   async listProjects(): Promise<string[]> {
@@ -201,11 +640,40 @@ export class FsProjectStore extends FsAssetStore {
 
   // QNBS-v3: move the whole folder before reload so corrupt project artifacts remain recoverable.
   /** Move the whole corrupt project directory aside so its manuscript and assets remain recoverable. */
+  private async prepareLegacyQuarantinePolicy(
+    safeProjectId: string,
+    apis: TauriApis,
+    appDataPath: string,
+  ): Promise<{
+    legacyProjectId: string;
+    codex: boolean;
+    binderAssetIds: readonly string[];
+  } | null> {
+    const policy = this.legacyAuxiliaryPolicyForProject(safeProjectId);
+    if (policy?.legacyProjectId !== 'project') return policy;
+    const legacyProjectState = await this.legacyFallbackProjectState(
+      safeProjectId,
+      apis,
+      appDataPath,
+    );
+    if (legacyProjectState === 'confirmed') {
+      this.clearLegacyAuxiliaryPolicy(safeProjectId);
+      return null;
+    }
+    if (legacyProjectState === 'indeterminate') throw new ProjectQuarantineError('io-error');
+    return policy;
+  }
+
   async quarantineProject(projectId: string): Promise<ProjectQuarantineResult> {
+    return this.withLegacyRoutingOperation(() => this.quarantineProjectUnlocked(projectId));
+  }
+
+  private async quarantineProjectUnlocked(projectId: string): Promise<ProjectQuarantineResult> {
     try {
       const apis = await this.getApis();
       const appDataPath = await this.ensureAppDataPath();
-      const safeProjectId = sanitizePathSegment(projectId, 'project');
+      const safeProjectId = projectPathSegment(projectId);
+      if (!safeProjectId) throw new ProjectQuarantineError('not-found');
       const projectPath = await apis.join(appDataPath, 'projects', safeProjectId);
       if (!(await apis.exists(projectPath))) {
         throw new ProjectQuarantineError('not-found');
@@ -214,23 +682,24 @@ export class FsProjectStore extends FsAssetStore {
       const quarantineRoot = await apis.join(appDataPath, 'quarantined-projects');
       await apis.mkdir(quarantineRoot, { recursive: true });
       const timestamp = Date.now();
+      const legacyPolicy = await this.prepareLegacyQuarantinePolicy(
+        safeProjectId,
+        apis,
+        appDataPath,
+      );
       for (let attempt = 0; attempt < 100; attempt++) {
         const suffix = attempt === 0 ? String(timestamp) : `${timestamp}-${attempt}`;
         const quarantinePath = await apis.join(
           quarantineRoot,
           `${safeProjectId}-corrupt-${suffix}`,
         );
-        if (await apis.exists(quarantinePath)) continue;
+        // QNBS-v3: reserve a unique directory atomically so rename cannot replace a concurrent quarantine target.
         try {
-          await retryFs(() => apis.rename(projectPath, quarantinePath));
-          return { projectId, path: quarantinePath };
+          await apis.mkdir(quarantinePath);
         } catch (error) {
-          // QNBS-v3: a concurrent quarantine may claim the checked target between exists and rename.
           let targetExists: boolean;
-          let sourceExists: boolean;
           try {
             targetExists = await apis.exists(quarantinePath);
-            sourceExists = await apis.exists(projectPath);
           } catch (probeError) {
             logger.error('Failed to inspect a concurrent quarantine result', {
               projectId,
@@ -239,7 +708,62 @@ export class FsProjectStore extends FsAssetStore {
             throw new ProjectQuarantineError('io-error');
           }
           if (targetExists) continue;
-          if (!sourceExists) throw new ProjectQuarantineError('already-preserved');
+          logger.error('Failed to reserve quarantine directory', {
+            projectId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          throw new ProjectQuarantineError('io-error');
+        }
+
+        const preservedPath = await apis.join(quarantinePath, safeProjectId);
+        const releaseReservation = async (): Promise<void> => {
+          try {
+            await apis.remove(quarantinePath, { recursive: true });
+          } catch (cleanupError) {
+            logger.warn('Failed to remove reserved quarantine directory after a failed move', {
+              projectId,
+              error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+            });
+          }
+        };
+        try {
+          if (legacyPolicy?.legacyProjectId === 'project') {
+            const manifestPath = await apis.join(quarantinePath, 'legacy-auxiliary.json');
+            const manifest: QuarantineLegacyAuxiliaryManifest = {
+              projectId: safeProjectId,
+              legacyProjectId: legacyPolicy.legacyProjectId,
+              codex: legacyPolicy.codex,
+              binderAssetIds: [...legacyPolicy.binderAssetIds],
+            };
+            // QNBS-v3: durable quarantine metadata preserves verified auxiliary provenance without claiming ownership of ambiguous fallback files.
+            await writeTextFileAtomic(apis, manifestPath, JSON.stringify(manifest));
+          }
+          await retryFs(() => apis.rename(projectPath, preservedPath));
+          this.clearLegacyAuxiliaryPolicy(safeProjectId);
+          return { projectId: safeProjectId, path: preservedPath };
+        } catch (error) {
+          let sourceExists: boolean;
+          let preservedExists: boolean;
+          try {
+            sourceExists = await apis.exists(projectPath);
+            preservedExists = await apis.exists(preservedPath);
+          } catch (probeError) {
+            logger.error('Failed to inspect a concurrent quarantine result', {
+              projectId,
+              error: probeError instanceof Error ? probeError.message : String(probeError),
+            });
+            throw new ProjectQuarantineError('io-error');
+          }
+          if (!sourceExists && preservedExists) {
+            this.clearLegacyAuxiliaryPolicy(safeProjectId);
+            return { projectId: safeProjectId, path: preservedPath };
+          }
+          if (!sourceExists) {
+            await releaseReservation();
+            this.clearLegacyAuxiliaryPolicy(safeProjectId);
+            throw new ProjectQuarantineError('source-missing');
+          }
+          await releaseReservation();
           logger.error('Failed to quarantine project directory', {
             projectId,
             error: error instanceof Error ? error.message : String(error),
@@ -260,13 +784,87 @@ export class FsProjectStore extends FsAssetStore {
   }
 
   async deleteProject(projectId: string): Promise<void> {
+    return this.withLegacyRoutingOperation(() => this.deleteProjectUnlocked(projectId));
+  }
+
+  private async deleteProjectUnlocked(projectId: string): Promise<void> {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
-    const safeProjectId = sanitizePathSegment(projectId);
+    const safeProjectId = projectPathSegment(projectId);
+    if (!safeProjectId) return;
     const projectPath = await apis.join(appDataPath, 'projects', safeProjectId);
 
-    if (await apis.exists(projectPath)) {
-      await retryFs(() => apis.remove(projectPath, { recursive: true }));
+    // QNBS-v3: uncertain existence is a typed retryable deletion failure, never permission to clean up.
+    let projectExists: boolean;
+    try {
+      projectExists = await apis.exists(projectPath);
+    } catch (error) {
+      logger.error('Failed to inspect project existence before deletion', {
+        projectId: safeProjectId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new ProjectDeleteError('identity-inspection-failed');
+    }
+    if (projectExists) {
+      await this.hydrateLegacyPolicyForDeletion(safeProjectId, projectPath, apis, appDataPath);
+    }
+
+    try {
+      const legacyBinderIds = this.legacyBinderAssetIdsForProject(safeProjectId);
+      if (legacyBinderIds.length > 0) {
+        for (const assetId of legacyBinderIds) {
+          await this.deleteBinderAssetStrict(safeProjectId, assetId);
+        }
+      }
+      if (this.legacyCodexProjectId(safeProjectId)) {
+        await this.deleteStoryCodexStrict(safeProjectId);
+      }
+      if (projectExists) await retryFs(() => apis.remove(projectPath, { recursive: true }));
+    } catch (error) {
+      logger.error('Failed to clean up legacy project data during deletion', {
+        projectId: safeProjectId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new ProjectDeleteError();
+    }
+    this.verifiedLegacyProjectDirectories.delete(safeProjectId);
+    this.clearLegacyAuxiliaryPolicy(safeProjectId);
+  }
+
+  private async hydrateLegacyPolicyForDeletion(
+    safeProjectId: string,
+    projectPath: string,
+    apis: TauriApis,
+    appDataPath: string,
+  ): Promise<void> {
+    if (
+      this.legacyBinderAssetIdsForProject(safeProjectId).length > 0 ||
+      this.legacyCodexProjectId(safeProjectId)
+    ) {
+      return;
+    }
+    let project: StoryProject;
+    try {
+      const projectFile = await apis.join(projectPath, 'project.json');
+      if (!(await apis.exists(projectFile))) return;
+      const parsed = decompressData<unknown>(await retryFs(() => apis.readTextFile(projectFile)));
+      if (!looksLikeStoryProject(parsed)) throw new Error('Stored project is not project-shaped.');
+      project = parsed;
+    } catch (error) {
+      logger.error('Could not inspect project identity before deletion', {
+        projectId: safeProjectId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new ProjectDeleteError('identity-inspection-failed');
+    }
+    try {
+      await this.migrateLegacyProjectIdentity(project, safeProjectId, apis, appDataPath);
+    } catch (error) {
+      logger.error('Could not validate legacy auxiliary data before deletion', {
+        projectId: safeProjectId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new ProjectDeleteError('identity-inspection-failed');
     }
   }
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ProjectLoadError } from '../../services/fs/projectFsStore';
 import { getStartupRecoveryActions } from '../../services/startupRecoveryPolicy';
 
+// QNBS-v3: prevent filesystem corruption from acquiring destructive database-reset authority.
 describe('startup recovery action policy', () => {
   it('offers quarantine only for corrupt projects on the filesystem backend', () => {
     const error = new ProjectLoadError('corrupt', 'corrupt', 'project-1');

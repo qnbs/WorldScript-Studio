@@ -4,6 +4,7 @@ import type {
   BinderAssetPayload,
   ProjectQuarantineResult,
   SaveProjectInput,
+  SnapshotRestoreTarget,
   StorageBackend,
 } from './storageBackend';
 
@@ -13,6 +14,7 @@ export type {
   ProjectQuarantineResult,
   SaveProjectEnvelope,
   SaveProjectInput,
+  SnapshotRestoreTarget,
   StorageBackend,
 } from './storageBackend';
 export {
@@ -27,6 +29,8 @@ import { dbService } from './dbService';
 import { fileSystemService } from './fileSystemService';
 import { logger } from './logger';
 import { isTauriRuntime } from './tauriRuntime';
+
+// QNBS-v3: re-exporting the narrow storage contracts keeps callers on one backend-independent type boundary.
 
 declare global {
   interface Window {
@@ -154,6 +158,15 @@ class StorageManager {
 
   async getSnapshotData(id: number): Promise<unknown> {
     const backend = await this.getBackend();
+    return backend.getSnapshotData(id);
+  }
+
+  // QNBS-v3: filesystem backends receive the pre-read target while IndexedDB keeps its existing snapshot fallback.
+  async restoreSnapshot(id: number, currentProject: SnapshotRestoreTarget): Promise<unknown> {
+    const backend = await this.getBackend();
+    if (backend.restoreSnapshot) {
+      return backend.restoreSnapshot(id, currentProject);
+    }
     return backend.getSnapshotData(id);
   }
 

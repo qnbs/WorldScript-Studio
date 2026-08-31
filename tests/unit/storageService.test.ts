@@ -149,6 +149,10 @@ describe('storageService (IndexedDB backend in browser)', () => {
     await storageService.getSnapshotData(42);
     expect(mockDb.getSnapshotData).toHaveBeenCalledWith(42);
 
+    const currentProject = { id: 'p1', title: 'Current target' };
+    await storageService.restoreSnapshot(42, currentProject as never);
+    expect(mockDb.getSnapshotData).toHaveBeenCalledWith(42);
+
     await storageService.listSnapshots();
     expect(mockDb.listSnapshots).toHaveBeenCalled();
 

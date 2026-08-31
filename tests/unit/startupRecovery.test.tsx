@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { mockRoot, mockReset, mockBackendKind, mockQuarantine, mockCopy, loggerError } = vi.hoisted(
   () => ({
@@ -17,6 +17,7 @@ const { mockRoot, mockReset, mockBackendKind, mockQuarantine, mockCopy, loggerEr
       reset: 'reset',
       quarantineNotice: 'quarantine notice',
       recoveryFailed: 'recovery failed',
+      recoveryUnknown: 'recovery unknown',
       recoveryAlreadyPreserved: 'already preserved',
       resetWarning: 'reset warning',
     },
@@ -80,7 +81,12 @@ function renderedScreenProps(): RecoveryScreenProps {
   return strictMode.props.children.props;
 }
 
+// QNBS-v3: keep startup recovery actions constrained by the originating storage backend.
 describe('startup recovery rendering', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('renders the database reset screen when IndexedDB initialization fails', async () => {
     await renderStorageInitializationFailure(mockRoot as never);
 
