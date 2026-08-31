@@ -21,6 +21,15 @@ const createPersistedProject = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+const createDesktopProject = (overrides: Record<string, unknown> = {}) => ({
+  title: '',
+  logline: '',
+  characters: [],
+  worlds: [],
+  manuscript: [],
+  ...overrides,
+});
+
 const h = vi.hoisted(() => ({
   isTauri: { value: false },
   dbLoadState: vi.fn(),
@@ -209,5 +218,112 @@ describe('shouldAllowInitialMetadataSeed', () => {
     const state = { project: { data: project } } as unknown as PersistedRootState;
     expect(getPersistedProjectPayload(state.project)).toEqual(project);
     expect(shouldAllowInitialMetadataSeed(state)).toBe(false);
+  });
+
+  // QNBS-v3: canonicalizes supported desktop persistence shapes before hydration authority can suppress fresh-project seeding.
+  it('normalizes desktop arrays and an omitted outline into the Redux shape', () => {
+    const project = createDesktopProject();
+    const state = { project: { data: project } } as unknown as PersistedRootState;
+    const payload = getPersistedProjectPayload(state.project);
+
+    expect(payload).toMatchObject({
+      outline: [],
+      manuscript: [],
+    });
+    expect(payload?.characters).toEqual({ ids: [], entities: {} });
+    expect(payload?.worlds).toEqual({ ids: [], entities: {} });
+    expect(shouldAllowInitialMetadataSeed(state)).toBe(false);
+  });
+
+  it('preserves all entities when normalizing desktop character and world arrays', () => {
+    const character = { id: 'character-1', name: 'Ada' };
+    const world = { id: 'world-1', name: 'Arcadia' };
+    const project = createDesktopProject({ characters: [character], worlds: [world] });
+    const state = { project: { data: project } } as unknown as PersistedRootState;
+    const payload = getPersistedProjectPayload(state.project);
+
+    expect(payload?.characters).toEqual({
+      ids: ['character-1'],
+      entities: { 'character-1': character },
+    });
+    expect(payload?.worlds).toEqual({ ids: ['world-1'], entities: { 'world-1': world } });
+  });
+
+  it('normalizes mixed array and EntityState desktop collections', () => {
+    const world = { id: 'world-1', name: 'Arcadia' };
+    const project = createDesktopProject({
+      characters: [{ id: 'character-1', name: 'Ada' }],
+      worlds: { ids: ['world-1'], entities: { 'world-1': world } },
+    });
+    const state = { project: { data: project } } as unknown as PersistedRootState;
+    const payload = getPersistedProjectPayload(state.project);
+
+    expect(payload?.characters.ids).toEqual(['character-1']);
+    expect(payload?.worlds).toEqual({ ids: ['world-1'], entities: { 'world-1': world } });
+  });
+
+  it('accepts the inverse mixed EntityState and array representation', () => {
+    const character = { id: 'character-1', name: 'Ada' };
+    const project = createDesktopProject({
+      characters: { ids: ['character-1'], entities: { 'character-1': character } },
+      worlds: [{ id: 'world-1', name: 'Arcadia' }],
+    });
+    const state = { project: { data: project } } as unknown as PersistedRootState;
+    const payload = getPersistedProjectPayload(state.project);
+
+    expect(payload?.characters).toEqual({
+      ids: ['character-1'],
+      entities: { 'character-1': character },
+    });
+    expect(payload?.worlds.ids).toEqual(['world-1']);
+  });
+
+  it('rejects array entities without stable IDs instead of dropping their content', () => {
+    const project = createDesktopProject({ characters: [{ name: 'Missing ID' }] });
+    const state = { project: { data: project } } as unknown as PersistedRootState;
+
+    expect(getPersistedProjectPayload(state.project)).toBeUndefined();
+    expect(shouldAllowInitialMetadataSeed(state)).toBe(true);
+  });
+
+  it('preserves an already canonical Redux project without changing its content', () => {
+    const project = createPersistedProject({
+      title: 'A story',
+      logline: 'A premise',
+      manuscript: [{ id: 'section-1', title: 'Chapter 1', content: 'Existing work' }],
+    });
+    const state = { project: { data: project } } as unknown as PersistedRootState;
+
+    expect(getPersistedProjectPayload(state.project)).toEqual(project);
+  });
+
+  it('keeps a structurally genuine project authoritative when title is absent', () => {
+    const project = createDesktopProject({
+      manuscript: [{ id: 'section-1', title: 'Existing', content: 'Work' }],
+    });
+    Reflect.deleteProperty(project, 'title');
+    const state = { project: { data: project } } as unknown as PersistedRootState;
+
+    expect(getPersistedProjectPayload(state.project)).toBeDefined();
+    expect(shouldAllowInitialMetadataSeed(state)).toBe(false);
+  });
+
+  it('keeps a structurally genuine project authoritative when logline is absent', () => {
+    const project = createDesktopProject({
+      manuscript: [{ id: 'section-1', title: 'Existing', content: 'Work' }],
+    });
+    Reflect.deleteProperty(project, 'logline');
+    const state = { project: { data: project } } as unknown as PersistedRootState;
+
+    expect(getPersistedProjectPayload(state.project)).toBeDefined();
+    expect(shouldAllowInitialMetadataSeed(state)).toBe(false);
+  });
+
+  it('rejects a present non-array outline instead of hiding malformed structure', () => {
+    const project = createDesktopProject({ outline: {} });
+    const state = { project: { data: project } } as unknown as PersistedRootState;
+
+    expect(getPersistedProjectPayload(state.project)).toBeUndefined();
+    expect(shouldAllowInitialMetadataSeed(state)).toBe(true);
   });
 });
