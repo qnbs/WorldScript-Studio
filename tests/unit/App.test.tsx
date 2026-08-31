@@ -2,65 +2,44 @@ import { render } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const {
-  mockUseApp,
-  mockProjectBootstrapEffect,
-  mockDispatch,
-  mockStore,
-  selectorState,
-  project,
-  featureFlags,
-} = vi.hoisted(() => ({
-  mockUseApp: vi.fn(),
-  mockProjectBootstrapEffect: vi.fn(),
-  mockDispatch: vi.fn(),
-  mockStore: {
-    getState: vi.fn(() => ({})),
-  },
-  selectorState: {
-    settings: {
-      theme: 'light',
-      appearancePreset: 'default',
-      writingSurfaceStyle: 'default',
-      keyboardShortcuts: [],
-      privacy: { analyticsEnabled: false },
-      aiMode: 'hybrid',
-      openRouter: { enabled: false },
-      advancedEditor: {
-        distractionFree: false,
-        typewriterMode: false,
-        zenMode: false,
-        focusMode: false,
-      },
-      accessibility: {
-        highContrast: false,
-        reducedMotion: false,
-        reducedTransparency: false,
-        largeText: false,
-        screenReader: false,
-        focusIndicators: false,
-        comfortableTargets: false,
-        colorBlindMode: 'none',
-      },
-      desktop: { minimizeToTray: false },
+const { mockUseApp, mockProjectBootstrapEffect, mockDispatch, mockStore, selectorState, project } =
+  vi.hoisted(() => ({
+    mockUseApp: vi.fn(),
+    mockProjectBootstrapEffect: vi.fn(),
+    mockDispatch: vi.fn(),
+    mockStore: {
+      getState: vi.fn(() => ({})),
     },
-  },
-  project: { id: 'test-project', title: 'Test project' },
-  featureFlags: {
-    enableRtlLayout: false,
-    enablePluginSystem: false,
-    enableDuckDbAnalytics: false,
-    enableWorkerBusV2: false,
-    enableLocalFirstSync: false,
-    enableIdbAtRestEncryption: false,
-    enableObjectsGroups: false,
-    enableMindMaps: false,
-    enableCharacterInterviews: false,
-    enableLoraAdapters: false,
-    enableGlobalCopilot: false,
-    enableVoiceSupport: false,
-  },
-}));
+    selectorState: {
+      settings: {
+        theme: 'light',
+        appearancePreset: 'default',
+        writingSurfaceStyle: 'default',
+        keyboardShortcuts: [],
+        privacy: { analyticsEnabled: false },
+        aiMode: 'hybrid',
+        openRouter: { enabled: false },
+        advancedEditor: {
+          distractionFree: false,
+          typewriterMode: false,
+          zenMode: false,
+          focusMode: false,
+        },
+        accessibility: {
+          highContrast: false,
+          reducedMotion: false,
+          reducedTransparency: false,
+          largeText: false,
+          screenReader: false,
+          focusIndicators: false,
+          comfortableTargets: false,
+          colorBlindMode: 'none',
+        },
+        desktop: { minimizeToTray: false },
+      },
+    },
+    project: { id: 'test-project', title: 'Test project' },
+  }));
 
 vi.mock('react-redux', () => ({
   Provider: ({ children }: { children: ReactNode }) => children,
@@ -83,7 +62,21 @@ vi.mock('../../features/featureFlags/featureFlagsSlice', async (importOriginal) 
     await importOriginal<typeof import('../../features/featureFlags/featureFlagsSlice')>();
   return {
     ...actual,
-    selectFeatureFlags: () => featureFlags,
+    selectFeatureFlags: () => ({
+      ...actual.defaultFeatureFlagsState,
+      enableRtlLayout: false,
+      enablePluginSystem: false,
+      enableDuckDbAnalytics: false,
+      enableWorkerBusV2: false,
+      enableLocalFirstSync: false,
+      enableIdbAtRestEncryption: false,
+      enableObjectsGroups: false,
+      enableMindMaps: false,
+      enableCharacterInterviews: false,
+      enableLoraAdapters: false,
+      enableGlobalCopilot: false,
+      enableVoiceSupport: false,
+    }),
   };
 });
 
