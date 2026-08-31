@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { WelcomePortal } from '../../components/WelcomePortal';
 
@@ -49,7 +49,17 @@ vi.mock('../../features/status/statusSlice', () => ({
 }));
 
 vi.mock('../../features/project/thunks/projectManagementThunks', () => ({
-  importProjectThunk: vi.fn(() => async () => undefined),
+  importProjectThunk: Object.assign(
+    vi.fn(() => ({ type: 'project/importProject/pending' })),
+    {
+      fulfilled: {
+        match: (action: unknown) =>
+          typeof action === 'object' &&
+          action !== null &&
+          (action as { type?: string }).type === 'project/importProject/fulfilled',
+      },
+    },
+  ),
 }));
 
 vi.mock('../../services/storageService', () => ({
@@ -115,5 +125,17 @@ describe('WelcomePortal', () => {
     render(<WelcomePortal onExit={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'portal.welcome.openProject' }));
     expect(screen.getByText('portal.open.title')).toBeTruthy();
+  });
+
+  it('marks a welcome-portal import as ineligible for fresh metadata seeding', async () => {
+    mockDispatch.mockResolvedValue({ type: 'project/importProject/fulfilled' });
+    const onExit = vi.fn();
+    render(<WelcomePortal onExit={onExit} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'portal.welcome.tryDemo' }));
+
+    await waitFor(() =>
+      expect(onExit).toHaveBeenCalledWith('manuscript', { allowInitialMetadataSeed: false }),
+    );
   });
 });

@@ -191,7 +191,8 @@ interface AppProps {
 
 const App: FC<AppProps> = ({ isNewUser }) => {
   const appState = useApp({ isNewUser });
-  const { currentView, handleNavigate, isPortalActive, isInitialLoad } = appState;
+  const { currentView, handleNavigate, isPortalActive, isInitialLoad, allowInitialMetadataSeed } =
+    appState;
   const settings = useAppSelector((state) => state.settings);
   const project = useAppSelector(selectProjectData);
   const featureFlags = useAppSelector(selectFeatureFlags);
@@ -447,7 +448,7 @@ const App: FC<AppProps> = ({ isNewUser }) => {
   // QNBS-v3: gates on isInitialLoad too (not just isPortalActive) so a same-commit stale read can't auto-seed a project before the welcome portal shows.
   useProjectBootstrapEffect({
     project,
-    isNewUser,
+    allowInitialMetadataSeed,
     isInitialLoad,
     isPortalActive,
     isI18nReady,

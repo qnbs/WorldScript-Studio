@@ -6,8 +6,6 @@ import { repairProjectI18nFields } from '../services/projectI18nRepair';
 
 export interface ProjectBootstrapGateState {
   project: ProjectMetaSlice | null;
-  // QNBS-v3: pre-hydration new-user state is the only authority allowed to seed blank metadata.
-  isNewUser: boolean;
   isInitialLoad: boolean;
   isPortalActive: boolean;
   isI18nReady: boolean;
@@ -24,13 +22,15 @@ export function shouldRunProjectBootstrap({
 }
 
 export interface UseProjectBootstrapEffectParams extends ProjectBootstrapGateState {
+  // QNBS-v3: explicit portal intent controls one-time metadata seeding without persisting schema state.
+  allowInitialMetadataSeed: boolean;
   t: TranslateFn;
 }
 
 /** Repairs raw-i18n-key project fields, or seeds a fresh blank project, once bootstrap has settled. */
 export function useProjectBootstrapEffect({
   project,
-  isNewUser,
+  allowInitialMetadataSeed,
   isInitialLoad,
   isPortalActive,
   isI18nReady,
@@ -45,7 +45,6 @@ export function useProjectBootstrapEffect({
       !project ||
       !shouldRunProjectBootstrap({
         project,
-        isNewUser,
         isInitialLoad,
         isPortalActive,
         isI18nReady,
@@ -54,9 +53,9 @@ export function useProjectBootstrapEffect({
       return;
 
     const repair = repairProjectI18nFields(project, t, {
-      seedInitialMetadata: isNewUser && !hasCompletedFreshUserBootstrap.current,
+      seedInitialMetadata: allowInitialMetadataSeed && !hasCompletedFreshUserBootstrap.current,
     });
-    if (isNewUser) hasCompletedFreshUserBootstrap.current = true;
+    if (allowInitialMetadataSeed) hasCompletedFreshUserBootstrap.current = true;
     if (repair) {
       if (repair.title !== undefined) dispatch(projectActions.updateTitle(repair.title));
       if (repair.logline !== undefined) dispatch(projectActions.updateLogline(repair.logline));
@@ -64,5 +63,5 @@ export function useProjectBootstrapEffect({
         dispatch(projectActions.setManuscript(repair.manuscript));
     }
     // QNBS-v3: blank metadata is seeded only once for a fresh user; later empty strings remain user intent.
-  }, [project, isNewUser, isInitialLoad, isPortalActive, isI18nReady, dispatch, t]);
+  }, [project, allowInitialMetadataSeed, isInitialLoad, isPortalActive, isI18nReady, dispatch, t]);
 }

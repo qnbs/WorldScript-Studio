@@ -115,6 +115,17 @@ describe('useApp', () => {
     expect(result.current.isPortalActive).toBe(false);
   });
 
+  it('disables fresh metadata seeding when the portal exits after an import', () => {
+    const { result } = renderHook(() => useApp({ isNewUser: true }));
+    expect(result.current.allowInitialMetadataSeed).toBe(true);
+
+    act(() => {
+      result.current.handlePortalExit('manuscript', { allowInitialMetadataSeed: false });
+    });
+
+    expect(result.current.allowInitialMetadataSeed).toBe(false);
+  });
+
   it('activates portal for new users', () => {
     const { result } = renderHook(() => useApp({ isNewUser: true }));
     expect(result.current.isPortalActive).toBe(true);
