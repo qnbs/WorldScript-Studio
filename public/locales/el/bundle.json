@@ -821,6 +821,7 @@
   "error.startup.reset": "Reset database and reload",
   "error.startup.quarantineNotice": "The complete project folder will be moved to quarantine. No project data will be deleted.",
   "error.startup.recoveryFailed": "Project preservation failed. The original project was not deleted. Reload and try again.",
+  "error.startup.recoveryUnknown": "Project preservation could not be confirmed. Reload and try again.",
   "error.startup.recoveryAlreadyPreserved": "The project appears to have been preserved by another recovery attempt. Reload to continue.",
   "error.startup.resetWarning": "Resetting the database will delete all local projects and settings.",
   "copilot.annotationCount": "{{count}} πληροφορίες για αυτό το κεφάλαιο",

@@ -13,6 +13,7 @@ export interface StorageErrorCopy {
   reset: string;
   quarantineNotice: string;
   recoveryFailed: string;
+  recoveryUnknown: string;
   recoveryAlreadyPreserved: string;
   resetWarning: string;
 }
@@ -29,6 +30,7 @@ export const STARTUP_COPY_FALLBACKS: StorageErrorCopy = {
     'The complete project folder will be moved to quarantine. No project data will be deleted.',
   recoveryFailed:
     'Project preservation failed. The original project was not deleted. Reload and try again.',
+  recoveryUnknown: 'Project preservation could not be confirmed. Reload and try again.',
   recoveryAlreadyPreserved:
     'The project appears to have been preserved by another recovery attempt. Reload to continue.',
   resetWarning: 'Resetting the database will delete all local projects and settings.',
@@ -51,6 +53,7 @@ export async function loadStorageErrorCopy(): Promise<StorageErrorCopy> {
     reset,
     quarantineNotice,
     recoveryFailed,
+    recoveryUnknown,
     recoveryAlreadyPreserved,
     resetWarning,
   ] = await Promise.all([
@@ -69,6 +72,7 @@ export async function loadStorageErrorCopy(): Promise<StorageErrorCopy> {
     startupTranslation('error.startup.reset', STARTUP_COPY_FALLBACKS.reset),
     startupTranslation('error.startup.quarantineNotice', STARTUP_COPY_FALLBACKS.quarantineNotice),
     startupTranslation('error.startup.recoveryFailed', STARTUP_COPY_FALLBACKS.recoveryFailed),
+    startupTranslation('error.startup.recoveryUnknown', STARTUP_COPY_FALLBACKS.recoveryUnknown),
     startupTranslation(
       'error.startup.recoveryAlreadyPreserved',
       STARTUP_COPY_FALLBACKS.recoveryAlreadyPreserved,
@@ -85,6 +89,7 @@ export async function loadStorageErrorCopy(): Promise<StorageErrorCopy> {
     reset,
     quarantineNotice,
     recoveryFailed,
+    recoveryUnknown,
     recoveryAlreadyPreserved,
     resetWarning,
   };
@@ -100,9 +105,9 @@ export function StorageErrorScreen({
   onReset?: () => void;
   onRecover?: () => Promise<void>;
 }) {
-  const [recoveryStatus, setRecoveryStatus] = React.useState<'failed' | 'already-preserved' | null>(
-    null,
-  );
+  const [recoveryStatus, setRecoveryStatus] = React.useState<
+    'failed' | 'already-preserved' | 'source-missing' | null
+  >(null);
   const [isRecovering, setIsRecovering] = React.useState(false);
 
   const handleRecover = async () => {
@@ -119,7 +124,9 @@ export function StorageErrorScreen({
       setRecoveryStatus(
         error instanceof ProjectQuarantineError && error.reason === 'already-preserved'
           ? 'already-preserved'
-          : 'failed',
+          : error instanceof ProjectQuarantineError && error.reason === 'source-missing'
+            ? 'source-missing'
+            : 'failed',
       );
       setIsRecovering(false);
     }
@@ -193,14 +200,17 @@ export function StorageErrorScreen({
         {onReset && (
           <button
             type="button"
-            onClick={onReset}
+            onClick={() => {
+              if (!isRecovering) onReset();
+            }}
+            disabled={isRecovering}
             style={{
               padding: '0.5rem 1.25rem',
               borderRadius: '0.5rem',
               border: 'none',
               background: '#dc2626',
               color: '#fff',
-              cursor: 'pointer',
+              cursor: isRecovering ? 'not-allowed' : 'pointer',
               fontFamily: 'inherit',
             }}
           >
@@ -213,11 +223,26 @@ export function StorageErrorScreen({
           {copy.quarantineNotice}
         </p>
       )}
-      {recoveryStatus && (
-        <p style={{ fontSize: '0.875rem', color: '#fca5a5', maxWidth: '32rem' }}>
-          {recoveryStatus === 'already-preserved'
-            ? copy.recoveryAlreadyPreserved
-            : copy.recoveryFailed}
+      {onRecover && (
+        <p
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          style={{
+            fontSize: '0.875rem',
+            color: recoveryStatus ? '#fca5a5' : '#cbd5e1',
+            maxWidth: '32rem',
+          }}
+        >
+          {isRecovering
+            ? copy.recovering
+            : recoveryStatus === 'already-preserved'
+              ? copy.recoveryAlreadyPreserved
+              : recoveryStatus === 'source-missing'
+                ? copy.recoveryUnknown
+                : recoveryStatus === 'failed'
+                  ? copy.recoveryFailed
+                  : ''}
         </p>
       )}
       {onReset && <p style={{ fontSize: '0.75rem', color: '#475569' }}>{copy.resetWarning}</p>}

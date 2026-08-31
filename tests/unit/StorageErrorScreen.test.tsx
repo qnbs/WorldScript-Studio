@@ -22,6 +22,7 @@ vi.mock('../../services/logger', async (importOriginal) => {
   };
 });
 
+// QNBS-v3: preserve truthful, accessible recovery outcomes while preventing destructive action races.
 describe('StorageErrorScreen', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -61,6 +62,44 @@ describe('StorageErrorScreen', () => {
       'Project quarantine failed',
       expect.objectContaining({ error: 'EACCES /private/project.json' }),
     );
+  });
+
+  it('announces recovery and blocks destructive reset while preservation is pending', async () => {
+    const user = userEvent.setup();
+    let resolveRecovery: () => void = () => undefined;
+    const onRecover = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveRecovery = resolve;
+        }),
+    );
+    const onReset = vi.fn();
+
+    render(
+      <StorageErrorScreen copy={STARTUP_COPY_FALLBACKS} onRecover={onRecover} onReset={onReset} />,
+    );
+
+    await user.click(screen.getByRole('button', { name: STARTUP_COPY_FALLBACKS.recover }));
+
+    expect(screen.getByRole('status')).toHaveTextContent(STARTUP_COPY_FALLBACKS.recovering);
+    expect(screen.getByRole('button', { name: STARTUP_COPY_FALLBACKS.reset })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: STARTUP_COPY_FALLBACKS.reset }));
+    expect(onReset).not.toHaveBeenCalled();
+
+    resolveRecovery();
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(''));
+  });
+
+  it('keeps source-missing wording truthful when preservation cannot be confirmed', async () => {
+    const user = userEvent.setup();
+    const onRecover = vi.fn().mockRejectedValue(new ProjectQuarantineError('source-missing'));
+
+    render(<StorageErrorScreen copy={STARTUP_COPY_FALLBACKS} onRecover={onRecover} />);
+
+    await user.click(screen.getByRole('button', { name: STARTUP_COPY_FALLBACKS.recover }));
+
+    expect(await screen.findByText(STARTUP_COPY_FALLBACKS.recoveryUnknown)).toBeInTheDocument();
+    expect(screen.queryByText(STARTUP_COPY_FALLBACKS.recoveryFailed)).not.toBeInTheDocument();
   });
 
   it('reports the typed already-preserved outcome and supports successful recovery and reset actions', async () => {

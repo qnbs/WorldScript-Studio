@@ -58,6 +58,7 @@ vi.mock('../../../../services/i18n/staticTranslate', () => ({
 }));
 
 import { appStoreRef } from '../../../../app/storeRef';
+import { compressData, decompressData } from '../../../../services/fs/fsCore';
 import { FsProjectStore } from '../../../../services/fs/projectFsStore';
 import { logger } from '../../../../services/logger';
 
@@ -83,7 +84,10 @@ function makeFakeFs(): FakeFs {
     join: (...parts: string[]) => Promise.resolve(parts.join('/')),
     exists: (p: string) =>
       Promise.resolve(text.has(p) || bin.has(p) || dirs.has(p) || under(p).length > 0),
-    mkdir: (p: string) => {
+    mkdir: (p: string, options?: { recursive?: boolean }) => {
+      if (dirs.has(p) && !options?.recursive) {
+        return Promise.reject(new Error(`EEXIST ${p}`));
+      }
       dirs.add(p);
       return Promise.resolve();
     },
@@ -111,6 +115,7 @@ function makeFakeFs(): FakeFs {
       for (const k of [...bin.keys()]) if (k.startsWith(`${p}/`)) bin.delete(k);
       return Promise.resolve();
     },
+    // QNBS-v3: recursive fake moves preserve every project asset so quarantine tests prove full-directory recovery.
     rename: (from: string, to: string) => {
       const fromEntries = [...text.keys(), ...bin.keys(), ...dirs].filter(
         (path, index, paths) =>
@@ -186,6 +191,7 @@ describe('FsProjectStore — projects', () => {
     expect(await store.listProjects()).toEqual([]);
   });
 
+  // QNBS-v3: the regression protects manuscripts and assets from partial or destructive quarantine.
   it('quarantines a complete project directory without deleting or relisting it', async () => {
     await store.saveProject(project as never);
     const original = fake.text.get('/app/projects/p1/project.json');
@@ -203,28 +209,49 @@ describe('FsProjectStore — projects', () => {
   // QNBS-v3: prove a claimed quarantine target cannot turn preserve-first recovery into data loss.
   it('tries the next quarantine name when a concurrent rename claims the checked target', async () => {
     await store.saveProject(project as never);
-    const originalRename = fake.apis.rename;
+    const originalMkdir = fake.apis.mkdir;
     let firstTarget: string | undefined;
     let racePending = true;
-    fake.apis.rename = (from: string, to: string) => {
-      if (racePending) {
+    fake.apis.mkdir = (path: string, options?: { recursive?: boolean }) => {
+      if (racePending && path.startsWith('/app/quarantined-projects/p1-corrupt-')) {
         racePending = false;
-        firstTarget = to;
-        return fake.apis.mkdir(to).then(() => originalRename(from, to));
+        firstTarget = path;
+        return originalMkdir(path, options).then(() => Promise.reject(new Error(`EEXIST ${path}`)));
       }
-      return originalRename(from, to);
+      return originalMkdir(path, options);
     };
 
     const result = await store.quarantineProject('p1');
 
     expect(firstTarget).toBeDefined();
-    expect(result.path).not.toBe(firstTarget);
+    expect(result.path).toBe(`${firstTarget}-1/p1`);
     expect(fake.text.get(`${result.path}/project.json`)).toBeDefined();
     expect(fake.text.has('/app/projects/p1/project.json')).toBe(false);
   });
 
-  // QNBS-v3: report source disappearance as concurrent preservation, without inventing a quarantine path.
-  it('reports when another recovery moved the source before this rename', async () => {
+  // QNBS-v3: report an unidentifiable concurrent move without claiming a path that was not observed.
+  it('reports source-missing when another recovery moved the source elsewhere', async () => {
+    await store.saveProject(project as never);
+    const original = fake.text.get('/app/projects/p1/project.json');
+    const originalRename = fake.apis.rename;
+    fake.apis.rename = async (from: string) => {
+      const concurrentPath = '/app/quarantined-projects/p1-corrupt-concurrent';
+      await originalRename(from, concurrentPath);
+      throw new Error(`ENOENT ${from}`);
+    };
+
+    await expect(store.quarantineProject('p1')).rejects.toMatchObject({
+      name: 'ProjectQuarantineError',
+      reason: 'source-missing',
+    });
+    expect(await store.listProjects()).not.toContain('p1');
+    expect(fake.text.get('/app/quarantined-projects/p1-corrupt-concurrent/project.json')).toBe(
+      original,
+    );
+  });
+
+  // QNBS-v3: a vanished source without a verified destination is not evidence of preservation.
+  it('reports source-missing when the source disappears without a quarantine copy', async () => {
     await store.saveProject(project as never);
     fake.apis.rename = async (from: string) => {
       await fake.apis.remove(from);
@@ -233,11 +260,973 @@ describe('FsProjectStore — projects', () => {
 
     await expect(store.quarantineProject('p1')).rejects.toMatchObject({
       name: 'ProjectQuarantineError',
-      reason: 'already-preserved',
+      reason: 'source-missing',
+      message:
+        'The project source is no longer present, but its preservation location could not be confirmed.',
     });
-    expect(await store.listProjects()).not.toContain('p1');
   });
 
+  // QNBS-v3: quarantine retains verified legacy routing without moving ambiguous fallback data into the recovery copy.
+  it('persists verified legacy routing beside a quarantined project', async () => {
+    const legacyProject = { ...project, id: '***' };
+    const legacyCodex = { projectId: '***', entries: [{ name: 'legacy' }] };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+    await fake.apis.mkdir('/app/projects/project/codex', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/project/codex/codex.snap',
+      compressData(legacyCodex),
+    );
+
+    await store.loadProject('item');
+    const result = await store.quarantineProject('item');
+    const quarantineContainer = result.path.slice(0, result.path.lastIndexOf('/'));
+
+    expect(fake.text.get(`${quarantineContainer}/legacy-auxiliary.json`)).toBe(
+      JSON.stringify({
+        projectId: 'item',
+        legacyProjectId: 'project',
+        codex: true,
+        binderAssetIds: [],
+      }),
+    );
+    expect(fake.text.has('/app/projects/project/codex/codex.snap')).toBe(true);
+    expect(fake.text.has(`${result.path}/project.json`)).toBe(true);
+    expect(await store.getStoryCodex('item')).toBeNull();
+  });
+
+  it('does not map an unusable project ID to an arbitrary quarantine directory', async () => {
+    await expect(store.saveProject({ ...project, id: '***' } as never)).rejects.toThrow(
+      'Cannot save a project with an unusable project ID.',
+    );
+
+    await expect(store.loadProject('***')).resolves.toBeNull();
+    await expect(store.deleteProject('***')).resolves.toBeUndefined();
+    await expect(store.quarantineProject('***')).rejects.toMatchObject({
+      name: 'ProjectQuarantineError',
+      reason: 'not-found',
+    });
+    expect([...fake.text.keys()].some((path) => path.startsWith('/app/projects/'))).toBe(false);
+  });
+
+  it('migrates a legacy invalid ID to its existing directory identity before save', async () => {
+    const legacyProject = { ...project, id: '***' };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+
+    const loaded = await store.loadProject('item');
+
+    expect((loaded as unknown as Record<string, unknown>)['id']).toBe('item');
+    await expect(store.saveProject(loaded as never)).resolves.toBeUndefined();
+    expect(fake.text.has('/app/projects/item/project.json')).toBe(true);
+    expect(await store.loadProject('item')).toEqual(expect.objectContaining({ title: 'My Novel' }));
+  });
+
+  // QNBS-v3: verified Codex and Binder evidence remains addressable while provenance-free vectors stay unassigned.
+  it('keeps verified legacy Binder and Codex data addressable without assigning ambiguous RAG data', async () => {
+    const legacyProject = {
+      ...project,
+      id: '***',
+      binderNodes: [{ binderAssetId: 'legacy-asset' }],
+    };
+    const legacyCodex = { projectId: '***', entries: [{ name: 'legacy' }] };
+    const legacyVectors = [{ id: 'legacy-vector' }];
+
+    await store.saveStoryCodex(legacyCodex as never);
+    await store.saveRagVectors('***', legacyVectors);
+    await store.saveBinderAsset('***', 'legacy-asset', new Uint8Array([1, 2]).buffer, {
+      mimeType: 'application/octet-stream',
+      originalFileName: 'legacy.bin',
+      byteSize: 2,
+    });
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+
+    const loaded = await store.loadProject('item');
+
+    expect((loaded as unknown as Record<string, unknown>)['id']).toBe('item');
+    expect(await store.getStoryCodex('item')).toEqual(legacyCodex);
+    expect(await store.getRagVectors('item')).toEqual([]);
+    expect(await store.getRagVectors('project')).toEqual(legacyVectors);
+    expect(await store.listBinderAssetIds('item')).toContain('legacy-asset');
+    expect(await store.getBinderAsset('item', 'legacy-asset')).toEqual(
+      expect.objectContaining({
+        meta: expect.objectContaining({ originalFileName: 'legacy.bin' }),
+      }),
+    );
+
+    await fake.apis.writeFile('/app/projects/project/binder/unregistered.bin', new Uint8Array([9]));
+    await fake.apis.writeTextFile(
+      '/app/projects/project/binder/unregistered.meta.json',
+      JSON.stringify({
+        mimeType: 'application/octet-stream',
+        originalFileName: 'unregistered.bin',
+        byteSize: 1,
+      }),
+    );
+    expect(await store.listBinderAssetIds('item')).not.toContain('unregistered');
+    await expect(store.getBinderAsset('item', 'unregistered')).resolves.toBeNull();
+    await store.deleteAllBinderAssetsForProject('item');
+    expect(fake.bin.has('/app/projects/project/binder/unregistered.bin')).toBe(true);
+    expect(fake.text.has('/app/projects/project/binder/unregistered.meta.json')).toBe(true);
+
+    await store.saveProject(loaded as never);
+    expect(fake.text.has('/app/projects/item/project.json')).toBe(true);
+    expect(fake.text.has('/app/projects/project/project.json')).toBe(false);
+
+    await store.deleteProject('item');
+    expect(fake.text.has('/app/projects/item/project.json')).toBe(false);
+    expect(fake.text.has('/app/projects/project/codex/codex.snap')).toBe(false);
+    expect(fake.text.has('/app/projects/project/codex/vectors.snap')).toBe(true);
+    expect(fake.bin.has('/app/projects/project/binder/legacy-asset.bin')).toBe(false);
+  });
+
+  // QNBS-v3: complete route-using mutations serialize so a legitimate fallback claimant cannot change ownership mid-operation.
+  it('keeps a legacy Codex write on one route while a fallback claimant waits', async () => {
+    const legacyProject = { ...project, id: '***' };
+    const legacyCodex = { projectId: '***', entries: [{ name: 'legacy' }] };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+    await fake.apis.mkdir('/app/projects/project/codex', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/project/codex/codex.snap',
+      compressData(legacyCodex),
+    );
+    await store.loadProject('item');
+
+    const originalWriteTextFile = fake.apis.writeTextFile;
+    let releaseWrite!: () => void;
+    let writeStarted!: () => void;
+    const writeStartedPromise = new Promise<void>((resolve) => {
+      writeStarted = resolve;
+    });
+    fake.apis.writeTextFile = (path: string, content: string) => {
+      if (path.startsWith('/app/projects/project/codex/codex.snap.tmp-')) {
+        writeStarted();
+        return new Promise<void>((resolve, reject) => {
+          releaseWrite = () => {
+            originalWriteTextFile(path, content).then(resolve, reject);
+          };
+        });
+      }
+      return originalWriteTextFile(path, content);
+    };
+
+    const legacyWrite = store.saveStoryCodex({
+      projectId: 'item',
+      entries: [{ name: 'updated' }],
+    } as never);
+    await writeStartedPromise;
+
+    let claimantFinished = false;
+    const claimant = store
+      .saveProject({ ...project, id: 'project', title: 'Legitimate Project' } as never)
+      .then(() => {
+        claimantFinished = true;
+      });
+    await Promise.resolve();
+    expect(claimantFinished).toBe(false);
+
+    releaseWrite();
+    await legacyWrite;
+    await claimant;
+
+    expect(
+      decompressData<Record<string, unknown>>(
+        fake.text.get('/app/projects/project/codex/codex.snap') as string,
+      ),
+    ).toEqual({ projectId: 'item', entries: [{ name: 'updated' }] });
+    expect(fake.text.has('/app/projects/project/project.json')).toBe(true);
+  });
+
+  // QNBS-v3: deletion cannot report success after route ownership changes during auxiliary cleanup.
+  it('serializes legacy deletion before a legitimate fallback claimant can save', async () => {
+    const legacyProject = { ...project, id: '***' };
+    const legacyCodex = { projectId: '***', entries: [{ name: 'legacy' }] };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+    await fake.apis.mkdir('/app/projects/project/codex', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/project/codex/codex.snap',
+      compressData(legacyCodex),
+    );
+    await store.loadProject('item');
+
+    const originalRemove = fake.apis.remove;
+    let releaseRemove!: () => void;
+    let removeStarted!: () => void;
+    const removeStartedPromise = new Promise<void>((resolve) => {
+      removeStarted = resolve;
+    });
+    fake.apis.remove = (path: string, options?: { recursive?: boolean }) => {
+      if (path === '/app/projects/project/codex/codex.snap') {
+        removeStarted();
+        return new Promise<void>((resolve, reject) => {
+          releaseRemove = () => {
+            originalRemove(path, options).then(resolve, reject);
+          };
+        });
+      }
+      return originalRemove(path, options);
+    };
+
+    const deletion = store.deleteProject('item');
+    await removeStartedPromise;
+
+    let claimantFinished = false;
+    const claimant = store
+      .saveProject({ ...project, id: 'project', title: 'Legitimate Project' } as never)
+      .then(() => {
+        claimantFinished = true;
+      });
+    await Promise.resolve();
+    expect(claimantFinished).toBe(false);
+
+    releaseRemove();
+    await deletion;
+    await claimant;
+
+    expect(fake.text.has('/app/projects/item/project.json')).toBe(false);
+    expect(fake.text.has('/app/projects/project/project.json')).toBe(true);
+    expect(fake.text.has('/app/projects/project/codex/codex.snap')).toBe(false);
+  });
+
+  // QNBS-v3: a normalized directory identity remains valid evidence while a legacy main file still carries the raw ID.
+  it('accepts the normalized project identity in a legacy Codex snapshot', async () => {
+    const legacyProject = { ...project, id: '***' };
+    const migratedCodex = { projectId: 'item', entries: [{ name: 'legacy' }] };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+    await fake.apis.mkdir('/app/projects/project/codex', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/project/codex/codex.snap',
+      compressData(migratedCodex),
+    );
+
+    await expect(store.loadProject('item')).resolves.toEqual(
+      expect.objectContaining({ id: 'item' }),
+    );
+    await expect(store.getStoryCodex('item')).resolves.toEqual(migratedCodex);
+  });
+
+  // QNBS-v3: partial Binder enumeration keeps healthy current assets visible when legacy inspection is temporarily unavailable.
+  it('retains current Binder IDs when the legacy directory cannot be listed', async () => {
+    const legacyProject = {
+      ...project,
+      id: '***',
+      binderNodes: [{ binderAssetId: 'legacy-asset' }],
+    };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+    await fake.apis.mkdir('/app/projects/project/binder', { recursive: true });
+    await fake.apis.writeFile('/app/projects/project/binder/legacy-asset.bin', new Uint8Array([1]));
+    await fake.apis.writeTextFile(
+      '/app/projects/project/binder/legacy-asset.meta.json',
+      JSON.stringify({
+        mimeType: 'application/octet-stream',
+        originalFileName: 'legacy.bin',
+        byteSize: 1,
+      }),
+    );
+    await store.loadProject('item');
+    await store.saveBinderAsset('item', 'current-asset', new Uint8Array([2]).buffer, {
+      mimeType: 'application/octet-stream',
+      originalFileName: 'current.bin',
+      byteSize: 1,
+    });
+
+    const originalReadDir = fake.apis.readDir;
+    fake.apis.readDir = async (path: string) => {
+      if (path === '/app/projects/project/binder') {
+        throw new Error('EAGAIN: legacy Binder directory temporarily unavailable');
+      }
+      return originalReadDir(path);
+    };
+
+    await expect(store.listBinderAssetIds('item')).resolves.toEqual(['current-asset']);
+  });
+
+  // QNBS-v3: persisted legacy provenance keeps coupled filesystem data visible after a desktop restart.
+  it('persists verified legacy auxiliary routing across normalized saves and reloads', async () => {
+    const legacyProject = {
+      ...project,
+      id: '***',
+      binderNodes: [{ binderAssetId: 'legacy-asset' }],
+    };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+    await fake.apis.mkdir('/app/projects/project/binder', { recursive: true });
+    await fake.apis.writeFile(
+      '/app/projects/project/binder/legacy-asset.bin',
+      new Uint8Array([1, 2]),
+    );
+    await fake.apis.writeTextFile(
+      '/app/projects/project/binder/legacy-asset.meta.json',
+      JSON.stringify({
+        mimeType: 'application/octet-stream',
+        originalFileName: 'legacy.bin',
+        byteSize: 2,
+      }),
+    );
+    const legacyCodex = { projectId: '***', entries: [{ name: 'legacy' }] };
+    await fake.apis.mkdir('/app/projects/project/codex', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/project/codex/codex.snap',
+      compressData(legacyCodex),
+    );
+
+    const loaded = await store.loadProject('item');
+    await store.saveProject(loaded as never);
+
+    const restarted = new FsProjectStore();
+    await expect(restarted.loadProject('item')).resolves.toEqual(
+      expect.objectContaining({ id: 'item' }),
+    );
+    await expect(restarted.getStoryCodex('item')).resolves.toEqual(legacyCodex);
+    await expect(restarted.getStoryCodex('item/')).resolves.toEqual(legacyCodex);
+    await expect(restarted.getBinderAsset('item', 'legacy-asset')).resolves.toEqual(
+      expect.objectContaining({
+        meta: expect.objectContaining({ originalFileName: 'legacy.bin' }),
+      }),
+    );
+  });
+
+  // QNBS-v3: persisted legacy routing must be revalidated so a later legitimate project cannot be captured by stale fallback metadata.
+  it('does not restore persisted legacy routing after a legitimate project identity appears', async () => {
+    const legacyProject = {
+      ...project,
+      id: '***',
+      binderNodes: [{ binderAssetId: 'legacy-asset' }],
+    };
+    const legacyCodex = { projectId: '***', entries: [{ name: 'legacy' }] };
+    await store.saveStoryCodex(legacyCodex as never);
+    await store.saveBinderAsset('***', 'legacy-asset', new Uint8Array([1]).buffer, {
+      mimeType: 'application/octet-stream',
+      originalFileName: 'legacy.bin',
+      byteSize: 1,
+    });
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+
+    const loaded = await store.loadProject('item');
+    await store.saveProject(loaded as never);
+
+    const legitimateProject = { ...project, id: 'project', title: 'Legitimate Project' };
+    const legitimateCodex = { projectId: 'project', entries: [{ name: 'legitimate' }] };
+    const legitimateVectors = [{ id: 'legitimate-vector' }];
+    await store.saveProject(legitimateProject as never);
+    await expect(store.getStoryCodex('item')).resolves.toBeNull();
+    await store.saveStoryCodex(legitimateCodex as never);
+    await store.saveRagVectors('project', legitimateVectors);
+    await store.saveBinderAsset('project', 'legitimate-asset', new Uint8Array([2]).buffer, {
+      mimeType: 'application/octet-stream',
+      originalFileName: 'legitimate.bin',
+      byteSize: 1,
+    });
+
+    const restarted = new FsProjectStore();
+    await expect(restarted.loadProject('item')).resolves.toEqual(
+      expect.objectContaining({ id: 'item' }),
+    );
+    await expect(restarted.getStoryCodex('item')).resolves.toBeNull();
+    await expect(restarted.listBinderAssetIds('item')).resolves.toEqual([]);
+    await expect(restarted.getStoryCodex('project')).resolves.toEqual(legitimateCodex);
+    await expect(restarted.getRagVectors('project')).resolves.toEqual(legitimateVectors);
+    await expect(restarted.getBinderAsset('project', 'legitimate-asset')).resolves.not.toBeNull();
+  });
+
+  // QNBS-v3: a failed reload must retain the verified legacy route so transient reads do not hide auxiliary data.
+  it('retains legacy routing when a later project reload fails', async () => {
+    const legacyProject = { ...project, id: '***' };
+    const legacyCodex = { projectId: '***', entries: [{ name: 'legacy' }] };
+    await store.saveStoryCodex(legacyCodex as never);
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+
+    await store.loadProject('item');
+    const originalReadTextFile = fake.apis.readTextFile;
+    fake.apis.readTextFile = async (path: string) => {
+      if (path === '/app/projects/item/project.json') {
+        throw new Error('EAGAIN: project temporarily unavailable');
+      }
+      return originalReadTextFile(path);
+    };
+
+    await expect(store.loadProject('item')).rejects.toMatchObject({
+      name: 'ProjectLoadError',
+      reason: 'io-error',
+      projectId: 'item',
+    });
+    await expect(store.getStoryCodex('item')).resolves.toEqual(legacyCodex);
+  });
+
+  // QNBS-v3: incomplete legacy evidence fails closed instead of making an unverified normalization durable.
+  it('aborts legacy migration when auxiliary ownership evidence cannot be read', async () => {
+    const legacyProject = { ...project, id: '***' };
+    const legacyCodex = { projectId: '***', entries: [{ name: 'legacy' }] };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+    await fake.apis.mkdir('/app/projects/project/codex', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/project/codex/codex.snap',
+      compressData(legacyCodex),
+    );
+
+    const originalReadTextFile = fake.apis.readTextFile;
+    fake.apis.readTextFile = async (path: string) => {
+      if (path === '/app/projects/project/codex/codex.snap') {
+        throw new Error('EAGAIN: codex temporarily unavailable');
+      }
+      return originalReadTextFile(path);
+    };
+
+    await expect(store.loadProject('item')).rejects.toMatchObject({
+      name: 'ProjectLoadError',
+      reason: 'io-error',
+      projectId: 'item',
+    });
+    expect(
+      decompressData<Record<string, unknown>>(
+        fake.text.get('/app/projects/item/project.json') as string,
+      )['id'],
+    ).toBe('***');
+
+    fake.apis.readTextFile = originalReadTextFile;
+    await expect(store.loadProject('item')).resolves.toEqual(
+      expect.objectContaining({ id: 'item' }),
+    );
+    await expect(store.getStoryCodex('item')).resolves.toEqual(legacyCodex);
+  });
+
+  // QNBS-v3: incomplete save-time evidence must not make an unverified legacy identity durable.
+  it('rejects a legacy save when auxiliary ownership evidence is incomplete', async () => {
+    const legacyProject = { ...project, id: '***' };
+    const legacyCodex = { projectId: '***', entries: [{ name: 'legacy' }] };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+    await fake.apis.mkdir('/app/projects/project/codex', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/project/codex/codex.snap',
+      compressData(legacyCodex),
+    );
+
+    const originalReadTextFile = fake.apis.readTextFile;
+    fake.apis.readTextFile = async (path: string) => {
+      if (path === '/app/projects/project/codex/codex.snap') {
+        throw new Error('EAGAIN: codex temporarily unavailable');
+      }
+      return originalReadTextFile(path);
+    };
+
+    await expect(store.saveProject(legacyProject as never)).rejects.toThrow(
+      'Cannot safely save this legacy project until its auxiliary data can be verified.',
+    );
+    expect(
+      decompressData<Record<string, unknown>>(
+        fake.text.get('/app/projects/item/project.json') as string,
+      )['id'],
+    ).toBe('***');
+  });
+
+  // QNBS-v3: indeterminate fallback ownership cannot clear a route that remains the only safe retry path.
+  it('defers persisted legacy routing when the fallback collision probe is indeterminate', async () => {
+    const legacyProject = { ...project, id: '***' };
+    const legacyCodex = { projectId: '***', entries: [{ name: 'legacy' }] };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+    await fake.apis.mkdir('/app/projects/project/codex', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/project/codex/codex.snap',
+      compressData(legacyCodex),
+    );
+
+    const loaded = await store.loadProject('item');
+    await store.saveProject(loaded as never);
+
+    const originalExists = fake.apis.exists;
+    fake.apis.exists = async (path: string) => {
+      if (path === '/app/projects/project/project.json') {
+        throw new Error('EIO: fallback collision probe unavailable');
+      }
+      return originalExists(path);
+    };
+
+    await expect(store.loadProject('item')).rejects.toMatchObject({
+      name: 'ProjectLoadError',
+      reason: 'io-error',
+      projectId: 'item',
+    });
+    await expect(store.getStoryCodex('item')).resolves.toEqual(legacyCodex);
+  });
+
+  // QNBS-v3: Binder filename suffixes make dot-shaped legacy asset IDs safe without weakening project path rules.
+  it('retains dot-shaped legacy Binder asset IDs across persisted routing', async () => {
+    const legacyProject = {
+      ...project,
+      id: '***',
+      binderNodes: [{ binderAssetId: '.' }, { binderAssetId: '..' }],
+    };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+    await fake.apis.mkdir('/app/projects/project/binder', { recursive: true });
+    await fake.apis.writeFile('/app/projects/project/binder/..bin', new Uint8Array([1]));
+    await fake.apis.writeTextFile(
+      '/app/projects/project/binder/..meta.json',
+      JSON.stringify({
+        mimeType: 'application/octet-stream',
+        originalFileName: 'dot.bin',
+        byteSize: 1,
+      }),
+    );
+    await fake.apis.writeFile('/app/projects/project/binder/...bin', new Uint8Array([2]));
+    await fake.apis.writeTextFile(
+      '/app/projects/project/binder/...meta.json',
+      JSON.stringify({
+        mimeType: 'application/octet-stream',
+        originalFileName: 'dot-dot.bin',
+        byteSize: 1,
+      }),
+    );
+
+    const loaded = await store.loadProject('item');
+    await store.saveProject(loaded as never);
+    expect(
+      decompressData<Record<string, unknown>>(
+        fake.text.get('/app/projects/item/project.json') as string,
+      )['__worldscriptLegacyAuxiliary'],
+    ).toEqual(
+      expect.objectContaining({
+        binderAssetIds: expect.arrayContaining(['.', '..']),
+      }),
+    );
+    const restarted = new FsProjectStore();
+
+    await expect(restarted.loadProject('item')).resolves.toEqual(
+      expect.objectContaining({ id: 'item' }),
+    );
+    await expect(restarted.getBinderAsset('item', '.')).resolves.toEqual(
+      expect.objectContaining({ meta: expect.objectContaining({ originalFileName: 'dot.bin' }) }),
+    );
+    await expect(restarted.getBinderAsset('item', '..')).resolves.toEqual(
+      expect.objectContaining({
+        meta: expect.objectContaining({ originalFileName: 'dot-dot.bin' }),
+      }),
+    );
+    await expect(restarted.listBinderAssetIds('item')).resolves.toEqual(
+      expect.arrayContaining(['.', '..']),
+    );
+  });
+
+  // QNBS-v3: legacy cleanup failures stay retryable so deletion cannot report success while routed data remains.
+  it('retains legacy routing when auxiliary cleanup fails during deletion', async () => {
+    const legacyProject = { ...project, id: '***' };
+    const legacyCodex = { projectId: '***', entries: [{ name: 'legacy' }] };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+    await fake.apis.mkdir('/app/projects/project/codex', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/project/codex/codex.snap',
+      compressData(legacyCodex),
+    );
+    await store.loadProject('item');
+
+    const originalRemove = fake.apis.remove;
+    fake.apis.remove = async (path: string, options?: { recursive?: boolean }) => {
+      if (path === '/app/projects/project/codex/codex.snap') {
+        throw new Error('EIO: legacy codex cleanup unavailable');
+      }
+      return originalRemove(path, options);
+    };
+
+    await expect(store.deleteProject('item')).rejects.toMatchObject({
+      name: 'ProjectDeleteError',
+    });
+    expect(fake.text.has('/app/projects/item/project.json')).toBe(true);
+    expect(fake.text.has('/app/projects/project/codex/codex.snap')).toBe(true);
+    await expect(store.getStoryCodex('item')).resolves.toEqual(legacyCodex);
+
+    fake.apis.remove = originalRemove;
+    const restarted = new FsProjectStore();
+    await expect(restarted.deleteProject('item')).resolves.toBeUndefined();
+    expect(fake.text.has('/app/projects/item/project.json')).toBe(false);
+    expect(fake.text.has('/app/projects/project/codex/codex.snap')).toBe(false);
+  });
+
+  // QNBS-v3: deletion revalidates persisted legacy routing so restart-time cleanup cannot orphan verified auxiliary data.
+  it('hydrates persisted legacy routing before deleting an unloaded project', async () => {
+    const legacyProject = { ...project, id: '***' };
+    const legacyCodex = { projectId: '***', entries: [{ name: 'legacy' }] };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+    await fake.apis.mkdir('/app/projects/project/codex', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/project/codex/codex.snap',
+      compressData(legacyCodex),
+    );
+
+    const loaded = await store.loadProject('item');
+    await store.saveProject(loaded as never);
+    const restarted = new FsProjectStore();
+
+    await expect(restarted.deleteProject('item')).resolves.toBeUndefined();
+    expect(fake.text.has('/app/projects/item/project.json')).toBe(false);
+    expect(fake.text.has('/app/projects/project/codex/codex.snap')).toBe(false);
+  });
+
+  // QNBS-v3: deletion fails closed when project identity cannot be inspected, preserving data for a later retry.
+  it('does not delete a project when its identity cannot be inspected', async () => {
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', '{corrupt');
+
+    await expect(store.deleteProject('item')).rejects.toMatchObject({
+      name: 'ProjectDeleteError',
+      reason: 'identity-inspection-failed',
+    });
+    expect(fake.text.has('/app/projects/item/project.json')).toBe(true);
+  });
+
+  // QNBS-v3: an uncertain existence probe must preserve the project and expose a retryable typed deletion result.
+  it('classifies a project existence probe failure before attempting cleanup', async () => {
+    await store.saveProject(project as never);
+    const originalExists = fake.apis.exists;
+    const originalRemove = fake.apis.remove;
+    const removeSpy = vi.fn(originalRemove);
+    fake.apis.remove = removeSpy;
+    fake.apis.exists = (path: string) =>
+      path === '/app/projects/p1'
+        ? Promise.reject(new Error('EIO: project existence unavailable'))
+        : originalExists(path);
+
+    await expect(store.deleteProject('p1')).rejects.toMatchObject({
+      name: 'ProjectDeleteError',
+      reason: 'identity-inspection-failed',
+    });
+    expect(removeSpy).not.toHaveBeenCalled();
+    expect(fake.text.has('/app/projects/p1/project.json')).toBe(true);
+  });
+
+  // QNBS-v3: snapshot recovery accepts an invalid legacy identity only when its existing fallback directory proves ownership.
+  it('normalizes a legacy invalid project ID restored from a filesystem snapshot', async () => {
+    const legacyProject = { ...project, id: '***' };
+    const legacyCodex = { projectId: '***', entries: [{ name: 'legacy' }] };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+    await fake.apis.mkdir('/app/projects/project/codex', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/project/codex/codex.snap',
+      compressData(legacyCodex),
+    );
+
+    const snapshotId = await store.saveSnapshot('legacy', legacyProject);
+    const restored = await store.getSnapshotData(snapshotId);
+    await expect(store.saveProject(restored as never)).resolves.toBeUndefined();
+    await expect(store.getStoryCodex('item')).resolves.toEqual(legacyCodex);
+
+    const persisted = decompressData<Record<string, unknown>>(
+      fake.text.get('/app/projects/item/project.json') as string,
+    );
+    expect(persisted['id']).toBe('item');
+    await expect(
+      store.saveProject({ ...project, id: '***', title: 'Unrelated New Project' } as never),
+    ).rejects.toThrow('Cannot save a project with an unusable project ID.');
+  });
+
+  // QNBS-v3: matching snapshot identity permits older content while keeping the filesystem target authoritative.
+  it('rejects a valid snapshot from another project before changing the target', async () => {
+    await store.saveProject(project as never);
+    const current = await store.loadProject('p1');
+    const snapshotId = await store.saveSnapshot('older', {
+      ...project,
+      id: 'p2',
+      title: 'Older snapshot content',
+      manuscript: [{ id: 's-old', title: 'Older', content: 'previous draft' }],
+    });
+
+    await expect(store.restoreSnapshot(snapshotId, current as never)).rejects.toMatchObject({
+      name: 'ProjectSnapshotRestoreError',
+      reason: 'snapshot-owner-mismatch',
+    });
+    expect(
+      decompressData<Record<string, unknown>>(
+        fake.text.get('/app/projects/p1/project.json') as string,
+      )['title'],
+    ).toBe('My Novel');
+    expect(fake.text.has('/app/projects/p2/project.json')).toBe(false);
+  });
+
+  // QNBS-v3: the best-effort cold-boot marker cannot veto a validated current filesystem target.
+  it('restores a matching snapshot when the active-project marker is stale', async () => {
+    const secondProject = { ...project, id: 'p2', title: 'Second Novel' };
+    await store.saveProject(secondProject as never);
+    const current = await store.loadProject('p2');
+    const snapshotId = await store.saveSnapshot('p2-snapshot', {
+      ...secondProject,
+      title: 'Older second project content',
+    });
+    fake.text.set('/app/config/active-project-id.txt', 'p1');
+
+    const restored = await store.restoreSnapshot(snapshotId, current as never);
+
+    expect((restored as unknown as Record<string, unknown>)['id']).toBe('p2');
+    expect(restored.title).toBe('Older second project content');
+  });
+
+  it('restores older content when the snapshot owner matches the validated target', async () => {
+    await store.saveProject(project as never);
+    const current = await store.loadProject('p1');
+    const snapshotId = await store.saveSnapshot('older', {
+      ...project,
+      id: 'p1',
+      title: 'Older snapshot content',
+      manuscript: [{ id: 's-old', title: 'Older', content: 'previous draft' }],
+    });
+
+    const restored = await store.restoreSnapshot(snapshotId, current as never);
+    const restoredRecord = restored as unknown as Record<string, unknown>;
+
+    expect(restoredRecord['id']).toBe('p1');
+    expect(restored.title).toBe('Older snapshot content');
+    await store.saveProject(restored as never);
+    expect(
+      decompressData<Record<string, unknown>>(
+        fake.text.get('/app/projects/p1/project.json') as string,
+      )['title'],
+    ).toBe('Older snapshot content');
+    expect(fake.text.has('/app/projects/p2/project.json')).toBe(false);
+  });
+
+  // QNBS-v3: target-owned metadata survives a matching restore without trusting snapshot metadata.
+  it('restores older normalized content and preserves target auxiliary metadata', async () => {
+    const legacyProject = { ...project, id: '***', title: 'Current legacy content' };
+    const legacyCodex = { projectId: '***', entries: [{ name: 'legacy' }] };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+    await fake.apis.mkdir('/app/projects/project/codex', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/project/codex/codex.snap',
+      compressData(legacyCodex),
+    );
+    const current = await store.loadProject('item');
+    const snapshotId = await store.saveSnapshot('older-legacy', {
+      ...legacyProject,
+      id: 'item',
+      title: 'Older legacy content',
+      manuscript: [{ id: 's-old', title: 'Older', content: 'previous draft' }],
+      __worldscriptLegacyProjectDirectory: 'project',
+      __worldscriptLegacyAuxiliary: {
+        legacyProjectId: 'project',
+        legacyRawProjectId: '***',
+        codex: false,
+        binderAssetIds: ['fabricated'],
+      },
+    });
+
+    const restored = await store.restoreSnapshot(snapshotId, current as never);
+    const restoredRecord = restored as unknown as Record<string, unknown>;
+    const metadata = restoredRecord['__worldscriptLegacyAuxiliary'] as Record<string, unknown>;
+
+    expect(restoredRecord['id']).toBe('item');
+    expect(restored.title).toBe('Older legacy content');
+    expect(restoredRecord['__worldscriptLegacyProjectDirectory']).toBeUndefined();
+    expect(metadata).toEqual(
+      expect.objectContaining({
+        legacyProjectId: 'project',
+        legacyRawProjectId: '***',
+        codex: true,
+      }),
+    );
+    expect(metadata['binderAssetIds']).toEqual([]);
+  });
+
+  it('rejects a historical invalid-ID snapshot even when the target has matching legacy lineage', async () => {
+    const legacyProject = { ...project, id: '***', title: 'Current legacy content' };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+    const current = await store.loadProject('item');
+    const snapshotId = await store.saveSnapshot('legacy-invalid-id', {
+      ...legacyProject,
+      title: 'Older legacy content',
+    });
+
+    await expect(store.restoreSnapshot(snapshotId, current as never)).rejects.toMatchObject({
+      name: 'ProjectSnapshotRestoreError',
+      reason: 'snapshot-owner-unverifiable',
+    });
+    expect(
+      decompressData<Record<string, unknown>>(
+        fake.text.get('/app/projects/item/project.json') as string,
+      )['title'],
+    ).toBe('Current legacy content');
+  });
+
+  // QNBS-v3: restore fails closed when no safe current filesystem target is available.
+  it.each(['.', '..', '***'])(
+    'rejects unsafe restore target %s without touching projects',
+    async (id) => {
+      const snapshotId = await store.saveSnapshot('unsafe-target', project);
+
+      await expect(
+        store.restoreSnapshot(snapshotId, { ...project, id } as never),
+      ).rejects.toMatchObject({
+        name: 'ProjectSnapshotRestoreError',
+        reason: 'target-unavailable',
+      });
+      expect([...fake.text.keys()].some((path) => path.startsWith('/app/projects/'))).toBe(false);
+    },
+  );
+
+  // QNBS-v3: ownerless historical snapshots fail closed instead of guessing a missing-ID target.
+  it('rejects a historical missing-ID snapshot for a verified missing-ID target', async () => {
+    const legacyProject = { ...project, id: undefined, title: 'Legacy Novel' };
+    await fake.apis.mkdir('/app/projects/Legacy-Novel', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/Legacy-Novel/project.json',
+      compressData(legacyProject),
+    );
+    const current = await store.loadProject('Legacy-Novel');
+    const snapshotId = await store.saveSnapshot('older-missing-id', {
+      ...legacyProject,
+      title: 'Renamed in older snapshot',
+    });
+
+    await expect(store.restoreSnapshot(snapshotId, current as never)).rejects.toMatchObject({
+      name: 'ProjectSnapshotRestoreError',
+      reason: 'snapshot-owner-unverifiable',
+    });
+    expect(fake.text.has('/app/projects/Legacy-Novel/project.json')).toBe(true);
+    expect(fake.text.has('/app/projects/Renamed-in-older-snapshot/project.json')).toBe(false);
+  });
+
+  it('keeps a missing-ID legacy project bound to its existing title-derived directory', async () => {
+    const legacyProject = { ...project, id: undefined, title: 'Legacy Novel' };
+    await fake.apis.mkdir('/app/projects/Legacy-Novel', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/Legacy-Novel/project.json',
+      compressData(legacyProject),
+    );
+
+    const loaded = await store.loadProject('Legacy-Novel');
+
+    expect((loaded as unknown as Record<string, unknown>)['id']).toBeUndefined();
+    await store.saveProject({ ...loaded, title: 'Renamed Novel' } as never);
+    expect(fake.text.has('/app/projects/Legacy-Novel/project.json')).toBe(true);
+    expect(fake.text.has('/app/projects/Renamed-Novel/project.json')).toBe(false);
+
+    const restarted = new FsProjectStore();
+    const reloaded = await restarted.loadProject('Legacy-Novel');
+    await restarted.saveProject({ ...reloaded, title: 'Renamed Again' } as never);
+    expect(fake.text.has('/app/projects/Legacy-Novel/project.json')).toBe(true);
+    expect(fake.text.has('/app/projects/Renamed-Again/project.json')).toBe(false);
+  });
+
+  // QNBS-v3: legacy missing-ID saves preserve historical Binder/Codex fallbacks without inventing cross-project ownership.
+  it('keeps missing-ID legacy auxiliary data on its historical fallback paths', async () => {
+    const legacyProject = { ...project, id: undefined, title: 'Legacy Novel' };
+    const legacyCodex = { projectId: 'default', entries: [{ name: 'legacy' }] };
+    await fake.apis.mkdir('/app/projects/Legacy-Novel', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/Legacy-Novel/project.json',
+      compressData(legacyProject),
+    );
+    await fake.apis.mkdir('/app/projects/browser-project/binder', { recursive: true });
+    await fake.apis.writeFile(
+      '/app/projects/browser-project/binder/legacy-asset.bin',
+      new Uint8Array([1]),
+    );
+    await fake.apis.writeTextFile(
+      '/app/projects/browser-project/binder/legacy-asset.meta.json',
+      JSON.stringify({
+        mimeType: 'application/octet-stream',
+        originalFileName: 'legacy.bin',
+        byteSize: 1,
+      }),
+    );
+    await fake.apis.mkdir('/app/projects/default/codex', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/default/codex/codex.snap',
+      compressData(legacyCodex),
+    );
+
+    const loaded = await store.loadProject('Legacy-Novel');
+
+    expect((loaded as unknown as Record<string, unknown>)['id']).toBeUndefined();
+    await expect(store.getBinderAsset('browser-project', 'legacy-asset')).resolves.not.toBeNull();
+    await expect(store.getStoryCodex('default')).resolves.toEqual(legacyCodex);
+    await store.saveProject({ ...loaded, title: 'Renamed Novel' } as never);
+    expect(fake.text.has('/app/projects/Legacy-Novel/project.json')).toBe(true);
+    expect(fake.text.has('/app/projects/Renamed-Novel/project.json')).toBe(false);
+    expect(fake.bin.has('/app/projects/browser-project/binder/legacy-asset.bin')).toBe(true);
+    expect(fake.text.has('/app/projects/default/codex/codex.snap')).toBe(true);
+  });
+
+  it('does not redirect a legacy project to a legitimate project-identity directory', async () => {
+    const legitimateCodex = { projectId: 'project', entries: [{ name: 'legitimate' }] };
+    const legitimateVectors = [{ id: 'legitimate-vector' }];
+    await store.saveProject({ ...project, id: 'project', title: 'Legitimate Project' } as never);
+    await store.saveStoryCodex(legitimateCodex as never);
+    await store.saveRagVectors('project', legitimateVectors);
+    await store.saveBinderAsset('project', 'legitimate-asset', new Uint8Array([3]).buffer, {
+      mimeType: 'application/octet-stream',
+      originalFileName: 'legitimate.bin',
+      byteSize: 1,
+    });
+
+    const legacyProject = {
+      ...project,
+      id: '***',
+      binderNodes: [{ binderAssetId: 'legitimate-asset' }],
+    };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+
+    await expect(store.loadProject('item')).resolves.toEqual(
+      expect.objectContaining({ title: 'My Novel' }),
+    );
+    expect(await store.getStoryCodex('item')).toBeNull();
+    expect(await store.getRagVectors('item')).toEqual([]);
+    expect(await store.listBinderAssetIds('item')).toEqual([]);
+    expect(await store.getStoryCodex('project')).toEqual(legitimateCodex);
+    expect(await store.getRagVectors('project')).toEqual(legitimateVectors);
+    expect(await store.getBinderAsset('project', 'legitimate-asset')).not.toBeNull();
+  });
+
+  // QNBS-v3: ambiguous auxiliary data stays in place and unassigned rather than being exposed through a guessed legacy identity.
+  it('does not assign auxiliary data without ownership evidence to a legacy project', async () => {
+    const ambiguousVectors = [{ id: 'ambiguous-vector' }];
+    await store.saveRagVectors('project', ambiguousVectors);
+    const legacyProject = { ...project, id: '***' };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+
+    await store.loadProject('item');
+
+    expect(await store.getRagVectors('item')).toEqual([]);
+    expect(await store.getRagVectors('project')).toEqual(ambiguousVectors);
+    expect(fake.text.has('/app/projects/project/codex/vectors.snap')).toBe(true);
+  });
+
+  it('rejects dot path segments without touching the project namespace', async () => {
+    await store.saveProject(project as never);
+    await store.saveProject({ ...project, id: 'p2', title: 'Other Novel' } as never);
+
+    for (const invalidId of ['.', '..']) {
+      await expect(store.saveProject({ ...project, id: invalidId } as never)).rejects.toThrow(
+        'Cannot save a project with an unusable project ID.',
+      );
+      await expect(store.loadProject(invalidId)).resolves.toBeNull();
+      await expect(store.deleteProject(invalidId)).resolves.toBeUndefined();
+      await expect(store.quarantineProject(invalidId)).rejects.toMatchObject({
+        name: 'ProjectQuarantineError',
+        reason: 'not-found',
+      });
+    }
+
+    expect(await store.listProjects()).toEqual(expect.arrayContaining(['p1', 'p2']));
+    expect(fake.text.has('/app/projects/p1/project.json')).toBe(true);
+    expect(fake.text.has('/app/projects/p2/project.json')).toBe(true);
+  });
+
+  // QNBS-v3: failed preservation must leave the affected source available for safe recovery.
   it('leaves the original project intact when quarantine cannot rename it', async () => {
     await store.saveProject(project as never);
     const original = fake.text.get('/app/projects/p1/project.json');
