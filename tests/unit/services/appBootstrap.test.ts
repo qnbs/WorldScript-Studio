@@ -160,6 +160,7 @@ describe('shouldAllowInitialMetadataSeed', () => {
     expect(shouldAllowInitialMetadataSeed(settingsOnlyState)).toBe(true);
   });
 
+  // QNBS-v3: payload absence must keep malformed envelopes from suppressing fresh-project initialization.
   it('allows seeding when a persisted project envelope has no actual payload', () => {
     const malformedState = {
       project: { present: { data: {} } },

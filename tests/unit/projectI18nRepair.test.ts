@@ -65,6 +65,7 @@ describe('repairProjectI18nFields', () => {
     expect(repair).toEqual({ title: 'My Untitled Story' });
   });
 
+  // QNBS-v3: missing presentation metadata is repaired without discarding the genuine persisted project.
   it('repairs missing logline without replacing the persisted project content', () => {
     const repair = repairProjectI18nFields(
       {
