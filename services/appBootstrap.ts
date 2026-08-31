@@ -37,14 +37,30 @@ export async function loadPersistedRootState(): Promise<PersistedRootState | und
   return result;
 }
 
-// QNBS-v3: only an actual persisted payload grants project authority; malformed envelopes must still seed the synthetic project.
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasEntityStateShape(value: unknown): boolean {
+  if (!isRecord(value) || !Array.isArray(value['ids']) || !isRecord(value['entities']))
+    return false;
+  return value['ids'].every((id: unknown) => typeof id === 'string');
+}
+
+// QNBS-v3: structural project evidence prevents malformed envelopes from suppressing fresh seeding while preserving partial metadata repair.
 export function getPersistedProjectPayload(
   project: PersistedRootState['project'] | undefined,
 ): ProjectData | undefined {
   const payload = project?.present?.data ?? project?.data;
-  return typeof payload === 'object' && payload !== null && !Array.isArray(payload)
-    ? payload
-    : undefined;
+  if (!isRecord(payload)) return undefined;
+  if (
+    !hasEntityStateShape(payload.characters) ||
+    !hasEntityStateShape(payload.worlds) ||
+    !Array.isArray(payload.outline) ||
+    !Array.isArray(payload.manuscript)
+  )
+    return undefined;
+  return payload as ProjectData;
 }
 
 // QNBS-v3: seed authority follows hydrated project presence, so settings-only state can still initialize the synthetic project without overwriting real user intent.

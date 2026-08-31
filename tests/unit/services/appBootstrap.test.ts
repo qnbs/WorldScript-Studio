@@ -11,6 +11,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PersistedRootState } from '../../../types';
 
+const createPersistedProject = (overrides: Record<string, unknown> = {}) => ({
+  title: '',
+  logline: '',
+  characters: { ids: [], entities: {} },
+  worlds: { ids: [], entities: {} },
+  outline: [],
+  manuscript: [],
+  ...overrides,
+});
+
 const h = vi.hoisted(() => ({
   isTauri: { value: false },
   dbLoadState: vi.fn(),
@@ -141,17 +151,63 @@ describe('shouldAllowInitialMetadataSeed', () => {
 
   it('allows seeding when a persisted project envelope has no actual payload', () => {
     const malformedState = {
-      project: { present: {} },
+      project: { present: { data: {} } },
       settings: {},
     } as unknown as PersistedRootState;
     expect(getPersistedProjectPayload(malformedState.project)).toBeUndefined();
     expect(shouldAllowInitialMetadataSeed(malformedState)).toBe(true);
   });
 
+  it('allows seeding when flat persisted project data is an empty object', () => {
+    const malformedState = {
+      project: { data: {} },
+    } as unknown as PersistedRootState;
+    expect(getPersistedProjectPayload(malformedState.project)).toBeUndefined();
+    expect(shouldAllowInitialMetadataSeed(malformedState)).toBe(true);
+  });
+
+  it('rejects flat arbitrary object-shaped project data as non-hydratable', () => {
+    const malformedState = {
+      project: { data: { foo: 'bar' } },
+    } as unknown as PersistedRootState;
+    expect(getPersistedProjectPayload(malformedState.project)).toBeUndefined();
+    expect(shouldAllowInitialMetadataSeed(malformedState)).toBe(true);
+  });
+
+  it('accepts a structurally genuine empty project without requiring metadata content', () => {
+    const project = createPersistedProject();
+    const state = { project: { data: project } } as unknown as PersistedRootState;
+    expect(getPersistedProjectPayload(state.project)).toEqual(project);
+    expect(shouldAllowInitialMetadataSeed(state)).toBe(false);
+  });
+
   it('does not allow seeding after a persisted project was hydrated', () => {
+    const project = createPersistedProject({
+      manuscript: [{ id: 'section-1', title: 'Existing', content: 'Valuable work' }],
+    });
     const hydratedProjectState = {
-      project: { present: { data: {} } },
+      project: { present: { data: project } },
     } as unknown as PersistedRootState;
     expect(shouldAllowInitialMetadataSeed(hydratedProjectState)).toBe(false);
+  });
+
+  it('keeps a genuine project authoritative when title is missing', () => {
+    const project = createPersistedProject({
+      title: undefined,
+      manuscript: [{ id: 'section-1', title: 'Existing', content: 'Valuable work' }],
+    });
+    const state = { project: { data: project } } as unknown as PersistedRootState;
+    expect(getPersistedProjectPayload(state.project)).toEqual(project);
+    expect(shouldAllowInitialMetadataSeed(state)).toBe(false);
+  });
+
+  it('keeps a genuine project authoritative when logline is missing', () => {
+    const project = createPersistedProject({
+      logline: undefined,
+      manuscript: [{ id: 'section-1', title: 'Existing', content: 'Valuable work' }],
+    });
+    const state = { project: { data: project } } as unknown as PersistedRootState;
+    expect(getPersistedProjectPayload(state.project)).toEqual(project);
+    expect(shouldAllowInitialMetadataSeed(state)).toBe(false);
   });
 });
