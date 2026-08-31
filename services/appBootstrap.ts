@@ -43,34 +43,49 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function hasOwn(value: object, key: PropertyKey): boolean {
+  return Object.hasOwn(value, key);
+}
+
+// QNBS-v3: null-prototype entity records preserve legal persisted IDs that collide with Object.prototype during bootstrap.
 function normalizeEntityCollection<T>(
   value: unknown,
   adapter: EntityAdapter<T, string>,
 ): EntityState<T, string> | undefined {
   if (Array.isArray(value)) {
-    const ids = new Set<string>();
+    const ids: string[] = [];
+    const entities = Object.create(null) as Record<string, T>;
     for (const entity of value) {
       if (!isRecord(entity) || typeof entity['id'] !== 'string' || !entity['id'].trim())
         return undefined;
-      if (ids.has(entity['id'])) return undefined;
-      ids.add(entity['id']);
+      const id = entity['id'];
+      if (hasOwn(entities, id)) return undefined;
+      ids.push(id);
+      entities[id] = entity as T;
     }
-    const state = adapter.getInitialState();
-    return adapter.setAll(state, value as T[]);
+    return { ...adapter.getInitialState(), ids, entities };
   }
 
   if (!isRecord(value) || !Array.isArray(value['ids']) || !isRecord(value['entities']))
     return undefined;
-  const ids = value['ids'];
-  const entities = value['entities'];
+  const sourceIds = value['ids'];
+  const sourceEntities = value['entities'];
+  const ids: string[] = [];
+  const entities = Object.create(null) as Record<string, T>;
   const seenIds = new Set<string>();
-  for (const id of ids) {
+  for (const id of sourceIds) {
     if (typeof id !== 'string' || !id.trim() || seenIds.has(id)) return undefined;
-    const entity = entities[id];
+    if (!hasOwn(sourceEntities, id)) return undefined;
+    const entity = sourceEntities[id];
     if (!isRecord(entity) || entity['id'] !== id) return undefined;
     seenIds.add(id);
+    ids.push(id);
+    entities[id] = entity as T;
   }
-  return value as unknown as EntityState<T, string>;
+  for (const key of Reflect.ownKeys(sourceEntities)) {
+    if (typeof key !== 'string' || !seenIds.has(key)) return undefined;
+  }
+  return { ...adapter.getInitialState(), ids, entities };
 }
 
 // QNBS-v3: canonical desktop collections prevent valid filesystem projects from being discarded while malformed envelopes remain non-authoritative.
@@ -90,6 +105,36 @@ export function getPersistedProjectPayload(
     worlds,
     outline: outline ?? [],
   } as unknown as ProjectData;
+}
+
+// QNBS-v3: the active payload is normalized before Redux-Undo sees it, preventing desktop array data from bypassing the canonical Redux state boundary.
+export function normalizePersistedProjectForStore(
+  project: PersistedRootState['project'] | undefined,
+): PersistedRootState['project'] | undefined {
+  const payload = getPersistedProjectPayload(project);
+  if (!payload) return undefined;
+
+  if (
+    project &&
+    isRecord(project.present) &&
+    Array.isArray(project.past) &&
+    Array.isArray(project.future)
+  ) {
+    const present = { ...project.present, data: payload };
+    return {
+      ...project,
+      present,
+      _latestUnfiltered: present,
+    };
+  }
+
+  const present = { data: payload };
+  return {
+    past: [],
+    present,
+    future: [],
+    _latestUnfiltered: present,
+  };
 }
 
 // QNBS-v3: seed authority follows hydrated project presence, so settings-only state can still initialize the synthetic project without overwriting real user intent.

@@ -8,8 +8,8 @@ import { IdbUnlockModal } from './components/settings/IdbUnlockModal';
 import { I18nProvider } from './contexts/I18nContext';
 import { versionControlActions } from './features/versionControl/versionControlSlice';
 import {
-  getPersistedProjectPayload,
   loadPersistedRootState,
+  normalizePersistedProjectForStore,
   shouldAllowInitialMetadataSeed,
 } from './services/appBootstrap';
 import { initializeStorage } from './services/dbInitialization';
@@ -132,20 +132,12 @@ async function bootApp(): Promise<void> {
     // We must manually reconstruct the undo envelope if we loaded flat data.
     if (preloadedState?.project) {
       const projectPart = preloadedState.project;
-      const persistedProjectData = getPersistedProjectPayload(projectPart);
-      const hasUndoPayload =
-        projectPart.present !== undefined &&
-        getPersistedProjectPayload({ present: projectPart.present }) !== undefined;
+      const normalizedProject = normalizePersistedProjectForStore(projectPart);
 
-      if (persistedProjectData && !hasUndoPayload) {
-        logger.debug('Hydrating flat project state into Redux-Undo envelope.');
-        preloadedState.project = {
-          past: [],
-          present: { data: persistedProjectData }, // Reconstruct the slice structure
-          future: [],
-          _latestUnfiltered: persistedProjectData, // Helper for redux-undo if needed
-        };
-      } else if (!persistedProjectData) {
+      if (normalizedProject) {
+        logger.debug('Hydrating persisted project state into Redux-Undo envelope.');
+        preloadedState.project = normalizedProject;
+      } else {
         // Fallback: Corrupt or empty project state
         logger.warn('Project state corrupted. Resetting project.');
         delete (preloadedState as Record<string, unknown>)['project'];

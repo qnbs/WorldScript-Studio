@@ -9,6 +9,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { charactersAdapter } from '../../../features/project/adapters';
 import type { PersistedRootState } from '../../../types';
 
 const createPersistedProject = (overrides: Record<string, unknown> = {}) => ({
@@ -59,6 +60,7 @@ vi.mock('../../../services/storageService', () => ({
 import {
   getPersistedProjectPayload,
   loadPersistedRootState,
+  normalizePersistedProjectForStore,
   shouldAllowInitialMetadataSeed,
 } from '../../../services/appBootstrap';
 
@@ -249,6 +251,71 @@ describe('shouldAllowInitialMetadataSeed', () => {
     expect(payload?.worlds).toEqual({ ids: ['world-1'], entities: { 'world-1': world } });
   });
 
+  it('preserves prototype-named array IDs in an adapter-compatible entity state', () => {
+    const ids = ['__proto__', 'constructor', 'toString'];
+    const project = createDesktopProject({
+      characters: ids.map((id) => ({ id, name: `Character ${id}` })),
+      worlds: ids.map((id) => ({ id, name: `World ${id}` })),
+    });
+    const state = { project: { data: project } } as unknown as PersistedRootState;
+    const payload = getPersistedProjectPayload(state.project);
+
+    expect(payload).toBeDefined();
+    if (!payload) return;
+    expect(Object.getPrototypeOf(payload.characters.entities)).toBeNull();
+    expect(Object.getPrototypeOf(payload.worlds.entities)).toBeNull();
+    for (const id of ids) {
+      expect(payload.characters.ids).toContain(id);
+      expect(Object.hasOwn(payload.characters.entities, id)).toBe(true);
+      expect(payload.characters.entities[id]?.id).toBe(id);
+      expect(payload.worlds.ids).toContain(id);
+      expect(Object.hasOwn(payload.worlds.entities, id)).toBe(true);
+      expect(payload.worlds.entities[id]?.id).toBe(id);
+    }
+
+    const updated = charactersAdapter.updateOne(payload.characters, {
+      id: '__proto__',
+      changes: { name: 'Updated' },
+    });
+    const updatedPrototypeCharacter = Object.getOwnPropertyDescriptor(updated.entities, '__proto__')
+      ?.value as { name: string } | undefined;
+    expect(updatedPrototypeCharacter?.name).toBe('Updated');
+    const selectCharacter = charactersAdapter.getSelectors().selectById;
+    expect(selectCharacter(payload.characters, '__proto__')?.name).toBe('Character __proto__');
+  });
+
+  it('rebuilds an EntityState input into a prototype-safe map without losing IDs', () => {
+    const sourceEntities = Object.create(null) as Record<string, { id: string; name: string }>;
+    sourceEntities['constructor'] = { id: 'constructor', name: 'Constructor' };
+    sourceEntities['toString'] = { id: 'toString', name: 'To String' };
+    const project = createDesktopProject({
+      characters: { ids: ['constructor', 'toString'], entities: sourceEntities },
+    });
+    const state = { project: { data: project } } as unknown as PersistedRootState;
+    const payload = getPersistedProjectPayload(state.project);
+
+    expect(payload).toBeDefined();
+    if (!payload) return;
+    expect(payload?.characters.ids).toEqual(['constructor', 'toString']);
+    expect(Object.getPrototypeOf(payload.characters.entities)).toBeNull();
+    expect(payload.characters.entities['constructor']?.name).toBe('Constructor');
+    expect(payload.characters.entities['toString']?.name).toBe('To String');
+  });
+
+  // QNBS-v3: orphaned entity entries must not masquerade as canonical state and suppress fresh-project fallback.
+  it('rejects EntityState entries that are not represented by ids', () => {
+    const project = createDesktopProject({
+      characters: {
+        ids: [],
+        entities: { orphan: { id: 'orphan', name: 'Orphan' } },
+      },
+    });
+    const state = { project: { data: project } } as unknown as PersistedRootState;
+
+    expect(getPersistedProjectPayload(state.project)).toBeUndefined();
+    expect(shouldAllowInitialMetadataSeed(state)).toBe(true);
+  });
+
   it('normalizes mixed array and EntityState desktop collections', () => {
     const world = { id: 'world-1', name: 'Arcadia' };
     const project = createDesktopProject({
@@ -325,5 +392,32 @@ describe('shouldAllowInitialMetadataSeed', () => {
 
     expect(getPersistedProjectPayload(state.project)).toBeUndefined();
     expect(shouldAllowInitialMetadataSeed(state)).toBe(true);
+  });
+
+  it('writes the normalized active payload back into an existing undo envelope', () => {
+    const project = createDesktopProject({
+      characters: [{ id: 'character-1', name: 'Ada' }],
+      worlds: [{ id: 'world-1', name: 'Arcadia' }],
+    });
+    const past = [{ data: createPersistedProject({ title: 'Past' }) }];
+    const future = [{ data: createPersistedProject({ title: 'Future' }) }];
+    const envelope = {
+      past,
+      present: { data: project },
+      future,
+      group: 'project-edit',
+      _latestUnfiltered: { data: project },
+    } as unknown as PersistedRootState['project'];
+
+    const normalized = normalizePersistedProjectForStore(envelope);
+
+    expect(normalized?.past).toBe(past);
+    expect(normalized?.future).toBe(future);
+    expect(normalized?.present?.data.characters).toEqual({
+      ids: ['character-1'],
+      entities: { 'character-1': { id: 'character-1', name: 'Ada' } },
+    });
+    expect(normalized?.present?.data.outline).toEqual([]);
+    expect(normalized?._latestUnfiltered).toEqual({ data: normalized?.present?.data });
   });
 });
