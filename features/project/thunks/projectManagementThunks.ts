@@ -1,4 +1,5 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
+import type { RootState } from '../../../app/store';
 import { parseImportedProjectJson } from '../../../services/projectImportSchema';
 import { storageService } from '../../../services/storageService';
 import type { Character, World } from '../../../types';
@@ -88,8 +89,12 @@ export const importProjectThunk = createAsyncThunk('project/importProject', asyn
 
 export const restoreSnapshotThunk = createAsyncThunk(
   'project/restoreSnapshot',
-  async (snapshotId: number) => {
-    const data = await storageService.getSnapshotData(snapshotId);
-    return data;
+  async (snapshotId: number, thunkApi) => {
+    // QNBS-v3: capture ownership before snapshot I/O so payload contents cannot change the restore target.
+    const currentProject = (thunkApi.getState() as RootState).project?.present?.data;
+    if (!currentProject) {
+      throw new Error('Cannot restore a snapshot without an active project.');
+    }
+    return storageService.restoreSnapshot(snapshotId, currentProject);
   },
 );

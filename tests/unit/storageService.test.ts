@@ -90,6 +90,11 @@ describe('storageService (IndexedDB backend in browser)', () => {
     expect(await storageService.getActiveProjectId()).toBeNull();
   });
 
+  // QNBS-v3: unsupported IndexedDB quarantine must remain a safe no-op rather than inventing a filesystem path.
+  it('returns null when the IndexedDB backend does not support filesystem quarantine', async () => {
+    await expect(storageService.quarantineProject('project-1')).resolves.toBeNull();
+  });
+
   it('delegates saveSettings / loadSettings to dbService', async () => {
     await storageService.saveSettings({} as never);
     expect(mockDb.saveSettings).toHaveBeenCalled();
@@ -142,6 +147,10 @@ describe('storageService (IndexedDB backend in browser)', () => {
     expect(id).toBe(42);
 
     await storageService.getSnapshotData(42);
+    expect(mockDb.getSnapshotData).toHaveBeenCalledWith(42);
+
+    const currentProject = { id: 'p1', title: 'Current target' };
+    await storageService.restoreSnapshot(42, currentProject as never);
     expect(mockDb.getSnapshotData).toHaveBeenCalledWith(42);
 
     await storageService.listSnapshots();

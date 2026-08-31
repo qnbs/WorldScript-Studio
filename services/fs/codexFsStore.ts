@@ -21,7 +21,10 @@ export class FsCodexStore extends FsSettingsStore {
   async saveStoryCodex(codex: StoryCodex): Promise<void> {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
-    const safeId = sanitizePathSegment(codex.projectId, 'project');
+    const safeId = sanitizePathSegment(
+      this.resolveAuxiliaryProjectId(codex.projectId, 'codex'),
+      'project',
+    );
     const codexDir = await apis.join(appDataPath, 'projects', safeId, 'codex');
     if (!(await apis.exists(codexDir))) await apis.mkdir(codexDir, { recursive: true });
     const codexFile = await apis.join(codexDir, 'codex.snap');
@@ -32,7 +35,10 @@ export class FsCodexStore extends FsSettingsStore {
     try {
       const apis = await this.getApis();
       const appDataPath = await this.ensureAppDataPath();
-      const safeId = sanitizePathSegment(projectId, 'project');
+      const safeId = sanitizePathSegment(
+        this.resolveAuxiliaryProjectId(projectId, 'codex'),
+        'project',
+      );
       const codexFile = await apis.join(appDataPath, 'projects', safeId, 'codex', 'codex.snap');
       if (!(await apis.exists(codexFile))) return null;
       const content = await retryFs(() => apis.readTextFile(codexFile));
@@ -45,14 +51,21 @@ export class FsCodexStore extends FsSettingsStore {
 
   async deleteStoryCodex(projectId: string): Promise<void> {
     try {
-      const apis = await this.getApis();
-      const appDataPath = await this.ensureAppDataPath();
-      const safeId = sanitizePathSegment(projectId, 'project');
-      const codexFile = await apis.join(appDataPath, 'projects', safeId, 'codex', 'codex.snap');
-      if (await apis.exists(codexFile)) await retryFs(() => apis.remove(codexFile));
+      await this.deleteStoryCodexStrict(projectId);
     } catch (error) {
       logger.error('Failed to delete story codex:', error);
     }
+  }
+
+  protected async deleteStoryCodexStrict(projectId: string): Promise<void> {
+    const apis = await this.getApis();
+    const appDataPath = await this.ensureAppDataPath();
+    const safeId = sanitizePathSegment(
+      this.resolveAuxiliaryProjectId(projectId, 'codex'),
+      'project',
+    );
+    const codexFile = await apis.join(appDataPath, 'projects', safeId, 'codex', 'codex.snap');
+    if (await apis.exists(codexFile)) await retryFs(() => apis.remove(codexFile));
   }
 
   // RAG Vectors — projects/{projectId}/codex/vectors.snap
@@ -60,6 +73,7 @@ export class FsCodexStore extends FsSettingsStore {
   async saveRagVectors(projectId: string, vectors: unknown[]): Promise<void> {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
+    // QNBS-v3: vectors.snap has no embedded project provenance, so Codex ownership cannot grant it a legacy fallback route.
     const safeId = sanitizePathSegment(projectId, 'project');
     const codexDir = await apis.join(appDataPath, 'projects', safeId, 'codex');
     if (!(await apis.exists(codexDir))) await apis.mkdir(codexDir, { recursive: true });

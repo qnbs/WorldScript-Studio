@@ -26,6 +26,12 @@ export type TauriApis = {
 
 let tauriApis: TauriApis | null = null;
 
+type LegacyAuxiliaryPolicy = {
+  legacyProjectId: string;
+  codex: boolean;
+  binderAssetIds: ReadonlySet<string>;
+};
+
 export async function loadTauriApis(): Promise<TauriApis> {
   if (tauriApis) return tauriApis;
   if (!desktopPlatform.runtime.isDesktop) {
@@ -158,7 +164,9 @@ export function decompressData<T>(raw: string): T {
     try {
       return JSON.parse(decompressed) as T;
     } catch {
-      throw new DecompressionError('Failed to parse decompressed data as JSON — the payload is corrupt.');
+      throw new DecompressionError(
+        'Failed to parse decompressed data as JSON — the payload is corrupt.',
+      );
     }
   }
   try {
@@ -301,6 +309,7 @@ export function countProjectWords(projectData: unknown): number {
 
 export class FsCore {
   protected appDataPath: string | null = null;
+  private readonly legacyAuxiliaryPolicies = new Map<string, LegacyAuxiliaryPolicy>();
   protected lastAutoSnapshotTime = Date.now();
   protected readonly AUTO_SNAPSHOT_INTERVAL = 5 * 60 * 1000; // 5 minutes
   protected readonly MAX_AUTO_SNAPSHOTS = 20;
@@ -324,5 +333,80 @@ export class FsCore {
 
   protected async getApis(): Promise<TauriApis> {
     return loadTauriApis();
+  }
+
+  protected registerLegacyAuxiliaryPolicy(
+    projectId: string,
+    legacyProjectId: string,
+    policy: Omit<LegacyAuxiliaryPolicy, 'legacyProjectId'>,
+  ): void {
+    if (policy.codex || policy.binderAssetIds.size > 0) {
+      // QNBS-v3: one filesystem-owned policy keeps verified legacy auxiliary data addressable without cross-project fallback.
+      this.legacyAuxiliaryPolicies.set(projectId, { legacyProjectId, ...policy });
+    }
+  }
+
+  protected clearLegacyAuxiliaryPolicy(projectId: string): void {
+    this.legacyAuxiliaryPolicies.delete(projectId);
+  }
+
+  // QNBS-v3: quarantine can persist only the verified route, never ambiguous fallback contents, for later recovery.
+  protected legacyAuxiliaryPolicyForProject(projectId: string): {
+    legacyProjectId: string;
+    codex: boolean;
+    binderAssetIds: readonly string[];
+  } | null {
+    const policy = this.policyFor(projectId);
+    if (!policy) return null;
+    return {
+      legacyProjectId: policy.legacyProjectId,
+      codex: policy.codex,
+      binderAssetIds: [...policy.binderAssetIds],
+    };
+  }
+
+  // QNBS-v3: claiming a real project directory invalidates legacy routes targeting that directory before they can redirect another project into it.
+  protected clearLegacyPoliciesTargetingProject(projectId: string): void {
+    const safeProjectId = sanitizePathSegment(projectId, '');
+    if (!safeProjectId || safeProjectId === '.' || safeProjectId === '..') return;
+    for (const [policyProjectId, policy] of this.legacyAuxiliaryPolicies) {
+      if (policy.legacyProjectId === safeProjectId) {
+        this.legacyAuxiliaryPolicies.delete(policyProjectId);
+      }
+    }
+  }
+
+  private policyFor(projectId: string): LegacyAuxiliaryPolicy | undefined {
+    const safeProjectId = sanitizePathSegment(projectId, '');
+    if (!safeProjectId || safeProjectId === '.' || safeProjectId === '..') return undefined;
+    return this.legacyAuxiliaryPolicies.get(safeProjectId);
+  }
+
+  protected resolveAuxiliaryProjectId(
+    projectId: string,
+    kind: 'binder' | 'codex',
+    assetId?: string,
+  ): string {
+    const policy = this.policyFor(projectId);
+    if (!policy) return projectId;
+    if (kind === 'codex' && policy.codex) return policy.legacyProjectId;
+    if (kind === 'binder' && assetId && policy.binderAssetIds.has(assetId)) {
+      return policy.legacyProjectId;
+    }
+    return projectId;
+  }
+
+  protected legacyBinderProjectId(projectId: string): string | null {
+    const policy = this.policyFor(projectId);
+    return policy && policy.binderAssetIds.size > 0 ? policy.legacyProjectId : null;
+  }
+
+  protected legacyCodexProjectId(projectId: string): string | null {
+    const policy = this.policyFor(projectId);
+    return policy?.codex ? policy.legacyProjectId : null;
+  }
+
+  protected legacyBinderAssetIdsForProject(projectId: string): readonly string[] {
+    return [...(this.policyFor(projectId)?.binderAssetIds ?? [])];
   }
 }

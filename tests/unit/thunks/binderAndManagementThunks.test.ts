@@ -8,6 +8,7 @@ vi.mock('../../../services/storageService', () => ({
     deleteBinderAsset: vi.fn(),
     saveBinderAsset: vi.fn(),
     getSnapshotData: vi.fn(),
+    restoreSnapshot: vi.fn(),
   },
 }));
 
@@ -52,6 +53,7 @@ beforeEach(() => {
   vi.mocked(storageService.saveBinderAsset).mockResolvedValue(undefined);
   vi.mocked(storageService.saveImage).mockResolvedValue(undefined);
   vi.mocked(storageService.getSnapshotData).mockResolvedValue(null);
+  vi.mocked(storageService.restoreSnapshot).mockResolvedValue(null);
 });
 
 // ---------------------------------------------------------------------------
@@ -359,26 +361,33 @@ describe('importProjectThunk', () => {
 describe('restoreSnapshotThunk', () => {
   it('dispatches fulfilled with snapshot data from storageService', async () => {
     const snapshotData = { title: 'Snapshot Title', manuscript: [] };
-    vi.mocked(storageService.getSnapshotData).mockResolvedValue(snapshotData as never);
+    vi.mocked(storageService.restoreSnapshot).mockResolvedValue(snapshotData as never);
 
     const store = makeStore();
     const action = await store.dispatch(restoreSnapshotThunk(42));
 
     expect(action.type).toBe('project/restoreSnapshot/fulfilled');
     expect((action as { payload: typeof snapshotData }).payload).toEqual(snapshotData);
+    expect(storageService.restoreSnapshot).toHaveBeenCalledWith(
+      42,
+      expect.objectContaining({ id: 'default' }),
+    );
   });
 
-  it('calls storageService.getSnapshotData with the correct id', async () => {
-    vi.mocked(storageService.getSnapshotData).mockResolvedValue(null);
+  it('captures the current project before requesting snapshot data', async () => {
+    vi.mocked(storageService.restoreSnapshot).mockResolvedValue(null);
 
     const store = makeStore();
     await store.dispatch(restoreSnapshotThunk(99));
 
-    expect(storageService.getSnapshotData).toHaveBeenCalledWith(99);
+    expect(storageService.restoreSnapshot).toHaveBeenCalledWith(
+      99,
+      expect.objectContaining({ id: 'default' }),
+    );
   });
 
   it('dispatches rejected when storageService throws', async () => {
-    vi.mocked(storageService.getSnapshotData).mockRejectedValue(new Error('IDB error'));
+    vi.mocked(storageService.restoreSnapshot).mockRejectedValue(new Error('IDB error'));
 
     const store = makeStore();
     const action = await store.dispatch(restoreSnapshotThunk(1));

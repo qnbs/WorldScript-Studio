@@ -70,8 +70,11 @@ export class FsAssetStore extends FsSnapshotStore {
   private async binderAssetPaths(projectId: string, assetId: string) {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
-    const safeId = sanitizePathSegment(projectId, 'project');
     const safeAsset = sanitizePathSegment(assetId, 'asset');
+    const safeId = sanitizePathSegment(
+      this.resolveAuxiliaryProjectId(projectId, 'binder', safeAsset),
+      'project',
+    );
     const dir = await apis.join(appDataPath, 'projects', safeId, 'binder');
     const binFile = await apis.join(dir, `${safeAsset}.bin`);
     const metaFile = await apis.join(dir, `${safeAsset}.meta.json`);
@@ -122,28 +125,53 @@ export class FsAssetStore extends FsSnapshotStore {
 
   async deleteBinderAsset(projectId: string, assetId: string): Promise<void> {
     try {
-      const apis = await this.getApis();
-      const { binFile, metaFile } = await this.binderAssetPaths(projectId, assetId);
-      if (await apis.exists(binFile)) await retryFs(() => apis.remove(binFile));
-      if (await apis.exists(metaFile)) await retryFs(() => apis.remove(metaFile));
+      await this.deleteBinderAssetStrict(projectId, assetId);
     } catch (error) {
       logger.warn('deleteBinderAsset failed:', error);
     }
+  }
+
+  protected async deleteBinderAssetStrict(projectId: string, assetId: string): Promise<void> {
+    const { apis, binFile, metaFile } = await this.binderAssetPaths(projectId, assetId);
+    if (await apis.exists(binFile)) await retryFs(() => apis.remove(binFile));
+    if (await apis.exists(metaFile)) await retryFs(() => apis.remove(metaFile));
   }
 
   async listBinderAssetIds(projectId: string): Promise<string[]> {
     try {
       const apis = await this.getApis();
       const appDataPath = await this.ensureAppDataPath();
-      const safeId = sanitizePathSegment(projectId, 'project');
-      const dir = await apis.join(appDataPath, 'projects', safeId, 'binder');
-      if (!(await apis.exists(dir))) return [];
-      const entries = await retryFs(() => apis.readDir(dir));
       const ids = new Set<string>();
-      for (const e of entries) {
-        const name = e.name ?? '';
-        if (name.endsWith('.meta.json')) {
-          ids.add(name.replace(/\.meta\.json$/, ''));
+      const legacyProjectId = this.legacyBinderProjectId(projectId);
+      const safeIds = new Set(
+        [projectId, legacyProjectId]
+          .filter((id): id is string => Boolean(id))
+          .map((id) => sanitizePathSegment(id, 'project')),
+      );
+      for (const safeId of safeIds) {
+        try {
+          const dir = await apis.join(appDataPath, 'projects', safeId, 'binder');
+          if (!(await apis.exists(dir))) continue;
+          const legacyOnly =
+            legacyProjectId !== null && safeId !== sanitizePathSegment(projectId, 'project');
+          const allowed = legacyOnly
+            ? new Set(this.legacyBinderAssetIdsForProject(projectId))
+            : null;
+          const entries = await retryFs(() => apis.readDir(dir));
+          for (const e of entries) {
+            const name = e.name ?? '';
+            if (name.endsWith('.meta.json')) {
+              const id = name.replace(/\.meta\.json$/, '');
+              if (!allowed || allowed.has(id)) ids.add(id);
+            }
+          }
+        } catch (error) {
+          // QNBS-v3: one unreadable legacy directory must not erase IDs already collected from a healthy project directory.
+          logger.warn('listBinderAssetIds: skipped unreadable project directory', {
+            projectId,
+            safeId,
+            error: error instanceof Error ? error.message : String(error),
+          });
         }
       }
       return [...ids];

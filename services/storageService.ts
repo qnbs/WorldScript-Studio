@@ -2,15 +2,19 @@ import type { ProjectSnapshot, Settings, StoryCodex, StoryProject } from '../typ
 import type {
   BinderAssetMeta,
   BinderAssetPayload,
+  ProjectQuarantineResult,
   SaveProjectInput,
+  SnapshotRestoreTarget,
   StorageBackend,
 } from './storageBackend';
 
 export type {
   BinderAssetMeta,
   BinderAssetPayload,
+  ProjectQuarantineResult,
   SaveProjectEnvelope,
   SaveProjectInput,
+  SnapshotRestoreTarget,
   StorageBackend,
 } from './storageBackend';
 export {
@@ -89,6 +93,12 @@ class StorageManager {
     return (await backend.getActiveProjectId?.()) ?? null;
   }
 
+  // QNBS-v3: delegate supported desktop quarantine and normalize unsupported backends to null.
+  async quarantineProject(projectId: string): Promise<ProjectQuarantineResult | null> {
+    const backend = await this.getBackend();
+    return (await backend.quarantineProject?.(projectId)) ?? null;
+  }
+
   async deleteProject(projectId: string): Promise<void> {
     const backend = await this.getBackend();
     return backend.deleteProject(projectId);
@@ -146,6 +156,14 @@ class StorageManager {
 
   async getSnapshotData(id: number): Promise<unknown> {
     const backend = await this.getBackend();
+    return backend.getSnapshotData(id);
+  }
+
+  async restoreSnapshot(id: number, currentProject: SnapshotRestoreTarget): Promise<unknown> {
+    const backend = await this.getBackend();
+    if (backend.restoreSnapshot) {
+      return backend.restoreSnapshot(id, currentProject);
+    }
     return backend.getSnapshotData(id);
   }
 
