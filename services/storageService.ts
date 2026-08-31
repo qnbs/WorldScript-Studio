@@ -30,6 +30,8 @@ import { fileSystemService } from './fileSystemService';
 import { logger } from './logger';
 import { isTauriRuntime } from './tauriRuntime';
 
+// QNBS-v3: re-exporting the narrow storage contracts keeps callers on one backend-independent type boundary.
+
 declare global {
   interface Window {
     __TAURI__?: unknown;
@@ -159,6 +161,7 @@ class StorageManager {
     return backend.getSnapshotData(id);
   }
 
+  // QNBS-v3: filesystem backends receive the pre-read target while IndexedDB keeps its existing snapshot fallback.
   async restoreSnapshot(id: number, currentProject: SnapshotRestoreTarget): Promise<unknown> {
     const backend = await this.getBackend();
     if (backend.restoreSnapshot) {

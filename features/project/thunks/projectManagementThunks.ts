@@ -6,6 +6,19 @@ import type { Character, World } from '../../../types';
 import { charactersAdapter, worldsAdapter } from '../adapters';
 import type { ProjectData } from '../projectSlice';
 
+const LEGACY_PROJECT_DIRECTORY_METADATA_KEY = '__worldscriptLegacyProjectDirectory';
+
+// QNBS-v3: compare only storage-owned target identity so mutable snapshot content cannot hide a project switch.
+function restoreTargetIdentity(project: unknown): string | null {
+  if (typeof project !== 'object' || project === null) return null;
+  const record = project as Record<string, unknown>;
+  if (typeof record['id'] === 'string' && record['id']) return `id:${record['id']}`;
+  const legacyDirectory = record[LEGACY_PROJECT_DIRECTORY_METADATA_KEY];
+  return typeof legacyDirectory === 'string' && legacyDirectory
+    ? `legacy:${legacyDirectory}`
+    : null;
+}
+
 export const importProjectThunk = createAsyncThunk('project/importProject', async (file: File) => {
   const text = await file.text();
   const projectDataJson = parseImportedProjectJson(text);
@@ -95,6 +108,12 @@ export const restoreSnapshotThunk = createAsyncThunk(
     if (!currentProject) {
       throw new Error('Cannot restore a snapshot without an active project.');
     }
-    return storageService.restoreSnapshot(snapshotId, currentProject);
+    const capturedTargetIdentity = restoreTargetIdentity(currentProject);
+    const restored = await storageService.restoreSnapshot(snapshotId, currentProject);
+    const liveProject = (thunkApi.getState() as RootState).project?.present?.data;
+    if (restoreTargetIdentity(liveProject) !== capturedTargetIdentity) {
+      throw new Error('Cannot restore a snapshot after the active project changed.');
+    }
+    return restored;
   },
 );

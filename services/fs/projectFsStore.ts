@@ -25,6 +25,26 @@ import {
   type TauriApis,
   writeTextFileAtomic,
 } from './fsCore';
+import {
+  evidenceFromPersistedMetadata,
+  hasLegacyMissingProjectId,
+  isLegacyInvalidProjectId,
+  LEGACY_AUXILIARY_METADATA_KEY,
+  LEGACY_PROJECT_DIRECTORY_METADATA_KEY,
+  type LegacyAuxiliaryEvidence,
+  legacyBinderAssetIds,
+  legacyProjectContent,
+  legacyProjectDirectory,
+  legacyProjectWithDirectory,
+  migratedProjectIdentity,
+  type PersistedLegacyAuxiliaryMetadata,
+  persistedLegacyAuxiliaryMetadata,
+  persistedMetadataFromEvidence,
+  persistedProjectId,
+  projectPathSegment,
+  type QuarantineLegacyAuxiliaryManifest,
+  snapshotRestoreTargetDirectory,
+} from './legacyProjectIdentity';
 
 // QNBS-v3 (DA-01): distinguishes corrupt/unreadable saved data from genuine absence — callers must never treat this the same as "no project exists yet".
 export class ProjectLoadError extends Error {
@@ -124,169 +144,6 @@ function looksLikeStoryProject(value: unknown): value is StoryProject {
 }
 
 // QNBS-v3: one sanitizer and empty-ID policy keeps every filesystem project operation on the same path identity.
-function projectPathSegment(projectId: string): string | null {
-  const safeProjectId = sanitizePathSegment(projectId, '');
-  return safeProjectId && safeProjectId !== '.' && safeProjectId !== '..' ? safeProjectId : null;
-}
-
-function persistedProjectId(project: StoryProject): unknown {
-  return (project as unknown as Record<string, unknown>)['id'];
-}
-
-const LEGACY_PROJECT_DIRECTORY_METADATA_KEY = '__worldscriptLegacyProjectDirectory';
-
-// QNBS-v3: legacy snapshot restoration requires content evidence so an invalid ID cannot claim another project's directory.
-function legacyProjectContent(project: StoryProject): string {
-  const value = { ...(project as unknown as Record<string, unknown>) };
-  delete value['id'];
-  delete value['__worldscriptLegacyAuxiliary'];
-  delete value[LEGACY_PROJECT_DIRECTORY_METADATA_KEY];
-  return JSON.stringify(value) ?? '';
-}
-
-function legacyProjectDirectory(project: StoryProject): string | null {
-  const value = (project as unknown as Record<string, unknown>)[
-    LEGACY_PROJECT_DIRECTORY_METADATA_KEY
-  ];
-  return typeof value === 'string' && projectPathSegment(value) === value ? value : null;
-}
-
-function snapshotRestoreTargetDirectory(project: SnapshotRestoreTarget): string | null {
-  const rawProjectId = (project as unknown as Record<string, unknown>)['id'];
-  if (rawProjectId !== undefined) {
-    return typeof rawProjectId === 'string' ? projectPathSegment(rawProjectId) : null;
-  }
-  return legacyProjectDirectory(project as StoryProject);
-}
-
-function hasLegacyMissingProjectId(project: StoryProject, safeProjectId: string): boolean {
-  return (
-    typeof persistedProjectId(project) !== 'string' &&
-    safeProjectId === (projectPathSegment(project.title) ?? 'project')
-  );
-}
-
-function isLegacyInvalidProjectId(project: StoryProject): project is StoryProject & { id: string } {
-  const rawProjectId = persistedProjectId(project);
-  return typeof rawProjectId === 'string' && !projectPathSegment(rawProjectId);
-}
-
-function legacyBinderAssetIds(project: StoryProject): string[] {
-  return (project.binderNodes ?? [])
-    .map((node) => node.binderAssetId)
-    .filter((assetId): assetId is string => typeof assetId === 'string')
-    .map((assetId) => sanitizePathSegment(assetId, 'asset'));
-}
-
-// QNBS-v3: Binder IDs become suffixed filenames, so dot segments remain safe here while project directory dots stay rejected.
-function persistedBinderAssetId(assetId: unknown): assetId is string {
-  return (
-    typeof assetId === 'string' &&
-    assetId.length > 0 &&
-    sanitizePathSegment(assetId, 'asset') === assetId
-  );
-}
-
-type LegacyAuxiliaryEvidence = {
-  codex: boolean;
-  binderAssetIds: Set<string>;
-  inspectionComplete: boolean;
-};
-
-const LEGACY_AUXILIARY_METADATA_KEY = '__worldscriptLegacyAuxiliary';
-
-type PersistedLegacyAuxiliaryMetadata = {
-  legacyProjectId: 'project';
-  legacyRawProjectId: string;
-  codex: boolean;
-  binderAssetIds: string[];
-};
-
-type QuarantineLegacyAuxiliaryManifest = {
-  projectId: string;
-  legacyProjectId: string;
-  codex: boolean;
-  binderAssetIds: string[];
-};
-
-function persistedLegacyAuxiliaryMetadata(
-  project: StoryProject,
-): PersistedLegacyAuxiliaryMetadata | null {
-  const value = (project as unknown as Record<string, unknown>)[LEGACY_AUXILIARY_METADATA_KEY];
-  if (typeof value !== 'object' || value === null) return null;
-  const candidate = value as Record<string, unknown>;
-  const rawProjectId = candidate['legacyRawProjectId'];
-  const binderAssetIds = candidate['binderAssetIds'];
-  if (
-    candidate['legacyProjectId'] !== 'project' ||
-    typeof rawProjectId !== 'string' ||
-    !rawProjectId ||
-    projectPathSegment(rawProjectId) ||
-    typeof candidate['codex'] !== 'boolean' ||
-    !Array.isArray(binderAssetIds) ||
-    binderAssetIds.some((assetId) => !persistedBinderAssetId(assetId)) ||
-    (!candidate['codex'] && binderAssetIds.length === 0)
-  ) {
-    return null;
-  }
-  return {
-    legacyProjectId: 'project',
-    legacyRawProjectId: rawProjectId,
-    codex: candidate['codex'],
-    binderAssetIds: [...binderAssetIds] as string[],
-  };
-}
-
-function persistedMetadataFromEvidence(
-  rawProjectId: string,
-  evidence: LegacyAuxiliaryEvidence,
-): PersistedLegacyAuxiliaryMetadata | null {
-  if (!evidence.inspectionComplete || (!evidence.codex && evidence.binderAssetIds.size === 0)) {
-    return null;
-  }
-  return {
-    legacyProjectId: 'project',
-    legacyRawProjectId: rawProjectId,
-    codex: evidence.codex,
-    binderAssetIds: [...evidence.binderAssetIds],
-  };
-}
-
-function evidenceFromPersistedMetadata(
-  metadata: PersistedLegacyAuxiliaryMetadata,
-): LegacyAuxiliaryEvidence {
-  return {
-    codex: metadata.codex,
-    binderAssetIds: new Set(metadata.binderAssetIds),
-    inspectionComplete: true,
-  };
-}
-
-function migratedProjectIdentity(
-  project: StoryProject,
-  safeProjectId: string,
-  rawProjectId?: string,
-  evidence?: LegacyAuxiliaryEvidence,
-): StoryProject {
-  const metadata =
-    rawProjectId && evidence ? persistedMetadataFromEvidence(rawProjectId, evidence) : null;
-  // QNBS-v3: legacy fallback directories carry verified auxiliary provenance across restart, while new invalid IDs remain rejected.
-  return {
-    ...project,
-    id: safeProjectId,
-    ...(metadata ? { [LEGACY_AUXILIARY_METADATA_KEY]: metadata } : {}),
-  } as StoryProject;
-}
-
-// QNBS-v3: missing-ID legacy projects retain their loaded directory while callers keep historical auxiliary fallbacks.
-function legacyProjectWithDirectory(project: StoryProject, safeProjectId: string): StoryProject {
-  if (legacyProjectDirectory(project) === safeProjectId) return project;
-  return {
-    ...project,
-    [LEGACY_PROJECT_DIRECTORY_METADATA_KEY]: safeProjectId,
-  } as StoryProject;
-}
-
 export class FsProjectStore extends FsAssetStore {
   private readonly verifiedLegacyProjectDirectories = new Set<string>();
 
@@ -511,22 +368,24 @@ export class FsProjectStore extends FsAssetStore {
     snapshotId: number,
     currentProject: SnapshotRestoreTarget,
   ): Promise<StoryProject> {
+    // QNBS-v3: serialize target validation and snapshot ownership checks so routing cannot change mid-restore.
+    return this.withLegacyRoutingOperation(() =>
+      this.restoreSnapshotUnlocked(snapshotId, currentProject),
+    );
+  }
+
+  private async restoreSnapshotUnlocked(
+    snapshotId: number,
+    currentProject: SnapshotRestoreTarget,
+  ): Promise<StoryProject> {
     const targetDirectory = snapshotRestoreTargetDirectory(currentProject);
     if (!targetDirectory) {
       throw new ProjectSnapshotRestoreError('target-unavailable');
     }
 
-    const activeProjectId = await this.getActiveProjectId();
-    if (activeProjectId !== null) {
-      const activeDirectory = projectPathSegment(activeProjectId);
-      if (!activeDirectory || activeDirectory !== targetDirectory) {
-        throw new ProjectSnapshotRestoreError('target-mismatch');
-      }
-    }
-
     let validatedTarget: StoryProject | null;
     try {
-      validatedTarget = await this.loadProject(targetDirectory);
+      validatedTarget = await this.loadProjectUnlocked(targetDirectory);
     } catch (error) {
       logger.error('Failed to validate the snapshot restore target', {
         projectId: targetDirectory,
@@ -584,6 +443,10 @@ export class FsProjectStore extends FsAssetStore {
   }
 
   async saveProject(project: SaveProjectInput): Promise<void> {
+    return this.withLegacyRoutingOperation(() => this.saveProjectUnlocked(project));
+  }
+
+  private async saveProjectUnlocked(project: SaveProjectInput): Promise<void> {
     const flat = normalizeSaveProjectInputToStoryProject(project);
     const rawProjectId = (flat as unknown as Record<string, unknown>)['id'];
     const suppliedProjectId = typeof rawProjectId === 'string';
@@ -640,7 +503,13 @@ export class FsProjectStore extends FsAssetStore {
       this.lastAutoSnapshotTime = Date.now();
       this.saveSnapshot('auto', projectToPersist)
         .then(() => this.pruneAutoSnapshots())
-        .catch(() => {});
+        .catch((error) => {
+          // QNBS-v3: auto-snapshot failure stays non-fatal while remaining visible for recovery diagnostics.
+          logger.warn('Auto-snapshot failed (project save itself is unaffected)', {
+            projectId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
     }
 
     const projectPath = await apis.join(appDataPath, 'projects', projectId);
@@ -697,6 +566,10 @@ export class FsProjectStore extends FsAssetStore {
    * collapse into the same `null` a caller would read as "no project exists yet".
    */
   async loadProject(projectId: string): Promise<StoryProject | null> {
+    return this.withLegacyRoutingOperation(() => this.loadProjectUnlocked(projectId));
+  }
+
+  private async loadProjectUnlocked(projectId: string): Promise<StoryProject | null> {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
     const safeProjectId = projectPathSegment(projectId);
@@ -792,6 +665,10 @@ export class FsProjectStore extends FsAssetStore {
   }
 
   async quarantineProject(projectId: string): Promise<ProjectQuarantineResult> {
+    return this.withLegacyRoutingOperation(() => this.quarantineProjectUnlocked(projectId));
+  }
+
+  private async quarantineProjectUnlocked(projectId: string): Promise<ProjectQuarantineResult> {
     try {
       const apis = await this.getApis();
       const appDataPath = await this.ensureAppDataPath();
@@ -863,7 +740,7 @@ export class FsProjectStore extends FsAssetStore {
           }
           await retryFs(() => apis.rename(projectPath, preservedPath));
           this.clearLegacyAuxiliaryPolicy(safeProjectId);
-          return { projectId, path: preservedPath };
+          return { projectId: safeProjectId, path: preservedPath };
         } catch (error) {
           let sourceExists: boolean;
           let preservedExists: boolean;
@@ -879,7 +756,7 @@ export class FsProjectStore extends FsAssetStore {
           }
           if (!sourceExists && preservedExists) {
             this.clearLegacyAuxiliaryPolicy(safeProjectId);
-            return { projectId, path: preservedPath };
+            return { projectId: safeProjectId, path: preservedPath };
           }
           if (!sourceExists) {
             await releaseReservation();
@@ -907,13 +784,27 @@ export class FsProjectStore extends FsAssetStore {
   }
 
   async deleteProject(projectId: string): Promise<void> {
+    return this.withLegacyRoutingOperation(() => this.deleteProjectUnlocked(projectId));
+  }
+
+  private async deleteProjectUnlocked(projectId: string): Promise<void> {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
     const safeProjectId = projectPathSegment(projectId);
     if (!safeProjectId) return;
     const projectPath = await apis.join(appDataPath, 'projects', safeProjectId);
 
-    const projectExists = await apis.exists(projectPath);
+    // QNBS-v3: uncertain existence is a typed retryable deletion failure, never permission to clean up.
+    let projectExists: boolean;
+    try {
+      projectExists = await apis.exists(projectPath);
+    } catch (error) {
+      logger.error('Failed to inspect project existence before deletion', {
+        projectId: safeProjectId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new ProjectDeleteError('identity-inspection-failed');
+    }
     if (projectExists) {
       await this.hydrateLegacyPolicyForDeletion(safeProjectId, projectPath, apis, appDataPath);
     }

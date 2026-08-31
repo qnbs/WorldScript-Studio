@@ -2,6 +2,7 @@ import { configureStore } from '@reduxjs/toolkit';
 import undoable from 'redux-undo';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// QNBS-v3: the thunk mock models the target-aware storage boundary used before snapshot I/O.
 vi.mock('../../../services/storageService', () => ({
   storageService: {
     saveImage: vi.fn(),
@@ -384,6 +385,30 @@ describe('restoreSnapshotThunk', () => {
       99,
       expect.objectContaining({ id: 'default' }),
     );
+  });
+
+  // QNBS-v3: an async restore must not fulfill into a different Redux project than the captured target.
+  it('rejects when the active project changes while snapshot I/O is pending', async () => {
+    let releaseRestore!: (value: unknown) => void;
+    vi.mocked(storageService.restoreSnapshot).mockReturnValue(
+      new Promise((resolve) => {
+        releaseRestore = resolve;
+      }),
+    );
+
+    const store = makeStore();
+    const pending = store.dispatch(restoreSnapshotThunk(100));
+    const currentData = store.getState().project.present.data;
+    store.dispatch({
+      type: 'project/restoreSnapshot/fulfilled',
+      payload: { ...currentData, id: 'p2' },
+    });
+    releaseRestore({ ...currentData, id: 'default' });
+
+    const action = await pending;
+
+    expect(action.type).toBe('project/restoreSnapshot/rejected');
+    expect(store.getState().project.present.data.id).toBe('p2');
   });
 
   it('dispatches rejected when storageService throws', async () => {

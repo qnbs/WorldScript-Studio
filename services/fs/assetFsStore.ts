@@ -87,36 +87,40 @@ export class FsAssetStore extends FsSnapshotStore {
     data: ArrayBuffer,
     meta: BinderAssetMeta,
   ): Promise<void> {
-    const apis = await this.getApis();
-    const { dir, binFile, metaFile } = await this.binderAssetPaths(projectId, assetId);
-    if (!(await apis.exists(dir))) await apis.mkdir(dir, { recursive: true });
-    const metaOut: BinderAssetMeta = { ...meta, byteSize: data.byteLength };
-    await writeFileAtomic(apis, binFile, new Uint8Array(data));
-    await writeTextFileAtomic(apis, metaFile, JSON.stringify(metaOut));
+    await this.withLegacyRoutingOperation(async () => {
+      const apis = await this.getApis();
+      const { dir, binFile, metaFile } = await this.binderAssetPaths(projectId, assetId);
+      if (!(await apis.exists(dir))) await apis.mkdir(dir, { recursive: true });
+      const metaOut: BinderAssetMeta = { ...meta, byteSize: data.byteLength };
+      await writeFileAtomic(apis, binFile, new Uint8Array(data));
+      await writeTextFileAtomic(apis, metaFile, JSON.stringify(metaOut));
+    });
   }
 
   async getBinderAsset(projectId: string, assetId: string): Promise<BinderAssetPayload | null> {
     try {
-      const apis = await this.getApis();
-      const { binFile, metaFile } = await this.binderAssetPaths(projectId, assetId);
-      if (!(await apis.exists(binFile)) || !(await apis.exists(metaFile))) return null;
-      const [bytes, metaRaw] = await Promise.all([
-        retryFs(() => apis.readFile(binFile)),
-        retryFs(() => apis.readTextFile(metaFile)),
-      ]);
-      const meta = JSON.parse(metaRaw) as BinderAssetMeta;
-      // QNBS-v3: binary + metadata are two independent atomic writes, not one transaction — a byteSize mismatch is the cheapest reliable signal that a partial failure paired a new generation with a stale one.
-      if (meta.byteSize !== bytes.byteLength) {
-        logger.warn('getBinderAsset: byteSize/binary mismatch — treating pair as corrupt', {
-          projectId,
-          assetId,
-          expected: meta.byteSize,
-          actual: bytes.byteLength,
-        });
-        return null;
-      }
-      const copy = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-      return { data: copy, meta };
+      return await this.withLegacyRoutingOperation(async () => {
+        const apis = await this.getApis();
+        const { binFile, metaFile } = await this.binderAssetPaths(projectId, assetId);
+        if (!(await apis.exists(binFile)) || !(await apis.exists(metaFile))) return null;
+        const [bytes, metaRaw] = await Promise.all([
+          retryFs(() => apis.readFile(binFile)),
+          retryFs(() => apis.readTextFile(metaFile)),
+        ]);
+        const meta = JSON.parse(metaRaw) as BinderAssetMeta;
+        // QNBS-v3: binary + metadata are two independent atomic writes, not one transaction — a byteSize mismatch is the cheapest reliable signal that a partial failure paired a new generation with a stale one.
+        if (meta.byteSize !== bytes.byteLength) {
+          logger.warn('getBinderAsset: byteSize/binary mismatch — treating pair as corrupt', {
+            projectId,
+            assetId,
+            expected: meta.byteSize,
+            actual: bytes.byteLength,
+          });
+          return null;
+        }
+        const copy = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+        return { data: copy, meta };
+      });
     } catch (error) {
       logger.warn('getBinderAsset failed:', error);
       return null;
@@ -125,7 +129,7 @@ export class FsAssetStore extends FsSnapshotStore {
 
   async deleteBinderAsset(projectId: string, assetId: string): Promise<void> {
     try {
-      await this.deleteBinderAssetStrict(projectId, assetId);
+      await this.withLegacyRoutingOperation(() => this.deleteBinderAssetStrict(projectId, assetId));
     } catch (error) {
       logger.warn('deleteBinderAsset failed:', error);
     }
@@ -138,6 +142,17 @@ export class FsAssetStore extends FsSnapshotStore {
   }
 
   async listBinderAssetIds(projectId: string): Promise<string[]> {
+    try {
+      return await this.withLegacyRoutingOperation(() =>
+        this.listBinderAssetIdsUnlocked(projectId),
+      );
+    } catch (error) {
+      logger.warn('listBinderAssetIds failed:', error);
+      return [];
+    }
+  }
+
+  private async listBinderAssetIdsUnlocked(projectId: string): Promise<string[]> {
     try {
       const apis = await this.getApis();
       const appDataPath = await this.ensureAppDataPath();
@@ -182,7 +197,17 @@ export class FsAssetStore extends FsSnapshotStore {
   }
 
   async deleteAllBinderAssetsForProject(projectId: string): Promise<void> {
-    const ids = await this.listBinderAssetIds(projectId);
-    await Promise.all(ids.map((id) => this.deleteBinderAsset(projectId, id)));
+    await this.withLegacyRoutingOperation(async () => {
+      const ids = await this.listBinderAssetIdsUnlocked(projectId);
+      await Promise.all(
+        ids.map(async (id) => {
+          try {
+            await this.deleteBinderAssetStrict(projectId, id);
+          } catch (error) {
+            logger.warn('deleteBinderAsset failed:', error);
+          }
+        }),
+      );
+    });
   }
 }

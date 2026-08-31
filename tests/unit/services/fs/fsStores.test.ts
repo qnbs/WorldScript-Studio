@@ -224,7 +224,7 @@ describe('FsProjectStore — projects', () => {
     const result = await store.quarantineProject('p1');
 
     expect(firstTarget).toBeDefined();
-    expect(result.path).not.toBe(firstTarget);
+    expect(result.path).toBe(`${firstTarget}-1/p1`);
     expect(fake.text.get(`${result.path}/project.json`)).toBeDefined();
     expect(fake.text.has('/app/projects/p1/project.json')).toBe(false);
   });
@@ -379,6 +379,116 @@ describe('FsProjectStore — projects', () => {
     expect(fake.text.has('/app/projects/project/codex/codex.snap')).toBe(false);
     expect(fake.text.has('/app/projects/project/codex/vectors.snap')).toBe(true);
     expect(fake.bin.has('/app/projects/project/binder/legacy-asset.bin')).toBe(false);
+  });
+
+  // QNBS-v3: complete route-using mutations serialize so a legitimate fallback claimant cannot change ownership mid-operation.
+  it('keeps a legacy Codex write on one route while a fallback claimant waits', async () => {
+    const legacyProject = { ...project, id: '***' };
+    const legacyCodex = { projectId: '***', entries: [{ name: 'legacy' }] };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+    await fake.apis.mkdir('/app/projects/project/codex', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/project/codex/codex.snap',
+      compressData(legacyCodex),
+    );
+    await store.loadProject('item');
+
+    const originalWriteTextFile = fake.apis.writeTextFile;
+    let releaseWrite!: () => void;
+    let writeStarted!: () => void;
+    const writeStartedPromise = new Promise<void>((resolve) => {
+      writeStarted = resolve;
+    });
+    fake.apis.writeTextFile = (path: string, content: string) => {
+      if (path.startsWith('/app/projects/project/codex/codex.snap.tmp-')) {
+        writeStarted();
+        return new Promise<void>((resolve, reject) => {
+          releaseWrite = () => {
+            originalWriteTextFile(path, content).then(resolve, reject);
+          };
+        });
+      }
+      return originalWriteTextFile(path, content);
+    };
+
+    const legacyWrite = store.saveStoryCodex({
+      projectId: 'item',
+      entries: [{ name: 'updated' }],
+    } as never);
+    await writeStartedPromise;
+
+    let claimantFinished = false;
+    const claimant = store
+      .saveProject({ ...project, id: 'project', title: 'Legitimate Project' } as never)
+      .then(() => {
+        claimantFinished = true;
+      });
+    await Promise.resolve();
+    expect(claimantFinished).toBe(false);
+
+    releaseWrite();
+    await legacyWrite;
+    await claimant;
+
+    expect(
+      decompressData<Record<string, unknown>>(
+        fake.text.get('/app/projects/project/codex/codex.snap') as string,
+      ),
+    ).toEqual({ projectId: 'item', entries: [{ name: 'updated' }] });
+    expect(fake.text.has('/app/projects/project/project.json')).toBe(true);
+  });
+
+  // QNBS-v3: deletion cannot report success after route ownership changes during auxiliary cleanup.
+  it('serializes legacy deletion before a legitimate fallback claimant can save', async () => {
+    const legacyProject = { ...project, id: '***' };
+    const legacyCodex = { projectId: '***', entries: [{ name: 'legacy' }] };
+    await fake.apis.mkdir('/app/projects/item', { recursive: true });
+    await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
+    await fake.apis.mkdir('/app/projects/project/codex', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/project/codex/codex.snap',
+      compressData(legacyCodex),
+    );
+    await store.loadProject('item');
+
+    const originalRemove = fake.apis.remove;
+    let releaseRemove!: () => void;
+    let removeStarted!: () => void;
+    const removeStartedPromise = new Promise<void>((resolve) => {
+      removeStarted = resolve;
+    });
+    fake.apis.remove = (path: string, options?: { recursive?: boolean }) => {
+      if (path === '/app/projects/project/codex/codex.snap') {
+        removeStarted();
+        return new Promise<void>((resolve, reject) => {
+          releaseRemove = () => {
+            originalRemove(path, options).then(resolve, reject);
+          };
+        });
+      }
+      return originalRemove(path, options);
+    };
+
+    const deletion = store.deleteProject('item');
+    await removeStartedPromise;
+
+    let claimantFinished = false;
+    const claimant = store
+      .saveProject({ ...project, id: 'project', title: 'Legitimate Project' } as never)
+      .then(() => {
+        claimantFinished = true;
+      });
+    await Promise.resolve();
+    expect(claimantFinished).toBe(false);
+
+    releaseRemove();
+    await deletion;
+    await claimant;
+
+    expect(fake.text.has('/app/projects/item/project.json')).toBe(false);
+    expect(fake.text.has('/app/projects/project/project.json')).toBe(true);
+    expect(fake.text.has('/app/projects/project/codex/codex.snap')).toBe(false);
   });
 
   // QNBS-v3: a normalized directory identity remains valid evidence while a legacy main file still carries the raw ID.
@@ -775,6 +885,26 @@ describe('FsProjectStore — projects', () => {
     expect(fake.text.has('/app/projects/item/project.json')).toBe(true);
   });
 
+  // QNBS-v3: an uncertain existence probe must preserve the project and expose a retryable typed deletion result.
+  it('classifies a project existence probe failure before attempting cleanup', async () => {
+    await store.saveProject(project as never);
+    const originalExists = fake.apis.exists;
+    const originalRemove = fake.apis.remove;
+    const removeSpy = vi.fn(originalRemove);
+    fake.apis.remove = removeSpy;
+    fake.apis.exists = (path: string) =>
+      path === '/app/projects/p1'
+        ? Promise.reject(new Error('EIO: project existence unavailable'))
+        : originalExists(path);
+
+    await expect(store.deleteProject('p1')).rejects.toMatchObject({
+      name: 'ProjectDeleteError',
+      reason: 'identity-inspection-failed',
+    });
+    expect(removeSpy).not.toHaveBeenCalled();
+    expect(fake.text.has('/app/projects/p1/project.json')).toBe(true);
+  });
+
   // QNBS-v3: snapshot recovery accepts an invalid legacy identity only when its existing fallback directory proves ownership.
   it('normalizes a legacy invalid project ID restored from a filesystem snapshot', async () => {
     const legacyProject = { ...project, id: '***' };
@@ -822,6 +952,23 @@ describe('FsProjectStore — projects', () => {
       )['title'],
     ).toBe('My Novel');
     expect(fake.text.has('/app/projects/p2/project.json')).toBe(false);
+  });
+
+  // QNBS-v3: the best-effort cold-boot marker cannot veto a validated current filesystem target.
+  it('restores a matching snapshot when the active-project marker is stale', async () => {
+    const secondProject = { ...project, id: 'p2', title: 'Second Novel' };
+    await store.saveProject(secondProject as never);
+    const current = await store.loadProject('p2');
+    const snapshotId = await store.saveSnapshot('p2-snapshot', {
+      ...secondProject,
+      title: 'Older second project content',
+    });
+    fake.text.set('/app/config/active-project-id.txt', 'p1');
+
+    const restored = await store.restoreSnapshot(snapshotId, current as never);
+
+    expect((restored as unknown as Record<string, unknown>)['id']).toBe('p2');
+    expect(restored.title).toBe('Older second project content');
   });
 
   it('restores older content when the snapshot owner matches the validated target', async () => {

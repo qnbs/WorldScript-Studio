@@ -310,6 +310,7 @@ export function countProjectWords(projectData: unknown): number {
 export class FsCore {
   protected appDataPath: string | null = null;
   private readonly legacyAuxiliaryPolicies = new Map<string, LegacyAuxiliaryPolicy>();
+  private legacyRoutingOperationTail: Promise<void> | null = null;
   protected lastAutoSnapshotTime = Date.now();
   protected readonly AUTO_SNAPSHOT_INTERVAL = 5 * 60 * 1000; // 5 minutes
   protected readonly MAX_AUTO_SNAPSHOTS = 20;
@@ -333,6 +334,26 @@ export class FsCore {
 
   protected async getApis(): Promise<TauriApis> {
     return loadTauriApis();
+  }
+
+  // QNBS-v3: serialize complete filesystem operations so legacy route ownership cannot change between awaited mutations.
+  protected async withLegacyRoutingOperation<T>(operation: () => Promise<T>): Promise<T> {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const previous = this.legacyRoutingOperationTail;
+    const current = (previous?.catch(() => undefined) ?? Promise.resolve()).then(() => gate);
+    this.legacyRoutingOperationTail = current;
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      if (this.legacyRoutingOperationTail === current) {
+        this.legacyRoutingOperationTail = null;
+      }
+      release();
+    }
   }
 
   protected registerLegacyAuxiliaryPolicy(

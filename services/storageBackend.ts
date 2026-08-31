@@ -46,6 +46,7 @@ export interface SaveProjectEnvelope {
  */
 export type SaveProjectInput = StoryProject | SaveProjectEnvelope;
 
+// QNBS-v3: restore carries pre-read project identity so filesystem ownership never comes from snapshot content.
 /**
  * Current project state captured before snapshot I/O; filesystem backends inspect only identity markers.
  */
