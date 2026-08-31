@@ -1,3 +1,5 @@
+import type { EntityAdapter, EntityState } from '@reduxjs/toolkit';
+import { charactersAdapter, worldsAdapter } from '../features/project/adapters';
 import type { ProjectData } from '../features/project/projectSlice';
 import type { PersistedRootState } from '../types';
 import { dbService } from './dbService';
@@ -41,26 +43,53 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function hasEntityStateShape(value: unknown): boolean {
+function normalizeEntityCollection<T>(
+  value: unknown,
+  adapter: EntityAdapter<T, string>,
+): EntityState<T, string> | undefined {
+  if (Array.isArray(value)) {
+    const ids = new Set<string>();
+    for (const entity of value) {
+      if (!isRecord(entity) || typeof entity['id'] !== 'string' || !entity['id'].trim())
+        return undefined;
+      if (ids.has(entity['id'])) return undefined;
+      ids.add(entity['id']);
+    }
+    const state = adapter.getInitialState();
+    return adapter.setAll(state, value as T[]);
+  }
+
   if (!isRecord(value) || !Array.isArray(value['ids']) || !isRecord(value['entities']))
-    return false;
-  return value['ids'].every((id: unknown) => typeof id === 'string');
+    return undefined;
+  const ids = value['ids'];
+  const entities = value['entities'];
+  const seenIds = new Set<string>();
+  for (const id of ids) {
+    if (typeof id !== 'string' || !id.trim() || seenIds.has(id)) return undefined;
+    const entity = entities[id];
+    if (!isRecord(entity) || entity['id'] !== id) return undefined;
+    seenIds.add(id);
+  }
+  return value as unknown as EntityState<T, string>;
 }
 
-// QNBS-v3: structural project evidence prevents malformed envelopes from suppressing fresh seeding while preserving partial metadata repair.
+// QNBS-v3: canonical desktop collections prevent valid filesystem projects from being discarded while malformed envelopes remain non-authoritative.
 export function getPersistedProjectPayload(
   project: PersistedRootState['project'] | undefined,
 ): ProjectData | undefined {
   const payload = project?.present?.data ?? project?.data;
   if (!isRecord(payload)) return undefined;
-  if (
-    !hasEntityStateShape(payload.characters) ||
-    !hasEntityStateShape(payload.worlds) ||
-    !Array.isArray(payload.outline) ||
-    !Array.isArray(payload.manuscript)
-  )
-    return undefined;
-  return payload as ProjectData;
+  const characters = normalizeEntityCollection(payload['characters'], charactersAdapter);
+  const worlds = normalizeEntityCollection(payload['worlds'], worldsAdapter);
+  if (!characters || !worlds || !Array.isArray(payload['manuscript'])) return undefined;
+  const outline = payload['outline'];
+  if (outline !== undefined && !Array.isArray(outline)) return undefined;
+  return {
+    ...payload,
+    characters,
+    worlds,
+    outline: outline ?? [],
+  } as unknown as ProjectData;
 }
 
 // QNBS-v3: seed authority follows hydrated project presence, so settings-only state can still initialize the synthetic project without overwriting real user intent.
