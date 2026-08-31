@@ -19,24 +19,34 @@ export class FsCodexStore extends FsSettingsStore {
   // Story Codex — projects/{projectId}/codex/codex.snap
 
   async saveStoryCodex(codex: StoryCodex): Promise<void> {
-    const apis = await this.getApis();
-    const appDataPath = await this.ensureAppDataPath();
-    const safeId = sanitizePathSegment(codex.projectId, 'project');
-    const codexDir = await apis.join(appDataPath, 'projects', safeId, 'codex');
-    if (!(await apis.exists(codexDir))) await apis.mkdir(codexDir, { recursive: true });
-    const codexFile = await apis.join(codexDir, 'codex.snap');
-    await writeTextFileAtomic(apis, codexFile, compressData(codex));
+    await this.withLegacyRoutingOperation(async () => {
+      const apis = await this.getApis();
+      const appDataPath = await this.ensureAppDataPath();
+      const safeId = sanitizePathSegment(
+        this.resolveAuxiliaryProjectId(codex.projectId, 'codex'),
+        'project',
+      );
+      const codexDir = await apis.join(appDataPath, 'projects', safeId, 'codex');
+      if (!(await apis.exists(codexDir))) await apis.mkdir(codexDir, { recursive: true });
+      const codexFile = await apis.join(codexDir, 'codex.snap');
+      await writeTextFileAtomic(apis, codexFile, compressData(codex));
+    });
   }
 
   async getStoryCodex(projectId: string): Promise<StoryCodex | null> {
     try {
-      const apis = await this.getApis();
-      const appDataPath = await this.ensureAppDataPath();
-      const safeId = sanitizePathSegment(projectId, 'project');
-      const codexFile = await apis.join(appDataPath, 'projects', safeId, 'codex', 'codex.snap');
-      if (!(await apis.exists(codexFile))) return null;
-      const content = await retryFs(() => apis.readTextFile(codexFile));
-      return decompressData<StoryCodex>(content);
+      return await this.withLegacyRoutingOperation(async () => {
+        const apis = await this.getApis();
+        const appDataPath = await this.ensureAppDataPath();
+        const safeId = sanitizePathSegment(
+          this.resolveAuxiliaryProjectId(projectId, 'codex'),
+          'project',
+        );
+        const codexFile = await apis.join(appDataPath, 'projects', safeId, 'codex', 'codex.snap');
+        if (!(await apis.exists(codexFile))) return null;
+        const content = await retryFs(() => apis.readTextFile(codexFile));
+        return decompressData<StoryCodex>(content);
+      });
     } catch (error) {
       logger.error('Failed to load story codex:', error);
       return null;
@@ -45,37 +55,55 @@ export class FsCodexStore extends FsSettingsStore {
 
   async deleteStoryCodex(projectId: string): Promise<void> {
     try {
-      const apis = await this.getApis();
-      const appDataPath = await this.ensureAppDataPath();
-      const safeId = sanitizePathSegment(projectId, 'project');
-      const codexFile = await apis.join(appDataPath, 'projects', safeId, 'codex', 'codex.snap');
-      if (await apis.exists(codexFile)) await retryFs(() => apis.remove(codexFile));
+      await this.withLegacyRoutingOperation(() => this.deleteStoryCodexStrict(projectId));
     } catch (error) {
       logger.error('Failed to delete story codex:', error);
     }
   }
 
+  protected async deleteStoryCodexStrict(projectId: string): Promise<void> {
+    const apis = await this.getApis();
+    const appDataPath = await this.ensureAppDataPath();
+    const safeId = sanitizePathSegment(
+      this.resolveAuxiliaryProjectId(projectId, 'codex'),
+      'project',
+    );
+    const codexFile = await apis.join(appDataPath, 'projects', safeId, 'codex', 'codex.snap');
+    if (await apis.exists(codexFile)) await retryFs(() => apis.remove(codexFile));
+  }
+
   // RAG Vectors — projects/{projectId}/codex/vectors.snap
 
   async saveRagVectors(projectId: string, vectors: unknown[]): Promise<void> {
-    const apis = await this.getApis();
-    const appDataPath = await this.ensureAppDataPath();
-    const safeId = sanitizePathSegment(projectId, 'project');
-    const codexDir = await apis.join(appDataPath, 'projects', safeId, 'codex');
-    if (!(await apis.exists(codexDir))) await apis.mkdir(codexDir, { recursive: true });
-    const vectorsFile = await apis.join(codexDir, 'vectors.snap');
-    await writeTextFileAtomic(apis, vectorsFile, compressData(vectors));
+    await this.withLegacyRoutingOperation(async () => {
+      const apis = await this.getApis();
+      const appDataPath = await this.ensureAppDataPath();
+      // QNBS-v3: vectors.snap has no embedded project provenance, so Codex ownership cannot grant it a legacy fallback route.
+      const safeId = sanitizePathSegment(projectId, 'project');
+      const codexDir = await apis.join(appDataPath, 'projects', safeId, 'codex');
+      if (!(await apis.exists(codexDir))) await apis.mkdir(codexDir, { recursive: true });
+      const vectorsFile = await apis.join(codexDir, 'vectors.snap');
+      await writeTextFileAtomic(apis, vectorsFile, compressData(vectors));
+    });
   }
 
   async getRagVectors(projectId: string): Promise<unknown[]> {
     try {
-      const apis = await this.getApis();
-      const appDataPath = await this.ensureAppDataPath();
-      const safeId = sanitizePathSegment(projectId, 'project');
-      const vectorsFile = await apis.join(appDataPath, 'projects', safeId, 'codex', 'vectors.snap');
-      if (!(await apis.exists(vectorsFile))) return [];
-      const content = await retryFs(() => apis.readTextFile(vectorsFile));
-      return decompressData<unknown[]>(content);
+      return await this.withLegacyRoutingOperation(async () => {
+        const apis = await this.getApis();
+        const appDataPath = await this.ensureAppDataPath();
+        const safeId = sanitizePathSegment(projectId, 'project');
+        const vectorsFile = await apis.join(
+          appDataPath,
+          'projects',
+          safeId,
+          'codex',
+          'vectors.snap',
+        );
+        if (!(await apis.exists(vectorsFile))) return [];
+        const content = await retryFs(() => apis.readTextFile(vectorsFile));
+        return decompressData<unknown[]>(content);
+      });
     } catch (error) {
       logger.error('Failed to load RAG vectors:', error);
       return [];
@@ -84,11 +112,19 @@ export class FsCodexStore extends FsSettingsStore {
 
   async deleteRagVectors(projectId: string): Promise<void> {
     try {
-      const apis = await this.getApis();
-      const appDataPath = await this.ensureAppDataPath();
-      const safeId = sanitizePathSegment(projectId, 'project');
-      const vectorsFile = await apis.join(appDataPath, 'projects', safeId, 'codex', 'vectors.snap');
-      if (await apis.exists(vectorsFile)) await retryFs(() => apis.remove(vectorsFile));
+      await this.withLegacyRoutingOperation(async () => {
+        const apis = await this.getApis();
+        const appDataPath = await this.ensureAppDataPath();
+        const safeId = sanitizePathSegment(projectId, 'project');
+        const vectorsFile = await apis.join(
+          appDataPath,
+          'projects',
+          safeId,
+          'codex',
+          'vectors.snap',
+        );
+        if (await apis.exists(vectorsFile)) await retryFs(() => apis.remove(vectorsFile));
+      });
     } catch (error) {
       logger.error('Failed to delete RAG vectors:', error);
     }

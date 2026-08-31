@@ -13,6 +13,13 @@ export interface BinderAssetPayload {
   meta: BinderAssetMeta;
 }
 
+// QNBS-v3: shared result keeps the affected identity and verified quarantine path explicit across backends.
+/** Result of moving a corrupt desktop project out of the active project namespace. */
+export interface ProjectQuarantineResult {
+  projectId: string;
+  path: string;
+}
+
 /** IndexedDB / filesystem key for binder blobs — stable delimiter avoids UUID clashes. */
 export function makeBinderAssetStorageKey(projectId: string, assetId: string): string {
   const safeProject = projectId.replace(/[\s:]/g, '_').slice(0, 200);
@@ -38,6 +45,12 @@ export interface SaveProjectEnvelope {
  * Payload from auto-save / Redux (`{ data }` envelope) or a flat exported `StoryProject`.
  */
 export type SaveProjectInput = StoryProject | SaveProjectEnvelope;
+
+// QNBS-v3: restore carries pre-read project identity so filesystem ownership never comes from snapshot content.
+/**
+ * Current project state captured before snapshot I/O; filesystem backends inspect only identity markers.
+ */
+export type SnapshotRestoreTarget = ProjectData | StoryProject;
 
 /** Auto-save from the current `ProjectData` (listener middleware) — returns a properly typed envelope. */
 export function saveEnvelopeFromProjectData(data: ProjectData): SaveProjectEnvelope {
@@ -66,6 +79,8 @@ export interface StorageBackend {
   deleteProject(projectId: string): Promise<void>;
   /** QNBS-v3 (#332): optional — only the multi-project Tauri filesystem backend implements this; IndexedDB's single-project contract has no "which one" ambiguity to resolve. */
   getActiveProjectId?(): Promise<string | null>;
+  // QNBS-v3: optional recovery keeps the filesystem-only quarantine contract out of IndexedDB.
+  quarantineProject?(projectId: string): Promise<ProjectQuarantineResult>;
 
   saveImage(id: string, base64Data: string): Promise<void>;
   getImage(id: string): Promise<string | null>;
@@ -84,6 +99,8 @@ export interface StorageBackend {
   /** Snapshot IDs: numeric (Date.now / IDB auto-increment). */
   saveSnapshot(snapshotLabel: string, data: unknown): Promise<number>;
   getSnapshotData(snapshotId: number): Promise<unknown>;
+  // QNBS-v3: filesystem restore validates this pre-read target; other backends retain their existing snapshot semantics.
+  restoreSnapshot?(snapshotId: number, currentProject: SnapshotRestoreTarget): Promise<unknown>;
   listSnapshots(): Promise<ProjectSnapshot[]>;
   deleteSnapshot(snapshotId: number): Promise<void>;
 
