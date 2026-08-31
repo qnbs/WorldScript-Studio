@@ -695,5 +695,17 @@
   "voice.stopDictation": "ディクテーションを停止する",
   "voice.stopListening": "聞くのをやめる",
   "worlds.emptyState.description": "あなたの物語が生きる場所、ルール、歴史を構築します。場所から始めます。",
-  "worlds.emptyState.title": "世界が待っています"
+  "worlds.emptyState.title": "世界が待っています",
+  "error.startup.description": "The local project or database could not be opened. Reload and try again.",
+  "error.startup.storageUnavailable": "Local storage could not be opened. Reload and try again.",
+  "error.startup.projectUnavailable": "A local project could not be opened. Reload and try again.",
+  "error.startup.reload": "Reload",
+  "error.startup.recover": "Quarantine project and reload",
+  "error.startup.recovering": "Preserving project…",
+  "error.startup.reset": "Reset database and reload",
+  "error.startup.quarantineNotice": "The complete project folder will be moved to quarantine. No project data will be deleted.",
+  "error.startup.recoveryFailed": "Project preservation failed. The original project was not deleted. Reload and try again.",
+  "error.startup.recoveryUnknown": "Project preservation could not be confirmed. Reload and try again.",
+  "error.startup.recoveryAlreadyPreserved": "The project appears to have been preserved by another recovery attempt. Reload to continue.",
+  "error.startup.resetWarning": "Resetting the database will delete all local projects and settings."
 }
