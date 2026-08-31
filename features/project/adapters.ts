@@ -6,6 +6,7 @@ import type { Character, World } from '../../types';
 const preserveEntityOrder = () => 0;
 
 // QNBS-v3: imported string IDs must survive EntityState construction even when they collide with Object.prototype.
+/** Builds a JSON-safe EntityState without treating prototype names as inherited properties. */
 export function createPrototypeSafeEntityState<T extends { id: string }>(
   items: readonly T[],
 ): EntityState<T, string> | undefined {
