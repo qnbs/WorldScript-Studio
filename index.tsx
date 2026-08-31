@@ -7,7 +7,7 @@ import { type AppDispatch, appStoreRef, type RootState, setupStore } from './app
 import { IdbUnlockModal } from './components/settings/IdbUnlockModal';
 import { I18nProvider } from './contexts/I18nContext';
 import { versionControlActions } from './features/versionControl/versionControlSlice';
-import { loadPersistedRootState } from './services/appBootstrap';
+import { loadPersistedRootState, shouldAllowInitialMetadataSeed } from './services/appBootstrap';
 import { initializeStorage } from './services/dbInitialization';
 import { logger } from './services/logger';
 import {
@@ -148,6 +148,9 @@ async function bootApp(): Promise<void> {
     }
     // --------------------------------
 
+    // QNBS-v3: derive metadata seeding from the normalized persisted-project boundary, not the broader first-run flag.
+    const allowInitialMetadataSeed = shouldAllowInitialMetadataSeed(preloadedState);
+
     const store = setupStore(preloadedState);
     appStoreRef.current = store as unknown as { getState(): RootState; dispatch: AppDispatch };
 
@@ -184,7 +187,7 @@ async function bootApp(): Promise<void> {
     root.render(
       <React.StrictMode>
         <Provider store={store}>
-          <App isNewUser={isNewUser} />
+          <App isNewUser={isNewUser} allowInitialMetadataSeed={allowInitialMetadataSeed} />
         </Provider>
       </React.StrictMode>,
     );

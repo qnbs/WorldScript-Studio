@@ -13,6 +13,7 @@ import { Button } from './ui/Button';
 import { CustomIcon } from './ui/Icon';
 import { LanguageSelector } from './ui/LanguageSelector';
 
+// QNBS-v3: imported/demo portal exits revoke boot seed authority so external content keeps intentional blank metadata.
 interface WelcomePortalProps {
   onExit: (view?: View, options?: PortalExitOptions) => void;
 }
@@ -119,6 +120,7 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
             title: t('settings.data.importSuccess'),
           }),
         );
+        // QNBS-v3: imported project content must revoke fresh-project metadata seeding before bootstrap runs.
         onExit('manuscript', { allowInitialMetadataSeed: false });
       } else {
         dispatch(
@@ -174,6 +176,7 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
           title: t('settings.data.importSuccess'),
         }),
       );
+      // QNBS-v3: demo content is imported content, so it must not be overwritten by fresh-project seeding.
       onExit('manuscript', { allowInitialMetadataSeed: false });
     } else {
       dispatch(

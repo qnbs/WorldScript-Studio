@@ -9,6 +9,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { PersistedRootState } from '../../../types';
 
 const h = vi.hoisted(() => ({
   isTauri: { value: false },
@@ -36,7 +37,10 @@ vi.mock('../../../services/storageService', () => ({
   },
 }));
 
-import { loadPersistedRootState } from '../../../services/appBootstrap';
+import {
+  loadPersistedRootState,
+  shouldAllowInitialMetadataSeed,
+} from '../../../services/appBootstrap';
 
 describe('loadPersistedRootState', () => {
   beforeEach(() => {
@@ -120,5 +124,24 @@ describe('loadPersistedRootState', () => {
     await loadPersistedRootState();
     expect(h.loadProject).toHaveBeenCalledTimes(1);
     expect(h.loadProject).toHaveBeenCalledWith('proj-1');
+  });
+});
+
+describe('shouldAllowInitialMetadataSeed', () => {
+  // QNBS-v3: verifies metadata seeding follows hydrated project presence instead of any persisted root state.
+  it('allows seeding when no persisted root state exists', () => {
+    expect(shouldAllowInitialMetadataSeed(undefined)).toBe(true);
+  });
+
+  it('allows seeding when settings were restored without a project', () => {
+    const settingsOnlyState = { settings: {} } as unknown as PersistedRootState;
+    expect(shouldAllowInitialMetadataSeed(settingsOnlyState)).toBe(true);
+  });
+
+  it('does not allow seeding after a persisted project was hydrated', () => {
+    const hydratedProjectState = {
+      project: { present: { data: {} } },
+    } as unknown as PersistedRootState;
+    expect(shouldAllowInitialMetadataSeed(hydratedProjectState)).toBe(false);
   });
 });

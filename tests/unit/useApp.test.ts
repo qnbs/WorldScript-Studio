@@ -126,6 +126,14 @@ describe('useApp', () => {
     expect(result.current.allowInitialMetadataSeed).toBe(false);
   });
 
+  // QNBS-v3: proves boot-derived seed authority can differ from first-run portal state.
+  it('uses explicit boot seed authority independently from isNewUser', () => {
+    const { result } = renderHook(() =>
+      useApp({ isNewUser: false, allowInitialMetadataSeed: true }),
+    );
+    expect(result.current.allowInitialMetadataSeed).toBe(true);
+  });
+
   it('activates portal for new users', () => {
     const { result } = renderHook(() => useApp({ isNewUser: true }));
     expect(result.current.isPortalActive).toBe(true);

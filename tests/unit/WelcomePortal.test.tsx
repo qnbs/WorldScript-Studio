@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { WelcomePortal } from '../../components/WelcomePortal';
 
@@ -115,24 +116,28 @@ describe('WelcomePortal', () => {
     expect(screen.getByText('portal.welcome.privacyBadge')).toBeTruthy();
   });
 
-  it('navigates to new project view on newProject button click', () => {
+  it('navigates to new project view on newProject button click', async () => {
+    const user = userEvent.setup();
     render(<WelcomePortal onExit={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'portal.welcome.newProject' }));
+    await user.click(screen.getByRole('button', { name: 'portal.welcome.newProject' }));
     expect(screen.getByText('portal.new.title')).toBeTruthy();
   });
 
-  it('navigates to open project view on openProject button click', () => {
+  it('navigates to open project view on openProject button click', async () => {
+    const user = userEvent.setup();
     render(<WelcomePortal onExit={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'portal.welcome.openProject' }));
+    await user.click(screen.getByRole('button', { name: 'portal.welcome.openProject' }));
     expect(screen.getByText('portal.open.title')).toBeTruthy();
   });
 
+  // QNBS-v3: locks the portal transition that revokes fresh-metadata seed authority after import.
   it('marks a welcome-portal import as ineligible for fresh metadata seeding', async () => {
     mockDispatch.mockResolvedValue({ type: 'project/importProject/fulfilled' });
     const onExit = vi.fn();
+    const user = userEvent.setup();
     render(<WelcomePortal onExit={onExit} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'portal.welcome.tryDemo' }));
+    await user.click(screen.getByRole('button', { name: 'portal.welcome.tryDemo' }));
 
     await waitFor(() =>
       expect(onExit).toHaveBeenCalledWith('manuscript', { allowInitialMetadataSeed: false }),

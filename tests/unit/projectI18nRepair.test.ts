@@ -25,6 +25,7 @@ describe('repairProjectI18nFields', () => {
     expect(repair?.manuscript?.[0]?.title).toBe('Chapter 1');
   });
 
+  // QNBS-v3: separates user-intent preservation from explicit fresh-project metadata seeding.
   it('preserves intentionally empty title and logline while still seeding an empty manuscript', () => {
     const repair = repairProjectI18nFields({ title: '', logline: '', manuscript: [] }, t);
     expect(repair?.title).toBeUndefined();
