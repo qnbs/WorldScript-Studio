@@ -37,9 +37,19 @@ export async function loadPersistedRootState(): Promise<PersistedRootState | und
   return result;
 }
 
+// QNBS-v3: only an actual persisted payload grants project authority; malformed envelopes must still seed the synthetic project.
+export function getPersistedProjectPayload(
+  project: PersistedRootState['project'] | undefined,
+): ProjectData | undefined {
+  const payload = project?.present?.data ?? project?.data;
+  return typeof payload === 'object' && payload !== null && !Array.isArray(payload)
+    ? payload
+    : undefined;
+}
+
 // QNBS-v3: seed authority follows hydrated project presence, so settings-only state can still initialize the synthetic project without overwriting real user intent.
 export function shouldAllowInitialMetadataSeed(
   preloadedState: PersistedRootState | undefined,
 ): boolean {
-  return preloadedState?.project === undefined;
+  return getPersistedProjectPayload(preloadedState?.project) === undefined;
 }

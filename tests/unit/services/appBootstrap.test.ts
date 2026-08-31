@@ -38,6 +38,7 @@ vi.mock('../../../services/storageService', () => ({
 }));
 
 import {
+  getPersistedProjectPayload,
   loadPersistedRootState,
   shouldAllowInitialMetadataSeed,
 } from '../../../services/appBootstrap';
@@ -136,6 +137,15 @@ describe('shouldAllowInitialMetadataSeed', () => {
   it('allows seeding when settings were restored without a project', () => {
     const settingsOnlyState = { settings: {} } as unknown as PersistedRootState;
     expect(shouldAllowInitialMetadataSeed(settingsOnlyState)).toBe(true);
+  });
+
+  it('allows seeding when a persisted project envelope has no actual payload', () => {
+    const malformedState = {
+      project: { present: {} },
+      settings: {},
+    } as unknown as PersistedRootState;
+    expect(getPersistedProjectPayload(malformedState.project)).toBeUndefined();
+    expect(shouldAllowInitialMetadataSeed(malformedState)).toBe(true);
   });
 
   it('does not allow seeding after a persisted project was hydrated', () => {

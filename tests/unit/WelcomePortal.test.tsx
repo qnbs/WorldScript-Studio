@@ -143,4 +143,20 @@ describe('WelcomePortal', () => {
       expect(onExit).toHaveBeenCalledWith('manuscript', { allowInitialMetadataSeed: false }),
     );
   });
+
+  it('revokes fresh metadata seeding after importing a project file', async () => {
+    mockDispatch.mockResolvedValue({ type: 'project/importProject/fulfilled' });
+    const onExit = vi.fn();
+    const user = userEvent.setup();
+    render(<WelcomePortal onExit={onExit} />);
+
+    await user.click(screen.getByRole('button', { name: 'portal.welcome.openProject' }));
+    const input = document.querySelector('input[type="file"]');
+    expect(input).not.toBeNull();
+    await user.upload(input as HTMLInputElement, new File(['{}'], 'project.json'));
+
+    await waitFor(() =>
+      expect(onExit).toHaveBeenCalledWith('manuscript', { allowInitialMetadataSeed: false }),
+    );
+  });
 });

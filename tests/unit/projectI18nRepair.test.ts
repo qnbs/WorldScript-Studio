@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { repairProjectI18nFields } from '../../services/projectI18nRepair';
+import { type ProjectMetaSlice, repairProjectI18nFields } from '../../services/projectI18nRepair';
 
 describe('repairProjectI18nFields', () => {
   const t = vi.fn((key: string) => {
@@ -52,6 +52,28 @@ describe('repairProjectI18nFields', () => {
       t,
     );
     expect(repair).toBeNull();
+  });
+
+  it('repairs missing title without replacing the persisted project content', () => {
+    const repair = repairProjectI18nFields(
+      {
+        logline: 'Existing logline',
+        manuscript: [{ id: '1', title: 'Chapter 1', content: 'Existing work' }],
+      } as unknown as ProjectMetaSlice,
+      t,
+    );
+    expect(repair).toEqual({ title: 'My Untitled Story' });
+  });
+
+  it('repairs missing logline without replacing the persisted project content', () => {
+    const repair = repairProjectI18nFields(
+      {
+        title: 'Existing title',
+        manuscript: [{ id: '1', title: 'Chapter 1', content: 'Existing work' }],
+      } as unknown as ProjectMetaSlice,
+      t,
+    );
+    expect(repair).toEqual({ logline: 'A journey...' });
   });
 
   it('returns null when project metadata is already human-readable', () => {
