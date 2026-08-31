@@ -97,6 +97,7 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
   // QNBS-v3: Defer highlight computation so keystroke → textarea updates stay synchronous even for long scenes.
   const deferredContent = useDeferredValue(activeSection?.content ?? '');
   const isHighlightPending = deferredContent !== (activeSection?.content ?? '');
+  // QNBS-v3 (#341): retain a visible pending cue without dropping light-sepia mirror contrast below 4.5:1.
 
   // QNBS-v3 (#341): shared with components/ui/Textarea.tsx and ContextPanel.tsx — the raw enum
   // value (e.g. 'custom') is not a valid font-family, and the highlight overlay must render the
@@ -398,7 +399,7 @@ export const ManuscriptEditor: FC<{ isFocusMode: boolean }> = React.memo(({ isFo
           ref={highlightRef}
           data-testid="manuscript-editor-mirror"
           dir={dir}
-          className={`absolute inset-0 p-4 sm:p-6 md:p-12 pt-2 leading-relaxed pointer-events-none overflow-auto max-w-3xl mx-auto transition-all duration-500 ${isFocusMode ? 'max-w-4xl pt-12' : ''} ${isHighlightPending ? 'opacity-70' : 'opacity-100'}`}
+          className={`absolute inset-0 p-4 sm:p-6 md:p-12 pt-2 leading-relaxed pointer-events-none overflow-auto max-w-3xl mx-auto transition-all duration-500 ${isFocusMode ? 'max-w-4xl pt-12' : ''} ${isHighlightPending ? 'opacity-75' : 'opacity-100'}`}
           style={editorStyles}
           aria-hidden="true"
         >
