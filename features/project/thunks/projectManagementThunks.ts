@@ -13,6 +13,7 @@ type ImportedEntityCollection<T extends { id: string }> =
   | { ids: readonly string[]; entities: Record<string, T> };
 
 // QNBS-v3: validate normalized import correspondence before image I/O so malformed collections cannot create partial imports.
+/** Extracts imported entities while requiring exact ids-to-own-entities correspondence. */
 function extractImportedEntities<T extends { id: string }>(
   collection: ImportedEntityCollection<T> | undefined,
 ): T[] | undefined {
