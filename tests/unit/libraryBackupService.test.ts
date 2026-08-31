@@ -97,7 +97,11 @@ describe('libraryBackupService — partial corruption (DA-01)', () => {
     vi.mocked(storageService.listProjects).mockResolvedValue(['good', 'corrupt']);
     vi.mocked(storageService.loadProject).mockImplementation(async (projectId: string) => {
       if (projectId === 'corrupt') {
-        throw new ProjectLoadError('corrupt', 'The saved project file for "corrupt" is corrupted.');
+        throw new ProjectLoadError(
+          'corrupt',
+          'The saved project file for "corrupt" is corrupted.',
+          'corrupt',
+        );
       }
       return minimalProject() as unknown as StoryProject;
     });

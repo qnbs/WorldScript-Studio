@@ -52,6 +52,7 @@ describe('FsProjectStore.loadProject — DA-01 fail-closed behavior', () => {
     await expect(store.loadProject('missing-id')).resolves.toBeNull();
   });
 
+  // QNBS-v3: preserve the affected project identity when filesystem reads fail during recovery.
   it('throws ProjectLoadError("io-error") on a read failure instead of returning null', async () => {
     const { FsProjectStore, ProjectLoadError } = await import(
       '../../../../services/fs/projectFsStore'
@@ -63,9 +64,10 @@ describe('FsProjectStore.loadProject — DA-01 fail-closed behavior', () => {
     const store = new FsProjectStore();
     const promise = store.loadProject('locked-id');
     await expect(promise).rejects.toThrow(ProjectLoadError);
-    await expect(promise).rejects.toMatchObject({ reason: 'io-error' });
+    await expect(promise).rejects.toMatchObject({ reason: 'io-error', projectId: 'locked-id' });
   });
 
+  // QNBS-v3: keep corruption classification attached to the project so quarantine targets only it.
   it('throws ProjectLoadError("corrupt") on a corrupt/truncated compressed payload', async () => {
     const { FsProjectStore, ProjectLoadError } = await import(
       '../../../../services/fs/projectFsStore'
@@ -75,7 +77,7 @@ describe('FsProjectStore.loadProject — DA-01 fail-closed behavior', () => {
     const store = new FsProjectStore();
     const promise = store.loadProject('corrupt-id');
     await expect(promise).rejects.toThrow(ProjectLoadError);
-    await expect(promise).rejects.toMatchObject({ reason: 'corrupt' });
+    await expect(promise).rejects.toMatchObject({ reason: 'corrupt', projectId: 'corrupt-id' });
   });
 
   it('throws ProjectLoadError("corrupt") on valid JSON that is not project-shaped at all', async () => {
