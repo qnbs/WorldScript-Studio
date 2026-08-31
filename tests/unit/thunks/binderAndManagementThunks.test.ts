@@ -18,6 +18,7 @@ vi.mock('../../../services/projectImportSchema', () => ({
 }));
 
 import featureFlagsReducer from '../../../features/featureFlags/featureFlagsSlice';
+import { charactersAdapter, worldsAdapter } from '../../../features/project/adapters';
 import projectReducer, { projectActions } from '../../../features/project/projectSlice';
 import {
   importBinderFileThunk,
@@ -353,6 +354,146 @@ describe('importProjectThunk', () => {
     const action = await store.dispatch(importProjectThunk(file));
 
     expect(action.type).toBe('project/importProject/fulfilled');
+  });
+
+  // QNBS-v3: imported prototype-named IDs must remain own properties through canonicalization and persistence.
+  it('preserves prototype-named imported character and world IDs', async () => {
+    const projectWithPrototypeIds = {
+      ...minimalProject,
+      characters: [
+        { id: '__proto__', name: 'Prototype Character' },
+        { id: 'constructor', name: 'Constructor Character' },
+        { id: 'toString', name: 'ToString Character' },
+      ],
+      worlds: [
+        { id: '__proto__', name: 'Prototype World' },
+        { id: 'constructor', name: 'Constructor World' },
+        { id: 'toString', name: 'ToString World' },
+      ],
+    };
+    vi.mocked(parseImportedProjectJson).mockReturnValue(projectWithPrototypeIds as never);
+
+    const store = makeStore();
+    const file = new File([JSON.stringify(projectWithPrototypeIds)], 'novel.json', {
+      type: 'application/json',
+    });
+    const action = await store.dispatch(importProjectThunk(file));
+    const payload = (
+      action as {
+        payload: {
+          characters: { ids: string[]; entities: Record<string, { id: string; name: string }> };
+          worlds: { ids: string[]; entities: Record<string, { id: string; name: string }> };
+        };
+      }
+    ).payload;
+
+    for (const id of ['__proto__', 'constructor', 'toString']) {
+      expect(payload.characters.ids).toContain(id);
+      expect(Object.hasOwn(payload.characters.entities, id)).toBe(true);
+      expect(Object.hasOwn(payload.worlds.entities, id)).toBe(true);
+    }
+    expect(JSON.stringify(payload.characters.entities)).toContain('Prototype Character');
+    expect(JSON.stringify(payload.worlds.entities)).toContain('Prototype World');
+
+    const state = store.getState().project.present.data;
+    expect(Object.getPrototypeOf(state.characters.entities)).toBeNull();
+    expect(Object.getPrototypeOf(state.worlds.entities)).toBeNull();
+    expect(charactersAdapter.getSelectors().selectById(state.characters, '__proto__')?.name).toBe(
+      'Prototype Character',
+    );
+    expect(worldsAdapter.getSelectors().selectById(state.worlds, 'constructor')?.name).toBe(
+      'Constructor World',
+    );
+
+    store.dispatch(
+      projectActions.updateCharacter({ id: '__proto__', changes: { name: 'Updated Character' } }),
+    );
+    const updatedCharacter = Reflect.get(
+      store.getState().project.present.data.characters.entities,
+      '__proto__',
+    ) as { name?: string };
+    expect(updatedCharacter.name).toBe('Updated Character');
+  });
+
+  // QNBS-v3: normalized imports must preserve own-ID correspondence instead of filtering malformed entries silently.
+  it('preserves prototype-named IDs in normalized imported collections', async () => {
+    const projectWithNormalizedPrototypeIds = {
+      ...minimalProject,
+      characters: {
+        ids: ['__proto__', 'constructor'],
+        entities: Object.fromEntries([
+          ['__proto__', { id: '__proto__', name: 'Prototype Character' }],
+          ['constructor', { id: 'constructor', name: 'Constructor Character' }],
+        ]),
+      },
+      worlds: {
+        ids: ['toString'],
+        entities: Object.fromEntries([['toString', { id: 'toString', name: 'ToString World' }]]),
+      },
+    };
+    const actualSchema = await vi.importActual<
+      typeof import('../../../services/projectImportSchema')
+    >('../../../services/projectImportSchema');
+    vi.mocked(parseImportedProjectJson).mockImplementation(actualSchema.parseImportedProjectJson);
+
+    const store = makeStore();
+    const file = new File([JSON.stringify(projectWithNormalizedPrototypeIds)], 'novel.json', {
+      type: 'application/json',
+    });
+    const action = await store.dispatch(importProjectThunk(file));
+
+    expect(action.type).toBe('project/importProject/fulfilled');
+    expect(store.getState().project.present.data.characters.ids).toEqual([
+      '__proto__',
+      'constructor',
+    ]);
+    expect(store.getState().project.present.data.worlds.ids).toEqual(['toString']);
+  });
+
+  // QNBS-v3: malformed normalized collections must fail before import side effects can create partial state.
+  it.each([
+    {
+      name: 'missing entity',
+      characters: { ids: ['missing'], entities: {} },
+    },
+    {
+      name: 'orphan entity',
+      characters: { ids: ['c1'], entities: { c1: { id: 'c1' }, orphan: { id: 'orphan' } } },
+    },
+  ])('rejects normalized collections with $name', async ({ characters }) => {
+    const malformedProject = { ...minimalProject, characters };
+    vi.mocked(parseImportedProjectJson).mockReturnValue(malformedProject as never);
+
+    const store = makeStore();
+    const file = new File([JSON.stringify(malformedProject)], 'novel.json', {
+      type: 'application/json',
+    });
+    const action = await store.dispatch(importProjectThunk(file));
+
+    expect(action.type).toBe('project/importProject/rejected');
+    expect(store.getState().project.present.data.title).toBe('');
+    expect(storageService.saveImage).not.toHaveBeenCalled();
+  });
+
+  // QNBS-v3: duplicate imported IDs are rejected instead of silently discarding project entities.
+  it('rejects duplicate imported entity IDs without creating a partial project', async () => {
+    const projectWithDuplicateIds = {
+      ...minimalProject,
+      characters: [
+        { id: 'duplicate', name: 'First Character' },
+        { id: 'duplicate', name: 'Second Character' },
+      ],
+    };
+    vi.mocked(parseImportedProjectJson).mockReturnValue(projectWithDuplicateIds as never);
+
+    const store = makeStore();
+    const file = new File([JSON.stringify(projectWithDuplicateIds)], 'novel.json', {
+      type: 'application/json',
+    });
+    const action = await store.dispatch(importProjectThunk(file));
+
+    expect(action.type).toBe('project/importProject/rejected');
+    expect(store.getState().project.present.data.title).toBe('');
   });
 });
 

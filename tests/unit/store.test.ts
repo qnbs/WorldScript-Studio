@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { normalizePersistedProjectForStore } from '../../services/appBootstrap';
+import type { PersistedRootState } from '../../types';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -73,6 +75,49 @@ describe('setupStore', () => {
     expect(Array.isArray(state['project']?.past)).toBe(true);
     expect(Array.isArray(state['project']?.future)).toBe(true);
     expect(state['project']?.present).toBeTruthy();
+  });
+
+  // QNBS-v3: the store must receive the canonical active payload so desktop arrays cannot bypass EntityState selectors after undo hydration.
+  it('hydrates normalized active data inside an existing undo envelope', async () => {
+    const { setupStore } = await import('../../app/store');
+    const project = {
+      title: '',
+      logline: '',
+      characters: [{ id: '__proto__', name: 'Ada' }],
+      worlds: [{ id: 'constructor', name: 'Arcadia' }],
+      manuscript: [],
+    };
+    const normalizedProject = normalizePersistedProjectForStore({
+      past: [],
+      present: { data: project },
+      future: [],
+    } as unknown as PersistedRootState['project']);
+
+    expect(normalizedProject).toBeDefined();
+    if (!normalizedProject) return;
+    const store = setupStore({ project: normalizedProject } as PersistedRootState);
+    const state = store.getState() as unknown as {
+      project: {
+        present: {
+          data: {
+            characters: { entities: Record<string, { id: string }> };
+            worlds: { entities: Record<string, { id: string }> };
+          };
+        };
+      };
+    };
+
+    const prototypeCharacter = Object.getOwnPropertyDescriptor(
+      state.project.present.data.characters.entities,
+      '__proto__',
+    )?.value as { id: string } | undefined;
+    const constructorWorld = Object.getOwnPropertyDescriptor(
+      state.project.present.data.worlds.entities,
+      'constructor',
+    )?.value as { id: string } | undefined;
+    expect(prototypeCharacter?.id).toBe('__proto__');
+    expect(constructorWorld?.id).toBe('constructor');
+    expect(Object.getPrototypeOf(state.project.present.data.characters.entities)).toBeNull();
   });
 });
 

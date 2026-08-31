@@ -3,10 +3,48 @@ import type { RootState } from '../../../app/store';
 import { parseImportedProjectJson } from '../../../services/projectImportSchema';
 import { storageService } from '../../../services/storageService';
 import type { Character, World } from '../../../types';
-import { charactersAdapter, worldsAdapter } from '../adapters';
+import { createPrototypeSafeEntityState } from '../adapters';
 import type { ProjectData } from '../projectSlice';
 
 const LEGACY_PROJECT_DIRECTORY_METADATA_KEY = '__worldscriptLegacyProjectDirectory';
+
+type ImportedEntityCollection<T extends { id: string }> =
+  | readonly T[]
+  | { ids: readonly string[]; entities: Record<string, T> };
+
+// QNBS-v3: validate normalized import correspondence before image I/O so malformed collections cannot create partial imports.
+/** Extracts imported entities while requiring exact ids-to-own-entities correspondence. */
+function extractImportedEntities<T extends { id: string }>(
+  collection: ImportedEntityCollection<T> | undefined,
+): T[] | undefined {
+  if (collection === undefined) return [];
+  if (!('ids' in collection)) return [...collection];
+  if (
+    !Array.isArray(collection.ids) ||
+    typeof collection.entities !== 'object' ||
+    collection.entities === null
+  ) {
+    return undefined;
+  }
+
+  const seenIds = new Set<string>();
+  const importedEntities: T[] = [];
+  for (const id of collection.ids) {
+    if (typeof id !== 'string' || seenIds.has(id) || !Object.hasOwn(collection.entities, id)) {
+      return undefined;
+    }
+    const entity = collection.entities[id];
+    if (!entity || typeof entity !== 'object' || entity.id !== id) return undefined;
+    seenIds.add(id);
+    importedEntities.push(entity);
+  }
+
+  const entityKeys = Object.keys(collection.entities);
+  if (entityKeys.length !== seenIds.size || entityKeys.some((id) => !seenIds.has(id))) {
+    return undefined;
+  }
+  return importedEntities;
+}
 
 // QNBS-v3: compare only storage-owned target identity so mutable snapshot content cannot hide a project switch.
 function restoreTargetIdentity(project: unknown): string | null {
@@ -23,20 +61,28 @@ export const importProjectThunk = createAsyncThunk('project/importProject', asyn
   const text = await file.text();
   const projectDataJson = parseImportedProjectJson(text);
 
-  // QNBS-v3: setAll returns a new Immer-produced state — capture the return value, do not rely on in-place mutation
-  let charactersState = charactersAdapter.getInitialState();
-  let worldsState = worldsAdapter.getInitialState();
   const charactersToSet: Character[] = [];
   const worldsToSet: World[] = [];
 
-  let characterArray: (Character & { avatarBase64?: string })[] = [];
-  if (Array.isArray(projectDataJson.characters)) {
-    characterArray = projectDataJson.characters as (Character & { avatarBase64?: string })[];
-  } else if (projectDataJson.characters && 'ids' in projectDataJson.characters) {
-    const { ids, entities } = projectDataJson.characters;
-    characterArray = ids
-      .map((id: string) => entities[id])
-      .filter((item): item is Character & { avatarBase64?: string } => Boolean(item));
+  const characterArray = extractImportedEntities(
+    projectDataJson.characters as
+      | ImportedEntityCollection<Character & { avatarBase64?: string }>
+      | undefined,
+  );
+  const worldArray = extractImportedEntities(
+    projectDataJson.worlds as
+      | ImportedEntityCollection<World & { ambianceImageBase64?: string }>
+      | undefined,
+  );
+  if (!characterArray || !worldArray) {
+    throw new Error('Invalid project file: entity IDs do not match their collection entries.');
+  }
+
+  if (
+    !createPrototypeSafeEntityState(characterArray) ||
+    !createPrototypeSafeEntityState(worldArray)
+  ) {
+    throw new Error('Invalid project file: duplicate character or world entity ID.');
   }
 
   for (const char of characterArray) {
@@ -48,17 +94,6 @@ export const importProjectThunk = createAsyncThunk('project/importProject', asyn
     }
     charactersToSet.push(newChar);
   }
-  charactersState = charactersAdapter.setAll(charactersState, charactersToSet);
-
-  let worldArray: (World & { ambianceImageBase64?: string })[] = [];
-  if (Array.isArray(projectDataJson.worlds)) {
-    worldArray = projectDataJson.worlds as (World & { ambianceImageBase64?: string })[];
-  } else if (projectDataJson.worlds && 'ids' in projectDataJson.worlds) {
-    const { ids, entities } = projectDataJson.worlds;
-    worldArray = ids
-      .map((id: string) => entities[id])
-      .filter((item): item is World & { ambianceImageBase64?: string } => Boolean(item));
-  }
 
   for (const world of worldArray) {
     const newWorld = { ...world };
@@ -69,7 +104,11 @@ export const importProjectThunk = createAsyncThunk('project/importProject', asyn
     }
     worldsToSet.push(newWorld);
   }
-  worldsState = worldsAdapter.setAll(worldsState, worldsToSet);
+  const charactersState = createPrototypeSafeEntityState(charactersToSet);
+  const worldsState = createPrototypeSafeEntityState(worldsToSet);
+  if (!charactersState || !worldsState) {
+    throw new Error('Invalid project file: duplicate character or world entity ID.');
+  }
 
   const manuscript = projectDataJson.manuscript ?? [];
 

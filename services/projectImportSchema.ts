@@ -135,10 +135,23 @@ const outlineSectionSchema = z.object({
   isTwist: z.boolean().optional(),
 });
 
+// QNBS-v3: entry-based parsing preserves legal prototype-named entity IDs as own keys for hydration.
+/** Parses record entries without letting special property names alter object prototypes. */
+function prototypeSafeEntityRecordSchema<T extends z.ZodTypeAny>(item: T) {
+  return z.preprocess(
+    (value) => {
+      if (typeof value !== 'object' || value === null || Array.isArray(value)) return value;
+      const record = value as Record<string, unknown>;
+      return Object.keys(record).map((key) => [key, record[key]]);
+    },
+    z.array(z.tuple([z.string(), item])).transform((entries) => Object.fromEntries(entries)),
+  );
+}
+
 const entityStateSchema = <T extends z.ZodTypeAny>(item: T) =>
   z.object({
     ids: z.array(z.string()),
-    entities: z.record(z.string(), item),
+    entities: prototypeSafeEntityRecordSchema(item),
   });
 
 const charactersFieldSchema = z.union([

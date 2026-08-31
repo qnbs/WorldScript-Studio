@@ -187,11 +187,14 @@ const ViewLoader: FC = () => {
 
 interface AppProps {
   isNewUser: boolean;
+  allowInitialMetadataSeed: boolean;
 }
 
-const App: FC<AppProps> = ({ isNewUser }) => {
-  const appState = useApp({ isNewUser });
-  const { currentView, handleNavigate, isPortalActive, isInitialLoad } = appState;
+// QNBS-v3: keep boot project hydration authority separate from first-run portal semantics.
+const App: FC<AppProps> = ({ isNewUser, allowInitialMetadataSeed: initialSeedAuthority }) => {
+  const appState = useApp({ isNewUser, allowInitialMetadataSeed: initialSeedAuthority });
+  const { currentView, handleNavigate, isPortalActive, isInitialLoad, allowInitialMetadataSeed } =
+    appState;
   const settings = useAppSelector((state) => state.settings);
   const project = useAppSelector(selectProjectData);
   const featureFlags = useAppSelector(selectFeatureFlags);
@@ -445,7 +448,14 @@ const App: FC<AppProps> = ({ isNewUser }) => {
   }, [currentView, announce, t, isInitialLoad, isPortalActive]);
 
   // QNBS-v3: gates on isInitialLoad too (not just isPortalActive) so a same-commit stale read can't auto-seed a project before the welcome portal shows.
-  useProjectBootstrapEffect({ project, isInitialLoad, isPortalActive, isI18nReady, t });
+  useProjectBootstrapEffect({
+    project,
+    allowInitialMetadataSeed,
+    isInitialLoad,
+    isPortalActive,
+    isI18nReady,
+    t,
+  });
 
   // QNBS-v3: PR3 — auto-launch the product tour once for first-run installs, after the welcome
   // portal closes and the nav has rendered. Returning users (or anyone who already finished/closed
