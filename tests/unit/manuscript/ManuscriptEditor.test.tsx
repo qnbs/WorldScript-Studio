@@ -8,12 +8,21 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const reactDeferredMock = vi.hoisted(() => ({ forceStaleValue: false }));
+// QNBS-v3: Retain the previous deferred value so pending-state coverage models React's stale render contract.
+const reactDeferredMock = vi.hoisted(() => ({
+  forceStaleValue: false,
+  previousValue: undefined as unknown,
+}));
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react');
-  const useDeferredValue = <T,>(value: T): T =>
-    reactDeferredMock.forceStaleValue ? ('' as T) : value;
+  const useDeferredValue = <T,>(value: T): T => {
+    if (reactDeferredMock.forceStaleValue && reactDeferredMock.previousValue !== undefined) {
+      return reactDeferredMock.previousValue as T;
+    }
+    reactDeferredMock.previousValue = value;
+    return value;
+  };
   return { ...actual, useDeferredValue };
 });
 
@@ -189,7 +198,9 @@ describe('ManuscriptEditor', () => {
     ltMock.available = false;
     ltMock.matches = [];
     ltMock.applySuggestion.mockReset();
+    // QNBS-v3: Reset deferred mock state so each test observes an isolated render timeline.
     reactDeferredMock.forceStaleValue = false;
+    reactDeferredMock.previousValue = undefined;
   });
 
   it('shows empty state when no section is selected', () => {
@@ -332,12 +343,19 @@ describe('ManuscriptEditor', () => {
       expect(mirror.scrollTop).toBe(360);
     });
 
-    // QNBS-v3 (#341): deferred mirror content must retain WCAG contrast while a long edit settles.
-    it('does not dim the visible mirror below the contrast contract while deferred', () => {
+    // QNBS-v3: A stale mirror must retain content and the WCAG-safe pending opacity during edits.
+    it('applies opacity-75 while retaining stale mirror content during deferred rendering', () => {
+      const { rerender } = render(<ManuscriptEditor isFocusMode={false} />);
+      mockActiveSection = {
+        id: 'sec-1',
+        title: 'Chapter One',
+        content: 'Updated content while the edit settles',
+      };
       reactDeferredMock.forceStaleValue = true;
-      render(<ManuscriptEditor isFocusMode={false} />);
+      rerender(<ManuscriptEditor isFocusMode />);
       const mirror = screen.getByTestId('manuscript-editor-mirror');
-      expect(mirror).not.toHaveClass('opacity-70');
+      expect(mirror).toHaveClass('opacity-75');
+      expect(mirror).toHaveTextContent('Hello world teh quick brown fox');
     });
   });
 });
