@@ -15,19 +15,23 @@ export type ProjectI18nRepair = {
   manuscript?: StorySection[];
 };
 
-/** Repair project fields that were saved as raw i18n keys during cold start. */
+/** Repair raw i18n keys, optionally seeding metadata only for the first fresh-user bootstrap. */
 export function repairProjectI18nFields(
   project: ProjectMetaSlice,
   t: TranslateFn,
+  { seedInitialMetadata = false }: { seedInitialMetadata?: boolean } = {},
 ): ProjectI18nRepair | null {
   const repair: ProjectI18nRepair = {};
   let changed = false;
 
-  if (!project.title || isKnownPersistedTranslationKey(project.title)) {
+  if ((seedInitialMetadata && !project.title) || isKnownPersistedTranslationKey(project.title)) {
     repair.title = t('initialProject.title');
     changed = true;
   }
-  if (!project.logline || isKnownPersistedTranslationKey(project.logline)) {
+  if (
+    (seedInitialMetadata && !project.logline) ||
+    isKnownPersistedTranslationKey(project.logline)
+  ) {
     repair.logline = t('initialProject.logline');
     changed = true;
   }

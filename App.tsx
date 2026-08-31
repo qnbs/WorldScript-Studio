@@ -445,7 +445,14 @@ const App: FC<AppProps> = ({ isNewUser }) => {
   }, [currentView, announce, t, isInitialLoad, isPortalActive]);
 
   // QNBS-v3: gates on isInitialLoad too (not just isPortalActive) so a same-commit stale read can't auto-seed a project before the welcome portal shows.
-  useProjectBootstrapEffect({ project, isInitialLoad, isPortalActive, isI18nReady, t });
+  useProjectBootstrapEffect({
+    project,
+    isNewUser,
+    isInitialLoad,
+    isPortalActive,
+    isI18nReady,
+    t,
+  });
 
   // QNBS-v3: PR3 — auto-launch the product tour once for first-run installs, after the welcome
   // portal closes and the nav has rendered. Returning users (or anyone who already finished/closed
