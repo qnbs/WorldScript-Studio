@@ -431,7 +431,10 @@ describe('importProjectThunk', () => {
         entities: Object.fromEntries([['toString', { id: 'toString', name: 'ToString World' }]]),
       },
     };
-    vi.mocked(parseImportedProjectJson).mockReturnValue(projectWithNormalizedPrototypeIds as never);
+    const actualSchema = await vi.importActual<
+      typeof import('../../../services/projectImportSchema')
+    >('../../../services/projectImportSchema');
+    vi.mocked(parseImportedProjectJson).mockImplementation(actualSchema.parseImportedProjectJson);
 
     const store = makeStore();
     const file = new File([JSON.stringify(projectWithNormalizedPrototypeIds)], 'novel.json', {
