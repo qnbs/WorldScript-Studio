@@ -45,6 +45,34 @@ describe('projectImportSchema', () => {
     expect(parsed.worlds).toMatchObject([{ id: ' ', name: 'Whitespace world' }]);
   });
 
+  // QNBS-v3: import parsing must retain prototype-named entity keys before hydration correspondence checks.
+  it('preserves prototype-named IDs in normalized entity records', () => {
+    const raw = JSON.stringify({
+      title: 'T',
+      logline: 'L',
+      characters: {
+        ids: ['__proto__'],
+        entities: Object.fromEntries([['__proto__', { id: '__proto__', name: 'Prototype' }]]),
+      },
+      worlds: {
+        ids: ['constructor'],
+        entities: Object.fromEntries([['constructor', { id: 'constructor', name: 'Constructor' }]]),
+      },
+      manuscript: [],
+    });
+    const parsed = parseImportedProjectJson(raw);
+    const characters = parsed.characters;
+    const worlds = parsed.worlds;
+
+    expect(Array.isArray(characters)).toBe(false);
+    expect(Array.isArray(worlds)).toBe(false);
+    if (Array.isArray(characters) || Array.isArray(worlds) || !characters || !worlds) return;
+    expect(Object.hasOwn(characters.entities, '__proto__')).toBe(true);
+    expect(Reflect.get(characters.entities, '__proto__')?.id).toBe('__proto__');
+    expect(Object.hasOwn(worlds.entities, 'constructor')).toBe(true);
+    expect(worlds.entities.constructor?.id).toBe('constructor');
+  });
+
   it('rejects invalid JSON shape', () => {
     expect(() => parseImportedProjectJson(JSON.stringify([]))).toThrow(/Invalid project file/);
   });
