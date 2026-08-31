@@ -303,6 +303,33 @@ describe('shouldAllowInitialMetadataSeed', () => {
     expect(payload.characters.entities['toString']?.name).toBe('To String');
   });
 
+  // QNBS-v3: imported string IDs remain hydratable so valid project content cannot be discarded at cold boot.
+  it('preserves empty and whitespace entity IDs accepted by project imports', () => {
+    const characters = [
+      { id: '', name: 'Empty ID' },
+      { id: ' ', name: 'Whitespace ID' },
+    ];
+    const worlds = [
+      { id: '', name: 'Empty world ID' },
+      { id: ' ', name: 'Whitespace world ID' },
+    ];
+    const project = createDesktopProject({ characters, worlds });
+    const state = { project: { data: project } } as unknown as PersistedRootState;
+    const payload = getPersistedProjectPayload(state.project);
+
+    expect(payload?.characters?.ids).toEqual(['', ' ']);
+    expect(payload?.worlds?.ids).toEqual(['', ' ']);
+    expect(Object.hasOwn(payload?.characters?.entities ?? {}, '')).toBe(true);
+    expect(Object.hasOwn(payload?.characters?.entities ?? {}, ' ')).toBe(true);
+    expect(Object.hasOwn(payload?.worlds?.entities ?? {}, '')).toBe(true);
+    expect(Object.hasOwn(payload?.worlds?.entities ?? {}, ' ')).toBe(true);
+    expect(payload?.characters?.entities['']?.name).toBe('Empty ID');
+    expect(payload?.characters?.entities[' ']?.name).toBe('Whitespace ID');
+    expect(payload?.worlds?.entities['']?.name).toBe('Empty world ID');
+    expect(payload?.worlds?.entities[' ']?.name).toBe('Whitespace world ID');
+    expect(shouldAllowInitialMetadataSeed(state)).toBe(false);
+  });
+
   // QNBS-v3: orphaned entity entries must not masquerade as canonical state and suppress fresh-project fallback.
   it('rejects EntityState entries that are not represented by ids', () => {
     const project = createDesktopProject({

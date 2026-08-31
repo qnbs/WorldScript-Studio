@@ -56,8 +56,7 @@ function normalizeEntityCollection<T>(
     const ids: string[] = [];
     const entities = Object.create(null) as Record<string, T>;
     for (const entity of value) {
-      if (!isRecord(entity) || typeof entity['id'] !== 'string' || !entity['id'].trim())
-        return undefined;
+      if (!isRecord(entity) || typeof entity['id'] !== 'string') return undefined;
       const id = entity['id'];
       if (hasOwn(entities, id)) return undefined;
       ids.push(id);
@@ -74,7 +73,7 @@ function normalizeEntityCollection<T>(
   const entities = Object.create(null) as Record<string, T>;
   const seenIds = new Set<string>();
   for (const id of sourceIds) {
-    if (typeof id !== 'string' || !id.trim() || seenIds.has(id)) return undefined;
+    if (typeof id !== 'string' || seenIds.has(id)) return undefined;
     if (!hasOwn(sourceEntities, id)) return undefined;
     const entity = sourceEntities[id];
     if (!isRecord(entity) || entity['id'] !== id) return undefined;

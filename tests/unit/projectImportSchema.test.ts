@@ -30,6 +30,21 @@ describe('projectImportSchema', () => {
     expect(parsed.binderNodes?.[0]?.title).toBe('Research');
   });
 
+  // QNBS-v3: the bootstrap boundary must preserve string IDs already accepted by project imports.
+  it('accepts empty and whitespace entity IDs in imported projects', () => {
+    const raw = JSON.stringify({
+      title: 'T',
+      logline: 'L',
+      characters: [{ id: '', name: 'Unnamed' }],
+      worlds: [{ id: ' ', name: 'Whitespace world' }],
+      manuscript: [],
+    });
+    const parsed = parseImportedProjectJson(raw);
+
+    expect(parsed.characters).toMatchObject([{ id: '', name: 'Unnamed' }]);
+    expect(parsed.worlds).toMatchObject([{ id: ' ', name: 'Whitespace world' }]);
+  });
+
   it('rejects invalid JSON shape', () => {
     expect(() => parseImportedProjectJson(JSON.stringify([]))).toThrow(/Invalid project file/);
   });
