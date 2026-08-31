@@ -8,6 +8,15 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const reactDeferredMock = vi.hoisted(() => ({ forceStaleValue: false }));
+
+vi.mock('react', async () => {
+  const actual = await vi.importActual<typeof import('react')>('react');
+  const useDeferredValue = <T,>(value: T): T =>
+    reactDeferredMock.forceStaleValue ? ('' as T) : value;
+  return { ...actual, useDeferredValue };
+});
+
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
@@ -180,6 +189,7 @@ describe('ManuscriptEditor', () => {
     ltMock.available = false;
     ltMock.matches = [];
     ltMock.applySuggestion.mockReset();
+    reactDeferredMock.forceStaleValue = false;
   });
 
   it('shows empty state when no section is selected', () => {
@@ -320,6 +330,14 @@ describe('ManuscriptEditor', () => {
         currentTarget: { scrollTop: 360, scrollLeft: 0 },
       } as unknown as React.UIEvent<HTMLTextAreaElement>);
       expect(mirror.scrollTop).toBe(360);
+    });
+
+    // QNBS-v3 (#341): deferred mirror content must retain WCAG contrast while a long edit settles.
+    it('does not dim the visible mirror below the contrast contract while deferred', () => {
+      reactDeferredMock.forceStaleValue = true;
+      render(<ManuscriptEditor isFocusMode={false} />);
+      const mirror = screen.getByTestId('manuscript-editor-mirror');
+      expect(mirror).not.toHaveClass('opacity-70');
     });
   });
 });
