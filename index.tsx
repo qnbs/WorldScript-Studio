@@ -7,7 +7,11 @@ import { type AppDispatch, appStoreRef, type RootState, setupStore } from './app
 import { IdbUnlockModal } from './components/settings/IdbUnlockModal';
 import { I18nProvider } from './contexts/I18nContext';
 import { versionControlActions } from './features/versionControl/versionControlSlice';
-import { loadPersistedRootState } from './services/appBootstrap';
+import {
+  loadPersistedRootState,
+  normalizePersistedProjectForStore,
+  shouldAllowInitialMetadataSeed,
+} from './services/appBootstrap';
 import { initializeStorage } from './services/dbInitialization';
 import { logger } from './services/logger';
 import {
@@ -128,25 +132,21 @@ async function bootApp(): Promise<void> {
     // We must manually reconstruct the undo envelope if we loaded flat data.
     if (preloadedState?.project) {
       const projectPart = preloadedState.project;
+      const normalizedProject = normalizePersistedProjectForStore(projectPart);
 
-      // Check if the loaded project is "flat" (i.e., it doesn't have a 'present' key, but HAS 'data')
-      const isFlatData = !projectPart.present && projectPart.data;
-
-      if (isFlatData && projectPart.data) {
-        logger.debug('Hydrating flat project state into Redux-Undo envelope.');
-        preloadedState.project = {
-          past: [],
-          present: { data: projectPart.data }, // Reconstruct the slice structure
-          future: [],
-          _latestUnfiltered: projectPart.data, // Helper for redux-undo if needed
-        };
-      } else if (!projectPart.present && !projectPart.data) {
+      if (normalizedProject) {
+        logger.debug('Hydrating persisted project state into Redux-Undo envelope.');
+        preloadedState.project = normalizedProject;
+      } else {
         // Fallback: Corrupt or empty project state
         logger.warn('Project state corrupted. Resetting project.');
         delete (preloadedState as Record<string, unknown>)['project'];
       }
     }
     // --------------------------------
+
+    // QNBS-v3: derive metadata seeding from the normalized persisted-project boundary, not the broader first-run flag.
+    const allowInitialMetadataSeed = shouldAllowInitialMetadataSeed(preloadedState);
 
     const store = setupStore(preloadedState);
     appStoreRef.current = store as unknown as { getState(): RootState; dispatch: AppDispatch };
@@ -184,7 +184,7 @@ async function bootApp(): Promise<void> {
     root.render(
       <React.StrictMode>
         <Provider store={store}>
-          <App isNewUser={isNewUser} />
+          <App isNewUser={isNewUser} allowInitialMetadataSeed={allowInitialMetadataSeed} />
         </Provider>
       </React.StrictMode>,
     );

@@ -61,13 +61,25 @@ function readInitialView(): View {
   return 'dashboard';
 }
 
-export const useApp = ({ isNewUser }: { isNewUser: boolean }) => {
+// QNBS-v3: portal exit context distinguishes imported content from a project created in this app.
+export interface PortalExitOptions {
+  allowInitialMetadataSeed?: boolean;
+}
+
+export const useApp = ({
+  isNewUser,
+  allowInitialMetadataSeed: initialSeedAuthority = isNewUser,
+}: {
+  isNewUser: boolean;
+  allowInitialMetadataSeed?: boolean;
+}) => {
   const [currentView, setCurrentView] = useState<View>(() => readInitialView());
   // QNBS-v3: remember the view navigated away from, so view-aware Help can open to the matching
   // category (once inside Help, currentView is 'help' and no longer tells us where the user was).
   const previousViewRef = useRef<View>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  // QNBS-v3: initialize from isNewUser (already stable pre-mount) instead of a hardcoded false, so no transient first commit exposes a stale value to a sibling effect.
+  const [allowInitialMetadataSeed, setAllowInitialMetadataSeed] = useState(initialSeedAuthority);
+  // QNBS-v3: initialize from boot project authority, with the legacy first-run fallback retained for direct hook consumers.
   const [isPortalActive, setIsPortalActive] = useState(isNewUser);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
@@ -131,7 +143,9 @@ export const useApp = ({ isNewUser }: { isNewUser: boolean }) => {
   }, [currentView]);
 
   const handlePortalExit = useCallback(
-    (view?: View) => {
+    (view?: View, options?: PortalExitOptions) => {
+      // QNBS-v3: imported/demo content revokes seed authority before bootstrap can treat it as fresh project data.
+      if (options?.allowInitialMetadataSeed === false) setAllowInitialMetadataSeed(false);
       if (view) {
         switchView(view);
         pushHash(view);
@@ -156,6 +170,8 @@ export const useApp = ({ isNewUser }: { isNewUser: boolean }) => {
     isSidebarOpen,
     isPortalActive,
     isInitialLoad,
+    // QNBS-v3: expose transient boot/import authority without persisting a new project-state field.
+    allowInitialMetadataSeed,
     handlePortalExit,
     handleNavigate,
     setIsSidebarOpen,

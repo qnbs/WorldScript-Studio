@@ -80,11 +80,13 @@ describe('shouldRunProjectBootstrap', () => {
   });
 });
 
+// QNBS-v3: verifies bootstrap applies explicit seed authority without changing raw-key repair behavior.
 describe('useProjectBootstrapEffect', () => {
   it('never dispatches during the race window (isInitialLoad still true)', () => {
     renderHook(() =>
       useProjectBootstrapEffect({
         project: blankProject,
+        allowInitialMetadataSeed: false,
         isInitialLoad: true,
         isPortalActive: false,
         isI18nReady: true,
@@ -94,24 +96,46 @@ describe('useProjectBootstrapEffect', () => {
     expect(dispatch).not.toHaveBeenCalled();
   });
 
-  it('seeds a blank project via the repair path once bootstrap has settled', () => {
-    // QNBS-v3: repairProjectI18nFields treats a blank title/logline/manuscript as "needs repair" too, so it — not the resetProject branch — is what actually seeds a brand-new blank project in practice.
+  it('preserves blank metadata for a returning project while still seeding its empty manuscript', () => {
     renderHook(() =>
       useProjectBootstrapEffect({
         project: blankProject,
+        allowInitialMetadataSeed: false,
         isInitialLoad: false,
         isPortalActive: false,
         isI18nReady: true,
         t,
       }),
     );
-    expect(dispatch).toHaveBeenCalledWith(projectActions.updateTitle('initialProject.title'));
-    expect(dispatch).toHaveBeenCalledWith(projectActions.updateLogline('initialProject.logline'));
+    expect(dispatch).not.toHaveBeenCalledWith(projectActions.updateTitle(expect.anything()));
+    expect(dispatch).not.toHaveBeenCalledWith(projectActions.updateLogline(expect.anything()));
     expect(dispatch).toHaveBeenCalledWith(
       projectActions.setManuscript([
         expect.objectContaining({ title: 'initialProject.chapter1', content: '' }),
       ]),
     );
+  });
+
+  it('seeds blank metadata only once for a fresh user', () => {
+    const { rerender } = renderHook(
+      ({ project }) =>
+        useProjectBootstrapEffect({
+          project,
+          allowInitialMetadataSeed: true,
+          isInitialLoad: false,
+          isPortalActive: false,
+          isI18nReady: true,
+          t,
+        }),
+      { initialProps: { project: blankProject } },
+    );
+    expect(dispatch).toHaveBeenCalledWith(projectActions.updateTitle('initialProject.title'));
+    expect(dispatch).toHaveBeenCalledWith(projectActions.updateLogline('initialProject.logline'));
+
+    dispatch.mockClear();
+    rerender({ project: { ...blankProject } });
+    expect(dispatch).not.toHaveBeenCalledWith(projectActions.updateTitle(expect.anything()));
+    expect(dispatch).not.toHaveBeenCalledWith(projectActions.updateLogline(expect.anything()));
   });
 
   it('dispatches nothing for a project that already has real content', () => {
@@ -122,6 +146,7 @@ describe('useProjectBootstrapEffect', () => {
           logline: 'A real logline',
           manuscript: [{ id: 'sec-1', title: 'Ch1', content: 'Real content' }],
         },
+        allowInitialMetadataSeed: false,
         isInitialLoad: false,
         isPortalActive: false,
         isI18nReady: true,
@@ -135,6 +160,7 @@ describe('useProjectBootstrapEffect', () => {
     renderHook(() =>
       useProjectBootstrapEffect({
         project: blankProject,
+        allowInitialMetadataSeed: false,
         isInitialLoad: false,
         isPortalActive: true,
         isI18nReady: true,
@@ -148,6 +174,7 @@ describe('useProjectBootstrapEffect', () => {
     renderHook(() =>
       useProjectBootstrapEffect({
         project: null,
+        allowInitialMetadataSeed: false,
         isInitialLoad: false,
         isPortalActive: false,
         isI18nReady: true,
@@ -161,10 +188,11 @@ describe('useProjectBootstrapEffect', () => {
     renderHook(() =>
       useProjectBootstrapEffect({
         project: {
-          title: '',
+          title: 'initialProject.title',
           logline: 'A real logline',
           manuscript: [{ id: 'sec-1', title: 'Real Chapter', content: 'real' }],
         },
+        allowInitialMetadataSeed: false,
         isInitialLoad: false,
         isPortalActive: false,
         isI18nReady: true,
@@ -182,9 +210,10 @@ describe('useProjectBootstrapEffect', () => {
       useProjectBootstrapEffect({
         project: {
           title: 'A Real Title',
-          logline: '',
+          logline: 'initialProject.logline',
           manuscript: [{ id: 'sec-1', title: 'Real Chapter', content: 'real' }],
         },
+        allowInitialMetadataSeed: false,
         isInitialLoad: false,
         isPortalActive: false,
         isI18nReady: true,

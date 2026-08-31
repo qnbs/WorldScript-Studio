@@ -5,6 +5,7 @@ import { ICONS } from '../constants';
 import { projectActions } from '../features/project/projectSlice';
 import { importProjectThunk } from '../features/project/thunks/projectManagementThunks';
 import { statusActions } from '../features/status/statusSlice';
+import type { PortalExitOptions } from '../hooks/useApp';
 import { useTranslation } from '../hooks/useTranslation';
 import { storageService } from '../services/storageService';
 import type { View } from '../types';
@@ -12,8 +13,9 @@ import { Button } from './ui/Button';
 import { CustomIcon } from './ui/Icon';
 import { LanguageSelector } from './ui/LanguageSelector';
 
+// QNBS-v3: imported/demo portal exits revoke boot seed authority so external content keeps intentional blank metadata.
 interface WelcomePortalProps {
-  onExit: (view?: View) => void;
+  onExit: (view?: View, options?: PortalExitOptions) => void;
 }
 
 type PortalView = 'main' | 'new_project' | 'open_project';
@@ -118,7 +120,8 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
             title: t('settings.data.importSuccess'),
           }),
         );
-        onExit('manuscript');
+        // QNBS-v3: imported project content must revoke fresh-project metadata seeding before bootstrap runs.
+        onExit('manuscript', { allowInitialMetadataSeed: false });
       } else {
         dispatch(
           statusActions.addNotification({
@@ -173,7 +176,8 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
           title: t('settings.data.importSuccess'),
         }),
       );
-      onExit('manuscript');
+      // QNBS-v3: demo content is imported content, so it must not be overwritten by fresh-project seeding.
+      onExit('manuscript', { allowInitialMetadataSeed: false });
     } else {
       dispatch(
         statusActions.addNotification({
