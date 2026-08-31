@@ -80,6 +80,7 @@ describe('shouldRunProjectBootstrap', () => {
   });
 });
 
+// QNBS-v3: verifies bootstrap applies explicit seed authority without changing raw-key repair behavior.
 describe('useProjectBootstrapEffect', () => {
   it('never dispatches during the race window (isInitialLoad still true)', () => {
     renderHook(() =>

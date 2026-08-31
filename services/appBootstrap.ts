@@ -36,3 +36,10 @@ export async function loadPersistedRootState(): Promise<PersistedRootState | und
   if (project) result.project = { data: project as unknown as ProjectData };
   return result;
 }
+
+// QNBS-v3: seed authority follows hydrated project presence, so settings-only state can still initialize the synthetic project without overwriting real user intent.
+export function shouldAllowInitialMetadataSeed(
+  preloadedState: PersistedRootState | undefined,
+): boolean {
+  return preloadedState?.project === undefined;
+}

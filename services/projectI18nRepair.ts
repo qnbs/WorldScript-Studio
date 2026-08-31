@@ -24,6 +24,7 @@ export function repairProjectI18nFields(
   const repair: ProjectI18nRepair = {};
   let changed = false;
 
+  // QNBS-v3: only explicit fresh-project authority may fill blanks; raw persisted keys remain independently repairable.
   if ((seedInitialMetadata && !project.title) || isKnownPersistedTranslationKey(project.title)) {
     repair.title = t('initialProject.title');
     changed = true;

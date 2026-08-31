@@ -187,10 +187,12 @@ const ViewLoader: FC = () => {
 
 interface AppProps {
   isNewUser: boolean;
+  allowInitialMetadataSeed: boolean;
 }
 
-const App: FC<AppProps> = ({ isNewUser }) => {
-  const appState = useApp({ isNewUser });
+// QNBS-v3: keep boot project hydration authority separate from first-run portal semantics.
+const App: FC<AppProps> = ({ isNewUser, allowInitialMetadataSeed: initialSeedAuthority }) => {
+  const appState = useApp({ isNewUser, allowInitialMetadataSeed: initialSeedAuthority });
   const { currentView, handleNavigate, isPortalActive, isInitialLoad, allowInitialMetadataSeed } =
     appState;
   const settings = useAppSelector((state) => state.settings);
