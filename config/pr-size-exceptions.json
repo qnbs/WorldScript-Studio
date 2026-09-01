@@ -50,6 +50,28 @@
         "turbo.json"
       ],
       "reason": "One-time deterministic replacement of stale committed graph reports; executable tooling remains governed by the ordinary absolute meaningful-line ceiling."
+    },
+    {
+      "id": "pr-564-r15-contract-review-convergence",
+      "repository": "qnbs/WorldScript-Studio",
+      "prNumber": 564,
+      "baseRef": "main",
+      "headRef": "design/445-r15-storage-contract",
+      "maxFiles": 3,
+      "maxCommits": 15,
+      "maxNonExemptMeaningfulLines": 10,
+      "supplementalLineAllowances": [
+        {
+          "path": "docs/native/R15-SECURE-STORAGE-CONTRACT.md",
+          "maxMeaningfulLines": 3200
+        }
+      ],
+      "allowedPaths": [
+        "docs/native/CORE-MIGRATION-LEDGER.md",
+        "docs/native/R15-SECURE-STORAGE-CONTRACT.md",
+        "docs/native/UI-DOMAIN-STATE-CLASSIFICATION.md"
+      ],
+      "reason": "One-time S5 R-15 normative secure-storage contract whose size grew through iterative security, durability, migration, recovery, and data-integrity review convergence. The exception is restricted to the single contract document plus its two minimal ledger/classification integrations; no executable or production source changes are admitted."
     }
   ]
 }
