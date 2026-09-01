@@ -117,7 +117,7 @@ Core contract.
 | Library backups | `libraryBackupService.ts`; user-selected external archive contains settings, projects, snapshots, Codex, RAG vectors and binder assets; current `META.json`/`vault.bin` is an explicit encrypted ZIP output. API keys are excluded. | Aggregate content copy. Current implementation builds the inner plaintext JSON/ZIP in memory and then AES-GCM encrypts it; it is not a native Core record and no internal plaintext staging file is created. | **PROTECTED** as a backup artifact; regenerable from source but not disposable until the user chooses to delete it. | `backup:<backup-id>` for a future Core-owned artifact. Keep the existing backup format as migration input only; do not claim it is the R-15 envelope. |
 | Quarantine/recovery data | `FsProjectStore#quarantineProject`; `$APPDATA/quarantined-projects/<project>-corrupt-<timestamp>/<project-id>/` plus `legacy-auxiliary.json`. Recovery reads preserved content; quarantine is created by explicit corruption recovery. | Preserved manuscript, assets, Codex and metadata. The quarantine manifest contains project and auxiliary provenance. It is recovery data, not a deletion permission or a plaintext escape. | **PROTECTED**; not regenerable without losing recovery evidence. | `recovery:<original-project-id>:<recovery-id>`; recovery ID is unique and path-independent. Migration must protect the whole preserved tree and manifest before any cleanup is admitted. |
 | Settings | `FsSettingsStore`; `$APPDATA/config/settings.json`; startup/settings UI read it and flush writes it. | User preferences, endpoints, accessibility, integrations, desktop choices and privacy settings can be sensitive. API keys are intentionally not part of this file. | **PROTECTED**; authoritative settings, not regenerable. | `settings:global` (or a future explicit profile scope). Migration must preserve unknown forward-compatible settings fields and never copy key material into the settings record. |
-| API/provider credentials | Active desktop path is `storageService` → WebView IndexedDB `idbKeyStore`; legacy `$APPDATA/config/<provider>_key.enc.json` files are cleanup-only and new FS writes throw. | Credentials are secrets. Current random-key IDB protection is separate from R-15 and the old path-derived filesystem helper is not an authority. | **PROTECTED**; not regenerable. | `credential:<provider>` in the owning secure key store. Native Core may use an OS keystore or passphrase adapter, but the renderer never receives raw key material. Migration must explicitly handle existing IDB/WebView credentials; no silent cross-authority copy. |
+| API/provider credentials | Active desktop path is `storageService` → WebView IndexedDB `idbKeyStore`; legacy `$APPDATA/config/<provider>_key.enc.json` files are cleanup-only and new FS writes throw. | Credentials are secrets. Current random-key IDB protection is separate from R-15 and the old path-derived filesystem helper is not an authority. Source classification for migration is `FOREIGN_PROTECTED` under `source_scheme_id = CREDENTIAL_IDB_KEYSTORE_V1` (§10.1.2). | **PROTECTED**; not regenerable. | `credential:<provider>` in the owning secure key store. Native Core may use an OS keystore or passphrase adapter, but the renderer never receives raw key material. Migration must explicitly handle existing IDB/WebView credentials; no silent cross-authority copy. Migration disposition (§10.4.1) is `RETAIN_APPROVED_SEPARATE_PROTECTED_AUTHORITY` unless a future decision selects `MIGRATE_TO_APPROVED_NATIVE_SECRET_AUTHORITY`; it is never `MIGRATE_TO_R15` merely because credentials are classified `PROTECTED`, and Gate 7 (§20) may not claim complete packaged-desktop protection while this disposition is unset. |
 | Global images | `FsAssetStore`; `$APPDATA/images/<sanitized-id>.png`; image save/get/delete. | Avatar/ambiance image bytes are user-provided content; image IDs and MIME/data-URL metadata can identify project material. Current files are plaintext base64 text despite the `.png` suffix. | **PROTECTED**; authoritative user asset, not regenerable. | `image:<image-id>` because current storage is global and IDs are the current stable lookup key. Do not add project scope unless it becomes a persisted invariant; bind the exact image ID. |
 | Binder binary assets | `FsAssetStore`; `$APPDATA/projects/<safe-project-id>/binder/<asset-id>.bin`; save/get/delete/list. | PDFs, images, audio and other research files can contain authored or private source material. Included in library backups and recursively preserved by quarantine. | **PROTECTED**; authoritative attachment, not regenerable. | `asset:<project-id>:<asset-id>`; project scope and asset ID are both required. Migration must treat binary and metadata as one logical generation, not two independently successful records. |
 | Binder asset metadata | Same binder directory, `<asset-id>.meta.json`; `getBinderAsset` pairs it with `.bin` and checks byte size. | MIME type, original filename and byte size can reveal sensitive context; mismatch currently signals corruption. Included in backups/quarantine. | **PROTECTED**; not independently regenerable without losing provenance. | `asset-metadata:<project-id>:<asset-id>` is distinct from the bytes identity and is joined by an authenticated `asset-pair:<project-id>:<asset-id>` commit marker. Migration must never expose either member as a complete asset without the committed pair. |
@@ -141,7 +141,7 @@ Core contract.
 | Analytics store (DuckDB/OPFS) | `workers/v2/duckdb.worker.ts` persists the DuckDB analytics database `worldscript_analytics.duckdb` in OPFS behind `enableDuckDbAnalytics`; `services/duckdb/duckdbSchema.ts` defines the tables/views it holds. | Project titles, loglines, character names and Codex-derived excerpts are aggregated for analytics queries; this is native content, not a disposable query cache, even though every row is derived from the canonical project record. | **PROTECTED** for the persisted OPFS database; computationally regenerable from source projects but content-bearing until regenerated. | `analytics-db:<installation-scope>`; the database aggregates multiple projects, so per-project scope is authenticated payload rather than the record's own AAD identity. Migration must protect or refuse the whole database before any authority switch; it is not a harmless cache merely because it is derived. |
 | Cross-project search index | `services/crossProjectIndexService.ts`; IndexedDB `worldscript-data-db/projects-index-store`, keyed by `projectId`; `indexProject`/`listIndexedProjects`/`removeProjectIndex` read/write it and dual-write a copy into the analytics store above when `enableDuckDbAnalytics` is on. | Project titles, loglines, character names, manuscript word counts, an AI-generated summary and a semantic-search embedding vector per project; this is native content, not a disposable query cache, even though every field is derived from the canonical project record. | **PROTECTED** for the persisted IndexedDB store; computationally regenerable from source projects but content-bearing until regenerated. | `cross-project-index:<project-id>`; unlike the aggregate `analytics-db` record, this store holds one entry per project, so the project ID is the record's own AAD identity, not payload. Migration must protect or refuse each project's index entry before any authority switch. |
 | Scene comments and replies | `features/sceneComments/sceneCommentsSlice.ts`; localStorage key `worldscript-scene-comments`; Redux middleware persists comment/reply bodies. | Comment bodies, replies, section IDs and resolution state are user-authored project context even though this store is outside `project.json`. | **PROTECTED**; current localStorage is a separate WebView authority and is not covered by native Core. | `scene-comments:<installation-scope>` until a project binding is added; future migration must bind every section/comment ID and preserve the current global namespace rather than guess a project. |
-| Scene revision history | `services/sceneRevisionService.ts`; WebView IndexedDB `worldscript-revisions-db/scene-revisions`; current browser encryption is separate from native R-15. | Revision titles and full scene content are recoverable user data. | **PROTECTED**; independently encrypted today where the IDB policy applies, but not a native Core record. | `scene-revision:<revision-id>` with section routing authenticated separately. Migration must preserve revision identity and bounded history. |
+| Scene revision history | `services/sceneRevisionService.ts`; WebView IndexedDB `worldscript-revisions-db/scene-revisions`; current browser encryption is separate from native R-15. | Revision titles and full scene content are recoverable user data. | **PROTECTED**; independently encrypted today where the IDB policy applies, but not a native Core record. When retained under B-1's `storageEncryptionService` policy, its migration source is classified `FOREIGN_PROTECTED` under `source_scheme_id = WEBVIEW_IDB_AT_REST_V1` (§10.1.2) rather than a scene-revision-specific cipher; a record outside the IDB policy's scope remains a `LEGACY_PLAINTEXT` source. | `scene-revision:<revision-id>` with section routing authenticated separately. Migration must preserve revision identity and bounded history. |
 | Plot-board and mind-map UI records | `features/plotBoard/plotBoardSlice.ts` and `features/mindMap/mindMapUiSlice.ts`; localStorage viewport/selection state. Authored connections/nodes remain in project state, but IDs and active selections persist here. | Selection, map identifiers, viewport and interaction metadata can reveal project structure; the UI state is regenerable but not harmless. | **PROTECTED** for a persisted desktop profile; it must not be treated as the project content authority. | `plot-ui:<installation-scope>` / `mind-map-ui:<installation-scope>`; future Core may omit purely ephemeral viewport fields only after proving no user intent or routing metadata is lost. |
 | Writing progress and session history | `features/progressTracker/progressTrackerSlice.ts`; localStorage key `worldscript-progress-tracker`. | Goals, streaks, writing totals and session timing are personal activity metadata. | **PROTECTED**; not manuscript content but capable of sensitive disclosure and not safely reconstructable. | `progress:<installation-scope>`; import/duplicate does not silently transfer personal history. |
 | ProForge memory bank | `services/proForge/proForgeMemoryBank.ts`; IndexedDB `proforge-memory-bank/entries`, keyed by entry ID and indexed by project ID. | Memory keys and content are project-specific AI context and may reproduce user text. | **PROTECTED**; current browser/IDB authority is separate from native R-15. | `proforge-memory:<project-id>:<entry-id>`; project binding is required and entries are not migrated by database name alone. |
@@ -151,7 +151,7 @@ Core contract.
 | LoRA Redux mirror | `features/lora/loraSlice.ts`; localStorage key `worldscript-lora`, rehydrated into Redux state at startup. | Adapter names/descriptions, project IDs, filesystem paths, run history and error details mirror a subset of the IndexedDB stores above in a separate physical location. | **PROTECTED**; a second physical copy of already-protected content is not exempt merely because the IndexedDB store is the primary record. | `lora-mirror:<installation-scope>`; migration must protect or remove this mirror in the same operation as the IndexedDB stores it duplicates, never leaving one protected and the other plaintext. |
 | Opt-in AI telemetry | `services/ai/telemetryService.ts`; DuckDB `ai_telemetry` or bounded localStorage fallback `worldscript-ai-telemetry`. | Task/provider/model, timing and success metadata can expose usage and provider context even without prompt text. | **PROTECTED** for persisted desktop telemetry; the opt-in gate remains separate from the protection requirement. | `telemetry:<installation-scope>:<chunk-id>`; future records are redacted, bounded and authenticated. |
 | AI benchmark history | `services/ai/benchmarkService.ts`; localStorage key `worldscript-benchmarks`; active whenever the default-on adaptive AI engine records a benchmark. | Task type, backend, model ID, latency and timestamps are the same class of usage/model/timing fields the adjacent telemetry row protects. | **PROTECTED**; not exempt merely because the feature that produces it is default-on rather than opt-in. | `ai-benchmark:<installation-scope>:<entry-id>`; future records are redacted, bounded and authenticated the same way as the telemetry chunk row above. |
-| Existing IDB KDF salt (B-1 at-rest encryption) | `services/storage/storageEncryptionService.ts`; WebView IndexedDB key-derivation salt record, generated once when a passphrase is first set and read on every unlock to re-derive the PBKDF2 key; no native Tauri filesystem record exists on `main`. | The salt value itself is non-secret by cryptographic design, but it is a security-critical migration input: losing it, silently rotating it, or letting a future authority switch discard it before every legacy IDB record that depends on it is retired would desynchronize key derivation from already-committed ciphertext and could mask a rollback instead of detecting one. | **PROTECTED** migration/control input; confidentiality is non-secret, integrity and availability are security-critical. Not independently regenerable without invalidating every IDB record derived from it. | `idb-kdf-salt:<installation-scope>`; do not imply the salt is secret or treat it as free to regenerate. MUST retain until every legacy IDB record depending on this salt is no longer required for rollback/recovery AND the new authority is durably committed AND cleanup/finalization is itself durable — no early deletion merely because conversion succeeded once. |
+| Existing IDB KDF salt (B-1 at-rest encryption) | `services/storage/storageEncryptionService.ts`; WebView IndexedDB key-derivation salt record, generated once when a passphrase is first set and read on every unlock to re-derive the PBKDF2 key; no native Tauri filesystem record exists on `main`. | The salt value itself is non-secret by cryptographic design, but it is a security-critical migration input: losing it, silently rotating it, or letting a future authority switch discard it before every legacy IDB record that depends on it is retired would desynchronize key derivation from already-committed ciphertext and could mask a rollback instead of detecting one. It is the key-acquisition input for every `FOREIGN_PROTECTED` source classified `source_scheme_id = WEBVIEW_IDB_AT_REST_V1` (§10.1.2), not a generic migration convenience value. | **PROTECTED** migration/control input; confidentiality is non-secret, integrity and availability are security-critical. Not independently regenerable without invalidating every IDB record derived from it. | `idb-kdf-salt:<installation-scope>`; do not imply the salt is secret or treat it as free to regenerate. MUST retain, specifically for as long as any retained record uses `source_scheme_id = WEBVIEW_IDB_AT_REST_V1` (§10.1.2, §10.6), until every such record is no longer required for rollback/recovery AND the new R-15 authority is durably committed AND cleanup/finalization is itself durable — no early deletion merely because the new root became `ACTIVE` or because one record's conversion succeeded once. |
 | UI preferences and feature flags | Theme, language, last-view, feature-flag, tour, command-palette and similar localStorage keys. | No authored content or credentials by contract; values are small presentation preferences. | **NON_SENSITIVE** and regenerable, provided no content or secret is added to these keys. | `ui-preferences:<installation-scope>` only as a future bounded preference record; never use them as project or encryption authority. |
 | Protected-envelope routing header | Future envelope header contains only the magic, fixed-width version/suite/epoch/generation/schema fields, nonce and ciphertext length; no plaintext project/title/content. | Protocol metadata is non-sensitive by contract, but tampering is detected because the canonical header is included in AAD. | **NON_SENSITIVE** protocol metadata; not a user record. | No logical record identity of its own. It is authenticated in the containing record's AAD and parsed strictly before key/payload use. |
 
@@ -520,7 +520,26 @@ hashing; a digest algorithm or input change requires a new envelope/journal vers
 | `key_epoch_set_digest` | `"worldscript-r15/key-epoch-set/v1"` bytes, then `u32be(entry_count)`, then each entry sorted by `epoch` and encoded as `u64be(epoch)`, `u64be(registry_generation)`, and the 32-byte `content_digest` of that key-epoch control record | Binds the complete, authenticated set of key-epoch control records — count, identity, and current generation — the same way `catalog_set_digest` binds the catalog shard set, so an omitted or replayed key-epoch record cannot be substituted for the currently trusted registry. |
 | `root_digest` | `"worldscript-r15/root/v1"` bytes, then `u64be(root_generation)`, `u64be(active_key_epoch)`, `u64be(root_checkpoint_revision)`, the 32-byte `marker_set_digest`, the 32-byte `catalog_set_digest`, the 32-byte `key_epoch_set_digest`, and the `root_commit_evidence` tuple (`operation_id`, fencing generation, `has_journal`, journal revision, and commit-state code), encoded exactly as defined below the table | Authenticates the root body named by the pointer, including the complete catalog-shard set and the complete key-epoch control-record set, not only the record-marker set. The digest field itself is excluded from its input. |
 | `pointer_digest` | `"worldscript-r15/pointer/v1"` bytes, then the canonical slot name, `u64be(root_generation)`, and the 32-byte `root_digest` | Binds the active-slot pointer to one committed root slot. |
-| `inventory_digest` | `"worldscript-r15/inventory/v1"` bytes, then `u32be(inventory_version)`, `u32be(entry_count)`, and sorted record descriptors containing class, the §6.2-tagged logical-identity binding, the §6.2-tagged project-ID scope binding, and the exact `source_authority_kind`/`has_source_generation`/`source_generation` presence encoding defined in §10.1 | Makes a migration inventory reproducible without hashing plaintext payloads. |
+| `inventory_digest` | `"worldscript-r15/inventory/v1"` bytes, then `u32be(inventory_version)`, `u32be(entry_count)`, and record descriptors sorted per the canonical tuple defined below, each encoded as class, the §6.2-tagged logical-identity binding, the §6.2-tagged project-ID scope binding, the exact `source_authority_kind`/`has_source_generation`/`source_generation` presence encoding defined in §10.1, and — only when `source_authority_kind = FOREIGN_PROTECTED` — the `source_scheme_id`/`source_format_version`/source-side identity and project-scope bindings/`source_evidence_digest` fields defined in §10.1.2 | Makes a migration inventory reproducible without hashing plaintext payloads. |
+
+**Canonical inventory sort order (version 1).** `inventory_digest` orders its record descriptors by
+exactly the tuple `(source record-class token bytes, tagged logical-record identity binding bytes,
+tagged project-scope binding bytes, source_authority_kind code, source_scheme_id code)`, compared
+byte-wise in that field order. A field that does not apply to a given entry uses its canonical
+absent representation rather than an omitted or renumbered tuple: the tagged project-scope binding
+uses its existing `u8(0)` absent encoding (§5.2.1, §6.2) when no project scope applies, and
+`source_scheme_id` uses `NONE / PLAINTEXT = 0` (§10.1.2) as its canonical absent representation for
+every `LEGACY_PLAINTEXT` or `R15_PROTECTED` entry, not only for `FOREIGN_PROTECTED` entries that
+happen to select that code. This sort key is derived exclusively from authenticated descriptor
+identity fields the Core itself controls. It is never filesystem path, locale collation, JSON
+serialization order, timestamp, directory enumeration order, or an implementation's internal enum
+order. Source generation/fingerprint is descriptor content, not a primary sort-key component: §10.1's
+inventory model produces at most one source descriptor per logical identity per migration operation,
+so no discriminator is needed to disambiguate multiple descriptors for the same identity in one
+inventory; a future admitted operation kind that can legitimately produce more than one source
+descriptor for the same identity in a single inventory must add an explicit discriminator field to
+this tuple and bump `inventory_version`, never rely on source-generation ordering to disambiguate
+silently.
 
 `root_commit_evidence` is encoded, in order, as: the §6.2 string encoding of `operation_id`
 (`u32be(byte_length)` then UTF-8 bytes), `u64be(fencing_generation)`, `u8(has_journal)`,
@@ -697,9 +716,13 @@ in §8.5.
 
 This entry-digest design replaces the previous inline-tuple entry shape entirely, including the
 former `asset-pair`-specific carve-out at the `marker_set_digest` table-row level: every record
-class, including `asset-pair`, now uses the same four-field outer entry — record class, tagged
-identity, tagged project scope, `marker_entry_digest` — in `marker_set_digest`'s input; only the
-hashed body inside `marker_entry_digest` differs by class and state.
+class, including `asset-pair`, now uses the same five-field outer entry — record class, tagged
+identity, tagged project scope, `u64be(marker_generation)`, `marker_entry_digest` — in
+`marker_set_digest`'s input; only the hashed body inside `marker_entry_digest` differs by class and
+state. `marker_generation` is never dropped from this outer entry in any restatement of the
+`marker_set_digest` shape elsewhere in this document; the full five-field list in §5.4's digest
+table above is the sole wire-format authority, and no simplified summary may be read as an alternate
+encoding.
 
 Every control-plane occurrence of a logical identity or project ID — `marker_set_digest` entries and
 the canonical marker bodies hashed into `marker_entry_digest` (including the `asset-pair` body
@@ -755,15 +778,60 @@ catalog page, for the same non-recursion reason the root has no marker for a mar
 migration journal excludes itself and its own control apparatus from the per-record inventory it
 gates (§10.1) — the same finite-base-case principle applied a third time.
 
-Each catalog page contains only bounded, authenticated descriptors for ordinary protected records:
-record-class token, the §6.2-tagged logical-identity binding, the §6.2-tagged project scope binding
-when present, pair/group identity when present, `marker_generation` and `marker_entry_digest` for
-the identity's current marker (§5.4), current record generation, epoch, marker state, and content
-digest — enough to locate and authenticate the current marker without ambiguity. Some duplication
-between the catalog descriptor and the marker body it names is acceptable; no value may be
-ambiguous. The catalog pages are generation-addressable records covered by the root's marker set;
-page order, count, and shard identity are authenticated by the `catalog_set_digest` defined in
-§5.4, which is itself an explicit input to `root_digest`. Because the root binds both
+Each catalog page contains only bounded, authenticated descriptors for ordinary protected records,
+using the exact version-1 descriptor field list below. Fields that name currently readable authority
+use explicit presence encoding, never a sentinel value, so a descriptor for a record with no
+committed payload generation yet is never forced to invent one:
+
+```text
+record_class                     exact §6.1.1 registry token
+identity                         §6.2-tagged logical-identity binding
+project_scope                    §6.2-tagged project-ID scope binding; u8(0) when absent (§5.2.1)
+marker_generation                u64be; the identity's current marker generation (§5.4)
+marker_entry_digest              32 bytes; the identity's current canonical marker-body digest (§5.4)
+marker_state                     u32be; the version-1 state_code (§5.4)
+
+has_active_record_generation     u8
+active_record_generation         u64be, present only when has_active_record_generation = 1
+
+has_active_epoch                 u8
+active_epoch                     u64be, present only when has_active_epoch = 1
+
+has_content_digest               u8
+content_digest                   32 bytes, present only when has_content_digest = 1
+```
+
+For a brand-new record's catalog entry — the `ABSENT -> PENDING(none -> 1)` transition — the
+descriptor is `marker_state = PENDING`, `marker_generation` present, `marker_entry_digest` present,
+and `has_active_record_generation = 0`, `has_active_epoch = 0`, `has_content_digest = 0`: a
+descriptor for a record that has never had a committed payload generation is never required to name
+one, and it never substitutes a sentinel (`0`, `-1`, or an all-zero digest) for an absent field. The
+pending marker itself (§5.4's `PENDING`/`READ_AUTHORITY_PENDING` canonical body), not the catalog
+descriptor, is the authority for target generation, target epoch, candidate descriptor, and
+operation/fence metadata; the catalog descriptor never duplicates that speculative target
+information into the `active_record_generation`/`active_epoch`/`content_digest` fields, which name
+only currently readable authority. Some duplication between the catalog descriptor and the marker
+body it names is acceptable — both name the same `marker_generation`/`marker_entry_digest` — but no
+value may be ambiguous, and the catalog's `has_active_*`/`active_*` fields never carry a pending
+target's information under the currently-readable field names.
+
+Authenticated enumeration and readability are two distinct guarantees. `list_records` may report that
+a logical identity exists — including one in a `PENDING`/`READ_AUTHORITY_PENDING` transition, per its
+catalog descriptor's `marker_state` — without that identity being a *readable* record: a descriptor
+with `has_active_record_generation = 0` (as every brand-new `PENDING` descriptor above requires) has
+no committed payload generation, and `read_record` on that identity returns the applicable §7 outcome
+(`PROTECTED_READ_AUTHORITY_PENDING`, or no result at all before `PENDING` is itself durable) rather
+than a payload. A record becomes readable only once its catalog descriptor reaches
+`marker_state = ACTIVE` with `has_active_record_generation = 1`, `has_active_epoch = 1`, and
+`has_content_digest = 1` under the same committed root. Enumerable-but-not-yet-readable is an
+expected, authenticated state, not a catalog defect, and `list_records` callers must not treat
+enumeration alone as permission to read.
+
+The catalog pages are generation-addressable records authenticated directly through
+`catalog_set_digest` — never through the ordinary-record `marker_set_digest`, and never through
+another catalog descriptor (this section's non-recursion rule above) — page order, count, and shard
+identity are authenticated by the `catalog_set_digest` defined in §5.4, which is itself an explicit
+input to `root_digest`. Because the root binds both
 `catalog_set_digest` and `marker_set_digest`, the committed root simultaneously selects (a) the
 authenticated catalog generation and (b) the marker-set state — including each descriptor's current
 `marker_generation` — corresponding to it; a catalog descriptor naming a `marker_generation` absent
@@ -880,7 +948,11 @@ used by production randomness): envelope version `1`, suite `1`, key epoch `7`, 
 
 Gate 1 must add the corresponding fixed-key AEAD vector, canonical AAD bytes, and expected tag to
 the headless Core test fixtures. The fixture must cover an absent and a present `project_id`; this
-document's field encoding is the authority those vectors must implement.
+document's field encoding is the authority those vectors must implement. Gate 1 must also add a
+boundary fixture for §6.2's deterministic direct-vs-hashed rule: a `logical_record_id` and a
+`project_id` that each individually fit within the 16,384-byte direct per-field limit, but whose
+combined direct-form canonical AAD would exceed the 32 KiB canonical AAD maximum, so both fields are
+required to fall through to their tagged hashed forms per §6.2 rule D rather than only one of them.
 
 ### 6.1.1 Normative record-class registry
 
@@ -955,7 +1027,35 @@ or `u8(2) + SHA-256("worldscript-r15/project-id/v1" bytes || u32be(full_byte_len
 UTF-8 project ID)` for a longer exact ID. Both hash forms preserve the existing logical identity;
 they are authenticated compact representations, not import-ID renames or truncations. The Core
 must obtain exact identities from verified project/ownership records and hash them incrementally
-when needed. The header is the
+when needed.
+
+**Deterministic direct-vs-hashed selection (version 1).** Whether `logical_record_id` and
+`project_id` use their direct or tagged-hashed AAD form is decided by the following fixed,
+implementation-independent rule, evaluated in order, so no two compliant implementations can select
+different encodings for the same identity pair:
+
+```text
+A. A logical_record_id or project_id that exceeds its direct per-field limit (16,384 bytes,
+   §6.1.2) always uses its tagged hashed representation, independent of the other field.
+B. Otherwise, first construct the size canonical AAD would have if every individually-direct-
+   eligible identity field (logical_record_id and, when present, project_id) were encoded in its
+   direct form.
+C. If that total fits within the 32 KiB canonical AAD maximum (§6.1.2): use their direct forms.
+D. If that total would exceed the 32 KiB maximum: encode BOTH logical_record_id and a present
+   project_id using their tagged hashed forms, even if one of the two would have fit alone.
+E. Recompute the total using the hashed forms and require it to fit the normative AAD maximum.
+   Failure after applying the fixed-size hashed forms indicates malformed or unsupported contract
+   input (an over-limit `domain`/`record_class`/header combination), not an implementation choice,
+   and is rejected before AAD construction rather than resolved by any further fallback.
+```
+
+This deterministic rule is the only admitted selection order. It deliberately forecloses "hash
+whichever field is longest," "hash whichever field the implementation encounters first," or any
+other per-implementation heuristic: two conformant implementations given the same
+`logical_record_id`/`project_id` pair must always compute byte-identical canonical AAD. §6.1.2
+requires a boundary test fixture for the case this rule exists to make deterministic — both IDs
+individually within the 16,384-byte direct bound, but their combined direct-form AAD exceeding the
+32 KiB maximum — and that fixture must exercise rule D, not rule A. The header is the
 single serialization of the version, suite, epoch, generation, schema, nonce, and ciphertext
 length fields: those fields are not serialized a second time as standalone AAD values. All integer
 encodings are unsigned big-endian. Lengths are checked against Core limits before allocation. There
@@ -1325,12 +1425,24 @@ contains:
   inventory is paged (§10.1.1).
 
 **`source_authority_kind` encoding.** Every migration-inventory descriptor names an immutable
-version-1 numeric source-authority kind, covering exactly the source classes this contract admits:
-`LEGACY = 0` for a legacy plaintext source discovered during `enable`/bootstrap (§10.2, §10.4), and
-`PROTECTED = 1` for an already-protected source record being re-enveloped under `rotate` or an
-envelope/schema migration (§10.4), where a real prior `record_generation` exists under the source
-epoch. The associated source generation uses explicit presence encoding, never a sentinel value a
-caller must separately learn means absence:
+version-1 numeric source-authority kind. These are source-*authority* categories — which mechanism a
+Core migration must trust and convert from — not confidentiality labels; `LEGACY_PLAINTEXT` and
+`R15_PROTECTED` are the two kinds this contract has admitted since an earlier pass (renamed here from
+their original `LEGACY`/`PROTECTED` names to make room for the third kind below without ambiguity;
+the numeric codes are unchanged), and `FOREIGN_PROTECTED` is a new third kind admitted by this pass:
+
+- `LEGACY_PLAINTEXT = 0` for a legacy plaintext source discovered during `enable`/bootstrap (§10.2,
+  §10.4).
+- `R15_PROTECTED = 1` for an already-protected R-15 source record being re-enveloped under `rotate`
+  or an envelope/schema migration (§10.4), where a real prior `record_generation` exists under the
+  source epoch.
+- `FOREIGN_PROTECTED = 2` for a source currently protected by a mechanism OTHER than R-15 — a
+  packaged-desktop WebView encryption authority such as `storageEncryptionService`'s IDB at-rest
+  protection or the separate `idbKeyStore` credential authority. §10.1.2 defines its versioned
+  scheme registry, inventory descriptor extension, and migration-compatibility boundary.
+
+The associated source generation uses explicit presence encoding, never a sentinel value a caller
+must separately learn means absence, for all three kinds:
 
 ```text
 source_authority_kind   u32be
@@ -1338,12 +1450,16 @@ has_source_generation   u8
 source_generation       u64be only when has_source_generation = 1
 ```
 
-For a `LEGACY` source, `source_authority_kind = LEGACY` and `has_source_generation = 0`; there is no
-generation number for plaintext that was never a protected record. For a `PROTECTED` source,
-`source_authority_kind = PROTECTED`, `has_source_generation = 1`, and `source_generation` is the
-source record's existing `record_generation` under the source epoch. `inventory_digest` (§5.4) hashes
-this exact encoding, not a generic prose description of "source-authority kind and source
-generation."
+For a `LEGACY_PLAINTEXT` source, `source_authority_kind = LEGACY_PLAINTEXT` and
+`has_source_generation = 0`; there is no generation number for plaintext that was never a protected
+record. For an `R15_PROTECTED` source, `source_authority_kind = R15_PROTECTED`,
+`has_source_generation = 1`, and `source_generation` is the source record's existing
+`record_generation` under the source epoch. For a `FOREIGN_PROTECTED` source,
+`source_authority_kind = FOREIGN_PROTECTED` and `has_source_generation`/`source_generation` follow
+the foreign scheme's own generation semantics (§10.1.2) — present only when that scheme actually
+tracks one — and the descriptor carries the additional `FOREIGN_PROTECTED`-only fields §10.1.2
+defines. `inventory_digest` (§5.4) hashes this exact encoding, not a generic prose description of
+"source-authority kind and source generation."
 
 The inventory is streamed or paged. The entire project and full record list are never required in
 memory. A checkpoint is written only after the corresponding record conversion and verification
@@ -1449,51 +1565,196 @@ the journal or its pages to the per-record `CONVERT`/`VERIFY` inventory the jour
 inventory; `migration-page` envelopes are the same kind of migration-owned control apparatus and
 are excluded on the same basis, not a data record subject to conversion.
 
+### 10.1.2 Foreign-protected source registry and inventory descriptor
+
+This section defines the version-1 `FOREIGN_PROTECTED` machinery §10.1 forward-references: which
+existing non-R-15 protection mechanisms are admitted migration sources, how a `FOREIGN_PROTECTED`
+inventory descriptor extends the common `source_authority_kind` encoding, and the boundary between
+this migration-compatibility concern and the R-15 `KeyProvider`/`Core` authority defined elsewhere in
+this contract.
+
+**Why a third kind is needed.** The two-way `LEGACY_PLAINTEXT`/`R15_PROTECTED` split (§10.1)
+correctly distinguishes plaintext from R-15 ciphertext, but several packaged-desktop `PROTECTED`
+classes in §3 are today protected by a real, independent, non-R-15 cryptographic mechanism —
+`storageEncryptionService`'s WebView IDB at-rest encryption and the separate `idbKeyStore` random-key
+credential authority. Such a source is neither unprotected legacy plaintext nor an existing R-15
+envelope; classifying it as either would either silently treat live ciphertext as plaintext to be
+read directly (a false `LEGACY_PLAINTEXT` claim) or claim an R-15 envelope's generation/epoch
+semantics for bytes that never went through R-15's key/epoch model (a false `R15_PROTECTED` claim).
+`FOREIGN_PROTECTED` names this third, honest category instead of collapsing it into either existing
+one.
+
+**Versioned foreign protection-scheme registry (version 1).** `source_scheme_id` is an immutable,
+version-1 numeric registry distinguishing the mechanisms that actually exist in the packaged desktop
+application, at minimum:
+
+```text
+0   NONE / PLAINTEXT             no foreign protection scheme applies; the canonical absent
+                                  representation for a LEGACY_PLAINTEXT or R15_PROTECTED entry's
+                                  source_scheme_id, including for §5.4's inventory sort tuple
+1   WEBVIEW_IDB_AT_REST_V1        current storageEncryptionService secure-record/IDB at-rest
+                                  protection path (PBKDF2-SHA-256/600,000 -> AES-256-GCM, keyed by
+                                  the retained `idb-kdf-salt:<installation-scope>` record, §3)
+2   CREDENTIAL_IDB_KEYSTORE_V1    separate idbKeyStore random non-extractable AES-GCM credential
+                                  authority (§3's API/provider credentials row); a distinct key-
+                                  acquisition and verification mechanism from code 1, never
+                                  collapsed into it merely because both use AES-GCM
+```
+
+A record protected under `storageEncryptionService`'s policy — including scene revisions where that
+IDB policy applies (§3) — uses `WEBVIEW_IDB_AT_REST_V1` rather than a bespoke per-class cipher code,
+because it is the same key-derivation/verification mechanism regardless of which logical record class
+lives in that database. A record protected by a materially different cryptographic
+verification/key-acquisition mechanism registers its own immutable code rather than sharing one; code
+2 exists specifically because `idbKeyStore`'s random non-extractable per-credential key has no KDF,
+no shared salt, and no passphrase — a different key authority from code 1, not an implementation
+detail of it. `libraryBackupService.ts` encrypted ZIPs are deliberately NOT registered here: §10.4
+already classifies them `MIGRATION_INPUT_ONLY`, requiring an explicit user import/ownership operation
+before Core ever reads them; folding them into the automatic `FOREIGN_PROTECTED` inventory would
+erase that already-established explicit-disclosure boundary. A future scheme requires a new immutable
+code and a compatibility rule, never a reused or renamed value.
+
+**`FOREIGN_PROTECTED` inventory descriptor extension.** In addition to the common
+`source_authority_kind`/`has_source_generation`/`source_generation` fields (§10.1), a
+`FOREIGN_PROTECTED` inventory descriptor binds:
+
+```text
+source_authority_kind          = FOREIGN_PROTECTED
+source_scheme_id                u32be; this registry's code
+source_format_version           u32be; the foreign scheme's own format/version marker
+source_identity_binding         §6.2-tagged binding of the source-side logical identity, as the
+                                 foreign scheme's own routing evidence names it
+source_project_scope_binding    §6.2-tagged binding of the source-side project scope; u8(0) when
+                                 the foreign scheme carries none
+has_source_generation            u8   (from the common encoding above)
+source_generation                u64be, present only when the foreign scheme has a generation
+                                 concept and has_source_generation = 1
+source_evidence_digest           32 bytes; SHA-256("worldscript-r15/foreign-source-evidence/v1"
+                                 bytes || the scheme-defined canonical opaque source representation
+                                 or authenticated routing evidence)
+```
+
+`source_identity_binding`/`source_project_scope_binding` are the frozen-inventory-time authenticated
+claim of the *source's own* identity/scope, encoded with the same §6.2 tagged direct-or-hashed
+mechanism used for the destination `logical_record_id`/`project_id` bindings elsewhere in the
+inventory descriptor (§5.4). They are a separate, independently authenticated commitment from the
+destination binding in the same descriptor, not a copy of it: §10.6/§15.3's no-transitive-trust rule
+requires Core to independently validate that the source-side identity actually maps to the intended
+destination `RecordIdentity` before conversion, rather than assuming the two bindings mean the same
+thing merely because they were captured in the same inventory entry.
+
+`source_evidence_digest` is a domain-separated digest over the scheme-defined canonical opaque source
+representation or authenticated routing evidence — for example, the foreign envelope's own
+authenticated header/AAD bytes, or an equivalent scheme-defined routing commitment — never a hash
+offered as a substitute for actually verifying the old encryption at conversion time. Its sole purpose
+is detecting source mutation between frozen inventory and conversion (§10.6); a mismatch at
+conversion time returns `SOURCE_CHANGED_SINCE_INVENTORY` (§15.3) rather than being silently ignored.
+The journal/inventory never contains raw source keys, passphrases, decrypted plaintext, or any other
+secret derived from the foreign source — only this non-secret evidence digest and the non-secret
+routing/scope bindings above.
+
+`inventory_digest` (§5.4) hashes this exact `FOREIGN_PROTECTED` extension, appended after the common
+fields, for every descriptor whose `source_authority_kind = FOREIGN_PROTECTED`; a `LEGACY_PLAINTEXT`
+or `R15_PROTECTED` descriptor never carries these extension fields at all, rather than carrying them
+with a sentinel absent value.
+
 ### 10.2 Bootstrap for first-time enable
 
 Enabling protection from `UNCONFIGURED` cannot first write a plaintext journal and cannot encrypt a
-journal before a target key exists. The operation therefore has an explicit `BOOTSTRAP_TARGET`
-step before the first protected `DISCOVER` checkpoint:
+journal before a target key exists, and it must not invent a bootstrap-only trust mechanism separate
+from the two-phase secure-anchor protocol §5.3.1 already defines for every later root commit. The
+operation therefore uses that exact same `prepare_root_anchor`/`commit_root_anchor` sequence, applied
+to the `UNCONFIGURED -> first COMMITTED root` transition, in an explicit `BOOTSTRAP_TARGET` step
+before the first protected `DISCOVER` checkpoint:
 
-1. The key adapter creates/resolves target epoch `M` and stores only its key reference/material in
-   the approved keystore or passphrase adapter; no raw key is written to the data directory.
-2. The adapter durably stores only the non-secret epoch/key reference and verifier through the
-   approved keystore or passphrase adapter; Core establishes the protected journal key context.
-   The first protected control record is encrypted under `M`, so no plaintext journal or data-
-   directory key record is needed. If key preparation fails, no migration journal is claimed and
+1. The key adapter creates/resolves target epoch `M` and its approved target key reference,
+   storing only key reference/material in the approved keystore or passphrase adapter; no raw key
+   is written to the data directory. If key preparation fails, no migration journal is claimed and
    the known legacy authority remains untouched.
-3. Core durably writes the first `authority-root:<scope>` root slot under target epoch `M`, in the
-   `NOT_COMMITTED` state of the `root_commit_evidence` encoding defined in §5.4 (`has_journal = 1`,
-   `journal_revision = 0` — the journal's initial checkpoint revision, since the journal itself is
-   not yet durable), naming the exact `operation_id` and fencing generation the bootstrap is about
-   to use. This is the authenticated bootstrap pointer: a crash after this point leaves durable,
-   authenticated evidence of which operation ID owns the journal that step 4 is about to create, so
-   restart never needs to already know or trust an operation ID from a filename. A `NOT_COMMITTED`
-   slot is never treated as authority (§5.3); it only anchors discovery.
-4. Core writes the first journal under target epoch `M`, tagged with the exact `operation_id` named
-   by the `NOT_COMMITTED` slot from step 3, with source authority explicitly marked `LEGACY` and
-   state `MIGRATING(source=LEGACY,target=M)`. Legacy project data remains authoritative until the
+2. Core constructs the initial `key-epoch:<scope>:M` control record (§5.4) — the generation-addressed,
+   immutable protected payload carrying epoch `M`'s key-provider reference, verifier metadata, and
+   status, never raw key material — at `registry_generation = 1`. This is the record
+   `key_epoch_set_digest` (§5.4) must bind before any root can legally claim `active_key_epoch = M`
+   (§5.4's finding-#8 invariant); bootstrap cannot skip it merely because there is no prior registry
+   to extend.
+3. Core determines the canonical final `COMMITTED` bootstrap root representation: `root_generation`
+   = the first generation, `active_key_epoch = M`, the (empty, single-entry) `marker_set_digest`
+   appropriate to a still-empty record set, an empty `catalog_set_digest`, the `key_epoch_set_digest`
+   binding the step-2 record, and `root_commit_evidence` with `root_commit_state_code = COMMITTED`,
+   `has_journal = 1`, and `journal_revision = 0` — the journal's deterministic initial-checkpoint
+   revision, known before the journal's own bytes are materialized in step 7, not a value only the
+   journal itself can supply (§5.3.1's D/E-collapsing rule already establishes this precomputability
+   for bootstrap; nothing here is a special case of it).
+4. Core computes `target_final_root_digest` (§5.3.1) over the exact representation determined in
+   step 3.
+5. Core calls `prepare_root_anchor` (§5.3.1 step C; expected prior state = `UNCONFIGURED`, i.e. no
+   `committed_root` yet exists) with the target generation, `target_final_root_digest` from step 4,
+   the target slot, `target_root_key_ref` = epoch `M`'s key reference, and the bootstrap
+   `operation_id`. This durably records, in the secure anchor, the only key reference a later restart
+   may trust for this bootstrap attempt — closing the exact crash window finding #1 identified: a
+   crash after this point leaves an authenticatable `prepared_root_commit` naming epoch `M`, not an
+   unauthenticatable bare filesystem slot.
+6. Core durably writes the first `authority-root:<scope>` root slot under target epoch `M`, in the
+   `NOT_COMMITTED` state of the `root_commit_evidence` encoding (§5.3.1 step D), naming the exact
+   `operation_id` and fencing generation from step 5. A `NOT_COMMITTED` slot is never treated as
+   authority (§5.3); it only anchors discovery, and its own digest legitimately differs from
+   `target_final_root_digest` per §5.3.1's normal D/E distinction.
+7. Core writes the first journal under target epoch `M`, tagged with the exact `operation_id` named
+   by steps 5-6, with source authority explicitly marked `LEGACY_PLAINTEXT` and state
+   `MIGRATING(source=LEGACY_PLAINTEXT,target=M)`. Legacy project data remains authoritative until the
    later `COMMIT` phase.
+8. Core verifies the exact final bootstrap authority state before proceeding: the step-2 key-epoch
+   record, the step-6 `NOT_COMMITTED` slot, and the step-7 journal all authenticate under the same
+   `operation_id` and target epoch `M`, and together reproduce exactly the representation
+   `target_final_root_digest` (step 4) commits to. A mismatch here is `RECOVERY_REQUIRED`, never a
+   best-effort repair.
+9. Core installs the `COMMITTED` root matching `target_final_root_digest` (§5.3.1 step E): the same
+   slot's evidence advances from `NOT_COMMITTED` to `COMMITTED`, and the directory-synchronized
+   active-slot pointer advances to it.
+10. Core calls `commit_root_anchor` (§5.3.1 step F), advancing `committed_floor` and `committed_root`
+    to this bootstrap generation only after re-authenticating step 9's durable representation against
+    `target_final_root_digest`.
+11. Only after step 10 succeeds does Core report bootstrap authority durable (§5.3.1 step G).
 
-If the process crashes after step 3's `NOT_COMMITTED` slot is durable but before step 4's journal is
-durable, restart authenticates the slot, recovers the named `operation_id`, finds no matching
-journal, and deterministically resumes bootstrap by writing the first journal under that exact same
-`operation_id` and epoch `M` rather than minting a new one — the anchored identity is never
-orphaned. If the process crashes before step 3, no authenticated evidence of a bootstrap attempt
-exists yet, so restart remains `UNCONFIGURED`; any stray bytes from an unanchored attempt are inert
-and are never adopted merely because a filename or operation ID looks plausible. Once both the slot
-and its named journal are durable, restart authenticates the slot, resolves the operation ID, and
-resumes the same journal deterministically.
+Steps 5-6 and 9-10 are exactly §5.3.1's C/D and E/F; bootstrap introduces no parallel commit
+mechanism, only this specific `UNCONFIGURED -> first-COMMITTED-root` instantiation of it, with steps
+2-3 and 7-8 supplying the bootstrap-specific content (the key-epoch record and the journal) that the
+generic sequence commits. Crash recovery therefore follows §5.3.1's crash-recovery table directly:
+
+- **Before step 5 is durable** — no authenticated secure-anchor intent exists yet. Restart remains
+  `UNCONFIGURED`; any stray bytes from an unanchored attempt (a partial step-2 record, for example)
+  are inert and are never adopted merely because a filename or operation ID looks plausible.
+- **After step 5, before step 6 is durable** — an authenticated `prepared_root_commit` names epoch
+  `M`'s trusted key reference and `operation_id`, but the target root slot is absent or incomplete
+  (§5.3.1's "After C, before D" row). Restart resolves the trusted key from this preparation — never
+  from an unauthenticated slot header, never by trying every `list_epochs()` entry — and either
+  discards the preparation or, only if it can deterministically confirm no slot write ever started,
+  re-enters step 6 for the same `operation_id`. `committed_floor`/`committed_root` are not raised.
+- **After step 6, before step 7 is durable** — the `NOT_COMMITTED` slot is durable and authenticatable
+  against the step-5 preparation's trusted key reference, but no matching journal exists yet. Restart
+  authenticates the slot, recovers the named `operation_id` and target epoch `M` from the secure
+  anchor's `prepared_root_commit` (never from the slot's own header), and deterministically resumes
+  by writing the journal under that exact same `operation_id` and epoch — the anchored identity is
+  never orphaned, and this is the specific gap finding #1 closes relative to the pre-existing text.
+- **After step 7, before step 9 is durable** — §5.3.1's "After D, before E" row: the slot remains a
+  non-authoritative `NOT_COMMITTED` candidate regardless of how much bootstrap-specific content (the
+  journal) has accumulated around it.
+- **After step 9, before step 10 is durable** — §5.3.1's "After E, before F" row applies verbatim:
+  startup re-authenticates the `prepared_root_commit` against the durable `COMMITTED` slot's own
+  evidence and re-derived digest, matching `operation_id`/`target_root_generation`/
+  `target_final_root_digest` exactly, and only on an exact match completes step 10.
+- **After step 10** — `committed_floor`, `committed_root`, and the committed root's `root_generation`
+  agree; bootstrap is durable and idempotent to re-observe.
 
 The bootstrap epoch is not active project authority merely because it protects the journal. A crash
-before `COMMIT` resumes from the journal or returns an explicit recovery result; it never interprets
-the absence of a target record as permission to write defaults.
+before `COMMIT` (§10.3) resumes from the journal or returns an explicit recovery result; it never
+interprets the absence of a target record as permission to write defaults.
 
 ### 10.3 Migration phases
 
 | Phase | Durable before/after; crash view | Resume/rollback; reads/writes |
 |---|---|---|
-| `BOOTSTRAP_TARGET` | Target key reference/verifier, the `NOT_COMMITTED` first root slot naming the operation ID, and the first protected journal are durable; legacy records are unchanged and remain authoritative. | If preparation fails, remain `UNCONFIGURED` with legacy data untouched. If the process crashes before the root slot is durable, remain `UNCONFIGURED`; if it crashes after the root slot but before the journal, resume by writing the journal under that same anchored operation ID. Once both are durable, resume the same operation from the journal or enter recovery. Reads use legacy authority; no ordinary record writes occur before the journal exists. |
+| `BOOTSTRAP_TARGET` | Target key reference/verifier, the initial `key-epoch:<scope>:M` control record, a secure-anchor `prepared_root_commit` naming epoch `M` (§10.2 step 5), the `NOT_COMMITTED` first root slot naming the operation ID, and the first protected journal are durable in that order; legacy records are unchanged and remain authoritative. | If preparation fails, remain `UNCONFIGURED` with legacy data untouched. Before the secure-anchor preparation (§10.2 step 5) is durable, remain `UNCONFIGURED`. After it but before the root slot, resolve the trusted key only from that preparation and resume from step 6. After the root slot but before the journal, resume by writing the journal under that same anchored operation ID (§10.2 step 7). Once the root is durably `COMMITTED` and the secure anchor's `commit_root_anchor` has run (§10.2 steps 9-10), resume the same operation from the journal or enter recovery. Reads use legacy authority; no ordinary record writes occur before the journal exists. |
 | `DISCOVER` | Journal operation ID and a preliminary deterministic inventory identity are durable; records are not changed. | Resume re-runs discovery. The preliminary inventory is not sufficient for commit; a changed/unverifiable inventory enters recovery. Reads use the existing authority; ordinary writes may occur only before the final barrier. |
 | `PREPARE` | Target key/verifier, staging namespace, and source/target policy are durable. | Idempotently reuse the same target epoch and operation. No old authority is deleted. Reads use source; ordinary writes stop once admission is acquired. |
 | `ADMIT` | Exclusive migration ownership and write barrier are durable; only now is the final streamed inventory snapshot and digest captured. | The final inventory includes records created before the barrier and becomes the commit inventory. If ownership is lost, restart claims the same journal only after lease expiry and fencing CAS. No ordinary writes cross the barrier; reads remain Core-selected. |
@@ -1529,6 +1790,41 @@ ZIPs are user-selected external artifacts classified as `MIGRATION_INPUT_ONLY`; 
 auto-discovered as live Core backups or converted merely because they are present on disk. Reading
 or converting one requires an explicit user operation and a separate import/ownership check.
 
+### 10.4.1 Migration disposition per protected class
+
+Not every `PROTECTED` class from §3 is a candidate for the generic R-15 data-envelope path merely
+because it is classified `PROTECTED` — some already have their own approved, independent protected
+authority. For each `PROTECTED` class, the migration plan names exactly one disposition, immutable
+once admitted for that class:
+
+```text
+MIGRATE_TO_R15                          the ordinary path: convert into an R-15 envelope under this
+                                          contract's identity/generation/AAD model
+RETAIN_APPROVED_SEPARATE_PROTECTED_AUTHORITY
+                                          the class keeps its existing, independently-approved
+                                          protection mechanism (e.g. a dedicated secret/keystore
+                                          authority); it never becomes an ordinary R-15 filesystem
+                                          record merely for uniformity
+MIGRATE_TO_APPROVED_NATIVE_SECRET_AUTHORITY
+                                          a future, separately authorized native secret-store
+                                          migration target, distinct from both R-15 filesystem
+                                          records and the class's current mechanism
+REFUSE_AUTHORITY_SWITCH
+                                          the class blocks the authority switch until its
+                                          disposition is decided; an unset disposition is this
+                                          state by default, never a silent MIGRATE_TO_R15
+```
+
+API/provider credentials (§3) are the normative example: their disposition is
+`RETAIN_APPROVED_SEPARATE_PROTECTED_AUTHORITY` (the existing `idbKeyStore` random non-extractable
+key authority, or a future OS-keystore equivalent) unless a separate, explicit product/security
+decision selects `MIGRATE_TO_APPROVED_NATIVE_SECRET_AUTHORITY` — never `MIGRATE_TO_R15`, because
+folding credentials into the ordinary envelope/generation/epoch model would give the renderer or an
+ordinary record-read path a way to observe credential ciphertext structure the dedicated authority
+deliberately isolates. **Gate 7 (§20) may not claim complete packaged-desktop protection while any
+`PROTECTED` class's disposition is unset or is `REFUSE_AUTHORITY_SWITCH`.** No disposition permits
+silent plaintext export of the class it governs.
+
 ### 10.5 Legacy plaintext and corruption
 
 Discovery distinguishes known healthy legacy plaintext, unknown shape, corrupt/unreadable data,
@@ -1537,6 +1833,66 @@ Only a recognized, ownership-verified legacy record is a migration candidate. A 
 is preserved, optionally quarantined under a recovery identity, and surfaced as recovery-required
 or per-record migration failure. Migration may continue independent records only when the journal
 can prove that doing so cannot hide or overwrite the failed record.
+
+### 10.6 Foreign-protected migration, key availability, and no-transitive-trust
+
+This section governs conversion of every `FOREIGN_PROTECTED` (§10.1, §10.1.2) source — a record
+currently protected by a real, independent, non-R-15 mechanism such as `WEBVIEW_IDB_AT_REST_V1` or
+`CREDENTIAL_IDB_KEYSTORE_V1`. It is strictly a migration-compatibility concern: it does not extend
+R-15's own threat model or key authority, and it does not create a new long-term renderer security
+boundary. §2.2's threat-model boundary is unchanged by anything in this section.
+
+**Preserve-first foreign migration flow.** For every `FOREIGN_PROTECTED` source, conversion follows
+exactly this ordering, each step durable before the next begins:
+
+```text
+freeze/admit writer
+  -> capture exact source descriptor/evidence (§10.1.2's frozen-inventory fields)
+  -> obtain required legacy unlock/key authority (via MigrationSourceAdapter, §15.3)
+  -> authenticate + decrypt source (MigrationSourceAdapter.open_verified, §15.3)
+  -> validate identity/schema against the frozen migration contract (this section's
+     no-transitive-trust rule, below)
+  -> create R-15 ciphertext under the *final* destination identity (§9's existing final-AAD-from-
+     creation staging discipline — the foreign-decrypted plaintext feeds the same staging path an
+     ordinary write already uses, from the moment ciphertext is first produced)
+  -> verify the R-15 candidate
+  -> commit the R-15 marker/catalog/root (§9 step 9, §5.3.1, §5.5)
+  -> preserve the old foreign-protected source
+  -> continue migration verification for remaining records
+```
+
+Core never deletes or disables an old `FOREIGN_PROTECTED` source immediately after one record
+converts. The old source remains recovery authority until: every applicable record verifies under
+the new R-15 authority; the final authority switch (§20 Gate 7) is durable; rollback/recovery no
+longer references the foreign source; every scheme-specific key/salt material the source depends on
+is no longer needed by any retained record (for `WEBVIEW_IDB_AT_REST_V1`, this is exactly the
+`idb-kdf-salt:<installation-scope>` retention rule §3 already states, tied specifically to that
+scheme); and cleanup/finalization itself commits durably.
+
+**Foreign-key availability.** A `FOREIGN_PROTECTED` source is not migration-ready merely because its
+ciphertext parses; conversion requires successful verification under its own admitted source scheme
+(`MigrationSourceAdapter.open_verified`, §15.3). If the required legacy key, passphrase, or
+non-extractable `CryptoKey` handle is unavailable, Core does **not**: treat the record as corrupt
+automatically, fall back to reading it as plaintext, delete it, reset it, write a default value in
+its place, or mark migration complete while it remains unconverted. Core returns the applicable
+typed source failure (§15.3) and preserves the original foreign-protected authority exactly as it
+was. **For an inventory-complete authority switch, an unresolved, non-regenerable `FOREIGN_PROTECTED`
+source is a blocker** — this is the same admission-readiness requirement Gate 5 (§20) already applies
+to WebView writer fencing, extended to source-key availability: a class cannot reach Gate 5's final
+inventory snapshot while a required foreign key is known to be permanently unavailable for a record
+that class's migration plan does not otherwise refuse or exempt.
+
+**No transitive trust from source encryption.** A source record successfully authenticating under
+its foreign scheme proves only that "these particular source bytes were valid under that foreign
+scheme/context" — it does not make the foreign scheme's own routing metadata (its notion of record
+class, logical identity, or project scope) automatically valid R-15 identity. Before encrypting a
+foreign-decrypted plaintext into R-15 ciphertext, Core independently validates the record class,
+logical identity, project scope, schema, and owner relationship the *frozen migration inventory*
+assigned to that source descriptor (§10.1.2's `source_identity_binding`/`source_project_scope_binding`
+are the frozen claim being validated against, not assumed equal to the destination binding merely
+because both appear in the same inventory entry) — and confirms the source is still a member of the
+admitted migration inventory. This prevents a valid old foreign ciphertext from being rebound to the
+wrong R-15 logical identity merely because it successfully decrypted.
 
 ## 11. Unified admission model (#360)
 
@@ -1742,6 +2098,60 @@ approximate the ordering with a weaker primitive. Once admitted, a genuine mid-o
 the prepare/commit sequence resolves per §5.3.1's crash-recovery table; an adapter that cannot even
 distinguish those crash states returns `RECOVERY_REQUIRED` rather than claim durable success.
 
+### 15.3 MigrationSourceAdapter boundary
+
+Core owns migration semantics — identity validation, admission, and destination encryption. Foreign
+(non-R-15) cryptographic mechanics belong behind an explicit, separate compatibility boundary, kept
+distinct from `KeyProvider` (§8.2) and from the `source_scheme` registry (§10.1.2, which only
+*identifies* a mechanism, never verifies it):
+
+```text
+MigrationSourceAdapter.inspect(source_scheme_id, source_locator)
+    -> canonical source descriptor (§10.1.2's FOREIGN_PROTECTED inventory fields)
+
+MigrationSourceAdapter.open_verified(descriptor, source_authority_or_unlock_context)
+    -> verified plaintext stream/value
+       OR one of: SOURCE_LOCKED, SOURCE_KEY_UNAVAILABLE, SOURCE_AUTHENTICATION_FAILED,
+                  SOURCE_UNSUPPORTED_VERSION, SOURCE_CHANGED_SINCE_INVENTORY,
+                  SOURCE_IDENTITY_MISMATCH, SOURCE_RECOVERY_REQUIRED
+```
+
+**`SOURCE_CHANGED_SINCE_INVENTORY`** is returned when the source's re-derived evidence no longer
+matches the frozen `source_evidence_digest` (§10.1.2) captured at inventory time. **The R-15
+`KeyProvider` is not the legacy-key registry.** Core does not copy every existing WebView key into
+the future R-15 `KeyProvider` merely to make migration convenient, and does not export a
+non-extractable WebCrypto key merely to satisfy a uniform API. Where a current source key is
+intentionally non-extractable (for example, `idbKeyStore`'s per-credential keys), the
+`MigrationSourceAdapter` authenticates and decrypts *within the legacy authority that already owns
+that key* and returns only the verified plaintext result to the Core migration operation calling
+`open_verified` — it never extracts or relocates the legacy key itself.
+
+That returned plaintext:
+
+- exists only in bounded process memory for the duration of the conversion step;
+- is never persisted as intermediate plaintext, on disk or otherwise;
+- is never logged (§14's redaction rule applies to it identically);
+- is immediately validated against the destination record schema/identity (§10.6's
+  no-transitive-trust rule) before any further use;
+- is encrypted directly into final-identity R-15 ciphertext staging (§9's existing final-AAD-from-
+  creation discipline — the same staging path an ordinary write uses, just fed by foreign-decrypted
+  bytes instead of a fresh plaintext write);
+- is released as soon as that conversion step completes.
+
+This is a **migration-compatibility mechanism**, not a new long-term renderer security authority: it
+exists only to move bytes from an already-approved legacy protection into R-15, and it confers no
+standing access beyond the single conversion operation it serves. §2.2's threat-model boundary is
+unchanged — a renderer already compromised while unlocked remains outside R-15's protection claim,
+`MigrationSourceAdapter` included.
+
+**Four non-collapsing layers.** `KeyProvider` (§8.2, the future R-15 target key authority),
+`MigrationSourceAdapter` (this section, the temporary compatibility boundary for *existing* source
+protection), the `source_scheme` registry (§10.1.2, which mechanism identifies which verification
+rules apply), and Core itself (identity validation, migration semantics, destination encryption, and
+authority decisions) are four distinct roles. An implementation must not collapse them into one
+generic "crypto adapter" — in particular, `MigrationSourceAdapter` never becomes a general-purpose
+key-management facility, and `KeyProvider` never gains foreign-scheme decryption responsibility.
+
 ## 16. Headless implementation and fault-injection requirements
 
 The Rust/Core test harness must run without Tauri or Qt and provide:
@@ -1806,6 +2216,19 @@ Required assertions include:
     manifest-updated-with-incomplete-page-durability, page-set replay, and
     resume-after-partial-page-conversion — and confirms an unauthenticatable paged state returns
     `RECOVERY_REQUIRED` rather than a guess from filenames or page count.
+19. `FOREIGN_PROTECTED` fault-injection coverage (§10.6, §15.3) exercises, at minimum: foreign
+    ciphertext changed after final inventory (`SOURCE_CHANGED_SINCE_INVENTORY`); foreign key
+    unavailable (`SOURCE_KEY_UNAVAILABLE`); foreign key wrong (`SOURCE_AUTHENTICATION_FAILED`);
+    foreign AEAD/tag failure; foreign scheme version unsupported (`SOURCE_UNSUPPORTED_VERSION`);
+    foreign source decrypt succeeds but destination identity validation fails
+    (`SOURCE_IDENTITY_MISMATCH`); crash after foreign decrypt but before R-15 candidate durability;
+    crash after R-15 candidate durability but before authority commit; crash after R-15 commit while
+    the foreign source is still retained; resume with the foreign source unchanged; resume with the
+    foreign source missing; the `idb-kdf-salt:<installation-scope>` record missing while a dependent
+    `WEBVIEW_IDB_AT_REST_V1` source remains; and a `CREDENTIAL_IDB_KEYSTORE_V1` non-extractable key
+    unavailable. Every case remains preserve-first: no assertion may pass by observing source
+    cleanup, plaintext fallback, a default write, or migration marked complete under any of these
+    conditions.
 
 ## 17. Reconciliation of current TypeScript mechanisms
 
