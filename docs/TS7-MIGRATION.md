@@ -37,7 +37,7 @@ package.json
   },
   "pnpm": {
     "overrides": {
-      "typescript": "npm:@typescript/typescript6@~6.0.3"
+      "typescript": "6.0.3"
     }
   }
 }
