@@ -125,6 +125,9 @@ Core contract.
 | RAG/vector/index payloads | `FsCodexStore`; `$APPDATA/projects/<safe-project-id>/codex/vectors.snap`; save/get/delete. | Embeddings and index metadata are content-derived and can support disclosure or cross-project confusion. Current vectors have no embedded provenance, so the project path is the only owner signal. | **PROTECTED** for any persisted native copy; computationally regenerable. | `rag-index:<project-id>:<index-version>`; project scope is mandatory because current payload lacks provenance. Migration must reject unowned vectors rather than guess ownership. |
 | Task metadata | Tauri `task_supervisor` handles bounded requests/results in memory; no native persistent task journal is currently written. | Current task IDs, type, timing and errors are transient; future resumable task payloads could contain user text or paths. | **DERIVED_REGENERABLE** for the current transient class; no native record to migrate. A future persisted task record becomes **PROTECTED** if it carries content or resumability authority. | Future `task:<task-id>`; admission requires an explicit persistence contract before adding files. Do not infer R-15 coverage from current in-memory handling. |
 | Active-project marker | `FsProjectStore`; `$APPDATA/config/active-project-id.txt`; save updates it and boot reads it. | Looks like metadata, but legacy IDs can be title/path-derived and reveal project linkage; a wrong marker can route reads to the wrong project. | **PROTECTED**; small authoritative routing metadata, not safely regenerable from content. | `active-project:<scope>`; bind the referenced project ID and marker schema. Migration must preserve it or fail closed rather than select a default project. |
+| Secure-storage authority manifest | No native record exists on `main`; future Core owns the active epoch, authority generation, record-root mapping, and commit state. | These values decide which protected generation is authoritative and can expose project/storage topology. | **PROTECTED**; security-critical control state, not regenerable after a crash. | `authority:<scope>`; scope is installation or storage-root specific and independent of filesystem path. Migration must durably switch it only after target verification. |
+| Key-epoch registry and verifier references | No native record exists on `main`; future Core/key adapter must persist non-secret epoch status, key identity references, and verifiers. | Epoch status and verifier metadata control key lookup and locked/recovery behavior; raw key material is never stored here. | **PROTECTED**; required control state, not regenerable without the key provider. | `key-epoch:<scope>:<epoch>`; epoch identity is immutable and survives path relocation. Migration must create and verify a target epoch before conversion. |
+| Record-generation and commit markers | No native record exists on `main`; future Core must track active/pending generation and commit intent per protected logical record. | A valid older ciphertext for the same identity can otherwise pass AEAD after rollback. Pending/active markers also decide deterministic crash recovery. | **PROTECTED**; authenticated authority metadata, not regenerable from record content alone. | `record-commit:<logical-record-id>`; marker binds identity, epoch, generation, operation and content digest. Migration must retain the prior active generation until the new marker is durable. |
 | Migration journals/checkpoints | No native FS journal exists on `main`; the existing `encryptionMigrationJournal.ts` is IDB-only. Future Core journal is the authority for native migration. | Operation ID, epochs, record inventory/cursor, per-record state and recovery status can reveal project structure and must never contain plaintext or keys. | **PROTECTED**; operationally required, not regenerable after a crash. | `migration:<operation-id>`; journal format/version is separate from project schema and envelope version. Migration must write/checkpoint it durably before touching records. |
 | Atomic-write temporary files | `FsCore#writeAndReplace` creates sibling `<target>.tmp-<UUID>` files for text and binary writes and removes them best effort. Current content is plaintext/compressed or raw bytes. | Temporary files are alternate representations and can survive a crash. Their existence must not create a plaintext sibling of a protected record. | **PROTECTED** in the future; current unprotected implementation is a migration input/risk, not an R-15 success. | `staging:<operation-id>:<record-id>:<generation>`; unique, same-directory, ciphertext-only. Reconcile without deleting the only valid authority. |
 | Migration staging | No native implementation currently exists. | Future conversion staging must not write plaintext temp data; it may contain ciphertext and authenticated generation metadata only. | **PROTECTED**; temporary but may contain the only converted copy during a commit window. | `migration-stage:<operation-id>:<record-id>:<generation>`; journal-owned and deleted only after durable commit/finalization. |
@@ -133,9 +136,9 @@ Core contract.
 | Logs/diagnostics | `services/diagnostics/logSinks.ts` writes bounded IDB logs and desktop JSONL at `$APPDATA/logs/worldscript-YYYY-MM-DD.jsonl`; `safeStringify` and logger redaction are current controls. | Structured errors, project IDs, paths, provider/task metadata and migration states can be sensitive even when manuscript text is prohibited. Current JSONL is not an R-15 protected record. | **PROTECTED** for desktop diagnostic persistence; bounded/derived but not harmless. | `diagnostic:<installation-scope>:<date>:<chunk-id>`; future chunks are redacted, authenticated and size-bounded. Migration must not carry raw plaintext logs into protected storage or vice versa. |
 | Local AI/model caches | Local model storage and inference caches are browser/WebView or model-file caches, not current `FsProjectStore` authority. | Downloaded models are not user-authored project records; prompt/result caches may become content-sensitive if persisted. | **DERIVED_REGENERABLE** for model/cache bytes with no user content; content-bearing cache records become **PROTECTED** before native persistence. | Future `model-cache:<model-id>:<version>` or `inference-cache:<content-scope>:<key>` only after an explicit owner contract. No current native R-15 migration. |
 | Service-worker/browser caches | PWA/service-worker caches and browser profile data are not native Tauri filesystem records and are owned by the browser runtime. | Static assets are generally regenerable; cached user responses may be sensitive depending on the browser feature. | **OUT_OF_SCOPE** for native R-15 authority; browser-specific protection remains its own policy. | No native identity. Do not use cache presence as project existence or secure-storage state. |
-| Protected-envelope routing header | Future envelope header contains only the magic, envelope version, suite ID, key epoch, nonce and ciphertext length; no plaintext project/title/content. | Protocol metadata is non-sensitive by contract, but tampering is detected because the canonical header is included in AAD. | **NON_SENSITIVE** protocol metadata; not a user record. | No logical record identity of its own. It is authenticated in the containing record's AAD and parsed strictly before key/payload use. |
+| Protected-envelope routing header | Future envelope header contains only the magic, fixed-width version/suite/epoch/generation/schema fields, nonce and ciphertext length; no plaintext project/title/content. | Protocol metadata is non-sensitive by contract, but tampering is detected because the canonical header is included in AAD. | **NON_SENSITIVE** protocol metadata; not a user record. | No logical record identity of its own. It is authenticated in the containing record's AAD and parsed strictly before key/payload use. |
 
-**Inventory result:** 17 `PROTECTED`, 1 `NON_SENSITIVE`, 2 `DERIVED_REGENERABLE`, 3 `OUT_OF_SCOPE`, 0 unclassified. The two derived classes are not permitted to become a plaintext native persistence escape if they later carry content or recovery authority.
+**Inventory result:** 20 `PROTECTED`, 1 `NON_SENSITIVE`, 2 `DERIVED_REGENERABLE`, 3 `OUT_OF_SCOPE`, 0 unclassified. The two derived classes are not permitted to become a plaintext native persistence escape if they later carry content or recovery authority.
 
 ## 4. No plaintext sibling rule
 
@@ -147,7 +150,7 @@ must either be protected or be an explicit external disclosure boundary:
 - atomic-write, migration, and cleanup staging;
 - import copies and conversion buffers if they leave bounded process memory;
 - Codex/RAG/thumbnail or metadata derivatives that can reveal source content;
-- diagnostic files, journals, manifests, and ownership indexes.
+- diagnostic files, journals, manifests, ownership indexes, epoch registries, and generation markers.
 
 The future Core may hold bounded plaintext in memory while reading or transforming a record. It
 must never write plaintext to an internal temporary or sibling path merely to encrypt it later. A
@@ -194,6 +197,9 @@ state, not a compliant implementation.
 | RAG/index | `rag-index:<project-id>:<index-version>` | Project scope and derivation version prevent cross-project reuse. |
 | Diagnostic chunk | `diagnostic:<installation-scope>:<date>:<chunk-id>` | Rotation/chunking changes physical files, not the installation scope or operation identity. |
 | Migration | `migration:<operation-id>` | Operation ID is random and immutable; retries resume the same journal. |
+| Authority manifest | `authority:<scope>` | Storage-root relocation does not change scope. The manifest is the sole epoch/authority selector after its commit boundary. |
+| Key epoch registry | `key-epoch:<scope>:<epoch>` | Epoch identity is immutable; key rotation adds an epoch and never changes record identities. |
+| Record commit marker | `record-commit:<logical-record-id>` | Tracks the active/pending generation for one identity; physical generation files and path names are subordinate to this marker. |
 
 ## 6. Protected-record envelope
 
@@ -205,12 +211,35 @@ detail, but the wire fields and order are part of the contract:
 
 ```text
 magic             4 bytes ASCII: WSR1
-envelope_version  unsigned integer: 1
-suite_id          unsigned integer: 1 = AES-256-GCM-1
+envelope_version  unsigned 32-bit integer, big-endian: 1
+suite_id          unsigned 32-bit integer, big-endian: 1 = AES-256-GCM-1
 key_epoch        unsigned 64-bit integer, big-endian
+record_generation unsigned 64-bit integer, big-endian
+record_schema     unsigned 32-bit integer, big-endian
 nonce             12 bytes, generated by the CSPRNG for this encryption
-ciphertext        remaining bytes, including the 16-byte AES-GCM tag
+ciphertext_len    unsigned 64-bit integer, big-endian
+ciphertext        exactly ciphertext_len bytes, including the 16-byte AES-GCM tag
 ```
+
+The fixed routing header is exactly 52 bytes in the order above: offsets `0..3` magic,
+`4..7` envelope version, `8..11` suite ID, `12..19` key epoch, `20..27` record generation,
+`28..31` record schema, `32..43` nonce, and `44..51` ciphertext length. `ciphertext_len` must be
+at least 16 and must equal the remaining file length; Core also applies a configured maximum before
+allocating. The tag is the final 16 bytes of the standard AES-GCM ciphertext representation. There
+is no trailing field or implicit endianness.
+
+The following header fixture is normative for parser tests (the nonce is test-only and must never be
+used by production randomness): envelope version `1`, suite `1`, key epoch `7`, record generation
+`3`, record schema `1`, nonce `000102030405060708090a0b`, ciphertext length `19`:
+
+```text
+57535231 00000001 00000001 0000000000000007 0000000000000003
+00000001 000102030405060708090a0b 0000000000000013
+```
+
+Gate 1 must add the corresponding fixed-key AEAD vector, canonical AAD bytes, and expected tag to
+the headless Core test fixtures. The fixture must cover an absent and a present `project_id`; this
+document's field encoding is the authority those vectors must implement.
 
 There is no unauthenticated plaintext payload field. Record class, logical identity, project
 scope, and the canonical schema/domain context are supplied by the Core caller and authenticated
@@ -234,21 +263,27 @@ AES-GCM AAD is the canonical serialization of:
 
 ```text
 domain = "worldscript-r15"
-envelope_version = 1
-suite_id = 1
+envelope_version = u32be(1)
+suite_id = u32be(1)
 record_class = exact registry token
 logical_record_id = exact registry identity
-project_id = present only for project-scoped records
-record_schema_version = Core record schema version
-key_epoch = envelope key_epoch
-header = magic + envelope_version + suite_id + key_epoch + nonce
+project_id = u8(0) when absent; u8(1) + length-delimited string when present
+record_schema_version = u32be(header.record_schema)
+key_epoch = u64be(header.key_epoch)
+record_generation = u64be(header.record_generation)
+header = the exact 52-byte routing header, including nonce and ciphertext_len
 ```
 
-The canonical serializer uses fixed field order, UTF-8, length-delimited strings, and a documented
-integer encoding. It is not a concatenated string with ambiguous separators. The same logical
-record context is required for encrypt and decrypt. Replacing `project-A` with `project-B`, a
-snapshot with an image, or one epoch with another causes authentication failure before payload
-use. Paths and display titles are deliberately absent.
+The canonical AAD byte sequence is the following fixed order: `u32be(byte_length) + UTF-8 bytes`
+for `domain`, `record_class`, and `logical_record_id`; the one-byte `project_id` presence marker
+and optional length-delimited UTF-8 project ID; then `u32be(record_schema_version)`,
+`u64be(key_epoch)`, `u64be(record_generation)`, and the exact header bytes. All integer encodings
+are unsigned big-endian. Lengths are checked against Core limits before allocation. There are no
+implicit separators, locale conversions, JSON key ordering, or omitted-field guesses. The same
+logical record context and header are required for encrypt and decrypt. Replacing `project-A` with
+`project-B`, a snapshot with an image, one epoch with another, or one generation with an older
+value causes authentication or authority validation failure before payload use. Paths and display
+titles are deliberately absent.
 
 ### 6.3 Algorithm and randomness
 
@@ -356,21 +391,52 @@ logged or sent to a renderer.
 7. Interrupted rotation resumes from the same journal. It never generates a new target epoch just
    because the process restarted.
 
+### 8.4 Record generations and commit authority
+
+Every protected logical record has a monotonically increasing `record_generation` starting at `1`.
+The value is authenticated in the envelope header/AAD and is recorded in the protected
+`record-commit:<logical-record-id>` marker together with the active epoch, content digest, and
+commit state. An ordinary write is admitted only when its expected active generation matches the
+marker; it allocates the next value under the same admission and compare-and-swap boundary. A
+generation counter reaching its maximum is a recovery error, not a wrap to zero.
+
+The marker supports `ACTIVE(old)`, `PENDING(old -> new)`, and `RECOVERY_REQUIRED` states. The old
+generation remains the active authority while `PENDING` is durable. A new generation is promoted
+under a generation-addressable physical name, then the marker is durably advanced to `ACTIVE(new)`.
+The authority manifest separately selects the active storage epoch and is switched only by the
+migration/rotation commit protocol. These control records are protected and included in the
+inventory; they are not mutable plaintext sidecars.
+
+On read, Core requires the authenticated record generation and epoch to match the committed marker
+and authority manifest. A valid older ciphertext for the same identity and epoch is therefore
+classified as stale/recovery-required rather than accepted after rollback. A record with no
+committed marker is not made authoritative by its existence; it is preserved for recovery. A
+current marker with a missing/invalid candidate never causes defaults or another generation to be
+written over the old authority.
+
 ## 9. Durable protected write contract (#357)
 
 For a new or replacement protected record, Core semantics are:
 
-1. Resolve record identity, current authority, target epoch, and admission state together.
-2. Serialize and authenticate the payload; materialize ciphertext to a unique same-directory
+1. Resolve record identity, current authority, expected generation, target epoch, and admission
+   state together.
+2. Durably record a protected `PENDING(old -> new)` commit intent while the old generation remains
+   active. The intent includes operation ID, fencing token, target generation, and digest.
+3. Serialize and authenticate the payload; materialize ciphertext to a unique same-directory
    staging target. No plaintext staging file is allowed.
-3. Write all staged bytes and verify the expected byte count/format.
-4. Flush/sync the staging file to the required durability level and close it.
-5. Validate the staged envelope by parsing/authenticating it against the exact target identity.
-6. Atomically replace/promote the target without deleting the only old authority first.
-7. Flush/sync the containing directory or platform-equivalent metadata required to persist the
-   replacement.
-8. Only after step 7 return `DURABLE_COMMIT_SUCCESS` and advance the journal/manifest.
-9. Reconcile stale staging deterministically on startup using authenticated generation/operation
+4. Write all staged bytes and verify the expected byte count/format.
+5. Flush/sync the staging file to the required durability level and close it.
+6. Validate the staged envelope by parsing/authenticating it against the exact target identity,
+   epoch, schema, and generation.
+7. Promote the staging file to an immutable, generation-addressable record without removing the
+   old active generation.
+8. Flush/sync the containing directory or platform-equivalent metadata required to persist the
+   promoted generation.
+9. Atomically replace/sync the protected commit marker from `PENDING` to `ACTIVE(new)`; only this
+   marker change transfers record authority.
+10. Only after the marker and its containing directory are durable return `DURABLE_COMMIT_SUCCESS`
+    and advance the migration journal/authority manifest when applicable.
+11. Reconcile stale staging deterministically on startup using authenticated generation/operation
    metadata; never delete an unrecognized file merely because it has a temp suffix.
 
 The platform adapter implements `fsync`/directory-sync mechanics. The Core owns the order, success
@@ -400,10 +466,19 @@ Core never turns an uncertain state into default project data.
 | Before staging write | Old authority remains valid; retry can start a new generation. |
 | During staging write | Old authority remains authoritative; incomplete staging is untrusted and reconciled. |
 | After staging write, before file sync | Staging is not committed; old authority remains. |
-| After file sync, before replace | Complete staging may be verified/adopted by the journal or discarded; old authority remains until commit. |
-| After replace, before directory sync | Return uncertain/recovery state; startup verifies journal, generations, and available old/new copies. |
-| After directory sync | New authority is durable; only now advance commit state. |
+| After file sync, before promotion | Complete staging may be verified/adopted by the journal or discarded; old authority remains until commit. |
+| After promotion, before directory sync | Old marker remains active; the new generation is preserved and not yet authoritative. |
+| After directory sync, before marker advancement | New bytes are durable but marker metadata is stale. Startup validates the authenticated pending intent and completes the marker, or restores `ACTIVE(old)` while preserving the candidate for recovery. It never guesses from timestamps. |
+| After marker advancement, before journal/manifest advancement | The record marker is authoritative and the new record is retained. Startup replays the journal/manifest checkpoint using the fencing token before reporting migration success. |
+| After journal/manifest advancement | New authority is durable; cleanup remains separately retryable. |
 | During cleanup | Authority is unchanged; cleanup can resume without deleting the committed generation. |
+
+The post-directory-sync/pre-marker rule is normative: startup first authenticates the durable
+`PENDING` intent and candidate generation. If both match, it idempotently completes the commit
+marker and then replays the journal/manifest checkpoint. If the candidate is missing, malformed, or
+fails authentication, it restores `ACTIVE(old)` and preserves the candidate/staging bytes for
+recovery. An unrecognized candidate is never adopted solely because it is newer or has a plausible
+filename.
 
 ## 10. Crash-resumable migration and rekey (#359)
 
@@ -419,22 +494,52 @@ contains:
 - deterministic inventory version/digest and bounded record count estimate;
 - per-record status or a resumable cursor, staging generation and verification result;
 - commit/finalization state, last durable checkpoint, and recovery-required reason code;
-- ownership/lease information sufficient to prevent two migration owners.
+- ownership/lease information, a monotonic fencing generation, and compare-and-swap journal
+  revision sufficient to prevent stale migration owners from mutating records.
 
 The inventory is streamed or paged. The entire project and full record list are never required in
 memory. A checkpoint is written only after the corresponding record conversion and verification
 are durable.
 
+Every checkpoint, record promotion, commit-marker update, and authority switch carries the current
+fencing generation and expected journal revision. The Core/adapter rejects a stale token
+(`STALE_MIGRATION_OWNER`) before mutation. Lease expiry makes a new owner eligible but is not by
+itself permission for the old owner to continue; a new owner must atomically advance the fencing
+generation. This prevents a stalled process that resumes after lease expiry from overwriting a
+new owner's checkpoint or promoted record.
+
+### 10.2 Bootstrap for first-time enable
+
+Enabling protection from `UNCONFIGURED` cannot first write a plaintext journal and cannot encrypt a
+journal before a target key exists. The operation therefore has an explicit `BOOTSTRAP_TARGET`
+step before the first protected `DISCOVER` checkpoint:
+
+1. The key adapter creates/resolves target epoch `M` and stores only its key reference/material in
+   the approved keystore or passphrase adapter; no raw key is written to the data directory.
+2. The adapter durably stores only the non-secret epoch/key reference and verifier through the
+   approved keystore or passphrase adapter; Core establishes the protected journal key context.
+   The first protected control record is encrypted under `M`, so no plaintext journal or data-
+   directory key record is needed. If key preparation fails, no migration journal is claimed and
+   the known legacy authority remains untouched.
+3. Core writes the first journal under target epoch `M`, with source authority explicitly marked
+   `LEGACY` and state `MIGRATING(source=LEGACY,target=M)`. Legacy project data remains authoritative
+   until the later `COMMIT` phase.
+
+The bootstrap epoch is not active project authority merely because it protects the journal. A crash
+before `COMMIT` resumes from the journal or returns an explicit recovery result; it never interprets
+the absence of a target record as permission to write defaults.
+
 ### 10.2 Migration phases
 
 | Phase | Durable before/after; crash view | Resume/rollback; reads/writes |
 |---|---|---|
-| `DISCOVER` | Journal operation ID and a deterministic inventory identity are durable; records are not changed. | Resume re-runs discovery and compares the inventory. A changed/unverifiable inventory enters recovery. Reads use the existing authority; ordinary writes are admitted only before the operation is locked. |
+| `BOOTSTRAP_TARGET` | Target key reference/verifier and the first protected journal are durable; legacy records are unchanged and remain authoritative. | If preparation fails, remain `UNCONFIGURED` with legacy data untouched. If the process crashes, resume the same operation or enter recovery. Reads use legacy authority; no ordinary record writes occur before the journal exists. |
+| `DISCOVER` | Journal operation ID and a preliminary deterministic inventory identity are durable; records are not changed. | Resume re-runs discovery. The preliminary inventory is not sufficient for commit; a changed/unverifiable inventory enters recovery. Reads use the existing authority; ordinary writes may occur only before the final barrier. |
 | `PREPARE` | Target key/verifier, staging namespace, and source/target policy are durable. | Idempotently reuse the same target epoch and operation. No old authority is deleted. Reads use source; ordinary writes stop once admission is acquired. |
-| `ADMIT` | Exclusive migration ownership and write barrier are durable. | If ownership is lost, restart claims the same journal only after lease expiry. No ordinary writes cross the barrier; reads remain Core-selected. |
-| `CONVERT` | Each record is ciphertext-staged, synced, promoted, verified, then checkpointed. | Already checkpointed records are verified/replayed idempotently; pending records retain source authority. No rollback deletes source or target. Reads use verified target for completed records and source for pending records under one Core policy. |
+| `ADMIT` | Exclusive migration ownership and write barrier are durable; only now is the final streamed inventory snapshot and digest captured. | The final inventory includes records created before the barrier and becomes the commit inventory. If ownership is lost, restart claims the same journal only after lease expiry and fencing CAS. No ordinary writes cross the barrier; reads remain Core-selected. |
+| `CONVERT` | Each record is ciphertext-staged, synced, promoted, marker-committed, verified, then checkpointed with the current fencing generation. | Already checkpointed records are verified/replayed idempotently; pending records retain source authority. A stale owner is refused before mutation. No rollback deletes source or target. Reads use verified target for completed records and source for pending records under one Core policy. |
 | `VERIFY` | All inventory records have been read under target policy and verified; journal records the exact result. | Any shortfall becomes `RECOVERY_REQUIRED`; no epoch switch or cleanup. Ordinary writes remain blocked. |
-| `COMMIT` | The active epoch/authority pointer and commit marker are atomically/durably switched. | Before the switch, source remains authoritative. After a durable switch, target is authoritative; startup never guesses from file timestamps. Reads follow the committed epoch; writes use target only. |
+| `COMMIT` | All final-inventory records and their generation markers are verified; the active epoch/authority pointer and commit marker are atomically/durably switched with the fencing generation. | Before the switch, source remains authoritative. After a durable switch, target is authoritative; startup never guesses from file timestamps. Reads follow the committed epoch; writes use target only. |
 | `RETIRE_OLD_AUTHORITY` | Target is committed and verified; old copies/keys are still retained until this phase succeeds. | Cleanup is retryable and non-destructive to target. If deletion/retirement is uncertain, remain recoverable rather than claim completion. |
 | `FINALIZE` | Journal says commit, verification, and permitted cleanup are complete; no key material is stored in the journal. | Remove only fully finalized operational debris. A stale journal is reconciled, not ignored. Ordinary operations resume after finalization. |
 | `DONE` / `RECOVERY_REQUIRED` | `DONE` is durable terminal success. `RECOVERY_REQUIRED` is durable terminal refusal with a reason code. | `DONE` permits normal policy. `RECOVERY_REQUIRED` blocks ordinary writes and destructive cleanup until explicit recovery; never resets to defaults. |
@@ -454,6 +559,12 @@ are durable.
   unsupported/locked result.
 - **Envelope/schema migration:** changes format or record schema under an operation ID without
   changing logical identity. An unknown future version is refused, not migrated by guessing.
+
+Core-owned future backup records use `backup:<backup-id>` and enter the final migration inventory
+only when the Core has an explicit ownership record. Existing `libraryBackupService.ts` encrypted
+ZIPs are user-selected external artifacts classified as `MIGRATION_INPUT_ONLY`; they are never
+auto-discovered as live Core backups or converted merely because they are present on disk. Reading
+or converting one requires an explicit user operation and a separate import/ownership check.
 
 ### 10.4 Legacy plaintext and corruption
 
@@ -654,8 +765,10 @@ Later implementation may be admitted only in these bounded gates:
    reconciliation, and fault-injection tests for one record class.
 4. **Journal/admission:** implement enable/rotate/recovery state machines, exclusive migration
    admission, bounded inventory/checkpoints, and shutdown/cancellation behavior.
-5. **Inventory-complete migration:** add every `PROTECTED` class from §3, including backups,
-   quarantine, diagnostics, and derived content indexes; prove no plaintext sibling path remains.
+5. **Inventory-complete migration:** add every future Core-owned `PROTECTED` class from §3,
+   including `backup:<backup-id>` records, quarantine, diagnostics, and derived content indexes;
+   explicitly exclude existing user-selected `libraryBackupService.ts` ZIPs until an explicit
+   import operation; prove no plaintext sibling path remains.
 6. **Shadow/compatibility phase:** compare Core verdicts with current TS reads without switching
    authority; run packaged Tauri acceptance and the relevant #332 durability/background scenarios.
 7. **Explicit authority switch:** only a separately authorized release migration may change desktop
@@ -669,9 +782,11 @@ complete merely because a design document exists.
 The contract is implementation-ready at the semantic level:
 
 - protected records and alternate representations are enumerated;
-- logical identity is separated from path/title and bound through AAD;
+- logical identity is separated from path/title and bound through canonical AAD and exact byte
+  encoding;
 - envelope, key/epoch, parse, failure, and downgrade semantics are explicit;
-- durable writes, migration/rekey, admission, lock, recovery, and memory bounds are defined;
+- durable writes, generations/commit markers, migration/rekey, admission, lock, recovery, and
+  memory bounds are defined;
 - Core versus platform responsibilities and headless tests are explicit;
 - #357/#359/#360/#361 have implementation owners and closure evidence.
 
