@@ -136,9 +136,19 @@ Core contract.
 | Logs/diagnostics | `services/diagnostics/logSinks.ts` writes bounded IDB logs and desktop JSONL at `$APPDATA/logs/worldscript-YYYY-MM-DD.jsonl`; `safeStringify` and logger redaction are current controls. | Structured errors, project IDs, paths, provider/task metadata and migration states can be sensitive even when manuscript text is prohibited. Current JSONL is not an R-15 protected record. | **PROTECTED** for desktop diagnostic persistence; bounded/derived but not harmless. | `diagnostic:<installation-scope>:<date>:<chunk-id>`; future chunks are redacted, authenticated and size-bounded. Migration must not carry raw plaintext logs into protected storage or vice versa. |
 | Local AI/model caches | Local model storage and inference caches are browser/WebView or model-file caches, not current `FsProjectStore` authority. | Downloaded models are not user-authored project records; prompt/result caches may become content-sensitive if persisted. | **DERIVED_REGENERABLE** for model/cache bytes with no user content; content-bearing cache records become **PROTECTED** before native persistence. | Future `model-cache:<model-id>:<version>` or `inference-cache:<content-scope>:<key>` only after an explicit owner contract. No current native R-15 migration. |
 | Service-worker/browser caches | PWA/service-worker caches and browser profile data are not native Tauri filesystem records and are owned by the browser runtime. | Static assets are generally regenerable; cached user responses may be sensitive depending on the browser feature. | **OUT_OF_SCOPE** for native R-15 authority; browser-specific protection remains its own policy. | No native identity. Do not use cache presence as project existence or secure-storage state. |
+| Scene comments and replies | `features/sceneComments/sceneCommentsSlice.ts`; localStorage key `worldscript-scene-comments`; Redux middleware persists comment/reply bodies. | Comment bodies, replies, section IDs and resolution state are user-authored project context even though this store is outside `project.json`. | **PROTECTED**; current localStorage is a separate WebView authority and is not covered by native Core. | `scene-comments:<installation-scope>` until a project binding is added; future migration must bind every section/comment ID and preserve the current global namespace rather than guess a project. |
+| Scene revision history | `services/sceneRevisionService.ts`; WebView IndexedDB `worldscript-revisions-db/scene-revisions`; current browser encryption is separate from native R-15. | Revision titles and full scene content are recoverable user data. | **PROTECTED**; independently encrypted today where the IDB policy applies, but not a native Core record. | `scene-revision:<revision-id>` with section routing authenticated separately. Migration must preserve revision identity and bounded history. |
+| Plot-board and mind-map UI records | `features/plotBoard/plotBoardSlice.ts` and `features/mindMap/mindMapUiSlice.ts`; localStorage viewport/selection state. Authored connections/nodes remain in project state, but IDs and active selections persist here. | Selection, map identifiers, viewport and interaction metadata can reveal project structure; the UI state is regenerable but not harmless. | **PROTECTED** for a persisted desktop profile; it must not be treated as the project content authority. | `plot-ui:<installation-scope>` / `mind-map-ui:<installation-scope>`; future Core may omit purely ephemeral viewport fields only after proving no user intent or routing metadata is lost. |
+| Writing progress and session history | `features/progressTracker/progressTrackerSlice.ts`; localStorage key `worldscript-progress-tracker`. | Goals, streaks, writing totals and session timing are personal activity metadata. | **PROTECTED**; not manuscript content but capable of sensitive disclosure and not safely reconstructable. | `progress:<installation-scope>`; import/duplicate does not silently transfer personal history. |
+| ProForge memory bank | `services/proForge/proForgeMemoryBank.ts`; IndexedDB `proforge-memory-bank/entries`, keyed by entry ID and indexed by project ID. | Memory keys and content are project-specific AI context and may reproduce user text. | **PROTECTED**; current browser/IDB authority is separate from native R-15. | `proforge-memory:<project-id>:<entry-id>`; project binding is required and entries are not migrated by database name alone. |
+| ProForge run history | `services/proForge/proForgeHistoryStore.ts`; IndexedDB `proforge-run-history/history`, keyed by project ID. | Pipeline runs can retain prompts, review context, generated text and operational project metadata. | **PROTECTED**; bounded per project but content-bearing. | `proforge-history:<project-id>`; history is preserved as a project child record and never treated as disposable cache during migration. |
+| AI inference cache | `services/ai/aiInferenceCacheService.ts`; IndexedDB `worldscript-inference-cache-db/inference-cache` with bounded in-memory LRU. | Cached results are user/provider content and the hashed prompt/model key is still sensitive linkage metadata. | **PROTECTED** for persisted desktop/WebView entries; TTL/LRU is a retention policy, not encryption. | `inference-cache:<installation-scope>:<cache-key>`; future Core must bind the model/prompt cache namespace without storing raw prompt text in routing metadata. |
+| LoRA adapters, datasets and run metadata | `services/loraAdapterService.ts`; IndexedDB `worldscript-lora-db` metadata/blob/dataset/run/active stores; adapter metadata can also reference Tauri paths. | Adapter blobs, training datasets, lineage and active-model metadata may contain user material or reveal project provenance. | **PROTECTED** when persisted or project-linked; downloaded public model bytes are not automatically safe once user data is merged. | `lora:<adapter-id>` plus explicit dataset/run child identities; filesystem paths are locations only. Migration must preserve metadata/blob pairing. |
+| Opt-in AI telemetry | `services/ai/telemetryService.ts`; DuckDB `ai_telemetry` or bounded localStorage fallback `worldscript-ai-telemetry`. | Task/provider/model, timing and success metadata can expose usage and provider context even without prompt text. | **PROTECTED** for persisted desktop telemetry; the opt-in gate remains separate from the protection requirement. | `telemetry:<installation-scope>:<chunk-id>`; future records are redacted, bounded and authenticated. |
+| UI preferences and feature flags | Theme, language, last-view, feature-flag, tour, command-palette and similar localStorage keys. | No authored content or credentials by contract; values are small presentation preferences. | **NON_SENSITIVE** and regenerable, provided no content or secret is added to these keys. | `ui-preferences:<installation-scope>` only as a future bounded preference record; never use them as project or encryption authority. |
 | Protected-envelope routing header | Future envelope header contains only the magic, fixed-width version/suite/epoch/generation/schema fields, nonce and ciphertext length; no plaintext project/title/content. | Protocol metadata is non-sensitive by contract, but tampering is detected because the canonical header is included in AAD. | **NON_SENSITIVE** protocol metadata; not a user record. | No logical record identity of its own. It is authenticated in the containing record's AAD and parsed strictly before key/payload use. |
 
-**Inventory result:** 20 `PROTECTED`, 1 `NON_SENSITIVE`, 2 `DERIVED_REGENERABLE`, 3 `OUT_OF_SCOPE`, 0 unclassified. The two derived classes are not permitted to become a plaintext native persistence escape if they later carry content or recovery authority.
+**Inventory result:** 29 `PROTECTED`, 2 `NON_SENSITIVE`, 2 `DERIVED_REGENERABLE`, 3 `OUT_OF_SCOPE`, 0 unclassified. The two derived classes are not permitted to become a plaintext native persistence escape if they later carry content or recovery authority.
 
 ## 4. No plaintext sibling rule
 
@@ -150,7 +160,8 @@ must either be protected or be an explicit external disclosure boundary:
 - atomic-write, migration, and cleanup staging;
 - import copies and conversion buffers if they leave bounded process memory;
 - Codex/RAG/thumbnail or metadata derivatives that can reveal source content;
-- diagnostic files, journals, manifests, ownership indexes, epoch registries, and generation markers.
+- diagnostic files, journals, manifests, ownership indexes, epoch registries, generation markers,
+  and content-bearing WebView/localStorage/IndexedDB stores on packaged desktop.
 
 The future Core may hold bounded plaintext in memory while reading or transforming a record. It
 must never write plaintext to an internal temporary or sibling path merely to encrypt it later. A
@@ -197,9 +208,38 @@ state, not a compliant implementation.
 | RAG/index | `rag-index:<project-id>:<index-version>` | Project scope and derivation version prevent cross-project reuse. |
 | Diagnostic chunk | `diagnostic:<installation-scope>:<date>:<chunk-id>` | Rotation/chunking changes physical files, not the installation scope or operation identity. |
 | Migration | `migration:<operation-id>` | Operation ID is random and immutable; retries resume the same journal. |
-| Authority manifest | `authority:<scope>` | Storage-root relocation does not change scope. The manifest is the sole epoch/authority selector after its commit boundary. |
+| Authority manifest/control root | `authority-root:<scope>` | Storage-root relocation does not change scope. This special control root is the sole epoch/authority selector after its commit boundary and is not an ordinary record requiring another commit marker. |
 | Key epoch registry | `key-epoch:<scope>:<epoch>` | Epoch identity is immutable; key rotation adds an epoch and never changes record identities. |
 | Record commit marker | `record-commit:<logical-record-id>` | Tracks the active/pending generation for one identity; physical generation files and path names are subordinate to this marker. |
+| Scene comments | `scene-comments:<installation-scope>` | Current global localStorage has no project binding; future migration must retain that namespace or add a verified binding, never infer ownership from section text. |
+| Scene revision | `scene-revision:<revision-id>` | Revision identity survives renderer/storage relocation; section routing is authenticated metadata. |
+| ProForge memory | `proforge-memory:<project-id>:<entry-id>` | Entry ID and project ID jointly bind project-specific AI context. |
+| ProForge history | `proforge-history:<project-id>` | Project ID binds the bounded run-history record; run order is payload, not a physical path. |
+| Inference cache | `inference-cache:<installation-scope>:<cache-key>` | The cache-key namespace is bound without exposing the raw prompt; TTL does not change identity. |
+| LoRA adapter | `lora:<adapter-id>` | Adapter metadata/blob pairing survives path changes; dataset/run children receive separate IDs. |
+| AI telemetry chunk | `telemetry:<installation-scope>:<chunk-id>` | Opt-in telemetry chunks rotate physically without changing the installation scope. |
+
+### 5.3 Non-recursive control root
+
+The `authority-root:<scope>` manifest is a special protected control-plane root, not an ordinary
+user record. Its fixed scope and key-provider reference form the non-recursive anchor for the
+authority manifest, key-epoch registry, and record-commit markers. Those control records are
+authenticated and durable, but they do not each require another `record-commit` record. Otherwise a
+protected commit marker would require a marker for its marker without a finite base case.
+
+The platform adapter provides the root's finite commit primitive: two generation-addressable root
+slots plus an atomic, directory-synchronized active-slot pointer (or a platform-equivalent
+transaction with the same semantics). Core authenticates each root slot with the fixed
+`authority-root:<scope>` AAD, verifies its generation and digest, and advances the pointer only
+under the exclusive control/admission fence. The pointer contains no plaintext project content or
+key material. A crash leaves the prior valid root slot, the new valid slot, or
+`RECOVERY_REQUIRED`; startup never selects a slot from timestamps alone.
+
+First-time enable creates the root key reference in the approved key adapter before writing the
+first protected root slot, using the bootstrap sequence in §10.2. The root remains the finite
+anchor for later control-record commits while ordinary record generations continue to use their
+per-record markers. This is a storage mechanism boundary, not a renderer or Storage-Core policy
+escape.
 
 ## 6. Protected-record envelope
 
@@ -241,6 +281,29 @@ Gate 1 must add the corresponding fixed-key AEAD vector, canonical AAD bytes, an
 the headless Core test fixtures. The fixture must cover an absent and a present `project_id`; this
 document's field encoding is the authority those vectors must implement.
 
+### 6.1.1 Normative record-class registry
+
+`record_class` is an ASCII registry token, not a human-readable inventory label. The following
+tokens are normative for version 1 and are serialized exactly as length-delimited UTF-8 strings in
+AAD:
+
+```text
+project          project-metadata   snapshot          backup
+recovery         settings           credential        image
+asset            asset-metadata     codex             rag-index
+active-project   authority-root     key-epoch         record-commit
+migration        staging            migration-stage   diagnostic
+scene-comments   scene-revision     plot-ui            mind-map-ui
+progress         proforge-memory    proforge-history  inference-cache
+lora             telemetry
+```
+
+The mapping is one token to one contract row or explicitly paired subrecord; aliases and locale
+labels are never accepted as tokens. A token is immutable once emitted. Adding a class requires a
+new registry entry and compatibility rule; removing one requires retaining its refusal/migration
+behavior for all supported envelope versions. An unknown class token is
+`PROTECTED_UNSUPPORTED_VERSION`, never an unbound generic record.
+
 There is no unauthenticated plaintext payload field. Record class, logical identity, project
 scope, and the canonical schema/domain context are supplied by the Core caller and authenticated
 as AAD; they do not need to be duplicated in the envelope. The routing header is intentionally
@@ -263,25 +326,22 @@ AES-GCM AAD is the canonical serialization of:
 
 ```text
 domain = "worldscript-r15"
-envelope_version = u32be(1)
-suite_id = u32be(1)
 record_class = exact registry token
 logical_record_id = exact registry identity
 project_id = u8(0) when absent; u8(1) + length-delimited string when present
-record_schema_version = u32be(header.record_schema)
-key_epoch = u64be(header.key_epoch)
-record_generation = u64be(header.record_generation)
-header = the exact 52-byte routing header, including nonce and ciphertext_len
+header = the exact 52-byte routing header, including envelope_version, suite_id, key_epoch,
+          record_generation, record_schema, nonce, and ciphertext_len
 ```
 
 The canonical AAD byte sequence is the following fixed order: `u32be(byte_length) + UTF-8 bytes`
 for `domain`, `record_class`, and `logical_record_id`; the one-byte `project_id` presence marker
-and optional length-delimited UTF-8 project ID; then `u32be(record_schema_version)`,
-`u64be(key_epoch)`, `u64be(record_generation)`, and the exact header bytes. All integer encodings
-are unsigned big-endian. Lengths are checked against Core limits before allocation. There are no
-implicit separators, locale conversions, JSON key ordering, or omitted-field guesses. The same
-logical record context and header are required for encrypt and decrypt. Replacing `project-A` with
-`project-B`, a snapshot with an image, one epoch with another, or one generation with an older
+and optional length-delimited UTF-8 project ID; then the exact header bytes. The header is the
+single serialization of the version, suite, epoch, generation, schema, nonce, and ciphertext
+length fields: those fields are not serialized a second time as standalone AAD values. All integer
+encodings are unsigned big-endian. Lengths are checked against Core limits before allocation. There
+are no implicit separators, locale conversions, JSON key ordering, or omitted-field guesses. The
+same logical record context and header are required for encrypt and decrypt. Replacing `project-A`
+with `project-B`, a snapshot with an image, one epoch with another, or one generation with an older
 value causes authentication or authority validation failure before payload use. Paths and display
 titles are deliberately absent.
 
@@ -323,14 +383,16 @@ The Core returns typed semantic results rather than `string | error`:
 | `PROTECTED_LOCKED` | Secure mode is configured but the session has no usable key. No plaintext or ciphertext payload is returned. |
 | `PROTECTED_WRONG_KEY` | The required key identity/epoch cannot be resolved, or an explicit supplied key fails the durable verifier. Do not retry indefinitely. |
 | `PROTECTED_TAMPERED` | Expected key is available but AEAD/AAD authentication fails; includes modified ciphertext, header, AAD, or cross-record substitution. |
-| `PROTECTED_UNSUPPORTED_VERSION` | Future envelope or suite cannot be interpreted safely. Never parse it as legacy plaintext. |
+| `PROTECTED_UNSUPPORTED_VERSION` | Future envelope, suite, record class, or record schema cannot be interpreted safely. Never parse it as legacy plaintext or relabel it as corruption. |
 | `PROTECTED_CORRUPT` | Truncated, malformed, invalidly encoded, or authenticated bytes whose payload cannot be decoded. |
-| `PROTECTED_IDENTITY_MISMATCH` | The requested registry identity differs from the authenticated record context. Preserve both copies and require recovery. |
+| `PROTECTED_IDENTITY_MISMATCH` | An authenticated authority/commit marker maps the located physical generation to a different requested logical identity before payload use. Preserve both copies and require recovery. A bare AEAD failure under the requested context is `PROTECTED_TAMPERED`, because the envelope intentionally does not expose identity as plaintext. |
 | `MIGRATION_REQUIRED` | The record is a supported legacy/current format that cannot be used under the current authority until a journaled migration completes. |
 | `RECOVERY_REQUIRED` | Journal, commit markers, ownership evidence, or verification state is inconsistent. Ordinary writes and destructive cleanup are blocked. |
 
 A key-unavailable result is not silently relabeled as corruption, and a parse/authentication
-failure is not silently relabeled as absence. If AEAD failure occurs after the expected key is
+failure is not silently relabeled as absence. If the parsed `record_schema` is not in the Core
+compatibility registry, the result is `PROTECTED_UNSUPPORTED_VERSION` even when the envelope and
+suite are known. If AEAD failure occurs after the expected key is
 available, the cryptographic primitive cannot prove whether the cause was tampering or the wrong
 key; the semantic result is `PROTECTED_TAMPERED` with redacted diagnostics, while key-resolution
 failure is `PROTECTED_WRONG_KEY`.
@@ -407,12 +469,21 @@ The authority manifest separately selects the active storage epoch and is switch
 migration/rotation commit protocol. These control records are protected and included in the
 inventory; they are not mutable plaintext sidecars.
 
-On read, Core requires the authenticated record generation and epoch to match the committed marker
-and authority manifest. A valid older ciphertext for the same identity and epoch is therefore
-classified as stale/recovery-required rather than accepted after rollback. A record with no
-committed marker is not made authoritative by its existence; it is preserved for recovery. A
-current marker with a missing/invalid candidate never causes defaults or another generation to be
-written over the old authority.
+Outside a migration, Core requires the authenticated record generation and epoch to match both the
+committed record marker and the authority-root manifest. A valid older ciphertext for the same
+identity and epoch is therefore classified as stale/recovery-required rather than accepted after
+rollback. A record with no committed marker is not made authoritative by its existence; it is
+preserved for recovery. A current marker with a missing/invalid candidate never causes defaults or
+another generation to be written over the old authority.
+
+During `MIGRATING(source=N,target=M)`, the authenticated journal is a temporary Core read
+authority. For a requested logical record, a `VERIFIED_TARGET` checkpoint whose target marker,
+generation, epoch, operation ID, and fencing generation all match the journal permits Core to read
+the target `M` generation before the global authority-root switch. Every other record is read from
+the still-authoritative source `N` while its marker and journal state permit it. The renderer never
+chooses an epoch, and a target-looking file without the matching journal/marker evidence is not
+read. After `COMMIT` durably advances the authority root, all reads resolve to `M`; after
+`FINALIZE`, the temporary dual-epoch rule is no longer needed.
 
 ## 9. Durable protected write contract (#357)
 
@@ -488,8 +559,8 @@ The journal is a durable Core record with no key material and no plaintext proje
 contains:
 
 - `operation_id` and journal format version;
-- operation type: `enable`, `rotate`, `disable-if-explicitly-admitted`, or envelope/schema
-  migration;
+- operation type: `enable`, `rotate`, or envelope/schema migration; an explicit disable operation
+  is not admitted by this contract;
 - source and target epoch identities and target verifier reference where applicable;
 - deterministic inventory version/digest and bounded record count estimate;
 - per-record status or a resumable cursor, staging generation and verification result;
@@ -507,6 +578,16 @@ fencing generation and expected journal revision. The Core/adapter rejects a sta
 itself permission for the old owner to continue; a new owner must atomically advance the fencing
 generation. This prevents a stalled process that resumes after lease expiry from overwriting a
 new owner's checkpoint or promoted record.
+
+A token check performed as a separate preflight is insufficient. Every mutation-capable adapter
+operation therefore exposes the semantic equivalent of
+`with_fence(fencing_generation, mutation_and_durability)`: it acquires the cross-process migration
+lock, compares the expected token/revision, performs the promotion or marker update and required
+syncs, and releases the lock only after the mutation's durability result is known. A platform that
+cannot hold that fence through the mutation must return `RECOVERY_REQUIRED` rather than rely on a
+stale preflight check. The Core still records the token on each operation for crash recovery, but
+the lock/CAS is the authority that prevents an expired owner from resuming a previously authorized
+filesystem mutation.
 
 ### 10.2 Bootstrap for first-time enable
 
@@ -537,7 +618,7 @@ the absence of a target record as permission to write defaults.
 | `DISCOVER` | Journal operation ID and a preliminary deterministic inventory identity are durable; records are not changed. | Resume re-runs discovery. The preliminary inventory is not sufficient for commit; a changed/unverifiable inventory enters recovery. Reads use the existing authority; ordinary writes may occur only before the final barrier. |
 | `PREPARE` | Target key/verifier, staging namespace, and source/target policy are durable. | Idempotently reuse the same target epoch and operation. No old authority is deleted. Reads use source; ordinary writes stop once admission is acquired. |
 | `ADMIT` | Exclusive migration ownership and write barrier are durable; only now is the final streamed inventory snapshot and digest captured. | The final inventory includes records created before the barrier and becomes the commit inventory. If ownership is lost, restart claims the same journal only after lease expiry and fencing CAS. No ordinary writes cross the barrier; reads remain Core-selected. |
-| `CONVERT` | Each record is ciphertext-staged, synced, promoted, marker-committed, verified, then checkpointed with the current fencing generation. | Already checkpointed records are verified/replayed idempotently; pending records retain source authority. A stale owner is refused before mutation. No rollback deletes source or target. Reads use verified target for completed records and source for pending records under one Core policy. |
+| `CONVERT` | Each record is ciphertext-staged, synced, promoted, marker-committed, verified, then checkpointed with the current fencing generation. | Already checkpointed records are verified/replayed idempotently; pending records retain source authority. A stale owner is refused before mutation. No rollback deletes source or target. During migration, Core reads a record from target only under the `VERIFIED_TARGET` journal/marker/fence rule in §8.4; otherwise it reads the source. |
 | `VERIFY` | All inventory records have been read under target policy and verified; journal records the exact result. | Any shortfall becomes `RECOVERY_REQUIRED`; no epoch switch or cleanup. Ordinary writes remain blocked. |
 | `COMMIT` | All final-inventory records and their generation markers are verified; the active epoch/authority pointer and commit marker are atomically/durably switched with the fencing generation. | Before the switch, source remains authoritative. After a durable switch, target is authoritative; startup never guesses from file timestamps. Reads follow the committed epoch; writes use target only. |
 | `RETIRE_OLD_AUTHORITY` | Target is committed and verified; old copies/keys are still retained until this phase succeeds. | Cleanup is retryable and non-destructive to target. If deletion/retirement is uncertain, remain recoverable rather than claim completion. |
@@ -552,11 +633,11 @@ the absence of a target record as permission to write defaults.
   record.
 - **Rotate:** source and target epochs are both available, records are re-enveloped with fresh
   nonces and target AAD, and the target epoch is switched only after complete verification.
-- **Disable:** not an automatic fallback. It is an explicit, separately confirmed security
-  downgrade if product policy admits it. It uses the same journal and preserve-first durability
-  sequence, verifies the resulting legacy representation, and never deletes the protected source
-  before the new authority is durable. If policy does not admit disable, Core returns an explicit
-  unsupported/locked result.
+- **Disable:** not admitted by this contract. Producing an internal legacy plaintext generation
+  would conflict with the no-plaintext-sibling rule during the preserve-first commit window. Core
+  must return an explicit unsupported/locked result and retain the protected authority. A future
+  product decision may define an external-export-only disclosure flow, but it must not silently
+  become an internal downgrade or delete the protected source.
 - **Envelope/schema migration:** changes format or record schema under an operation ID without
   changing logical identity. An unknown future version is refused, not migrated by guessing.
 
@@ -578,8 +659,12 @@ can prove that doing so cannot hide or overwrite the failed record.
 ## 11. Unified admission model (#360)
 
 The Core owns one admission authority for ordinary reads, ordinary writes, migration, rotation,
-enable/disable, and shutdown. The mechanism may be a Rust async reader/writer gate plus a durable
-journal lease; it need not copy browser Web Locks.
+enable, the explicitly refused disable operation, and shutdown. The mechanism may be a Rust async
+reader/writer gate plus a durable journal lease; it need not copy browser Web Locks.
+
+`enable` is admitted through the journaled state machine. `disable` is an explicit refusal state in
+R-15 (`unsupported/locked`) until a separate product/security decision defines a safe non-plaintext
+contract; it is not an unimplemented fall-through that may read or write legacy data.
 
 | Operation | Admission | Authority rule |
 |---|---|---|
@@ -666,7 +751,7 @@ read_record(class, logical_id) -> typed read outcome + payload
 write_record(class, logical_id, payload) -> durability result
 query_secure_storage_state() -> key/epoch/migration state
 unlock(input) / lock()
-begin_enable() / begin_rotation() / begin_explicit_disable()
+  begin_enable() / begin_rotation()
 resume_recovery(operation_id)
 observe_migration(operation_id)
 ```
