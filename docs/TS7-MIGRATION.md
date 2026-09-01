@@ -34,16 +34,17 @@ package.json
   "devDependencies": {
     "@typescript/native-preview": "beta",
     "@typescript/typescript6": "npm:typescript@~6.0.3"
-  },
-  "pnpm": {
-    "overrides": {
-      "typescript": "npm:@typescript/typescript6@~6.0.3"
-    }
   }
 }
 ```
 
-### 2. Scripts
+### 2. pnpm-workspace.yaml
+```yaml
+overrides:
+  typescript: "6.0.3"
+```
+
+### 3. Scripts
 ```json
 {
   "scripts": {
@@ -53,11 +54,11 @@ package.json
 }
 ```
 
-### 3. tsconfig.tsgo.json
+### 4. tsconfig.tsgo.json
 - Removed `vite/client` from `types` (tsgo Preview doesn't support it yet)
 - All path aliases preserved from main tsconfig
 
-### 4. CI Workflow (.github/workflows/ci.yml)
+### 5. CI Workflow (.github/workflows/ci.yml)
 ```yaml
 - name: Typecheck (tsgo)
   run: npx tsgo --project tsconfig.tsgo.json --noEmit --checkers 4 --builders 4
