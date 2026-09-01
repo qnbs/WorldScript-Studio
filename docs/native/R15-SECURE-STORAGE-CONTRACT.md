@@ -151,10 +151,11 @@ Core contract.
 | LoRA Redux mirror | `features/lora/loraSlice.ts`; localStorage key `worldscript-lora`, rehydrated into Redux state at startup. | Adapter names/descriptions, project IDs, filesystem paths, run history and error details mirror a subset of the IndexedDB stores above in a separate physical location. | **PROTECTED**; a second physical copy of already-protected content is not exempt merely because the IndexedDB store is the primary record. | `lora-mirror:<installation-scope>`; migration must protect or remove this mirror in the same operation as the IndexedDB stores it duplicates, never leaving one protected and the other plaintext. |
 | Opt-in AI telemetry | `services/ai/telemetryService.ts`; DuckDB `ai_telemetry` or bounded localStorage fallback `worldscript-ai-telemetry`. | Task/provider/model, timing and success metadata can expose usage and provider context even without prompt text. | **PROTECTED** for persisted desktop telemetry; the opt-in gate remains separate from the protection requirement. | `telemetry:<installation-scope>:<chunk-id>`; future records are redacted, bounded and authenticated. |
 | AI benchmark history | `services/ai/benchmarkService.ts`; localStorage key `worldscript-benchmarks`; active whenever the default-on adaptive AI engine records a benchmark. | Task type, backend, model ID, latency and timestamps are the same class of usage/model/timing fields the adjacent telemetry row protects. | **PROTECTED**; not exempt merely because the feature that produces it is default-on rather than opt-in. | `ai-benchmark:<installation-scope>:<entry-id>`; future records are redacted, bounded and authenticated the same way as the telemetry chunk row above. |
+| Existing IDB KDF salt (B-1 at-rest encryption) | `services/storage/storageEncryptionService.ts`; WebView IndexedDB key-derivation salt record, generated once when a passphrase is first set and read on every unlock to re-derive the PBKDF2 key; no native Tauri filesystem record exists on `main`. | The salt value itself is non-secret by cryptographic design, but it is a security-critical migration input: losing it, silently rotating it, or letting a future authority switch discard it before every legacy IDB record that depends on it is retired would desynchronize key derivation from already-committed ciphertext and could mask a rollback instead of detecting one. | **PROTECTED** migration/control input; confidentiality is non-secret, integrity and availability are security-critical. Not independently regenerable without invalidating every IDB record derived from it. | `idb-kdf-salt:<installation-scope>`; do not imply the salt is secret or treat it as free to regenerate. MUST retain until every legacy IDB record depending on this salt is no longer required for rollback/recovery AND the new authority is durably committed AND cleanup/finalization is itself durable — no early deletion merely because conversion succeeded once. |
 | UI preferences and feature flags | Theme, language, last-view, feature-flag, tour, command-palette and similar localStorage keys. | No authored content or credentials by contract; values are small presentation preferences. | **NON_SENSITIVE** and regenerable, provided no content or secret is added to these keys. | `ui-preferences:<installation-scope>` only as a future bounded preference record; never use them as project or encryption authority. |
 | Protected-envelope routing header | Future envelope header contains only the magic, fixed-width version/suite/epoch/generation/schema fields, nonce and ciphertext length; no plaintext project/title/content. | Protocol metadata is non-sensitive by contract, but tampering is detected because the canonical header is included in AAD. | **NON_SENSITIVE** protocol metadata; not a user record. | No logical record identity of its own. It is authenticated in the containing record's AAD and parsed strictly before key/payload use. |
 
-**Inventory result:** 35 `PROTECTED`, 2 `NON_SENSITIVE`, 2 `DERIVED_REGENERABLE`, 3 `OUT_OF_SCOPE`, 0 unclassified (42 classes total). The two derived classes are not permitted to become a plaintext native persistence escape if they later carry content or recovery authority. Persistent worker dead-letter entries are protected even though their current WebView queue is bounded and best-effort.
+**Inventory result:** 36 `PROTECTED`, 2 `NON_SENSITIVE`, 2 `DERIVED_REGENERABLE`, 3 `OUT_OF_SCOPE`, 0 unclassified (43 classes total). The two derived classes are not permitted to become a plaintext native persistence escape if they later carry content or recovery authority. Persistent worker dead-letter entries are protected even though their current WebView queue is bounded and best-effort.
 
 This R-15 inventory is the authoritative security/storage admission list for packaged desktop data.
 The renderer classification in `UI-DOMAIN-STATE-CLASSIFICATION.md` remains authoritative for whether a
@@ -245,6 +246,7 @@ state, not a compliant implementation.
 | AI telemetry chunk | `telemetry:<installation-scope>:<chunk-id>` | Opt-in telemetry chunks rotate physically without changing the installation scope. |
 | AI benchmark entry | `ai-benchmark:<installation-scope>:<entry-id>` | Entry ID rotates physically without changing the installation scope, following the same pattern as the telemetry chunk row. |
 | Worker dead-letter entry | `worker-dlq:<installation-scope>:<task-id>` | Task ID is immutable; queue retention or physical compaction does not change identity. |
+| IDB KDF salt | `idb-kdf-salt:<installation-scope>` | Non-secret by design; salt rotation is a distinct migration operation from key rotation and must not silently invalidate already-migrated IDB ciphertext, and it is never regenerated as an implicit side effect of an unrelated write. |
 
 ### 5.2.1 Project-scope registry
 
@@ -295,6 +297,7 @@ remain explicit gaps until a verified owner binding exists.
 | `telemetry` | Installation/profile scope; no project ID by default | Opt-in telemetry is redacted and global unless a separately approved project scope exists. |
 | `ai-benchmark` | Installation/profile scope; no project ID by default | Follows the same scope rule as `telemetry`; benchmark entries are not project-owned even though the feature that produces them is default-on. |
 | `worker-dlq` | Installation scope; no project ID by default | Task IDs and bounded retention define queue ownership; payload content must not be used to infer a project. |
+| `idb-kdf-salt` | Installation scope; no project ID | The salt is a shared per-installation KDF input, not project-owned or secret; do not infer a rotation from an unrelated encryption or migration event. |
 
 For the current desktop implementation, rows marked as global or installation-scoped retain that
 scope rather than receiving a speculative project binding. A future authority switch may add a
@@ -314,13 +317,15 @@ The platform adapter provides the root's finite commit primitive: two generation
 slots plus an atomic, directory-synchronized active-slot pointer (or a platform-equivalent
 transaction with the same semantics). Core authenticates each root slot with the fixed
 `authority-root:<scope>` AAD, verifies its generation and digest, and advances the pointer only
-under the exclusive control/admission fence. The pointer contains no plaintext project content or
-key material. A crash leaves the prior valid root slot, the new valid slot, or
+while holding `root_commit_mutex` (§11.1) — the finite control-plane commit lock, not a
+shared-to-exclusive upgrade of ordinary operation-level admission. The pointer contains no plaintext
+project content or key material. A crash leaves the prior valid root slot, the new valid slot, or
 `RECOVERY_REQUIRED`; startup never selects a slot from timestamps alone.
 
 Root slots also carry a monotonic `root_generation`, authenticated root digest, and the fixed root
-AAD. The pointer names one slot, generation, and digest and can advance only under the exclusive
-fence plus a directory-synchronized commit. A root slot has authenticated commit evidence that
+AAD. The pointer names one slot, generation, and digest and can advance only while holding
+`root_commit_mutex` (§11.1) plus a directory-synchronized commit. A root slot has authenticated
+commit evidence that
 binds its operation ID, fencing generation, journal revision, and `COMMITTED` state; an authenticated
 slot that is only prepared or pending is not authority. Startup authenticates both slots and accepts
 the pointer only when it matches a committed slot and is not below the monotonic floor held by the
@@ -360,82 +365,143 @@ normative.
 
 ```text
 committed_floor           u64; the current durable monotonic rollback floor
+committed_root            the trusted cold-start root binding; advanced only by step F below:
+  root_generation           u64; equals committed_floor once F has run at least once
+  root_digest               32-byte target_final_root_digest (defined below) of the currently
+                             trusted root
+  root_slot                 the §5.3 generation-addressable slot identity holding that root
+  root_key_ref              opaque non-secret key/epoch reference for the trusted root key; may be
+                             represented as an epoch only if that epoch is an unambiguous trusted
+                             key-provider reference (trusted_root_epoch)
 prepared_root_commit      optional; absent in steady state; when present:
   operation_id              the fenced operation this preparation belongs to
-  expected_prior_floor      u64; must equal committed_floor at prepare time
+  expected_prior_floor      u64; must equal committed_floor (and committed_root.root_generation)
+                             at prepare time
   target_root_generation    u64; the root_generation this commit is advancing to
-  target_root_digest        32-byte root_digest (§5.4) this commit is preparing
+  target_final_root_digest  32-byte digest (§5.4) of the representation that will exist after
+                             filesystem authority commit (step E below), including
+                             root_commit_state_code = COMMITTED, computed canonically in advance —
+                             this replaces the earlier ambiguous target_root_digest name
   target_slot                the §5.3 generation-addressable slot identity this targets
+  target_root_key_ref       opaque non-secret key/epoch reference this commit is advancing to
+                             (target_epoch when represented as an epoch)
   preparation_revision      disambiguates re-preparation after a retry of the same operation
 ```
 
-**Sequence**, run under the §5.3/§9 admission fence:
+**Sequence**, run while the caller already holds its operation-level admission (§11) for this
+write and, for this finite control-plane commit, `root_commit_mutex` (§11.1):
 
 ```text
-A. acquire the exclusive control/admission fence for this root commit
-B. read committed_floor and the currently committed root/pointer; verify the intended
-   target_root_generation is exactly the committed root_generation + 1 (or the first-commit case)
+A. acquire root_commit_mutex (§11.1) for this root commit — never a shared-to-exclusive upgrade of
+   the operation-level admission already held
+B. read committed_floor, committed_root, and the currently committed root/pointer; verify the
+   intended target_root_generation is exactly committed_root.root_generation + 1 (or the
+   first-commit case)
 C. durably PREPARE the secure anchor: write prepared_root_commit with expected_prior_floor set to
-   the current committed_floor. This write MUST NOT raise committed_floor.
-D. durably write/sync the target root slot, authenticated under its target_root_digest, tagged
-   NOT_COMMITTED per the §5.3/§9 root_commit_evidence encoding
+   the current committed_floor, and target_final_root_digest bound to the digest the representation
+   will have after filesystem authority commit (step E), including root_commit_state_code =
+   COMMITTED, computed canonically in advance. This write MUST NOT raise committed_floor or
+   committed_root.
+D. durably write/sync the target root slot, tagged NOT_COMMITTED per the §5.3/§9
+   root_commit_evidence encoding. This NOT_COMMITTED candidate's own authenticated digest
+   legitimately differs from target_final_root_digest — root_commit_state_code = NOT_COMMITTED
+   versus COMMITTED alone changes the digest input (§5.4) — and that difference is expected, not an
+   error; no step ever compares D's candidate digest to target_final_root_digest.
 E. durably perform the filesystem authority commit: update that same slot's evidence to COMMITTED
    and advance the directory-synchronized active-slot pointer to it (the existing §5.3/§9
-   atomic-rename-and-fsync mechanism, intra-filesystem only)
-F. durably COMMIT the secure anchor: committed_floor := target_root_generation,
-   prepared_root_commit := none, in one durable adapter write
+   atomic-rename-and-fsync mechanism, intra-filesystem only). The installed representation's digest
+   now equals target_final_root_digest exactly, because both were computed canonically from the
+   same target inputs with root_commit_state_code = COMMITTED.
+F. durably COMMIT the secure anchor, in one durable adapter write: committed_floor :=
+   target_root_generation; committed_root := { root_generation: target_root_generation, root_digest:
+   target_final_root_digest, root_slot: target_slot, root_key_ref: target_root_key_ref };
+   prepared_root_commit := none. F never fires until the durable E representation has been
+   re-authenticated and its digest confirmed to exactly match target_final_root_digest.
 G. only after F succeeds may the caller report DURABLE_COMMIT_SUCCESS for this root commit
 ```
 
 Steps D and E are logically distinct durable states for crash recovery. An implementation may
 perform them as two separate filesystem writes, or — whenever the slot's final `COMMITTED`
-evidence is already fully known before D, which is true for every root commit except the §10.2
-bootstrap anchor (which durably records an `operation_id` before the journal that supplies its own
-evidence even exists) — as one atomic filesystem write that lands directly in the `COMMITTED`
-state, collapsing D into E. Either way, the durable state after D (or combined D+E) must be
-authenticable independently of C, and F never fires until that state is durably observed.
+evidence is already fully known before D, which holds for every root commit including the §10.2
+bootstrap anchor (its `journal_revision = 0` is the deterministic initial-revision sentinel for a
+first-time journal and is known before the journal's own bytes are materialized, not a value only
+the journal itself can supply) — as one atomic filesystem write that lands directly in the
+`COMMITTED` state, collapsing D into E. Either way, the durable state after D (or combined D+E) must
+be authenticable independently of C, and F never fires until that state is durably observed.
 
 **Crash semantics.** Startup evaluates these cases in order; only the fourth row permits completing
 a commit forward, and every other row leaves the prior committed root as authority:
 
 | Crash point | Startup disposition |
 |---|---|
-| Before C is durable | No new secure intent exists. The prior committed root remains authority; retry starts a fresh A-G attempt. `committed_floor` is unchanged. |
-| After C, before D is durable | An authenticated `prepared_root_commit` exists but the target root slot is absent or incomplete. Startup discards the preparation (clears `prepared_root_commit`) or, only if it can deterministically confirm no target-slot write ever started, re-enters PREPARE for the same `operation_id`. `committed_floor` MUST NOT be raised; the prior committed root remains authority. |
-| After D is durable, before E is durable | The target root slot is durable but still `NOT_COMMITTED`; the filesystem pointer has not moved. It remains a non-authoritative candidate — discard it or retain it as a retry candidate for the same `operation_id`. The prior committed root remains authority; `committed_floor` is unchanged. |
-| After E is durable, before F is durable | The filesystem pointer now names the target slot, but `committed_floor` still equals the prior generation and `prepared_root_commit` still names this exact operation. Startup re-authenticates `prepared_root_commit` against the durable target slot's own `root_commit_evidence` — matching `operation_id`, `target_root_generation`, and `target_root_digest` exactly, never generation or recency alone — and only on an exact match performs F to complete the commit forward. A `prepared_root_commit` that does not exactly match the durable target evidence is never used to advance the floor; that case is `RECOVERY_REQUIRED`, because the filesystem pointer has moved to a root the secure anchor cannot prove it authorized. |
-| After F is durable | `committed_floor` and the committed root's `root_generation` agree, and `prepared_root_commit` is absent. This state is idempotent and replay-safe: re-running F against an absent preparation is a no-op. |
+| Before C is durable | No new secure intent exists. The prior committed root remains authority; retry starts a fresh A-G attempt. `committed_floor` and `committed_root` are unchanged. |
+| After C, before D is durable | An authenticated `prepared_root_commit` exists but the target root slot is absent or incomplete. Startup discards the preparation (clears `prepared_root_commit`) or, only if it can deterministically confirm no target-slot write ever started, re-enters PREPARE for the same `operation_id`. `committed_floor` and `committed_root` MUST NOT be raised or advanced; the prior committed root remains authority. |
+| After D is durable, before E is durable | The target root slot is durable but still `NOT_COMMITTED`; the filesystem pointer has not moved. It remains a non-authoritative candidate — discard it or retain it as a retry candidate for the same `operation_id`. Its own authenticated digest is never compared against `target_final_root_digest` at this point: a `NOT_COMMITTED` candidate's digest is expected to differ from the eventual `COMMITTED` representation's digest, so that difference is never treated as corruption. The prior committed root remains authority; `committed_floor` and `committed_root` are unchanged. |
+| After E is durable, before F is durable | The filesystem pointer now names the target slot, which is durably `COMMITTED` and whose own re-derived digest is the final representation's digest, but `committed_floor`/`committed_root` still name the prior generation and `prepared_root_commit` still names this exact operation. Startup re-authenticates `prepared_root_commit` against the durable target slot's own committed `root_commit_evidence` and re-derived digest — matching `operation_id`, `target_root_generation`, and `target_final_root_digest` exactly against the durable `COMMITTED` slot's own digest, never against D's earlier `NOT_COMMITTED` candidate digest, and never generation or recency alone — and only on an exact match performs F to complete the commit forward and set `committed_root` to the new binding. A `prepared_root_commit` that does not exactly match the durable target evidence is never used to advance the floor; that case is `RECOVERY_REQUIRED`, because the filesystem pointer has moved to a root the secure anchor cannot prove it authorized. |
+| After F is durable | `committed_floor` and `committed_root.root_generation` agree, `committed_root` names the newly committed `root_digest`/`root_slot`/`root_key_ref`, and `prepared_root_commit` is absent. This state is idempotent and replay-safe: re-running F against an absent preparation is a no-op. |
 
 The middle three rows are why this is a *recoverable* protocol rather than a claim of cross-store
 atomicity: every crash window leaves either the prior committed root intact and authoritative, or
-durable evidence specific enough (an exact `operation_id`/`target_root_generation`/`target_root_digest`
-match) to finish the same commit forward — never a guess from generation numbers, timestamps, or
-slot recency alone.
+durable evidence specific enough (an exact `operation_id`/`target_root_generation`/
+`target_final_root_digest` match against the durable `COMMITTED` slot) to finish the same commit
+forward — never a guess from generation numbers, timestamps, or slot recency alone.
 
 **Fail-closed requirement.** A platform adapter that cannot provide a durable `prepared_root_commit`/
-`committed_floor` pair with the ordering and exact-match semantics above cannot implement this
-protocol, and therefore cannot implement R-15 offline-rollback protection: it must refuse the
-protection mode (fail closed) at admission time rather than approximate the ordering with a weaker
-primitive. This does not change §2.2's boundary — the protocol defends against offline restoration
-of an older complete data-directory (or secure-metadata-store) snapshot; it still assumes the
-platform's secure-metadata/keystore mechanism is not simultaneously compromised alongside the
-filesystem, and it makes no claim against a live, currently-compromised kernel, OS, or keystore.
+`committed_floor`/`committed_root` state with the ordering and exact-match semantics above cannot
+implement this protocol, and therefore cannot implement R-15 offline-rollback protection or trusted
+cold-start key routing (below): it must refuse the protection mode (fail closed) at admission time
+rather than approximate the ordering with a weaker primitive. This does not change §2.2's boundary —
+the protocol defends against offline restoration of an older complete data-directory (or
+secure-metadata-store) snapshot; it still assumes the platform's secure-metadata/keystore mechanism
+is not simultaneously compromised alongside the filesystem, and it makes no claim against a live,
+currently-compromised kernel, OS, or keystore.
+
+**Trusted cold-start root-key routing.** Startup never chooses the root key from the unauthenticated
+root-envelope routing header, and never discovers it by calling `KeyProvider.list_epochs()` and
+attempting each returned epoch in turn until one authenticates — that pattern is an unbounded,
+untrusted search and is not admitted by this contract. `list_epochs()` (§8.2) returns non-secret
+epoch identities for UI/diagnostic display and rotation-target enumeration only; it is never a
+trust-routing mechanism for the root itself. Cold start instead resolves the root key exclusively
+from the secure anchor's own `committed_root` binding:
+
+```text
+1. read rollback-resistant secure-anchor state (KeyProvider.read_root_anchor_state())
+2. obtain the committed root's trusted slot, generation, digest, and key reference/epoch from
+   committed_root
+3. resolve ONLY that trusted key (committed_root.root_key_ref) via KeyProvider.resolve(...)
+4. authenticate the expected authority root at committed_root.root_slot against
+   committed_root.root_digest
+5. compare the root's own routing/header epoch against the anchor-bound expectation
+   (committed_root.root_key_ref / trusted_root_epoch)
+6. only after root authentication succeeds: accept the root-contained active_key_epoch, authenticate
+   key_epoch_set_digest against it (§5.4), and use the now-authenticated key-epoch registry
+```
+
+The unauthenticated root-envelope header MUST NOT choose the root key; it is untrusted input until
+the root it names has authenticated against `committed_root`. This integrates with, and does not
+replace, §5.3's existing startup rule that a slot is authority only once it matches a committed slot
+and is not below the monotonic floor: steps 1-4 above are how that resolution obtains its trusted
+key in the first place. During an interrupted prepared transition, recovery may consider only the
+explicitly anchor-bound `committed_root.root_key_ref` and, if a `prepared_root_commit` is present,
+its `target_root_key_ref` — never an unbounded search across every key the provider knows about.
 
 **Adapter surface.** This replaces the bare `KeyProvider.read_floor()` / `advance_floor(new_value)`
 pair (§8.2) with operations equivalent to:
 
 ```text
-KeyProvider.read_root_anchor_state() -> { committed_floor, prepared_root_commit? }
-KeyProvider.prepare_root_anchor(expected_floor, target_root_generation, target_root_digest,
-                                 target_slot, operation_id) -> committed / typed failure (step C)
+KeyProvider.read_root_anchor_state() -> { committed_floor, committed_root, prepared_root_commit? }
+KeyProvider.prepare_root_anchor(expected_floor, target_root_generation, target_final_root_digest,
+                                 target_slot, target_root_key_ref, operation_id) -> committed /
+                                 typed failure (step C)
 KeyProvider.commit_root_anchor(operation_id, target_root_generation) -> committed / typed failure (step F)
 KeyProvider.abort_or_recover_root_anchor(operation_id) -> clears a stale/discardable
-                                 prepared_root_commit without raising committed_floor
+                                 prepared_root_commit without raising committed_floor or
+                                 committed_root
 ```
 
 Exact method names, argument shapes, and whether these are exposed as one call or several are an
-implementation choice; the durable state machine, the exact-match recovery rule, and the
-fail-closed requirement above are normative.
+implementation choice; the durable state machine, the exact-match recovery rule, the trusted
+cold-start routing rule above, and the fail-closed requirement above are normative.
 
 ### 5.4 Canonical digest contract
 
@@ -449,11 +515,12 @@ hashing; a digest algorithm or input change requires a new envelope/journal vers
 | Digest | Exact input, in order | Use |
 |---|---|---|
 | `content_digest` | `"worldscript-r15/content/v1"` bytes, then the complete canonical protected envelope bytes (`WSR1` header plus ciphertext) | Lets the commit marker verify that the generation-addressable envelope is the one it committed without exposing plaintext. |
-| `marker_set_digest` | `"worldscript-r15/marker-set/v1"` bytes, then `u32be(entry_count)`, then each entry sorted by `(record_class bytes, sort key derived from the §6.2-tagged logical_record_id binding, sort key derived from the §6.2-tagged project_id binding)` and encoded as record class, the tagged logical-identity binding, the tagged project binding, and the 32-byte `marker_entry_digest` for that identity's current canonical marker body, defined exactly below the table | Checkpoints the complete authenticated record-marker set in the authority root by binding one canonical marker body per identity, so a replayed or substituted marker with different authority fields (operation, fencing, target generation/epoch, retention, or tombstone provenance) cannot pass verification merely because it names the same identity and state code. |
+| `marker_set_digest` | `"worldscript-r15/marker-set/v1"` bytes, then `u32be(entry_count)`, then each entry sorted by `(record_class bytes, sort key derived from the §6.2-tagged logical_record_id binding, sort key derived from the §6.2-tagged project_id binding)` and encoded as record class, the tagged logical-identity binding, the tagged project binding, `u64be(marker_generation)` — the control-plane generation counter for this identity's marker, distinct from the protected data record's own `record_generation` — and the 32-byte `marker_entry_digest` for that identity's current canonical marker body at that generation, defined exactly below the table | Checkpoints the complete authenticated record-marker set in the authority root by binding one immutable canonical marker body, at one explicit generation, per identity, so a replayed or substituted marker with different authority fields (operation, fencing, target generation/epoch, retention, or tombstone provenance) cannot pass verification merely because it names the same identity and state code, and so the root can select one marker generation as current without requiring the marker body itself to be mutated in place. |
 | `catalog_set_digest` | `"worldscript-r15/catalog-set/v1"` bytes, then `u32be(shard_count)`, then each shard sorted by `shard_id` and encoded as `shard_id`, `u64be(catalog_generation)`, and the 32-byte page `content_digest` | Binds the complete, authenticated set of catalog shards — count, identity, and current generation — so an omitted or replayed shard cannot be substituted for the current catalog. |
-| `root_digest` | `"worldscript-r15/root/v1"` bytes, then `u64be(root_generation)`, `u64be(active_key_epoch)`, `u64be(root_checkpoint_revision)`, the 32-byte `marker_set_digest`, the 32-byte `catalog_set_digest`, and the `root_commit_evidence` tuple (`operation_id`, fencing generation, `has_journal`, journal revision, and commit-state code), encoded exactly as defined below the table | Authenticates the root body named by the pointer, including the complete catalog-shard set and not only the record-marker set. The digest field itself is excluded from its input. |
+| `key_epoch_set_digest` | `"worldscript-r15/key-epoch-set/v1"` bytes, then `u32be(entry_count)`, then each entry sorted by `epoch` and encoded as `u64be(epoch)`, `u64be(registry_generation)`, and the 32-byte `content_digest` of that key-epoch control record | Binds the complete, authenticated set of key-epoch control records — count, identity, and current generation — the same way `catalog_set_digest` binds the catalog shard set, so an omitted or replayed key-epoch record cannot be substituted for the currently trusted registry. |
+| `root_digest` | `"worldscript-r15/root/v1"` bytes, then `u64be(root_generation)`, `u64be(active_key_epoch)`, `u64be(root_checkpoint_revision)`, the 32-byte `marker_set_digest`, the 32-byte `catalog_set_digest`, the 32-byte `key_epoch_set_digest`, and the `root_commit_evidence` tuple (`operation_id`, fencing generation, `has_journal`, journal revision, and commit-state code), encoded exactly as defined below the table | Authenticates the root body named by the pointer, including the complete catalog-shard set and the complete key-epoch control-record set, not only the record-marker set. The digest field itself is excluded from its input. |
 | `pointer_digest` | `"worldscript-r15/pointer/v1"` bytes, then the canonical slot name, `u64be(root_generation)`, and the 32-byte `root_digest` | Binds the active-slot pointer to one committed root slot. |
-| `inventory_digest` | `"worldscript-r15/inventory/v1"` bytes, then `u32be(inventory_version)`, `u32be(entry_count)`, and sorted record descriptors containing class, the §6.2-tagged logical-identity binding, the §6.2-tagged project-ID scope binding, source-authority kind, and source generation | Makes a migration inventory reproducible without hashing plaintext payloads. |
+| `inventory_digest` | `"worldscript-r15/inventory/v1"` bytes, then `u32be(inventory_version)`, `u32be(entry_count)`, and sorted record descriptors containing class, the §6.2-tagged logical-identity binding, the §6.2-tagged project-ID scope binding, and the exact `source_authority_kind`/`has_source_generation`/`source_generation` presence encoding defined in §10.1 | Makes a migration inventory reproducible without hashing plaintext payloads. |
 
 `root_commit_evidence` is encoded, in order, as: the §6.2 string encoding of `operation_id`
 (`u32be(byte_length)` then UTF-8 bytes), `u64be(fencing_generation)`, `u8(has_journal)`,
@@ -468,12 +535,38 @@ evidence tuple alone and is distinct from the version-1 marker `state_code` valu
 `NOT_COMMITTED = 0` for a slot that is authenticated but only prepared or pending per §5.3, and
 `COMMITTED = 1` for the durable committed state §5.3 requires before a slot is authority.
 
+Each `key-epoch:<scope>:<epoch>` control record committed by `key_epoch_set_digest` is immutable and
+generation-addressed, following the same immutable-generation discipline §8.4 requires for ordinary
+protected records and §5.5 requires for catalog pages: a rotation or status change writes a new
+`registry_generation` under the same `epoch` rather than mutating the previous generation's bytes in
+place. Its protected payload may contain a key-provider reference, verifier metadata, epoch status,
+retirement state, a KDF profile reference, and non-secret recovery metadata; raw key material never
+appears in it (this does not relax the existing §8.1/§8.2 rule that raw key bytes are never written
+to the data directory or exposed to a renderer). Like the authority root and catalog pages, a
+key-epoch control record does not itself require another `record-commit` marker — the root's
+`key_epoch_set_digest` is its non-recursive anchor, the same finite-base-case principle §5.3 already
+establishes for the authority manifest and record-commit markers themselves.
+
+The root's `active_key_epoch` field (already part of `root_digest`'s own input above) MUST name an
+entry present in the root-bound `key_epoch_set_digest` set; an `active_key_epoch` naming no matching
+authenticated key-epoch control record is a `root_digest` verification failure, not a `KEY_LOST` or
+`PROTECTED_WRONG_KEY` outcome, because the root itself failed to authenticate its own selection.
+This key-epoch registry becomes trusted only *after* the root has authenticated, per §5.3.1's
+cold-start sequence; cold-start key routing itself resolves the root key from the secure anchor's
+`committed_root` binding (§5.3.1), never from this registry, so the two mechanisms are never
+conflated.
+
 Version-1 marker `state_code` values are immutable and assigned once: `ABSENT = 0`, `ACTIVE = 1`,
 `PENDING = 2`, `DELETE_PENDING = 3`, `TOMBSTONED = 4`, `RECOVERY_REQUIRED = 5`, and
-`READ_AUTHORITY_PENDING = 6` for a pair marker whose committed member has not yet been matched by
-its partner. Every version-1 Core implementation must emit and compare these exact discriminants; a
-future state requires a new numeric value and a version bump, never a reused or
-implementation-chosen code.
+`READ_AUTHORITY_PENDING = 6`. Code 6 is valid for both a single-record migration/read-authority
+transition (the `PENDING(2) and a single-record READ_AUTHORITY_PENDING(6)` body defined below) and
+an asset-pair transition whose committed member has not yet been matched by its partner (the
+dedicated `asset-pair` body defined further below) — each uses its own canonical body, never a
+shared one, and neither reading makes the other invalid. The parser dispatches by record
+class/marker kind plus state code to the correct canonical body; an unrecognized combination remains
+unsupported/corrupt per the existing parse rules. Every version-1 Core implementation must emit and
+compare these exact discriminants; a future state requires a new numeric value and a version bump,
+never a reused or implementation-chosen code.
 
 Every marker-set entry's authority-bearing content is committed via a per-identity
 `marker_entry_digest` rather than being enumerated inline in `marker_set_digest` itself, so the full
@@ -487,11 +580,30 @@ marker_entry_digest = SHA-256("worldscript-r15/marker-entry/v1" bytes || canonic
 `canonical_marker_body_bytes` is a common header followed by exactly one state-specific body,
 selected by the entry's `state_code`. The common header is, in order: the exact `record_class`
 registry token (`u32be(byte_length) + UTF-8 bytes`), the §6.2-tagged `logical_record_id` binding,
-the §6.2-tagged `project_id` binding (`u8(0)` when absent), and `u32be(state_code)`. This repeats
-the entry's own leading identity fields inside the hashed body, not only in the outer
-`marker_set_digest` entry, because the persisted `record-commit`/`asset-pair` marker is itself an
-authoritative record read directly by ordinary reads/writes (§8.4) independent of ever being
-enumerated in a root checkpoint; it must be self-binding to its claimed identity on its own.
+the §6.2-tagged `project_id` binding (`u8(0)` when absent), `u64be(marker_generation)`, and
+`u32be(state_code)`. This repeats the entry's own leading identity fields — now including its own
+generation — inside the hashed body, not only in the outer `marker_set_digest` entry, because the
+persisted `record-commit`/`asset-pair` marker is itself an authoritative record read directly by
+ordinary reads/writes (§8.4) independent of ever being enumerated in a root checkpoint; it must be
+self-binding to its claimed identity and generation on its own.
+
+**Marker generations are immutable and generation-addressed.** `marker_generation` is a
+monotonically increasing counter maintained per logical identity's `record-commit`/`asset-pair`
+marker, starting at `1` for that identity's first marker write. It is a control-plane counter,
+entirely distinct from the protected data record's own `record_generation` carried inside the
+state-specific body below: `record_generation` versions the protected payload, `marker_generation`
+versions the authority statement about that payload, and the two counters advance independently — a
+single `record_generation` may be described by several successive marker generations (for example,
+an `ACTIVE(1)` marker generation followed later by a `DELETE_PENDING` marker generation that still
+names record generation `1`). Every marker transition — `ABSENT -> PENDING`, `PENDING -> ACTIVE`,
+`ACTIVE -> PENDING`, `DELETE_PENDING`, `TOMBSTONED`, and any `READ_AUTHORITY_PENDING` transition —
+writes the next `marker_generation` as a new immutable, generation-addressed marker record rather
+than mutating the previous marker generation's bytes in place, following the same
+generation-addressing discipline §8.4 already requires for ordinary protected records and §5.5
+requires for catalog pages. The current marker generation for an identity is exactly the one named
+by the committed root's `marker_set_digest` entry for that identity; older marker generations remain
+physically retained per §5.5's retention rule, giving startup a deterministic, authenticatable marker
+body to recover against after a crash rather than only a digest with no accessible bytes behind it.
 
 The state-specific body is exactly one of the following (`ABSENT` never appears as an entry — no
 marker exists yet — and is therefore not encoded here):
@@ -542,17 +654,27 @@ RECOVERY_REQUIRED(5):
 `asset-pair` markers use the same common header (with the `asset-pair` registry token and the
 `asset-pair:<project-id>:<asset-id>` identity) but a dedicated state-specific body, because the pair
 authenticates two members at once rather than one candidate/committed generation. Valid state codes
-for an `asset-pair` body are `ACTIVE`, `PENDING`, `DELETE_PENDING`, `READ_AUTHORITY_PENDING`, and
-`RECOVERY_REQUIRED`:
+for an `asset-pair` body are `ACTIVE`, `PENDING`, `DELETE_PENDING`, `TOMBSTONED`,
+`READ_AUTHORITY_PENDING`, and `RECOVERY_REQUIRED` — the pair-level authority machine is a complete
+aggregate counterpart to the single-record marker's own six states, so a pair can reach a durable
+deleted state exactly as a single record can:
 
 ```text
 pair_generation           u64be
 operation_id              length-delimited UTF-8; u32be(0) empty-string sentinel when
-                           state_code = ACTIVE and no in-flight operation applies, else
+                           state_code = ACTIVE and no in-flight operation applies; for TOMBSTONED
+                           this carries the committed delete's authenticated operation identity
+                           (mirrors the single-record TOMBSTONED delete_operation_id above); else
                            u32be(byte_length) + bytes, max 128 bytes
 fencing_generation        u64be; 0 sentinel when state_code = ACTIVE and not applicable
+retention_policy_code     u32be; present only when state_code = DELETE_PENDING; 0 = default
+                           retention (§8.5); a code that changes recovery behavior requires a
+                           version bump, never silent reuse (mirrors the single-record
+                           DELETE_PENDING body above)
 bytes-member tuple        member_generation (u64be), member_key_epoch (u64be),
-                           content_digest_present (u8), content_digest (32 bytes, if present)
+                           content_digest_present (u8), content_digest (32 bytes, if present); for
+                           DELETE_PENDING and TOMBSTONED this is the generation/epoch/digest being
+                           deleted or already tombstoned, retained per §8.5's retention boundary
 metadata-member tuple     same shape as the bytes-member tuple, for the metadata member
 ```
 
@@ -561,6 +683,17 @@ This is the only marker shape carrying more than one generation/epoch/content-di
 bodies above close: without them, an older but still AEAD-valid partial-pair marker with different
 operation authority could otherwise match the current root merely because its two member tuples
 happened to still parse.
+
+A durable pair `TOMBSTONED` marker binds both members' final generation/epoch/content-digest tuples
+together with the committed delete's `operation_id`, which is exactly the provenance needed to
+prevent either member — bytes or metadata — from becoming independently readable again after the
+pair is deleted: a reader can never reconstruct a "still active" bytes record from a tombstoned pair
+merely because the bytes envelope itself still authenticates under its own AAD. After a durable pair
+tombstone, a `getBinderAsset`-equivalent read returns `PROTECTED_DELETED` (§7) even when the old
+bytes/metadata generations remain physically retained for recovery or garbage collection; garbage
+collection of a tombstoned pair's retained generations remains separately retryable and non-blocking
+for the tombstone commit itself, consistent with the existing single-record `TOMBSTONED`/GC language
+in §8.5.
 
 This entry-digest design replaces the previous inline-tuple entry shape entirely, including the
 former `asset-pair`-specific carve-out at the `marker_set_digest` table-row level: every record
@@ -585,9 +718,9 @@ including an ordinary write, under the same `with_fence` boundary. Record genera
 independent; the root does not serve as a per-record lookup table. Because ordinary writes hold only
 shared admission, two concurrent writes to different records may both observe the same
 `root_checkpoint_revision`; each commit therefore performs a compare-and-swap on
-`root_checkpoint_revision` under the fence and, on conflict, recomputes the marker set against the
-newly committed root and retries its own record's marker transition rather than overwriting the
-concurrent update. A record's independent generation compare-and-swap in §8.4 governs only that
+`root_checkpoint_revision` while holding `root_commit_mutex` (§11.1) and, on conflict, recomputes
+the marker set against the newly committed root and retries its own record's marker transition
+rather than overwriting the concurrent update. A record's independent generation compare-and-swap in §8.4 governs only that
 record's own marker; it does not by itself serialize the shared root checkpoint. A marker/root digest
 mismatch is therefore a pending or recovery state, not a readable new generation: startup preserves
 the prior marker and candidate, then completes or rolls back the fenced transition using journal
@@ -611,16 +744,51 @@ epoch, candidate descriptor, record schema, and the deferred `content_digest` �
 ### 5.5 Authenticated enumeration and paired asset authority
 
 The `authority-root` is an integrity anchor, not a lookup table. The future Core therefore owns a
-protected, paged `record-catalog:<scope>:<shard>` set. Each catalog page contains only bounded,
-authenticated descriptors: record-class token, the §6.2-tagged logical-identity binding, the
-§6.2-tagged project scope binding when present, pair/group identity when present, current
-generation, epoch, marker state, and content digest. The
-catalog pages are generation-addressable records covered by the root's marker set; page order,
-count, and shard identity are authenticated by the `catalog_set_digest` defined in §5.4, which is
-itself an explicit input to `root_digest`. A shard omitted or replayed from an older catalog
-generation therefore fails root verification rather than silently disappearing from enumeration. A
-cursor is bound to the committed catalog generation and scope, and becomes invalid rather than
-silently continuing across an authority change.
+protected, paged `record-catalog:<scope>:<shard>` set. The catalog is an authenticated lookup/index
+for **ordinary protected records only** — it is not an inventory of its own control-plane pages.
+`record-catalog` catalog pages, `authority-root`, `key-epoch` control records, and `migration`/
+`migration-page` control records are explicitly excluded from their own catalog descriptor set: a
+catalog page is authenticated only through authority root -> `catalog_set_digest` -> shard id +
+catalog generation + content digest -> catalog page, never through a catalog descriptor that
+describes a catalog page. There is no catalog-page self-descriptor, and no catalog marker for a
+catalog page, for the same non-recursion reason the root has no marker for a marker (§5.3) and the
+migration journal excludes itself and its own control apparatus from the per-record inventory it
+gates (§10.1) — the same finite-base-case principle applied a third time.
+
+Each catalog page contains only bounded, authenticated descriptors for ordinary protected records:
+record-class token, the §6.2-tagged logical-identity binding, the §6.2-tagged project scope binding
+when present, pair/group identity when present, `marker_generation` and `marker_entry_digest` for
+the identity's current marker (§5.4), current record generation, epoch, marker state, and content
+digest — enough to locate and authenticate the current marker without ambiguity. Some duplication
+between the catalog descriptor and the marker body it names is acceptable; no value may be
+ambiguous. The catalog pages are generation-addressable records covered by the root's marker set;
+page order, count, and shard identity are authenticated by the `catalog_set_digest` defined in
+§5.4, which is itself an explicit input to `root_digest`. Because the root binds both
+`catalog_set_digest` and `marker_set_digest`, the committed root simultaneously selects (a) the
+authenticated catalog generation and (b) the marker-set state — including each descriptor's current
+`marker_generation` — corresponding to it; a catalog descriptor naming a `marker_generation` absent
+from the root's committed `marker_set_digest` fails verification the same way an omitted catalog
+shard does. A shard omitted or replayed from an older catalog generation therefore fails root
+verification rather than silently disappearing from enumeration. A cursor is bound to the committed
+catalog generation and scope, and becomes invalid rather than silently continuing across an
+authority change.
+
+**Retention.** Old catalog generations and marker generations referenced by the previous committed
+root, the current committed root, or a prepared root (§5.3.1), if present, must remain physically
+retained. Garbage collection may remove a marker or catalog generation only after no retained or
+recoverable root can reference it — a digest recorded in an old root without physically accessible
+bytes for the generation it names is not sufficient recovery evidence. This is what gives startup an
+actual deterministic path to restore or verify the previous marker state after a crash.
+
+**Ordinary-write coherence.** For every ordinary record authority transition whose catalog
+descriptor changes — `ABSENT -> PENDING`, `ACTIVE -> PENDING`, `PENDING -> ACTIVE`,
+`DELETE_PENDING`, `TOMBSTONED`, and migration read-authority transitions — Core updates, in the same
+serialized root commit: the new immutable `marker_generation`, the new affected catalog-page
+generation, `marker_set_digest`, `catalog_set_digest`, and the authority root. A write must never
+return durable success while authenticated enumeration (`list_records`) still describes the previous
+record authority. §9 step 9's fenced prepare/commit sub-sequence is where this catalog update is
+performed — it is part of the same fenced transition as the marker/root update, never a separate or
+deferred step.
 
 `list_records(scope, filter, cursor)` verifies the committed root, catalog marker, page digest,
 and each returned descriptor before returning bounded results. It never enumerates by trusting
@@ -644,8 +812,10 @@ envelopes use their respective record-class AAD. The aggregate
 `asset-pair:<project-id>:<asset-id>` marker records the pair generation, both member identities,
 both member generations/epochs, and both content digests. Core exposes the pair only when the
 aggregate marker is committed and both members match it under one fence. A partial pair is
-`READ_AUTHORITY_PENDING`/`RECOVERY_REQUIRED`, never an independently successful asset; migration,
-backup, quarantine, and cleanup must preserve or process the pair as one recovery unit.
+`READ_AUTHORITY_PENDING`/`RECOVERY_REQUIRED`, never an independently successful asset; a durably
+`TOMBSTONED` pair is `PROTECTED_DELETED` (§7) for both members even if their bytes remain physically
+retained; migration, backup, quarantine, and cleanup must preserve or process the pair as one
+recovery unit.
 
 ## 6. Protected-record envelope
 
@@ -728,7 +898,7 @@ record-catalog       local-first-doc    analytics-db       cross-project-index
 scene-comments       scene-revision     plot-ui            mind-map-ui
 progress             proforge-memory    proforge-history   inference-cache
 lora                 lora-dataset       lora-run           lora-mirror
-telemetry            ai-benchmark       worker-dlq
+telemetry            ai-benchmark       worker-dlq         idb-kdf-salt
 ```
 
 `staging` and `migration-stage` are deliberately not registry tokens: staging is a physical locator
@@ -889,8 +1059,10 @@ The Core contract is:
 KeyProvider.resolve(epoch) -> opaque 32-byte key or typed unavailable result
 KeyProvider.unlock(input) -> authenticated epoch/state transition
 KeyProvider.lock() -> clear runtime key handles/material
-KeyProvider.list_epochs() -> non-secret key identities and availability
-KeyProvider.read_root_anchor_state() -> { committed_floor, prepared_root_commit? } (§5.3.1)
+KeyProvider.list_epochs() -> non-secret key identities and availability; enumeration/diagnostic use
+                             only — never a trust-routing mechanism for the root (§5.3.1)
+KeyProvider.read_root_anchor_state() -> { committed_floor, committed_root, prepared_root_commit? }
+                             (§5.3.1)
 KeyProvider.prepare_root_anchor(...) -> committed / typed failure (§5.3.1)
 KeyProvider.commit_root_anchor(...) -> committed / typed failure (§5.3.1)
 KeyProvider.abort_or_recover_root_anchor(operation_id) -> clears a discardable preparation (§5.3.1)
@@ -903,17 +1075,19 @@ copy browser storage code into Core. The native implementation must select and d
 profile before production admission. No raw passphrase, key, salt secret, or decrypted payload is
 logged or sent to a renderer.
 
-These four operations expose the two-phase secure-anchor protocol that §5.3.1 normatively defines
-for the rollback floor; they are ordinary `KeyProvider` operations, not a separate contract. There
-is no claim of atomicity between the secure-metadata adapter and the filesystem:
-`prepare_root_anchor` durably records intent without raising `committed_floor`, the filesystem
-pointer transition happens independently, and `commit_root_anchor` durably raises `committed_floor`
+The four `*_root_anchor` operations expose the two-phase secure-anchor protocol that §5.3.1
+normatively defines for the rollback floor and the trusted `committed_root` cold-start binding; they
+are ordinary `KeyProvider` operations, not a separate contract. There is no claim of atomicity
+between the secure-metadata adapter and the filesystem: `prepare_root_anchor` durably records intent
+without raising `committed_floor` or `committed_root`, the filesystem pointer transition happens
+independently, and `commit_root_anchor` durably raises `committed_floor` and advances `committed_root`
 only after re-authenticating that transition's exact evidence (§5.3.1). §9 step 9 invokes
 `prepare_root_anchor`/`commit_root_anchor` at the two points §5.3.1's sequence requires, and startup
-calls `read_root_anchor_state()` before accepting any root slot as authoritative, consistent with
-§5.3's floor-verification rule and §5.3.1's crash-recovery table. An adapter that cannot provide the
-exact ordering and evidence-matching semantics §5.3.1 requires must fail closed per that section,
-not approximate it here.
+calls `read_root_anchor_state()` before accepting any root slot as authoritative and before resolving
+the root key at all (§5.3.1's trusted cold-start routing sequence), consistent with §5.3's
+floor-verification rule and §5.3.1's crash-recovery table. An adapter that cannot provide the exact
+ordering and evidence-matching semantics §5.3.1 requires must fail closed per that section, not
+approximate it here.
 
 ### 8.3 Epoch rules
 
@@ -947,10 +1121,12 @@ and `RECOVERY_REQUIRED` states. A first-time record follows the same fenced auth
 while pending, no payload is readable as the new record; after the authenticated `ACTIVE(1)` marker
 is durable, generation `1` is authoritative. If this creates the first root or changes its digest,
 the root commit is part of the same authority transition. The old
-generation remains the active authority while `PENDING` is durable. A new generation is promoted
-under a generation-addressable physical name, then the marker is durably advanced to `ACTIVE(new)`.
-The authority manifest separately selects the active storage epoch and is switched only by the
-migration/rotation commit protocol. These control records are protected and included in the
+generation remains the active authority while `PENDING` is durable. A new record generation is
+promoted under a generation-addressable physical name, and a new `marker_generation` (§5.4) — the
+identity's marker counter, distinct from and independent of this record's own `record_generation` —
+is durably written naming `ACTIVE(new)`, rather than mutating the previous marker generation in
+place. The authority manifest separately selects the active storage epoch and is switched only by
+the migration/rotation commit protocol. These control records are protected and included in the
 inventory; they are not mutable plaintext sidecars.
 
 The authority-root manifest does not duplicate every record's generation or act as their lookup
@@ -969,8 +1145,10 @@ envelopes use their respective record-class AAD. The aggregate
 `asset-pair:<project-id>:<asset-id>` marker records the pair generation, both member identities,
 both member generations/epochs, and both content digests. Core exposes the pair only when the
 aggregate marker is committed and both members match it under one fence. A partial pair is
-`READ_AUTHORITY_PENDING`/`RECOVERY_REQUIRED`, never an independently successful asset; migration,
-backup, quarantine, and cleanup must preserve or process the pair as one recovery unit.
+`READ_AUTHORITY_PENDING`/`RECOVERY_REQUIRED`, never an independently successful asset; a durably
+`TOMBSTONED` pair (§5.4) is `PROTECTED_DELETED` (§7) for both members even if their bytes remain
+physically retained for recovery/GC; migration, backup, quarantine, and cleanup must preserve or
+process the pair as one recovery unit.
 
 Outside a migration, Core requires the authenticated record generation and epoch to match both the
 committed record marker and the authority-root manifest. A valid older ciphertext for the same
@@ -1032,9 +1210,12 @@ For a new or replacement protected record, Core semantics are:
 2. Durably record a protected `PENDING(old -> new)` commit intent while the old generation remains
    active; for a new record use `PENDING(none -> 1)` from `ABSENT`. The intent includes operation
    ID, fencing token, target generation, target epoch, target record schema, and candidate
-   descriptor, but deliberately no `content_digest` because ciphertext does not exist yet. Commit
-   this pending marker with the matching root `marker_set_digest` under the same fenced transition
-   described in §5.4.
+   descriptor, but deliberately no `content_digest` because ciphertext does not exist yet. This is
+   itself a root-commit event: acquire `root_commit_mutex` (§11.1), commit this pending marker as a
+   new immutable `marker_generation` (§5.4) together with the matching root `marker_set_digest` and
+   the affected `catalog_set_digest` descriptor (§5.5's ordinary-write coherence rule) via the same
+   §5.3.1 two-phase secure-anchor sequence step 9 uses, then release `root_commit_mutex` before
+   staging (steps 3-8) begins.
 3. Serialize and authenticate the payload under the *final* record's own AAD — final `record_class`,
    final `logical_record_id`, project scope, target `key_epoch`, and target `record_generation`
    (§6.2) — the same identity the committed record will use. The physical staging location and its
@@ -1051,23 +1232,30 @@ For a new or replacement protected record, Core semantics are:
    re-encrypts or rewrites AAD merely because the physical file moves.
 8. Flush/sync the containing directory or platform-equivalent metadata required to persist the
    promoted generation.
-9. Perform the fenced root-anchor transition defined in §5.3.1 for this commit: (a) `prepare_root_anchor`
-   durably records the intent to advance the authority root to its next generation and the updated
-   `marker_set_digest` (the marker moving `PENDING` to `ACTIVE(new)`, or, for a migration target,
-   also the matching `VERIFIED_TARGET` journal/read-authority checkpoint) without yet raising the
-   rollback floor; (b) durably replace/sync the protected commit marker from `PENDING` to
-   `ACTIVE(new)` together with the authority-root `marker_set_digest` checkpoint under the same
-   `with_fence` transition — this is the first point at which the verified staged envelope supplies
+9. Acquire `root_commit_mutex` (§11.1) — never by upgrading this write's shared operation admission
+   from step 1 — and perform the fenced root-anchor transition defined in §5.3.1 for this commit:
+   (a) `prepare_root_anchor` durably records the intent to advance the authority root to its next
+   generation together with the updated `marker_set_digest` and `catalog_set_digest` (the marker's
+   next `marker_generation` moving `PENDING` to `ACTIVE(new)` and the affected `record-catalog`
+   descriptor's next `catalog_generation`, or, for a migration target, also the matching
+   `VERIFIED_TARGET` journal/read-authority checkpoint) without yet raising the rollback floor or
+   `committed_root`; (b) durably write the next `marker_generation` for the protected commit marker
+   (`PENDING` to `ACTIVE(new)`) as a new immutable marker record (§5.4) and the affected
+   `record-catalog` shard's next `catalog_generation` (§5.5), together with the authority-root
+   `marker_set_digest` and `catalog_set_digest` checkpoints, all under the same `with_fence`
+   transition — this is the first point at which the verified staged envelope supplies
    `content_digest`; for a migration target, retain `READ_AUTHORITY_PENDING` and block target reads
    until all required state is durable, or return recovery if the adapter cannot provide that
-   semantic; (c) `commit_root_anchor` durably advances the adapter-held rollback floor (§5.3,
-   §5.3.1) to the new `root_generation` only after (b) is durable. Only the completed (a)-(c)
-   sequence transfers ordinary record authority; a crash at any point resolves per §5.3.1's
+   semantic; (c) `commit_root_anchor` durably advances the adapter-held rollback floor and
+   `committed_root` (§5.3, §5.3.1) to the new `root_generation` only after (b) is durable. Only the
+   completed (a)-(c) sequence transfers ordinary record authority and updates authenticated
+   enumeration in the same serialized commit (§5.5); a crash at any point resolves per §5.3.1's
    crash-recovery table, never by claiming atomicity between the secure-metadata adapter and the
-   filesystem.
-10. Only after the marker, root checkpoint, advanced rollback floor, their containing directory
-    metadata, and any required migration checkpoint are durable return `DURABLE_COMMIT_SUCCESS`;
-    never report success after a marker-only commit.
+   filesystem. Release `root_commit_mutex` once this step's durable result is known.
+10. Only after the marker generation, catalog-page generation, root checkpoint, advanced rollback
+    floor, their containing directory metadata, and any required migration checkpoint are durable
+    return `DURABLE_COMMIT_SUCCESS`; never report success after a marker-only commit or while
+    `list_records` could still describe the previous record authority (§5.5).
 11. Reconcile stale staging deterministically on startup using authenticated generation/operation
    metadata; never delete an unrecognized file merely because it has a temp suffix.
 
@@ -1104,7 +1292,7 @@ Core never turns an uncertain state into default project data.
 | After file sync, before promotion | Complete staging may be verified/adopted by the journal or discarded; old authority remains until commit. |
 | After promotion, before directory sync | Old marker remains active; the new generation is preserved and not yet authoritative. |
 | After directory sync, before marker advancement | New bytes are durable but marker metadata is stale. Startup validates the authenticated pending intent and completes the marker, or rolls back while preserving the candidate for recovery — restoring `ACTIVE(old)` for a replacement, or `ABSENT` when the pending transition was `PENDING(none -> 1)` and no prior generation exists. It never guesses from timestamps. |
-| During the final marker/root/checkpoint transition (§9 step 9's prepare/commit sub-sequence) | The fence blocks readers from selecting the new target until the marker, root checkpoint, rollback-floor preparation and commit, and any migration checkpoint agree. §5.3.1's crash-recovery table governs the exact disposition of the floor's prepare/commit sub-sequence; the marker/root-checkpoint write itself resolves the same way as any other interruption in this table — restoring `ACTIVE(old)` for a replacement, or `ABSENT` for `PENDING(none -> 1)` — and the fence is released only once both the record-level and floor-level recovery are resolved. A marker-only ordinary write, and a floor-only `prepared_root_commit` with no matching durable target evidence, are never reported as durable success. |
+| During the final marker/root/checkpoint transition (§9 step 9's prepare/commit sub-sequence, held under `root_commit_mutex`, §11.1) | `root_commit_mutex` blocks readers from selecting the new target until the marker, root checkpoint, rollback-floor preparation and commit, and any migration checkpoint agree. §5.3.1's crash-recovery table governs the exact disposition of the floor's prepare/commit sub-sequence; the marker/root-checkpoint write itself resolves the same way as any other interruption in this table — restoring `ACTIVE(old)` for a replacement, or `ABSENT` for `PENDING(none -> 1)` — and `root_commit_mutex` is released only once both the record-level and floor-level recovery are resolved. A marker-only ordinary write, and a floor-only `prepared_root_commit` with no matching durable target evidence, are never reported as durable success. |
 | After journal/manifest advancement | New authority is durable; cleanup remains separately retryable. |
 | During cleanup | Authority is unchanged; cleanup can resume without deleting the committed generation. |
 
@@ -1135,6 +1323,27 @@ contains:
   revision sufficient to prevent stale migration owners from mutating records;
 - page count, entry count, and an ordered, authenticated page-set digest once the checkpoint or
   inventory is paged (§10.1.1).
+
+**`source_authority_kind` encoding.** Every migration-inventory descriptor names an immutable
+version-1 numeric source-authority kind, covering exactly the source classes this contract admits:
+`LEGACY = 0` for a legacy plaintext source discovered during `enable`/bootstrap (§10.2, §10.4), and
+`PROTECTED = 1` for an already-protected source record being re-enveloped under `rotate` or an
+envelope/schema migration (§10.4), where a real prior `record_generation` exists under the source
+epoch. The associated source generation uses explicit presence encoding, never a sentinel value a
+caller must separately learn means absence:
+
+```text
+source_authority_kind   u32be
+has_source_generation   u8
+source_generation       u64be only when has_source_generation = 1
+```
+
+For a `LEGACY` source, `source_authority_kind = LEGACY` and `has_source_generation = 0`; there is no
+generation number for plaintext that was never a protected record. For a `PROTECTED` source,
+`source_authority_kind = PROTECTED`, `has_source_generation = 1`, and `source_generation` is the
+source record's existing `record_generation` under the source epoch. `inventory_digest` (§5.4) hashes
+this exact encoding, not a generic prose description of "source-authority kind and source
+generation."
 
 The inventory is streamed or paged. The entire project and full record list are never required in
 memory. A checkpoint is written only after the corresponding record conversion and verification
@@ -1361,14 +1570,50 @@ transition is held; only then may ordinary admission resume. A lock/unlock reque
 migration or rotation waits for that operation's journal boundary or returns a resumable typed
 state, never a transient state in which the UI says `LOCKED` while an old-epoch write can commit.
 
-### 11.1 Locked legacy plaintext
+### 11.1 Root-commit concurrency (`root_commit_mutex`)
+
+Ordinary writers hold only shared operation admission (the table above), and an ordinary writer
+never attempts to upgrade that shared admission to exclusive in order to perform its root-anchor
+transition — a shared-to-exclusive upgrade while other shared holders remain active is the deadlock
+this section closes. Instead, the finite control-plane commit in §5.3.1 steps C-F is serialized by a
+separate, cross-process-serialized `root_commit_mutex`, held **below** the admission layer above:
+
+```text
+1. obtain operation admission — shared for ordinary read/write, exclusive for migration/lock/
+   authority switch (already defined in the table above)
+2. perform record preparation/staging outside root_commit_mutex where safe (§9 steps 1-8)
+3. acquire root_commit_mutex for the finite control-plane commit
+4. while holding root_commit_mutex:
+   - re-read current root
+   - validate CAS/root_checkpoint_revision (§5.4)
+   - recompute affected marker/catalog/key-registry sets if required
+   - perform secure-anchor PREPARE (§5.3.1 step C)
+   - commit filesystem root/control generations (§5.3.1 steps D/E)
+   - commit secure anchor (§5.3.1 step F)
+   - reach durable result
+5. release root_commit_mutex
+6. release operation admission at the already-defined boundary
+```
+
+An ordinary write (§9) performs steps 1-8 while holding only shared admission, then acquires
+`root_commit_mutex` for step 9's fenced prepare/commit sub-sequence — §5.3.1 steps A-G map onto
+steps 3-5 above — and releases it before returning its durability result. A migration, rotation,
+lock, or authority-switch operation first acquires exclusive admission and waits for ordinary shared
+work to drain (as the table above already requires), then acquires the same `root_commit_mutex` in
+the same ordering — never inverted, and never by holding `root_commit_mutex` while waiting to
+acquire admission. Because exclusive admission already excludes concurrent ordinary admission, such
+an operation is the sole admission holder when it takes `root_commit_mutex`, so no separate upgrade
+path is ever needed for that case either. §5.3.1 step A and §5.3's pointer-advance rule both refer to
+acquiring `root_commit_mutex`, never to upgrading operation-level admission.
+
+### 11.2 Locked legacy plaintext
 
 When secure mode is configured and the session is `LOCKED`, a legacy plaintext record is not
 readable through a special-case path. Core returns `PROTECTED_LOCKED` or `MIGRATION_REQUIRED`,
 depending on whether an unlock/migration operation is available. There is no silent bypass merely
 because a particular file has not yet been converted.
 
-### 11.2 Read/write policy during migration
+### 11.3 Read/write policy during migration
 
 Core owns a deterministic policy: verified target records may be read after their per-record
 checkpoint, pending records may be read from the still-valid source only while the journal permits
@@ -1434,12 +1679,30 @@ platform adapters may retain private OS error detail in a redacted diagnostic ch
 
 ### 15.1 Renderer-neutral Core surface
 
+The public Core read/write/delete surface accepts one structured identity value, never a
+colon-delimited logical string the Core would have to parse to recover project scope:
+
+```text
+RecordIdentity {
+    record_class
+    logical_record_id
+    project_id: Option<ExactProjectId>
+}
+```
+
+`logical_record_id` remains the stable registered logical identity (§5.1); `project_id` remains its
+separately authenticated AAD scope (§6.2), carried as its own structured field rather than joined
+into `logical_record_id`. The implementation may internally derive a canonical encoded storage key
+or AAD binding from `RecordIdentity`'s fields, but the public semantic contract must never recover
+project scope by splitting a joined string such as `asset:<project-id>:<asset-id>`, because existing
+imported IDs are unrestricted strings that may themselves contain the join delimiter.
+
 The later public Core API is semantic:
 
 ```text
-read_record(class, logical_id) -> typed read outcome + payload
-write_record(class, logical_id, payload) -> durability result
-delete_record(class, logical_id, project_scope?) -> durability result
+read_record(identity: RecordIdentity) -> typed read outcome + payload (§7)
+write_record(identity: RecordIdentity, payload, expected_generation) -> durability result
+delete_record(identity: RecordIdentity) -> durability result
 list_records(scope, filter, cursor) -> bounded authenticated descriptors + cursor
 query_secure_storage_state() -> key/epoch/migration state
 unlock(input) / lock()
@@ -1459,10 +1722,10 @@ Adapters may provide:
 - file write, file sync, atomic replace, and directory-sync primitives;
 - OS-backed cryptographic randomness;
 - OS keystore/credential access or the approved passphrase KDF input;
-- the two-phase secure-anchor rollback-floor primitive defined in §5.3.1
-  (`KeyProvider.read_root_anchor_state()` / `prepare_root_anchor(...)` / `commit_root_anchor(...)` /
-  `abort_or_recover_root_anchor(...)`, §8.2) backed by the same key/secure-metadata store rather
-  than the on-disk root slot;
+- the two-phase secure-anchor rollback-floor and trusted `committed_root` cold-start binding defined
+  in §5.3.1 (`KeyProvider.read_root_anchor_state()` / `prepare_root_anchor(...)` /
+  `commit_root_anchor(...)` / `abort_or_recover_root_anchor(...)`, §8.2) backed by the same
+  key/secure-metadata store rather than the on-disk root slot;
 - platform permission/error translation;
 - process shutdown/cancellation signals.
 
@@ -1472,12 +1735,12 @@ Core contract.
 
 An adapter's rollback-floor primitive must provide the exact durability ordering and
 evidence-matching semantics §5.3.1 defines. An adapter that cannot provide a durable
-`prepared_root_commit`/`committed_floor` pair with that ordering cannot implement R-15
-offline-rollback protection at all and must refuse the protection mode at admission time (fail
-closed), per §5.3.1's fail-closed requirement — it must not approximate the ordering with a weaker
-primitive. Once admitted, a genuine mid-operation crash inside the prepare/commit sequence resolves
-per §5.3.1's crash-recovery table; an adapter that cannot even distinguish those crash states
-returns `RECOVERY_REQUIRED` rather than claim durable success.
+`prepared_root_commit`/`committed_floor`/`committed_root` state with that ordering cannot implement
+R-15 offline-rollback protection or trusted cold-start key routing at all and must refuse the
+protection mode at admission time (fail closed), per §5.3.1's fail-closed requirement — it must not
+approximate the ordering with a weaker primitive. Once admitted, a genuine mid-operation crash inside
+the prepare/commit sequence resolves per §5.3.1's crash-recovery table; an adapter that cannot even
+distinguish those crash states returns `RECOVERY_REQUIRED` rather than claim durable success.
 
 ## 16. Headless implementation and fault-injection requirements
 
