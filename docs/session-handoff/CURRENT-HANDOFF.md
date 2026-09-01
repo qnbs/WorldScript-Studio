@@ -1,221 +1,91 @@
-# WorldScript Studio — Current Agent Handoff
+# WorldScript Studio — Session Handoff (Claude → Codex CLI)
 
-## 1. Capture Metadata
+**Captured UTC:** 2026-08-28, ca. 12:45. **Grund:** Claude-Session-Wochenlimit steht kurz bevor.
+**Worktree:** `/home/pc/WorldScript-Studio/.worktrees/main` (NICHT das Worktree wechseln — historischer
+Root ist auf Branch `h1-d-intel-qualification`, weitere Worktrees `release-v1282`, `scenario-465`
+existieren, NICHT anfassen). Repo: `qnbs/WorldScript-Studio`.
 
-- Captured UTC: approximately `2026-08-12T09:50:00Z`.
-- Supersedes `docs/session-handoff/archive/CLAUDE-HANDOFF-20260812T072000Z.md`
-  (captured right after #335→#336 layering-mistake correction, before #335
-  and #336 were actually merged into `main`). Read that document for full
-  provenance of everything before this segment.
-- This segment covers: merging #335 and #336 into `main` (with two
-  stacked-PR auto-close recoveries), then a large second CodeRabbit review
-  wave on #337 (now based directly on `main` for the first time) that
-  surfaced real bugs, doc drift, and — most importantly — confirmed the
-  entire encryption migration journal system has **zero production
-  callers**.
+## 1. Was gerade passiert ist (Kontext für Codex)
 
-## 2. Executive Summary
+Zwei-PR-Auftrag: **PR A** (Review-Workflow-Doku, CodeRabbit/CodeAnt-Semantik) — **bereits gemergt**
+(#538, `main` = `ca2f364d43a052c7cba273523fd3a481f427d2cd`). **PR B** (Graphify+CodeGraph
+Dual-Graph-Tooling-Härtung) — **offen als PR #539**, aktueller Branch `chore/dual-graph-solo-local-optimization`,
+aktueller HEAD `b1de85b1ec8b694b26e8ba702bc728b3fb1ed61c`. Beide PRs liefen mit sehr vielen
+Review-Wellen (CodeAnt, CodeRabbit, chatgpt-codex-connector) — die daraus gehärteten Regeln stehen
+jetzt in `docs/PR-CI-MERGE-WORKFLOW.md` / `docs/CODEANT-REVIEW-LOOP.md` / `docs/DEEPSOURCE-REVIEW-LOOP.md`
+(**vor dem Weiterarbeiten lesen** — evidenzbasierte CodeRabbit-Trigger-Semantik, Drei-Kanal-Modell mit
+exhaustiver Pagination, fail-closed Stacked-PR-Regel, `--match-head-commit`).
 
-- **`main`** is now at `78c7bb7b` (squash of #336) — previously `804793aa`,
-  then `c82f3f4a` (squash of #335), then `78c7bb7b`.
-- **#335 and #336 are both MERGED and CLOSED.** Only **#337** remains open,
-  now based directly on `main`.
-- **#337 head: `5fed880f`.** Review threads: **73/76 resolved, 3
-  deliberately left unresolved** (not false-closed — see § 5).
-- **Major discovery this segment:** `beginEncryptionMigration`,
-  `runProtectedStoreMigration`, and `getRegisteredSecondaryProtectedStoreAdapters`
-  have **zero production callers anywhere in the codebase** — confirmed via
-  exhaustive grep; every call site is in `tests/unit/storage/*.test.ts`. The
-  live "Encrypt project data at rest" toggle only supports **enable**
-  (`setupIdbEncryption`) and **unlock** (`verifyAndInitIdbEncryption`).
-  `PassphraseModalMode` is type-restricted to `'set' | 'unlock'` only —
-  there is no disable or passphrase-rotation UI at all yet. This matches
-  this project's own documented tech debt (`CLAUDE.md` § Known Technical
-  Debt, B-1: "Actual IDB read/write integration for stores is Phase 4
-  (service-layer only currently)"). **This means the entire TOCTOU/migration
-  hardening work done across this whole session — while real, well-tested,
-  and correct in isolation — is not yet reachable by any live user action.**
-- CI is running on #337's latest push (`5fed880f`) at capture time — check
-  before trusting it's green (§ 6).
+## 2. Akuter Blocker — SOFORT nächster Schritt
 
-## 3. What Happened This Segment (chronological)
+PR #539 scheitert am **required** `PR Size Governance` Check (feeds `✅ CI Success` Aggregator):
+`26 files, 6009 meaningful lines, 4 commits — limit ≤30 files / ≤3000 lines / ≤15 commits`. Überschreitung
+kommt fast komplett aus dem Diff der zwei neu generierten Report-Dateien (`graphify-out/GRAPH_REPORT.md`
+4527→169 Zeilen, `.codegraph/CODEGRAPH_REPORT.md` neu generiert) — nicht aus schwer review-barer Logik.
 
-1. Confirmed #336's full CI pipeline (its first time ever running, since it
-   only got full native CI once retargeted to `main`) was completely green
-   at `43e4afc6`. CodeAnt showed 0 bugs, CodeRabbit's fresh review found 0
-   new findings.
-2. Attempted a normal `gh pr merge 336 --squash --delete-branch` — hit the
-   same `mergeable_state` cache-lag quirk as #335 earlier ("base branch
-   policy prohibits the merge" despite everything green). Re-polled several
-   times per the documented procedure; it did not clear.
-3. **User explicitly authorized `--admin` for this specific merge.**
-   Merged #336 into `main` → `78c7bb7b`.
-4. **Same stacked-PR auto-close quirk hit #337 again** — this time #337's
-   base correctly auto-retargeted to `main`, but GitHub still closed the PR
-   instead of leaving it open. Recovered: `gh pr reopen 337`
-   (no branch-ref restoration needed this time, since #337's own head
-   branch was never deleted — only #336's branch was).
-5. `git merge origin/main` into #337 hit conflicts (squash-merge produces
-   new commit ancestry unrelated to #337's real merge history) — resolved
-   `README.md` (kept #337's higher key count), `AiProviderCard.tsx` (kept
-   #337's `ProviderConnectionStatus`/`getOllamaAvailability` extraction,
-   which #336's squash didn't have), `AiProviderCard.test.tsx`. **Caught and
-   fixed a silent duplicate-declaration bug from git's auto-merge** (two
-   copies of `probeWebGpu`/`useConnectionContextReset` inserted side by
-   side) that `git status` didn't flag as conflicted — always re-run
-   `pnpm run typecheck:single` after a merge, even a "clean" one.
-6. CodeRabbit could finally review #337 properly for the first time (base
-   was never `main` before) — first pass: 4 new findings (1 real duplicate
-   of the just-fixed aria-busy gap, 2 architectural false positives already
-   answered on #336, 1 cryptographically-verified false positive on the
-   rekey fallback's AES-GCM auth-tag safety). All replied to and resolved.
-7. Full native CI ran on #337 for the first time — caught a **second**
-   pre-existing, never-before-run bug (separate from #336's WebGPU
-   regression): `tests/unit/dbServiceBinder.test.ts`'s hand-rolled fake IDB
-   store never exposed a `.transaction` back-reference, crashing
-   `deleteAllBinderAssetsForProject`'s real transaction-batching code
-   (`Cannot set properties of undefined (setting 'oncomplete')`). Fixed the
-   test mock to track queued-request completion and fire `oncomplete`
-   correctly — reproducible locally, fixed, verified stable across 3 runs.
-8. Re-triggered CodeRabbit again — a **second, much larger** review wave
-   landed: 15 new findings spanning docs drift, QNBS-v3 formatting (4
-   batches), 2 real functional bugs (`aiInferenceCacheService` read-path
-   reject-vs-fail-soft contract violation; `sceneRevisionService`
-   concurrent-open connection leak), 1 real defensive gap
-   (`secondaryPayloadStoreAdapter` double `transaction.abort()`), 1
-   accessibility gap (loading state + `aria-busy`, needing a new i18n key
-   across all 19 locales), 1 test-quality bug (wrong prop changed in a
-   rerender test), and **3 deep, security-relevant findings about the
-   migration journal system** that led to the major discovery in § 2.
-9. Fixed and tested 12 of the 15 findings (commit `5fed880f`), added
-   regression tests for every genuine bug (not just doc/comment fixes),
-   replied to and resolved all 12. **Deliberately left the 3
-   migration-system findings unresolved** with detailed evidence-based
-   replies explaining why (§ 5) — not fixed, not falsely closed.
+**User-Entscheidung (bereits getroffen):** Einmalige Size-Limit-Ausnahme anfragen (NICHT splitten, NICHT
+Reports weiter kürzen). Das erfordert eine **maintainer-seitige** Aktion (User selbst, GitHub-Admin) —
+Codex/Claude kann das nicht selbst autorisieren. Nächster Schritt: mit dem User klären, wie die Ausnahme
+technisch erfolgt (z. B. `check-pr-size.mjs`/Governance-Config anpassen mit expliziter Begründung im Commit,
+oder ein Admin-Merge nur für diesen einen Fall mit frischer expliziter Autorisierung). **Kein `--admin`
+ohne diese frische, explizite Freigabe.**
 
-## 4. Live PR State
+## 3. CI-Stand auf PR #539 (letzter bekannter Stand)
 
-| PR | State | Head | Base | Threads (unresolved/total) |
-| --- | --- | --- | --- | --- |
-| #335 | **MERGED** | `edc3ef13` → squashed as `c82f3f4a` | `main` | n/a (closed) |
-| #336 | **MERGED** | `43e4afc6` → squashed as `78c7bb7b` | `main` | n/a (closed) |
-| #337 | **OPEN** | `5fed880f` | `main` | 3/76 |
-| #310 | OPEN (parked) | `27177ce5` | `main` | 0/317 (review-thread queue fully reconciled earlier this session; commit/behavior/test tables still incomplete) |
+Grün: CodeAnt (alle 5), Amazon Q, CodeQL, Security Audit, semgrep, Verified Signatures, GitGuardian,
+Socket (beide), Workflow Policy Gate. **Rot/blockierend:** PR Size Governance (s. o.). Quality Gate
+Node 22/24 war zuletzt noch pending. **Review-Threads auf #539 wurden noch NICHT geprüft** — sobald CI
+grün ist (nach Size-Gate-Lösung), den vollen Drei-Kanal-Check fahren (siehe gehärtete Doku oben) BEVOR
+gemergt wird.
 
-## 5. The 3 Deliberately Unresolved Threads (real, deferred, not fixed)
+## 4. Was in PR B technisch gebaut wurde (kurz)
 
-All three are independent code defects in the migration engine. They share
-one **reachability constraint** — the migration journal system has no
-production trigger today (§ 2) — but that absence is not their root cause
-and fixing it (wiring the system up) would not, by itself, fix any of them.
-Phase 4 must address both: build the missing disable/rotate-passphrase flow
-*and* fix these three defects before that flow can safely use the migration
-engine.
+- `config/graph-tools-versions.json` — Versions-Policy (graphifyy 0.9.51, codegraph 1.6.0, beide
+  `controlled-upgrade`, tatsächlich lokal installiert).
+- `scripts/graphSourceFingerprint.mjs` — worktree-aware Fingerprint (kein Commit-SHA, keine
+  git-ls-tree-Falle), `checkCleanState()` für `DIRTY_UNTRACKED_INPUT`-Gate.
+- `scripts/graphs-cli.mjs` — Kommando-Interface `bootstrap|doctor|status|update|report|refresh`
+  (ersetzt `dual-graph-update.mjs`, das früher Fehler verschluckt hat).
+- `scripts/codegraph-report.mjs` (neu geschrieben) + `scripts/graphify-report.mjs` (neu) — kompakte,
+  deterministische, fingerprint-gated Reports statt der alten kaputten/fremden/riesigen Reports.
+- Beide committeten Reports (`graphify-out/GRAPH_REPORT.md`, `.codegraph/CODEGRAPH_REPORT.md`) sind
+  bereits neu generiert, fingerprint-verifiziert, Determinismus getestet (Regenerierung ohne
+  Source-Änderung → byte-identisch).
+- Unit-Tests: `tests/unit/scripts/graphSourceFingerprint.test.ts` (10) +
+  `tests/unit/scripts/codegraphReport.test.ts` (7) — alle grün.
 
-1. **`services/storage/idbAssetStore.ts` (cross-tab write admission).**
-   `assertNoActiveEncryptionMigration()` is preflight-only, not atomic with
-   the write. A real TOCTOU: a writer could pass the check, migration could
-   claim ownership and commit, and the writer could then persist under the
-   stale key generation. Applies to `saveImage`, `saveBinderAsset`,
-   `deleteAllBinderAssetsForProject`, `saveStoryCodex`, `saveRagVectors`,
-   `saveSlice`, `createSnapshot`. Fixing it needs a new shared cross-tab
-   admission/locking protocol — a genuine design task, not a patch.
-2. **`services/storage/protectedStoreMigration.ts` (verification vs.
-   concurrent deletion).** `verify()` compares current record count against
-   `checkpoint.processed`, but `aiInferenceCacheService`'s eviction and
-   `sceneRevisionService`'s retention can delete records independently of
-   migration state — causing a false `ProtectedStoreVerificationShortfallError`
-   → `recovery-required`. Needs either migration-aware blocking of those two
-   mutation paths, or verification against the surviving record set.
-3. **`services/storage/secondaryProtectedStoreAdapters.ts` (never wired
-   in).** The registered secondary adapters (scene revisions, inference
-   cache) are never passed to `beginEncryptionMigration`/
-   `runProtectedStoreMigration` by any production code path.
+## 5. Bekannte Stolperfallen (nicht erneut debuggen)
 
-**None of these are reachable today** — confirmed via exhaustive grep (only
-test files call the migration entry points) and via the live UI's actual
-capabilities (`PassphraseModalMode = 'set' | 'unlock'` only;
-`PrivacySection.tsx` explicitly disables the "Encrypt project data at rest"
-toggle once it's on, with the comment "Locked is still encrypted; showing it
-as off invited an unsafe disable path"). **This is Phase 4 work** per
-`CLAUDE.md`'s own tech-debt tracking, not a gap introduced this session.
+- **`.codegraph/.gitignore` taucht immer wieder als `??` auf** — wird von `codegraph init`/manchen
+  Befehlen neu erzeugt, un-ignored sich selbst (`!.gitignore`), würde sich sonst selbst tracken. Vor
+  jedem `git add`/Commit prüfen und `rm -f .codegraph/.gitignore` falls vorhanden — NIE `git add -A`
+  blind verwenden, immer explizite Pfade stagen.
+- **`graphify-report.mjs` überschreibt denselben Pfad, den graphify selbst nativ beschreibt.** Bei
+  "no topology changes" schreibt graphify nichts — das Skript benennt die vorige kompakte Version vorher
+  um und stellt sie in diesem Fall unverändert wieder her (bereits gefixt, s. Commits `5ac03296`/`e2eae67e`).
+- Dieses Repo hat `delete_branch_on_merge=true` (verifiziert) — `--delete-branch` beim Merge ist bei
+  0 abhängigen offenen PRs unkritisch; bei >0 abhängigen PRs NICHT mergen, erst umbasieren (siehe
+  gehärtete Doku, fail-closed Regel).
+- `pnpm run ci:prepush` ist das lokale Pflicht-Gate (NICHT `pnpm run lint`/`typecheck` einzeln erwarten
+  — die laufen separat via `pnpm run lint` / `pnpm run typecheck:single`, falls nötig).
+- Nach jedem `package.json`-Edit vor Tests: `node scripts/dependency-state.mjs reconcile` (NIEMALS
+  bare `pnpm install`), sonst `ERR_PNPM_VERIFY_DEPS_BEFORE_RUN`.
+- README-Testmetriken müssen nach neuen Testdateien synchronisiert werden:
+  `node scripts/sync-readme-metrics.mjs`.
 
-**Implication for the standing NO-GO conditions:** the "migration/session
-race" NO-GO condition tracked all session is **not currently live-exploitable**
-(no production trigger exists), but the underlying engineering work to make
-it safe **when** Phase 4 wiring happens is still incomplete. Do not treat
-"not currently reachable" as "resolved" — it isn't. Building the disable/
-rotate-passphrase UI is itself a prerequisite piece of work that doesn't
-exist yet either.
+## 6. Nach erfolgreichem Merge von PR #539 (Rest des Master-Auftrags)
 
-## 6. How To Check Whether #337's Latest CI Landed Green
+1. `git fetch origin main --prune && git switch main && git pull --ff-only` — Invarianten neu prüfen
+   (`core.bare=false`, `hooksPath` leer, Worktree-Topologie unverändert).
+2. Post-Merge-Funktionsnachweis: `pnpm run graphs:status` muss `FRESH` für beide Reports zeigen,
+   `git status --short` sauber.
+3. Konsolidierten Abschlussbericht liefern (kanonische SHAs, Persistenz-Matrix, Funktionsnachweis) —
+   siehe ursprünglicher Master-Prompt §26 (Plan-Datei: `~/.claude/plans/worldscript-studio-enumerated-dragonfly.md`).
 
-```bash
-gh pr checks 337
-gh api graphql -f query='query { repository(owner: "qnbs", name: "WorldScript-Studio") { pullRequest(number: 337) { reviewThreads(first: 100) { totalCount nodes { isResolved } } } } }' --jq '{total: .data.repository.pullRequest.reviewThreads.totalCount, unresolved: [.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved==false)] | length}'
-```
+## 7. Harte Regeln (gelten für jeden Agenten hier)
 
-Expect `3` unresolved (the deliberately-deferred findings in § 5) — if the
-count is higher, a fresh review wave landed; fetch, classify, fix/defer,
-reply, and re-check per the established loop-until-quiescent method (see the
-archived prior handoffs' § 13 for the full method). If CodeRabbit shows
-"rate limited," check its actual review history
-(`gh api repos/qnbs/WorldScript-Studio/pulls/337/reviews --paginate`) before
-assuming nothing happened — this session hit that exact false signal twice
-on #336 and had to wait it out.
-
-## 7. Exact Next Actions
-
-1. **Confirm #337's CI is green on `5fed880f`** — was still running at
-   capture time (Quality Gate Node 22/24, CodeQL, semgrep, CodeRabbit all
-   pending).
-2. **If CI is green and no new review wave landed:** the stack's review/CI
-   dimension is satisfied for #337. The standing NO-GO conditions
-   (§ 5's migration-system gap, #310's incomplete commit/behavior/test
-   tables, #332/#333 packaged evidence) still block a full "ready to merge"
-   declaration — #337 merging into `main` is itself fine from a
-   code-correctness standpoint (nothing it does depends on the unreached
-   migration system), but do not claim the encryption-recovery-journal
-   *feature* is production-ready or fully delivered until Phase 4 (disable/
-   rotate UI + the 3 deferred fixes) lands.
-3. **When resuming Phase 4 work (disable/rotate-passphrase UI):** read § 5
-   first — the 3 deferred findings must be designed and fixed as part of
-   that same effort, not bolted on separately before or after.
-4. **Continue #310's remaining ledger work** (commit/behavior/test tables,
-   not the review-thread queue which is done) — untouched this segment.
-5. **#332/#333 packaged desktop evidence** — still explicitly deferred, no
-   `.deb` work happened this segment.
-
-## 8. Files / Symbols To Read First
-
-1. This file, then `docs/session-handoff/archive/CLAUDE-HANDOFF-20260812T072000Z.md`
-   for full provenance of the layering-mistake corrections and earlier
-   wave-3/wave-4 fixes.
-2. `services/storage/secondaryProtectedStoreAdapters.ts`,
-   `services/storage/protectedStoreMigration.ts`,
-   `services/storage/idbAssetStore.ts` — the 3 deferred findings (§ 5).
-3. `components/settings/PrivacySection.tsx`, `components/settings/PassphraseModal.tsx`
-   — confirms the current disable/rotate UI gap firsthand.
-4. `services/ai/aiInferenceCacheService.ts`, `services/sceneRevisionService.ts`,
-   `services/storage/secondaryPayloadStoreAdapter.ts` — this segment's 3
-   genuine bug fixes (all with regression tests).
-
-## 9. Commands To Avoid (unchanged from prior handoffs)
-
-- `pnpm install` without first checking current host load/free memory.
-- `cargo check` / `cargo build` on this host.
-- Hand-editing `pnpm-workspace.yaml`/`pnpm-lock.yaml` without a follow-up
-  real `pnpm install`.
-- Full local coverage/E2E/mutation/Lighthouse/Storybook/Tauri build — cloud
-  CI only.
-- Resolving a review thread because its anchor moved, without re-verifying
-  against current code.
-- `--admin` merges without the user's fresh, explicit authorization for
-  that specific merge (both #335 and #336 required asking again — the
-  authorization does not carry over automatically).
-- **Committing on a stacked/merged branch without `git branch --show-current`
-  first.** This session hit the layering mistake 3 times total across its
-  full duration. Now largely moot since only #337 remains open, but stay
-  disciplined if any new stacked work starts.
-- Treating "not currently reachable in production" as equivalent to
-  "resolved" for the § 5 migration-system findings — it isn't.
+- Sequenziell: **ein** schwerer Shell-Befehl gleichzeitig (2 Kerne, ~3.7 GB RAM, oft <500 MB frei).
+- Nie `git config` schreiben, nie Worktrees löschen/verschieben außer explizit angefragt.
+- Nie direkt auf `main` committen — immer Feature-Branch + PR.
+- Zero Tolerance bei jedem `FAILURE`-Status (required oder advisory) — nie ignorieren/raten.
+- Keine `--admin`/Protection-Bypass ohne frische, explizite, fallspezifische Freigabe des Users.
