@@ -317,6 +317,29 @@ anchor for later control-record commits while ordinary record generations contin
 per-record markers. This is a storage mechanism boundary, not a renderer or Storage-Core policy
 escape.
 
+### 5.4 Canonical digest contract
+
+All R-15 digests use SHA-256 with a 32-byte output and an explicit ASCII domain-separation prefix.
+The digest input is never locale-dependent or JSON-dependent. Unless a rule below says otherwise,
+strings use the §6.2 encoding (`u32be(byte_length)` followed by UTF-8 bytes), integers use unsigned
+big-endian fixed-width encoding, and records are sorted by the encoded byte tuple stated below.
+Implementations must reject invalid UTF-8, over-limit fields, and checked-length overflow before
+hashing; a digest algorithm or input change requires a new envelope/journal version.
+
+| Digest | Exact input, in order | Use |
+|---|---|---|
+| `content_digest` | `"worldscript-r15/content/v1"` bytes, then the complete canonical protected envelope bytes (`WSR1` header plus ciphertext) | Lets the commit marker verify that the generation-addressable envelope is the one it committed without exposing plaintext. |
+| `marker_set_digest` | `"worldscript-r15/marker-set/v1"` bytes, then `u32be(entry_count)`, then each entry sorted by `(record_class bytes, logical_record_id bytes, project_id bytes or empty)` and encoded as record class, logical ID, project ID presence/value, `u64be(record_generation)`, `u64be(key_epoch)`, `u32be(state_code)`, and the 32-byte `content_digest` | Checkpoints the complete authenticated record-marker set in the authority root. |
+| `root_digest` | `"worldscript-r15/root/v1"` bytes, then `u64be(root_generation)`, `u64be(active_key_epoch)`, `u64be(root_checkpoint_revision)`, the 32-byte `marker_set_digest`, and canonical root commit evidence (`operation_id`, fencing generation, journal revision, and committed state) | Authenticates the root body named by the pointer. The digest field itself is excluded from its input. |
+| `pointer_digest` | `"worldscript-r15/pointer/v1"` bytes, then the canonical slot name, `u64be(root_generation)`, and the 32-byte `root_digest` | Binds the active-slot pointer to one committed root slot. |
+| `inventory_digest` | `"worldscript-r15/inventory/v1"` bytes, then `u32be(inventory_version)`, `u32be(entry_count)`, and sorted record descriptors containing class, logical ID, project ID scope, source-authority kind, and source generation | Makes a migration inventory reproducible without hashing plaintext payloads. |
+
+The root's `marker_set_digest` is committed together with every record-marker authority change,
+including an ordinary write, under the same `with_fence` boundary. Record generations remain
+independent; the root does not serve as a per-record lookup table. A marker/root digest mismatch is
+therefore a pending or recovery state, not a readable new generation: startup preserves the prior
+marker and candidate, then completes or rolls back the fenced transition using journal evidence.
+
 ## 6. Protected-record envelope
 
 ### 6.1 Version 1 wire contract
@@ -585,13 +608,13 @@ The authority manifest separately selects the active storage epoch and is switch
 migration/rotation commit protocol. These control records are protected and included in the
 inventory; they are not mutable plaintext sidecars.
 
-The authority-root manifest does not duplicate every record's generation. It anchors the active
-storage epoch and carries a digest of the sorted authenticated record-marker set (logical identity,
-marker generation, epoch, and state). Each `record-commit` marker remains authoritative for exactly
-one logical identity. A read requires the envelope generation and epoch to match that marker, and
-the marker-set digest to match the committed root (or the matching migration journal view).
-Independent records may therefore advance generations independently without weakening root-level
-rollback detection.
+The authority-root manifest does not duplicate every record's generation or act as their lookup
+table. It anchors the active storage epoch and carries the `marker_set_digest` defined in §5.4.
+Each `record-commit` marker remains authoritative for exactly one logical identity. Record
+generations may advance independently, but each marker change and the corresponding root digest
+checkpoint are committed under the same fence. A read requires the envelope generation and epoch to
+match its marker and the marker-set digest to match the committed root (or the matching migration
+journal view); a marker written without that root checkpoint remains pending and is not served.
 
 Outside a migration, Core requires the authenticated record generation and epoch to match both the
 committed record marker and the authority-root manifest. A valid older ciphertext for the same
@@ -658,13 +681,15 @@ For a new or replacement protected record, Core semantics are:
    old active generation.
 8. Flush/sync the containing directory or platform-equivalent metadata required to persist the
    promoted generation.
-9. Atomically replace/sync the protected commit marker from `PENDING` to `ACTIVE(new)`; only this
-   marker change transfers ordinary record authority. For a migration target, the marker change and
-   its `VERIFIED_TARGET` journal/read-authority checkpoint are one `with_fence` transition: retain
-   `READ_AUTHORITY_PENDING` and block target reads until both are durable, or return recovery if the
-   adapter cannot provide that fenced semantic.
-10. Only after the marker, its containing directory, and any required migration checkpoint are
-    durable return `DURABLE_COMMIT_SUCCESS` and advance the authority manifest when applicable.
+9. Atomically replace/sync the protected commit marker from `PENDING` to `ACTIVE(new)` together
+   with the authority-root `marker_set_digest` checkpoint under one `with_fence` transition. Only
+   this paired commit transfers ordinary record authority. For a migration target, include the
+   matching `VERIFIED_TARGET` journal/read-authority checkpoint in the same fenced semantic: retain
+   `READ_AUTHORITY_PENDING` and block target reads until all required state is durable, or return
+   recovery if the adapter cannot provide that semantic.
+10. Only after the marker, root checkpoint, their containing directory metadata, and any required
+    migration checkpoint are durable return `DURABLE_COMMIT_SUCCESS`; never report success after a
+    marker-only commit.
 11. Reconcile stale staging deterministically on startup using authenticated generation/operation
    metadata; never delete an unrecognized file merely because it has a temp suffix.
 
@@ -701,13 +726,14 @@ Core never turns an uncertain state into default project data.
 | After file sync, before promotion | Complete staging may be verified/adopted by the journal or discarded; old authority remains until commit. |
 | After promotion, before directory sync | Old marker remains active; the new generation is preserved and not yet authoritative. |
 | After directory sync, before marker advancement | New bytes are durable but marker metadata is stale. Startup validates the authenticated pending intent and completes the marker, or restores `ACTIVE(old)` while preserving the candidate for recovery. It never guesses from timestamps. |
-| After marker advancement, before migration checkpoint/manifest advancement | The migration read authority is `READ_AUTHORITY_PENDING` under the fence; no reader selects the new target. Startup completes the matching checkpoint or restores `ACTIVE(old)` while preserving the candidate, then releases the fence. Ordinary non-migration writes may treat their already-durable marker as authoritative. |
+| After marker advancement, before root/checkpoint advancement | The record and migration read authority is `READ_AUTHORITY_PENDING` under the fence; no reader selects the new target. Startup completes the matching root/checkpoint commit or restores `ACTIVE(old)` while preserving the candidate, then releases the fence. A marker-only ordinary write is never reported as durable success. |
 | After journal/manifest advancement | New authority is durable; cleanup remains separately retryable. |
 | During cleanup | Authority is unchanged; cleanup can resume without deleting the committed generation. |
 
 The post-directory-sync/pre-marker rule is normative: startup first authenticates the durable
 `PENDING` intent and candidate generation. If both match, it idempotently completes the commit
-marker and, for migration, the matching journal/manifest checkpoint while holding the same fence.
+marker, the root marker-set checkpoint, and, for migration, the matching journal/manifest checkpoint
+while holding the same fence.
 If the candidate is missing, malformed, or fails authentication, it restores `ACTIVE(old)` and
 preserves the candidate/staging bytes for recovery. An unrecognized candidate is never adopted
 solely because it is newer or has a plausible filename.
