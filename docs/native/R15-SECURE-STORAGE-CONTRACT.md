@@ -148,11 +148,13 @@ Core contract.
 | ProForge run history | `services/proForge/proForgeHistoryStore.ts`; IndexedDB `proforge-run-history/history`, keyed by project ID. | Pipeline runs can retain prompts, review context, generated text and operational project metadata. | **PROTECTED**; bounded per project but content-bearing. | `proforge-history:<project-id>`; history is preserved as a project child record and never treated as disposable cache during migration. |
 | AI inference cache | `services/ai/aiInferenceCacheService.ts`; IndexedDB `worldscript-inference-cache-db/inference-cache` with bounded in-memory LRU. | Cached results are user/provider content and the hashed prompt/model key is still sensitive linkage metadata. | **PROTECTED** for persisted desktop/WebView entries; TTL/LRU is a retention policy, not encryption. | `inference-cache:<installation-scope>:<cache-key>`; future Core must bind the model/prompt cache namespace without storing raw prompt text in routing metadata. |
 | LoRA adapters, datasets and run metadata | `services/loraAdapterService.ts`; IndexedDB `worldscript-lora-db` metadata/blob/dataset/run/active stores; adapter metadata can also reference Tauri paths. | Adapter blobs, training datasets, lineage and active-model metadata may contain user material or reveal project provenance. | **PROTECTED** when persisted or project-linked; downloaded public model bytes are not automatically safe once user data is merged. | `lora:<adapter-id>` plus explicit dataset/run child identities; filesystem paths are locations only. Migration must preserve metadata/blob pairing. |
+| LoRA Redux mirror | `features/lora/loraSlice.ts`; localStorage key `worldscript-lora`, rehydrated into Redux state at startup. | Adapter names/descriptions, project IDs, filesystem paths, run history and error details mirror a subset of the IndexedDB stores above in a separate physical location. | **PROTECTED**; a second physical copy of already-protected content is not exempt merely because the IndexedDB store is the primary record. | `lora-mirror:<installation-scope>`; migration must protect or remove this mirror in the same operation as the IndexedDB stores it duplicates, never leaving one protected and the other plaintext. |
 | Opt-in AI telemetry | `services/ai/telemetryService.ts`; DuckDB `ai_telemetry` or bounded localStorage fallback `worldscript-ai-telemetry`. | Task/provider/model, timing and success metadata can expose usage and provider context even without prompt text. | **PROTECTED** for persisted desktop telemetry; the opt-in gate remains separate from the protection requirement. | `telemetry:<installation-scope>:<chunk-id>`; future records are redacted, bounded and authenticated. |
+| AI benchmark history | `services/ai/benchmarkService.ts`; localStorage key `worldscript-benchmarks`; active whenever the default-on adaptive AI engine records a benchmark. | Task type, backend, model ID, latency and timestamps are the same class of usage/model/timing fields the adjacent telemetry row protects. | **PROTECTED**; not exempt merely because the feature that produces it is default-on rather than opt-in. | `ai-benchmark:<installation-scope>:<entry-id>`; future records are redacted, bounded and authenticated the same way as the telemetry chunk row above. |
 | UI preferences and feature flags | Theme, language, last-view, feature-flag, tour, command-palette and similar localStorage keys. | No authored content or credentials by contract; values are small presentation preferences. | **NON_SENSITIVE** and regenerable, provided no content or secret is added to these keys. | `ui-preferences:<installation-scope>` only as a future bounded preference record; never use them as project or encryption authority. |
 | Protected-envelope routing header | Future envelope header contains only the magic, fixed-width version/suite/epoch/generation/schema fields, nonce and ciphertext length; no plaintext project/title/content. | Protocol metadata is non-sensitive by contract, but tampering is detected because the canonical header is included in AAD. | **NON_SENSITIVE** protocol metadata; not a user record. | No logical record identity of its own. It is authenticated in the containing record's AAD and parsed strictly before key/payload use. |
 
-**Inventory result:** 33 `PROTECTED`, 2 `NON_SENSITIVE`, 2 `DERIVED_REGENERABLE`, 3 `OUT_OF_SCOPE`, 0 unclassified (40 classes total). The two derived classes are not permitted to become a plaintext native persistence escape if they later carry content or recovery authority. Persistent worker dead-letter entries are protected even though their current WebView queue is bounded and best-effort.
+**Inventory result:** 35 `PROTECTED`, 2 `NON_SENSITIVE`, 2 `DERIVED_REGENERABLE`, 3 `OUT_OF_SCOPE`, 0 unclassified (42 classes total). The two derived classes are not permitted to become a plaintext native persistence escape if they later carry content or recovery authority. Persistent worker dead-letter entries are protected even though their current WebView queue is bounded and best-effort.
 
 This R-15 inventory is the authoritative security/storage admission list for packaged desktop data.
 The renderer classification in `UI-DOMAIN-STATE-CLASSIFICATION.md` remains authoritative for whether a
@@ -238,7 +240,9 @@ state, not a compliant implementation.
 | LoRA adapter | `lora:<adapter-id>` | Adapter metadata/blob pairing survives path changes; dataset/run children receive separate IDs. |
 | LoRA dataset | `lora-dataset:<adapter-id>:<dataset-id>` | Adapter and dataset IDs jointly identify a training-dataset child record; identity survives path changes and is never inferred from directory listing. |
 | LoRA run | `lora-run:<adapter-id>:<run-id>` | Adapter and run IDs jointly identify one training/run record; run identity is independent of the adapter's active-model selection. |
+| LoRA Redux mirror | `lora-mirror:<installation-scope>` | A second physical copy of adapter/dataset/run content; migration binds it to the same operation as the parent `lora`/`lora-dataset`/`lora-run` records, never a separate schedule. |
 | AI telemetry chunk | `telemetry:<installation-scope>:<chunk-id>` | Opt-in telemetry chunks rotate physically without changing the installation scope. |
+| AI benchmark entry | `ai-benchmark:<installation-scope>:<entry-id>` | Entry ID rotates physically without changing the installation scope, following the same pattern as the telemetry chunk row. |
 | Worker dead-letter entry | `worker-dlq:<installation-scope>:<task-id>` | Task ID is immutable; queue retention or physical compaction does not change identity. |
 
 ### 5.2.1 Project-scope registry
@@ -287,7 +291,9 @@ remain explicit gaps until a verified owner binding exists.
 | `lora` | Installation/adapter scope; project ID required for project-bound datasets/runs | Adapter identity survives path changes; child ownership is explicit. |
 | `lora-dataset` | Installation/adapter scope; project ID required for a project-bound dataset | Dataset ownership follows the parent adapter's rule: explicit, never inferred from content. |
 | `lora-run` | Installation/adapter scope; project ID required for a project-bound run | Run ownership follows the parent adapter's rule and is independent of other runs under the same adapter. |
+| `lora-mirror` | Installation scope; no project ID | Mirrors the installation/adapter-scoped `lora` family; never acquires a project ID the parent records don't already carry. |
 | `telemetry` | Installation/profile scope; no project ID by default | Opt-in telemetry is redacted and global unless a separately approved project scope exists. |
+| `ai-benchmark` | Installation/profile scope; no project ID by default | Follows the same scope rule as `telemetry`; benchmark entries are not project-owned even though the feature that produces them is default-on. |
 | `worker-dlq` | Installation scope; no project ID by default | Task IDs and bounded retention define queue ownership; payload content must not be used to infer a project. |
 
 For the current desktop implementation, rows marked as global or installation-scoped retain that
@@ -351,11 +357,11 @@ hashing; a digest algorithm or input change requires a new envelope/journal vers
 | Digest | Exact input, in order | Use |
 |---|---|---|
 | `content_digest` | `"worldscript-r15/content/v1"` bytes, then the complete canonical protected envelope bytes (`WSR1` header plus ciphertext) | Lets the commit marker verify that the generation-addressable envelope is the one it committed without exposing plaintext. |
-| `marker_set_digest` | `"worldscript-r15/marker-set/v1"` bytes, then `u32be(entry_count)`, then each entry sorted by `(record_class bytes, logical_record_id bytes, project_id bytes or empty)` and encoded as record class, logical ID, project ID presence/value, `u64be(record_generation)`, `u64be(key_epoch)`, `u32be(state_code)`, `u8(content_digest_present)`, and the 32-byte `content_digest` only when present | Checkpoints the complete authenticated record-marker set in the authority root while allowing a pre-ciphertext pending intent to be represented without a fabricated digest. |
+| `marker_set_digest` | `"worldscript-r15/marker-set/v1"` bytes, then `u32be(entry_count)`, then each entry sorted by `(record_class bytes, sort key derived from the §6.2-tagged logical_record_id binding, sort key derived from the §6.2-tagged project_id binding)` and encoded as record class, the tagged logical-identity binding, the tagged project binding, `u64be(record_generation)`, `u64be(key_epoch)`, `u32be(state_code)`, `u8(content_digest_present)`, and the 32-byte `content_digest` only when present | Checkpoints the complete authenticated record-marker set in the authority root while allowing a pre-ciphertext pending intent to be represented without a fabricated digest. |
 | `catalog_set_digest` | `"worldscript-r15/catalog-set/v1"` bytes, then `u32be(shard_count)`, then each shard sorted by `shard_id` and encoded as `shard_id`, `u64be(catalog_generation)`, and the 32-byte page `content_digest` | Binds the complete, authenticated set of catalog shards — count, identity, and current generation — so an omitted or replayed shard cannot be substituted for the current catalog. |
 | `root_digest` | `"worldscript-r15/root/v1"` bytes, then `u64be(root_generation)`, `u64be(active_key_epoch)`, `u64be(root_checkpoint_revision)`, the 32-byte `marker_set_digest`, the 32-byte `catalog_set_digest`, and the `root_commit_evidence` tuple (`operation_id`, fencing generation, `has_journal`, journal revision, and commit-state code), encoded exactly as defined below the table | Authenticates the root body named by the pointer, including the complete catalog-shard set and not only the record-marker set. The digest field itself is excluded from its input. |
 | `pointer_digest` | `"worldscript-r15/pointer/v1"` bytes, then the canonical slot name, `u64be(root_generation)`, and the 32-byte `root_digest` | Binds the active-slot pointer to one committed root slot. |
-| `inventory_digest` | `"worldscript-r15/inventory/v1"` bytes, then `u32be(inventory_version)`, `u32be(entry_count)`, and sorted record descriptors containing class, logical ID, project ID scope, source-authority kind, and source generation | Makes a migration inventory reproducible without hashing plaintext payloads. |
+| `inventory_digest` | `"worldscript-r15/inventory/v1"` bytes, then `u32be(inventory_version)`, `u32be(entry_count)`, and sorted record descriptors containing class, the §6.2-tagged logical-identity binding, the §6.2-tagged project-ID scope binding, source-authority kind, and source generation | Makes a migration inventory reproducible without hashing plaintext payloads. |
 
 `root_commit_evidence` is encoded, in order, as: the §6.2 string encoding of `operation_id`
 (`u32be(byte_length)` then UTF-8 bytes), `u64be(fencing_generation)`, `u8(has_journal)`,
@@ -377,15 +383,26 @@ its partner. Every version-1 Core implementation must emit and compare these exa
 future state requires a new numeric value and a version bump, never a reused or
 implementation-chosen code.
 
-An `asset-pair` entry in the marker set uses the same leading `(record_class bytes,
-logical_record_id bytes, project_id bytes or empty)` sort key and the `asset-pair` class token, but
-its trailing tuple differs from the single-record encoding above because it authenticates two
+An `asset-pair` entry in the marker set uses the same leading `(record_class bytes, tagged
+logical_record_id binding, tagged project_id binding)` sort key and the `asset-pair` class token,
+but its trailing tuple differs from the single-record encoding above because it authenticates two
 members at once: `u32be(state_code)`, `u64be(pair_generation)`, then the bytes-member tuple and the
 metadata-member tuple in that fixed order, each encoded as `u64be(member_generation)`,
 `u64be(member_key_epoch)`, `u8(content_digest_present)`, and the 32-byte `content_digest` only when
 present. This is the only entry shape carrying more than one generation/epoch/content-digest tuple;
 every other record class uses the single-tuple encoding defined in the `marker_set_digest` row
 above.
+
+Every control-plane occurrence of a logical identity or project ID — `marker_set_digest` entries
+(including the `asset-pair` shape above), catalog descriptors (§5.5), and `inventory_digest`
+descriptors — uses the exact same tagged direct-or-hashed binding §6.2 defines for envelope AAD:
+`u8(1) + u32be(byte_length) + exact UTF-8 bytes` within the 16,384-byte direct bound, or
+`u8(2) + SHA-256(the matching §6.2 domain-prefixed hash input)` for a longer exact identity. An
+identity that exceeds the direct bound is never truncated, renamed, or dropped to raw untagged
+bytes merely because it appears in a marker, catalog page, or inventory entry instead of an
+envelope: the same identity produces the same tagged binding everywhere it is authenticated, so an
+envelope that hashes a long ID under §6.2 can still acquire a compliant commit marker, catalog
+entry, and migration descriptor for that identical binding.
 
 The root's `marker_set_digest` is committed together with every record-marker authority change,
 including an ordinary write, under the same `with_fence` boundary. Record generations remain
@@ -416,8 +433,9 @@ pending marker with an unrelated old root.
 
 The `authority-root` is an integrity anchor, not a lookup table. The future Core therefore owns a
 protected, paged `record-catalog:<scope>:<shard>` set. Each catalog page contains only bounded,
-authenticated descriptors: record-class token, exact logical identity, project scope when present,
-pair/group identity when present, current generation, epoch, marker state, and content digest. The
+authenticated descriptors: record-class token, the §6.2-tagged logical-identity binding, the
+§6.2-tagged project scope binding when present, pair/group identity when present, current
+generation, epoch, marker state, and content digest. The
 catalog pages are generation-addressable records covered by the root's marker set; page order,
 count, and shard identity are authenticated by the `catalog_set_digest` defined in §5.4, which is
 itself an explicit input to `root_digest`. A shard omitted or replayed from an older catalog
@@ -531,7 +549,7 @@ diagnostic           record-catalog     local-first-doc    analytics-db
 cross-project-index  scene-comments     scene-revision     plot-ui
 mind-map-ui          progress           proforge-memory    proforge-history
 inference-cache      lora               lora-dataset       lora-run
-telemetry            worker-dlq
+lora-mirror          telemetry          ai-benchmark       worker-dlq
 ```
 
 The mapping is one token to one contract row or explicitly paired subrecord; aliases and locale
