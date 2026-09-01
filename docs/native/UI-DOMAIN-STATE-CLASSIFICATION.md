@@ -40,7 +40,7 @@ Originally produced as a Wave 1 deliverable during the (now-retired) CEF desktop
 
 This table is the input for (`docs/native/ROADMAP-QT-GPUI-DESKTOP.md`'s wave numbering):
 - **Wave 2** (Rust Core extraction and headless harness) — `project`'s domain state is the first candidate for a renderer-neutral, core-owned representation (open → edit → native save → quit → relaunch → restore).
-- **Wave 3–4** (storage correctness and R-15 encryption) — encrypting domain state at rest on desktop (concrete open gaps: issues #357, #359, #360, #361) operates on exactly the "Domain" rows above, not the Presentation/UI ones.
+- **Wave 3–4** (storage correctness and R-15 encryption) — the R-15 contract's protected-data inventory is the authoritative desktop security scope. It includes Domain rows and explicitly protected durable UI records such as `plot-ui` and `mind-map-ui` where their persisted viewport/selection state can expose user context; this does not reclassify those slices as domain state or make transient UI state Core-owned. Browser/PWA stores remain a separate authority.
 - **Wave 13** (task supervisor and native services) — `proForge`'s live-progress projection is a template for how a future core-owned task's progress should be surfaced into any renderer without becoming the source of truth itself.
 
 Re-classify any slice whose shape changes materially before relying on this table for a later wave's scope decisions — it is a snapshot, not a live-checked contract.
