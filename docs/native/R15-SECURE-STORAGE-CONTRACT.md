@@ -152,10 +152,11 @@ Core contract.
 | Opt-in AI telemetry | `services/ai/telemetryService.ts`; DuckDB `ai_telemetry` or bounded localStorage fallback `worldscript-ai-telemetry`. | Task/provider/model, timing and success metadata can expose usage and provider context even without prompt text. | **PROTECTED** for persisted desktop telemetry; the opt-in gate remains separate from the protection requirement. | `telemetry:<installation-scope>:<chunk-id>`; future records are redacted, bounded and authenticated. |
 | AI benchmark history | `services/ai/benchmarkService.ts`; localStorage key `worldscript-benchmarks`; active whenever the default-on adaptive AI engine records a benchmark. | Task type, backend, model ID, latency and timestamps are the same class of usage/model/timing fields the adjacent telemetry row protects. | **PROTECTED**; not exempt merely because the feature that produces it is default-on rather than opt-in. | `ai-benchmark:<installation-scope>:<entry-id>`; future records are redacted, bounded and authenticated the same way as the telemetry chunk row above. |
 | Existing IDB KDF salt (B-1 at-rest encryption) | `services/storage/storageEncryptionService.ts`; WebView IndexedDB key-derivation salt record, generated once when a passphrase is first set and read on every unlock to re-derive the PBKDF2 key; no native Tauri filesystem record exists on `main`. | The salt value itself is non-secret by cryptographic design, but it is a security-critical migration input: losing it, silently rotating it, or letting a future authority switch discard it before every legacy IDB record that depends on it is retired would desynchronize key derivation from already-committed ciphertext and could mask a rollback instead of detecting one. It is the key-acquisition input for every `FOREIGN_PROTECTED` source classified `source_scheme_id = WEBVIEW_IDB_AT_REST_V1` (§10.1.2), not a generic migration convenience value. | **PROTECTED** migration/control input; confidentiality is non-secret, integrity and availability are security-critical. Not independently regenerable without invalidating every IDB record derived from it. | `idb-kdf-salt:<installation-scope>`; do not imply the salt is secret or treat it as free to regenerate. MUST retain, specifically for as long as any retained record uses `source_scheme_id = WEBVIEW_IDB_AT_REST_V1` (§10.1.2, §10.6), until every such record is no longer required for rollback/recovery AND the new R-15 authority is durably committed AND cleanup/finalization is itself durable — no early deletion merely because the new root became `ACTIVE` or because one record's conversion succeeded once. |
+| Existing IDB passphrase sentinel (B-1 at-rest encryption) | `services/storage/idbPassphraseSentinel.ts`; WebView IndexedDB `worldscript-state-db/app-data-store` key `idb_passphrase_sentinel_v1`, written once when a passphrase is first set; `verifyAndInitIdbEncryption` reads and authenticates it on every unlock before deriving/accepting the PBKDF2 key and opening any dependent `WEBVIEW_IDB_AT_REST_V1` source. | The sentinel is an authenticated verifier of the passphrase itself, not the passphrase or the derived key; losing it, silently rotating it, or discarding it before every dependent `source_scheme_id = WEBVIEW_IDB_AT_REST_V1` (§10.1.2) record is retired would leave those records unauthenticatable even with the correct passphrase, masking a rollback instead of detecting one — the same migration-critical role the adjacent `idb-kdf-salt` row plays for key derivation. | **PROTECTED** migration/control input; not independently regenerable without invalidating every dependent `WEBVIEW_IDB_AT_REST_V1` record's ability to authenticate its passphrase. | `idb-passphrase-sentinel:<installation-scope>`; do not treat it as a generic settings flag or drop it as forward-compatible cruft. MUST retain, specifically for as long as any retained record uses `source_scheme_id = WEBVIEW_IDB_AT_REST_V1` (§10.1.2, §10.6), until every such record is no longer required for rollback/recovery AND the new R-15 authority is durably committed AND cleanup/finalization is itself durable — the same retention boundary the adjacent `idb-kdf-salt` row states, because both records gate the same dependent sources. |
 | UI preferences and feature flags | Theme, language, last-view, feature-flag, tour, command-palette and similar localStorage keys. | No authored content or credentials by contract; values are small presentation preferences. | **NON_SENSITIVE** and regenerable, provided no content or secret is added to these keys. | `ui-preferences:<installation-scope>` only as a future bounded preference record; never use them as project or encryption authority. |
 | Protected-envelope routing header | Future envelope header contains only the magic, fixed-width version/suite/epoch/generation/schema fields, nonce and ciphertext length; no plaintext project/title/content. | Protocol metadata is non-sensitive by contract, but tampering is detected because the canonical header is included in AAD. | **NON_SENSITIVE** protocol metadata; not a user record. | No logical record identity of its own. It is authenticated in the containing record's AAD and parsed strictly before key/payload use. |
 
-**Inventory result:** 36 `PROTECTED`, 2 `NON_SENSITIVE`, 2 `DERIVED_REGENERABLE`, 3 `OUT_OF_SCOPE`, 0 unclassified (43 classes total). The two derived classes are not permitted to become a plaintext native persistence escape if they later carry content or recovery authority. Persistent worker dead-letter entries are protected even though their current WebView queue is bounded and best-effort.
+**Inventory result:** 37 `PROTECTED`, 2 `NON_SENSITIVE`, 2 `DERIVED_REGENERABLE`, 3 `OUT_OF_SCOPE`, 0 unclassified (44 classes total). The two derived classes are not permitted to become a plaintext native persistence escape if they later carry content or recovery authority. Persistent worker dead-letter entries are protected even though their current WebView queue is bounded and best-effort.
 
 This R-15 inventory is the authoritative security/storage admission list for packaged desktop data.
 The renderer classification in `UI-DOMAIN-STATE-CLASSIFICATION.md` remains authoritative for whether a
@@ -516,11 +517,11 @@ hashing; a digest algorithm or input change requires a new envelope/journal vers
 |---|---|---|
 | `content_digest` | `"worldscript-r15/content/v1"` bytes, then the complete canonical protected envelope bytes (`WSR1` header plus ciphertext) | Lets the commit marker verify that the generation-addressable envelope is the one it committed without exposing plaintext. |
 | `marker_set_digest` | `"worldscript-r15/marker-set/v1"` bytes, then `u32be(entry_count)`, then each entry sorted by `(record_class bytes, sort key derived from the §6.2-tagged logical_record_id binding, sort key derived from the §6.2-tagged project_id binding)` and encoded as record class, the tagged logical-identity binding, the tagged project binding, `u64be(marker_generation)` — the control-plane generation counter for this identity's marker, distinct from the protected data record's own `record_generation` — and the 32-byte `marker_entry_digest` for that identity's current canonical marker body at that generation, defined exactly below the table | Checkpoints the complete authenticated record-marker set in the authority root by binding one immutable canonical marker body, at one explicit generation, per identity, so a replayed or substituted marker with different authority fields (operation, fencing, target generation/epoch, retention, or tombstone provenance) cannot pass verification merely because it names the same identity and state code, and so the root can select one marker generation as current without requiring the marker body itself to be mutated in place. |
-| `catalog_set_digest` | `"worldscript-r15/catalog-set/v1"` bytes, then `u32be(shard_count)`, then each shard sorted by `shard_id` and encoded as `shard_id`, `u64be(catalog_generation)`, and the 32-byte page `content_digest` | Binds the complete, authenticated set of catalog shards — count, identity, and current generation — so an omitted or replayed shard cannot be substituted for the current catalog. |
+| `catalog_set_digest` | `"worldscript-r15/catalog-set/v1"` bytes, then `u32be(shard_count)`, then each shard sorted by `shard_id` (`u32be`, §5.4's canonical shard identity below) and encoded as `u32be(shard_id)`, `u64be(catalog_generation)`, and the 32-byte page `content_digest` | Binds the complete, authenticated set of catalog shards — count, identity, and current generation — so an omitted or replayed shard cannot be substituted for the current catalog. |
 | `key_epoch_set_digest` | `"worldscript-r15/key-epoch-set/v1"` bytes, then `u32be(entry_count)`, then each entry sorted by `epoch` and encoded as `u64be(epoch)`, `u64be(registry_generation)`, and the 32-byte `content_digest` of that key-epoch control record | Binds the complete, authenticated set of key-epoch control records — count, identity, and current generation — the same way `catalog_set_digest` binds the catalog shard set, so an omitted or replayed key-epoch record cannot be substituted for the currently trusted registry. |
 | `root_digest` | `"worldscript-r15/root/v1"` bytes, then `u64be(root_generation)`, `u64be(active_key_epoch)`, `u64be(root_checkpoint_revision)`, the 32-byte `marker_set_digest`, the 32-byte `catalog_set_digest`, the 32-byte `key_epoch_set_digest`, and the `root_commit_evidence` tuple (`operation_id`, fencing generation, `has_journal`, journal revision, and commit-state code), encoded exactly as defined below the table | Authenticates the root body named by the pointer, including the complete catalog-shard set and the complete key-epoch control-record set, not only the record-marker set. The digest field itself is excluded from its input. |
 | `pointer_digest` | `"worldscript-r15/pointer/v1"` bytes, then the canonical slot name, `u64be(root_generation)`, and the 32-byte `root_digest` | Binds the active-slot pointer to one committed root slot. |
-| `inventory_digest` | `"worldscript-r15/inventory/v1"` bytes, then `u32be(inventory_version)`, `u32be(entry_count)`, and record descriptors sorted per the canonical tuple defined below, each encoded as class, the §6.2-tagged logical-identity binding, the §6.2-tagged project-ID scope binding, the exact `source_authority_kind`/`has_source_generation`/`source_generation` presence encoding defined in §10.1, and — only when `source_authority_kind = FOREIGN_PROTECTED` — the `source_scheme_id`/`source_format_version`/source-side identity and project-scope bindings/`source_evidence_digest` fields defined in §10.1.2 | Makes a migration inventory reproducible without hashing plaintext payloads. |
+| `inventory_digest` | `"worldscript-r15/inventory/v1"` bytes, then `u32be(inventory_version)`, `u32be(entry_count)`, and record descriptors sorted per the canonical tuple defined below, each encoded as class, the §6.2-tagged logical-identity binding, the §6.2-tagged project-ID scope binding, the exact `source_authority_kind`/`has_source_generation`/`source_generation` presence encoding defined in §10.1, the common `source_evidence_digest` field (32 bytes; §10.1's mutation-detection encoding, present for every `LEGACY_PLAINTEXT` and `FOREIGN_PROTECTED` entry, absent for `R15_PROTECTED`), and — only when `source_authority_kind = FOREIGN_PROTECTED` — the additional `source_scheme_id`/`source_format_version`/source-side identity and project-scope bindings defined in §10.1.2 | Makes a migration inventory reproducible without hashing `PROTECTED` payload content, while still committing evidence sufficient to detect any admitted legacy or foreign source mutating between frozen inventory and conversion. |
 
 **Canonical inventory sort order (version 1).** `inventory_digest` orders its record descriptors by
 exactly the tuple `(source record-class token bytes, tagged logical-record identity binding bytes,
@@ -540,6 +541,43 @@ inventory; a future admitted operation kind that can legitimately produce more t
 descriptor for the same identity in a single inventory must add an explicit discriminator field to
 this tuple and bump `inventory_version`, never rely on source-generation ordering to disambiguate
 silently.
+
+**Canonical shard identity (version 1).** `shard_id` is a `u32be` shard index assigned by Core when a
+catalog shard is first created; it is never a caller-supplied value, a path-derived value, or a
+value re-derived from shard content. `catalog_set_digest` sorts shards by this fixed-width big-endian
+encoding — numeric ascending order, per §5.4's preamble default for integers — never by a locale,
+string, or filesystem-enumeration order. Two shard descriptors bearing the same `shard_id` in one
+`catalog_set_digest` input is a verification failure, not a silently-deduplicated or last-write-wins
+condition: `catalog_set_digest`'s own purpose — binding "an omitted or replayed shard cannot be
+substituted for the current catalog" — already requires each `shard_id` to identify at most one
+current shard, so a duplicate is exactly the substitution/replay case that digest exists to catch,
+not a new failure category. `record-catalog:<scope>:<shard>`'s own `<shard>` locator uses this same
+`u32be` value in its §6.1.1 identity encoding, never a separately formatted string.
+
+**Legacy and foreign source mutation-detection fingerprint.** Every `LEGACY_PLAINTEXT` or
+`FOREIGN_PROTECTED` inventory descriptor carries a `source_evidence_digest` (32 bytes), computed and
+verified against the equivalent freshly-observed evidence immediately before conversion; a mismatch
+returns `SOURCE_CHANGED_SINCE_INVENTORY` (§15.3). For `FOREIGN_PROTECTED`, this is exactly the
+digest §10.1.2 already defines over the foreign scheme's own authenticated header/AAD or routing
+evidence. For `LEGACY_PLAINTEXT`, where no foreign envelope or AAD exists to reference, it is:
+
+```text
+source_evidence_digest (LEGACY_PLAINTEXT) =
+  SHA-256("worldscript-r15/legacy-source-evidence/v1" bytes || u64be(exact frozen source byte
+          length) || the frozen source file's exact byte content)
+```
+
+Hashing the frozen legacy bytes here is not a new plaintext-disclosure boundary: a `LEGACY_PLAINTEXT`
+source is, by definition, already stored and readable as plaintext outside any R-15 protection
+(§1.1), so a digest computed over bytes already readable by anyone with the same filesystem access
+discloses nothing the plaintext file did not already disclose. This is narrower than, and does not
+relax, `inventory_digest`'s general design preference against hashing `PROTECTED` payload content
+elsewhere in the descriptor set (`R15_PROTECTED` entries carry no `source_evidence_digest` at all,
+because their own generation-addressed `content_digest` already serves this role under §5.4/§8.4). A
+`LEGACY_PLAINTEXT` or `FOREIGN_PROTECTED` descriptor with no computable `source_evidence_digest` at
+inventory time — the source is unreadable, missing, or ownership-ambiguous — is not admitted to the
+final inventory snapshot under that identity; it follows §10.5's corrupt/ownership-ambiguous
+disposition instead of a synthesized or absent-sentinel digest.
 
 `root_commit_evidence` is encoded, in order, as: the §6.2 string encoding of `operation_id`
 (`u32be(byte_length)` then UTF-8 bytes), `u64be(fencing_generation)`, `u8(has_journal)`,
@@ -1448,17 +1486,25 @@ must separately learn means absence, for all three kinds:
 source_authority_kind   u32be
 has_source_generation   u8
 source_generation       u64be only when has_source_generation = 1
+has_source_evidence     u8
+source_evidence_digest  32 bytes only when has_source_evidence = 1 (§5.4's mutation-detection
+                         fingerprint; §10.1.2 for the FOREIGN_PROTECTED-specific evidence input)
 ```
 
 For a `LEGACY_PLAINTEXT` source, `source_authority_kind = LEGACY_PLAINTEXT` and
 `has_source_generation = 0`; there is no generation number for plaintext that was never a protected
-record. For an `R15_PROTECTED` source, `source_authority_kind = R15_PROTECTED`,
-`has_source_generation = 1`, and `source_generation` is the source record's existing
-`record_generation` under the source epoch. For a `FOREIGN_PROTECTED` source,
-`source_authority_kind = FOREIGN_PROTECTED` and `has_source_generation`/`source_generation` follow
-the foreign scheme's own generation semantics (§10.1.2) — present only when that scheme actually
-tracks one — and the descriptor carries the additional `FOREIGN_PROTECTED`-only fields §10.1.2
-defines. `inventory_digest` (§5.4) hashes this exact encoding, not a generic prose description of
+record. `has_source_evidence = 1` and `source_evidence_digest` is present, computed over the frozen
+source bytes exactly as §5.4 defines, so a resumed conversion can detect the source changing since
+inventory (`SOURCE_CHANGED_SINCE_INVENTORY`, §15.3) even though no generation number exists. For an
+`R15_PROTECTED` source, `source_authority_kind = R15_PROTECTED`, `has_source_generation = 1`,
+`source_generation` is the source record's existing `record_generation` under the source epoch, and
+`has_source_evidence = 0` — its own generation-addressed `content_digest` (§5.4, §8.4) already
+detects mutation, so no separate fingerprint is carried. For a `FOREIGN_PROTECTED` source,
+`source_authority_kind = FOREIGN_PROTECTED`, `has_source_generation`/`source_generation` follow the
+foreign scheme's own generation semantics (§10.1.2) — present only when that scheme actually tracks
+one — `has_source_evidence = 1`, `source_evidence_digest` is the §10.1.2-defined foreign evidence
+digest, and the descriptor carries the additional `FOREIGN_PROTECTED`-only fields §10.1.2 defines.
+`inventory_digest` (§5.4) hashes this exact encoding, not a generic prose description of
 "source-authority kind and source generation."
 
 The inventory is streamed or paged. The entire project and full record list are never required in
@@ -1539,11 +1585,22 @@ from, or reappearing in, the paged inventory; the manifest's authenticated page 
 trusted source of which pages exist, never directory enumeration.
 
 **Processing model.** Pages are immutable per generation; a checkpoint revision that must change a
-page's content writes a new `page_generation` under the same `page_index` and republishes the
-manifest with an atomically replaced `journal_page_set_digest` and `journal_revision`, rather than
-mutating a page in place. Implementations must not load the full inventory into memory; the
-manifest's `page_count` and cursor/progress state let a resumed operation stream only the pages it
-still needs.
+page's content writes a new `page_generation` under the same `page_index`, rather than mutating a
+page in place. The manifest itself is generation-addressed the same way, under its own
+`journal_revision`: republishing the manifest for a new checkpoint writes a new immutable
+`migration:<operation-id>` generation carrying the updated `journal_page_set_digest` and
+`journal_revision`, rather than overwriting the previous revision's bytes in place. This closes the
+exact crash window finding #5 identified: if a checkpoint replaces the manifest at revision `r` with
+revision `r+1` and the process crashes before the matching authority-root commit advances the root's
+`root_commit_evidence.journal_revision` (§5.4) to `r+1`, the still-authoritative root continues to
+name revision `r`, and revision `r`'s manifest bytes remain physically retained and authenticatable
+under its own generation rather than being destroyed by the write of `r+1`. **Retention.** Every
+manifest generation referenced by the previous committed root, the current committed root, or a
+prepared root (§5.3.1), if present, must remain physically retained — the same retention rule §5.5
+already states for catalog and marker generations, applied here to the journal manifest. Garbage
+collection may remove a manifest generation only after no retained or recoverable root can reference
+it. Implementations must not load the full inventory into memory; the current manifest generation's
+`page_count` and cursor/progress state let a resumed operation stream only the pages it still needs.
 
 **Crash recovery.** These paged-journal cases are explicit, in addition to the whole-journal cases
 in §10.3/§12:
@@ -1553,6 +1610,7 @@ in §10.3/§12:
 | Orphan prepared page — a `migration-page` envelope is durable but no durable manifest `journal_page_set_digest` references it | Not authoritative; discard it or retain it as an unclaimed candidate. Never adopted merely because its `operation_id`/`page_index` looks plausible. |
 | Manifest references a page that is missing | `RECOVERY_REQUIRED` for that checkpoint; the manifest's authenticated page set is trusted over what physically exists. |
 | A new page generation is durable but the manifest still names the old generation | The old generation remains authoritative for that `page_index` until the manifest is durably updated; the new page is a discardable or retryable candidate. |
+| A new manifest generation (`journal_revision = r+1`) is durable but the committed root's `root_commit_evidence.journal_revision` (§5.4) still names `r` | Revision `r` remains authoritative — its bytes are retained under its own generation, never destroyed by writing `r+1` — and resumption reads and resumes from revision `r`, exactly the crash window this section's Processing model closes. Revision `r+1` is a discardable or retryable candidate until the root itself advances. |
 | Manifest is durably updated to a new `journal_page_set_digest` but a referenced page's durability is incomplete | The manifest update itself was not eligible to commit under §9's write contract; treat as `RECOVERY_REQUIRED` rather than serve a partially-durable page set. |
 | Replay of an older, internally-consistent complete page set (an older `journal_revision` with its own valid `journal_page_set_digest`) | Rejected: the manifest is read through the same committed-root/marker authority as any other record (§5.3, §8.4), so an older `journal_revision` cannot become current again without also rolling back that authority, which §5.3.1's floor protocol independently blocks. |
 | Resume after partial page conversion | Idempotent: the cursor/progress state in the last durably committed manifest determines which pages/entries remain; already-converted pages are re-verified, not reprocessed. |
@@ -1615,8 +1673,8 @@ erase that already-established explicit-disclosure boundary. A future scheme req
 code and a compatibility rule, never a reused or renamed value.
 
 **`FOREIGN_PROTECTED` inventory descriptor extension.** In addition to the common
-`source_authority_kind`/`has_source_generation`/`source_generation` fields (§10.1), a
-`FOREIGN_PROTECTED` inventory descriptor binds:
+`source_authority_kind`/`has_source_generation`/`source_generation`/`has_source_evidence`/
+`source_evidence_digest` fields (§10.1, §5.4), a `FOREIGN_PROTECTED` inventory descriptor binds:
 
 ```text
 source_authority_kind          = FOREIGN_PROTECTED
@@ -1629,9 +1687,6 @@ source_project_scope_binding    §6.2-tagged binding of the source-side project 
 has_source_generation            u8   (from the common encoding above)
 source_generation                u64be, present only when the foreign scheme has a generation
                                  concept and has_source_generation = 1
-source_evidence_digest           32 bytes; SHA-256("worldscript-r15/foreign-source-evidence/v1"
-                                 bytes || the scheme-defined canonical opaque source representation
-                                 or authenticated routing evidence)
 ```
 
 `source_identity_binding`/`source_project_scope_binding` are the frozen-inventory-time authenticated
@@ -1643,20 +1698,32 @@ requires Core to independently validate that the source-side identity actually m
 destination `RecordIdentity` before conversion, rather than assuming the two bindings mean the same
 thing merely because they were captured in the same inventory entry.
 
-`source_evidence_digest` is a domain-separated digest over the scheme-defined canonical opaque source
-representation or authenticated routing evidence — for example, the foreign envelope's own
-authenticated header/AAD bytes, or an equivalent scheme-defined routing commitment — never a hash
-offered as a substitute for actually verifying the old encryption at conversion time. Its sole purpose
-is detecting source mutation between frozen inventory and conversion (§10.6); a mismatch at
-conversion time returns `SOURCE_CHANGED_SINCE_INVENTORY` (§15.3) rather than being silently ignored.
-The journal/inventory never contains raw source keys, passphrases, decrypted plaintext, or any other
-secret derived from the foreign source — only this non-secret evidence digest and the non-secret
-routing/scope bindings above.
+For `FOREIGN_PROTECTED`, `has_source_evidence = 1` (§10.1) always, and the common
+`source_evidence_digest` field (§5.4) is computed as:
+
+```text
+source_evidence_digest (FOREIGN_PROTECTED) =
+  SHA-256("worldscript-r15/foreign-source-evidence/v1" bytes || the scheme-defined canonical
+          opaque source representation or authenticated routing evidence)
+```
+
+a domain-separated digest over the scheme-defined canonical opaque source representation or
+authenticated routing evidence — for example, the foreign envelope's own authenticated header/AAD
+bytes, or an equivalent scheme-defined routing commitment — never a hash offered as a substitute for
+actually verifying the old encryption at conversion time. Its sole purpose is detecting source
+mutation between frozen inventory and conversion (§10.6); a mismatch at conversion time returns
+`SOURCE_CHANGED_SINCE_INVENTORY` (§15.3) rather than being silently ignored. The journal/inventory
+never contains raw source keys, passphrases, decrypted plaintext, or any other secret derived from
+the foreign source — only this non-secret evidence digest and the non-secret routing/scope bindings
+above.
 
 `inventory_digest` (§5.4) hashes this exact `FOREIGN_PROTECTED` extension, appended after the common
-fields, for every descriptor whose `source_authority_kind = FOREIGN_PROTECTED`; a `LEGACY_PLAINTEXT`
-or `R15_PROTECTED` descriptor never carries these extension fields at all, rather than carrying them
-with a sentinel absent value.
+fields (which, for `FOREIGN_PROTECTED`, already include the common `source_evidence_digest` computed
+by the formula above), for every descriptor whose `source_authority_kind = FOREIGN_PROTECTED`; an
+`R15_PROTECTED` descriptor never carries `source_evidence_digest` or these extension fields at all
+(§5.4's `has_source_evidence = 0` for that kind), and a `LEGACY_PLAINTEXT` descriptor carries the
+common `source_evidence_digest` (§5.4's `LEGACY_PLAINTEXT`-specific formula) but never these
+`FOREIGN_PROTECTED`-only extension fields, rather than carrying either with a sentinel absent value.
 
 ### 10.2 Bootstrap for first-time enable
 
@@ -1678,8 +1745,12 @@ before the first protected `DISCOVER` checkpoint:
    (§5.4's finding-#8 invariant); bootstrap cannot skip it merely because there is no prior registry
    to extend.
 3. Core determines the canonical final `COMMITTED` bootstrap root representation: `root_generation`
-   = the first generation, `active_key_epoch = M`, the (empty, single-entry) `marker_set_digest`
-   appropriate to a still-empty record set, an empty `catalog_set_digest`, the `key_epoch_set_digest`
+   = the first generation, `active_key_epoch = M`, the empty `marker_set_digest` (`entry_count = 0`)
+   appropriate to a still-empty *ordinary* record set — the step-2 key-epoch control record is bound
+   by `key_epoch_set_digest`, not `marker_set_digest`, because key-epoch and migration control
+   records are explicitly excluded from the ordinary marker set (§10.1); bootstrap's first root is
+   therefore never both empty and single-entry for the same digest, and the step-2 record does not
+   make this an `entry_count = 1` marker set — an empty `catalog_set_digest`, the `key_epoch_set_digest`
    binding the step-2 record, and `root_commit_evidence` with `root_commit_state_code = COMMITTED`,
    `has_journal = 1`, and `journal_revision = 0` — the journal's deterministic initial-checkpoint
    revision, known before the journal's own bytes are materialized in step 7, not a value only the
@@ -1825,6 +1896,59 @@ deliberately isolates. **Gate 7 (§20) may not claim complete packaged-desktop p
 `PROTECTED` class's disposition is unset or is `REFUSE_AUTHORITY_SWITCH`.** No disposition permits
 silent plaintext export of the class it governs.
 
+**Exhaustive class-to-disposition registry.** Every `PROTECTED` class from §3's inventory falls into
+exactly one of the three groups below; none is left to reader inference, and none defaults to
+`MIGRATE_TO_R15` merely because it is not listed under the other two groups.
+
+*Native Core control-plane records — no disposition applies.* These classes have no pre-existing
+legacy source on `main` (§3 states "no native record exists" for each) and are created natively
+under the target epoch as R-15's own control apparatus, never converted from a legacy source; §10.1
+already excludes them from the per-record `CONVERT`/`VERIFY` migration inventory on that basis, so
+"migration disposition" does not apply to them at all — not `MIGRATE_TO_R15`, and not any other
+value:
+
+- Secure-storage authority manifest and record catalog
+- Key-epoch registry and verifier references
+- Record-generation and commit markers
+- Migration journals/checkpoints
+- Atomic-write temporary files (current unprotected staging is a migration input/risk, not itself a
+  migrated data class; §3 already states this)
+- Migration staging (no current implementation; a future physical conversion-staging locator only,
+  §3 already states this)
+
+*`RETAIN_APPROVED_SEPARATE_PROTECTED_AUTHORITY`* — the class keeps its existing, independently
+approved mechanism rather than becoming an ordinary R-15 filesystem record:
+
+- API/provider credentials (normative example above)
+- Existing IDB KDF salt (B-1 at-rest encryption) — retained exactly per §3's own retention boundary
+  (tied to every dependent `WEBVIEW_IDB_AT_REST_V1` source, not indefinitely like credentials) rather
+  than converted into an ordinary R-15 envelope; it is migration/rollback evidence for other classes'
+  conversions, not itself PROTECTED content with an R-15 destination.
+- Existing IDB passphrase sentinel (B-1 at-rest encryption) — same reasoning and the same retention
+  boundary as the KDF salt row immediately above, because both gate the same dependent sources.
+
+*`MIGRATE_TO_R15`* — the ordinary path; every remaining `PROTECTED` class converts into an R-15
+envelope under this contract's identity/generation/AAD model once its Gate 5 admission-readiness
+requirement (§20) is satisfied:
+
+Project/manuscript canonical data; Project metadata; Snapshots; Library backups; Quarantine/recovery
+data; Settings; Global images; Binder binary assets; Binder asset metadata; Story Codex; RAG/vector/
+index payloads; Worker dead-letter entries; Active-project marker; Logs/diagnostics; Local-first sync
+document (Yjs); Analytics store (DuckDB/OPFS); Cross-project search index; Scene comments and
+replies; Scene revision history (its migration *source* is classified `FOREIGN_PROTECTED` or
+`LEGACY_PLAINTEXT` per §3/§10.1.2 depending on whether the B-1 IDB policy currently applies to it —
+an orthogonal axis from this disposition, which governs only its eventual R-15 destination); Plot-
+board and mind-map UI records; Writing progress and session history; ProForge memory bank; ProForge
+run history; AI inference cache; LoRA adapters, datasets and run metadata; LoRA Redux mirror; Opt-in
+AI telemetry; AI benchmark history.
+
+This registry totals 6 no-disposition native control-plane classes, 3
+`RETAIN_APPROVED_SEPARATE_PROTECTED_AUTHORITY` classes, and 28 `MIGRATE_TO_R15` classes — 37
+`PROTECTED` classes in all, matching §3's inventory result exactly. Adding, removing, or reclassifying
+a §3 row requires updating this registry in the same change; a `PROTECTED` row with no corresponding
+entry here is `REFUSE_AUTHORITY_SWITCH` by this section's own default, not an oversight to silently
+resolve as `MIGRATE_TO_R15`.
+
 ### 10.5 Legacy plaintext and corruption
 
 Discovery distinguishes known healthy legacy plaintext, unknown shape, corrupt/unreadable data,
@@ -1937,8 +2061,8 @@ separate, cross-process-serialized `root_commit_mutex`, held **below** the admis
 ```text
 1. obtain operation admission — shared for ordinary read/write, exclusive for migration/lock/
    authority switch (already defined in the table above)
-2. perform record preparation/staging outside root_commit_mutex where safe (§9 steps 1-8)
-3. acquire root_commit_mutex for the finite control-plane commit
+2. perform preparation/staging work outside root_commit_mutex where safe
+3. acquire root_commit_mutex for one finite control-plane commit
 4. while holding root_commit_mutex:
    - re-read current root
    - validate CAS/root_checkpoint_revision (§5.4)
@@ -1948,19 +2072,32 @@ separate, cross-process-serialized `root_commit_mutex`, held **below** the admis
    - commit secure anchor (§5.3.1 step F)
    - reach durable result
 5. release root_commit_mutex
-6. release operation admission at the already-defined boundary
+6. repeat steps 2-5 for every further root-commit event the same operation requires, still under
+   the same operation admission obtained once in step 1 — never re-obtaining or upgrading it
+7. release operation admission at the already-defined boundary
 ```
 
-An ordinary write (§9) performs steps 1-8 while holding only shared admission, then acquires
-`root_commit_mutex` for step 9's fenced prepare/commit sub-sequence — §5.3.1 steps A-G map onto
-steps 3-5 above — and releases it before returning its durability result. A migration, rotation,
-lock, or authority-switch operation first acquires exclusive admission and waits for ordinary shared
-work to drain (as the table above already requires), then acquires the same `root_commit_mutex` in
-the same ordering — never inverted, and never by holding `root_commit_mutex` while waiting to
-acquire admission. Because exclusive admission already excludes concurrent ordinary admission, such
-an operation is the sole admission holder when it takes `root_commit_mutex`, so no separate upgrade
-path is ever needed for that case either. §5.3.1 step A and §5.3's pointer-advance rule both refer to
-acquiring `root_commit_mutex`, never to upgrading operation-level admission.
+An ordinary write (§9) requires exactly two root-commit events under the one shared admission
+obtained once in step 1, not one: §9 step 2's `PENDING(old -> new)` commit is itself a root-commit
+event and acquires `root_commit_mutex` for its own instance of this generic sequence's steps 3-5
+*before* staging begins, releasing it before §9 steps 3-8 (staging) proceed; §9 step 9's
+`ACTIVE(new)` commit then acquires `root_commit_mutex` again for a second instance of steps 3-5
+*after* staging completes — §5.3.1 steps A-G map onto each instance's steps 3-5 in turn — releasing
+it before the write returns its durability result. Neither acquisition upgrades the shared admission
+obtained in step 1 to exclusive. Serializing both root-changing checkpoints, not only the second, is
+required: leaving §9 step 2's `PENDING` commit unserialized would let two concurrent ordinary writers
+to the same identity both observe the same pre-write root and each durably commit a `PENDING`
+marker/catalog/root checkpoint from that identical root revision — exactly the unserialized
+first-checkpoint race this section exists to close, and exactly what §5.4's compare-and-swap-and-retry
+rule on `root_checkpoint_revision` already assumes is prevented upstream of it, not provided by it.
+A migration, rotation, lock, or authority-switch operation first acquires exclusive admission and
+waits for ordinary shared work to drain (as the table above already requires), then acquires the same
+`root_commit_mutex` in the same ordering for its own root-commit event(s) — never inverted, and never
+by holding `root_commit_mutex` while waiting to acquire admission. Because exclusive admission already
+excludes concurrent ordinary admission, such an operation is the sole admission holder when it takes
+`root_commit_mutex`, so no separate upgrade path is ever needed for that case either. §5.3.1 step A
+and §5.3's pointer-advance rule both refer to acquiring `root_commit_mutex`, never to upgrading
+operation-level admission.
 
 ### 11.2 Locked legacy plaintext
 
@@ -2116,8 +2253,18 @@ MigrationSourceAdapter.open_verified(descriptor, source_authority_or_unlock_cont
                   SOURCE_IDENTITY_MISMATCH, SOURCE_RECOVERY_REQUIRED
 ```
 
-**`SOURCE_CHANGED_SINCE_INVENTORY`** is returned when the source's re-derived evidence no longer
-matches the frozen `source_evidence_digest` (§10.1.2) captured at inventory time. **The R-15
+**`SOURCE_CHANGED_SINCE_INVENTORY`** is returned when a source's re-derived evidence no longer
+matches its frozen `source_evidence_digest` (§5.4) captured at inventory time. For a
+`FOREIGN_PROTECTED` source this check is `MigrationSourceAdapter.open_verified`'s own responsibility,
+against the §10.1.2-defined foreign evidence input; `MigrationSourceAdapter` is scoped to foreign
+(non-R-15) cryptographic mechanics only (this section's own opening paragraph, above) and is never
+invoked for a `LEGACY_PLAINTEXT` source,
+which has no foreign envelope to open or verify. For a `LEGACY_PLAINTEXT` source, the same typed
+outcome is instead returned directly by Core's own legacy-read-and-convert step (§9, §10.4) when the
+freshly-read file's evidence no longer matches the frozen `source_evidence_digest` (§5.4's
+`LEGACY_PLAINTEXT`-specific formula); both call sites return the identical outcome code because both
+are the same conceptual check — a resumed or retried conversion must never commit different bytes
+under an identity frozen at an earlier inventory. **The R-15
 `KeyProvider` is not the legacy-key registry.** Core does not copy every existing WebView key into
 the future R-15 `KeyProvider` merely to make migration convenient, and does not export a
 non-extractable WebCrypto key merely to satisfy a uniform API. Where a current source key is
@@ -2225,10 +2372,26 @@ Required assertions include:
     crash after R-15 candidate durability but before authority commit; crash after R-15 commit while
     the foreign source is still retained; resume with the foreign source unchanged; resume with the
     foreign source missing; the `idb-kdf-salt:<installation-scope>` record missing while a dependent
-    `WEBVIEW_IDB_AT_REST_V1` source remains; and a `CREDENTIAL_IDB_KEYSTORE_V1` non-extractable key
-    unavailable. Every case remains preserve-first: no assertion may pass by observing source
-    cleanup, plaintext fallback, a default write, or migration marked complete under any of these
-    conditions.
+    `WEBVIEW_IDB_AT_REST_V1` source remains; the `idb-passphrase-sentinel:<installation-scope>`
+    record missing while a dependent `WEBVIEW_IDB_AT_REST_V1` source remains; and a
+    `CREDENTIAL_IDB_KEYSTORE_V1` non-extractable key unavailable. Every case remains preserve-first:
+    no assertion may pass by observing source cleanup, plaintext fallback, a default write, or
+    migration marked complete under any of these conditions.
+20. `LEGACY_PLAINTEXT` mutation-detection coverage exercises the frozen source bytes changing after
+    final inventory but before conversion reads them, confirming Core's own legacy-read-and-convert
+    step (§9, §10.4) returns `SOURCE_CHANGED_SINCE_INVENTORY` from the re-derived `source_evidence_digest`
+    (§5.4) mismatch rather than committing the changed bytes under the frozen identity; and confirms
+    an unchanged source's re-derived digest matches and conversion proceeds.
+21. Journal-manifest generation-addressing recovery exercises a crash after a new manifest generation
+    (`journal_revision = r+1`, §10.1.1) is durable but before the committed root's
+    `root_commit_evidence.journal_revision` (§5.4) advances to it, confirming resumption reads and
+    resumes from the still-authoritative retained revision `r` rather than treating `r`'s bytes as
+    destroyed or `r+1` as already authoritative.
+22. Two concurrent ordinary writers targeting the same logical identity both reach §9 step 2's
+    `PENDING` commit; the fixture confirms `root_commit_mutex` (§11.1) serializes both writers'
+    acquisitions for that step so only one durably commits its `PENDING` marker/catalog/root
+    checkpoint from a given pre-write root revision, and the other observes the CAS retry defined in
+    §5.4 rather than an unserialized parallel `PENDING` commit against the same root revision.
 
 ## 17. Reconciliation of current TypeScript mechanisms
 
