@@ -139,6 +139,7 @@ Core contract.
 | Service-worker/browser caches | PWA/service-worker caches and browser profile data are not native Tauri filesystem records and are owned by the browser runtime. | Static assets are generally regenerable; cached user responses may be sensitive depending on the browser feature. | **OUT_OF_SCOPE** for native R-15 authority; browser-specific protection remains its own policy. | No native identity. Do not use cache presence as project existence or secure-storage state. |
 | Local-first sync document (Yjs) | `services/localFirst/docPersistence.ts` persists the Yjs update log and `services/localFirst/projectDoc.ts` projects manuscript, characters, worlds and metadata into it; active only behind the opt-in `enableLocalFirstSync` flag (ADR-0008) as a WebView IndexedDB store, with Redux remaining the declared source of truth. | The projected CRDT document mirrors complete authored manuscript, character, world and project-metadata content, so it carries the same sensitivity as the canonical project record even though it is a shadow projection. | **PROTECTED**; content-bearing shadow copy, not a disposable cache merely because Redux is the declared source of truth. | `local-first-doc:<project-id>`; bind the owning project ID. Migration must treat the update log as a project child record and must never let it become authoritative ahead of the canonical project record. |
 | Analytics store (DuckDB/OPFS) | `workers/v2/duckdb.worker.ts` persists the DuckDB analytics database `worldscript_analytics.duckdb` in OPFS behind `enableDuckDbAnalytics`; `services/duckdb/duckdbSchema.ts` defines the tables/views it holds. | Project titles, loglines, character names and Codex-derived excerpts are aggregated for analytics queries; this is native content, not a disposable query cache, even though every row is derived from the canonical project record. | **PROTECTED** for the persisted OPFS database; computationally regenerable from source projects but content-bearing until regenerated. | `analytics-db:<installation-scope>`; the database aggregates multiple projects, so per-project scope is authenticated payload rather than the record's own AAD identity. Migration must protect or refuse the whole database before any authority switch; it is not a harmless cache merely because it is derived. |
+| Cross-project search index | `services/crossProjectIndexService.ts`; IndexedDB `worldscript-data-db/projects-index-store`, keyed by `projectId`; `indexProject`/`listIndexedProjects`/`removeProjectIndex` read/write it and dual-write a copy into the analytics store above when `enableDuckDbAnalytics` is on. | Project titles, loglines, character names, manuscript word counts, an AI-generated summary and a semantic-search embedding vector per project; this is native content, not a disposable query cache, even though every field is derived from the canonical project record. | **PROTECTED** for the persisted IndexedDB store; computationally regenerable from source projects but content-bearing until regenerated. | `cross-project-index:<project-id>`; unlike the aggregate `analytics-db` record, this store holds one entry per project, so the project ID is the record's own AAD identity, not payload. Migration must protect or refuse each project's index entry before any authority switch. |
 | Scene comments and replies | `features/sceneComments/sceneCommentsSlice.ts`; localStorage key `worldscript-scene-comments`; Redux middleware persists comment/reply bodies. | Comment bodies, replies, section IDs and resolution state are user-authored project context even though this store is outside `project.json`. | **PROTECTED**; current localStorage is a separate WebView authority and is not covered by native Core. | `scene-comments:<installation-scope>` until a project binding is added; future migration must bind every section/comment ID and preserve the current global namespace rather than guess a project. |
 | Scene revision history | `services/sceneRevisionService.ts`; WebView IndexedDB `worldscript-revisions-db/scene-revisions`; current browser encryption is separate from native R-15. | Revision titles and full scene content are recoverable user data. | **PROTECTED**; independently encrypted today where the IDB policy applies, but not a native Core record. | `scene-revision:<revision-id>` with section routing authenticated separately. Migration must preserve revision identity and bounded history. |
 | Plot-board and mind-map UI records | `features/plotBoard/plotBoardSlice.ts` and `features/mindMap/mindMapUiSlice.ts`; localStorage viewport/selection state. Authored connections/nodes remain in project state, but IDs and active selections persist here. | Selection, map identifiers, viewport and interaction metadata can reveal project structure; the UI state is regenerable but not harmless. | **PROTECTED** for a persisted desktop profile; it must not be treated as the project content authority. | `plot-ui:<installation-scope>` / `mind-map-ui:<installation-scope>`; future Core may omit purely ephemeral viewport fields only after proving no user intent or routing metadata is lost. |
@@ -151,7 +152,7 @@ Core contract.
 | UI preferences and feature flags | Theme, language, last-view, feature-flag, tour, command-palette and similar localStorage keys. | No authored content or credentials by contract; values are small presentation preferences. | **NON_SENSITIVE** and regenerable, provided no content or secret is added to these keys. | `ui-preferences:<installation-scope>` only as a future bounded preference record; never use them as project or encryption authority. |
 | Protected-envelope routing header | Future envelope header contains only the magic, fixed-width version/suite/epoch/generation/schema fields, nonce and ciphertext length; no plaintext project/title/content. | Protocol metadata is non-sensitive by contract, but tampering is detected because the canonical header is included in AAD. | **NON_SENSITIVE** protocol metadata; not a user record. | No logical record identity of its own. It is authenticated in the containing record's AAD and parsed strictly before key/payload use. |
 
-**Inventory result:** 32 `PROTECTED`, 2 `NON_SENSITIVE`, 2 `DERIVED_REGENERABLE`, 3 `OUT_OF_SCOPE`, 0 unclassified (39 classes total). The two derived classes are not permitted to become a plaintext native persistence escape if they later carry content or recovery authority. Persistent worker dead-letter entries are protected even though their current WebView queue is bounded and best-effort.
+**Inventory result:** 33 `PROTECTED`, 2 `NON_SENSITIVE`, 2 `DERIVED_REGENERABLE`, 3 `OUT_OF_SCOPE`, 0 unclassified (40 classes total). The two derived classes are not permitted to become a plaintext native persistence escape if they later carry content or recovery authority. Persistent worker dead-letter entries are protected even though their current WebView queue is bounded and best-effort.
 
 This R-15 inventory is the authoritative security/storage admission list for packaged desktop data.
 The renderer classification in `UI-DOMAIN-STATE-CLASSIFICATION.md` remains authoritative for whether a
@@ -228,12 +229,15 @@ state, not a compliant implementation.
 | Record catalog/index | `record-catalog:<scope>:<shard>` | Authenticated paged enumeration of owned record descriptors; it is controlled by the authority root and never rebuilt from filenames alone. |
 | Local-first sync document | `local-first-doc:<project-id>` | Project ID binds the CRDT projection to its owning project; the update log is never an independent live authority ahead of the canonical project record. |
 | Analytics store | `analytics-db:<installation-scope>` | The aggregated OPFS database is one installation-scoped record; per-project rows inside it are authenticated payload, not separate record identities. |
+| Cross-project search index | `cross-project-index:<project-id>` | Project ID binds the index entry to its owning project; the record is keyed identically to the underlying store, so rename/relocation does not change identity. |
 | Scene comments | `scene-comments:<installation-scope>` | Current global localStorage has no project binding; future migration must retain that namespace or add a verified binding, never infer ownership from section text. |
 | Scene revision | `scene-revision:<revision-id>` | Revision identity survives renderer/storage relocation; section routing is authenticated metadata. |
 | ProForge memory | `proforge-memory:<project-id>:<entry-id>` | Entry ID and project ID jointly bind project-specific AI context. |
 | ProForge history | `proforge-history:<project-id>` | Project ID binds the bounded run-history record; run order is payload, not a physical path. |
 | Inference cache | `inference-cache:<installation-scope>:<cache-key>` | The cache-key namespace is bound without exposing the raw prompt; TTL does not change identity. |
 | LoRA adapter | `lora:<adapter-id>` | Adapter metadata/blob pairing survives path changes; dataset/run children receive separate IDs. |
+| LoRA dataset | `lora-dataset:<adapter-id>:<dataset-id>` | Adapter and dataset IDs jointly identify a training-dataset child record; identity survives path changes and is never inferred from directory listing. |
+| LoRA run | `lora-run:<adapter-id>:<run-id>` | Adapter and run IDs jointly identify one training/run record; run identity is independent of the adapter's active-model selection. |
 | AI telemetry chunk | `telemetry:<installation-scope>:<chunk-id>` | Opt-in telemetry chunks rotate physically without changing the installation scope. |
 | Worker dead-letter entry | `worker-dlq:<installation-scope>:<task-id>` | Task ID is immutable; queue retention or physical compaction does not change identity. |
 
@@ -271,6 +275,7 @@ remain explicit gaps until a verified owner binding exists.
 | `diagnostic` | Installation scope; no project ID by default | Redacted diagnostics are global; a future project-bound diagnostic must opt into an explicit owner. |
 | `local-first-doc` | Required `project_id` | The projected CRDT document is a project child record; it inherits the canonical project's owner and is never a standalone authority. |
 | `analytics-db` | Installation scope; per-project ownership lives in table rows, not the record's own AAD | The database aggregates multiple projects; a project ID inside the payload is not a substitute for verified per-record ownership. |
+| `cross-project-index` | Required `project_id` | Each index entry is a project-owned search/summary record, unlike the installation-scoped `analytics-db` aggregate. |
 | `scene-comments` | Current installation/global scope; project ID absent until verified | Preserve the current namespace; never bind comments from section text. |
 | `scene-revision` | Current revision scope; project ID required only when verified | Revision IDs remain stable; section routing is authenticated payload metadata. |
 | `plot-ui` | Current installation scope; no project ID | Viewport/selection state is not project authority; future binding must be explicit. |
@@ -280,6 +285,8 @@ remain explicit gaps until a verified owner binding exists.
 | `proforge-history` | Required `project_id` | Run history is a project child record. |
 | `inference-cache` | Current installation/cache scope; project ID absent unless a project-bound cache is explicitly admitted | Cache keys are not project provenance and raw prompts are not routing metadata. |
 | `lora` | Installation/adapter scope; project ID required for project-bound datasets/runs | Adapter identity survives path changes; child ownership is explicit. |
+| `lora-dataset` | Installation/adapter scope; project ID required for a project-bound dataset | Dataset ownership follows the parent adapter's rule: explicit, never inferred from content. |
+| `lora-run` | Installation/adapter scope; project ID required for a project-bound run | Run ownership follows the parent adapter's rule and is independent of other runs under the same adapter. |
 | `telemetry` | Installation/profile scope; no project ID by default | Opt-in telemetry is redacted and global unless a separately approved project scope exists. |
 | `worker-dlq` | Installation scope; no project ID by default | Task IDs and bounded retention define queue ownership; payload content must not be used to infer a project. |
 
@@ -346,9 +353,22 @@ hashing; a digest algorithm or input change requires a new envelope/journal vers
 | `content_digest` | `"worldscript-r15/content/v1"` bytes, then the complete canonical protected envelope bytes (`WSR1` header plus ciphertext) | Lets the commit marker verify that the generation-addressable envelope is the one it committed without exposing plaintext. |
 | `marker_set_digest` | `"worldscript-r15/marker-set/v1"` bytes, then `u32be(entry_count)`, then each entry sorted by `(record_class bytes, logical_record_id bytes, project_id bytes or empty)` and encoded as record class, logical ID, project ID presence/value, `u64be(record_generation)`, `u64be(key_epoch)`, `u32be(state_code)`, `u8(content_digest_present)`, and the 32-byte `content_digest` only when present | Checkpoints the complete authenticated record-marker set in the authority root while allowing a pre-ciphertext pending intent to be represented without a fabricated digest. |
 | `catalog_set_digest` | `"worldscript-r15/catalog-set/v1"` bytes, then `u32be(shard_count)`, then each shard sorted by `shard_id` and encoded as `shard_id`, `u64be(catalog_generation)`, and the 32-byte page `content_digest` | Binds the complete, authenticated set of catalog shards — count, identity, and current generation — so an omitted or replayed shard cannot be substituted for the current catalog. |
-| `root_digest` | `"worldscript-r15/root/v1"` bytes, then `u64be(root_generation)`, `u64be(active_key_epoch)`, `u64be(root_checkpoint_revision)`, the 32-byte `marker_set_digest`, the 32-byte `catalog_set_digest`, and canonical root commit evidence (`operation_id`, fencing generation, journal revision, and committed state) | Authenticates the root body named by the pointer, including the complete catalog-shard set and not only the record-marker set. The digest field itself is excluded from its input. |
+| `root_digest` | `"worldscript-r15/root/v1"` bytes, then `u64be(root_generation)`, `u64be(active_key_epoch)`, `u64be(root_checkpoint_revision)`, the 32-byte `marker_set_digest`, the 32-byte `catalog_set_digest`, and the `root_commit_evidence` tuple (`operation_id`, fencing generation, `has_journal`, journal revision, and commit-state code), encoded exactly as defined below the table | Authenticates the root body named by the pointer, including the complete catalog-shard set and not only the record-marker set. The digest field itself is excluded from its input. |
 | `pointer_digest` | `"worldscript-r15/pointer/v1"` bytes, then the canonical slot name, `u64be(root_generation)`, and the 32-byte `root_digest` | Binds the active-slot pointer to one committed root slot. |
 | `inventory_digest` | `"worldscript-r15/inventory/v1"` bytes, then `u32be(inventory_version)`, `u32be(entry_count)`, and sorted record descriptors containing class, logical ID, project ID scope, source-authority kind, and source generation | Makes a migration inventory reproducible without hashing plaintext payloads. |
+
+`root_commit_evidence` is encoded, in order, as: the §6.2 string encoding of `operation_id`
+(`u32be(byte_length)` then UTF-8 bytes), `u64be(fencing_generation)`, `u8(has_journal)`,
+`u64be(journal_revision)`, and `u32be(root_commit_state_code)`. `has_journal` gates the meaning of
+`journal_revision`, so a real revision is never conflated with an absent one: an ordinary,
+non-migration root commit (the per-write checkpoint in §9/§5.4) sets `has_journal = 0` and the
+sentinel `journal_revision = 0`, because no migration journal exists for that commit. A
+migration-driven root commit (§10) sets `has_journal = 1` and the journal's actual current
+`journal_revision` from §10.1, which may itself legitimately be `0` — that value is a real revision
+only because `has_journal = 1` says so. `root_commit_state_code` is a discriminant scoped to this
+evidence tuple alone and is distinct from the version-1 marker `state_code` values below:
+`NOT_COMMITTED = 0` for a slot that is authenticated but only prepared or pending per §5.3, and
+`COMMITTED = 1` for the durable committed state §5.3 requires before a slot is authority.
 
 Version-1 marker `state_code` values are immutable and assigned once: `ABSENT = 0`, `ACTIVE = 1`,
 `PENDING = 2`, `DELETE_PENDING = 3`, `TOMBSTONED = 4`, `RECOVERY_REQUIRED = 5`, and
@@ -502,15 +522,16 @@ tokens are normative for version 1 and are serialized exactly as length-delimite
 AAD:
 
 ```text
-project          project-metadata   snapshot          backup
-recovery         settings           credential        image
-asset            asset-metadata     asset-pair        codex
-rag-index        active-project     authority-root    key-epoch
-record-commit    migration          staging           migration-stage
-diagnostic       record-catalog     local-first-doc   analytics-db
-scene-comments   scene-revision     plot-ui            mind-map-ui
-progress         proforge-memory    proforge-history  inference-cache
-lora             telemetry          worker-dlq
+project              project-metadata   snapshot           backup
+recovery             settings           credential         image
+asset                asset-metadata     asset-pair         codex
+rag-index            active-project     authority-root     key-epoch
+record-commit        migration          staging            migration-stage
+diagnostic           record-catalog     local-first-doc    analytics-db
+cross-project-index  scene-comments     scene-revision     plot-ui
+mind-map-ui          progress           proforge-memory    proforge-history
+inference-cache      lora               lora-dataset       lora-run
+telemetry            worker-dlq
 ```
 
 The mapping is one token to one contract row or explicitly paired subrecord; aliases and locale
@@ -663,6 +684,8 @@ KeyProvider.resolve(epoch) -> opaque 32-byte key or typed unavailable result
 KeyProvider.unlock(input) -> authenticated epoch/state transition
 KeyProvider.lock() -> clear runtime key handles/material
 KeyProvider.list_epochs() -> non-secret key identities and availability
+KeyProvider.read_floor() -> current durable monotonic rollback-floor value (u64)
+KeyProvider.advance_floor(new_value) -> committed / typed failure
 ```
 
 The provider may be implemented by an OS keystore, a user passphrase adapter, or a later approved
@@ -671,6 +694,15 @@ salt; the existing WebCrypto PBKDF2-SHA-256/600,000 profile is a browser referen
 copy browser storage code into Core. The native implementation must select and document its KDF
 profile before production admission. No raw passphrase, key, salt secret, or decrypted payload is
 logged or sent to a renderer.
+
+`read_floor()` and `advance_floor(new_value)` expose the monotonic rollback-floor primitive that
+§5.3 and §9 require the key/secure-metadata adapter to hold; they are ordinary `KeyProvider`
+operations, not a separate contract. `advance_floor` must durably succeed before or atomically with
+the root commit it protects: a crash between them must never leave the floor ahead of an
+uncommitted root, and must never leave a committed root unprotected by an already-advanced floor.
+§9 step 9 sequences the `advance_floor` call inside the same fenced marker/root-checkpoint
+transition so neither ordering can occur independently, and startup calls `read_floor()` before
+accepting any root slot as authoritative, consistent with §5.3's floor-verification rule.
 
 ### 8.3 Epoch rules
 
@@ -926,9 +958,28 @@ step before the first protected `DISCOVER` checkpoint:
    The first protected control record is encrypted under `M`, so no plaintext journal or data-
    directory key record is needed. If key preparation fails, no migration journal is claimed and
    the known legacy authority remains untouched.
-3. Core writes the first journal under target epoch `M`, with source authority explicitly marked
-   `LEGACY` and state `MIGRATING(source=LEGACY,target=M)`. Legacy project data remains authoritative
-   until the later `COMMIT` phase.
+3. Core durably writes the first `authority-root:<scope>` root slot under target epoch `M`, in the
+   `NOT_COMMITTED` state of the `root_commit_evidence` encoding defined in §5.4 (`has_journal = 1`,
+   `journal_revision = 0` — the journal's initial checkpoint revision, since the journal itself is
+   not yet durable), naming the exact `operation_id` and fencing generation the bootstrap is about
+   to use. This is the authenticated bootstrap pointer: a crash after this point leaves durable,
+   authenticated evidence of which operation ID owns the journal that step 4 is about to create, so
+   restart never needs to already know or trust an operation ID from a filename. A `NOT_COMMITTED`
+   slot is never treated as authority (§5.3); it only anchors discovery.
+4. Core writes the first journal under target epoch `M`, tagged with the exact `operation_id` named
+   by the `NOT_COMMITTED` slot from step 3, with source authority explicitly marked `LEGACY` and
+   state `MIGRATING(source=LEGACY,target=M)`. Legacy project data remains authoritative until the
+   later `COMMIT` phase.
+
+If the process crashes after step 3's `NOT_COMMITTED` slot is durable but before step 4's journal is
+durable, restart authenticates the slot, recovers the named `operation_id`, finds no matching
+journal, and deterministically resumes bootstrap by writing the first journal under that exact same
+`operation_id` and epoch `M` rather than minting a new one — the anchored identity is never
+orphaned. If the process crashes before step 3, no authenticated evidence of a bootstrap attempt
+exists yet, so restart remains `UNCONFIGURED`; any stray bytes from an unanchored attempt are inert
+and are never adopted merely because a filename or operation ID looks plausible. Once both the slot
+and its named journal are durable, restart authenticates the slot, resolves the operation ID, and
+resumes the same journal deterministically.
 
 The bootstrap epoch is not active project authority merely because it protects the journal. A crash
 before `COMMIT` resumes from the journal or returns an explicit recovery result; it never interprets
@@ -938,7 +989,7 @@ the absence of a target record as permission to write defaults.
 
 | Phase | Durable before/after; crash view | Resume/rollback; reads/writes |
 |---|---|---|
-| `BOOTSTRAP_TARGET` | Target key reference/verifier and the first protected journal are durable; legacy records are unchanged and remain authoritative. | If preparation fails, remain `UNCONFIGURED` with legacy data untouched. If the process crashes, resume the same operation or enter recovery. Reads use legacy authority; no ordinary record writes occur before the journal exists. |
+| `BOOTSTRAP_TARGET` | Target key reference/verifier, the `NOT_COMMITTED` first root slot naming the operation ID, and the first protected journal are durable; legacy records are unchanged and remain authoritative. | If preparation fails, remain `UNCONFIGURED` with legacy data untouched. If the process crashes before the root slot is durable, remain `UNCONFIGURED`; if it crashes after the root slot but before the journal, resume by writing the journal under that same anchored operation ID. Once both are durable, resume the same operation from the journal or enter recovery. Reads use legacy authority; no ordinary record writes occur before the journal exists. |
 | `DISCOVER` | Journal operation ID and a preliminary deterministic inventory identity are durable; records are not changed. | Resume re-runs discovery. The preliminary inventory is not sufficient for commit; a changed/unverifiable inventory enters recovery. Reads use the existing authority; ordinary writes may occur only before the final barrier. |
 | `PREPARE` | Target key/verifier, staging namespace, and source/target policy are durable. | Idempotently reuse the same target epoch and operation. No old authority is deleted. Reads use source; ordinary writes stop once admission is acquired. |
 | `ADMIT` | Exclusive migration ownership and write barrier are durable; only now is the final streamed inventory snapshot and digest captured. | The final inventory includes records created before the barrier and becomes the commit inventory. If ownership is lost, restart claims the same journal only after lease expiry and fencing CAS. No ordinary writes cross the barrier; reads remain Core-selected. |
@@ -1113,12 +1164,20 @@ Adapters may provide:
 - file write, file sync, atomic replace, and directory-sync primitives;
 - OS-backed cryptographic randomness;
 - OS keystore/credential access or the approved passphrase KDF input;
+- the monotonic rollback-floor read/advance primitive (`KeyProvider.read_floor()` /
+  `KeyProvider.advance_floor(new_value)`, §8.2) backed by the same key/secure-metadata store
+  rather than the on-disk root slot;
 - platform permission/error translation;
 - process shutdown/cancellation signals.
 
 The adapter reports capabilities and honest failures. It does not choose policy, classify a missing
 record from an I/O error, or bypass Core admission. Tauri and later Qt therefore consume the same
 Core contract.
+
+The floor advance must be durable before or atomically with the root commit it protects. A crash
+between them must never leave the floor ahead of an uncommitted root, and must never leave a
+committed root unprotected by an already-advanced floor; an adapter that cannot provide this
+ordering must return `RECOVERY_REQUIRED` rather than claim durable success.
 
 ## 16. Headless implementation and fault-injection requirements
 
