@@ -124,6 +124,7 @@ Core contract.
 | Story Codex | `FsCodexStore`; `$APPDATA/projects/<safe-project-id>/codex/codex.snap`; save/get/delete. | Derived entities, mentions, excerpts, summaries and relationships may reproduce manuscript content. Included in backups and may be rebuilt from a project, but rebuilding is not lossless. | **PROTECTED**; derived but content-sensitive and regenerable only from still-available source. | `codex:<project-id>` plus an explicit derivation/version if split. Protect it even when marked derived; no plaintext sibling is permitted. |
 | RAG/vector/index payloads | `FsCodexStore`; `$APPDATA/projects/<safe-project-id>/codex/vectors.snap`; save/get/delete. | Embeddings and index metadata are content-derived and can support disclosure or cross-project confusion. Current vectors have no embedded provenance, so the project path is the only owner signal. | **PROTECTED** for any persisted native copy; computationally regenerable. | `rag-index:<project-id>:<index-version>`; project scope is mandatory because current payload lacks provenance. Migration must reject unowned vectors rather than guess ownership. |
 | Task metadata | Tauri `task_supervisor` handles bounded requests/results in memory; no native persistent task journal is currently written. | Current task IDs, type, timing and errors are transient; future resumable task payloads could contain user text or paths. | **DERIVED_REGENERABLE** for the current transient class; no native record to migrate. A future persisted task record becomes **PROTECTED** if it carries content or resumability authority. | Future `task:<task-id>`; admission requires an explicit persistence contract before adding files. Do not infer R-15 coverage from current in-memory handling. |
+| Worker dead-letter entries | `packages/worker-bus/src/deadLetterQueue.ts`; IndexedDB `worldscript-dead-letter-db/dead_letters`; failed `WorkerTask` requests and `TaskResult` entries are persisted best-effort up to a bounded capacity. | Task payloads, generated results, error details, worker IDs and retry metadata can contain prompts, manuscript text, paths or provider context. Persistence is not harmless merely because entries are bounded or retryable. | **PROTECTED**; current WebView persistence is separate from future native Core authority and is not regenerable without losing failure evidence. | `worker-dlq:<installation-scope>:<task-id>`; task ID is immutable and installation scope is explicit. A future migration must redact or protect payload/result/error fields and preserve entries until their retention policy permits cleanup. |
 | Active-project marker | `FsProjectStore`; `$APPDATA/config/active-project-id.txt`; save updates it and boot reads it. | Looks like metadata, but legacy IDs can be title/path-derived and reveal project linkage; a wrong marker can route reads to the wrong project. | **PROTECTED**; small authoritative routing metadata, not safely regenerable from content. | `active-project:<scope>`; bind the referenced project ID and marker schema. Migration must preserve it or fail closed rather than select a default project. |
 | Secure-storage authority manifest | No native record exists on `main`; future Core owns the active epoch, authority generation, record-root mapping, and commit state. | These values decide which protected generation is authoritative and can expose project/storage topology. | **PROTECTED**; security-critical control state, not regenerable after a crash. | `authority:<scope>`; scope is installation or storage-root specific and independent of filesystem path. Migration must durably switch it only after target verification. |
 | Key-epoch registry and verifier references | No native record exists on `main`; future Core/key adapter must persist non-secret epoch status, key identity references, and verifiers. | Epoch status and verifier metadata control key lookup and locked/recovery behavior; raw key material is never stored here. | **PROTECTED**; required control state, not regenerable without the key provider. | `key-epoch:<scope>:<epoch>`; epoch identity is immutable and survives path relocation. Migration must create and verify a target epoch before conversion. |
@@ -148,7 +149,7 @@ Core contract.
 | UI preferences and feature flags | Theme, language, last-view, feature-flag, tour, command-palette and similar localStorage keys. | No authored content or credentials by contract; values are small presentation preferences. | **NON_SENSITIVE** and regenerable, provided no content or secret is added to these keys. | `ui-preferences:<installation-scope>` only as a future bounded preference record; never use them as project or encryption authority. |
 | Protected-envelope routing header | Future envelope header contains only the magic, fixed-width version/suite/epoch/generation/schema fields, nonce and ciphertext length; no plaintext project/title/content. | Protocol metadata is non-sensitive by contract, but tampering is detected because the canonical header is included in AAD. | **NON_SENSITIVE** protocol metadata; not a user record. | No logical record identity of its own. It is authenticated in the containing record's AAD and parsed strictly before key/payload use. |
 
-**Inventory result:** 29 `PROTECTED`, 2 `NON_SENSITIVE`, 2 `DERIVED_REGENERABLE`, 3 `OUT_OF_SCOPE`, 0 unclassified. The two derived classes are not permitted to become a plaintext native persistence escape if they later carry content or recovery authority.
+**Inventory result:** 30 `PROTECTED`, 2 `NON_SENSITIVE`, 2 `DERIVED_REGENERABLE`, 3 `OUT_OF_SCOPE`, 0 unclassified (37 classes total). The two derived classes are not permitted to become a plaintext native persistence escape if they later carry content or recovery authority. Persistent worker dead-letter entries are protected even though their current WebView queue is bounded and best-effort.
 
 ## 4. No plaintext sibling rule
 
@@ -161,7 +162,8 @@ must either be protected or be an explicit external disclosure boundary:
 - import copies and conversion buffers if they leave bounded process memory;
 - Codex/RAG/thumbnail or metadata derivatives that can reveal source content;
 - diagnostic files, journals, manifests, ownership indexes, epoch registries, generation markers,
-  and content-bearing WebView/localStorage/IndexedDB stores on packaged desktop.
+  content-bearing WebView/localStorage/IndexedDB stores, and persisted worker dead-letter task,
+  result, or error payloads on packaged desktop.
 
 The future Core may hold bounded plaintext in memory while reading or transforming a record. It
 must never write plaintext to an internal temporary or sibling path merely to encrypt it later. A
@@ -218,6 +220,55 @@ state, not a compliant implementation.
 | Inference cache | `inference-cache:<installation-scope>:<cache-key>` | The cache-key namespace is bound without exposing the raw prompt; TTL does not change identity. |
 | LoRA adapter | `lora:<adapter-id>` | Adapter metadata/blob pairing survives path changes; dataset/run children receive separate IDs. |
 | AI telemetry chunk | `telemetry:<installation-scope>:<chunk-id>` | Opt-in telemetry chunks rotate physically without changing the installation scope. |
+| Worker dead-letter entry | `worker-dlq:<installation-scope>:<task-id>` | Task ID is immutable; queue retention or physical compaction does not change identity. |
+
+### 5.2.1 Project-scope registry
+
+The `project_id` AAD component is required for project-owned records and absent for installation,
+storage-root, record-local control, or explicit external-boundary records. This is a scope rule,
+not a permission to infer ownership from a title, path, content value, or cache key. The following
+registry is exhaustive for the version-1 record-class tokens in §6.1.1; current global namespaces
+remain explicit gaps until a verified owner binding exists.
+
+| Record-class token | Scope in the AAD contract | Ownership rule |
+|---|---|---|
+| `project` | Required `project_id` | The persisted project ID is the owner. |
+| `project-metadata` | Required `project_id` | Metadata is a child of the project record, never a fresh authority. |
+| `snapshot` | Absent in the current global namespace; required when a verified owner is added | Preserve the current snapshot ID and do not guess a project owner from content. |
+| `backup` | Explicit artifact/storage scope | A Core-owned backup gets an explicit artifact owner; user-selected archives remain external migration inputs. |
+| `recovery` | Required original `project_id` | The recovery ID is bound to the original project and is never inferred from the quarantine path. |
+| `settings` | Installation/profile scope; no project ID | Settings are not project provenance or encryption authority. |
+| `credential` | Installation scope plus provider identity; no project ID | Provider credentials belong to the secure key store scope, not to a project title or path. |
+| `image` | Current installation/global scope; project ID absent unless persisted ownership exists | Preserve the global image ID; do not invent project ownership. |
+| `asset` | Required `project_id` | Project and asset IDs jointly identify the protected attachment. |
+| `asset-metadata` | Required `project_id` | Metadata and bytes share the asset generation and owner. |
+| `codex` | Required `project_id` | Derived content remains project-owned even when regenerable. |
+| `rag-index` | Required `project_id` | Index generation cannot be shared across projects without an explicit new owner. |
+| `active-project` | Installation/storage scope; referenced project ID is protected payload | The marker binds routing to a project but is not itself project-scoped. |
+| `authority-root` | Storage-root scope; no project ID | This is the finite control-plane anchor for the storage authority. |
+| `key-epoch` | Storage-root/key-provider scope; no project ID | Epoch identity is global to its protected storage authority. |
+| `record-commit` | Same scope as the referenced logical record | A project record marker carries that record's project ID; control markers do not acquire one. |
+| `migration` | Installation/storage operation scope; no single project ID required | The protected journal contains an authenticated inventory of all owned records in the operation. |
+| `staging` | Record/operation scope; project ID required for a project record | A staging identity inherits the record owner and cannot become authority by filename. |
+| `migration-stage` | Record/operation scope; project ID required for a project record | Conversion staging inherits the journal-verified owner. |
+| `diagnostic` | Installation scope; no project ID by default | Redacted diagnostics are global; a future project-bound diagnostic must opt into an explicit owner. |
+| `scene-comments` | Current installation/global scope; project ID absent until verified | Preserve the current namespace; never bind comments from section text. |
+| `scene-revision` | Current revision scope; project ID required only when verified | Revision IDs remain stable; section routing is authenticated payload metadata. |
+| `plot-ui` | Current installation scope; no project ID | Viewport/selection state is not project authority; future binding must be explicit. |
+| `mind-map-ui` | Current installation scope; no project ID | Same rule as plot UI; no content-based owner inference. |
+| `progress` | Installation/profile scope; no project ID | Personal progress remains separate from project identity. |
+| `proforge-memory` | Required `project_id` | Each memory entry is project-specific AI context. |
+| `proforge-history` | Required `project_id` | Run history is a project child record. |
+| `inference-cache` | Current installation/cache scope; project ID absent unless a project-bound cache is explicitly admitted | Cache keys are not project provenance and raw prompts are not routing metadata. |
+| `lora` | Installation/adapter scope; project ID required for project-bound datasets/runs | Adapter identity survives path changes; child ownership is explicit. |
+| `telemetry` | Installation/profile scope; no project ID by default | Opt-in telemetry is redacted and global unless a separately approved project scope exists. |
+| `worker-dlq` | Installation scope; no project ID by default | Task IDs and bounded retention define queue ownership; payload content must not be used to infer a project. |
+
+For the current desktop implementation, rows marked as global or installation-scoped retain that
+scope rather than receiving a speculative project binding. A future authority switch may add a
+verified project owner as an additive migration field, but a missing owner causes migration or
+recovery—not a guessed AAD value. Physical path, display title, and renderer remain excluded from
+every scope decision.
 
 ### 5.3 Non-recursive control root
 
@@ -234,6 +285,17 @@ transaction with the same semantics). Core authenticates each root slot with the
 under the exclusive control/admission fence. The pointer contains no plaintext project content or
 key material. A crash leaves the prior valid root slot, the new valid slot, or
 `RECOVERY_REQUIRED`; startup never selects a slot from timestamps alone.
+
+Root slots also carry a monotonic `root_generation`, authenticated root digest, and the fixed root
+AAD. The pointer names one slot, generation, and digest and can advance only under the exclusive
+fence plus a directory-synchronized commit. Startup authenticates both valid slots and accepts the
+pointer only when it matches a slot and is not below the monotonic floor held by the approved key
+or secure-metadata adapter. If a newer authenticated slot exists, startup selects it and repairs
+the pointer under the same fence. If the floor is unavailable, the pointer conflicts with both
+slots, or the platform cannot distinguish a complete older-directory snapshot from current state,
+startup returns `RECOVERY_REQUIRED` rather than selecting an older root. Filesystem slots alone
+cannot detect an attacker restoring the entire data directory; the adapter floor is the required
+rollback-detection boundary, and its absence is never treated as proof of freshness.
 
 First-time enable creates the root key reference in the approved key adapter before writing the
 first protected root slot, using the bootstrap sequence in §10.2. The root remains the finite
@@ -295,7 +357,7 @@ active-project   authority-root     key-epoch         record-commit
 migration        staging            migration-stage   diagnostic
 scene-comments   scene-revision     plot-ui            mind-map-ui
 progress         proforge-memory    proforge-history  inference-cache
-lora             telemetry
+lora             telemetry          worker-dlq
 ```
 
 The mapping is one token to one contract row or explicitly paired subrecord; aliases and locale
@@ -462,7 +524,8 @@ commit state. An ordinary write is admitted only when its expected active genera
 marker; it allocates the next value under the same admission and compare-and-swap boundary. A
 generation counter reaching its maximum is a recovery error, not a wrap to zero.
 
-The marker supports `ACTIVE(old)`, `PENDING(old -> new)`, and `RECOVERY_REQUIRED` states. The old
+The marker supports `ACTIVE(old)`, `PENDING(old -> new)`, `DELETE_PENDING`, `TOMBSTONED`, and
+`RECOVERY_REQUIRED` states. The old
 generation remains the active authority while `PENDING` is durable. A new generation is promoted
 under a generation-addressable physical name, then the marker is durably advanced to `ACTIVE(new)`.
 The authority manifest separately selects the active storage epoch and is switched only by the
@@ -484,6 +547,25 @@ the still-authoritative source `N` while its marker and journal state permit it.
 chooses an epoch, and a target-looking file without the matching journal/marker evidence is not
 read. After `COMMIT` durably advances the authority root, all reads resolve to `M`; after
 `FINALIZE`, the temporary dual-epoch rule is no longer needed.
+
+### 8.5 Authenticated deletion authority
+
+Deletion is an authenticated logical transition, not an unlink-first filesystem operation. An
+explicitly admitted user delete (or a separately authorized migration cleanup) creates a protected
+`DELETE_PENDING` marker containing the logical identity, active generation, operation ID, fencing
+generation, and retention policy. Core syncs that intent while the prior generation remains
+recoverable, then durably commits a `TOMBSTONED` marker under the same fence. Only after the
+tombstone and required directory metadata are durable may physical generations, staging copies,
+or retained recovery copies become eligible for cleanup. The tombstone is itself bound to the
+record identity and epoch/generation context; it cannot be substituted between records.
+
+On restart, a crash before the tombstone leaves the old generation active; a durable tombstone
+makes the identity logically deleted while bytes remain subject to the retention/recovery policy;
+an uncertain marker or fence result returns `RECOVERY_REQUIRED`. Resume is idempotent. Deletion
+never creates a default replacement, re-enables a legacy plaintext copy, or deletes quarantine and
+backup evidence automatically. Old-key retirement and physical cleanup must wait for the same
+retention boundary used by migration. A future purge operation is a separate explicit policy and
+must not be conflated with ordinary record deletion.
 
 ## 9. Durable protected write contract (#357)
 
@@ -610,7 +692,7 @@ The bootstrap epoch is not active project authority merely because it protects t
 before `COMMIT` resumes from the journal or returns an explicit recovery result; it never interprets
 the absence of a target record as permission to write defaults.
 
-### 10.2 Migration phases
+### 10.3 Migration phases
 
 | Phase | Durable before/after; crash view | Resume/rollback; reads/writes |
 |---|---|---|
@@ -625,7 +707,7 @@ the absence of a target record as permission to write defaults.
 | `FINALIZE` | Journal says commit, verification, and permitted cleanup are complete; no key material is stored in the journal. | Remove only fully finalized operational debris. A stale journal is reconciled, not ignored. Ordinary operations resume after finalization. |
 | `DONE` / `RECOVERY_REQUIRED` | `DONE` is durable terminal success. `RECOVERY_REQUIRED` is durable terminal refusal with a reason code. | `DONE` permits normal policy. `RECOVERY_REQUIRED` blocks ordinary writes and destructive cleanup until explicit recovery; never resets to defaults. |
 
-### 10.3 Operations
+### 10.4 Operations
 
 - **Enable:** discover known healthy legacy plaintext while unlocked, convert every admitted
   protected class, verify, then commit the first protected epoch. A corrupt or ownership-ambiguous
@@ -640,6 +722,9 @@ the absence of a target record as permission to write defaults.
   become an internal downgrade or delete the protected source.
 - **Envelope/schema migration:** changes format or record schema under an operation ID without
   changing logical identity. An unknown future version is refused, not migrated by guessing.
+- **Delete:** creates and durably commits an authenticated `DELETE_PENDING`/`TOMBSTONED` transition
+  under the record fence before any physical cleanup. It is idempotently resumed and never writes
+  defaults over the deleted record; uncertain cleanup remains recoverable.
 
 Core-owned future backup records use `backup:<backup-id>` and enter the final migration inventory
 only when the Core has an explicit ownership record. Existing `libraryBackupService.ts` encrypted
@@ -647,7 +732,7 @@ ZIPs are user-selected external artifacts classified as `MIGRATION_INPUT_ONLY`; 
 auto-discovered as live Core backups or converted merely because they are present on disk. Reading
 or converting one requires an explicit user operation and a separate import/ownership check.
 
-### 10.4 Legacy plaintext and corruption
+### 10.5 Legacy plaintext and corruption
 
 Discovery distinguishes known healthy legacy plaintext, unknown shape, corrupt/unreadable data,
 already protected legacy envelopes, current envelopes, orphan staging, quarantine, and journals.
@@ -713,6 +798,9 @@ durable commit.
 | Mixed epochs | Journal determines per-record status; source remains recoverable until target verification and commit. |
 | Key loss | `KEY_LOST / RESET_REQUIRED`; no promise of decryption. Destructive reset requires separate explicit confirmation. |
 | Stale staging | Validate operation/generation/authentication; adopt only with journal proof, otherwise preserve/quarantine for recovery. |
+| Crash before delete tombstone | The old generation remains active and recoverable; retry the same delete operation or return recovery. |
+| Crash after delete tombstone | The identity is logically deleted; retain bytes until the authenticated retention/finalize boundary, then cleanup may resume idempotently. |
+| Uncertain delete marker/fence result | `RECOVERY_REQUIRED`; never guess whether deletion committed and never recreate defaults. |
 | Large record/inventory | Use bounded whole-record, chunked, or paged processing according to class; reject unsupported size rather than allocate unbounded memory. |
 
 ## 13. Memory and processing contract
@@ -801,6 +889,8 @@ Required assertions include:
 7. Protected IDs, fields, and unknown forward-compatible fields are preserved; no normalization
    silently drops user content.
 8. Logs and error results contain no raw content, key, passphrase, or unrestricted path.
+9. Delete intent/tombstone transitions are authenticated, idempotent, and preserve the prior
+   generation until the explicit retention/finalization boundary.
 
 ## 17. Reconciliation of current TypeScript mechanisms
 
