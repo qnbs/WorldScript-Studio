@@ -1831,8 +1831,8 @@ Source of truth for the override floors is `pnpm-workspace.yaml` (`overrides:`).
 IDs below were re-verified against the GitHub Advisory Database on 2026-06-13, except the
 `@xmldom/xmldom` and `fast-uri` rows, re-verified 2026-09-02 (Dependabot alert #79 and a
 `pnpm audit` sweep, respectively) after both floors were found to no longer exclude the
-then-currently-resolved vulnerable version. Floors are intentionally conservative (set above
-the patched version) as preventive supply-chain pins; several apply only to dev/test
+then-currently-resolved vulnerable version. Floors are intentionally conservative (set at or
+above the patched version) as preventive supply-chain pins; several apply only to dev/test
 transitive deps and are never shipped to users.
 
 | Package | Override | Advisory | Justification |
