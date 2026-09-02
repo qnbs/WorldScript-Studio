@@ -169,6 +169,13 @@ This is slower than merging a batch back-to-back, but avoids diagnosing a `main`
 pile of unrelated changes, and avoids the specific "PR A's CI was green against a `main` that PR B's
 merge just changed underneath it" class of race.
 
+**A red post-merge `main` is a hard stop, even when the failure looks unrelated to the
+dependency just merged** (confirmed 2026-09-02: a cargo patch merge landed on a `main` whose
+Security Audit was already failing on a separately-tracked, in-flight npm vulnerability fix —
+correctly recognizing the failure as pre-existing and unrelated is not the same as permission to
+merge the next Dependabot PR anyway). Classify the root cause, restore a genuinely green `main`
+(or wait for the PR already fixing it to land), and only then continue the dependency train.
+
 ## Detecting future grouping candidates
 
 Run this whenever a new workflow file is added, or periodically as a health check — it surfaces any
