@@ -110,11 +110,41 @@ describe('wipeAllAppData', () => {
     expect(mockCloseDbServiceConnections).toHaveBeenCalledTimes(1);
     expect(mockCloseJournalStoreConnection).toHaveBeenCalledTimes(1);
     expect(mockCloseSentinelStoreConnection).toHaveBeenCalledTimes(1);
-    const closeOrder = mockCloseDbServiceConnections.mock.invocationCallOrder[0];
+    const dbCloseOrder = mockCloseDbServiceConnections.mock.invocationCallOrder[0];
+    const journalCloseOrder = mockCloseJournalStoreConnection.mock.invocationCallOrder[0];
+    const sentinelCloseOrder = mockCloseSentinelStoreConnection.mock.invocationCallOrder[0];
     const firstDeleteOrder = delSpy.mock.invocationCallOrder[0];
-    expect(closeOrder).toBeDefined();
+    expect(dbCloseOrder).toBeDefined();
+    expect(journalCloseOrder).toBeDefined();
+    expect(sentinelCloseOrder).toBeDefined();
     expect(firstDeleteOrder).toBeDefined();
-    expect(closeOrder as number).toBeLessThan(firstDeleteOrder as number);
+    // QNBS-v3: all three closes must precede the first delete, not just one — any left open can silently reintroduce the block.
+    expect(dbCloseOrder as number).toBeLessThan(firstDeleteOrder as number);
+    expect(journalCloseOrder as number).toBeLessThan(firstDeleteOrder as number);
+    expect(sentinelCloseOrder as number).toBeLessThan(firstDeleteOrder as number);
+    delSpy.mockRestore();
+  });
+
+  // QNBS-v3: onblocked must reject, not resolve, or the reset reports a false "fresh install" success while the database still has old data.
+  it('rejects and never reloads when a database deletion is blocked by another open connection', async () => {
+    await createDb('worldscript-data-db');
+    const delSpy = vi.spyOn(indexedDB, 'deleteDatabase').mockImplementation((_name: string) => {
+      const req = {} as IDBOpenDBRequest;
+      queueMicrotask(() => req.onblocked?.(new Event('blocked') as IDBVersionChangeEvent));
+      return req;
+    });
+
+    vi.useFakeTimers();
+    try {
+      await expect(wipeAllAppData()).rejects.toThrow(/blocked by another open connection/);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(reloadMock).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining(`deleteDatabase(worldscript-data-db) blocked`),
+    );
     delSpy.mockRestore();
   });
 

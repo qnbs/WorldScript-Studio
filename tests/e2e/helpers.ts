@@ -29,6 +29,20 @@ export async function clickNavItem(page: Page, name: RegExp): Promise<void> {
   await page.locator('#sidebar-mobile').getByRole('button', { name }).click();
 }
 
+/** Locale-independent Settings navigation: same mobile-aware fallback as clickNavItem, keyed on the stable `data-tour="nav-settings"` anchor instead of translated visible text. */
+async function clickSettingsNavItem(page: Page): Promise<void> {
+  const desktopBtn = page.locator('#sidebar [data-tour="nav-settings"]');
+  if (await desktopBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
+    await desktopBtn.click();
+    return;
+  }
+  const moreBtn = page.locator('[data-tour="nav-mobile"]').getByRole('button', { name: /More/i });
+  await expect(moreBtn).toBeVisible({ timeout: 8000 });
+  await moreBtn.click();
+  await page.locator('#sidebar-mobile').waitFor({ state: 'visible' });
+  await page.locator('#sidebar-mobile [data-tour="nav-settings"]').click();
+}
+
 // QNBS-v3: Stable Writer `#writer-section-select` + option handling avoids Playwright strict-mode / native-<option> visibility pitfalls that broke CI E2E.
 
 /** Writer section `<Select>` — stable id to avoid picking tone/tool comboboxes elsewhere on the page. */
@@ -207,23 +221,8 @@ export async function ensureWelcomePortalEntry(page: Page): Promise<void> {
   if ((await resolveStartupState(page)) === 'WELCOME_PORTAL') {
     return;
   }
-  // QNBS-v3 (#532): a caller-registered addInitScript (e.g. seeding a non-English language) fires
-  // on every subsequent navigation, including this reload — a page.evaluate() here would be
-  // silently undone before the recovery flow below runs. Registering a further addInitScript
-  // instead relies on Playwright's documented in-order execution: this one runs after any
-  // earlier-registered script on every future navigation, not only this one reload, so the
-  // recovery flow below is genuinely guaranteed English regardless of what the caller seeded.
-  await page.addInitScript(() => localStorage.setItem('worldscript-language', 'en'));
-  await page.reload();
-  // QNBS-v3: this reload can itself race a pending debounced autosave and land back in
-  // WelcomePortal instead of main chrome — accept either state again rather than assuming main chrome.
-  if ((await resolveStartupState(page)) === 'WELCOME_PORTAL') {
-    return;
-  }
-  // QNBS-v3 (#532): the recovery flow's own navigation is now genuinely locale-independent —
-  // Data & Backups / Factory Reset / its confirm use stable data-testid, matching this function's
-  // documented "locale-independently" contract even without relying on the English override above.
-  await clickNavItem(page, /Settings/i);
+  // QNBS-v3: every step below uses a stable data-tour/data-testid anchor, never translated text — Playwright's own docs say addInitScript execution order across registrations is unspecified, so this cannot rely on forcing a language first.
+  await clickSettingsNavItem(page);
   await page.getByTestId('settings-nav-data').click();
   await page.getByTestId('factory-reset-button').click();
   await page.getByTestId('factory-reset-confirm-button').click();
