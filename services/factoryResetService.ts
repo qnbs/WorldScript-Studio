@@ -47,25 +47,31 @@ const KNOWN_DB_NAMES = [
 ];
 
 async function deleteAllIndexedDBDatabases(): Promise<void> {
+  // QNBS-v3: enumeration failure falls back to the known list, but a real deletion failure must propagate, not be silently retried through a different path that could mask it.
+  let names: string[] | null = null;
   // Prefer the native API if available (Chrome 73+, Firefox 126+).
   if (indexedDB.databases) {
     try {
       const all = await indexedDB.databases();
-      await Promise.all(all.map((db) => db.name && deleteDatabase(db.name)));
-      return;
+      names = all.map((db) => db.name).filter((name): name is string => Boolean(name));
     } catch {
       // Fall through to known-list approach
     }
   }
-  // Safari / older browsers: delete by known name list.
-  await Promise.all(KNOWN_DB_NAMES.map(deleteDatabase));
+  // Safari / older browsers, or a failed enumeration: delete by known name list.
+  await Promise.all((names ?? KNOWN_DB_NAMES).map(deleteDatabase));
 }
 
 function deleteDatabase(name: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.deleteDatabase(name);
     req.onsuccess = () => resolve();
-    req.onerror = () => resolve(); // ignore — DB may not exist
+    // QNBS-v3: deleting a non-existent database succeeds per spec — a real onerror means deletion is genuinely unproven, so reject rather than assume "DB may not exist" and report a fresh install that isn't.
+    req.onerror = () => {
+      const message = `[factoryReset] deleteDatabase(${name}) failed`;
+      logger.warn(message, { error: req.error?.message });
+      reject(req.error ?? new Error(message));
+    };
     // QNBS-v3: a still-open connection means the database was NOT deleted — reject rather than resolve, so wipeAllAppData() never reports a "fresh install" that still has old data.
     req.onblocked = () => {
       const message = `[factoryReset] deleteDatabase(${name}) blocked by another open connection`;

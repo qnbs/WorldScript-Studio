@@ -16,11 +16,11 @@
   "sidebar.outline": "Rungon luonti",
   "sidebar.overflowMenuAria": "Lisää näkymiä",
   "sidebar.primaryNavAria": "Päänavigointi",
-  "sidebar.scenario": "Skenaario / Käsikirjoitus",
   "sidebar.sceneboard": "Kohtaustaulu",
   "sidebar.secondaryNavAria": "Asetukset ja ohje",
   "sidebar.settings": "Asetukset",
   "sidebar.templates": "Mallit",
   "sidebar.world": "Maailmanrakennus",
-  "sidebar.writer": "AI-kirjoitusstudio"
+  "sidebar.writer": "AI-kirjoitusstudio",
+  "sidebar.scenario": "Skenaario / Käsikirjoitus"
 }

@@ -27,11 +27,7 @@ vi.mock('../../services/fs/fsCore', () => ({
   // QNBS-v3: pass-through — retry/backoff behavior is covered by fsCore.test.ts directly.
   retryFs: (fn: () => Promise<unknown>) => fn(),
 }));
-// QNBS-v3: deleteDatabase silently treated onblocked as success while a still-open connection
-// stayed open; the gate must begin (closing every registered connection) before any delete, and
-// end only on a failure path that never reaches reload. The gate's own registry/flag behavior is
-// covered directly by idbResetGate.test.ts — this suite only verifies factoryResetService calls it
-// at the right points.
+// QNBS-v3: the gate's own registry/generation behavior is covered directly by idbResetGate.test.ts — this suite only verifies factoryResetService calls begin/end at the right points.
 vi.mock('../../services/storage/idbResetGate', () => ({
   beginIdbReset: () => mockBeginIdbReset(),
   endIdbReset: () => mockEndIdbReset(),

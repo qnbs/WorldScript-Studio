@@ -1,7 +1,7 @@
 // QNBS-v3: Standalone IDB for scene revisions avoids a shared schema upgrade and keeps history bounded.
 import type { SceneRevision } from '../types';
 import { createLogger } from './logger';
-import { isIdbResetInProgress, registerIdbConnectionCloser } from './storage/idbResetGate';
+import { currentIdbResetGeneration, registerIdbConnectionCloser } from './storage/idbResetGate';
 import { withProtectedWriteAdmission } from './storage/protectedWriteAdmission';
 import {
   assertSecureStorageReadable,
@@ -49,6 +49,8 @@ async function getDb(): Promise<IDBDatabase> {
   if (database) return database;
   if (openPromise) return openPromise;
   // QNBS-v3: single-flight open — concurrent saves must share one connection instead of leaking one per call.
+  // QNBS-v3: captured before the open starts — a reset (even one that later fails and ends) between here and onsuccess must invalidate this open rather than let it cache once the reset flag flips back to false.
+  const openGeneration = currentIdbResetGeneration();
   openPromise = new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
@@ -62,8 +64,7 @@ async function getDb(): Promise<IDBDatabase> {
     request.onsuccess = () => {
       const opened = request.result;
       openPromise = null;
-      // QNBS-v3: this open may have started before a factory reset began — never cache a connection reset already closed.
-      if (isIdbResetInProgress()) {
+      if (currentIdbResetGeneration() !== openGeneration) {
         opened.close();
         reject(new Error('IndexedDB reset in progress'));
         return;

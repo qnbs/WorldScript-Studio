@@ -1,7 +1,7 @@
 // QNBS-v3: Keep browser/Tauri sink dispatch behind an adapter boundary around portable LogEntry.
 
 import { desktopPlatform } from '../desktopPlatform';
-import { isIdbResetInProgress, registerIdbConnectionCloser } from '../storage/idbResetGate';
+import { currentIdbResetGeneration, registerIdbConnectionCloser } from '../storage/idbResetGate';
 import { type LogEntry, safeStringify } from './logEntry';
 
 const isDev = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
@@ -17,15 +17,18 @@ let _idbOpenPromise: Promise<IDBDatabase> | null = null;
 let _idbRecordCount: number | null = null;
 let _idbWriteQueue: Promise<void> = Promise.resolve();
 
-// QNBS-v3: this connection is opened on the first log write and cached indefinitely — a factory reset must close it or its own logging call keeps worldscript-logs-db blocked.
+// QNBS-v3: this connection is opened on the first log write and cached indefinitely — a factory reset must close it (and drop the cached record count, which describes this now-closed connection's contents) or its own logging call keeps worldscript-logs-db blocked.
 registerIdbConnectionCloser(() => {
   _idbDb?.close();
   _idbDb = null;
+  _idbRecordCount = null;
 });
 
 function openLogDb(): Promise<IDBDatabase> {
   if (_idbDb) return Promise.resolve(_idbDb);
   if (_idbOpenPromise) return _idbOpenPromise;
+  // QNBS-v3: captured before the open starts — a reset (even one that later fails and ends) between here and onsuccess must invalidate this open rather than let it cache once the reset flag flips back to false.
+  const openGeneration = currentIdbResetGeneration();
   _idbOpenPromise = new Promise((resolve, reject) => {
     const req = indexedDB.open(IDB_DB_NAME, 1);
     req.onupgradeneeded = (e) => {
@@ -37,12 +40,17 @@ function openLogDb(): Promise<IDBDatabase> {
     req.onsuccess = (e) => {
       const db = (e.target as IDBOpenDBRequest).result;
       _idbOpenPromise = null;
-      // QNBS-v3: this open may have started before a factory reset began — never cache a connection reset already closed.
-      if (isIdbResetInProgress()) {
+      if (currentIdbResetGeneration() !== openGeneration) {
         db.close();
         reject(new Error('IndexedDB reset in progress'));
         return;
       }
+      // QNBS-v3: another tab's factory reset fires versionchange here first — close and invalidate so this tab re-opens fresh next write instead of holding a connection that blocks that reset.
+      db.onversionchange = () => {
+        db.close();
+        _idbDb = null;
+        _idbRecordCount = null;
+      };
       _idbDb = db;
       resolve(_idbDb);
     };

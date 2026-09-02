@@ -16,11 +16,11 @@
   "sidebar.outline": "מחולל מתווה",
   "sidebar.overflowMenuAria": "תצוגות נוספות",
   "sidebar.primaryNavAria": "ניווט ראשי",
-  "sidebar.scenario": "תרחיש / תסריט",
   "sidebar.sceneboard": "לוח סצנות",
   "sidebar.secondaryNavAria": "הגדרות ועזרה",
   "sidebar.settings": "הגדרות",
   "sidebar.templates": "תבניות",
   "sidebar.world": "בניית עולם",
-  "sidebar.writer": "סטודיו כתיבה עם AI"
+  "sidebar.writer": "סטודיו כתיבה עם AI",
+  "sidebar.scenario": "תרחיש / תסריט"
 }

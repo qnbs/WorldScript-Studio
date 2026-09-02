@@ -8,7 +8,7 @@ import type { Character } from '../types';
 import { cosineSimilarity, embedText } from './ai/localEmbeddingService';
 import { DATA_DB_NAME, DB_VERSION, PROJECTS_INDEX_STORE } from './dbConstants';
 import { loadDuckdbAnalytics } from './duckdb/duckdbListenerLoader';
-import { isIdbResetInProgress, registerIdbConnectionCloser } from './storage/idbResetGate';
+import { currentIdbResetGeneration, registerIdbConnectionCloser } from './storage/idbResetGate';
 
 export interface ProjectSearchIndex {
   projectId: string;
@@ -36,7 +36,10 @@ registerIdbConnectionCloser(() => {
 });
 
 function getDb(): Promise<IDBDatabase> {
+  if (database) return Promise.resolve(database);
   if (!dbPromise) {
+    // QNBS-v3: captured before the open starts — a reset (even one that later fails and ends) between here and onsuccess must invalidate this open rather than let it cache once the reset flag flips back to false.
+    const openGeneration = currentIdbResetGeneration();
     dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
       const req = indexedDB.open(DATA_DB_NAME, DB_VERSION);
       req.onupgradeneeded = () => {
@@ -50,17 +53,24 @@ function getDb(): Promise<IDBDatabase> {
       };
       req.onsuccess = () => {
         const db = req.result;
-        // QNBS-v3: this open may have started before a factory reset began — never cache a connection reset already closed.
-        if (isIdbResetInProgress()) {
+        dbPromise = null;
+        if (currentIdbResetGeneration() !== openGeneration) {
           db.close();
-          dbPromise = null;
           reject(new Error('IndexedDB reset in progress'));
           return;
         }
+        db.onversionchange = () => {
+          db.close();
+          database = null;
+        };
         database = db;
         resolve(db);
       };
-      req.onerror = () => reject(req.error);
+      // QNBS-v3: don't memoize a rejected promise — a transient open failure must not permanently disable cross-project search for the rest of the session.
+      req.onerror = () => {
+        dbPromise = null;
+        reject(req.error);
+      };
     });
   }
   return dbPromise;
