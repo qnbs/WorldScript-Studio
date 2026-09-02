@@ -64,21 +64,32 @@ describe('AiInferenceCacheService — reset retry', () => {
   });
 
   it('discards a connection opened before a reset and durably re-opens fresh afterward', async () => {
+    type CacheInternals = { db: IDBDatabase | null };
     const writer = new AiInferenceCacheService();
+    const internals = writer as unknown as CacheInternals;
 
     // Warm the connection before any reset exists.
     await writer.setCachedInference('warm', 'model-a', 'warm-result');
     expect(await new AiInferenceCacheService().getCachedInference('warm', 'model-a')).toBe(
       'warm-result',
     );
+    // QNBS-v3: a durable post-reset round-trip alone doesn't prove the pre-reset connection actually closed — a still-open connection would pass it too. Capture identity to prove a genuine re-open happened.
+    const preResetDb = internals.db;
+    expect(preResetDb).not.toBeNull();
 
     await beginIdbReset();
     endIdbReset();
+
+    // The reset's registered closer must have closed the pre-reset connection synchronously.
+    expect(internals.db).toBeNull();
 
     // The pre-reset connection must be gone — a fresh write still durably round-trips.
     await writer.setCachedInference('after-reset', 'model-a', 'after-reset-result');
     expect(await new AiInferenceCacheService().getCachedInference('after-reset', 'model-a')).toBe(
       'after-reset-result',
     );
+    // QNBS-v3: proves a genuinely NEW connection was opened, not the same pre-reset object somehow surviving.
+    expect(internals.db).not.toBeNull();
+    expect(internals.db).not.toBe(preResetDb);
   });
 });
