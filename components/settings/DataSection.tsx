@@ -418,6 +418,7 @@ export const DataSection: FC = () => {
                   {t('settings.data.dangerZone.factoryReset.hint')}
                 </p>
               </div>
+              {/* QNBS-v3: stable data-testid lets E2E recovery navigation target this button without matching translated label text */}
               <Button
                 variant="danger"
                 size="sm"

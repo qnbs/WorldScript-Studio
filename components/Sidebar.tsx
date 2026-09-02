@@ -77,7 +77,7 @@ const BottomTabItem: React.FC<{
   isActive: boolean;
   onClick: () => void;
   sectionId?: string;
-  /** Spotlight tour / stable E2E anchor (`data-tour`) */
+  // QNBS-v3: stable data-tour anchor lets E2E recovery navigation find this button without matching translated label text
   dataTour?: string;
 }> = React.memo(({ icon, label, isActive, onClick, sectionId, dataTour }) => {
   // QNBS-v3: colored icon dot for mobile tab bar via section SSOT
