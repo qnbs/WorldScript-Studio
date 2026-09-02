@@ -16,7 +16,6 @@ blockExoticSubdeps: true
 minimumReleaseAge: 10080
 minimumReleaseAgeExclude:
   - nanoid@3.3.18
-  # QNBS-v3: version-scoped security-fix exception (same mechanism/precedent as nanoid@3.3.18, PR #362) -- exempts ONLY this exact qs release from the 7-day quarantine so GHSA-4mjr-xmp4-gh2g/GHSA-x5fp-wj9c-mxmx can be remediated now; qs 6.16.1+ remain governed by the normal minimumReleaseAge. Remove once 6.16.0 naturally ages past 2026-09-05T23:50:15Z UTC and frozen install still resolves it.
   - qs@6.16.0
 
 # QNBS-v3: Migrated from package.json "pnpm" field (deprecated in pnpm v10+)
