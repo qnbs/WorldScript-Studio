@@ -4,7 +4,7 @@
 
 **Status:** S5-A — admitted R-15 secure-storage architecture baseline; production implementation not
 started. `S5_A_ADMITTED = YES`, `S5_IMPLEMENTATION_READY = NO`, `S5_TERMINAL = NO`,
-`PRODUCTION_AUTHORITY_SWITCH_ALLOWED = NO`. `S5_B2_ADMITTED = YES` (`docs/native/r15/AUTHORITY-SNAPSHOT-LIFETIME.md` — race-free `AuthoritySnapshot` acquisition/lifetime/reclamation, §5.3.3). `S5_B1_ADMITTED = YES` (`docs/native/r15/MIGRATION-SOURCE-EVIDENCE.md` — canonical JSON encoding, packaged-IDB source evidence, per-class `canonical_destination_payload_bytes`/`source_value_digest`, atomic-write-temporary reconciliation, and identity-upgrade/recovery for unbound sources and legacy quarantine, §10.1.2, §10.1.3, §10.4.1). One blocking S5 child contract remains: **S5-B3** (Chunked Large-Object Envelope for records above the `64 MiB` whole-record limit, §13). S5 is terminal only once S5-A, S5-B1, S5-B2, and S5-B3 are all merged and post-merge green; S5-B3's mechanism is not designed in this baseline.
+`PRODUCTION_AUTHORITY_SWITCH_ALLOWED = NO`. `S5_B2_ADMITTED = YES` (`docs/native/r15/AUTHORITY-SNAPSHOT-LIFETIME.md` — race-free `AuthoritySnapshot` acquisition/lifetime/reclamation, §5.3.3). `S5_B1_ADMITTED = YES` (`docs/native/r15/MIGRATION-SOURCE-EVIDENCE.md` — canonical JSON encoding, packaged-IDB source evidence, per-class `canonical_destination_payload_bytes`/`source_value_digest`, atomic-write-temporary reconciliation, and identity-upgrade/recovery for unbound sources and legacy quarantine, §10.1.2, §10.1.3, §10.4.1). `S5_B3_ADMITTED = YES` (`docs/native/r15/CHUNKED-LARGE-OBJECT-ENVELOPE.md` — per-chunk-authenticated envelope and `chunk_set_digest` for records above the `64 MiB` whole-record limit, §6.1.2, §6.3, §13). All three S5 child contracts are now admitted; `S5_TERMINAL` still requires a final cross-contract consistency audit (S5-A/S5-B1/S5-B2/S5-B3 mutual reference integrity) before it may be declared, and production implementation has not started regardless.
 
 **Baseline:** `main` at `7ce506ee771f6273e22c08ded049b48955cb40a5`
 
@@ -986,6 +986,10 @@ ACTIVE(1):
   committed_epoch           u64be
   content_digest_present    u8, always 1 for ACTIVE
   content_digest            32 bytes, present because content_digest_present = 1
+  is_chunked                u8; 0 = content_digest above is the whole-record envelope's own §5.4
+                             content_digest (§6.1.2); 1 = content_digest above is this record's
+                             chunk_set_digest (§2, `docs/native/r15/CHUNKED-LARGE-OBJECT-ENVELOPE.md`)
+  chunk_count               u32be, present only when is_chunked = 1
 
 PENDING(2) and a single-record READ_AUTHORITY_PENDING(6):
   operation_id              length-delimited UTF-8, u32be(byte_length) + bytes, max 128 bytes (§6.1.2)
@@ -997,6 +1001,9 @@ PENDING(2) and a single-record READ_AUTHORITY_PENDING(6):
   content_digest_present    u8
   content_digest            32 bytes, present only when content_digest_present = 1
   record_schema             u32be; the target record schema needed to interpret the candidate
+  is_chunked                u8; same meaning as the ACTIVE body's own is_chunked, applied to the
+                             target generation's candidate content_digest above
+  chunk_count               u32be, present only when is_chunked = 1
 
 DELETE_PENDING(3):
   operation_id              length-delimited UTF-8, max 128 bytes
@@ -1464,10 +1471,11 @@ titles are deliberately absent.
   Core must reject a provider that cannot supply secure randomness. Nonces are never derived from a
   path, record ID, timestamp, or revision alone.
 - Authentication tag: the standard 16-byte GCM tag included in `ciphertext`.
-- Large records: use bounded chunked records only with a separately versioned chunk envelope and
-  domain-separated per-chunk AAD/nonces. Do not invent unauthenticated streaming AES. The initial
-  implementation may reject records above its bounded whole-record limit until the chunk format is
-  admitted.
+- Large records: use bounded chunked records only, per the now-admitted `docs/native/r15/
+  CHUNKED-LARGE-OBJECT-ENVELOPE.md` (S5-B3) — each chunk its own complete `WSR1` envelope, domain
+  separation coming entirely from per-chunk AAD (never from nonce derivation), with each chunk's
+  own nonce independently CSPRNG-random exactly like any other encryption. Do not invent
+  unauthenticated streaming AES.
 
 ### 6.4 Compatibility and downgrade
 
@@ -2818,7 +2826,7 @@ durable commit.
 | Logs | Bounded redacted chunks with rotation; no unbounded append file. |
 | Migration inventory | Paged/streamed cursor and bounded journal checkpoints, never the entire inventory in memory. |
 
-**S5-B3 blocker — chunked large-object envelope not yet admitted.** No chunked/streaming envelope format is defined anywhere in this S5-A baseline — the rows above state only an *intent* to use one for images/binder assets/backup archives and oversized manuscripts; §6.1.2's `64 MiB` whole-record `ciphertext_len` limit (above) is the only admitted envelope size, and current application code (`importBinderFileThunk`) accepts binder attachments of any size. An existing or future asset above `64 MiB` therefore has **no admitted R-15 representation**: it cannot be migrated (no format to convert into) and Gate 5's per-class migrate-or-refuse requirement (§20) has no explicit refusal path for it either — this is a genuine gap, not a deferred convenience. No implementation may invent an ad-hoc chunking scheme, silently truncate, or silently exclude oversized assets from Gate 5's inventory. Any authority switch for a class that can exceed `64 MiB` remains blocked until the dedicated **S5-B3** Chunked Large-Object Envelope child contract admits a per-chunk-authenticated format and manifest, or this baseline is explicitly amended to state a size-based refusal policy instead.
+**S5-B3 admitted — chunked large-object envelope.** `docs/native/r15/CHUNKED-LARGE-OBJECT-ENVELOPE.md` (S5-B3) admits the per-chunk-authenticated format §6.3 anticipated: fixed `16 MiB` plaintext chunks (final chunk may be shorter), each its own complete AEAD envelope with mandatory independent CSPRNG nonces and record-identity-plus-chunk-index-bound AAD, authenticated as a set via `chunk_set_digest` — the same digest-set pattern already proven for `catalog_set_digest`/`journal_page_set_digest`. A record above `64 MiB` (above) now has an admitted representation; Gate 5 (§20) may migrate it via this format rather than requiring a refusal.
 
 ## 14. Logging and redaction
 
@@ -3163,4 +3171,4 @@ complete merely because a design document exists.
 
 ## 21. S5 admission decision
 
-This S5-A baseline is admitted at the semantic level for everything it actually specifies (protected records/representations enumerated; logical identity, envelope, key/epoch, parse, failure, and downgrade semantics explicit; durable writes, generations/commit markers, admission, lock, recovery, and memory bounds defined; Core-vs-platform responsibilities and headless tests explicit; #357/#359/#360/#361 have implementation owners and closure evidence) but is **not** implementation-ready as a whole: the chunked large-object envelope for records above `64 MiB` (**S5-B3**) remains the sole explicit fail-closed gate this baseline does not admit; race-free `AuthoritySnapshot` acquisition (**S5-B2**) and canonical migration source/payload evidence (**S5-B1**) are now admitted (above). This is **`S5_A_ADMITTED / CONTRACT_DEFINED / IMPLEMENTATION_NOT_STARTED`**, not `DESIGN_ADMITTED`/`IMPLEMENTATION_READY` for the whole S5 program; current desktop filesystem authority remains unchanged and current user data is not retroactively encrypted by S5-A.
+This S5-A baseline, together with S5-B1/S5-B2/S5-B3, is admitted at the semantic level for everything each actually specifies (protected records/representations enumerated; logical identity, envelope, key/epoch, parse, failure, and downgrade semantics explicit; durable writes, generations/commit markers, admission, lock, recovery, and memory bounds defined; canonical migration-source/payload evidence, race-free `AuthoritySnapshot` lifetime, and the chunked large-object envelope all admitted above; Core-vs-platform responsibilities and headless tests explicit; #357/#359/#360/#361 have implementation owners and closure evidence) but is **not** implementation-ready: no production implementation exists for any of the four documents, and `S5_TERMINAL` still requires the final cross-contract consistency audit (§20 of the governing process) before the whole S5 program may be declared closed. This is **`S5_A_ADMITTED / S5_B1_ADMITTED / S5_B2_ADMITTED / S5_B3_ADMITTED / CONTRACT_DEFINED / IMPLEMENTATION_NOT_STARTED`**, not `IMPLEMENTATION_READY`; current desktop filesystem authority remains unchanged and current user data is not retroactively encrypted by any of these documents.
