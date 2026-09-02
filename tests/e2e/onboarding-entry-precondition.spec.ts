@@ -42,6 +42,22 @@ test.describe('WelcomePortal entry precondition (CI-only)', () => {
     await expect(page.getByRole('button', { name: /Start a New Project/i })).toBeVisible();
   });
 
+  test('reaches the entry point via the recovery flow with a persisted non-English language, on Mobile Chrome and desktop alike', async ({
+    page,
+  }) => {
+    // QNBS-v3: a fresh boot lands on the portal regardless of locale — this combines a persisted main-chrome project with a non-English language so a mobile "More"-button locale regression actually fails, on every project including Mobile Chrome.
+    await page.goto('/');
+    await ensureBlankProject(page);
+    await expect(page.getByText(/All changes saved/i)).toBeVisible({ timeout: 10000 });
+    await page.addInitScript(() => localStorage.setItem('worldscript-language', 'es'));
+    await page.reload();
+    await waitForMainChrome(page);
+    // QNBS-v3: proves the precondition actually took effect — without this, a broken addInitScript seed could pass this test vacuously in English, regardless of viewport/view.
+    expect(await page.evaluate(() => localStorage.getItem('worldscript-language'))).toBe('es');
+    await ensureWelcomePortalEntry(page);
+    await expect(page.getByTestId('welcome-portal')).toBeVisible();
+  });
+
   test('reaches the entry point when its own internal reload can race a pending autosave', async ({
     page,
   }) => {
