@@ -483,9 +483,3 @@ export const __encryptionMigrationJournalRecordKeyForTest = JOURNAL_RECORD_KEY;
 export function __resetEncryptionMigrationJournalConnectionsForTest(): void {
   journalStore.resetConnectionsForTest();
 }
-
-// QNBS-v3: this store's own connection could otherwise block factory reset's deleteDatabase (#532).
-/** Closes this store's own cached IDB connection before a factory reset's deleteDatabase calls. */
-export function closeJournalStoreConnectionForReset(): void {
-  journalStore.resetConnectionsForTest();
-}

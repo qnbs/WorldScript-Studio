@@ -6,6 +6,7 @@
  */
 
 import type { PipelineRun } from '../../features/proForge/types';
+import { isIdbResetInProgress, registerIdbConnectionCloser } from '../storage/idbResetGate';
 
 const HISTORY_DB = 'proforge-run-history';
 const HISTORY_VERSION = 1;
@@ -14,6 +15,14 @@ const STORE = 'history';
 export const MAX_RUN_HISTORY = 20;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
+let database: IDBDatabase | null = null;
+
+// QNBS-v3: this connection is cached indefinitely — a factory reset must close it or deleteDatabase(proforge-run-history) blocks.
+registerIdbConnectionCloser(() => {
+  database?.close();
+  database = null;
+  dbPromise = null;
+});
 
 function openHistoryDb(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
@@ -26,7 +35,18 @@ function openHistoryDb(): Promise<IDBDatabase> {
       dbPromise = null;
       reject(new Error('Failed to open ProForge history DB'));
     };
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      const db = request.result;
+      // QNBS-v3: this open may have started before a factory reset began — never cache a connection reset already closed.
+      if (isIdbResetInProgress()) {
+        db.close();
+        dbPromise = null;
+        reject(new Error('IndexedDB reset in progress'));
+        return;
+      }
+      database = db;
+      resolve(db);
+    };
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
       if (!db.objectStoreNames.contains(STORE)) {
@@ -70,5 +90,7 @@ export async function loadRunHistory(projectId: string): Promise<PipelineRun[]> 
 
 /** Reset the DB connection — test-only. */
 export function _resetHistoryDbForTest(): void {
+  database?.close();
+  database = null;
   dbPromise = null;
 }

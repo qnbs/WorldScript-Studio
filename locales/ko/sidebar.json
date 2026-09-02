@@ -16,11 +16,11 @@
   "sidebar.outline": "아웃라인 생성기",
   "sidebar.overflowMenuAria": "조회수 증가",
   "sidebar.primaryNavAria": "기본 탐색",
+  "sidebar.scenario": "시나리오 / 각본",
   "sidebar.sceneboard": "장면 보드",
   "sidebar.secondaryNavAria": "설정 및 도움말",
   "sidebar.settings": "설정",
   "sidebar.templates": "템플릿",
   "sidebar.world": "월드 빌딩",
-  "sidebar.writer": "AI 글쓰기 스튜디오",
-  "sidebar.scenario": "시나리오 / 각본"
+  "sidebar.writer": "AI 글쓰기 스튜디오"
 }

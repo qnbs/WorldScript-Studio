@@ -16,11 +16,11 @@
   "sidebar.outline": "Generatore di scaletta",
   "sidebar.overflowMenuAria": "Altre viste",
   "sidebar.primaryNavAria": "Navigazione principale",
+  "sidebar.scenario": "Scenario / sceneggiatura",
   "sidebar.sceneboard": "Board delle scene",
   "sidebar.secondaryNavAria": "Impostazioni e aiuto",
   "sidebar.settings": "Impostazioni",
   "sidebar.templates": "Modelli",
   "sidebar.world": "Mondo",
-  "sidebar.writer": "Studio di scrittura IA",
-  "sidebar.scenario": "Scenario / sceneggiatura"
+  "sidebar.writer": "Studio di scrittura IA"
 }

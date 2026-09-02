@@ -15,6 +15,7 @@
 
 import { IndexeddbPersistence } from 'y-indexeddb';
 import type * as Y from 'yjs';
+import { registerIdbConnectionCloser } from '../storage/idbResetGate';
 
 // QNBS-v3: Rebrand — canonical worldscript-* IndexedDB namespace. Safe to rename outright:
 // local-first sync is behind enableLocalFirstSync (off by default) and this is a pre-release
@@ -69,8 +70,15 @@ export function persistProjectDoc(projectId: string, doc: Y.Doc): DocPersistence
   // in-flight destroy (no double-destroy, and no flag flipped to "destroyed" before destroy actually
   // finishes). Errors are swallowed so teardown never throws.
   let destroyPromise: Promise<void> | null = null;
+  // QNBS-v3: this project's own worldscript-localfirst-<id> connection must close during a factory reset too, or deleteDatabase blocks on it — each open project doc registers/unregisters its own instance.
+  const unregister = registerIdbConnectionCloser(() => {
+    destroy();
+  });
   const destroy = (): Promise<void> => {
-    if (!destroyPromise) destroyPromise = provider.destroy().catch(() => undefined);
+    if (!destroyPromise) {
+      unregister();
+      destroyPromise = provider.destroy().catch(() => undefined);
+    }
     return destroyPromise;
   };
 

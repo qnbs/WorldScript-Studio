@@ -1,4 +1,5 @@
 import { logger } from './logger';
+import { isIdbResetInProgress, registerIdbConnectionCloser } from './storage/idbResetGate';
 
 export interface LoraAdapterMeta {
   id: string;
@@ -37,8 +38,19 @@ const ACTIVE_STORE = 'lora-active';
 
 const ACTIVE_KEY = 'active_adapter_id';
 
+let database: IDBDatabase | null = null;
+let openPromise: Promise<IDBDatabase> | null = null;
+
+// QNBS-v3: each call previously opened its own never-closed connection (unbounded leak); now cached single-flight so a factory reset has exactly one connection per store to close instead of none it can reference.
+registerIdbConnectionCloser(() => {
+  database?.close();
+  database = null;
+});
+
 function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+  if (database) return Promise.resolve(database);
+  if (openPromise) return openPromise;
+  openPromise = new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = (e) => {
       const db = (e.target as IDBOpenDBRequest).result;
@@ -61,9 +73,28 @@ function openDb(): Promise<IDBDatabase> {
         db.createObjectStore(ACTIVE_STORE);
       }
     };
-    req.onsuccess = (e) => resolve((e.target as IDBOpenDBRequest).result);
-    req.onerror = () => reject(req.error);
+    req.onsuccess = (e) => {
+      const db = (e.target as IDBOpenDBRequest).result;
+      openPromise = null;
+      // QNBS-v3: this open may have started before a factory reset began — never cache a connection reset already closed.
+      if (isIdbResetInProgress()) {
+        db.close();
+        reject(new Error('IndexedDB reset in progress'));
+        return;
+      }
+      db.onversionchange = () => {
+        db.close();
+        database = null;
+      };
+      database = db;
+      resolve(db);
+    };
+    req.onerror = () => {
+      openPromise = null;
+      reject(req.error);
+    };
   });
+  return openPromise;
 }
 
 export async function listAdapters(): Promise<LoraAdapterMeta[]> {

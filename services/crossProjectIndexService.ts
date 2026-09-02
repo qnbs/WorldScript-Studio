@@ -8,6 +8,7 @@ import type { Character } from '../types';
 import { cosineSimilarity, embedText } from './ai/localEmbeddingService';
 import { DATA_DB_NAME, DB_VERSION, PROJECTS_INDEX_STORE } from './dbConstants';
 import { loadDuckdbAnalytics } from './duckdb/duckdbListenerLoader';
+import { isIdbResetInProgress, registerIdbConnectionCloser } from './storage/idbResetGate';
 
 export interface ProjectSearchIndex {
   projectId: string;
@@ -25,6 +26,14 @@ export interface ProjectSearchIndex {
 // QNBS-v3: Own connection to data-db — avoids circular import with dbService singleton.
 //          IDB handles concurrent same-version opens gracefully; no upgrade runs again.
 let dbPromise: Promise<IDBDatabase> | null = null;
+let database: IDBDatabase | null = null;
+
+// QNBS-v3: a second, independent connection to worldscript-data-db (separate from dbService's own) — a factory reset must close this one too or deleteDatabase(worldscript-data-db) blocks even after dbService's connection is closed.
+registerIdbConnectionCloser(() => {
+  database?.close();
+  database = null;
+  dbPromise = null;
+});
 
 function getDb(): Promise<IDBDatabase> {
   if (!dbPromise) {
@@ -39,7 +48,18 @@ function getDb(): Promise<IDBDatabase> {
           store.createIndex('lastIndexed', 'lastIndexed', { unique: false });
         }
       };
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => {
+        const db = req.result;
+        // QNBS-v3: this open may have started before a factory reset began — never cache a connection reset already closed.
+        if (isIdbResetInProgress()) {
+          db.close();
+          dbPromise = null;
+          reject(new Error('IndexedDB reset in progress'));
+          return;
+        }
+        database = db;
+        resolve(db);
+      };
       req.onerror = () => reject(req.error);
     });
   }

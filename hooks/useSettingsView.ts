@@ -353,11 +353,11 @@ export const useSettingsView = () => {
     try {
       await wipeAllAppData();
     } catch (error) {
-      // QNBS-v3: a blocked deleteDatabase now rejects instead of silently reloading — surface it to the user.
+      // QNBS-v3: a blocked deleteDatabase now rejects instead of silently reloading — surface it, without encryptionRecoveryFailed's false "your data has not been lost" claim.
       logger.error('Factory reset failed', {
         error: error instanceof Error ? error.message : String(error),
       });
-      toast.error(t('settings.privacy.encryptionRecoveryFailed'));
+      toast.error(t('settings.data.dangerZone.factoryReset.failed'));
     }
   }, [t, toast]);
 

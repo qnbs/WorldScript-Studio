@@ -1,6 +1,7 @@
 // QNBS-v3: Keep browser/Tauri sink dispatch behind an adapter boundary around portable LogEntry.
 
 import { desktopPlatform } from '../desktopPlatform';
+import { isIdbResetInProgress, registerIdbConnectionCloser } from '../storage/idbResetGate';
 import { type LogEntry, safeStringify } from './logEntry';
 
 const isDev = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
@@ -16,6 +17,12 @@ let _idbOpenPromise: Promise<IDBDatabase> | null = null;
 let _idbRecordCount: number | null = null;
 let _idbWriteQueue: Promise<void> = Promise.resolve();
 
+// QNBS-v3: this connection is opened on the first log write and cached indefinitely — a factory reset must close it or its own logging call keeps worldscript-logs-db blocked.
+registerIdbConnectionCloser(() => {
+  _idbDb?.close();
+  _idbDb = null;
+});
+
 function openLogDb(): Promise<IDBDatabase> {
   if (_idbDb) return Promise.resolve(_idbDb);
   if (_idbOpenPromise) return _idbOpenPromise;
@@ -28,8 +35,15 @@ function openLogDb(): Promise<IDBDatabase> {
       }
     };
     req.onsuccess = (e) => {
-      _idbDb = (e.target as IDBOpenDBRequest).result;
+      const db = (e.target as IDBOpenDBRequest).result;
       _idbOpenPromise = null;
+      // QNBS-v3: this open may have started before a factory reset began — never cache a connection reset already closed.
+      if (isIdbResetInProgress()) {
+        db.close();
+        reject(new Error('IndexedDB reset in progress'));
+        return;
+      }
+      _idbDb = db;
       resolve(_idbDb);
     };
     req.onerror = (e) => {

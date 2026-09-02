@@ -19,6 +19,7 @@ import {
 } from '../dbConstants';
 import { migrateLegacyWorldscriptDbIfNeeded } from '../dbMigration';
 import { logger } from '../logger';
+import { isIdbResetInProgress, registerIdbConnectionCloser } from './idbResetGate';
 
 // LZ-String threshold: compress payloads >10 KB
 const COMPRESS_THRESHOLD_BYTES = 10_240;
@@ -96,6 +97,11 @@ export class IdbConnectionManager {
   protected stateDb: IDBDatabase | null = null;
   protected dataDb: IDBDatabase | null = null;
 
+  constructor() {
+    // QNBS-v3: auto-registers every subclass singleton with the shared reset gate, so factory reset closes it without a hand-written per-store wrapper.
+    registerIdbConnectionCloser(() => this.closeConnections());
+  }
+
   protected closeConnections(): void {
     // QNBS-v3: Test singletons must release old factories before another fake IndexedDB is installed.
     this.stateDb?.close();
@@ -132,6 +138,12 @@ export class IdbConnectionManager {
       };
       request.onsuccess = () => {
         const db = request.result;
+        // QNBS-v3: this open may have started before a factory reset began — never cache a connection reset already closed.
+        if (isIdbResetInProgress()) {
+          db.close();
+          reject(new Error('IndexedDB reset in progress'));
+          return;
+        }
         db.onversionchange = () => {
           db.close();
           this.stateDb = null;
@@ -170,6 +182,12 @@ export class IdbConnectionManager {
       };
       request.onsuccess = () => {
         const db = request.result;
+        // QNBS-v3: this open may have started before a factory reset began — never cache a connection reset already closed.
+        if (isIdbResetInProgress()) {
+          db.close();
+          reject(new Error('IndexedDB reset in progress'));
+          return;
+        }
         db.onversionchange = () => {
           db.close();
           this.dataDb = null;
