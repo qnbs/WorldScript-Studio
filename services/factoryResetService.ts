@@ -61,16 +61,15 @@ async function deleteAllIndexedDBDatabases(): Promise<void> {
 }
 
 function deleteDatabase(name: string): Promise<void> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const req = indexedDB.deleteDatabase(name);
     req.onsuccess = () => resolve();
     req.onerror = () => resolve(); // ignore — DB may not exist
-    // QNBS-v3: this page's own known connections are now closed before this call (#532); a block
-    // here means another tab still has the database open, which this page cannot close — log it
-    // rather than silently claiming success, since the reload alone does not finish a blocked delete.
+    // QNBS-v3: a still-open connection means the database was NOT deleted — reject rather than resolve, so wipeAllAppData() never reports a "fresh install" that still has old data.
     req.onblocked = () => {
-      logger.warn(`[factoryReset] deleteDatabase(${name}) blocked by another open connection`);
-      resolve();
+      const message = `[factoryReset] deleteDatabase(${name}) blocked by another open connection`;
+      logger.warn(message);
+      reject(new Error(message));
     };
   });
 }
@@ -164,12 +163,12 @@ export async function wipeAllAppData(): Promise<void> {
       crossProjectIndexCoordinator.idle(),
       duckDbWriteCoordinator.idle(),
     ]);
-    // QNBS-v3: close this page's own cached connections only after the coordinators above have drained — deleteDatabase silently treated a block by one of them as success (#532), leaving the database intact after a reported reset.
+    // QNBS-v3: clear fallible desktop data first so a failed desktop reset never leaves a mixed wipe.
+    await clearTauriAppData();
+    // QNBS-v3: connections close immediately before deleting, not earlier (and after the coordinators above have drained) — an earlier close left an await window where a concurrent read/write could reopen one and reintroduce the block.
     closeDbServiceConnectionsForReset();
     closeJournalStoreConnectionForReset();
     closeSentinelStoreConnectionForReset();
-    // QNBS-v3: clear fallible desktop data first so a failed desktop reset never leaves a mixed wipe.
-    await clearTauriAppData();
     await deleteAllIndexedDBDatabases();
     await clearServiceWorkerCaches();
     try {

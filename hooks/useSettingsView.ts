@@ -350,8 +350,16 @@ export const useSettingsView = () => {
   const handleFactoryReset = useCallback(async () => {
     setModal({ state: 'closed', payload: {} });
     // QNBS-v3: wipes all IDB databases, localStorage, SW caches, then reloads.
-    await wipeAllAppData();
-  }, []);
+    try {
+      await wipeAllAppData();
+    } catch (error) {
+      // QNBS-v3: a blocked deleteDatabase now rejects instead of silently reloading — surface it to the user.
+      logger.error('Factory reset failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      toast.error(t('settings.privacy.encryptionRecoveryFailed'));
+    }
+  }, [t, toast]);
 
   const handleRepeatOnboarding = useCallback(() => {
     // QNBS-v3: useApp.ts listens for this event and re-opens the WelcomePortal.
