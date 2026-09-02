@@ -26,6 +26,8 @@ registerIdbConnectionCloser(() => {
   _idbDb?.close();
   _idbDb = null;
   _idbRecordCount = null;
+  // QNBS-v3: without this, a reset-time closer leaves _idbOpenPromise pointing at the pending (about-to-be-invalidated) flight, so the first post-reset write reuses it and waits on its eventual generation-mismatch rejection instead of starting a fresh open immediately.
+  _idbOpenPromise = null;
 });
 
 function openLogDb(): Promise<IDBDatabase> {
