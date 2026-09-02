@@ -1829,8 +1829,8 @@ WorldScript Studio was assessed as a strong, modern React/TypeScript application
 
 Source of truth for the override floors is `pnpm-workspace.yaml` (`overrides:`). Advisory
 IDs below were re-verified against the GitHub Advisory Database on 2026-06-13, except the
-`@xmldom/xmldom` and `fast-uri` rows, re-verified 2026-09-02 (Dependabot alert #79 and a
-`pnpm audit` sweep, respectively) after both floors were found to no longer exclude the
+`@xmldom/xmldom`, `fast-uri`, and `qs` rows, re-verified 2026-09-02 (Dependabot alert #79
+and two `pnpm audit` sweeps) after all three floors were found to no longer exclude the
 then-currently-resolved vulnerable version. Floors are intentionally conservative (set at or
 above the patched version) as preventive supply-chain pins; several apply only to dev/test
 transitive deps and are never shipped to users.
@@ -1847,7 +1847,7 @@ transitive deps and are never shipped to users.
 | fast-uri | >=3.1.6 | GHSA-5jgf-p345-68v8 / GHSA-f65p-4m7j-42xc / GHSA-fph4-wmhf-6fwf / GHSA-jqff-g426-hqxp (supersedes GHSA-q3j6-qgpj-74h6 / CVE-2026-6321) | Host confusion / SSRF via percent-encoding and IPv6 normalization (resolved 3.1.5 vulnerable; fixed 3.1.6). The prior `>=3.1.2` floor no longer excluded this — found via a routine `pnpm audit` sweep, 2026-09-02. Dev-only transitive (`@stryker-mutator/core`, `workbox-build`), never shipped. |
 | ws | >=8.20.1 | GHSA-3h5v-q93c-6h6q / CVE-2024-37890 | DoS when handling a request with many HTTP headers (fixed 8.17.1). |
 | brace-expansion | >=5.0.6 | GHSA-v6h2-p8h4-qcjw / CVE-2025-5889 | ReDoS in `expand()` (fixed 1.1.12 / 2.0.2 / 3.0.1 / 4.0.1). |
-| qs | >=6.15.2 | GHSA-hrpp-h998-j3pp / CVE-2022-24999 | Prototype pollution / DoS via crafted query strings (fixed in the ≥6.2.4 line). |
+| qs | >=6.16.0 | GHSA-4mjr-xmp4-gh2g / GHSA-x5fp-wj9c-mxmx (supersedes GHSA-hrpp-h998-j3pp / CVE-2022-24999) | Array-limit bypass via bracket-key comma parsing, and a DoS via attacker-controlled `isBuffer` (resolved 6.15.2 vulnerable; fixed 6.16.0). Dev-only transitive (`@lhci/cli`, `@stryker-mutator/core`, `http-server`), never shipped. `6.16.0` was published 2026-08-29, inside this repo's 7-day `minimumReleaseAge` quarantine at the time of this fix — admitted via a version-scoped `minimumReleaseAgeExclude: qs@6.16.0` entry (same mechanism/precedent as `nanoid@3.3.18`, PR #362), **not** a reduction of the 10080-minute quarantine itself. Compensating verification before admission: registry identity/integrity confirmed via `npm view`; no new install/preinstall/postinstall/prepare lifecycle scripts versus 6.15.2 (identical script set); the one dependency delta (`es-define-property@^1.0.1` added, `side-channel` bumped to `^1.1.1`) is maintained by the same author (`ljharb`) as `qs` itself and was already present elsewhere in the resolved tree. Remove the exclusion once 6.16.0 naturally ages past 2026-09-05T23:50:15Z UTC and a frozen install still resolves it — future qs releases remain governed by the normal quarantine. |
 | chrome-launcher | ^1.2.1 | preventive pin — no direct advisory | Lighthouse-CI dev transitive; conservative floor, dev-only. |
 | ip-address | >=10.1.1 | preventive pin — no direct advisory | Dev/test transitive hardening; no advisory matches this floor. |
 | uuid | >=11.1.1 | preventive pin — no direct advisory | Conservative version floor; no security advisory applies (the prior "collision" note was inaccurate). |

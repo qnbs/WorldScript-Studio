@@ -16,6 +16,8 @@ blockExoticSubdeps: true
 minimumReleaseAge: 10080
 minimumReleaseAgeExclude:
   - nanoid@3.3.18
+  # QNBS-v3: version-scoped security-fix exception (same mechanism/precedent as nanoid@3.3.18, PR #362) -- exempts ONLY this exact qs release from the 7-day quarantine so GHSA-4mjr-xmp4-gh2g/GHSA-x5fp-wj9c-mxmx can be remediated now; qs 6.16.1+ remain governed by the normal minimumReleaseAge. Remove once 6.16.0 naturally ages past 2026-09-05T23:50:15Z UTC and frozen install still resolves it.
+  - qs@6.16.0
 
 # QNBS-v3: Migrated from package.json "pnpm" field (deprecated in pnpm v10+)
 # Overrides with security justifications:
@@ -37,7 +39,7 @@ minimumReleaseAgeExclude:
 # - uuid: GHSA-w5hq-g745-h8pq / CVE-2026-41907 - missing buffer bounds check in v3/v5/v6 API methods,
 #     allows silent partial writes with an insufficient output buffer or wrong offset (fixed 11.1.1 /
 #     12.0.1 / 13.0.1 per major line; lockfile converges on 14.0.1, which the override floor now pins)
-# - qs: GHSA-q8mj-m7cp-5q26 / CVE-2026-8723 - prototype pollution fix
+# - qs: GHSA-q8mj-m7cp-5q26 / CVE-2026-8723 - prototype pollution fix; superseded by GHSA-4mjr-xmp4-gh2g / GHSA-x5fp-wj9c-mxmx - array-limit bypass / isBuffer DoS (fixed 6.16.0; see minimumReleaseAgeExclude above for the release-age exception this specific version needed)
 # - esbuild: GHSA-67mh-4wv8-2f99 - dev-server CORS allowed any origin to read responses;
 #     GHSA-gv7w-rqvm-qjhr - missing binary integrity verification (Deno module);
 #     GHSA-g7r4-m6w7-qqqr - Windows path traversal in the dev-server file handler (all fixed 0.28.1)
@@ -80,7 +82,7 @@ overrides:
   brace-expansion: ">=5.0.9"
   # QNBS-v3: excludes the two exact unpatched releases (12.0.0, 13.0.0) a bare ">=11.1.1" floor would still permit; the resolved 14.0.1 already satisfies this.
   uuid: ">=11.1.1 <12.0.0 || >=12.0.1 <13.0.0 || >=13.0.1"
-  qs: ">=6.15.2"
+  qs: ">=6.16.0"
   dompurify: ">=3.4.13"
   "@babel/core": ">=7.29.6 <8"
   undici: ">=7.29.0 <8"
