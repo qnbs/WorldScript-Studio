@@ -136,6 +136,52 @@ describe('wipeAllAppData', () => {
     delSpy.mockRestore();
   });
 
+  // QNBS-v3: proves allSettled semantics — a fast rejection must not release the gate while another deletion is still outstanding; the gate only releases once every deletion has settled.
+  it('waits for every database deletion to settle before releasing the gate, even when one rejects quickly and another is deliberately delayed', async () => {
+    const dbSpy = vi.spyOn(indexedDB, 'databases').mockResolvedValue([
+      { name: 'worldscript-data-db', version: 1 },
+      { name: 'worldscript-logs-db', version: 1 },
+    ]);
+    // QNBS-v3: a mutable object wrapper (not a reassigned `let`) avoids a tsgo control-flow narrowing artifact across the mock callback boundary.
+    const slow: { resolve: (() => void) | null } = { resolve: null };
+    const calledNames: string[] = [];
+    const delSpy = vi.spyOn(indexedDB, 'deleteDatabase').mockImplementation((name: string) => {
+      calledNames.push(name);
+      const req = {} as IDBOpenDBRequest;
+      if (name === 'worldscript-data-db') {
+        queueMicrotask(() => req.onerror?.(new Event('error')));
+      } else {
+        slow.resolve = () => req.onsuccess?.(new Event('success'));
+      }
+      return req;
+    });
+
+    let settled = false;
+    const wipePromise = wipeAllAppData();
+    void wipePromise.catch(() => {
+      settled = true;
+    });
+
+    await vi.waitFor(() => {
+      expect(calledNames).toEqual(
+        expect.arrayContaining(['worldscript-data-db', 'worldscript-logs-db']),
+      );
+    });
+    // QNBS-v3: the fast rejection has already fired by now, but the slow deletion hasn't settled — the gate must not release yet.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    expect(mockEndIdbReset).not.toHaveBeenCalled();
+
+    slow.resolve?.();
+    await expect(wipePromise).rejects.toThrow(/database deletion\(s\) failed/);
+
+    expect(mockEndIdbReset).toHaveBeenCalledTimes(1);
+    expect(reloadMock).not.toHaveBeenCalled();
+    dbSpy.mockRestore();
+    delSpy.mockRestore();
+  });
+
   // QNBS-v3: the fail-closed contract's core proof — a closer failure must abort the wipe entirely, before any database deletion is attempted, while still releasing the gate for retry.
   it('never deletes any database and releases the gate when beginIdbReset itself rejects', async () => {
     await createDb('worldscript-data-db');

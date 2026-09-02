@@ -45,7 +45,20 @@ async function deleteAllIndexedDBDatabases(): Promise<void> {
     }
   }
   // Safari / older browsers, or a failed enumeration: delete by known name list.
-  await Promise.all((names ?? KNOWN_DB_NAMES).map(deleteDatabase));
+  const targets = names ?? KNOWN_DB_NAMES;
+  // QNBS-v3: allSettled, not all — every deletion request must be given the chance to fully settle before this resolves/rejects, so wipeAllAppData()'s catch never releases the reset gate while another deletion is still outstanding in the background.
+  const results = await Promise.allSettled(targets.map(deleteDatabase));
+  const failures = results.filter(
+    (result): result is PromiseRejectedResult => result.status === 'rejected',
+  );
+  if (failures.length > 0) {
+    const messages = failures.map((failure) =>
+      failure.reason instanceof Error ? failure.reason.message : String(failure.reason),
+    );
+    throw new Error(
+      `[factoryReset] ${failures.length} of ${targets.length} database deletion(s) failed: ${messages.join('; ')}`,
+    );
+  }
 }
 
 function deleteDatabase(name: string): Promise<void> {

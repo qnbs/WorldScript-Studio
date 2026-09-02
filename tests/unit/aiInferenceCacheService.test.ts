@@ -26,12 +26,13 @@ describe('aiInferenceCacheService — in-memory LRU', () => {
 
   it('keeps the in-memory result when non-authoritative durable cache encoding is blocked', async () => {
     type CacheInternals = {
-      dbReady: Promise<void>;
+      ensureDb: () => Promise<void>;
       db: IDBDatabase | null;
       encodeEntry: (key: string, result: string, timestamp: number) => Promise<unknown>;
     };
     const cache = service.aiInferenceCacheService as unknown as CacheInternals;
-    await cache.dbReady;
+    // QNBS-v3: dbReady was a one-shot constructor-time promise (replaced by the retryable ensureDb() fix) — this test needs the connection open before the forced db override below.
+    await cache.ensureDb();
     cache.db = {} as IDBDatabase;
     vi.spyOn(cache, 'encodeEntry').mockRejectedValueOnce(new Error('storage locked'));
 

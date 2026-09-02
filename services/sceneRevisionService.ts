@@ -1,7 +1,11 @@
 // QNBS-v3: Standalone IDB for scene revisions avoids a shared schema upgrade and keeps history bounded.
 import type { SceneRevision } from '../types';
 import { createLogger } from './logger';
-import { currentIdbResetGeneration, registerIdbConnectionCloser } from './storage/idbResetGate';
+import {
+  beginIdbOpenAdmission,
+  isIdbOpenStillValid,
+  registerIdbConnectionCloser,
+} from './storage/idbResetGate';
 import { withProtectedWriteAdmission } from './storage/protectedWriteAdmission';
 import {
   assertSecureStorageReadable,
@@ -48,10 +52,13 @@ registerIdbConnectionCloser(() => {
 async function getDb(): Promise<IDBDatabase> {
   if (database) return database;
   if (openPromise) return openPromise;
-  // QNBS-v3: single-flight open — concurrent saves must share one connection instead of leaking one per call.
-  // QNBS-v3: captured before the open starts — a reset (even one that later fails and ends) between here and onsuccess must invalidate this open rather than let it cache once the reset flag flips back to false.
-  const openGeneration = currentIdbResetGeneration();
-  openPromise = new Promise<IDBDatabase>((resolve, reject) => {
+  // QNBS-v3: rejects immediately if a reset is currently draining — the generation check alone can't catch an open that STARTS mid-reset, since it would capture the reset's own already-bumped generation.
+  const openGeneration = beginIdbOpenAdmission();
+  if (openGeneration === null) {
+    return Promise.reject(new Error('IndexedDB reset in progress'));
+  }
+  // QNBS-v3: single-flight open — concurrent saves must share one connection instead of leaking one per call. Identity token: a stale completion must only clear openPromise if it's STILL the current in-flight promise.
+  const thisOpen: Promise<IDBDatabase> = new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
@@ -63,8 +70,8 @@ async function getDb(): Promise<IDBDatabase> {
     };
     request.onsuccess = () => {
       const opened = request.result;
-      openPromise = null;
-      if (currentIdbResetGeneration() !== openGeneration) {
+      if (openPromise === thisOpen) openPromise = null;
+      if (!isIdbOpenStillValid(openGeneration)) {
         opened.close();
         reject(new Error('IndexedDB reset in progress'));
         return;
@@ -73,16 +80,16 @@ async function getDb(): Promise<IDBDatabase> {
       opened.onversionchange = () => {
         opened.close();
         database = null;
-        openPromise = null;
       };
       resolve(opened);
     };
     request.onerror = () => {
-      openPromise = null;
+      if (openPromise === thisOpen) openPromise = null;
       reject(request.error);
     };
   });
-  return openPromise;
+  openPromise = thisOpen;
+  return thisOpen;
 }
 
 function isStoredSceneRevision(value: unknown): value is StoredSceneRevision {

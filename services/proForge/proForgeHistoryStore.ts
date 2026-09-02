@@ -6,7 +6,11 @@
  */
 
 import type { PipelineRun } from '../../features/proForge/types';
-import { currentIdbResetGeneration, registerIdbConnectionCloser } from '../storage/idbResetGate';
+import {
+  beginIdbOpenAdmission,
+  isIdbOpenStillValid,
+  registerIdbConnectionCloser,
+} from '../storage/idbResetGate';
 
 const HISTORY_DB = 'proforge-run-history';
 const HISTORY_VERSION = 1;
@@ -27,8 +31,11 @@ registerIdbConnectionCloser(() => {
 function openHistoryDb(): Promise<IDBDatabase> {
   if (database) return Promise.resolve(database);
   if (dbPromise) return dbPromise;
-  // QNBS-v3: captured before the open starts — a reset (even one that later fails and ends) between here and onsuccess must invalidate this open rather than let it cache once the reset flag flips back to false.
-  const openGeneration = currentIdbResetGeneration();
+  // QNBS-v3: rejects immediately if a reset is currently draining — the generation check alone can't catch an open that STARTS mid-reset, since it would capture the reset's own already-bumped generation.
+  const openGeneration = beginIdbOpenAdmission();
+  if (openGeneration === null) {
+    return Promise.reject(new Error('IndexedDB reset in progress'));
+  }
   // QNBS-v3: identity token — a stale open's completion must only clear dbPromise if it's STILL the current in-flight promise; otherwise it would wipe out a newer open started after this one was invalidated mid-flight (e.g. by a reset closer).
   const thisOpen: Promise<IDBDatabase> = new Promise((resolve, reject) => {
     const request = indexedDB.open(HISTORY_DB, HISTORY_VERSION);
@@ -42,7 +49,7 @@ function openHistoryDb(): Promise<IDBDatabase> {
     request.onsuccess = () => {
       const db = request.result;
       if (dbPromise === thisOpen) dbPromise = null;
-      if (currentIdbResetGeneration() !== openGeneration) {
+      if (!isIdbOpenStillValid(openGeneration)) {
         db.close();
         reject(new Error('IndexedDB reset in progress'));
         return;

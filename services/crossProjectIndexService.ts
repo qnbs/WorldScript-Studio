@@ -8,7 +8,11 @@ import type { Character } from '../types';
 import { cosineSimilarity, embedText } from './ai/localEmbeddingService';
 import { DATA_DB_NAME, DB_VERSION, PROJECTS_INDEX_STORE } from './dbConstants';
 import { loadDuckdbAnalytics } from './duckdb/duckdbListenerLoader';
-import { currentIdbResetGeneration, registerIdbConnectionCloser } from './storage/idbResetGate';
+import {
+  beginIdbOpenAdmission,
+  isIdbOpenStillValid,
+  registerIdbConnectionCloser,
+} from './storage/idbResetGate';
 
 export interface ProjectSearchIndex {
   projectId: string;
@@ -37,43 +41,46 @@ registerIdbConnectionCloser(() => {
 
 function getDb(): Promise<IDBDatabase> {
   if (database) return Promise.resolve(database);
-  if (!dbPromise) {
-    // QNBS-v3: captured before the open starts — a reset (even one that later fails and ends) between here and onsuccess must invalidate this open rather than let it cache once the reset flag flips back to false.
-    const openGeneration = currentIdbResetGeneration();
-    dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
-      const req = indexedDB.open(DATA_DB_NAME, DB_VERSION);
-      req.onupgradeneeded = () => {
-        // QNBS-v3: Upgrade handled by dbService; this connection should never need it.
-        //          If reached (first open before dbService), store is created here too.
-        const db = req.result;
-        if (!db.objectStoreNames.contains(PROJECTS_INDEX_STORE)) {
-          const store = db.createObjectStore(PROJECTS_INDEX_STORE, { keyPath: 'projectId' });
-          store.createIndex('lastIndexed', 'lastIndexed', { unique: false });
-        }
-      };
-      req.onsuccess = () => {
-        const db = req.result;
-        dbPromise = null;
-        if (currentIdbResetGeneration() !== openGeneration) {
-          db.close();
-          reject(new Error('IndexedDB reset in progress'));
-          return;
-        }
-        db.onversionchange = () => {
-          db.close();
-          database = null;
-        };
-        database = db;
-        resolve(db);
-      };
-      // QNBS-v3: don't memoize a rejected promise — a transient open failure must not permanently disable cross-project search for the rest of the session.
-      req.onerror = () => {
-        dbPromise = null;
-        reject(req.error);
-      };
-    });
+  if (dbPromise) return dbPromise;
+  // QNBS-v3: rejects immediately if a reset is currently draining — the generation check alone can't catch an open that STARTS mid-reset, since it would capture the reset's own already-bumped generation.
+  const openGeneration = beginIdbOpenAdmission();
+  if (openGeneration === null) {
+    return Promise.reject(new Error('IndexedDB reset in progress'));
   }
-  return dbPromise;
+  // QNBS-v3: identity token — a stale completion must only clear dbPromise if it's STILL the current in-flight promise, not a newer one started after a reset closer invalidated this one mid-flight.
+  const thisOpen: Promise<IDBDatabase> = new Promise<IDBDatabase>((resolve, reject) => {
+    const req = indexedDB.open(DATA_DB_NAME, DB_VERSION);
+    req.onupgradeneeded = () => {
+      // QNBS-v3: upgrade is normally handled by dbService — if reached (first open before dbService), the store is created here too.
+      const db = req.result;
+      if (!db.objectStoreNames.contains(PROJECTS_INDEX_STORE)) {
+        const store = db.createObjectStore(PROJECTS_INDEX_STORE, { keyPath: 'projectId' });
+        store.createIndex('lastIndexed', 'lastIndexed', { unique: false });
+      }
+    };
+    req.onsuccess = () => {
+      const db = req.result;
+      if (dbPromise === thisOpen) dbPromise = null;
+      if (!isIdbOpenStillValid(openGeneration)) {
+        db.close();
+        reject(new Error('IndexedDB reset in progress'));
+        return;
+      }
+      db.onversionchange = () => {
+        db.close();
+        database = null;
+      };
+      database = db;
+      resolve(db);
+    };
+    // QNBS-v3: don't memoize a rejected promise — a transient open failure must not permanently disable cross-project search for the rest of the session.
+    req.onerror = () => {
+      if (dbPromise === thisOpen) dbPromise = null;
+      reject(req.error);
+    };
+  });
+  dbPromise = thisOpen;
+  return thisOpen;
 }
 
 function extractCharacterNames(data: ProjectData): string[] {
