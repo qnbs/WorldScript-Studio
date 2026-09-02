@@ -1,6 +1,10 @@
 // QNBS-v3: Two-layer inference cache keeps hot reads in memory while the durable layer is encrypted.
 import { logger } from '../logger';
-import { currentIdbResetGeneration, registerIdbConnectionCloser } from '../storage/idbResetGate';
+import {
+  beginIdbOpenAdmission,
+  isIdbOpenStillValid,
+  registerIdbConnectionCloser,
+} from '../storage/idbResetGate';
 import { withProtectedWriteAdmission } from '../storage/protectedWriteAdmission';
 import {
   assertSecureStorageReadable,
@@ -100,6 +104,12 @@ export class AiInferenceCacheService {
         resolve();
         return;
       }
+      // QNBS-v3: skips opening entirely if a reset is currently draining — the generation check alone can't catch an open that STARTS mid-reset, since it would capture the reset's own already-bumped generation.
+      const openGeneration = beginIdbOpenAdmission();
+      if (openGeneration === null) {
+        resolve();
+        return;
+      }
       let request: IDBOpenDBRequest;
       try {
         request = indexedDB.open(IDB_DB_NAME, IDB_DB_VERSION);
@@ -111,8 +121,6 @@ export class AiInferenceCacheService {
         resolve();
         return;
       }
-      // QNBS-v3: captured before the open starts — a reset (even one that later fails and ends) between here and onsuccess must invalidate this open rather than let it cache once the reset flag flips back to false.
-      const openGeneration = currentIdbResetGeneration();
       request.onupgradeneeded = () => {
         const db = request.result;
         if (!db.objectStoreNames.contains(IDB_STORE)) {
@@ -122,7 +130,7 @@ export class AiInferenceCacheService {
       };
       request.onsuccess = () => {
         const opened = request.result;
-        if (currentIdbResetGeneration() !== openGeneration) {
+        if (!isIdbOpenStillValid(openGeneration)) {
           opened.close();
           resolve();
           return;

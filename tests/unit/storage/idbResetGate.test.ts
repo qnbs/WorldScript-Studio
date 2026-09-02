@@ -4,9 +4,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   _resetIdbResetGateForTest,
+  beginIdbOpenAdmission,
   beginIdbReset,
   currentIdbResetGeneration,
   endIdbReset,
+  isIdbOpenStillValid,
   isIdbResetInProgress,
   registerIdbConnectionCloser,
 } from '../../../services/storage/idbResetGate';
@@ -190,5 +192,65 @@ describe('idbResetGate', () => {
     expect(isIdbResetInProgress()).toBe(false);
     // QNBS-v3: isIdbResetInProgress() alone would wrongly say it's now safe to cache — the generation check is what actually catches this.
     expect(currentIdbResetGeneration()).not.toBe(capturedGeneration);
+  });
+
+  describe('beginIdbOpenAdmission / isIdbOpenStillValid', () => {
+    it('admits an open with the current generation when no reset is in progress', () => {
+      const token = beginIdbOpenAdmission();
+      expect(token).toBe(currentIdbResetGeneration());
+      expect(isIdbOpenStillValid(token as number)).toBe(true);
+    });
+
+    // QNBS-v3: the P1 this pair exists to close — a naive generation-only check captures the reset's OWN already-bumped generation for an open that starts mid-reset, so the comparison at completion would wrongly still match.
+    it('refuses admission for an open that would start while a reset is already in progress', async () => {
+      let resolveCloser: () => void = () => {};
+      registerIdbConnectionCloser(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveCloser = resolve;
+          }),
+      );
+      const resetPromise = beginIdbReset();
+      await Promise.resolve();
+      expect(isIdbResetInProgress()).toBe(true);
+
+      // A caller that tries to start a fresh open mid-reset must be refused, not admitted against the reset's own current generation.
+      expect(beginIdbOpenAdmission()).toBeNull();
+
+      resolveCloser();
+      await resetPromise;
+    });
+
+    it('invalidates an admitted open once a reset starts before that open completes, even while the reset is still running', async () => {
+      const token = beginIdbOpenAdmission() as number;
+      expect(token).not.toBeNull();
+
+      let resolveCloser: () => void = () => {};
+      registerIdbConnectionCloser(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveCloser = resolve;
+          }),
+      );
+      const resetPromise = beginIdbReset();
+      await Promise.resolve();
+      expect(isIdbResetInProgress()).toBe(true);
+
+      // QNBS-v3: generation alone wouldn't yet prove anything here if this open's completion raced ahead of the reset's own bump, but isIdbOpenStillValid also checks isIdbResetInProgress().
+      expect(isIdbOpenStillValid(token)).toBe(false);
+
+      resolveCloser();
+      await resetPromise;
+      expect(isIdbOpenStillValid(token)).toBe(false);
+    });
+
+    it('stays invalid for a pre-reset token even after a failed reset ends and the flag flips back to false', async () => {
+      const token = beginIdbOpenAdmission() as number;
+      await beginIdbReset();
+      endIdbReset();
+
+      expect(isIdbResetInProgress()).toBe(false);
+      expect(isIdbOpenStillValid(token)).toBe(false);
+    });
   });
 });

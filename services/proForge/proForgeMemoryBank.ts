@@ -5,7 +5,11 @@
  */
 
 import type { MemoryBankEntry, PipelineStage } from '../../features/proForge/types';
-import { currentIdbResetGeneration, registerIdbConnectionCloser } from '../storage/idbResetGate';
+import {
+  beginIdbOpenAdmission,
+  isIdbOpenStillValid,
+  registerIdbConnectionCloser,
+} from '../storage/idbResetGate';
 
 const MEMORY_BANK_STORE = 'proforge-memory-bank';
 const MEMORY_BANK_VERSION = 1;
@@ -40,20 +44,24 @@ registerIdbConnectionCloser(() => {
 function openMemoryBankDb(): Promise<MemoryBankDb> {
   if (database) return Promise.resolve(database);
   if (dbPromise) return dbPromise;
-  // QNBS-v3: captured before the open starts — a reset (even one that later fails and ends) between here and onsuccess must invalidate this open rather than let it cache once the reset flag flips back to false.
-  const openGeneration = currentIdbResetGeneration();
+  // QNBS-v3: rejects immediately if a reset is currently draining — the generation check alone can't catch an open that STARTS mid-reset, since it would capture the reset's own already-bumped generation.
+  const openGeneration = beginIdbOpenAdmission();
+  if (openGeneration === null) {
+    return Promise.reject(new Error('IndexedDB reset in progress'));
+  }
 
-  dbPromise = new Promise((resolve, reject) => {
+  // QNBS-v3: identity token — a stale completion must only clear dbPromise if it's STILL the current in-flight promise, not a newer one started after a reset closer invalidated this one mid-flight.
+  const thisOpen: Promise<MemoryBankDb> = new Promise((resolve, reject) => {
     const request = indexedDB.open(MEMORY_BANK_STORE, MEMORY_BANK_VERSION);
     // QNBS-v3: a rejected dbPromise must not stay cached forever — clearing it here lets the next call retry instead of permanently failing every future open.
     request.onerror = () => {
-      dbPromise = null;
+      if (dbPromise === thisOpen) dbPromise = null;
       reject(new Error('Failed to open Memory Bank DB'));
     };
     request.onsuccess = () => {
       const db = request.result as MemoryBankDb;
-      dbPromise = null;
-      if (currentIdbResetGeneration() !== openGeneration) {
+      if (dbPromise === thisOpen) dbPromise = null;
+      if (!isIdbOpenStillValid(openGeneration)) {
         db.close();
         reject(new Error('IndexedDB reset in progress'));
         return;
@@ -76,7 +84,8 @@ function openMemoryBankDb(): Promise<MemoryBankDb> {
     };
   });
 
-  return dbPromise;
+  dbPromise = thisOpen;
+  return thisOpen;
 }
 
 // ---------------------------------------------------------------------------

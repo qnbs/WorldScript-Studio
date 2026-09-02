@@ -19,7 +19,11 @@ import {
 } from '../dbConstants';
 import { migrateLegacyWorldscriptDbIfNeeded } from '../dbMigration';
 import { logger } from '../logger';
-import { currentIdbResetGeneration, registerIdbConnectionCloser } from './idbResetGate';
+import {
+  beginIdbOpenAdmission,
+  isIdbOpenStillValid,
+  registerIdbConnectionCloser,
+} from './idbResetGate';
 
 // LZ-String threshold: compress payloads >10 KB
 const COMPRESS_THRESHOLD_BYTES = 10_240;
@@ -125,8 +129,11 @@ export class IdbConnectionManager {
   }
 
   private openStateDb(): Promise<void> {
-    // QNBS-v3: captured before the open starts — a reset (even one that later fails and ends) between here and onsuccess must invalidate this open rather than let it cache once resetInProgress flips back to false.
-    const openGeneration = currentIdbResetGeneration();
+    // QNBS-v3: rejects immediately if a reset is currently draining — the generation check alone can't catch an open that STARTS mid-reset, since it would capture the reset's own already-bumped generation.
+    const openGeneration = beginIdbOpenAdmission();
+    if (openGeneration === null) {
+      return Promise.reject(new Error('IndexedDB reset in progress'));
+    }
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(STATE_DB_NAME, DB_VERSION);
       request.onupgradeneeded = (event) => {
@@ -140,7 +147,7 @@ export class IdbConnectionManager {
       };
       request.onsuccess = () => {
         const db = request.result;
-        if (currentIdbResetGeneration() !== openGeneration) {
+        if (!isIdbOpenStillValid(openGeneration)) {
           db.close();
           reject(new Error('IndexedDB reset in progress'));
           return;
@@ -157,8 +164,11 @@ export class IdbConnectionManager {
   }
 
   private openDataDb(): Promise<void> {
-    // QNBS-v3: captured before the open starts — a reset (even one that later fails and ends) between here and onsuccess must invalidate this open rather than let it cache once resetInProgress flips back to false.
-    const openGeneration = currentIdbResetGeneration();
+    // QNBS-v3: rejects immediately if a reset is currently draining — the generation check alone can't catch an open that STARTS mid-reset, since it would capture the reset's own already-bumped generation.
+    const openGeneration = beginIdbOpenAdmission();
+    if (openGeneration === null) {
+      return Promise.reject(new Error('IndexedDB reset in progress'));
+    }
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(DATA_DB_NAME, DB_VERSION);
       request.onupgradeneeded = (event) => {
@@ -185,7 +195,7 @@ export class IdbConnectionManager {
       };
       request.onsuccess = () => {
         const db = request.result;
-        if (currentIdbResetGeneration() !== openGeneration) {
+        if (!isIdbOpenStillValid(openGeneration)) {
           db.close();
           reject(new Error('IndexedDB reset in progress'));
           return;

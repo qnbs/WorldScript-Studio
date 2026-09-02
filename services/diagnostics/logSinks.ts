@@ -1,7 +1,11 @@
 // QNBS-v3: Keep browser/Tauri sink dispatch behind an adapter boundary around portable LogEntry.
 
 import { desktopPlatform } from '../desktopPlatform';
-import { currentIdbResetGeneration, registerIdbConnectionCloser } from '../storage/idbResetGate';
+import {
+  beginIdbOpenAdmission,
+  isIdbOpenStillValid,
+  registerIdbConnectionCloser,
+} from '../storage/idbResetGate';
 import { type LogEntry, safeStringify } from './logEntry';
 
 const isDev = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
@@ -27,9 +31,13 @@ registerIdbConnectionCloser(() => {
 function openLogDb(): Promise<IDBDatabase> {
   if (_idbDb) return Promise.resolve(_idbDb);
   if (_idbOpenPromise) return _idbOpenPromise;
-  // QNBS-v3: captured before the open starts — a reset (even one that later fails and ends) between here and onsuccess must invalidate this open rather than let it cache once the reset flag flips back to false.
-  const openGeneration = currentIdbResetGeneration();
-  _idbOpenPromise = new Promise((resolve, reject) => {
+  // QNBS-v3: rejects immediately if a reset is currently draining — the generation check alone can't catch an open that STARTS mid-reset, since it would capture the reset's own already-bumped generation.
+  const openGeneration = beginIdbOpenAdmission();
+  if (openGeneration === null) {
+    return Promise.reject(new Error('IndexedDB reset in progress'));
+  }
+  // QNBS-v3: identity token — a stale completion must only clear _idbOpenPromise if it's STILL the current in-flight promise, not a newer one started after a reset closer invalidated this one mid-flight.
+  const thisOpen: Promise<IDBDatabase> = new Promise((resolve, reject) => {
     const req = indexedDB.open(IDB_DB_NAME, 1);
     req.onupgradeneeded = (e) => {
       const db = (e.target as IDBOpenDBRequest).result;
@@ -39,8 +47,8 @@ function openLogDb(): Promise<IDBDatabase> {
     };
     req.onsuccess = (e) => {
       const db = (e.target as IDBOpenDBRequest).result;
-      _idbOpenPromise = null;
-      if (currentIdbResetGeneration() !== openGeneration) {
+      if (_idbOpenPromise === thisOpen) _idbOpenPromise = null;
+      if (!isIdbOpenStillValid(openGeneration)) {
         db.close();
         reject(new Error('IndexedDB reset in progress'));
         return;
@@ -55,11 +63,12 @@ function openLogDb(): Promise<IDBDatabase> {
       resolve(_idbDb);
     };
     req.onerror = (e) => {
-      _idbOpenPromise = null;
+      if (_idbOpenPromise === thisOpen) _idbOpenPromise = null;
       reject((e.target as IDBOpenDBRequest).error);
     };
   });
-  return _idbOpenPromise;
+  _idbOpenPromise = thisOpen;
+  return thisOpen;
 }
 
 // QNBS-v3: serialize IDB writes and track a bounded count to prevent burst logging from blocking or exhausting storage.

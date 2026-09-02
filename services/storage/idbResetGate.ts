@@ -118,6 +118,28 @@ export async function beginIdbReset(): Promise<void> {
   }
 }
 
+/**
+ * Call before starting any indexedDB.open() in a reset-aware opener. Returns the generation to
+ * pass to isIdbOpenStillValid() once the open completes, or null when a reset is currently in
+ * progress — the generation check alone cannot catch an open that STARTS during an active reset
+ * (it captures the reset's own already-bumped generation, so a naive comparison at completion
+ * would still match): callers must not start a fresh indexedDB.open() when this returns null, and
+ * should reject/defer instead.
+ */
+export function beginIdbOpenAdmission(): number | null {
+  return resetInProgress ? null : generation;
+}
+
+/**
+ * Call from an open's onsuccess handler with the token from beginIdbOpenAdmission(). False means
+ * the result must be closed and discarded/rejected rather than cached: either a reset is still
+ * running (started after admission, so the generation alone wouldn't yet show a mismatch), or one
+ * ran and ended with a different generation than the one captured at admission time.
+ */
+export function isIdbOpenStillValid(capturedGeneration: number): boolean {
+  return !resetInProgress && generation === capturedGeneration;
+}
+
 /** Only needed if a reset attempt fails before reaching reload — restores normal DB access for the still-live app. */
 export function endIdbReset(): void {
   resetInProgress = false;

@@ -1,5 +1,9 @@
 import { logger } from './logger';
-import { currentIdbResetGeneration, registerIdbConnectionCloser } from './storage/idbResetGate';
+import {
+  beginIdbOpenAdmission,
+  isIdbOpenStillValid,
+  registerIdbConnectionCloser,
+} from './storage/idbResetGate';
 
 export interface LoraAdapterMeta {
   id: string;
@@ -50,8 +54,11 @@ registerIdbConnectionCloser(() => {
 function openDb(): Promise<IDBDatabase> {
   if (database) return Promise.resolve(database);
   if (openPromise) return openPromise;
-  // QNBS-v3: captured before the open starts — a reset (even one that later fails and ends) between here and onsuccess must invalidate this open rather than let it cache once the reset flag flips back to false.
-  const openGeneration = currentIdbResetGeneration();
+  // QNBS-v3: rejects immediately if a reset is currently draining — the generation check alone can't catch an open that STARTS mid-reset, since it would capture the reset's own already-bumped generation.
+  const openGeneration = beginIdbOpenAdmission();
+  if (openGeneration === null) {
+    return Promise.reject(new Error('IndexedDB reset in progress'));
+  }
   // QNBS-v3: identity token — a stale open's completion must only clear openPromise if it's STILL the current in-flight promise, not a newer one started after a reset closer invalidated this one mid-flight.
   const thisOpen: Promise<IDBDatabase> = new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
@@ -79,7 +86,7 @@ function openDb(): Promise<IDBDatabase> {
     req.onsuccess = (e) => {
       const db = (e.target as IDBOpenDBRequest).result;
       if (openPromise === thisOpen) openPromise = null;
-      if (currentIdbResetGeneration() !== openGeneration) {
+      if (!isIdbOpenStillValid(openGeneration)) {
         db.close();
         reject(new Error('IndexedDB reset in progress'));
         return;
