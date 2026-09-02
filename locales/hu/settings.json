@@ -414,6 +414,7 @@
   "settings.data.createSnapshot": "Pillanatkép létrehozása",
   "settings.data.dangerZone.description": "Ezek a műveletek visszafordíthatatlanok. Óvatosan járjon el.",
   "settings.data.dangerZone.factoryReset.button": "Gyári visszaállítás",
+  "settings.data.dangerZone.factoryReset.failed": "Factory reset did not complete — the app may now be in a partially reset state. Restart the app to check, then try the reset again.",
   "settings.data.dangerZone.factoryReset.hint": "Véglegesen törli az összes projektet, beállítást, API-kulcsot és helyi adatot. Az alkalmazás újraindul új telepítésként.",
   "settings.data.dangerZone.factoryReset.label": "Állítsa vissza az összes alkalmazásadatot",
   "settings.data.dangerZone.factoryReset.modalConfirm": "Töröljön mindent és indítsa újra",

@@ -36,7 +36,8 @@ async function clickSettingsNavItem(page: Page): Promise<void> {
     await desktopBtn.click();
     return;
   }
-  const moreBtn = page.locator('[data-tour="nav-mobile"]').getByRole('button', { name: /More/i });
+  // QNBS-v3: data-tour="nav-more" (not a translated /More/i label) so this stays locale-independent on a non-English mobile boot.
+  const moreBtn = page.locator('[data-tour="nav-more"]');
   await expect(moreBtn).toBeVisible({ timeout: 8000 });
   await moreBtn.click();
   await page.locator('#sidebar-mobile').waitFor({ state: 'visible' });

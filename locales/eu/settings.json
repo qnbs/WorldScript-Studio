@@ -414,6 +414,7 @@
   "settings.data.createSnapshot": "Sortu argazkia",
   "settings.data.dangerZone.description": "Ekintza hauek atzeraezinak dira. Kontuz ibili.",
   "settings.data.dangerZone.factoryReset.button": "Fabrika berrezarri",
+  "settings.data.dangerZone.factoryReset.failed": "Factory reset did not complete — the app may now be in a partially reset state. Restart the app to check, then try the reset again.",
   "settings.data.dangerZone.factoryReset.hint": "Proiektu, ezarpen, API gako eta tokiko datu guztiak behin betiko ezabatzen ditu. Aplikazioa instalazio berri gisa berrabiaraziko da.",
   "settings.data.dangerZone.factoryReset.label": "Berrezarri aplikazioaren datu guztiak",
   "settings.data.dangerZone.factoryReset.modalConfirm": "Ezabatu dena eta berrabiarazi",

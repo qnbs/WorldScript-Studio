@@ -16,11 +16,11 @@
   "sidebar.outline": "Générateur de plan",
   "sidebar.overflowMenuAria": "Autres vues",
   "sidebar.primaryNavAria": "Navigation principale",
+  "sidebar.scenario": "Scénario / Scénarisation",
   "sidebar.sceneboard": "Tableau des scènes",
   "sidebar.secondaryNavAria": "Paramètres et aide",
   "sidebar.settings": "Paramètres",
   "sidebar.templates": "Modèles",
   "sidebar.world": "Univers",
-  "sidebar.writer": "Studio d’écriture IA",
-  "sidebar.scenario": "Scénario / Scénarisation"
+  "sidebar.writer": "Studio d’écriture IA"
 }

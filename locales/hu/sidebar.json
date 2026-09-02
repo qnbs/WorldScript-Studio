@@ -16,11 +16,11 @@
   "sidebar.outline": "Vázlatgenerátor",
   "sidebar.overflowMenuAria": "További nézetek",
   "sidebar.primaryNavAria": "Elsődleges navigáció",
+  "sidebar.scenario": "Forgatókönyv / filmforgatókönyv",
   "sidebar.sceneboard": "Jelenettábla",
   "sidebar.secondaryNavAria": "Beállítások és súgó",
   "sidebar.settings": "Beállítások",
   "sidebar.templates": "Sablonok",
   "sidebar.world": "Világépítés",
-  "sidebar.writer": "AI-íróstúdió",
-  "sidebar.scenario": "Forgatókönyv / filmforgatókönyv"
+  "sidebar.writer": "AI-íróstúdió"
 }

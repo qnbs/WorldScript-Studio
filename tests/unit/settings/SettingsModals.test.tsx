@@ -16,6 +16,7 @@ const mockHandleResetProject = vi.fn();
 const mockHandleCreateSnapshot = vi.fn();
 const mockHandleRestoreSnapshot = vi.fn();
 const mockHandleDeleteSnapshot = vi.fn();
+const mockHandleFactoryReset = vi.fn();
 const mockSetSnapshotName = vi.fn();
 
 let mockModal: { state: string; payload: Record<string, unknown> } = {
@@ -35,6 +36,7 @@ vi.mock('../../../contexts/SettingsViewContext', () => ({
     handleCreateSnapshot: mockHandleCreateSnapshot,
     handleRestoreSnapshot: mockHandleRestoreSnapshot,
     handleDeleteSnapshot: mockHandleDeleteSnapshot,
+    handleFactoryReset: mockHandleFactoryReset,
     currentWordCount: 1500,
   }),
 }));
@@ -157,6 +159,41 @@ describe('SettingsModals', () => {
       render(<SettingsModals />);
       await user.click(screen.getByText('settings.deleteModal.confirm'));
       expect(mockHandleDeleteSnapshot).toHaveBeenCalled();
+    });
+  });
+
+  describe('factoryReset modal', () => {
+    beforeEach(() => {
+      mockModal = { state: 'factoryReset', payload: {} };
+    });
+
+    it('renders factory reset modal title', () => {
+      render(<SettingsModals />);
+      expect(
+        screen.getByText('settings.data.dangerZone.factoryReset.modalTitle'),
+      ).toBeInTheDocument();
+    });
+
+    it('renders the warning text', () => {
+      render(<SettingsModals />);
+      expect(
+        screen.getByText('settings.data.dangerZone.factoryReset.modalWarning'),
+      ).toBeInTheDocument();
+    });
+
+    // QNBS-v3: this is the E2E recovery flow's own click target — it must stay findable by testid, not just visible label text.
+    it('calls handleFactoryReset when the stable-testid confirm button is clicked', async () => {
+      const user = userEvent.setup();
+      render(<SettingsModals />);
+      await user.click(screen.getByTestId('factory-reset-confirm-button'));
+      expect(mockHandleFactoryReset).toHaveBeenCalled();
+    });
+
+    it('calls setModal with closed when cancel clicked', async () => {
+      const user = userEvent.setup();
+      render(<SettingsModals />);
+      await user.click(screen.getByText('common.cancel'));
+      expect(mockSetModal).toHaveBeenCalledWith({ state: 'closed', payload: {} });
     });
   });
 });

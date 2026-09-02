@@ -1,5 +1,6 @@
 // QNBS-v3: Two-layer inference cache keeps hot reads in memory while the durable layer is encrypted.
 import { logger } from '../logger';
+import { isIdbResetInProgress, registerIdbConnectionCloser } from '../storage/idbResetGate';
 import { withProtectedWriteAdmission } from '../storage/protectedWriteAdmission';
 import {
   assertSecureStorageReadable,
@@ -76,6 +77,11 @@ export class AiInferenceCacheService {
   private readonly dbReady: Promise<void>;
 
   constructor() {
+    // QNBS-v3: this connection is cached for the service's lifetime — a factory reset must close it or deleteDatabase(worldscript-inference-cache-db) blocks.
+    registerIdbConnectionCloser(() => {
+      this.db?.close();
+      this.db = null;
+    });
     this.dbReady = this.openDb();
   }
 
@@ -105,6 +111,12 @@ export class AiInferenceCacheService {
       };
       request.onsuccess = () => {
         const opened = request.result;
+        // QNBS-v3: this open may have started before a factory reset began — never cache a connection reset already closed.
+        if (isIdbResetInProgress()) {
+          opened.close();
+          resolve();
+          return;
+        }
         this.db = opened;
         opened.onversionchange = () => {
           this.db?.close();

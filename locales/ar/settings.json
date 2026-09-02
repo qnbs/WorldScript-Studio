@@ -414,6 +414,7 @@
   "settings.data.createSnapshot": "إنشاء لقطة",
   "settings.data.dangerZone.description": "هذه الإجراءات لا رجعة فيها. تابع بحذر.",
   "settings.data.dangerZone.factoryReset.button": "إعادة ضبط المصنع",
+  "settings.data.dangerZone.factoryReset.failed": "Factory reset did not complete — the app may now be in a partially reset state. Restart the app to check, then try the reset again.",
   "settings.data.dangerZone.factoryReset.hint": "يحذف نهائيًا جميع المشاريع والإعدادات ومفاتيح API والبيانات المحلية. سيُعاد تشغيل التطبيق كتثبيت جديد.",
   "settings.data.dangerZone.factoryReset.label": "إعادة ضبط جميع بيانات التطبيق",
   "settings.data.dangerZone.factoryReset.modalConfirm": "حذف كل شيء وإعادة التشغيل",

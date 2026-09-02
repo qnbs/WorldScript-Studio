@@ -9,9 +9,7 @@
  */
 
 import { logger } from './logger';
-import { closeDbServiceConnectionsForReset } from './storage';
-import { closeJournalStoreConnectionForReset } from './storage/encryptionMigrationJournal';
-import { closeSentinelStoreConnectionForReset } from './storage/idbPassphraseSentinel';
+import { beginIdbReset, endIdbReset } from './storage/idbResetGate';
 import { isTauriRuntime } from './tauriRuntime';
 
 // QNBS-v3: mirrors public/sw.js's isWorldScriptOwnedCache/register-sw.ts's isWorldScriptOwnedCacheName — duplicated (not imported) since sw.js is a classic non-module script and register-sw.ts has its own load-time side effect.
@@ -19,6 +17,7 @@ const OWNED_CACHE_NAME_RE =
   /^worldscript-(?:static|dynamic|images)-v\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/;
 const isWorldScriptOwnedCacheName = (name: string): boolean => OWNED_CACHE_NAME_RE.test(name);
 
+// QNBS-v3: worldscript-localfirst-<projectId> (services/localFirst/docPersistence.ts) is per-project and dynamically named — it cannot be enumerated here; only indexedDB.databases() (the primary path above) ever sees it. This static list is a Safari/old-browser fallback only.
 /** All IDB databases the app may have created. */
 const KNOWN_DB_NAMES = [
   'worldscript-db', // legacy — migrated to worldscript-data-db
@@ -29,6 +28,8 @@ const KNOWN_DB_NAMES = [
   'worldscript-lora-db',
   'worldscript-inference-cache-db',
   'proforge-memory-bank',
+  'proforge-run-history',
+  'worldscript-dead-letter-db',
 ];
 
 async function deleteAllIndexedDBDatabases(): Promise<void> {
@@ -106,21 +107,25 @@ async function clearTauriAppData(): Promise<void> {
  */
 export async function wipeAllAppData(): Promise<void> {
   logger.warn('[factoryReset] Wiping all app data…');
-  // QNBS-v3: clear fallible desktop data first so a failed desktop reset never leaves a mixed wipe.
-  await clearTauriAppData();
-  // QNBS-v3: connections close immediately before deleting, not earlier — an earlier close left an await window where a concurrent read/write could reopen one and reintroduce the block.
-  closeDbServiceConnectionsForReset();
-  closeJournalStoreConnectionForReset();
-  closeSentinelStoreConnectionForReset();
-  await deleteAllIndexedDBDatabases();
-  await clearServiceWorkerCaches();
+  // QNBS-v3: gate blocks every registered store's new/in-flight opens for the whole reset, not just one point in time — closes both the close-then-reopen race and stores a one-time close call would miss entirely.
+  beginIdbReset();
   try {
-    localStorage.clear();
-    sessionStorage.clear();
-  } catch {
-    // Private browsing may throw
+    // QNBS-v3: clear fallible desktop data first so a failed desktop reset never leaves a mixed wipe.
+    await clearTauriAppData();
+    await deleteAllIndexedDBDatabases();
+    await clearServiceWorkerCaches();
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch {
+      // Private browsing may throw
+    }
+    // Small delay so async IDB deletions can settle before unload.
+    await new Promise((r) => setTimeout(r, 300));
+    window.location.reload();
+  } catch (error) {
+    // QNBS-v3: reload never runs on this path — release the gate so the still-live app can access IDB again.
+    endIdbReset();
+    throw error;
   }
-  // Small delay so async IDB deletions can settle before unload.
-  await new Promise((r) => setTimeout(r, 300));
-  window.location.reload();
 }

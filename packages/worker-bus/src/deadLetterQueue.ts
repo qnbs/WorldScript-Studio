@@ -2,6 +2,10 @@
 //          Stores failed tasks for operator inspection. Not a retry queue.
 
 import { createLogger } from '../../../services/logger';
+import {
+  isIdbResetInProgress,
+  registerIdbConnectionCloser,
+} from '../../../services/storage/idbResetGate';
 import { DEAD_LETTER_CAPACITY } from './constants';
 import type { TaskResult, WorkerTask } from './types';
 
@@ -75,8 +79,19 @@ export class DeadLetterQueue {
   }
 }
 
+let database: IDBDatabase | null = null;
+let openPromise: Promise<IDBDatabase> | null = null;
+
+// QNBS-v3: each call previously opened its own never-closed connection — now cached single-flight so a factory reset has exactly one connection to close instead of none it can reference.
+registerIdbConnectionCloser(() => {
+  database?.close();
+  database = null;
+});
+
 function openDlqDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+  if (database) return Promise.resolve(database);
+  if (openPromise) return openPromise;
+  openPromise = new Promise((resolve, reject) => {
     const req = indexedDB.open(IDB_DB_NAME, 1);
     req.onupgradeneeded = (e) => {
       const db = (e.target as IDBOpenDBRequest).result;
@@ -84,9 +99,24 @@ function openDlqDb(): Promise<IDBDatabase> {
         db.createObjectStore(IDB_STORE, { autoIncrement: true });
       }
     };
-    req.onsuccess = (e) => resolve((e.target as IDBOpenDBRequest).result);
-    req.onerror = (e) => reject((e.target as IDBOpenDBRequest).error);
+    req.onsuccess = (e) => {
+      const db = (e.target as IDBOpenDBRequest).result;
+      openPromise = null;
+      // QNBS-v3: this open may have started before a factory reset began — never cache a connection reset already closed.
+      if (isIdbResetInProgress()) {
+        db.close();
+        reject(new Error('IndexedDB reset in progress'));
+        return;
+      }
+      database = db;
+      resolve(db);
+    };
+    req.onerror = (e) => {
+      openPromise = null;
+      reject((e.target as IDBOpenDBRequest).error);
+    };
   });
+  return openPromise;
 }
 
 function storeClear(store: IDBObjectStore): Promise<void> {

@@ -5,6 +5,7 @@
  */
 
 import type { MemoryBankEntry, PipelineStage } from '../../features/proForge/types';
+import { isIdbResetInProgress, registerIdbConnectionCloser } from '../storage/idbResetGate';
 
 const MEMORY_BANK_STORE = 'proforge-memory-bank';
 const MEMORY_BANK_VERSION = 1;
@@ -27,6 +28,14 @@ function idbAvailable(): boolean {
 }
 
 let dbPromise: Promise<MemoryBankDb> | null = null;
+let database: MemoryBankDb | null = null;
+
+// QNBS-v3: this connection is cached indefinitely — a factory reset must close it or deleteDatabase(proforge-memory-bank) blocks.
+registerIdbConnectionCloser(() => {
+  database?.close();
+  database = null;
+  dbPromise = null;
+});
 
 function openMemoryBankDb(): Promise<MemoryBankDb> {
   if (dbPromise) return dbPromise;
@@ -34,7 +43,17 @@ function openMemoryBankDb(): Promise<MemoryBankDb> {
   dbPromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(MEMORY_BANK_STORE, MEMORY_BANK_VERSION);
     request.onerror = () => reject(new Error('Failed to open Memory Bank DB'));
-    request.onsuccess = () => resolve(request.result as MemoryBankDb);
+    request.onsuccess = () => {
+      const db = request.result as MemoryBankDb;
+      // QNBS-v3: this open may have started before a factory reset began — never cache a connection reset already closed.
+      if (isIdbResetInProgress()) {
+        db.close();
+        reject(new Error('IndexedDB reset in progress'));
+        return;
+      }
+      database = db;
+      resolve(db);
+    };
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
       if (!db.objectStoreNames.contains('entries')) {
@@ -316,6 +335,8 @@ export function clearMemoryBankCache(): void {
 
 /** Reset DB connection and singleton cache — test-only. Allows fresh IDBFactory per test. */
 export function _resetDbForTest(): void {
+  database?.close();
+  database = null;
   dbPromise = null;
   bankCache.clear();
   memFallback.clear();

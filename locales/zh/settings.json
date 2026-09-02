@@ -414,6 +414,7 @@
   "settings.data.createSnapshot": "创建 Snapshot",
   "settings.data.dangerZone.description": "这些行动是不可逆转的。谨慎行事。",
   "settings.data.dangerZone.factoryReset.button": "恢复出厂设置",
+  "settings.data.dangerZone.factoryReset.failed": "Factory reset did not complete — the app may now be in a partially reset state. Restart the app to check, then try the reset again.",
   "settings.data.dangerZone.factoryReset.hint": "永久删除所有项目、设置、API 密钥和本地数据。该应用程序将作为全新安装重新启动。",
   "settings.data.dangerZone.factoryReset.label": "重置所有应用程序数据",
   "settings.data.dangerZone.factoryReset.modalConfirm": "删除 everything & restart",

@@ -30,9 +30,11 @@ const mockListSnapshots = vi.fn().mockResolvedValue([]);
 const mockSaveSnapshot = vi.fn().mockResolvedValue(undefined);
 const mockDeleteSnapshot = vi.fn().mockResolvedValue(undefined);
 const mockLoggerWarn = vi.fn();
+const mockLoggerError = vi.fn();
 // QNBS-v3 (#332/D5): aliased to stableToast's own methods (not fresh vi.fn()s) so the encryption tests below assert against the same stable mock useToast() actually returns.
 const mockToastInfo = stableToast.info;
 const mockToastSuccess = stableToast.success;
+const mockWipeAllAppData = vi.fn().mockResolvedValue(undefined);
 const mockClearIdbEncryptionKey = vi.fn();
 const mockIsIdbEncryptionReady = vi.fn(() => false);
 const mockSetupIdbEncryption = vi.fn().mockResolvedValue(undefined);
@@ -193,15 +195,23 @@ vi.mock('../../../components/ui/Toast', () => ({
   useToast: () => stableToast,
 }));
 
-// QNBS-v3: createLogger added for factoryResetService's #532 connection-close imports (services/storage transitive chain)
+// QNBS-v3: createLogger mocked here too — the real ModuleLogger interface also has debug(), which withContext()'s returned logger must mirror or a module further down the transitive chain calling it would crash the test.
 vi.mock('../../../services/logger', () => ({
-  logger: { warn: (...args: unknown[]) => mockLoggerWarn(...args) },
+  logger: {
+    warn: (...args: unknown[]) => mockLoggerWarn(...args),
+    error: (...args: unknown[]) => mockLoggerError(...args),
+  },
   createLogger: () => ({
+    debug: () => {},
     info: () => {},
     warn: () => {},
     error: () => {},
-    withContext: () => ({ info: () => {}, warn: () => {}, error: () => {} }),
+    withContext: () => ({ debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }),
   }),
+}));
+
+vi.mock('../../../services/factoryResetService', () => ({
+  wipeAllAppData: () => mockWipeAllAppData(),
 }));
 
 vi.mock('../../../services/desktopPlatform', () => ({
@@ -290,6 +300,36 @@ describe('handleLanguageChange', () => {
       result.current.handleLanguageChange('de');
     });
     expect(mockSetLanguage).toHaveBeenCalledWith('de');
+  });
+});
+
+describe('handleFactoryReset', () => {
+  it('wipes app data without surfacing an error toast on success', async () => {
+    mockWipeAllAppData.mockResolvedValueOnce(undefined);
+    const { result } = renderHook(() => useSettingsView());
+
+    await act(async () => {
+      await result.current.handleFactoryReset();
+    });
+
+    expect(mockWipeAllAppData).toHaveBeenCalledTimes(1);
+    expect(stableToast.error).not.toHaveBeenCalled();
+  });
+
+  // QNBS-v3: onblocked now rejects instead of silently reloading — the failure must reach the user, not just the console.
+  it('logs and surfaces a non-misleading error toast when wipeAllAppData rejects', async () => {
+    mockWipeAllAppData.mockRejectedValueOnce(new Error('blocked by another open connection'));
+    const { result } = renderHook(() => useSettingsView());
+
+    await act(async () => {
+      await result.current.handleFactoryReset();
+    });
+
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      'Factory reset failed',
+      expect.objectContaining({ error: 'blocked by another open connection' }),
+    );
+    expect(stableToast.error).toHaveBeenCalledWith('settings.data.dangerZone.factoryReset.failed');
   });
 });
 

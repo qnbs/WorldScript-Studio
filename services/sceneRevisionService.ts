@@ -1,6 +1,7 @@
 // QNBS-v3: Standalone IDB for scene revisions avoids a shared schema upgrade and keeps history bounded.
 import type { SceneRevision } from '../types';
 import { createLogger } from './logger';
+import { isIdbResetInProgress, registerIdbConnectionCloser } from './storage/idbResetGate';
 import { withProtectedWriteAdmission } from './storage/protectedWriteAdmission';
 import {
   assertSecureStorageReadable,
@@ -38,6 +39,12 @@ interface StoredSceneRevision {
 let database: IDBDatabase | null = null;
 let openPromise: Promise<IDBDatabase> | null = null;
 
+// QNBS-v3: this connection is cached indefinitely across saves — a factory reset must close it or deleteDatabase(worldscript-revisions-db) blocks.
+registerIdbConnectionCloser(() => {
+  database?.close();
+  database = null;
+});
+
 async function getDb(): Promise<IDBDatabase> {
   if (database) return database;
   if (openPromise) return openPromise;
@@ -54,6 +61,13 @@ async function getDb(): Promise<IDBDatabase> {
     };
     request.onsuccess = () => {
       const opened = request.result;
+      openPromise = null;
+      // QNBS-v3: this open may have started before a factory reset began — never cache a connection reset already closed.
+      if (isIdbResetInProgress()) {
+        opened.close();
+        reject(new Error('IndexedDB reset in progress'));
+        return;
+      }
       database = opened;
       opened.onversionchange = () => {
         opened.close();

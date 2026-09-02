@@ -8,9 +8,8 @@ import { logger } from '../../services/logger';
 
 const mockIsTauriRuntime = vi.fn(() => false);
 const mockLoadTauriApis = vi.fn();
-const mockCloseDbServiceConnections = vi.fn();
-const mockCloseJournalStoreConnection = vi.fn();
-const mockCloseSentinelStoreConnection = vi.fn();
+const mockBeginIdbReset = vi.fn();
+const mockEndIdbReset = vi.fn();
 
 vi.mock('../../services/logger', () => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
@@ -23,16 +22,14 @@ vi.mock('../../services/fs/fsCore', () => ({
   // QNBS-v3: pass-through — retry/backoff behavior is covered by fsCore.test.ts directly.
   retryFs: (fn: () => Promise<unknown>) => fn(),
 }));
-// QNBS-v3: #532 — deleteDatabase silently treated onblocked as success while this page's own
-// connections stayed open; these three closes must run before deleteDatabase is ever called.
-vi.mock('../../services/storage', () => ({
-  closeDbServiceConnectionsForReset: () => mockCloseDbServiceConnections(),
-}));
-vi.mock('../../services/storage/encryptionMigrationJournal', () => ({
-  closeJournalStoreConnectionForReset: () => mockCloseJournalStoreConnection(),
-}));
-vi.mock('../../services/storage/idbPassphraseSentinel', () => ({
-  closeSentinelStoreConnectionForReset: () => mockCloseSentinelStoreConnection(),
+// QNBS-v3: deleteDatabase silently treated onblocked as success while a still-open connection
+// stayed open; the gate must begin (closing every registered connection) before any delete, and
+// end only on a failure path that never reaches reload. The gate's own registry/flag behavior is
+// covered directly by idbResetGate.test.ts — this suite only verifies factoryResetService calls it
+// at the right points.
+vi.mock('../../services/storage/idbResetGate', () => ({
+  beginIdbReset: () => mockBeginIdbReset(),
+  endIdbReset: () => mockEndIdbReset(),
 }));
 
 function createDb(name: string): Promise<void> {
@@ -99,34 +96,28 @@ describe('wipeAllAppData', () => {
     delSpy.mockRestore();
   });
 
-  // QNBS-v3: #532 root cause — a still-open connection silently blocked deleteDatabase while the
-  // code reported success anyway; closing known connections first must happen before any delete.
-  it("closes this page's own known IDB connections before deleting any database", async () => {
+  // QNBS-v3: a still-open connection silently blocked deleteDatabase while the code reported
+  // success anyway; the reset gate must begin (closing every registered connection) before any delete.
+  it('begins the reset gate before deleting any database', async () => {
     await createDb('worldscript-data-db');
     const delSpy = vi.spyOn(indexedDB, 'deleteDatabase');
 
     await runWipe();
 
-    expect(mockCloseDbServiceConnections).toHaveBeenCalledTimes(1);
-    expect(mockCloseJournalStoreConnection).toHaveBeenCalledTimes(1);
-    expect(mockCloseSentinelStoreConnection).toHaveBeenCalledTimes(1);
-    const dbCloseOrder = mockCloseDbServiceConnections.mock.invocationCallOrder[0];
-    const journalCloseOrder = mockCloseJournalStoreConnection.mock.invocationCallOrder[0];
-    const sentinelCloseOrder = mockCloseSentinelStoreConnection.mock.invocationCallOrder[0];
+    expect(mockBeginIdbReset).toHaveBeenCalledTimes(1);
+    const beginOrder = mockBeginIdbReset.mock.invocationCallOrder[0];
     const firstDeleteOrder = delSpy.mock.invocationCallOrder[0];
-    expect(dbCloseOrder).toBeDefined();
-    expect(journalCloseOrder).toBeDefined();
-    expect(sentinelCloseOrder).toBeDefined();
+    expect(beginOrder).toBeDefined();
     expect(firstDeleteOrder).toBeDefined();
-    // QNBS-v3: all three closes must precede the first delete, not just one — any left open can silently reintroduce the block.
-    expect(dbCloseOrder as number).toBeLessThan(firstDeleteOrder as number);
-    expect(journalCloseOrder as number).toBeLessThan(firstDeleteOrder as number);
-    expect(sentinelCloseOrder as number).toBeLessThan(firstDeleteOrder as number);
+    expect(beginOrder as number).toBeLessThan(firstDeleteOrder as number);
+    expect(mockEndIdbReset).not.toHaveBeenCalled();
     delSpy.mockRestore();
   });
 
-  // QNBS-v3: onblocked must reject, not resolve, or the reset reports a false "fresh install" success while the database still has old data.
-  it('rejects and never reloads when a database deletion is blocked by another open connection', async () => {
+  // QNBS-v3: onblocked must reject, not resolve, or the reset reports a false "fresh install"
+  // success while the database still has old data; reload never runs on this path, so the gate
+  // must release too or the still-live app could never access IDB again.
+  it('rejects, never reloads, and releases the reset gate when a database deletion is blocked', async () => {
     await createDb('worldscript-data-db');
     const delSpy = vi.spyOn(indexedDB, 'deleteDatabase').mockImplementation((_name: string) => {
       const req = {} as IDBOpenDBRequest;
@@ -142,6 +133,8 @@ describe('wipeAllAppData', () => {
     }
 
     expect(reloadMock).not.toHaveBeenCalled();
+    expect(mockBeginIdbReset).toHaveBeenCalledTimes(1);
+    expect(mockEndIdbReset).toHaveBeenCalledTimes(1);
     expect(logger.warn).toHaveBeenCalledWith(
       expect.stringContaining(`deleteDatabase(worldscript-data-db) blocked`),
     );

@@ -421,6 +421,7 @@ export const DataSection: FC = () => {
               <Button
                 variant="danger"
                 size="sm"
+                data-testid="factory-reset-button"
                 onClick={() => setModal({ state: 'factoryReset', payload: {} })}
                 className="shrink-0"
               >
