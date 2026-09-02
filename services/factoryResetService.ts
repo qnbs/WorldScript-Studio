@@ -9,10 +9,14 @@
  */
 
 import { logger } from './logger';
+import { closeDbServiceConnectionsForReset } from './storage';
+import { closeJournalStoreConnectionForReset } from './storage/encryptionMigrationJournal';
+import { closeSentinelStoreConnectionForReset } from './storage/idbPassphraseSentinel';
 import { isTauriRuntime } from './tauriRuntime';
 
 // QNBS-v3: mirrors public/sw.js's isWorldScriptOwnedCache/register-sw.ts's isWorldScriptOwnedCacheName — duplicated (not imported) since sw.js is a classic non-module script and register-sw.ts has its own load-time side effect.
-const OWNED_CACHE_NAME_RE = /^worldscript-(?:static|dynamic|images)-v\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/;
+const OWNED_CACHE_NAME_RE =
+  /^worldscript-(?:static|dynamic|images)-v\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/;
 const isWorldScriptOwnedCacheName = (name: string): boolean => OWNED_CACHE_NAME_RE.test(name);
 
 /** All IDB databases the app may have created. */
@@ -47,7 +51,13 @@ function deleteDatabase(name: string): Promise<void> {
     const req = indexedDB.deleteDatabase(name);
     req.onsuccess = () => resolve();
     req.onerror = () => resolve(); // ignore — DB may not exist
-    req.onblocked = () => resolve(); // resolve anyway; page reload will finish the job
+    // QNBS-v3: this page's own known connections are now closed before this call (#532); a block
+    // here means another tab still has the database open, which this page cannot close — log it
+    // rather than silently claiming success, since the reload alone does not finish a blocked delete.
+    req.onblocked = () => {
+      logger.warn(`[factoryReset] deleteDatabase(${name}) blocked by another open connection`);
+      resolve();
+    };
   });
 }
 
@@ -97,6 +107,11 @@ async function clearTauriAppData(): Promise<void> {
  */
 export async function wipeAllAppData(): Promise<void> {
   logger.warn('[factoryReset] Wiping all app data…');
+  // QNBS-v3: close this page's own cached connections first — deleteDatabase silently treated a
+  // block by one of them as success (#532), leaving the database intact after a reported reset.
+  closeDbServiceConnectionsForReset();
+  closeJournalStoreConnectionForReset();
+  closeSentinelStoreConnectionForReset();
   // QNBS-v3: clear fallible desktop data first so a failed desktop reset never leaves a mixed wipe.
   await clearTauriAppData();
   await deleteAllIndexedDBDatabases();

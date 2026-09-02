@@ -147,6 +147,25 @@ export async function waitForMainChrome(page: Page): Promise<void> {
   ]);
 }
 
+/**
+ * QNBS-v3: explicit discriminated startup state, not boolean soup — #532 root cause was code
+ * repeatedly asking "is the portal visible?" via isVisible().catch(()=>false) after a navigation,
+ * which cannot distinguish "definitely main chrome" from "still loading" and silently swallows
+ * genuine errors as false. Callers that need MAIN_CHROME must check this result explicitly rather
+ * than inferring it from the portal's absence.
+ */
+export type StartupState = 'WELCOME_PORTAL' | 'MAIN_CHROME';
+
+/** Resolves which of waitForSpaReady()'s two shapes the current document actually reached. */
+export async function resolveStartupState(page: Page): Promise<StartupState> {
+  await waitForSpaReady(page);
+  const portal = page.getByTestId('welcome-portal');
+  if (await portal.isVisible().catch(() => false)) {
+    return 'WELCOME_PORTAL';
+  }
+  return 'MAIN_CHROME';
+}
+
 /** Language toggle on the welcome portal (EN must be active for English copy in assertions). */
 export async function selectEnglish(page: Page): Promise<void> {
   const enBtn = page.getByRole('button', { name: /^EN$/i }).first();
@@ -179,36 +198,35 @@ export async function ensureBlankProject(page: Page): Promise<void> {
  * waitForSpaReady()'s two success shapes the app actually booted into. A cold CI boot has landed
  * in an already-mounted main shell with a persisted project instead of the portal — a startup-
  * state precondition gap distinct from the (fixed) portal-activation auto-seed race.
- * Contract: guarantees the portal is reached, locale-independently — it does NOT guarantee
- * English. A caller needing English selects it itself (export.spec.ts already does this for the
- * fresh-boot case). Recovers via the real Settings → Data & Backups → Factory Reset flow when
- * main chrome is active so no React/Redux/storage internals are touched — only supported app
- * behavior.
+ * Contract: guarantees the portal is reached, locale-independently. Recovers via the real
+ * Settings → Data & Backups → Factory Reset flow when main chrome is active so no React/Redux/
+ * storage internals are touched — only supported app behavior.
  */
 export async function ensureWelcomePortalEntry(page: Page): Promise<void> {
-  await waitForSpaReady(page);
   const portal = page.getByTestId('welcome-portal');
-  if (await portal.isVisible({ timeout: 3000 }).catch(() => false)) {
+  if ((await resolveStartupState(page)) === 'WELCOME_PORTAL') {
     return;
   }
-  // QNBS-v3: force English before the locale-dependent recovery flow below, or a persisted non-EN/DE language would hang it.
-  await page.evaluate(() => localStorage.setItem('worldscript-language', 'en'));
+  // QNBS-v3 (#532): a caller-registered addInitScript (e.g. seeding a non-English language) fires
+  // on every subsequent navigation, including this reload — a page.evaluate() here would be
+  // silently undone before the recovery flow below runs. Registering a further addInitScript
+  // instead relies on Playwright's documented in-order execution: this one runs after any
+  // earlier-registered script on every future navigation, not only this one reload, so the
+  // recovery flow below is genuinely guaranteed English regardless of what the caller seeded.
+  await page.addInitScript(() => localStorage.setItem('worldscript-language', 'en'));
   await page.reload();
-  await waitForSpaReady(page);
-  // QNBS-v3: this reload can itself race a pending debounced autosave and land back in WelcomePortal instead of main chrome — accept either state again rather than assuming main chrome.
-  if (await portal.isVisible({ timeout: 3000 }).catch(() => false)) {
+  // QNBS-v3: this reload can itself race a pending debounced autosave and land back in
+  // WelcomePortal instead of main chrome — accept either state again rather than assuming main chrome.
+  if ((await resolveStartupState(page)) === 'WELCOME_PORTAL') {
     return;
   }
-  await waitForMainChrome(page);
+  // QNBS-v3 (#532): the recovery flow's own navigation is now genuinely locale-independent —
+  // Data & Backups / Factory Reset / its confirm use stable data-testid, matching this function's
+  // documented "locale-independently" contract even without relying on the English override above.
   await clickNavItem(page, /Settings/i);
-  await page
-    .getByRole('button', { name: /Data & Backups|Daten & Backups/i })
-    .first()
-    .click();
-  await page.getByRole('button', { name: /Factory Reset|Werkseinstellungen/i }).click();
-  await page
-    .getByRole('button', { name: /Delete everything & restart|Alles löschen & neu starten/i })
-    .click();
+  await page.getByTestId('settings-nav-data').click();
+  await page.getByTestId('factory-reset-button').click();
+  await page.getByTestId('factory-reset-confirm-button').click();
   await waitForSpaReady(page);
   await expect(portal).toBeVisible({ timeout: 15000 });
 }

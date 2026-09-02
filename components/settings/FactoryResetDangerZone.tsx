@@ -26,7 +26,14 @@ export const FactoryResetDangerZone: FC<Props> = ({
       <p className={descriptionClassName}>
         {t('settings.data.dangerZone.factoryReset.modalDescription')}
       </p>
-      <Button variant="danger" onClick={onReset} disabled={busy} aria-busy={busy}>
+      {/* QNBS-v3: stable data-testid lets E2E recovery navigation target this button without matching translated label text */}
+      <Button
+        variant="danger"
+        onClick={onReset}
+        disabled={busy}
+        aria-busy={busy}
+        data-testid="factory-reset-button"
+      >
         {t('settings.data.dangerZone.factoryReset.button')}
       </Button>
     </>
