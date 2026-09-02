@@ -52,8 +52,8 @@ test.describe('WelcomePortal entry precondition (CI-only)', () => {
     await page.addInitScript(() => localStorage.setItem('worldscript-language', 'es'));
     await page.reload();
     await waitForMainChrome(page);
-    // QNBS-v3: proves the precondition actually took effect — without this, a broken addInitScript seed could pass this test vacuously in English, regardless of viewport/view.
-    expect(await page.evaluate(() => localStorage.getItem('worldscript-language'))).toBe('es');
+    // QNBS-v3: asserts the applied locale, not just the persisted seed — a broken addInitScript or a failed es bundle load could otherwise pass this test vacuously in English.
+    await expect(page.locator('html')).toHaveAttribute('lang', 'es');
     await ensureWelcomePortalEntry(page);
     await expect(page.getByTestId('welcome-portal')).toBeVisible();
   });
