@@ -729,11 +729,38 @@ function withLocalFirstLock<T>(fn: () => Promise<T>): Promise<T> {
   return run;
 }
 
+// QNBS-v3: extracted so getLocalFirstHandle's own body doesn't absorb this classification/teardown complexity (CodeScene hotspot). Mutates the module-level localFirstHandle directly; returns the still-valid handle to reuse, or null once any stale/mismatched handle has been torn down and cleared.
+async function reconcileLocalFirstHandle(
+  projectId: string,
+  isIdbEncryptionReady: () => boolean,
+  noopPersistence: LocalFirstHandle['persistence'],
+): Promise<LocalFirstHandle | null> {
+  if (!localFirstHandle) return null;
+  if (localFirstHandle.projectId !== projectId) {
+    // Project switched — tear down the previous handle before creating a new one.
+    await localFirstHandle.persistence.destroy().catch(() => undefined);
+    localFirstHandle = null;
+    return null;
+  }
+  // QNBS-v3 (CodeAnt): the persistence backend is chosen at handle creation — if at-rest encryption became active after a plaintext-persisting handle was made, tear it down (wiping the plaintext already written) so no further plaintext is persisted.
+  if (isIdbEncryptionReady() && localFirstHandle.persistence.active) {
+    await localFirstHandle.persistence.clearData().catch(() => undefined);
+    await localFirstHandle.persistence.destroy().catch(() => undefined);
+    localFirstHandle = null;
+    return null;
+  }
+  // QNBS-v3: a dead reference, not an intentional NOOP — recreate rather than return a handle writes would silently go nowhere through.
+  if (localFirstHandle.persistence !== noopPersistence && !localFirstHandle.persistence.active) {
+    localFirstHandle = null;
+    return null;
+  }
+  return localFirstHandle;
+}
+
 function getLocalFirstHandle(project: ProjectData): Promise<LocalFirstHandle> {
   return withLocalFirstLock(async () => {
     const projectId = project.id ?? 'default';
     const { isIdbEncryptionReady } = await import('../services/storage/storageEncryptionService');
-    // QNBS-v3: imported before the staleness check so NOOP_PERSISTENCE is available there to distinguish an intentional NOOP from real persistence an external reset tore down.
     const [
       { createBlankProjectDoc },
       { ProjectDocBinding },
@@ -743,28 +770,12 @@ function getLocalFirstHandle(project: ProjectData): Promise<LocalFirstHandle> {
       import('../services/localFirst/docBinding'),
       import('../services/localFirst/docPersistence'),
     ]);
-    if (localFirstHandle?.projectId === projectId) {
-      // QNBS-v3 (CodeAnt): the persistence backend (NOOP vs y-indexeddb) is chosen at handle
-      // creation. If at-rest encryption became active AFTER a plaintext-persisting handle was made,
-      // tear it down — wiping the plaintext already written — so no further plaintext is persisted.
-      if (isIdbEncryptionReady() && localFirstHandle.persistence.active) {
-        await localFirstHandle.persistence.clearData().catch(() => undefined);
-        await localFirstHandle.persistence.destroy().catch(() => undefined);
-        localFirstHandle = null;
-      } else if (
-        localFirstHandle.persistence !== NOOP_PERSISTENCE &&
-        !localFirstHandle.persistence.active
-      ) {
-        // QNBS-v3: a dead reference, not an intentional NOOP — recreate rather than return a handle writes would silently go nowhere through.
-        localFirstHandle = null;
-      } else {
-        return localFirstHandle;
-      }
-    } else if (localFirstHandle) {
-      // Project switched — tear down the previous handle before creating a new one.
-      await localFirstHandle.persistence.destroy().catch(() => undefined);
-      localFirstHandle = null;
-    }
+    const reused = await reconcileLocalFirstHandle(
+      projectId,
+      isIdbEncryptionReady,
+      NOOP_PERSISTENCE,
+    );
+    if (reused) return reused;
     const doc = createBlankProjectDoc();
     // QNBS-v3 (CodeAnt): never write a PLAINTEXT shadow copy to y-indexeddb when at-rest encryption
     // is active — the local-first doc is not encrypted yet. Keep it in-memory only so the privacy

@@ -15,7 +15,7 @@
 
 import { IndexeddbPersistence } from 'y-indexeddb';
 import type * as Y from 'yjs';
-import { registerIdbConnectionCloser } from '../storage/idbResetGate';
+import { isIdbResetInProgress, registerIdbConnectionCloser } from '../storage/idbResetGate';
 
 // QNBS-v3: Rebrand — canonical worldscript-* IndexedDB namespace. Safe to rename outright:
 // local-first sync is behind enableLocalFirstSync (off by default) and this is a pre-release
@@ -56,6 +56,8 @@ export const NOOP_PERSISTENCE: DocPersistence = {
  */
 export function persistProjectDoc(projectId: string, doc: Y.Doc): DocPersistence {
   if (!isIndexedDbAvailable()) return NOOP_PERSISTENCE;
+  // QNBS-v3: never open a fresh y-indexeddb provider while a reset is draining — it would immediately register a closer and get torn down again, for no benefit, and could race the reset's own deleteDatabase call.
+  if (isIdbResetInProgress()) return NOOP_PERSISTENCE;
 
   let provider: IndexeddbPersistence;
   try {

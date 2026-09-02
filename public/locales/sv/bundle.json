@@ -2074,7 +2074,7 @@
   "settings.data.createSnapshot": "Skapa ögonblicksbild",
   "settings.data.dangerZone.description": "Dessa åtgärder är oåterkalleliga. Proceed with caution.",
   "settings.data.dangerZone.factoryReset.button": "Fabriksåterställning",
-  "settings.data.dangerZone.factoryReset.failed": "Factory reset did not complete — the app may now be in a partially reset state. Restart the app to check, then try the reset again.",
+  "settings.data.dangerZone.factoryReset.failed": "Fabriksåterställningen slutfördes inte — appen kan nu vara i ett delvis återställt tillstånd. Starta om appen för att kontrollera och försök sedan återställningen igen.",
   "settings.data.dangerZone.factoryReset.hint": "Tar permanent bort alla projekt, inställningar, API-nycklar och lokal data. The app will restart as a fresh install.",
   "settings.data.dangerZone.factoryReset.label": "Återställ all appdata",
   "settings.data.dangerZone.factoryReset.modalConfirm": "Radera allt och starta om",

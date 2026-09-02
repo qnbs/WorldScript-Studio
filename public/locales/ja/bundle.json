@@ -2074,7 +2074,7 @@
   "settings.data.createSnapshot": "作成 Snapshot",
   "settings.data.dangerZone.description": "これらの操作は元に戻すことができません。慎重に作業を進めてください。",
   "settings.data.dangerZone.factoryReset.button": "工場出荷時設定にリセット",
-  "settings.data.dangerZone.factoryReset.failed": "Factory reset did not complete — the app may now be in a partially reset state. Restart the app to check, then try the reset again.",
+  "settings.data.dangerZone.factoryReset.failed": "工場出荷時リセットが完了しませんでした — アプリが部分的にリセットされた状態になっている可能性があります。アプリを再起動して確認し、リセットをもう一度お試しください。",
   "settings.data.dangerZone.factoryReset.hint": "すべてのプロジェクト、設定、API キー、ローカル データを完全に削除します。アプリは新規インストールとして再起動されます。",
   "settings.data.dangerZone.factoryReset.label": "すべてのアプリデータをリセット",
   "settings.data.dangerZone.factoryReset.modalConfirm": "削除 everything & restart",

@@ -414,7 +414,7 @@
   "settings.data.createSnapshot": "Búðu til skyndimynd",
   "settings.data.dangerZone.description": "Þessar aðgerðir eru óafturkræfar. Haltu áfram með varúð.",
   "settings.data.dangerZone.factoryReset.button": "Factory Reset",
-  "settings.data.dangerZone.factoryReset.failed": "Factory reset did not complete — the app may now be in a partially reset state. Restart the app to check, then try the reset again.",
+  "settings.data.dangerZone.factoryReset.failed": "Verksmiðjuendurstilling tókst ekki að fullu — forritið gæti nú verið í hálfendurstilltu ástandi. Endurræstu forritið til að athuga stöðuna og reyndu síðan endurstillinguna aftur.",
   "settings.data.dangerZone.factoryReset.hint": "Eyðir varanlega öllum verkefnum, stillingum, API lyklum og staðbundnum gögnum. Forritið mun endurræsa sem ný uppsetning.",
   "settings.data.dangerZone.factoryReset.label": "Endurstilla öll forritsgögn",
   "settings.data.dangerZone.factoryReset.modalConfirm": "Eyddu öllu og endurræstu",

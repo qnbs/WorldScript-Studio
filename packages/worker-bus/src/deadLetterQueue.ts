@@ -93,36 +93,44 @@ function openDlqDb(): Promise<IDBDatabase> {
   if (openPromise) return openPromise;
   // QNBS-v3: captured before the open starts — a reset (even one that later fails and ends) between here and onsuccess must invalidate this open rather than let it cache once the reset flag flips back to false.
   const openGeneration = currentIdbResetGeneration();
-  openPromise = new Promise((resolve, reject) => {
-    const req = indexedDB.open(IDB_DB_NAME, 1);
-    req.onupgradeneeded = (e) => {
-      const db = (e.target as IDBOpenDBRequest).result;
-      if (!db.objectStoreNames.contains(IDB_STORE)) {
-        db.createObjectStore(IDB_STORE, { autoIncrement: true });
-      }
-    };
-    req.onsuccess = (e) => {
-      const db = (e.target as IDBOpenDBRequest).result;
-      openPromise = null;
-      if (currentIdbResetGeneration() !== openGeneration) {
-        db.close();
-        reject(new Error('IndexedDB reset in progress'));
-        return;
-      }
-      // QNBS-v3: another tab's factory reset (or any other deleteDatabase caller) fires versionchange here — close and invalidate so the next call re-opens fresh instead of blocking that deletion.
-      db.onversionchange = () => {
-        db.close();
-        database = null;
+  // QNBS-v3: identity token — a stale open's completion must only clear openPromise if it's STILL the current in-flight promise, not a newer one started after a reset closer invalidated this one mid-flight.
+  const thisOpen: Promise<IDBDatabase> = new Promise((resolve, reject) => {
+    try {
+      const req = indexedDB.open(IDB_DB_NAME, 1);
+      req.onupgradeneeded = (e) => {
+        const db = (e.target as IDBOpenDBRequest).result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          db.createObjectStore(IDB_STORE, { autoIncrement: true });
+        }
       };
-      database = db;
-      resolve(db);
-    };
-    req.onerror = (e) => {
+      req.onsuccess = (e) => {
+        const db = (e.target as IDBOpenDBRequest).result;
+        if (openPromise === thisOpen) openPromise = null;
+        if (currentIdbResetGeneration() !== openGeneration) {
+          db.close();
+          reject(new Error('IndexedDB reset in progress'));
+          return;
+        }
+        // QNBS-v3: another tab's factory reset (or any other deleteDatabase caller) fires versionchange here — close and invalidate so the next call re-opens fresh instead of blocking that deletion.
+        db.onversionchange = () => {
+          db.close();
+          database = null;
+        };
+        database = db;
+        resolve(db);
+      };
+      req.onerror = (e) => {
+        if (openPromise === thisOpen) openPromise = null;
+        reject((e.target as IDBOpenDBRequest).error);
+      };
+    } catch (error) {
+      // QNBS-v3: indexedDB.open() itself can throw synchronously (private/restricted mode) — without this, the handlers above never attach, so openPromise would stay memoized as a permanently-rejected promise and DLQ persistence could never retry.
       openPromise = null;
-      reject((e.target as IDBOpenDBRequest).error);
-    };
+      reject(error);
+    }
   });
-  return openPromise;
+  openPromise = thisOpen;
+  return thisOpen;
 }
 
 function storeClear(store: IDBObjectStore): Promise<void> {

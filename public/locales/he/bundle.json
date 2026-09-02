@@ -2074,7 +2074,7 @@
   "settings.data.createSnapshot": "יצירת תמונת מצב",
   "settings.data.dangerZone.description": "פעולות אלה בלתי הפיכות. המשיכו בזהירות.",
   "settings.data.dangerZone.factoryReset.button": "איפוס להגדרות יצרן",
-  "settings.data.dangerZone.factoryReset.failed": "Factory reset did not complete — the app may now be in a partially reset state. Restart the app to check, then try the reset again.",
+  "settings.data.dangerZone.factoryReset.failed": "איפוס להגדרות יצרן לא הושלם — ייתכן שהאפליקציה נמצאת כעת במצב איפוס חלקי. הפעל מחדש את האפליקציה כדי לבדוק, ולאחר מכן נסה שוב את האיפוס.",
   "settings.data.dangerZone.factoryReset.hint": "מוחק לצמיתות את כל הפרויקטים, ההגדרות, מפתחות ה‑API והנתונים המקומיים. האפליקציה תופעל מחדש כהתקנה חדשה.",
   "settings.data.dangerZone.factoryReset.label": "איפוס כל נתוני האפליקציה",
   "settings.data.dangerZone.factoryReset.modalConfirm": "מחיקת הכול והפעלה מחדש",
