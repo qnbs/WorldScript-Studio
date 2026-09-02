@@ -4,7 +4,7 @@
 
 **Status:** S5-A — admitted R-15 secure-storage architecture baseline; production implementation not
 started. `S5_A_ADMITTED = YES`, `S5_IMPLEMENTATION_READY = NO`, `S5_TERMINAL = NO`,
-`PRODUCTION_AUTHORITY_SWITCH_ALLOWED = NO`. Three blocking S5 child contracts remain, each an explicit fail-closed gate rather than an implicit gap: **S5-B1** (Canonical Migration Source & Payload Evidence — plaintext packaged-IDB source evidence, per-class canonical destination-payload bytes, `source_value_digest` value-equivalence, surviving atomic-write-temporary reconciliation, and identity-upgrade/recovery for unbound AAD-less legacy sources and unidentified legacy quarantine data, §10.1.2, §10.1.3, §10.4.1); **S5-B2** (race-free `AuthoritySnapshot` acquisition/lifetime/reclamation, §5.3.3); **S5-B3** (Chunked Large-Object Envelope for records above the `64 MiB` whole-record limit, §13). S5 is terminal only once S5-A, S5-B1, S5-B2, and S5-B3 are all merged and post-merge green; none of the three child contracts' mechanisms are designed in this baseline.
+`PRODUCTION_AUTHORITY_SWITCH_ALLOWED = NO`. `S5_B2_ADMITTED = YES` (`docs/native/r15/AUTHORITY-SNAPSHOT-LIFETIME.md` — race-free `AuthoritySnapshot` acquisition/lifetime/reclamation, §5.3.3). Two blocking S5 child contracts remain, each an explicit fail-closed gate rather than an implicit gap: **S5-B1** (Canonical Migration Source & Payload Evidence — plaintext packaged-IDB source evidence, per-class canonical destination-payload bytes, `source_value_digest` value-equivalence, surviving atomic-write-temporary reconciliation, and identity-upgrade/recovery for unbound AAD-less legacy sources and unidentified legacy quarantine data, §10.1.2, §10.1.3, §10.4.1); **S5-B3** (Chunked Large-Object Envelope for records above the `64 MiB` whole-record limit, §13). S5 is terminal only once S5-A, S5-B1, S5-B2, and S5-B3 are all merged and post-merge green; S5-B1's and S5-B3's mechanisms are not designed in this baseline.
 
 **Baseline:** `main` at `7ce506ee771f6273e22c08ded049b48955cb40a5`
 
@@ -703,14 +703,13 @@ filesystem slot is never read authority by itself (per §5.3.1's "meaning of `CO
 
 ```text
 1. acquire shared read admission
-2. capture AuthoritySnapshot from the secure anchor and acquire its retention reference
-   (S5-B2, below — steps 2's capture and its retention reference are NOT yet specified as one
-   atomic acquisition in this S5-A baseline)
-3. resolve ONLY snapshot.committed_root.root_key_ref
-4. authenticate the exact root named by the snapshot
+2. guard := acquire_authority_snapshot_guard() — atomic capture + retention-reference registration
+   (S5-B2, `docs/native/r15/AUTHORITY-SNAPSHOT-LIFETIME.md` §2)
+3. resolve ONLY guard.committed_root.root_key_ref
+4. authenticate the exact root named by the guard's snapshot
 5. use that root's catalog/marker/data generations
 6. decrypt + validate + hand off payload
-7. release the retention reference
+7. release(guard)
 8. release shared read admission
 ```
 
@@ -737,7 +736,7 @@ lane reuse may occur only after no admitted reader can still reference the gener
 generation-addressed root representation when reusing a lane, and must never overwrite bytes a pinned
 reader snapshot still references.
 
-**S5-B2 blocker — race-free acquisition not yet admitted.** `committed_root` remains the sole publication authority and the immutable read-snapshot semantics above remain admitted, but this S5-A baseline does **not** admit a race-free acquisition mechanism between snapshot capture and retention-reference registration (reader algorithm step 2, above): a reader descheduled in that gap can have its retention reference arrive after two further root commits already reclaimed the generation it names — a gap in *acquisition*, not *retention*, that no reference counting or generation-addressed layout closes merely by existing. No production implementation may claim `AuthoritySnapshot`/GC lifetime conformance until the dedicated **S5-B2** child contract admits atomic guarded acquisition (preferred direction: an `AuthoritySnapshotGuard` atomically capturing `committed_root` and registering its retention reference before the snapshot can become reclaimable); that mechanism is not designed in this S5-A baseline.
+**S5-B2 admitted — race-free acquisition.** `docs/native/r15/AUTHORITY-SNAPSHOT-LIFETIME.md` (S5-B2) admits the atomic `AuthoritySnapshotGuard` acquisition this baseline originally left as an explicit blocker: reader algorithm step 2 (above) is `guard := acquire_authority_snapshot_guard()`, an operation indivisible with respect to a concurrent root commit's replacement of the current generation handle, closing the capture-to-registration race a reader could otherwise be descheduled inside. Reclamation eligibility (§3 of that document) extends this section's `ACTIVE_READER_PIN` reason precisely: a generation's reference count, maintained by the guard mechanism, must be zero in addition to satisfying this section's own retention conditions.
 
 ### 5.4 Canonical digest contract
 
@@ -3157,4 +3156,4 @@ complete merely because a design document exists.
 
 ## 21. S5 admission decision
 
-This S5-A baseline is admitted at the semantic level for everything it actually specifies (protected records/representations enumerated; logical identity, envelope, key/epoch, parse, failure, and downgrade semantics explicit; durable writes, generations/commit markers, admission, lock, recovery, and memory bounds defined; Core-vs-platform responsibilities and headless tests explicit; #357/#359/#360/#361 have implementation owners and closure evidence) but is **not** implementation-ready as a whole: `canonical_destination_payload_bytes`/plaintext-IDB source evidence (**S5-B1**), race-free `AuthoritySnapshot` acquisition (**S5-B2**), and the chunked large-object envelope for records above `64 MiB` (**S5-B3**) remain explicit fail-closed gates this baseline does not admit (above). This is **`S5_A_ADMITTED / CONTRACT_DEFINED / IMPLEMENTATION_NOT_STARTED`**, not `DESIGN_ADMITTED`/`IMPLEMENTATION_READY` for the whole S5 program; current desktop filesystem authority remains unchanged and current user data is not retroactively encrypted by S5-A.
+This S5-A baseline is admitted at the semantic level for everything it actually specifies (protected records/representations enumerated; logical identity, envelope, key/epoch, parse, failure, and downgrade semantics explicit; durable writes, generations/commit markers, admission, lock, recovery, and memory bounds defined; Core-vs-platform responsibilities and headless tests explicit; #357/#359/#360/#361 have implementation owners and closure evidence) but is **not** implementation-ready as a whole: `canonical_destination_payload_bytes`/plaintext-IDB source evidence (**S5-B1**) and the chunked large-object envelope for records above `64 MiB` (**S5-B3**) remain explicit fail-closed gates this baseline does not admit; race-free `AuthoritySnapshot` acquisition (**S5-B2**) is now admitted (above). This is **`S5_A_ADMITTED / CONTRACT_DEFINED / IMPLEMENTATION_NOT_STARTED`**, not `DESIGN_ADMITTED`/`IMPLEMENTATION_READY` for the whole S5 program; current desktop filesystem authority remains unchanged and current user data is not retroactively encrypted by S5-A.
