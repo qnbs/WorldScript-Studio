@@ -88,15 +88,28 @@ describe('B1.1 — docPersistence (y-indexeddb)', () => {
   });
 
   // QNBS-v3: opening a fresh y-indexeddb provider while a reset is draining would just register a closer that gets immediately torn down again — degrading to NOOP avoids that pointless open/destroy race entirely.
-  it('degrades to the NOOP handle while a reset is in progress, instead of opening a new provider', async () => {
+  it('degrades to a transient NOOP (distinct from the intentional NOOP_PERSISTENCE singleton) while a reset is in progress, instead of opening a new provider', async () => {
     await beginIdbReset();
+    let deniedPersistence: ReturnType<typeof persistProjectDoc>;
     try {
       const doc = new Y.Doc();
-      const persistence = persistProjectDoc('reset-guard', doc);
-      expect(persistence).toBe(NOOP_PERSISTENCE);
-      expect(persistence.active).toBe(false);
+      deniedPersistence = persistProjectDoc('reset-guard', doc);
+      // QNBS-v3: must NOT be the shared singleton — a caller that caches this (getLocalFirstHandle) needs to tell it apart from an intentional NOOP so it doesn't reuse it forever once the reset ends.
+      expect(deniedPersistence).not.toBe(NOOP_PERSISTENCE);
+      expect(deniedPersistence.active).toBe(false);
     } finally {
       endIdbReset();
+    }
+
+    // QNBS-v3: proves persistProjectDoc itself has no sticky memory of the denial — a call after the reset ends must attempt a real open, not keep degrading.
+    const doc = new Y.Doc();
+    const persistence = persistProjectDoc('reset-guard', doc);
+    try {
+      expect(persistence.active).toBe(true);
+      await persistence.whenSynced;
+    } finally {
+      await persistence.destroy();
+      await clearPersisted('reset-guard');
     }
   });
 

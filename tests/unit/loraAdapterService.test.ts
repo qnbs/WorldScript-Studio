@@ -25,6 +25,7 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 import {
+  _resetLoraDbForTest,
   deleteAdapter,
   getAdapterBlob,
   type LoraAdapterMeta,
@@ -109,5 +110,42 @@ describe('getAdapterBlob', () => {
     const result = await getAdapterBlob('lora-1');
     expect(result).not.toBeNull();
     expect(result?.byteLength).toBe(4);
+  });
+});
+
+describe('_resetLoraDbForTest — stale in-flight open ownership', () => {
+  // QNBS-v3: proves a pending open from before _resetLoraDbForTest() runs cannot publish its (now-discarded-factory) connection once that helper has already cleared state.
+  it('discards a stale open that completes only after _resetLoraDbForTest() already reset state', async () => {
+    // QNBS-v3: clean slate — a database/openPromise cached by an earlier test in this file would otherwise short-circuit openDb() before it ever calls the mocked indexedDB.open() below.
+    _resetLoraDbForTest();
+    // QNBS-v3: a mutable object wrapper (not a reassigned `let`) avoids a tsgo control-flow narrowing artifact across the mock callback boundary.
+    const stale: { fireSuccess: (() => void) | null } = { fireSuccess: null };
+    const closeSpy = vi.fn();
+    const staleDb = { close: closeSpy } as unknown as IDBDatabase;
+    const openSpy = vi.spyOn(indexedDB, 'open').mockImplementationOnce(() => {
+      const req = {} as IDBOpenDBRequest;
+      Object.defineProperty(req, 'result', { value: staleDb, configurable: true });
+      // QNBS-v3: onsuccess reads e.target.result — a plain `new Event(...)` has no target, so the event must be a stand-in object with target set to req.
+      stale.fireSuccess = () => req.onsuccess?.({ target: req } as unknown as Event);
+      return req;
+    });
+
+    const stalePromise = saveAdapter(META, new ArrayBuffer(0));
+    const rejectionCheck = expect(stalePromise).rejects.toThrow();
+
+    // The exact race: reset-for-test runs WHILE the open above is still pending (its onsuccess has not fired yet).
+    _resetLoraDbForTest();
+    openSpy.mockRestore();
+
+    // Now let the OLD (stale) open complete, late.
+    stale.fireSuccess?.();
+    await rejectionCheck;
+
+    expect(closeSpy).toHaveBeenCalledTimes(1);
+
+    // A fresh call after the stale completion must retry and durably succeed against the new factory.
+    await saveAdapter(META, new ArrayBuffer(4));
+    const result = await listAdapters();
+    expect(result).toHaveLength(1);
   });
 });

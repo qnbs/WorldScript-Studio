@@ -59,7 +59,6 @@ function openDb(): Promise<IDBDatabase> {
   if (openGeneration === null) {
     return Promise.reject(new Error('IndexedDB reset in progress'));
   }
-  // QNBS-v3: identity token — a stale open's completion must only clear openPromise if it's STILL the current in-flight promise, not a newer one started after a reset closer invalidated this one mid-flight.
   const thisOpen: Promise<IDBDatabase> = new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = (e) => {
@@ -85,7 +84,12 @@ function openDb(): Promise<IDBDatabase> {
     };
     req.onsuccess = (e) => {
       const db = (e.target as IDBOpenDBRequest).result;
-      if (openPromise === thisOpen) openPromise = null;
+      // QNBS-v3: a stale flight (e.g. _resetLoraDbForTest() swapped the fake IndexedDB factory while this open was still pending, clearing openPromise to null) must not publish — only proceed if this flight is STILL the one openPromise points to.
+      if (openPromise !== thisOpen) {
+        db.close();
+        reject(new Error('Superseded by a newer open'));
+        return;
+      }
       if (!isIdbOpenStillValid(openGeneration)) {
         db.close();
         reject(new Error('IndexedDB reset in progress'));
@@ -99,11 +103,16 @@ function openDb(): Promise<IDBDatabase> {
       resolve(db);
     };
     req.onerror = () => {
-      if (openPromise === thisOpen) openPromise = null;
       reject(req.error);
     };
   });
   openPromise = thisOpen;
+  // QNBS-v3: single ownership-checked cleanup for every settlement (success, async onerror, AND a synchronous open throw) — .finally()'s callback always runs as a later microtask, so this always sees openPromise already set to thisOpen. The trailing .catch(() => {}) only prevents an unhandled-rejection warning on this DISCARDED derived chain — thisOpen itself is returned separately and its rejection is handled by the actual caller.
+  thisOpen
+    .finally(() => {
+      if (openPromise === thisOpen) openPromise = null;
+    })
+    .catch(() => {});
   return thisOpen;
 }
 

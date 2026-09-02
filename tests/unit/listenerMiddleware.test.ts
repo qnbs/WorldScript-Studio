@@ -652,6 +652,52 @@ describe('local-first shadow sync (B1.1)', () => {
     expect(mockLoggerWarn).not.toHaveBeenCalled();
     expect(mockLoggerError).not.toHaveBeenCalled();
   });
+
+  // QNBS-v3: proves reconcileLocalFirstHandle tells a transient reset-denial NOOP (distinct identity, inactive) apart from the intentional encryption-driven NOOP_PERSISTENCE singleton — a handle cached during an active reset must not be reused forever once the reset ends.
+  it('does not permanently reuse a transient reset-denied persistence handle once real persistence becomes available', async () => {
+    const { isIdbEncryptionReady } = await import(
+      '../../services/storage/storageEncryptionService'
+    );
+    const { persistProjectDoc } = await import('../../services/localFirst/docPersistence');
+
+    // QNBS-v3: localFirstHandle is module-level state that can carry a stale handle over from an earlier test in this file — force a clean teardown first so this test's own scenario starts from null.
+    const warmupStore = makeFullStore();
+    warmupStore.dispatch(featureFlagsActions.setEnableLocalFirstSync(true));
+    await vi.advanceTimersByTimeAsync(100);
+    warmupStore.dispatch(featureFlagsActions.setEnableLocalFirstSync(false));
+    await vi.advanceTimersByTimeAsync(100);
+    vi.mocked(persistProjectDoc).mockClear();
+
+    // QNBS-v3: takes the persistProjectDoc branch instead of the encryption-driven NOOP branch, so this test controls exactly what persistProjectDoc returns.
+    vi.mocked(isIdbEncryptionReady).mockReturnValue(false);
+    const transientResetDenied = {
+      active: false,
+      whenSynced: Promise.resolve(),
+      destroy: () => Promise.resolve(),
+      clearData: () => Promise.resolve(),
+    };
+    const realActive = {
+      active: true,
+      whenSynced: Promise.resolve(),
+      destroy: () => Promise.resolve(),
+      clearData: () => Promise.resolve(),
+    };
+    vi.mocked(persistProjectDoc)
+      .mockReturnValueOnce(transientResetDenied)
+      .mockReturnValueOnce(realActive);
+
+    const store = makeFullStore();
+    store.dispatch(projectActions.updateTitle('Reset Denial Title'));
+    store.dispatch(featureFlagsActions.setEnableLocalFirstSync(true));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(persistProjectDoc).toHaveBeenCalledTimes(1);
+
+    // A later edit to the SAME project re-triggers getLocalFirstHandle — the transient handle must
+    // not be reused as if it were an intentional NOOP; a fresh open must be attempted instead.
+    store.dispatch(projectActions.updateTitle('After Reset Ends'));
+    await vi.advanceTimersByTimeAsync(1300);
+    expect(persistProjectDoc).toHaveBeenCalledTimes(2);
+  });
 });
 
 // ---------------------------------------------------------------------------

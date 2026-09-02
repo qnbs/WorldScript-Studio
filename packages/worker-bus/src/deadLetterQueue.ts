@@ -97,7 +97,6 @@ function openDlqDb(): Promise<IDBDatabase> {
   if (openGeneration === null) {
     return Promise.reject(new Error('IndexedDB reset in progress'));
   }
-  // QNBS-v3: identity token — a stale open's completion must only clear openPromise if it's STILL the current in-flight promise, not a newer one started after a reset closer invalidated this one mid-flight.
   const thisOpen: Promise<IDBDatabase> = new Promise((resolve, reject) => {
     try {
       const req = indexedDB.open(IDB_DB_NAME, 1);
@@ -109,7 +108,6 @@ function openDlqDb(): Promise<IDBDatabase> {
       };
       req.onsuccess = (e) => {
         const db = (e.target as IDBOpenDBRequest).result;
-        if (openPromise === thisOpen) openPromise = null;
         if (!isIdbOpenStillValid(openGeneration)) {
           db.close();
           reject(new Error('IndexedDB reset in progress'));
@@ -124,16 +122,20 @@ function openDlqDb(): Promise<IDBDatabase> {
         resolve(db);
       };
       req.onerror = (e) => {
-        if (openPromise === thisOpen) openPromise = null;
         reject((e.target as IDBOpenDBRequest).error);
       };
     } catch (error) {
-      // QNBS-v3: indexedDB.open() itself can throw synchronously (private/restricted mode) — without this, the handlers above never attach, so openPromise would stay memoized as a permanently-rejected promise and DLQ persistence could never retry.
-      openPromise = null;
+      // QNBS-v3: indexedDB.open() itself can throw synchronously (private/restricted mode) — the .finally() below is what actually clears openPromise; clearing it here would just be overwritten by the unconditional assignment two lines down.
       reject(error);
     }
   });
   openPromise = thisOpen;
+  // QNBS-v3: single ownership-checked cleanup for every settlement (success, async onerror, reset-invalidation reject, AND a synchronous open throw) — .finally()'s callback always runs as a later microtask, so this always sees openPromise already set to thisOpen, even when the promise settled synchronously above. The trailing .catch(() => {}) is only to prevent an unhandled-rejection warning on this DISCARDED derived chain — thisOpen itself is returned separately and its rejection is handled by the actual caller.
+  thisOpen
+    .finally(() => {
+      if (openPromise === thisOpen) openPromise = null;
+    })
+    .catch(() => {});
   return thisOpen;
 }
 
