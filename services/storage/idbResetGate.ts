@@ -82,13 +82,20 @@ export function currentIdbResetGeneration(): number {
  * Marks a reset in progress and advances the generation synchronously (before anything else
  * async runs, so no new open can slip in unobserved), then awaits every registered closer's
  * teardown — including any closer registered WHILE this drain is still running, via the same
- * barrier. Fails closed: if any closer threw or rejected, this rejects too (after every closer,
- * including the failing ones, has had its chance to run) so the caller never proceeds into
- * destructive deletion on an unproven teardown. The reset stays marked in progress either way —
- * it is the caller's responsibility to call endIdbReset() once it decides whether to proceed with
- * deletion or abort.
+ * barrier. A concurrent call made while a reset is already draining joins that same barrier
+ * instead of starting a second one, so two overlapping callers see the exact same outcome and
+ * neither can proceed into deletion before every closer -- including one that only registered
+ * during the overlap -- has actually settled. Fails closed: if any closer threw or rejected, this
+ * rejects too (after every closer, including the failing ones, has had its chance to run) so the
+ * caller never proceeds into destructive deletion on an unproven teardown. The reset stays marked
+ * in progress either way — it is the caller's responsibility to call endIdbReset() once it decides
+ * whether to proceed with deletion or abort.
  */
 export async function beginIdbReset(): Promise<void> {
+  // QNBS-v3 (CodeAnt): a concurrent caller joins THIS barrier instead of overwriting activeBarrier with its own — otherwise a closer that registers in the gap between the two calls joins whichever barrier is active at that instant, and the first call's own while-loop below (bound to its own barrier reference) would settle without ever having awaited it.
+  if (activeBarrier) {
+    return awaitResetBarrier(activeBarrier);
+  }
   resetInProgress = true;
   generation += 1;
   const barrier: ResetBarrier = { pending: new Set(), failures: [] };
@@ -96,11 +103,16 @@ export async function beginIdbReset(): Promise<void> {
   for (const closer of closers) {
     joinActiveBarrier(closer);
   }
+  await awaitResetBarrier(barrier);
+}
+
+async function awaitResetBarrier(barrier: ResetBarrier): Promise<void> {
   // QNBS-v3: re-checks pending after each drain round — a closer registered while we're draining adds itself to this same Set, so the loop only exits once nothing new has joined.
   while (barrier.pending.size > 0) {
     await Promise.allSettled(Array.from(barrier.pending));
   }
-  activeBarrier = null;
+  // QNBS-v3: only clear activeBarrier if it's still this exact barrier -- a caller that joined this one and settles first must not null out a newer barrier a third concurrent call may have since created.
+  if (activeBarrier === barrier) activeBarrier = null;
   if (barrier.failures.length > 0) {
     const messages = barrier.failures.map((failure) =>
       failure instanceof Error ? failure.message : String(failure),

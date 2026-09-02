@@ -81,10 +81,11 @@ export class AiInferenceCacheService {
   private openPromise: Promise<void> | null = null;
 
   constructor() {
-    // QNBS-v3: this connection is cached for the service's lifetime — a factory reset must close it or deleteDatabase(worldscript-inference-cache-db) blocks.
+    // QNBS-v3 (CodeAnt): this connection is cached for the service's lifetime — a factory reset must close it or deleteDatabase(worldscript-inference-cache-db) blocks. openPromise must clear too, or a post-reset caller reuses the invalidated in-flight open instead of retrying immediately.
     registerIdbConnectionCloser(() => {
       this.db?.close();
       this.db = null;
+      this.openPromise = null;
     });
   }
 
@@ -92,10 +93,13 @@ export class AiInferenceCacheService {
   private ensureDb(): Promise<void> {
     if (this.db) return Promise.resolve();
     if (this.openPromise) return this.openPromise;
-    this.openPromise = this.openDb().finally(() => {
-      this.openPromise = null;
+    // QNBS-v3 (CodeAnt): identity-checked, not a bare reassignment — the reset closer can null openPromise directly while this open is still in flight, so a later caller starts a second attempt; this settlement must not then clobber that newer attempt's reference.
+    const thisOpen: Promise<void> = this.openDb();
+    this.openPromise = thisOpen;
+    thisOpen.finally(() => {
+      if (this.openPromise === thisOpen) this.openPromise = null;
     });
-    return this.openPromise;
+    return thisOpen;
   }
 
   private openDb(): Promise<void> {

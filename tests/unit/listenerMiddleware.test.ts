@@ -101,23 +101,20 @@ class MockProjectDocBinding {
 vi.mock('../../services/localFirst/docBinding', () => ({
   ProjectDocBinding: MockProjectDocBinding,
 }));
-// QNBS-v3: stable mock fns (not inline closures) so tests can assert teardown was actually invoked, and destroy/clearData are present since real listener code can call them on any persistence handle.
+// QNBS-v3: destroy/clearData must be present since real listener teardown code can call either on any persistence handle. mockNoopDestroy is a stable reference because a test below asserts teardownLocalFirst() actually invoked it; the other three stay plain no-op closures since nothing currently asserts on them.
 const mockNoopDestroy = vi.fn().mockResolvedValue(undefined);
-const mockNoopClearData = vi.fn().mockResolvedValue(undefined);
-const mockPersistDestroy = vi.fn().mockResolvedValue(undefined);
-const mockPersistClearData = vi.fn().mockResolvedValue(undefined);
 vi.mock('../../services/localFirst/docPersistence', () => ({
   NOOP_PERSISTENCE: {
     active: false,
     whenSynced: Promise.resolve(),
     destroy: (...args: unknown[]) => mockNoopDestroy(...args),
-    clearData: (...args: unknown[]) => mockNoopClearData(...args),
+    clearData: () => Promise.resolve(),
   },
   persistProjectDoc: vi.fn(() => ({
     active: true,
     whenSynced: Promise.resolve(),
-    destroy: (...args: unknown[]) => mockPersistDestroy(...args),
-    clearData: (...args: unknown[]) => mockPersistClearData(...args),
+    destroy: () => Promise.resolve(),
+    clearData: () => Promise.resolve(),
   })),
 }));
 vi.mock('../../services/storage/storageEncryptionService', () => ({
@@ -681,6 +678,8 @@ describe('local-first shadow sync (B1.1)', () => {
     await vi.advanceTimersByTimeAsync(100);
     warmupStore.dispatch(featureFlagsActions.setEnableLocalFirstSync(false));
     await vi.advanceTimersByTimeAsync(100);
+    // QNBS-v3: proves the warmup's OFF transition actually tore down the handle via teardownLocalFirst(), not merely dispatched an action that happened to do nothing.
+    expect(mockNoopDestroy).toHaveBeenCalledTimes(1);
     vi.mocked(persistProjectDoc).mockClear();
 
     // QNBS-v3: takes the persistProjectDoc branch instead of the encryption-driven NOOP branch, so this test controls exactly what persistProjectDoc returns.
@@ -712,6 +711,36 @@ describe('local-first shadow sync (B1.1)', () => {
     store.dispatch(projectActions.updateTitle('After Reset Ends'));
     await vi.advanceTimersByTimeAsync(1300);
     expect(persistProjectDoc).toHaveBeenCalledTimes(2);
+  });
+
+  // QNBS-v3 (CodeAnt): mirror image of the reset-denial test above — a handle that chose the shared NOOP_PERSISTENCE singleton because encryption was ready must not be reused forever once encryption is later disabled.
+  it('discards the shared NOOP_PERSISTENCE handle and resumes durable persistence once encryption is disabled', async () => {
+    const { isIdbEncryptionReady } = await import(
+      '../../services/storage/storageEncryptionService'
+    );
+    const { persistProjectDoc } = await import('../../services/localFirst/docPersistence');
+
+    // QNBS-v3: localFirstHandle is module-level state carried over between tests — force a clean teardown first.
+    const warmupStore = makeFullStore();
+    warmupStore.dispatch(featureFlagsActions.setEnableLocalFirstSync(true));
+    await vi.advanceTimersByTimeAsync(100);
+    warmupStore.dispatch(featureFlagsActions.setEnableLocalFirstSync(false));
+    await vi.advanceTimersByTimeAsync(100);
+    vi.mocked(persistProjectDoc).mockClear();
+
+    // Encryption is ready — getLocalFirstHandle chooses the shared NOOP_PERSISTENCE singleton, never calling persistProjectDoc.
+    vi.mocked(isIdbEncryptionReady).mockReturnValue(true);
+    const store = makeFullStore();
+    store.dispatch(projectActions.updateTitle('Encrypted Title'));
+    store.dispatch(featureFlagsActions.setEnableLocalFirstSync(true));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(persistProjectDoc).not.toHaveBeenCalled();
+
+    // Encryption is later disabled — a further edit to the SAME project must discard the cached NOOP and resume durable persistence, not keep returning the memory-only handle forever.
+    vi.mocked(isIdbEncryptionReady).mockReturnValue(false);
+    store.dispatch(projectActions.updateTitle('Decrypted Title'));
+    await vi.advanceTimersByTimeAsync(1300);
+    expect(persistProjectDoc).toHaveBeenCalledTimes(1);
   });
 });
 

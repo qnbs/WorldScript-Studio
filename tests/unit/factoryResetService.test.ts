@@ -238,8 +238,7 @@ describe('wipeAllAppData', () => {
     replaceStateSpy.mockRestore();
   });
 
-  // QNBS-v3: a still-open connection silently blocked deleteDatabase while the code reported
-  // success anyway; the reset gate must begin (closing every registered connection) before any delete.
+  // QNBS-v3: a still-open connection silently blocked deleteDatabase while the code reported success anyway; the reset gate must begin (closing every registered connection) before any delete.
   it('begins the reset gate before deleting any database', async () => {
     await createDb('worldscript-data-db');
     const delSpy = vi.spyOn(indexedDB, 'deleteDatabase');

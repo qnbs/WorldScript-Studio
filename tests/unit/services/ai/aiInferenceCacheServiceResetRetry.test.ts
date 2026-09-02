@@ -92,4 +92,31 @@ describe('AiInferenceCacheService — reset retry', () => {
     expect(internals.db).not.toBeNull();
     expect(internals.db).not.toBe(preResetDb);
   });
+
+  // QNBS-v3 (CodeAnt): the reset closer previously cleared only `db`, not `openPromise` -- a call made before the stale (invalidated) open settled would reuse that same promise instead of starting a fresh attempt.
+  it('clears the in-flight openPromise on reset so a call made before it settles starts a fresh attempt', async () => {
+    type CacheInternals = { openPromise: Promise<void> | null };
+    const writer = new AiInferenceCacheService();
+    const internals = writer as unknown as CacheInternals;
+
+    const staleWrite = writer.setCachedInference('stale', 'model-a', 'stale-result');
+    const staleOpenPromise = internals.openPromise;
+    expect(staleOpenPromise).not.toBeNull();
+
+    // The generation bump happens synchronously, before the stale open's onsuccess can fire.
+    await beginIdbReset();
+    endIdbReset();
+
+    expect(internals.openPromise).toBeNull();
+
+    const retryWrite = writer.setCachedInference('retry', 'model-a', 'retry-result');
+    // QNBS-v3: a genuinely new attempt, not the stale in-flight promise handed back again.
+    expect(internals.openPromise).not.toBeNull();
+    expect(internals.openPromise).not.toBe(staleOpenPromise);
+
+    await Promise.all([staleWrite, retryWrite]);
+    expect(await new AiInferenceCacheService().getCachedInference('retry', 'model-a')).toBe(
+      'retry-result',
+    );
+  });
 });

@@ -182,6 +182,58 @@ describe('idbResetGate', () => {
     expect(order).toEqual(['early-closer-ran', 'late-closer-started', 'reset-settled']);
   });
 
+  // QNBS-v3 (CodeAnt): a concurrent second beginIdbReset() call must join the first's barrier, not overwrite activeBarrier -- otherwise a closer registered during the overlap joins the second (orphan) barrier and the first call's own await never sees it, so it can settle and let its caller start deleting databases before that closer's teardown finished.
+  it('joins an already-draining reset instead of starting a second one, so both callers wait for a closer that registers during the overlap', async () => {
+    let resolveFirstCloser: () => void = () => {};
+    registerIdbConnectionCloser(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveFirstCloser = resolve;
+        }),
+    );
+    const startGeneration = currentIdbResetGeneration();
+
+    let firstSettled = false;
+    let secondSettled = false;
+    const firstReset = beginIdbReset().then(() => {
+      firstSettled = true;
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(isIdbResetInProgress()).toBe(true);
+
+    const secondReset = beginIdbReset().then(() => {
+      secondSettled = true;
+    });
+    // QNBS-v3: a single reentrant call must not bump the generation a second time.
+    expect(currentIdbResetGeneration()).toBe(startGeneration + 1);
+
+    let lateCloserStarted = false;
+    let resolveLateCloser: () => void = () => {};
+    registerIdbConnectionCloser(
+      () =>
+        new Promise<void>((resolve) => {
+          lateCloserStarted = true;
+          resolveLateCloser = resolve;
+        }),
+    );
+    expect(lateCloserStarted).toBe(true);
+
+    resolveFirstCloser();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    // QNBS-v3: the late closer is still pending -- neither call may have settled yet.
+    expect(firstSettled).toBe(false);
+    expect(secondSettled).toBe(false);
+    expect(isIdbResetInProgress()).toBe(true);
+
+    resolveLateCloser();
+    await Promise.all([firstReset, secondReset]);
+    expect(firstSettled).toBe(true);
+    expect(secondSettled).toBe(true);
+  });
+
   // QNBS-v3: the core invariant this module exists for — a stale open cannot become cached once the generation it was captured against is no longer current, even after the reset that advanced it has already ended.
   it('generation mismatch persists after a failed reset ends, so a late-completing open from before it started stays invalidated', async () => {
     const capturedGeneration = currentIdbResetGeneration();

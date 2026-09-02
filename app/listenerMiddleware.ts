@@ -754,6 +754,11 @@ async function reconcileLocalFirstHandle(
     localFirstHandle = null;
     return null;
   }
+  // QNBS-v3 (CodeAnt): mirror image of the case above — if encryption was ready when this handle chose NOOP and has since been disabled, discard it too, or local-first sync stays memory-only forever after a disable.
+  if (!isIdbEncryptionReady() && localFirstHandle.persistence === noopPersistence) {
+    localFirstHandle = null;
+    return null;
+  }
   return localFirstHandle;
 }
 
