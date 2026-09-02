@@ -54,6 +54,18 @@ import type {
 type ModalState = 'closed' | 'reset' | 'restore' | 'delete' | 'create' | 'factoryReset';
 type ModalPayload = { id?: number; name?: string; date?: string; wordCount?: number };
 
+// QNBS-v3: extracted so useSettingsView's own body doesn't absorb this branch's complexity (CodeScene hotspot).
+function reportFactoryResetFailure(
+  error: unknown,
+  t: (key: string) => string,
+  toast: ReturnType<typeof useToast>,
+): void {
+  logger.error('Factory reset failed', {
+    error: error instanceof Error ? error.message : String(error),
+  });
+  toast.error(t('settings.data.dangerZone.factoryReset.failed'));
+}
+
 export const useSettingsView = () => {
   const { t, language, setLanguage } = useTranslation();
   const dispatch = useAppDispatch();
@@ -349,15 +361,11 @@ export const useSettingsView = () => {
 
   const handleFactoryReset = useCallback(async () => {
     setModal({ state: 'closed', payload: {} });
-    // QNBS-v3: wipes all IDB databases, localStorage, SW caches, then reloads.
+    // QNBS-v3: wipes all IDB databases, localStorage, SW caches, then reloads; a blocked deleteDatabase now rejects instead of silently reloading.
     try {
       await wipeAllAppData();
     } catch (error) {
-      // QNBS-v3: a blocked deleteDatabase now rejects instead of silently reloading — surface it, without encryptionRecoveryFailed's false "your data has not been lost" claim.
-      logger.error('Factory reset failed', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      toast.error(t('settings.data.dangerZone.factoryReset.failed'));
+      reportFactoryResetFailure(error, t, toast);
     }
   }, [t, toast]);
 
