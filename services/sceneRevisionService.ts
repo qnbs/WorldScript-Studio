@@ -57,7 +57,7 @@ async function getDb(): Promise<IDBDatabase> {
   if (openGeneration === null) {
     return Promise.reject(new Error('IndexedDB reset in progress'));
   }
-  // QNBS-v3: single-flight open — concurrent saves must share one connection instead of leaking one per call. Identity token: a stale completion must only clear openPromise if it's STILL the current in-flight promise.
+  // QNBS-v3: single-flight open — concurrent saves must share one connection instead of leaking one per call.
   const thisOpen: Promise<IDBDatabase> = new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
@@ -70,7 +70,6 @@ async function getDb(): Promise<IDBDatabase> {
     };
     request.onsuccess = () => {
       const opened = request.result;
-      if (openPromise === thisOpen) openPromise = null;
       if (!isIdbOpenStillValid(openGeneration)) {
         opened.close();
         reject(new Error('IndexedDB reset in progress'));
@@ -84,11 +83,16 @@ async function getDb(): Promise<IDBDatabase> {
       resolve(opened);
     };
     request.onerror = () => {
-      if (openPromise === thisOpen) openPromise = null;
       reject(request.error);
     };
   });
   openPromise = thisOpen;
+  // QNBS-v3: single ownership-checked cleanup for every settlement — .finally()'s callback always runs as a later microtask, so this always sees openPromise already set to thisOpen. The trailing .catch(() => {}) only prevents an unhandled-rejection warning on this DISCARDED derived chain.
+  thisOpen
+    .finally(() => {
+      if (openPromise === thisOpen) openPromise = null;
+    })
+    .catch(() => {});
   return thisOpen;
 }
 

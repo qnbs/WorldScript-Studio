@@ -50,17 +50,13 @@ function openMemoryBankDb(): Promise<MemoryBankDb> {
     return Promise.reject(new Error('IndexedDB reset in progress'));
   }
 
-  // QNBS-v3: identity token — a stale completion must only clear dbPromise if it's STILL the current in-flight promise, not a newer one started after a reset closer invalidated this one mid-flight.
   const thisOpen: Promise<MemoryBankDb> = new Promise((resolve, reject) => {
     const request = indexedDB.open(MEMORY_BANK_STORE, MEMORY_BANK_VERSION);
-    // QNBS-v3: a rejected dbPromise must not stay cached forever — clearing it here lets the next call retry instead of permanently failing every future open.
     request.onerror = () => {
-      if (dbPromise === thisOpen) dbPromise = null;
       reject(new Error('Failed to open Memory Bank DB'));
     };
     request.onsuccess = () => {
       const db = request.result as MemoryBankDb;
-      if (dbPromise === thisOpen) dbPromise = null;
       if (!isIdbOpenStillValid(openGeneration)) {
         db.close();
         reject(new Error('IndexedDB reset in progress'));
@@ -85,6 +81,12 @@ function openMemoryBankDb(): Promise<MemoryBankDb> {
   });
 
   dbPromise = thisOpen;
+  // QNBS-v3: single ownership-checked cleanup for every settlement — .finally()'s callback always runs as a later microtask, so this always sees dbPromise already set to thisOpen. The trailing .catch(() => {}) only prevents an unhandled-rejection warning on this DISCARDED derived chain.
+  thisOpen
+    .finally(() => {
+      if (dbPromise === thisOpen) dbPromise = null;
+    })
+    .catch(() => {});
   return thisOpen;
 }
 

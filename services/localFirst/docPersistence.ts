@@ -50,6 +50,16 @@ export const NOOP_PERSISTENCE: DocPersistence = {
   clearData: () => Promise.resolve(),
 };
 
+// QNBS-v3: a fresh object every call, deliberately never the NOOP_PERSISTENCE singleton — this is a transient "reset denied this open" result, not an intentional environmental NOOP, so a caller that caches it (getLocalFirstHandle's reconcileLocalFirstHandle) can tell the two apart by identity and must not keep reusing it once the reset ends.
+function createTransientResetDeniedPersistence(): DocPersistence {
+  return {
+    whenSynced: Promise.resolve(),
+    active: false,
+    destroy: () => Promise.resolve(),
+    clearData: () => Promise.resolve(),
+  };
+}
+
 /**
  * Attach y-indexeddb persistence to a project doc. Returns a no-op handle when IndexedDB is
  * unavailable so callers never need to branch.
@@ -57,7 +67,7 @@ export const NOOP_PERSISTENCE: DocPersistence = {
 export function persistProjectDoc(projectId: string, doc: Y.Doc): DocPersistence {
   if (!isIndexedDbAvailable()) return NOOP_PERSISTENCE;
   // QNBS-v3: never open a fresh y-indexeddb provider while a reset is draining — it would immediately register a closer and get torn down again, for no benefit, and could race the reset's own deleteDatabase call.
-  if (isIdbResetInProgress()) return NOOP_PERSISTENCE;
+  if (isIdbResetInProgress()) return createTransientResetDeniedPersistence();
 
   let provider: IndexeddbPersistence;
   try {

@@ -47,7 +47,6 @@ function getDb(): Promise<IDBDatabase> {
   if (openGeneration === null) {
     return Promise.reject(new Error('IndexedDB reset in progress'));
   }
-  // QNBS-v3: identity token — a stale completion must only clear dbPromise if it's STILL the current in-flight promise, not a newer one started after a reset closer invalidated this one mid-flight.
   const thisOpen: Promise<IDBDatabase> = new Promise<IDBDatabase>((resolve, reject) => {
     const req = indexedDB.open(DATA_DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
@@ -60,7 +59,6 @@ function getDb(): Promise<IDBDatabase> {
     };
     req.onsuccess = () => {
       const db = req.result;
-      if (dbPromise === thisOpen) dbPromise = null;
       if (!isIdbOpenStillValid(openGeneration)) {
         db.close();
         reject(new Error('IndexedDB reset in progress'));
@@ -73,13 +71,17 @@ function getDb(): Promise<IDBDatabase> {
       database = db;
       resolve(db);
     };
-    // QNBS-v3: don't memoize a rejected promise — a transient open failure must not permanently disable cross-project search for the rest of the session.
     req.onerror = () => {
-      if (dbPromise === thisOpen) dbPromise = null;
       reject(req.error);
     };
   });
   dbPromise = thisOpen;
+  // QNBS-v3: single ownership-checked cleanup for every settlement — .finally()'s callback always runs as a later microtask, so this always sees dbPromise already set to thisOpen. The trailing .catch(() => {}) only prevents an unhandled-rejection warning on this DISCARDED derived chain.
+  thisOpen
+    .finally(() => {
+      if (dbPromise === thisOpen) dbPromise = null;
+    })
+    .catch(() => {});
   return thisOpen;
 }
 

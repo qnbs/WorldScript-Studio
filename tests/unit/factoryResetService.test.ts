@@ -109,9 +109,7 @@ describe('wipeAllAppData', () => {
     delSpy.mockRestore();
   });
 
-  // QNBS-v3: onblocked must reject, not resolve, or the reset reports a false "fresh install"
-  // success while the database still has old data; reload never runs on this path, so the gate
-  // must release too or the still-live app could never access IDB again.
+  // QNBS-v3: onblocked must reject, not resolve — the reset must never report a false "fresh install" success, and the gate must still release since reload never runs on this path.
   it('rejects, never reloads, and releases the reset gate when a database deletion is blocked', async () => {
     await createDb('worldscript-data-db');
     const delSpy = vi.spyOn(indexedDB, 'deleteDatabase').mockImplementation((_name: string) => {
@@ -206,6 +204,26 @@ describe('wipeAllAppData', () => {
 
     // Fallback deletes every name in the known list (e.g. the logs DB).
     expect(delSpy).toHaveBeenCalledWith('worldscript-logs-db');
+    expect(reloadMock).toHaveBeenCalledTimes(1);
+    dbSpy.mockRestore();
+    delSpy.mockRestore();
+  });
+
+  // QNBS-v3: hard preserve-first gate — a shared origin can host a database from an unrelated app/tool; indexedDB.databases() enumerates the whole origin, so factory reset must never construct a deletion target from anything it doesn't own.
+  it('never deletes a foreign, non-owned database on the shared origin, including when native enumeration succeeds', async () => {
+    const dbSpy = vi.spyOn(indexedDB, 'databases').mockResolvedValue([
+      { name: 'worldscript-data-db', version: 1 },
+      { name: 'worldscript-localfirst-proj-123', version: 1 },
+      { name: 'some-other-tools-database', version: 1 },
+    ]);
+    const delSpy = vi.spyOn(indexedDB, 'deleteDatabase');
+
+    await runWipe();
+
+    expect(delSpy).toHaveBeenCalledWith('worldscript-data-db');
+    expect(delSpy).toHaveBeenCalledWith('worldscript-localfirst-proj-123');
+    expect(delSpy).not.toHaveBeenCalledWith('some-other-tools-database');
+    expect(delSpy).toHaveBeenCalledTimes(2);
     expect(reloadMock).toHaveBeenCalledTimes(1);
     dbSpy.mockRestore();
     delSpy.mockRestore();
