@@ -401,7 +401,7 @@ Infrastructure-level features that keep the app fast and extensible as projects 
 
 ### 🌐 Full Multi-Language Support
 
-Shipped UI locales with **2937 i18n keys** across all 19 languages — zero hardcoded user-facing strings:
+Shipped UI locales with **2938 i18n keys** across all 19 languages — zero hardcoded user-facing strings:
 
 - 🇩🇪 **German** (Deutsch)
 - 🇬🇧 **English**
@@ -713,7 +713,7 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 **Current test metrics (2026-08-30, source-synchronized; CI remains authoritative for pass/fail):**
 - **7370+ unit tests** across **595 test files** — CI is authoritative for pass/fail
 - Coverage thresholds: lines ≥ 80 · branches ≥ 66 · functions ≥ 72 · statements ≥ 78 — enforced in CI (see Codecov badge for live metrics)
-- i18n: **2937 keys × 19 locales** (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu/ru/ko Beta)
+- i18n: **2938 keys × 19 locales** (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu/ru/ko Beta)
 
 **CI-cloud-first workflow (recommended):** On constrained hardware run **`pnpm run lint && pnpm run i18n:check && pnpm run typecheck`** locally, then push and let CI handle coverage, E2E, Lighthouse, and Stryker. Authoritative numbers come from CI artifacts (Codecov, JUnit). After CI goes green, update the README badges and `AUDIT.md` quality-gate line from the reported metrics. See **[`docs/CI.md`](docs/CI.md) § Cloud CI-first vs local development** for the full post-merge doc-update checklist.
 
