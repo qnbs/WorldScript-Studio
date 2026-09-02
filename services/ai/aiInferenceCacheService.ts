@@ -1,6 +1,6 @@
 // QNBS-v3: Two-layer inference cache keeps hot reads in memory while the durable layer is encrypted.
 import { logger } from '../logger';
-import { isIdbResetInProgress, registerIdbConnectionCloser } from '../storage/idbResetGate';
+import { currentIdbResetGeneration, registerIdbConnectionCloser } from '../storage/idbResetGate';
 import { withProtectedWriteAdmission } from '../storage/protectedWriteAdmission';
 import {
   assertSecureStorageReadable,
@@ -74,7 +74,7 @@ function isCacheEntry(value: unknown): value is CacheEntry | LegacyCacheEntry {
 export class AiInferenceCacheService {
   private readonly inMemory = new Map<string, LruEntry>();
   private db: IDBDatabase | null = null;
-  private readonly dbReady: Promise<void>;
+  private openPromise: Promise<void> | null = null;
 
   constructor() {
     // QNBS-v3: this connection is cached for the service's lifetime — a factory reset must close it or deleteDatabase(worldscript-inference-cache-db) blocks.
@@ -82,7 +82,16 @@ export class AiInferenceCacheService {
       this.db?.close();
       this.db = null;
     });
-    this.dbReady = this.openDb();
+  }
+
+  // QNBS-v3: retryable, not a one-shot constructor-time promise — the original design permanently disabled durable caching for the rest of the session (silently falling back to in-memory-only) if the very first open lost a race with a reset; every caller now re-attempts whenever there's no live connection and no attempt already in flight.
+  private ensureDb(): Promise<void> {
+    if (this.db) return Promise.resolve();
+    if (this.openPromise) return this.openPromise;
+    this.openPromise = this.openDb().finally(() => {
+      this.openPromise = null;
+    });
+    return this.openPromise;
   }
 
   private openDb(): Promise<void> {
@@ -102,6 +111,8 @@ export class AiInferenceCacheService {
         resolve();
         return;
       }
+      // QNBS-v3: captured before the open starts — a reset (even one that later fails and ends) between here and onsuccess must invalidate this open rather than let it cache once the reset flag flips back to false.
+      const openGeneration = currentIdbResetGeneration();
       request.onupgradeneeded = () => {
         const db = request.result;
         if (!db.objectStoreNames.contains(IDB_STORE)) {
@@ -111,8 +122,7 @@ export class AiInferenceCacheService {
       };
       request.onsuccess = () => {
         const opened = request.result;
-        // QNBS-v3: this open may have started before a factory reset began — never cache a connection reset already closed.
-        if (isIdbResetInProgress()) {
+        if (currentIdbResetGeneration() !== openGeneration) {
           opened.close();
           resolve();
           return;
@@ -220,7 +230,7 @@ export class AiInferenceCacheService {
       return memoryEntry.result;
     }
 
-    await this.dbReady;
+    await this.ensureDb();
     if (!this.db) return null;
     return new Promise((resolve) => {
       const transaction = this.db!.transaction(IDB_STORE, 'readonly');
@@ -267,7 +277,7 @@ export class AiInferenceCacheService {
     const key = hashKey(prompt, modelId);
     this.evictLru();
     this.inMemory.set(key, { result, lastUsed: Date.now() });
-    await this.dbReady;
+    await this.ensureDb();
     if (!this.db) return;
     try {
       // QNBS-v3: shares the writer-admission lock so eviction/persist cannot run mid-migration-batch and produce a false verification shortfall (#338).
@@ -314,7 +324,7 @@ export class AiInferenceCacheService {
   async clearPersistentCache(): Promise<void> {
     await assertSecureStorageWritableForMutation();
     this.inMemory.clear();
-    await this.dbReady;
+    await this.ensureDb();
     if (!this.db) return;
     await new Promise<void>((resolve) => {
       const transaction = this.db!.transaction(IDB_STORE, 'readwrite');

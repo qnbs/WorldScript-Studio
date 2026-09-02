@@ -16,11 +16,11 @@
   "sidebar.outline": "アウトラインジェネレーター",
   "sidebar.overflowMenuAria": "さらに見る",
   "sidebar.primaryNavAria": "プライマリナビゲーション",
-  "sidebar.scenario": "シナリオ / 脚本",
   "sidebar.sceneboard": "シーンボード",
   "sidebar.secondaryNavAria": "設定とヘルプ",
   "sidebar.settings": "設定",
   "sidebar.templates": "テンプレート",
   "sidebar.world": "世界の建物",
-  "sidebar.writer": "AIライティングスタジオ"
+  "sidebar.writer": "AIライティングスタジオ",
+  "sidebar.scenario": "シナリオ / 脚本"
 }

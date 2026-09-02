@@ -32,7 +32,7 @@ export const FactoryResetDangerZone: FC<Props> = ({
         onClick={onReset}
         disabled={busy}
         aria-busy={busy}
-        data-testid="factory-reset-button"
+        data-testid="encryption-recovery-factory-reset-button"
       >
         {t('settings.data.dangerZone.factoryReset.button')}
       </Button>

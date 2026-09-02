@@ -1,5 +1,5 @@
 import { logger } from './logger';
-import { isIdbResetInProgress, registerIdbConnectionCloser } from './storage/idbResetGate';
+import { currentIdbResetGeneration, registerIdbConnectionCloser } from './storage/idbResetGate';
 
 export interface LoraAdapterMeta {
   id: string;
@@ -50,6 +50,8 @@ registerIdbConnectionCloser(() => {
 function openDb(): Promise<IDBDatabase> {
   if (database) return Promise.resolve(database);
   if (openPromise) return openPromise;
+  // QNBS-v3: captured before the open starts — a reset (even one that later fails and ends) between here and onsuccess must invalidate this open rather than let it cache once the reset flag flips back to false.
+  const openGeneration = currentIdbResetGeneration();
   openPromise = new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = (e) => {
@@ -76,8 +78,7 @@ function openDb(): Promise<IDBDatabase> {
     req.onsuccess = (e) => {
       const db = (e.target as IDBOpenDBRequest).result;
       openPromise = null;
-      // QNBS-v3: this open may have started before a factory reset began — never cache a connection reset already closed.
-      if (isIdbResetInProgress()) {
+      if (currentIdbResetGeneration() !== openGeneration) {
         db.close();
         reject(new Error('IndexedDB reset in progress'));
         return;

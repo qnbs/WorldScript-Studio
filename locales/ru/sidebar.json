@@ -16,11 +16,11 @@
   "sidebar.outline": "Генератор контуров",
   "sidebar.overflowMenuAria": "Больше просмотров",
   "sidebar.primaryNavAria": "Основная навигация",
-  "sidebar.scenario": "Сценарий / Киносценарий",
   "sidebar.sceneboard": "Доска сцен",
   "sidebar.secondaryNavAria": "Настройки и помощь",
   "sidebar.settings": "Настройки",
   "sidebar.templates": "Шаблоны",
   "sidebar.world": "Мировое строительство",
-  "sidebar.writer": "Студия письма AI"
+  "sidebar.writer": "Студия письма AI",
+  "sidebar.scenario": "Сценарий / Киносценарий"
 }

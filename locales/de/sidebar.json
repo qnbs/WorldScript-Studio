@@ -16,11 +16,11 @@
   "sidebar.outline": "Gliederungsgenerator",
   "sidebar.overflowMenuAria": "Weitere Ansichten",
   "sidebar.primaryNavAria": "Werkzeuge",
-  "sidebar.scenario": "Szenario / Drehbuch",
   "sidebar.sceneboard": "Szenenbrett",
   "sidebar.secondaryNavAria": "Einstellungen und Hilfe",
   "sidebar.settings": "Einstellungen",
   "sidebar.templates": "Vorlagen",
   "sidebar.world": "Weltenbau",
-  "sidebar.writer": "KI-Schreibstudio"
+  "sidebar.writer": "KI-Schreibstudio",
+  "sidebar.scenario": "Szenario / Drehbuch"
 }

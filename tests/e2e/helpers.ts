@@ -162,13 +162,7 @@ export async function waitForMainChrome(page: Page): Promise<void> {
   ]);
 }
 
-/**
- * QNBS-v3: explicit discriminated startup state, not boolean soup — #532 root cause was code
- * repeatedly asking "is the portal visible?" via isVisible().catch(()=>false) after a navigation,
- * which cannot distinguish "definitely main chrome" from "still loading" and silently swallows
- * genuine errors as false. Callers that need MAIN_CHROME must check this result explicitly rather
- * than inferring it from the portal's absence.
- */
+/** QNBS-v3: explicit discriminated startup state, not boolean soup — repeatedly asking "is the portal visible?" via isVisible().catch(()=>false) can't distinguish "main chrome" from "still loading" and silently swallows genuine errors as false. */
 export type StartupState = 'WELCOME_PORTAL' | 'MAIN_CHROME';
 
 /** Resolves which of waitForSpaReady()'s two shapes the current document actually reached. */

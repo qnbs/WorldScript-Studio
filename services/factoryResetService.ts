@@ -33,25 +33,31 @@ const KNOWN_DB_NAMES = [
 ];
 
 async function deleteAllIndexedDBDatabases(): Promise<void> {
+  // QNBS-v3: enumeration failure falls back to the known list, but a real deletion failure must propagate, not be silently retried through a different path that could mask it.
+  let names: string[] | null = null;
   // Prefer the native API if available (Chrome 73+, Firefox 126+).
   if (indexedDB.databases) {
     try {
       const all = await indexedDB.databases();
-      await Promise.all(all.map((db) => db.name && deleteDatabase(db.name)));
-      return;
+      names = all.map((db) => db.name).filter((name): name is string => Boolean(name));
     } catch {
       // Fall through to known-list approach
     }
   }
-  // Safari / older browsers: delete by known name list.
-  await Promise.all(KNOWN_DB_NAMES.map(deleteDatabase));
+  // Safari / older browsers, or a failed enumeration: delete by known name list.
+  await Promise.all((names ?? KNOWN_DB_NAMES).map(deleteDatabase));
 }
 
 function deleteDatabase(name: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.deleteDatabase(name);
     req.onsuccess = () => resolve();
-    req.onerror = () => resolve(); // ignore — DB may not exist
+    // QNBS-v3: deleting a non-existent database succeeds per spec — a real onerror means deletion is genuinely unproven, so reject rather than assume "DB may not exist" and report a fresh install that isn't.
+    req.onerror = () => {
+      const message = `[factoryReset] deleteDatabase(${name}) failed`;
+      logger.warn(message, { error: req.error?.message });
+      reject(req.error ?? new Error(message));
+    };
     // QNBS-v3: a still-open connection means the database was NOT deleted — reject rather than resolve, so wipeAllAppData() never reports a "fresh install" that still has old data.
     req.onblocked = () => {
       const message = `[factoryReset] deleteDatabase(${name}) blocked by another open connection`;
@@ -107,9 +113,9 @@ async function clearTauriAppData(): Promise<void> {
  */
 export async function wipeAllAppData(): Promise<void> {
   logger.warn('[factoryReset] Wiping all app data…');
-  // QNBS-v3: gate blocks every registered store's new/in-flight opens for the whole reset, not just one point in time — closes both the close-then-reopen race and stores a one-time close call would miss entirely.
-  beginIdbReset();
   try {
+    // QNBS-v3: awaited — deletion must not begin until every registered connection has actually finished closing, not merely been asked to; beginIdbReset() itself never throws (closer failures are caught internally), but stays inside this try for defense in depth.
+    await beginIdbReset();
     // QNBS-v3: clear fallible desktop data first so a failed desktop reset never leaves a mixed wipe.
     await clearTauriAppData();
     await deleteAllIndexedDBDatabases();

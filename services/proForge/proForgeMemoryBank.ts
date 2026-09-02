@@ -5,7 +5,7 @@
  */
 
 import type { MemoryBankEntry, PipelineStage } from '../../features/proForge/types';
-import { isIdbResetInProgress, registerIdbConnectionCloser } from '../storage/idbResetGate';
+import { currentIdbResetGeneration, registerIdbConnectionCloser } from '../storage/idbResetGate';
 
 const MEMORY_BANK_STORE = 'proforge-memory-bank';
 const MEMORY_BANK_VERSION = 1;
@@ -38,19 +38,30 @@ registerIdbConnectionCloser(() => {
 });
 
 function openMemoryBankDb(): Promise<MemoryBankDb> {
+  if (database) return Promise.resolve(database);
   if (dbPromise) return dbPromise;
+  // QNBS-v3: captured before the open starts — a reset (even one that later fails and ends) between here and onsuccess must invalidate this open rather than let it cache once the reset flag flips back to false.
+  const openGeneration = currentIdbResetGeneration();
 
   dbPromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(MEMORY_BANK_STORE, MEMORY_BANK_VERSION);
-    request.onerror = () => reject(new Error('Failed to open Memory Bank DB'));
+    // QNBS-v3: a rejected dbPromise must not stay cached forever — clearing it here lets the next call retry instead of permanently failing every future open.
+    request.onerror = () => {
+      dbPromise = null;
+      reject(new Error('Failed to open Memory Bank DB'));
+    };
     request.onsuccess = () => {
       const db = request.result as MemoryBankDb;
-      // QNBS-v3: this open may have started before a factory reset began — never cache a connection reset already closed.
-      if (isIdbResetInProgress()) {
+      dbPromise = null;
+      if (currentIdbResetGeneration() !== openGeneration) {
         db.close();
         reject(new Error('IndexedDB reset in progress'));
         return;
       }
+      db.onversionchange = () => {
+        db.close();
+        database = null;
+      };
       database = db;
       resolve(db);
     };

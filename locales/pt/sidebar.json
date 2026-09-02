@@ -16,11 +16,11 @@
   "sidebar.outline": "Gerador de contorno",
   "sidebar.overflowMenuAria": "Mais visualizações",
   "sidebar.primaryNavAria": "Navegação primária",
-  "sidebar.scenario": "Cenário / Roteiro",
   "sidebar.sceneboard": "Quadro de cena",
   "sidebar.secondaryNavAria": "Configurações e ajuda",
   "sidebar.settings": "Configurações",
   "sidebar.templates": "Modelos",
   "sidebar.world": "Construção Mundial",
-  "sidebar.writer": "Estúdio de redação de IA"
+  "sidebar.writer": "Estúdio de redação de IA",
+  "sidebar.scenario": "Cenário / Roteiro"
 }

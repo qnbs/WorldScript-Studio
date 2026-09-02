@@ -6,7 +6,7 @@
  */
 
 import type { PipelineRun } from '../../features/proForge/types';
-import { isIdbResetInProgress, registerIdbConnectionCloser } from '../storage/idbResetGate';
+import { currentIdbResetGeneration, registerIdbConnectionCloser } from '../storage/idbResetGate';
 
 const HISTORY_DB = 'proforge-run-history';
 const HISTORY_VERSION = 1;
@@ -25,7 +25,10 @@ registerIdbConnectionCloser(() => {
 });
 
 function openHistoryDb(): Promise<IDBDatabase> {
+  if (database) return Promise.resolve(database);
   if (dbPromise) return dbPromise;
+  // QNBS-v3: captured before the open starts — a reset (even one that later fails and ends) between here and onsuccess must invalidate this open rather than let it cache once the reset flag flips back to false.
+  const openGeneration = currentIdbResetGeneration();
   dbPromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(HISTORY_DB, HISTORY_VERSION);
     request.onerror = () => {
@@ -37,13 +40,16 @@ function openHistoryDb(): Promise<IDBDatabase> {
     };
     request.onsuccess = () => {
       const db = request.result;
-      // QNBS-v3: this open may have started before a factory reset began — never cache a connection reset already closed.
-      if (isIdbResetInProgress()) {
+      dbPromise = null;
+      if (currentIdbResetGeneration() !== openGeneration) {
         db.close();
-        dbPromise = null;
         reject(new Error('IndexedDB reset in progress'));
         return;
       }
+      db.onversionchange = () => {
+        db.close();
+        database = null;
+      };
       database = db;
       resolve(db);
     };

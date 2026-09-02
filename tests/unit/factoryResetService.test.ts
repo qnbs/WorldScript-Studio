@@ -22,11 +22,7 @@ vi.mock('../../services/fs/fsCore', () => ({
   // QNBS-v3: pass-through — retry/backoff behavior is covered by fsCore.test.ts directly.
   retryFs: (fn: () => Promise<unknown>) => fn(),
 }));
-// QNBS-v3: deleteDatabase silently treated onblocked as success while a still-open connection
-// stayed open; the gate must begin (closing every registered connection) before any delete, and
-// end only on a failure path that never reaches reload. The gate's own registry/flag behavior is
-// covered directly by idbResetGate.test.ts — this suite only verifies factoryResetService calls it
-// at the right points.
+// QNBS-v3: the gate's own registry/generation behavior is covered directly by idbResetGate.test.ts — this suite only verifies factoryResetService calls begin/end at the right points.
 vi.mock('../../services/storage/idbResetGate', () => ({
   beginIdbReset: () => mockBeginIdbReset(),
   endIdbReset: () => mockEndIdbReset(),
@@ -96,8 +92,7 @@ describe('wipeAllAppData', () => {
     delSpy.mockRestore();
   });
 
-  // QNBS-v3: a still-open connection silently blocked deleteDatabase while the code reported
-  // success anyway; the reset gate must begin (closing every registered connection) before any delete.
+  // QNBS-v3: the reset gate must begin (closing every registered connection) before any delete, or a still-open connection silently blocks it while the code reports success anyway.
   it('begins the reset gate before deleting any database', async () => {
     await createDb('worldscript-data-db');
     const delSpy = vi.spyOn(indexedDB, 'deleteDatabase');

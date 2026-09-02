@@ -16,11 +16,11 @@
   "sidebar.outline": "轮廓生成器",
   "sidebar.overflowMenuAria": "更多浏览次数",
   "sidebar.primaryNavAria": "主要导航",
-  "sidebar.scenario": "场景 / 剧本",
   "sidebar.sceneboard": "场景板",
   "sidebar.secondaryNavAria": "设置和帮助",
   "sidebar.settings": "设置",
   "sidebar.templates": "模板",
   "sidebar.world": "世界大厦",
-  "sidebar.writer": "人工智能写作工作室"
+  "sidebar.writer": "人工智能写作工作室",
+  "sidebar.scenario": "场景 / 剧本"
 }
