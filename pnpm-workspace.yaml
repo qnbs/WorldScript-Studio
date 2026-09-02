@@ -24,12 +24,12 @@ minimumReleaseAgeExclude:
 # - serialize-javascript: CVE-2024-XXXX - prototype pollution fix
 # - chrome-launcher: CVE-2024-XXXX - command injection fix
 # - tmp: GHSA-7c78-jf6q-g5cm - type-confusion _assertPath bypass (fixed 0.2.7)
-# - @xmldom/xmldom: CVE-2024-XXXX - XSS fix
+# - @xmldom/xmldom: GHSA-6gmq-8vp8-gcm6 - XML fragment injection via invalid EntityReference.nodeName (fixed 0.9.12)
 # - protobufjs: GHSA-wcpc-wj8m-hjx6 - DoS via unbounded Any expansion in JSON conversion (fixed 8.4.1);
 #     raised to >=8.6.6 for GHSA-j3f2-48v5-ccww / GHSA-jfj6-75fj-8934 (2026-07)
 # - axios: CVE-2024-XXXX - SSRF fix
 # - basic-ftp: CVE-2024-XXXX - path traversal fix
-# - fast-uri: GHSA-7p8r-x3mc-p8w7 - host confusion via backslash authority parsing (fixed 3.1.5)
+# - fast-uri: GHSA-7p8r-x3mc-p8w7 - host confusion via backslash authority parsing (fixed 3.1.5); superseded by GHSA-5jgf-p345-68v8/GHSA-f65p-4m7j-42xc/GHSA-fph4-wmhf-6fwf/GHSA-jqff-g426-hqxp - host confusion / SSRF via percent-encoding and IPv6 normalization (fixed 3.1.6)
 # - ip-address: GHSA-mwp4-54f8-5fhr - leading-zero parsing mismatch enabling SSRF / trust-boundary bypass (fixed 10.3.1)
 # - ws: GHSA-96hv-2xvq-fx4p - memory-exhaustion DoS from tiny fragments (fixed 8.21.0)
 # - form-data: CRLF injection via unescaped boundary (fixed 4.0.6)
@@ -69,11 +69,11 @@ overrides:
   serialize-javascript: ">=7.0.3"
   chrome-launcher: "^1.2.1"
   tmp: ">=0.2.7"
-  "@xmldom/xmldom": ">=0.8.13"
+  "@xmldom/xmldom": ">=0.9.12"
   protobufjs: ">=8.6.6"
   axios: ">=1.18.0"
   basic-ftp: ">=5.3.1"
-  fast-uri: ">=3.1.5 <4"
+  fast-uri: ">=3.1.6 <4"
   ip-address: "10.3.1"
   ws: ">=8.21.0"
   form-data: ">=4.0.6"

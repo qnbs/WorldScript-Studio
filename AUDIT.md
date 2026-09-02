@@ -1837,7 +1837,7 @@ several apply only to dev/test transitive deps and are never shipped to users.
 | esbuild | >=0.28.1 | GHSA-67mh-4wv8-2f99 | Dev-server CORS let any website send requests to the esbuild dev server and read the response (≤0.24.2; fixed 0.25.0). Build-tool only, never shipped. Pinned in the 2026-06 security merge. |
 | serialize-javascript | >=7.0.3 | GHSA-76p7-773f-r4q5 / CVE-2024-11831 | Regex XSS in serialized output (<6.0.2). |
 | tmp | ^0.2.6 | GHSA-52f5-9888-hmc6 / CVE-2025-54798 | Arbitrary temp file/dir write via symlink `dir` parameter (≤0.2.3; fixed 0.2.4). |
-| @xmldom/xmldom | >=0.8.13 | GHSA-5fg8-2547-mr8q / CVE-2022-39353 | Misinterpretation of malicious XML input; floor sits above the 0.8.x fixes. |
+| @xmldom/xmldom | >=0.9.12 | GHSA-6gmq-8vp8-gcm6 / CVE-2026-83610 (supersedes GHSA-5fg8-2547-mr8q / CVE-2022-39353) | XML fragment injection via invalid `EntityReference.nodeName` during `requireWellFormed` serialization (≥0.9.0 ≤0.9.11; fixed 0.9.12). The prior `>=0.8.13` floor no longer excluded this — Dependabot alert #79, 2026-09-02. Ships via `mammoth` (`.docx` export), a production dependency. |
 | protobufjs | >=7.5.6 | GHSA-h755-8qp9-cq85 / CVE-2023-36665 | Prototype pollution (6.10.0–7.2.3; fixed 7.2.4). |
 | axios | >=1.15.2 | GHSA-jr5f-v2jv-69x6 / CVE-2025-27152 | SSRF + credential leak via absolute URL. |
 | basic-ftp | >=5.3.1 | GHSA-5rq4-664w-9x2c / CVE-2026-27699 | Path traversal in `downloadToDir()` (<5.2.0). Dev/test transitive. |
