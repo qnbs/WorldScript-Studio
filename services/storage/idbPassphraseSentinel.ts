@@ -54,6 +54,12 @@ export function _resetSentinelStoreForTest(): void {
   (_store as unknown as { closeConnections: () => void }).closeConnections();
 }
 
+// QNBS-v3: this store's own connection could otherwise block factory reset's deleteDatabase (#532).
+/** Closes this store's own cached IDB connection before a factory reset's deleteDatabase calls. */
+export function closeSentinelStoreConnectionForReset(): void {
+  (_store as unknown as { closeConnections: () => void }).closeConnections();
+}
+
 /** Persist the encrypted sentinel bytes (produced by AES-GCM encrypt). */
 export async function savePassphraseSentinel(bytes: Uint8Array): Promise<void> {
   return _store.save(bytes);

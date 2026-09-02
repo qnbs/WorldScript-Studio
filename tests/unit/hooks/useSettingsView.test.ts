@@ -193,8 +193,15 @@ vi.mock('../../../components/ui/Toast', () => ({
   useToast: () => stableToast,
 }));
 
+// QNBS-v3: createLogger added for factoryResetService's #532 connection-close imports (services/storage transitive chain)
 vi.mock('../../../services/logger', () => ({
   logger: { warn: (...args: unknown[]) => mockLoggerWarn(...args) },
+  createLogger: () => ({
+    info: () => {},
+    warn: () => {},
+    error: () => {},
+    withContext: () => ({ info: () => {}, warn: () => {}, error: () => {} }),
+  }),
 }));
 
 vi.mock('../../../services/desktopPlatform', () => ({

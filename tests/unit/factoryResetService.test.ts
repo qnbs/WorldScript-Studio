@@ -13,6 +13,9 @@ import { logger } from '../../services/logger';
 
 const mockIsTauriRuntime = vi.fn(() => false);
 const mockLoadTauriApis = vi.fn();
+const mockCloseDbServiceConnections = vi.fn();
+const mockCloseJournalStoreConnection = vi.fn();
+const mockCloseSentinelStoreConnection = vi.fn();
 
 vi.mock('../../services/logger', () => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
@@ -24,6 +27,17 @@ vi.mock('../../services/fs/fsCore', () => ({
   loadTauriApis: (...args: unknown[]) => mockLoadTauriApis(...args),
   // QNBS-v3: pass-through — retry/backoff behavior is covered by fsCore.test.ts directly.
   retryFs: (fn: () => Promise<unknown>) => fn(),
+}));
+// QNBS-v3: #532 — deleteDatabase silently treated onblocked as success while this page's own
+// connections stayed open; these three closes must run before deleteDatabase is ever called.
+vi.mock('../../services/storage', () => ({
+  closeDbServiceConnectionsForReset: () => mockCloseDbServiceConnections(),
+}));
+vi.mock('../../services/storage/encryptionMigrationJournal', () => ({
+  closeJournalStoreConnectionForReset: () => mockCloseJournalStoreConnection(),
+}));
+vi.mock('../../services/storage/idbPassphraseSentinel', () => ({
+  closeSentinelStoreConnectionForReset: () => mockCloseSentinelStoreConnection(),
 }));
 
 function createDb(name: string): Promise<void> {
@@ -229,6 +243,25 @@ describe('wipeAllAppData', () => {
 
     expect(replaceStateSpy).toHaveBeenCalledWith(null, '', '/WorldScript-Studio/?foo=bar');
     replaceStateSpy.mockRestore();
+  });
+
+  // QNBS-v3: #532 root cause — a still-open connection silently blocked deleteDatabase while the
+  // code reported success anyway; closing known connections first must happen before any delete.
+  it("closes this page's own known IDB connections before deleting any database", async () => {
+    await createDb('worldscript-data-db');
+    const delSpy = vi.spyOn(indexedDB, 'deleteDatabase');
+
+    await runWipe();
+
+    expect(mockCloseDbServiceConnections).toHaveBeenCalledTimes(1);
+    expect(mockCloseJournalStoreConnection).toHaveBeenCalledTimes(1);
+    expect(mockCloseSentinelStoreConnection).toHaveBeenCalledTimes(1);
+    const closeOrder = mockCloseDbServiceConnections.mock.invocationCallOrder[0];
+    const firstDeleteOrder = delSpy.mock.invocationCallOrder[0];
+    expect(closeOrder).toBeDefined();
+    expect(firstDeleteOrder).toBeDefined();
+    expect(closeOrder as number).toBeLessThan(firstDeleteOrder as number);
+    delSpy.mockRestore();
   });
 
   it('falls back to the known database list when indexedDB.databases() fails', async () => {
