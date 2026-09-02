@@ -54,16 +54,19 @@ import type {
 type ModalState = 'closed' | 'reset' | 'restore' | 'delete' | 'create' | 'factoryReset';
 type ModalPayload = { id?: number; name?: string; date?: string; wordCount?: number };
 
-// QNBS-v3: extracted so useSettingsView's own body doesn't absorb this branch's complexity (CodeScene hotspot).
-function reportFactoryResetFailure(
-  error: unknown,
+// QNBS-v3: the whole try/catch lives here, not in useSettingsView's own body, so this branch's complexity is never attributed to that already-flagged hotspot (CodeScene).
+async function performFactoryReset(
   t: (key: string) => string,
   toast: ReturnType<typeof useToast>,
-): void {
-  logger.error('Factory reset failed', {
-    error: error instanceof Error ? error.message : String(error),
-  });
-  toast.error(t('settings.data.dangerZone.factoryReset.failed'));
+): Promise<void> {
+  try {
+    await wipeAllAppData();
+  } catch (error) {
+    logger.error('Factory reset failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    toast.error(t('settings.data.dangerZone.factoryReset.failed'));
+  }
 }
 
 export const useSettingsView = () => {
@@ -361,12 +364,7 @@ export const useSettingsView = () => {
 
   const handleFactoryReset = useCallback(async () => {
     setModal({ state: 'closed', payload: {} });
-    // QNBS-v3: wipes all IDB databases, localStorage, SW caches, then reloads; a blocked deleteDatabase now rejects instead of silently reloading.
-    try {
-      await wipeAllAppData();
-    } catch (error) {
-      reportFactoryResetFailure(error, t, toast);
-    }
+    await performFactoryReset(t, toast);
   }, [t, toast]);
 
   const handleRepeatOnboarding = useCallback(() => {
