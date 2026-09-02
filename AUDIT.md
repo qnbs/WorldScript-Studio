@@ -1828,9 +1828,12 @@ WorldScript Studio was assessed as a strong, modern React/TypeScript application
 ## Known Overrides Table (Supply-Chain Hardening)
 
 Source of truth for the override floors is `pnpm-workspace.yaml` (`overrides:`). Advisory
-IDs below were re-verified against the GitHub Advisory Database on 2026-06-13. Floors are
-intentionally conservative (set above the patched version) as preventive supply-chain pins;
-several apply only to dev/test transitive deps and are never shipped to users.
+IDs below were re-verified against the GitHub Advisory Database on 2026-06-13, except the
+`@xmldom/xmldom` and `fast-uri` rows, re-verified 2026-09-02 (Dependabot alert #79 and a
+`pnpm audit` sweep, respectively) after both floors were found to no longer exclude the
+then-currently-resolved vulnerable version. Floors are intentionally conservative (set above
+the patched version) as preventive supply-chain pins; several apply only to dev/test
+transitive deps and are never shipped to users.
 
 | Package | Override | Advisory | Justification |
 |---------|----------|----------|---------------|
@@ -1841,7 +1844,7 @@ several apply only to dev/test transitive deps and are never shipped to users.
 | protobufjs | >=7.5.6 | GHSA-h755-8qp9-cq85 / CVE-2023-36665 | Prototype pollution (6.10.0–7.2.3; fixed 7.2.4). |
 | axios | >=1.15.2 | GHSA-jr5f-v2jv-69x6 / CVE-2025-27152 | SSRF + credential leak via absolute URL. |
 | basic-ftp | >=5.3.1 | GHSA-5rq4-664w-9x2c / CVE-2026-27699 | Path traversal in `downloadToDir()` (<5.2.0). Dev/test transitive. |
-| fast-uri | >=3.1.2 | GHSA-q3j6-qgpj-74h6 / CVE-2026-6321 | Path traversal via percent-encoded dot segments (≤3.1.0). |
+| fast-uri | >=3.1.6 | GHSA-5jgf-p345-68v8 / GHSA-f65p-4m7j-42xc / GHSA-fph4-wmhf-6fwf / GHSA-jqff-g426-hqxp (supersedes GHSA-q3j6-qgpj-74h6 / CVE-2026-6321) | Host confusion / SSRF via percent-encoding and IPv6 normalization (resolved 3.1.5 vulnerable; fixed 3.1.6). The prior `>=3.1.2` floor no longer excluded this — found via a routine `pnpm audit` sweep, 2026-09-02. Dev-only transitive (`@stryker-mutator/core`, `workbox-build`), never shipped. |
 | ws | >=8.20.1 | GHSA-3h5v-q93c-6h6q / CVE-2024-37890 | DoS when handling a request with many HTTP headers (fixed 8.17.1). |
 | brace-expansion | >=5.0.6 | GHSA-v6h2-p8h4-qcjw / CVE-2025-5889 | ReDoS in `expand()` (fixed 1.1.12 / 2.0.2 / 3.0.1 / 4.0.1). |
 | qs | >=6.15.2 | GHSA-hrpp-h998-j3pp / CVE-2022-24999 | Prototype pollution / DoS via crafted query strings (fixed in the ≥6.2.4 line). |
