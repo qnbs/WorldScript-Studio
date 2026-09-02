@@ -101,9 +101,24 @@ class MockProjectDocBinding {
 vi.mock('../../services/localFirst/docBinding', () => ({
   ProjectDocBinding: MockProjectDocBinding,
 }));
+// QNBS-v3: stable mock fns (not inline closures) so tests can assert teardown was actually invoked, and destroy/clearData are present since real listener code can call them on any persistence handle.
+const mockNoopDestroy = vi.fn().mockResolvedValue(undefined);
+const mockNoopClearData = vi.fn().mockResolvedValue(undefined);
+const mockPersistDestroy = vi.fn().mockResolvedValue(undefined);
+const mockPersistClearData = vi.fn().mockResolvedValue(undefined);
 vi.mock('../../services/localFirst/docPersistence', () => ({
-  NOOP_PERSISTENCE: { active: false, whenSynced: Promise.resolve() },
-  persistProjectDoc: vi.fn(() => ({ active: true, whenSynced: Promise.resolve() })),
+  NOOP_PERSISTENCE: {
+    active: false,
+    whenSynced: Promise.resolve(),
+    destroy: (...args: unknown[]) => mockNoopDestroy(...args),
+    clearData: (...args: unknown[]) => mockNoopClearData(...args),
+  },
+  persistProjectDoc: vi.fn(() => ({
+    active: true,
+    whenSynced: Promise.resolve(),
+    destroy: (...args: unknown[]) => mockPersistDestroy(...args),
+    clearData: (...args: unknown[]) => mockPersistClearData(...args),
+  })),
 }));
 vi.mock('../../services/storage/storageEncryptionService', () => ({
   isIdbEncryptionReady: vi.fn(() => true),

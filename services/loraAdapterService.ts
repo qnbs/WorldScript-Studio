@@ -49,6 +49,8 @@ let openPromise: Promise<IDBDatabase> | null = null;
 registerIdbConnectionCloser(() => {
   database?.close();
   database = null;
+  // QNBS-v3: without this, a reset-time closer leaves openPromise pointing at the pending (about-to-be-invalidated) flight, so the first post-reset caller reuses it and waits on its eventual generation-mismatch rejection instead of starting a fresh open immediately.
+  openPromise = null;
 });
 
 function openDb(): Promise<IDBDatabase> {
