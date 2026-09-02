@@ -52,7 +52,8 @@ function openDb(): Promise<IDBDatabase> {
   if (openPromise) return openPromise;
   // QNBS-v3: captured before the open starts — a reset (even one that later fails and ends) between here and onsuccess must invalidate this open rather than let it cache once the reset flag flips back to false.
   const openGeneration = currentIdbResetGeneration();
-  openPromise = new Promise((resolve, reject) => {
+  // QNBS-v3: identity token — a stale open's completion must only clear openPromise if it's STILL the current in-flight promise, not a newer one started after a reset closer invalidated this one mid-flight.
+  const thisOpen: Promise<IDBDatabase> = new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = (e) => {
       const db = (e.target as IDBOpenDBRequest).result;
@@ -77,7 +78,7 @@ function openDb(): Promise<IDBDatabase> {
     };
     req.onsuccess = (e) => {
       const db = (e.target as IDBOpenDBRequest).result;
-      openPromise = null;
+      if (openPromise === thisOpen) openPromise = null;
       if (currentIdbResetGeneration() !== openGeneration) {
         db.close();
         reject(new Error('IndexedDB reset in progress'));
@@ -91,11 +92,12 @@ function openDb(): Promise<IDBDatabase> {
       resolve(db);
     };
     req.onerror = () => {
-      openPromise = null;
+      if (openPromise === thisOpen) openPromise = null;
       reject(req.error);
     };
   });
-  return openPromise;
+  openPromise = thisOpen;
+  return thisOpen;
 }
 
 export async function listAdapters(): Promise<LoraAdapterMeta[]> {
@@ -375,6 +377,10 @@ export async function listTrainingRuns(projectId: string): Promise<StoredTrainin
 
 /** Reset the IDB for unit tests. */
 export function _resetLoraDbForTest(): void {
+  // QNBS-v3: close and drop the cached handle/in-flight open FIRST — otherwise openDb()'s cache check would keep returning a handle bound to the fake IndexedDB factory this function is about to discard.
+  database?.close();
+  database = null;
+  openPromise = null;
   // Re-assign global so the next openDb() call starts fresh
   if (typeof global !== 'undefined' && 'IDBFactory' in global) {
     const { IDBFactory } = global as unknown as { IDBFactory: new () => IDBDatabase };

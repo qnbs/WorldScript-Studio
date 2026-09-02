@@ -106,14 +106,15 @@ describe('idbResetGate', () => {
     expect(closer).not.toHaveBeenCalled();
   });
 
-  it('logs and stays fail-closed (in progress) when a closer rejects, without stopping other closers', async () => {
+  it('rejects, logs, and stays fail-closed (in progress) when a closer rejects, without stopping other closers', async () => {
     const { logger } = await import('../../../services/logger');
     const failingCloser = vi.fn().mockRejectedValue(new Error('close failed'));
     const okCloser = vi.fn();
     registerIdbConnectionCloser(failingCloser);
     registerIdbConnectionCloser(okCloser);
 
-    await beginIdbReset();
+    // QNBS-v3: beginIdbReset() must fail closed — a caller like wipeAllAppData() relies on this rejection to skip database deletion entirely.
+    await expect(beginIdbReset()).rejects.toThrow(/1 closer\(s\) failed/);
 
     expect(okCloser).toHaveBeenCalledTimes(1);
     expect(isIdbResetInProgress()).toBe(true);
@@ -121,6 +122,62 @@ describe('idbResetGate', () => {
       expect.stringContaining('1 connection closer(s) failed'),
       expect.objectContaining({ errors: ['close failed'] }),
     );
+  });
+
+  // QNBS-v3: proves every closer still gets its chance to run even when an earlier one fails — the aggregate rejection only surfaces after the full Promise.allSettled round completes.
+  it('runs every closer to completion even when an earlier one rejects, before aggregating the failure', async () => {
+    const order: string[] = [];
+    const failingCloser = vi.fn(async () => {
+      order.push('failing-start');
+      throw new Error('close failed');
+    });
+    const slowOkCloser = vi.fn(async () => {
+      order.push('slow-start');
+      await Promise.resolve();
+      order.push('slow-end');
+    });
+    registerIdbConnectionCloser(failingCloser);
+    registerIdbConnectionCloser(slowOkCloser);
+
+    await expect(beginIdbReset()).rejects.toThrow();
+
+    expect(order).toContain('slow-end');
+    expect(slowOkCloser).toHaveBeenCalledTimes(1);
+  });
+
+  // QNBS-v3: the second required invariant — a closer registered mid-reset must join the SAME awaited barrier, not race ahead of it, so beginIdbReset cannot settle (resolve OR reject) while that late closer is still in flight.
+  it('does not settle beginIdbReset until a late-registered, deliberately delayed closer also finishes', async () => {
+    let resolveLateCloser: () => void = () => {};
+    const order: string[] = [];
+    registerIdbConnectionCloser(() => {
+      order.push('early-closer-ran');
+    });
+    const resetPromise = beginIdbReset().then(() => {
+      order.push('reset-settled');
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // QNBS-v3: registered AFTER the reset started iterating — must not be deferred to some future reset.
+    registerIdbConnectionCloser(
+      () =>
+        new Promise<void>((resolve) => {
+          order.push('late-closer-started');
+          resolveLateCloser = resolve;
+        }),
+    );
+
+    // Give any (incorrect) fire-and-forget path a chance to race ahead before we resolve the late closer.
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(order).toEqual(['early-closer-ran', 'late-closer-started']);
+    expect(isIdbResetInProgress()).toBe(true);
+
+    resolveLateCloser();
+    await resetPromise;
+
+    expect(order).toEqual(['early-closer-ran', 'late-closer-started', 'reset-settled']);
   });
 
   // QNBS-v3: the core invariant this module exists for — a stale open cannot become cached once the generation it was captured against is no longer current, even after the reset that advanced it has already ended.

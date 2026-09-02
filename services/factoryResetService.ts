@@ -114,7 +114,7 @@ async function clearTauriAppData(): Promise<void> {
 export async function wipeAllAppData(): Promise<void> {
   logger.warn('[factoryReset] Wiping all app data…');
   try {
-    // QNBS-v3: awaited — deletion must not begin until every registered connection has actually finished closing, not merely been asked to; beginIdbReset() itself never throws (closer failures are caught internally), but stays inside this try for defense in depth.
+    // QNBS-v3: awaited and can throw — beginIdbReset() fails closed on any closer failure, so a rejection here skips straight to the catch below and deletion never starts on an unproven teardown.
     await beginIdbReset();
     // QNBS-v3: clear fallible desktop data first so a failed desktop reset never leaves a mixed wipe.
     await clearTauriAppData();

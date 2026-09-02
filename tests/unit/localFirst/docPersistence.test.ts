@@ -8,8 +8,10 @@ import * as Y from 'yjs';
 import {
   dbNameForProject,
   isIndexedDbAvailable,
+  NOOP_PERSISTENCE,
   persistProjectDoc,
 } from '../../../services/localFirst/docPersistence';
+import { beginIdbReset, endIdbReset } from '../../../services/storage/idbResetGate';
 
 // Open a fresh provider, read the persisted 'greeting' text, and tear it down. Used to probe what
 // has actually reached IndexedDB without depending on wall-clock delays.
@@ -82,6 +84,19 @@ describe('B1.1 — docPersistence (y-indexeddb)', () => {
     } finally {
       await pA.destroy(); // idempotent (memoized)
       await clearPersisted(projectId); // wipe shared IDB via a fresh provider
+    }
+  });
+
+  // QNBS-v3: opening a fresh y-indexeddb provider while a reset is draining would just register a closer that gets immediately torn down again — degrading to NOOP avoids that pointless open/destroy race entirely.
+  it('degrades to the NOOP handle while a reset is in progress, instead of opening a new provider', async () => {
+    await beginIdbReset();
+    try {
+      const doc = new Y.Doc();
+      const persistence = persistProjectDoc('reset-guard', doc);
+      expect(persistence).toBe(NOOP_PERSISTENCE);
+      expect(persistence.active).toBe(false);
+    } finally {
+      endIdbReset();
     }
   });
 

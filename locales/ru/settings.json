@@ -414,7 +414,7 @@
   "settings.data.createSnapshot": "Создать снимок",
   "settings.data.dangerZone.description": "Эти действия необратимы. Действуйте осторожно.",
   "settings.data.dangerZone.factoryReset.button": "Сброс к заводским настройкам",
-  "settings.data.dangerZone.factoryReset.failed": "Factory reset did not complete — the app may now be in a partially reset state. Restart the app to check, then try the reset again.",
+  "settings.data.dangerZone.factoryReset.failed": "Сброс к заводским настройкам не завершился — приложение может сейчас находиться в частично сброшенном состоянии. Перезапустите приложение, чтобы проверить, а затем повторите попытку сброса.",
   "settings.data.dangerZone.factoryReset.hint": "Безвозвратно удаляет все проекты, настройки, ключи API и локальные данные. Приложение будет перезапущено как новая установка.",
   "settings.data.dangerZone.factoryReset.label": "Сбросить все данные приложения",
   "settings.data.dangerZone.factoryReset.modalConfirm": "Удалить все и перезапустить",

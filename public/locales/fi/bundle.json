@@ -2074,7 +2074,7 @@
   "settings.data.createSnapshot": "Luo tilannekuva",
   "settings.data.dangerZone.description": "Nämä toimet ovat peruuttamattomia. Jatka varovasti.",
   "settings.data.dangerZone.factoryReset.button": "Tehdasasetusten palautus",
-  "settings.data.dangerZone.factoryReset.failed": "Factory reset did not complete — the app may now be in a partially reset state. Restart the app to check, then try the reset again.",
+  "settings.data.dangerZone.factoryReset.failed": "Tehdasasetusten palautus ei valmistunut — sovellus saattaa nyt olla osittain palautetussa tilassa. Käynnistä sovellus uudelleen tarkistaaksesi tilanteen ja yritä palautusta sitten uudelleen.",
   "settings.data.dangerZone.factoryReset.hint": "Poistaa pysyvästi kaikki projektit, asetukset, API-avaimet ja paikalliset tiedot. Sovellus käynnistyy uudelleen uutena asennuksena.",
   "settings.data.dangerZone.factoryReset.label": "Nollaa kaikki sovellustiedot",
   "settings.data.dangerZone.factoryReset.modalConfirm": "Poista kaikki ja käynnistä uudelleen",

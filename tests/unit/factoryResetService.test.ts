@@ -136,6 +136,22 @@ describe('wipeAllAppData', () => {
     delSpy.mockRestore();
   });
 
+  // QNBS-v3: the fail-closed contract's core proof — a closer failure must abort the wipe entirely, before any database deletion is attempted, while still releasing the gate for retry.
+  it('never deletes any database and releases the gate when beginIdbReset itself rejects', async () => {
+    await createDb('worldscript-data-db');
+    const delSpy = vi.spyOn(indexedDB, 'deleteDatabase');
+    mockBeginIdbReset.mockRejectedValueOnce(
+      new Error('[idbResetGate] reset teardown incomplete — 1 closer(s) failed: close failed'),
+    );
+
+    await expect(wipeAllAppData()).rejects.toThrow(/closer\(s\) failed/);
+
+    expect(delSpy).not.toHaveBeenCalled();
+    expect(reloadMock).not.toHaveBeenCalled();
+    expect(mockEndIdbReset).toHaveBeenCalledTimes(1);
+    delSpy.mockRestore();
+  });
+
   it('falls back to the known database list when indexedDB.databases() fails', async () => {
     const dbSpy = vi.spyOn(indexedDB, 'databases').mockRejectedValueOnce(new Error('not allowed'));
     const delSpy = vi.spyOn(indexedDB, 'deleteDatabase');

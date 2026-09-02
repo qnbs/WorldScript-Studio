@@ -29,18 +29,19 @@ function openHistoryDb(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
   // QNBS-v3: captured before the open starts — a reset (even one that later fails and ends) between here and onsuccess must invalidate this open rather than let it cache once the reset flag flips back to false.
   const openGeneration = currentIdbResetGeneration();
-  dbPromise = new Promise((resolve, reject) => {
+  // QNBS-v3: identity token — a stale open's completion must only clear dbPromise if it's STILL the current in-flight promise; otherwise it would wipe out a newer open started after this one was invalidated mid-flight (e.g. by a reset closer).
+  const thisOpen: Promise<IDBDatabase> = new Promise((resolve, reject) => {
     const request = indexedDB.open(HISTORY_DB, HISTORY_VERSION);
     request.onerror = () => {
       // QNBS-v3: Don't memoize a rejected promise — a transient open failure (quota, locked DB)
       // must not disable run-history for the rest of the session. Clear the cache so later
       // calls retry the open.
-      dbPromise = null;
+      if (dbPromise === thisOpen) dbPromise = null;
       reject(new Error('Failed to open ProForge history DB'));
     };
     request.onsuccess = () => {
       const db = request.result;
-      dbPromise = null;
+      if (dbPromise === thisOpen) dbPromise = null;
       if (currentIdbResetGeneration() !== openGeneration) {
         db.close();
         reject(new Error('IndexedDB reset in progress'));
@@ -60,7 +61,8 @@ function openHistoryDb(): Promise<IDBDatabase> {
       }
     };
   });
-  return dbPromise;
+  dbPromise = thisOpen;
+  return thisOpen;
 }
 
 interface HistoryRecord {

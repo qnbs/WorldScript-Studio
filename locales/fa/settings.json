@@ -414,7 +414,7 @@
   "settings.data.createSnapshot": "ایجاد عکس فوری",
   "settings.data.dangerZone.description": "این اقدامات برگشت ناپذیر است. با احتیاط ادامه دهید",
   "settings.data.dangerZone.factoryReset.button": "تنظیم مجدد کارخانه",
-  "settings.data.dangerZone.factoryReset.failed": "Factory reset did not complete — the app may now be in a partially reset state. Restart the app to check, then try the reset again.",
+  "settings.data.dangerZone.factoryReset.failed": "تنظیم مجدد کارخانه کامل نشد — ممکن است برنامه اکنون در وضعیت بازنشانی جزئی باشد. برنامه را دوباره راه‌اندازی کنید تا بررسی شود، سپس بازنشانی را دوباره امتحان کنید.",
   "settings.data.dangerZone.factoryReset.hint": "تمام پروژه ها، تنظیمات، کلیدهای API و داده های محلی را برای همیشه حذف می کند. برنامه به عنوان یک نصب تازه راه اندازی مجدد می شود.",
   "settings.data.dangerZone.factoryReset.label": "تمام داده های برنامه را بازنشانی کنید",
   "settings.data.dangerZone.factoryReset.modalConfirm": "همه چیز را پاک کنید و دوباره راه اندازی کنید",
