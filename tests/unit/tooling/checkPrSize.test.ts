@@ -678,6 +678,35 @@ describe('evaluatePrSize', () => {
       );
       expect(tooManyCommits.severity?.blocking).toBe(true);
     });
+
+    // QNBS-v3: an exception's whole purpose is authorizing a PR past TIERS.absolute (30/3000/15) -- a ceiling wide enough to matter must not then get re-checked against that same fixed tier and blocked anyway.
+    it('does not block a PR within a wide exception ceiling that exceeds the fixed absolute tier', () => {
+      const rows: NumstatRow[] = Array.from({ length: 40 }, (_, i) => ({
+        path: `scripts/tool-${i}.mjs`,
+        added: 100,
+        removed: 0,
+      }));
+      const wide = {
+        ...exception,
+        maxFiles: 65,
+        maxCommits: 20,
+        maxNonExemptMeaningfulLines: 4000,
+        supplementalLineAllowances: [],
+        allowedPaths: rows.map((row) => row.path),
+      };
+      const result = evaluatePrSize(
+        'base',
+        'head',
+        exceptionDependencies({
+          rows,
+          changedPaths: rows.map((row) => row.path),
+          commitCount: 18,
+          registry: { schemaVersion: 1, exceptions: [wide] },
+        }),
+      );
+      expect(result.severity?.blocking).toBe(false);
+      expect(result.severity?.tier).toBe('exception');
+    });
   });
 });
 

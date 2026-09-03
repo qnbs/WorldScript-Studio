@@ -460,18 +460,18 @@ export function evaluatePrSize(base, head, dependencies = {}) {
         );
         return count <= allowance.maxMeaningfulLines;
       }));
-  const severity =
-    exception.entry && !exceptionWithinLimits
-      ? {
-          tier: 'absolute',
-          blocking: true,
-          limits: {
-            files: exception.entry.maxFiles,
-            lines: exception.entry.maxNonExemptMeaningfulLines,
-            commits: exception.entry.maxCommits,
-          },
-        }
-      : selectSeverity({ fileCount, lineCount: nonExemptLineCount, commitCount, allDocs });
+  // QNBS-v3: an exception's own ceiling can legitimately exceed TIERS.absolute (that is the whole point of granting one) -- falling through to selectSeverity() here would re-check the raw counts against the fixed 30/3000/15 tier and block anyway, even though the PR-specific ceiling was satisfied.
+  const severity = exception.entry
+    ? {
+        tier: exceptionWithinLimits ? 'exception' : 'absolute',
+        blocking: !exceptionWithinLimits,
+        limits: {
+          files: exception.entry.maxFiles,
+          lines: exception.entry.maxNonExemptMeaningfulLines,
+          commits: exception.entry.maxCommits,
+        },
+      }
+    : selectSeverity({ fileCount, lineCount: nonExemptLineCount, commitCount, allDocs });
   return {
     ok: true,
     fileCount,
