@@ -1831,9 +1831,10 @@ Source of truth for the override floors is `pnpm-workspace.yaml` (`overrides:`).
 IDs below were re-verified against the GitHub Advisory Database on 2026-06-13, except the
 `@xmldom/xmldom`, `fast-uri`, and `qs` rows, re-verified 2026-09-02 (Dependabot alert #79
 and two `pnpm audit` sweeps) after all three floors were found to no longer exclude the
-then-currently-resolved vulnerable version. Floors are intentionally conservative (set at or
-above the patched version) as preventive supply-chain pins; several apply only to dev/test
-transitive deps and are never shipped to users.
+then-currently-resolved vulnerable version, and the `fflate` row, added 2026-09-03 the same
+day its advisory was elevated to GitHub-reviewed status. Floors are intentionally conservative
+(set at or above the patched version) as preventive supply-chain pins; several apply only to
+dev/test transitive deps and are never shipped to users.
 
 | Package | Override | Advisory | Justification |
 |---------|----------|----------|---------------|
@@ -1852,7 +1853,7 @@ transitive deps and are never shipped to users.
 | ip-address | >=10.1.1 | preventive pin — no direct advisory | Dev/test transitive hardening; no advisory matches this floor. |
 | uuid | >=11.1.1 | preventive pin — no direct advisory | Conservative version floor; no security advisory applies (the prior "collision" note was inaccurate). |
 | joi (transitive via `wait-on` ← `@storybook/test-runner` → `jest-process-manager`) | ^18.2.1 | transitive hardening (dev-only) | `wait-on@7.2.0` originally pulled an older `joi`; lockfile pins `joi@18.2.1` for both `wait-on@7.2.0` and `wait-on@9.0.10`. Dev/test toolchain only, never shipped. |
-| fflate | >=0.8.3 | GHSA-px8p-9vwx-vf98 / CVE-2026-45820 | `unzipSync()` infinite loop on a crafted ZIP64 archive missing its required extra field (≤0.8.2; fixed 0.8.3). Transitive via `jspdf@4.2.1` (PDF export), whose own `^0.8.1` range already permits the patched version. Advisory elevated to GitHub-reviewed status 2026-09-03, discovered via a routine Security Audit CI failure the same day. |
+| fflate | >=0.8.3 | GHSA-px8p-9vwx-vf98 / CVE-2026-45820 | `unzipSync()` infinite loop on a crafted ZIP64 archive missing its required extra field (≤0.8.2; fixed at or above 0.8.3). Transitive via `jspdf@4.2.1` (PDF export), whose own `^0.8.1` range already permits the patched version. Advisory elevated to GitHub-reviewed status 2026-09-03, discovered via a routine Security Audit CI failure the same day. |
 
 **Dependency hygiene status (2026-06-13):**
 - `pnpm audit --audit-level=high` → 0 vulnerabilities.
