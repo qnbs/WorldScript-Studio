@@ -138,7 +138,12 @@ export const SettingsModals: FC = () => {
             <Button variant="secondary" onClick={() => setModal({ state: 'closed', payload: {} })}>
               {t('common.cancel')}
             </Button>
-            <Button variant="danger" onClick={() => void handleFactoryReset()}>
+            {/* QNBS-v3: stable data-testid lets E2E recovery navigation target this button without matching translated label text */}
+            <Button
+              variant="danger"
+              onClick={() => void handleFactoryReset()}
+              data-testid="factory-reset-confirm-button"
+            >
               {t('settings.data.dangerZone.factoryReset.modalConfirm')}
             </Button>
           </div>

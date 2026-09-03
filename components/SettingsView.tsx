@@ -38,14 +38,17 @@ import { ViewErrorBoundary } from './ui/ViewErrorBoundary';
 
 // --- SUB-COMPONENTS ---
 
+// QNBS-v3: stable data-testid lets E2E recovery navigation target a category without matching translated label text
 const NavButton: FC<{
+  id: string;
   icon: React.ReactNode;
   label: string;
   isActive: boolean;
   onClick: () => void;
-}> = React.memo(({ icon, label, isActive, onClick }) => (
+}> = React.memo(({ id, icon, label, isActive, onClick }) => (
   <button
     type="button"
+    data-testid={`settings-nav-${id}`}
     onClick={onClick}
     aria-current={isActive ? 'page' : undefined}
     className={`flex items-center flex-shrink-0 md:flex-shrink md:w-full px-3 py-2 text-left rounded-md transition-colors whitespace-nowrap md:whitespace-normal ${isActive ? 'bg-[var(--nav-background-active)] text-[var(--nav-text-active)]' : 'hover:bg-[var(--nav-background-hover)] text-[var(--sc-text-secondary)] hover:text-[var(--sc-text-primary)]'}`}
@@ -365,6 +368,7 @@ const SettingsViewUI: FC = () => {
               filteredNavCategories.map((cat) => (
                 <NavButton
                   key={cat.id}
+                  id={cat.id}
                   icon={cat.icon}
                   label={cat.label}
                   isActive={activeCategory === cat.id}
@@ -379,6 +383,7 @@ const SettingsViewUI: FC = () => {
                   .map((cat) => (
                     <NavButton
                       key={cat.id}
+                      id={cat.id}
                       icon={cat.icon}
                       label={cat.label}
                       isActive={activeCategory === cat.id}
@@ -396,6 +401,7 @@ const SettingsViewUI: FC = () => {
                       {groupCats.map((cat) => (
                         <NavButton
                           key={cat.id}
+                          id={cat.id}
                           icon={cat.icon}
                           label={cat.label}
                           isActive={activeCategory === cat.id}
