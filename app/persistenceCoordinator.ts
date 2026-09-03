@@ -93,3 +93,5 @@ export class PersistenceCoordinator {
 
 export const projectPersistenceCoordinator = new PersistenceCoordinator();
 export const settingsPersistenceCoordinator = new PersistenceCoordinator();
+// QNBS-v3: separate from projectPersistenceCoordinator so a slow non-critical index/analytics write can never queue behind (and delay) the next actual project save; a factory reset still drains it before deleting anything.
+export const backgroundWriteCoordinator = new PersistenceCoordinator();

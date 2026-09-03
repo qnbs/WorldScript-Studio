@@ -9,6 +9,7 @@
  */
 
 import {
+  backgroundWriteCoordinator,
   projectPersistenceCoordinator,
   settingsPersistenceCoordinator,
 } from '../app/persistenceCoordinator';
@@ -146,10 +147,11 @@ export async function wipeAllAppData(): Promise<void> {
   logger.warn('[factoryReset] Wiping all app data…');
   resetInProgress = true;
   try {
-    // QNBS-v3: a save enqueued (project or settings autosave, or a visibility/quit flush) before this flag flipped already passed its own guard check and will run regardless -- draining both coordinators here lets it finish before deletion starts, instead of racing it.
+    // QNBS-v3: a save enqueued (project or settings autosave, or a visibility/quit flush) before this flag flipped already passed its own guard check and will run regardless -- draining all three coordinators here lets it finish before deletion starts, instead of racing it. backgroundWriteCoordinator covers the non-critical cross-project-index/DuckDB writes a project save fires off after its own enqueue() already resolved.
     await Promise.all([
       projectPersistenceCoordinator.idle(),
       settingsPersistenceCoordinator.idle(),
+      backgroundWriteCoordinator.idle(),
     ]);
     // QNBS-v3: clear fallible desktop data first so a failed desktop reset never leaves a mixed wipe.
     await clearTauriAppData();

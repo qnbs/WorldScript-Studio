@@ -3,7 +3,10 @@
  * QNBS-v3: covers the native indexedDB.databases() path, the known-list fallback, the Cache API branch, and the Tauri AppData clear branch (exists/missing/partial-failure).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { projectPersistenceCoordinator } from '../../app/persistenceCoordinator';
+import {
+  backgroundWriteCoordinator,
+  projectPersistenceCoordinator,
+} from '../../app/persistenceCoordinator';
 import { isFactoryResetInProgress, wipeAllAppData } from '../../services/factoryResetService';
 import { logger } from '../../services/logger';
 
@@ -118,6 +121,38 @@ describe('wipeAllAppData', () => {
     } finally {
       // QNBS-v3: resolveSave() is idempotent (a no-op if the success path already called it) -- an assertion failing above must not leave this singleton coordinator permanently stuck, hanging every later test's own wipeAllAppData() at idle().
       resolveSave();
+      await vi.runAllTimersAsync();
+      vi.useRealTimers();
+      delSpy.mockRestore();
+    }
+  });
+
+  // QNBS-v3: the post-save index/DuckDB writes were previously untracked by any drain, so a reset could delete the database they were about to write to.
+  it('drains a background index/analytics write already enqueued before deleting any database', async () => {
+    await createDb('worldscript-data-db');
+    let resolveWrite: () => void = () => {};
+    const pendingWrite = new Promise<void>((resolve) => {
+      resolveWrite = resolve;
+    });
+    const enqueued = backgroundWriteCoordinator.enqueue(() => pendingWrite);
+
+    const delSpy = vi.spyOn(indexedDB, 'deleteDatabase');
+    vi.useFakeTimers();
+    try {
+      const done = wipeAllAppData();
+      // QNBS-v3: lets the idle()-await point run without letting the still-pending write resolve.
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(delSpy).not.toHaveBeenCalled();
+
+      resolveWrite();
+      await enqueued;
+      await vi.runAllTimersAsync();
+      await done;
+      expect(delSpy).toHaveBeenCalled();
+    } finally {
+      // QNBS-v3: idempotent no-op if the success path already resolved it -- see the project-save drain test above for why this matters.
+      resolveWrite();
       await vi.runAllTimersAsync();
       vi.useRealTimers();
       delSpy.mockRestore();

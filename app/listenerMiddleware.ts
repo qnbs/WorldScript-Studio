@@ -23,6 +23,7 @@ import { storageService } from '../services/storageService';
 import type { Character, StorySection, World } from '../types';
 import { isAnalyticsPersistenceAllowed } from './analyticsGate';
 import {
+  backgroundWriteCoordinator,
   projectPersistenceCoordinator,
   settingsPersistenceCoordinator,
 } from './persistenceCoordinator';
@@ -92,11 +93,17 @@ async function runCrossProjectIndexUpdate(
   presentData: ProjectData,
   enriched: ProjectData,
 ): Promise<void> {
-  if (!presentData.id) return;
+  const projectId = presentData.id;
+  if (!projectId) return;
   const { indexProject } = await import('../services/crossProjectIndexService');
-  // QNBS-v3: SEC — a thunk lets the gate re-evaluate at indexProject's DuckDB write site (after its async IDB work) instead of a snapshot here, so a mid-window opt-out can't slip a stale mirror write through.
-  indexProject(presentData.id, enriched, () => isAnalyticsPersistenceAllowed(api.getState())).catch(
-    (err: unknown) => logger.warn('Cross-project index update failed (non-critical):', err),
+  // QNBS-v3: reset may start during the dynamic import's own await -- re-checked here with zero await before registering, mirroring the project-autosave TOCTOU fix below.
+  if (isFactoryResetInProgress()) return;
+  // QNBS-v3: routed through backgroundWriteCoordinator (not awaited here) so wipeAllAppData()'s drain can still catch a reset starting while this write is in flight, without making a reset -- or the next project save -- wait on this non-critical write.
+  void backgroundWriteCoordinator.enqueue(() =>
+    // QNBS-v3: SEC — a thunk lets the gate re-evaluate at indexProject's DuckDB write site (after its async IDB work) instead of a snapshot here, so a mid-window opt-out can't slip a stale mirror write through.
+    indexProject(projectId, enriched, () => isAnalyticsPersistenceAllowed(api.getState())).catch(
+      (err: unknown) => logger.warn('Cross-project index update failed (non-critical):', err),
+    ),
   );
 }
 
@@ -116,21 +123,26 @@ async function runDuckDbDualWrite(
   }));
   const totalWordCount = sections.reduce((acc, s) => acc + s.wordCount, 0);
   const { duckdbDualWrite, withDuckDbRetry } = await loadDuckdbAnalytics();
-  void withDuckDbRetry(() => {
-    // QNBS-v3: SEC — re-checked at write time since the opt-out may have toggled during the async loadDuckdbAnalytics()/retry window, making the outer gate's snapshot stale.
-    if (!isAnalyticsPersistenceAllowed(api.getState())) return Promise.resolve();
-    return duckdbDualWrite(
-      projectId,
-      presentData.title,
-      presentData.logline,
-      totalWordCount,
-      presentData.projectGoals?.totalWordCount,
-      presentData.projectGoals?.targetDate,
-      presentData.writingHistory ?? [],
-      sections,
-    );
-  }).catch((err: unknown) =>
-    logger.warn('DuckDB dual-write failed after retries (non-critical):', err),
+  // QNBS-v3: reset may start during loadDuckdbAnalytics()'s own await -- re-checked here with zero await before registering, mirroring the project-autosave TOCTOU fix below.
+  if (isFactoryResetInProgress()) return;
+  // QNBS-v3: routed through backgroundWriteCoordinator (not awaited here) for the same reason as the cross-project index update above.
+  void backgroundWriteCoordinator.enqueue(() =>
+    withDuckDbRetry(() => {
+      // QNBS-v3: SEC — re-checked at write time since the opt-out may have toggled during the async loadDuckdbAnalytics()/retry window, making the outer gate's snapshot stale.
+      if (!isAnalyticsPersistenceAllowed(api.getState())) return Promise.resolve();
+      return duckdbDualWrite(
+        projectId,
+        presentData.title,
+        presentData.logline,
+        totalWordCount,
+        presentData.projectGoals?.totalWordCount,
+        presentData.projectGoals?.targetDate,
+        presentData.writingHistory ?? [],
+        sections,
+      );
+    }).catch((err: unknown) =>
+      logger.warn('DuckDB dual-write failed after retries (non-critical):', err),
+    ),
   );
 }
 
