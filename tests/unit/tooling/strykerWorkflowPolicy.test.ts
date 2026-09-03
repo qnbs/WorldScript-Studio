@@ -18,8 +18,8 @@ const workflow = readFileSync(workflowPath, 'utf8');
 const scopeScriptPath = fileURLToPath(
   new URL('../../../scripts/stryker-scope.mjs', import.meta.url),
 );
-// QNBS-v3: stays string concat — a template literal here is `${{ ${expr} }}`, a JS SyntaxError, not just a style nit.
-const githubExpression = (expression: string) => '$' + '{{ ' + expression + ' }}';
+// QNBS-v3: the unescaped `${{ ${expr} }}` form Biome's own autofix suggests is a JS SyntaxError — `\$` escapes the literal dollar so only the inner `${expr}` interpolates.
+const githubExpression = (expression: string) => `\${{ ${expression} }}`;
 
 // QNBS-v3: Lock workflow/config invariants so mutation plumbing cannot silently drift.
 describe('Stryker workflow policy', () => {
