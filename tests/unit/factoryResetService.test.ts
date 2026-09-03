@@ -4,7 +4,8 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  backgroundWriteCoordinator,
+  crossProjectIndexCoordinator,
+  duckDbWriteCoordinator,
   projectPersistenceCoordinator,
 } from '../../app/persistenceCoordinator';
 import { isFactoryResetInProgress, wipeAllAppData } from '../../services/factoryResetService';
@@ -127,32 +128,45 @@ describe('wipeAllAppData', () => {
     }
   });
 
-  // QNBS-v3: the post-save index/DuckDB writes were previously untracked by any drain, so a reset could delete the database they were about to write to.
-  it('drains a background index/analytics write already enqueued before deleting any database', async () => {
+  // QNBS-v3: the post-save index/DuckDB writes were previously untracked by any drain, so a reset could delete the database they were about to write to. Two separate coordinators (not one shared instance) since a shared single queue slot let one resource's write silently discard the other's.
+  it('drains both the cross-project-index and DuckDB write coordinators before deleting any database', async () => {
     await createDb('worldscript-data-db');
-    let resolveWrite: () => void = () => {};
-    const pendingWrite = new Promise<void>((resolve) => {
-      resolveWrite = resolve;
+    let resolveIndexWrite: () => void = () => {};
+    let resolveDuckDbWrite: () => void = () => {};
+    const pendingIndexWrite = new Promise<void>((resolve) => {
+      resolveIndexWrite = resolve;
     });
-    const enqueued = backgroundWriteCoordinator.enqueue(() => pendingWrite);
+    const pendingDuckDbWrite = new Promise<void>((resolve) => {
+      resolveDuckDbWrite = resolve;
+    });
+    const enqueuedIndex = crossProjectIndexCoordinator.enqueue(() => pendingIndexWrite);
+    const enqueuedDuckDb = duckDbWriteCoordinator.enqueue(() => pendingDuckDbWrite);
 
     const delSpy = vi.spyOn(indexedDB, 'deleteDatabase');
     vi.useFakeTimers();
     try {
       const done = wipeAllAppData();
-      // QNBS-v3: lets the idle()-await point run without letting the still-pending write resolve.
+      // QNBS-v3: lets the idle()-await point run without letting either still-pending write resolve.
       await Promise.resolve();
       await Promise.resolve();
       expect(delSpy).not.toHaveBeenCalled();
 
-      resolveWrite();
-      await enqueued;
+      // QNBS-v3: resolving only one of the two must not be enough -- proves the drain genuinely waits on both, not just whichever settles first.
+      resolveIndexWrite();
+      await enqueuedIndex;
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(delSpy).not.toHaveBeenCalled();
+
+      resolveDuckDbWrite();
+      await enqueuedDuckDb;
       await vi.runAllTimersAsync();
       await done;
       expect(delSpy).toHaveBeenCalled();
     } finally {
       // QNBS-v3: idempotent no-op if the success path already resolved it -- see the project-save drain test above for why this matters.
-      resolveWrite();
+      resolveIndexWrite();
+      resolveDuckDbWrite();
       await vi.runAllTimersAsync();
       vi.useRealTimers();
       delSpy.mockRestore();
