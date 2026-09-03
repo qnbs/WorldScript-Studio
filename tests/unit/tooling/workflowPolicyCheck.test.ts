@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseDocument } from 'yaml';
+import type { WorkflowPolicyFailure } from '../../../scripts/workflow-policy-check.d.mts';
 import {
   checkActionFile,
   checkActionPins,
@@ -14,11 +15,10 @@ import {
   getTriggers,
   listActionFiles,
 } from '../../../scripts/workflow-policy-check.mjs';
-import type { WorkflowPolicyFailure } from '../../../scripts/workflow-policy-check.d.mts';
 
 const doc = (yaml: string) => parseDocument(yaml, { uniqueKeys: true });
-// QNBS-v3: stays string concat — a template literal here is `${{ ${expr} }}`, a JS SyntaxError, not just a style nit.
-const githubExpression = (expression: string) => '$' + '{{ ' + expression + ' }}';
+// QNBS-v3: the unescaped `${{ ${expr} }}` form Biome's own autofix suggests is a JS SyntaxError — `\$` escapes the literal dollar so only the inner `${expr}` interpolates.
+const githubExpression = (expression: string) => `\${{ ${expression} }}`;
 
 // QNBS-v3: contents:read is the only safe top-level default — every other form is a policy gap.
 describe('checkTopLevelPermissions', () => {
@@ -36,11 +36,7 @@ describe('checkTopLevelPermissions', () => {
 
   it('fails when a top-level write permission is declared', () => {
     const failures: WorkflowPolicyFailure[] = [];
-    checkTopLevelPermissions(
-      'x.yml',
-      doc('permissions:\n  contents: write\njobs: {}\n'),
-      failures,
-    );
+    checkTopLevelPermissions('x.yml', doc('permissions:\n  contents: write\njobs: {}\n'), failures);
     expect(failures).toHaveLength(1);
     expect(failures[0]?.message).toMatch(/contents: read/);
   });
@@ -88,7 +84,11 @@ describe('checkJobWriteScopeAllowlist', () => {
 
   it('passes for the job-level scalar "read-all"', () => {
     const failures: WorkflowPolicyFailure[] = [];
-    checkJobWriteScopeAllowlist('ci.yml', doc('jobs:\n  build:\n    permissions: read-all\n'), failures);
+    checkJobWriteScopeAllowlist(
+      'ci.yml',
+      doc('jobs:\n  build:\n    permissions: read-all\n'),
+      failures,
+    );
     expect(failures).toEqual([]);
   });
 
@@ -106,9 +106,14 @@ describe('checkJobWriteScopeAllowlist', () => {
   // QNBS-v3: a per-key alias (contents: *grant) must resolve to "write", not the literal "*grant".
   it('resolves a per-key alias inside a job permissions map', () => {
     const failures: WorkflowPolicyFailure[] = [];
-    const content = ['x: &grant write', 'jobs:', '  build:', '    permissions:', '      contents: *grant', ''].join(
-      '\n',
-    );
+    const content = [
+      'x: &grant write',
+      'jobs:',
+      '  build:',
+      '    permissions:',
+      '      contents: *grant',
+      '',
+    ].join('\n');
     checkJobWriteScopeAllowlist('ci.yml', doc(content), failures);
     expect(failures).toHaveLength(1);
     expect(failures[0]?.message).toMatch(/contents/);
@@ -147,11 +152,7 @@ describe('checkNeedsGraph', () => {
 
   it('detects a two-job needs cycle', () => {
     const failures: WorkflowPolicyFailure[] = [];
-    checkNeedsGraph(
-      'x.yml',
-      doc('jobs:\n  a:\n    needs: [b]\n  b:\n    needs: [a]\n'),
-      failures,
-    );
+    checkNeedsGraph('x.yml', doc('jobs:\n  a:\n    needs: [b]\n  b:\n    needs: [a]\n'), failures);
     expect(failures.some((f) => f.message.includes('cycle detected'))).toBe(true);
   });
 
@@ -272,9 +273,14 @@ describe('checkActionPins', () => {
   // QNBS-v3: a Docker action has no steps: at all — its own runs.image needs the same pin check.
   it('fails for a mutable docker image on a Docker action (runs.using: docker)', () => {
     const failures: WorkflowPolicyFailure[] = [];
-    checkActionPins('action.yml', doc('runs:\n  using: docker\n  image: docker://alpine:latest\n'), failures, {
-      fileKind: 'action',
-    });
+    checkActionPins(
+      'action.yml',
+      doc('runs:\n  using: docker\n  image: docker://alpine:latest\n'),
+      failures,
+      {
+        fileKind: 'action',
+      },
+    );
     expect(failures).toHaveLength(1);
     expect(failures[0]?.message).toMatch(/@sha256/);
   });
@@ -339,9 +345,14 @@ describe('checkActionPins', () => {
   // QNBS-v3: GitHub resolves *action_ref before running the step — the checker must do the same.
   it('fails for an unpinned action reference hidden behind an alias', () => {
     const failures: WorkflowPolicyFailure[] = [];
-    const content = ['x: &action_ref actions/checkout@v4', 'jobs:', '  a:', '    steps:', '      - uses: *action_ref', ''].join(
-      '\n',
-    );
+    const content = [
+      'x: &action_ref actions/checkout@v4',
+      'jobs:',
+      '  a:',
+      '    steps:',
+      '      - uses: *action_ref',
+      '',
+    ].join('\n');
     checkActionPins('x.yml', doc(content), failures);
     expect(failures).toHaveLength(1);
     expect(failures[0]?.message).toMatch(/40-hex-char SHA/);
@@ -428,7 +439,7 @@ describe('checkAggregatorNeeds', () => {
     expect(failures).toEqual([]);
   });
 
-  it('fails when if: always() is set but the run script never checks a gating job\'s result', () => {
+  it("fails when if: always() is set but the run script never checks a gating job's result", () => {
     const failures: WorkflowPolicyFailure[] = [];
     checkAggregatorNeeds(
       'ci.yml',
@@ -441,12 +452,14 @@ describe('checkAggregatorNeeds', () => {
     expect(failures[0]?.message).toMatch(/never check needs\.a\.result/);
   });
 
-  it('passes when if: always() is set and the run script checks every gating job\'s result', () => {
+  it("passes when if: always() is set and the run script checks every gating job's result", () => {
     const failures: WorkflowPolicyFailure[] = [];
     const runLine = `[ \\"${githubExpression('needs.a.result')}\\" = success ] || exit 1`;
     checkAggregatorNeeds(
       'ci.yml',
-      doc(`jobs:\n  a: {}\n  ci-success:\n    if: always()\n    needs: [a]\n    steps:\n      - run: "${runLine}"\n`),
+      doc(
+        `jobs:\n  a: {}\n  ci-success:\n    if: always()\n    needs: [a]\n    steps:\n      - run: "${runLine}"\n`,
+      ),
       failures,
     );
     expect(failures).toEqual([]);
@@ -497,7 +510,9 @@ describe('checkAggregatorNeeds', () => {
     const runLine = `echo ${githubExpression('needs.a.result')}\\n# exit 1`;
     checkAggregatorNeeds(
       'ci.yml',
-      doc(`jobs:\n  a: {}\n  ci-success:\n    if: always()\n    needs: [a]\n    steps:\n      - run: "${runLine}"\n`),
+      doc(
+        `jobs:\n  a: {}\n  ci-success:\n    if: always()\n    needs: [a]\n    steps:\n      - run: "${runLine}"\n`,
+      ),
       failures,
     );
     expect(failures).toHaveLength(1);
@@ -508,28 +523,34 @@ describe('checkAggregatorNeeds', () => {
     const failures: WorkflowPolicyFailure[] = [];
     checkAggregatorNeeds(
       'ci.yml',
-      doc('jobs:\n  a: {}\n  ci-success:\n    needs: [a]\n  deploy:\n    needs: [ci-success]\n  smoke:\n    needs: [deploy]\n'),
+      doc(
+        'jobs:\n  a: {}\n  ci-success:\n    needs: [a]\n  deploy:\n    needs: [ci-success]\n  smoke:\n    needs: [deploy]\n',
+      ),
       failures,
     );
     expect(failures).toEqual([]);
   });
 
   // QNBS-v3: failure()/cancelled() bypass default gating exactly like always() — must be caught too.
-  it('fails when if: failure() is set but the run script never checks a gating job\'s result', () => {
+  it("fails when if: failure() is set but the run script never checks a gating job's result", () => {
     const failures: WorkflowPolicyFailure[] = [];
     checkAggregatorNeeds(
       'ci.yml',
-      doc('jobs:\n  a: {}\n  ci-success:\n    if: failure()\n    needs: [a]\n    steps:\n      - run: echo ok\n'),
+      doc(
+        'jobs:\n  a: {}\n  ci-success:\n    if: failure()\n    needs: [a]\n    steps:\n      - run: echo ok\n',
+      ),
       failures,
     );
     expect(failures).toHaveLength(1);
   });
 
-  it('fails when if: !cancelled() is set but the run script never checks a gating job\'s result', () => {
+  it("fails when if: !cancelled() is set but the run script never checks a gating job's result", () => {
     const failures: WorkflowPolicyFailure[] = [];
     checkAggregatorNeeds(
       'ci.yml',
-      doc('jobs:\n  a: {}\n  ci-success:\n    if: "!cancelled()"\n    needs: [a]\n    steps:\n      - run: echo ok\n'),
+      doc(
+        'jobs:\n  a: {}\n  ci-success:\n    if: "!cancelled()"\n    needs: [a]\n    steps:\n      - run: echo ok\n',
+      ),
       failures,
     );
     expect(failures).toHaveLength(1);
@@ -593,14 +614,22 @@ describe('checkPublishingBoundary', () => {
 
   it('fails for the job-level scalar "write-all" on a job not on the publishing allowlist', () => {
     const failures: WorkflowPolicyFailure[] = [];
-    checkPublishingBoundary('ci.yml', doc('jobs:\n  build:\n    permissions: write-all\n'), failures);
+    checkPublishingBoundary(
+      'ci.yml',
+      doc('jobs:\n  build:\n    permissions: write-all\n'),
+      failures,
+    );
     expect(failures).toHaveLength(1);
     expect(failures[0]?.message).toMatch(/not on the publishing allowlist/);
   });
 
   it('passes for the job-level scalar "read-all" (no implied contents:write)', () => {
     const failures: WorkflowPolicyFailure[] = [];
-    checkPublishingBoundary('ci.yml', doc('jobs:\n  build:\n    permissions: read-all\n'), failures);
+    checkPublishingBoundary(
+      'ci.yml',
+      doc('jobs:\n  build:\n    permissions: read-all\n'),
+      failures,
+    );
     expect(failures).toEqual([]);
   });
 });
@@ -688,11 +717,13 @@ describe('checkActionFile', () => {
 });
 
 describe('listActionFiles', () => {
-  it('discovers the repository\'s real .github/actions/setup/action.yml', () => {
+  it("discovers the repository's real .github/actions/setup/action.yml", () => {
     // QNBS-v3: existsSync isn't DI'd (matches listWorkflowFiles), so this hits the real fs.
     const files = listActionFiles();
     expect(
-      files.some((filePath) => filePath.endsWith(join('.github', 'actions', 'setup', 'action.yml'))),
+      files.some((filePath) =>
+        filePath.endsWith(join('.github', 'actions', 'setup', 'action.yml')),
+      ),
     ).toBe(true);
   });
 

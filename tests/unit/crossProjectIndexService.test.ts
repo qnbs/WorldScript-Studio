@@ -67,13 +67,6 @@ beforeEach(async () => {
   }
 });
 
-// Flush the fire-and-forget DuckDB write chain (loadDuckdbAnalytics().then(...)) deterministically —
-// it is a pure microtask chain (mocked loader resolves synchronously), so awaiting a few microtask
-// ticks settles it without depending on real timers / wall-clock scheduling.
-async function flushMicrotasks() {
-  for (let i = 0; i < 5; i++) await Promise.resolve();
-}
-
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 describe('crossProjectIndexService', () => {
@@ -160,7 +153,6 @@ describe('crossProjectIndexService', () => {
   // IDB put (so a mid-call opt-out is honoured). The IDB index itself is written regardless.
   it('indexProject writes the DuckDB mirror when the gate callback returns true', async () => {
     await indexProject('proj-1', makeProjectData(), () => true);
-    await flushMicrotasks();
     expect(mockCrossProjectWrite).toHaveBeenCalledWith(
       expect.objectContaining({ projectId: 'proj-1', title: 'My Novel' }),
     );
@@ -168,11 +160,31 @@ describe('crossProjectIndexService', () => {
 
   it('indexProject skips the DuckDB mirror when the gate callback returns false (IDB still written)', async () => {
     await indexProject('proj-1', makeProjectData(), () => false);
-    await flushMicrotasks();
     expect(mockCrossProjectWrite).not.toHaveBeenCalled();
     // IDB search index is still populated — search works regardless of analytics opt-out.
     const results = await listIndexedProjects();
     expect(results.find((r) => r.projectId === 'proj-1')).toBeDefined();
+  });
+
+  // QNBS-v3: closes a cubic P1 finding -- a caller awaiting indexProject() (e.g. a factory reset's coordinator drain) must see the mirror write as done, not still in flight after this call already resolved.
+  it("indexProject's own promise does not resolve until the DuckDB mirror write settles", async () => {
+    let resolveMirror: () => void = () => {};
+    mockCrossProjectWrite.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveMirror = resolve;
+      }),
+    );
+    let indexProjectSettled = false;
+    const pending = indexProject('proj-1', makeProjectData(), () => true).then(() => {
+      indexProjectSettled = true;
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(indexProjectSettled).toBe(false);
+
+    resolveMirror();
+    await pending;
+    expect(indexProjectSettled).toBe(true);
   });
 });
 

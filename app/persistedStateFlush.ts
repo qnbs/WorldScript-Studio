@@ -1,7 +1,11 @@
 import type { ProjectData } from '../features/project/projectSlice';
+import { isFactoryResetInProgress } from '../services/factoryResetService';
 import { saveEnvelopeFromProjectData, storageService } from '../services/storageService';
+import {
+  projectPersistenceCoordinator,
+  settingsPersistenceCoordinator,
+} from './persistenceCoordinator';
 import type { RootState } from './store';
-import { projectPersistenceCoordinator, settingsPersistenceCoordinator } from './persistenceCoordinator';
 
 /**
  * QNBS-v3 (#332/D3): shared, awaitable flush of pending project+settings state. Used by both the
@@ -12,6 +16,8 @@ import { projectPersistenceCoordinator, settingsPersistenceCoordinator } from '.
  * swallowed by Promise.allSettled — callers decide their own failure policy.
  */
 export async function flushPersistedState(state: RootState): Promise<void> {
+  // QNBS-v3: window.location.reload() fires visibilitychange before the page actually unloads -- without this, a factory reset's own reload races this flush, recreating the just-deleted database with stale pre-reset state.
+  if (isFactoryResetInProgress()) return;
   const presentData = state.project.present?.data;
   // QNBS-v3 (#332): make visibility and quit flushes wait behind both active and queued saves.
   const saves: Promise<unknown>[] = [

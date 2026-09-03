@@ -14,11 +14,16 @@ import type { RootState } from '../../app/store';
 const h = vi.hoisted(() => ({
   saveProject: vi.fn(async (_envelope: { envelope: Record<string, unknown> }) => {}),
   saveSettings: vi.fn(async (_settings: unknown) => {}),
+  isFactoryResetInProgress: vi.fn(() => false),
 }));
 
 vi.mock('../../services/storageService', () => ({
   storageService: { saveProject: h.saveProject, saveSettings: h.saveSettings },
   saveEnvelopeFromProjectData: (data: unknown) => ({ envelope: data }),
+}));
+
+vi.mock('../../services/factoryResetService', () => ({
+  isFactoryResetInProgress: () => h.isFactoryResetInProgress(),
 }));
 
 import { flushPersistedState } from '../../app/persistedStateFlush';
@@ -47,6 +52,15 @@ describe('flushPersistedState', () => {
   beforeEach(() => {
     h.saveProject.mockClear();
     h.saveSettings.mockClear();
+    h.isFactoryResetInProgress.mockReturnValue(false);
+  });
+
+  // QNBS-v3: window.location.reload() fires visibilitychange before the page actually unloads -- a factory reset's own reload must not race this flush into recreating the just-deleted database.
+  it('skips the flush entirely while a factory reset is in progress', async () => {
+    h.isFactoryResetInProgress.mockReturnValue(true);
+    await flushPersistedState(buildState());
+    expect(h.saveProject).not.toHaveBeenCalled();
+    expect(h.saveSettings).not.toHaveBeenCalled();
   });
 
   it('saves project (enriched with persistedVersionControl) and settings', async () => {

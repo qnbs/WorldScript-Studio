@@ -40,6 +40,22 @@ vi.mock('../../services/storageService', () => ({
   },
 }));
 
+const mockIsFactoryResetInProgress = vi.fn(() => false);
+vi.mock('../../services/factoryResetService', () => ({
+  isFactoryResetInProgress: () => mockIsFactoryResetInProgress(),
+}));
+
+// QNBS-v3: dynamically imported by listenerMiddleware's post-save side effects -- mocked so tests can assert on it directly instead of touching the real IDB store.
+const mockIndexProject = vi.fn().mockResolvedValue(undefined);
+vi.mock('../../services/crossProjectIndexService', () => ({
+  indexProject: (...args: unknown[]) => mockIndexProject(...args),
+}));
+
+const mockCheckStorageHealth = vi.fn().mockResolvedValue({ ok: true, warning: null });
+vi.mock('../../services/dbInitialization', () => ({
+  checkStorageHealth: (...args: unknown[]) => mockCheckStorageHealth(...args),
+}));
+
 vi.mock('../../services/dbService', () => ({
   dbService: {
     initDB: vi.fn().mockResolvedValue(undefined),
@@ -183,6 +199,9 @@ function getNotifications(store: MinimalStore) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // QNBS-v3: clearAllMocks resets call history, not a mockReturnValue override -- an assertion failure mid-test must not leave this true for every later test in the file.
+  mockIsFactoryResetInProgress.mockReturnValue(false);
+  mockCheckStorageHealth.mockResolvedValue({ ok: true, warning: null });
   vi.useFakeTimers();
 });
 
@@ -350,6 +369,65 @@ describe('auto-save project listener', () => {
     // An error notification should be present
     const errorNote = notifications.find((n) => n.type === 'error');
     expect(errorNote).toBeTruthy();
+  });
+
+  // QNBS-v3: a debounce armed just before a factory reset began must not fire after it and repopulate the database the reset just deleted.
+  it('skips the debounced save entirely while a factory reset is in progress', async () => {
+    mockIsFactoryResetInProgress.mockReturnValue(true);
+    const store = makeFullStore();
+    store.dispatch(projectActions.updateTitle('Should Never Save'));
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(mockSaveProject).not.toHaveBeenCalled();
+  });
+
+  // QNBS-v3: the shared addDebouncedListener guard passes once before this effect's own checkStorageHealth() await -- a reset starting during that gap must still be caught by the re-check immediately before enqueue().
+  it('skips saveProject when a factory reset starts while checkStorageHealth is still pending', async () => {
+    let resolveHealth: (value: { ok: boolean; warning: string | null }) => void = () => {};
+    mockCheckStorageHealth.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveHealth = resolve;
+      }),
+    );
+    const store = makeFullStore();
+    store.dispatch(projectActions.updateTitle('Race Test'));
+    await vi.advanceTimersByTimeAsync(1000);
+    // QNBS-v3: the effect is now suspended inside its own checkStorageHealth() await, past the shared guard's first (already-false) check.
+    expect(mockCheckStorageHealth).toHaveBeenCalled();
+
+    mockIsFactoryResetInProgress.mockReturnValue(true);
+    resolveHealth({ ok: true, warning: null });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(mockSaveProject).not.toHaveBeenCalled();
+  });
+
+  // QNBS-v3: enqueue() resolving already clears the coordinator's own active slot, so a reset starting right after is invisible to wipeAllAppData()'s drain -- the post-save writes need their own re-check.
+  it('skips the cross-project index update when a factory reset starts right after the save resolves', async () => {
+    let resolveSave: (value?: undefined) => void = () => {};
+    mockSaveProject.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveSave = resolve;
+      }),
+    );
+    const store = makeFullStore();
+    store.dispatch(projectActions.updateTitle('Post-Save Race'));
+    await vi.advanceTimersByTimeAsync(1000);
+    // QNBS-v3: the effect is now suspended awaiting the coordinator's enqueue(), which is itself awaiting this pending save.
+    expect(mockSaveProject).toHaveBeenCalled();
+
+    mockIsFactoryResetInProgress.mockReturnValue(true);
+    resolveSave();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(mockIndexProject).not.toHaveBeenCalled();
+  });
+
+  it('runs the cross-project index update when no reset is in progress', async () => {
+    const store = makeFullStore();
+    store.dispatch(projectActions.updateTitle('Normal Save'));
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(mockIndexProject).toHaveBeenCalled();
   });
 });
 
