@@ -2,7 +2,7 @@
 // QNBS-v3: node environment + global.indexedDB = fake-indexeddb avoids jsdom's stub.
 //          Module imported once — singleton dbPromise reused; tests clean own records via removeProjectIndex.
 import { indexedDB as fakeIdb, IDBKeyRange } from 'fake-indexeddb';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 global.indexedDB = fakeIdb;
 global.IDBKeyRange = IDBKeyRange;
@@ -30,6 +30,7 @@ import {
   removeProjectIndex,
   semanticSearchProjects,
 } from '../../services/crossProjectIndexService';
+import { beginIdbReset, endIdbReset } from '../../services/storage/idbResetGate';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -290,5 +291,61 @@ describe('semanticSearchProjects', () => {
     const results = await semanticSearchProjects('space');
     const first = results[0];
     expect(first?.projectId).toBe('proj-1');
+  });
+
+  describe('reset-gate interaction', () => {
+    afterEach(() => {
+      endIdbReset();
+    });
+
+    // QNBS-v3: rejects immediately rather than starting a new open while a reset is draining.
+    it('rejects indexProject() while a reset is in progress', async () => {
+      const resetPromise = beginIdbReset();
+      await expect(indexProject('proj-1', makeProjectData())).rejects.toThrow(
+        'IndexedDB reset in progress',
+      );
+      await resetPromise;
+    });
+
+    // QNBS-v3: the reset closer must close the live connection so a later open can't reuse a stale reference, and a fresh open afterward must durably succeed.
+    it('closes the live connection on reset and durably reopens on the next call', async () => {
+      await indexProject('proj-1', makeProjectData());
+      await beginIdbReset();
+      endIdbReset();
+
+      await indexProject('proj-1', makeProjectData());
+      const results = await listIndexedProjects();
+      expect(results.find((r) => r.projectId === 'proj-1')).toBeDefined();
+    });
+
+    // QNBS-v3: exercises the actual generation race -- a second reset begins WHILE a fresh open (started right after the first reset closed the prior connection) is still in flight, before its onsuccess has fired.
+    it('discards an open that was already in flight when a second reset begins before it completes', async () => {
+      await beginIdbReset();
+      endIdbReset();
+
+      const staleIndex = indexProject('proj-1', makeProjectData());
+      await beginIdbReset();
+      endIdbReset();
+      await expect(staleIndex).rejects.toThrow('IndexedDB reset in progress');
+
+      await indexProject('proj-1', makeProjectData());
+      const results = await listIndexedProjects();
+      expect(results.find((r) => r.projectId === 'proj-1')).toBeDefined();
+    });
+
+    // QNBS-v3: two concurrent callers before the first open resolves must share the SAME in-flight promise, not each start their own indexedDB.open().
+    it('shares the in-flight open promise across concurrent callers', async () => {
+      await beginIdbReset();
+      endIdbReset();
+
+      const [first, second] = await Promise.all([
+        indexProject('proj-1', makeProjectData()),
+        indexProject('proj-2', makeProjectData({ id: 'proj-2' })),
+      ]);
+      expect(first).toBeUndefined();
+      expect(second).toBeUndefined();
+      const results = await listIndexedProjects();
+      expect(results.map((r) => r.projectId).sort()).toEqual(['proj-1', 'proj-2']);
+    });
   });
 });

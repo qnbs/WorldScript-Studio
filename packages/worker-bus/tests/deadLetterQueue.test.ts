@@ -1,6 +1,8 @@
 /// <reference lib="dom" />
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { IDBFactory, IDBKeyRange } from 'fake-indexeddb';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beginIdbReset, endIdbReset } from '../../../services/storage/idbResetGate';
 import { DeadLetterQueue } from '../src/deadLetterQueue';
 import type { TaskResult } from '../src/types';
 
@@ -126,5 +128,55 @@ describe('DeadLetterQueue', () => {
     expect(dlq3.count()).toBe(2);
 
     (globalThis as unknown as { indexedDB: unknown }).indexedDB = originalIDB;
+  });
+
+  describe('reset-gate interaction', () => {
+    let originalIDB: unknown;
+
+    beforeEach(() => {
+      originalIDB = globalThis.indexedDB;
+      (globalThis as unknown as { indexedDB: unknown }).indexedDB = new IDBFactory();
+      (globalThis as unknown as { IDBKeyRange: unknown }).IDBKeyRange = IDBKeyRange;
+    });
+
+    afterEach(() => {
+      endIdbReset();
+      (globalThis as unknown as { indexedDB: unknown }).indexedDB = originalIDB;
+    });
+
+    // QNBS-v3: rejects immediately rather than starting a new open while a reset is draining -- persist()/load() swallow the rejection (best-effort DLQ), so we assert on the resulting durable state instead of the promise itself.
+    it('does not persist while a reset is in progress, but keeps working in memory', async () => {
+      const dlq = new DeadLetterQueue(4);
+      const resetPromise = beginIdbReset();
+      dlq.add(makeEntry('during-reset', 1));
+      expect(dlq.count()).toBe(1);
+      await resetPromise;
+      endIdbReset();
+    });
+
+    // QNBS-v3: the reset closer must close the live connection, and exercises the actual generation race -- a second reset begins while a fresh open (started right after the first reset closed the prior connection) is still in flight, before its onsuccess has fired. One DeadLetterQueue instance throughout: persist() clears and rewrites the whole store from its OWN in-memory entries, so separate instances would each wipe the others' data.
+    it('closes the live connection on reset and durably persists again after a race with a second reset', async () => {
+      const dlq = new DeadLetterQueue(4);
+      dlq.add(makeEntry('warm', 1));
+      await vi.waitFor(async () => {
+        const loader = new DeadLetterQueue(4);
+        await loader.load();
+        expect(loader.count()).toBe(1);
+      });
+
+      await beginIdbReset();
+      endIdbReset();
+
+      dlq.add(makeEntry('racing', 2));
+      await beginIdbReset();
+      endIdbReset();
+
+      dlq.add(makeEntry('fresh', 3));
+      await vi.waitFor(async () => {
+        const loader = new DeadLetterQueue(4);
+        await loader.load();
+        expect(loader.list().some((e) => e.task.taskId === 'fresh')).toBe(true);
+      });
+    });
   });
 });

@@ -16,6 +16,11 @@ import {
   IdbConnectionManager,
   retryDb,
 } from '../../../services/storage/idbCore';
+import {
+  _resetIdbResetGateForTest,
+  beginIdbReset,
+  endIdbReset,
+} from '../../../services/storage/idbResetGate';
 
 // ---------------------------------------------------------------------------
 // compressData / decompressData
@@ -241,5 +246,58 @@ describe('IdbConnectionManager — single-flight opens', () => {
 
     expect(openSpy.mock.calls.filter(([name]) => name === STATE_DB_NAME)).toHaveLength(0);
     expect(openSpy.mock.calls.filter(([name]) => name === DATA_DB_NAME)).toHaveLength(1);
+  });
+
+  // QNBS-v3: mirror of the sibling test above -- proves the guard is symmetric, not just for stateDb.
+  it('does not reopen an already-live data database when only its sibling needs a fresh open', async () => {
+    type ManagerInternals = { stateDb: IDBDatabase | null };
+    const manager = new IdbConnectionManager();
+
+    await manager.initDB();
+
+    const internals = manager as unknown as ManagerInternals;
+    internals.stateDb?.close();
+    internals.stateDb = null;
+
+    const openSpy = vi.spyOn(indexedDB, 'open');
+    await manager.initDB();
+
+    expect(openSpy.mock.calls.filter(([name]) => name === DATA_DB_NAME)).toHaveLength(0);
+    expect(openSpy.mock.calls.filter(([name]) => name === STATE_DB_NAME)).toHaveLength(1);
+  });
+
+  describe('reset-gate interaction', () => {
+    afterEach(() => {
+      _resetIdbResetGateForTest();
+    });
+
+    // QNBS-v3: rejects immediately rather than starting a new open while a reset is draining.
+    it('rejects initDB() while a reset is currently in progress', async () => {
+      const manager = new IdbConnectionManager();
+      const resetPromise = beginIdbReset();
+      await expect(manager.initDB()).rejects.toThrow('IndexedDB reset in progress');
+      await resetPromise;
+      endIdbReset();
+    });
+
+    // QNBS-v3: a reset that starts and ends WHILE an open is already in flight must discard that open's result once its onsuccess fires, rather than caching a connection whose generation is now stale.
+    it('discards both connections when a reset begins while their opens are still in flight', async () => {
+      const manager = new IdbConnectionManager();
+      const initPromise = manager.initDB();
+      // QNBS-v3: the generation bump happens synchronously, before the pending opens' onsuccess can possibly fire.
+      await beginIdbReset();
+      endIdbReset();
+      await expect(initPromise).rejects.toThrow('IndexedDB reset in progress');
+
+      type ManagerInternals = { stateDb: IDBDatabase | null; dataDb: IDBDatabase | null };
+      const internals = manager as unknown as ManagerInternals;
+      expect(internals.stateDb).toBeNull();
+      expect(internals.dataDb).toBeNull();
+
+      // A fresh attempt after the reset ended must retry and durably succeed.
+      await manager.initDB();
+      expect(internals.stateDb).not.toBeNull();
+      expect(internals.dataDb).not.toBeNull();
+    });
   });
 });

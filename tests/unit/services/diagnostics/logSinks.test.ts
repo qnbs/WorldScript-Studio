@@ -134,4 +134,62 @@ describe('renderer-specific diagnostics sinks', () => {
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     expect(open).toHaveBeenCalledWith('worldscript-logs-db', 1);
   });
+
+  describe('reset-gate interaction', () => {
+    // QNBS-v3 (coderabbit): a fixed `await Promise.resolve()` couples these tests to the write queue's exact internal await-depth -- if it ever gains one more await, "during-reset"/"racing-write" would land after all (test 1 fails loudly) or the race would silently stop covering the branch it claims to (test 2, no failure). Both tests now wait on the observable admission-check call itself instead of a fixed tick count.
+    it('closes the connection on reset, rejects while draining, and durably reopens afterward', async () => {
+      const { writeLogEntryToSinks } = await import('../../../../services/diagnostics/logSinks');
+      const idbResetGate = await import('../../../../services/storage/idbResetGate');
+      const { beginIdbReset, endIdbReset } = idbResetGate;
+      const admissionSpy = vi.spyOn(idbResetGate, 'beginIdbOpenAdmission');
+
+      writeLogEntryToSinks(entry('before-reset'));
+      await vi.waitFor(async () => {
+        const entries = await readIdbEntries();
+        expect(entries.some((e) => e.message === 'before-reset')).toBe(true);
+      });
+
+      await beginIdbReset();
+      admissionSpy.mockClear();
+      // QNBS-v3: a write attempted while still draining must be rejected by beginIdbOpenAdmission(), not silently queued against a closed connection. Waits for the write queue to actually REACH that admission check (observable), not a guessed number of microtask ticks.
+      writeLogEntryToSinks(entry('during-reset'));
+      await vi.waitFor(() => expect(admissionSpy).toHaveBeenCalled());
+      expect(admissionSpy).toHaveReturnedWith(null);
+      endIdbReset();
+
+      writeLogEntryToSinks(entry('after-reset'));
+      await vi.waitFor(async () => {
+        const entries = await readIdbEntries();
+        expect(entries.some((e) => e.message === 'after-reset')).toBe(true);
+      });
+      const entries = await readIdbEntries();
+      expect(entries.some((e) => e.message === 'during-reset')).toBe(false);
+    });
+
+    // QNBS-v3: exercises the actual generation race -- the reset begins WHILE this open is already in flight, before its onsuccess has fired.
+    it('discards an open that races a reset before its onsuccess fires', async () => {
+      const { writeLogEntryToSinks } = await import('../../../../services/diagnostics/logSinks');
+      const idbResetGate = await import('../../../../services/storage/idbResetGate');
+      const { beginIdbReset, endIdbReset } = idbResetGate;
+      const admissionSpy = vi.spyOn(idbResetGate, 'beginIdbOpenAdmission');
+      const openSpy = vi.spyOn(indexedDB, 'open');
+
+      writeLogEntryToSinks(entry('racing-write'));
+      // QNBS-v3 (coderabbit): waits for the ACTUAL indexedDB.open() call (observable), not a guessed microtask count -- a microtask-paced poll rather than vi.waitFor's real-time (50ms) interval, since fake-indexeddb's own onsuccess can fire faster than that and would otherwise be missed. Proves the open genuinely started (and was admitted) BEFORE the reset's generation bump, so the later discard is provably via the onsuccess generation check, not via admission rejecting a not-yet-started open.
+      while (openSpy.mock.calls.length === 0) {
+        await Promise.resolve();
+      }
+      expect(admissionSpy).toHaveReturnedWith(expect.any(Number));
+      await beginIdbReset();
+      endIdbReset();
+
+      writeLogEntryToSinks(entry('after-reset'));
+      await vi.waitFor(async () => {
+        const entries = await readIdbEntries();
+        expect(entries.some((e) => e.message === 'after-reset')).toBe(true);
+      });
+      const entries = await readIdbEntries();
+      expect(entries.some((e) => e.message === 'racing-write')).toBe(false);
+    });
+  });
 });
