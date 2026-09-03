@@ -151,15 +151,15 @@ describe('wipeAllAppData', () => {
       await Promise.resolve();
       expect(delSpy).not.toHaveBeenCalled();
 
-      // QNBS-v3: resolving only one of the two must not be enough -- proves the drain genuinely waits on both, not just whichever settles first.
-      resolveIndexWrite();
-      await enqueuedIndex;
+      // QNBS-v3: DuckDB resolved first (not index) is the discriminating order -- if crossProjectIndexCoordinator.idle() were dropped from the drain, deletion would proceed right here since every other awaited promise is already settled.
+      resolveDuckDbWrite();
+      await enqueuedDuckDb;
       await Promise.resolve();
       await Promise.resolve();
       expect(delSpy).not.toHaveBeenCalled();
 
-      resolveDuckDbWrite();
-      await enqueuedDuckDb;
+      resolveIndexWrite();
+      await enqueuedIndex;
       await vi.runAllTimersAsync();
       await done;
       expect(delSpy).toHaveBeenCalled();
