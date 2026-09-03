@@ -1852,6 +1852,7 @@ transitive deps and are never shipped to users.
 | ip-address | >=10.1.1 | preventive pin — no direct advisory | Dev/test transitive hardening; no advisory matches this floor. |
 | uuid | >=11.1.1 | preventive pin — no direct advisory | Conservative version floor; no security advisory applies (the prior "collision" note was inaccurate). |
 | joi (transitive via `wait-on` ← `@storybook/test-runner` → `jest-process-manager`) | ^18.2.1 | transitive hardening (dev-only) | `wait-on@7.2.0` originally pulled an older `joi`; lockfile pins `joi@18.2.1` for both `wait-on@7.2.0` and `wait-on@9.0.10`. Dev/test toolchain only, never shipped. |
+| fflate | >=0.8.3 | GHSA-px8p-9vwx-vf98 / CVE-2026-45820 | `unzipSync()` infinite loop on a crafted ZIP64 archive missing its required extra field (≤0.8.2; fixed 0.8.3). Transitive via `jspdf@4.2.1` (PDF export), whose own `^0.8.1` range already permits the patched version. Advisory elevated to GitHub-reviewed status 2026-09-03, discovered via a routine Security Audit CI failure the same day. |
 
 **Dependency hygiene status (2026-06-13):**
 - `pnpm audit --audit-level=high` → 0 vulnerabilities.
