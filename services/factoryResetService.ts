@@ -12,7 +12,8 @@ import { logger } from './logger';
 import { isTauriRuntime } from './tauriRuntime';
 
 // QNBS-v3: mirrors public/sw.js's isWorldScriptOwnedCache/register-sw.ts's isWorldScriptOwnedCacheName — duplicated (not imported) since sw.js is a classic non-module script and register-sw.ts has its own load-time side effect.
-const OWNED_CACHE_NAME_RE = /^worldscript-(?:static|dynamic|images)-v\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/;
+const OWNED_CACHE_NAME_RE =
+  /^worldscript-(?:static|dynamic|images)-v\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/;
 const isWorldScriptOwnedCacheName = (name: string): boolean => OWNED_CACHE_NAME_RE.test(name);
 
 /** All IDB databases the app may have created. */
@@ -59,6 +60,18 @@ async function clearServiceWorkerCaches(): Promise<void> {
     await Promise.all(keys.filter(isWorldScriptOwnedCacheName).map((k) => caches.delete(k)));
   } catch {
     // Non-fatal — caches cleared on next SW registration
+  }
+}
+
+// QNBS-v3: the deep-link hash and `view` query param both survive a bare window.location.reload(), and useApp.ts's readInitialView() reads them before checking whether a project even exists -- without this, a reset triggered from Settings reboots straight back into Settings.
+function sanitizeViewCarryingUrlState(): void {
+  try {
+    const url = new URL(window.location.href);
+    url.hash = '';
+    url.searchParams.delete('view');
+    history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+  } catch {
+    // Never let URL sanitization block the reset itself.
   }
 }
 
@@ -109,5 +122,6 @@ export async function wipeAllAppData(): Promise<void> {
   }
   // Small delay so async IDB deletions can settle before unload.
   await new Promise((r) => setTimeout(r, 300));
+  sanitizeViewCarryingUrlState();
   window.location.reload();
 }

@@ -85,6 +85,28 @@ describe('wipeAllAppData', () => {
     delSpy.mockRestore();
   });
 
+  // QNBS-v3: a bare reload preserves the hash, and readInitialView() reads it before checking whether a project exists, rebooting a freshly wiped app straight back into the pre-reset view.
+  it('sanitizes the view-carrying hash and view query param before reload, preserving other URL state', async () => {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        ...originalLocation,
+        href: 'http://localhost:3000/WorldScript-Studio/?foo=bar&view=settings#/settings',
+        reload: reloadMock,
+      },
+    });
+    const replaceStateSpy = vi.spyOn(history, 'replaceState').mockImplementation(() => undefined);
+
+    await runWipe();
+
+    expect(replaceStateSpy).toHaveBeenCalledWith(null, '', '/WorldScript-Studio/?foo=bar');
+    expect(reloadMock).toHaveBeenCalledTimes(1);
+    expect(replaceStateSpy.mock.invocationCallOrder[0]).toBeLessThan(
+      reloadMock.mock.invocationCallOrder[0]!,
+    );
+    replaceStateSpy.mockRestore();
+  });
+
   it('falls back to the known database list when indexedDB.databases() fails', async () => {
     const dbSpy = vi.spyOn(indexedDB, 'databases').mockRejectedValueOnce(new Error('not allowed'));
     const delSpy = vi.spyOn(indexedDB, 'deleteDatabase');
@@ -98,10 +120,12 @@ describe('wipeAllAppData', () => {
     delSpy.mockRestore();
   });
 
-  it('clears this app\'s own service-worker caches when the Cache API is available', async () => {
+  it("clears this app's own service-worker caches when the Cache API is available", async () => {
     const del = vi.fn().mockResolvedValue(true);
     vi.stubGlobal('caches', {
-      keys: vi.fn().mockResolvedValue(['worldscript-static-v1.28.2', 'worldscript-dynamic-v1.28.2']),
+      keys: vi
+        .fn()
+        .mockResolvedValue(['worldscript-static-v1.28.2', 'worldscript-dynamic-v1.28.2']),
       delete: del,
     });
 
