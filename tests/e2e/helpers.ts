@@ -29,6 +29,21 @@ export async function clickNavItem(page: Page, name: RegExp): Promise<void> {
   await page.locator('#sidebar-mobile').getByRole('button', { name }).click();
 }
 
+/** Locale-independent Settings navigation: same mobile-aware fallback as clickNavItem, keyed on the stable `data-tour="nav-settings"` anchor instead of translated visible text. */
+async function clickSettingsNavItem(page: Page): Promise<void> {
+  const desktopBtn = page.locator('#sidebar [data-tour="nav-settings"]');
+  if (await desktopBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
+    await desktopBtn.click();
+    return;
+  }
+  // QNBS-v3: data-tour="nav-more" (not a translated /More/i label) so this stays locale-independent on a non-English mobile boot.
+  const moreBtn = page.locator('[data-tour="nav-more"]');
+  await expect(moreBtn).toBeVisible({ timeout: 8000 });
+  await moreBtn.click();
+  await page.locator('#sidebar-mobile').waitFor({ state: 'visible' });
+  await page.locator('#sidebar-mobile [data-tour="nav-settings"]').click();
+}
+
 // QNBS-v3: Stable Writer `#writer-section-select` + option handling avoids Playwright strict-mode / native-<option> visibility pitfalls that broke CI E2E.
 
 /** Writer section `<Select>` — stable id to avoid picking tone/tool comboboxes elsewhere on the page. */
@@ -147,6 +162,19 @@ export async function waitForMainChrome(page: Page): Promise<void> {
   ]);
 }
 
+/** QNBS-v3: explicit discriminated startup state, not boolean soup — repeatedly asking "is the portal visible?" via isVisible().catch(()=>false) can't distinguish "main chrome" from "still loading" and silently swallows genuine errors as false. */
+export type StartupState = 'WELCOME_PORTAL' | 'MAIN_CHROME';
+
+/** Resolves which of waitForSpaReady()'s two shapes the current document actually reached. */
+export async function resolveStartupState(page: Page): Promise<StartupState> {
+  await waitForSpaReady(page);
+  const portal = page.getByTestId('welcome-portal');
+  if (await portal.isVisible().catch(() => false)) {
+    return 'WELCOME_PORTAL';
+  }
+  return 'MAIN_CHROME';
+}
+
 /** Language toggle on the welcome portal (EN must be active for English copy in assertions). */
 export async function selectEnglish(page: Page): Promise<void> {
   const enBtn = page.getByRole('button', { name: /^EN$/i }).first();
@@ -179,36 +207,20 @@ export async function ensureBlankProject(page: Page): Promise<void> {
  * waitForSpaReady()'s two success shapes the app actually booted into. A cold CI boot has landed
  * in an already-mounted main shell with a persisted project instead of the portal — a startup-
  * state precondition gap distinct from the (fixed) portal-activation auto-seed race.
- * Contract: guarantees the portal is reached, locale-independently — it does NOT guarantee
- * English. A caller needing English selects it itself (export.spec.ts already does this for the
- * fresh-boot case). Recovers via the real Settings → Data & Backups → Factory Reset flow when
- * main chrome is active so no React/Redux/storage internals are touched — only supported app
- * behavior.
+ * Contract: guarantees the portal is reached, locale-independently. Recovers via the real
+ * Settings → Data & Backups → Factory Reset flow when main chrome is active so no React/Redux/
+ * storage internals are touched — only supported app behavior.
  */
 export async function ensureWelcomePortalEntry(page: Page): Promise<void> {
-  await waitForSpaReady(page);
   const portal = page.getByTestId('welcome-portal');
-  if (await portal.isVisible({ timeout: 3000 }).catch(() => false)) {
+  if ((await resolveStartupState(page)) === 'WELCOME_PORTAL') {
     return;
   }
-  // QNBS-v3: force English before the locale-dependent recovery flow below, or a persisted non-EN/DE language would hang it.
-  await page.evaluate(() => localStorage.setItem('worldscript-language', 'en'));
-  await page.reload();
-  await waitForSpaReady(page);
-  // QNBS-v3: this reload can itself race a pending debounced autosave and land back in WelcomePortal instead of main chrome — accept either state again rather than assuming main chrome.
-  if (await portal.isVisible({ timeout: 3000 }).catch(() => false)) {
-    return;
-  }
-  await waitForMainChrome(page);
-  await clickNavItem(page, /Settings/i);
-  await page
-    .getByRole('button', { name: /Data & Backups|Daten & Backups/i })
-    .first()
-    .click();
-  await page.getByRole('button', { name: /Factory Reset|Werkseinstellungen/i }).click();
-  await page
-    .getByRole('button', { name: /Delete everything & restart|Alles löschen & neu starten/i })
-    .click();
+  // QNBS-v3: every step below uses a stable data-tour/data-testid anchor, never translated text — Playwright's own docs say addInitScript execution order across registrations is unspecified, so this cannot rely on forcing a language first.
+  await clickSettingsNavItem(page);
+  await page.getByTestId('settings-nav-data').click();
+  await page.getByTestId('factory-reset-button').click();
+  await page.getByTestId('factory-reset-confirm-button').click();
   await waitForSpaReady(page);
   await expect(portal).toBeVisible({ timeout: 15000 });
 }
