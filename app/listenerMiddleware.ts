@@ -74,7 +74,7 @@ function addDebouncedListener(
       // invocation runs after the delay window. Without this, 50 rapid dispatches produce 50 saves.
       listenerApi.cancelActiveListeners();
       await listenerApi.delay(delayMs);
-      // QNBS-v3: a debounce armed just before a factory reset began still fires after it -- this shared gate is the same one flushPersistedState checks, closing every autosave path (not just visibilitychange) that could otherwise repopulate the database the reset just deleted.
+      // QNBS-v3: a debounce armed just before a factory reset began still fires after it -- blocks a new project/settings/codex write from starting once resetInProgress flips; project autosave re-checks again immediately before its own enqueue() since checkStorageHealth() is an await this gate already passed once.
       if (isFactoryResetInProgress()) return;
       await effect({
         getState: () => listenerApi.getState() as RootState,
@@ -151,6 +151,8 @@ addDebouncedListener(
         /* non-critical */
       }
 
+      // QNBS-v3: re-checked here, not just at the top of addDebouncedListener -- checkStorageHealth() above is an await this shared guard already passed before, so a reset started during that gap would otherwise still reach enqueue() unblocked. No await sits between this check and enqueue() itself, so nothing can interleave between them.
+      if (isFactoryResetInProgress()) return;
       // QNBS-v3 (#332): skip stale indexing after a newer project snapshot supersedes this save.
       const projectSaveResult = await projectPersistenceCoordinator.enqueue(() =>
         storageService.saveProject(projectDataToSave),
@@ -292,6 +294,7 @@ addDebouncedListener(
         { advanced: state.featureFlags?.enableStoryBibleAdvanced ?? false },
         binderResearchSections,
       );
+      // QNBS-v3: unlike project/settings, this write isn't drained by wipeAllAppData() before deletion -- accepted, since Codex is a regenerable index derived from the manuscript, not primary data whose staleness affects which boot screen the app shows.
       await saveStoryCodex(codex);
 
       // QNBS-v3: SEC — re-read live state at the gate (not the pre-await snapshot) so toggling the

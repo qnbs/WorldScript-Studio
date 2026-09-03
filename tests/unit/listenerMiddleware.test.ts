@@ -45,6 +45,11 @@ vi.mock('../../services/factoryResetService', () => ({
   isFactoryResetInProgress: () => mockIsFactoryResetInProgress(),
 }));
 
+const mockCheckStorageHealth = vi.fn().mockResolvedValue({ ok: true, warning: null });
+vi.mock('../../services/dbInitialization', () => ({
+  checkStorageHealth: (...args: unknown[]) => mockCheckStorageHealth(...args),
+}));
+
 vi.mock('../../services/dbService', () => ({
   dbService: {
     initDB: vi.fn().mockResolvedValue(undefined),
@@ -190,6 +195,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   // QNBS-v3: clearAllMocks resets call history, not a mockReturnValue override -- an assertion failure mid-test must not leave this true for every later test in the file.
   mockIsFactoryResetInProgress.mockReturnValue(false);
+  mockCheckStorageHealth.mockResolvedValue({ ok: true, warning: null });
   vi.useFakeTimers();
 });
 
@@ -365,6 +371,27 @@ describe('auto-save project listener', () => {
     const store = makeFullStore();
     store.dispatch(projectActions.updateTitle('Should Never Save'));
     await vi.advanceTimersByTimeAsync(1500);
+    expect(mockSaveProject).not.toHaveBeenCalled();
+  });
+
+  // QNBS-v3: the shared addDebouncedListener guard passes once before this effect's own checkStorageHealth() await -- a reset starting during that gap must still be caught by the re-check immediately before enqueue().
+  it('skips saveProject when a factory reset starts while checkStorageHealth is still pending', async () => {
+    let resolveHealth: (value: { ok: boolean; warning: string | null }) => void = () => {};
+    mockCheckStorageHealth.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveHealth = resolve;
+      }),
+    );
+    const store = makeFullStore();
+    store.dispatch(projectActions.updateTitle('Race Test'));
+    await vi.advanceTimersByTimeAsync(1000);
+    // QNBS-v3: the effect is now suspended inside its own checkStorageHealth() await, past the shared guard's first (already-false) check.
+    expect(mockCheckStorageHealth).toHaveBeenCalled();
+
+    mockIsFactoryResetInProgress.mockReturnValue(true);
+    resolveHealth({ ok: true, warning: null });
+    await vi.advanceTimersByTimeAsync(0);
+
     expect(mockSaveProject).not.toHaveBeenCalled();
   });
 });
