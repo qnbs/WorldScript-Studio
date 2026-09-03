@@ -86,6 +86,54 @@ function addDebouncedListener(
   });
 }
 
+// QNBS-v3: split from a single combined side-effects function -- CodeScene's hotspot gate flagged that one function too once it held both branches; each concern is simple alone.
+async function runCrossProjectIndexUpdate(
+  api: DebouncedEffectApi,
+  presentData: ProjectData,
+  enriched: ProjectData,
+): Promise<void> {
+  if (!presentData.id) return;
+  const { indexProject } = await import('../services/crossProjectIndexService');
+  // QNBS-v3: SEC — a thunk lets the gate re-evaluate at indexProject's DuckDB write site (after its async IDB work) instead of a snapshot here, so a mid-window opt-out can't slip a stale mirror write through.
+  indexProject(presentData.id, enriched, () => isAnalyticsPersistenceAllowed(api.getState())).catch(
+    (err: unknown) => logger.warn('Cross-project index update failed (non-critical):', err),
+  );
+}
+
+async function runDuckDbDualWrite(
+  api: DebouncedEffectApi,
+  presentData: ProjectData,
+): Promise<void> {
+  if (!isAnalyticsPersistenceAllowed(api.getState())) return;
+  const projectId = presentData.id ?? 'default';
+  const sections = presentData.manuscript.map((s, idx) => ({
+    id: s.id,
+    title: s.title,
+    wordCount: (s.content?.match(/\S+/g) ?? []).length,
+    status: s.status,
+    position: idx,
+    scene_start: s.sceneStart,
+  }));
+  const totalWordCount = sections.reduce((acc, s) => acc + s.wordCount, 0);
+  const { duckdbDualWrite, withDuckDbRetry } = await loadDuckdbAnalytics();
+  void withDuckDbRetry(() => {
+    // QNBS-v3: SEC — re-checked at write time since the opt-out may have toggled during the async loadDuckdbAnalytics()/retry window, making the outer gate's snapshot stale.
+    if (!isAnalyticsPersistenceAllowed(api.getState())) return Promise.resolve();
+    return duckdbDualWrite(
+      projectId,
+      presentData.title,
+      presentData.logline,
+      totalWordCount,
+      presentData.projectGoals?.totalWordCount,
+      presentData.projectGoals?.targetDate,
+      presentData.writingHistory ?? [],
+      sections,
+    );
+  }).catch((err: unknown) =>
+    logger.warn('DuckDB dual-write failed after retries (non-critical):', err),
+  );
+}
+
 // QNBS-v3: extracted out of the debounced project-save effect so CodeFactor's complexity gate on that already-large function doesn't keep climbing every time a cross-cutting concern (indexing, analytics) needs its own guard.
 async function runPostProjectSaveSideEffects(
   api: DebouncedEffectApi,
@@ -93,45 +141,8 @@ async function runPostProjectSaveSideEffects(
   enriched: ProjectData,
 ): Promise<void> {
   // QNBS-v3: the IDB search index always updates on save (enableCrossProjectSearch is permanent core); the DuckDB mirror honours the same analytics-privacy gate as other DuckDB writes.
-  if (presentData.id) {
-    const { indexProject } = await import('../services/crossProjectIndexService');
-    // QNBS-v3: SEC — a thunk lets the gate re-evaluate at indexProject's DuckDB write site (after its async IDB work) instead of a snapshot here, so a mid-window opt-out can't slip a stale mirror write through.
-    indexProject(presentData.id, enriched, () =>
-      isAnalyticsPersistenceAllowed(api.getState()),
-    ).catch((err: unknown) =>
-      logger.warn('Cross-project index update failed (non-critical):', err),
-    );
-  }
-
-  if (isAnalyticsPersistenceAllowed(api.getState())) {
-    const projectId = presentData.id ?? 'default';
-    const sections = presentData.manuscript.map((s, idx) => ({
-      id: s.id,
-      title: s.title,
-      wordCount: (s.content?.match(/\S+/g) ?? []).length,
-      status: s.status,
-      position: idx,
-      scene_start: s.sceneStart,
-    }));
-    const totalWordCount = sections.reduce((acc, s) => acc + s.wordCount, 0);
-    const { duckdbDualWrite, withDuckDbRetry } = await loadDuckdbAnalytics();
-    void withDuckDbRetry(() => {
-      // QNBS-v3: SEC — re-checked at write time since the opt-out may have toggled during the async loadDuckdbAnalytics()/retry window, making the outer gate's snapshot stale.
-      if (!isAnalyticsPersistenceAllowed(api.getState())) return Promise.resolve();
-      return duckdbDualWrite(
-        projectId,
-        presentData.title,
-        presentData.logline,
-        totalWordCount,
-        presentData.projectGoals?.totalWordCount,
-        presentData.projectGoals?.targetDate,
-        presentData.writingHistory ?? [],
-        sections,
-      );
-    }).catch((err: unknown) =>
-      logger.warn('DuckDB dual-write failed after retries (non-critical):', err),
-    );
-  }
+  await runCrossProjectIndexUpdate(api, presentData, enriched);
+  await runDuckDbDualWrite(api, presentData);
 }
 
 // --- 1a. Auto-Save: Project ---
