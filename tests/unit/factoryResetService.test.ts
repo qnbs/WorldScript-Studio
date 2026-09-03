@@ -3,6 +3,7 @@
  * QNBS-v3: covers the native indexedDB.databases() path, the known-list fallback, the Cache API branch, and the Tauri AppData clear branch (exists/missing/partial-failure).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { projectPersistenceCoordinator } from '../../app/persistenceCoordinator';
 import { isFactoryResetInProgress, wipeAllAppData } from '../../services/factoryResetService';
 import { logger } from '../../services/logger';
 
@@ -91,6 +92,35 @@ describe('wipeAllAppData', () => {
     expect(isFactoryResetInProgress()).toBe(true);
   });
 
+  // QNBS-v3: a save already enqueued before resetInProgress flips has already passed its own guard check and will run regardless -- proves the reset waits for it to finish before deleting anything, instead of racing it.
+  it('drains a project save already enqueued before deleting any database', async () => {
+    await createDb('worldscript-data-db');
+    let resolveSave: () => void = () => {};
+    const pendingSave = new Promise<void>((resolve) => {
+      resolveSave = resolve;
+    });
+    const enqueued = projectPersistenceCoordinator.enqueue(() => pendingSave);
+
+    const delSpy = vi.spyOn(indexedDB, 'deleteDatabase');
+    vi.useFakeTimers();
+    try {
+      const done = wipeAllAppData();
+      // QNBS-v3: lets the idle()-await point run without letting the still-pending save resolve.
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(delSpy).not.toHaveBeenCalled();
+
+      resolveSave();
+      await enqueued;
+      await vi.runAllTimersAsync();
+      await done;
+      expect(delSpy).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+      delSpy.mockRestore();
+    }
+  });
+
   // QNBS-v3: a bare reload preserves the hash, and readInitialView() reads it before checking whether a project exists, rebooting a freshly wiped app straight back into the pre-reset view.
   it('sanitizes the view-carrying hash and view query param before reload, preserving other URL state', async () => {
     Object.defineProperty(window, 'location', {
@@ -128,6 +158,24 @@ describe('wipeAllAppData', () => {
     await runWipe();
 
     expect(replaceStateSpy).toHaveBeenCalledWith(null, '', '/WorldScript-Studio/?foo=a%20b&flag');
+    replaceStateSpy.mockRestore();
+  });
+
+  // QNBS-v3: readInitialView() reads via URLSearchParams.get('view'), which decodes -- an encoded spelling like %76iew would otherwise survive a raw-key comparison and still restore Settings after reload.
+  it('strips a percent-encoded view key, not just the literal spelling', async () => {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        ...originalLocation,
+        href: 'http://localhost:3000/WorldScript-Studio/?%76iew=settings&foo=bar',
+        reload: reloadMock,
+      },
+    });
+    const replaceStateSpy = vi.spyOn(history, 'replaceState').mockImplementation(() => undefined);
+
+    await runWipe();
+
+    expect(replaceStateSpy).toHaveBeenCalledWith(null, '', '/WorldScript-Studio/?foo=bar');
     replaceStateSpy.mockRestore();
   });
 

@@ -8,6 +8,10 @@
  * IDB store is added.
  */
 
+import {
+  projectPersistenceCoordinator,
+  settingsPersistenceCoordinator,
+} from '../app/persistenceCoordinator';
 import { logger } from './logger';
 import { isTauriRuntime } from './tauriRuntime';
 
@@ -71,6 +75,16 @@ async function clearServiceWorkerCaches(): Promise<void> {
   }
 }
 
+// QNBS-v3: readInitialView() reads via URLSearchParams.get('view'), which decodes -- comparing the raw key would let an encoded spelling like %76iew survive this filter and still restore Settings after reload.
+function isViewKey(rawKey: string): boolean {
+  if (rawKey === 'view') return true;
+  try {
+    return decodeURIComponent(rawKey.replace(/\+/g, ' ')) === 'view';
+  } catch {
+    return false;
+  }
+}
+
 // QNBS-v3: string-level removal, not URLSearchParams.delete() -- reserializing via searchParams.toString() would reserialize every retained parameter too, e.g. turning a raw %20 into + or a bare flag `?foo` into `?foo=`, silently rewriting unrelated URL state this reset has no business touching.
 function stripViewQueryParam(rawSearch: string): string {
   if (!rawSearch || rawSearch === '?') return '';
@@ -80,7 +94,7 @@ function stripViewQueryParam(rawSearch: string): string {
     .filter((pair) => {
       const eq = pair.indexOf('=');
       const key = eq === -1 ? pair : pair.slice(0, eq);
-      return key !== 'view';
+      return !isViewKey(key);
     });
   return pairs.length > 0 ? `?${pairs.join('&')}` : '';
 }
@@ -132,6 +146,11 @@ export async function wipeAllAppData(): Promise<void> {
   logger.warn('[factoryReset] Wiping all app data…');
   resetInProgress = true;
   try {
+    // QNBS-v3: a save enqueued (project or settings autosave, or a visibility/quit flush) before this flag flipped already passed its own guard check and will run regardless -- draining both coordinators here lets it finish before deletion starts, instead of racing it.
+    await Promise.all([
+      projectPersistenceCoordinator.idle(),
+      settingsPersistenceCoordinator.idle(),
+    ]);
     // QNBS-v3: clear fallible desktop data first so a failed desktop reset never leaves a mixed wipe.
     await clearTauriAppData();
     await deleteAllIndexedDBDatabases();

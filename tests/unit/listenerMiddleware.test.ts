@@ -188,6 +188,8 @@ function getNotifications(store: MinimalStore) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // QNBS-v3: clearAllMocks resets call history, not a mockReturnValue override -- an assertion failure mid-test must not leave this true for every later test in the file.
+  mockIsFactoryResetInProgress.mockReturnValue(false);
   vi.useFakeTimers();
 });
 
@@ -364,7 +366,6 @@ describe('auto-save project listener', () => {
     store.dispatch(projectActions.updateTitle('Should Never Save'));
     await vi.advanceTimersByTimeAsync(1500);
     expect(mockSaveProject).not.toHaveBeenCalled();
-    mockIsFactoryResetInProgress.mockReturnValue(false);
   });
 });
 
