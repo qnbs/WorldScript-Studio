@@ -23,6 +23,9 @@ const OWNED_CACHE_NAME_RE =
   /^worldscript-(?:static|dynamic|images)-v\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/;
 const isWorldScriptOwnedCacheName = (name: string): boolean => OWNED_CACHE_NAME_RE.test(name);
 
+// QNBS-v3 (cubic/coderabbit): onblocked only means deletion is waiting on another open connection -- the same request can still reach a real onsuccess/onerror once that connection closes. This bounds how long deleteDatabase() waits before giving up and reporting the block as a genuine failure.
+const DELETE_BLOCKED_TIMEOUT_MS = 3000;
+
 // QNBS-v3: set before any wipe work starts and never cleared -- the page is reloading regardless, and a false-negative window here is exactly the race (visibilitychange-triggered flush recreating a just-deleted database) this exists to close.
 let resetInProgress = false;
 
@@ -86,18 +89,28 @@ async function deleteAllIndexedDBDatabases(): Promise<void> {
 function deleteDatabase(name: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.deleteDatabase(name);
-    req.onsuccess = () => resolve();
+    let blockedTimeout: ReturnType<typeof setTimeout> | null = null;
+    const settle = (run: () => void) => {
+      if (blockedTimeout) clearTimeout(blockedTimeout);
+      run();
+    };
+    req.onsuccess = () => settle(resolve);
     // QNBS-v3: deleting a non-existent database succeeds per spec — a real onerror means deletion is genuinely unproven, so reject rather than assume "DB may not exist" and report a fresh install that isn't.
     req.onerror = () => {
       const message = `[factoryReset] deleteDatabase(${name}) failed`;
       logger.warn(message, { error: req.error?.message });
-      reject(req.error ?? new Error(message));
+      settle(() => reject(req.error ?? new Error(message)));
     };
-    // QNBS-v3: a still-open connection means the database was NOT deleted — reject rather than resolve, so wipeAllAppData() never reports a "fresh install" that still has old data.
+    // QNBS-v3 (cubic/coderabbit): onblocked alone doesn't mean the request failed -- the SAME request can still reach onsuccess once the other connection closes. Rejecting here immediately previously settled the promise before the actual deletion outcome was known, letting wipeAllAppData() release the reset gate while the deletion was still asynchronously pending. Log and wait for the real terminal event; only give up once the block has genuinely outlasted a reasonable window.
     req.onblocked = () => {
-      const message = `[factoryReset] deleteDatabase(${name}) blocked by another open connection`;
-      logger.warn(message);
-      reject(new Error(message));
+      logger.warn(
+        `[factoryReset] deleteDatabase(${name}) blocked by another open connection — waiting for it to close`,
+      );
+      blockedTimeout = setTimeout(() => {
+        const message = `[factoryReset] deleteDatabase(${name}) still blocked after ${DELETE_BLOCKED_TIMEOUT_MS}ms`;
+        logger.warn(message);
+        reject(new Error(message));
+      }, DELETE_BLOCKED_TIMEOUT_MS);
     };
   });
 }

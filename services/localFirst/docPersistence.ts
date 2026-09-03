@@ -80,19 +80,22 @@ export function persistProjectDoc(projectId: string, doc: Y.Doc): DocPersistence
 
   // QNBS-v3 (CodeAnt): memoize the real teardown promise so concurrent/repeat calls share the SAME
   // in-flight destroy (no double-destroy, and no flag flipped to "destroyed" before destroy actually
-  // finishes). Errors are swallowed so teardown never throws.
-  let destroyPromise: Promise<void> | null = null;
+  // finishes).
+  let rawDestroyPromise: Promise<void> | null = null;
   // QNBS-v3: starts as a no-op and gets replaced right after registration — a reset already in progress would otherwise invoke this closer synchronously while unregister is still mid-TDZ.
   let unregister: () => void = () => {};
-  const destroy = (): Promise<void> => {
-    if (!destroyPromise) {
-      unregister();
-      destroyPromise = provider.destroy().catch(() => undefined);
+  // QNBS-v3 (CodeAnt): unregisters only once the underlying teardown actually settles, not synchronously before it starts — a reset draining right after this call would otherwise no longer track (and never await) a still-in-flight destroy.
+  const beginDestroy = (): Promise<void> => {
+    if (!rawDestroyPromise) {
+      rawDestroyPromise = provider.destroy();
+      rawDestroyPromise.finally(unregister).catch(() => undefined);
     }
-    return destroyPromise;
+    return rawDestroyPromise;
   };
-  // QNBS-v3: this project's own worldscript-localfirst-<id> connection must close during a factory reset too, or deleteDatabase blocks on it — each open project doc registers/unregisters its own instance. Returns destroy()'s own promise (a block-bodied arrow here would silently discard it, so the reset gate would resolve before teardown actually finished).
-  unregister = registerIdbConnectionCloser(() => destroy());
+  // QNBS-v3 (CodeAnt): the public destroy() stays no-throw for its many defensive `.catch(() => undefined)` callers, but the reset closer below calls beginDestroy() directly so a genuine teardown failure still reaches the reset gate's fail-closed check instead of being swallowed before it gets there.
+  const destroy = (): Promise<void> => beginDestroy().catch(() => undefined);
+  // QNBS-v3: this project's own worldscript-localfirst-<id> connection must close during a factory reset too, or deleteDatabase blocks on it — each open project doc registers/unregisters its own instance.
+  unregister = registerIdbConnectionCloser(() => beginDestroy());
 
   // QNBS-v3 (CodeAnt): if IndexedDB fails *asynchronously* after construction, provider.whenSynced
   // rejects. Without handling, callers would receive a rejected promise and the provider would leak.
@@ -108,11 +111,11 @@ export function persistProjectDoc(projectId: string, doc: Y.Doc): DocPersistence
     // QNBS-v3 (CodeAnt): `active` must reflect the live state — false once teardown has begun (incl.
     // the async whenSynced-rejection path), not a constant true.
     get active() {
-      return destroyPromise === null;
+      return rawDestroyPromise === null;
     },
     destroy,
     // After teardown the provider can no longer clear its store — degrade to a resolved no-op.
     clearData: () =>
-      destroyPromise ? Promise.resolve() : provider.clearData().catch(() => undefined),
+      rawDestroyPromise ? Promise.resolve() : provider.clearData().catch(() => undefined),
   };
 }

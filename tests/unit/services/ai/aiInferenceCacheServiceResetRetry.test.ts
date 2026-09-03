@@ -23,11 +23,10 @@ describe('AiInferenceCacheService — reset retry', () => {
   // QNBS-v3: the original one-shot dbReady promise permanently fell back to in-memory-only for the rest of the session once the first open lost a race with a reset; ensureDb() must retry.
   // Reads go through a SEPARATE fresh instance (empty in-memory LRU) so this proves the write
   // actually reached durable IDB, not just the writer's own in-memory cache.
-  it('durably caches to IDB again after a factory reset attempt fails and ends', async () => {
+  it('durably caches to IDB again after a factory reset begins and is then aborted', async () => {
     const writer = new AiInferenceCacheService();
 
-    // A reset begins (closing the not-yet-open connection is a no-op here) and then fails before
-    // reaching reload — exactly wipeAllAppData()'s catch path.
+    // QNBS-v3 (cubic): begins cleanly and is then aborted before reaching deletion/reload -- exercises the post-abort retry path, not a closer failure.
     await beginIdbReset();
     endIdbReset();
 

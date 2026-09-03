@@ -255,8 +255,8 @@ describe('wipeAllAppData', () => {
     delSpy.mockRestore();
   });
 
-  // QNBS-v3: onblocked must reject, not resolve — the reset must never report a false "fresh install" success, and the gate must still release since reload never runs on this path.
-  it('rejects, never reloads, and releases the reset gate when a database deletion is blocked', async () => {
+  // QNBS-v3 (cubic/coderabbit): onblocked alone must not settle the promise -- only a block that genuinely outlasts the timeout is treated as a failure.
+  it('rejects, never reloads, and releases the reset gate when a database deletion stays blocked past the timeout', async () => {
     await createDb('worldscript-data-db');
     const delSpy = vi.spyOn(indexedDB, 'deleteDatabase').mockImplementation((_name: string) => {
       const req = {} as IDBOpenDBRequest;
@@ -266,7 +266,11 @@ describe('wipeAllAppData', () => {
 
     vi.useFakeTimers();
     try {
-      await expect(wipeAllAppData()).rejects.toThrow(/blocked by another open connection/);
+      const wiped = wipeAllAppData();
+      // QNBS-v3: attached synchronously, in the same tick the promise is created — a handler attached only after runAllTimersAsync() lets the timeout-driven rejection fire unhandled for a full turn first, which Node flags even once it's later caught.
+      void wiped.catch(() => undefined);
+      await vi.runAllTimersAsync();
+      await expect(wiped).rejects.toThrow(/still blocked after/);
     } finally {
       vi.useRealTimers();
     }
@@ -277,6 +281,39 @@ describe('wipeAllAppData', () => {
     expect(logger.warn).toHaveBeenCalledWith(
       expect.stringContaining(`deleteDatabase(worldscript-data-db) blocked`),
     );
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining(`deleteDatabase(worldscript-data-db) still blocked after`),
+    );
+    delSpy.mockRestore();
+  });
+
+  // QNBS-v3 (cubic/coderabbit): the regression case the fix exists for -- a block that clears before the timeout must resolve normally, not be treated as a failure.
+  it('resolves once a blocked deletion is followed by a real onsuccess, without waiting for the timeout', async () => {
+    await createDb('worldscript-data-db');
+    const delSpy = vi.spyOn(indexedDB, 'deleteDatabase').mockImplementation((_name: string) => {
+      const req = {} as IDBOpenDBRequest;
+      queueMicrotask(() => {
+        req.onblocked?.(new Event('blocked') as IDBVersionChangeEvent);
+        queueMicrotask(() => req.onsuccess?.(new Event('success') as unknown as Event));
+      });
+      return req;
+    });
+
+    vi.useFakeTimers();
+    try {
+      const wiped = wipeAllAppData();
+      await vi.runAllTimersAsync();
+      await wiped;
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(reloadMock).toHaveBeenCalledTimes(1);
+    expect(mockEndIdbReset).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining(`deleteDatabase(worldscript-data-db) blocked`),
+    );
+    expect(logger.warn).not.toHaveBeenCalledWith(expect.stringContaining('still blocked after'));
     delSpy.mockRestore();
   });
 

@@ -16,6 +16,8 @@ vi.mock('../../services/logger', () => ({
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
+  // QNBS-v3 (cubic): release the previous test's cached connection before swapping the fake factory -- otherwise a still-set `database` from the old factory is returned as-is by getDb()'s first check, silently reading/writing against a discarded IndexedDB instance instead of the fresh one installed below.
+  _resetLoraDbForTest();
   global.indexedDB = new IDBFactory();
   global.IDBKeyRange = IDBKeyRange;
 });

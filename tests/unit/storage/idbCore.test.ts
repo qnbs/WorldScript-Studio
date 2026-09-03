@@ -5,12 +5,15 @@
  * and getUserFriendlyDbError message mapping — all without opening IndexedDB.
  */
 
+import { IDBFactory, IDBKeyRange } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { DATA_DB_NAME, STATE_DB_NAME } from '../../../services/dbConstants';
 import {
   compressData,
   decompressData,
   getUserFriendlyDbError,
+  IdbConnectionManager,
   retryDb,
 } from '../../../services/storage/idbCore';
 
@@ -181,5 +184,62 @@ describe('getUserFriendlyDbError', () => {
     expect(getUserFriendlyDbError(null)).toMatch(/unknown/i);
     expect(getUserFriendlyDbError(undefined)).toMatch(/unknown/i);
     expect(getUserFriendlyDbError(42)).toMatch(/unknown/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// IdbConnectionManager — single-flight state/data opens (cubic)
+// ---------------------------------------------------------------------------
+describe('IdbConnectionManager — single-flight opens', () => {
+  beforeEach(() => {
+    global.indexedDB = new IDBFactory();
+    global.IDBKeyRange = IDBKeyRange;
+  });
+
+  // QNBS-v3 (cubic): before this fix, concurrent initDB() calls made before the first open resolved each started their own indexedDB.open() -- the last onsuccess to fire silently overwrote stateDb/dataDb, orphaning every earlier connection untracked by closeConnections(), which could leave deleteDatabase() blocked during a factory reset.
+  it('shares a single indexedDB.open() per database across concurrent initDB() callers', async () => {
+    const manager = new IdbConnectionManager();
+    const openSpy = vi.spyOn(indexedDB, 'open');
+
+    await Promise.all([manager.initDB(), manager.initDB(), manager.initDB()]);
+
+    const stateOpens = openSpy.mock.calls.filter(([name]) => name === STATE_DB_NAME);
+    const dataOpens = openSpy.mock.calls.filter(([name]) => name === DATA_DB_NAME);
+    expect(stateOpens).toHaveLength(1);
+    expect(dataOpens).toHaveLength(1);
+  });
+
+  // QNBS-v3 (cubic): proves the single-flight guard doesn't outlive the connection it guarded -- after a close, a later initDB() must open fresh rather than reusing (or permanently skipping) the stale in-flight promise.
+  it('opens fresh again after closeConnections(), rather than reusing the prior single-flight promise', async () => {
+    type ManagerInternals = { closeConnections(): void };
+    const manager = new IdbConnectionManager();
+    const openSpy = vi.spyOn(indexedDB, 'open');
+
+    await manager.initDB();
+    expect(openSpy.mock.calls.filter(([name]) => name === STATE_DB_NAME)).toHaveLength(1);
+
+    (manager as unknown as ManagerInternals).closeConnections();
+    await manager.initDB();
+
+    expect(openSpy.mock.calls.filter(([name]) => name === STATE_DB_NAME)).toHaveLength(2);
+  });
+
+  // QNBS-v3 (coderabbit): initDB() calls both openers unconditionally, and getObjectStore() calls initDB() whenever EITHER handle is still null -- without the live-handle guard, a later initDB() would reopen (and silently overwrite, unclosed) an already-live sibling database just because the other one still needed a fresh open.
+  it('does not reopen an already-live database when only its sibling needs a fresh open', async () => {
+    type ManagerInternals = { dataDb: IDBDatabase | null };
+    const manager = new IdbConnectionManager();
+
+    await manager.initDB();
+
+    // QNBS-v3: simulates only the data connection going away (e.g. a versionchange close elsewhere) while state stays live -- getObjectStore() would call initDB() again in exactly this state.
+    const internals = manager as unknown as ManagerInternals;
+    internals.dataDb?.close();
+    internals.dataDb = null;
+
+    const openSpy = vi.spyOn(indexedDB, 'open');
+    await manager.initDB();
+
+    expect(openSpy.mock.calls.filter(([name]) => name === STATE_DB_NAME)).toHaveLength(0);
+    expect(openSpy.mock.calls.filter(([name]) => name === DATA_DB_NAME)).toHaveLength(1);
   });
 });

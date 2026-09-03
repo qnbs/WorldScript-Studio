@@ -16,6 +16,7 @@ import projectReducer, { projectActions } from '../../features/project/projectSl
 import settingsReducer, { settingsActions } from '../../features/settings/settingsSlice';
 import statusReducer, { statusActions } from '../../features/status/statusSlice';
 import versionControlReducer from '../../features/versionControl/versionControlSlice';
+import { isIdbEncryptionReady } from '../../services/storage/storageEncryptionService';
 
 // ---------------------------------------------------------------------------
 // Service mocks
@@ -213,6 +214,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   // QNBS-v3: clearAllMocks resets call history, not a mockReturnValue override -- an assertion failure mid-test must not leave this true for every later test in the file.
   mockIsFactoryResetInProgress.mockReturnValue(false);
+  // QNBS-v3 (cubic): same rationale -- a test that overrides this to false for its own scenario must not leave every later local-first test in the file silently taking the persistProjectDoc branch instead of the default encryption-ready NOOP branch.
+  vi.mocked(isIdbEncryptionReady).mockReturnValue(true);
   mockCheckStorageHealth.mockResolvedValue({ ok: true, warning: null });
   vi.useFakeTimers();
 });

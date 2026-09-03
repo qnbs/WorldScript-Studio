@@ -34,7 +34,11 @@ async function runCloser(closer: IdbConnectionCloser): Promise<void> {
 // QNBS-v3: settled removes itself from barrier.pending via its own .then — safe because that callback only runs on a later microtask, after the synchronous `const settled = …` assignment below has completed.
 function joinActiveBarrier(closer: IdbConnectionCloser): void {
   const barrier = activeBarrier;
-  if (!barrier) return;
+  // QNBS-v3 (cubic): activeBarrier is only non-null while the drain loop is actively running -- resetInProgress can still be true afterward (until endIdbReset()). A closer registering in that window must still run so its connection actually closes, even though nothing is left to await it against.
+  if (!barrier) {
+    void runCloser(closer).catch(() => undefined);
+    return;
+  }
   const settled: Promise<void> = runCloser(closer)
     .catch((error: unknown) => {
       barrier.failures.push(error);
@@ -100,7 +104,8 @@ export async function beginIdbReset(): Promise<void> {
   generation += 1;
   const barrier: ResetBarrier = { pending: new Set(), failures: [] };
   activeBarrier = barrier;
-  for (const closer of closers) {
+  // QNBS-v3 (cubic): a snapshot, not a live iteration -- a closer that itself synchronously registers another closer during this loop would otherwise see that new entry visited twice: once here (closers is a live Set) and once via registerIdbConnectionCloser's own resetInProgress check.
+  for (const closer of Array.from(closers)) {
     joinActiveBarrier(closer);
   }
   await awaitResetBarrier(barrier);

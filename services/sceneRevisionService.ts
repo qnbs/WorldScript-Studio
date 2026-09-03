@@ -72,7 +72,8 @@ async function getDb(): Promise<IDBDatabase> {
     };
     request.onsuccess = () => {
       const opened = request.result;
-      if (!isIdbOpenStillValid(openGeneration)) {
+      // QNBS-v3 (cubic): a stale flight (e.g. _resetDbForTest() swapped the fake IndexedDB factory while this open was still pending, clearing openPromise to null) must not publish — only proceed if this flight is STILL the one openPromise points to. The generation check alone can't catch this: _resetDbForTest() doesn't touch idbResetGate's generation.
+      if (!isIdbOpenStillValid(openGeneration) || openPromise !== thisOpen) {
         opened.close();
         reject(new Error('IndexedDB reset in progress'));
         return;
