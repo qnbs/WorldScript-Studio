@@ -16,13 +16,17 @@ import {
   loadLocalRagService,
   loadRagVectorMigration,
 } from '../services/duckdb/duckdbListenerLoader';
+import { isFactoryResetInProgress } from '../services/factoryResetService';
 import { logger } from '../services/logger';
 import { saveEnvelopeFromProjectData } from '../services/storageBackend';
 import { storageService } from '../services/storageService';
 import type { Character, StorySection, World } from '../types';
 import { isAnalyticsPersistenceAllowed } from './analyticsGate';
+import {
+  projectPersistenceCoordinator,
+  settingsPersistenceCoordinator,
+} from './persistenceCoordinator';
 import type { AppDispatch, RootState } from './store';
-import { projectPersistenceCoordinator, settingsPersistenceCoordinator } from './persistenceCoordinator';
 import { appStoreRef } from './storeRef';
 import { useTransientUiStore } from './transientUiStore';
 
@@ -70,6 +74,8 @@ function addDebouncedListener(
       // invocation runs after the delay window. Without this, 50 rapid dispatches produce 50 saves.
       listenerApi.cancelActiveListeners();
       await listenerApi.delay(delayMs);
+      // QNBS-v3: a debounce armed just before a factory reset began still fires after it -- this shared gate is the same one flushPersistedState checks, closing every autosave path (not just visibilitychange) that could otherwise repopulate the database the reset just deleted.
+      if (isFactoryResetInProgress()) return;
       await effect({
         getState: () => listenerApi.getState() as RootState,
         getOriginalState: () => originalState,

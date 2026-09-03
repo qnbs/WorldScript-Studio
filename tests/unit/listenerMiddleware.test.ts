@@ -40,6 +40,11 @@ vi.mock('../../services/storageService', () => ({
   },
 }));
 
+const mockIsFactoryResetInProgress = vi.fn(() => false);
+vi.mock('../../services/factoryResetService', () => ({
+  isFactoryResetInProgress: () => mockIsFactoryResetInProgress(),
+}));
+
 vi.mock('../../services/dbService', () => ({
   dbService: {
     initDB: vi.fn().mockResolvedValue(undefined),
@@ -350,6 +355,16 @@ describe('auto-save project listener', () => {
     // An error notification should be present
     const errorNote = notifications.find((n) => n.type === 'error');
     expect(errorNote).toBeTruthy();
+  });
+
+  // QNBS-v3: a debounce armed just before a factory reset began must not fire after it and repopulate the database the reset just deleted.
+  it('skips the debounced save entirely while a factory reset is in progress', async () => {
+    mockIsFactoryResetInProgress.mockReturnValue(true);
+    const store = makeFullStore();
+    store.dispatch(projectActions.updateTitle('Should Never Save'));
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(mockSaveProject).not.toHaveBeenCalled();
+    mockIsFactoryResetInProgress.mockReturnValue(false);
   });
 });
 
