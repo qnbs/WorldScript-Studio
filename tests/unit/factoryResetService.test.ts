@@ -3,7 +3,7 @@
  * QNBS-v3: covers the native indexedDB.databases() path, the known-list fallback, the Cache API branch, and the Tauri AppData clear branch (exists/missing/partial-failure).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { wipeAllAppData } from '../../services/factoryResetService';
+import { isFactoryResetInProgress, wipeAllAppData } from '../../services/factoryResetService';
 import { logger } from '../../services/logger';
 
 const mockIsTauriRuntime = vi.fn(() => false);
@@ -85,6 +85,12 @@ describe('wipeAllAppData', () => {
     delSpy.mockRestore();
   });
 
+  // QNBS-v3: guards flushPersistedState's visibilitychange/quit-flush call sites against racing this same reload and recreating a just-deleted database with stale state.
+  it('marks a reset in progress for the duration of a successful wipe', async () => {
+    await runWipe();
+    expect(isFactoryResetInProgress()).toBe(true);
+  });
+
   // QNBS-v3: a bare reload preserves the hash, and readInitialView() reads it before checking whether a project exists, rebooting a freshly wiped app straight back into the pre-reset view.
   it('sanitizes the view-carrying hash and view query param before reload, preserving other URL state', async () => {
     Object.defineProperty(window, 'location', {
@@ -104,6 +110,24 @@ describe('wipeAllAppData', () => {
     expect(replaceStateSpy.mock.invocationCallOrder[0]).toBeLessThan(
       reloadMock.mock.invocationCallOrder[0]!,
     );
+    replaceStateSpy.mockRestore();
+  });
+
+  // QNBS-v3: URLSearchParams.delete() + toString() would reserialize every retained parameter, silently turning a raw %20 into + or a bare flag into an explicit empty value -- proves the fix strips only `view` at the string level.
+  it('removes only the view query param without reserializing non-canonical unrelated query encoding', async () => {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        ...originalLocation,
+        href: 'http://localhost:3000/WorldScript-Studio/?foo=a%20b&flag&view=settings',
+        reload: reloadMock,
+      },
+    });
+    const replaceStateSpy = vi.spyOn(history, 'replaceState').mockImplementation(() => undefined);
+
+    await runWipe();
+
+    expect(replaceStateSpy).toHaveBeenCalledWith(null, '', '/WorldScript-Studio/?foo=a%20b&flag');
     replaceStateSpy.mockRestore();
   });
 
@@ -219,6 +243,8 @@ describe('wipeAllAppData', () => {
         'Failed to clear Tauri app data during factory reset:',
         expect.any(Error),
       );
+      // QNBS-v3: a failed reset never reloads, so the app keeps running -- the flag must not stay stuck on and silently block every future save.
+      expect(isFactoryResetInProgress()).toBe(false);
     });
 
     it('rejects and never reloads when readDir itself throws', async () => {

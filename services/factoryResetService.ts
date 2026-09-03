@@ -16,6 +16,14 @@ const OWNED_CACHE_NAME_RE =
   /^worldscript-(?:static|dynamic|images)-v\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/;
 const isWorldScriptOwnedCacheName = (name: string): boolean => OWNED_CACHE_NAME_RE.test(name);
 
+// QNBS-v3: set before any wipe work starts and never cleared -- the page is reloading regardless, and a false-negative window here is exactly the race (visibilitychange-triggered flush recreating a just-deleted database) this exists to close.
+let resetInProgress = false;
+
+/** True once a factory reset has started; stays true until the reload actually happens. */
+export function isFactoryResetInProgress(): boolean {
+  return resetInProgress;
+}
+
 /** All IDB databases the app may have created. */
 const KNOWN_DB_NAMES = [
   'worldscript-db', // legacy — migrated to worldscript-data-db
@@ -63,13 +71,25 @@ async function clearServiceWorkerCaches(): Promise<void> {
   }
 }
 
+// QNBS-v3: string-level removal, not URLSearchParams.delete() -- reserializing via searchParams.toString() would reserialize every retained parameter too, e.g. turning a raw %20 into + or a bare flag `?foo` into `?foo=`, silently rewriting unrelated URL state this reset has no business touching.
+function stripViewQueryParam(rawSearch: string): string {
+  if (!rawSearch || rawSearch === '?') return '';
+  const pairs = rawSearch
+    .slice(1)
+    .split('&')
+    .filter((pair) => {
+      const eq = pair.indexOf('=');
+      const key = eq === -1 ? pair : pair.slice(0, eq);
+      return key !== 'view';
+    });
+  return pairs.length > 0 ? `?${pairs.join('&')}` : '';
+}
+
 // QNBS-v3: the deep-link hash and `view` query param both survive a bare window.location.reload(), and useApp.ts's readInitialView() reads them before checking whether a project even exists -- without this, a reset triggered from Settings reboots straight back into Settings.
 function sanitizeViewCarryingUrlState(): void {
   try {
     const url = new URL(window.location.href);
-    url.hash = '';
-    url.searchParams.delete('view');
-    history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+    history.replaceState(null, '', `${url.pathname}${stripViewQueryParam(url.search)}`);
   } catch {
     // Never let URL sanitization block the reset itself.
   }
@@ -110,18 +130,25 @@ async function clearTauriAppData(): Promise<void> {
  */
 export async function wipeAllAppData(): Promise<void> {
   logger.warn('[factoryReset] Wiping all app data…');
-  // QNBS-v3: clear fallible desktop data first so a failed desktop reset never leaves a mixed wipe.
-  await clearTauriAppData();
-  await deleteAllIndexedDBDatabases();
-  await clearServiceWorkerCaches();
+  resetInProgress = true;
   try {
-    localStorage.clear();
-    sessionStorage.clear();
-  } catch {
-    // Private browsing may throw
+    // QNBS-v3: clear fallible desktop data first so a failed desktop reset never leaves a mixed wipe.
+    await clearTauriAppData();
+    await deleteAllIndexedDBDatabases();
+    await clearServiceWorkerCaches();
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch {
+      // Private browsing may throw
+    }
+    // Small delay so async IDB deletions can settle before unload.
+    await new Promise((r) => setTimeout(r, 300));
+    sanitizeViewCarryingUrlState();
+    window.location.reload();
+  } catch (error) {
+    // QNBS-v3: a failed reset never reloads, so the app keeps running -- the in-progress flag must not stay permanently on and silently block every future save.
+    resetInProgress = false;
+    throw error;
   }
-  // Small delay so async IDB deletions can settle before unload.
-  await new Promise((r) => setTimeout(r, 300));
-  sanitizeViewCarryingUrlState();
-  window.location.reload();
 }
