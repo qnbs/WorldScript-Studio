@@ -93,3 +93,7 @@ export class PersistenceCoordinator {
 
 export const projectPersistenceCoordinator = new PersistenceCoordinator();
 export const settingsPersistenceCoordinator = new PersistenceCoordinator();
+// QNBS-v3: separate from projectPersistenceCoordinator so a slow non-critical write can never queue behind (and delay) the next actual project save; a factory reset still drains both before deleting anything.
+// QNBS-v3: kept as two distinct coordinators, not one shared instance -- enqueue() retains only a single queued slot, so sharing one between indexing and DuckDB writes let a later write of one kind silently discard an already-queued write of the other.
+export const crossProjectIndexCoordinator = new PersistenceCoordinator();
+export const duckDbWriteCoordinator = new PersistenceCoordinator();

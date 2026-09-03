@@ -98,7 +98,8 @@ export async function indexProject(
   const gateAllows: () => boolean =
     typeof duckDbEnabled === 'function' ? duckDbEnabled : () => duckDbEnabled;
   if (gateAllows()) {
-    void loadDuckdbAnalytics()
+    // QNBS-v3: awaited, not fire-and-forget -- a caller draining indexProject()'s own promise (e.g. a factory reset's coordinator drain) must see this mirror write as part of what "done" means, not something still in flight after this function has already returned.
+    await loadDuckdbAnalytics()
       .then(({ duckdbCrossProjectWrite }) => {
         if (!gateAllows()) return undefined;
         return duckdbCrossProjectWrite({
