@@ -116,6 +116,9 @@ describe('wipeAllAppData', () => {
       await done;
       expect(delSpy).toHaveBeenCalled();
     } finally {
+      // QNBS-v3: resolveSave() is idempotent (a no-op if the success path already called it) -- an assertion failing above must not leave this singleton coordinator permanently stuck, hanging every later test's own wipeAllAppData() at idle().
+      resolveSave();
+      await vi.runAllTimersAsync();
       vi.useRealTimers();
       delSpy.mockRestore();
     }
