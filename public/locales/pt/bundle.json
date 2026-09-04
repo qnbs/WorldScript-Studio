@@ -2074,6 +2074,7 @@
   "settings.data.createSnapshot": "Criar Snapshot",
   "settings.data.dangerZone.description": "Essas ações são irreversíveis. Proceda com cautela.",
   "settings.data.dangerZone.factoryReset.button": "Redefinição de fábrica",
+  "settings.data.dangerZone.factoryReset.failed": "A redefinição de fábrica não foi concluída — o aplicativo pode estar agora em um estado parcialmente redefinido. Reinicie o aplicativo para verificar e tente a redefinição novamente.",
   "settings.data.dangerZone.factoryReset.hint": "Exclui permanentemente todos os projetos, configurações, chaves de API e dados locais. O aplicativo será reiniciado como uma nova instalação.",
   "settings.data.dangerZone.factoryReset.label": "Redefinir todos os dados do aplicativo",
   "settings.data.dangerZone.factoryReset.modalConfirm": "Excluir everything & restart",

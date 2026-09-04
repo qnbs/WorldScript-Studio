@@ -414,6 +414,7 @@
   "settings.data.createSnapshot": "Create Snapshot",
   "settings.data.dangerZone.description": "These actions are irreversible. Proceed with caution.",
   "settings.data.dangerZone.factoryReset.button": "Factory Reset",
+  "settings.data.dangerZone.factoryReset.failed": "Factory reset did not complete — the app may now be in a partially reset state. Restart the app to check, then try the reset again.",
   "settings.data.dangerZone.factoryReset.hint": "Permanently deletes all projects, settings, API keys, and local data. The app will restart as a fresh install.",
   "settings.data.dangerZone.factoryReset.label": "Reset all app data",
   "settings.data.dangerZone.factoryReset.modalConfirm": "Delete everything & restart",

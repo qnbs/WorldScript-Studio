@@ -1,5 +1,10 @@
 // QNBS-v3: Two-layer inference cache keeps hot reads in memory while the durable layer is encrypted.
 import { logger } from '../logger';
+import {
+  beginIdbOpenAdmission,
+  isIdbOpenStillValid,
+  registerIdbConnectionCloser,
+} from '../storage/idbResetGate';
 import { withProtectedWriteAdmission } from '../storage/protectedWriteAdmission';
 import {
   assertSecureStorageReadable,
@@ -73,15 +78,39 @@ function isCacheEntry(value: unknown): value is CacheEntry | LegacyCacheEntry {
 export class AiInferenceCacheService {
   private readonly inMemory = new Map<string, LruEntry>();
   private db: IDBDatabase | null = null;
-  private readonly dbReady: Promise<void>;
+  private openPromise: Promise<void> | null = null;
 
   constructor() {
-    this.dbReady = this.openDb();
+    // QNBS-v3 (CodeAnt): this connection is cached for the service's lifetime — a factory reset must close it or deleteDatabase(worldscript-inference-cache-db) blocks. openPromise must clear too, or a post-reset caller reuses the invalidated in-flight open instead of retrying immediately.
+    registerIdbConnectionCloser(() => {
+      this.db?.close();
+      this.db = null;
+      this.openPromise = null;
+    });
+  }
+
+  // QNBS-v3: retryable, not a one-shot constructor-time promise — the original design permanently disabled durable caching for the rest of the session (silently falling back to in-memory-only) if the very first open lost a race with a reset; every caller now re-attempts whenever there's no live connection and no attempt already in flight.
+  private ensureDb(): Promise<void> {
+    if (this.db) return Promise.resolve();
+    if (this.openPromise) return this.openPromise;
+    // QNBS-v3 (CodeAnt): identity-checked, not a bare reassignment — the reset closer can null openPromise directly while this open is still in flight, so a later caller starts a second attempt; this settlement must not then clobber that newer attempt's reference.
+    const thisOpen: Promise<void> = this.openDb();
+    this.openPromise = thisOpen;
+    thisOpen.finally(() => {
+      if (this.openPromise === thisOpen) this.openPromise = null;
+    });
+    return thisOpen;
   }
 
   private openDb(): Promise<void> {
     return new Promise((resolve) => {
       if (typeof indexedDB === 'undefined') {
+        resolve();
+        return;
+      }
+      // QNBS-v3: skips opening entirely if a reset is currently draining — the generation check alone can't catch an open that STARTS mid-reset, since it would capture the reset's own already-bumped generation.
+      const openGeneration = beginIdbOpenAdmission();
+      if (openGeneration === null) {
         resolve();
         return;
       }
@@ -105,6 +134,11 @@ export class AiInferenceCacheService {
       };
       request.onsuccess = () => {
         const opened = request.result;
+        if (!isIdbOpenStillValid(openGeneration)) {
+          opened.close();
+          resolve();
+          return;
+        }
         this.db = opened;
         opened.onversionchange = () => {
           this.db?.close();
@@ -208,7 +242,7 @@ export class AiInferenceCacheService {
       return memoryEntry.result;
     }
 
-    await this.dbReady;
+    await this.ensureDb();
     if (!this.db) return null;
     return new Promise((resolve) => {
       const transaction = this.db!.transaction(IDB_STORE, 'readonly');
@@ -255,7 +289,7 @@ export class AiInferenceCacheService {
     const key = hashKey(prompt, modelId);
     this.evictLru();
     this.inMemory.set(key, { result, lastUsed: Date.now() });
-    await this.dbReady;
+    await this.ensureDb();
     if (!this.db) return;
     try {
       // QNBS-v3: shares the writer-admission lock so eviction/persist cannot run mid-migration-batch and produce a false verification shortfall (#338).
@@ -302,7 +336,7 @@ export class AiInferenceCacheService {
   async clearPersistentCache(): Promise<void> {
     await assertSecureStorageWritableForMutation();
     this.inMemory.clear();
-    await this.dbReady;
+    await this.ensureDb();
     if (!this.db) return;
     await new Promise<void>((resolve) => {
       const transaction = this.db!.transaction(IDB_STORE, 'readwrite');

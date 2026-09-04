@@ -10,6 +10,7 @@ import {
   MAX_RUN_HISTORY,
   saveRunHistory,
 } from '../../../services/proForge/proForgeHistoryStore';
+import { beginIdbReset, endIdbReset } from '../../../services/storage/idbResetGate';
 
 beforeEach(() => {
   global.indexedDB = new IDBFactory();
@@ -66,5 +67,33 @@ describe('proForgeHistoryStore', () => {
     await saveRunHistory('p1', [run('old')]);
     await saveRunHistory('p1', [run('new')]);
     expect((await loadRunHistory('p1')).map((r) => r.id)).toEqual(['new']);
+  });
+
+  describe('reset-gate interaction', () => {
+    afterEach(() => {
+      endIdbReset();
+    });
+
+    // QNBS-v3: rejects immediately rather than starting a new open while a reset is draining.
+    it('rejects while a reset is in progress', async () => {
+      const resetPromise = beginIdbReset();
+      await expect(saveRunHistory('p1', [run('a')])).rejects.toThrow('IndexedDB reset in progress');
+      await resetPromise;
+    });
+
+    // QNBS-v3: the reset closer must close the live connection, and exercises the actual generation race -- a second reset begins while a fresh open (started right after the first reset closed the prior connection) is still in flight, before its onsuccess has fired.
+    it('closes the live connection on reset and discards an open that races a second reset', async () => {
+      await saveRunHistory('p1', [run('warm')]);
+      await beginIdbReset();
+      endIdbReset();
+
+      const staleSave = saveRunHistory('p1', [run('stale')]);
+      await beginIdbReset();
+      endIdbReset();
+      await expect(staleSave).rejects.toThrow('IndexedDB reset in progress');
+
+      await saveRunHistory('p1', [run('fresh')]);
+      expect((await loadRunHistory('p1')).map((r) => r.id)).toEqual(['fresh']);
+    });
   });
 });

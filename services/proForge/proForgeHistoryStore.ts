@@ -6,6 +6,11 @@
  */
 
 import type { PipelineRun } from '../../features/proForge/types';
+import {
+  beginIdbOpenAdmission,
+  isIdbOpenStillValid,
+  registerIdbConnectionCloser,
+} from '../storage/idbResetGate';
 
 const HISTORY_DB = 'proforge-run-history';
 const HISTORY_VERSION = 1;
@@ -14,19 +19,42 @@ const STORE = 'history';
 export const MAX_RUN_HISTORY = 20;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
+let database: IDBDatabase | null = null;
+
+// QNBS-v3: this connection is cached indefinitely — a factory reset must close it or deleteDatabase(proforge-run-history) blocks.
+registerIdbConnectionCloser(() => {
+  database?.close();
+  database = null;
+  dbPromise = null;
+});
 
 function openHistoryDb(): Promise<IDBDatabase> {
+  if (database) return Promise.resolve(database);
   if (dbPromise) return dbPromise;
-  dbPromise = new Promise((resolve, reject) => {
+  // QNBS-v3: rejects immediately if a reset is currently draining — the generation check alone can't catch an open that STARTS mid-reset, since it would capture the reset's own already-bumped generation.
+  const openGeneration = beginIdbOpenAdmission();
+  if (openGeneration === null) {
+    return Promise.reject(new Error('IndexedDB reset in progress'));
+  }
+  const thisOpen: Promise<IDBDatabase> = new Promise((resolve, reject) => {
     const request = indexedDB.open(HISTORY_DB, HISTORY_VERSION);
     request.onerror = () => {
-      // QNBS-v3: Don't memoize a rejected promise — a transient open failure (quota, locked DB)
-      // must not disable run-history for the rest of the session. Clear the cache so later
-      // calls retry the open.
-      dbPromise = null;
       reject(new Error('Failed to open ProForge history DB'));
     };
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      const db = request.result;
+      if (!isIdbOpenStillValid(openGeneration)) {
+        db.close();
+        reject(new Error('IndexedDB reset in progress'));
+        return;
+      }
+      db.onversionchange = () => {
+        db.close();
+        database = null;
+      };
+      database = db;
+      resolve(db);
+    };
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
       if (!db.objectStoreNames.contains(STORE)) {
@@ -34,7 +62,14 @@ function openHistoryDb(): Promise<IDBDatabase> {
       }
     };
   });
-  return dbPromise;
+  dbPromise = thisOpen;
+  // QNBS-v3: single ownership-checked cleanup for every settlement — .finally()'s callback always runs as a later microtask, so this always sees dbPromise already set to thisOpen. The trailing .catch(() => {}) only prevents an unhandled-rejection warning on this DISCARDED derived chain.
+  thisOpen
+    .finally(() => {
+      if (dbPromise === thisOpen) dbPromise = null;
+    })
+    .catch(() => {});
+  return thisOpen;
 }
 
 interface HistoryRecord {
@@ -70,5 +105,7 @@ export async function loadRunHistory(projectId: string): Promise<PipelineRun[]> 
 
 /** Reset the DB connection — test-only. */
 export function _resetHistoryDbForTest(): void {
+  database?.close();
+  database = null;
   dbPromise = null;
 }

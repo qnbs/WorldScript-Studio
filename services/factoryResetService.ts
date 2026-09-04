@@ -15,12 +15,16 @@ import {
   settingsPersistenceCoordinator,
 } from '../app/persistenceCoordinator';
 import { logger } from './logger';
+import { beginIdbReset, endIdbReset } from './storage/idbResetGate';
 import { isTauriRuntime } from './tauriRuntime';
 
 // QNBS-v3: mirrors public/sw.js's isWorldScriptOwnedCache/register-sw.ts's isWorldScriptOwnedCacheName — duplicated (not imported) since sw.js is a classic non-module script and register-sw.ts has its own load-time side effect.
 const OWNED_CACHE_NAME_RE =
   /^worldscript-(?:static|dynamic|images)-v\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/;
 const isWorldScriptOwnedCacheName = (name: string): boolean => OWNED_CACHE_NAME_RE.test(name);
+
+// QNBS-v3 (cubic/coderabbit): onblocked only means deletion is waiting on another open connection -- the same request can still reach a real onsuccess/onerror once that connection closes. This bounds how long deleteDatabase() waits before giving up and reporting the block as a genuine failure.
+const DELETE_BLOCKED_TIMEOUT_MS = 3000;
 
 // QNBS-v3: set before any wipe work starts and never cleared -- the page is reloading regardless, and a false-negative window here is exactly the race (visibilitychange-triggered flush recreating a just-deleted database) this exists to close.
 let resetInProgress = false;
@@ -30,7 +34,8 @@ export function isFactoryResetInProgress(): boolean {
   return resetInProgress;
 }
 
-/** All IDB databases the app may have created. */
+// QNBS-v3: worldscript-localfirst-<projectId> (services/localFirst/docPersistence.ts) is per-project and dynamically named — it cannot be enumerated here; only indexedDB.databases() (the primary path above) ever sees it. This static list is a Safari/old-browser fallback only.
+/** All IDB databases the app may have created under a fixed, exact name. */
 const KNOWN_DB_NAMES = [
   'worldscript-db', // legacy — migrated to worldscript-data-db
   'worldscript-state-db',
@@ -40,29 +45,73 @@ const KNOWN_DB_NAMES = [
   'worldscript-lora-db',
   'worldscript-inference-cache-db',
   'proforge-memory-bank',
+  'proforge-run-history',
+  'worldscript-dead-letter-db',
 ];
 
+// QNBS-v3: the only prefix-based (non-exact) WorldScript-owned IDB name — services/localFirst/docPersistence.ts's per-project shadow store, dynamically named per projectId, so it can never appear in KNOWN_DB_NAMES.
+const LOCAL_FIRST_DB_PREFIX = 'worldscript-localfirst-';
+
+// QNBS-v3: a shared origin can host databases from an unrelated app/tool — indexedDB.databases() enumerates everything on the origin, so a real deletion target must be proven app-owned, never assumed just because enumeration returned it.
+function isWorldScriptOwnedDatabaseName(name: string): boolean {
+  return KNOWN_DB_NAMES.includes(name) || name.startsWith(LOCAL_FIRST_DB_PREFIX);
+}
+
 async function deleteAllIndexedDBDatabases(): Promise<void> {
+  // QNBS-v3: enumeration failure falls back to the known list, but a real deletion failure must propagate, not be silently retried through a different path that could mask it.
+  let names: string[] | null = null;
   // Prefer the native API if available (Chrome 73+, Firefox 126+).
   if (indexedDB.databases) {
     try {
       const all = await indexedDB.databases();
-      await Promise.all(all.map((db) => db.name && deleteDatabase(db.name)));
-      return;
+      names = all.map((db) => db.name).filter((name): name is string => Boolean(name));
     } catch {
       // Fall through to known-list approach
     }
   }
-  // Safari / older browsers: delete by known name list.
-  await Promise.all(KNOWN_DB_NAMES.map(deleteDatabase));
+  // Safari / older browsers, or a failed enumeration: delete by known name list (already exact-owned, no filter needed). A successful native enumeration must still be filtered — it can see a foreign database on this origin.
+  const targets = names ? names.filter(isWorldScriptOwnedDatabaseName) : KNOWN_DB_NAMES;
+  // QNBS-v3: allSettled, not all — every deletion request must be given the chance to fully settle before this resolves/rejects, so wipeAllAppData()'s catch never releases the reset gate while another deletion is still outstanding in the background.
+  const results = await Promise.allSettled(targets.map(deleteDatabase));
+  const failures = results.filter(
+    (result): result is PromiseRejectedResult => result.status === 'rejected',
+  );
+  if (failures.length > 0) {
+    const messages = failures.map((failure) =>
+      failure.reason instanceof Error ? failure.reason.message : String(failure.reason),
+    );
+    throw new Error(
+      `[factoryReset] ${failures.length} of ${targets.length} database deletion(s) failed: ${messages.join('; ')}`,
+    );
+  }
 }
 
 function deleteDatabase(name: string): Promise<void> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const req = indexedDB.deleteDatabase(name);
-    req.onsuccess = () => resolve();
-    req.onerror = () => resolve(); // ignore — DB may not exist
-    req.onblocked = () => resolve(); // resolve anyway; page reload will finish the job
+    let blockedTimeout: ReturnType<typeof setTimeout> | null = null;
+    const settle = (run: () => void) => {
+      if (blockedTimeout) clearTimeout(blockedTimeout);
+      run();
+    };
+    req.onsuccess = () => settle(resolve);
+    // QNBS-v3: deleting a non-existent database succeeds per spec — a real onerror means deletion is genuinely unproven, so reject rather than assume "DB may not exist" and report a fresh install that isn't.
+    req.onerror = () => {
+      const message = `[factoryReset] deleteDatabase(${name}) failed`;
+      logger.warn(message, { error: req.error?.message });
+      settle(() => reject(req.error ?? new Error(message)));
+    };
+    // QNBS-v3 (cubic/coderabbit): onblocked alone doesn't mean the request failed -- the SAME request can still reach onsuccess once the other connection closes. Rejecting here immediately previously settled the promise before the actual deletion outcome was known, letting wipeAllAppData() release the reset gate while the deletion was still asynchronously pending. Log and wait for the real terminal event; only give up once the block has genuinely outlasted a reasonable window.
+    req.onblocked = () => {
+      logger.warn(
+        `[factoryReset] deleteDatabase(${name}) blocked by another open connection — waiting for it to close`,
+      );
+      blockedTimeout = setTimeout(() => {
+        const message = `[factoryReset] deleteDatabase(${name}) still blocked after ${DELETE_BLOCKED_TIMEOUT_MS}ms`;
+        logger.warn(message);
+        reject(new Error(message));
+      }, DELETE_BLOCKED_TIMEOUT_MS);
+    };
   });
 }
 
@@ -155,6 +204,8 @@ export async function wipeAllAppData(): Promise<void> {
       crossProjectIndexCoordinator.idle(),
       duckDbWriteCoordinator.idle(),
     ]);
+    // QNBS-v3: only after those four have genuinely drained -- beginIdbReset() force-closes every other long-lived IDB connection (9 modules), which must not happen while one of the four above is still mid-write. Awaited and can throw: it fails closed on any closer failure, so a rejection here skips straight to the catch below and deletion never starts on an unproven teardown.
+    await beginIdbReset();
     // QNBS-v3: clear fallible desktop data first so a failed desktop reset never leaves a mixed wipe.
     await clearTauriAppData();
     await deleteAllIndexedDBDatabases();
@@ -170,8 +221,9 @@ export async function wipeAllAppData(): Promise<void> {
     sanitizeViewCarryingUrlState();
     window.location.reload();
   } catch (error) {
-    // QNBS-v3: a failed reset never reloads, so the app keeps running -- the in-progress flag must not stay permanently on and silently block every future save.
+    // QNBS-v3: a failed reset never reloads, so the app keeps running -- both gates must release (endIdbReset() unconditionally, since beginIdbReset() can leave its own internal state marked in-progress even when it itself is what rejected), or every future save/open would stay silently blocked.
     resetInProgress = false;
+    endIdbReset();
     throw error;
   }
 }

@@ -1,4 +1,9 @@
 import { logger } from './logger';
+import {
+  beginIdbOpenAdmission,
+  isIdbOpenStillValid,
+  registerIdbConnectionCloser,
+} from './storage/idbResetGate';
 
 export interface LoraAdapterMeta {
   id: string;
@@ -37,8 +42,26 @@ const ACTIVE_STORE = 'lora-active';
 
 const ACTIVE_KEY = 'active_adapter_id';
 
+let database: IDBDatabase | null = null;
+let openPromise: Promise<IDBDatabase> | null = null;
+
+// QNBS-v3: each call previously opened its own never-closed connection (unbounded leak); now cached single-flight so a factory reset has exactly one connection per store to close instead of none it can reference.
+registerIdbConnectionCloser(() => {
+  database?.close();
+  database = null;
+  // QNBS-v3: without this, a reset-time closer leaves openPromise pointing at the pending (about-to-be-invalidated) flight, so the first post-reset caller reuses it and waits on its eventual generation-mismatch rejection instead of starting a fresh open immediately.
+  openPromise = null;
+});
+
 function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+  if (database) return Promise.resolve(database);
+  if (openPromise) return openPromise;
+  // QNBS-v3: rejects immediately if a reset is currently draining — the generation check alone can't catch an open that STARTS mid-reset, since it would capture the reset's own already-bumped generation.
+  const openGeneration = beginIdbOpenAdmission();
+  if (openGeneration === null) {
+    return Promise.reject(new Error('IndexedDB reset in progress'));
+  }
+  const thisOpen: Promise<IDBDatabase> = new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = (e) => {
       const db = (e.target as IDBOpenDBRequest).result;
@@ -61,9 +84,38 @@ function openDb(): Promise<IDBDatabase> {
         db.createObjectStore(ACTIVE_STORE);
       }
     };
-    req.onsuccess = (e) => resolve((e.target as IDBOpenDBRequest).result);
-    req.onerror = () => reject(req.error);
+    req.onsuccess = (e) => {
+      const db = (e.target as IDBOpenDBRequest).result;
+      // QNBS-v3: a stale flight (e.g. _resetLoraDbForTest() swapped the fake IndexedDB factory while this open was still pending, clearing openPromise to null) must not publish — only proceed if this flight is STILL the one openPromise points to.
+      if (openPromise !== thisOpen) {
+        db.close();
+        reject(new Error('Superseded by a newer open'));
+        return;
+      }
+      if (!isIdbOpenStillValid(openGeneration)) {
+        db.close();
+        reject(new Error('IndexedDB reset in progress'));
+        return;
+      }
+      db.onversionchange = () => {
+        db.close();
+        database = null;
+      };
+      database = db;
+      resolve(db);
+    };
+    req.onerror = () => {
+      reject(req.error);
+    };
   });
+  openPromise = thisOpen;
+  // QNBS-v3: single ownership-checked cleanup for every settlement (success, async onerror, AND a synchronous open throw) — .finally()'s callback always runs as a later microtask, so this always sees openPromise already set to thisOpen. The trailing .catch(() => {}) only prevents an unhandled-rejection warning on this DISCARDED derived chain — thisOpen itself is returned separately and its rejection is handled by the actual caller.
+  thisOpen
+    .finally(() => {
+      if (openPromise === thisOpen) openPromise = null;
+    })
+    .catch(() => {});
+  return thisOpen;
 }
 
 export async function listAdapters(): Promise<LoraAdapterMeta[]> {
@@ -343,6 +395,10 @@ export async function listTrainingRuns(projectId: string): Promise<StoredTrainin
 
 /** Reset the IDB for unit tests. */
 export function _resetLoraDbForTest(): void {
+  // QNBS-v3: close and drop the cached handle/in-flight open FIRST — otherwise openDb()'s cache check would keep returning a handle bound to the fake IndexedDB factory this function is about to discard.
+  database?.close();
+  database = null;
+  openPromise = null;
   // Re-assign global so the next openDb() call starts fresh
   if (typeof global !== 'undefined' && 'IDBFactory' in global) {
     const { IDBFactory } = global as unknown as { IDBFactory: new () => IDBDatabase };

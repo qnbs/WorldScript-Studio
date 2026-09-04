@@ -20,7 +20,8 @@ export function useFactoryReset({ t, setBusy, setError }: Options): () => Promis
     try {
       await wipeAllAppData();
     } catch (err) {
-      setError(t('settings.privacy.encryptionRecoveryFailed'));
+      // QNBS-v3: a failed factory reset can leave partial cleanup behind — never reuse encryptionRecoveryFailed's "your data has not been lost" claim here.
+      setError(t('settings.data.dangerZone.factoryReset.failed'));
       logger.error('Factory reset failed', {
         error: err instanceof Error ? err.message : String(err),
       });

@@ -2074,6 +2074,7 @@
   "settings.data.createSnapshot": "Créer un instantané",
   "settings.data.dangerZone.description": "Ces actions sont irréversibles. Procédez avec précaution.",
   "settings.data.dangerZone.factoryReset.button": "Réinitialisation totale",
+  "settings.data.dangerZone.factoryReset.failed": "La réinitialisation d'usine ne s'est pas terminée — l'application peut être dans un état partiellement réinitialisé. Redémarrez l'application pour vérifier, puis réessayez la réinitialisation.",
   "settings.data.dangerZone.factoryReset.hint": "Supprime définitivement tous les projets, paramètres, clés API et données locales. L'application redémarre comme une installation vierge.",
   "settings.data.dangerZone.factoryReset.label": "Réinitialiser toutes les données",
   "settings.data.dangerZone.factoryReset.modalConfirm": "Tout supprimer et redémarrer",

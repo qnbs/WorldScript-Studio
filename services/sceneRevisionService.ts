@@ -1,6 +1,11 @@
 // QNBS-v3: Standalone IDB for scene revisions avoids a shared schema upgrade and keeps history bounded.
 import type { SceneRevision } from '../types';
 import { createLogger } from './logger';
+import {
+  beginIdbOpenAdmission,
+  isIdbOpenStillValid,
+  registerIdbConnectionCloser,
+} from './storage/idbResetGate';
 import { withProtectedWriteAdmission } from './storage/protectedWriteAdmission';
 import {
   assertSecureStorageReadable,
@@ -38,11 +43,24 @@ interface StoredSceneRevision {
 let database: IDBDatabase | null = null;
 let openPromise: Promise<IDBDatabase> | null = null;
 
+// QNBS-v3: this connection is cached indefinitely across saves — a factory reset must close it or deleteDatabase(worldscript-revisions-db) blocks.
+registerIdbConnectionCloser(() => {
+  database?.close();
+  database = null;
+  // QNBS-v3: without this, a reset-time closer leaves openPromise pointing at the pending (about-to-be-invalidated) flight, so the first post-reset caller reuses it and waits on its eventual generation-mismatch rejection instead of starting a fresh open immediately.
+  openPromise = null;
+});
+
 async function getDb(): Promise<IDBDatabase> {
   if (database) return database;
   if (openPromise) return openPromise;
+  // QNBS-v3: rejects immediately if a reset is currently draining — the generation check alone can't catch an open that STARTS mid-reset, since it would capture the reset's own already-bumped generation.
+  const openGeneration = beginIdbOpenAdmission();
+  if (openGeneration === null) {
+    return Promise.reject(new Error('IndexedDB reset in progress'));
+  }
   // QNBS-v3: single-flight open — concurrent saves must share one connection instead of leaking one per call.
-  openPromise = new Promise<IDBDatabase>((resolve, reject) => {
+  const thisOpen: Promise<IDBDatabase> = new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
@@ -54,20 +72,31 @@ async function getDb(): Promise<IDBDatabase> {
     };
     request.onsuccess = () => {
       const opened = request.result;
+      // QNBS-v3 (cubic): a stale flight (e.g. _resetDbForTest() swapped the fake IndexedDB factory while this open was still pending, clearing openPromise to null) must not publish — only proceed if this flight is STILL the one openPromise points to. The generation check alone can't catch this: _resetDbForTest() doesn't touch idbResetGate's generation.
+      if (!isIdbOpenStillValid(openGeneration) || openPromise !== thisOpen) {
+        opened.close();
+        reject(new Error('IndexedDB reset in progress'));
+        return;
+      }
       database = opened;
       opened.onversionchange = () => {
         opened.close();
         database = null;
-        openPromise = null;
       };
       resolve(opened);
     };
     request.onerror = () => {
-      openPromise = null;
       reject(request.error);
     };
   });
-  return openPromise;
+  openPromise = thisOpen;
+  // QNBS-v3: single ownership-checked cleanup for every settlement — .finally()'s callback always runs as a later microtask, so this always sees openPromise already set to thisOpen. The trailing .catch(() => {}) only prevents an unhandled-rejection warning on this DISCARDED derived chain.
+  thisOpen
+    .finally(() => {
+      if (openPromise === thisOpen) openPromise = null;
+    })
+    .catch(() => {});
+  return thisOpen;
 }
 
 function isStoredSceneRevision(value: unknown): value is StoredSceneRevision {

@@ -298,7 +298,9 @@ describe('IdbUnlockModal', () => {
         screen.getByRole('button', { name: 'settings.data.dangerZone.factoryReset.button' }),
       );
       await waitFor(() => {
-        expect(screen.getByText('settings.privacy.encryptionRecoveryFailed')).toBeInTheDocument();
+        expect(
+          screen.getByText('settings.data.dangerZone.factoryReset.failed'),
+        ).toBeInTheDocument();
       });
       expect(mockLoggerError).toHaveBeenCalledWith('Factory reset failed', {
         error: 'disk full',

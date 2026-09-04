@@ -414,6 +414,7 @@
   "settings.data.createSnapshot": "Δημιουργία Snapshot",
   "settings.data.dangerZone.description": "Αυτές οι ενέργειες είναι μη αναστρέψιμες. Προχωρήστε με προσοχή.",
   "settings.data.dangerZone.factoryReset.button": "Επαναφορά",
+  "settings.data.dangerZone.factoryReset.failed": "Η επαναφορά εργοστασιακών ρυθμίσεων δεν ολοκληρώθηκε — η εφαρμογή ενδέχεται να βρίσκεται τώρα σε κατάσταση μερικής επαναφοράς. Επανεκκινήστε την εφαρμογή για έλεγχο και δοκιμάστε ξανά την επαναφορά.",
   "settings.data.dangerZone.factoryReset.hint": "Διαγράφει οριστικά όλα τα έργα, τις ρυθμίσεις, τα κλειδιά API και τα τοπικά δεδομένα. Η εφαρμογή θα επανεκκινηθεί ως νέα εγκατάσταση.",
   "settings.data.dangerZone.factoryReset.label": "Επαναφορά όλων των δεδομένων εφαρμογής",
   "settings.data.dangerZone.factoryReset.modalConfirm": "Διαγραφή everything & restart",

@@ -5,6 +5,11 @@
  */
 
 import type { MemoryBankEntry, PipelineStage } from '../../features/proForge/types';
+import {
+  beginIdbOpenAdmission,
+  isIdbOpenStillValid,
+  registerIdbConnectionCloser,
+} from '../storage/idbResetGate';
 
 const MEMORY_BANK_STORE = 'proforge-memory-bank';
 const MEMORY_BANK_VERSION = 1;
@@ -27,14 +32,43 @@ function idbAvailable(): boolean {
 }
 
 let dbPromise: Promise<MemoryBankDb> | null = null;
+let database: MemoryBankDb | null = null;
+
+// QNBS-v3: this connection is cached indefinitely — a factory reset must close it or deleteDatabase(proforge-memory-bank) blocks.
+registerIdbConnectionCloser(() => {
+  database?.close();
+  database = null;
+  dbPromise = null;
+});
 
 function openMemoryBankDb(): Promise<MemoryBankDb> {
+  if (database) return Promise.resolve(database);
   if (dbPromise) return dbPromise;
+  // QNBS-v3: rejects immediately if a reset is currently draining — the generation check alone can't catch an open that STARTS mid-reset, since it would capture the reset's own already-bumped generation.
+  const openGeneration = beginIdbOpenAdmission();
+  if (openGeneration === null) {
+    return Promise.reject(new Error('IndexedDB reset in progress'));
+  }
 
-  dbPromise = new Promise((resolve, reject) => {
+  const thisOpen: Promise<MemoryBankDb> = new Promise((resolve, reject) => {
     const request = indexedDB.open(MEMORY_BANK_STORE, MEMORY_BANK_VERSION);
-    request.onerror = () => reject(new Error('Failed to open Memory Bank DB'));
-    request.onsuccess = () => resolve(request.result as MemoryBankDb);
+    request.onerror = () => {
+      reject(new Error('Failed to open Memory Bank DB'));
+    };
+    request.onsuccess = () => {
+      const db = request.result as MemoryBankDb;
+      if (!isIdbOpenStillValid(openGeneration)) {
+        db.close();
+        reject(new Error('IndexedDB reset in progress'));
+        return;
+      }
+      db.onversionchange = () => {
+        db.close();
+        database = null;
+      };
+      database = db;
+      resolve(db);
+    };
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
       if (!db.objectStoreNames.contains('entries')) {
@@ -46,7 +80,14 @@ function openMemoryBankDb(): Promise<MemoryBankDb> {
     };
   });
 
-  return dbPromise;
+  dbPromise = thisOpen;
+  // QNBS-v3: single ownership-checked cleanup for every settlement — .finally()'s callback always runs as a later microtask, so this always sees dbPromise already set to thisOpen. The trailing .catch(() => {}) only prevents an unhandled-rejection warning on this DISCARDED derived chain.
+  thisOpen
+    .finally(() => {
+      if (dbPromise === thisOpen) dbPromise = null;
+    })
+    .catch(() => {});
+  return thisOpen;
 }
 
 // ---------------------------------------------------------------------------
@@ -316,6 +357,8 @@ export function clearMemoryBankCache(): void {
 
 /** Reset DB connection and singleton cache — test-only. Allows fresh IDBFactory per test. */
 export function _resetDbForTest(): void {
+  database?.close();
+  database = null;
   dbPromise = null;
   bankCache.clear();
   memFallback.clear();
