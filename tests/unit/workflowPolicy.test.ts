@@ -52,6 +52,8 @@ describe('CI workflow policy', () => {
     expect(actionIndex).toBeGreaterThanOrEqual(0);
     expect(actionIndex).toBeLessThan(nodeIndex);
     expect(setupActionSource).not.toContain('corepack enable');
+    // QNBS-v3: retired bootstrap must not silently reappear alongside the new one.
+    expect(setupActionSource).not.toContain('pnpm/action-setup@');
     // QNBS-v3: install:false keeps the explicit "pnpm install --frozen-lockfile" step as the sole install call and its failure attribution.
     expect(setupActionSource).toContain('install: false');
     const setupToolchainIndex = setupActionSource.indexOf(
@@ -69,6 +71,20 @@ describe('CI workflow policy', () => {
     );
     expect(cloudflareToolchainIndex).toBeGreaterThanOrEqual(0);
     expect(cloudflareToolchainIndex).toBeLessThan(cloudflareInstallIndex);
+  });
+  // QNBS-v3: this job predates the trust boundary it validates, so it duplicates the composite's pnpm bootstrap instead of using it — verify that duplicate independently.
+  it('bootstraps the exact secure pnpm in the workflow-policy job itself, before the gate it validates', () => {
+    const expectedVersion = packageJson.packageManager.replace('pnpm@', '');
+    const policyBlock = extractJobBlock(workflowSource, 'workflow-policy');
+    const actionIndex = policyBlock.indexOf('pnpm/setup@');
+    const nodeIndex = policyBlock.indexOf('actions/setup-node@');
+    expect(policyBlock).toContain('pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b');
+    expect(policyBlock).toContain(`version: ${expectedVersion}`);
+    expect(policyBlock).toContain('install: false');
+    expect(actionIndex).toBeGreaterThanOrEqual(0);
+    expect(actionIndex).toBeLessThan(nodeIndex);
+    expect(policyBlock).not.toContain('pnpm/action-setup@');
+    expect(policyBlock).not.toContain('corepack enable');
   });
   // QNBS-v3: preserve first-attempt Vitest failures as visible CI evidence instead of masking flakes with retries.
   it('runs Vitest once so first-attempt failures cannot be hidden by retry', () => {
