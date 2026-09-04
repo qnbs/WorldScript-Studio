@@ -24,7 +24,8 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", "storybook-static/**"]
+      "outputs": ["dist/**", "storybook-static/**"],
+      "env": ["CODECOV_BUNDLE_ANALYSIS", "CODECOV_BUNDLE_SHA", "CODECOV_TOKEN"]
     },
     "dev": {
       "cache": false,

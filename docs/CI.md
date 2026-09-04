@@ -136,9 +136,9 @@ registry gzip-decoding failure mode, while OSV failures remain blocking.
 | `pr-size` | `workflow-policy` | PR-size governance (`scripts/check-pr-size.mjs`) — tiered file/line/commit limits, advisory below the absolute ceiling and blocking only above it. `pull_request` only. Runs the **base ref's** own copy of the checker (never the PR's working-tree copy) when it exists there, so a PR touching it can't raise its own limits; falls back to the PR's own copy one time only, for the introducing PR whose base ref has no checker yet. |
 | `security` | `workflow-policy` | `pnpm audit --audit-level=high`; **OSV scanner** (`google/osv-scanner-action`) for npm + Rust lockfiles; `gitleaks` secrets scan; on PRs: `dependency-review-action` |
 | `scheduled-osv` | — | Separate daily and manually triggerable (`workflow_dispatch`) `.github/workflows/security-scheduled.yml` scan of the same three lockfiles; `contents: read` only; fails closed and writes lockfile/package/advisory details to the step summary |
-| `quality` | `security` | Matrix **Node 22** and **24** → Biome lint, **`pnpm run i18n:check`**, **`pnpm run docs:check`**, **`pnpm run csp:verify`**, **`pnpm run parity:check`**, `pnpm run typecheck`, Vitest + coverage (+ non-blocking coverage-ratchet suggestion), Codecov (optional token), coverage artifact |
+| `quality` | `security` | Matrix **Node 22** and **24** → Biome lint, **`pnpm run i18n:check`**, **`pnpm run docs:check`**, **`pnpm run csp:verify`**, **`pnpm run parity:check`**, `pnpm run typecheck`, Vitest + coverage (+ non-blocking coverage-ratchet suggestion), Codecov coverage (Node 22 only, optional token), Codecov Test Analytics per Node version (`unit-node22`/`unit-node24` flags), coverage + JUnit artifacts |
 | `rust-tauri` | `security` | Rust `cargo fmt --check`, `cargo check --locked`, `cargo clippy --locked --all-targets -- -D warnings`, and `cargo test --locked`; compile/lint signal for Tauri changes without building installers on every PR |
-| `build` | `quality` | Production `pnpm run build`, **`bundle:budget`**, **`analyze`** (upload `bundle-analysis.html`), **`pnpm run smoke:prod`** (headless-Chromium prod-build + CSP-runtime gate — see below), `dist` artifact; on `main` (non-PR): Pages artifact + **SLSA build provenance attestation**. No `if:` on the job itself — `smoke:prod` runs on every PR, not just `main` pushes. |
+| `build` | `quality` | Production `pnpm run build`, **`bundle:budget`**, **`analyze`** (upload `bundle-analysis.html`; Codecov Bundle Analysis runs inside this same build — see below), **`pnpm run smoke:prod`** (headless-Chromium prod-build + CSP-runtime gate — see below), `dist` artifact; on `main` (non-PR): Pages artifact + **SLSA build provenance attestation**. No `if:` on the job itself — `smoke:prod` runs on every PR, not just `main` pushes. |
 | `e2e` | `quality` | Playwright **Chromium** + **Mobile Chrome** (Pixel 5) — `CI=true`, 2× retries, 50 min timeout; browser cache via `actions/cache@v5`. Firefox optional locally. `PLAYWRIGHT_SKIP_VRT=true` (VRT is its own job). |
 | `lighthouse` | `build` | LHCI (mobile): **accessibility error gate** `minScore: 0.95`; **CLS error** ≤ 0.1; performance/SEO warn. Desktop run: `continue-on-error: true` until baselines stabilise. Timeout 25 min. |
 | `storybook` | `quality` | Cloud-first — Storybook build + test-runner only run in CI (not locally); Playwright browser cache `v5`; `--maxWorkers=2 --junit` (non-blocking, `continue-on-error: true` — see [exit criteria](#non-blocking-gates--exit-criteria-f-13)); artifacts uploaded always. Debug: manual `storybook-debug.yml` workflow. |
@@ -154,6 +154,62 @@ registry gzip-decoding failure mode, while OSV failures remain blocking.
 > an automated PR. Do it manually once `ci-success` has run green on `main` at least once: repo
 > Settings → Branches → `main` → Required status checks → remove the 4 individual entries, add
 > `✅ CI Success`.
+
+### Codecov integration
+
+Three independent, additive analysis planes — none replaces an existing repository-native gate
+(`bundle:budget`, coverage thresholds, the coverage ratchet, first-attempt-failure policy, or any
+artifact upload already listed above).
+
+**Coverage.** Unchanged: `quality` (Node 22 only) uploads `coverage/lcov.info` under flag `unit`.
+
+**Test Analytics.** Every suite that already produces a Playwright/Vitest JUnit file uploads it via
+`codecov/codecov-action` with `report_type: test_results`, `disable_search: true`, and an explicit
+`files:` path — never the deprecated `codecov/test-results-action`. Each upload runs on
+`if: ${{ !cancelled() }}`, not the default `success()`, so a real test failure still uploads its
+result instead of silently disappearing.
+
+| Suite | Flag | JUnit source |
+|-------|------|--------------|
+| Unit (Node 22) | `unit-node22` | `reports/junit.xml` (Vitest, `--reporter=junit`) |
+| Unit (Node 24) | `unit-node24` | `reports/junit.xml` (Vitest, `--reporter=junit`) |
+| Required E2E | `e2e` | `tests/e2e/results/junit.xml` (Playwright) |
+| Deep E2E (advisory) | `e2e-deep` | `tests/e2e/results/junit.xml`, same runner as above |
+| Storybook (advisory) | `storybook` | `test-results/storybook-junit.xml` (`JEST_JUNIT_OUTPUT_FILE` pins the path — `--junit`'s own default, jest-junit's `<cwd>/junit.xml`, was never captured by the existing artifact upload) |
+| VRT | `vrt` | `tests/e2e/results/junit.xml`, same runner as E2E |
+
+Vitest runs once per Node version with two reporters in the same invocation
+(`--reporter=json --reporter=junit`) — never a second test run merely to get JUnit; the `junit`
+reporter inherits `vitest.config.ts`'s own `reports/junit.xml` path, so only the `json` output needs
+an explicit `--outputFile.json=`. The no-`--retry` policy is unchanged.
+
+**Bundle Analysis.** `@codecov/vite-plugin` runs as the last plugin in `vite.config.ts`, gated by an
+explicit `CODECOV_BUNDLE_ANALYSIS=true` env var set only on the `build` job's existing `analyze`
+step — never on the plain `pnpm run build` step, and never merely because `CODECOV_TOKEN` happens to
+be present. This reuses the existing ANALYZE build (no third Vite build); the token is scoped to
+that one step, not the job or workflow. Configured bundle name is the stable `worldscript-studio-web`
+(no version/SHA/PR number, so Codecov tracks one bundle over time) — the plugin itself appends the
+output format, so the name actually visible on Codecov's dashboard is `worldscript-studio-web-esm`
+(this repo's build only ever emits `es` output). `uploadOverrides.sha` uses the PR's head SHA (not
+GitHub's synthetic merge commit) via `CODECOV_BUNDLE_SHA`. `telemetry: false` disables the plugin's
+own telemetry about itself — it does not disable the bundle upload. `codecov.yml`'s
+`bundle_analysis.status: "informational"` keeps this non-blocking until a real size baseline exists;
+`pnpm run bundle:budget`'s absolute ceilings remain the actual blocking gate.
+
+`@codecov/vite-plugin@2.0.1` declares `peerDependencies: { vite: "4.x || 5.x || 6.x" }` — this repo
+runs Vite 8 with Rolldown. Verified empirically (not merely assumed) against the real production
+build, including PWA `injectManifest`, manual chunking, and every existing plugin: the build
+succeeds cleanly with no plugin-order or chunk-graph regressions. This is an intentionally-accepted
+gap against the plugin's own declared contract, not a false positive — tracked in
+[#606](https://github.com/qnbs/WorldScript-Studio/issues/606) to revalidate once `@codecov/vite-plugin`
+officially declares Vite 8 support.
+
+Coverage and Test Analytics (`codecov/codecov-action`) use `fail_ci_if_error: false` — a Codecov
+outage must never turn an otherwise-correct build into a false CI failure. Bundle Analysis has no
+such input: `@codecov/vite-plugin` calls the underlying `Output.write()` without its optional
+`emitError` argument, so provider-detection, auth, and upload failures are caught internally and
+never fail the build — verified against the plugin's own source, not assumed from the coverage
+upload's unrelated flag.
 
 ### Release-truth checks
 

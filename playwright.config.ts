@@ -38,7 +38,15 @@ export default defineConfig({
   workers: process.env['CI'] ? 1 : 4,
   reporter: [
     ['html', { outputFolder: 'tests/e2e/html-report' }],
-    ['junit', { outputFile: 'tests/e2e/results/junit.xml' }],
+    // QNBS-v3: junit.xml feeds Codecov Test Analytics; project-name-prefixed titles keep per-project failures distinguishable there
+    [
+      'junit',
+      {
+        outputFile: 'tests/e2e/results/junit.xml',
+        includeProjectInTestName: true,
+        stripANSIControlSequences: true,
+      },
+    ],
   ],
 
   /** Omit `{platform}` so one baseline PNG works on Linux (CI) and Windows/macOS dev machines. */

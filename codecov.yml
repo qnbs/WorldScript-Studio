@@ -1,2 +1,9 @@
 ignore:
   - "tests/**"
+
+# Informational only: no historical WorldScript Studio bundle baseline exists yet, and the
+# existing `pnpm run bundle:budget` absolute ceilings remain the blocking gate. Revisit once
+# several main/PR uploads establish a real baseline.
+bundle_analysis:
+  warning_threshold: "5%"
+  status: "informational"
