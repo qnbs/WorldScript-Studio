@@ -819,7 +819,7 @@ jobs:
   # ----------------------------------------------------------
   # 6. BROWSER QUALITY: VRT + Lighthouse (after build)
   # ----------------------------------------------------------
-  # QNBS-v3: consolidated from separate vrt/lighthouse jobs (Wave 2 CI-performance) — both already ran off the critical path, but each paid its own checkout/setup/artifact-download; sharing that once saves runner-minutes with no wall-clock cost.
+  # QNBS-v3: consolidated from separate vrt/lighthouse jobs (Wave 2 CI-performance) — both already ran off the critical path; sharing checkout/setup/artifact-download once saves runner-minutes, measured to fit inside this baseline's critical-path slack, not a universal zero-wall-clock guarantee.
   browser-quality:
     name: 🔦🖼 Browser Quality (VRT + Lighthouse)
     runs-on: ubuntu-latest
@@ -910,7 +910,7 @@ jobs:
         env:
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
 
-      # QNBS-v3: !cancelled() so desktop still runs even if VRT or mobile Lighthouse failed; continue-on-error stays true until desktop baselines stabilise so its own failure can't fail this job. Accessibility and CLS remain error gates.
+      # QNBS-v3: !cancelled() so desktop still runs even if VRT or mobile Lighthouse failed; pre-existing continue-on-error (unchanged by this consolidation) means its accessibility/CLS error assertions can still fail this step internally without failing the job — promotion to blocking stays gated on the 5-consecutive-main-run exit criterion in docs/CI.md.
       - name: Run Lighthouse CI (desktop)
         if: ${{ !cancelled() }}
         run: pnpm exec lhci autorun --config=.lighthouserc.desktop.cjs
