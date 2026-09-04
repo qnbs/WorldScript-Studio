@@ -32,6 +32,7 @@ import {
   saveMemoryEntry,
   searchMemoryEntries,
 } from '../../../services/proForge/proForgeMemoryBank';
+import { beginIdbReset, endIdbReset } from '../../../services/storage/idbResetGate';
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -426,5 +427,45 @@ describe('getMemoryBank', () => {
     const b1 = getMemoryBank('proj-a');
     const b2 = getMemoryBank('proj-b');
     expect(b1).not.toBe(b2);
+  });
+});
+
+describe('reset-gate interaction', () => {
+  afterEach(() => {
+    endIdbReset();
+  });
+
+  function entry(key: string) {
+    return {
+      projectId: 'proj-1',
+      category: 'lore' as const,
+      key,
+      content: 'content',
+      sourceStage: 'intake' as const,
+    };
+  }
+
+  // QNBS-v3: rejects immediately rather than starting a new open while a reset is draining.
+  it('rejects while a reset is in progress', async () => {
+    const resetPromise = beginIdbReset();
+    await expect(saveMemoryEntry(entry('a'))).rejects.toThrow('IndexedDB reset in progress');
+    await resetPromise;
+  });
+
+  // QNBS-v3: the reset closer must close the live connection, and exercises the actual generation race -- a second reset begins while a fresh open (started right after the first reset closed the prior connection) is still in flight, before its onsuccess has fired.
+  it('closes the live connection on reset and discards an open that races a second reset', async () => {
+    await saveMemoryEntry(entry('warm'));
+    await beginIdbReset();
+    endIdbReset();
+
+    const staleSave = saveMemoryEntry(entry('stale'));
+    await beginIdbReset();
+    endIdbReset();
+    await expect(staleSave).rejects.toThrow('IndexedDB reset in progress');
+
+    await saveMemoryEntry(entry('fresh'));
+    const entries = await getMemoryEntries('proj-1');
+    expect(entries.some((e) => e.key === 'fresh')).toBe(true);
+    expect(entries.some((e) => e.key === 'stale')).toBe(false);
   });
 });

@@ -2074,6 +2074,7 @@
   "settings.data.createSnapshot": "Crea istantanea",
   "settings.data.dangerZone.description": "Queste azioni sono irreversibili. Procedi con cautela.",
   "settings.data.dangerZone.factoryReset.button": "Ripristino di fabbrica",
+  "settings.data.dangerZone.factoryReset.failed": "Il ripristino delle impostazioni di fabbrica non è stato completato — l'app potrebbe trovarsi in uno stato parzialmente ripristinato. Riavvia l'app per verificare, quindi riprova il ripristino.",
   "settings.data.dangerZone.factoryReset.hint": "Elimina definitivamente tutti i progetti, le impostazioni, le chiavi API e i dati locali. L'app si riavvia come nuova installazione.",
   "settings.data.dangerZone.factoryReset.label": "Ripristina tutti i dati",
   "settings.data.dangerZone.factoryReset.modalConfirm": "Elimina tutto e riavvia",

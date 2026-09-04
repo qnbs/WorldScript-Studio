@@ -2,6 +2,11 @@
 //          Stores failed tasks for operator inspection. Not a retry queue.
 
 import { createLogger } from '../../../services/logger';
+import {
+  beginIdbOpenAdmission,
+  isIdbOpenStillValid,
+  registerIdbConnectionCloser,
+} from '../../../services/storage/idbResetGate';
 import { DEAD_LETTER_CAPACITY } from './constants';
 import type { TaskResult, WorkerTask } from './types';
 
@@ -75,18 +80,65 @@ export class DeadLetterQueue {
   }
 }
 
+let database: IDBDatabase | null = null;
+let openPromise: Promise<IDBDatabase> | null = null;
+
+// QNBS-v3: each call previously opened its own never-closed connection — now cached single-flight so a factory reset has exactly one connection to close instead of none it can reference.
+registerIdbConnectionCloser(() => {
+  database?.close();
+  database = null;
+  // QNBS-v3: without this, a reset-time closer leaves openPromise pointing at the pending (about-to-be-invalidated) flight, so the first post-reset caller reuses it and waits on its eventual generation-mismatch rejection instead of starting a fresh open immediately.
+  openPromise = null;
+});
+
 function openDlqDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(IDB_DB_NAME, 1);
-    req.onupgradeneeded = (e) => {
-      const db = (e.target as IDBOpenDBRequest).result;
-      if (!db.objectStoreNames.contains(IDB_STORE)) {
-        db.createObjectStore(IDB_STORE, { autoIncrement: true });
-      }
-    };
-    req.onsuccess = (e) => resolve((e.target as IDBOpenDBRequest).result);
-    req.onerror = (e) => reject((e.target as IDBOpenDBRequest).error);
+  if (database) return Promise.resolve(database);
+  if (openPromise) return openPromise;
+  // QNBS-v3: rejects immediately if a reset is currently draining — the generation check alone can't catch an open that STARTS mid-reset, since it would capture the reset's own already-bumped generation.
+  const openGeneration = beginIdbOpenAdmission();
+  if (openGeneration === null) {
+    return Promise.reject(new Error('IndexedDB reset in progress'));
+  }
+  const thisOpen: Promise<IDBDatabase> = new Promise((resolve, reject) => {
+    try {
+      const req = indexedDB.open(IDB_DB_NAME, 1);
+      req.onupgradeneeded = (e) => {
+        const db = (e.target as IDBOpenDBRequest).result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          db.createObjectStore(IDB_STORE, { autoIncrement: true });
+        }
+      };
+      req.onsuccess = (e) => {
+        const db = (e.target as IDBOpenDBRequest).result;
+        if (!isIdbOpenStillValid(openGeneration)) {
+          db.close();
+          reject(new Error('IndexedDB reset in progress'));
+          return;
+        }
+        // QNBS-v3: another tab's factory reset (or any other deleteDatabase caller) fires versionchange here — close and invalidate so the next call re-opens fresh instead of blocking that deletion.
+        db.onversionchange = () => {
+          db.close();
+          database = null;
+        };
+        database = db;
+        resolve(db);
+      };
+      req.onerror = (e) => {
+        reject((e.target as IDBOpenDBRequest).error);
+      };
+    } catch (error) {
+      // QNBS-v3: indexedDB.open() itself can throw synchronously (private/restricted mode) — the .finally() below is what actually clears openPromise; clearing it here would just be overwritten by the unconditional assignment two lines down.
+      reject(error);
+    }
   });
+  openPromise = thisOpen;
+  // QNBS-v3: single ownership-checked cleanup for every settlement (success, async onerror, reset-invalidation reject, AND a synchronous open throw) — .finally()'s callback always runs as a later microtask, so this always sees openPromise already set to thisOpen, even when the promise settled synchronously above. The trailing .catch(() => {}) is only to prevent an unhandled-rejection warning on this DISCARDED derived chain — thisOpen itself is returned separately and its rejection is handled by the actual caller.
+  thisOpen
+    .finally(() => {
+      if (openPromise === thisOpen) openPromise = null;
+    })
+    .catch(() => {});
+  return thisOpen;
 }
 
 function storeClear(store: IDBObjectStore): Promise<void> {

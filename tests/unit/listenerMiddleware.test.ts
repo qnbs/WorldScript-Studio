@@ -16,6 +16,7 @@ import projectReducer, { projectActions } from '../../features/project/projectSl
 import settingsReducer, { settingsActions } from '../../features/settings/settingsSlice';
 import statusReducer, { statusActions } from '../../features/status/statusSlice';
 import versionControlReducer from '../../features/versionControl/versionControlSlice';
+import { isIdbEncryptionReady } from '../../services/storage/storageEncryptionService';
 
 // ---------------------------------------------------------------------------
 // Service mocks
@@ -101,9 +102,21 @@ class MockProjectDocBinding {
 vi.mock('../../services/localFirst/docBinding', () => ({
   ProjectDocBinding: MockProjectDocBinding,
 }));
+// QNBS-v3: destroy/clearData must be present since real listener teardown code can call either on any persistence handle. mockNoopDestroy is a stable reference because a test below asserts teardownLocalFirst() actually invoked it; the other three stay plain no-op closures since nothing currently asserts on them.
+const mockNoopDestroy = vi.fn().mockResolvedValue(undefined);
 vi.mock('../../services/localFirst/docPersistence', () => ({
-  NOOP_PERSISTENCE: { active: false, whenSynced: Promise.resolve() },
-  persistProjectDoc: vi.fn(() => ({ active: true, whenSynced: Promise.resolve() })),
+  NOOP_PERSISTENCE: {
+    active: false,
+    whenSynced: Promise.resolve(),
+    destroy: (...args: unknown[]) => mockNoopDestroy(...args),
+    clearData: () => Promise.resolve(),
+  },
+  persistProjectDoc: vi.fn(() => ({
+    active: true,
+    whenSynced: Promise.resolve(),
+    destroy: () => Promise.resolve(),
+    clearData: () => Promise.resolve(),
+  })),
 }));
 vi.mock('../../services/storage/storageEncryptionService', () => ({
   isIdbEncryptionReady: vi.fn(() => true),
@@ -201,6 +214,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   // QNBS-v3: clearAllMocks resets call history, not a mockReturnValue override -- an assertion failure mid-test must not leave this true for every later test in the file.
   mockIsFactoryResetInProgress.mockReturnValue(false);
+  // QNBS-v3 (cubic): same rationale -- a test that overrides this to false for its own scenario must not leave every later local-first test in the file silently taking the persistProjectDoc branch instead of the default encryption-ready NOOP branch.
+  vi.mocked(isIdbEncryptionReady).mockReturnValue(true);
   mockCheckStorageHealth.mockResolvedValue({ ok: true, warning: null });
   vi.useFakeTimers();
 });
@@ -651,6 +666,84 @@ describe('local-first shadow sync (B1.1)', () => {
     expect(mockReproject).not.toHaveBeenCalled();
     expect(mockLoggerWarn).not.toHaveBeenCalled();
     expect(mockLoggerError).not.toHaveBeenCalled();
+  });
+
+  // QNBS-v3: proves reconcileLocalFirstHandle tells a transient reset-denial NOOP (distinct identity, inactive) apart from the intentional encryption-driven NOOP_PERSISTENCE singleton — a handle cached during an active reset must not be reused forever once the reset ends.
+  it('does not permanently reuse a transient reset-denied persistence handle once real persistence becomes available', async () => {
+    const { isIdbEncryptionReady } = await import(
+      '../../services/storage/storageEncryptionService'
+    );
+    const { persistProjectDoc } = await import('../../services/localFirst/docPersistence');
+
+    // QNBS-v3: localFirstHandle is module-level state that can carry a stale handle over from an earlier test in this file — force a clean teardown first so this test's own scenario starts from null.
+    const warmupStore = makeFullStore();
+    warmupStore.dispatch(featureFlagsActions.setEnableLocalFirstSync(true));
+    await vi.advanceTimersByTimeAsync(100);
+    warmupStore.dispatch(featureFlagsActions.setEnableLocalFirstSync(false));
+    await vi.advanceTimersByTimeAsync(100);
+    // QNBS-v3: proves the warmup's OFF transition actually tore down the handle via teardownLocalFirst(), not merely dispatched an action that happened to do nothing.
+    expect(mockNoopDestroy).toHaveBeenCalledTimes(1);
+    vi.mocked(persistProjectDoc).mockClear();
+
+    // QNBS-v3: takes the persistProjectDoc branch instead of the encryption-driven NOOP branch, so this test controls exactly what persistProjectDoc returns.
+    vi.mocked(isIdbEncryptionReady).mockReturnValue(false);
+    const transientResetDenied = {
+      active: false,
+      whenSynced: Promise.resolve(),
+      destroy: () => Promise.resolve(),
+      clearData: () => Promise.resolve(),
+    };
+    const realActive = {
+      active: true,
+      whenSynced: Promise.resolve(),
+      destroy: () => Promise.resolve(),
+      clearData: () => Promise.resolve(),
+    };
+    vi.mocked(persistProjectDoc)
+      .mockReturnValueOnce(transientResetDenied)
+      .mockReturnValueOnce(realActive);
+
+    const store = makeFullStore();
+    store.dispatch(projectActions.updateTitle('Reset Denial Title'));
+    store.dispatch(featureFlagsActions.setEnableLocalFirstSync(true));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(persistProjectDoc).toHaveBeenCalledTimes(1);
+
+    // A later edit to the SAME project re-triggers getLocalFirstHandle — the transient handle must
+    // not be reused as if it were an intentional NOOP; a fresh open must be attempted instead.
+    store.dispatch(projectActions.updateTitle('After Reset Ends'));
+    await vi.advanceTimersByTimeAsync(1300);
+    expect(persistProjectDoc).toHaveBeenCalledTimes(2);
+  });
+
+  // QNBS-v3 (CodeAnt): mirror image of the reset-denial test above — a handle that chose the shared NOOP_PERSISTENCE singleton because encryption was ready must not be reused forever once encryption is later disabled.
+  it('discards the shared NOOP_PERSISTENCE handle and resumes durable persistence once encryption is disabled', async () => {
+    const { isIdbEncryptionReady } = await import(
+      '../../services/storage/storageEncryptionService'
+    );
+    const { persistProjectDoc } = await import('../../services/localFirst/docPersistence');
+
+    // QNBS-v3: localFirstHandle is module-level state carried over between tests — force a clean teardown first.
+    const warmupStore = makeFullStore();
+    warmupStore.dispatch(featureFlagsActions.setEnableLocalFirstSync(true));
+    await vi.advanceTimersByTimeAsync(100);
+    warmupStore.dispatch(featureFlagsActions.setEnableLocalFirstSync(false));
+    await vi.advanceTimersByTimeAsync(100);
+    vi.mocked(persistProjectDoc).mockClear();
+
+    // Encryption is ready — getLocalFirstHandle chooses the shared NOOP_PERSISTENCE singleton, never calling persistProjectDoc.
+    vi.mocked(isIdbEncryptionReady).mockReturnValue(true);
+    const store = makeFullStore();
+    store.dispatch(projectActions.updateTitle('Encrypted Title'));
+    store.dispatch(featureFlagsActions.setEnableLocalFirstSync(true));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(persistProjectDoc).not.toHaveBeenCalled();
+
+    // Encryption is later disabled — a further edit to the SAME project must discard the cached NOOP and resume durable persistence, not keep returning the memory-only handle forever.
+    vi.mocked(isIdbEncryptionReady).mockReturnValue(false);
+    store.dispatch(projectActions.updateTitle('Decrypted Title'));
+    await vi.advanceTimersByTimeAsync(1300);
+    expect(persistProjectDoc).toHaveBeenCalledTimes(1);
   });
 });
 

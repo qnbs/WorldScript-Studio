@@ -414,6 +414,7 @@
   "settings.data.createSnapshot": "Crear instantánea",
   "settings.data.dangerZone.description": "Estas acciones son irreversibles. Procede con precaución.",
   "settings.data.dangerZone.factoryReset.button": "Restablecimiento de fábrica",
+  "settings.data.dangerZone.factoryReset.failed": "El restablecimiento de fábrica no se completó — la aplicación puede estar en un estado parcialmente restablecido. Reinicia la aplicación para comprobarlo y vuelve a intentar el restablecimiento.",
   "settings.data.dangerZone.factoryReset.hint": "Elimina permanentemente todos los proyectos, configuraciones, claves API y datos locales. La app se reinicia como instalación nueva.",
   "settings.data.dangerZone.factoryReset.label": "Restablecer todos los datos",
   "settings.data.dangerZone.factoryReset.modalConfirm": "Eliminar todo y reiniciar",

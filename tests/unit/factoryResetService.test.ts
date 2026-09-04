@@ -13,6 +13,8 @@ import { logger } from '../../services/logger';
 
 const mockIsTauriRuntime = vi.fn(() => false);
 const mockLoadTauriApis = vi.fn();
+const mockBeginIdbReset = vi.fn();
+const mockEndIdbReset = vi.fn();
 
 vi.mock('../../services/logger', () => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
@@ -24,6 +26,11 @@ vi.mock('../../services/fs/fsCore', () => ({
   loadTauriApis: (...args: unknown[]) => mockLoadTauriApis(...args),
   // QNBS-v3: pass-through — retry/backoff behavior is covered by fsCore.test.ts directly.
   retryFs: (fn: () => Promise<unknown>) => fn(),
+}));
+// QNBS-v3: the gate's own registry/generation behavior is covered directly by idbResetGate.test.ts — this suite only verifies factoryResetService calls begin/end at the right points.
+vi.mock('../../services/storage/idbResetGate', () => ({
+  beginIdbReset: () => mockBeginIdbReset(),
+  endIdbReset: () => mockEndIdbReset(),
 }));
 
 function createDb(name: string): Promise<void> {
@@ -231,6 +238,147 @@ describe('wipeAllAppData', () => {
     replaceStateSpy.mockRestore();
   });
 
+  // QNBS-v3: a still-open connection silently blocked deleteDatabase while the code reported success anyway; the reset gate must begin (closing every registered connection) before any delete.
+  it('begins the reset gate before deleting any database', async () => {
+    await createDb('worldscript-data-db');
+    const delSpy = vi.spyOn(indexedDB, 'deleteDatabase');
+
+    await runWipe();
+
+    expect(mockBeginIdbReset).toHaveBeenCalledTimes(1);
+    const beginOrder = mockBeginIdbReset.mock.invocationCallOrder[0];
+    const firstDeleteOrder = delSpy.mock.invocationCallOrder[0];
+    expect(beginOrder).toBeDefined();
+    expect(firstDeleteOrder).toBeDefined();
+    expect(beginOrder as number).toBeLessThan(firstDeleteOrder as number);
+    expect(mockEndIdbReset).not.toHaveBeenCalled();
+    delSpy.mockRestore();
+  });
+
+  // QNBS-v3 (cubic/coderabbit): onblocked alone must not settle the promise -- only a block that genuinely outlasts the timeout is treated as a failure.
+  it('rejects, never reloads, and releases the reset gate when a database deletion stays blocked past the timeout', async () => {
+    await createDb('worldscript-data-db');
+    const delSpy = vi.spyOn(indexedDB, 'deleteDatabase').mockImplementation((_name: string) => {
+      const req = {} as IDBOpenDBRequest;
+      queueMicrotask(() => req.onblocked?.(new Event('blocked') as IDBVersionChangeEvent));
+      return req;
+    });
+
+    vi.useFakeTimers();
+    try {
+      const wiped = wipeAllAppData();
+      // QNBS-v3: attached synchronously, in the same tick the promise is created — a handler attached only after runAllTimersAsync() lets the timeout-driven rejection fire unhandled for a full turn first, which Node flags even once it's later caught.
+      void wiped.catch(() => undefined);
+      await vi.runAllTimersAsync();
+      await expect(wiped).rejects.toThrow(/still blocked after/);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(reloadMock).not.toHaveBeenCalled();
+    expect(mockBeginIdbReset).toHaveBeenCalledTimes(1);
+    expect(mockEndIdbReset).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining(`deleteDatabase(worldscript-data-db) blocked`),
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining(`deleteDatabase(worldscript-data-db) still blocked after`),
+    );
+    delSpy.mockRestore();
+  });
+
+  // QNBS-v3 (cubic/coderabbit): the regression case the fix exists for -- a block that clears before the timeout must resolve normally, not be treated as a failure.
+  it('resolves once a blocked deletion is followed by a real onsuccess, without waiting for the timeout', async () => {
+    await createDb('worldscript-data-db');
+    const delSpy = vi.spyOn(indexedDB, 'deleteDatabase').mockImplementation((_name: string) => {
+      const req = {} as IDBOpenDBRequest;
+      queueMicrotask(() => {
+        req.onblocked?.(new Event('blocked') as IDBVersionChangeEvent);
+        queueMicrotask(() => req.onsuccess?.(new Event('success') as unknown as Event));
+      });
+      return req;
+    });
+
+    vi.useFakeTimers();
+    try {
+      const wiped = wipeAllAppData();
+      await vi.runAllTimersAsync();
+      await wiped;
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(reloadMock).toHaveBeenCalledTimes(1);
+    expect(mockEndIdbReset).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining(`deleteDatabase(worldscript-data-db) blocked`),
+    );
+    expect(logger.warn).not.toHaveBeenCalledWith(expect.stringContaining('still blocked after'));
+    delSpy.mockRestore();
+  });
+
+  // QNBS-v3: proves allSettled semantics — a fast rejection must not release the gate while another deletion is still outstanding; the gate only releases once every deletion has settled.
+  it('waits for every database deletion to settle before releasing the gate, even when one rejects quickly and another is deliberately delayed', async () => {
+    const dbSpy = vi.spyOn(indexedDB, 'databases').mockResolvedValue([
+      { name: 'worldscript-data-db', version: 1 },
+      { name: 'worldscript-logs-db', version: 1 },
+    ]);
+    // QNBS-v3: a mutable object wrapper (not a reassigned `let`) avoids a tsgo control-flow narrowing artifact across the mock callback boundary.
+    const slow: { resolve: (() => void) | null } = { resolve: null };
+    const calledNames: string[] = [];
+    const delSpy = vi.spyOn(indexedDB, 'deleteDatabase').mockImplementation((name: string) => {
+      calledNames.push(name);
+      const req = {} as IDBOpenDBRequest;
+      if (name === 'worldscript-data-db') {
+        queueMicrotask(() => req.onerror?.(new Event('error')));
+      } else {
+        slow.resolve = () => req.onsuccess?.(new Event('success'));
+      }
+      return req;
+    });
+
+    let settled = false;
+    const wipePromise = wipeAllAppData();
+    void wipePromise.catch(() => {
+      settled = true;
+    });
+
+    await vi.waitFor(() => {
+      expect(calledNames).toEqual(
+        expect.arrayContaining(['worldscript-data-db', 'worldscript-logs-db']),
+      );
+    });
+    // QNBS-v3: the fast rejection has already fired by now, but the slow deletion hasn't settled — the gate must not release yet.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    expect(mockEndIdbReset).not.toHaveBeenCalled();
+
+    slow.resolve?.();
+    await expect(wipePromise).rejects.toThrow(/database deletion\(s\) failed/);
+
+    expect(mockEndIdbReset).toHaveBeenCalledTimes(1);
+    expect(reloadMock).not.toHaveBeenCalled();
+    dbSpy.mockRestore();
+    delSpy.mockRestore();
+  });
+
+  // QNBS-v3: the fail-closed contract's core proof — a closer failure must abort the wipe entirely, before any database deletion is attempted, while still releasing the gate for retry.
+  it('never deletes any database and releases the gate when beginIdbReset itself rejects', async () => {
+    await createDb('worldscript-data-db');
+    const delSpy = vi.spyOn(indexedDB, 'deleteDatabase');
+    mockBeginIdbReset.mockRejectedValueOnce(
+      new Error('[idbResetGate] reset teardown incomplete — 1 closer(s) failed: close failed'),
+    );
+
+    await expect(wipeAllAppData()).rejects.toThrow(/closer\(s\) failed/);
+
+    expect(delSpy).not.toHaveBeenCalled();
+    expect(reloadMock).not.toHaveBeenCalled();
+    expect(mockEndIdbReset).toHaveBeenCalledTimes(1);
+    delSpy.mockRestore();
+  });
+
   it('falls back to the known database list when indexedDB.databases() fails', async () => {
     const dbSpy = vi.spyOn(indexedDB, 'databases').mockRejectedValueOnce(new Error('not allowed'));
     const delSpy = vi.spyOn(indexedDB, 'deleteDatabase');
@@ -239,6 +387,26 @@ describe('wipeAllAppData', () => {
 
     // Fallback deletes every name in the known list (e.g. the logs DB).
     expect(delSpy).toHaveBeenCalledWith('worldscript-logs-db');
+    expect(reloadMock).toHaveBeenCalledTimes(1);
+    dbSpy.mockRestore();
+    delSpy.mockRestore();
+  });
+
+  // QNBS-v3: hard preserve-first gate — a shared origin can host a database from an unrelated app/tool; indexedDB.databases() enumerates the whole origin, so factory reset must never construct a deletion target from anything it doesn't own.
+  it('never deletes a foreign, non-owned database on the shared origin, including when native enumeration succeeds', async () => {
+    const dbSpy = vi.spyOn(indexedDB, 'databases').mockResolvedValue([
+      { name: 'worldscript-data-db', version: 1 },
+      { name: 'worldscript-localfirst-proj-123', version: 1 },
+      { name: 'some-other-tools-database', version: 1 },
+    ]);
+    const delSpy = vi.spyOn(indexedDB, 'deleteDatabase');
+
+    await runWipe();
+
+    expect(delSpy).toHaveBeenCalledWith('worldscript-data-db');
+    expect(delSpy).toHaveBeenCalledWith('worldscript-localfirst-proj-123');
+    expect(delSpy).not.toHaveBeenCalledWith('some-other-tools-database');
+    expect(delSpy).toHaveBeenCalledTimes(2);
     expect(reloadMock).toHaveBeenCalledTimes(1);
     dbSpy.mockRestore();
     delSpy.mockRestore();

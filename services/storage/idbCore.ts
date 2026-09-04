@@ -19,6 +19,11 @@ import {
 } from '../dbConstants';
 import { migrateLegacyWorldscriptDbIfNeeded } from '../dbMigration';
 import { logger } from '../logger';
+import {
+  beginIdbOpenAdmission,
+  isIdbOpenStillValid,
+  registerIdbConnectionCloser,
+} from './idbResetGate';
 
 // LZ-String threshold: compress payloads >10 KB
 const COMPRESS_THRESHOLD_BYTES = 10_240;
@@ -95,6 +100,14 @@ export function getUserFriendlyDbError(error: unknown): string {
 export class IdbConnectionManager {
   protected stateDb: IDBDatabase | null = null;
   protected dataDb: IDBDatabase | null = null;
+  // QNBS-v3 (cubic): single-flight guards -- getObjectStore() calls initDB() whenever stateDb/dataDb is still null, so concurrent callers before the first open resolves would otherwise each start their own indexedDB.open(), and the last onsuccess to fire would silently orphan every earlier connection (untracked, so closeConnections() can never close it and a later deleteDatabase() can block).
+  private stateDbPromise: Promise<void> | null = null;
+  private dataDbPromise: Promise<void> | null = null;
+
+  constructor() {
+    // QNBS-v3: auto-registers every subclass singleton with the shared reset gate, so factory reset closes it without a hand-written per-store wrapper.
+    registerIdbConnectionCloser(() => this.closeConnections());
+  }
 
   protected closeConnections(): void {
     // QNBS-v3: Test singletons must release old factories before another fake IndexedDB is installed.
@@ -102,6 +115,8 @@ export class IdbConnectionManager {
     this.dataDb?.close();
     this.stateDb = null;
     this.dataDb = null;
+    this.stateDbPromise = null;
+    this.dataDbPromise = null;
   }
 
   protected isStateStore(storeName: string): boolean {
@@ -119,7 +134,15 @@ export class IdbConnectionManager {
   }
 
   private openStateDb(): Promise<void> {
-    return new Promise((resolve, reject) => {
+    // QNBS-v3 (coderabbit): initDB() calls both openers unconditionally, and getObjectStore() calls initDB() whenever EITHER handle is null -- without this, a live stateDb would still be reopened (and silently overwritten, unclosed) whenever only dataDb needed a fresh open.
+    if (this.stateDb) return Promise.resolve();
+    if (this.stateDbPromise) return this.stateDbPromise;
+    // QNBS-v3: rejects immediately if a reset is currently draining — the generation check alone can't catch an open that STARTS mid-reset, since it would capture the reset's own already-bumped generation.
+    const openGeneration = beginIdbOpenAdmission();
+    if (openGeneration === null) {
+      return Promise.reject(new Error('IndexedDB reset in progress'));
+    }
+    const thisOpen: Promise<void> = new Promise((resolve, reject) => {
       const request = indexedDB.open(STATE_DB_NAME, DB_VERSION);
       request.onupgradeneeded = (event) => {
         const db = request.result;
@@ -132,6 +155,11 @@ export class IdbConnectionManager {
       };
       request.onsuccess = () => {
         const db = request.result;
+        if (!isIdbOpenStillValid(openGeneration)) {
+          db.close();
+          reject(new Error('IndexedDB reset in progress'));
+          return;
+        }
         db.onversionchange = () => {
           db.close();
           this.stateDb = null;
@@ -141,10 +169,26 @@ export class IdbConnectionManager {
       };
       request.onerror = () => reject(request.error);
     });
+    this.stateDbPromise = thisOpen;
+    // QNBS-v3 (cubic): identity-checked -- a reset's closeConnections() can null stateDbPromise directly while this open is still in flight, so this settlement must not then clobber a newer attempt's reference.
+    thisOpen
+      .finally(() => {
+        if (this.stateDbPromise === thisOpen) this.stateDbPromise = null;
+      })
+      .catch(() => undefined);
+    return thisOpen;
   }
 
   private openDataDb(): Promise<void> {
-    return new Promise((resolve, reject) => {
+    // QNBS-v3 (coderabbit): same rationale as openStateDb() -- a live dataDb must not be reopened just because stateDb alone needed a fresh open.
+    if (this.dataDb) return Promise.resolve();
+    if (this.dataDbPromise) return this.dataDbPromise;
+    // QNBS-v3: rejects immediately if a reset is currently draining — the generation check alone can't catch an open that STARTS mid-reset, since it would capture the reset's own already-bumped generation.
+    const openGeneration = beginIdbOpenAdmission();
+    if (openGeneration === null) {
+      return Promise.reject(new Error('IndexedDB reset in progress'));
+    }
+    const thisOpen: Promise<void> = new Promise((resolve, reject) => {
       const request = indexedDB.open(DATA_DB_NAME, DB_VERSION);
       request.onupgradeneeded = (event) => {
         const db = request.result;
@@ -170,6 +214,11 @@ export class IdbConnectionManager {
       };
       request.onsuccess = () => {
         const db = request.result;
+        if (!isIdbOpenStillValid(openGeneration)) {
+          db.close();
+          reject(new Error('IndexedDB reset in progress'));
+          return;
+        }
         db.onversionchange = () => {
           db.close();
           this.dataDb = null;
@@ -179,6 +228,14 @@ export class IdbConnectionManager {
       };
       request.onerror = () => reject(request.error);
     });
+    this.dataDbPromise = thisOpen;
+    // QNBS-v3 (cubic): identity-checked -- a reset's closeConnections() can null dataDbPromise directly while this open is still in flight, so this settlement must not then clobber a newer attempt's reference.
+    thisOpen
+      .finally(() => {
+        if (this.dataDbPromise === thisOpen) this.dataDbPromise = null;
+      })
+      .catch(() => undefined);
+    return thisOpen;
   }
 
   async initDB(): Promise<void> {

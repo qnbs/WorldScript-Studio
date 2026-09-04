@@ -2074,6 +2074,7 @@
   "settings.data.createSnapshot": "Schnappschuss erstellen",
   "settings.data.dangerZone.description": "Diese Aktionen sind unwiderruflich. Vorsicht!",
   "settings.data.dangerZone.factoryReset.button": "Werkseinstellungen",
+  "settings.data.dangerZone.factoryReset.failed": "Der Werksreset wurde nicht abgeschlossen – die App befindet sich möglicherweise in einem teilweise zurückgesetzten Zustand. Starten Sie die App neu, um dies zu überprüfen, und versuchen Sie den Reset erneut.",
   "settings.data.dangerZone.factoryReset.hint": "Löscht alle Projekte, Einstellungen, API-Schlüssel und lokalen Daten dauerhaft. Die App startet neu wie bei einer Erstinstallation.",
   "settings.data.dangerZone.factoryReset.label": "Alle App-Daten zurücksetzen",
   "settings.data.dangerZone.factoryReset.modalConfirm": "Alles löschen & neu starten",

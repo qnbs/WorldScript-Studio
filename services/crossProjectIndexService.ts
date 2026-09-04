@@ -8,6 +8,11 @@ import type { Character } from '../types';
 import { cosineSimilarity, embedText } from './ai/localEmbeddingService';
 import { DATA_DB_NAME, DB_VERSION, PROJECTS_INDEX_STORE } from './dbConstants';
 import { loadDuckdbAnalytics } from './duckdb/duckdbListenerLoader';
+import {
+  beginIdbOpenAdmission,
+  isIdbOpenStillValid,
+  registerIdbConnectionCloser,
+} from './storage/idbResetGate';
 
 export interface ProjectSearchIndex {
   projectId: string;
@@ -25,25 +30,59 @@ export interface ProjectSearchIndex {
 // QNBS-v3: Own connection to data-db — avoids circular import with dbService singleton.
 //          IDB handles concurrent same-version opens gracefully; no upgrade runs again.
 let dbPromise: Promise<IDBDatabase> | null = null;
+let database: IDBDatabase | null = null;
+
+// QNBS-v3: a second, independent connection to worldscript-data-db (separate from dbService's own) — a factory reset must close this one too or deleteDatabase(worldscript-data-db) blocks even after dbService's connection is closed.
+registerIdbConnectionCloser(() => {
+  database?.close();
+  database = null;
+  dbPromise = null;
+});
 
 function getDb(): Promise<IDBDatabase> {
-  if (!dbPromise) {
-    dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
-      const req = indexedDB.open(DATA_DB_NAME, DB_VERSION);
-      req.onupgradeneeded = () => {
-        // QNBS-v3: Upgrade handled by dbService; this connection should never need it.
-        //          If reached (first open before dbService), store is created here too.
-        const db = req.result;
-        if (!db.objectStoreNames.contains(PROJECTS_INDEX_STORE)) {
-          const store = db.createObjectStore(PROJECTS_INDEX_STORE, { keyPath: 'projectId' });
-          store.createIndex('lastIndexed', 'lastIndexed', { unique: false });
-        }
-      };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
+  if (database) return Promise.resolve(database);
+  if (dbPromise) return dbPromise;
+  // QNBS-v3: rejects immediately if a reset is currently draining — the generation check alone can't catch an open that STARTS mid-reset, since it would capture the reset's own already-bumped generation.
+  const openGeneration = beginIdbOpenAdmission();
+  if (openGeneration === null) {
+    return Promise.reject(new Error('IndexedDB reset in progress'));
   }
-  return dbPromise;
+  const thisOpen: Promise<IDBDatabase> = new Promise<IDBDatabase>((resolve, reject) => {
+    const req = indexedDB.open(DATA_DB_NAME, DB_VERSION);
+    req.onupgradeneeded = () => {
+      // QNBS-v3: upgrade is normally handled by dbService — if reached (first open before dbService), the store is created here too.
+      const db = req.result;
+      if (!db.objectStoreNames.contains(PROJECTS_INDEX_STORE)) {
+        const store = db.createObjectStore(PROJECTS_INDEX_STORE, { keyPath: 'projectId' });
+        store.createIndex('lastIndexed', 'lastIndexed', { unique: false });
+      }
+    };
+    req.onsuccess = () => {
+      const db = req.result;
+      if (!isIdbOpenStillValid(openGeneration)) {
+        db.close();
+        reject(new Error('IndexedDB reset in progress'));
+        return;
+      }
+      db.onversionchange = () => {
+        db.close();
+        database = null;
+      };
+      database = db;
+      resolve(db);
+    };
+    req.onerror = () => {
+      reject(req.error);
+    };
+  });
+  dbPromise = thisOpen;
+  // QNBS-v3: single ownership-checked cleanup for every settlement — .finally()'s callback always runs as a later microtask, so this always sees dbPromise already set to thisOpen. The trailing .catch(() => {}) only prevents an unhandled-rejection warning on this DISCARDED derived chain.
+  thisOpen
+    .finally(() => {
+      if (dbPromise === thisOpen) dbPromise = null;
+    })
+    .catch(() => {});
+  return thisOpen;
 }
 
 function extractCharacterNames(data: ProjectData): string[] {

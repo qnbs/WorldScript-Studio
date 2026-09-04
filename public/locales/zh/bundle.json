@@ -2074,6 +2074,7 @@
   "settings.data.createSnapshot": "创建 Snapshot",
   "settings.data.dangerZone.description": "这些行动是不可逆转的。谨慎行事。",
   "settings.data.dangerZone.factoryReset.button": "恢复出厂设置",
+  "settings.data.dangerZone.factoryReset.failed": "恢复出厂设置未完成——应用程序现在可能处于部分重置状态。请重新启动应用程序进行检查，然后重新尝试重置。",
   "settings.data.dangerZone.factoryReset.hint": "永久删除所有项目、设置、API 密钥和本地数据。该应用程序将作为全新安装重新启动。",
   "settings.data.dangerZone.factoryReset.label": "重置所有应用程序数据",
   "settings.data.dangerZone.factoryReset.modalConfirm": "删除 everything & restart",
