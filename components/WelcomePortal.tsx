@@ -194,11 +194,7 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({ onExit }) => {
       <CustomIcon className="w-16 h-16 text-[var(--sc-accent)] mx-auto mb-4" aria-hidden="true">
         {ICONS.WRITER}
       </CustomIcon>
-      <h1
-        className="text-4xl md:text-5xl font-bold text-[var(--sc-text-primary)]"
-        style={{ color: 'magenta' }}
-      >
-        {/* NEGATIVE-CONTROL: temporary, obvious visual perturbation to prove VRT detects a real change — reverted immediately after. */}
+      <h1 className="text-4xl md:text-5xl font-bold text-[var(--sc-text-primary)]">
         {t('portal.welcome.title')}
       </h1>
       <p className="text-lg text-[var(--sc-text-muted)] mt-2 mb-6">
