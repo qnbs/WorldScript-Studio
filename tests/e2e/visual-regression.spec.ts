@@ -70,6 +70,8 @@ test.describe('Visual regression', () => {
     await selectEnglish(page);
     await ensureBlankProject(page);
     await clickNavItem(page, /AI Writing Studio|Writer/i);
+    // QNBS-v3: proves the Writer view specifically loaded, not just "some" app view — a screenshot diff alone can silently under-detect a wrong destination when both the wrong and right pages happen to be sparse enough to fall under the pixel-diff threshold.
+    await expect(page.getByTestId('writer-studio-editor').first()).toBeVisible();
     await settle(page);
     await expect(page).toHaveScreenshot('writer.png', opts);
   });
@@ -80,6 +82,8 @@ test.describe('Visual regression', () => {
     await selectEnglish(page);
     await ensureBlankProject(page);
     await clickNavItem(page, /Characters/i);
+    // QNBS-v3: proves the Characters view specifically loaded — see the writer test's identical rationale above.
+    await expect(page.getByRole('button', { name: /Add Manually/i })).toBeVisible();
     await settle(page);
     await expect(page).toHaveScreenshot('characters.png', opts);
   });
@@ -90,6 +94,10 @@ test.describe('Visual regression', () => {
     await selectEnglish(page);
     await ensureBlankProject(page);
     await clickNavItem(page, /Settings/i);
+    // QNBS-v3: proves the Settings view specifically loaded — see the writer test's identical rationale above.
+    await expect(
+      page.getByRole('heading', { name: /Settings|Einstellungen/i }).first(),
+    ).toBeVisible();
     await settle(page);
     await expect(page).toHaveScreenshot('settings.png', opts);
   });
