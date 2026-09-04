@@ -135,8 +135,8 @@ test.describe('Accessibility (axe)', () => {
       { timeout: 8000 },
     );
     await clickNavItem(page, /Dashboard/i);
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(500);
+    // QNBS-v3: waits for the lazy-loaded Dashboard to actually render before scanning — clickNavItem/domcontentloaded resolve before the view mounts, so a fixed sleep could scan a stale/empty page.
+    await expect(page.locator('#projectTitle')).toBeVisible({ timeout: 15_000 });
     await assertNoSeriousViolations(page, 'light-sepia-home');
   });
 
@@ -159,8 +159,8 @@ test.describe('Accessibility (axe)', () => {
     );
     await assertNoSeriousViolations(page, 'dark-sepia-settings');
     await clickNavItem(page, /Dashboard/i);
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(500);
+    // QNBS-v3: waits for the lazy-loaded Dashboard to actually render before scanning — see the light-sepia test's identical rationale above.
+    await expect(page.locator('#projectTitle')).toBeVisible({ timeout: 15_000 });
     await assertNoSeriousViolations(page, 'dark-sepia-home');
   });
 });

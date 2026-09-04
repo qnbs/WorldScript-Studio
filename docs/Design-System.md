@@ -5,7 +5,7 @@ Runtime styling is **CSS-first** (`index.css`); TypeScript mirrors live in `@dom
 ## Principles
 
 - **Single vocabulary**: Use `--sc-*` variables exclusively. The bridge aliases below are **DEPRECATED** — kept only in `index.css` for backward compatibility until DS-5 removes them.
-- **No `dark:` Tailwind prefix in components**: WorldScript uses body-class theming (`.light-theme` / `.dark-theme`), not Tailwind's `dark:` media-query mechanism. Using `dark:` bypasses appearance presets and will break sepia/fantasy/romance themes.
+- **No `dark:` Tailwind prefix in components**: WorldScript uses body-class theming (`.light-theme` / `.dark-theme`), not Tailwind's `dark:` media-query mechanism. Using `dark:` bypasses appearance presets and can break the active creative palette.
 - **Accessibility**: High contrast uses `.accessibility-high-contrast` on `body`; reduced motion uses `.worldscript-reduced-motion` plus `prefers-reduced-motion`.
 - **Internationalization**: User-facing labels for presets live in locale bundles (`settings.appearance.preset*`).
 
@@ -83,7 +83,7 @@ Stories live in `stories/`. Global decorators (`withTheme`, `withAppearance`) sw
 
 **Toolbar states to test every story against:**
 - Theme: Dark / Light
-- Appearance: Default / Sepia / Fantasy / Romance
+- Appearance: Default / Sepia
 
 The `@storybook/addon-a11y` addon runs axe-core per story — all stories must pass with no serious violations.
 
