@@ -163,4 +163,26 @@ test.describe('Accessibility (axe)', () => {
     await expect(page.locator('#projectTitle')).toBeVisible({ timeout: 15_000 });
     await assertNoSeriousViolations(page, 'dark-sepia-home');
   });
+
+  // QNBS-v3: overrides the describe-level reducedMotion:'reduce' emulation to prove the Dashboard's real, fully-settled end state is AA-compliant on its own — not only the reduced-motion path other tests in this file exercise.
+  test('dashboard has no serious axe violations after motion settles (normal motion)', async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.goto('/');
+    await waitForSpaReady(page);
+    await selectEnglish(page);
+    await ensureBlankProject(page);
+    await clickNavItem(page, /Dashboard/i);
+    await expect(page.locator('#projectTitle')).toBeVisible({ timeout: 15_000 });
+    // QNBS-v3: each staggered card's fade-in delay scales with its own --index, so waiting for every .animate-in element's computed opacity to settle is more robust than tracking each caller's index by hand.
+    await page.waitForFunction(
+      () =>
+        Array.from(document.querySelectorAll<HTMLElement>('.animate-in')).every(
+          (el) => getComputedStyle(el).opacity === '1',
+        ),
+      { timeout: 8000 },
+    );
+    await assertNoSeriousViolations(page, 'normal-motion-home');
+  });
 });
