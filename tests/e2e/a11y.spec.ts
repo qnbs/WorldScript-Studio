@@ -117,6 +117,29 @@ test.describe('Accessibility (axe)', () => {
     await assertNoSeriousViolations(page, 'help-view');
   });
 
+  // QNBS-v3: light color scheme + explicit Writer's Sepia — the plain "welcome" test above no longer covers sepia now that the default preset changed, so this closes that gap deterministically rather than relying on default/persistence.
+  test('light sepia dashboard has no serious axe violations', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    await page.goto('/');
+    await waitForSpaReady(page);
+    await selectEnglish(page);
+    await ensureBlankProject(page);
+    await clickNavItem(page, /Settings/i);
+    await page.getByRole('button', { name: /Appearance|Erscheinungsbild/i }).click();
+    await page.getByRole('button', { name: /Writer's Sepia/i }).click();
+    // Confirm light-theme + appearance-sepia are both applied before running axe
+    await page.waitForFunction(
+      () =>
+        document.body.classList.contains('light-theme') &&
+        document.body.classList.contains('appearance-sepia'),
+      { timeout: 8000 },
+    );
+    await clickNavItem(page, /Dashboard/i);
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(500);
+    await assertNoSeriousViolations(page, 'light-sepia-home');
+  });
+
   // QNBS-v3: dark color scheme + explicit Writer's Sepia selection (not relying on it being the default, which changed) so this keeps exercising .dark-theme.appearance-sepia's token set (primary 14.7:1, muted 5.3:1 on worst-case bg).
   test('dark sepia theme has no serious axe violations', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
