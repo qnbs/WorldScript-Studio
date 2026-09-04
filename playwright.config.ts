@@ -38,6 +38,7 @@ export default defineConfig({
   workers: process.env['CI'] ? 1 : 4,
   reporter: [
     ['html', { outputFolder: 'tests/e2e/html-report' }],
+    // QNBS-v3: junit.xml feeds Codecov Test Analytics; project-name-prefixed titles keep per-project failures distinguishable there
     [
       'junit',
       {

@@ -314,9 +314,9 @@ jobs:
 
       # QNBS-v3: no retry — a first-attempt failure remains visible instead of being masked as a pass.
       # --no-experimental-webstorage disables Node 24's native Web Storage API for deterministic setup.
-      # QNBS-v3: --reporter=junit inherits vitest.config.ts's own outputFile (reports/junit.xml) for that reporter name; only json needs a CLI outputFile since it has no config-declared one.
+      # QNBS-v3: both outputFile paths explicit in this one invocation — never relying on vitest.config.ts's own reporter-tuple default, which could silently drift independently of this exact command.
       - name: Unit tests (Vitest, no retry)
-        run: pnpm exec vitest run --coverage --reporter=json --reporter=junit --outputFile.json=test-results.json
+        run: pnpm exec vitest run --coverage --reporter=json --reporter=junit --outputFile.json=test-results.json --outputFile.junit=reports/junit.xml
         env:
           NODE_OPTIONS: "--no-experimental-webstorage --max-old-space-size=4096"
           CI: "true"

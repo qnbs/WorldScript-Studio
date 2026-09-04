@@ -187,21 +187,29 @@ an explicit `--outputFile.json=`. The no-`--retry` policy is unchanged.
 explicit `CODECOV_BUNDLE_ANALYSIS=true` env var set only on the `build` job's existing `analyze`
 step — never on the plain `pnpm run build` step, and never merely because `CODECOV_TOKEN` happens to
 be present. This reuses the existing ANALYZE build (no third Vite build); the token is scoped to
-that one step, not the job or workflow. Bundle name is the stable `worldscript-studio-web` (no
-version/SHA/PR number, so Codecov tracks one bundle over time); `uploadOverrides.sha` uses the PR's
-head SHA (not GitHub's synthetic merge commit) via `CODECOV_BUNDLE_SHA`. `telemetry: false` disables
-the plugin's own telemetry about itself — it does not disable the bundle upload. `codecov.yml`'s
+that one step, not the job or workflow. Configured bundle name is the stable `worldscript-studio-web`
+(no version/SHA/PR number, so Codecov tracks one bundle over time) — the plugin itself appends the
+output format, so the name actually visible on Codecov's dashboard is `worldscript-studio-web-esm`
+(this repo's build only ever emits `es` output). `uploadOverrides.sha` uses the PR's head SHA (not
+GitHub's synthetic merge commit) via `CODECOV_BUNDLE_SHA`. `telemetry: false` disables the plugin's
+own telemetry about itself — it does not disable the bundle upload. `codecov.yml`'s
 `bundle_analysis.status: "informational"` keeps this non-blocking until a real size baseline exists;
 `pnpm run bundle:budget`'s absolute ceilings remain the actual blocking gate.
 
 `@codecov/vite-plugin@2.0.1` declares `peerDependencies: { vite: "4.x || 5.x || 6.x" }` — this repo
 runs Vite 8 with Rolldown. Verified empirically (not merely assumed) against the real production
 build, including PWA `injectManifest`, manual chunking, and every existing plugin: the build
-succeeds cleanly with no plugin-order or chunk-graph regressions. Re-check this compatibility note
-after any future `@codecov/vite-plugin` or Vite major-version bump.
+succeeds cleanly with no plugin-order or chunk-graph regressions. This is an intentionally-accepted
+gap against the plugin's own declared contract, not a false positive — tracked in
+[#606](https://github.com/qnbs/WorldScript-Studio/issues/606) to revalidate once `@codecov/vite-plugin`
+officially declares Vite 8 support.
 
-All Codecov uploads (coverage, test analytics, and bundle analysis) use `fail_ci_if_error: false` —
-a Codecov outage must never turn an otherwise-correct build into a false CI failure.
+Coverage and Test Analytics (`codecov/codecov-action`) use `fail_ci_if_error: false` — a Codecov
+outage must never turn an otherwise-correct build into a false CI failure. Bundle Analysis has no
+such input: `@codecov/vite-plugin` calls the underlying `Output.write()` without its optional
+`emitError` argument, so provider-detection, auth, and upload failures are caught internally and
+never fail the build — verified against the plugin's own source, not assumed from the coverage
+upload's unrelated flag.
 
 ### Release-truth checks
 

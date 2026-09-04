@@ -296,6 +296,61 @@ describe('Tauri release workflow policy', () => {
     expect(cancelledGuardCount).toBe(reportTypeCount);
   });
 
+  // QNBS-v3: the aggregate count above cannot tell five correct uploads from five miswired duplicates of one suite — assert each suite's own exact upload.
+  it.each([
+    {
+      job: 'quality',
+      step: 'Publish unit test results to Codecov',
+      files: 'reports/junit.xml',
+      flags: `unit-node\${{ matrix.node-version }}`,
+      name: `unit-node\${{ matrix.node-version }}`,
+    },
+    {
+      job: 'e2e',
+      step: 'Publish E2E test results to Codecov',
+      files: 'tests/e2e/results/junit.xml',
+      flags: 'e2e',
+      name: 'playwright-e2e',
+    },
+    {
+      job: 'e2e-deep',
+      step: 'Publish deep E2E test results to Codecov',
+      files: 'tests/e2e/results/junit.xml',
+      flags: 'e2e-deep',
+      name: 'e2e-deep',
+    },
+    {
+      job: 'storybook',
+      step: 'Publish Storybook test results to Codecov',
+      files: 'test-results/storybook-junit.xml',
+      flags: 'storybook',
+      name: 'storybook',
+    },
+    {
+      job: 'vrt',
+      step: 'Publish VRT test results to Codecov',
+      files: 'tests/e2e/results/junit.xml',
+      flags: 'vrt',
+      name: 'vrt',
+    },
+  ])(
+    '$job uploads its own test analytics with the correct files/flags/name',
+    ({ job, step, files, flags, name }) => {
+      const jobBlock = extractJobBlock(workflowSource, job);
+      const uploadStep = extractStepBlock(jobBlock, step);
+      expect(uploadStep).toContain(
+        'uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f',
+      );
+      expect(uploadStep).toContain(`if: \${{ !cancelled() }}`);
+      expect(uploadStep).toContain('report_type: test_results');
+      expect(uploadStep).toContain('disable_search: true');
+      expect(uploadStep).toContain(`files: ${files}`);
+      expect(uploadStep).toContain(`flags: ${flags}`);
+      expect(uploadStep).toContain(`name: ${name}`);
+    },
+  );
+
+  // QNBS-v3: a workflow/job-wide token would reach every step, including ones that never need it.
   it('never assigns CODECOV_TOKEN at workflow or job level, only inside individual steps', () => {
     expect(workflowSource).not.toMatch(/^env:\n(?:.*\n)*?\s*CODECOV_TOKEN/m);
     for (const jobName of extractJobNames(workflowSource)) {
@@ -305,15 +360,20 @@ describe('Tauri release workflow policy', () => {
     }
   });
 
-  it('runs Vitest once with both JSON and JUnit reporters, still without retry', () => {
+  // QNBS-v3: a second test run just to get JUnit would double Vitest's cost for no new coverage.
+  it('runs Vitest once with both JSON and JUnit reporters at explicit paths, still without retry', () => {
     const qualityBlock = extractJobBlock(workflowSource, 'quality');
     const vitestStep = extractStepBlock(qualityBlock, 'Unit tests (Vitest, no retry)');
     expect(vitestStep).toContain('--reporter=json');
     expect(vitestStep).toContain('--reporter=junit');
+    // QNBS-v3: explicit paths for both reporters — never relying on vitest.config.ts's own reporter-tuple default drifting independently of this exact command.
+    expect(vitestStep).toContain('--outputFile.json=test-results.json');
+    expect(vitestStep).toContain('--outputFile.junit=reports/junit.xml');
     expect(vitestStep).not.toContain('--retry');
     expect((qualityBlock.match(/pnpm exec vitest run/g) ?? []).length).toBe(1);
   });
 
+  // QNBS-v3: an always-on flag would upload from local `pnpm run build` too, not just the intended CI analysis pass.
   it('scopes Codecov Bundle Analysis to the analysis-build step only, never the plain build step', () => {
     const buildBlock = extractJobBlock(workflowSource, 'build');
     const plainBuildStep = extractStepBlock(buildBlock, 'Build application');
