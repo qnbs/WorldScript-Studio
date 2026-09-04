@@ -46,11 +46,12 @@ describe('StorageErrorScreen', () => {
       ...STARTUP_COPY_FALLBACKS,
       description: 'Localized description',
       projectUnavailable: 'Localized project failure',
+      projectIoUnavailable: 'Localized project I/O failure',
       recover: 'Localized preserve',
       recoveryFailed: 'Localized safe failure',
     };
 
-    render(<StorageErrorScreen copy={copy} onRecover={onRecover} />);
+    render(<StorageErrorScreen copy={copy} failureKind="project-corrupt" onRecover={onRecover} />);
     expect(screen.getByText('Localized description')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Localized preserve' })).toBeInTheDocument();
 
@@ -64,7 +65,7 @@ describe('StorageErrorScreen', () => {
     );
   });
 
-  it('announces recovery and blocks destructive reset while preservation is pending', async () => {
+  it('announces recovery without offering a destructive reset while preservation is pending', async () => {
     const user = userEvent.setup();
     let resolveRecovery: () => void = () => undefined;
     const onRecover = vi.fn(
@@ -73,18 +74,20 @@ describe('StorageErrorScreen', () => {
           resolveRecovery = resolve;
         }),
     );
-    const onReset = vi.fn();
-
     render(
-      <StorageErrorScreen copy={STARTUP_COPY_FALLBACKS} onRecover={onRecover} onReset={onReset} />,
+      <StorageErrorScreen
+        copy={STARTUP_COPY_FALLBACKS}
+        failureKind="project-corrupt"
+        onRecover={onRecover}
+      />,
     );
 
     await user.click(screen.getByRole('button', { name: STARTUP_COPY_FALLBACKS.recover }));
 
     expect(screen.getByRole('status')).toHaveTextContent(STARTUP_COPY_FALLBACKS.recovering);
-    expect(screen.getByRole('button', { name: STARTUP_COPY_FALLBACKS.reset })).toBeDisabled();
-    await user.click(screen.getByRole('button', { name: STARTUP_COPY_FALLBACKS.reset }));
-    expect(onReset).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole('button', { name: STARTUP_COPY_FALLBACKS.reset }),
+    ).not.toBeInTheDocument();
 
     resolveRecovery();
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(''));
@@ -94,7 +97,13 @@ describe('StorageErrorScreen', () => {
     const user = userEvent.setup();
     const onRecover = vi.fn().mockRejectedValue(new ProjectQuarantineError('source-missing'));
 
-    render(<StorageErrorScreen copy={STARTUP_COPY_FALLBACKS} onRecover={onRecover} />);
+    render(
+      <StorageErrorScreen
+        copy={STARTUP_COPY_FALLBACKS}
+        failureKind="project-corrupt"
+        onRecover={onRecover}
+      />,
+    );
 
     await user.click(screen.getByRole('button', { name: STARTUP_COPY_FALLBACKS.recover }));
 
@@ -102,12 +111,15 @@ describe('StorageErrorScreen', () => {
     expect(screen.queryByText(STARTUP_COPY_FALLBACKS.recoveryFailed)).not.toBeInTheDocument();
   });
 
-  it('reports the typed already-preserved outcome and supports successful recovery and reset actions', async () => {
+  it('reports the typed already-preserved outcome and supports successful recovery', async () => {
     const user = userEvent.setup();
     const onRecover = vi.fn().mockRejectedValue(new ProjectQuarantineError('already-preserved'));
-    const onReset = vi.fn();
     const firstRender = render(
-      <StorageErrorScreen copy={STARTUP_COPY_FALLBACKS} onRecover={onRecover} onReset={onReset} />,
+      <StorageErrorScreen
+        copy={STARTUP_COPY_FALLBACKS}
+        failureKind="project-corrupt"
+        onRecover={onRecover}
+      />,
     );
 
     await user.click(screen.getByRole('button', { name: STARTUP_COPY_FALLBACKS.recover }));
@@ -115,12 +127,19 @@ describe('StorageErrorScreen', () => {
       await screen.findByText(STARTUP_COPY_FALLBACKS.recoveryAlreadyPreserved),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: STARTUP_COPY_FALLBACKS.reset }));
-    expect(onReset).toHaveBeenCalledOnce();
+    expect(
+      screen.queryByRole('button', { name: STARTUP_COPY_FALLBACKS.reset }),
+    ).not.toBeInTheDocument();
 
     firstRender.unmount();
     const successfulRecover = vi.fn().mockResolvedValue(undefined);
-    render(<StorageErrorScreen copy={STARTUP_COPY_FALLBACKS} onRecover={successfulRecover} />);
+    render(
+      <StorageErrorScreen
+        copy={STARTUP_COPY_FALLBACKS}
+        failureKind="project-corrupt"
+        onRecover={successfulRecover}
+      />,
+    );
     await user.click(screen.getByRole('button', { name: STARTUP_COPY_FALLBACKS.recover }));
     await waitFor(() => expect(successfulRecover).toHaveBeenCalledOnce());
     expect(
@@ -129,7 +148,7 @@ describe('StorageErrorScreen', () => {
   });
 
   it('omits unsupported recovery actions when no handlers are provided', () => {
-    render(<StorageErrorScreen copy={STARTUP_COPY_FALLBACKS} />);
+    render(<StorageErrorScreen copy={STARTUP_COPY_FALLBACKS} failureKind="storage" />);
 
     expect(
       screen.queryByRole('button', { name: STARTUP_COPY_FALLBACKS.recover }),
@@ -138,5 +157,51 @@ describe('StorageErrorScreen', () => {
       screen.queryByRole('button', { name: STARTUP_COPY_FALLBACKS.reset }),
     ).not.toBeInTheDocument();
     expect(screen.getByText(STARTUP_COPY_FALLBACKS.storageUnavailable)).toBeInTheDocument();
+  });
+
+  it('offers database reset only for generic storage failures', async () => {
+    const user = userEvent.setup();
+    const onReset = vi.fn();
+
+    render(
+      <StorageErrorScreen copy={STARTUP_COPY_FALLBACKS} failureKind="storage" onReset={onReset} />,
+    );
+
+    await user.click(screen.getByRole('button', { name: STARTUP_COPY_FALLBACKS.reset }));
+
+    expect(onReset).toHaveBeenCalledOnce();
+  });
+
+  it('shows a non-destructive retry for project I/O failures without corruption or reset actions', async () => {
+    const user = userEvent.setup();
+    const onRetry = vi.fn();
+    const onRecover = vi.fn();
+    const onReset = vi.fn();
+
+    render(
+      <StorageErrorScreen
+        copy={STARTUP_COPY_FALLBACKS}
+        failureKind="project-io"
+        onRetry={onRetry}
+        onRecover={onRecover}
+        onReset={onReset}
+      />,
+    );
+
+    expect(screen.getByText(STARTUP_COPY_FALLBACKS.projectIoUnavailable)).toBeInTheDocument();
+    expect(screen.queryByText(STARTUP_COPY_FALLBACKS.projectUnavailable)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: STARTUP_COPY_FALLBACKS.retry })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: STARTUP_COPY_FALLBACKS.recover }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: STARTUP_COPY_FALLBACKS.reset }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: STARTUP_COPY_FALLBACKS.retry }));
+
+    expect(onRetry).toHaveBeenCalledOnce();
+    expect(onRecover).not.toHaveBeenCalled();
+    expect(onReset).not.toHaveBeenCalled();
   });
 });

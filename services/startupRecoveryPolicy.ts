@@ -1,15 +1,29 @@
 import { ProjectLoadError } from './fs/projectFsStore';
 
 export type StartupStorageBackend = 'indexeddb' | 'filesystem';
+export type StartupRecoveryFailureKind = 'storage' | 'project-corrupt' | 'project-io';
 
-// QNBS-v3: bind destructive reset to IndexedDB provenance so desktop filesystem failures stay preserve-first.
+export interface StartupRecoveryActions {
+  failureKind: StartupRecoveryFailureKind;
+  canQuarantine: boolean;
+  canReset: boolean;
+}
+
+// QNBS-v3: separate project I/O retry UX from corruption so non-destructive failures never gain quarantine authority.
 export function getStartupRecoveryActions(
   error: unknown,
   backend: StartupStorageBackend,
-): { canQuarantine: boolean; canReset: boolean } {
+): StartupRecoveryActions {
   const projectLoadError = error instanceof ProjectLoadError ? error : null;
+  const failureKind: StartupRecoveryFailureKind =
+    projectLoadError?.reason === 'corrupt'
+      ? 'project-corrupt'
+      : projectLoadError || backend === 'filesystem'
+        ? 'project-io'
+        : 'storage';
   return {
-    canQuarantine: projectLoadError?.reason === 'corrupt' && backend === 'filesystem',
-    canReset: !projectLoadError && backend === 'indexeddb',
+    failureKind,
+    canQuarantine: failureKind === 'project-corrupt' && backend === 'filesystem',
+    canReset: failureKind === 'storage' && backend === 'indexeddb',
   };
 }

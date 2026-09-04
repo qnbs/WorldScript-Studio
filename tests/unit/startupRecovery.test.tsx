@@ -11,7 +11,9 @@ const { mockRoot, mockReset, mockBackendKind, mockQuarantine, mockCopy, loggerEr
       description: 'description',
       storageUnavailable: 'storage unavailable',
       projectUnavailable: 'project unavailable',
+      projectIoUnavailable: 'project io unavailable',
       reload: 'reload',
+      retry: 'retry',
       recover: 'recover',
       recovering: 'recovering',
       reset: 'reset',
@@ -70,8 +72,10 @@ import {
 
 type RecoveryScreenProps = {
   copy: typeof mockCopy;
+  failureKind: 'storage' | 'project-corrupt' | 'project-io';
   onReset?: () => Promise<void>;
   onRecover?: () => Promise<void>;
+  onRetry?: () => void;
 };
 
 function renderedScreenProps(): RecoveryScreenProps {
@@ -92,6 +96,7 @@ describe('startup recovery rendering', () => {
 
     expect(mockRoot.render).toHaveBeenCalledOnce();
     expect(renderedScreenProps().copy).toBe(mockCopy);
+    expect(renderedScreenProps().failureKind).toBe('storage');
     expect(renderedScreenProps().onReset).toEqual(expect.any(Function));
   });
 
@@ -104,6 +109,7 @@ describe('startup recovery rendering', () => {
     );
 
     const props = renderedScreenProps();
+    expect(props.failureKind).toBe('project-corrupt');
     expect(props.onRecover).toEqual(expect.any(Function));
     expect(props.onReset).toBeUndefined();
     await (props.onRecover as () => Promise<void>)();
@@ -114,13 +120,17 @@ describe('startup recovery rendering', () => {
     mockBackendKind.mockResolvedValue('filesystem');
 
     await renderProjectInitializationFailure(mockRoot as never, new Error('EACCES /projects/p1'));
+    expect(renderedScreenProps().failureKind).toBe('project-io');
     expect(renderedScreenProps().onReset).toBeUndefined();
 
     await renderProjectInitializationFailure(
       mockRoot as never,
       new ProjectLoadError('io-error', 'io', 'p1'),
     );
+    expect(renderedScreenProps().failureKind).toBe('project-io');
     expect(renderedScreenProps().onReset).toBeUndefined();
+    expect(renderedScreenProps().onRecover).toBeUndefined();
+    expect(renderedScreenProps().onRetry).toEqual(expect.any(Function));
     expect(loggerError).toHaveBeenCalled();
   });
 
@@ -129,6 +139,7 @@ describe('startup recovery rendering', () => {
     await renderProjectInitializationFailure(mockRoot as never, new Error('QuotaExceededError'));
 
     expect(renderedScreenProps().onRecover).toBeUndefined();
+    expect(renderedScreenProps().failureKind).toBe('storage');
     expect(renderedScreenProps().onReset).toEqual(expect.any(Function));
   });
 });
