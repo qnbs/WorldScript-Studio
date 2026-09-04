@@ -3,8 +3,9 @@
 **Issue:** [#445](https://github.com/qnbs/WorldScript-Studio/issues/445)
 
 **Status:** S5-A — admitted R-15 secure-storage architecture baseline; production implementation not
-started. `S5_A_ADMITTED = YES`, `S5_IMPLEMENTATION_READY = NO`, `S5_TERMINAL = NO`,
-`PRODUCTION_AUTHORITY_SWITCH_ALLOWED = NO`. `S5_B2_ADMITTED = YES` (`docs/native/r15/AUTHORITY-SNAPSHOT-LIFETIME.md` — race-free `AuthoritySnapshot` acquisition/lifetime/reclamation, §5.3.3). `S5_B1_ADMITTED = YES` (`docs/native/r15/MIGRATION-SOURCE-EVIDENCE.md` — canonical JSON encoding, packaged-IDB source evidence, per-class `canonical_destination_payload_bytes`/`source_value_digest`, atomic-write-temporary reconciliation, and identity-upgrade/recovery for unbound sources and legacy quarantine, §10.1.2, §10.1.3, §10.4.1). `S5_B3_ADMITTED = YES` (`docs/native/r15/CHUNKED-LARGE-OBJECT-ENVELOPE.md` — per-chunk-authenticated envelope and `chunk_set_digest` for records above the `64 MiB` whole-record limit, §6.1.2, §6.3, §13). All three S5 child contracts are now admitted; `S5_TERMINAL` still requires a final cross-contract consistency audit (S5-A/S5-B1/S5-B2/S5-B3 mutual reference integrity) before it may be declared, and production implementation has not started regardless.
+started. `S5_A_ADMITTED = YES`, `S5_IMPLEMENTATION_READY = NO`, `S5_TERMINAL = NO (pending this
+PR's own merge and post-merge CI)`,
+`PRODUCTION_AUTHORITY_SWITCH_ALLOWED = NO`. `S5_B2_ADMITTED = YES` (`docs/native/r15/AUTHORITY-SNAPSHOT-LIFETIME.md` — race-free `AuthoritySnapshot` acquisition/lifetime/reclamation, §5.3.3). `S5_B1_ADMITTED = YES` (`docs/native/r15/MIGRATION-SOURCE-EVIDENCE.md` — canonical JSON encoding, packaged-IDB source evidence, per-class `canonical_destination_payload_bytes`/`source_value_digest`, atomic-write-temporary reconciliation, and identity-upgrade/recovery for unbound sources and legacy quarantine, §10.1.2, §10.1.3, §10.4.1). `S5_B3_ADMITTED = YES` (`docs/native/r15/CHUNKED-LARGE-OBJECT-ENVELOPE.md` — per-chunk-authenticated envelope and `chunk_set_digest` for records above the `64 MiB` whole-record limit, §6.1.2, §6.3, §13). All three S5 child contracts are admitted, and the final cross-contract consistency audit (S5-A/S5-B1/S5-B2/S5-B3 mutual reference integrity) is complete: five findings were made and corrected in this same change — two mechanical citation-drift notes (a stale "blocked pending S5-B1" disposition-count note in §10.4.1, and S5-B3's §6 crash-recovery paragraph citing S5-B1's migration-time reconciliation mechanism for an ordinary write's own orphaned staging chunk, where §9.2/§9 step 11's own ordinary-write staging-reconciliation rule actually applies) and three substantive gaps (S5-B3's chunk physical locator, §2, carried no operation/generation identity, so recovery could not distinguish a superseded attempt's orphaned chunk from the current attempt's — closed by giving each chunk's staging form the same `operation_id`/`target_generation` temp suffix §9 step 3 already defines for a whole record, and by making §6's recovery text check that exact suffix rather than the bare promoted-form locator; and §10.4.1's atomic-write-temporary-files carve-out was declared exempt from "exactly one of the three groups," directly contradicting that same exhaustiveness invariant — closed by making it an explicit fourth `REFUSE_AUTHORITY_SWITCH` group; that fix in turn made Gate 7's flat class-level rule ("blocked while any class is `REFUSE_AUTHORITY_SWITCH`") permanently unsatisfiable for this one class, since its class-level registry entry never changes even once every instance resolves — closed by making Gate 7's rule instance-aware, so only an *unresolved* `REFUSE_AUTHORITY_SWITCH` instance blocks it). No further inconsistency was found after these corrections. `S5_TERMINAL` and `S5_TERMINAL_R15_DESIGN_ADMITTED_MERGED_POSTMERGE_GREEN` are set only in a small dedicated follow-up commit once this PR itself has merged and its own post-merge main CI (including CodeQL) is confirmed green — never asserted here, inside this PR's own still-open diff, as an already-true fact about a merge that has not happened. Production implementation has not started regardless.
 
 **Baseline:** `main` at `7ce506ee771f6273e22c08ded049b48955cb40a5`
 
@@ -2550,10 +2551,14 @@ MIGRATE_TO_APPROVED_NATIVE_SECRET_AUTHORITY
 REFUSE_AUTHORITY_SWITCH
                                           the class blocks the authority switch until its
                                           disposition is decided; an unset disposition is this
-                                          state by default, never a silent MIGRATE_TO_R15
+                                          state by default, never a silent MIGRATE_TO_R15. Some
+                                          classes reach this state with an already-admitted,
+                                          fully deterministic resolution procedure rather than an
+                                          open decision — see atomic-write temporary files in the
+                                          registry below.
 ```
 
-**Disposition routing (§10.6, §15.3).** `MIGRATE_TO_R15` -> §10.6's authenticated open/validate/convert/verify/commit flow. `RETAIN_APPROVED_SEPARATE_PROTECTED_AUTHORITY` -> verify-and-retain only (§10.6): no R-15 ciphertext is created and the retained source is never deleted. `MIGRATE_TO_APPROVED_NATIVE_SECRET_AUTHORITY` -> its own dedicated secret-authority migration contract, never the ordinary R-15 path. `REFUSE_AUTHORITY_SWITCH` -> blocks Gate 7 for that class. A `FOREIGN_PROTECTED` source's physical protection mechanism is never itself grounds to route it through the generic conversion flow independent of its disposition.
+**Disposition routing (§10.6, §15.3).** `MIGRATE_TO_R15` -> §10.6's authenticated open/validate/convert/verify/commit flow. `RETAIN_APPROVED_SEPARATE_PROTECTED_AUTHORITY` -> verify-and-retain only (§10.6): no R-15 ciphertext is created and the retained source is never deleted. `MIGRATE_TO_APPROVED_NATIVE_SECRET_AUTHORITY` -> its own dedicated secret-authority migration contract, never the ordinary R-15 path. `REFUSE_AUTHORITY_SWITCH` -> blocks Gate 7 for that class until every instance is resolved: an ordinary `REFUSE_AUTHORITY_SWITCH` class (an unset disposition, the section's own default) has no resolution procedure at all, so every instance stays unresolved and the block is permanent until a disposition is explicitly admitted; §10.4.1's atomic-write-temporary-files entry is the one exception with an admitted per-instance resolution procedure (S5-B1), so its block clears once every surviving instance is resolved, even though the class-level registry entry itself never changes. A `FOREIGN_PROTECTED` source's physical protection mechanism is never itself grounds to route it through the generic conversion flow independent of its disposition.
 
 API/provider credentials (§3) are the normative example: their disposition is
 `RETAIN_APPROVED_SEPARATE_PROTECTED_AUTHORITY` (the existing `idbKeyStore` random non-extractable
@@ -2562,12 +2567,18 @@ decision selects `MIGRATE_TO_APPROVED_NATIVE_SECRET_AUTHORITY` — never `MIGRAT
 folding credentials into the ordinary envelope/generation/epoch model would give the renderer or an
 ordinary record-read path a way to observe credential ciphertext structure the dedicated authority
 deliberately isolates. **Gate 7 (§20) may not claim complete packaged-desktop protection while any
-`PROTECTED` class's disposition is unset or is `REFUSE_AUTHORITY_SWITCH`.** No disposition permits
-silent plaintext export of the class it governs.
+`PROTECTED` class has an unset disposition, or has any unresolved `REFUSE_AUTHORITY_SWITCH`
+instance.** This is never weaker than a flat class-level rule: an ordinary `REFUSE_AUTHORITY_SWITCH`
+class has no resolution procedure, so every one of its instances is permanently unresolved and Gate
+7 stays blocked for it exactly as before. Only §10.4.1's atomic-write-temporary-files entry, whose
+`REFUSE_AUTHORITY_SWITCH` disposition carries an admitted per-instance resolution procedure
+(S5-B1), can ever clear this by resolving every surviving instance — the class-level registry entry
+itself never changes to a different disposition. No disposition permits silent plaintext export of
+the class it governs.
 
 **Exhaustive class-to-disposition registry.** Every `PROTECTED` class from §3's inventory falls into
-exactly one of the three groups below; none is left to reader inference, and none defaults to
-`MIGRATE_TO_R15` merely because it is not listed under the other two groups.
+exactly one of the four groups below; none is left to reader inference, and none defaults to
+`MIGRATE_TO_R15` merely because it is not listed under the other three groups.
 
 *Native Core control-plane records — no disposition applies.* These classes have no pre-existing
 legacy source on `main` (§3 states "no native record exists" for each) and are created natively
@@ -2583,7 +2594,23 @@ value:
 - Migration staging (no current implementation; a future physical conversion-staging locator only,
   §3 already states this)
 
-Atomic-write temporary files are **not** in this no-disposition group: §3 already states their current unprotected content is plaintext/compressed and "can survive a crash," a genuine migration input/risk, not natively-created apparatus with no pre-existing content. **S5-B1 admitted — surviving atomic-write temporaries.** `docs/native/r15/MIGRATION-SOURCE-EVIDENCE.md` §5 admits deterministic reconciliation: discovery, owner derivation, candidate evidence, canonical-target comparison, conflicting-candidate handling, and cleanup eligibility. Preserve every survivor; never delete or auto-promote one merely because its canonical target exists; never use mtime/newest-wins; never treat it as having no pre-existing source. Ambiguous owner/candidate state still blocks the authority switch for that identity — the same `SOURCE_AUTHORITY_CONFLICT`-style posture §10.1.3 already uses for other unresolved multi-candidate state — until that document's comparison resolves it one way or the other.
+*`REFUSE_AUTHORITY_SWITCH` (pending per-instance resolution)* — not an open, undecided default here
+but a class already carrying a fully specified, deterministic resolution procedure:
+
+- Atomic-write temporary files. Excluded from the no-disposition group above: §3 already states
+  their current unprotected content is plaintext/compressed and "can survive a crash," a genuine
+  migration input/risk, not natively-created apparatus with no pre-existing content. **S5-B1
+  admitted — surviving atomic-write temporaries.** `docs/native/r15/MIGRATION-SOURCE-EVIDENCE.md`
+  §5 admits deterministic reconciliation: discovery, owner derivation, candidate evidence,
+  canonical-target comparison, conflicting-candidate handling, and cleanup eligibility. Preserve
+  every survivor; never delete or auto-promote one merely because its canonical target exists;
+  never use mtime/newest-wins; never treat it as having no pre-existing source. Ambiguous owner/
+  candidate state keeps this class at `REFUSE_AUTHORITY_SWITCH` and continues blocking the
+  authority switch for that identity — the same `SOURCE_AUTHORITY_CONFLICT`-style posture §10.1.3
+  already uses for other unresolved multi-candidate state — until S5-B1's comparison resolves it
+  one way or the other; a resolved survivor's ultimate fate then follows its own recovered
+  identity's class-level entry elsewhere in this registry, never a second, independent conversion
+  path of its own.
 
 *`RETAIN_APPROVED_SEPARATE_PROTECTED_AUTHORITY`* — the class keeps its existing, independently
 approved mechanism rather than becoming an ordinary R-15 filesystem record:
@@ -2611,10 +2638,10 @@ board and mind-map UI records; Writing progress and session history; ProForge me
 run history; AI inference cache; LoRA adapters, datasets and run metadata; LoRA Redux mirror; Opt-in
 AI telemetry; AI benchmark history.
 
-This registry totals 5 no-disposition native control-plane classes, 3
-`RETAIN_APPROVED_SEPARATE_PROTECTED_AUTHORITY` classes, 28 `MIGRATE_TO_R15` classes, and 1 class
-(atomic-write temporary files, above) blocked pending S5-B1 rather than assigned to any of the three
-groups — 37 `PROTECTED` classes in all, matching §3's inventory result exactly. Adding, removing, or
+This registry totals 5 no-disposition native control-plane classes, 1 `REFUSE_AUTHORITY_SWITCH`
+class (atomic-write temporary files, resolved per-instance via S5-B1's admitted mechanism above), 3
+`RETAIN_APPROVED_SEPARATE_PROTECTED_AUTHORITY` classes, and 28 `MIGRATE_TO_R15` classes — 37
+`PROTECTED` classes in all, matching §3's inventory result exactly. Adding, removing, or
 reclassifying a §3 row requires updating this registry in the same change; a `PROTECTED` row with no
 corresponding entry here is `REFUSE_AUTHORITY_SWITCH` by this section's own default, not an oversight
 to silently resolve as `MIGRATE_TO_R15`.
@@ -3171,4 +3198,4 @@ complete merely because a design document exists.
 
 ## 21. S5 admission decision
 
-This S5-A baseline, together with S5-B1/S5-B2/S5-B3, is admitted at the semantic level for everything each actually specifies (protected records/representations enumerated; logical identity, envelope, key/epoch, parse, failure, and downgrade semantics explicit; durable writes, generations/commit markers, admission, lock, recovery, and memory bounds defined; canonical migration-source/payload evidence, race-free `AuthoritySnapshot` lifetime, and the chunked large-object envelope all admitted above; Core-vs-platform responsibilities and headless tests explicit; #357/#359/#360/#361 have implementation owners and closure evidence) but is **not** implementation-ready: no production implementation exists for any of the four documents, and `S5_TERMINAL` still requires the final cross-contract consistency audit (§20 of the governing process) before the whole S5 program may be declared closed. This is **`S5_A_ADMITTED / S5_B1_ADMITTED / S5_B2_ADMITTED / S5_B3_ADMITTED / CONTRACT_DEFINED / IMPLEMENTATION_NOT_STARTED`**, not `IMPLEMENTATION_READY`; current desktop filesystem authority remains unchanged and current user data is not retroactively encrypted by any of these documents.
+This S5-A baseline, together with S5-B1/S5-B2/S5-B3, is admitted at the semantic level for everything each actually specifies (protected records/representations enumerated; logical identity, envelope, key/epoch, parse, failure, and downgrade semantics explicit; durable writes, generations/commit markers, admission, lock, recovery, and memory bounds defined; canonical migration-source/payload evidence, race-free `AuthoritySnapshot` lifetime, and the chunked large-object envelope all admitted above; Core-vs-platform responsibilities and headless tests explicit; #357/#359/#360/#361 have implementation owners and closure evidence) but is **not** implementation-ready: no production implementation exists for any of the four documents. The final cross-contract consistency audit across all four documents is complete: every cross-reference, shared formula (`source_value_digest`, the marker-body `is_chunked`/`chunk_count` extension, the §6.3 nonce/AAD wording), and status flag was checked for mutual agreement; two mechanical citation-drift notes and three substantive gaps (S5-B3's chunk-locator operation-identity binding; §10.4.1's disposition-registry exhaustiveness; and Gate 7's resulting class-level-vs-instance-level contradiction that the exhaustiveness fix itself introduced) were corrected in this same change (see the header status line above), and no further inconsistency was found. This is **`S5_A_ADMITTED / S5_B1_ADMITTED / S5_B2_ADMITTED / S5_B3_ADMITTED / CONTRACT_DEFINED / IMPLEMENTATION_NOT_STARTED`**, not `IMPLEMENTATION_READY`; `S5_TERMINAL` is declared only in a dedicated follow-up commit once this PR has merged and its own post-merge main CI is confirmed green, never inside this still-open PR's own diff. Current desktop filesystem authority remains unchanged and current user data is not retroactively encrypted by any of these documents.
