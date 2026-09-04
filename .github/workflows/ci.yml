@@ -873,10 +873,10 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: vrt-screenshots
-          # QNBS-v3: upload both baselines and diff outputs so PR reviewers can compare visually.
+          # QNBS-v3: upload both baselines and diff outputs so PR reviewers can compare visually — playwright.config.ts sets no outputDir, so Playwright's default (repo-root test-results/, not tests/e2e/test-results/) is where actual/diff failure images actually land.
           path: |
             tests/e2e/visual-regression.spec.ts-snapshots/
-            tests/e2e/test-results/
+            test-results/
           retention-days: 7
 
       # QNBS-v3: same playwright.config.ts reporter as the required e2e job, produced independently on this runner — previously never uploaded.
