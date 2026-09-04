@@ -95,9 +95,10 @@ export default defineConfig({
     codecovVitePlugin({
       enableBundleAnalysis: enableCodecovBundleAnalysis,
       bundleName: 'worldscript-studio-web',
-      uploadToken: codecovToken,
       gitService: 'github',
       telemetry: false,
+      // QNBS-v3: exactOptionalPropertyTypes forbids passing `undefined` for an optional string key — omit it entirely instead of assigning undefined (fork PRs run tokenless).
+      ...(codecovToken ? { uploadToken: codecovToken } : {}),
       ...(codecovBundleSha ? { uploadOverrides: { sha: codecovBundleSha } } : {}),
     }),
   ],
