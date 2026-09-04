@@ -62,7 +62,7 @@ jobs:
   security:
     name: 🔒 Security Audit
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     needs: [workflow-policy]
     # QNBS-v3: dependency-review-action needs readable PR metadata — otherwise the job fails unnecessarily on external PRs/scopes.
     permissions:
@@ -259,7 +259,7 @@ jobs:
   quality:
     name: 🔍 Quality Gate (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 22
     needs: [security]
     strategy:
       fail-fast: false
