@@ -16,7 +16,7 @@ describe('settingsSlice', () => {
     const state = initState();
     expect(state).toBeDefined();
     expect(state.theme).toBeTypeOf('string');
-    expect(state.appearancePreset).toBe('sepia');
+    expect(state.appearancePreset).toBe('default');
     expect(state.writingSurfaceStyle).toBe('textured');
     expect(state.aiCreativity).toBe('Balanced');
     expect(state.keyboardShortcuts.length).toBeGreaterThan(0);

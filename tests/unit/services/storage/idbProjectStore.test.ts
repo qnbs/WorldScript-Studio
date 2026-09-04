@@ -11,10 +11,8 @@ describe('idbProjectStore', () => {
     it('applies defaults for missing top-level fields', () => {
       const result = normalizePersistedSettings({});
       expect(result.theme).toBe('dark');
-      // QNBS-v3 (#332): must match settingsSlice.ts's initialState.appearancePreset ('sepia' since
-      // v1.21) — a prior mismatch here made a genuinely first-ever launch disagree with every
-      // other launch about what "no persisted preference" means.
-      expect(result.appearancePreset).toBe('sepia');
+      // QNBS-v3: must match settingsSlice.ts's initialState.appearancePreset — a mismatch here would make a genuinely first-ever launch disagree with every other launch about what "no persisted preference" means.
+      expect(result.appearancePreset).toBe('default');
       expect(result.writingSurfaceStyle).toBe('textured');
       expect(result.editorFont).toBe('serif');
       expect(result.fontSize).toBe(16);
@@ -22,12 +20,13 @@ describe('idbProjectStore', () => {
 
     it('migrates a legacy/invalid appearancePreset value to the current default', () => {
       const result = normalizePersistedSettings({ appearancePreset: 'fantasy' });
-      expect(result.appearancePreset).toBe('sepia');
+      expect(result.appearancePreset).toBe('default');
     });
 
+    // QNBS-v3: input intentionally differs from the current default (see the test above) — otherwise this assertion can't distinguish "preserved the explicit value" from "just returned the default".
     it('preserves an explicitly persisted appearancePreset over the default', () => {
-      const result = normalizePersistedSettings({ appearancePreset: 'default' });
-      expect(result.appearancePreset).toBe('default');
+      const result = normalizePersistedSettings({ appearancePreset: 'sepia' });
+      expect(result.appearancePreset).toBe('sepia');
     });
 
     it('preserves provided values over defaults', () => {

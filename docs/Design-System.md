@@ -58,7 +58,7 @@ These aliases still exist in `index.css` but must not be used in new or modified
 ## Theme mechanics
 
 1. **Light/dark**: `body` classes `.light-theme` / `.dark-theme` (from `settings.theme` and `App.tsx`).
-2. **Creative palettes**: `settings.appearancePreset` adds one of `appearance-sepia`, `appearance-fantasy`, `appearance-romance`, or none for default.
+2. **Creative palettes**: `settings.appearancePreset` adds `appearance-sepia`, or none for the standard `default` preset (`fantasy`/`romance` were removed in v1.22).
 3. **Accessibility presets**: `settings.accessibility` drives body classes — see `features/settings/accessibilitySchema.ts` for all 5 presets.
 
 ## Tailwind v4

@@ -117,16 +117,16 @@ test.describe('Accessibility (axe)', () => {
     await assertNoSeriousViolations(page, 'help-view');
   });
 
-  // QNBS-v3: Validate dark sepia ("Candlelit Manuscript") contrast tokens.
-  // Emulate dark color scheme so getSystemThemePreference() → 'dark'; the default
-  // appearancePreset:'sepia' in settingsSlice triggers .dark-theme.appearance-sepia,
-  // exercising the new token set (primary 14.7:1, muted 5.3:1 on worst-case bg).
+  // QNBS-v3: dark color scheme + explicit Writer's Sepia selection (not relying on it being the default, which changed) so this keeps exercising .dark-theme.appearance-sepia's token set (primary 14.7:1, muted 5.3:1 on worst-case bg).
   test('dark sepia theme has no serious axe violations', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
     await page.goto('/');
     await waitForSpaReady(page);
     await selectEnglish(page);
     await ensureBlankProject(page);
+    await clickNavItem(page, /Settings/i);
+    await page.getByRole('button', { name: /Appearance|Erscheinungsbild/i }).click();
+    await page.getByRole('button', { name: /Writer's Sepia/i }).click();
     // Confirm dark-theme + appearance-sepia are both applied before running axe
     await page.waitForFunction(
       () =>
@@ -134,11 +134,10 @@ test.describe('Accessibility (axe)', () => {
         document.body.classList.contains('appearance-sepia'),
       { timeout: 8000 },
     );
-    await assertNoSeriousViolations(page, 'dark-sepia-home');
-    // Also test settings panel (most token-dense view)
-    await clickNavItem(page, /Settings/i);
+    await assertNoSeriousViolations(page, 'dark-sepia-settings');
+    await clickNavItem(page, /Dashboard/i);
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(500);
-    await assertNoSeriousViolations(page, 'dark-sepia-settings');
+    await assertNoSeriousViolations(page, 'dark-sepia-home');
   });
 });

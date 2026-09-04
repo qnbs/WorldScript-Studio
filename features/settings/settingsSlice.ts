@@ -44,7 +44,7 @@ export const DEFAULT_OPENROUTER_SETTINGS: OpenRouterSettings = {
 const defaultSettings: Settings = {
   // Basic Settings
   theme: getSystemThemePreference(),
-  appearancePreset: 'sepia',
+  appearancePreset: 'default',
   writingSurfaceStyle: 'textured',
   aiMode: 'hybrid',
   openRouter: DEFAULT_OPENROUTER_SETTINGS,
