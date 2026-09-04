@@ -85,6 +85,10 @@ describe('CI workflow policy', () => {
     expect(actionIndex).toBeLessThan(nodeIndex);
     expect(policyBlock).not.toContain('pnpm/action-setup@');
     expect(policyBlock).not.toContain('corepack enable');
+    // QNBS-v3: the pnpm/setup swap must not weaken this job's no-lifecycle-scripts install hardening.
+    expect(policyBlock).toContain(
+      'pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile',
+    );
   });
   // QNBS-v3: preserve first-attempt Vitest failures as visible CI evidence instead of masking flakes with retries.
   it('runs Vitest once so first-attempt failures cannot be hidden by retry', () => {
