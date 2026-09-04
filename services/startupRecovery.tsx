@@ -14,6 +14,7 @@ export async function renderStorageInitializationFailure(root: Root): Promise<vo
     <React.StrictMode>
       <StorageErrorScreen
         copy={copy}
+        failureKind="storage"
         onReset={async () => {
           await resetAllDatabases();
           window.location.reload();
@@ -32,13 +33,14 @@ export async function renderProjectInitializationFailure(
   const projectLoadError = error instanceof ProjectLoadError ? error : null;
   const backendKind = await storageService.getStorageBackendKind();
   const copy = await loadStorageErrorCopy();
-  const { canQuarantine, canReset } = getStartupRecoveryActions(error, backendKind);
+  const { canQuarantine, canReset, failureKind } = getStartupRecoveryActions(error, backendKind);
   const corruptProjectId =
     projectLoadError?.reason === 'corrupt' ? projectLoadError.projectId : null;
   root.render(
     <React.StrictMode>
       <StorageErrorScreen
         copy={copy}
+        failureKind={failureKind}
         {...(canQuarantine
           ? {
               onRecover: async () => {
@@ -49,6 +51,7 @@ export async function renderProjectInitializationFailure(
               },
             }
           : {})}
+        {...(failureKind === 'project-io' ? { onRetry: () => window.location.reload() } : {})}
         {...(canReset
           ? {
               onReset: async () => {
