@@ -866,7 +866,7 @@ jobs:
           pnpm exec http-server serve_root -p 3000 -s &
           pnpm exec wait-on http://127.0.0.1:3000 --timeout 30000
           # TEMP-DIAGNOSTIC: --update-snapshots to regenerate baselines from real CI evidence; removed before this PR is ready for review.
-          pnpm run test:vrt -- --update-snapshots
+          PLAYWRIGHT_REUSE_SERVER=true pnpm exec playwright test tests/e2e/visual-regression.spec.ts --project=chromium --update-snapshots --retries=0
 
       - name: Upload VRT screenshots
         if: always()
