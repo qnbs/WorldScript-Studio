@@ -16,7 +16,7 @@ inputs:
 runs:
   using: composite
   steps:
-    # QNBS-v3: pnpm/setup verifies a SHA-256-checked standalone binary, replacing pnpm/action-setup's npm-based installer (measured 20s-6min variance); caching left unchanged below to isolate this one variable.
+    # QNBS-v3: pnpm/setup fetches the standalone binary via the npm registry, verified by an npm-signed checksum against a pinned key (not a GitHub-published digest), replacing pnpm/action-setup's npm-install path measured at 20s-6min variance; pnpm store caching below is unchanged, though pnpm/setup separately manages its own exact-lockfile-hash verification-result cache regardless of that setting.
     - uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0
       with:
         version: 11.22.0
