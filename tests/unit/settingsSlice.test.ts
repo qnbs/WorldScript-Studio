@@ -16,7 +16,8 @@ describe('settingsSlice', () => {
     const state = initState();
     expect(state).toBeDefined();
     expect(state.theme).toBeTypeOf('string');
-    expect(state.appearancePreset).toBe('sepia');
+    // QNBS-v3: locks in the product default of standard palette over Writer's Sepia for new sessions.
+    expect(state.appearancePreset).toBe('default');
     expect(state.writingSurfaceStyle).toBe('textured');
     expect(state.aiCreativity).toBe('Balanced');
     expect(state.keyboardShortcuts.length).toBeGreaterThan(0);

@@ -69,43 +69,20 @@ CEF (Chromium Embedded Framework) is **retired from the target architecture**, n
 ### Directory map
 
 ```
-app/              → Redux store, typed hooks, listener middleware, transientUiStore (Zustand)
-components/       → View components; components/ui/ = design-system atoms (Button, Modal, Toast…)
-                     components/manuscript/ = ManuscriptView sub-components (NavigatorPanel, ManuscriptEditor, ResizeHandle)
-contexts/         → React context providers — one per major view + I18nContext + CommandExecutorContext
-features/         → Redux slices: project, settings, status, writer, versionControl, featureFlags,
-                     plotBoard, sceneComments, progressTracker, analytics, proForge
-hooks/            → View business logic (use*View.ts naming); useGlobalKeyboardShortcuts here too
-services/         → External adapters; key sub-dirs:
-                     ai/          Vercel AI SDK layer (index.ts entry, providerFactory, worldScriptCompletionFetch,
-                                   hybridFallback, aiPolicy, aiRetry, aiModeService + cache/health/gpu/eco/embedding services)
-                                   providers/ — openrouterProvider (circuit breaker, free-tier catalog, RPM tracking)
-                     copilot/     heuristicEngine (8 manuscript rules), insightGenerator, copilotContextService,
-                                   actionApplier (apply-to-chapter, offset-safe, ≥70% length gate)
-                     commands/    (palette registry, fuzzy rank, recent/pinned)
-                     duckdb/      (duckdbClient, duckdbSchema, duckdbAnalytics, duckdbMigration, ragVectorMigration)
-                     help/        (helpCatalog, helpSearch, helpDocRetrieval)
-                     keyboard/    (shortcut normalization, conflict detection)
-                     proForge/    (proForgeOrchestrator, proForgeMemoryBank, proForgeHistoryStore,
-                                   applyReviewEdits, pipelineAgents/ — baseAgent, supervisorAgent + 8
-                                   stage agents; pipelineOutput/)
-                     storage/     (idbCore, idbProjectStore, idbSnapshotStore, idbKeyStore, idbCodexStore,
-                                   idbAssetStore, storageEncryptionService — AES-256-GCM at-rest via B-1)
-                     voice/       (voiceCommandService, voiceTypes, stt/tts/vad/wakeWord/intent engines,
-                                   wasmSttEngine + sileroVadEngine — B-2 scaffolds)
-packages/         → Internal workspace packages: ai-core (WebLLM + inference worker), ui,
-                     collab-transport (vendor fork of y-webrtc 10.3.0 with RTCDataChannel E2E encryption),
-                     worker-bus (typed worker pool, circuit breakers, dead-letter queue — see § WorkerBus below)
-locales/          → i18n source JSON — 19 locales (de/en/es/fr/it/ar/he/el/ja/pt/zh/fi/sv/hu/is/eu/fa/ru/ko × 21 modules); runtime: public/locales/<lang>/bundle.json
-                     ar/ + he/ + fa/ — RTL (fa is Arabic-script Persian); el/ja/pt/zh — Near-production; fi/sv/hu/is/eu/ru/ko — Beta (Phase X + Tier-1 2026 expansion). SSOT: i18n/locales.ts
-tests/            → unit/ (Vitest) + e2e/ (Playwright); shared E2E helpers in tests/e2e/helpers.ts
-types/            → Supplemental TypeScript definitions (duckdb-wasm-worker.d.ts, tauri-plugins.d.ts)
-types.ts          → Core shared interfaces and types (root level)
-workers/          → plugin.worker.ts (sandboxed plugin execution, P0-2)
-                     v2/ → sole worker generation since ADR-0015: inference.worker.ts (@huggingface/transformers v3),
-                     duckdb.worker.ts (DuckDB-WASM), webllm.worker.ts (P1-1, @mlc-ai/web-llm)
-infra/low-end-ci/ → Local CI stack: Forgejo + act + systemd units + bash scripts
-scripts/          → Build/deploy helpers (sync-deploy-base, cf-pages-deploy, graphify-update, etc.)
+app/              → Redux store, listener middleware, transientUiStore (Zustand)
+components/       → View components (components/ui/ = design-system atoms)
+contexts/         → React context providers, one per major view
+features/         → Redux slices — see `ls features/` for the current list
+hooks/            → View business logic (use*View.ts naming)
+services/         → External adapters — see `ls services/` for sub-dirs
+packages/         → Internal workspace packages (collab-transport is a vendor fork — see § Collaboration below)
+locales/          → i18n source JSON, 19 locales × 21 modules; runtime bundles in public/locales/<lang>/bundle.json.
+                     ar/he/fa — RTL; el/ja/pt/zh — Near-production; fi/sv/hu/is/eu/ru/ko — Beta. SSOT: i18n/locales.ts
+tests/            → unit/ (Vitest) + e2e/ (Playwright)
+types/            → Supplemental TypeScript definitions; types.ts at the repo root holds the core shared interfaces
+workers/          → v2/ is the sole worker generation since ADR-0015
+infra/low-end-ci/ → Local CI stack (Forgejo + act + systemd units)
+scripts/          → Build/deploy helpers
 ```
 
 ### State Management

@@ -51,10 +51,8 @@ import {
 export function normalizePersistedSettings(incoming: Record<string, unknown>): Settings {
   const validSettings = {
     theme: 'dark',
-    // QNBS-v3 (#332): must match settingsSlice.ts's initialState.appearancePreset — a mismatch here
-    // only mattered for genuinely first-ever launches, but the two are the same product default and
-    // should never silently disagree about what "no persisted preference" means.
-    appearancePreset: 'sepia',
+    // QNBS-v3: must match settingsSlice.ts's initialState.appearancePreset — the two are the same product default and must never silently disagree about what "no persisted preference" means.
+    appearancePreset: 'default',
     writingSurfaceStyle: 'textured',
     // QNBS-v3: aiMode added in v1.22 — backfill for older persisted settings that lack the field.
     aiMode: 'hybrid',
@@ -67,10 +65,9 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
     ...incoming,
   } as Settings;
 
-  // QNBS-v3: fantasy/romance presets removed in v1.22 — migrate legacy stored values to the
-  // current default (#332: was 'default', now matches settingsSlice.ts's 'sepia').
+  // QNBS-v3: fantasy/romance presets removed in v1.22 — migrate any legacy stored value to the current default.
   if (!['default', 'sepia'].includes(validSettings.appearancePreset)) {
-    validSettings.appearancePreset = 'sepia';
+    validSettings.appearancePreset = 'default';
   }
   if (!['textured', 'plain'].includes(validSettings.writingSurfaceStyle)) {
     validSettings.writingSurfaceStyle = 'textured';
@@ -273,14 +270,18 @@ export class IdbProjectStore extends IdbAssetStore {
         request.onerror = () => reject(request.error);
         transaction.oncomplete = () => resolve();
         transaction.onerror = () => reject(transaction.error);
-        transaction.onabort = () => reject(transaction.error ?? new Error('IDB transaction aborted'));
+        transaction.onabort = () =>
+          reject(transaction.error ?? new Error('IDB transaction aborted'));
       });
     });
   }
 
   async saveProject(data: SaveProjectInput): Promise<void> {
     // QNBS-v3: autoSnapshotInFlight prevents a saveProject() call arriving before the first snapshot's success callback runs from starting a duplicate concurrent snapshot.
-    if (!this.autoSnapshotInFlight && Date.now() - this.lastAutoSnapshotTime > this.AUTO_SNAPSHOT_INTERVAL) {
+    if (
+      !this.autoSnapshotInFlight &&
+      Date.now() - this.lastAutoSnapshotTime > this.AUTO_SNAPSHOT_INTERVAL
+    ) {
       // data may arrive as a Redux-undo envelope (PersistedProjectState) or plain StoryProject
       const persisted = data as PersistedProjectState;
       const projectData = persisted.present ? persisted.present.data : persisted.data;

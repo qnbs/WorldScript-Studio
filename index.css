@@ -414,19 +414,6 @@
   display: none;
 }
 
-/* Reduced motion: Aurora + stagger respect */
-@media (prefers-reduced-motion: reduce) {
-  .aurora-blob {
-    animation: none;
-    opacity: 0.12;
-  }
-  .animate-in {
-    animation: none;
-    opacity: 1;
-    transform: none;
-  }
-}
-
 .worldscript-reduced-motion .aurora-blob {
   animation: none;
   opacity: 0.1;
@@ -655,6 +642,19 @@ body {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* QNBS-v3: must come after the .aurora-blob/.animate-in base rules above — same specificity means source order decides, and this override was previously silently dead when declared earlier in the file, leaving both perpetually animating under prefers-reduced-motion. */
+@media (prefers-reduced-motion: reduce) {
+  .aurora-blob {
+    animation: none;
+    opacity: 0.12;
+  }
+  .animate-in {
+    animation: none;
+    opacity: 1;
+    transform: none;
   }
 }
 
