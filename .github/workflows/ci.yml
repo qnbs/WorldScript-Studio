@@ -590,8 +590,7 @@ jobs:
         core-rust,
         build,
         e2e,
-        lighthouse,
-        vrt,
+        browser-quality,
       ]
     if: always()
     steps:
@@ -617,8 +616,7 @@ jobs:
           fi
           [ "${{ needs.build.result }}" = "success" ] || FAIL=1
           [ "${{ needs.e2e.result }}" = "success" ] || FAIL=1
-          [ "${{ needs.lighthouse.result }}" = "success" ] || FAIL=1
-          [ "${{ needs.vrt.result }}" = "success" ] || FAIL=1
+          [ "${{ needs.browser-quality.result }}" = "success" ] || FAIL=1
           if [ "$FAIL" = "1" ]; then
             echo "One or more required jobs did not succeed:"
             echo "  workflow-policy: ${{ needs.workflow-policy.result }}"
@@ -631,8 +629,7 @@ jobs:
             echo "  core-rust: ${{ needs.core-rust.result }} (skipped = OK, crates/ untouched)"
             echo "  build:    ${{ needs.build.result }}"
             echo "  e2e:      ${{ needs.e2e.result }}"
-            echo "  lighthouse: ${{ needs.lighthouse.result }}"
-            echo "  vrt:      ${{ needs.vrt.result }}"
+            echo "  browser-quality: ${{ needs.browser-quality.result }}"
             exit 1
           fi
           echo "All required jobs succeeded (or were legitimately skipped)."
@@ -820,13 +817,14 @@ jobs:
           fail_ci_if_error: false
 
   # ----------------------------------------------------------
-  # 6. LIGHTHOUSE: Performance budgets (after build)
+  # 6. BROWSER QUALITY: VRT + Lighthouse (after build)
   # ----------------------------------------------------------
-  lighthouse:
-    name: 🔦 Lighthouse CI
+  # QNBS-v3: consolidated from separate vrt/lighthouse jobs (Wave 2 CI-performance) — both already ran off the critical path, but each paid its own checkout/setup/artifact-download; sharing that once saves runner-minutes with no wall-clock cost.
+  browser-quality:
+    name: 🔦🖼 Browser Quality (VRT + Lighthouse)
     runs-on: ubuntu-latest
-    # QNBS-v3: 25 min — two lhci runs (mobile 3× + desktop 2×); was 15 min for mobile only
-    timeout-minutes: 25
+    # QNBS-v3: union of the former 15 min (vrt) + 25 min (lighthouse) timeouts, now sequential in one job.
+    timeout-minutes: 35
     needs: [build]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -838,18 +836,83 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: dist
-          path: ./dist
+          path: dist/
 
+      # ---- VRT phase ----
+      # QNBS-v3: /var/cache/apt/archives is root-owned by default — actions/cache's restore
+      # (tar extraction) runs as the unprivileged runner user and fails with "Permission denied"
+      # on every file without this, silently degrading to a cache miss every time (real CI
+      # evidence: "Cache hit" followed immediately by "Cache not found" from the failed tar).
+      - name: Make apt archive cache dir writable by the runner user
+        run: sudo mkdir -p /var/cache/apt/archives/partial && sudo chown -R runner:runner /var/cache/apt/archives && sudo chmod -R 755 /var/cache/apt/archives
+
+      - name: Cache apt packages (Playwright system deps)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /var/cache/apt/archives/*.deb
+          key: apt-playwright-chromium-deps-v1
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Serve dist + run VRT
+        env:
+          CI: true
+        run: |
+          # QNBS-v3: The GitHub Pages build has base=/WorldScript-Studio/. Mirror that structure
+          # so http-server serves assets at the expected paths matching playwright.config baseURL.
+          mkdir -p serve_root/WorldScript-Studio
+          cp -r dist/. serve_root/WorldScript-Studio/
+          pnpm exec http-server serve_root -p 3000 -s &
+          pnpm exec wait-on http://127.0.0.1:3000 --timeout 30000
+          pnpm run test:vrt
+
+      - name: Upload VRT screenshots
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: vrt-screenshots
+          # QNBS-v3: upload both baselines and diff outputs so PR reviewers can compare visually.
+          path: |
+            tests/e2e/visual-regression.spec.ts-snapshots/
+            tests/e2e/test-results/
+          retention-days: 7
+
+      # QNBS-v3: same playwright.config.ts reporter as the required e2e job, produced independently on this runner — previously never uploaded.
+      - name: Upload VRT JUnit results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: vrt-junit
+          path: tests/e2e/results/junit.xml
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Publish VRT test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          report_type: test_results
+          files: tests/e2e/results/junit.xml
+          disable_search: true
+          flags: vrt
+          name: vrt
+          fail_ci_if_error: false
+
+      # ---- Lighthouse phase ----
+      # QNBS-v3: !cancelled(), not the step default success() — VRT failing must not skip Lighthouse; each phase is an independent diagnostic gate that must produce its own evidence, matching what two separate jobs would have done.
       # QNBS-v3: no --assert.exitCode flag — let .lighthouserc.cjs assertions drive the
       # exit code; error-level assertions (CLS, accessibility) will correctly fail this job.
       - name: Run Lighthouse CI (mobile)
+        if: ${{ !cancelled() }}
         run: pnpm exec lhci autorun
         env:
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
 
-      # QNBS-v3: desktop run is continue-on-error until baselines stabilise; accessibility
-      # and CLS are still error gates so critical issues surface immediately.
+      # QNBS-v3: !cancelled() so desktop still runs even if VRT or mobile Lighthouse failed; continue-on-error stays true until desktop baselines stabilise so its own failure can't fail this job. Accessibility and CLS remain error gates.
       - name: Run Lighthouse CI (desktop)
+        if: ${{ !cancelled() }}
         run: pnpm exec lhci autorun --config=.lighthouserc.desktop.cjs
         continue-on-error: true
         env:
@@ -957,86 +1020,4 @@ jobs:
           disable_search: true
           flags: storybook
           name: storybook
-          fail_ci_if_error: false
-
-  # ----------------------------------------------------------
-  # 8. VRT: Visual regression (Playwright screenshots, chromium only)
-  # ----------------------------------------------------------
-  vrt:
-    name: 🖼 Visual Regression
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs: [build]
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup
-
-      - name: Download dist artifact
-        # QNBS-v3: SHA-pinned to match all other download-artifact usages in this workflow
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: dist
-          path: dist/
-
-      # QNBS-v3: /var/cache/apt/archives is root-owned by default — actions/cache's restore
-      # (tar extraction) runs as the unprivileged runner user and fails with "Permission denied"
-      # on every file without this, silently degrading to a cache miss every time (real CI
-      # evidence: "Cache hit" followed immediately by "Cache not found" from the failed tar).
-      - name: Make apt archive cache dir writable by the runner user
-        run: sudo mkdir -p /var/cache/apt/archives/partial && sudo chown -R runner:runner /var/cache/apt/archives && sudo chmod -R 755 /var/cache/apt/archives
-
-      - name: Cache apt packages (Playwright system deps)
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: /var/cache/apt/archives/*.deb
-          key: apt-playwright-chromium-deps-v1
-
-      - name: Install Playwright browsers
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Serve dist + run VRT
-        env:
-          CI: true
-        run: |
-          # QNBS-v3: The GitHub Pages build has base=/WorldScript-Studio/. Mirror that structure
-          # so http-server serves assets at the expected paths matching playwright.config baseURL.
-          mkdir -p serve_root/WorldScript-Studio
-          cp -r dist/. serve_root/WorldScript-Studio/
-          pnpm exec http-server serve_root -p 3000 -s &
-          pnpm exec wait-on http://127.0.0.1:3000 --timeout 30000
-          pnpm run test:vrt
-
-      - name: Upload VRT screenshots
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: vrt-screenshots
-          # QNBS-v3: upload both baselines and diff outputs so PR reviewers can compare visually.
-          path: |
-            tests/e2e/visual-regression.spec.ts-snapshots/
-            tests/e2e/test-results/
-          retention-days: 7
-
-      # QNBS-v3: same playwright.config.ts reporter as the required e2e job, produced independently on this runner — previously never uploaded.
-      - name: Upload VRT JUnit results
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: vrt-junit
-          path: tests/e2e/results/junit.xml
-          if-no-files-found: warn
-          retention-days: 7
-
-      - name: Publish VRT test results to Codecov
-        if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          report_type: test_results
-          files: tests/e2e/results/junit.xml
-          disable_search: true
-          flags: vrt
-          name: vrt
           fail_ci_if_error: false
