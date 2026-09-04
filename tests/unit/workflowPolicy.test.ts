@@ -45,15 +45,15 @@ describe('CI workflow policy', () => {
   // QNBS-v3: the first package-manager binary must be patched and explicit before repository caching/install.
   it('bootstraps the exact secure pnpm before setup-node cache or install', () => {
     const expectedVersion = packageJson.packageManager.replace('pnpm@', '');
-    const actionIndex = setupActionSource.indexOf('pnpm/action-setup@');
+    const actionIndex = setupActionSource.indexOf('pnpm/setup@');
     const nodeIndex = setupActionSource.indexOf('actions/setup-node@');
-    expect(setupActionSource).toContain(
-      'pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86',
-    );
+    expect(setupActionSource).toContain('pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b');
     expect(setupActionSource).toContain(`version: ${expectedVersion}`);
     expect(actionIndex).toBeGreaterThanOrEqual(0);
     expect(actionIndex).toBeLessThan(nodeIndex);
     expect(setupActionSource).not.toContain('corepack enable');
+    // QNBS-v3: install:false keeps the explicit "pnpm install --frozen-lockfile" step as the sole install call and its failure attribution.
+    expect(setupActionSource).toContain('install: false');
     const setupToolchainIndex = setupActionSource.indexOf(
       'export npm_config_user_agent="pnpm/$(pnpm --version)"',
     );
