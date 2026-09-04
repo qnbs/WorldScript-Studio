@@ -18,6 +18,9 @@ coverage/
 reports/
 tests/bench/baseline/
 
+# Nested git worktree checkouts (git worktree add .worktrees/<name>) — never tracked
+.worktrees/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
