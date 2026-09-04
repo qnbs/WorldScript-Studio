@@ -44,7 +44,8 @@ export const DEFAULT_OPENROUTER_SETTINGS: OpenRouterSettings = {
 const defaultSettings: Settings = {
   // Basic Settings
   theme: getSystemThemePreference(),
-  appearancePreset: 'sepia',
+  // QNBS-v3: new sessions default to the standard palette, not Writer's Sepia — sepia is now an opt-in choice, matching idbProjectStore.ts's normalizePersistedSettings fallback.
+  appearancePreset: 'default',
   writingSurfaceStyle: 'textured',
   aiMode: 'hybrid',
   openRouter: DEFAULT_OPENROUTER_SETTINGS,
