@@ -1659,7 +1659,7 @@
   "portal.welcome.openProject": "Open Project",
   "portal.welcome.privacyBadge": "100% offline-first — your story stays on this device; API keys are encrypted at rest.",
   "portal.welcome.subtitle": "Your AI-powered creative partner for writing.",
-  "portal.welcome.title": "NEGATIVE CONTROL TEST — TEMPORARY, WILL BE REVERTED",
+  "portal.welcome.title": "Welcome to WorldScript Studio",
   "portal.welcome.tryDemo": "Load demo project",
   "settings.about.description": "Your AI-powered creative partner for writing.",
   "settings.about.githubDescription": "View source code, report issues, and contribute.",
