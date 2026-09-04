@@ -181,11 +181,10 @@ describe('CI workflow policy', () => {
       'core-rust',
       'build',
       'e2e',
-      'lighthouse',
-      'vrt',
+      'browser-quality',
     ]);
     expect(ciSuccessBlock).toMatch(/\$\{\{\s*needs\.signatures\.result\s*\}\}/);
-    expect(ciSuccessBlock).toMatch(/\$\{\{\s*needs\.lighthouse\.result\s*\}\}/);
+    expect(ciSuccessBlock).toMatch(/\$\{\{\s*needs\.browser-quality\.result\s*\}\}/);
 
     for (const jobName of ['e2e-deep', 'storybook']) {
       const jobBlock = extractJobBlock(workflowSource, jobName);
@@ -327,7 +326,7 @@ describe('Tauri release workflow policy', () => {
       name: 'storybook',
     },
     {
-      job: 'vrt',
+      job: 'browser-quality',
       step: 'Publish VRT test results to Codecov',
       files: 'tests/e2e/results/junit.xml',
       flags: 'vrt',
