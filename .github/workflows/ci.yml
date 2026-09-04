@@ -314,8 +314,9 @@ jobs:
 
       # QNBS-v3: no retry — a first-attempt failure remains visible instead of being masked as a pass.
       # --no-experimental-webstorage disables Node 24's native Web Storage API for deterministic setup.
+      # QNBS-v3: --reporter=junit inherits vitest.config.ts's own outputFile (reports/junit.xml) for that reporter name; only json needs a CLI outputFile since it has no config-declared one.
       - name: Unit tests (Vitest, no retry)
-        run: pnpm exec vitest run --coverage --reporter=json --outputFile=test-results.json
+        run: pnpm exec vitest run --coverage --reporter=json --reporter=junit --outputFile.json=test-results.json
         env:
           NODE_OPTIONS: "--no-experimental-webstorage --max-old-space-size=4096"
           CI: "true"
@@ -331,6 +332,15 @@ jobs:
         with:
           name: vitest-results-node${{ matrix.node-version }}
           path: test-results.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload Vitest JUnit results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: vitest-junit-node${{ matrix.node-version }}
+          path: reports/junit.xml
           if-no-files-found: ignore
           retention-days: 7
 
@@ -352,6 +362,19 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage/lcov.info
           flags: unit
+          fail_ci_if_error: false
+
+      # QNBS-v3: !cancelled() (not the default success()) — a real test failure must still upload results, only a cancelled run skips it.
+      - name: Publish unit test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          report_type: test_results
+          files: reports/junit.xml
+          disable_search: true
+          flags: unit-node${{ matrix.node-version }}
+          name: unit-node${{ matrix.node-version }}
           fail_ci_if_error: false
 
   # ----------------------------------------------------------
@@ -496,10 +519,15 @@ jobs:
       - name: Bundle chunk size budget
         run: pnpm run bundle:budget
 
-      - name: Bundle analysis (rollup visualizer)
+      # QNBS-v3: token scoped to this exact step only, never job/workflow-wide — Codecov Bundle Analysis needs it inside this one Vite build, nothing else does.
+      - name: Bundle analysis (rollup visualizer + Codecov)
         run: pnpm run analyze
         env:
           NODE_ENV: production
+          CODECOV_BUNDLE_ANALYSIS: 'true'
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+          # QNBS-v3: PR head SHA (not GitHub's synthetic merge commit) so Bundle Analysis attributes to the same commit reviewers see; falls back to github.sha on main pushes.
+          CODECOV_BUNDLE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Upload bundle analysis HTML
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -703,6 +731,18 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      - name: Publish E2E test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          report_type: test_results
+          files: tests/e2e/results/junit.xml
+          disable_search: true
+          flags: e2e
+          name: playwright-e2e
+          fail_ci_if_error: false
+
   # ----------------------------------------------------------
   # 6a. E2E DEEP COVERAGE: Feature-flag matrix + error paths (non-blocking)
   # QNBS-v3: Separate from the required `e2e` gate. Runs tests/e2e/deep/ with
@@ -756,6 +796,28 @@ jobs:
           path: tests/e2e/html-report/
           if-no-files-found: warn
           retention-days: 7
+
+      # QNBS-v3: same playwright.config.ts reporter as the required e2e job, produced independently on this runner — previously never uploaded.
+      - name: Upload deep E2E JUnit results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-deep-junit
+          path: tests/e2e/results/junit.xml
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Publish deep E2E test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          report_type: test_results
+          files: tests/e2e/results/junit.xml
+          disable_search: true
+          flags: e2e-deep
+          name: e2e-deep
+          fail_ci_if_error: false
 
   # ----------------------------------------------------------
   # 6. LIGHTHOUSE: Performance budgets (after build)
@@ -862,6 +924,8 @@ jobs:
         env:
           CI: true
           DEBUG: pw:browser*
+          # QNBS-v3: --junit's underlying jest-junit defaults to <cwd>/junit.xml, outside every path this job already uploads — pin it into test-results/ instead of guessing at the default.
+          JEST_JUNIT_OUTPUT_FILE: test-results/storybook-junit.xml
         run: |
           npx http-server storybook-static -p 6006 -s &
           npx wait-on http://localhost:6006 --timeout 90000
@@ -882,6 +946,18 @@ jobs:
             test-results/
             **/screenshots/
           retention-days: 7
+
+      - name: Publish Storybook test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          report_type: test_results
+          files: test-results/storybook-junit.xml
+          disable_search: true
+          flags: storybook
+          name: storybook
+          fail_ci_if_error: false
 
   # ----------------------------------------------------------
   # 8. VRT: Visual regression (Playwright screenshots, chromium only)
@@ -942,3 +1018,25 @@ jobs:
             tests/e2e/visual-regression.spec.ts-snapshots/
             tests/e2e/test-results/
           retention-days: 7
+
+      # QNBS-v3: same playwright.config.ts reporter as the required e2e job, produced independently on this runner — previously never uploaded.
+      - name: Upload VRT JUnit results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: vrt-junit
+          path: tests/e2e/results/junit.xml
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Publish VRT test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          report_type: test_results
+          files: tests/e2e/results/junit.xml
+          disable_search: true
+          flags: vrt
+          name: vrt
+          fail_ci_if_error: false

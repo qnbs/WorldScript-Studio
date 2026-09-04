@@ -276,4 +276,56 @@ describe('Tauri release workflow policy', () => {
     expect(ciSuccess).toContain('✅ CI Success');
     expect(workflowSource).toContain('name: ✅ CI Success');
   });
+
+  // QNBS-v3: codecov/test-results-action is deprecated upstream in favor of the main codecov-action; guard against it creeping back in.
+  it('never uses the deprecated codecov/test-results-action', () => {
+    expect(workflowSource).not.toContain('test-results-action');
+  });
+
+  // QNBS-v3: one upload per test suite (unit x1 source occurrence covers both matrix legs, e2e, e2e-deep, storybook, vrt) — a sixth occurrence would mean an untracked/duplicate upload.
+  it('publishes test analytics for every suite with report_type: test_results, disable_search, and !cancelled()', () => {
+    const reportTypeCount = (workflowSource.match(/report_type: test_results/g) ?? []).length;
+    expect(reportTypeCount).toBe(5);
+    const disableSearchCount = (workflowSource.match(/disable_search: true/g) ?? []).length;
+    expect(disableSearchCount).toBe(reportTypeCount);
+    // QNBS-v3: a real test failure must still upload — default success() would hide it.
+    const cancelledGuardCount = (
+      workflowSource.match(/if: \$\{\{ !cancelled\(\) \}\}\n\s+uses: codecov\/codecov-action/g) ??
+      []
+    ).length;
+    expect(cancelledGuardCount).toBe(reportTypeCount);
+  });
+
+  it('never assigns CODECOV_TOKEN at workflow or job level, only inside individual steps', () => {
+    expect(workflowSource).not.toMatch(/^env:\n(?:.*\n)*?\s*CODECOV_TOKEN/m);
+    for (const jobName of extractJobNames(workflowSource)) {
+      const jobBlock = extractJobBlock(workflowSource, jobName);
+      const jobLevelEnv = jobBlock.match(/^ {4}env:\n([\s\S]*?)(?=\n {4}\S|\n {2}\S|$)/m)?.[1];
+      if (jobLevelEnv) expect(jobLevelEnv).not.toContain('CODECOV_TOKEN');
+    }
+  });
+
+  it('runs Vitest once with both JSON and JUnit reporters, still without retry', () => {
+    const qualityBlock = extractJobBlock(workflowSource, 'quality');
+    const vitestStep = extractStepBlock(qualityBlock, 'Unit tests (Vitest, no retry)');
+    expect(vitestStep).toContain('--reporter=json');
+    expect(vitestStep).toContain('--reporter=junit');
+    expect(vitestStep).not.toContain('--retry');
+    expect((qualityBlock.match(/pnpm exec vitest run/g) ?? []).length).toBe(1);
+  });
+
+  it('scopes Codecov Bundle Analysis to the analysis-build step only, never the plain build step', () => {
+    const buildBlock = extractJobBlock(workflowSource, 'build');
+    const plainBuildStep = extractStepBlock(buildBlock, 'Build application');
+    const analysisStep = extractStepBlock(
+      buildBlock,
+      'Bundle analysis (rollup visualizer + Codecov)',
+    );
+    expect(plainBuildStep).not.toContain('CODECOV_BUNDLE_ANALYSIS');
+    expect(plainBuildStep).not.toContain('CODECOV_TOKEN');
+    expect(analysisStep).toContain("CODECOV_BUNDLE_ANALYSIS: 'true'");
+    expect(analysisStep).toContain(`CODECOV_TOKEN: \${{ secrets.CODECOV_TOKEN }}`);
+    // QNBS-v3: exactly one analyze/build invocation in this job — a second `vite build` would defeat the point of reusing the existing ANALYZE pass.
+    expect((buildBlock.match(/run: pnpm run (build|analyze)\n/g) ?? []).length).toBe(2);
+  });
 });

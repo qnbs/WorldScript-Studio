@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { codecovVitePlugin } from '@codecov/vite-plugin';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { visualizer } from 'rollup-plugin-visualizer';
@@ -7,6 +8,10 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { GITHUB_PAGES_BASE, isTauriBuild, resolveViteBase } from './config/resolveViteBase';
 
 const isAnalyze = process.env['ANALYZE'] === 'true';
+// QNBS-v3: explicit CI-only flag — bundle upload never fires merely because CODECOV_TOKEN happens to be set locally.
+const enableCodecovBundleAnalysis = process.env['CODECOV_BUNDLE_ANALYSIS'] === 'true';
+const codecovToken = process.env['CODECOV_TOKEN'] || undefined;
+const codecovBundleSha = process.env['CODECOV_BUNDLE_SHA'] || undefined;
 
 const deployBase = resolveViteBase();
 const isTauri = isTauriBuild();
@@ -86,6 +91,15 @@ export default defineConfig({
           }),
         ]
       : []),
+    // QNBS-v3: Codecov docs require this plugin to run last; only enabled for the CI analysis build, never local `pnpm run build`/`analyze`.
+    codecovVitePlugin({
+      enableBundleAnalysis: enableCodecovBundleAnalysis,
+      bundleName: 'worldscript-studio-web',
+      uploadToken: codecovToken,
+      gitService: 'github',
+      telemetry: false,
+      ...(codecovBundleSha ? { uploadOverrides: { sha: codecovBundleSha } } : {}),
+    }),
   ],
 
   resolve: {
