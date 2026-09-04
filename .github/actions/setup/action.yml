@@ -16,10 +16,11 @@ inputs:
 runs:
   using: composite
   steps:
-    # QNBS-v3: install the patched exact pnpm before setup-node reads the repository lockfile for caching.
-    - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+    # QNBS-v3: pnpm/setup fetches the standalone binary via the npm registry, verified by an npm-signed checksum against a pinned key (not a GitHub-published digest), replacing pnpm/action-setup's npm-install path measured at 20s-6min variance; pnpm store caching below is unchanged, though pnpm/setup separately manages its own exact-lockfile-hash verification-result cache regardless of that setting.
+    - uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0
       with:
         version: 11.22.0
+        install: false
 
     # QNBS-v3: When node-version is set (matrix), use it; otherwise read .nvmrc so
     # non-matrix jobs stay pinned to the project's declared Node version.
