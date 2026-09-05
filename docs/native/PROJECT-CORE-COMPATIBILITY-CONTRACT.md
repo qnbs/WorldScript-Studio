@@ -174,6 +174,19 @@ the same treatment.
 
 ### 2.4 Version classification and state machine
 
+**Classification reads `schemaVersion` via a minimal raw/header parse, never via full deserialization
+into the current typed schema.** If a `FUTURE`-versioned document also changed or removed a field
+the current build's typed schema requires — a plausible, even likely, kind of breaking change for a
+real future version to make — attempting a full structured parse first would fail *before* the
+version field is ever compared, misclassifying a genuine `FUTURE` document as `MALFORMED` and
+denying it the correct "this project requires a newer build" recovery path in favor of a generic
+corruption message. Classification is therefore always: read the raw payload, extract `schemaVersion`
+via the most permissive parse that can find that one field (tolerating a payload shape the current
+typed schema would otherwise reject), classify per the table below, *then* attempt the full typed
+parse only for `CURRENT` and successfully-migrated records. A raw parse that fails even to identify
+a plausible `schemaVersion` field (not just "the rest of the shape doesn't match") is the only case
+that classifies as `MALFORMED`.
+
 Classifications are disjoint by construction — each uses a strict comparison against
 `CURRENT_PROJECT_SCHEMA_VERSION`, never a hardcoded specific number, so the rule set stays correct
 even at the very first release where the only defined version *is* current:
@@ -221,13 +234,28 @@ UNSUPPORTED_OLDER/GAP       → RECOVERY / FAIL_CLOSED (no write authority; dist
                               same enforcement mechanism as §2.5)
 CURRENT                     → NORMAL (read/write, no migration needed)
 FUTURE                      → REFUSE_WRITE_AUTHORITY (see §2.5)
-MALFORMED                   → RECOVERY / FAIL_CLOSED (existing preserve-first recovery UX, unchanged)
+MALFORMED                   → RECOVERY / FAIL_CLOSED (see the correction below — not already true
+                              on the current web/IDB path)
 ```
 
 `LEGACY_UNVERSIONED` and `SUPPORTED_OLDER` both resolve through the *same* explicit migration path —
 never a silent in-place relabel. Preserve-first applies throughout: the original persisted form is
 retained until `NO_LOSS_VERIFIED` succeeds and the new form is durably committed (mirrors this
 codebase's existing preserve-first storage rules; see §7).
+
+**Correction: `MALFORMED` recovery is not already preserve-first on the current web/IDB path.**
+Verified against live source: `index.tsx`'s hydration logic calls
+`normalizePersistedProjectForStore`; when it returns `undefined` (malformed project data), the
+handler logs a warning and executes `delete preloadedState['project']` — Redux then initializes
+with no project, `isNewUser`/default-project seeding proceeds, and the app's normal autosave path
+can subsequently persist that fresh, empty project over the original record. This is destructive,
+not preserve-first: the original malformed record is never quarantined, and ordinary continued use
+of the app can overwrite it. The `RECOVERY / FAIL_CLOSED` label for `MALFORMED` in the table above
+is therefore a requirement this contract adds, not a description of already-correct behavior — the
+web/IDB path must be brought to the same non-editable, blocking recovery admission this document
+already requires for `FUTURE` and `UNSUPPORTED_OLDER`/`MIGRATION_GAP` (§2.5) before an authority
+switch, not merely left as-is on the assumption it already qualifies. Added as authority-switch gate
+9 (§5) and decision row 13 (§9).
 
 **`LEGACY_UNVERSIONED` gets its own explicit migration step, `LEGACY_TO_V1` — not a silent alias
 into `PROJECT_SCHEMA_V1`'s dispatch point.** A normal `N → N+1` migration step (like the harness
@@ -402,23 +430,34 @@ the modified paths are merged/overlaid into a copy of the *same* raw payload R
         │        (every unowned path in R is carried through unchanged — this is an overlay
         │         onto R, never a re-serialization of P as if it were the whole document)
         ▼
-before commit: revalidate that R's source generation has not changed since P was derived
-        │
-        ├── unchanged → proceed
-        │
-        └── changed (another writer committed in the meantime) → FAIL CLOSED, do not
-            merge — never a stale merge onto a generation that is no longer current
+verify the merge, two-sided, not opaque-paths-only:
+        │  (a) unowned paths — semantic no-loss (§4) against the pre-merge raw payload
+        │  (b) owned paths — re-project the merged payload and confirm every owned path
+        │      equals the value Core intended to write; an overlay bug that omits an edit
+        │      or writes to the wrong path must fail this check, not silently commit the
+        │      old or misplaced value
         ▼
-post-merge semantic no-loss verification (§4) against the pre-merge raw payload, restricted
-to the paths that were not supposed to change
+atomically, as one fenced operation (compare-and-swap on the generation, or an exclusive
+writer lease held across both steps — never two separate steps with a window between them):
         │
+        ├── generation still matches what P was derived from → commit
+        │
+        └── generation no longer matches (another writer committed first) → FAIL CLOSED,
+            discard this merge entirely — a check that passed a moment ago is not
+            sufficient license to commit a moment later; the validation and the commit
+            must be the same indivisible operation, not a check-then-act pair with a gap
+            another writer can land in
         ▼
 durable commit
 ```
 
 The generation/source-identity check is deliberately the same shape this codebase's own preserve-
 first storage work already uses elsewhere for detecting a stale write target — it is not invented
-new here, only applied to this specific merge. This connects forward to any future multi-writer/
+new here, only applied to this specific merge, but it must be *implemented* as a single atomic
+operation (whatever primitive the target storage backend provides for this — e.g. an IndexedDB
+transaction that reads-checks-writes without yielding, or a filesystem rename gated on an
+in-process exclusive lock) rather than as two separate steps, or the check does not actually
+prevent the race it exists to prevent. This connects forward to any future multi-writer/
 generation-authority work (see the project's own writer-ownership backlog); this document does not
 implement that work, only ensures the raw-carrier merge step has a defined, fail-closed answer for
 "what if the source moved under me" rather than leaving it undefined until an implementation PR
@@ -472,6 +511,11 @@ latter satisfies this list:
 8. Pre-contract downgrade safety (§2.7): a concrete mechanism exists such that a mutated
    pre-contract-shaped copy of an already-migrated project cannot supersede the schema-aware
    canonical record through ordinary save/autosave.
+9. `MALFORMED` recovery is genuinely preserve-first on every backend (§2.4's correction) — the
+   current web/IDB path's actual behavior (delete the project key, boot a blank project, allow
+   autosave to overwrite the original record) is replaced with the same non-editable, blocking
+   recovery admission already required for `FUTURE`/`MIGRATION_GAP` (§2.5), before an authority
+   switch, not assumed already true.
 
 ## 6. Fixtures and existing invariant coverage
 
@@ -492,16 +536,27 @@ concrete checklist rather than an undefined "every fixture class":
 - A project at each `SUPPORTED_OLDER` version once more than one exists.
 - A project in `UNSUPPORTED_OLDER`/`MIGRATION_GAP` (§2.4) — a version older than current with no
   registered migration step.
+- A `FUTURE`-versioned project whose shape *also* breaks the current typed schema (missing/renamed
+  field the current build requires) — must still classify as `FUTURE` via the raw/header parse
+  (§2.4), never misclassify as `MALFORMED`.
 - A project at a `FUTURE` version (must be refused, §2.5).
-- A `MALFORMED`/unparseable project (existing preserve-first recovery path, unchanged).
+- A `MALFORMED`/genuinely unparseable project (§2.4's correction — proves the new non-editable,
+  blocking recovery admission actually replaces the current destructive delete-and-reset behavior,
+  on the web/IDB backend specifically).
 - Extra unknown fields at the top level of the payload, and nested inside an already-Core-owned
   object (§3's `OUT_OF_SCOPE_BUT_MUST_NOT_BE_DROPPED` and `PRESERVE_OPAQUE` rows respectively).
 - An unknown value for a closed discriminant/enum Core owns (§3's `REJECT_UNKNOWN` row).
 - Array and `EntityState` forms of `characters`/`worlds` (existing coverage — §6.1 — re-run against
   the versioned envelope).
 - A large, representative project (performance/scale sanity, not just correctness).
-- The write-back merge (§3.2) under both an unchanged and a changed source generation, proving the
-  fail-closed path on a generation mismatch actually triggers.
+- The write-back merge (§3.2) under an unchanged source generation, proving the ordinary commit
+  path succeeds.
+- The write-back merge (§3.2) under a source generation injected to change between validation and
+  the intended commit point, proving the atomic check-and-commit actually fails closed rather than
+  merely detecting the race too late to matter.
+- The write-back merge (§3.2) where the overlay implementation is deliberately made to omit an edit
+  or write it to the wrong path, proving the owned-path re-projection check catches it rather than
+  letting the stale/misplaced value commit.
 - A full round-trip no-loss comparison (§4) across every fixture above.
 
 Golden fixtures should exist in both TS and Rust wherever transition parity matters, matching
@@ -552,6 +607,10 @@ this proposal is treated as admitted:
 | 10 | No-loss definition per §4 (semantic equality, not byte-identical; "verbatim" is not used) | ⬜ awaiting confirmation |
 | 11 | `LEGACY_UNVERSIONED` migrates via its own explicit, registered `LEGACY_TO_V1` step (recognize → verify → stamp → no-loss-verify → commit) — never an implicit alias into `PROJECT_SCHEMA_V1`'s dispatch point with no step actually executing | ⬜ awaiting confirmation |
 | 12 | Pre-contract downgrade safety (§2.7): once migrated, a project's schema-aware canonical record can never be superseded by a mutated pre-contract-shaped copy through ordinary save/autosave; the exact storage mechanism is left to the implementation PR, but the invariant itself is fixed here | ⬜ awaiting confirmation |
+| 13 | `MALFORMED` recovery must be brought to genuine preserve-first behavior on the web/IDB backend (§2.4's correction) — the current `index.tsx` path (delete the project key, boot blank, allow autosave to overwrite the original) is not already-correct behavior this contract can assume | ⬜ awaiting confirmation |
+| 14 | Version classification reads `schemaVersion` via a minimal raw/header parse before any full typed deserialization, so a `FUTURE` document with a breaking shape change still classifies as `FUTURE`, never `MALFORMED` (§2.4) | ⬜ awaiting confirmation |
+| 15 | Write-back merge verification is two-sided: unowned paths checked for no-loss *and* owned paths re-projected and confirmed to equal the intended edit — not opaque-paths-only (§3.2) | ⬜ awaiting confirmation |
+| 16 | Generation revalidation and commit are one atomic, fenced operation (compare-and-swap or an exclusive lease spanning both) — never a check-then-act pair with a window another writer can land in (§3.2) | ⬜ awaiting confirmation |
 
 Once confirmed, this document's status line updates to `ADMITTED = YES` and
 `CORE-MIGRATION-LEDGER.md` row 9 is updated to reflect it, per issue `#553`'s own acceptance
