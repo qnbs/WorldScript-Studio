@@ -69,6 +69,12 @@ describe('classifyRawProjectVersion', () => {
     expect(classifyRawProjectVersion(raw)).toBe('MALFORMED');
   });
 
+  it('detects a duplicate schemaVersion key even when one occurrence uses a JSON unicode escape', () => {
+    // QNBS-v3: JSON.parse decodes s to "s", so a byte-literal scanner would miss this duplicate; must compare decoded key names.
+    const raw = `{"\\u0073chemaVersion": ${CURRENT_PROJECT_SCHEMA_VERSION}, "schemaVersion": ${CURRENT_PROJECT_SCHEMA_VERSION + 5}}`;
+    expect(classifyRawProjectVersion(raw)).toBe('MALFORMED');
+  });
+
   it('does not misclassify a nested field also named schemaVersion as a duplicate', () => {
     const raw = JSON.stringify({
       schemaVersion: CURRENT_PROJECT_SCHEMA_VERSION,
@@ -101,18 +107,45 @@ describe('classifyRawProjectVersion', () => {
 });
 
 describe('stampLegacyToV1', () => {
-  it('stamps schemaVersion onto a legacy payload without altering any other field', () => {
-    const legacy = { title: 'Old Project', logline: 'A tale.', characters: [], worlds: [] };
-    const result = stampLegacyToV1(legacy);
+  const validLegacy = {
+    title: 'Old Project',
+    logline: 'A tale.',
+    characters: [],
+    worlds: [],
+    manuscript: [],
+  };
 
-    expect(result.stamped).toEqual({ ...legacy, schemaVersion: PROJECT_SCHEMA_V1 });
-    expect([...result.sourceKeys].sort()).toEqual(Object.keys(legacy).sort());
+  it('stamps schemaVersion onto a legacy payload without altering any other field', () => {
+    const result = stampLegacyToV1(validLegacy);
+
+    expect(result?.stamped).toEqual({ ...validLegacy, schemaVersion: PROJECT_SCHEMA_V1 });
+    expect([...(result?.sourceKeys ?? [])].sort()).toEqual(Object.keys(validLegacy).sort());
+  });
+
+  it('accepts EntityState-shaped characters/worlds, not only arrays', () => {
+    const legacy = {
+      ...validLegacy,
+      characters: { ids: ['c1'], entities: { c1: { id: 'c1', name: 'X' } } },
+      worlds: { ids: [], entities: {} },
+    };
+    expect(stampLegacyToV1(legacy)).not.toBeNull();
   });
 
   it('does not mutate the input payload', () => {
-    const legacy = { title: 'Old Project' };
-    const original = { ...legacy };
-    stampLegacyToV1(legacy);
-    expect(legacy).toEqual(original);
+    const original = { ...validLegacy };
+    stampLegacyToV1(validLegacy);
+    expect(validLegacy).toEqual(original);
+  });
+
+  it.each([
+    ['missing title', { logline: 'x', characters: [], worlds: [], manuscript: [] }],
+    ['non-string title', { ...validLegacy, title: 123 }],
+    ['missing manuscript', { title: 'x', characters: [], worlds: [] }],
+    ['non-array manuscript', { ...validLegacy, manuscript: 'not an array' }],
+    ['missing characters', { title: 'x', worlds: [], manuscript: [] }],
+    ['characters neither array nor EntityState', { ...validLegacy, characters: 'nope' }],
+    ['missing worlds', { title: 'x', characters: [], manuscript: [] }],
+  ])('returns null for a legacy payload failing minimal verification (%s)', (_label, payload) => {
+    expect(stampLegacyToV1(payload)).toBeNull();
   });
 });
