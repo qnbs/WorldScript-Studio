@@ -31,10 +31,10 @@ Status: 🔄 in progress | ⬜ open | ✅ done
   action (PR #545) landed.
 - ✅ Visual regression testing repaired — baselines previously pointed at directory listings, not
   the application (PR #610).
-- 🔄 `v1.28.4` release cut in progress: version/`CHANGELOG.md`/`TODO.md`/`README.md`
-  reconciliation for everything merged since `v1.28.3` is in PR #615. Tag, GitHub Release, release
-  artifacts, and the post-release `AUDIT.md` evidence entry all remain pending until after that PR
-  merges and post-merge main CI/CodeQL are green.
+- ✅ `v1.28.4` released (PR #615, tag+release published 2026-09-05): version/`CHANGELOG.md`/
+  `TODO.md`/`README.md` reconciled, `v1.28.4` tag and GitHub Release published with all expected
+  Desktop artifacts; post-merge main CI and CodeQL green (CodeQL has no tag trigger), tag-triggered
+  CI/Tauri/Docker all green, and `AUDIT.md` updated with real evidence.
 - ⬜ Close the outstanding Wave 2 prerequisite (ledger row 9: project state-shape compatibility
   adapter) — currently in progress, not complete. Wave 3/4 R-15 implementation stays blocked
   (`S5_IMPLEMENTATION_READY=NO`) until this and `S5_TERMINAL=YES` are both true.

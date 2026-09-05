@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-<!-- release-candidate: v1.28.4 -->
+### Documentation
+
+- **Post-release v1.28.4 truth sync:** removed the now-stale release-candidate markers from
+  README.md and CHANGELOG.md now that the `v1.28.4` tag and GitHub Release are published, and
+  recorded real release-gate evidence in AUDIT.md (main CI/CD run, CodeQL, GitHub Pages deploy,
+  tag-triggered Tauri/CI/Docker runs, published release assets).
+
 ## [1.28.4] — 2026-09-05
 
 ### Fixed
