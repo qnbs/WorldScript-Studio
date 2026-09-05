@@ -30,7 +30,7 @@ function offlineFallbackBlock(src: string): string {
   return src.slice(start, end);
 }
 
-/** Every top-level `caches.match(...)` call found in a source block (not `cache.match(...)` on an already-opened, already-scoped handle). Strips `//` comments first so prose mentioning `caches.match()` can't masquerade as a real call site. */
+/** Every top-level `caches.match(...)` call found in a source block (not `cache.match(...)` on an already-opened, already-scoped handle). Strips `//` comments first so prose mentioning `caches.match()` can't masquerade as a real call site, and normalizes the `${BASE}` interpolation to a plain placeholder so expected-value strings in this file never need to embed a real template-literal placeholder themselves. */
 function cachesDotMatchCalls(block: string): string[] {
   const codeOnly = block
     .split('\n')
@@ -40,30 +40,42 @@ function cachesDotMatchCalls(block: string): string[] {
   const re = /\bcaches\.match\([^;]*?\)/g;
   let m: RegExpExecArray | null = re.exec(codeOnly);
   while (m !== null) {
-    calls.push(m[0]);
+    calls.push(m[0].replace(/\$\{BASE\}/, '<BASE>'));
     m = re.exec(codeOnly);
   }
   return calls;
 }
 
 describe('service worker — caches.match() is always scoped to an owned cache (#514)', () => {
-  it('the fetch handler contains at least the known caches.match() call sites', () => {
+  it('the fetch handler contains exactly the 3 known caches.match() call sites', () => {
+    // QNBS-v3: exact count, not a lower bound — a lower bound would let a call site silently disappear (e.g. an accidental merge/refactor) without this regression test failing.
     const calls = cachesDotMatchCalls(fetchHandlerBlock(swSource));
-    expect(calls.length).toBeGreaterThanOrEqual(2);
+    expect(calls.length).toBe(3);
   });
 
-  it('every caches.match() call in the fetch handler passes an explicit cacheName', () => {
-    const calls = cachesDotMatchCalls(fetchHandlerBlock(swSource));
-    for (const call of calls) {
-      expect(call).toMatch(/cacheName:\s*CACHE_(STATIC|DYNAMIC|IMAGES)/);
-    }
+  it('the JS/CSS Cache-First lookup reads from CACHE_STATIC, where the network path writes it', () => {
+    const start = swSource.indexOf('JS / CSS bundles');
+    expect(start).toBeGreaterThan(-1);
+    const end = swSource.indexOf('Locale JSON', start);
+    expect(end).toBeGreaterThan(start);
+    const calls = cachesDotMatchCalls(swSource.slice(start, end));
+    expect(calls).toEqual(['caches.match(request, { cacheName: CACHE_STATIC })']);
   });
 
-  it('offlineFallback (reachable from every fetch-handler catch path) also scopes its caches.match()', () => {
+  it("the navigation fallback reads the navigated URL from CACHE_DYNAMIC and the SPA shell from CACHE_STATIC — not each other's cache", () => {
+    const start = swSource.indexOf('Navigation — Network First');
+    expect(start).toBeGreaterThan(-1);
+    const end = swSource.indexOf('Everything else', start);
+    expect(end).toBeGreaterThan(start);
+    const calls = cachesDotMatchCalls(swSource.slice(start, end));
+    expect(calls).toEqual([
+      'caches.match(request, { cacheName: CACHE_DYNAMIC })',
+      'caches.match(`<BASE>index.html`, { cacheName: CACHE_STATIC })',
+    ]);
+  });
+
+  it('offlineFallback (reachable from every fetch-handler catch path) reads offline.html from CACHE_STATIC, where it is precached', () => {
     const calls = cachesDotMatchCalls(offlineFallbackBlock(swSource));
-    expect(calls.length).toBeGreaterThanOrEqual(1);
-    for (const call of calls) {
-      expect(call).toMatch(/cacheName:\s*CACHE_(STATIC|DYNAMIC|IMAGES)/);
-    }
+    expect(calls).toEqual(['caches.match(`<BASE>offline.html`, { cacheName: CACHE_STATIC })']);
   });
 });
