@@ -4,9 +4,10 @@
 
 **Status:** PROPOSAL — awaiting maintainer sign-off in §9. `PROPOSED = YES`,
 `ADMITTED = NO (pending review)`, `IMPLEMENTATION_STARTED = NO`. This document changes no code and
-switches no authority. It resolves the two decisions `CORE-MIGRATION-LEDGER.md` row 9 and issue
-#553 identify as blocking further work on the Wave 2 project state-shape compatibility adapter —
-and, transitively, the Wave 2 prerequisite gate that R-15 (#445) implementation sits behind.
+switches no authority. It resolves the two decisions that `CORE-MIGRATION-LEDGER.md` row 9 and
+issue `#553` both identify as blocking further work on the Wave 2 project state-shape compatibility
+adapter — and, transitively, the Wave 2 prerequisite gate that R-15 (`#445`) implementation sits
+behind.
 
 **Baseline:** `main` at `f490360bab26bc068164d6226a03898b797b8e40`
 
@@ -228,16 +229,31 @@ never a silent in-place relabel. Preserve-first applies throughout: the original
 retained until `NO_LOSS_VERIFIED` succeeds and the new form is durably committed (mirrors this
 codebase's existing preserve-first storage rules; see §7).
 
-**`LEGACY_UNVERSIONED`'s migration dispatch point:** a migration step is selected by *source
-version*, so `LEGACY_UNVERSIONED` — having no version number by definition — needs an explicit
-dispatch rule, not just a classification label. For migration-dispatch purposes only,
-`LEGACY_UNVERSIONED` enters the chain at the oldest version this contract's migration registry
-defines a starting point for (`PROJECT_SCHEMA_V1`, once fixtures prove today's field set matches
-that version's shape — see §6). This is a dispatch convenience only: the record's *classification*
-remains `LEGACY_UNVERSIONED` for provenance/audit purposes (e.g. logging, telemetry, and any future
-migration-history field) even though the migration registry treats it as starting from
-`PROJECT_SCHEMA_V1`'s step — the two are not the same fact and must not be conflated in anything
-that reports *when* a project was actually last saved by a version-aware build.
+**`LEGACY_UNVERSIONED` gets its own explicit migration step, `LEGACY_TO_V1` — not a silent alias
+into `PROJECT_SCHEMA_V1`'s dispatch point.** A normal `N → N+1` migration step (like the harness
+proof's `V1ToV2`) transforms a known shape into another known shape. `LEGACY_UNVERSIONED` is
+different: it has no version number to transform *from*, so treating it as if its source were
+simply `PROJECT_SCHEMA_V1` — with no explicit step actually executing — would mean a legacy record
+silently becomes "current" with no stamp ever written and no verification ever performed, exactly
+the silent-relabel outcome this document already forbids one paragraph above. `LEGACY_TO_V1` is
+therefore a real, distinct, registered migration step whose *input* is the `LEGACY_UNVERSIONED`
+sentinel (not a numeric version) and whose actions are:
+
+1. **Recognize** the legacy shape (no `schemaVersion` field present at all).
+2. **Verify** the payload's field set conforms to `PROJECT_SCHEMA_V1`'s definition (§2.1.1's
+   inventory) — this is a real check, not an assumption, even though today's `ProjectData` shape and
+   `PROJECT_SCHEMA_V1`'s definition are the same shape by construction (§2.2).
+3. **Write** `schemaVersion: 1` into the record for the first time — this is the actual state
+   transition; nothing before this step has ever set the field.
+4. **No-loss verify** (§4) the stamped result against the original legacy payload.
+5. **Durably commit** only after step 4 succeeds, per the preserve-first chain above.
+
+The record's *classification* for provenance/audit purposes (logging, telemetry, any future
+migration-history field) remains "migrated from `LEGACY_UNVERSIONED` via `LEGACY_TO_V1`" — never
+conflated with "was already `PROJECT_SCHEMA_V1`," which would misreport when the project was
+actually first touched by a version-aware build. Once a second real schema version exists,
+`LEGACY_TO_V1` remains the fixed entry point for any legacy record; later steps proceed normally
+from `PROJECT_SCHEMA_V1` onward.
 
 ### 2.5 Future version and migration gaps: fail closed, no automatic action
 
@@ -269,12 +285,57 @@ simply never admitted into the state those write paths read from. The one except
 read-only inspection view named above, which by construction reads from a value that was never
 assigned into the app's normal editable project state.
 
+**Scope limit — this guarantee only binds builds that implement it.** Today's load-admission check,
+`services/fs/projectFsStore.ts`'s `looksLikeStoryProject`, is a permissive structural check: it
+requires only `title`/`logline`/`manuscript`/`characters`/`worlds` and does not reject on the
+presence of extra keys. Once `schemaVersion` exists (§2.1.1 lists it as an in-scope field), that
+same admission check must be extended to read and enforce it — "no write authority" is only real if
+the code path deciding whether to admit a project for editing actually consults the version, not
+merely if this document says it should. A build that predates this contract entirely has no code
+path capable of performing that check at all; no design decision in this document can retroactively
+grant already-shipped code an awareness it was never given. This is an inherent limit of any
+additive versioning scheme, not a gap this document can close — the practical mitigation is that a
+`FUTURE`-versioned project is, by construction, one only a build implementing this contract could
+have produced in the first place, so the exposure window is bounded by how many older, no-longer-
+updated installs remain in use, not open-ended.
+
 ### 2.6 Downgrade: never automatic
 
 A newer schema opened by an older client never auto-downgrades. If an explicit "export for an older
 WorldScript Studio version" feature is ever wanted, it is a distinct, explicit, separately-scoped
 export action that names any features/fields it cannot represent — never part of ordinary
 open/save.
+
+### 2.7 Pre-contract downgrade safety: a migrated record must not be re-superseded by a stale copy
+
+§2.5's scope-limit caveat establishes that a genuinely pre-contract build (one with no code path
+capable of reading `schemaVersion` at all) cannot itself be made to fail closed. That gap has a
+second half this document must also close: once a project *has* been migrated to a schema-aware
+canonical representation and durably committed, an old build that still holds — and can still
+mutate — its own legacy-shaped copy of that same project must never be able to have that mutation
+silently supersede the already-migrated canonical record. Without an explicit rule here, a plausible
+sequence is: project migrates to `PROJECT_SCHEMA_V1` → an old, still-installed build later opens and
+resaves its own untouched legacy copy (it never knew a migration happened) → that resave is mistaken
+for the current authoritative record, silently reverting the project past a migration point that
+already succeeded.
+
+**Required invariant:** once the schema-aware representation for a given project becomes
+authoritative, any surviving pre-contract-shaped representation of that same project is
+non-authoritative and cannot supersede the schema-aware canonical generation through ordinary
+save/autosave. An old build may still mutate its own legacy-shaped copy — this document does not
+propose preventing that, since a pre-contract build cannot be changed retroactively (§2.5) — but the
+schema-aware load/admission path must never treat that mutated legacy copy as a valid update to the
+already-migrated canonical record. At most, a later-observed legacy-shaped write for an
+already-migrated project is surfaced as an explicit recovery/import candidate requiring user
+action, never an automatic authority supersession.
+
+The exact storage mechanism that satisfies this invariant (a distinct canonical location or root
+shape the old `looksLikeStoryProject`-style check would not recognize; a generation/namespace
+authority in IDB that a legacy write cannot address; or another equivalent) is an implementation
+detail for the follow-up PR, matching how §2.1 leaves the exact envelope representation
+unspecified — what this document fixes is that *some* mechanism satisfying the invariant above must
+exist before an authority switch, and "the old file format still happens to be readable" is not
+sufficient on its own.
 
 ## 3. Decision 2 — Unknown-field policy is staged by field class, not one global choice
 
@@ -376,7 +437,7 @@ has to invent one under time pressure.
   contradict the semantic-equality standard stated above.
 - **Array order preservation** for every ordered collection.
 - **Stable ID preservation**, exactly (already proven for `characters`/`worlds` by
-  `coreBoundaryAdapter.ts` — see §6).
+  `coreBoundaryAdapter.ts` — see §6.1).
 - **No missing fields** relative to the source, and **no invented fields** except those an
   explicitly admitted migration step introduces (mirroring `revision_note`'s own honest doc comment
   about why it exists).
@@ -384,8 +445,10 @@ has to invent one under time pressure.
 ## 5. Authority-switch admission gates
 
 Before the current `OBSERVATION_ONLY` shadow comparison may become any production decision/write
-authority, all of the following are required — none are satisfied yet, and this document satisfies
-none of them by existing:
+authority, all of the following are required. None is confirmed satisfied *for an authority switch*
+by this document — gate 7 already has structural evidence in today's code, but "structurally
+supports it" and "verified sufficient for an actual switch" are different claims, and only the
+latter satisfies this list:
 
 1. Complete field inventory for the admitted lifecycle — every `ProjectData` field in §2.1.1's table
    is either modeled, or explicitly and deliberately routed through §3's out-of-scope/opaque
@@ -393,21 +456,56 @@ none of them by existing:
 2. §2's version classification implemented and exercised against real historical projects, not only
    the synthetic harness shapes — including a real `UNSUPPORTED_OLDER`/`MIGRATION_GAP` test case
    once a second real schema version exists to create one.
-3. No-loss round-trip proof (§4) for every fixture class in §6, including the write-back merge
+3. No-loss round-trip proof (§4) for every fixture class in §6.2, including the write-back merge
    invariant (§3.2) under a concurrent-generation-change scenario.
-4. TS/Rust accept/reject parity while both remain active during any transition window.
+4. TS/Rust accept/reject parity, kept permanently — not scoped to a transition window. The React/PWA
+   product and any native Core/Qt consumer are both permanent, coexisting readers/writers of the
+   same renderer-independent format (§7's Qt relationship), not a temporary migration pair; a later
+   schema change shipping in one without the other is a parity break at any point in this project's
+   life, not only during an initial cutover.
 5. Rollback/fallback: the TS-authoritative path can still read whatever Rust most recently wrote.
 6. Representative historical fixtures — real project shapes predating this contract, not only
    synthetic ones already shaped to match it.
-7. No Redux-specific types leaking into Core — already satisfied structurally by
-   `coreBoundaryAdapter.ts` (§6); re-verify at switch time.
+7. No Redux-specific types leaking into Core. `coreBoundaryAdapter.ts` already provides structural
+   evidence for this today (§6.1) — re-verify it still holds, with fresh evidence against the
+   switch-time code, rather than treating today's evidence as sufficient proof on its own.
+8. Pre-contract downgrade safety (§2.7): a concrete mechanism exists such that a mutated
+   pre-contract-shaped copy of an already-migrated project cannot supersede the schema-aware
+   canonical record through ordinary save/autosave.
 
-## 6. Entity-state invariants — already satisfied, no change proposed
+## 6. Fixtures and existing invariant coverage
+
+### 6.1 Entity-state invariants — already satisfied, no change proposed
 
 `coreBoundaryAdapter.ts`'s `entityStateToCoreArray`/`coreArrayToEntityState` and
 `tests/unit/features/project/coreBoundaryAdapter.test.ts` already fail closed on duplicate IDs,
 missing `ids`/entity correspondence, and orphan entities, and already preserve declared order and
 stable IDs exactly. No change proposed here.
+
+### 6.2 Fixture classes required for §5 gate 3's no-loss proof
+
+None of these exist yet; a follow-up implementation PR adds them. Listed here so gate 3 has a
+concrete checklist rather than an undefined "every fixture class":
+
+- A current, fully-populated project exercising every field in §2.1.1's inventory.
+- A representative historical project predating this contract (`LEGACY_UNVERSIONED`).
+- A project at each `SUPPORTED_OLDER` version once more than one exists.
+- A project in `UNSUPPORTED_OLDER`/`MIGRATION_GAP` (§2.4) — a version older than current with no
+  registered migration step.
+- A project at a `FUTURE` version (must be refused, §2.5).
+- A `MALFORMED`/unparseable project (existing preserve-first recovery path, unchanged).
+- Extra unknown fields at the top level of the payload, and nested inside an already-Core-owned
+  object (§3's `OUT_OF_SCOPE_BUT_MUST_NOT_BE_DROPPED` and `PRESERVE_OPAQUE` rows respectively).
+- An unknown value for a closed discriminant/enum Core owns (§3's `REJECT_UNKNOWN` row).
+- Array and `EntityState` forms of `characters`/`worlds` (existing coverage — §6.1 — re-run against
+  the versioned envelope).
+- A large, representative project (performance/scale sanity, not just correctness).
+- The write-back merge (§3.2) under both an unchanged and a changed source generation, proving the
+  fail-closed path on a generation mismatch actually triggers.
+- A full round-trip no-loss comparison (§4) across every fixture above.
+
+Golden fixtures should exist in both TS and Rust wherever transition parity matters, matching
+issue `#553`'s own fixture/evidence section.
 
 ## 7. Relationship to preserve-first, R-15, and Qt
 
@@ -452,7 +550,9 @@ this proposal is treated as admitted:
 | 8 | Mechanism: raw canonical payload as lossless carrier + typed Core projection, evaluated per-struct rather than blanket `#[serde(flatten)]` (§3.1) | ⬜ awaiting confirmation |
 | 9 | Write-back merge invariant: known-field edits overlay onto the raw carrier, never re-serialize the typed projection as the whole document; fail closed on a source-generation change since the projection was derived (§3.2) | ⬜ awaiting confirmation |
 | 10 | No-loss definition per §4 (semantic equality, not byte-identical; "verbatim" is not used) | ⬜ awaiting confirmation |
+| 11 | `LEGACY_UNVERSIONED` migrates via its own explicit, registered `LEGACY_TO_V1` step (recognize → verify → stamp → no-loss-verify → commit) — never an implicit alias into `PROJECT_SCHEMA_V1`'s dispatch point with no step actually executing | ⬜ awaiting confirmation |
+| 12 | Pre-contract downgrade safety (§2.7): once migrated, a project's schema-aware canonical record can never be superseded by a mutated pre-contract-shaped copy through ordinary save/autosave; the exact storage mechanism is left to the implementation PR, but the invariant itself is fixed here | ⬜ awaiting confirmation |
 
 Once confirmed, this document's status line updates to `ADMITTED = YES` and
-`CORE-MIGRATION-LEDGER.md` row 9 is updated to reflect it, per issue #553's own acceptance
+`CORE-MIGRATION-LEDGER.md` row 9 is updated to reflect it, per issue `#553`'s own acceptance
 criterion. Implementation begins only in a separate, subsequent PR.
