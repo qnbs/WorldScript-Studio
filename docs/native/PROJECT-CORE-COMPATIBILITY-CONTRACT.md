@@ -226,14 +226,23 @@ that classifies as `MALFORMED`.
 
 **Accepted value grammar for `schemaVersion`.** The classification table below covers absent,
 lower, equal, and higher *valid* values — it does not by itself say what happens when the field is
-*present but not a valid version value* (e.g. a string `"1"`, `null`, a fractional number `1.5`, a
-negative number, or a duplicate key with conflicting values in a permissive parser). The accepted
-representation is a non-negative integer JSON number, matching `CURRENT_PROJECT_SCHEMA_VERSION`'s
-own type; any other representation — wrong JSON type, non-integer, negative, or (where the raw
-parser surfaces it) a duplicate key with conflicting values — classifies as `MALFORMED` at the raw
-parse stage above, before typed parsing is ever attempted, exactly like a raw parse that cannot find
-the field at all. This is not a new state, only a precise definition of which raw values the
-existing `MALFORMED` classification already covers.
+*present but not a valid version value* (e.g. a string `"1"`, `null`, a fractional number `1.5`, or
+a negative number). The accepted representation is a non-negative integer JSON number, matching
+`CURRENT_PROJECT_SCHEMA_VERSION`'s own type. **Correction: an absent field is not the same case as a
+present invalid one, and must not both be called `MALFORMED`.** An earlier draft of this paragraph
+said a raw parse that finds no `schemaVersion` field classifies the same as an invalid present
+value; that directly contradicts decision row 4 (§2.3): a genuinely absent field is
+`LEGACY_UNVERSIONED` and must enter `LEGACY_TO_V1`, never `MALFORMED`. The rule is therefore: field
+absent → `LEGACY_UNVERSIONED`; field present with a wrong JSON type, non-integer, or negative value
+→ `MALFORMED` at the raw parse stage, before typed parsing is ever attempted; envelope unparseable
+at all (not just this one field) → `MALFORMED`, same as before. **Duplicate `schemaVersion` keys are
+rejected deterministically, not parser-dependently:** an earlier draft left duplicate-key handling to
+"wherever the raw parser surfaces it," which would let TS's `JSON.parse` (keeps the last key) and a
+Rust deserializer that rejects duplicates classify the same bytes differently, breaking permanent
+parity (gate 4). A raw payload with a duplicate `schemaVersion` key — same or conflicting values —
+always classifies `MALFORMED`, in every implementation, with a required cross-renderer fixture
+proving it. None of this is a new state, only a precise, contradiction-free definition of what
+`LEGACY_UNVERSIONED` and `MALFORMED` already cover.
 
 Classifications are disjoint by construction — each uses a strict comparison against
 `CURRENT_PROJECT_SCHEMA_VERSION`, never a hardcoded specific number, so the rule set stays correct
@@ -573,9 +582,17 @@ default across the whole graph.
 A raw-carrier-plus-typed-projection split (§3.1) is only safe if writing back a change to a *known*
 field has a defined, non-destructive mechanism. The wrong mechanism — "serialize the typed
 projection and use that as the new raw payload" — silently deletes every opaque field the
-projection never carried in the first place, reintroducing exactly the failure §1.4 describes. The
-required mechanism instead merges a change into the existing raw payload without touching the paths
-Core doesn't own:
+projection never carried in the first place, reintroducing exactly the failure §1.4 describes.
+**This applies to every authoritative writer, not only a future Core writer.** TypeScript is the
+sole writer today and a permanent coexisting writer after any Core authority switch (§5's gate 4) —
+an ordinary TS save/autosave/flush that serializes its own typed `ProjectData` model, without this
+same overlay mechanism, would drop any field that exists only in the raw carrier (e.g. one an
+authority-switch-era native writer or a future schema bump introduced) exactly as surely as a
+hypothetical Core writer would. The diagram below reads "Core" for the case gate 4 concerns, but the
+overlay/verify/fence mechanism it describes is required of **every** writer able to persist this
+document — TS included, both before and after any authority switch — with a required TS-autosave
+fixture proving it. The required mechanism merges a change into the existing raw payload without
+touching the paths the writer doesn't own:
 
 ```text
 raw source generation R
@@ -647,6 +664,21 @@ value happens to occupy the same array index or iteration position in the other 
 Declared order (§6.1) is a separate, already-covered invariant; merging by ID does not change how
 order is determined or preserved. The concrete merge implementation is `IMPLEMENTATION_REQUIRED`,
 not designed by this document — this fixes only the identity-vs-position invariant it must satisfy.
+
+**Whole-entity insertion and deletion are an explicit exception to "no invented/missing fields," not
+only migration-manifest changes.** §4's no-loss definition already exempts fields an admitted
+migration introduces or declares removed — but ordinary user actions (`addCharacter`,
+`deleteCharacter`, and world equivalents) are not migrations, and gate 3 applies §4 to the write-back
+merge itself. Read literally, deleting an entity that carries preserved opaque children would
+require those opaque fields to remain (violating "no missing fields"), and adding one would violate
+"no invented fields" — making ordinary CRUD impossible to satisfy alongside this invariant.
+**Requirement, admitted now:** an owned-path edit that inserts a wholly new entity or deletes an
+entity (consuming its entire subtree, opaque children included) is a defined, intentional delta the
+write-back merge must allow — never treated as data loss or invention. This exception is scoped to
+the entity subtree the edit actually targets; every other entity's opaque fields, and this deleted/
+inserted entity's identity handling elsewhere (e.g. dangling references), are unaffected and remain
+governed by the invariants above. A required create/delete merge fixture proves this explicitly,
+alongside the existing edit-only fixtures.
 
 ## 4. No-loss round-trip — precise definition
 
@@ -929,9 +961,23 @@ numeric values — added an explicit lossless-numeric requirement; the migration
 exemption (from wave one) did not require verifying a renamed value actually landed at its
 declared destination — added that requirement; and the egress requirement (from wave one) omitted
 snapshot creation as a fourth call site distinct from the three named exports — added. None required
-a new product/security/legal decision or contradicted rows 1–19; this document is now closed to
-further design-cascade rounds — any further finding is dispositioned as `IMPLEMENTATION_REQUIRED` or
-a stated non-issue in its review thread, not absorbed as another document revision.
+a new product/security/legal decision or contradicted rows 1–19.
+
+**Fourth wave — an exception to the closing statement above, because one finding was a genuine
+self-contradiction with an already-admitted row, not a refinement.** The wave-two accepted-value-
+grammar text wrongly classified an absent `schemaVersion` as `MALFORMED`, directly contradicting
+decision row 4 (`LEGACY_UNVERSIONED`, never `MALFORMED`, for an absent version) — corrected, along
+with making duplicate-`schemaVersion`-key rejection deterministic rather than parser-dependent
+(both §2.4). Three further real gaps were fixed alongside it: the write-back overlay invariant read
+as scoped to a future Core writer only, when TypeScript is the actual permanent writer it must also
+bind (§3.2); ordinary entity insertion/deletion had no exception from "no invented/missing fields,"
+making normal add/delete character actions impossible to satisfy alongside the write-back invariant
+(§3.2); and duplicate-key handling (folded into the schemaVersion fix above). None of the four
+contradicted rows 1–19 or required new product/security/legal authority — the first was a direct bug
+in this document's own prior text, corrected as such. **This document is now closed to further
+design-cascade rounds.** Any further finding is dispositioned in its review thread — fixed only if it
+is a genuine self-contradiction with an admitted row or a similarly clear-cut bug, otherwise recorded
+as `IMPLEMENTATION_REQUIRED` or a stated non-issue — never absorbed as another open-ended revision.
 
 All 19 rows above are confirmed. This document's status line reflects `ADMITTED = YES` and
 `CORE-MIGRATION-LEDGER.md` row 9 is updated to reflect it, per issue `#553`'s own acceptance
