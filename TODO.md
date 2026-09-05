@@ -27,8 +27,10 @@ Status: 🔄 in progress | ⬜ open | ✅ done
   action (PR #545) landed.
 - ✅ Visual regression testing repaired — baselines previously pointed at directory listings, not
   the application (PR #610).
-- ✅ `v1.28.4` release cut, reconciling `CHANGELOG.md`/`TODO.md`/`AUDIT.md` truth with everything
-  merged since `v1.28.3`.
+- 🔄 `v1.28.4` release cut in progress: version/`CHANGELOG.md`/`TODO.md`/`README.md`
+  reconciliation for everything merged since `v1.28.3` is in PR #615. Tag, GitHub Release, release
+  artifacts, and the post-release `AUDIT.md` evidence entry all remain pending until after that PR
+  merges and post-merge main CI/CodeQL are green.
 - ⬜ R-15 desktop at-rest encryption implementation: select the smallest already-authorized
   Wave 3/4 slice from `docs/native/R15-SECURE-STORAGE-CONTRACT.md` and
   `docs/native/CORE-MIGRATION-LEDGER.md`, execute through the preserve-first migration gates.
