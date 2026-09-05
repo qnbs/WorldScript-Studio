@@ -128,8 +128,20 @@ permanently unversioned, defeating the purpose of a persisted-format version num
 
 This does not require Core to model every `ProjectData` field before `PROJECT_SCHEMA_V1` can exist
 — §3's staged policy is exactly the mechanism that lets the version apply to the whole payload while
-Core's authority over any given field grows incrementally. The inventory below is what §5's gate 1
-("complete field inventory for the admitted lifecycle") checks against:
+Core's authority over any given field grows incrementally.
+
+**`schemaVersion` itself is deliberately not a row in the inventory below.** It is the version
+discriminant of the envelope (§2.1), not a field *of* the versioned payload, so gate 1's "complete
+field inventory" does not require it to appear alongside `title`/`characters`/etc. Its exact storage
+location (a field on `ProjectData` itself vs. a wrapper object around it) is the implementation
+detail §2.1 already leaves open — this document fixes only that it belongs to the persisted project
+format and is never derived from another version. Whichever location the implementation PR chooses,
+it becomes a single, consistent choice recorded in that PR, not a per-caller ambiguity: every writer
+of the persisted document uses the same location, and §2.4's classification/migration rules operate
+against that one location.
+
+The inventory below is what §5's gate 1 ("complete field inventory for the admitted lifecycle")
+checks against:
 
 | Persisted field | Current TS owner | Persisted? | Core modeled? | Unknown-field class (§3) | V1 inclusion |
 |---|---|---|---|---|---|
@@ -145,10 +157,17 @@ Core's authority over any given field grows incrementally. The inventory below i
 | `storyObjects`, `objectGroups` | `ProjectData` | Yes | No | `OUT_OF_SCOPE_BUT_MUST_NOT_BE_DROPPED` | In scope, opaque |
 | `mindMaps` | `ProjectData` (viewport-only state is separate, in `mindMapUiSlice`, and is not persisted project data) | Yes | No | `OUT_OF_SCOPE_BUT_MUST_NOT_BE_DROPPED` | In scope, opaque |
 | `characterInterviews` | `ProjectData` | Yes | No | `OUT_OF_SCOPE_BUT_MUST_NOT_BE_DROPPED` | In scope, opaque |
+| `__worldscriptLegacyProjectDirectory`, `__worldscriptLegacyAuxiliary` | Filesystem backend only (`services/fs/legacyProjectIdentity.ts`, injected onto the object and serialized to `project.json` by `services/fs/projectFsStore.ts`'s `saveProjectUnlocked`/snapshot-restore paths) — not declared on the `ProjectData` TypeScript type at all, hence the `as unknown as Record<string, unknown>` casts used to read/write them | Yes, on the filesystem/desktop backend | No | `OUT_OF_SCOPE_BUT_MUST_NOT_BE_DROPPED` | In scope, opaque, backend-specific |
 
 A follow-up implementation PR must re-verify this table against `ProjectData`'s exact current
 fields before implementing — this table is this proposal's evidence, not a promise that the shape
-hasn't changed by the time implementation starts.
+hasn't changed by the time implementation starts. The filesystem-backend row above is a reminder
+that "the versioned object" (§2.1.1) is backend-inclusive: a field the web/IDB backend never writes
+can still be part of what a specific backend's persisted document carries, and gate 1's inventory
+must be checked against each backend's actual on-disk/on-storage shape, not only the in-memory
+`ProjectData` type shared across backends. The historical-filesystem-fixture requirement (§6.2)
+must include a fixture carrying these two fields, proving they survive classification and migration
+on the filesystem backend specifically.
 
 ### 2.2 First production version starts fresh at v1 — the synthetic Rust v1/v2 proof is retired
 
@@ -187,6 +206,17 @@ typed schema would otherwise reject), classify per the table below, *then* attem
 parse only for `CURRENT` and successfully-migrated records. A raw parse that fails even to identify
 a plausible `schemaVersion` field (not just "the rest of the shape doesn't match") is the only case
 that classifies as `MALFORMED`.
+
+**Accepted value grammar for `schemaVersion`.** The classification table below covers absent,
+lower, equal, and higher *valid* values — it does not by itself say what happens when the field is
+*present but not a valid version value* (e.g. a string `"1"`, `null`, a fractional number `1.5`, a
+negative number, or a duplicate key with conflicting values in a permissive parser). The accepted
+representation is a non-negative integer JSON number, matching `CURRENT_PROJECT_SCHEMA_VERSION`'s
+own type; any other representation — wrong JSON type, non-integer, negative, or (where the raw
+parser surfaces it) a duplicate key with conflicting values — classifies as `MALFORMED` at the raw
+parse stage above, before typed parsing is ever attempted, exactly like a raw parse that cannot find
+the field at all. This is not a new state, only a precise definition of which raw values the
+existing `MALFORMED` classification already covers.
 
 Classifications are disjoint by construction — each uses a strict comparison against
 `CURRENT_PROJECT_SCHEMA_VERSION`, never a hardcoded specific number, so the rule set stays correct
@@ -722,6 +752,16 @@ issue `#553`'s own fixture/evidence section.
 - **R-15 (#445):** a distinct security/durability contract for the encrypted-record envelope, key
   management, and migration — this document's `schemaVersion` is not R-15's envelope version (§1.3)
   and this document does not admit, implement, or modify any part of R-15's S5 contracts.
+- **ADR-0008 (local-first Y.Doc):** this document governs the *current* authority model — TypeScript/
+  Redux's `ProjectData` is the persisted source of truth, and `enableLocalFirstSync` (default off)
+  keeps the Y.Doc projection a non-authoritative shadow (`services/localFirst/docPersistence.ts`
+  persists it as a separate Yjs update log, not through `StorageBackend`). ADR-0008 is accepted in
+  principle but its one-way authority flip has not occurred and is not gated by anything in this
+  document. **This admission does not extend schema-version admission, migration, or opaque-field
+  guarantees to the Y.Doc/CRDT update-log format** — if and when ADR-0008's flip is scheduled, that
+  flip requires its own compatibility-contract review (covering Y.Doc replay, remote CRDT updates,
+  and fixtures for that format) before this contract's authority-switch gates (§5) could be read as
+  covering it. Explicitly out of scope, not implicitly inherited.
 - **Qt:** any future Qt-side project consumer must read the same canonical raw payload + typed
   projection this document defines, never redefine its own project-schema rules — matching issue
   #553's own instruction that "Qt must consume this admitted Core boundary; QML must not recreate
@@ -742,8 +782,9 @@ issue `#553`'s own fixture/evidence section.
 
 ## 9. Maintainer decision record
 
-Each row below is a single decision this document makes. Confirm, amend, or reject any row before
-this proposal is treated as admitted:
+Each row below is a single decision this document makes. **All 19 rows are confirmed — this
+document is admitted**, per the status line above. The rows are kept as an itemized record of what
+was decided, not as an open confirm/amend/reject checklist.
 
 | # | Decision | Status |
 |---|---|---|
@@ -789,6 +830,19 @@ verified against three live export/backup call sites; and migration backup reten
 "until commit," short of the binding roadmap's "backup before destructive migration" rule (§2.4,
 §7). None of these required a new product/security/legal decision or contradicted any of rows 1–19
 as approved; each is recorded inline at its section rather than as a new numbered row.
+
+**Second wave of post-signoff refinements:** five further findings landed on the admission commit
+itself, again verified before being addressed: stale proposal-stage confirm/amend/reject wording
+left in this section's own intro after admission (fixed above); §2.1.1's field inventory not stating
+that `schemaVersion` itself is deliberately excluded from that table (§2.1.1); the version
+classification table not defining the accepted value grammar for a present-but-invalid
+`schemaVersion` (§2.4); a genuine gap verified against live source — the filesystem backend
+(`services/fs/projectFsStore.ts`, `legacyProjectIdentity.ts`) persists two backend-specific fields
+(`__worldscriptLegacyProjectDirectory`, `__worldscriptLegacyAuxiliary`) absent from `ProjectData`'s
+declared type, now added to §2.1.1's inventory; and an explicit scope boundary against ADR-0008's
+accepted-but-not-yet-flipped local-first Y.Doc authority model (§7), which this document does not
+extend to. As with the first wave, none required a new product/security/legal decision or
+contradicted rows 1–19.
 
 All 19 rows above are confirmed. This document's status line reflects `ADMITTED = YES` and
 `CORE-MIGRATION-LEDGER.md` row 9 is updated to reflect it, per issue `#553`'s own acceptance
