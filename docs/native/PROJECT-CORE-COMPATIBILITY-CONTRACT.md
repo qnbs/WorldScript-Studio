@@ -365,6 +365,60 @@ unspecified — what this document fixes is that *some* mechanism satisfying the
 exist before an authority switch, and "the old file format still happens to be readable" is not
 sufficient on its own.
 
+### 2.8 Universal ingress admission: every path in, not just the primary load path
+
+**Contract invariant, admitted now; concrete code changes are `IMPLEMENTATION_REQUIRED`.** §2.4's
+raw/version classification and this contract's schema admission must run before typed narrowing or
+Redux/editable-state admission — on *every* ingress capable of producing authoritative editable
+project state, not only the primary stored-project load path discussed in §2.4/§2.5. A version gate
+that only the main load path honors is not a real gate; any other ingress is a bypass of everything
+this document establishes. Named examples this applies to (illustrative, not exhaustive — any
+current or future ingress producing editable project state is in scope by the general rule, whether
+or not it is named here):
+
+- Stored-project load (primary IDB/filesystem hydration — already covered in detail above).
+- Filesystem load (`services/fs/projectFsStore.ts` and equivalents).
+- IDB load.
+- File/backup import (e.g. `services/projectImportSchema.ts`'s `parseImportedProjectJson`).
+- Snapshot restore (e.g. `IdbSnapshotStore` / `restoreSnapshotThunk`).
+- Recovery restore (any explicit user-triggered restore-from-backup path).
+- Future native/Qt project open.
+
+This document does not redesign any of these individual code paths — that is implementation work
+for the follow-up PR(s), tracked as `IMPLEMENTATION_REQUIRED` per-path, not `ADMITTED_IMPLEMENTED`
+by this document. What is admitted here is the invariant itself: no ingress path is exempt from
+classification merely because it predates this contract or is a narrower/secondary path relative to
+the primary load.
+
+### 2.9 What requires a schema version bump
+
+**Design decision, admitted now.** This contract defines who writes `schemaVersion` and how
+versions classify, but a persisted-format change is only safe if this contract also defines *when*
+the number must advance. A version bump (and the corresponding migration/admission review, §2.4) is
+mandatory whenever a change could cause an older reader/writer to misinterpret or lose data. At
+minimum, all of the following require a bump:
+
+- Adding a new **required** (non-optional) field.
+- Removing or renaming any existing field.
+- Changing an existing field's type.
+- Any semantic or invariant change incompatible with how an older build interprets the same shape
+  (e.g. changing what a field's absence means).
+- A closed-discriminant/enum value change that isn't purely additive for a field under §3's
+  `REJECT_UNKNOWN` policy — an older build's `REJECT_UNKNOWN` handling for that field needs to know
+  about the change.
+- Any change to identity or declared-order semantics (§6.1's invariants).
+- Any other persisted-format change an older reader/writer could misinterpret or silently lose.
+
+Changes that do **not** require a bump: a new **optional** field routed through §3's
+`OUT_OF_SCOPE_BUT_MUST_NOT_BE_DROPPED` or `PRESERVE_OPAQUE` policy without altering the meaning of
+any existing field — the staged unknown-field policy (§3) is exactly what makes this kind of change
+safe without a version bump.
+
+This classification is a **permanent release invariant**, not a one-time decision made by this
+document and then forgotten: every future project-format change must be evaluated against this list
+before shipping, and that evaluation — not only its outcome — belongs wherever this contract's
+decisions are recorded (e.g. a changelog entry, or an update to this document).
+
 ## 3. Decision 2 — Unknown-field policy is staged by field class, not one global choice
 
 A single global policy is wrong here: the right answer depends on what kind of field is unknown.
@@ -463,6 +517,18 @@ implement that work, only ensures the raw-carrier merge step has a defined, fail
 "what if the source moved under me" rather than leaving it undefined until an implementation PR
 has to invent one under time pressure.
 
+**Identity-bearing collections merge by stable entity ID, never by position.** `characters`,
+`worlds`, and any equivalent identity-bearing collection are merged during the overlay step (above)
+by stable entity ID — never by array index or object-enumeration position. A raw payload using the
+Redux `EntityState` shape (keyed under `entities[id]`) and a Core projection using a normalized
+array (§6.1) must resolve to the *same* entity whenever they share an ID, regardless of any position
+or ordering difference between the two representations at merge time. Opaque sibling fields on an
+entity stay attached to that entity's identity throughout the merge — never reattached to whatever
+value happens to occupy the same array index or iteration position in the other representation.
+Declared order (§6.1) is a separate, already-covered invariant; merging by ID does not change how
+order is determined or preserved. The concrete merge implementation is `IMPLEMENTATION_REQUIRED`,
+not designed by this document — this fixes only the identity-vs-position invariant it must satisfy.
+
 ## 4. No-loss round-trip — precise definition
 
 "No loss" means, precisely:
@@ -495,8 +561,12 @@ latter satisfies this list:
 2. §2's version classification implemented and exercised against real historical projects, not only
    the synthetic harness shapes — including a real `UNSUPPORTED_OLDER`/`MIGRATION_GAP` test case
    once a second real schema version exists to create one.
-3. No-loss round-trip proof (§4) for every fixture class in §6.2, including the write-back merge
-   invariant (§3.2) under a concurrent-generation-change scenario.
+3. No-loss round-trip proof (§4) for every *admitted or migrated* fixture class in §6.2, including
+   the write-back merge invariant (§3.2) under a concurrent-generation-change scenario. This does
+   **not** apply to fixture classes the contract intentionally refuses (`FUTURE`,
+   `UNSUPPORTED_OLDER`/`MIGRATION_GAP`, `MALFORMED`) — see §6.2's split for what those require
+   instead (source preserved unchanged, zero durable writes, zero editable-state admission; never a
+   semantic round-trip, since nothing is meant to be admitted or transformed).
 4. TS/Rust accept/reject parity, kept permanently — not scoped to a transition window. The React/PWA
    product and any native Core/Qt consumer are both permanent, coexisting readers/writers of the
    same renderer-independent format (§7's Qt relationship), not a temporary migration pair; a later
@@ -528,36 +598,49 @@ stable IDs exactly. No change proposed here.
 
 ### 6.2 Fixture classes required for §5 gate 3's no-loss proof
 
-None of these exist yet; a follow-up implementation PR adds them. Listed here so gate 3 has a
-concrete checklist rather than an undefined "every fixture class":
+None of these exist yet; a follow-up implementation PR adds them. Split into two groups by what
+each fixture class actually proves — a semantic round-trip is meaningful only for fixtures the
+contract admits or migrates; for fixtures the contract intentionally *refuses*, the correct proof is
+that nothing was admitted, transformed, or written at all.
+
+**Group A — admitted or migrated fixtures (§4's semantic no-loss round-trip applies):**
 
 - A current, fully-populated project exercising every field in §2.1.1's inventory.
-- A representative historical project predating this contract (`LEGACY_UNVERSIONED`).
+- A representative historical project predating this contract (`LEGACY_UNVERSIONED`) — proves
+  `LEGACY_TO_V1` (§2.4).
 - A project at each `SUPPORTED_OLDER` version once more than one exists.
-- A project in `UNSUPPORTED_OLDER`/`MIGRATION_GAP` (§2.4) — a version older than current with no
-  registered migration step.
-- A `FUTURE`-versioned project whose shape *also* breaks the current typed schema (missing/renamed
-  field the current build requires) — must still classify as `FUTURE` via the raw/header parse
-  (§2.4), never misclassify as `MALFORMED`.
-- A project at a `FUTURE` version (must be refused, §2.5).
-- A `MALFORMED`/genuinely unparseable project (§2.4's correction — proves the new non-editable,
-  blocking recovery admission actually replaces the current destructive delete-and-reset behavior,
-  on the web/IDB backend specifically).
 - Extra unknown fields at the top level of the payload, and nested inside an already-Core-owned
   object (§3's `OUT_OF_SCOPE_BUT_MUST_NOT_BE_DROPPED` and `PRESERVE_OPAQUE` rows respectively).
-- An unknown value for a closed discriminant/enum Core owns (§3's `REJECT_UNKNOWN` row).
 - Array and `EntityState` forms of `characters`/`worlds` (existing coverage — §6.1 — re-run against
-  the versioned envelope).
+  the versioned envelope), including the identity-by-ID merge invariant (§3.2).
 - A large, representative project (performance/scale sanity, not just correctness).
 - The write-back merge (§3.2) under an unchanged source generation, proving the ordinary commit
   path succeeds.
-- The write-back merge (§3.2) under a source generation injected to change between validation and
-  the intended commit point, proving the atomic check-and-commit actually fails closed rather than
-  merely detecting the race too late to matter.
 - The write-back merge (§3.2) where the overlay implementation is deliberately made to omit an edit
   or write it to the wrong path, proving the owned-path re-projection check catches it rather than
   letting the stale/misplaced value commit.
-- A full round-trip no-loss comparison (§4) across every fixture above.
+- A full round-trip no-loss comparison (§4) across every fixture in this group.
+
+**Group B — refused fixtures (no round-trip; proof is preserve-and-refuse instead):**
+
+- A project in `UNSUPPORTED_OLDER`/`MIGRATION_GAP` (§2.4) — a version older than current with no
+  registered migration step.
+- A project at a `FUTURE` version (§2.5).
+- A `FUTURE`-versioned project whose shape *also* breaks the current typed schema (missing/renamed
+  field the current build requires) — must still classify as `FUTURE` via the raw/header parse
+  (§2.4), never misclassify as `MALFORMED`.
+- An unknown value for a closed discriminant/enum Core owns (§3's `REJECT_UNKNOWN` row).
+- A `MALFORMED`/genuinely unparseable project (§2.4's correction — proves the new non-editable,
+  blocking recovery admission actually replaces the current destructive delete-and-reset behavior,
+  on the web/IDB backend specifically).
+- The write-back merge (§3.2) under a source generation injected to change between validation and
+  the intended commit point, proving the atomic check-and-commit actually fails closed rather than
+  merely detecting the race too late to matter.
+
+For every fixture in Group B, the required proof is: the source is preserved byte-for-byte
+unchanged, zero durable writes occur, and zero editable-state admission occurs (no Redux/UI state
+is ever populated from it) — never a semantic round-trip, since nothing about these inputs is
+supposed to be admitted or transformed in the first place.
 
 Golden fixtures should exist in both TS and Rust wherever transition parity matters, matching
 issue `#553`'s own fixture/evidence section.
@@ -611,6 +694,18 @@ this proposal is treated as admitted:
 | 14 | Version classification reads `schemaVersion` via a minimal raw/header parse before any full typed deserialization, so a `FUTURE` document with a breaking shape change still classifies as `FUTURE`, never `MALFORMED` (§2.4) | ⬜ awaiting confirmation |
 | 15 | Write-back merge verification is two-sided: unowned paths checked for no-loss *and* owned paths re-projected and confirmed to equal the intended edit — not opaque-paths-only (§3.2) | ⬜ awaiting confirmation |
 | 16 | Generation revalidation and commit are one atomic, fenced operation (compare-and-swap or an exclusive lease spanning both) — never a check-then-act pair with a window another writer can land in (§3.2) | ⬜ awaiting confirmation |
+| 17 | Universal ingress admission (§2.8): classification and schema admission apply to every ingress producing editable project state — not only the primary load path — naming stored-project load, filesystem load, IDB load, file/backup import, snapshot restore, recovery restore, and future native/Qt open as examples; concrete per-path changes are `IMPLEMENTATION_REQUIRED` | ⬜ awaiting confirmation |
+| 18 | Identity-bearing collections (`characters`, `worlds`, equivalents) merge by stable entity ID, never array index or enumeration position (§3.2); concrete merge implementation is `IMPLEMENTATION_REQUIRED` | ⬜ awaiting confirmation |
+| 19 | Schema version-bump policy (§2.9): required-field additions, removals/renames, type changes, incompatible semantic/invariant changes, non-additive closed-discriminant changes, and identity/order semantic changes all require a bump; this classification is a permanent release invariant, evaluated for every future format change | ⬜ awaiting confirmation |
+
+**Implementation status of concrete mechanics named in this document** (tracked here so "admitted as
+a contract invariant" is never mistaken for "already implemented"): the specific code changes for
+universal ingress admission (§2.8 — stored-project load, filesystem load, IDB load, file/backup
+import, snapshot restore, recovery restore, future native/Qt open), identity-bearing collection
+merge (§3.2), the write-back overlay mechanism (§3.1/§3.2), `LEGACY_TO_V1` (§2.4), the pre-contract
+downgrade barrier (§2.7), and the `MALFORMED` recovery fix (§2.4's correction) are all
+`IMPLEMENTATION_REQUIRED` — none exist in code today. This document admits the invariants they must
+satisfy; it does not implement any of them.
 
 Once confirmed, this document's status line updates to `ADMITTED = YES` and
 `CORE-MIGRATION-LEDGER.md` row 9 is updated to reflect it, per issue `#553`'s own acceptance
