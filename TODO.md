@@ -13,9 +13,13 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 > **Status: 🔄 in progress.** The authoritative native sequence remains
 > [`docs/native/ROADMAP-QT-GPUI-DESKTOP.md`](docs/native/ROADMAP-QT-GPUI-DESKTOP.md), with the
 > next Rust-Core capability choice recorded in [`docs/native/CORE-MIGRATION-LEDGER.md`](docs/native/CORE-MIGRATION-LEDGER.md).
-> R-15 (desktop at-rest encryption) is now prioritized ahead of ordinary roadmap frontier work —
-> its design contract (S5-A/B1/B2/B3) is already admitted; this sprint moves it into
-> implementation. No Qt or GPUI implementation work is part of this sprint.
+> R-15 (desktop at-rest encryption) design work is complete — S5-A/B1/B2/B3 are all admitted — but
+> [`docs/native/DESKTOP-MIGRATION-ROADMAP-REV3.md`](docs/native/DESKTOP-MIGRATION-ROADMAP-REV3.md)
+> explicitly forbids pulling Wave 3/4 R-15 **implementation** ahead of unresolved Wave 2 authority
+> prerequisites, and the ledger's row 10 records `S5_IMPLEMENTATION_READY=NO`. This sprint's
+> desktop-storage work is therefore the still-open Wave 2 prerequisite (ledger row 9: the
+> project state-shape compatibility adapter), not R-15 implementation itself. No Qt or GPUI
+> implementation work is part of this sprint.
 
 - ✅ `v1.28.2` (2026-08-27) and `v1.28.3` (2026-08-27) released, closing out the prior sprint's
   accumulated reconstruction-reconciliation and documentation-truth work.
@@ -31,9 +35,9 @@ Status: 🔄 in progress | ⬜ open | ✅ done
   reconciliation for everything merged since `v1.28.3` is in PR #615. Tag, GitHub Release, release
   artifacts, and the post-release `AUDIT.md` evidence entry all remain pending until after that PR
   merges and post-merge main CI/CodeQL are green.
-- ⬜ R-15 desktop at-rest encryption implementation: select the smallest already-authorized
-  Wave 3/4 slice from `docs/native/R15-SECURE-STORAGE-CONTRACT.md` and
-  `docs/native/CORE-MIGRATION-LEDGER.md`, execute through the preserve-first migration gates.
+- ⬜ Close the outstanding Wave 2 prerequisite (ledger row 9: project state-shape compatibility
+  adapter) — currently in progress, not complete. Wave 3/4 R-15 implementation stays blocked
+  (`S5_IMPLEMENTATION_READY=NO`) until this and `S5_TERMINAL=YES` are both true.
 - ⬜ #614 (narrow concurrent-first-install multi-tab race, requires cross-tab coordination) and
   #532 (WelcomePortal E2E entry nondeterminism root cause) remain open, tracked separately —
   not part of this sprint unless they directly block release or R-15 work.

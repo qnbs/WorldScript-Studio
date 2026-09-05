@@ -35,6 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that's actually safe for it. PR #545.
 - **Intentionally cleared project metadata no longer reappears:** an empty title/logline set by the
   user could be silently repopulated during returning-user bootstrap. PR #546.
+- **Factory Reset could report success while user data remained:** `deleteDatabase()` treated a
+  genuine `onerror` or an `onblocked` event (another connection still open) as success, so
+  `wipeAllAppData()` could resolve without every database actually being deleted. `onerror` now
+  rejects, and `onblocked` waits for the connection to close before giving up. PR #596.
 
 ### Accessibility
 
@@ -62,9 +66,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   application — the gate was not protecting against real visual regressions. Now reaches actual app
   routes with real baselines and a proven negative control demonstrating a visible regression fails
   the gate. PR #610.
-- IDB reset-quiescence hardening across 9 service modules (PR #596; issue #532's own WelcomePortal
-  entry-nondeterminism root cause is a related but distinct class and remains open); WelcomePortal
-  E2E recovery navigation made locale-independent (PR #590).
+- **Async, generation/epoch-based IDB reset-quiescence contract** across 9 service modules, closing
+  every long-lived connection before a factory reset deletes anything (PR #596; issue #532's own
+  WelcomePortal entry-nondeterminism root cause is a related but distinct class and remains open).
+  WelcomePortal E2E recovery navigation made locale-independent (PR #590).
 
 ## [1.28.3] — 2026-08-27
 
