@@ -7,12 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+<!-- release-candidate: v1.28.4 -->
+## [1.28.4] — 2026-09-05
+
+### Fixed
+
+- **PWA first-install unprompted reload:** `clients.claim()` on activation fired `controllerchange`
+  on the very first-ever page load, not only on genuine updates, causing every first-time visitor
+  to undergo one automatic reload shortly after landing. Fixed via absolute-URL own-worker
+  identification, shared-origin foreign-worker exclusion, persistent installation history, event
+  queuing during classification, and recovery when `getRegistration()` fails. A narrow residual —
+  two tabs racing the very first-ever activation of this origin's service worker so closely that
+  one tab's evidence reads as "already installed" — requires real cross-tab coordination and
+  remains open as #614. Fixes #585, PR #613.
+- **Service-worker cache reads are now positively ownership-scoped:** every `caches.match()` call
+  in the fetch handler and offline fallback now specifies its owning cache by name, closing a
+  shared-origin (e.g. `qnbs.github.io` hosting multiple projects) cache-read isolation gap. Fixes
+  #514, PR #612.
+- **Factory Reset could reboot back into Settings instead of Welcome Portal:** a stale
+  view-carrying URL hash survived `wipeAllAppData()`'s reload, and `readInitialView()` read it with
+  higher priority than checking whether a project still existed. PR #592.
+- **Desktop project corruption is now preserve-first:** a corrupt desktop project is quarantined
+  (moved to `quarantined-projects` with a collision-safe name) rather than risking deletion; the
+  destructive IndexedDB-reset action is no longer offered for project-load failures. PR #542.
+- **Desktop filesystem I/O errors now get a distinct, truthful recovery action:** separated from
+  corruption-quarantine and generic-storage-reset, so each failure class only exposes the action
+  that's actually safe for it. PR #545.
+- **Intentionally cleared project metadata no longer reappears:** an empty title/logline set by the
+  user could be silently repopulated during returning-user bootstrap. PR #546.
+
+### Accessibility
+
+- **Welcome/Home dashboard WCAG AA contrast** and a repaired `prefers-reduced-motion` cascade (the
+  override now correctly wins over equal-specificity base rules); default appearance preset is now
+  `default` for new and invalid-legacy sessions. Fixes #565, PR #609.
+- **ManuscriptEditor deferred-mirror contrast** raised from 4.45:1 to ~5.10:1. PR #560.
+
+### Security
+
+- **`fflate` ZIP64-parsing DoS**, used by this app's export path: overridden to `0.8.3`. PR #595.
+- Routine dependency maintenance: `xmldom`/`fast-uri`/`qs` floor bumps (PR #587), `log` crate in
+  `src-tauri` (PR #561), `codeql-action` group (PR #562), `actions/setup-node` (PR #594).
+
 ### Documentation
 
-- **Post-release v1.28.3 truth sync:** removed the now-stale release-candidate markers from
-  README.md and CHANGELOG.md now that the `v1.28.3` tag and GitHub Release are published, and
-  recorded real release-gate evidence in AUDIT.md (main CI/CD run, CodeQL, GitHub Pages deploy,
-  tag-triggered Tauri/CI/Docker runs, published release assets).
+- **R-15 secure desktop storage — design contract admitted, implementation not started:** the full
+  storage/migration/recovery contract (S5-A, S5-B1, S5-B2, S5-B3) is now defined and its
+  cross-contract consistency audited. No code has shipped yet; desktop project files remain
+  documented as plaintext until this implementation lands. PRs #564, #580, #581, #582, #584.
+
+### Tests
+
+- **Visual regression testing repaired:** VRT baselines were directory listings, not the
+  application — the gate was not protecting against real visual regressions. Now reaches actual app
+  routes with real baselines and a proven negative control demonstrating a visible regression fails
+  the gate. PR #610.
+- IDB reset-quiescence hardening across 9 service modules (PR #596; issue #532's own WelcomePortal
+  entry-nondeterminism root cause is a related but distinct class and remains open); WelcomePortal
+  E2E recovery navigation made locale-independent (PR #590).
 
 ## [1.28.3] — 2026-08-27
 
