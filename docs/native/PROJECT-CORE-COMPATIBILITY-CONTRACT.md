@@ -62,11 +62,38 @@ persisted project document alone.
 No struct in `schema.rs` carries `#[serde(deny_unknown_fields)]`; serde's default is to silently
 ignore any JSON field it doesn't recognize on deserialize. Harmless for the current
 observation-only comparison (nothing round-trips back to disk from Rust), but the most dangerous
-possible default for a future authority switch. The real gap is large: `types.ts`'s `StoryProject`
-already has fields Rust's `schema.rs` explicitly documents as out of scope for this first slice —
-`outline`, `binderNodes`, `compileProfile`, `projectGoals`, `writingHistory` (`schema.rs`'s own
-`StoryProject` doc comment names exactly these). A deserialize→reserialize round trip through the
-current schema would silently erase every one of them today.
+possible default for a future authority switch.
+
+### 1.5 The real persisted surface is larger than `StoryProject` — `StoryProject` is itself already a narrowed view
+
+`types.ts`'s `StoryProject` interface — the type `coreEnvelope.ts`'s `buildCoreProjectEnvelope`
+takes — is not the full persisted project. The actual runtime/persisted shape is
+`features/project/projectState.ts`'s `ProjectData`, which `services/storageBackend.ts`'s
+`normalizeSaveProjectInputToStoryProject` narrows to `StoryProject` only at the *type* level (`return
+project.data as StoryProject` — a cast, not a field-by-field copy; the real object retains every
+`ProjectData` field at runtime). `buildCoreProjectEnvelope` then explicitly picks only `title`,
+`logline`, `author`, `characters`/`worlds` (via `toCoreProjectCollections`), and `manuscript` when
+constructing the shadow-validation envelope. Two narrowing steps exist today, not one:
+
+```text
+ProjectData (actual persisted/Redux shape, ~20 fields)
+        │  narrowed by a type cast only — no fields actually removed at runtime
+        ▼
+StoryProject (types.ts interface, 11 fields)
+        │  narrowed by explicit field-picking in coreEnvelope.ts
+        ▼
+Core shadow-validation envelope (title/logline/author/characters/worlds/manuscript only)
+```
+
+`schema.rs`'s own `StoryProject` doc comment names `outline`, `binderNodes`, `compileProfile`,
+`projectGoals`, `writingHistory` as out of scope — but that comment is scoped to the gap between
+`types.ts`'s `StoryProject` interface and Rust's model, which is only the *first* narrowing step
+above. `ProjectData` additionally carries `id`, `relationships`, `writingSessions`, `writingGoals`,
+`sceneBoardLayout`, `persistedVersionControl`, `plotConnections`, `plotSubplots`,
+`plotTensionOverrides`, `aiPreset`, `storyObjects`, `objectGroups`, `mindMaps`, and
+`characterInterviews` — none of which reach the current shadow envelope at all. §2.1 resolves which
+of these two shapes `PROJECT_SCHEMA_V1` actually versions; §2.1.1's inventory table covers all of
+them, not only the five `schema.rs` names.
 
 ## 2. Decision 1 — Persisted schema-version authority
 
@@ -87,13 +114,47 @@ to *the persisted project format itself*, is written by whichever side currently
 authority (TypeScript, unchanged from today), and is never derived, inferred, or borrowed from any
 other version in the table in §1.3.
 
+### 2.1.1 What exactly is the versioned object
+
+Per §1.5, `StoryProject` is already a narrowed view of the real persisted surface. **`schemaVersion`
+versions the complete authoritative persisted project payload — `ProjectData` (or a canonical
+`ProjectDocument` that a future implementation PR may define as its equivalent, e.g. if
+import/export/backup need their own explicit wrapper) — not merely the current `StoryProject`
+interface or the narrower field set `coreEnvelope.ts` currently projects into the shadow-validation
+envelope.** Versioning only the reduced Core-visible slice would leave every field outside it
+permanently unversioned, defeating the purpose of a persisted-format version number.
+
+This does not require Core to model every `ProjectData` field before `PROJECT_SCHEMA_V1` can exist
+— §3's staged policy is exactly the mechanism that lets the version apply to the whole payload while
+Core's authority over any given field grows incrementally. The inventory below is what §5's gate 1
+("complete field inventory for the admitted lifecycle") checks against:
+
+| Persisted field | Current TS owner | Persisted? | Core modeled? | Unknown-field class (§3) | V1 inclusion |
+|---|---|---|---|---|---|
+| `title`, `logline` | `ProjectData` | Yes | Yes | `MODEL_AND_VALIDATE` | In scope |
+| `author` | `ProjectData` | Yes | Yes | `MODEL_AND_VALIDATE` | In scope |
+| `characters`, `worlds` | `ProjectData` (via `coreBoundaryAdapter.ts`) | Yes | Yes | `MODEL_AND_VALIDATE` | In scope |
+| `manuscript` | `ProjectData` | Yes | Yes | `MODEL_AND_VALIDATE` | In scope |
+| `id` | `ProjectData` | Yes | No | `OUT_OF_SCOPE_BUT_MUST_NOT_BE_DROPPED` | In scope, opaque |
+| `outline`, `binderNodes`, `compileProfile`, `projectGoals`, `writingHistory` | `ProjectData` (`types.ts` `StoryProject` also declares these) | Yes | No | `OUT_OF_SCOPE_BUT_MUST_NOT_BE_DROPPED` | In scope, opaque |
+| `relationships`, `writingSessions`, `writingGoals`, `sceneBoardLayout`, `aiPreset` | `ProjectData` only (not in `types.ts` `StoryProject`) | Yes | No | `OUT_OF_SCOPE_BUT_MUST_NOT_BE_DROPPED` | In scope, opaque |
+| `persistedVersionControl` | `ProjectData`; mirrors `features/versionControl/` slice state, embedded so branches/snapshots survive reload | Yes | No | `OUT_OF_SCOPE_BUT_MUST_NOT_BE_DROPPED` | In scope, opaque |
+| `plotConnections`, `plotSubplots`, `plotTensionOverrides` | `ProjectData`; moved from the Plot Board slice so they're undo-able via redux-undo | Yes | No | `OUT_OF_SCOPE_BUT_MUST_NOT_BE_DROPPED` | In scope, opaque |
+| `storyObjects`, `objectGroups` | `ProjectData` | Yes | No | `OUT_OF_SCOPE_BUT_MUST_NOT_BE_DROPPED` | In scope, opaque |
+| `mindMaps` | `ProjectData` (viewport-only state is separate, in `mindMapUiSlice`, and is not persisted project data) | Yes | No | `OUT_OF_SCOPE_BUT_MUST_NOT_BE_DROPPED` | In scope, opaque |
+| `characterInterviews` | `ProjectData` | Yes | No | `OUT_OF_SCOPE_BUT_MUST_NOT_BE_DROPPED` | In scope, opaque |
+
+A follow-up implementation PR must re-verify this table against `ProjectData`'s exact current
+fields before implementing — this table is this proposal's evidence, not a promise that the shape
+hasn't changed by the time implementation starts.
+
 ### 2.2 First production version starts fresh at v1 — the synthetic Rust v1/v2 proof is retired
 
 The first schema version any real WorldScript project is assigned is **`PROJECT_SCHEMA_V1`**,
-defined fresh by this document against the actual current `StoryProject` shape (including the five
-fields §1.4 names as currently unmodeled by Rust — being unmodeled by Rust does not mean absent
-from the version-1 *format*; see §3 for how those fields are handled without being modeled). This
-is a deliberately new, independent number sequence from Rust's harness-proof `1`/`2`. The existing
+defined fresh by this document against §2.1.1's full inventory — every field in that table is part
+of the version-1 *format*, whether or not Core models it yet (see §3 for how unmodeled fields are
+handled without being modeled). This is a deliberately new, independent number sequence from Rust's
+harness-proof `1`/`2`. The existing
 `V1ToV2` migration and `CURRENT_SCHEMA_VERSION = 2` in `envelope.rs`/`migrate.rs` remain valid as
 what they already are — a proof that the migration *mechanism* works — but are not reinterpreted as
 describing real project history once this contract is admitted. A follow-up implementation PR
@@ -112,14 +173,22 @@ the same treatment.
 
 ### 2.4 Version classification and state machine
 
+Classifications are disjoint by construction — each uses a strict comparison against
+`CURRENT_PROJECT_SCHEMA_VERSION`, never a hardcoded specific number, so the rule set stays correct
+even at the very first release where the only defined version *is* current:
+
 ```text
-        ┌─────────────────────┐
-        │ schemaVersion absent │──────▶ LEGACY_UNVERSIONED
-        └─────────────────────┘
-        ┌───────────────────────────┐
-        │ schemaVersion == 1 (or any │
-        │ future supported older N) │──────▶ SUPPORTED_OLDER
-        └───────────────────────────┘
+        ┌──────────────────────┐
+        │ schemaVersion absent  │──────▶ LEGACY_UNVERSIONED
+        └──────────────────────┘
+        ┌────────────────────────────────────────┐
+        │ schemaVersion < current                 │
+        │   AND an admitted migration path exists │──────▶ SUPPORTED_OLDER
+        └────────────────────────────────────────┘
+        ┌────────────────────────────────────────┐
+        │ schemaVersion < current                 │
+        │   AND no admitted migration path exists │──────▶ UNSUPPORTED_OLDER / MIGRATION_GAP
+        └────────────────────────────────────────┘
         ┌───────────────────────────┐
         │ schemaVersion == current  │──────▶ CURRENT
         └───────────────────────────┘
@@ -131,15 +200,27 @@ the same treatment.
         └───────────────────────────┘
 ```
 
+`UNSUPPORTED_OLDER`/`MIGRATION_GAP` is a genuinely distinct state from `FUTURE`, not a duplicate of
+it: `migrate.rs`'s existing `MigrationError::NoMigrationFrom { version }` already names exactly this
+condition for the harness proof (an older version with no registered migration step) — this document
+adopts the same distinction for the real contract rather than collapsing "too old, no path" and "too
+new, unknown" into one generic failure. At `PROJECT_SCHEMA_V1` (the first defined version) this state
+is unreachable by construction — there is no older version yet to have a gap from — but the contract
+must not omit it, since it is exactly the state a second real schema bump could hit if that bump's
+migration step were ever incomplete or unregistered.
+
 Per-classification admission:
 
 ```text
-LEGACY_UNVERSIONED  → CLASSIFIED → MIGRATION_REQUIRED → MIGRATED_IN_MEMORY
-                        → NO_LOSS_VERIFIED → DURABLE_CURRENT
-SUPPORTED_OLDER      → MIGRATION_REQUIRED → (same chain as above)
-CURRENT              → NORMAL (read/write, no migration needed)
-FUTURE               → REFUSE_WRITE_AUTHORITY (see §2.5)
-MALFORMED            → RECOVERY / FAIL_CLOSED (existing preserve-first recovery UX, unchanged)
+LEGACY_UNVERSIONED         → CLASSIFIED → MIGRATION_REQUIRED → MIGRATED_IN_MEMORY
+                              → NO_LOSS_VERIFIED → DURABLE_CURRENT
+SUPPORTED_OLDER             → MIGRATION_REQUIRED → (same chain as above)
+UNSUPPORTED_OLDER/GAP       → RECOVERY / FAIL_CLOSED (no write authority; distinct diagnostic
+                              from FUTURE — "too old, no path" vs. "too new, unknown" — but the
+                              same enforcement mechanism as §2.5)
+CURRENT                     → NORMAL (read/write, no migration needed)
+FUTURE                      → REFUSE_WRITE_AUTHORITY (see §2.5)
+MALFORMED                   → RECOVERY / FAIL_CLOSED (existing preserve-first recovery UX, unchanged)
 ```
 
 `LEGACY_UNVERSIONED` and `SUPPORTED_OLDER` both resolve through the *same* explicit migration path —
@@ -147,7 +228,18 @@ never a silent in-place relabel. Preserve-first applies throughout: the original
 retained until `NO_LOSS_VERIFIED` succeeds and the new form is durably committed (mirrors this
 codebase's existing preserve-first storage rules; see §7).
 
-### 2.5 Future version: fail closed, no automatic action
+**`LEGACY_UNVERSIONED`'s migration dispatch point:** a migration step is selected by *source
+version*, so `LEGACY_UNVERSIONED` — having no version number by definition — needs an explicit
+dispatch rule, not just a classification label. For migration-dispatch purposes only,
+`LEGACY_UNVERSIONED` enters the chain at the oldest version this contract's migration registry
+defines a starting point for (`PROJECT_SCHEMA_V1`, once fixtures prove today's field set matches
+that version's shape — see §6). This is a dispatch convenience only: the record's *classification*
+remains `LEGACY_UNVERSIONED` for provenance/audit purposes (e.g. logging, telemetry, and any future
+migration-history field) even though the migration registry treats it as starting from
+`PROJECT_SCHEMA_V1`'s step — the two are not the same fact and must not be conflated in anything
+that reports *when* a project was actually last saved by a version-aware build.
+
+### 2.5 Future version and migration gaps: fail closed, no automatic action
 
 ```text
 persisted schemaVersion > this build's current supported version
@@ -160,6 +252,22 @@ state may offer: use a newer WorldScript Studio version; preserve/export the ori
 untouched; a strictly read-only inspection view *only* if write-back is provably impossible from
 that view. No older client may ever save over a newer-versioned project. This mirrors the
 `FutureVersion` philosophy `migrate.rs` already implements for the harness proof.
+`UNSUPPORTED_OLDER`/`MIGRATION_GAP` (§2.4) is enforced identically — the diagnostic shown to the
+user differs ("this project is too old for this build's migration path" vs. "this project requires
+a newer build"), but neither state ever admits write authority.
+
+**Mechanism for disabling save/autosave, not just declaring the rule:** "no write authority" must
+be enforced at the same load-time gate that already blocks the editable application shell on other
+unrecoverable load failures in this codebase (the existing pattern behind `StorageErrorScreen`-style
+recovery screens for corruption/decryption failures) — a `FUTURE`- or `MIGRATION_GAP`-classified
+project never reaches the state that Redux's autosave listener middleware or any manual "Save"
+action operates on in the first place. Concretely: the load path that would normally dispatch a
+successful project-loaded action instead dispatches the corresponding recovery state and stops,
+exactly as it already does for a corrupt or undecryptable project today. There is no separate
+"read-only mode with save disabled" flag to forget to check on every write path; the project is
+simply never admitted into the state those write paths read from. The one exception is the optional
+read-only inspection view named above, which by construction reads from a value that was never
+assigned into the app's normal editable project state.
 
 ### 2.6 Downgrade: never automatic
 
@@ -174,7 +282,7 @@ A single global policy is wrong here: the right answer depends on what kind of f
 
 | Field class | Policy | Why |
 |---|---|---|
-| Persisted data not yet modeled by Core at all (today: `outline`, `binderNodes`, `compileProfile`, `projectGoals`, `writingHistory`) | `OUT_OF_SCOPE_BUT_MUST_NOT_BE_DROPPED` | Core makes no claim about these fields' meaning; it must still never cause them to disappear from the persisted document. |
+| Persisted data not yet modeled by Core at all (today: every `ProjectData` field beyond `title`/`logline`/`author`/`characters`/`worlds`/`manuscript` — see §2.1.1's full inventory) | `OUT_OF_SCOPE_BUT_MUST_NOT_BE_DROPPED` | Core makes no claim about these fields' meaning; it must still never cause them to disappear from the persisted document. |
 | Additive unknown fields inside an object Core *does* claim authority over (e.g. a future field added to `Character`) | `PRESERVE_OPAQUE` | Core understands the object's shape but not every field on it yet; the object round-trips losslessly while the unknown sub-fields wait to be modeled. |
 | An unknown value for a closed, semantically load-bearing discriminant/enum Core must interpret to act correctly | `REJECT_UNKNOWN` | Silently passing through an unrecognized enum value risks Core acting on a wrong interpretation of it — failing closed is safer than opaque pass-through here. |
 | Fields fully modeled and owned by Core today (`title`, `logline`, `characters[].id`, etc.) | `MODEL_AND_VALIDATE` | Already validated per-field; no ambiguity to resolve. |
@@ -194,7 +302,8 @@ is:
 ```text
 persisted project document
         │
-        ├── retained verbatim as the canonical raw JSON value (the lossless carrier)
+        ├── retained as the canonical raw JSON value (the lossless carrier — see §4 for
+        │   exactly what "lossless" does and does not require)
         │
         └── Core produces a typed projection/verdict over only the fields it claims
             authority over today, validated per §3's table
@@ -209,13 +318,62 @@ implementation PR should evaluate `#[serde(flatten)]` per-struct only where a sp
 already fully Core-owned and needs additive-field tolerance (§3's second row) — not as a blanket
 default across the whole graph.
 
+### 3.2 Write-back invariant: how a known-field edit is merged without corrupting the raw carrier
+
+A raw-carrier-plus-typed-projection split (§3.1) is only safe if writing back a change to a *known*
+field has a defined, non-destructive mechanism. The wrong mechanism — "serialize the typed
+projection and use that as the new raw payload" — silently deletes every opaque field the
+projection never carried in the first place, reintroducing exactly the failure §1.4 describes. The
+required mechanism instead merges a change into the existing raw payload without touching the paths
+Core doesn't own:
+
+```text
+raw source generation R
+        │
+        ▼
+typed projection P derived from R (§3.1)
+        │
+        ▼
+Core modifies only paths P admits owning
+        │
+        ▼
+the modified paths are merged/overlaid into a copy of the *same* raw payload R
+        │        (every unowned path in R is carried through unchanged — this is an overlay
+        │         onto R, never a re-serialization of P as if it were the whole document)
+        ▼
+before commit: revalidate that R's source generation has not changed since P was derived
+        │
+        ├── unchanged → proceed
+        │
+        └── changed (another writer committed in the meantime) → FAIL CLOSED, do not
+            merge — never a stale merge onto a generation that is no longer current
+        ▼
+post-merge semantic no-loss verification (§4) against the pre-merge raw payload, restricted
+to the paths that were not supposed to change
+        │
+        ▼
+durable commit
+```
+
+The generation/source-identity check is deliberately the same shape this codebase's own preserve-
+first storage work already uses elsewhere for detecting a stale write target — it is not invented
+new here, only applied to this specific merge. This connects forward to any future multi-writer/
+generation-authority work (see the project's own writer-ownership backlog); this document does not
+implement that work, only ensures the raw-carrier merge step has a defined, fail-closed answer for
+"what if the source moved under me" rather than leaving it undefined until an implementation PR
+has to invent one under time pressure.
+
 ## 4. No-loss round-trip — precise definition
 
 "No loss" means, precisely:
 
-- **Semantic JSON equality**, not byte-for-byte identity — key order and whitespace are not user
-  data and are not part of this guarantee.
-- **Exact preservation of every opaque/unmodeled value**, verbatim.
+- **Semantic JSON equality**, not byte-for-byte identity — key order, whitespace, escape spelling,
+  and numeric-literal formatting are not user data and are not part of this guarantee.
+- **Exact semantic preservation of every opaque/unmodeled value** — same JSON type, same value,
+  same nested structure, same array order, same object membership. "Verbatim" is deliberately not
+  used here: a parsed-and-reserialized JSON value is allowed to differ in whitespace/key-order/
+  escape representation while still satisfying this guarantee, and calling that "verbatim" would
+  contradict the semantic-equality standard stated above.
 - **Array order preservation** for every ordered collection.
 - **Stable ID preservation**, exactly (already proven for `characters`/`worlds` by
   `coreBoundaryAdapter.ts` — see §6).
@@ -229,12 +387,14 @@ Before the current `OBSERVATION_ONLY` shadow comparison may become any productio
 authority, all of the following are required — none are satisfied yet, and this document satisfies
 none of them by existing:
 
-1. Complete field inventory for the admitted lifecycle — every `StoryProject` field is either
-   modeled, or explicitly and deliberately routed through §3's out-of-scope/opaque handling, never
-   merely "not yet gotten to."
+1. Complete field inventory for the admitted lifecycle — every `ProjectData` field in §2.1.1's table
+   is either modeled, or explicitly and deliberately routed through §3's out-of-scope/opaque
+   handling, never merely "not yet gotten to." (Not `StoryProject` alone — see §1.5.)
 2. §2's version classification implemented and exercised against real historical projects, not only
-   the synthetic harness shapes.
-3. No-loss round-trip proof (§4) for every fixture class in §6.
+   the synthetic harness shapes — including a real `UNSUPPORTED_OLDER`/`MIGRATION_GAP` test case
+   once a second real schema version exists to create one.
+3. No-loss round-trip proof (§4) for every fixture class in §6, including the write-back merge
+   invariant (§3.2) under a concurrent-generation-change scenario.
 4. TS/Rust accept/reject parity while both remain active during any transition window.
 5. Rollback/fallback: the TS-authoritative path can still read whatever Rust most recently wrote.
 6. Representative historical fixtures — real project shapes predating this contract, not only
@@ -267,7 +427,7 @@ stable IDs exactly. No change proposed here.
 - Any change to current write authority — TypeScript remains sole authority; Rust's shadow
   comparison remains `OBSERVATION_ONLY`.
 - R-15 (#445)'s encrypted-storage envelope, key management, or migration contract.
-- Modeling every currently-unmodeled `StoryProject` field in Rust immediately — §3 deliberately
+- Modeling every currently-unmodeled `ProjectData` field in Rust immediately — §3 deliberately
   defers that to whenever each field actually graduates to Core-owned authority.
 - Moving Redux reducers into Rust.
 - Redesigning import UX.
@@ -283,13 +443,15 @@ this proposal is treated as admitted:
 | # | Decision | Status |
 |---|---|---|
 | 1 | Persisted `schemaVersion` belongs to the project document itself, distinct from app/IndexedDB/contract/R-15 versions (§1.3, §2.1) | ⬜ awaiting confirmation |
-| 2 | First production version is a fresh `PROJECT_SCHEMA_V1`; Rust's existing harness `1`/`2` is not canonicalized as real project history (§2.2) | ⬜ awaiting confirmation |
-| 3 | Absent version → `LEGACY_UNVERSIONED`, never silently treated as current (§2.3) | ⬜ awaiting confirmation |
-| 4 | Future version → fail closed, no write authority, no auto-migration (§2.5) | ⬜ awaiting confirmation |
-| 5 | Downgrade is never automatic (§2.6) | ⬜ awaiting confirmation |
-| 6 | Unknown-field policy is staged by field class per §3's table, not one global policy | ⬜ awaiting confirmation |
-| 7 | Mechanism: raw canonical payload as lossless carrier + typed Core projection, evaluated per-struct rather than blanket `#[serde(flatten)]` (§3.1) | ⬜ awaiting confirmation |
-| 8 | No-loss definition per §4 (semantic equality, not byte-identical) | ⬜ awaiting confirmation |
+| 2 | **The versioned object is `ProjectData` (the full persisted/Redux surface), not `StoryProject` or the narrower shadow-envelope projection** (§2.1.1) | ⬜ awaiting confirmation |
+| 3 | First production version is a fresh `PROJECT_SCHEMA_V1`, defined against §2.1.1's full field inventory; Rust's existing harness `1`/`2` is not canonicalized as real project history (§2.2) | ⬜ awaiting confirmation |
+| 4 | Absent version → `LEGACY_UNVERSIONED`, never silently treated as current (§2.3) | ⬜ awaiting confirmation |
+| 5 | Version classification is disjoint via strict comparison, with a distinct `UNSUPPORTED_OLDER`/`MIGRATION_GAP` state (mirroring `migrate.rs`'s existing `NoMigrationFrom`) separate from `FUTURE` (§2.4) | ⬜ awaiting confirmation |
+| 6 | Future version and migration gaps both fail closed — no write authority, no auto-migration, no auto-downgrade (§2.5, §2.6) | ⬜ awaiting confirmation |
+| 7 | Unknown-field policy is staged by field class per §3's table, not one global policy | ⬜ awaiting confirmation |
+| 8 | Mechanism: raw canonical payload as lossless carrier + typed Core projection, evaluated per-struct rather than blanket `#[serde(flatten)]` (§3.1) | ⬜ awaiting confirmation |
+| 9 | Write-back merge invariant: known-field edits overlay onto the raw carrier, never re-serialize the typed projection as the whole document; fail closed on a source-generation change since the projection was derived (§3.2) | ⬜ awaiting confirmation |
+| 10 | No-loss definition per §4 (semantic equality, not byte-identical; "verbatim" is not used) | ⬜ awaiting confirmation |
 
 Once confirmed, this document's status line updates to `ADMITTED = YES` and
 `CORE-MIGRATION-LEDGER.md` row 9 is updated to reflect it, per issue #553's own acceptance
