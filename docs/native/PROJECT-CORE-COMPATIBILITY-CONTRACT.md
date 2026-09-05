@@ -2,12 +2,13 @@
 
 **Issue:** [#553](https://github.com/qnbs/WorldScript-Studio/issues/553)
 
-**Status:** PROPOSAL — awaiting maintainer sign-off in §9. `PROPOSED = YES`,
-`ADMITTED = NO (pending review)`, `IMPLEMENTATION_STARTED = NO`. This document changes no code and
-switches no authority. It resolves the two decisions that `CORE-MIGRATION-LEDGER.md` row 9 and
-issue `#553` both identify as blocking further work on the Wave 2 project state-shape compatibility
-adapter — and, transitively, the Wave 2 prerequisite gate that R-15 (`#445`) implementation sits
-behind.
+**Status:** ADMITTED — maintainer-approved at the contract/design level, including §9's decision
+rows 1–19 and the post-signoff refinements recorded below them. `PROPOSED = YES`, `ADMITTED = YES`,
+`IMPLEMENTATION_STARTED = NO`. This document changes no code and switches no authority. It resolves
+the two decisions that `CORE-MIGRATION-LEDGER.md` row 9 and issue `#553` both identify as blocking
+further work on the Wave 2 project state-shape compatibility adapter — and, transitively, the Wave 2
+prerequisite gate that R-15 (`#445`) implementation sits behind. Implementation begins only in a
+separate, subsequent PR per issue `#553`'s own slices.
 
 **Baseline:** `main` at `f490360bab26bc068164d6226a03898b797b8e40`
 
@@ -746,25 +747,25 @@ this proposal is treated as admitted:
 
 | # | Decision | Status |
 |---|---|---|
-| 1 | Persisted `schemaVersion` belongs to the project document itself, distinct from app/IndexedDB/contract/R-15 versions (§1.3, §2.1) | ⬜ awaiting confirmation |
-| 2 | **The versioned object is `ProjectData` (the full persisted/Redux surface), not `StoryProject` or the narrower shadow-envelope projection** (§2.1.1) | ⬜ awaiting confirmation |
-| 3 | First production version is a fresh `PROJECT_SCHEMA_V1`, defined against §2.1.1's full field inventory; Rust's existing harness `1`/`2` is not canonicalized as real project history (§2.2) | ⬜ awaiting confirmation |
-| 4 | Absent version → `LEGACY_UNVERSIONED`, never silently treated as current (§2.3) | ⬜ awaiting confirmation |
-| 5 | Version classification is disjoint via strict comparison, with a distinct `UNSUPPORTED_OLDER`/`MIGRATION_GAP` state (mirroring `migrate.rs`'s existing `NoMigrationFrom`) separate from `FUTURE` (§2.4) | ⬜ awaiting confirmation |
-| 6 | Future version and migration gaps both fail closed — no write authority, no auto-migration, no auto-downgrade (§2.5, §2.6) | ⬜ awaiting confirmation |
-| 7 | Unknown-field policy is staged by field class per §3's table, not one global policy | ⬜ awaiting confirmation |
-| 8 | Mechanism: raw canonical payload as lossless carrier + typed Core projection, evaluated per-struct rather than blanket `#[serde(flatten)]` (§3.1) | ⬜ awaiting confirmation |
-| 9 | Write-back merge invariant: known-field edits overlay onto the raw carrier, never re-serialize the typed projection as the whole document; fail closed on a source-generation change since the projection was derived (§3.2) | ⬜ awaiting confirmation |
-| 10 | No-loss definition per §4 (semantic equality, not byte-identical; "verbatim" is not used) | ⬜ awaiting confirmation |
-| 11 | `LEGACY_UNVERSIONED` migrates via its own explicit, registered `LEGACY_TO_V1` step (recognize → verify → stamp → no-loss-verify → commit) — never an implicit alias into `PROJECT_SCHEMA_V1`'s dispatch point with no step actually executing | ⬜ awaiting confirmation |
-| 12 | Pre-contract downgrade safety (§2.7): once migrated, a project's schema-aware canonical record can never be superseded by a mutated pre-contract-shaped copy through ordinary save/autosave; the exact storage mechanism is left to the implementation PR, but the invariant itself is fixed here | ⬜ awaiting confirmation |
-| 13 | `MALFORMED` recovery must be brought to genuine preserve-first behavior on the web/IDB backend (§2.4's correction) — the current `index.tsx` path (delete the project key, boot blank, allow autosave to overwrite the original) is not already-correct behavior this contract can assume | ⬜ awaiting confirmation |
-| 14 | Version classification reads `schemaVersion` via a minimal raw/header parse before any full typed deserialization, so a `FUTURE` document with a breaking shape change still classifies as `FUTURE`, never `MALFORMED` (§2.4) | ⬜ awaiting confirmation |
-| 15 | Write-back merge verification is two-sided: unowned paths checked for no-loss *and* owned paths re-projected and confirmed to equal the intended edit — not opaque-paths-only (§3.2) | ⬜ awaiting confirmation |
-| 16 | Generation revalidation and commit are one atomic, fenced operation (compare-and-swap or an exclusive lease spanning both) — never a check-then-act pair with a window another writer can land in (§3.2) | ⬜ awaiting confirmation |
-| 17 | Universal ingress admission (§2.8): classification and schema admission apply to every ingress producing editable project state — not only the primary load path — naming stored-project load, filesystem load, IDB load, file/backup import, snapshot restore, recovery restore, and future native/Qt open as examples; concrete per-path changes are `IMPLEMENTATION_REQUIRED` | ⬜ awaiting confirmation |
-| 18 | Identity-bearing collections (`characters`, `worlds`, equivalents) merge by stable entity ID, never array index or enumeration position (§3.2); concrete merge implementation is `IMPLEMENTATION_REQUIRED` | ⬜ awaiting confirmation |
-| 19 | Schema version-bump policy (§2.9): required-field additions, removals/renames, type changes, incompatible semantic/invariant changes, non-additive closed-discriminant changes, and identity/order semantic changes all require a bump; this classification is a permanent release invariant, evaluated for every future format change | ⬜ awaiting confirmation |
+| 1 | Persisted `schemaVersion` belongs to the project document itself, distinct from app/IndexedDB/contract/R-15 versions (§1.3, §2.1) | ✅ confirmed |
+| 2 | **The versioned object is `ProjectData` (the full persisted/Redux surface), not `StoryProject` or the narrower shadow-envelope projection** (§2.1.1) | ✅ confirmed |
+| 3 | First production version is a fresh `PROJECT_SCHEMA_V1`, defined against §2.1.1's full field inventory; Rust's existing harness `1`/`2` is not canonicalized as real project history (§2.2) | ✅ confirmed |
+| 4 | Absent version → `LEGACY_UNVERSIONED`, never silently treated as current (§2.3) | ✅ confirmed |
+| 5 | Version classification is disjoint via strict comparison, with a distinct `UNSUPPORTED_OLDER`/`MIGRATION_GAP` state (mirroring `migrate.rs`'s existing `NoMigrationFrom`) separate from `FUTURE` (§2.4) | ✅ confirmed |
+| 6 | Future version and migration gaps both fail closed — no write authority, no auto-migration, no auto-downgrade (§2.5, §2.6) | ✅ confirmed |
+| 7 | Unknown-field policy is staged by field class per §3's table, not one global policy | ✅ confirmed |
+| 8 | Mechanism: raw canonical payload as lossless carrier + typed Core projection, evaluated per-struct rather than blanket `#[serde(flatten)]` (§3.1) | ✅ confirmed |
+| 9 | Write-back merge invariant: known-field edits overlay onto the raw carrier, never re-serialize the typed projection as the whole document; fail closed on a source-generation change since the projection was derived (§3.2) | ✅ confirmed |
+| 10 | No-loss definition per §4 (semantic equality, not byte-identical; "verbatim" is not used) | ✅ confirmed |
+| 11 | `LEGACY_UNVERSIONED` migrates via its own explicit, registered `LEGACY_TO_V1` step (recognize → verify → stamp → no-loss-verify → commit) — never an implicit alias into `PROJECT_SCHEMA_V1`'s dispatch point with no step actually executing | ✅ confirmed |
+| 12 | Pre-contract downgrade safety (§2.7): once migrated, a project's schema-aware canonical record can never be superseded by a mutated pre-contract-shaped copy through ordinary save/autosave; the exact storage mechanism is left to the implementation PR, but the invariant itself is fixed here | ✅ confirmed |
+| 13 | `MALFORMED` recovery must be brought to genuine preserve-first behavior on the web/IDB backend (§2.4's correction) — the current `index.tsx` path (delete the project key, boot blank, allow autosave to overwrite the original) is not already-correct behavior this contract can assume | ✅ confirmed |
+| 14 | Version classification reads `schemaVersion` via a minimal raw/header parse before any full typed deserialization, so a `FUTURE` document with a breaking shape change still classifies as `FUTURE`, never `MALFORMED` (§2.4) | ✅ confirmed |
+| 15 | Write-back merge verification is two-sided: unowned paths checked for no-loss *and* owned paths re-projected and confirmed to equal the intended edit — not opaque-paths-only (§3.2) | ✅ confirmed |
+| 16 | Generation revalidation and commit are one atomic, fenced operation (compare-and-swap or an exclusive lease spanning both) — never a check-then-act pair with a window another writer can land in (§3.2) | ✅ confirmed |
+| 17 | Universal ingress admission (§2.8): classification and schema admission apply to every ingress producing editable project state — not only the primary load path — naming stored-project load, filesystem load, IDB load, file/backup import, snapshot restore, recovery restore, and future native/Qt open as examples; concrete per-path changes are `IMPLEMENTATION_REQUIRED` | ✅ confirmed |
+| 18 | Identity-bearing collections (`characters`, `worlds`, equivalents) merge by stable entity ID, never array index or enumeration position (§3.2); concrete merge implementation is `IMPLEMENTATION_REQUIRED` | ✅ confirmed |
+| 19 | Schema version-bump policy (§2.9): required-field additions, removals/renames, type changes, incompatible semantic/invariant changes, non-additive closed-discriminant changes, and identity/order semantic changes all require a bump; this classification is a permanent release invariant, evaluated for every future format change | ✅ confirmed |
 
 **Implementation status of concrete mechanics named in this document** (tracked here so "admitted as
 a contract invariant" is never mistaken for "already implemented"): the specific code changes for
@@ -789,6 +790,6 @@ verified against three live export/backup call sites; and migration backup reten
 §7). None of these required a new product/security/legal decision or contradicted any of rows 1–19
 as approved; each is recorded inline at its section rather than as a new numbered row.
 
-Once confirmed, this document's status line updates to `ADMITTED = YES` and
+All 19 rows above are confirmed. This document's status line reflects `ADMITTED = YES` and
 `CORE-MIGRATION-LEDGER.md` row 9 is updated to reflect it, per issue `#553`'s own acceptance
 criterion. Implementation begins only in a separate, subsequent PR.
