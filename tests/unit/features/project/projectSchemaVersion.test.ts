@@ -13,6 +13,18 @@ describe('classifyRawProjectVersion', () => {
     );
   });
 
+  it('treats a schemaVersion inherited only via a polluted Object.prototype as genuinely absent', () => {
+    const objectProto = Object.prototype as Record<string, unknown>;
+    objectProto.schemaVersion = CURRENT_PROJECT_SCHEMA_VERSION;
+    try {
+      expect(classifyRawProjectVersion(JSON.stringify({ title: 'Old Project' }))).toBe(
+        'LEGACY_UNVERSIONED',
+      );
+    } finally {
+      delete objectProto.schemaVersion;
+    }
+  });
+
   it('classifies the current version as CURRENT', () => {
     expect(
       classifyRawProjectVersion(JSON.stringify({ schemaVersion: CURRENT_PROJECT_SCHEMA_VERSION })),

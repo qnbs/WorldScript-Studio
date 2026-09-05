@@ -177,7 +177,8 @@ export function classifyRawProjectVersion(rawText: string): ProjectVersionClassi
   const record = tryParseJsonObject(rawText);
   if (record === null) return 'MALFORMED';
   if (hasDuplicateTopLevelKey(rawText, 'schemaVersion')) return 'MALFORMED';
-  if (!('schemaVersion' in record)) return 'LEGACY_UNVERSIONED';
+  // QNBS-v3: Object.hasOwn (not `in`) so a polluted Object.prototype.schemaVersion can never make a genuinely absent field look present.
+  if (!Object.hasOwn(record, 'schemaVersion')) return 'LEGACY_UNVERSIONED';
 
   const value = record['schemaVersion'];
   if (!isValidSchemaVersionValue(value)) return 'MALFORMED';
