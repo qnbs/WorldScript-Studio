@@ -166,8 +166,16 @@ enum RawHeaderScan {
     },
 }
 
+/// JSON (RFC 8259) permits exactly four whitespace code points between tokens: space, tab, LF,
+/// CR. `u8::is_ascii_whitespace` is broader (it also accepts form feed and vertical tab), which
+/// would let Rust accept a document `JSON.parse` rejects on the TS side — a real parity break,
+/// not a hypothetical one.
+fn is_json_whitespace(b: u8) -> bool {
+    matches!(b, b' ' | b'\t' | b'\n' | b'\r')
+}
+
 fn skip_ws(bytes: &[u8], mut i: usize) -> usize {
-    while matches!(bytes.get(i), Some(b) if b.is_ascii_whitespace()) {
+    while matches!(bytes.get(i), Some(&b) if is_json_whitespace(b)) {
         i += 1;
     }
     i
@@ -199,7 +207,7 @@ fn scan_raw_header(raw_text: &str) -> RawHeaderScan {
     loop {
         i = skip_ws(bytes, i);
         let Some(frame) = stack.last().copied() else {
-            return if raw_text[i..].bytes().all(|b| b.is_ascii_whitespace()) {
+            return if raw_text[i..].bytes().all(is_json_whitespace) {
                 RawHeaderScan::Object {
                     schema_version,
                     schema_version_key_count,
@@ -227,12 +235,11 @@ fn scan_raw_header(raw_text: &str) -> RawHeaderScan {
                     return RawHeaderScan::Invalid;
                 };
                 if stack.len() == 1 {
-                    let Some(decoded) = decode_json_string_literal(&raw_text[i..key_end]) else {
-                        return RawHeaderScan::Invalid;
-                    };
-                    if decoded == "schemaVersion" {
+                    // QNBS-v3: an unrelated key with a lone UTF-16 surrogate has no valid UTF-8 form and fails to decode, but that only proves it isn't "schemaVersion" - must not fail the whole scan.
+                    let decoded = decode_json_string_literal(&raw_text[i..key_end]);
+                    if decoded.as_deref() == Some("schemaVersion") {
                         schema_version_key_count += 1;
-                        pending_top_level_key = Some(decoded);
+                        pending_top_level_key = decoded;
                     } else {
                         pending_top_level_key = None;
                     }
@@ -611,6 +618,26 @@ mod tests {
         assert_eq!(
             classify_raw_project_version(&raw),
             ProjectVersionClassification::Malformed
+        );
+    }
+
+    #[test]
+    fn form_feed_between_tokens_is_malformed_not_whitespace() {
+        // QNBS-v3: JSON permits only space/tab/LF/CR as insignificant whitespace; Rust's is_ascii_whitespace() also accepts form feed, which JSON.parse rejects - would have been a parity break.
+        let raw = format!("{{\"schemaVersion\"\u{0C}: {CURRENT_PROJECT_SCHEMA_VERSION}}}");
+        assert_eq!(
+            classify_raw_project_version(&raw),
+            ProjectVersionClassification::Malformed
+        );
+    }
+
+    #[test]
+    fn unrelated_key_with_a_lone_surrogate_escape_does_not_fail_the_whole_document() {
+        // QNBS-v3: \uD800 is a lone UTF-16 surrogate - valid per JS's JSON.parse, but has no UTF-8 form, so decoding it must not abort classification of an otherwise-valid document.
+        let raw = format!(r#"{{"schemaVersion": {CURRENT_PROJECT_SCHEMA_VERSION}, "\uD800": 0}}"#);
+        assert_eq!(
+            classify_raw_project_version(&raw),
+            ProjectVersionClassification::Current
         );
     }
 
