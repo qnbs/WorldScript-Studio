@@ -88,7 +88,8 @@ async function trimCache(cacheName, maxEntries) {
 // ── Offline fallback per resource type ───────────────────────
 async function offlineFallback(request) {
   if (request.destination === 'document') {
-    const cached = await caches.match(`${BASE}offline.html`);
+    // QNBS-v3: scoped to CACHE_STATIC (where offline.html is precached) — an unscoped caches.match() searches every cache on the shared qnbs.github.io origin, not just this app's own.
+    const cached = await caches.match(`${BASE}offline.html`, { cacheName: CACHE_STATIC });
     return cached || new Response('<!doctype html><title>Offline</title><p>WorldScript Studio ist offline.</p>', {
       headers: { 'Content-Type': 'text/html' },
       status: 503,
@@ -241,7 +242,8 @@ self.addEventListener('fetch', (event) => {
     (request.destination === 'script' || request.destination === 'style')
   ) {
     event.respondWith(
-      caches.match(request).then((cached) => {
+      // QNBS-v3: scoped to CACHE_STATIC (where the network path below stores it) — same shared-origin rationale as offlineFallback's fix above.
+      caches.match(request, { cacheName: CACHE_STATIC }).then((cached) => {
         const networkFetch = fetch(request).then((response) => {
           if (response.ok) {
             caches.open(CACHE_STATIC).then((c) => c.put(request, response.clone()));
@@ -290,8 +292,9 @@ self.addEventListener('fetch', (event) => {
           return response;
         })
         .catch(async () =>
-          (await caches.match(request)) ||
-          (await caches.match(`${BASE}index.html`)) ||
+          // QNBS-v3: each lookup scoped to the cache it's actually written to (CACHE_DYNAMIC for the navigated URL, CACHE_STATIC for the precached SPA shell) — same shared-origin rationale as above.
+          (await caches.match(request, { cacheName: CACHE_DYNAMIC })) ||
+          (await caches.match(`${BASE}index.html`, { cacheName: CACHE_STATIC })) ||
           offlineFallback(request)
         )
     );
