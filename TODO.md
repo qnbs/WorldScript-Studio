@@ -8,12 +8,49 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ---
 
-## Current Sprint — Post-#477 reconstruction reconciliation, Dependabot, and documentation truth (2026-08-26)
+## Current Sprint — Release truth reconciliation and R-15 desktop at-rest encryption priority (2026-09-05)
 
 > **Status: 🔄 in progress.** The authoritative native sequence remains
 > [`docs/native/ROADMAP-QT-GPUI-DESKTOP.md`](docs/native/ROADMAP-QT-GPUI-DESKTOP.md), with the
-> next Rust-Core capability choice recorded in [`docs/native/CORE-MIGRATION-LEDGER.md`](docs/native/CORE-MIGRATION-LEDGER.md);
-> no Qt or GPUI implementation work is part of this sprint.
+> next Rust-Core capability choice recorded in [`docs/native/CORE-MIGRATION-LEDGER.md`](docs/native/CORE-MIGRATION-LEDGER.md).
+> R-15 (desktop at-rest encryption) design work is complete — S5-A/B1/B2/B3 are all admitted — but
+> [`docs/native/DESKTOP-MIGRATION-ROADMAP-REV3.md`](docs/native/DESKTOP-MIGRATION-ROADMAP-REV3.md)
+> explicitly forbids pulling Wave 3/4 R-15 **implementation** ahead of unresolved Wave 2 authority
+> prerequisites, and the ledger's row 10 records `S5_IMPLEMENTATION_READY=NO`. This sprint's
+> desktop-storage work is therefore the still-open Wave 2 prerequisite (ledger row 9: the
+> project state-shape compatibility adapter), not R-15 implementation itself. No Qt or GPUI
+> implementation work is part of this sprint.
+
+- ✅ `v1.28.2` (2026-08-27) and `v1.28.3` (2026-08-27) released, closing out the prior sprint's
+  accumulated reconstruction-reconciliation and documentation-truth work.
+- ✅ PWA first-install unprompted-reload fix (#585, PR #613) and shared-origin service-worker
+  cache-read isolation fix (#514, PR #612) merged.
+- ✅ WCAG AA contrast + `prefers-reduced-motion` cascade fix and default-appearance-preset change
+  (#565, PR #609); ManuscriptEditor contrast fix (#341, PR #560).
+- ✅ Preserve-first desktop corruption recovery (PR #542) and a distinct filesystem-I/O recovery
+  action (PR #545) landed.
+- ✅ Visual regression testing repaired — baselines previously pointed at directory listings, not
+  the application (PR #610).
+- 🔄 `v1.28.4` release cut in progress: version/`CHANGELOG.md`/`TODO.md`/`README.md`
+  reconciliation for everything merged since `v1.28.3` is in PR #615. Tag, GitHub Release, release
+  artifacts, and the post-release `AUDIT.md` evidence entry all remain pending until after that PR
+  merges and post-merge main CI/CodeQL are green.
+- ⬜ Close the outstanding Wave 2 prerequisite (ledger row 9: project state-shape compatibility
+  adapter) — currently in progress, not complete. Wave 3/4 R-15 implementation stays blocked
+  (`S5_IMPLEMENTATION_READY=NO`) until this and `S5_TERMINAL=YES` are both true.
+- ⬜ #614 (narrow concurrent-first-install multi-tab race, requires cross-tab coordination) and
+  #532 (WelcomePortal E2E entry nondeterminism root cause) remain open, tracked separately —
+  not part of this sprint unless they directly block release or R-15 work.
+
+## Archived sprint history
+
+The completed release and infrastructure sections below are retained for provenance. They are not
+the current sprint plan; long-term native sequencing belongs in the linked roadmap and ledger.
+
+## Archived — Post-#477 reconstruction reconciliation, Dependabot, and documentation truth (2026-08-26)
+
+> **Status: ✅ Superseded by the current sprint above.** The release this section's final bullet
+> anticipated shipped as `v1.28.2` and `v1.28.3` (2026-08-27).
 
 - ✅ PR #477 (Qt/PWA architecture-governance roadmap) merged; `v1.28.1` released 2026-08-23.
 - ✅ Reconstruction reconciliation: the frozen PR #491 bundle's three genuinely-still-required
@@ -27,14 +64,6 @@ Status: 🔄 in progress | ⬜ open | ✅ done
   test-oracle fix for the hardcoded SHA it changed) and #496 (`docker/setup-buildx-action`
   4.2.0→4.3.0) merged.
 - ✅ Documentation truth pass (`AUDIT.md`/`TODO.md`, this update).
-- 🔄 A new release cut for this sprint's accumulated work (reconstruction reconciliation,
-  Dependabot integration, this documentation pass) remains open — a new version, not a repeat of
-  the already-published `v1.28.1` above.
-
-## Archived sprint history
-
-The completed release and infrastructure sections below are retained for provenance. They are not
-the current sprint plan; long-term native sequencing belongs in the linked roadmap and ledger.
 
 ## Archived — Native desktop consolidation and Wave 2 G1 (2026-08-20)
 
