@@ -14,14 +14,19 @@ describe('classifyRawProjectVersion', () => {
   });
 
   it('treats a schemaVersion inherited only via a polluted Object.prototype as genuinely absent', () => {
-    const objectProto = Object.prototype as Record<string, unknown>;
-    objectProto['schemaVersion'] = CURRENT_PROJECT_SCHEMA_VERSION;
+    // QNBS-v3: non-enumerable so this simulated pollution stays invisible to any concurrent for...in iteration (e.g. Vitest/expect internals) during the assertion.
+    Object.defineProperty(Object.prototype, 'schemaVersion', {
+      value: CURRENT_PROJECT_SCHEMA_VERSION,
+      configurable: true,
+      enumerable: false,
+      writable: true,
+    });
     try {
       expect(classifyRawProjectVersion(JSON.stringify({ title: 'Old Project' }))).toBe(
         'LEGACY_UNVERSIONED',
       );
     } finally {
-      delete objectProto['schemaVersion'];
+      delete (Object.prototype as Record<string, unknown>)['schemaVersion'];
     }
   });
 
@@ -116,33 +121,40 @@ describe('classifyRawProjectVersion', () => {
   });
 
   it('accepts schemaVersion at the JS-safe-integer boundary (2^53 - 1)', () => {
+    // QNBS-v3: the largest integer both f64/JS Number and Rust can represent exactly - the joint admission-domain ceiling.
     expect(classifyRawProjectVersion('{"schemaVersion": 9007199254740991}')).toBe('FUTURE');
   });
 
   it('classifies schemaVersion one past the JS-safe-integer boundary as MALFORMED', () => {
+    // QNBS-v3: beyond 2^53-1, f64/Number can no longer represent every integer exactly, so TS and Rust could silently disagree - reject rather than risk divergence.
     expect(classifyRawProjectVersion('{"schemaVersion": 9007199254740992}')).toBe('MALFORMED');
   });
 
   it('classifies schemaVersion far beyond the JS-safe-integer boundary as MALFORMED', () => {
+    // QNBS-v3: u64::MAX-scale literals must fail the same domain check as the boundary+1 case above, not merely near it.
     expect(classifyRawProjectVersion('{"schemaVersion": 18446744073709551615}')).toBe('MALFORMED');
   });
 
   it('classifies a missing comma between fields as MALFORMED (real JSON.parse, matches Rust)', () => {
+    // QNBS-v3: proves Rust's non-recursive scanner validates real JSON grammar, not just brace/bracket balance - this is the TS-side parity lock for that fix.
     const raw = `{"schemaVersion": ${CURRENT_PROJECT_SCHEMA_VERSION} "x": 3}`;
     expect(classifyRawProjectVersion(raw)).toBe('MALFORMED');
   });
 
   it('classifies an invalid escape in an unrelated field as MALFORMED', () => {
+    // QNBS-v3: an invalid escape anywhere in the document must reject, even in a field the classifier never otherwise inspects.
     const raw = `{"schemaVersion": ${CURRENT_PROJECT_SCHEMA_VERSION}, "x": "\\q"}`;
     expect(classifyRawProjectVersion(raw)).toBe('MALFORMED');
   });
 
   it('classifies a trailing comma before the closing brace as MALFORMED', () => {
+    // QNBS-v3: real JSON forbids a trailing comma; the parity fix must reject it like JSON.parse does.
     const raw = `{"schemaVersion": ${CURRENT_PROJECT_SCHEMA_VERSION},}`;
     expect(classifyRawProjectVersion(raw)).toBe('MALFORMED');
   });
 
   it('classifies a deeply nested but syntactically invalid unrelated value as MALFORMED', () => {
+    // QNBS-v3: proves the non-recursive scanner still validates full JSON grammar at depth (leading zero "01" is not a valid JSON number), not merely brace balance.
     const depth = 256;
     const raw = `{"schemaVersion": ${CURRENT_PROJECT_SCHEMA_VERSION + 1}, "unrelated": ${'['.repeat(depth)}01${']'.repeat(depth)}}`;
     expect(classifyRawProjectVersion(raw)).toBe('MALFORMED');
