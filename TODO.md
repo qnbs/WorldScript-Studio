@@ -33,8 +33,8 @@ Status: 🔄 in progress | ⬜ open | ✅ done
   the application (PR #610).
 - ✅ `v1.28.4` released (PR #615, tag+release published 2026-09-05): version/`CHANGELOG.md`/
   `TODO.md`/`README.md` reconciled, `v1.28.4` tag and GitHub Release published with all expected
-  Desktop artifacts, post-merge main and tag-triggered CI/CodeQL/Tauri/Docker all green, and
-  `AUDIT.md` updated with real evidence.
+  Desktop artifacts; post-merge main CI and CodeQL green (CodeQL has no tag trigger), tag-triggered
+  CI/Tauri/Docker all green, and `AUDIT.md` updated with real evidence.
 - ⬜ Close the outstanding Wave 2 prerequisite (ledger row 9: project state-shape compatibility
   adapter) — currently in progress, not complete. Wave 3/4 R-15 implementation stays blocked
   (`S5_IMPLEMENTATION_READY=NO`) until this and `S5_TERMINAL=YES` are both true.
