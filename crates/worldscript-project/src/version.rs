@@ -34,210 +34,377 @@ pub enum ProjectVersionClassification {
     Malformed,
 }
 
-/// Advances past a JSON string literal starting at `start` (byte index of the opening `"`).
-/// Returns the byte index just past the matching closing `"`. Does not decode escapes — an
-/// escaped character (including an escaped quote, `\"`) is always exactly 2 bytes starting with
-/// `\`, so unconditionally skipping 2 bytes on any backslash can never mistake an escaped quote
-/// for the literal's real terminator, regardless of which character is escaped.
-fn skip_json_string_literal(bytes: &[u8], start: usize) -> usize {
-    let mut i = start + 1;
-    while i < bytes.len() {
-        match bytes[i] {
-            b'\\' => i += 2,
-            b'"' => return i + 1,
-            _ => i += 1,
-        }
-    }
-    i
-}
-
 /// Decodes a JSON string literal's escape sequences by delegating to `serde_json`'s own string
 /// grammar, rather than reimplementing Unicode escape decoding (including surrogate pairs) by
-/// hand.
+/// hand. Only used once a literal has already been *validated* by [`validate_json_string`], so
+/// this always succeeds on a well-formed slice.
 fn decode_json_string_literal(literal_with_quotes: &str) -> Option<String> {
     serde_json::from_str::<String>(literal_with_quotes).ok()
 }
 
-/// Collects the *decoded* name of every JSON object key at the outermost (depth-1) object level
-/// of `raw_text`, in source order — decoded per JSON string-escape rules, not raw source
-/// spelling, so an escaped key like `"schemaVersion"` is correctly recognized as
-/// `schemaVersion` rather than silently missed by a literal-byte comparison. Assumes `raw_text`
-/// already parsed successfully as a JSON object (caller's responsibility).
-fn top_level_object_keys(raw_text: &str) -> Vec<String> {
-    let bytes = raw_text.as_bytes();
-    let mut depth: i32 = 0;
-    let mut keys = Vec::new();
-    let mut i = 0usize;
-
-    while i < bytes.len() {
-        if bytes[i] == b'"' {
-            let string_start = i;
-            i = skip_json_string_literal(bytes, i);
-            if depth == 1 {
-                let mut j = i;
-                while j < bytes.len() && bytes[j].is_ascii_whitespace() {
-                    j += 1;
-                }
-                if bytes.get(j) == Some(&b':') {
-                    if let Some(decoded) = decode_json_string_literal(&raw_text[string_start..i]) {
-                        keys.push(decoded);
+/// Validates and skips exactly one JSON string literal starting at `start` (the opening `"`).
+/// Returns the byte index just past the matching closing `"`, or `None` if the literal is not
+/// valid JSON: an unterminated string, a raw (unescaped) control character, an escape character
+/// outside JSON's fixed set (`" \ / b f n r t u`), or a `\u` escape without exactly 4 hex digits.
+/// This is what lets the header scan reject `{"schemaVersion":2,"x":"\q"}` as `Malformed` rather
+/// than silently accepting an invalid escape in a field the scanner never otherwise inspects.
+fn validate_json_string(bytes: &[u8], start: usize) -> Option<usize> {
+    let mut i = start + 1;
+    loop {
+        match *bytes.get(i)? {
+            b'"' => return Some(i + 1),
+            b'\\' => match *bytes.get(i + 1)? {
+                b'"' | b'\\' | b'/' | b'b' | b'f' | b'n' | b'r' | b't' => i += 2,
+                b'u' => {
+                    for k in 0..4 {
+                        if !bytes.get(i + 2 + k)?.is_ascii_hexdigit() {
+                            return None;
+                        }
                     }
+                    i += 6;
                 }
-            }
-            continue;
+                _ => return None,
+            },
+            0x00..=0x1F => return None,
+            _ => i += 1,
         }
-        match bytes[i] {
-            b'{' | b'[' => depth += 1,
-            b'}' | b']' => depth -= 1,
-            _ => {}
-        }
+    }
+}
+
+/// Validates and skips exactly one JSON number literal starting at `start`, per RFC 8259's
+/// number grammar (`-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?`). Returns the index just past
+/// it, or `None` if `start` is not the beginning of a syntactically valid number.
+fn validate_json_number(bytes: &[u8], start: usize) -> Option<usize> {
+    let mut i = start;
+    if bytes.get(i) == Some(&b'-') {
         i += 1;
     }
-    keys
-}
-
-/// True when `key` appears more than once as a property name at the outermost object level of
-/// `raw_text`. `serde_json::Value`'s default map (like JS's `JSON.parse`) silently keeps only the
-/// last occurrence of a duplicate key, so detecting a duplicate must run on the raw text.
-fn has_duplicate_top_level_key(raw_text: &str, key: &str) -> bool {
-    top_level_object_keys(raw_text)
-        .iter()
-        .filter(|found| found.as_str() == key)
-        .count()
-        > 1
-}
-
-/// Skips exactly one JSON value starting at `start` (its first non-whitespace byte), returning
-/// the index just past it. Nested objects/arrays are skipped by brace/bracket depth counting,
-/// never by deserializing them — this is what lets [`scan_raw_header`] survive arbitrarily deep
-/// nesting in a value that isn't `schemaVersion` without hitting `serde_json`'s recursion limit.
-fn skip_json_value(bytes: &[u8], start: usize) -> usize {
-    match bytes.get(start) {
-        Some(b'"') => skip_json_string_literal(bytes, start),
-        Some(b'{') | Some(b'[') => {
-            let mut depth = 1i32;
-            let mut i = start + 1;
-            while i < bytes.len() && depth > 0 {
-                if bytes[i] == b'"' {
-                    i = skip_json_string_literal(bytes, i);
-                    continue;
-                }
-                match bytes[i] {
-                    b'{' | b'[' => depth += 1,
-                    b'}' | b']' => depth -= 1,
-                    _ => {}
-                }
+    match bytes.get(i)? {
+        b'0' => i += 1,
+        b'1'..=b'9' => {
+            i += 1;
+            while matches!(bytes.get(i), Some(b'0'..=b'9')) {
                 i += 1;
             }
-            i
         }
-        _ => {
-            let mut i = start;
-            while i < bytes.len()
-                && !matches!(bytes[i], b',' | b'}' | b']')
-                && !bytes[i].is_ascii_whitespace()
-            {
-                i += 1;
-            }
-            i
-        }
+        _ => return None,
     }
+    if bytes.get(i) == Some(&b'.') {
+        let digits_start = i + 1;
+        let mut j = digits_start;
+        while matches!(bytes.get(j), Some(b'0'..=b'9')) {
+            j += 1;
+        }
+        if j == digits_start {
+            return None;
+        }
+        i = j;
+    }
+    if matches!(bytes.get(i), Some(b'e') | Some(b'E')) {
+        let mut j = i + 1;
+        if matches!(bytes.get(j), Some(b'+') | Some(b'-')) {
+            j += 1;
+        }
+        let digits_start = j;
+        while matches!(bytes.get(j), Some(b'0'..=b'9')) {
+            j += 1;
+        }
+        if j == digits_start {
+            return None;
+        }
+        i = j;
+    }
+    Some(i)
 }
 
-/// Outcome of [`scan_raw_header`]: whether the input is even shaped like a top-level JSON
-/// object, and if so, the raw text span of its `schemaVersion` value (the *last* occurrence if
-/// duplicated — duplicate rejection is [`has_duplicate_top_level_key`]'s separate job).
+/// Validates that `bytes` contains exactly `keyword` starting at `start` (used for JSON's three
+/// fixed literals: `true`, `false`, `null`).
+fn validate_json_keyword(bytes: &[u8], start: usize, keyword: &[u8]) -> Option<usize> {
+    let end = start.checked_add(keyword.len())?;
+    (bytes.get(start..end) == Some(keyword)).then_some(end)
+}
+
+/// A container frame on the explicit, heap-allocated parser stack — used instead of recursive
+/// descent so that document nesting depth is bounded only by available memory, never by the
+/// call stack, and cannot hit `serde_json`'s (or any recursive parser's) fixed recursion limit.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Frame {
+    /// Expecting a key string, or `}` if `at_start` (an empty object, or nothing parsed yet).
+    ObjectKey {
+        at_start: bool,
+    },
+    ObjectColon,
+    ObjectValue,
+    ObjectCommaOrEnd,
+    /// Expecting a value, or `]` if `at_start` (an empty array, or nothing parsed yet).
+    ArrayValue {
+        at_start: bool,
+    },
+    ArrayCommaOrEnd,
+}
+
+/// What was found for the top-level `schemaVersion` key, if present. A container value
+/// (object/array) is recorded as `NonScalar` without capturing its span, since it is invalid for
+/// `schemaVersion` regardless of its exact shape, so nothing downstream ever needs its precise
+/// byte range.
+enum SchemaVersionSighting {
+    Scalar(usize, usize),
+    NonScalar,
+}
+
+/// Outcome of [`scan_raw_header`].
 enum RawHeaderScan {
     NotAnObject,
-    Unbalanced,
+    /// Truncated, unbalanced, or contains a genuine JSON syntax error anywhere in the document
+    /// (invalid escape, malformed number, bad keyword, missing comma/colon, trailing garbage).
+    Invalid,
     Object {
-        schema_version_span: Option<(usize, usize)>,
+        /// `None` if absent, `Some` for the *last* occurrence if the key is duplicated —
+        /// duplicate rejection is tracked separately via `schema_version_key_count`.
+        schema_version: Option<SchemaVersionSighting>,
+        schema_version_key_count: u32,
     },
 }
 
-/// Non-recursive, header-only scan of the top-level object. Never deserializes nested
-/// object/array values — brace/bracket depth is tracked with a flat byte loop, and each value is
-/// skipped via [`skip_json_value`] rather than parsed — so this survives arbitrarily deep nesting
-/// anywhere in the document without hitting `serde_json`'s default recursion limit. Contract
-/// section 2.4 requires exactly this: raw/header classification *before* any full typed parse, so
-/// a `FUTURE` document with a breaking (or absurdly deep) shape elsewhere still classifies
-/// `FUTURE`, never `Malformed`. Matches `JSON.parse`'s strictness on the TS side by rejecting
-/// trailing non-whitespace content after the top-level object closes.
-fn scan_raw_header(raw_text: &str) -> RawHeaderScan {
-    let bytes = raw_text.as_bytes();
-    let mut i = 0usize;
-    while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+fn skip_ws(bytes: &[u8], mut i: usize) -> usize {
+    while matches!(bytes.get(i), Some(b) if b.is_ascii_whitespace()) {
         i += 1;
     }
+    i
+}
+
+/// Non-recursive, full-syntax JSON validator that classifies the raw/header shape in one pass,
+/// per contract section 2.4. Unlike a `serde_json::Value` deserialize, nesting depth is bounded
+/// by the heap-allocated `stack`, not the call stack, so this survives arbitrarily deep nesting
+/// anywhere in the document without hitting a recursion limit — while still rejecting *any*
+/// genuine JSON syntax error anywhere in the document (not just around `schemaVersion`), matching
+/// `JSON.parse`'s strictness on the TS side. A `FUTURE` document may have any unknown or breaking
+/// *shape* elsewhere and must still classify `FUTURE` — but it must still be syntactically valid
+/// JSON to do so; invalid syntax is `Malformed` regardless of how "far" it is from `schemaVersion`.
+fn scan_raw_header(raw_text: &str) -> RawHeaderScan {
+    let bytes = raw_text.as_bytes();
+    let mut i = skip_ws(bytes, 0);
     if bytes.get(i) != Some(&b'{') {
         return RawHeaderScan::NotAnObject;
     }
+    i += 1;
 
-    let mut depth: i32 = 0;
-    let mut schema_version_span = None;
-    let mut closed_at = None;
+    let mut stack = vec![Frame::ObjectKey { at_start: true }];
+    let mut schema_version: Option<SchemaVersionSighting> = None;
+    let mut schema_version_key_count: u32 = 0;
+    // Set right after reading a key at depth 1 (stack.len() == 1 at that moment), consumed the
+    // moment that key's value is parsed.
+    let mut pending_top_level_key: Option<String> = None;
 
-    while i < bytes.len() {
-        if bytes[i] == b'"' {
-            let string_start = i;
-            let string_end = skip_json_string_literal(bytes, i);
-            if depth == 1 {
-                let mut j = string_end;
-                while j < bytes.len() && bytes[j].is_ascii_whitespace() {
-                    j += 1;
+    loop {
+        i = skip_ws(bytes, i);
+        let Some(frame) = stack.last().copied() else {
+            return if raw_text[i..].bytes().all(|b| b.is_ascii_whitespace()) {
+                RawHeaderScan::Object {
+                    schema_version,
+                    schema_version_key_count,
                 }
-                if bytes.get(j) == Some(&b':') {
-                    let mut value_start = j + 1;
-                    while value_start < bytes.len() && bytes[value_start].is_ascii_whitespace() {
-                        value_start += 1;
-                    }
-                    let value_end = skip_json_value(bytes, value_start);
-                    if decode_json_string_literal(&raw_text[string_start..string_end]).as_deref()
-                        == Some("schemaVersion")
-                    {
-                        schema_version_span = Some((value_start, value_end));
-                    }
-                    i = value_end;
+            } else {
+                RawHeaderScan::Invalid
+            };
+        };
+        let Some(&b) = bytes.get(i) else {
+            return RawHeaderScan::Invalid;
+        };
+
+        match frame {
+            Frame::ObjectKey { at_start } => {
+                if b == b'}' && at_start {
+                    stack.pop();
+                    i += 1;
+                    finish_value(&mut stack);
                     continue;
                 }
+                if b != b'"' {
+                    return RawHeaderScan::Invalid;
+                }
+                let Some(key_end) = validate_json_string(bytes, i) else {
+                    return RawHeaderScan::Invalid;
+                };
+                if stack.len() == 1 {
+                    let Some(decoded) = decode_json_string_literal(&raw_text[i..key_end]) else {
+                        return RawHeaderScan::Invalid;
+                    };
+                    if decoded == "schemaVersion" {
+                        schema_version_key_count += 1;
+                        pending_top_level_key = Some(decoded);
+                    } else {
+                        pending_top_level_key = None;
+                    }
+                }
+                *stack.last_mut().unwrap() = Frame::ObjectColon;
+                i = key_end;
             }
-            i = string_end;
-            continue;
+            Frame::ObjectColon => {
+                if b != b':' {
+                    return RawHeaderScan::Invalid;
+                }
+                *stack.last_mut().unwrap() = Frame::ObjectValue;
+                i += 1;
+            }
+            Frame::ObjectValue => {
+                let capturing = stack.len() == 1 && pending_top_level_key.is_some();
+                *stack.last_mut().unwrap() = Frame::ObjectCommaOrEnd;
+                let Some(next_i) =
+                    parse_value(bytes, i, &mut stack, capturing, &mut schema_version)
+                else {
+                    return RawHeaderScan::Invalid;
+                };
+                i = next_i;
+            }
+            Frame::ObjectCommaOrEnd => match b {
+                b'}' => {
+                    stack.pop();
+                    i += 1;
+                    finish_value(&mut stack);
+                }
+                b',' => {
+                    *stack.last_mut().unwrap() = Frame::ObjectKey { at_start: false };
+                    i += 1;
+                }
+                _ => return RawHeaderScan::Invalid,
+            },
+            Frame::ArrayValue { at_start } => {
+                if b == b']' && at_start {
+                    stack.pop();
+                    i += 1;
+                    finish_value(&mut stack);
+                    continue;
+                }
+                *stack.last_mut().unwrap() = Frame::ArrayCommaOrEnd;
+                let Some(next_i) = parse_value(bytes, i, &mut stack, false, &mut schema_version)
+                else {
+                    return RawHeaderScan::Invalid;
+                };
+                i = next_i;
+            }
+            Frame::ArrayCommaOrEnd => match b {
+                b']' => {
+                    stack.pop();
+                    i += 1;
+                    finish_value(&mut stack);
+                }
+                b',' => {
+                    *stack.last_mut().unwrap() = Frame::ArrayValue { at_start: false };
+                    i += 1;
+                }
+                _ => return RawHeaderScan::Invalid,
+            },
         }
-        match bytes[i] {
-            b'{' | b'[' => depth += 1,
-            b'}' | b']' => depth -= 1,
-            _ => {}
-        }
-        i += 1;
-        if depth == 0 {
-            closed_at = Some(i);
-            break;
-        }
-    }
-
-    let Some(closed_at) = closed_at else {
-        return RawHeaderScan::Unbalanced;
-    };
-    if raw_text[closed_at..]
-        .bytes()
-        .any(|b| !b.is_ascii_whitespace())
-    {
-        return RawHeaderScan::Unbalanced;
-    }
-    RawHeaderScan::Object {
-        schema_version_span,
     }
 }
 
-/// The accepted `schemaVersion` value grammar: a non-negative integer JSON number. Compares by
-/// numeric value, never by which `serde_json::Value` variant parsed it as — JS's `JSON.parse`
-/// collapses `1` and `1.0` into the same number (`Number.isInteger(1.0)` is `true`), so an
-/// integer-valued decimal literal like `1.0` must classify identically here, not be rejected
-/// merely because `serde_json` parses a decimal-point literal as its `Float` variant.
-fn validated_schema_version_number(value: &Value) -> Option<u64> {
+/// Parses exactly one JSON value at `start`: a string, number, `true`/`false`/`null`, or the
+/// opening of a nested object/array (pushed onto `stack` for the main loop to continue into,
+/// never recursed into here). When `capturing` is set (this is the top-level `schemaVersion`
+/// key's value), records what was found into `schema_version` — the exact span for a scalar, or
+/// just `NonScalar` for a container, since a container is invalid for `schemaVersion` regardless
+/// of its contents and its precise span is never needed.
+fn parse_value(
+    bytes: &[u8],
+    start: usize,
+    stack: &mut Vec<Frame>,
+    capturing: bool,
+    schema_version: &mut Option<SchemaVersionSighting>,
+) -> Option<usize> {
+    match *bytes.get(start)? {
+        b'"' => {
+            let end = validate_json_string(bytes, start)?;
+            if capturing {
+                *schema_version = Some(SchemaVersionSighting::Scalar(start, end));
+            }
+            Some(end)
+        }
+        b'{' => {
+            if capturing {
+                *schema_version = Some(SchemaVersionSighting::NonScalar);
+            }
+            stack.push(Frame::ObjectKey { at_start: true });
+            Some(start + 1)
+        }
+        b'[' => {
+            if capturing {
+                *schema_version = Some(SchemaVersionSighting::NonScalar);
+            }
+            stack.push(Frame::ArrayValue { at_start: true });
+            Some(start + 1)
+        }
+        b't' => {
+            let end = validate_json_keyword(bytes, start, b"true")?;
+            if capturing {
+                *schema_version = Some(SchemaVersionSighting::Scalar(start, end));
+            }
+            Some(end)
+        }
+        b'f' => {
+            let end = validate_json_keyword(bytes, start, b"false")?;
+            if capturing {
+                *schema_version = Some(SchemaVersionSighting::Scalar(start, end));
+            }
+            Some(end)
+        }
+        b'n' => {
+            let end = validate_json_keyword(bytes, start, b"null")?;
+            if capturing {
+                *schema_version = Some(SchemaVersionSighting::Scalar(start, end));
+            }
+            Some(end)
+        }
+        b'-' | b'0'..=b'9' => {
+            let end = validate_json_number(bytes, start)?;
+            if capturing {
+                *schema_version = Some(SchemaVersionSighting::Scalar(start, end));
+            }
+            Some(end)
+        }
+        _ => None,
+    }
+}
+
+/// After a container frame pops (a nested object/array just finished), the *parent* frame just
+/// completed parsing "a value" from its own perspective — transition it from expecting a value to
+/// expecting a comma or its own closing bracket. A no-op when the stack is now empty (the
+/// top-level object itself just closed).
+fn finish_value(stack: &mut [Frame]) {
+    if let Some(top) = stack.last_mut() {
+        *top = match *top {
+            Frame::ObjectValue => Frame::ObjectCommaOrEnd,
+            Frame::ArrayValue { .. } => Frame::ArrayCommaOrEnd,
+            other => other,
+        };
+    }
+}
+
+/// The accepted `schemaVersion` value grammar: a non-negative integer JSON number within the
+/// jointly-exact domain both TS (`Number`, exact only up to `2^53 - 1`) and Rust can represent
+/// without rounding. Compares by numeric value, never by which `serde_json::Value` variant parsed
+/// it as — JS's `JSON.parse` collapses `1` and `1.0` into the same number
+/// (`Number.isInteger(1.0)` is `true`), so an integer-valued decimal literal like `1.0` must
+/// classify identically here, not be rejected merely because `serde_json` parses a decimal-point
+/// literal as its `Float` variant. A value outside `[0, 2^53 - 1]` is `Malformed`: beyond that
+/// bound, `f64` (and therefore JS's `Number`) can no longer represent every integer exactly, so
+/// TS and Rust could silently disagree on the value — this is a joint admission-domain limit for
+/// the `schemaVersion` discriminant specifically, not a statement about opaque numeric fields
+/// elsewhere in the document.
+fn validated_schema_version_number(
+    sighting: &SchemaVersionSighting,
+    raw_text: &str,
+) -> Option<u64> {
+    let SchemaVersionSighting::Scalar(start, end) = sighting else {
+        return None;
+    };
+    let value: Value = serde_json::from_str(&raw_text[*start..*end]).ok()?;
     let numeric = value.as_f64()?;
-    if !numeric.is_finite() || numeric.fract() != 0.0 || numeric < 0.0 {
+    const MAX_SAFE_INTEGER: f64 = 9007199254740991.0; // 2^53 - 1
+    if !numeric.is_finite()
+        || numeric.fract() != 0.0
+        || !(0.0..=MAX_SAFE_INTEGER).contains(&numeric)
+    {
         return None;
     }
     Some(numeric as u64)
@@ -259,33 +426,28 @@ fn classify_version_number(version: u64) -> ProjectVersionClassification {
 }
 
 /// Classifies raw persisted-project JSON text by its `schemaVersion`, per contract section 2.4:
-/// a minimal raw/header parse extracting only `schemaVersion`, performed *before* any full typed
-/// parse — so a `FUTURE` document with a breaking shape change still classifies `FUTURE`, never
-/// `Malformed`. Field absence, present-invalid values, and duplicate keys are handled per the
-/// contract's accepted value grammar.
+/// a full-syntax, non-recursive raw/header parse, performed *before* any full typed parse — so a
+/// `FUTURE` document with a breaking (or absurdly deep) shape elsewhere still classifies `FUTURE`,
+/// never `Malformed`, while any genuine JSON syntax error anywhere in the document still does
+/// classify `Malformed`, matching `JSON.parse`'s strictness. Field absence, present-invalid
+/// values, and duplicate keys are handled per the contract's accepted value grammar.
 pub fn classify_raw_project_version(raw_text: &str) -> ProjectVersionClassification {
-    let schema_version_span = match scan_raw_header(raw_text) {
-        RawHeaderScan::NotAnObject | RawHeaderScan::Unbalanced => {
+    let (schema_version, key_count) = match scan_raw_header(raw_text) {
+        RawHeaderScan::NotAnObject | RawHeaderScan::Invalid => {
             return ProjectVersionClassification::Malformed;
         }
         RawHeaderScan::Object {
-            schema_version_span,
-        } => schema_version_span,
+            schema_version,
+            schema_version_key_count,
+        } => (schema_version, schema_version_key_count),
     };
-    if has_duplicate_top_level_key(raw_text, "schemaVersion") {
+    if key_count > 1 {
         return ProjectVersionClassification::Malformed;
     }
-    let Some((start, end)) = schema_version_span else {
+    let Some(sighting) = schema_version else {
         return ProjectVersionClassification::LegacyUnversioned;
     };
-    // Only this small captured span (typically a short number literal) is ever deserialized —
-    // never the whole document — so a pathologically deep value here can only make this specific
-    // value invalid, not misclassify an unrelated part of the document.
-    let value: Value = match serde_json::from_str(&raw_text[start..end]) {
-        Ok(value) => value,
-        Err(_) => return ProjectVersionClassification::Malformed,
-    };
-    match validated_schema_version_number(&value) {
+    match validated_schema_version_number(&sighting, raw_text) {
         Some(version) => classify_version_number(version),
         None => ProjectVersionClassification::Malformed,
     }
@@ -448,6 +610,91 @@ mod tests {
         let raw = format!(r#"{{"schemaVersion": {CURRENT_PROJECT_SCHEMA_VERSION}}}garbage"#);
         assert_eq!(
             classify_raw_project_version(&raw),
+            ProjectVersionClassification::Malformed
+        );
+    }
+
+    #[test]
+    fn missing_comma_between_fields_is_malformed() {
+        // QNBS-v3: balanced braces alone are not sufficient JSON syntax - a missing comma must reject, not silently accept the well-formed schemaVersion before it.
+        let raw = format!(r#"{{"schemaVersion": {CURRENT_PROJECT_SCHEMA_VERSION} "x": 3}}"#);
+        assert_eq!(
+            classify_raw_project_version(&raw),
+            ProjectVersionClassification::Malformed
+        );
+    }
+
+    #[test]
+    fn invalid_escape_in_an_unrelated_field_is_malformed() {
+        // QNBS-v3: JS's JSON.parse rejects this whole document; an unrelated field's invalid escape must not be silently skipped just because it isn't schemaVersion.
+        let raw = format!(r#"{{"schemaVersion": {CURRENT_PROJECT_SCHEMA_VERSION}, "x": "\q"}}"#);
+        assert_eq!(
+            classify_raw_project_version(&raw),
+            ProjectVersionClassification::Malformed
+        );
+    }
+
+    #[test]
+    fn trailing_comma_before_closing_brace_is_malformed() {
+        let raw = format!(r#"{{"schemaVersion": {CURRENT_PROJECT_SCHEMA_VERSION},}}"#);
+        assert_eq!(
+            classify_raw_project_version(&raw),
+            ProjectVersionClassification::Malformed
+        );
+    }
+
+    #[test]
+    fn malformed_nested_value_in_an_unrelated_field_is_malformed() {
+        let raw = format!(
+            r#"{{"schemaVersion": {CURRENT_PROJECT_SCHEMA_VERSION}, "nested": {{"a": 1,}}}}"#
+        );
+        assert_eq!(
+            classify_raw_project_version(&raw),
+            ProjectVersionClassification::Malformed
+        );
+    }
+
+    #[test]
+    fn deeply_nested_but_syntactically_invalid_payload_is_malformed() {
+        // QNBS-v3: proves the non-recursive scanner still validates full JSON grammar at depth, not merely brace balance - an invalid number inside deep nesting must still classify MALFORMED.
+        let depth = 256;
+        let nested_open = "[".repeat(depth);
+        let nested_close = "]".repeat(depth);
+        let raw = format!(
+            r#"{{"schemaVersion": {}, "unrelated": {nested_open}01{nested_close}}}"#,
+            CURRENT_PROJECT_SCHEMA_VERSION + 1
+        );
+        // QNBS-v3: "01" is not a valid JSON number (leading zero followed by another digit).
+        assert_eq!(
+            classify_raw_project_version(&raw),
+            ProjectVersionClassification::Malformed
+        );
+    }
+
+    #[test]
+    fn schema_version_at_the_js_safe_integer_boundary_is_accepted() {
+        // 2^53 - 1, the largest integer both f64/JS Number and this domain can represent exactly.
+        let raw = r#"{"schemaVersion": 9007199254740991}"#;
+        assert_eq!(
+            classify_raw_project_version(raw),
+            ProjectVersionClassification::Future
+        );
+    }
+
+    #[test]
+    fn schema_version_one_past_the_js_safe_integer_boundary_is_malformed() {
+        let raw = r#"{"schemaVersion": 9007199254740992}"#;
+        assert_eq!(
+            classify_raw_project_version(raw),
+            ProjectVersionClassification::Malformed
+        );
+    }
+
+    #[test]
+    fn schema_version_far_beyond_the_js_safe_integer_boundary_is_malformed() {
+        let raw = r#"{"schemaVersion": 18446744073709551615}"#;
+        assert_eq!(
+            classify_raw_project_version(raw),
             ProjectVersionClassification::Malformed
         );
     }

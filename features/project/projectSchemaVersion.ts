@@ -6,7 +6,9 @@
  * synthetic Wave 2 shadow-validation envelope, not the real persisted `ProjectData` document.
  * This module implements the raw/header classification only (contract section 2.4) — it does not
  * implement the typed `ProjectData` graduated validation (`MODEL_AND_VALIDATE`, contract section
- * 3) or wire into any ingress path (contract section 2.8, Slice B).
+ * 3), the `LEGACY_TO_V1` stamp/write admission step (deferred to the slice that builds the
+ * canonical V1 validation/projection), or wire into any ingress path (contract section 2.8,
+ * Slice B).
  */
 
 /** First production version. Fresh; not derived from the Rust harness's synthetic v1/v2 proof. */
@@ -135,9 +137,22 @@ function tryParseJsonObject(rawText: string): Record<string, unknown> | null {
   return parsed as Record<string, unknown>;
 }
 
-/** The accepted `schemaVersion` value grammar: a non-negative integer JSON number. */
+/**
+ * The accepted `schemaVersion` value grammar: a non-negative integer JSON number within the
+ * jointly-exact domain both TS (`Number`, exact only up to `Number.MAX_SAFE_INTEGER`) and Rust
+ * (`f64`) can represent without rounding. A value outside `[0, 2^53 - 1]` is rejected: beyond
+ * that bound, `Number`/`f64` can no longer represent every integer exactly, so TS and Rust could
+ * silently disagree on the value — this is a joint admission-domain limit for the `schemaVersion`
+ * discriminant specifically, not a statement about opaque numeric fields elsewhere in the
+ * document (those remain governed by the raw-carrier no-loss guarantee, contract section 4).
+ */
 function isValidSchemaVersionValue(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= Number.MAX_SAFE_INTEGER
+  );
 }
 
 /** Classifies an already-validated, present `schemaVersion` integer against the current build. */
@@ -170,57 +185,4 @@ export function classifyRawProjectVersion(rawText: string): ProjectVersionClassi
   return classifyVersionNumber(value);
 }
 
-export interface LegacyToV1Result {
-  readonly stamped: Record<string, unknown>;
-  readonly sourceKeys: readonly string[];
-}
-
-function isEntityStateLike(value: unknown): boolean {
-  if (typeof value !== 'object' || value === null) return false;
-  const record = value as Record<string, unknown>;
-  return Array.isArray(record['ids']) && typeof record['entities'] === 'object';
-}
-
-/**
- * Minimal structural verification that `payload` plausibly conforms to `PROJECT_SCHEMA_V1`'s
- * currently-modeled field set (contract section 2.1.1's `MODEL_AND_VALIDATE` row: `title`,
- * `characters`, `worlds`, `manuscript`) — the real "verify" action `LEGACY_TO_V1` requires
- * (contract section 2.4), not the silent no-op an earlier draft of `stampLegacyToV1` performed.
- * Deliberately not a full `ProjectData` validator: every other field is
- * `OUT_OF_SCOPE_BUT_MUST_NOT_BE_DROPPED` and is not checked here (per-field graduation to
- * `MODEL_AND_VALIDATE` is gradual, contract section 3) — but stamping a payload that fails even
- * this minimal shape check would let clearly-invalid legacy data pass through as if it were a
- * valid current record.
- */
-function looksLikeMinimalProjectSchemaV1(payload: Record<string, unknown>): boolean {
-  if (typeof payload['title'] !== 'string') return false;
-  if (!Array.isArray(payload['manuscript'])) return false;
-  const isArrayOrEntityState = (value: unknown): boolean =>
-    Array.isArray(value) || isEntityStateLike(value);
-  return isArrayOrEntityState(payload['characters']) && isArrayOrEntityState(payload['worlds']);
-}
-
-/**
- * `LEGACY_TO_V1` (contract section 2.4): the explicit, registered migration step for a
- * `LEGACY_UNVERSIONED` record. Not a silent alias into `PROJECT_SCHEMA_V1`'s dispatch point —
- * this performs the real "recognize -> verify -> stamp" actions. Callers are responsible for the
- * remaining "no-loss verify -> durably commit" steps (contract section 4), since those require
- * comparing against the actual pre-migration persisted record in the caller's storage context,
- * which this pure function does not have access to.
- *
- * @param legacyPayload A parsed JSON object already recognized as `LEGACY_UNVERSIONED` (i.e.
- *   `classifyRawProjectVersion` on its raw text returned `LEGACY_UNVERSIONED`). This function
- *   does not re-verify that precondition; callers must classify first.
- * @returns `null` when `legacyPayload` fails the minimal `PROJECT_SCHEMA_V1` shape verification —
- *   callers must route this to the same `MALFORMED`/recovery handling as any other invalid
- *   legacy record, never treat it as if verification had been skipped.
- */
-export function stampLegacyToV1(legacyPayload: Record<string, unknown>): LegacyToV1Result | null {
-  if (!looksLikeMinimalProjectSchemaV1(legacyPayload)) {
-    return null;
-  }
-  return {
-    stamped: { ...legacyPayload, schemaVersion: PROJECT_SCHEMA_V1 },
-    sourceKeys: Object.keys(legacyPayload),
-  };
-}
+// QNBS-v3: LEGACY_TO_V1 stamping (contract section 2.4's "verify" action) is deliberately not implemented here - a correct verify step needs the canonical MODEL_AND_VALIDATE projection (title/logline/author/characters/worlds/manuscript per section 2.1.1), which does not exist yet; a partial heuristic risked being relied on as if it proved V1 conformance. Deferred to the #553 slice that builds that projection.

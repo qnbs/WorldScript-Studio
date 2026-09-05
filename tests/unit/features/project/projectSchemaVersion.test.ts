@@ -4,8 +4,6 @@ import { describe, expect, it } from 'vitest';
 import {
   CURRENT_PROJECT_SCHEMA_VERSION,
   classifyRawProjectVersion,
-  PROJECT_SCHEMA_V1,
-  stampLegacyToV1,
 } from '../../../../features/project/projectSchemaVersion';
 
 describe('classifyRawProjectVersion', () => {
@@ -104,48 +102,37 @@ describe('classifyRawProjectVersion', () => {
     expect(classifyRawProjectVersion('42')).toBe('MALFORMED');
     expect(classifyRawProjectVersion('null')).toBe('MALFORMED');
   });
-});
 
-describe('stampLegacyToV1', () => {
-  const validLegacy = {
-    title: 'Old Project',
-    logline: 'A tale.',
-    characters: [],
-    worlds: [],
-    manuscript: [],
-  };
-
-  it('stamps schemaVersion onto a legacy payload without altering any other field', () => {
-    const result = stampLegacyToV1(validLegacy);
-
-    expect(result?.stamped).toEqual({ ...validLegacy, schemaVersion: PROJECT_SCHEMA_V1 });
-    expect([...(result?.sourceKeys ?? [])].sort()).toEqual(Object.keys(validLegacy).sort());
+  it('accepts schemaVersion at the JS-safe-integer boundary (2^53 - 1)', () => {
+    expect(classifyRawProjectVersion('{"schemaVersion": 9007199254740991}')).toBe('FUTURE');
   });
 
-  it('accepts EntityState-shaped characters/worlds, not only arrays', () => {
-    const legacy = {
-      ...validLegacy,
-      characters: { ids: ['c1'], entities: { c1: { id: 'c1', name: 'X' } } },
-      worlds: { ids: [], entities: {} },
-    };
-    expect(stampLegacyToV1(legacy)).not.toBeNull();
+  it('classifies schemaVersion one past the JS-safe-integer boundary as MALFORMED', () => {
+    expect(classifyRawProjectVersion('{"schemaVersion": 9007199254740992}')).toBe('MALFORMED');
   });
 
-  it('does not mutate the input payload', () => {
-    const original = { ...validLegacy };
-    stampLegacyToV1(validLegacy);
-    expect(validLegacy).toEqual(original);
+  it('classifies schemaVersion far beyond the JS-safe-integer boundary as MALFORMED', () => {
+    expect(classifyRawProjectVersion('{"schemaVersion": 18446744073709551615}')).toBe('MALFORMED');
   });
 
-  it.each([
-    ['missing title', { logline: 'x', characters: [], worlds: [], manuscript: [] }],
-    ['non-string title', { ...validLegacy, title: 123 }],
-    ['missing manuscript', { title: 'x', characters: [], worlds: [] }],
-    ['non-array manuscript', { ...validLegacy, manuscript: 'not an array' }],
-    ['missing characters', { title: 'x', worlds: [], manuscript: [] }],
-    ['characters neither array nor EntityState', { ...validLegacy, characters: 'nope' }],
-    ['missing worlds', { title: 'x', characters: [], manuscript: [] }],
-  ])('returns null for a legacy payload failing minimal verification (%s)', (_label, payload) => {
-    expect(stampLegacyToV1(payload)).toBeNull();
+  it('classifies a missing comma between fields as MALFORMED (real JSON.parse, matches Rust)', () => {
+    const raw = `{"schemaVersion": ${CURRENT_PROJECT_SCHEMA_VERSION} "x": 3}`;
+    expect(classifyRawProjectVersion(raw)).toBe('MALFORMED');
+  });
+
+  it('classifies an invalid escape in an unrelated field as MALFORMED', () => {
+    const raw = `{"schemaVersion": ${CURRENT_PROJECT_SCHEMA_VERSION}, "x": "\\q"}`;
+    expect(classifyRawProjectVersion(raw)).toBe('MALFORMED');
+  });
+
+  it('classifies a trailing comma before the closing brace as MALFORMED', () => {
+    const raw = `{"schemaVersion": ${CURRENT_PROJECT_SCHEMA_VERSION},}`;
+    expect(classifyRawProjectVersion(raw)).toBe('MALFORMED');
+  });
+
+  it('classifies a deeply nested but syntactically invalid unrelated value as MALFORMED', () => {
+    const depth = 256;
+    const raw = `{"schemaVersion": ${CURRENT_PROJECT_SCHEMA_VERSION + 1}, "unrelated": ${'['.repeat(depth)}01${']'.repeat(depth)}}`;
+    expect(classifyRawProjectVersion(raw)).toBe('MALFORMED');
   });
 });
