@@ -157,7 +157,23 @@ checks against:
 | `storyObjects`, `objectGroups` | `ProjectData` | Yes | No | `OUT_OF_SCOPE_BUT_MUST_NOT_BE_DROPPED` | In scope, opaque |
 | `mindMaps` | `ProjectData` (viewport-only state is separate, in `mindMapUiSlice`, and is not persisted project data) | Yes | No | `OUT_OF_SCOPE_BUT_MUST_NOT_BE_DROPPED` | In scope, opaque |
 | `characterInterviews` | `ProjectData` | Yes | No | `OUT_OF_SCOPE_BUT_MUST_NOT_BE_DROPPED` | In scope, opaque |
-| `__worldscriptLegacyProjectDirectory`, `__worldscriptLegacyAuxiliary` | Filesystem backend only (`services/fs/legacyProjectIdentity.ts`, injected onto the object and serialized to `project.json` by `services/fs/projectFsStore.ts`'s `saveProjectUnlocked`/snapshot-restore paths) — not declared on the `ProjectData` TypeScript type at all, hence the `as unknown as Record<string, unknown>` casts used to read/write them | Yes, on the filesystem/desktop backend | No | `OUT_OF_SCOPE_BUT_MUST_NOT_BE_DROPPED` | In scope, opaque, backend-specific |
+| `__worldscriptLegacyProjectDirectory`, `__worldscriptLegacyAuxiliary` | Filesystem backend only (`services/fs/legacyProjectIdentity.ts`, injected onto the object and serialized to `project.json` by `services/fs/projectFsStore.ts`'s `saveProjectUnlocked`/snapshot-restore paths) — not declared on the `ProjectData` TypeScript type at all, hence the `as unknown as Record<string, unknown>` casts used to read/write them | Yes, on the filesystem/desktop backend | No | **Not** `OUT_OF_SCOPE_BUT_MUST_NOT_BE_DROPPED` — see the correction below | Excluded from portable payloads |
+
+**Correction: this metadata is local machine-trust state, not portable opaque user data — it must
+never be treated as ordinarily opaque-preserved.** `persistedLegacyAuxiliaryMetadata` (verified,
+`legacyProjectIdentity.ts`) *interprets* `__worldscriptLegacyAuxiliary` as trusted routing data — a
+legacy project ID, a codex flag, and a list of local binder asset IDs — and
+`projectFsStore.ts`'s `registerLegacyAuxiliaryPolicy` uses it to later route, quarantine, or delete
+local auxiliary assets. If this were preserved opaquely across an export/import boundary the way
+ordinary `OUT_OF_SCOPE_BUT_MUST_NOT_BE_DROPPED` fields are, a carried-over or crafted value could
+associate an imported project with local legacy codex/binder assets belonging to a different
+project on the receiving machine — a trust confusion, not a data-loss risk. **Requirement, admitted
+now:** these two fields are local machine-trust state, scoped to the filesystem backend that wrote
+them; they must be **stripped at every portable boundary** (export/backup egress, §2.8's ingress for
+file/backup import, snapshot restore from a file, recovery restore) and, where the local filesystem
+backend still needs the routing behavior they enable, **re-derived locally** from local evidence
+rather than trusted from the incoming payload — never carried through as opaque pass-through data.
+Concrete stripping/re-derivation logic is `IMPLEMENTATION_REQUIRED`.
 
 A follow-up implementation PR must re-verify this table against `ProjectData`'s exact current
 fields before implementing — this table is this proposal's evidence, not a promise that the shape
@@ -166,7 +182,8 @@ that "the versioned object" (§2.1.1) is backend-inclusive: a field the web/IDB 
 can still be part of what a specific backend's persisted document carries, and gate 1's inventory
 must be checked against each backend's actual on-disk/on-storage shape, not only the in-memory
 `ProjectData` type shared across backends. The historical-filesystem-fixture requirement (§6.2)
-must include a fixture carrying these two fields, proving they survive classification and migration
+must include a fixture carrying these two fields, proving they survive ordinary local save/load
+classification and migration, and a separate fixture proving they are stripped (not carried through)
 on the filesystem backend specifically.
 
 ### 2.2 First production version starts fresh at v1 — the synthetic Rust v1/v2 proof is retired
@@ -445,11 +462,14 @@ already gone, defeating the no-loss guarantee (§4) this document exists to esta
 against live source: `hooks/useSettingsView.ts`'s `handleExport`, `BackupQuickActionsCard.tsx`'s
 `handleExport`, and `services/libraryBackupService.ts`'s `collectLibraryBackupPayload` (via
 `storageService.loadProject` returning the narrowed `StoryProject` type) all currently serialize the
-typed/narrowed projection, not a canonical raw payload. **Requirement, admitted now:** every project
-export/backup egress must serialize the same canonical raw payload this contract defines for
-ingress, including its opaque/out-of-scope fields — never only the typed projection. Concrete code
-changes to these and any other egress path are `IMPLEMENTATION_REQUIRED`, matching the per-path
-status of the ingress list above.
+typed/narrowed projection, not a canonical raw payload. Snapshot creation
+(`storageService.saveSnapshot`, `IdbSnapshotStore.createSnapshot`) is a distinct fourth egress named
+here explicitly, since it is a separate call path from the three above and must not be assumed
+covered by them. **Requirement, admitted now:** every project export/backup/snapshot egress must
+serialize the same canonical raw payload this contract defines for ingress, including its
+opaque/out-of-scope fields — never only the typed projection. Concrete code changes to these and any
+other egress path are `IMPLEMENTATION_REQUIRED`, matching the per-path status of the ingress list
+above.
 
 ### 2.9 What requires a schema version bump
 
@@ -464,9 +484,18 @@ minimum, all of the following require a bump:
 - Changing an existing field's type.
 - Any semantic or invariant change incompatible with how an older build interprets the same shape
   (e.g. changing what a field's absence means).
-- A closed-discriminant/enum value change that isn't purely additive for a field under §3's
-  `REJECT_UNKNOWN` policy — an older build's `REJECT_UNKNOWN` handling for that field needs to know
-  about the change.
+- **Any** new value added to a closed discriminant/enum under §3's `REJECT_UNKNOWN` policy — including
+  a purely additive one. **Correction:** an earlier draft of this rule exempted purely-additive enum
+  changes from the bump requirement; that was wrong, because `REJECT_UNKNOWN` fields are matched
+  against `CURRENT_PROJECT_SCHEMA_VERSION`, not against their own independent version — if the
+  document's `schemaVersion` does not advance, an older build classifies the document as `CURRENT`
+  and attempts typed parsing, where it hits the new value and must apply `REJECT_UNKNOWN` outside the
+  clean `FUTURE`/`MIGRATION_GAP` recovery path (§2.5) the classification stage would otherwise route
+  it through — an ad-hoc failure, not the intended fail-closed recovery. A bump is required for every
+  new value on a `REJECT_UNKNOWN` discriminant, with no purely-additive exception; a field that
+  genuinely needs additive-without-bump tolerance must first be redefined under an explicitly open
+  compatibility policy (`PRESERVE_OPAQUE`'s sibling-field tolerance, §3's second row), not left under
+  `REJECT_UNKNOWN` with an implicit carve-out.
 - Any change to identity or declared-order semantics (§6.1's invariants).
 - Any other persisted-format change an older reader/writer could misinterpret or silently lose.
 
@@ -490,6 +519,23 @@ A single global policy is wrong here: the right answer depends on what kind of f
 | Additive unknown fields inside an object Core *does* claim authority over (e.g. a future field added to `Character`) | `PRESERVE_OPAQUE` | Core understands the object's shape but not every field on it yet; the object round-trips losslessly while the unknown sub-fields wait to be modeled. |
 | An unknown value for a closed, semantically load-bearing discriminant/enum Core must interpret to act correctly | `REJECT_UNKNOWN` | Silently passing through an unrecognized enum value risks Core acting on a wrong interpretation of it — failing closed is safer than opaque pass-through here. |
 | Fields fully modeled and owned by Core today (`title`, `logline`, `characters[].id`, etc.) | `MODEL_AND_VALIDATE` | Already validated per-field; no ambiguity to resolve. |
+
+**Correction: "already validated" understates a real, verified gap.** For at least two fields
+already treated as modeled, TypeScript's and Rust's validation domains genuinely differ today —
+`services/projectImportSchema.ts` accepts any numeric `wordCount` while
+`crates/worldscript-project/src/schema.rs` rejects negative/fractional values as a `u32`, and a
+similar TS-looser/Rust-stricter mismatch exists elsewhere. "Requiring eventual TS/Rust parity" (gate
+4, §5) does not by itself say *which* domain is authoritative, and naively tightening TypeScript to
+match Rust's stricter domain could make an existing, already-saved, legitimately-accepted project
+newly unreadable — exactly the silent-loss failure mode this document exists to prevent, just
+via validation rather than a dropped field. **Requirement, admitted now:** before any field's
+classification changes from unvalidated pass-through to `MODEL_AND_VALIDATE` authority, the chosen
+validation domain must be proven compatible with (a strict superset of, or an explicitly reconciled
+narrowing of) every value TypeScript's own shipped validation has already accepted and legitimately
+persisted for that field — never assumed compatible by declaration. Reconciling a current TS/Rust
+domain mismatch for an already-modeled field is `IMPLEMENTATION_REQUIRED`, per field, and must be
+exercised against real historical values in the parity fixtures (§6.2) before that field's
+`MODEL_AND_VALIDATE` classification is treated as switch-ready (§5's gates).
 | Forward compatibility with a not-yet-defined future field | Not an independent policy | Forward compatibility is the *result* of `OUT_OF_SCOPE_BUT_MUST_NOT_BE_DROPPED`/`PRESERVE_OPAQUE` actually proving lossless preservation — never granted as a standalone default. |
 
 `ALLOW_FORWARD_COMPATIBLE`, as a named policy distinct from the above, is not adopted: it would add
@@ -612,7 +658,16 @@ not designed by this document — this fixes only the identity-vs-position invar
   same nested structure, same array order, same object membership. "Verbatim" is deliberately not
   used here: a parsed-and-reserialized JSON value is allowed to differ in whitespace/key-order/
   escape representation while still satisfying this guarantee, and calling that "verbatim" would
-  contradict the semantic-equality standard stated above.
+  contradict the semantic-equality standard stated above. **"Same value" includes exact numeric
+  precision, which is not automatic for JSON numbers between TS and Rust:** JavaScript's `JSON.parse`
+  rounds an integer beyond `Number.MAX_SAFE_INTEGER` (e.g. `9007199254740993`), while Rust's
+  `serde_json::Value` retains a `u64` of the same magnitude exactly — an opaque field holding such a
+  value could silently change on an ordinary TS load/save even though this guarantee requires it not
+  to. **Requirement, admitted now:** the raw-carrier mechanism (§3.1) must not lose integer precision
+  for any opaque/unmodeled numeric value, for any value either implementation may encounter — the
+  exact lossless representation (e.g. a bigint-aware parse path, or preserving large numeric literals
+  as strings internally rather than as parsed `number`s) is `IMPLEMENTATION_REQUIRED`, verified by a
+  boundary fixture at and beyond `Number.MAX_SAFE_INTEGER`.
 - **Array order preservation** for every ordered collection.
 - **Stable ID preservation**, exactly (already proven for `characters`/`worlds` by
   `coreBoundaryAdapter.ts` — see §6.1).
@@ -626,6 +681,16 @@ not designed by this document — this fixes only the identity-vs-position invar
     consumed; every path the manifest does not name must still satisfy semantic preservation
     unchanged. A migration step with no declared manifest (e.g. `LEGACY_TO_V1`, which is purely
     additive) has no removed/renamed paths and so this exemption is vacuous for it.
+    **Correction: the exemption alone is not sufficient for a rename/replacement — it must not
+    become a way to silently launder a dropped value.** As stated, a manifest could name `oldField`
+    as consumed and simply omit or default `newField`, and this exemption would let that pass the
+    no-loss check even though the value was lost, not transformed — and TS/Rust parity (gate 4) would
+    not catch it either if both implementations make the same mistake. **Requirement, admitted now:**
+    a manifest entry for a rename/replacement must declare an explicit source-path → destination-path
+    mapping, and the no-loss/migration-output check must verify the destination path actually
+    contains the semantically-transformed source value — not merely that the source path is absent
+    and some value exists at the destination. A pure removal (no replacement destination) has no such
+    mapping to verify and is unaffected by this requirement.
 
 ## 5. Authority-switch admission gates
 
@@ -708,6 +773,11 @@ that nothing was admitted, transformed, or written at all.
 - An export-to-import round trip through each backup/export egress named in §2.8's egress
   requirement, proving opaque/out-of-scope fields survive a full backup-and-restore cycle, not only
   ordinary save/load.
+- A snapshot create-then-restore round trip (`storageService.saveSnapshot`/`IdbSnapshotStore.
+  createSnapshot`, `restoreSnapshotThunk`) — verified live to differ from the three §2.8 egress call
+  sites in what it currently receives, so it is named here explicitly rather than assumed covered by
+  the export/backup fixture above. Snapshot creation is added to §2.8's canonical-payload egress
+  requirement alongside export/backup.
 - A full round-trip no-loss comparison (§4) across every fixture in this group.
 
 **Group B — refused fixtures (no round-trip; proof is preserve-and-refuse instead):**
@@ -843,6 +913,25 @@ declared type, now added to §2.1.1's inventory; and an explicit scope boundary 
 accepted-but-not-yet-flipped local-first Y.Doc authority model (§7), which this document does not
 extend to. As with the first wave, none required a new product/security/legal decision or
 contradicted rows 1–19.
+
+**Third wave of post-signoff refinements, and the last absorbed into this document:** six further
+findings landed on the second-wave commit, verified before being addressed: the newly-added
+filesystem-metadata inventory row wrongly implied ordinary opaque preservation across portable
+boundaries for local machine-trust data (`__worldscriptLegacyProjectDirectory`/
+`__worldscriptLegacyAuxiliary`, verified to drive local asset routing/quarantine decisions) — now
+corrected to require stripping/re-derivation at portable boundaries instead; the bump-policy
+exemption for purely-additive closed-enum values contradicted `REJECT_UNKNOWN`'s own fail-closed
+intent — removed; `MODEL_AND_VALIDATE`'s "already validated" claim did not hold for at least one
+verified field (`wordCount`) where TS's and Rust's validation domains actually differ today — added
+a requirement that tightening validation must never retroactively invalidate existing persisted
+values; the no-loss definition did not address JS/Rust large-integer precision divergence for opaque
+numeric values — added an explicit lossless-numeric requirement; the migration removal/rename
+exemption (from wave one) did not require verifying a renamed value actually landed at its
+declared destination — added that requirement; and the egress requirement (from wave one) omitted
+snapshot creation as a fourth call site distinct from the three named exports — added. None required
+a new product/security/legal decision or contradicted rows 1–19; this document is now closed to
+further design-cascade rounds — any further finding is dispositioned as `IMPLEMENTATION_REQUIRED` or
+a stated non-issue in its review thread, not absorbed as another document revision.
 
 All 19 rows above are confirmed. This document's status line reflects `ADMITTED = YES` and
 `CORE-MIGRATION-LEDGER.md` row 9 is updated to reflect it, per issue `#553`'s own acceptance
