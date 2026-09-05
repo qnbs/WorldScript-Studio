@@ -240,8 +240,23 @@ MALFORMED                   → RECOVERY / FAIL_CLOSED (see the correction below
 
 `LEGACY_UNVERSIONED` and `SUPPORTED_OLDER` both resolve through the *same* explicit migration path —
 never a silent in-place relabel. Preserve-first applies throughout: the original persisted form is
-retained until `NO_LOSS_VERIFIED` succeeds and the new form is durably committed (mirrors this
-codebase's existing preserve-first storage rules; see §7).
+retained at least until `NO_LOSS_VERIFIED` succeeds and the new form is durably committed (mirrors
+this codebase's existing preserve-first storage rules; see §7).
+
+**Correction: retention "until commit" is not sufficient for a migration §2.9 classifies as
+destructive.** The binding native roadmap (`docs/native/ROADMAP-QT-GPUI-DESKTOP.md` §20, "Project
+format and migration policy") requires "backup before destructive migration" as a standing rule, not
+a transient in-flight safeguard. A migration step that removes, renames, or otherwise cannot losslessly
+reconstruct a field from its output (§2.9's bump triggers) must leave a durable, explicitly
+restorable backup of the pre-migration record that survives the commit — discarding the sole
+original the moment `DURABLE_CURRENT` is reached is not enough, because a migration later found
+semantically wrong (a bug in the migration step itself, discovered after the fact) would otherwise
+have no recovery path. A **non-destructive** migration (pure additive stamping, e.g. `LEGACY_TO_V1`
+on today's shape, where the output already losslessly contains everything the source had) has no
+roadmap-mandated backup obligation beyond the in-flight retention already required for
+`NO_LOSS_VERIFIED` — the durable-backup requirement is specifically for the destructive case §2.9
+defines. The exact retention mechanism and duration are `IMPLEMENTATION_REQUIRED`, not designed by
+this document.
 
 **Correction: `MALFORMED` recovery is not already preserve-first on the current web/IDB path.**
 Verified against live source: `index.tsx`'s hydration logic calls
@@ -390,6 +405,21 @@ by this document. What is admitted here is the invariant itself: no ingress path
 classification merely because it predates this contract or is a narrower/secondary path relative to
 the primary load.
 
+**Egress must match, or ingress admission alone does not prevent data loss.** An ingress-only gate
+is not sufficient by itself: if a project's export/backup path serializes a narrowed, typed
+projection rather than the canonical raw payload (§3.1), any opaque/out-of-scope field this contract
+requires ingress to preserve is silently absent from that export — and re-importing it then
+classifies as `LEGACY_UNVERSIONED` (or worse, appears to round-trip cleanly) with those fields
+already gone, defeating the no-loss guarantee (§4) this document exists to establish. Verified
+against live source: `hooks/useSettingsView.ts`'s `handleExport`, `BackupQuickActionsCard.tsx`'s
+`handleExport`, and `services/libraryBackupService.ts`'s `collectLibraryBackupPayload` (via
+`storageService.loadProject` returning the narrowed `StoryProject` type) all currently serialize the
+typed/narrowed projection, not a canonical raw payload. **Requirement, admitted now:** every project
+export/backup egress must serialize the same canonical raw payload this contract defines for
+ingress, including its opaque/out-of-scope fields — never only the typed projection. Concrete code
+changes to these and any other egress path are `IMPLEMENTATION_REQUIRED`, matching the per-path
+status of the ingress list above.
+
 ### 2.9 What requires a schema version bump
 
 **Design decision, admitted now.** This contract defines who writes `schemaVersion` and how
@@ -508,14 +538,26 @@ durable commit
 The generation/source-identity check is deliberately the same shape this codebase's own preserve-
 first storage work already uses elsewhere for detecting a stale write target — it is not invented
 new here, only applied to this specific merge, but it must be *implemented* as a single atomic
-operation (whatever primitive the target storage backend provides for this — e.g. an IndexedDB
-transaction that reads-checks-writes without yielding, or a filesystem rename gated on an
-in-process exclusive lock) rather than as two separate steps, or the check does not actually
-prevent the race it exists to prevent. This connects forward to any future multi-writer/
-generation-authority work (see the project's own writer-ownership backlog); this document does not
-implement that work, only ensures the raw-carrier merge step has a defined, fail-closed answer for
-"what if the source moved under me" rather than leaving it undefined until an implementation PR
-has to invent one under time pressure.
+operation (whatever primitive the target storage backend provides for this) rather than as two
+separate steps, or the check does not actually prevent the race it exists to prevent.
+
+**The fence must be safe across processes, not only within one runtime.** An in-process exclusive
+lock (a mutex, an in-memory flag) only serializes writers inside the same process — it does nothing
+when a second process can write the same project (two instances of the same desktop build, or a
+future Tauri instance and a Qt instance open on the same project file). For a single-process/
+single-tab target (e.g. today's web/IDB path), an IndexedDB transaction that reads-checks-writes
+without yielding is sufficient, since IndexedDB itself serializes transactions per origin. For any
+target where more than one OS process can hold a writer role, the fence must be a mechanism every
+such writer actually observes — a filesystem-level compare-and-swap primitive, an OS-level exclusive
+lease/lock file every writer opens and honors, or an equivalent cross-process primitive — not an
+in-process-only lock presented as if it were sufficient. Which primitive applies to which target is
+`IMPLEMENTATION_REQUIRED`; what this document fixes is that the primitive must actually span every
+process capable of writing that target, not just the calling runtime. This connects forward to any
+future multi-writer/generation-authority work (see the project's own writer-ownership backlog); this
+document does not implement that work, only ensures the raw-carrier merge step has a defined,
+fail-closed answer for "what if the source moved under me" — from another writer in the same process
+or a different one — rather than leaving it undefined until an implementation PR has to invent one
+under time pressure.
 
 **Identity-bearing collections merge by stable entity ID, never by position.** `characters`,
 `worlds`, and any equivalent identity-bearing collection are merged during the overlay step (above)
@@ -543,9 +585,16 @@ not designed by this document — this fixes only the identity-vs-position invar
 - **Array order preservation** for every ordered collection.
 - **Stable ID preservation**, exactly (already proven for `characters`/`worlds` by
   `coreBoundaryAdapter.ts` — see §6.1).
-- **No missing fields** relative to the source, and **no invented fields** except those an
-  explicitly admitted migration step introduces (mirroring `revision_note`'s own honest doc comment
-  about why it exists).
+- **No missing fields** relative to the source, and **no invented fields**, except:
+  - a field an explicitly admitted migration step introduces (mirroring `revision_note`'s own
+    honest doc comment about why it exists), and
+  - a field an explicitly admitted migration step's own manifest declares as removed, renamed, or
+    replaced — §2.9 permits a version bump specifically for this case, so a no-loss check that
+    forbids all missing fields unconditionally would make any admitted removal/rename impossible to
+    ever ship. The exemption applies only to paths the migration's manifest names as deliberately
+    consumed; every path the manifest does not name must still satisfy semantic preservation
+    unchanged. A migration step with no declared manifest (e.g. `LEGACY_TO_V1`, which is purely
+    additive) has no removed/renamed paths and so this exemption is vacuous for it.
 
 ## 5. Authority-switch admission gates
 
@@ -567,11 +616,17 @@ latter satisfies this list:
    `UNSUPPORTED_OLDER`/`MIGRATION_GAP`, `MALFORMED`) — see §6.2's split for what those require
    instead (source preserved unchanged, zero durable writes, zero editable-state admission; never a
    semantic round-trip, since nothing is meant to be admitted or transformed).
-4. TS/Rust accept/reject parity, kept permanently — not scoped to a transition window. The React/PWA
-   product and any native Core/Qt consumer are both permanent, coexisting readers/writers of the
-   same renderer-independent format (§7's Qt relationship), not a temporary migration pair; a later
-   schema change shipping in one without the other is a parity break at any point in this project's
-   life, not only during an initial cutover.
+4. TS/Rust parity, kept permanently — not scoped to a transition window, and not limited to
+   accept/reject agreement. The React/PWA product and any native Core/Qt consumer are both
+   permanent, coexisting readers/writers of the same renderer-independent format (§7's Qt
+   relationship), not a temporary migration pair; a later schema change shipping in one without the
+   other is a parity break at any point in this project's life, not only during an initial cutover.
+   **Accept/reject agreement alone is not sufficient**: §4 permits a migration to introduce or
+   consume declared fields, so two implementations could both legitimately accept the same older
+   document yet apply different migration defaults or normalizations and produce semantically
+   different current documents while still "agreeing" on accept/reject. The permanent cross-renderer
+   fixtures (§6.2) must additionally prove semantic equality (§4) of each migration's *resulting*
+   canonical payload between TS and Rust, not only that both accepted the same input.
 5. Rollback/fallback: the TS-authoritative path can still read whatever Rust most recently wrote.
 6. Representative historical fixtures — real project shapes predating this contract, not only
    synthetic ones already shaped to match it.
@@ -619,6 +674,9 @@ that nothing was admitted, transformed, or written at all.
 - The write-back merge (§3.2) where the overlay implementation is deliberately made to omit an edit
   or write it to the wrong path, proving the owned-path re-projection check catches it rather than
   letting the stale/misplaced value commit.
+- An export-to-import round trip through each backup/export egress named in §2.8's egress
+  requirement, proving opaque/out-of-scope fields survive a full backup-and-restore cycle, not only
+  ordinary save/load.
 - A full round-trip no-loss comparison (§4) across every fixture in this group.
 
 **Group B — refused fixtures (no round-trip; proof is preserve-and-refuse instead):**
@@ -635,12 +693,20 @@ that nothing was admitted, transformed, or written at all.
   on the web/IDB backend specifically).
 - The write-back merge (§3.2) under a source generation injected to change between validation and
   the intended commit point, proving the atomic check-and-commit actually fails closed rather than
-  merely detecting the race too late to matter.
+  merely detecting the race too late to matter. **This fixture is a write-conflict on an already-
+  admitted project, not a refused input document** — the project reaching this fixture necessarily
+  went through Group A admission first, so "zero editable-state admission" below does not apply to
+  it (that admission already legitimately happened before the conflict arose). The required proof for
+  this specific fixture is instead: the losing writer's merge produces zero durable commit, and the
+  generation that actually won the fence remains the durable record afterward — the write-back
+  invariant (§3.2) fails closed, it does not corrupt or silently discard the winner.
 
-For every fixture in Group B, the required proof is: the source is preserved byte-for-byte
-unchanged, zero durable writes occur, and zero editable-state admission occurs (no Redux/UI state
-is ever populated from it) — never a semantic round-trip, since nothing about these inputs is
-supposed to be admitted or transformed in the first place.
+For every *other* fixture in Group B — i.e. every genuinely refused input document (`FUTURE`,
+`UNSUPPORTED_OLDER`/`MIGRATION_GAP`, `REJECT_UNKNOWN` discriminant values, `MALFORMED`) — the
+required proof is: the source is preserved byte-for-byte unchanged, zero durable writes occur, and
+zero editable-state admission occurs (no Redux/UI state is ever populated from it) — never a
+semantic round-trip, since nothing about these inputs is supposed to be admitted or transformed in
+the first place.
 
 Golden fixtures should exist in both TS and Rust wherever transition parity matters, matching
 issue `#553`'s own fixture/evidence section.
@@ -648,8 +714,10 @@ issue `#553`'s own fixture/evidence section.
 ## 7. Relationship to preserve-first, R-15, and Qt
 
 - **Preserve-first:** §2.4's migration chain (retain original until `NO_LOSS_VERIFIED` and durable
-  commit) is this codebase's existing preserve-first storage principle applied to project-schema
-  migration specifically — not a new principle invented here.
+  commit, plus a durable post-commit backup for any migration §2.9 classifies as destructive) is
+  this codebase's existing preserve-first storage principle, and the native roadmap's "backup before
+  destructive migration" rule (`docs/native/ROADMAP-QT-GPUI-DESKTOP.md` §20), applied to
+  project-schema migration specifically — not a new principle invented here.
 - **R-15 (#445):** a distinct security/durability contract for the encrypted-record envelope, key
   management, and migration — this document's `schemaVersion` is not R-15's envelope version (§1.3)
   and this document does not admit, implement, or modify any part of R-15's S5 contracts.
@@ -706,6 +774,20 @@ merge (§3.2), the write-back overlay mechanism (§3.1/§3.2), `LEGACY_TO_V1` (�
 downgrade barrier (§2.7), and the `MALFORMED` recovery fix (§2.4's correction) are all
 `IMPLEMENTATION_REQUIRED` — none exist in code today. This document admits the invariants they must
 satisfy; it does not implement any of them.
+
+**Post-signoff refinements (do not reopen rows 1–19):** after maintainer sign-off on this document's
+decisions, automatic review surfaced six concrete gaps in how those already-approved decisions were
+specified — each verified against live source or the binding native roadmap before being addressed,
+and each closing a loophole in an already-admitted invariant rather than introducing a new decision:
+a cross-process-unsafe example in the write-back fence mechanism (row 16, §3.2); TS/Rust parity
+scoped to accept/reject only, missing migration-output equality (row 4's gate, §5); the no-loss
+definition (row 10, §4) not accounting for §2.9's already-admitted field-removal/rename bump case;
+the Group B refusal blanket (§6.2) not accounting for the concurrent-write fixture starting from an
+already-admitted project; no egress counterpart to universal ingress admission (row 17, §2.8),
+verified against three live export/backup call sites; and migration backup retention scoped only to
+"until commit," short of the binding roadmap's "backup before destructive migration" rule (§2.4,
+§7). None of these required a new product/security/legal decision or contradicted any of rows 1–19
+as approved; each is recorded inline at its section rather than as a new numbered row.
 
 Once confirmed, this document's status line updates to `ADMITTED = YES` and
 `CORE-MIGRATION-LEDGER.md` row 9 is updated to reflect it, per issue `#553`'s own acceptance
