@@ -138,6 +138,26 @@ describe('IdbProjectStore#loadState — universal ingress admission observation'
     expect(result).toBeUndefined();
   });
 
+  it('classifies a flat record with its own schemaVersion directly, not via a coincidental data field', async () => {
+    // QNBS-v3: a top-level schemaVersion is self-describing and must win over the envelope-unwrap heuristic - otherwise a FUTURE document with an unrelated truthy data/present field gets misread as LEGACY_UNVERSIONED via that field instead of its own header.
+    const projectStore = new IdbProjectStore();
+    const futureFlatRecord = { schemaVersion: 999, data: {} };
+    const { store, projectRequest, settingsRequest } = makeFakeStore(futureFlatRecord, undefined);
+    vi.spyOn(
+      projectStore as unknown as { getObjectStore: () => Promise<unknown> },
+      'getObjectStore',
+    ).mockResolvedValue(store as never);
+
+    const loadPromise = projectStore.loadState();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    projectRequest.onsuccess?.();
+    settingsRequest.onsuccess?.();
+    await loadPromise;
+
+    expect(h.observe).toHaveBeenCalledTimes(1);
+    expect(h.observe).toHaveBeenCalledWith(futureFlatRecord, 'idb-project-load');
+  });
+
   it('does not observe when no project is persisted', async () => {
     const projectStore = new IdbProjectStore();
     const { store, projectRequest, settingsRequest } = makeFakeStore(undefined, { theme: 'dark' });

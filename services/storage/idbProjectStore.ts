@@ -219,6 +219,10 @@ function selectIdbProjectObservationTarget(project: unknown): unknown {
     typeof project === 'object' && project !== null
       ? (project as PersistedProjectState)
       : undefined;
+  // QNBS-v3: a record with its own schemaVersion is self-describing - classify it directly, before guessing it's a Redux envelope, so a flat FUTURE/CURRENT document that also happens to carry a data/present field is never misread via that field instead of its own header.
+  if (projectRecord && Object.hasOwn(projectRecord, 'schemaVersion')) {
+    return projectRecord;
+  }
   const rawData = projectRecord
     ? projectRecord.present
       ? projectRecord.present.data
