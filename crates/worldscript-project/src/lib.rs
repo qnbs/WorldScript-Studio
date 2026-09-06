@@ -12,8 +12,13 @@ pub mod io;
 pub mod migrate;
 pub mod schema;
 pub mod validate;
+pub mod version;
 
 pub use envelope::{parse_envelope, ParseError, ProjectEnvelope, CURRENT_SCHEMA_VERSION};
 pub use migrate::migrate_to_latest;
 pub use schema::{Character, StoryProject, StorySection, World};
 pub use validate::{validate, ValidationError};
+pub use version::{
+    classify_raw_project_version, ProjectVersionClassification, CURRENT_PROJECT_SCHEMA_VERSION,
+    PROJECT_SCHEMA_V1,
+};
