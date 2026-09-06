@@ -48,13 +48,20 @@ export function scanLocalizedBundleBudgetTruth(content, filePath, budget) {
   try {
     const data = JSON.parse(content);
     const claim = data['help.docs.lazyLoading.content'];
-    const numericClaims =
-      typeof claim === 'string'
-        ? (claim.match(/\d[\d\s,]*/g) ?? []).map((value) => value.replace(/[^\d]/g, ''))
-        : [];
+    const budgetSection = typeof claim === 'string' ? claim.slice(claim.lastIndexOf('<li>')) : '';
+    const numericClaims = [...budgetSection.matchAll(/\d[\d\s,]*/g)].map((match) => ({
+      index: match.index ?? -1,
+      value: match[0].replace(/[^\d]/g, ''),
+    }));
+    const vendorLabel = /\bvendor\b/i.exec(budgetSection);
+    const entryLabel = /(?:\bentry\b|\bentrada\b|entrée)/i.exec(budgetSection);
     if (
-      numericClaims.includes(String(budget.vendorKb)) &&
-      numericClaims.includes(String(budget.entryKb))
+      numericClaims.length === 2 &&
+      vendorLabel?.index !== undefined &&
+      entryLabel?.index !== undefined &&
+      vendorLabel.index < entryLabel.index &&
+      numericClaims[0].value === String(budget.vendorKb) &&
+      numericClaims[1].value === String(budget.entryKb)
     ) {
       return [];
     }

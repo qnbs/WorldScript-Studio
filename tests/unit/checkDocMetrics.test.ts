@@ -191,12 +191,32 @@ describe('bundle budget truth', () => {
       'help.docs.lazyLoading.content': '<li>Vendor: 6 200 KB; Entry: 2 500 KB.</li>',
     });
     const staleClaim = localizedClaim.replace('6 200', '7 000').replace('2 500', '4 500');
+    const staleAndCurrentClaim = JSON.stringify({
+      'help.docs.lazyLoading.content':
+        '<li>Vendor: 7 000 KB; Entry: 2 500 KB; legacy entry: 4 500 KB.</li>',
+    });
+    const swappedClaim = JSON.stringify({
+      'help.docs.lazyLoading.content': '<li>Vendor: 2 500 KB; Entry: 6 200 KB.</li>',
+    });
+    const unrelatedNumbersBeforeClaim = JSON.stringify({
+      'help.docs.lazyLoading.content':
+        '<li>14 views and ~200 KB gzip.</li><li>Vendor: 6 200 KB; Entry: 2 500 KB.</li>',
+    });
     expect(scanLocalizedBundleBudgetTruth(localizedClaim, 'locales/en/help.json', budget)).toEqual(
       [],
     );
     expect(scanLocalizedBundleBudgetTruth(staleClaim, 'locales/en/help.json', budget)).toEqual([
       expect.stringContaining('does not match config/bundle-budget.json'),
     ]);
+    expect(
+      scanLocalizedBundleBudgetTruth(staleAndCurrentClaim, 'locales/en/help.json', budget),
+    ).toEqual([expect.stringContaining('does not match config/bundle-budget.json')]);
+    expect(scanLocalizedBundleBudgetTruth(swappedClaim, 'locales/en/help.json', budget)).toEqual([
+      expect.stringContaining('does not match config/bundle-budget.json'),
+    ]);
+    expect(
+      scanLocalizedBundleBudgetTruth(unrelatedNumbersBeforeClaim, 'locales/en/help.json', budget),
+    ).toEqual([]);
   });
 });
 
