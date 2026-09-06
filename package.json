@@ -104,7 +104,7 @@
     "test:storybook": "test-storybook",
     "test:vrt": "PLAYWRIGHT_REUSE_SERVER=true playwright test tests/e2e/visual-regression.spec.ts --project=chromium",
     "analyze": "ANALYZE=true vite build",
-    "bundle:budget": "node scripts/check-bundle-budget.mjs --max-entry-kb 2500 --max-vendor-kb 6200 --max-chunk-kb 2500 --max-wasm-kb 30000",
+    "bundle:budget": "node scripts/check-bundle-budget.mjs",
     "bundle:report": "node scripts/bundle-report.mjs",
     "dev:tauri": "tauri dev",
     "ci:quick": "bash infra/low-end-ci/scripts/ci-quick.sh",
