@@ -98,6 +98,26 @@ describe('IdbProjectStore#loadState — universal ingress admission observation'
     expect(h.observe).toHaveBeenCalledWith(flatPayload, 'idb-project-load');
   });
 
+  it('observes an explicit null payload as itself, not the outer envelope', async () => {
+    // QNBS-v3: a persisted null/false payload is a real (malformed) classification target - falling back to the envelope on any falsy value would misreport it as the envelope's own LEGACY_UNVERSIONED shape instead of MALFORMED.
+    const projectStore = new IdbProjectStore();
+    const envelope = { data: null };
+    const { store, projectRequest, settingsRequest } = makeFakeStore(envelope, undefined);
+    vi.spyOn(
+      projectStore as unknown as { getObjectStore: () => Promise<unknown> },
+      'getObjectStore',
+    ).mockResolvedValue(store as never);
+
+    const loadPromise = projectStore.loadState();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    projectRequest.onsuccess?.();
+    settingsRequest.onsuccess?.();
+    await loadPromise;
+
+    expect(h.observe).toHaveBeenCalledTimes(1);
+    expect(h.observe).toHaveBeenCalledWith(null, 'idb-project-load');
+  });
+
   it('does not observe when no project is persisted', async () => {
     const projectStore = new IdbProjectStore();
     const { store, projectRequest, settingsRequest } = makeFakeStore(undefined, { theme: 'dark' });

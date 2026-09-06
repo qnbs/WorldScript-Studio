@@ -224,8 +224,11 @@ export class IdbProjectStore extends IdbAssetStore {
     // Ensure Project Structure consistency
     if (validProject) {
       const rawData = validProject.present ? validProject.present.data : validProject.data;
-      // QNBS-v3: falls back to the envelope itself so a flat/malformed present record (neither .present.data nor .data resolving) is still observed, not silently skipped, per contract section 2.8's universal ingress admission (observation-only, Slice B).
-      observeProjectVersionClassificationFromObject(rawData ?? validProject, 'idb-project-load');
+      // QNBS-v3: undefined (not merely falsy) means neither .present.data nor .data resolved at all, so only then fall back to the envelope - a persisted null/false payload must be observed as itself, per contract section 2.8's universal ingress admission (observation-only, Slice B).
+      observeProjectVersionClassificationFromObject(
+        rawData === undefined ? validProject : rawData,
+        'idb-project-load',
+      );
       if (rawData) {
         // Ensure projectGoals exists
         if (!rawData.projectGoals) {
