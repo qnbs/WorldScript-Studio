@@ -19,6 +19,7 @@ const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const BUNDLE_BUDGET_DOCS = ['README.md', '.github/CI-AUDIT.md'];
 const BUNDLE_BUDGET_CONFIG = 'config/bundle-budget.json';
 
+// QNBS-v3: Fail closed on budget drift so current documentation cannot outlive executable limits.
 function readBundleBudget() {
   try {
     const budget = JSON.parse(readFileSync(join(root, BUNDLE_BUDGET_CONFIG), 'utf8'));
