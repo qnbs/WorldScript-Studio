@@ -55,12 +55,13 @@ describe('classifyRawProjectVersion', () => {
     expect(classifyRawProjectVersion(raw)).toBe('FUTURE');
   });
 
-  it('classifies an integer-valued decimal literal (e.g. "1.0") the same as its integer form', () => {
-    // QNBS-v3: JS's JSON.parse collapses 1 and 1.0 into the same number; the Rust side must match this exactly (serde_json otherwise parses "1.0" as a distinct Float variant).
-    expect(
-      classifyRawProjectVersion(`{"schemaVersion": ${CURRENT_PROJECT_SCHEMA_VERSION}.0}`),
-    ).toBe('CURRENT');
-  });
+  it.each([`${CURRENT_PROJECT_SCHEMA_VERSION}.0`, `${CURRENT_PROJECT_SCHEMA_VERSION}e0`])(
+    'classifies an integer-valued JSON number literal (%s) the same as its integer form',
+    (literal) => {
+      // QNBS-v3: mathematically integer decimal/exponent spellings remain valid after raw-token validation.
+      expect(classifyRawProjectVersion(`{"schemaVersion": ${literal}}`)).toBe('CURRENT');
+    },
+  );
 
   it('classifies an unregistered lower version as UNSUPPORTED_OLDER', () => {
     // QNBS-v3: no SUPPORTED_OLDER_SOURCE_VERSIONS entry exists yet since PROJECT_SCHEMA_V1 is the only defined version.
@@ -121,9 +122,14 @@ describe('classifyRawProjectVersion', () => {
     expect(classifyRawProjectVersion('null')).toBe('MALFORMED');
   });
 
-  it('accepts schemaVersion at the JS-safe-integer boundary (2^53 - 1)', () => {
+  it('accepts an integer schemaVersion at the JS-safe-integer boundary (2^53 - 1)', () => {
     // QNBS-v3: the largest integer both f64/JS Number and Rust can represent exactly - the joint admission-domain ceiling.
     expect(classifyRawProjectVersion('{"schemaVersion": 9007199254740991}')).toBe('FUTURE');
+  });
+
+  it('rejects a fractional raw token that rounds to the JS-safe-integer boundary', () => {
+    // QNBS-v3: mathematical integer validation must happen before JSON.parse rounds this token to 9007199254740991.
+    expect(classifyRawProjectVersion('{"schemaVersion": 9007199254740991.4}')).toBe('MALFORMED');
   });
 
   it('classifies schemaVersion one past the JS-safe-integer boundary as MALFORMED', () => {
