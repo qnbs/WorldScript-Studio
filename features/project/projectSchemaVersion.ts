@@ -71,6 +71,90 @@ function decodeJsonStringLiteral(literalWithQuotes: string): string | null {
   }
 }
 
+function isJsonDigit(ch: string | undefined): boolean {
+  return ch !== undefined && ch >= '0' && ch <= '9';
+}
+
+function skipJsonIntegerPart(rawText: string, start: number): number {
+  let i = start;
+  if (rawText[i] === '-') i++;
+  if (rawText[i] === '0') {
+    i++;
+  } else {
+    while (isJsonDigit(rawText[i])) i++;
+  }
+  return i;
+}
+
+function skipJsonFractionPart(rawText: string, start: number): number {
+  let i = start;
+  if (rawText[i] === '.') {
+    i++;
+    while (isJsonDigit(rawText[i])) i++;
+  }
+  return i;
+}
+
+function skipJsonExponentPart(rawText: string, start: number): number {
+  let i = start;
+  if (rawText[i] === 'e' || rawText[i] === 'E') {
+    i++;
+    if (rawText[i] === '+' || rawText[i] === '-') i++;
+    while (isJsonDigit(rawText[i])) i++;
+  }
+  return i;
+}
+
+/** Skips one already-validated JSON number and returns the index after its token. */
+function skipJsonNumberLiteral(rawText: string, start: number): number {
+  const afterInteger = skipJsonIntegerPart(rawText, start);
+  const afterFraction = skipJsonFractionPart(rawText, afterInteger);
+  return skipJsonExponentPart(rawText, afterFraction);
+}
+
+function updateJsonDepth(ch: string | undefined, depth: number): number {
+  if (ch === '{' || ch === '[') return depth + 1;
+  if (ch === '}' || ch === ']') return depth - 1;
+  return depth;
+}
+
+function readTopLevelSchemaVersionNumberToken(
+  rawText: string,
+  stringStart: number,
+  stringEnd: number,
+): string | null {
+  let valueStart = stringEnd;
+  while (valueStart < rawText.length && /\s/.test(rawText[valueStart] ?? '')) valueStart++;
+  if (rawText[valueStart] !== ':') return null;
+  const decoded = decodeJsonStringLiteral(rawText.slice(stringStart, stringEnd));
+  if (decoded !== 'schemaVersion') return null;
+  valueStart++;
+  while (valueStart < rawText.length && /\s/.test(rawText[valueStart] ?? '')) valueStart++;
+  if (rawText[valueStart] !== '-' && !isJsonDigit(rawText[valueStart])) return null;
+  return rawText.slice(valueStart, skipJsonNumberLiteral(rawText, valueStart));
+}
+
+/** Returns the top-level schemaVersion number token without applying IEEE-754 rounding. */
+function findTopLevelSchemaVersionNumberToken(rawText: string): string | null {
+  let depth = 0;
+  let i = 0;
+  while (i < rawText.length) {
+    const ch = rawText[i];
+    if (ch === '"') {
+      const stringStart = i;
+      i = skipJsonStringLiteral(rawText, i);
+      if (depth === 1) {
+        const token = readTopLevelSchemaVersionNumberToken(rawText, stringStart, i);
+        if (token !== null) return token;
+      }
+      continue;
+    }
+    depth = updateJsonDepth(ch, depth);
+    i++;
+  }
+  return null;
+}
+
 /**
  * Yields the *decoded* name of every JSON object key at the outermost (depth-1) object level of
  * `rawText`, in source order — decoded per JSON string-escape rules, not raw source spelling, so
@@ -137,6 +221,69 @@ function tryParseJsonObject(rawText: string): Record<string, unknown> | null {
   return parsed as Record<string, unknown>;
 }
 
+type RawSchemaVersionNumber = {
+  isNegative: boolean;
+  significantDigits: string;
+  fractionalDigitsLength: number;
+  exponent: number;
+};
+
+function parseRawSchemaVersionNumber(token: string): RawSchemaVersionNumber {
+  const isNegative = token.startsWith('-');
+  const unsignedToken = isNegative ? token.slice(1) : token;
+  const exponentIndex = unsignedToken.search(/[eE]/);
+  const mantissa = exponentIndex === -1 ? unsignedToken : unsignedToken.slice(0, exponentIndex);
+  const exponentText = exponentIndex === -1 ? '' : unsignedToken.slice(exponentIndex + 1);
+  const decimalIndex = mantissa.indexOf('.');
+  const integerDigits = decimalIndex === -1 ? mantissa : mantissa.slice(0, decimalIndex);
+  const fractionalDigits = decimalIndex === -1 ? '' : mantissa.slice(decimalIndex + 1);
+  return {
+    isNegative,
+    significantDigits: `${integerDigits}${fractionalDigits}`.replace(/^0+/, ''),
+    fractionalDigitsLength: fractionalDigits.length,
+    exponent: exponentText === '' ? 0 : Number(exponentText),
+  };
+}
+
+function normalizeRawSchemaVersionInteger(parts: RawSchemaVersionNumber): string | null {
+  const decimalShift = parts.exponent - parts.fractionalDigitsLength;
+  const maxSafeIntegerText = String(Number.MAX_SAFE_INTEGER);
+
+  if (decimalShift >= 0) {
+    if (
+      !Number.isFinite(decimalShift) ||
+      parts.significantDigits.length + decimalShift > maxSafeIntegerText.length
+    ) {
+      return null;
+    }
+    return `${parts.significantDigits}${'0'.repeat(decimalShift)}`;
+  }
+  if (!Number.isFinite(decimalShift)) return null;
+  const requiredTrailingZeros = -decimalShift;
+  const trailingZeros =
+    parts.significantDigits.length - parts.significantDigits.replace(/0+$/, '').length;
+  if (requiredTrailingZeros > trailingZeros) return null;
+  return parts.significantDigits.slice(0, parts.significantDigits.length - requiredTrailingZeros);
+}
+
+function isWithinSchemaVersionSafeIntegerDomain(normalizedInteger: string): boolean {
+  const maxSafeIntegerText = String(Number.MAX_SAFE_INTEGER);
+  return (
+    normalizedInteger.length < maxSafeIntegerText.length ||
+    (normalizedInteger.length === maxSafeIntegerText.length &&
+      normalizedInteger <= maxSafeIntegerText)
+  );
+}
+
+// QNBS-v3: reject mathematically fractional raw tokens before IEEE-754 rounding can make them look integral.
+function isMathematicallyNonNegativeIntegerToken(token: string): boolean {
+  const parts = parseRawSchemaVersionNumber(token);
+  if (parts.significantDigits.length === 0) return true;
+  if (parts.isNegative) return false;
+  const normalizedInteger = normalizeRawSchemaVersionInteger(parts);
+  return normalizedInteger !== null && isWithinSchemaVersionSafeIntegerDomain(normalizedInteger);
+}
+
 /**
  * The accepted `schemaVersion` value grammar: a non-negative integer JSON number within the
  * jointly-exact domain both TS (`Number`, exact only up to `Number.MAX_SAFE_INTEGER`) and Rust
@@ -181,7 +328,14 @@ export function classifyRawProjectVersion(rawText: string): ProjectVersionClassi
   if (!Object.hasOwn(record, 'schemaVersion')) return 'LEGACY_UNVERSIONED';
 
   const value = record['schemaVersion'];
-  if (!isValidSchemaVersionValue(value)) return 'MALFORMED';
+  const rawToken = findTopLevelSchemaVersionNumberToken(rawText);
+  if (
+    !isValidSchemaVersionValue(value) ||
+    rawToken === null ||
+    !isMathematicallyNonNegativeIntegerToken(rawToken)
+  ) {
+    return 'MALFORMED';
+  }
 
   return classifyVersionNumber(value);
 }
