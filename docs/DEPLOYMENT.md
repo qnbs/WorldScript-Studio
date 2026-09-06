@@ -47,6 +47,15 @@ gh run view <run-id> --log-failed
 5. SPA routing: `rewrites` in `vercel.json` → `index.html`.
 6. **Preview deployments:** enabled per branch/PR by default.
 
+After each merged PR, the exact resulting-main CI and CodeQL runs must be
+successful before the authenticated Preview retention procedure runs. Follow
+[`VERCEL-PREVIEW-RETENTION-POLICY.md`](VERCEL-PREVIEW-RETENTION-POLICY.md) for
+the dry-run, three-Preview open-PR retention, protected Production aliases,
+closed-PR/orphan classification, deletion, redaction, and post-cleanup proof.
+The GitHub workflow [`prune-deployments.yml`](../.github/workflows/prune-deployments.yml)
+prunes GitHub Deployment records only; it does not delete Vercel deployment
+artifacts.
+
 ---
 
 ## Cloudflare Pages

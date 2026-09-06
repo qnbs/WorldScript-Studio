@@ -1,4 +1,4 @@
-name: Prune old deployments
+name: Prune old GitHub deployment records
 
 on:
   workflow_run:
@@ -15,22 +15,24 @@ permissions:
 
 jobs:
   prune:
-    name: Keep latest 3 deployments
+    name: Keep latest 3 GitHub deployment records
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       deployments: write
     steps:
-      - name: Delete stale deployments — keep latest 3 per environment
+      - name: Delete stale GitHub deployment records — keep latest 3 per environment
         # QNBS-v3: v9.0.0 uses node24 — v7 was node20 (deprecated June 2026)
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const KEEP = 3;
 
-            // QNBS-v3: Paginate ALL deployments (not just one environment) — Vercel creates
-            //          "Production" and "Preview" environments that accumulate independently
-            //          of the "github-pages" environment; the old filter missed them entirely.
+            // QNBS-v3: This API manages GitHub Deployment records only. It does not delete
+            //          Vercel deployment artifacts; see docs/VERCEL-PREVIEW-RETENTION-POLICY.md
+            //          and issue #627 for the separate protected Vercel cleanup procedure.
+            // QNBS-v3: Paginate ALL records (not just one environment) so GitHub's own
+            //          Production/Preview/github-pages records do not accumulate silently.
             const allDeployments = await github.paginate(
               github.rest.repos.listDeployments,
               {
