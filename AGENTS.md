@@ -424,6 +424,19 @@ deploy (main, non-PR) needs: ci-success ──► GitHub Pages
 
 Edge builds run `scripts/build-edge.mjs` which sets `DEPLOY_TARGET=edge` and patches manifest/offline/404 files.
 
+### Vercel Preview retention after merge
+
+After every merge to `main`, wait for the exact resulting-main CI and CodeQL
+gate to be truthful-green, then run the authenticated Vercel Preview
+reconciliation in [`docs/VERCEL-PREVIEW-RETENTION-POLICY.md`](docs/VERCEL-PREVIEW-RETENTION-POLICY.md)
+before starting dependent mutation. Retain the newest three Previews for each
+open PR, never delete Production/main aliases or configuration, use an exact
+dry-run manifest, and delete only explicitly classified stale deployment IDs.
+The existing `.github/workflows/prune-deployments.yml` removes GitHub
+Deployment records only; it is not Vercel artifact cleanup. Redact creator
+emails and all secrets in reports and local logs. Follow #627 for the future
+least-privilege automation path; do not use a project-wide Vercel removal.
+
 ---
 
 ## PR Review & Merge Discipline

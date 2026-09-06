@@ -50,6 +50,7 @@ pnpm run token:audit        # audit-tokens.mjs — design-token usage gate (CI b
 - The normal path is protected squash **auto-merge**, enabled only after this repo's own stricter criteria are met, not just GitHub's branch-protection floor — see `PR-CI-MERGE-WORKFLOW.md`'s merge-mechanics paragraph for the exact command (`--match-head-commit <SHA>` pinning, `--delete-branch` gated by a paginated dependent-PR check, not restated here to avoid a drifting duplicate). An admin/protection bypass is never a standing fallback — it needs fresh, explicit maintainer authorization for that specific incident.
 - Any `FAILURE` status, required or advisory, is zero-tolerance — never merge past one.
 - Fix the root cause of CodeQL/security findings — never just suppress. Every GitHub Actions workflow must set top-level `permissions: contents: read`.
+- After every merge to `main`, wait for the exact resulting-main CI and CodeQL runs to be truthful-green, then execute the authenticated Vercel Preview retention procedure in [`docs/VERCEL-PREVIEW-RETENTION-POLICY.md`](docs/VERCEL-PREVIEW-RETENTION-POLICY.md) before dependent mutation. Keep the newest three Previews for every open PR; never delete Production/main aliases, configuration, or rollback history. The GitHub deployment-record pruner is not Vercel artifact cleanup, and all creator emails/secrets are redacted in reports.
 
 Pre-commit hook runs Biome check via `simple-git-hooks` + `lint-staged` on staged files.
 
