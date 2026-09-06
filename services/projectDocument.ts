@@ -329,7 +329,7 @@ export function admitCanonicalProjectDocument<TProjection>(
     safeParse(value: unknown): CanonicalProjectSchemaResult<TProjection>;
   },
 ): CanonicalProjectAdmission<TProjection> {
-  // QNBS-v3: refuse unsupported or invalid states before granting any editable migration authority.
+  // QNBS-v3: preserve source raw data and revalidate the overlaid carrier before migration authority.
   const source = parseCanonicalProjectDocument(text, schema);
 
   if (source.classification === 'CURRENT' && source.projection !== null) {
