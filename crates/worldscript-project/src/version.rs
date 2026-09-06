@@ -386,16 +386,94 @@ fn finish_value(stack: &mut [Frame]) {
     }
 }
 
+/// Returns whether a JSON number is mathematically a non-negative integer within the jointly-safe
+/// schema-version domain, without allowing IEEE-754 rounding to redefine its grammar.
+// QNBS-v3: raw-token validation keeps TS/Rust aligned for fractional literals near the safe-integer boundary.
+fn is_mathematically_non_negative_integer_token(raw_token: &str) -> bool {
+    let (is_negative, unsigned_token) = raw_token
+        .strip_prefix('-')
+        .map_or((false, raw_token), |token| (true, token));
+    let exponent_index = unsigned_token.find(['e', 'E']);
+    let (mantissa, exponent_text) = exponent_index.map_or((unsigned_token, ""), |index| {
+        (&unsigned_token[..index], &unsigned_token[index + 1..])
+    });
+    let decimal_index = mantissa.find('.');
+    let (integer_digits, fractional_digits) = decimal_index.map_or((mantissa, ""), |index| {
+        (&mantissa[..index], &mantissa[index + 1..])
+    });
+    let mut digits = String::with_capacity(integer_digits.len() + fractional_digits.len());
+    digits.push_str(integer_digits);
+    digits.push_str(fractional_digits);
+    let significant_digits = digits.trim_start_matches('0');
+    if significant_digits.is_empty() {
+        return true;
+    }
+    if is_negative {
+        return false;
+    }
+
+    let exponent = if exponent_text.is_empty() {
+        0
+    } else {
+        let (negative_exponent, unsigned_exponent) =
+            if let Some(text) = exponent_text.strip_prefix('-') {
+                (true, text)
+            } else {
+                (
+                    false,
+                    exponent_text.strip_prefix('+').unwrap_or(exponent_text),
+                )
+            };
+        let mut magnitude = 0_i128;
+        for byte in unsigned_exponent.bytes() {
+            magnitude = magnitude
+                .saturating_mul(10)
+                .saturating_add(i128::from(byte - b'0'));
+        }
+        if negative_exponent {
+            -magnitude
+        } else {
+            magnitude
+        }
+    };
+    let fractional_length = i128::try_from(fractional_digits.len()).unwrap_or(i128::MAX);
+    let decimal_shift = exponent.saturating_sub(fractional_length);
+    const MAX_SAFE_INTEGER_TEXT: &str = "9007199254740991";
+
+    let normalized_integer = if decimal_shift >= 0 {
+        let Ok(shift) = usize::try_from(decimal_shift) else {
+            return false;
+        };
+        if significant_digits.len().saturating_add(shift) > MAX_SAFE_INTEGER_TEXT.len() {
+            return false;
+        }
+        format!("{}{}", significant_digits, "0".repeat(shift))
+    } else {
+        let Ok(required_trailing_zeros) = usize::try_from(decimal_shift.unsigned_abs()) else {
+            return false;
+        };
+        let trailing_zeros = significant_digits
+            .bytes()
+            .rev()
+            .take_while(|byte| *byte == b'0')
+            .count();
+        if required_trailing_zeros > trailing_zeros {
+            return false;
+        }
+        significant_digits[..significant_digits.len() - required_trailing_zeros].to_owned()
+    };
+
+    normalized_integer.len() < MAX_SAFE_INTEGER_TEXT.len()
+        || (normalized_integer.len() == MAX_SAFE_INTEGER_TEXT.len()
+            && normalized_integer.as_str() <= MAX_SAFE_INTEGER_TEXT)
+}
+
 /// The accepted `schemaVersion` value grammar: a non-negative integer JSON number within the
 /// jointly-exact domain both TS (`Number`, exact only up to `2^53 - 1`) and Rust can represent
-/// without rounding. Compares by numeric value, never by which `serde_json::Value` variant parsed
-/// it as — JS's `JSON.parse` collapses `1` and `1.0` into the same number
-/// (`Number.isInteger(1.0)` is `true`), so an integer-valued decimal literal like `1.0` must
-/// classify identically here, not be rejected merely because `serde_json` parses a decimal-point
-/// literal as its `Float` variant. A value outside `[0, 2^53 - 1]` is `Malformed`: beyond that
-/// bound, `f64` (and therefore JS's `Number`) can no longer represent every integer exactly, so
-/// TS and Rust could silently disagree on the value — this is a joint admission-domain limit for
-/// the `schemaVersion` discriminant specifically, not a statement about opaque numeric fields
+/// without rounding. A value outside `[0, 2^53 - 1]` is `Malformed`: beyond that bound, `f64`
+/// (and therefore JS's `Number`) can no longer represent every integer exactly, so TS and Rust
+/// could silently disagree on the value — this is a joint admission-domain limit for the
+/// `schemaVersion` discriminant specifically, not a statement about opaque numeric fields
 /// elsewhere in the document.
 fn validated_schema_version_number(
     sighting: &SchemaVersionSighting,
@@ -404,8 +482,11 @@ fn validated_schema_version_number(
     let SchemaVersionSighting::Scalar(start, end) = sighting else {
         return None;
     };
-    // QNBS-v3: parses the raw token text directly via Rust's std f64 parser (verified to match V8's rounding exactly) rather than serde_json::Value::as_f64, whose own number handling rounds some large decimal literals differently and broke parity at the safe-integer boundary.
-    let numeric: f64 = raw_text[*start..*end].parse().ok()?;
+    let raw_token = &raw_text[*start..*end];
+    if !is_mathematically_non_negative_integer_token(raw_token) {
+        return None;
+    }
+    let numeric: f64 = raw_token.parse().ok()?;
     const MAX_SAFE_INTEGER: f64 = 9007199254740991.0; // 2^53 - 1
     if !numeric.is_finite()
         || numeric.fract() != 0.0

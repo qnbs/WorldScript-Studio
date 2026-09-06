@@ -59,12 +59,16 @@ fn unregistered_lower_version_is_unsupported_older() {
 
 #[test]
 fn integer_valued_float_literal_matches_ts_json_parse_semantics() {
-    // QNBS-v3: JS's JSON.parse collapses 1 and 1.0 into the same number; serde_json parses "1.0" as its Float variant, so this must compare by value, not representation, for TS/Rust parity.
-    let raw = format!(r#"{{"schemaVersion": {CURRENT_PROJECT_SCHEMA_VERSION}.0}}"#);
-    assert_eq!(
-        classify_raw_project_version(&raw),
-        ProjectVersionClassification::Current
-    );
+    // QNBS-v3: mathematically integer decimal/exponent spellings remain valid after raw-token validation.
+    for raw in [
+        format!(r#"{{"schemaVersion": {CURRENT_PROJECT_SCHEMA_VERSION}.0}}"#),
+        format!(r#"{{"schemaVersion": {CURRENT_PROJECT_SCHEMA_VERSION}e0}}"#),
+    ] {
+        assert_eq!(
+            classify_raw_project_version(&raw),
+            ProjectVersionClassification::Current
+        );
+    }
 }
 
 #[test]
@@ -252,12 +256,12 @@ fn schema_version_at_the_js_safe_integer_boundary_is_accepted() {
 }
 
 #[test]
-fn fractional_literal_rounding_near_the_boundary_matches_v8_not_serde_json_value() {
-    // QNBS-v3: serde_json::Value::as_f64() rounds "9007199254740991.4" to 9007199254740992 (rejected), while V8's Number() and Rust's std str::parse::<f64> both round it to 9007199254740991 (accepted) - the fix parses the raw token directly to avoid this specific serde_json rounding divergence.
+fn fractional_literal_near_the_boundary_is_malformed_before_rounding() {
+    // QNBS-v3: mathematical integer validation must happen before f64 rounding can make this token look integral.
     let raw = r#"{"schemaVersion": 9007199254740991.4}"#;
     assert_eq!(
         classify_raw_project_version(raw),
-        ProjectVersionClassification::Future
+        ProjectVersionClassification::Malformed
     );
 }
 
