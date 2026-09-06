@@ -27,6 +27,7 @@ export interface CanonicalProjectDocument<TProjection> {
   error: string | null;
 }
 
+// QNBS-v3: keep source, migration, and refusal verdicts distinct before any writer gains authority.
 export type CanonicalProjectAdmissionStatus = 'CURRENT' | 'LEGACY_TO_V1' | 'REFUSED';
 
 export interface CanonicalProjectAdmission<TProjection> {
@@ -164,24 +165,42 @@ function skipRawJsonScalar(raw: string, start: number): number {
   return index;
 }
 
+type RawJsonContainerStep = {
+  nextIndex: number;
+  nextDepth: number;
+  complete: boolean;
+};
+
+// QNBS-v3: isolate delimiter depth changes so the raw scanner's state transition stays auditable.
+function rawJsonContainerDepthDelta(character: string | undefined): number {
+  if (character === '{' || character === '[') return 1;
+  if (character === '}' || character === ']') return -1;
+  return 0;
+}
+
+function advanceRawJsonContainer(
+  raw: string,
+  index: number,
+  depth: number,
+): RawJsonContainerStep | null {
+  const character = raw[index];
+  if (character === '"') {
+    const stringEnd = skipRawJsonString(raw, index);
+    return stringEnd === null ? null : { nextIndex: stringEnd, nextDepth: depth, complete: false };
+  }
+  const nextDepth = depth + rawJsonContainerDepthDelta(character);
+  return { nextIndex: index + 1, nextDepth, complete: nextDepth === 0 };
+}
+
 function skipRawJsonContainer(raw: string, start: number): number | null {
   let depth = 0;
   let index = start;
   while (index < raw.length) {
-    const character = raw[index];
-    if (character === '"') {
-      const stringEnd = skipRawJsonString(raw, index);
-      if (stringEnd === null) return null;
-      index = stringEnd;
-      continue;
-    }
-    if (character === '{' || character === '[') {
-      depth++;
-    } else if (character === '}' || character === ']') {
-      depth--;
-      if (depth === 0) return index + 1;
-    }
-    index++;
+    const step = advanceRawJsonContainer(raw, index, depth);
+    if (step === null) return null;
+    if (step.complete) return step.nextIndex;
+    index = step.nextIndex;
+    depth = step.nextDepth;
   }
   return null;
 }
@@ -236,6 +255,36 @@ function readTopLevelObjectMembers(raw: string): CanonicalRawObjectMember[] | nu
   return null;
 }
 
+function collectTopLevelRemovalSpans(
+  members: readonly CanonicalRawObjectMember[],
+  keys: ReadonlySet<string>,
+): Array<{ start: number; end: number }> {
+  const spans: Array<{ start: number; end: number }> = [];
+  let index = 0;
+  while (index < members.length) {
+    const member = members[index];
+    if (!member || !keys.has(member.key)) {
+      index++;
+      continue;
+    }
+
+    const runStart = index;
+    while (index + 1 < members.length && keys.has(members[index + 1]?.key ?? '')) index++;
+    const runEnd = index;
+    const runFirst = members[runStart];
+    const runLast = members[runEnd];
+    const nextRetained = members[runEnd + 1];
+    if (!runFirst || !runLast) return spans;
+    spans.push(
+      nextRetained
+        ? { start: runFirst.start, end: nextRetained.start }
+        : { start: members[runStart - 1]?.valueEnd ?? runFirst.start, end: runLast.valueEnd },
+    );
+    index++;
+  }
+  return spans;
+}
+
 /** Removes backend-local top-level metadata while preserving every other raw JSON token. */
 // QNBS-v3: strip machine-local trust metadata only at the portable import boundary without narrowing opaque data.
 export function stripTopLevelObjectKeys(
@@ -246,18 +295,7 @@ export function stripTopLevelObjectKeys(
   const members = readTopLevelObjectMembers(raw);
   if (members === null) return null;
 
-  const removalSpans = members.flatMap((member, index) => {
-    if (!keys.has(member.key)) return [];
-    const nextMember = members[index + 1];
-    if (nextMember) {
-      return [{ start: member.start, end: nextMember.start }];
-    }
-    const previousMember = members[index - 1];
-    if (previousMember) {
-      return [{ start: previousMember.valueEnd, end: member.valueEnd }];
-    }
-    return [{ start: member.start, end: member.valueEnd }];
-  });
+  const removalSpans = collectTopLevelRemovalSpans(members, keys);
   if (removalSpans.length === 0) return raw;
 
   const mergedSpans = removalSpans

@@ -121,6 +121,20 @@ describe('parseCanonicalProjectDocument', () => {
     expect(JSON.parse(stripped ?? '')).toMatchObject({ schemaVersion: 1, opaque: {} });
   });
 
+  // QNBS-v3: adjacent trailing local metadata must remove the preceding survivor separator too.
+  it('removes adjacent local metadata keys at the end of an object without a trailing comma', () => {
+    const raw =
+      '{"title":"T","__worldscriptLegacyProjectDirectory":"project","__worldscriptLegacyAuxiliary":{}}';
+
+    const stripped = stripTopLevelObjectKeys(
+      raw,
+      new Set(['__worldscriptLegacyProjectDirectory', '__worldscriptLegacyAuxiliary']),
+    );
+
+    expect(stripped).toBe('{"title":"T"}');
+    expect(() => JSON.parse(stripped ?? '')).not.toThrow();
+  });
+
   // QNBS-v3: malformed raw-removal input fails closed instead of manufacturing a portable payload.
   it('fails closed when raw top-level removal cannot parse the object boundary', () => {
     expect(stripTopLevelObjectKeys('{"broken":"unterminated}', new Set(['broken']))).toBeNull();

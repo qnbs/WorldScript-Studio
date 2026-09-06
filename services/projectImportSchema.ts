@@ -159,6 +159,7 @@ function prototypeSafeEntityRecordSchema<T extends z.ZodTypeAny>(item: T) {
   );
 }
 
+// QNBS-v3: reject duplicate stable IDs before an imported projection receives editable authority.
 function validateEntityCollection(entities: readonly unknown[], context: z.RefinementCtx): void {
   const seenIds = new Set<string>();
   for (const [index, entity] of entities.entries()) {
@@ -179,6 +180,7 @@ function entityArraySchema<T extends z.ZodTypeAny>(item: T) {
   return z.array(item).superRefine(validateEntityCollection);
 }
 
+// QNBS-v3: require EntityState ids and entity keys to describe one lossless identity set.
 const entityStateSchema = <T extends z.ZodTypeAny>(item: T) =>
   z
     .object({
