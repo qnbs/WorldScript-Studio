@@ -5,6 +5,7 @@
  *          Phase 2 B-1: encrypt/decrypt on every saveSlice / loadState call when key is active.
  */
 
+import { observeProjectVersionClassificationFromObject } from '../../features/project/projectSchemaVersionShadow';
 import type { ProjectData } from '../../features/project/projectSlice';
 import { normalizeAccessibilitySettings } from '../../features/settings/accessibilitySchema';
 import { getDefaultKeyboardShortcuts } from '../../features/settings/keyboardShortcutsDefaults';
@@ -212,9 +213,35 @@ interface PersistedState {
   settings?: Settings;
 }
 
+// QNBS-v3: extracted so validateAndFixState's own branching stays low - this owns only the "what should be observed" selection for an already-known-present raw IDB project value.
+function selectIdbProjectObservationTarget(project: unknown): unknown {
+  const projectRecord =
+    typeof project === 'object' && project !== null
+      ? (project as PersistedProjectState)
+      : undefined;
+  // QNBS-v3: a record with its own schemaVersion is self-describing - classify it directly, before guessing it's a Redux envelope, so a flat FUTURE/CURRENT document that also happens to carry a data/present field is never misread via that field instead of its own header.
+  if (projectRecord && Object.hasOwn(projectRecord, 'schemaVersion')) {
+    return projectRecord;
+  }
+  const rawData = projectRecord
+    ? projectRecord.present
+      ? projectRecord.present.data
+      : projectRecord.data
+    : undefined;
+  return rawData === undefined ? project : rawData;
+}
+
 export class IdbProjectStore extends IdbAssetStore {
   // Helper to validate state structure and fix common issues
   private validateAndFixState(project: unknown, settings: unknown): PersistedState | undefined {
+    // QNBS-v3: project !== undefined (not truthiness) distinguishes an absent IDB record from a present-but-falsy one, so a corrupted top-level project record is observed instead of silently treated as absent.
+    if (project !== undefined) {
+      observeProjectVersionClassificationFromObject(
+        selectIdbProjectObservationTarget(project),
+        'idb-project-load',
+      );
+    }
+
     // If project is missing but we have settings, return partial to allow new user flow
     if (!project && !settings) return undefined;
 

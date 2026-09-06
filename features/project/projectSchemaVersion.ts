@@ -186,4 +186,35 @@ export function classifyRawProjectVersion(rawText: string): ProjectVersionClassi
   return classifyVersionNumber(value);
 }
 
+/**
+ * Classifies an already-deserialized persisted-project object by its `schemaVersion`, for
+ * ingress paths that never have a raw JSON text representation to classify in the first place —
+ * contract section 2.8's universal ingress admission names IndexedDB explicitly, and IndexedDB
+ * stores/retrieves structured-clone JS objects directly (`IDBObjectStore.put`/`.get`), with no
+ * JSON serialization step anywhere in that path (verified against
+ * `services/storage/idbProjectStore.ts`). Unlike `classifyRawProjectVersion`, there is no
+ * duplicate-key or JSON-escape concern here: a JS object literal cannot carry two properties with
+ * the same key — structured clone, like `JSON.parse`, has already resolved that before this
+ * function ever sees the value — so this only needs the same value-grammar and
+ * version-comparison rules, not a raw-text scan.
+ */
+// QNBS-v3: a second classifier variant is required because IDB ingress has no raw JSON text at all - reusing classifyRawProjectVersion here would need a wasteful re-serialize just to re-parse.
+export function classifyProjectVersionFromObject(value: unknown): ProjectVersionClassification {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return 'MALFORMED';
+  }
+  // QNBS-v3: IDB can store non-record structured-clone values (Date, Map, typed arrays); only a plain object literal (or Object.create(null)) is a valid project-envelope shape.
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== null && prototype !== Object.prototype) {
+    return 'MALFORMED';
+  }
+  const record = value as Record<string, unknown>;
+  if (!Object.hasOwn(record, 'schemaVersion')) return 'LEGACY_UNVERSIONED';
+
+  const versionValue = record['schemaVersion'];
+  if (!isValidSchemaVersionValue(versionValue)) return 'MALFORMED';
+
+  return classifyVersionNumber(versionValue);
+}
+
 // QNBS-v3: LEGACY_TO_V1 stamping (contract section 2.4's "verify" action) is deliberately not implemented here - a correct verify step needs the canonical MODEL_AND_VALIDATE projection (title/logline/author/characters/worlds/manuscript per section 2.1.1), which does not exist yet; a partial heuristic risked being relied on as if it proved V1 conformance. Deferred to the #553 slice that builds that projection.
