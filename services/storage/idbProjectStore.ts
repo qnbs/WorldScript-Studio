@@ -216,6 +216,23 @@ interface PersistedState {
 export class IdbProjectStore extends IdbAssetStore {
   // Helper to validate state structure and fix common issues
   private validateAndFixState(project: unknown, settings: unknown): PersistedState | undefined {
+    // QNBS-v3: project !== undefined (not truthiness) distinguishes an absent IDB record from a present-but-falsy one, so a corrupted top-level project record is observed instead of silently treated as absent.
+    if (project !== undefined) {
+      const projectRecord =
+        typeof project === 'object' && project !== null
+          ? (project as PersistedProjectState)
+          : undefined;
+      const observedRawData = projectRecord
+        ? projectRecord.present
+          ? projectRecord.present.data
+          : projectRecord.data
+        : undefined;
+      observeProjectVersionClassificationFromObject(
+        observedRawData === undefined ? project : observedRawData,
+        'idb-project-load',
+      );
+    }
+
     // If project is missing but we have settings, return partial to allow new user flow
     if (!project && !settings) return undefined;
 
@@ -224,11 +241,6 @@ export class IdbProjectStore extends IdbAssetStore {
     // Ensure Project Structure consistency
     if (validProject) {
       const rawData = validProject.present ? validProject.present.data : validProject.data;
-      // QNBS-v3: undefined (not merely falsy) means neither .present.data nor .data resolved at all, so only then fall back to the envelope - a persisted null/false payload must be observed as itself, per contract section 2.8's universal ingress admission (observation-only, Slice B).
-      observeProjectVersionClassificationFromObject(
-        rawData === undefined ? validProject : rawData,
-        'idb-project-load',
-      );
       if (rawData) {
         // Ensure projectGoals exists
         if (!rawData.projectGoals) {

@@ -118,6 +118,26 @@ describe('IdbProjectStore#loadState — universal ingress admission observation'
     expect(h.observe).toHaveBeenCalledWith(null, 'idb-project-load');
   });
 
+  it('observes a top-level falsy-but-present project record as itself', async () => {
+    // QNBS-v3: project !== undefined (not truthiness) gates this - a corrupted top-level null/false record is a real classification target, distinct from an absent IDB record (undefined), even though both trigger the same "no project to load" early return below.
+    const projectStore = new IdbProjectStore();
+    const { store, projectRequest, settingsRequest } = makeFakeStore(null, undefined);
+    vi.spyOn(
+      projectStore as unknown as { getObjectStore: () => Promise<unknown> },
+      'getObjectStore',
+    ).mockResolvedValue(store as never);
+
+    const loadPromise = projectStore.loadState();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    projectRequest.onsuccess?.();
+    settingsRequest.onsuccess?.();
+    const result = await loadPromise;
+
+    expect(h.observe).toHaveBeenCalledTimes(1);
+    expect(h.observe).toHaveBeenCalledWith(null, 'idb-project-load');
+    expect(result).toBeUndefined();
+  });
+
   it('does not observe when no project is persisted', async () => {
     const projectStore = new IdbProjectStore();
     const { store, projectRequest, settingsRequest } = makeFakeStore(undefined, { theme: 'dark' });
