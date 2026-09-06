@@ -9,6 +9,7 @@ const validProject = {
 };
 
 describe('parseCanonicalProjectDocument', () => {
+  // QNBS-v3: prove the raw carrier remains authoritative when the typed projection is narrower.
   it('retains unknown fields in the raw carrier while projecting owned V1 fields', () => {
     const raw =
       '{"schemaVersion":1,"title":"Canonical project","logline":"A project used to prove raw-carrier behavior.","manuscript":[],"opaqueTopLevel":{"exact":9007199254740993},"characters":[{"id":"character-1","name":"A character","opaqueNested":{"preserved":true}}]}';

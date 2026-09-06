@@ -1,5 +1,5 @@
 import {
-  classifyRawProjectVersion,
+  classifyRawProjectVersionFromParsed,
   type ProjectVersionClassification,
 } from '../features/project/projectSchemaVersion';
 
@@ -33,11 +33,14 @@ function validationError(result: {
   return `Invalid project file: ${detail}`;
 }
 
+function shouldProjectClassification(classification: ProjectVersionClassification): boolean {
+  return classification === 'LEGACY_UNVERSIONED' || classification === 'CURRENT';
+}
+
 /**
  * Parses one project document into its canonical raw carrier and the bounded V1-owned projection.
- * Header classification happens first so future and migration-gap payloads are preserved without
- * being forced through a current typed schema; a current typed failure is MALFORMED instead of
- * receiving editable authority.
+ * Raw header checks happen before typed validation so future and migration-gap payloads are
+ * preserved without receiving editable authority.
  */
 export function parseCanonicalProjectDocument<TProjection>(
   text: string,
@@ -45,7 +48,6 @@ export function parseCanonicalProjectDocument<TProjection>(
     safeParse(value: unknown): CanonicalProjectSchemaResult<TProjection>;
   },
 ): CanonicalProjectDocument<TProjection> {
-  const classification = classifyRawProjectVersion(text);
   let parsed: unknown;
   try {
     parsed = JSON.parse(text) as unknown;
@@ -67,7 +69,12 @@ export function parseCanonicalProjectDocument<TProjection>(
     };
   }
 
-  if (classification !== 'LEGACY_UNVERSIONED' && classification !== 'CURRENT') {
+  // QNBS-v3: reuse the validated object so raw admission and typed projection do not double-parse large imports.
+  const classification = classifyRawProjectVersionFromParsed(
+    text,
+    parsed as Record<string, unknown>,
+  );
+  if (!shouldProjectClassification(classification)) {
     return {
       classification,
       raw: text,
