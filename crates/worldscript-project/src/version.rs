@@ -483,7 +483,11 @@ fn validated_schema_version_number(
         return None;
     };
     let raw_token = &raw_text[*start..*end];
-    if !is_mathematically_non_negative_integer_token(raw_token) {
+    let token_bytes = raw_token.as_bytes();
+    // QNBS-v3: validate the captured JSON token before grammar-specific arithmetic can inspect it.
+    if validate_json_number(token_bytes, 0) != Some(token_bytes.len())
+        || !is_mathematically_non_negative_integer_token(raw_token)
+    {
         return None;
     }
     let numeric: f64 = raw_token.parse().ok()?;

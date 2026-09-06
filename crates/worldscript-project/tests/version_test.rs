@@ -75,6 +75,7 @@ fn integer_valued_float_literal_matches_ts_json_parse_semantics() {
 fn present_invalid_values_are_malformed() {
     for raw in [
         r#"{"schemaVersion": "1"}"#,
+        r#"{"schemaVersion": "1e"}"#,
         r#"{"schemaVersion": null}"#,
         r#"{"schemaVersion": 1.5}"#,
         r#"{"schemaVersion": -1}"#,
