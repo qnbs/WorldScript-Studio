@@ -168,6 +168,7 @@ describe('bundle budget truth', () => {
     ).toEqual([expect.stringContaining('does not match config/bundle-budget.json')]);
   });
 
+  // QNBS-v3: Localized help truth prevents user-facing budget drift across all 19 locales.
   it('checks the localized in-app help claim independently of formatting', () => {
     const localeFiles = readdirSync(join(process.cwd(), 'locales'), { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
