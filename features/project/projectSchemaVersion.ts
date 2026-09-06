@@ -323,6 +323,18 @@ function classifyVersionNumber(version: number): ProjectVersionClassification {
 export function classifyRawProjectVersion(rawText: string): ProjectVersionClassification {
   const record = tryParseJsonObject(rawText);
   if (record === null) return 'MALFORMED';
+  return classifyRawProjectVersionFromParsed(rawText, record);
+}
+
+/**
+ * Classifies raw JSON after its object parse has already succeeded. This keeps raw duplicate-key
+ * and numeric-token checks while allowing canonical admission to reuse the parsed value for typed
+ * projection instead of parsing the complete document a second time.
+ */
+export function classifyRawProjectVersionFromParsed(
+  rawText: string,
+  record: Record<string, unknown>,
+): ProjectVersionClassification {
   if (hasDuplicateTopLevelKey(rawText, 'schemaVersion')) return 'MALFORMED';
   // QNBS-v3: Object.hasOwn (not `in`) so a polluted Object.prototype.schemaVersion can never make a genuinely absent field look present.
   if (!Object.hasOwn(record, 'schemaVersion')) return 'LEGACY_UNVERSIONED';

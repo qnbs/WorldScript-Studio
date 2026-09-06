@@ -350,6 +350,7 @@ export const importedProjectJsonSchema = z.object({
 
 export type ImportedProjectJson = z.infer<typeof importedProjectJsonSchema>;
 
+// QNBS-v3: route file imports through the canonical admission boundary before exposing editable data.
 export function parseImportedProjectJson(text: string): ImportedProjectJson {
   const document = parseCanonicalProjectDocument(text, importedProjectJsonSchema);
   if (document.projection !== null) {
