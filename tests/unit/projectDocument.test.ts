@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { parseCanonicalProjectDocument } from '../../services/projectDocument';
+import {
+  admitCanonicalProjectDocument,
+  parseCanonicalProjectDocument,
+  stripTopLevelObjectKeys,
+} from '../../services/projectDocument';
 import { importedProjectJsonSchema } from '../../services/projectImportSchema';
 
 const validProject = {
@@ -76,5 +80,86 @@ describe('parseCanonicalProjectDocument', () => {
     expect(document.raw).toBe('{"schemaVersion":1');
     expect(document.projection).toBeNull();
     expect(document.error).toMatch(/not valid JSON/);
+  });
+
+  it('performs explicit LEGACY_TO_V1 admission without reserializing the source payload', () => {
+    const raw =
+      '{\n  "title":"Legacy project",\n  "logline":"Preserve this",\n  "manuscript":[],\n  "opaque":{"exact":9007199254740993}\n}';
+
+    const admission = admitCanonicalProjectDocument(raw, importedProjectJsonSchema);
+
+    expect(admission.status).toBe('LEGACY_TO_V1');
+    expect(admission.source.classification).toBe('LEGACY_UNVERSIONED');
+    expect(admission.canonical?.classification).toBe('CURRENT');
+    expect(admission.canonical?.projection?.title).toBe('Legacy project');
+    expect(admission.canonical?.raw).toContain('"schemaVersion":1');
+    expect(admission.canonical?.raw).toContain('9007199254740993');
+    expect(admission.canonical?.raw).toContain('"opaque":{"exact":9007199254740993}');
+  });
+
+  // QNBS-v3: current documents retain editable authority without a second migration classification.
+  it('admits an already-current valid document as CURRENT', () => {
+    const raw = JSON.stringify({ schemaVersion: 1, ...validProject });
+    const admission = admitCanonicalProjectDocument(raw, importedProjectJsonSchema);
+
+    expect(admission.status).toBe('CURRENT');
+    expect(admission.canonical).toBe(admission.source);
+    expect(admission.canonical?.raw).toBe(raw);
+  });
+
+  // QNBS-v3: raw top-level removal must preserve opaque nested values and delimiters around survivors.
+  it('removes selected top-level keys without reserializing surviving raw JSON', () => {
+    const raw =
+      '{\n  "local":"directory",\n  "schemaVersion":1,\n  "opaque":{"exact":9007199254740993},\n  "aux":true\n}';
+
+    const stripped = stripTopLevelObjectKeys(raw, new Set(['local', 'aux']));
+
+    expect(stripped).toContain('"schemaVersion":1');
+    expect(stripped).toContain('9007199254740993');
+    expect(stripped).not.toContain('"local"');
+    expect(stripped).not.toContain('"aux"');
+    expect(JSON.parse(stripped ?? '')).toMatchObject({ schemaVersion: 1, opaque: {} });
+  });
+
+  // QNBS-v3: adjacent trailing local metadata must remove the preceding survivor separator too.
+  it('removes adjacent local metadata keys at the end of an object without a trailing comma', () => {
+    const raw =
+      '{"title":"T","__worldscriptLegacyProjectDirectory":"project","__worldscriptLegacyAuxiliary":{}}';
+
+    const stripped = stripTopLevelObjectKeys(
+      raw,
+      new Set(['__worldscriptLegacyProjectDirectory', '__worldscriptLegacyAuxiliary']),
+    );
+
+    expect(stripped).toBe('{"title":"T"}');
+    expect(() => JSON.parse(stripped ?? '')).not.toThrow();
+  });
+
+  // QNBS-v3: malformed raw-removal input fails closed instead of manufacturing a portable payload.
+  it('fails closed when raw top-level removal cannot parse the object boundary', () => {
+    expect(stripTopLevelObjectKeys('{"broken":"unterminated}', new Set(['broken']))).toBeNull();
+    expect(stripTopLevelObjectKeys('{"kept":1}', new Set())).toBe('{"kept":1}');
+  });
+
+  it('refuses legacy input that fails the complete V1 projection', () => {
+    const admission = admitCanonicalProjectDocument(
+      JSON.stringify({ title: 'Missing logline', manuscript: [] }),
+      importedProjectJsonSchema,
+    );
+
+    expect(admission.status).toBe('REFUSED');
+    expect(admission.source.classification).toBe('MALFORMED');
+    expect(admission.canonical).toBeNull();
+  });
+
+  it.each([
+    ['future', JSON.stringify({ schemaVersion: 99, title: 'Future' })],
+    ['migration gap', JSON.stringify({ schemaVersion: 0, ...validProject })],
+    ['current typed failure', JSON.stringify({ ...validProject, schemaVersion: 1, title: 42 })],
+  ])('refuses %s documents without a canonical editable projection', (_label, raw) => {
+    const admission = admitCanonicalProjectDocument(raw, importedProjectJsonSchema);
+
+    expect(admission.status).toBe('REFUSED');
+    expect(admission.canonical).toBeNull();
   });
 });

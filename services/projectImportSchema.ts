@@ -3,7 +3,17 @@
  * QNBS-v3: Einheitliches Schema verhindert divergierende Parse-Pfade und härter gegen korrupte Dateien.
  */
 import { z } from 'zod';
-import { parseCanonicalProjectDocument } from './projectDocument';
+import {
+  admitCanonicalProjectDocument,
+  type CanonicalProjectAdmission,
+  parseCanonicalProjectDocument,
+  stripTopLevelObjectKeys,
+} from './projectDocument';
+
+const PORTABLE_IMPORT_LOCAL_METADATA_KEYS = new Set([
+  '__worldscriptLegacyProjectDirectory',
+  '__worldscriptLegacyAuxiliary',
+]);
 
 const binderNodeTypeSchema = z.enum(['folder', 'text', 'note', 'image', 'pdf', 'link']);
 
@@ -149,18 +159,89 @@ function prototypeSafeEntityRecordSchema<T extends z.ZodTypeAny>(item: T) {
   );
 }
 
+// QNBS-v3: reject duplicate stable IDs before an imported projection receives editable authority.
+function validateEntityCollection(entities: readonly unknown[], context: z.RefinementCtx): void {
+  const seenIds = new Set<string>();
+  for (const [index, entity] of entities.entries()) {
+    const id = (entity as { id?: unknown } | null)?.id;
+    if (typeof id !== 'string') continue;
+    if (seenIds.has(id)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [index, 'id'],
+        message: `duplicate entity id "${id}"`,
+      });
+    }
+    seenIds.add(id);
+  }
+}
+
+function entityArraySchema<T extends z.ZodTypeAny>(item: T) {
+  return z.array(item).superRefine(validateEntityCollection);
+}
+
+// QNBS-v3: require EntityState ids and entity keys to describe one lossless identity set.
 const entityStateSchema = <T extends z.ZodTypeAny>(item: T) =>
-  z.object({
-    ids: z.array(z.string()),
-    entities: prototypeSafeEntityRecordSchema(item),
-  });
+  z
+    .object({
+      ids: z.array(z.string()),
+      entities: prototypeSafeEntityRecordSchema(item),
+    })
+    .superRefine((state, context) => {
+      const seenIds = new Set<string>();
+      for (const [index, id] of state.ids.entries()) {
+        if (seenIds.has(id)) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['ids', index],
+            message: `duplicate entity id "${id}"`,
+          });
+          continue;
+        }
+        seenIds.add(id);
+        if (!Object.hasOwn(state.entities, id)) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['entities', id],
+            message: `ids references missing entity "${id}"`,
+          });
+          continue;
+        }
+        const entity = state.entities[id] as { id?: unknown };
+        if (entity.id !== id) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['entities', id, 'id'],
+            message: `entity id does not match key "${id}"`,
+          });
+        }
+      }
+
+      for (const [key, entity] of Object.entries(state.entities)) {
+        const entityId = (entity as { id?: unknown }).id;
+        if (entityId !== key) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['entities', key, 'id'],
+            message: `entity id does not match key "${key}"`,
+          });
+        }
+        if (!seenIds.has(key)) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['entities', key],
+            message: `orphan entity "${key}" is absent from ids`,
+          });
+        }
+      }
+    });
 
 const charactersFieldSchema = z.union([
-  z.array(characterSchema),
+  entityArraySchema(characterSchema),
   entityStateSchema(characterSchema),
 ]);
 
-const worldsFieldSchema = z.union([z.array(worldSchema), entityStateSchema(worldSchema)]);
+const worldsFieldSchema = z.union([entityArraySchema(worldSchema), entityStateSchema(worldSchema)]);
 
 const writingHistoryEntrySchema = z.object({
   date: z.string(),
@@ -350,14 +431,39 @@ export const importedProjectJsonSchema = z.object({
 
 export type ImportedProjectJson = z.infer<typeof importedProjectJsonSchema>;
 
+/**
+ * Admits a JSON import through the explicit legacy-to-V1 boundary while retaining both source and
+ * canonical raw payloads for the writer/fencing slice that will make this boundary authoritative.
+ */
+export function admitImportedProjectJson(
+  text: string,
+): CanonicalProjectAdmission<ImportedProjectJson> {
+  // QNBS-v3: portable imports must not grant portable authority to backend-local trust metadata.
+  const admission = admitCanonicalProjectDocument(text, importedProjectJsonSchema);
+  if (admission.canonical === null) return admission;
+
+  const portableRaw = stripTopLevelObjectKeys(
+    admission.canonical.raw,
+    PORTABLE_IMPORT_LOCAL_METADATA_KEYS,
+  );
+  if (portableRaw === null) {
+    return { source: admission.source, canonical: null, status: 'REFUSED' };
+  }
+  const canonical = parseCanonicalProjectDocument(portableRaw, importedProjectJsonSchema);
+  if (canonical.classification !== 'CURRENT' || canonical.projection === null) {
+    return { source: admission.source, canonical: null, status: 'REFUSED' };
+  }
+  return { source: admission.source, canonical, status: admission.status };
+}
+
 // QNBS-v3: route file imports through the canonical admission boundary before exposing editable data.
 export function parseImportedProjectJson(text: string): ImportedProjectJson {
-  const document = parseCanonicalProjectDocument(text, importedProjectJsonSchema);
-  if (document.projection !== null) {
-    return document.projection;
+  const admission = admitImportedProjectJson(text);
+  if (admission.canonical?.projection !== null && admission.canonical?.projection !== undefined) {
+    return admission.canonical.projection;
   }
   throw new Error(
-    document.error ??
-      `Invalid project file: ${document.classification} documents are not editable import sources.`,
+    admission.source.error ??
+      `Invalid project file: ${admission.source.classification} documents are not editable import sources.`,
   );
 }

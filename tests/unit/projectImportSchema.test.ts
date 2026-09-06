@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { parseImportedProjectJson } from '../../services/projectImportSchema';
+import {
+  admitImportedProjectJson,
+  parseImportedProjectJson,
+} from '../../services/projectImportSchema';
 
 describe('projectImportSchema', () => {
   it('parses minimal valid project JSON', () => {
@@ -43,6 +46,50 @@ describe('projectImportSchema', () => {
 
     expect(parsed.characters).toMatchObject([{ id: '', name: 'Unnamed' }]);
     expect(parsed.worlds).toMatchObject([{ id: ' ', name: 'Whitespace world' }]);
+  });
+
+  // QNBS-v3: portable admission strips backend-local trust metadata while retaining its source evidence.
+  it('strips local filesystem metadata from the canonical import raw carrier', () => {
+    const raw =
+      '{"title":"T","logline":"L","manuscript":[],"__worldscriptLegacyProjectDirectory":"project","opaque":{"exact":9007199254740993},"__worldscriptLegacyAuxiliary":{"legacyProjectId":"project"}}';
+    const admission = admitImportedProjectJson(raw);
+
+    expect(admission.status).toBe('LEGACY_TO_V1');
+    expect(admission.source.raw).toContain('__worldscriptLegacyProjectDirectory');
+    expect(admission.canonical?.raw).not.toContain('__worldscriptLegacyProjectDirectory');
+    expect(admission.canonical?.raw).not.toContain('__worldscriptLegacyAuxiliary');
+    expect(admission.canonical?.raw).toContain('9007199254740993');
+  });
+
+  // QNBS-v3: canonical import validation rejects duplicate or inconsistent identity containers.
+  it.each([
+    {
+      label: 'duplicate array IDs',
+      characters: [
+        { id: 'same', name: 'One' },
+        { id: 'same', name: 'Two' },
+      ],
+    },
+    {
+      label: 'missing EntityState reference',
+      characters: { ids: ['missing'], entities: {} },
+    },
+    {
+      label: 'mismatched EntityState ID',
+      characters: { ids: ['key'], entities: { key: { id: 'other', name: 'Mismatch' } } },
+    },
+    {
+      label: 'orphan EntityState entity',
+      characters: { ids: [], entities: { orphan: { id: 'orphan', name: 'Orphan' } } },
+    },
+  ])('refuses $label before legacy admission', ({ characters }) => {
+    const admission = admitImportedProjectJson(
+      JSON.stringify({ title: 'T', logline: 'L', manuscript: [], characters }),
+    );
+
+    expect(admission.status).toBe('REFUSED');
+    expect(admission.source.classification).toBe('MALFORMED');
+    expect(admission.canonical).toBeNull();
   });
 
   // QNBS-v3: import parsing must retain prototype-named entity keys before hydration correspondence checks.
