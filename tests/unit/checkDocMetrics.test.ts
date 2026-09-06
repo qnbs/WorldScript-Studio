@@ -4,7 +4,7 @@
  * QNBS-v3: protects the drift gate from historical-section regressions — an untested exclusion heuristic would turn it into noise.
  */
 
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -13,6 +13,7 @@ import {
   scanBundleBudgetTruth,
   scanForDrift,
   scanForUrlDrift,
+  scanLocalizedBundleBudgetTruth,
   scanReadmeTestMetrics,
   scanReleaseTruth,
   stripHistoricalSections,
@@ -165,6 +166,37 @@ describe('bundle budget truth', () => {
     expect(
       scanBundleBudgetTruth(statement.replace('2500 KB', '4500 KB'), 'FAKE.md', budget),
     ).toEqual([expect.stringContaining('does not match config/bundle-budget.json')]);
+  });
+
+  it('checks the localized in-app help claim independently of formatting', () => {
+    const localeFiles = readdirSync(join(process.cwd(), 'locales'), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => join(process.cwd(), 'locales', entry.name, 'help.json'))
+      .filter((filePath) => {
+        try {
+          readFileSync(filePath, 'utf8');
+          return true;
+        } catch {
+          return false;
+        }
+      });
+    expect(localeFiles).toHaveLength(19);
+    for (const filePath of localeFiles) {
+      expect(
+        scanLocalizedBundleBudgetTruth(readFileSync(filePath, 'utf8'), filePath, budget),
+      ).toEqual([]);
+    }
+
+    const localizedClaim = JSON.stringify({
+      'help.docs.lazyLoading.content': '<li>Vendor: 6 200 KB; Entry: 2 500 KB.</li>',
+    });
+    const staleClaim = localizedClaim.replace('6 200', '7 000').replace('2 500', '4 500');
+    expect(scanLocalizedBundleBudgetTruth(localizedClaim, 'locales/en/help.json', budget)).toEqual(
+      [],
+    );
+    expect(scanLocalizedBundleBudgetTruth(staleClaim, 'locales/en/help.json', budget)).toEqual([
+      expect.stringContaining('does not match config/bundle-budget.json'),
+    ]);
   });
 });
 

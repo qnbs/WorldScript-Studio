@@ -12,7 +12,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getModules, REF_LANG } from './i18n-locales.mjs';
+import { getLocales, getModules, REF_LANG } from './i18n-locales.mjs';
 import { getVitestTestCaseCount, getVitestTestFileCount } from './test-metrics.mjs';
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
@@ -41,6 +41,29 @@ export function scanBundleBudgetTruth(content, filePath, budget) {
   return content.replaceAll('\r\n', '\n').includes(expected)
     ? []
     : [`${filePath} — bundle-budget statement does not match ${BUNDLE_BUDGET_CONFIG}`];
+}
+
+// QNBS-v3: validate localized in-app help claims so user-facing budget guidance cannot drift from CI.
+export function scanLocalizedBundleBudgetTruth(content, filePath, budget) {
+  try {
+    const data = JSON.parse(content);
+    const claim = data['help.docs.lazyLoading.content'];
+    const numericClaims =
+      typeof claim === 'string'
+        ? (claim.match(/\d[\d\s,]*/g) ?? []).map((value) => value.replace(/[^\d]/g, ''))
+        : [];
+    if (
+      numericClaims.includes(String(budget.vendorKb)) &&
+      numericClaims.includes(String(budget.entryKb))
+    ) {
+      return [];
+    }
+  } catch {
+    // The regular i18n key/content gates report malformed locale JSON separately.
+  }
+  return [
+    `${filePath} — help.docs.lazyLoading.content bundle-budget claim does not match ${BUNDLE_BUDGET_CONFIG}`,
+  ];
 }
 
 // QNBS-v3: scan every documented drift site so stale locale, release, and metric claims cannot bypass this gate.
@@ -535,6 +558,20 @@ function main() {
       continue;
     }
     allFindings.push(...scanBundleBudgetTruth(content, relPath, bundleBudget));
+  }
+
+  // QNBS-v3: current locale help is shipped to users, so every active locale must carry the same budget truth.
+  for (const locale of getLocales()) {
+    const relPath = `locales/${locale}/help.json`;
+    const abs = join(root, relPath);
+    let content;
+    try {
+      content = readFileSync(abs, 'utf8');
+    } catch {
+      allFindings.push(`${relPath} — required current in-app help document is missing`);
+      continue;
+    }
+    allFindings.push(...scanLocalizedBundleBudgetTruth(content, relPath, bundleBudget));
   }
 
   if (allFindings.length > 0) {

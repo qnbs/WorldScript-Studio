@@ -28,6 +28,11 @@ export function scanBundleBudgetTruth(
   filePath: string,
   budget: { entryKb: number; vendorKb: number; chunkKb: number; wasmKb: number },
 ): string[];
+export function scanLocalizedBundleBudgetTruth(
+  content: string,
+  filePath: string,
+  budget: { entryKb: number; vendorKb: number; chunkKb: number; wasmKb: number },
+): string[];
 export function getCanonicalProductionUrl(): string;
 export function scanForUrlDrift(content: string, filePath: string, canonicalUrl: string): string[];
 export const VERCEL_URL_PATTERN: RegExp;
