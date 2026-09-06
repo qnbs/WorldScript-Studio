@@ -154,26 +154,34 @@ export class DecompressionError extends Error {
   }
 }
 
-// QNBS-v3 (Amazon Q): JSON.parse also wrapped — a bare SyntaxError would break the DecompressionError-only contract callers rely on.
-export function decompressData<T>(raw: string): T {
+/**
+ * Decodes a stored payload while retaining the decompressed JSON text as the lossless admission
+ * input. The typed helper below remains the compatibility path for non-project stores.
+ */
+export function decompressJsonText(raw: string): string {
+  let json = raw;
   if (raw.startsWith(LZ_PREFIX)) {
     const decompressed = LZString.decompressFromUTF16(raw.slice(LZ_PREFIX.length));
     if (decompressed === null) {
       throw new DecompressionError();
     }
-    try {
-      return JSON.parse(decompressed) as T;
-    } catch {
-      throw new DecompressionError(
-        'Failed to parse decompressed data as JSON — the payload is corrupt.',
-      );
-    }
+    json = decompressed;
   }
   try {
-    return JSON.parse(raw) as T;
+    JSON.parse(json);
   } catch {
-    throw new DecompressionError('Failed to parse stored data as JSON — the payload is corrupt.');
+    throw new DecompressionError(
+      raw.startsWith(LZ_PREFIX)
+        ? 'Failed to parse decompressed data as JSON — the payload is corrupt.'
+        : 'Failed to parse stored data as JSON — the payload is corrupt.',
+    );
   }
+  return json;
+}
+
+// QNBS-v3 (Amazon Q): JSON.parse also wrapped — a bare SyntaxError would break the DecompressionError-only contract callers rely on.
+export function decompressData<T>(raw: string): T {
+  return JSON.parse(decompressJsonText(raw)) as T;
 }
 
 // --- Crypto helpers ---

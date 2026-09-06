@@ -150,4 +150,45 @@ describe('FsProjectStore.loadProject — DA-01 fail-closed behavior', () => {
     const store = new FsProjectStore();
     await expect(store.loadProject('good-entity-state-id')).resolves.toEqual(validProject);
   });
+
+  // QNBS-v3: legacy admission must not stamp or rewrite a source before durable migration fencing exists.
+  it('admits a legacy project in memory without rewriting its source', async () => {
+    const { FsProjectStore } = await import('../../../../services/fs/projectFsStore');
+    const source =
+      '{"title":"Legacy book","logline":"L","characters":[],"worlds":[],"manuscript":[],"opaque":{"exact":9007199254740993}}';
+    mockDesktopPlatform.filesystem.exists.mockResolvedValue(true);
+    mockDesktopPlatform.filesystem.readTextFile.mockResolvedValue(source);
+    const store = new FsProjectStore();
+
+    await expect(store.loadProject('legacy-id')).resolves.toMatchObject({
+      title: 'Legacy book',
+      logline: 'L',
+      characters: [],
+      worlds: [],
+      manuscript: [],
+    });
+    expect(mockDesktopPlatform.filesystem.writeTextFile).not.toHaveBeenCalled();
+    expect(mockDesktopPlatform.filesystem.rename).not.toHaveBeenCalled();
+  });
+
+  // QNBS-v3: unsupported versions must refuse editable filesystem authority without touching source.
+  it.each([
+    ['future', { schemaVersion: 99, title: 'Future' }],
+    ['migration gap', { schemaVersion: 0, title: 'Gap' }],
+  ])('refuses %s filesystem input without changing its source', async (_label, value) => {
+    const { FsProjectStore } = await import('../../../../services/fs/projectFsStore');
+    const source = JSON.stringify(value);
+    mockDesktopPlatform.filesystem.exists.mockResolvedValue(true);
+    mockDesktopPlatform.filesystem.readTextFile.mockResolvedValue(source);
+    const store = new FsProjectStore();
+
+    await expect(store.loadProject('refused-id')).rejects.toMatchObject({
+      name: 'ProjectLoadError',
+      reason: 'corrupt',
+      projectId: 'refused-id',
+      classification: expect.any(String),
+    });
+    expect(mockDesktopPlatform.filesystem.writeTextFile).not.toHaveBeenCalled();
+    expect(mockDesktopPlatform.filesystem.rename).not.toHaveBeenCalled();
+  });
 });

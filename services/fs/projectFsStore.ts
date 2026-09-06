@@ -6,9 +6,14 @@
 
 import type { EntityState } from '@reduxjs/toolkit';
 import { scheduleCoreProjectValidation } from '../../features/project/coreValidationShadow';
+import type { ProjectVersionClassification } from '../../features/project/projectSchemaVersion';
 import type { Character, StoryProject, World } from '../../types';
 import { getStaticTranslation } from '../i18n/staticTranslate';
 import { logger } from '../logger';
+import {
+  admitCanonicalProjectDocument,
+  type CanonicalProjectSchemaResult,
+} from '../projectDocument';
 import { parseImportedProjectJson } from '../projectImportSchema';
 import {
   normalizeSaveProjectInputToStoryProject,
@@ -20,6 +25,7 @@ import { FsAssetStore } from './assetFsStore';
 import {
   compressData,
   decompressData,
+  decompressJsonText,
   retryFs,
   sanitizePathSegment,
   type TauriApis,
@@ -52,6 +58,7 @@ export class ProjectLoadError extends Error {
     public readonly reason: 'corrupt' | 'io-error',
     message: string,
     public readonly projectId: string,
+    public readonly classification?: ProjectVersionClassification,
   ) {
     super(message);
     this.name = 'ProjectLoadError';
@@ -141,6 +148,32 @@ function looksLikeStoryProject(value: unknown): value is StoryProject {
     isArrayOrEntityState(v['characters']) &&
     isArrayOrEntityState(v['worlds'])
   );
+}
+
+const storedProjectSchema = {
+  safeParse(value: unknown): CanonicalProjectSchemaResult<StoryProject> {
+    if (looksLikeStoryProject(value)) {
+      return { success: true, data: value };
+    }
+    return {
+      success: false,
+      error: {
+        issues: [
+          {
+            path: [],
+            message: 'Stored project is missing the required project-owned fields.',
+          },
+        ],
+      },
+    };
+  },
+};
+
+// QNBS-v3: schemaVersion belongs to the persisted envelope, not the renderer-facing StoryProject projection.
+function projectWithoutSchemaVersion(project: StoryProject): StoryProject {
+  const projected = { ...(project as unknown as Record<string, unknown>) };
+  delete projected['schemaVersion'];
+  return projected as unknown as StoryProject;
 }
 
 // QNBS-v3: one sanitizer and empty-ID policy keeps every filesystem project operation on the same path identity.
@@ -594,22 +627,39 @@ export class FsProjectStore extends FsAssetStore {
     }
 
     let project: StoryProject;
+    let classification: ProjectVersionClassification | undefined;
     try {
-      const parsed = decompressData<unknown>(content);
-      if (!looksLikeStoryProject(parsed)) {
-        throw new Error('Parsed content is not project-shaped (missing title/manuscript).');
+      const admission = admitCanonicalProjectDocument(
+        decompressJsonText(content),
+        storedProjectSchema,
+      );
+      classification = admission.source.classification;
+      if (admission.canonical?.projection === null || admission.canonical === null) {
+        throw new Error(
+          admission.source.error ??
+            'Project admission refused for ' + admission.source.classification + ' input.',
+        );
       }
-      project = parsed;
+      project = projectWithoutSchemaVersion(admission.canonical.projection);
     } catch (error) {
       logger.error('Failed to parse project file (corrupt data):', error);
       throw new ProjectLoadError(
         'corrupt',
-        `The saved project file for "${projectId}" appears to be corrupted and could not be read. The file has not been deleted.`,
+        classification && classification !== 'MALFORMED'
+          ? 'The saved project file for "' +
+              projectId +
+              '" was refused as ' +
+              classification +
+              '. The file has not been changed.'
+          : 'The saved project file for "' +
+              projectId +
+              '" appears to be corrupted and could not be read. The file has not been deleted.',
         projectId,
+        classification,
       );
     }
 
-    // QNBS-v3: schedule observation after this async load resolves so validation cannot delay or alter the load result.
+    // QNBS-v3: admission remains non-destructive until durable migration and raw-carrier writeback are fenced.
     const migratedProject = await this.migrateLegacyProjectIdentity(
       project,
       safeProjectId,
