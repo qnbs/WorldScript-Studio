@@ -33,7 +33,7 @@ This document summarizes the **current inventory** and **stabilization measures*
 | i18n | `scripts/check-i18n-keys.mjs` | `pnpm run i18n:check` |
 | Unit | Vitest + V8 | CI: `pnpm exec vitest run --coverage`; local: targeted `pnpm exec vitest run <path>` |
 | E2E | Playwright | `CI=true pnpm run test:e2e` |
-| Bundle | `scripts/check-bundle-budget.mjs` + [`config/bundle-budget.json`](../config/bundle-budget.json) | differentiated raw per-file ceilings: entry **2500 KB**, vendor **6200 KB**, other JavaScript **2500 KB**, WASM **30000 KB** |
+| Bundle | `scripts/check-bundle-budget.mjs` + [`config/bundle-budget.json`](../config/bundle-budget.json) | differentiated raw per-file ceilings; see the checked source-of-truth statement below |
 | Lighthouse | `.lighthouserc.cjs` | Accessibility **error** ≥ 0.95; CLS **error** ≤ 0.1; Performance **warn** |
 
 ---

@@ -143,6 +143,7 @@ describe('README test metrics truth', () => {
   });
 });
 
+// QNBS-v3: Lock documentation budgets to the executable source so stale gate claims fail closed.
 describe('bundle budget truth', () => {
   const budget = { entryKb: 2500, vendorKb: 6200, chunkKb: 2500, wasmKb: 30000 };
   const statement = [
@@ -152,6 +153,12 @@ describe('bundle budget truth', () => {
 
   it('accepts a current source-of-truth statement', () => {
     expect(scanBundleBudgetTruth(statement, 'FAKE.md', budget)).toEqual([]);
+  });
+
+  it('accepts the current statement with CRLF line endings', () => {
+    expect(scanBundleBudgetTruth(statement.replaceAll('\n', '\r\n'), 'FAKE.md', budget)).toEqual(
+      [],
+    );
   });
 
   it('rejects stale budget documentation', () => {

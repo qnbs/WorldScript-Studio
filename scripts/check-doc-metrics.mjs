@@ -20,19 +20,24 @@ const BUNDLE_BUDGET_DOCS = ['README.md', '.github/CI-AUDIT.md'];
 const BUNDLE_BUDGET_CONFIG = 'config/bundle-budget.json';
 
 function readBundleBudget() {
-  const budget = JSON.parse(readFileSync(join(root, BUNDLE_BUDGET_CONFIG), 'utf8'));
-  const requiredKeys = ['entryKb', 'vendorKb', 'chunkKb', 'wasmKb'];
-  if (requiredKeys.some((key) => !Number.isFinite(budget[key]) || budget[key] < 0)) {
-    throw new Error(`${BUNDLE_BUDGET_CONFIG} must define non-negative finite KB ceilings`);
+  try {
+    const budget = JSON.parse(readFileSync(join(root, BUNDLE_BUDGET_CONFIG), 'utf8'));
+    const requiredKeys = ['entryKb', 'vendorKb', 'chunkKb', 'wasmKb'];
+    if (requiredKeys.some((key) => !Number.isFinite(budget[key]) || budget[key] < 0)) {
+      throw new Error('must define non-negative finite KB ceilings');
+    }
+    return budget;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`[bundle:budget] Invalid ${BUNDLE_BUDGET_CONFIG}: ${reason}`);
   }
-  return budget;
 }
 
 export function scanBundleBudgetTruth(content, filePath, budget) {
   const expected =
     '<!-- bundle-budget:source-of-truth -->\n' +
     `Raw bundle-budget ceilings (KB per uncompressed asset): entry **${budget.entryKb} KB**, vendor **${budget.vendorKb} KB**, other JavaScript **${budget.chunkKb} KB**, and WASM **${budget.wasmKb} KB**.`;
-  return content.includes(expected)
+  return content.replaceAll('\r\n', '\n').includes(expected)
     ? []
     : [`${filePath} — bundle-budget statement does not match ${BUNDLE_BUDGET_CONFIG}`];
 }
@@ -473,7 +478,13 @@ function main() {
   const latestVersion = getLatestReleasedVersion();
   const canonicalUrl = getCanonicalProductionUrl();
   const packageVersion = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
-  const bundleBudget = readBundleBudget();
+  let bundleBudget;
+  try {
+    bundleBudget = readBundleBudget();
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    process.exit(1);
+  }
 
   const taggedVersions = getTaggedVersions();
   const changelog = readFileSync(join(root, 'CHANGELOG.md'), 'utf8');

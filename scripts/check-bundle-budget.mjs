@@ -16,6 +16,7 @@ const root = path.join(__dirname, '..');
 const assetsDir = path.join(root, 'dist', 'assets');
 const budgetConfigPath = path.join(root, 'config', 'bundle-budget.json');
 
+// QNBS-v3: Keep the executable budget gate fail-closed and aligned with its checked-in authority.
 function readBudgetConfig() {
   try {
     const config = JSON.parse(fs.readFileSync(budgetConfigPath, 'utf8'));
