@@ -16,6 +16,26 @@ import { getModules, REF_LANG } from './i18n-locales.mjs';
 import { getVitestTestCaseCount, getVitestTestFileCount } from './test-metrics.mjs';
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
+const BUNDLE_BUDGET_DOCS = ['README.md', '.github/CI-AUDIT.md'];
+const BUNDLE_BUDGET_CONFIG = 'config/bundle-budget.json';
+
+function readBundleBudget() {
+  const budget = JSON.parse(readFileSync(join(root, BUNDLE_BUDGET_CONFIG), 'utf8'));
+  const requiredKeys = ['entryKb', 'vendorKb', 'chunkKb', 'wasmKb'];
+  if (requiredKeys.some((key) => !Number.isFinite(budget[key]) || budget[key] < 0)) {
+    throw new Error(`${BUNDLE_BUDGET_CONFIG} must define non-negative finite KB ceilings`);
+  }
+  return budget;
+}
+
+export function scanBundleBudgetTruth(content, filePath, budget) {
+  const expected =
+    '<!-- bundle-budget:source-of-truth -->\n' +
+    `Raw bundle-budget ceilings (KB per uncompressed asset): entry **${budget.entryKb} KB**, vendor **${budget.vendorKb} KB**, other JavaScript **${budget.chunkKb} KB**, and WASM **${budget.wasmKb} KB**.`;
+  return content.includes(expected)
+    ? []
+    : [`${filePath} — bundle-budget statement does not match ${BUNDLE_BUDGET_CONFIG}`];
+}
 
 // QNBS-v3: scan every documented drift site so stale locale, release, and metric claims cannot bypass this gate.
 const TARGET_FILES = [
@@ -453,6 +473,7 @@ function main() {
   const latestVersion = getLatestReleasedVersion();
   const canonicalUrl = getCanonicalProductionUrl();
   const packageVersion = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
+  const bundleBudget = readBundleBudget();
 
   const taggedVersions = getTaggedVersions();
   const changelog = readFileSync(join(root, 'CHANGELOG.md'), 'utf8');
@@ -490,6 +511,18 @@ function main() {
       continue;
     }
     allFindings.push(...scanForUrlDrift(content, relPath, canonicalUrl));
+  }
+
+  for (const relPath of BUNDLE_BUDGET_DOCS) {
+    const abs = join(root, relPath);
+    let content;
+    try {
+      content = readFileSync(abs, 'utf8');
+    } catch {
+      allFindings.push(`${relPath} — required current bundle-budget document is missing`);
+      continue;
+    }
+    allFindings.push(...scanBundleBudgetTruth(content, relPath, bundleBudget));
   }
 
   if (allFindings.length > 0) {

@@ -23,6 +23,11 @@ export function scanForDrift(
   filePath: string,
   actual: { localeCount: number; keyCount: number; latestVersion: string | null },
 ): string[];
+export function scanBundleBudgetTruth(
+  content: string,
+  filePath: string,
+  budget: { entryKb: number; vendorKb: number; chunkKb: number; wasmKb: number },
+): string[];
 export function getCanonicalProductionUrl(): string;
 export function scanForUrlDrift(content: string, filePath: string, canonicalUrl: string): string[];
 export const VERCEL_URL_PATTERN: RegExp;

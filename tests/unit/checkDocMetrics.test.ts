@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getCanonicalProductionUrl,
   getTaggedVersions,
+  scanBundleBudgetTruth,
   scanForDrift,
   scanForUrlDrift,
   scanReadmeTestMetrics,
@@ -139,6 +140,24 @@ describe('README test metrics truth', () => {
   // QNBS-v3: stale badges must fail docs:check instead of preserving an old count during local sync.
   it('rejects stale test counts instead of silently preserving them', () => {
     expect(scanReadmeTestMetrics('![Tests-1%2B_%2F_1_files](badge.svg)')).not.toEqual([]);
+  });
+});
+
+describe('bundle budget truth', () => {
+  const budget = { entryKb: 2500, vendorKb: 6200, chunkKb: 2500, wasmKb: 30000 };
+  const statement = [
+    '<!-- bundle-budget:source-of-truth -->',
+    'Raw bundle-budget ceilings (KB per uncompressed asset): entry **2500 KB**, vendor **6200 KB**, other JavaScript **2500 KB**, and WASM **30000 KB**.',
+  ].join('\n');
+
+  it('accepts a current source-of-truth statement', () => {
+    expect(scanBundleBudgetTruth(statement, 'FAKE.md', budget)).toEqual([]);
+  });
+
+  it('rejects stale budget documentation', () => {
+    expect(
+      scanBundleBudgetTruth(statement.replace('2500 KB', '4500 KB'), 'FAKE.md', budget),
+    ).toEqual([expect.stringContaining('does not match config/bundle-budget.json')]);
   });
 });
 

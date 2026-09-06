@@ -2,21 +2,9 @@
 /**
  * Bundle-budget gate (audit finding F-8 — single source of truth).
  *
- * Differentiated ceilings, measured on RAW (uncompressed) per-file KB under dist/assets:
- *   --max-entry-kb (default 2500): the `index-*` entry chunk.
- *   --max-vendor-kb (default 6200): vendor JS, including local-AI runtime bundles.
- *   --max-chunk-kb (default 2500): other JS chunks.
- *   --max-wasm-kb (default 30000): individual WASM modules.
- *
- * The package.json `bundle:budget` script passes these same values explicitly — defaults and
- * invocation are kept in lockstep so there is ONE budget, not two. Do not diverge them.
- *
- * Headroom at 2026-06-09 (main CI build, run 27241741348):
- *   - entry `index-*.js` ≈ 496 KB  → ~3 500 KB under the 4000 ceiling (entry is small; the ceiling
- *     is generous on purpose — local-AI views are lazy-loaded, not in the entry).
- *   - largest chunk `lib-*.js` ≈ 6 054 KB → ~446 KB under the 6500 ceiling. This vendor bundle
- *     (@mlc-ai/web-llm + onnxruntime-web + transformers) is the real constraint; the 6500 ceiling
- *     catches an accidental >446 KB regression there while still passing today.
+ * Differentiated ceilings are measured on RAW (uncompressed) per-file KB under dist/assets and
+ * loaded from config/bundle-budget.json. The CLI flags remain diagnostic overrides; the package
+ * gate and current documentation use the checked-in configuration as their authority.
  * Run after `pnpm run build`.
  */
 import fs from 'node:fs';
@@ -26,12 +14,31 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
 const assetsDir = path.join(root, 'dist', 'assets');
+const budgetConfigPath = path.join(root, 'config', 'bundle-budget.json');
+
+function readBudgetConfig() {
+  try {
+    const config = JSON.parse(fs.readFileSync(budgetConfigPath, 'utf8'));
+    for (const key of ['entryKb', 'vendorKb', 'chunkKb', 'wasmKb']) {
+      if (!Number.isFinite(config[key]) || config[key] < 0) {
+        throw new Error(`${key} must be a non-negative finite number`);
+      }
+    }
+    return config;
+  } catch (error) {
+    console.error(
+      `[bundle:budget] Invalid ${path.relative(root, budgetConfigPath)}: ${error.message}`,
+    );
+    process.exit(1);
+  }
+}
 
 const argv = process.argv.slice(2);
-let maxEntryKb = 2500;
-let maxVendorKb = 6200;
-let maxChunkKb = 2500;
-let maxWasmKb = 30000;
+const configuredBudget = readBudgetConfig();
+let maxEntryKb = configuredBudget.entryKb;
+let maxVendorKb = configuredBudget.vendorKb;
+let maxChunkKb = configuredBudget.chunkKb;
+let maxWasmKb = configuredBudget.wasmKb;
 function parseThreshold(flag, rawValue) {
   if (typeof rawValue !== 'string' || rawValue.trim() === '' || rawValue.startsWith('--')) {
     console.error(`[bundle:budget] ${flag} requires a non-negative finite number.`);
