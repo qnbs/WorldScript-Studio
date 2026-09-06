@@ -1,4 +1,5 @@
 import {
+  CURRENT_PROJECT_SCHEMA_VERSION,
   classifyRawProjectVersionFromParsed,
   type ProjectVersionClassification,
 } from '../features/project/projectSchemaVersion';
@@ -25,6 +26,24 @@ export interface CanonicalProjectDocument<TProjection> {
   /** Validation detail when the payload cannot produce an admitted projection. */
   error: string | null;
 }
+
+// QNBS-v3: keep source, migration, and refusal verdicts distinct before any writer gains authority.
+export type CanonicalProjectAdmissionStatus = 'CURRENT' | 'LEGACY_TO_V1' | 'REFUSED';
+
+export interface CanonicalProjectAdmission<TProjection> {
+  /** The source verdict remains available for migration provenance and recovery diagnostics. */
+  source: CanonicalProjectDocument<TProjection>;
+  /** A current document after validation, or null when no editable projection was admitted. */
+  canonical: CanonicalProjectDocument<TProjection> | null;
+  /** LEGACY_TO_V1 is distinct from an already-current source even when the destination is V1. */
+  status: CanonicalProjectAdmissionStatus;
+}
+
+type CanonicalRawObjectMember = {
+  key: string;
+  start: number;
+  valueEnd: number;
+};
 
 function validationError(result: {
   error: { issues: Array<{ path: PropertyKey[]; message: string }> };
@@ -107,4 +126,227 @@ export function parseCanonicalProjectDocument<TProjection>(
     projection: result.data,
     error: null,
   };
+}
+
+// QNBS-v3: stamp legacy JSON without reserializing opaque numeric literals or nested payloads.
+function overlayCurrentSchemaVersion(raw: CanonicalProjectRawPayload): string | null {
+  const objectStart = raw.search(/\S/);
+  if (objectStart === -1 || raw[objectStart] !== '{') return null;
+
+  let firstMember = objectStart + 1;
+  while (/\s/.test(raw[firstMember] ?? '')) firstMember++;
+  const isEmptyObject = raw[firstMember] === '}';
+  const separator = isEmptyObject ? '' : ',';
+  return `${raw.slice(0, objectStart + 1)}"schemaVersion":${CURRENT_PROJECT_SCHEMA_VERSION}${separator}${raw.slice(objectStart + 1)}`;
+}
+
+function skipRawJsonString(raw: string, start: number): number | null {
+  let index = start + 1;
+  while (index < raw.length) {
+    if (raw[index] === '\\') {
+      index += 2;
+      continue;
+    }
+    if (raw[index] === '"') return index + 1;
+    index++;
+  }
+  return null;
+}
+
+function skipRawJsonWhitespace(raw: string, start: number): number {
+  let index = start;
+  while (/\s/.test(raw[index] ?? '')) index++;
+  return index;
+}
+
+function skipRawJsonScalar(raw: string, start: number): number {
+  let index = start;
+  while (index < raw.length && raw[index] !== ',' && raw[index] !== '}') index++;
+  return index;
+}
+
+type RawJsonContainerStep = {
+  nextIndex: number;
+  nextDepth: number;
+  complete: boolean;
+};
+
+// QNBS-v3: isolate delimiter depth changes so the raw scanner's state transition stays auditable.
+function rawJsonContainerDepthDelta(character: string | undefined): number {
+  if (character === '{' || character === '[') return 1;
+  if (character === '}' || character === ']') return -1;
+  return 0;
+}
+
+function advanceRawJsonContainer(
+  raw: string,
+  index: number,
+  depth: number,
+): RawJsonContainerStep | null {
+  const character = raw[index];
+  if (character === '"') {
+    const stringEnd = skipRawJsonString(raw, index);
+    return stringEnd === null ? null : { nextIndex: stringEnd, nextDepth: depth, complete: false };
+  }
+  const nextDepth = depth + rawJsonContainerDepthDelta(character);
+  return { nextIndex: index + 1, nextDepth, complete: nextDepth === 0 };
+}
+
+function skipRawJsonContainer(raw: string, start: number): number | null {
+  let depth = 0;
+  let index = start;
+  while (index < raw.length) {
+    const step = advanceRawJsonContainer(raw, index, depth);
+    if (step === null) return null;
+    if (step.complete) return step.nextIndex;
+    index = step.nextIndex;
+    depth = step.nextDepth;
+  }
+  return null;
+}
+
+function skipRawJsonValue(raw: string, start: number): number | null {
+  if (raw[start] === '"') return skipRawJsonString(raw, start);
+  if (raw[start] === '{' || raw[start] === '[') return skipRawJsonContainer(raw, start);
+  return skipRawJsonScalar(raw, start);
+}
+
+function readRawObjectKey(raw: string, start: number): { key: string; end: number } | null {
+  const keyEnd = skipRawJsonString(raw, start);
+  if (keyEnd === null) return null;
+  try {
+    const key: unknown = JSON.parse(raw.slice(start, keyEnd));
+    return typeof key === 'string' ? { key, end: keyEnd } : null;
+  } catch {
+    return null;
+  }
+}
+
+function readRawObjectMember(raw: string, start: number): CanonicalRawObjectMember | null {
+  const parsedKey = readRawObjectKey(raw, start);
+  if (parsedKey === null) return null;
+
+  let index = skipRawJsonWhitespace(raw, parsedKey.end);
+  if (raw[index] !== ':') return null;
+  index = skipRawJsonWhitespace(raw, index + 1);
+  const valueEnd = skipRawJsonValue(raw, index);
+  if (valueEnd === null) return null;
+  return { key: parsedKey.key, start, valueEnd };
+}
+
+function readTopLevelObjectMembers(raw: string): CanonicalRawObjectMember[] | null {
+  const objectStart = raw.search(/\S/);
+  if (objectStart === -1 || raw[objectStart] !== '{') return null;
+
+  const members: CanonicalRawObjectMember[] = [];
+  let index = skipRawJsonWhitespace(raw, objectStart + 1);
+  if (raw[index] === '}') return members;
+
+  while (index < raw.length) {
+    const member = readRawObjectMember(raw, index);
+    if (member === null) return null;
+    members.push(member);
+
+    index = skipRawJsonWhitespace(raw, member.valueEnd);
+    if (raw[index] === '}') return members;
+    if (raw[index] !== ',') return null;
+    index = skipRawJsonWhitespace(raw, index + 1);
+  }
+  return null;
+}
+
+function collectTopLevelRemovalSpans(
+  members: readonly CanonicalRawObjectMember[],
+  keys: ReadonlySet<string>,
+): Array<{ start: number; end: number }> {
+  const spans: Array<{ start: number; end: number }> = [];
+  let index = 0;
+  while (index < members.length) {
+    const member = members[index];
+    if (!member || !keys.has(member.key)) {
+      index++;
+      continue;
+    }
+
+    const runStart = index;
+    while (index + 1 < members.length && keys.has(members[index + 1]?.key ?? '')) index++;
+    const runEnd = index;
+    const runFirst = members[runStart];
+    const runLast = members[runEnd];
+    const nextRetained = members[runEnd + 1];
+    if (!runFirst || !runLast) return spans;
+    spans.push(
+      nextRetained
+        ? { start: runFirst.start, end: nextRetained.start }
+        : { start: members[runStart - 1]?.valueEnd ?? runFirst.start, end: runLast.valueEnd },
+    );
+    index++;
+  }
+  return spans;
+}
+
+/** Removes backend-local top-level metadata while preserving every other raw JSON token. */
+// QNBS-v3: strip machine-local trust metadata only at the portable import boundary without narrowing opaque data.
+export function stripTopLevelObjectKeys(
+  raw: CanonicalProjectRawPayload,
+  keys: ReadonlySet<string>,
+): CanonicalProjectRawPayload | null {
+  if (keys.size === 0) return raw;
+  const members = readTopLevelObjectMembers(raw);
+  if (members === null) return null;
+
+  const removalSpans = collectTopLevelRemovalSpans(members, keys);
+  if (removalSpans.length === 0) return raw;
+
+  const mergedSpans = removalSpans
+    .sort((left, right) => left.start - right.start)
+    .reduce<Array<{ start: number; end: number }>>((merged, span) => {
+      const previous = merged.at(-1);
+      if (previous && span.start <= previous.end) {
+        previous.end = Math.max(previous.end, span.end);
+      } else {
+        merged.push({ ...span });
+      }
+      return merged;
+    }, []);
+
+  let result = '';
+  let cursor = 0;
+  for (const span of mergedSpans) {
+    result += raw.slice(cursor, span.start);
+    cursor = span.end;
+  }
+  return result + raw.slice(cursor);
+}
+
+/**
+ * Performs the non-destructive in-memory LEGACY_TO_V1 admission step.
+ * The durable source-generation fence and writer integration remain separate gates.
+ */
+export function admitCanonicalProjectDocument<TProjection>(
+  text: string,
+  schema: {
+    safeParse(value: unknown): CanonicalProjectSchemaResult<TProjection>;
+  },
+): CanonicalProjectAdmission<TProjection> {
+  // QNBS-v3: preserve source raw data and revalidate the overlaid carrier before migration authority.
+  const source = parseCanonicalProjectDocument(text, schema);
+
+  if (source.classification === 'CURRENT' && source.projection !== null) {
+    return { source, canonical: source, status: 'CURRENT' };
+  }
+
+  if (source.classification !== 'LEGACY_UNVERSIONED' || source.projection === null) {
+    return { source, canonical: null, status: 'REFUSED' };
+  }
+
+  const migratedRaw = overlayCurrentSchemaVersion(source.raw);
+  if (migratedRaw === null) return { source, canonical: null, status: 'REFUSED' };
+
+  const canonical = parseCanonicalProjectDocument(migratedRaw, schema);
+  if (canonical.classification !== 'CURRENT' || canonical.projection === null) {
+    return { source, canonical: null, status: 'REFUSED' };
+  }
+
+  return { source, canonical, status: 'LEGACY_TO_V1' };
 }
