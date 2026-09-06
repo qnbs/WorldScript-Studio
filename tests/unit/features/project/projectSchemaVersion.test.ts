@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CURRENT_PROJECT_SCHEMA_VERSION,
+  classifyProjectVersionFromObject,
   classifyRawProjectVersion,
 } from '../../../../features/project/projectSchemaVersion';
 
@@ -158,5 +159,74 @@ describe('classifyRawProjectVersion', () => {
     const depth = 256;
     const raw = `{"schemaVersion": ${CURRENT_PROJECT_SCHEMA_VERSION + 1}, "unrelated": ${'['.repeat(depth)}01${']'.repeat(depth)}}`;
     expect(classifyRawProjectVersion(raw)).toBe('MALFORMED');
+  });
+});
+
+describe('classifyProjectVersionFromObject', () => {
+  it('classifies an absent schemaVersion as LEGACY_UNVERSIONED', () => {
+    expect(classifyProjectVersionFromObject({ title: 'Old Project' })).toBe('LEGACY_UNVERSIONED');
+  });
+
+  it('classifies the current version as CURRENT', () => {
+    expect(
+      classifyProjectVersionFromObject({ schemaVersion: CURRENT_PROJECT_SCHEMA_VERSION }),
+    ).toBe('CURRENT');
+  });
+
+  it('classifies a higher version as FUTURE', () => {
+    expect(
+      classifyProjectVersionFromObject({ schemaVersion: CURRENT_PROJECT_SCHEMA_VERSION + 1 }),
+    ).toBe('FUTURE');
+  });
+
+  it('classifies an unregistered lower version as UNSUPPORTED_OLDER', () => {
+    expect(classifyProjectVersionFromObject({ schemaVersion: 0 })).toBe('UNSUPPORTED_OLDER');
+  });
+
+  it.each([
+    ['a string', '1'],
+    ['null', null],
+    ['a fractional number', 1.5],
+    ['a negative number', -1],
+    ['a boolean', true],
+  ])('classifies a present but invalid schemaVersion (%s) as MALFORMED', (_label, value) => {
+    expect(classifyProjectVersionFromObject({ schemaVersion: value })).toBe('MALFORMED');
+  });
+
+  it('treats a schemaVersion inherited only via a polluted Object.prototype as genuinely absent', () => {
+    Object.defineProperty(Object.prototype, 'schemaVersion', {
+      value: CURRENT_PROJECT_SCHEMA_VERSION,
+      configurable: true,
+      enumerable: false,
+      writable: true,
+    });
+    try {
+      expect(classifyProjectVersionFromObject({ title: 'Old Project' })).toBe('LEGACY_UNVERSIONED');
+    } finally {
+      delete (Object.prototype as Record<string, unknown>)['schemaVersion'];
+    }
+  });
+
+  it('classifies null as MALFORMED', () => {
+    expect(classifyProjectVersionFromObject(null)).toBe('MALFORMED');
+  });
+
+  it('classifies an array as MALFORMED', () => {
+    expect(classifyProjectVersionFromObject([1, 2, 3])).toBe('MALFORMED');
+  });
+
+  it('classifies a primitive as MALFORMED', () => {
+    expect(classifyProjectVersionFromObject('just a string')).toBe('MALFORMED');
+    expect(classifyProjectVersionFromObject(42)).toBe('MALFORMED');
+    expect(classifyProjectVersionFromObject(undefined)).toBe('MALFORMED');
+  });
+
+  it('does not misclassify a nested field also named schemaVersion', () => {
+    expect(
+      classifyProjectVersionFromObject({
+        schemaVersion: CURRENT_PROJECT_SCHEMA_VERSION,
+        nested: { schemaVersion: 999 },
+      }),
+    ).toBe('CURRENT');
   });
 });

@@ -5,6 +5,7 @@
  *          Phase 2 B-1: encrypt/decrypt on every saveSlice / loadState call when key is active.
  */
 
+import { observeProjectVersionClassificationFromObject } from '../../features/project/projectSchemaVersionShadow';
 import type { ProjectData } from '../../features/project/projectSlice';
 import { normalizeAccessibilitySettings } from '../../features/settings/accessibilitySchema';
 import { getDefaultKeyboardShortcuts } from '../../features/settings/keyboardShortcutsDefaults';
@@ -224,6 +225,8 @@ export class IdbProjectStore extends IdbAssetStore {
     if (validProject) {
       const rawData = validProject.present ? validProject.present.data : validProject.data;
       if (rawData) {
+        // QNBS-v3: observes the as-persisted shape before any default-backfilling below, per contract section 2.8's universal ingress admission (observation-only, Slice B).
+        observeProjectVersionClassificationFromObject(rawData, 'idb-project-load');
         // Ensure projectGoals exists
         if (!rawData.projectGoals) {
           rawData.projectGoals = { totalWordCount: 50000, targetDate: null };
