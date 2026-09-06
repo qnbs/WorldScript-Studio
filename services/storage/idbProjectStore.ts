@@ -213,22 +213,27 @@ interface PersistedState {
   settings?: Settings;
 }
 
+// QNBS-v3: extracted so validateAndFixState's own branching stays low - this owns only the "what should be observed" selection for an already-known-present raw IDB project value.
+function selectIdbProjectObservationTarget(project: unknown): unknown {
+  const projectRecord =
+    typeof project === 'object' && project !== null
+      ? (project as PersistedProjectState)
+      : undefined;
+  const rawData = projectRecord
+    ? projectRecord.present
+      ? projectRecord.present.data
+      : projectRecord.data
+    : undefined;
+  return rawData === undefined ? project : rawData;
+}
+
 export class IdbProjectStore extends IdbAssetStore {
   // Helper to validate state structure and fix common issues
   private validateAndFixState(project: unknown, settings: unknown): PersistedState | undefined {
     // QNBS-v3: project !== undefined (not truthiness) distinguishes an absent IDB record from a present-but-falsy one, so a corrupted top-level project record is observed instead of silently treated as absent.
     if (project !== undefined) {
-      const projectRecord =
-        typeof project === 'object' && project !== null
-          ? (project as PersistedProjectState)
-          : undefined;
-      const observedRawData = projectRecord
-        ? projectRecord.present
-          ? projectRecord.present.data
-          : projectRecord.data
-        : undefined;
       observeProjectVersionClassificationFromObject(
-        observedRawData === undefined ? project : observedRawData,
+        selectIdbProjectObservationTarget(project),
         'idb-project-load',
       );
     }
