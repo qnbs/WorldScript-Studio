@@ -26,42 +26,19 @@ afterEach(() => {
 });
 
 describe('observeProjectVersionClassificationFromObject', () => {
-  it('logs LEGACY_UNVERSIONED at debug level', () => {
-    observeProjectVersionClassificationFromObject({ title: 'Old Project' }, 'idb-load');
+  it.each([
+    ['LEGACY_UNVERSIONED', { title: 'Old Project' }, 'debug'],
+    ['MALFORMED', { schemaVersion: 'not-a-number' }, 'warn'],
+    ['FUTURE', { schemaVersion: 999 }, 'warn'],
+  ] as const)('logs %s at %s level', (classification, input, level) => {
+    observeProjectVersionClassificationFromObject(input, 'idb-load');
 
-    expect(h.debug).toHaveBeenCalledWith(
+    expect(h[level]).toHaveBeenCalledWith(
       'project schema-version classification (observation-only)',
-      {
-        classification: 'LEGACY_UNVERSIONED',
-        ingressPath: 'idb-load',
-      },
+      { classification, ingressPath: 'idb-load' },
     );
-    expect(h.warn).not.toHaveBeenCalled();
-  });
-
-  it('logs MALFORMED at warn level', () => {
-    observeProjectVersionClassificationFromObject({ schemaVersion: 'not-a-number' }, 'idb-load');
-
-    expect(h.warn).toHaveBeenCalledWith(
-      'project schema-version classification (observation-only)',
-      {
-        classification: 'MALFORMED',
-        ingressPath: 'idb-load',
-      },
-    );
-    expect(h.debug).not.toHaveBeenCalled();
-  });
-
-  it('logs FUTURE at warn level', () => {
-    observeProjectVersionClassificationFromObject({ schemaVersion: 999 }, 'idb-load');
-
-    expect(h.warn).toHaveBeenCalledWith(
-      'project schema-version classification (observation-only)',
-      {
-        classification: 'FUTURE',
-        ingressPath: 'idb-load',
-      },
-    );
+    const otherLevel = level === 'debug' ? 'warn' : 'debug';
+    expect(h[otherLevel]).not.toHaveBeenCalled();
   });
 
   it('never throws, logging the observation failure instead', () => {
@@ -83,27 +60,15 @@ describe('observeProjectVersionClassificationFromObject', () => {
 });
 
 describe('observeProjectVersionClassificationFromText', () => {
-  it('logs CURRENT at debug level', () => {
-    observeProjectVersionClassificationFromText('{"schemaVersion": 1}', 'filesystem-load');
+  it.each([
+    ['CURRENT', '{"schemaVersion": 1}', 'debug'],
+    ['MALFORMED', '{not valid json', 'warn'],
+  ] as const)('logs %s at %s level', (classification, rawText, level) => {
+    observeProjectVersionClassificationFromText(rawText, 'filesystem-load');
 
-    expect(h.debug).toHaveBeenCalledWith(
+    expect(h[level]).toHaveBeenCalledWith(
       'project schema-version classification (observation-only)',
-      {
-        classification: 'CURRENT',
-        ingressPath: 'filesystem-load',
-      },
-    );
-  });
-
-  it('logs MALFORMED at warn level for unparseable text', () => {
-    observeProjectVersionClassificationFromText('{not valid json', 'filesystem-load');
-
-    expect(h.warn).toHaveBeenCalledWith(
-      'project schema-version classification (observation-only)',
-      {
-        classification: 'MALFORMED',
-        ingressPath: 'filesystem-load',
-      },
+      { classification, ingressPath: 'filesystem-load' },
     );
   });
 });
