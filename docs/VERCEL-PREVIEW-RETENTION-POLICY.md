@@ -22,12 +22,40 @@ The same reconciliation may run on the scheduled/manual maintenance path. A
 still-running or failed post-merge gate is a read-only hard stop for dependent
 engineering work; it does not authorize cleanup of protected deployments.
 
+Every run must anchor itself to one concrete current-`main` SHA and its
+truthful-green CI/CD and CodeQL evidence. Re-read that SHA immediately before
+the deletion phase and again before any dependent repository mutation. If it
+has advanced, stop the retention wave and establish the new exact-main gate
+before continuing.
+
+## Expected provider scope and identity
+
+Enumeration and deletion are scoped to this exact non-secret identity:
+
+```text
+provider: Vercel
+team scope: qnbs-projects
+project name: worldscript-studio
+project id: prj_XJDiKIlKNg5sbmw6xMHIlf6glXHy
+repository: qnbs/WorldScript-Studio
+```
+
+The provider response must confirm the expected project/team scope, and must
+confirm the repository identity when that metadata is exposed. A deployment
+outside this scope, or any missing or contradictory identity metadata, is
+`UNKNOWN_REVIEW_REQUIRED` and is never eligible for deletion. Do not enumerate
+or delete across all projects reachable by a broad credential.
+
 ## Protected state
 
 The cleanup must never delete or modify:
 
 - a deployment with `target=production`;
 - a deployment carrying a Production, `main`, or currently active branch alias;
+- every deployment in the pre-cleanup protected Production/rollback snapshot;
+- a deployment that the provider identifies as previously promoted to
+  Production or eligible for rollback, including `readySubstate=PROMOTED` or
+  an equivalent provider-supported promotion/rollback-history signal;
 - Production domains, environment-variable values, project settings, rollback
   history, or promotion state; or
 - a deployment that is not in a recognized terminal state. The currently
@@ -50,6 +78,19 @@ protected alias or review/retest-evidence deployment. A PR with one or two
 available Previews therefore protects exactly those available IDs; the policy
 does not require an impossible count of three.
 
+Before the dry run, snapshot these exact non-secret protections:
+
+- every current Production deployment ID and every provider-supported
+  rollback-eligible/previously-promoted deployment ID;
+- Production and `main` alias-to-deployment bindings;
+- every active Preview branch-alias-to-deployment binding;
+- the exact open-PR Preview ID sets, review/retest IDs, and baseline states.
+
+Rollback/promotion eligibility is a provider-backed predicate, not a single
+best-effort field assumption. If the provider exposes additional membership or
+state evidence, include it; if that evidence is unavailable or contradictory,
+protect the deployment as `UNKNOWN_REVIEW_REQUIRED`.
+
 ## Safe deletion classification
 
 A non-Production deployment is `SAFE_TO_DELETE` only when all applicable live
@@ -57,9 +98,13 @@ evidence supports the decision:
 
 ```text
 COMMON_PROTECTION_GATES:
+provider/project/team/repository identity matches expected scope
+AND current-main gate is anchored to the live current main SHA
 target != production
 AND state is a recognized terminal state
 AND no Production/main/active-branch alias
+AND rollback/promotion eligibility is definitively false
+AND not in the exact protected Production/rollback ID set
 AND not in the exact protected open-PR ID set
 AND not separately protected as review/retest evidence
 AND commit != current main
@@ -102,28 +147,44 @@ reviewable manifest:
 
 ```text
 PROTECTED PRODUCTION: <count>
+PROTECTED ROLLBACK HISTORY: <count>
 PROTECTED OPEN-PR PREVIEWS: <count>
 SAFE TO DELETE: <count>
 UNKNOWN/DEFERRED: <count>
-<deployment-id> | <branch> | <PR> | <commit> | <target> | <aliases> | <age> | <state> | <lifecycle> | <protection-evidence>
+<deployment-id> | <project/team/repository> | <branch> | <PR> | <commit> | <target> | <aliases> | <promotion/rollback> | <age> | <state> | <lifecycle> | <protection-evidence>
 ```
 
 Every candidate row must expose `target`, aliases, state, and enough explicit
 boolean/evidence fields to review every common protection gate: terminal state,
-absence of protected aliases, absence from the exact protected ID set, absence
-of review/retest evidence, non-current-main/non-open-head commit, and the
-lifecycle branch that makes the candidate eligible. Never include secrets or
-email fields.
+expected project/team/repository identity, definitive non-rollback eligibility,
+absence of protected aliases, absence from the exact Production/rollback and
+open-PR ID sets, absence of review/retest evidence,
+non-current-main/non-open-head commit, and the lifecycle branch that makes the
+candidate eligible. Never include secrets or email fields.
+
+The run records these disjoint sets explicitly:
+
+```text
+DRY_RUN_CANDIDATE
+REVALIDATED_DELETE
+RECLASSIFIED_UNKNOWN/DEFERRED
+DELETE_ATTEMPTED
+DELETE_CONFIRMED
+```
 
 Serialize each maintenance run so two retention waves cannot intentionally
 overlap. Immediately before deleting each explicit deployment ID, re-fetch and
-revalidate its target, terminal state, aliases, current `main`, open-PR heads,
-branch/PR lifecycle, exact protected-ID set, and review/retest evidence. If any
-predicate changed, metadata is missing or contradictory, or eligibility is no
-longer provable, do not delete that ID; move it to `UNKNOWN_REVIEW_REQUIRED`
-and continue only with separately revalidated IDs. Delete IDs one at a time
-through the authenticated Vercel CLI/API, with rate limiting and bounded
-retry/backoff for provider throttling. Never fall back to a broad deletion.
+revalidate the current `main` gate anchor, project/team/repository identity,
+target, terminal state, aliases, promotion/rollback eligibility, open-PR
+heads, branch/PR lifecycle, exact protected ID sets, and review/retest
+evidence. If `main` changed, restart the exact-main gate and stop the retention
+wave. If any other predicate changed, metadata is missing or contradictory, or
+eligibility is no longer provable, move that ID from `DRY_RUN_CANDIDATE` to
+`RECLASSIFIED_UNKNOWN/DEFERRED` and preserve it. Only then move an ID to
+`REVALIDATED_DELETE` and attempt its individual deletion through the
+authenticated Vercel CLI/API, with rate limiting and bounded retry/backoff for
+provider throttling. Record `DELETE_CONFIRMED` only after absence is verified.
+Never fall back to a broad deletion.
 
 The cleanup report may identify the creator as `qnbs`, but must render
 `creator.email` as `[REDACTED]` and must never include Vercel tokens, cookies,
@@ -136,12 +197,19 @@ Re-enumerate all deployments and verify:
 
 - Production still exists, is healthy/READY, and retains the same Production
   and `main` aliases;
+- every snapshotted protected Production and rollback-history deployment ID
+  still exists with its protected promotion/rollback evidence;
+- every snapshotted Production and `main` alias binding remains unchanged;
 - every exact protected Preview ID snapshotted for every open PR still exists;
+- every snapshotted active Preview branch alias still resolves to its exact
+  protected deployment ID, or to an explicitly provider-approved equivalent;
 - a protected Preview that was `READY` before cleanup remains `READY` (or has
   an explicitly observed provider transition); a protected Preview that was
   already `ERROR`, `CANCELED`, or otherwise non-READY is preserved and is not
   required to become `READY`;
-- every targeted deployment ID is absent;
+- every `DELETE_CONFIRMED` deployment ID is absent;
+- every `RECLASSIFIED_UNKNOWN/DEFERRED` deployment remains present and is
+  reported as preserved; it is not included in the deletion absence proof;
 - every snapshotted protected ID remains in the retained set; any newly
   observed deployment is independently classified under the same gates, and
   aggregate counts are informational only;
@@ -149,6 +217,10 @@ Re-enumerate all deployments and verify:
   changed; and
 - Production and an active Preview return a successful HTTP response where
   practical.
+
+Before dependent repository mutation, re-read current `main` and compare it
+with the gate anchor. A changed SHA requires a new truthful-green CI/CD and
+CodeQL gate; the previous result is not reusable.
 
 Any unexpected loss of protected state is an immediate hard stop. Do not
 auto-promote or rollback to compensate.
