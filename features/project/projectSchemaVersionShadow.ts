@@ -14,6 +14,7 @@ import {
  * mechanism and the `LEGACY_TO_V1` migration — this only proves the classifiers against real,
  * live ingress data first.
  */
+// QNBS-v3: MALFORMED/FUTURE log at warn since they represent a genuine data-integrity or newer-build signal worth surfacing, while every other classification is routine debug noise.
 function logClassification(
   classification: ProjectVersionClassification,
   ingressPath: string,

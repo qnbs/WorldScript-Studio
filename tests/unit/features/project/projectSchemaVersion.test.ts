@@ -162,6 +162,7 @@ describe('classifyRawProjectVersion', () => {
   });
 });
 
+// QNBS-v3: covers the object-ingress classifier's own contract (no duplicate-key/escape concerns, same value-grammar/version rules) - distinct from classifyRawProjectVersion's text-based suite above.
 describe('classifyProjectVersionFromObject', () => {
   it('classifies an absent schemaVersion as LEGACY_UNVERSIONED', () => {
     expect(classifyProjectVersionFromObject({ title: 'Old Project' })).toBe('LEGACY_UNVERSIONED');

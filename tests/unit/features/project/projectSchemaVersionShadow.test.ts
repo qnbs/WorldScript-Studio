@@ -25,6 +25,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+// QNBS-v3: proves the observer never alters caller-visible behavior (log level per classification, exceptions contained) - the actual admission-gating contract is deferred, so only logging is under test here.
 describe('observeProjectVersionClassificationFromObject', () => {
   it.each([
     ['LEGACY_UNVERSIONED', { title: 'Old Project' }, 'debug'],

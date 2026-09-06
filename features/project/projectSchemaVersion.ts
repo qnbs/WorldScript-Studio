@@ -198,6 +198,7 @@ export function classifyRawProjectVersion(rawText: string): ProjectVersionClassi
  * function ever sees the value — so this only needs the same value-grammar and
  * version-comparison rules, not a raw-text scan.
  */
+// QNBS-v3: a second classifier variant is required because IDB ingress has no raw JSON text at all - reusing classifyRawProjectVersion here would need a wasteful re-serialize just to re-parse.
 export function classifyProjectVersionFromObject(value: unknown): ProjectVersionClassification {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return 'MALFORMED';
