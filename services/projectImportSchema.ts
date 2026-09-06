@@ -218,15 +218,15 @@ const entityStateSchema = <T extends z.ZodTypeAny>(item: T) =>
       }
 
       for (const [key, entity] of Object.entries(state.entities)) {
-        const entityId = (entity as { id?: unknown }).id;
-        if (entityId !== key) {
-          context.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['entities', key, 'id'],
-            message: `entity id does not match key "${key}"`,
-          });
-        }
         if (!seenIds.has(key)) {
+          const entityId = (entity as { id?: unknown }).id;
+          if (entityId !== key) {
+            context.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ['entities', key, 'id'],
+              message: `entity id does not match key "${key}"`,
+            });
+          }
           context.addIssue({
             code: z.ZodIssueCode.custom,
             path: ['entities', key],
@@ -462,8 +462,10 @@ export function parseImportedProjectJson(text: string): ImportedProjectJson {
   if (admission.canonical?.projection !== null && admission.canonical?.projection !== undefined) {
     return admission.canonical.projection;
   }
-  throw new Error(
-    admission.source.error ??
-      `Invalid project file: ${admission.source.classification} documents are not editable import sources.`,
-  );
+  // QNBS-v3: distinguish a valid source refused by portable admission from malformed input.
+  const fallbackError =
+    admission.status === 'REFUSED' && admission.source.classification === 'CURRENT'
+      ? 'Invalid project file: the document could not be admitted as a portable project.'
+      : `Invalid project file: ${admission.source.classification} documents are not editable import sources.`;
+  throw new Error(admission.source.error ?? fallbackError);
 }
