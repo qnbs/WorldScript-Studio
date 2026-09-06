@@ -78,6 +78,26 @@ describe('IdbProjectStore#loadState — universal ingress admission observation'
     expect(result?.project?.data).toHaveProperty('projectGoals');
   });
 
+  it('observes a flat/malformed present record by falling back to the envelope itself', async () => {
+    // QNBS-v3: neither .present.data nor .data resolves here (a flat/corrupt payload) - the observation must not be silently skipped for a present-but-unusual record.
+    const projectStore = new IdbProjectStore();
+    const flatPayload = { title: 'Flat legacy shape', manuscript: [] };
+    const { store, projectRequest, settingsRequest } = makeFakeStore(flatPayload, undefined);
+    vi.spyOn(
+      projectStore as unknown as { getObjectStore: () => Promise<unknown> },
+      'getObjectStore',
+    ).mockResolvedValue(store as never);
+
+    const loadPromise = projectStore.loadState();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    projectRequest.onsuccess?.();
+    settingsRequest.onsuccess?.();
+    await loadPromise;
+
+    expect(h.observe).toHaveBeenCalledTimes(1);
+    expect(h.observe).toHaveBeenCalledWith(flatPayload, 'idb-project-load');
+  });
+
   it('does not observe when no project is persisted', async () => {
     const projectStore = new IdbProjectStore();
     const { store, projectRequest, settingsRequest } = makeFakeStore(undefined, { theme: 'dark' });

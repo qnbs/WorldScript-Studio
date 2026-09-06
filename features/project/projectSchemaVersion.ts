@@ -203,6 +203,11 @@ export function classifyProjectVersionFromObject(value: unknown): ProjectVersion
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return 'MALFORMED';
   }
+  // QNBS-v3: IDB can store non-record structured-clone values (Date, Map, typed arrays); only a plain object literal (or Object.create(null)) is a valid project-envelope shape.
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== null && prototype !== Object.prototype) {
+    return 'MALFORMED';
+  }
   const record = value as Record<string, unknown>;
   if (!Object.hasOwn(record, 'schemaVersion')) return 'LEGACY_UNVERSIONED';
 

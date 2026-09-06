@@ -224,9 +224,9 @@ export class IdbProjectStore extends IdbAssetStore {
     // Ensure Project Structure consistency
     if (validProject) {
       const rawData = validProject.present ? validProject.present.data : validProject.data;
+      // QNBS-v3: falls back to the envelope itself so a flat/malformed present record (neither .present.data nor .data resolving) is still observed, not silently skipped, per contract section 2.8's universal ingress admission (observation-only, Slice B).
+      observeProjectVersionClassificationFromObject(rawData ?? validProject, 'idb-project-load');
       if (rawData) {
-        // QNBS-v3: observes the as-persisted shape before any default-backfilling below, per contract section 2.8's universal ingress admission (observation-only, Slice B).
-        observeProjectVersionClassificationFromObject(rawData, 'idb-project-load');
         // Ensure projectGoals exists
         if (!rawData.projectGoals) {
           rawData.projectGoals = { totalWordCount: 50000, targetDate: null };

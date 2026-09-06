@@ -1,6 +1,7 @@
 // @vitest-environment node
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CURRENT_PROJECT_SCHEMA_VERSION } from '../../../../features/project/projectSchemaVersion';
 
 const h = vi.hoisted(() => ({
   debug: vi.fn(),
@@ -31,6 +32,7 @@ describe('observeProjectVersionClassificationFromObject', () => {
     ['LEGACY_UNVERSIONED', { title: 'Old Project' }, 'debug'],
     ['MALFORMED', { schemaVersion: 'not-a-number' }, 'warn'],
     ['FUTURE', { schemaVersion: 999 }, 'warn'],
+    ['UNSUPPORTED_OLDER', { schemaVersion: 0 }, 'warn'],
   ] as const)('logs %s at %s level', (classification, input, level) => {
     observeProjectVersionClassificationFromObject(input, 'idb-load');
 
@@ -62,7 +64,7 @@ describe('observeProjectVersionClassificationFromObject', () => {
 
 describe('observeProjectVersionClassificationFromText', () => {
   it.each([
-    ['CURRENT', '{"schemaVersion": 1}', 'debug'],
+    ['CURRENT', `{"schemaVersion": ${CURRENT_PROJECT_SCHEMA_VERSION}}`, 'debug'],
     ['MALFORMED', '{not valid json', 'warn'],
   ] as const)('logs %s at %s level', (classification, rawText, level) => {
     observeProjectVersionClassificationFromText(rawText, 'filesystem-load');

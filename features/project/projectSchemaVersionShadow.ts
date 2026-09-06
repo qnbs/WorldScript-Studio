@@ -5,6 +5,7 @@ import {
   type ProjectVersionClassification,
 } from './projectSchemaVersion';
 
+// QNBS-v3: new observer module for #553 Slice B - proves Slice A's classifiers against real ingress data before any admission gating exists.
 /**
  * Universal ingress admission (contract section 2.8), staged as observation-only — the first
  * ingress caller wired to the classifiers built in Slice A. Matches this codebase's established
@@ -14,12 +15,17 @@ import {
  * mechanism and the `LEGACY_TO_V1` migration — this only proves the classifiers against real,
  * live ingress data first.
  */
-// QNBS-v3: MALFORMED/FUTURE log at warn since they represent a genuine data-integrity or newer-build signal worth surfacing, while every other classification is routine debug noise.
+// QNBS-v3: MALFORMED/FUTURE/UNSUPPORTED_OLDER all grant no write authority per contract section 2.5 - each is worth surfacing at warn, unlike the routine debug-level classifications.
 function logClassification(
   classification: ProjectVersionClassification,
   ingressPath: string,
 ): void {
-  const level = classification === 'MALFORMED' || classification === 'FUTURE' ? 'warn' : 'debug';
+  const level =
+    classification === 'MALFORMED' ||
+    classification === 'FUTURE' ||
+    classification === 'UNSUPPORTED_OLDER'
+      ? 'warn'
+      : 'debug';
   logger[level]('project schema-version classification (observation-only)', {
     classification,
     ingressPath,

@@ -222,6 +222,19 @@ describe('classifyProjectVersionFromObject', () => {
     expect(classifyProjectVersionFromObject(undefined)).toBe('MALFORMED');
   });
 
+  it('classifies non-record structured-clone values (Date, Map, typed array) as MALFORMED', () => {
+    // QNBS-v3: IDB can store these directly; none is a valid project-envelope shape even though typeof is 'object'.
+    expect(classifyProjectVersionFromObject(new Date())).toBe('MALFORMED');
+    expect(classifyProjectVersionFromObject(new Map())).toBe('MALFORMED');
+    expect(classifyProjectVersionFromObject(new Uint8Array(4))).toBe('MALFORMED');
+  });
+
+  it('accepts a null-prototype plain object', () => {
+    const record = Object.create(null) as Record<string, unknown>;
+    record['schemaVersion'] = CURRENT_PROJECT_SCHEMA_VERSION;
+    expect(classifyProjectVersionFromObject(record)).toBe('CURRENT');
+  });
+
   it('does not misclassify a nested field also named schemaVersion', () => {
     expect(
       classifyProjectVersionFromObject({
