@@ -1,4 +1,5 @@
 import {
+  CURRENT_PROJECT_SCHEMA_VERSION,
   classifyRawProjectVersionFromParsed,
   type ProjectVersionClassification,
 } from '../features/project/projectSchemaVersion';
@@ -24,6 +25,17 @@ export interface CanonicalProjectDocument<TProjection> {
   projection: TProjection | null;
   /** Validation detail when the payload cannot produce an admitted projection. */
   error: string | null;
+}
+
+export type CanonicalProjectAdmissionStatus = 'CURRENT' | 'LEGACY_TO_V1' | 'REFUSED';
+
+export interface CanonicalProjectAdmission<TProjection> {
+  /** The source verdict remains available for migration provenance and recovery diagnostics. */
+  source: CanonicalProjectDocument<TProjection>;
+  /** A current document after validation, or null when no editable projection was admitted. */
+  canonical: CanonicalProjectDocument<TProjection> | null;
+  /** LEGACY_TO_V1 is distinct from an already-current source even when the destination is V1. */
+  status: CanonicalProjectAdmissionStatus;
 }
 
 function validationError(result: {
@@ -107,4 +119,46 @@ export function parseCanonicalProjectDocument<TProjection>(
     projection: result.data,
     error: null,
   };
+}
+
+function overlayCurrentSchemaVersion(raw: CanonicalProjectRawPayload): string | null {
+  const objectStart = raw.search(/\S/);
+  if (objectStart === -1 || raw[objectStart] !== '{') return null;
+
+  let firstMember = objectStart + 1;
+  while (/\s/.test(raw[firstMember] ?? '')) firstMember++;
+  const isEmptyObject = raw[firstMember] === '}';
+  const separator = isEmptyObject ? '' : ',';
+  return `${raw.slice(0, objectStart + 1)}"schemaVersion":${CURRENT_PROJECT_SCHEMA_VERSION}${separator}${raw.slice(objectStart + 1)}`;
+}
+
+/**
+ * Performs the non-destructive in-memory LEGACY_TO_V1 admission step.
+ * The durable source-generation fence and writer integration remain separate gates.
+ */
+export function admitCanonicalProjectDocument<TProjection>(
+  text: string,
+  schema: {
+    safeParse(value: unknown): CanonicalProjectSchemaResult<TProjection>;
+  },
+): CanonicalProjectAdmission<TProjection> {
+  const source = parseCanonicalProjectDocument(text, schema);
+
+  if (source.classification === 'CURRENT' && source.projection !== null) {
+    return { source, canonical: source, status: 'CURRENT' };
+  }
+
+  if (source.classification !== 'LEGACY_UNVERSIONED' || source.projection === null) {
+    return { source, canonical: null, status: 'REFUSED' };
+  }
+
+  const migratedRaw = overlayCurrentSchemaVersion(source.raw);
+  if (migratedRaw === null) return { source, canonical: null, status: 'REFUSED' };
+
+  const canonical = parseCanonicalProjectDocument(migratedRaw, schema);
+  if (canonical.classification !== 'CURRENT' || canonical.projection === null) {
+    return { source, canonical: null, status: 'REFUSED' };
+  }
+
+  return { source, canonical, status: 'LEGACY_TO_V1' };
 }

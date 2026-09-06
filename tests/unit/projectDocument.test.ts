@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { parseCanonicalProjectDocument } from '../../services/projectDocument';
+import {
+  admitCanonicalProjectDocument,
+  parseCanonicalProjectDocument,
+} from '../../services/projectDocument';
 import { importedProjectJsonSchema } from '../../services/projectImportSchema';
 
 const validProject = {
@@ -76,5 +79,42 @@ describe('parseCanonicalProjectDocument', () => {
     expect(document.raw).toBe('{"schemaVersion":1');
     expect(document.projection).toBeNull();
     expect(document.error).toMatch(/not valid JSON/);
+  });
+
+  it('performs explicit LEGACY_TO_V1 admission without reserializing the source payload', () => {
+    const raw =
+      '{\n  "title":"Legacy project",\n  "logline":"Preserve this",\n  "manuscript":[],\n  "opaque":{"exact":9007199254740993}\n}';
+
+    const admission = admitCanonicalProjectDocument(raw, importedProjectJsonSchema);
+
+    expect(admission.status).toBe('LEGACY_TO_V1');
+    expect(admission.source.classification).toBe('LEGACY_UNVERSIONED');
+    expect(admission.canonical?.classification).toBe('CURRENT');
+    expect(admission.canonical?.projection?.title).toBe('Legacy project');
+    expect(admission.canonical?.raw).toContain('"schemaVersion":1');
+    expect(admission.canonical?.raw).toContain('9007199254740993');
+    expect(admission.canonical?.raw).toContain('"opaque":{"exact":9007199254740993}');
+  });
+
+  it('refuses legacy input that fails the complete V1 projection', () => {
+    const admission = admitCanonicalProjectDocument(
+      JSON.stringify({ title: 'Missing logline', manuscript: [] }),
+      importedProjectJsonSchema,
+    );
+
+    expect(admission.status).toBe('REFUSED');
+    expect(admission.source.classification).toBe('MALFORMED');
+    expect(admission.canonical).toBeNull();
+  });
+
+  it.each([
+    ['future', JSON.stringify({ schemaVersion: 99, title: 'Future' })],
+    ['migration gap', JSON.stringify({ schemaVersion: 0, ...validProject })],
+    ['current typed failure', JSON.stringify({ ...validProject, schemaVersion: 1, title: 42 })],
+  ])('refuses %s documents without a canonical editable projection', (_label, raw) => {
+    const admission = admitCanonicalProjectDocument(raw, importedProjectJsonSchema);
+
+    expect(admission.status).toBe('REFUSED');
+    expect(admission.canonical).toBeNull();
   });
 });

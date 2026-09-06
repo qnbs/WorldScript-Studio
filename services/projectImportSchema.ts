@@ -3,7 +3,11 @@
  * QNBS-v3: Einheitliches Schema verhindert divergierende Parse-Pfade und härter gegen korrupte Dateien.
  */
 import { z } from 'zod';
-import { parseCanonicalProjectDocument } from './projectDocument';
+import {
+  admitCanonicalProjectDocument,
+  type CanonicalProjectAdmission,
+  parseCanonicalProjectDocument,
+} from './projectDocument';
 
 const binderNodeTypeSchema = z.enum(['folder', 'text', 'note', 'image', 'pdf', 'link']);
 
@@ -349,6 +353,16 @@ export const importedProjectJsonSchema = z.object({
 });
 
 export type ImportedProjectJson = z.infer<typeof importedProjectJsonSchema>;
+
+/**
+ * Admits a JSON import through the explicit legacy-to-V1 boundary while retaining both source and
+ * canonical raw payloads for the writer/fencing slice that will make this boundary authoritative.
+ */
+export function admitImportedProjectJson(
+  text: string,
+): CanonicalProjectAdmission<ImportedProjectJson> {
+  return admitCanonicalProjectDocument(text, importedProjectJsonSchema);
+}
 
 // QNBS-v3: route file imports through the canonical admission boundary before exposing editable data.
 export function parseImportedProjectJson(text: string): ImportedProjectJson {
