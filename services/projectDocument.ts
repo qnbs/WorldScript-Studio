@@ -152,14 +152,19 @@ function skipRawJsonString(raw: string, start: number): number | null {
   return null;
 }
 
-function skipRawJsonValue(raw: string, start: number): number | null {
-  if (raw[start] === '"') return skipRawJsonString(raw, start);
-  if (raw[start] !== '{' && raw[start] !== '[') {
-    let index = start;
-    while (index < raw.length && raw[index] !== ',' && raw[index] !== '}') index++;
-    return index;
-  }
+function skipRawJsonWhitespace(raw: string, start: number): number {
+  let index = start;
+  while (/\s/.test(raw[index] ?? '')) index++;
+  return index;
+}
 
+function skipRawJsonScalar(raw: string, start: number): number {
+  let index = start;
+  while (index < raw.length && raw[index] !== ',' && raw[index] !== '}') index++;
+  return index;
+}
+
+function skipRawJsonContainer(raw: string, start: number): number | null {
   let depth = 0;
   let index = start;
   while (index < raw.length) {
@@ -170,8 +175,9 @@ function skipRawJsonValue(raw: string, start: number): number | null {
       index = stringEnd;
       continue;
     }
-    if (character === '{' || character === '[') depth++;
-    if (character === '}' || character === ']') {
+    if (character === '{' || character === '[') {
+      depth++;
+    } else if (character === '}' || character === ']') {
       depth--;
       if (depth === 0) return index + 1;
     }
@@ -180,42 +186,52 @@ function skipRawJsonValue(raw: string, start: number): number | null {
   return null;
 }
 
+function skipRawJsonValue(raw: string, start: number): number | null {
+  if (raw[start] === '"') return skipRawJsonString(raw, start);
+  if (raw[start] === '{' || raw[start] === '[') return skipRawJsonContainer(raw, start);
+  return skipRawJsonScalar(raw, start);
+}
+
+function readRawObjectKey(raw: string, start: number): { key: string; end: number } | null {
+  const keyEnd = skipRawJsonString(raw, start);
+  if (keyEnd === null) return null;
+  try {
+    const key: unknown = JSON.parse(raw.slice(start, keyEnd));
+    return typeof key === 'string' ? { key, end: keyEnd } : null;
+  } catch {
+    return null;
+  }
+}
+
+function readRawObjectMember(raw: string, start: number): CanonicalRawObjectMember | null {
+  const parsedKey = readRawObjectKey(raw, start);
+  if (parsedKey === null) return null;
+
+  let index = skipRawJsonWhitespace(raw, parsedKey.end);
+  if (raw[index] !== ':') return null;
+  index = skipRawJsonWhitespace(raw, index + 1);
+  const valueEnd = skipRawJsonValue(raw, index);
+  if (valueEnd === null) return null;
+  return { key: parsedKey.key, start, valueEnd };
+}
+
 function readTopLevelObjectMembers(raw: string): CanonicalRawObjectMember[] | null {
   const objectStart = raw.search(/\S/);
   if (objectStart === -1 || raw[objectStart] !== '{') return null;
 
   const members: CanonicalRawObjectMember[] = [];
-  let index = objectStart + 1;
-  while (/\s/.test(raw[index] ?? '')) index++;
+  let index = skipRawJsonWhitespace(raw, objectStart + 1);
   if (raw[index] === '}') return members;
 
   while (index < raw.length) {
-    const memberStart = index;
-    const keyEnd = skipRawJsonString(raw, index);
-    if (keyEnd === null) return null;
-    let key: unknown;
-    try {
-      key = JSON.parse(raw.slice(index, keyEnd)) as unknown;
-    } catch {
-      return null;
-    }
-    if (typeof key !== 'string') return null;
+    const member = readRawObjectMember(raw, index);
+    if (member === null) return null;
+    members.push(member);
 
-    index = keyEnd;
-    while (/\s/.test(raw[index] ?? '')) index++;
-    if (raw[index] !== ':') return null;
-    index++;
-    while (/\s/.test(raw[index] ?? '')) index++;
-    const valueEnd = skipRawJsonValue(raw, index);
-    if (valueEnd === null) return null;
-    members.push({ key, start: memberStart, valueEnd });
-
-    index = valueEnd;
-    while (/\s/.test(raw[index] ?? '')) index++;
+    index = skipRawJsonWhitespace(raw, member.valueEnd);
     if (raw[index] === '}') return members;
     if (raw[index] !== ',') return null;
-    index++;
-    while (/\s/.test(raw[index] ?? '')) index++;
+    index = skipRawJsonWhitespace(raw, index + 1);
   }
   return null;
 }
