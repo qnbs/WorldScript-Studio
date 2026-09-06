@@ -14,8 +14,10 @@ export type CanonicalProjectSchemaResult<TProjection> =
     };
 
 export interface CanonicalProjectDocument<TProjection> {
-  /** Header verdict; typed projection is present only for admitted legacy/current input. */
+  /** Final admission/recovery verdict; a current header with invalid owned fields becomes MALFORMED. */
   classification: ProjectVersionClassification;
+  /** Raw/header verdict retained separately so recovery can distinguish CURRENT from malformed data. */
+  headerClassification: ProjectVersionClassification;
   /** Original payload, including fields and numeric literals the current projection does not model. */
   raw: CanonicalProjectRawPayload;
   /** V1-owned projection; this is a view and never the persistence source. */
@@ -55,6 +57,7 @@ export function parseCanonicalProjectDocument<TProjection>(
   } catch {
     return {
       classification: 'MALFORMED',
+      headerClassification: 'MALFORMED',
       raw: text,
       projection: null,
       error: 'Invalid project file: not valid JSON.',
@@ -64,6 +67,7 @@ export function parseCanonicalProjectDocument<TProjection>(
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
     return {
       classification: 'MALFORMED',
+      headerClassification: 'MALFORMED',
       raw: text,
       projection: null,
       error: 'Invalid project file: the document must be a JSON object.',
@@ -78,6 +82,7 @@ export function parseCanonicalProjectDocument<TProjection>(
   if (!shouldProjectClassification(classification)) {
     return {
       classification,
+      headerClassification: classification,
       raw: text,
       projection: null,
       error: null,
@@ -88,6 +93,7 @@ export function parseCanonicalProjectDocument<TProjection>(
   if (!result.success) {
     return {
       classification: 'MALFORMED',
+      headerClassification: classification,
       raw: text,
       projection: null,
       error: validationError(result),
@@ -96,6 +102,7 @@ export function parseCanonicalProjectDocument<TProjection>(
 
   return {
     classification,
+    headerClassification: classification,
     raw: text,
     projection: result.data,
     error: null,

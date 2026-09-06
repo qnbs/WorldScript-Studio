@@ -17,6 +17,7 @@ describe('parseCanonicalProjectDocument', () => {
     const document = parseCanonicalProjectDocument(raw, importedProjectJsonSchema);
 
     expect(document.classification).toBe('CURRENT');
+    expect(document.headerClassification).toBe('CURRENT');
     expect(document.projection?.title).toBe(validProject.title);
     expect(document.projection).not.toHaveProperty('opaqueTopLevel');
     expect(document.raw).toBe(raw);
@@ -31,6 +32,7 @@ describe('parseCanonicalProjectDocument', () => {
     );
 
     expect(document.classification).toBe('LEGACY_UNVERSIONED');
+    expect(document.headerClassification).toBe('LEGACY_UNVERSIONED');
     expect(document.projection?.title).toBe(validProject.title);
     expect(document.raw).toBe(JSON.stringify(validProject));
   });
@@ -44,6 +46,7 @@ describe('parseCanonicalProjectDocument', () => {
     const document = parseCanonicalProjectDocument(raw, importedProjectJsonSchema);
 
     expect(document.classification).toBe('FUTURE');
+    expect(document.headerClassification).toBe('FUTURE');
     expect(document.projection).toBeNull();
     expect(document.error).toBeNull();
     expect(document.raw).toBe(raw);
@@ -59,6 +62,7 @@ describe('parseCanonicalProjectDocument', () => {
     const document = parseCanonicalProjectDocument(raw, importedProjectJsonSchema);
 
     expect(document.classification).toBe('MALFORMED');
+    expect(document.headerClassification).toBe('CURRENT');
     expect(document.projection).toBeNull();
     expect(document.raw).toBe(raw);
     expect(document.error).toMatch(/title/);
@@ -68,6 +72,7 @@ describe('parseCanonicalProjectDocument', () => {
     const document = parseCanonicalProjectDocument('{"schemaVersion":1', importedProjectJsonSchema);
 
     expect(document.classification).toBe('MALFORMED');
+    expect(document.headerClassification).toBe('MALFORMED');
     expect(document.raw).toBe('{"schemaVersion":1');
     expect(document.projection).toBeNull();
     expect(document.error).toMatch(/not valid JSON/);
