@@ -3,6 +3,7 @@
  * QNBS-v3: Einheitliches Schema verhindert divergierende Parse-Pfade und härter gegen korrupte Dateien.
  */
 import { z } from 'zod';
+import { parseCanonicalProjectDocument } from './projectDocument';
 
 const binderNodeTypeSchema = z.enum(['folder', 'text', 'note', 'image', 'pdf', 'link']);
 
@@ -349,17 +350,14 @@ export const importedProjectJsonSchema = z.object({
 
 export type ImportedProjectJson = z.infer<typeof importedProjectJsonSchema>;
 
+// QNBS-v3: route file imports through the canonical admission boundary before exposing editable data.
 export function parseImportedProjectJson(text: string): ImportedProjectJson {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text) as unknown;
-  } catch {
-    throw new Error('Invalid project file: not valid JSON.');
+  const document = parseCanonicalProjectDocument(text, importedProjectJsonSchema);
+  if (document.projection !== null) {
+    return document.projection;
   }
-  const result = importedProjectJsonSchema.safeParse(raw);
-  if (!result.success) {
-    const detail = result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
-    throw new Error(`Invalid project file: ${detail}`);
-  }
-  return result.data;
+  throw new Error(
+    document.error ??
+      `Invalid project file: ${document.classification} documents are not editable import sources.`,
+  );
 }

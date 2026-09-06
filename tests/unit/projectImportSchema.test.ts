@@ -76,4 +76,20 @@ describe('projectImportSchema', () => {
   it('rejects invalid JSON shape', () => {
     expect(() => parseImportedProjectJson(JSON.stringify([]))).toThrow(/Invalid project file/);
   });
+
+  // QNBS-v3: file import must refuse version states that cannot receive editable authority.
+  it('refuses future and migration-gap documents before projection', () => {
+    expect(() =>
+      parseImportedProjectJson(
+        JSON.stringify({ schemaVersion: 99, futureOnlyField: { preserved: true } }),
+      ),
+    ).toThrow(/FUTURE/);
+    expect(() =>
+      parseImportedProjectJson(JSON.stringify({ schemaVersion: 0, ...validProjectForImport() })),
+    ).toThrow(/UNSUPPORTED_OLDER/);
+  });
 });
+
+function validProjectForImport() {
+  return { title: 'T', logline: 'L', manuscript: [] };
+}
