@@ -4,11 +4,12 @@
 
 **Status:** ADMITTED — maintainer-approved at the contract/design level, including §9's decision
 rows 1–19 and the post-signoff refinements recorded below them. `PROPOSED = YES`, `ADMITTED = YES`,
-`IMPLEMENTATION_STARTED = NO`. This document changes no code and switches no authority. It resolves
-the two decisions that `CORE-MIGRATION-LEDGER.md` row 9 and issue `#553` both identify as blocking
-further work on the Wave 2 project state-shape compatibility adapter — and, transitively, the Wave 2
-prerequisite gate that R-15 (`#445`) implementation sits behind. Implementation begins only in a
-separate, subsequent PR per issue `#553`'s own slices.
+`IMPLEMENTATION_STARTED = YES`, `authority switch = NO`, `implementation incomplete`. This
+document remains the binding contract while the admitted #553 implementation slices progress; it
+does not itself switch production authority. It resolves the two decisions that
+`CORE-MIGRATION-LEDGER.md` row 9 and issue `#553` both identify as blocking further work on the Wave
+2 project state-shape compatibility adapter — and, transitively, the Wave 2 prerequisite gate that
+R-15 (`#445`) implementation sits behind.
 
 **Baseline:** `main` at `f490360bab26bc068164d6226a03898b797b8e40`
 
