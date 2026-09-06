@@ -20,9 +20,10 @@ codebase).
 **Scope:** Decides (1) where persisted project schema-version authority lives, its legacy/current/
 future semantics, and its migration state machine; and (2) a field-class-staged unknown-field
 policy that can never silently drop persisted user data. Defines the authority-switch admission
-gates issue #553 asks for. Does not implement any of this, does not touch R-15/#445's separate
-encryption-envelope security contract, and does not change current write authority (TypeScript
-remains sole authority; the Rust shadow comparison remains observation-only).
+gates issue #553 asks for. The admitted implementation is progressing in separate causal #553
+slices but remains incomplete; this contract does not touch R-15/#445's separate encryption-envelope
+security contract and does not change current write authority (TypeScript remains sole authority;
+the Rust shadow comparison remains observation-only).
 
 ## 1. Current truth (baseline)
 
@@ -982,4 +983,5 @@ as `IMPLEMENTATION_REQUIRED` or a stated non-issue — never absorbed as another
 
 All 19 rows above are confirmed. This document's status line reflects `ADMITTED = YES` and
 `CORE-MIGRATION-LEDGER.md` row 9 is updated to reflect it, per issue `#553`'s own acceptance
-criterion. Implementation begins only in a separate, subsequent PR.
+criterion. Implementation has begun in subsequent causal #553 PRs, while the authority switch and
+the remaining admission, no-loss, migration, fencing, and egress gates remain incomplete.
