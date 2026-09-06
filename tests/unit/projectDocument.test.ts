@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   admitCanonicalProjectDocument,
   parseCanonicalProjectDocument,
+  stripTopLevelObjectKeys,
 } from '../../services/projectDocument';
 import { importedProjectJsonSchema } from '../../services/projectImportSchema';
 
@@ -94,6 +95,36 @@ describe('parseCanonicalProjectDocument', () => {
     expect(admission.canonical?.raw).toContain('"schemaVersion":1');
     expect(admission.canonical?.raw).toContain('9007199254740993');
     expect(admission.canonical?.raw).toContain('"opaque":{"exact":9007199254740993}');
+  });
+
+  // QNBS-v3: current documents retain editable authority without a second migration classification.
+  it('admits an already-current valid document as CURRENT', () => {
+    const raw = JSON.stringify({ schemaVersion: 1, ...validProject });
+    const admission = admitCanonicalProjectDocument(raw, importedProjectJsonSchema);
+
+    expect(admission.status).toBe('CURRENT');
+    expect(admission.canonical).toBe(admission.source);
+    expect(admission.canonical?.raw).toBe(raw);
+  });
+
+  // QNBS-v3: raw top-level removal must preserve opaque nested values and delimiters around survivors.
+  it('removes selected top-level keys without reserializing surviving raw JSON', () => {
+    const raw =
+      '{\n  "local":"directory",\n  "schemaVersion":1,\n  "opaque":{"exact":9007199254740993},\n  "aux":true\n}';
+
+    const stripped = stripTopLevelObjectKeys(raw, new Set(['local', 'aux']));
+
+    expect(stripped).toContain('"schemaVersion":1');
+    expect(stripped).toContain('9007199254740993');
+    expect(stripped).not.toContain('"local"');
+    expect(stripped).not.toContain('"aux"');
+    expect(JSON.parse(stripped ?? '')).toMatchObject({ schemaVersion: 1, opaque: {} });
+  });
+
+  // QNBS-v3: malformed raw-removal input fails closed instead of manufacturing a portable payload.
+  it('fails closed when raw top-level removal cannot parse the object boundary', () => {
+    expect(stripTopLevelObjectKeys('{"broken":"unterminated}', new Set(['broken']))).toBeNull();
+    expect(stripTopLevelObjectKeys('{"kept":1}', new Set())).toBe('{"kept":1}');
   });
 
   it('refuses legacy input that fails the complete V1 projection', () => {

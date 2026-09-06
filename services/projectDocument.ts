@@ -38,6 +38,12 @@ export interface CanonicalProjectAdmission<TProjection> {
   status: CanonicalProjectAdmissionStatus;
 }
 
+type CanonicalRawObjectMember = {
+  key: string;
+  start: number;
+  valueEnd: number;
+};
+
 function validationError(result: {
   error: { issues: Array<{ path: PropertyKey[]; message: string }> };
 }) {
@@ -121,6 +127,7 @@ export function parseCanonicalProjectDocument<TProjection>(
   };
 }
 
+// QNBS-v3: stamp legacy JSON without reserializing opaque numeric literals or nested payloads.
 function overlayCurrentSchemaVersion(raw: CanonicalProjectRawPayload): string | null {
   const objectStart = raw.search(/\S/);
   if (objectStart === -1 || raw[objectStart] !== '{') return null;
@@ -130,6 +137,132 @@ function overlayCurrentSchemaVersion(raw: CanonicalProjectRawPayload): string | 
   const isEmptyObject = raw[firstMember] === '}';
   const separator = isEmptyObject ? '' : ',';
   return `${raw.slice(0, objectStart + 1)}"schemaVersion":${CURRENT_PROJECT_SCHEMA_VERSION}${separator}${raw.slice(objectStart + 1)}`;
+}
+
+function skipRawJsonString(raw: string, start: number): number | null {
+  let index = start + 1;
+  while (index < raw.length) {
+    if (raw[index] === '\\') {
+      index += 2;
+      continue;
+    }
+    if (raw[index] === '"') return index + 1;
+    index++;
+  }
+  return null;
+}
+
+function skipRawJsonValue(raw: string, start: number): number | null {
+  if (raw[start] === '"') return skipRawJsonString(raw, start);
+  if (raw[start] !== '{' && raw[start] !== '[') {
+    let index = start;
+    while (index < raw.length && raw[index] !== ',' && raw[index] !== '}') index++;
+    return index;
+  }
+
+  let depth = 0;
+  let index = start;
+  while (index < raw.length) {
+    const character = raw[index];
+    if (character === '"') {
+      const stringEnd = skipRawJsonString(raw, index);
+      if (stringEnd === null) return null;
+      index = stringEnd;
+      continue;
+    }
+    if (character === '{' || character === '[') depth++;
+    if (character === '}' || character === ']') {
+      depth--;
+      if (depth === 0) return index + 1;
+    }
+    index++;
+  }
+  return null;
+}
+
+function readTopLevelObjectMembers(raw: string): CanonicalRawObjectMember[] | null {
+  const objectStart = raw.search(/\S/);
+  if (objectStart === -1 || raw[objectStart] !== '{') return null;
+
+  const members: CanonicalRawObjectMember[] = [];
+  let index = objectStart + 1;
+  while (/\s/.test(raw[index] ?? '')) index++;
+  if (raw[index] === '}') return members;
+
+  while (index < raw.length) {
+    const memberStart = index;
+    const keyEnd = skipRawJsonString(raw, index);
+    if (keyEnd === null) return null;
+    let key: unknown;
+    try {
+      key = JSON.parse(raw.slice(index, keyEnd)) as unknown;
+    } catch {
+      return null;
+    }
+    if (typeof key !== 'string') return null;
+
+    index = keyEnd;
+    while (/\s/.test(raw[index] ?? '')) index++;
+    if (raw[index] !== ':') return null;
+    index++;
+    while (/\s/.test(raw[index] ?? '')) index++;
+    const valueEnd = skipRawJsonValue(raw, index);
+    if (valueEnd === null) return null;
+    members.push({ key, start: memberStart, valueEnd });
+
+    index = valueEnd;
+    while (/\s/.test(raw[index] ?? '')) index++;
+    if (raw[index] === '}') return members;
+    if (raw[index] !== ',') return null;
+    index++;
+    while (/\s/.test(raw[index] ?? '')) index++;
+  }
+  return null;
+}
+
+/** Removes backend-local top-level metadata while preserving every other raw JSON token. */
+// QNBS-v3: strip machine-local trust metadata only at the portable import boundary without narrowing opaque data.
+export function stripTopLevelObjectKeys(
+  raw: CanonicalProjectRawPayload,
+  keys: ReadonlySet<string>,
+): CanonicalProjectRawPayload | null {
+  if (keys.size === 0) return raw;
+  const members = readTopLevelObjectMembers(raw);
+  if (members === null) return null;
+
+  const removalSpans = members.flatMap((member, index) => {
+    if (!keys.has(member.key)) return [];
+    const nextMember = members[index + 1];
+    if (nextMember) {
+      return [{ start: member.start, end: nextMember.start }];
+    }
+    const previousMember = members[index - 1];
+    if (previousMember) {
+      return [{ start: previousMember.valueEnd, end: member.valueEnd }];
+    }
+    return [{ start: member.start, end: member.valueEnd }];
+  });
+  if (removalSpans.length === 0) return raw;
+
+  const mergedSpans = removalSpans
+    .sort((left, right) => left.start - right.start)
+    .reduce<Array<{ start: number; end: number }>>((merged, span) => {
+      const previous = merged.at(-1);
+      if (previous && span.start <= previous.end) {
+        previous.end = Math.max(previous.end, span.end);
+      } else {
+        merged.push({ ...span });
+      }
+      return merged;
+    }, []);
+
+  let result = '';
+  let cursor = 0;
+  for (const span of mergedSpans) {
+    result += raw.slice(cursor, span.start);
+    cursor = span.end;
+  }
+  return result + raw.slice(cursor);
 }
 
 /**
@@ -142,6 +275,7 @@ export function admitCanonicalProjectDocument<TProjection>(
     safeParse(value: unknown): CanonicalProjectSchemaResult<TProjection>;
   },
 ): CanonicalProjectAdmission<TProjection> {
+  // QNBS-v3: refuse unsupported or invalid states before granting any editable migration authority.
   const source = parseCanonicalProjectDocument(text, schema);
 
   if (source.classification === 'CURRENT' && source.projection !== null) {
