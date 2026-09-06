@@ -28,11 +28,8 @@ jobs:
           script: |
             const KEEP = 3;
 
-            // QNBS-v3: This API manages GitHub Deployment records only. It does not delete
-            //          Vercel deployment artifacts; see docs/VERCEL-PREVIEW-RETENTION-POLICY.md
-            //          and issue #627 for the separate protected Vercel cleanup procedure.
-            // QNBS-v3: Paginate ALL records (not just one environment) so GitHub's own
-            //          Production/Preview/github-pages records do not accumulate silently.
+            // QNBS-v3: GitHub API only; Vercel artifacts require the protected #627 procedure.
+            // QNBS-v3: Paginate all GitHub deployment records to prevent retention drift.
             const allDeployments = await github.paginate(
               github.rest.repos.listDeployments,
               {
