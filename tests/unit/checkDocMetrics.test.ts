@@ -4,14 +4,16 @@
  * QNBS-v3: protects the drift gate from historical-section regressions — an untested exclusion heuristic would turn it into noise.
  */
 
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   getCanonicalProductionUrl,
   getTaggedVersions,
+  scanBundleBudgetTruth,
   scanForDrift,
   scanForUrlDrift,
+  scanLocalizedBundleBudgetTruth,
   scanReadmeTestMetrics,
   scanReleaseTruth,
   stripHistoricalSections,
@@ -139,6 +141,83 @@ describe('README test metrics truth', () => {
   // QNBS-v3: stale badges must fail docs:check instead of preserving an old count during local sync.
   it('rejects stale test counts instead of silently preserving them', () => {
     expect(scanReadmeTestMetrics('![Tests-1%2B_%2F_1_files](badge.svg)')).not.toEqual([]);
+  });
+});
+
+// QNBS-v3: Lock documentation budgets to the executable source so stale gate claims fail closed.
+describe('bundle budget truth', () => {
+  const budget = { entryKb: 2500, vendorKb: 6200, chunkKb: 2500, wasmKb: 30000 };
+  const statement = [
+    '<!-- bundle-budget:source-of-truth -->',
+    'Raw bundle-budget ceilings (KB per uncompressed asset): entry **2500 KB**, vendor **6200 KB**, other JavaScript **2500 KB**, and WASM **30000 KB**.',
+  ].join('\n');
+
+  it('accepts a current source-of-truth statement', () => {
+    expect(scanBundleBudgetTruth(statement, 'FAKE.md', budget)).toEqual([]);
+  });
+
+  it('accepts the current statement with CRLF line endings', () => {
+    expect(scanBundleBudgetTruth(statement.replaceAll('\n', '\r\n'), 'FAKE.md', budget)).toEqual(
+      [],
+    );
+  });
+
+  it('rejects stale budget documentation', () => {
+    expect(
+      scanBundleBudgetTruth(statement.replace('2500 KB', '4500 KB'), 'FAKE.md', budget),
+    ).toEqual([expect.stringContaining('does not match config/bundle-budget.json')]);
+  });
+
+  // QNBS-v3: Localized help truth prevents user-facing budget drift across all 19 locales.
+  it('checks the localized in-app help claim independently of formatting', () => {
+    const localeFiles = readdirSync(join(process.cwd(), 'locales'), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => join(process.cwd(), 'locales', entry.name, 'help.json'))
+      .filter((filePath) => {
+        try {
+          readFileSync(filePath, 'utf8');
+          return true;
+        } catch {
+          return false;
+        }
+      });
+    expect(localeFiles).toHaveLength(19);
+    for (const filePath of localeFiles) {
+      expect(
+        scanLocalizedBundleBudgetTruth(readFileSync(filePath, 'utf8'), filePath, budget),
+      ).toEqual([]);
+    }
+
+    const localizedClaim = JSON.stringify({
+      'help.docs.lazyLoading.content': '<li>Vendor: 6 200 KB; Entry: 2 500 KB.</li>',
+    });
+    const staleClaim = localizedClaim.replace('6 200', '7 000').replace('2 500', '4 500');
+    const staleAndCurrentClaim = JSON.stringify({
+      'help.docs.lazyLoading.content':
+        '<li>Vendor: 7 000 KB; Entry: 2 500 KB; legacy entry: 4 500 KB.</li>',
+    });
+    const swappedClaim = JSON.stringify({
+      'help.docs.lazyLoading.content': '<li>Vendor: 2 500 KB; Entry: 6 200 KB.</li>',
+    });
+    const unrelatedNumbersBeforeClaim = JSON.stringify({
+      'help.docs.lazyLoading.content':
+        '<li>14 views and ~200 KB gzip.</li><li>Vendor: 6 200 KB; Entry: 2 500 KB.</li>',
+    });
+    expect(scanLocalizedBundleBudgetTruth(localizedClaim, 'locales/en/help.json', budget)).toEqual(
+      [],
+    );
+    expect(scanLocalizedBundleBudgetTruth(staleClaim, 'locales/en/help.json', budget)).toEqual([
+      expect.stringContaining('does not match config/bundle-budget.json'),
+    ]);
+    expect(
+      scanLocalizedBundleBudgetTruth(staleAndCurrentClaim, 'locales/en/help.json', budget),
+    ).toEqual([expect.stringContaining('does not match config/bundle-budget.json')]);
+    expect(scanLocalizedBundleBudgetTruth(swappedClaim, 'locales/en/help.json', budget)).toEqual([
+      expect.stringContaining('does not match config/bundle-budget.json'),
+    ]);
+    expect(
+      scanLocalizedBundleBudgetTruth(unrelatedNumbersBeforeClaim, 'locales/en/help.json', budget),
+    ).toEqual([]);
   });
 });
 

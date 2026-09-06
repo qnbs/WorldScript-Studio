@@ -197,7 +197,7 @@ pnpm run mutation:report    # Aggregate downloaded reports; fails on missing/inv
 
 # Analysis / budgets
 pnpm run analyze            # Rollup visualizer → dist/bundle-analysis.html
-pnpm run bundle:budget      # Chunk size guard (default max 6200 KB total, 2500 KB entry)
+pnpm run bundle:budget      # Chunk size guard; ceilings come from config/bundle-budget.json
 pnpm run storybook          # Storybook dev server on :6006
 pnpm run build-storybook    # Static Storybook build
 pnpm run test:storybook     # Test-runner against served Storybook
@@ -456,7 +456,7 @@ Never commit directly to `main` — always a feature branch + PR, even for a sin
 - **Supply-chain:** SHA-pinned GitHub Actions, Dependabot weekly updates, OpenSSF Scorecard, CodeQL SAST, SLSA build provenance on `main`.
 - **Collaboration:** Yjs + `packages/collab-transport` (vendor fork of y-webrtc 10.3.0) with AES-256-GCM E2E encryption baked in (PBKDF2, 600k iterations, `extractable: false`). Signaling URLs are user-configurable.
 - **Tauri isolation:** `vite.config.ts` externalizes `/^@tauri-apps\//` so web builds never bundle Tauri APIs. Abstract Tauri calls through `services/desktopPlatform.ts` (the `DesktopPlatform` interface from `packages/desktop-contracts`) — new code must not import `@tauri-apps/*` directly outside `components/ui/`; enforced by `pnpm run guardrail:desktop-imports`.
-- **IDB at-rest encryption:** Optional feature (`featureFlags.enableIdbAtRestEncryption`) encrypts all project data, snapshots, and settings with AES-256-GCM + PBKDF2-derived key (600k iterations, SHA-256, 32-byte random salt). Web build uses passphrase unlock screen; Tauri build uses OS keychain via `tauri-plugin-stronghold`.
+- **IDB at-rest encryption:** Optional feature (`featureFlags.enableIdbAtRestEncryption`) protects browser IndexedDB project data, snapshots, and settings with AES-256-GCM + PBKDF2-derived key (600k iterations, SHA-256, 32-byte random salt). Desktop project files, settings, snapshots, and assets remain plaintext apart from compression until R-15; no `tauri-plugin-stronghold` or OS-keychain-backed project-storage authority is currently used.
 - **Encrypted library backup:** One-click encrypted ZIP export from Settings → Data; `vault.bin` encrypted with AES-256-GCM, passphrase-derived key via PBKDF2.
 - **Vulnerability reporting:** GitHub Private Vulnerability Reporting preferred. 90-day coordinated disclosure embargo.
 

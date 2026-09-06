@@ -12,10 +12,66 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getModules, REF_LANG } from './i18n-locales.mjs';
+import { getLocales, getModules, REF_LANG } from './i18n-locales.mjs';
 import { getVitestTestCaseCount, getVitestTestFileCount } from './test-metrics.mjs';
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
+const BUNDLE_BUDGET_DOCS = ['README.md', '.github/CI-AUDIT.md'];
+const BUNDLE_BUDGET_CONFIG = 'config/bundle-budget.json';
+
+// QNBS-v3: Fail closed on budget drift so current documentation cannot outlive executable limits.
+function readBundleBudget() {
+  try {
+    const budget = JSON.parse(readFileSync(join(root, BUNDLE_BUDGET_CONFIG), 'utf8'));
+    const requiredKeys = ['entryKb', 'vendorKb', 'chunkKb', 'wasmKb'];
+    if (requiredKeys.some((key) => !Number.isFinite(budget[key]) || budget[key] < 0)) {
+      throw new Error('must define non-negative finite KB ceilings');
+    }
+    return budget;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`[bundle:budget] Invalid ${BUNDLE_BUDGET_CONFIG}: ${reason}`);
+  }
+}
+
+export function scanBundleBudgetTruth(content, filePath, budget) {
+  const expected =
+    '<!-- bundle-budget:source-of-truth -->\n' +
+    `Raw bundle-budget ceilings (KB per uncompressed asset): entry **${budget.entryKb} KB**, vendor **${budget.vendorKb} KB**, other JavaScript **${budget.chunkKb} KB**, and WASM **${budget.wasmKb} KB**.`;
+  return content.replaceAll('\r\n', '\n').includes(expected)
+    ? []
+    : [`${filePath} — bundle-budget statement does not match ${BUNDLE_BUDGET_CONFIG}`];
+}
+
+// QNBS-v3: validate localized in-app help claims so user-facing budget guidance cannot drift from CI.
+export function scanLocalizedBundleBudgetTruth(content, filePath, budget) {
+  try {
+    const data = JSON.parse(content);
+    const claim = data['help.docs.lazyLoading.content'];
+    const budgetSection = typeof claim === 'string' ? claim.slice(claim.lastIndexOf('<li>')) : '';
+    const numericClaims = [...budgetSection.matchAll(/\d[\d\s,]*/g)].map((match) => ({
+      index: match.index ?? -1,
+      value: match[0].replace(/[^\d]/g, ''),
+    }));
+    const vendorLabel = /\bvendor\b/i.exec(budgetSection);
+    const entryLabel = /(?:\bentry\b|\bentrada\b|entrée)/i.exec(budgetSection);
+    if (
+      numericClaims.length === 2 &&
+      vendorLabel?.index !== undefined &&
+      entryLabel?.index !== undefined &&
+      vendorLabel.index < entryLabel.index &&
+      numericClaims[0].value === String(budget.vendorKb) &&
+      numericClaims[1].value === String(budget.entryKb)
+    ) {
+      return [];
+    }
+  } catch {
+    // The regular i18n key/content gates report malformed locale JSON separately.
+  }
+  return [
+    `${filePath} — help.docs.lazyLoading.content bundle-budget claim does not match ${BUNDLE_BUDGET_CONFIG}`,
+  ];
+}
 
 // QNBS-v3: scan every documented drift site so stale locale, release, and metric claims cannot bypass this gate.
 const TARGET_FILES = [
@@ -453,6 +509,13 @@ function main() {
   const latestVersion = getLatestReleasedVersion();
   const canonicalUrl = getCanonicalProductionUrl();
   const packageVersion = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
+  let bundleBudget;
+  try {
+    bundleBudget = readBundleBudget();
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    process.exit(1);
+  }
 
   const taggedVersions = getTaggedVersions();
   const changelog = readFileSync(join(root, 'CHANGELOG.md'), 'utf8');
@@ -490,6 +553,32 @@ function main() {
       continue;
     }
     allFindings.push(...scanForUrlDrift(content, relPath, canonicalUrl));
+  }
+
+  for (const relPath of BUNDLE_BUDGET_DOCS) {
+    const abs = join(root, relPath);
+    let content;
+    try {
+      content = readFileSync(abs, 'utf8');
+    } catch {
+      allFindings.push(`${relPath} — required current bundle-budget document is missing`);
+      continue;
+    }
+    allFindings.push(...scanBundleBudgetTruth(content, relPath, bundleBudget));
+  }
+
+  // QNBS-v3: current locale help is shipped to users, so every active locale must carry the same budget truth.
+  for (const locale of getLocales()) {
+    const relPath = `locales/${locale}/help.json`;
+    const abs = join(root, relPath);
+    let content;
+    try {
+      content = readFileSync(abs, 'utf8');
+    } catch {
+      allFindings.push(`${relPath} — required current in-app help document is missing`);
+      continue;
+    }
+    allFindings.push(...scanLocalizedBundleBudgetTruth(content, relPath, bundleBudget));
   }
 
   if (allFindings.length > 0) {

@@ -33,7 +33,7 @@ This document summarizes the **current inventory** and **stabilization measures*
 | i18n | `scripts/check-i18n-keys.mjs` | `pnpm run i18n:check` |
 | Unit | Vitest + V8 | CI: `pnpm exec vitest run --coverage`; local: targeted `pnpm exec vitest run <path>` |
 | E2E | Playwright | `CI=true pnpm run test:e2e` |
-| Bundle | `scripts/check-bundle-budget.mjs` | max **7000 KB** per chunk, max **4500 KB** entry (`index-*.js`) |
+| Bundle | `scripts/check-bundle-budget.mjs` + [`config/bundle-budget.json`](../config/bundle-budget.json) | differentiated raw per-file ceilings; see the checked source-of-truth statement below |
 | Lighthouse | `.lighthouserc.cjs` | Accessibility **error** ≥ 0.95; CLS **error** ≤ 0.1; Performance **warn** |
 
 ---
@@ -43,8 +43,11 @@ This document summarizes the **current inventory** and **stabilization measures*
 | Problem | Fix |
 |---------|-----|
 | Matrix `node-version: ['lts/*', 'node']` breaks on new Node release without code changes | Pinned to **`['22', '24']`** |
-| Entry chunk grows with Plot-Board splits | Separate budget **`--max-entry-kb 4500`** in `bundle:budget` |
+| Entry/vendor growth from lazy-loaded local-AI and Plot-Board code | Differentiated raw per-file ceilings are maintained in [`config/bundle-budget.json`](../config/bundle-budget.json) and checked against current docs by `pnpm run docs:check` |
 | Vendor chunks (ML, DuckDB) | `manualChunks` + PWA `resolveDependencies` filter for `plot-board`, `vendor-duckdb`, `vendor-ai-onnx` |
+
+<!-- bundle-budget:source-of-truth -->
+Raw bundle-budget ceilings (KB per uncompressed asset): entry **2500 KB**, vendor **6200 KB**, other JavaScript **2500 KB**, and WASM **30000 KB**.
 
 ---
 
