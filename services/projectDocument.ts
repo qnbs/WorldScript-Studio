@@ -42,6 +42,7 @@ function shouldProjectClassification(classification: ProjectVersionClassificatio
  * Raw header checks happen before typed validation so future and migration-gap payloads are
  * preserved without receiving editable authority.
  */
+// QNBS-v3: classify version before typed projection so unsupported input stays preserve-first and noneditable.
 export function parseCanonicalProjectDocument<TProjection>(
   text: string,
   schema: {
