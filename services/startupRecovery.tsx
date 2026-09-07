@@ -51,7 +51,9 @@ export async function renderProjectInitializationFailure(
               },
             }
           : {})}
-        {...(failureKind === 'project-io' || failureKind === 'project-unsupported'
+        {...(failureKind === 'project-io' ||
+        failureKind === 'project-unsupported' ||
+        failureKind === 'project-migration-gap'
           ? { onRetry: () => window.location.reload() }
           : {})}
         {...(canReset

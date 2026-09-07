@@ -5,7 +5,8 @@ export type StartupRecoveryFailureKind =
   | 'storage'
   | 'project-corrupt'
   | 'project-io'
-  | 'project-unsupported';
+  | 'project-unsupported'
+  | 'project-migration-gap';
 
 export interface StartupRecoveryActions {
   failureKind: StartupRecoveryFailureKind;
@@ -20,13 +21,15 @@ export function getStartupRecoveryActions(
 ): StartupRecoveryActions {
   const projectLoadError = error instanceof ProjectLoadError ? error : null;
   const failureKind: StartupRecoveryFailureKind =
-    projectLoadError?.reason === 'unsupported-version'
-      ? 'project-unsupported'
-      : projectLoadError?.reason === 'corrupt'
-        ? 'project-corrupt'
-        : projectLoadError || backend === 'filesystem'
-          ? 'project-io'
-          : 'storage';
+    projectLoadError?.classification === 'UNSUPPORTED_OLDER'
+      ? 'project-migration-gap'
+      : projectLoadError?.reason === 'unsupported-version'
+        ? 'project-unsupported'
+        : projectLoadError?.reason === 'corrupt'
+          ? 'project-corrupt'
+          : projectLoadError || backend === 'filesystem'
+            ? 'project-io'
+            : 'storage';
   return {
     failureKind,
     canQuarantine: failureKind === 'project-corrupt' && backend === 'filesystem',

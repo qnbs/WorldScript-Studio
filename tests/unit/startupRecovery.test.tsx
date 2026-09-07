@@ -13,6 +13,7 @@ const { mockRoot, mockReset, mockBackendKind, mockQuarantine, mockCopy, loggerEr
       projectUnavailable: 'project unavailable',
       projectIoUnavailable: 'project io unavailable',
       projectUnsupported: 'project unsupported',
+      projectMigrationGap: 'project migration gap',
       reload: 'reload',
       retry: 'retry',
       recover: 'recover',
@@ -51,6 +52,7 @@ vi.mock('../../services/fs/projectFsStore', () => {
       public readonly reason: 'corrupt' | 'io-error' | 'unsupported-version',
       message: string,
       public readonly projectId: string,
+      public readonly classification?: 'FUTURE' | 'UNSUPPORTED_OLDER',
     ) {
       super(message);
       this.name = 'ProjectLoadError';
@@ -73,7 +75,12 @@ import {
 
 type RecoveryScreenProps = {
   copy: typeof mockCopy;
-  failureKind: 'storage' | 'project-corrupt' | 'project-io' | 'project-unsupported';
+  failureKind:
+    | 'storage'
+    | 'project-corrupt'
+    | 'project-io'
+    | 'project-unsupported'
+    | 'project-migration-gap';
   onReset?: () => Promise<void>;
   onRecover?: () => Promise<void>;
   onRetry?: () => void;
@@ -154,6 +161,21 @@ describe('startup recovery rendering', () => {
 
     const props = renderedScreenProps();
     expect(props.failureKind).toBe('project-unsupported');
+    expect(props.onRecover).toBeUndefined();
+    expect(props.onReset).toBeUndefined();
+    expect(props.onRetry).toEqual(expect.any(Function));
+  });
+
+  // QNBS-v3: migration-gap recovery keeps the older-version diagnostic while remaining retry-only.
+  it('renders migration-gap projects with distinct retry-only recovery', async () => {
+    mockBackendKind.mockResolvedValue('filesystem');
+    await renderProjectInitializationFailure(
+      mockRoot as never,
+      new ProjectLoadError('unsupported-version', 'older', 'p1', 'UNSUPPORTED_OLDER'),
+    );
+
+    const props = renderedScreenProps();
+    expect(props.failureKind).toBe('project-migration-gap');
     expect(props.onRecover).toBeUndefined();
     expect(props.onReset).toBeUndefined();
     expect(props.onRetry).toEqual(expect.any(Function));
