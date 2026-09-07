@@ -6,10 +6,18 @@
 
 import type { EntityState } from '@reduxjs/toolkit';
 import { scheduleCoreProjectValidation } from '../../features/project/coreValidationShadow';
+import {
+  CURRENT_PROJECT_SCHEMA_VERSION,
+  type ProjectVersionClassification,
+} from '../../features/project/projectSchemaVersion';
 import type { Character, StoryProject, World } from '../../types';
 import { getStaticTranslation } from '../i18n/staticTranslate';
 import { logger } from '../logger';
-import { parseImportedProjectJson } from '../projectImportSchema';
+import {
+  admitCanonicalProjectDocument,
+  type CanonicalProjectSchemaResult,
+} from '../projectDocument';
+import { importedProjectJsonSchema, parseImportedProjectJson } from '../projectImportSchema';
 import {
   normalizeSaveProjectInputToStoryProject,
   type ProjectQuarantineResult,
@@ -20,6 +28,7 @@ import { FsAssetStore } from './assetFsStore';
 import {
   compressData,
   decompressData,
+  decompressJsonText,
   retryFs,
   sanitizePathSegment,
   type TauriApis,
@@ -27,7 +36,6 @@ import {
 } from './fsCore';
 import {
   evidenceFromPersistedMetadata,
-  hasLegacyMissingProjectId,
   isLegacyInvalidProjectId,
   LEGACY_AUXILIARY_METADATA_KEY,
   LEGACY_PROJECT_DIRECTORY_METADATA_KEY,
@@ -49,12 +57,23 @@ import {
 // QNBS-v3 (DA-01): distinguishes corrupt/unreadable saved data from genuine absence — callers must never treat this the same as "no project exists yet".
 export class ProjectLoadError extends Error {
   constructor(
-    public readonly reason: 'corrupt' | 'io-error',
+    public readonly reason: 'corrupt' | 'io-error' | 'unsupported-version',
     message: string,
     public readonly projectId: string,
+    public readonly classification?: ProjectVersionClassification,
   ) {
     super(message);
     this.name = 'ProjectLoadError';
+  }
+}
+
+// QNBS-v3: legacy admissions stay readable but cannot enter the ordinary writer until migration fencing exists.
+export class ProjectWritebackError extends Error {
+  constructor(public readonly projectId: string) {
+    super(
+      `Project "${projectId}" was loaded from an unversioned legacy source and cannot be saved until durable migration fencing is available.`,
+    );
+    this.name = 'ProjectWritebackError';
   }
 }
 
@@ -143,9 +162,202 @@ function looksLikeStoryProject(value: unknown): value is StoryProject {
   );
 }
 
-// QNBS-v3: one sanitizer and empty-ID policy keeps every filesystem project operation on the same path identity.
+// QNBS-v3: reuse nested import validators while returning the original object so opaque fields remain present until raw-carrier writeback.
+const storedProjectSchema = {
+  safeParse(value: unknown): CanonicalProjectSchemaResult<StoryProject> {
+    const result = importedProjectJsonSchema.safeParse(value);
+    if (!result.success) {
+      return {
+        success: false,
+        error: {
+          issues: result.error.issues.map((issue) => ({
+            path: issue.path,
+            message: issue.message,
+          })),
+        },
+      };
+    }
+    if (looksLikeStoryProject(value)) {
+      return { success: true, data: value };
+    }
+    return {
+      success: false,
+      error: {
+        issues: [
+          {
+            path: [],
+            message: 'Stored project is missing the required project-owned fields.',
+          },
+        ],
+      },
+    };
+  },
+};
+
+// QNBS-v3: keep the synthetic legacy-to-V1 marker out of editable state until fenced durable migration exists.
+function withoutSyntheticLegacySchemaVersion(project: StoryProject): StoryProject {
+  const projection = { ...(project as unknown as Record<string, unknown>) };
+  delete projection['schemaVersion'];
+  return projection as unknown as StoryProject;
+}
+
+// QNBS-v3: fresh writer output is explicitly CURRENT while legacy admissions remain fenced before this boundary.
+function withCurrentSchemaVersion(project: StoryProject): StoryProject {
+  const projection = { ...(project as unknown as Record<string, unknown>) };
+  if (!Object.hasOwn(projection, 'schemaVersion')) {
+    projection['schemaVersion'] = CURRENT_PROJECT_SCHEMA_VERSION;
+  }
+  return projection as unknown as StoryProject;
+}
+
+type LegacyAdmissionRecord = {
+  sourceDirectoryId: string;
+  persistedProjectId: string | null;
+  sourceOwnedWriterIdentities: ReadonlySet<string>;
+  sharedFallbackWriterIdentities: ReadonlySet<string>;
+  writerIdentities: ReadonlySet<string>;
+  editable: boolean;
+};
+
+const LEGACY_FALLBACK_WRITER_IDENTITIES = ['browser-project', 'default', 'project'] as const;
+
+// QNBS-v3: one source-owned record keeps the canonical directory, embedded identity, aliases, and write verdict together.
 export class FsProjectStore extends FsAssetStore {
   private readonly verifiedLegacyProjectDirectories = new Set<string>();
+  private readonly legacyAdmissionRecords = new Map<string, LegacyAdmissionRecord>();
+
+  private writerIdentityAliases(projectId: string): Set<string> {
+    const identities = new Set([projectId]);
+    const safeProjectId = projectPathSegment(projectId);
+    if (safeProjectId) identities.add(safeProjectId);
+    return identities;
+  }
+
+  private registerLegacyAdmission(sourceDirectoryId: string, project: StoryProject): void {
+    const persistedId = persistedProjectId(project);
+    const sourceOwnedWriterIdentities = new Set<string>([sourceDirectoryId]);
+    const sharedFallbackWriterIdentities = new Set<string>();
+    if (typeof persistedId === 'string') {
+      sourceOwnedWriterIdentities.add(persistedId);
+      const safePersistedId = projectPathSegment(persistedId);
+      if (safePersistedId) sourceOwnedWriterIdentities.add(safePersistedId);
+      if (!safePersistedId) {
+        for (const fallback of LEGACY_FALLBACK_WRITER_IDENTITIES) {
+          sourceOwnedWriterIdentities.add(fallback);
+        }
+      }
+    } else {
+      for (const fallback of LEGACY_FALLBACK_WRITER_IDENTITIES) {
+        sharedFallbackWriterIdentities.add(fallback);
+      }
+    }
+    const writerIdentities = new Set([
+      ...sourceOwnedWriterIdentities,
+      ...sharedFallbackWriterIdentities,
+    ]);
+    this.legacyAdmissionRecords.set(sourceDirectoryId, {
+      sourceDirectoryId,
+      persistedProjectId: typeof persistedId === 'string' ? persistedId : null,
+      sourceOwnedWriterIdentities,
+      sharedFallbackWriterIdentities,
+      writerIdentities,
+      editable: false,
+    });
+  }
+
+  private clearLegacyAdmissionForSource(sourceDirectoryId: string): void {
+    this.legacyAdmissionRecords.delete(sourceDirectoryId);
+    for (const [recordSource, record] of this.legacyAdmissionRecords) {
+      const sourceOwnedWriterIdentities = new Set(
+        [...record.sourceOwnedWriterIdentities].filter(
+          (identity) => projectPathSegment(identity) !== sourceDirectoryId,
+        ),
+      );
+      if (sourceOwnedWriterIdentities.size === record.sourceOwnedWriterIdentities.size) {
+        continue;
+      }
+      const writerIdentities = new Set([
+        ...sourceOwnedWriterIdentities,
+        ...record.sharedFallbackWriterIdentities,
+      ]);
+      if (writerIdentities.size === 0) {
+        this.legacyAdmissionRecords.delete(recordSource);
+      } else {
+        this.legacyAdmissionRecords.set(recordSource, {
+          ...record,
+          sourceOwnedWriterIdentities,
+          writerIdentities,
+        });
+      }
+    }
+  }
+
+  private legacyAdmissionsForWriter(projectId: string): LegacyAdmissionRecord[] {
+    const aliases = this.writerIdentityAliases(projectId);
+    return [...this.legacyAdmissionRecords.values()].filter((record) =>
+      [...aliases].some((identity) => record.writerIdentities.has(identity)),
+    );
+  }
+
+  private async currentProjectSourceIsAdmitted(sourceDirectoryId: string): Promise<boolean> {
+    const projectFileId = projectPathSegment(sourceDirectoryId);
+    if (!projectFileId) return false;
+    try {
+      const apis = await this.getApis();
+      const appDataPath = await this.ensureAppDataPath();
+      const projectFile = await apis.join(appDataPath, 'projects', projectFileId, 'project.json');
+      if (!(await apis.exists(projectFile))) return false;
+      const admission = admitCanonicalProjectDocument(
+        decompressJsonText(await retryFs(() => apis.readTextFile(projectFile))),
+        storedProjectSchema,
+      );
+      return admission.status === 'CURRENT' && admission.canonical?.projection !== null;
+    } catch {
+      return false;
+    }
+  }
+
+  // QNBS-v3: current-source validation may release only aliases proven to belong to that current source.
+  protected override async assertProjectWriteAuthority(projectId: string): Promise<void> {
+    const admissions = this.legacyAdmissionsForWriter(projectId);
+    if (admissions.length === 0) return;
+
+    const aliases = this.writerIdentityAliases(projectId);
+    const hasSharedFallbackConflict = admissions.some((record) =>
+      [...aliases].some((identity) => record.sharedFallbackWriterIdentities.has(identity)),
+    );
+    if (hasSharedFallbackConflict) {
+      throw new ProjectWritebackError(projectId);
+    }
+
+    const sourceDirectoryId = projectPathSegment(projectId);
+    if (sourceDirectoryId && (await this.currentProjectSourceIsAdmitted(sourceDirectoryId))) {
+      this.clearLegacyAdmissionForSource(sourceDirectoryId);
+      return;
+    }
+    throw new ProjectWritebackError(projectId);
+  }
+
+  protected override isProjectWriteAuthorityError(error: unknown): boolean {
+    return error instanceof ProjectWritebackError;
+  }
+
+  private canonicalLegacyProjection(
+    project: StoryProject,
+    sourceDirectoryId: string,
+  ): StoryProject {
+    const persistedId = persistedProjectId(project);
+    const safePersistedId =
+      typeof persistedId === 'string' ? projectPathSegment(persistedId) : null;
+    if (safePersistedId && safePersistedId !== sourceDirectoryId) {
+      return {
+        ...project,
+        id: sourceDirectoryId,
+        [LEGACY_PROJECT_DIRECTORY_METADATA_KEY]: sourceDirectoryId,
+      } as StoryProject;
+    }
+    return project;
+  }
 
   private async inspectLegacyAuxiliaryEvidence(
     project: StoryProject,
@@ -282,8 +494,8 @@ export class FsProjectStore extends FsAssetStore {
         this.verifiedLegacyProjectDirectories.add(safeProjectId);
         return project;
       }
-      if (!hasLegacyMissingProjectId(project, safeProjectId)) return project;
       this.verifiedLegacyProjectDirectories.add(safeProjectId);
+      // QNBS-v3: retain the source directory for every missing-ID load so a later save cannot drift to a title-derived path.
       return legacyProjectWithDirectory(project, safeProjectId);
     }
 
@@ -396,15 +608,34 @@ export class FsProjectStore extends FsAssetStore {
     if (!validatedTarget) {
       throw new ProjectSnapshotRestoreError('target-unavailable');
     }
-
-    const snapshot = await super.getSnapshotData(snapshotId);
-    if (!looksLikeStoryProject(snapshot)) {
-      throw new ProjectSnapshotRestoreError(
-        snapshot === null ? 'snapshot-unavailable' : 'snapshot-invalid',
-      );
+    try {
+      await this.assertProjectWriteAuthority(targetDirectory);
+    } catch {
+      throw new ProjectSnapshotRestoreError('target-unavailable');
     }
 
-    const snapshotProjectId = persistedProjectId(snapshot);
+    let snapshotJson: string | null;
+    try {
+      snapshotJson = await this.getSnapshotJsonText(snapshotId);
+    } catch (error) {
+      logger.error('Failed to read snapshot for restore', {
+        snapshotId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new ProjectSnapshotRestoreError('snapshot-unavailable');
+    }
+    if (snapshotJson === null) {
+      throw new ProjectSnapshotRestoreError('snapshot-unavailable');
+    }
+
+    // QNBS-v3: admit decompressed snapshot text before parsing so duplicate and unsafe version tokens remain visible to the canonical gate.
+    const snapshotAdmission = admitCanonicalProjectDocument(snapshotJson, storedProjectSchema);
+    const admittedSnapshot = snapshotAdmission.canonical?.projection;
+    if (snapshotAdmission.status === 'REFUSED' || !admittedSnapshot) {
+      throw new ProjectSnapshotRestoreError('snapshot-invalid');
+    }
+
+    const snapshotProjectId = persistedProjectId(admittedSnapshot);
     if (typeof snapshotProjectId !== 'string') {
       throw new ProjectSnapshotRestoreError('snapshot-owner-unverifiable');
     }
@@ -416,7 +647,7 @@ export class FsProjectStore extends FsAssetStore {
       throw new ProjectSnapshotRestoreError('snapshot-owner-mismatch');
     }
 
-    const restored = { ...(snapshot as unknown as Record<string, unknown>) };
+    const restored = { ...(admittedSnapshot as unknown as Record<string, unknown>) };
     delete restored['id'];
     delete restored[LEGACY_PROJECT_DIRECTORY_METADATA_KEY];
     delete restored[LEGACY_AUXILIARY_METADATA_KEY];
@@ -429,6 +660,8 @@ export class FsProjectStore extends FsAssetStore {
       }
       restored['id'] = safeTargetId;
     }
+
+    restored['schemaVersion'] = CURRENT_PROJECT_SCHEMA_VERSION;
 
     const validatedTargetDirectory = legacyProjectDirectory(validatedTarget);
     if (validatedTargetDirectory) {
@@ -488,7 +721,6 @@ export class FsProjectStore extends FsAssetStore {
         }
       } else {
         projectId = safeProjectId;
-        this.verifiedLegacyProjectDirectories.delete(projectId);
       }
     } else {
       const legacyDirectory = legacyProjectDirectory(flat);
@@ -497,6 +729,13 @@ export class FsProjectStore extends FsAssetStore {
           ? legacyDirectory
           : (projectPathSegment(flat.title || '') ?? 'project');
     }
+
+    await this.assertProjectWriteAuthority(projectId);
+    if (suppliedProjectId) {
+      this.verifiedLegacyProjectDirectories.delete(projectId);
+    }
+
+    projectToPersist = withCurrentSchemaVersion(projectToPersist);
 
     // Auto-snapshot: fire-and-forget, mirrors dbService behaviour
     if (Date.now() - this.lastAutoSnapshotTime > this.AUTO_SNAPSHOT_INTERVAL) {
@@ -581,6 +820,7 @@ export class FsProjectStore extends FsAssetStore {
     try {
       if (!(await apis.exists(projectFile))) {
         this.clearLegacyAuxiliaryPolicy(safeProjectId);
+        this.clearLegacyAdmissionForSource(safeProjectId);
         return null;
       }
       content = await retryFs(() => apis.readTextFile(projectFile));
@@ -594,30 +834,59 @@ export class FsProjectStore extends FsAssetStore {
     }
 
     let project: StoryProject;
+    let classification: ProjectVersionClassification | undefined;
+    let legacyAdmission = false;
     try {
-      const parsed = decompressData<unknown>(content);
-      if (!looksLikeStoryProject(parsed)) {
-        throw new Error('Parsed content is not project-shaped (missing title/manuscript).');
+      const admission = admitCanonicalProjectDocument(
+        decompressJsonText(content),
+        storedProjectSchema,
+      );
+      legacyAdmission = admission.status === 'LEGACY_TO_V1';
+      classification = admission.source.classification;
+      if (admission.canonical?.projection === null || admission.canonical === null) {
+        throw new Error(
+          admission.source.error ??
+            `Project admission refused for ${admission.source.classification} input.`,
+        );
       }
-      project = parsed;
+      project =
+        admission.status === 'LEGACY_TO_V1'
+          ? withoutSyntheticLegacySchemaVersion(admission.canonical.projection)
+          : admission.canonical.projection;
     } catch (error) {
       logger.error('Failed to parse project file (corrupt data):', error);
       throw new ProjectLoadError(
-        'corrupt',
-        `The saved project file for "${projectId}" appears to be corrupted and could not be read. The file has not been deleted.`,
+        classification && classification !== 'MALFORMED' ? 'unsupported-version' : 'corrupt',
+        classification && classification !== 'MALFORMED'
+          ? 'The saved project file for "' +
+              projectId +
+              '" was refused as ' +
+              classification +
+              '. The file has not been changed.'
+          : 'The saved project file for "' +
+              projectId +
+              '" appears to be corrupted and could not be read. The file has not been deleted.',
         projectId,
+        classification,
       );
     }
 
-    // QNBS-v3: schedule observation after this async load resolves so validation cannot delay or alter the load result.
+    // QNBS-v3: admission remains non-destructive until durable migration and raw-carrier writeback are fenced.
     const migratedProject = await this.migrateLegacyProjectIdentity(
       project,
       safeProjectId,
       apis,
       appDataPath,
     );
+    if (legacyAdmission) {
+      this.registerLegacyAdmission(safeProjectId, project);
+    } else {
+      this.clearLegacyAdmissionForSource(safeProjectId);
+    }
     scheduleCoreProjectValidation(migratedProject);
-    return migratedProject;
+    return legacyAdmission
+      ? this.canonicalLegacyProjection(migratedProject, safeProjectId)
+      : migratedProject;
   }
 
   async listProjects(): Promise<string[]> {
@@ -740,6 +1009,7 @@ export class FsProjectStore extends FsAssetStore {
           }
           await retryFs(() => apis.rename(projectPath, preservedPath));
           this.clearLegacyAuxiliaryPolicy(safeProjectId);
+          this.clearLegacyAdmissionForSource(safeProjectId);
           return { projectId: safeProjectId, path: preservedPath };
         } catch (error) {
           let sourceExists: boolean;
@@ -756,11 +1026,13 @@ export class FsProjectStore extends FsAssetStore {
           }
           if (!sourceExists && preservedExists) {
             this.clearLegacyAuxiliaryPolicy(safeProjectId);
+            this.clearLegacyAdmissionForSource(safeProjectId);
             return { projectId: safeProjectId, path: preservedPath };
           }
           if (!sourceExists) {
             await releaseReservation();
             this.clearLegacyAuxiliaryPolicy(safeProjectId);
+            this.clearLegacyAdmissionForSource(safeProjectId);
             throw new ProjectQuarantineError('source-missing');
           }
           await releaseReservation();
@@ -828,6 +1100,7 @@ export class FsProjectStore extends FsAssetStore {
       throw new ProjectDeleteError();
     }
     this.verifiedLegacyProjectDirectories.delete(safeProjectId);
+    this.clearLegacyAdmissionForSource(safeProjectId);
     this.clearLegacyAuxiliaryPolicy(safeProjectId);
   }
 

@@ -121,9 +121,11 @@ describe('FsProjectStore.loadProject — DA-01 fail-closed behavior', () => {
     await expect(promise).rejects.toMatchObject({ reason: 'io-error' });
   });
 
+  // QNBS-v3: explicit V1 admission keeps this source writable while legacy sources remain fenced.
   it('resolves the real project on a valid save with array-shaped characters/worlds', async () => {
     const { FsProjectStore } = await import('../../../../services/fs/projectFsStore');
     const validProject = {
+      schemaVersion: 1,
       title: 'My Book',
       logline: 'L',
       characters: [],
@@ -133,12 +135,17 @@ describe('FsProjectStore.loadProject — DA-01 fail-closed behavior', () => {
     mockDesktopPlatform.filesystem.exists.mockResolvedValue(true);
     mockDesktopPlatform.filesystem.readTextFile.mockResolvedValue(compressData(validProject));
     const store = new FsProjectStore();
-    await expect(store.loadProject('good-id')).resolves.toEqual(validProject);
+    await expect(store.loadProject('good-id')).resolves.toMatchObject({
+      ...validProject,
+      schemaVersion: 1,
+    });
   });
 
+  // QNBS-v3: EntityState-shaped V1 data remains editable after canonical admission.
   it('resolves the real project on a valid save with EntityState-shaped characters/worlds', async () => {
     const { FsProjectStore } = await import('../../../../services/fs/projectFsStore');
     const validProject = {
+      schemaVersion: 1,
       title: 'My Book',
       logline: 'L',
       characters: { ids: [], entities: {} },
@@ -148,6 +155,99 @@ describe('FsProjectStore.loadProject — DA-01 fail-closed behavior', () => {
     mockDesktopPlatform.filesystem.exists.mockResolvedValue(true);
     mockDesktopPlatform.filesystem.readTextFile.mockResolvedValue(compressData(validProject));
     const store = new FsProjectStore();
-    await expect(store.loadProject('good-entity-state-id')).resolves.toEqual(validProject);
+    await expect(store.loadProject('good-entity-state-id')).resolves.toMatchObject({
+      ...validProject,
+      schemaVersion: 1,
+    });
   });
+
+  // QNBS-v3: current filesystem admission must reject malformed owned children before editable authority.
+  it.each([
+    ['entity', { characters: [{ id: 'c1', name: 42 }] }],
+    ['manuscript entry', { manuscript: [{ id: 's1', title: 42, content: 'text' }] }],
+  ])('rejects malformed nested %s content', async (_label, fragment) => {
+    const { FsProjectStore } = await import('../../../../services/fs/projectFsStore');
+    mockDesktopPlatform.filesystem.exists.mockResolvedValue(true);
+    mockDesktopPlatform.filesystem.readTextFile.mockResolvedValue(
+      JSON.stringify({
+        title: 'Malformed nested',
+        logline: 'L',
+        characters: [],
+        worlds: [],
+        manuscript: [],
+        ...fragment,
+      }),
+    );
+    const store = new FsProjectStore();
+    await expect(store.loadProject('malformed-nested-id')).rejects.toMatchObject({
+      name: 'ProjectLoadError',
+      reason: 'corrupt',
+      classification: 'MALFORMED',
+    });
+  });
+
+  // QNBS-v3: legacy admission must not stamp or rewrite a source before durable migration fencing exists.
+  it('admits a legacy project in memory without rewriting its source', async () => {
+    const { FsProjectStore } = await import('../../../../services/fs/projectFsStore');
+    const source =
+      '{"title":"Legacy book","logline":"L","characters":[],"worlds":[],"manuscript":[],"opaque":{"exact":9007199254740993}}';
+    mockDesktopPlatform.filesystem.exists.mockResolvedValue(true);
+    mockDesktopPlatform.filesystem.readTextFile.mockResolvedValue(source);
+    const store = new FsProjectStore();
+
+    const loaded = await store.loadProject('legacy-id');
+    expect(loaded).toMatchObject({
+      title: 'Legacy book',
+      logline: 'L',
+      characters: [],
+      worlds: [],
+      manuscript: [],
+    });
+    expect(loaded).not.toHaveProperty('schemaVersion');
+    expect(mockDesktopPlatform.filesystem.writeTextFile).not.toHaveBeenCalled();
+    expect(mockDesktopPlatform.filesystem.rename).not.toHaveBeenCalled();
+  });
+
+  // QNBS-v3: legacy admission cannot let ordinary autosave normalize or rewrite its source before fencing.
+  it('rejects ordinary writeback after admitting a legacy project', async () => {
+    const { FsProjectStore } = await import('../../../../services/fs/projectFsStore');
+    const source =
+      '{"title":"Legacy book","logline":"L","characters":[],"worlds":[],"manuscript":[]}';
+    mockDesktopPlatform.filesystem.exists.mockResolvedValue(true);
+    mockDesktopPlatform.filesystem.readTextFile.mockResolvedValue(source);
+    const store = new FsProjectStore();
+
+    const loaded = await store.loadProject('legacy-id');
+    await expect(
+      store.saveProject({ ...loaded, title: 'Edited legacy book' } as never),
+    ).rejects.toMatchObject({
+      name: 'ProjectWritebackError',
+      projectId: 'legacy-id',
+    });
+    expect(mockDesktopPlatform.filesystem.writeTextFile).not.toHaveBeenCalled();
+  });
+
+  // QNBS-v3: unsupported versions must refuse editable filesystem authority without touching source.
+  it.each([
+    ['future', { schemaVersion: 99, title: 'Future' }, 'FUTURE'],
+    ['migration gap', { schemaVersion: 0, title: 'Gap' }, 'UNSUPPORTED_OLDER'],
+  ])(
+    'refuses %s filesystem input without changing its source',
+    async (_label, value, classification) => {
+      const { FsProjectStore } = await import('../../../../services/fs/projectFsStore');
+      const source = JSON.stringify(value);
+      mockDesktopPlatform.filesystem.exists.mockResolvedValue(true);
+      mockDesktopPlatform.filesystem.readTextFile.mockResolvedValue(source);
+      const store = new FsProjectStore();
+
+      await expect(store.loadProject('refused-id')).rejects.toMatchObject({
+        name: 'ProjectLoadError',
+        reason: 'unsupported-version',
+        projectId: 'refused-id',
+        classification,
+      });
+      expect(mockDesktopPlatform.filesystem.writeTextFile).not.toHaveBeenCalled();
+      expect(mockDesktopPlatform.filesystem.rename).not.toHaveBeenCalled();
+    },
+  );
 });

@@ -10,8 +10,9 @@ import type { TauriApis } from '../../../../services/fs/fsCore';
 import {
   compressData,
   countProjectWords,
-  decompressData,
   DecompressionError,
+  decompressData,
+  decompressJsonText,
   decryptText,
   encryptText,
   retryFs,
@@ -151,6 +152,14 @@ describe('compressData / decompressData', () => {
 
   it('throws DecompressionError (not a bare SyntaxError) for malformed uncompressed JSON', () => {
     expect(() => decompressData('this is not json {{{')).toThrow(DecompressionError);
+  });
+
+  it('returns decompressed JSON text without normalizing numeric literals', () => {
+    const source = '{"opaque":9007199254740993.0000000000001}';
+    const compressed = `\x00lz1\x00${LZString.compressToUTF16(source)}`;
+
+    expect(decompressJsonText(source)).toBe(source);
+    expect(decompressJsonText(compressed)).toBe(source);
   });
 });
 
