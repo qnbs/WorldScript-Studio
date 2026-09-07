@@ -14,6 +14,13 @@ const TIERS = {
 
 const EXCEPTION_REGISTRY_PATH = 'config/pr-size-exceptions.json';
 const REQUIRED_EXCEPTION_SCHEMA_VERSION = 1;
+const MAX_EXCEPTION_REASON_LENGTH = 500;
+const GOVERNANCE_CONTROL_PATHS = new Set([
+  EXCEPTION_REGISTRY_PATH,
+  '.github/workflows/ci.yml',
+  'scripts/check-pr-size.d.mts',
+  'scripts/check-pr-size.mjs',
+]);
 
 function runGit(args, dependencies = {}) {
   const spawn = dependencies.spawnSync ?? spawnSync;
@@ -162,6 +169,116 @@ function isSafeRegistryPath(value) {
   );
 }
 
+function isGovernanceControlPath(path) {
+  return GOVERNANCE_CONTROL_PATHS.has(path);
+}
+
+function validateExceptionCeilings(entry, index) {
+  const status = entry.status ?? 'active';
+  if (status !== 'active' && status !== 'historical') {
+    throw new Error(`invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} has invalid status`);
+  }
+  const ceilings = [
+    ['maxFiles', TIERS.absolute.files],
+    ['maxCommits', TIERS.absolute.commits],
+    ['maxNonExemptMeaningfulLines', TIERS.absolute.lines],
+  ];
+  for (const [field, absoluteLimit] of ceilings) {
+    if (!isValidPositiveInteger(entry[field])) {
+      throw new Error(
+        `invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} has invalid ${field}`,
+      );
+    }
+    if (status === 'active' && entry[field] > absoluteLimit) {
+      throw new Error(
+        `invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} ${field} exceeds the absolute ceiling of ${absoluteLimit}`,
+      );
+    }
+  }
+}
+
+function validateExceptionPaths(entry, index) {
+  if (!Array.isArray(entry.allowedPaths) || entry.allowedPaths.length === 0) {
+    throw new Error(`invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} needs allowedPaths`);
+  }
+  for (const path of entry.allowedPaths) {
+    if (!isSafeRegistryPath(path)) {
+      throw new Error(
+        `invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} has invalid allowed path`,
+      );
+    }
+    if (isGovernanceControlPath(path)) {
+      throw new Error(
+        `invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} cannot allow governance control path ${path}`,
+      );
+    }
+  }
+}
+
+function validateSupplementalAllowances(entry, index) {
+  if (!Array.isArray(entry.supplementalLineAllowances)) {
+    throw new Error(
+      `invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} needs supplementalLineAllowances`,
+    );
+  }
+  const supplementalPaths = new Set();
+  for (const allowance of entry.supplementalLineAllowances) {
+    if (
+      !allowance ||
+      !isSafeRegistryPath(allowance.path) ||
+      !isValidPositiveInteger(allowance.maxMeaningfulLines)
+    ) {
+      throw new Error(
+        `invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} has invalid supplemental allowance`,
+      );
+    }
+    if (supplementalPaths.has(allowance.path)) {
+      throw new Error(
+        `invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} has a duplicate supplemental path ${allowance.path}`,
+      );
+    }
+    if (!entry.allowedPaths.includes(allowance.path)) {
+      throw new Error(
+        `invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} supplemental path ${allowance.path} is not in allowedPaths`,
+      );
+    }
+    supplementalPaths.add(allowance.path);
+  }
+}
+
+function validateExceptionEntry(entry, index, ids) {
+  if (!entry || typeof entry !== 'object') {
+    throw new Error(`invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} is not an object`);
+  }
+  for (const field of ['id', 'repository', 'baseRef', 'headRef', 'reason']) {
+    if (typeof entry[field] !== 'string' || entry[field].length === 0) {
+      throw new Error(
+        `invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} has invalid ${field}`,
+      );
+    }
+  }
+  if (ids.has(entry.id)) {
+    throw new Error(`invalid ${EXCEPTION_REGISTRY_PATH}: duplicate exception id ${entry.id}`);
+  }
+  ids.add(entry.id);
+  if (!isValidPositiveInteger(entry.prNumber) || entry.prNumber < 1) {
+    throw new Error(`invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} has invalid prNumber`);
+  }
+  validateExceptionCeilings(entry, index);
+  if (
+    entry.reason.length > MAX_EXCEPTION_REASON_LENGTH ||
+    entry.reason.includes('\n') ||
+    entry.reason.includes('\r')
+  ) {
+    throw new Error(
+      `invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} needs a short single-line reason (max ${MAX_EXCEPTION_REASON_LENGTH} characters)`,
+    );
+  }
+  validateExceptionPaths(entry, index);
+  validateSupplementalAllowances(entry, index);
+  return entry;
+}
+
 function validateExceptionRegistry(value) {
   if (
     !value ||
@@ -177,74 +294,7 @@ function validateExceptionRegistry(value) {
   }
 
   const ids = new Set();
-  return value.exceptions.map((entry, index) => {
-    if (!entry || typeof entry !== 'object') {
-      throw new Error(`invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} is not an object`);
-    }
-    const requiredStrings = ['id', 'repository', 'baseRef', 'headRef', 'reason'];
-    for (const field of requiredStrings) {
-      if (typeof entry[field] !== 'string' || entry[field].length === 0) {
-        throw new Error(
-          `invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} has invalid ${field}`,
-        );
-      }
-    }
-    if (ids.has(entry.id)) {
-      throw new Error(`invalid ${EXCEPTION_REGISTRY_PATH}: duplicate exception id ${entry.id}`);
-    }
-    ids.add(entry.id);
-    if (!isValidPositiveInteger(entry.prNumber) || entry.prNumber < 1) {
-      throw new Error(
-        `invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} has invalid prNumber`,
-      );
-    }
-    for (const field of ['maxFiles', 'maxCommits', 'maxNonExemptMeaningfulLines']) {
-      if (!isValidPositiveInteger(entry[field])) {
-        throw new Error(
-          `invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} has invalid ${field}`,
-        );
-      }
-    }
-    if (!Array.isArray(entry.allowedPaths) || entry.allowedPaths.length === 0) {
-      throw new Error(`invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} needs allowedPaths`);
-    }
-    for (const path of entry.allowedPaths) {
-      if (!isSafeRegistryPath(path)) {
-        throw new Error(
-          `invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} has invalid allowed path`,
-        );
-      }
-    }
-    if (!Array.isArray(entry.supplementalLineAllowances)) {
-      throw new Error(
-        `invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} needs supplementalLineAllowances`,
-      );
-    }
-    const supplementalPaths = new Set();
-    for (const allowance of entry.supplementalLineAllowances) {
-      if (
-        !allowance ||
-        !isSafeRegistryPath(allowance.path) ||
-        !isValidPositiveInteger(allowance.maxMeaningfulLines)
-      ) {
-        throw new Error(
-          `invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} has invalid supplemental allowance`,
-        );
-      }
-      if (supplementalPaths.has(allowance.path)) {
-        throw new Error(
-          `invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} has a duplicate supplemental path ${allowance.path}`,
-        );
-      }
-      if (!entry.allowedPaths.includes(allowance.path)) {
-        throw new Error(
-          `invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} supplemental path ${allowance.path} is not in allowedPaths`,
-        );
-      }
-      supplementalPaths.add(allowance.path);
-    }
-    return entry;
-  });
+  return value.exceptions.map((entry, index) => validateExceptionEntry(entry, index, ids));
 }
 
 function getPullRequestIdentity(dependencies = {}) {
@@ -317,6 +367,7 @@ function resolveException(base, head, dependencies = {}) {
     return { applied: false, identityMatch: false, pathScopeMatch: false, baseGoverned: true };
   const matches = registry.filter(
     (entry) =>
+      (entry.status ?? 'active') === 'active' &&
       entry.repository === identity.repository &&
       entry.prNumber === identity.prNumber &&
       entry.baseRef === identity.baseRef &&
@@ -329,7 +380,10 @@ function resolveException(base, head, dependencies = {}) {
   const changedPaths = getChangedPaths(base, head, dependencies);
   if (changedPaths === null)
     throw new Error('could not resolve changed paths for PR-size exception scope');
-  const pathScopeMatch = changedPaths.every((path) => entry.allowedPaths.includes(path));
+  // QNBS-v3: an exception cannot authorize the PR to rewrite the authority that governs it.
+  const pathScopeMatch =
+    !changedPaths.some(isGovernanceControlPath) &&
+    changedPaths.every((path) => entry.allowedPaths.includes(path));
   return {
     applied: pathScopeMatch,
     identityMatch: true,

@@ -543,6 +543,67 @@ describe('evaluatePrSize', () => {
       expect(result.severity?.blocking).toBe(true);
     });
 
+    it.each([
+      'config/pr-size-exceptions.json',
+      'scripts/check-pr-size.mjs',
+      'scripts/check-pr-size.d.mts',
+      '.github/workflows/ci.yml',
+    ])('does not let an exception authorize governance-control path %s', (path) => {
+      const rows: NumstatRow[] = [{ path, added: 3001, removed: 0 }];
+      const result = evaluatePrSize(
+        'base',
+        'head',
+        exceptionDependencies({
+          rows,
+          changedPaths: [path],
+          registry: { schemaVersion: 1, exceptions: [exception] },
+        }),
+      );
+      expect(result.exception).toMatchObject({
+        applied: false,
+        identityMatch: true,
+        pathScopeMatch: false,
+      });
+      expect(result.severity?.blocking).toBe(true);
+    });
+
+    it('rejects a base registry that allowlists a governance-control path', () => {
+      const result = evaluatePrSize(
+        'base',
+        'head',
+        exceptionDependencies({
+          rows: [{ path: 'scripts/tool.mjs', added: 10, removed: 0 }],
+          registry: {
+            schemaVersion: 1,
+            exceptions: [
+              {
+                ...exception,
+                allowedPaths: [...exception.allowedPaths, 'config/pr-size-exceptions.json'],
+              },
+            ],
+          },
+        }),
+      );
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain('cannot allow governance control path');
+    });
+
+    it('rejects an exception rationale that is not short and single-line', () => {
+      const result = evaluatePrSize(
+        'base',
+        'head',
+        exceptionDependencies({
+          rows: [{ path: 'scripts/tool.mjs', added: 10, removed: 0 }],
+          registry: {
+            schemaVersion: 1,
+            exceptions: [{ ...exception, reason: 'x'.repeat(501) }],
+          },
+        }),
+      );
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain('short single-line reason');
+    });
+
     it('rejects rename-style scope smuggling through the no-renames path list', () => {
       const rows: NumstatRow[] = [{ path: 'graphify-out/GRAPH_REPORT.md', added: 10, removed: 10 }];
       const result = evaluatePrSize(
@@ -679,18 +740,84 @@ describe('evaluatePrSize', () => {
       expect(tooManyCommits.severity?.blocking).toBe(true);
     });
 
-    // QNBS-v3: an exception's whole purpose is authorizing a PR past TIERS.absolute (30/3000/15) -- a ceiling wide enough to matter must not then get re-checked against that same fixed tier and blocked anyway.
-    it('does not block a PR within a wide exception ceiling that exceeds the fixed absolute tier', () => {
-      const rows: NumstatRow[] = Array.from({ length: 40 }, (_, i) => ({
+    it.each([
+      ['maxFiles', 31],
+      ['maxCommits', 16],
+      ['maxNonExemptMeaningfulLines', 3001],
+    ])('fails closed when an exception %s exceeds the absolute ceiling', (field, value) => {
+      const invalidException = { ...exception, [field]: value };
+      const result = evaluatePrSize(
+        'base',
+        'head',
+        exceptionDependencies({
+          rows: [{ path: 'scripts/tool.mjs', added: 10, removed: 0 }],
+          registry: { schemaVersion: 1, exceptions: [invalidException] },
+        }),
+      );
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain(`${field} exceeds the absolute ceiling`);
+    });
+
+    it('does not apply a historical exception with preserved legacy ceilings', () => {
+      const rows: NumstatRow[] = [{ path: 'scripts/tool.mjs', added: 10, removed: 0 }];
+      const result = evaluatePrSize(
+        'base',
+        'head',
+        exceptionDependencies({
+          rows,
+          registry: {
+            schemaVersion: 1,
+            exceptions: [
+              {
+                ...exception,
+                status: 'historical',
+                maxFiles: 70,
+                maxCommits: 16,
+              },
+            ],
+          },
+        }),
+      );
+      expect(result.exception?.applied).toBe(false);
+      expect(result.severity?.tier).toBe('ok');
+    });
+
+    it('rejects an ordinary diff over the absolute file and commit ceilings without an exception', () => {
+      const rows: NumstatRow[] = Array.from({ length: 31 }, (_, i) => ({
+        path: `scripts/tool-${i}.mjs`,
+        added: 1,
+        removed: 0,
+      }));
+      const result = evaluatePrSize('base', 'head', {
+        ...exceptionDependencies({ rows, registry: { schemaVersion: 1, exceptions: [] } }),
+        env: {},
+      });
+      expect(result.severity?.blocking).toBe(true);
+      expect(result.severity?.tier).toBe('absolute');
+
+      const commitsOver = evaluatePrSize('base', 'head', {
+        ...exceptionDependencies({
+          rows: [{ path: 'scripts/tool.mjs', added: 1, removed: 0 }],
+          registry: { schemaVersion: 1, exceptions: [] },
+          commitCount: 16,
+        }),
+        env: {},
+      });
+      expect(commitsOver.severity?.blocking).toBe(true);
+      expect(commitsOver.severity?.tier).toBe('absolute');
+    });
+
+    it('passes a narrow base-authorized exception at the absolute boundary', () => {
+      const rows: NumstatRow[] = Array.from({ length: 30 }, (_, i) => ({
         path: `scripts/tool-${i}.mjs`,
         added: 100,
         removed: 0,
       }));
       const wide = {
         ...exception,
-        maxFiles: 65,
-        maxCommits: 20,
-        maxNonExemptMeaningfulLines: 4000,
+        maxFiles: 30,
+        maxCommits: 15,
+        maxNonExemptMeaningfulLines: 3000,
         supplementalLineAllowances: [],
         allowedPaths: rows.map((row) => row.path),
       };
@@ -700,7 +827,7 @@ describe('evaluatePrSize', () => {
         exceptionDependencies({
           rows,
           changedPaths: rows.map((row) => row.path),
-          commitCount: 18,
+          commitCount: 15,
           registry: { schemaVersion: 1, exceptions: [wide] },
         }),
       );
