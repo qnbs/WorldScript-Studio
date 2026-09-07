@@ -543,8 +543,10 @@ describe('evaluatePrSize', () => {
       expect(result.severity?.blocking).toBe(true);
     });
 
+    // QNBS-v3: keeps every governance-control path outside exception authority.
     it.each([
       'config/pr-size-exceptions.json',
+      'scripts/ci-prepush-classifier.mjs',
       'scripts/check-pr-size.mjs',
       'scripts/check-pr-size.d.mts',
       '.github/workflows/ci.yml',
@@ -567,7 +569,14 @@ describe('evaluatePrSize', () => {
       expect(result.severity?.blocking).toBe(true);
     });
 
-    it('rejects a base registry that allowlists a governance-control path', () => {
+    // QNBS-v3: rejects registry entries that attempt to authorize governance controls.
+    it.each([
+      'config/pr-size-exceptions.json',
+      'scripts/ci-prepush-classifier.mjs',
+      'scripts/check-pr-size.d.mts',
+      'scripts/check-pr-size.mjs',
+      '.github/workflows/ci.yml',
+    ])('rejects a base registry that allowlists governance-control path %s', (path) => {
       const result = evaluatePrSize(
         'base',
         'head',
@@ -578,7 +587,7 @@ describe('evaluatePrSize', () => {
             exceptions: [
               {
                 ...exception,
-                allowedPaths: [...exception.allowedPaths, 'config/pr-size-exceptions.json'],
+                allowedPaths: [...exception.allowedPaths, path],
               },
             ],
           },
@@ -588,6 +597,7 @@ describe('evaluatePrSize', () => {
       expect(result.error).toContain('cannot allow governance control path');
     });
 
+    // QNBS-v3: keeps exception rationale references short and auditable.
     it('rejects an exception rationale that is not short and single-line', () => {
       const result = evaluatePrSize(
         'base',
@@ -662,12 +672,14 @@ describe('evaluatePrSize', () => {
     });
 
     it('reports duplicate supplemental paths separately', () => {
-      const rows: NumstatRow[] = [{ path: 'scripts/tool.mjs', added: 10, removed: 0 }];
+      const duplicatePath = 'docs/duplicate.md';
+      const rows: NumstatRow[] = [{ path: duplicatePath, added: 10, removed: 0 }];
       const duplicateAllowance = {
         ...exception,
+        allowedPaths: [...exception.allowedPaths, duplicatePath],
         supplementalLineAllowances: [
-          { path: 'scripts/tool.mjs', maxMeaningfulLines: 10 },
-          { path: 'scripts/tool.mjs', maxMeaningfulLines: 20 },
+          { path: duplicatePath, maxMeaningfulLines: 10 },
+          { path: duplicatePath, maxMeaningfulLines: 20 },
         ],
       };
       const result = evaluatePrSize(
@@ -679,7 +691,7 @@ describe('evaluatePrSize', () => {
         }),
       );
       expect(result.ok).toBe(false);
-      expect(result.error).toContain('duplicate supplemental path scripts/tool.mjs');
+      expect(result.error).toContain(`duplicate supplemental path ${duplicatePath}`);
       expect(result.error).not.toContain('is not in allowedPaths');
     });
 
@@ -702,6 +714,27 @@ describe('evaluatePrSize', () => {
         'supplemental path other/GRAPH_REPORT.md is not in allowedPaths',
       );
       expect(result.error).not.toContain('duplicate supplemental path');
+    });
+
+    // QNBS-v3: prevents executable files from escaping the ordinary line ceiling.
+    it('rejects a supplemental allowance for an executable path', () => {
+      const executablePath = 'services/security.ts';
+      const executableAllowance = {
+        ...exception,
+        allowedPaths: [...exception.allowedPaths, executablePath],
+        supplementalLineAllowances: [{ path: executablePath, maxMeaningfulLines: 3000 }],
+      };
+      const result = evaluatePrSize(
+        'base',
+        'head',
+        exceptionDependencies({
+          rows: [{ path: executablePath, added: 10, removed: 0 }],
+          changedPaths: [executablePath],
+          registry: { schemaVersion: 1, exceptions: [executableAllowance] },
+        }),
+      );
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain('must be a recognized non-executable artifact');
     });
 
     it('fails closed for duplicate matching identities', () => {
@@ -740,6 +773,7 @@ describe('evaluatePrSize', () => {
       expect(tooManyCommits.severity?.blocking).toBe(true);
     });
 
+    // QNBS-v3: rejects active exception ceilings above the fixed absolute tier.
     it.each([
       ['maxFiles', 31],
       ['maxCommits', 16],
@@ -758,6 +792,7 @@ describe('evaluatePrSize', () => {
       expect(result.error).toContain(`${field} exceeds the absolute ceiling`);
     });
 
+    // QNBS-v3: keeps historical authorization inert without rewriting its recorded limits.
     it('does not apply a historical exception with preserved legacy ceilings', () => {
       const rows: NumstatRow[] = [{ path: 'scripts/tool.mjs', added: 10, removed: 0 }];
       const result = evaluatePrSize(
@@ -782,6 +817,7 @@ describe('evaluatePrSize', () => {
       expect(result.severity?.tier).toBe('ok');
     });
 
+    // QNBS-v3: verifies ordinary diffs still fail closed beyond the absolute tier.
     it('rejects an ordinary diff over the absolute file and commit ceilings without an exception', () => {
       const rows: NumstatRow[] = Array.from({ length: 31 }, (_, i) => ({
         path: `scripts/tool-${i}.mjs`,
@@ -807,6 +843,7 @@ describe('evaluatePrSize', () => {
       expect(commitsOver.severity?.tier).toBe('absolute');
     });
 
+    // QNBS-v3: proves base authority can pass only within the exact absolute boundary.
     it('passes a narrow base-authorized exception at the absolute boundary', () => {
       const rows: NumstatRow[] = Array.from({ length: 30 }, (_, i) => ({
         path: `scripts/tool-${i}.mjs`,

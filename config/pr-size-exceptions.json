@@ -175,7 +175,7 @@
         "tests/unit/storage/idbCore.test.ts",
         "tests/unit/storage/idbResetGate.test.ts"
       ],
-      "reason": "One-time PR #596 exception for reviewed issue #532 startup-determinism convergence; see PR #596 and issue #625."
+      "reason": "One-time PR #596 exception for reviewed issue #532 startup-determinism convergence; see PR #596 and issue #532."
     }
   ]
 }

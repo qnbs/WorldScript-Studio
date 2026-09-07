@@ -18,9 +18,17 @@ const MAX_EXCEPTION_REASON_LENGTH = 500;
 const GOVERNANCE_CONTROL_PATHS = new Set([
   EXCEPTION_REGISTRY_PATH,
   '.github/workflows/ci.yml',
+  'scripts/ci-prepush-classifier.mjs',
   'scripts/check-pr-size.d.mts',
   'scripts/check-pr-size.mjs',
 ]);
+// QNBS-v3: supplemental ceilings are only for explicitly named non-executable artifacts.
+const SUPPLEMENTAL_ARTIFACT_PATTERNS = [
+  /^docs\/.+\.(?:md|mdx)$/i,
+  /^(?:graphify-out|\.codegraph)\/.+\.(?:json|md|mdx|html)$/i,
+  /(?:^|\/)(?:generated|reports?)\/[^/]+\.(?:json|md|mdx|html)$/i,
+  /(?:^|\/)[^/]+\.(?:generated|report)\.(?:json|md|mdx|html)$/i,
+];
 
 function runGit(args, dependencies = {}) {
   const spawn = dependencies.spawnSync ?? spawnSync;
@@ -173,6 +181,10 @@ function isGovernanceControlPath(path) {
   return GOVERNANCE_CONTROL_PATHS.has(path);
 }
 
+function isSupplementalArtifactPath(path) {
+  return SUPPLEMENTAL_ARTIFACT_PATTERNS.some((pattern) => pattern.test(path));
+}
+
 function validateExceptionCeilings(entry, index) {
   const status = entry.status ?? 'active';
   if (status !== 'active' && status !== 'historical') {
@@ -240,6 +252,11 @@ function validateSupplementalAllowances(entry, index) {
     if (!entry.allowedPaths.includes(allowance.path)) {
       throw new Error(
         `invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} supplemental path ${allowance.path} is not in allowedPaths`,
+      );
+    }
+    if (!isSupplementalArtifactPath(allowance.path)) {
+      throw new Error(
+        `invalid ${EXCEPTION_REGISTRY_PATH}: exception ${index} supplemental path ${allowance.path} must be a recognized non-executable artifact`,
       );
     }
     supplementalPaths.add(allowance.path);
@@ -514,7 +531,7 @@ export function evaluatePrSize(base, head, dependencies = {}) {
         );
         return count <= allowance.maxMeaningfulLines;
       }));
-  // QNBS-v3: an exception's own ceiling can legitimately exceed TIERS.absolute (that is the whole point of granting one) -- falling through to selectSeverity() here would re-check the raw counts against the fixed 30/3000/15 tier and block anyway, even though the PR-specific ceiling was satisfied.
+  // QNBS-v3: active exception ceilings remain bounded by the ordinary absolute tier.
   const severity = exception.entry
     ? {
         tier: exceptionWithinLimits ? 'exception' : 'absolute',
