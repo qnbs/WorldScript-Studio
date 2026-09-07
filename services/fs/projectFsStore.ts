@@ -233,7 +233,10 @@ export class FsProjectStore extends FsAssetStore {
   }
 
   private isLegacyWritebackBlocked(projectId: string): boolean {
-    return this.legacyWritebackBlockedProjectIds.has(projectId);
+    if (this.legacyWritebackBlockedProjectIds.has(projectId)) return true;
+    const safeProjectId =
+      projectPathSegment(projectId) ?? sanitizePathSegment(projectId, 'project');
+    return this.legacyWritebackBlockedProjectIds.has(safeProjectId);
   }
 
   private assertLegacyWritebackAllowed(projectId: string): void {

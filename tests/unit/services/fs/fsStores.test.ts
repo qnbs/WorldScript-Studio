@@ -477,6 +477,50 @@ describe('FsProjectStore — projects', () => {
     await expect(store.getRagVectors('legacy-assets')).resolves.toEqual([{ id: 'vector-1' }]);
   });
 
+  // QNBS-v3: auxiliary fence checks use the writers' sanitized identity and fallback so invalid IDs cannot bypass legacy writeback policy.
+  it('normalizes legacy auxiliary fence identities before mutation', async () => {
+    const asset = new Uint8Array([1, 2, 3]).buffer;
+    await fake.apis.mkdir('/app/projects/foo-bar', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/foo-bar/project.json',
+      compressData({
+        id: 'foo/bar',
+        title: 'Legacy Path ID',
+        logline: 'L',
+        manuscript: [],
+        characters: [],
+        worlds: [],
+      }),
+    );
+    await store.loadProject('foo-bar');
+
+    await expect(
+      store.saveBinderAsset('foo/bar', 'asset-1', asset, {
+        mimeType: 'application/pdf',
+        originalFileName: 'new.pdf',
+        byteSize: 3,
+      }),
+    ).rejects.toMatchObject({ name: 'ProjectWritebackError' });
+
+    await fake.apis.mkdir('/app/projects/project', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/project/project.json',
+      compressData({
+        id: '***',
+        title: 'Legacy Fallback ID',
+        logline: 'L',
+        manuscript: [],
+        characters: [],
+        worlds: [],
+      }),
+    );
+    await store.loadProject('project');
+
+    await expect(store.saveRagVectors('***', [])).rejects.toMatchObject({
+      name: 'ProjectWritebackError',
+    });
+  });
+
   // QNBS-v3: verified Codex and Binder evidence remains addressable while provenance-free vectors stay unassigned.
   it('keeps verified legacy Binder and Codex data addressable without assigning ambiguous RAG data', async () => {
     const legacyProject = {
