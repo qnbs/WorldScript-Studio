@@ -156,7 +156,7 @@ describe('compressData / decompressData', () => {
 
   it('returns decompressed JSON text without normalizing numeric literals', () => {
     const source = '{"opaque":9007199254740993.0000000000001}';
-    const compressed = '\x00lz1\x00' + LZString.compressToUTF16(source);
+    const compressed = `\x00lz1\x00${LZString.compressToUTF16(source)}`;
 
     expect(decompressJsonText(source)).toBe(source);
     expect(decompressJsonText(compressed)).toBe(source);

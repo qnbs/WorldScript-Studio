@@ -643,7 +643,7 @@ export class FsProjectStore extends FsAssetStore {
       if (admission.canonical?.projection === null || admission.canonical === null) {
         throw new Error(
           admission.source.error ??
-            'Project admission refused for ' + admission.source.classification + ' input.',
+            `Project admission refused for ${admission.source.classification} input.`,
         );
       }
       project = admission.canonical.projection;
