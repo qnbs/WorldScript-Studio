@@ -1,6 +1,6 @@
 ---
 description: Protect secrets, logging, CSP, and privacy boundaries on executable and security-sensitive paths
-globs: app/**/*.ts,app/**/*.tsx,components/**/*.ts,components/**/*.tsx,config/**/*,features/**/*.ts,features/**/*.tsx,hooks/useLanguageToolCheck.ts,hooks/useWorldScriptAI.ts,hooks/useFactoryReset.ts,hooks/useIdbUnlockStartupGuard.ts,hooks/useSettingsView.ts,App.tsx,index.tsx,register-sw.ts,index.html,nginx.conf,package.json,packages/**/*.ts,packages/**/*.tsx,public/_headers,public/sw.js,scripts/**/*.mjs,scripts/**/*.ts,services/**/*.ts,services/**/*.tsx,vercel.json,vite.config.ts,workers/**/*,wrangler.toml,.github/**/*,src-tauri/**/*,crates/**/*
+globs: app/**/*.ts,app/**/*.tsx,api/**/*.ts,components/**/*.ts,components/**/*.tsx,config/**/*,features/**/*.ts,features/**/*.tsx,functions/**/*.ts,hooks/useLanguageToolCheck.ts,hooks/useWorldScriptAI.ts,hooks/useFactoryReset.ts,hooks/useIdbUnlockStartupGuard.ts,hooks/useSettingsView.ts,App.tsx,index.tsx,register-sw.ts,index.html,nginx.conf,package.json,packages/**/*.ts,packages/**/*.tsx,public/_headers,public/sw.js,scripts/**/*.mjs,scripts/**/*.ts,services/**/*.ts,services/**/*.tsx,vercel.json,vite.config.ts,workers/**/*,wrangler.toml,.github/**/*,src-tauri/**/*,crates/**/*
 alwaysApply: false
 ---
 

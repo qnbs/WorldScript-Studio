@@ -36,6 +36,7 @@ alwaysApply: false
 
 - Tailwind; Inline nur für gemessene Werte.
 - No `dark:` Tailwind classes; use body themes and semantic CSS tokens.
+- Shared UI atoms use logical Tailwind spacing/position utilities (`ps`/`pe`, `start`/`end`) for RTL; see [`docs/Design-System.md`](../../docs/Design-System.md).
 - No `@tauri-apps/api` in UI atoms; use services/hooks and the platform abstraction.
 
 ## Storybook

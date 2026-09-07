@@ -20,7 +20,9 @@ alwaysApply: false
 ## Verbotene „Grün-Tricks“
 
 - Kein Auskommentieren von Assertions, kein dauerhaftes Ignorieren flakiger Unit-Tests.
-- `it.skip`/`describe.skip` nur mit **Dateikommentar** (Grund, Ticket) und bewusst deaktivierten Suites — nicht statt Fix.
+- `it.skip`/`describe.skip` oder eine temporäre Quarantäne nur nach dem vollständigen Vertrag in
+  [`docs/CI.md#first-attempt-failures-and-flake-quarantine`](../../docs/CI.md#first-attempt-failures-and-flake-quarantine)
+  — nicht als Ersatz für einen Fix.
 
 ## Assertions & E2E-Hilfen
 
