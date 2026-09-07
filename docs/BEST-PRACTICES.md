@@ -48,7 +48,7 @@ Single reference for maintainers: architecture touchpoints, content rules, secur
 
 - **Unit/integration:** Vitest; global coverage thresholds in `vitest.config.ts` are a regression floor. Current (v1.28.2 candidate): lines ≥ 80 / branches ≥ 66 / functions ≥ 72 / statements ≥ 78 (CI-measured after adding the root application/PWA shell). **7 171+ tests / 588 files**. Target for v2.0: lines 85 / branches 75 / functions 80 (C-7).
 - **Risk-hotspots** (aim for focused tests when touching): `dbService`, `dbMigration`, `aiProviderService`, `sceneRevisionService`, `plotBoardService`, `deepLinkService`, project import/export, `storageService` / `storageBackend`.
-- **IDB test isolation:** `sceneRevisionService` and similar IDB tests require `@vitest-environment node` + per-test `IDBFactory` + `_resetDbForTest()`. See `CLAUDE.md § IDB unit tests`.
+- **IDB test isolation:** `sceneRevisionService` and similar IDB tests require `@vitest-environment node` + per-test `IDBFactory` + `_resetDbForTest()`. See [`tests/CLAUDE.md`](../tests/CLAUDE.md).
 - **Custom Select testing:** Components using `Select` or `LanguageSelector` should mock them as native `<select>` elements in tests for compatibility with testing-library queries. See `docs/UI-MODERNIZATION.md` Testing section for the mock pattern.
 - **E2E:** Playwright (CI-only `CI=true`); a11y smoke with axe (see `tests/e2e/a11y.spec.ts`). Plot-board E2E: `tests/e2e/plot-board.spec.ts`.
 - **Mutation:** Stryker job (`mutation.yml`) is informational until `break` threshold is raised. Current targets: 9 service files in `stryker.conf.json`.

@@ -1,6 +1,5 @@
 ---
 description: Consult roadmap and docs hub before cross-cutting product or integration work
-globs: ~
 alwaysApply: false
 ---
 

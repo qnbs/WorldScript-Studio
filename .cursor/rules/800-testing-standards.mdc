@@ -1,6 +1,6 @@
 ---
 description: Require deterministic Vitest mocks and CI-first heavy suites per docs/CI.md
-globs: tests/**/*,components/**/*.test.ts,components/**/*.test.tsx,vitest.config.ts,playwright.config.ts
+globs: tests/**/*,packages/**/tests/**/*,components/**/*.test.ts,components/**/*.test.tsx,vitest.config.ts,playwright.config.ts
 alwaysApply: false
 ---
 
@@ -38,7 +38,7 @@ alwaysApply: false
 | Tier | Befehle |
 |------|---------|
 | **Lokal schnell** | `pnpm run ci:prepush`; optional focused `pnpm exec vitest run <path>` **ohne** `--coverage` |
-| **CI schwer** | Vitest **mit** Coverage (thresholds 74/60/67/72 — lines/branches/functions/statements), `CI=true pnpm run test:e2e`, LHCI, `bundle:budget` |
+| **CI schwer** | Vitest **mit** Coverage (thresholds defined by [`scripts/coverage-thresholds.json`](../../scripts/coverage-thresholds.json); do not duplicate or lower them here), `CI=true pnpm run test:e2e`, LHCI, `bundle:budget` |
 
 - Merge-Bar = **grüner GitHub-Workflow**, nicht voller lokaler E2E auf schwacher Hardware.
 - Playwright E2E is CI-only on this constrained workstation; use `playwright.config.ts` for CI matrix details.

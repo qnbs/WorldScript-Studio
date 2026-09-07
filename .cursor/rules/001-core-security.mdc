@@ -1,6 +1,6 @@
 ---
-description: Protect secrets,logs,and CSP when touching any project file
-globs: app/**/*.ts,app/**/*.tsx,components/**/*.ts,components/**/*.tsx,config/**/*,features/**/*.ts,features/**/*.tsx,packages/**/*.ts,packages/**/*.tsx,public/sw.js,scripts/**/*.mjs,scripts/**/*.ts,services/**/*.ts,services/**/*.tsx,.github/**/*,src-tauri/**/*,crates/**/*
+description: Protect secrets, logging, CSP, and privacy boundaries on executable and security-sensitive paths
+globs: app/**/*.ts,app/**/*.tsx,components/**/*.ts,components/**/*.tsx,config/**/*,features/**/*.ts,features/**/*.tsx,hooks/useLanguageToolCheck.ts,hooks/useWorldScriptAI.ts,index.html,package.json,packages/**/*.ts,packages/**/*.tsx,public/sw.js,scripts/**/*.mjs,scripts/**/*.ts,services/**/*.ts,services/**/*.tsx,vercel.json,vite.config.ts,workers/**/*,wrangler.toml,.github/**/*,src-tauri/**/*,crates/**/*
 alwaysApply: false
 ---
 

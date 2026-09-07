@@ -63,7 +63,7 @@ Tasks are pre-defined in [`.vscode/tasks.json`](../.vscode/tasks.json) (e.g. **G
 | `graphify-cli.mjs` | `scripts/` | PATH-independent launcher used by `pnpm run graphify:*` |
 | `graphSourceFingerprint.mjs` | `scripts/` | Shared worktree-aware fingerprint module (freshness, both tools) |
 | `graphs-cli.mjs` | `scripts/` | Combined dual-graph orchestrator — `pnpm run graphs:*` |
-| Claude Code integration | `CLAUDE.md` + `graphify install` | PreToolUse hook + instructions |
+| Claude Code integration | `AGENTS.md` + `graphify install` | PreToolUse hook + on-demand graph instructions |
 | VS Code Copilot integration | `.github/copilot-instructions.md` | Copilot Chat reads the graph |
 | Git hooks | optional, via `pnpm run graphify:hooks` | Not recommended by default — see [Automatic updates](#automatic-updates) |
 
@@ -228,7 +228,7 @@ When `graphify-out/graph.json` exists, Claude Code's PreToolUse hook automatical
 
 This fires before every `Glob` or `Grep` tool call, so Claude reads the graph summary first instead of scanning raw files.
 
-The CLAUDE.md section also instructs Claude to:
+The graph guidance in this document is the canonical source for Claude to:
 - Read `graphify-out/GRAPH_REPORT.md` before architecture questions
 - Use `graphify query/path/explain` for cross-module questions
 - Run `graphify update .` after modifying code files

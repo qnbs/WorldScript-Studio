@@ -39,6 +39,9 @@ needs their detail. Dynamic facts belong in `package.json`, `.nvmrc`, scripts, o
 
 - `exactOptionalPropertyTypes` is enabled: omit optional properties rather than assigning
   `undefined` unless the type explicitly permits it. Avoid `any` and honor strict checks.
+- When adding a nested settings object, update default merging in both
+  `services/storage/idbProjectStore.ts#normalizePersistedSettings` and
+  `features/settings/settingsSlice.ts#setSettings` so persisted and Redux hydration agree.
 - User-visible copy uses the i18n system. Add keys to canonical `locales/*` sources and run
   the repository i18n generator/check; do not hardcode UI strings or stale locale counts.
 - Do not use Tailwind `dark:` classes. Themes are body-class and semantic CSS-token driven.
@@ -72,7 +75,9 @@ When a task enters commit/push/PR/CI/review/merge work, read and follow
 - Use a feature branch and conventional commits. Never commit directly to `main`.
 - Before new history, run `pnpm run signing:doctor` and install hooks with
   `pnpm run hooks:install`. Commits and tags must be normally signed and Git-verified; never
-  use `--no-gpg-sign`, `--no-verify`, unsigned temporary history, or force-push.
+  use `--no-gpg-sign`, `--no-verify`, unsigned temporary history, or force-push ordinary PR
+  history. Use `--force-with-lease` only where the canonical PR recovery procedure explicitly
+  requires it after a controlled rebase.
 - Inspect all three review channels: paginated inline threads, top-level issue comments, and
   full review bodies. Validate each finding against current code; fix real correctness,
   security, persistence, or data-integrity issues, or reply with evidence. Resolve inline
@@ -91,5 +96,6 @@ When a task enters commit/push/PR/CI/review/merge work, read and follow
 - Native architecture: `docs/native/CORE-MIGRATION-LEDGER.md` and `docs/adr/0021-qt-gpui-native-desktop-strategy.md`.
 - i18n: `scripts/build-i18n.mjs`, `scripts/check-i18n-keys.mjs`, and `.cursor/rules/150-i18n-and-content.mdc`.
 - Architecture/dependency investigation: `docs/graphify.md` and `docs/codegraph.md`; use tools on demand.
-- Specialist path knowledge lives in `.cursor/rules/*.mdc` and nested `CLAUDE.md` files; do not
-  duplicate it here.
+- Specialist path knowledge lives in `.cursor/rules/*.mdc` and nested `CLAUDE.md` files; for
+  cross-directory callers, follow the explicit guide mappings in the root `CLAUDE.md`; do not
+  duplicate specialist content here.

@@ -1,6 +1,6 @@
 ---
 description: Enforce i18n key parity and content guard when editing locales or copy
-globs: locales/**/*.json,public/locales/**/*,community-templates/**/*,scripts/build-i18n.mjs,scripts/check-i18n-keys.mjs,scripts/content-guard.mjs
+globs: locales/**/*.json,public/locales/**/*,community-templates/**/*,scripts/build-i18n.mjs,scripts/check-i18n-keys.mjs,scripts/content-guard.mjs,services/help/helpCatalog.ts
 alwaysApply: false
 ---
 

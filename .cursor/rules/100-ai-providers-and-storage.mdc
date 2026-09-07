@@ -1,6 +1,6 @@
 ---
-description: Apply hybrid AI,IndexedDB,and storage patterns when editing services or features
-globs: services/ai/**/*.ts,services/aiProviderService.ts,services/geminiService.ts,services/localAiFacade.ts,services/localRag*.ts,services/rag*.ts,services/dbService.ts,services/storage/**/*.ts,services/duckdb/**/*.ts,packages/ai-core/**/*.ts
+description: Apply hybrid AI, persistence, and privacy patterns on AI and storage boundaries
+globs: services/ai/**/*.ts,services/aiProviderService.ts,services/geminiService.ts,services/localAiFacade.ts,services/localRag*.ts,services/rag*.ts,services/dbService.ts,services/storage/**/*.ts,services/storageService.ts,services/storageBackend.ts,services/dbInitialization.ts,services/sceneRevisionService.ts,services/collaborationService.ts,services/duckdb/**/*.ts,hooks/useWorldScriptAI.ts,features/project/thunks/**/*.ts,packages/ai-core/**/*.ts
 alwaysApply: false
 ---
 

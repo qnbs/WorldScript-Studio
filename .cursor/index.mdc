@@ -1,6 +1,5 @@
 ---
 description: Open the canonical repository guidance and relevant specialist rules on demand
-globs: ~
 alwaysApply: false
 ---
 
@@ -8,7 +7,8 @@ alwaysApply: false
 
 `AGENTS.md` is the canonical repository-wide rule source. Load it for repository work, then
 load only the matching `.cursor/rules/*.mdc` rule and nearest nested `CLAUDE.md` for the paths
-being changed.
+being changed. Follow the explicit cross-directory mappings in the root `CLAUDE.md` when a
+caller is governed by a specialist guide elsewhere.
 
 Useful deep references:
 

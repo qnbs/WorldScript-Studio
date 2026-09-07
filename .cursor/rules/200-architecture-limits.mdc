@@ -1,6 +1,6 @@
 ---
 description: Keep files small and reuse logic via services,hooks,and feature slices
-globs: app/**/*.ts,components/**/*.tsx,contexts/**/*.tsx,features/**/*.ts,hooks/**/*.ts,services/**/*.ts,packages/**/*.ts,packages/**/*.tsx
+globs: App.tsx,app/**/*.ts,components/**/*.tsx,contexts/**/*.ts,contexts/**/*.tsx,features/**/*.ts,hooks/**/*.ts,services/**/*.ts,packages/**/*.ts,packages/**/*.tsx
 alwaysApply: false
 ---
 
