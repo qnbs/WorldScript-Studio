@@ -40,6 +40,7 @@ export interface SupplementalLineAllowance {
 
 export interface PrSizeException {
   id: string;
+  status?: 'active' | 'historical';
   repository: string;
   prNumber: number;
   baseRef: string;
@@ -72,7 +73,7 @@ export interface SizeTierLimits {
   commits: number;
 }
 
-export type SizeTier = 'ok' | 'target' | 'hard' | 'docsGovernance' | 'absolute';
+export type SizeTier = 'ok' | 'target' | 'hard' | 'docsGovernance' | 'absolute' | 'exception';
 
 export interface SizeSeverity {
   tier: SizeTier;
