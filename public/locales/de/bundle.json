@@ -817,6 +817,7 @@
   "error.startup.projectUnavailable": "Ein lokales Projekt konnte nicht geöffnet werden. Laden Sie die Anwendung neu und versuchen Sie es erneut.",
   "error.startup.projectIoUnavailable": "Das Projekt konnte derzeit aufgrund eines Speicher- oder Dateizugriffsproblems nicht gelesen werden. Es wurde nicht als beschädigt oder verändert eingestuft. Prüfen Sie die Verfügbarkeit des Speichers und die Dateiberechtigungen und versuchen Sie es erneut.",
   "error.startup.projectUnsupported": "Dieses Projekt verwendet eine Schema-Version, die dieser Build nicht bearbeiten kann. Die Originaldatei wurde nicht verändert. Aktualisieren Sie WorldScript Studio oder öffnen Sie das Projekt mit einem kompatiblen Build.",
+  "error.startup.projectMigrationGap": "Dieses Projekt verwendet eine ältere Schema-Version, die dieser Build nicht migrieren kann. Die Originaldatei wurde nicht verändert. Öffnen Sie das Projekt mit einem kompatiblen Build, der diesen Migrationspfad unterstützt.",
   "error.startup.reload": "Neu laden",
   "error.startup.retry": "Erneut versuchen",
   "error.startup.recover": "Projekt unter Quarantäne stellen und neu laden",
