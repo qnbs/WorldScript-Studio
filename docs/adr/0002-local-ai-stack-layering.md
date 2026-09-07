@@ -64,6 +64,6 @@ pipeline mirrors this with `isFallback: true` + 0 scores so the supervisor can t
 
 ## References
 
-- `CLAUDE.md` § AI Services, § Local inference, § Code Splitting
+- `.cursor/rules/100-ai-providers-and-storage.mdc` for current AI/storage routing; `vite.config.ts` for code-splitting configuration.
 - `AUDIT.md` Edge-AI Perfection Cycle (2026-05-31), Perf Hardening (2026-06-02)
 - [[0001-state-management-boundaries]]

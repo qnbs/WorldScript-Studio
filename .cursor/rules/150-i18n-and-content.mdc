@@ -1,6 +1,6 @@
 ---
 description: Enforce i18n key parity and content guard when editing locales or copy
-globs: locales/**/*.json,public/locales/**/*,community-templates/**/*,scripts/build-i18n.mjs,scripts/check-i18n-keys.mjs,scripts/content-guard.mjs,services/help/helpCatalog.ts
+globs: i18n/locales.ts,contexts/I18nContext.tsx,locales/**/*.json,public/locales/**/*,community-templates/**/*,scripts/build-i18n.mjs,scripts/check-i18n-keys.mjs,scripts/content-guard.mjs,scripts/i18n-locales.mjs,scripts/i18n-quality-report.mjs,scripts/i18n-status-dashboard.ts,scripts/check-doc-metrics.mjs,scripts/bulk-translate-locales.mjs,services/help/helpCatalog.ts,tests/unit/i18n/localesRegistry.test.ts
 alwaysApply: false
 ---
 
@@ -8,7 +8,8 @@ alwaysApply: false
 
 ## Schlüssel & Bundles
 
-- Source: **`locales/<lang>/*.json`** for all 19 repository locales; add every new key to every locale tree.
+- Source: **`locales/<lang>/*.json`** for every locale returned by the canonical registries (`i18n/locales.ts` and `scripts/i18n-locales.mjs`); add every new key to every locale tree.
+- Registry authority: keep the typed locale SSOT, filesystem bridge, and their integrity test aligned; do not duplicate a locale roster or count here.
 - Runtime: **`public/locales/<lang>/bundle.json`** via `node scripts/build-i18n.mjs` (also used by `i18n:check`).
 - CI: **`pnpm run i18n:check`** (Key-Parität + Bundle + `content:guard`).
 - UI-Text nur als **Übersetzungsschlüssel** (Dot-Notation), nie hardcodiert in TSX — außer Dev-Debug.
@@ -26,7 +27,7 @@ alwaysApply: false
 
 ## PR-Checkliste
 
-1. Keys in all 19 locale trees
+1. Keys in every locale tree defined by the canonical registries
 2. `pnpm run i18n:check` lokal (Quick-Tier)
 3. Keine Secrets/PII in JSON-Beispielen
 

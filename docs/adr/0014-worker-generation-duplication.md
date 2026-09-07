@@ -31,7 +31,8 @@ CDN-URL fix twice — once in `workers/duckdbWorker.ts`, once in `workers/v2/duc
 because the same logic is duplicated across both generations. Any future fix to shared worker
 concerns (CSP compliance, error handling, protocol changes) pays this tax again until consolidated.
 
-`CLAUDE.md`'s own Architecture section describes `packages/worker-bus` (WorkerBus v2) as "Central
+The WorkerBus implementation in `packages/worker-bus` and `services/workerBusManager.ts` provides
+the current architecture context; WorkerBus v2 is described as "Central
 orchestration layer for all background tasks... auto-scaling pool, priority queue + circuit
 breakers, dead-letter queue" — i.e. the codebase's own documentation already implies v2 is the
 intended long-term target, without ever stating that v1 is deprecated or scheduling its removal.

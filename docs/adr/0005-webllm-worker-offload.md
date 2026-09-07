@@ -67,7 +67,7 @@ runtime ([[0003-workerbus-hybrid-routing]]).
 
 ## References
 
-- `CLAUDE.md` § AI Services / WorkerBus v2
+- `.cursor/rules/100-ai-providers-and-storage.mdc`, `services/localAiFacade.ts`, and `services/workerBusManager.ts` are the current routing sources.
 - `workers/v2/webllm.worker.ts`, `services/localAiFacade.ts`, `services/workerBusManager.ts`,
   `packages/ai-core/src/webllmOptimizer.ts`
 - `TODO.md` P1-1
