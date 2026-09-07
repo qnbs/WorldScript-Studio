@@ -701,6 +701,7 @@
   "error.startup.projectUnavailable": "Non è stato possibile aprire un progetto locale. Ricarica l’applicazione e riprova.",
   "error.startup.projectIoUnavailable": "Non è stato possibile leggere il progetto in questo momento a causa di un problema di archiviazione o di accesso ai file. Il progetto non è stato classificato come danneggiato né modificato. Verifica la disponibilità del dispositivo di archiviazione e i permessi dei file, quindi riprova.",
   "error.startup.projectUnsupported": "Questo progetto usa una versione dello schema che questa build non può modificare. Il file originale non è stato cambiato. Aggiorna WorldScript Studio o apri il progetto con una build compatibile.",
+  "error.startup.projectMigrationGap": "Questo progetto usa una versione precedente dello schema che questa build non può migrare. Il file originale non è stato cambiato. Aprilo con una build compatibile che supporti il relativo percorso di migrazione.",
   "error.startup.reload": "Ricarica",
   "error.startup.retry": "Riprova",
   "error.startup.recover": "Metti il progetto in quarantena e ricarica",
