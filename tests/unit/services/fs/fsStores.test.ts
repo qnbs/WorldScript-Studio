@@ -206,7 +206,7 @@ describe('FsProjectStore — projects', () => {
     const persisted = decompressData<Record<string, unknown>>(
       fake.text.get('/app/projects/p1/project.json') as string,
     );
-    expect(persisted.schemaVersion).toBe(1);
+    expect(persisted['schemaVersion']).toBe(1);
   });
 
   it('returns null for a missing project and [] when no projects dir', async () => {
@@ -363,7 +363,7 @@ describe('FsProjectStore — projects', () => {
 
     const loaded = await store.loadProject('directory-id');
 
-    expect((loaded as Record<string, unknown>).id).toBe('embedded-id');
+    expect((loaded as unknown as Record<string, unknown>)['id']).toBe('embedded-id');
     await expect(
       store.saveProject({ ...loaded, title: 'Edited legacy novel' } as never),
     ).rejects.toMatchObject({
