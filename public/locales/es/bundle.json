@@ -816,6 +816,7 @@
   "error.startup.storageUnavailable": "No se pudo abrir el almacenamiento local. Recarga la aplicación e inténtalo de nuevo.",
   "error.startup.projectUnavailable": "No se pudo abrir un proyecto local. Recarga la aplicación e inténtalo de nuevo.",
   "error.startup.projectIoUnavailable": "No se pudo leer el proyecto en este momento debido a un problema de almacenamiento o acceso a los archivos. El proyecto no se ha clasificado como dañado ni como modificado. Comprueba la disponibilidad del dispositivo de almacenamiento y los permisos de los archivos, y vuelve a intentarlo.",
+  "error.startup.projectUnsupported": "Este proyecto utiliza una versión de esquema que esta compilación no puede editar. El archivo original no se ha modificado. Actualiza WorldScript Studio o abre el proyecto con una compilación compatible.",
   "error.startup.reload": "Recargar",
   "error.startup.retry": "Reintentar",
   "error.startup.recover": "Poner el proyecto en cuarentena y recargar",
