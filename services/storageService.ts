@@ -84,6 +84,13 @@ class StorageManager {
     return backend.loadProject(projectId);
   }
 
+  // QNBS-v3: bootstrap asks for an editable admission explicitly; backends without a distinct boundary retain their existing single-project behavior.
+  async loadProjectForEditing(projectId: string): Promise<StoryProject | null> {
+    const backend = await this.getBackend();
+    if (backend.loadProjectForEditing) return backend.loadProjectForEditing(projectId);
+    return backend.loadProject(projectId);
+  }
+
   async listProjects(): Promise<string[]> {
     const backend = await this.getBackend();
     return backend.listProjects();

@@ -34,6 +34,33 @@ describe('startup recovery action policy', () => {
     });
   });
 
+  it('keeps unsupported project versions non-quarantinable and retryable', () => {
+    expect(
+      getStartupRecoveryActions(
+        new ProjectLoadError('unsupported-version', 'future', 'project-1', 'FUTURE'),
+        'filesystem',
+      ),
+    ).toEqual({
+      failureKind: 'project-unsupported',
+      canQuarantine: false,
+      canReset: false,
+    });
+  });
+
+  // QNBS-v3: preserve migration-gap provenance so recovery copy explains why this build cannot migrate the project.
+  it('distinguishes unsupported older projects from future projects', () => {
+    expect(
+      getStartupRecoveryActions(
+        new ProjectLoadError('unsupported-version', 'older', 'project-1', 'UNSUPPORTED_OLDER'),
+        'filesystem',
+      ),
+    ).toEqual({
+      failureKind: 'project-migration-gap',
+      canQuarantine: false,
+      canReset: false,
+    });
+  });
+
   it('retains database reset for non-project failures from IndexedDB', () => {
     expect(getStartupRecoveryActions(new Error('QuotaExceededError'), 'indexeddb')).toEqual({
       failureKind: 'storage',

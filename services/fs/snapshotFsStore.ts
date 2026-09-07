@@ -9,7 +9,7 @@ import { FsCodexStore } from './codexFsStore';
 import {
   compressData,
   countProjectWords,
-  decompressData,
+  decompressJsonText,
   retryFs,
   writeTextFileAtomic,
 } from './fsCore';
@@ -46,24 +46,37 @@ export class FsSnapshotStore extends FsCodexStore {
     return id;
   }
 
+  protected async getSnapshotJsonText(snapshotId: number): Promise<string | null> {
+    const apis = await this.getApis();
+    const appDataPath = await this.ensureAppDataPath();
+    const snapshotFile = await apis.join(appDataPath, 'snapshots', `${snapshotId}.json`);
+
+    if (!(await apis.exists(snapshotFile))) {
+      return null;
+    }
+
+    const content = await retryFs(() => apis.readTextFile(snapshotFile));
+    let envelope: unknown;
+    try {
+      envelope = JSON.parse(content);
+    } catch {
+      // QNBS-v3: preserve malformed raw snapshot text so canonical admission can classify it without a lossy parse/re-serialize step.
+      return content;
+    }
+    if (
+      typeof envelope === 'object' &&
+      envelope !== null &&
+      typeof (envelope as { data?: unknown }).data === 'string'
+    ) {
+      return decompressJsonText((envelope as { data: string }).data);
+    }
+    return content;
+  }
+
   async getSnapshotData(snapshotId: number): Promise<unknown> {
     try {
-      const apis = await this.getApis();
-      const appDataPath = await this.ensureAppDataPath();
-      const snapshotFile = await apis.join(appDataPath, 'snapshots', `${snapshotId}.json`);
-
-      if (!(await apis.exists(snapshotFile))) {
-        return null;
-      }
-
-      const content = await retryFs(() => apis.readTextFile(snapshotFile));
-      const envelope = JSON.parse(content) as SnapshotEnvelope;
-      // New format: envelope with compressed data field
-      if (envelope && typeof envelope.data === 'string') {
-        return decompressData(envelope.data);
-      }
-      // Legacy format: raw project data stored directly
-      return envelope;
+      const raw = await this.getSnapshotJsonText(snapshotId);
+      return raw === null ? null : JSON.parse(raw);
     } catch (error) {
       logger.error('Failed to load snapshot:', error);
       return null;
