@@ -37,6 +37,7 @@ const h = vi.hoisted(() => ({
   loadSettings: vi.fn(),
   listProjects: vi.fn(),
   loadProject: vi.fn(),
+  loadProjectForEditing: vi.fn(),
   getActiveProjectId: vi.fn(),
 }));
 
@@ -53,6 +54,7 @@ vi.mock('../../../services/storageService', () => ({
     loadSettings: h.loadSettings,
     listProjects: h.listProjects,
     loadProject: h.loadProject,
+    loadProjectForEditing: h.loadProjectForEditing,
     getActiveProjectId: h.getActiveProjectId,
   },
 }));
@@ -72,6 +74,7 @@ describe('loadPersistedRootState', () => {
     h.loadSettings.mockResolvedValue(null);
     h.listProjects.mockResolvedValue([]);
     h.loadProject.mockResolvedValue(null);
+    h.loadProjectForEditing.mockResolvedValue(null);
     h.getActiveProjectId.mockResolvedValue(null);
   });
 
@@ -89,14 +92,14 @@ describe('loadPersistedRootState', () => {
     h.isTauri.value = true;
     h.loadSettings.mockResolvedValue({ theme: 'sepia' });
     h.listProjects.mockResolvedValue(['proj-1']);
-    h.loadProject.mockResolvedValue({ id: 'proj-1', title: 'My Novel' });
+    h.loadProjectForEditing.mockResolvedValue({ id: 'proj-1', title: 'My Novel' });
 
     const result = await loadPersistedRootState();
 
     expect(h.dbLoadState).not.toHaveBeenCalled();
     expect(h.loadSettings).toHaveBeenCalledTimes(1);
     expect(h.listProjects).toHaveBeenCalledTimes(1);
-    expect(h.loadProject).toHaveBeenCalledWith('proj-1');
+    expect(h.loadProjectForEditing).toHaveBeenCalledWith('proj-1');
     expect(result?.settings).toEqual({ theme: 'sepia' });
     // Flat shape — index.tsx's existing hydration logic reconstructs the redux-undo envelope.
     expect(result?.project).toEqual({ data: { id: 'proj-1', title: 'My Novel' } });
@@ -122,30 +125,30 @@ describe('loadPersistedRootState', () => {
     h.isTauri.value = true;
     h.listProjects.mockResolvedValue(['proj-1', 'proj-2']);
     h.getActiveProjectId.mockResolvedValue(null);
-    h.loadProject.mockResolvedValue({ id: 'proj-1', title: 'First' });
+    h.loadProjectForEditing.mockResolvedValue({ id: 'proj-1', title: 'First' });
     await loadPersistedRootState();
-    expect(h.loadProject).toHaveBeenCalledTimes(1);
-    expect(h.loadProject).toHaveBeenCalledWith('proj-1');
+    expect(h.loadProjectForEditing).toHaveBeenCalledTimes(1);
+    expect(h.loadProjectForEditing).toHaveBeenCalledWith('proj-1');
   });
 
   it('on desktop, prefers the active-project marker over the first listed project id', async () => {
     h.isTauri.value = true;
     h.listProjects.mockResolvedValue(['proj-1', 'proj-2']);
     h.getActiveProjectId.mockResolvedValue('proj-2');
-    h.loadProject.mockResolvedValue({ id: 'proj-2', title: 'Second' });
+    h.loadProjectForEditing.mockResolvedValue({ id: 'proj-2', title: 'Second' });
     await loadPersistedRootState();
-    expect(h.loadProject).toHaveBeenCalledTimes(1);
-    expect(h.loadProject).toHaveBeenCalledWith('proj-2');
+    expect(h.loadProjectForEditing).toHaveBeenCalledTimes(1);
+    expect(h.loadProjectForEditing).toHaveBeenCalledWith('proj-2');
   });
 
   it('on desktop, falls back to the first listed project id when the marker points to a deleted project', async () => {
     h.isTauri.value = true;
     h.listProjects.mockResolvedValue(['proj-1', 'proj-2']);
     h.getActiveProjectId.mockResolvedValue('proj-deleted');
-    h.loadProject.mockResolvedValue({ id: 'proj-1', title: 'First' });
+    h.loadProjectForEditing.mockResolvedValue({ id: 'proj-1', title: 'First' });
     await loadPersistedRootState();
-    expect(h.loadProject).toHaveBeenCalledTimes(1);
-    expect(h.loadProject).toHaveBeenCalledWith('proj-1');
+    expect(h.loadProjectForEditing).toHaveBeenCalledTimes(1);
+    expect(h.loadProjectForEditing).toHaveBeenCalledWith('proj-1');
   });
 });
 

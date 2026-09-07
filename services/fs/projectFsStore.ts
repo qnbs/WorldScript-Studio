@@ -247,9 +247,7 @@ export class FsProjectStore extends FsAssetStore {
         }
       }
     } else {
-      for (const fallback of LEGACY_FALLBACK_WRITER_IDENTITIES) {
-        sharedFallbackWriterIdentities.add(fallback);
-      }
+      // QNBS-v3: an ID-less legacy inspection is read-only; shared fallback names must not become global write claims that can block an unrelated CURRENT source.
     }
     const writerIdentities = new Set([
       ...sourceOwnedWriterIdentities,
@@ -806,6 +804,23 @@ export class FsProjectStore extends FsAssetStore {
    */
   async loadProject(projectId: string): Promise<StoryProject | null> {
     return this.withLegacyRoutingOperation(() => this.loadProjectUnlocked(projectId));
+  }
+
+  // QNBS-v3: desktop bootstrap uses a distinct admission boundary so a readable legacy projection cannot enter the ordinary editable Redux store.
+  async loadProjectForEditing(projectId: string): Promise<StoryProject | null> {
+    return this.withLegacyRoutingOperation(async () => {
+      const project = await this.loadProjectUnlocked(projectId);
+      const safeProjectId = projectPathSegment(projectId);
+      if (project && safeProjectId && this.legacyAdmissionRecords.has(safeProjectId)) {
+        throw new ProjectLoadError(
+          'unsupported-version',
+          `The legacy project file for "${projectId}" is readable but cannot enter the editable application state. The file has not been changed.`,
+          projectId,
+          'LEGACY_UNVERSIONED',
+        );
+      }
+      return project;
+    });
   }
 
   private async loadProjectUnlocked(projectId: string): Promise<StoryProject | null> {

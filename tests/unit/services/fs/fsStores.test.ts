@@ -504,7 +504,7 @@ describe('FsProjectStore — projects', () => {
     await expect(store.getRagVectors('legacy-assets')).resolves.toEqual([{ id: 'vector-1' }]);
   });
 
-  // QNBS-v3: ID-less legacy callers cannot use historical fallback IDs as an unfenced write route.
+  // QNBS-v3: ID-less legacy callers can only address the retained source directory, never an ambiguous fallback route.
   it('fails closed for ID-less legacy Binder, Codex, and RAG writes', async () => {
     const asset = new Uint8Array([1, 2, 3]).buffer;
     const legacyProject = {
@@ -539,18 +539,18 @@ describe('FsProjectStore — projects', () => {
 
     await store.loadProject('idless-legacy');
     await expect(
-      store.saveBinderAsset('browser-project', 'new', asset, {
+      store.saveBinderAsset('idless-legacy', 'new', asset, {
         mimeType: 'application/pdf',
         originalFileName: 'new.pdf',
         byteSize: 3,
       }),
     ).rejects.toMatchObject({ name: 'ProjectWritebackError' });
     await expect(
-      store.saveStoryCodex({ projectId: 'default', entries: [{ name: 'new' }] } as never),
+      store.saveStoryCodex({ projectId: 'idless-legacy', entries: [{ name: 'new' }] } as never),
     ).rejects.toMatchObject({ name: 'ProjectWritebackError' });
-    await expect(store.saveRagVectors('project', [{ id: 'new-vector' }])).rejects.toMatchObject({
-      name: 'ProjectWritebackError',
-    });
+    await expect(
+      store.saveRagVectors('idless-legacy', [{ id: 'new-vector' }]),
+    ).rejects.toMatchObject({ name: 'ProjectWritebackError' });
     expect(
       decompressData<Record<string, unknown>>(
         fake.text.get('/app/projects/default/codex/codex.snap') as string,
@@ -564,8 +564,8 @@ describe('FsProjectStore — projects', () => {
     expect(fake.bin.has('/app/projects/browser-project/binder/new.bin')).toBe(false);
   });
 
-  // QNBS-v3: an inspected CURRENT fallback source cannot release a shared ID-less legacy fence.
-  it('retains shared ID-less fallback fences when a CURRENT fallback source is inspected', async () => {
+  // QNBS-v3: background ID-less inspection cannot install a global fallback fence over a valid CURRENT source.
+  it('keeps CURRENT fallback writes authoritative after ID-less legacy inspection', async () => {
     await store.saveProject({ ...project, id: 'project' } as never);
     const legacyProject = {
       title: 'ID-less Legacy',
@@ -589,16 +589,37 @@ describe('FsProjectStore — projects', () => {
         originalFileName: 'ambiguous.bin',
         byteSize: 1,
       }),
-    ).rejects.toMatchObject({ name: 'ProjectWritebackError' });
+    ).resolves.toBeUndefined();
     await expect(
       store.saveStoryCodex({ projectId: 'project', entries: [{ name: 'ambiguous' }] } as never),
-    ).rejects.toMatchObject({ name: 'ProjectWritebackError' });
-    await expect(store.saveRagVectors('project', [{ id: 'ambiguous' }])).rejects.toMatchObject({
-      name: 'ProjectWritebackError',
+    ).resolves.toBeUndefined();
+    await expect(store.saveRagVectors('project', [{ id: 'ambiguous' }])).resolves.toBeUndefined();
+    expect(fake.bin.has('/app/projects/project/binder/ambiguous.bin')).toBe(true);
+    expect(fake.text.has('/app/projects/project/codex/codex.snap')).toBe(true);
+    expect(fake.text.has('/app/projects/project/codex/vectors.snap')).toBe(true);
+  });
+
+  // QNBS-v3: readable legacy bytes remain available to inspection but cannot cross the editable bootstrap boundary.
+  it('refuses ID-less legacy admission for the editable application state without rewriting the source', async () => {
+    const legacyProject = {
+      title: 'ID-less Legacy',
+      logline: 'L',
+      manuscript: [],
+      characters: [],
+      worlds: [],
+    };
+    const source = '/app/projects/idless-legacy/project.json';
+    await fake.apis.mkdir('/app/projects/idless-legacy', { recursive: true });
+    await fake.apis.writeTextFile(source, JSON.stringify(legacyProject));
+    const before = fake.text.get(source);
+
+    await expect(store.loadProjectForEditing('idless-legacy')).rejects.toMatchObject({
+      name: 'ProjectLoadError',
+      reason: 'unsupported-version',
+      classification: 'LEGACY_UNVERSIONED',
+      projectId: 'idless-legacy',
     });
-    expect(fake.bin.has('/app/projects/project/binder/ambiguous.bin')).toBe(false);
-    expect(fake.text.has('/app/projects/project/codex/codex.snap')).toBe(false);
-    expect(fake.text.has('/app/projects/project/codex/vectors.snap')).toBe(false);
+    expect(fake.text.get(source)).toBe(before);
   });
 
   // QNBS-v3: authority is checked after queued work completes so a load cannot race a later mutation.
