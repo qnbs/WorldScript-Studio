@@ -33,7 +33,6 @@ import {
 } from './fsCore';
 import {
   evidenceFromPersistedMetadata,
-  hasLegacyMissingProjectId,
   isLegacyInvalidProjectId,
   LEGACY_AUXILIARY_METADATA_KEY,
   LEGACY_PROJECT_DIRECTORY_METADATA_KEY,
@@ -62,6 +61,16 @@ export class ProjectLoadError extends Error {
   ) {
     super(message);
     this.name = 'ProjectLoadError';
+  }
+}
+
+// QNBS-v3: legacy admissions stay readable but cannot enter the ordinary writer until migration fencing exists.
+export class ProjectWritebackError extends Error {
+  constructor(public readonly projectId: string) {
+    super(
+      `Project "${projectId}" was loaded from an unversioned legacy source and cannot be saved until durable migration fencing is available.`,
+    );
+    this.name = 'ProjectWritebackError';
   }
 }
 
@@ -182,9 +191,17 @@ const storedProjectSchema = {
   },
 };
 
+// QNBS-v3: keep the synthetic legacy-to-V1 marker out of editable state until fenced durable migration exists.
+function withoutSyntheticLegacySchemaVersion(project: StoryProject): StoryProject {
+  const projection = { ...(project as unknown as Record<string, unknown>) };
+  delete projection['schemaVersion'];
+  return projection as unknown as StoryProject;
+}
+
 // QNBS-v3: one sanitizer and empty-ID policy keeps every filesystem project operation on the same path identity.
 export class FsProjectStore extends FsAssetStore {
   private readonly verifiedLegacyProjectDirectories = new Set<string>();
+  private readonly legacyWritebackBlockedProjectIds = new Set<string>();
 
   private async inspectLegacyAuxiliaryEvidence(
     project: StoryProject,
@@ -321,8 +338,8 @@ export class FsProjectStore extends FsAssetStore {
         this.verifiedLegacyProjectDirectories.add(safeProjectId);
         return project;
       }
-      if (!hasLegacyMissingProjectId(project, safeProjectId)) return project;
       this.verifiedLegacyProjectDirectories.add(safeProjectId);
+      // QNBS-v3: retain the source directory for every missing-ID load so a later save cannot drift to a title-derived path.
       return legacyProjectWithDirectory(project, safeProjectId);
     }
 
@@ -537,6 +554,10 @@ export class FsProjectStore extends FsAssetStore {
           : (projectPathSegment(flat.title || '') ?? 'project');
     }
 
+    if (this.legacyWritebackBlockedProjectIds.has(projectId)) {
+      throw new ProjectWritebackError(projectId);
+    }
+
     // Auto-snapshot: fire-and-forget, mirrors dbService behaviour
     if (Date.now() - this.lastAutoSnapshotTime > this.AUTO_SNAPSHOT_INTERVAL) {
       this.lastAutoSnapshotTime = Date.now();
@@ -634,11 +655,13 @@ export class FsProjectStore extends FsAssetStore {
 
     let project: StoryProject;
     let classification: ProjectVersionClassification | undefined;
+    let legacyAdmission = false;
     try {
       const admission = admitCanonicalProjectDocument(
         decompressJsonText(content),
         storedProjectSchema,
       );
+      legacyAdmission = admission.status === 'LEGACY_TO_V1';
       classification = admission.source.classification;
       if (admission.canonical?.projection === null || admission.canonical === null) {
         throw new Error(
@@ -646,7 +669,10 @@ export class FsProjectStore extends FsAssetStore {
             `Project admission refused for ${admission.source.classification} input.`,
         );
       }
-      project = admission.canonical.projection;
+      project =
+        admission.status === 'LEGACY_TO_V1'
+          ? withoutSyntheticLegacySchemaVersion(admission.canonical.projection)
+          : admission.canonical.projection;
     } catch (error) {
       logger.error('Failed to parse project file (corrupt data):', error);
       throw new ProjectLoadError(
@@ -672,6 +698,11 @@ export class FsProjectStore extends FsAssetStore {
       apis,
       appDataPath,
     );
+    if (legacyAdmission) {
+      this.legacyWritebackBlockedProjectIds.add(safeProjectId);
+    } else {
+      this.legacyWritebackBlockedProjectIds.delete(safeProjectId);
+    }
     scheduleCoreProjectValidation(migratedProject);
     return migratedProject;
   }
@@ -796,6 +827,7 @@ export class FsProjectStore extends FsAssetStore {
           }
           await retryFs(() => apis.rename(projectPath, preservedPath));
           this.clearLegacyAuxiliaryPolicy(safeProjectId);
+          this.legacyWritebackBlockedProjectIds.delete(safeProjectId);
           return { projectId: safeProjectId, path: preservedPath };
         } catch (error) {
           let sourceExists: boolean;
@@ -812,11 +844,13 @@ export class FsProjectStore extends FsAssetStore {
           }
           if (!sourceExists && preservedExists) {
             this.clearLegacyAuxiliaryPolicy(safeProjectId);
+            this.legacyWritebackBlockedProjectIds.delete(safeProjectId);
             return { projectId: safeProjectId, path: preservedPath };
           }
           if (!sourceExists) {
             await releaseReservation();
             this.clearLegacyAuxiliaryPolicy(safeProjectId);
+            this.legacyWritebackBlockedProjectIds.delete(safeProjectId);
             throw new ProjectQuarantineError('source-missing');
           }
           await releaseReservation();
@@ -884,6 +918,7 @@ export class FsProjectStore extends FsAssetStore {
       throw new ProjectDeleteError();
     }
     this.verifiedLegacyProjectDirectories.delete(safeProjectId);
+    this.legacyWritebackBlockedProjectIds.delete(safeProjectId);
     this.clearLegacyAuxiliaryPolicy(safeProjectId);
   }
 

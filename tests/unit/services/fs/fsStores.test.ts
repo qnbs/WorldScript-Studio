@@ -62,6 +62,15 @@ import { compressData, decompressData } from '../../../../services/fs/fsCore';
 import { FsProjectStore } from '../../../../services/fs/projectFsStore';
 import { logger } from '../../../../services/logger';
 
+const legacyBinderNode = (binderAssetId: string) => ({
+  id: `binder-${binderAssetId}`,
+  parentId: null,
+  type: 'pdf' as const,
+  title: `Legacy ${binderAssetId}`,
+  sortIndex: 0,
+  binderAssetId,
+});
+
 interface FakeFs {
   apis: TauriApis;
   text: Map<string, string>;
@@ -166,6 +175,7 @@ afterEach(() => {
 describe('FsProjectStore — projects', () => {
   const project = {
     id: 'p1',
+    schemaVersion: 1,
     title: 'My Novel',
     logline: 'A tale',
     manuscript: [{ id: 's1', title: 'Ch1', content: 'hello world foo' }],
@@ -327,7 +337,7 @@ describe('FsProjectStore — projects', () => {
     const legacyProject = {
       ...project,
       id: '***',
-      binderNodes: [{ binderAssetId: 'legacy-asset' }],
+      binderNodes: [legacyBinderNode('legacy-asset')],
     };
     const legacyCodex = { projectId: '***', entries: [{ name: 'legacy' }] };
     const legacyVectors = [{ id: 'legacy-vector' }];
@@ -514,7 +524,7 @@ describe('FsProjectStore — projects', () => {
     const legacyProject = {
       ...project,
       id: '***',
-      binderNodes: [{ binderAssetId: 'legacy-asset' }],
+      binderNodes: [legacyBinderNode('legacy-asset')],
     };
     await fake.apis.mkdir('/app/projects/item', { recursive: true });
     await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
@@ -551,7 +561,7 @@ describe('FsProjectStore — projects', () => {
     const legacyProject = {
       ...project,
       id: '***',
-      binderNodes: [{ binderAssetId: 'legacy-asset' }],
+      binderNodes: [legacyBinderNode('legacy-asset')],
     };
     await fake.apis.mkdir('/app/projects/item', { recursive: true });
     await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
@@ -596,7 +606,7 @@ describe('FsProjectStore — projects', () => {
     const legacyProject = {
       ...project,
       id: '***',
-      binderNodes: [{ binderAssetId: 'legacy-asset' }],
+      binderNodes: [legacyBinderNode('legacy-asset')],
     };
     const legacyCodex = { projectId: '***', entries: [{ name: 'legacy' }] };
     await store.saveStoryCodex(legacyCodex as never);
@@ -764,7 +774,7 @@ describe('FsProjectStore — projects', () => {
     const legacyProject = {
       ...project,
       id: '***',
-      binderNodes: [{ binderAssetId: '.' }, { binderAssetId: '..' }],
+      binderNodes: [legacyBinderNode('.'), legacyBinderNode('..')],
     };
     await fake.apis.mkdir('/app/projects/item', { recursive: true });
     await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));
@@ -1174,7 +1184,7 @@ describe('FsProjectStore — projects', () => {
     const legacyProject = {
       ...project,
       id: '***',
-      binderNodes: [{ binderAssetId: 'legitimate-asset' }],
+      binderNodes: [legacyBinderNode('legitimate-asset')],
     };
     await fake.apis.mkdir('/app/projects/item', { recursive: true });
     await fake.apis.writeTextFile('/app/projects/item/project.json', compressData(legacyProject));

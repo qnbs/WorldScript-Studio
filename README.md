@@ -12,8 +12,8 @@
   <img src="https://img.shields.io/badge/Release-v1.28.4-6366F1" alt="Release v1.28.4">
   <img src="https://img.shields.io/badge/Storage-IndexedDB_v8-F59E0B" alt="IndexedDB v8">
   <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
-  <img src="https://img.shields.io/badge/i18n-19_locales-2940_keys-0EA5E9" alt="i18n 19 locales — 2940 keys">
-  <img src="https://img.shields.io/badge/Tests-7516%2B_%2F_602_files-22C55E" alt="7516+ tests / 602 files">
+  <img src="https://img.shields.io/badge/i18n-19_locales-2941_keys-0EA5E9" alt="i18n 19 locales — 2941 keys">
+  <img src="https://img.shields.io/badge/Tests-7517%2B_%2F_602_files-22C55E" alt="7517+ tests / 602 files">
   <img src="https://img.shields.io/codecov/c/github/qnbs/WorldScript-Studio?logo=codecov&label=Coverage" alt="Codecov Coverage">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">
   <img src="https://img.shields.io/github/actions/workflow/status/qnbs/WorldScript-Studio/.github/workflows/ci.yml?branch=main&logo=github" alt="CI Status">
@@ -401,7 +401,7 @@ Infrastructure-level features that keep the app fast and extensible as projects 
 
 ### 🌐 Full Multi-Language Support
 
-Shipped UI locales with **2940 i18n keys** across all 19 languages — zero hardcoded user-facing strings:
+Shipped UI locales with **2941 i18n keys** across all 19 languages — zero hardcoded user-facing strings:
 
 - 🇩🇪 **German** (Deutsch)
 - 🇬🇧 **English**
@@ -510,8 +510,8 @@ The Settings → AI panel shows a live GPU status badge with adapter details and
 | **PDF Export**       | jsPDF                                                     | Client-side, configurable PDF document generation                    |
 | **Document Export**  | docx + jszip                                              | Word-compatible `.docx` generation (lazy-loaded)                     |
 | **PWA**              | Service Worker + Web App Manifest v3                     | Offline support, installability, Workbox chunking                    |
-| **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 2940 keys × 19 locales (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu/ru/ko Beta); EN fallback; `localStorage` persistence |
-| **Testing**          | Vitest 4.x (7516+ tests / 602 files) + Playwright E2E     | Unit/integration + cross-browser E2E; Stryker mutation (manual workflow)          |
+| **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 2941 keys × 19 locales (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu/ru/ko Beta); EN fallback; `localStorage` persistence |
+| **Testing**          | Vitest 4.x (7517+ tests / 602 files) + Playwright E2E     | Unit/integration + cross-browser E2E; Stryker mutation (manual workflow)          |
 | **Code Quality**     | Biome (lint + format) + TypeScript 7 (tsgo) strict       | `--error-on-warnings` in CI; zero `any` policy                      |
 | **Visualization**    | Force-directed graph                                      | Interactive character relationship network                           |
 | **Desktop**          | Tauri v2                                                  | Cross-platform installer; auto-updater via `latest.json`             |
@@ -549,7 +549,7 @@ WorldScript-Studio/
 │   ├── sw.js             # PWA Service Worker
 │   └── manifest.json     # PWA Web App Manifest v3
 ├── tests/
-│   ├── unit/             # Vitest unit tests (7516+ tests, 602 files) — count spans tests/, components/, packages/*/tests/, not just this folder
+│   ├── unit/             # Vitest unit tests (7517+ tests, 602 files) — count spans tests/, components/, packages/*/tests/, not just this folder
 │   │   ├── ai/           # aiSmallModules, aiCoreFallbackPaths
 │   │   └── settings/     # WebLlmPanel, AiSections
 │   └── e2e/              # Playwright specs + helpers.ts
@@ -714,9 +714,9 @@ The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Opt
 Raw bundle-budget ceilings (KB per uncompressed asset): entry **2500 KB**, vendor **6200 KB**, other JavaScript **2500 KB**, and WASM **30000 KB**.
 
 **Current test metrics (2026-09-07, source-synchronized; CI remains authoritative for pass/fail):**
-- **7516+ unit tests** across **602 test files** — CI is authoritative for pass/fail
+- **7517+ unit tests** across **602 test files** — CI is authoritative for pass/fail
 - Coverage thresholds: lines ≥ 80 · branches ≥ 66 · functions ≥ 72 · statements ≥ 78 — enforced in CI (see Codecov badge for live metrics)
-- i18n: **2940 keys × 19 locales** (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu/ru/ko Beta)
+- i18n: **2941 keys × 19 locales** (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu/ru/ko Beta)
 
 **CI-cloud-first workflow (recommended):** On constrained hardware run **`pnpm run lint && pnpm run i18n:check && pnpm run typecheck`** locally, then push and let CI handle coverage, E2E, Lighthouse, and Stryker. Authoritative numbers come from CI artifacts (Codecov, JUnit). After CI goes green, update the README badges and `AUDIT.md` quality-gate line from the reported metrics. See **[`docs/CI.md`](docs/CI.md) § Cloud CI-first vs local development** for the full post-merge doc-update checklist.
 

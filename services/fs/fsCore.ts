@@ -170,7 +170,7 @@ export function decompressJsonText(raw: string): string {
   return json;
 }
 
-// QNBS-v3 (Amazon Q): JSON.parse also wrapped — a bare SyntaxError would break the DecompressionError-only contract callers rely on.
+// QNBS-v3: JSON.parse also wrapped — a bare SyntaxError would break the DecompressionError-only contract callers rely on.
 export function decompressData<T>(raw: string): T {
   try {
     return JSON.parse(decompressJsonText(raw)) as T;

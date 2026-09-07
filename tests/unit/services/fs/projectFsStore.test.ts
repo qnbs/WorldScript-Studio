@@ -121,9 +121,11 @@ describe('FsProjectStore.loadProject — DA-01 fail-closed behavior', () => {
     await expect(promise).rejects.toMatchObject({ reason: 'io-error' });
   });
 
+  // QNBS-v3: explicit V1 admission keeps this source writable while legacy sources remain fenced.
   it('resolves the real project on a valid save with array-shaped characters/worlds', async () => {
     const { FsProjectStore } = await import('../../../../services/fs/projectFsStore');
     const validProject = {
+      schemaVersion: 1,
       title: 'My Book',
       logline: 'L',
       characters: [],
@@ -139,9 +141,11 @@ describe('FsProjectStore.loadProject — DA-01 fail-closed behavior', () => {
     });
   });
 
+  // QNBS-v3: EntityState-shaped V1 data remains editable after canonical admission.
   it('resolves the real project on a valid save with EntityState-shaped characters/worlds', async () => {
     const { FsProjectStore } = await import('../../../../services/fs/projectFsStore');
     const validProject = {
+      schemaVersion: 1,
       title: 'My Book',
       logline: 'L',
       characters: { ids: [], entities: {} },
@@ -191,15 +195,36 @@ describe('FsProjectStore.loadProject — DA-01 fail-closed behavior', () => {
     mockDesktopPlatform.filesystem.readTextFile.mockResolvedValue(source);
     const store = new FsProjectStore();
 
-    await expect(store.loadProject('legacy-id')).resolves.toMatchObject({
+    const loaded = await store.loadProject('legacy-id');
+    expect(loaded).toMatchObject({
       title: 'Legacy book',
       logline: 'L',
       characters: [],
       worlds: [],
       manuscript: [],
     });
+    expect(loaded).not.toHaveProperty('schemaVersion');
     expect(mockDesktopPlatform.filesystem.writeTextFile).not.toHaveBeenCalled();
     expect(mockDesktopPlatform.filesystem.rename).not.toHaveBeenCalled();
+  });
+
+  // QNBS-v3: legacy admission cannot let ordinary autosave normalize or rewrite its source before fencing.
+  it('rejects ordinary writeback after admitting a legacy project', async () => {
+    const { FsProjectStore } = await import('../../../../services/fs/projectFsStore');
+    const source =
+      '{"title":"Legacy book","logline":"L","characters":[],"worlds":[],"manuscript":[]}';
+    mockDesktopPlatform.filesystem.exists.mockResolvedValue(true);
+    mockDesktopPlatform.filesystem.readTextFile.mockResolvedValue(source);
+    const store = new FsProjectStore();
+
+    const loaded = await store.loadProject('legacy-id');
+    await expect(
+      store.saveProject({ ...loaded, title: 'Edited legacy book' } as never),
+    ).rejects.toMatchObject({
+      name: 'ProjectWritebackError',
+      projectId: 'legacy-id',
+    });
+    expect(mockDesktopPlatform.filesystem.writeTextFile).not.toHaveBeenCalled();
   });
 
   // QNBS-v3: unsupported versions must refuse editable filesystem authority without touching source.

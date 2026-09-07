@@ -144,6 +144,7 @@ describe('startup recovery rendering', () => {
     expect(renderedScreenProps().onReset).toEqual(expect.any(Function));
   });
 
+  // QNBS-v3: unsupported versions expose retry-only recovery so no destructive authority is offered.
   it('renders unsupported project versions without quarantine or reset authority', async () => {
     mockBackendKind.mockResolvedValue('filesystem');
     await renderProjectInitializationFailure(
