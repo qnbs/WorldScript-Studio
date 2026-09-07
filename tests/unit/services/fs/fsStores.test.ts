@@ -564,6 +564,43 @@ describe('FsProjectStore — projects', () => {
     expect(fake.bin.has('/app/projects/browser-project/binder/new.bin')).toBe(false);
   });
 
+  // QNBS-v3: an inspected CURRENT fallback source cannot release a shared ID-less legacy fence.
+  it('retains shared ID-less fallback fences when a CURRENT fallback source is inspected', async () => {
+    await store.saveProject({ ...project, id: 'project' } as never);
+    const legacyProject = {
+      title: 'ID-less Legacy',
+      logline: 'L',
+      manuscript: [],
+      characters: [],
+      worlds: [],
+    };
+    await fake.apis.mkdir('/app/projects/idless-legacy', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/idless-legacy/project.json',
+      JSON.stringify(legacyProject),
+    );
+
+    await store.loadProject('idless-legacy');
+    await store.loadProject('project');
+
+    await expect(
+      store.saveBinderAsset('project', 'ambiguous', new Uint8Array([1]).buffer, {
+        mimeType: 'application/octet-stream',
+        originalFileName: 'ambiguous.bin',
+        byteSize: 1,
+      }),
+    ).rejects.toMatchObject({ name: 'ProjectWritebackError' });
+    await expect(
+      store.saveStoryCodex({ projectId: 'project', entries: [{ name: 'ambiguous' }] } as never),
+    ).rejects.toMatchObject({ name: 'ProjectWritebackError' });
+    await expect(store.saveRagVectors('project', [{ id: 'ambiguous' }])).rejects.toMatchObject({
+      name: 'ProjectWritebackError',
+    });
+    expect(fake.bin.has('/app/projects/project/binder/ambiguous.bin')).toBe(false);
+    expect(fake.text.has('/app/projects/project/codex/codex.snap')).toBe(false);
+    expect(fake.text.has('/app/projects/project/codex/vectors.snap')).toBe(false);
+  });
+
   // QNBS-v3: authority is checked after queued work completes so a load cannot race a later mutation.
   it('rechecks legacy authority after a queued admission change', async () => {
     const legacyProject = {
@@ -1345,6 +1382,42 @@ describe('FsProjectStore — projects', () => {
     ).toMatchObject({ schemaVersion: 1, title: 'My Novel' });
   });
 
+  // QNBS-v3: raw snapshot version tokens must be admitted before JSON parsing can normalize them.
+  it.each([
+    [
+      'duplicate schemaVersion',
+      '{"schemaVersion":1,"schemaVersion":2,"id":"p1","title":"Raw","logline":"L","manuscript":[],"characters":[],"worlds":[]}',
+    ],
+    [
+      'unsafe numeric schemaVersion',
+      '{"schemaVersion":9007199254740993,"id":"p1","title":"Raw","logline":"L","manuscript":[],"characters":[],"worlds":[]}',
+    ],
+  ])('refuses %s snapshot tokens before normalization', async (_label, rawSnapshot) => {
+    await store.saveProject(project as never);
+    const current = await store.loadProject('p1');
+    const snapshotId = 9101;
+    fake.text.set(
+      `/app/snapshots/${snapshotId}.json`,
+      JSON.stringify({
+        id: snapshotId,
+        name: 'raw',
+        date: new Date().toISOString(),
+        wordCount: 0,
+        data: rawSnapshot,
+      }),
+    );
+
+    await expect(store.restoreSnapshot(snapshotId, current as never)).rejects.toMatchObject({
+      name: 'ProjectSnapshotRestoreError',
+      reason: 'snapshot-invalid',
+    });
+    expect(
+      decompressData<Record<string, unknown>>(
+        fake.text.get('/app/projects/p1/project.json') as string,
+      ),
+    ).toMatchObject({ schemaVersion: 1, title: 'My Novel' });
+  });
+
   // QNBS-v3: pre-marker snapshots remain recoverable through the non-destructive legacy projection.
   it('restores a legacy snapshot through canonical in-memory admission', async () => {
     await store.saveProject(project as never);
@@ -1483,6 +1556,36 @@ describe('FsProjectStore — projects', () => {
     await restarted.saveProject({ ...reloaded, title: 'Renamed Again' } as never);
     expect(fake.text.has('/app/projects/Legacy-Novel/project.json')).toBe(true);
     expect(fake.text.has('/app/projects/Renamed-Again/project.json')).toBe(false);
+  });
+
+  // QNBS-v3: a CURRENT ID-less source remains authoritative across repeated title-changing saves.
+  it('retains a CURRENT ID-less source binding across repeated saves', async () => {
+    const currentProject = {
+      schemaVersion: 1,
+      title: 'Current Novel',
+      logline: 'L',
+      manuscript: [],
+      characters: [],
+      worlds: [],
+    };
+    await fake.apis.mkdir('/app/projects/current-source', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/current-source/project.json',
+      compressData(currentProject),
+    );
+
+    const loaded = await store.loadProject('current-source');
+    await store.saveProject({ ...loaded, title: 'First Rename' } as never);
+    await store.saveProject({ ...loaded, title: 'Second Rename' } as never);
+
+    expect(
+      decompressData<Record<string, unknown>>(
+        fake.text.get('/app/projects/current-source/project.json') as string,
+      ),
+    ).toMatchObject({ schemaVersion: 1, title: 'Second Rename' });
+    expect(fake.text.has('/app/projects/First-Rename/project.json')).toBe(false);
+    expect(fake.text.has('/app/projects/Second-Rename/project.json')).toBe(false);
+    expect(fake.text.get('/app/config/active-project-id.txt')).toBe('current-source');
   });
 
   // QNBS-v3: legacy missing-ID saves preserve historical Binder/Codex fallbacks without inventing cross-project ownership.

@@ -213,6 +213,8 @@ function withCurrentSchemaVersion(project: StoryProject): StoryProject {
 type LegacyAdmissionRecord = {
   sourceDirectoryId: string;
   persistedProjectId: string | null;
+  sourceOwnedWriterIdentities: ReadonlySet<string>;
+  sharedFallbackWriterIdentities: ReadonlySet<string>;
   writerIdentities: ReadonlySet<string>;
   editable: boolean;
 };
@@ -233,24 +235,31 @@ export class FsProjectStore extends FsAssetStore {
 
   private registerLegacyAdmission(sourceDirectoryId: string, project: StoryProject): void {
     const persistedId = persistedProjectId(project);
-    const writerIdentities = new Set<string>([sourceDirectoryId]);
+    const sourceOwnedWriterIdentities = new Set<string>([sourceDirectoryId]);
+    const sharedFallbackWriterIdentities = new Set<string>();
     if (typeof persistedId === 'string') {
-      writerIdentities.add(persistedId);
+      sourceOwnedWriterIdentities.add(persistedId);
       const safePersistedId = projectPathSegment(persistedId);
-      if (safePersistedId) writerIdentities.add(safePersistedId);
+      if (safePersistedId) sourceOwnedWriterIdentities.add(safePersistedId);
       if (!safePersistedId) {
         for (const fallback of LEGACY_FALLBACK_WRITER_IDENTITIES) {
-          writerIdentities.add(fallback);
+          sourceOwnedWriterIdentities.add(fallback);
         }
       }
     } else {
       for (const fallback of LEGACY_FALLBACK_WRITER_IDENTITIES) {
-        writerIdentities.add(fallback);
+        sharedFallbackWriterIdentities.add(fallback);
       }
     }
+    const writerIdentities = new Set([
+      ...sourceOwnedWriterIdentities,
+      ...sharedFallbackWriterIdentities,
+    ]);
     this.legacyAdmissionRecords.set(sourceDirectoryId, {
       sourceDirectoryId,
       persistedProjectId: typeof persistedId === 'string' ? persistedId : null,
+      sourceOwnedWriterIdentities,
+      sharedFallbackWriterIdentities,
       writerIdentities,
       editable: false,
     });
@@ -259,15 +268,26 @@ export class FsProjectStore extends FsAssetStore {
   private clearLegacyAdmissionForSource(sourceDirectoryId: string): void {
     this.legacyAdmissionRecords.delete(sourceDirectoryId);
     for (const [recordSource, record] of this.legacyAdmissionRecords) {
-      const writerIdentities = new Set(
-        [...record.writerIdentities].filter(
+      const sourceOwnedWriterIdentities = new Set(
+        [...record.sourceOwnedWriterIdentities].filter(
           (identity) => projectPathSegment(identity) !== sourceDirectoryId,
         ),
       );
+      if (sourceOwnedWriterIdentities.size === record.sourceOwnedWriterIdentities.size) {
+        continue;
+      }
+      const writerIdentities = new Set([
+        ...sourceOwnedWriterIdentities,
+        ...record.sharedFallbackWriterIdentities,
+      ]);
       if (writerIdentities.size === 0) {
         this.legacyAdmissionRecords.delete(recordSource);
-      } else if (writerIdentities.size !== record.writerIdentities.size) {
-        this.legacyAdmissionRecords.set(recordSource, { ...record, writerIdentities });
+      } else {
+        this.legacyAdmissionRecords.set(recordSource, {
+          ...record,
+          sourceOwnedWriterIdentities,
+          writerIdentities,
+        });
       }
     }
   }
@@ -301,6 +321,14 @@ export class FsProjectStore extends FsAssetStore {
   protected override async assertProjectWriteAuthority(projectId: string): Promise<void> {
     const admissions = this.legacyAdmissionsForWriter(projectId);
     if (admissions.length === 0) return;
+
+    const aliases = this.writerIdentityAliases(projectId);
+    const hasSharedFallbackConflict = admissions.some((record) =>
+      [...aliases].some((identity) => record.sharedFallbackWriterIdentities.has(identity)),
+    );
+    if (hasSharedFallbackConflict) {
+      throw new ProjectWritebackError(projectId);
+    }
 
     const sourceDirectoryId = projectPathSegment(projectId);
     if (sourceDirectoryId && (await this.currentProjectSourceIsAdmitted(sourceDirectoryId))) {
@@ -586,18 +614,22 @@ export class FsProjectStore extends FsAssetStore {
       throw new ProjectSnapshotRestoreError('target-unavailable');
     }
 
-    const snapshot = await super.getSnapshotData(snapshotId);
-    if (!looksLikeStoryProject(snapshot)) {
-      throw new ProjectSnapshotRestoreError(
-        snapshot === null ? 'snapshot-unavailable' : 'snapshot-invalid',
-      );
+    let snapshotJson: string | null;
+    try {
+      snapshotJson = await this.getSnapshotJsonText(snapshotId);
+    } catch (error) {
+      logger.error('Failed to read snapshot for restore', {
+        snapshotId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new ProjectSnapshotRestoreError('snapshot-unavailable');
+    }
+    if (snapshotJson === null) {
+      throw new ProjectSnapshotRestoreError('snapshot-unavailable');
     }
 
-    // QNBS-v3: snapshots must pass the same canonical version gate before Redux can observe them.
-    const snapshotAdmission = admitCanonicalProjectDocument(
-      JSON.stringify(snapshot),
-      storedProjectSchema,
-    );
+    // QNBS-v3: admit decompressed snapshot text before parsing so duplicate and unsafe version tokens remain visible to the canonical gate.
+    const snapshotAdmission = admitCanonicalProjectDocument(snapshotJson, storedProjectSchema);
     const admittedSnapshot = snapshotAdmission.canonical?.projection;
     if (snapshotAdmission.status === 'REFUSED' || !admittedSnapshot) {
       throw new ProjectSnapshotRestoreError('snapshot-invalid');
@@ -699,7 +731,9 @@ export class FsProjectStore extends FsAssetStore {
     }
 
     await this.assertProjectWriteAuthority(projectId);
-    this.verifiedLegacyProjectDirectories.delete(projectId);
+    if (suppliedProjectId) {
+      this.verifiedLegacyProjectDirectories.delete(projectId);
+    }
 
     projectToPersist = withCurrentSchemaVersion(projectToPersist);
 
