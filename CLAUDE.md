@@ -12,3 +12,14 @@ verified specialist mappings:
 - `hooks/useVoice.ts` → `services/voice/CLAUDE.md`
 - `hooks/useGlobalCopilot.ts` → `services/copilot/CLAUDE.md`
 - `features/project/thunks/plotBoardAiThunks.ts` → `features/plotBoard/CLAUDE.md`
+- Plot Board external callers: `services/plotBoardService.ts`, `hooks/usePlotBoardAi.ts`,
+  `components/scene-board/PlotMinimap.tsx` → `features/plotBoard/CLAUDE.md`
+- Voice external callers: `hooks/usePushToTalk.ts`, `hooks/useVoiceDictation.ts`,
+  `hooks/useVoiceAccessibility.ts` → `services/voice/CLAUDE.md`
+- Copilot external callers: `features/copilot/copilotSlice.ts`, `components/copilot/**/*`,
+  `App.tsx` → `services/copilot/CLAUDE.md`
+- ProForge external callers: `features/proForge/proForgeSlice.ts`, `features/proForge/types.ts`,
+  `hooks/useProForgeOrchestrator.ts`, `app/storeRef.ts` → `services/proForge/CLAUDE.md`
+- Service integration callers: `features/sceneComments/sceneCommentsSlice.ts`,
+  `features/progressTracker/progressTrackerSlice.ts`, `hooks/useLanguageToolCheck.ts`,
+  `config/csp-connect-src.json` → `services/CLAUDE.md`

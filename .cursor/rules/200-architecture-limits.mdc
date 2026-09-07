@@ -1,6 +1,6 @@
 ---
 description: Keep files small and reuse logic via services,hooks,and feature slices
-globs: App.tsx,app/**/*.ts,components/**/*.tsx,contexts/**/*.ts,contexts/**/*.tsx,features/**/*.ts,hooks/**/*.ts,services/**/*.ts,packages/**/*.ts,packages/**/*.tsx
+globs: App.tsx,app/**/*.ts,components/**/*.tsx,contexts/**/*.ts,contexts/**/*.tsx,features/**/*.ts,hooks/**/*.ts,services/**/*.ts,packages/**/*.ts,packages/**/*.tsx,vite.config.ts
 alwaysApply: false
 ---
 
@@ -17,6 +17,7 @@ alwaysApply: false
 - **Redux** für persistierten App-State; **Zustand** nur transient (`app/transientUiStore.ts`).
 - **Undo:** `redux-undo` am Projekt-Slice; Plot-Board-**Viewport** lokal — Verbindungen/Subplots im `projectSlice` wenn undo-relevant.
 - Schwere Views: `React.lazy` in `App.tsx`; Plot-Board-Subchunks, ForceGraph, Collaboration lazy; `listenerMiddleware` + `aiApi` dynamic import für DuckDB/RAG/Provider.
+- Neue schwere optionale Chunks müssen in `vite.config.ts` gemeinsam in `manualChunks` und PWA-`globIgnores` gepflegt werden; siehe ADR 0002, damit sie nicht service-worker-vorinstalliert werden.
 - ProForge orchestration stays behind `hooks/useProForgeOrchestrator.ts`; do not instantiate it in components.
 - Voice uses the existing engine abstractions and `VoiceCommandService`; honor its feature/settings gates.
 

@@ -45,8 +45,9 @@ needs their detail. Dynamic facts belong in `package.json`, `.nvmrc`, scripts, o
 - User-visible copy uses the i18n system. Add keys to canonical `locales/*` sources and run
   the repository i18n generator/check; do not hardcode UI strings or stale locale counts.
 - Do not use Tailwind `dark:` classes. Themes are body-class and semantic CSS-token driven.
-- `components/ui/**` must remain platform-neutral: do not import `@tauri-apps/api` there;
-  use the existing service/platform abstractions.
+- First-party TS/TSX must not import `@tauri-apps/*` directly. Route desktop capabilities through
+  `desktopPlatform` / `@domain/desktop-contracts`; the approved boundary and exceptions are
+  defined by `scripts/check-tauri-import-boundary.mjs`. `components/ui/**` remains platform-neutral.
 - New feature flags need the repository’s relevant E2E coverage, but heavy E2E execution is
   CI-only on this machine. Do not invent scattered `if (true)` feature gates.
 - For non-trivial TypeScript/TSX/CSS changes, add one short physical-line `QNBS-v3:` rationale
@@ -66,6 +67,9 @@ binding roadmap/ADR; do not copy roadmap prose into agent context.
 For persistence, AI, filesystem, or encryption work, inspect the relevant source and the
 path-scoped Cursor/nested Claude rule first. Deep references include `docs/CI.md`,
 `docs/BEST-PRACTICES.md`, `docs/IDB-ENCRYPTION.md`, and the native ledger.
+
+Vendor-fork edits under `packages/collab-transport` follow `VENDOR-FORKS.md` and
+`pnpm run verify:vendor`; do not recreate the removed upstream patch or a parallel fork.
 
 ## PR, review, signing, and merge work
 
