@@ -115,6 +115,26 @@ describe('libraryBackupService — partial corruption (DA-01)', () => {
     expect(corrupt?.project).toBeNull();
   });
 
+  // QNBS-v3: unsupported projects must never be represented as a successful backup with an omitted payload.
+  it('fails visibly when a project uses an unsupported schema version', async () => {
+    const { storageService } = await import('../../services/storageService');
+    const { ProjectLoadError } = await import('../../services/fs/projectFsStore');
+    vi.mocked(storageService.listProjects).mockResolvedValue(['future']);
+    vi.mocked(storageService.loadProject).mockRejectedValue(
+      new ProjectLoadError(
+        'unsupported-version',
+        'The saved project uses a schema version this build cannot edit.',
+        'future',
+        'FUTURE',
+      ),
+    );
+    const { collectLibraryBackupPayload } = await import('../../services/libraryBackupService');
+    await expect(collectLibraryBackupPayload()).rejects.toMatchObject({
+      reason: 'unsupported-version',
+      projectId: 'future',
+    });
+  });
+
   // QNBS-v3 (codex P1): an unexpected (non-ProjectLoadError) failure must still surface, not be silently swallowed as if it were an ordinary corrupt project.
   it('rethrows an unexpected (non-ProjectLoadError) failure instead of silently swallowing it', async () => {
     const { storageService } = await import('../../services/storageService');

@@ -94,7 +94,7 @@ export class FsAssetStore extends FsSnapshotStore {
       const metaOut: BinderAssetMeta = { ...meta, byteSize: data.byteLength };
       await writeFileAtomic(apis, binFile, new Uint8Array(data));
       await writeTextFileAtomic(apis, metaFile, JSON.stringify(metaOut));
-    });
+    }, projectId);
   }
 
   async getBinderAsset(projectId: string, assetId: string): Promise<BinderAssetPayload | null> {
@@ -129,8 +129,12 @@ export class FsAssetStore extends FsSnapshotStore {
 
   async deleteBinderAsset(projectId: string, assetId: string): Promise<void> {
     try {
-      await this.withLegacyRoutingOperation(() => this.deleteBinderAssetStrict(projectId, assetId));
+      await this.withLegacyRoutingOperation(
+        () => this.deleteBinderAssetStrict(projectId, assetId),
+        projectId,
+      );
     } catch (error) {
+      if (this.isProjectWriteAuthorityError(error)) throw error;
       logger.warn('deleteBinderAsset failed:', error);
     }
   }
@@ -208,6 +212,6 @@ export class FsAssetStore extends FsSnapshotStore {
           }
         }),
       );
-    });
+    }, projectId);
   }
 }

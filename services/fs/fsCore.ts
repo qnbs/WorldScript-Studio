@@ -154,25 +154,32 @@ export class DecompressionError extends Error {
   }
 }
 
-// QNBS-v3 (Amazon Q): JSON.parse also wrapped — a bare SyntaxError would break the DecompressionError-only contract callers rely on.
-export function decompressData<T>(raw: string): T {
+/**
+ * Decodes a stored payload while retaining the decompressed JSON text as the lossless admission
+ * input. The typed helper below remains the compatibility path for non-project stores.
+ */
+export function decompressJsonText(raw: string): string {
+  let json = raw;
   if (raw.startsWith(LZ_PREFIX)) {
     const decompressed = LZString.decompressFromUTF16(raw.slice(LZ_PREFIX.length));
     if (decompressed === null) {
       throw new DecompressionError();
     }
-    try {
-      return JSON.parse(decompressed) as T;
-    } catch {
-      throw new DecompressionError(
-        'Failed to parse decompressed data as JSON — the payload is corrupt.',
-      );
-    }
+    json = decompressed;
   }
+  return json;
+}
+
+// QNBS-v3: JSON.parse also wrapped — a bare SyntaxError would break the DecompressionError-only contract callers rely on.
+export function decompressData<T>(raw: string): T {
   try {
-    return JSON.parse(raw) as T;
+    return JSON.parse(decompressJsonText(raw)) as T;
   } catch {
-    throw new DecompressionError('Failed to parse stored data as JSON — the payload is corrupt.');
+    throw new DecompressionError(
+      raw.startsWith(LZ_PREFIX)
+        ? 'Failed to parse decompressed data as JSON — the payload is corrupt.'
+        : 'Failed to parse stored data as JSON — the payload is corrupt.',
+    );
   }
 }
 
@@ -336,8 +343,18 @@ export class FsCore {
     return loadTauriApis();
   }
 
+  // QNBS-v3: subclasses re-evaluate project authority only after the serialized operation begins.
+  protected async assertProjectWriteAuthority(_projectId: string): Promise<void> {}
+
+  protected isProjectWriteAuthorityError(_error: unknown): boolean {
+    return false;
+  }
+
   // QNBS-v3: serialize complete filesystem operations so legacy route ownership cannot change between awaited mutations.
-  protected async withLegacyRoutingOperation<T>(operation: () => Promise<T>): Promise<T> {
+  protected async withLegacyRoutingOperation<T>(
+    operation: () => Promise<T>,
+    projectId?: string,
+  ): Promise<T> {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => {
       release = resolve;
@@ -347,6 +364,9 @@ export class FsCore {
     this.legacyRoutingOperationTail = current;
     await previous;
     try {
+      if (projectId !== undefined) {
+        await this.assertProjectWriteAuthority(projectId);
+      }
       return await operation();
     } finally {
       if (this.legacyRoutingOperationTail === current) {

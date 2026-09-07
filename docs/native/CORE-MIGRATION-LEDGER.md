@@ -21,6 +21,11 @@ scope shifts — it is a living decision record, not a one-time snapshot.
 
 ## Decisions this table records
 
+- **Row 9 current implementation truth:** the filesystem project-load ingress now decodes the
+  original JSON text before applying the canonical version classifier and refuses future,
+  migration-gap, and malformed payloads without rewriting the source. Legacy input is admitted
+  in memory only; durable migration, raw-carrier write-back, generation fencing, and the remaining
+  universal ingress/egress paths are still incomplete.
 - **Wave 2 first slice touches only rows 1-3**, narrowly: project schema, validation, and a
   plaintext (no compression, no atomicity guarantee) fs load/save round-trip. This is deliberately
   the smallest slice that satisfies Wave 2's stated exit criterion ("representative project

@@ -134,6 +134,8 @@ export async function collectLibraryBackupPayload(
     } catch (error) {
       // QNBS-v3 (codex P1): only the expected corruption/I-O case is swallowed — an unexpected bug must still surface, not be silently absorbed as "skip this project".
       if (!(error instanceof ProjectLoadError)) throw error;
+      // QNBS-v3: an unsupported project must make the backup fail visibly instead of producing an incomplete archive.
+      if (error.reason === 'unsupported-version') throw error;
       logger.warn('collectLibraryBackupPayload: skipping unreadable project', {
         projectId,
         reason: error.reason,

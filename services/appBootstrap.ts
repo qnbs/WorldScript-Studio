@@ -29,7 +29,7 @@ export async function loadPersistedRootState(): Promise<PersistedRootState | und
   // QNBS-v3 (#332): prefer the last-saved project's marker over projectIds[0] — readDir() order isn't recency, so an arbitrary first entry could hydrate a stale project. Falls back to projectIds[0] for pre-marker installs or a since-deleted active project.
   const projectId =
     activeProjectId && projectIds.includes(activeProjectId) ? activeProjectId : projectIds[0];
-  const project = projectId ? await storageService.loadProject(projectId) : null;
+  const project = projectId ? await storageService.loadProjectForEditing(projectId) : null;
   if (!settings && !project) return undefined;
   const result: PersistedRootState = {};
   if (settings) result.settings = settings;
