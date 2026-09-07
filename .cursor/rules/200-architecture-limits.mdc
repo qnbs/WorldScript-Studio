@@ -1,24 +1,24 @@
 ---
 description: Keep files small and reuse logic via services,hooks,and feature slices
-globs: **/*
+globs: app/**/*.ts,components/**/*.tsx,contexts/**/*.tsx,features/**/*.ts,hooks/**/*.ts,services/**/*.ts,packages/**/*.ts,packages/**/*.tsx
 alwaysApply: false
 ---
 
-# Architektur: KISS, DRY, Grenzen
+# Architecture limits
 
 ## Prinzipien
 
 - **KISS:** Einfachste Lösung mit `strict` Types und testbaren Seams.
 - **DRY:** Logik in `services/`, `hooks/`, `features/*/thunks` — nicht in Views duplizieren.
 
-## View-Muster (StoryCraft)
+## View pattern (WorldScript Studio)
 
-- **Component + Hook + Context:** Rendering in `components/*View.tsx`, Logik in `hooks/use*View.ts`, Kontext für Kindbaum.
+- **Component + Hook + Context:** rendering in `components/*View.tsx`, logic in `hooks/use*View.ts`, context for child trees.
 - **Redux** für persistierten App-State; **Zustand** nur transient (`app/transientUiStore.ts`).
 - **Undo:** `redux-undo` am Projekt-Slice; Plot-Board-**Viewport** lokal — Verbindungen/Subplots im `projectSlice` wenn undo-relevant.
 - Schwere Views: `React.lazy` in `App.tsx`; Plot-Board-Subchunks, ForceGraph, Collaboration lazy; `listenerMiddleware` + `aiApi` dynamic import für DuckDB/RAG/Provider.
-- **ProForge Pipeline** (`services/proForge/`, `features/proForge/`, `components/proForge/`): 8-stage Agentic-Pipeline hinter `enableProForge`-Flag. Orchestrator nie direkt in Komponenten instantiieren — über `hooks/useProForgeOrchestrator.ts`.
-- **Voice** (`services/voice/`): Abstract-Engine-Pattern; `VoiceCommandService` als Singleton hinter `enableVoiceSupport`-Flag.
+- ProForge orchestration stays behind `hooks/useProForgeOrchestrator.ts`; do not instantiate it in components.
+- Voice uses the existing engine abstractions and `VoiceCommandService`; honor its feature/settings gates.
 
 ## Dateigrößen
 
@@ -32,9 +32,8 @@ alwaysApply: false
 
 ## Feature Flags
 
-- Experimentelles über `features/featureFlags/featureFlagsSlice.ts` (19 Flags) — nicht verstreute `if (true)`-Hacks.
-- Standard **ein**: `enableCodexAutoTracking`, `enableCrossProjectSearch`, `enablePlotBoardV2`. Alle anderen: aus.
-- Major-Features (Voice, ProForge, DuckDB, LoRA, CloudSync, PluginSystem) müssen per Flag ein-/ausgeschaltet werden.
+- Experimental behavior belongs in `features/featureFlags/featureFlagsSlice.ts`; do not use scattered `if (true)` hacks.
+- Read current flag defaults from that slice; do not duplicate a stale flag count or default table in rules.
 
 <example>
 Manuskript >700 Zeilen: `ManuscriptInspector.tsx` + `hooks/useManuscript.ts`; Plot-Board-Canvas eigene Datei unter `components/plotBoard/`.

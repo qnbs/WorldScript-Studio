@@ -1,6 +1,6 @@
 ---
 description: Enforce accessible,i18n-ready React UI in shared components
-globs: components/**/*.tsx
+globs: components/**/*.tsx,hooks/**/*.ts,packages/ui/**/*.ts,packages/ui/**/*.tsx,index.css,stories/**/*
 alwaysApply: false
 ---
 
@@ -32,14 +32,15 @@ alwaysApply: false
 - Palette: keine zweite Open-State-Quelle neben `transientUiStore`.
 - Tooltips/EmptyState aus `components/ui/`; Toasts mit `commandId` wo passend.
 
-## Styling & Hosts
+## Styling and platform boundary
 
 - Tailwind; Inline nur für gemessene Werte.
-- **Keine** `@tauri-apps/api` in UI-Atoms — Services/Hooks.
+- No `dark:` Tailwind classes; use body themes and semantic CSS tokens.
+- No `@tauri-apps/api` in UI atoms; use services/hooks and the platform abstraction.
 
 ## Storybook
 
-- Neue Primitive: Story + **addon-a11y** prüfen (`pnpm run storybook`).
+- Neue Primitive need a story and **addon-a11y** coverage; the full Storybook runner is CI work.
 
 <example>
 Neues Panel: `Modal` + i18n-Titel; Fokus zurück auf Trigger; Tastatur-Reihenfolge in Scene Board wie `moveManuscriptSectionWithinAct`.

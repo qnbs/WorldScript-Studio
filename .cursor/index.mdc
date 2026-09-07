@@ -1,54 +1,18 @@
 ---
-description: Project Manifest and Global Architecture
-alwaysApply: true
+description: Open the canonical repository guidance and relevant specialist rules on demand
+globs: ~
+alwaysApply: false
 ---
 
-# StoryCraft Studio — Manifest
+# Cursor context index
 
-**Zweck:** Offline-first Schreib- und Erzählwerkzeug (v1.3+): Dashboard, Manuskript, Szenenboard, Plot Board, Charaktergraph, Version Control, KI-Copilot — **kein Ghostwriting-Fokus**. Daten lokal; Privacy-first; Cloud-KI nur nutzergetriggert.
+`AGENTS.md` is the canonical repository-wide rule source. Load it for repository work, then
+load only the matching `.cursor/rules/*.mdc` rule and nearest nested `CLAUDE.md` for the paths
+being changed.
 
-**Frontend:** React 19, Vite 8, TypeScript 6 (`strict`, `exactOptionalPropertyTypes`, restrike Index/Switch). Alias `@` → Repo-Root. **pnpm 10** Workspace (`packages/*`); Node ≥22. Optional **Turbo** (`*:turbo`-Skripte).
+Useful deep references:
 
-**State:** Redux Toolkit + `redux-undo` (Projekt/Undo); **Zustand** für transientes UI (`app/transientUiStore.ts` — z. B. Command-Palette). Listener-Middleware für Auto-Save/Side-Effects.
-
-**Persistenz:** Dual IndexedDB (`dbService.ts`: State vs. Data, Migration, LZ-String, AES-GCM für Keys); **`storageService` → `storageBackend`** (Web/Tauri, Binder-Blobs, typisiertes Envelope). Kein serverseitiges ORM.
-
-**KI (Hybrid):** `@google/genai` + **Vercel AI SDK** (`ai`, `@ai-sdk/*`); Orchestrierung `services/ai/` (Strangler) + Legacy `aiProviderService.ts` / `geminiService.ts`. **RAG assembly:** `services/ragPromptAssembly.ts` (Writer, Plot Board, Consistency pattern). DuckDB `rag_chunks.embedding` (384-dim). Lokal: Ollama, WebLLM/ONNX/Transformers (`packages/ai-core`). Thunks: `features/project/thunks/`.
-
-**Desktop:** Tauri 2 (`src-tauri`); `@tauri-apps/api` im Vite-Bundle **external**; FS/Dialog nur über Services — UI-Atoms ohne direkte Tauri-Imports.
-
-**Kollaboration:** Yjs + `y-webrtc` (`collaborationService.ts`); Signaling: `settings.collaboration.webrtcSignalingUrls`; CSP `connect-src` für benutzerdefinierte `wss:`/`https:`.
-
-**UI:** Tailwind 4 (`@tailwindcss/vite`), Tokens optional `@domain/ui`; Primitive `components/ui/*`. Storybook 10 + **addon-a11y**. Biome 2 (`--error-on-warnings`), `lineWidth` 100.
-
-**PWA:** `vite-plugin-pwa`, `injectManifest`, `public/sw.js` (Version-Sync via `scripts/sync-sw-version.mjs`).
-
-**i18n:** Quelle `locales/<lang>/*.json` (de, en, fr, es, it); Runtime **`public/locales/<lang>/bundle.json`** via `pnpm run i18n:bundle` / `i18n:check` + `content:guard`. Keine hardcodierten UI-Strings.
-
-**Tests:** Vitest 4 (jsdom, `tests/setup.ts`, `maxWorkers: 1`); Coverage-Schwellen **63/55/54/62** % (lines/branches/functions/statements). E2E Playwright **CI-first** (`CI=true`). Stryker informativ. Siehe [`docs/CI.md`](../docs/CI.md).
-
-**Qualität (lokal schnell):** `pnpm run lint`, `typecheck`, `i18n:check`; optional `pnpm exec vitest run` **ohne** `--coverage`. Schwere Gates (E2E, LHCI, Coverage) = GitHub Actions.
-
-**Barrierefreiheit:** `LiveRegionProvider` / `useAnnounce()`; Settings-Presets + Zod (`accessibilitySchema.ts`); [`docs/ACCESSIBILITY.md`](../docs/ACCESSIBILITY.md); E2E [`tests/e2e/a11y.spec.ts`](../tests/e2e/a11y.spec.ts).
-
-**Command Center:** `services/commands/` → Palette; `CommandExecutorContext`; Shortcuts `useGlobalKeyboardShortcuts` + `services/keyboard/`; Hilfe `helpCatalog.ts` + `helpDocRetrieval.ts` + `tryActionId`; Settings-Guide-Kategorie `experimental` für 12 Feature-Flags.
-
-**v1.10:** Mobile-Nav (Scene Board), Branches ≥55 %, Help-Artikel (Plot Board v2, Hybrid RAG, Tauri). v1.9: Lazy cold-start (`duckdbListenerLoader`, deferred `aiApi`), Help/Settings-Hub, Tauri menu/window-state/updater — [`docs/SPRINT-V1.10.md`](../docs/SPRINT-V1.10.md).
-
-**Pfad-Konventionen:** `app/`, `components/`, `features/*`, `hooks/`, `services/`, `packages/*`, `types.ts`, `tests/`.
-
-## Cursor-Regelkatalog
-
-| Datei | Wann |
-|-------|------|
-| [`.cursorrules`](../.cursorrules) | QNBS-Masterprompt, Kommentar-Konvention |
-| [`000-cursor-rules.mdc`](rules/000-cursor-rules.mdc) | Neue/geänderte `.mdc` |
-| [`001-core-security.mdc`](rules/001-core-security.mdc) | Secrets, Logs, CSP |
-| [`100-ai-providers-and-storage.mdc`](rules/100-ai-providers-and-storage.mdc) | KI, IDB, Storage |
-| [`150-i18n-and-content.mdc`](rules/150-i18n-and-content.mdc) | Locales, Copy, Templates |
-| [`200-architecture-limits.mdc`](rules/200-architecture-limits.mdc) | KISS/DRY, Dateigrößen |
-| [`300-ui-components.mdc`](rules/300-ui-components.mdc) | React UI, A11y |
-| [`800-testing-standards.mdc`](rules/800-testing-standards.mdc) | Vitest, E2E, CI-first |
-| [`850-mcp-and-prd.mdc`](rules/850-mcp-and-prd.mdc) | Roadmap, MCP, Doku-Hub |
-
-**Maintainer-Doku:** [`docs/BEST-PRACTICES.md`](../docs/BEST-PRACTICES.md), [`AUDIT.md`](../AUDIT.md), [`ROADMAP.md`](../ROADMAP.md). Nach größeren Code-Änderungen optional `pnpm run graphify:update`.
+- `README.md` / `CONTRIBUTING.md` — product and setup
+- `docs/CI.md` / `docs/PR-CI-MERGE-WORKFLOW.md` — CI and PR operations
+- `docs/native/CORE-MIGRATION-LEDGER.md` — native direction
+- `docs/graphify.md` / `docs/codegraph.md` — on-demand architecture investigation

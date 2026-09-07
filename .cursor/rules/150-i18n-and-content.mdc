@@ -8,8 +8,8 @@ alwaysApply: false
 
 ## Schlüssel & Bundles
 
-- Quelle: **`locales/<lang>/*.json`** (de, en, fr, es, it) — **alle fünf** Locales bei neuen Keys.
-- Runtime: **`public/locales/<lang>/bundle.json`** via `node scripts/build-i18n.mjs` (läuft in `predev` / `i18n:check`).
+- Source: **`locales/<lang>/*.json`** for all 19 repository locales; add every new key to every locale tree.
+- Runtime: **`public/locales/<lang>/bundle.json`** via `node scripts/build-i18n.mjs` (also used by `i18n:check`).
 - CI: **`pnpm run i18n:check`** (Key-Parität + Bundle + `content:guard`).
 - UI-Text nur als **Übersetzungsschlüssel** (Dot-Notation), nie hardcodiert in TSX — außer Dev-Debug.
 
@@ -21,19 +21,19 @@ alwaysApply: false
 ## Community & Help
 
 - Templates: kanonisches **Englisch** in `community-templates/index.json` + Spiegel unter `public/community-templates/`; Zod in `fetchCommunityTemplates`.
-- Help-Struktur: **`services/help/helpCatalog.ts`** (nicht `help.categories` in JSON); Texte in `locales/<lang>/help.json`. Neue Artikel: Katalog + alle 5 Locales (siehe `scripts/help-extra-keys.json`, `scripts/help-locales-es-fr-it.json`).
+- Help structure: **`services/help/helpCatalog.ts`** (not `help.categories` in JSON); text lives in `locales/<lang>/help.json`. New articles require the catalog plus every locale tree.
 - Help-Artikel: **`tryActionId`** für Palette/Navigation; Suche über `helpSearch.ts`; Demo-Feedback über Toasts, nicht `alert`.
 
 ## PR-Checkliste
 
-1. Keys in allen Locales
+1. Keys in all 19 locale trees
 2. `pnpm run i18n:check` lokal (Quick-Tier)
 3. Keine Secrets/PII in JSON-Beispielen
 
 <example>
-Neuer Settings-String: Key in `locales/en/settings.json` + de/fr/es/it; `i18n:check` grün; Help-Link mit `tryActionId: 'nav-settings'`.
+New Settings copy: key in every `locales/*/settings.json`, rebuild bundles, and keep `i18n:check` green.
 </example>
 
 <example type="invalid">
-Nur `en` befüllt; UI zeigt rohe Keys weil `bundle.json` nicht gebaut; deutscher Fließtext direkt in `components/Dashboard.tsx`.
+Only `en` updated; runtime bundles not rebuilt; or user-visible text hardcoded in a component.
 </example>

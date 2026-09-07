@@ -1,6 +1,6 @@
 ---
 description: Apply hybrid AI,IndexedDB,and storage patterns when editing services or features
-globs: services/**/*.ts,features/**/*.ts,packages/ai-core/**/*.ts
+globs: services/ai/**/*.ts,services/aiProviderService.ts,services/geminiService.ts,services/localAiFacade.ts,services/localRag*.ts,services/rag*.ts,services/dbService.ts,services/storage/**/*.ts,services/duckdb/**/*.ts,packages/ai-core/**/*.ts
 alwaysApply: false
 ---
 
@@ -10,7 +10,7 @@ alwaysApply: false
 
 - Einstieg **`services/ai/index.ts`**: Strangler neben Legacy; Writer-Streaming → **`writer`-Slice**, Manuskript erst nach **Accept**.
 - Netzwerk-KI: **`aiProviderService.ts`**, **`geminiService.ts`** — keine parallele SDK-Init in Komponenten.
-- Vercel AI SDK (`ai`, `@ai-sdk/google`, `@ai-sdk/openai`): neue Pfade über `services/ai/` und Hooks (`useStoryCraftAI` o. ä.), nicht doppelte Retry-Logik.
+- Vercel AI SDK (`ai`, `@ai-sdk/google`, `@ai-sdk/openai`): new paths belong in `services/ai/` and `hooks/useWorldScriptAI.ts`; do not duplicate retry logic.
 - **`assertCloudAiAllowed`:** Cloud nur wenn Policy/Settings es erlauben.
 
 ## Hybrid & lokale Inferenz

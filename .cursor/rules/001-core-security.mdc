@@ -1,10 +1,10 @@
 ---
 description: Protect secrets,logs,and CSP when touching any project file
-globs: **/*
+globs: app/**/*.ts,app/**/*.tsx,components/**/*.ts,components/**/*.tsx,config/**/*,features/**/*.ts,features/**/*.tsx,packages/**/*.ts,packages/**/*.tsx,public/sw.js,scripts/**/*.mjs,scripts/**/*.ts,services/**/*.ts,services/**/*.tsx,.github/**/*,src-tauri/**/*,crates/**/*
 alwaysApply: false
 ---
 
-# Core Security & Betrieb
+# Core security red lines
 
 ## Secrets & Konfiguration
 
