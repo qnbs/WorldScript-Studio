@@ -21,7 +21,8 @@ verified specialist mappings:
 - ProForge external callers: `features/proForge/proForgeSlice.ts`, `features/proForge/types.ts`,
   `hooks/useProForgeOrchestrator.ts`, `app/storeRef.ts` → `services/proForge/CLAUDE.md`
 - LoRA external callers: `services/aiProviderService.ts`, `components/settings/LoraAdapterSection.tsx`,
-  `components/settings/ProjectAiPresetSection.tsx` → `features/lora/CLAUDE.md`
+  `components/settings/ProjectAiPresetSection.tsx`, `hooks/useWorldScriptAI.ts`,
+  `services/ai/worldScriptCompletionFetch.ts` → `features/lora/CLAUDE.md`
 - Service integration callers: `features/sceneComments/sceneCommentsSlice.ts`,
   `features/progressTracker/progressTrackerSlice.ts`, `hooks/useLanguageToolCheck.ts`,
   `config/csp-connect-src.json` → `services/CLAUDE.md`

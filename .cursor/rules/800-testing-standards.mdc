@@ -9,6 +9,7 @@ alwaysApply: false
 ## Determinismus
 
 - Tests **isoliert**: keine Reihenfolge-, Netzwerk- oder `Date.now()`-Abhängigkeit ohne Mock/Fake-Timer.
+- Bei `Intl.Segmenter`, `Intl.PluralRules` und verwandten ICU-APIs stabile Verhaltensgarantien statt exakt formatierter, engine-/locale-abhängiger Zählwerte prüfen.
 - Redux, `localStorage`, IDB: Reset via `tests/setup.ts` oder explizite Fixtures.
 - Vitest: **`maxWorkers: 1`** im Repo — keinen parallelen schweren Lauf neben Build/E2E auf Low-RAM-Maschinen.
 

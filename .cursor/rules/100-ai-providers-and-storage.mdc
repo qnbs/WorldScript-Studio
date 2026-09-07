@@ -18,7 +18,7 @@ alwaysApply: false
 - Presets: Ollama/LM Studio/vLLM via `settings.advancedAi`; Cloud-Router über `openAiCompatibleBaseUrl` + Key-Slot.
 - Fallback-Kette in `aiProviderService` für Legacy-Thunks respektieren.
 - WebLLM/GPU: **`gpuResourceManager`**, Tab-Leader (`packages/ai-core` / BroadcastChannel) — kein zweiter schwerer Inferenz-Tab.
-- Lokales RAG/Embeddings: bestehende Speicher (`saveRagVectors`), chunked yields; `@xenova/transformers` nur über etablierte Pfade.
+- Lokales RAG/Embeddings: bestehende Speicher (`saveRagVectors`), chunked yields; `@huggingface/transformers` nur über etablierte Pfade.
 
 ## Google GenAI
 
