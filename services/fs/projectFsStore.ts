@@ -599,7 +599,7 @@ export class FsProjectStore extends FsAssetStore {
       storedProjectSchema,
     );
     const admittedSnapshot = snapshotAdmission.canonical?.projection;
-    if (snapshotAdmission.status !== 'CURRENT' || !admittedSnapshot) {
+    if (snapshotAdmission.status === 'REFUSED' || !admittedSnapshot) {
       throw new ProjectSnapshotRestoreError('snapshot-invalid');
     }
 

@@ -1345,6 +1345,22 @@ describe('FsProjectStore — projects', () => {
     ).toMatchObject({ schemaVersion: 1, title: 'My Novel' });
   });
 
+  // QNBS-v3: pre-marker snapshots remain recoverable through the non-destructive legacy projection.
+  it('restores a legacy snapshot through canonical in-memory admission', async () => {
+    await store.saveProject(project as never);
+    const current = await store.loadProject('p1');
+    const { schemaVersion: _schemaVersion, ...legacySnapshot } = project;
+    const snapshotId = await store.saveSnapshot('legacy-snapshot', {
+      ...legacySnapshot,
+      title: 'Legacy snapshot content',
+    });
+
+    const restored = await store.restoreSnapshot(snapshotId, current as never);
+
+    expect(restored.title).toBe('Legacy snapshot content');
+    expect((restored as unknown as Record<string, unknown>)['schemaVersion']).toBe(1);
+  });
+
   // QNBS-v3: target-owned metadata survives a matching restore without trusting snapshot metadata.
   it('restores older normalized content and preserves target auxiliary metadata', async () => {
     const legacyProject = { ...project, id: '***', title: 'Current legacy content' };
