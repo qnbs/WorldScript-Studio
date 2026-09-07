@@ -51,7 +51,9 @@ export async function renderProjectInitializationFailure(
               },
             }
           : {})}
-        {...(failureKind === 'project-io' ? { onRetry: () => window.location.reload() } : {})}
+        {...(failureKind === 'project-io' || failureKind === 'project-unsupported'
+          ? { onRetry: () => window.location.reload() }
+          : {})}
         {...(canReset
           ? {
               onReset: async () => {

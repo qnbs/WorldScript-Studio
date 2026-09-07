@@ -133,7 +133,10 @@ describe('FsProjectStore.loadProject — DA-01 fail-closed behavior', () => {
     mockDesktopPlatform.filesystem.exists.mockResolvedValue(true);
     mockDesktopPlatform.filesystem.readTextFile.mockResolvedValue(compressData(validProject));
     const store = new FsProjectStore();
-    await expect(store.loadProject('good-id')).resolves.toEqual(validProject);
+    await expect(store.loadProject('good-id')).resolves.toMatchObject({
+      ...validProject,
+      schemaVersion: 1,
+    });
   });
 
   it('resolves the real project on a valid save with EntityState-shaped characters/worlds', async () => {
@@ -148,7 +151,35 @@ describe('FsProjectStore.loadProject — DA-01 fail-closed behavior', () => {
     mockDesktopPlatform.filesystem.exists.mockResolvedValue(true);
     mockDesktopPlatform.filesystem.readTextFile.mockResolvedValue(compressData(validProject));
     const store = new FsProjectStore();
-    await expect(store.loadProject('good-entity-state-id')).resolves.toEqual(validProject);
+    await expect(store.loadProject('good-entity-state-id')).resolves.toMatchObject({
+      ...validProject,
+      schemaVersion: 1,
+    });
+  });
+
+  // QNBS-v3: current filesystem admission must reject malformed owned children before editable authority.
+  it.each([
+    ['entity', { characters: [{ id: 'c1', name: 42 }] }],
+    ['manuscript entry', { manuscript: [{ id: 's1', title: 42, content: 'text' }] }],
+  ])('rejects malformed nested %s content', async (_label, fragment) => {
+    const { FsProjectStore } = await import('../../../../services/fs/projectFsStore');
+    mockDesktopPlatform.filesystem.exists.mockResolvedValue(true);
+    mockDesktopPlatform.filesystem.readTextFile.mockResolvedValue(
+      JSON.stringify({
+        title: 'Malformed nested',
+        logline: 'L',
+        characters: [],
+        worlds: [],
+        manuscript: [],
+        ...fragment,
+      }),
+    );
+    const store = new FsProjectStore();
+    await expect(store.loadProject('malformed-nested-id')).rejects.toMatchObject({
+      name: 'ProjectLoadError',
+      reason: 'corrupt',
+      classification: 'MALFORMED',
+    });
   });
 
   // QNBS-v3: legacy admission must not stamp or rewrite a source before durable migration fencing exists.
@@ -173,22 +204,25 @@ describe('FsProjectStore.loadProject — DA-01 fail-closed behavior', () => {
 
   // QNBS-v3: unsupported versions must refuse editable filesystem authority without touching source.
   it.each([
-    ['future', { schemaVersion: 99, title: 'Future' }],
-    ['migration gap', { schemaVersion: 0, title: 'Gap' }],
-  ])('refuses %s filesystem input without changing its source', async (_label, value) => {
-    const { FsProjectStore } = await import('../../../../services/fs/projectFsStore');
-    const source = JSON.stringify(value);
-    mockDesktopPlatform.filesystem.exists.mockResolvedValue(true);
-    mockDesktopPlatform.filesystem.readTextFile.mockResolvedValue(source);
-    const store = new FsProjectStore();
+    ['future', { schemaVersion: 99, title: 'Future' }, 'FUTURE'],
+    ['migration gap', { schemaVersion: 0, title: 'Gap' }, 'UNSUPPORTED_OLDER'],
+  ])(
+    'refuses %s filesystem input without changing its source',
+    async (_label, value, classification) => {
+      const { FsProjectStore } = await import('../../../../services/fs/projectFsStore');
+      const source = JSON.stringify(value);
+      mockDesktopPlatform.filesystem.exists.mockResolvedValue(true);
+      mockDesktopPlatform.filesystem.readTextFile.mockResolvedValue(source);
+      const store = new FsProjectStore();
 
-    await expect(store.loadProject('refused-id')).rejects.toMatchObject({
-      name: 'ProjectLoadError',
-      reason: 'corrupt',
-      projectId: 'refused-id',
-      classification: expect.any(String),
-    });
-    expect(mockDesktopPlatform.filesystem.writeTextFile).not.toHaveBeenCalled();
-    expect(mockDesktopPlatform.filesystem.rename).not.toHaveBeenCalled();
-  });
+      await expect(store.loadProject('refused-id')).rejects.toMatchObject({
+        name: 'ProjectLoadError',
+        reason: 'unsupported-version',
+        projectId: 'refused-id',
+        classification,
+      });
+      expect(mockDesktopPlatform.filesystem.writeTextFile).not.toHaveBeenCalled();
+      expect(mockDesktopPlatform.filesystem.rename).not.toHaveBeenCalled();
+    },
+  );
 });

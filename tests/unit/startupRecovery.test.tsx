@@ -12,6 +12,7 @@ const { mockRoot, mockReset, mockBackendKind, mockQuarantine, mockCopy, loggerEr
       storageUnavailable: 'storage unavailable',
       projectUnavailable: 'project unavailable',
       projectIoUnavailable: 'project io unavailable',
+      projectUnsupported: 'project unsupported',
       reload: 'reload',
       retry: 'retry',
       recover: 'recover',
@@ -47,7 +48,7 @@ vi.mock('../../components/StorageErrorScreen', () => ({
 vi.mock('../../services/fs/projectFsStore', () => {
   class ProjectLoadError extends Error {
     constructor(
-      public readonly reason: 'corrupt' | 'io-error',
+      public readonly reason: 'corrupt' | 'io-error' | 'unsupported-version',
       message: string,
       public readonly projectId: string,
     ) {
@@ -72,7 +73,7 @@ import {
 
 type RecoveryScreenProps = {
   copy: typeof mockCopy;
-  failureKind: 'storage' | 'project-corrupt' | 'project-io';
+  failureKind: 'storage' | 'project-corrupt' | 'project-io' | 'project-unsupported';
   onReset?: () => Promise<void>;
   onRecover?: () => Promise<void>;
   onRetry?: () => void;
@@ -141,5 +142,19 @@ describe('startup recovery rendering', () => {
     expect(renderedScreenProps().onRecover).toBeUndefined();
     expect(renderedScreenProps().failureKind).toBe('storage');
     expect(renderedScreenProps().onReset).toEqual(expect.any(Function));
+  });
+
+  it('renders unsupported project versions without quarantine or reset authority', async () => {
+    mockBackendKind.mockResolvedValue('filesystem');
+    await renderProjectInitializationFailure(
+      mockRoot as never,
+      new ProjectLoadError('unsupported-version', 'future', 'p1'),
+    );
+
+    const props = renderedScreenProps();
+    expect(props.failureKind).toBe('project-unsupported');
+    expect(props.onRecover).toBeUndefined();
+    expect(props.onReset).toBeUndefined();
+    expect(props.onRetry).toEqual(expect.any(Function));
   });
 });

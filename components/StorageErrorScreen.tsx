@@ -9,6 +9,7 @@ export interface StorageErrorCopy {
   storageUnavailable: string;
   projectUnavailable: string;
   projectIoUnavailable: string;
+  projectUnsupported: string;
   reload: string;
   retry: string;
   recover: string;
@@ -27,6 +28,8 @@ export const STARTUP_COPY_FALLBACKS: StorageErrorCopy = {
   projectUnavailable: 'A local project could not be opened. Reload and try again.',
   projectIoUnavailable:
     'The project could not currently be read because of a storage or file-access problem. It has not been classified as corrupt or changed. Check the storage device and file permissions, then retry.',
+  projectUnsupported:
+    'This project uses a schema version this build cannot edit. The original file has not been changed. Upgrade WorldScript Studio or open it with a compatible build.',
   reload: 'Reload',
   retry: 'Retry',
   recover: 'Quarantine project and reload',
@@ -54,6 +57,7 @@ export async function loadStorageErrorCopy(): Promise<StorageErrorCopy> {
     storageUnavailable,
     projectUnavailable,
     projectIoUnavailable,
+    projectUnsupported,
     reload,
     retry,
     recover,
@@ -78,6 +82,10 @@ export async function loadStorageErrorCopy(): Promise<StorageErrorCopy> {
       'error.startup.projectIoUnavailable',
       STARTUP_COPY_FALLBACKS.projectIoUnavailable,
     ),
+    startupTranslation(
+      'error.startup.projectUnsupported',
+      STARTUP_COPY_FALLBACKS.projectUnsupported,
+    ),
     startupTranslation('error.startup.reload', STARTUP_COPY_FALLBACKS.reload),
     startupTranslation('error.startup.retry', STARTUP_COPY_FALLBACKS.retry),
     startupTranslation('error.startup.recover', STARTUP_COPY_FALLBACKS.recover),
@@ -97,6 +105,7 @@ export async function loadStorageErrorCopy(): Promise<StorageErrorCopy> {
     storageUnavailable,
     projectUnavailable,
     projectIoUnavailable,
+    projectUnsupported,
     reload,
     retry,
     recover,
@@ -117,6 +126,7 @@ function getFailureMessage(
   const messages: Record<StartupRecoveryFailureKind, string> = {
     'project-corrupt': copy.projectUnavailable,
     'project-io': copy.projectIoUnavailable,
+    'project-unsupported': copy.projectUnsupported,
     storage: copy.storageUnavailable,
   };
   return messages[failureKind];
@@ -366,7 +376,11 @@ export function StorageErrorScreen({
         {getFailureMessage(failureKind, copy)}
       </p>
       <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-        <RetryButton isProjectIo={failureKind === 'project-io'} copy={copy} onClick={handleRetry} />
+        <RetryButton
+          isProjectIo={failureKind === 'project-io' || failureKind === 'project-unsupported'}
+          copy={copy}
+          onClick={handleRetry}
+        />
         <RecoverButton
           failureKind={failureKind}
           onRecover={onRecover}

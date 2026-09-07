@@ -14,7 +14,7 @@ import {
   admitCanonicalProjectDocument,
   type CanonicalProjectSchemaResult,
 } from '../projectDocument';
-import { parseImportedProjectJson } from '../projectImportSchema';
+import { importedProjectJsonSchema, parseImportedProjectJson } from '../projectImportSchema';
 import {
   normalizeSaveProjectInputToStoryProject,
   type ProjectQuarantineResult,
@@ -55,7 +55,7 @@ import {
 // QNBS-v3 (DA-01): distinguishes corrupt/unreadable saved data from genuine absence — callers must never treat this the same as "no project exists yet".
 export class ProjectLoadError extends Error {
   constructor(
-    public readonly reason: 'corrupt' | 'io-error',
+    public readonly reason: 'corrupt' | 'io-error' | 'unsupported-version',
     message: string,
     public readonly projectId: string,
     public readonly classification?: ProjectVersionClassification,
@@ -150,8 +150,21 @@ function looksLikeStoryProject(value: unknown): value is StoryProject {
   );
 }
 
+// QNBS-v3: reuse nested import validators while returning the original object so opaque fields remain present until raw-carrier writeback.
 const storedProjectSchema = {
   safeParse(value: unknown): CanonicalProjectSchemaResult<StoryProject> {
+    const result = importedProjectJsonSchema.safeParse(value);
+    if (!result.success) {
+      return {
+        success: false,
+        error: {
+          issues: result.error.issues.map((issue) => ({
+            path: issue.path,
+            message: issue.message,
+          })),
+        },
+      };
+    }
     if (looksLikeStoryProject(value)) {
       return { success: true, data: value };
     }
@@ -168,13 +181,6 @@ const storedProjectSchema = {
     };
   },
 };
-
-// QNBS-v3: schemaVersion belongs to the persisted envelope, not the renderer-facing StoryProject projection.
-function projectWithoutSchemaVersion(project: StoryProject): StoryProject {
-  const projected = { ...(project as unknown as Record<string, unknown>) };
-  delete projected['schemaVersion'];
-  return projected as unknown as StoryProject;
-}
 
 // QNBS-v3: one sanitizer and empty-ID policy keeps every filesystem project operation on the same path identity.
 export class FsProjectStore extends FsAssetStore {
@@ -640,11 +646,11 @@ export class FsProjectStore extends FsAssetStore {
             'Project admission refused for ' + admission.source.classification + ' input.',
         );
       }
-      project = projectWithoutSchemaVersion(admission.canonical.projection);
+      project = admission.canonical.projection;
     } catch (error) {
       logger.error('Failed to parse project file (corrupt data):', error);
       throw new ProjectLoadError(
-        'corrupt',
+        classification && classification !== 'MALFORMED' ? 'unsupported-version' : 'corrupt',
         classification && classification !== 'MALFORMED'
           ? 'The saved project file for "' +
               projectId +
