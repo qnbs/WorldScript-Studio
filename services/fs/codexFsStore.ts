@@ -30,7 +30,7 @@ export class FsCodexStore extends FsSettingsStore {
       if (!(await apis.exists(codexDir))) await apis.mkdir(codexDir, { recursive: true });
       const codexFile = await apis.join(codexDir, 'codex.snap');
       await writeTextFileAtomic(apis, codexFile, compressData(codex));
-    });
+    }, codex.projectId);
   }
 
   async getStoryCodex(projectId: string): Promise<StoryCodex | null> {
@@ -55,8 +55,12 @@ export class FsCodexStore extends FsSettingsStore {
 
   async deleteStoryCodex(projectId: string): Promise<void> {
     try {
-      await this.withLegacyRoutingOperation(() => this.deleteStoryCodexStrict(projectId));
+      await this.withLegacyRoutingOperation(
+        () => this.deleteStoryCodexStrict(projectId),
+        projectId,
+      );
     } catch (error) {
+      if (this.isProjectWriteAuthorityError(error)) throw error;
       logger.error('Failed to delete story codex:', error);
     }
   }
@@ -84,7 +88,7 @@ export class FsCodexStore extends FsSettingsStore {
       if (!(await apis.exists(codexDir))) await apis.mkdir(codexDir, { recursive: true });
       const vectorsFile = await apis.join(codexDir, 'vectors.snap');
       await writeTextFileAtomic(apis, vectorsFile, compressData(vectors));
-    });
+    }, projectId);
   }
 
   async getRagVectors(projectId: string): Promise<unknown[]> {
@@ -124,8 +128,9 @@ export class FsCodexStore extends FsSettingsStore {
           'vectors.snap',
         );
         if (await apis.exists(vectorsFile)) await retryFs(() => apis.remove(vectorsFile));
-      });
+      }, projectId);
     } catch (error) {
+      if (this.isProjectWriteAuthorityError(error)) throw error;
       logger.error('Failed to delete RAG vectors:', error);
     }
   }

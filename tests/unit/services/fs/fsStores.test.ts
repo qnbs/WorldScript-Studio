@@ -345,7 +345,7 @@ describe('FsProjectStore — projects', () => {
     expect(await store.loadProject('item')).toEqual(expect.objectContaining({ title: 'My Novel' }));
   });
 
-  // QNBS-v3: block every identity a legacy source can expose so autosave cannot redirect normalized data.
+  // QNBS-v3: conflicting embedded identity is kept read-only under the canonical source directory.
   it('fences legacy writeback by both directory and embedded project identity', async () => {
     const legacyProject = {
       id: 'embedded-id',
@@ -363,14 +363,41 @@ describe('FsProjectStore — projects', () => {
 
     const loaded = await store.loadProject('directory-id');
 
-    expect((loaded as unknown as Record<string, unknown>)['id']).toBe('embedded-id');
+    expect((loaded as unknown as Record<string, unknown>)['id']).toBe('directory-id');
     await expect(
       store.saveProject({ ...loaded, title: 'Edited legacy novel' } as never),
     ).rejects.toMatchObject({
       name: 'ProjectWritebackError',
-      projectId: 'embedded-id',
+      projectId: 'directory-id',
     });
     expect(fake.text.has('/app/projects/embedded-id/project.json')).toBe(false);
+  });
+
+  // QNBS-v3: a valid current source can reclaim its own identity without inheriting a legacy alias fence.
+  it('does not let a conflicting legacy alias fence a valid current project', async () => {
+    await store.saveProject({ ...project, id: 'embedded-id' } as never);
+    await fake.apis.mkdir('/app/projects/directory-id', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/directory-id/project.json',
+      compressData({
+        id: 'embedded-id',
+        title: 'Legacy Novel',
+        logline: 'A legacy tale',
+        manuscript: [],
+        characters: [],
+        worlds: [],
+      }),
+    );
+
+    await store.loadProject('directory-id');
+    await expect(
+      store.saveProject({ ...project, id: 'embedded-id', title: 'Current Novel' } as never),
+    ).resolves.toBeUndefined();
+    expect(
+      decompressData<Record<string, unknown>>(
+        fake.text.get('/app/projects/embedded-id/project.json') as string,
+      )['title'],
+    ).toBe('Current Novel');
   });
 
   // QNBS-v3: snapshot restore cannot reintroduce mutable state for a project whose source lacks write authority.
@@ -475,6 +502,109 @@ describe('FsProjectStore — projects', () => {
     await expect(store.getBinderAsset('legacy-assets', 'asset-1')).resolves.not.toBeNull();
     await expect(store.getStoryCodex('legacy-assets')).resolves.not.toBeNull();
     await expect(store.getRagVectors('legacy-assets')).resolves.toEqual([{ id: 'vector-1' }]);
+  });
+
+  // QNBS-v3: ID-less legacy callers cannot use historical fallback IDs as an unfenced write route.
+  it('fails closed for ID-less legacy Binder, Codex, and RAG writes', async () => {
+    const asset = new Uint8Array([1, 2, 3]).buffer;
+    const legacyProject = {
+      title: 'ID-less Legacy',
+      logline: 'L',
+      manuscript: [],
+      characters: [],
+      worlds: [],
+    };
+    await fake.apis.mkdir('/app/projects/idless-legacy', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/idless-legacy/project.json',
+      JSON.stringify(legacyProject),
+    );
+    await fake.apis.mkdir('/app/projects/browser-project/binder', { recursive: true });
+    await fake.apis.writeFile(
+      '/app/projects/browser-project/binder/legacy.bin',
+      new Uint8Array([9]),
+    );
+    await fake.apis.mkdir('/app/projects/default/codex', { recursive: true });
+    const originalCodex = { projectId: 'default', entries: [{ name: 'legacy' }] };
+    await fake.apis.writeTextFile(
+      '/app/projects/default/codex/codex.snap',
+      compressData(originalCodex),
+    );
+    await fake.apis.mkdir('/app/projects/project/codex', { recursive: true });
+    const originalVectors = [{ id: 'legacy-vector' }];
+    await fake.apis.writeTextFile(
+      '/app/projects/project/codex/vectors.snap',
+      compressData(originalVectors),
+    );
+
+    await store.loadProject('idless-legacy');
+    await expect(
+      store.saveBinderAsset('browser-project', 'new', asset, {
+        mimeType: 'application/pdf',
+        originalFileName: 'new.pdf',
+        byteSize: 3,
+      }),
+    ).rejects.toMatchObject({ name: 'ProjectWritebackError' });
+    await expect(
+      store.saveStoryCodex({ projectId: 'default', entries: [{ name: 'new' }] } as never),
+    ).rejects.toMatchObject({ name: 'ProjectWritebackError' });
+    await expect(store.saveRagVectors('project', [{ id: 'new-vector' }])).rejects.toMatchObject({
+      name: 'ProjectWritebackError',
+    });
+    expect(
+      decompressData<Record<string, unknown>>(
+        fake.text.get('/app/projects/default/codex/codex.snap') as string,
+      ),
+    ).toEqual(originalCodex);
+    expect(
+      decompressData<unknown[]>(
+        fake.text.get('/app/projects/project/codex/vectors.snap') as string,
+      ),
+    ).toEqual(originalVectors);
+    expect(fake.bin.has('/app/projects/browser-project/binder/new.bin')).toBe(false);
+  });
+
+  // QNBS-v3: authority is checked after queued work completes so a load cannot race a later mutation.
+  it('rechecks legacy authority after a queued admission change', async () => {
+    const legacyProject = {
+      title: 'Racing Legacy',
+      logline: 'L',
+      manuscript: [],
+      characters: [],
+      worlds: [],
+    };
+    await fake.apis.mkdir('/app/projects/racing-legacy', { recursive: true });
+    await fake.apis.writeTextFile(
+      '/app/projects/racing-legacy/project.json',
+      JSON.stringify(legacyProject),
+    );
+
+    const originalWriteTextFile = fake.apis.writeTextFile;
+    let releaseWrite!: () => void;
+    let writeStarted!: () => void;
+    const writeStartedPromise = new Promise<void>((resolve) => {
+      writeStarted = resolve;
+    });
+    fake.apis.writeTextFile = (path: string, content: string) => {
+      if (path.startsWith('/app/projects/queue-holder/codex/codex.snap.tmp-')) {
+        writeStarted();
+        return new Promise<void>((resolve, reject) => {
+          releaseWrite = () => originalWriteTextFile(path, content).then(resolve, reject);
+        });
+      }
+      return originalWriteTextFile(path, content);
+    };
+
+    const holder = store.saveStoryCodex({ projectId: 'queue-holder', entries: [] } as never);
+    await writeStartedPromise;
+    const load = store.loadProject('racing-legacy');
+    const queuedWrite = store.saveStoryCodex({ projectId: 'racing-legacy', entries: [] } as never);
+
+    releaseWrite();
+    await holder;
+    await load;
+    await expect(queuedWrite).rejects.toMatchObject({ name: 'ProjectWritebackError' });
+    expect(fake.text.has('/app/projects/racing-legacy/codex/codex.snap')).toBe(false);
   });
 
   // QNBS-v3: auxiliary fence checks use the writers' sanitized identity and fallback so invalid IDs cannot bypass legacy writeback policy.
@@ -1192,6 +1322,27 @@ describe('FsProjectStore — projects', () => {
       )['title'],
     ).toBe('Older snapshot content');
     expect(fake.text.has('/app/projects/p2/project.json')).toBe(false);
+  });
+
+  // QNBS-v3: a future snapshot cannot overwrite a current target with an unadmitted schema marker.
+  it('refuses a future snapshot before it can turn a current target into future state', async () => {
+    await store.saveProject(project as never);
+    const current = await store.loadProject('p1');
+    const snapshotId = await store.saveSnapshot('future', {
+      ...project,
+      schemaVersion: 99,
+      title: 'Future snapshot content',
+    });
+
+    await expect(store.restoreSnapshot(snapshotId, current as never)).rejects.toMatchObject({
+      name: 'ProjectSnapshotRestoreError',
+      reason: 'snapshot-invalid',
+    });
+    expect(
+      decompressData<Record<string, unknown>>(
+        fake.text.get('/app/projects/p1/project.json') as string,
+      ),
+    ).toMatchObject({ schemaVersion: 1, title: 'My Novel' });
   });
 
   // QNBS-v3: target-owned metadata survives a matching restore without trusting snapshot metadata.

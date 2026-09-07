@@ -343,8 +343,18 @@ export class FsCore {
     return loadTauriApis();
   }
 
+  // QNBS-v3: subclasses re-evaluate project authority only after the serialized operation begins.
+  protected async assertProjectWriteAuthority(_projectId: string): Promise<void> {}
+
+  protected isProjectWriteAuthorityError(_error: unknown): boolean {
+    return false;
+  }
+
   // QNBS-v3: serialize complete filesystem operations so legacy route ownership cannot change between awaited mutations.
-  protected async withLegacyRoutingOperation<T>(operation: () => Promise<T>): Promise<T> {
+  protected async withLegacyRoutingOperation<T>(
+    operation: () => Promise<T>,
+    projectId?: string,
+  ): Promise<T> {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => {
       release = resolve;
@@ -354,6 +364,9 @@ export class FsCore {
     this.legacyRoutingOperationTail = current;
     await previous;
     try {
+      if (projectId !== undefined) {
+        await this.assertProjectWriteAuthority(projectId);
+      }
       return await operation();
     } finally {
       if (this.legacyRoutingOperationTail === current) {

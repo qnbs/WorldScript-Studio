@@ -10,7 +10,7 @@ import {
   CURRENT_PROJECT_SCHEMA_VERSION,
   type ProjectVersionClassification,
 } from '../../features/project/projectSchemaVersion';
-import type { Character, StoryCodex, StoryProject, World } from '../../types';
+import type { Character, StoryProject, World } from '../../types';
 import { getStaticTranslation } from '../i18n/staticTranslate';
 import { logger } from '../logger';
 import {
@@ -19,7 +19,6 @@ import {
 } from '../projectDocument';
 import { importedProjectJsonSchema, parseImportedProjectJson } from '../projectImportSchema';
 import {
-  type BinderAssetMeta,
   normalizeSaveProjectInputToStoryProject,
   type ProjectQuarantineResult,
   type SaveProjectInput,
@@ -211,78 +210,125 @@ function withCurrentSchemaVersion(project: StoryProject): StoryProject {
   return projection as unknown as StoryProject;
 }
 
-// QNBS-v3: one sanitizer and empty-ID policy keeps every filesystem project operation on the same path identity.
+type LegacyAdmissionRecord = {
+  sourceDirectoryId: string;
+  persistedProjectId: string | null;
+  writerIdentities: ReadonlySet<string>;
+  editable: boolean;
+};
+
+const LEGACY_FALLBACK_WRITER_IDENTITIES = ['browser-project', 'default', 'project'] as const;
+
+// QNBS-v3: one source-owned record keeps the canonical directory, embedded identity, aliases, and write verdict together.
 export class FsProjectStore extends FsAssetStore {
   private readonly verifiedLegacyProjectDirectories = new Set<string>();
-  private readonly legacyWritebackBlockedProjectIds = new Map<string, string>();
+  private readonly legacyAdmissionRecords = new Map<string, LegacyAdmissionRecord>();
 
-  private blockLegacyWriteback(safeProjectId: string, project: StoryProject): void {
-    this.legacyWritebackBlockedProjectIds.set(safeProjectId, safeProjectId);
+  private writerIdentityAliases(projectId: string): Set<string> {
+    const identities = new Set([projectId]);
+    const safeProjectId = projectPathSegment(projectId);
+    if (safeProjectId) identities.add(safeProjectId);
+    return identities;
+  }
+
+  private registerLegacyAdmission(sourceDirectoryId: string, project: StoryProject): void {
     const persistedId = persistedProjectId(project);
-    if (typeof persistedId !== 'string') return;
-    const safePersistedId = projectPathSegment(persistedId);
-    if (safePersistedId) {
-      this.legacyWritebackBlockedProjectIds.set(safePersistedId, safeProjectId);
+    const writerIdentities = new Set<string>([sourceDirectoryId]);
+    if (typeof persistedId === 'string') {
+      writerIdentities.add(persistedId);
+      const safePersistedId = projectPathSegment(persistedId);
+      if (safePersistedId) writerIdentities.add(safePersistedId);
+      if (!safePersistedId) {
+        for (const fallback of LEGACY_FALLBACK_WRITER_IDENTITIES) {
+          writerIdentities.add(fallback);
+        }
+      }
+    } else {
+      for (const fallback of LEGACY_FALLBACK_WRITER_IDENTITIES) {
+        writerIdentities.add(fallback);
+      }
+    }
+    this.legacyAdmissionRecords.set(sourceDirectoryId, {
+      sourceDirectoryId,
+      persistedProjectId: typeof persistedId === 'string' ? persistedId : null,
+      writerIdentities,
+      editable: false,
+    });
+  }
+
+  private clearLegacyAdmissionForSource(sourceDirectoryId: string): void {
+    this.legacyAdmissionRecords.delete(sourceDirectoryId);
+    for (const [recordSource, record] of this.legacyAdmissionRecords) {
+      const writerIdentities = new Set(
+        [...record.writerIdentities].filter(
+          (identity) => projectPathSegment(identity) !== sourceDirectoryId,
+        ),
+      );
+      if (writerIdentities.size === 0) {
+        this.legacyAdmissionRecords.delete(recordSource);
+      } else if (writerIdentities.size !== record.writerIdentities.size) {
+        this.legacyAdmissionRecords.set(recordSource, { ...record, writerIdentities });
+      }
     }
   }
 
-  private clearLegacyWriteback(safeProjectId: string): void {
-    for (const [projectId, directoryId] of this.legacyWritebackBlockedProjectIds) {
-      if (directoryId === safeProjectId) this.legacyWritebackBlockedProjectIds.delete(projectId);
+  private legacyAdmissionsForWriter(projectId: string): LegacyAdmissionRecord[] {
+    const aliases = this.writerIdentityAliases(projectId);
+    return [...this.legacyAdmissionRecords.values()].filter((record) =>
+      [...aliases].some((identity) => record.writerIdentities.has(identity)),
+    );
+  }
+
+  private async currentProjectSourceIsAdmitted(sourceDirectoryId: string): Promise<boolean> {
+    const projectFileId = projectPathSegment(sourceDirectoryId);
+    if (!projectFileId) return false;
+    try {
+      const apis = await this.getApis();
+      const appDataPath = await this.ensureAppDataPath();
+      const projectFile = await apis.join(appDataPath, 'projects', projectFileId, 'project.json');
+      if (!(await apis.exists(projectFile))) return false;
+      const admission = admitCanonicalProjectDocument(
+        decompressJsonText(await retryFs(() => apis.readTextFile(projectFile))),
+        storedProjectSchema,
+      );
+      return admission.status === 'CURRENT' && admission.canonical?.projection !== null;
+    } catch {
+      return false;
     }
   }
 
-  private isLegacyWritebackBlocked(projectId: string): boolean {
-    if (this.legacyWritebackBlockedProjectIds.has(projectId)) return true;
-    const safeProjectId =
-      projectPathSegment(projectId) ?? sanitizePathSegment(projectId, 'project');
-    return this.legacyWritebackBlockedProjectIds.has(safeProjectId);
-  }
+  // QNBS-v3: current-source validation may release only aliases proven to belong to that current source.
+  protected override async assertProjectWriteAuthority(projectId: string): Promise<void> {
+    const admissions = this.legacyAdmissionsForWriter(projectId);
+    if (admissions.length === 0) return;
 
-  private assertLegacyWritebackAllowed(projectId: string): void {
-    if (this.isLegacyWritebackBlocked(projectId)) {
-      throw new ProjectWritebackError(projectId);
+    const sourceDirectoryId = projectPathSegment(projectId);
+    if (sourceDirectoryId && (await this.currentProjectSourceIsAdmitted(sourceDirectoryId))) {
+      this.clearLegacyAdmissionForSource(sourceDirectoryId);
+      return;
     }
+    throw new ProjectWritebackError(projectId);
   }
 
-  async saveBinderAsset(
-    projectId: string,
-    assetId: string,
-    data: ArrayBuffer,
-    meta: BinderAssetMeta,
-  ): Promise<void> {
-    this.assertLegacyWritebackAllowed(projectId);
-    return super.saveBinderAsset(projectId, assetId, data, meta);
+  protected override isProjectWriteAuthorityError(error: unknown): boolean {
+    return error instanceof ProjectWritebackError;
   }
 
-  async deleteBinderAsset(projectId: string, assetId: string): Promise<void> {
-    this.assertLegacyWritebackAllowed(projectId);
-    return super.deleteBinderAsset(projectId, assetId);
-  }
-
-  async deleteAllBinderAssetsForProject(projectId: string): Promise<void> {
-    this.assertLegacyWritebackAllowed(projectId);
-    return super.deleteAllBinderAssetsForProject(projectId);
-  }
-
-  async saveStoryCodex(codex: StoryCodex): Promise<void> {
-    this.assertLegacyWritebackAllowed(codex.projectId);
-    return super.saveStoryCodex(codex);
-  }
-
-  async deleteStoryCodex(projectId: string): Promise<void> {
-    this.assertLegacyWritebackAllowed(projectId);
-    return super.deleteStoryCodex(projectId);
-  }
-
-  async saveRagVectors(projectId: string, vectors: unknown[]): Promise<void> {
-    this.assertLegacyWritebackAllowed(projectId);
-    return super.saveRagVectors(projectId, vectors);
-  }
-
-  async deleteRagVectors(projectId: string): Promise<void> {
-    this.assertLegacyWritebackAllowed(projectId);
-    return super.deleteRagVectors(projectId);
+  private canonicalLegacyProjection(
+    project: StoryProject,
+    sourceDirectoryId: string,
+  ): StoryProject {
+    const persistedId = persistedProjectId(project);
+    const safePersistedId =
+      typeof persistedId === 'string' ? projectPathSegment(persistedId) : null;
+    if (safePersistedId && safePersistedId !== sourceDirectoryId) {
+      return {
+        ...project,
+        id: sourceDirectoryId,
+        [LEGACY_PROJECT_DIRECTORY_METADATA_KEY]: sourceDirectoryId,
+      } as StoryProject;
+    }
+    return project;
   }
 
   private async inspectLegacyAuxiliaryEvidence(
@@ -534,7 +580,9 @@ export class FsProjectStore extends FsAssetStore {
     if (!validatedTarget) {
       throw new ProjectSnapshotRestoreError('target-unavailable');
     }
-    if (this.isLegacyWritebackBlocked(targetDirectory)) {
+    try {
+      await this.assertProjectWriteAuthority(targetDirectory);
+    } catch {
       throw new ProjectSnapshotRestoreError('target-unavailable');
     }
 
@@ -545,7 +593,17 @@ export class FsProjectStore extends FsAssetStore {
       );
     }
 
-    const snapshotProjectId = persistedProjectId(snapshot);
+    // QNBS-v3: snapshots must pass the same canonical version gate before Redux can observe them.
+    const snapshotAdmission = admitCanonicalProjectDocument(
+      JSON.stringify(snapshot),
+      storedProjectSchema,
+    );
+    const admittedSnapshot = snapshotAdmission.canonical?.projection;
+    if (snapshotAdmission.status !== 'CURRENT' || !admittedSnapshot) {
+      throw new ProjectSnapshotRestoreError('snapshot-invalid');
+    }
+
+    const snapshotProjectId = persistedProjectId(admittedSnapshot);
     if (typeof snapshotProjectId !== 'string') {
       throw new ProjectSnapshotRestoreError('snapshot-owner-unverifiable');
     }
@@ -557,7 +615,7 @@ export class FsProjectStore extends FsAssetStore {
       throw new ProjectSnapshotRestoreError('snapshot-owner-mismatch');
     }
 
-    const restored = { ...(snapshot as unknown as Record<string, unknown>) };
+    const restored = { ...(admittedSnapshot as unknown as Record<string, unknown>) };
     delete restored['id'];
     delete restored[LEGACY_PROJECT_DIRECTORY_METADATA_KEY];
     delete restored[LEGACY_AUXILIARY_METADATA_KEY];
@@ -570,6 +628,8 @@ export class FsProjectStore extends FsAssetStore {
       }
       restored['id'] = safeTargetId;
     }
+
+    restored['schemaVersion'] = CURRENT_PROJECT_SCHEMA_VERSION;
 
     const validatedTargetDirectory = legacyProjectDirectory(validatedTarget);
     if (validatedTargetDirectory) {
@@ -629,7 +689,6 @@ export class FsProjectStore extends FsAssetStore {
         }
       } else {
         projectId = safeProjectId;
-        this.verifiedLegacyProjectDirectories.delete(projectId);
       }
     } else {
       const legacyDirectory = legacyProjectDirectory(flat);
@@ -639,9 +698,8 @@ export class FsProjectStore extends FsAssetStore {
           : (projectPathSegment(flat.title || '') ?? 'project');
     }
 
-    if (this.legacyWritebackBlockedProjectIds.has(projectId)) {
-      throw new ProjectWritebackError(projectId);
-    }
+    await this.assertProjectWriteAuthority(projectId);
+    this.verifiedLegacyProjectDirectories.delete(projectId);
 
     projectToPersist = withCurrentSchemaVersion(projectToPersist);
 
@@ -728,7 +786,7 @@ export class FsProjectStore extends FsAssetStore {
     try {
       if (!(await apis.exists(projectFile))) {
         this.clearLegacyAuxiliaryPolicy(safeProjectId);
-        this.clearLegacyWriteback(safeProjectId);
+        this.clearLegacyAdmissionForSource(safeProjectId);
         return null;
       }
       content = await retryFs(() => apis.readTextFile(projectFile));
@@ -787,12 +845,14 @@ export class FsProjectStore extends FsAssetStore {
       appDataPath,
     );
     if (legacyAdmission) {
-      this.blockLegacyWriteback(safeProjectId, migratedProject);
+      this.registerLegacyAdmission(safeProjectId, project);
     } else {
-      this.clearLegacyWriteback(safeProjectId);
+      this.clearLegacyAdmissionForSource(safeProjectId);
     }
     scheduleCoreProjectValidation(migratedProject);
-    return migratedProject;
+    return legacyAdmission
+      ? this.canonicalLegacyProjection(migratedProject, safeProjectId)
+      : migratedProject;
   }
 
   async listProjects(): Promise<string[]> {
@@ -915,7 +975,7 @@ export class FsProjectStore extends FsAssetStore {
           }
           await retryFs(() => apis.rename(projectPath, preservedPath));
           this.clearLegacyAuxiliaryPolicy(safeProjectId);
-          this.clearLegacyWriteback(safeProjectId);
+          this.clearLegacyAdmissionForSource(safeProjectId);
           return { projectId: safeProjectId, path: preservedPath };
         } catch (error) {
           let sourceExists: boolean;
@@ -932,13 +992,13 @@ export class FsProjectStore extends FsAssetStore {
           }
           if (!sourceExists && preservedExists) {
             this.clearLegacyAuxiliaryPolicy(safeProjectId);
-            this.clearLegacyWriteback(safeProjectId);
+            this.clearLegacyAdmissionForSource(safeProjectId);
             return { projectId: safeProjectId, path: preservedPath };
           }
           if (!sourceExists) {
             await releaseReservation();
             this.clearLegacyAuxiliaryPolicy(safeProjectId);
-            this.clearLegacyWriteback(safeProjectId);
+            this.clearLegacyAdmissionForSource(safeProjectId);
             throw new ProjectQuarantineError('source-missing');
           }
           await releaseReservation();
@@ -1006,7 +1066,7 @@ export class FsProjectStore extends FsAssetStore {
       throw new ProjectDeleteError();
     }
     this.verifiedLegacyProjectDirectories.delete(safeProjectId);
-    this.clearLegacyWriteback(safeProjectId);
+    this.clearLegacyAdmissionForSource(safeProjectId);
     this.clearLegacyAuxiliaryPolicy(safeProjectId);
   }
 
