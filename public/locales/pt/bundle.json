@@ -816,6 +816,7 @@
   "error.startup.storageUnavailable": "Local storage could not be opened. Reload and try again.",
   "error.startup.projectUnavailable": "A local project could not be opened. Reload and try again.",
   "error.startup.projectIoUnavailable": "The project could not currently be read because of a storage or file-access problem. It has not been classified as corrupt or changed. Check the storage device and file permissions, then retry.",
+  "error.startup.projectUnsupported": "This project uses a schema version this build cannot edit. The original file has not been changed. Upgrade WorldScript Studio or open the project with a compatible build.",
   "error.startup.reload": "Reload",
   "error.startup.retry": "Retry",
   "error.startup.recover": "Quarantine project and reload",
