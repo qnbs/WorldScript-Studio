@@ -106,6 +106,21 @@ describe('checkAttributionText', () => {
     expect(result.matches).toContain('copilot-claude-co-author');
   });
 
+  it('rejects a co-author trailer with a custom name via the anthropic email, still trailer-anchored', () => {
+    const result = checkAttributionText(
+      'fix: bump dep\n\nCo-Authored-By: AI Assistant <noreply@anthropic.com>\n',
+    );
+    expect(result.ok).toBe(false);
+    expect(result.matches).toContain('anthropic-noreply-email');
+  });
+
+  it('passes prose that merely discusses the anthropic noreply address, not in a trailer', () => {
+    const result = checkAttributionText(
+      'docs: document that this guard rejects noreply@anthropic.com in commit trailers\n',
+    );
+    expect(result.ok).toBe(true);
+  });
+
   it('passes legitimate prose about the Claude provider', () => {
     const result = checkAttributionText(
       'feat(ai): improve Claude provider retry handling\n\nAligns backoff with the OpenAI provider.\n',
