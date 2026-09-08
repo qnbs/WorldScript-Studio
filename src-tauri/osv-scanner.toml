@@ -1,6 +1,6 @@
 # osv-scanner ignore list for src-tauri/Cargo.lock + pnpm-lock.yaml
 # All entries have been evaluated and accepted by the maintainer.
-# Reviewed: 2026-05-17 (Rust) / 2026-06-16 (npm)
+# Reviewed: 2026-05-17 (Rust) / 2026-09-08 (npm)
 
 # ─── GTK3 Rust bindings (Linux WebKit stack) ────────────────────────────────
 # webkit2gtk 2.0.2 (required by wry 0.55.x / Tauri 2.x for Linux) depends on
@@ -117,13 +117,14 @@ ignoreUntil = "2026-11-30T00:00:00Z"
 reason = "unic-ucd-ident 0.9.0: unmaintained Unicode data crate; final version; no exploitable attack surface"
 
 # ─── npm advisories (pnpm-lock.yaml) ─────────────────────────────────────────
-# Reviewed 2026-06-16 / 2026-07-26 / 2026-08-12. Most currently-flagged npm
-# advisories are remediated via pnpm-workspace.yaml overrides (tmp, ws,
-# form-data, protobufjs, @babel/core, dompurify→3.4.12, js-yaml→4.x,
-# body-parser→1.20.6, …). (The former dompurify GHSA-x4vx-rjvf-j5p4 and
-# js-yaml-3.x GHSA-h67p-54hq-rp68 ignores were dropped: both advisories no
-# longer match the lockfile after the overrides.) One documented ignore
-# remains below — no fixed version exists to override to.
+# Reviewed 2026-06-16 / 2026-07-26 / 2026-08-12 / 2026-09-08. Most
+# currently-flagged npm advisories are remediated via pnpm-workspace.yaml
+# overrides (tmp, ws, form-data, protobufjs, @babel/core, dompurify→3.4.13,
+# js-yaml→4.3.2, body-parser→1.20.6, joi→18.2.5, sharp→0.35.4, …). (The former
+# dompurify GHSA-x4vx-rjvf-j5p4 and js-yaml-3.x GHSA-h67p-54hq-rp68 ignores
+# were dropped: both advisories no longer match the lockfile after the
+# overrides.) Three documented ignores remain below — no fixed version exists
+# to override to for any of them.
 
 # extract-zip@2.0.1 (CVE-2026-56876 / GHSA-jmr9-qjv8-65gv, CVSS 8.6): unvalidated
 # symlink path traversal when extracting an attacker-controlled zip archive.
@@ -138,3 +139,35 @@ reason = "unic-ucd-ident 0.9.0: unmaintained Unicode data crate; final version; 
 id = "GHSA-jmr9-qjv8-65gv"
 ignoreUntil = "2026-11-30T00:00:00Z"
 reason = "extract-zip 2.0.1: unvalidated symlink path traversal; latest release, no fixed version exists; transitive Playwright/@puppeteer/browsers devDependency only extracting Playwright's own CDN-hosted browser binaries, never user-supplied zips; no runtime footprint in the shipped app"
+
+# extract-zip@2.0.1 (GHSA-7pqw-9j4j-h8q3, CVSS 8.1): a second, distinct advisory
+# for the same package/version (CWE-22 path traversal via two archive entries
+# with identical names — a symlink followed by a regular file — bypassing the
+# containment check). Not an alias of GHSA-jmr9-qjv8-65gv above; OSV reports it
+# separately. Same "no patched version exists" and same non-exposure reasoning
+# applies unchanged: transitive @puppeteer/browsers devDependency, only ever
+# extracts Playwright/Chromium's own CDN-hosted archives, never ships in the app.
+
+[[IgnoredVulns]]
+id = "GHSA-7pqw-9j4j-h8q3"
+ignoreUntil = "2026-11-30T00:00:00Z"
+reason = "extract-zip 2.0.1: second, distinct symlink path-traversal advisory (two-entry name-collision technique); latest release, no fixed version exists; same transitive Playwright/@puppeteer/browsers devDependency, never user-supplied zips, no runtime footprint in the shipped app"
+
+# adm-zip@0.6.0 (CVE-2026-76845 / GHSA-vwc7-r8mq-g2x9, CVSS 6.8): symlink-following
+# path traversal on extraction with overwrite enabled, when an attacker can
+# pre-place a symlink at the extraction destination. 0.6.0 is the latest
+# published release with no patched version yet — pnpm.overrides already pins
+# the newest available release (see pnpm-workspace.yaml) but cannot fix an
+# unpatched vulnerability. adm-zip here is used only by onnxruntime-node's own
+# postinstall to unpack its bundled native-binary release into its own
+# node_modules directory at `pnpm install` time — a location this project's
+# local/CI install process controls exclusively, extracting content sourced
+# from the npm registry/ONNX Runtime project's own release, never a
+# user-supplied or externally-influenced archive. No shared/predictable
+# extraction directory exists for an attacker to pre-place a symlink in, and
+# the affected code path never runs as part of the shipped web or desktop app.
+
+[[IgnoredVulns]]
+id = "GHSA-vwc7-r8mq-g2x9"
+ignoreUntil = "2026-11-30T00:00:00Z"
+reason = "adm-zip 0.6.0: symlink-following path traversal on overwrite-enabled extraction; latest release, no fixed version exists; used only by onnxruntime-node's own postinstall to unpack its own trusted npm-sourced binary at install time, never a user-supplied archive, no runtime footprint in the shipped app"
