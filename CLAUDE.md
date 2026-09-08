@@ -24,7 +24,7 @@ verified specialist mappings:
 - ProForge guide applies to `features/proForge/**/*`; external callers:
   `features/proForge/proForgeSlice.ts`, `features/proForge/types.ts`,
   `hooks/useProForgeOrchestrator.ts`, `contexts/ProForgeViewContext.ts`, `components/proForge/**/*`,
-  `app/storeRef.ts`
+  `components/WriterView.tsx`, `components/writing/WriterViewUI.tsx`, `app/storeRef.ts`
   → `services/proForge/CLAUDE.md`
 - LoRA external callers: `services/aiProviderService.ts`, `components/settings/LoraAdapterSection.tsx`,
   `components/settings/ProjectAiPresetSection.tsx`, `hooks/useWorldScriptAI.ts`,
