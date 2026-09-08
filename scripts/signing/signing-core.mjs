@@ -706,12 +706,48 @@ export function verifyOutgoingUpdates(input, remote, cwd = process.cwd(), depend
   }
 }
 
+// QNBS-v3: fail closed (not the "" from gitOutput) — an unreadable commit must not pass as clean.
 export function checkCommitAttribution(sha, cwd = process.cwd()) {
-  const message = gitOutput(['show', '-s', '--format=%B', sha], { cwd }) ?? '';
-  return checkAttributionText(message);
+  const result = runGit(['show', '-s', '--format=%B', sha], { cwd });
+  if (result.status !== 0) return { ok: false, matches: ['unreadable-commit'] };
+  return checkAttributionText(result.stdout);
 }
 
-// QNBS-v3: catches a missing/uninstalled commit-msg hook or commits authored by another tool.
+// QNBS-v3: cat-file -p reads the tag's own annotation body — session/co-author text can live there too.
+export function checkTagAttribution(sha, cwd = process.cwd()) {
+  const result = runGit(['cat-file', '-p', sha], { cwd });
+  if (result.status !== 0) return { ok: false, matches: ['unreadable-tag'] };
+  return checkAttributionText(result.stdout);
+}
+
+// QNBS-v3: split from the outer loop so each function's own nesting stays shallow (code-health delta).
+function firstAttributionFailure(
+  update,
+  cwd,
+  getIntroducedCommits,
+  checkCommit,
+  checkTag,
+  reports,
+) {
+  if (isZeroSha(update.localSha)) return null;
+  if (update.remoteRef.startsWith('refs/tags/')) {
+    const verification = checkTag(update.localSha);
+    reports.push({ sha: update.localSha, subject: update.remoteRef, verification });
+    return verification.ok
+      ? null
+      : `${update.remoteRef}: forbidden attribution pattern(s) ${verification.matches.join(', ')}`;
+  }
+  for (const sha of getIntroducedCommits(update)) {
+    const verification = checkCommit(sha);
+    reports.push({ sha, subject: commitSubject(sha, cwd), verification });
+    if (!verification.ok) {
+      return `${sha.slice(0, 12)}: forbidden attribution pattern(s) ${verification.matches.join(', ')}`;
+    }
+  }
+  return null;
+}
+
+// QNBS-v3: existing-branch ranges come from the shared evidence file (deterministic); only a new-branch push re-derives a live fallback base, sharing the signature check's same narrow concurrent-fetch window.
 export function checkAttributionForOutgoingUpdates(
   input,
   remote,
@@ -722,25 +758,20 @@ export function checkAttributionForOutgoingUpdates(
     dependencies.introducedCommits ?? ((update) => introducedCommits(update, remote, cwd));
   const checkCommit =
     dependencies.checkCommitAttribution ?? ((sha) => checkCommitAttribution(sha, cwd));
+  const checkTag = dependencies.checkTagAttribution ?? ((sha) => checkTagAttribution(sha, cwd));
   const reports = [];
   try {
     const updates = validatedPrePushUpdates(input);
     for (const update of updates) {
-      if (isZeroSha(update.localSha)) continue;
-      if (update.remoteRef.startsWith('refs/tags/')) continue;
-      const commits = getIntroducedCommits(update);
-      for (const sha of commits) {
-        const verification = checkCommit(sha);
-        const report = { sha, subject: commitSubject(sha, cwd), verification };
-        reports.push(report);
-        if (!verification.ok) {
-          return {
-            ok: false,
-            reports,
-            reason: `${sha.slice(0, 12)}: forbidden attribution pattern(s) ${verification.matches.join(', ')}`,
-          };
-        }
-      }
+      const reason = firstAttributionFailure(
+        update,
+        cwd,
+        getIntroducedCommits,
+        checkCommit,
+        checkTag,
+        reports,
+      );
+      if (reason) return { ok: false, reports, reason };
     }
     return { ok: true, reports };
   } catch (error) {

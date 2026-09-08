@@ -16,7 +16,7 @@ import { pathToFileURL } from 'node:url';
 export const FORBIDDEN_ATTRIBUTION_PATTERNS = [
   { name: 'claude-session-trailer', regex: /^Claude-Session:/im },
   { name: 'claude-session-url', regex: /claude\.ai\/code\/session_/i },
-  { name: 'claude-com-session-url', regex: /claude\.com\/[^\s]*\/session_/i },
+  { name: 'claude-com-session-url', regex: /claude\.com\/[^\s]*session_/i },
   { name: 'co-authored-by-claude', regex: /^Co-Authored-By:\s*Claude\b/im },
   { name: 'anthropic-noreply-email', regex: /noreply@anthropic\.com/i },
   { name: 'generated-by-claude-footer', regex: /^🤖\s*(Generated|Addressed)\s+.*Claude/im },
@@ -30,6 +30,8 @@ export function checkAttributionText(text) {
   return { ok: matches.length === 0, matches };
 }
 
+const SHA_LINE = /^[0-9a-f]{40}$/i;
+
 function runGit(args) {
   const result = spawnSync('git', args, { encoding: 'utf8' });
   if (result.error || result.status !== 0) throw new Error(`git ${args.join(' ')} failed`);
@@ -42,11 +44,72 @@ function checkRange(base, head) {
     .filter(Boolean);
   const failures = [];
   for (const sha of shas) {
+    // QNBS-v3: fail closed on any unexpected rev-list output shape before it reaches a git arg.
+    if (!SHA_LINE.test(sha)) throw new Error(`unexpected non-SHA line from git rev-list: ${sha}`);
     const message = runGit(['show', '-s', '--format=%B', sha]);
     const result = checkAttributionText(message);
     if (!result.ok) failures.push({ sha, matches: result.matches });
   }
   return failures;
+}
+
+function usageError(message) {
+  console.error(`[check-commit-attribution] ${message}`);
+  console.error(
+    'usage: node scripts/check-commit-attribution.mjs --file <path> | --message <text> | <base-sha> <head-sha>',
+  );
+  process.exitCode = 2;
+}
+
+function reportResult(result, label) {
+  if (result.ok) {
+    console.log('[check-commit-attribution] OK');
+    return;
+  }
+  console.error(
+    `[check-commit-attribution] ${label}forbidden pattern(s) ${result.matches.join(', ')} — remove AI/session attribution (see AGENTS.md).`,
+  );
+  process.exitCode = 1;
+}
+
+function runFileMode(filePath) {
+  let text;
+  try {
+    text = readFileSync(filePath, 'utf8');
+  } catch (error) {
+    console.error(
+      `[check-commit-attribution] cannot read ${filePath}: ${error instanceof Error ? error.message : 'unknown error'}`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+  reportResult(checkAttributionText(text), `${filePath}: `);
+}
+
+function runRangeMode(base, head) {
+  let failures;
+  try {
+    failures = checkRange(base, head);
+  } catch (error) {
+    console.error(
+      `[check-commit-attribution] ${error instanceof Error ? error.message : 'range check failed'}`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+  if (failures.length === 0) {
+    console.log(`[check-commit-attribution] OK — 0 forbidden patterns in ${base}..${head}`);
+    return;
+  }
+  for (const f of failures) {
+    console.error(
+      `[check-commit-attribution] ${f.sha.slice(0, 12)}: forbidden pattern(s) ${f.matches.join(', ')}`,
+    );
+  }
+  console.error(
+    '[check-commit-attribution] FAIL — remove AI/model/session attribution from the listed commits (see AGENTS.md).',
+  );
+  process.exitCode = 1;
 }
 
 export function main() {
@@ -56,53 +119,17 @@ export function main() {
 
   if (fileIndex >= 0) {
     const filePath = args[fileIndex + 1];
-    const result = checkAttributionText(readFileSync(filePath, 'utf8'));
-    if (!result.ok) {
-      console.error(
-        `[check-commit-attribution] ${filePath}: forbidden pattern(s) ${result.matches.join(', ')} — remove AI/session attribution (see AGENTS.md).`,
-      );
-      process.exitCode = 1;
-      return;
-    }
-    console.log('[check-commit-attribution] OK');
-    return;
+    if (!filePath) return usageError('--file requires a path argument');
+    return runFileMode(filePath);
   }
-
   if (messageIndex >= 0) {
-    const result = checkAttributionText(args[messageIndex + 1]);
-    if (!result.ok) {
-      console.error(
-        `[check-commit-attribution] forbidden pattern(s) ${result.matches.join(', ')} — remove AI/session attribution (see AGENTS.md).`,
-      );
-      process.exitCode = 1;
-      return;
-    }
-    console.log('[check-commit-attribution] OK');
-    return;
+    const text = args[messageIndex + 1];
+    if (text === undefined) return usageError('--message requires a text argument');
+    return reportResult(checkAttributionText(text), '');
   }
-
   const [base, head] = args;
-  if (!base || !head) {
-    console.error(
-      'usage: node scripts/check-commit-attribution.mjs --file <path> | --message <text> | <base-sha> <head-sha>',
-    );
-    process.exitCode = 2;
-    return;
-  }
-  const failures = checkRange(base, head);
-  if (failures.length > 0) {
-    for (const f of failures) {
-      console.error(
-        `[check-commit-attribution] ${f.sha.slice(0, 12)}: forbidden pattern(s) ${f.matches.join(', ')}`,
-      );
-    }
-    console.error(
-      '[check-commit-attribution] FAIL — remove AI/model/session attribution from the listed commits (see AGENTS.md).',
-    );
-    process.exitCode = 1;
-    return;
-  }
-  console.log(`[check-commit-attribution] OK — 0 forbidden patterns in ${base}..${head}`);
+  if (!base || !head) return usageError('requires --file, --message, or <base-sha> <head-sha>');
+  return runRangeMode(base, head);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

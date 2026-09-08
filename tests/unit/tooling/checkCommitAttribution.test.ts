@@ -1,8 +1,15 @@
+import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import {
   checkAttributionText,
   FORBIDDEN_ATTRIBUTION_PATTERNS,
 } from '../../../scripts/check-commit-attribution.mjs';
+
+function runCli(args: string[]) {
+  return spawnSync('node', ['scripts/check-commit-attribution.mjs', ...args], {
+    encoding: 'utf8',
+  });
+}
 
 describe('checkAttributionText', () => {
   it('passes a clean conventional commit', () => {
@@ -27,6 +34,12 @@ describe('checkAttributionText', () => {
     );
     expect(result.ok).toBe(false);
     expect(result.matches).toContain('co-authored-by-claude');
+  });
+
+  it('rejects a direct claude.com session URL with no intermediate path segment', () => {
+    const result = checkAttributionText('fix: bump dep\n\nhttps://claude.com/session_abc123\n');
+    expect(result.ok).toBe(false);
+    expect(result.matches).toContain('claude-com-session-url');
   });
 
   it('rejects a Claude-Session trailer', () => {
@@ -67,5 +80,30 @@ describe('checkAttributionText', () => {
 
   it('exposes one pattern per forbidden category', () => {
     expect(FORBIDDEN_ATTRIBUTION_PATTERNS.length).toBeGreaterThanOrEqual(6);
+  });
+});
+
+describe('check-commit-attribution CLI', () => {
+  it('rejects --message with no following value as a usage error, not a silent pass', () => {
+    const result = runCli(['--message']);
+    expect(result.status).toBe(2);
+    expect(result.stderr).toMatch(/--message requires a text argument/);
+  });
+
+  it('rejects --file with no following value as a usage error, not a silent pass', () => {
+    const result = runCli(['--file']);
+    expect(result.status).toBe(2);
+    expect(result.stderr).toMatch(/--file requires a path argument/);
+  });
+
+  it('fails closed with a clear message on a missing --file path', () => {
+    const result = runCli(['--file', '/nonexistent/path/does-not-exist.txt']);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/cannot read/);
+  });
+
+  it('exits 0 for a clean --message', () => {
+    const result = runCli(['--message', 'chore: bump dependency']);
+    expect(result.status).toBe(0);
   });
 });

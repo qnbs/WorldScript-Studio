@@ -85,8 +85,9 @@ When a task enters commit/push/PR/CI/review/merge work, read and follow
 - Do not add AI/model/tool attribution, generated-by footers, or Claude/session URLs to commit
   messages, tags, PR titles/bodies, or maintainer-authored review comments. Repository history
   records the code change, not the agent session. Never add `Co-Authored-By` for an AI agent or
-  a `Claude-Session` trailer. Enforced by `scripts/check-commit-attribution.mjs` (commit-msg hook,
-  pre-push, and CI).
+  a `Claude-Session` trailer. `scripts/check-commit-attribution.mjs` mechanically enforces this
+  for commit messages and PR titles/bodies (commit-msg hook, pre-push, and CI); review comments
+  and replies have no automated check and stay a manual policy — never append these footers there.
 - Before new history, run `pnpm run signing:doctor` and install hooks with
   `pnpm run hooks:install`. Commits and tags must be normally signed and Git-verified; never
   use `--no-gpg-sign`, `--no-verify`, unsigned temporary history, or force-push ordinary PR

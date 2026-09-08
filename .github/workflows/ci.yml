@@ -263,8 +263,8 @@ jobs:
           fi
           HEAD="${{ github.sha }}"
           if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BASE" 2>/dev/null; then
-            echo "::notice::No usable base SHA to diff against — skipping (nothing to compare)"
-            exit 0
+            echo "::error::No usable base SHA to diff against — cannot verify introduced commits for AI/session attribution. This is expected only on the repository's first-ever commit; review manually before merging."
+            exit 1
           fi
           node scripts/check-commit-attribution.mjs "$BASE" "$HEAD"
       - name: Reject AI/session attribution in PR title/body
