@@ -506,7 +506,9 @@ export function scanForDrift(content, filePath, { localeCount, keyCount, latestV
 // also reject the legitimate historical CHANGELOG entry, ADR narrative, and already-qualified
 // ROADMAP citations of the same PR elsewhere in the repo.
 const SECURITY_STATUS_DOCS = ['docs/SECURITY-THREAT-MODEL.md', 'docs/IDB-ENCRYPTION.md'];
-const PR_REFERENCE = /\[?PR\s*#(\d+)\]?/gi;
+// QNBS-v3 (coderabbit): tolerate an inline-code span around the digits ("PR `#356`"), not just a
+// markdown-link bracket — both are real Markdown ways to format a PR reference.
+const PR_REFERENCE = /\[?PR\s*`?#(\d+)`?\]?/gi;
 // QNBS-v3 (codex): order-independent — catches "PR #N is the active remediation", "the active
 // remediation is PR #N", "PR #N remains the active remediation", "pending PR #N", "pending on
 // PR #N", "in progress on PR #N", etc. Proximity to a PR reference (not fixed word order) is what
@@ -514,6 +516,12 @@ const PR_REFERENCE = /\[?PR\s*#(\d+)\]?/gi;
 const LIVE_STATUS_TRIGGER = /\bactive remediation\b|\bpending\b|\bin progress\b/gi;
 const STATUS_QUALIFIER_WORD = 'closed|merged|superseded';
 const STATUS_QUALIFIER_RE = new RegExp(`\\b(?:${STATUS_QUALIFIER_WORD})\\b`, 'gi');
+// QNBS-v3 (codex): a qualifier word only proves a completed status when it isn't negated
+// ("is not closed") or prospective ("will be merged") — checked against the text immediately
+// preceding the match.
+const QUALIFIER_NEGATION_OR_FUTURE =
+  /\b(?:not|never|isn't|won't|will|would|should|going to be)\s+(?:be\s+)?$/i;
+const NEGATION_LOOKBACK = 30;
 const PROXIMITY_WINDOW = 60;
 // QNBS-v3 (codex): an unordered/ordered Markdown list marker — same isolation reasoning as table
 // rows below.
@@ -538,9 +546,18 @@ function splitIntoParagraphs(content) {
     const trimmed = line.trim();
     if (trimmed === '') {
       flush();
-    } else if (trimmed.startsWith('|') || LIST_ITEM_MARKER.test(trimmed)) {
+    } else if (trimmed.startsWith('|')) {
+      // QNBS-v3 (codex): a table row is always a single physical line in standard Markdown — it
+      // never wraps — so push it immediately as its own unit, unlike a list item below.
       flush();
       paragraphs.push({ text: trimmed, startLine: i + 1 });
+    } else if (LIST_ITEM_MARKER.test(trimmed)) {
+      // QNBS-v3 (coderabbit): a new list item starts a new unit, but its own text may still
+      // soft-wrap across the following physical line(s) — buffer it like prose (don't push
+      // immediately) and let the next marker/table-row/blank line flush it.
+      flush();
+      startLine = i;
+      buffer.push(trimmed);
     } else {
       if (buffer.length === 0) startLine = i;
       buffer.push(trimmed);
@@ -590,13 +607,20 @@ function findPrReferences(sentence) {
   }));
 }
 
+// QNBS-v3 (codex): "is not closed" / "will be merged" don't assert a completed status — only a
+// qualifier that isn't negated or prospective actually proves the PR is done.
+function isNegatedOrProspective(sentence, matchIndex) {
+  const before = sentence.slice(Math.max(0, matchIndex - NEGATION_LOOKBACK), matchIndex);
+  return QUALIFIER_NEGATION_OR_FUTURE.test(before);
+}
+
 // QNBS-v3 (CodeScene): extracted so scanSecurityDocPrStatus itself stays a flat, shallow loop —
 // each of these small helpers owns exactly one nested loop+conditional, not three stacked in one.
 function collectQualifiedPrs(sentence, prRefs) {
   const qualifiedPrs = new Set();
   for (const m of sentence.matchAll(STATUS_QUALIFIER_RE)) {
     const nearest = nearestPrNumber(m.index, prRefs);
-    if (nearest !== null) qualifiedPrs.add(nearest);
+    if (nearest !== null && !isNegatedOrProspective(sentence, m.index)) qualifiedPrs.add(nearest);
   }
   return qualifiedPrs;
 }

@@ -682,4 +682,41 @@ describe('scanSecurityDocPrStatus', () => {
     const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
     expect(findings).toHaveLength(0);
   });
+
+  // QNBS-v3 (coderabbit/codex): a list item's own text may soft-wrap across the following
+  // physical line — an immediate push-per-marker-line split it before the trigger was reached.
+  it('flags a live-status claim wrapped across a list item', () => {
+    const content = ['- PR `#356` is', '  the active remediation for this gap'].join('\n');
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+  });
+
+  it('flags a Markdown-link PR reference wrapped across a list item', () => {
+    const content = [
+      '- [PR #999](https://github.com/qnbs/pull/999)',
+      'is the active remediation',
+    ].join('\n');
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+  });
+
+  // QNBS-v3 (codex): "is not closed" / "will be merged" don't assert a completed status — only an
+  // unnegated, non-prospective qualifier actually proves the PR is done.
+  it('still flags a claim whose only nearby qualifier is negated', () => {
+    const content = 'PR #999 is the active remediation; it is not closed.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+  });
+
+  it('still flags a claim whose only nearby qualifier is prospective (future tense)', () => {
+    const content = 'PR #999 is the active remediation and will be merged soon.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+  });
+
+  it('does not flag a claim with a genuinely completed (non-negated) qualifier', () => {
+    const content = 'PR #999 is the active remediation; it was later closed.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(0);
+  });
 });
