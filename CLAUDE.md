@@ -15,11 +15,14 @@ verified specialist mappings:
 - Plot Board external callers: `services/plotBoardService.ts`, `hooks/usePlotBoardAi.ts`,
   `components/scene-board/PlotMinimap.tsx` → `features/plotBoard/CLAUDE.md`
 - Voice external callers: `hooks/usePushToTalk.ts`, `hooks/useVoiceDictation.ts`,
-  `hooks/useVoiceAccessibility.ts` → `services/voice/CLAUDE.md`
+  `hooks/useVoiceAccessibility.ts`, `tests/e2e/mocks/voiceMockEngines.ts`
+  → `services/voice/CLAUDE.md`
 - Copilot external callers: `features/copilot/copilotSlice.ts`, `components/copilot/**/*`,
   `App.tsx` → `services/copilot/CLAUDE.md`
-- ProForge external callers: `features/proForge/proForgeSlice.ts`, `features/proForge/types.ts`,
-  `hooks/useProForgeOrchestrator.ts`, `app/storeRef.ts` → `services/proForge/CLAUDE.md`
+- ProForge guide applies to `features/proForge/**/*`; external callers:
+  `features/proForge/proForgeSlice.ts`, `features/proForge/types.ts`,
+  `hooks/useProForgeOrchestrator.ts`, `contexts/ProForgeViewContext.ts`, `app/storeRef.ts`
+  → `services/proForge/CLAUDE.md`
 - LoRA external callers: `services/aiProviderService.ts`, `components/settings/LoraAdapterSection.tsx`,
   `components/settings/ProjectAiPresetSection.tsx`, `hooks/useWorldScriptAI.ts`,
   `services/ai/worldScriptCompletionFetch.ts` → `features/lora/CLAUDE.md`

@@ -13,8 +13,9 @@ needs their detail. Dynamic facts belong in `package.json`, `.nvmrc`, scripts, o
 - Before every push, run `pnpm run ci:prepush`. On a new worktree or after dependency/lock
   changes, use `node scripts/dependency-state.mjs reconcile` (or `pnpm run deps:reconcile`),
   never a bare install.
-- Local default is the quick gate plus focused `pnpm exec vitest run <path>` when a changed
-  behavior has a relevant test. Never run `pnpm test`, an untargeted Vitest wrapper, full
+- Local default is the quick gate plus a focused test for every non-trivial behavior change;
+  add or update the narrowest relevant test rather than silently shipping unverified behavior.
+  Never run `pnpm test`, an untargeted Vitest wrapper, full
   coverage, Playwright E2E, Stryker, Lighthouse, or Storybook test-runner locally; cloud CI is
   authoritative for those heavy checks.
 - The authoritative repository typecheck is `pnpm run typecheck`; a lighter helper is not an
