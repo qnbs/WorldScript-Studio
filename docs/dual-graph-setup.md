@@ -110,8 +110,9 @@ pnpm run ci:prepush
 
 ## Prompt Templates for Kimi K2.6 (optional reference — not required setup)
 
-Claude Code's own graph-usage instructions live directly in `CLAUDE.md` and don't need a separate
-template. The templates below are optional reference material if you're driving this repo through
+The repository's graph-usage instructions live in [`docs/graphify.md`](graphify.md) and the root
+agent adapters, so they don't need a separate Claude template. The templates below are optional
+reference material if you're driving this repo through
 Kimi K2.6 or a similarly prompted agent that needs the same guidance spelled out explicitly.
 
 ### Template A: Feature Development

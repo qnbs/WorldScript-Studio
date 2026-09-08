@@ -451,4 +451,4 @@ Full maintainer guide: [`docs/architecture/proforge-capability-layer.md`](archit
 
 ---
 
-*See `CLAUDE.md` for engineering conventions and `docs/CI.md` for testing requirements.*
+*See `AGENTS.md` for engineering conventions and `docs/CI.md` for testing requirements.*

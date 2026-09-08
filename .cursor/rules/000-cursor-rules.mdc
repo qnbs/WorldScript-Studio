@@ -1,6 +1,5 @@
 ---
 description: ALWAYS use when asked to CREATE A RULE or UPDATE A RULE or when taught a lesson to RETAIN AS NEW RULE
-globs: ~
 alwaysApply: false
 ---
 
@@ -22,8 +21,11 @@ alwaysApply: false
   - `300–399` UI
   - `800–899` Testing/Workflows
 - Frontmatter **`description`:** ATO (Action, Trigger, Outcome), **< 120 Zeichen**.
-- **`globs`:** kommagetrennt, **keine Leerzeichen**, keine Anführungszeichen — z. B. `globs: services/**/*.ts,features/**/*.ts`.
-- **`alwaysApply: true`** nur für [`.cursor/index.mdc`](../index.mdc) (Manifest). Fachregeln: `false` + passende `globs`.
+- **`globs`:** optional, comma-separated patterns with **no spaces** or quotation marks — e.g.
+  `globs: services/**/*.ts,features/**/*.ts`. Omit it for description-based Apply Intelligently
+  rules; use real patterns for path-specific rules.
+- An always-applied repository rule is not needed. Use `alwaysApply: false` with precise globs or
+  a useful description.
 - **≤ 200 Zeilen** pro Datei; Code nicht duplizieren — verweise auf kanonische Pfade (`@services/logger.ts`).
 - Pflicht: `<example>` und `<example type="invalid">`.
 - Regeln mit **Plain-Text-Editor** schreiben (MDC-UI-Bugs vermeiden).
@@ -33,8 +35,7 @@ alwaysApply: false
 ```yaml
 ---
 description: <ATO unter 120 Zeichen>
-globs: <Pfadmuster oder ~ für manuell>
-alwaysApply: <true nur Manifest>
+alwaysApply: false
 ---
 ```
 
@@ -49,5 +50,6 @@ Hybrid-KI-Regel: `101-hybrid-ai-orchestration.mdc`, `globs: services/ai/**/*.ts,
 </example>
 
 <example type="invalid">
-`globs: *.ts, *.tsx` (Leerzeichen); 300-Zeilen-Regel mit kopiertem Redux-Reducer; `alwaysApply: true` auf jeder Fachregel.
+`globs: **/*` für jede Fachregel; copied architecture encyclopedias; or an always-applied
+specialist rule.
 </example>

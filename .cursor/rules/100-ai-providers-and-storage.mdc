@@ -1,6 +1,6 @@
 ---
-description: Apply hybrid AI,IndexedDB,and storage patterns when editing services or features
-globs: services/**/*.ts,features/**/*.ts,packages/ai-core/**/*.ts
+description: Apply hybrid AI, persistence, and privacy patterns on AI and storage boundaries
+globs: app/listenerMiddleware.ts,app/persistenceCoordinator.ts,app/persistedStateFlush.ts,components/ApiKeySection.tsx,components/BinderPanel.tsx,components/CharacterView.tsx,components/ManuscriptResearchSplit.tsx,components/WelcomePortal.tsx,components/WorldView.tsx,components/dashboard/BackupQuickActionsCard.tsx,components/settings/AiProviderCard.tsx,components/settings/GeneralSections.tsx,components/settings/OpenRouterSection.tsx,components/settings/EncryptionRecoveryModal.tsx,components/settings/IdbUnlockModal.tsx,components/settings/IdbUnlockModalGate.tsx,components/settings/PassphraseModal.tsx,components/settings/PrivacySection.tsx,features/lora/loraThunks.ts,features/project/projectSchemaVersion.ts,features/project/projectSchemaVersionShadow.ts,features/project/thunks/**/*.ts,features/settings/settingsSlice.ts,features/writer/writerSlice.ts,hooks/useCharacterInterviewsView.ts,hooks/useCharacterView.ts,hooks/useFactoryReset.ts,hooks/useIdbUnlockStartupGuard.ts,hooks/useSettingsView.ts,hooks/useWorldView.ts,hooks/useWorldScriptAI.ts,App.tsx,index.tsx,services/ai/**/*.ts,services/aiProviderService.ts,services/appBootstrap.ts,services/cloudSync/**/*.ts,services/codexService.ts,services/crossProjectIndexService.ts,services/crossProjectSearchService.ts,services/dbInitialization.ts,services/dbMigration.ts,services/dbService.ts,services/diagnostics/logSinks.ts,services/factoryResetService.ts,services/fs/**/*.ts,services/geminiService.ts,services/keyboard/shortcutActions.ts,services/libraryBackupService.ts,services/localAiFacade.ts,services/workerBusManager.ts,services/localFirst/**/*.ts,services/localRag*.ts,services/lora/**/*.ts,services/loraAdapterService.ts,services/pluginRegistry.ts,services/projectDocument.ts,services/projectImportSchema.ts,services/proForge/adapters/nodeProForgeCapability.ts,services/proForge/proForgeHistoryStore.ts,services/proForge/proForgeMemoryBank.ts,services/proForge/proForgeOrchestrator.ts,services/rag*.ts,services/sceneRevisionService.ts,services/settingsExchange.ts,services/startupRecovery.tsx,services/startupRecoveryPolicy.ts,services/storage/**/*.ts,services/storageBackend.ts,services/storageService.ts,services/duckdb/**/*.ts,services/logger.ts,services/collaborationService.ts,workers/v2/webllm.worker.ts,packages/ai-core/**/*.ts,packages/collab-transport/**/*
 alwaysApply: false
 ---
 
@@ -10,7 +10,7 @@ alwaysApply: false
 
 - Einstieg **`services/ai/index.ts`**: Strangler neben Legacy; Writer-Streaming → **`writer`-Slice**, Manuskript erst nach **Accept**.
 - Netzwerk-KI: **`aiProviderService.ts`**, **`geminiService.ts`** — keine parallele SDK-Init in Komponenten.
-- Vercel AI SDK (`ai`, `@ai-sdk/google`, `@ai-sdk/openai`): neue Pfade über `services/ai/` und Hooks (`useStoryCraftAI` o. ä.), nicht doppelte Retry-Logik.
+- Vercel AI SDK (`ai`, `@ai-sdk/google`, `@ai-sdk/openai`): new paths belong in `services/ai/` and `hooks/useWorldScriptAI.ts`; do not duplicate retry logic.
 - **`assertCloudAiAllowed`:** Cloud nur wenn Policy/Settings es erlauben.
 
 ## Hybrid & lokale Inferenz
@@ -18,7 +18,8 @@ alwaysApply: false
 - Presets: Ollama/LM Studio/vLLM via `settings.advancedAi`; Cloud-Router über `openAiCompatibleBaseUrl` + Key-Slot.
 - Fallback-Kette in `aiProviderService` für Legacy-Thunks respektieren.
 - WebLLM/GPU: **`gpuResourceManager`**, Tab-Leader (`packages/ai-core` / BroadcastChannel) — kein zweiter schwerer Inferenz-Tab.
-- Lokales RAG/Embeddings: bestehende Speicher (`saveRagVectors`), chunked yields; `@xenova/transformers` nur über etablierte Pfade.
+- WebLLM offload follows ADR 0005: keep the dedicated worker-first pool, capability-based main-thread fallback, and progress bridge; do not couple it to `enableWorkerBusV2` or move model loading back to the UI thread.
+- Lokales RAG/Embeddings: bestehende Speicher (`saveRagVectors`), chunked yields; `@huggingface/transformers` nur über etablierte Pfade.
 
 ## Google GenAI
 
@@ -29,7 +30,7 @@ alwaysApply: false
 - Zugriff über `dbService.ts`, `storageService.ts`, **`storageBackend.ts`** (`saveEnvelopeFromProjectData` — kein roher Cast im Listener).
 - Record-Keys/Migrationen nicht willkürlich umbenennen; Scene-Revisions → `sceneRevisionService.ts` (eigener Store).
 - `checkStorageHealth()` in `services/dbInitialization.ts` — liefert `StorageHealth`; wird beim App-Start ausgeführt (Low-Storage-Toast).
-- Kollaboration: nur **eine** CRDT-Schicht (`collaborationService.ts` + Yjs). RTCDataChannel-Verschlüsselung läuft über den y-webrtc-Patch (`patches/y-webrtc@10.3.0.patch`) — nicht erneut implementieren.
+- Kollaboration: nur **eine** CRDT-Schicht (`collaborationService.ts` + Yjs). RTCDataChannel-Verschlüsselung lebt in `packages/collab-transport`; Änderungen folgen `VENDOR-FORKS.md` und `pnpm run verify:vendor` — keine parallele Schicht implementieren.
 
 ## Privacy
 

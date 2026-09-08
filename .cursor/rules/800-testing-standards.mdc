@@ -1,6 +1,6 @@
 ---
 description: Require deterministic Vitest mocks and CI-first heavy suites per docs/CI.md
-globs: tests/**/*.test.ts,tests/**/*.test.tsx,tests/**/*.spec.ts,tests/**/*.spec.tsx,components/**/*.test.ts,components/**/*.test.tsx
+globs: tests/**/*,packages/**/tests/**/*,components/**/*.test.ts,components/**/*.test.tsx,vitest.config.ts,playwright.config.ts,stryker.config.mjs,stryker-scope.json,.github/workflows/mutation.yml,scripts/stryker-scope.mjs,scripts/stryker-scope.d.mts,scripts/aggregate-stryker-reports.mjs,scripts/aggregate-stryker-reports.d.mts,scripts/assert-ci-only.mjs
 alwaysApply: false
 ---
 
@@ -9,6 +9,7 @@ alwaysApply: false
 ## Determinismus
 
 - Tests **isoliert**: keine Reihenfolge-, Netzwerk- oder `Date.now()`-Abhängigkeit ohne Mock/Fake-Timer.
+- Bei `Intl.Segmenter`, `Intl.PluralRules` und verwandten ICU-APIs stabile Verhaltensgarantien statt exakt formatierter, engine-/locale-abhängiger Zählwerte prüfen.
 - Redux, `localStorage`, IDB: Reset via `tests/setup.ts` oder explizite Fixtures.
 - Vitest: **`maxWorkers: 1`** im Repo — keinen parallelen schweren Lauf neben Build/E2E auf Low-RAM-Maschinen.
 
@@ -20,7 +21,9 @@ alwaysApply: false
 ## Verbotene „Grün-Tricks“
 
 - Kein Auskommentieren von Assertions, kein dauerhaftes Ignorieren flakiger Unit-Tests.
-- `it.skip`/`describe.skip` nur mit **Dateikommentar** (Grund, Ticket) und bewusst deaktivierten Suites — nicht statt Fix.
+- `it.skip`/`describe.skip` oder eine temporäre Quarantäne nur nach dem vollständigen Vertrag in
+  [`docs/CI.md#first-attempt-failures-and-flake-quarantine`](../../docs/CI.md#first-attempt-failures-and-flake-quarantine)
+  — nicht als Ersatz für einen Fix.
 
 ## Assertions & E2E-Hilfen
 
@@ -30,19 +33,19 @@ alwaysApply: false
 
 ## Spezialfälle
 
-- `sceneRevisionService` / reine IDB: `@vitest-environment node` + `IDBFactory` + `_resetDbForTest()` (siehe `CLAUDE.md`).
+- `sceneRevisionService` / reine IDB: `@vitest-environment node` + `IDBFactory` + `_resetDbForTest()` (see `tests/CLAUDE.md`).
 - Risiko-Hotspots bei Änderungen testen: `dbService`, `aiProviderService`, Import/Export, `storageBackend`.
 
 ## CI-first (kanonisch: [`docs/CI.md`](../../docs/CI.md))
 
 | Tier | Befehle |
 |------|---------|
-| **Lokal schnell** | `lint`, `typecheck`, `i18n:check`; optional `pnpm exec vitest run` **ohne** `--coverage` |
-| **CI schwer** | Vitest **mit** Coverage (Schwellen 63/55/54/62 — lines/branches/functions/statements), `CI=true pnpm run test:e2e`, LHCI, `bundle:budget` |
+| **Lokal schnell** | `pnpm run ci:prepush`; optional focused `pnpm exec vitest run <path>` **ohne** `--coverage` |
+| **CI schwer** | Vitest **mit** Coverage (thresholds defined by [`scripts/coverage-thresholds.json`](../../scripts/coverage-thresholds.json); do not duplicate or lower them here), `CI=true pnpm run test:e2e`, LHCI, `bundle:budget` |
 
 - Merge-Bar = **grüner GitHub-Workflow**, nicht voller lokaler E2E auf schwacher Hardware.
-- Mobile E2E lokal nur mit `RUN_MOBILE_E2E=1` (siehe `playwright.config.ts`).
-- **Stryker:** informativ (`continue-on-error`); Score-Gate nicht umgehen durch Test-Löschung.
+- Playwright E2E is CI-only on this constrained workstation; use `playwright.config.ts` for CI matrix details.
+- **Stryker:** CI/manual only; never lower a score gate or delete tests to make it green.
 
 <example>
 `aiProviderService`: `vi.mock` für SDK; feste Antwort; bei IDB-Test `node`-Environment + Factory-Reset.

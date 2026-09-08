@@ -110,9 +110,9 @@ Informed predictions from the codebase, to triage faster once findings land. **N
   suppressions** (mostly `noExplicitAny` at worker/test boundaries). DeepSource will likely flag the
   same sites (e.g. `JS-0323` "avoid `any`"). Decision skew: worker-protocol/test boundaries →
   `# skipcq`+reason or config-ignore in test paths; production `any` → real fix where feasible.
-- **React hooks deps / re-render (JS):** exhaustive-deps and re-render rules — cross-check against the
-  repo's deliberate ResizeObserver/layout-trigger patterns (CLAUDE.md notes Biome exhaustive-deps
-  exceptions); config-ignore where the deviation is intentional and documented.
+- **React hooks deps / re-render (JS):** exhaustive-deps and re-render rules — cross-check against
+  current source, `biome.json`, and the applicable path-scoped rule; config-ignore only where the
+  deviation is intentional and documented.
 - **Rust (`src-tauri/`):** clippy-style findings on the Tauri backend; no PR-CI gate historically →
   verify via `tauri-build.yml`. Low traffic.
 - **Docker:** `Dockerfile`/compose hardening hints (pinned tags, non-root) — quick P4 batch.
