@@ -500,26 +500,82 @@ export function scanForDrift(content, filePath, { localeCount, keyCount, latestV
 }
 
 // QNBS-v3: (audit F-1) reject a live/pending-remediation claim tied to a bare PR number in the two
-// security-status docs unless the same line also states that PR's actual closed/merged state — a
-// stale "PR #356 is the active remediation" survived weeks after #356 closed because nothing
-// checked it. Deliberately scoped to these two files, not repo-wide: a blanket rule would also
-// reject the legitimate historical CHANGELOG entry, ADR narrative, and already-qualified ROADMAP
-// citations of the same PR elsewhere in the repo.
+// security-status docs unless that same PR number also carries its actual closed/merged state
+// nearby — a stale "PR #356 is the active remediation" survived weeks after #356 closed because
+// nothing checked it. Deliberately scoped to these two files, not repo-wide: a blanket rule would
+// also reject the legitimate historical CHANGELOG entry, ADR narrative, and already-qualified
+// ROADMAP citations of the same PR elsewhere in the repo.
 const SECURITY_STATUS_DOCS = ['docs/SECURITY-THREAT-MODEL.md', 'docs/IDB-ENCRYPTION.md'];
-const LIVE_STATUS_CLAIM =
-  /is the active remediation|\bpending\s+\[?PR\s*#\d+|\bin progress on\s+\[?PR\s*#\d+/i;
-const STATUS_QUALIFIER = /\b(?:closed|merged|superseded)\b/i;
+// QNBS-v3 (CodeAnt): the PR number is captured INSIDE each alternative so the qualifier check
+// below can require proximity to that specific PR, not "any qualifier anywhere in the text" —
+// otherwise a closed/merged mention of a DIFFERENT PR would wrongly suppress this one's finding.
+const LIVE_STATUS_CLAIM_WITH_PR = new RegExp(
+  [
+    // QNBS-v3: the gap allows any character (a markdown link's URL contains periods, e.g.
+    // "github.com") — matching already runs per-sentence, so a real sentence boundary was
+    // already cut before this regex ever sees the text.
+    String.raw`\[?PR\s*#(?<prA>\d+)\]?[\s\S]{0,120}?\bis the active remediation`,
+    String.raw`\bpending\s+\[?PR\s*#(?<prB>\d+)\]?`,
+    String.raw`\bin progress on\s+\[?PR\s*#(?<prC>\d+)\]?`,
+  ].join('|'),
+  'gi',
+);
+const STATUS_QUALIFIER_WORD = 'closed|merged|superseded';
+
+// QNBS-v3 (CodeAnt): group physical lines into Markdown paragraphs (blank-line-delimited) before
+// matching — a naive per-line split let a status claim split across a soft-wrapped line evade
+// detection entirely, since neither half alone matched the full pattern.
+function splitIntoParagraphs(content) {
+  const paragraphs = [];
+  let buffer = [];
+  let startLine = 0;
+  const flush = () => {
+    if (buffer.length > 0) {
+      paragraphs.push({ text: buffer.join(' '), startLine: startLine + 1 });
+      buffer = [];
+    }
+  };
+  content.split('\n').forEach((line, i) => {
+    if (line.trim() === '') {
+      flush();
+    } else {
+      if (buffer.length === 0) startLine = i;
+      buffer.push(line.trim());
+    }
+  });
+  flush();
+  return paragraphs;
+}
+
+// QNBS-v3: crude but sufficient sentence split for this narrow, two-file gate — doesn't need to
+// handle abbreviations/decimals correctly, only to stop a qualifier for one PR bleeding across an
+// unrelated sentence into another PR's claim.
+function splitIntoSentences(paragraph) {
+  return paragraph.split(/(?<=[.;])\s+/);
+}
 
 export function scanSecurityDocPrStatus(content, filePath) {
   const findings = [];
-  const lines = content.split('\n');
-  lines.forEach((line, i) => {
-    if (LIVE_STATUS_CLAIM.test(line) && !STATUS_QUALIFIER.test(line)) {
-      findings.push(
-        `${filePath}:${i + 1} — asserts a live/pending remediation status tied to a PR number without stating that PR's actual closed/merged state: "${line.trim()}"`,
-      );
+  for (const { text: paragraph, startLine } of splitIntoParagraphs(content)) {
+    for (const sentence of splitIntoSentences(paragraph)) {
+      for (const match of sentence.matchAll(LIVE_STATUS_CLAIM_WITH_PR)) {
+        const prNumber = match.groups?.prA ?? match.groups?.prB ?? match.groups?.prC;
+        // QNBS-v3 (CodeAnt): the qualifier must sit near THIS PR's own number in the same
+        // sentence, not merely appear somewhere in it — otherwise a different, already-qualified
+        // PR mentioned nearby would incorrectly suppress this one's live-status finding.
+        const qualifiedForThisPr = new RegExp(
+          `#${prNumber}\\b[\\s\\S]{0,60}\\b(?:${STATUS_QUALIFIER_WORD})\\b|` +
+            `\\b(?:${STATUS_QUALIFIER_WORD})\\b[\\s\\S]{0,60}#${prNumber}\\b`,
+          'i',
+        ).test(sentence);
+        if (!qualifiedForThisPr) {
+          findings.push(
+            `${filePath}:${startLine} — asserts a live/pending remediation status tied to PR #${prNumber} without stating that PR's actual closed/merged state: "${sentence.trim()}"`,
+          );
+        }
+      }
     }
-  });
+  }
   return findings;
 }
 

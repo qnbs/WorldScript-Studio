@@ -601,4 +601,27 @@ describe('scanSecurityDocPrStatus', () => {
     const findings = scanSecurityDocPrStatus(content, 'docs/IDB-ENCRYPTION.md');
     expect(findings).toHaveLength(0);
   });
+
+  // QNBS-v3 (CodeAnt): a naive per-physical-line split let a status claim soft-wrapped across two
+  // Markdown lines within the same paragraph evade detection entirely.
+  it('flags a claim even when Markdown wraps it across two physical lines of one paragraph', () => {
+    const content = [
+      'Desktop plaintext persistence remains open. [PR #356](https://github.com/qnbs/pull/356)',
+      'is the active remediation for this gap.',
+    ].join('\n');
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain('PR #356');
+  });
+
+  // QNBS-v3 (CodeAnt): the qualifier must be tied to the SAME PR number, not merely present
+  // anywhere in the sentence/line — otherwise a different, already-closed PR mentioned nearby
+  // would wrongly suppress a live claim about an unrelated, still-unqualified PR.
+  it('still flags an unqualified claim when a DIFFERENT PR is closed nearby', () => {
+    const content =
+      'PR #999 is the active remediation for this gap, unlike PR #111 which was already closed.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain('PR #999');
+  });
 });
