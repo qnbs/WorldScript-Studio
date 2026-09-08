@@ -499,6 +499,30 @@ export function scanForDrift(content, filePath, { localeCount, keyCount, latestV
   return findings;
 }
 
+// QNBS-v3: (audit F-1) reject a live/pending-remediation claim tied to a bare PR number in the two
+// security-status docs unless the same line also states that PR's actual closed/merged state — a
+// stale "PR #356 is the active remediation" survived weeks after #356 closed because nothing
+// checked it. Deliberately scoped to these two files, not repo-wide: a blanket rule would also
+// reject the legitimate historical CHANGELOG entry, ADR narrative, and already-qualified ROADMAP
+// citations of the same PR elsewhere in the repo.
+const SECURITY_STATUS_DOCS = ['docs/SECURITY-THREAT-MODEL.md', 'docs/IDB-ENCRYPTION.md'];
+const LIVE_STATUS_CLAIM =
+  /is the active remediation|\bpending\s+\[?PR\s*#\d+|\bin progress on\s+\[?PR\s*#\d+/i;
+const STATUS_QUALIFIER = /\b(?:closed|merged|superseded)\b/i;
+
+export function scanSecurityDocPrStatus(content, filePath) {
+  const findings = [];
+  const lines = content.split('\n');
+  lines.forEach((line, i) => {
+    if (LIVE_STATUS_CLAIM.test(line) && !STATUS_QUALIFIER.test(line)) {
+      findings.push(
+        `${filePath}:${i + 1} — asserts a live/pending remediation status tied to a PR number without stating that PR's actual closed/merged state: "${line.trim()}"`,
+      );
+    }
+  });
+  return findings;
+}
+
 // QNBS-v3: exits 1 on any finding — unlike check-coverage-ratchet.mjs this gate is blocking, since a doc claiming a wrong locale/key/release count is actively misleading, not just an opportunity.
 // QNBS-v3 (F-10, CodeRabbit follow-up): locales/it/help.json IS included — it's exactly where the F-10 stale-URL drift happened; the in-app link reads the constant directly so it can't drift and isn't listed here.
 const URL_CHECK_FILES = ['README.md', 'CLAUDE.md', 'locales/it/help.json'];
@@ -553,6 +577,17 @@ function main() {
       continue;
     }
     allFindings.push(...scanForUrlDrift(content, relPath, canonicalUrl));
+  }
+
+  for (const relPath of SECURITY_STATUS_DOCS) {
+    const abs = join(root, relPath);
+    let content;
+    try {
+      content = readFileSync(abs, 'utf8');
+    } catch {
+      continue;
+    }
+    allFindings.push(...scanSecurityDocPrStatus(content, relPath));
   }
 
   for (const relPath of BUNDLE_BUDGET_DOCS) {

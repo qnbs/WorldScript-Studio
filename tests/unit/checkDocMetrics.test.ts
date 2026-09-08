@@ -16,6 +16,7 @@ import {
   scanLocalizedBundleBudgetTruth,
   scanReadmeTestMetrics,
   scanReleaseTruth,
+  scanSecurityDocPrStatus,
   stripHistoricalSections,
   VERCEL_URL_PATTERN,
 } from '../../scripts/check-doc-metrics.mjs';
@@ -552,5 +553,52 @@ describe('scanForUrlDrift', () => {
     it('still matches the -indol dead-preview host (hyphenated variant)', () => {
       expect(matches('https://worldscript-studio-indol.vercel.app/')).toBe(true);
     });
+  });
+});
+
+// QNBS-v3 (audit F-1): a security doc asserting a PR is "the active remediation" or work is
+// "pending"/"in progress on" that PR must say so truthfully — this gate exists because
+// docs/SECURITY-THREAT-MODEL.md said exactly that about PR #356 for weeks after it closed.
+describe('scanSecurityDocPrStatus', () => {
+  it('flags an unqualified "is the active remediation" claim', () => {
+    const content =
+      '| Threat | [PR #356](https://github.com/qnbs/WorldScript-Studio/pull/356) is the active remediation | Loc |';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain('docs/SECURITY-THREAT-MODEL.md:1');
+  });
+
+  it('flags an unqualified "pending [PR #NNN]" claim', () => {
+    const content =
+      "remain only as shared crypto plumbing pending [PR #356](https://github.com/qnbs/WorldScript-Studio/pull/356)'s project-data encryption work.";
+    const findings = scanSecurityDocPrStatus(content, 'docs/IDB-ENCRYPTION.md');
+    expect(findings).toHaveLength(1);
+  });
+
+  it('flags an unqualified "in progress on PR #NNN" claim', () => {
+    const content = 'Encryption work is in progress on PR #356.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/IDB-ENCRYPTION.md');
+    expect(findings).toHaveLength(1);
+  });
+
+  it('does not flag the same claim once qualified as closed/superseded on the same line', () => {
+    const content =
+      'PR #356 is the active remediation for the prior (now inaccurate) history — PR #356 was later closed as superseded by R-15.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(0);
+  });
+
+  it('does not flag a bare historical PR citation with no live-status verb', () => {
+    const content =
+      'it remains in fsCore.ts as shared crypto plumbing for other filesystem-encrypted data (see [PR #356](https://github.com/qnbs/WorldScript-Studio/pull/356), closed 2026-08-18 as superseded).';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(0);
+  });
+
+  it('does not flag "pending" prose with no PR-number anchor', () => {
+    const content =
+      'Full at-rest protection for the desktop filesystem store is pending R-15 implementation.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/IDB-ENCRYPTION.md');
+    expect(findings).toHaveLength(0);
   });
 });

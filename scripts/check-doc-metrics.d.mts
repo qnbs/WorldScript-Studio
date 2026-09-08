@@ -36,3 +36,4 @@ export function scanLocalizedBundleBudgetTruth(
 export function getCanonicalProductionUrl(): string;
 export function scanForUrlDrift(content: string, filePath: string, canonicalUrl: string): string[];
 export const VERCEL_URL_PATTERN: RegExp;
+export function scanSecurityDocPrStatus(content: string, filePath: string): string[];
