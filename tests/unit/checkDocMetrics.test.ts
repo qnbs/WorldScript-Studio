@@ -654,4 +654,32 @@ describe('scanSecurityDocPrStatus', () => {
     const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
     expect(findings).toHaveLength(0);
   });
+
+  // QNBS-v3 (codex): a raw character-window qualifier check let a SHORT, unrelated PR's qualifier
+  // suppress a different PR's unqualified claim when both PRs sat close together. Nearest-PR
+  // association (not "any qualifier within the window") is required.
+  it('still flags an unqualified claim when a nearby DIFFERENT PR is closed right next to it', () => {
+    const content = '[PR #999] is the active remediation, unlike [PR #111], closed.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain('PR #999');
+  });
+
+  // QNBS-v3 (codex): consecutive Markdown list items have no blank line between them either —
+  // joining them let an unrelated later item's trigger word attach to an earlier item's PR.
+  it("does not let one list item's wording attach to a different item's PR reference", () => {
+    const content = ['- Historical context: PR #356', '- R-15 implementation is pending'].join(
+      '\n',
+    );
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(0);
+  });
+
+  // QNBS-v3 (codex): a semicolon does not end a sentence — splitting on it separated a claim from
+  // its own qualifying clause.
+  it('does not flag a claim whose qualifier follows a semicolon in the same sentence', () => {
+    const content = 'PR #356 is the active remediation; it was later closed as superseded.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(0);
+  });
 });

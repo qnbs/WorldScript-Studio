@@ -511,16 +511,19 @@ const PR_REFERENCE = /\[?PR\s*#(\d+)\]?/gi;
 // remediation is PR #N", "PR #N remains the active remediation", "pending PR #N", "pending on
 // PR #N", "in progress on PR #N", etc. Proximity to a PR reference (not fixed word order) is what
 // makes a phrase a live-status CLAIM rather than incidental prose.
-const LIVE_STATUS_TRIGGER = /\bactive remediation\b|\bpending\b|\bin progress\b/i;
+const LIVE_STATUS_TRIGGER = /\bactive remediation\b|\bpending\b|\bin progress\b/gi;
 const STATUS_QUALIFIER_WORD = 'closed|merged|superseded';
-const STATUS_QUALIFIER_RE = new RegExp(`\\b(?:${STATUS_QUALIFIER_WORD})\\b`, 'i');
+const STATUS_QUALIFIER_RE = new RegExp(`\\b(?:${STATUS_QUALIFIER_WORD})\\b`, 'gi');
 const PROXIMITY_WINDOW = 60;
+// QNBS-v3 (codex): an unordered/ordered Markdown list marker — same isolation reasoning as table
+// rows below.
+const LIST_ITEM_MARKER = /^(?:[-*+]|\d+\.)\s+/;
 
 // QNBS-v3 (CodeAnt): group physical lines into Markdown paragraphs (blank-line-delimited) before
 // matching — a naive per-line split let a status claim split across a soft-wrapped line evade
-// detection entirely. QNBS-v3 (codex): a Markdown table row is its own logical unit even though
-// consecutive rows have no blank line between them — joining them let a live-status claim in one
-// row absorb an unrelated row's qualifier (or vice versa).
+// detection entirely. QNBS-v3 (codex): a Markdown table row or list item is its own logical unit
+// even though consecutive rows/items have no blank line between them — joining them let a
+// live-status claim in one row/item absorb an unrelated row/item's qualifier (or vice versa).
 function splitIntoParagraphs(content) {
   const paragraphs = [];
   let buffer = [];
@@ -535,7 +538,7 @@ function splitIntoParagraphs(content) {
     const trimmed = line.trim();
     if (trimmed === '') {
       flush();
-    } else if (trimmed.startsWith('|')) {
+    } else if (trimmed.startsWith('|') || LIST_ITEM_MARKER.test(trimmed)) {
       flush();
       paragraphs.push({ text: trimmed, startLine: i + 1 });
     } else {
@@ -547,11 +550,12 @@ function splitIntoParagraphs(content) {
   return paragraphs;
 }
 
-// QNBS-v3: crude but sufficient sentence split for this narrow, two-file gate — doesn't need to
-// handle abbreviations/decimals correctly, only to stop a qualifier for one PR bleeding across an
-// unrelated sentence into another PR's claim.
+// QNBS-v3 (codex): a semicolon does not end a sentence — splitting on it separated a claim from
+// its own qualifying clause (e.g. "PR #N is the active remediation; it was later closed."). Only
+// a period genuinely ends a sentence here; the character-proximity window below is what actually
+// bounds how far a qualifier/trigger may be from a PR reference, not this split.
 function splitIntoSentences(paragraph) {
-  return paragraph.split(/(?<=[.;])\s+/);
+  return paragraph.split(/(?<=\.)\s+/);
 }
 
 // QNBS-v3 (codex): a markdown link's URL (github.com/.../pull/NNN) adds length between a PR
@@ -561,35 +565,49 @@ function stripLinkUrls(text) {
   return text.replace(/\]\([^)]*\)/g, ']');
 }
 
+// QNBS-v3 (codex): associate a word occurrence with its NEAREST PR reference by character
+// distance, not "any PR reference within a fixed window" — a raw-window check let a short,
+// unrelated PR's qualifier suppress a different PR's live claim when both sat close together
+// (e.g. "[PR #999] is the active remediation, unlike [PR #111], closed.").
+function nearestPrNumber(position, prRefs) {
+  let best = null;
+  let bestDistance = Infinity;
+  for (const ref of prRefs) {
+    const distance = position < ref.index ? ref.index - position : Math.max(0, position - ref.end);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = ref.prNumber;
+    }
+  }
+  return bestDistance <= PROXIMITY_WINDOW ? best : null;
+}
+
 export function scanSecurityDocPrStatus(content, filePath) {
   const findings = [];
   for (const { text: paragraph, startLine } of splitIntoParagraphs(content)) {
     const compact = stripLinkUrls(paragraph);
     for (const sentence of splitIntoSentences(compact)) {
-      for (const match of sentence.matchAll(PR_REFERENCE)) {
-        const prNumber = match[1];
-        const nearby = sentence.slice(
-          Math.max(0, match.index - PROXIMITY_WINDOW),
-          match.index + match[0].length + PROXIMITY_WINDOW,
+      const prRefs = [...sentence.matchAll(PR_REFERENCE)].map((m) => ({
+        index: m.index,
+        end: m.index + m[0].length,
+        prNumber: m[1],
+      }));
+      if (prRefs.length === 0) continue;
+
+      const qualifiedPrs = new Set();
+      for (const m of sentence.matchAll(STATUS_QUALIFIER_RE)) {
+        const nearest = nearestPrNumber(m.index, prRefs);
+        if (nearest !== null) qualifiedPrs.add(nearest);
+      }
+
+      const alreadyFlagged = new Set();
+      for (const m of sentence.matchAll(LIVE_STATUS_TRIGGER)) {
+        const nearest = nearestPrNumber(m.index, prRefs);
+        if (nearest === null || qualifiedPrs.has(nearest) || alreadyFlagged.has(nearest)) continue;
+        alreadyFlagged.add(nearest);
+        findings.push(
+          `${filePath}:${startLine} — asserts a live/pending remediation status near PR #${nearest} without stating that PR's actual closed/merged state: "${sentence.trim()}"`,
         );
-        if (!LIVE_STATUS_TRIGGER.test(nearby)) continue;
-        // QNBS-v3 (CodeAnt): the qualifier must sit near THIS PR's own number, not merely appear
-        // somewhere in the sentence — otherwise a different, already-qualified PR mentioned
-        // nearby would incorrectly suppress this one's live-status finding. Checked two ways: in
-        // the immediate window (same clause) or anywhere else THIS PR number repeats with a
-        // qualifier nearby (e.g. "PR #N is the active remediation … PR #N was later closed").
-        const qualifiedForThisPr =
-          STATUS_QUALIFIER_RE.test(nearby) ||
-          new RegExp(
-            `#${prNumber}\\b[\\s\\S]{0,${PROXIMITY_WINDOW}}\\b(?:${STATUS_QUALIFIER_WORD})\\b|` +
-              `\\b(?:${STATUS_QUALIFIER_WORD})\\b[\\s\\S]{0,${PROXIMITY_WINDOW}}#${prNumber}\\b`,
-            'i',
-          ).test(sentence);
-        if (!qualifiedForThisPr) {
-          findings.push(
-            `${filePath}:${startLine} — asserts a live/pending remediation status near PR #${prNumber} without stating that PR's actual closed/merged state: "${sentence.trim()}"`,
-          );
-        }
       }
     }
   }

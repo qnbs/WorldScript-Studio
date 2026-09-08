@@ -81,11 +81,16 @@ rule; it applies to dependency PRs exactly as it does to feature PRs.
 
 ## OSV ignore-expiry review
 
-The 2026-08-20 consolidation review found **19** entries in `src-tauri/osv-scanner.toml`, all
-currently sharing the `2026-11-30T00:00:00Z` review deadline. This is a synchronized review cliff,
-not evidence that the risks were extended or resolved. The entries remain grouped by their real
-reason: legacy GTK3/WebKit bindings, build-time `proc-macro-error`/`paste`, archived Unicode data
-crates, and the transitive `extract-zip` advisory.
+The 2026-08-20 consolidation review found 19 entries in `src-tauri/osv-scanner.toml`, all
+currently sharing the `2026-11-30T00:00:00Z` review deadline. **2026-09-08 update: two more npm
+entries were added under the same deadline** — a second, distinct `extract-zip` 2.0.1 advisory
+(`GHSA-7pqw-9j4j-h8q3`, not an alias of the original) and `adm-zip` 0.6.0
+(`GHSA-vwc7-r8mq-g2x9`) — bringing the total to **21**. This is a synchronized review cliff, not
+evidence that the risks were extended or resolved; **`src-tauri/osv-scanner.toml` is the dynamic
+source of truth for the exact count and entries** — treat this list as a cluster summary, not a
+substitute for reading the file. The entries remain grouped by their real reason: legacy GTK3/WebKit
+bindings, build-time `proc-macro-error`/`paste`, archived Unicode data crates, both `extract-zip`
+advisories, and `adm-zip`.
 
 No ignore deadline was extended in this pass. `extract-zip` remains a transitive Playwright browser
 download dependency with no patched release and no production-runtime footprint; it must still be
