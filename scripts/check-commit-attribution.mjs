@@ -24,9 +24,11 @@ export const FORBIDDEN_ATTRIBUTION_PATTERNS = [
     name: 'anthropic-noreply-email',
     regex: /^(?:Co-Authored-By|Signed-off-by):.*noreply@anthropic\.com/im,
   },
+  // QNBS-v3: end-anchored to the actual footer shape so prose discussing/quoting it isn't rejected.
   {
     name: 'generated-by-claude-footer',
-    regex: /^(?:🤖\s*)?(Generated|Addressed)\s+(with|by)\s+.*(?:Claude|Anthropic)\b/im,
+    regex:
+      /^(?:🤖\s*)?(?:Generated|Addressed)\s+(?:with|by)\s+(?:\[Claude Code\]\([^)]*\)|Claude Code|Anthropic)\s*$/im,
   },
   { name: 'copilot-claude-co-author', regex: /^Co-Authored-By:\s*GitHub Copilot \(Claude/im },
 ];

@@ -98,6 +98,21 @@ describe('checkAttributionText', () => {
     expect(result.matches).toContain('generated-by-claude-footer');
   });
 
+  it('rejects the markdown-link generated-by footer form', () => {
+    const result = checkAttributionText(
+      'fix: bump dep\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n',
+    );
+    expect(result.ok).toBe(false);
+    expect(result.matches).toContain('generated-by-claude-footer');
+  });
+
+  it('passes a line that discusses the footer text rather than being the footer itself', () => {
+    const result = checkAttributionText(
+      'fix: bump dep\n\nGenerated with Claude Code is the exact footer this guard rejects.\n',
+    );
+    expect(result.ok).toBe(true);
+  });
+
   it('rejects the GitHub-Copilot-with-Claude co-author form', () => {
     const result = checkAttributionText(
       'fix: bump dep\n\nCo-Authored-By: GitHub Copilot (Claude Sonnet 5)\n',
