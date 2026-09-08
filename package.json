@@ -217,6 +217,7 @@
   },
   "simple-git-hooks": {
     "pre-commit": "node scripts/hooks/pre-commit.mjs",
+    "commit-msg": "node scripts/hooks/commit-msg.mjs \"$1\"",
     "pre-push": "node scripts/hooks/pre-push.mjs \"$@\""
   },
   "lint-staged": {

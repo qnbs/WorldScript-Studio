@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
+import { checkAttributionText } from '../check-commit-attribution.mjs';
 import { computeDependencyState } from '../dependency-state.mjs';
 
 const SHA = /^[0-9a-f]{40}$/i;
@@ -705,6 +706,91 @@ export function verifyOutgoingUpdates(input, remote, cwd = process.cwd(), depend
   }
 }
 
+// QNBS-v3: fail closed (not the "" from gitOutput) — an unreadable commit must not pass as clean.
+export function checkCommitAttribution(sha, cwd = process.cwd()) {
+  const result = runGit(['show', '-s', '--format=%B', sha], { cwd });
+  if (result.status !== 0) return { ok: false, matches: ['unreadable-commit'] };
+  return checkAttributionText(result.stdout);
+}
+
+// QNBS-v3: cat-file -p reads the tag's own annotation body — session/co-author text can live there too.
+// QNBS-v3: also peels to the tagged commit — a clean annotation can still target an attributed commit.
+export function checkTagAttribution(sha, cwd = process.cwd()) {
+  const result = runGit(['cat-file', '-p', sha], { cwd });
+  if (result.status !== 0) return { ok: false, matches: ['unreadable-tag'] };
+  const tagResult = checkAttributionText(result.stdout);
+  const tag = parseAnnotatedTag(sha, cwd);
+  if (tag?.objectType !== 'tag' || tag.targetType !== 'commit') return tagResult;
+  const commitResult = checkCommitAttribution(tag.target, cwd);
+  return {
+    ok: tagResult.ok && commitResult.ok,
+    matches: [...new Set([...tagResult.matches, ...commitResult.matches])],
+  };
+}
+
+// QNBS-v3: split from the outer loop so each function's own nesting stays shallow (code-health delta).
+function firstAttributionFailure(
+  update,
+  cwd,
+  getIntroducedCommits,
+  checkCommit,
+  checkTag,
+  reports,
+) {
+  if (isZeroSha(update.localSha)) return null;
+  if (update.remoteRef.startsWith('refs/tags/')) {
+    const verification = checkTag(update.localSha);
+    reports.push({ sha: update.localSha, subject: update.remoteRef, verification });
+    return verification.ok
+      ? null
+      : `${update.remoteRef}: forbidden attribution pattern(s) ${verification.matches.join(', ')}`;
+  }
+  for (const sha of getIntroducedCommits(update)) {
+    const verification = checkCommit(sha);
+    reports.push({ sha, subject: commitSubject(sha, cwd), verification });
+    if (!verification.ok) {
+      return `${sha.slice(0, 12)}: forbidden attribution pattern(s) ${verification.matches.join(', ')}`;
+    }
+  }
+  return null;
+}
+
+// QNBS-v3: existing-branch ranges come from the shared evidence file (deterministic); only a new-branch push re-derives a live fallback base, sharing the signature check's same narrow concurrent-fetch window.
+export function checkAttributionForOutgoingUpdates(
+  input,
+  remote,
+  cwd = process.cwd(),
+  dependencies = {},
+) {
+  const getIntroducedCommits =
+    dependencies.introducedCommits ?? ((update) => introducedCommits(update, remote, cwd));
+  const checkCommit =
+    dependencies.checkCommitAttribution ?? ((sha) => checkCommitAttribution(sha, cwd));
+  const checkTag = dependencies.checkTagAttribution ?? ((sha) => checkTagAttribution(sha, cwd));
+  const reports = [];
+  try {
+    const updates = validatedPrePushUpdates(input);
+    for (const update of updates) {
+      const reason = firstAttributionFailure(
+        update,
+        cwd,
+        getIntroducedCommits,
+        checkCommit,
+        checkTag,
+        reports,
+      );
+      if (reason) return { ok: false, reports, reason };
+    }
+    return { ok: true, reports };
+  } catch (error) {
+    return {
+      ok: false,
+      reports,
+      reason: error instanceof Error ? error.message : 'invalid pre-push ref-update input',
+    };
+  }
+}
+
 export function safeConfigSummary(cwd = process.cwd()) {
   const signing = getSigningConfig(cwd);
   const identity = getIdentity(cwd);
@@ -714,7 +800,7 @@ export function safeConfigSummary(cwd = process.cwd()) {
     : gitDir
       ? join(gitDir, 'hooks')
       : null;
-  const hookNames = ['pre-commit', 'pre-push'];
+  const hookNames = ['pre-commit', 'commit-msg', 'pre-push'];
   return {
     signing: {
       format: signing.format,

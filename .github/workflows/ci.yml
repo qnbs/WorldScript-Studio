@@ -254,6 +254,34 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/signing/verify-github-signatures.mjs
+      - name: Reject AI/session attribution in introduced commits
+        run: |
+          set -euo pipefail
+          HEAD="${{ github.sha }}"
+          # QNBS-v3: run the base-ref copy on PRs so this PR can't weaken the checker that grades it.
+          CHECKER=scripts/check-commit-attribution.mjs
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            mkdir -p /tmp/base-scripts
+            if git show "$BASE:scripts/check-commit-attribution.mjs" > /tmp/base-scripts/check-commit-attribution.mjs 2>/dev/null; then
+              CHECKER=/tmp/base-scripts/check-commit-attribution.mjs
+            else
+              echo "::notice::check-commit-attribution.mjs not found on base ref (bootstrap PR) — using this PR's own copy this one time."
+            fi
+            node "$CHECKER" "$BASE" "$HEAD"
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            # QNBS-v3: github.sha is the dereferenced commit for a tag push; rev-parse the ref for the actual tag object so the annotation itself gets checked.
+            TAG_SHA=$(git rev-parse "$GITHUB_REF")
+            node "$CHECKER" --tag "$TAG_SHA"
+          else
+            BASE="${{ github.event.before }}"
+            if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BASE" 2>/dev/null; then
+              echo "::error::No usable base SHA to diff against — cannot verify introduced commits for AI/session attribution. This is expected only on the repository's first-ever commit; review manually before merging."
+              exit 1
+            fi
+            node "$CHECKER" "$BASE" "$HEAD"
+          fi
+          # QNBS-v3: PR title/body attribution is checked by the separate, cheap pr-text-attribution.yml (also runs on `edited`, which this workflow's trigger deliberately excludes).
 
   # ----------------------------------------------------------
   # 1. QUALITY GATE: Lint + Typecheck + Tests (parallel matrix)

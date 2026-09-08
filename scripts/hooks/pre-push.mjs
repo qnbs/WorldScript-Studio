@@ -19,6 +19,8 @@ try {
   writePrePushEvidenceFile(evidenceFile, updates);
   const childArgs = [...process.argv.slice(2), '--prepush-evidence-file', evidenceFile];
   exitCode = await runNodeScript('scripts/signing/verify-outgoing.mjs', childArgs);
+  if (exitCode === 0)
+    exitCode = await runNodeScript('scripts/signing/verify-attribution.mjs', childArgs);
   if (exitCode === 0) exitCode = await runNodeScript('scripts/ci-prepush-lowend.mjs', childArgs);
 } catch (error) {
   console.error(
