@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
+import { checkAttributionText } from '../check-commit-attribution.mjs';
 import { computeDependencyState } from '../dependency-state.mjs';
 
 const SHA = /^[0-9a-f]{40}$/i;
@@ -693,6 +694,52 @@ export function verifyOutgoingUpdates(input, remote, cwd = process.cwd(), depend
         reports.push(report);
         if (!verification.ok)
           return { ok: false, reports, reason: `${sha.slice(0, 12)}: ${verification.reason}` };
+      }
+    }
+    return { ok: true, reports };
+  } catch (error) {
+    return {
+      ok: false,
+      reports,
+      reason: error instanceof Error ? error.message : 'invalid pre-push ref-update input',
+    };
+  }
+}
+
+export function checkCommitAttribution(sha, cwd = process.cwd()) {
+  const message = gitOutput(['show', '-s', '--format=%B', sha], { cwd }) ?? '';
+  return checkAttributionText(message);
+}
+
+// QNBS-v3: catches a missing/uninstalled commit-msg hook or commits authored by another tool.
+export function checkAttributionForOutgoingUpdates(
+  input,
+  remote,
+  cwd = process.cwd(),
+  dependencies = {},
+) {
+  const getIntroducedCommits =
+    dependencies.introducedCommits ?? ((update) => introducedCommits(update, remote, cwd));
+  const checkCommit =
+    dependencies.checkCommitAttribution ?? ((sha) => checkCommitAttribution(sha, cwd));
+  const reports = [];
+  try {
+    const updates = validatedPrePushUpdates(input);
+    for (const update of updates) {
+      if (isZeroSha(update.localSha)) continue;
+      if (update.remoteRef.startsWith('refs/tags/')) continue;
+      const commits = getIntroducedCommits(update);
+      for (const sha of commits) {
+        const verification = checkCommit(sha);
+        const report = { sha, subject: commitSubject(sha, cwd), verification };
+        reports.push(report);
+        if (!verification.ok) {
+          return {
+            ok: false,
+            reports,
+            reason: `${sha.slice(0, 12)}: forbidden attribution pattern(s) ${verification.matches.join(', ')}`,
+          };
+        }
       }
     }
     return { ok: true, reports };

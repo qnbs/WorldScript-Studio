@@ -254,6 +254,24 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/signing/verify-github-signatures.mjs
+      - name: Reject AI/session attribution in introduced commits
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+          fi
+          HEAD="${{ github.sha }}"
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BASE" 2>/dev/null; then
+            echo "::notice::No usable base SHA to diff against — skipping (nothing to compare)"
+            exit 0
+          fi
+          node scripts/check-commit-attribution.mjs "$BASE" "$HEAD"
+      - name: Reject AI/session attribution in PR title/body
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+        run: node scripts/check-pr-text-attribution.mjs
 
   # ----------------------------------------------------------
   # 1. QUALITY GATE: Lint + Typecheck + Tests (parallel matrix)

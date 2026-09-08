@@ -82,6 +82,11 @@ When a task enters commit/push/PR/CI/review/merge work, read and follow
 `docs/PR-CI-MERGE-WORKFLOW.md`; do not load that procedure for an unrelated tiny edit.
 
 - Use a feature branch and conventional commits. Never commit directly to `main`.
+- Do not add AI/model/tool attribution, generated-by footers, or Claude/session URLs to commit
+  messages, tags, PR titles/bodies, or maintainer-authored review comments. Repository history
+  records the code change, not the agent session. Never add `Co-Authored-By` for an AI agent or
+  a `Claude-Session` trailer. Enforced by `scripts/check-commit-attribution.mjs` (commit-msg hook,
+  pre-push, and CI).
 - Before new history, run `pnpm run signing:doctor` and install hooks with
   `pnpm run hooks:install`. Commits and tags must be normally signed and Git-verified; never
   use `--no-gpg-sign`, `--no-verify`, unsigned temporary history, or force-push ordinary PR
