@@ -210,11 +210,9 @@ git commit -m "refactor(scope): address CodeAnt wave N review feedback"
 git push origin <feature-branch>
 ```
 
-End commit messages with the attribution matching whichever agent/model actually made the change, e.g.:
-
-```text
-Co-Authored-By: GitHub Copilot (Claude Sonnet 5) <noreply@github.com>
-```
+Do not add an agent/model co-author trailer, generated-by footer, or session URL — see AGENTS.md's
+commit/PR attribution rule; `scripts/check-commit-attribution.mjs` rejects one at commit-msg,
+pre-push, and CI.
 
 ## 6. Reply to every thread, then resolve it → 0 unresolved
 

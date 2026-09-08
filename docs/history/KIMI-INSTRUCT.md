@@ -108,7 +108,7 @@ pnpm exec vitest run <betroffene-testdateien>
 - Lint/Format-Fehler vor dem Commit beheben (`biome check --write ...`).
 - TypeScript-Fehler sofort beheben.
 - i18n-Keys bei neuem UI-Text zu **allen 19 Locales** hinzufügen (`node scripts/check-i18n-keys.mjs --fix`) und Bundles neu bauen (`pnpm run i18n:bundle`).
-- Commit-Nachrichten mit der Zuordnung des tatsächlich arbeitenden Agenten/Modells abschließen, z. B. `Co-Authored-By: Kimi K2 <noreply@moonshot.ai>` — niemals eine generische oder falsche Modellangabe übernehmen.
+- Keine Agent-/Modell-Attribution (Co-Author-Trailer, Generated-by-Footer, Session-URL) an Commit-Nachrichten anhängen — siehe AGENTS.md.
 
 ### 3.4 Commit & Push
 

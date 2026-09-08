@@ -184,3 +184,33 @@ export function verifyOutgoingUpdates(
     introducedCommits?: (update: RefUpdate) => string[];
   },
 ): OutgoingResult;
+
+export interface AttributionCheckResult {
+  ok: boolean;
+  matches: string[];
+}
+
+export interface AttributionReport {
+  sha: string;
+  subject: string;
+  verification: AttributionCheckResult;
+}
+
+export interface AttributionResult {
+  ok: boolean;
+  reports: AttributionReport[];
+  reason?: string;
+}
+
+export function checkCommitAttribution(sha: string, cwd?: string): AttributionCheckResult;
+export function checkTagAttribution(sha: string, cwd?: string): AttributionCheckResult;
+export function checkAttributionForOutgoingUpdates(
+  input: string | string[] | RefUpdate[],
+  remote: string,
+  cwd?: string,
+  dependencies?: {
+    introducedCommits?: (update: RefUpdate) => string[];
+    checkCommitAttribution?: (sha: string) => AttributionCheckResult;
+    checkTagAttribution?: (sha: string) => AttributionCheckResult;
+  },
+): AttributionResult;

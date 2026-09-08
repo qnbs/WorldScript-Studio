@@ -14,6 +14,9 @@ import { pathToFileURL } from 'node:url';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   auditRepositoryPolicy,
+  checkAttributionForOutgoingUpdates,
+  checkCommitAttribution,
+  checkTagAttribution,
   classifyCommitObject,
   classifyTagVerification,
   computeWorkingTreeState,
@@ -192,6 +195,97 @@ describe('local signing controls', () => {
         },
       ),
     ).toMatchObject({ ok: true, reports: [{ sha: commit }] });
+  });
+
+  it('fails closed when a commit or tag is unreadable instead of passing as clean', () => {
+    const bogus = 'f'.repeat(40);
+    expect(checkCommitAttribution(bogus, process.cwd())).toMatchObject({
+      ok: false,
+      matches: ['unreadable-commit'],
+    });
+    expect(checkTagAttribution(bogus, process.cwd())).toMatchObject({
+      ok: false,
+      matches: ['unreadable-tag'],
+    });
+  });
+
+  it('checkTagAttribution peels to the target commit — a clean annotation cannot hide an attributed commit', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'worldscript-tagattr-test-'));
+    const env = {
+      ...process.env,
+      GIT_AUTHOR_NAME: 'Test',
+      GIT_AUTHOR_EMAIL: 'test@example.com',
+      GIT_COMMITTER_NAME: 'Test',
+      GIT_COMMITTER_EMAIL: 'test@example.com',
+    };
+    try {
+      execFileSync('git', ['init', '--quiet', '--initial-branch=main', dir]);
+      execFileSync(
+        'git',
+        [
+          '-C',
+          dir,
+          'commit',
+          '--quiet',
+          '--allow-empty',
+          '-m',
+          'fix: bump dep\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>',
+        ],
+        { env },
+      );
+      execFileSync('git', ['-C', dir, 'tag', '-a', 'v1.0.0', '-m', 'clean release notes'], { env });
+      const tagSha = execFileSync('git', ['-C', dir, 'rev-parse', 'v1.0.0'], {
+        encoding: 'utf8',
+      }).trim();
+      const result = checkTagAttribution(tagSha, dir);
+      expect(result.ok).toBe(false);
+      expect(result.matches).toContain('co-authored-by-claude');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('routes tag pushes to checkTagAttribution, not introducedCommits', () => {
+    const zero = '0'.repeat(40);
+    const commit = 'a'.repeat(40);
+    let tagChecked = false;
+    expect(
+      checkAttributionForOutgoingUpdates(
+        [`refs/tags/v1.0.0 ${commit} refs/tags/v1.0.0 ${zero}`],
+        'origin',
+        process.cwd(),
+        {
+          checkTagAttribution: (sha) => {
+            tagChecked = true;
+            expect(sha).toBe(commit);
+            return { ok: true, matches: [] };
+          },
+          introducedCommits: () => {
+            throw new Error('tags must not enumerate branch commits');
+          },
+        },
+      ),
+    ).toMatchObject({ ok: true, reports: [{ sha: commit, subject: 'refs/tags/v1.0.0' }] });
+    expect(tagChecked).toBe(true);
+  });
+
+  it('reports the first forbidden-attribution commit and stops scanning', () => {
+    const commit = 'a'.repeat(40);
+    const remote = 'b'.repeat(40);
+    expect(
+      checkAttributionForOutgoingUpdates(
+        [`refs/heads/main ${commit} refs/heads/main ${remote}`],
+        'origin',
+        process.cwd(),
+        {
+          introducedCommits: () => [commit],
+          checkCommitAttribution: () => ({ ok: false, matches: ['co-authored-by-claude'] }),
+        },
+      ),
+    ).toMatchObject({
+      ok: false,
+      reason: expect.stringContaining('co-authored-by-claude'),
+    });
   });
 
   // QNBS-v3: lock the pre-push evidence contract against malformed or unresolved input.
