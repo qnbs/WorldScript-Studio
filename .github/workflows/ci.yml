@@ -256,6 +256,7 @@ jobs:
         run: node scripts/signing/verify-github-signatures.mjs
       - name: Reject AI/session attribution in introduced commits
         run: |
+          set -euo pipefail
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE="${{ github.event.pull_request.base.sha }}"
           else
@@ -266,12 +267,18 @@ jobs:
             echo "::error::No usable base SHA to diff against — cannot verify introduced commits for AI/session attribution. This is expected only on the repository's first-ever commit; review manually before merging."
             exit 1
           fi
-          node scripts/check-commit-attribution.mjs "$BASE" "$HEAD"
-      - name: Reject AI/session attribution in PR title/body
-        if: github.event_name == 'pull_request'
-        env:
-          GITHUB_EVENT_PATH: ${{ github.event_path }}
-        run: node scripts/check-pr-text-attribution.mjs
+          # QNBS-v3: run the base-ref copy on PRs so this PR can't weaken the checker that grades it.
+          CHECKER=scripts/check-commit-attribution.mjs
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            mkdir -p /tmp/base-scripts
+            if git show "$BASE:scripts/check-commit-attribution.mjs" > /tmp/base-scripts/check-commit-attribution.mjs 2>/dev/null; then
+              CHECKER=/tmp/base-scripts/check-commit-attribution.mjs
+            else
+              echo "::notice::check-commit-attribution.mjs not found on base ref (bootstrap PR) — using this PR's own copy this one time."
+            fi
+          fi
+          node "$CHECKER" "$BASE" "$HEAD"
+          # QNBS-v3: PR title/body attribution is checked by the separate, cheap pr-text-attribution.yml (also runs on `edited`, which this workflow's trigger deliberately excludes).
 
   # ----------------------------------------------------------
   # 1. QUALITY GATE: Lint + Typecheck + Tests (parallel matrix)

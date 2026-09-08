@@ -1,0 +1,37 @@
+name: PR Text Attribution Guard
+
+# QNBS-v3: separate + cheap so `edited` (title/body-only changes) never re-triggers the full ci.yml pipeline.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Reject AI/session attribution in PR title/body
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Reject AI/session attribution in PR title/body
+        env:
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+        run: |
+          set -euo pipefail
+          BASE="${{ github.event.pull_request.base.sha }}"
+          mkdir -p /tmp/base-scripts
+          # QNBS-v3: run the base-ref copy so this PR can't weaken the checker that grades it.
+          CHECKER=scripts/check-pr-text-attribution.mjs
+          if git show "$BASE:scripts/check-commit-attribution.mjs" > /tmp/base-scripts/check-commit-attribution.mjs 2>/dev/null \
+             && git show "$BASE:scripts/check-pr-text-attribution.mjs" > /tmp/base-scripts/check-pr-text-attribution.mjs 2>/dev/null; then
+            CHECKER=/tmp/base-scripts/check-pr-text-attribution.mjs
+          else
+            echo "::notice::check-pr-text-attribution.mjs not found on base ref (bootstrap PR) — using this PR's own copy this one time."
+          fi
+          node "$CHECKER"

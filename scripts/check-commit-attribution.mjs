@@ -19,7 +19,10 @@ export const FORBIDDEN_ATTRIBUTION_PATTERNS = [
   { name: 'claude-com-session-url', regex: /claude\.com\/[^\s]*session_/i },
   { name: 'co-authored-by-claude', regex: /^Co-Authored-By:\s*Claude\b/im },
   { name: 'anthropic-noreply-email', regex: /noreply@anthropic\.com/i },
-  { name: 'generated-by-claude-footer', regex: /^🤖\s*(Generated|Addressed)\s+.*Claude/im },
+  {
+    name: 'generated-by-claude-footer',
+    regex: /^(?:🤖\s*)?(Generated|Addressed)\s+(with|by)\s+.*Claude/im,
+  },
   { name: 'copilot-claude-co-author', regex: /^Co-Authored-By:\s*GitHub Copilot \(Claude/im },
 ];
 
@@ -112,24 +115,31 @@ function runRangeMode(base, head) {
   process.exitCode = 1;
 }
 
+function dispatchFileMode(args, fileIndex) {
+  const filePath = args[fileIndex + 1];
+  if (!filePath) return usageError('--file requires a path argument');
+  return runFileMode(filePath);
+}
+
+function dispatchMessageMode(args, messageIndex) {
+  const text = args[messageIndex + 1];
+  if (text === undefined) return usageError('--message requires a text argument');
+  return reportResult(checkAttributionText(text), '');
+}
+
+function dispatchRangeMode(args) {
+  const [base, head] = args;
+  if (!base || !head) return usageError('requires --file, --message, or <base-sha> <head-sha>');
+  return runRangeMode(base, head);
+}
+
 export function main() {
   const args = process.argv.slice(2);
   const fileIndex = args.indexOf('--file');
   const messageIndex = args.indexOf('--message');
-
-  if (fileIndex >= 0) {
-    const filePath = args[fileIndex + 1];
-    if (!filePath) return usageError('--file requires a path argument');
-    return runFileMode(filePath);
-  }
-  if (messageIndex >= 0) {
-    const text = args[messageIndex + 1];
-    if (text === undefined) return usageError('--message requires a text argument');
-    return reportResult(checkAttributionText(text), '');
-  }
-  const [base, head] = args;
-  if (!base || !head) return usageError('requires --file, --message, or <base-sha> <head-sha>');
-  return runRangeMode(base, head);
+  if (fileIndex >= 0) return dispatchFileMode(args, fileIndex);
+  if (messageIndex >= 0) return dispatchMessageMode(args, messageIndex);
+  return dispatchRangeMode(args);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

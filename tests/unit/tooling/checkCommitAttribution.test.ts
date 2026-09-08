@@ -58,6 +58,12 @@ describe('checkAttributionText', () => {
     expect(result.matches).toContain('generated-by-claude-footer');
   });
 
+  it('rejects a generated-by footer with no emoji prefix', () => {
+    const result = checkAttributionText('fix: bump dep\n\nGenerated with Claude Code\n');
+    expect(result.ok).toBe(false);
+    expect(result.matches).toContain('generated-by-claude-footer');
+  });
+
   it('rejects the GitHub-Copilot-with-Claude co-author form', () => {
     const result = checkAttributionText(
       'fix: bump dep\n\nCo-Authored-By: GitHub Copilot (Claude Sonnet 5)\n',
