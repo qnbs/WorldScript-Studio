@@ -30,6 +30,8 @@ needs their detail. Dynamic facts belong in `package.json`, `.nvmrc`, scripts, o
   boundary and serialization contract.
 - Never commit or expose secrets. Never log keys, IVs, decrypted material, or full manuscript
   payloads; use `services/logger.ts` with sanitized context.
+- Never store credentials, manuscript content, or other sensitive payloads in plaintext
+  `localStorage`; use the approved encrypted/storage boundary instead.
 - Do not weaken encryption, CSP, storage boundaries, or privacy gates. AI responses are not
   cached by the service worker; delete only caches proven to be WorldScript-owned under the
   canonical naming scheme.

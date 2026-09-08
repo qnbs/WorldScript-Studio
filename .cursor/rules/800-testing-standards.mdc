@@ -1,6 +1,6 @@
 ---
 description: Require deterministic Vitest mocks and CI-first heavy suites per docs/CI.md
-globs: tests/**/*,packages/**/tests/**/*,components/**/*.test.ts,components/**/*.test.tsx,vitest.config.ts,playwright.config.ts
+globs: tests/**/*,packages/**/tests/**/*,components/**/*.test.ts,components/**/*.test.tsx,vitest.config.ts,playwright.config.ts,stryker.config.mjs,stryker-scope.json,.github/workflows/mutation.yml,scripts/stryker-scope.mjs,scripts/stryker-scope.d.mts,scripts/aggregate-stryker-reports.mjs,scripts/aggregate-stryker-reports.d.mts,scripts/assert-ci-only.mjs
 alwaysApply: false
 ---
 

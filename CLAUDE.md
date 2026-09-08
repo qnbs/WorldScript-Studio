@@ -19,6 +19,7 @@ verified specialist mappings:
   `components/settings/VoiceSettingsSection.tsx`, `tests/e2e/mocks/voiceMockEngines.ts`
   → `services/voice/CLAUDE.md`
 - Copilot external callers: `features/copilot/copilotSlice.ts`, `components/copilot/**/*`,
+  `components/proForge/PipelineReviewPanel.tsx`, `components/manuscript/ManuscriptEditor.tsx`,
   `App.tsx` → `services/copilot/CLAUDE.md`
 - ProForge guide applies to `features/proForge/**/*`; external callers:
   `features/proForge/proForgeSlice.ts`, `features/proForge/types.ts`,
@@ -27,7 +28,8 @@ verified specialist mappings:
   → `services/proForge/CLAUDE.md`
 - LoRA external callers: `services/aiProviderService.ts`, `components/settings/LoraAdapterSection.tsx`,
   `components/settings/ProjectAiPresetSection.tsx`, `hooks/useWorldScriptAI.ts`,
-  `services/ai/worldScriptCompletionFetch.ts` → `features/lora/CLAUDE.md`
+  `services/ai/worldScriptCompletionFetch.ts`, `components/lora/**/*`, `hooks/useLoraView.ts`,
+  `contexts/LoraViewContext.ts`, `services/lora/**/*` → `features/lora/CLAUDE.md`
 - Service integration callers: `features/sceneComments/sceneCommentsSlice.ts`,
   `features/progressTracker/progressTrackerSlice.ts`, `hooks/useLanguageToolCheck.ts`,
   `config/csp-connect-src.json` → `services/CLAUDE.md`

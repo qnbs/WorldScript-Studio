@@ -1,6 +1,6 @@
 ---
 description: Enforce i18n key parity and content guard when editing locales or copy
-globs: i18n/locales.ts,contexts/I18nContext.tsx,locales/**/*.json,public/locales/**/*,community-templates/**/*,scripts/build-i18n.mjs,scripts/check-i18n-keys.mjs,scripts/content-guard.mjs,scripts/i18n-locales.mjs,scripts/i18n-quality-report.mjs,scripts/i18n-status-dashboard.ts,scripts/check-doc-metrics.mjs,scripts/bulk-translate-locales.mjs,services/help/helpCatalog.ts,services/help/helpSearch.ts,tests/unit/i18n/localesRegistry.test.ts
+globs: i18n/locales.ts,contexts/I18nContext.tsx,locales/**/*.json,public/locales/**/*,community-templates/**/*,scripts/build-i18n.mjs,scripts/check-i18n-keys.mjs,scripts/content-guard.mjs,scripts/i18n-locales.mjs,scripts/i18n-quality-report.mjs,scripts/i18n-status-dashboard.ts,scripts/check-doc-metrics.mjs,scripts/bulk-translate-locales.mjs,services/i18n/**/*.ts,services/i18nBootstrap.ts,services/projectI18nRepair.ts,services/help/helpCatalog.ts,services/help/helpSearch.ts,tests/unit/i18n/localesRegistry.test.ts
 alwaysApply: false
 ---
 
