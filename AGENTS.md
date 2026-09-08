@@ -33,6 +33,8 @@ needs their detail. Dynamic facts belong in `package.json`, `.nvmrc`, scripts, o
 - Do not weaken encryption, CSP, storage boundaries, or privacy gates. AI responses are not
   cached by the service worker; delete only caches proven to be WorldScript-owned under the
   canonical naming scheme.
+- Never execute AI, provider, user, or community content as code (`eval`, `new Function`, or
+  dynamic script injection); preserve the CSP `unsafe-eval` boundary and read the relevant ADR.
 - Community content remains schema-validated and guarded by `pnpm run content:guard`; new
   network endpoints require the canonical CSP source and runtime privacy gate.
 
