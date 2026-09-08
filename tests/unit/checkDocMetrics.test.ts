@@ -624,4 +624,34 @@ describe('scanSecurityDocPrStatus', () => {
     expect(findings).toHaveLength(1);
     expect(findings[0]).toContain('PR #999');
   });
+
+  // QNBS-v3 (codex): the original three-alternative regex required an exact word order and missed
+  // common natural phrasings — the fix is order-independent (trigger phrase near a PR reference).
+  it.each([
+    'The active remediation is PR #356 for this gap.',
+    'PR #356 remains the active remediation for this gap.',
+    'Work is pending on PR #356 for this gap.',
+  ])('flags the natural-language variant: %s', (content) => {
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain('PR #356');
+  });
+
+  // QNBS-v3 (codex): consecutive Markdown table rows have no blank line between them — joining
+  // them into one paragraph let a live claim in one row absorb an unrelated row's qualifier.
+  it("does not let one table row's qualifier suppress a different row's unqualified claim", () => {
+    const content = ['| PR #356 was closed |', '| PR #999 is the active remediation |'].join('\n');
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain('PR #999');
+  });
+
+  // QNBS-v3 (codex): a long markdown-link URL between the PR reference and its qualifier must not
+  // make a genuinely, explicitly qualified claim look unqualified.
+  it('does not flag a claim qualified via a Markdown link with a long URL', () => {
+    const content =
+      '[PR #356](https://github.com/qnbs/WorldScript-Studio/pull/356) is the active remediation, but was closed.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(0);
+  });
 });

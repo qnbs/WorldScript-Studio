@@ -499,32 +499,28 @@ export function scanForDrift(content, filePath, { localeCount, keyCount, latestV
   return findings;
 }
 
-// QNBS-v3: (audit F-1) reject a live/pending-remediation claim tied to a bare PR number in the two
+// QNBS-v3: (audit F-1) reject a live/pending-remediation claim near a bare PR number in the two
 // security-status docs unless that same PR number also carries its actual closed/merged state
 // nearby — a stale "PR #356 is the active remediation" survived weeks after #356 closed because
 // nothing checked it. Deliberately scoped to these two files, not repo-wide: a blanket rule would
 // also reject the legitimate historical CHANGELOG entry, ADR narrative, and already-qualified
 // ROADMAP citations of the same PR elsewhere in the repo.
 const SECURITY_STATUS_DOCS = ['docs/SECURITY-THREAT-MODEL.md', 'docs/IDB-ENCRYPTION.md'];
-// QNBS-v3 (CodeAnt): the PR number is captured INSIDE each alternative so the qualifier check
-// below can require proximity to that specific PR, not "any qualifier anywhere in the text" —
-// otherwise a closed/merged mention of a DIFFERENT PR would wrongly suppress this one's finding.
-const LIVE_STATUS_CLAIM_WITH_PR = new RegExp(
-  [
-    // QNBS-v3: the gap allows any character (a markdown link's URL contains periods, e.g.
-    // "github.com") — matching already runs per-sentence, so a real sentence boundary was
-    // already cut before this regex ever sees the text.
-    String.raw`\[?PR\s*#(?<prA>\d+)\]?[\s\S]{0,120}?\bis the active remediation`,
-    String.raw`\bpending\s+\[?PR\s*#(?<prB>\d+)\]?`,
-    String.raw`\bin progress on\s+\[?PR\s*#(?<prC>\d+)\]?`,
-  ].join('|'),
-  'gi',
-);
+const PR_REFERENCE = /\[?PR\s*#(\d+)\]?/gi;
+// QNBS-v3 (codex): order-independent — catches "PR #N is the active remediation", "the active
+// remediation is PR #N", "PR #N remains the active remediation", "pending PR #N", "pending on
+// PR #N", "in progress on PR #N", etc. Proximity to a PR reference (not fixed word order) is what
+// makes a phrase a live-status CLAIM rather than incidental prose.
+const LIVE_STATUS_TRIGGER = /\bactive remediation\b|\bpending\b|\bin progress\b/i;
 const STATUS_QUALIFIER_WORD = 'closed|merged|superseded';
+const STATUS_QUALIFIER_RE = new RegExp(`\\b(?:${STATUS_QUALIFIER_WORD})\\b`, 'i');
+const PROXIMITY_WINDOW = 60;
 
 // QNBS-v3 (CodeAnt): group physical lines into Markdown paragraphs (blank-line-delimited) before
 // matching — a naive per-line split let a status claim split across a soft-wrapped line evade
-// detection entirely, since neither half alone matched the full pattern.
+// detection entirely. QNBS-v3 (codex): a Markdown table row is its own logical unit even though
+// consecutive rows have no blank line between them — joining them let a live-status claim in one
+// row absorb an unrelated row's qualifier (or vice versa).
 function splitIntoParagraphs(content) {
   const paragraphs = [];
   let buffer = [];
@@ -536,11 +532,15 @@ function splitIntoParagraphs(content) {
     }
   };
   content.split('\n').forEach((line, i) => {
-    if (line.trim() === '') {
+    const trimmed = line.trim();
+    if (trimmed === '') {
       flush();
+    } else if (trimmed.startsWith('|')) {
+      flush();
+      paragraphs.push({ text: trimmed, startLine: i + 1 });
     } else {
       if (buffer.length === 0) startLine = i;
-      buffer.push(line.trim());
+      buffer.push(trimmed);
     }
   });
   flush();
@@ -554,23 +554,40 @@ function splitIntoSentences(paragraph) {
   return paragraph.split(/(?<=[.;])\s+/);
 }
 
+// QNBS-v3 (codex): a markdown link's URL (github.com/.../pull/NNN) adds length between a PR
+// reference and its surrounding wording without adding meaning — strip it before measuring
+// proximity, so a long URL can't push a genuinely adjacent trigger/qualifier word out of window.
+function stripLinkUrls(text) {
+  return text.replace(/\]\([^)]*\)/g, ']');
+}
+
 export function scanSecurityDocPrStatus(content, filePath) {
   const findings = [];
   for (const { text: paragraph, startLine } of splitIntoParagraphs(content)) {
-    for (const sentence of splitIntoSentences(paragraph)) {
-      for (const match of sentence.matchAll(LIVE_STATUS_CLAIM_WITH_PR)) {
-        const prNumber = match.groups?.prA ?? match.groups?.prB ?? match.groups?.prC;
-        // QNBS-v3 (CodeAnt): the qualifier must sit near THIS PR's own number in the same
-        // sentence, not merely appear somewhere in it — otherwise a different, already-qualified
-        // PR mentioned nearby would incorrectly suppress this one's live-status finding.
-        const qualifiedForThisPr = new RegExp(
-          `#${prNumber}\\b[\\s\\S]{0,60}\\b(?:${STATUS_QUALIFIER_WORD})\\b|` +
-            `\\b(?:${STATUS_QUALIFIER_WORD})\\b[\\s\\S]{0,60}#${prNumber}\\b`,
-          'i',
-        ).test(sentence);
+    const compact = stripLinkUrls(paragraph);
+    for (const sentence of splitIntoSentences(compact)) {
+      for (const match of sentence.matchAll(PR_REFERENCE)) {
+        const prNumber = match[1];
+        const nearby = sentence.slice(
+          Math.max(0, match.index - PROXIMITY_WINDOW),
+          match.index + match[0].length + PROXIMITY_WINDOW,
+        );
+        if (!LIVE_STATUS_TRIGGER.test(nearby)) continue;
+        // QNBS-v3 (CodeAnt): the qualifier must sit near THIS PR's own number, not merely appear
+        // somewhere in the sentence — otherwise a different, already-qualified PR mentioned
+        // nearby would incorrectly suppress this one's live-status finding. Checked two ways: in
+        // the immediate window (same clause) or anywhere else THIS PR number repeats with a
+        // qualifier nearby (e.g. "PR #N is the active remediation … PR #N was later closed").
+        const qualifiedForThisPr =
+          STATUS_QUALIFIER_RE.test(nearby) ||
+          new RegExp(
+            `#${prNumber}\\b[\\s\\S]{0,${PROXIMITY_WINDOW}}\\b(?:${STATUS_QUALIFIER_WORD})\\b|` +
+              `\\b(?:${STATUS_QUALIFIER_WORD})\\b[\\s\\S]{0,${PROXIMITY_WINDOW}}#${prNumber}\\b`,
+            'i',
+          ).test(sentence);
         if (!qualifiedForThisPr) {
           findings.push(
-            `${filePath}:${startLine} — asserts a live/pending remediation status tied to PR #${prNumber} without stating that PR's actual closed/merged state: "${sentence.trim()}"`,
+            `${filePath}:${startLine} — asserts a live/pending remediation status near PR #${prNumber} without stating that PR's actual closed/merged state: "${sentence.trim()}"`,
           );
         }
       }
@@ -641,6 +658,10 @@ function main() {
     try {
       content = readFileSync(abs, 'utf8');
     } catch {
+      // QNBS-v3 (codex): these two files are this gate's required subjects — silently skipping a
+      // missing/unreadable one would make the live-status enforcement disappear exactly when its
+      // input is unavailable, the same failure mode as BUNDLE_BUDGET_DOCS below.
+      allFindings.push(`${relPath} — required security-status document is missing or unreadable`);
       continue;
     }
     allFindings.push(...scanSecurityDocPrStatus(content, relPath));
