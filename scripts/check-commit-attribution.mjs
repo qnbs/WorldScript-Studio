@@ -41,6 +41,22 @@ function runGit(args) {
   return result.stdout;
 }
 
+// QNBS-v3: a clean tag annotation can still target an attributed commit — check both objects.
+function checkTagAndTarget(sha) {
+  if (!SHA_LINE.test(sha)) throw new Error(`--tag requires a full commit/tag SHA, got: ${sha}`);
+  const tagText = runGit(['cat-file', '-p', sha]);
+  const tagResult = checkAttributionText(tagText);
+  const type = runGit(['cat-file', '-t', sha]).trim();
+  if (type !== 'tag') return tagResult;
+  const targetSha = tagText.match(/^object ([0-9a-f]{40})$/m)?.[1];
+  if (!targetSha || runGit(['cat-file', '-t', targetSha]).trim() !== 'commit') return tagResult;
+  const commitResult = checkAttributionText(runGit(['show', '-s', '--format=%B', targetSha]));
+  return {
+    ok: tagResult.ok && commitResult.ok,
+    matches: [...new Set([...tagResult.matches, ...commitResult.matches])],
+  };
+}
+
 function checkRange(base, head) {
   const shas = runGit(['rev-list', '--reverse', `${base}..${head}`])
     .split(/\r?\n/)
@@ -129,16 +145,35 @@ function dispatchMessageMode(args, messageIndex) {
 
 function dispatchRangeMode(args) {
   const [base, head] = args;
-  if (!base || !head) return usageError('requires --file, --message, or <base-sha> <head-sha>');
+  if (!base || !head)
+    return usageError('requires --file, --message, --tag, or <base-sha> <head-sha>');
   return runRangeMode(base, head);
+}
+
+function dispatchTagMode(args, tagIndex) {
+  const sha = args[tagIndex + 1];
+  if (!sha) return usageError('--tag requires a SHA argument');
+  let result;
+  try {
+    result = checkTagAndTarget(sha);
+  } catch (error) {
+    console.error(
+      `[check-commit-attribution] ${error instanceof Error ? error.message : 'tag check failed'}`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+  return reportResult(result, `${sha.slice(0, 12)}: `);
 }
 
 export function main() {
   const args = process.argv.slice(2);
   const fileIndex = args.indexOf('--file');
   const messageIndex = args.indexOf('--message');
+  const tagIndex = args.indexOf('--tag');
   if (fileIndex >= 0) return dispatchFileMode(args, fileIndex);
   if (messageIndex >= 0) return dispatchMessageMode(args, messageIndex);
+  if (tagIndex >= 0) return dispatchTagMode(args, tagIndex);
   return dispatchRangeMode(args);
 }
 

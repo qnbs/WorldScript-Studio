@@ -1,14 +1,36 @@
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   checkAttributionText,
   FORBIDDEN_ATTRIBUTION_PATTERNS,
 } from '../../../scripts/check-commit-attribution.mjs';
 
+const SCRIPT = resolve(process.cwd(), 'scripts/check-commit-attribution.mjs');
+
 function runCli(args: string[]) {
   return spawnSync('node', ['scripts/check-commit-attribution.mjs', ...args], {
     encoding: 'utf8',
   });
+}
+
+function runCliIn(dir: string, args: string[]) {
+  return spawnSync('node', [SCRIPT, ...args], { cwd: dir, encoding: 'utf8' });
+}
+
+function makeTagFixture() {
+  const dir = mkdtempSync(join(tmpdir(), 'worldscript-tag-test-'));
+  const env = {
+    ...process.env,
+    GIT_AUTHOR_NAME: 'Test',
+    GIT_AUTHOR_EMAIL: 'test@example.com',
+    GIT_COMMITTER_NAME: 'Test',
+    GIT_COMMITTER_EMAIL: 'test@example.com',
+  };
+  execFileSync('git', ['init', '--quiet', '--initial-branch=main', dir]);
+  return { dir, env };
 }
 
 describe('checkAttributionText', () => {
@@ -111,5 +133,96 @@ describe('check-commit-attribution CLI', () => {
   it('exits 0 for a clean --message', () => {
     const result = runCli(['--message', 'chore: bump dependency']);
     expect(result.status).toBe(0);
+  });
+});
+
+describe('check-commit-attribution --tag mode', () => {
+  it('accepts a clean tag pointing at a clean commit', () => {
+    const { dir, env } = makeTagFixture();
+    try {
+      execFileSync(
+        'git',
+        ['-C', dir, 'commit', '--quiet', '--allow-empty', '-m', 'chore: initial'],
+        {
+          env,
+        },
+      );
+      execFileSync('git', ['-C', dir, 'tag', '-a', 'v1.0.0', '-m', 'clean release notes'], { env });
+      const tagSha = execFileSync('git', ['-C', dir, 'rev-parse', 'v1.0.0'], {
+        encoding: 'utf8',
+      }).trim();
+      const result = runCliIn(dir, ['--tag', tagSha]);
+      expect(result.status).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a clean tag annotation that targets an attributed commit', () => {
+    const { dir, env } = makeTagFixture();
+    try {
+      execFileSync(
+        'git',
+        [
+          '-C',
+          dir,
+          'commit',
+          '--quiet',
+          '--allow-empty',
+          '-m',
+          'fix: bump dep\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>',
+        ],
+        { env },
+      );
+      execFileSync('git', ['-C', dir, 'tag', '-a', 'v1.0.0', '-m', 'clean release notes'], { env });
+      const tagSha = execFileSync('git', ['-C', dir, 'rev-parse', 'v1.0.0'], {
+        encoding: 'utf8',
+      }).trim();
+      const result = runCliIn(dir, ['--tag', tagSha]);
+      expect(result.status).toBe(1);
+      expect(result.stderr).toMatch(/co-authored-by-claude/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects an attributed tag annotation even when the target commit is clean', () => {
+    const { dir, env } = makeTagFixture();
+    try {
+      execFileSync(
+        'git',
+        ['-C', dir, 'commit', '--quiet', '--allow-empty', '-m', 'chore: initial'],
+        {
+          env,
+        },
+      );
+      execFileSync(
+        'git',
+        [
+          '-C',
+          dir,
+          'tag',
+          '-a',
+          'v1.0.0',
+          '-m',
+          'Claude-Session: https://claude.ai/code/session_x',
+        ],
+        { env },
+      );
+      const tagSha = execFileSync('git', ['-C', dir, 'rev-parse', 'v1.0.0'], {
+        encoding: 'utf8',
+      }).trim();
+      const result = runCliIn(dir, ['--tag', tagSha]);
+      expect(result.status).toBe(1);
+      expect(result.stderr).toMatch(/claude-session/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects --tag with no following value as a usage error', () => {
+    const result = runCli(['--tag']);
+    expect(result.status).toBe(2);
+    expect(result.stderr).toMatch(/--tag requires a SHA argument/);
   });
 });

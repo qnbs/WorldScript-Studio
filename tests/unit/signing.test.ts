@@ -209,6 +209,42 @@ describe('local signing controls', () => {
     });
   });
 
+  it('checkTagAttribution peels to the target commit — a clean annotation cannot hide an attributed commit', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'worldscript-tagattr-test-'));
+    const env = {
+      ...process.env,
+      GIT_AUTHOR_NAME: 'Test',
+      GIT_AUTHOR_EMAIL: 'test@example.com',
+      GIT_COMMITTER_NAME: 'Test',
+      GIT_COMMITTER_EMAIL: 'test@example.com',
+    };
+    try {
+      execFileSync('git', ['init', '--quiet', '--initial-branch=main', dir]);
+      execFileSync(
+        'git',
+        [
+          '-C',
+          dir,
+          'commit',
+          '--quiet',
+          '--allow-empty',
+          '-m',
+          'fix: bump dep\n\nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>',
+        ],
+        { env },
+      );
+      execFileSync('git', ['-C', dir, 'tag', '-a', 'v1.0.0', '-m', 'clean release notes'], { env });
+      const tagSha = execFileSync('git', ['-C', dir, 'rev-parse', 'v1.0.0'], {
+        encoding: 'utf8',
+      }).trim();
+      const result = checkTagAttribution(tagSha, dir);
+      expect(result.ok).toBe(false);
+      expect(result.matches).toContain('co-authored-by-claude');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('routes tag pushes to checkTagAttribution, not introducedCommits', () => {
     const zero = '0'.repeat(40);
     const commit = 'a'.repeat(40);

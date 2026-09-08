@@ -714,10 +714,18 @@ export function checkCommitAttribution(sha, cwd = process.cwd()) {
 }
 
 // QNBS-v3: cat-file -p reads the tag's own annotation body — session/co-author text can live there too.
+// QNBS-v3: also peels to the tagged commit — a clean annotation can still target an attributed commit.
 export function checkTagAttribution(sha, cwd = process.cwd()) {
   const result = runGit(['cat-file', '-p', sha], { cwd });
   if (result.status !== 0) return { ok: false, matches: ['unreadable-tag'] };
-  return checkAttributionText(result.stdout);
+  const tagResult = checkAttributionText(result.stdout);
+  const tag = parseAnnotatedTag(sha, cwd);
+  if (tag?.objectType !== 'tag' || tag.targetType !== 'commit') return tagResult;
+  const commitResult = checkCommitAttribution(tag.target, cwd);
+  return {
+    ok: tagResult.ok && commitResult.ok,
+    matches: [...new Set([...tagResult.matches, ...commitResult.matches])],
+  };
 }
 
 // QNBS-v3: split from the outer loop so each function's own nesting stays shallow (code-health delta).
@@ -792,7 +800,7 @@ export function safeConfigSummary(cwd = process.cwd()) {
     : gitDir
       ? join(gitDir, 'hooks')
       : null;
-  const hookNames = ['pre-commit', 'pre-push'];
+  const hookNames = ['pre-commit', 'commit-msg', 'pre-push'];
   return {
     signing: {
       format: signing.format,
