@@ -17,11 +17,11 @@ export const FORBIDDEN_ATTRIBUTION_PATTERNS = [
   { name: 'claude-session-trailer', regex: /^Claude-Session:/im },
   { name: 'claude-session-url', regex: /claude\.ai\/code\/session_/i },
   { name: 'claude-com-session-url', regex: /claude\.com\/[^\s]*session_/i },
-  { name: 'co-authored-by-claude', regex: /^Co-Authored-By:\s*Claude\b/im },
+  { name: 'co-authored-by-claude', regex: /^Co-Authored-By:\s*(?:Claude|Anthropic)\b/im },
   { name: 'anthropic-noreply-email', regex: /noreply@anthropic\.com/i },
   {
     name: 'generated-by-claude-footer',
-    regex: /^(?:🤖\s*)?(Generated|Addressed)\s+(with|by)\s+.*Claude/im,
+    regex: /^(?:🤖\s*)?(Generated|Addressed)\s+(with|by)\s+.*(?:Claude|Anthropic)\b/im,
   },
   { name: 'copilot-claude-co-author', regex: /^Co-Authored-By:\s*GitHub Copilot \(Claude/im },
 ];

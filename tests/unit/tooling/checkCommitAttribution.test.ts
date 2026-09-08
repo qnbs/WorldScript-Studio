@@ -58,6 +58,18 @@ describe('checkAttributionText', () => {
     expect(result.matches).toContain('co-authored-by-claude');
   });
 
+  it('rejects an Anthropic co-author trailer (not just Claude)', () => {
+    const result = checkAttributionText('fix: bump dep\n\nCo-Authored-By: Anthropic\n');
+    expect(result.ok).toBe(false);
+    expect(result.matches).toContain('co-authored-by-claude');
+  });
+
+  it('rejects a generated-by-Anthropic footer (not just Claude)', () => {
+    const result = checkAttributionText('fix: bump dep\n\nGenerated with Anthropic\n');
+    expect(result.ok).toBe(false);
+    expect(result.matches).toContain('generated-by-claude-footer');
+  });
+
   it('rejects a direct claude.com session URL with no intermediate path segment', () => {
     const result = checkAttributionText('fix: bump dep\n\nhttps://claude.com/session_abc123\n');
     expect(result.ok).toBe(false);
