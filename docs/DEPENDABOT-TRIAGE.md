@@ -76,8 +76,8 @@ reinstating blanket auto-merge.
 
 "CI green" always means the **full** suite for that PR (Quality Gate ×2, Build, E2E, E2E Deep
 Coverage, Storybook, Lighthouse where applicable) — not just the required-check subset. See
-[`CLAUDE.md`](../CLAUDE.md)'s branching-discipline section for the general "wait for advisory jobs
-too" rule; it applies to dependency PRs exactly as it does to feature PRs.
+[`PR-CI-MERGE-WORKFLOW.md`](PR-CI-MERGE-WORKFLOW.md) for the general "wait for advisory jobs too"
+rule; it applies to dependency PRs exactly as it does to feature PRs.
 
 ## OSV ignore-expiry review
 
@@ -98,7 +98,7 @@ These need more than a changelog skim because of documented quirks elsewhere in 
 
 | Dependency | Why it needs extra care |
 |---|---|
-| `vite` | Production build uses **rolldown**, not esbuild/rollup (see `CLAUDE.md` § Build & bundler gotchas). Rolldown ignores `rollupOptions.treeshake` and ties tree-shaking to `package.json "sideEffects"` — a Vite bump that changes how a dependency's `sideEffects` field is honored can produce a blank-screen prod build that CI's `vite dev`-based E2E suite won't catch. Run `pnpm run build && pnpm run smoke:prod` after any Vite bump, not just CI green. |
+| `vite` | Production build uses **rolldown**, not esbuild/rollup; verify the current `vite.config.ts` and `package.json` `sideEffects` contract. Rolldown ignores `rollupOptions.treeshake` and ties tree-shaking to `package.json "sideEffects"` — a Vite bump that changes how a dependency's `sideEffects` field is honored can produce a blank-screen prod build that CI's `vite dev`-based E2E suite won't catch. Run `pnpm run build && pnpm run smoke:prod` after any Vite bump, not just CI green. |
 | `zod` | Has a repo-local patch (`patches/zod@4.4.3.patch`, forces `"sideEffects": true`) applied via `pnpm patch`. A version bump may need the patch re-applied/re-verified against the new version. |
 | `react` / `react-dom` | Already grouped — must stay in lockstep, split bumps cause version-mismatch errors at test time. |
 | `tauri*` / `wry` / `tao` | Already grouped (`tauri-deps`) — same lockstep concern for the desktop backend. |

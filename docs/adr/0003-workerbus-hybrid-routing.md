@@ -81,7 +81,7 @@ never accidentally enqueued onto the Web Worker pool. This mirrors the degradati
 
 ## References
 
-- `CLAUDE.md` § WorkerBus v2
+- `services/workerBusManager.ts`, `services/hybridRouter.ts`, and `packages/worker-bus/` are the WorkerBus implementation sources.
 - `AUDIT.md` WorkerBus v2 Phase 3 + Tauri-Build Unblock (2026-06-03)
 - `services/workerBusManager.ts`, `services/hybridRouter.ts`, `services/rustTaskSupervisor.ts`,
   `src-tauri/src/commands/task_supervisor.rs`

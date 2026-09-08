@@ -45,6 +45,6 @@ State is partitioned by **lifetime and ownership**, not by feature:
 
 ## References
 
-- `CLAUDE.md` § State Management
+- `AGENTS.md` for current agent invariants; this ADR and `app/store.ts`/`app/listenerMiddleware.ts` are the state-management sources.
 - `app/transientUiStore.ts`, `app/listenerMiddleware.ts`
 - [[0002-local-ai-stack-layering]]

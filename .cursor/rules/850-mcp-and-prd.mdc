@@ -1,10 +1,9 @@
 ---
 description: Consult roadmap and docs hub before cross-cutting product or integration work
-globs: ~
 alwaysApply: false
 ---
 
-# Produktkontext, Doku-Hub & MCP
+# Product context, documentation, and MCP
 
 ## Vor großen Änderungen lesen
 
@@ -40,10 +39,11 @@ Server-Namen und Tokens **nur** in lokaler Cursor-Konfiguration — nie ins Repo
 
 ## Agent-Parität
 
-- [`CLAUDE.md`](../../CLAUDE.md), [`.github/copilot-instructions.md`](../../.github/copilot-instructions.md) und **diese `.mdc`-Regeln** sollten bei Stack-Updates zusammen gehalten werden.
+- `AGENTS.md` is the canonical root source; keep this scoped rule and tool adapters as pointers,
+  not duplicated architecture or workflow encyclopedias.
 
 <example>
-Neues Plot-Board-Feature: ROADMAP-Eintrag prüfen; BEST-PRACTICES Glossar; nach Merge CI-Metriken in README/AUDIT (nur wenn Maintainer es verlangt).
+Neues Plot-Board-Feature: ROADMAP-Eintrag prüfen; BEST-PRACTICES Glossar; nach Merge CI-Metriken in README/AUDIT aktualisieren, sobald sich Testfall-/Testdatei-Anzahl ändert (unbedingt, nicht nur auf Maintainer-Anfrage).
 </example>
 
 <example type="invalid">

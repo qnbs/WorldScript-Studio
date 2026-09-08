@@ -69,7 +69,7 @@ needed there.
   successful AI prompt injection into a code path that issues a request) can reach any HTTPS origin.
   Mitigations: no secrets are placed in `connect-src`-reachable globals; API keys are encrypted at
   rest and only attached to the user-configured provider request; AI output is never `eval`'d
-  (`CLAUDE.md` Key Constraints). Closing this fully requires build-time CSP generation from the
+  (`AGENTS.md` security red lines). Closing this fully requires build-time CSP generation from the
   provider registry + a validated custom-endpoint allowlist (Option C), deferred to v2.0.
 - **Revision note (2026-07-28):** this section previously claimed "the host (Vercel/CF) tightens CSP
   further via HTTP response headers in production." That was **false** at the time it was written —
