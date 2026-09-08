@@ -17,7 +17,9 @@ export const FORBIDDEN_ATTRIBUTION_PATTERNS = [
   { name: 'claude-session-trailer', regex: /^Claude-Session:/im },
   { name: 'claude-session-url', regex: /claude\.ai\/code\/session_/i },
   { name: 'claude-com-session-url', regex: /claude\.com\/[^\s]*session_/i },
+  // QNBS-v3: covers Anthropic too, not just Claude, matching AGENTS.md's Claude/Anthropic wording.
   { name: 'co-authored-by-claude', regex: /^Co-Authored-By:\s*(?:Claude|Anthropic)\b/im },
+  // QNBS-v3: trailer-scoped so prose merely discussing the address (e.g. documenting this guard) isn't rejected.
   {
     name: 'anthropic-noreply-email',
     regex: /^(?:Co-Authored-By|Signed-off-by):.*noreply@anthropic\.com/im,
