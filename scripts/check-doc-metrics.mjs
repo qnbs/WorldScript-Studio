@@ -582,31 +582,49 @@ function nearestPrNumber(position, prRefs) {
   return bestDistance <= PROXIMITY_WINDOW ? best : null;
 }
 
+function findPrReferences(sentence) {
+  return [...sentence.matchAll(PR_REFERENCE)].map((m) => ({
+    index: m.index,
+    end: m.index + m[0].length,
+    prNumber: m[1],
+  }));
+}
+
+// QNBS-v3 (CodeScene): extracted so scanSecurityDocPrStatus itself stays a flat, shallow loop —
+// each of these small helpers owns exactly one nested loop+conditional, not three stacked in one.
+function collectQualifiedPrs(sentence, prRefs) {
+  const qualifiedPrs = new Set();
+  for (const m of sentence.matchAll(STATUS_QUALIFIER_RE)) {
+    const nearest = nearestPrNumber(m.index, prRefs);
+    if (nearest !== null) qualifiedPrs.add(nearest);
+  }
+  return qualifiedPrs;
+}
+
+function collectUnqualifiedClaims(sentence, prRefs, qualifiedPrs) {
+  const claims = new Set();
+  for (const m of sentence.matchAll(LIVE_STATUS_TRIGGER)) {
+    const nearest = nearestPrNumber(m.index, prRefs);
+    if (nearest !== null && !qualifiedPrs.has(nearest)) claims.add(nearest);
+  }
+  return claims;
+}
+
+function findUnqualifiedClaimsInSentence(sentence) {
+  const prRefs = findPrReferences(sentence);
+  if (prRefs.length === 0) return [];
+  const qualifiedPrs = collectQualifiedPrs(sentence, prRefs);
+  return [...collectUnqualifiedClaims(sentence, prRefs, qualifiedPrs)];
+}
+
 export function scanSecurityDocPrStatus(content, filePath) {
   const findings = [];
   for (const { text: paragraph, startLine } of splitIntoParagraphs(content)) {
     const compact = stripLinkUrls(paragraph);
     for (const sentence of splitIntoSentences(compact)) {
-      const prRefs = [...sentence.matchAll(PR_REFERENCE)].map((m) => ({
-        index: m.index,
-        end: m.index + m[0].length,
-        prNumber: m[1],
-      }));
-      if (prRefs.length === 0) continue;
-
-      const qualifiedPrs = new Set();
-      for (const m of sentence.matchAll(STATUS_QUALIFIER_RE)) {
-        const nearest = nearestPrNumber(m.index, prRefs);
-        if (nearest !== null) qualifiedPrs.add(nearest);
-      }
-
-      const alreadyFlagged = new Set();
-      for (const m of sentence.matchAll(LIVE_STATUS_TRIGGER)) {
-        const nearest = nearestPrNumber(m.index, prRefs);
-        if (nearest === null || qualifiedPrs.has(nearest) || alreadyFlagged.has(nearest)) continue;
-        alreadyFlagged.add(nearest);
+      for (const prNumber of findUnqualifiedClaimsInSentence(sentence)) {
         findings.push(
-          `${filePath}:${startLine} — asserts a live/pending remediation status near PR #${nearest} without stating that PR's actual closed/merged state: "${sentence.trim()}"`,
+          `${filePath}:${startLine} — asserts a live/pending remediation status near PR #${prNumber} without stating that PR's actual closed/merged state: "${sentence.trim()}"`,
         );
       }
     }
