@@ -60,7 +60,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of the whole section, and full per-commit completeness is enforced only outside
   `pull_request` CI context — a PR's own git-log range enumerates every commit unique to that
   branch, not the one commit that will exist after squash-merge, so a review-fix follow-up commit
-  can't reference itself in advance.
+  can't reference itself in advance. Stop reading the GitHub event name (`GITHUB_EVENT_NAME`) as
+  that `pull_request`-context check's own default: the same environment variable is ambiently
+  visible to the Vitest process too when the whole suite runs inside a `pull_request`-triggered
+  job — the pure function's default is now hardcoded `false`; only the real CLI invocation reads
+  the actual environment.
 
 ### Security
 

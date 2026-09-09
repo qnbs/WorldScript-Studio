@@ -472,12 +472,18 @@ export function getPostReleaseCommitSubjects(repositoryRoot = root) {
   }
 }
 
+// QNBS-v3: deliberately NOT defaulted from process.env here — this same env var is ambiently
+// visible to the Vitest process itself when the whole suite runs inside a GitHub Actions
+// pull_request-triggered job (not just this gate's own CLI step), so a default read at this
+// pure-function boundary silently changed every test's behavior based on which CI context ran
+// it. Only main()'s real CLI invocation below reads the actual environment; tests always get a
+// deterministic, explicitly-passed value.
 export function scanUnreleasedTruth(
   changelog,
   postReleaseCommitSubjects,
   packageVersion,
   taggedVersions,
-  isPullRequestContext = process.env.GITHUB_EVENT_NAME === 'pull_request',
+  isPullRequestContext = false,
 ) {
   if (!postReleaseCommitSubjects || postReleaseCommitSubjects.length === 0) return [];
   const candidateVersion = changelog.match(
@@ -858,6 +864,7 @@ function main() {
       getPostReleaseCommitSubjects(),
       packageVersion,
       taggedVersions,
+      process.env.GITHUB_EVENT_NAME === 'pull_request',
     ),
   );
   allFindings.push(
