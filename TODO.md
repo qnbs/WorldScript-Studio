@@ -39,11 +39,12 @@ Status: 🔄 in progress | ⬜ open | ✅ done
   missing reference; a one-line CHANGELOG fix restored it to green. (A possible future pre-merge
   hardening of this check is recorded as deferred, memory-only follow-up — not part of this
   release cut.)
-- 🔄 `v1.28.6` release cut in progress (this sprint's active PR): version/`CHANGELOG.md`/
-  `TODO.md`/`README.md` reconciliation for the Tauri plugin-parity recovery. Tag, GitHub Release,
-  release artifacts, and the post-release `AUDIT.md` evidence entry all remain pending until
-  after this PR merges, post-merge main CI/CodeQL are green, and an exact-SHA
-  Windows/Ubuntu/macOS `tauri-build.yml` qualification passes on the intended tag commit.
+- ✅ `v1.28.6` released (PR #680, 2026-09-09): version/`CHANGELOG.md`/`TODO.md`/`README.md`
+  reconciliation for the Tauri plugin-parity recovery, merged after an exact-SHA
+  Windows/Ubuntu/macOS `tauri-build.yml` qualification passed on the intended tag commit. Tag
+  `v1.28.6` and its GitHub Release (full desktop installer/updater asset set, all platforms) are
+  published; the tag-triggered Tauri/CI/Docker workflows and the post-release `AUDIT.md` evidence
+  entry (PR #681) are complete.
 - ✅ PR #674 merged (2026-09-09): the CHANGELOG completeness gate upgraded from accepting any
   non-empty `[Unreleased]` section forever to requiring every governed commit to be individually
   referenced by PR number or subject slug; backfilled 13 previously-undocumented entries. The
