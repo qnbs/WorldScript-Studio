@@ -10,6 +10,12 @@ function cargoLockEntry(crateName: string, version: string): string {
   return `[[package]]\nname = "${crateName}"\nversion = "${version}"\nsource = "registry+https://github.com/rust-lang/crates.io-index"\n`;
 }
 
+// QNBS-v3: mirrors how Cargo.lock disambiguates a same-named dependency as "name version" inside the owning package's own dependencies list only when more than one resolved version exists.
+function ownPackageBlock(dependencyRefs: string[]): string {
+  const refLines = dependencyRefs.map((ref) => ` "${ref}",`).join('\n');
+  return `[[package]]\nname = "worldscript-studio"\nversion = "1.28.5"\ndependencies = [\n${refLines}\n]\n`;
+}
+
 function pnpmImporterBlock(
   importer: string,
   pkgs: Record<string, { specifier: string; version: string }>,
@@ -41,6 +47,23 @@ describe('resolvedCargoPluginVersions', () => {
     const versions = resolvedCargoPluginVersions(crlf);
     expect(versions.get('tauri-plugin-http')).toBe('2.6.0');
   });
+
+  // QNBS-v3 (cubic): reproduces the reviewer-found gap — a first-match lookup over duplicate package entries could silently pick a transitive occurrence instead of the direct app dependency Cargo.lock itself disambiguates.
+  it('resolves the direct-dependency version, not the textually-first one, when Cargo.lock has duplicate entries', () => {
+    const cargoLock =
+      ownPackageBlock(['tauri-plugin-http 2.6.0']) +
+      cargoLockEntry('tauri-plugin-http', '2.5.0') + // transitive, textually first
+      cargoLockEntry('tauri-plugin-http', '2.6.0'); // direct, referenced by name
+    const versions = resolvedCargoPluginVersions(cargoLock);
+    expect(versions.get('tauri-plugin-http')).toBe('2.6.0');
+  });
+
+  it('fails closed (null) when a crate resolves to more than one version with no disambiguating reference', () => {
+    const cargoLock =
+      cargoLockEntry('tauri-plugin-http', '2.5.0') + cargoLockEntry('tauri-plugin-http', '2.6.0');
+    const versions = resolvedCargoPluginVersions(cargoLock);
+    expect(versions.get('tauri-plugin-http')).toBeNull();
+  });
 });
 
 describe('resolvedPnpmImporterVersions', () => {
@@ -69,13 +92,29 @@ describe('resolvedPnpmImporterVersions', () => {
 });
 
 describe('findTauriPluginVersionMismatches', () => {
-  it('reports nothing when every declared, resolved pair is major.minor-aligned', () => {
-    const cargoLock = cargoLockEntry('tauri-plugin-http', '2.6.0');
-    const pnpmLock = pnpmImporterBlock('.', {
-      '@tauri-apps/plugin-http': { specifier: '^2.6.0', version: '2.6.3' },
-    });
+  // QNBS-v3: consolidates two previously-separate "no finding" cases (a straightforwardly aligned pair, and a resolved version that has moved past its declared specifier) into one table.
+  it.each([
+    {
+      name: 'an aligned pair',
+      crate: 'tauri-plugin-http',
+      rust: '2.6.0',
+      npm: '@tauri-apps/plugin-http',
+      specifier: '^2.6.0',
+      resolved: '2.6.3',
+    },
+    {
+      name: 'a resolved version ahead of its specifier',
+      crate: 'tauri-plugin-updater',
+      rust: '2.11.0',
+      npm: '@tauri-apps/plugin-updater',
+      specifier: '^2.9.0',
+      resolved: '2.11.4',
+    },
+  ])('reports nothing for $name', ({ crate, rust, npm, specifier, resolved }) => {
+    const cargoLock = cargoLockEntry(crate, rust);
+    const pnpmLock = pnpmImporterBlock('.', { [npm]: { specifier, version: resolved } });
     const findings = findTauriPluginVersionMismatches(cargoLock, pnpmLock, [
-      importerPkg('.', { '@tauri-apps/plugin-http': '^2.6.0' }),
+      importerPkg('.', { [npm]: specifier }),
     ]);
     expect(findings).toEqual([]);
   });
@@ -119,16 +158,32 @@ describe('findTauriPluginVersionMismatches', () => {
     expect(findings[0]).toContain('@tauri-apps/plugin-notification');
   });
 
-  // QNBS-v3: a caret range's declared minimum can be well behind what pnpm actually resolved — only the resolved lockfile version is trustworthy.
-  it('does not flag a resolved version that has moved ahead of the declared specifier, when still aligned', () => {
-    const cargoLock = cargoLockEntry('tauri-plugin-updater', '2.11.0');
+  // QNBS-v3 (cubic): a duplicate Cargo.lock entry must resolve to the direct app dependency's version (2.6.0), never the textually-first transitive occurrence (2.5.0) — proven by the fact that using the wrong one would falsely flag this as a mismatch.
+  it('does not mistake a transitive crate version for the direct app dependency', () => {
+    const cargoLock =
+      ownPackageBlock(['tauri-plugin-http 2.6.0']) +
+      cargoLockEntry('tauri-plugin-http', '2.5.0') +
+      cargoLockEntry('tauri-plugin-http', '2.6.0');
     const pnpmLock = pnpmImporterBlock('.', {
-      '@tauri-apps/plugin-updater': { specifier: '^2.9.0', version: '2.11.4' },
+      '@tauri-apps/plugin-http': { specifier: '^2.6.0', version: '2.6.3' },
     });
     const findings = findTauriPluginVersionMismatches(cargoLock, pnpmLock, [
-      importerPkg('.', { '@tauri-apps/plugin-updater': '^2.9.0' }),
+      importerPkg('.', { '@tauri-apps/plugin-http': '^2.6.0' }),
     ]);
     expect(findings).toEqual([]);
+  });
+
+  it('fails closed when Cargo.lock has an undisambiguated duplicate, rather than guessing', () => {
+    const cargoLock =
+      cargoLockEntry('tauri-plugin-http', '2.5.0') + cargoLockEntry('tauri-plugin-http', '2.6.0');
+    const pnpmLock = pnpmImporterBlock('.', {
+      '@tauri-apps/plugin-http': { specifier: '^2.6.0', version: '2.6.3' },
+    });
+    const findings = findTauriPluginVersionMismatches(cargoLock, pnpmLock, [
+      importerPkg('.', { '@tauri-apps/plugin-http': '^2.6.0' }),
+    ]);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain('more than one version');
   });
 
   // QNBS-v3: fail closed — a plugin declared in package.json with no resolved Cargo.lock or pnpm-lock.yaml entry means a lockfile is out of sync and parity cannot be verified, which must surface as a finding, not a silent pass.

@@ -41,39 +41,84 @@ function majorMinor(version) {
   return match ? `${match[1]}.${match[2]}` : null;
 }
 
+// QNBS-v3 (cubic): Cargo.lock qualifies a same-named dependency as "name version" inside its owning package's own dependencies list only when more than one resolved version of that crate exists — reading this authoritative signal avoids ever mistaking a transitive occurrence for the direct app dependency.
+function directDependencyReferences(cargoLock) {
+  const ownPackageMatch = cargoLock.match(
+    /name = "worldscript-studio"\n(?:[^\n]*\n)*?dependencies = \[\n([^\]]*)\]/,
+  );
+  const references = new Map();
+  if (!ownPackageMatch) return references;
+  for (const line of ownPackageMatch[1].split('\n')) {
+    const depMatch = line.match(/"([^"]+)"/);
+    if (!depMatch) continue;
+    const [name, version] = depMatch[1].split(' ');
+    references.set(name, version ?? null);
+  }
+  return references;
+}
+
+function allResolvedVersionsOf(cargoLock, crateName) {
+  const regex = new RegExp(`name = "${crateName}"\\nversion = "([^"]+)"`, 'g');
+  const versions = [];
+  for (const match of cargoLock.matchAll(regex)) versions.push(match[1]);
+  return versions;
+}
+
+// QNBS-v3: a crate absent from the returned map has no resolved version at all; a crate mapped to null was found more than once in Cargo.lock with no disambiguating reference — both are distinct fail-closed states, never guessed.
 export function resolvedCargoPluginVersions(cargoLock) {
   const normalized = normalizeLineEndings(cargoLock);
-  const versions = new Map();
+  const references = directDependencyReferences(normalized);
+  const resolved = new Map();
   for (const crateName of PLUGIN_CRATE_NAMES) {
-    const match = normalized.match(new RegExp(`name = "${crateName}"\\nversion = "([^"]+)"`));
-    if (match) versions.set(crateName, match[1]);
+    const qualifiedVersion = references.get(crateName);
+    if (qualifiedVersion) {
+      resolved.set(crateName, qualifiedVersion);
+      continue;
+    }
+    const versions = allResolvedVersionsOf(normalized, crateName);
+    if (versions.length === 1) resolved.set(crateName, versions[0]);
+    else if (versions.length > 1) resolved.set(crateName, null);
   }
-  return versions;
+  return resolved;
+}
+
+function importerHeaderName(line) {
+  const match = line.match(/^ {2}(\S.*):$/);
+  return match ? match[1] : null;
+}
+
+function importerPackageName(line) {
+  const match = line.match(/^ {6}'?(@[\w.-]+\/[\w.-]+|[\w.-]+)'?:$/);
+  return match ? match[1] : null;
+}
+
+function importerPackageVersion(line) {
+  const match = line.match(/^ {8}version: (.+)$/);
+  return match ? match[1].trim() : null;
 }
 
 // QNBS-v3: line-based state-machine parse (importer header at 2-space indent, package name at 6-space, specifier/version at 8-space) — pnpm-lock.yaml's importers block is regular enough that this avoids adding a YAML-parsing dependency.
 export function resolvedPnpmImporterVersions(pnpmLock) {
-  const normalized = normalizeLineEndings(pnpmLock);
-  const lines = normalized.split('\n');
+  const lines = normalizeLineEndings(pnpmLock).split('\n');
   const byImporter = new Map();
   let currentImporter = null;
   let currentPackage = null;
   for (const line of lines) {
-    const importerMatch = line.match(/^ {2}(\S.*):$/);
-    if (importerMatch && !line.startsWith('    ')) {
-      currentImporter = importerMatch[1];
+    const importer = importerHeaderName(line);
+    if (importer) {
+      currentImporter = importer;
       currentPackage = null;
-      if (!byImporter.has(currentImporter)) byImporter.set(currentImporter, new Map());
+      if (!byImporter.has(importer)) byImporter.set(importer, new Map());
       continue;
     }
-    const packageMatch = line.match(/^ {6}'?(@[\w.-]+\/[\w.-]+|[\w.-]+)'?:$/);
-    if (packageMatch) {
-      currentPackage = packageMatch[1];
+    const packageName = importerPackageName(line);
+    if (packageName) {
+      currentPackage = packageName;
       continue;
     }
-    const versionMatch = line.match(/^ {8}version: (.+)$/);
-    if (versionMatch && currentImporter && currentPackage) {
-      byImporter.get(currentImporter).set(currentPackage, versionMatch[1].trim());
+    const version = importerPackageVersion(line);
+    if (version && currentImporter && currentPackage) {
+      byImporter.get(currentImporter).set(currentPackage, version);
     }
   }
   return byImporter;
@@ -100,17 +145,24 @@ function discoverWorkspaceImporterPackages() {
 // QNBS-v3 (CodeScene): extracted so findTauriPluginVersionMismatches stays a flat loop — returns a finding string for one declared pair, or null when it's aligned.
 function checkPluginPairParity(importer, crateName, cargoVersions, importerVersions) {
   const npmName = crateToNpmName(crateName);
-  const rustVersion = cargoVersions.get(crateName);
-  if (!rustVersion) {
+  if (!cargoVersions.has(crateName)) {
     return `${importer}: ${npmName} is declared but ${crateName} has no resolved version in Cargo.lock — fix Cargo.lock before this check can validate parity`;
+  }
+  const rustVersion = cargoVersions.get(crateName);
+  if (rustVersion === null) {
+    return `${importer}: ${npmName} is declared but ${crateName} resolves to more than one version in Cargo.lock with no disambiguating direct-dependency reference — fix Cargo.lock before this check can validate parity`;
   }
   const npmVersion = importerVersions?.get(npmName);
   if (!npmVersion) {
     return `${importer}: ${npmName} is declared but has no resolved version in pnpm-lock.yaml for this importer — reconcile the lockfile before this check can validate parity`;
   }
   const rustMM = majorMinor(rustVersion);
+  if (!rustMM)
+    return `${importer}: ${crateName}'s resolved Rust version "${rustVersion}" is not a parseable semver`;
   const npmMM = majorMinor(npmVersion);
-  if (!rustMM || !npmMM || rustMM !== npmMM) {
+  if (!npmMM)
+    return `${importer}: ${npmName}'s resolved npm version "${npmVersion}" is not a parseable semver`;
+  if (rustMM !== npmMM) {
     return `${importer}: ${crateName} (Rust ${rustVersion}) vs ${npmName} (npm ${npmVersion}, resolved) — major.minor mismatch, "pnpm exec tauri build" rejects this`;
   }
   return null;
