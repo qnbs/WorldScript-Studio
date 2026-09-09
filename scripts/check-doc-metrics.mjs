@@ -379,12 +379,13 @@ const SLUG_STOP_WORDS = new Set([
 // QNBS-v3 (codex): a commit not merged via the standard squash flow has nothing to key off but its own wording — require most of its significant words to appear in [Unreleased] rather than an exact-sentence match, and never truncate the word list, since a dropped trailing word can be the one that discriminates against an opposite-meaning entry.
 const SLUG_MATCH_RATIO = 0.6;
 
+// QNBS-v3 (codex): a short alphanumeric token like "v2" or "10" can be the only thing distinguishing a change (a version, a limit, a count) — the length filter must not discard it just because it has no letters to spare.
 function significantSlugWords(description) {
   return description
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, ' ')
     .split(/\s+/)
-    .filter((word) => word.length > 2 && !SLUG_STOP_WORDS.has(word));
+    .filter((word) => (word.length > 2 || /\d/.test(word)) && !SLUG_STOP_WORDS.has(word));
 }
 
 // QNBS-v3 (coderabbit/CodeAnt): a bare String.includes let "#65" incorrectly satisfy a check for
@@ -420,9 +421,11 @@ function splitUnreleasedEntries(unreleasedSection) {
 
 // QNBS-v3 (codex): a negated description ("do not delete X") must never slug-match an entry describing the opposite, unnegated action ("Delete X") — word-overlap ratio alone can't tell these apart, so mismatched polarity disqualifies the entry outright, before the ratio is even computed.
 const NEGATION_MARKER =
-  /\b(?:not|never|no longer|cannot|can[’']t|doesn[’']t|don[’']t|won[’']t|isn[’']t|avoid(?:s|ed|ing)?|prevent(?:s|ed|ing)?)\b/i;
+  /\b(?:not|never|no longer|cannot|can[’']t|doesn[’']t|don[’']t|won[’']t|isn[’']t|avoid(?:s|ed|ing)?|prevent(?:s|ed|ing)?|refuse[sd]?|refusing|stop(?:s|ped|ping)?|disable[sd]?|disabling)\b/i;
+// QNBS-v3 (codex): a negation word in an entry's rationale/context prose after its **bold** lead claim (this file's own convention for the actual change being documented) must not disqualify the match — only the bold lead's own polarity is checked when one exists.
 function hasNegationMarker(text) {
-  return NEGATION_MARKER.test(text);
+  const boldLead = text.match(/\*\*(.+?)\*\*/);
+  return NEGATION_MARKER.test(boldLead ? boldLead[1] : text);
 }
 
 // QNBS-v3 (codex): the set of entry indices a given commit's slug could match — match ratio is
@@ -498,7 +501,7 @@ function classifyGovernedCommit(subject, entries, isFeatureBranchContext, isBran
     const isDocumented = entries.some((entry) => isReferencedByPrNumber(prMatch[1], entry));
     return isDocumented ? 'documented' : 'undocumented';
   }
-  return isFeatureBranchContext ? 'documented' : 'needsSlugCheck';
+  return isFeatureBranchContext && isBranchLocal ? 'documented' : 'needsSlugCheck';
 }
 
 // QNBS-v3 (codex): reserves EVERY entry referencing the numbered commit, not just the first — a PR number split across multiple bullets must not leave a later one free for an unrelated commit's slug match.

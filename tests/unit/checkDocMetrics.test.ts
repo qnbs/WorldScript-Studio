@@ -483,6 +483,28 @@ describe('Unreleased truth', () => {
       expect(findings).toEqual([]);
     });
 
+    // QNBS-v3 (codex): a negation word in an entry's rationale prose AFTER its **bold** lead claim must not disqualify the match — this repo's own CHANGELOG.md has real entries where the bold lead states the change and trailing prose incidentally uses a word like "cannot" to describe unrelated circumstances.
+    it("does not let a negation word in an entry's rationale prose outside its bold lead disqualify the match", async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const changelog =
+        '## [Unreleased]\n\n### Fixed\n\n- **Unsupported-project startup copy added** so a build that cannot open the project shows its own message.\n';
+      const findings = scanUnreleasedTruth(changelog, [
+        'fix(i18n): add unsupported-project startup copy',
+      ]);
+      expect(findings).toEqual([]);
+    });
+
+    // QNBS-v3 (codex): negation inside the bold lead itself must still be detected — the scoping must narrow the check, not silently disable it.
+    it('still detects negation inside the bold lead itself', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const changelog =
+        '## [Unreleased]\n\n### Fixed\n\n- **Do not delete malformed project data** during import.\n';
+      const findings = scanUnreleasedTruth(changelog, [
+        'fix(project): do not delete malformed project data',
+      ]);
+      expect(findings).toEqual([]);
+    });
+
     // QNBS-v3 (codex): a typographic apostrophe ("don't") must be recognized as negation too, or the tokenizer turns it into the unmatched word "don" and the remaining words alone can clear the ratio against the opposite-polarity entry.
     it('recognizes a typographic apostrophe as negation', async () => {
       const { scanUnreleasedTruth } = await loadReleaseTruthModule();
@@ -505,6 +527,27 @@ describe('Unreleased truth', () => {
       ]);
       expect(findings).toHaveLength(1);
       expect(findings[0]).toContain('prevent deleting malformed project data');
+    });
+
+    // QNBS-v3 (codex): "refuse"/"stop"/"disable" are further negative-polarity refusal verbs beyond avoid/prevent.
+    it('treats refusal verbs like "refuse" as negative polarity', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const changelog =
+        '## [Unreleased]\n\n### Fixed\n\n- Delete malformed project data during import.\n';
+      const findings = scanUnreleasedTruth(changelog, [
+        'fix(project): refuse to delete malformed project data',
+      ]);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toContain('refuse to delete malformed project data');
+    });
+
+    // QNBS-v3 (codex): a short alphanumeric token (a version, a limit) can be the only significant word distinguishing a short subject — the length filter must not silently drop it from the comparison.
+    it('preserves a short numeric token that is the only other significant word', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const changelog = '## [Unreleased]\n\n### Fixed\n\n- Retry 20.\n';
+      const findings = scanUnreleasedTruth(changelog, ['fix(project): retry 10']);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toContain('retry 10');
     });
 
     // QNBS-v3 (codex): truncating a long subject's significant words to the first six could drop trailing words entirely, letting a truncated 66%-overlap ratio wrongly clear the 60% threshold when the full word list would correctly fall below it.
@@ -622,8 +665,27 @@ describe('Unreleased truth', () => {
         undefined,
         undefined,
         true,
+        new Set([0]),
       );
       expect(findings).toEqual([]);
+    });
+
+    // QNBS-v3 (codex): the un-numbered exemption must key off the computed branch-local set, not the overall pull_request context alone — an unnumbered commit that is NOT branch-local (already reachable from main) must still go through the normal slug check.
+    it('does not exempt an unnumbered commit that is not actually branch-local, even in pull_request CI context', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const findings = scanUnreleasedTruth(
+        populatedButUnrelated,
+        [
+          'fix(project): retain raw header verdict on projection failure',
+          'fix(project): apply an unrelated branch-local adjustment',
+        ],
+        undefined,
+        undefined,
+        true,
+        new Set([1]),
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toContain('retain raw header verdict on projection failure');
     });
 
     // QNBS-v3 (codex, P1): exempting a PR's own in-flight commits must not weaken enforcement for
