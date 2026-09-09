@@ -17,6 +17,7 @@ export function scanUnreleasedTruth(
   postReleaseCommitSubjects: string[] | null,
   packageVersion?: string,
   taggedVersions?: Set<string>,
+  isPullRequestContext?: boolean,
 ): string[];
 export function scanForDrift(
   content: string,

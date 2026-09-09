@@ -30,6 +30,7 @@ type ReleaseTruthModule = {
     subjects: string[] | null,
     packageVersion?: string,
     taggedVersions?: Set<string>,
+    isPullRequestContext?: boolean,
   ) => string[];
 };
 // QNBS-v3: load the runtime-only scanners without making tsgo infer untyped .mjs exports.
@@ -354,6 +355,86 @@ describe('Unreleased truth', () => {
       ]);
       expect(findings).toHaveLength(1);
       expect(findings[0]).toContain('does not reference 2 post-tag feat/fix/perf commit');
+    });
+
+    // QNBS-v3 (coderabbit/CodeAnt): "#65" is a substring of "#656" — a naive String.includes
+    // check let a shorter/longer PR number incorrectly satisfy a completely different one.
+    it('does not let a shorter PR number satisfy a longer one that contains it as a substring', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const changelog = '## [Unreleased]\n\n### Fixed\n\n- Something unrelated. PR #6567.\n';
+      const findings = scanUnreleasedTruth(changelog, [
+        'fix(i18n): distinguish migration-gap startup copy (#656)',
+      ]);
+      expect(findings).toHaveLength(1);
+    });
+
+    it('does not let a longer PR number satisfy a shorter one it contains as a substring', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const changelog = '## [Unreleased]\n\n### Fixed\n\n- Something unrelated. PR #65.\n';
+      const findings = scanUnreleasedTruth(changelog, [
+        'fix(i18n): distinguish migration-gap startup copy (#656)',
+      ]);
+      expect(findings).toHaveLength(1);
+    });
+
+    // QNBS-v3 (codex): matching must be scoped to ONE changelog entry — words scattered across
+    // several unrelated bullets must not collectively satisfy a commit none of them documents,
+    // and one bullet's generic words must not simultaneously "document" multiple commits.
+    it('does not let slug words scattered across separate unrelated bullets satisfy a commit', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const changelog = [
+        '## [Unreleased]',
+        '',
+        '### Fixed',
+        '',
+        '- Something about canonical naming conventions.',
+        '- A separate change involving document upload limits.',
+        '- Another unrelated projection-mapping utility update.',
+      ].join('\n');
+      const findings = scanUnreleasedTruth(changelog, [
+        'feat(project): establish canonical document projection foundation',
+      ]);
+      expect(findings).toHaveLength(1);
+    });
+
+    it('does not let one generic bullet satisfy multiple different undocumented commits', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const changelog = '## [Unreleased]\n\n### Fixed\n\n- A change involving canonical data.\n';
+      const findings = scanUnreleasedTruth(changelog, [
+        'feat(project): establish canonical document projection foundation',
+        'fix(project): reuse parsed canonical document input',
+      ]);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toContain('does not reference 2 post-tag feat/fix/perf commit');
+    });
+
+    // QNBS-v3 (codex, P1): a pull_request CI run's git-log range enumerates every commit unique
+    // to that branch, not the one commit that will exist after squash-merge — a routine
+    // review-fix follow-up commit can't reference itself in [Unreleased] in advance. Full
+    // completeness is enforced only outside pull_request context (locally, and on push to main
+    // right after merge).
+    it('does not enforce per-commit completeness in pull_request CI context', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const findings = scanUnreleasedTruth(
+        populatedButUnrelated,
+        ['fix(project): retain raw header verdict on projection failure'],
+        undefined,
+        undefined,
+        true,
+      );
+      expect(findings).toEqual([]);
+    });
+
+    it('still rejects a completely empty [Unreleased] in pull_request CI context', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const findings = scanUnreleasedTruth(
+        '## [Unreleased]\n\n### Added\n',
+        ['fix(project): retain raw header verdict on projection failure'],
+        undefined,
+        undefined,
+        true,
+      );
+      expect(findings).toEqual([expect.stringContaining('[Unreleased] is empty')]);
     });
   });
 });

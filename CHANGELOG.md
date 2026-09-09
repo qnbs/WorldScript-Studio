@@ -54,7 +54,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   let arbitrarily many later `feat`/`fix`/`perf` commits go completely undocumented — 13 real
   commits since `v1.28.4` had gone unrecorded. It now requires every governed commit to be
   individually referenced by PR number or subject slug, naming any that aren't; this section was
-  backfilled with all 13 currently-undocumented entries above.
+  backfilled with all 13 currently-undocumented entries above. Review findings addressed on this
+  same upgrade: PR-number matching now requires a non-digit boundary (a bare substring check let
+  `#65` satisfy `#656`), subject-slug matching is now scoped to one changelog entry at a time
+  instead of the whole section, and full per-commit completeness is enforced only outside
+  `pull_request` CI context — a PR's own git-log range enumerates every commit unique to that
+  branch, not the one commit that will exist after squash-merge, so a review-fix follow-up commit
+  can't reference itself in advance.
 
 ### Security
 

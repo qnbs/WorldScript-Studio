@@ -391,20 +391,60 @@ function significantSlugWords(description) {
     .slice(0, SLUG_WORD_COUNT);
 }
 
-function isReferencedInUnreleased(subject, unreleasedSection) {
+// QNBS-v3 (coderabbit/CodeAnt): a bare String.includes let "#65" incorrectly satisfy a check for
+// "#656" (and vice versa) since one is a substring of the other — require a non-digit boundary on
+// both sides so only the exact PR number counts.
+function isReferencedByPrNumber(subject, unreleasedSection) {
   const prMatch = TRAILING_PR_REF.exec(subject);
-  if (prMatch && unreleasedSection.includes(`#${prMatch[1]}`)) return true;
+  if (!prMatch) return false;
+  return new RegExp(`(?:^|\\D)#${prMatch[1]}(?!\\d)`).test(unreleasedSection);
+}
+
+// QNBS-v3 (codex): match ratio is computed PER changelog entry, not against the whole section —
+// otherwise words scattered across several unrelated bullets could collectively satisfy the
+// threshold for a commit none of them actually documents, and one generic bullet could
+// simultaneously "document" multiple different undocumented commits.
+function isReferencedBySlug(subject, unreleasedEntries) {
   const description = subject.replace(GOVERNED_COMMIT_TYPE, '').replace(TRAILING_PR_REF, '');
   const words = significantSlugWords(description);
   if (words.length === 0) return false;
-  const matched = words.filter((word) => new RegExp(`\\b${word}\\b`, 'i').test(unreleasedSection));
-  return matched.length / words.length >= SLUG_MATCH_RATIO;
+  return unreleasedEntries.some((entry) => {
+    const matched = words.filter((word) => new RegExp(`\\b${word}\\b`, 'i').test(entry));
+    return matched.length / words.length >= SLUG_MATCH_RATIO;
+  });
+}
+
+// QNBS-v3: a Markdown bullet may wrap across several physical lines — join a bullet's own
+// continuation lines into one entry so slug-matching sees the whole thought, not a fragment.
+function splitUnreleasedEntries(unreleasedSection) {
+  const entries = [];
+  let current = [];
+  const flush = () => {
+    if (current.length > 0) entries.push(current.join(' '));
+    current = [];
+  };
+  for (const rawLine of unreleasedSection.split('\n')) {
+    const line = rawLine.trim();
+    if (/^-\s/.test(line)) {
+      flush();
+      current.push(line);
+    } else if (current.length > 0 && line !== '') {
+      current.push(line);
+    } else if (line === '') {
+      flush();
+    }
+  }
+  flush();
+  return entries;
 }
 
 function findUndocumentedGovernedCommits(postReleaseCommitSubjects, unreleasedSection) {
+  const entries = splitUnreleasedEntries(unreleasedSection);
   return postReleaseCommitSubjects.filter(
     (subject) =>
-      GOVERNED_COMMIT_TYPE.test(subject) && !isReferencedInUnreleased(subject, unreleasedSection),
+      GOVERNED_COMMIT_TYPE.test(subject) &&
+      !isReferencedByPrNumber(subject, unreleasedSection) &&
+      !isReferencedBySlug(subject, entries),
   );
 }
 
@@ -437,6 +477,7 @@ export function scanUnreleasedTruth(
   postReleaseCommitSubjects,
   packageVersion,
   taggedVersions,
+  isPullRequestContext = process.env.GITHUB_EVENT_NAME === 'pull_request',
 ) {
   if (!postReleaseCommitSubjects || postReleaseCommitSubjects.length === 0) return [];
   const candidateVersion = changelog.match(
@@ -458,6 +499,13 @@ export function scanUnreleasedTruth(
       `CHANGELOG.md — ${postReleaseCommitSubjects.length} commit(s) exist after the latest release tag, but [Unreleased] is empty`,
     ];
   }
+  // QNBS-v3 (codex, P1): a pull_request CI run's `git log` range enumerates every commit unique
+  // to that branch — not the one commit that will actually exist after squash-merge. Enforcing
+  // full per-commit completeness there would make a routine review-fix follow-up commit
+  // unsatisfiable (it cannot reference itself in [Unreleased] in advance). Completeness is
+  // enforced once those commits are real, permanent history: on the push to main right after
+  // merge (and locally, since a developer isn't fighting the multi-commit-per-PR shape there).
+  if (isPullRequestContext) return [];
   const unreleasedSection = getUnreleasedSectionText(changelog);
   const undocumented = findUndocumentedGovernedCommits(
     postReleaseCommitSubjects,
