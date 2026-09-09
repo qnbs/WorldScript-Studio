@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+<!-- release-candidate: v1.28.6 -->
+## [1.28.6] — 2026-09-09
+
 ### Fixed
 
 - **Tauri plugin Rust/npm version parity restored:** `tauri-plugin-http` and
@@ -15,9 +18,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   side, failing every platform's Tauri release build. Bumped the npm packages to match; added
   `check-tauri-plugin-versions.mjs`, a cheap CI guard catching this class of mismatch before the
   next release tag instead of at tag-triggered release time. PR #678.
+- **CHANGELOG completeness-gate PR-number reference restored:** the Tauri plugin-parity entry
+  above passed PR-branch CI but failed on resulting-`main` immediately after squash-merge, since
+  the gate's PR-number match is only checkable against the final squashed commit subject, which
+  only exists post-merge. PR #679.
 
-<!-- release-candidate: v1.28.5 -->
 ## [1.28.5] — 2026-09-09
+
+> **This tagged release's desktop build never completed.** The tag-triggered Tauri release
+> workflow failed on every platform (Windows/Linux/macOS) with the Rust/npm plugin version
+> mismatch fixed in `[1.28.6]` above. No GitHub Release or installer/updater artifacts were ever
+> published for `v1.28.5` — the bundle jobs failed before producing assets, so nothing broken
+> reached users. The `v1.28.5` git tag itself is intentionally never deleted, moved, or
+> re-tagged; it remains permanently bound to its original commit as the historical
+> failed/incomplete desktop-release cut. `v1.28.6` is the corrected, complete release.
 
 ### Added
 
