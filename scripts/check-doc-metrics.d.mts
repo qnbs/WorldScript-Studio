@@ -17,6 +17,8 @@ export function scanUnreleasedTruth(
   postReleaseCommitSubjects: string[] | null,
   packageVersion?: string,
   taggedVersions?: Set<string>,
+  isFeatureBranchContext?: boolean,
+  branchLocalIndices?: Set<number>,
 ): string[];
 export function scanForDrift(
   content: string,

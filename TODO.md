@@ -35,9 +35,21 @@ Status: 🔄 in progress | ⬜ open | ✅ done
   `TODO.md`/`README.md` reconciled, `v1.28.4` tag and GitHub Release published with all expected
   Desktop artifacts; post-merge main CI and CodeQL green (CodeQL has no tag trigger), tag-triggered
   CI/Tauri/Docker all green, and `AUDIT.md` updated with real evidence.
-- ⬜ Close the outstanding Wave 2 prerequisite (ledger row 9: project state-shape compatibility
-  adapter) — currently in progress, not complete. Wave 3/4 R-15 implementation stays blocked
-  (`S5_IMPLEMENTATION_READY=NO`) until this and `S5_TERMINAL=YES` are both true.
+- ✅ Attribution-hygiene guard merged (PR #672): fail-closed rejection of AI/session attribution
+  trailers and footers in commits, tags, and PR titles/bodies (commit-msg hook, pre-push scan, CI).
+- ✅ Post-audit truth/governance remediation PR #673 merged: stale `#356`-active-remediation
+  citations in `docs/SECURITY-THREAT-MODEL.md`/`docs/IDB-ENCRYPTION.md` rewritten to anchor on the
+  living ledger state, with a mechanical `check-doc-metrics.mjs` guard against recurrence (first
+  slice of the 2026-09-08 external audit's S1–S10 remediation sequence; further slices in progress).
+- 🔄 Ledger row 9 (project state-shape compatibility adapter) — five `feat`/`fix` PRs landed
+  (#618 Slice A persisted schema-version classification, #619 Slice B IDB-load observation, #621
+  raw-integer-grammar hardening, #653 the non-destructive `LEGACY_TO_V1` admission primitive, #658
+  filesystem-admission convergence) but **still not complete**: durable source-generation fencing,
+  writer integration, universal ingress/egress, and authority switch remain open per
+  `docs/native/CORE-MIGRATION-LEDGER.md` row 9. Wave 3/4 R-15 implementation stays blocked
+  (`S5_IMPLEMENTATION_READY=NO`, recorded on row 10) until row 9 and `S5_TERMINAL=YES` are both
+  true — no target release is set for that yet (tracked, not invented; see the S1–S10 remediation
+  plan's exit-criterion work).
 - ⬜ #614 (narrow concurrent-first-install multi-tab race, requires cross-tab coordination) and
   #532 (WelcomePortal E2E entry nondeterminism root cause) remain open, tracked separately —
   not part of this sprint unless they directly block release or R-15 work.
