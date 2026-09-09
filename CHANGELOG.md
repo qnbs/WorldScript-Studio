@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Project schema-version classification (Slice A, #553):** `PROJECT_SCHEMA_V1` as a fresh
+  production version marker, disjoint classification
+  (`LEGACY_UNVERSIONED`/`SUPPORTED_OLDER`/`UNSUPPORTED_OLDER`/`CURRENT`/`FUTURE`/`MALFORMED`),
+  raw/header parsing before typed parsing so a `FUTURE` document with a breaking shape still
+  classifies `FUTURE` rather than `MALFORMED`, and the `LEGACY_TO_V1` in-memory admission
+  primitive. PR #618.
+- **Schema-version classification observed on IDB project load (Slice B, 1/N, #553):** the first
+  ingress path wired to Slice A's classifiers, observation-only (classify and log, never alter
+  load behavior, never throw), matching the established Core shadow-validation pattern. PR #619.
+- **Canonical document projection foundation:** establishes the canonical parser/import/admission
+  boundary that retains the original JSON text alongside a bounded typed projection, the
+  foundation Slice C's admission primitive builds on.
+- **Explicit legacy-to-v1 admission primitive (#653):** the non-destructive `LEGACY_TO_V1`
+  in-memory admission path recognizes, fully validates, losslessly overlays the V1 version marker,
+  and revalidates the destination. PR #653.
+- **Filesystem admission converged after #654 (#658):** carries forward canonical filesystem
+  admission and closes legacy editable-admission authority gaps. PR #658.
+
+### Fixed
+
+- **`schemaVersion` now enforces raw integer grammar (#553):** rejects rounded fractional schema
+  versions and non-number schema-version tokens instead of silently coercing them. PR #621.
+- **Canonical document projection now reuses its own parsed input** instead of re-parsing,
+  removing a redundant-parse divergence risk between the raw and typed projections.
+- **Projection failure now retains the raw header verdict** instead of discarding the
+  already-classified version header when the typed projection itself fails.
+- **Unsupported-project startup copy added** alongside the existing migration-gap copy, so a
+  project whose schema version this build cannot open at all gets its own distinct startup
+  message rather than reusing the migration-gap wording.
+- **Migration-gap startup copy now distinguished from the unsupported-project case (#656):** the
+  two failure classes previously shared wording; each now gets copy specific to its actual cause.
+  PR #656.
+- **PR-size exception governance hardened (#657):** closes control gaps in how per-PR size-ceiling
+  exceptions are recorded and validated. PR #657.
+- **Security docs no longer cite closed PR #356 as active desktop-encryption remediation:**
+  `docs/SECURITY-THREAT-MODEL.md` and `docs/IDB-ENCRYPTION.md` both asserted PR #356 was the
+  active/pending remediation for desktop plaintext storage after it was closed as superseded on
+  2026-08-18. Rewritten to anchor on the living Ledger-row-9/R-15 state instead of a PR number, and
+  `check-doc-metrics.mjs` now mechanically rejects an unqualified live/pending-remediation claim
+  tied to a bare PR number in these two files. PR #673.
+- **CHANGELOG completeness-check upgrade, backfill Unreleased (audit F-2):** `scanUnreleasedTruth`
+  previously accepted any non-empty `[Unreleased]` section forever, so a single unrelated bullet
+  let arbitrarily many later `feat`/`fix`/`perf` commits go completely undocumented — 13 real
+  commits since `v1.28.4` had gone unrecorded. It now requires every governed commit to be
+  individually referenced by PR number or subject slug, naming any that aren't; this section was
+  backfilled with all 13 currently-undocumented entries above.
+
+### Security
+
+- **AI/session attribution now rejected in commits and PRs:** a fail-closed guard
+  (`check-commit-attribution.mjs`, a commit-msg hook, a pre-push scan of outgoing commits, and a
+  CI check on the commit range and PR title/body) blocks Claude/Anthropic attribution trailers,
+  session URLs, and generated-by footers before they can land in repository history. PR #672.
+
 ### Documentation
 
 - **Post-release v1.28.4 truth sync:** removed the now-stale release-candidate markers from

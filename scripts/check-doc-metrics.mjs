@@ -330,17 +330,82 @@ export function scanReadmeReleaseTruth(readme, taggedVersions) {
   return findings;
 }
 
-function hasMeaningfulUnreleasedContent(changelog) {
+// QNBS-v3 (audit F-2): shared by the presence check below and the completeness check further
+// down — both need the raw [Unreleased] section text with HTML comments stripped.
+function getUnreleasedSectionText(changelog) {
   const heading = /^## \[Unreleased\]\s*$/m.exec(changelog);
-  if (!heading) return false;
+  if (!heading) return '';
   const afterHeading = changelog.slice(heading.index + heading[0].length);
   const nextHeading = afterHeading.search(/^##\s/m);
   const section = nextHeading === -1 ? afterHeading : afterHeading.slice(0, nextHeading);
-  const withoutHtmlComments = section.replace(/<!--[\s\S]*?(?:-->|$)/g, '');
-  return withoutHtmlComments.split('\n').some((line) => {
+  return section.replace(/<!--[\s\S]*?(?:-->|$)/g, '');
+}
+
+function hasMeaningfulUnreleasedContent(changelog) {
+  const section = getUnreleasedSectionText(changelog);
+  return section.split('\n').some((line) => {
     const trimmed = line.trim();
     return trimmed.length > 0 && !trimmed.startsWith('<!--') && !trimmed.startsWith('###');
   });
+}
+
+// QNBS-v3 (audit F-2): a single doc-sync bullet previously satisfied hasMeaningfulUnreleasedContent
+// forever, letting arbitrarily many later feat/fix/perf commits go undocumented — the exact gap
+// this audit found (13 of 13 real post-tag commits undocumented). Governed commits must each be
+// referenced by PR number OR a recognizable subject slug, not merely "some content exists."
+const GOVERNED_COMMIT_TYPE = /^(?:feat|fix|perf)(?:\([^)]*\))?!?:\s*/i;
+const TRAILING_PR_REF = /\(#(\d+)\)\s*$/;
+const SLUG_STOP_WORDS = new Set([
+  'the',
+  'a',
+  'an',
+  'and',
+  'or',
+  'of',
+  'to',
+  'in',
+  'on',
+  'for',
+  'with',
+  'from',
+  'at',
+  'by',
+  'is',
+  'are',
+  'this',
+  'that',
+  'not',
+]);
+// QNBS-v3: a commit not merged via the standard squash flow (no trailing "(#NNN)") has nothing to
+// key off but its own wording — require most of a bounded set of its most identifying words to
+// appear in [Unreleased], rather than an exact-sentence match this file's other scanners avoid.
+const SLUG_WORD_COUNT = 6;
+const SLUG_MATCH_RATIO = 0.6;
+
+function significantSlugWords(description) {
+  return description
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((word) => word.length > 2 && !SLUG_STOP_WORDS.has(word))
+    .slice(0, SLUG_WORD_COUNT);
+}
+
+function isReferencedInUnreleased(subject, unreleasedSection) {
+  const prMatch = TRAILING_PR_REF.exec(subject);
+  if (prMatch && unreleasedSection.includes(`#${prMatch[1]}`)) return true;
+  const description = subject.replace(GOVERNED_COMMIT_TYPE, '').replace(TRAILING_PR_REF, '');
+  const words = significantSlugWords(description);
+  if (words.length === 0) return false;
+  const matched = words.filter((word) => new RegExp(`\\b${word}\\b`, 'i').test(unreleasedSection));
+  return matched.length / words.length >= SLUG_MATCH_RATIO;
+}
+
+function findUndocumentedGovernedCommits(postReleaseCommitSubjects, unreleasedSection) {
+  return postReleaseCommitSubjects.filter(
+    (subject) =>
+      GOVERNED_COMMIT_TYPE.test(subject) && !isReferencedInUnreleased(subject, unreleasedSection),
+  );
 }
 
 /**
@@ -388,9 +453,19 @@ export function scanUnreleasedTruth(
     semverCompare(candidateVersion, latestTagged) > 0;
   // QNBS-v3: only the current untagged release candidate may defer Unreleased history until merge-time tagging.
   if (isActiveUntaggedCandidate) return [];
-  if (hasMeaningfulUnreleasedContent(changelog)) return [];
+  if (!hasMeaningfulUnreleasedContent(changelog)) {
+    return [
+      `CHANGELOG.md — ${postReleaseCommitSubjects.length} commit(s) exist after the latest release tag, but [Unreleased] is empty`,
+    ];
+  }
+  const unreleasedSection = getUnreleasedSectionText(changelog);
+  const undocumented = findUndocumentedGovernedCommits(
+    postReleaseCommitSubjects,
+    unreleasedSection,
+  );
+  if (undocumented.length === 0) return [];
   return [
-    `CHANGELOG.md — ${postReleaseCommitSubjects.length} commit(s) exist after the latest release tag, but [Unreleased] is empty`,
+    `CHANGELOG.md — [Unreleased] does not reference ${undocumented.length} post-tag feat/fix/perf commit(s) by PR number or subject: ${undocumented.map((s) => `"${s}"`).join('; ')}`,
   ];
 }
 

@@ -287,6 +287,75 @@ describe('Unreleased truth', () => {
       ]),
     ).toEqual([expect.stringContaining('[Unreleased] is empty')]);
   });
+
+  // QNBS-v3 (audit F-2): the actual bug this section exists to catch — a single unrelated doc-sync
+  // bullet previously satisfied "meaningful content" forever, so a real feat/fix commit could go
+  // completely undocumented while docs:check stayed green. Completeness must be checked per commit.
+  describe('completeness — every governed commit must be individually referenced', () => {
+    const populatedButUnrelated = '## [Unreleased]\n\n### Documentation\n\n- Unrelated doc sync.\n';
+
+    it('rejects a governed commit referenced by neither PR number nor subject slug', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const findings = scanUnreleasedTruth(populatedButUnrelated, [
+        'fix(project): retain raw header verdict on projection failure',
+      ]);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toContain('does not reference 1 post-tag feat/fix/perf commit');
+      expect(findings[0]).toContain('retain raw header verdict');
+    });
+
+    it('accepts a governed commit referenced by its trailing PR number', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const changelog =
+        '## [Unreleased]\n\n### Fixed\n\n- Something about migration-gap copy. PR #656.\n';
+      const findings = scanUnreleasedTruth(changelog, [
+        'fix(i18n): distinguish migration-gap startup copy (#656)',
+      ]);
+      expect(findings).toEqual([]);
+    });
+
+    it('extracts the TRAILING PR number, not a mid-subject issue reference', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      // QNBS-v3: real house style embeds an issue ref mid-subject ("(#553)") before the actual
+      // trailing squash-merge PR number ("(#621)") — referencing only the issue number must NOT
+      // satisfy the check for the PR.
+      const changelog = '## [Unreleased]\n\n### Fixed\n\n- Closes #553 eventually.\n';
+      const findings = scanUnreleasedTruth(changelog, [
+        'fix(project): enforce raw schemaVersion integer grammar (#553) (#621)',
+      ]);
+      expect(findings).toHaveLength(1);
+    });
+
+    it('accepts a governed commit with no PR number, referenced by subject slug', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const changelog =
+        '## [Unreleased]\n\n### Fixed\n\n- Canonical document projection now reuses parsed input.\n';
+      const findings = scanUnreleasedTruth(changelog, [
+        'fix(project): reuse parsed canonical document input',
+      ]);
+      expect(findings).toEqual([]);
+    });
+
+    it('does not require build/chore/docs commits to be individually referenced', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const findings = scanUnreleasedTruth(populatedButUnrelated, [
+        'build(deps): bump some-package from 1.0.0 to 1.0.1 (#700)',
+        'chore(agent): unrelated housekeeping',
+        'docs: unrelated doc update',
+      ]);
+      expect(findings).toEqual([]);
+    });
+
+    it('lists every undocumented governed commit, not just the first', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const findings = scanUnreleasedTruth(populatedButUnrelated, [
+        'feat(project): establish canonical document projection foundation',
+        'fix(project): reuse parsed canonical document input',
+      ]);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toContain('does not reference 2 post-tag feat/fix/perf commit');
+    });
+  });
 });
 
 describe('getTaggedVersions', () => {
