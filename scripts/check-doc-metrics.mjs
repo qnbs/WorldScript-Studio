@@ -970,6 +970,22 @@ export function scanSecurityDocPrStatus(content, filePath) {
 // QNBS-v3 (F-10, CodeRabbit follow-up): locales/it/help.json IS included — it's exactly where the F-10 stale-URL drift happened; the in-app link reads the constant directly so it can't drift and isn't listed here.
 const URL_CHECK_FILES = ['README.md', 'CLAUDE.md', 'locales/it/help.json'];
 
+// QNBS-v3 (CodeFactor): extracted so main() is a flat sequence of calls instead of five near-identical read/scan loops, each with its own try/catch for a missing file.
+function scanRequiredFiles(relPaths, scanFn, missingFindingFor) {
+  const findings = [];
+  for (const relPath of relPaths) {
+    let content;
+    try {
+      content = readFileSync(join(root, relPath), 'utf8');
+    } catch {
+      if (missingFindingFor) findings.push(missingFindingFor(relPath));
+      continue;
+    }
+    findings.push(...scanFn(content, relPath));
+  }
+  return findings;
+}
+
 function main() {
   const localeCount = getActualLocaleCount();
   const keyCount = getActualKeyCount();
@@ -1004,68 +1020,32 @@ function main() {
     ...scanReadmeReleaseTruth(readFileSync(join(root, 'README.md'), 'utf8'), taggedVersions),
   );
   allFindings.push(...scanReadmeTestMetrics(readFileSync(join(root, 'README.md'), 'utf8')));
-  for (const relPath of TARGET_FILES) {
-    const abs = join(root, relPath);
-    let content;
-    try {
-      content = readFileSync(abs, 'utf8');
-    } catch {
-      continue; // file doesn't exist in this checkout — not this gate's concern
-    }
-    allFindings.push(...scanForDrift(content, relPath, { localeCount, keyCount, latestVersion }));
-  }
 
-  for (const relPath of URL_CHECK_FILES) {
-    const abs = join(root, relPath);
-    let content;
-    try {
-      content = readFileSync(abs, 'utf8');
-    } catch {
-      continue;
-    }
-    allFindings.push(...scanForUrlDrift(content, relPath, canonicalUrl));
-  }
-
-  for (const relPath of SECURITY_STATUS_DOCS) {
-    const abs = join(root, relPath);
-    let content;
-    try {
-      content = readFileSync(abs, 'utf8');
-    } catch {
-      // QNBS-v3 (codex): these two files are this gate's required subjects — silently skipping a
-      // missing/unreadable one would make the live-status enforcement disappear exactly when its
-      // input is unavailable, the same failure mode as BUNDLE_BUDGET_DOCS below.
-      allFindings.push(`${relPath} — required security-status document is missing or unreadable`);
-      continue;
-    }
-    allFindings.push(...scanSecurityDocPrStatus(content, relPath));
-  }
-
-  for (const relPath of BUNDLE_BUDGET_DOCS) {
-    const abs = join(root, relPath);
-    let content;
-    try {
-      content = readFileSync(abs, 'utf8');
-    } catch {
-      allFindings.push(`${relPath} — required current bundle-budget document is missing`);
-      continue;
-    }
-    allFindings.push(...scanBundleBudgetTruth(content, relPath, bundleBudget));
-  }
-
-  // QNBS-v3: current locale help is shipped to users, so every active locale must carry the same budget truth.
-  for (const locale of getLocales()) {
-    const relPath = `locales/${locale}/help.json`;
-    const abs = join(root, relPath);
-    let content;
-    try {
-      content = readFileSync(abs, 'utf8');
-    } catch {
-      allFindings.push(`${relPath} — required current in-app help document is missing`);
-      continue;
-    }
-    allFindings.push(...scanLocalizedBundleBudgetTruth(content, relPath, bundleBudget));
-  }
+  // QNBS-v3 (codex): these two files are this gate's required subjects — silently skipping a missing/unreadable one would make the live-status enforcement disappear exactly when its input is unavailable, the same failure mode as the bundle-budget docs below.
+  allFindings.push(
+    ...scanRequiredFiles(TARGET_FILES, (content, relPath) =>
+      scanForDrift(content, relPath, { localeCount, keyCount, latestVersion }),
+    ),
+    ...scanRequiredFiles(URL_CHECK_FILES, (content, relPath) =>
+      scanForUrlDrift(content, relPath, canonicalUrl),
+    ),
+    ...scanRequiredFiles(
+      SECURITY_STATUS_DOCS,
+      scanSecurityDocPrStatus,
+      (relPath) => `${relPath} — required security-status document is missing or unreadable`,
+    ),
+    ...scanRequiredFiles(
+      BUNDLE_BUDGET_DOCS,
+      (content, relPath) => scanBundleBudgetTruth(content, relPath, bundleBudget),
+      (relPath) => `${relPath} — required current bundle-budget document is missing`,
+    ),
+    // QNBS-v3: current locale help is shipped to users, so every active locale must carry the same budget truth.
+    ...scanRequiredFiles(
+      getLocales().map((locale) => `locales/${locale}/help.json`),
+      (content, relPath) => scanLocalizedBundleBudgetTruth(content, relPath, bundleBudget),
+      (relPath) => `${relPath} — required current in-app help document is missing`,
+    ),
+  );
 
   if (allFindings.length > 0) {
     process.stderr.write(
