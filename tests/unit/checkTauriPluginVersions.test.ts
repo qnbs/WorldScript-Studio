@@ -147,6 +147,7 @@ describe('findTauriPluginVersionMismatches', () => {
   // QNBS-v3: reproduces the live v1.28.5 release-build failure — Rust bumped via a Dependabot PR without a matching npm bump, resolved lockfile versions included.
   it('flags a Rust-ahead-of-npm minor-version mismatch, reproducing the v1.28.5 release failure', () => {
     const cargoLock =
+      ownPackageBlock(['tauri-plugin-http', 'tauri-plugin-notification']) +
       cargoLockEntry('tauri-plugin-http', '2.6.0') +
       cargoLockEntry('tauri-plugin-notification', '2.4.0');
     const pnpmLock = pnpmImporterBlock('.', {
@@ -160,7 +161,10 @@ describe('findTauriPluginVersionMismatches', () => {
       }),
     ]);
     expect(findings).toHaveLength(2);
+    // QNBS-v3: asserts the specific "major.minor mismatch" wording, not just the crate name — a weaker substring check on the crate name alone would also pass for the wrong reason (e.g. a "no resolved version" fail-closed finding also contains the crate name).
+    expect(findings[0]).toContain('major.minor mismatch');
     expect(findings[0]).toContain('tauri-plugin-http');
+    expect(findings[1]).toContain('major.minor mismatch');
     expect(findings[1]).toContain('tauri-plugin-notification');
   });
 
@@ -181,6 +185,7 @@ describe('findTauriPluginVersionMismatches', () => {
       importerPkg('packages/desktop-contracts', { '@tauri-apps/plugin-notification': '^2.3.3' }),
     ]);
     expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain('major.minor mismatch');
     expect(findings[0]).toContain('packages/desktop-contracts');
     expect(findings[0]).toContain('@tauri-apps/plugin-notification');
   });
