@@ -719,4 +719,49 @@ describe('scanSecurityDocPrStatus', () => {
     const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
     expect(findings).toHaveLength(0);
   });
+
+  // QNBS-v3 (codex): a negated or "no longer" trigger phrase explicitly denies live status — it
+  // isn't a claim at all.
+  it.each([
+    'PR #356 is not the active remediation for this gap.',
+    'PR #356 is no longer the active remediation for this gap.',
+    'Work is not in progress on PR #356 for this gap.',
+  ])('does not flag a negated trigger: %s', (content) => {
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(0);
+  });
+
+  // QNBS-v3 (codex): compound negation/auxiliary forms around a qualifier must not be accepted as
+  // proof of a completed status.
+  it.each([
+    'PR #999 is the active remediation; it has not been closed.',
+    'PR #999 is the active remediation; it is not yet closed.',
+    'PR #999 is the active remediation and may be merged eventually.',
+  ])('still flags a claim with compound-negated/prospective qualifier: %s', (content) => {
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+  });
+
+  // QNBS-v3 (codex): an HTML comment or fenced code block is never rendered prose — a literal
+  // example inside one isn't a live assertion about a real PR.
+  it('does not flag trigger wording inside an HTML comment', () => {
+    const content = '<!-- Do not write: PR #999 is the active remediation -->\nReal prose here.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(0);
+  });
+
+  it('does not flag trigger wording inside a fenced code block', () => {
+    const content = ['```', 'PR #999 is the active remediation', '```'].join('\n');
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(0);
+  });
+
+  it('still flags real prose surrounding a stripped HTML comment', () => {
+    const content = [
+      '<!-- internal note -->',
+      'PR #999 is the active remediation for this gap.',
+    ].join('\n');
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+  });
 });

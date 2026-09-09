@@ -517,11 +517,17 @@ const LIVE_STATUS_TRIGGER = /\bactive remediation\b|\bpending\b|\bin progress\b/
 const STATUS_QUALIFIER_WORD = 'closed|merged|superseded';
 const STATUS_QUALIFIER_RE = new RegExp(`\\b(?:${STATUS_QUALIFIER_WORD})\\b`, 'gi');
 // QNBS-v3 (codex): a qualifier word only proves a completed status when it isn't negated
-// ("is not closed") or prospective ("will be merged") — checked against the text immediately
-// preceding the match.
-const QUALIFIER_NEGATION_OR_FUTURE =
-  /\b(?:not|never|isn't|won't|will|would|should|going to be)\s+(?:be\s+)?$/i;
-const NEGATION_LOOKBACK = 30;
+// ("is not closed", "has not been closed", "is not yet closed") or prospective ("will be merged",
+// "may be merged") — checked for PRESENCE anywhere in the short lookback immediately before the
+// match, not requiring exact adjacency, so common compound/auxiliary forms are covered without
+// attempting a full negation-scope parser (a known, bounded best-effort heuristic, matching this
+// file's existing "crude but sufficient" sentence-split rationale).
+const QUALIFIER_NEGATION_OR_FUTURE_WORDS =
+  /\b(?:not|never|isn't|won't|will|would|should|may|might|could|going to)\b/i;
+// QNBS-v3 (codex): a live-status TRIGGER phrase negated or "no longer" true isn't a live claim at
+// all ("is not the active remediation", "no longer the active remediation").
+const TRIGGER_NEGATION_WORDS = /\b(?:not|never|no longer|isn't)\b/i;
+const NEGATION_LOOKBACK = 40;
 const PROXIMITY_WINDOW = 60;
 // QNBS-v3 (codex): an unordered/ordered Markdown list marker — same isolation reasoning as table
 // rows below.
@@ -607,11 +613,20 @@ function findPrReferences(sentence) {
   }));
 }
 
+function lookback(sentence, matchIndex) {
+  return sentence.slice(Math.max(0, matchIndex - NEGATION_LOOKBACK), matchIndex);
+}
+
 // QNBS-v3 (codex): "is not closed" / "will be merged" don't assert a completed status — only a
 // qualifier that isn't negated or prospective actually proves the PR is done.
-function isNegatedOrProspective(sentence, matchIndex) {
-  const before = sentence.slice(Math.max(0, matchIndex - NEGATION_LOOKBACK), matchIndex);
-  return QUALIFIER_NEGATION_OR_FUTURE.test(before);
+function isNegatedOrProspectiveQualifier(sentence, matchIndex) {
+  return QUALIFIER_NEGATION_OR_FUTURE_WORDS.test(lookback(sentence, matchIndex));
+}
+
+// QNBS-v3 (codex): "is not the active remediation" / "no longer the active remediation" don't
+// assert live status at all — the trigger phrase itself is negated away.
+function isNegatedTrigger(sentence, matchIndex) {
+  return TRIGGER_NEGATION_WORDS.test(lookback(sentence, matchIndex));
 }
 
 // QNBS-v3 (CodeScene): extracted so scanSecurityDocPrStatus itself stays a flat, shallow loop —
@@ -620,7 +635,9 @@ function collectQualifiedPrs(sentence, prRefs) {
   const qualifiedPrs = new Set();
   for (const m of sentence.matchAll(STATUS_QUALIFIER_RE)) {
     const nearest = nearestPrNumber(m.index, prRefs);
-    if (nearest !== null && !isNegatedOrProspective(sentence, m.index)) qualifiedPrs.add(nearest);
+    if (nearest !== null && !isNegatedOrProspectiveQualifier(sentence, m.index)) {
+      qualifiedPrs.add(nearest);
+    }
   }
   return qualifiedPrs;
 }
@@ -629,7 +646,9 @@ function collectUnqualifiedClaims(sentence, prRefs, qualifiedPrs) {
   const claims = new Set();
   for (const m of sentence.matchAll(LIVE_STATUS_TRIGGER)) {
     const nearest = nearestPrNumber(m.index, prRefs);
-    if (nearest !== null && !qualifiedPrs.has(nearest)) claims.add(nearest);
+    if (nearest !== null && !qualifiedPrs.has(nearest) && !isNegatedTrigger(sentence, m.index)) {
+      claims.add(nearest);
+    }
   }
   return claims;
 }
@@ -641,9 +660,21 @@ function findUnqualifiedClaimsInSentence(sentence) {
   return [...collectUnqualifiedClaims(sentence, prRefs, qualifiedPrs)];
 }
 
+// QNBS-v3 (codex): an HTML comment or fenced code block is never rendered prose — a literal
+// example inside one isn't a live assertion about a real PR. Blank out matched spans (keep
+// newlines) rather than remove lines, so line numbers stay stable for the findings below.
+// Known, accepted limitation: a single-backtick inline-code SPAN is deliberately not stripped —
+// PR_REFERENCE needs backtick tolerance for a real "PR `#356`" citation, and distinguishing that
+// from a whole illustrative phrase wrapped in one backtick pair isn't attempted here.
+function stripNonProseMarkdown(content) {
+  const blank = (match) => match.replace(/[^\n]/g, ' ');
+  return content.replace(/<!--[\s\S]*?-->/g, blank).replace(/```[\s\S]*?```/g, blank);
+}
+
 export function scanSecurityDocPrStatus(content, filePath) {
   const findings = [];
-  for (const { text: paragraph, startLine } of splitIntoParagraphs(content)) {
+  const prose = stripNonProseMarkdown(content);
+  for (const { text: paragraph, startLine } of splitIntoParagraphs(prose)) {
     const compact = stripLinkUrls(paragraph);
     for (const sentence of splitIntoSentences(compact)) {
       for (const prNumber of findUnqualifiedClaimsInSentence(sentence)) {
