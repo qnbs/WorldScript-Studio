@@ -190,91 +190,83 @@ describe('findTauriPluginVersionMismatches', () => {
     expect(findings[0]).toContain('@tauri-apps/plugin-notification');
   });
 
-  // QNBS-v3 (codex): a crate resolved only transitively (absent from the direct-dependencies list) must fail closed through the full pipeline too, not just at the resolvedCargoPluginVersions level.
-  it('fails closed end-to-end when the declared npm plugin has no direct Rust dependency, only a transitive one', () => {
-    const cargoLock =
-      ownPackageBlock(['tauri-plugin-dialog']) + cargoLockEntry('tauri-plugin-http', '2.6.0');
-    const pnpmLock = pnpmImporterBlock('.', {
-      '@tauri-apps/plugin-http': { specifier: '^2.6.0', version: '2.6.0' },
-    });
-    const findings = findTauriPluginVersionMismatches(cargoLock, pnpmLock, [
-      importerPkg('.', { '@tauri-apps/plugin-http': '^2.6.0' }),
-    ]);
-    expect(findings).toHaveLength(1);
-    expect(findings[0]).toContain('no resolved version in Cargo.lock');
-  });
-
-  // QNBS-v3 (codex): a plugin declared under optionalDependencies/peerDependencies/devDependencies still resolves into the lockfile and can still be bundled — checking only "dependencies" silently skipped it.
-  it('checks a plugin declared under a non-"dependencies" section too', () => {
-    const cargoLock =
-      ownPackageBlock(['tauri-plugin-http']) + cargoLockEntry('tauri-plugin-http', '2.5.0');
-    const pnpmLock = pnpmImporterBlock('.', {
-      '@tauri-apps/plugin-http': { specifier: '^2.6.0', version: '2.6.0' },
-    });
-    const findings = findTauriPluginVersionMismatches(cargoLock, pnpmLock, [
-      importerPkgWithSection('.', 'optionalDependencies', { '@tauri-apps/plugin-http': '^2.6.0' }),
-    ]);
-    expect(findings).toHaveLength(1);
-    expect(findings[0]).toContain('major.minor mismatch');
-  });
-
-  // QNBS-v3 (cubic): a duplicate Cargo.lock entry must resolve to the direct app dependency's version (2.6.0), never the textually-first transitive occurrence (2.5.0) — proven by the fact that using the wrong one would falsely flag this as a mismatch.
-  it('does not mistake a transitive crate version for the direct app dependency', () => {
-    const cargoLock =
-      ownPackageBlock(['tauri-plugin-http 2.6.0']) +
-      cargoLockEntry('tauri-plugin-http', '2.5.0') +
-      cargoLockEntry('tauri-plugin-http', '2.6.0');
-    const pnpmLock = pnpmImporterBlock('.', {
-      '@tauri-apps/plugin-http': { specifier: '^2.6.0', version: '2.6.3' },
-    });
-    const findings = findTauriPluginVersionMismatches(cargoLock, pnpmLock, [
-      importerPkg('.', { '@tauri-apps/plugin-http': '^2.6.0' }),
-    ]);
-    expect(findings).toEqual([]);
-  });
-
-  it('fails closed when Cargo.lock has an undisambiguated duplicate, rather than guessing', () => {
-    const cargoLock =
-      ownPackageBlock(['tauri-plugin-http']) +
-      cargoLockEntry('tauri-plugin-http', '2.5.0') +
-      cargoLockEntry('tauri-plugin-http', '2.6.0');
-    const pnpmLock = pnpmImporterBlock('.', {
-      '@tauri-apps/plugin-http': { specifier: '^2.6.0', version: '2.6.3' },
-    });
-    const findings = findTauriPluginVersionMismatches(cargoLock, pnpmLock, [
-      importerPkg('.', { '@tauri-apps/plugin-http': '^2.6.0' }),
-    ]);
-    expect(findings).toHaveLength(1);
-    expect(findings[0]).toContain('more than one version');
-  });
-
-  // QNBS-v3: fail closed — a plugin declared in package.json with no resolved Cargo.lock or pnpm-lock.yaml entry means a lockfile is out of sync and parity cannot be verified, which must surface as a finding, not a silent pass.
+  // QNBS-v3 (CodeScene): unifies six single-'.'-importer, single-http-crate scenarios (each previously its own near-identical test) into one table — every distinct code path (no direct Rust dependency, non-"dependencies" section, undisambiguated duplicate, correctly-disambiguated duplicate, missing Cargo.lock entry, missing pnpm-lock.yaml entry) stays independently named and asserted, just without repeating the same four-line "build lockfiles, call, assert" shape six times.
   it.each([
     {
-      name: 'no resolved Rust crate version',
-      cargoLock: '', // no tauri-plugin-http entry at all
+      name: 'no direct Rust dependency, only a transitive one',
+      cargoLock:
+        ownPackageBlock(['tauri-plugin-dialog']) + cargoLockEntry('tauri-plugin-http', '2.6.0'),
       pnpmLock: pnpmImporterBlock('.', {
         '@tauri-apps/plugin-http': { specifier: '^2.6.0', version: '2.6.0' },
       }),
-      expectedSubstring: 'no resolved version in Cargo.lock',
+      importerPackages: [importerPkg('.', { '@tauri-apps/plugin-http': '^2.6.0' })],
+      expectedSubstrings: ['no resolved version in Cargo.lock'],
+    },
+    {
+      // QNBS-v3 (codex): a plugin declared under optionalDependencies/peerDependencies/devDependencies still resolves into the lockfile and can still be bundled — checking only "dependencies" silently skipped it.
+      name: 'a plugin declared under a non-"dependencies" section',
+      cargoLock:
+        ownPackageBlock(['tauri-plugin-http']) + cargoLockEntry('tauri-plugin-http', '2.5.0'),
+      pnpmLock: pnpmImporterBlock('.', {
+        '@tauri-apps/plugin-http': { specifier: '^2.6.0', version: '2.6.0' },
+      }),
+      importerPackages: [
+        importerPkgWithSection('.', 'optionalDependencies', {
+          '@tauri-apps/plugin-http': '^2.6.0',
+        }),
+      ],
+      expectedSubstrings: ['major.minor mismatch'],
+    },
+    {
+      name: 'an undisambiguated Cargo.lock duplicate, rather than guessing',
+      cargoLock:
+        ownPackageBlock(['tauri-plugin-http']) +
+        cargoLockEntry('tauri-plugin-http', '2.5.0') +
+        cargoLockEntry('tauri-plugin-http', '2.6.0'),
+      pnpmLock: pnpmImporterBlock('.', {
+        '@tauri-apps/plugin-http': { specifier: '^2.6.0', version: '2.6.3' },
+      }),
+      importerPackages: [importerPkg('.', { '@tauri-apps/plugin-http': '^2.6.0' })],
+      expectedSubstrings: ['more than one version'],
+    },
+    {
+      // QNBS-v3 (cubic): a duplicate Cargo.lock entry must resolve to the direct app dependency's version (2.6.0), never the textually-first transitive occurrence (2.5.0) — proven by zero findings, since using the wrong one would falsely flag this as a mismatch.
+      name: 'nothing, correctly disambiguating a duplicate Cargo.lock entry via the direct reference',
+      cargoLock:
+        ownPackageBlock(['tauri-plugin-http 2.6.0']) +
+        cargoLockEntry('tauri-plugin-http', '2.5.0') +
+        cargoLockEntry('tauri-plugin-http', '2.6.0'),
+      pnpmLock: pnpmImporterBlock('.', {
+        '@tauri-apps/plugin-http': { specifier: '^2.6.0', version: '2.6.3' },
+      }),
+      importerPackages: [importerPkg('.', { '@tauri-apps/plugin-http': '^2.6.0' })],
+      expectedSubstrings: [],
+    },
+    {
+      // QNBS-v3: fail closed — a plugin declared in package.json with no resolved Cargo.lock entry means the lockfile is out of sync and parity cannot be verified, which must surface as a finding, not a silent pass.
+      name: 'no resolved Rust crate version at all',
+      cargoLock: '',
+      pnpmLock: pnpmImporterBlock('.', {
+        '@tauri-apps/plugin-http': { specifier: '^2.6.0', version: '2.6.0' },
+      }),
+      importerPackages: [importerPkg('.', { '@tauri-apps/plugin-http': '^2.6.0' })],
+      expectedSubstrings: ['no resolved version in Cargo.lock'],
     },
     {
       name: 'no resolved npm version in the lockfile',
       cargoLock:
         ownPackageBlock(['tauri-plugin-http']) + cargoLockEntry('tauri-plugin-http', '2.6.0'),
       pnpmLock: pnpmImporterBlock('.', {}), // http declared in package.json but absent from the lockfile importer
-      expectedSubstring: 'no resolved version in pnpm-lock.yaml',
+      importerPackages: [importerPkg('.', { '@tauri-apps/plugin-http': '^2.6.0' })],
+      expectedSubstrings: ['no resolved version in pnpm-lock.yaml'],
     },
-  ])(
-    'fails closed when a declared plugin has $name',
-    ({ cargoLock, pnpmLock, expectedSubstring }) => {
-      const findings = findTauriPluginVersionMismatches(cargoLock, pnpmLock, [
-        importerPkg('.', { '@tauri-apps/plugin-http': '^2.6.0' }),
-      ]);
-      expect(findings).toHaveLength(1);
-      expect(findings[0]).toContain(expectedSubstring);
-    },
-  );
+  ])('flags $name', ({ cargoLock, pnpmLock, importerPackages, expectedSubstrings }) => {
+    const findings = findTauriPluginVersionMismatches(cargoLock, pnpmLock, importerPackages);
+    expect(findings).toHaveLength(expectedSubstrings.length);
+    expectedSubstrings.forEach((substring, index) => {
+      expect(findings[index]).toContain(substring);
+    });
+  });
 
   it('skips a plugin the importer does not declare at all (not applicable, not a failure)', () => {
     // QNBS-v3: http has no Cargo.lock entry at all here, proving it was never even considered for an importer that doesn't declare it — only notification (declared, and given a matching Cargo entry) is checked.
