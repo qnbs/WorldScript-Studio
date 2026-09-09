@@ -45,7 +45,7 @@ Status: 🔄 in progress | ⬜ open | ✅ done
   (#618 Slice A persisted schema-version classification, #619 Slice B IDB-load observation, #621
   raw-integer-grammar hardening, #653 the non-destructive `LEGACY_TO_V1` admission primitive, #658
   filesystem-admission convergence) but **still not complete**: durable source-generation fencing,
-  writer integration, and universal ingress/egress remain open per
+  writer integration, universal ingress/egress, and authority switch remain open per
   `docs/native/CORE-MIGRATION-LEDGER.md` row 9. Wave 3/4 R-15 implementation stays blocked
   (`S5_IMPLEMENTATION_READY=NO`, recorded on row 10) until row 9 and `S5_TERMINAL=YES` are both
   true — no target release is set for that yet (tracked, not invented; see the S1–S10 remediation
