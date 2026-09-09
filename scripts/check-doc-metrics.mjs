@@ -398,6 +398,16 @@ function isReferencedByPrNumber(prNumber, unreleasedSection) {
   return new RegExp(`(?:^|\\D)#${prNumber}(?!\\d)`).test(unreleasedSection);
 }
 
+// QNBS-v3 (codex): an entry that explicitly bundles several PR numbers is deliberately shared, so it must stay available for slug matching rather than being reserved for just one of them.
+function countDistinctPrReferences(entry) {
+  const numbers = new Set();
+  const pattern = /(?:^|\D)#(\d+)(?!\d)/g;
+  for (let match = pattern.exec(entry); match !== null; match = pattern.exec(entry)) {
+    numbers.add(match[1]);
+  }
+  return numbers.size;
+}
+
 // QNBS-v3 (codex): a Markdown bullet may wrap across several physical lines — join a bullet's own
 // continuation lines into one entry so slug-matching sees the whole thought, not a fragment.
 function splitUnreleasedEntries(unreleasedSection) {
@@ -434,6 +444,9 @@ function candidateEntryIndices(subject, unreleasedEntries) {
   });
 }
 
+// QNBS-v3 (codex): unlike an entry merely held by another slug-matched commit, a reserved entry can never be freed up via recursive reassignment.
+const RESERVED_ENTRY = -2;
+
 // QNBS-v3 (codex): try to (re)assign `commitIndex` an entry, freeing up its current entry (via
 // recursive reassignment) if every candidate is already claimed by a commit that itself has
 // another option — standard Kuhn's-algorithm augmenting path for maximum bipartite matching.
@@ -442,6 +455,7 @@ function tryAssignEntry(commitIndex, adjacency, entryOwner, visited) {
     if (visited.has(entryIndex)) continue;
     visited.add(entryIndex);
     const currentOwner = entryOwner[entryIndex];
+    if (currentOwner === RESERVED_ENTRY) continue;
     if (currentOwner === -1 || tryAssignEntry(currentOwner, adjacency, entryOwner, visited)) {
       entryOwner[entryIndex] = commitIndex;
       return true;
@@ -458,9 +472,12 @@ function tryAssignEntry(commitIndex, adjacency, entryOwner, visited) {
 // both). A maximum bipartite matching (Kuhn's algorithm) finds the best possible assignment
 // regardless of input order, so this mandatory pre-push/CI check never blocks already-complete
 // history on an accident of commit ordering.
-function computeMaxSlugMatching(subjects, entries) {
+function computeMaxSlugMatching(subjects, entries, reservedEntryIndices = new Set()) {
   const adjacency = subjects.map((subject) => candidateEntryIndices(subject, entries));
   const entryOwner = new Array(entries.length).fill(-1);
+  reservedEntryIndices.forEach((entryIndex) => {
+    entryOwner[entryIndex] = RESERVED_ENTRY;
+  });
   const matchedSubjects = new Array(subjects.length).fill(false);
   for (let commitIndex = 0; commitIndex < subjects.length; commitIndex++) {
     if (tryAssignEntry(commitIndex, adjacency, entryOwner, new Set())) {
@@ -486,6 +503,14 @@ function classifyGovernedCommit(subject, unreleasedSection, isFeatureBranchConte
   return isFeatureBranchContext ? 'documented' : 'needsSlugCheck';
 }
 
+// QNBS-v3 (codex): reserves a numbered commit's entry so it can't silently double as an unrelated commit's own slug-matched documentation, unless the entry explicitly bundles several PRs.
+function reserveEntryForNumberedCommit(prNumber, entries, reservedEntryIndices) {
+  const entryIndex = entries.findIndex((entry) => isReferencedByPrNumber(prNumber, entry));
+  if (entryIndex === -1) return;
+  if (countDistinctPrReferences(entries[entryIndex]) > 1) return;
+  reservedEntryIndices.add(entryIndex);
+}
+
 function findUndocumentedGovernedCommits(
   postReleaseCommitSubjects,
   unreleasedSection,
@@ -494,13 +519,17 @@ function findUndocumentedGovernedCommits(
   const entries = splitUnreleasedEntries(unreleasedSection);
   const undocumented = [];
   const slugCandidates = [];
+  const reservedEntryIndices = new Set();
   for (const subject of postReleaseCommitSubjects) {
     if (!GOVERNED_COMMIT_TYPE.test(subject)) continue;
+    const prMatch = TRAILING_PR_REF.exec(subject);
     const status = classifyGovernedCommit(subject, unreleasedSection, isFeatureBranchContext);
     if (status === 'undocumented') undocumented.push(subject);
     if (status === 'needsSlugCheck') slugCandidates.push(subject);
+    if (status === 'documented' && prMatch)
+      reserveEntryForNumberedCommit(prMatch[1], entries, reservedEntryIndices);
   }
-  const matched = computeMaxSlugMatching(slugCandidates, entries);
+  const matched = computeMaxSlugMatching(slugCandidates, entries, reservedEntryIndices);
   slugCandidates.forEach((subject, index) => {
     if (!matched[index]) undocumented.push(subject);
   });

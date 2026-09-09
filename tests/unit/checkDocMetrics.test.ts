@@ -470,6 +470,34 @@ describe('Unreleased truth', () => {
       expect(findings[0]).toContain('#999');
     });
 
+    // QNBS-v3 (codex): a numbered commit's exact-PR-number match must reserve its entry — otherwise
+    // an unrelated un-numbered commit's slug match can silently reuse the same bullet, since the PR
+    // check never touches entryOwner the way the slug-matching bipartite algorithm does.
+    it("does not let a numbered commit's entry double as an unrelated commit's slug match", async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const changelog =
+        '## [Unreleased]\n\n### Fixed\n\n- Canonical document projection foundation. PR #999.\n';
+      const findings = scanUnreleasedTruth(changelog, [
+        'fix(project): canonical document projection foundation (#999)',
+        'fix(project): reuse canonical document projection foundation',
+      ]);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toContain('reuse canonical document projection foundation');
+    });
+
+    // QNBS-v3 (codex): an entry that explicitly bundles multiple PR numbers is deliberately shared
+    // documentation, so it must stay available for slug matching rather than being reserved.
+    it('still allows slug matching against an entry that explicitly lists multiple PR numbers', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const changelog =
+        '## [Unreleased]\n\n### Fixed\n\n- Canonical document projection foundation. PR #999, PR #998.\n';
+      const findings = scanUnreleasedTruth(changelog, [
+        'fix(project): canonical document projection foundation (#999)',
+        'fix(project): reuse canonical document projection foundation',
+      ]);
+      expect(findings).toEqual([]);
+    });
+
     // QNBS-v3 (codex, P1): a pull_request CI run's git-log range enumerates every commit unique
     // to that branch, not the one commit that will exist after squash-merge — a routine
     // review-fix follow-up commit (necessarily un-numbered, since it hasn't been squash-merged
