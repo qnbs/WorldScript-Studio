@@ -422,55 +422,85 @@ function splitUnreleasedEntries(unreleasedSection) {
   return entries;
 }
 
-// QNBS-v3 (codex): match ratio is computed PER changelog entry, and a matched entry is then
-// claimed (excluded from later commits in the same pass) — otherwise words scattered across
-// several unrelated bullets could collectively satisfy a commit none of them documents, AND one
-// generic bullet could simultaneously "document" multiple different undocumented commits.
-function findSlugMatchIndex(subject, unreleasedEntries, claimedIndices) {
+// QNBS-v3 (codex): the set of entry indices a given commit's slug could match — match ratio is
+// computed PER changelog entry (see findUndocumentedGovernedCommits's header comment for why).
+function candidateEntryIndices(subject, unreleasedEntries) {
   const description = subject.replace(GOVERNED_COMMIT_TYPE, '').replace(TRAILING_PR_REF, '');
   const words = significantSlugWords(description);
-  if (words.length === 0) return -1;
-  return unreleasedEntries.findIndex((entry, index) => {
-    if (claimedIndices.has(index)) return false;
+  if (words.length === 0) return [];
+  return unreleasedEntries.flatMap((entry, index) => {
     const matched = words.filter((word) => new RegExp(`\\b${word}\\b`, 'i').test(entry));
-    return matched.length / words.length >= SLUG_MATCH_RATIO;
+    return matched.length / words.length >= SLUG_MATCH_RATIO ? [index] : [];
   });
 }
 
-// QNBS-v3 (codex): a commit ending in a trailing PR number has an unambiguous way to be
-// referenced — require the exact number, never fall back to a fuzzy slug match that could match a
-// different, older bullet purely by generic word overlap.
-function isCommitDocumented(subject, unreleasedSection, entries, claimedIndices) {
-  const prMatch = TRAILING_PR_REF.exec(subject);
-  if (prMatch) return isReferencedByPrNumber(prMatch[1], unreleasedSection);
-  const matchIndex = findSlugMatchIndex(subject, entries, claimedIndices);
-  if (matchIndex === -1) return false;
-  claimedIndices.add(matchIndex);
-  return true;
+// QNBS-v3 (codex): try to (re)assign `commitIndex` an entry, freeing up its current entry (via
+// recursive reassignment) if every candidate is already claimed by a commit that itself has
+// another option — standard Kuhn's-algorithm augmenting path for maximum bipartite matching.
+function tryAssignEntry(commitIndex, adjacency, entryOwner, visited) {
+  for (const entryIndex of adjacency[commitIndex]) {
+    if (visited.has(entryIndex)) continue;
+    visited.add(entryIndex);
+    const currentOwner = entryOwner[entryIndex];
+    if (currentOwner === -1 || tryAssignEntry(currentOwner, adjacency, entryOwner, visited)) {
+      entryOwner[entryIndex] = commitIndex;
+      return true;
+    }
+  }
+  return false;
 }
 
+// QNBS-v3 (codex): greedily claiming the FIRST matching entry per commit is order-dependent — a
+// fully documented changelog could be wrongly rejected depending only on which commit happens to
+// be checked first (e.g. two entries "Alpha beta gamma delta" / "Alpha beta epsilon zeta" against
+// subjects "alpha beta gamma delta epsilon zeta" then "alpha beta gamma delta": greedy claiming in
+// that order leaves the second unmatched, even though swapping which entry each takes documents
+// both). A maximum bipartite matching (Kuhn's algorithm) finds the best possible assignment
+// regardless of input order, so this mandatory pre-push/CI check never blocks already-complete
+// history on an accident of commit ordering.
+function computeMaxSlugMatching(subjects, entries) {
+  const adjacency = subjects.map((subject) => candidateEntryIndices(subject, entries));
+  const entryOwner = new Array(entries.length).fill(-1);
+  const matchedSubjects = new Array(subjects.length).fill(false);
+  for (let commitIndex = 0; commitIndex < subjects.length; commitIndex++) {
+    if (tryAssignEntry(commitIndex, adjacency, entryOwner, new Set())) {
+      matchedSubjects[commitIndex] = true;
+    }
+  }
+  return matchedSubjects;
+}
+
+// QNBS-v3 (codex, P1): an un-numbered commit observed while HEAD isn't `main` is, in practice,
+// either a rare old direct-push commit or one of THIS branch's own not-yet-squashed intermediate
+// commits (whether pushed to an open PR, or still only local, e.g. under the mandatory pre-push
+// hook mid-review), which cannot reference itself in [Unreleased] in advance. Exempting only
+// un-numbered commits — not every governed commit, and never a numbered one — still enforces full
+// completeness for an already-numbered commit sitting in the same range from a separate,
+// already-merged PR, in every context.
 function findUndocumentedGovernedCommits(
   postReleaseCommitSubjects,
   unreleasedSection,
   isFeatureBranchContext,
 ) {
   const entries = splitUnreleasedEntries(unreleasedSection);
-  const claimedIndices = new Set();
   const undocumented = [];
+  const slugCandidates = [];
   for (const subject of postReleaseCommitSubjects) {
     if (!GOVERNED_COMMIT_TYPE.test(subject)) continue;
-    // QNBS-v3 (codex, P1): an un-numbered commit observed while HEAD isn't `main` is, in
-    // practice, either a rare old direct-push commit (still checked below) or one of THIS
-    // branch's own not-yet-squashed intermediate commits (whether pushed to an open PR, or still
-    // only local, e.g. under the mandatory pre-push hook mid-review), which cannot reference
-    // itself in [Unreleased] in advance. Exempting only un-numbered commits here — not every
-    // governed commit — still enforces full completeness for an already-numbered commit sitting
-    // in the same range from a separate, already-merged PR.
-    if (isFeatureBranchContext && !TRAILING_PR_REF.test(subject)) continue;
-    if (!isCommitDocumented(subject, unreleasedSection, entries, claimedIndices)) {
-      undocumented.push(subject);
+    const prMatch = TRAILING_PR_REF.exec(subject);
+    if (prMatch) {
+      // QNBS-v3 (codex): a numbered commit has an unambiguous way to be referenced — require the
+      // exact number, never fall back to a fuzzy slug match that could hit a different bullet.
+      if (!isReferencedByPrNumber(prMatch[1], unreleasedSection)) undocumented.push(subject);
+      continue;
     }
+    if (isFeatureBranchContext) continue;
+    slugCandidates.push(subject);
   }
+  const matched = computeMaxSlugMatching(slugCandidates, entries);
+  slugCandidates.forEach((subject, index) => {
+    if (!matched[index]) undocumented.push(subject);
+  });
   return undocumented;
 }
 

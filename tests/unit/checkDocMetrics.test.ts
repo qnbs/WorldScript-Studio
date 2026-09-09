@@ -427,6 +427,36 @@ describe('Unreleased truth', () => {
       expect(findings[0]).toContain('reuse canonical document projection foundation');
     });
 
+    // QNBS-v3 (codex): greedily claiming the FIRST matching entry is order-dependent — a fully
+    // documented changelog could be wrongly rejected depending only on which commit is checked
+    // first. Here the broader commit (6 words) can match EITHER entry, but the narrower commit
+    // (4 words) can only match the first entry; a correct maximum-matching assignment documents
+    // both regardless of processing order (the broader one takes the second entry, freeing the
+    // first for the narrower one).
+    it('finds a valid assignment even when a broader commit could greedily claim the only entry a narrower commit needs', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const changelog = [
+        '## [Unreleased]',
+        '',
+        '### Fixed',
+        '',
+        '- Alpha beta gamma delta.',
+        '- Alpha beta epsilon zeta.',
+      ].join('\n');
+      const findingsForward = scanUnreleasedTruth(changelog, [
+        'fix(project): alpha beta gamma delta epsilon zeta',
+        'fix(project): alpha beta gamma delta',
+      ]);
+      expect(findingsForward).toEqual([]);
+
+      // QNBS-v3: same commits, reversed order — must still fully document both.
+      const findingsReversed = scanUnreleasedTruth(changelog, [
+        'fix(project): alpha beta gamma delta',
+        'fix(project): alpha beta gamma delta epsilon zeta',
+      ]);
+      expect(findingsReversed).toEqual([]);
+    });
+
     // QNBS-v3 (codex): a numbered commit has an unambiguous way to be referenced — it must not
     // fall back to a fuzzy slug match against a different, older bullet that merely shares words.
     it('requires the exact PR number for a numbered commit, never a slug fallback', async () => {
