@@ -92,8 +92,10 @@ substitute for reading the file. The entries remain grouped by their real reason
 bindings, build-time `proc-macro-error`/`paste`, archived Unicode data crates, both `extract-zip`
 advisories, and `adm-zip`.
 
-No ignore deadline was extended in this pass. `extract-zip` remains a transitive Playwright browser
-download dependency with no patched release and no production-runtime footprint; it must still be
+No ignore deadline was extended in this pass. `extract-zip` remains a transitive dependency of
+`@lhci/cli`'s own Puppeteer stack (`lighthouse` -> `puppeteer-core` -> `@puppeteer/browsers` ->
+`extract-zip`, verified via `pnpm audit` — not this repo's separate Playwright devDependency)
+with no patched release and no production-runtime footprint; it must still be
 rechecked before expiry and removed as soon as an upstream fix or dependency-path change makes that
 possible. Review each cluster against current upstream status before changing any deadline.
 

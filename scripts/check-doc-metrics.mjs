@@ -581,11 +581,21 @@ function splitIntoSentences(paragraph) {
   return paragraph.split(/(?<=\.)\s+/);
 }
 
+// QNBS-v3 (codex): a bracketed "#NNN" whose link target is a /pull/NNN URL (the same bare
+// shorthand style already used for issue links like "[#358](.../issues/358)" in these exact two
+// docs) is a real PR reference with no literal "PR" text — normalize it to include "PR" BEFORE
+// the URL is stripped below, since PR_REFERENCE needs the URL gone but the "PR" word present. The
+// \2 backreference ties the link text's number to the URL's /pull/ number so a mismatched pair
+// (accidentally or adversarially) isn't misattributed.
+function normalizePullShorthand(text) {
+  return text.replace(/\[(#(\d+))\]\((?:[^)]*\/pull\/\2)\)/gi, '[PR $1]');
+}
+
 // QNBS-v3 (codex): a markdown link's URL (github.com/.../pull/NNN) adds length between a PR
 // reference and its surrounding wording without adding meaning — strip it before measuring
 // proximity, so a long URL can't push a genuinely adjacent trigger/qualifier word out of window.
 function stripLinkUrls(text) {
-  return text.replace(/\]\([^)]*\)/g, ']');
+  return normalizePullShorthand(text).replace(/\]\([^)]*\)/g, ']');
 }
 
 // QNBS-v3 (codex): associate a word occurrence with its NEAREST PR reference by character

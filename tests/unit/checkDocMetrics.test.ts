@@ -779,4 +779,28 @@ describe('scanSecurityDocPrStatus', () => {
     const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
     expect(findings).toHaveLength(1);
   });
+
+  // QNBS-v3 (codex): the bare "[#NNN](.../pull/NNN)" shorthand is the same convention already
+  // used for issue links (e.g. "[#358](.../issues/358)") in these exact two docs — a stale claim
+  // shouldn't evade the gate merely by using this link style instead of writing "PR #NNN".
+  it('flags a live-status claim using the bare "[#N](.../pull/N)" shorthand', () => {
+    const content =
+      '[#356](https://github.com/qnbs/WorldScript-Studio/pull/356) is the active remediation.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+  });
+
+  it('does not treat a bare "[#N](.../issues/N)" shorthand as a PR reference', () => {
+    const content =
+      'Closing [#358](https://github.com/qnbs/WorldScript-Studio/issues/358) is the active remediation.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(0);
+  });
+
+  it('does not misattribute a mismatched "[#N](.../pull/M)" shorthand pair', () => {
+    const content =
+      '[#356](https://github.com/qnbs/WorldScript-Studio/pull/999) is the active remediation.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(0);
+  });
 });
