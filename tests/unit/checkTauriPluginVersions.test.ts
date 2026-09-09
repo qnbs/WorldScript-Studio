@@ -59,33 +59,26 @@ describe('resolvedCargoPluginVersions', () => {
     expect(versions.get('tauri-plugin-http')).toBe('2.6.0');
   });
 
-  // QNBS-v3 (cubic): reproduces the reviewer-found gap — a first-match lookup over duplicate package entries could silently pick a transitive occurrence instead of the direct app dependency Cargo.lock itself disambiguates.
-  it('resolves the direct-dependency version, not the textually-first one, when Cargo.lock has duplicate entries', () => {
+  // QNBS-v3 (cubic): three ways the same two-entry duplicate Cargo.lock can be resolved, table-driven — a matching qualified reference disambiguates it, no reference at all is genuinely ambiguous, and a reference pointing nowhere real is an inconsistent lockfile. All three must fail closed except the first.
+  it.each([
+    {
+      name: 'a qualified reference matching an existing entry',
+      ref: 'tauri-plugin-http 2.6.0',
+      expected: '2.6.0',
+    },
+    { name: 'no disambiguating reference at all', ref: 'tauri-plugin-http', expected: null },
+    {
+      name: 'a qualified reference matching no entry',
+      ref: 'tauri-plugin-http 2.7.0',
+      expected: null,
+    },
+  ])('resolves a duplicate-entry Cargo.lock correctly for $name', ({ ref, expected }) => {
     const cargoLock =
-      ownPackageBlock(['tauri-plugin-http 2.6.0']) +
+      ownPackageBlock([ref]) +
       cargoLockEntry('tauri-plugin-http', '2.5.0') + // transitive, textually first
       cargoLockEntry('tauri-plugin-http', '2.6.0'); // direct, referenced by name
     const versions = resolvedCargoPluginVersions(cargoLock);
-    expect(versions.get('tauri-plugin-http')).toBe('2.6.0');
-  });
-
-  it('fails closed (null) when a crate resolves to more than one version with no disambiguating reference', () => {
-    const cargoLock =
-      ownPackageBlock(['tauri-plugin-http']) +
-      cargoLockEntry('tauri-plugin-http', '2.5.0') +
-      cargoLockEntry('tauri-plugin-http', '2.6.0');
-    const versions = resolvedCargoPluginVersions(cargoLock);
-    expect(versions.get('tauri-plugin-http')).toBeNull();
-  });
-
-  // QNBS-v3 (cubic): a qualified direct-dependency reference must be checked against real [[package]] entries — an inconsistent lockfile referencing a version with no matching entry must not be trusted at face value.
-  it('fails closed when the direct-dependency reference points to a version with no matching package entry', () => {
-    const cargoLock =
-      ownPackageBlock(['tauri-plugin-http 2.7.0']) + // references a version that doesn't exist below
-      cargoLockEntry('tauri-plugin-http', '2.5.0') +
-      cargoLockEntry('tauri-plugin-http', '2.6.0');
-    const versions = resolvedCargoPluginVersions(cargoLock);
-    expect(versions.get('tauri-plugin-http')).toBeNull();
+    expect(versions.get('tauri-plugin-http') ?? null).toEqual(expected);
   });
 
   // QNBS-v3 (codex): a crate with only one lockfile entry is not necessarily a direct app dependency — it can be pulled in solely as a transitive of another plugin (e.g. tauri-plugin-deep-link via single-instance's "deep-link" feature). Absent from the direct-dependencies list, it must not be treated as resolved at all.

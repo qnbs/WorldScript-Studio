@@ -67,24 +67,30 @@ function allResolvedVersionsOf(cargoLock, crateName) {
   return versions;
 }
 
+// QNBS-v3 (CodeScene): extracted so resolvedCargoPluginVersions stays a flat loop of early returns instead of nested branches — undefined means "not a direct dependency at all", null means "ambiguous/inconsistent", a string is the confirmed resolved version.
+function resolveCrateVersion(crateName, references, normalized) {
+  // QNBS-v3 (codex): a crate absent from worldscript-studio's own dependencies list is at most a transitive occurrence, even with only one lockfile entry — routing it through the existing "no resolved version" fail-closed path instead of comparing an unrelated transitive version.
+  if (!references.has(crateName)) return undefined;
+  const versions = allResolvedVersionsOf(normalized, crateName);
+  const qualifiedVersion = references.get(crateName);
+  if (!qualifiedVersion) {
+    if (versions.length === 1) return versions[0];
+    if (versions.length > 1) return null;
+    return undefined;
+  }
+  // QNBS-v3 (cubic): a qualified reference not matched by any actual [[package]] entry means the lockfile itself is inconsistent — trust only a reference that a real resolved entry confirms.
+  if (versions.includes(qualifiedVersion)) return qualifiedVersion;
+  return versions.length > 0 ? null : undefined;
+}
+
 // QNBS-v3: a crate absent from the returned map has no resolved version at all; a crate mapped to null was found more than once in Cargo.lock with no disambiguating reference — both are distinct fail-closed states, never guessed.
 export function resolvedCargoPluginVersions(cargoLock) {
   const normalized = normalizeLineEndings(cargoLock);
   const references = directDependencyReferences(normalized);
   const resolved = new Map();
   for (const crateName of PLUGIN_CRATE_NAMES) {
-    // QNBS-v3 (codex): a crate absent from worldscript-studio's own dependencies list is at most a transitive occurrence, even with only one lockfile entry — leaving it unset here routes it through the existing "no resolved version" fail-closed path instead of comparing an unrelated transitive version.
-    if (!references.has(crateName)) continue;
-    const versions = allResolvedVersionsOf(normalized, crateName);
-    const qualifiedVersion = references.get(crateName);
-    if (qualifiedVersion) {
-      // QNBS-v3 (cubic): a qualified reference not matched by any actual [[package]] entry means the lockfile itself is inconsistent — trust only a reference that a real resolved entry confirms.
-      if (versions.includes(qualifiedVersion)) resolved.set(crateName, qualifiedVersion);
-      else if (versions.length > 0) resolved.set(crateName, null);
-      continue;
-    }
-    if (versions.length === 1) resolved.set(crateName, versions[0]);
-    else if (versions.length > 1) resolved.set(crateName, null);
+    const version = resolveCrateVersion(crateName, references, normalized);
+    if (version !== undefined) resolved.set(crateName, version);
   }
   return resolved;
 }
