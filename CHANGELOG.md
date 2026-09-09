@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recorded real release-gate evidence in AUDIT.md for both `v1.28.6` (main CI/CD run, CodeQL,
   the pre-tag exact-SHA Tauri qualification, tag-triggered Tauri/CI/Docker runs, published
   release assets) and `v1.28.5` (the desktop-build failure and its independently-successful
-  Docker/GHCR publish).
+  Docker/GHCR publish). PR #681.
 
 ## [1.28.6] — 2026-09-09
 
