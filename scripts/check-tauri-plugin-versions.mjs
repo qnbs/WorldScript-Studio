@@ -19,15 +19,18 @@ const pnpmLockPath = path.join(root, 'pnpm-lock.yaml');
 const rootPkgPath = path.join(root, 'package.json');
 const packagesDir = path.join(root, 'packages');
 
-// QNBS-v3: only Tauri plugins with a corresponding @tauri-apps/plugin-* npm package are coupled — tauri-plugin-log/window-state/deep-link/single-instance have no JS-side counterpart to drift against.
+// QNBS-v3 (codex): tauri-plugin-log, -window-state, and -deep-link all have real @tauri-apps/plugin-* npm packages too (verified against the npm registry) even though this repo doesn't declare them in package.json yet — listed here so the guard covers them immediately if that ever changes. Only tauri-plugin-single-instance genuinely has no npm counterpart (confirmed 404).
 const PLUGIN_CRATE_NAMES = [
+  'tauri-plugin-deep-link',
   'tauri-plugin-dialog',
   'tauri-plugin-fs',
   'tauri-plugin-http',
+  'tauri-plugin-log',
   'tauri-plugin-notification',
   'tauri-plugin-process',
   'tauri-plugin-shell',
   'tauri-plugin-updater',
+  'tauri-plugin-window-state',
 ];
 const crateToNpmName = (crateName) => `@tauri-apps/${crateName.replace(/^tauri-/, '')}`;
 
@@ -70,12 +73,14 @@ export function resolvedCargoPluginVersions(cargoLock) {
   const references = directDependencyReferences(normalized);
   const resolved = new Map();
   for (const crateName of PLUGIN_CRATE_NAMES) {
+    const versions = allResolvedVersionsOf(normalized, crateName);
     const qualifiedVersion = references.get(crateName);
     if (qualifiedVersion) {
-      resolved.set(crateName, qualifiedVersion);
+      // QNBS-v3 (cubic): a qualified reference not matched by any actual [[package]] entry means the lockfile itself is inconsistent — trust only a reference that a real resolved entry confirms.
+      if (versions.includes(qualifiedVersion)) resolved.set(crateName, qualifiedVersion);
+      else if (versions.length > 0) resolved.set(crateName, null);
       continue;
     }
-    const versions = allResolvedVersionsOf(normalized, crateName);
     if (versions.length === 1) resolved.set(crateName, versions[0]);
     else if (versions.length > 1) resolved.set(crateName, null);
   }
@@ -117,9 +122,10 @@ export function resolvedPnpmImporterVersions(pnpmLock) {
       continue;
     }
     const version = importerPackageVersion(line);
-    if (version && currentImporter && currentPackage) {
-      byImporter.get(currentImporter).set(currentPackage, version);
-    }
+    if (!version) continue;
+    if (!currentImporter) continue;
+    if (!currentPackage) continue;
+    byImporter.get(currentImporter).set(currentPackage, version);
   }
   return byImporter;
 }

@@ -64,6 +64,16 @@ describe('resolvedCargoPluginVersions', () => {
     const versions = resolvedCargoPluginVersions(cargoLock);
     expect(versions.get('tauri-plugin-http')).toBeNull();
   });
+
+  // QNBS-v3 (cubic): a qualified direct-dependency reference must be checked against real [[package]] entries — an inconsistent lockfile referencing a version with no matching entry must not be trusted at face value.
+  it('fails closed when the direct-dependency reference points to a version with no matching package entry', () => {
+    const cargoLock =
+      ownPackageBlock(['tauri-plugin-http 2.7.0']) + // references a version that doesn't exist below
+      cargoLockEntry('tauri-plugin-http', '2.5.0') +
+      cargoLockEntry('tauri-plugin-http', '2.6.0');
+    const versions = resolvedCargoPluginVersions(cargoLock);
+    expect(versions.get('tauri-plugin-http')).toBeNull();
+  });
 });
 
 describe('resolvedPnpmImporterVersions', () => {
