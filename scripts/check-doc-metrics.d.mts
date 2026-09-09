@@ -18,6 +18,7 @@ export function scanUnreleasedTruth(
   packageVersion?: string,
   taggedVersions?: Set<string>,
   isFeatureBranchContext?: boolean,
+  branchLocalCount?: number,
 ): string[];
 export function scanForDrift(
   content: string,

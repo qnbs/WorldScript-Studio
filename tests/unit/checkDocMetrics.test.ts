@@ -33,8 +33,10 @@ type ReleaseTruthModule = {
     packageVersion?: string,
     taggedVersions?: Set<string>,
     isFeatureBranchContext?: boolean,
+    branchLocalCount?: number,
   ) => string[];
   isOnFeatureBranch: (repositoryRoot?: string) => boolean;
+  getBranchLocalCommitCount: (repositoryRoot?: string) => number;
 };
 // QNBS-v3: load the runtime-only scanners without making tsgo infer untyped .mjs exports.
 const loadReleaseTruthModule = async () =>
@@ -470,9 +472,7 @@ describe('Unreleased truth', () => {
       expect(findings[0]).toContain('#999');
     });
 
-    // QNBS-v3 (codex): a numbered commit's exact-PR-number match must reserve its entry — otherwise
-    // an unrelated un-numbered commit's slug match can silently reuse the same bullet, since the PR
-    // check never touches entryOwner the way the slug-matching bipartite algorithm does.
+    // QNBS-v3 (codex): a numbered commit's exact-PR-number match must reserve its entry, otherwise an unrelated un-numbered commit's slug match can silently reuse the same bullet.
     it("does not let a numbered commit's entry double as an unrelated commit's slug match", async () => {
       const { scanUnreleasedTruth } = await loadReleaseTruthModule();
       const changelog =
@@ -485,15 +485,27 @@ describe('Unreleased truth', () => {
       expect(findings[0]).toContain('reuse canonical document projection foundation');
     });
 
-    // QNBS-v3 (codex): an entry that explicitly bundles multiple PR numbers is deliberately shared
-    // documentation, so it must stay available for slug matching rather than being reserved.
-    it('still allows slug matching against an entry that explicitly lists multiple PR numbers', async () => {
+    // QNBS-v3 (codex): an entry listing several PR numbers still reserves for each, so it must keep refusing an unrelated commit's slug match.
+    it('reserves an entry that lists multiple PR numbers, still blocking an unrelated slug match', async () => {
       const { scanUnreleasedTruth } = await loadReleaseTruthModule();
       const changelog =
         '## [Unreleased]\n\n### Fixed\n\n- Canonical document projection foundation. PR #999, PR #998.\n';
       const findings = scanUnreleasedTruth(changelog, [
         'fix(project): canonical document projection foundation (#999)',
         'fix(project): reuse canonical document projection foundation',
+      ]);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toContain('reuse canonical document projection foundation');
+    });
+
+    // QNBS-v3 (codex): reservation must never make the second numbered commit sharing that entry itself undocumented.
+    it('lets two numbered commits share one entry that lists both their PR numbers', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const changelog =
+        '## [Unreleased]\n\n### Fixed\n\n- Canonical document projection foundation. PR #999, PR #998.\n';
+      const findings = scanUnreleasedTruth(changelog, [
+        'fix(project): canonical document projection foundation (#999)',
+        'fix(project): canonical document projection refinement (#998)',
       ]);
       expect(findings).toEqual([]);
     });
@@ -532,6 +544,39 @@ describe('Unreleased truth', () => {
       );
       expect(findings).toHaveLength(1);
       expect(findings[0]).toContain('#999');
+    });
+
+    // QNBS-v3 (codex): this repository's own history shows the eventual squashed form "... (#553) (#621)", so a branch-local "(#553)" must not be treated as an already-merged PR number.
+    it('exempts a branch-local commit whose trailing token is an in-flight issue reference, not a PR number', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const findings = scanUnreleasedTruth(
+        populatedButUnrelated,
+        ['fix(project): enforce raw schemaVersion integer grammar (#553)'],
+        undefined,
+        undefined,
+        true,
+        1,
+      );
+      expect(findings).toEqual([]);
+    });
+
+    // QNBS-v3 (codex): the branch-local exemption must only cover commits above the main branch point, never an older, already-merged numbered commit sitting lower in the same range.
+    it('still enforces an already-merged numbered commit below the branch-local window', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const findings = scanUnreleasedTruth(
+        populatedButUnrelated,
+        [
+          'fix(project): enforce raw schemaVersion integer grammar (#553)',
+          'fix(project): retain raw header verdict on projection failure (#999)',
+        ],
+        undefined,
+        undefined,
+        true,
+        1,
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toContain('#999');
+      expect(findings[0]).not.toContain('#553');
     });
 
     it('still rejects a completely empty [Unreleased] in pull_request CI context', async () => {
@@ -606,6 +651,61 @@ describe('isOnFeatureBranch', () => {
     const repositoryRoot = mkdtempSync(join(tmpdir(), 'worldscript-doc-metrics-nogit-'));
     try {
       expect(isOnFeatureBranch(repositoryRoot)).toBe(false);
+    } finally {
+      rmSync(repositoryRoot, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('getBranchLocalCommitCount', () => {
+  function initTempRepo(prefix: string): string {
+    const repositoryRoot = mkdtempSync(join(process.cwd(), prefix));
+    execFileSync('git', ['init', '--quiet', '--initial-branch=main', repositoryRoot]);
+    execFileSync('git', ['-C', repositoryRoot, 'config', 'user.email', 'test@example.com']);
+    execFileSync('git', ['-C', repositoryRoot, 'config', 'user.name', 'Test']);
+    writeFileSync(join(repositoryRoot, 'file.txt'), 'content');
+    execFileSync('git', ['-C', repositoryRoot, 'add', 'file.txt']);
+    execFileSync('git', ['-C', repositoryRoot, 'commit', '--quiet', '-m', 'init']);
+    return repositoryRoot;
+  }
+
+  function addCommit(repositoryRoot: string, message: string): void {
+    writeFileSync(join(repositoryRoot, `${message}.txt`), message);
+    execFileSync('git', ['-C', repositoryRoot, 'add', '-A']);
+    execFileSync('git', ['-C', repositoryRoot, 'commit', '--quiet', '-m', message]);
+  }
+
+  it('returns 0 on main itself', async () => {
+    const { getBranchLocalCommitCount } = await loadReleaseTruthModule();
+    const repositoryRoot = initTempRepo('.tmp-worldscript-doc-metrics-branchlocal-main-');
+    try {
+      expect(getBranchLocalCommitCount(repositoryRoot)).toBe(0);
+    } finally {
+      rmSync(repositoryRoot, { recursive: true, force: true });
+    }
+  });
+
+  // QNBS-v3: mirrors this repository's own feat/553-universal-ingress-admission, several commits ahead of main with no open PR yet.
+  it('counts commits unique to a feature branch since it diverged from main', async () => {
+    const { getBranchLocalCommitCount } = await loadReleaseTruthModule();
+    const repositoryRoot = initTempRepo('.tmp-worldscript-doc-metrics-branchlocal-feature-');
+    try {
+      execFileSync('git', ['-C', repositoryRoot, 'switch', '--quiet', '-c', 'fix/example']);
+      addCommit(repositoryRoot, 'first');
+      addCommit(repositoryRoot, 'second');
+      expect(getBranchLocalCommitCount(repositoryRoot)).toBe(2);
+    } finally {
+      rmSync(repositoryRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('fails closed to 0 when not a git repository', async () => {
+    const { getBranchLocalCommitCount } = await loadReleaseTruthModule();
+    const repositoryRoot = mkdtempSync(
+      join(tmpdir(), 'worldscript-doc-metrics-branchlocal-nogit-'),
+    );
+    try {
+      expect(getBranchLocalCommitCount(repositoryRoot)).toBe(0);
     } finally {
       rmSync(repositoryRoot, { recursive: true, force: true });
     }

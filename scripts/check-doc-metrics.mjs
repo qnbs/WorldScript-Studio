@@ -398,16 +398,6 @@ function isReferencedByPrNumber(prNumber, unreleasedSection) {
   return new RegExp(`(?:^|\\D)#${prNumber}(?!\\d)`).test(unreleasedSection);
 }
 
-// QNBS-v3 (codex): an entry that explicitly bundles several PR numbers is deliberately shared, so it must stay available for slug matching rather than being reserved for just one of them.
-function countDistinctPrReferences(entry) {
-  const numbers = new Set();
-  const pattern = /(?:^|\D)#(\d+)(?!\d)/g;
-  for (let match = pattern.exec(entry); match !== null; match = pattern.exec(entry)) {
-    numbers.add(match[1]);
-  }
-  return numbers.size;
-}
-
 // QNBS-v3 (codex): a Markdown bullet may wrap across several physical lines — join a bullet's own
 // continuation lines into one entry so slug-matching sees the whole thought, not a fragment.
 function splitUnreleasedEntries(unreleasedSection) {
@@ -494,20 +484,20 @@ function computeMaxSlugMatching(subjects, entries, reservedEntryIndices = new Se
 // un-numbered commits — not every governed commit, and never a numbered one — still enforces full
 // completeness for an already-numbered commit sitting in the same range from a separate,
 // already-merged PR, in every context.
+// QNBS-v3 (codex): a branch-local commit's trailing "(#NNN)" may be an in-flight issue reference rather than the real PR number GitHub only appends at squash time, so isBranchLocal skips the exact-PR-match path entirely instead of trusting that number.
 // QNBS-v3 (CodeScene): extracted so findUndocumentedGovernedCommits stays a flat loop with zero nested conditionals — returns 'documented', 'undocumented', or 'needsSlugCheck' for one subject.
-function classifyGovernedCommit(subject, unreleasedSection, isFeatureBranchContext) {
+function classifyGovernedCommit(subject, unreleasedSection, isFeatureBranchContext, isBranchLocal) {
   const prMatch = TRAILING_PR_REF.exec(subject);
-  if (prMatch) {
+  if (prMatch && !isBranchLocal) {
     return isReferencedByPrNumber(prMatch[1], unreleasedSection) ? 'documented' : 'undocumented';
   }
   return isFeatureBranchContext ? 'documented' : 'needsSlugCheck';
 }
 
-// QNBS-v3 (codex): reserves a numbered commit's entry so it can't silently double as an unrelated commit's own slug-matched documentation, unless the entry explicitly bundles several PRs.
+// QNBS-v3 (codex): reserves a numbered commit's entry so it can't silently double as an unrelated commit's own slug-matched documentation — an entry bundling several PR numbers is reserved once per number, which is idempotent since they all resolve to the same index.
 function reserveEntryForNumberedCommit(prNumber, entries, reservedEntryIndices) {
   const entryIndex = entries.findIndex((entry) => isReferencedByPrNumber(prNumber, entry));
   if (entryIndex === -1) return;
-  if (countDistinctPrReferences(entries[entryIndex]) > 1) return;
   reservedEntryIndices.add(entryIndex);
 }
 
@@ -515,18 +505,26 @@ function findUndocumentedGovernedCommits(
   postReleaseCommitSubjects,
   unreleasedSection,
   isFeatureBranchContext,
+  branchLocalCount = 0,
 ) {
   const entries = splitUnreleasedEntries(unreleasedSection);
   const undocumented = [];
   const slugCandidates = [];
   const reservedEntryIndices = new Set();
-  for (const subject of postReleaseCommitSubjects) {
+  for (let index = 0; index < postReleaseCommitSubjects.length; index++) {
+    const subject = postReleaseCommitSubjects[index];
     if (!GOVERNED_COMMIT_TYPE.test(subject)) continue;
+    const isBranchLocal = index < branchLocalCount;
     const prMatch = TRAILING_PR_REF.exec(subject);
-    const status = classifyGovernedCommit(subject, unreleasedSection, isFeatureBranchContext);
+    const status = classifyGovernedCommit(
+      subject,
+      unreleasedSection,
+      isFeatureBranchContext,
+      isBranchLocal,
+    );
     if (status === 'undocumented') undocumented.push(subject);
     if (status === 'needsSlugCheck') slugCandidates.push(subject);
-    if (status === 'documented' && prMatch)
+    if (status === 'documented' && prMatch && !isBranchLocal)
       reserveEntryForNumberedCommit(prMatch[1], entries, reservedEntryIndices);
   }
   const matched = computeMaxSlugMatching(slugCandidates, entries, reservedEntryIndices);
@@ -574,6 +572,38 @@ export function isOnFeatureBranch(repositoryRoot = root) {
   }
 }
 
+// QNBS-v3 (codex): tries origin/main first (what CI actually has) and falls back to a local main so this still resolves in a plain developer clone.
+function resolveMainBranchPoint(repositoryRoot) {
+  for (const ref of ['origin/main', 'main']) {
+    try {
+      return execFileSync('git', ['merge-base', 'HEAD', ref], {
+        cwd: repositoryRoot,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim();
+    } catch {
+      // Try the next candidate ref below.
+    }
+  }
+  return null;
+}
+
+// QNBS-v3 (codex): a branch-local commit's trailing "(#NNN)" may still be an in-flight issue reference, not yet the real PR number GitHub appends at squash time, so counting how many of the newest post-tag commits sit above the main branch point lets the caller exempt exactly those from the exact-PR-match rule.
+export function getBranchLocalCommitCount(repositoryRoot = root) {
+  const branchPoint = resolveMainBranchPoint(repositoryRoot);
+  if (!branchPoint) return 0;
+  try {
+    const output = execFileSync('git', ['rev-list', '--count', `${branchPoint}..HEAD`], {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    return Number.parseInt(output.trim(), 10) || 0;
+  } catch {
+    return 0;
+  }
+}
+
 // QNBS-v3: isFeatureBranchContext deliberately has a plain `false` default, not one read from
 // process.env/git here — an env var is ambiently visible to the Vitest process itself when the
 // whole suite runs inside a GitHub Actions pull_request-triggered job (not just this gate's own
@@ -588,6 +618,7 @@ export function scanUnreleasedTruth(
   packageVersion,
   taggedVersions,
   isFeatureBranchContext = false,
+  branchLocalCount = 0,
 ) {
   if (!postReleaseCommitSubjects || postReleaseCommitSubjects.length === 0) return [];
   const candidateVersion = changelog.match(
@@ -614,6 +645,7 @@ export function scanUnreleasedTruth(
     postReleaseCommitSubjects,
     unreleasedSection,
     isFeatureBranchContext,
+    branchLocalCount,
   );
   if (undocumented.length === 0) return [];
   return [
@@ -954,6 +986,8 @@ function main() {
 
   const taggedVersions = getTaggedVersions();
   const changelog = readFileSync(join(root, 'CHANGELOG.md'), 'utf8');
+  const isFeatureBranchContext =
+    process.env.GITHUB_EVENT_NAME === 'pull_request' || isOnFeatureBranch();
   const allFindings = [];
   allFindings.push(
     ...scanReleaseTruth(changelog, packageVersion, taggedVersions),
@@ -962,7 +996,8 @@ function main() {
       getPostReleaseCommitSubjects(),
       packageVersion,
       taggedVersions,
-      process.env.GITHUB_EVENT_NAME === 'pull_request' || isOnFeatureBranch(),
+      isFeatureBranchContext,
+      isFeatureBranchContext ? getBranchLocalCommitCount() : 0,
     ),
   );
   allFindings.push(
