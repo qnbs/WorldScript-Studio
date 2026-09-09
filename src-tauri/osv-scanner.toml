@@ -1,6 +1,6 @@
 # osv-scanner ignore list for src-tauri/Cargo.lock + pnpm-lock.yaml
 # All entries have been evaluated and accepted by the maintainer.
-# Reviewed: 2026-05-17 (Rust) / 2026-06-16 (npm)
+# Reviewed: 2026-05-17 (Rust) / 2026-09-08 (npm)
 
 # ─── GTK3 Rust bindings (Linux WebKit stack) ────────────────────────────────
 # webkit2gtk 2.0.2 (required by wry 0.55.x / Tauri 2.x for Linux) depends on
@@ -117,24 +117,66 @@ ignoreUntil = "2026-11-30T00:00:00Z"
 reason = "unic-ucd-ident 0.9.0: unmaintained Unicode data crate; final version; no exploitable attack surface"
 
 # ─── npm advisories (pnpm-lock.yaml) ─────────────────────────────────────────
-# Reviewed 2026-06-16 / 2026-07-26 / 2026-08-12. Most currently-flagged npm
-# advisories are remediated via pnpm-workspace.yaml overrides (tmp, ws,
-# form-data, protobufjs, @babel/core, dompurify→3.4.12, js-yaml→4.x,
-# body-parser→1.20.6, …). (The former dompurify GHSA-x4vx-rjvf-j5p4 and
-# js-yaml-3.x GHSA-h67p-54hq-rp68 ignores were dropped: both advisories no
-# longer match the lockfile after the overrides.) One documented ignore
-# remains below — no fixed version exists to override to.
+# Reviewed 2026-06-16 / 2026-07-26 / 2026-08-12 / 2026-09-08. Most
+# currently-flagged npm advisories are remediated via pnpm-workspace.yaml
+# overrides (tmp, ws, form-data, protobufjs, @babel/core, dompurify→3.4.13,
+# js-yaml→4.3.2, body-parser→1.20.6, joi→18.2.5, sharp→0.35.4, …). (The former
+# dompurify GHSA-x4vx-rjvf-j5p4 and js-yaml-3.x GHSA-h67p-54hq-rp68 ignores
+# were dropped: both advisories no longer match the lockfile after the
+# overrides.) Three documented ignores remain below — no fixed version exists
+# to override to for any of them.
 
 # extract-zip@2.0.1 (CVE-2026-56876 / GHSA-jmr9-qjv8-65gv, CVSS 8.6): unvalidated
 # symlink path traversal when extracting an attacker-controlled zip archive.
 # extract-zip@2.0.1 is the latest published release — no patched version exists
 # (first_patched_version: null on the advisory) — so pnpm.overrides cannot fix
-# this. It's a transitive devDependency of @puppeteer/browsers (Playwright's
-# browser-binary downloader): only ever extracts Playwright/Chromium's own
-# CDN-hosted zip releases, never a user- or attacker-supplied archive, and never
-# ships in the production app bundle. No exploitable attack surface here.
+# this. QNBS-v3 (codex, corrected): the actual lock-graph path (verified via
+# `pnpm audit`) is `@lhci/cli` -> `lighthouse` -> `puppeteer-core` ->
+# `@puppeteer/browsers` -> `extract-zip` — Lighthouse CI's own headless-Chrome
+# automation stack (which itself depends on Puppeteer internally), NOT this
+# repo's separate `playwright`/`playwright-core` devDependency despite the
+# similarly-named `@puppeteer/browsers` package. It only extracts
+# Puppeteer/Lighthouse's own CDN-hosted Chrome binary releases, never a user-
+# or attacker-supplied archive, and never ships in the production app bundle.
+# No exploitable attack surface here.
 
 [[IgnoredVulns]]
 id = "GHSA-jmr9-qjv8-65gv"
 ignoreUntil = "2026-11-30T00:00:00Z"
-reason = "extract-zip 2.0.1: unvalidated symlink path traversal; latest release, no fixed version exists; transitive Playwright/@puppeteer/browsers devDependency only extracting Playwright's own CDN-hosted browser binaries, never user-supplied zips; no runtime footprint in the shipped app"
+reason = "extract-zip 2.0.1: unvalidated symlink path traversal; latest release, no fixed version exists; transitive @lhci/cli->lighthouse->puppeteer-core->@puppeteer/browsers devDependency (Lighthouse CI's own Puppeteer stack, not Playwright) only extracting its own CDN-hosted Chrome binaries, never user-supplied zips; no runtime footprint in the shipped app"
+
+# extract-zip@2.0.1 (GHSA-7pqw-9j4j-h8q3, CVSS 8.1): a second, distinct advisory
+# for the same package/version (CWE-22 path traversal via two archive entries
+# with identical names — a symlink followed by a regular file — bypassing the
+# containment check). Not an alias of GHSA-jmr9-qjv8-65gv above; OSV reports it
+# separately. Same "no patched version exists" and same non-exposure reasoning
+# applies unchanged: the same @lhci/cli->lighthouse->puppeteer-core->
+# @puppeteer/browsers devDependency chain above, only ever extracting
+# Puppeteer/Lighthouse's own CDN-hosted Chrome binaries, never ships in the app.
+
+[[IgnoredVulns]]
+id = "GHSA-7pqw-9j4j-h8q3"
+ignoreUntil = "2026-11-30T00:00:00Z"
+reason = "extract-zip 2.0.1: second, distinct symlink path-traversal advisory (two-entry name-collision technique); latest release, no fixed version exists; same transitive @lhci/cli->lighthouse->puppeteer-core->@puppeteer/browsers devDependency (Lighthouse CI's own Puppeteer stack, not Playwright), never user-supplied zips, no runtime footprint in the shipped app"
+
+# adm-zip@0.6.0 (CVE-2026-76845 / GHSA-vwc7-r8mq-g2x9, CVSS 6.8): symlink-following
+# path traversal on extraction with overwrite enabled, when an attacker can
+# pre-place a symlink at the extraction destination. 0.6.0 is the latest
+# published release with no patched version yet — pnpm.overrides already pins
+# the newest available release (see pnpm-workspace.yaml) but cannot fix an
+# unpatched vulnerability. adm-zip is a dependency of onnxruntime-node's own
+# postinstall/build script (which extracts its prebuilt native binary into
+# `path.join(os.tmpdir(), 'onnxruntime-node-pkgs_<timestamp>')` — a shared,
+# timestamp-named system temp directory, NOT a project-local one — verified
+# directly against onnxruntime-node@1.24.3's own install-utils.js). The actual
+# mitigation is that `pnpm-workspace.yaml`'s `allowBuilds: { onnxruntime-node:
+# false }` denies this package's lifecycle scripts outright, so this code path
+# never executes during a normal `pnpm install` in this repo, in CI, or in the
+# shipped app. If that `allowBuilds` entry is ever relaxed or removed, this
+# exposure model must be re-evaluated — the temp-directory extraction target
+# is not inherently safe on its own.
+
+[[IgnoredVulns]]
+id = "GHSA-vwc7-r8mq-g2x9"
+ignoreUntil = "2026-11-30T00:00:00Z"
+reason = "adm-zip 0.6.0: symlink-following path traversal on overwrite-enabled extraction; latest release, no fixed version exists; mitigated by pnpm-workspace.yaml's allowBuilds: onnxruntime-node=false denying its postinstall/build script outright (not by the extraction path itself, which uses a shared system temp directory) — re-evaluate if that allowBuilds entry ever changes"

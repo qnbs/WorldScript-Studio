@@ -499,6 +499,214 @@ export function scanForDrift(content, filePath, { localeCount, keyCount, latestV
   return findings;
 }
 
+// QNBS-v3: (audit F-1) reject a live/pending-remediation claim near a bare PR number in the two
+// security-status docs unless that same PR number also carries its actual closed/merged state
+// nearby — a stale "PR #356 is the active remediation" survived weeks after #356 closed because
+// nothing checked it. Deliberately scoped to these two files, not repo-wide: a blanket rule would
+// also reject the legitimate historical CHANGELOG entry, ADR narrative, and already-qualified
+// ROADMAP citations of the same PR elsewhere in the repo.
+const SECURITY_STATUS_DOCS = ['docs/SECURITY-THREAT-MODEL.md', 'docs/IDB-ENCRYPTION.md'];
+// QNBS-v3 (coderabbit): tolerate an inline-code span around the digits ("PR `#356`"), not just a
+// markdown-link bracket — both are real Markdown ways to format a PR reference.
+const PR_REFERENCE = /\[?PR\s*`?#(\d+)`?\]?/gi;
+// QNBS-v3 (codex): order-independent — catches "PR #N is the active remediation", "the active
+// remediation is PR #N", "PR #N remains the active remediation", "pending PR #N", "pending on
+// PR #N", "in progress on PR #N", etc. Proximity to a PR reference (not fixed word order) is what
+// makes a phrase a live-status CLAIM rather than incidental prose.
+const LIVE_STATUS_TRIGGER = /\bactive remediation\b|\bpending\b|\bin progress\b/gi;
+const STATUS_QUALIFIER_WORD = 'closed|merged|superseded';
+const STATUS_QUALIFIER_RE = new RegExp(`\\b(?:${STATUS_QUALIFIER_WORD})\\b`, 'gi');
+// QNBS-v3 (codex): a qualifier word only proves a completed status when it isn't negated
+// ("is not closed", "has not been closed", "is not yet closed") or prospective ("will be merged",
+// "may be merged") — checked for PRESENCE anywhere in the short lookback immediately before the
+// match, not requiring exact adjacency, so common compound/auxiliary forms are covered without
+// attempting a full negation-scope parser (a known, bounded best-effort heuristic, matching this
+// file's existing "crude but sufficient" sentence-split rationale).
+const QUALIFIER_NEGATION_OR_FUTURE_WORDS =
+  /\b(?:not|never|isn't|won't|will|would|should|may|might|could|going to)\b/i;
+// QNBS-v3 (codex): a live-status TRIGGER phrase negated or "no longer" true isn't a live claim at
+// all ("is not the active remediation", "no longer the active remediation").
+const TRIGGER_NEGATION_WORDS = /\b(?:not|never|no longer|isn't)\b/i;
+const NEGATION_LOOKBACK = 40;
+const PROXIMITY_WINDOW = 60;
+// QNBS-v3 (codex): an unordered/ordered Markdown list marker — same isolation reasoning as table
+// rows below.
+const LIST_ITEM_MARKER = /^(?:[-*+]|\d+\.)\s+/;
+
+// QNBS-v3 (CodeAnt): group physical lines into Markdown paragraphs (blank-line-delimited) before
+// matching — a naive per-line split let a status claim split across a soft-wrapped line evade
+// detection entirely. QNBS-v3 (codex): a Markdown table row or list item is its own logical unit
+// even though consecutive rows/items have no blank line between them — joining them let a
+// live-status claim in one row/item absorb an unrelated row/item's qualifier (or vice versa).
+function splitIntoParagraphs(content) {
+  const paragraphs = [];
+  let buffer = [];
+  let startLine = 0;
+  const flush = () => {
+    if (buffer.length > 0) {
+      paragraphs.push({ text: buffer.join(' '), startLine: startLine + 1 });
+      buffer = [];
+    }
+  };
+  content.split('\n').forEach((line, i) => {
+    const trimmed = line.trim();
+    if (trimmed === '') {
+      flush();
+    } else if (trimmed.startsWith('|')) {
+      // QNBS-v3 (codex): a table row is always a single physical line in standard Markdown — it
+      // never wraps — so push it immediately as its own unit, unlike a list item below.
+      flush();
+      paragraphs.push({ text: trimmed, startLine: i + 1 });
+    } else if (LIST_ITEM_MARKER.test(trimmed)) {
+      // QNBS-v3 (coderabbit): a new list item starts a new unit, but its own text may still
+      // soft-wrap across the following physical line(s) — buffer it like prose (don't push
+      // immediately) and let the next marker/table-row/blank line flush it.
+      flush();
+      startLine = i;
+      buffer.push(trimmed);
+    } else {
+      if (buffer.length === 0) startLine = i;
+      buffer.push(trimmed);
+    }
+  });
+  flush();
+  return paragraphs;
+}
+
+// QNBS-v3 (codex): a semicolon does not end a sentence — splitting on it separated a claim from
+// its own qualifying clause (e.g. "PR #N is the active remediation; it was later closed."). Only
+// a period genuinely ends a sentence here; the character-proximity window below is what actually
+// bounds how far a qualifier/trigger may be from a PR reference, not this split.
+function splitIntoSentences(paragraph) {
+  return paragraph.split(/(?<=\.)\s+/);
+}
+
+// QNBS-v3 (codex): a bracketed "#NNN" whose link target is a /pull/NNN URL (the same bare
+// shorthand style already used for issue links like "[#358](.../issues/358)" in these exact two
+// docs) is a real PR reference with no literal "PR" text — normalize it to include "PR" BEFORE
+// the URL is stripped below, since PR_REFERENCE needs the URL gone but the "PR" word present. The
+// \2 backreference ties the link text's number to the URL's /pull/ number so a mismatched pair
+// (accidentally or adversarially) isn't misattributed.
+function normalizePullShorthand(text) {
+  return text.replace(/\[(#(\d+))\]\((?:[^)]*\/pull\/\2)\)/gi, '[PR $1]');
+}
+
+// QNBS-v3 (codex): a markdown link's URL (github.com/.../pull/NNN) adds length between a PR
+// reference and its surrounding wording without adding meaning — strip it before measuring
+// proximity, so a long URL can't push a genuinely adjacent trigger/qualifier word out of window.
+function stripLinkUrls(text) {
+  return normalizePullShorthand(text).replace(/\]\([^)]*\)/g, ']');
+}
+
+// QNBS-v3 (codex): associate a word occurrence with its NEAREST PR reference by character
+// distance, not "any PR reference within a fixed window" — a raw-window check let a short,
+// unrelated PR's qualifier suppress a different PR's live claim when both sat close together
+// (e.g. "[PR #999] is the active remediation, unlike [PR #111], closed.").
+function nearestPrNumber(position, prRefs) {
+  let best = null;
+  let bestDistance = Infinity;
+  for (const ref of prRefs) {
+    const distance = position < ref.index ? ref.index - position : Math.max(0, position - ref.end);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = ref.prNumber;
+    }
+  }
+  return bestDistance <= PROXIMITY_WINDOW ? best : null;
+}
+
+function findPrReferences(sentence) {
+  return [...sentence.matchAll(PR_REFERENCE)].map((m) => ({
+    index: m.index,
+    end: m.index + m[0].length,
+    prNumber: m[1],
+  }));
+}
+
+// QNBS-v3 (coderabbit/codex): a negation word belonging to an EARLIER clause must not scope over
+// this match ("... is not encrypted, so PR #N is the active remediation" — the "not" modifies
+// "encrypted", not "active remediation"). Truncate the raw window at the last clause-separating
+// comma/semicolon/colon before the match.
+function lookback(sentence, matchIndex) {
+  const window = sentence.slice(Math.max(0, matchIndex - NEGATION_LOOKBACK), matchIndex);
+  const boundary = Math.max(
+    window.lastIndexOf(','),
+    window.lastIndexOf(';'),
+    window.lastIndexOf(':'),
+  );
+  return boundary === -1 ? window : window.slice(boundary + 1);
+}
+
+// QNBS-v3 (codex): "is not closed" / "will be merged" don't assert a completed status — only a
+// qualifier that isn't negated or prospective actually proves the PR is done.
+function isNegatedOrProspectiveQualifier(sentence, matchIndex) {
+  return QUALIFIER_NEGATION_OR_FUTURE_WORDS.test(lookback(sentence, matchIndex));
+}
+
+// QNBS-v3 (codex): "is not the active remediation" / "no longer the active remediation" don't
+// assert live status at all — the trigger phrase itself is negated away.
+function isNegatedTrigger(sentence, matchIndex) {
+  return TRIGGER_NEGATION_WORDS.test(lookback(sentence, matchIndex));
+}
+
+// QNBS-v3 (CodeScene): extracted so scanSecurityDocPrStatus itself stays a flat, shallow loop —
+// each of these small helpers owns exactly one nested loop+conditional, not three stacked in one.
+function collectQualifiedPrs(sentence, prRefs) {
+  const qualifiedPrs = new Set();
+  for (const m of sentence.matchAll(STATUS_QUALIFIER_RE)) {
+    const nearest = nearestPrNumber(m.index, prRefs);
+    if (nearest !== null && !isNegatedOrProspectiveQualifier(sentence, m.index)) {
+      qualifiedPrs.add(nearest);
+    }
+  }
+  return qualifiedPrs;
+}
+
+function collectUnqualifiedClaims(sentence, prRefs, qualifiedPrs) {
+  const claims = new Set();
+  for (const m of sentence.matchAll(LIVE_STATUS_TRIGGER)) {
+    const nearest = nearestPrNumber(m.index, prRefs);
+    if (nearest !== null && !qualifiedPrs.has(nearest) && !isNegatedTrigger(sentence, m.index)) {
+      claims.add(nearest);
+    }
+  }
+  return claims;
+}
+
+function findUnqualifiedClaimsInSentence(sentence) {
+  const prRefs = findPrReferences(sentence);
+  if (prRefs.length === 0) return [];
+  const qualifiedPrs = collectQualifiedPrs(sentence, prRefs);
+  return [...collectUnqualifiedClaims(sentence, prRefs, qualifiedPrs)];
+}
+
+// QNBS-v3 (codex): an HTML comment or fenced code block is never rendered prose — a literal
+// example inside one isn't a live assertion about a real PR. Blank out matched spans (keep
+// newlines) rather than remove lines, so line numbers stay stable for the findings below.
+// Known, accepted limitation: a single-backtick inline-code SPAN is deliberately not stripped —
+// PR_REFERENCE needs backtick tolerance for a real "PR `#356`" citation, and distinguishing that
+// from a whole illustrative phrase wrapped in one backtick pair isn't attempted here.
+function stripNonProseMarkdown(content) {
+  const blank = (match) => match.replace(/[^\n]/g, ' ');
+  return content.replace(/<!--[\s\S]*?-->/g, blank).replace(/```[\s\S]*?```/g, blank);
+}
+
+export function scanSecurityDocPrStatus(content, filePath) {
+  const findings = [];
+  const prose = stripNonProseMarkdown(content);
+  for (const { text: paragraph, startLine } of splitIntoParagraphs(prose)) {
+    const compact = stripLinkUrls(paragraph);
+    for (const sentence of splitIntoSentences(compact)) {
+      for (const prNumber of findUnqualifiedClaimsInSentence(sentence)) {
+        findings.push(
+          `${filePath}:${startLine} — asserts a live/pending remediation status near PR #${prNumber} without stating that PR's actual closed/merged state: "${sentence.trim()}"`,
+        );
+      }
+    }
+  }
+  return findings;
+}
+
 // QNBS-v3: exits 1 on any finding — unlike check-coverage-ratchet.mjs this gate is blocking, since a doc claiming a wrong locale/key/release count is actively misleading, not just an opportunity.
 // QNBS-v3 (F-10, CodeRabbit follow-up): locales/it/help.json IS included — it's exactly where the F-10 stale-URL drift happened; the in-app link reads the constant directly so it can't drift and isn't listed here.
 const URL_CHECK_FILES = ['README.md', 'CLAUDE.md', 'locales/it/help.json'];
@@ -553,6 +761,21 @@ function main() {
       continue;
     }
     allFindings.push(...scanForUrlDrift(content, relPath, canonicalUrl));
+  }
+
+  for (const relPath of SECURITY_STATUS_DOCS) {
+    const abs = join(root, relPath);
+    let content;
+    try {
+      content = readFileSync(abs, 'utf8');
+    } catch {
+      // QNBS-v3 (codex): these two files are this gate's required subjects — silently skipping a
+      // missing/unreadable one would make the live-status enforcement disappear exactly when its
+      // input is unavailable, the same failure mode as BUNDLE_BUDGET_DOCS below.
+      allFindings.push(`${relPath} — required security-status document is missing or unreadable`);
+      continue;
+    }
+    allFindings.push(...scanSecurityDocPrStatus(content, relPath));
   }
 
   for (const relPath of BUNDLE_BUDGET_DOCS) {

@@ -16,6 +16,7 @@ import {
   scanLocalizedBundleBudgetTruth,
   scanReadmeTestMetrics,
   scanReleaseTruth,
+  scanSecurityDocPrStatus,
   stripHistoricalSections,
   VERCEL_URL_PATTERN,
 } from '../../scripts/check-doc-metrics.mjs';
@@ -552,5 +553,254 @@ describe('scanForUrlDrift', () => {
     it('still matches the -indol dead-preview host (hyphenated variant)', () => {
       expect(matches('https://worldscript-studio-indol.vercel.app/')).toBe(true);
     });
+  });
+});
+
+// QNBS-v3 (audit F-1): a security doc asserting a PR is "the active remediation" or work is
+// "pending"/"in progress on" that PR must say so truthfully — this gate exists because
+// docs/SECURITY-THREAT-MODEL.md said exactly that about PR #356 for weeks after it closed.
+describe('scanSecurityDocPrStatus', () => {
+  it('flags an unqualified "is the active remediation" claim', () => {
+    const content =
+      '| Threat | [PR #356](https://github.com/qnbs/WorldScript-Studio/pull/356) is the active remediation | Loc |';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain('docs/SECURITY-THREAT-MODEL.md:1');
+  });
+
+  it('flags an unqualified "pending [PR #NNN]" claim', () => {
+    const content =
+      "remain only as shared crypto plumbing pending [PR #356](https://github.com/qnbs/WorldScript-Studio/pull/356)'s project-data encryption work.";
+    const findings = scanSecurityDocPrStatus(content, 'docs/IDB-ENCRYPTION.md');
+    expect(findings).toHaveLength(1);
+  });
+
+  it('flags an unqualified "in progress on PR #NNN" claim', () => {
+    const content = 'Encryption work is in progress on PR #356.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/IDB-ENCRYPTION.md');
+    expect(findings).toHaveLength(1);
+  });
+
+  it('does not flag the same claim once qualified as closed/superseded on the same line', () => {
+    const content =
+      'PR #356 is the active remediation for the prior (now inaccurate) history — PR #356 was later closed as superseded by R-15.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(0);
+  });
+
+  it('does not flag a bare historical PR citation with no live-status verb', () => {
+    const content =
+      'it remains in fsCore.ts as shared crypto plumbing for other filesystem-encrypted data (see [PR #356](https://github.com/qnbs/WorldScript-Studio/pull/356), closed 2026-08-18 as superseded).';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(0);
+  });
+
+  it('does not flag "pending" prose with no PR-number anchor', () => {
+    const content =
+      'Full at-rest protection for the desktop filesystem store is pending R-15 implementation.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/IDB-ENCRYPTION.md');
+    expect(findings).toHaveLength(0);
+  });
+
+  // QNBS-v3 (CodeAnt): a naive per-physical-line split let a status claim soft-wrapped across two
+  // Markdown lines within the same paragraph evade detection entirely.
+  it('flags a claim even when Markdown wraps it across two physical lines of one paragraph', () => {
+    const content = [
+      'Desktop plaintext persistence remains open. [PR #356](https://github.com/qnbs/pull/356)',
+      'is the active remediation for this gap.',
+    ].join('\n');
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain('PR #356');
+  });
+
+  // QNBS-v3 (CodeAnt): the qualifier must be tied to the SAME PR number, not merely present
+  // anywhere in the sentence/line — otherwise a different, already-closed PR mentioned nearby
+  // would wrongly suppress a live claim about an unrelated, still-unqualified PR.
+  it('still flags an unqualified claim when a DIFFERENT PR is closed nearby', () => {
+    const content =
+      'PR #999 is the active remediation for this gap, unlike PR #111 which was already closed.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain('PR #999');
+  });
+
+  // QNBS-v3 (codex): the original three-alternative regex required an exact word order and missed
+  // common natural phrasings — the fix is order-independent (trigger phrase near a PR reference).
+  it.each([
+    'The active remediation is PR #356 for this gap.',
+    'PR #356 remains the active remediation for this gap.',
+    'Work is pending on PR #356 for this gap.',
+  ])('flags the natural-language variant: %s', (content) => {
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain('PR #356');
+  });
+
+  // QNBS-v3 (codex): consecutive Markdown table rows have no blank line between them — joining
+  // them into one paragraph let a live claim in one row absorb an unrelated row's qualifier.
+  it("does not let one table row's qualifier suppress a different row's unqualified claim", () => {
+    const content = ['| PR #356 was closed |', '| PR #999 is the active remediation |'].join('\n');
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain('PR #999');
+  });
+
+  // QNBS-v3 (codex): a long markdown-link URL between the PR reference and its qualifier must not
+  // make a genuinely, explicitly qualified claim look unqualified.
+  it('does not flag a claim qualified via a Markdown link with a long URL', () => {
+    const content =
+      '[PR #356](https://github.com/qnbs/WorldScript-Studio/pull/356) is the active remediation, but was closed.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(0);
+  });
+
+  // QNBS-v3 (codex): a raw character-window qualifier check let a SHORT, unrelated PR's qualifier
+  // suppress a different PR's unqualified claim when both PRs sat close together. Nearest-PR
+  // association (not "any qualifier within the window") is required.
+  it('still flags an unqualified claim when a nearby DIFFERENT PR is closed right next to it', () => {
+    const content = '[PR #999] is the active remediation, unlike [PR #111], closed.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain('PR #999');
+  });
+
+  // QNBS-v3 (codex): consecutive Markdown list items have no blank line between them either —
+  // joining them let an unrelated later item's trigger word attach to an earlier item's PR.
+  it("does not let one list item's wording attach to a different item's PR reference", () => {
+    const content = ['- Historical context: PR #356', '- R-15 implementation is pending'].join(
+      '\n',
+    );
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(0);
+  });
+
+  // QNBS-v3 (codex): a semicolon does not end a sentence — splitting on it separated a claim from
+  // its own qualifying clause.
+  it('does not flag a claim whose qualifier follows a semicolon in the same sentence', () => {
+    const content = 'PR #356 is the active remediation; it was later closed as superseded.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(0);
+  });
+
+  // QNBS-v3 (coderabbit/codex): a list item's own text may soft-wrap across the following
+  // physical line — an immediate push-per-marker-line split it before the trigger was reached.
+  it('flags a live-status claim wrapped across a list item', () => {
+    const content = ['- PR `#356` is', '  the active remediation for this gap'].join('\n');
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+  });
+
+  it('flags a Markdown-link PR reference wrapped across a list item', () => {
+    const content = [
+      '- [PR #999](https://github.com/qnbs/pull/999)',
+      'is the active remediation',
+    ].join('\n');
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+  });
+
+  // QNBS-v3 (codex): "is not closed" / "will be merged" don't assert a completed status — only an
+  // unnegated, non-prospective qualifier actually proves the PR is done.
+  it('still flags a claim whose only nearby qualifier is negated', () => {
+    const content = 'PR #999 is the active remediation; it is not closed.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+  });
+
+  it('still flags a claim whose only nearby qualifier is prospective (future tense)', () => {
+    const content = 'PR #999 is the active remediation and will be merged soon.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+  });
+
+  it('does not flag a claim with a genuinely completed (non-negated) qualifier', () => {
+    const content = 'PR #999 is the active remediation; it was later closed.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(0);
+  });
+
+  // QNBS-v3 (codex): a negated or "no longer" trigger phrase explicitly denies live status — it
+  // isn't a claim at all.
+  it.each([
+    'PR #356 is not the active remediation for this gap.',
+    'PR #356 is no longer the active remediation for this gap.',
+    'Work is not in progress on PR #356 for this gap.',
+  ])('does not flag a negated trigger: %s', (content) => {
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(0);
+  });
+
+  // QNBS-v3 (codex): compound negation/auxiliary forms around a qualifier must not be accepted as
+  // proof of a completed status.
+  it.each([
+    'PR #999 is the active remediation; it has not been closed.',
+    'PR #999 is the active remediation; it is not yet closed.',
+    'PR #999 is the active remediation and may be merged eventually.',
+  ])('still flags a claim with compound-negated/prospective qualifier: %s', (content) => {
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+  });
+
+  // QNBS-v3 (codex): an HTML comment or fenced code block is never rendered prose — a literal
+  // example inside one isn't a live assertion about a real PR.
+  it('does not flag trigger wording inside an HTML comment', () => {
+    const content = '<!-- Do not write: PR #999 is the active remediation -->\nReal prose here.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(0);
+  });
+
+  it('does not flag trigger wording inside a fenced code block', () => {
+    const content = ['```', 'PR #999 is the active remediation', '```'].join('\n');
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(0);
+  });
+
+  it('still flags real prose surrounding a stripped HTML comment', () => {
+    const content = [
+      '<!-- internal note -->',
+      'PR #999 is the active remediation for this gap.',
+    ].join('\n');
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+  });
+
+  // QNBS-v3 (coderabbit/codex): a negation word in an EARLIER clause must not suppress a
+  // genuinely live, unqualified claim in a later clause of the same sentence — a real
+  // false-negative that let a stale claim escape the gate entirely.
+  it('flags a claim when negation belongs to an earlier, unrelated clause', () => {
+    const content = 'Desktop project data is not encrypted, so PR #356 is the active remediation.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+  });
+
+  it('flags a claim when negation modifies a different word in an earlier clause', () => {
+    const content = 'PR #356 is not complete, but remains the active remediation.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+  });
+
+  // QNBS-v3 (codex): the bare "[#NNN](.../pull/NNN)" shorthand is the same convention already
+  // used for issue links (e.g. "[#358](.../issues/358)") in these exact two docs — a stale claim
+  // shouldn't evade the gate merely by using this link style instead of writing "PR #NNN".
+  it('flags a live-status claim using the bare "[#N](.../pull/N)" shorthand', () => {
+    const content =
+      '[#356](https://github.com/qnbs/WorldScript-Studio/pull/356) is the active remediation.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+  });
+
+  it('does not treat a bare "[#N](.../issues/N)" shorthand as a PR reference', () => {
+    const content =
+      'Closing [#358](https://github.com/qnbs/WorldScript-Studio/issues/358) is the active remediation.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(0);
+  });
+
+  it('does not misattribute a mismatched "[#N](.../pull/M)" shorthand pair', () => {
+    const content =
+      '[#356](https://github.com/qnbs/WorldScript-Studio/pull/999) is the active remediation.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(0);
   });
 });
