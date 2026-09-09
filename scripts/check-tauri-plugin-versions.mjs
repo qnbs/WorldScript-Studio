@@ -73,6 +73,8 @@ export function resolvedCargoPluginVersions(cargoLock) {
   const references = directDependencyReferences(normalized);
   const resolved = new Map();
   for (const crateName of PLUGIN_CRATE_NAMES) {
+    // QNBS-v3 (codex): a crate absent from worldscript-studio's own dependencies list is at most a transitive occurrence, even with only one lockfile entry — leaving it unset here routes it through the existing "no resolved version" fail-closed path instead of comparing an unrelated transitive version.
+    if (!references.has(crateName)) continue;
     const versions = allResolvedVersionsOf(normalized, crateName);
     const qualifiedVersion = references.get(crateName);
     if (qualifiedVersion) {
@@ -174,9 +176,21 @@ function checkPluginPairParity(importer, crateName, cargoVersions, importerVersi
   return null;
 }
 
+// QNBS-v3 (codex): a plugin declared under optionalDependencies/peerDependencies/devDependencies still resolves into the lockfile and can still be bundled — checking only "dependencies" silently skipped it.
+const DEPENDENCY_SECTIONS = [
+  'dependencies',
+  'optionalDependencies',
+  'peerDependencies',
+  'devDependencies',
+];
+
+function isDeclaredInAnySection(pkg, npmName) {
+  return DEPENDENCY_SECTIONS.some((section) => Boolean(pkg[section]?.[npmName]));
+}
+
 function declaredPluginCrateNames(pkg) {
   return PLUGIN_CRATE_NAMES.filter((crateName) =>
-    Boolean(pkg.dependencies?.[crateToNpmName(crateName)]),
+    isDeclaredInAnySection(pkg, crateToNpmName(crateName)),
   );
 }
 

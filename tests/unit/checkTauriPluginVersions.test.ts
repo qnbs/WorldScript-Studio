@@ -35,16 +35,27 @@ function importerPkg(importer: string, dependencies: Record<string, string>) {
   return { importer, pkg: { dependencies } };
 }
 
+function importerPkgWithSection(
+  importer: string,
+  section: 'optionalDependencies' | 'peerDependencies' | 'devDependencies',
+  deps: Record<string, string>,
+) {
+  return { importer, pkg: { [section]: deps } };
+}
+
 describe('resolvedCargoPluginVersions', () => {
   it('resolves a plugin crate version from Cargo.lock', () => {
-    const versions = resolvedCargoPluginVersions(cargoLockEntry('tauri-plugin-http', '2.6.0'));
+    const cargoLock =
+      ownPackageBlock(['tauri-plugin-http']) + cargoLockEntry('tauri-plugin-http', '2.6.0');
+    const versions = resolvedCargoPluginVersions(cargoLock);
     expect(versions.get('tauri-plugin-http')).toBe('2.6.0');
   });
 
   // QNBS-v3: a Windows checkout without a pinned EOL for Cargo.lock can convert it to CRLF; the literal \n in the matcher must not silently stop matching.
   it('resolves a plugin crate version from a CRLF-line-ended Cargo.lock', () => {
-    const crlf = cargoLockEntry('tauri-plugin-http', '2.6.0').replace(/\n/g, '\r\n');
-    const versions = resolvedCargoPluginVersions(crlf);
+    const cargoLock =
+      ownPackageBlock(['tauri-plugin-http']) + cargoLockEntry('tauri-plugin-http', '2.6.0');
+    const versions = resolvedCargoPluginVersions(cargoLock.replace(/\n/g, '\r\n'));
     expect(versions.get('tauri-plugin-http')).toBe('2.6.0');
   });
 
@@ -60,7 +71,9 @@ describe('resolvedCargoPluginVersions', () => {
 
   it('fails closed (null) when a crate resolves to more than one version with no disambiguating reference', () => {
     const cargoLock =
-      cargoLockEntry('tauri-plugin-http', '2.5.0') + cargoLockEntry('tauri-plugin-http', '2.6.0');
+      ownPackageBlock(['tauri-plugin-http']) +
+      cargoLockEntry('tauri-plugin-http', '2.5.0') +
+      cargoLockEntry('tauri-plugin-http', '2.6.0');
     const versions = resolvedCargoPluginVersions(cargoLock);
     expect(versions.get('tauri-plugin-http')).toBeNull();
   });
@@ -73,6 +86,15 @@ describe('resolvedCargoPluginVersions', () => {
       cargoLockEntry('tauri-plugin-http', '2.6.0');
     const versions = resolvedCargoPluginVersions(cargoLock);
     expect(versions.get('tauri-plugin-http')).toBeNull();
+  });
+
+  // QNBS-v3 (codex): a crate with only one lockfile entry is not necessarily a direct app dependency — it can be pulled in solely as a transitive of another plugin (e.g. tauri-plugin-deep-link via single-instance's "deep-link" feature). Absent from the direct-dependencies list, it must not be treated as resolved at all.
+  it('does not resolve a crate that has only one lockfile entry but is absent from the direct-dependencies list', () => {
+    const cargoLock =
+      ownPackageBlock(['tauri-plugin-dialog']) + // http is NOT listed as a direct dependency here
+      cargoLockEntry('tauri-plugin-http', '2.6.0'); // present only as a transitive occurrence
+    const versions = resolvedCargoPluginVersions(cargoLock);
+    expect(versions.has('tauri-plugin-http')).toBe(false);
   });
 });
 
@@ -121,7 +143,7 @@ describe('findTauriPluginVersionMismatches', () => {
       resolved: '2.11.4',
     },
   ])('reports nothing for $name', ({ crate, rust, npm, specifier, resolved }) => {
-    const cargoLock = cargoLockEntry(crate, rust);
+    const cargoLock = ownPackageBlock([crate]) + cargoLockEntry(crate, rust);
     const pnpmLock = pnpmImporterBlock('.', { [npm]: { specifier, version: resolved } });
     const findings = findTauriPluginVersionMismatches(cargoLock, pnpmLock, [
       importerPkg('.', { [npm]: specifier }),
@@ -151,7 +173,9 @@ describe('findTauriPluginVersionMismatches', () => {
 
   // QNBS-v3: reproduces the exact reviewer-found gap — root package.json/lockfile were fixed, but a workspace member's own manifest still resolved the stale minor.
   it('flags a workspace-member importer drifting independently of the root', () => {
-    const cargoLock = cargoLockEntry('tauri-plugin-notification', '2.4.0');
+    const cargoLock =
+      ownPackageBlock(['tauri-plugin-notification']) +
+      cargoLockEntry('tauri-plugin-notification', '2.4.0');
     const pnpmLock =
       pnpmImporterBlock('.', {
         '@tauri-apps/plugin-notification': { specifier: '^2.4.0', version: '2.4.0' },
@@ -166,6 +190,34 @@ describe('findTauriPluginVersionMismatches', () => {
     expect(findings).toHaveLength(1);
     expect(findings[0]).toContain('packages/desktop-contracts');
     expect(findings[0]).toContain('@tauri-apps/plugin-notification');
+  });
+
+  // QNBS-v3 (codex): a crate resolved only transitively (absent from the direct-dependencies list) must fail closed through the full pipeline too, not just at the resolvedCargoPluginVersions level.
+  it('fails closed end-to-end when the declared npm plugin has no direct Rust dependency, only a transitive one', () => {
+    const cargoLock =
+      ownPackageBlock(['tauri-plugin-dialog']) + cargoLockEntry('tauri-plugin-http', '2.6.0');
+    const pnpmLock = pnpmImporterBlock('.', {
+      '@tauri-apps/plugin-http': { specifier: '^2.6.0', version: '2.6.0' },
+    });
+    const findings = findTauriPluginVersionMismatches(cargoLock, pnpmLock, [
+      importerPkg('.', { '@tauri-apps/plugin-http': '^2.6.0' }),
+    ]);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain('no resolved version in Cargo.lock');
+  });
+
+  // QNBS-v3 (codex): a plugin declared under optionalDependencies/peerDependencies/devDependencies still resolves into the lockfile and can still be bundled — checking only "dependencies" silently skipped it.
+  it('checks a plugin declared under a non-"dependencies" section too', () => {
+    const cargoLock =
+      ownPackageBlock(['tauri-plugin-http']) + cargoLockEntry('tauri-plugin-http', '2.5.0');
+    const pnpmLock = pnpmImporterBlock('.', {
+      '@tauri-apps/plugin-http': { specifier: '^2.6.0', version: '2.6.0' },
+    });
+    const findings = findTauriPluginVersionMismatches(cargoLock, pnpmLock, [
+      importerPkgWithSection('.', 'optionalDependencies', { '@tauri-apps/plugin-http': '^2.6.0' }),
+    ]);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain('major.minor mismatch');
   });
 
   // QNBS-v3 (cubic): a duplicate Cargo.lock entry must resolve to the direct app dependency's version (2.6.0), never the textually-first transitive occurrence (2.5.0) — proven by the fact that using the wrong one would falsely flag this as a mismatch.
@@ -185,7 +237,9 @@ describe('findTauriPluginVersionMismatches', () => {
 
   it('fails closed when Cargo.lock has an undisambiguated duplicate, rather than guessing', () => {
     const cargoLock =
-      cargoLockEntry('tauri-plugin-http', '2.5.0') + cargoLockEntry('tauri-plugin-http', '2.6.0');
+      ownPackageBlock(['tauri-plugin-http']) +
+      cargoLockEntry('tauri-plugin-http', '2.5.0') +
+      cargoLockEntry('tauri-plugin-http', '2.6.0');
     const pnpmLock = pnpmImporterBlock('.', {
       '@tauri-apps/plugin-http': { specifier: '^2.6.0', version: '2.6.3' },
     });
@@ -208,7 +262,8 @@ describe('findTauriPluginVersionMismatches', () => {
     },
     {
       name: 'no resolved npm version in the lockfile',
-      cargoLock: cargoLockEntry('tauri-plugin-http', '2.6.0'),
+      cargoLock:
+        ownPackageBlock(['tauri-plugin-http']) + cargoLockEntry('tauri-plugin-http', '2.6.0'),
       pnpmLock: pnpmImporterBlock('.', {}), // http declared in package.json but absent from the lockfile importer
       expectedSubstring: 'no resolved version in pnpm-lock.yaml',
     },
@@ -225,7 +280,9 @@ describe('findTauriPluginVersionMismatches', () => {
 
   it('skips a plugin the importer does not declare at all (not applicable, not a failure)', () => {
     // QNBS-v3: http has no Cargo.lock entry at all here, proving it was never even considered for an importer that doesn't declare it — only notification (declared, and given a matching Cargo entry) is checked.
-    const cargoLock = cargoLockEntry('tauri-plugin-notification', '2.4.0');
+    const cargoLock =
+      ownPackageBlock(['tauri-plugin-notification']) +
+      cargoLockEntry('tauri-plugin-notification', '2.4.0');
     const pnpmLock = pnpmImporterBlock('packages/desktop-contracts', {
       '@tauri-apps/plugin-notification': { specifier: '^2.4.0', version: '2.4.0' },
     });
