@@ -395,7 +395,7 @@ function significantSlugWords(description) {
 // "#656" (and vice versa) since one is a substring of the other — require a non-digit boundary on
 // both sides so only the exact PR number counts.
 function isReferencedByPrNumber(prNumber, unreleasedSection) {
-  return new RegExp(`(?:^|\\D)#${prNumber}(?!\\d)`).test(unreleasedSection);
+  return new RegExp(`(?:^|\\D)#${prNumber}(?!\\w)`).test(unreleasedSection);
 }
 
 // QNBS-v3 (codex): a Markdown bullet may wrap across several physical lines — join a bullet's own
@@ -423,7 +423,8 @@ function splitUnreleasedEntries(unreleasedSection) {
 }
 
 // QNBS-v3 (codex): a negated description ("do not delete X") must never slug-match an entry describing the opposite, unnegated action ("Delete X") — word-overlap ratio alone can't tell these apart, so mismatched polarity disqualifies the entry outright, before the ratio is even computed.
-const NEGATION_MARKER = /\b(?:not|never|no longer|cannot|can't|doesn't|don't|won't|isn't)\b/i;
+const NEGATION_MARKER =
+  /\b(?:not|never|no longer|cannot|can[’']t|doesn[’']t|don[’']t|won[’']t|isn[’']t)\b/i;
 function hasNegationMarker(text) {
   return NEGATION_MARKER.test(text);
 }
@@ -504,11 +505,11 @@ function classifyGovernedCommit(subject, entries, isFeatureBranchContext, isBran
   return isFeatureBranchContext ? 'documented' : 'needsSlugCheck';
 }
 
-// QNBS-v3 (codex): reserves a numbered commit's entry so it can't silently double as an unrelated commit's own slug-matched documentation — an entry bundling several PR numbers is reserved once per number, which is idempotent since they all resolve to the same index.
+// QNBS-v3 (codex): reserves EVERY entry referencing the numbered commit, not just the first — a PR number split across multiple bullets must not leave a later one free for an unrelated commit's slug match.
 function reserveEntryForNumberedCommit(prNumber, entries, reservedEntryIndices) {
-  const entryIndex = entries.findIndex((entry) => isReferencedByPrNumber(prNumber, entry));
-  if (entryIndex === -1) return;
-  reservedEntryIndices.add(entryIndex);
+  entries.forEach((entry, index) => {
+    if (isReferencedByPrNumber(prNumber, entry)) reservedEntryIndices.add(index);
+  });
 }
 
 function findUndocumentedGovernedCommits(
@@ -620,9 +621,9 @@ export function getBranchLocalSubjectIndices(repositoryRoot = root) {
         cwd: repositoryRoot,
         stdio: 'ignore',
       });
-    } catch {
-      // Non-zero exit means sha is not an ancestor of mainRef — it is branch-local.
-      branchLocalIndices.add(index);
+    } catch (error) {
+      // QNBS-v3 (codex): only git's exit-1 confirms "not an ancestor" (branch-local); any other failure can't determine ancestry, so it fails closed to the stricter, non-exempted path.
+      if (error.status === 1) branchLocalIndices.add(index);
     }
   });
   return branchLocalIndices;
@@ -1045,7 +1046,7 @@ function main() {
   );
   allFindings.push(...scanReadmeTestMetrics(readFileSync(join(root, 'README.md'), 'utf8')));
 
-  // QNBS-v3 (codex): these two files are this gate's required subjects — silently skipping a missing/unreadable one would make the live-status enforcement disappear exactly when its input is unavailable, the same failure mode as the bundle-budget docs below.
+  // QNBS-v3 (codex): TARGET_FILES and URL_CHECK_FILES below pass no fallback message, so silently skipping a missing/unreadable file here would make live-status enforcement disappear exactly when its input is unavailable — the failure mode the explicit fallback messages below already guard against.
   allFindings.push(
     ...scanRequiredFiles(TARGET_FILES, (content, relPath) =>
       scanForDrift(content, relPath, { localeCount, keyCount, latestVersion }),

@@ -483,6 +483,18 @@ describe('Unreleased truth', () => {
       expect(findings).toEqual([]);
     });
 
+    // QNBS-v3 (codex): a typographic apostrophe ("don't") must be recognized as negation too, or the tokenizer turns it into the unmatched word "don" and the remaining words alone can clear the ratio against the opposite-polarity entry.
+    it('recognizes a typographic apostrophe as negation', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const changelog =
+        '## [Unreleased]\n\n### Fixed\n\n- Delete malformed project data during import.\n';
+      const findings = scanUnreleasedTruth(changelog, [
+        'fix(project): don’t delete malformed project data',
+      ]);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toContain('delete malformed project data');
+    });
+
     // QNBS-v3 (codex): a numbered commit has an unambiguous way to be referenced — it must not
     // fall back to a fuzzy slug match against a different, older bullet that merely shares words.
     it('requires the exact PR number for a numbered commit, never a slug fallback', async () => {
@@ -508,11 +520,36 @@ describe('Unreleased truth', () => {
       expect(findings[0]).toContain('#999');
     });
 
+    // QNBS-v3 (codex): a hex-color-like token such as "#999abc" must not satisfy an exact reference to PR #999 — the boundary must reject a letter continuation, not just a digit.
+    it('does not treat a hex-color-like token as a reference to a PR number', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const changelog =
+        '## [Unreleased]\n\n### Fixed\n\n- Update accent color token to #999abc for contrast.\n';
+      const findings = scanUnreleasedTruth(changelog, [
+        'fix(project): resolve unrelated regression (#999)',
+      ]);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toContain('#999');
+    });
+
     // QNBS-v3 (codex): a numbered commit's exact-PR-number match must reserve its entry, otherwise an unrelated un-numbered commit's slug match can silently reuse the same bullet.
     it("does not let a numbered commit's entry double as an unrelated commit's slug match", async () => {
       const { scanUnreleasedTruth } = await loadReleaseTruthModule();
       const changelog =
         '## [Unreleased]\n\n### Fixed\n\n- Canonical document projection foundation. PR #999.\n';
+      const findings = scanUnreleasedTruth(changelog, [
+        'fix(project): canonical document projection foundation (#999)',
+        'fix(project): reuse canonical document projection foundation',
+      ]);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toContain('reuse canonical document projection foundation');
+    });
+
+    // QNBS-v3 (codex): the same PR number split across two separate bullets must reserve BOTH, not just the first findIndex() hit — otherwise an unrelated commit's slug match can claim the un-reserved second bullet.
+    it('reserves every entry referencing the same numbered commit, not just the first', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const changelog =
+        '## [Unreleased]\n\n### Fixed\n\n- Canonical document projection foundation. PR #999.\n- Canonical document projection foundation restated. PR #999.\n';
       const findings = scanUnreleasedTruth(changelog, [
         'fix(project): canonical document projection foundation (#999)',
         'fix(project): reuse canonical document projection foundation',
