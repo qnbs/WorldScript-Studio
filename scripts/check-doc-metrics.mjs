@@ -394,27 +394,11 @@ function significantSlugWords(description) {
 // QNBS-v3 (coderabbit/CodeAnt): a bare String.includes let "#65" incorrectly satisfy a check for
 // "#656" (and vice versa) since one is a substring of the other — require a non-digit boundary on
 // both sides so only the exact PR number counts.
-function isReferencedByPrNumber(subject, unreleasedSection) {
-  const prMatch = TRAILING_PR_REF.exec(subject);
-  if (!prMatch) return false;
-  return new RegExp(`(?:^|\\D)#${prMatch[1]}(?!\\d)`).test(unreleasedSection);
+function isReferencedByPrNumber(prNumber, unreleasedSection) {
+  return new RegExp(`(?:^|\\D)#${prNumber}(?!\\d)`).test(unreleasedSection);
 }
 
-// QNBS-v3 (codex): match ratio is computed PER changelog entry, not against the whole section —
-// otherwise words scattered across several unrelated bullets could collectively satisfy the
-// threshold for a commit none of them actually documents, and one generic bullet could
-// simultaneously "document" multiple different undocumented commits.
-function isReferencedBySlug(subject, unreleasedEntries) {
-  const description = subject.replace(GOVERNED_COMMIT_TYPE, '').replace(TRAILING_PR_REF, '');
-  const words = significantSlugWords(description);
-  if (words.length === 0) return false;
-  return unreleasedEntries.some((entry) => {
-    const matched = words.filter((word) => new RegExp(`\\b${word}\\b`, 'i').test(entry));
-    return matched.length / words.length >= SLUG_MATCH_RATIO;
-  });
-}
-
-// QNBS-v3: a Markdown bullet may wrap across several physical lines — join a bullet's own
+// QNBS-v3 (codex): a Markdown bullet may wrap across several physical lines — join a bullet's own
 // continuation lines into one entry so slug-matching sees the whole thought, not a fragment.
 function splitUnreleasedEntries(unreleasedSection) {
   const entries = [];
@@ -438,14 +422,56 @@ function splitUnreleasedEntries(unreleasedSection) {
   return entries;
 }
 
-function findUndocumentedGovernedCommits(postReleaseCommitSubjects, unreleasedSection) {
+// QNBS-v3 (codex): match ratio is computed PER changelog entry, and a matched entry is then
+// claimed (excluded from later commits in the same pass) — otherwise words scattered across
+// several unrelated bullets could collectively satisfy a commit none of them documents, AND one
+// generic bullet could simultaneously "document" multiple different undocumented commits.
+function findSlugMatchIndex(subject, unreleasedEntries, claimedIndices) {
+  const description = subject.replace(GOVERNED_COMMIT_TYPE, '').replace(TRAILING_PR_REF, '');
+  const words = significantSlugWords(description);
+  if (words.length === 0) return -1;
+  return unreleasedEntries.findIndex((entry, index) => {
+    if (claimedIndices.has(index)) return false;
+    const matched = words.filter((word) => new RegExp(`\\b${word}\\b`, 'i').test(entry));
+    return matched.length / words.length >= SLUG_MATCH_RATIO;
+  });
+}
+
+// QNBS-v3 (codex): a commit ending in a trailing PR number has an unambiguous way to be
+// referenced — require the exact number, never fall back to a fuzzy slug match that could match a
+// different, older bullet purely by generic word overlap.
+function isCommitDocumented(subject, unreleasedSection, entries, claimedIndices) {
+  const prMatch = TRAILING_PR_REF.exec(subject);
+  if (prMatch) return isReferencedByPrNumber(prMatch[1], unreleasedSection);
+  const matchIndex = findSlugMatchIndex(subject, entries, claimedIndices);
+  if (matchIndex === -1) return false;
+  claimedIndices.add(matchIndex);
+  return true;
+}
+
+function findUndocumentedGovernedCommits(
+  postReleaseCommitSubjects,
+  unreleasedSection,
+  isFeatureBranchContext,
+) {
   const entries = splitUnreleasedEntries(unreleasedSection);
-  return postReleaseCommitSubjects.filter(
-    (subject) =>
-      GOVERNED_COMMIT_TYPE.test(subject) &&
-      !isReferencedByPrNumber(subject, unreleasedSection) &&
-      !isReferencedBySlug(subject, entries),
-  );
+  const claimedIndices = new Set();
+  const undocumented = [];
+  for (const subject of postReleaseCommitSubjects) {
+    if (!GOVERNED_COMMIT_TYPE.test(subject)) continue;
+    // QNBS-v3 (codex, P1): an un-numbered commit observed while HEAD isn't `main` is, in
+    // practice, either a rare old direct-push commit (still checked below) or one of THIS
+    // branch's own not-yet-squashed intermediate commits (whether pushed to an open PR, or still
+    // only local, e.g. under the mandatory pre-push hook mid-review), which cannot reference
+    // itself in [Unreleased] in advance. Exempting only un-numbered commits here — not every
+    // governed commit — still enforces full completeness for an already-numbered commit sitting
+    // in the same range from a separate, already-merged PR.
+    if (isFeatureBranchContext && !TRAILING_PR_REF.test(subject)) continue;
+    if (!isCommitDocumented(subject, unreleasedSection, entries, claimedIndices)) {
+      undocumented.push(subject);
+    }
+  }
+  return undocumented;
 }
 
 /**
@@ -472,18 +498,39 @@ export function getPostReleaseCommitSubjects(repositoryRoot = root) {
   }
 }
 
-// QNBS-v3: deliberately NOT defaulted from process.env here — this same env var is ambiently
-// visible to the Vitest process itself when the whole suite runs inside a GitHub Actions
-// pull_request-triggered job (not just this gate's own CLI step), so a default read at this
-// pure-function boundary silently changed every test's behavior based on which CI context ran
-// it. Only main()'s real CLI invocation below reads the actual environment; tests always get a
-// deterministic, explicitly-passed value.
+// QNBS-v3 (codex): the mandatory local `pnpm run ci:prepush` hook runs this same checker on every
+// feature branch, mid-review, without any GitHub Actions event context at all — checking the
+// branch name directly (not just GITHUB_EVENT_NAME) means the un-numbered-commit exemption also
+// covers a local review-fix commit before it's ever pushed, not only a PR's own CI run. Fails
+// closed to "not a feature branch" (full strictness) on any git error, matching this file's other
+// git-plumbing helpers' fail-safe posture.
+export function isOnFeatureBranch(repositoryRoot = root) {
+  try {
+    const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    return branch !== '' && branch !== 'main';
+  } catch {
+    return false;
+  }
+}
+
+// QNBS-v3: isFeatureBranchContext deliberately has a plain `false` default, not one read from
+// process.env/git here — an env var is ambiently visible to the Vitest process itself when the
+// whole suite runs inside a GitHub Actions pull_request-triggered job (not just this gate's own
+// CLI step), so a default read at this pure-function boundary silently changed every test's
+// behavior based on which CI context ran it. Only main()'s real CLI invocation below computes the
+// actual value (from GITHUB_EVENT_NAME and/or the checked-out branch not being `main` — see
+// isOnFeatureBranch below, which covers local `pnpm run ci:prepush` on a feature branch too, not
+// just GitHub Actions pull_request jobs); tests always get a deterministic, explicitly-passed value.
 export function scanUnreleasedTruth(
   changelog,
   postReleaseCommitSubjects,
   packageVersion,
   taggedVersions,
-  isPullRequestContext = false,
+  isFeatureBranchContext = false,
 ) {
   if (!postReleaseCommitSubjects || postReleaseCommitSubjects.length === 0) return [];
   const candidateVersion = changelog.match(
@@ -505,17 +552,11 @@ export function scanUnreleasedTruth(
       `CHANGELOG.md — ${postReleaseCommitSubjects.length} commit(s) exist after the latest release tag, but [Unreleased] is empty`,
     ];
   }
-  // QNBS-v3 (codex, P1): a pull_request CI run's `git log` range enumerates every commit unique
-  // to that branch — not the one commit that will actually exist after squash-merge. Enforcing
-  // full per-commit completeness there would make a routine review-fix follow-up commit
-  // unsatisfiable (it cannot reference itself in [Unreleased] in advance). Completeness is
-  // enforced once those commits are real, permanent history: on the push to main right after
-  // merge (and locally, since a developer isn't fighting the multi-commit-per-PR shape there).
-  if (isPullRequestContext) return [];
   const unreleasedSection = getUnreleasedSectionText(changelog);
   const undocumented = findUndocumentedGovernedCommits(
     postReleaseCommitSubjects,
     unreleasedSection,
+    isFeatureBranchContext,
   );
   if (undocumented.length === 0) return [];
   return [
@@ -864,7 +905,7 @@ function main() {
       getPostReleaseCommitSubjects(),
       packageVersion,
       taggedVersions,
-      process.env.GITHUB_EVENT_NAME === 'pull_request',
+      process.env.GITHUB_EVENT_NAME === 'pull_request' || isOnFeatureBranch(),
     ),
   );
   allFindings.push(

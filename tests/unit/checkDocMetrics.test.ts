@@ -4,7 +4,9 @@
  * QNBS-v3: protects the drift gate from historical-section regressions — an untested exclusion heuristic would turn it into noise.
  */
 
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -30,8 +32,9 @@ type ReleaseTruthModule = {
     subjects: string[] | null,
     packageVersion?: string,
     taggedVersions?: Set<string>,
-    isPullRequestContext?: boolean,
+    isFeatureBranchContext?: boolean,
   ) => string[];
+  isOnFeatureBranch: (repositoryRoot?: string) => boolean;
 };
 // QNBS-v3: load the runtime-only scanners without making tsgo infer untyped .mjs exports.
 const loadReleaseTruthModule = async () =>
@@ -408,12 +411,43 @@ describe('Unreleased truth', () => {
       expect(findings[0]).toContain('does not reference 2 post-tag feat/fix/perf commit');
     });
 
+    // QNBS-v3 (codex): the previous test's bullet is too generic for EITHER commit to individually
+    // clear the 60% threshold — this one is specific enough that BOTH would clear it alone,
+    // proving the fix is genuine "claim, don't reuse" exclusivity, not incidental low overlap.
+    it('claims a matched entry exclusively — a second commit cannot reuse it even above threshold', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const changelog =
+        '## [Unreleased]\n\n### Fixed\n\n- Canonical document projection foundation established.\n';
+      const findings = scanUnreleasedTruth(changelog, [
+        'feat(project): establish canonical document projection foundation',
+        'fix(project): reuse canonical document projection foundation',
+      ]);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toContain('does not reference 1 post-tag feat/fix/perf commit');
+      expect(findings[0]).toContain('reuse canonical document projection foundation');
+    });
+
+    // QNBS-v3 (codex): a numbered commit has an unambiguous way to be referenced — it must not
+    // fall back to a fuzzy slug match against a different, older bullet that merely shares words.
+    it('requires the exact PR number for a numbered commit, never a slug fallback', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const changelog =
+        '## [Unreleased]\n\n### Fixed\n\n- Canonical document projection now reuses parsed input.\n';
+      const findings = scanUnreleasedTruth(changelog, [
+        'fix(project): reuse parsed canonical document input (#999)',
+      ]);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toContain('#999');
+    });
+
     // QNBS-v3 (codex, P1): a pull_request CI run's git-log range enumerates every commit unique
     // to that branch, not the one commit that will exist after squash-merge — a routine
-    // review-fix follow-up commit can't reference itself in [Unreleased] in advance. Full
-    // completeness is enforced only outside pull_request context (locally, and on push to main
-    // right after merge).
-    it('does not enforce per-commit completeness in pull_request CI context', async () => {
+    // review-fix follow-up commit (necessarily un-numbered, since it hasn't been squash-merged
+    // yet) can't reference itself in [Unreleased] in advance. Only UN-numbered commits are
+    // exempted in pull_request context; full completeness is otherwise enforced everywhere
+    // (locally, on push to main right after merge, and for any already-numbered commit even
+    // during a pull_request run — see the next test).
+    it('does not enforce completeness for an un-numbered commit in pull_request CI context', async () => {
       const { scanUnreleasedTruth } = await loadReleaseTruthModule();
       const findings = scanUnreleasedTruth(
         populatedButUnrelated,
@@ -423,6 +457,23 @@ describe('Unreleased truth', () => {
         true,
       );
       expect(findings).toEqual([]);
+    });
+
+    // QNBS-v3 (codex, P1): exempting a PR's own in-flight commits must not weaken enforcement for
+    // an already-numbered commit sitting in the same range (e.g. from a separate, already-merged
+    // PR) — that one is real, permanent history and must still be caught even during a
+    // pull_request run.
+    it('still enforces completeness for an already-numbered commit in pull_request CI context', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const findings = scanUnreleasedTruth(
+        populatedButUnrelated,
+        ['fix(project): retain raw header verdict on projection failure (#999)'],
+        undefined,
+        undefined,
+        true,
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toContain('#999');
     });
 
     it('still rejects a completely empty [Unreleased] in pull_request CI context', async () => {
@@ -436,6 +487,55 @@ describe('Unreleased truth', () => {
       );
       expect(findings).toEqual([expect.stringContaining('[Unreleased] is empty')]);
     });
+  });
+});
+
+describe('isOnFeatureBranch', () => {
+  function initTempRepo(prefix: string): string {
+    const repositoryRoot = mkdtempSync(join(process.cwd(), prefix));
+    execFileSync('git', ['init', '--quiet', '--initial-branch=main', repositoryRoot]);
+    execFileSync('git', ['-C', repositoryRoot, 'config', 'user.email', 'test@example.com']);
+    execFileSync('git', ['-C', repositoryRoot, 'config', 'user.name', 'Test']);
+    writeFileSync(join(repositoryRoot, 'file.txt'), 'content');
+    execFileSync('git', ['-C', repositoryRoot, 'add', 'file.txt']);
+    execFileSync('git', ['-C', repositoryRoot, 'commit', '--quiet', '-m', 'init']);
+    return repositoryRoot;
+  }
+
+  it('returns false when HEAD is main', async () => {
+    const { isOnFeatureBranch } = await loadReleaseTruthModule();
+    const repositoryRoot = initTempRepo('.tmp-worldscript-doc-metrics-branch-main-');
+    try {
+      expect(isOnFeatureBranch(repositoryRoot)).toBe(false);
+    } finally {
+      rmSync(repositoryRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('returns true when HEAD is a feature branch', async () => {
+    const { isOnFeatureBranch } = await loadReleaseTruthModule();
+    const repositoryRoot = initTempRepo('.tmp-worldscript-doc-metrics-branch-feature-');
+    try {
+      execFileSync('git', ['-C', repositoryRoot, 'switch', '--quiet', '-c', 'fix/example']);
+      expect(isOnFeatureBranch(repositoryRoot)).toBe(true);
+    } finally {
+      rmSync(repositoryRoot, { recursive: true, force: true });
+    }
+  });
+
+  // QNBS-v3: fails closed to "not a feature branch" (full strictness) on any git error, matching
+  // this file's other git-plumbing helpers' fail-safe posture — never fails open into leniency.
+  it('fails closed to false when not a git repository', async () => {
+    const { isOnFeatureBranch } = await loadReleaseTruthModule();
+    // QNBS-v3: git searches upward for a .git directory, so a plain subdirectory of THIS actual
+    // repository would still resolve to ITS branch — use a location outside any git repository
+    // (tmpdir(), not process.cwd()) so this genuinely exercises the no-repository failure path.
+    const repositoryRoot = mkdtempSync(join(tmpdir(), 'worldscript-doc-metrics-nogit-'));
+    try {
+      expect(isOnFeatureBranch(repositoryRoot)).toBe(false);
+    } finally {
+      rmSync(repositoryRoot, { recursive: true, force: true });
+    }
   });
 });
 

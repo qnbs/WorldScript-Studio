@@ -54,17 +54,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   let arbitrarily many later `feat`/`fix`/`perf` commits go completely undocumented — 13 real
   commits since `v1.28.4` had gone unrecorded. It now requires every governed commit to be
   individually referenced by PR number or subject slug, naming any that aren't; this section was
-  backfilled with all 13 currently-undocumented entries above. Review findings addressed on this
-  same upgrade: PR-number matching now requires a non-digit boundary (a bare substring check let
-  `#65` satisfy `#656`), subject-slug matching is now scoped to one changelog entry at a time
-  instead of the whole section, and full per-commit completeness is enforced only outside
-  `pull_request` CI context — a PR's own git-log range enumerates every commit unique to that
-  branch, not the one commit that will exist after squash-merge, so a review-fix follow-up commit
-  can't reference itself in advance. Stop reading the GitHub event name (`GITHUB_EVENT_NAME`) as
-  that `pull_request`-context check's own default: the same environment variable is ambiently
-  visible to the Vitest process too when the whole suite runs inside a `pull_request`-triggered
-  job — the pure function's default is now hardcoded `false`; only the real CLI invocation reads
-  the actual environment.
+  backfilled with all 13 currently-undocumented entries above.
+- **Completeness-check review findings addressed:** PR-number matching now requires a non-digit
+  boundary (a bare substring check let `#65` satisfy `#656`), subject-slug matching is scoped to
+  one changelog entry at a time instead of the whole section, each matched entry is claimed so one
+  generic bullet can't simultaneously "document" multiple different commits, a numbered commit now
+  requires its exact PR number rather than ever falling back to a slug match, and full per-commit
+  completeness is enforced only outside `pull_request` CI context (an un-numbered commit there is
+  exempted — a PR's own git-log range enumerates every commit unique to that branch, not the one
+  commit that will exist after squash-merge, so a review-fix follow-up commit can't reference
+  itself in advance — while an already-numbered commit from a separate, already-merged PR sitting
+  in the same range stays fully enforced).
+- **Stop reading the GitHub event name as the completeness check's own default:** the
+  `pull_request`-context parameter defaulted to reading `GITHUB_EVENT_NAME` directly, but that
+  environment variable is ambiently visible to the Vitest test process too when the whole suite
+  runs inside a `pull_request`-triggered job — the pure function's default is now hardcoded
+  `false`; only the real CLI invocation reads the actual environment.
 
 ### Security
 
