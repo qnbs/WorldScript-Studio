@@ -97,44 +97,43 @@ function discoverWorkspaceImporterPackages() {
   return importerPackages;
 }
 
+// QNBS-v3 (CodeScene): extracted so findTauriPluginVersionMismatches stays a flat loop — returns a finding string for one declared pair, or null when it's aligned.
+function checkPluginPairParity(importer, crateName, cargoVersions, importerVersions) {
+  const npmName = crateToNpmName(crateName);
+  const rustVersion = cargoVersions.get(crateName);
+  if (!rustVersion) {
+    return `${importer}: ${npmName} is declared but ${crateName} has no resolved version in Cargo.lock — fix Cargo.lock before this check can validate parity`;
+  }
+  const npmVersion = importerVersions?.get(npmName);
+  if (!npmVersion) {
+    return `${importer}: ${npmName} is declared but has no resolved version in pnpm-lock.yaml for this importer — reconcile the lockfile before this check can validate parity`;
+  }
+  const rustMM = majorMinor(rustVersion);
+  const npmMM = majorMinor(npmVersion);
+  if (!rustMM || !npmMM || rustMM !== npmMM) {
+    return `${importer}: ${crateName} (Rust ${rustVersion}) vs ${npmName} (npm ${npmVersion}, resolved) — major.minor mismatch, "pnpm exec tauri build" rejects this`;
+  }
+  return null;
+}
+
+function declaredPluginCrateNames(pkg) {
+  return PLUGIN_CRATE_NAMES.filter((crateName) =>
+    Boolean(pkg.dependencies?.[crateToNpmName(crateName)]),
+  );
+}
+
 export function findTauriPluginVersionMismatches(cargoLock, pnpmLock, importerPackages) {
-  const findings = [];
   const cargoVersions = resolvedCargoPluginVersions(cargoLock);
   const pnpmVersions = resolvedPnpmImporterVersions(pnpmLock);
 
-  for (const { importer, pkg } of importerPackages) {
+  return importerPackages.flatMap(({ importer, pkg }) => {
     const importerVersions = pnpmVersions.get(importer);
-    for (const crateName of PLUGIN_CRATE_NAMES) {
-      const npmName = crateToNpmName(crateName);
-      const isDeclared = Boolean(pkg.dependencies?.[npmName]);
-      if (!isDeclared) continue; // not applicable to this importer
-
-      const rustVersion = cargoVersions.get(crateName);
-      if (!rustVersion) {
-        findings.push(
-          `${importer}: ${npmName} is declared but ${crateName} has no resolved version in Cargo.lock — fix Cargo.lock before this check can validate parity`,
-        );
-        continue;
-      }
-
-      const npmVersion = importerVersions?.get(npmName);
-      if (!npmVersion) {
-        findings.push(
-          `${importer}: ${npmName} is declared but has no resolved version in pnpm-lock.yaml for this importer — reconcile the lockfile before this check can validate parity`,
-        );
-        continue;
-      }
-
-      const rustMM = majorMinor(rustVersion);
-      const npmMM = majorMinor(npmVersion);
-      if (!rustMM || !npmMM || rustMM !== npmMM) {
-        findings.push(
-          `${importer}: ${crateName} (Rust ${rustVersion}) vs ${npmName} (npm ${npmVersion}, resolved) — major.minor mismatch, "pnpm exec tauri build" rejects this`,
-        );
-      }
-    }
-  }
-  return findings;
+    return declaredPluginCrateNames(pkg)
+      .map((crateName) =>
+        checkPluginPairParity(importer, crateName, cargoVersions, importerVersions),
+      )
+      .filter((finding) => finding !== null);
+  });
 }
 
 function main() {

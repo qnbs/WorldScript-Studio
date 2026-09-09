@@ -131,28 +131,32 @@ describe('findTauriPluginVersionMismatches', () => {
     expect(findings).toEqual([]);
   });
 
-  // QNBS-v3: fail closed — a plugin declared in package.json with no resolved Cargo.lock entry means the lockfile is out of sync and parity cannot be verified, which must surface as a finding, not a silent pass.
-  it('fails closed when a declared plugin has no resolved Rust crate version', () => {
-    const cargoLock = ''; // no tauri-plugin-http entry at all
-    const pnpmLock = pnpmImporterBlock('.', {
-      '@tauri-apps/plugin-http': { specifier: '^2.6.0', version: '2.6.0' },
-    });
-    const findings = findTauriPluginVersionMismatches(cargoLock, pnpmLock, [
-      importerPkg('.', { '@tauri-apps/plugin-http': '^2.6.0' }),
-    ]);
-    expect(findings).toHaveLength(1);
-    expect(findings[0]).toContain('no resolved version in Cargo.lock');
-  });
-
-  it('fails closed when a declared plugin has no resolved npm version in the lockfile', () => {
-    const cargoLock = cargoLockEntry('tauri-plugin-http', '2.6.0');
-    const pnpmLock = pnpmImporterBlock('.', {}); // http declared in package.json but absent from the lockfile importer
-    const findings = findTauriPluginVersionMismatches(cargoLock, pnpmLock, [
-      importerPkg('.', { '@tauri-apps/plugin-http': '^2.6.0' }),
-    ]);
-    expect(findings).toHaveLength(1);
-    expect(findings[0]).toContain('no resolved version in pnpm-lock.yaml');
-  });
+  // QNBS-v3: fail closed — a plugin declared in package.json with no resolved Cargo.lock or pnpm-lock.yaml entry means a lockfile is out of sync and parity cannot be verified, which must surface as a finding, not a silent pass.
+  it.each([
+    {
+      name: 'no resolved Rust crate version',
+      cargoLock: '', // no tauri-plugin-http entry at all
+      pnpmLock: pnpmImporterBlock('.', {
+        '@tauri-apps/plugin-http': { specifier: '^2.6.0', version: '2.6.0' },
+      }),
+      expectedSubstring: 'no resolved version in Cargo.lock',
+    },
+    {
+      name: 'no resolved npm version in the lockfile',
+      cargoLock: cargoLockEntry('tauri-plugin-http', '2.6.0'),
+      pnpmLock: pnpmImporterBlock('.', {}), // http declared in package.json but absent from the lockfile importer
+      expectedSubstring: 'no resolved version in pnpm-lock.yaml',
+    },
+  ])(
+    'fails closed when a declared plugin has $name',
+    ({ cargoLock, pnpmLock, expectedSubstring }) => {
+      const findings = findTauriPluginVersionMismatches(cargoLock, pnpmLock, [
+        importerPkg('.', { '@tauri-apps/plugin-http': '^2.6.0' }),
+      ]);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toContain(expectedSubstring);
+    },
+  );
 
   it('skips a plugin the importer does not declare at all (not applicable, not a failure)', () => {
     // QNBS-v3: http has no Cargo.lock entry at all here, proving it was never even considered for an importer that doesn't declare it — only notification (declared, and given a matching Cargo entry) is checked.
