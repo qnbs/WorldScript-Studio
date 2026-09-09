@@ -330,17 +330,213 @@ export function scanReadmeReleaseTruth(readme, taggedVersions) {
   return findings;
 }
 
-function hasMeaningfulUnreleasedContent(changelog) {
+// QNBS-v3 (audit F-2): shared by the presence check below and the completeness check further
+// down — both need the raw [Unreleased] section text with HTML comments stripped.
+function getUnreleasedSectionText(changelog) {
   const heading = /^## \[Unreleased\]\s*$/m.exec(changelog);
-  if (!heading) return false;
+  if (!heading) return '';
   const afterHeading = changelog.slice(heading.index + heading[0].length);
   const nextHeading = afterHeading.search(/^##\s/m);
   const section = nextHeading === -1 ? afterHeading : afterHeading.slice(0, nextHeading);
-  const withoutHtmlComments = section.replace(/<!--[\s\S]*?(?:-->|$)/g, '');
-  return withoutHtmlComments.split('\n').some((line) => {
+  return section.replace(/<!--[\s\S]*?(?:-->|$)/g, '');
+}
+
+function hasMeaningfulUnreleasedContent(changelog) {
+  const section = getUnreleasedSectionText(changelog);
+  return section.split('\n').some((line) => {
     const trimmed = line.trim();
     return trimmed.length > 0 && !trimmed.startsWith('<!--') && !trimmed.startsWith('###');
   });
+}
+
+// QNBS-v3 (audit F-2): a single doc-sync bullet previously satisfied hasMeaningfulUnreleasedContent
+// forever, letting arbitrarily many later feat/fix/perf commits go undocumented — the exact gap
+// this audit found (13 of 13 real post-tag commits undocumented). Governed commits must each be
+// referenced by PR number OR a recognizable subject slug, not merely "some content exists."
+const GOVERNED_COMMIT_TYPE = /^(?:feat|fix|perf)(?:\([^)]*\))?!?:\s*/i;
+const TRAILING_PR_REF = /\(#(\d+)\)\s*$/;
+const SLUG_STOP_WORDS = new Set([
+  'the',
+  'a',
+  'an',
+  'and',
+  'or',
+  'of',
+  'to',
+  'in',
+  'on',
+  'for',
+  'with',
+  'from',
+  'at',
+  'by',
+  'is',
+  'are',
+  'this',
+  'that',
+  'not',
+]);
+// QNBS-v3 (codex): a commit not merged via the standard squash flow has nothing to key off but its own wording — require most of its significant words to appear in [Unreleased] rather than an exact-sentence match, and never truncate the word list, since a dropped trailing word can be the one that discriminates against an opposite-meaning entry.
+const SLUG_MATCH_RATIO = 0.6;
+
+// QNBS-v3 (codex): a short alphanumeric token like "v2" or "10" can be the only thing distinguishing a change (a version, a limit, a count) — the length filter must not discard it just because it has no letters to spare.
+function significantSlugWords(description) {
+  return description
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((word) => (word.length > 2 || /\d/.test(word)) && !SLUG_STOP_WORDS.has(word));
+}
+
+// QNBS-v3 (coderabbit/CodeAnt): a bare String.includes let "#65" incorrectly satisfy a check for
+// "#656" (and vice versa) since one is a substring of the other — require a non-digit boundary on
+// both sides so only the exact PR number counts.
+function isReferencedByPrNumber(prNumber, unreleasedSection) {
+  return new RegExp(`(?:^|\\D)#${prNumber}(?!\\w)`).test(unreleasedSection);
+}
+
+// QNBS-v3 (codex): a Markdown bullet may wrap across several physical lines — join a bullet's own
+// continuation lines into one entry so slug-matching sees the whole thought, not a fragment.
+function splitUnreleasedEntries(unreleasedSection) {
+  const entries = [];
+  let current = [];
+  const flush = () => {
+    if (current.length > 0) entries.push(current.join(' '));
+    current = [];
+  };
+  for (const rawLine of unreleasedSection.split('\n')) {
+    const line = rawLine.trim();
+    if (/^-\s/.test(line)) {
+      flush();
+      current.push(line);
+    } else if (current.length > 0 && line !== '') {
+      current.push(line);
+    } else if (line === '') {
+      flush();
+    }
+  }
+  flush();
+  return entries;
+}
+
+// QNBS-v3 (codex): a negated description ("do not delete X") must never slug-match an entry describing the opposite, unnegated action ("Delete X") — word-overlap ratio alone can't tell these apart, so mismatched polarity disqualifies the entry outright, before the ratio is even computed.
+const NEGATION_MARKER =
+  /\b(?:not|never|no longer|cannot|can[’']t|doesn[’']t|don[’']t|won[’']t|isn[’']t|avoid(?:s|ed|ing)?|prevent(?:s|ed|ing)?|refuse[sd]?|refusing|stop(?:s|ped|ping)?|disable[sd]?|disabling)\b/i;
+// QNBS-v3 (codex): a negation word in an entry's rationale/context prose after its **bold** lead claim (this file's own convention for the actual change being documented) must not disqualify the match — only the bold lead's own polarity is checked when one exists.
+function hasNegationMarker(text) {
+  const boldLead = text.match(/\*\*(.+?)\*\*/);
+  return NEGATION_MARKER.test(boldLead ? boldLead[1] : text);
+}
+
+// QNBS-v3 (codex): the set of entry indices a given commit's slug could match — match ratio is
+// computed PER changelog entry (see findUndocumentedGovernedCommits's header comment for why).
+function candidateEntryIndices(subject, unreleasedEntries) {
+  const description = subject.replace(GOVERNED_COMMIT_TYPE, '').replace(TRAILING_PR_REF, '');
+  const words = significantSlugWords(description);
+  if (words.length === 0) return [];
+  const isNegated = hasNegationMarker(description);
+  return unreleasedEntries.flatMap((entry, index) => {
+    if (hasNegationMarker(entry) !== isNegated) return [];
+    const matched = words.filter((word) => new RegExp(`\\b${word}\\b`, 'i').test(entry));
+    return matched.length / words.length >= SLUG_MATCH_RATIO ? [index] : [];
+  });
+}
+
+// QNBS-v3 (codex): unlike an entry merely held by another slug-matched commit, a reserved entry can never be freed up via recursive reassignment.
+const RESERVED_ENTRY = -2;
+
+// QNBS-v3 (codex): try to (re)assign `commitIndex` an entry, freeing up its current entry (via
+// recursive reassignment) if every candidate is already claimed by a commit that itself has
+// another option — standard Kuhn's-algorithm augmenting path for maximum bipartite matching.
+function tryAssignEntry(commitIndex, adjacency, entryOwner, visited) {
+  for (const entryIndex of adjacency[commitIndex]) {
+    if (visited.has(entryIndex)) continue;
+    visited.add(entryIndex);
+    const currentOwner = entryOwner[entryIndex];
+    if (currentOwner === RESERVED_ENTRY) continue;
+    if (currentOwner === -1 || tryAssignEntry(currentOwner, adjacency, entryOwner, visited)) {
+      entryOwner[entryIndex] = commitIndex;
+      return true;
+    }
+  }
+  return false;
+}
+
+// QNBS-v3 (codex): greedily claiming the FIRST matching entry per commit is order-dependent — a
+// fully documented changelog could be wrongly rejected depending only on which commit happens to
+// be checked first (e.g. two entries "Alpha beta gamma delta" / "Alpha beta epsilon zeta" against
+// subjects "alpha beta gamma delta epsilon zeta" then "alpha beta gamma delta": greedy claiming in
+// that order leaves the second unmatched, even though swapping which entry each takes documents
+// both). A maximum bipartite matching (Kuhn's algorithm) finds the best possible assignment
+// regardless of input order, so this mandatory pre-push/CI check never blocks already-complete
+// history on an accident of commit ordering.
+function computeMaxSlugMatching(subjects, entries, reservedEntryIndices = new Set()) {
+  const adjacency = subjects.map((subject) => candidateEntryIndices(subject, entries));
+  const entryOwner = new Array(entries.length).fill(-1);
+  reservedEntryIndices.forEach((entryIndex) => {
+    entryOwner[entryIndex] = RESERVED_ENTRY;
+  });
+  const matchedSubjects = new Array(subjects.length).fill(false);
+  for (let commitIndex = 0; commitIndex < subjects.length; commitIndex++) {
+    if (tryAssignEntry(commitIndex, adjacency, entryOwner, new Set())) {
+      matchedSubjects[commitIndex] = true;
+    }
+  }
+  return matchedSubjects;
+}
+
+// QNBS-v3 (codex, P1): an un-numbered commit observed while HEAD isn't `main` is, in practice,
+// either a rare old direct-push commit or one of THIS branch's own not-yet-squashed intermediate
+// commits (whether pushed to an open PR, or still only local, e.g. under the mandatory pre-push
+// hook mid-review), which cannot reference itself in [Unreleased] in advance. Exempting only
+// un-numbered commits — not every governed commit, and never a numbered one — still enforces full
+// completeness for an already-numbered commit sitting in the same range from a separate,
+// already-merged PR, in every context.
+// QNBS-v3 (codex): a branch-local commit's trailing "(#NNN)" may be an in-flight issue reference rather than the real PR number GitHub only appends at squash time, so isBranchLocal skips the exact-PR-match path entirely instead of trusting that number.
+// QNBS-v3 (codex): checks parsed bullet entries, not the raw section text — a PR number mentioned only in surrounding prose (never inside an actual release-note bullet) must not count as documentation.
+// QNBS-v3 (CodeScene): extracted so findUndocumentedGovernedCommits stays a flat loop with zero nested conditionals — returns 'documented', 'undocumented', or 'needsSlugCheck' for one subject.
+function classifyGovernedCommit(subject, entries, isFeatureBranchContext, isBranchLocal) {
+  const prMatch = TRAILING_PR_REF.exec(subject);
+  if (prMatch && !isBranchLocal) {
+    const isDocumented = entries.some((entry) => isReferencedByPrNumber(prMatch[1], entry));
+    return isDocumented ? 'documented' : 'undocumented';
+  }
+  return isFeatureBranchContext && isBranchLocal ? 'documented' : 'needsSlugCheck';
+}
+
+// QNBS-v3 (codex): reserves EVERY entry referencing the numbered commit, not just the first — a PR number split across multiple bullets must not leave a later one free for an unrelated commit's slug match.
+function reserveEntryForNumberedCommit(prNumber, entries, reservedEntryIndices) {
+  entries.forEach((entry, index) => {
+    if (isReferencedByPrNumber(prNumber, entry)) reservedEntryIndices.add(index);
+  });
+}
+
+function findUndocumentedGovernedCommits(
+  postReleaseCommitSubjects,
+  unreleasedSection,
+  isFeatureBranchContext,
+  branchLocalIndices = new Set(),
+) {
+  const entries = splitUnreleasedEntries(unreleasedSection);
+  const undocumented = [];
+  const slugCandidates = [];
+  const reservedEntryIndices = new Set();
+  for (let index = 0; index < postReleaseCommitSubjects.length; index++) {
+    const subject = postReleaseCommitSubjects[index];
+    if (!GOVERNED_COMMIT_TYPE.test(subject)) continue;
+    const isBranchLocal = branchLocalIndices.has(index);
+    const prMatch = TRAILING_PR_REF.exec(subject);
+    const status = classifyGovernedCommit(subject, entries, isFeatureBranchContext, isBranchLocal);
+    if (status === 'undocumented') undocumented.push(subject);
+    if (status === 'needsSlugCheck') slugCandidates.push(subject);
+    if (status === 'documented' && prMatch && !isBranchLocal)
+      reserveEntryForNumberedCommit(prMatch[1], entries, reservedEntryIndices);
+  }
+  const matched = computeMaxSlugMatching(slugCandidates, entries, reservedEntryIndices);
+  slugCandidates.forEach((subject, index) => {
+    if (!matched[index]) undocumented.push(subject);
+  });
+  return undocumented;
 }
 
 /**
@@ -367,11 +563,86 @@ export function getPostReleaseCommitSubjects(repositoryRoot = root) {
   }
 }
 
+// QNBS-v3 (codex): checks the branch name directly (not just GITHUB_EVENT_NAME) so the un-numbered-commit exemption also covers a local pre-push run, but fails closed on detached HEAD (`git rev-parse --abbrev-ref HEAD` prints "HEAD" there, actions/checkout's default for every event including push) so push-to-main enforcement never silently weakens.
+export function isOnFeatureBranch(repositoryRoot = root) {
+  try {
+    const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    return branch !== '' && branch !== 'HEAD' && branch !== 'main';
+  } catch {
+    return false;
+  }
+}
+
+// QNBS-v3 (codex): tries origin/main first (what CI actually has) and falls back to a local main so this still resolves in a plain developer clone.
+function resolveMainRef(repositoryRoot) {
+  for (const ref of ['origin/main', 'main']) {
+    try {
+      execFileSync('git', ['rev-parse', '--verify', '--quiet', ref], {
+        cwd: repositoryRoot,
+        stdio: 'ignore',
+      });
+      return ref;
+    } catch {
+      // Try the next candidate ref below.
+    }
+  }
+  return null;
+}
+
+// QNBS-v3 (codex): a merge-base cutoff plus a positional window mis-splits history once the branch has merged main back in — git log's default order can interleave an already-merged main commit between branch-local ones — so each commit's OWN ancestry (merge-base --is-ancestor against main) is checked individually instead.
+export function getBranchLocalSubjectIndices(repositoryRoot = root) {
+  const taggedVersions = getTaggedVersions(repositoryRoot);
+  const latestTagged = [...taggedVersions].sort(semverCompare).at(-1);
+  const mainRef = resolveMainRef(repositoryRoot);
+  if (!latestTagged || !mainRef) return new Set();
+  let shas;
+  try {
+    const output = execFileSync('git', ['log', '--format=%H', `v${latestTagged}..HEAD`], {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    shas = output
+      .split('\n')
+      .map((sha) => sha.trim())
+      .filter(Boolean);
+  } catch {
+    return new Set();
+  }
+  const branchLocalIndices = new Set();
+  shas.forEach((sha, index) => {
+    try {
+      execFileSync('git', ['merge-base', '--is-ancestor', sha, mainRef], {
+        cwd: repositoryRoot,
+        stdio: 'ignore',
+      });
+    } catch (error) {
+      // QNBS-v3 (codex): only git's exit-1 confirms "not an ancestor" (branch-local); any other failure can't determine ancestry, so it fails closed to the stricter, non-exempted path.
+      if (error.status === 1) branchLocalIndices.add(index);
+    }
+  });
+  return branchLocalIndices;
+}
+
+// QNBS-v3: isFeatureBranchContext deliberately has a plain `false` default, not one read from
+// process.env/git here — an env var is ambiently visible to the Vitest process itself when the
+// whole suite runs inside a GitHub Actions pull_request-triggered job (not just this gate's own
+// CLI step), so a default read at this pure-function boundary silently changed every test's
+// behavior based on which CI context ran it. Only main()'s real CLI invocation below computes the
+// actual value (from GITHUB_EVENT_NAME and/or the checked-out branch not being `main` — see
+// isOnFeatureBranch below, which covers local `pnpm run ci:prepush` on a feature branch too, not
+// just GitHub Actions pull_request jobs); tests always get a deterministic, explicitly-passed value.
 export function scanUnreleasedTruth(
   changelog,
   postReleaseCommitSubjects,
   packageVersion,
   taggedVersions,
+  isFeatureBranchContext = false,
+  branchLocalIndices = new Set(),
 ) {
   if (!postReleaseCommitSubjects || postReleaseCommitSubjects.length === 0) return [];
   const candidateVersion = changelog.match(
@@ -388,9 +659,21 @@ export function scanUnreleasedTruth(
     semverCompare(candidateVersion, latestTagged) > 0;
   // QNBS-v3: only the current untagged release candidate may defer Unreleased history until merge-time tagging.
   if (isActiveUntaggedCandidate) return [];
-  if (hasMeaningfulUnreleasedContent(changelog)) return [];
+  if (!hasMeaningfulUnreleasedContent(changelog)) {
+    return [
+      `CHANGELOG.md — ${postReleaseCommitSubjects.length} commit(s) exist after the latest release tag, but [Unreleased] is empty`,
+    ];
+  }
+  const unreleasedSection = getUnreleasedSectionText(changelog);
+  const undocumented = findUndocumentedGovernedCommits(
+    postReleaseCommitSubjects,
+    unreleasedSection,
+    isFeatureBranchContext,
+    branchLocalIndices,
+  );
+  if (undocumented.length === 0) return [];
   return [
-    `CHANGELOG.md — ${postReleaseCommitSubjects.length} commit(s) exist after the latest release tag, but [Unreleased] is empty`,
+    `CHANGELOG.md — [Unreleased] does not reference ${undocumented.length} post-tag feat/fix/perf commit(s) by PR number or subject: ${undocumented.map((s) => `"${s}"`).join('; ')}`,
   ];
 }
 
@@ -711,6 +994,22 @@ export function scanSecurityDocPrStatus(content, filePath) {
 // QNBS-v3 (F-10, CodeRabbit follow-up): locales/it/help.json IS included — it's exactly where the F-10 stale-URL drift happened; the in-app link reads the constant directly so it can't drift and isn't listed here.
 const URL_CHECK_FILES = ['README.md', 'CLAUDE.md', 'locales/it/help.json'];
 
+// QNBS-v3 (CodeFactor): extracted so main() is a flat sequence of calls instead of five near-identical read/scan loops, each with its own try/catch for a missing file.
+function scanRequiredFiles(relPaths, scanFn, missingFindingFor) {
+  const findings = [];
+  for (const relPath of relPaths) {
+    let content;
+    try {
+      content = readFileSync(join(root, relPath), 'utf8');
+    } catch {
+      if (missingFindingFor) findings.push(missingFindingFor(relPath));
+      continue;
+    }
+    findings.push(...scanFn(content, relPath));
+  }
+  return findings;
+}
+
 function main() {
   const localeCount = getActualLocaleCount();
   const keyCount = getActualKeyCount();
@@ -727,6 +1026,8 @@ function main() {
 
   const taggedVersions = getTaggedVersions();
   const changelog = readFileSync(join(root, 'CHANGELOG.md'), 'utf8');
+  const isFeatureBranchContext =
+    process.env.GITHUB_EVENT_NAME === 'pull_request' || isOnFeatureBranch();
   const allFindings = [];
   allFindings.push(
     ...scanReleaseTruth(changelog, packageVersion, taggedVersions),
@@ -735,74 +1036,40 @@ function main() {
       getPostReleaseCommitSubjects(),
       packageVersion,
       taggedVersions,
+      isFeatureBranchContext,
+      isFeatureBranchContext ? getBranchLocalSubjectIndices() : new Set(),
     ),
   );
   allFindings.push(
     ...scanReadmeReleaseTruth(readFileSync(join(root, 'README.md'), 'utf8'), taggedVersions),
   );
   allFindings.push(...scanReadmeTestMetrics(readFileSync(join(root, 'README.md'), 'utf8')));
-  for (const relPath of TARGET_FILES) {
-    const abs = join(root, relPath);
-    let content;
-    try {
-      content = readFileSync(abs, 'utf8');
-    } catch {
-      continue; // file doesn't exist in this checkout — not this gate's concern
-    }
-    allFindings.push(...scanForDrift(content, relPath, { localeCount, keyCount, latestVersion }));
-  }
 
-  for (const relPath of URL_CHECK_FILES) {
-    const abs = join(root, relPath);
-    let content;
-    try {
-      content = readFileSync(abs, 'utf8');
-    } catch {
-      continue;
-    }
-    allFindings.push(...scanForUrlDrift(content, relPath, canonicalUrl));
-  }
-
-  for (const relPath of SECURITY_STATUS_DOCS) {
-    const abs = join(root, relPath);
-    let content;
-    try {
-      content = readFileSync(abs, 'utf8');
-    } catch {
-      // QNBS-v3 (codex): these two files are this gate's required subjects — silently skipping a
-      // missing/unreadable one would make the live-status enforcement disappear exactly when its
-      // input is unavailable, the same failure mode as BUNDLE_BUDGET_DOCS below.
-      allFindings.push(`${relPath} — required security-status document is missing or unreadable`);
-      continue;
-    }
-    allFindings.push(...scanSecurityDocPrStatus(content, relPath));
-  }
-
-  for (const relPath of BUNDLE_BUDGET_DOCS) {
-    const abs = join(root, relPath);
-    let content;
-    try {
-      content = readFileSync(abs, 'utf8');
-    } catch {
-      allFindings.push(`${relPath} — required current bundle-budget document is missing`);
-      continue;
-    }
-    allFindings.push(...scanBundleBudgetTruth(content, relPath, bundleBudget));
-  }
-
-  // QNBS-v3: current locale help is shipped to users, so every active locale must carry the same budget truth.
-  for (const locale of getLocales()) {
-    const relPath = `locales/${locale}/help.json`;
-    const abs = join(root, relPath);
-    let content;
-    try {
-      content = readFileSync(abs, 'utf8');
-    } catch {
-      allFindings.push(`${relPath} — required current in-app help document is missing`);
-      continue;
-    }
-    allFindings.push(...scanLocalizedBundleBudgetTruth(content, relPath, bundleBudget));
-  }
+  // QNBS-v3 (codex): TARGET_FILES and URL_CHECK_FILES below pass no fallback message, so silently skipping a missing/unreadable file here would make live-status enforcement disappear exactly when its input is unavailable — the failure mode the explicit fallback messages below already guard against.
+  allFindings.push(
+    ...scanRequiredFiles(TARGET_FILES, (content, relPath) =>
+      scanForDrift(content, relPath, { localeCount, keyCount, latestVersion }),
+    ),
+    ...scanRequiredFiles(URL_CHECK_FILES, (content, relPath) =>
+      scanForUrlDrift(content, relPath, canonicalUrl),
+    ),
+    ...scanRequiredFiles(
+      SECURITY_STATUS_DOCS,
+      scanSecurityDocPrStatus,
+      (relPath) => `${relPath} — required security-status document is missing or unreadable`,
+    ),
+    ...scanRequiredFiles(
+      BUNDLE_BUDGET_DOCS,
+      (content, relPath) => scanBundleBudgetTruth(content, relPath, bundleBudget),
+      (relPath) => `${relPath} — required current bundle-budget document is missing`,
+    ),
+    // QNBS-v3: current locale help is shipped to users, so every active locale must carry the same budget truth.
+    ...scanRequiredFiles(
+      getLocales().map((locale) => `locales/${locale}/help.json`),
+      (content, relPath) => scanLocalizedBundleBudgetTruth(content, relPath, bundleBudget),
+      (relPath) => `${relPath} — required current in-app help document is missing`,
+    ),
+  );
 
   if (allFindings.length > 0) {
     process.stderr.write(
