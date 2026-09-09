@@ -19,19 +19,26 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 - ✅ `v1.28.5` tagged (PR #676, 2026-09-09) — but its tag-triggered Tauri desktop release build
   failed on every platform with a Rust/npm plugin version mismatch (`tauri-plugin-http`,
   `tauri-plugin-notification` drifted ahead of their npm counterparts after #661's Rust-only
-  bump). No GitHub Release or installer artifacts were ever published for it. The `v1.28.5` tag
-  is permanently kept as-is (never deleted/moved/re-tagged) as the historical failed/incomplete
+  bump), so no GitHub desktop Release or installer/updater assets were ever published for it.
+  This was desktop-build-specific: the separate Docker/GHCR publish workflow for this tag
+  succeeded, so a container image for `v1.28.5` does exist. The `v1.28.5` tag is permanently
+  kept as-is (never deleted/moved/re-tagged) as the historical failed/incomplete desktop-release
   cut; the corrected release ships as `v1.28.6`.
 - ✅ PR #678 merged (2026-09-09): aligned the drifted npm plugin versions and added
   `check-tauri-plugin-versions.mjs`, a cheap CI guard mirroring Tauri's own build-time
   Rust/npm parity check for every workspace importer, so this class of mismatch is caught before
   the next release tag instead of at tag-triggered release time. Cross-platform
-  Windows/Ubuntu/macOS `tauri-build.yml` qualification passed on the exact merged SHA before
-  merge.
+  Windows/Ubuntu/macOS `tauri-build.yml` qualification succeeded on the exact final PR head /
+  merge-candidate SHA (`52f14d15aebede5a0482225ba6327221ef81d9c8`) before merge; the resulting
+  squash-merge commit on `main` was a different SHA, produced only after that qualification.
 - ✅ PR #679 merged (2026-09-09): resulting-`main` CI failed once post-#678 on the CHANGELOG
-  completeness gate's own PR-number-reference requirement (only checkable against the final
-  squashed commit subject, which doesn't exist until after merge — see the deferred governance
-  note this incident produced); a one-line CHANGELOG fix restored resulting-`main` to green.
+  completeness gate's PR-number-reference requirement. PR #678's number was already known
+  before merge; what didn't exist yet was the final squash commit. The PR-branch check doesn't
+  enforce a current PR's own already-known number against `[Unreleased]`, only resulting-`main`'s
+  commit history, so PR CI stayed green and only resulting-`main`'s `docs:check` caught the
+  missing reference; a one-line CHANGELOG fix restored it to green. (A possible future pre-merge
+  hardening of this check is recorded as deferred, memory-only follow-up — not part of this
+  release cut.)
 - 🔄 `v1.28.6` release cut in progress (this sprint's active PR): version/`CHANGELOG.md`/
   `TODO.md`/`README.md` reconciliation for the Tauri plugin-parity recovery. Tag, GitHub Release,
   release artifacts, and the post-release `AUDIT.md` evidence entry all remain pending until
@@ -53,7 +60,7 @@ Status: 🔄 in progress | ⬜ open | ✅ done
   unnumbered-commit heuristic) remain open, tracked separately — not part of this sprint unless
   they directly block release or R-15 work.
 
-## Archived — v1.28.5 release cut and post-audit remediation continuation (2026-09-09)
+## Archived — v1.28.5 release cut, superseded by the v1.28.6 corrected release (2026-09-09)
 
 - ✅ `v1.28.4` released (PR #615, tag+release published 2026-09-05); the prior sprint's release
   and governance work (attribution-hygiene guard PR #672, security-docs truth fix PR #673) closed
