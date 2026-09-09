@@ -72,8 +72,9 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ## Archived — Release truth reconciliation and R-15 desktop at-rest encryption priority (2026-09-05)
 
-> **Status: ✅ Superseded by the current sprint above.** `v1.28.4` shipped 2026-09-05; PR #674 and
-> the `v1.28.5` release cut are the current sprint's continuation of this same work.
+> **Status: ✅ Superseded by the current sprint above.** `v1.28.4` shipped 2026-09-05; PR #674, the
+> `v1.28.5` release cut, and its `v1.28.6` desktop-release-build recovery are the current sprint's
+> continuation of this same work.
 
 - ✅ `v1.28.2` (2026-08-27) and `v1.28.3` (2026-08-27) released, closing out the prior sprint's
   accumulated reconstruction-reconciliation and documentation-truth work.
