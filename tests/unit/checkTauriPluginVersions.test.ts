@@ -144,7 +144,6 @@ describe('findTauriPluginVersionMismatches', () => {
     expect(findings).toEqual([]);
   });
 
-  // QNBS-v3: reproduces the live v1.28.5 release-build failure — Rust bumped via a Dependabot PR without a matching npm bump, resolved lockfile versions included.
   it('flags a Rust-ahead-of-npm minor-version mismatch, reproducing the v1.28.5 release failure', () => {
     const cargoLock =
       ownPackageBlock(['tauri-plugin-http', 'tauri-plugin-notification']) +
@@ -161,7 +160,6 @@ describe('findTauriPluginVersionMismatches', () => {
       }),
     ]);
     expect(findings).toHaveLength(2);
-    // QNBS-v3: asserts the specific "major.minor mismatch" wording, not just the crate name — a weaker substring check on the crate name alone would also pass for the wrong reason (e.g. a "no resolved version" fail-closed finding also contains the crate name).
     expect(findings[0]).toContain('major.minor mismatch');
     expect(findings[0]).toContain('tauri-plugin-http');
     expect(findings[1]).toContain('major.minor mismatch');
