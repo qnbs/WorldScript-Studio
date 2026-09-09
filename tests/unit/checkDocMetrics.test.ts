@@ -764,4 +764,19 @@ describe('scanSecurityDocPrStatus', () => {
     const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
     expect(findings).toHaveLength(1);
   });
+
+  // QNBS-v3 (coderabbit/codex): a negation word in an EARLIER clause must not suppress a
+  // genuinely live, unqualified claim in a later clause of the same sentence — a real
+  // false-negative that let a stale claim escape the gate entirely.
+  it('flags a claim when negation belongs to an earlier, unrelated clause', () => {
+    const content = 'Desktop project data is not encrypted, so PR #356 is the active remediation.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+  });
+
+  it('flags a claim when negation modifies a different word in an earlier clause', () => {
+    const content = 'PR #356 is not complete, but remains the active remediation.';
+    const findings = scanSecurityDocPrStatus(content, 'docs/SECURITY-THREAT-MODEL.md');
+    expect(findings).toHaveLength(1);
+  });
 });

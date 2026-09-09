@@ -613,8 +613,18 @@ function findPrReferences(sentence) {
   }));
 }
 
+// QNBS-v3 (coderabbit/codex): a negation word belonging to an EARLIER clause must not scope over
+// this match ("... is not encrypted, so PR #N is the active remediation" — the "not" modifies
+// "encrypted", not "active remediation"). Truncate the raw window at the last clause-separating
+// comma/semicolon/colon before the match.
 function lookback(sentence, matchIndex) {
-  return sentence.slice(Math.max(0, matchIndex - NEGATION_LOOKBACK), matchIndex);
+  const window = sentence.slice(Math.max(0, matchIndex - NEGATION_LOOKBACK), matchIndex);
+  const boundary = Math.max(
+    window.lastIndexOf(','),
+    window.lastIndexOf(';'),
+    window.lastIndexOf(':'),
+  );
+  return boundary === -1 ? window : window.slice(boundary + 1);
 }
 
 // QNBS-v3 (codex): "is not closed" / "will be merged" don't assert a completed status — only a

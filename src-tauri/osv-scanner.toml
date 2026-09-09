@@ -158,16 +158,19 @@ reason = "extract-zip 2.0.1: second, distinct symlink path-traversal advisory (t
 # pre-place a symlink at the extraction destination. 0.6.0 is the latest
 # published release with no patched version yet — pnpm.overrides already pins
 # the newest available release (see pnpm-workspace.yaml) but cannot fix an
-# unpatched vulnerability. adm-zip here is used only by onnxruntime-node's own
-# postinstall to unpack its bundled native-binary release into its own
-# node_modules directory at `pnpm install` time — a location this project's
-# local/CI install process controls exclusively, extracting content sourced
-# from the npm registry/ONNX Runtime project's own release, never a
-# user-supplied or externally-influenced archive. No shared/predictable
-# extraction directory exists for an attacker to pre-place a symlink in, and
-# the affected code path never runs as part of the shipped web or desktop app.
+# unpatched vulnerability. adm-zip is a dependency of onnxruntime-node's own
+# postinstall/build script (which extracts its prebuilt native binary into
+# `path.join(os.tmpdir(), 'onnxruntime-node-pkgs_<timestamp>')` — a shared,
+# timestamp-named system temp directory, NOT a project-local one — verified
+# directly against onnxruntime-node@1.24.3's own install-utils.js). The actual
+# mitigation is that `pnpm-workspace.yaml`'s `allowBuilds: { onnxruntime-node:
+# false }` denies this package's lifecycle scripts outright, so this code path
+# never executes during a normal `pnpm install` in this repo, in CI, or in the
+# shipped app. If that `allowBuilds` entry is ever relaxed or removed, this
+# exposure model must be re-evaluated — the temp-directory extraction target
+# is not inherently safe on its own.
 
 [[IgnoredVulns]]
 id = "GHSA-vwc7-r8mq-g2x9"
 ignoreUntil = "2026-11-30T00:00:00Z"
-reason = "adm-zip 0.6.0: symlink-following path traversal on overwrite-enabled extraction; latest release, no fixed version exists; used only by onnxruntime-node's own postinstall to unpack its own trusted npm-sourced binary at install time, never a user-supplied archive, no runtime footprint in the shipped app"
+reason = "adm-zip 0.6.0: symlink-following path traversal on overwrite-enabled extraction; latest release, no fixed version exists; mitigated by pnpm-workspace.yaml's allowBuilds: onnxruntime-node=false denying its postinstall/build script outright (not by the extraction path itself, which uses a shared system temp directory) — re-evaluate if that allowBuilds entry ever changes"
