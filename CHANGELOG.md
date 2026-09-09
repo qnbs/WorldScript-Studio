@@ -49,12 +49,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   2026-08-18. Rewritten to anchor on the living Ledger-row-9/R-15 state instead of a PR number, and
   `check-doc-metrics.mjs` now mechanically rejects an unqualified live/pending-remediation claim
   tied to a bare PR number in these two files. PR #673.
-- **CHANGELOG completeness-check upgrade, backfill Unreleased (audit F-2):** `scanUnreleasedTruth`
-  previously accepted any non-empty `[Unreleased]` section forever, so a single unrelated bullet
-  let arbitrarily many later `feat`/`fix`/`perf` commits go completely undocumented — 13 real
-  commits since `v1.28.4` had gone unrecorded. It now requires every governed commit to be
-  individually referenced by PR number or subject slug, naming any that aren't; this section was
-  backfilled with all 13 currently-undocumented entries above.
+- **CHANGELOG completeness-check upgrade, backfill Unreleased (audit F-2, PR #674):**
+  `scanUnreleasedTruth` previously accepted any non-empty `[Unreleased]` section forever, so a
+  single unrelated bullet let arbitrarily many later `feat`/`fix`/`perf` commits go completely
+  undocumented — 13 real commits since `v1.28.4` had gone unrecorded. It now requires every
+  governed commit to be individually referenced by PR number or subject slug, naming any that
+  aren't; this section was backfilled with all 13 currently-undocumented entries above.
 - **Completeness-check review findings addressed:** PR-number matching now requires a non-digit
   boundary (a bare substring check let `#65` satisfy `#656`), subject-slug matching is scoped to
   one changelog entry at a time instead of the whole section, each matched entry is claimed so one

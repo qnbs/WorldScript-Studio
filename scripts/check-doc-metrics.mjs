@@ -477,6 +477,15 @@ function computeMaxSlugMatching(subjects, entries) {
 // un-numbered commits — not every governed commit, and never a numbered one — still enforces full
 // completeness for an already-numbered commit sitting in the same range from a separate,
 // already-merged PR, in every context.
+// QNBS-v3 (CodeScene): extracted so findUndocumentedGovernedCommits stays a flat loop with zero nested conditionals — returns 'documented', 'undocumented', or 'needsSlugCheck' for one subject.
+function classifyGovernedCommit(subject, unreleasedSection, isFeatureBranchContext) {
+  const prMatch = TRAILING_PR_REF.exec(subject);
+  if (prMatch) {
+    return isReferencedByPrNumber(prMatch[1], unreleasedSection) ? 'documented' : 'undocumented';
+  }
+  return isFeatureBranchContext ? 'documented' : 'needsSlugCheck';
+}
+
 function findUndocumentedGovernedCommits(
   postReleaseCommitSubjects,
   unreleasedSection,
@@ -487,15 +496,9 @@ function findUndocumentedGovernedCommits(
   const slugCandidates = [];
   for (const subject of postReleaseCommitSubjects) {
     if (!GOVERNED_COMMIT_TYPE.test(subject)) continue;
-    const prMatch = TRAILING_PR_REF.exec(subject);
-    if (prMatch) {
-      // QNBS-v3 (codex): a numbered commit has an unambiguous way to be referenced — require the
-      // exact number, never fall back to a fuzzy slug match that could hit a different bullet.
-      if (!isReferencedByPrNumber(prMatch[1], unreleasedSection)) undocumented.push(subject);
-      continue;
-    }
-    if (isFeatureBranchContext) continue;
-    slugCandidates.push(subject);
+    const status = classifyGovernedCommit(subject, unreleasedSection, isFeatureBranchContext);
+    if (status === 'undocumented') undocumented.push(subject);
+    if (status === 'needsSlugCheck') slugCandidates.push(subject);
   }
   const matched = computeMaxSlugMatching(slugCandidates, entries);
   slugCandidates.forEach((subject, index) => {
@@ -528,12 +531,7 @@ export function getPostReleaseCommitSubjects(repositoryRoot = root) {
   }
 }
 
-// QNBS-v3 (codex): the mandatory local `pnpm run ci:prepush` hook runs this same checker on every
-// feature branch, mid-review, without any GitHub Actions event context at all — checking the
-// branch name directly (not just GITHUB_EVENT_NAME) means the un-numbered-commit exemption also
-// covers a local review-fix commit before it's ever pushed, not only a PR's own CI run. Fails
-// closed to "not a feature branch" (full strictness) on any git error, matching this file's other
-// git-plumbing helpers' fail-safe posture.
+// QNBS-v3 (codex): checks the branch name directly (not just GITHUB_EVENT_NAME) so the un-numbered-commit exemption also covers a local pre-push run, but fails closed on detached HEAD (`git rev-parse --abbrev-ref HEAD` prints "HEAD" there, actions/checkout's default for every event including push) so push-to-main enforcement never silently weakens.
 export function isOnFeatureBranch(repositoryRoot = root) {
   try {
     const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
@@ -541,7 +539,7 @@ export function isOnFeatureBranch(repositoryRoot = root) {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
-    return branch !== '' && branch !== 'main';
+    return branch !== '' && branch !== 'HEAD' && branch !== 'main';
   } catch {
     return false;
   }
