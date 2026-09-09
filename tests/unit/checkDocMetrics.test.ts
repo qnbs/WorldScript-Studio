@@ -553,6 +553,21 @@ describe('isOnFeatureBranch', () => {
     }
   });
 
+  // QNBS-v3: actions/checkout leaves every GitHub Actions event, push included, in detached HEAD.
+  it('returns false when HEAD is detached, matching a push-to-main CI checkout', async () => {
+    const { isOnFeatureBranch } = await loadReleaseTruthModule();
+    const repositoryRoot = initTempRepo('.tmp-worldscript-doc-metrics-branch-detached-');
+    try {
+      const headSha = execFileSync('git', ['-C', repositoryRoot, 'rev-parse', 'HEAD'], {
+        encoding: 'utf8',
+      }).trim();
+      execFileSync('git', ['-C', repositoryRoot, 'checkout', '--quiet', '--detach', headSha]);
+      expect(isOnFeatureBranch(repositoryRoot)).toBe(false);
+    } finally {
+      rmSync(repositoryRoot, { recursive: true, force: true });
+    }
+  });
+
   // QNBS-v3: fails closed to "not a feature branch" (full strictness) on any git error, matching
   // this file's other git-plumbing helpers' fail-safe posture — never fails open into leniency.
   it('fails closed to false when not a git repository', async () => {
