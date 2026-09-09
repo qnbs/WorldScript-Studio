@@ -376,10 +376,7 @@ const SLUG_STOP_WORDS = new Set([
   'that',
   'not',
 ]);
-// QNBS-v3: a commit not merged via the standard squash flow (no trailing "(#NNN)") has nothing to
-// key off but its own wording — require most of a bounded set of its most identifying words to
-// appear in [Unreleased], rather than an exact-sentence match this file's other scanners avoid.
-const SLUG_WORD_COUNT = 6;
+// QNBS-v3 (codex): a commit not merged via the standard squash flow has nothing to key off but its own wording — require most of its significant words to appear in [Unreleased] rather than an exact-sentence match, and never truncate the word list, since a dropped trailing word can be the one that discriminates against an opposite-meaning entry.
 const SLUG_MATCH_RATIO = 0.6;
 
 function significantSlugWords(description) {
@@ -387,8 +384,7 @@ function significantSlugWords(description) {
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, ' ')
     .split(/\s+/)
-    .filter((word) => word.length > 2 && !SLUG_STOP_WORDS.has(word))
-    .slice(0, SLUG_WORD_COUNT);
+    .filter((word) => word.length > 2 && !SLUG_STOP_WORDS.has(word));
 }
 
 // QNBS-v3 (coderabbit/CodeAnt): a bare String.includes let "#65" incorrectly satisfy a check for
@@ -424,7 +420,7 @@ function splitUnreleasedEntries(unreleasedSection) {
 
 // QNBS-v3 (codex): a negated description ("do not delete X") must never slug-match an entry describing the opposite, unnegated action ("Delete X") — word-overlap ratio alone can't tell these apart, so mismatched polarity disqualifies the entry outright, before the ratio is even computed.
 const NEGATION_MARKER =
-  /\b(?:not|never|no longer|cannot|can[’']t|doesn[’']t|don[’']t|won[’']t|isn[’']t)\b/i;
+  /\b(?:not|never|no longer|cannot|can[’']t|doesn[’']t|don[’']t|won[’']t|isn[’']t|avoid(?:s|ed|ing)?|prevent(?:s|ed|ing)?)\b/i;
 function hasNegationMarker(text) {
   return NEGATION_MARKER.test(text);
 }

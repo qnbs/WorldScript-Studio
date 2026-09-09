@@ -495,6 +495,30 @@ describe('Unreleased truth', () => {
       expect(findings[0]).toContain('delete malformed project data');
     });
 
+    // QNBS-v3 (codex): "avoid"/"prevent" express negative polarity without any literal not/never — a preserve-first commit worded this way must not slug-match an entry describing the opposite, unguarded action.
+    it('treats avoidance verbs like "prevent" as negative polarity', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const changelog =
+        '## [Unreleased]\n\n### Fixed\n\n- Delete malformed project data during import.\n';
+      const findings = scanUnreleasedTruth(changelog, [
+        'fix(project): prevent deleting malformed project data',
+      ]);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toContain('prevent deleting malformed project data');
+    });
+
+    // QNBS-v3 (codex): truncating a long subject's significant words to the first six could drop trailing words entirely, letting a truncated 66%-overlap ratio wrongly clear the 60% threshold when the full word list would correctly fall below it.
+    it('does not drop trailing significant words that would prevent a false slug match', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const changelog =
+        '## [Unreleased]\n\n### Fixed\n\n- Alpha beta gamma delta refactor summary.\n';
+      const findings = scanUnreleasedTruth(changelog, [
+        'fix(project): alpha beta gamma delta epsilon zeta eta',
+      ]);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toContain('alpha beta gamma delta epsilon zeta eta');
+    });
+
     // QNBS-v3 (codex): a numbered commit has an unambiguous way to be referenced — it must not
     // fall back to a fuzzy slug match against a different, older bullet that merely shares words.
     it('requires the exact PR number for a numbered commit, never a slug fallback', async () => {
