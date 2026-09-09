@@ -84,6 +84,9 @@ async function main() {
     runNodeScript('scripts/check-tauri-import-boundary.mjs'),
   );
   await runCheck('Native readiness', () => runNodeScript('scripts/check-native-readiness.mjs'));
+  await runCheck('Tauri plugin version parity', () =>
+    runNodeScript('scripts/check-tauri-plugin-versions.mjs'),
+  );
 
   if (shouldRunAdmissionCheck('i18n', classification.files) || full) {
     await runCheck('i18n key parity', () => runNodeScript('scripts/check-i18n-keys.mjs'));

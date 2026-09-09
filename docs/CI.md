@@ -375,7 +375,7 @@ the local block above; GitHub Actions owns those heavy checks on this hardware.
 
 `pnpm run ci:prepush` always resolves a change classification from the outgoing evidence first
 (`scripts/ci-prepush-classifier.mjs`), then runs docs/release-truth, CSP, desktop-import boundary,
-native-readiness, and dependency-state checks unconditionally on every invocation. It does **not**
+native-readiness, Tauri plugin version-parity, and dependency-state checks unconditionally on every invocation. It does **not**
 run Biome lint — full-repository lint stays CI-owned (`quality` job); only staged files are linted
 locally, by the separate pre-commit hook (`lint-staged`). Two check groups are conditional on the
 change classification instead of always running:
