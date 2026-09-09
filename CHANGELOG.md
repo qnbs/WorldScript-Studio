@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+<!-- release-candidate: v1.28.5 -->
+## [1.28.5] — 2026-09-09
+
 ### Added
 
 - **Project schema-version classification (Slice A, #553):** `PROJECT_SCHEMA_V1` as a fresh

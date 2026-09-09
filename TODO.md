@@ -8,18 +8,43 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ---
 
-## Current Sprint — Release truth reconciliation and R-15 desktop at-rest encryption priority (2026-09-05)
+## Current Sprint — v1.28.5 release cut and post-audit remediation continuation (2026-09-09)
 
 > **Status: 🔄 in progress.** The authoritative native sequence remains
 > [`docs/native/ROADMAP-QT-GPUI-DESKTOP.md`](docs/native/ROADMAP-QT-GPUI-DESKTOP.md), with the
 > next Rust-Core capability choice recorded in [`docs/native/CORE-MIGRATION-LEDGER.md`](docs/native/CORE-MIGRATION-LEDGER.md).
-> R-15 (desktop at-rest encryption) design work is complete — S5-A/B1/B2/B3 are all admitted — but
-> [`docs/native/DESKTOP-MIGRATION-ROADMAP-REV3.md`](docs/native/DESKTOP-MIGRATION-ROADMAP-REV3.md)
-> explicitly forbids pulling Wave 3/4 R-15 **implementation** ahead of unresolved Wave 2 authority
-> prerequisites, and the ledger's row 10 records `S5_IMPLEMENTATION_READY=NO`. This sprint's
-> desktop-storage work is therefore the still-open Wave 2 prerequisite (ledger row 9: the
-> project state-shape compatibility adapter), not R-15 implementation itself. No Qt or GPUI
-> implementation work is part of this sprint.
+> R-15 implementation stays blocked behind the still-open Wave 2 prerequisite (ledger row 9). No
+> Qt, GPUI, or R-15 implementation work is part of this sprint.
+
+- ✅ `v1.28.4` released (PR #615, tag+release published 2026-09-05); the prior sprint's release
+  and governance work (attribution-hygiene guard PR #672, security-docs truth fix PR #673) closed
+  out.
+- ✅ PR #674 merged (2026-09-09): the CHANGELOG completeness gate upgraded from accepting any
+  non-empty `[Unreleased]` section forever to requiring every governed commit to be individually
+  referenced by PR number or subject slug; backfilled 13 previously-undocumented entries. Four
+  correction waves addressed branch-local-vs-ancestry classification, negation/refusal polarity,
+  PR-number token boundaries, and multi-entry reservation gaps. The remaining structural
+  heuristic-matching limitation (a short token like a version number can still clear the
+  word-overlap ratio in an otherwise-matching sentence) is intentionally out of this gate's
+  deterministic, non-NLP scope and is tracked separately as #675.
+- 🔄 `v1.28.5` release cut in progress: version/`CHANGELOG.md`/`TODO.md`/`README.md`
+  reconciliation for everything merged since `v1.28.4` (headlined by PR #674) is in PR #676. Tag,
+  GitHub Release, release artifacts, and the post-release `AUDIT.md` evidence entry all remain
+  pending until after that PR merges and post-merge main CI/CodeQL are green.
+- ⬜ Ledger row 9 (project state-shape compatibility adapter) remains open: durable
+  source-generation fencing, writer integration, universal ingress/egress, and authority switch
+  per `docs/native/CORE-MIGRATION-LEDGER.md` row 9. Wave 3/4 R-15 implementation stays blocked
+  (`S5_IMPLEMENTATION_READY=NO`, recorded on row 10) until row 9 and `S5_TERMINAL=YES` are both
+  true — no target release is set for that yet (tracked, not invented).
+- ⬜ #614 (narrow concurrent-first-install multi-tab race), #532 (WelcomePortal E2E entry
+  nondeterminism root cause), and #675 (deterministic contract for the changelog gate's
+  unnumbered-commit heuristic) remain open, tracked separately — not part of this sprint unless
+  they directly block release or R-15 work.
+
+## Archived — Release truth reconciliation and R-15 desktop at-rest encryption priority (2026-09-05)
+
+> **Status: ✅ Superseded by the current sprint above.** `v1.28.4` shipped 2026-09-05; PR #674 and
+> the `v1.28.5` release cut are the current sprint's continuation of this same work.
 
 - ✅ `v1.28.2` (2026-08-27) and `v1.28.3` (2026-08-27) released, closing out the prior sprint's
   accumulated reconstruction-reconciliation and documentation-truth work.
@@ -41,18 +66,6 @@ Status: 🔄 in progress | ⬜ open | ✅ done
   citations in `docs/SECURITY-THREAT-MODEL.md`/`docs/IDB-ENCRYPTION.md` rewritten to anchor on the
   living ledger state, with a mechanical `check-doc-metrics.mjs` guard against recurrence (first
   slice of the 2026-09-08 external audit's S1–S10 remediation sequence; further slices in progress).
-- 🔄 Ledger row 9 (project state-shape compatibility adapter) — five `feat`/`fix` PRs landed
-  (#618 Slice A persisted schema-version classification, #619 Slice B IDB-load observation, #621
-  raw-integer-grammar hardening, #653 the non-destructive `LEGACY_TO_V1` admission primitive, #658
-  filesystem-admission convergence) but **still not complete**: durable source-generation fencing,
-  writer integration, universal ingress/egress, and authority switch remain open per
-  `docs/native/CORE-MIGRATION-LEDGER.md` row 9. Wave 3/4 R-15 implementation stays blocked
-  (`S5_IMPLEMENTATION_READY=NO`, recorded on row 10) until row 9 and `S5_TERMINAL=YES` are both
-  true — no target release is set for that yet (tracked, not invented; see the S1–S10 remediation
-  plan's exit-criterion work).
-- ⬜ #614 (narrow concurrent-first-install multi-tab race, requires cross-tab coordination) and
-  #532 (WelcomePortal E2E entry nondeterminism root cause) remain open, tracked separately —
-  not part of this sprint unless they directly block release or R-15 work.
 
 ## Archived sprint history
 
