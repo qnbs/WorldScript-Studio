@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Tauri plugin Rust/npm version parity restored:** `tauri-plugin-http` and
+  `tauri-plugin-notification` had drifted ahead of their npm counterparts
+  (`@tauri-apps/plugin-http`, `@tauri-apps/plugin-notification`) after #661 bumped only the Rust
+  side, failing every platform's Tauri release build. Bumped the npm packages to match; added
+  `check-tauri-plugin-versions.mjs`, a cheap CI guard catching this class of mismatch before the
+  next release tag instead of at tag-triggered release time.
+
 <!-- release-candidate: v1.28.5 -->
 ## [1.28.5] — 2026-09-09
 
