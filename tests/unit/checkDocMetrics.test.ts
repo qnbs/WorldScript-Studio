@@ -33,10 +33,11 @@ type ReleaseTruthModule = {
     packageVersion?: string,
     taggedVersions?: Set<string>,
     isFeatureBranchContext?: boolean,
-    branchLocalCount?: number,
+    branchLocalIndices?: Set<number>,
   ) => string[];
   isOnFeatureBranch: (repositoryRoot?: string) => boolean;
-  getBranchLocalCommitCount: (repositoryRoot?: string) => number;
+  getBranchLocalSubjectIndices: (repositoryRoot?: string) => Set<number>;
+  getPostReleaseCommitSubjects: (repositoryRoot?: string) => string[] | null;
 };
 // QNBS-v3: load the runtime-only scanners without making tsgo infer untyped .mjs exports.
 const loadReleaseTruthModule = async () =>
@@ -459,6 +460,29 @@ describe('Unreleased truth', () => {
       expect(findingsReversed).toEqual([]);
     });
 
+    // QNBS-v3 (codex): a negated commit description must never slug-match an entry describing the opposite, unnegated action — ratio-based word overlap alone can't tell "do not delete X" from "Delete X".
+    it('does not let a negated commit description slug-match an entry with the opposite polarity', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const changelog =
+        '## [Unreleased]\n\n### Fixed\n\n- Delete malformed project data during import.\n';
+      const findings = scanUnreleasedTruth(changelog, [
+        'fix(project): do not delete malformed project data',
+      ]);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toContain('do not delete malformed project data');
+    });
+
+    // QNBS-v3: a genuinely negated entry documenting the negated behavior must still match normally.
+    it('still slug-matches when both the commit and the entry share the same negated polarity', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const changelog =
+        '## [Unreleased]\n\n### Fixed\n\n- Do not delete malformed project data during import.\n';
+      const findings = scanUnreleasedTruth(changelog, [
+        'fix(project): do not delete malformed project data',
+      ]);
+      expect(findings).toEqual([]);
+    });
+
     // QNBS-v3 (codex): a numbered commit has an unambiguous way to be referenced — it must not
     // fall back to a fuzzy slug match against a different, older bullet that merely shares words.
     it('requires the exact PR number for a numbered commit, never a slug fallback', async () => {
@@ -467,6 +491,18 @@ describe('Unreleased truth', () => {
         '## [Unreleased]\n\n### Fixed\n\n- Canonical document projection now reuses parsed input.\n';
       const findings = scanUnreleasedTruth(changelog, [
         'fix(project): reuse parsed canonical document input (#999)',
+      ]);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toContain('#999');
+    });
+
+    // QNBS-v3 (codex): a PR number mentioned only in surrounding prose, never inside an actual release-note bullet, must not count as documentation.
+    it('does not treat a PR number mentioned in non-bullet prose as documentation', async () => {
+      const { scanUnreleasedTruth } = await loadReleaseTruthModule();
+      const changelog =
+        '## [Unreleased]\n\n### Fixed\n\nFor context see #999.\n\n- Unrelated doc sync.\n';
+      const findings = scanUnreleasedTruth(changelog, [
+        'fix(project): resolve unrelated regression (#999)',
       ]);
       expect(findings).toHaveLength(1);
       expect(findings[0]).toContain('#999');
@@ -555,7 +591,7 @@ describe('Unreleased truth', () => {
         undefined,
         undefined,
         true,
-        1,
+        new Set([0]),
       );
       expect(findings).toEqual([]);
     });
@@ -572,7 +608,7 @@ describe('Unreleased truth', () => {
         undefined,
         undefined,
         true,
-        1,
+        new Set([0]),
       );
       expect(findings).toHaveLength(1);
       expect(findings[0]).toContain('#999');
@@ -657,7 +693,7 @@ describe('isOnFeatureBranch', () => {
   });
 });
 
-describe('getBranchLocalCommitCount', () => {
+describe('getBranchLocalSubjectIndices', () => {
   function initTempRepo(prefix: string): string {
     const repositoryRoot = mkdtempSync(join(process.cwd(), prefix));
     execFileSync('git', ['init', '--quiet', '--initial-branch=main', repositoryRoot]);
@@ -666,6 +702,7 @@ describe('getBranchLocalCommitCount', () => {
     writeFileSync(join(repositoryRoot, 'file.txt'), 'content');
     execFileSync('git', ['-C', repositoryRoot, 'add', 'file.txt']);
     execFileSync('git', ['-C', repositoryRoot, 'commit', '--quiet', '-m', 'init']);
+    execFileSync('git', ['-C', repositoryRoot, 'tag', '-m', 'v1.0.0', 'v1.0.0']);
     return repositoryRoot;
   }
 
@@ -675,37 +712,78 @@ describe('getBranchLocalCommitCount', () => {
     execFileSync('git', ['-C', repositoryRoot, 'commit', '--quiet', '-m', message]);
   }
 
-  it('returns 0 on main itself', async () => {
-    const { getBranchLocalCommitCount } = await loadReleaseTruthModule();
+  it('returns an empty set on main itself', async () => {
+    const { getBranchLocalSubjectIndices } = await loadReleaseTruthModule();
     const repositoryRoot = initTempRepo('.tmp-worldscript-doc-metrics-branchlocal-main-');
     try {
-      expect(getBranchLocalCommitCount(repositoryRoot)).toBe(0);
+      expect(getBranchLocalSubjectIndices(repositoryRoot)).toEqual(new Set());
     } finally {
       rmSync(repositoryRoot, { recursive: true, force: true });
     }
   });
 
   // QNBS-v3: mirrors this repository's own feat/553-universal-ingress-admission, several commits ahead of main with no open PR yet.
-  it('counts commits unique to a feature branch since it diverged from main', async () => {
-    const { getBranchLocalCommitCount } = await loadReleaseTruthModule();
+  it('identifies commits unique to a feature branch since it diverged from main', async () => {
+    const { getPostReleaseCommitSubjects, getBranchLocalSubjectIndices } =
+      await loadReleaseTruthModule();
     const repositoryRoot = initTempRepo('.tmp-worldscript-doc-metrics-branchlocal-feature-');
     try {
       execFileSync('git', ['-C', repositoryRoot, 'switch', '--quiet', '-c', 'fix/example']);
       addCommit(repositoryRoot, 'first');
       addCommit(repositoryRoot, 'second');
-      expect(getBranchLocalCommitCount(repositoryRoot)).toBe(2);
+      const subjects = getPostReleaseCommitSubjects(repositoryRoot) ?? [];
+      const branchLocalIndices = getBranchLocalSubjectIndices(repositoryRoot);
+      expect(branchLocalIndices.size).toBe(2);
+      expect([...branchLocalIndices].every((index) => subjects[index] !== undefined)).toBe(true);
     } finally {
       rmSync(repositoryRoot, { recursive: true, force: true });
     }
   });
 
-  it('fails closed to 0 when not a git repository', async () => {
-    const { getBranchLocalCommitCount } = await loadReleaseTruthModule();
+  // QNBS-v3 (codex): git log's default order can interleave an already-merged main commit between branch-local ones once the branch has merged main in — the prior positional "newest N" window misclassified both sides here.
+  it('classifies each commit by ancestry, not log position, once the branch has merged main in', async () => {
+    const { getPostReleaseCommitSubjects, getBranchLocalSubjectIndices } =
+      await loadReleaseTruthModule();
+    const repositoryRoot = initTempRepo('.tmp-worldscript-doc-metrics-branchlocal-merge-');
+    try {
+      execFileSync('git', ['-C', repositoryRoot, 'switch', '--quiet', '-c', 'fix/example']);
+      addCommit(repositoryRoot, 'branch1');
+      execFileSync('git', ['-C', repositoryRoot, 'switch', '--quiet', 'main']);
+      addCommit(repositoryRoot, 'main-new');
+      execFileSync('git', ['-C', repositoryRoot, 'switch', '--quiet', 'fix/example']);
+      execFileSync('git', [
+        '-C',
+        repositoryRoot,
+        'merge',
+        '--no-ff',
+        '--quiet',
+        '-m',
+        'merge-main',
+        'main',
+      ]);
+      addCommit(repositoryRoot, 'branch2');
+
+      const subjects = getPostReleaseCommitSubjects(repositoryRoot) ?? [];
+      const branchLocalIndices = getBranchLocalSubjectIndices(repositoryRoot);
+      const mainNewIndex = subjects.indexOf('main-new');
+      const branch1Index = subjects.indexOf('branch1');
+
+      expect(mainNewIndex).toBeGreaterThanOrEqual(0);
+      expect(branch1Index).toBeGreaterThanOrEqual(0);
+      expect(branchLocalIndices.has(mainNewIndex)).toBe(false);
+      expect(branchLocalIndices.has(branch1Index)).toBe(true);
+    } finally {
+      rmSync(repositoryRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('fails closed to an empty set when not a git repository', async () => {
+    const { getBranchLocalSubjectIndices } = await loadReleaseTruthModule();
     const repositoryRoot = mkdtempSync(
       join(tmpdir(), 'worldscript-doc-metrics-branchlocal-nogit-'),
     );
     try {
-      expect(getBranchLocalCommitCount(repositoryRoot)).toBe(0);
+      expect(getBranchLocalSubjectIndices(repositoryRoot)).toEqual(new Set());
     } finally {
       rmSync(repositoryRoot, { recursive: true, force: true });
     }

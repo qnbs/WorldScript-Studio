@@ -422,13 +422,21 @@ function splitUnreleasedEntries(unreleasedSection) {
   return entries;
 }
 
+// QNBS-v3 (codex): a negated description ("do not delete X") must never slug-match an entry describing the opposite, unnegated action ("Delete X") — word-overlap ratio alone can't tell these apart, so mismatched polarity disqualifies the entry outright, before the ratio is even computed.
+const NEGATION_MARKER = /\b(?:not|never|no longer|cannot|can't|doesn't|don't|won't|isn't)\b/i;
+function hasNegationMarker(text) {
+  return NEGATION_MARKER.test(text);
+}
+
 // QNBS-v3 (codex): the set of entry indices a given commit's slug could match — match ratio is
 // computed PER changelog entry (see findUndocumentedGovernedCommits's header comment for why).
 function candidateEntryIndices(subject, unreleasedEntries) {
   const description = subject.replace(GOVERNED_COMMIT_TYPE, '').replace(TRAILING_PR_REF, '');
   const words = significantSlugWords(description);
   if (words.length === 0) return [];
+  const isNegated = hasNegationMarker(description);
   return unreleasedEntries.flatMap((entry, index) => {
+    if (hasNegationMarker(entry) !== isNegated) return [];
     const matched = words.filter((word) => new RegExp(`\\b${word}\\b`, 'i').test(entry));
     return matched.length / words.length >= SLUG_MATCH_RATIO ? [index] : [];
   });
@@ -485,11 +493,13 @@ function computeMaxSlugMatching(subjects, entries, reservedEntryIndices = new Se
 // completeness for an already-numbered commit sitting in the same range from a separate,
 // already-merged PR, in every context.
 // QNBS-v3 (codex): a branch-local commit's trailing "(#NNN)" may be an in-flight issue reference rather than the real PR number GitHub only appends at squash time, so isBranchLocal skips the exact-PR-match path entirely instead of trusting that number.
+// QNBS-v3 (codex): checks parsed bullet entries, not the raw section text — a PR number mentioned only in surrounding prose (never inside an actual release-note bullet) must not count as documentation.
 // QNBS-v3 (CodeScene): extracted so findUndocumentedGovernedCommits stays a flat loop with zero nested conditionals — returns 'documented', 'undocumented', or 'needsSlugCheck' for one subject.
-function classifyGovernedCommit(subject, unreleasedSection, isFeatureBranchContext, isBranchLocal) {
+function classifyGovernedCommit(subject, entries, isFeatureBranchContext, isBranchLocal) {
   const prMatch = TRAILING_PR_REF.exec(subject);
   if (prMatch && !isBranchLocal) {
-    return isReferencedByPrNumber(prMatch[1], unreleasedSection) ? 'documented' : 'undocumented';
+    const isDocumented = entries.some((entry) => isReferencedByPrNumber(prMatch[1], entry));
+    return isDocumented ? 'documented' : 'undocumented';
   }
   return isFeatureBranchContext ? 'documented' : 'needsSlugCheck';
 }
@@ -505,7 +515,7 @@ function findUndocumentedGovernedCommits(
   postReleaseCommitSubjects,
   unreleasedSection,
   isFeatureBranchContext,
-  branchLocalCount = 0,
+  branchLocalIndices = new Set(),
 ) {
   const entries = splitUnreleasedEntries(unreleasedSection);
   const undocumented = [];
@@ -514,14 +524,9 @@ function findUndocumentedGovernedCommits(
   for (let index = 0; index < postReleaseCommitSubjects.length; index++) {
     const subject = postReleaseCommitSubjects[index];
     if (!GOVERNED_COMMIT_TYPE.test(subject)) continue;
-    const isBranchLocal = index < branchLocalCount;
+    const isBranchLocal = branchLocalIndices.has(index);
     const prMatch = TRAILING_PR_REF.exec(subject);
-    const status = classifyGovernedCommit(
-      subject,
-      unreleasedSection,
-      isFeatureBranchContext,
-      isBranchLocal,
-    );
+    const status = classifyGovernedCommit(subject, entries, isFeatureBranchContext, isBranchLocal);
     if (status === 'undocumented') undocumented.push(subject);
     if (status === 'needsSlugCheck') slugCandidates.push(subject);
     if (status === 'documented' && prMatch && !isBranchLocal)
@@ -573,14 +578,14 @@ export function isOnFeatureBranch(repositoryRoot = root) {
 }
 
 // QNBS-v3 (codex): tries origin/main first (what CI actually has) and falls back to a local main so this still resolves in a plain developer clone.
-function resolveMainBranchPoint(repositoryRoot) {
+function resolveMainRef(repositoryRoot) {
   for (const ref of ['origin/main', 'main']) {
     try {
-      return execFileSync('git', ['merge-base', 'HEAD', ref], {
+      execFileSync('git', ['rev-parse', '--verify', '--quiet', ref], {
         cwd: repositoryRoot,
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-      }).trim();
+        stdio: 'ignore',
+      });
+      return ref;
     } catch {
       // Try the next candidate ref below.
     }
@@ -588,20 +593,39 @@ function resolveMainBranchPoint(repositoryRoot) {
   return null;
 }
 
-// QNBS-v3 (codex): a branch-local commit's trailing "(#NNN)" may still be an in-flight issue reference, not yet the real PR number GitHub appends at squash time, so counting how many of the newest post-tag commits sit above the main branch point lets the caller exempt exactly those from the exact-PR-match rule.
-export function getBranchLocalCommitCount(repositoryRoot = root) {
-  const branchPoint = resolveMainBranchPoint(repositoryRoot);
-  if (!branchPoint) return 0;
+// QNBS-v3 (codex): a merge-base cutoff plus a positional window mis-splits history once the branch has merged main back in — git log's default order can interleave an already-merged main commit between branch-local ones — so each commit's OWN ancestry (merge-base --is-ancestor against main) is checked individually instead.
+export function getBranchLocalSubjectIndices(repositoryRoot = root) {
+  const taggedVersions = getTaggedVersions(repositoryRoot);
+  const latestTagged = [...taggedVersions].sort(semverCompare).at(-1);
+  const mainRef = resolveMainRef(repositoryRoot);
+  if (!latestTagged || !mainRef) return new Set();
+  let shas;
   try {
-    const output = execFileSync('git', ['rev-list', '--count', `${branchPoint}..HEAD`], {
+    const output = execFileSync('git', ['log', '--format=%H', `v${latestTagged}..HEAD`], {
       cwd: repositoryRoot,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     });
-    return Number.parseInt(output.trim(), 10) || 0;
+    shas = output
+      .split('\n')
+      .map((sha) => sha.trim())
+      .filter(Boolean);
   } catch {
-    return 0;
+    return new Set();
   }
+  const branchLocalIndices = new Set();
+  shas.forEach((sha, index) => {
+    try {
+      execFileSync('git', ['merge-base', '--is-ancestor', sha, mainRef], {
+        cwd: repositoryRoot,
+        stdio: 'ignore',
+      });
+    } catch {
+      // Non-zero exit means sha is not an ancestor of mainRef — it is branch-local.
+      branchLocalIndices.add(index);
+    }
+  });
+  return branchLocalIndices;
 }
 
 // QNBS-v3: isFeatureBranchContext deliberately has a plain `false` default, not one read from
@@ -618,7 +642,7 @@ export function scanUnreleasedTruth(
   packageVersion,
   taggedVersions,
   isFeatureBranchContext = false,
-  branchLocalCount = 0,
+  branchLocalIndices = new Set(),
 ) {
   if (!postReleaseCommitSubjects || postReleaseCommitSubjects.length === 0) return [];
   const candidateVersion = changelog.match(
@@ -645,7 +669,7 @@ export function scanUnreleasedTruth(
     postReleaseCommitSubjects,
     unreleasedSection,
     isFeatureBranchContext,
-    branchLocalCount,
+    branchLocalIndices,
   );
   if (undocumented.length === 0) return [];
   return [
@@ -1013,7 +1037,7 @@ function main() {
       packageVersion,
       taggedVersions,
       isFeatureBranchContext,
-      isFeatureBranchContext ? getBranchLocalCommitCount() : 0,
+      isFeatureBranchContext ? getBranchLocalSubjectIndices() : new Set(),
     ),
   );
   allFindings.push(
