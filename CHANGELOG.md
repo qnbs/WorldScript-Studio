@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+<!-- release-candidate: v1.28.6 -->
+## [1.28.6] — 2026-09-09
+
 ### Fixed
 
 - **Tauri plugin Rust/npm version parity restored:** `tauri-plugin-http` and
@@ -15,9 +18,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   side, failing every platform's Tauri release build. Bumped the npm packages to match; added
   `check-tauri-plugin-versions.mjs`, a cheap CI guard catching this class of mismatch before the
   next release tag instead of at tag-triggered release time. PR #678.
+- **CHANGELOG completeness-gate PR-number reference restored:** the Tauri plugin-parity entry
+  above passed PR-branch CI but failed on resulting-`main` right after squash-merge. PR #678's
+  number was already known before merge; only the final squash commit's SHA/subject did not
+  exist yet. The PR-branch check does not enforce the current PR's own already-known number
+  against `[Unreleased]`, only resulting-`main`'s commit history — so PR CI stayed green, and
+  only after the squash commit landed on `main` did `docs:check` correctly flag the missing
+  reference. PR #679.
 
-<!-- release-candidate: v1.28.5 -->
 ## [1.28.5] — 2026-09-09
+
+> **This tagged release's desktop build never completed.** The tag-triggered Tauri desktop
+> release workflow failed on every platform (Windows/Linux/macOS) with the Rust/npm plugin
+> version mismatch fixed in `[1.28.6]` above, so no GitHub desktop Release or installer/updater
+> assets were ever published for `v1.28.5` — those bundle jobs failed before producing assets.
+> This was a desktop-build-specific failure: the separate Docker/GHCR publish workflow for this
+> tag succeeded, so a container image for `v1.28.5` does exist. The `v1.28.5` git tag itself is
+> intentionally never deleted, moved, or re-tagged; it remains permanently bound to its original
+> commit as the historical failed/incomplete desktop-release cut. `v1.28.6` is the corrected,
+> complete release.
 
 ### Added
 

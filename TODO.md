@@ -8,7 +8,7 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ---
 
-## Current Sprint — v1.28.5 release cut and post-audit remediation continuation (2026-09-09)
+## Current Sprint — v1.28.6 corrected release cut: Tauri desktop release-build recovery (2026-09-09)
 
 > **Status: 🔄 in progress.** The authoritative native sequence remains
 > [`docs/native/ROADMAP-QT-GPUI-DESKTOP.md`](docs/native/ROADMAP-QT-GPUI-DESKTOP.md), with the
@@ -16,21 +16,40 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 > R-15 implementation stays blocked behind the still-open Wave 2 prerequisite (ledger row 9). No
 > Qt, GPUI, or R-15 implementation work is part of this sprint.
 
-- ✅ `v1.28.4` released (PR #615, tag+release published 2026-09-05); the prior sprint's release
-  and governance work (attribution-hygiene guard PR #672, security-docs truth fix PR #673) closed
-  out.
+- ✅ `v1.28.5` tagged (PR #676, 2026-09-09) — but its tag-triggered Tauri desktop release build
+  failed on every platform with a Rust/npm plugin version mismatch (`tauri-plugin-http`,
+  `tauri-plugin-notification` drifted ahead of their npm counterparts after #661's Rust-only
+  bump), so no GitHub desktop Release or installer/updater assets were ever published for it.
+  This was desktop-build-specific: the separate Docker/GHCR publish workflow for this tag
+  succeeded, so a container image for `v1.28.5` does exist. The `v1.28.5` tag is permanently
+  kept as-is (never deleted/moved/re-tagged) as the historical failed/incomplete desktop-release
+  cut; the corrected release ships as `v1.28.6`.
+- ✅ PR #678 merged (2026-09-09): aligned the drifted npm plugin versions and added
+  `check-tauri-plugin-versions.mjs`, a cheap CI guard mirroring Tauri's own build-time
+  Rust/npm parity check for every workspace importer, so this class of mismatch is caught before
+  the next release tag instead of at tag-triggered release time. Cross-platform
+  Windows/Ubuntu/macOS `tauri-build.yml` qualification succeeded on the exact final PR head /
+  merge-candidate SHA (`52f14d15aebede5a0482225ba6327221ef81d9c8`) before merge; the resulting
+  squash-merge commit on `main` was a different SHA, produced only after that qualification.
+- ✅ PR #679 merged (2026-09-09): resulting-`main` CI failed once post-#678 on the CHANGELOG
+  completeness gate's PR-number-reference requirement. PR #678's number was already known
+  before merge; what didn't exist yet was the final squash commit. The PR-branch check doesn't
+  enforce a current PR's own already-known number against `[Unreleased]`, only resulting-`main`'s
+  commit history, so PR CI stayed green and only resulting-`main`'s `docs:check` caught the
+  missing reference; a one-line CHANGELOG fix restored it to green. (A possible future pre-merge
+  hardening of this check is recorded as deferred, memory-only follow-up — not part of this
+  release cut.)
+- 🔄 `v1.28.6` release cut in progress (this sprint's active PR): version/`CHANGELOG.md`/
+  `TODO.md`/`README.md` reconciliation for the Tauri plugin-parity recovery. Tag, GitHub Release,
+  release artifacts, and the post-release `AUDIT.md` evidence entry all remain pending until
+  after this PR merges, post-merge main CI/CodeQL are green, and an exact-SHA
+  Windows/Ubuntu/macOS `tauri-build.yml` qualification passes on the intended tag commit.
 - ✅ PR #674 merged (2026-09-09): the CHANGELOG completeness gate upgraded from accepting any
   non-empty `[Unreleased]` section forever to requiring every governed commit to be individually
-  referenced by PR number or subject slug; backfilled 13 previously-undocumented entries. Four
-  correction waves addressed branch-local-vs-ancestry classification, negation/refusal polarity,
-  PR-number token boundaries, and multi-entry reservation gaps. The remaining structural
-  heuristic-matching limitation (a short token like a version number can still clear the
-  word-overlap ratio in an otherwise-matching sentence) is intentionally out of this gate's
-  deterministic, non-NLP scope and is tracked separately as #675.
-- 🔄 `v1.28.5` release cut in progress: version/`CHANGELOG.md`/`TODO.md`/`README.md`
-  reconciliation for everything merged since `v1.28.4` (headlined by PR #674) is in PR #676. Tag,
-  GitHub Release, release artifacts, and the post-release `AUDIT.md` evidence entry all remain
-  pending until after that PR merges and post-merge main CI/CodeQL are green.
+  referenced by PR number or subject slug; backfilled 13 previously-undocumented entries. The
+  remaining structural heuristic-matching limitation (a short token like a version number can
+  still clear the word-overlap ratio in an otherwise-matching sentence) is intentionally out of
+  this gate's deterministic, non-NLP scope and is tracked separately as #675.
 - ⬜ Ledger row 9 (project state-shape compatibility adapter) remains open: durable
   source-generation fencing, writer integration, universal ingress/egress, and authority switch
   per `docs/native/CORE-MIGRATION-LEDGER.md` row 9. Wave 3/4 R-15 implementation stays blocked
@@ -41,10 +60,21 @@ Status: 🔄 in progress | ⬜ open | ✅ done
   unnumbered-commit heuristic) remain open, tracked separately — not part of this sprint unless
   they directly block release or R-15 work.
 
+## Archived — v1.28.5 release cut, superseded by the v1.28.6 corrected release (2026-09-09)
+
+- ✅ `v1.28.4` released (PR #615, tag+release published 2026-09-05); the prior sprint's release
+  and governance work (attribution-hygiene guard PR #672, security-docs truth fix PR #673) closed
+  out.
+- ✅ PR #674 merged (2026-09-09): CHANGELOG completeness-gate upgrade (see current sprint entry
+  above for the full description, carried forward since it remains active work).
+- ✅ `v1.28.5` release-prep PR #676 merged and tagged (2026-09-09) — see current sprint above for
+  why this release cut is superseded by `v1.28.6`.
+
 ## Archived — Release truth reconciliation and R-15 desktop at-rest encryption priority (2026-09-05)
 
-> **Status: ✅ Superseded by the current sprint above.** `v1.28.4` shipped 2026-09-05; PR #674 and
-> the `v1.28.5` release cut are the current sprint's continuation of this same work.
+> **Status: ✅ Superseded by the current sprint above.** `v1.28.4` shipped 2026-09-05; PR #674, the
+> `v1.28.5` release cut, and its `v1.28.6` desktop-release-build recovery are the current sprint's
+> continuation of this same work.
 
 - ✅ `v1.28.2` (2026-08-27) and `v1.28.3` (2026-08-27) released, closing out the prior sprint's
   accumulated reconstruction-reconciliation and documentation-truth work.
