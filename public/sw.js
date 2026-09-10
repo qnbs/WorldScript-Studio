@@ -42,14 +42,23 @@ const swLogger = {
 // eslint-disable-next-line no-underscore-dangle
 const _WB_MANIFEST = self.__WB_MANIFEST || [];
 
-const PRECACHE_URLS = [
-  BASE,
-  `${BASE}index.html`,
-  `${BASE}manifest.json`,
-  `${BASE}favicon.svg`,
-  `${BASE}offline.html`,
-  ..._WB_MANIFEST.map((entry) => (typeof entry === 'string' ? entry : entry.url)),
-];
+const EXPLICIT_SHELL_URLS = [BASE, `${BASE}index.html`, `${BASE}manifest.json`, `${BASE}favicon.svg`, `${BASE}offline.html`];
+
+// QNBS-v3: keep these files in the injected manifest (their content hash still changes sw.js's own bytes, triggering an update with no version bump) but drop them here so cache.addAll() never sees the same resolved URL twice — tracked against every URL seen so far, not just the explicit list, since two manifest entries could otherwise collide with each other.
+const seenResolvedUrls = new Set(EXPLICIT_SHELL_URLS.map((url) => new URL(url, self.location.href).href));
+const manifestUrls = _WB_MANIFEST
+  .map((entry) => (typeof entry === 'string' ? entry : entry.url))
+  .filter((url) => {
+    const resolved = new URL(url, self.location.href).href;
+    if (seenResolvedUrls.has(resolved)) return false;
+    seenResolvedUrls.add(resolved);
+    return true;
+  });
+
+const PRECACHE_URLS = [...EXPLICIT_SHELL_URLS, ...manifestUrls];
+
+// QNBS-v3: marker written into CACHE_STATIC only once precache fully succeeds; activate checks it before pruning an older generation.
+const PRECACHE_ADMISSION_URL = `${BASE}__sw-precache-complete__`;
 
 // ── Max age / entry limits ───────────────────────────────────
 const MAX_AGE_DYNAMIC = 7  * 24 * 60 * 60 * 1000; // 7 days
@@ -112,16 +121,22 @@ async function offlineFallback(request) {
 // INSTALL — Precache shell
 // ════════════════════════════════════════════════════════════
 self.addEventListener('install', (event) => {
-  // QNBS-v3: activates immediately, no waiting — register-sw.ts owns the bounded pre-reload flush mitigation, residual risk tracked in #518.
-  self.skipWaiting();
   // QNBS-v3: Never precache inside Tauri — the desktop app serves its shell from the bundle.
-  if (IS_TAURI) return;
+  if (IS_TAURI) {
+    self.skipWaiting();
+    return;
+  }
   event.waitUntil(
     caches.open(CACHE_STATIC)
-      .then((cache) => cache.addAll(PRECACHE_URLS))
+      .then((cache) => cache.addAll(PRECACHE_URLS).then(() => cache.put(PRECACHE_ADMISSION_URL, new Response('ok'))))
+      .then(() => {
+        // QNBS-v3: only claim the update once precache fully succeeded; register-sw.ts owns the pre-reload flush mitigation for the resulting reload.
+        self.skipWaiting();
+      })
       .catch((err) => {
-        // Some precache entries (e.g. offline.html) may not exist yet; continue anyway
-        swLogger.warn('Precache partial failure (non-fatal):', err);
+        // QNBS-v3: rethrow so install() itself fails — a worker that never reaches "installed" can never be waited-on, activated, or SKIP_WAITING'd.
+        swLogger.warn('Precache failed — this installation will not complete:', err);
+        throw err;
       })
   );
 });
@@ -154,19 +169,26 @@ self.addEventListener('activate', (event) => {
     return;
   }
   event.waitUntil(
-    caches.keys()
-      .then((cacheNames) =>
-        Promise.all(
-          cacheNames
-            // QNBS-v3: prune only owned-and-stale — never delete a cache we don't positively own.
-            .filter((name) => isWorldScriptOwnedCache(name) && !ALL_CACHES.includes(name))
-            .map((name) => {
-              swLogger.log('Pruning old cache:', name);
-              return caches.delete(name);
-            })
-        )
-      )
-      .then(() => self.clients.claim())
+    (async () => {
+      // QNBS-v3: admission gate — only an admitted generation may prune stale caches or claim clients.
+      const staticCache = await caches.open(CACHE_STATIC);
+      const precacheComplete = Boolean(await staticCache.match(PRECACHE_ADMISSION_URL));
+      if (!precacheComplete) {
+        swLogger.warn('Skipping cache-generation cutover: this generation\'s precache never completed');
+        return;
+      }
+      const cacheNames = await caches.keys();
+      await Promise.all(
+        cacheNames
+          // QNBS-v3: prune only owned-and-stale — never delete a cache we don't positively own.
+          .filter((name) => isWorldScriptOwnedCache(name) && !ALL_CACHES.includes(name))
+          .map((name) => {
+            swLogger.log('Pruning old cache:', name);
+            return caches.delete(name);
+          })
+      );
+      await self.clients.claim();
+    })()
   );
 });
 
