@@ -46,11 +46,17 @@ interface FakeCaches {
 
 function createFakeCaches(
   initialNames: string[],
-  opts: { rejectOnDelete?: string | undefined; failAddAllFor?: string | undefined } = {},
+  opts: {
+    rejectOnDelete?: string | undefined;
+    failAddAllFor?: string | undefined;
+    failAddAllTimes?: number | undefined;
+  } = {},
 ): FakeCaches {
   const store = new Set(initialNames);
   const entries = new Map<string, Set<string>>();
   const attemptedDeletes: string[] = [];
+  // QNBS-v3: a countdown (not a fixed boolean) so the SAME fake caches instance can simulate a real second install attempt succeeding after an earlier one failed.
+  let remainingAddAllFailures = opts.failAddAllTimes ?? (opts.failAddAllFor ? 1 : 0);
   return {
     async keys() {
       return [...store];
@@ -62,8 +68,10 @@ function createFakeCaches(
       if (!bucket) throw new Error('unreachable: bucket just inserted');
       return {
         addAll: async (urls: string[]) => {
-          if (opts.failAddAllFor === name)
+          if (opts.failAddAllFor === name && remainingAddAllFailures > 0) {
+            remainingAddAllFailures--;
             throw new Error(`simulated precache failure for ${name}`);
+          }
           for (const url of urls) bucket.add(url);
         },
         match: async (key: string) => (bucket.has(key) ? { ok: true } : undefined),
@@ -95,12 +103,15 @@ function loadServiceWorker(opts: {
   initialCacheNames: string[];
   rejectOnDelete?: string;
   failAddAllFor?: string;
+  failAddAllTimes?: number;
 }) {
   const handlers: Record<string, SwHandler> = {};
   const fakeCaches = createFakeCaches(opts.initialCacheNames, {
     rejectOnDelete: opts.rejectOnDelete,
     failAddAllFor: opts.failAddAllFor,
+    failAddAllTimes: opts.failAddAllTimes,
   });
+  let skipWaitingCallCount = 0;
   const selfMock = {
     location: {
       protocol: opts.protocol,
@@ -113,7 +124,9 @@ function loadServiceWorker(opts: {
     },
     clients: { claim: async () => {} },
     registration: { unregister: async () => {} },
-    skipWaiting: () => {},
+    skipWaiting: () => {
+      skipWaitingCallCount++;
+    },
     __WB_MANIFEST: [],
   };
   const context = vm.createContext({
@@ -131,7 +144,7 @@ function loadServiceWorker(opts: {
     if (!handler) throw new Error(`sw.js never registered a "${type}" listener`);
     return handler;
   };
-  return { getHandler, fakeCaches };
+  return { getHandler, fakeCaches, skipWaitingCalls: () => skipWaitingCallCount };
 }
 
 async function runWaitUntil(handler: SwHandler, event: Record<string, unknown> = {}) {
@@ -291,9 +304,44 @@ describe('service worker — cache ownership (activate / CLEAR_CACHE never delet
   });
 });
 
-// QNBS-v3: regression coverage for #525 — a partial precache must never displace a working prior generation.
+// QNBS-v3: a rejected install can never reach 'installed'/'waiting', so register-sw.ts's SKIP_WAITING message can't reach an incomplete generation either — no extra gating needed there.
 describe('service worker — precache admission gate (#525)', () => {
-  it('successful install admits the new generation: activate prunes the previous complete generation', async () => {
+  it('failed addAll() causes the install waitUntil() promise to reject', async () => {
+    const { getHandler } = loadServiceWorker({
+      protocol: 'https:',
+      hostname: 'qnbs.github.io',
+      initialCacheNames: [],
+      failAddAllFor: CURRENT_STATIC,
+      failAddAllTimes: 1,
+    });
+    await expect(runWaitUntil(getHandler('install'))).rejects.toThrow();
+  });
+
+  it('skipWaiting() is not called for a failed installation', async () => {
+    const { getHandler, skipWaitingCalls } = loadServiceWorker({
+      protocol: 'https:',
+      hostname: 'qnbs.github.io',
+      initialCacheNames: [],
+      failAddAllFor: CURRENT_STATIC,
+      failAddAllTimes: 1,
+    });
+    await expect(runWaitUntil(getHandler('install'))).rejects.toThrow();
+    expect(skipWaitingCalls()).toBe(0);
+  });
+
+  it('successful install completes, writes the admission marker and invokes skipWaiting()', async () => {
+    const { getHandler, fakeCaches, skipWaitingCalls } = loadServiceWorker({
+      protocol: 'https:',
+      hostname: 'qnbs.github.io',
+      initialCacheNames: [],
+    });
+    await runWaitUntil(getHandler('install'));
+    const staticCache = await fakeCaches.open(CURRENT_STATIC);
+    expect(await staticCache.match(ADMISSION_MARKER_URL)).toBeTruthy();
+    expect(skipWaitingCalls()).toBe(1);
+  });
+
+  it('successful activate after an admitted install prunes the previous owned generation', async () => {
     const { getHandler, fakeCaches } = loadServiceWorker({
       protocol: 'https:',
       hostname: 'qnbs.github.io',
@@ -305,33 +353,22 @@ describe('service worker — precache admission gate (#525)', () => {
     expect(fakeCaches.names()).toContain(CURRENT_STATIC);
   });
 
-  it('failed precache never admits the new generation: activate preserves every existing cache, including the previous complete generation', async () => {
+  it('a later real successful install attempt after a failed one succeeds normally (no permanent stuck state)', async () => {
     const { getHandler, fakeCaches } = loadServiceWorker({
       protocol: 'https:',
       hostname: 'qnbs.github.io',
       initialCacheNames: [STALE_STATIC],
       failAddAllFor: CURRENT_STATIC,
+      failAddAllTimes: 1,
     });
-    await runWaitUntil(getHandler('install'));
+    // QNBS-v3: the first attempt fails and must reject; activate must never run for a rejected install in real life, but even if reached the marker check still preserves the previous generation as defense in depth.
+    await expect(runWaitUntil(getHandler('install'))).rejects.toThrow();
     await runWaitUntil(getHandler('activate'));
-    // QNBS-v3: STALE_STATIC represents the previous, complete, last-known-good generation here.
     expect(fakeCaches.names()).toContain(STALE_STATIC);
     expect(fakeCaches.attemptedDeletes).not.toContain(STALE_STATIC);
-  });
 
-  it('a later successful install can still admit and prune after an earlier failed attempt (no permanent stuck state)', async () => {
-    const { getHandler, fakeCaches } = loadServiceWorker({
-      protocol: 'https:',
-      hostname: 'qnbs.github.io',
-      initialCacheNames: [STALE_STATIC],
-      failAddAllFor: CURRENT_STATIC,
-    });
+    // QNBS-v3: a real second install attempt (same worker source and fake caches, not a marker shortcut) now succeeds because the failure countdown is exhausted.
     await runWaitUntil(getHandler('install'));
-    await runWaitUntil(getHandler('activate'));
-    expect(fakeCaches.names()).toContain(STALE_STATIC);
-
-    // QNBS-v3: simulate a subsequent successful install for the same generation by admitting it directly.
-    await admitPrecache(fakeCaches);
     await runWaitUntil(getHandler('activate'));
     expect(fakeCaches.names()).not.toContain(STALE_STATIC);
     expect(fakeCaches.names()).toContain(CURRENT_STATIC);

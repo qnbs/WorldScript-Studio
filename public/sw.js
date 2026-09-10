@@ -128,8 +128,9 @@ self.addEventListener('install', (event) => {
         self.skipWaiting();
       })
       .catch((err) => {
-        // QNBS-v3: no skipWaiting on failure — a working prior generation keeps serving clients until a later install succeeds.
-        swLogger.warn('Precache failed — this generation will not take over from a working prior worker:', err);
+        // QNBS-v3: rethrow so install() itself fails — a worker that never reaches "installed" can never be waited-on, activated, or SKIP_WAITING'd.
+        swLogger.warn('Precache failed — this installation will not complete:', err);
+        throw err;
       })
   );
 });
