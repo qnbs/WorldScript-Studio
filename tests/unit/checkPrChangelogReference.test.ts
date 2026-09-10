@@ -105,6 +105,20 @@ describe('checkPrChangelogReference', () => {
     expect(isReferencedByPrLabel(700, 'lowercase and tight: pr#700 done')).toBe(true);
   });
 
+  it('14. rejects a reference that appears only in prose outside any bullet entry', () => {
+    const changelog = `## [Unreleased]\n\n### Fixed\n\nNote: tracked under PR #700, changelog entry pending.\n\n- **Something else:** unrelated bullet content.\n\n## [1.28.6]\n`;
+    expect(
+      checkPrChangelogReference({ prNumber: 700, prTitle: GOVERNED_TITLE, changelog }),
+    ).toEqual({ ok: false, reason: 'missing-reference' });
+  });
+
+  it("15. accepts a reference on a bullet's own soft-wrapped continuation line", () => {
+    const changelog = `## [Unreleased]\n\n### Fixed\n\n- **Hardens activation:** wraps across\n  a continuation line. PR #700.\n\n## [1.28.6]\n`;
+    expect(
+      checkPrChangelogReference({ prNumber: 700, prTitle: GOVERNED_TITLE, changelog }),
+    ).toEqual({ ok: true, reason: 'referenced' });
+  });
+
   describe('historical-incident fixtures (real CHANGELOG text from the three prior recoveries)', () => {
     // QNBS-v3: real bullet text from each incident's own recovery commit, factored so only the trailing reference varies.
     const tauriPluginParityBody =

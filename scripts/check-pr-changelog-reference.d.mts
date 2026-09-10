@@ -1,4 +1,4 @@
-export function isReferencedByPrLabel(prNumber: number, unreleasedSection: string): boolean;
+export function isReferencedByPrLabel(prNumber: number, text: string): boolean;
 
 export interface CheckPrChangelogReferenceInput {
   prNumber: number;

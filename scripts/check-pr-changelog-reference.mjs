@@ -29,9 +29,32 @@ function getUnreleasedSectionText(changelog) {
   return section.replace(/<!--[\s\S]*?(?:-->|$)/g, '');
 }
 
+// QNBS-v3: duplicated from check-doc-metrics.mjs's splitUnreleasedEntries for the same self-containment reason — joins a bullet's own soft-wrapped continuation lines into one entry.
+function extractBulletEntries(unreleasedSection) {
+  const entries = [];
+  let current = [];
+  const flush = () => {
+    if (current.length > 0) entries.push(current.join(' '));
+    current = [];
+  };
+  for (const rawLine of unreleasedSection.split('\n')) {
+    const line = rawLine.trim();
+    if (/^-\s/.test(line)) {
+      flush();
+      current.push(line);
+    } else if (current.length > 0 && line !== '') {
+      current.push(line);
+    } else if (line === '') {
+      flush();
+    }
+  }
+  flush();
+  return entries;
+}
+
 // QNBS-v3: exact "PR #NNN" grammar, stricter than check-doc-metrics.mjs's post-merge bare "#NNN" matcher — pre-merge there is no squash-appended "(#NNN)" to anchor on, so a bare "#NNN" could belong to an unrelated issue/PR mention instead of a genuine self-reference.
-export function isReferencedByPrLabel(prNumber, unreleasedSection) {
-  return new RegExp(`\\bPR\\s*#${prNumber}(?!\\d)`, 'i').test(unreleasedSection);
+export function isReferencedByPrLabel(prNumber, text) {
+  return new RegExp(`\\bPR\\s*#${prNumber}(?!\\d)`, 'i').test(text);
 }
 
 /** Pure decision function — kept separate from I/O so it is directly unit-testable. */
@@ -39,8 +62,10 @@ export function checkPrChangelogReference({ prNumber, prTitle, changelog }) {
   if (!GOVERNED_COMMIT_TYPE.test(prTitle ?? '')) {
     return { ok: true, reason: 'not-governed' };
   }
+  // QNBS-v3: scoped to actual bullet entries, not the whole section — a PR number floating in prose or a sub-heading (not inside a real release-note bullet) must not count as documentation.
   const unreleasedSection = getUnreleasedSectionText(changelog ?? '');
-  return isReferencedByPrLabel(prNumber, unreleasedSection)
+  const bulletEntries = extractBulletEntries(unreleasedSection);
+  return bulletEntries.some((entry) => isReferencedByPrLabel(prNumber, entry))
     ? { ok: true, reason: 'referenced' }
     : { ok: false, reason: 'missing-reference' };
 }
