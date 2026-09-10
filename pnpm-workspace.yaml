@@ -97,9 +97,11 @@ overrides:
   body-parser: ">=1.20.6 <2" # GHSA-v422-hmwv-36x6 — DoS via empty urlencoded body (express via @lhci/cli, dev-only)
   # GHSA-jmr9-qjv8-65gv + GHSA-7pqw-9j4j-h8q3 (extract-zip, no fixed version exists): @lhci/cli
   # hard-pins lighthouse@12.6.1, which pulls puppeteer-core -> @puppeteer/browsers@2.x ->
-  # extract-zip. lighthouse 13.x's puppeteer-core (^25.x) uses @puppeteer/browsers 3.x, which
+  # extract-zip. lighthouse 13.4.1's puppeteer-core (^25.x) uses @puppeteer/browsers 3.x, which
   # replaced extract-zip with modern-tar, eliminating the vulnerable package from the graph.
-  lighthouse: ">=13.4.1"
+  # Exact-pinned, not >=: @lhci/cli@0.15.1 is old and untested against newer Lighthouse majors —
+  # only 13.4.1's CLI-subprocess bridge has actually been compatibility-verified here.
+  lighthouse: "13.4.1"
 
 peerDependencyRules:
   allowedVersions:

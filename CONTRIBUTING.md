@@ -32,7 +32,7 @@ This project follows the [Contributor Covenant Code of Conduct](.github/CODE_OF_
 
 ### Windows: Node, Corepack, and pnpm
 
-1. Install **Node.js 22+** LTS from [nodejs.org](https://nodejs.org/) (includes Corepack) or use **nvm-windows** and install `22` from [`.nvmrc`](.nvmrc).
+1. Install **Node.js ≥22.19** LTS from [nodejs.org](https://nodejs.org/) (includes Corepack; matches `engines` in [`package.json`](package.json)) or use **nvm-windows** and install `22` from [`.nvmrc`](.nvmrc) — pick the latest available 22.x patch, not the first one nvm-windows offers.
 2. Open **PowerShell or CMD as Administrator** once and run: `corepack enable`
 3. In the repo folder: `corepack prepare pnpm@11.22.0 --activate` (version matches `packageManager` in [`package.json`](package.json); adjust if that field changes).
 4. Confirm: `pnpm -v` — then `node scripts/dependency-state.mjs reconcile` (never a bare `pnpm install` — see [Installation](#installation)) and use `pnpm run …` for all scripts (hooks expect `pnpm` on `PATH`).
