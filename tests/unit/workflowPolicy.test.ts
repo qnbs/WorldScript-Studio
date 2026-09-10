@@ -244,7 +244,10 @@ describe('Tauri release workflow policy', () => {
 
   it('requires successful tag verification before tagged bundles, while allowing manual builds', () => {
     const bundle = extractJobBlock(tauriWorkflowSource, 'bundle');
-    expect(extractNeeds(tauriWorkflowSource, 'bundle')).toEqual(['verify-release-tag']);
+    expect(extractNeeds(tauriWorkflowSource, 'bundle')).toEqual([
+      'verify-release-tag',
+      'parity-preflight',
+    ]);
     expect(bundle).toContain('always()');
     expect(bundle).toContain('!cancelled()');
     expect(bundle).toMatch(/github\.event_name == 'workflow_dispatch'/);
@@ -253,6 +256,27 @@ describe('Tauri release workflow policy', () => {
       /always\(\)\s*&&\s*!cancelled\(\)[\s\S]+github\.event_name == 'workflow_dispatch'[\s\S]+needs\.verify-release-tag\.result == 'success'/,
     );
     expect(bundle).toContain('Skip updater signing for workflow_dispatch test builds');
+  });
+
+  it('requires the plugin parity preflight to pass before bundling, and never runs it against an unverified tag', () => {
+    const bundle = extractJobBlock(tauriWorkflowSource, 'bundle');
+    const preflight = extractJobBlock(tauriWorkflowSource, 'parity-preflight');
+    // bundle requires both gates independently, with parity-preflight's success required
+    // structurally BEFORE the workflow_dispatch/tag OR branch — not nested inside it, where an
+    // OR would let a manual build bypass the parity check entirely.
+    expect(extractJobIf(bundle)).toMatch(
+      /always\(\)\s*&&\s*!cancelled\(\)\s*&&\s*needs\.parity-preflight\.result == 'success'\s*&&\s*\([\s\S]+github\.event_name == 'workflow_dispatch'[\s\S]+needs\.verify-release-tag\.result == 'success'/,
+    );
+    // parity-preflight itself never checks out/runs against a tag that failed signature
+    // verification — it depends on verify-release-tag, with the manual-build exception
+    // structurally OR'd (not AND'd, which would also skip it on every manual dispatch build).
+    expect(extractNeeds(tauriWorkflowSource, 'parity-preflight')).toEqual(['verify-release-tag']);
+    expect(extractJobIf(preflight)).toMatch(
+      /always\(\)\s*&&\s*!cancelled\(\)\s*&&\s*\(\s*github\.event_name == 'workflow_dispatch'\s*\|\|\s*needs\.verify-release-tag\.result == 'success'/,
+    );
+    expect(preflight).toContain('scripts/check-tauri-plugin-versions.mjs');
+    expect(preflight).not.toContain('pnpm install');
+    expect(preflight).toMatch(/^ {4}permissions:\n {6}contents: read\s*$/m);
   });
 
   it('keeps release publication tag-only and downstream of bundle output', () => {
