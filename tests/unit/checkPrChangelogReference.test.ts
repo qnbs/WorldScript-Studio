@@ -136,6 +136,13 @@ describe('checkPrChangelogReference', () => {
     ).toEqual({ ok: false, reason: 'missing-reference' });
   });
 
+  it('19. does not let a commented-out fake "## [Unreleased]" heading earlier in the file hijack the section boundary', () => {
+    const changelog = `<!--\n## [Unreleased]\n- Placeholder PR #700.\n-->\n\n## [Unreleased]\n\n### Fixed\n\n- **Real fix:** unrelated content with no reference.\n\n## [1.28.6]\n`;
+    expect(
+      checkPrChangelogReference({ prNumber: 700, prTitle: GOVERNED_TITLE, changelog }),
+    ).toEqual({ ok: false, reason: 'missing-reference' });
+  });
+
   describe('historical-incident fixtures (real CHANGELOG text from the three prior recoveries)', () => {
     // QNBS-v3: real bullet text from each incident's own recovery commit, factored so only the trailing reference varies.
     const tauriPluginParityBody =

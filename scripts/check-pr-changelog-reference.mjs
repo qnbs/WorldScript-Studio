@@ -19,14 +19,14 @@ import { fileURLToPath } from 'node:url';
 // QNBS-v3: duplicated from check-doc-metrics.mjs's GOVERNED_COMMIT_TYPE (kept in sync manually, not via import) so this file has zero local dependencies — see file header.
 const GOVERNED_COMMIT_TYPE = /^(?:feat|fix|perf)(?:\([^)]*\))?!?:\s*/i;
 
-// QNBS-v3: duplicated from check-doc-metrics.mjs's getUnreleasedSectionText for the same self-containment reason.
+// QNBS-v3: strips comments from the WHOLE document before searching for the heading — a commented-out template containing a literal "## [Unreleased]" line earlier in the file would otherwise hijack the section boundary, since slicing off the opening "<!--" before comment-removal runs left the fake section's own content unstrippable.
 function getUnreleasedSectionText(changelog) {
-  const heading = /^## \[Unreleased\]\s*$/m.exec(changelog);
+  const withoutComments = changelog.replace(/<!--[\s\S]*?(?:-->|$)/g, '');
+  const heading = /^## \[Unreleased\]\s*$/m.exec(withoutComments);
   if (!heading) return '';
-  const afterHeading = changelog.slice(heading.index + heading[0].length);
+  const afterHeading = withoutComments.slice(heading.index + heading[0].length);
   const nextHeading = afterHeading.search(/^##\s/m);
-  const section = nextHeading === -1 ? afterHeading : afterHeading.slice(0, nextHeading);
-  return section.replace(/<!--[\s\S]*?(?:-->|$)/g, '');
+  return nextHeading === -1 ? afterHeading : afterHeading.slice(0, nextHeading);
 }
 
 // QNBS-v3: duplicated from check-doc-metrics.mjs's splitUnreleasedEntries for the same self-containment reason — joins a bullet's own soft-wrapped continuation lines into one entry.
