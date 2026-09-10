@@ -1,0 +1,31 @@
+name: PR CHANGELOG Reference Guard
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  check:
+    name: Require this PR's own number in CHANGELOG.md [Unreleased] before merge
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require [Unreleased] to reference this PR before merge
+        env:
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+        run: |
+          set -euo pipefail
+          BASE="${{ github.event.pull_request.base.sha }}"
+          mkdir -p /tmp/base-scripts
+          CHECKER=scripts/check-pr-changelog-reference.mjs
+          if git show "$BASE:scripts/check-pr-changelog-reference.mjs" > /tmp/base-scripts/check-pr-changelog-reference.mjs 2>/dev/null; then
+            CHECKER=/tmp/base-scripts/check-pr-changelog-reference.mjs
+          else
+            echo "::notice::check-pr-changelog-reference.mjs not found on base ref (bootstrap PR) — using this PR's own copy this one time."
+          fi
+          node "$CHECKER"
