@@ -110,17 +110,22 @@ entry for the full verification trail.
 
 **2026-09-10 update: `adm-zip` (`GHSA-vwc7-r8mq-g2x9`) investigated exhaustively, remains
 accepted risk — BLOCKED UPSTREAM / CURRENTLY MITIGATED, not retired.** No patched `adm-zip`
-release exists (GitHub's advisory API: `first_patched_version: null`), and no upgrade path
-removes it: `@huggingface/transformers@4.2.0` (latest stable) hard-pins `onnxruntime-node` as an
-exact, mandatory dependency, and `onnxruntime-node@1.29.0` (latest stable) still depends on
-`adm-zip@^0.6.0`. Beyond the existing `allowBuilds: onnxruntime-node=false` mitigation, a second,
-independent layer was confirmed: `@huggingface/transformers`'s own package `exports` map routes
-every bundler/browser consumer (Vite, for both the PWA build and the Tauri WebView frontend) to
-`dist/transformers.web.js`, which contains zero real reference to `onnxruntime-node` — only a
-genuine Node.js `require`/`import` resolution would hit the `"node"` export condition that pulls
-it in, and this repo has no such code path (confirmed via source inspection and this repo's own
-test suite, which explicitly mocks the web build path rather than letting real resolution occur).
-See `src-tauri/osv-scanner.toml`'s expanded comment for the full evidence trail.
+release exists (GitHub's advisory API: `first_patched_version: null`); the `>=0.6.0` override is a
+floor permitting any future release from 0.6.0 upward, currently resolving to 0.6.0 only because
+that is still the newest published version. No upgrade path removes it either:
+`@huggingface/transformers@4.2.0` (latest stable) hard-pins `onnxruntime-node` as an exact,
+mandatory dependency, and `onnxruntime-node@1.29.0` (latest stable) still depends on
+`adm-zip@^0.6.0`. The SOLE mitigation for the actual vulnerable operation — `adm-zip` runs inside
+`onnxruntime-node`'s postinstall script, during `pnpm install`'s lifecycle-script phase, before any
+bundler is involved — remains `allowBuilds: onnxruntime-node=false`, which denies that script
+outright. Separately (not as a second install-time control for the same risk, but as independent
+evidence about a different question): the shipped app's own JS code never imports the
+`onnxruntime-node` module either, since `vite.config.ts`'s `resolve.alias` hardcodes
+`@huggingface/transformers` to `dist/transformers.web.js` for every bundler/browser consumer (the
+PWA build and the Tauri WebView frontend alike), bypassing the package's own `exports` map
+entirely; that file has zero real reference to `onnxruntime-node`, reinforced by this repo's own
+test suite explicitly mocking that exact web-build path. See `src-tauri/osv-scanner.toml`'s
+expanded comment for the full evidence trail.
 
 ## Special-attention dependencies
 
