@@ -268,12 +268,12 @@ describe('Tauri release workflow policy', () => {
       /always\(\)\s*&&\s*!cancelled\(\)\s*&&\s*needs\.parity-preflight\.result == 'success'\s*&&\s*\([\s\S]+github\.event_name == 'workflow_dispatch'[\s\S]+needs\.verify-release-tag\.result == 'success'/,
     );
     // parity-preflight itself never checks out/runs against a tag that failed signature
-    // verification — it depends on verify-release-tag, with the same manual-build exception.
+    // verification — it depends on verify-release-tag, with the manual-build exception
+    // structurally OR'd (not AND'd, which would also skip it on every manual dispatch build).
     expect(extractNeeds(tauriWorkflowSource, 'parity-preflight')).toEqual(['verify-release-tag']);
-    expect(preflight).toContain('always()');
-    expect(preflight).toContain('!cancelled()');
-    expect(preflight).toMatch(/github\.event_name == 'workflow_dispatch'/);
-    expect(preflight).toMatch(/needs\.verify-release-tag\.result == 'success'/);
+    expect(extractJobIf(preflight)).toMatch(
+      /always\(\)\s*&&\s*!cancelled\(\)\s*&&\s*\(\s*github\.event_name == 'workflow_dispatch'\s*\|\|\s*needs\.verify-release-tag\.result == 'success'/,
+    );
     expect(preflight).toContain('scripts/check-tauri-plugin-versions.mjs');
     expect(preflight).not.toContain('pnpm install');
     expect(preflight).toMatch(/^ {4}permissions:\n {6}contents: read\s*$/m);
