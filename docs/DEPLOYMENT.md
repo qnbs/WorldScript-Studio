@@ -42,7 +42,7 @@ gh run view <run-id> --log-failed
    - **Install:** `node scripts/dependency-state.mjs reconcile`
    - **Build:** `pnpm run build:edge`
    - **Output:** `dist`
-3. **Node.js** ≥ 22 (Project Settings → General).
+3. **Node.js** ≥ 22.19 (Project Settings → General; matches `engines` in `package.json`).
 4. **Environment variables (optional):** `DEPLOY_TARGET=edge` — redundant if using `build:edge`; do **not** add AI API keys for end users.
 5. SPA routing: `rewrites` in `vercel.json` → `index.html`.
 6. **Preview deployments:** enabled per branch/PR by default.

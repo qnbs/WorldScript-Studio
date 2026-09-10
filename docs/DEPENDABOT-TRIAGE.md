@@ -99,6 +99,14 @@ with no patched release and no production-runtime footprint; it must still be
 rechecked before expiry and removed as soon as an upstream fix or dependency-path change makes that
 possible. Review each cluster against current upstream status before changing any deadline.
 
+**2026-09-10 update: both `extract-zip` ignores retired.** A `pnpm-workspace.yaml`
+`overrides.lighthouse: ">=13.4.1"` entry forces `@lhci/cli`'s Lighthouse/Puppeteer chain onto a
+version whose `@puppeteer/browsers` dependency replaced `extract-zip` with `modern-tar` —
+eliminating the package from the resolved graph entirely (`pnpm why extract-zip` now returns
+nothing). `GHSA-jmr9-qjv8-65gv` and `GHSA-7pqw-9j4j-h8q3` are removed from
+`src-tauri/osv-scanner.toml`; the cluster total drops from 21 to 19. See AUDIT.md's 2026-09-10
+entry for the full verification trail.
+
 ## Special-attention dependencies
 
 These need more than a changelog skim because of documented quirks elsewhere in this repo:
