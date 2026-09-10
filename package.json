@@ -196,7 +196,7 @@
     "@types/react-dom": "^19.2.5",
     "@typescript/native-preview": "beta",
     "@typescript/typescript6": "npm:typescript@~6.0.3",
-    "@vitejs/plugin-react": "^6.0.2",
+    "@vitejs/plugin-react": "^6.1.1",
     "@vitest/coverage-v8": "^4.1.11",
     "fake-indexeddb": "^6.2.5",
     "http-server": "^14.1.1",
