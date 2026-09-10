@@ -261,9 +261,12 @@ describe('Tauri release workflow policy', () => {
   it('requires the plugin parity preflight to pass before bundling, and never runs it against an unverified tag', () => {
     const bundle = extractJobBlock(tauriWorkflowSource, 'bundle');
     const preflight = extractJobBlock(tauriWorkflowSource, 'parity-preflight');
-    // bundle requires both gates independently.
-    expect(bundle).toMatch(/needs\.parity-preflight\.result == 'success'/);
-    expect(bundle).toMatch(/needs\.verify-release-tag\.result == 'success'/);
+    // bundle requires both gates independently, with parity-preflight's success required
+    // structurally BEFORE the workflow_dispatch/tag OR branch — not nested inside it, where an
+    // OR would let a manual build bypass the parity check entirely.
+    expect(extractJobIf(bundle)).toMatch(
+      /always\(\)\s*&&\s*!cancelled\(\)\s*&&\s*needs\.parity-preflight\.result == 'success'\s*&&\s*\([\s\S]+github\.event_name == 'workflow_dispatch'[\s\S]+needs\.verify-release-tag\.result == 'success'/,
+    );
     // parity-preflight itself never checks out/runs against a tag that failed signature
     // verification — it depends on verify-release-tag, with the same manual-build exception.
     expect(extractNeeds(tauriWorkflowSource, 'parity-preflight')).toEqual(['verify-release-tag']);
