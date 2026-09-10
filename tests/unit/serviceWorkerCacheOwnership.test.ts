@@ -46,7 +46,7 @@ interface FakeCaches {
 
 function createFakeCaches(
   initialNames: string[],
-  opts: { rejectOnDelete?: string; failAddAllFor?: string } = {},
+  opts: { rejectOnDelete?: string | undefined; failAddAllFor?: string | undefined } = {},
 ): FakeCaches {
   const store = new Set(initialNames);
   const entries = new Map<string, Set<string>>();
