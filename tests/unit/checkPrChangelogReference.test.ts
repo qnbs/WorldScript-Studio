@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import {
   checkPrChangelogReference,
   isReferencedByPrLabel,
+  isValidPrMetadata,
 } from '../../scripts/check-pr-changelog-reference.mjs';
 
 const UNRELEASED = (body: string) => `## [Unreleased]\n\n### Fixed\n\n${body}\n\n## [1.28.6]\n`;
@@ -141,6 +142,28 @@ describe('checkPrChangelogReference', () => {
     expect(
       checkPrChangelogReference({ prNumber: 700, prTitle: GOVERNED_TITLE, changelog }),
     ).toEqual({ ok: false, reason: 'missing-reference' });
+  });
+
+  it('20. does not let a blockquote immediately after a bullet (no blank line) absorb its text as a continuation', () => {
+    const changelog = `## [Unreleased]\n\n### Fixed\n\n- **Something else:** unrelated bullet content.\n> Tracking only: PR #700\n\n## [1.28.6]\n`;
+    expect(
+      checkPrChangelogReference({ prNumber: 700, prTitle: GOVERNED_TITLE, changelog }),
+    ).toEqual({ ok: false, reason: 'missing-reference' });
+  });
+
+  it.each([
+    ['missing title', { number: 705 }],
+    ['blank title', { number: 705, title: '   ' }],
+    ['non-integer number', { number: 705.5, title: GOVERNED_TITLE }],
+    ['zero number', { number: 0, title: GOVERNED_TITLE }],
+    ['negative number', { number: -1, title: GOVERNED_TITLE }],
+    ['null payload', null],
+  ] as const)('isValidPrMetadata rejects %s', (_label, pr) => {
+    expect(isValidPrMetadata(pr)).toBe(false);
+  });
+
+  it('isValidPrMetadata accepts well-formed PR metadata', () => {
+    expect(isValidPrMetadata({ number: 705, title: GOVERNED_TITLE })).toBe(true);
   });
 
   describe('historical-incident fixtures (real CHANGELOG text from the three prior recoveries)', () => {

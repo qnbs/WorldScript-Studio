@@ -1,5 +1,7 @@
 export function isReferencedByPrLabel(prNumber: number, text: string): boolean;
 
+export function isValidPrMetadata(pr: unknown): boolean;
+
 export interface CheckPrChangelogReferenceInput {
   prNumber: number;
   prTitle: string | undefined | null;

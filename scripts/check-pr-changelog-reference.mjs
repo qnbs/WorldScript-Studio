@@ -29,7 +29,7 @@ function getUnreleasedSectionText(changelog) {
   return nextHeading === -1 ? afterHeading : afterHeading.slice(0, nextHeading);
 }
 
-// QNBS-v3: duplicated from check-doc-metrics.mjs's splitUnreleasedEntries for the same self-containment reason — joins a bullet's own soft-wrapped continuation lines into one entry.
+// QNBS-v3: a continuation line must be INDENTED (this project's own convention for a soft-wrapped bullet, confirmed in every real multi-line CHANGELOG entry) — any flush-left line that isn't itself a new bullet (heading, blockquote, code fence, hr, stray prose) ends the current entry instead of being absorbed, without needing to enumerate every Markdown block type individually.
 function extractBulletEntries(unreleasedSection) {
   const entries = [];
   let current = [];
@@ -38,15 +38,13 @@ function extractBulletEntries(unreleasedSection) {
     current = [];
   };
   for (const rawLine of unreleasedSection.split('\n')) {
-    const line = rawLine.trim();
-    if (/^-\s/.test(line)) {
+    const trimmed = rawLine.trim();
+    if (/^-\s/.test(trimmed)) {
       flush();
-      current.push(line);
-    } else if (/^#{1,6}\s/.test(line)) {
-      flush();
-    } else if (current.length > 0 && line !== '') {
-      current.push(line);
-    } else if (line === '') {
+      current.push(trimmed);
+    } else if (current.length > 0 && trimmed !== '' && /^\s/.test(rawLine)) {
+      current.push(trimmed);
+    } else {
       flush();
     }
   }
@@ -57,6 +55,17 @@ function extractBulletEntries(unreleasedSection) {
 // QNBS-v3: exact "PR #NNN" grammar with a full trailing word boundary (rejects "PR #705alpha"/"PR #705_"), stricter than check-doc-metrics.mjs's post-merge bare "#NNN" matcher since pre-merge there is no squash-appended "(#NNN)" to anchor on.
 export function isReferencedByPrLabel(prNumber, text) {
   return new RegExp(`\\bPR\\s*#${prNumber}(?!\\w)`, 'i').test(text);
+}
+
+// QNBS-v3: split out so main()'s CLI wiring stays a thin I/O shell — kept directly unit-testable against malformed event-payload shapes.
+export function isValidPrMetadata(pr) {
+  return (
+    Boolean(pr) &&
+    Number.isSafeInteger(pr.number) &&
+    pr.number > 0 &&
+    typeof pr.title === 'string' &&
+    pr.title.trim() !== ''
+  );
 }
 
 /** Pure decision function — kept separate from I/O so it is directly unit-testable. */
@@ -94,9 +103,9 @@ function main() {
     console.log('[check-pr-changelog-reference] not a pull_request event — skipping');
     process.exit(0);
   }
-  if (typeof pr.number !== 'number') {
+  if (!isValidPrMetadata(pr)) {
     console.error(
-      '[check-pr-changelog-reference] pull_request event payload is missing a numeric "number" field',
+      '[check-pr-changelog-reference] pull_request event payload has invalid PR metadata',
     );
     process.exit(1);
   }
