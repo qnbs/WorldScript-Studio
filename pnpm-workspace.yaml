@@ -115,6 +115,7 @@ packages:
 
 allowBuilds:
   '@google/genai': false
+  '@parcel/watcher': false
   '@swc/core': true
   core-js: false
   esbuild: true
