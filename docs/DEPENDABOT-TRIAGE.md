@@ -100,12 +100,32 @@ rechecked before expiry and removed as soon as an upstream fix or dependency-pat
 possible. Review each cluster against current upstream status before changing any deadline.
 
 **2026-09-10 update: both `extract-zip` ignores retired.** A `pnpm-workspace.yaml`
-`overrides.lighthouse: ">=13.4.1"` entry forces `@lhci/cli`'s Lighthouse/Puppeteer chain onto a
+`overrides.lighthouse: "13.4.1"` entry (exact-pinned, not a `>=` floor — `@lhci/cli@0.15.1` is
+untested against later Lighthouse majors) forces `@lhci/cli`'s Lighthouse/Puppeteer chain onto a
 version whose `@puppeteer/browsers` dependency replaced `extract-zip` with `modern-tar` —
 eliminating the package from the resolved graph entirely (`pnpm why extract-zip` now returns
 nothing). `GHSA-jmr9-qjv8-65gv` and `GHSA-7pqw-9j4j-h8q3` are removed from
 `src-tauri/osv-scanner.toml`; the cluster total drops from 21 to 19. See AUDIT.md's 2026-09-10
 entry for the full verification trail.
+
+**2026-09-10 update: `adm-zip` (`GHSA-vwc7-r8mq-g2x9`) investigated exhaustively, remains
+accepted risk — BLOCKED UPSTREAM / CURRENTLY MITIGATED, not retired.** No patched `adm-zip`
+release exists (GitHub's advisory API: `first_patched_version: null`); the `>=0.6.0` override is a
+floor permitting any future release from 0.6.0 upward, currently resolving to 0.6.0 only because
+that is still the newest published version. No upgrade path removes it either:
+`@huggingface/transformers@4.2.0` (latest stable) hard-pins `onnxruntime-node` as an exact,
+mandatory dependency, and `onnxruntime-node@1.29.0` (latest stable) still depends on
+`adm-zip@^0.6.0`. The SOLE mitigation for the actual vulnerable operation — `adm-zip` runs inside
+`onnxruntime-node`'s postinstall script, during `pnpm install`'s lifecycle-script phase, before any
+bundler is involved — remains `allowBuilds: onnxruntime-node=false`, which denies that script
+outright. Separately (not as a second install-time control for the same risk, but as independent
+evidence about a different question): the shipped app's own JS code never imports the
+`onnxruntime-node` module either, since `vite.config.ts`'s `resolve.alias` hardcodes
+`@huggingface/transformers` to `dist/transformers.web.js` for every bundler/browser consumer (the
+PWA build and the Tauri WebView frontend alike), bypassing the package's own `exports` map
+entirely; that file has zero real reference to `onnxruntime-node`, reinforced by this repo's own
+test suite explicitly mocking that exact web-build path. See `src-tauri/osv-scanner.toml`'s
+expanded comment for the full evidence trail.
 
 ## Special-attention dependencies
 
