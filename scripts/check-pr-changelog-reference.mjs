@@ -42,6 +42,8 @@ function extractBulletEntries(unreleasedSection) {
     if (/^-\s/.test(line)) {
       flush();
       current.push(line);
+    } else if (/^#{1,6}\s/.test(line)) {
+      flush();
     } else if (current.length > 0 && line !== '') {
       current.push(line);
     } else if (line === '') {
@@ -52,9 +54,9 @@ function extractBulletEntries(unreleasedSection) {
   return entries;
 }
 
-// QNBS-v3: exact "PR #NNN" grammar, stricter than check-doc-metrics.mjs's post-merge bare "#NNN" matcher — pre-merge there is no squash-appended "(#NNN)" to anchor on, so a bare "#NNN" could belong to an unrelated issue/PR mention instead of a genuine self-reference.
+// QNBS-v3: exact "PR #NNN" grammar with a full trailing word boundary (rejects "PR #705alpha"/"PR #705_"), stricter than check-doc-metrics.mjs's post-merge bare "#NNN" matcher since pre-merge there is no squash-appended "(#NNN)" to anchor on.
 export function isReferencedByPrLabel(prNumber, text) {
-  return new RegExp(`\\bPR\\s*#${prNumber}(?!\\d)`, 'i').test(text);
+  return new RegExp(`\\bPR\\s*#${prNumber}(?!\\w)`, 'i').test(text);
 }
 
 /** Pure decision function — kept separate from I/O so it is directly unit-testable. */
@@ -88,9 +90,15 @@ function main() {
   }
 
   const pr = payload.pull_request;
-  if (!pr || typeof pr.number !== 'number') {
+  if (!pr) {
     console.log('[check-pr-changelog-reference] not a pull_request event — skipping');
     process.exit(0);
+  }
+  if (typeof pr.number !== 'number') {
+    console.error(
+      '[check-pr-changelog-reference] pull_request event payload is missing a numeric "number" field',
+    );
+    process.exit(1);
   }
 
   let changelog;

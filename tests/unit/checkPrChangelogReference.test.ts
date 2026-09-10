@@ -119,6 +119,23 @@ describe('checkPrChangelogReference', () => {
     ).toEqual({ ok: true, reason: 'referenced' });
   });
 
+  it.each([
+    ['16. a trailing letter suffix, e.g. "PR #700alpha"', '- Hardens activation. PR #700alpha.'],
+    [
+      '17. a trailing underscore suffix, e.g. "PR #700_internal"',
+      '- Hardens activation. PR #700_internal.',
+    ],
+  ] as const)('rejects a near-miss reference with %s', (_label, entryBody) => {
+    expect(check({ entryBody })).toEqual({ ok: false, reason: 'missing-reference' });
+  });
+
+  it('18. does not let a heading immediately after a bullet (no blank line) absorb the heading text as a continuation', () => {
+    const changelog = `## [Unreleased]\n\n### Fixed\n\n- **Something else:** unrelated bullet content.\n### Notes: tracked under PR #700\n\n## [1.28.6]\n`;
+    expect(
+      checkPrChangelogReference({ prNumber: 700, prTitle: GOVERNED_TITLE, changelog }),
+    ).toEqual({ ok: false, reason: 'missing-reference' });
+  });
+
   describe('historical-incident fixtures (real CHANGELOG text from the three prior recoveries)', () => {
     // QNBS-v3: real bullet text from each incident's own recovery commit, factored so only the trailing reference varies.
     const tauriPluginParityBody =
