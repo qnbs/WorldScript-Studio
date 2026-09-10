@@ -226,7 +226,7 @@ restore-ci.sh ~/worldscript-ci/backups/<timestamp>
 | act: exec format error | Wrong arch — check release `amd64` vs `arm64` |
 | OOM during act | Swap ≥6G, `ci-eco-stop.sh`, `--sequential` only, single-axis matrix |
 | Forgejo won't start | `docker logs worldscript-forgejo`; data directory permissions `chown 1000:1000` |
-| Node too old | `fnm use 22` — project requires Node ≥22 |
+| Node too old | `fnm install 22 --latest && fnm use 22` — project requires Node ≥22.19 |
 
 ---
 

@@ -10,7 +10,7 @@ Status: 🔄 in progress | ⬜ open | ✅ done
 
 ## Current Sprint — v1.28.6 corrected release cut: Tauri desktop release-build recovery (2026-09-09)
 
-> **Status: 🔄 in progress.** The authoritative native sequence remains
+> **Status: ✅ done.** The authoritative native sequence remains
 > [`docs/native/ROADMAP-QT-GPUI-DESKTOP.md`](docs/native/ROADMAP-QT-GPUI-DESKTOP.md), with the
 > next Rust-Core capability choice recorded in [`docs/native/CORE-MIGRATION-LEDGER.md`](docs/native/CORE-MIGRATION-LEDGER.md).
 > R-15 implementation stays blocked behind the still-open Wave 2 prerequisite (ledger row 9). No

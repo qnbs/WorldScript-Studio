@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`extract-zip` eliminated from the dependency graph (Dependabot #86, GHSA-7pqw-9j4j-h8q3 /
+  GHSA-jmr9-qjv8-65gv):** the vulnerable package was reachable only via `@lhci/cli`'s hard-pinned
+  `lighthouse@12.6.1` → `puppeteer-core` → `@puppeteer/browsers@2.x` chain. A
+  `pnpm-workspace.yaml` override exact-pins `lighthouse` to `13.4.1`, whose modern
+  `@puppeteer/browsers@3.x` dependency replaced `extract-zip` with `modern-tar` entirely — the
+  package now has zero occurrences in the resolved graph. Lighthouse 13.4.1 requires Node
+  `>=22.19`, so the repository's own `engines.node` floor is raised to match. PR #682.
+
 ### Documentation
 
 - **Post-release v1.28.6 truth sync:** removed the now-stale release-candidate markers from
