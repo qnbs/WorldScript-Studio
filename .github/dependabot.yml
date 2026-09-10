@@ -1,4 +1,10 @@
 version: 2
+# QNBS-v3: consolidates a Rust tauri-plugin-* bump with its npm @tauri-apps/plugin-* counterpart into one PR when both ecosystems have matching updates — the parity checker stays the fail-closed authority regardless (see docs/DEPENDABOT-TRIAGE.md).
+multi-ecosystem-groups:
+  tauri-plugins:
+    schedule:
+      interval: weekly
+      day: monday
 updates:
   # npm / pnpm workspaces
   - package-ecosystem: npm
@@ -34,10 +40,13 @@ updates:
           - 'biome*'
           - 'stryker*'
           - '@stryker-mutator/*'
+    # QNBS-v3: joins the top-level tauri-plugins multi-ecosystem-group defined above.
+    patterns:
+      - '@tauri-apps/plugin-*'
+    multi-ecosystem-group: tauri-plugins
 
   # Cargo / Rust (Tauri desktop backend)
   # QNBS-v3: separate from npm — Cargo updates affect src-tauri/ only; group all together to reduce PR noise
-  # QNBS-v3: no cross-ecosystem grouping exists for the npm @tauri-apps/plugin-* counterparts — see docs/DEPENDABOT-TRIAGE.md's "Special-attention dependencies" row (this gap caused v1.28.5).
   - package-ecosystem: cargo
     directory: /src-tauri
     schedule:
@@ -47,12 +56,19 @@ updates:
       default-days: 7
     open-pull-requests-limit: 5
     groups:
+      # QNBS-v3: excludes tauri-plugin-* so a crate never double-joins both this group and the tauri-plugins multi-ecosystem-group below.
       tauri-deps:
         patterns:
           - 'tauri*'
           - 'tauri-*'
           - 'wry'
           - 'tao'
+        exclude-patterns:
+          - 'tauri-plugin-*'
+    # QNBS-v3: joins the top-level tauri-plugins multi-ecosystem-group with its npm @tauri-apps/plugin-* counterparts — this gap caused v1.28.5 (see docs/DEPENDABOT-TRIAGE.md).
+    patterns:
+      - 'tauri-plugin-*'
+    multi-ecosystem-group: tauri-plugins
 
   # Cargo / Rust (renderer-neutral Core, independent workspace — see docs/native/CORE-MIGRATION-LEDGER.md)
   - package-ecosystem: cargo

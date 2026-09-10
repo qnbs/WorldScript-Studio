@@ -21,7 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   verification, with no cheap check for the exact Rust/npm plugin mismatch that broke every
   platform's `v1.28.5` release build. Added a `parity-preflight` job (checkout + one dependency-free
   Node script, no `pnpm install`) that runs `check-tauri-plugin-versions.mjs` before the bundle
-  matrix starts, on both `workflow_dispatch` and tag pushes. PR #684.
+  matrix starts, gated behind `verify-release-tag` so no repository code runs on an unverified
+  release tag. On both `workflow_dispatch` and tag pushes.
+- **Dependabot now consolidates paired Tauri plugin bumps into one PR:** a new
+  `multi-ecosystem-groups.tauri-plugins` entry couples the Cargo `tauri-plugin-*` crates with
+  their npm `@tauri-apps/plugin-*` counterparts, so Dependabot raises a single combined PR
+  instead of two separate, uncoordinated ones when both sides have a matching update — the same
+  separation that let #661 bump only the Rust side. `tauri-plugins:check` remains the fail-closed
+  authority regardless; grouping only reduces the probability of a lopsided PR. PR #684.
 
 ### Documentation
 

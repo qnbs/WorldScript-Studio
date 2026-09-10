@@ -41,8 +41,19 @@ jobs:
         run: node scripts/signing/verify-github-signatures.mjs
 
   # QNBS-v3: cheap defense-in-depth gate (no pnpm install needed) so a Rust/npm plugin mismatch fails in seconds, not after the ~45min matrix — the v1.28.5 failure class.
+  # QNBS-v3: needs verify-release-tag so a tag that fails signature verification never gets this job's checkout+script execution either, not just the bundle matrix.
   parity-preflight:
     name: 🔍 Tauri plugin parity preflight
+    needs: [verify-release-tag]
+    if: >-
+      ${{
+        always() &&
+        !cancelled() &&
+        (
+          github.event_name == 'workflow_dispatch' ||
+          needs.verify-release-tag.result == 'success'
+        )
+      }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
