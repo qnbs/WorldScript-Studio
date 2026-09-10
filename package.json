@@ -193,7 +193,7 @@
     "@testing-library/user-event": "^14.6.7",
     "@types/node": "^25.9.2",
     "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.5",
+    "@types/react-dom": "^19.2.7",
     "@typescript/native-preview": "beta",
     "@typescript/typescript6": "npm:typescript@~6.0.3",
     "@vitejs/plugin-react": "^6.1.1",
