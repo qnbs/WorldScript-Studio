@@ -44,11 +44,16 @@ const _WB_MANIFEST = self.__WB_MANIFEST || [];
 
 const EXPLICIT_SHELL_URLS = [BASE, `${BASE}index.html`, `${BASE}manifest.json`, `${BASE}favicon.svg`, `${BASE}offline.html`];
 
-// QNBS-v3: keep these files in the injected manifest (their content hash still changes sw.js's own bytes, triggering an update with no version bump) but drop them here so cache.addAll() never sees the same resolved URL twice.
-const explicitResolvedUrls = new Set(EXPLICIT_SHELL_URLS.map((url) => new URL(url, self.location.href).href));
+// QNBS-v3: keep these files in the injected manifest (their content hash still changes sw.js's own bytes, triggering an update with no version bump) but drop them here so cache.addAll() never sees the same resolved URL twice — tracked against every URL seen so far, not just the explicit list, since two manifest entries could otherwise collide with each other.
+const seenResolvedUrls = new Set(EXPLICIT_SHELL_URLS.map((url) => new URL(url, self.location.href).href));
 const manifestUrls = _WB_MANIFEST
   .map((entry) => (typeof entry === 'string' ? entry : entry.url))
-  .filter((url) => !explicitResolvedUrls.has(new URL(url, self.location.href).href));
+  .filter((url) => {
+    const resolved = new URL(url, self.location.href).href;
+    if (seenResolvedUrls.has(resolved)) return false;
+    seenResolvedUrls.add(resolved);
+    return true;
+  });
 
 const PRECACHE_URLS = [...EXPLICIT_SHELL_URLS, ...manifestUrls];
 

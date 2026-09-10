@@ -425,4 +425,21 @@ describe('service worker — precache manifest deduplication (#525 follow-up)', 
     expect(await staticCache.match(ADMISSION_MARKER_URL)).toBeTruthy();
     expect(skipWaitingCalls()).toBe(1);
   });
+
+  it('two manifest entries that resolve to the same URL as each other (not the explicit list) do not trigger a duplicate-request rejection', async () => {
+    // QNBS-v3: exercises the fake's InvalidStateError branch through real production dedup logic, not just the explicit-list case above — proves the rejection path is actually reachable and correctly avoided.
+    const { getHandler, fakeCaches, skipWaitingCalls } = loadServiceWorker({
+      protocol: 'https:',
+      hostname: 'qnbs.github.io',
+      initialCacheNames: [],
+      manifest: [
+        { url: 'assets/app-somehash.js', revision: '' },
+        { url: 'assets/app-somehash.js', revision: '' },
+      ],
+    });
+    await runWaitUntil(getHandler('install'));
+    const staticCache = await fakeCaches.open(CURRENT_STATIC);
+    expect(await staticCache.match(ADMISSION_MARKER_URL)).toBeTruthy();
+    expect(skipWaitingCalls()).toBe(1);
+  });
 });
