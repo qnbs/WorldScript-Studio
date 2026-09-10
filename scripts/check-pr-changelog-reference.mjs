@@ -29,6 +29,11 @@ function getUnreleasedSectionText(changelog) {
   return nextHeading === -1 ? afterHeading : afterHeading.slice(0, nextHeading);
 }
 
+// QNBS-v3: named predicate so extractBulletEntries reads as a flat 3-way dispatch instead of one compound boolean condition.
+function isIndentedContinuation(rawLine, trimmedLine, hasOpenEntry) {
+  return hasOpenEntry && trimmedLine !== '' && /^\s/.test(rawLine);
+}
+
 // QNBS-v3: a continuation line must be INDENTED (this project's own convention for a soft-wrapped bullet, confirmed in every real multi-line CHANGELOG entry) — any flush-left line that isn't itself a new bullet (heading, blockquote, code fence, hr, stray prose) ends the current entry instead of being absorbed, without needing to enumerate every Markdown block type individually.
 function extractBulletEntries(unreleasedSection) {
   const entries = [];
@@ -42,7 +47,7 @@ function extractBulletEntries(unreleasedSection) {
     if (/^-\s/.test(trimmed)) {
       flush();
       current.push(trimmed);
-    } else if (current.length > 0 && trimmed !== '' && /^\s/.test(rawLine)) {
+    } else if (isIndentedContinuation(rawLine, trimmed, current.length > 0)) {
       current.push(trimmed);
     } else {
       flush();
