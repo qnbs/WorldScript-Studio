@@ -23,6 +23,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Node script, no `pnpm install`) that runs `check-tauri-plugin-versions.mjs` before the bundle
   matrix starts, gated behind `verify-release-tag` so no repository code runs on an unverified
   release tag. On both `workflow_dispatch` and tag pushes. PR #684.
+- **PWA: a failed precache can no longer displace a working service-worker generation (#525):**
+  `install` previously caught a `cache.addAll()`/admission-marker failure without rethrowing, so
+  the browser still recorded the worker as successfully installed; it could later activate and
+  claim clients with an incomplete cache and no working fallback. `install` now rethrows on
+  failure so the whole installation rejects — a worker that never reaches `installed` can never
+  activate, claim clients, or receive an update message. The `activate`-side admission check is
+  kept as defense in depth, returning immediately (no pruning, no `clients.claim()`) if it is ever
+  reached without a completed marker. Also fixed a duplicate-precache-request risk the lifecycle
+  fix would otherwise have turned fatal: VitePWA's injected manifest independently discovers
+  `index.html`/`offline.html`/`favicon.svg`, colliding with the same files already listed
+  explicitly in `PRECACHE_URLS`; these are now resolved and deduplicated at runtime (against each
+  other too, not just the explicit list) before reaching `cache.addAll()`, while the manifest keeps
+  its content-hash revision tracking for update detection. PR #699.
 
 ### Documentation
 
