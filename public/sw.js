@@ -42,14 +42,15 @@ const swLogger = {
 // eslint-disable-next-line no-underscore-dangle
 const _WB_MANIFEST = self.__WB_MANIFEST || [];
 
-const PRECACHE_URLS = [
-  BASE,
-  `${BASE}index.html`,
-  `${BASE}manifest.json`,
-  `${BASE}favicon.svg`,
-  `${BASE}offline.html`,
-  ..._WB_MANIFEST.map((entry) => (typeof entry === 'string' ? entry : entry.url)),
-];
+const EXPLICIT_SHELL_URLS = [BASE, `${BASE}index.html`, `${BASE}manifest.json`, `${BASE}favicon.svg`, `${BASE}offline.html`];
+
+// QNBS-v3: keep these files in the injected manifest (their content hash still changes sw.js's own bytes, triggering an update with no version bump) but drop them here so cache.addAll() never sees the same resolved URL twice.
+const explicitResolvedUrls = new Set(EXPLICIT_SHELL_URLS.map((url) => new URL(url, self.location.href).href));
+const manifestUrls = _WB_MANIFEST
+  .map((entry) => (typeof entry === 'string' ? entry : entry.url))
+  .filter((url) => !explicitResolvedUrls.has(new URL(url, self.location.href).href));
+
+const PRECACHE_URLS = [...EXPLICIT_SHELL_URLS, ...manifestUrls];
 
 // QNBS-v3: marker written into CACHE_STATIC only once precache fully succeeds; activate checks it before pruning an older generation.
 const PRECACHE_ADMISSION_URL = `${BASE}__sw-precache-complete__`;

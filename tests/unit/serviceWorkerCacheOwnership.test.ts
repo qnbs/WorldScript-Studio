@@ -53,7 +53,8 @@ function createFakeCaches(
     rejectOnDelete?: string | undefined;
     failAddAllFor?: string | undefined;
     failAddAllTimes?: number | undefined;
-  } = {},
+    swHref: string;
+  },
 ): FakeCaches {
   const store = new Set(initialNames);
   const entries = new Map<string, Set<string>>();
@@ -75,7 +76,16 @@ function createFakeCaches(
             remainingAddAllFailures--;
             throw new Error(`simulated precache failure for ${name}`);
           }
-          for (const url of urls) bucket.add(url);
+          // QNBS-v3: mirrors real Cache.addAll() — rejects when two entries resolve to the same absolute URL, even if their literal strings differ.
+          const resolvedSeen = new Set<string>();
+          for (const url of urls) {
+            const resolved = new URL(url, opts.swHref).href;
+            if (resolvedSeen.has(resolved)) {
+              throw new Error(`simulated InvalidStateError: duplicate request for ${resolved}`);
+            }
+            resolvedSeen.add(resolved);
+            bucket.add(url);
+          }
         },
         match: async (key: string) => (bucket.has(key) ? { ok: true } : undefined),
         put: async (key: string) => {
@@ -107,12 +117,16 @@ function loadServiceWorker(opts: {
   rejectOnDelete?: string;
   failAddAllFor?: string;
   failAddAllTimes?: number;
+  manifest?: Array<string | { url: string; revision: string }>;
 }) {
   const handlers: Record<string, SwHandler> = {};
+  // QNBS-v3: real service-worker scripts resolve bare manifest URLs relative to their own script location — the fake needs the same href to detect duplicate-request rejections realistically.
+  const swHref = `${opts.protocol}//${opts.hostname}${TEST_BASE}sw.js`;
   const fakeCaches = createFakeCaches(opts.initialCacheNames, {
     rejectOnDelete: opts.rejectOnDelete,
     failAddAllFor: opts.failAddAllFor,
     failAddAllTimes: opts.failAddAllTimes,
+    swHref,
   });
   let skipWaitingCallCount = 0;
   let clientsClaimCallCount = 0;
@@ -121,6 +135,7 @@ function loadServiceWorker(opts: {
       protocol: opts.protocol,
       hostname: opts.hostname,
       pathname: `${TEST_BASE}sw.js`,
+      href: swHref,
     },
     console: { log: () => {}, warn: () => {}, error: () => {} },
     addEventListener: (type: string, handler: SwHandler) => {
@@ -135,12 +150,13 @@ function loadServiceWorker(opts: {
     skipWaiting: () => {
       skipWaitingCallCount++;
     },
-    __WB_MANIFEST: [],
+    __WB_MANIFEST: opts.manifest ?? [],
   };
   const context = vm.createContext({
     self: selfMock,
     caches: fakeCaches,
     console: selfMock.console,
+    URL,
     Response: class {
       constructor(public body?: unknown) {}
     },
@@ -387,5 +403,26 @@ describe('service worker — precache admission gate (#525)', () => {
     expect(clientsClaimCalls()).toBe(1);
     expect(fakeCaches.names()).not.toContain(STALE_STATIC);
     expect(fakeCaches.names()).toContain(CURRENT_STATIC);
+  });
+});
+
+// QNBS-v3: regression coverage for a review finding on the #525 fix itself — VitePWA's injected manifest independently discovers index.html/offline.html/favicon.svg, which must not collide with PRECACHE_URLS's own explicit entries for the same files.
+describe('service worker — precache manifest deduplication (#525 follow-up)', () => {
+  it('a manifest entry resolving to the same URL as an explicit shell asset does not trigger a duplicate-request rejection', async () => {
+    const { getHandler, fakeCaches, skipWaitingCalls } = loadServiceWorker({
+      protocol: 'https:',
+      hostname: 'qnbs.github.io',
+      initialCacheNames: [],
+      manifest: [
+        { url: 'index.html', revision: 'abc123' },
+        { url: 'offline.html', revision: 'def456' },
+        { url: 'favicon.svg', revision: 'ghi789' },
+        { url: 'assets/app-somehash.js', revision: '' },
+      ],
+    });
+    await runWaitUntil(getHandler('install'));
+    const staticCache = await fakeCaches.open(CURRENT_STATIC);
+    expect(await staticCache.match(ADMISSION_MARKER_URL)).toBeTruthy();
+    expect(skipWaitingCalls()).toBe(1);
   });
 });
