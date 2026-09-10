@@ -76,6 +76,10 @@ export default defineConfig({
           '**/*.wasm',
           // QNBS-v3 (F-09): self-hosted duckdb-wasm *.worker.js (scripts/copy-duckdb-assets.mjs) matches the **/*.js allowlist above unlike the already-excluded *.wasm — exclude explicitly, same feature-flag-gated reasoning as vendor-duckdb*.
           '**/duckdb/**',
+          // QNBS-v3: sw.js's own PRECACHE_URLS already lists these with the deployment BASE prefix — leaving them in the injected manifest too resolves to duplicate cache.addAll() requests, which throws.
+          'index.html',
+          'offline.html',
+          'favicon.svg',
         ],
       },
       // Manifest bereits in public/manifest.json eingebunden

@@ -13,12 +13,15 @@ const extractedVersion = appVersionMatch?.[1];
 if (!extractedVersion) throw new Error('Could not extract APP_VERSION from public/sw.js');
 const APP_VERSION = extractedVersion;
 
-// QNBS-v3: extracted from source (not hardcoded) so this test tracks the real constant, not a guess.
+// QNBS-v3: the one BASE every loadServiceWorker() call below uses via selfMock.location.pathname — shared so ADMISSION_MARKER_URL can never silently diverge from it.
+const TEST_BASE = '/WorldScript-Studio/';
+
+// QNBS-v3: only the suffix is extracted from source; TEST_BASE above is the single hardcoded value both this constant and selfMock.location.pathname derive from.
 const admissionUrlMatch = swSource.match(/const PRECACHE_ADMISSION_URL\s*=\s*`\$\{BASE\}([^`]+)`/);
 const extractedAdmissionSuffix = admissionUrlMatch?.[1];
 if (!extractedAdmissionSuffix)
   throw new Error('Could not extract PRECACHE_ADMISSION_URL from public/sw.js');
-const ADMISSION_MARKER_URL = `/WorldScript-Studio/${extractedAdmissionSuffix}`;
+const ADMISSION_MARKER_URL = `${TEST_BASE}${extractedAdmissionSuffix}`;
 
 const CURRENT_STATIC = `worldscript-static-v${APP_VERSION}`;
 const CURRENT_DYNAMIC = `worldscript-dynamic-v${APP_VERSION}`;
@@ -117,7 +120,7 @@ function loadServiceWorker(opts: {
     location: {
       protocol: opts.protocol,
       hostname: opts.hostname,
-      pathname: '/WorldScript-Studio/sw.js',
+      pathname: `${TEST_BASE}sw.js`,
     },
     console: { log: () => {}, warn: () => {}, error: () => {} },
     addEventListener: (type: string, handler: SwHandler) => {
