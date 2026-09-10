@@ -100,12 +100,27 @@ rechecked before expiry and removed as soon as an upstream fix or dependency-pat
 possible. Review each cluster against current upstream status before changing any deadline.
 
 **2026-09-10 update: both `extract-zip` ignores retired.** A `pnpm-workspace.yaml`
-`overrides.lighthouse: ">=13.4.1"` entry forces `@lhci/cli`'s Lighthouse/Puppeteer chain onto a
+`overrides.lighthouse: "13.4.1"` entry (exact-pinned, not a `>=` floor — `@lhci/cli@0.15.1` is
+untested against later Lighthouse majors) forces `@lhci/cli`'s Lighthouse/Puppeteer chain onto a
 version whose `@puppeteer/browsers` dependency replaced `extract-zip` with `modern-tar` —
 eliminating the package from the resolved graph entirely (`pnpm why extract-zip` now returns
 nothing). `GHSA-jmr9-qjv8-65gv` and `GHSA-7pqw-9j4j-h8q3` are removed from
 `src-tauri/osv-scanner.toml`; the cluster total drops from 21 to 19. See AUDIT.md's 2026-09-10
 entry for the full verification trail.
+
+**2026-09-10 update: `adm-zip` (`GHSA-vwc7-r8mq-g2x9`) investigated exhaustively, remains
+accepted risk — BLOCKED UPSTREAM / CURRENTLY MITIGATED, not retired.** No patched `adm-zip`
+release exists (GitHub's advisory API: `first_patched_version: null`), and no upgrade path
+removes it: `@huggingface/transformers@4.2.0` (latest stable) hard-pins `onnxruntime-node` as an
+exact, mandatory dependency, and `onnxruntime-node@1.29.0` (latest stable) still depends on
+`adm-zip@^0.6.0`. Beyond the existing `allowBuilds: onnxruntime-node=false` mitigation, a second,
+independent layer was confirmed: `@huggingface/transformers`'s own package `exports` map routes
+every bundler/browser consumer (Vite, for both the PWA build and the Tauri WebView frontend) to
+`dist/transformers.web.js`, which contains zero real reference to `onnxruntime-node` — only a
+genuine Node.js `require`/`import` resolution would hit the `"node"` export condition that pulls
+it in, and this repo has no such code path (confirmed via source inspection and this repo's own
+test suite, which explicitly mocks the web build path rather than letting real resolution occur).
+See `src-tauri/osv-scanner.toml`'s expanded comment for the full evidence trail.
 
 ## Special-attention dependencies
 

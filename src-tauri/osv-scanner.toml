@@ -134,19 +134,33 @@ reason = "unic-ucd-ident 0.9.0: unmaintained Unicode data crate; final version; 
 # adm-zip@0.6.0 (CVE-2026-76845 / GHSA-vwc7-r8mq-g2x9, CVSS 6.8): symlink-following
 # path traversal on extraction with overwrite enabled, when an attacker can
 # pre-place a symlink at the extraction destination. 0.6.0 is the latest
-# published release with no patched version yet — pnpm.overrides already pins
-# the newest available release (see pnpm-workspace.yaml) but cannot fix an
-# unpatched vulnerability. adm-zip is a dependency of onnxruntime-node's own
-# postinstall/build script (which extracts its prebuilt native binary into
+# published release with no patched version yet (GitHub's advisory API reports
+# first_patched_version: null) — pnpm.overrides already pins the newest
+# available release (see pnpm-workspace.yaml) but cannot fix an unpatched
+# vulnerability. No upgrade path exists either: @huggingface/transformers@4.2.0
+# (latest stable) hard-pins onnxruntime-node to an exact, mandatory (non-optional)
+# "1.24.3", and even onnxruntime-node@1.29.0 (latest stable, 2026-09-10) still
+# depends on adm-zip@^0.6.0 — this is not a stale-pin problem an upgrade solves.
+# adm-zip is a dependency of onnxruntime-node's own postinstall/build script
+# (which extracts its prebuilt native binary into
 # `path.join(os.tmpdir(), 'onnxruntime-node-pkgs_<timestamp>')` — a shared,
 # timestamp-named system temp directory, NOT a project-local one — verified
-# directly against onnxruntime-node@1.24.3's own install-utils.js). The actual
-# mitigation is that `pnpm-workspace.yaml`'s `allowBuilds: { onnxruntime-node:
-# false }` denies this package's lifecycle scripts outright, so this code path
-# never executes during a normal `pnpm install` in this repo, in CI, or in the
-# shipped app. If that `allowBuilds` entry is ever relaxed or removed, this
-# exposure model must be re-evaluated — the temp-directory extraction target
-# is not inherently safe on its own.
+# directly against onnxruntime-node@1.24.3's own install-utils.js). Two
+# independent mitigations, verified 2026-09-10: (1) `pnpm-workspace.yaml`'s
+# `allowBuilds: { onnxruntime-node: false }` denies this package's lifecycle
+# scripts outright, so the postinstall extraction never runs during a normal
+# `pnpm install` in this repo, in CI, or in the shipped app; (2)
+# @huggingface/transformers's own package.json `exports` map routes every
+# bundler/browser consumer (Vite, for both the PWA build and the Tauri WebView
+# frontend) to `dist/transformers.web.js` via the "default" condition — only a
+# genuine Node.js require/import resolution hits the "node" condition that
+# actually imports onnxruntime-node. `dist/transformers.web.js` contains zero
+# real reference to onnxruntime-node (confirmed by inspecting the published
+# package), and this repo's own test suite explicitly mocks that exact web
+# build path rather than letting real module resolution occur. If that
+# `allowBuilds` entry is ever relaxed/removed, or transformers.js changes its
+# exports/bundling strategy, this exposure model must be re-evaluated — the
+# temp-directory extraction target is not inherently safe on its own.
 
 [[IgnoredVulns]]
 id = "GHSA-vwc7-r8mq-g2x9"
