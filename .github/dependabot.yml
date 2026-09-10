@@ -34,6 +34,16 @@ updates:
           - 'biome*'
           - 'stryker*'
           - '@stryker-mutator/*'
+    ignore:
+      - dependency-name: '@stryker-mutator/api'
+        update-types:
+          - 'version-update:semver-major'
+      - dependency-name: '@stryker-mutator/core'
+        update-types:
+          - 'version-update:semver-major'
+      - dependency-name: '@stryker-mutator/vitest-runner'
+        update-types:
+          - 'version-update:semver-major'
 
   # Cargo / Rust (Tauri desktop backend)
   # QNBS-v3: separate from npm — Cargo updates affect src-tauri/ only; group all together to reduce PR noise
