@@ -112,6 +112,7 @@ function loadServiceWorker(opts: {
     failAddAllTimes: opts.failAddAllTimes,
   });
   let skipWaitingCallCount = 0;
+  let clientsClaimCallCount = 0;
   const selfMock = {
     location: {
       protocol: opts.protocol,
@@ -122,7 +123,11 @@ function loadServiceWorker(opts: {
     addEventListener: (type: string, handler: SwHandler) => {
       handlers[type] = handler;
     },
-    clients: { claim: async () => {} },
+    clients: {
+      claim: async () => {
+        clientsClaimCallCount++;
+      },
+    },
     registration: { unregister: async () => {} },
     skipWaiting: () => {
       skipWaitingCallCount++;
@@ -144,7 +149,12 @@ function loadServiceWorker(opts: {
     if (!handler) throw new Error(`sw.js never registered a "${type}" listener`);
     return handler;
   };
-  return { getHandler, fakeCaches, skipWaitingCalls: () => skipWaitingCallCount };
+  return {
+    getHandler,
+    fakeCaches,
+    skipWaitingCalls: () => skipWaitingCallCount,
+    clientsClaimCalls: () => clientsClaimCallCount,
+  };
 }
 
 async function runWaitUntil(handler: SwHandler, event: Record<string, unknown> = {}) {
@@ -354,22 +364,24 @@ describe('service worker — precache admission gate (#525)', () => {
   });
 
   it('a later real successful install attempt after a failed one succeeds normally (no permanent stuck state)', async () => {
-    const { getHandler, fakeCaches } = loadServiceWorker({
+    const { getHandler, fakeCaches, clientsClaimCalls } = loadServiceWorker({
       protocol: 'https:',
       hostname: 'qnbs.github.io',
       initialCacheNames: [STALE_STATIC],
       failAddAllFor: CURRENT_STATIC,
       failAddAllTimes: 1,
     });
-    // QNBS-v3: the first attempt fails and must reject; activate must never run for a rejected install in real life, but even if reached the marker check still preserves the previous generation as defense in depth.
+    // QNBS-v3: the first attempt fails and must reject; activate must never run for a rejected install in real life, but even if reached the marker check still preserves the previous generation and never claims clients, as defense in depth.
     await expect(runWaitUntil(getHandler('install'))).rejects.toThrow();
     await runWaitUntil(getHandler('activate'));
     expect(fakeCaches.names()).toContain(STALE_STATIC);
     expect(fakeCaches.attemptedDeletes).not.toContain(STALE_STATIC);
+    expect(clientsClaimCalls()).toBe(0);
 
     // QNBS-v3: a real second install attempt (same worker source and fake caches, not a marker shortcut) now succeeds because the failure countdown is exhausted.
     await runWaitUntil(getHandler('install'));
     await runWaitUntil(getHandler('activate'));
+    expect(clientsClaimCalls()).toBe(1);
     expect(fakeCaches.names()).not.toContain(STALE_STATIC);
     expect(fakeCaches.names()).toContain(CURRENT_STATIC);
   });

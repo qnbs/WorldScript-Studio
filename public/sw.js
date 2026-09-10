@@ -164,23 +164,23 @@ self.addEventListener('activate', (event) => {
   }
   event.waitUntil(
     (async () => {
-      // QNBS-v3: admission gate — only prune older caches once this generation's own precache is proven complete; otherwise leave every cache untouched.
+      // QNBS-v3: admission gate — only an admitted generation may prune stale caches or claim clients.
       const staticCache = await caches.open(CACHE_STATIC);
       const precacheComplete = Boolean(await staticCache.match(PRECACHE_ADMISSION_URL));
-      if (precacheComplete) {
-        const cacheNames = await caches.keys();
-        await Promise.all(
-          cacheNames
-            // QNBS-v3: prune only owned-and-stale — never delete a cache we don't positively own.
-            .filter((name) => isWorldScriptOwnedCache(name) && !ALL_CACHES.includes(name))
-            .map((name) => {
-              swLogger.log('Pruning old cache:', name);
-              return caches.delete(name);
-            })
-        );
-      } else {
+      if (!precacheComplete) {
         swLogger.warn('Skipping cache-generation cutover: this generation\'s precache never completed');
+        return;
       }
+      const cacheNames = await caches.keys();
+      await Promise.all(
+        cacheNames
+          // QNBS-v3: prune only owned-and-stale — never delete a cache we don't positively own.
+          .filter((name) => isWorldScriptOwnedCache(name) && !ALL_CACHES.includes(name))
+          .map((name) => {
+            swLogger.log('Pruning old cache:', name);
+            return caches.delete(name);
+          })
+      );
       await self.clients.claim();
     })()
   );
