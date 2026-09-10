@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `@puppeteer/browsers@3.x` dependency replaced `extract-zip` with `modern-tar` entirely — the
   package now has zero occurrences in the resolved graph. Lighthouse 13.4.1 requires Node
   `>=22.19`, so the repository's own `engines.node` floor is raised to match. PR #682.
+- **Tauri release build now fails fast on a plugin version mismatch:** `tauri-build.yml`'s
+  cross-platform bundle matrix (~45 min) previously started right after tag-signature
+  verification, with no cheap check for the exact Rust/npm plugin mismatch that broke every
+  platform's `v1.28.5` release build. Added a `parity-preflight` job (checkout + one dependency-free
+  Node script, no `pnpm install`) that runs `check-tauri-plugin-versions.mjs` before the bundle
+  matrix starts, on both `workflow_dispatch` and tag pushes. PR #684.
 
 ### Documentation
 

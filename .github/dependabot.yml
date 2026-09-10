@@ -37,6 +37,7 @@ updates:
 
   # Cargo / Rust (Tauri desktop backend)
   # QNBS-v3: separate from npm — Cargo updates affect src-tauri/ only; group all together to reduce PR noise
+  # QNBS-v3: no cross-ecosystem grouping exists for the npm @tauri-apps/plugin-* counterparts — see docs/DEPENDABOT-TRIAGE.md's "Special-attention dependencies" row (this gap caused v1.28.5).
   - package-ecosystem: cargo
     directory: /src-tauri
     schedule:

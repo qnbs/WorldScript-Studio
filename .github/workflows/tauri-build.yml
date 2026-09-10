@@ -40,13 +40,31 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/signing/verify-github-signatures.mjs
 
+  # QNBS-v3: cheap defense-in-depth gate (no pnpm install needed) so a Rust/npm plugin mismatch fails in seconds, not after the ~45min matrix — the v1.28.5 failure class.
+  parity-preflight:
+    name: 🔍 Tauri plugin parity preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version-file: .nvmrc
+      - name: Verify Tauri plugin Rust/npm version parity
+        run: node scripts/check-tauri-plugin-versions.mjs
+
   bundle:
     name: Bundle (${{ matrix.os }})
-    needs: [verify-release-tag]
+    needs: [verify-release-tag, parity-preflight]
     if: >-
       ${{
         always() &&
         !cancelled() &&
+        needs.parity-preflight.result == 'success' &&
         (
           github.event_name == 'workflow_dispatch' ||
           needs.verify-release-tag.result == 'success'
