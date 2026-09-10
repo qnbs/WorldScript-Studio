@@ -22,7 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   platform's `v1.28.5` release build. Added a `parity-preflight` job (checkout + one dependency-free
   Node script, no `pnpm install`) that runs `check-tauri-plugin-versions.mjs` before the bundle
   matrix starts, gated behind `verify-release-tag` so no repository code runs on an unverified
-  release tag. On both `workflow_dispatch` and tag pushes.
+  release tag. On both `workflow_dispatch` and tag pushes. PR #684.
+
 ### Documentation
 
 - **Post-release v1.28.6 truth sync:** removed the now-stale release-candidate markers from
