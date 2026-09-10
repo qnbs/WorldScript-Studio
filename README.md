@@ -63,7 +63,7 @@ Two always-on hosted builds — open whichever you prefer (identical app, both a
 
 > Everything is saved locally in IndexedDB and works offline (PWA). Nothing leaves your device unless you choose a cloud provider.
 
-**Running it yourself?** `node scripts/dependency-state.mjs reconcile && pnpm run dev` (Node ≥ 22, pnpm 11; frozen-lockfile install — never a bare `pnpm install`) → <http://localhost:3000>. Full setup, deployment, and AI-provider options — including the new **OpenRouter** free-tier gateway — are in [Getting Started](#getting-started).
+**Running it yourself?** `node scripts/dependency-state.mjs reconcile && pnpm run dev` (Node ≥ 22.19, pnpm 11; frozen-lockfile install — never a bare `pnpm install`) → <http://localhost:3000>. Full setup, deployment, and AI-provider options — including the new **OpenRouter** free-tier gateway — are in [Getting Started](#getting-started).
 
 ---
 
@@ -567,7 +567,7 @@ WorldScript-Studio/
 
 A modern browser (Chrome 90+, Firefox 88+, Safari 14+, Edge 90+) is all you need for the web app — no installation required.
 
-For local development: **Node ≥ 22**, **pnpm 11** (`npm install -g pnpm`). For the desktop app: **Rust + Tauri CLI** (`cargo install tauri-cli`).
+For local development: **Node ≥ 22.19**, **pnpm 11** (`npm install -g pnpm`). For the desktop app: **Rust + Tauri CLI** (`cargo install tauri-cli`).
 
 ### 🔐 Setting Up AI
 
@@ -631,7 +631,7 @@ Vercel is a **first-class** hosting option alongside Pages: connect the repo, us
 git clone https://github.com/qnbs/WorldScript-Studio.git
 cd WorldScript-Studio
 
-# Install dependencies (Node ≥ 22, pnpm 11) — frozen-lockfile install, never a bare `pnpm install`
+# Install dependencies (Node ≥ 22.19, pnpm 11) — frozen-lockfile install, never a bare `pnpm install`
 node scripts/dependency-state.mjs reconcile
 
 # Start the development server (http://localhost:3000)
