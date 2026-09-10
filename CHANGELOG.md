@@ -36,6 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   explicitly in `PRECACHE_URLS`; these are now resolved and deduplicated at runtime (against each
   other too, not just the explicit list) before reaching `cache.addAll()`, while the manifest keeps
   its content-hash revision tracking for update detection. PR #699.
+- **A governed PR can no longer merge without a CHANGELOG reference to itself:** the completeness
+  gate in `check-doc-metrics.mjs` only enforced a PR-number reference in `[Unreleased]` after
+  squash-merge, once the commit already carried `(#N)` — nothing stopped a governed PR from merging
+  without ever adding the entry, even though its real PR number is knowable before merge. Recurred
+  three times (#678→#679, #684→#685, #699→#700). A new pre-merge admission gate
+  (`.github/workflows/pr-changelog-reference.yml` + `check-pr-changelog-reference.mjs`, run from the
+  PR's base ref to prevent self-weakening) now fails a governed PR's CI unless `[Unreleased]` already
+  references it as `PR #<N>`. PR #705.
 
 ### Documentation
 
