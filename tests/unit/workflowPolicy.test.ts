@@ -244,7 +244,10 @@ describe('Tauri release workflow policy', () => {
 
   it('requires successful tag verification before tagged bundles, while allowing manual builds', () => {
     const bundle = extractJobBlock(tauriWorkflowSource, 'bundle');
-    expect(extractNeeds(tauriWorkflowSource, 'bundle')).toEqual(['verify-release-tag']);
+    expect(extractNeeds(tauriWorkflowSource, 'bundle')).toEqual([
+      'verify-release-tag',
+      'parity-preflight',
+    ]);
     expect(bundle).toContain('always()');
     expect(bundle).toContain('!cancelled()');
     expect(bundle).toMatch(/github\.event_name == 'workflow_dispatch'/);
@@ -253,6 +256,16 @@ describe('Tauri release workflow policy', () => {
       /always\(\)\s*&&\s*!cancelled\(\)[\s\S]+github\.event_name == 'workflow_dispatch'[\s\S]+needs\.verify-release-tag\.result == 'success'/,
     );
     expect(bundle).toContain('Skip updater signing for workflow_dispatch test builds');
+  });
+
+  it('requires the plugin parity preflight to pass, unconditionally, before bundling', () => {
+    const bundle = extractJobBlock(tauriWorkflowSource, 'bundle');
+    const preflight = extractJobBlock(tauriWorkflowSource, 'parity-preflight');
+    expect(bundle).toMatch(/needs\.parity-preflight\.result == 'success'/);
+    expect(extractNeeds(tauriWorkflowSource, 'parity-preflight')).toEqual([]);
+    expect(preflight).toContain('scripts/check-tauri-plugin-versions.mjs');
+    expect(preflight).not.toContain('pnpm install');
+    expect(preflight).toMatch(/^ {4}permissions:\n {6}contents: read\s*$/m);
   });
 
   it('keeps release publication tag-only and downstream of bundle output', () => {
