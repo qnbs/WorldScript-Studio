@@ -76,7 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `getProjectTargetIdentity()` invariant (extracted from `restoreSnapshotThunk`'s own established
   guard into a shared `features/project/projectIdentity.ts`, `captureActiveProjectIdentity()` reads
   the live store directly) and discard the result if that identity no longer matches by the time
-  the request settles (or, for the outline generator, by the time Apply is later clicked). PR #NNN.
+  the request settles (or, for the outline generator, by the time Apply is later clicked). PR #707.
 
 ### Documentation
 
