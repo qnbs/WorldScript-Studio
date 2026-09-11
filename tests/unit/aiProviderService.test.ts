@@ -270,17 +270,30 @@ describe('generateJson', () => {
 
 // ─── streamText ───────────────────────────────────────────────────────────────
 
+// QNBS-v3: shared by the streamText and streamAiHelpResponse local-reroute tests below — CodeScene flagged the prior near-identical pair as duplication.
+async function expectLocalRerouteInsteadOfGemini(
+  invoke: (onChunk: (text: string) => void) => Promise<void>,
+  geminiMock: ReturnType<typeof vi.fn>,
+  localText: string,
+): Promise<void> {
+  setActiveAiMode('local');
+  const spy = vi
+    .spyOn(localAiFacade, 'generateLocalText')
+    .mockResolvedValueOnce({ layer: 'webllm', text: localText });
+  const onChunk = vi.fn();
+  await invoke(onChunk);
+  expect(geminiMock).not.toHaveBeenCalled();
+  expect(onChunk).toHaveBeenCalledWith(localText);
+  spy.mockRestore();
+}
+
 describe('streamText', () => {
   it('reroutes to local inference when local-only mode is active, even though opts specify a cloud provider', async () => {
-    setActiveAiMode('local');
-    const spy = vi
-      .spyOn(localAiFacade, 'generateLocalText')
-      .mockResolvedValueOnce({ layer: 'webllm', text: 'local stream answer' });
-    const onChunk = vi.fn();
-    await streamText('prompt', 'Balanced', defaultOpts, { onChunk, onDone: vi.fn() });
-    expect(geminiService.streamText).not.toHaveBeenCalled();
-    expect(onChunk).toHaveBeenCalledWith('local stream answer');
-    spy.mockRestore();
+    await expectLocalRerouteInsteadOfGemini(
+      (onChunk) => streamText('prompt', 'Balanced', defaultOpts, { onChunk, onDone: vi.fn() }),
+      vi.mocked(geminiService.streamText),
+      'local stream answer',
+    );
   });
 });
 
@@ -300,15 +313,12 @@ describe('streamAiHelpResponse', () => {
   });
 
   it('blocks the gemini-direct branch when local-only mode is active, rerouting to local inference instead', async () => {
-    setActiveAiMode('local');
-    const spy = vi
-      .spyOn(localAiFacade, 'generateLocalText')
-      .mockResolvedValueOnce({ layer: 'webllm', text: 'local answer' });
-    const onChunk = vi.fn();
-    await streamAiHelpResponse('question?', 'Balanced', defaultOpts, { onChunk, onDone: vi.fn() });
-    expect(geminiService.streamAiHelpResponse).not.toHaveBeenCalled();
-    expect(onChunk).toHaveBeenCalledWith('local answer');
-    spy.mockRestore();
+    await expectLocalRerouteInsteadOfGemini(
+      (onChunk) =>
+        streamAiHelpResponse('question?', 'Balanced', defaultOpts, { onChunk, onDone: vi.fn() }),
+      vi.mocked(geminiService.streamAiHelpResponse),
+      'local answer',
+    );
   });
 });
 
