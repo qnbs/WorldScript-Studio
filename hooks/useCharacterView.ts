@@ -2,6 +2,10 @@ import { useCallback, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useToast } from '../components/ui/Toast';
+import {
+  captureActiveProjectIdentity,
+  identityUnchanged,
+} from '../features/project/projectIdentity';
 import { selectAllCharacters } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
 import {
@@ -80,6 +84,7 @@ export const useCharacterView = () => {
     setIsGeneratingProfile(true);
     setIsAiModalOpen(false);
 
+    const capturedProjectIdentity = captureActiveProjectIdentity();
     const resultAction = await dispatch(
       generateCharacterProfileThunk({
         concept: aiConcept,
@@ -87,6 +92,13 @@ export const useCharacterView = () => {
         heuristicLabels: buildCharacterHeuristicLabels(),
       }),
     );
+    // QNBS-v3: the active project may have changed while this request was in flight (e.g. New Project/import/restore elsewhere in the still-mounted app) -- discard rather than apply a result generated for a different project.
+    if (!identityUnchanged(capturedProjectIdentity, captureActiveProjectIdentity())) {
+      setIsGeneratingProfile(false);
+      setAiConcept('');
+      return;
+    }
+
     if (generateCharacterProfileThunk.fulfilled.match(resultAction)) {
       const newChar = resultAction.payload;
       dispatch(projectActions.addCharacter(newChar));
@@ -119,9 +131,16 @@ export const useCharacterView = () => {
     async (field: keyof Character) => {
       if (!selectedCharacter) return;
       setIsRegeneratingField(field);
+      const capturedProjectIdentity = captureActiveProjectIdentity();
       const resultAction = await dispatch(
         regenerateCharacterFieldThunk({ character: selectedCharacter, field, lang: language }),
       );
+      // QNBS-v3: discard a late-arriving regenerated field if the active project changed while the request was in flight.
+      if (!identityUnchanged(capturedProjectIdentity, captureActiveProjectIdentity())) {
+        setIsRegeneratingField(null);
+        return;
+      }
+
       if (regenerateCharacterFieldThunk.fulfilled.match(resultAction)) {
         handleFieldChange(resultAction.payload.field, resultAction.payload.value);
       } else {

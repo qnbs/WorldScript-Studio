@@ -2,6 +2,10 @@ import { useCallback, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useToast } from '../components/ui/Toast';
+import {
+  captureActiveProjectIdentity,
+  identityUnchanged,
+} from '../features/project/projectIdentity';
 import { selectAllWorlds } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
 import {
@@ -75,6 +79,7 @@ export const useWorldView = () => {
   const handleGenerateProfile = useCallback(async () => {
     setIsGeneratingProfile(true);
     setIsAiModalOpen(false);
+    const capturedProjectIdentity = captureActiveProjectIdentity();
     const resultAction = await dispatch(
       generateWorldProfileThunk({
         concept: aiConcept,
@@ -82,6 +87,13 @@ export const useWorldView = () => {
         heuristicLabels: buildWorldHeuristicLabels(),
       }),
     );
+    // QNBS-v3: the active project may have changed while this request was in flight -- discard rather than apply a result generated for a different project.
+    if (!identityUnchanged(capturedProjectIdentity, captureActiveProjectIdentity())) {
+      setIsGeneratingProfile(false);
+      setAiConcept('');
+      return;
+    }
+
     if (generateWorldProfileThunk.fulfilled.match(resultAction)) {
       dispatch(projectActions.addWorld(resultAction.payload));
       toast.success(t('common.saved'), resultAction.payload.name);
@@ -112,9 +124,16 @@ export const useWorldView = () => {
     async (field: keyof World) => {
       if (!selectedWorld) return;
       setIsRegeneratingField(field);
+      const capturedProjectIdentity = captureActiveProjectIdentity();
       const resultAction = await dispatch(
         regenerateWorldFieldThunk({ world: selectedWorld, field, lang: language }),
       );
+      // QNBS-v3: discard a late-arriving regenerated field if the active project changed while the request was in flight.
+      if (!identityUnchanged(capturedProjectIdentity, captureActiveProjectIdentity())) {
+        setIsRegeneratingField(null);
+        return;
+      }
+
       if (regenerateWorldFieldThunk.fulfilled.match(resultAction)) {
         handleFieldChange(resultAction.payload.field, resultAction.payload.value);
       } else {
