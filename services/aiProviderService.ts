@@ -764,6 +764,12 @@ export async function generateJson<T>(
   }
 }
 
+// QNBS-v3: image generation has no local-routing fallback, so the policy gate alone must block a cloud call in local-only/eco/privacy mode — extracted so generateImage's own switch stays one statement per case for CodeScene's complexity gate on this hotspot file.
+async function generateImageViaGemini(prompt: string, signal?: AbortSignal): Promise<string> {
+  await assertCloudAiAllowed('gemini');
+  return generateImageGemini(prompt, signal);
+}
+
 export async function generateImage(
   prompt: string,
   opts: AIRequestOptions,
@@ -771,9 +777,7 @@ export async function generateImage(
 ): Promise<string> {
   switch (opts.provider) {
     case 'gemini':
-      // QNBS-v3: image generation has no local-routing fallback, so the policy gate alone must block a cloud call in local-only/eco/privacy mode.
-      await assertCloudAiAllowed('gemini');
-      return generateImageGemini(prompt, signal);
+      return generateImageViaGemini(prompt, signal);
     case 'openai':
       throw new Error(
         'OpenAI image generation is currently not available via the browser version.',
