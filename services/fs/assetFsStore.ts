@@ -12,14 +12,26 @@ import { FsSnapshotStore } from './snapshotFsStore';
 export class FsAssetStore extends FsSnapshotStore {
   // --- Image Store Methods ---
 
-  // QNBS-v3: sanitizePathSegment (and projectPathSegment, which wraps it for project.json's own directory) is a display sanitizer, not injective -- "alpha beta" and "alpha-beta" both normalize to "alpha-beta". Reusing it for images would let two distinct projects share one image directory, so this hashes the FULL untruncated projectId instead; the sanitized text is kept only as a human-readable prefix, never as the sole identity. Deliberately does not touch projectPathSegment itself -- that stays the project-directory/legacy-routing authority unchanged.
-  private async projectNamespaceSegment(projectId: string): Promise<string> {
-    const digestBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(projectId));
-    const digest = Array.from(new Uint8Array(digestBuffer), (b) => b.toString(16).padStart(2, '0'))
+  // QNBS-v3: shared digest primitive for both the project-namespace and entity-filename encodings below -- neither may rely on sanitizePathSegment alone, since it collapses distinct inputs (e.g. "alpha beta" and "alpha-beta") to the same output.
+  private async digestHex(value: string): Promise<string> {
+    const digestBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+    return Array.from(new Uint8Array(digestBuffer), (b) => b.toString(16).padStart(2, '0'))
       .join('')
       .slice(0, 16);
+  }
+
+  // QNBS-v3: sanitizePathSegment (and projectPathSegment, which wraps it for project.json's own directory) is a display sanitizer, not injective -- "alpha beta" and "alpha-beta" both normalize to "alpha-beta". Reusing it for images would let two distinct projects share one image directory, so this hashes the FULL untruncated projectId instead; the sanitized text is kept only as a human-readable prefix, never as the sole identity. Deliberately does not touch projectPathSegment itself -- that stays the project-directory/legacy-routing authority unchanged.
+  private async projectNamespaceSegment(projectId: string): Promise<string> {
+    const digest = await this.digestHex(projectId);
     const readablePrefix = sanitizePathSegment(projectId, 'project').slice(0, 40);
     return `${readablePrefix}--${digest}`;
+  }
+
+  // QNBS-v3: same non-injective-sanitizer risk as projectNamespaceSegment, but for the entity id within one project's namespace -- e.g. two characters named "alpha beta" and "alpha-beta" would otherwise share one qualified filename and silently overwrite each other's image.
+  private async qualifiedImageFilename(id: string): Promise<string> {
+    const digest = await this.digestHex(id);
+    const readablePrefix = sanitizePathSegment(id, 'image').slice(0, 40);
+    return `${readablePrefix}--${digest}.png`;
   }
 
   private async qualifiedImagePaths(
@@ -30,7 +42,7 @@ export class FsAssetStore extends FsSnapshotStore {
     const appDataPath = await this.ensureAppDataPath();
     const namespaceSegment = await this.projectNamespaceSegment(projectId);
     const dir = await apis.join(appDataPath, 'images', namespaceSegment);
-    const file = await apis.join(dir, `${sanitizePathSegment(id, 'image')}.png`);
+    const file = await apis.join(dir, await this.qualifiedImageFilename(id));
     return { dir, file };
   }
 
@@ -66,19 +78,24 @@ export class FsAssetStore extends FsSnapshotStore {
 
   async getImage(projectId: string, id: string): Promise<string | null> {
     try {
-      const apis = await this.getApis();
-      let imageFile = (await this.qualifiedImagePaths(projectId, id)).file;
-      if (!(await apis.exists(imageFile))) {
-        // QNBS-v3: preserve-first fail-closed -- a legacy unqualified image cannot be safely attributed to this project once a second project is stored, since either could have originally saved it.
-        if ((await this.countStoredProjectsCapped()) > 1) return null;
-        imageFile = await this.legacyImagePath(id);
+      // QNBS-v3: serialized like getBinderAsset -- without this, the ownership count and the legacy-file read are two separate awaited steps a concurrent project creation/deletion can interleave, staling the ownership verdict.
+      return await this.withLegacyRoutingOperation(async () => {
+        const apis = await this.getApis();
+        let imageFile = (await this.qualifiedImagePaths(projectId, id)).file;
         if (!(await apis.exists(imageFile))) {
-          return null;
+          // QNBS-v3: preserve-first fail-closed -- a legacy unqualified image cannot be safely attributed to this project once a second project is stored, since either could have originally saved it.
+          if ((await this.countStoredProjectsCapped()) > 1) return null;
+          imageFile = await this.legacyImagePath(id);
+          if (!(await apis.exists(imageFile))) {
+            return null;
+          }
         }
-      }
 
-      const imageData = await retryFs(() => apis.readTextFile(imageFile));
-      return imageData.startsWith('data:image/') ? imageData : `data:image/png;base64,${imageData}`;
+        const imageData = await retryFs(() => apis.readTextFile(imageFile));
+        return imageData.startsWith('data:image/')
+          ? imageData
+          : `data:image/png;base64,${imageData}`;
+      });
     } catch (error) {
       logger.error('Failed to load image:', error);
       return null;
@@ -87,21 +104,25 @@ export class FsAssetStore extends FsSnapshotStore {
 
   async deleteImage(projectId: string, id: string): Promise<void> {
     try {
-      const apis = await this.getApis();
-      const qualifiedFile = (await this.qualifiedImagePaths(projectId, id)).file;
-      // QNBS-v3: preserve-first -- only remove the unattributed legacy copy when this is provably the sole stored project; with 2+ projects stored it may belong to a different one, so leave it untouched rather than risk destroying another project's image.
-      const soleOwner = (await this.countStoredProjectsCapped()) <= 1;
-      // QNBS-v3: legacy MUST be removed before the qualified file, not after -- if legacy removal throws, the catch below aborts before the qualified file is touched, so getImage's legacy fallback can never resurrect a half-deleted image. The reverse order would let a failure after the qualified delete leave the legacy copy to resurrect it.
-      if (soleOwner) {
-        const legacyFile = await this.legacyImagePath(id);
-        if (await apis.exists(legacyFile)) {
-          await retryFs(() => apis.remove(legacyFile));
+      // QNBS-v3: serialized + write-authority-checked like deleteBinderAsset -- an unserialized ownership count could go stale against a concurrent project creation and delete another project's unattributed legacy image.
+      await this.withLegacyRoutingOperation(async () => {
+        const apis = await this.getApis();
+        const qualifiedFile = (await this.qualifiedImagePaths(projectId, id)).file;
+        // QNBS-v3: preserve-first -- only remove the unattributed legacy copy when this is provably the sole stored project; with 2+ projects stored it may belong to a different one, so leave it untouched rather than risk destroying another project's image.
+        const soleOwner = (await this.countStoredProjectsCapped()) <= 1;
+        // QNBS-v3: legacy MUST be removed before the qualified file, not after -- if legacy removal throws, the catch below aborts before the qualified file is touched, so getImage's legacy fallback can never resurrect a half-deleted image. The reverse order would let a failure after the qualified delete leave the legacy copy to resurrect it.
+        if (soleOwner) {
+          const legacyFile = await this.legacyImagePath(id);
+          if (await apis.exists(legacyFile)) {
+            await retryFs(() => apis.remove(legacyFile));
+          }
         }
-      }
-      if (await apis.exists(qualifiedFile)) {
-        await retryFs(() => apis.remove(qualifiedFile));
-      }
+        if (await apis.exists(qualifiedFile)) {
+          await retryFs(() => apis.remove(qualifiedFile));
+        }
+      }, projectId);
     } catch (error) {
+      if (this.isProjectWriteAuthorityError(error)) throw error;
       logger.error('Failed to delete image:', error);
     }
   }

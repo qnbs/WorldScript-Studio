@@ -69,6 +69,7 @@ export const generateSceneImageThunk = createDeduplicatedThunk(
     { getState, signal, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
+    // QNBS-v3: threaded into saveImage so the stored key is project-qualified, not a bare entity id shared across projects.
     const projectId = state.project.present?.data?.id || 'default';
     const aiOptions = buildAiOptions(state);
     const { getPrompts } = await loadPrompts();

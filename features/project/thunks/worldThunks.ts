@@ -68,6 +68,7 @@ export const generateWorldImageThunk = createDeduplicatedThunk(
     { getState, signal, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
+    // QNBS-v3: threaded into saveImage so the stored key is project-qualified, not a bare entity id shared across projects.
     const projectId = state.project.present?.data?.id || 'default';
     const aiOptions = buildAiOptions(state);
     const { getPrompts } = await loadPrompts();
@@ -83,6 +84,7 @@ export const generateWorldImageThunk = createDeduplicatedThunk(
 export const uploadWorldImageThunk = createAsyncThunk(
   'project/uploadWorldImage',
   async ({ worldId, file }: { worldId: string; file: File }, { getState }) => {
+    // QNBS-v3: threaded into saveImage so the stored key is project-qualified, not a bare entity id shared across projects.
     const projectId = (getState() as RootState).project.present?.data?.id || 'default';
     return new Promise<{ worldId: string }>((resolve, reject) => {
       const reader = new FileReader();

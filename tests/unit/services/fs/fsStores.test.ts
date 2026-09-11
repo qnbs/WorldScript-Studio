@@ -1930,12 +1930,25 @@ describe('FsAssetStore — images + binder assets', () => {
   it('writes new images under a per-project subdirectory, not the flat legacy path', async () => {
     await store.saveImage('proj-1', 'char-1', 'data:image/webp;base64,QUJD');
     expect(fake.text.has('/app/images/char-1.png')).toBe(false);
-    // QNBS-v3: asserts the qualified write landed somewhere under images/, without pinning the exact digest-based directory name (an implementation detail).
+    // QNBS-v3: asserts the qualified write landed somewhere under images/ with a digest-qualified filename, without pinning the exact digest (an implementation detail).
     const qualifiedKeys = [...fake.text.keys()].filter(
-      (k) => k.startsWith('/app/images/') && k.endsWith('/char-1.png'),
+      (k) => k.startsWith('/app/images/') && k.includes('/char-1--') && k.endsWith('.png'),
     );
     expect(qualifiedKeys).toHaveLength(1);
     expect(await store.getImage('proj-1', 'char-1')).toBe('data:image/webp;base64,QUJD');
+  });
+
+  // QNBS-v3: sanitizePathSegment alone would collapse both of these entity ids to the same "alpha-beta.png" filename within one project's namespace.
+  it('does not collide two distinct entity ids that sanitize to the same readable prefix', async () => {
+    await store.saveImage('proj-1', 'alpha beta', 'data:image/png;base64,FROM_ALPHA_SPACE');
+    await store.saveImage('proj-1', 'alpha-beta', 'data:image/png;base64,FROM_ALPHA_HYPHEN');
+
+    expect(await store.getImage('proj-1', 'alpha beta')).toBe(
+      'data:image/png;base64,FROM_ALPHA_SPACE',
+    );
+    expect(await store.getImage('proj-1', 'alpha-beta')).toBe(
+      'data:image/png;base64,FROM_ALPHA_HYPHEN',
+    );
   });
 
   // QNBS-v3: sanitizePathSegment alone would collapse both of these to the same "alpha-beta" directory -- the namespace must not let two distinct projects share one image directory.
@@ -2008,13 +2021,14 @@ describe('FsAssetStore — images + binder assets', () => {
     expect(await store.getImage('proj-1', 'solo')).toBe('data:image/png;base64,SOLO');
   });
 
-  // QNBS-v3: finds the qualified (per-project digest directory) key for an entity, distinct from the flat legacy key at /app/images/<id>.png.
+  // QNBS-v3: finds the qualified (per-project digest directory, digest-qualified filename) key for an entity, distinct from the flat legacy key at /app/images/<id>.png.
   function qualifiedImageKey(entityId: string): string | undefined {
     return [...fake.text.keys()].find(
       (k) =>
         k.startsWith('/app/images/') &&
         k !== `/app/images/${entityId}.png` &&
-        k.endsWith(`/${entityId}.png`),
+        k.includes(`/${entityId}--`) &&
+        k.endsWith('.png'),
     );
   }
 
@@ -2050,6 +2064,44 @@ describe('FsAssetStore — images + binder assets', () => {
     expect(fake.text.has('/app/images/atomic.png')).toBe(true);
     expect(qualifiedImageKey('atomic')).toBeDefined();
     expect(await store.getImage('proj-1', 'atomic')).toBe('data:image/png;base64,QUALIFIED');
+  });
+
+  // QNBS-v3: the ownership check and the legacy-file read/delete must not be two separately-awaited, unserialized steps -- a concurrent project creation between them could make the ownership verdict stale. Proves getImage participates in the same legacy-routing serialization queue as every other mutation, so a call enqueued first blocks a call enqueued after it from even starting its own body, not just from finishing first.
+  it('serializes getImage calls so a call enqueued first blocks a later call from starting until it completes', async () => {
+    simulateStoredProject('proj-1');
+    fake.text.set('/app/images/first.png', 'data:image/png;base64,FIRST');
+    fake.text.set('/app/images/second.png', 'data:image/png;base64,SECOND');
+
+    const events: string[] = [];
+    const originalExists = fake.apis.exists;
+    let releaseGate: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      releaseGate = resolve;
+    });
+    // QNBS-v3: gates only the legacy-existence check for "first" (identified by its own path, not by arrival order); "second" never touches this path, so it is free to run the instant its own operation body starts.
+    fake.apis.exists = async (p: string) => {
+      events.push(`exists:${p}`);
+      if (p === '/app/images/first.png') {
+        await gate;
+      }
+      return originalExists(p);
+    };
+
+    const firstPromise = store.getImage('proj-1', 'first');
+    const secondPromise = store.getImage('proj-1', 'second');
+
+    try {
+      // QNBS-v3: a real (not fake-timer) wait, generous relative to crypto.subtle.digest's real latency -- long enough that an unserialized "second" would have completed its entire (ungated) chain by now.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(events.some((e) => e.includes('second'))).toBe(false);
+
+      releaseGate();
+      const [firstResult, secondResult] = await Promise.all([firstPromise, secondPromise]);
+      expect(firstResult).toBe('data:image/png;base64,FIRST');
+      expect(secondResult).toBe('data:image/png;base64,SECOND');
+    } finally {
+      fake.apis.exists = originalExists;
+    }
   });
 
   it('round-trips a binder binary asset with metadata', async () => {
