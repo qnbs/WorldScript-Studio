@@ -38,3 +38,8 @@ export function captureActiveProjectIdentity(): string | null {
   const state = appStoreRef.current?.getState();
   return getProjectTargetIdentity(state?.project?.present);
 }
+
+// QNBS-v3: null means identity could not be determined -- fail closed (never "unchanged") so a guard never allows a mutation it can't actually prove is still targeting the right project.
+export function identityUnchanged(captured: string | null, live: string | null): boolean {
+  return captured !== null && captured === live;
+}

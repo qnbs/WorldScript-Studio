@@ -64,6 +64,8 @@ vi.mock('../../../features/project/thunks/outlineThunks', () => {
 
 vi.mock('../../../features/project/projectIdentity', () => ({
   captureActiveProjectIdentity: mockCaptureIdentity,
+  identityUnchanged: (captured: string | null, live: string | null) =>
+    captured !== null && captured === live,
 }));
 
 // ---------------------------------------------------------------------------
@@ -146,6 +148,46 @@ describe('generate', () => {
     });
 
     expect(result.current.isLoading).toBe(false);
+  });
+
+  it('discards a fulfilled outline (no local-state update, no success toast) if the active project changed while generation was in flight', async () => {
+    const fulfilledAction = {
+      type: 'project/generateOutline/fulfilled',
+      payload: [makeOutlineSection('g1', 'Act 1')],
+    };
+    mockDispatch.mockResolvedValue(fulfilledAction);
+    // QNBS-v3: mount's eager ref-init also calls captureActiveProjectIdentity() once, before generate()'s own capture -- both must return 'id:project-a' so generate() legitimately captures the pre-change identity.
+    mockCaptureIdentity
+      .mockReturnValueOnce('id:project-a')
+      .mockReturnValueOnce('id:project-a')
+      .mockReturnValue('id:project-b');
+
+    const { result } = renderHook(() => useOutlineGenerator({ onNavigate }));
+    await act(async () => {
+      await result.current.handleGenerate();
+    });
+
+    expect(result.current.outline).toHaveLength(0);
+    expect(mockToast.success).not.toHaveBeenCalled();
+    expect(result.current.isLoading).toBe(false);
+  });
+
+  it('discards a rejected outline (no error state, no error toast) if the active project changed while generation was in flight', async () => {
+    const rejectedAction = { type: 'project/generateOutline/rejected' };
+    mockDispatch.mockResolvedValue(rejectedAction);
+    mockGenerateMatch.mockReturnValue(false);
+    mockCaptureIdentity
+      .mockReturnValueOnce('id:project-a')
+      .mockReturnValueOnce('id:project-a')
+      .mockReturnValue('id:project-b');
+
+    const { result } = renderHook(() => useOutlineGenerator({ onNavigate }));
+    await act(async () => {
+      await result.current.handleGenerate();
+    });
+
+    expect(result.current.error).toBeNull();
+    expect(mockToast.error).not.toHaveBeenCalled();
   });
 });
 
@@ -323,6 +365,31 @@ describe('deleteSection', () => {
 // handleApplyOutline / apply
 // ---------------------------------------------------------------------------
 describe('handleApplyOutline', () => {
+  it('applies successfully when generate() and apply() happen in the same, unchanged project', async () => {
+    // QNBS-v3: covers the guard's non-discard branch -- every other apply test skips generate(), so generatedForProjectIdentity.current stays at its eager mount value and the guard is never really exercised for a legitimate same-project flow.
+    mockExistingManuscript = [{ id: 's1', title: 'Untitled', content: '' }];
+    mockExistingOutline = [];
+    const fulfilledAction = {
+      type: 'project/generateOutline/fulfilled',
+      payload: [makeOutlineSection('g1', 'Act 1')],
+    };
+    mockDispatch.mockResolvedValue(fulfilledAction);
+
+    const { result } = renderHook(() => useOutlineGenerator({ onNavigate }));
+    await act(async () => {
+      await result.current.handleGenerate();
+    });
+    await waitFor(() => expect(result.current.outline).toHaveLength(1));
+
+    mockDispatch.mockClear();
+    act(() => result.current.handleApplyOutline());
+
+    expect(mockDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'project/setManuscript' }),
+    );
+    expect(onNavigate).toHaveBeenCalledWith('manuscript');
+  });
+
   it('applies directly when manuscript is a single empty section', () => {
     mockExistingManuscript = [{ id: 's1', title: 'Untitled', content: '' }];
     mockExistingOutline = [makeOutlineSection('o1', 'Act 1')];

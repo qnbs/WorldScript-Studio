@@ -2,7 +2,10 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { useAppDispatch } from '../app/hooks';
 import { useToast } from '../components/ui/Toast';
 import { STORY_TEMPLATES } from '../constants';
-import { captureActiveProjectIdentity } from '../features/project/projectIdentity';
+import {
+  captureActiveProjectIdentity,
+  identityUnchanged,
+} from '../features/project/projectIdentity';
 import { projectActions } from '../features/project/projectSlice';
 import {
   generateCustomTemplateThunk,
@@ -157,7 +160,7 @@ export const useTemplateView = ({ onNavigate }: UseTemplateViewProps) => {
     );
 
     // QNBS-v3: applyToManuscript replaces the whole manuscript/outline -- if the active project changed while this request was in flight, neither the AI result nor the failure fallback may be applied to it.
-    if (captureActiveProjectIdentity() !== capturedProjectIdentity) {
+    if (!identityUnchanged(capturedProjectIdentity, captureActiveProjectIdentity())) {
       setIsAiLoading(false);
       closeModal();
       return;
@@ -200,7 +203,7 @@ export const useTemplateView = ({ onNavigate }: UseTemplateViewProps) => {
       }),
     );
     // QNBS-v3: applyToManuscript replaces the whole manuscript/outline -- discard if the active project changed while this request was in flight.
-    if (captureActiveProjectIdentity() !== capturedProjectIdentity) {
+    if (!identityUnchanged(capturedProjectIdentity, captureActiveProjectIdentity())) {
       setIsAiLoading(false);
       closeModal();
       return;

@@ -1,7 +1,10 @@
 import { useCallback, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useToast } from '../components/ui/Toast';
-import { captureActiveProjectIdentity } from '../features/project/projectIdentity';
+import {
+  captureActiveProjectIdentity,
+  identityUnchanged,
+} from '../features/project/projectIdentity';
 import { selectManuscript, selectOutline } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
 import {
@@ -92,6 +95,12 @@ export const useOutlineGenerator = ({ onNavigate }: UseOutlineGeneratorProps) =>
         heuristicLabels: buildOutlineHeuristicLabels(),
       }),
     );
+
+    // QNBS-v3: discard a late-arriving outline (and its success/failure toast) if the active project changed while this request was in flight -- apply()'s own guard only protects the later persisted write, not this local-state preview.
+    if (!identityUnchanged(capturedProjectIdentity, captureActiveProjectIdentity())) {
+      setIsLoading(false);
+      return;
+    }
 
     if (generateOutlineThunk.fulfilled.match(resultAction)) {
       generatedForProjectIdentity.current = capturedProjectIdentity;
@@ -216,10 +225,7 @@ export const useOutlineGenerator = ({ onNavigate }: UseOutlineGeneratorProps) =>
 
   const apply = useCallback(() => {
     // QNBS-v3: outline may have been generated for a different project if the active project changed since (e.g. New Project/import/restore elsewhere in the still-mounted app) -- discard rather than overwrite the wrong project's manuscript.
-    if (
-      generatedForProjectIdentity.current !== null &&
-      captureActiveProjectIdentity() !== generatedForProjectIdentity.current
-    ) {
+    if (!identityUnchanged(generatedForProjectIdentity.current, captureActiveProjectIdentity())) {
       setConfirmModal(null);
       return;
     }

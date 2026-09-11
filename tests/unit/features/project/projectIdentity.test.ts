@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { getProjectTargetIdentity } from '../../../../features/project/projectIdentity';
+import {
+  getProjectTargetIdentity,
+  identityUnchanged,
+} from '../../../../features/project/projectIdentity';
 
 describe('getProjectTargetIdentity', () => {
   it('returns null when the source is null or undefined', () => {
@@ -49,5 +52,24 @@ describe('getProjectTargetIdentity', () => {
       generation: 0,
     });
     expect(identity).toBe('id:p1:gen:0');
+  });
+});
+
+describe('identityUnchanged', () => {
+  it('returns true when both identities are equal and non-null', () => {
+    expect(identityUnchanged('id:p1:gen:0', 'id:p1:gen:0')).toBe(true);
+  });
+
+  it('returns false when the identities differ', () => {
+    expect(identityUnchanged('id:p1:gen:0', 'id:p1:gen:1')).toBe(false);
+  });
+
+  // QNBS-v3: fail-closed -- an unknowable identity must never be treated as "unchanged", even against itself.
+  it('returns false when the captured identity is null, even if the live identity is also null', () => {
+    expect(identityUnchanged(null, null)).toBe(false);
+  });
+
+  it('returns false when only the captured identity is null', () => {
+    expect(identityUnchanged(null, 'id:p1:gen:0')).toBe(false);
   });
 });

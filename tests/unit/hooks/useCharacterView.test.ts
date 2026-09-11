@@ -51,6 +51,8 @@ vi.mock('../../../features/project/projectSelectors', () => ({
 
 vi.mock('../../../features/project/projectIdentity', () => ({
   captureActiveProjectIdentity: mockCaptureIdentity,
+  identityUnchanged: (captured: string | null, live: string | null) =>
+    captured !== null && captured === live,
 }));
 
 vi.mock('../../../features/project/thunks/characterThunks', () => {
@@ -211,6 +213,7 @@ describe('handleGenerateProfile', () => {
   });
 
   it('discards the AI-generated character if the active project changed while the request was in flight', async () => {
+    // QNBS-v3: simulates a project switch (New Project/import/restore) landing between capture and re-check, the exact race the guard exists to close.
     const newChar = makeCharacter('c-new', 'Bob');
     const fulfilledAction = {
       type: 'project/generateCharacterProfile/fulfilled',
@@ -319,6 +322,7 @@ describe('handleRegenerateField', () => {
   });
 
   it('discards the regenerated field if the active project changed while the request was in flight', async () => {
+    // QNBS-v3: same race as the profile-generation guard above, exercised for the field-regeneration path instead.
     const fulfilledAction = {
       type: 'project/regenerateCharacterField/fulfilled',
       payload: { field: 'backstory', value: 'New backstory' },

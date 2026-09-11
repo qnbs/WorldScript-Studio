@@ -80,6 +80,8 @@ vi.mock('../../../features/project/thunks/outlineThunks', () => {
 
 vi.mock('../../../features/project/projectIdentity', () => ({
   captureActiveProjectIdentity: mockCaptureIdentity,
+  identityUnchanged: (captured: string | null, live: string | null) =>
+    captured !== null && captured === live,
 }));
 
 // ---------------------------------------------------------------------------
@@ -277,7 +279,7 @@ describe('handleAiApply', () => {
     expect(mockNavigate).toHaveBeenCalledWith('manuscript');
   });
 
-  it('discards the result (and the failure fallback) if the active project changed while the request was in flight', async () => {
+  it('discards a fulfilled result if the active project changed while the request was in flight', async () => {
     mockDispatch.mockResolvedValue({
       type: 'fulfilled',
       payload: [{ title: 'Personalized Act 1' }],
@@ -298,6 +300,27 @@ describe('handleAiApply', () => {
     );
     expect(mockNavigate).not.toHaveBeenCalled();
     expect(mockToast.success).not.toHaveBeenCalled();
+  });
+
+  it('discards the failure fallback (applyToManuscript(remixedSections)) if the active project changed while the request was in flight', async () => {
+    // QNBS-v3: the fallback-apply path replaces the whole manuscript/outline too, and is otherwise untested for this guard -- only the fulfilled branch was covered before.
+    mockDispatch.mockResolvedValue({ type: 'rejected' });
+    mockPersonalizeMatch.mockReturnValue(false);
+    mockCaptureIdentity.mockReturnValueOnce('id:project-a').mockReturnValueOnce('id:project-b');
+
+    const { result } = renderTemplateHook();
+    act(() => {
+      result.current.openPreviewModal(MOCK_TEMPLATES[0]!);
+    });
+    await act(async () => {
+      await result.current.handleAiApply();
+    });
+
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'project/setManuscript' }),
+    );
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(mockToast.error).not.toHaveBeenCalled();
   });
 });
 

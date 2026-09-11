@@ -4,7 +4,7 @@ import { parseImportedProjectJson } from '../../../services/projectImportSchema'
 import { storageService } from '../../../services/storageService';
 import type { Character, World } from '../../../types';
 import { createPrototypeSafeEntityState } from '../adapters';
-import { getProjectTargetIdentity } from '../projectIdentity';
+import { getProjectTargetIdentity, identityUnchanged } from '../projectIdentity';
 import type { ProjectData } from '../projectSlice';
 
 type ImportedEntityCollection<T extends { id: string }> =
@@ -138,7 +138,7 @@ export const restoreSnapshotThunk = createAsyncThunk(
     const capturedTargetIdentity = getProjectTargetIdentity(currentSlice);
     const restored = await storageService.restoreSnapshot(snapshotId, currentSlice.data);
     const liveSlice = (thunkApi.getState() as RootState).project?.present;
-    if (getProjectTargetIdentity(liveSlice) !== capturedTargetIdentity) {
+    if (!identityUnchanged(capturedTargetIdentity, getProjectTargetIdentity(liveSlice))) {
       throw new Error('Cannot restore a snapshot after the active project changed.');
     }
     return restored;
