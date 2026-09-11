@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useToast } from '../components/ui/Toast';
+import { captureActiveProjectIdentity } from '../features/project/projectIdentity';
 import { selectManuscript, selectOutline } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
 import {
@@ -48,6 +49,8 @@ export const useOutlineGenerator = ({ onNavigate }: UseOutlineGeneratorProps) =>
   const [confirmModal, setConfirmModal] = useState<ConfirmModalState>(null);
   const draggedItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
+  // QNBS-v3: the project identity captured when `outline` was last (re)populated by an AI result -- `apply()` fires later, on a discrete user click with no await of its own, so this is checked there instead of at dispatch time.
+  const generatedForProjectIdentity = useRef<string | null>(null);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
 
   // QNBS-v3: resolve the offline outline labels here (the hook has `t`) so the service-layer heuristic
@@ -75,6 +78,7 @@ export const useOutlineGenerator = ({ onNavigate }: UseOutlineGeneratorProps) =>
   const generate = useCallback(async () => {
     setIsLoading(true);
     setError(null);
+    const capturedProjectIdentity = captureActiveProjectIdentity();
     const resultAction = await dispatch(
       generateOutlineThunk({
         genre,
@@ -90,6 +94,7 @@ export const useOutlineGenerator = ({ onNavigate }: UseOutlineGeneratorProps) =>
     );
 
     if (generateOutlineThunk.fulfilled.match(resultAction)) {
+      generatedForProjectIdentity.current = capturedProjectIdentity;
       setOutline(resultAction.payload.map((s) => ({ ...s, id: s.id || `gen-${Math.random()}` })));
       toast.success(t('common.saved'));
     } else {
@@ -210,6 +215,14 @@ export const useOutlineGenerator = ({ onNavigate }: UseOutlineGeneratorProps) =>
   }, []);
 
   const apply = useCallback(() => {
+    // QNBS-v3: outline may have been generated for a different project if the active project changed since (e.g. New Project/import/restore elsewhere in the still-mounted app) -- discard rather than overwrite the wrong project's manuscript.
+    if (
+      generatedForProjectIdentity.current !== null &&
+      captureActiveProjectIdentity() !== generatedForProjectIdentity.current
+    ) {
+      setConfirmModal(null);
+      return;
+    }
     const newManuscript: StorySection[] = outline.map((s, i) => ({
       id: `sec-${Date.now()}-${i}`,
       title: s.title,

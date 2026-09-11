@@ -6,9 +6,10 @@ import type { OutlineSection, StorySection } from '../../../types';
 // ---------------------------------------------------------------------------
 // vi.hoisted — match mocks referenced inside vi.mock factories
 // ---------------------------------------------------------------------------
-const { mockGenerateMatch, mockRegenerateMatch } = vi.hoisted(() => ({
+const { mockGenerateMatch, mockRegenerateMatch, mockCaptureIdentity } = vi.hoisted(() => ({
   mockGenerateMatch: vi.fn((_: unknown) => true),
   mockRegenerateMatch: vi.fn((_: unknown) => true),
+  mockCaptureIdentity: vi.fn(() => 'id:test-project'),
 }));
 
 // ---------------------------------------------------------------------------
@@ -61,6 +62,10 @@ vi.mock('../../../features/project/thunks/outlineThunks', () => {
   };
 });
 
+vi.mock('../../../features/project/projectIdentity', () => ({
+  captureActiveProjectIdentity: mockCaptureIdentity,
+}));
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -78,6 +83,7 @@ beforeEach(() => {
   mockExistingManuscript = [{ id: 's1', title: 'Ch1', content: '' }];
   mockGenerateMatch.mockReturnValue(true);
   mockRegenerateMatch.mockReturnValue(true);
+  mockCaptureIdentity.mockReturnValue('id:test-project');
 });
 
 // ---------------------------------------------------------------------------
@@ -374,5 +380,32 @@ describe('handleApplyOutline', () => {
     act(() => result.current.handleApplyOutline());
 
     expect(mockToast.success).toHaveBeenCalled();
+  });
+
+  it('discards apply when the active project changed since the outline was generated', async () => {
+    mockExistingManuscript = [{ id: 's1', title: 'Untitled', content: '' }];
+    mockExistingOutline = [];
+    const fulfilledAction = {
+      type: 'project/generateOutline/fulfilled',
+      payload: [makeOutlineSection('g1', 'Act 1')],
+    };
+    mockDispatch.mockResolvedValue(fulfilledAction);
+    mockCaptureIdentity.mockReturnValueOnce('id:project-a'); // captured while generate() was in flight
+
+    const { result } = renderHook(() => useOutlineGenerator({ onNavigate }));
+    await act(async () => {
+      await result.current.handleGenerate();
+    });
+    await waitFor(() => expect(result.current.outline.length).toBe(1));
+
+    mockDispatch.mockClear();
+    mockCaptureIdentity.mockReturnValue('id:project-b'); // active project changed before Apply was clicked
+
+    act(() => result.current.handleApplyOutline());
+
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'project/setManuscript' }),
+    );
+    expect(onNavigate).not.toHaveBeenCalled();
   });
 });

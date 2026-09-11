@@ -5,33 +5,36 @@ import { useTemplateView } from '../../../hooks/useTemplateView';
 // ---------------------------------------------------------------------------
 // vi.hoisted — thunk match fns + template data (must be hoisted; vi.mock is hoisted)
 // ---------------------------------------------------------------------------
-const { mockPersonalizeMatch, mockCustomMatch, MOCK_TEMPLATES } = vi.hoisted(() => {
-  const templates = [
-    {
-      id: 'hero',
-      name: "Hero's Journey",
-      description: 'Classic structure',
-      type: 'Structure' as const,
-      tags: ['classic'],
-      arcDescription: 'The hero departs',
-      sections: [{ titleKey: 'templates.hero.act1' }, { titleKey: 'templates.hero.act2' }],
-    },
-    {
-      id: 'thriller',
-      name: 'Thriller',
-      description: 'Fast-paced',
-      type: 'Genre' as const,
-      tags: ['action'],
-      arcDescription: 'Tension builds',
-      sections: [{ titleKey: 'templates.thriller.opening' }],
-    },
-  ];
-  return {
-    mockPersonalizeMatch: vi.fn((_: unknown) => true),
-    mockCustomMatch: vi.fn((_: unknown) => true),
-    MOCK_TEMPLATES: templates,
-  };
-});
+const { mockPersonalizeMatch, mockCustomMatch, MOCK_TEMPLATES, mockCaptureIdentity } = vi.hoisted(
+  () => {
+    const templates = [
+      {
+        id: 'hero',
+        name: "Hero's Journey",
+        description: 'Classic structure',
+        type: 'Structure' as const,
+        tags: ['classic'],
+        arcDescription: 'The hero departs',
+        sections: [{ titleKey: 'templates.hero.act1' }, { titleKey: 'templates.hero.act2' }],
+      },
+      {
+        id: 'thriller',
+        name: 'Thriller',
+        description: 'Fast-paced',
+        type: 'Genre' as const,
+        tags: ['action'],
+        arcDescription: 'Tension builds',
+        sections: [{ titleKey: 'templates.thriller.opening' }],
+      },
+    ];
+    return {
+      mockPersonalizeMatch: vi.fn((_: unknown) => true),
+      mockCustomMatch: vi.fn((_: unknown) => true),
+      MOCK_TEMPLATES: templates,
+      mockCaptureIdentity: vi.fn(() => 'id:test-project'),
+    };
+  },
+);
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -75,6 +78,10 @@ vi.mock('../../../features/project/thunks/outlineThunks', () => {
   };
 });
 
+vi.mock('../../../features/project/projectIdentity', () => ({
+  captureActiveProjectIdentity: mockCaptureIdentity,
+}));
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -88,6 +95,7 @@ beforeEach(() => {
   mockDispatch.mockResolvedValue({ type: 'mock-action' });
   mockPersonalizeMatch.mockReturnValue(true);
   mockCustomMatch.mockReturnValue(true);
+  mockCaptureIdentity.mockReturnValue('id:test-project');
 });
 
 // ---------------------------------------------------------------------------
@@ -268,6 +276,29 @@ describe('handleAiApply', () => {
     // Still navigates via fallback applyToManuscript
     expect(mockNavigate).toHaveBeenCalledWith('manuscript');
   });
+
+  it('discards the result (and the failure fallback) if the active project changed while the request was in flight', async () => {
+    mockDispatch.mockResolvedValue({
+      type: 'fulfilled',
+      payload: [{ title: 'Personalized Act 1' }],
+    });
+    mockPersonalizeMatch.mockReturnValue(true);
+    mockCaptureIdentity.mockReturnValueOnce('id:project-a').mockReturnValueOnce('id:project-b');
+
+    const { result } = renderTemplateHook();
+    act(() => {
+      result.current.openPreviewModal(MOCK_TEMPLATES[0]!);
+    });
+    await act(async () => {
+      await result.current.handleAiApply();
+    });
+
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'project/setManuscript' }),
+    );
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(mockToast.success).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -301,6 +332,25 @@ describe('handleGenerateCustom', () => {
     });
     expect(mockToast.error).toHaveBeenCalled();
     expect(result.current.isAiLoading).toBe(false);
+  });
+
+  it('discards the generated custom template if the active project changed while the request was in flight', async () => {
+    mockDispatch.mockResolvedValue({
+      type: 'fulfilled',
+      payload: [{ title: 'Custom Act' }],
+    });
+    mockCustomMatch.mockReturnValue(true);
+    mockCaptureIdentity.mockReturnValueOnce('id:project-a').mockReturnValueOnce('id:project-b');
+
+    const { result } = renderTemplateHook();
+    await act(async () => {
+      await result.current.handleGenerateCustom();
+    });
+
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'project/setManuscript' }),
+    );
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 });
 

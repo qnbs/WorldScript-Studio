@@ -7,11 +7,13 @@ import type { Character } from '../../../types';
 // ---------------------------------------------------------------------------
 // vi.hoisted — match mocks referenced in vi.mock factories
 // ---------------------------------------------------------------------------
-const { mockProfileMatch, mockPortraitMatch, mockRegenerateMatch } = vi.hoisted(() => ({
-  mockProfileMatch: vi.fn((_: unknown) => true),
-  mockPortraitMatch: vi.fn((_: unknown) => true),
-  mockRegenerateMatch: vi.fn((_: unknown) => true),
-}));
+const { mockProfileMatch, mockPortraitMatch, mockRegenerateMatch, mockCaptureIdentity } =
+  vi.hoisted(() => ({
+    mockProfileMatch: vi.fn((_: unknown) => true),
+    mockPortraitMatch: vi.fn((_: unknown) => true),
+    mockRegenerateMatch: vi.fn((_: unknown) => true),
+    mockCaptureIdentity: vi.fn(() => 'id:test-project'),
+  }));
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -45,6 +47,10 @@ vi.mock('../../../components/ui/Toast', () => ({
 
 vi.mock('../../../features/project/projectSelectors', () => ({
   selectAllCharacters: (state: { characters: Character[] }) => state.characters,
+}));
+
+vi.mock('../../../features/project/projectIdentity', () => ({
+  captureActiveProjectIdentity: mockCaptureIdentity,
 }));
 
 vi.mock('../../../features/project/thunks/characterThunks', () => {
@@ -104,6 +110,7 @@ beforeEach(() => {
   mockProfileMatch.mockReturnValue(true);
   mockPortraitMatch.mockReturnValue(true);
   mockRegenerateMatch.mockReturnValue(true);
+  mockCaptureIdentity.mockReturnValue('id:test-project');
 });
 
 // ---------------------------------------------------------------------------
@@ -202,6 +209,25 @@ describe('handleGenerateProfile', () => {
 
     expect(result.current.isAiModalOpen).toBe(false);
   });
+
+  it('discards the AI-generated character if the active project changed while the request was in flight', async () => {
+    const newChar = makeCharacter('c-new', 'Bob');
+    const fulfilledAction = {
+      type: 'project/generateCharacterProfile/fulfilled',
+      payload: newChar,
+    };
+    mockDispatch.mockResolvedValue(fulfilledAction);
+    mockProfileMatch.mockReturnValue(true);
+    mockCaptureIdentity.mockReturnValueOnce('id:project-a').mockReturnValueOnce('id:project-b');
+
+    const { result } = renderHook(() => useCharacterView());
+    await act(async () => {
+      await result.current.handleGenerateProfile();
+    });
+
+    expect(mockDispatch).not.toHaveBeenCalledWith(projectActions.addCharacter(newChar));
+    expect(mockToast.success).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -290,6 +316,27 @@ describe('handleRegenerateField', () => {
     });
 
     await waitFor(() => expect(result.current.isRegeneratingField).toBeNull());
+  });
+
+  it('discards the regenerated field if the active project changed while the request was in flight', async () => {
+    const fulfilledAction = {
+      type: 'project/regenerateCharacterField/fulfilled',
+      payload: { field: 'backstory', value: 'New backstory' },
+    };
+    mockDispatch.mockResolvedValue(fulfilledAction);
+    mockRegenerateMatch.mockReturnValue(true);
+    mockCaptureIdentity.mockReturnValueOnce('id:project-a').mockReturnValueOnce('id:project-b');
+
+    const char = makeCharacter('c1');
+    const { result } = renderHook(() => useCharacterView());
+    act(() => result.current.handleSelect(char));
+    await act(async () => {
+      await result.current.handleRegenerateField('backstory');
+    });
+
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      projectActions.updateCharacter({ id: 'c1', changes: { backstory: 'New backstory' } }),
+    );
   });
 });
 

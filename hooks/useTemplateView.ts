@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { useAppDispatch } from '../app/hooks';
 import { useToast } from '../components/ui/Toast';
 import { STORY_TEMPLATES } from '../constants';
+import { captureActiveProjectIdentity } from '../features/project/projectIdentity';
 import { projectActions } from '../features/project/projectSlice';
 import {
   generateCustomTemplateThunk,
@@ -146,6 +147,7 @@ export const useTemplateView = ({ onNavigate }: UseTemplateViewProps) => {
   const handleAiApply = useCallback(async () => {
     if (!selectedTemplate) return;
     setIsAiLoading(true);
+    const capturedProjectIdentity = captureActiveProjectIdentity();
     const resultAction = await dispatch(
       personalizeTemplateThunk({
         sections: remixedSections,
@@ -154,11 +156,14 @@ export const useTemplateView = ({ onNavigate }: UseTemplateViewProps) => {
       }),
     );
 
-    if (personalizeTemplateThunk.fulfilled.match(resultAction)) {
-      applyToManuscript(resultAction.payload);
-    } else {
-      toast.error(t('templates.error.personalizationFailed'));
-      applyToManuscript(remixedSections); // Fallback to standard apply
+    // QNBS-v3: applyToManuscript replaces the whole manuscript/outline -- if the active project changed while this request was in flight, neither the AI result nor the failure fallback may be applied to it.
+    if (captureActiveProjectIdentity() === capturedProjectIdentity) {
+      if (personalizeTemplateThunk.fulfilled.match(resultAction)) {
+        applyToManuscript(resultAction.payload);
+      } else {
+        toast.error(t('templates.error.personalizationFailed'));
+        applyToManuscript(remixedSections); // Fallback to standard apply
+      }
     }
     setIsAiLoading(false);
     closeModal();
@@ -181,6 +186,7 @@ export const useTemplateView = ({ onNavigate }: UseTemplateViewProps) => {
 
   const handleGenerateCustom = useCallback(async () => {
     setIsAiLoading(true);
+    const capturedProjectIdentity = captureActiveProjectIdentity();
     const resultAction = await dispatch(
       generateCustomTemplateThunk({
         customConcept,
@@ -189,10 +195,13 @@ export const useTemplateView = ({ onNavigate }: UseTemplateViewProps) => {
         lang: language,
       }),
     );
-    if (generateCustomTemplateThunk.fulfilled.match(resultAction)) {
-      applyToManuscript(resultAction.payload);
-    } else {
-      toast.error(t('templates.error.customGenerationFailed'));
+    // QNBS-v3: applyToManuscript replaces the whole manuscript/outline -- discard if the active project changed while this request was in flight.
+    if (captureActiveProjectIdentity() === capturedProjectIdentity) {
+      if (generateCustomTemplateThunk.fulfilled.match(resultAction)) {
+        applyToManuscript(resultAction.payload);
+      } else {
+        toast.error(t('templates.error.customGenerationFailed'));
+      }
     }
     setIsAiLoading(false);
     closeModal();

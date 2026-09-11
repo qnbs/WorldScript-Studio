@@ -6,11 +6,14 @@ import type { World } from '../../../types';
 // ---------------------------------------------------------------------------
 // vi.hoisted — thunk match fns must be stable references inside vi.mock factories
 // ---------------------------------------------------------------------------
-const { mockProfileMatch, mockRegenerateMatch, mockImageMatch } = vi.hoisted(() => ({
-  mockProfileMatch: vi.fn((_: unknown) => true),
-  mockRegenerateMatch: vi.fn((_: unknown) => true),
-  mockImageMatch: vi.fn((_: unknown) => true),
-}));
+const { mockProfileMatch, mockRegenerateMatch, mockImageMatch, mockCaptureIdentity } = vi.hoisted(
+  () => ({
+    mockProfileMatch: vi.fn((_: unknown) => true),
+    mockRegenerateMatch: vi.fn((_: unknown) => true),
+    mockImageMatch: vi.fn((_: unknown) => true),
+    mockCaptureIdentity: vi.fn(() => 'id:test-project'),
+  }),
+);
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -42,6 +45,10 @@ vi.mock('../../../components/ui/Toast', () => ({
 
 vi.mock('../../../features/project/projectSelectors', () => ({
   selectAllWorlds: () => mockWorlds,
+}));
+
+vi.mock('../../../features/project/projectIdentity', () => ({
+  captureActiveProjectIdentity: mockCaptureIdentity,
 }));
 
 vi.mock('../../../features/project/thunks/worldThunks', () => {
@@ -99,6 +106,7 @@ beforeEach(() => {
   mockProfileMatch.mockReturnValue(true);
   mockRegenerateMatch.mockReturnValue(true);
   mockImageMatch.mockReturnValue(true);
+  mockCaptureIdentity.mockReturnValue('id:test-project');
 });
 
 // ---------------------------------------------------------------------------
@@ -189,6 +197,23 @@ describe('handleGenerateProfile', () => {
       await result.current.handleGenerateProfile();
     });
     expect(result.current.isGeneratingProfile).toBe(false);
+  });
+
+  it('discards the AI-generated world if the active project changed while the request was in flight', async () => {
+    const newWorld = makeWorld('w-new');
+    mockDispatch.mockResolvedValue({ type: 'fulfilled', payload: newWorld });
+    mockProfileMatch.mockReturnValue(true);
+    mockCaptureIdentity.mockReturnValueOnce('id:project-a').mockReturnValueOnce('id:project-b');
+
+    const { result } = renderHook(() => useWorldView());
+    await act(async () => {
+      await result.current.handleGenerateProfile();
+    });
+
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'project/addWorld' }),
+    );
+    expect(mockToast.success).not.toHaveBeenCalled();
   });
 });
 
@@ -281,6 +306,28 @@ describe('handleRegenerateField', () => {
       await result.current.handleRegenerateField('geography');
     });
     expect(result.current.isRegeneratingField).toBeNull();
+  });
+
+  it('discards the regenerated field if the active project changed while the request was in flight', async () => {
+    const world = makeWorld('w1');
+    mockDispatch.mockResolvedValue({
+      type: 'fulfilled',
+      payload: { field: 'geography', value: 'Plains' },
+    });
+    mockRegenerateMatch.mockReturnValue(true);
+    mockCaptureIdentity.mockReturnValueOnce('id:project-a').mockReturnValueOnce('id:project-b');
+
+    const { result } = renderHook(() => useWorldView());
+    act(() => {
+      result.current.handleSelect(world);
+    });
+    await act(async () => {
+      await result.current.handleRegenerateField('geography');
+    });
+
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'project/updateWorld' }),
+    );
   });
 });
 

@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useToast } from '../components/ui/Toast';
+import { captureActiveProjectIdentity } from '../features/project/projectIdentity';
 import { selectAllWorlds } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
 import {
@@ -75,6 +76,7 @@ export const useWorldView = () => {
   const handleGenerateProfile = useCallback(async () => {
     setIsGeneratingProfile(true);
     setIsAiModalOpen(false);
+    const capturedProjectIdentity = captureActiveProjectIdentity();
     const resultAction = await dispatch(
       generateWorldProfileThunk({
         concept: aiConcept,
@@ -82,11 +84,14 @@ export const useWorldView = () => {
         heuristicLabels: buildWorldHeuristicLabels(),
       }),
     );
-    if (generateWorldProfileThunk.fulfilled.match(resultAction)) {
-      dispatch(projectActions.addWorld(resultAction.payload));
-      toast.success(t('common.saved'), resultAction.payload.name);
-    } else {
-      toast.error(t('error.apiErrorTitle'));
+    // QNBS-v3: the active project may have changed while this request was in flight -- discard rather than apply a result generated for a different project.
+    if (captureActiveProjectIdentity() === capturedProjectIdentity) {
+      if (generateWorldProfileThunk.fulfilled.match(resultAction)) {
+        dispatch(projectActions.addWorld(resultAction.payload));
+        toast.success(t('common.saved'), resultAction.payload.name);
+      } else {
+        toast.error(t('error.apiErrorTitle'));
+      }
     }
     setIsGeneratingProfile(false);
     setAiConcept('');
@@ -112,13 +117,17 @@ export const useWorldView = () => {
     async (field: keyof World) => {
       if (!selectedWorld) return;
       setIsRegeneratingField(field);
+      const capturedProjectIdentity = captureActiveProjectIdentity();
       const resultAction = await dispatch(
         regenerateWorldFieldThunk({ world: selectedWorld, field, lang: language }),
       );
-      if (regenerateWorldFieldThunk.fulfilled.match(resultAction)) {
-        handleFieldChange(resultAction.payload.field, resultAction.payload.value);
-      } else {
-        toast.error(t('error.apiErrorTitle'));
+      // QNBS-v3: discard a late-arriving regenerated field if the active project changed while the request was in flight.
+      if (captureActiveProjectIdentity() === capturedProjectIdentity) {
+        if (regenerateWorldFieldThunk.fulfilled.match(resultAction)) {
+          handleFieldChange(resultAction.payload.field, resultAction.payload.value);
+        } else {
+          toast.error(t('error.apiErrorTitle'));
+        }
       }
       setIsRegeneratingField(null);
     },
