@@ -1916,15 +1916,35 @@ describe('FsCodexStore — codex + RAG vectors', () => {
 
 describe('FsAssetStore — images + binder assets', () => {
   it('round-trips an image while preserving its data-url MIME type', async () => {
-    await store.saveImage('char-1', 'data:image/webp;base64,QUJD');
-    expect(await store.getImage('char-1')).toBe('data:image/webp;base64,QUJD');
-    await store.deleteImage('char-1');
-    expect(await store.getImage('char-1')).toBeNull();
+    await store.saveImage('proj-1', 'char-1', 'data:image/webp;base64,QUJD');
+    expect(await store.getImage('proj-1', 'char-1')).toBe('data:image/webp;base64,QUJD');
+    await store.deleteImage('proj-1', 'char-1');
+    expect(await store.getImage('proj-1', 'char-1')).toBeNull();
   });
 
   it('treats legacy raw image payloads as PNG', async () => {
-    await store.saveImage('legacy-char', 'QUJD');
-    expect(await store.getImage('legacy-char')).toBe('data:image/png;base64,QUJD');
+    await store.saveImage('proj-1', 'legacy-char', 'QUJD');
+    expect(await store.getImage('proj-1', 'legacy-char')).toBe('data:image/png;base64,QUJD');
+  });
+
+  it('writes new images under a per-project subdirectory, not the flat legacy path', async () => {
+    await store.saveImage('proj-1', 'char-1', 'data:image/webp;base64,QUJD');
+    expect(fake.text.has('/app/images/proj-1/char-1.png')).toBe(true);
+    expect(fake.text.has('/app/images/char-1.png')).toBe(false);
+  });
+
+  // QNBS-v3: a pre-migration flat-path image (written before project-qualified keys existed) must stay reachable without a forced migration.
+  it('falls back to the legacy flat image path when the project-qualified file is absent', async () => {
+    fake.text.set('/app/images/legacy-only.png', 'data:image/png;base64,OLD');
+    expect(await store.getImage('proj-1', 'legacy-only')).toBe('data:image/png;base64,OLD');
+  });
+
+  it('deletes both the project-qualified and legacy flat image files', async () => {
+    fake.text.set('/app/images/dual.png', 'data:image/png;base64,LEGACYCOPY');
+    await store.saveImage('proj-1', 'dual', 'data:image/png;base64,NEWCOPY');
+    await store.deleteImage('proj-1', 'dual');
+    expect(await store.getImage('proj-1', 'dual')).toBeNull();
+    expect(fake.text.has('/app/images/dual.png')).toBe(false);
   });
 
   it('round-trips a binder binary asset with metadata', async () => {

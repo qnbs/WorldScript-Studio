@@ -1,6 +1,11 @@
 import type { RootState } from '../../../app/store';
 import { storageService } from '../../../services/storageService';
 import { createDeduplicatedThunk } from '../aiThunkUtils';
+import {
+  captureActiveProjectIdentity,
+  identityUnchanged,
+  staleProjectRejection,
+} from '../projectIdentity';
 import { buildAiCreativity, buildAiOptions, loadAiProvider, loadPrompts } from './thunkUtils';
 
 export const generateLoglineSuggestionsThunk = createDeduplicatedThunk(
@@ -66,7 +71,7 @@ export const generateSceneImageThunk = createDeduplicatedThunk(
       projectTitle: string;
       lang: string;
     },
-    { getState, signal, registerDuplicateRequest },
+    { getState, signal, registerDuplicateRequest, rejectWithValue },
   ) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
@@ -79,9 +84,15 @@ export const generateSceneImageThunk = createDeduplicatedThunk(
       lang: payload.lang,
     });
     registerDuplicateRequest(prompt, 'sceneVisualization');
+    const projectId = state.project.present?.data?.id || 'default';
+    const capturedProjectIdentity = captureActiveProjectIdentity();
     const base64 = await generateImage(prompt, aiOptions, signal);
+    // QNBS-v3: reject before the persistent write -- a hook-level check after this thunk resolves would already be too late for saveImage.
+    if (!identityUnchanged(capturedProjectIdentity, captureActiveProjectIdentity())) {
+      return rejectWithValue(staleProjectRejection());
+    }
     const imageKey = `scene-${payload.sectionId}`;
-    await storageService.saveImage(imageKey, base64);
+    await storageService.saveImage(projectId, imageKey, base64);
     const dataUrl = base64.includes('data:image') ? base64 : `data:image/png;base64,${base64}`;
     return { imageKey, dataUrl };
   },

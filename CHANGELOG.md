@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **AI-generated character/world/scene images no longer overwrite the wrong project, and a stale
+  result can no longer be persisted (#704, #708):** `generateCharacterPortraitThunk`,
+  `generateWorldImageThunk`, and `generateSceneImageThunk` now capture the active project's
+  identity before the AI call and reject with a stale-project sentinel *before* the persistent
+  `saveImage`/reducer mutation, closing a race where a project switch mid-generation could apply
+  one project's AI output to another. Image storage keys on both the IndexedDB and desktop
+  filesystem backends are now project-qualified (matching the existing binder-asset convention),
+  with a legacy-key read-through so pre-existing images stay reachable without a forced
+  migration — previously two stored projects sharing an entity id (e.g. one imported from the
+  other's own export) could silently overwrite each other's image. Character Interview streaming
+  now drops chunks once the active project changes mid-stream, and Writer's generation history and
+  Global Copilot's transcript are invalidated on project-generation change so a stale AI result
+  from another project can never be accepted or applied. PR #718.
 - **`extract-zip` eliminated from the dependency graph (Dependabot #86, GHSA-7pqw-9j4j-h8q3 /
   GHSA-jmr9-qjv8-65gv):** the vulnerable package was reachable only via `@lhci/cli`'s hard-pinned
   `lighthouse@12.6.1` → `puppeteer-core` → `@puppeteer/browsers@2.x` chain. A

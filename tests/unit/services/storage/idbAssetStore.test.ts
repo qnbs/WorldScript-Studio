@@ -50,6 +50,8 @@ vi.mock('../../../../services/storageBackend', () => ({
     `${projectId.replace(/[\s:]/g, '_').slice(0, 200)}::`,
   makeBinderAssetStorageKey: (projectId: string, assetId: string) =>
     `${projectId.replace(/[\s:]/g, '_').slice(0, 200)}::${assetId}`,
+  makeImageStorageKey: (projectId: string, entityId: string) =>
+    `${projectId.replace(/[\s:]/g, '_').slice(0, 200)}::${entityId}`,
 }));
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -84,47 +86,63 @@ describe('IdbAssetStore', () => {
   });
 
   describe('saveImage', () => {
-    it('calls put with base64 payload and key', async () => {
+    it('calls put with base64 payload and the project-qualified key', async () => {
       mockIdbStore.put.mockImplementation(() => makeSuccessReq(undefined));
-      await store.saveImage('img-1', 'data:image/png;base64,abc');
-      expect(mockIdbStore.put).toHaveBeenCalledWith('data:image/png;base64,abc', 'img-1');
+      await store.saveImage('proj-1', 'img-1', 'data:image/png;base64,abc');
+      expect(mockIdbStore.put).toHaveBeenCalledWith('data:image/png;base64,abc', 'proj-1::img-1');
     });
 
     it('rejects when IDB put errors', async () => {
       mockIdbStore.put.mockImplementation(() => makeErrorReq(new DOMException('put failed')));
-      await expect(store.saveImage('img-1', 'abc')).rejects.toBeDefined();
+      await expect(store.saveImage('proj-1', 'img-1', 'abc')).rejects.toBeDefined();
     });
   });
 
   describe('getImage', () => {
-    it('returns null when key is absent', async () => {
+    it('returns null when neither the qualified nor legacy key exists', async () => {
       mockIdbStore.get.mockImplementation(() => makeSuccessReq(null));
-      const result = await store.getImage('missing-id');
+      const result = await store.getImage('proj-1', 'missing-id');
       expect(result).toBeNull();
     });
 
-    it('returns the stored base64 string', async () => {
-      mockIdbStore.get.mockImplementation(() => makeSuccessReq('data:image/png;base64,XYZ'));
-      const result = await store.getImage('img-1');
+    it('returns the stored base64 string from the project-qualified key', async () => {
+      mockIdbStore.get.mockImplementation((key: string) =>
+        makeSuccessReq(key === 'proj-1::img-1' ? 'data:image/png;base64,XYZ' : null),
+      );
+      const result = await store.getImage('proj-1', 'img-1');
       expect(result).toBe('data:image/png;base64,XYZ');
+      expect(mockIdbStore.get).toHaveBeenCalledWith('proj-1::img-1');
+    });
+
+    // QNBS-v3: pre-project-qualification images must stay reachable without a forced migration.
+    it('falls back to the legacy unqualified key when the qualified key is absent', async () => {
+      mockIdbStore.get.mockImplementation((key: string) =>
+        makeSuccessReq(key === 'img-1' ? 'data:image/png;base64,LEGACY' : null),
+      );
+      const result = await store.getImage('proj-1', 'img-1');
+      expect(result).toBe('data:image/png;base64,LEGACY');
+      expect(mockIdbStore.get).toHaveBeenCalledWith('proj-1::img-1');
+      expect(mockIdbStore.get).toHaveBeenCalledWith('img-1');
     });
 
     it('rejects when IDB get errors', async () => {
       mockIdbStore.get.mockImplementation(() => makeErrorReq(new DOMException('get failed')));
-      await expect(store.getImage('img-1')).rejects.toBeDefined();
+      await expect(store.getImage('proj-1', 'img-1')).rejects.toBeDefined();
     });
   });
 
   describe('deleteImage', () => {
-    it('calls delete with the given id', async () => {
+    // QNBS-v3: both keys must be cleared so a stale legacy record can never resurface via getImage's fallback.
+    it('deletes both the qualified and legacy key', async () => {
       mockIdbStore.delete.mockImplementation(() => makeSuccessReq(undefined));
-      await store.deleteImage('img-1');
+      await store.deleteImage('proj-1', 'img-1');
+      expect(mockIdbStore.delete).toHaveBeenCalledWith('proj-1::img-1');
       expect(mockIdbStore.delete).toHaveBeenCalledWith('img-1');
     });
 
     it('rejects when IDB delete errors', async () => {
       mockIdbStore.delete.mockImplementation(() => makeErrorReq(new DOMException('del failed')));
-      await expect(store.deleteImage('img-1')).rejects.toBeDefined();
+      await expect(store.deleteImage('proj-1', 'img-1')).rejects.toBeDefined();
     });
   });
 

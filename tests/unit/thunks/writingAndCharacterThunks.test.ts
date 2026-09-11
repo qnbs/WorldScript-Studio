@@ -1,6 +1,6 @@
 import { configureStore } from '@reduxjs/toolkit';
 import undoable from 'redux-undo';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // QNBS-v3: localStorageOnly defaults true in settingsReducer — bypass the cloud-AI gate so thunks can run.
 vi.mock('../../../services/ai/aiPolicy', () => ({
@@ -22,8 +22,9 @@ vi.mock('../../../services/storageService', () => ({
   },
 }));
 
+import { appStoreRef } from '../../../app/storeRef';
 import featureFlagsReducer from '../../../features/featureFlags/featureFlagsSlice';
-import projectReducer from '../../../features/project/projectSlice';
+import projectReducer, { projectActions } from '../../../features/project/projectSlice';
 import {
   generateCharacterPortraitThunk,
   generateCharacterProfileThunk,
@@ -75,6 +76,12 @@ beforeEach(() => {
   } as never);
   vi.mocked(storageService.saveImage).mockResolvedValue(undefined);
   mockGetPrompts.mockReturnValue({ prompt: 'test-prompt', schema: { type: 'array' } });
+  // QNBS-v3: default-identity store so captureActiveProjectIdentity() is stable and non-null by default; tests exercising the stale-project guard point appStoreRef.current at their own store instead.
+  appStoreRef.current = makeStore() as never;
+});
+
+afterEach(() => {
+  appStoreRef.current = null;
 });
 
 // ---------------------------------------------------------------------------
@@ -202,7 +209,7 @@ describe('generateSceneImageThunk', () => {
     const store = makeStore();
     await store.dispatch(generateSceneImageThunk(payload));
 
-    expect(storageService.saveImage).toHaveBeenCalledWith('scene-sec-1', 'rawbase64');
+    expect(storageService.saveImage).toHaveBeenCalledWith('default', 'scene-sec-1', 'rawbase64');
   });
 
   it('prefixes plain base64 with data:image/png;base64,', async () => {
@@ -223,6 +230,36 @@ describe('generateSceneImageThunk', () => {
 
     const result = (action as { payload: { imageKey: string; dataUrl: string } }).payload;
     expect(result.dataUrl).toBe('data:image/png;base64,alreadyprefixed');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// generateSceneImageThunk — project authority (Wave 0B.1)
+// ---------------------------------------------------------------------------
+describe('generateSceneImageThunk - project authority', () => {
+  const payload = {
+    sectionId: 'sec-1',
+    sectionTitle: 'Chapter One',
+    sectionContent: 'Once upon a time...',
+    projectTitle: 'My Novel',
+    lang: 'en',
+  };
+
+  it('rejects with a stale-project payload and never persists when the active project changed mid-generation', async () => {
+    const store = makeStore();
+    appStoreRef.current = store as never;
+    mockGenerateImage.mockImplementation(async () => {
+      store.dispatch(
+        projectActions.resetProject({ title: 'New', logline: '', chapter1Title: 'Ch1' }),
+      );
+      return 'base64imagedata';
+    });
+
+    const action = await store.dispatch(generateSceneImageThunk(payload));
+
+    expect(action.type).toBe('project/generateSceneImage/rejected');
+    expect((action as { payload?: { staleProject?: boolean } }).payload?.staleProject).toBe(true);
+    expect(storageService.saveImage).not.toHaveBeenCalled();
   });
 });
 
@@ -390,7 +427,7 @@ describe('generateCharacterPortraitThunk', () => {
       }),
     );
 
-    expect(storageService.saveImage).toHaveBeenCalledWith('c42', 'portraitdata');
+    expect(storageService.saveImage).toHaveBeenCalledWith('default', 'c42', 'portraitdata');
   });
 
   it('appends style to description when style is provided', async () => {
@@ -432,6 +469,52 @@ describe('generateCharacterPortraitThunk', () => {
 });
 
 // ---------------------------------------------------------------------------
+// generateCharacterPortraitThunk — project authority (Wave 0B.1)
+// ---------------------------------------------------------------------------
+describe('generateCharacterPortraitThunk - project authority', () => {
+  it('rejects with a stale-project payload and never persists when the active project changed mid-generation', async () => {
+    const store = makeStore();
+    appStoreRef.current = store as never;
+    mockGenerateImage.mockImplementation(async () => {
+      // QNBS-v3: simulates a New Project/import/restore completing while the portrait AI call was in flight.
+      store.dispatch(
+        projectActions.resetProject({ title: 'New', logline: '', chapter1Title: 'Ch1' }),
+      );
+      return 'portraitbase64';
+    });
+
+    const action = await store.dispatch(
+      generateCharacterPortraitThunk({
+        characterId: 'c1',
+        description: 'A tall warrior',
+        lang: 'en',
+      }),
+    );
+
+    expect(action.type).toBe('project/generateCharacterPortrait/rejected');
+    expect((action as { payload?: { staleProject?: boolean } }).payload?.staleProject).toBe(true);
+    expect(storageService.saveImage).not.toHaveBeenCalled();
+  });
+
+  it('persists normally when the active project is unchanged', async () => {
+    const store = makeStore();
+    appStoreRef.current = store as never;
+    mockGenerateImage.mockResolvedValue('portraitbase64');
+
+    const action = await store.dispatch(
+      generateCharacterPortraitThunk({
+        characterId: 'c1',
+        description: 'A tall warrior',
+        lang: 'en',
+      }),
+    );
+
+    expect(action.type).toBe('project/generateCharacterPortrait/fulfilled');
+    expect(storageService.saveImage).toHaveBeenCalledWith('default', 'c1', 'portraitbase64');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // uploadCharacterImageThunk
 // ---------------------------------------------------------------------------
 // QNBS-v3: FileReader error/abort and storageService.saveImage-rejection coverage prevents the upload thunk's Promise from hanging forever on any terminal failure path.
@@ -454,7 +537,7 @@ describe('uploadCharacterImageThunk', () => {
     const action = await store.dispatch(uploadCharacterImageThunk({ characterId: 'c99', file }));
 
     expect(action.type).toBe('project/uploadCharacterImage/fulfilled');
-    expect(storageService.saveImage).toHaveBeenCalledWith('c99', fakeDataUrl);
+    expect(storageService.saveImage).toHaveBeenCalledWith('default', 'c99', fakeDataUrl);
   });
 
   it('dispatches fulfilled with characterId', async () => {
@@ -474,7 +557,11 @@ describe('uploadCharacterImageThunk', () => {
     const action = await store.dispatch(uploadCharacterImageThunk({ characterId: 'c7', file }));
 
     expect((action as { payload: { characterId: string } }).payload?.characterId).toBe('c7');
-    expect(storageService.saveImage).toHaveBeenCalledWith('c7', 'data:image/jpeg;base64,abc123');
+    expect(storageService.saveImage).toHaveBeenCalledWith(
+      'default',
+      'c7',
+      'data:image/jpeg;base64,abc123',
+    );
   });
 
   it('rejects when the FileReader errors', async () => {

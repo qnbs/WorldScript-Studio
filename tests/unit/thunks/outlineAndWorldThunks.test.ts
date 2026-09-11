@@ -1,6 +1,6 @@
 import { configureStore } from '@reduxjs/toolkit';
 import undoable from 'redux-undo';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // QNBS-v3: localStorageOnly defaults true in settingsReducer — bypass the cloud-AI gate so thunks can run.
 vi.mock('../../../services/ai/aiPolicy', () => ({
@@ -22,6 +22,7 @@ vi.mock('../../../services/storageService', () => ({
   },
 }));
 
+import { appStoreRef } from '../../../app/storeRef';
 import featureFlagsReducer from '../../../features/featureFlags/featureFlagsSlice';
 import projectReducer, { projectActions } from '../../../features/project/projectSlice';
 import {
@@ -78,6 +79,12 @@ beforeEach(() => {
   mockGetPrompts.mockReturnValue({ prompt: 'test-prompt', schema: {} });
   mockGenerateJson.mockResolvedValue([]);
   vi.mocked(storageService.saveImage).mockResolvedValue(undefined);
+  // QNBS-v3: default-identity store so captureActiveProjectIdentity() is stable and non-null by default; tests exercising the stale-project guard point appStoreRef.current at their own store instead.
+  appStoreRef.current = makeStore() as never;
+});
+
+afterEach(() => {
+  appStoreRef.current = null;
 });
 
 // ---------------------------------------------------------------------------
@@ -262,7 +269,7 @@ describe('generateWorldImageThunk', () => {
       generateWorldImageThunk({ worldId: 'w42', description: 'A volcanic wasteland', lang: 'en' }),
     );
 
-    expect(storageService.saveImage).toHaveBeenCalledWith('w42', 'worldimagedata');
+    expect(storageService.saveImage).toHaveBeenCalledWith('default', 'w42', 'worldimagedata');
   });
 
   it('rejects on AI error', async () => {
@@ -274,6 +281,41 @@ describe('generateWorldImageThunk', () => {
 
     expect(action.type).toBe('project/generateWorldImage/rejected');
     expect(storageService.saveImage).not.toHaveBeenCalled();
+  });
+});
+
+// QNBS-v3: Wave 0B.1 -- image writes must reject before persistence when the active project changed mid-generation.
+describe('generateWorldImageThunk - project authority', () => {
+  it('rejects with a stale-project payload and never persists when the active project changed mid-generation', async () => {
+    const store = makeStore();
+    appStoreRef.current = store as never;
+    mockGenerateImage.mockImplementation(async () => {
+      store.dispatch(
+        projectActions.resetProject({ title: 'New', logline: '', chapter1Title: 'Ch1' }),
+      );
+      return 'worldimagedata';
+    });
+
+    const action = await store.dispatch(
+      generateWorldImageThunk({ worldId: 'w1', description: 'A misty forest', lang: 'en' }),
+    );
+
+    expect(action.type).toBe('project/generateWorldImage/rejected');
+    expect((action as { payload?: { staleProject?: boolean } }).payload?.staleProject).toBe(true);
+    expect(storageService.saveImage).not.toHaveBeenCalled();
+  });
+
+  it('persists normally when the active project is unchanged', async () => {
+    const store = makeStore();
+    appStoreRef.current = store as never;
+    mockGenerateImage.mockResolvedValue('worldimagedata');
+
+    const action = await store.dispatch(
+      generateWorldImageThunk({ worldId: 'w1', description: 'A misty forest', lang: 'en' }),
+    );
+
+    expect(action.type).toBe('project/generateWorldImage/fulfilled');
+    expect(storageService.saveImage).toHaveBeenCalledWith('default', 'w1', 'worldimagedata');
   });
 });
 
@@ -294,7 +336,7 @@ describe('uploadWorldImageThunk', () => {
     const action = await store.dispatch(uploadWorldImageThunk({ worldId: 'w99', file }));
 
     expect(action.type).toBe('project/uploadWorldImage/fulfilled');
-    expect(storageService.saveImage).toHaveBeenCalledWith('w99', fakeDataUrl);
+    expect(storageService.saveImage).toHaveBeenCalledWith('default', 'w99', fakeDataUrl);
   });
 
   it('rejects when the FileReader errors', async () => {

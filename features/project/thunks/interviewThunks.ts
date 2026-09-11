@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { RootState } from '../../../app/store';
 import { streamText } from '../../../services/geminiService';
 import type { CharacterArchetype, CharacterInterview, InterviewMessage } from '../../../types';
+import { captureActiveProjectIdentity, identityUnchanged } from '../projectIdentity';
 import { selectAllCharacters } from '../projectSelectors';
 import { projectActions } from '../projectSlice';
 import { buildAiCreativity, buildAiOptions } from './thunkUtils';
@@ -64,6 +65,8 @@ export const streamInterviewResponseThunk = createAsyncThunk(
     const interview = interviews.find((iv) => iv.id === interviewId);
     if (!interview) throw new Error(`Interview ${interviewId} not found`);
 
+    // QNBS-v3: captured before any await -- the streaming callback below re-checks this on every chunk so a project switch/import/reset mid-stream can never mutate the now-active project via these interview/character ids.
+    const capturedProjectIdentity = captureActiveProjectIdentity();
     const creativity = buildAiCreativity(state);
     const aiOptions = buildAiOptions(state);
 
@@ -105,6 +108,10 @@ export const streamInterviewResponseThunk = createAsyncThunk(
       creativity,
       (chunk) => {
         accumulated += chunk;
+        // QNBS-v3: a late chunk after the active project changed must never mutate the now-current project via these stale ids -- drop it rather than dispatch.
+        if (!identityUnchanged(capturedProjectIdentity, captureActiveProjectIdentity())) {
+          return;
+        }
         // QNBS-v3: update the AI message in place via updateCharacterInterview to avoid N dispatches
         dispatch(
           projectActions.updateCharacterInterview({

@@ -1,8 +1,9 @@
 import type { FC } from 'react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useAppDispatch } from '../app/hooks';
+import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { ICONS } from '../constants';
 import { useWorldViewContext, WorldViewContext } from '../contexts/WorldViewContext';
+import { selectProjectData } from '../features/project/projectSelectors';
 import { uploadWorldImageThunk } from '../features/project/thunks/worldThunks';
 import { useWorldView } from '../hooks/useWorldView';
 import { logger } from '../services/logger';
@@ -31,6 +32,7 @@ import { Textarea } from './ui/Textarea';
 
 // QNBS-v3: reads through the selected backend so Tauri uploads and views use the same storage location.
 const useStoredImage = (id: string | undefined, hasImage: boolean | undefined) => {
+  const projectId = useAppSelector((state) => selectProjectData(state)?.id || 'default');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   useEffect(() => {
     setImageUrl(null); // Reset on change
@@ -40,7 +42,7 @@ const useStoredImage = (id: string | undefined, hasImage: boolean | undefined) =
     let isMounted = true;
     const fetchImage = async () => {
       try {
-        const image = await storageService.getImage(id);
+        const image = await storageService.getImage(projectId, id);
         if (isMounted && image) {
           setImageUrl(image.startsWith('data:image/') ? image : `data:image/png;base64,${image}`);
         }
@@ -53,7 +55,7 @@ const useStoredImage = (id: string | undefined, hasImage: boolean | undefined) =
     return () => {
       isMounted = false;
     };
-  }, [id, hasImage]);
+  }, [id, hasImage, projectId]);
   return imageUrl;
 };
 

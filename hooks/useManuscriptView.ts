@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useTransientUiStore } from '../app/transientUiStore';
 import { useToast } from '../components/ui/Toast';
+import { isStaleProjectRejection } from '../features/project/projectIdentity';
 import {
   selectAllCharacters,
   selectAllWorlds,
@@ -325,8 +326,11 @@ export const useManuscriptView = ({
       ).unwrap();
       setSceneImagePreviewUrl(result.dataUrl);
       toast.success(t('manuscript.visualize.successTitle'), t('manuscript.visualize.successBody'));
-    } catch {
-      toast.error(t('error.apiErrorTitle'));
+    } catch (err) {
+      // QNBS-v3: a stale-project discard is not a provider failure -- the active project changed while the request was in flight; stay silent rather than showing a misleading API-error toast.
+      if (!isStaleProjectRejection(err)) {
+        toast.error(t('error.apiErrorTitle'));
+      }
     } finally {
       setIsSceneVisualizing(false);
     }

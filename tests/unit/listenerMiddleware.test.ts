@@ -5,6 +5,7 @@ import { listenerMiddleware } from '../../app/listenerMiddleware';
 import type { RootState } from '../../app/store';
 import { useTransientUiStore } from '../../app/transientUiStore';
 import analyticsReducer, { analyticsActions } from '../../features/analytics/analyticsSlice';
+import copilotReducer, { copilotActions } from '../../features/copilot/copilotSlice';
 // QNBS-v3: featureFlagsActions dispatches setEnableLocalFirstSync to exercise the local-first listener below
 import featureFlagsReducer, {
   featureFlagsActions,
@@ -16,6 +17,7 @@ import projectReducer, { projectActions } from '../../features/project/projectSl
 import settingsReducer, { settingsActions } from '../../features/settings/settingsSlice';
 import statusReducer, { statusActions } from '../../features/status/statusSlice';
 import versionControlReducer from '../../features/versionControl/versionControlSlice';
+import writerReducer, { writerActions } from '../../features/writer/writerSlice';
 import { isIdbEncryptionReady } from '../../services/storage/storageEncryptionService';
 
 // ---------------------------------------------------------------------------
@@ -198,6 +200,8 @@ function makeFullStore() {
       featureFlags: featureFlagsReducer,
       analytics: analyticsReducer,
       proForge: proForgeReducer,
+      writer: writerReducer,
+      copilot: copilotReducer,
     },
     middleware: (getDefault) => getDefault().prepend(listenerMiddleware.middleware),
   });
@@ -799,5 +803,61 @@ describe('desktop notification listener (ProForge stageCompleted)', () => {
     await vi.runAllTimersAsync();
 
     expect(mockSendDesktopNotification).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Wave 0B.1: Writer/Copilot ephemeral state invalidation on project-incarnation change
+// ---------------------------------------------------------------------------
+describe('project-generation-change invalidation (Writer + Copilot)', () => {
+  it('clears Writer generationHistory/resultStream/isLoading when the project generation changes', async () => {
+    const store = makeFullStore();
+    store.dispatch(writerActions.addHistory('A-originating generated text'));
+    store.dispatch(writerActions.appendResultStream('streamed chunk'));
+    store.dispatch(writerActions.startLoading());
+    expect(store.getState().writer.generationHistory).toEqual(['A-originating generated text']);
+
+    // QNBS-v3: resetProject bumps state.project.present.generation -- the exact signal the listener watches.
+    store.dispatch(
+      projectActions.resetProject({ title: 'New', logline: '', chapter1Title: 'Ch1' }),
+    );
+    await vi.runAllTimersAsync();
+
+    expect(store.getState().writer.generationHistory).toEqual([]);
+    expect(store.getState().writer.activeHistoryIndex).toBe(-1);
+    expect(store.getState().writer.resultStream).toBe('');
+    expect(store.getState().writer.isLoading).toBe(false);
+  });
+
+  it('does not clear Writer state for unrelated project edits that do not bump generation', async () => {
+    const store = makeFullStore();
+    store.dispatch(writerActions.addHistory('kept text'));
+    store.dispatch(projectActions.updateTitle('Renamed'));
+    await vi.runAllTimersAsync();
+
+    expect(store.getState().writer.generationHistory).toEqual(['kept text']);
+  });
+
+  it('clears the Copilot transcript when the project generation changes', async () => {
+    const store = makeFullStore();
+    store.dispatch(copilotActions.addMessage('user', 'Rewrite this scene for project A'));
+    expect(store.getState().copilot.messages).toHaveLength(1);
+
+    store.dispatch(
+      projectActions.resetProject({ title: 'New', logline: '', chapter1Title: 'Ch1' }),
+    );
+    await vi.runAllTimersAsync();
+
+    expect(store.getState().copilot.messages).toEqual([]);
+    expect(store.getState().copilot.status).toBe('idle');
+  });
+
+  it('does not clear the Copilot transcript for unrelated project edits that do not bump generation', async () => {
+    const store = makeFullStore();
+    store.dispatch(copilotActions.addMessage('user', 'kept message'));
+    store.dispatch(projectActions.updateTitle('Renamed'));
+    await vi.runAllTimersAsync();
+
+    expect(store.getState().copilot.messages).toHaveLength(1);
   });
 });
