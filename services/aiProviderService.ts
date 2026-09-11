@@ -770,6 +770,7 @@ async function generateImageViaGemini(prompt: string, signal?: AbortSignal): Pro
   return generateImageGemini(prompt, signal);
 }
 
+// QNBS-v3: the default case fails closed — no repository authority defines a silent Gemini fallback for an unrecognized provider.
 export async function generateImage(
   prompt: string,
   opts: AIRequestOptions,
@@ -795,7 +796,6 @@ export async function generateImage(
         'Anthropic image generation is not available. Please use Gemini or Ollama for image content.',
       );
     default:
-      // QNBS-v3: no repository authority defines a silent Gemini fallback for an unrecognized provider — fail explicitly instead of guessing.
       throw new Error('Image generation is not supported for this provider.');
   }
 }
