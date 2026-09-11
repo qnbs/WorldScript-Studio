@@ -10,8 +10,6 @@ import { detectWebGpuSupport } from '@domain/ai-core';
 import { z } from 'zod';
 import type { AIProvider, AiCreativity, AiModel, GeminiSchema, LocalBackendPreset } from '../types';
 import {
-  getActiveAiMode,
-  getLocalFallbackModel,
   getOpenRouterFallbackProvider,
   shouldRouteLocally,
   shouldUseOpenRouter,
@@ -28,9 +26,9 @@ import {
   normalizeOpenAiCompatibleBaseUrl,
   resolveOpenAiCompatibleRoot,
 } from './ai/modelNormalization';
+import { attemptOpenRouterFallback, isOpenRouterTransientFailure } from './ai/openRouterFallback';
 import { resolvePositiveRoutingOpts } from './ai/positiveRouting';
 import { generateOpenRouterText, streamOpenRouter } from './ai/providers/openrouterProvider';
-import { logRoutingDecision } from './ai/routingLogger';
 import { attachCause, sanitizePromptValue, stripJsonFences } from './aiUtils';
 import { isServerlessProxyCapable } from './deployTarget';
 import {
@@ -591,53 +589,6 @@ async function generateTextSingleProvider(
   }
 }
 
-// QNBS-v3: shared by generateText and streamText — identifies a transient OpenRouter failure (rate-limit or open circuit) that should promote to OpenRouter's own configured fallback provider instead of just moving to the next chain entry.
-function isOpenRouterTransientFailure(
-  nextProvider: AIProvider | undefined,
-  error: unknown,
-): boolean {
-  if (nextProvider !== 'openrouter') return false;
-  const msg = error instanceof Error ? error.message : String(error);
-  return msg.startsWith('OPENROUTER_RATE_LIMITED') || msg.startsWith('OPENROUTER_CIRCUIT_OPEN');
-}
-
-// QNBS-v3: reusing mergedOpts.model (an OpenRouter model id) would be meaningless for webllm's local registry lookup, so the fallback needs a provider-appropriate model — gemini's own getModelForText() already defaults safely, so only webllm needs an explicit swap here.
-function buildOpenRouterFallbackOpts(
-  mergedOpts: AIRequestOptions,
-  fallback: string,
-): AIRequestOptions {
-  const provider = fallback as AIRequestOptions['provider'];
-  if (provider === 'webllm') {
-    return { ...mergedOpts, provider, model: getLocalFallbackModel() as AIRequestOptions['model'] };
-  }
-  return { ...mergedOpts, provider };
-}
-
-// QNBS-v3: extracted so generateText's loop body carries fewer inline branches — the caller must have already committed `fallback` (e.g. to attemptedOpenRouterFallback) before calling, since this can throw on a failed retry.
-async function attemptOpenRouterTextFallback(
-  prompt: string,
-  creativity: AiCreativity,
-  mergedOpts: AIRequestOptions,
-  fallback: string,
-): Promise<string> {
-  logRoutingDecision({
-    mode: getActiveAiMode(),
-    originalProvider: 'openrouter',
-    chosenProvider: fallback,
-    reason: 'openrouter-fallback',
-  });
-  const { withTransientRetry } = await import('./ai/aiRetry');
-  return withTransientRetry(
-    () =>
-      generateTextSingleProvider(
-        prompt,
-        creativity,
-        buildOpenRouterFallbackOpts(mergedOpts, fallback),
-      ),
-    { attempts: 2 },
-  );
-}
-
 export async function generateText(
   prompt: string,
   creativity: AiCreativity,
@@ -686,11 +637,16 @@ export async function generateText(
           const fallback = getOpenRouterFallbackProvider();
           attemptedOpenRouterFallback = fallback;
           try {
-            const result = await attemptOpenRouterTextFallback(
-              prompt,
-              creativity,
+            const result = await attemptOpenRouterFallback(
               mergedOpts,
               fallback,
+              async (fallbackOpts) => {
+                const { withTransientRetry } = await import('./ai/aiRetry');
+                return withTransientRetry(
+                  () => generateTextSingleProvider(prompt, creativity, fallbackOpts),
+                  { attempts: 2 },
+                );
+              },
             );
             _lastFallbackReason = `OpenRouter rate-limited; fell back to ${fallback}.`;
             return result;
@@ -795,30 +751,6 @@ export async function generateImage(
   );
 }
 
-// QNBS-v3: extracted so streamText's loop body carries fewer inline branches — the caller must have already committed `fallback` (e.g. to attemptedOpenRouterFallback) before calling, since this can throw on a failed stream attempt.
-async function attemptOpenRouterStreamFallback(
-  prompt: string,
-  creativity: AiCreativity,
-  mergedOpts: AIRequestOptions,
-  callbacks: AIStreamCallbacks,
-  fallback: string,
-  signal?: AbortSignal,
-): Promise<void> {
-  logRoutingDecision({
-    mode: getActiveAiMode(),
-    originalProvider: 'openrouter',
-    chosenProvider: fallback,
-    reason: 'openrouter-fallback',
-  });
-  await streamProvider(
-    prompt,
-    creativity,
-    buildOpenRouterFallbackOpts(mergedOpts, fallback),
-    callbacks,
-    signal,
-  );
-}
-
 export async function streamText(
   prompt: string,
   creativity: AiCreativity,
@@ -875,13 +807,8 @@ export async function streamText(
           const fallback = getOpenRouterFallbackProvider();
           attemptedOpenRouterFallback = fallback;
           try {
-            await attemptOpenRouterStreamFallback(
-              prompt,
-              creativity,
-              mergedOpts,
-              callbacks,
-              fallback,
-              signal,
+            await attemptOpenRouterFallback(mergedOpts, fallback, (fallbackOpts) =>
+              streamProvider(prompt, creativity, fallbackOpts, callbacks, signal),
             );
             _lastFallbackReason = `OpenRouter rate-limited; fell back to ${fallback}.`;
             return;
