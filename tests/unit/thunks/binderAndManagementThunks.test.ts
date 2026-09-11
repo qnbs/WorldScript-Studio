@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../../services/storageService', () => ({
   storageService: {
     saveImage: vi.fn(),
+    deleteImage: vi.fn(),
     deleteBinderAsset: vi.fn(),
     saveBinderAsset: vi.fn(),
     getSnapshotData: vi.fn(),
@@ -54,6 +55,7 @@ beforeEach(() => {
   vi.mocked(storageService.deleteBinderAsset).mockResolvedValue(undefined);
   vi.mocked(storageService.saveBinderAsset).mockResolvedValue(undefined);
   vi.mocked(storageService.saveImage).mockResolvedValue(undefined);
+  vi.mocked(storageService.deleteImage).mockResolvedValue(undefined);
   vi.mocked(storageService.getSnapshotData).mockResolvedValue(null);
   vi.mocked(storageService.restoreSnapshot).mockResolvedValue(null);
 });
@@ -337,8 +339,8 @@ describe('importProjectThunk', () => {
     expect(character?.avatarBase64).toBeUndefined();
   });
 
-  // QNBS-v3: `||`, not `??`, resolves the import namespace so a present-but-empty id collapses into the same 'default' namespace as a genuinely missing id -- two independent no-real-id imports must not diverge into two different image namespaces ('' vs 'default').
-  it('project-qualifies images under "default" when the imported project id is an empty string', async () => {
+  // QNBS-v3: `||`, not `??`, treats a present-but-empty id identically to a genuinely missing one -- both take the fresh-generated-id branch below, rather than an empty id alone diverging into its own '' namespace.
+  it('generates a fresh project id when the imported project id is an empty string', async () => {
     const projectWithEmptyId = {
       ...minimalProject,
       id: '',
@@ -352,9 +354,74 @@ describe('importProjectThunk', () => {
     });
     const action = await store.dispatch(importProjectThunk(file));
 
-    expect(storageService.saveImage).toHaveBeenCalledWith('c3', 'emptyidimgdata', 'default');
     const payload = (action as { payload: { id: string } }).payload;
-    expect(payload.id).toBe('default');
+    expect(payload.id).toBeTruthy();
+    expect(storageService.saveImage).toHaveBeenCalledWith('c3', 'emptyidimgdata', payload.id);
+  });
+
+  // QNBS-v3: the exact gap CodeAnt flagged -- two independent no-id imports with a colliding entity id must land in two distinct storage namespaces, not both fall back to the same shared 'default' string.
+  it('does not collide two independent imports that both lack a project id', async () => {
+    const firstNoIdProject = {
+      ...minimalProject,
+      id: '',
+      characters: [{ id: 'shared-id', name: 'Alice', avatarBase64: 'first-avatar' }],
+    };
+    vi.mocked(parseImportedProjectJson).mockReturnValueOnce(firstNoIdProject as never);
+    const firstStore = makeStore();
+    const firstFile = new File([JSON.stringify(firstNoIdProject)], 'first.json', {
+      type: 'application/json',
+    });
+    const firstAction = await firstStore.dispatch(importProjectThunk(firstFile));
+    const firstPayload = (firstAction as { payload: { id: string } }).payload;
+
+    const secondNoIdProject = {
+      ...minimalProject,
+      id: '',
+      characters: [{ id: 'shared-id', name: 'Bob', avatarBase64: 'second-avatar' }],
+    };
+    vi.mocked(parseImportedProjectJson).mockReturnValueOnce(secondNoIdProject as never);
+    const secondStore = makeStore();
+    const secondFile = new File([JSON.stringify(secondNoIdProject)], 'second.json', {
+      type: 'application/json',
+    });
+    const secondAction = await secondStore.dispatch(importProjectThunk(secondFile));
+    const secondPayload = (secondAction as { payload: { id: string } }).payload;
+
+    expect(firstPayload.id).not.toBe(secondPayload.id);
+    expect(storageService.saveImage).toHaveBeenCalledWith(
+      'shared-id',
+      'first-avatar',
+      firstPayload.id,
+    );
+    expect(storageService.saveImage).toHaveBeenCalledWith(
+      'shared-id',
+      'second-avatar',
+      secondPayload.id,
+    );
+  });
+
+  // QNBS-v3: a partial import failure must not leave orphaned images for a project that never gets admitted into state.
+  it('cleans up already-saved images when a later image save fails during import', async () => {
+    const projectWithTwoAvatars = {
+      ...minimalProject,
+      characters: [
+        { id: 'c-ok', name: 'Ok', avatarBase64: 'ok-avatar' },
+        { id: 'c-fail', name: 'Fail', avatarBase64: 'fail-avatar' },
+      ],
+    };
+    vi.mocked(parseImportedProjectJson).mockReturnValue(projectWithTwoAvatars as never);
+    vi.mocked(storageService.saveImage).mockImplementation(async (id: string) => {
+      if (id === 'c-fail') throw new Error('disk full');
+    });
+
+    const store = makeStore();
+    const file = new File([JSON.stringify(projectWithTwoAvatars)], 'novel.json', {
+      type: 'application/json',
+    });
+    const action = await store.dispatch(importProjectThunk(file));
+
+    expect(action.type).toBe('project/importProject/rejected');
+    expect(storageService.deleteImage).toHaveBeenCalledWith('c-ok', 'proj-1');
   });
 
   it('handles normalized entity format characters', async () => {

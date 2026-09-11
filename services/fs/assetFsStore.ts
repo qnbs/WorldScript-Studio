@@ -52,18 +52,31 @@ export class FsAssetStore extends FsSnapshotStore {
     return apis.join(appDataPath, 'images', `${sanitizePathSegment(id, 'image')}.png`);
   }
 
-  // QNBS-v3: a legacy global image has no recorded owner -- when only one project is stored, it can only be that project's; once a second project exists, ownership is unprovable and serving it risks cross-project misattribution. Counts entries under appData/projects/ (by this app's own convention, every entry there is a project directory) rather than trusting readDir's isDirectory flag, which isn't populated consistently by every backend; stops as soon as 2 are found.
-  private async countStoredProjectsCapped(): Promise<number> {
-    try {
-      const apis = await this.getApis();
-      const appDataPath = await this.ensureAppDataPath();
-      const projectsDir = await apis.join(appDataPath, 'projects');
-      if (!(await apis.exists(projectsDir))) return 0;
-      const entries = await apis.readDir(projectsDir);
-      return Math.min(entries.length, 2);
-    } catch {
-      return 2; // QNBS-v3: fail closed on enumeration failure -- treat as ambiguous rather than assume single-project safety.
+  private async legacyImageOwnerMarkerPath(): Promise<string> {
+    const apis = await this.getApis();
+    const appDataPath = await this.ensureAppDataPath();
+    return apis.join(appDataPath, 'images', '.legacy-owner');
+  }
+
+  // QNBS-v3: a legacy global image has no recorded owner -- the first project to consult it claims the whole legacy namespace for itself, permanently; every later project is checked against that claim instead of guessing. A live directory-count heuristic does NOT survive a delete-then-create cycle (delete project A, create project B: B would see "sole owner" and incorrectly inherit A's abandoned legacy images), so ownership is a persisted marker file, mirroring the IndexedDB backend's ownership marker.
+  private async claimOrCheckLegacyImageOwnership(projectId: string): Promise<boolean> {
+    const apis = await this.getApis();
+    const markerPath = await this.legacyImageOwnerMarkerPath();
+    if (await apis.exists(markerPath)) {
+      const existing = await retryFs(() => apis.readTextFile(markerPath));
+      return existing === projectId;
     }
+    await writeTextFileAtomic(apis, markerPath, projectId);
+    return true;
+  }
+
+  // QNBS-v3: read-only counterpart for deleteImage -- a destructive delete must never itself establish the first ownership claim, only act once ownership is already provable.
+  private async checkLegacyImageOwnership(projectId: string): Promise<boolean> {
+    const apis = await this.getApis();
+    const markerPath = await this.legacyImageOwnerMarkerPath();
+    if (!(await apis.exists(markerPath))) return false;
+    const existing = await retryFs(() => apis.readTextFile(markerPath));
+    return existing === projectId;
   }
 
   async saveImage(id: string, base64Data: string, projectId = 'default'): Promise<void> {
@@ -78,20 +91,21 @@ export class FsAssetStore extends FsSnapshotStore {
 
   async getImage(id: string, projectId = 'default'): Promise<string | null> {
     try {
-      // QNBS-v3: serialized like getBinderAsset -- without this, the ownership count and the legacy-file read are two separate awaited steps a concurrent project creation/deletion can interleave, staling the ownership verdict.
+      const apis = await this.getApis();
+      const qualifiedFile = (await this.qualifiedImagePaths(projectId, id)).file;
+      if (await apis.exists(qualifiedFile)) {
+        const imageData = await retryFs(() => apis.readTextFile(qualifiedFile));
+        return imageData.startsWith('data:image/')
+          ? imageData
+          : `data:image/png;base64,${imageData}`;
+      }
+      // QNBS-v3: only the legacy-fallback branch touches shared/ambiguous ownership state -- restrict serialization to it so a qualified-path hit (the common case) can read concurrently with unrelated saveProject/deleteProject/saveBinderAsset operations instead of queuing behind them.
       return await this.withLegacyRoutingOperation(async () => {
-        const apis = await this.getApis();
-        let imageFile = (await this.qualifiedImagePaths(projectId, id)).file;
-        if (!(await apis.exists(imageFile))) {
-          // QNBS-v3: preserve-first fail-closed -- a legacy unqualified image cannot be safely attributed to this project once a second project is stored, since either could have originally saved it.
-          if ((await this.countStoredProjectsCapped()) > 1) return null;
-          imageFile = await this.legacyImagePath(id);
-          if (!(await apis.exists(imageFile))) {
-            return null;
-          }
-        }
-
-        const imageData = await retryFs(() => apis.readTextFile(imageFile));
+        // QNBS-v3: preserve-first fail-closed -- a legacy unqualified image cannot be safely attributed to this project unless this project (or an already-deleted prior claimant) provably owns the legacy namespace.
+        if (!(await this.claimOrCheckLegacyImageOwnership(projectId))) return null;
+        const legacyFile = await this.legacyImagePath(id);
+        if (!(await apis.exists(legacyFile))) return null;
+        const imageData = await retryFs(() => apis.readTextFile(legacyFile));
         return imageData.startsWith('data:image/')
           ? imageData
           : `data:image/png;base64,${imageData}`;
@@ -104,12 +118,12 @@ export class FsAssetStore extends FsSnapshotStore {
 
   async deleteImage(id: string, projectId = 'default'): Promise<void> {
     try {
-      // QNBS-v3: serialized + write-authority-checked like deleteBinderAsset -- an unserialized ownership count could go stale against a concurrent project creation and delete another project's unattributed legacy image.
+      // QNBS-v3: serialized + write-authority-checked like deleteBinderAsset -- an unserialized ownership check could go stale against a concurrent project creation and delete another project's unattributed legacy image.
       await this.withLegacyRoutingOperation(async () => {
         const apis = await this.getApis();
         const qualifiedFile = (await this.qualifiedImagePaths(projectId, id)).file;
-        // QNBS-v3: preserve-first -- only remove the unattributed legacy copy when this is provably the sole stored project; with 2+ projects stored it may belong to a different one, so leave it untouched rather than risk destroying another project's image.
-        const soleOwner = (await this.countStoredProjectsCapped()) <= 1;
+        // QNBS-v3: preserve-first -- only remove the unattributed legacy copy when ownership is already provable; otherwise it may belong to a different (possibly already-deleted) project, so leave it untouched rather than risk destroying another project's image.
+        const soleOwner = await this.checkLegacyImageOwnership(projectId);
         // QNBS-v3: legacy MUST be removed before the qualified file, not after -- if legacy removal throws, the catch below aborts before the qualified file is touched, so getImage's legacy fallback can never resurrect a half-deleted image. The reverse order would let a failure after the qualified delete leave the legacy copy to resurrect it.
         if (soleOwner) {
           const legacyFile = await this.legacyImagePath(id);

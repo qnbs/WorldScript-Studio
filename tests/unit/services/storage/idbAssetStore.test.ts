@@ -23,11 +23,14 @@ const mockAppDataStore = {
   delete: vi.fn(),
 };
 
+// QNBS-v3: hoisted so tests can inspect exactly which store/mode getObjectStore was called with (e.g. to prove the ownership claim uses one readwrite transaction, not a separate readonly + readwrite pair).
+const mockGetObjectStore = vi.fn((storeName: string) =>
+  Promise.resolve(storeName === 'app-data' ? mockAppDataStore : mockIdbStore),
+);
+
 vi.mock('../../../../services/storage/idbCodexStore', () => ({
   IdbCodexStore: class {
-    protected getObjectStore = vi.fn((storeName: string) =>
-      Promise.resolve(storeName === 'app-data' ? mockAppDataStore : mockIdbStore),
-    );
+    protected getObjectStore = mockGetObjectStore;
   },
 }));
 
@@ -210,6 +213,19 @@ describe('IdbAssetStore', () => {
         'project-a',
         '__legacy_image_owner_project_id__',
       );
+    });
+
+    // QNBS-v3: the lookup and the conditional write must share one readwrite transaction (not a separate readonly lookup + readwrite write) so two concurrent claims for different projects can never both observe "unclaimed" and both succeed.
+    it('performs the ownership lookup and conditional write in a single readwrite transaction', async () => {
+      mockIdbStore.get.mockImplementation((key: string) =>
+        makeSuccessReq(key === 'img-1' ? 'data:image/png;base64,ATOMIC' : null),
+      );
+      await store.getImage('img-1', 'project-a');
+
+      const appDataStoreCalls = mockGetObjectStore.mock.calls.filter(
+        ([name]) => name === 'app-data',
+      );
+      expect(appDataStoreCalls).toEqual([['app-data', 'readwrite']]);
     });
   });
 

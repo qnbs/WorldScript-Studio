@@ -42,6 +42,7 @@ const useStoredImage = (id: string | undefined, hasImage: boolean | undefined) =
     let isMounted = true;
     const fetchImage = async () => {
       try {
+        // QNBS-v3: passes projectId so the lookup resolves the project-qualified key, not a bare entity id shared across projects.
         const image = await storageService.getImage(id, projectId);
         if (isMounted && image) {
           setImageUrl(image.startsWith('data:image/') ? image : `data:image/png;base64,${image}`);

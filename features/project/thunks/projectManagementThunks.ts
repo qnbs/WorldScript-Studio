@@ -73,27 +73,44 @@ export const importProjectThunk = createAsyncThunk('project/importProject', asyn
     throw new Error('Invalid project file: duplicate character or world entity ID.');
   }
 
-  // QNBS-v3: images are project-qualified in storage now -- resolve the imported project's own id up front so both save loops use the same namespace the returned ProjectData below is assigned. `||`, not `??`, so a present-but-empty id falls to 'default' exactly like every other live call site (state.project.present?.data?.id || 'default'); `??` would let an explicit empty-string id silently diverge into its own '' namespace instead of collapsing into the same 'default' namespace as other no-id projects.
-  const importedProjectId = projectDataJson.id || 'default';
+  // QNBS-v3: images are project-qualified in storage now -- resolve the imported project's own id up front so both save loops use the same namespace the returned ProjectData below is assigned. A present-but-empty id is treated identically to a missing one (`||`, not `??`) and gets its own fresh generated id, not the shared 'default' fallback used elsewhere for "no active project" -- two independent no-id imports must land in two distinct namespaces, not silently collapse into the same one.
+  const importedProjectId = projectDataJson.id || crypto.randomUUID();
 
-  for (const char of characterArray) {
-    const newChar = { ...char };
-    if (newChar.avatarBase64) {
-      await storageService.saveImage(newChar.id, newChar.avatarBase64, importedProjectId);
-      newChar.hasAvatar = true;
-      delete newChar.avatarBase64;
+  // QNBS-v3: an import that fails partway must not leave orphaned images behind for a project that will never be admitted into state -- best-effort cleanup of everything saved so far before re-throwing.
+  const savedImageIds: string[] = [];
+  try {
+    for (const char of characterArray) {
+      const newChar = { ...char };
+      if (newChar.avatarBase64) {
+        await storageService.saveImage(newChar.id, newChar.avatarBase64, importedProjectId);
+        savedImageIds.push(newChar.id);
+        newChar.hasAvatar = true;
+        delete newChar.avatarBase64;
+      }
+      charactersToSet.push(newChar);
     }
-    charactersToSet.push(newChar);
-  }
 
-  for (const world of worldArray) {
-    const newWorld = { ...world };
-    if (newWorld.ambianceImageBase64) {
-      await storageService.saveImage(newWorld.id, newWorld.ambianceImageBase64, importedProjectId);
-      newWorld.hasAmbianceImage = true;
-      delete newWorld.ambianceImageBase64;
+    for (const world of worldArray) {
+      const newWorld = { ...world };
+      if (newWorld.ambianceImageBase64) {
+        await storageService.saveImage(
+          newWorld.id,
+          newWorld.ambianceImageBase64,
+          importedProjectId,
+        );
+        savedImageIds.push(newWorld.id);
+        newWorld.hasAmbianceImage = true;
+        delete newWorld.ambianceImageBase64;
+      }
+      worldsToSet.push(newWorld);
     }
-    worldsToSet.push(newWorld);
+  } catch (error) {
+    await Promise.all(
+      savedImageIds.map((id) =>
+        storageService.deleteImage(id, importedProjectId).catch(() => undefined),
+      ),
+    );
+    throw error;
   }
   const charactersState = createPrototypeSafeEntityState(charactersToSet);
   const worldsState = createPrototypeSafeEntityState(worldsToSet);

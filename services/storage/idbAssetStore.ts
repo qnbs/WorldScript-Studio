@@ -34,23 +34,23 @@ export class IdbAssetStore extends IdbSnapshotStore {
 
   // QNBS-v3: a legacy (pre-project-qualification) image has no recorded owner -- the first project to consult it claims the whole legacy namespace for itself, permanently; every later project is checked against that claim instead of guessing. Closes the orphaned-image leak across a New Project/import cycle that reuses the same entity id.
   private async claimOrCheckLegacyImageOwnership(projectId: string): Promise<boolean> {
-    const store = await this.getObjectStore(APP_DATA_STORE, 'readonly');
-    const existing = await new Promise<string | undefined>((resolve, reject) => {
-      const request = store.get(LEGACY_IMAGE_OWNER_KEY);
-      request.onsuccess = () => resolve(request.result as string | undefined);
-      request.onerror = () => reject(request.error);
+    const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
+    // QNBS-v3: the read and the conditional write are chained inside one onsuccess callback on one readwrite transaction (no awaited gap between them), not two separate transactions -- IDB serializes concurrent readwrite transactions on the same store, so this makes claim-or-check atomic: two concurrent callers for different projects can never both observe "unclaimed" and both succeed.
+    return new Promise<boolean>((resolve, reject) => {
+      const getRequest = store.get(LEGACY_IMAGE_OWNER_KEY);
+      getRequest.onerror = () => reject(getRequest.error);
+      getRequest.onsuccess = () => {
+        // QNBS-v3: treats both undefined (real IDB "no such key") and null (a store that records an explicit null) as unclaimed.
+        const existing = getRequest.result as string | undefined;
+        if (existing == null) {
+          const putRequest = store.put(projectId, LEGACY_IMAGE_OWNER_KEY);
+          putRequest.onerror = () => reject(putRequest.error);
+          putRequest.onsuccess = () => resolve(true);
+          return;
+        }
+        resolve(existing === projectId);
+      };
     });
-    // QNBS-v3: treats both undefined (real IDB "no such key") and null (a store that records an explicit null) as unclaimed.
-    if (existing == null) {
-      const writeStore = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
-      await new Promise<void>((resolve, reject) => {
-        const request = writeStore.put(projectId, LEGACY_IMAGE_OWNER_KEY);
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
-      });
-      return true;
-    }
-    return existing === projectId;
   }
 
   // QNBS-v3: read-only counterpart for deleteImage -- a destructive delete must never itself establish the first ownership claim, only act once ownership is already provable.

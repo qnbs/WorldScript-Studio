@@ -192,6 +192,7 @@ describe('WorldView', () => {
       ],
     } as never);
     render(<WorldView />);
+    // QNBS-v3: id now leads, projectId trails, matching the reordered getImage signature.
     await waitFor(() =>
       expect(storageService.getImage).toHaveBeenCalledWith('w-broken', 'default'),
     );

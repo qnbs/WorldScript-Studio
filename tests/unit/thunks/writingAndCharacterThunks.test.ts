@@ -202,6 +202,7 @@ describe('generateSceneImageThunk', () => {
     const store = makeStore();
     await store.dispatch(generateSceneImageThunk(payload));
 
+    // QNBS-v3: id, data, projectId order, matching the reordered saveImage signature.
     expect(storageService.saveImage).toHaveBeenCalledWith('scene-sec-1', 'rawbase64', 'default');
   });
 
@@ -390,6 +391,7 @@ describe('generateCharacterPortraitThunk', () => {
       }),
     );
 
+    // QNBS-v3: id, data, projectId order, matching the reordered saveImage signature.
     expect(storageService.saveImage).toHaveBeenCalledWith('c42', 'portraitdata', 'default');
   });
 
@@ -454,6 +456,7 @@ describe('uploadCharacterImageThunk', () => {
     const action = await store.dispatch(uploadCharacterImageThunk({ characterId: 'c99', file }));
 
     expect(action.type).toBe('project/uploadCharacterImage/fulfilled');
+    // QNBS-v3: id, data, projectId order, matching the reordered saveImage signature.
     expect(storageService.saveImage).toHaveBeenCalledWith('c99', fakeDataUrl, 'default');
   });
 
@@ -474,6 +477,7 @@ describe('uploadCharacterImageThunk', () => {
     const action = await store.dispatch(uploadCharacterImageThunk({ characterId: 'c7', file }));
 
     expect((action as { payload: { characterId: string } }).payload?.characterId).toBe('c7');
+    // QNBS-v3: id, data, projectId order, matching the reordered saveImage signature.
     expect(storageService.saveImage).toHaveBeenCalledWith(
       'c7',
       'data:image/jpeg;base64,abc123',

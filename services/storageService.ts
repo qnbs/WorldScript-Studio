@@ -113,6 +113,7 @@ class StorageManager {
     return backend.deleteProject(projectId);
   }
 
+  // QNBS-v3: projectId is trailing/optional, mirroring StorageBackend, so callers that predate project-qualification still compile unchanged and defer to each backend's own 'default' fallback.
   async saveImage(id: string, base64Data: string, projectId?: string): Promise<void> {
     const backend = await this.getBackend();
     return backend.saveImage(id, base64Data, projectId);
@@ -187,6 +188,7 @@ class StorageManager {
     return backend.deleteSnapshot(id);
   }
 
+  // QNBS-v3: same trailing-optional projectId compatibility shape as saveImage/getImage above.
   async deleteImage(id: string, projectId?: string): Promise<void> {
     const backend = await this.getBackend();
     return backend.deleteImage(id, projectId);

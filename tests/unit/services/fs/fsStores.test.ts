@@ -2007,7 +2007,9 @@ describe('FsAssetStore — images + binder assets', () => {
     expect(await store.getImage('legacy-only', 'proj-1')).toBe('data:image/png;base64,OLD');
   });
 
-  it('deletes both the project-qualified and legacy flat image files', async () => {
+  it('deletes both the project-qualified and legacy flat image files once ownership is claimed', async () => {
+    // QNBS-v3: deleteImage never establishes a first claim itself, so the owning project must already hold it -- matches the real lifecycle where a prior getImage call claims the namespace.
+    simulateLegacyImageOwner('proj-1');
     fake.text.set('/app/images/dual.png', 'data:image/png;base64,LEGACYCOPY');
     await store.saveImage('dual', 'data:image/png;base64,NEWCOPY', 'proj-1');
     await store.deleteImage('dual', 'proj-1');
@@ -2015,24 +2017,30 @@ describe('FsAssetStore — images + binder assets', () => {
     expect(fake.text.has('/app/images/dual.png')).toBe(false);
   });
 
-  // QNBS-v3: the fake FS enumerates readDir() results from real file keys, matching real Tauri readDir() listing actual project.json entries -- a bare mkdir with no file inside is invisible to readDir, so simulate a stored project by writing its marker file.
-  function simulateStoredProject(projectId: string) {
-    fake.text.set(`/app/projects/${projectId}/project.json`, '{}');
+  // QNBS-v3: writes the persisted legacy-image-ownership marker directly, simulating a prior claim by projectId (as if it had already consulted the legacy fallback once).
+  function simulateLegacyImageOwner(projectId: string) {
+    fake.text.set('/app/images/.legacy-owner', projectId);
   }
 
-  // QNBS-v3: a legacy image has no recorded owner -- once a second project is stored, either could have originally saved it, so serving it to any project risks cross-project misattribution.
-  it('fails closed on the legacy fallback when more than one project is stored', async () => {
-    simulateStoredProject('proj-1');
-    simulateStoredProject('proj-2');
+  // QNBS-v3: a legacy image has no recorded owner -- once a different project has already claimed the legacy namespace, serving it to any other project risks cross-project misattribution. A live directory-count heuristic would not survive a delete-then-create cycle, so ownership is a persisted claim, not a live count.
+  it('fails closed on the legacy fallback when a different project already claimed the legacy namespace', async () => {
+    simulateLegacyImageOwner('proj-a');
     fake.text.set('/app/images/ambiguous.png', 'data:image/png;base64,AMBIGUOUS');
 
-    expect(await store.getImage('ambiguous', 'proj-1')).toBeNull();
+    expect(await store.getImage('ambiguous', 'proj-b')).toBeNull();
     // QNBS-v3: preserved untouched, not destructively deleted, despite being unattributable.
     expect(fake.text.has('/app/images/ambiguous.png')).toBe(true);
   });
 
-  it('still serves the legacy fallback when only one project is stored', async () => {
-    simulateStoredProject('proj-1');
+  it('claims the legacy namespace for the first project that ever consults it', async () => {
+    fake.text.set('/app/images/solo.png', 'data:image/png;base64,SOLO');
+
+    expect(await store.getImage('solo', 'proj-1')).toBe('data:image/png;base64,SOLO');
+    expect(fake.text.get('/app/images/.legacy-owner')).toBe('proj-1');
+  });
+
+  it('still serves the legacy fallback for the project that already owns the legacy namespace', async () => {
+    simulateLegacyImageOwner('proj-1');
     fake.text.set('/app/images/solo.png', 'data:image/png;base64,SOLO');
 
     expect(await store.getImage('solo', 'proj-1')).toBe('data:image/png;base64,SOLO');
@@ -2049,21 +2057,31 @@ describe('FsAssetStore — images + binder assets', () => {
     );
   }
 
-  it('does not delete the legacy copy when more than one project is stored', async () => {
-    simulateStoredProject('proj-1');
-    simulateStoredProject('proj-2');
+  it('does not delete the legacy copy when a different project already claimed the legacy namespace', async () => {
+    simulateLegacyImageOwner('proj-a');
     fake.text.set('/app/images/shared-legacy.png', 'data:image/png;base64,SHARED');
-    await store.saveImage('shared-legacy', 'data:image/png;base64,NEWCOPY', 'proj-1');
+    await store.saveImage('shared-legacy', 'data:image/png;base64,NEWCOPY', 'proj-b');
 
-    await store.deleteImage('shared-legacy', 'proj-1');
+    await store.deleteImage('shared-legacy', 'proj-b');
 
     expect(qualifiedImageKey('shared-legacy')).toBeUndefined();
     expect(fake.text.has('/app/images/shared-legacy.png')).toBe(true);
   });
 
+  // QNBS-v3: preserve-first -- a destructive delete must never itself establish the first ownership claim, so with no prior claim the unattributed legacy copy is left untouched rather than guessed-and-destroyed.
+  it('does not delete the legacy copy when this project has not yet claimed the legacy namespace', async () => {
+    fake.text.set('/app/images/unclaimed-legacy.png', 'data:image/png;base64,UNCLAIMED');
+    await store.saveImage('unclaimed-legacy', 'data:image/png;base64,NEWCOPY', 'proj-1');
+
+    await store.deleteImage('unclaimed-legacy', 'proj-1');
+
+    expect(qualifiedImageKey('unclaimed-legacy')).toBeUndefined();
+    expect(fake.text.has('/app/images/unclaimed-legacy.png')).toBe(true);
+  });
+
   // QNBS-v3: legacy must be removed before the qualified file -- if legacy removal fails, the qualified file must survive untouched so getImage's fallback can never resurrect a half-deleted image.
   it('leaves the qualified file untouched when legacy deletion fails (sole-owner case)', async () => {
-    simulateStoredProject('proj-1');
+    simulateLegacyImageOwner('proj-1');
     fake.text.set('/app/images/atomic.png', 'data:image/png;base64,LEGACY');
     await store.saveImage('atomic', 'data:image/png;base64,QUALIFIED', 'proj-1');
 
@@ -2085,19 +2103,26 @@ describe('FsAssetStore — images + binder assets', () => {
 
   // QNBS-v3: the ownership check and the legacy-file read/delete must not be two separately-awaited, unserialized steps -- a concurrent project creation between them could make the ownership verdict stale. Proves getImage participates in the same legacy-routing serialization queue as every other mutation, so a call enqueued first blocks a call enqueued after it from even starting its own body, not just from finishing first.
   it('serializes getImage calls so a call enqueued first blocks a later call from starting until it completes', async () => {
-    simulateStoredProject('proj-1');
     fake.text.set('/app/images/first.png', 'data:image/png;base64,FIRST');
     fake.text.set('/app/images/second.png', 'data:image/png;base64,SECOND');
 
-    const events: string[] = [];
+    // QNBS-v3: stubs out crypto.subtle.digest's real (variable) native latency so the barrier check below is deterministic instead of racing an unbounded delay -- a slow digest/CI worker could otherwise let an unserialized "second" pass the barrier late and produce a false-pass.
+    const digestSpy = vi
+      .spyOn(crypto.subtle, 'digest')
+      .mockImplementation(() => Promise.resolve(new ArrayBuffer(32)));
+
     const originalExists = fake.apis.exists;
     let releaseGate: () => void = () => {};
     const gate = new Promise<void>((resolve) => {
       releaseGate = resolve;
     });
-    // QNBS-v3: gates only the legacy-existence check for "first" (identified by its own path, not by arrival order); "second" never touches this path, so it is free to run the instant its own operation body starts.
+    let gateReleased = false;
+    // QNBS-v3: a violation is recorded the instant it happens, not inferred from the absence of evidence after a fixed wait -- correct regardless of how long "second" takes to reach this point.
+    let violation = false;
     fake.apis.exists = async (p: string) => {
-      events.push(`exists:${p}`);
+      if (p === '/app/images/second.png' && !gateReleased) {
+        violation = true;
+      }
       if (p === '/app/images/first.png') {
         await gate;
       }
@@ -2106,18 +2131,19 @@ describe('FsAssetStore — images + binder assets', () => {
 
     const firstPromise = store.getImage('first', 'proj-1');
     const secondPromise = store.getImage('second', 'proj-1');
+    setTimeout(() => {
+      gateReleased = true;
+      releaseGate();
+    }, 20);
 
     try {
-      // QNBS-v3: a real (not fake-timer) wait, generous relative to crypto.subtle.digest's real latency -- long enough that an unserialized "second" would have completed its entire (ungated) chain by now.
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      expect(events.some((e) => e.includes('second'))).toBe(false);
-
-      releaseGate();
       const [firstResult, secondResult] = await Promise.all([firstPromise, secondPromise]);
+      expect(violation).toBe(false);
       expect(firstResult).toBe('data:image/png;base64,FIRST');
       expect(secondResult).toBe('data:image/png;base64,SECOND');
     } finally {
       fake.apis.exists = originalExists;
+      digestSpy.mockRestore();
     }
   });
 

@@ -28,8 +28,11 @@ let mockWorlds: World[] = [];
 
 vi.mock('../../../app/hooks', () => ({
   useAppDispatch: () => mockDispatch,
+  // QNBS-v3: a real (non-'default') id so confirmDelete's deleteImage assertion actually proves the active project's own id is forwarded, not just the || 'default' fallback every project would otherwise share.
   useAppSelector: (selector: (s: unknown) => unknown) =>
-    selector({ project: { present: { data: { worlds: { ids: [], entities: {} } } } } }),
+    selector({
+      project: { present: { data: { id: 'w-project-1', worlds: { ids: [], entities: {} } } } },
+    }),
 }));
 
 vi.mock('../../../hooks/useTranslation', () => ({
@@ -422,7 +425,8 @@ describe('confirmDelete', () => {
     await act(async () => {
       await result.current.confirmDelete();
     });
-    expect(mockDeleteImage).toHaveBeenCalledWith('w1', 'default');
+    // QNBS-v3: asserts the real active project id (not a hardcoded fallback every project would share) is forwarded to deleteImage.
+    expect(mockDeleteImage).toHaveBeenCalledWith('w1', 'w-project-1');
     expect(mockDispatch).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'project/deleteWorld', payload: 'w1' }),
     );

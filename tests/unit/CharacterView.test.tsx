@@ -193,6 +193,7 @@ describe('CharacterView', () => {
       ],
     } as never);
     render(<CharacterView />);
+    // QNBS-v3: id now leads, projectId trails, matching the reordered getImage signature.
     await waitFor(() =>
       expect(storageService.getImage).toHaveBeenCalledWith('c-broken', 'default'),
     );

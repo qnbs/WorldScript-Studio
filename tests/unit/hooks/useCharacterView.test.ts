@@ -48,8 +48,8 @@ vi.mock('../../../components/ui/Toast', () => ({
 
 vi.mock('../../../features/project/projectSelectors', () => ({
   selectAllCharacters: (state: { characters: Character[] }) => state.characters,
-  // QNBS-v3: not exercised by this file's fake state -- confirmDelete's projectId falls back to 'default'.
-  selectProjectData: () => undefined,
+  // QNBS-v3: a real (non-'default') id so confirmDelete's deleteImage assertion actually proves the active project's own id is forwarded, not just the || 'default' fallback every project would otherwise share.
+  selectProjectData: () => ({ id: 'c-project-1' }),
 }));
 
 vi.mock('../../../features/project/projectIdentity', () => ({
@@ -81,6 +81,7 @@ vi.mock('../../../features/project/thunks/characterThunks', () => {
   };
 });
 
+// QNBS-v3: id-then-projectId argument order mirrors the reordered storageService signature.
 vi.mock('../../../services/storageService', () => ({
   storageService: {
     saveImage: (id: unknown, data: unknown, projectId: unknown) =>
@@ -432,7 +433,8 @@ describe('confirmDelete', () => {
       await result.current.confirmDelete();
     });
 
-    expect(mockDeleteImage).toHaveBeenCalledWith('c1', 'default');
+    // QNBS-v3: asserts the real active project id (not a hardcoded fallback every project would share) is forwarded to deleteImage.
+    expect(mockDeleteImage).toHaveBeenCalledWith('c1', 'c-project-1');
     expect(mockDispatch).toHaveBeenCalledWith(projectActions.deleteCharacter('c1'));
   });
 
