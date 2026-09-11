@@ -322,8 +322,8 @@ describe('importProjectThunk', () => {
     });
     const action = await store.dispatch(importProjectThunk(file));
 
-    // saveImage called proves avatar was processed
-    expect(storageService.saveImage).toHaveBeenCalledWith('c2', 'base64imgdata');
+    // saveImage called proves avatar was processed, project-qualified by the imported project's own id
+    expect(storageService.saveImage).toHaveBeenCalledWith('proj-1', 'c2', 'base64imgdata');
     // hasAvatar flag set on the character entity in the payload
     const payload = (
       action as {

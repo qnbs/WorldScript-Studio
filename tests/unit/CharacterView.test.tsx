@@ -193,7 +193,9 @@ describe('CharacterView', () => {
       ],
     } as never);
     render(<CharacterView />);
-    await waitFor(() => expect(storageService.getImage).toHaveBeenCalledWith('c-broken'));
+    await waitFor(() =>
+      expect(storageService.getImage).toHaveBeenCalledWith('default', 'c-broken'),
+    );
     expect(screen.queryByAltText('Robin')).toBeNull();
   });
 });

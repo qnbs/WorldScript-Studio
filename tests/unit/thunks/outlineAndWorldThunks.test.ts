@@ -262,7 +262,7 @@ describe('generateWorldImageThunk', () => {
       generateWorldImageThunk({ worldId: 'w42', description: 'A volcanic wasteland', lang: 'en' }),
     );
 
-    expect(storageService.saveImage).toHaveBeenCalledWith('w42', 'worldimagedata');
+    expect(storageService.saveImage).toHaveBeenCalledWith('default', 'w42', 'worldimagedata');
   });
 
   it('rejects on AI error', async () => {
@@ -294,7 +294,7 @@ describe('uploadWorldImageThunk', () => {
     const action = await store.dispatch(uploadWorldImageThunk({ worldId: 'w99', file }));
 
     expect(action.type).toBe('project/uploadWorldImage/fulfilled');
-    expect(storageService.saveImage).toHaveBeenCalledWith('w99', fakeDataUrl);
+    expect(storageService.saveImage).toHaveBeenCalledWith('default', 'w99', fakeDataUrl);
   });
 
   it('rejects when the FileReader errors', async () => {

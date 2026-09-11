@@ -73,10 +73,13 @@ export const importProjectThunk = createAsyncThunk('project/importProject', asyn
     throw new Error('Invalid project file: duplicate character or world entity ID.');
   }
 
+  // QNBS-v3: images are project-qualified in storage now -- resolve the imported project's own id up front so both save loops use the same namespace the returned ProjectData below is assigned.
+  const importedProjectId = projectDataJson.id ?? 'default';
+
   for (const char of characterArray) {
     const newChar = { ...char };
     if (newChar.avatarBase64) {
-      await storageService.saveImage(newChar.id, newChar.avatarBase64);
+      await storageService.saveImage(importedProjectId, newChar.id, newChar.avatarBase64);
       newChar.hasAvatar = true;
       delete newChar.avatarBase64;
     }
@@ -86,7 +89,7 @@ export const importProjectThunk = createAsyncThunk('project/importProject', asyn
   for (const world of worldArray) {
     const newWorld = { ...world };
     if (newWorld.ambianceImageBase64) {
-      await storageService.saveImage(newWorld.id, newWorld.ambianceImageBase64);
+      await storageService.saveImage(importedProjectId, newWorld.id, newWorld.ambianceImageBase64);
       newWorld.hasAmbianceImage = true;
       delete newWorld.ambianceImageBase64;
     }
@@ -101,7 +104,7 @@ export const importProjectThunk = createAsyncThunk('project/importProject', asyn
   const manuscript = projectDataJson.manuscript ?? [];
 
   const result = {
-    id: projectDataJson.id ?? 'default',
+    id: importedProjectId,
     title: projectDataJson.title,
     logline: projectDataJson.logline,
     author: projectDataJson.author,

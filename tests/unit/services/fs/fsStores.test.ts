@@ -1916,15 +1916,140 @@ describe('FsCodexStore — codex + RAG vectors', () => {
 
 describe('FsAssetStore — images + binder assets', () => {
   it('round-trips an image while preserving its data-url MIME type', async () => {
-    await store.saveImage('char-1', 'data:image/webp;base64,QUJD');
-    expect(await store.getImage('char-1')).toBe('data:image/webp;base64,QUJD');
-    await store.deleteImage('char-1');
-    expect(await store.getImage('char-1')).toBeNull();
+    await store.saveImage('proj-1', 'char-1', 'data:image/webp;base64,QUJD');
+    expect(await store.getImage('proj-1', 'char-1')).toBe('data:image/webp;base64,QUJD');
+    await store.deleteImage('proj-1', 'char-1');
+    expect(await store.getImage('proj-1', 'char-1')).toBeNull();
   });
 
   it('treats legacy raw image payloads as PNG', async () => {
-    await store.saveImage('legacy-char', 'QUJD');
-    expect(await store.getImage('legacy-char')).toBe('data:image/png;base64,QUJD');
+    await store.saveImage('proj-1', 'legacy-char', 'QUJD');
+    expect(await store.getImage('proj-1', 'legacy-char')).toBe('data:image/png;base64,QUJD');
+  });
+
+  it('writes new images under a per-project subdirectory, not the flat legacy path', async () => {
+    await store.saveImage('proj-1', 'char-1', 'data:image/webp;base64,QUJD');
+    expect(fake.text.has('/app/images/char-1.png')).toBe(false);
+    // QNBS-v3: asserts the qualified write landed somewhere under images/, without pinning the exact digest-based directory name (an implementation detail).
+    const qualifiedKeys = [...fake.text.keys()].filter(
+      (k) => k.startsWith('/app/images/') && k.endsWith('/char-1.png'),
+    );
+    expect(qualifiedKeys).toHaveLength(1);
+    expect(await store.getImage('proj-1', 'char-1')).toBe('data:image/webp;base64,QUJD');
+  });
+
+  // QNBS-v3: sanitizePathSegment alone would collapse both of these to the same "alpha-beta" directory -- the namespace must not let two distinct projects share one image directory.
+  it('does not collide two distinct project ids that sanitize to the same readable prefix', async () => {
+    await store.saveImage('alpha beta', 'char-1', 'data:image/png;base64,FROM_ALPHA_SPACE');
+    await store.saveImage('alpha-beta', 'char-1', 'data:image/png;base64,FROM_ALPHA_HYPHEN');
+
+    expect(await store.getImage('alpha beta', 'char-1')).toBe(
+      'data:image/png;base64,FROM_ALPHA_SPACE',
+    );
+    expect(await store.getImage('alpha-beta', 'char-1')).toBe(
+      'data:image/png;base64,FROM_ALPHA_HYPHEN',
+    );
+  });
+
+  it('does not collide project ids differing only by a forbidden-character substitution', async () => {
+    await store.saveImage('alpha/beta', 'char-1', 'data:image/png;base64,FROM_SLASH');
+    await store.saveImage('alpha\\beta', 'char-1', 'data:image/png;base64,FROM_BACKSLASH');
+
+    expect(await store.getImage('alpha/beta', 'char-1')).toBe('data:image/png;base64,FROM_SLASH');
+    expect(await store.getImage('alpha\\beta', 'char-1')).toBe(
+      'data:image/png;base64,FROM_BACKSLASH',
+    );
+  });
+
+  it('does not collide long project ids that differ only after sanitizer truncation', async () => {
+    const longA = `${'x'.repeat(120)}-A`;
+    const longB = `${'x'.repeat(120)}-B`;
+    await store.saveImage(longA, 'char-1', 'data:image/png;base64,FROM_LONG_A');
+    await store.saveImage(longB, 'char-1', 'data:image/png;base64,FROM_LONG_B');
+
+    expect(await store.getImage(longA, 'char-1')).toBe('data:image/png;base64,FROM_LONG_A');
+    expect(await store.getImage(longB, 'char-1')).toBe('data:image/png;base64,FROM_LONG_B');
+  });
+
+  // QNBS-v3: a pre-migration flat-path image (written before project-qualified keys existed) must stay reachable without a forced migration.
+  it('falls back to the legacy flat image path when the project-qualified file is absent', async () => {
+    fake.text.set('/app/images/legacy-only.png', 'data:image/png;base64,OLD');
+    expect(await store.getImage('proj-1', 'legacy-only')).toBe('data:image/png;base64,OLD');
+  });
+
+  it('deletes both the project-qualified and legacy flat image files', async () => {
+    fake.text.set('/app/images/dual.png', 'data:image/png;base64,LEGACYCOPY');
+    await store.saveImage('proj-1', 'dual', 'data:image/png;base64,NEWCOPY');
+    await store.deleteImage('proj-1', 'dual');
+    expect(await store.getImage('proj-1', 'dual')).toBeNull();
+    expect(fake.text.has('/app/images/dual.png')).toBe(false);
+  });
+
+  // QNBS-v3: the fake FS enumerates readDir() results from real file keys, matching real Tauri readDir() listing actual project.json entries -- a bare mkdir with no file inside is invisible to readDir, so simulate a stored project by writing its marker file.
+  function simulateStoredProject(projectId: string) {
+    fake.text.set(`/app/projects/${projectId}/project.json`, '{}');
+  }
+
+  // QNBS-v3: a legacy image has no recorded owner -- once a second project is stored, either could have originally saved it, so serving it to any project risks cross-project misattribution.
+  it('fails closed on the legacy fallback when more than one project is stored', async () => {
+    simulateStoredProject('proj-1');
+    simulateStoredProject('proj-2');
+    fake.text.set('/app/images/ambiguous.png', 'data:image/png;base64,AMBIGUOUS');
+
+    expect(await store.getImage('proj-1', 'ambiguous')).toBeNull();
+    // QNBS-v3: preserved untouched, not destructively deleted, despite being unattributable.
+    expect(fake.text.has('/app/images/ambiguous.png')).toBe(true);
+  });
+
+  it('still serves the legacy fallback when only one project is stored', async () => {
+    simulateStoredProject('proj-1');
+    fake.text.set('/app/images/solo.png', 'data:image/png;base64,SOLO');
+
+    expect(await store.getImage('proj-1', 'solo')).toBe('data:image/png;base64,SOLO');
+  });
+
+  // QNBS-v3: finds the qualified (per-project digest directory) key for an entity, distinct from the flat legacy key at /app/images/<id>.png.
+  function qualifiedImageKey(entityId: string): string | undefined {
+    return [...fake.text.keys()].find(
+      (k) =>
+        k.startsWith('/app/images/') &&
+        k !== `/app/images/${entityId}.png` &&
+        k.endsWith(`/${entityId}.png`),
+    );
+  }
+
+  it('does not delete the legacy copy when more than one project is stored', async () => {
+    simulateStoredProject('proj-1');
+    simulateStoredProject('proj-2');
+    fake.text.set('/app/images/shared-legacy.png', 'data:image/png;base64,SHARED');
+    await store.saveImage('proj-1', 'shared-legacy', 'data:image/png;base64,NEWCOPY');
+
+    await store.deleteImage('proj-1', 'shared-legacy');
+
+    expect(qualifiedImageKey('shared-legacy')).toBeUndefined();
+    expect(fake.text.has('/app/images/shared-legacy.png')).toBe(true);
+  });
+
+  // QNBS-v3: legacy must be removed before the qualified file -- if legacy removal fails, the qualified file must survive untouched so getImage's fallback can never resurrect a half-deleted image.
+  it('leaves the qualified file untouched when legacy deletion fails (sole-owner case)', async () => {
+    simulateStoredProject('proj-1');
+    fake.text.set('/app/images/atomic.png', 'data:image/png;base64,LEGACY');
+    await store.saveImage('proj-1', 'atomic', 'data:image/png;base64,QUALIFIED');
+
+    const originalRemove = fake.apis.remove;
+    fake.apis.remove = (p: string) => {
+      if (p === '/app/images/atomic.png') return Promise.reject(new Error('simulated I/O failure'));
+      return originalRemove(p);
+    };
+    try {
+      await store.deleteImage('proj-1', 'atomic');
+    } finally {
+      fake.apis.remove = originalRemove;
+    }
+
+    expect(fake.text.has('/app/images/atomic.png')).toBe(true);
+    expect(qualifiedImageKey('atomic')).toBeDefined();
+    expect(await store.getImage('proj-1', 'atomic')).toBe('data:image/png;base64,QUALIFIED');
   });
 
   it('round-trips a binder binary asset with metadata', async () => {

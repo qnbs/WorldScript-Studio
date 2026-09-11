@@ -6,7 +6,7 @@ import {
   captureActiveProjectIdentity,
   identityUnchanged,
 } from '../features/project/projectIdentity';
-import { selectAllCharacters } from '../features/project/projectSelectors';
+import { selectAllCharacters, selectProjectData } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
 import {
   generateCharacterPortraitThunk,
@@ -22,6 +22,7 @@ export const useCharacterView = () => {
   const { t, language } = useTranslation();
   const dispatch = useAppDispatch();
   const characters = useAppSelector(selectAllCharacters);
+  const projectId = useAppSelector((state) => selectProjectData(state)?.id || 'default');
   const toast = useToast();
 
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
@@ -205,14 +206,15 @@ export const useCharacterView = () => {
 
   const confirmDelete = useCallback(async () => {
     if (characterToDelete) {
-      await storageService.saveImage(characterToDelete.id, ''); // Empty string to delete
+      // QNBS-v3: the real delete API, not saveImage(id, '') -- an empty-string save only overwrote the project-qualified key, leaving any pre-qualification legacy blob for this id intact and resurfacable via getImage's fallback.
+      await storageService.deleteImage(projectId, characterToDelete.id);
       dispatch(projectActions.deleteCharacter(characterToDelete.id));
       setCharacterToDelete(null);
       setIsDossierOpen(false);
       setSelectedCharacter(null);
       toast.info(t('characters.deleteLabel', { name: characterToDelete.name }));
     }
-  }, [dispatch, characterToDelete, toast, t]);
+  }, [dispatch, characterToDelete, toast, t, projectId]);
 
   return {
     t,

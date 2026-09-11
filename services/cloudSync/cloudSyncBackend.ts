@@ -170,16 +170,16 @@ export class CloudSyncBackend implements StorageBackend {
 
   // --- Not synced to cloud (security / size constraints) ---
 
-  async saveImage(_id: string, _base64Data: string): Promise<void> {
+  async saveImage(_projectId: string, _id: string, _base64Data: string): Promise<void> {
     // QNBS-v3: Images are not synced — large binary blobs belong in local IDB.
     throw new Error('CloudSyncBackend: image storage is local-only');
   }
 
-  async getImage(_id: string): Promise<string | null> {
+  async getImage(_projectId: string, _id: string): Promise<string | null> {
     throw new Error('CloudSyncBackend: image storage is local-only');
   }
 
-  async deleteImage(_id: string): Promise<void> {
+  async deleteImage(_projectId: string, _id: string): Promise<void> {
     throw new Error('CloudSyncBackend: image storage is local-only');
   }
 

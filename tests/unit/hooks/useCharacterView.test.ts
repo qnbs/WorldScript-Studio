@@ -22,6 +22,7 @@ const { mockProfileMatch, mockPortraitMatch, mockRegenerateMatch, mockCaptureIde
 const mockDispatch = vi.fn();
 const mockToast = { success: vi.fn(), error: vi.fn(), info: vi.fn() };
 const mockSaveImage = vi.fn().mockResolvedValue(undefined);
+const mockDeleteImage = vi.fn().mockResolvedValue(undefined);
 
 let mockCharacters: Character[] = [];
 
@@ -47,6 +48,8 @@ vi.mock('../../../components/ui/Toast', () => ({
 
 vi.mock('../../../features/project/projectSelectors', () => ({
   selectAllCharacters: (state: { characters: Character[] }) => state.characters,
+  // QNBS-v3: not exercised by this file's fake state -- confirmDelete's projectId falls back to 'default'.
+  selectProjectData: () => undefined,
 }));
 
 vi.mock('../../../features/project/projectIdentity', () => ({
@@ -79,7 +82,11 @@ vi.mock('../../../features/project/thunks/characterThunks', () => {
 });
 
 vi.mock('../../../services/storageService', () => ({
-  storageService: { saveImage: (data: unknown, name: unknown) => mockSaveImage(data, name) },
+  storageService: {
+    saveImage: (projectId: unknown, id: unknown, data: unknown) =>
+      mockSaveImage(projectId, id, data),
+    deleteImage: (projectId: unknown, id: unknown) => mockDeleteImage(projectId, id),
+  },
 }));
 
 // uuid always returns the same id so assertions are deterministic
@@ -416,7 +423,7 @@ describe('handleDelete', () => {
 });
 
 describe('confirmDelete', () => {
-  it('calls storageService.saveImage and dispatches deleteCharacter', async () => {
+  it('calls storageService.deleteImage and dispatches deleteCharacter', async () => {
     const char = makeCharacter('c1', 'Hero');
     const { result } = renderHook(() => useCharacterView());
     act(() => result.current.setCharacterToDelete(char));
@@ -425,7 +432,7 @@ describe('confirmDelete', () => {
       await result.current.confirmDelete();
     });
 
-    expect(mockSaveImage).toHaveBeenCalledWith('c1', '');
+    expect(mockDeleteImage).toHaveBeenCalledWith('default', 'c1');
     expect(mockDispatch).toHaveBeenCalledWith(projectActions.deleteCharacter('c1'));
   });
 
@@ -450,7 +457,7 @@ describe('confirmDelete', () => {
     await act(async () => {
       await result.current.confirmDelete();
     });
-    expect(mockSaveImage).not.toHaveBeenCalled();
+    expect(mockDeleteImage).not.toHaveBeenCalled();
     expect(mockDispatch).not.toHaveBeenCalled();
   });
 });

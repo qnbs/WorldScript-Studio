@@ -12,32 +12,69 @@ import { FsSnapshotStore } from './snapshotFsStore';
 export class FsAssetStore extends FsSnapshotStore {
   // --- Image Store Methods ---
 
-  async saveImage(id: string, base64Data: string): Promise<void> {
-    const apis = await this.getApis();
-    const appDataPath = await this.ensureAppDataPath();
-    const imagesPath = await apis.join(appDataPath, 'images');
-
-    if (!(await apis.exists(imagesPath))) {
-      await apis.mkdir(imagesPath, { recursive: true });
-    }
-
-    const imageFile = await apis.join(imagesPath, `${sanitizePathSegment(id, 'image')}.png`);
-    // QNBS-v3: data URLs retain an uploaded image's MIME type; legacy raw payloads remain readable as PNG below.
-    await writeTextFileAtomic(apis, imageFile, base64Data);
+  // QNBS-v3: sanitizePathSegment (and projectPathSegment, which wraps it for project.json's own directory) is a display sanitizer, not injective -- "alpha beta" and "alpha-beta" both normalize to "alpha-beta". Reusing it for images would let two distinct projects share one image directory, so this hashes the FULL untruncated projectId instead; the sanitized text is kept only as a human-readable prefix, never as the sole identity. Deliberately does not touch projectPathSegment itself -- that stays the project-directory/legacy-routing authority unchanged.
+  private async projectNamespaceSegment(projectId: string): Promise<string> {
+    const digestBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(projectId));
+    const digest = Array.from(new Uint8Array(digestBuffer), (b) => b.toString(16).padStart(2, '0'))
+      .join('')
+      .slice(0, 16);
+    const readablePrefix = sanitizePathSegment(projectId, 'project').slice(0, 40);
+    return `${readablePrefix}--${digest}`;
   }
 
-  async getImage(id: string): Promise<string | null> {
+  private async qualifiedImagePaths(
+    projectId: string,
+    id: string,
+  ): Promise<{ dir: string; file: string }> {
+    const apis = await this.getApis();
+    const appDataPath = await this.ensureAppDataPath();
+    const namespaceSegment = await this.projectNamespaceSegment(projectId);
+    const dir = await apis.join(appDataPath, 'images', namespaceSegment);
+    const file = await apis.join(dir, `${sanitizePathSegment(id, 'image')}.png`);
+    return { dir, file };
+  }
+
+  private async legacyImagePath(id: string): Promise<string> {
+    const apis = await this.getApis();
+    const appDataPath = await this.ensureAppDataPath();
+    return apis.join(appDataPath, 'images', `${sanitizePathSegment(id, 'image')}.png`);
+  }
+
+  // QNBS-v3: a legacy global image has no recorded owner -- when only one project is stored, it can only be that project's; once a second project exists, ownership is unprovable and serving it risks cross-project misattribution. Counts entries under appData/projects/ (by this app's own convention, every entry there is a project directory) rather than trusting readDir's isDirectory flag, which isn't populated consistently by every backend; stops as soon as 2 are found.
+  private async countStoredProjectsCapped(): Promise<number> {
     try {
       const apis = await this.getApis();
       const appDataPath = await this.ensureAppDataPath();
-      const imageFile = await apis.join(
-        appDataPath,
-        'images',
-        `${sanitizePathSegment(id, 'image')}.png`,
-      );
+      const projectsDir = await apis.join(appDataPath, 'projects');
+      if (!(await apis.exists(projectsDir))) return 0;
+      const entries = await apis.readDir(projectsDir);
+      return Math.min(entries.length, 2);
+    } catch {
+      return 2; // QNBS-v3: fail closed on enumeration failure -- treat as ambiguous rather than assume single-project safety.
+    }
+  }
 
+  async saveImage(projectId: string, id: string, base64Data: string): Promise<void> {
+    const apis = await this.getApis();
+    const { dir, file } = await this.qualifiedImagePaths(projectId, id);
+    if (!(await apis.exists(dir))) {
+      await apis.mkdir(dir, { recursive: true });
+    }
+    // QNBS-v3: data URLs retain an uploaded image's MIME type; legacy raw payloads remain readable as PNG below.
+    await writeTextFileAtomic(apis, file, base64Data);
+  }
+
+  async getImage(projectId: string, id: string): Promise<string | null> {
+    try {
+      const apis = await this.getApis();
+      let imageFile = (await this.qualifiedImagePaths(projectId, id)).file;
       if (!(await apis.exists(imageFile))) {
-        return null;
+        // QNBS-v3: preserve-first fail-closed -- a legacy unqualified image cannot be safely attributed to this project once a second project is stored, since either could have originally saved it.
+        if ((await this.countStoredProjectsCapped()) > 1) return null;
+        imageFile = await this.legacyImagePath(id);
+        if (!(await apis.exists(imageFile))) {
+          return null;
+        }
       }
 
       const imageData = await retryFs(() => apis.readTextFile(imageFile));
@@ -48,17 +85,21 @@ export class FsAssetStore extends FsSnapshotStore {
     }
   }
 
-  async deleteImage(id: string): Promise<void> {
+  async deleteImage(projectId: string, id: string): Promise<void> {
     try {
       const apis = await this.getApis();
-      const appDataPath = await this.ensureAppDataPath();
-      const imageFile = await apis.join(
-        appDataPath,
-        'images',
-        `${sanitizePathSegment(id, 'image')}.png`,
-      );
-      if (await apis.exists(imageFile)) {
-        await retryFs(() => apis.remove(imageFile));
+      const qualifiedFile = (await this.qualifiedImagePaths(projectId, id)).file;
+      // QNBS-v3: preserve-first -- only remove the unattributed legacy copy when this is provably the sole stored project; with 2+ projects stored it may belong to a different one, so leave it untouched rather than risk destroying another project's image.
+      const soleOwner = (await this.countStoredProjectsCapped()) <= 1;
+      // QNBS-v3: legacy MUST be removed before the qualified file, not after -- if legacy removal throws, the catch below aborts before the qualified file is touched, so getImage's legacy fallback can never resurrect a half-deleted image. The reverse order would let a failure after the qualified delete leave the legacy copy to resurrect it.
+      if (soleOwner) {
+        const legacyFile = await this.legacyImagePath(id);
+        if (await apis.exists(legacyFile)) {
+          await retryFs(() => apis.remove(legacyFile));
+        }
+      }
+      if (await apis.exists(qualifiedFile)) {
+        await retryFs(() => apis.remove(qualifiedFile));
       }
     } catch (error) {
       logger.error('Failed to delete image:', error);

@@ -22,6 +22,7 @@ const { mockProfileMatch, mockRegenerateMatch, mockImageMatch, mockCaptureIdenti
 const mockDispatch = vi.fn();
 const mockToast = { success: vi.fn(), error: vi.fn(), info: vi.fn() };
 const mockSaveImage = vi.fn().mockResolvedValue(undefined);
+const mockDeleteImage = vi.fn().mockResolvedValue(undefined);
 
 let mockWorlds: World[] = [];
 
@@ -45,6 +46,8 @@ vi.mock('../../../components/ui/Toast', () => ({
 
 vi.mock('../../../features/project/projectSelectors', () => ({
   selectAllWorlds: () => mockWorlds,
+  selectProjectData: (state: { project: { present: { data: unknown } } }) =>
+    state.project.present.data,
 }));
 
 vi.mock('../../../features/project/projectIdentity', () => ({
@@ -78,7 +81,11 @@ vi.mock('../../../features/project/thunks/worldThunks', () => {
 });
 
 vi.mock('../../../services/storageService', () => ({
-  storageService: { saveImage: (id: unknown, data: unknown) => mockSaveImage(id, data) },
+  storageService: {
+    saveImage: (projectId: unknown, id: unknown, data: unknown) =>
+      mockSaveImage(projectId, id, data),
+    deleteImage: (projectId: unknown, id: unknown) => mockDeleteImage(projectId, id),
+  },
 }));
 
 vi.mock('uuid', () => ({ v4: () => 'test-uuid-world' }));
@@ -415,7 +422,7 @@ describe('confirmDelete', () => {
     await act(async () => {
       await result.current.confirmDelete();
     });
-    expect(mockSaveImage).toHaveBeenCalledWith('w1', '');
+    expect(mockDeleteImage).toHaveBeenCalledWith('default', 'w1');
     expect(mockDispatch).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'project/deleteWorld', payload: 'w1' }),
     );

@@ -68,20 +68,22 @@ export const generateWorldImageThunk = createDeduplicatedThunk(
     { getState, signal, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
+    const projectId = state.project.present?.data?.id || 'default';
     const aiOptions = buildAiOptions(state);
     const { getPrompts } = await loadPrompts();
     const { generateImage } = await loadAiProvider();
     const { prompt } = getPrompts('worldImage', { description, lang });
     registerDuplicateRequest(prompt, 'worldImage');
     const base64 = await generateImage(prompt, aiOptions, signal);
-    await storageService.saveImage(worldId, base64);
+    await storageService.saveImage(projectId, worldId, base64);
     return { worldId };
   },
 );
 
 export const uploadWorldImageThunk = createAsyncThunk(
   'project/uploadWorldImage',
-  async ({ worldId, file }: { worldId: string; file: File }) => {
+  async ({ worldId, file }: { worldId: string; file: File }, { getState }) => {
+    const projectId = (getState() as RootState).project.present?.data?.id || 'default';
     return new Promise<{ worldId: string }>((resolve, reject) => {
       const reader = new FileReader();
       // QNBS-v3: onload/onerror/onabort (not onloadend) plus Promise.catch(reject) so every terminal FileReader/saveImage outcome settles this Promise instead of leaving it pending.
@@ -93,7 +95,7 @@ export const uploadWorldImageThunk = createAsyncThunk(
         }
         // QNBS-v3: retain the data-URL MIME type so uploaded JPEG/WebP images survive filesystem round-trips.
         storageService
-          .saveImage(worldId, result)
+          .saveImage(projectId, worldId, result)
           .then(() => resolve({ worldId }))
           .catch(reject);
       };

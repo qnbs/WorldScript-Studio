@@ -6,7 +6,7 @@ import {
   captureActiveProjectIdentity,
   identityUnchanged,
 } from '../features/project/projectIdentity';
-import { selectAllWorlds } from '../features/project/projectSelectors';
+import { selectAllWorlds, selectProjectData } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
 import {
   generateWorldImageThunk,
@@ -22,6 +22,7 @@ export const useWorldView = () => {
   const { t, language } = useTranslation();
   const dispatch = useAppDispatch();
   const worlds = useAppSelector(selectAllWorlds);
+  const projectId = useAppSelector((state) => selectProjectData(state)?.id || 'default');
   const toast = useToast();
 
   const [selectedWorld, setSelectedWorld] = useState<World | null>(null);
@@ -243,14 +244,15 @@ export const useWorldView = () => {
 
   const confirmDelete = useCallback(async () => {
     if (worldToDelete) {
-      await storageService.saveImage(worldToDelete.id, ''); // Empty string to delete
+      // QNBS-v3: the real delete API, not saveImage(id, '') -- an empty-string save only overwrote the project-qualified key, leaving any pre-qualification legacy blob for this id intact and resurfacable via getImage's fallback.
+      await storageService.deleteImage(projectId, worldToDelete.id);
       dispatch(projectActions.deleteWorld(worldToDelete.id));
       setWorldToDelete(null);
       setIsAtlasOpen(false);
       setSelectedWorld(null);
       toast.info(t('worlds.deleteLabel', { name: worldToDelete.name }));
     }
-  }, [dispatch, worldToDelete, toast, t]);
+  }, [dispatch, worldToDelete, toast, t, projectId]);
 
   return {
     t,
