@@ -44,6 +44,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`.github/workflows/pr-changelog-reference.yml` + `check-pr-changelog-reference.mjs`, run from the
   PR's base ref to prevent self-weakening) now fails a governed PR's CI unless `[Unreleased]` already
   references it as `PR #<N>`. PR #705.
+- **Closed a cloud-AI privacy-policy bypass reachable via generateJson/generateImage/streamAiHelpResponse:**
+  these three entry points in `aiProviderService.ts` called Gemini directly without the
+  `assertCloudAiAllowed`/`shouldRouteLocally` gate that `generateText`/`streamText` already apply,
+  and `generateImage`'s `default` case silently routed any other provider to Gemini too. Combined
+  with a mismatch where the shared thunk-level policy pre-check read the global provider setting
+  instead of the effective (project-preset-aware) provider, a generation request could silently
+  reach Google's real API despite local-only/privacy settings. All four gaps are now closed. PR #706.
 
 ### Documentation
 
