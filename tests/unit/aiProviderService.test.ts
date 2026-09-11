@@ -32,6 +32,11 @@ vi.mock('../../services/ollamaService', () => ({
   testOllamaConnection: vi.fn().mockResolvedValue({ ok: true }),
 }));
 
+vi.mock('../../services/ai/providers/openrouterProvider', () => ({
+  streamOpenRouter: vi.fn(),
+  generateOpenRouterText: vi.fn(),
+}));
+
 // QNBS-v3 (ADR-0016 Track A): localServerFetch's own Tauri-vs-web routing is already fully
 // covered by localServerHttp.test.ts — mock only its native dependency (plugin-http) here,
 // exactly like that file does, so the real localServerFetch (used by both the new Anthropic
@@ -42,6 +47,7 @@ vi.mock('@tauri-apps/plugin-http', () => ({
 }));
 
 import { setActiveAiMode } from '../../services/ai/aiModeService';
+import * as openrouterProvider from '../../services/ai/providers/openrouterProvider';
 import {
   generateImage,
   generateJson,
@@ -294,6 +300,25 @@ describe('streamText', () => {
       vi.mocked(geminiService.streamText),
       'local stream answer',
     );
+  });
+
+  it('falls back to the configured OpenRouter fallback provider on a rate-limit/circuit-open failure instead of failing hard', async () => {
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('or-key');
+    vi.mocked(openrouterProvider.streamOpenRouter).mockRejectedValueOnce(
+      new Error('OPENROUTER_RATE_LIMITED: too many requests'),
+    );
+    vi.mocked(geminiService.streamText).mockImplementationOnce(async (_p, _c, onChunk) => {
+      onChunk('fallback-gemini-answer');
+    });
+    const onChunk = vi.fn();
+    await streamText(
+      'prompt',
+      'Balanced',
+      { ...defaultOpts, provider: 'openrouter' },
+      { onChunk, onDone: vi.fn() },
+    );
+    // QNBS-v3: default aiMode is 'hybrid' (not eco/local), so getOpenRouterFallbackProvider() resolves to 'gemini'.
+    expect(onChunk).toHaveBeenCalledWith('fallback-gemini-answer');
   });
 });
 

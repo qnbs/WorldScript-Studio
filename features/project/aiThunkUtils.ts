@@ -1,8 +1,8 @@
 import type { AsyncThunkConfig, GetThunkAPI } from '@reduxjs/toolkit';
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import type { RootState } from '../../app/store';
-import { shouldRouteLocally } from '../../services/ai/aiModeService';
 import { assertCloudAiAllowedSync } from '../../services/ai/aiPolicy';
+import { resolvePositiveRoutingOpts } from '../../services/aiProviderService';
 import type { PrivacySettings } from '../../types';
 import { buildAiOptions } from './thunks/thunkUtils';
 
@@ -67,10 +67,10 @@ export const createDeduplicatedThunk = <Returned, ThunkArg = void>(
       } as DeduplicatedThunkAPI;
 
       try {
-        // QNBS-v3: enforces cloud AI policy for every AI thunk using the effective (preset-aware) provider, skipped when shouldRouteLocally() is true since the real per-call-site gates safely handle that reroute instead.
+        // QNBS-v3: enforces cloud AI policy using resolvePositiveRoutingOpts()'s effective provider — the same function generateText/generateJson/streamText use to actually route the request — so a local- or OpenRouter-promoted call is checked against what it will really use, not the raw preset/global setting.
         const state = thunkAPI.getState() as RootState;
-        const provider = buildAiOptions(state).provider;
-        if (provider && !shouldRouteLocally()) {
+        const provider = resolvePositiveRoutingOpts(buildAiOptions(state)).provider;
+        if (provider) {
           const privacy = (state.settings as unknown as { privacy?: PrivacySettings }).privacy;
           assertCloudAiAllowedSync(provider, privacy);
         }

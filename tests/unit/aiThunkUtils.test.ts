@@ -8,7 +8,7 @@ import settingsReducer, { settingsActions } from '../../features/settings/settin
 import statusReducer from '../../features/status/statusSlice';
 import versionControlReducer from '../../features/versionControl/versionControlSlice';
 import writerReducer from '../../features/writer/writerSlice';
-import { setActiveAiMode } from '../../services/ai/aiModeService';
+import { setActiveAiMode, setOpenRouterConfig } from '../../services/ai/aiModeService';
 
 // QNBS-v3: vi.hoisted() ensures the mock fn is initialized before vi.mock() factory runs,
 //          since vi.mock() is hoisted to the top of the file by Vitest's transformer.
@@ -36,8 +36,9 @@ describe('createDeduplicatedThunk', () => {
   });
 
   afterEach(() => {
-    // QNBS-v3: aiModeService's mode is module-level singleton state — reset it so a test that sets local/eco mode never leaks into a later, unrelated test.
+    // QNBS-v3: aiModeService's mode/OpenRouter state is module-level singleton state — reset it so a test that changes it never leaks into a later, unrelated test.
     setActiveAiMode('hybrid');
+    setOpenRouterConfig(false, '');
   });
 
   it('executes the payload creator and returns its result', async () => {
@@ -154,10 +155,10 @@ describe('createDeduplicatedThunk', () => {
       );
     });
 
-    it('skips the pre-check when shouldRouteLocally() is true, even with a cloud effective provider, so the safe local-reroute path is not blocked before it runs', async () => {
+    it('checks the routing-resolved local provider, not the nominal cloud one, when shouldRouteLocally() is true — so the safe local-reroute path is not blocked before it runs', async () => {
       const payloadCreator = vi.fn().mockResolvedValue('result');
       const thunk = createDeduplicatedThunk<string>(
-        'test/policy-local-routing-skip',
+        'test/policy-local-routing-resolve',
         async (arg, api) => {
           api.registerDuplicateRequest('prompt', 'view');
           return payloadCreator(arg, api);
@@ -165,13 +166,44 @@ describe('createDeduplicatedThunk', () => {
       );
 
       const store = makeStore();
-      // QNBS-v3: global provider stays the default cloud 'gemini', but local/eco mode means generateText/generateJson will silently reroute to webllm — the pre-check must not reject this before the payload creator (which performs that reroute) even runs.
+      // QNBS-v3: global provider stays the default cloud 'gemini', but local/eco mode means generateText/generateJson will silently reroute to webllm — the pre-check must validate against that same resolved provider, not the stale nominal one.
       setActiveAiMode('local');
 
       const result = await store.dispatch(thunk());
 
-      expect(result.type).toBe('test/policy-local-routing-skip/fulfilled');
-      expect(mockAssertCloudAiAllowedSync).not.toHaveBeenCalled();
+      expect(result.type).toBe('test/policy-local-routing-resolve/fulfilled');
+      expect(mockAssertCloudAiAllowedSync).toHaveBeenCalledWith(
+        'webllm',
+        expect.objectContaining({ localStorageOnly: true }),
+      );
+      expect(payloadCreator).toHaveBeenCalled();
+    });
+
+    it('checks the OpenRouter-promoted provider, not the EU-residency-restricted preset provider, when OpenRouter is enabled', async () => {
+      const payloadCreator = vi.fn().mockResolvedValue('result');
+      const thunk = createDeduplicatedThunk<string>(
+        'test/policy-openrouter-promotion',
+        async (arg, api) => {
+          api.registerDuplicateRequest('prompt', 'view');
+          return payloadCreator(arg, api);
+        },
+      );
+
+      const store = makeStore();
+      // QNBS-v3: an enabled project preset picks 'openai' (blocked under EU residency), but OpenRouter is enabled and permitted — the real call would be promoted to 'openrouter', so the pre-check must validate that, not the raw preset provider.
+      setOpenRouterConfig(true, 'deepseek/deepseek-r1:free');
+      store.dispatch(
+        settingsActions.setPrivacy({ euDataResidency: true, localStorageOnly: false }),
+      );
+      store.dispatch(projectActions.setProjectAiPreset({ enabled: true, provider: 'openai' }));
+
+      const result = await store.dispatch(thunk());
+
+      expect(result.type).toBe('test/policy-openrouter-promotion/fulfilled');
+      expect(mockAssertCloudAiAllowedSync).toHaveBeenCalledWith(
+        'openrouter',
+        expect.objectContaining({ euDataResidency: true }),
+      );
       expect(payloadCreator).toHaveBeenCalled();
     });
 

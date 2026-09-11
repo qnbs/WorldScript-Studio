@@ -594,8 +594,8 @@ async function generateTextSingleProvider(
   }
 }
 
-// QNBS-v3: positive AI-mode routing (local-only → webllm, else OpenRouter-preferred, else passthrough) shared by generateText and streamText so both reroute before building their fallback chain — streamText was previously missing this step entirely.
-function resolvePositiveRoutingOpts(opts: AIRequestOptions): AIRequestOptions {
+// QNBS-v3: positive AI-mode routing (local-only → webllm, else OpenRouter-preferred, else passthrough) shared by generateText and streamText so both reroute before building their fallback chain — streamText was previously missing this step entirely. Also exported for aiThunkUtils.ts's policy pre-check, so it can gate on the same effective provider a real call will actually use.
+export function resolvePositiveRoutingOpts(opts: AIRequestOptions): AIRequestOptions {
   if (shouldRouteLocally() && !_LOCAL_INFERENCE_PROVIDERS.has(opts.provider)) {
     const localModel = getLocalFallbackModel();
     logRoutingDecision({
@@ -629,6 +629,16 @@ function resolvePositiveRoutingOpts(opts: AIRequestOptions): AIRequestOptions {
     reason: 'passthrough',
   });
   return opts;
+}
+
+// QNBS-v3: shared by generateText and streamText — identifies a transient OpenRouter failure (rate-limit or open circuit) that should promote to OpenRouter's own configured fallback provider instead of just moving to the next chain entry.
+function isOpenRouterTransientFailure(
+  nextProvider: AIProvider | undefined,
+  error: unknown,
+): boolean {
+  if (nextProvider !== 'openrouter') return false;
+  const msg = error instanceof Error ? error.message : String(error);
+  return msg.startsWith('OPENROUTER_RATE_LIMITED') || msg.startsWith('OPENROUTER_CIRCUIT_OPEN');
 }
 
 export async function generateText(
@@ -673,10 +683,7 @@ export async function generateText(
         _lastFallbackReason = `Provider ${nextProvider ?? 'unknown'} failed: ${msg}`;
         // QNBS-v3: OpenRouter rate-limit or circuit-open — log and promote to its configured fallback
         // provider rather than continuing blindly down the chain to avoid masking the root cause.
-        if (
-          nextProvider === 'openrouter' &&
-          (msg.startsWith('OPENROUTER_RATE_LIMITED') || msg.startsWith('OPENROUTER_CIRCUIT_OPEN'))
-        ) {
+        if (isOpenRouterTransientFailure(nextProvider, err)) {
           const fallback = getOpenRouterFallbackProvider();
           logRoutingDecision({
             mode: getActiveAiMode(),
@@ -846,11 +853,33 @@ export async function streamText(
           throw error instanceof Error ? error : new Error(String(error));
         }
         lastError = error;
+        // QNBS-v3: mirrors generateText's OpenRouter rate-limit/circuit-open promotion — without this, a stream promoted to OpenRouter by resolvePositiveRoutingOpts would fail hard on a transient OpenRouter outage instead of falling back.
+        if (isOpenRouterTransientFailure(nextProvider, error)) {
+          const fallback = getOpenRouterFallbackProvider();
+          logRoutingDecision({
+            mode: getActiveAiMode(),
+            originalProvider: 'openrouter',
+            chosenProvider: fallback,
+            reason: 'openrouter-fallback',
+          });
+          try {
+            await streamProvider(
+              prompt,
+              creativity,
+              { ...mergedOpts, provider: fallback as AIRequestOptions['provider'] },
+              callbacks,
+              signal,
+            );
+            return;
+          } catch (fallbackError) {
+            lastError = fallbackError;
+          }
+        }
         if (i === chain.length - 1) {
           // QNBS-v3: onError is owned by this orchestration layer — fire it exactly once, after
           // the whole fallback chain is exhausted, so a failing provider never surfaces a terminal
           // error callback while a subsequent fallback provider is still about to succeed.
-          const terminal = error instanceof Error ? error : new Error(String(error));
+          const terminal = lastError instanceof Error ? lastError : new Error(String(lastError));
           if (tryHeuristicStream()) return;
           callbacks.onError?.(terminal);
           throw terminal;
