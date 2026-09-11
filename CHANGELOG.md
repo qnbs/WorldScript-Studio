@@ -58,7 +58,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   had, since it was silently missing it; both now share one `isOpenRouterTransientFailure()`
   rate-limit/circuit-open detector and one `buildOpenRouterFallbackOpts()` fallback-options builder,
   which also fixes a cancellation-during-fallback edge case and a same-provider double-invocation
-  edge case in the OpenRouter-promoted fallback path. PR #706.
+  edge case in the OpenRouter-promoted fallback path. `streamText`'s newly-reachable local-routing
+  path also now forwards the merged `AbortSignal` into `generateLocalText` (previously dropped, so
+  a cancelled local-mode stream ran to completion anyway) and clears a stale `_lastFallbackReason`
+  when a later request's primary provider succeeds outright, matching `generateText`'s existing
+  behavior. PR #706.
 
 ### Documentation
 

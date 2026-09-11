@@ -496,7 +496,14 @@ async function streamProvider(
       const merged = oWithLora.systemPrompt?.trim()
         ? `${sanitizePromptValue(oWithLora.systemPrompt)}\n\n${sanitizePromptValue(prompt)}`
         : sanitizePromptValue(prompt);
-      const local = await generateLocalText(merged, oWithLora.model);
+      // QNBS-v3: forward the merged signal so a cancelled/offline-rerouted local stream actually stops instead of running to completion — generateLocalText's 5th param is a real abort hook, not a no-op.
+      const local = await generateLocalText(
+        merged,
+        oWithLora.model,
+        undefined,
+        undefined,
+        oWithLora.signal,
+      );
       callbacks.onChunk(local.text);
       callbacks.onDone?.();
       return;
@@ -793,6 +800,12 @@ export async function streamText(
           callbacks,
           signal,
         );
+        // QNBS-v3: mirrors generateText's fallback-reason bookkeeping — without this, a stale reason from an earlier failed/promoted request would keep showing in GpuMetricsPanel after this request's primary provider succeeds outright.
+        if (i > 0) {
+          _lastFallbackReason = `Primary provider ${mergedOpts.provider} failed; fell back to ${nextProvider}.`;
+        } else {
+          _lastFallbackReason = '';
+        }
         return;
       } catch (error) {
         // QNBS-v3: A user-cancelled request is NOT a provider failure. Don't fall back to the next

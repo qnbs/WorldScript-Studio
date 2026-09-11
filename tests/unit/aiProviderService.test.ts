@@ -316,6 +316,53 @@ describe('streamText', () => {
     );
   });
 
+  it('forwards the merged AbortSignal to generateLocalText so a cancelled local-mode stream actually stops instead of running to completion', async () => {
+    setActiveAiMode('local');
+    const spy = vi
+      .spyOn(localAiFacade, 'generateLocalText')
+      .mockResolvedValueOnce({ layer: 'webllm', text: 'local answer' });
+    const userSignal = new AbortController().signal;
+    await streamText(
+      'prompt',
+      'Balanced',
+      defaultOpts,
+      { onChunk: vi.fn(), onDone: vi.fn() },
+      userSignal,
+    );
+    expect(spy).toHaveBeenCalledWith(
+      expect.any(String),
+      'Llama-3.2-1B-Instruct-q4f16_1-MLC',
+      undefined,
+      undefined,
+      userSignal,
+    );
+    spy.mockRestore();
+  });
+
+  it('clears a stale fallback reason when a later primary provider succeeds outright', async () => {
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('or-key');
+    vi.mocked(openrouterProvider.streamOpenRouter).mockRejectedValueOnce(
+      new Error('OPENROUTER_RATE_LIMITED: too many requests'),
+    );
+    vi.mocked(geminiService.streamText).mockImplementationOnce(async (_p, _c, onChunk) => {
+      onChunk('fallback-answer');
+    });
+    await streamText(
+      'prompt',
+      'Balanced',
+      { ...defaultOpts, provider: 'openrouter' },
+      { onChunk: vi.fn(), onDone: vi.fn() },
+    );
+    expect(getLastAiFallbackReason()).not.toBe('');
+
+    vi.mocked(geminiService.streamText).mockImplementationOnce(async (_p, _c, onChunk) => {
+      onChunk('fresh-primary-answer');
+    });
+    await streamText('prompt', 'Balanced', defaultOpts, { onChunk: vi.fn(), onDone: vi.fn() });
+    // QNBS-v3: GpuMetricsPanel polls getLastAiFallbackReason() -- a stale message from an earlier request must not survive a later request whose own primary provider succeeded outright.
+    expect(getLastAiFallbackReason()).toBe('');
+  });
+
   it('falls back to the configured OpenRouter fallback provider on a rate-limit/circuit-open failure instead of failing hard', async () => {
     vi.mocked(storageService.getApiKey).mockResolvedValueOnce('or-key');
     vi.mocked(openrouterProvider.streamOpenRouter).mockRejectedValueOnce(
