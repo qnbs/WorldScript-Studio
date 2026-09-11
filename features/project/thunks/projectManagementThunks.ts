@@ -131,14 +131,14 @@ export const restoreSnapshotThunk = createAsyncThunk(
   'project/restoreSnapshot',
   async (snapshotId: number, thunkApi) => {
     // QNBS-v3: capture ownership before snapshot I/O so payload contents cannot change the restore target.
-    const currentProject = (thunkApi.getState() as RootState).project?.present?.data;
-    if (!currentProject) {
+    const currentSlice = (thunkApi.getState() as RootState).project?.present;
+    if (!currentSlice?.data) {
       throw new Error('Cannot restore a snapshot without an active project.');
     }
-    const capturedTargetIdentity = getProjectTargetIdentity(currentProject);
-    const restored = await storageService.restoreSnapshot(snapshotId, currentProject);
-    const liveProject = (thunkApi.getState() as RootState).project?.present?.data;
-    if (getProjectTargetIdentity(liveProject) !== capturedTargetIdentity) {
+    const capturedTargetIdentity = getProjectTargetIdentity(currentSlice);
+    const restored = await storageService.restoreSnapshot(snapshotId, currentSlice.data);
+    const liveSlice = (thunkApi.getState() as RootState).project?.present;
+    if (getProjectTargetIdentity(liveSlice) !== capturedTargetIdentity) {
       throw new Error('Cannot restore a snapshot after the active project changed.');
     }
     return restored;

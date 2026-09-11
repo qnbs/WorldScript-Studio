@@ -90,14 +90,18 @@ export const useCharacterView = () => {
       }),
     );
     // QNBS-v3: the active project may have changed while this request was in flight (e.g. New Project/import/restore elsewhere in the still-mounted app) -- discard rather than apply a result generated for a different project.
-    if (captureActiveProjectIdentity() === capturedProjectIdentity) {
-      if (generateCharacterProfileThunk.fulfilled.match(resultAction)) {
-        const newChar = resultAction.payload;
-        dispatch(projectActions.addCharacter(newChar));
-        toast.success(t('common.saved'), newChar.name);
-      } else {
-        toast.error(t('error.apiErrorTitle'), t('error.apiErrorDescription'));
-      }
+    if (captureActiveProjectIdentity() !== capturedProjectIdentity) {
+      setIsGeneratingProfile(false);
+      setAiConcept('');
+      return;
+    }
+
+    if (generateCharacterProfileThunk.fulfilled.match(resultAction)) {
+      const newChar = resultAction.payload;
+      dispatch(projectActions.addCharacter(newChar));
+      toast.success(t('common.saved'), newChar.name);
+    } else {
+      toast.error(t('error.apiErrorTitle'), t('error.apiErrorDescription'));
     }
 
     setIsGeneratingProfile(false);
@@ -129,12 +133,15 @@ export const useCharacterView = () => {
         regenerateCharacterFieldThunk({ character: selectedCharacter, field, lang: language }),
       );
       // QNBS-v3: discard a late-arriving regenerated field if the active project changed while the request was in flight.
-      if (captureActiveProjectIdentity() === capturedProjectIdentity) {
-        if (regenerateCharacterFieldThunk.fulfilled.match(resultAction)) {
-          handleFieldChange(resultAction.payload.field, resultAction.payload.value);
-        } else {
-          toast.error(t('error.apiErrorTitle'));
-        }
+      if (captureActiveProjectIdentity() !== capturedProjectIdentity) {
+        setIsRegeneratingField(null);
+        return;
+      }
+
+      if (regenerateCharacterFieldThunk.fulfilled.match(resultAction)) {
+        handleFieldChange(resultAction.payload.field, resultAction.payload.value);
+      } else {
+        toast.error(t('error.apiErrorTitle'));
       }
       setIsRegeneratingField(null);
     },

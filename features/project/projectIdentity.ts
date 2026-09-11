@@ -9,8 +9,12 @@ import { appStoreRef } from '../../app/storeRef';
 
 const LEGACY_PROJECT_DIRECTORY_METADATA_KEY = '__worldscriptLegacyProjectDirectory';
 
-// QNBS-v3: compare only storage-owned target identity so mutable snapshot/generation content cannot hide a project switch.
-export function getProjectTargetIdentity(project: unknown): string | null {
+interface ProjectIdentitySource {
+  data: unknown;
+  generation?: number;
+}
+
+function baseTargetIdentity(project: unknown): string | null {
   if (typeof project !== 'object' || project === null) return null;
   const record = project as Record<string, unknown>;
   if (typeof record['id'] === 'string' && record['id']) return `id:${record['id']}`;
@@ -20,8 +24,17 @@ export function getProjectTargetIdentity(project: unknown): string | null {
     : null;
 }
 
+// QNBS-v3: incorporates the in-memory generation counter, not just the persisted id -- a fresh "New Project" always reuses id:'default' until explicitly saved elsewhere, so id alone cannot distinguish two different reset/import/restore sessions.
+export function getProjectTargetIdentity(
+  source: ProjectIdentitySource | null | undefined,
+): string | null {
+  if (!source) return null;
+  const base = baseTargetIdentity(source.data);
+  return base === null ? null : `${base}:gen:${source.generation ?? 0}`;
+}
+
 // QNBS-v3: reads the live store directly (not a React selector) so a hook can capture identity at dispatch time and re-check it after an await, independent of that hook's own render cycle.
 export function captureActiveProjectIdentity(): string | null {
   const state = appStoreRef.current?.getState();
-  return getProjectTargetIdentity(state?.project?.present?.data);
+  return getProjectTargetIdentity(state?.project?.present);
 }

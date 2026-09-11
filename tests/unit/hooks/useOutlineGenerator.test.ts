@@ -408,4 +408,22 @@ describe('handleApplyOutline', () => {
     );
     expect(onNavigate).not.toHaveBeenCalled();
   });
+
+  it('discards apply when the active project changed since mount, even when the outline was only ever seeded from existingOutline (no generate() call)', () => {
+    mockExistingManuscript = [{ id: 's1', title: 'Untitled', content: '' }];
+    mockExistingOutline = [makeOutlineSection('o1', 'Seeded Act 1')];
+    mockCaptureIdentity.mockReturnValueOnce('id:project-a'); // captured at mount
+
+    const { result } = renderHook(() => useOutlineGenerator({ onNavigate }));
+    expect(result.current.outline).toHaveLength(1);
+
+    mockCaptureIdentity.mockReturnValue('id:project-b'); // active project changed before Apply, no generate() ever ran
+
+    act(() => result.current.handleApplyOutline());
+
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'project/setManuscript' }),
+    );
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
 });

@@ -49,8 +49,8 @@ export const useOutlineGenerator = ({ onNavigate }: UseOutlineGeneratorProps) =>
   const [confirmModal, setConfirmModal] = useState<ConfirmModalState>(null);
   const draggedItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
-  // QNBS-v3: the project identity captured when `outline` was last (re)populated by an AI result -- `apply()` fires later, on a discrete user click with no await of its own, so this is checked there instead of at dispatch time.
-  const generatedForProjectIdentity = useRef<string | null>(null);
+  // QNBS-v3: the project identity `outline` currently belongs to -- initialized eagerly (not null) so the existingOutline seed is covered too, not just an AI-generated result; `apply()` fires later, on a discrete user click with no await of its own, so this is checked there instead of at dispatch time.
+  const generatedForProjectIdentity = useRef<string | null>(captureActiveProjectIdentity());
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
 
   // QNBS-v3: resolve the offline outline labels here (the hook has `t`) so the service-layer heuristic

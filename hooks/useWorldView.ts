@@ -85,13 +85,17 @@ export const useWorldView = () => {
       }),
     );
     // QNBS-v3: the active project may have changed while this request was in flight -- discard rather than apply a result generated for a different project.
-    if (captureActiveProjectIdentity() === capturedProjectIdentity) {
-      if (generateWorldProfileThunk.fulfilled.match(resultAction)) {
-        dispatch(projectActions.addWorld(resultAction.payload));
-        toast.success(t('common.saved'), resultAction.payload.name);
-      } else {
-        toast.error(t('error.apiErrorTitle'));
-      }
+    if (captureActiveProjectIdentity() !== capturedProjectIdentity) {
+      setIsGeneratingProfile(false);
+      setAiConcept('');
+      return;
+    }
+
+    if (generateWorldProfileThunk.fulfilled.match(resultAction)) {
+      dispatch(projectActions.addWorld(resultAction.payload));
+      toast.success(t('common.saved'), resultAction.payload.name);
+    } else {
+      toast.error(t('error.apiErrorTitle'));
     }
     setIsGeneratingProfile(false);
     setAiConcept('');
@@ -122,12 +126,15 @@ export const useWorldView = () => {
         regenerateWorldFieldThunk({ world: selectedWorld, field, lang: language }),
       );
       // QNBS-v3: discard a late-arriving regenerated field if the active project changed while the request was in flight.
-      if (captureActiveProjectIdentity() === capturedProjectIdentity) {
-        if (regenerateWorldFieldThunk.fulfilled.match(resultAction)) {
-          handleFieldChange(resultAction.payload.field, resultAction.payload.value);
-        } else {
-          toast.error(t('error.apiErrorTitle'));
-        }
+      if (captureActiveProjectIdentity() !== capturedProjectIdentity) {
+        setIsRegeneratingField(null);
+        return;
+      }
+
+      if (regenerateWorldFieldThunk.fulfilled.match(resultAction)) {
+        handleFieldChange(resultAction.payload.field, resultAction.payload.value);
+      } else {
+        toast.error(t('error.apiErrorTitle'));
       }
       setIsRegeneratingField(null);
     },

@@ -76,7 +76,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `getProjectTargetIdentity()` invariant (extracted from `restoreSnapshotThunk`'s own established
   guard into a shared `features/project/projectIdentity.ts`, `captureActiveProjectIdentity()` reads
   the live store directly) and discard the result if that identity no longer matches by the time
-  the request settles (or, for the outline generator, by the time Apply is later clicked). PR #707.
+  the request settles (or, for the outline generator, by the time Apply is later clicked). Review
+  caught that the persisted id alone cannot distinguish two different sessions: a fresh "New
+  Project" always reuses the sentinel `id: 'default'` until explicitly saved elsewhere, so two
+  separate resets (or a reset racing a pending snapshot restore) would previously read as the same
+  project. Added an in-memory (never persisted) `generation` counter to `ProjectSliceState`,
+  bumped by `resetProject`/`importProjectThunk.fulfilled`/`restoreSnapshotThunk.fulfilled`, and
+  folded into every identity comparison -- `restoreSnapshotThunk`'s own pre-existing guard now
+  closes this gap too. `useOutlineGenerator`'s guard also now captures identity eagerly at mount
+  (not just after a successful AI generation), so an outline seeded from the existing project and
+  never regenerated is still protected if the active project changes before Apply is clicked.
+  PR #707.
 
 ### Documentation
 

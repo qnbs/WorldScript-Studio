@@ -46,5 +46,7 @@ export const metaReducers = {
       ],
       binderNodes: [],
     };
+    // QNBS-v3: distinguishes this fresh project from any other one that also happens to keep id:'default'; nullish-coalesced since some hand-built test store fixtures predate this field.
+    state.generation = (state.generation ?? 0) + 1;
   },
 };
