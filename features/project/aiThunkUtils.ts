@@ -2,7 +2,7 @@ import type { AsyncThunkConfig, GetThunkAPI } from '@reduxjs/toolkit';
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import type { RootState } from '../../app/store';
 import { assertCloudAiAllowedSync } from '../../services/ai/aiPolicy';
-import { resolvePositiveRoutingOpts } from '../../services/aiProviderService';
+import { resolvePositiveRoutingOpts } from '../../services/ai/positiveRouting';
 import type { PrivacySettings } from '../../types';
 import { buildAiOptions } from './thunks/thunkUtils';
 

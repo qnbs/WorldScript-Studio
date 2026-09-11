@@ -11,11 +11,8 @@ import { z } from 'zod';
 import type { AIProvider, AiCreativity, AiModel, GeminiSchema, LocalBackendPreset } from '../types';
 import {
   getActiveAiMode,
-  getLocalFallbackModel,
   getOpenRouterFallbackProvider,
-  getOpenRouterModel,
   shouldRouteLocally,
-  shouldUseOpenRouter,
 } from './ai/aiModeService';
 import { assertCloudAiAllowed } from './ai/aiPolicy';
 // QNBS-v3: connection tests use the same current Anthropic default as the catalog and proxy.
@@ -29,6 +26,7 @@ import {
   normalizeOpenAiCompatibleBaseUrl,
   resolveOpenAiCompatibleRoot,
 } from './ai/modelNormalization';
+import { resolvePositiveRoutingOpts } from './ai/positiveRouting';
 import { generateOpenRouterText, streamOpenRouter } from './ai/providers/openrouterProvider';
 import { logRoutingDecision } from './ai/routingLogger';
 import { attachCause, sanitizePromptValue, stripJsonFences } from './aiUtils';
@@ -112,9 +110,6 @@ export function isAbortError(error: unknown): boolean {
     (error as { name?: unknown }).name === 'AbortError'
   );
 }
-
-// QNBS-v3: Providers that run on-device — excluded from cloud-policy gate and ai-mode override.
-const _LOCAL_INFERENCE_PROVIDERS = new Set<string>(['webllm', 'onnx', 'transformers', 'ollama']);
 
 // ─── Fallback reason tracking ────────────────────────────────────────────────
 // QNBS-v3: Records why the last fallback occurred so the UI can explain it to the user.
@@ -592,43 +587,6 @@ async function generateTextSingleProvider(
       return providerTextSchema.parse({ text }).text;
     }
   }
-}
-
-// QNBS-v3: positive AI-mode routing (local-only → webllm, else OpenRouter-preferred, else passthrough) shared by generateText and streamText so both reroute before building their fallback chain — streamText was previously missing this step entirely. Also exported for aiThunkUtils.ts's policy pre-check, so it can gate on the same effective provider a real call will actually use.
-export function resolvePositiveRoutingOpts(opts: AIRequestOptions): AIRequestOptions {
-  if (shouldRouteLocally() && !_LOCAL_INFERENCE_PROVIDERS.has(opts.provider)) {
-    const localModel = getLocalFallbackModel();
-    logRoutingDecision({
-      mode: getActiveAiMode(),
-      originalProvider: opts.provider,
-      chosenProvider: 'webllm',
-      reason: 'mode-override',
-    });
-    return { ...opts, provider: 'webllm', model: localModel as AIRequestOptions['model'] };
-  }
-  if (
-    shouldUseOpenRouter() &&
-    !_LOCAL_INFERENCE_PROVIDERS.has(opts.provider) &&
-    opts.provider !== 'openrouter'
-  ) {
-    // QNBS-v3: OpenRouter routing — when enabled and caller specified a cloud provider other than
-    // openrouter, promote to OpenRouter (free-tier or user-configured model).
-    const orModel = getOpenRouterModel();
-    logRoutingDecision({
-      mode: getActiveAiMode(),
-      originalProvider: opts.provider,
-      chosenProvider: 'openrouter',
-      reason: 'openrouter-preferred',
-    });
-    return { ...opts, provider: 'openrouter', model: orModel as AIRequestOptions['model'] };
-  }
-  logRoutingDecision({
-    mode: getActiveAiMode(),
-    originalProvider: opts.provider,
-    chosenProvider: opts.provider,
-    reason: 'passthrough',
-  });
-  return opts;
 }
 
 // QNBS-v3: shared by generateText and streamText — identifies a transient OpenRouter failure (rate-limit or open circuit) that should promote to OpenRouter's own configured fallback provider instead of just moving to the next chain entry.
