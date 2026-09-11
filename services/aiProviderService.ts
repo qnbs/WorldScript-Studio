@@ -11,8 +11,10 @@ import { z } from 'zod';
 import type { AIProvider, AiCreativity, AiModel, GeminiSchema, LocalBackendPreset } from '../types';
 import {
   getActiveAiMode,
+  getLocalFallbackModel,
   getOpenRouterFallbackProvider,
   shouldRouteLocally,
+  shouldUseOpenRouter,
 } from './ai/aiModeService';
 import { assertCloudAiAllowed } from './ai/aiPolicy';
 // QNBS-v3: connection tests use the same current Anthropic default as the catalog and proxy.
@@ -599,6 +601,18 @@ function isOpenRouterTransientFailure(
   return msg.startsWith('OPENROUTER_RATE_LIMITED') || msg.startsWith('OPENROUTER_CIRCUIT_OPEN');
 }
 
+// QNBS-v3: reusing mergedOpts.model (an OpenRouter model id) would be meaningless for webllm's local registry lookup, so the fallback needs a provider-appropriate model — gemini's own getModelForText() already defaults safely, so only webllm needs an explicit swap here.
+function buildOpenRouterFallbackOpts(
+  mergedOpts: AIRequestOptions,
+  fallback: string,
+): AIRequestOptions {
+  const provider = fallback as AIRequestOptions['provider'];
+  if (provider === 'webllm') {
+    return { ...mergedOpts, provider, model: getLocalFallbackModel() as AIRequestOptions['model'] };
+  }
+  return { ...mergedOpts, provider };
+}
+
 export async function generateText(
   prompt: string,
   creativity: AiCreativity,
@@ -614,10 +628,12 @@ export async function generateText(
   const mergedOpts = withMergedAbortSignal(resolvedOpts, signal ?? controller.signal);
   const chain = resolveProviderFallbackChain(mergedOpts);
   let lastError: unknown;
+  // QNBS-v3: tracks an OpenRouter-promoted fallback provider already attempted this call, so the outer loop doesn't invoke it a second time (and double-bill/duplicate) if the chain also lists it later.
+  let attemptedOpenRouterFallback: string | undefined;
   try {
     for (let i = 0; i < chain.length; i++) {
       const nextProvider = chain[i];
-      if (nextProvider === undefined) continue;
+      if (nextProvider === undefined || nextProvider === attemptedOpenRouterFallback) continue;
       try {
         const { withTransientRetry } = await import('./ai/aiRetry');
         const result = await withTransientRetry(
@@ -643,6 +659,7 @@ export async function generateText(
         // provider rather than continuing blindly down the chain to avoid masking the root cause.
         if (isOpenRouterTransientFailure(nextProvider, err)) {
           const fallback = getOpenRouterFallbackProvider();
+          attemptedOpenRouterFallback = fallback;
           logRoutingDecision({
             mode: getActiveAiMode(),
             originalProvider: 'openrouter',
@@ -653,10 +670,11 @@ export async function generateText(
             const { withTransientRetry } = await import('./ai/aiRetry');
             const result = await withTransientRetry(
               () =>
-                generateTextSingleProvider(prompt, creativity, {
-                  ...mergedOpts,
-                  provider: fallback as AIRequestOptions['provider'],
-                }),
+                generateTextSingleProvider(
+                  prompt,
+                  creativity,
+                  buildOpenRouterFallbackOpts(mergedOpts, fallback),
+                ),
               { attempts: 2 },
             );
             _lastFallbackReason = `OpenRouter rate-limited; fell back to ${fallback}.`;
@@ -689,9 +707,9 @@ export async function generateText(
   }
 }
 
-// QNBS-v3: shared by generateJson and streamAiHelpResponse so each call site's own branching stays flat for CodeScene's complexity gate on this already-hot file.
+// QNBS-v3: shared by generateJson and streamAiHelpResponse so each call site's own branching stays flat for CodeScene's complexity gate on this already-hot file — also excludes OpenRouter-preferred mode so these paths fall through to generateText's own resolvePositiveRoutingOpts-based promotion instead of bypassing it with a direct Gemini SDK call.
 function isGeminiDirectCloudPath(provider: AIProvider): boolean {
-  return provider === 'gemini' && !shouldRouteLocally();
+  return provider === 'gemini' && !shouldRouteLocally() && !shouldUseOpenRouter();
 }
 
 export async function generateJson<T>(
@@ -778,6 +796,8 @@ export async function streamText(
   const mergedOpts = withMergedAbortSignal(resolvedOpts, signal ?? controller.signal);
   const chain = resolveProviderFallbackChain(mergedOpts);
   let lastError: unknown;
+  // QNBS-v3: tracks an OpenRouter-promoted fallback provider already attempted this call, so the outer loop doesn't invoke it a second time (and double-bill/duplicate chunks) if the chain also lists it later.
+  let attemptedOpenRouterFallback: string | undefined;
   // QNBS-v3: after the chain is exhausted, deliver a registered heuristic result through the stream
   // (onChunk + onDone) instead of erroring — so streaming features (Writer tools) stay useful offline.
   const tryHeuristicStream = (): boolean => {
@@ -793,7 +813,7 @@ export async function streamText(
   try {
     for (let i = 0; i < chain.length; i++) {
       const nextProvider = chain[i];
-      if (nextProvider === undefined) continue;
+      if (nextProvider === undefined || nextProvider === attemptedOpenRouterFallback) continue;
       try {
         await streamProvider(
           prompt,
@@ -814,6 +834,7 @@ export async function streamText(
         // QNBS-v3: mirrors generateText's OpenRouter rate-limit/circuit-open promotion — without this, a stream promoted to OpenRouter by resolvePositiveRoutingOpts would fail hard on a transient OpenRouter outage instead of falling back.
         if (isOpenRouterTransientFailure(nextProvider, error)) {
           const fallback = getOpenRouterFallbackProvider();
+          attemptedOpenRouterFallback = fallback;
           logRoutingDecision({
             mode: getActiveAiMode(),
             originalProvider: 'openrouter',
@@ -824,12 +845,19 @@ export async function streamText(
             await streamProvider(
               prompt,
               creativity,
-              { ...mergedOpts, provider: fallback as AIRequestOptions['provider'] },
+              buildOpenRouterFallbackOpts(mergedOpts, fallback),
               callbacks,
               signal,
             );
+            _lastFallbackReason = `OpenRouter rate-limited; fell back to ${fallback}.`;
             return;
           } catch (fallbackError) {
+            // QNBS-v3: mirrors the outer catch's cancellation guard — a cancel during the promoted fallback must not be treated as a provider failure either.
+            if (isAbortError(fallbackError) || mergedOpts.signal?.aborted || signal?.aborted) {
+              throw fallbackError instanceof Error
+                ? fallbackError
+                : new Error(String(fallbackError));
+            }
             lastError = fallbackError;
           }
         }

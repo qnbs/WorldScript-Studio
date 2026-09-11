@@ -46,12 +46,13 @@ vi.mock('@tauri-apps/plugin-http', () => ({
   fetch: (...args: unknown[]) => mockPluginHttpFetch(...args),
 }));
 
-import { setActiveAiMode } from '../../services/ai/aiModeService';
+import { setActiveAiMode, setOpenRouterConfig } from '../../services/ai/aiModeService';
 import * as openrouterProvider from '../../services/ai/providers/openrouterProvider';
 import {
   generateImage,
   generateJson,
   generateText,
+  getLastAiFallbackReason,
   listOllamaModels,
   scanLocalOpenAiCompatibleEndpoints,
   streamAiHelpResponse,
@@ -79,8 +80,9 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  // QNBS-v3: aiModeService's mode is module-level singleton state — reset it so a test that blocks cloud AI never leaks into a later, unrelated test.
+  // QNBS-v3: aiModeService's mode/OpenRouter config is module-level singleton state — reset it so a test that blocks cloud AI or enables OpenRouter never leaks into a later, unrelated test.
   setActiveAiMode('hybrid');
+  setOpenRouterConfig(false, '');
 });
 
 // ─── generateImage ────────────────────────────────────────────────────────────
@@ -272,6 +274,18 @@ describe('generateJson', () => {
     expect(geminiService.generateJson).not.toHaveBeenCalled();
     spy.mockRestore();
   });
+
+  it('falls through to the OpenRouter-promoted path instead of the gemini-direct branch when OpenRouter is enabled', async () => {
+    setOpenRouterConfig(true, 'deepseek/deepseek-r1:free');
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('or-key');
+    vi.mocked(openrouterProvider.generateOpenRouterText).mockResolvedValueOnce(
+      '{"key":"via-openrouter"}',
+    );
+    const schema = { type: 'object' as const, properties: {} };
+    const result = await generateJson('prompt', 'Balanced', schema as never, defaultOpts);
+    expect(result).toEqual({ key: 'via-openrouter' });
+    expect(geminiService.generateJson).not.toHaveBeenCalled();
+  });
 });
 
 // ─── streamText ───────────────────────────────────────────────────────────────
@@ -319,6 +333,50 @@ describe('streamText', () => {
     );
     // QNBS-v3: default aiMode is 'hybrid' (not eco/local), so getOpenRouterFallbackProvider() resolves to 'gemini'.
     expect(onChunk).toHaveBeenCalledWith('fallback-gemini-answer');
+    expect(getLastAiFallbackReason()).toBe('OpenRouter rate-limited; fell back to gemini.');
+  });
+
+  it('propagates cancellation from the OpenRouter fallback attempt instead of treating it as a provider failure', async () => {
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('or-key');
+    vi.mocked(openrouterProvider.streamOpenRouter).mockRejectedValueOnce(
+      new Error('OPENROUTER_RATE_LIMITED: too many requests'),
+    );
+    const abortError = Object.assign(new Error('Aborted'), { name: 'AbortError' });
+    vi.mocked(geminiService.streamText).mockRejectedValueOnce(abortError);
+    const onError = vi.fn();
+    await expect(
+      streamText(
+        'prompt',
+        'Balanced',
+        { ...defaultOpts, provider: 'openrouter' },
+        { onChunk: vi.fn(), onDone: vi.fn(), onError },
+      ),
+    ).rejects.toThrow('Aborted');
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('does not retry the OpenRouter-promoted fallback provider again later in the chain', async () => {
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('or-key');
+    vi.mocked(openrouterProvider.streamOpenRouter).mockRejectedValueOnce(
+      new Error('OPENROUTER_RATE_LIMITED: too many requests'),
+    );
+    vi.mocked(geminiService.streamText).mockRejectedValueOnce(new Error('gemini also failed'));
+    const onError = vi.fn();
+    await expect(
+      streamText(
+        'prompt',
+        'Balanced',
+        {
+          ...defaultOpts,
+          provider: 'openrouter',
+          hybridFallbackEnabled: true,
+          hybridFallbackChain: ['gemini'],
+        },
+        { onChunk: vi.fn(), onDone: vi.fn(), onError },
+      ),
+    ).rejects.toThrow('gemini also failed');
+    // QNBS-v3: chain is ['openrouter', 'gemini']; the rate-limit promotes to 'gemini' first, so the chain's own later 'gemini' entry must be skipped rather than invoking Gemini a second time.
+    expect(geminiService.streamText).toHaveBeenCalledTimes(1);
   });
 });
 

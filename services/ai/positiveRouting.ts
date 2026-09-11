@@ -12,6 +12,7 @@ import {
   shouldRouteLocally,
   shouldUseOpenRouter,
 } from './aiModeService';
+import type { RoutingReason } from './routingLogger';
 import { logRoutingDecision } from './routingLogger';
 
 // QNBS-v3: on-device providers excluded from the mode override; includes 'ollama' unlike aiConstants.ts's own LOCAL_INFERENCE_PROVIDERS, a separate pre-existing disagreement left as-is here.
@@ -27,33 +28,47 @@ function shouldPromoteToOpenRouter(opts: AIRequestOptions): boolean {
   return shouldUseOpenRouter();
 }
 
-export function resolvePositiveRoutingOpts(opts: AIRequestOptions): AIRequestOptions {
+interface RoutingResolution {
+  resolvedOpts: AIRequestOptions;
+  reason: RoutingReason;
+}
+
+// QNBS-v3: pure resolution, no logging — shared by the logging wrapper below and by peekPositiveRoutingProvider, which must not record a routing-decision entry for a probe that may never become a real request.
+function computeRoutingResolution(opts: AIRequestOptions): RoutingResolution {
   if (shouldRerouteToLocal(opts)) {
     const localModel = getLocalFallbackModel();
-    logRoutingDecision({
-      mode: getActiveAiMode(),
-      originalProvider: opts.provider,
-      chosenProvider: 'webllm',
+    return {
+      resolvedOpts: { ...opts, provider: 'webllm', model: localModel as AIRequestOptions['model'] },
       reason: 'mode-override',
-    });
-    return { ...opts, provider: 'webllm', model: localModel as AIRequestOptions['model'] };
+    };
   }
   // QNBS-v3: when enabled and the caller specified a cloud provider other than openrouter, promote to OpenRouter (free-tier or user-configured model).
   if (shouldPromoteToOpenRouter(opts)) {
     const orModel = getOpenRouterModel();
-    logRoutingDecision({
-      mode: getActiveAiMode(),
-      originalProvider: opts.provider,
-      chosenProvider: 'openrouter',
+    return {
+      resolvedOpts: {
+        ...opts,
+        provider: 'openrouter',
+        model: orModel as AIRequestOptions['model'],
+      },
       reason: 'openrouter-preferred',
-    });
-    return { ...opts, provider: 'openrouter', model: orModel as AIRequestOptions['model'] };
+    };
   }
+  return { resolvedOpts: opts, reason: 'passthrough' };
+}
+
+export function resolvePositiveRoutingOpts(opts: AIRequestOptions): AIRequestOptions {
+  const { resolvedOpts, reason } = computeRoutingResolution(opts);
   logRoutingDecision({
     mode: getActiveAiMode(),
     originalProvider: opts.provider,
-    chosenProvider: opts.provider,
-    reason: 'passthrough',
+    chosenProvider: resolvedOpts.provider,
+    reason,
   });
-  return opts;
+  return resolvedOpts;
+}
+
+// QNBS-v3: side-effect-free variant for the thunk policy pre-check — the real call re-resolves (and logs) again when it actually executes, so this must not double-log or record a decision for a request that may never be dispatched with this exact shape (e.g. generateImage, which never calls resolvePositiveRoutingOpts itself).
+export function peekPositiveRoutingProvider(opts: AIRequestOptions): AIRequestOptions['provider'] {
+  return computeRoutingResolution(opts).resolvedOpts.provider;
 }

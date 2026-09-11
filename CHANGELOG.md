@@ -50,13 +50,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `generateImage`'s `default` case silently routed any other provider to Gemini too. Combined
   with a mismatch where the shared thunk-level policy pre-check read the global provider setting
   instead of the effective (project-preset-aware) provider, a generation request could silently
-  reach Google's real API despite local-only/privacy settings. All of these are now closed. Also
-  fixed two regressions the fix itself would otherwise have introduced: the thunk-level pre-check
-  now skips its own throw when `shouldRouteLocally()` is true, since `generateText`/`generateJson`
-  already reroute a nominally-cloud provider to local inference in that case — rejecting earlier
-  would have blocked that safe path; and `streamText` (used by AI Help chat) gained the same
-  positive local-routing override `generateText` already had, since it was silently missing it and
-  would otherwise have rejected local-mode help requests instead of answering them locally. PR #706.
+  reach Google's real API despite local-only/privacy settings. All of these are now closed, and the
+  thunk-level pre-check now validates the exact effective provider `resolvePositiveRoutingOpts()`
+  resolves to (local-reroute or OpenRouter-promotion included) via a side-effect-free
+  `peekPositiveRoutingProvider()`, rather than re-deriving its own approximation. `streamText`
+  (used by AI Help chat) gained the same positive local/OpenRouter routing `generateText` already
+  had, since it was silently missing it; both now share one `isOpenRouterTransientFailure()`
+  rate-limit/circuit-open detector and one `buildOpenRouterFallbackOpts()` fallback-options builder,
+  which also fixes a cancellation-during-fallback edge case and a same-provider double-invocation
+  edge case in the OpenRouter-promoted fallback path. PR #706.
 
 ### Documentation
 
