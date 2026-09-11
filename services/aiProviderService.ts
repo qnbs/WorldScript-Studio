@@ -594,16 +594,8 @@ async function generateTextSingleProvider(
   }
 }
 
-export async function generateText(
-  prompt: string,
-  creativity: AiCreativity,
-  opts: AIRequestOptions,
-  signal?: AbortSignal,
-): Promise<string> {
-  // QNBS-v3: Positive routing — apply AI execution mode overrides before dedup keying (G2).
-  // Priority: (1) local-only modes → webllm; (2) OpenRouter enabled → prefer OR for cloud calls;
-  // (3) passthrough — use whatever provider the caller specified.
-  let resolvedOpts = opts;
+// QNBS-v3: positive AI-mode routing (local-only → webllm, else OpenRouter-preferred, else passthrough) shared by generateText and streamText so both reroute before building their fallback chain — streamText was previously missing this step entirely.
+function resolvePositiveRoutingOpts(opts: AIRequestOptions): AIRequestOptions {
   if (shouldRouteLocally() && !_LOCAL_INFERENCE_PROVIDERS.has(opts.provider)) {
     const localModel = getLocalFallbackModel();
     logRoutingDecision({
@@ -612,8 +604,9 @@ export async function generateText(
       chosenProvider: 'webllm',
       reason: 'mode-override',
     });
-    resolvedOpts = { ...opts, provider: 'webllm', model: localModel as AIRequestOptions['model'] };
-  } else if (
+    return { ...opts, provider: 'webllm', model: localModel as AIRequestOptions['model'] };
+  }
+  if (
     shouldUseOpenRouter() &&
     !_LOCAL_INFERENCE_PROVIDERS.has(opts.provider) &&
     opts.provider !== 'openrouter'
@@ -627,15 +620,24 @@ export async function generateText(
       chosenProvider: 'openrouter',
       reason: 'openrouter-preferred',
     });
-    resolvedOpts = { ...opts, provider: 'openrouter', model: orModel as AIRequestOptions['model'] };
-  } else {
-    logRoutingDecision({
-      mode: getActiveAiMode(),
-      originalProvider: opts.provider,
-      chosenProvider: opts.provider,
-      reason: 'passthrough',
-    });
+    return { ...opts, provider: 'openrouter', model: orModel as AIRequestOptions['model'] };
   }
+  logRoutingDecision({
+    mode: getActiveAiMode(),
+    originalProvider: opts.provider,
+    chosenProvider: opts.provider,
+    reason: 'passthrough',
+  });
+  return opts;
+}
+
+export async function generateText(
+  prompt: string,
+  creativity: AiCreativity,
+  opts: AIRequestOptions,
+  signal?: AbortSignal,
+): Promise<string> {
+  const resolvedOpts = resolvePositiveRoutingOpts(opts);
   const { key, controller } = _deduplicateRequest(
     resolvedOpts.provider,
     resolvedOpts.model,
@@ -802,8 +804,13 @@ export async function streamText(
   callbacks: AIStreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
-  const { key, controller } = _deduplicateRequest(opts.provider, opts.model, prompt);
-  const mergedOpts = withMergedAbortSignal(opts, signal ?? controller.signal);
+  const resolvedOpts = resolvePositiveRoutingOpts(opts);
+  const { key, controller } = _deduplicateRequest(
+    resolvedOpts.provider,
+    resolvedOpts.model,
+    prompt,
+  );
+  const mergedOpts = withMergedAbortSignal(resolvedOpts, signal ?? controller.signal);
   const chain = resolveProviderFallbackChain(mergedOpts);
   let lastError: unknown;
   // QNBS-v3: after the chain is exhausted, deliver a registered heuristic result through the stream

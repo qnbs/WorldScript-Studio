@@ -268,6 +268,22 @@ describe('generateJson', () => {
   });
 });
 
+// ─── streamText ───────────────────────────────────────────────────────────────
+
+describe('streamText', () => {
+  it('reroutes to local inference when local-only mode is active, even though opts specify a cloud provider', async () => {
+    setActiveAiMode('local');
+    const spy = vi
+      .spyOn(localAiFacade, 'generateLocalText')
+      .mockResolvedValueOnce({ layer: 'webllm', text: 'local stream answer' });
+    const onChunk = vi.fn();
+    await streamText('prompt', 'Balanced', defaultOpts, { onChunk, onDone: vi.fn() });
+    expect(geminiService.streamText).not.toHaveBeenCalled();
+    expect(onChunk).toHaveBeenCalledWith('local stream answer');
+    spy.mockRestore();
+  });
+});
+
 // ─── streamAiHelpResponse ─────────────────────────────────────────────────────
 
 describe('streamAiHelpResponse', () => {
@@ -283,14 +299,16 @@ describe('streamAiHelpResponse', () => {
     expect(onChunk).toHaveBeenCalledWith('answer');
   });
 
-  it('blocks the gemini-direct branch when local-only mode is active, never reaching the SDK', async () => {
-    // QNBS-v3: unlike generateText/generateJson, streamText has no positive local-routing override for its primary provider (a separate, out-of-scope finding) — the fallthrough correctly rejects via the policy gate instead of silently routing locally, which still proves Gemini is never reached.
+  it('blocks the gemini-direct branch when local-only mode is active, rerouting to local inference instead', async () => {
     setActiveAiMode('local');
+    const spy = vi
+      .spyOn(localAiFacade, 'generateLocalText')
+      .mockResolvedValueOnce({ layer: 'webllm', text: 'local answer' });
     const onChunk = vi.fn();
-    await expect(
-      streamAiHelpResponse('question?', 'Balanced', defaultOpts, { onChunk, onDone: vi.fn() }),
-    ).rejects.toThrow(/local-only/i);
+    await streamAiHelpResponse('question?', 'Balanced', defaultOpts, { onChunk, onDone: vi.fn() });
     expect(geminiService.streamAiHelpResponse).not.toHaveBeenCalled();
+    expect(onChunk).toHaveBeenCalledWith('local answer');
+    spy.mockRestore();
   });
 });
 

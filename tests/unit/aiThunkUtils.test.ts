@@ -1,6 +1,6 @@
 import { configureStore } from '@reduxjs/toolkit';
 import undoable from 'redux-undo';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import featureFlagsReducer from '../../features/featureFlags/featureFlagsSlice';
 import { createDeduplicatedThunk } from '../../features/project/aiThunkUtils';
 import projectReducer, { projectActions } from '../../features/project/projectSlice';
@@ -8,6 +8,7 @@ import settingsReducer, { settingsActions } from '../../features/settings/settin
 import statusReducer from '../../features/status/statusSlice';
 import versionControlReducer from '../../features/versionControl/versionControlSlice';
 import writerReducer from '../../features/writer/writerSlice';
+import { setActiveAiMode } from '../../services/ai/aiModeService';
 
 // QNBS-v3: vi.hoisted() ensures the mock fn is initialized before vi.mock() factory runs,
 //          since vi.mock() is hoisted to the top of the file by Vitest's transformer.
@@ -32,6 +33,11 @@ function makeStore() {
 describe('createDeduplicatedThunk', () => {
   beforeEach(() => {
     mockAssertCloudAiAllowedSync.mockReset();
+  });
+
+  afterEach(() => {
+    // QNBS-v3: aiModeService's mode is module-level singleton state — reset it so a test that sets local/eco mode never leaks into a later, unrelated test.
+    setActiveAiMode('hybrid');
   });
 
   it('executes the payload creator and returns its result', async () => {
@@ -146,6 +152,27 @@ describe('createDeduplicatedThunk', () => {
         'gemini',
         expect.objectContaining({ localStorageOnly: true }),
       );
+    });
+
+    it('skips the pre-check when shouldRouteLocally() is true, even with a cloud effective provider, so the safe local-reroute path is not blocked before it runs', async () => {
+      const payloadCreator = vi.fn().mockResolvedValue('result');
+      const thunk = createDeduplicatedThunk<string>(
+        'test/policy-local-routing-skip',
+        async (arg, api) => {
+          api.registerDuplicateRequest('prompt', 'view');
+          return payloadCreator(arg, api);
+        },
+      );
+
+      const store = makeStore();
+      // QNBS-v3: global provider stays the default cloud 'gemini', but local/eco mode means generateText/generateJson will silently reroute to webllm — the pre-check must not reject this before the payload creator (which performs that reroute) even runs.
+      setActiveAiMode('local');
+
+      const result = await store.dispatch(thunk());
+
+      expect(result.type).toBe('test/policy-local-routing-skip/fulfilled');
+      expect(mockAssertCloudAiAllowedSync).not.toHaveBeenCalled();
+      expect(payloadCreator).toHaveBeenCalled();
     });
 
     it('does not call the payload creator when policy check throws', async () => {

@@ -50,7 +50,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `generateImage`'s `default` case silently routed any other provider to Gemini too. Combined
   with a mismatch where the shared thunk-level policy pre-check read the global provider setting
   instead of the effective (project-preset-aware) provider, a generation request could silently
-  reach Google's real API despite local-only/privacy settings. All four gaps are now closed. PR #706.
+  reach Google's real API despite local-only/privacy settings. All of these are now closed. Also
+  fixed two regressions the fix itself would otherwise have introduced: the thunk-level pre-check
+  now skips its own throw when `shouldRouteLocally()` is true, since `generateText`/`generateJson`
+  already reroute a nominally-cloud provider to local inference in that case — rejecting earlier
+  would have blocked that safe path; and `streamText` (used by AI Help chat) gained the same
+  positive local-routing override `generateText` already had, since it was silently missing it and
+  would otherwise have rejected local-mode help requests instead of answering them locally. PR #706.
 
 ### Documentation
 
