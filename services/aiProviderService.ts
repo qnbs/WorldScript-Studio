@@ -730,7 +730,9 @@ export async function generateJson<T>(
   signal?: AbortSignal,
 ): Promise<T> {
   try {
-    if (opts.provider === 'gemini') {
+    // QNBS-v3: gate the Gemini-direct fast path behind the same cloud-AI policy every other entry point applies — this branch previously reached the SDK before any mode/privacy check.
+    if (opts.provider === 'gemini' && !shouldRouteLocally()) {
+      await assertCloudAiAllowed('gemini');
       return await generateJsonGemini(prompt, creativity, schema, signal, undefined, opts.model);
     }
 
@@ -765,6 +767,8 @@ export async function generateImage(
 ): Promise<string> {
   switch (opts.provider) {
     case 'gemini':
+      // QNBS-v3: image generation has no local-routing fallback, so the policy gate alone must block a cloud call in local-only/eco/privacy mode.
+      await assertCloudAiAllowed('gemini');
       return generateImageGemini(prompt, signal);
     case 'openai':
       throw new Error(
@@ -783,7 +787,8 @@ export async function generateImage(
         'Anthropic image generation is not available. Please use Gemini or Ollama for image content.',
       );
     default:
-      return generateImageGemini(prompt, signal);
+      // QNBS-v3: no repository authority defines a silent Gemini fallback for an unrecognized provider — fail explicitly instead of guessing.
+      throw new Error('Image generation is not supported for this provider.');
   }
 }
 
@@ -865,7 +870,9 @@ export async function streamAiHelpResponse(
   const helpPromptWithDocs = doc
     ? `You are a helpful assistant for WorldScript Studio. Prefer the documentation excerpts below when they answer the question; otherwise give concise general guidance. Format using Markdown.\n\n${mergedBody}`
     : `You are a helpful assistant for a creative writing app called WorldScript Studio. Answer the user's question concisely and clearly. Format your answer using Markdown. Question: ${sanitizePromptValue(question)}`;
-  if (opts.provider === 'gemini') {
+  // QNBS-v3: gate the Gemini-direct fast path behind the same cloud-AI policy every other entry point applies — this branch previously reached the SDK before any mode/privacy check.
+  if (opts.provider === 'gemini' && !shouldRouteLocally()) {
+    await assertCloudAiAllowed('gemini');
     return streamAiHelpResponseGemini(
       mergedBody,
       callbacks.onChunk,

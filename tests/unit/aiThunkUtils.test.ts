@@ -3,8 +3,8 @@ import undoable from 'redux-undo';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import featureFlagsReducer from '../../features/featureFlags/featureFlagsSlice';
 import { createDeduplicatedThunk } from '../../features/project/aiThunkUtils';
-import projectReducer from '../../features/project/projectSlice';
-import settingsReducer from '../../features/settings/settingsSlice';
+import projectReducer, { projectActions } from '../../features/project/projectSlice';
+import settingsReducer, { settingsActions } from '../../features/settings/settingsSlice';
 import statusReducer from '../../features/status/statusSlice';
 import versionControlReducer from '../../features/versionControl/versionControlSlice';
 import writerReducer from '../../features/writer/writerSlice';
@@ -124,6 +124,28 @@ describe('createDeduplicatedThunk', () => {
       expect(result.type).toBe('test/policy-block/rejected');
       const rejected = result as { error: { message: string } };
       expect(rejected.error.message).toBe('Cloud provider blocked: local-only mode is active.');
+    });
+
+    it('resolves the effective (preset-aware) provider, not the global one, when an enabled project preset overrides it', async () => {
+      const thunk = createDeduplicatedThunk<string>(
+        'test/policy-effective-provider',
+        async (_arg, api) => {
+          api.registerDuplicateRequest('prompt', 'view');
+          return 'result';
+        },
+      );
+
+      const store = makeStore();
+      // QNBS-v3: global provider is local (would short-circuit the policy check trivially if used directly), but an enabled project preset overrides the effective provider to a cloud one — the pre-check must catch this, not the stale global value.
+      store.dispatch(settingsActions.setAdvancedAi({ provider: 'ollama' }));
+      store.dispatch(projectActions.setProjectAiPreset({ enabled: true, provider: 'gemini' }));
+
+      await store.dispatch(thunk());
+
+      expect(mockAssertCloudAiAllowedSync).toHaveBeenCalledWith(
+        'gemini',
+        expect.objectContaining({ localStorageOnly: true }),
+      );
     });
 
     it('does not call the payload creator when policy check throws', async () => {

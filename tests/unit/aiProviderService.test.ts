@@ -41,12 +41,14 @@ vi.mock('@tauri-apps/plugin-http', () => ({
   fetch: (...args: unknown[]) => mockPluginHttpFetch(...args),
 }));
 
+import { setActiveAiMode } from '../../services/ai/aiModeService';
 import {
   generateImage,
   generateJson,
   generateText,
   listOllamaModels,
   scanLocalOpenAiCompatibleEndpoints,
+  streamAiHelpResponse,
   streamText,
   testAIConnection,
   testOpenAiCompatibleLocalConnection,
@@ -71,6 +73,8 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  // QNBS-v3: aiModeService's mode is module-level singleton state — reset it so a test that blocks cloud AI never leaks into a later, unrelated test.
+  setActiveAiMode('hybrid');
 });
 
 // ─── generateImage ────────────────────────────────────────────────────────────
@@ -117,6 +121,19 @@ describe('generateImage', () => {
     await expect(
       generateImage('a cat', { ...defaultOpts, provider: 'transformers' }),
     ).rejects.toThrow('Local inference is text-only');
+  });
+
+  it('throws an explicit unsupported-provider error for openrouter instead of silently calling Gemini', async () => {
+    await expect(
+      generateImage('a cat', { ...defaultOpts, provider: 'openrouter' }),
+    ).rejects.toThrow('not supported for this provider');
+    expect(geminiService.generateImage).not.toHaveBeenCalled();
+  });
+
+  it('blocks gemini image generation when local-only mode is active, never reaching the SDK', async () => {
+    setActiveAiMode('local');
+    await expect(generateImage('a cat', defaultOpts)).rejects.toThrow(/local-only/i);
+    expect(geminiService.generateImage).not.toHaveBeenCalled();
   });
 });
 
@@ -236,6 +253,44 @@ describe('generateJson', () => {
     await expect(
       generateJson('prompt', 'Balanced', {} as never, { ...defaultOpts, provider: 'ollama' }),
     ).rejects.toThrow('not valid JSON');
+  });
+
+  it('blocks the gemini-direct branch when local-only mode is active, falling through to local routing instead', async () => {
+    setActiveAiMode('local');
+    const spy = vi
+      .spyOn(localAiFacade, 'generateLocalText')
+      .mockResolvedValueOnce({ layer: 'webllm', text: '{"key":"local"}' });
+    const schema = { type: 'object' as const, properties: {} };
+    const result = await generateJson('prompt', 'Balanced', schema as never, defaultOpts);
+    expect(result).toEqual({ key: 'local' });
+    expect(geminiService.generateJson).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+});
+
+// ─── streamAiHelpResponse ─────────────────────────────────────────────────────
+
+describe('streamAiHelpResponse', () => {
+  it('delegates to geminiService for gemini provider', async () => {
+    vi.mocked(geminiService.streamAiHelpResponse).mockImplementationOnce(
+      async (_prompt, onChunk) => {
+        onChunk('answer');
+      },
+    );
+    const onChunk = vi.fn();
+    await streamAiHelpResponse('question?', 'Balanced', defaultOpts, { onChunk, onDone: vi.fn() });
+    expect(geminiService.streamAiHelpResponse).toHaveBeenCalled();
+    expect(onChunk).toHaveBeenCalledWith('answer');
+  });
+
+  it('blocks the gemini-direct branch when local-only mode is active, never reaching the SDK', async () => {
+    // QNBS-v3: unlike generateText/generateJson, streamText has no positive local-routing override for its primary provider (a separate, out-of-scope finding) — the fallthrough correctly rejects via the policy gate instead of silently routing locally, which still proves Gemini is never reached.
+    setActiveAiMode('local');
+    const onChunk = vi.fn();
+    await expect(
+      streamAiHelpResponse('question?', 'Balanced', defaultOpts, { onChunk, onDone: vi.fn() }),
+    ).rejects.toThrow(/local-only/i);
+    expect(geminiService.streamAiHelpResponse).not.toHaveBeenCalled();
   });
 });
 
