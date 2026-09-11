@@ -63,6 +63,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a cancelled local-mode stream ran to completion anyway) and clears a stale `_lastFallbackReason`
   when a later request's primary provider succeeds outright, matching `generateText`'s existing
   behavior. PR #706.
+- **Closed a cross-project AI mutation gap (Wave 0B):** `useCharacterView`/`useWorldView`'s
+  AI-generation handlers (`handleGenerateProfile`/`handleRegenerateField`), `useTemplateView`'s
+  AI-personalization handlers (`handleAiApply`/`handleGenerateCustom`), and
+  `useOutlineGenerator`'s outline-apply path all `await dispatch(aiThunk)` and then mutate
+  persisted project state, with no check that the active project is still the one the request
+  was made for. Since project loading (New Project/import/restore) replaces `state.data` wholesale
+  while the SPA stays mounted, a late-arriving AI result could be applied to whichever project
+  happened to be open when it resolved -- for the template/outline apply paths (which replace the
+  entire manuscript/outline) this could silently overwrite a different project's content outright.
+  All five handlers now capture the active project's identity via the existing
+  `getProjectTargetIdentity()` invariant (extracted from `restoreSnapshotThunk`'s own established
+  guard into a shared `features/project/projectIdentity.ts`, `captureActiveProjectIdentity()` reads
+  the live store directly) and discard the result if that identity no longer matches by the time
+  the request settles (or, for the outline generator, by the time Apply is later clicked). Review
+  caught that the persisted id alone cannot distinguish two different sessions: a fresh "New
+  Project" always reuses the sentinel `id: 'default'` until explicitly saved elsewhere, so two
+  separate resets (or a reset racing a pending snapshot restore) would previously read as the same
+  project. Added an in-memory (never persisted) `generation` counter to `ProjectSliceState`,
+  bumped by `resetProject`/`importProjectThunk.fulfilled`/`restoreSnapshotThunk.fulfilled`, and
+  folded into every identity comparison -- `restoreSnapshotThunk`'s own pre-existing guard now
+  closes this gap too. `useOutlineGenerator`'s guard also now captures identity eagerly at mount
+  (not just after a successful AI generation), so an outline seeded from the existing project and
+  never regenerated is still protected if the active project changes before Apply is clicked.
+  PR #707.
 
 ### Documentation
 

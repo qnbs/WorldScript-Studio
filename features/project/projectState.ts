@@ -64,11 +64,14 @@ export interface ProjectData {
 // type their Immer draft param without `any` — preserves WritableDraft typing across the split.
 export interface ProjectSliceState {
   data: ProjectData;
+  // QNBS-v3: bumped every time `data` is replaced wholesale (reset/import/restore) -- distinguishes two such replacements that persist under the same id, since a fresh "New Project" always reuses id:'default' until explicitly saved elsewhere. Never persisted (selectProjectData/save paths read only `.data`). Optional so pre-existing hand-built test store fixtures (which never read it) don't need updating; real app state always has it via initialState.
+  generation?: number;
 }
 
 // QNBS-v3: Canonical initial state. Lives here (not in projectSlice) so reducer modules such as
 // metaReducers.resetProject can reference it without a circular import back through the slice.
 export const initialState: ProjectSliceState = {
+  generation: 0,
   data: {
     id: 'default',
     title: '',

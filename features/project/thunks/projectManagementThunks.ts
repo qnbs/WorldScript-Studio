@@ -4,9 +4,8 @@ import { parseImportedProjectJson } from '../../../services/projectImportSchema'
 import { storageService } from '../../../services/storageService';
 import type { Character, World } from '../../../types';
 import { createPrototypeSafeEntityState } from '../adapters';
+import { getProjectTargetIdentity, identityUnchanged } from '../projectIdentity';
 import type { ProjectData } from '../projectSlice';
-
-const LEGACY_PROJECT_DIRECTORY_METADATA_KEY = '__worldscriptLegacyProjectDirectory';
 
 type ImportedEntityCollection<T extends { id: string }> =
   | readonly T[]
@@ -44,17 +43,6 @@ function extractImportedEntities<T extends { id: string }>(
     return undefined;
   }
   return importedEntities;
-}
-
-// QNBS-v3: compare only storage-owned target identity so mutable snapshot content cannot hide a project switch.
-function restoreTargetIdentity(project: unknown): string | null {
-  if (typeof project !== 'object' || project === null) return null;
-  const record = project as Record<string, unknown>;
-  if (typeof record['id'] === 'string' && record['id']) return `id:${record['id']}`;
-  const legacyDirectory = record[LEGACY_PROJECT_DIRECTORY_METADATA_KEY];
-  return typeof legacyDirectory === 'string' && legacyDirectory
-    ? `legacy:${legacyDirectory}`
-    : null;
 }
 
 export const importProjectThunk = createAsyncThunk('project/importProject', async (file: File) => {
@@ -143,14 +131,14 @@ export const restoreSnapshotThunk = createAsyncThunk(
   'project/restoreSnapshot',
   async (snapshotId: number, thunkApi) => {
     // QNBS-v3: capture ownership before snapshot I/O so payload contents cannot change the restore target.
-    const currentProject = (thunkApi.getState() as RootState).project?.present?.data;
-    if (!currentProject) {
+    const currentSlice = (thunkApi.getState() as RootState).project?.present;
+    if (!currentSlice?.data) {
       throw new Error('Cannot restore a snapshot without an active project.');
     }
-    const capturedTargetIdentity = restoreTargetIdentity(currentProject);
-    const restored = await storageService.restoreSnapshot(snapshotId, currentProject);
-    const liveProject = (thunkApi.getState() as RootState).project?.present?.data;
-    if (restoreTargetIdentity(liveProject) !== capturedTargetIdentity) {
+    const capturedTargetIdentity = getProjectTargetIdentity(currentSlice);
+    const restored = await storageService.restoreSnapshot(snapshotId, currentSlice.data);
+    const liveSlice = (thunkApi.getState() as RootState).project?.present;
+    if (!identityUnchanged(capturedTargetIdentity, getProjectTargetIdentity(liveSlice))) {
       throw new Error('Cannot restore a snapshot after the active project changed.');
     }
     return restored;

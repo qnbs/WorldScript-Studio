@@ -552,6 +552,28 @@ describe('restoreSnapshotThunk', () => {
     expect(store.getState().project.present.data.id).toBe('p2');
   });
 
+  // QNBS-v3: a New Project reset keeps id:'default' (the same as almost every fresh project), so id alone cannot detect this race -- the generation counter must.
+  it('rejects when the active project is reset (still id:default) while snapshot I/O is pending', async () => {
+    let releaseRestore!: (value: unknown) => void;
+    vi.mocked(storageService.restoreSnapshot).mockReturnValue(
+      new Promise((resolve) => {
+        releaseRestore = resolve;
+      }),
+    );
+
+    const store = makeStore();
+    const pending = store.dispatch(restoreSnapshotThunk(100));
+    store.dispatch(
+      projectActions.resetProject({ title: 'Fresh', logline: '', chapter1Title: 'Ch1' }),
+    );
+    releaseRestore({ title: 'Old snapshot content', id: 'default' });
+
+    const action = await pending;
+
+    expect(action.type).toBe('project/restoreSnapshot/rejected');
+    expect(store.getState().project.present.data.title).toBe('Fresh');
+  });
+
   it('dispatches rejected when storageService throws', async () => {
     vi.mocked(storageService.restoreSnapshot).mockRejectedValue(new Error('IDB error'));
 

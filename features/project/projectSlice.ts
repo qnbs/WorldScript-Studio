@@ -79,9 +79,13 @@ const projectSlice = createSlice({
     builder
       .addCase(importProjectThunk.fulfilled, (state, action) => {
         state.data = action.payload;
+        // QNBS-v3: distinguishes this import from any other project state that also happens to keep the same id; nullish-coalesced since some hand-built test store fixtures predate this field.
+        state.generation = (state.generation ?? 0) + 1;
       })
       .addCase(restoreSnapshotThunk.fulfilled, (state, action) => {
         state.data = action.payload as ProjectData;
+        // QNBS-v3: distinguishes this restore from any other project state that also happens to keep the same id; nullish-coalesced since some hand-built test store fixtures predate this field.
+        state.generation = (state.generation ?? 0) + 1;
       })
       .addCase(generateCharacterPortraitThunk.fulfilled, (state, action) => {
         charactersAdapter.updateOne(state.data.characters, {
