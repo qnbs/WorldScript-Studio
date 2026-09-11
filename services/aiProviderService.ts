@@ -764,40 +764,35 @@ export async function generateJson<T>(
   }
 }
 
-// QNBS-v3: image generation has no local-routing fallback, so the policy gate alone must block a cloud call in local-only/eco/privacy mode — extracted so generateImage's own switch stays one statement per case for CodeScene's complexity gate on this hotspot file.
+// QNBS-v3: image generation has no local-routing fallback, so the policy gate alone must block a cloud call in local-only/eco/privacy mode.
 async function generateImageViaGemini(prompt: string, signal?: AbortSignal): Promise<string> {
   await assertCloudAiAllowed('gemini');
   return generateImageGemini(prompt, signal);
 }
 
-// QNBS-v3: the default case fails closed — no repository authority defines a silent Gemini fallback for an unrecognized provider.
+// QNBS-v3: lookup table instead of a branch chain — every entry besides 'gemini' is unsupported; an unlisted provider (including 'openrouter') fails closed via the same message rather than a silent Gemini fallback.
+const IMAGE_GENERATION_UNSUPPORTED_MESSAGE: Partial<Record<AIProvider, string>> = {
+  openai: 'OpenAI image generation is currently not available via the browser version.',
+  ollama: 'Ollama image generation is currently not supported. Please use Gemini for images.',
+  webllm: 'Local inference is text-only: use Gemini for image generation.',
+  onnx: 'Local inference is text-only: use Gemini for image generation.',
+  transformers: 'Local inference is text-only: use Gemini for image generation.',
+  anthropic:
+    'Anthropic image generation is not available. Please use Gemini or Ollama for image content.',
+};
+
 export async function generateImage(
   prompt: string,
   opts: AIRequestOptions,
   signal?: AbortSignal,
 ): Promise<string> {
-  switch (opts.provider) {
-    case 'gemini':
-      return generateImageViaGemini(prompt, signal);
-    case 'openai':
-      throw new Error(
-        'OpenAI image generation is currently not available via the browser version.',
-      );
-    case 'ollama':
-      throw new Error(
-        'Ollama image generation is currently not supported. Please use Gemini for images.',
-      );
-    case 'webllm':
-    case 'onnx':
-    case 'transformers':
-      throw new Error('Local inference is text-only: use Gemini for image generation.');
-    case 'anthropic':
-      throw new Error(
-        'Anthropic image generation is not available. Please use Gemini or Ollama for image content.',
-      );
-    default:
-      throw new Error('Image generation is not supported for this provider.');
+  if (opts.provider === 'gemini') {
+    return generateImageViaGemini(prompt, signal);
   }
+  throw new Error(
+    IMAGE_GENERATION_UNSUPPORTED_MESSAGE[opts.provider] ??
+      'Image generation is not supported for this provider.',
+  );
 }
 
 export async function streamText(
