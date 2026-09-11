@@ -171,12 +171,12 @@ describe('CloudSyncBackend', () => {
 
   it('saveImage throws (images are local-only)', async () => {
     const backend = makeBackend();
-    await expect(backend.saveImage('proj-1', 'img-1', 'base64data')).rejects.toThrow('local-only');
+    await expect(backend.saveImage('img-1', 'base64data')).rejects.toThrow('local-only');
   });
 
   it('getImage throws (images are local-only)', async () => {
     const backend = makeBackend();
-    await expect(backend.getImage('proj-1', 'img-1')).rejects.toThrow('local-only');
+    await expect(backend.getImage('img-1')).rejects.toThrow('local-only');
   });
 
   it('saveGeminiApiKey throws (API keys are local-only)', async () => {

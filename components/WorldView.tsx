@@ -42,7 +42,7 @@ const useStoredImage = (id: string | undefined, hasImage: boolean | undefined) =
     let isMounted = true;
     const fetchImage = async () => {
       try {
-        const image = await storageService.getImage(projectId, id);
+        const image = await storageService.getImage(id, projectId);
         if (isMounted && image) {
           setImageUrl(image.startsWith('data:image/') ? image : `data:image/png;base64,${image}`);
         }

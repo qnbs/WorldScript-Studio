@@ -96,7 +96,7 @@ describe('fileSystemService', () => {
 
   it('getImage() returns null when Tauri unavailable', async () => {
     const { fileSystemService } = await import('../../services/fileSystemService');
-    const result = await fileSystemService.getImage('proj-1', 'img-1').catch(() => null);
+    const result = await fileSystemService.getImage('img-1').catch(() => null);
     expect(result).toBeNull();
   });
 

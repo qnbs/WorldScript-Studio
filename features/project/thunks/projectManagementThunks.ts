@@ -73,13 +73,13 @@ export const importProjectThunk = createAsyncThunk('project/importProject', asyn
     throw new Error('Invalid project file: duplicate character or world entity ID.');
   }
 
-  // QNBS-v3: images are project-qualified in storage now -- resolve the imported project's own id up front so both save loops use the same namespace the returned ProjectData below is assigned.
-  const importedProjectId = projectDataJson.id ?? 'default';
+  // QNBS-v3: images are project-qualified in storage now -- resolve the imported project's own id up front so both save loops use the same namespace the returned ProjectData below is assigned. `||`, not `??`, so a present-but-empty id falls to 'default' exactly like every other live call site (state.project.present?.data?.id || 'default'); `??` would let an explicit empty-string id silently diverge into its own '' namespace instead of collapsing into the same 'default' namespace as other no-id projects.
+  const importedProjectId = projectDataJson.id || 'default';
 
   for (const char of characterArray) {
     const newChar = { ...char };
     if (newChar.avatarBase64) {
-      await storageService.saveImage(importedProjectId, newChar.id, newChar.avatarBase64);
+      await storageService.saveImage(newChar.id, newChar.avatarBase64, importedProjectId);
       newChar.hasAvatar = true;
       delete newChar.avatarBase64;
     }
@@ -89,7 +89,7 @@ export const importProjectThunk = createAsyncThunk('project/importProject', asyn
   for (const world of worldArray) {
     const newWorld = { ...world };
     if (newWorld.ambianceImageBase64) {
-      await storageService.saveImage(importedProjectId, newWorld.id, newWorld.ambianceImageBase64);
+      await storageService.saveImage(newWorld.id, newWorld.ambianceImageBase64, importedProjectId);
       newWorld.hasAmbianceImage = true;
       delete newWorld.ambianceImageBase64;
     }

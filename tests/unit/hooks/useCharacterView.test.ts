@@ -83,9 +83,9 @@ vi.mock('../../../features/project/thunks/characterThunks', () => {
 
 vi.mock('../../../services/storageService', () => ({
   storageService: {
-    saveImage: (projectId: unknown, id: unknown, data: unknown) =>
-      mockSaveImage(projectId, id, data),
-    deleteImage: (projectId: unknown, id: unknown) => mockDeleteImage(projectId, id),
+    saveImage: (id: unknown, data: unknown, projectId: unknown) =>
+      mockSaveImage(id, data, projectId),
+    deleteImage: (id: unknown, projectId: unknown) => mockDeleteImage(id, projectId),
   },
 }));
 
@@ -432,7 +432,7 @@ describe('confirmDelete', () => {
       await result.current.confirmDelete();
     });
 
-    expect(mockDeleteImage).toHaveBeenCalledWith('default', 'c1');
+    expect(mockDeleteImage).toHaveBeenCalledWith('c1', 'default');
     expect(mockDispatch).toHaveBeenCalledWith(projectActions.deleteCharacter('c1'));
   });
 

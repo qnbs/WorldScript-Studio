@@ -83,7 +83,7 @@ export const generateSceneImageThunk = createDeduplicatedThunk(
     registerDuplicateRequest(prompt, 'sceneVisualization');
     const base64 = await generateImage(prompt, aiOptions, signal);
     const imageKey = `scene-${payload.sectionId}`;
-    await storageService.saveImage(projectId, imageKey, base64);
+    await storageService.saveImage(imageKey, base64, projectId);
     const dataUrl = base64.includes('data:image') ? base64 : `data:image/png;base64,${base64}`;
     return { imageKey, dataUrl };
   },

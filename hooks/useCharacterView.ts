@@ -207,7 +207,7 @@ export const useCharacterView = () => {
   const confirmDelete = useCallback(async () => {
     if (characterToDelete) {
       // QNBS-v3: the real delete API, not saveImage(id, '') -- an empty-string save only overwrote the project-qualified key, leaving any pre-qualification legacy blob for this id intact and resurfacable via getImage's fallback.
-      await storageService.deleteImage(projectId, characterToDelete.id);
+      await storageService.deleteImage(characterToDelete.id, projectId);
       dispatch(projectActions.deleteCharacter(characterToDelete.id));
       setCharacterToDelete(null);
       setIsDossierOpen(false);

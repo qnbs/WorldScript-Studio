@@ -25,3 +25,6 @@ export const BINDER_ASSETS_STORE = 'binder-assets-store';
 
 /** Written to `APP_DATA_STORE` after a successful legacy → dual-DB copy (idempotency). */
 export const LEGACY_DB_MIGRATION_MARKER_KEY = '__legacy_worldscript_db_migrated__';
+
+// QNBS-v3: a legacy (pre-project-qualification) image key carries no recorded owner; this claims the WHOLE legacy image namespace for whichever project first consults it, and every later project checks against that claim instead of guessing.
+export const LEGACY_IMAGE_OWNER_KEY = '__legacy_image_owner_project_id__';

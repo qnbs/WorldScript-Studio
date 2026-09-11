@@ -668,15 +668,15 @@ describe('disable/rotate blocked by a stuck recovery-required journal', () => {
 describe('production migration round-trip with real data', () => {
   it('preserves an image through rekey then disable', async () => {
     await setupIdbEncryption('test-fixture-original-passphrase');
-    await dbService.saveImage('recovery-project', 'recovery-img', 'recovery-content');
-    expect(await dbService.getImage('recovery-project', 'recovery-img')).toBe('recovery-content');
+    await dbService.saveImage('recovery-img', 'recovery-content');
+    expect(await dbService.getImage('recovery-img')).toBe('recovery-content');
 
     await rotateIdbPassphrase('test-fixture-original-passphrase', 'test-fixture-new-passphrase');
-    expect(await dbService.getImage('recovery-project', 'recovery-img')).toBe('recovery-content');
+    expect(await dbService.getImage('recovery-img')).toBe('recovery-content');
 
     await clearIdbPassphrase();
     expect(isIdbEncryptionReady()).toBe(false);
-    expect(await dbService.getImage('recovery-project', 'recovery-img')).toBe('recovery-content');
+    expect(await dbService.getImage('recovery-img')).toBe('recovery-content');
   });
 
   it('preserves a story codex (3-shape dispatch) through rekey then disable', async () => {
@@ -807,7 +807,7 @@ describe('resumeEncryptionMigration (recovery UX)', () => {
 
   it('re-derives keys from passphrases and completes a pending rekey journal', async () => {
     await setupIdbEncryption('test-fixture-original-passphrase');
-    await dbService.saveImage('recovery-project-2', 'recovery-img-2', 'recovery-content-2');
+    await dbService.saveImage('recovery-img-2', 'recovery-content-2');
     const journal = await buildPendingRekeyJournal('test-fixture-new-passphrase');
     clearIdbEncryptionKey();
 
@@ -820,9 +820,7 @@ describe('resumeEncryptionMigration (recovery UX)', () => {
       ).resolves.toBeUndefined();
 
       expect(isIdbEncryptionReady()).toBe(true);
-      expect(await dbService.getImage('recovery-project-2', 'recovery-img-2')).toBe(
-        'recovery-content-2',
-      );
+      expect(await dbService.getImage('recovery-img-2')).toBe('recovery-content-2');
 
       clearIdbEncryptionKey();
       await expect(

@@ -1916,60 +1916,60 @@ describe('FsCodexStore — codex + RAG vectors', () => {
 
 describe('FsAssetStore — images + binder assets', () => {
   it('round-trips an image while preserving its data-url MIME type', async () => {
-    await store.saveImage('proj-1', 'char-1', 'data:image/webp;base64,QUJD');
-    expect(await store.getImage('proj-1', 'char-1')).toBe('data:image/webp;base64,QUJD');
-    await store.deleteImage('proj-1', 'char-1');
-    expect(await store.getImage('proj-1', 'char-1')).toBeNull();
+    await store.saveImage('char-1', 'data:image/webp;base64,QUJD', 'proj-1');
+    expect(await store.getImage('char-1', 'proj-1')).toBe('data:image/webp;base64,QUJD');
+    await store.deleteImage('char-1', 'proj-1');
+    expect(await store.getImage('char-1', 'proj-1')).toBeNull();
   });
 
   it('treats legacy raw image payloads as PNG', async () => {
-    await store.saveImage('proj-1', 'legacy-char', 'QUJD');
-    expect(await store.getImage('proj-1', 'legacy-char')).toBe('data:image/png;base64,QUJD');
+    await store.saveImage('legacy-char', 'QUJD', 'proj-1');
+    expect(await store.getImage('legacy-char', 'proj-1')).toBe('data:image/png;base64,QUJD');
   });
 
   it('writes new images under a per-project subdirectory, not the flat legacy path', async () => {
-    await store.saveImage('proj-1', 'char-1', 'data:image/webp;base64,QUJD');
+    await store.saveImage('char-1', 'data:image/webp;base64,QUJD', 'proj-1');
     expect(fake.text.has('/app/images/char-1.png')).toBe(false);
     // QNBS-v3: asserts the qualified write landed somewhere under images/ with a digest-qualified filename, without pinning the exact digest (an implementation detail).
     const qualifiedKeys = [...fake.text.keys()].filter(
       (k) => k.startsWith('/app/images/') && k.includes('/char-1--') && k.endsWith('.png'),
     );
     expect(qualifiedKeys).toHaveLength(1);
-    expect(await store.getImage('proj-1', 'char-1')).toBe('data:image/webp;base64,QUJD');
+    expect(await store.getImage('char-1', 'proj-1')).toBe('data:image/webp;base64,QUJD');
   });
 
   // QNBS-v3: sanitizePathSegment alone would collapse both of these entity ids to the same "alpha-beta.png" filename within one project's namespace.
   it('does not collide two distinct entity ids that sanitize to the same readable prefix', async () => {
-    await store.saveImage('proj-1', 'alpha beta', 'data:image/png;base64,FROM_ALPHA_SPACE');
-    await store.saveImage('proj-1', 'alpha-beta', 'data:image/png;base64,FROM_ALPHA_HYPHEN');
+    await store.saveImage('alpha beta', 'data:image/png;base64,FROM_ALPHA_SPACE', 'proj-1');
+    await store.saveImage('alpha-beta', 'data:image/png;base64,FROM_ALPHA_HYPHEN', 'proj-1');
 
-    expect(await store.getImage('proj-1', 'alpha beta')).toBe(
+    expect(await store.getImage('alpha beta', 'proj-1')).toBe(
       'data:image/png;base64,FROM_ALPHA_SPACE',
     );
-    expect(await store.getImage('proj-1', 'alpha-beta')).toBe(
+    expect(await store.getImage('alpha-beta', 'proj-1')).toBe(
       'data:image/png;base64,FROM_ALPHA_HYPHEN',
     );
   });
 
   // QNBS-v3: sanitizePathSegment alone would collapse both of these to the same "alpha-beta" directory -- the namespace must not let two distinct projects share one image directory.
   it('does not collide two distinct project ids that sanitize to the same readable prefix', async () => {
-    await store.saveImage('alpha beta', 'char-1', 'data:image/png;base64,FROM_ALPHA_SPACE');
-    await store.saveImage('alpha-beta', 'char-1', 'data:image/png;base64,FROM_ALPHA_HYPHEN');
+    await store.saveImage('char-1', 'data:image/png;base64,FROM_ALPHA_SPACE', 'alpha beta');
+    await store.saveImage('char-1', 'data:image/png;base64,FROM_ALPHA_HYPHEN', 'alpha-beta');
 
-    expect(await store.getImage('alpha beta', 'char-1')).toBe(
+    expect(await store.getImage('char-1', 'alpha beta')).toBe(
       'data:image/png;base64,FROM_ALPHA_SPACE',
     );
-    expect(await store.getImage('alpha-beta', 'char-1')).toBe(
+    expect(await store.getImage('char-1', 'alpha-beta')).toBe(
       'data:image/png;base64,FROM_ALPHA_HYPHEN',
     );
   });
 
   it('does not collide project ids differing only by a forbidden-character substitution', async () => {
-    await store.saveImage('alpha/beta', 'char-1', 'data:image/png;base64,FROM_SLASH');
-    await store.saveImage('alpha\\beta', 'char-1', 'data:image/png;base64,FROM_BACKSLASH');
+    await store.saveImage('char-1', 'data:image/png;base64,FROM_SLASH', 'alpha/beta');
+    await store.saveImage('char-1', 'data:image/png;base64,FROM_BACKSLASH', 'alpha\\beta');
 
-    expect(await store.getImage('alpha/beta', 'char-1')).toBe('data:image/png;base64,FROM_SLASH');
-    expect(await store.getImage('alpha\\beta', 'char-1')).toBe(
+    expect(await store.getImage('char-1', 'alpha/beta')).toBe('data:image/png;base64,FROM_SLASH');
+    expect(await store.getImage('char-1', 'alpha\\beta')).toBe(
       'data:image/png;base64,FROM_BACKSLASH',
     );
   });
@@ -1977,24 +1977,24 @@ describe('FsAssetStore — images + binder assets', () => {
   it('does not collide long project ids that differ only after sanitizer truncation', async () => {
     const longA = `${'x'.repeat(120)}-A`;
     const longB = `${'x'.repeat(120)}-B`;
-    await store.saveImage(longA, 'char-1', 'data:image/png;base64,FROM_LONG_A');
-    await store.saveImage(longB, 'char-1', 'data:image/png;base64,FROM_LONG_B');
+    await store.saveImage('char-1', 'data:image/png;base64,FROM_LONG_A', longA);
+    await store.saveImage('char-1', 'data:image/png;base64,FROM_LONG_B', longB);
 
-    expect(await store.getImage(longA, 'char-1')).toBe('data:image/png;base64,FROM_LONG_A');
-    expect(await store.getImage(longB, 'char-1')).toBe('data:image/png;base64,FROM_LONG_B');
+    expect(await store.getImage('char-1', longA)).toBe('data:image/png;base64,FROM_LONG_A');
+    expect(await store.getImage('char-1', longB)).toBe('data:image/png;base64,FROM_LONG_B');
   });
 
   // QNBS-v3: a pre-migration flat-path image (written before project-qualified keys existed) must stay reachable without a forced migration.
   it('falls back to the legacy flat image path when the project-qualified file is absent', async () => {
     fake.text.set('/app/images/legacy-only.png', 'data:image/png;base64,OLD');
-    expect(await store.getImage('proj-1', 'legacy-only')).toBe('data:image/png;base64,OLD');
+    expect(await store.getImage('legacy-only', 'proj-1')).toBe('data:image/png;base64,OLD');
   });
 
   it('deletes both the project-qualified and legacy flat image files', async () => {
     fake.text.set('/app/images/dual.png', 'data:image/png;base64,LEGACYCOPY');
-    await store.saveImage('proj-1', 'dual', 'data:image/png;base64,NEWCOPY');
-    await store.deleteImage('proj-1', 'dual');
-    expect(await store.getImage('proj-1', 'dual')).toBeNull();
+    await store.saveImage('dual', 'data:image/png;base64,NEWCOPY', 'proj-1');
+    await store.deleteImage('dual', 'proj-1');
+    expect(await store.getImage('dual', 'proj-1')).toBeNull();
     expect(fake.text.has('/app/images/dual.png')).toBe(false);
   });
 
@@ -2009,7 +2009,7 @@ describe('FsAssetStore — images + binder assets', () => {
     simulateStoredProject('proj-2');
     fake.text.set('/app/images/ambiguous.png', 'data:image/png;base64,AMBIGUOUS');
 
-    expect(await store.getImage('proj-1', 'ambiguous')).toBeNull();
+    expect(await store.getImage('ambiguous', 'proj-1')).toBeNull();
     // QNBS-v3: preserved untouched, not destructively deleted, despite being unattributable.
     expect(fake.text.has('/app/images/ambiguous.png')).toBe(true);
   });
@@ -2018,7 +2018,7 @@ describe('FsAssetStore — images + binder assets', () => {
     simulateStoredProject('proj-1');
     fake.text.set('/app/images/solo.png', 'data:image/png;base64,SOLO');
 
-    expect(await store.getImage('proj-1', 'solo')).toBe('data:image/png;base64,SOLO');
+    expect(await store.getImage('solo', 'proj-1')).toBe('data:image/png;base64,SOLO');
   });
 
   // QNBS-v3: finds the qualified (per-project digest directory, digest-qualified filename) key for an entity, distinct from the flat legacy key at /app/images/<id>.png.
@@ -2036,9 +2036,9 @@ describe('FsAssetStore — images + binder assets', () => {
     simulateStoredProject('proj-1');
     simulateStoredProject('proj-2');
     fake.text.set('/app/images/shared-legacy.png', 'data:image/png;base64,SHARED');
-    await store.saveImage('proj-1', 'shared-legacy', 'data:image/png;base64,NEWCOPY');
+    await store.saveImage('shared-legacy', 'data:image/png;base64,NEWCOPY', 'proj-1');
 
-    await store.deleteImage('proj-1', 'shared-legacy');
+    await store.deleteImage('shared-legacy', 'proj-1');
 
     expect(qualifiedImageKey('shared-legacy')).toBeUndefined();
     expect(fake.text.has('/app/images/shared-legacy.png')).toBe(true);
@@ -2048,7 +2048,7 @@ describe('FsAssetStore — images + binder assets', () => {
   it('leaves the qualified file untouched when legacy deletion fails (sole-owner case)', async () => {
     simulateStoredProject('proj-1');
     fake.text.set('/app/images/atomic.png', 'data:image/png;base64,LEGACY');
-    await store.saveImage('proj-1', 'atomic', 'data:image/png;base64,QUALIFIED');
+    await store.saveImage('atomic', 'data:image/png;base64,QUALIFIED', 'proj-1');
 
     const originalRemove = fake.apis.remove;
     fake.apis.remove = (p: string) => {
@@ -2056,14 +2056,14 @@ describe('FsAssetStore — images + binder assets', () => {
       return originalRemove(p);
     };
     try {
-      await store.deleteImage('proj-1', 'atomic');
+      await store.deleteImage('atomic', 'proj-1');
     } finally {
       fake.apis.remove = originalRemove;
     }
 
     expect(fake.text.has('/app/images/atomic.png')).toBe(true);
     expect(qualifiedImageKey('atomic')).toBeDefined();
-    expect(await store.getImage('proj-1', 'atomic')).toBe('data:image/png;base64,QUALIFIED');
+    expect(await store.getImage('atomic', 'proj-1')).toBe('data:image/png;base64,QUALIFIED');
   });
 
   // QNBS-v3: the ownership check and the legacy-file read/delete must not be two separately-awaited, unserialized steps -- a concurrent project creation between them could make the ownership verdict stale. Proves getImage participates in the same legacy-routing serialization queue as every other mutation, so a call enqueued first blocks a call enqueued after it from even starting its own body, not just from finishing first.
@@ -2087,8 +2087,8 @@ describe('FsAssetStore — images + binder assets', () => {
       return originalExists(p);
     };
 
-    const firstPromise = store.getImage('proj-1', 'first');
-    const secondPromise = store.getImage('proj-1', 'second');
+    const firstPromise = store.getImage('first', 'proj-1');
+    const secondPromise = store.getImage('second', 'proj-1');
 
     try {
       // QNBS-v3: a real (not fake-timer) wait, generous relative to crypto.subtle.digest's real latency -- long enough that an unserialized "second" would have completed its entire (ungated) chain by now.

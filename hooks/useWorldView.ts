@@ -245,7 +245,7 @@ export const useWorldView = () => {
   const confirmDelete = useCallback(async () => {
     if (worldToDelete) {
       // QNBS-v3: the real delete API, not saveImage(id, '') -- an empty-string save only overwrote the project-qualified key, leaving any pre-qualification legacy blob for this id intact and resurfacable via getImage's fallback.
-      await storageService.deleteImage(projectId, worldToDelete.id);
+      await storageService.deleteImage(worldToDelete.id, projectId);
       dispatch(projectActions.deleteWorld(worldToDelete.id));
       setWorldToDelete(null);
       setIsAtlasOpen(false);

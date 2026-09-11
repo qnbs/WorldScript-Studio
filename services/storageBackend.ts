@@ -96,8 +96,9 @@ export interface StorageBackend {
   // QNBS-v3: optional recovery keeps the filesystem-only quarantine contract out of IndexedDB.
   quarantineProject?(projectId: string): Promise<ProjectQuarantineResult>;
 
-  saveImage(projectId: string, id: string, base64Data: string): Promise<void>;
-  getImage(projectId: string, id: string): Promise<string | null>;
+  // QNBS-v3: projectId is trailing/optional (defaults to 'default' at each implementer) so call sites that predate project-qualification keep compiling unchanged -- only call sites that need real qualification pass it explicitly.
+  saveImage(id: string, base64Data: string, projectId?: string): Promise<void>;
+  getImage(id: string, projectId?: string): Promise<string | null>;
 
   saveSettings(settings: Settings): Promise<void>;
   loadSettings(): Promise<Settings | null>;
@@ -118,7 +119,7 @@ export interface StorageBackend {
   listSnapshots(): Promise<ProjectSnapshot[]>;
   deleteSnapshot(snapshotId: number): Promise<void>;
 
-  deleteImage(projectId: string, id: string): Promise<void>;
+  deleteImage(id: string, projectId?: string): Promise<void>;
 
   hasSavedData(): Promise<boolean>;
 

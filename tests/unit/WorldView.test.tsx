@@ -193,7 +193,7 @@ describe('WorldView', () => {
     } as never);
     render(<WorldView />);
     await waitFor(() =>
-      expect(storageService.getImage).toHaveBeenCalledWith('default', 'w-broken'),
+      expect(storageService.getImage).toHaveBeenCalledWith('w-broken', 'default'),
     );
     expect(screen.queryByAltText('Cindralis')).toBeNull();
   });

@@ -82,9 +82,9 @@ vi.mock('../../../features/project/thunks/worldThunks', () => {
 
 vi.mock('../../../services/storageService', () => ({
   storageService: {
-    saveImage: (projectId: unknown, id: unknown, data: unknown) =>
-      mockSaveImage(projectId, id, data),
-    deleteImage: (projectId: unknown, id: unknown) => mockDeleteImage(projectId, id),
+    saveImage: (id: unknown, data: unknown, projectId: unknown) =>
+      mockSaveImage(id, data, projectId),
+    deleteImage: (id: unknown, projectId: unknown) => mockDeleteImage(id, projectId),
   },
 }));
 
@@ -422,7 +422,7 @@ describe('confirmDelete', () => {
     await act(async () => {
       await result.current.confirmDelete();
     });
-    expect(mockDeleteImage).toHaveBeenCalledWith('default', 'w1');
+    expect(mockDeleteImage).toHaveBeenCalledWith('w1', 'default');
     expect(mockDispatch).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'project/deleteWorld', payload: 'w1' }),
     );

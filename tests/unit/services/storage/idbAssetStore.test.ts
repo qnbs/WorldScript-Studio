@@ -15,9 +15,19 @@ const mockIdbStore = {
   openCursor: vi.fn(),
 };
 
+// QNBS-v3: a separate mock store for APP_DATA_STORE (the legacy-image-ownership marker) so its
+// get/put calls never contaminate the IMAGES_STORE-shaped mock behavior the tests below set up.
+const mockAppDataStore = {
+  put: vi.fn(),
+  get: vi.fn(),
+  delete: vi.fn(),
+};
+
 vi.mock('../../../../services/storage/idbCodexStore', () => ({
   IdbCodexStore: class {
-    protected getObjectStore = vi.fn().mockResolvedValue(mockIdbStore);
+    protected getObjectStore = vi.fn((storeName: string) =>
+      Promise.resolve(storeName === 'app-data' ? mockAppDataStore : mockIdbStore),
+    );
   },
 }));
 
@@ -42,6 +52,8 @@ vi.mock('../../../../services/storage/storageEncryptionService', () => ({
 vi.mock('../../../../services/dbConstants', () => ({
   IMAGES_STORE: 'images',
   BINDER_ASSETS_STORE: 'binder-assets',
+  APP_DATA_STORE: 'app-data',
+  LEGACY_IMAGE_OWNER_KEY: '__legacy_image_owner_project_id__',
 }));
 
 // QNBS-v3: mock matches production contract — sanitize spaces/colons and use :: delimiter
@@ -82,26 +94,29 @@ describe('IdbAssetStore', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // QNBS-v3: default "no legacy-image-owner claim yet" so every test's first legacy-fallback access claims for its own project id, matching prior (pre-ownership-check) fallback behavior unless a test deliberately overrides this to simulate a rival claim.
+    mockAppDataStore.get.mockImplementation(() => makeSuccessReq(undefined));
+    mockAppDataStore.put.mockImplementation(() => makeSuccessReq(undefined));
     store = new IdbAssetStore();
   });
 
   describe('saveImage', () => {
     it('calls put with base64 payload and the project-qualified key', async () => {
       mockIdbStore.put.mockImplementation(() => makeSuccessReq(undefined));
-      await store.saveImage('proj-1', 'img-1', 'data:image/png;base64,abc');
+      await store.saveImage('img-1', 'data:image/png;base64,abc', 'proj-1');
       expect(mockIdbStore.put).toHaveBeenCalledWith('data:image/png;base64,abc', 'proj-1::img-1');
     });
 
     it('rejects when IDB put errors', async () => {
       mockIdbStore.put.mockImplementation(() => makeErrorReq(new DOMException('put failed')));
-      await expect(store.saveImage('proj-1', 'img-1', 'abc')).rejects.toBeDefined();
+      await expect(store.saveImage('img-1', 'abc', 'proj-1')).rejects.toBeDefined();
     });
   });
 
   describe('getImage', () => {
     it('returns null when neither the qualified nor legacy key exists', async () => {
       mockIdbStore.get.mockImplementation(() => makeSuccessReq(null));
-      const result = await store.getImage('proj-1', 'missing-id');
+      const result = await store.getImage('missing-id', 'proj-1');
       expect(result).toBeNull();
     });
 
@@ -109,7 +124,7 @@ describe('IdbAssetStore', () => {
       mockIdbStore.get.mockImplementation((key: string) =>
         makeSuccessReq(key === 'proj-1::img-1' ? 'data:image/png;base64,XYZ' : null),
       );
-      const result = await store.getImage('proj-1', 'img-1');
+      const result = await store.getImage('img-1', 'proj-1');
       expect(result).toBe('data:image/png;base64,XYZ');
       expect(mockIdbStore.get).toHaveBeenCalledWith('proj-1::img-1');
     });
@@ -119,7 +134,7 @@ describe('IdbAssetStore', () => {
       mockIdbStore.get.mockImplementation((key: string) =>
         makeSuccessReq(key === 'img-1' ? 'data:image/png;base64,LEGACY' : null),
       );
-      const result = await store.getImage('proj-1', 'img-1');
+      const result = await store.getImage('img-1', 'proj-1');
       expect(result).toBe('data:image/png;base64,LEGACY');
       expect(mockIdbStore.get).toHaveBeenCalledWith('proj-1::img-1');
       expect(mockIdbStore.get).toHaveBeenCalledWith('img-1');
@@ -127,22 +142,74 @@ describe('IdbAssetStore', () => {
 
     it('rejects when IDB get errors', async () => {
       mockIdbStore.get.mockImplementation(() => makeErrorReq(new DOMException('get failed')));
-      await expect(store.getImage('proj-1', 'img-1')).rejects.toBeDefined();
+      await expect(store.getImage('img-1', 'proj-1')).rejects.toBeDefined();
     });
   });
 
   describe('deleteImage', () => {
-    // QNBS-v3: both keys must be cleared so a stale legacy record can never resurface via getImage's fallback.
-    it('deletes both the qualified and legacy key', async () => {
+    // QNBS-v3: both keys must be cleared so a stale legacy record can never resurface via getImage's fallback -- but only once ownership of the legacy namespace is already provable for this project (simulated here via a pre-existing claim).
+    it('deletes both the qualified and legacy key when this project already owns the legacy namespace', async () => {
+      mockAppDataStore.get.mockImplementation(() => makeSuccessReq('proj-1'));
       mockIdbStore.delete.mockImplementation(() => makeSuccessReq(undefined));
-      await store.deleteImage('proj-1', 'img-1');
+      await store.deleteImage('img-1', 'proj-1');
       expect(mockIdbStore.delete).toHaveBeenCalledWith('proj-1::img-1');
       expect(mockIdbStore.delete).toHaveBeenCalledWith('img-1');
     });
 
+    // QNBS-v3: preserve-first -- a delete must never itself establish a first ownership claim, so with no prior claim the unattributed legacy copy is left untouched rather than guessed-and-destroyed.
+    it('does not delete the legacy key when this project has not yet claimed the legacy namespace', async () => {
+      mockIdbStore.delete.mockImplementation(() => makeSuccessReq(undefined));
+      await store.deleteImage('img-1', 'proj-1');
+      expect(mockIdbStore.delete).toHaveBeenCalledWith('proj-1::img-1');
+      expect(mockIdbStore.delete).not.toHaveBeenCalledWith('img-1');
+    });
+
+    // QNBS-v3: a legacy blob already claimed by a DIFFERENT project must never be deleted by this one either.
+    it('does not delete the legacy key when a different project already owns the legacy namespace', async () => {
+      mockAppDataStore.get.mockImplementation(() => makeSuccessReq('other-project'));
+      mockIdbStore.delete.mockImplementation(() => makeSuccessReq(undefined));
+      await store.deleteImage('img-1', 'proj-1');
+      expect(mockIdbStore.delete).toHaveBeenCalledWith('proj-1::img-1');
+      expect(mockIdbStore.delete).not.toHaveBeenCalledWith('img-1');
+    });
+
     it('rejects when IDB delete errors', async () => {
+      mockAppDataStore.get.mockImplementation(() => makeSuccessReq('proj-1'));
       mockIdbStore.delete.mockImplementation(() => makeErrorReq(new DOMException('del failed')));
-      await expect(store.deleteImage('proj-1', 'img-1')).rejects.toBeDefined();
+      await expect(store.deleteImage('img-1', 'proj-1')).rejects.toBeDefined();
+    });
+  });
+
+  describe('legacy image ownership', () => {
+    // QNBS-v3: the exact scenario this fix closes -- an orphaned legacy blob from a previously-active, now-replaced project must not leak into a new project reusing the same entity id.
+    it('fails closed on the legacy fallback once a different project already claimed the legacy namespace', async () => {
+      mockAppDataStore.get.mockImplementation(() => makeSuccessReq('project-a'));
+      mockIdbStore.get.mockImplementation((key: string) =>
+        makeSuccessReq(key === 'img-1' ? 'data:image/png;base64,PROJECT_A_IMAGE' : null),
+      );
+      const result = await store.getImage('img-1', 'project-b');
+      expect(result).toBeNull();
+    });
+
+    it('still serves the legacy fallback for the project that already owns the legacy namespace', async () => {
+      mockAppDataStore.get.mockImplementation(() => makeSuccessReq('project-a'));
+      mockIdbStore.get.mockImplementation((key: string) =>
+        makeSuccessReq(key === 'img-1' ? 'data:image/png;base64,PROJECT_A_IMAGE' : null),
+      );
+      const result = await store.getImage('img-1', 'project-a');
+      expect(result).toBe('data:image/png;base64,PROJECT_A_IMAGE');
+    });
+
+    it('claims the legacy namespace for the first project that ever consults it', async () => {
+      mockIdbStore.get.mockImplementation((key: string) =>
+        makeSuccessReq(key === 'img-1' ? 'data:image/png;base64,FIRST_CLAIM' : null),
+      );
+      const result = await store.getImage('img-1', 'project-a');
+      expect(result).toBe('data:image/png;base64,FIRST_CLAIM');
+      expect(mockAppDataStore.put).toHaveBeenCalledWith(
+        'project-a',
+        '__legacy_image_owner_project_id__',
+      );
     });
   });
 

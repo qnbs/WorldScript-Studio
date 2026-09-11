@@ -113,14 +113,14 @@ class StorageManager {
     return backend.deleteProject(projectId);
   }
 
-  async saveImage(projectId: string, id: string, base64Data: string): Promise<void> {
+  async saveImage(id: string, base64Data: string, projectId?: string): Promise<void> {
     const backend = await this.getBackend();
-    return backend.saveImage(projectId, id, base64Data);
+    return backend.saveImage(id, base64Data, projectId);
   }
 
-  async getImage(projectId: string, id: string): Promise<string | null> {
+  async getImage(id: string, projectId?: string): Promise<string | null> {
     const backend = await this.getBackend();
-    return backend.getImage(projectId, id);
+    return backend.getImage(id, projectId);
   }
 
   async saveSettings(settings: Settings): Promise<void> {
@@ -187,9 +187,9 @@ class StorageManager {
     return backend.deleteSnapshot(id);
   }
 
-  async deleteImage(projectId: string, id: string): Promise<void> {
+  async deleteImage(id: string, projectId?: string): Promise<void> {
     const backend = await this.getBackend();
-    return backend.deleteImage(projectId, id);
+    return backend.deleteImage(id, projectId);
   }
 
   async hasSavedData(): Promise<boolean> {

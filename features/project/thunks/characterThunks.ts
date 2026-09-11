@@ -83,7 +83,7 @@ export const generateCharacterPortraitThunk = createDeduplicatedThunk(
     const { prompt } = getPrompts('characterPortrait', { description: fullDescription, lang });
     registerDuplicateRequest(prompt, 'characterPortrait');
     const base64 = await generateImage(prompt, aiOptions, signal);
-    await storageService.saveImage(projectId, characterId, base64);
+    await storageService.saveImage(characterId, base64, projectId);
     return { characterId };
   },
 );
@@ -104,7 +104,7 @@ export const uploadCharacterImageThunk = createAsyncThunk(
         }
         // QNBS-v3: retain the data-URL MIME type so uploaded JPEG/WebP images survive filesystem round-trips.
         storageService
-          .saveImage(projectId, characterId, result)
+          .saveImage(characterId, result, projectId)
           .then(() => resolve({ characterId }))
           .catch(reject);
       };

@@ -189,8 +189,8 @@ describe('storageService (IndexedDB backend in browser)', () => {
     const result = await storageService.hasSavedData();
     expect(result).toBe(true);
 
-    await storageService.deleteImage('proj-1', 'img-1');
-    expect(mockDb.deleteImage).toHaveBeenCalledWith('proj-1', 'img-1');
+    await storageService.deleteImage('img-1', 'proj-1');
+    expect(mockDb.deleteImage).toHaveBeenCalledWith('img-1', 'proj-1');
   });
 
   it('reports indexeddb storage backend in web context', async () => {

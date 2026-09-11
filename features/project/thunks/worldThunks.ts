@@ -76,7 +76,7 @@ export const generateWorldImageThunk = createDeduplicatedThunk(
     const { prompt } = getPrompts('worldImage', { description, lang });
     registerDuplicateRequest(prompt, 'worldImage');
     const base64 = await generateImage(prompt, aiOptions, signal);
-    await storageService.saveImage(projectId, worldId, base64);
+    await storageService.saveImage(worldId, base64, projectId);
     return { worldId };
   },
 );
@@ -97,7 +97,7 @@ export const uploadWorldImageThunk = createAsyncThunk(
         }
         // QNBS-v3: retain the data-URL MIME type so uploaded JPEG/WebP images survive filesystem round-trips.
         storageService
-          .saveImage(projectId, worldId, result)
+          .saveImage(worldId, result, projectId)
           .then(() => resolve({ worldId }))
           .catch(reject);
       };

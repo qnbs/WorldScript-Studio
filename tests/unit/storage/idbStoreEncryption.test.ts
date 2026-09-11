@@ -115,16 +115,16 @@ describe('IdbAssetStore encryption round-trip', () => {
     await initIdbEncryption('test-pass');
     const store = new IdbAssetStore();
     const base64 = 'data:image/png;base64,iVBORw0KGgo=';
-    await store.saveImage('proj-1', 'img-1', base64);
-    const result = await store.getImage('proj-1', 'img-1');
+    await store.saveImage('img-1', base64);
+    const result = await store.getImage('img-1');
     expect(result).toBe(base64);
   });
 
   it('round-trips image when encryption is inactive', async () => {
     const store = new IdbAssetStore();
     const base64 = 'data:image/png;base64,plain=';
-    await store.saveImage('proj-2', 'img-2', base64);
-    const result = await store.getImage('proj-2', 'img-2');
+    await store.saveImage('img-2', base64);
+    const result = await store.getImage('img-2');
     expect(result).toBe(base64);
   });
 
@@ -178,7 +178,7 @@ describe('configured but locked storage', () => {
       IdbStorageLockedError,
     );
     await expect(
-      assetStore.saveImage('locked', 'locked', 'data:image/png;base64,blocked'),
+      assetStore.saveImage('locked', 'data:image/png;base64,blocked'),
     ).rejects.toBeInstanceOf(IdbStorageLockedError);
     await expect(
       assetStore.saveBinderAsset('locked', 'asset', new ArrayBuffer(0), {
@@ -192,7 +192,7 @@ describe('configured but locked storage', () => {
   it('does not expose legacy protected content while the configured library is locked', async () => {
     const assetStore = new IdbAssetStore();
     const codexStore = new IdbCodexStore();
-    await assetStore.saveImage('legacy', 'legacy-image', 'data:image/png;base64,legacy');
+    await assetStore.saveImage('legacy-image', 'data:image/png;base64,legacy');
     await assetStore.saveBinderAsset('legacy', 'legacy-asset', new ArrayBuffer(1), {
       byteSize: 1,
       mimeType: 'application/pdf',
@@ -207,9 +207,7 @@ describe('configured but locked storage', () => {
     await setupIdbEncryption('test-pass');
     clearIdbEncryptionKey();
 
-    await expect(assetStore.getImage('legacy', 'legacy-image')).rejects.toBeInstanceOf(
-      IdbStorageLockedError,
-    );
+    await expect(assetStore.getImage('legacy-image')).rejects.toBeInstanceOf(IdbStorageLockedError);
     await expect(assetStore.getBinderAsset('legacy', 'legacy-asset')).rejects.toBeInstanceOf(
       IdbStorageLockedError,
     );
@@ -221,7 +219,7 @@ describe('configured but locked storage', () => {
 describe('locked-state guards on destructive and listing operations', () => {
   it('rejects deleteImage, deleteBinderAsset, and listBinderAssetIds while locked', async () => {
     const store = new IdbAssetStore();
-    await store.saveImage('proj-1', 'img-1', 'data:image/png;base64,x');
+    await store.saveImage('img-1', 'data:image/png;base64,x');
     await store.saveBinderAsset('proj-1', 'asset-1', new ArrayBuffer(1), {
       byteSize: 1,
       mimeType: 'application/pdf',
@@ -230,9 +228,7 @@ describe('locked-state guards on destructive and listing operations', () => {
     await setupIdbEncryption('test-pass');
     clearIdbEncryptionKey();
 
-    await expect(store.deleteImage('proj-1', 'img-1')).rejects.toBeInstanceOf(
-      IdbStorageLockedError,
-    );
+    await expect(store.deleteImage('img-1')).rejects.toBeInstanceOf(IdbStorageLockedError);
     await expect(store.deleteBinderAsset('proj-1', 'asset-1')).rejects.toBeInstanceOf(
       IdbStorageLockedError,
     );

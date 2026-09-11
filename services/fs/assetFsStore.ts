@@ -66,7 +66,7 @@ export class FsAssetStore extends FsSnapshotStore {
     }
   }
 
-  async saveImage(projectId: string, id: string, base64Data: string): Promise<void> {
+  async saveImage(id: string, base64Data: string, projectId = 'default'): Promise<void> {
     const apis = await this.getApis();
     const { dir, file } = await this.qualifiedImagePaths(projectId, id);
     if (!(await apis.exists(dir))) {
@@ -76,7 +76,7 @@ export class FsAssetStore extends FsSnapshotStore {
     await writeTextFileAtomic(apis, file, base64Data);
   }
 
-  async getImage(projectId: string, id: string): Promise<string | null> {
+  async getImage(id: string, projectId = 'default'): Promise<string | null> {
     try {
       // QNBS-v3: serialized like getBinderAsset -- without this, the ownership count and the legacy-file read are two separate awaited steps a concurrent project creation/deletion can interleave, staling the ownership verdict.
       return await this.withLegacyRoutingOperation(async () => {
@@ -102,7 +102,7 @@ export class FsAssetStore extends FsSnapshotStore {
     }
   }
 
-  async deleteImage(projectId: string, id: string): Promise<void> {
+  async deleteImage(id: string, projectId = 'default'): Promise<void> {
     try {
       // QNBS-v3: serialized + write-authority-checked like deleteBinderAsset -- an unserialized ownership count could go stale against a concurrent project creation and delete another project's unattributed legacy image.
       await this.withLegacyRoutingOperation(async () => {

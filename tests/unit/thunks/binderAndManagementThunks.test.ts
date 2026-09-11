@@ -323,7 +323,7 @@ describe('importProjectThunk', () => {
     const action = await store.dispatch(importProjectThunk(file));
 
     // saveImage called proves avatar was processed, project-qualified by the imported project's own id
-    expect(storageService.saveImage).toHaveBeenCalledWith('proj-1', 'c2', 'base64imgdata');
+    expect(storageService.saveImage).toHaveBeenCalledWith('c2', 'base64imgdata', 'proj-1');
     // hasAvatar flag set on the character entity in the payload
     const payload = (
       action as {
@@ -335,6 +335,26 @@ describe('importProjectThunk', () => {
     const character = Object.values(payload.characters.entities)[0];
     expect(character?.hasAvatar).toBe(true);
     expect(character?.avatarBase64).toBeUndefined();
+  });
+
+  // QNBS-v3: `||`, not `??`, resolves the import namespace so a present-but-empty id collapses into the same 'default' namespace as a genuinely missing id -- two independent no-real-id imports must not diverge into two different image namespaces ('' vs 'default').
+  it('project-qualifies images under "default" when the imported project id is an empty string', async () => {
+    const projectWithEmptyId = {
+      ...minimalProject,
+      id: '',
+      characters: [{ id: 'c3', name: 'Eve', avatarBase64: 'emptyidimgdata' }],
+    };
+    vi.mocked(parseImportedProjectJson).mockReturnValue(projectWithEmptyId as never);
+
+    const store = makeStore();
+    const file = new File([JSON.stringify(projectWithEmptyId)], 'novel.json', {
+      type: 'application/json',
+    });
+    const action = await store.dispatch(importProjectThunk(file));
+
+    expect(storageService.saveImage).toHaveBeenCalledWith('c3', 'emptyidimgdata', 'default');
+    const payload = (action as { payload: { id: string } }).payload;
+    expect(payload.id).toBe('default');
   });
 
   it('handles normalized entity format characters', async () => {

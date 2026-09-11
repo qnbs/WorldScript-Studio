@@ -1235,8 +1235,6 @@ export class FsProjectStore extends FsAssetStore {
 
     if (filePath.endsWith('.json')) {
       const parsed = parseImportedProjectJson(content);
-      // QNBS-v3: images are project-qualified in storage; use the imported project's own id (matching importProjectThunk's web-path convention) so entity images land under the correct namespace. This method is not currently wired to any live UI call site and its return value carries no id -- whoever admits it into persisted state must save it under this exact importedProjectId, or images and project data will diverge under different namespaces.
-      const importedProjectId = parsed.id ?? 'default';
       type CharRow = Character & { avatarBase64?: string };
       type WorldRow = World & { ambianceImageBase64?: string };
       let characterArray: CharRow[] = [];
@@ -1252,7 +1250,7 @@ export class FsProjectStore extends FsAssetStore {
       for (const char of characterArray) {
         const row = { ...char };
         if (row.avatarBase64) {
-          await this.saveImage(importedProjectId, row.id, row.avatarBase64);
+          await this.saveImage(row.id, row.avatarBase64);
           row.hasAvatar = true;
           delete row.avatarBase64;
         }
@@ -1272,7 +1270,7 @@ export class FsProjectStore extends FsAssetStore {
       for (const world of worldArray) {
         const row = { ...world };
         if (row.ambianceImageBase64) {
-          await this.saveImage(importedProjectId, row.id, row.ambianceImageBase64);
+          await this.saveImage(row.id, row.ambianceImageBase64);
           row.hasAmbianceImage = true;
           delete row.ambianceImageBase64;
         }
