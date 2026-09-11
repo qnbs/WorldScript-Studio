@@ -12,32 +12,43 @@ import { FsSnapshotStore } from './snapshotFsStore';
 export class FsAssetStore extends FsSnapshotStore {
   // --- Image Store Methods ---
 
-  async saveImage(id: string, base64Data: string): Promise<void> {
+  // QNBS-v3: images previously lived in one flat dir keyed only by entity id, colliding across the desktop backend's multiple stored projects -- nest per-project going forward; getImage/deleteImage still fall through to the legacy flat path.
+  private async qualifiedImagePaths(
+    projectId: string,
+    id: string,
+  ): Promise<{ dir: string; file: string }> {
     const apis = await this.getApis();
     const appDataPath = await this.ensureAppDataPath();
-    const imagesPath = await apis.join(appDataPath, 'images');
-
-    if (!(await apis.exists(imagesPath))) {
-      await apis.mkdir(imagesPath, { recursive: true });
-    }
-
-    const imageFile = await apis.join(imagesPath, `${sanitizePathSegment(id, 'image')}.png`);
-    // QNBS-v3: data URLs retain an uploaded image's MIME type; legacy raw payloads remain readable as PNG below.
-    await writeTextFileAtomic(apis, imageFile, base64Data);
+    const dir = await apis.join(appDataPath, 'images', sanitizePathSegment(projectId, 'project'));
+    const file = await apis.join(dir, `${sanitizePathSegment(id, 'image')}.png`);
+    return { dir, file };
   }
 
-  async getImage(id: string): Promise<string | null> {
+  private async legacyImagePath(id: string): Promise<string> {
+    const apis = await this.getApis();
+    const appDataPath = await this.ensureAppDataPath();
+    return apis.join(appDataPath, 'images', `${sanitizePathSegment(id, 'image')}.png`);
+  }
+
+  async saveImage(projectId: string, id: string, base64Data: string): Promise<void> {
+    const apis = await this.getApis();
+    const { dir, file } = await this.qualifiedImagePaths(projectId, id);
+    if (!(await apis.exists(dir))) {
+      await apis.mkdir(dir, { recursive: true });
+    }
+    // QNBS-v3: data URLs retain an uploaded image's MIME type; legacy raw payloads remain readable as PNG below.
+    await writeTextFileAtomic(apis, file, base64Data);
+  }
+
+  async getImage(projectId: string, id: string): Promise<string | null> {
     try {
       const apis = await this.getApis();
-      const appDataPath = await this.ensureAppDataPath();
-      const imageFile = await apis.join(
-        appDataPath,
-        'images',
-        `${sanitizePathSegment(id, 'image')}.png`,
-      );
-
+      let imageFile = (await this.qualifiedImagePaths(projectId, id)).file;
       if (!(await apis.exists(imageFile))) {
-        return null;
+        imageFile = await this.legacyImagePath(id);
+        if (!(await apis.exists(imageFile))) {
+          return null;
+        }
       }
 
       const imageData = await retryFs(() => apis.readTextFile(imageFile));
@@ -48,17 +59,17 @@ export class FsAssetStore extends FsSnapshotStore {
     }
   }
 
-  async deleteImage(id: string): Promise<void> {
+  async deleteImage(projectId: string, id: string): Promise<void> {
     try {
       const apis = await this.getApis();
-      const appDataPath = await this.ensureAppDataPath();
-      const imageFile = await apis.join(
-        appDataPath,
-        'images',
-        `${sanitizePathSegment(id, 'image')}.png`,
-      );
-      if (await apis.exists(imageFile)) {
-        await retryFs(() => apis.remove(imageFile));
+      // QNBS-v3: clear both the qualified and legacy path so a stale legacy file can never resurface via getImage's fallback after an explicit delete.
+      for (const imageFile of [
+        (await this.qualifiedImagePaths(projectId, id)).file,
+        await this.legacyImagePath(id),
+      ]) {
+        if (await apis.exists(imageFile)) {
+          await retryFs(() => apis.remove(imageFile));
+        }
       }
     } catch (error) {
       logger.error('Failed to delete image:', error);

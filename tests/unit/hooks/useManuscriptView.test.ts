@@ -414,6 +414,17 @@ describe('handleVisualizeScene', () => {
     expect(mockToast.error).toHaveBeenCalled();
   });
 
+  // QNBS-v3: Wave 0B.1 -- a stale-project discard is not a provider failure; the project merely changed.
+  it('does not call toast.error when the rejection is a stale-project discard', async () => {
+    mockUnwrap.mockRejectedValue({ staleProject: true });
+    setManuscript([makeSection('s1', 'Ch1', 'Scene content')]);
+    const { result } = renderHook(() => useManuscriptView({ onNavigate }));
+    await act(async () => {
+      await result.current.handleVisualizeScene();
+    });
+    expect(mockToast.error).not.toHaveBeenCalled();
+  });
+
   it('does nothing when active section has no content', async () => {
     setManuscript([makeSection('s1', 'Ch1', '')]);
     const { result } = renderHook(() => useManuscriptView({ onNavigate }));

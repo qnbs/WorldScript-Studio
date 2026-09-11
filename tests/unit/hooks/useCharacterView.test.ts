@@ -47,12 +47,18 @@ vi.mock('../../../components/ui/Toast', () => ({
 
 vi.mock('../../../features/project/projectSelectors', () => ({
   selectAllCharacters: (state: { characters: Character[] }) => state.characters,
+  // QNBS-v3: not exercised by this file's fake state -- confirmDelete's projectId falls back to 'default'.
+  selectProjectData: () => undefined,
 }));
 
 vi.mock('../../../features/project/projectIdentity', () => ({
   captureActiveProjectIdentity: mockCaptureIdentity,
   identityUnchanged: (captured: string | null, live: string | null) =>
     captured !== null && captured === live,
+  isStaleProjectRejection: (payload: unknown) =>
+    typeof payload === 'object' &&
+    payload !== null &&
+    (payload as Record<string, unknown>)['staleProject'] === true,
 }));
 
 vi.mock('../../../features/project/thunks/characterThunks', () => {
@@ -79,7 +85,10 @@ vi.mock('../../../features/project/thunks/characterThunks', () => {
 });
 
 vi.mock('../../../services/storageService', () => ({
-  storageService: { saveImage: (data: unknown, name: unknown) => mockSaveImage(data, name) },
+  storageService: {
+    saveImage: (projectId: unknown, id: unknown, data: unknown) =>
+      mockSaveImage(projectId, id, data),
+  },
 }));
 
 // uuid always returns the same id so assertions are deterministic
@@ -393,6 +402,26 @@ describe('handleGeneratePortrait', () => {
     expect(mockToast.error).toHaveBeenCalled();
     expect(result.current.errorMessage).not.toBeNull();
   });
+
+  // QNBS-v3: Wave 0B.1 -- a stale-project discard is not a provider failure; stay silent.
+  it('does not call toast.error when rejected with a stale-project payload', async () => {
+    const rejectedAction = {
+      type: 'project/generateCharacterPortrait/rejected',
+      payload: { staleProject: true },
+    };
+    mockDispatch.mockResolvedValue(rejectedAction);
+    mockPortraitMatch.mockReturnValue(false);
+
+    const char = makeCharacter('c1');
+    const { result } = renderHook(() => useCharacterView());
+    act(() => result.current.handleSelect(char));
+    await act(async () => {
+      await result.current.handleGeneratePortrait();
+    });
+
+    expect(mockToast.error).not.toHaveBeenCalled();
+    expect(result.current.errorMessage).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -425,7 +454,7 @@ describe('confirmDelete', () => {
       await result.current.confirmDelete();
     });
 
-    expect(mockSaveImage).toHaveBeenCalledWith('c1', '');
+    expect(mockSaveImage).toHaveBeenCalledWith('default', 'c1', '');
     expect(mockDispatch).toHaveBeenCalledWith(projectActions.deleteCharacter('c1'));
   });
 

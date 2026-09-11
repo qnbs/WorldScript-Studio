@@ -43,3 +43,21 @@ export function captureActiveProjectIdentity(): string | null {
 export function identityUnchanged(captured: string | null, live: string | null): boolean {
   return captured !== null && captured === live;
 }
+
+/** rejectWithValue payload for an AI result discarded because the active project changed while it was in flight. */
+export interface StaleProjectRejection {
+  readonly staleProject: true;
+}
+
+export function staleProjectRejection(): StaleProjectRejection {
+  return { staleProject: true };
+}
+
+// QNBS-v3: distinguishes a deliberate stale-project discard from a genuine provider/network failure so callers can stay silent instead of showing an error toast for a mere project switch.
+export function isStaleProjectRejection(payload: unknown): payload is StaleProjectRejection {
+  return (
+    typeof payload === 'object' &&
+    payload !== null &&
+    (payload as Record<string, unknown>)['staleProject'] === true
+  );
+}

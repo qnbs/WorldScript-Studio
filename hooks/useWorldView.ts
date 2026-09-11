@@ -5,8 +5,9 @@ import { useToast } from '../components/ui/Toast';
 import {
   captureActiveProjectIdentity,
   identityUnchanged,
+  isStaleProjectRejection,
 } from '../features/project/projectIdentity';
-import { selectAllWorlds } from '../features/project/projectSelectors';
+import { selectAllWorlds, selectProjectData } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
 import {
   generateWorldImageThunk,
@@ -22,6 +23,7 @@ export const useWorldView = () => {
   const { t, language } = useTranslation();
   const dispatch = useAppDispatch();
   const worlds = useAppSelector(selectAllWorlds);
+  const projectId = useAppSelector((state) => selectProjectData(state)?.id || 'default');
   const toast = useToast();
 
   const [selectedWorld, setSelectedWorld] = useState<World | null>(null);
@@ -156,7 +158,8 @@ export const useWorldView = () => {
     );
     if (generateWorldImageThunk.fulfilled.match(resultAction)) {
       setSelectedWorld((w) => (w ? { ...w, hasAmbianceImage: true } : null));
-    } else {
+    } else if (!isStaleProjectRejection(resultAction.payload)) {
+      // QNBS-v3: a stale-project discard is not a provider failure -- stay silent rather than showing a misleading error for an ordinary project switch.
       toast.error(t('worlds.error.imageFailed'));
     }
     setIsGeneratingImage(false);
@@ -169,7 +172,10 @@ export const useWorldView = () => {
     const resultAction = await dispatch(
       generateWorldImageThunk({ worldId: selectedWorld.id, description, lang: language }),
     );
-    if (!generateWorldImageThunk.fulfilled.match(resultAction)) {
+    if (
+      !generateWorldImageThunk.fulfilled.match(resultAction) &&
+      !isStaleProjectRejection(resultAction.payload)
+    ) {
       toast.error(t('worlds.error.imageFailed'));
     }
     setRefinementPrompt('');
@@ -243,14 +249,14 @@ export const useWorldView = () => {
 
   const confirmDelete = useCallback(async () => {
     if (worldToDelete) {
-      await storageService.saveImage(worldToDelete.id, ''); // Empty string to delete
+      await storageService.saveImage(projectId, worldToDelete.id, ''); // Empty string to delete
       dispatch(projectActions.deleteWorld(worldToDelete.id));
       setWorldToDelete(null);
       setIsAtlasOpen(false);
       setSelectedWorld(null);
       toast.info(t('worlds.deleteLabel', { name: worldToDelete.name }));
     }
-  }, [dispatch, worldToDelete, toast, t]);
+  }, [dispatch, worldToDelete, toast, t, projectId]);
 
   return {
     t,

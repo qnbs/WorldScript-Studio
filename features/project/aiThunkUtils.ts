@@ -10,6 +10,9 @@ type DeduplicatedThunkAPI = GetThunkAPI<AsyncThunkConfig> & {
   registerDuplicateRequest: (prompt: string, viewType: string) => string;
 };
 
+// QNBS-v3: RTK's RejectWithValue class isn't exported by name; derive its exact instance type structurally from rejectWithValue's own return type so payloadCreator can allow a stale-project reject without importing an internal type.
+type RejectionValue = ReturnType<DeduplicatedThunkAPI['rejectWithValue']>;
+
 const activeControllers = new Map<string, AbortController>();
 
 // Deduplicates AI requests by prompt and view type.
@@ -17,7 +20,10 @@ const activeControllers = new Map<string, AbortController>();
 // pending request for that same key is aborted to prevent spam and race conditions.
 export const createDeduplicatedThunk = <Returned, ThunkArg = void>(
   typePrefix: string,
-  payloadCreator: (arg: ThunkArg, thunkAPI: DeduplicatedThunkAPI) => Promise<Returned>,
+  payloadCreator: (
+    arg: ThunkArg,
+    thunkAPI: DeduplicatedThunkAPI,
+  ) => Promise<Returned | RejectionValue>,
   options?: Parameters<typeof createAsyncThunk<Returned, ThunkArg>>[2],
 ) => {
   return createAsyncThunk<Returned, ThunkArg>(

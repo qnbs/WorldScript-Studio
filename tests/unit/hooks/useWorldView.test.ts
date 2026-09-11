@@ -45,12 +45,18 @@ vi.mock('../../../components/ui/Toast', () => ({
 
 vi.mock('../../../features/project/projectSelectors', () => ({
   selectAllWorlds: () => mockWorlds,
+  selectProjectData: (state: { project: { present: { data: unknown } } }) =>
+    state.project.present.data,
 }));
 
 vi.mock('../../../features/project/projectIdentity', () => ({
   captureActiveProjectIdentity: mockCaptureIdentity,
   identityUnchanged: (captured: string | null, live: string | null) =>
     captured !== null && captured === live,
+  isStaleProjectRejection: (payload: unknown) =>
+    typeof payload === 'object' &&
+    payload !== null &&
+    (payload as Record<string, unknown>)['staleProject'] === true,
 }));
 
 vi.mock('../../../features/project/thunks/worldThunks', () => {
@@ -78,7 +84,10 @@ vi.mock('../../../features/project/thunks/worldThunks', () => {
 });
 
 vi.mock('../../../services/storageService', () => ({
-  storageService: { saveImage: (id: unknown, data: unknown) => mockSaveImage(id, data) },
+  storageService: {
+    saveImage: (projectId: unknown, id: unknown, data: unknown) =>
+      mockSaveImage(projectId, id, data),
+  },
 }));
 
 vi.mock('uuid', () => ({ v4: () => 'test-uuid-world' }));
@@ -364,6 +373,22 @@ describe('handleGenerateImage', () => {
     expect(mockToast.error).toHaveBeenCalled();
   });
 
+  // QNBS-v3: Wave 0B.1 -- a stale-project discard is not a provider failure; stay silent.
+  it('does not call toast.error when rejected with a stale-project payload', async () => {
+    const world = makeWorld('w1');
+    mockDispatch.mockResolvedValue({ type: 'rejected', payload: { staleProject: true } });
+    mockImageMatch.mockReturnValue(false);
+
+    const { result } = renderHook(() => useWorldView());
+    act(() => {
+      result.current.handleSelect(world);
+    });
+    await act(async () => {
+      await result.current.handleGenerateImage();
+    });
+    expect(mockToast.error).not.toHaveBeenCalled();
+  });
+
   it('sets hasAmbianceImage on success', async () => {
     const world = makeWorld('w1');
     mockDispatch.mockResolvedValue({ type: 'fulfilled' });
@@ -415,7 +440,7 @@ describe('confirmDelete', () => {
     await act(async () => {
       await result.current.confirmDelete();
     });
-    expect(mockSaveImage).toHaveBeenCalledWith('w1', '');
+    expect(mockSaveImage).toHaveBeenCalledWith('default', 'w1', '');
     expect(mockDispatch).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'project/deleteWorld', payload: 'w1' }),
     );

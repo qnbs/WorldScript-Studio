@@ -3,7 +3,7 @@
  * QNBS-v3: Mocks geminiService + Redux; tests createNewInterview factory + streamInterviewResponseThunk.
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -33,6 +33,7 @@ vi.mock('uuid', () => ({
 // Import after mocks
 // ---------------------------------------------------------------------------
 
+import { appStoreRef } from '../../../app/storeRef';
 import {
   createNewInterview,
   streamInterviewResponseThunk,
@@ -231,5 +232,124 @@ describe('streamInterviewResponseThunk', () => {
     const result = await thunk(dispatch, getState, undefined);
     expect((result as { type: string }).type).toBe('project/streamInterviewResponse/rejected');
     expect((result as { error: { message: string } }).error.message).toContain('interview-1');
+  });
+});
+
+// QNBS-v3: Wave 0B.1 -- streaming chunks must never mutate a project that is no longer active.
+describe('streamInterviewResponseThunk - project authority', () => {
+  function makeInterviewState() {
+    return {
+      project: {
+        present: {
+          data: {
+            characters: {
+              ids: ['char-1'],
+              entities: {
+                'char-1': {
+                  id: 'char-1',
+                  name: 'Alice',
+                  backstory: 'A brave hero',
+                  motivation: 'Save the world',
+                  personalityTraits: 'Courageous',
+                },
+              },
+            },
+            characterInterviews: {
+              'char-1': [
+                {
+                  id: 'interview-1',
+                  characterId: 'char-1',
+                  archetype: 'hero',
+                  templateId: 'tpl-1',
+                  messages: [],
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                },
+              ],
+            },
+          },
+        },
+      },
+      settings: {
+        present: {
+          advancedAi: { provider: 'gemini', model: 'gemini-2.5-flash', temperature: 0.7 },
+          aiCreativity: 'Balanced',
+        },
+      },
+    };
+  }
+
+  afterEach(() => {
+    appStoreRef.current = null;
+  });
+
+  it('drops a streaming chunk dispatched after the active project identity changed', async () => {
+    let liveState = { project: { present: { data: { id: 'proj-a' }, generation: 0 } } };
+    appStoreRef.current = {
+      getState: () => liveState as never,
+      dispatch: vi.fn() as never,
+    };
+
+    mockStreamText.mockImplementation(
+      async (
+        _prompt: unknown,
+        _creativity: unknown,
+        onChunk: (chunk: string) => void,
+        _signal: unknown,
+      ) => {
+        // QNBS-v3: simulates a project reset/import/switch completing while the stream is in flight.
+        liveState = { project: { present: { data: { id: 'proj-b' }, generation: 1 } } };
+        onChunk('late chunk');
+      },
+    );
+
+    const dispatch = vi.fn();
+    const getState = vi.fn().mockReturnValue(makeInterviewState());
+    const thunk = streamInterviewResponseThunk({
+      characterId: 'char-1',
+      interviewId: 'interview-1',
+      question: 'Who are you?',
+    });
+
+    await thunk(dispatch, getState, undefined);
+
+    const chunkDispatch = dispatch.mock.calls.find(
+      (c) => c[0]?.type === 'project/streamInterviewChunk',
+    );
+    expect(chunkDispatch).toBeUndefined();
+  });
+
+  it('still dispatches streaming chunks when the active project is unchanged', async () => {
+    const liveState = { project: { present: { data: { id: 'proj-a' }, generation: 0 } } };
+    appStoreRef.current = {
+      getState: () => liveState as never,
+      dispatch: vi.fn() as never,
+    };
+
+    mockStreamText.mockImplementation(
+      async (
+        _prompt: unknown,
+        _creativity: unknown,
+        onChunk: (chunk: string) => void,
+        _signal: unknown,
+      ) => {
+        onChunk('normal chunk');
+      },
+    );
+
+    const dispatch = vi.fn();
+    const getState = vi.fn().mockReturnValue(makeInterviewState());
+    const thunk = streamInterviewResponseThunk({
+      characterId: 'char-1',
+      interviewId: 'interview-1',
+      question: 'Who are you?',
+    });
+
+    await thunk(dispatch, getState, undefined);
+
+    const chunkDispatch = dispatch.mock.calls.find(
+      (c) => c[0]?.type === 'project/streamInterviewChunk',
+    );
+    expect(chunkDispatch).toBeDefined();
   });
 });

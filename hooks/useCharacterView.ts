@@ -5,8 +5,9 @@ import { useToast } from '../components/ui/Toast';
 import {
   captureActiveProjectIdentity,
   identityUnchanged,
+  isStaleProjectRejection,
 } from '../features/project/projectIdentity';
-import { selectAllCharacters } from '../features/project/projectSelectors';
+import { selectAllCharacters, selectProjectData } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
 import {
   generateCharacterPortraitThunk,
@@ -22,6 +23,7 @@ export const useCharacterView = () => {
   const { t, language } = useTranslation();
   const dispatch = useAppDispatch();
   const characters = useAppSelector(selectAllCharacters);
+  const projectId = useAppSelector((state) => selectProjectData(state)?.id || 'default');
   const toast = useToast();
 
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
@@ -162,13 +164,14 @@ export const useCharacterView = () => {
         lang: language,
       }),
     );
-    if (!generateCharacterPortraitThunk.fulfilled.match(resultAction)) {
+    if (generateCharacterPortraitThunk.fulfilled.match(resultAction)) {
+      // Trigger re-render by updating local state, redux state will update via extraReducer
+      setSelectedCharacter((c) => (c ? { ...c, hasAvatar: true } : null));
+    } else if (!isStaleProjectRejection(resultAction.payload)) {
+      // QNBS-v3: a stale-project discard is not a provider failure -- stay silent rather than showing a misleading error for an ordinary project switch.
       const errorText = t('characters.error.portraitFailed');
       setErrorMessage(errorText);
       toast.error(errorText);
-    } else {
-      // Trigger re-render by updating local state, redux state will update via extraReducer
-      setSelectedCharacter((c) => (c ? { ...c, hasAvatar: true } : null));
     }
     setIsGeneratingPortrait(false);
   }, [dispatch, selectedCharacter, portraitStyle, language, t, toast]);
@@ -184,7 +187,11 @@ export const useCharacterView = () => {
         lang: language,
       }),
     );
-    if (!generateCharacterPortraitThunk.fulfilled.match(resultAction)) {
+    if (
+      !generateCharacterPortraitThunk.fulfilled.match(resultAction) &&
+      !isStaleProjectRejection(resultAction.payload)
+    ) {
+      // QNBS-v3: a stale-project discard is not a provider failure -- stay silent rather than showing a misleading error for an ordinary project switch.
       const errorText = t('characters.error.portraitFailed');
       setErrorMessage(errorText);
       toast.error(errorText);
@@ -205,14 +212,14 @@ export const useCharacterView = () => {
 
   const confirmDelete = useCallback(async () => {
     if (characterToDelete) {
-      await storageService.saveImage(characterToDelete.id, ''); // Empty string to delete
+      await storageService.saveImage(projectId, characterToDelete.id, ''); // Empty string to delete
       dispatch(projectActions.deleteCharacter(characterToDelete.id));
       setCharacterToDelete(null);
       setIsDossierOpen(false);
       setSelectedCharacter(null);
       toast.info(t('characters.deleteLabel', { name: characterToDelete.name }));
     }
-  }, [dispatch, characterToDelete, toast, t]);
+  }, [dispatch, characterToDelete, toast, t, projectId]);
 
   return {
     t,

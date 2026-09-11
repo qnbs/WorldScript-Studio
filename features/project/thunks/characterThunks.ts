@@ -6,6 +6,11 @@ import type { CharacterHeuristicLabels } from '../../../services/ai/heuristicFal
 import { storageService } from '../../../services/storageService';
 import type { Character } from '../../../types';
 import { createDeduplicatedThunk } from '../aiThunkUtils';
+import {
+  captureActiveProjectIdentity,
+  identityUnchanged,
+  staleProjectRejection,
+} from '../projectIdentity';
 import { buildAiCreativity, buildAiOptions, loadAiProvider, loadPrompts } from './thunkUtils';
 
 export const generateCharacterProfileThunk = createDeduplicatedThunk(
@@ -71,7 +76,7 @@ export const generateCharacterPortraitThunk = createDeduplicatedThunk(
       style,
       lang,
     }: { characterId: string; description: string; style?: string; lang: string },
-    { getState, signal, registerDuplicateRequest },
+    { getState, signal, registerDuplicateRequest, rejectWithValue },
   ) => {
     const fullDescription = style ? `${description}. Style: ${style}` : description;
     const state = getState() as RootState;
@@ -80,15 +85,22 @@ export const generateCharacterPortraitThunk = createDeduplicatedThunk(
     const { generateImage } = await loadAiProvider();
     const { prompt } = getPrompts('characterPortrait', { description: fullDescription, lang });
     registerDuplicateRequest(prompt, 'characterPortrait');
+    const projectId = state.project.present?.data?.id || 'default';
+    const capturedProjectIdentity = captureActiveProjectIdentity();
     const base64 = await generateImage(prompt, aiOptions, signal);
-    await storageService.saveImage(characterId, base64);
+    // QNBS-v3: reject before the persistent write/reducer mutation -- a hook-level check after this thunk resolves would already be too late for saveImage.
+    if (!identityUnchanged(capturedProjectIdentity, captureActiveProjectIdentity())) {
+      return rejectWithValue(staleProjectRejection());
+    }
+    await storageService.saveImage(projectId, characterId, base64);
     return { characterId };
   },
 );
 
 export const uploadCharacterImageThunk = createAsyncThunk(
   'project/uploadCharacterImage',
-  async ({ characterId, file }: { characterId: string; file: File }) => {
+  async ({ characterId, file }: { characterId: string; file: File }, { getState }) => {
+    const projectId = (getState() as RootState).project.present?.data?.id || 'default';
     return new Promise<{ characterId: string }>((resolve, reject) => {
       const reader = new FileReader();
       // QNBS-v3: onload/onerror/onabort (not onloadend) plus Promise.catch(reject) so every terminal FileReader/saveImage outcome settles this Promise instead of leaving it pending.
@@ -100,7 +112,7 @@ export const uploadCharacterImageThunk = createAsyncThunk(
         }
         // QNBS-v3: retain the data-URL MIME type so uploaded JPEG/WebP images survive filesystem round-trips.
         storageService
-          .saveImage(characterId, result)
+          .saveImage(projectId, characterId, result)
           .then(() => resolve({ characterId }))
           .catch(reject);
       };

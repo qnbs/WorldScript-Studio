@@ -6,7 +6,11 @@
 
 import { BINDER_ASSETS_STORE, IMAGES_STORE } from '../dbConstants';
 import type { BinderAssetMeta, BinderAssetPayload } from '../storageBackend';
-import { makeBinderAssetIdsPrefix, makeBinderAssetStorageKey } from '../storageBackend';
+import {
+  makeBinderAssetIdsPrefix,
+  makeBinderAssetStorageKey,
+  makeImageStorageKey,
+} from '../storageBackend';
 import { getUserFriendlyDbError, retryDb } from './idbCore';
 import { IdbSnapshotStore } from './idbSnapshotStore';
 import { withProtectedWriteAdmission } from './protectedWriteAdmission';
@@ -23,7 +27,7 @@ import {
 export class IdbAssetStore extends IdbSnapshotStore {
   // --- Image Store Methods ---
 
-  async saveImage(id: string, base64: string): Promise<void> {
+  async saveImage(projectId: string, id: string, base64: string): Promise<void> {
     return withProtectedWriteAdmission(async () => {
       // QNBS-v3: Resolve the write key BEFORE opening the transaction — `await idbEncryptWithKey`
       //          yields the event loop, which auto-commits an already-open IDB transaction
@@ -35,49 +39,59 @@ export class IdbAssetStore extends IdbSnapshotStore {
       await assertNoActiveEncryptionMigration();
       const store = await this.getObjectStore(IMAGES_STORE, 'readwrite');
       return new Promise<void>((resolve, reject) => {
-        const request = store.put(payload, id);
+        const request = store.put(payload, makeImageStorageKey(projectId, id));
         request.onsuccess = () => resolve();
         request.onerror = () => reject(request.error);
       });
     });
   }
 
-  async getImage(id: string): Promise<string | null> {
-    // QNBS-v3: assertSecureStorageReadable also blocks reads during an active journal migration, not just a plain lock — the superset check needed while a journal owns lifecycle state.
-    await assertSecureStorageReadable();
-    const store = await this.getObjectStore(IMAGES_STORE, 'readonly');
-    return new Promise((resolve, reject) => {
-      const request = store.get(id);
-      // QNBS-v3: IDBRequest.onsuccess is not awaited by the browser — an async handler whose
-      //          promise rejects becomes an unhandled rejection instead of reaching this
-      //          Promise's reject, leaving the caller pending instead of surfacing the error.
-      request.onsuccess = () => {
-        const raw = request.result;
-        if (raw == null) {
-          resolve(null);
-          return;
-        }
-        // QNBS-v3: Decrypt encrypted image payload; legacy plaintext falls through.
-        if (raw instanceof Uint8Array && isEncryptedBlob(raw)) {
-          idbReadSecure<string>(raw).then(resolve).catch(reject);
-          return;
-        }
-        resolve(raw as string);
-      };
-      request.onerror = () => reject(request.error);
-    });
+  // QNBS-v3: decodes one raw IMAGES_STORE record (legacy plaintext or encrypted) into its base64 string.
+  private decodeImageRecord(raw: unknown): Promise<string | null> | string | null {
+    if (raw == null) return null;
+    if (raw instanceof Uint8Array && isEncryptedBlob(raw)) {
+      return idbReadSecure<string>(raw);
+    }
+    return raw as string;
   }
 
-  async deleteImage(id: string): Promise<void> {
+  private getRawImage(key: string): Promise<unknown> {
+    return this.getObjectStore(IMAGES_STORE, 'readonly').then(
+      (store) =>
+        new Promise<unknown>((resolve, reject) => {
+          const request = store.get(key);
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        }),
+    );
+  }
+
+  async getImage(projectId: string, id: string): Promise<string | null> {
+    // QNBS-v3: assertSecureStorageReadable also blocks reads during an active journal migration, not just a plain lock — the superset check needed while a journal owns lifecycle state.
+    await assertSecureStorageReadable();
+    const qualified = await this.getRawImage(makeImageStorageKey(projectId, id));
+    if (qualified != null) return this.decodeImageRecord(qualified);
+    // QNBS-v3: fall back to the pre-project-qualification key so pre-existing images stay reachable without a forced rewrite/migration.
+    const legacy = await this.getRawImage(id);
+    return this.decodeImageRecord(legacy);
+  }
+
+  async deleteImage(projectId: string, id: string): Promise<void> {
     return withProtectedWriteAdmission(async () => {
       // QNBS-v3: A locked session must not be able to destroy protected images it cannot read.
       await assertIdbProtectedWriteAllowed();
       const store = await this.getObjectStore(IMAGES_STORE, 'readwrite');
-      return new Promise<void>((resolve, reject) => {
-        const request = store.delete(id);
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
-      });
+      // QNBS-v3: clear both the qualified and legacy key so a stale legacy record can never resurface via getImage's fallback after an explicit delete.
+      await Promise.all(
+        [makeImageStorageKey(projectId, id), id].map(
+          (key) =>
+            new Promise<void>((resolve, reject) => {
+              const request = store.delete(key);
+              request.onsuccess = () => resolve();
+              request.onerror = () => reject(request.error);
+            }),
+        ),
+      );
     });
   }
 

@@ -1,11 +1,13 @@
 import type { TypedStartListening } from '@reduxjs/toolkit';
 import { createListenerMiddleware, isRejected } from '@reduxjs/toolkit';
 import { analyticsActions } from '../features/analytics/analyticsSlice';
+import { copilotActions } from '../features/copilot/copilotSlice';
 // QNBS-v3: canonical selector — replaces a local type that misapplied the persisted-state shape to the live store
 import { proForgeActions } from '../features/proForge/proForgeSlice';
 import { selectProjectData } from '../features/project/projectSelectors';
 import type { ProjectData } from '../features/project/projectSlice';
 import { statusActions } from '../features/status/statusSlice';
+import { writerActions } from '../features/writer/writerSlice';
 import { ecoModeService } from '../services/ai/ecoModeService';
 import { extractStoryCodex, saveStoryCodex } from '../services/codexService';
 import { checkStorageHealth } from '../services/dbInitialization';
@@ -881,6 +883,28 @@ export async function initLocalFirstSyncOnStartup(enabled: boolean): Promise<voi
     () => store.getState().featureFlags?.enableLocalFirstSync === true,
   );
 }
+
+// QNBS-v3: Writer's generationHistory is project-unscoped session state -- invalidate it on the shared generation counter so handleAccept() can never insert another project's AI output.
+listenerMiddleware.startListening({
+  predicate: (_action, curr, prev) =>
+    (curr as RootState).project.present.generation !==
+    (prev as RootState).project.present.generation,
+  effect: async (_action, listenerApi) => {
+    listenerApi.dispatch(writerActions.clearHistory());
+    listenerApi.dispatch(writerActions.clearResultStream());
+    listenerApi.dispatch(writerActions.stopLoading());
+  },
+});
+
+// QNBS-v3: Global Copilot's chat transcript is also project-unscoped -- same generation-counter guard so an apply-capable response from project A can't survive into project B.
+listenerMiddleware.startListening({
+  predicate: (_action, curr, prev) =>
+    (curr as RootState).project.present.generation !==
+    (prev as RootState).project.present.generation,
+  effect: async (_action, listenerApi) => {
+    listenerApi.dispatch(copilotActions.clear());
+  },
+});
 
 export const startAppListening = listenerMiddleware.startListening as TypedStartListening<
   RootState,
