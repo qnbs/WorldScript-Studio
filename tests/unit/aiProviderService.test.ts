@@ -32,6 +32,11 @@ vi.mock('../../services/ollamaService', () => ({
   testOllamaConnection: vi.fn().mockResolvedValue({ ok: true }),
 }));
 
+vi.mock('../../services/ai/providers/openrouterProvider', () => ({
+  streamOpenRouter: vi.fn(),
+  generateOpenRouterText: vi.fn(),
+}));
+
 // QNBS-v3 (ADR-0016 Track A): localServerFetch's own Tauri-vs-web routing is already fully
 // covered by localServerHttp.test.ts — mock only its native dependency (plugin-http) here,
 // exactly like that file does, so the real localServerFetch (used by both the new Anthropic
@@ -41,12 +46,16 @@ vi.mock('@tauri-apps/plugin-http', () => ({
   fetch: (...args: unknown[]) => mockPluginHttpFetch(...args),
 }));
 
+import { setActiveAiMode, setOpenRouterConfig } from '../../services/ai/aiModeService';
+import * as openrouterProvider from '../../services/ai/providers/openrouterProvider';
 import {
   generateImage,
   generateJson,
   generateText,
+  getLastAiFallbackReason,
   listOllamaModels,
   scanLocalOpenAiCompatibleEndpoints,
+  streamAiHelpResponse,
   streamText,
   testAIConnection,
   testOpenAiCompatibleLocalConnection,
@@ -71,6 +80,9 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  // QNBS-v3: aiModeService's mode/OpenRouter config is module-level singleton state — reset it so a test that blocks cloud AI or enables OpenRouter never leaks into a later, unrelated test.
+  setActiveAiMode('hybrid');
+  setOpenRouterConfig(false, '');
 });
 
 // ─── generateImage ────────────────────────────────────────────────────────────
@@ -117,6 +129,19 @@ describe('generateImage', () => {
     await expect(
       generateImage('a cat', { ...defaultOpts, provider: 'transformers' }),
     ).rejects.toThrow('Local inference is text-only');
+  });
+
+  it('throws an explicit unsupported-provider error for openrouter instead of silently calling Gemini', async () => {
+    await expect(
+      generateImage('a cat', { ...defaultOpts, provider: 'openrouter' }),
+    ).rejects.toThrow('not supported for this provider');
+    expect(geminiService.generateImage).not.toHaveBeenCalled();
+  });
+
+  it('blocks gemini image generation when local-only mode is active, never reaching the SDK', async () => {
+    setActiveAiMode('local');
+    await expect(generateImage('a cat', defaultOpts)).rejects.toThrow(/local-only/i);
+    expect(geminiService.generateImage).not.toHaveBeenCalled();
   });
 });
 
@@ -236,6 +261,194 @@ describe('generateJson', () => {
     await expect(
       generateJson('prompt', 'Balanced', {} as never, { ...defaultOpts, provider: 'ollama' }),
     ).rejects.toThrow('not valid JSON');
+  });
+
+  it('blocks the gemini-direct branch when local-only mode is active, falling through to local routing instead', async () => {
+    setActiveAiMode('local');
+    const spy = vi
+      .spyOn(localAiFacade, 'generateLocalText')
+      .mockResolvedValueOnce({ layer: 'webllm', text: '{"key":"local"}' });
+    const schema = { type: 'object' as const, properties: {} };
+    const result = await generateJson('prompt', 'Balanced', schema as never, defaultOpts);
+    expect(result).toEqual({ key: 'local' });
+    expect(geminiService.generateJson).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('falls through to the OpenRouter-promoted path instead of the gemini-direct branch when OpenRouter is enabled', async () => {
+    setOpenRouterConfig(true, 'deepseek/deepseek-r1:free');
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('or-key');
+    vi.mocked(openrouterProvider.generateOpenRouterText).mockResolvedValueOnce(
+      '{"key":"via-openrouter"}',
+    );
+    const schema = { type: 'object' as const, properties: {} };
+    const result = await generateJson('prompt', 'Balanced', schema as never, defaultOpts);
+    expect(result).toEqual({ key: 'via-openrouter' });
+    expect(geminiService.generateJson).not.toHaveBeenCalled();
+  });
+});
+
+// ─── streamText ───────────────────────────────────────────────────────────────
+
+// QNBS-v3: shared by the streamText and streamAiHelpResponse local-reroute tests below — CodeScene flagged the prior near-identical pair as duplication.
+async function expectLocalRerouteInsteadOfGemini(
+  invoke: (onChunk: (text: string) => void) => Promise<void>,
+  geminiMock: ReturnType<typeof vi.fn>,
+  localText: string,
+): Promise<void> {
+  setActiveAiMode('local');
+  const spy = vi
+    .spyOn(localAiFacade, 'generateLocalText')
+    .mockResolvedValueOnce({ layer: 'webllm', text: localText });
+  const onChunk = vi.fn();
+  await invoke(onChunk);
+  expect(geminiMock).not.toHaveBeenCalled();
+  expect(onChunk).toHaveBeenCalledWith(localText);
+  spy.mockRestore();
+}
+
+describe('streamText', () => {
+  it('reroutes to local inference when local-only mode is active, even though opts specify a cloud provider', async () => {
+    await expectLocalRerouteInsteadOfGemini(
+      (onChunk) => streamText('prompt', 'Balanced', defaultOpts, { onChunk, onDone: vi.fn() }),
+      vi.mocked(geminiService.streamText),
+      'local stream answer',
+    );
+  });
+
+  it('forwards the merged AbortSignal to generateLocalText so a cancelled local-mode stream actually stops instead of running to completion', async () => {
+    setActiveAiMode('local');
+    const spy = vi
+      .spyOn(localAiFacade, 'generateLocalText')
+      .mockResolvedValueOnce({ layer: 'webllm', text: 'local answer' });
+    const userSignal = new AbortController().signal;
+    await streamText(
+      'prompt',
+      'Balanced',
+      defaultOpts,
+      { onChunk: vi.fn(), onDone: vi.fn() },
+      userSignal,
+    );
+    expect(spy).toHaveBeenCalledWith(
+      expect.any(String),
+      'Llama-3.2-1B-Instruct-q4f16_1-MLC',
+      undefined,
+      undefined,
+      userSignal,
+    );
+    spy.mockRestore();
+  });
+
+  it('clears a stale fallback reason when a later primary provider succeeds outright', async () => {
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('or-key');
+    vi.mocked(openrouterProvider.streamOpenRouter).mockRejectedValueOnce(
+      new Error('OPENROUTER_RATE_LIMITED: too many requests'),
+    );
+    vi.mocked(geminiService.streamText).mockImplementationOnce(async (_p, _c, onChunk) => {
+      onChunk('fallback-answer');
+    });
+    await streamText(
+      'prompt',
+      'Balanced',
+      { ...defaultOpts, provider: 'openrouter' },
+      { onChunk: vi.fn(), onDone: vi.fn() },
+    );
+    expect(getLastAiFallbackReason()).not.toBe('');
+
+    vi.mocked(geminiService.streamText).mockImplementationOnce(async (_p, _c, onChunk) => {
+      onChunk('fresh-primary-answer');
+    });
+    await streamText('prompt', 'Balanced', defaultOpts, { onChunk: vi.fn(), onDone: vi.fn() });
+    // QNBS-v3: GpuMetricsPanel polls getLastAiFallbackReason() -- a stale message from an earlier request must not survive a later request whose own primary provider succeeded outright.
+    expect(getLastAiFallbackReason()).toBe('');
+  });
+
+  it('falls back to the configured OpenRouter fallback provider on a rate-limit/circuit-open failure instead of failing hard', async () => {
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('or-key');
+    vi.mocked(openrouterProvider.streamOpenRouter).mockRejectedValueOnce(
+      new Error('OPENROUTER_RATE_LIMITED: too many requests'),
+    );
+    vi.mocked(geminiService.streamText).mockImplementationOnce(async (_p, _c, onChunk) => {
+      onChunk('fallback-gemini-answer');
+    });
+    const onChunk = vi.fn();
+    await streamText(
+      'prompt',
+      'Balanced',
+      { ...defaultOpts, provider: 'openrouter' },
+      { onChunk, onDone: vi.fn() },
+    );
+    // QNBS-v3: default aiMode is 'hybrid' (not eco/local), so getOpenRouterFallbackProvider() resolves to 'gemini'.
+    expect(onChunk).toHaveBeenCalledWith('fallback-gemini-answer');
+    expect(getLastAiFallbackReason()).toBe('OpenRouter rate-limited; fell back to gemini.');
+  });
+
+  it('propagates cancellation from the OpenRouter fallback attempt instead of treating it as a provider failure', async () => {
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('or-key');
+    vi.mocked(openrouterProvider.streamOpenRouter).mockRejectedValueOnce(
+      new Error('OPENROUTER_RATE_LIMITED: too many requests'),
+    );
+    const abortError = Object.assign(new Error('Aborted'), { name: 'AbortError' });
+    vi.mocked(geminiService.streamText).mockRejectedValueOnce(abortError);
+    const onError = vi.fn();
+    await expect(
+      streamText(
+        'prompt',
+        'Balanced',
+        { ...defaultOpts, provider: 'openrouter' },
+        { onChunk: vi.fn(), onDone: vi.fn(), onError },
+      ),
+    ).rejects.toThrow('Aborted');
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('does not retry the OpenRouter-promoted fallback provider again later in the chain', async () => {
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('or-key');
+    vi.mocked(openrouterProvider.streamOpenRouter).mockRejectedValueOnce(
+      new Error('OPENROUTER_RATE_LIMITED: too many requests'),
+    );
+    vi.mocked(geminiService.streamText).mockRejectedValueOnce(new Error('gemini also failed'));
+    const onError = vi.fn();
+    await expect(
+      streamText(
+        'prompt',
+        'Balanced',
+        {
+          ...defaultOpts,
+          provider: 'openrouter',
+          hybridFallbackEnabled: true,
+          hybridFallbackChain: ['gemini'],
+        },
+        { onChunk: vi.fn(), onDone: vi.fn(), onError },
+      ),
+    ).rejects.toThrow('gemini also failed');
+    // QNBS-v3: chain is ['openrouter', 'gemini']; the rate-limit promotes to 'gemini' first, so the chain's own later 'gemini' entry must be skipped rather than invoking Gemini a second time.
+    expect(geminiService.streamText).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ─── streamAiHelpResponse ─────────────────────────────────────────────────────
+
+describe('streamAiHelpResponse', () => {
+  it('delegates to geminiService for gemini provider', async () => {
+    vi.mocked(geminiService.streamAiHelpResponse).mockImplementationOnce(
+      async (_prompt, onChunk) => {
+        onChunk('answer');
+      },
+    );
+    const onChunk = vi.fn();
+    await streamAiHelpResponse('question?', 'Balanced', defaultOpts, { onChunk, onDone: vi.fn() });
+    expect(geminiService.streamAiHelpResponse).toHaveBeenCalled();
+    expect(onChunk).toHaveBeenCalledWith('answer');
+  });
+
+  it('blocks the gemini-direct branch when local-only mode is active, rerouting to local inference instead', async () => {
+    await expectLocalRerouteInsteadOfGemini(
+      (onChunk) =>
+        streamAiHelpResponse('question?', 'Balanced', defaultOpts, { onChunk, onDone: vi.fn() }),
+      vi.mocked(geminiService.streamAiHelpResponse),
+      'local answer',
+    );
   });
 });
 

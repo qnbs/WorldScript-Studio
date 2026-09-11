@@ -2,7 +2,9 @@ import type { AsyncThunkConfig, GetThunkAPI } from '@reduxjs/toolkit';
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import type { RootState } from '../../app/store';
 import { assertCloudAiAllowedSync } from '../../services/ai/aiPolicy';
-import type { AIProvider, PrivacySettings } from '../../types';
+import { peekPositiveRoutingProvider } from '../../services/ai/positiveRouting';
+import type { PrivacySettings } from '../../types';
+import { buildAiOptions } from './thunks/thunkUtils';
 
 type DeduplicatedThunkAPI = GetThunkAPI<AsyncThunkConfig> & {
   registerDuplicateRequest: (prompt: string, viewType: string) => string;
@@ -65,11 +67,9 @@ export const createDeduplicatedThunk = <Returned, ThunkArg = void>(
       } as DeduplicatedThunkAPI;
 
       try {
-        // QNBS-v3: Enforce cloud AI policy before every AI thunk — one place to enforce instead
-        //          of relying on each caller to manually call assertCloudAiAllowed().
+        // QNBS-v3: checks the same effective provider generateText/generateJson/streamText actually route to, not the raw preset/global setting.
         const state = thunkAPI.getState() as RootState;
-        const provider = (state.settings as unknown as { advancedAi?: { provider?: AIProvider } })
-          .advancedAi?.provider;
+        const provider = peekPositiveRoutingProvider(buildAiOptions(state));
         if (provider) {
           const privacy = (state.settings as unknown as { privacy?: PrivacySettings }).privacy;
           assertCloudAiAllowedSync(provider, privacy);

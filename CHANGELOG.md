@@ -44,6 +44,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`.github/workflows/pr-changelog-reference.yml` + `check-pr-changelog-reference.mjs`, run from the
   PR's base ref to prevent self-weakening) now fails a governed PR's CI unless `[Unreleased]` already
   references it as `PR #<N>`. PR #705.
+- **Closed a cloud-AI privacy-policy bypass reachable via generateJson/generateImage/streamAiHelpResponse:**
+  these three entry points in `aiProviderService.ts` called Gemini directly without the
+  `assertCloudAiAllowed`/`shouldRouteLocally` gate that `generateText`/`streamText` already apply,
+  and `generateImage`'s `default` case silently routed any other provider to Gemini too. Combined
+  with a mismatch where the shared thunk-level policy pre-check read the global provider setting
+  instead of the effective (project-preset-aware) provider, a generation request could silently
+  reach Google's real API despite local-only/privacy settings. All of these are now closed, and the
+  thunk-level pre-check now validates the exact effective provider `resolvePositiveRoutingOpts()`
+  resolves to (local-reroute or OpenRouter-promotion included) via a side-effect-free
+  `peekPositiveRoutingProvider()`, rather than re-deriving its own approximation. `streamText`
+  (used by AI Help chat) gained the same positive local/OpenRouter routing `generateText` already
+  had, since it was silently missing it; both now share one `isOpenRouterTransientFailure()`
+  rate-limit/circuit-open detector and one `buildOpenRouterFallbackOpts()` fallback-options builder,
+  which also fixes a cancellation-during-fallback edge case and a same-provider double-invocation
+  edge case in the OpenRouter-promoted fallback path. `streamText`'s newly-reachable local-routing
+  path also now forwards the merged `AbortSignal` into `generateLocalText` (previously dropped, so
+  a cancelled local-mode stream ran to completion anyway) and clears a stale `_lastFallbackReason`
+  when a later request's primary provider succeeds outright, matching `generateText`'s existing
+  behavior. PR #706.
 
 ### Documentation
 

@@ -45,6 +45,9 @@ vi.mock('../../hooks/useTranslation', () => ({
 
 vi.mock('../../services/logger', () => ({
   logger: { error: vi.fn(), info: vi.fn(), debug: vi.fn(), warn: vi.fn() },
+  // QNBS-v3: routingLogger.ts (pulled in transitively via aiThunkUtils.ts's policy pre-check) calls createLogger() and sanitizeLogContext() at module scope, so this mock must cover both or the import throws.
+  createLogger: () => ({ error: vi.fn(), info: vi.fn(), debug: vi.fn(), warn: vi.fn() }),
+  sanitizeLogContext: (ctx: unknown) => ctx,
 }));
 
 vi.mock('../../services/storageService', () => ({
@@ -80,11 +83,7 @@ vi.mock('../../components/ui/Select', () => ({
     onChange: (v: string) => void;
     options: Array<{ value: string; label: string }>;
   }) => (
-    <select
-      id={props.id}
-      value={props.value}
-      onChange={(e) => props.onChange(e.target.value)}
-    >
+    <select id={props.id} value={props.value} onChange={(e) => props.onChange(e.target.value)}>
       {props.options.map((opt) => (
         <option key={opt.value} value={opt.value}>
           {opt.label}

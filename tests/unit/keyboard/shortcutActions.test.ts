@@ -21,6 +21,9 @@ vi.mock('../../../services/storageBackend', () => ({
 
 vi.mock('../../../services/logger', () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
+  // QNBS-v3: routingLogger.ts (pulled in transitively via aiThunkUtils.ts's policy pre-check) calls createLogger() and sanitizeLogContext() at module scope, so this mock must cover both or the import throws.
+  createLogger: () => ({ warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() }),
+  sanitizeLogContext: (ctx: unknown) => ctx,
 }));
 
 // ---------------------------------------------------------------------------
