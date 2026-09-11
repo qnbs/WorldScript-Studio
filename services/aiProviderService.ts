@@ -613,6 +613,31 @@ function buildOpenRouterFallbackOpts(
   return { ...mergedOpts, provider };
 }
 
+// QNBS-v3: extracted so generateText's loop body carries fewer inline branches — the caller must have already committed `fallback` (e.g. to attemptedOpenRouterFallback) before calling, since this can throw on a failed retry.
+async function attemptOpenRouterTextFallback(
+  prompt: string,
+  creativity: AiCreativity,
+  mergedOpts: AIRequestOptions,
+  fallback: string,
+): Promise<string> {
+  logRoutingDecision({
+    mode: getActiveAiMode(),
+    originalProvider: 'openrouter',
+    chosenProvider: fallback,
+    reason: 'openrouter-fallback',
+  });
+  const { withTransientRetry } = await import('./ai/aiRetry');
+  return withTransientRetry(
+    () =>
+      generateTextSingleProvider(
+        prompt,
+        creativity,
+        buildOpenRouterFallbackOpts(mergedOpts, fallback),
+      ),
+    { attempts: 2 },
+  );
+}
+
 export async function generateText(
   prompt: string,
   creativity: AiCreativity,
@@ -660,22 +685,12 @@ export async function generateText(
         if (isOpenRouterTransientFailure(nextProvider, err)) {
           const fallback = getOpenRouterFallbackProvider();
           attemptedOpenRouterFallback = fallback;
-          logRoutingDecision({
-            mode: getActiveAiMode(),
-            originalProvider: 'openrouter',
-            chosenProvider: fallback,
-            reason: 'openrouter-fallback',
-          });
           try {
-            const { withTransientRetry } = await import('./ai/aiRetry');
-            const result = await withTransientRetry(
-              () =>
-                generateTextSingleProvider(
-                  prompt,
-                  creativity,
-                  buildOpenRouterFallbackOpts(mergedOpts, fallback),
-                ),
-              { attempts: 2 },
+            const result = await attemptOpenRouterTextFallback(
+              prompt,
+              creativity,
+              mergedOpts,
+              fallback,
             );
             _lastFallbackReason = `OpenRouter rate-limited; fell back to ${fallback}.`;
             return result;
@@ -780,6 +795,30 @@ export async function generateImage(
   );
 }
 
+// QNBS-v3: extracted so streamText's loop body carries fewer inline branches — the caller must have already committed `fallback` (e.g. to attemptedOpenRouterFallback) before calling, since this can throw on a failed stream attempt.
+async function attemptOpenRouterStreamFallback(
+  prompt: string,
+  creativity: AiCreativity,
+  mergedOpts: AIRequestOptions,
+  callbacks: AIStreamCallbacks,
+  fallback: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  logRoutingDecision({
+    mode: getActiveAiMode(),
+    originalProvider: 'openrouter',
+    chosenProvider: fallback,
+    reason: 'openrouter-fallback',
+  });
+  await streamProvider(
+    prompt,
+    creativity,
+    buildOpenRouterFallbackOpts(mergedOpts, fallback),
+    callbacks,
+    signal,
+  );
+}
+
 export async function streamText(
   prompt: string,
   creativity: AiCreativity,
@@ -835,18 +874,13 @@ export async function streamText(
         if (isOpenRouterTransientFailure(nextProvider, error)) {
           const fallback = getOpenRouterFallbackProvider();
           attemptedOpenRouterFallback = fallback;
-          logRoutingDecision({
-            mode: getActiveAiMode(),
-            originalProvider: 'openrouter',
-            chosenProvider: fallback,
-            reason: 'openrouter-fallback',
-          });
           try {
-            await streamProvider(
+            await attemptOpenRouterStreamFallback(
               prompt,
               creativity,
-              buildOpenRouterFallbackOpts(mergedOpts, fallback),
+              mergedOpts,
               callbacks,
+              fallback,
               signal,
             );
             _lastFallbackReason = `OpenRouter rate-limited; fell back to ${fallback}.`;
