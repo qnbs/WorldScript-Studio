@@ -1938,50 +1938,67 @@ describe('FsAssetStore — images + binder assets', () => {
     expect(await store.getImage('char-1', 'proj-1')).toBe('data:image/webp;base64,QUJD');
   });
 
+  // QNBS-v3: shared round-trip assertion for every "distinct ids must not collide" test below -- each pair must independently save and read back its own distinct value.
+  async function expectNoImageCollision(
+    first: { entityId: string; projectId: string; value: string },
+    second: { entityId: string; projectId: string; value: string },
+  ) {
+    await store.saveImage(first.entityId, first.value, first.projectId);
+    await store.saveImage(second.entityId, second.value, second.projectId);
+    expect(await store.getImage(first.entityId, first.projectId)).toBe(first.value);
+    expect(await store.getImage(second.entityId, second.projectId)).toBe(second.value);
+  }
+
   // QNBS-v3: sanitizePathSegment alone would collapse both of these entity ids to the same "alpha-beta.png" filename within one project's namespace.
   it('does not collide two distinct entity ids that sanitize to the same readable prefix', async () => {
-    await store.saveImage('alpha beta', 'data:image/png;base64,FROM_ALPHA_SPACE', 'proj-1');
-    await store.saveImage('alpha-beta', 'data:image/png;base64,FROM_ALPHA_HYPHEN', 'proj-1');
-
-    expect(await store.getImage('alpha beta', 'proj-1')).toBe(
-      'data:image/png;base64,FROM_ALPHA_SPACE',
-    );
-    expect(await store.getImage('alpha-beta', 'proj-1')).toBe(
-      'data:image/png;base64,FROM_ALPHA_HYPHEN',
+    await expectNoImageCollision(
+      {
+        entityId: 'alpha beta',
+        projectId: 'proj-1',
+        value: 'data:image/png;base64,FROM_ALPHA_SPACE',
+      },
+      {
+        entityId: 'alpha-beta',
+        projectId: 'proj-1',
+        value: 'data:image/png;base64,FROM_ALPHA_HYPHEN',
+      },
     );
   });
 
   // QNBS-v3: sanitizePathSegment alone would collapse both of these to the same "alpha-beta" directory -- the namespace must not let two distinct projects share one image directory.
   it('does not collide two distinct project ids that sanitize to the same readable prefix', async () => {
-    await store.saveImage('char-1', 'data:image/png;base64,FROM_ALPHA_SPACE', 'alpha beta');
-    await store.saveImage('char-1', 'data:image/png;base64,FROM_ALPHA_HYPHEN', 'alpha-beta');
-
-    expect(await store.getImage('char-1', 'alpha beta')).toBe(
-      'data:image/png;base64,FROM_ALPHA_SPACE',
-    );
-    expect(await store.getImage('char-1', 'alpha-beta')).toBe(
-      'data:image/png;base64,FROM_ALPHA_HYPHEN',
+    await expectNoImageCollision(
+      {
+        entityId: 'char-1',
+        projectId: 'alpha beta',
+        value: 'data:image/png;base64,FROM_ALPHA_SPACE',
+      },
+      {
+        entityId: 'char-1',
+        projectId: 'alpha-beta',
+        value: 'data:image/png;base64,FROM_ALPHA_HYPHEN',
+      },
     );
   });
 
   it('does not collide project ids differing only by a forbidden-character substitution', async () => {
-    await store.saveImage('char-1', 'data:image/png;base64,FROM_SLASH', 'alpha/beta');
-    await store.saveImage('char-1', 'data:image/png;base64,FROM_BACKSLASH', 'alpha\\beta');
-
-    expect(await store.getImage('char-1', 'alpha/beta')).toBe('data:image/png;base64,FROM_SLASH');
-    expect(await store.getImage('char-1', 'alpha\\beta')).toBe(
-      'data:image/png;base64,FROM_BACKSLASH',
+    await expectNoImageCollision(
+      { entityId: 'char-1', projectId: 'alpha/beta', value: 'data:image/png;base64,FROM_SLASH' },
+      {
+        entityId: 'char-1',
+        projectId: 'alpha\\beta',
+        value: 'data:image/png;base64,FROM_BACKSLASH',
+      },
     );
   });
 
   it('does not collide long project ids that differ only after sanitizer truncation', async () => {
     const longA = `${'x'.repeat(120)}-A`;
     const longB = `${'x'.repeat(120)}-B`;
-    await store.saveImage('char-1', 'data:image/png;base64,FROM_LONG_A', longA);
-    await store.saveImage('char-1', 'data:image/png;base64,FROM_LONG_B', longB);
-
-    expect(await store.getImage('char-1', longA)).toBe('data:image/png;base64,FROM_LONG_A');
-    expect(await store.getImage('char-1', longB)).toBe('data:image/png;base64,FROM_LONG_B');
+    await expectNoImageCollision(
+      { entityId: 'char-1', projectId: longA, value: 'data:image/png;base64,FROM_LONG_A' },
+      { entityId: 'char-1', projectId: longB, value: 'data:image/png;base64,FROM_LONG_B' },
+    );
   });
 
   // QNBS-v3: a pre-migration flat-path image (written before project-qualified keys existed) must stay reachable without a forced migration.
