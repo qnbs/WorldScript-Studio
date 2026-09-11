@@ -722,6 +722,11 @@ export async function generateText(
   }
 }
 
+// QNBS-v3: shared by generateJson and streamAiHelpResponse so each call site's own branching stays flat for CodeScene's complexity gate on this already-hot file.
+function isGeminiDirectCloudPath(provider: AIProvider): boolean {
+  return provider === 'gemini' && !shouldRouteLocally();
+}
+
 export async function generateJson<T>(
   prompt: string,
   creativity: AiCreativity,
@@ -730,8 +735,7 @@ export async function generateJson<T>(
   signal?: AbortSignal,
 ): Promise<T> {
   try {
-    // QNBS-v3: gate the Gemini-direct fast path behind the same cloud-AI policy every other entry point applies — this branch previously reached the SDK before any mode/privacy check.
-    if (opts.provider === 'gemini' && !shouldRouteLocally()) {
+    if (isGeminiDirectCloudPath(opts.provider)) {
       await assertCloudAiAllowed('gemini');
       return await generateJsonGemini(prompt, creativity, schema, signal, undefined, opts.model);
     }
@@ -870,8 +874,7 @@ export async function streamAiHelpResponse(
   const helpPromptWithDocs = doc
     ? `You are a helpful assistant for WorldScript Studio. Prefer the documentation excerpts below when they answer the question; otherwise give concise general guidance. Format using Markdown.\n\n${mergedBody}`
     : `You are a helpful assistant for a creative writing app called WorldScript Studio. Answer the user's question concisely and clearly. Format your answer using Markdown. Question: ${sanitizePromptValue(question)}`;
-  // QNBS-v3: gate the Gemini-direct fast path behind the same cloud-AI policy every other entry point applies — this branch previously reached the SDK before any mode/privacy check.
-  if (opts.provider === 'gemini' && !shouldRouteLocally()) {
+  if (isGeminiDirectCloudPath(opts.provider)) {
     await assertCloudAiAllowed('gemini');
     return streamAiHelpResponseGemini(
       mergedBody,
