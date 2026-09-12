@@ -8,21 +8,29 @@ import { IdbAssetStore } from '../../../../services/storage/idbAssetStore';
 
 // ── IDB mock store ────────────────────────────────────────────────────────────
 
+// QNBS-v3: a fake transaction object so a wait-for-commit contract is exercisable in tests -- shared shape for both stores below.
+type MockTransaction = {
+  oncomplete: (() => void) | null;
+  onerror: (() => void) | null;
+  onabort: (() => void) | null;
+  error: unknown;
+};
+
+function makeMockTransaction(): MockTransaction {
+  return { oncomplete: null, onerror: null, onabort: null, error: null };
+}
+
+const mockImagesTransaction = makeMockTransaction();
+
 const mockIdbStore = {
   put: vi.fn(),
   get: vi.fn(),
   delete: vi.fn(),
   openCursor: vi.fn(),
+  transaction: mockImagesTransaction,
 };
 
-// QNBS-v3: a fake transaction object so claimOrCheckLegacyImageOwnership's wait-for-commit contract
-// (oncomplete/onerror/onabort, not just the individual request's onsuccess) is exercisable in tests.
-const mockAppDataTransaction: {
-  oncomplete: (() => void) | null;
-  onerror: (() => void) | null;
-  onabort: (() => void) | null;
-  error: unknown;
-} = { oncomplete: null, onerror: null, onabort: null, error: null };
+const mockAppDataTransaction = makeMockTransaction();
 
 // QNBS-v3: a separate mock store for APP_DATA_STORE (the legacy-image-ownership marker) so its
 // get/put calls never contaminate the IMAGES_STORE-shaped mock behavior the tests below set up.
@@ -100,48 +108,61 @@ function makeErrorReq(err: DOMException): MockReq<undefined> {
   return req;
 }
 
-// QNBS-v3: tracks how many appDataStore requests are still pending so mockAppDataTransaction.oncomplete
-// can fire only once every request issued on it (including one synchronously chained from another's
-// onsuccess handler, e.g. claimOrCheckLegacyImageOwnership's put after its get) has actually settled.
-let appDataPendingRequests = 0;
-
-function makeAppDataSuccessReq<T>(result: T): MockReq<T> {
-  appDataPendingRequests += 1;
-  const req: MockReq<T> = { result, error: null, onsuccess: null, onerror: null };
-  setTimeout(() => {
-    req.onsuccess?.();
-    appDataPendingRequests -= 1;
-    if (appDataPendingRequests === 0) mockAppDataTransaction.oncomplete?.();
-  }, 0);
-  return req;
+// QNBS-v3: shared factory so APP_DATA_STORE and IMAGES_STORE reuse identical wait-for-commit/abort-after-success mocks instead of near-duplicate copies.
+function makeTransactionTracker(transaction: MockTransaction) {
+  // QNBS-v3: tracks pending requests on this transaction so oncomplete fires only once every request issued on it (including one chained from another's onsuccess) has settled.
+  let pending = 0;
+  return {
+    reset(): void {
+      pending = 0;
+      transaction.oncomplete = null;
+      transaction.onerror = null;
+      transaction.onabort = null;
+      transaction.error = null;
+    },
+    success<T>(result: T): MockReq<T> {
+      pending += 1;
+      const req: MockReq<T> = { result, error: null, onsuccess: null, onerror: null };
+      setTimeout(() => {
+        req.onsuccess?.();
+        pending -= 1;
+        if (pending === 0) transaction.oncomplete?.();
+      }, 0);
+      return req;
+    },
+    error(err: DOMException): MockReq<undefined> {
+      pending += 1;
+      const req: MockReq<undefined> = {
+        result: undefined,
+        error: err,
+        onsuccess: null,
+        onerror: null,
+      };
+      setTimeout(() => {
+        req.onerror?.(err);
+        pending -= 1;
+        transaction.error = err;
+        transaction.onabort?.();
+      }, 0);
+      return req;
+    },
+    // QNBS-v3: simulates a request that succeeds but whose transaction then aborts -- proves a caller waiting on oncomplete never acts on a request that was never durably committed.
+    successThatThenAborts<T>(result: T): MockReq<T> {
+      pending += 1;
+      const req: MockReq<T> = { result, error: null, onsuccess: null, onerror: null };
+      setTimeout(() => {
+        req.onsuccess?.();
+        pending -= 1;
+        transaction.error = new DOMException('simulated transaction abort');
+        transaction.onabort?.();
+      }, 0);
+      return req;
+    },
+  };
 }
 
-function makeAppDataErrorReq(err: DOMException): MockReq<undefined> {
-  appDataPendingRequests += 1;
-  const req: MockReq<undefined> = { result: undefined, error: err, onsuccess: null, onerror: null };
-  setTimeout(() => {
-    req.onerror?.(err);
-    appDataPendingRequests -= 1;
-    mockAppDataTransaction.error = err;
-    mockAppDataTransaction.onabort?.();
-  }, 0);
-  return req;
-}
-
-// QNBS-v3: simulates a transaction whose individual put request reports success but the transaction
-// itself then aborts (e.g. quota exceeded, another request in the same transaction failing) -- proves
-// claimOrCheckLegacyImageOwnership does not admit the claim until the transaction actually commits.
-function makeAppDataSuccessReqThatThenAborts<T>(result: T): MockReq<T> {
-  appDataPendingRequests += 1;
-  const req: MockReq<T> = { result, error: null, onsuccess: null, onerror: null };
-  setTimeout(() => {
-    req.onsuccess?.();
-    appDataPendingRequests -= 1;
-    mockAppDataTransaction.error = new DOMException('simulated transaction abort');
-    mockAppDataTransaction.onabort?.();
-  }, 0);
-  return req;
-}
+const appDataTracker = makeTransactionTracker(mockAppDataTransaction);
+const imagesTracker = makeTransactionTracker(mockImagesTransaction);
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
@@ -150,14 +171,11 @@ describe('IdbAssetStore', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    appDataPendingRequests = 0;
-    mockAppDataTransaction.oncomplete = null;
-    mockAppDataTransaction.onerror = null;
-    mockAppDataTransaction.onabort = null;
-    mockAppDataTransaction.error = null;
+    appDataTracker.reset();
+    imagesTracker.reset();
     // QNBS-v3: default "no legacy-image-owner claim yet" so every test's first legacy-fallback access claims for its own project id, matching prior (pre-ownership-check) fallback behavior unless a test deliberately overrides this to simulate a rival claim.
-    mockAppDataStore.get.mockImplementation(() => makeAppDataSuccessReq(undefined));
-    mockAppDataStore.put.mockImplementation(() => makeAppDataSuccessReq(undefined));
+    mockAppDataStore.get.mockImplementation(() => appDataTracker.success(undefined));
+    mockAppDataStore.put.mockImplementation(() => appDataTracker.success(undefined));
     store = new IdbAssetStore();
   });
 
@@ -210,7 +228,7 @@ describe('IdbAssetStore', () => {
   describe('deleteImage', () => {
     // QNBS-v3: both keys must be cleared so a stale legacy record can never resurface via getImage's fallback -- but only once ownership of the legacy namespace is already provable for this project (simulated here via a pre-existing claim).
     it('deletes both the qualified and legacy key when this project already owns the legacy namespace', async () => {
-      mockAppDataStore.get.mockImplementation(() => makeAppDataSuccessReq('proj-1'));
+      mockAppDataStore.get.mockImplementation(() => appDataTracker.success('proj-1'));
       mockIdbStore.delete.mockImplementation(() => makeSuccessReq(undefined));
       await store.deleteImage('img-1', 'proj-1');
       expect(mockIdbStore.delete).toHaveBeenCalledWith('proj-1::img-1');
@@ -227,7 +245,7 @@ describe('IdbAssetStore', () => {
 
     // QNBS-v3: a legacy blob already claimed by a DIFFERENT project must never be deleted by this one either.
     it('does not delete the legacy key when a different project already owns the legacy namespace', async () => {
-      mockAppDataStore.get.mockImplementation(() => makeAppDataSuccessReq('other-project'));
+      mockAppDataStore.get.mockImplementation(() => appDataTracker.success('other-project'));
       mockIdbStore.delete.mockImplementation(() => makeSuccessReq(undefined));
       await store.deleteImage('img-1', 'proj-1');
       expect(mockIdbStore.delete).toHaveBeenCalledWith('proj-1::img-1');
@@ -235,7 +253,7 @@ describe('IdbAssetStore', () => {
     });
 
     it('rejects when IDB delete errors', async () => {
-      mockAppDataStore.get.mockImplementation(() => makeAppDataSuccessReq('proj-1'));
+      mockAppDataStore.get.mockImplementation(() => appDataTracker.success('proj-1'));
       mockIdbStore.delete.mockImplementation(() => makeErrorReq(new DOMException('del failed')));
       await expect(store.deleteImage('img-1', 'proj-1')).rejects.toBeDefined();
     });
@@ -244,7 +262,7 @@ describe('IdbAssetStore', () => {
   describe('legacy image ownership', () => {
     // QNBS-v3: the exact scenario this fix closes -- an orphaned legacy blob from a previously-active, now-replaced project must not leak into a new project reusing the same entity id.
     it('fails closed on the legacy fallback once a different project already claimed the legacy namespace', async () => {
-      mockAppDataStore.get.mockImplementation(() => makeAppDataSuccessReq('project-a'));
+      mockAppDataStore.get.mockImplementation(() => appDataTracker.success('project-a'));
       mockIdbStore.get.mockImplementation((key: string) =>
         makeSuccessReq(key === 'img-1' ? 'data:image/png;base64,PROJECT_A_IMAGE' : null),
       );
@@ -253,7 +271,7 @@ describe('IdbAssetStore', () => {
     });
 
     it('still serves the legacy fallback for the project that already owns the legacy namespace', async () => {
-      mockAppDataStore.get.mockImplementation(() => makeAppDataSuccessReq('project-a'));
+      mockAppDataStore.get.mockImplementation(() => appDataTracker.success('project-a'));
       mockIdbStore.get.mockImplementation((key: string) =>
         makeSuccessReq(key === 'img-1' ? 'data:image/png;base64,PROJECT_A_IMAGE' : null),
       );
@@ -288,7 +306,9 @@ describe('IdbAssetStore', () => {
 
     // QNBS-v3: a put request can report success and still be rolled back if its transaction later aborts (e.g. quota exceeded) -- proves the claim is not admitted (rejects, matching this class's established "propagate IDB errors" contract already covered by "rejects when IDB get/put/delete errors" above) rather than silently resolving as though the legacy image were safe to serve.
     it('rejects instead of admitting the legacy fallback when the ownership-claim transaction aborts after the put reports success', async () => {
-      mockAppDataStore.put.mockImplementation(() => makeAppDataSuccessReqThatThenAborts(undefined));
+      mockAppDataStore.put.mockImplementation(() =>
+        appDataTracker.successThatThenAborts(undefined),
+      );
       mockIdbStore.get.mockImplementation((key: string) =>
         makeSuccessReq(key === 'img-1' ? 'data:image/png;base64,SHOULD_NOT_BE_SERVED' : null),
       );
@@ -298,7 +318,7 @@ describe('IdbAssetStore', () => {
 
     it('rejects when the ownership-marker lookup itself errors', async () => {
       mockAppDataStore.get.mockImplementation(() =>
-        makeAppDataErrorReq(new DOMException('app-data get failed')),
+        appDataTracker.error(new DOMException('app-data get failed')),
       );
       mockIdbStore.get.mockImplementation(() => makeSuccessReq(null));
 
@@ -346,7 +366,7 @@ describe('IdbAssetStore', () => {
     });
 
     it('deletes only the qualified key, preserving an unrelated legacy key', async () => {
-      mockIdbStore.delete.mockImplementation(() => makeSuccessReq(undefined));
+      mockIdbStore.delete.mockImplementation(() => imagesTracker.success(undefined));
       await store.deleteQualifiedImage('img-1', 'proj-1');
       expect(mockIdbStore.delete).toHaveBeenCalledWith('proj-1::img-1');
       expect(mockIdbStore.delete).not.toHaveBeenCalledWith('img-1');
@@ -355,7 +375,15 @@ describe('IdbAssetStore', () => {
     });
 
     it('propagates a delete failure instead of swallowing it', async () => {
-      mockIdbStore.delete.mockImplementation(() => makeErrorReq(new DOMException('del failed')));
+      mockIdbStore.delete.mockImplementation(() =>
+        imagesTracker.error(new DOMException('del failed')),
+      );
+      await expect(store.deleteQualifiedImage('img-1', 'proj-1')).rejects.toBeDefined();
+    });
+
+    // QNBS-v3: a delete request can report success and still be rolled back if its transaction later aborts (e.g. quota exceeded) -- proves deleteQualifiedImage does not resolve until the transaction actually commits, matching the same "wait for transaction.oncomplete" contract already established for the legacy-ownership claim above.
+    it('rejects instead of resolving successfully when the delete transaction aborts after the request reports success', async () => {
+      mockIdbStore.delete.mockImplementation(() => imagesTracker.successThatThenAborts(undefined));
       await expect(store.deleteQualifiedImage('img-1', 'proj-1')).rejects.toBeDefined();
     });
   });

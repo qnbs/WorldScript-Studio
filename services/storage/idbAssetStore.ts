@@ -160,10 +160,14 @@ export class IdbAssetStore extends IdbSnapshotStore {
       await assertIdbProtectedWriteAllowed();
       const qualifiedKey = await makeImageStorageKey(projectId, id);
       const store = await this.getObjectStore(IMAGES_STORE, 'readwrite');
+      const transaction = store.transaction;
+      // QNBS-v3: resolves only once the transaction durably commits, not merely once the delete request succeeds -- a request can report success and still be rolled back if the transaction later aborts, which would otherwise let a rollback believe an image was removed when it was actually restored.
       await new Promise<void>((resolve, reject) => {
         const request = store.delete(qualifiedKey);
-        request.onsuccess = () => resolve();
         request.onerror = () => reject(request.error);
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error);
       });
     });
   }
