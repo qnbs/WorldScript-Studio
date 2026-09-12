@@ -359,8 +359,7 @@ addDebouncedListener(
 listenerMiddleware.startListening({
   matcher: isRejected,
   effect: (action, listenerApi) => {
-    if (action.meta.aborted) return;
-    if (action.error?.name === STALE_PROJECT_OPERATION_ERROR_NAME) return;
+    if (action.meta.aborted || isStaleProjectOperationRejection(action)) return;
 
     let errorDescription = action.error?.message ?? 'An unexpected error occurred.';
     if (errorDescription.includes('quota') || errorDescription.includes('API key')) {
@@ -376,6 +375,10 @@ listenerMiddleware.startListening({
     );
   },
 });
+
+function isStaleProjectOperationRejection(action: { error?: { name?: string } }): boolean {
+  return action.error?.name === STALE_PROJECT_OPERATION_ERROR_NAME;
+}
 
 listenerMiddleware.startListening({
   predicate: (_action, currentState, previousState) => {
