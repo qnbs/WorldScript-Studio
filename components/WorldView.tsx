@@ -4,8 +4,10 @@ import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { ICONS } from '../constants';
 import { useWorldViewContext, WorldViewContext } from '../contexts/WorldViewContext';
 import {
+  captureActiveProjectIdentity,
   getProjectTargetIdentity,
   getProjectTargetStorageId,
+  identityUnchanged,
 } from '../features/project/projectIdentity';
 import { uploadWorldImageThunk } from '../features/project/thunks/worldThunks';
 import { useWorldView } from '../hooks/useWorldView';
@@ -59,11 +61,13 @@ const startWorldImageLoad = ({
   setImageUrl(null);
   if (!id || !hasImage) return () => {};
 
-  const loadScopeKey = projectIdentity ?? projectId;
   let isMounted = true;
   void loadStoredWorldImage(id, projectId)
     .then((image) => {
-      if (isMounted && loadScopeKey) setImageUrl(image);
+      const isCurrentProject =
+        projectIdentity === null ||
+        identityUnchanged(projectIdentity, captureActiveProjectIdentity());
+      if (isMounted && isCurrentProject) setImageUrl(image);
     })
     .catch((error) => {
       // QNBS-v3: an unavailable image must retain the placeholder instead of causing an unhandled async rejection.

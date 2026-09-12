@@ -16,6 +16,7 @@ export interface BinderAssetPayload {
 /** Synchronous admission check evaluated at the backend's image-write point. */
 export type ImageWriteAdmission = () => void;
 
+// QNBS-v3: [Grund: shared delete authority / Impact: reject stale image removals / Kreativer Mehrwert: keep every backend on one admission contract]
 /** Synchronous admission check evaluated at the backend's image-delete point. */
 export type ImageDeleteAdmission = () => void;
 

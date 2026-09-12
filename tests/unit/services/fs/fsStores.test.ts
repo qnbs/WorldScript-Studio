@@ -1953,6 +1953,18 @@ describe('FsAssetStore — images + binder assets', () => {
     expect(await store.getImage('delete-guarded', 'proj-1')).toBe('data:image/png;base64,OLD');
   });
 
+  // QNBS-v3: [Grund: stale no-op deletion / Impact: reject obsolete entity removal / Kreativer Mehrwert: keep missing-file cleanup under project authority]
+  it('checks delete admission even when both image files are already absent', async () => {
+    const admission = vi.fn(() => {
+      throw new Error('stale project incarnation');
+    });
+
+    await expect(store.deleteImage('missing-image', 'proj-1', admission)).rejects.toThrow(
+      'stale project incarnation',
+    );
+    expect(admission).toHaveBeenCalledTimes(1);
+  });
+
   it('rechecks delete admission after a transient filesystem retry', async () => {
     await store.saveImage('delete-retry', 'data:image/png;base64,OLD', 'proj-1');
     const qualified = qualifiedImageKey('delete-retry');
@@ -1974,7 +1986,7 @@ describe('FsAssetStore — images + binder assets', () => {
     }
 
     expect(removeAttempts).toBe(2);
-    expect(admission).toHaveBeenCalledTimes(2);
+    expect(admission).toHaveBeenCalledTimes(3);
     expect(await store.getImage('delete-retry', 'proj-1')).toBeNull();
   });
 

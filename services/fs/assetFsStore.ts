@@ -157,6 +157,8 @@ export class FsAssetStore extends FsSnapshotStore {
         if (await apis.exists(qualifiedFile)) {
           await removeImageFile(qualifiedFile);
         }
+        // QNBS-v3: final delete admission / reject stale no-op deletions / keep entity mutation authority truthful.
+        deleteAdmission?.();
       }, projectId);
     } catch (error) {
       if (deleteAdmission || this.isProjectWriteAuthorityError(error)) throw error;

@@ -270,6 +270,7 @@ describe('IdbAssetStore', () => {
       await expect(store.deleteImage('img-1', 'proj-1')).rejects.toBeDefined();
     });
 
+    // QNBS-v3: [Grund: incarnation authority rejection / Impact: prevent stale deletion / Kreativer Mehrwert: guard the admission check]
     it('refuses deletion when the current incarnation no longer has authority', async () => {
       mockIdbStore.delete.mockImplementation(() => makeSuccessReq(undefined));
       const admission = vi.fn(() => {

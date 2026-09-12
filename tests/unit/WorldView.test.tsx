@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { appStoreRef } from '../../app/storeRef';
 import { WorldView } from '../../components/WorldView';
 import { storageService } from '../../services/storageService';
 
@@ -44,15 +45,20 @@ const baseContextValue = {
   handleLocationChange: vi.fn(),
 };
 
+const mockProjectState = {
+  settings: { editorFont: 'serif', fontSize: 16, lineSpacing: 1.5 },
+  project: {
+    present: null as { data: { id: string }; generation: number } | null,
+  },
+};
+
 vi.mock('../../hooks/useWorldView', () => ({
   useWorldView: vi.fn(() => baseContextValue),
 }));
 
 vi.mock('../../app/hooks', () => ({
   useAppDispatch: vi.fn(() => vi.fn()),
-  useAppSelector: vi.fn((selector: (s: unknown) => unknown) =>
-    selector({ settings: { editorFont: 'serif', fontSize: 16, lineSpacing: 1.5 } }),
-  ),
+  useAppSelector: vi.fn((selector: (s: unknown) => unknown) => selector(mockProjectState)),
 }));
 
 vi.mock('../../hooks/useSpeechRecognition', () => ({
@@ -73,6 +79,18 @@ vi.mock('../../services/storageService', () => ({
     getImage: vi.fn().mockResolvedValue(null),
   },
 }));
+
+beforeEach(() => {
+  mockProjectState.project.present = null;
+  appStoreRef.current = {
+    getState: () => mockProjectState,
+    dispatch: vi.fn(),
+  } as never;
+});
+
+afterEach(() => {
+  appStoreRef.current = null;
+});
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -197,5 +215,41 @@ describe('WorldView', () => {
       expect(storageService.getImage).toHaveBeenCalledWith('w-broken', 'default'),
     );
     expect(screen.queryByAltText('Cindralis')).toBeNull();
+  });
+
+  // QNBS-v3: [Grund: deferred read identity fence / Impact: reject stale image completion / Kreativer Mehrwert: keep a replacement incarnation visually isolated]
+  it('does not apply a deferred ambiance read after the project incarnation changes', async () => {
+    mockProjectState.project.present = { data: { id: 'p1' }, generation: 0 };
+    let resolveImage!: (value: string) => void;
+    vi.mocked(storageService.getImage).mockReturnValueOnce(
+      new Promise<string>((resolve) => {
+        resolveImage = resolve;
+      }),
+    );
+    const { useWorldView } = await import('../../hooks/useWorldView');
+    vi.mocked(useWorldView).mockReturnValueOnce({
+      ...baseContextValue,
+      worlds: [
+        {
+          id: 'w-stale',
+          name: 'Stale Ambiance',
+          description: '',
+          geography: '',
+          magicSystem: '',
+          notes: '',
+          hasAmbianceImage: true,
+          locations: [],
+          timeline: [],
+        },
+      ],
+    } as never);
+    render(<WorldView />);
+    await waitFor(() => expect(storageService.getImage).toHaveBeenCalledWith('w-stale', 'p1'));
+
+    mockProjectState.project.present.generation = 1;
+    resolveImage('data:image/png;base64,STALE');
+    await Promise.resolve();
+
+    expect(screen.queryByAltText('Stale Ambiance')).toBeNull();
   });
 });

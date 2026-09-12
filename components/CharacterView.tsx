@@ -4,8 +4,10 @@ import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { ICONS } from '../constants';
 import { CharacterViewContext, useCharacterViewContext } from '../contexts/CharacterViewContext';
 import {
+  captureActiveProjectIdentity,
   getProjectTargetIdentity,
   getProjectTargetStorageId,
+  identityUnchanged,
 } from '../features/project/projectIdentity';
 import { uploadCharacterImageThunk } from '../features/project/thunks/characterThunks';
 import { useCharacterView } from '../hooks/useCharacterView';
@@ -59,11 +61,13 @@ const startCharacterImageLoad = ({
   setImageUrl(null);
   if (!id || !hasImage) return () => {};
 
-  const loadScopeKey = projectIdentity ?? projectId;
   let isMounted = true;
   void loadStoredCharacterImage(id, projectId)
     .then((image) => {
-      if (isMounted && loadScopeKey) setImageUrl(image);
+      const isCurrentProject =
+        projectIdentity === null ||
+        identityUnchanged(projectIdentity, captureActiveProjectIdentity());
+      if (isMounted && isCurrentProject) setImageUrl(image);
     })
     .catch((error) => {
       // QNBS-v3: an unavailable image must retain the placeholder instead of causing an unhandled async rejection.
