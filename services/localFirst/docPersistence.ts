@@ -103,7 +103,12 @@ export function persistProjectDoc(projectId: string, doc: Y.Doc): DocPersistence
       return Promise.reject(new Error('Cannot clear persisted data after destruction has started'));
     }
     if (!rawClearDataPromise) {
-      rawClearDataPromise = Promise.resolve().then(() => provider.clearData());
+      rawClearDataPromise = Promise.resolve().then(() => {
+        if (rawDestroyPromise) {
+          throw new Error('Cannot clear persisted data after destruction has started');
+        }
+        return provider.clearData();
+      });
     }
     return rawClearDataPromise;
   };
