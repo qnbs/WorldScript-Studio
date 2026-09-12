@@ -125,7 +125,9 @@ class StorageManager {
     writeAdmission?: ImageWriteAdmission,
   ): Promise<void> {
     const backend = await this.getBackend();
-    return backend.saveImage(id, base64Data, projectId, writeAdmission);
+    return writeAdmission
+      ? backend.saveImage(id, base64Data, projectId, writeAdmission)
+      : backend.saveImage(id, base64Data, projectId);
   }
 
   async getImage(id: string, projectId?: string): Promise<string | null> {
@@ -215,7 +217,9 @@ class StorageManager {
     deleteAdmission?: ImageDeleteAdmission,
   ): Promise<void> {
     const backend = await this.getBackend();
-    return backend.deleteImage(id, projectId, deleteAdmission);
+    return deleteAdmission
+      ? backend.deleteImage(id, projectId, deleteAdmission)
+      : backend.deleteImage(id, projectId);
   }
 
   async hasSavedData(): Promise<boolean> {
