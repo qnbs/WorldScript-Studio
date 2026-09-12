@@ -6,12 +6,18 @@ import {
   evaluatePrSize,
   evaluatePrSizeSnapshot,
   getCommitCount,
+  getStagedChangedPaths,
   getStagedNumstat,
   hasStagedChanges,
   PR_SIZE_TIERS,
-  parseNumstat,
   selectBudgetMode,
 } from './check-pr-size.mjs';
+
+export const PR_BUDGET_EXIT_CODES = {
+  OK: 0,
+  BLOCKED: 1,
+  UNRESOLVED_BASE: 2,
+};
 
 function run(command, args, dependencies = {}) {
   const spawn = dependencies.spawnSync ?? spawnSync;
@@ -112,12 +118,15 @@ const setValue = (property) => (options, argv, index) => {
 };
 
 const OPTION_HANDLERS = {
-  '--': setFlag('separator', true),
   '--base': setValue('base'),
   '--head': setValue('head'),
   '--prospective': setFlag('prospective', true),
   '--staged': setFlag('prospective', true),
-  '--prepush': setFlag('prepush', true),
+  '--prepush': (options) => {
+    options.allowLive = true;
+    options.prospective = true;
+    return 0;
+  },
   '--no-live': setFlag('allowLive', false),
   '--help': setFlag('help', true),
 };
@@ -126,8 +135,9 @@ function parseArguments(argv) {
   const options = { head: 'HEAD', allowLive: true, prospective: false };
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
+    if (argument === '--') continue;
     const handler = OPTION_HANDLERS[argument];
-    if (!handler) throw new Error(`unknown option ${argument}`);
+    if (!Object.hasOwn(OPTION_HANDLERS, argument)) throw new Error(`unknown option ${argument}`);
     index += handler(options, argv, index);
   }
   return options;
@@ -135,19 +145,19 @@ function parseArguments(argv) {
 
 export function evaluateProspectivePrSize(base, head, dependencies = {}) {
   const numstat = getStagedNumstat(base, dependencies);
+  const changedPaths = getStagedChangedPaths(base, dependencies);
   const staged = hasStagedChanges(dependencies);
   const currentCommitCount = getCommitCount(base, head, dependencies);
-  if ([numstat, staged, currentCommitCount].some((value) => value === null)) {
+  if ([numstat, changedPaths, staged, currentCommitCount].some((value) => value === null)) {
     return { ok: false, error: 'could not resolve the staged prospective range via git' };
   }
-  const rows = parseNumstat(numstat);
   return evaluatePrSizeSnapshot(
     base,
     head,
     numstat,
     currentCommitCount + Number(staged),
     dependencies,
-    rows.map((row) => row.path),
+    changedPaths,
   );
 }
 
@@ -201,15 +211,15 @@ export function main(argv = process.argv.slice(2)) {
   }
 
   const resolution = resolveBudgetBase({
-    explicitBase: options.base,
+    explicitBase: options.base ?? process.env.PR_BUDGET_BASE,
     allowLive: options.allowLive,
   });
   if (!resolution.ok) {
     console.log('PR_BUDGET');
     console.log('status=UNRESOLVED_BASE');
     console.log(`error=${resolution.error}`);
-    process.exitCode = 2;
-    return 2;
+    process.exitCode = PR_BUDGET_EXIT_CODES.UNRESOLVED_BASE;
+    return PR_BUDGET_EXIT_CODES.UNRESOLVED_BASE;
   }
 
   const result = options.prospective
@@ -219,8 +229,8 @@ export function main(argv = process.argv.slice(2)) {
     console.log('PR_BUDGET');
     console.log('status=BLOCKED');
     console.log(`error=${result.error}`);
-    process.exitCode = 1;
-    return 1;
+    process.exitCode = PR_BUDGET_EXIT_CODES.BLOCKED;
+    return PR_BUDGET_EXIT_CODES.BLOCKED;
   }
   const subject = options.prospective ? 'STAGED_PROSPECTIVE' : 'COMMITTED_HEAD';
   const status = printBudget(result, {

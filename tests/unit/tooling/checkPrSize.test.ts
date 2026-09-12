@@ -9,6 +9,7 @@ import {
   evaluatePrSize,
   evaluatePrSizeSnapshot,
   formatReport,
+  getStagedChangedPaths,
   isAllDocs,
   parseNumstat,
   selectBudgetMode,
@@ -461,6 +462,8 @@ describe('evaluatePrSize', () => {
       if (args.includes('--git-path')) return { status: 1, stdout: '', stderr: '' };
       if (args[0] === 'diff' && args.includes('--numstat'))
         return { ...okGit(), stdout: '4\t1\tscripts/staged.mjs\x00' };
+      if (args[0] === 'diff' && args.includes('--name-only'))
+        return { ...okGit(), stdout: 'old-name.mjs\x00new-name.mjs\x00' };
       if (args[0] === 'diff' && args.includes('--quiet'))
         return { status: 1, stdout: '', stderr: '' };
       if (args[0] === 'rev-list') return { ...okGit(), stdout: '14\n' };
@@ -471,6 +474,7 @@ describe('evaluatePrSize', () => {
     expect(result.commitCount).toBe(15);
     expect(result.fileCount).toBe(1);
     expect(result.severity?.blocking).toBe(false);
+    expect(getStagedChangedPaths('base', { spawnSync })).toEqual(['old-name.mjs', 'new-name.mjs']);
   });
 
   it('does not silently fall back to main when the PR base is unresolved', () => {
@@ -632,6 +636,7 @@ describe('evaluatePrSize', () => {
       'scripts/check-pr-size.mjs',
       'scripts/check-pr-size.d.mts',
       'scripts/pr-budget.mjs',
+      'scripts/pr-budget.d.mts',
       '.github/workflows/ci.yml',
     ])('does not let an exception authorize governance-control path %s', (path) => {
       const rows: NumstatRow[] = [{ path, added: 3001, removed: 0 }];
@@ -659,6 +664,7 @@ describe('evaluatePrSize', () => {
       'scripts/check-pr-size.d.mts',
       'scripts/check-pr-size.mjs',
       'scripts/pr-budget.mjs',
+      'scripts/pr-budget.d.mts',
       '.github/workflows/ci.yml',
     ])('rejects a base registry that allowlists governance-control path %s', (path) => {
       const result = evaluatePrSize(

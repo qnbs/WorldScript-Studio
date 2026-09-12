@@ -25,6 +25,8 @@ export function getCommitCount(
 
 export function getStagedNumstat(base: string, dependencies?: GitDependencies): string | null;
 
+export function getStagedChangedPaths(base: string, dependencies?: GitDependencies): string[] | null;
+
 export function hasStagedChanges(dependencies?: GitDependencies): boolean | null;
 
 export interface NumstatRow {

@@ -23,6 +23,7 @@ const GOVERNANCE_CONTROL_PATHS = new Set([
   'scripts/check-pr-size.d.mts',
   'scripts/check-pr-size.mjs',
   'scripts/pr-budget.mjs',
+  'scripts/pr-budget.d.mts',
 ]);
 // QNBS-v3: supplemental ceilings are only for explicitly named non-executable artifacts.
 const SUPPLEMENTAL_ARTIFACT_PATTERNS = [
@@ -94,6 +95,13 @@ export function getStagedNumstat(base, dependencies = {}) {
   );
 }
 
+export function getStagedChangedPaths(base, dependencies = {}) {
+  const output = withNeutralizedDiffAttribute(dependencies, () =>
+    runGit(['diff', '--cached', '--name-only', '--no-renames', '-z', base], dependencies),
+  );
+  return output === null ? null : parseNulDelimitedPaths(output);
+}
+
 export function hasStagedChanges(dependencies = {}) {
   const spawn = dependencies.spawnSync ?? spawnSync;
   const result = spawn('git', ['diff', '--cached', '--quiet'], { encoding: 'utf8' });
@@ -102,6 +110,10 @@ export function hasStagedChanges(dependencies = {}) {
 }
 
 const NUMSTAT_HEADER = /^(-|\d+)\t(-|\d+)\t(.*)$/s;
+
+function parseNulDelimitedPaths(output) {
+  return output.split('\0').filter(Boolean);
+}
 
 // QNBS-v3: binary files report "-\t-\t..." — treated as 0 meaningful lines, not NaN.
 // QNBS-v3: -z rename records are 3 NUL-separated tokens (numbers, old path, new path) — not 1.
@@ -387,7 +399,7 @@ function getChangedPaths(base, head, dependencies = {}) {
     dependencies,
   );
   if (output === null) return null;
-  return output.split('\0').filter(Boolean);
+  return parseNulDelimitedPaths(output);
 }
 
 function resolveException(base, head, dependencies = {}, changedPathsOverride) {

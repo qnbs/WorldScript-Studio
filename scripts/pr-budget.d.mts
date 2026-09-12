@@ -12,6 +12,12 @@ export interface BudgetBaseResolution {
   error?: string;
 }
 
+export const PR_BUDGET_EXIT_CODES: {
+  OK: 0;
+  BLOCKED: 1;
+  UNRESOLVED_BASE: 2;
+};
+
 export function resolveBudgetBase(options?: {
   explicitBase?: string;
   allowLive?: boolean;

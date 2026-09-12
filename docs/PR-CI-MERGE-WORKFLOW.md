@@ -12,7 +12,7 @@ Full pre-push gate mechanics, worktree bootstrap, CI pipeline order, the PR revi
 
 The PR-size evaluator in `scripts/check-pr-size.mjs` is the single mechanical authority for governed files, meaningful lines, exceptions, and commit counts. Budget is measured cumulatively from the trusted PR base to the committed head or prospective index, not from the last push. Before the first commit and before each corrective commit or push, resolve the base and run `pnpm run pr:budget -- --base <ref>`; use `--prospective` to evaluate staged changes without creating a temporary commit. `ci:prepush` repeats the committed-head check when it can resolve the base. If the base is not trustworthy, the command reports `UNRESOLVED_BASE` and must not silently assume `main`. Remote PR-size CI remains the final authority.
 
-The normal-profile thresholds are target ≤8 files / ≤400 meaningful lines / ≤6 commits, hard-advisory ≤20 / ≤1200 / ≤10, and absolute ≤30 / ≤3000 / ≤15. Active exceptions remain base-governed and cannot raise the absolute ceiling.
+The normal-profile thresholds are target ≤8 files / ≤400 meaningful lines / ≤6 commits, hard-advisory ≤20 / ≤1200 / ≤10, and absolute ≤30 / ≤3000 / ≤15. For an all-docs/governance PR, `docsGovernance` (≤15 files / ≤2400 meaningful lines / ≤8 commits) replaces hard-advisory, not target. Active exceptions remain base-governed and cannot raise the absolute ceiling.
 
 - **NORMAL / TARGET:** stay within the preferred target when practical.
 - **CAUTION:** after exceeding target, reassess that the PR still covers one execution-boundary family, remove opportunistic refactors, and batch findings by root cause.
