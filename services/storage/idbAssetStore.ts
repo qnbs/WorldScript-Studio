@@ -35,8 +35,10 @@ export class IdbAssetStore extends IdbSnapshotStore {
   // QNBS-v3: a legacy (pre-project-qualification) image has no recorded owner -- the first project to consult it claims the whole legacy namespace for itself, permanently; every later project is checked against that claim instead of guessing. Closes the orphaned-image leak across a New Project/import cycle that reuses the same entity id.
   private async claimOrCheckLegacyImageOwnership(projectId: string): Promise<boolean> {
     const store = await this.getObjectStore(APP_DATA_STORE, 'readwrite');
+    const transaction = store.transaction;
     // QNBS-v3: the read and the conditional write are chained inside one onsuccess callback on one readwrite transaction (no awaited gap between them), not two separate transactions -- IDB serializes concurrent readwrite transactions on the same store, so this makes claim-or-check atomic: two concurrent callers for different projects can never both observe "unclaimed" and both succeed.
     return new Promise<boolean>((resolve, reject) => {
+      let result: boolean | undefined;
       const getRequest = store.get(LEGACY_IMAGE_OWNER_KEY);
       getRequest.onerror = () => reject(getRequest.error);
       getRequest.onsuccess = () => {
@@ -45,11 +47,17 @@ export class IdbAssetStore extends IdbSnapshotStore {
         if (existing == null) {
           const putRequest = store.put(projectId, LEGACY_IMAGE_OWNER_KEY);
           putRequest.onerror = () => reject(putRequest.error);
-          putRequest.onsuccess = () => resolve(true);
+          putRequest.onsuccess = () => {
+            result = true;
+          };
           return;
         }
-        resolve(existing === projectId);
+        result = existing === projectId;
       };
+      // QNBS-v3: resolves only once the transaction durably commits, not merely once the individual put request succeeds -- a request can report success and still be rolled back if the transaction later aborts, which would otherwise let getImage proceed on a claim that was never actually persisted.
+      transaction.oncomplete = () => resolve(result as boolean);
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error);
     });
   }
 

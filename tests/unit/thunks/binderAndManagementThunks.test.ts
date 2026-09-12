@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../../services/storageService', () => ({
   storageService: {
     saveImage: vi.fn(),
+    getImage: vi.fn(),
     deleteImage: vi.fn(),
     deleteBinderAsset: vi.fn(),
     saveBinderAsset: vi.fn(),
@@ -55,6 +56,8 @@ beforeEach(() => {
   vi.mocked(storageService.deleteBinderAsset).mockResolvedValue(undefined);
   vi.mocked(storageService.saveBinderAsset).mockResolvedValue(undefined);
   vi.mocked(storageService.saveImage).mockResolvedValue(undefined);
+  // QNBS-v3: default "nothing stored yet" so import tests exercise the new-image (delete-on-rollback) path unless a test deliberately simulates a pre-existing image to exercise the restore-on-rollback path.
+  vi.mocked(storageService.getImage).mockResolvedValue(null);
   vi.mocked(storageService.deleteImage).mockResolvedValue(undefined);
   vi.mocked(storageService.getSnapshotData).mockResolvedValue(null);
   vi.mocked(storageService.restoreSnapshot).mockResolvedValue(null);
@@ -422,6 +425,77 @@ describe('importProjectThunk', () => {
 
     expect(action.type).toBe('project/importProject/rejected');
     expect(storageService.deleteImage).toHaveBeenCalledWith('c-ok', 'proj-1');
+  });
+
+  // QNBS-v3: re-importing into an existing project id can overwrite an already-present qualified image -- a failed later save must restore that exact prior image, not just delete this attempt's write (which would permanently destroy data that predates the failed import).
+  it('restores the pre-existing image (not deletes it) when a later image save fails after an overwrite', async () => {
+    const projectWithTwoAvatars = {
+      ...minimalProject,
+      characters: [
+        { id: 'c-overwritten', name: 'Overwritten', avatarBase64: 'new-avatar' },
+        { id: 'c-fail', name: 'Fail', avatarBase64: 'fail-avatar' },
+      ],
+    };
+    vi.mocked(parseImportedProjectJson).mockReturnValue(projectWithTwoAvatars as never);
+    vi.mocked(storageService.getImage).mockImplementation(async (id: string) =>
+      id === 'c-overwritten' ? 'pre-existing-avatar' : null,
+    );
+    vi.mocked(storageService.saveImage).mockImplementation(async (id: string) => {
+      if (id === 'c-fail') throw new Error('disk full');
+    });
+
+    const store = makeStore();
+    const file = new File([JSON.stringify(projectWithTwoAvatars)], 'novel.json', {
+      type: 'application/json',
+    });
+    const action = await store.dispatch(importProjectThunk(file));
+
+    expect(action.type).toBe('project/importProject/rejected');
+    // QNBS-v3: restored via saveImage with the snapshotted prior value, never deleted.
+    expect(storageService.saveImage).toHaveBeenCalledWith(
+      'c-overwritten',
+      'pre-existing-avatar',
+      'proj-1',
+    );
+    expect(storageService.deleteImage).not.toHaveBeenCalledWith('c-overwritten', 'proj-1');
+  });
+
+  // QNBS-v3: characterArray/worldArray are validated for duplicates separately, so a shared raw id between a character and a world would otherwise pass both checks while colliding in the same project-qualified image namespace.
+  it('rejects an import where a character and a world share the same entity id and both have an image', async () => {
+    const projectWithCollidingIds = {
+      ...minimalProject,
+      characters: [{ id: 'shared-id', name: 'Alice', avatarBase64: 'char-avatar' }],
+      worlds: [{ id: 'shared-id', name: 'Alicia', ambianceImageBase64: 'world-avatar' }],
+    };
+    vi.mocked(parseImportedProjectJson).mockReturnValue(projectWithCollidingIds as never);
+
+    const store = makeStore();
+    const file = new File([JSON.stringify(projectWithCollidingIds)], 'novel.json', {
+      type: 'application/json',
+    });
+    const action = await store.dispatch(importProjectThunk(file));
+
+    expect(action.type).toBe('project/importProject/rejected');
+    expect(storageService.saveImage).not.toHaveBeenCalled();
+  });
+
+  // QNBS-v3: characters and worlds are independent Redux entity collections and may legitimately share a raw id -- only actually colliding image writes (both sides carrying an image) are rejected, not the shared id alone.
+  it('allows a character and a world to share the same entity id when only one of them has an image', async () => {
+    const projectWithSharedIdNoCollision = {
+      ...minimalProject,
+      characters: [{ id: 'shared-id', name: 'Alice', avatarBase64: 'char-avatar' }],
+      worlds: [{ id: 'shared-id', name: 'Alicia' }],
+    };
+    vi.mocked(parseImportedProjectJson).mockReturnValue(projectWithSharedIdNoCollision as never);
+
+    const store = makeStore();
+    const file = new File([JSON.stringify(projectWithSharedIdNoCollision)], 'novel.json', {
+      type: 'application/json',
+    });
+    const action = await store.dispatch(importProjectThunk(file));
+
+    expect(action.type).toBe('project/importProject/fulfilled');
+    expect(storageService.saveImage).toHaveBeenCalledWith('shared-id', 'char-avatar', 'proj-1');
   });
 
   it('handles normalized entity format characters', async () => {

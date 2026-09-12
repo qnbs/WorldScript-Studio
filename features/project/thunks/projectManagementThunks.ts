@@ -73,17 +73,26 @@ export const importProjectThunk = createAsyncThunk('project/importProject', asyn
     throw new Error('Invalid project file: duplicate character or world entity ID.');
   }
 
+  // QNBS-v3: characters and worlds are validated for internal duplicates SEPARATELY above and may legitimately share a raw id (they live in independent Redux entity collections) -- but the qualified image filename is keyed purely by that raw id with no entity-type discriminator, so a character AND a world with the same id that BOTH carry an image would overwrite each other's image on save. Reject only that specific combination, before any image I/O starts.
+  const characterImageIds = new Set(characterArray.filter((c) => c.avatarBase64).map((c) => c.id));
+  if (worldArray.some((w) => w.ambianceImageBase64 && characterImageIds.has(w.id))) {
+    throw new Error(
+      'Invalid project file: a character and a world with the same entity ID both have an image.',
+    );
+  }
+
   // QNBS-v3: images are project-qualified in storage now -- resolve the imported project's own id up front so both save loops use the same namespace the returned ProjectData below is assigned. A present-but-empty id is treated identically to a missing one (`||`, not `??`) and gets its own fresh generated id, not the shared 'default' fallback used elsewhere for "no active project" -- two independent no-id imports must land in two distinct namespaces, not silently collapse into the same one.
   const importedProjectId = projectDataJson.id || crypto.randomUUID();
 
-  // QNBS-v3: an import that fails partway must not leave orphaned images behind for a project that will never be admitted into state -- best-effort cleanup of everything saved so far before re-throwing.
-  const savedImageIds: string[] = [];
+  // QNBS-v3: a failed import must restore exactly the pre-import persistent image state, not just delete whatever this attempt wrote -- re-importing into an EXISTING project id can overwrite an already-present qualified image, and a plain delete-on-failure would permanently destroy it instead of just undoing this attempt. Snapshot whatever was there (or null) before each write, and restore that snapshot on failure instead of unconditionally deleting.
+  const imageRollbackLog: { id: string; previousImage: string | null }[] = [];
   try {
     for (const char of characterArray) {
       const newChar = { ...char };
       if (newChar.avatarBase64) {
+        const previousImage = await storageService.getImage(newChar.id, importedProjectId);
+        imageRollbackLog.push({ id: newChar.id, previousImage });
         await storageService.saveImage(newChar.id, newChar.avatarBase64, importedProjectId);
-        savedImageIds.push(newChar.id);
         newChar.hasAvatar = true;
         delete newChar.avatarBase64;
       }
@@ -93,12 +102,13 @@ export const importProjectThunk = createAsyncThunk('project/importProject', asyn
     for (const world of worldArray) {
       const newWorld = { ...world };
       if (newWorld.ambianceImageBase64) {
+        const previousImage = await storageService.getImage(newWorld.id, importedProjectId);
+        imageRollbackLog.push({ id: newWorld.id, previousImage });
         await storageService.saveImage(
           newWorld.id,
           newWorld.ambianceImageBase64,
           importedProjectId,
         );
-        savedImageIds.push(newWorld.id);
         newWorld.hasAmbianceImage = true;
         delete newWorld.ambianceImageBase64;
       }
@@ -106,8 +116,11 @@ export const importProjectThunk = createAsyncThunk('project/importProject', asyn
     }
   } catch (error) {
     await Promise.all(
-      savedImageIds.map((id) =>
-        storageService.deleteImage(id, importedProjectId).catch(() => undefined),
+      imageRollbackLog.map(({ id, previousImage }) =>
+        (previousImage !== null
+          ? storageService.saveImage(id, previousImage, importedProjectId)
+          : storageService.deleteImage(id, importedProjectId)
+        ).catch(() => undefined),
       ),
     );
     throw error;
