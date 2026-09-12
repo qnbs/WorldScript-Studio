@@ -102,6 +102,7 @@ async function writeAndReplace(
     const temporary = temporaryPath(path);
     try {
       await retryFs(() => write(temporary));
+      // QNBS-v3: [Grund: final replace admission / Impact: reject stale filesystem mutations / Kreativer Mehrwert: preserve atomic project assets]
       beforeReplace?.();
       await retryFs(() => apis.rename(temporary, path));
     } catch (error) {

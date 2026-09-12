@@ -5,7 +5,12 @@
  */
 
 import { logger } from '../logger';
-import type { BinderAssetMeta, BinderAssetPayload, ImageWriteAdmission } from '../storageBackend';
+import type {
+  BinderAssetMeta,
+  BinderAssetPayload,
+  ImageDeleteAdmission,
+  ImageWriteAdmission,
+} from '../storageBackend';
 import { retryFs, sanitizePathSegment, writeFileAtomic, writeTextFileAtomic } from './fsCore';
 import { FsSnapshotStore } from './snapshotFsStore';
 
@@ -123,7 +128,11 @@ export class FsAssetStore extends FsSnapshotStore {
     }
   }
 
-  async deleteImage(id: string, projectId = 'default'): Promise<void> {
+  async deleteImage(
+    id: string,
+    projectId = 'default',
+    deleteAdmission?: ImageDeleteAdmission,
+  ): Promise<void> {
     try {
       // QNBS-v3: serialized + write-authority-checked like deleteBinderAsset -- an unserialized ownership check could go stale against a concurrent project creation and delete another project's unattributed legacy image.
       await this.withLegacyRoutingOperation(async () => {
@@ -135,15 +144,17 @@ export class FsAssetStore extends FsSnapshotStore {
         if (soleOwner) {
           const legacyFile = await this.legacyImagePath(id);
           if (await apis.exists(legacyFile)) {
+            deleteAdmission?.();
             await retryFs(() => apis.remove(legacyFile));
           }
         }
         if (await apis.exists(qualifiedFile)) {
+          deleteAdmission?.();
           await retryFs(() => apis.remove(qualifiedFile));
         }
       }, projectId);
     } catch (error) {
-      if (this.isProjectWriteAuthorityError(error)) throw error;
+      if (deleteAdmission || this.isProjectWriteAuthorityError(error)) throw error;
       logger.error('Failed to delete image:', error);
     }
   }

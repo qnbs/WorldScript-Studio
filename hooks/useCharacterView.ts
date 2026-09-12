@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useToast } from '../components/ui/Toast';
 import {
+  assertProjectIdentityUnchanged,
   captureActiveProjectIdentity,
   getProjectTargetStorageId,
   identityUnchanged,
@@ -227,7 +228,13 @@ export const useCharacterView = () => {
       }
       const deletingCharacter = characterToDelete;
       // QNBS-v3: the real delete API, not saveImage(id, '') -- an empty-string save only overwrote the project-qualified key, leaving any pre-qualification legacy blob for this id intact and resurfacable via getImage's fallback.
-      await storageService.deleteImage(deletingCharacter.id, projectId);
+      await storageService.deleteImage(deletingCharacter.id, projectId, () =>
+        assertProjectIdentityUnchanged(
+          characterDeleteIdentity,
+          captureActiveProjectIdentity(),
+          'character image deletion',
+        ),
+      );
       if (!identityUnchanged(characterDeleteIdentity, captureActiveProjectIdentity())) {
         setCharacterToDeleteState(null);
         setCharacterDeleteIdentity(null);

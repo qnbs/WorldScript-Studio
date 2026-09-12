@@ -16,6 +16,9 @@ export interface BinderAssetPayload {
 /** Synchronous admission check evaluated at the backend's image-write point. */
 export type ImageWriteAdmission = () => void;
 
+/** Synchronous admission check evaluated at the backend's image-delete point. */
+export type ImageDeleteAdmission = () => void;
+
 // QNBS-v3: shared result keeps the affected identity and verified quarantine path explicit across backends.
 /** Result of moving a corrupt desktop project out of the active project namespace. */
 export interface ProjectQuarantineResult {
@@ -130,7 +133,11 @@ export interface StorageBackend {
   listSnapshots(): Promise<ProjectSnapshot[]>;
   deleteSnapshot(snapshotId: number): Promise<void>;
 
-  deleteImage(id: string, projectId?: string): Promise<void>;
+  deleteImage(
+    id: string,
+    projectId?: string,
+    deleteAdmission?: ImageDeleteAdmission,
+  ): Promise<void>;
 
   hasSavedData(): Promise<boolean>;
 

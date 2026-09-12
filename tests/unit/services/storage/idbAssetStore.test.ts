@@ -269,6 +269,19 @@ describe('IdbAssetStore', () => {
       mockIdbStore.delete.mockImplementation(() => makeErrorReq(new DOMException('del failed')));
       await expect(store.deleteImage('img-1', 'proj-1')).rejects.toBeDefined();
     });
+
+    it('refuses deletion when the current incarnation no longer has authority', async () => {
+      mockIdbStore.delete.mockImplementation(() => makeSuccessReq(undefined));
+      const admission = vi.fn(() => {
+        throw new Error('stale project incarnation');
+      });
+
+      await expect(store.deleteImage('img-1', 'proj-1', admission)).rejects.toThrow(
+        'stale project incarnation',
+      );
+      expect(admission).toHaveBeenCalledTimes(1);
+      expect(mockIdbStore.delete).not.toHaveBeenCalled();
+    });
   });
 
   describe('legacy image ownership', () => {

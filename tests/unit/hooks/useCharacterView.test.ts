@@ -97,7 +97,8 @@ vi.mock('../../../services/storageService', () => ({
   storageService: {
     saveImage: (id: unknown, data: unknown, projectId: unknown) =>
       mockSaveImage(id, data, projectId),
-    deleteImage: (id: unknown, projectId: unknown) => mockDeleteImage(id, projectId),
+    deleteImage: (id: unknown, projectId: unknown, admission: unknown) =>
+      mockDeleteImage(id, projectId, admission),
   },
 }));
 
@@ -465,7 +466,7 @@ describe('confirmDelete', () => {
     });
 
     // QNBS-v3: asserts the real active project id (not a hardcoded fallback every project would share) is forwarded to deleteImage.
-    expect(mockDeleteImage).toHaveBeenCalledWith('c1', 'c-project-1');
+    expect(mockDeleteImage).toHaveBeenCalledWith('c1', 'c-project-1', expect.any(Function));
     expect(mockDispatch).toHaveBeenCalledWith(projectActions.deleteCharacter('c1'));
   });
 

@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useToast } from '../components/ui/Toast';
 import {
+  assertProjectIdentityUnchanged,
   captureActiveProjectIdentity,
   getProjectTargetStorageId,
   identityUnchanged,
@@ -265,7 +266,13 @@ export const useWorldView = () => {
       }
       const deletingWorld = worldToDelete;
       // QNBS-v3: the real delete API, not saveImage(id, '') -- an empty-string save only overwrote the project-qualified key, leaving any pre-qualification legacy blob for this id intact and resurfacable via getImage's fallback.
-      await storageService.deleteImage(deletingWorld.id, projectId);
+      await storageService.deleteImage(deletingWorld.id, projectId, () =>
+        assertProjectIdentityUnchanged(
+          worldDeleteIdentity,
+          captureActiveProjectIdentity(),
+          'world image deletion',
+        ),
+      );
       if (!identityUnchanged(worldDeleteIdentity, captureActiveProjectIdentity())) {
         setWorldToDeleteState(null);
         setWorldDeleteIdentity(null);

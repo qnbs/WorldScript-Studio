@@ -26,6 +26,7 @@ export class StaleProjectOperationError extends Error {
   }
 }
 
+// QNBS-v3: [Grund: serialized stale-error classification / Impact: suppress expected caller noise / Kreativer Mehrwert: keep global diagnostics actionable]
 export function isStaleProjectOperationError(error: unknown): boolean {
   return (
     typeof error === 'object' &&

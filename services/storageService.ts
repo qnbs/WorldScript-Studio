@@ -2,6 +2,7 @@ import type { ProjectSnapshot, Settings, StoryCodex, StoryProject } from '../typ
 import type {
   BinderAssetMeta,
   BinderAssetPayload,
+  ImageDeleteAdmission,
   ImageWriteAdmission,
   ProjectQuarantineResult,
   SaveProjectInput,
@@ -12,6 +13,7 @@ import type {
 export type {
   BinderAssetMeta,
   BinderAssetPayload,
+  ImageDeleteAdmission,
   ImageWriteAdmission,
   ProjectQuarantineResult,
   SaveProjectEnvelope,
@@ -207,9 +209,13 @@ class StorageManager {
   }
 
   // QNBS-v3: same trailing-optional projectId compatibility shape as saveImage/getImage above.
-  async deleteImage(id: string, projectId?: string): Promise<void> {
+  async deleteImage(
+    id: string,
+    projectId?: string,
+    deleteAdmission?: ImageDeleteAdmission,
+  ): Promise<void> {
     const backend = await this.getBackend();
-    return backend.deleteImage(id, projectId);
+    return backend.deleteImage(id, projectId, deleteAdmission);
   }
 
   async hasSavedData(): Promise<boolean> {
