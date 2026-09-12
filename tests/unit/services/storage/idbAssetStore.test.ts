@@ -222,6 +222,7 @@ describe('IdbAssetStore', () => {
       await expect(store.saveImage('img-1', 'abc', 'proj-1')).rejects.toBeDefined();
     });
 
+    // QNBS-v3: [Grund: request success precedes transaction commit / Impact: reject a rolled-back stale write / Kreativer Mehrwert: keep persistence authority fail-closed]
     it('aborts a successful put when commit-time authority no longer holds', async () => {
       const admission = vi
         .fn<() => undefined>()
@@ -323,6 +324,7 @@ describe('IdbAssetStore', () => {
       await expect(store.deleteImage('img-1', 'proj-1')).rejects.toBeDefined();
     });
 
+    // QNBS-v3: [Grund: delete admission can fail after one request succeeds / Impact: roll back the whole atomic deletion / Kreativer Mehrwert: preserve project ownership]
     it('aborts a delete when commit-time authority no longer holds', async () => {
       const admission = vi
         .fn<() => undefined>()
@@ -338,6 +340,7 @@ describe('IdbAssetStore', () => {
       expect(mockImagesTransaction.abort).toHaveBeenCalledTimes(1);
     });
 
+    // QNBS-v3: [Grund: a queued sibling request may surface AbortError first / Impact: retain the causal stale-operation error / Kreativer Mehrwert: keep retry and UI handling truthful]
     it('preserves the stale admission error if another delete request aborts', async () => {
       mockAppDataStore.get.mockImplementation(() => appDataTracker.success('proj-1'));
       const abortError = new DOMException('transaction aborted', 'AbortError');

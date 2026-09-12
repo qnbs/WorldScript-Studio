@@ -591,6 +591,7 @@ describe('confirmDelete', () => {
     expect(mockDispatch).not.toHaveBeenCalledWith(projectActions.deleteCharacter('c1'));
   });
 
+  // QNBS-v3: [Grund: a backend failure can arrive after an incarnation switch / Impact: suppress stale error UI and selection / Kreativer Mehrwert: keep feedback scoped to the active project]
   it('suppresses a backend error after the active project changes', async () => {
     const char = makeCharacter('c1', 'Hero');
     const { result } = renderHook(() => useCharacterView());
