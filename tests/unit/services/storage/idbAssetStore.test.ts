@@ -186,6 +186,18 @@ describe('IdbAssetStore', () => {
       expect(mockIdbStore.put).toHaveBeenCalledWith('data:image/png;base64,abc', 'proj-1::img-1');
     });
 
+    it('refuses the image write when final admission no longer proves authority', async () => {
+      const admission = vi.fn(() => {
+        throw new Error('stale project incarnation');
+      });
+
+      await expect(
+        store.saveImage('img-1', 'data:image/png;base64,abc', 'proj-1', admission),
+      ).rejects.toThrow('stale project incarnation');
+      expect(admission).toHaveBeenCalledTimes(1);
+      expect(mockIdbStore.put).not.toHaveBeenCalled();
+    });
+
     it('rejects when IDB put errors', async () => {
       mockIdbStore.put.mockImplementation(() => makeErrorReq(new DOMException('put failed')));
       await expect(store.saveImage('img-1', 'abc', 'proj-1')).rejects.toBeDefined();
@@ -256,6 +268,20 @@ describe('IdbAssetStore', () => {
       mockAppDataStore.get.mockImplementation(() => appDataTracker.success('proj-1'));
       mockIdbStore.delete.mockImplementation(() => makeErrorReq(new DOMException('del failed')));
       await expect(store.deleteImage('img-1', 'proj-1')).rejects.toBeDefined();
+    });
+
+    // QNBS-v3: [Grund: incarnation authority rejection / Impact: prevent stale deletion / Kreativer Mehrwert: guard the admission check]
+    it('refuses deletion when the current incarnation no longer has authority', async () => {
+      mockIdbStore.delete.mockImplementation(() => makeSuccessReq(undefined));
+      const admission = vi.fn(() => {
+        throw new Error('stale project incarnation');
+      });
+
+      await expect(store.deleteImage('img-1', 'proj-1', admission)).rejects.toThrow(
+        'stale project incarnation',
+      );
+      expect(admission).toHaveBeenCalledTimes(1);
+      expect(mockIdbStore.delete).not.toHaveBeenCalled();
     });
   });
 

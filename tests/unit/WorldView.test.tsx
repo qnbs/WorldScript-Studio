@@ -1,5 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { appStoreRef } from '../../app/storeRef';
 import { WorldView } from '../../components/WorldView';
 import { storageService } from '../../services/storageService';
 
@@ -44,15 +45,20 @@ const baseContextValue = {
   handleLocationChange: vi.fn(),
 };
 
+const mockProjectState = {
+  settings: { editorFont: 'serif', fontSize: 16, lineSpacing: 1.5 },
+  project: {
+    present: { data: { id: 'p1' }, generation: 0 },
+  },
+};
+
 vi.mock('../../hooks/useWorldView', () => ({
   useWorldView: vi.fn(() => baseContextValue),
 }));
 
 vi.mock('../../app/hooks', () => ({
   useAppDispatch: vi.fn(() => vi.fn()),
-  useAppSelector: vi.fn((selector: (s: unknown) => unknown) =>
-    selector({ settings: { editorFont: 'serif', fontSize: 16, lineSpacing: 1.5 } }),
-  ),
+  useAppSelector: vi.fn((selector: (s: unknown) => unknown) => selector(mockProjectState)),
 }));
 
 vi.mock('../../hooks/useSpeechRecognition', () => ({
@@ -73,6 +79,18 @@ vi.mock('../../services/storageService', () => ({
     getImage: vi.fn().mockResolvedValue(null),
   },
 }));
+
+beforeEach(() => {
+  mockProjectState.project.present = { data: { id: 'p1' }, generation: 0 };
+  appStoreRef.current = {
+    getState: () => mockProjectState,
+    dispatch: vi.fn(),
+  } as never;
+});
+
+afterEach(() => {
+  appStoreRef.current = null;
+});
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -193,9 +211,73 @@ describe('WorldView', () => {
     } as never);
     render(<WorldView />);
     // QNBS-v3: id now leads, projectId trails, matching the reordered getImage signature.
-    await waitFor(() =>
-      expect(storageService.getImage).toHaveBeenCalledWith('w-broken', 'default'),
-    );
+    await waitFor(() => expect(storageService.getImage).toHaveBeenCalledWith('w-broken', 'p1'));
     expect(screen.queryByAltText('Cindralis')).toBeNull();
+  });
+
+  // QNBS-v3: [Grund: deferred read identity fence / Impact: reject stale image completion / Kreativer Mehrwert: keep a replacement incarnation visually isolated]
+  it('does not apply a deferred ambiance read after the project incarnation changes', async () => {
+    let resolveInitialImage!: (value: string) => void;
+    vi.mocked(storageService.getImage).mockReturnValueOnce(
+      new Promise<string>((resolve) => {
+        resolveInitialImage = resolve;
+      }),
+    );
+    const { useWorldView } = await import('../../hooks/useWorldView');
+    vi.mocked(useWorldView).mockReturnValueOnce({
+      ...baseContextValue,
+      worlds: [
+        {
+          id: 'w-stable',
+          name: 'Stable Ambiance',
+          description: '',
+          geography: '',
+          magicSystem: '',
+          notes: '',
+          hasAmbianceImage: true,
+          locations: [],
+          timeline: [],
+        },
+      ],
+    } as never);
+    const { rerender } = render(<WorldView />);
+    await waitFor(() => expect(storageService.getImage).toHaveBeenCalledWith('w-stable', 'p1'));
+    await act(async () => {
+      resolveInitialImage('data:image/png;base64,INITIAL');
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(screen.getByAltText('Stable Ambiance')).toBeTruthy());
+
+    let resolveStaleImage!: (value: string) => void;
+    vi.mocked(storageService.getImage).mockReturnValueOnce(
+      new Promise<string>((resolve) => {
+        resolveStaleImage = resolve;
+      }),
+    );
+    vi.mocked(useWorldView).mockReturnValueOnce({
+      ...baseContextValue,
+      worlds: [
+        {
+          id: 'w-stale',
+          name: 'Stale Ambiance',
+          description: '',
+          geography: '',
+          magicSystem: '',
+          notes: '',
+          hasAmbianceImage: true,
+          locations: [],
+          timeline: [],
+        },
+      ],
+    } as never);
+    rerender(<WorldView />);
+    await waitFor(() => expect(storageService.getImage).toHaveBeenCalledWith('w-stale', 'p1'));
+    mockProjectState.project.present.generation = 1;
+    await act(async () => {
+      resolveStaleImage('data:image/png;base64,STALE');
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByAltText('Stale Ambiance')).toBeNull();
   });
 });

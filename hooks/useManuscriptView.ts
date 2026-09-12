@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useTransientUiStore } from '../app/transientUiStore';
 import { useToast } from '../components/ui/Toast';
+import { isStaleProjectOperationError } from '../features/project/projectIdentity';
 import {
   selectAllCharacters,
   selectAllWorlds,
@@ -325,8 +326,11 @@ export const useManuscriptView = ({
       ).unwrap();
       setSceneImagePreviewUrl(result.dataUrl);
       toast.success(t('manuscript.visualize.successTitle'), t('manuscript.visualize.successBody'));
-    } catch {
-      toast.error(t('error.apiErrorTitle'));
+    } catch (error) {
+      // QNBS-v3: [Grund: stale scene result is expected after a project switch / Impact: suppress false error toasts / Kreativer Mehrwert: keep authoring feedback actionable]
+      if (!isStaleProjectOperationError(error)) {
+        toast.error(t('error.apiErrorTitle'));
+      }
     } finally {
       setIsSceneVisualizing(false);
     }

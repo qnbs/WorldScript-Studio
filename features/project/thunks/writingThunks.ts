@@ -1,6 +1,11 @@
 import type { RootState } from '../../../app/store';
 import { storageService } from '../../../services/storageService';
 import { createDeduplicatedThunk } from '../aiThunkUtils';
+import {
+  assertProjectIdentityUnchanged,
+  getProjectTargetIdentity,
+  getProjectTargetStorageId,
+} from '../projectIdentity';
 import { buildAiCreativity, buildAiOptions, loadAiProvider, loadPrompts } from './thunkUtils';
 
 export const generateLoglineSuggestionsThunk = createDeduplicatedThunk(
@@ -69,8 +74,10 @@ export const generateSceneImageThunk = createDeduplicatedThunk(
     { getState, signal, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
+    // QNBS-v3: capture the incarnation before generation so a same-ID replacement cannot inherit the result.
+    const originIdentity = getProjectTargetIdentity(state.project.present);
     // QNBS-v3: threaded into saveImage so the stored key is project-qualified, not a bare entity id shared across projects.
-    const projectId = state.project.present?.data?.id || 'default';
+    const projectId = getProjectTargetStorageId(state.project.present) ?? 'default';
     const aiOptions = buildAiOptions(state);
     const { getPrompts } = await loadPrompts();
     const { generateImage } = await loadAiProvider();
@@ -83,7 +90,24 @@ export const generateSceneImageThunk = createDeduplicatedThunk(
     registerDuplicateRequest(prompt, 'sceneVisualization');
     const base64 = await generateImage(prompt, aiOptions, signal);
     const imageKey = `scene-${payload.sectionId}`;
-    await storageService.saveImage(imageKey, base64, projectId);
+    assertProjectIdentityUnchanged(
+      originIdentity,
+      getProjectTargetIdentity((getState() as RootState).project.present),
+      'scene image generation before storage',
+    );
+    // QNBS-v3: the backend must re-check incarnation authority at its final image-write point, not only before/after the asynchronous storage call.
+    await storageService.saveImage(imageKey, base64, projectId, () =>
+      assertProjectIdentityUnchanged(
+        originIdentity,
+        getProjectTargetIdentity((getState() as RootState).project.present),
+        'scene image persistence',
+      ),
+    );
+    assertProjectIdentityUnchanged(
+      originIdentity,
+      getProjectTargetIdentity((getState() as RootState).project.present),
+      'scene image generation after storage',
+    );
     const dataUrl = base64.includes('data:image') ? base64 : `data:image/png;base64,${base64}`;
     return { imageKey, dataUrl };
   },

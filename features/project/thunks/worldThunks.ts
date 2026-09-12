@@ -5,6 +5,11 @@ import type { WorldHeuristicLabels } from '../../../services/ai/heuristicFallbac
 import { storageService } from '../../../services/storageService';
 import type { World } from '../../../types';
 import { createDeduplicatedThunk } from '../aiThunkUtils';
+import {
+  assertProjectIdentityUnchanged,
+  getProjectTargetIdentity,
+  getProjectTargetStorageId,
+} from '../projectIdentity';
 import { buildAiCreativity, buildAiOptions, loadAiProvider, loadPrompts } from './thunkUtils';
 
 export const generateWorldProfileThunk = createDeduplicatedThunk(
@@ -68,15 +73,34 @@ export const generateWorldImageThunk = createDeduplicatedThunk(
     { getState, signal, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
+    // QNBS-v3: capture the incarnation before generation so a same-ID replacement cannot inherit the result.
+    const originIdentity = getProjectTargetIdentity(state.project.present);
     // QNBS-v3: threaded into saveImage so the stored key is project-qualified, not a bare entity id shared across projects.
-    const projectId = state.project.present?.data?.id || 'default';
+    const projectId = getProjectTargetStorageId(state.project.present) ?? 'default';
     const aiOptions = buildAiOptions(state);
     const { getPrompts } = await loadPrompts();
     const { generateImage } = await loadAiProvider();
     const { prompt } = getPrompts('worldImage', { description, lang });
     registerDuplicateRequest(prompt, 'worldImage');
     const base64 = await generateImage(prompt, aiOptions, signal);
-    await storageService.saveImage(worldId, base64, projectId);
+    assertProjectIdentityUnchanged(
+      originIdentity,
+      getProjectTargetIdentity((getState() as RootState).project.present),
+      'world image generation before storage',
+    );
+    // QNBS-v3: [Grund: origin persistence authority / Impact: reject stale writes at backend boundary / Kreativer Mehrwert: preserve world asset ownership]
+    await storageService.saveImage(worldId, base64, projectId, () =>
+      assertProjectIdentityUnchanged(
+        originIdentity,
+        getProjectTargetIdentity((getState() as RootState).project.present),
+        'world image persistence',
+      ),
+    );
+    assertProjectIdentityUnchanged(
+      originIdentity,
+      getProjectTargetIdentity((getState() as RootState).project.present),
+      'world image generation after storage',
+    );
     return { worldId };
   },
 );
@@ -84,8 +108,10 @@ export const generateWorldImageThunk = createDeduplicatedThunk(
 export const uploadWorldImageThunk = createAsyncThunk(
   'project/uploadWorldImage',
   async ({ worldId, file }: { worldId: string; file: File }, { getState }) => {
-    // QNBS-v3: threaded into saveImage so the stored key is project-qualified, not a bare entity id shared across projects.
-    const projectId = (getState() as RootState).project.present?.data?.id || 'default';
+    const state = getState() as RootState;
+    const originIdentity = getProjectTargetIdentity(state.project.present);
+    // QNBS-v3: [Origin storage owner / Keep upload/read namespaces aligned / Preserve legacy project visibility]
+    const projectId = getProjectTargetStorageId(state.project.present) ?? 'default';
     return new Promise<{ worldId: string }>((resolve, reject) => {
       const reader = new FileReader();
       // QNBS-v3: onload/onerror/onabort (not onloadend) plus Promise.catch(reject) so every terminal FileReader/saveImage outcome settles this Promise instead of leaving it pending.
@@ -95,10 +121,38 @@ export const uploadWorldImageThunk = createAsyncThunk(
           reject(new Error('FileReader did not produce a string result'));
           return;
         }
+        // QNBS-v3: [MIME-preserving upload / Keep backend round-trips lossless / Preserve user-selected image format]
+        try {
+          assertProjectIdentityUnchanged(
+            originIdentity,
+            getProjectTargetIdentity((getState() as RootState).project.present),
+            'world image upload before storage',
+          );
+        } catch (error) {
+          reject(error);
+          return;
+        }
         // QNBS-v3: retain the data-URL MIME type so uploaded JPEG/WebP images survive filesystem round-trips.
         storageService
-          .saveImage(worldId, result, projectId)
-          .then(() => resolve({ worldId }))
+          .saveImage(worldId, result, projectId, () =>
+            assertProjectIdentityUnchanged(
+              originIdentity,
+              getProjectTargetIdentity((getState() as RootState).project.present),
+              'world image upload persistence',
+            ),
+          )
+          .then(() => {
+            try {
+              assertProjectIdentityUnchanged(
+                originIdentity,
+                getProjectTargetIdentity((getState() as RootState).project.present),
+                'world image upload completion',
+              );
+              resolve({ worldId });
+            } catch (error) {
+              reject(error);
+            }
+          })
           .catch(reject);
       };
       reader.onerror = () =>

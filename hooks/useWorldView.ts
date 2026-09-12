@@ -3,10 +3,13 @@ import { v4 as uuidv4 } from 'uuid';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useToast } from '../components/ui/Toast';
 import {
+  assertProjectIdentityUnchanged,
   captureActiveProjectIdentity,
+  getProjectTargetStorageId,
   identityUnchanged,
+  isStaleProjectOperationError,
 } from '../features/project/projectIdentity';
-import { selectAllWorlds, selectProjectData } from '../features/project/projectSelectors';
+import { selectAllWorlds } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
 import {
   generateWorldImageThunk,
@@ -22,7 +25,9 @@ export const useWorldView = () => {
   const { t, language } = useTranslation();
   const dispatch = useAppDispatch();
   const worlds = useAppSelector(selectAllWorlds);
-  const projectId = useAppSelector((state) => selectProjectData(state)?.id || 'default');
+  const projectId = useAppSelector(
+    (state) => getProjectTargetStorageId(state.project.present) ?? 'default',
+  );
   const toast = useToast();
 
   const [selectedWorld, setSelectedWorld] = useState<World | null>(null);
@@ -36,7 +41,13 @@ export const useWorldView = () => {
   const [isRefiningImage, setIsRefiningImage] = useState(false);
   const [refinementPrompt, setRefinementPrompt] = useState('');
 
-  const [worldToDelete, setWorldToDelete] = useState<World | null>(null);
+  const [worldToDelete, setWorldToDeleteState] = useState<World | null>(null);
+  const [worldDeleteIdentity, setWorldDeleteIdentity] = useState<string | null>(null);
+
+  const setWorldToDelete = useCallback((world: World | null) => {
+    setWorldToDeleteState(world);
+    setWorldDeleteIdentity(world ? captureActiveProjectIdentity() : null);
+  }, []);
 
   // QNBS-v3: Manual add must open the atlas immediately — dispatch-only left users on the grid
   //          with a silent "New World" card and no editor (inconsistent with Characters, which
@@ -157,7 +168,7 @@ export const useWorldView = () => {
     );
     if (generateWorldImageThunk.fulfilled.match(resultAction)) {
       setSelectedWorld((w) => (w ? { ...w, hasAmbianceImage: true } : null));
-    } else {
+    } else if (!isStaleProjectOperationError(resultAction.error)) {
       toast.error(t('worlds.error.imageFailed'));
     }
     setIsGeneratingImage(false);
@@ -170,7 +181,10 @@ export const useWorldView = () => {
     const resultAction = await dispatch(
       generateWorldImageThunk({ worldId: selectedWorld.id, description, lang: language }),
     );
-    if (!generateWorldImageThunk.fulfilled.match(resultAction)) {
+    if (
+      !generateWorldImageThunk.fulfilled.match(resultAction) &&
+      !isStaleProjectOperationError(resultAction.error)
+    ) {
       toast.error(t('worlds.error.imageFailed'));
     }
     setRefinementPrompt('');
@@ -239,20 +253,45 @@ export const useWorldView = () => {
       const world = worlds.find((w) => w.id === id);
       if (world) setWorldToDelete(world);
     },
-    [worlds],
+    [worlds, setWorldToDelete],
   );
 
   const confirmDelete = useCallback(async () => {
     if (worldToDelete) {
+      // QNBS-v3: [Delete intent identity / Reject a dialog opened in another incarnation / Preserve destructive-action authority]
+      if (!identityUnchanged(worldDeleteIdentity, captureActiveProjectIdentity())) {
+        setWorldToDeleteState(null);
+        setWorldDeleteIdentity(null);
+        return;
+      }
+      const deletingWorld = worldToDelete;
       // QNBS-v3: the real delete API, not saveImage(id, '') -- an empty-string save only overwrote the project-qualified key, leaving any pre-qualification legacy blob for this id intact and resurfacable via getImage's fallback.
-      await storageService.deleteImage(worldToDelete.id, projectId);
-      dispatch(projectActions.deleteWorld(worldToDelete.id));
+      try {
+        await storageService.deleteImage(deletingWorld.id, projectId, () =>
+          assertProjectIdentityUnchanged(
+            worldDeleteIdentity,
+            captureActiveProjectIdentity(),
+            'world image deletion',
+          ),
+        );
+      } catch (error) {
+        if (!isStaleProjectOperationError(error)) throw error;
+        setWorldToDeleteState(null);
+        setWorldDeleteIdentity(null);
+        return;
+      }
+      if (!identityUnchanged(worldDeleteIdentity, captureActiveProjectIdentity())) {
+        setWorldToDeleteState(null);
+        setWorldDeleteIdentity(null);
+        return;
+      }
+      dispatch(projectActions.deleteWorld(deletingWorld.id));
       setWorldToDelete(null);
       setIsAtlasOpen(false);
       setSelectedWorld(null);
-      toast.info(t('worlds.deleteLabel', { name: worldToDelete.name }));
+      toast.info(t('worlds.deleteLabel', { name: deletingWorld.name }));
     }
-  }, [dispatch, worldToDelete, toast, t, projectId]);
+  }, [dispatch, worldToDelete, worldDeleteIdentity, toast, t, projectId, setWorldToDelete]);
 
   return {
     t,

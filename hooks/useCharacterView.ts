@@ -3,10 +3,13 @@ import { v4 as uuidv4 } from 'uuid';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useToast } from '../components/ui/Toast';
 import {
+  assertProjectIdentityUnchanged,
   captureActiveProjectIdentity,
+  getProjectTargetStorageId,
   identityUnchanged,
+  isStaleProjectOperationError,
 } from '../features/project/projectIdentity';
-import { selectAllCharacters, selectProjectData } from '../features/project/projectSelectors';
+import { selectAllCharacters } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
 import {
   generateCharacterPortraitThunk,
@@ -22,7 +25,9 @@ export const useCharacterView = () => {
   const { t, language } = useTranslation();
   const dispatch = useAppDispatch();
   const characters = useAppSelector(selectAllCharacters);
-  const projectId = useAppSelector((state) => selectProjectData(state)?.id || 'default');
+  const projectId = useAppSelector(
+    (state) => getProjectTargetStorageId(state.project.present) ?? 'default',
+  );
   const toast = useToast();
 
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
@@ -38,7 +43,13 @@ export const useCharacterView = () => {
   const [portraitStyle, setPortraitStyle] = useState('digital painting');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const [characterToDelete, setCharacterToDelete] = useState<Character | null>(null);
+  const [characterToDelete, setCharacterToDeleteState] = useState<Character | null>(null);
+  const [characterDeleteIdentity, setCharacterDeleteIdentity] = useState<string | null>(null);
+
+  const setCharacterToDelete = useCallback((character: Character | null) => {
+    setCharacterToDeleteState(character);
+    setCharacterDeleteIdentity(character ? captureActiveProjectIdentity() : null);
+  }, []);
 
   // QNBS-v3: Manual add must open the dossier immediately — dispatch-only left users on an empty grid and broke E2E + discoverability.
   const handleAddNewManually = useCallback(() => {
@@ -163,13 +174,13 @@ export const useCharacterView = () => {
         lang: language,
       }),
     );
-    if (!generateCharacterPortraitThunk.fulfilled.match(resultAction)) {
+    if (generateCharacterPortraitThunk.fulfilled.match(resultAction)) {
+      // QNBS-v3: only fulfilled generation may mark the local selection as having an avatar.
+      setSelectedCharacter((c) => (c ? { ...c, hasAvatar: true } : null));
+    } else if (!isStaleProjectOperationError(resultAction.error)) {
       const errorText = t('characters.error.portraitFailed');
       setErrorMessage(errorText);
       toast.error(errorText);
-    } else {
-      // Trigger re-render by updating local state, redux state will update via extraReducer
-      setSelectedCharacter((c) => (c ? { ...c, hasAvatar: true } : null));
     }
     setIsGeneratingPortrait(false);
   }, [dispatch, selectedCharacter, portraitStyle, language, t, toast]);
@@ -185,7 +196,10 @@ export const useCharacterView = () => {
         lang: language,
       }),
     );
-    if (!generateCharacterPortraitThunk.fulfilled.match(resultAction)) {
+    if (
+      !generateCharacterPortraitThunk.fulfilled.match(resultAction) &&
+      !isStaleProjectOperationError(resultAction.error)
+    ) {
       const errorText = t('characters.error.portraitFailed');
       setErrorMessage(errorText);
       toast.error(errorText);
@@ -201,20 +215,53 @@ export const useCharacterView = () => {
         setCharacterToDelete(char);
       }
     },
-    [characters],
+    [characters, setCharacterToDelete],
   );
 
   const confirmDelete = useCallback(async () => {
     if (characterToDelete) {
+      // QNBS-v3: [Delete intent identity / Reject a dialog opened in another incarnation / Preserve destructive-action authority]
+      if (!identityUnchanged(characterDeleteIdentity, captureActiveProjectIdentity())) {
+        setCharacterToDeleteState(null);
+        setCharacterDeleteIdentity(null);
+        return;
+      }
+      const deletingCharacter = characterToDelete;
       // QNBS-v3: the real delete API, not saveImage(id, '') -- an empty-string save only overwrote the project-qualified key, leaving any pre-qualification legacy blob for this id intact and resurfacable via getImage's fallback.
-      await storageService.deleteImage(characterToDelete.id, projectId);
-      dispatch(projectActions.deleteCharacter(characterToDelete.id));
+      try {
+        await storageService.deleteImage(deletingCharacter.id, projectId, () =>
+          assertProjectIdentityUnchanged(
+            characterDeleteIdentity,
+            captureActiveProjectIdentity(),
+            'character image deletion',
+          ),
+        );
+      } catch (error) {
+        if (!isStaleProjectOperationError(error)) throw error;
+        setCharacterToDeleteState(null);
+        setCharacterDeleteIdentity(null);
+        return;
+      }
+      if (!identityUnchanged(characterDeleteIdentity, captureActiveProjectIdentity())) {
+        setCharacterToDeleteState(null);
+        setCharacterDeleteIdentity(null);
+        return;
+      }
+      dispatch(projectActions.deleteCharacter(deletingCharacter.id));
       setCharacterToDelete(null);
       setIsDossierOpen(false);
       setSelectedCharacter(null);
-      toast.info(t('characters.deleteLabel', { name: characterToDelete.name }));
+      toast.info(t('characters.deleteLabel', { name: deletingCharacter.name }));
     }
-  }, [dispatch, characterToDelete, toast, t, projectId]);
+  }, [
+    dispatch,
+    characterToDelete,
+    characterDeleteIdentity,
+    toast,
+    t,
+    projectId,
+    setCharacterToDelete,
+  ]);
 
   return {
     t,

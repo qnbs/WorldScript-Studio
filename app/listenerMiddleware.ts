@@ -3,6 +3,7 @@ import { createListenerMiddleware, isRejected } from '@reduxjs/toolkit';
 import { analyticsActions } from '../features/analytics/analyticsSlice';
 // QNBS-v3: canonical selector — replaces a local type that misapplied the persisted-state shape to the live store
 import { proForgeActions } from '../features/proForge/proForgeSlice';
+import { isStaleProjectOperationError } from '../features/project/projectIdentity';
 import { selectProjectData } from '../features/project/projectSelectors';
 import type { ProjectData } from '../features/project/projectSlice';
 import { statusActions } from '../features/status/statusSlice';
@@ -358,7 +359,8 @@ addDebouncedListener(
 listenerMiddleware.startListening({
   matcher: isRejected,
   effect: (action, listenerApi) => {
-    if (action.meta.aborted) return;
+    // QNBS-v3: [Grund: expected stale rejection / Impact: suppress false failure notifications / Kreativer Mehrwert: keep project switches quiet]
+    if (action.meta.aborted || isStaleProjectOperationRejection(action)) return;
 
     let errorDescription = action.error?.message ?? 'An unexpected error occurred.';
     if (errorDescription.includes('quota') || errorDescription.includes('API key')) {
@@ -374,6 +376,10 @@ listenerMiddleware.startListening({
     );
   },
 });
+
+function isStaleProjectOperationRejection(action: { error?: unknown }): boolean {
+  return isStaleProjectOperationError(action.error);
+}
 
 listenerMiddleware.startListening({
   predicate: (_action, currentState, previousState) => {

@@ -10,7 +10,12 @@ import {
   IMAGES_STORE,
   LEGACY_IMAGE_OWNER_KEY,
 } from '../dbConstants';
-import type { BinderAssetMeta, BinderAssetPayload } from '../storageBackend';
+import type {
+  BinderAssetMeta,
+  BinderAssetPayload,
+  ImageDeleteAdmission,
+  ImageWriteAdmission,
+} from '../storageBackend';
 import {
   makeBinderAssetIdsPrefix,
   makeBinderAssetStorageKey,
@@ -72,7 +77,12 @@ export class IdbAssetStore extends IdbSnapshotStore {
     return existing === projectId;
   }
 
-  async saveImage(id: string, base64: string, projectId = 'default'): Promise<void> {
+  async saveImage(
+    id: string,
+    base64: string,
+    projectId = 'default',
+    writeAdmission?: ImageWriteAdmission,
+  ): Promise<void> {
     return withProtectedWriteAdmission(async () => {
       // QNBS-v3: Resolve the write key BEFORE opening the transaction — `await idbEncryptWithKey`
       //          yields the event loop, which auto-commits an already-open IDB transaction
@@ -84,6 +94,7 @@ export class IdbAssetStore extends IdbSnapshotStore {
       await assertNoActiveEncryptionMigration();
       const key = await makeImageStorageKey(projectId, id);
       const store = await this.getObjectStore(IMAGES_STORE, 'readwrite');
+      writeAdmission?.();
       return new Promise<void>((resolve, reject) => {
         const request = store.put(payload, key);
         request.onsuccess = () => resolve();
@@ -123,7 +134,11 @@ export class IdbAssetStore extends IdbSnapshotStore {
     return this.decodeImageRecord(legacy);
   }
 
-  async deleteImage(id: string, projectId = 'default'): Promise<void> {
+  async deleteImage(
+    id: string,
+    projectId = 'default',
+    deleteAdmission?: ImageDeleteAdmission,
+  ): Promise<void> {
     return withProtectedWriteAdmission(async () => {
       // QNBS-v3: A locked session must not be able to destroy protected images it cannot read.
       await assertIdbProtectedWriteAllowed();
@@ -134,6 +149,7 @@ export class IdbAssetStore extends IdbSnapshotStore {
       const keysToDelete = legacyOwned ? [qualifiedKey, id] : [qualifiedKey];
       const store = await this.getObjectStore(IMAGES_STORE, 'readwrite');
       // QNBS-v3: clear both the qualified and legacy key so a stale legacy record can never resurface via getImage's fallback after an explicit delete. Both deletes share one IDB transaction, so a failure on either aborts and rolls back both -- no partial-delete resurrection risk here, unlike the filesystem backend's independent file operations.
+      deleteAdmission?.();
       await Promise.all(
         keysToDelete.map(
           (key) =>

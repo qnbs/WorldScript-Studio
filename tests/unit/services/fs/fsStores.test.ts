@@ -1922,6 +1922,125 @@ describe('FsAssetStore — images + binder assets', () => {
     expect(await store.getImage('char-1', 'proj-1')).toBeNull();
   });
 
+  it('does not replace an image when final write admission rejects the incarnation', async () => {
+    await store.saveImage('guarded', 'data:image/png;base64,OLD', 'proj-1');
+    const filesBeforeRejectedWrite = new Map(fake.text);
+    const admission = vi
+      .fn()
+      .mockImplementationOnce(() => undefined)
+      .mockImplementationOnce(() => {
+        throw new Error('stale project incarnation');
+      });
+
+    await expect(
+      store.saveImage('guarded', 'data:image/png;base64,NEW', 'proj-1', admission),
+    ).rejects.toThrow('stale project incarnation');
+    expect(admission).toHaveBeenCalledTimes(2);
+    expect(fake.text).toEqual(filesBeforeRejectedWrite);
+    expect(await store.getImage('guarded', 'proj-1')).toBe('data:image/png;base64,OLD');
+  });
+
+  it('does not delete an image when delete admission rejects the incarnation', async () => {
+    await store.saveImage('delete-guarded', 'data:image/png;base64,OLD', 'proj-1');
+    const admission = vi.fn(() => {
+      throw new Error('stale project incarnation');
+    });
+
+    await expect(store.deleteImage('delete-guarded', 'proj-1', admission)).rejects.toThrow(
+      'stale project incarnation',
+    );
+    expect(admission).toHaveBeenCalledTimes(1);
+    expect(await store.getImage('delete-guarded', 'proj-1')).toBe('data:image/png;base64,OLD');
+  });
+
+  // QNBS-v3: [Grund: stale no-op deletion / Impact: reject obsolete entity removal / Kreativer Mehrwert: keep missing-file cleanup under project authority]
+  it('checks delete admission even when both image files are already absent', async () => {
+    const admission = vi.fn(() => {
+      throw new Error('stale project incarnation');
+    });
+
+    await expect(store.deleteImage('missing-image', 'proj-1', admission)).rejects.toThrow(
+      'stale project incarnation',
+    );
+    expect(admission).toHaveBeenCalledTimes(1);
+  });
+
+  it('rechecks delete admission after a transient filesystem retry', async () => {
+    await store.saveImage('delete-retry', 'data:image/png;base64,OLD', 'proj-1');
+    const qualified = qualifiedImageKey('delete-retry');
+    expect(qualified).toBeDefined();
+    const originalRemove = fake.apis.remove;
+    let removeAttempts = 0;
+    fake.apis.remove = (path: string, options?: { recursive?: boolean }) => {
+      if (path === qualified && removeAttempts++ === 0) {
+        return Promise.reject(new Error('resource busy'));
+      }
+      return originalRemove(path, options);
+    };
+    const admission = vi.fn();
+
+    try {
+      await store.deleteImage('delete-retry', 'proj-1', admission);
+    } finally {
+      fake.apis.remove = originalRemove;
+    }
+
+    expect(removeAttempts).toBe(2);
+    expect(admission).toHaveBeenCalledTimes(3);
+    expect(await store.getImage('delete-retry', 'proj-1')).toBeNull();
+  });
+
+  // QNBS-v3: a replacement must wait for a pending delete so the delete cannot remove the replacement after its atomic rename.
+  it('serializes a replacement behind a deferred image removal', async () => {
+    await store.saveImage('replace-race', 'data:image/png;base64,OLD', 'proj-1');
+    const qualified = qualifiedImageKey('replace-race');
+    expect(qualified).toBeDefined();
+
+    const originalRemove = fake.apis.remove;
+    const originalWriteTextFile = fake.apis.writeTextFile;
+    let releaseRemoval!: () => void;
+    let removalStarted!: () => void;
+    const removalReleased = new Promise<void>((resolve) => {
+      releaseRemoval = resolve;
+    });
+    const removalObserved = new Promise<void>((resolve) => {
+      removalStarted = resolve;
+    });
+    let replacementWriteStarted = false;
+
+    fake.apis.remove = async (path: string, options?: { recursive?: boolean }) => {
+      if (path === qualified) {
+        removalStarted();
+        await removalReleased;
+      }
+      return originalRemove(path, options);
+    };
+    fake.apis.writeTextFile = (path: string, content: string) => {
+      if (path.includes('.tmp-')) replacementWriteStarted = true;
+      return originalWriteTextFile(path, content);
+    };
+
+    try {
+      const deletePromise = store.deleteImage('replace-race', 'proj-1');
+      await removalObserved;
+      const replacementPromise = store.saveImage(
+        'replace-race',
+        'data:image/png;base64,NEW',
+        'proj-1',
+      );
+
+      expect(replacementWriteStarted).toBe(false);
+      releaseRemoval();
+      await Promise.all([deletePromise, replacementPromise]);
+    } finally {
+      fake.apis.remove = originalRemove;
+      fake.apis.writeTextFile = originalWriteTextFile;
+      releaseRemoval();
+    }
+
+    expect(await store.getImage('replace-race', 'proj-1')).toBe('data:image/png;base64,NEW');
+  });
+
   it('treats legacy raw image payloads as PNG', async () => {
     await store.saveImage('legacy-char', 'QUJD', 'proj-1');
     expect(await store.getImage('legacy-char', 'proj-1')).toBe('data:image/png;base64,QUJD');

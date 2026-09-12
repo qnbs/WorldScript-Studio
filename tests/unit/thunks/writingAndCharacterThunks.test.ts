@@ -23,7 +23,7 @@ vi.mock('../../../services/storageService', () => ({
 }));
 
 import featureFlagsReducer from '../../../features/featureFlags/featureFlagsSlice';
-import projectReducer from '../../../features/project/projectSlice';
+import projectReducer, { projectActions } from '../../../features/project/projectSlice';
 import {
   generateCharacterPortraitThunk,
   generateCharacterProfileThunk,
@@ -202,8 +202,11 @@ describe('generateSceneImageThunk', () => {
     const store = makeStore();
     await store.dispatch(generateSceneImageThunk(payload));
 
-    // QNBS-v3: id, data, projectId order, matching the reordered saveImage signature.
-    expect(storageService.saveImage).toHaveBeenCalledWith('scene-sec-1', 'rawbase64', 'default');
+    // QNBS-v3: the final-write admission callback prevents an in-flight save from crossing an incarnation boundary.
+    const [imageId, imageData, projectId, writeAdmission] = vi.mocked(storageService.saveImage).mock
+      .calls[0]!;
+    expect([imageId, imageData, projectId]).toEqual(['scene-sec-1', 'rawbase64', 'default']);
+    expect(writeAdmission).toEqual(expect.any(Function));
   });
 
   it('prefixes plain base64 with data:image/png;base64,', async () => {
@@ -224,6 +227,83 @@ describe('generateSceneImageThunk', () => {
 
     const result = (action as { payload: { imageKey: string; dataUrl: string } }).payload;
     expect(result.dataUrl).toBe('data:image/png;base64,alreadyprefixed');
+  });
+
+  it('rejects and skips storage when the project changes before the write', async () => {
+    let resolveImage: ((value: string) => void) | undefined;
+    mockGenerateImage.mockReturnValueOnce(
+      new Promise<string>((resolve) => {
+        resolveImage = resolve;
+      }),
+    );
+    const store = makeStore();
+    const pending = store.dispatch(generateSceneImageThunk(payload));
+
+    store.dispatch(
+      projectActions.resetProject({
+        title: 'New project',
+        logline: '',
+        chapter1Title: 'Chapter One',
+      }),
+    );
+    resolveImage?.('late-image');
+
+    const action = await pending;
+    expect(action.type).toBe('project/generateSceneImage/rejected');
+    expect(storageService.saveImage).not.toHaveBeenCalled();
+  });
+
+  it('rejects after a project changes during the storage operation', async () => {
+    mockGenerateImage.mockResolvedValueOnce('late-image');
+    let resolveSave: (() => void) | undefined;
+    vi.mocked(storageService.saveImage).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSave = resolve;
+        }),
+    );
+    const store = makeStore();
+    const pending = store.dispatch(generateSceneImageThunk(payload));
+
+    await vi.waitFor(() => expect(storageService.saveImage).toHaveBeenCalled());
+    store.dispatch(
+      projectActions.resetProject({
+        title: 'New project',
+        logline: '',
+        chapter1Title: 'Chapter One',
+      }),
+    );
+    resolveSave?.();
+
+    const action = await pending;
+    expect(action.type).toBe('project/generateSceneImage/rejected');
+  });
+
+  it('rejects a same-ID generation change at the backend write-admission point', async () => {
+    mockGenerateImage.mockResolvedValueOnce('late-image');
+    let resolveSave: (() => void) | undefined;
+    let writeAdmission: (() => void) | undefined;
+    vi.mocked(storageService.saveImage).mockImplementationOnce(
+      (_id, _data, _projectId, admission) => {
+        writeAdmission = admission;
+        return new Promise<void>((resolve) => {
+          resolveSave = resolve;
+        });
+      },
+    );
+    const store = makeStore();
+    const pending = store.dispatch(generateSceneImageThunk(payload));
+
+    await vi.waitFor(() => expect(storageService.saveImage).toHaveBeenCalled());
+    store.dispatch(
+      projectActions.resetProject({ title: 'Replaced', logline: '', chapter1Title: 'Chapter One' }),
+    );
+    expect(writeAdmission).toEqual(expect.any(Function));
+    expect(() => writeAdmission?.()).toThrow('Discarded stale project operation');
+    resolveSave?.();
+
+    const action = await pending;
+    expect(action.type).toBe('project/generateSceneImage/rejected');
   });
 });
 
@@ -391,8 +471,11 @@ describe('generateCharacterPortraitThunk', () => {
       }),
     );
 
-    // QNBS-v3: id, data, projectId order, matching the reordered saveImage signature.
-    expect(storageService.saveImage).toHaveBeenCalledWith('c42', 'portraitdata', 'default');
+    const [imageId, imageData, projectId, writeAdmission] = vi.mocked(storageService.saveImage).mock
+      .calls[0]!;
+    expect([imageId, imageData, projectId]).toEqual(['c42', 'portraitdata', 'default']);
+    expect(writeAdmission).toEqual(expect.any(Function));
+    writeAdmission?.();
   });
 
   it('appends style to description when style is provided', async () => {
@@ -457,7 +540,46 @@ describe('uploadCharacterImageThunk', () => {
 
     expect(action.type).toBe('project/uploadCharacterImage/fulfilled');
     // QNBS-v3: id, data, projectId order, matching the reordered saveImage signature.
-    expect(storageService.saveImage).toHaveBeenCalledWith('c99', fakeDataUrl, 'default');
+    expect(storageService.saveImage).toHaveBeenCalledWith(
+      'c99',
+      fakeDataUrl,
+      'default',
+      expect.any(Function),
+    );
+    const writeAdmission = vi.mocked(storageService.saveImage).mock.calls[0]?.[3];
+    expect(writeAdmission).toEqual(expect.any(Function));
+    (writeAdmission as (() => void) | undefined)?.();
+  });
+
+  it('rejects when the project changes before the upload reaches storage', async () => {
+    let triggerLoad: (() => void) | undefined;
+    vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(function (this: FileReader) {
+      Object.defineProperty(this, 'result', {
+        value: 'data:image/png;base64,late-upload',
+        configurable: true,
+      });
+      triggerLoad = () => this.onload?.(new ProgressEvent('load') as ProgressEvent<FileReader>);
+    });
+
+    const store = makeStore();
+    const pending = store.dispatch(
+      uploadCharacterImageThunk({
+        characterId: 'c-before-storage',
+        file: new File(['data'], 'portrait.png', { type: 'image/png' }),
+      }),
+    );
+    store.dispatch(
+      projectActions.resetProject({
+        title: 'Replacement',
+        logline: '',
+        chapter1Title: 'Chapter 1',
+      }),
+    );
+    triggerLoad?.();
+
+    const action = await pending;
+    expect(action.type).toBe('project/uploadCharacterImage/rejected');
+    expect(storageService.saveImage).not.toHaveBeenCalled();
   });
 
   it('dispatches fulfilled with characterId', async () => {
@@ -482,6 +604,7 @@ describe('uploadCharacterImageThunk', () => {
       'c7',
       'data:image/jpeg;base64,abc123',
       'default',
+      expect.any(Function),
     );
   });
 

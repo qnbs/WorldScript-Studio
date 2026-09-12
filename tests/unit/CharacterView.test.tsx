@@ -1,5 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { appStoreRef } from '../../app/storeRef';
 import { CharacterView } from '../../components/CharacterView';
 import { storageService } from '../../services/storageService';
 
@@ -11,6 +12,12 @@ const mockHandleAddNewManually = vi.fn();
 const mockHandleAddNewWithAI = vi.fn();
 const mockHandleSelect = vi.fn();
 const mockConfirmDelete = vi.fn();
+const mockProjectState = {
+  settings: { editorFont: 'serif', fontSize: 16, lineSpacing: 1.5 },
+  project: {
+    present: { data: { id: 'p1' }, generation: 0 },
+  },
+};
 
 const baseContextValue = {
   t: (k: string) => k,
@@ -51,9 +58,7 @@ vi.mock('../../hooks/useCharacterView', () => ({
 
 vi.mock('../../app/hooks', () => ({
   useAppDispatch: vi.fn(() => vi.fn()),
-  useAppSelector: vi.fn((selector: (s: unknown) => unknown) =>
-    selector({ settings: { editorFont: 'serif', fontSize: 16, lineSpacing: 1.5 } }),
-  ),
+  useAppSelector: vi.fn((selector: (s: unknown) => unknown) => selector(mockProjectState)),
 }));
 
 vi.mock('../../hooks/useSpeechRecognition', () => ({
@@ -78,6 +83,18 @@ vi.mock('../../services/storageService', () => ({
 vi.mock('../../features/project/thunks/characterThunks', () => ({
   uploadCharacterImageThunk: vi.fn(),
 }));
+
+beforeEach(() => {
+  mockProjectState.project.present = { data: { id: 'p1' }, generation: 0 };
+  appStoreRef.current = {
+    getState: () => mockProjectState,
+    dispatch: vi.fn(),
+  } as never;
+});
+
+afterEach(() => {
+  appStoreRef.current = null;
+});
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -194,9 +211,43 @@ describe('CharacterView', () => {
     } as never);
     render(<CharacterView />);
     // QNBS-v3: id now leads, projectId trails, matching the reordered getImage signature.
-    await waitFor(() =>
-      expect(storageService.getImage).toHaveBeenCalledWith('c-broken', 'default'),
-    );
+    await waitFor(() => expect(storageService.getImage).toHaveBeenCalledWith('c-broken', 'p1'));
     expect(screen.queryByAltText('Robin')).toBeNull();
+  });
+
+  // QNBS-v3: [Grund: deferred read identity fence / Impact: reject stale image completion / Kreativer Mehrwert: keep a replacement incarnation visually isolated]
+  it('does not apply a deferred avatar read after the project incarnation changes', async () => {
+    let resolveImage!: (value: string) => void;
+    vi.mocked(storageService.getImage).mockReturnValueOnce(
+      new Promise<string>((resolve) => {
+        resolveImage = resolve;
+      }),
+    );
+    const { useCharacterView } = await import('../../hooks/useCharacterView');
+    vi.mocked(useCharacterView).mockReturnValueOnce({
+      ...baseContextValue,
+      characters: [
+        {
+          id: 'c-stale',
+          name: 'Stale Avatar',
+          appearance: '',
+          motivation: '',
+          backstory: '',
+          notes: '',
+          personalityTraits: '',
+          hasAvatar: true,
+        },
+      ],
+    } as never);
+    render(<CharacterView />);
+    await waitFor(() => expect(storageService.getImage).toHaveBeenCalledWith('c-stale', 'p1'));
+
+    mockProjectState.project.present.generation = 1;
+    await act(async () => {
+      resolveImage('data:image/png;base64,STALE');
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByAltText('Stale Avatar')).toBeNull();
   });
 });
