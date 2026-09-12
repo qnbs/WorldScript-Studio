@@ -2185,6 +2185,84 @@ describe('FsAssetStore — images + binder assets', () => {
       expect.objectContaining({ expected: 999, actual: 4 }),
     );
   });
+
+  // QNBS-v3: getQualifiedImage exists specifically so a rollback snapshot can't be handed a differently-provenanced legacy blob in place of "the qualified slot is genuinely empty".
+  describe('getQualifiedImage / deleteQualifiedImage — rollback/transaction primitives', () => {
+    it('reports absent (not the legacy blob) when only a legacy-flat image exists', async () => {
+      fake.text.set('/app/images/legacy-only.png', 'data:image/png;base64,OLD');
+
+      expect(await store.getQualifiedImage('legacy-only', 'proj-1')).toBeNull();
+      // QNBS-v3: the merged-semantics getImage would return the legacy blob for the same call -- proves the two reads genuinely disagree, not just that getQualifiedImage happens to return null.
+      expect(await store.getImage('legacy-only', 'proj-1')).toBe('data:image/png;base64,OLD');
+    });
+
+    it('does not claim legacy ownership merely by peeking at the qualified slot', async () => {
+      fake.text.set('/app/images/solo.png', 'data:image/png;base64,SOLO');
+
+      expect(await store.getQualifiedImage('solo', 'proj-1')).toBeNull();
+      expect(fake.text.has('/app/images/.legacy-owner')).toBe(false);
+    });
+
+    it('returns the qualified value when present, ignoring an unrelated legacy file', async () => {
+      fake.text.set('/app/images/dual.png', 'data:image/png;base64,LEGACYCOPY');
+      await store.saveImage('dual', 'data:image/png;base64,QUALIFIED', 'proj-1');
+
+      expect(await store.getQualifiedImage('dual', 'proj-1')).toBe(
+        'data:image/png;base64,QUALIFIED',
+      );
+    });
+
+    it('propagates a read failure instead of collapsing it to null', async () => {
+      await store.saveImage('unreadable', 'data:image/png;base64,DATA', 'proj-1');
+      const originalReadTextFile = fake.apis.readTextFile;
+      const qualified = qualifiedImageKey('unreadable');
+      expect(qualified).toBeDefined();
+      fake.apis.readTextFile = (p: string) => {
+        if (p === qualified) return Promise.reject(new Error('simulated decrypt failure'));
+        return originalReadTextFile(p);
+      };
+      try {
+        await expect(store.getQualifiedImage('unreadable', 'proj-1')).rejects.toThrow(
+          'simulated decrypt failure',
+        );
+      } finally {
+        fake.apis.readTextFile = originalReadTextFile;
+      }
+    });
+
+    it('deletes only the qualified file, preserving an unrelated legacy copy', async () => {
+      simulateLegacyImageOwner('proj-1');
+      fake.text.set('/app/images/shared.png', 'data:image/png;base64,LEGACYCOPY');
+      await store.saveImage('shared', 'data:image/png;base64,QUALIFIED', 'proj-1');
+
+      await store.deleteQualifiedImage('shared', 'proj-1');
+
+      expect(qualifiedImageKey('shared')).toBeUndefined();
+      expect(fake.text.has('/app/images/shared.png')).toBe(true);
+    });
+
+    it('propagates a delete failure instead of swallowing it', async () => {
+      await store.saveImage('undeletable', 'data:image/png;base64,DATA', 'proj-1');
+      const originalRemove = fake.apis.remove;
+      const qualified = qualifiedImageKey('undeletable');
+      expect(qualified).toBeDefined();
+      fake.apis.remove = (p: string) => {
+        if (p === qualified) return Promise.reject(new Error('simulated I/O failure'));
+        return originalRemove(p);
+      };
+      try {
+        await expect(store.deleteQualifiedImage('undeletable', 'proj-1')).rejects.toThrow(
+          'simulated I/O failure',
+        );
+      } finally {
+        fake.apis.remove = originalRemove;
+      }
+    });
+
+    it('is a no-op (not an error) when the qualified file never existed', async () => {
+      await expect(store.deleteQualifiedImage('never-existed', 'proj-1')).resolves.toBeUndefined();
+    });
+  });
 });
 
 describe('FsProjectStore — export / import', () => {

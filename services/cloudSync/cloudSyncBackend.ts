@@ -183,6 +183,14 @@ export class CloudSyncBackend implements StorageBackend {
     throw new Error('CloudSyncBackend: image storage is local-only');
   }
 
+  async getQualifiedImage(_id: string, _projectId?: string): Promise<string | null> {
+    throw new Error('CloudSyncBackend: image storage is local-only');
+  }
+
+  async deleteQualifiedImage(_id: string, _projectId?: string): Promise<void> {
+    throw new Error('CloudSyncBackend: image storage is local-only');
+  }
+
   async saveGeminiApiKey(_apiKey: string): Promise<void> {
     // QNBS-v3: API keys MUST stay local — never upload credentials to cloud.
     throw new Error('CloudSyncBackend: API keys are stored locally only');

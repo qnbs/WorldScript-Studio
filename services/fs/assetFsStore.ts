@@ -141,6 +141,24 @@ export class FsAssetStore extends FsSnapshotStore {
     }
   }
 
+  // QNBS-v3: qualified-only read for rollback/transaction callers -- deliberately does not enter the outer try/catch that getImage uses to fail closed to null on ANY error, since that would collapse "genuinely absent" and "read failed" into the same value; a rollback needs a read failure to reject and abort before it mutates anything. Also never consults the legacy fallback, so it can't return a differently-provenanced blob.
+  async getQualifiedImage(id: string, projectId = 'default'): Promise<string | null> {
+    const apis = await this.getApis();
+    const qualifiedFile = (await this.qualifiedImagePaths(projectId, id)).file;
+    if (!(await apis.exists(qualifiedFile))) return null;
+    const imageData = await retryFs(() => apis.readTextFile(qualifiedFile));
+    return imageData.startsWith('data:image/') ? imageData : `data:image/png;base64,${imageData}`;
+  }
+
+  // QNBS-v3: qualified-only delete for rollback/transaction callers -- never touches the legacy file or the legacy ownership marker, unlike deleteImage's user-facing "clear both, fail-closed-to-success" semantics, which could delete a legacy image that predates and is unrelated to the transaction being rolled back. No withLegacyRoutingOperation needed since this never reads/writes the shared legacy state saveImage also skips.
+  async deleteQualifiedImage(id: string, projectId = 'default'): Promise<void> {
+    const apis = await this.getApis();
+    const qualifiedFile = (await this.qualifiedImagePaths(projectId, id)).file;
+    if (await apis.exists(qualifiedFile)) {
+      await retryFs(() => apis.remove(qualifiedFile));
+    }
+  }
+
   // QNBS-v3: Research-Blobs pro Projekt unter projects/<id>/binder — rekursives deleteProject räumt mit auf.
 
   private async binderAssetPaths(projectId: string, assetId: string) {

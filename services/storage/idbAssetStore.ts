@@ -147,6 +147,27 @@ export class IdbAssetStore extends IdbSnapshotStore {
     });
   }
 
+  // QNBS-v3: qualified-only read for rollback/transaction callers -- never consults the legacy fallback (which could return a differently-provenanced blob) and never converts a genuine read failure to null; both would corrupt a rollback's snapshot of exactly the key saveImage/deleteImage mutate.
+  async getQualifiedImage(id: string, projectId = 'default'): Promise<string | null> {
+    await assertSecureStorageReadable();
+    const qualified = await this.getRawImage(await makeImageStorageKey(projectId, id));
+    return this.decodeImageRecord(qualified);
+  }
+
+  // QNBS-v3: qualified-only delete for rollback/transaction callers -- never touches the legacy key or the legacy ownership marker, unlike deleteImage's user-facing "clear both" semantics, which would delete a legacy image that predates and is unrelated to the transaction being rolled back.
+  async deleteQualifiedImage(id: string, projectId = 'default'): Promise<void> {
+    return withProtectedWriteAdmission(async () => {
+      await assertIdbProtectedWriteAllowed();
+      const qualifiedKey = await makeImageStorageKey(projectId, id);
+      const store = await this.getObjectStore(IMAGES_STORE, 'readwrite');
+      await new Promise<void>((resolve, reject) => {
+        const request = store.delete(qualifiedKey);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    });
+  }
+
   // QNBS-v3: Binder-Blobs in eigener IDB-Store — Redux bleibt schlank, Research-PDFs offline-first.
 
   async saveBinderAsset(

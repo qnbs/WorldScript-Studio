@@ -124,6 +124,17 @@ class StorageManager {
     return backend.getImage(id, projectId);
   }
 
+  // QNBS-v3: qualified-only pass-through for rollback/transaction callers -- see StorageBackend's own comment for why this must stay distinct from getImage/deleteImage.
+  async getQualifiedImage(id: string, projectId?: string): Promise<string | null> {
+    const backend = await this.getBackend();
+    return backend.getQualifiedImage(id, projectId);
+  }
+
+  async deleteQualifiedImage(id: string, projectId?: string): Promise<void> {
+    const backend = await this.getBackend();
+    return backend.deleteQualifiedImage(id, projectId);
+  }
+
   async saveSettings(settings: Settings): Promise<void> {
     const backend = await this.getBackend();
     return backend.saveSettings(settings);

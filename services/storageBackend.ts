@@ -99,6 +99,9 @@ export interface StorageBackend {
   // QNBS-v3: projectId is trailing/optional (defaults to 'default' at each implementer) so call sites that predate project-qualification keep compiling unchanged -- only call sites that need real qualification pass it explicitly.
   saveImage(id: string, base64Data: string, projectId?: string): Promise<void>;
   getImage(id: string, projectId?: string): Promise<string | null>;
+  // QNBS-v3: qualified-only variants for transaction/rollback callers -- unlike getImage/deleteImage, these never consult the legacy fallback, never claim/touch legacy ownership, and never swallow a read/delete failure to null/success. A rollback needs to know the exact pre-mutation state of the exact key it is about to overwrite, not the UI-friendly merged view.
+  getQualifiedImage(id: string, projectId?: string): Promise<string | null>;
+  deleteQualifiedImage(id: string, projectId?: string): Promise<void>;
 
   saveSettings(settings: Settings): Promise<void>;
   loadSettings(): Promise<Settings | null>;

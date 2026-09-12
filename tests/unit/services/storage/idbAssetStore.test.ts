@@ -306,6 +306,60 @@ describe('IdbAssetStore', () => {
     });
   });
 
+  // QNBS-v3: these exist so a rollback snapshot can't be handed a differently-provenanced legacy blob instead of a genuinely empty qualified slot.
+  describe('getQualifiedImage / deleteQualifiedImage — rollback/transaction primitives', () => {
+    it('reports absent (not the legacy blob) when only the legacy unqualified key exists', async () => {
+      mockIdbStore.get.mockImplementation((key: string) =>
+        makeSuccessReq(key === 'img-1' ? 'data:image/png;base64,LEGACY' : null),
+      );
+      const qualifiedResult = await store.getQualifiedImage('img-1', 'proj-1');
+      expect(qualifiedResult).toBeNull();
+      // QNBS-v3: the merged-semantics getImage would return the legacy blob for the same call -- proves the two reads genuinely disagree, not just that getQualifiedImage happens to return null.
+      const mergedResult = await store.getImage('img-1', 'proj-1');
+      expect(mergedResult).toBe('data:image/png;base64,LEGACY');
+    });
+
+    it('does not claim legacy ownership merely by peeking at the qualified slot', async () => {
+      mockIdbStore.get.mockImplementation(() => makeSuccessReq(null));
+      await store.getQualifiedImage('img-1', 'proj-1');
+      expect(mockAppDataStore.put).not.toHaveBeenCalled();
+      expect(mockAppDataStore.get).not.toHaveBeenCalled();
+    });
+
+    it('returns the qualified value when present, ignoring an unrelated legacy key', async () => {
+      mockIdbStore.get.mockImplementation((key: string) =>
+        makeSuccessReq(
+          key === 'proj-1::img-1'
+            ? 'data:image/png;base64,QUALIFIED'
+            : key === 'img-1'
+              ? 'data:image/png;base64,LEGACY'
+              : null,
+        ),
+      );
+      const result = await store.getQualifiedImage('img-1', 'proj-1');
+      expect(result).toBe('data:image/png;base64,QUALIFIED');
+    });
+
+    it('propagates a read failure instead of collapsing it to null', async () => {
+      mockIdbStore.get.mockImplementation(() => makeErrorReq(new DOMException('get failed')));
+      await expect(store.getQualifiedImage('img-1', 'proj-1')).rejects.toBeDefined();
+    });
+
+    it('deletes only the qualified key, preserving an unrelated legacy key', async () => {
+      mockIdbStore.delete.mockImplementation(() => makeSuccessReq(undefined));
+      await store.deleteQualifiedImage('img-1', 'proj-1');
+      expect(mockIdbStore.delete).toHaveBeenCalledWith('proj-1::img-1');
+      expect(mockIdbStore.delete).not.toHaveBeenCalledWith('img-1');
+      // QNBS-v3: never even consults the ownership marker, unlike deleteImage.
+      expect(mockAppDataStore.get).not.toHaveBeenCalled();
+    });
+
+    it('propagates a delete failure instead of swallowing it', async () => {
+      mockIdbStore.delete.mockImplementation(() => makeErrorReq(new DOMException('del failed')));
+      await expect(store.deleteQualifiedImage('img-1', 'proj-1')).rejects.toBeDefined();
+    });
+  });
+
   describe('saveBinderAsset', () => {
     it('stores asset at proj-1::asset-1 key (production key format)', async () => {
       mockIdbStore.put.mockImplementation(() => makeSuccessReq(undefined));
