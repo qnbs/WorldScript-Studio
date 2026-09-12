@@ -2212,22 +2212,38 @@ describe('FsAssetStore — images + binder assets', () => {
       );
     });
 
-    it('propagates a read failure instead of collapsing it to null', async () => {
-      await store.saveImage('unreadable', 'data:image/png;base64,DATA', 'proj-1');
-      const originalReadTextFile = fake.apis.readTextFile;
-      const qualified = qualifiedImageKey('unreadable');
+    // QNBS-v3: shared assertion for "a qualified-only I/O failure propagates instead of being swallowed" -- the read and delete paths below share this exact shape: save an entity, fail one fake API call for its qualified path, assert the qualified-only call rejects, then always restore the original API.
+    async function expectQualifiedIoFailurePropagates(
+      entityId: string,
+      errorMessage: string,
+      install: (qualifiedPath: string) => () => void,
+      run: (id: string) => Promise<unknown>,
+    ) {
+      await store.saveImage(entityId, 'data:image/png;base64,DATA', 'proj-1');
+      const qualified = qualifiedImageKey(entityId);
       expect(qualified).toBeDefined();
-      fake.apis.readTextFile = (p: string) => {
-        if (p === qualified) return Promise.reject(new Error('simulated decrypt failure'));
-        return originalReadTextFile(p);
-      };
+      const restore = install(qualified as string);
       try {
-        await expect(store.getQualifiedImage('unreadable', 'proj-1')).rejects.toThrow(
-          'simulated decrypt failure',
-        );
+        await expect(run(entityId)).rejects.toThrow(errorMessage);
       } finally {
-        fake.apis.readTextFile = originalReadTextFile;
+        restore();
       }
+    }
+
+    it('propagates a read failure instead of collapsing it to null', async () => {
+      await expectQualifiedIoFailurePropagates(
+        'unreadable',
+        'simulated decrypt failure',
+        (qualified) => {
+          const original = fake.apis.readTextFile;
+          fake.apis.readTextFile = (p: string) =>
+            p === qualified ? Promise.reject(new Error('simulated decrypt failure')) : original(p);
+          return () => {
+            fake.apis.readTextFile = original;
+          };
+        },
+        (id) => store.getQualifiedImage(id, 'proj-1'),
+      );
     });
 
     it('deletes only the qualified file, preserving an unrelated legacy copy', async () => {
@@ -2242,21 +2258,19 @@ describe('FsAssetStore — images + binder assets', () => {
     });
 
     it('propagates a delete failure instead of swallowing it', async () => {
-      await store.saveImage('undeletable', 'data:image/png;base64,DATA', 'proj-1');
-      const originalRemove = fake.apis.remove;
-      const qualified = qualifiedImageKey('undeletable');
-      expect(qualified).toBeDefined();
-      fake.apis.remove = (p: string) => {
-        if (p === qualified) return Promise.reject(new Error('simulated I/O failure'));
-        return originalRemove(p);
-      };
-      try {
-        await expect(store.deleteQualifiedImage('undeletable', 'proj-1')).rejects.toThrow(
-          'simulated I/O failure',
-        );
-      } finally {
-        fake.apis.remove = originalRemove;
-      }
+      await expectQualifiedIoFailurePropagates(
+        'undeletable',
+        'simulated I/O failure',
+        (qualified) => {
+          const original = fake.apis.remove;
+          fake.apis.remove = (p: string) =>
+            p === qualified ? Promise.reject(new Error('simulated I/O failure')) : original(p);
+          return () => {
+            fake.apis.remove = original;
+          };
+        },
+        (id) => store.deleteQualifiedImage(id, 'proj-1'),
+      );
     });
 
     it('is a no-op (not an error) when the qualified file never existed', async () => {
