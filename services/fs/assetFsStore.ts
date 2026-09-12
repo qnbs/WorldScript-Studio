@@ -141,16 +141,21 @@ export class FsAssetStore extends FsSnapshotStore {
         // QNBS-v3: preserve-first -- only remove the unattributed legacy copy when ownership is already provable; otherwise it may belong to a different (possibly already-deleted) project, so leave it untouched rather than risk destroying another project's image.
         const soleOwner = await this.checkLegacyImageOwnership(projectId);
         // QNBS-v3: legacy MUST be removed before the qualified file, not after -- if legacy removal throws, the catch below aborts before the qualified file is touched, so getImage's legacy fallback can never resurrect a half-deleted image. The reverse order would let a failure after the qualified delete leave the legacy copy to resurrect it.
+        const removeImageFile = async (path: string) => {
+          await retryFs(async () => {
+            // QNBS-v3: re-admit every retry attempt so a same-ID replacement cannot be deleted after a transient filesystem failure.
+            deleteAdmission?.();
+            await apis.remove(path);
+          });
+        };
         if (soleOwner) {
           const legacyFile = await this.legacyImagePath(id);
           if (await apis.exists(legacyFile)) {
-            deleteAdmission?.();
-            await retryFs(() => apis.remove(legacyFile));
+            await removeImageFile(legacyFile);
           }
         }
         if (await apis.exists(qualifiedFile)) {
-          deleteAdmission?.();
-          await retryFs(() => apis.remove(qualifiedFile));
+          await removeImageFile(qualifiedFile);
         }
       }, projectId);
     } catch (error) {

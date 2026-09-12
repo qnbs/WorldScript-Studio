@@ -463,6 +463,24 @@ describe('confirmDelete', () => {
     expect(result.current.selectedWorld).toBeNull();
   });
 
+  it('clears a stale delete confirmation without dispatching a deletion', async () => {
+    const world = makeWorld('w1');
+    mockWorlds = [world];
+    const { result } = renderHook(() => useWorldView());
+    act(() => result.current.handleDelete('w1'));
+    mockIsStaleError.mockReturnValue(true);
+    mockDeleteImage.mockRejectedValueOnce({ name: 'StaleProjectOperationError' });
+
+    await act(async () => {
+      await result.current.confirmDelete();
+    });
+
+    expect(result.current.worldToDelete).toBeNull();
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'project/deleteWorld', payload: 'w1' }),
+    );
+  });
+
   it('does nothing when worldToDelete is null', async () => {
     const { result } = renderHook(() => useWorldView());
     await act(async () => {

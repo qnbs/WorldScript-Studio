@@ -1953,6 +1953,31 @@ describe('FsAssetStore — images + binder assets', () => {
     expect(await store.getImage('delete-guarded', 'proj-1')).toBe('data:image/png;base64,OLD');
   });
 
+  it('rechecks delete admission after a transient filesystem retry', async () => {
+    await store.saveImage('delete-retry', 'data:image/png;base64,OLD', 'proj-1');
+    const qualified = qualifiedImageKey('delete-retry');
+    expect(qualified).toBeDefined();
+    const originalRemove = fake.apis.remove;
+    let removeAttempts = 0;
+    fake.apis.remove = (path: string, options?: { recursive?: boolean }) => {
+      if (path === qualified && removeAttempts++ === 0) {
+        return Promise.reject(new Error('resource busy'));
+      }
+      return originalRemove(path, options);
+    };
+    const admission = vi.fn();
+
+    try {
+      await store.deleteImage('delete-retry', 'proj-1', admission);
+    } finally {
+      fake.apis.remove = originalRemove;
+    }
+
+    expect(removeAttempts).toBe(2);
+    expect(admission).toHaveBeenCalledTimes(2);
+    expect(await store.getImage('delete-retry', 'proj-1')).toBeNull();
+  });
+
   it('treats legacy raw image payloads as PNG', async () => {
     await store.saveImage('legacy-char', 'QUJD', 'proj-1');
     expect(await store.getImage('legacy-char', 'proj-1')).toBe('data:image/png;base64,QUJD');

@@ -228,13 +228,20 @@ export const useCharacterView = () => {
       }
       const deletingCharacter = characterToDelete;
       // QNBS-v3: the real delete API, not saveImage(id, '') -- an empty-string save only overwrote the project-qualified key, leaving any pre-qualification legacy blob for this id intact and resurfacable via getImage's fallback.
-      await storageService.deleteImage(deletingCharacter.id, projectId, () =>
-        assertProjectIdentityUnchanged(
-          characterDeleteIdentity,
-          captureActiveProjectIdentity(),
-          'character image deletion',
-        ),
-      );
+      try {
+        await storageService.deleteImage(deletingCharacter.id, projectId, () =>
+          assertProjectIdentityUnchanged(
+            characterDeleteIdentity,
+            captureActiveProjectIdentity(),
+            'character image deletion',
+          ),
+        );
+      } catch (error) {
+        if (!isStaleProjectOperationError(error)) throw error;
+        setCharacterToDeleteState(null);
+        setCharacterDeleteIdentity(null);
+        return;
+      }
       if (!identityUnchanged(characterDeleteIdentity, captureActiveProjectIdentity())) {
         setCharacterToDeleteState(null);
         setCharacterDeleteIdentity(null);

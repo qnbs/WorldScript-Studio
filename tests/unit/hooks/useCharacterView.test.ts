@@ -486,6 +486,21 @@ describe('confirmDelete', () => {
     expect(mockToast.info).toHaveBeenCalled();
   });
 
+  it('clears a stale delete confirmation without dispatching a deletion', async () => {
+    const char = makeCharacter('c1', 'Hero');
+    const { result } = renderHook(() => useCharacterView());
+    act(() => result.current.setCharacterToDelete(char));
+    mockIsStaleError.mockReturnValue(true);
+    mockDeleteImage.mockRejectedValueOnce({ name: 'StaleProjectOperationError' });
+
+    await act(async () => {
+      await result.current.confirmDelete();
+    });
+
+    expect(result.current.characterToDelete).toBeNull();
+    expect(mockDispatch).not.toHaveBeenCalledWith(projectActions.deleteCharacter('c1'));
+  });
+
   it('does nothing when characterToDelete is null', async () => {
     const { result } = renderHook(() => useCharacterView());
     await act(async () => {
