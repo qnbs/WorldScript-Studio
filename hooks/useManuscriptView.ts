@@ -326,18 +326,21 @@ export const useManuscriptView = ({
           lang: language,
         }),
       ).unwrap();
+      // QNBS-v3: only the newest request may publish preview, toast, or loading completion.
+      if (sceneVisualizationRequestRef.current !== requestId) return;
       setSceneImagePreviewUrl(result.dataUrl);
       toast.success(t('manuscript.visualize.successTitle'), t('manuscript.visualize.successBody'));
     } catch (error) {
       // QNBS-v3: [Grund: stale scene result is expected after a project switch / Impact: suppress false error toasts / Kreativer Mehrwert: keep authoring feedback actionable]
+      if (sceneVisualizationRequestRef.current !== requestId) return;
       if (!isStaleProjectOperationError(error)) {
         toast.error(t('error.apiErrorTitle'));
-      } else if (sceneVisualizationRequestRef.current === requestId) {
+      } else {
         // QNBS-v3: [Grund: stale request ordering / Impact: do not erase a newer preview / Kreativer Mehrwert: keep current-project feedback visible]
         setSceneImagePreviewUrl(null);
       }
     } finally {
-      setIsSceneVisualizing(false);
+      if (sceneVisualizationRequestRef.current === requestId) setIsSceneVisualizing(false);
     }
   }, [activeSection, dispatch, language, project, t, toast]);
 

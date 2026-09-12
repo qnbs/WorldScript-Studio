@@ -177,7 +177,7 @@ export class IdbAssetStore extends IdbSnapshotStore {
         transaction.onabort = () => reject(admissionError ?? transaction.error);
         for (const key of keysToDelete) {
           const request = store.delete(key);
-          request.onerror = () => reject(request.error);
+          request.onerror = () => reject(admissionError ?? request.error);
           request.onsuccess = () => {
             try {
               deleteAdmission?.();

@@ -23,7 +23,7 @@ function makeMockTransaction(): MockTransaction {
     onerror: null,
     onabort: null,
     error: null,
-    abort: vi.fn(),
+    abort: () => {},
   };
   transaction.abort = vi.fn(() => {
     transaction.error = new DOMException('simulated transaction abort');
@@ -33,6 +33,7 @@ function makeMockTransaction(): MockTransaction {
 }
 
 const mockImagesTransaction = makeMockTransaction();
+const defaultImagesAbort = mockImagesTransaction.abort;
 
 const mockIdbStore = {
   put: vi.fn(),
@@ -185,6 +186,7 @@ describe('IdbAssetStore', () => {
     vi.clearAllMocks();
     appDataTracker.reset();
     imagesTracker.reset();
+    mockImagesTransaction.abort = defaultImagesAbort;
     // QNBS-v3: default "no legacy-image-owner claim yet" so every test's first legacy-fallback access claims for its own project id, matching prior (pre-ownership-check) fallback behavior unless a test deliberately overrides this to simulate a rival claim.
     mockAppDataStore.get.mockImplementation(() => appDataTracker.success(undefined));
     mockAppDataStore.put.mockImplementation(() => appDataTracker.success(undefined));
@@ -334,6 +336,48 @@ describe('IdbAssetStore', () => {
         'stale project incarnation',
       );
       expect(mockImagesTransaction.abort).toHaveBeenCalledTimes(1);
+    });
+
+    it('preserves the stale admission error if another delete request aborts', async () => {
+      mockAppDataStore.get.mockImplementation(() => appDataTracker.success('proj-1'));
+      const abortError = new DOMException('transaction aborted', 'AbortError');
+      let secondRequest: MockReq<undefined> | null = null;
+      mockImagesTransaction.abort = vi.fn(() => {
+        mockImagesTransaction.error = abortError;
+        secondRequest?.onerror?.(abortError);
+        mockImagesTransaction.onabort?.();
+      });
+      let deleteCall = 0;
+      mockIdbStore.delete.mockImplementation(() => {
+        deleteCall += 1;
+        if (deleteCall === 1) {
+          const request: MockReq<undefined> = {
+            result: undefined,
+            error: null,
+            onsuccess: null,
+            onerror: null,
+          };
+          setTimeout(() => request.onsuccess?.(), 0);
+          return request;
+        }
+        secondRequest = {
+          result: undefined,
+          error: abortError,
+          onsuccess: null,
+          onerror: null,
+        };
+        return secondRequest;
+      });
+      const admission = vi
+        .fn<() => undefined>()
+        .mockImplementationOnce(() => undefined)
+        .mockImplementationOnce(() => {
+          throw new Error('stale project incarnation');
+        });
+
+      await expect(store.deleteImage('img-1', 'proj-1', admission)).rejects.toThrow(
+        'stale project incarnation',
+      );
     });
   });
 

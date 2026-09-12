@@ -92,7 +92,9 @@ beforeEach(() => {
   } as never;
 });
 
-afterEach(() => {
+afterEach(async () => {
+  const { useCharacterView } = await import('../../hooks/useCharacterView');
+  vi.mocked(useCharacterView).mockImplementation(() => baseContextValue);
   appStoreRef.current = null;
 });
 

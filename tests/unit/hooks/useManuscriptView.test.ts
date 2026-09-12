@@ -404,6 +404,45 @@ describe('handleVisualizeScene', () => {
     expect(result.current.sceneImagePreviewUrl).toBe('data:image/png;base64,abc');
   });
 
+  it('keeps an older visualization from replacing a newer preview', async () => {
+    let resolveFirst!: (value: { imageKey: string; dataUrl: string }) => void;
+    let resolveSecond!: (value: { imageKey: string; dataUrl: string }) => void;
+    mockUnwrap
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveFirst = resolve;
+        }),
+      )
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveSecond = resolve;
+        }),
+      );
+    setManuscript([makeSection('s1', 'Ch1', 'A scene with action')]);
+    const { result } = renderHook(() => useManuscriptView({ onNavigate }));
+
+    let firstRequest!: Promise<void>;
+    let secondRequest!: Promise<void>;
+    act(() => {
+      firstRequest = result.current.handleVisualizeScene();
+      secondRequest = result.current.handleVisualizeScene();
+    });
+
+    await act(async () => {
+      resolveFirst({ imageKey: 'scene-old', dataUrl: 'data:image/png;base64,old' });
+      await firstRequest;
+    });
+    expect(result.current.sceneImagePreviewUrl).toBeNull();
+    expect(result.current.isSceneVisualizing).toBe(true);
+
+    await act(async () => {
+      resolveSecond({ imageKey: 'scene-new', dataUrl: 'data:image/png;base64,new' });
+      await secondRequest;
+    });
+    expect(result.current.sceneImagePreviewUrl).toBe('data:image/png;base64,new');
+    expect(result.current.isSceneVisualizing).toBe(false);
+  });
+
   it('calls toast.error on rejection', async () => {
     mockUnwrap.mockRejectedValue(new Error('Image gen failed'));
     setManuscript([makeSection('s1', 'Ch1', 'Scene content')]);
