@@ -43,6 +43,36 @@ const loadStoredWorldImage = async (id: string, projectId: string): Promise<stri
     : null;
 };
 
+const startWorldImageLoad = ({
+  id,
+  hasImage,
+  projectId,
+  projectIdentity,
+  setImageUrl,
+}: {
+  id: string | undefined;
+  hasImage: boolean | undefined;
+  projectId: string;
+  projectIdentity: string | null;
+  setImageUrl: (imageUrl: string | null) => void;
+}): (() => void) => {
+  setImageUrl(null);
+  if (!id || !hasImage || !projectIdentity) return () => {};
+
+  let isMounted = true;
+  void loadStoredWorldImage(id, projectId)
+    .then((image) => {
+      if (isMounted) setImageUrl(image);
+    })
+    .catch((error) => {
+      // QNBS-v3: an unavailable image must retain the placeholder instead of causing an unhandled async rejection.
+      logger.warn('Failed to load world image', { error: String(error) });
+    });
+  return () => {
+    isMounted = false;
+  };
+};
+
 const useStoredImage = (id: string | undefined, hasImage: boolean | undefined) => {
   const projectId = useAppSelector(
     (state) => getProjectTargetStorageId(state.project?.present) ?? 'default',
@@ -51,31 +81,10 @@ const useStoredImage = (id: string | undefined, hasImage: boolean | undefined) =
     getProjectTargetIdentity(state.project?.present),
   );
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  useEffect(() => {
-    setImageUrl(null); // Reset on change
-    if (!id || !hasImage) {
-      return;
-    }
-    if (!projectIdentity) {
-      return;
-    }
-    let isMounted = true;
-    const fetchImage = async () => {
-      try {
-        const image = await loadStoredWorldImage(id, projectId);
-        if (isMounted && image) {
-          setImageUrl(image);
-        }
-      } catch (error) {
-        // QNBS-v3: an unavailable image must retain the placeholder instead of causing an unhandled async rejection.
-        logger.warn('Failed to load world image', { error: String(error) });
-      }
-    };
-    fetchImage();
-    return () => {
-      isMounted = false;
-    };
-  }, [id, hasImage, projectId, projectIdentity]);
+  useEffect(
+    () => startWorldImageLoad({ id, hasImage, projectId, projectIdentity, setImageUrl }),
+    [id, hasImage, projectId, projectIdentity],
+  );
   return imageUrl;
 };
 
