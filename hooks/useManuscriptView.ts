@@ -330,6 +330,8 @@ export const useManuscriptView = ({
       // QNBS-v3: [Grund: stale scene result is expected after a project switch / Impact: suppress false error toasts / Kreativer Mehrwert: keep authoring feedback actionable]
       if (!isStaleProjectOperationError(error)) {
         toast.error(t('error.apiErrorTitle'));
+      } else {
+        setSceneImagePreviewUrl(null);
       }
     } finally {
       setIsSceneVisualizing(false);

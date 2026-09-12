@@ -239,6 +239,7 @@ describe('generateSceneImageThunk', () => {
     const store = makeStore();
     const pending = store.dispatch(generateSceneImageThunk(payload));
 
+    await vi.waitFor(() => expect(resolveImage).toEqual(expect.any(Function)));
     store.dispatch(
       projectActions.resetProject({
         title: 'New project',

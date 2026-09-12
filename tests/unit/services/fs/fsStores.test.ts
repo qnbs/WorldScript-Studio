@@ -1977,7 +1977,7 @@ describe('FsAssetStore — images + binder assets', () => {
       }
       return originalRemove(path, options);
     };
-    const admission = vi.fn();
+    const admission = vi.fn(() => undefined);
 
     try {
       await store.deleteImage('delete-retry', 'proj-1', admission);
@@ -1999,18 +1999,15 @@ describe('FsAssetStore — images + binder assets', () => {
     const originalRemove = fake.apis.remove;
     const originalWriteTextFile = fake.apis.writeTextFile;
     let releaseRemoval!: () => void;
-    let removalStarted!: () => void;
+    let removalStarted = false;
     const removalReleased = new Promise<void>((resolve) => {
       releaseRemoval = resolve;
-    });
-    const removalObserved = new Promise<void>((resolve) => {
-      removalStarted = resolve;
     });
     let replacementWriteStarted = false;
 
     fake.apis.remove = async (path: string, options?: { recursive?: boolean }) => {
       if (path === qualified) {
-        removalStarted();
+        removalStarted = true;
         await removalReleased;
       }
       return originalRemove(path, options);
@@ -2022,7 +2019,7 @@ describe('FsAssetStore — images + binder assets', () => {
 
     try {
       const deletePromise = store.deleteImage('replace-race', 'proj-1');
-      await removalObserved;
+      await vi.waitFor(() => expect(removalStarted).toBe(true));
       const replacementPromise = store.saveImage(
         'replace-race',
         'data:image/png;base64,NEW',
@@ -2140,6 +2137,7 @@ describe('FsAssetStore — images + binder assets', () => {
     await store.saveImage('delete-boundary', 'data:image/png;base64,QUALIFIED', 'proj-1');
     const admission = vi.fn(() => {
       if (admission.mock.calls.length > 1) throw new Error('stale project incarnation');
+      return undefined;
     });
 
     await expect(store.deleteImage('delete-boundary', 'proj-1', admission)).rejects.toThrow(

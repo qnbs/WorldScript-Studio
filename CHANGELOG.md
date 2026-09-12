@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Async AI image writes and Character Interview chunks now reject stale project
   incarnations:** direct image persistence and interview-stream updates capture the originating
   project identity and refuse late results after a project switch or same-ID replacement, with
-  focused regression coverage. PR #734 (successor to saturated PR #733).
+  focused regression coverage. PR #734 (successor to PR #733).
 - **AI-generated character/world/scene images can no longer overwrite another project's image
   (#704, #708):** image storage keys on both the IndexedDB and desktop filesystem backends are
   now project-qualified using a collision-resistant hash of the full project id (not a lossy

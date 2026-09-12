@@ -267,13 +267,14 @@ export const useWorldView = () => {
       const deletingWorld = worldToDelete;
       // QNBS-v3: the real delete API, not saveImage(id, '') -- an empty-string save only overwrote the project-qualified key, leaving any pre-qualification legacy blob for this id intact and resurfacable via getImage's fallback.
       try {
-        await storageService.deleteImage(deletingWorld.id, projectId, () =>
+        await storageService.deleteImage(deletingWorld.id, projectId, (): undefined => {
           assertProjectIdentityUnchanged(
             worldDeleteIdentity,
             captureActiveProjectIdentity(),
             'world image deletion',
-          ),
-        );
+          );
+          return undefined;
+        });
       } catch (error) {
         setWorldToDeleteState(null);
         setWorldDeleteIdentity(null);

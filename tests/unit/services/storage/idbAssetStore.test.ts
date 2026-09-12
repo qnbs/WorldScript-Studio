@@ -181,9 +181,14 @@ describe('IdbAssetStore', () => {
 
   describe('saveImage', () => {
     it('calls put with base64 payload and the project-qualified key', async () => {
-      mockIdbStore.put.mockImplementation(() => makeSuccessReq(undefined));
+      mockIdbStore.put.mockImplementation(() => imagesTracker.success(undefined));
       await store.saveImage('img-1', 'data:image/png;base64,abc', 'proj-1');
       expect(mockIdbStore.put).toHaveBeenCalledWith('data:image/png;base64,abc', 'proj-1::img-1');
+    });
+
+    it('rejects when the put request succeeds but its transaction aborts', async () => {
+      mockIdbStore.put.mockImplementation(() => imagesTracker.successThatThenAborts(undefined));
+      await expect(store.saveImage('img-1', 'abc', 'proj-1')).rejects.toBeDefined();
     });
 
     it('refuses the image write when final admission no longer proves authority', async () => {
@@ -241,7 +246,7 @@ describe('IdbAssetStore', () => {
     // QNBS-v3: both keys must be cleared so a stale legacy record can never resurface via getImage's fallback -- but only once ownership of the legacy namespace is already provable for this project (simulated here via a pre-existing claim).
     it('deletes both the qualified and legacy key when this project already owns the legacy namespace', async () => {
       mockAppDataStore.get.mockImplementation(() => appDataTracker.success('proj-1'));
-      mockIdbStore.delete.mockImplementation(() => makeSuccessReq(undefined));
+      mockIdbStore.delete.mockImplementation(() => imagesTracker.success(undefined));
       await store.deleteImage('img-1', 'proj-1');
       expect(mockIdbStore.delete).toHaveBeenCalledWith('proj-1::img-1');
       expect(mockIdbStore.delete).toHaveBeenCalledWith('img-1');
@@ -249,7 +254,7 @@ describe('IdbAssetStore', () => {
 
     // QNBS-v3: preserve-first -- a delete must never itself establish a first ownership claim, so with no prior claim the unattributed legacy copy is left untouched rather than guessed-and-destroyed.
     it('does not delete the legacy key when this project has not yet claimed the legacy namespace', async () => {
-      mockIdbStore.delete.mockImplementation(() => makeSuccessReq(undefined));
+      mockIdbStore.delete.mockImplementation(() => imagesTracker.success(undefined));
       await store.deleteImage('img-1', 'proj-1');
       expect(mockIdbStore.delete).toHaveBeenCalledWith('proj-1::img-1');
       expect(mockIdbStore.delete).not.toHaveBeenCalledWith('img-1');
@@ -258,7 +263,7 @@ describe('IdbAssetStore', () => {
     // QNBS-v3: a legacy blob already claimed by a DIFFERENT project must never be deleted by this one either.
     it('does not delete the legacy key when a different project already owns the legacy namespace', async () => {
       mockAppDataStore.get.mockImplementation(() => appDataTracker.success('other-project'));
-      mockIdbStore.delete.mockImplementation(() => makeSuccessReq(undefined));
+      mockIdbStore.delete.mockImplementation(() => imagesTracker.success(undefined));
       await store.deleteImage('img-1', 'proj-1');
       expect(mockIdbStore.delete).toHaveBeenCalledWith('proj-1::img-1');
       expect(mockIdbStore.delete).not.toHaveBeenCalledWith('img-1');
@@ -272,7 +277,7 @@ describe('IdbAssetStore', () => {
 
     // QNBS-v3: [Grund: incarnation authority rejection / Impact: prevent stale deletion / Kreativer Mehrwert: guard the admission check]
     it('refuses deletion when the current incarnation no longer has authority', async () => {
-      mockIdbStore.delete.mockImplementation(() => makeSuccessReq(undefined));
+      mockIdbStore.delete.mockImplementation(() => imagesTracker.success(undefined));
       const admission = vi.fn(() => {
         throw new Error('stale project incarnation');
       });
@@ -282,6 +287,11 @@ describe('IdbAssetStore', () => {
       );
       expect(admission).toHaveBeenCalledTimes(1);
       expect(mockIdbStore.delete).not.toHaveBeenCalled();
+    });
+
+    it('rejects when the delete request succeeds but its transaction aborts', async () => {
+      mockIdbStore.delete.mockImplementation(() => imagesTracker.successThatThenAborts(undefined));
+      await expect(store.deleteImage('img-1', 'proj-1')).rejects.toBeDefined();
     });
   });
 

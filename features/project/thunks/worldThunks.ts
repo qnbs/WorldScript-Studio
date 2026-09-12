@@ -89,13 +89,14 @@ export const generateWorldImageThunk = createDeduplicatedThunk(
       'world image generation before storage',
     );
     // QNBS-v3: [Grund: origin persistence authority / Impact: reject stale writes at backend boundary / Kreativer Mehrwert: preserve world asset ownership]
-    await storageService.saveImage(worldId, base64, projectId, () =>
+    await storageService.saveImage(worldId, base64, projectId, (): undefined => {
       assertProjectIdentityUnchanged(
         originIdentity,
         getProjectTargetIdentity((getState() as RootState).project.present),
         'world image persistence',
-      ),
-    );
+      );
+      return undefined;
+    });
     assertProjectIdentityUnchanged(
       originIdentity,
       getProjectTargetIdentity((getState() as RootState).project.present),
@@ -134,13 +135,14 @@ export const uploadWorldImageThunk = createAsyncThunk(
         }
         // QNBS-v3: retain the data-URL MIME type so uploaded JPEG/WebP images survive filesystem round-trips.
         storageService
-          .saveImage(worldId, result, projectId, () =>
+          .saveImage(worldId, result, projectId, (): undefined => {
             assertProjectIdentityUnchanged(
               originIdentity,
               getProjectTargetIdentity((getState() as RootState).project.present),
               'world image upload persistence',
-            ),
-          )
+            );
+            return undefined;
+          })
           .then(() => {
             try {
               assertProjectIdentityUnchanged(

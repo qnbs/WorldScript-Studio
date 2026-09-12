@@ -62,6 +62,12 @@ export const streamInterviewResponseThunk = createAsyncThunk(
     const state = getState() as RootState;
     const { characterId, interviewId, question } = params;
     const originIdentity = getProjectTargetIdentity(state.project.present);
+    // QNBS-v3: reject before appending user/placeholder messages when the origin project cannot be proven.
+    assertProjectIdentityUnchanged(
+      originIdentity,
+      getProjectTargetIdentity(state.project.present),
+      'character interview start',
+    );
 
     const characters = selectAllCharacters(state);
     const character = characters.find((c) => c.id === characterId);
@@ -108,41 +114,53 @@ export const streamInterviewResponseThunk = createAsyncThunk(
 
     let accumulated = '';
     let stale = false;
-    await streamText(
-      prompt,
-      creativity,
-      (chunk) => {
-        if (stale) return;
-        const liveIdentity = getProjectTargetIdentity((getState() as RootState).project.present);
-        if (!identityUnchanged(originIdentity, liveIdentity)) {
-          // QNBS-v3: [Grund: origin stream identity / Impact: reject late chunks / Kreativer Mehrwert: preserve active interview ownership]
-          stale = true;
-          return;
-        }
-        accumulated += chunk;
-        // QNBS-v3: update the AI message in place via updateCharacterInterview to avoid N dispatches
-        dispatch(
-          projectActions.updateCharacterInterview({
-            characterId,
-            interviewId,
-            changes: { updatedAt: aiMsgTimestamp },
-          }),
-        );
-        // Directly mutate via a targeted appendInterviewMessage that overwrites the last AI msg
-        // We re-dispatch a synthetic update to keep Redux as the single source of truth
-        dispatch({
-          type: 'project/streamInterviewChunk',
-          payload: {
-            characterId,
-            interviewId,
-            aiMsgId,
-            content: accumulated,
-            originIdentity,
-          },
-        });
-      },
-      signal,
-    );
+    try {
+      await streamText(
+        prompt,
+        creativity,
+        (chunk) => {
+          if (stale) return;
+          const liveIdentity = getProjectTargetIdentity((getState() as RootState).project.present);
+          if (!identityUnchanged(originIdentity, liveIdentity)) {
+            // QNBS-v3: [Grund: origin stream identity / Impact: reject late chunks / Kreativer Mehrwert: preserve active interview ownership]
+            stale = true;
+            return;
+          }
+          accumulated += chunk;
+          // QNBS-v3: update the AI message in place via updateCharacterInterview to avoid N dispatches
+          dispatch(
+            projectActions.updateCharacterInterview({
+              characterId,
+              interviewId,
+              changes: { updatedAt: aiMsgTimestamp },
+            }),
+          );
+          // Directly mutate via a targeted appendInterviewMessage that overwrites the last AI msg
+          // We re-dispatch a synthetic update to keep Redux as the single source of truth
+          dispatch({
+            type: 'project/streamInterviewChunk',
+            payload: {
+              characterId,
+              interviewId,
+              aiMsgId,
+              content: accumulated,
+              originIdentity,
+            },
+          });
+        },
+        signal,
+      );
+    } catch (error) {
+      if (
+        !identityUnchanged(
+          originIdentity,
+          getProjectTargetIdentity((getState() as RootState).project.present),
+        )
+      ) {
+        throw new StaleProjectOperationError('character interview stream');
+      }
+      throw error;
+    }
 
     if (stale) throw new StaleProjectOperationError('character interview stream');
     // QNBS-v3: a stream can finish without another chunk after a project switch, so completion needs its own authority check.

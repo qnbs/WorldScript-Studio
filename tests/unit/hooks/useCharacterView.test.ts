@@ -63,7 +63,8 @@ vi.mock('../../../features/project/projectSelectors', () => ({
 
 vi.mock('../../../features/project/projectIdentity', () => ({
   captureActiveProjectIdentity: mockCaptureIdentity,
-  getProjectTargetStorageId: () => 'c-project-1',
+  getProjectTargetStorageId: (source: { data?: { id?: string } } | null | undefined) =>
+    source?.data?.id ?? null,
   identityUnchanged: (captured: string | null, live: string | null) =>
     captured !== null && captured === live,
   assertProjectIdentityUnchanged: (captured: string | null, live: string | null) => {
@@ -516,6 +517,10 @@ describe('confirmDelete', () => {
     const char = makeCharacter('c1', 'Hero');
     const { result } = renderHook(() => useCharacterView());
     act(() => result.current.setCharacterToDelete(char));
+    act(() => {
+      result.current.setSelectedCharacter(char);
+      result.current.setIsDossierOpen(true);
+    });
     mockIsStaleError.mockReturnValue(true);
     mockDeleteImage.mockRejectedValueOnce({ name: 'StaleProjectOperationError' });
 
@@ -524,6 +529,8 @@ describe('confirmDelete', () => {
     });
 
     expect(result.current.characterToDelete).toBeNull();
+    expect(result.current.selectedCharacter).toBeNull();
+    expect(result.current.isDossierOpen).toBe(false);
     expect(mockDispatch).not.toHaveBeenCalledWith(projectActions.deleteCharacter('c1'));
   });
 
@@ -543,8 +550,13 @@ describe('confirmDelete', () => {
   });
 
   it('clears a confirmation when the active project changes before delete starts', async () => {
+    const char = makeCharacter('c1', 'Hero');
     const { result } = renderHook(() => useCharacterView());
-    act(() => result.current.setCharacterToDelete(makeCharacter('c1')));
+    act(() => {
+      result.current.setCharacterToDelete(char);
+      result.current.setSelectedCharacter(char);
+      result.current.setIsDossierOpen(true);
+    });
     mockCaptureIdentity.mockReturnValue('id:replacement');
 
     await act(async () => {
@@ -552,13 +564,19 @@ describe('confirmDelete', () => {
     });
 
     expect(result.current.characterToDelete).toBeNull();
+    expect(result.current.selectedCharacter).toBeNull();
+    expect(result.current.isDossierOpen).toBe(false);
     expect(mockDeleteImage).not.toHaveBeenCalled();
   });
 
   it('clears a confirmation when the active project changes after storage', async () => {
     const char = makeCharacter('c1', 'Hero');
     const { result } = renderHook(() => useCharacterView());
-    act(() => result.current.setCharacterToDelete(char));
+    act(() => {
+      result.current.setCharacterToDelete(char);
+      result.current.setSelectedCharacter(char);
+      result.current.setIsDossierOpen(true);
+    });
     mockDeleteImage.mockImplementationOnce(async () => {
       mockCaptureIdentity.mockReturnValue('id:replacement');
     });
@@ -568,6 +586,8 @@ describe('confirmDelete', () => {
     });
 
     expect(result.current.characterToDelete).toBeNull();
+    expect(result.current.selectedCharacter).toBeNull();
+    expect(result.current.isDossierOpen).toBe(false);
     expect(mockDispatch).not.toHaveBeenCalledWith(projectActions.deleteCharacter('c1'));
   });
 

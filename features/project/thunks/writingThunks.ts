@@ -96,13 +96,14 @@ export const generateSceneImageThunk = createDeduplicatedThunk(
       'scene image generation before storage',
     );
     // QNBS-v3: the backend must re-check incarnation authority at its final image-write point, not only before/after the asynchronous storage call.
-    await storageService.saveImage(imageKey, base64, projectId, () =>
+    await storageService.saveImage(imageKey, base64, projectId, (): undefined => {
       assertProjectIdentityUnchanged(
         originIdentity,
         getProjectTargetIdentity((getState() as RootState).project.present),
         'scene image persistence',
-      ),
-    );
+      );
+      return undefined;
+    });
     assertProjectIdentityUnchanged(
       originIdentity,
       getProjectTargetIdentity((getState() as RootState).project.present),

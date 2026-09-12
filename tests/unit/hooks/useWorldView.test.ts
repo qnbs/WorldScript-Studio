@@ -408,7 +408,9 @@ describe('handleGenerateImage', () => {
       error: { name: 'StaleProjectOperationError' },
     });
     mockImageMatch.mockReturnValue(false);
-    mockIsStaleError.mockReturnValue(true);
+    mockIsStaleError.mockImplementation(
+      (error: unknown) => (error as { name?: string })?.name === 'StaleProjectOperationError',
+    );
 
     const { result } = renderHook(() => useWorldView());
     act(() => result.current.handleSelect(world));

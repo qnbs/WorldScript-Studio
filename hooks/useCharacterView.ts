@@ -224,22 +224,28 @@ export const useCharacterView = () => {
       if (!identityUnchanged(characterDeleteIdentity, captureActiveProjectIdentity())) {
         setCharacterToDeleteState(null);
         setCharacterDeleteIdentity(null);
+        setIsDossierOpen(false);
+        setSelectedCharacter(null);
         return;
       }
       const deletingCharacter = characterToDelete;
       // QNBS-v3: the real delete API, not saveImage(id, '') -- an empty-string save only overwrote the project-qualified key, leaving any pre-qualification legacy blob for this id intact and resurfacable via getImage's fallback.
       try {
-        await storageService.deleteImage(deletingCharacter.id, projectId, () =>
+        await storageService.deleteImage(deletingCharacter.id, projectId, (): undefined => {
           assertProjectIdentityUnchanged(
             characterDeleteIdentity,
             captureActiveProjectIdentity(),
             'character image deletion',
-          ),
-        );
+          );
+          return undefined;
+        });
       } catch (error) {
         setCharacterToDeleteState(null);
         setCharacterDeleteIdentity(null);
-        if (!isStaleProjectOperationError(error)) {
+        if (isStaleProjectOperationError(error)) {
+          setIsDossierOpen(false);
+          setSelectedCharacter(null);
+        } else {
           toast.error(t('error.apiErrorTitle'));
         }
         return;
@@ -247,6 +253,8 @@ export const useCharacterView = () => {
       if (!identityUnchanged(characterDeleteIdentity, captureActiveProjectIdentity())) {
         setCharacterToDeleteState(null);
         setCharacterDeleteIdentity(null);
+        setIsDossierOpen(false);
+        setSelectedCharacter(null);
         return;
       }
       dispatch(projectActions.deleteCharacter(deletingCharacter.id));

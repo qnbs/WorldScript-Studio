@@ -96,13 +96,14 @@ export const generateCharacterPortraitThunk = createDeduplicatedThunk(
       'character portrait generation before storage',
     );
     // QNBS-v3: [Origin persistence authority / Reject stale writes at the backend boundary / Preserve portrait asset ownership]
-    await storageService.saveImage(characterId, base64, projectId, () =>
+    await storageService.saveImage(characterId, base64, projectId, (): undefined => {
       assertProjectIdentityUnchanged(
         originIdentity,
         getProjectTargetIdentity((getState() as RootState).project.present),
         'character portrait persistence',
-      ),
-    );
+      );
+      return undefined;
+    });
     assertProjectIdentityUnchanged(
       originIdentity,
       getProjectTargetIdentity((getState() as RootState).project.present),
@@ -141,13 +142,14 @@ export const uploadCharacterImageThunk = createAsyncThunk(
         }
         // QNBS-v3: retain the data-URL MIME type so uploaded JPEG/WebP images survive filesystem round-trips.
         storageService
-          .saveImage(characterId, result, projectId, () =>
+          .saveImage(characterId, result, projectId, (): undefined => {
             assertProjectIdentityUnchanged(
               originIdentity,
               getProjectTargetIdentity((getState() as RootState).project.present),
               'character image upload persistence',
-            ),
-          )
+            );
+            return undefined;
+          })
           .then(() => {
             try {
               assertProjectIdentityUnchanged(

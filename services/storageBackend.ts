@@ -14,11 +14,11 @@ export interface BinderAssetPayload {
 }
 
 /** Synchronous admission check evaluated at the backend's image-write point. */
-export type ImageWriteAdmission = () => void;
+export type ImageWriteAdmission = () => undefined;
 
 // QNBS-v3: [Grund: shared delete authority / Impact: reject stale image removals / Kreativer Mehrwert: keep every backend on one admission contract]
 /** Synchronous admission check evaluated at the backend's image-delete point. */
-export type ImageDeleteAdmission = () => void;
+export type ImageDeleteAdmission = () => undefined;
 
 // QNBS-v3: shared result keeps the affected identity and verified quarantine path explicit across backends.
 /** Result of moving a corrupt desktop project out of the active project namespace. */
