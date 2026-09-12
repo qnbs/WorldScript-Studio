@@ -262,6 +262,8 @@ export const useWorldView = () => {
       if (!identityUnchanged(worldDeleteIdentity, captureActiveProjectIdentity())) {
         setWorldToDeleteState(null);
         setWorldDeleteIdentity(null);
+        setIsAtlasOpen(false);
+        setSelectedWorld(null);
         return;
       }
       const deletingWorld = worldToDelete;
@@ -278,7 +280,14 @@ export const useWorldView = () => {
       } catch (error) {
         setWorldToDeleteState(null);
         setWorldDeleteIdentity(null);
-        if (!isStaleProjectOperationError(error)) {
+        const projectStillActive = identityUnchanged(
+          worldDeleteIdentity,
+          captureActiveProjectIdentity(),
+        );
+        if (isStaleProjectOperationError(error) || !projectStillActive) {
+          setIsAtlasOpen(false);
+          setSelectedWorld(null);
+        } else {
           toast.error(t('error.apiErrorTitle'));
         }
         return;
@@ -286,6 +295,8 @@ export const useWorldView = () => {
       if (!identityUnchanged(worldDeleteIdentity, captureActiveProjectIdentity())) {
         setWorldToDeleteState(null);
         setWorldDeleteIdentity(null);
+        setIsAtlasOpen(false);
+        setSelectedWorld(null);
         return;
       }
       dispatch(projectActions.deleteWorld(deletingWorld.id));

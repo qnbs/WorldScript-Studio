@@ -224,7 +224,7 @@ describe('CharacterView', () => {
       }),
     );
     const { useCharacterView } = await import('../../hooks/useCharacterView');
-    vi.mocked(useCharacterView).mockReturnValueOnce({
+    vi.mocked(useCharacterView).mockReturnValue({
       ...baseContextValue,
       characters: [
         {

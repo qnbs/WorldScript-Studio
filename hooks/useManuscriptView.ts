@@ -103,6 +103,7 @@ export const useManuscriptView = ({
   >([]);
   const [isSceneVisualizing, setIsSceneVisualizing] = useState(false);
   const [sceneImagePreviewUrl, setSceneImagePreviewUrl] = useState<string | null>(null);
+  const sceneVisualizationRequestRef = useRef(0);
 
   // Drag and drop state
   const draggedItem = useRef<number | null>(null);
@@ -313,6 +314,7 @@ export const useManuscriptView = ({
 
   const handleVisualizeScene = useCallback(async () => {
     if (!activeSection?.content?.trim() || !project) return;
+    const requestId = ++sceneVisualizationRequestRef.current;
     setIsSceneVisualizing(true);
     try {
       const result = await dispatch(
@@ -330,7 +332,8 @@ export const useManuscriptView = ({
       // QNBS-v3: [Grund: stale scene result is expected after a project switch / Impact: suppress false error toasts / Kreativer Mehrwert: keep authoring feedback actionable]
       if (!isStaleProjectOperationError(error)) {
         toast.error(t('error.apiErrorTitle'));
-      } else {
+      } else if (sceneVisualizationRequestRef.current === requestId) {
+        // QNBS-v3: [Grund: stale request ordering / Impact: do not erase a newer preview / Kreativer Mehrwert: keep current-project feedback visible]
         setSceneImagePreviewUrl(null);
       }
     } finally {

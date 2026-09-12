@@ -96,13 +96,26 @@ export class IdbAssetStore extends IdbSnapshotStore {
       const store = await this.getObjectStore(IMAGES_STORE, 'readwrite');
       writeAdmission?.();
       const transaction = store.transaction;
+      let admissionError: unknown;
+      let transactionAborted = false;
       return new Promise<void>((resolve, reject) => {
         const request = store.put(payload, key);
         request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          try {
+            writeAdmission?.();
+          } catch (error) {
+            admissionError = error;
+            if (!transactionAborted) {
+              transactionAborted = true;
+              transaction.abort();
+            }
+          }
+        };
         // QNBS-v3: a successful request can still be rolled back by a later transaction abort; only commit grants persistence authority.
         transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error ?? request.error);
-        transaction.onabort = () => reject(transaction.error ?? request.error);
+        transaction.onerror = () => reject(admissionError ?? transaction.error ?? request.error);
+        transaction.onabort = () => reject(admissionError ?? transaction.error ?? request.error);
       });
     });
   }
@@ -155,14 +168,27 @@ export class IdbAssetStore extends IdbSnapshotStore {
       // QNBS-v3: clear both the qualified and legacy key so a stale legacy record can never resurface via getImage's fallback after an explicit delete. Both deletes share one IDB transaction, so a failure on either aborts and rolls back both -- no partial-delete resurrection risk here, unlike the filesystem backend's independent file operations.
       deleteAdmission?.();
       const transaction = store.transaction;
+      let admissionError: unknown;
+      let transactionAborted = false;
       await new Promise<void>((resolve, reject) => {
         // QNBS-v3: request success is not durable until this shared transaction commits.
         transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error);
-        transaction.onabort = () => reject(transaction.error);
+        transaction.onerror = () => reject(admissionError ?? transaction.error);
+        transaction.onabort = () => reject(admissionError ?? transaction.error);
         for (const key of keysToDelete) {
           const request = store.delete(key);
           request.onerror = () => reject(request.error);
+          request.onsuccess = () => {
+            try {
+              deleteAdmission?.();
+            } catch (error) {
+              admissionError = error;
+              if (!transactionAborted) {
+                transactionAborted = true;
+                transaction.abort();
+              }
+            }
+          };
         }
       });
     });

@@ -224,7 +224,7 @@ describe('WorldView', () => {
       }),
     );
     const { useWorldView } = await import('../../hooks/useWorldView');
-    vi.mocked(useWorldView).mockReturnValueOnce({
+    vi.mocked(useWorldView).mockReturnValue({
       ...baseContextValue,
       worlds: [
         {

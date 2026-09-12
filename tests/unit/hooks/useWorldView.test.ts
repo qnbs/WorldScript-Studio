@@ -496,6 +496,10 @@ describe('confirmDelete', () => {
     mockWorlds = [world];
     const { result } = renderHook(() => useWorldView());
     act(() => result.current.handleDelete('w1'));
+    act(() => {
+      result.current.setSelectedWorld(world);
+      result.current.setIsAtlasOpen(true);
+    });
     mockIsStaleError.mockReturnValue(true);
     mockDeleteImage.mockRejectedValueOnce({ name: 'StaleProjectOperationError' });
 
@@ -504,6 +508,8 @@ describe('confirmDelete', () => {
     });
 
     expect(result.current.worldToDelete).toBeNull();
+    expect(result.current.selectedWorld).toBeNull();
+    expect(result.current.isAtlasOpen).toBe(false);
     expect(mockDispatch).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: 'project/deleteWorld', payload: 'w1' }),
     );
@@ -527,8 +533,13 @@ describe('confirmDelete', () => {
   });
 
   it('clears a confirmation when the active project changes before delete starts', async () => {
+    const world = makeWorld('w1');
     const { result } = renderHook(() => useWorldView());
-    act(() => result.current.setWorldToDelete(makeWorld('w1')));
+    act(() => {
+      result.current.setWorldToDelete(world);
+      result.current.setSelectedWorld(world);
+      result.current.setIsAtlasOpen(true);
+    });
     mockCaptureIdentity.mockReturnValue('id:replacement');
 
     await act(async () => {
@@ -536,13 +547,19 @@ describe('confirmDelete', () => {
     });
 
     expect(result.current.worldToDelete).toBeNull();
+    expect(result.current.selectedWorld).toBeNull();
+    expect(result.current.isAtlasOpen).toBe(false);
     expect(mockDeleteImage).not.toHaveBeenCalled();
   });
 
   it('clears a confirmation when the active project changes after storage', async () => {
     const world = makeWorld('w1', 'Arda');
     const { result } = renderHook(() => useWorldView());
-    act(() => result.current.setWorldToDelete(world));
+    act(() => {
+      result.current.setWorldToDelete(world);
+      result.current.setSelectedWorld(world);
+      result.current.setIsAtlasOpen(true);
+    });
     mockDeleteImage.mockImplementationOnce(async () => {
       mockCaptureIdentity.mockReturnValue('id:replacement');
     });
@@ -552,9 +569,34 @@ describe('confirmDelete', () => {
     });
 
     expect(result.current.worldToDelete).toBeNull();
+    expect(result.current.selectedWorld).toBeNull();
+    expect(result.current.isAtlasOpen).toBe(false);
     expect(mockDispatch).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: 'project/deleteWorld', payload: 'w1' }),
     );
+  });
+
+  it('suppresses a backend error after the active project changes', async () => {
+    const world = makeWorld('w1', 'Arda');
+    const { result } = renderHook(() => useWorldView());
+    act(() => {
+      result.current.setWorldToDelete(world);
+      result.current.setSelectedWorld(world);
+      result.current.setIsAtlasOpen(true);
+    });
+    mockDeleteImage.mockImplementationOnce(async () => {
+      mockCaptureIdentity.mockReturnValue('id:replacement');
+      throw new Error('storage failed');
+    });
+
+    await act(async () => {
+      await result.current.confirmDelete();
+    });
+
+    expect(result.current.worldToDelete).toBeNull();
+    expect(result.current.selectedWorld).toBeNull();
+    expect(result.current.isAtlasOpen).toBe(false);
+    expect(mockToast.error).not.toHaveBeenCalled();
   });
 
   it('does nothing when worldToDelete is null', async () => {

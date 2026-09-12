@@ -14,10 +14,22 @@ type MockTransaction = {
   onerror: (() => void) | null;
   onabort: (() => void) | null;
   error: unknown;
+  abort: () => void;
 };
 
 function makeMockTransaction(): MockTransaction {
-  return { oncomplete: null, onerror: null, onabort: null, error: null };
+  const transaction: MockTransaction = {
+    oncomplete: null,
+    onerror: null,
+    onabort: null,
+    error: null,
+    abort: vi.fn(),
+  };
+  transaction.abort = vi.fn(() => {
+    transaction.error = new DOMException('simulated transaction abort');
+    transaction.onabort?.();
+  });
+  return transaction;
 }
 
 const mockImagesTransaction = makeMockTransaction();
@@ -207,6 +219,21 @@ describe('IdbAssetStore', () => {
       mockIdbStore.put.mockImplementation(() => makeErrorReq(new DOMException('put failed')));
       await expect(store.saveImage('img-1', 'abc', 'proj-1')).rejects.toBeDefined();
     });
+
+    it('aborts a successful put when commit-time authority no longer holds', async () => {
+      const admission = vi
+        .fn<() => undefined>()
+        .mockImplementationOnce(() => undefined)
+        .mockImplementationOnce(() => {
+          throw new Error('stale project incarnation');
+        });
+      mockIdbStore.put.mockImplementation(() => imagesTracker.success(undefined));
+
+      await expect(store.saveImage('img-1', 'abc', 'proj-1', admission)).rejects.toThrow(
+        'stale project incarnation',
+      );
+      expect(mockImagesTransaction.abort).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('getImage', () => {
@@ -292,6 +319,21 @@ describe('IdbAssetStore', () => {
     it('rejects when the delete request succeeds but its transaction aborts', async () => {
       mockIdbStore.delete.mockImplementation(() => imagesTracker.successThatThenAborts(undefined));
       await expect(store.deleteImage('img-1', 'proj-1')).rejects.toBeDefined();
+    });
+
+    it('aborts a delete when commit-time authority no longer holds', async () => {
+      const admission = vi
+        .fn<() => undefined>()
+        .mockImplementationOnce(() => undefined)
+        .mockImplementationOnce(() => {
+          throw new Error('stale project incarnation');
+        });
+      mockIdbStore.delete.mockImplementation(() => imagesTracker.success(undefined));
+
+      await expect(store.deleteImage('img-1', 'proj-1', admission)).rejects.toThrow(
+        'stale project incarnation',
+      );
+      expect(mockImagesTransaction.abort).toHaveBeenCalledTimes(1);
     });
   });
 
