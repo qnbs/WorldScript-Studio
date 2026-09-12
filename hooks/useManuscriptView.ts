@@ -126,7 +126,10 @@ export const useManuscriptView = ({
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset preview on active section change
   useEffect(() => {
+    // QNBS-v3: changing the visualization target invalidates any pending result from the prior section.
+    sceneVisualizationRequestRef.current += 1;
     setSceneImagePreviewUrl(null);
+    setIsSceneVisualizing(false);
   }, [activeSectionId]);
 
   const activeSectionStats = useMemo(() => {

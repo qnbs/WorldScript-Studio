@@ -476,4 +476,30 @@ describe('handleVisualizeScene', () => {
     act(() => result.current.setActiveSectionId('s2'));
     expect(result.current.sceneImagePreviewUrl).toBeNull();
   });
+
+  it('rejects a pending visualization after the active section changes', async () => {
+    let resolveVisualization!: (value: { imageKey: string; dataUrl: string }) => void;
+    mockUnwrap.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveVisualization = resolve;
+      }),
+    );
+    setManuscript([makeSection('s1', 'Ch1', 'Scene one'), makeSection('s2', 'Ch2', 'Scene two')]);
+    const { result } = renderHook(() => useManuscriptView({ onNavigate }));
+
+    let visualizationRequest!: Promise<void>;
+    act(() => {
+      visualizationRequest = result.current.handleVisualizeScene();
+    });
+    act(() => result.current.setActiveSectionId('s2'));
+    expect(result.current.sceneImagePreviewUrl).toBeNull();
+    expect(result.current.isSceneVisualizing).toBe(false);
+
+    await act(async () => {
+      resolveVisualization({ imageKey: 'scene-old', dataUrl: 'data:image/png;base64,old' });
+      await visualizationRequest;
+    });
+    expect(result.current.sceneImagePreviewUrl).toBeNull();
+    expect(result.current.isSceneVisualizing).toBe(false);
+  });
 });
