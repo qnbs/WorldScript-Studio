@@ -125,6 +125,7 @@ describe('projectSlice — characterInterview reducers', () => {
     const aiMsg = makeMessage({ id: 'ai-msg', role: 'ai', content: '' });
     const interview = makeInterview({ messages: [aiMsg] });
     const state = s({ 'char-1': [interview] });
+    // QNBS-v3: [Stale generation fixture / Prove reducer-level rejection / Preserve active interview content]
     const next = projectReducer(state as unknown as Parameters<typeof projectReducer>[0], {
       type: 'project/streamInterviewChunk',
       payload: {

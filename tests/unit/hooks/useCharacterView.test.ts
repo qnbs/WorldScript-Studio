@@ -28,8 +28,11 @@ let mockCharacters: Character[] = [];
 
 vi.mock('../../../app/hooks', () => ({
   useAppDispatch: () => mockDispatch,
-  useAppSelector: (selector: (s: { characters: Character[] }) => unknown) =>
-    selector({ characters: mockCharacters }),
+  useAppSelector: (selector: (s: unknown) => unknown) =>
+    selector({
+      characters: mockCharacters,
+      project: { present: { data: { id: 'c-project-1' } } },
+    }),
 }));
 
 vi.mock('../../../hooks/useTranslation', () => ({
@@ -54,6 +57,7 @@ vi.mock('../../../features/project/projectSelectors', () => ({
 
 vi.mock('../../../features/project/projectIdentity', () => ({
   captureActiveProjectIdentity: mockCaptureIdentity,
+  getProjectTargetStorageId: () => 'c-project-1',
   identityUnchanged: (captured: string | null, live: string | null) =>
     captured !== null && captured === live,
   isStaleProjectOperationError: () => false,

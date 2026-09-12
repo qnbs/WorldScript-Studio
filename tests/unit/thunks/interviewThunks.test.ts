@@ -236,6 +236,7 @@ describe('streamInterviewResponseThunk', () => {
   });
 
   it('does not dispatch late chunks after the project incarnation changes', async () => {
+    // QNBS-v3: [Incarnation switch during stream / Prove late chunks are discarded / Preserve project-owned dialogue]
     const state = makeState();
     mockStreamText.mockImplementationOnce(
       async (_prompt: string, _creativity: unknown, onChunk: (chunk: string) => void) => {

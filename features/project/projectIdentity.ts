@@ -45,7 +45,7 @@ function baseTargetIdentity(project: unknown): string | null {
     : null;
 }
 
-// QNBS-v3: incorporates the in-memory generation counter, not just the persisted id -- a fresh "New Project" always reuses id:'default' until explicitly saved elsewhere, so id alone cannot distinguish two different reset/import/restore sessions.
+// QNBS-v3: [Generation fence / Reject same-ID stale mutations / Preserve project-incarnation ownership]
 export function getProjectTargetIdentity(
   source: ProjectIdentitySource | null | undefined,
 ): string | null {
@@ -54,7 +54,7 @@ export function getProjectTargetIdentity(
   return base === null ? null : `${base}:gen:${source.generation ?? 0}`;
 }
 
-// QNBS-v3: legacy directory identity is stable storage ownership, while the in-memory generation remains an async-operation fence only.
+// QNBS-v3: [Legacy directory identity / Keep storage owner stable / Preserve compatibility without generation aliases]
 export function getProjectTargetStorageId(
   source: ProjectIdentitySource | null | undefined,
 ): string | null {

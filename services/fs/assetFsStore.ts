@@ -85,6 +85,8 @@ export class FsAssetStore extends FsSnapshotStore {
     projectId = 'default',
     writeAdmission?: ImageWriteAdmission,
   ): Promise<void> {
+    // QNBS-v3: [Admission before temp-file creation / Reject already-stale writes without disk residue / Preserve filesystem authority]
+    writeAdmission?.();
     const apis = await this.getApis();
     const { dir, file } = await this.qualifiedImagePaths(projectId, id);
     if (!(await apis.exists(dir))) {

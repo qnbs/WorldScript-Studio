@@ -3,7 +3,10 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { ICONS } from '../constants';
 import { useWorldViewContext, WorldViewContext } from '../contexts/WorldViewContext';
-import { selectProjectData } from '../features/project/projectSelectors';
+import {
+  getProjectTargetIdentity,
+  getProjectTargetStorageId,
+} from '../features/project/projectIdentity';
 import { uploadWorldImageThunk } from '../features/project/thunks/worldThunks';
 import { useWorldView } from '../hooks/useWorldView';
 import { logger } from '../services/logger';
@@ -32,11 +35,16 @@ import { Textarea } from './ui/Textarea';
 
 // QNBS-v3: reads through the selected backend so Tauri uploads and views use the same storage location.
 const useStoredImage = (id: string | undefined, hasImage: boolean | undefined) => {
-  const projectId = useAppSelector((state) => selectProjectData(state)?.id || 'default');
+  const projectId = useAppSelector(
+    (state) => getProjectTargetStorageId(state.project.present) ?? 'default',
+  );
+  const projectIdentity = useAppSelector((state) =>
+    getProjectTargetIdentity(state.project.present),
+  );
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   useEffect(() => {
     setImageUrl(null); // Reset on change
-    if (!id || !hasImage) {
+    if (!id || !hasImage || !projectIdentity) {
       return;
     }
     let isMounted = true;
@@ -56,7 +64,7 @@ const useStoredImage = (id: string | undefined, hasImage: boolean | undefined) =
     return () => {
       isMounted = false;
     };
-  }, [id, hasImage, projectId]);
+  }, [id, hasImage, projectId, projectIdentity]);
   return imageUrl;
 };
 

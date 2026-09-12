@@ -62,11 +62,6 @@ export const streamInterviewResponseThunk = createAsyncThunk(
     const state = getState() as RootState;
     const { characterId, interviewId, question } = params;
     const originIdentity = getProjectTargetIdentity(state.project.present);
-    assertProjectIdentityUnchanged(
-      originIdentity,
-      getProjectTargetIdentity(state.project.present),
-      'character interview start',
-    );
 
     const characters = selectAllCharacters(state);
     const character = characters.find((c) => c.id === characterId);
@@ -120,7 +115,7 @@ export const streamInterviewResponseThunk = createAsyncThunk(
         if (stale) return;
         const liveIdentity = getProjectTargetIdentity((getState() as RootState).project.present);
         if (!identityUnchanged(originIdentity, liveIdentity)) {
-          // QNBS-v3: stop accepting chunks as soon as the originating project incarnation is replaced.
+          // QNBS-v3: [Origin stream identity / Reject late chunks / Preserve active interview ownership]
           stale = true;
           return;
         }

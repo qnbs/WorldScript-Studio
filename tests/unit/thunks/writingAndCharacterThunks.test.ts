@@ -539,7 +539,12 @@ describe('uploadCharacterImageThunk', () => {
 
     expect(action.type).toBe('project/uploadCharacterImage/fulfilled');
     // QNBS-v3: id, data, projectId order, matching the reordered saveImage signature.
-    expect(storageService.saveImage).toHaveBeenCalledWith('c99', fakeDataUrl, 'default');
+    expect(storageService.saveImage).toHaveBeenCalledWith(
+      'c99',
+      fakeDataUrl,
+      'default',
+      expect.any(Function),
+    );
   });
 
   it('dispatches fulfilled with characterId', async () => {
@@ -564,6 +569,7 @@ describe('uploadCharacterImageThunk', () => {
       'c7',
       'data:image/jpeg;base64,abc123',
       'default',
+      expect.any(Function),
     );
   });
 

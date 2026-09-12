@@ -4,10 +4,11 @@ import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useToast } from '../components/ui/Toast';
 import {
   captureActiveProjectIdentity,
+  getProjectTargetStorageId,
   identityUnchanged,
   isStaleProjectOperationError,
 } from '../features/project/projectIdentity';
-import { selectAllWorlds, selectProjectData } from '../features/project/projectSelectors';
+import { selectAllWorlds } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
 import {
   generateWorldImageThunk,
@@ -23,7 +24,9 @@ export const useWorldView = () => {
   const { t, language } = useTranslation();
   const dispatch = useAppDispatch();
   const worlds = useAppSelector(selectAllWorlds);
-  const projectId = useAppSelector((state) => selectProjectData(state)?.id || 'default');
+  const projectId = useAppSelector(
+    (state) => getProjectTargetStorageId(state.project.present) ?? 'default',
+  );
   const toast = useToast();
 
   const [selectedWorld, setSelectedWorld] = useState<World | null>(null);
@@ -37,7 +40,13 @@ export const useWorldView = () => {
   const [isRefiningImage, setIsRefiningImage] = useState(false);
   const [refinementPrompt, setRefinementPrompt] = useState('');
 
-  const [worldToDelete, setWorldToDelete] = useState<World | null>(null);
+  const [worldToDelete, setWorldToDeleteState] = useState<World | null>(null);
+  const [worldDeleteIdentity, setWorldDeleteIdentity] = useState<string | null>(null);
+
+  const setWorldToDelete = useCallback((world: World | null) => {
+    setWorldToDeleteState(world);
+    setWorldDeleteIdentity(world ? captureActiveProjectIdentity() : null);
+  }, []);
 
   // QNBS-v3: Manual add must open the atlas immediately — dispatch-only left users on the grid
   //          with a silent "New World" card and no editor (inconsistent with Characters, which
@@ -243,20 +252,32 @@ export const useWorldView = () => {
       const world = worlds.find((w) => w.id === id);
       if (world) setWorldToDelete(world);
     },
-    [worlds],
+    [worlds, setWorldToDelete],
   );
 
   const confirmDelete = useCallback(async () => {
     if (worldToDelete) {
+      // QNBS-v3: [Delete intent identity / Reject a dialog opened in another incarnation / Preserve destructive-action authority]
+      if (!identityUnchanged(worldDeleteIdentity, captureActiveProjectIdentity())) {
+        setWorldToDeleteState(null);
+        setWorldDeleteIdentity(null);
+        return;
+      }
+      const deletingWorld = worldToDelete;
       // QNBS-v3: the real delete API, not saveImage(id, '') -- an empty-string save only overwrote the project-qualified key, leaving any pre-qualification legacy blob for this id intact and resurfacable via getImage's fallback.
-      await storageService.deleteImage(worldToDelete.id, projectId);
-      dispatch(projectActions.deleteWorld(worldToDelete.id));
+      await storageService.deleteImage(deletingWorld.id, projectId);
+      if (!identityUnchanged(worldDeleteIdentity, captureActiveProjectIdentity())) {
+        setWorldToDeleteState(null);
+        setWorldDeleteIdentity(null);
+        return;
+      }
+      dispatch(projectActions.deleteWorld(deletingWorld.id));
       setWorldToDelete(null);
       setIsAtlasOpen(false);
       setSelectedWorld(null);
-      toast.info(t('worlds.deleteLabel', { name: worldToDelete.name }));
+      toast.info(t('worlds.deleteLabel', { name: deletingWorld.name }));
     }
-  }, [dispatch, worldToDelete, toast, t, projectId]);
+  }, [dispatch, worldToDelete, worldDeleteIdentity, toast, t, projectId, setWorldToDelete]);
 
   return {
     t,

@@ -4,10 +4,11 @@ import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useToast } from '../components/ui/Toast';
 import {
   captureActiveProjectIdentity,
+  getProjectTargetStorageId,
   identityUnchanged,
   isStaleProjectOperationError,
 } from '../features/project/projectIdentity';
-import { selectAllCharacters, selectProjectData } from '../features/project/projectSelectors';
+import { selectAllCharacters } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
 import {
   generateCharacterPortraitThunk,
@@ -23,7 +24,9 @@ export const useCharacterView = () => {
   const { t, language } = useTranslation();
   const dispatch = useAppDispatch();
   const characters = useAppSelector(selectAllCharacters);
-  const projectId = useAppSelector((state) => selectProjectData(state)?.id || 'default');
+  const projectId = useAppSelector(
+    (state) => getProjectTargetStorageId(state.project.present) ?? 'default',
+  );
   const toast = useToast();
 
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
@@ -39,7 +42,13 @@ export const useCharacterView = () => {
   const [portraitStyle, setPortraitStyle] = useState('digital painting');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const [characterToDelete, setCharacterToDelete] = useState<Character | null>(null);
+  const [characterToDelete, setCharacterToDeleteState] = useState<Character | null>(null);
+  const [characterDeleteIdentity, setCharacterDeleteIdentity] = useState<string | null>(null);
+
+  const setCharacterToDelete = useCallback((character: Character | null) => {
+    setCharacterToDeleteState(character);
+    setCharacterDeleteIdentity(character ? captureActiveProjectIdentity() : null);
+  }, []);
 
   // QNBS-v3: Manual add must open the dossier immediately — dispatch-only left users on an empty grid and broke E2E + discoverability.
   const handleAddNewManually = useCallback(() => {
@@ -208,20 +217,40 @@ export const useCharacterView = () => {
         setCharacterToDelete(char);
       }
     },
-    [characters],
+    [characters, setCharacterToDelete],
   );
 
   const confirmDelete = useCallback(async () => {
     if (characterToDelete) {
+      // QNBS-v3: [Delete intent identity / Reject a dialog opened in another incarnation / Preserve destructive-action authority]
+      if (!identityUnchanged(characterDeleteIdentity, captureActiveProjectIdentity())) {
+        setCharacterToDeleteState(null);
+        setCharacterDeleteIdentity(null);
+        return;
+      }
+      const deletingCharacter = characterToDelete;
       // QNBS-v3: the real delete API, not saveImage(id, '') -- an empty-string save only overwrote the project-qualified key, leaving any pre-qualification legacy blob for this id intact and resurfacable via getImage's fallback.
-      await storageService.deleteImage(characterToDelete.id, projectId);
-      dispatch(projectActions.deleteCharacter(characterToDelete.id));
+      await storageService.deleteImage(deletingCharacter.id, projectId);
+      if (!identityUnchanged(characterDeleteIdentity, captureActiveProjectIdentity())) {
+        setCharacterToDeleteState(null);
+        setCharacterDeleteIdentity(null);
+        return;
+      }
+      dispatch(projectActions.deleteCharacter(deletingCharacter.id));
       setCharacterToDelete(null);
       setIsDossierOpen(false);
       setSelectedCharacter(null);
-      toast.info(t('characters.deleteLabel', { name: characterToDelete.name }));
+      toast.info(t('characters.deleteLabel', { name: deletingCharacter.name }));
     }
-  }, [dispatch, characterToDelete, toast, t, projectId]);
+  }, [
+    dispatch,
+    characterToDelete,
+    characterDeleteIdentity,
+    toast,
+    t,
+    projectId,
+    setCharacterToDelete,
+  ]);
 
   return {
     t,

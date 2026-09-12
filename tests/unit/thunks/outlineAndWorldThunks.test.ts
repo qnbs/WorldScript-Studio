@@ -263,7 +263,12 @@ describe('generateWorldImageThunk', () => {
     );
 
     // QNBS-v3: id, data, projectId order, matching the reordered saveImage signature.
-    expect(storageService.saveImage).toHaveBeenCalledWith('w42', 'worldimagedata', 'default');
+    expect(storageService.saveImage).toHaveBeenCalledWith(
+      'w42',
+      'worldimagedata',
+      'default',
+      expect.any(Function),
+    );
   });
 
   it('rejects on AI error', async () => {
@@ -296,7 +301,12 @@ describe('uploadWorldImageThunk', () => {
 
     expect(action.type).toBe('project/uploadWorldImage/fulfilled');
     // QNBS-v3: id, data, projectId order, matching the reordered saveImage signature.
-    expect(storageService.saveImage).toHaveBeenCalledWith('w99', fakeDataUrl, 'default');
+    expect(storageService.saveImage).toHaveBeenCalledWith(
+      'w99',
+      fakeDataUrl,
+      'default',
+      expect.any(Function),
+    );
   });
 
   it('rejects when the FileReader errors', async () => {

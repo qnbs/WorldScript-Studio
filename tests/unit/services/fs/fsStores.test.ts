@@ -1924,6 +1924,7 @@ describe('FsAssetStore — images + binder assets', () => {
 
   it('does not replace an image when final write admission rejects the incarnation', async () => {
     await store.saveImage('guarded', 'data:image/png;base64,OLD', 'proj-1');
+    const filesBeforeRejectedWrite = new Map(fake.text);
     const admission = vi.fn(() => {
       throw new Error('stale project incarnation');
     });
@@ -1932,6 +1933,7 @@ describe('FsAssetStore — images + binder assets', () => {
       store.saveImage('guarded', 'data:image/png;base64,NEW', 'proj-1', admission),
     ).rejects.toThrow('stale project incarnation');
     expect(admission).toHaveBeenCalledTimes(1);
+    expect(fake.text).toEqual(filesBeforeRejectedWrite);
     expect(await store.getImage('guarded', 'proj-1')).toBe('data:image/png;base64,OLD');
   });
 
