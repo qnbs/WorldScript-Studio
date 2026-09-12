@@ -88,7 +88,7 @@ export const generateWorldImageThunk = createDeduplicatedThunk(
       getProjectTargetIdentity((getState() as RootState).project.present),
       'world image generation before storage',
     );
-    // QNBS-v3: [Origin persistence authority / Reject stale writes at the backend boundary / Preserve world asset ownership]
+    // QNBS-v3: [Grund: origin persistence authority / Impact: reject stale writes at backend boundary / Kreativer Mehrwert: preserve world asset ownership]
     await storageService.saveImage(worldId, base64, projectId, () =>
       assertProjectIdentityUnchanged(
         originIdentity,

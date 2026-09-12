@@ -115,7 +115,7 @@ export const streamInterviewResponseThunk = createAsyncThunk(
         if (stale) return;
         const liveIdentity = getProjectTargetIdentity((getState() as RootState).project.present);
         if (!identityUnchanged(originIdentity, liveIdentity)) {
-          // QNBS-v3: [Origin stream identity / Reject late chunks / Preserve active interview ownership]
+          // QNBS-v3: [Grund: origin stream identity / Impact: reject late chunks / Kreativer Mehrwert: preserve active interview ownership]
           stale = true;
           return;
         }

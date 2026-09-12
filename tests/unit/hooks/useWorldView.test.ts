@@ -6,14 +6,19 @@ import type { World } from '../../../types';
 // ---------------------------------------------------------------------------
 // vi.hoisted — thunk match fns must be stable references inside vi.mock factories
 // ---------------------------------------------------------------------------
-const { mockProfileMatch, mockRegenerateMatch, mockImageMatch, mockCaptureIdentity } = vi.hoisted(
-  () => ({
-    mockProfileMatch: vi.fn((_: unknown) => true),
-    mockRegenerateMatch: vi.fn((_: unknown) => true),
-    mockImageMatch: vi.fn((_: unknown) => true),
-    mockCaptureIdentity: vi.fn(() => 'id:test-project'),
-  }),
-);
+const {
+  mockProfileMatch,
+  mockRegenerateMatch,
+  mockImageMatch,
+  mockCaptureIdentity,
+  mockIsStaleError,
+} = vi.hoisted(() => ({
+  mockProfileMatch: vi.fn((_: unknown) => true),
+  mockRegenerateMatch: vi.fn((_: unknown) => true),
+  mockImageMatch: vi.fn((_: unknown) => true),
+  mockCaptureIdentity: vi.fn(() => 'id:test-project'),
+  mockIsStaleError: vi.fn((_: unknown) => false),
+}));
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -58,7 +63,7 @@ vi.mock('../../../features/project/projectIdentity', () => ({
   getProjectTargetStorageId: () => 'w-project-1',
   identityUnchanged: (captured: string | null, live: string | null) =>
     captured !== null && captured === live,
-  isStaleProjectOperationError: () => false,
+  isStaleProjectOperationError: mockIsStaleError,
 }));
 
 vi.mock('../../../features/project/thunks/worldThunks', () => {
@@ -121,6 +126,7 @@ beforeEach(() => {
   mockRegenerateMatch.mockReturnValue(true);
   mockImageMatch.mockReturnValue(true);
   mockCaptureIdentity.mockReturnValue('id:test-project');
+  mockIsStaleError.mockReturnValue(false);
 });
 
 // ---------------------------------------------------------------------------
@@ -388,6 +394,25 @@ describe('handleGenerateImage', () => {
     await act(async () => {
       await result.current.handleGenerateImage();
     });
+    expect(result.current.isGeneratingImage).toBe(false);
+  });
+
+  it('silently discards stale image results without showing a toast', async () => {
+    const world = makeWorld('w1');
+    mockDispatch.mockResolvedValue({
+      type: 'project/generateWorldImage/rejected',
+      error: { name: 'StaleProjectOperationError' },
+    });
+    mockImageMatch.mockReturnValue(false);
+    mockIsStaleError.mockReturnValue(true);
+
+    const { result } = renderHook(() => useWorldView());
+    act(() => result.current.handleSelect(world));
+    await act(async () => {
+      await result.current.handleGenerateImage();
+    });
+
+    expect(mockToast.error).not.toHaveBeenCalled();
     expect(result.current.isGeneratingImage).toBe(false);
   });
 });

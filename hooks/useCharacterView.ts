@@ -173,16 +173,13 @@ export const useCharacterView = () => {
         lang: language,
       }),
     );
-    if (
-      !generateCharacterPortraitThunk.fulfilled.match(resultAction) &&
-      !isStaleProjectOperationError(resultAction.error)
-    ) {
+    if (generateCharacterPortraitThunk.fulfilled.match(resultAction)) {
+      // QNBS-v3: only fulfilled generation may mark the local selection as having an avatar.
+      setSelectedCharacter((c) => (c ? { ...c, hasAvatar: true } : null));
+    } else if (!isStaleProjectOperationError(resultAction.error)) {
       const errorText = t('characters.error.portraitFailed');
       setErrorMessage(errorText);
       toast.error(errorText);
-    } else {
-      // Trigger re-render by updating local state, redux state will update via extraReducer
-      setSelectedCharacter((c) => (c ? { ...c, hasAvatar: true } : null));
     }
     setIsGeneratingPortrait(false);
   }, [dispatch, selectedCharacter, portraitStyle, language, t, toast]);

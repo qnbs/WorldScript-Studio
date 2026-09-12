@@ -7,13 +7,19 @@ import type { Character } from '../../../types';
 // ---------------------------------------------------------------------------
 // vi.hoisted — match mocks referenced in vi.mock factories
 // ---------------------------------------------------------------------------
-const { mockProfileMatch, mockPortraitMatch, mockRegenerateMatch, mockCaptureIdentity } =
-  vi.hoisted(() => ({
-    mockProfileMatch: vi.fn((_: unknown) => true),
-    mockPortraitMatch: vi.fn((_: unknown) => true),
-    mockRegenerateMatch: vi.fn((_: unknown) => true),
-    mockCaptureIdentity: vi.fn(() => 'id:test-project'),
-  }));
+const {
+  mockProfileMatch,
+  mockPortraitMatch,
+  mockRegenerateMatch,
+  mockCaptureIdentity,
+  mockIsStaleError,
+} = vi.hoisted(() => ({
+  mockProfileMatch: vi.fn((_: unknown) => true),
+  mockPortraitMatch: vi.fn((_: unknown) => true),
+  mockRegenerateMatch: vi.fn((_: unknown) => true),
+  mockCaptureIdentity: vi.fn(() => 'id:test-project'),
+  mockIsStaleError: vi.fn((_: unknown) => false),
+}));
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -60,7 +66,7 @@ vi.mock('../../../features/project/projectIdentity', () => ({
   getProjectTargetStorageId: () => 'c-project-1',
   identityUnchanged: (captured: string | null, live: string | null) =>
     captured !== null && captured === live,
-  isStaleProjectOperationError: () => false,
+  isStaleProjectOperationError: mockIsStaleError,
 }));
 
 vi.mock('../../../features/project/thunks/characterThunks', () => {
@@ -126,6 +132,7 @@ beforeEach(() => {
   mockPortraitMatch.mockReturnValue(true);
   mockRegenerateMatch.mockReturnValue(true);
   mockCaptureIdentity.mockReturnValue('id:test-project');
+  mockIsStaleError.mockReturnValue(false);
 });
 
 // ---------------------------------------------------------------------------
@@ -405,6 +412,25 @@ describe('handleGeneratePortrait', () => {
 
     expect(mockToast.error).toHaveBeenCalled();
     expect(result.current.errorMessage).not.toBeNull();
+  });
+
+  it('silently discards stale portrait results without marking an avatar', async () => {
+    mockDispatch.mockResolvedValue({
+      type: 'project/generateCharacterPortrait/rejected',
+      error: { name: 'StaleProjectOperationError' },
+    });
+    mockPortraitMatch.mockReturnValue(false);
+    mockIsStaleError.mockReturnValue(true);
+
+    const char = makeCharacter('c1');
+    const { result } = renderHook(() => useCharacterView());
+    act(() => result.current.handleSelect(char));
+    await act(async () => {
+      await result.current.handleGeneratePortrait();
+    });
+
+    expect(result.current.selectedCharacter?.hasAvatar).toBe(false);
+    expect(mockToast.error).not.toHaveBeenCalled();
   });
 });
 

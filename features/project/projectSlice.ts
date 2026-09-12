@@ -127,7 +127,7 @@ const projectSlice = createSlice({
           };
         } => action.type === 'project/streamInterviewChunk',
         (state, action) => {
-          // QNBS-v3: [Origin chunk identity / Reject stale stream mutation / Preserve current-project interview state]
+          // QNBS-v3: [Grund: origin chunk identity / Impact: reject stale stream mutation / Kreativer Mehrwert: preserve current-project interview state]
           if (!identityUnchanged(action.payload.originIdentity, getProjectTargetIdentity(state))) {
             return;
           }

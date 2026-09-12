@@ -359,7 +359,7 @@ addDebouncedListener(
 listenerMiddleware.startListening({
   matcher: isRejected,
   effect: (action, listenerApi) => {
-    // QNBS-v3: [Expected stale rejection / Suppress false failure notifications / Keep project switches quiet]
+    // QNBS-v3: [Grund: expected stale rejection / Impact: suppress false failure notifications / Kreativer Mehrwert: keep project switches quiet]
     if (action.meta.aborted || isStaleProjectOperationRejection(action)) return;
 
     let errorDescription = action.error?.message ?? 'An unexpected error occurred.';

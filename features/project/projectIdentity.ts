@@ -45,7 +45,7 @@ function baseTargetIdentity(project: unknown): string | null {
     : null;
 }
 
-// QNBS-v3: [Generation fence / Reject same-ID stale mutations / Preserve project-incarnation ownership]
+// QNBS-v3: [Grund: generation fence / Impact: reject same-ID stale mutations / Kreativer Mehrwert: preserve project-incarnation ownership]
 export function getProjectTargetIdentity(
   source: ProjectIdentitySource | null | undefined,
 ): string | null {
@@ -54,7 +54,7 @@ export function getProjectTargetIdentity(
   return base === null ? null : `${base}:gen:${source.generation ?? 0}`;
 }
 
-// QNBS-v3: [Legacy directory identity / Keep storage owner stable / Preserve compatibility without generation aliases]
+// QNBS-v3: [Grund: legacy directory identity / Impact: keep storage owner stable / Kreativer Mehrwert: preserve compatibility without aliases]
 export function getProjectTargetStorageId(
   source: ProjectIdentitySource | null | undefined,
 ): string | null {
