@@ -34,6 +34,15 @@ import { Select } from './ui/Select';
 import { Spinner } from './ui/Spinner';
 
 // QNBS-v3: reads through the selected backend so Tauri uploads and views use the same storage location.
+const loadStoredCharacterImage = async (id: string, projectId: string): Promise<string | null> => {
+  const image = await storageService.getImage(id, projectId);
+  return image
+    ? image.startsWith('data:image/')
+      ? image
+      : `data:image/png;base64,${image}`
+    : null;
+};
+
 const useStoredImage = (id: string | undefined, hasImage: boolean | undefined) => {
   const projectId = useAppSelector(
     (state) => getProjectTargetStorageId(state.project?.present) ?? 'default',
@@ -53,10 +62,9 @@ const useStoredImage = (id: string | undefined, hasImage: boolean | undefined) =
     let isMounted = true;
     const fetchImage = async () => {
       try {
-        // QNBS-v3: passes projectId so the lookup resolves the project-qualified key, not a bare entity id shared across projects.
-        const image = await storageService.getImage(id, projectId);
+        const image = await loadStoredCharacterImage(id, projectId);
         if (isMounted && image) {
-          setImageUrl(image.startsWith('data:image/') ? image : `data:image/png;base64,${image}`);
+          setImageUrl(image);
         }
       } catch (error) {
         // QNBS-v3: an unavailable image must retain the placeholder instead of causing an unhandled async rejection.

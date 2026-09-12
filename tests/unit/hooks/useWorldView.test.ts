@@ -413,6 +413,7 @@ describe('handleGenerateImage', () => {
     });
 
     expect(mockToast.error).not.toHaveBeenCalled();
+    expect(mockIsStaleError).toHaveBeenCalledWith({ name: 'StaleProjectOperationError' });
     expect(result.current.isGeneratingImage).toBe(false);
   });
 });
