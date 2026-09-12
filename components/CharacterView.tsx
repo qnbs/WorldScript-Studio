@@ -36,15 +36,18 @@ import { Spinner } from './ui/Spinner';
 // QNBS-v3: reads through the selected backend so Tauri uploads and views use the same storage location.
 const useStoredImage = (id: string | undefined, hasImage: boolean | undefined) => {
   const projectId = useAppSelector(
-    (state) => getProjectTargetStorageId(state.project.present) ?? 'default',
+    (state) => getProjectTargetStorageId(state.project?.present) ?? 'default',
   );
   const projectIdentity = useAppSelector((state) =>
-    getProjectTargetIdentity(state.project.present),
+    getProjectTargetIdentity(state.project?.present),
   );
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   useEffect(() => {
     setImageUrl(null); // Reset on change
-    if (!id || !hasImage || !projectIdentity) {
+    if (!id || !hasImage) {
+      return;
+    }
+    if (!projectIdentity) {
       return;
     }
     let isMounted = true;
