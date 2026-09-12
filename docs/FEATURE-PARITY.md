@@ -22,9 +22,9 @@
 ## Feature Parity Matrix
 
 > **Defaults (v1.24 post-release):** the slice ships the **full feature set** —
-> 23 flags, **16 default-on**, **7 opt-in default-off** (`enableProForge`, `enableRtlLayout`,
-> `enableVoiceSupport`, `enableVoiceWasm`, `enableGlobalCopilot`, `enableLocalFirstSync`,
-> `enableBrowserOllama`).
+> 23 flags, **15 default-on**, **8 opt-in default-off** (`enableProForge`, `enableRtlLayout`,
+> `enableVoiceSupport`, `enableVoiceWasm`, `enableRustCompute`, `enableGlobalCopilot`,
+> `enableLocalFirstSync`, `enableBrowserOllama`).
 > `enableProForge` was flipped to opt-in (experimental, token-heavy 8-stage pipeline). The retired/promoted
 > flags `enableCodexAutoTracking`, `enableCrossProjectSearch` (both promoted to permanent core),
 > `enablePlotBoardV2`, and `enableCloudSync` (retired) are no longer in the slice and have been
