@@ -42,9 +42,9 @@ function pullRequestEventRefs(payload) {
   const baseSha = pullRequest?.base?.sha;
   const baseRef = pullRequest?.base?.ref;
   const headRef = pullRequest?.head?.ref;
-  if (typeof baseSha !== 'string' && typeof baseRef !== 'string') return null;
-  if (typeof headRef !== 'string') return null;
-  return { baseSha, baseRef, headRef };
+  const hasBaseRef = [baseSha, baseRef].some((value) => typeof value === 'string');
+  const hasHeadRef = typeof headRef === 'string';
+  return hasBaseRef && hasHeadRef ? { baseSha, baseRef, headRef } : null;
 }
 
 function currentBranch(dependencies = {}) {
