@@ -23,6 +23,7 @@ const mockToast = { success: vi.fn(), error: vi.fn(), info: vi.fn() };
 const mockState = {
   project: {
     present: {
+      generation: 0,
       data: {
         id: 'p1',
         title: 'My Novel',
@@ -404,6 +405,45 @@ describe('handleVisualizeScene', () => {
     expect(result.current.sceneImagePreviewUrl).toBe('data:image/png;base64,abc');
   });
 
+  it('keeps an older visualization from replacing a newer preview', async () => {
+    let resolveFirst!: (value: { imageKey: string; dataUrl: string }) => void;
+    let resolveSecond!: (value: { imageKey: string; dataUrl: string }) => void;
+    mockUnwrap
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveFirst = resolve;
+        }),
+      )
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveSecond = resolve;
+        }),
+      );
+    setManuscript([makeSection('s1', 'Ch1', 'A scene with action')]);
+    const { result } = renderHook(() => useManuscriptView({ onNavigate }));
+
+    let firstRequest!: Promise<void>;
+    let secondRequest!: Promise<void>;
+    act(() => {
+      firstRequest = result.current.handleVisualizeScene();
+      secondRequest = result.current.handleVisualizeScene();
+    });
+
+    await act(async () => {
+      resolveFirst({ imageKey: 'scene-old', dataUrl: 'data:image/png;base64,old' });
+      await firstRequest;
+    });
+    expect(result.current.sceneImagePreviewUrl).toBeNull();
+    expect(result.current.isSceneVisualizing).toBe(true);
+
+    await act(async () => {
+      resolveSecond({ imageKey: 'scene-new', dataUrl: 'data:image/png;base64,new' });
+      await secondRequest;
+    });
+    expect(result.current.sceneImagePreviewUrl).toBe('data:image/png;base64,new');
+    expect(result.current.isSceneVisualizing).toBe(false);
+  });
+
   it('calls toast.error on rejection', async () => {
     mockUnwrap.mockRejectedValue(new Error('Image gen failed'));
     setManuscript([makeSection('s1', 'Ch1', 'Scene content')]);
@@ -436,5 +476,73 @@ describe('handleVisualizeScene', () => {
     // Switch section — preview should clear
     act(() => result.current.setActiveSectionId('s2'));
     expect(result.current.sceneImagePreviewUrl).toBeNull();
+  });
+
+  it('rejects a pending visualization after the active section changes', async () => {
+    let resolveVisualization!: (value: { imageKey: string; dataUrl: string }) => void;
+    mockUnwrap.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveVisualization = resolve;
+      }),
+    );
+    setManuscript([makeSection('s1', 'Ch1', 'Scene one'), makeSection('s2', 'Ch2', 'Scene two')]);
+    const { result } = renderHook(() => useManuscriptView({ onNavigate }));
+
+    let visualizationRequest!: Promise<void>;
+    act(() => {
+      visualizationRequest = result.current.handleVisualizeScene();
+    });
+    act(() => result.current.setActiveSectionId('s2'));
+    expect(result.current.sceneImagePreviewUrl).toBeNull();
+    expect(result.current.isSceneVisualizing).toBe(false);
+
+    await act(async () => {
+      resolveVisualization({ imageKey: 'scene-old', dataUrl: 'data:image/png;base64,old' });
+      await visualizationRequest;
+    });
+    expect(result.current.sceneImagePreviewUrl).toBeNull();
+    expect(result.current.isSceneVisualizing).toBe(false);
+  });
+
+  it('clears a visualization when the project incarnation changes without changing section', async () => {
+    mockUnwrap.mockResolvedValueOnce({
+      imageKey: 'scene-before-replacement',
+      dataUrl: 'data:image/png;base64,before-replacement',
+    });
+    setManuscript([makeSection('s1', 'Ch1', 'Scene one')]);
+    const { result, rerender } = renderHook(() => useManuscriptView({ onNavigate }));
+
+    await act(async () => {
+      await result.current.handleVisualizeScene();
+    });
+    expect(result.current.sceneImagePreviewUrl).toBe('data:image/png;base64,before-replacement');
+
+    let resolveVisualization!: (value: { imageKey: string; dataUrl: string }) => void;
+    mockUnwrap.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveVisualization = resolve;
+      }),
+    );
+    let visualizationRequest!: Promise<void>;
+    act(() => {
+      visualizationRequest = result.current.handleVisualizeScene();
+    });
+
+    act(() => {
+      mockState.project.present.generation = 1;
+      rerender();
+    });
+    expect(result.current.sceneImagePreviewUrl).toBeNull();
+    expect(result.current.isSceneVisualizing).toBe(false);
+
+    await act(async () => {
+      resolveVisualization({
+        imageKey: 'scene-after-replacement',
+        dataUrl: 'data:image/png;base64,after-replacement',
+      });
+      await visualizationRequest;
+    });
+    expect(result.current.sceneImagePreviewUrl).toBeNull();
+    expect(result.current.isSceneVisualizing).toBe(false);
   });
 });

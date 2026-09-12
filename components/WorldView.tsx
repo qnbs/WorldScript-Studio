@@ -3,7 +3,12 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { ICONS } from '../constants';
 import { useWorldViewContext, WorldViewContext } from '../contexts/WorldViewContext';
-import { selectProjectData } from '../features/project/projectSelectors';
+import {
+  captureActiveProjectIdentity,
+  getProjectTargetIdentity,
+  getProjectTargetStorageId,
+  identityUnchanged,
+} from '../features/project/projectIdentity';
 import { uploadWorldImageThunk } from '../features/project/thunks/worldThunks';
 import { useWorldView } from '../hooks/useWorldView';
 import { logger } from '../services/logger';
@@ -31,32 +36,58 @@ import { Spinner } from './ui/Spinner';
 import { Textarea } from './ui/Textarea';
 
 // QNBS-v3: reads through the selected backend so Tauri uploads and views use the same storage location.
+const loadStoredWorldImage = async (id: string, projectId: string): Promise<string | null> => {
+  const image = await storageService.getImage(id, projectId);
+  return image
+    ? image.startsWith('data:image/')
+      ? image
+      : `data:image/png;base64,${image}`
+    : null;
+};
+
+const startWorldImageLoad = ({
+  id,
+  hasImage,
+  projectId,
+  projectIdentity,
+  setImageUrl,
+}: {
+  id: string | undefined;
+  hasImage: boolean | undefined;
+  projectId: string;
+  projectIdentity: string | null;
+  setImageUrl: (imageUrl: string | null) => void;
+}): (() => void) => {
+  setImageUrl(null);
+  if (!id || !hasImage) return () => {};
+
+  let isMounted = true;
+  void loadStoredWorldImage(id, projectId)
+    .then((image) => {
+      const isCurrentProject = identityUnchanged(projectIdentity, captureActiveProjectIdentity());
+      if (isMounted && isCurrentProject) setImageUrl(image);
+    })
+    .catch((error) => {
+      // QNBS-v3: an unavailable image must retain the placeholder instead of causing an unhandled async rejection.
+      logger.warn('Failed to load world image', { error: String(error) });
+    });
+  return () => {
+    isMounted = false;
+  };
+};
+
 const useStoredImage = (id: string | undefined, hasImage: boolean | undefined) => {
-  const projectId = useAppSelector((state) => selectProjectData(state)?.id || 'default');
+  const projectId = useAppSelector(
+    (state) => getProjectTargetStorageId(state.project?.present) ?? 'default',
+  );
+  const projectIdentity = useAppSelector((state) =>
+    getProjectTargetIdentity(state.project?.present),
+  );
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  useEffect(() => {
-    setImageUrl(null); // Reset on change
-    if (!id || !hasImage) {
-      return;
-    }
-    let isMounted = true;
-    const fetchImage = async () => {
-      try {
-        // QNBS-v3: passes projectId so the lookup resolves the project-qualified key, not a bare entity id shared across projects.
-        const image = await storageService.getImage(id, projectId);
-        if (isMounted && image) {
-          setImageUrl(image.startsWith('data:image/') ? image : `data:image/png;base64,${image}`);
-        }
-      } catch (error) {
-        // QNBS-v3: an unavailable image must retain the placeholder instead of causing an unhandled async rejection.
-        logger.warn('Failed to load world image', { error: String(error) });
-      }
-    };
-    fetchImage();
-    return () => {
-      isMounted = false;
-    };
-  }, [id, hasImage, projectId]);
+  useEffect(
+    () => startWorldImageLoad({ id, hasImage, projectId, projectIdentity, setImageUrl }),
+    [id, hasImage, projectId, projectIdentity],
+  );
   return imageUrl;
 };
 

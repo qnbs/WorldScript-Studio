@@ -3,6 +3,10 @@ import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useTransientUiStore } from '../app/transientUiStore';
 import { useToast } from '../components/ui/Toast';
 import {
+  getProjectTargetIdentity,
+  isStaleProjectOperationError,
+} from '../features/project/projectIdentity';
+import {
   selectAllCharacters,
   selectAllWorlds,
   selectProjectData,
@@ -79,6 +83,9 @@ export const useManuscriptView = ({
   const { t, language } = useTranslation();
   const dispatch = useAppDispatch();
   const project = useAppSelector(selectProjectData);
+  const projectIdentity = useAppSelector((state) =>
+    getProjectTargetIdentity(state.project.present),
+  );
   const manuscript = useAppSelector((state) => state.project.present.data.manuscript);
   const characters = useAppSelector(selectAllCharacters);
   const worlds = useAppSelector(selectAllWorlds);
@@ -102,6 +109,11 @@ export const useManuscriptView = ({
   >([]);
   const [isSceneVisualizing, setIsSceneVisualizing] = useState(false);
   const [sceneImagePreviewUrl, setSceneImagePreviewUrl] = useState<string | null>(null);
+  const sceneVisualizationRequestRef = useRef(0);
+  const sceneVisualizationTargetRef = useRef({
+    sectionId: activeSectionId,
+    projectIdentity,
+  });
 
   // Drag and drop state
   const draggedItem = useRef<number | null>(null);
@@ -122,10 +134,13 @@ export const useManuscriptView = ({
     return manuscript.find((s) => s.id === currentActiveId) || manuscript?.[0];
   }, [activeSectionId, manuscript]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset preview on active section change
+  // QNBS-v3: changing the visualization target or project incarnation invalidates pending results.
   useEffect(() => {
+    sceneVisualizationTargetRef.current = { sectionId: activeSectionId, projectIdentity };
+    sceneVisualizationRequestRef.current += 1;
     setSceneImagePreviewUrl(null);
-  }, [activeSectionId]);
+    setIsSceneVisualizing(false);
+  }, [activeSectionId, projectIdentity]);
 
   const activeSectionStats = useMemo(() => {
     if (!activeSection) return { wordCount: 0, charCount: 0, readTime: 0 };
@@ -312,6 +327,8 @@ export const useManuscriptView = ({
 
   const handleVisualizeScene = useCallback(async () => {
     if (!activeSection?.content?.trim() || !project) return;
+    const requestId = ++sceneVisualizationRequestRef.current;
+    const requestTarget = sceneVisualizationTargetRef.current;
     setIsSceneVisualizing(true);
     try {
       const result = await dispatch(
@@ -323,12 +340,33 @@ export const useManuscriptView = ({
           lang: language,
         }),
       ).unwrap();
+      // QNBS-v3: only the newest request may publish preview, toast, or loading completion.
+      if (
+        sceneVisualizationRequestRef.current !== requestId ||
+        sceneVisualizationTargetRef.current !== requestTarget
+      )
+        return;
       setSceneImagePreviewUrl(result.dataUrl);
       toast.success(t('manuscript.visualize.successTitle'), t('manuscript.visualize.successBody'));
-    } catch {
-      toast.error(t('error.apiErrorTitle'));
+    } catch (error) {
+      // QNBS-v3: [Grund: stale scene result is expected after a project switch / Impact: suppress false error toasts / Kreativer Mehrwert: keep authoring feedback actionable]
+      if (
+        sceneVisualizationRequestRef.current !== requestId ||
+        sceneVisualizationTargetRef.current !== requestTarget
+      )
+        return;
+      if (!isStaleProjectOperationError(error)) {
+        toast.error(t('error.apiErrorTitle'));
+      } else {
+        // QNBS-v3: [Grund: stale request ordering / Impact: do not erase a newer preview / Kreativer Mehrwert: keep current-project feedback visible]
+        setSceneImagePreviewUrl(null);
+      }
     } finally {
-      setIsSceneVisualizing(false);
+      if (
+        sceneVisualizationRequestRef.current === requestId &&
+        sceneVisualizationTargetRef.current === requestTarget
+      )
+        setIsSceneVisualizing(false);
     }
   }, [activeSection, dispatch, language, project, t, toast]);
 

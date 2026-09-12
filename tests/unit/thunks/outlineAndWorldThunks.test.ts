@@ -263,7 +263,15 @@ describe('generateWorldImageThunk', () => {
     );
 
     // QNBS-v3: id, data, projectId order, matching the reordered saveImage signature.
-    expect(storageService.saveImage).toHaveBeenCalledWith('w42', 'worldimagedata', 'default');
+    expect(storageService.saveImage).toHaveBeenCalledWith(
+      'w42',
+      'worldimagedata',
+      'default',
+      expect.any(Function),
+    );
+    const writeAdmission = vi.mocked(storageService.saveImage).mock.calls[0]?.[3];
+    expect(writeAdmission).toEqual(expect.any(Function));
+    (writeAdmission as (() => void) | undefined)?.();
   });
 
   it('rejects on AI error', async () => {
@@ -296,7 +304,46 @@ describe('uploadWorldImageThunk', () => {
 
     expect(action.type).toBe('project/uploadWorldImage/fulfilled');
     // QNBS-v3: id, data, projectId order, matching the reordered saveImage signature.
-    expect(storageService.saveImage).toHaveBeenCalledWith('w99', fakeDataUrl, 'default');
+    expect(storageService.saveImage).toHaveBeenCalledWith(
+      'w99',
+      fakeDataUrl,
+      'default',
+      expect.any(Function),
+    );
+    const writeAdmission = vi.mocked(storageService.saveImage).mock.calls[0]?.[3];
+    expect(writeAdmission).toEqual(expect.any(Function));
+    (writeAdmission as (() => void) | undefined)?.();
+  });
+
+  it('rejects when the project changes before the upload reaches storage', async () => {
+    let triggerLoad: (() => void) | undefined;
+    vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(function (this: FileReader) {
+      Object.defineProperty(this, 'result', {
+        value: 'data:image/png;base64,late-upload',
+        configurable: true,
+      });
+      triggerLoad = () => this.onload?.(new ProgressEvent('load') as ProgressEvent<FileReader>);
+    });
+
+    const store = makeStore();
+    const pending = store.dispatch(
+      uploadWorldImageThunk({
+        worldId: 'w-before-storage',
+        file: new File(['data'], 'atlas.png', { type: 'image/png' }),
+      }),
+    );
+    store.dispatch(
+      projectActions.resetProject({
+        title: 'Replacement',
+        logline: '',
+        chapter1Title: 'Chapter 1',
+      }),
+    );
+    triggerLoad?.();
+
+    const action = await pending;
+    expect(action.type).toBe('project/uploadWorldImage/rejected');
+    expect(storageService.saveImage).not.toHaveBeenCalled();
   });
 
   it('rejects when the FileReader errors', async () => {
