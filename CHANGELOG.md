@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Local-first encryption transitions now preserve wipe failures instead of treating plaintext
+  cleanup as successful:** a failed `clearData()` aborts the current shadow sync, tears down the
+  cached persistence handle, and keeps subsequent encryption-active sync memory-only. PR #738.
 - **Async AI image writes and Character Interview chunks now reject stale project
   incarnations:** direct image persistence and interview-stream updates capture the originating
   project identity and refuse late results after a project switch or same-ID replacement, with
