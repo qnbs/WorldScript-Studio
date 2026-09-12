@@ -26,6 +26,15 @@ export class StaleProjectOperationError extends Error {
   }
 }
 
+export function isStaleProjectOperationError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'name' in error &&
+    error.name === STALE_PROJECT_OPERATION_ERROR_NAME
+  );
+}
+
 function baseTargetIdentity(project: unknown): string | null {
   if (typeof project !== 'object' || project === null) return null;
   const record = project as Record<string, unknown>;

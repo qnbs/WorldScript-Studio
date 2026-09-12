@@ -57,6 +57,7 @@ vi.mock('../../../features/project/projectIdentity', () => ({
   captureActiveProjectIdentity: mockCaptureIdentity,
   identityUnchanged: (captured: string | null, live: string | null) =>
     captured !== null && captured === live,
+  isStaleProjectOperationError: () => false,
 }));
 
 vi.mock('../../../features/project/thunks/worldThunks', () => {

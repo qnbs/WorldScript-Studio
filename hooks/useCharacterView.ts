@@ -5,6 +5,7 @@ import { useToast } from '../components/ui/Toast';
 import {
   captureActiveProjectIdentity,
   identityUnchanged,
+  isStaleProjectOperationError,
 } from '../features/project/projectIdentity';
 import { selectAllCharacters, selectProjectData } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
@@ -163,7 +164,10 @@ export const useCharacterView = () => {
         lang: language,
       }),
     );
-    if (!generateCharacterPortraitThunk.fulfilled.match(resultAction)) {
+    if (
+      !generateCharacterPortraitThunk.fulfilled.match(resultAction) &&
+      !isStaleProjectOperationError(resultAction.error)
+    ) {
       const errorText = t('characters.error.portraitFailed');
       setErrorMessage(errorText);
       toast.error(errorText);
@@ -185,7 +189,10 @@ export const useCharacterView = () => {
         lang: language,
       }),
     );
-    if (!generateCharacterPortraitThunk.fulfilled.match(resultAction)) {
+    if (
+      !generateCharacterPortraitThunk.fulfilled.match(resultAction) &&
+      !isStaleProjectOperationError(resultAction.error)
+    ) {
       const errorText = t('characters.error.portraitFailed');
       setErrorMessage(errorText);
       toast.error(errorText);

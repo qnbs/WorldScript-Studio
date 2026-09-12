@@ -3,6 +3,7 @@ import {
   getProjectTargetIdentity,
   getProjectTargetStorageId,
   identityUnchanged,
+  isStaleProjectOperationError,
 } from '../../../../features/project/projectIdentity';
 
 describe('getProjectTargetIdentity', () => {
@@ -92,5 +93,16 @@ describe('identityUnchanged', () => {
 
   it('returns false when only the captured identity is null', () => {
     expect(identityUnchanged(null, 'id:p1:gen:0')).toBe(false);
+  });
+});
+
+describe('isStaleProjectOperationError', () => {
+  it('recognizes serialized stale-operation rejections', () => {
+    expect(isStaleProjectOperationError({ name: 'StaleProjectOperationError' })).toBe(true);
+  });
+
+  it('does not classify unrelated errors or non-errors as stale', () => {
+    expect(isStaleProjectOperationError(new Error('other failure'))).toBe(false);
+    expect(isStaleProjectOperationError(null)).toBe(false);
   });
 });

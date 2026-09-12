@@ -3,7 +3,7 @@ import { createListenerMiddleware, isRejected } from '@reduxjs/toolkit';
 import { analyticsActions } from '../features/analytics/analyticsSlice';
 // QNBS-v3: canonical selector — replaces a local type that misapplied the persisted-state shape to the live store
 import { proForgeActions } from '../features/proForge/proForgeSlice';
-import { STALE_PROJECT_OPERATION_ERROR_NAME } from '../features/project/projectIdentity';
+import { isStaleProjectOperationError } from '../features/project/projectIdentity';
 import { selectProjectData } from '../features/project/projectSelectors';
 import type { ProjectData } from '../features/project/projectSlice';
 import { statusActions } from '../features/status/statusSlice';
@@ -377,8 +377,8 @@ listenerMiddleware.startListening({
   },
 });
 
-function isStaleProjectOperationRejection(action: { error?: { name?: string } }): boolean {
-  return action.error?.name === STALE_PROJECT_OPERATION_ERROR_NAME;
+function isStaleProjectOperationRejection(action: { error?: unknown }): boolean {
+  return isStaleProjectOperationError(action.error);
 }
 
 listenerMiddleware.startListening({

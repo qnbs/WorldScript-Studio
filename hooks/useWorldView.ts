@@ -5,6 +5,7 @@ import { useToast } from '../components/ui/Toast';
 import {
   captureActiveProjectIdentity,
   identityUnchanged,
+  isStaleProjectOperationError,
 } from '../features/project/projectIdentity';
 import { selectAllWorlds, selectProjectData } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
@@ -157,7 +158,7 @@ export const useWorldView = () => {
     );
     if (generateWorldImageThunk.fulfilled.match(resultAction)) {
       setSelectedWorld((w) => (w ? { ...w, hasAmbianceImage: true } : null));
-    } else {
+    } else if (!isStaleProjectOperationError(resultAction.error)) {
       toast.error(t('worlds.error.imageFailed'));
     }
     setIsGeneratingImage(false);
@@ -170,7 +171,10 @@ export const useWorldView = () => {
     const resultAction = await dispatch(
       generateWorldImageThunk({ worldId: selectedWorld.id, description, lang: language }),
     );
-    if (!generateWorldImageThunk.fulfilled.match(resultAction)) {
+    if (
+      !generateWorldImageThunk.fulfilled.match(resultAction) &&
+      !isStaleProjectOperationError(resultAction.error)
+    ) {
       toast.error(t('worlds.error.imageFailed'));
     }
     setRefinementPrompt('');
