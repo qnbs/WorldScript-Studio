@@ -748,6 +748,52 @@ describe('local-first shadow sync (B1.1)', () => {
     await vi.advanceTimersByTimeAsync(1300);
     expect(persistProjectDoc).toHaveBeenCalledTimes(1);
   });
+
+  it('fails closed when encryption transition cannot clear plaintext local-first data', async () => {
+    const { isIdbEncryptionReady } = await import(
+      '../../services/storage/storageEncryptionService'
+    );
+    const { persistProjectDoc } = await import('../../services/localFirst/docPersistence');
+    const clearData = vi.fn().mockRejectedValue(new Error('wipe failed'));
+    const destroy = vi.fn().mockResolvedValue(undefined);
+
+    vi.mocked(isIdbEncryptionReady).mockReturnValue(false);
+    vi.mocked(persistProjectDoc).mockReturnValue({
+      active: true,
+      whenSynced: Promise.resolve(),
+      clearData,
+      destroy,
+    });
+
+    // localFirstHandle is module-global; explicitly tear down any handle left by a preceding test.
+    const warmupStore = makeFullStore();
+    warmupStore.dispatch(featureFlagsActions.setEnableLocalFirstSync(true));
+    await vi.advanceTimersByTimeAsync(100);
+    warmupStore.dispatch(featureFlagsActions.setEnableLocalFirstSync(false));
+    await vi.advanceTimersByTimeAsync(100);
+    vi.mocked(persistProjectDoc).mockClear();
+
+    const store = makeFullStore();
+    store.dispatch(featureFlagsActions.setEnableLocalFirstSync(true));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(persistProjectDoc).toHaveBeenCalledTimes(1);
+
+    vi.mocked(isIdbEncryptionReady).mockReturnValue(true);
+    store.dispatch(projectActions.updateTitle('Encryption transition'));
+    await vi.advanceTimersByTimeAsync(1300);
+
+    expect(clearData).toHaveBeenCalledTimes(1);
+    expect(destroy).toHaveBeenCalledTimes(1);
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      'Local-First plaintext cleanup failed; shadow sync aborted and persistence disabled:',
+      expect.any(Error),
+    );
+
+    // The failed handle is not reused, and encryption-active follow-up sync stays memory-only.
+    store.dispatch(projectActions.updateTitle('After failed cleanup'));
+    await vi.advanceTimersByTimeAsync(1300);
+    expect(persistProjectDoc).toHaveBeenCalledTimes(1);
+  });
 });
 
 // ---------------------------------------------------------------------------

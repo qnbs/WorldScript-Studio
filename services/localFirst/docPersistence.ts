@@ -38,7 +38,7 @@ export interface DocPersistence {
   readonly active: boolean;
   /** Detach the provider (does not delete data). */
   destroy(): Promise<void>;
-  /** Delete the persisted data for this project. */
+  /** Delete the persisted data for this project; rejects when the underlying wipe fails. */
   clearData(): Promise<void>;
 }
 
@@ -82,6 +82,7 @@ export function persistProjectDoc(projectId: string, doc: Y.Doc): DocPersistence
   // in-flight destroy (no double-destroy, and no flag flipped to "destroyed" before destroy actually
   // finishes).
   let rawDestroyPromise: Promise<void> | null = null;
+  let rawClearDataPromise: Promise<void> | null = null;
   // QNBS-v3: starts as a no-op and gets replaced right after registration — a reset already in progress would otherwise invoke this closer synchronously while unregister is still mid-TDZ.
   let unregister: () => void = () => {};
   // QNBS-v3 (CodeAnt): unregisters only once the underlying teardown actually settles, not synchronously before it starts — a reset draining right after this call would otherwise no longer track (and never await) a still-in-flight destroy.
@@ -91,6 +92,14 @@ export function persistProjectDoc(projectId: string, doc: Y.Doc): DocPersistence
       rawDestroyPromise.finally(unregister).catch(() => undefined);
     }
     return rawDestroyPromise;
+  };
+  // QNBS-v3: a plaintext wipe failure is a security-boundary failure and must reach the reconciliation caller instead of being mistaken for successful removal.
+  const beginClearData = (): Promise<void> => {
+    if (rawDestroyPromise) return Promise.resolve();
+    if (!rawClearDataPromise) {
+      rawClearDataPromise = Promise.resolve().then(() => provider.clearData());
+    }
+    return rawClearDataPromise;
   };
   // QNBS-v3 (CodeAnt): the public destroy() stays no-throw for its many defensive `.catch(() => undefined)` callers, but the reset closer below calls beginDestroy() directly so a genuine teardown failure still reaches the reset gate's fail-closed check instead of being swallowed before it gets there.
   const destroy = (): Promise<void> => beginDestroy().catch(() => undefined);
@@ -114,8 +123,6 @@ export function persistProjectDoc(projectId: string, doc: Y.Doc): DocPersistence
       return rawDestroyPromise === null;
     },
     destroy,
-    // After teardown the provider can no longer clear its store — degrade to a resolved no-op.
-    clearData: () =>
-      rawDestroyPromise ? Promise.resolve() : provider.clearData().catch(() => undefined),
+    clearData: beginClearData,
   };
 }
