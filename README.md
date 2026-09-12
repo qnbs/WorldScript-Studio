@@ -1,830 +1,1315 @@
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/qnbs/WorldScript-Studio)
 
-# ✨ WorldScript Studio: Your AI-Powered Narrative Universe ✨
+<p align="center">
+  <img src="public/icon-192.png" width="112" height="112" alt="WorldScript Studio logo">
+</p>
+
+<h1 align="center">WorldScript Studio</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black" alt="React 19">
-  <img src="https://img.shields.io/badge/Redux_Toolkit-2.x-764ABC?logo=redux" alt="Redux Toolkit">
-  <img src="https://img.shields.io/badge/Vite-8.x-646CFF?logo=vite&logoColor=white" alt="Vite 8">
-  <img src="https://img.shields.io/badge/TypeScript-7.x_(tsgo)-3178C6?logo=typescript&logoColor=white" alt="TypeScript 7 (tsgo)">
-  <img src="https://img.shields.io/badge/AI-Gemini_%7C_OpenAI_%7C_OpenRouter_%7C_Ollama_%7C_WebLLM-4285F4?logo=google" alt="Gemini · OpenAI · OpenRouter · Ollama · WebLLM">
-  <img src="https://img.shields.io/badge/Local_AI-WebGPU_%7C_ONNX_%7C_Transformers.js-8B5CF6" alt="WebGPU · ONNX · Transformers.js">
+  <strong>Local-first, offline-capable, AI-assisted creative writing studio for novels, screenplays, worlds, characters, research, revision, and export.</strong>
+</p>
+
+<p align="center">
+  <a href="https://qnbs.github.io/WorldScript-Studio/"><img src="https://img.shields.io/badge/Launch-GitHub_Pages-22C55E?logo=github&logoColor=white" alt="Launch on GitHub Pages"></a>
+  <a href="https://worldscript-studio.vercel.app/"><img src="https://img.shields.io/badge/Launch-Vercel-000000?logo=vercel&logoColor=white" alt="Launch on Vercel"></a>
+  <a href="https://qnbs.gitbook.io/worldscript-studio/"><img src="https://img.shields.io/badge/Docs-GitBook-346DDB?logo=gitbook&logoColor=white" alt="WorldScript Studio documentation on GitBook"></a>
   <img src="https://img.shields.io/badge/Release-v1.28.6-6366F1" alt="Release v1.28.6">
-  <img src="https://img.shields.io/badge/Storage-IndexedDB_v8-F59E0B" alt="IndexedDB v8">
-  <img src="https://img.shields.io/badge/PWA-v3.0-5BB974?logo=pwa" alt="PWA v3.0">
-  <img src="https://img.shields.io/badge/i18n-19_locales-2942_keys-0EA5E9" alt="i18n 19 locales — 2942 keys">
+  <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black" alt="React 19">
+  <img src="https://img.shields.io/badge/Vite-8.x-646CFF?logo=vite&logoColor=white" alt="Vite 8">
+  <img src="https://img.shields.io/badge/TypeScript-tsgo_native_preview-3178C6?logo=typescript&logoColor=white" alt="TypeScript native preview (tsgo)">
+  <img src="https://img.shields.io/badge/Desktop-Tauri_2-FFC131?logo=tauri&logoColor=black" alt="Tauri 2">
+  <img src="https://img.shields.io/badge/i18n-19_locales-2942_keys-0EA5E9" alt="19 locales — 2942 keys">
   <img src="https://img.shields.io/badge/Tests-7750%2B_%2F_606_files-22C55E" alt="7750+ tests / 606 files">
   <img src="https://img.shields.io/codecov/c/github/qnbs/WorldScript-Studio?logo=codecov&label=Coverage" alt="Codecov Coverage">
-  <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="License MIT">
-  <img src="https://img.shields.io/github/actions/workflow/status/qnbs/WorldScript-Studio/.github/workflows/ci.yml?branch=main&logo=github" alt="CI Status">
-  <img src="https://img.shields.io/badge/Lighthouse-90%2B-brightgreen" alt="Lighthouse Score">
-  <a href="https://qnbs.github.io/WorldScript-Studio/"><img src="https://img.shields.io/badge/▶_Launch_Live-GitHub_Pages-22C55E?logo=github&logoColor=white" alt="Launch live on GitHub Pages"></a>
+  <img src="https://img.shields.io/github/actions/workflow/status/qnbs/WorldScript-Studio/.github/workflows/ci.yml?branch=main&logo=github&label=CI" alt="CI status">
+  <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="MIT License">
 </p>
 
 ---
 
-## ⚠️ Legal Disclaimer
+## Overview
 
-> **Educational & Personal Use**: WorldScript Studio is a creative writing tool for educational and personal use. It does not provide professional, medical, legal, or financial advice. Users are solely responsible for the content they create and must comply with all applicable local laws and platform policies.
+**WorldScript Studio** is an open-source creative-writing workspace designed around three principles:
 
----
+1. **Local-first project ownership** — there is no WorldScript user account or central manuscript database. Project state is stored locally in the browser/PWA or in the desktop app's local data directory.
+2. **Offline-capable core writing** — once the PWA shell is cached, writing, planning, project management, and many analysis tools remain useful without a network connection. Cloud AI, collaboration, first-time model downloads, and other explicitly networked integrations naturally require connectivity.
+3. **AI is optional infrastructure, not the product's source of truth** — the manuscript and project model remain authoritative. You can use cloud BYOK providers, browser-native models, local model servers, heuristics, or no AI at all.
 
-## 🌐 Live Demo
+WorldScript Studio combines a manuscript editor, visual plot planning, character and world dossiers, story-bible tooling, research and revision surfaces, progress analytics, AI writing tools, local inference, collaboration, publishing/export workflows, and a Tauri desktop shell in one project-centered application.
 
-Two always-on hosted builds — open whichever you prefer (identical app, both auto-deployed from `main`):
-
-| | Host | Link |
-|---|---|---|
-| 🟢 | **GitHub Pages** _(always-on mirror — auto-deployed from `main` on every green build)_ | **🚀 <https://qnbs.github.io/WorldScript-Studio/> 🚀** |
-| ▲ | **Vercel** _(primary)_ | <https://worldscript-studio.vercel.app/> |
-
-> **Tip:** If the Vercel build is ever rate-limited, the **[GitHub Pages mirror](https://qnbs.github.io/WorldScript-Studio/)** is always live and current.
-
-✨ _Try it right now — no installation, no account required. All data is saved securely in your browser's IndexedDB._ ✨
-
-### PWA & Desktop
-
-- **Install as PWA:** In Chromium/Edge, open the Live Demo → use the install icon in the address bar (or browser menu) for an offline-capable app shortcut.
-- **Desktop installers:** GitHub **Releases** for tags `v*` include Tauri bundles when the workflow runs — `.appimage`, `.msi`, and `.dmg` artifacts, with a `latest.json` update manifest containing a **Minisign signature for each platform's bundle** (update-integrity only; OS-level code signing — Windows Authenticode, macOS notarization — is not currently configured in CI). **v1.9+** adds a native **File/Help menu**, **window-state restore**, in-app **updater UI** (Settings → About), and **open data folder** (Settings → Data). See [`docs/TAURI-CI.md`](docs/TAURI-CI.md) § Auto-update & signing, [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md), and [`docs/history/sprints/SPRINT-V1.10.md`](docs/history/sprints/SPRINT-V1.10.md).
+> [!IMPORTANT]
+> **"Local-first" does not mean "nothing ever uses the network."** Project persistence is local by default, but cloud AI providers, the Claude web proxy, real-time collaboration signaling, optional LanguageTool servers, model downloads, update checks, and other explicitly enabled integrations can create network traffic. The sections below document those boundaries precisely.
 
 ---
 
-**WorldScript Studio is a cutting-edge, AI-enhanced application meticulously engineered for authors, screenwriters, and creators.** It transforms the daunting task of writing into a seamless, inspiring journey from a fleeting idea to a polished manuscript. By integrating a multi-provider AI stack — including Google Gemini, OpenAI, OpenRouter, Grok, Claude, Ollama, and a fully browser-native 4-layer local inference engine — with an intuitive, offline-first interface, WorldScript Studio acts as your all-in-one creative co-pilot, empowering you to build, write, and refine your narrative universe without compromise. Four **AI Execution Modes** (Hybrid · Cloud · Local · Eco) let you choose the right balance between quality, privacy, and battery life at any moment.
+## Try it
+
+| Surface | URL / entry point | Important differences |
+| --- | --- | --- |
+| **GitHub Pages** | **https://qnbs.github.io/WorldScript-Studio/** | Canonical static upstream deployment. No serverless API functions; **Claude is unavailable on this host**. GitHub Pages also cannot inject HTTP security headers, so the app relies on its meta CSP there. |
+| **Vercel** | **https://worldscript-studio.vercel.app/** | Edge-hosted deployment with root-path build, response security headers, and the same-origin Claude serverless relay. |
+| **PWA** | Install from a supported browser | Offline-capable app shell after caching; local browser storage remains origin-specific. |
+| **Tauri desktop** | Tagged GitHub Releases / local `pnpm run tauri:dev` | Local filesystem project persistence, native HTTP for admitted local/cloud endpoints, native menu/window integration, updater plumbing. See the desktop security caveat below. |
+
+The web deployments share the same application codebase, but they are **not operationally identical** because their hosting capabilities differ.
+
+### 60-second quick start
+
+1. Open **GitHub Pages** or **Vercel**.
+2. From the Welcome Portal, open the demo project or start a blank project.
+3. Go to **Manuscript** and start writing.
+4. Press **`Ctrl+K`** (Windows/Linux) or **`⌘K`** (macOS) to open the Command Palette.
+5. AI is optional:
+   - use a configured BYOK cloud provider;
+   - download a browser-native local model;
+   - use Ollama/local-server inference where supported;
+   - or keep AI disabled.
+
+No WorldScript account is required.
+
+**Documentation:** the curated public documentation is available in **[English](https://qnbs.gitbook.io/worldscript-studio/)** and **[Deutsch](https://qnbs.gitbook.io/worldscript-studio/de/)**. **[DeepWiki](https://deepwiki.com/qnbs/WorldScript-Studio)** provides an additional code-derived repository view. Repository source, current ADRs, security documents, configuration, and CI remain the engineering/source-truth layer; GitBook is the polished reader-oriented documentation surface.
 
 ---
 
-## ⚡ Quick Start (60 seconds)
+## Table of contents
 
-**The fastest path to value — no install, no account, no API key:**
-
-1. **Open the Live Demo** — [GitHub Pages (always-on)](https://qnbs.github.io/WorldScript-Studio/) or [Vercel](https://worldscript-studio.vercel.app/) → click **"Try Demo Project"** on the Welcome screen to load a populated story instantly.
-2. Open the **Manuscript** view (sidebar) and start typing. Press **`⌘K` / `Ctrl-K`** anytime for the Command Palette — every action is reachable from there.
-3. Want AI without a cloud key? **Settings → AI Provider → WebLLM** runs a model entirely in your browser (WebGPU; auto-falls back to ONNX/WASM on any device). Prefer cloud? Paste a Gemini/OpenAI key — it's encrypted at rest in your browser and only ever sent to that provider.
-
-> Everything is saved locally in IndexedDB and works offline (PWA). Nothing leaves your device unless you choose a cloud provider.
-
-**Running it yourself?** `node scripts/dependency-state.mjs reconcile && pnpm run dev` (Node ≥ 22.19, pnpm 11; frozen-lockfile install — never a bare `pnpm install`) → <http://localhost:3000>. Full setup, deployment, and AI-provider options — including the new **OpenRouter** free-tier gateway — are in [Getting Started](#getting-started).
-
----
-
-## 📖 Table of Contents
-
-- [Quick Start (60 seconds)](#-quick-start-60-seconds)
-- [Why WorldScript Studio?](#-why-worldscript-studio)
-- [Features: A Comprehensive Creative Suite](#-features-a-comprehensive-creative-suite)
-- [AI Provider Stack](#-ai-provider-stack)
-- [Technology Deep Dive](#️-technology-deep-dive)
-- [Project Structure](#-project-structure)
-- [Getting Started](#getting-started)
-- [CI & Local Validation](#-ci--local-validation)
-- [A Creative Workflow](#-a-creative-workflow)
-- [Contributing](#-contributing)
+- [What makes WorldScript Studio different](#what-makes-worldscript-studio-different)
+- [Product tour](#product-tour)
+- [Feature maturity and flags](#feature-maturity-and-flags)
+- [AI architecture](#ai-architecture)
+- [Privacy, storage, and security](#privacy-storage-and-security)
+- [Offline and local-first semantics](#offline-and-local-first-semantics)
+- [Export and publishing](#export-and-publishing)
+- [Collaboration](#collaboration)
+- [Languages and accessibility](#languages-and-accessibility)
+- [Web, PWA, and desktop](#web-pwa-and-desktop)
+- [Technology stack](#technology-stack)
+- [Architecture at a glance](#architecture-at-a-glance)
+- [Repository structure](#repository-structure)
+- [Getting started for development](#getting-started-for-development)
+- [Validation and CI](#validation-and-ci)
+- [Deployment](#deployment)
+- [Known limitations and truth boundaries](#known-limitations-and-truth-boundaries)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [Security reporting](#security-reporting)
 - [Documentation Hub](#-documentation-hub)
+- [License and disclaimer](#license-and-disclaimer)
 
 ---
 
-## 🤔 Why WorldScript Studio?
+## What makes WorldScript Studio different
 
-In a world of generic text editors and bloated writing software, WorldScript Studio carves its own niche by focusing on a holistic, AI-augmented narrative design process.
+### A writing application first
 
-- **✍️ From Macro to Micro:** Most tools focus only on writing. We cover the _entire_ creative lifecycle — from high-level plot structure and world-building down to sentence-by-sentence prose refinement.
-- **🧠 Intelligent Partnership:** The AI is not a ghostwriter — it's a Socratic partner, a tireless brainstormer, and a creative muse. It's designed to break blocks and expand your own potential, not replace it.
-- **🔒 Ultimate Privacy & Ownership:** Your manuscript and project data stay on this device by default (IndexedDB in the browser, or local files in the desktop app). Cloud AI features send only the prompts and context you trigger to the provider you configure — every provider is called directly from your browser/device, with **one exception**: Claude on the web/PWA (Vercel/Cloudflare Pages) relays through WorldScript's own stateless serverless proxy, since Anthropic blocks direct browser requests (desktop calls Anthropic directly, like every other provider — see [Encryption — which mechanism protects what](#-encryption--which-mechanism-protects-what)). Use local/Ollama/WebLLM mode if you want AI without sending text to any cloud API. There is no WorldScript account — you stay in control of exports and backups.
-- **🔬 Built-in Quality Tools:** Go beyond writing with the AI Critic, Plot-Hole Detector, and RAG Consistency Checker — tools that help you catch narrative weaknesses before your readers do.
-- **⚡ Browser-Native AI:** A 4-layer local inference stack (WebGPU → ONNX WASM → Transformers.js → heuristics) means local AI works even without Ollama — entirely in-browser, no server, no download manager.
+AI is integrated throughout the product, but the central object is still the **project**: manuscript sections, characters, worlds, plot structure, comments, snapshots, research, goals, export settings, and related metadata.
+
+The application is intended to remain useful when:
+- no API key is configured;
+- no cloud provider is reachable;
+- local AI has not been downloaded;
+- AI features are deliberately disabled.
+
+### Privacy-oriented without pretending the network does not exist
+
+WorldScript does not require:
+- a WorldScript account;
+- server-side manuscript persistence;
+- a central project database;
+- mandatory cloud AI.
+
+When you choose a networked feature, that boundary is made explicit:
+- cloud AI sends the prompt/context required for that request to the selected provider;
+- browser-native AI downloads model assets before local inference is possible;
+- collaboration uses signaling infrastructure to establish peer connections;
+- self-hosted LanguageTool receives the text you explicitly send for checking;
+- Claude on Vercel/Cloudflare Pages transits WorldScript's same-origin relay.
+
+### One workspace from idea to export
+
+The product spans:
+- ideation and templates;
+- outlining and scene planning;
+- characters and worldbuilding;
+- manuscript drafting;
+- AI-assisted revision and analysis;
+- research and binder material;
+- comments and scene revision history;
+- progress tracking;
+- consistency/RAG tooling;
+- preview, compile, and export.
 
 ---
 
-## 🚀 Features: A Comprehensive Creative Suite
+# Product tour
+
+## Welcome Portal and project bootstrap
+
+The Welcome Portal is the first-run/project-entry surface. It can:
+- open a blank project;
+- load the demo project;
+- direct the user to templates and guided workflows;
+- explain local-first/offline behavior;
+- be reopened from Settings.
+
+Project imports, resets, and snapshot restores are treated as real project-incarnation changes rather than simple page navigation.
+
+## Dashboard
+
+The Dashboard provides a project-level overview with local calculations for:
+- current word counts and goals;
+- writing momentum and streaks;
+- pace/deadline projections;
+- manuscript composition;
+- reading-time and scene metrics;
+- optional Project Health scoring;
+- shortcuts back into active writing.
+
+These calculations do not require a cloud AI call.
+
+## Manuscript editor
+
+The Manuscript view is the primary writing surface:
+- chapter/section navigation;
+- editor + surrounding project context;
+- `@character` and `#world` linking/highlighting;
+- scene notes and references;
+- threaded comments;
+- per-scene revision history and diffs;
+- keyboard-first navigation;
+- Zen/Flow-oriented distraction reduction;
+- optional grammar/spell integration through a configured LanguageTool server.
 
-### 📊 Dynamic Project Dashboard
+LanguageTool is **off by default** and should be treated as a network boundary unless the configured server is genuinely local to the device.
 
-Your mission control. Track word counts against custom goals, visualize project statistics, manage your title and logline with AI assistance, and access all views from a single hub. The dashboard opens with a **personalized, time-aware greeting header** and a one-click **Continue Writing** jump-back into your last-edited scene. Surfaced cards include:
+## Writer / AI Writing Studio
 
-- **Writing Momentum** — current/longest streak, today-vs-daily-goal and week-vs-weekly-goal progress, and a 14-day activity sparkline (wired to the progress tracker).
-- **Project Goals + Pace Projection** — words remaining and the required words/day to hit your deadline, with an on-track / behind verdict.
-- **Project Health Score** (optional, `enableProjectHealthScore`) — a radial gauge plus per-dimension breakdown bars (writing progress, cast depth, worldbuilding).
-- **Manuscript Composition** — scene-status distribution segmented bar, reading-time estimate, scene count, and average words/scene.
-- **Author insights** — **readability sampling** (Flesch-style heuristic) and **scene-timeline rule hints**.
+The Writer surface exposes focused AI-assisted writing operations such as:
+- continue writing;
+- improve/rewrite;
+- tone transformation;
+- dialogue generation;
+- brainstorming;
+- synopsis generation;
+- grammar/style-oriented review;
+- critique;
+- plot-hole analysis;
+- consistency assistance.
 
-Everything is computed locally without sending manuscript text to the cloud.
+Underlying execution follows the currently selected AI provider/mode. The UI does not imply that every tool has identical capability or fallback semantics across every provider.
 
-### ✍️ Three-Panel Manuscript Editor
+## Outline Generator
 
-A focused, distraction-free writing environment. The central editor is flanked by a draggable chapter **Navigator** and a project **Inspector**. An advanced overlay provides real-time highlighting and linking for `@character` and `#world` mentions, turning your manuscript into a living document. Includes **Zen Mode** for full-screen distraction-free writing and real **grammar & spell checking** via an optional **self-hosted [LanguageTool](https://languagetool.org)** server — live inline underlines plus an on-demand "Check this scene" panel, with one-click offset-safe corrections and a personal dictionary. Privacy-first (manuscript text never leaves your machine); off by default. See [`docs/LANGUAGETOOL.md`](docs/LANGUAGETOOL.md).
+The Outline Generator builds and edits structured story outlines and can apply an outline to the manuscript.
 
-### 🎬 Plot-Board v2 _(Visual Story Planning)_
+AI-generated outline previews are treated as project-owned results; project identity remains authoritative when applying generated content.
 
-Three co-existing modes for visual story planning:
+## Plot Board v2
 
-| Mode | What it does |
-|------|-------------|
-| **Swimlane** | Kanban drag-and-drop across 3-act columns |
-| **Canvas** | Free-form pan/zoom board — position scenes anywhere; pinch-to-zoom on mobile |
-| **Timeline** | Gantt-style scene timeline with rule hints |
+Three visual planning modes coexist:
 
-**SVG Connection Layer:** Draw cause-effect, parallel, subplot, temporal, and character-arc arrows between scenes. Hover to edit label or type; click to select and delete. Keyboard accessible (`role="button"` + `tabIndex`).
+| Mode | Purpose |
+| --- | --- |
+| **Swimlane** | Kanban-style scene organization across structural lanes |
+| **Canvas** | Free-form pan/zoom spatial planning |
+| **Timeline** | Timeline/Gantt-style story sequencing |
 
-**Subplot System:** Color-coded subplot lanes with filter toggle — dims unrelated scenes to focus on one storyline at a time.
+Additional planning layers include:
+- scene connections;
+- subplot filtering;
+- tension-curve visualization;
+- beat-sheet markers;
+- mini-map support;
+- drag/drop planning.
 
-**Tension Curve:** 800×200 SVG chart showing auto-computed dramatic tension (status-based 0–10 score) with drag-to-override points. Beat sheet overlays: Three-Act, Save the Cat!, Hero's Journey marker presets.
+## Scenario workspace
 
-**Mini-map:** Fixed 80×50 px SVG overview in corner for spatial orientation on the free-form canvas.
+The **Scenario** view is a renderer-neutral, read-only projection of the canonical project model. It summarizes:
+- characters;
+- worlds;
+- outline entries;
+- scenes;
+- manuscript word count;
+- projected manuscript sections.
 
-### 📖 Real-Time Book Preview
+It intentionally does **not** become a competing source of project truth.
 
-Scrivener-style "Scrivenings" mode — a scrollable, paginated view of your entire manuscript rendered as formatted prose. Updates live as you write:
+## Characters
 
-- **Collapsible TOC sidebar** with IntersectionObserver-driven active chapter highlight
-- **Font controls:** family (system-ui / serif / monospace), size (12–24 px), word-count margin annotations
-- **Fullscreen mode** (`position: fixed inset-0`) with ESC-to-dismiss; independent of the app theme
-- **Export button** opens the Export view in EPUB mode
+Character dossiers support:
+- identity and descriptive fields;
+- backstory and motivations;
+- relationships and arcs;
+- roster search/sort;
+- completeness indicators;
+- AI profile generation;
+- AI-generated portraits;
+- Character Interviews v2 where enabled.
 
-### 📊 Progress Tracker Dashboard
+## Worlds
 
-Dedicated analytics view — the first thing a writer sees each day:
+Worldbuilding surfaces support:
+- history/lore;
+- geography;
+- locations;
+- systems/technology/magic concepts;
+- timelines;
+- roster/search/sort;
+- completeness indicators;
+- AI world generation;
+- AI-generated ambiance images.
 
-- **Circular SVG progress ring** for today's word-count goal
-- **Live session timer** (`role="timer"`) with start/stop; shortcut `Ctrl+Shift+S`
-- **Streak display** — current streak and longest streak computed from writing history
-- **30-day velocity area chart** (pure SVG, no external chart library)
-- **12-week GitHub-style heatmap** (84 `<rect>` cells, 5 intensity shades)
-- **Inline goal editor** for daily/weekly word targets
+## Character relationship graph
 
-### 🗒️ Reference Panel & Threaded Comments
+A force-directed graph visualizes relationships across the cast for complex story networks and multi-POV projects.
 
-**Reference Panel** — an iPad-style 6-tab sidebar in the manuscript editor:
+## Templates
 
-| Tab | Content |
-|-----|---------|
-| Characters | Mini-cards for scene's characters with backstory excerpt |
-| World | Linked locations with geography excerpt |
-| Notes | Inline editable notes synced to the scene |
-| Binder | Linked binder node content |
-| Comments | Threaded comment panel (see below) |
-| Revisions | Per-scene snapshot history |
+The template library includes structural and genre-oriented starting points, including classic narrative structures. Templates can be adapted and, when AI is configured, personalized.
 
-**Threaded Comments:** Add comments anchored to any scene, reply inline, resolve/unresolve with a badge counter in the toolbar.
+Community template assets live with the application rather than requiring a WorldScript account marketplace.
 
-**Per-Scene Revision History:** IndexedDB-backed snapshots with word-level diff view and named snapshot labels. Two-step restore with confirmation.
+## Story Objects & Groups
 
-### 🕸️ Character Relationship Graph _(Interactive Visualization)_
+A dedicated inventory can track props, artifacts, vehicles, documents, weapons, and other story objects, with grouping/tagging for larger projects.
 
-An interactive, force-directed graph that visualizes all relationships between your characters. See at a glance who knows whom, who is in conflict, and how your cast interconnects — invaluable for complex multi-POV narratives.
+## Mind Maps
 
-### 📚 Intelligent Story Template Library
+Enhanced mind maps provide an SVG planning canvas with:
+- multiple node shapes;
+- entity links;
+- multi-map management;
+- visual brainstorming across plot/world/research concepts.
 
-Jumpstart your creativity with a library of classic structures (Three-Act, Hero's Journey, Save the Cat! Beat Sheet, Fichtean Curve) and genre templates (Fantasy, Thriller, Horror, Romance, Space Opera, and more). **Remix any template** by dragging, editing, or adding sections. **Personalize with AI** to generate chapter-specific prompts based on your unique concept. Browse **Community Templates** alongside your own saved templates.
+## Research Binder
 
-### 🤖 AI Outline Generator
+The Research Binder keeps reference material adjacent to the manuscript and project instead of requiring a separate research application.
 
-The ultimate cure for the blank page. Provide a concept and let the AI architect a detailed, chapter-by-chapter outline. Advanced controls let you specify genre, pacing, key characters, setting, and even mandate a specific plot twist. The result is a fully interactive, editable structure you can apply to your manuscript with one click.
+## Book Preview
 
-### 👥 Advanced Character Dossiers
+The Preview view renders the manuscript as continuous formatted prose with:
+- a navigable table of contents;
+- display/font controls;
+- full-screen reading;
+- export handoff.
 
-Breathe life into your cast. Use the **AI Profile Generator** to create compelling backstories, motivations, and personality traits from a single concept. Generate a unique **AI character portrait** in a choice of styles (realistic, anime, cartoon, comic book). Manage relationships and character arcs with dedicated fields. A **roster toolbar** adds live search, sort (name / completeness), and at-a-glance cast stats (total, developed, with-portrait, average completeness), while each card shows a **completeness ring** signalling how fully developed that character is — so gaps in a large cast are obvious at a glance.
+## Progress Tracker
 
-### 🌍 Expansive World-Building Atlas
+The Progress view includes:
+- daily/weekly goals;
+- writing-session timer;
+- streaks;
+- velocity visualization;
+- activity heatmap;
+- writing-history-driven summaries.
 
-Construct the universe of your story. Define your world's history and lore, create interactive timelines and location lists, and let the **AI World Generation** feature write rich, consistent world-building content. Generate an atmospheric **ambiance image** to capture your world's visual identity. The same **roster toolbar** (search, sort, stats — total, developed, locations, average completeness) and per-world **completeness ring** keep large atlases navigable and surface under-developed worlds.
 
-### ✨ AI Writing Studio _(10 Specialized AI Tools)_
+## Voice and dictation
 
-Your tireless creative co-pilot, available at every stage:
+Voice support is an **explicit opt-in capability** because microphone access is a privacy and permission boundary.
 
-| Tool                      | What it does                                                               |
-| ------------------------- | -------------------------------------------------------------------------- |
-| **Continue Writing**      | Seamlessly continues from your last sentence in your voice                 |
-| **Improve Writing**       | Rewrites selected prose for clarity, flow, and impact                      |
-| **Change Tone**           | Shifts the register of any passage (darker, funnier, more formal, …)       |
-| **Generate Dialogue**     | Creates authentic, in-character conversations                              |
-| **Brainstorm Ideas**      | Generates creative plot possibilities for what comes next                  |
-| **Generate Synopsis**     | Creates a concise, polished summary of any section                         |
-| **Grammar & Style Check** | Catches errors and suggests stylistic improvements                         |
-| **AI Critic**             | Delivers an honest, structured literary critique of your prose             |
-| **Plot-Hole Detector**    | Analyzes your manuscript for logical inconsistencies and continuity errors |
-| **Consistency Checker**   | Cross-references your text against your character and world data via RAG   |
+Current voice layers include:
+- browser speech capabilities where available;
+- optional local WASM/ONNX voice components behind a separate opt-in;
+- voice commands/dictation only after the corresponding feature is enabled and permissions are granted.
 
-### 🔍 RAG Consistency Checker _(Advanced)_
+The main `enableVoiceSupport` flag and the heavier `enableVoiceWasm` path are both **off by default**. Local voice-model assets can require a substantial first download and compatible browser/runtime capabilities.
 
-A dedicated view using **Retrieval-Augmented Generation (RAG)** to give the AI deep, contextualized knowledge of your _entire_ project. It cross-checks your manuscript against character profiles and world-building notes to surface subtle inconsistencies and continuity errors that a read-through would miss.
+Voice should not be interpreted as a mandatory part of the writing workflow: the complete core editor remains usable without microphone access.
 
-### 🧩 Story Organization & Research
+## Cross-project search
 
-Rounding out the creative suite with dedicated tools for the parts of a story that live outside the manuscript itself — all on by default:
+Cross-project search uses a lightweight local index for fast discovery:
+- the persistent index stores project metadata rather than full manuscript plaintext;
+- deeper excerpts require loading the project on demand;
+- indexing is updated as projects are saved.
 
-- **Story Objects & Groups** — an inventory view for props, weapons, vehicles, artifacts, documents, and any other place-item, with group tagging to keep a large prop list navigable (`components/ObjectsView.tsx`).
-- **Enhanced Mind Maps** — an SVG mind-map canvas with 5 node shapes, entity-linking straight to characters and scenes, and multi-map management for brainstorming world lore or plot branches (`components/mind-map/`).
-- **Character Interviews v2** _(experimental)_ — archetype-based AI interview sessions with streaming responses, for developing a character's voice through simulated Q&A rather than a static form.
-- **Research Binder** — a sidebar panel inside the Manuscript view for collecting web clips, notes, and reference material alongside the scene you're writing, so research never leaves the editor.
-- **Compile Wizard** _(experimental)_ — a step-by-step guided flow on the Export view for configuring output format, trim size, and style before generating the final manuscript file.
+## Story Bible / consistency tooling
 
-### 🚀 ProForge Ultimate Author Pipeline _(Experimental — `enableProForge`)_
-
-An 8-stage agentic manuscript editing pipeline that transforms the Writer view into a full **Human-in-the-Loop** editorial workflow — from raw draft to publication-ready manuscript. All processing runs client-side; no cloud dependency for the pipeline itself.
-
-**Stage sequence:** Intake & Diagnostic → Structural → Line/Prose → Copy Edit → Proof → Production → Publishing → Analytics
-
-Key design points:
-- **Never auto-modifies** the manuscript — every agent output awaits explicit author approval in the Review Panel.
-- **SupervisorAgent** applies heuristic quality gates between stages and can trigger one automatic retry when it detects a fallback output or low-quality score.
-- **Self-evaluation loop** (`BaseAgent.selfReflect()`) flags incoherent AI output for a second-pass before surfacing to the author.
-- **Critical Actions summary card** + severity-grouped Review Panel with Quick Accept for high-confidence suggestions (≥ 0.85).
-- Enable via **Settings → Experimental Features → ProForge Pipeline**.
-
-See [`docs/PROFORGE-PIPELINE.md`](docs/PROFORGE-PIPELINE.md) for full architecture, types, and agent reference.
-
-### ✦ Global AI Copilot _(v2 — Ambient Intelligence Layer)_
-
-An always-present AI writing assistant that surfaces proactive insights and lets you chat without leaving the editor. Enable via **Settings → Experimental → Enable Global AI Copilot**.
-
-**Panel modes:**
-- **Dialog** (default) — floating panel, bottom-right
-- **Sidebar** — docked to the right edge on desktop (≥ 768 px); toggle with the dock/float icon
-
-**v2 capabilities (shipped in latest release):**
-- **Markdown rendering** — assistant replies render as formatted HTML (headings, bold, italic, code blocks, lists)
-- **Apply to chapter** — if the last assistant message contains a fenced code block and a chapter is open, one click rewrites it (dispatched into redux-undo; `Ctrl+Z` reversal; gated to blocks ≥ 70 % of chapter length)
-- **Inline Annotation Layer** — a badge inside the Manuscript Editor shows the heuristic insight count for the active chapter; clicking it opens the Copilot and scrolls to the relevant finding
-- **Heuristics-only mode** — brain-icon toggle disables all AI calls; the Copilot replies using only the local [Heuristic Engine](docs/HEURISTIC-RULES.md) (8 built-in rules, pure TypeScript, no network)
-- **ProForge integration** — each ProForge Review item has an **✦ Ask Copilot** chip that pre-fills the chat with the item's context
-
-See [`docs/COPILOT.md`](docs/COPILOT.md) for the full feature guide and architecture overview, and [`docs/HEURISTIC-RULES.md`](docs/HEURISTIC-RULES.md) for the rule catalogue.
-
-### 🌊 Flow Mode _(Distraction-Free Writing)_
-
-A single-keystroke toggle that collapses all sidebars and chrome, leaving only the manuscript editor. Exit with `Escape` or the same toggle key. State is stored in the Zustand `transientUiStore` (`flowMode` flag) so it resets on page load.
-
-### 🗣️ Voice Dictation & WASM Voice Engines _(v1.17 foundation + v1.19.0 WASM scaffold + v1.21 model download UI)_
-
-Built-in speech-to-text via the browser's Web Speech API. Dictate scenes hands-free directly into the manuscript editor or into the Command Palette search field. **v1.19.0** adds WASM STT/VAD engine scaffolds; **v1.21** ships the full model download flow:
-
-- **`WasmSttEngine`** (`services/voice/wasmSttEngine.ts`) — Whisper.cpp WASM interface scaffold (model download, chunked inference, 99+ language detection).
-- **`SileroVadEngine`** (`services/voice/sileroVadEngine.ts`) — Silero VAD v4 via ONNX Runtime Web (~2 MB model, lazy-loaded, replaces energy-threshold VAD).
-- **`VoiceModelDownloadModal`** (`components/voice/`) — Progress bar, per-model cancel (AbortController), and retry for both Whisper STT (~42 MB) and Kokoro TTS (~15 MB). Triggered from **Settings → Voice** via separate "Download STT Model" / "Download TTS Model" buttons.
-- Web Speech API fallback active in all environments; WASM engines activate when model is downloaded and `featureFlags.enableVoiceWasm` is on.
-
-### ⌨️ Command Palette & Productivity Hub
-
-A keyboard-first **command palette** (⌘K / Ctrl+K, plus configurable bindings in **Settings → Shortcuts**) drives navigation, AI actions, editor helpers, and project tools from one surface:
-
-- **Typed command registry** (`services/commands/`) — fuzzy scoring with highlighted matches, category sections, optional AI-suggested rows from lightweight project signals (no extra network call required).
-- **Recent & pinned commands** — persisted preferences (versioned local storage); pin/unpin from the palette context menu.
-- **Voice input** — Web Speech integration for dictating palette queries where supported.
-- **Global shortcuts** — `hooks/useGlobalKeyboardShortcuts.ts` + `services/keyboard/` evaluate Redux-backed shortcut bindings; conflicts surface in the Shortcuts editor.
-- **Settings** — filter controls via the Settings search bar (`services/settingsSearchHints.ts`); **Import / Export** of a Zod-validated, privacy-conscious settings JSON subset (**Settings → Data** via `services/settingsExchange.ts`).
-- **Help Center (v1.9)** — `services/help/helpCatalog.ts` drives 50+ articles across 11 categories (including **Advanced & Power Features**, **Technical Documentation**, and **Settings Guide**); full-text search (`helpSearch.ts`); AI assistant uses 16 offline doc chunks; **Try it** actions via `tryActionId`; tours from `services/spotlightTour.ts`. The in-app **Settings Guide** documents every live settings category (incl. Fine-Tuning/LoRA, Community, Plugins). All five primary locales include translated article bodies (es/fr/it complete as of v1.9); Arabic/Hebrew article prose ships as English fallback in the RTL Beta.
-- **UI primitives** — shared **`Tooltip`**, **`EmptyState`**, and toast rows that trigger a **registered command** via `commandId` (see `features/status/statusSlice.ts`).
-- **Feature flags** — `enableProjectHealthScore` (dashboard card) lives in `features/featureFlags/featureFlagsSlice.ts`. (Cross-project search was promoted to permanent core behaviour in v1.8 and no longer has a flag.)
-
-### 🔭 Cross-Project Search _(v2 — Privacy-Preserving Index)_
-
-Search across **all your projects** without loading them into memory. An IndexedDB-based privacy-preserving index (DB v8, `projects-index-store`) stores only lightweight metadata per project — title, logline, word count, character names — never manuscript plaintext.
-
-- **Two-phase search:** Phase 1 queries the index (instant); Phase 2 loads the full project on demand for deep-match excerpts.
-- **Auto-indexing** on every save via `listenerMiddleware` (permanent core behaviour since v1.8).
-- **Index management:** `crossProjectIndexService.ts` exposes `indexProject`, `listIndexedProjects`, `removeProjectIndex`.
-- Fully localized across all 5 UI languages.
-
-### 🤝 Real-Time Collaboration with Full E2E Encryption
-
-Real-time P2P co-editing via **Yjs + collab-transport** (vendor fork of y-webrtc 10.3.0 with E2E encryption baked in) with multiple signaling endpoints for automatic failover:
-
-- **RTCDataChannel in-flight E2E encryption** — all Yjs sync updates and awareness protocol messages over peer-to-peer WebRTC data channels are encrypted via AES-256-GCM using a room key. Shipped via `packages/collab-transport` (vendor fork with applied patch).
-- **Room isolation** — room IDs are derived from a SHA-256 hash of the room name.
-- **AES-256-GCM key derivation** — `collaborationService.ts` includes `deriveEncryptionKey()` (PBKDF2, 600 000 iterations, SHA-256), `encryptUpdate()` / `decryptUpdate()` (AES-256-GCM, 12-byte random IV), and `getEncryptionStatus()`.
-- **Encryption status badge** — CollaborationPanel shows green `E2E Key Derived (AES-256-GCM)` or amber `Room isolation only` based on whether a room password is set.
-- **Security warning banner** (`role="alert"`, `aria-live="polite"`, WCAG 2.2 AA) visible before connecting explains that public signaling relays observe connection metadata; disappears after connect.
-- **Configurable signaling URLs** in Settings → Collaboration.
-- Default signaling endpoints: `wss://y-webrtc-signaling.fly.dev`, `wss://signaling.yjs.dev`.
-
-#### Self-host signaling (Cloudflare Worker)
-
-1. Deploy a y-webrtc-compatible signaling worker using an established open-source recipe.
-2. Add your endpoint to `SIGNALING_SERVERS` in `services/collaborationService.ts`.
-3. Add the endpoint to `config/csp-connect-src.json` and run `pnpm run csp:sync`; CI rejects
-   deployment-surface drift via `pnpm run csp:verify`.
-4. Keep at least one fallback endpoint during migration to avoid downtime.
-
-### 🔒 IDB At-Rest Encryption _(B-1, v1.19.0)_
-
-The current primary project, settings, snapshot, image, Codex, RAG, and binder-asset IndexedDB paths can be encrypted at rest via `services/storage/storageEncryptionService.ts`. This is not yet a claim that every IndexedDB surface is covered:
-
-- **AES-256-GCM** with a PBKDF2-derived key (600 000 iterations, SHA-256, 32-byte random salt).
-- Gated behind `featureFlags.enableIdbAtRestEncryption`. When a library is configured but locked, protected reads and writes fail closed rather than falling back to plaintext.
-- Disable and passphrase rotation are temporarily unavailable until a journaled, cross-store migration protocol can prove recovery after interruption.
-- **Web/PWA and desktop API-key paths are separate from project-file protection.** The unlock screen (`IdbUnlockModal`) and session-scoped in-memory key protect the IndexedDB-backed storage path. On the **Tauri desktop build**, primary project, settings, snapshot, image, Codex, RAG, and binder-asset data are written by the filesystem-backed store (`services/fs/*`), which is plaintext (LZ-string compressed, not encrypted) regardless of this setting. API keys are kept in the WebView's IndexedDB random-key store; the desktop filesystem never receives API-key ciphertext or derived key material.
-- At-rest protection reduces disclosure from an extracted browser profile while the library is locked; it does not protect an unlocked renderer, a compromised device, or every persistence surface.
-
-### 🔐 Encrypted Library Backup
-
-One-click encrypted export of your entire project library from **Settings → Data**:
-
-- Archives all projects as a **ZIP** containing `META.json` + `vault.bin`.
-- `vault.bin` is encrypted with **AES-256-GCM** — the decryption key is derived from your chosen passphrase using PBKDF2.
-- The encrypted vault holds its project payload in `vault.bin`; users must still protect the downloaded archive and should not confuse it with ordinary plaintext JSON export.
-- Import on any device using the same passphrase to restore your full library.
-
-### 🔑 Encryption — which mechanism protects what
-
-There is no single blanket "encrypted at rest" guarantee — four protected data paths
-are covered, alongside one explicitly documented plaintext desktop filesystem
-path. They use different key material, and the desktop filesystem path (marked ⚠️) currently
-provides no encryption despite the legacy helper code still existing:
-
-| Data | Mechanism | Where |
-|------|-----------|-------|
-| **Browser BYOK API key** | Random, non-extractable AES-256-GCM key generated via `crypto.subtle.generateKey()` — no passphrase, nothing to derive | `services/storage/idbKeyStore.ts` |
-| **Browser IDB-at-rest data** _(opt-in, B-1)_ | User passphrase → PBKDF2 (600 000 iterations, SHA-256, random 32-byte salt) → AES-256-GCM, non-extractable key | `services/storage/storageEncryptionService.ts` |
-| **Desktop (Tauri) BYOK API key** | Same random, non-extractable AES-256-GCM key store as the browser; no filesystem-derived secret material. Resolved 2026-08-14 — previously used a PBKDF2 derivation with a public/reconstructible input; also closed a Gemini-specific split-persistence bug ([#358](https://github.com/qnbs/WorldScript-Studio/issues/358)) where `ApiKeySection.tsx` and `geminiService.ts` read the key through different backends | `services/storage/idbKeyStore.ts`, `services/storageService.ts` |
-| **Desktop (Tauri) project/settings/snapshot/Codex/RAG/asset data** ⚠️ | **None — plaintext (LZ-string compressed only).** Enabling "Encrypt project data at rest" still shows the passphrase unlock screen on desktop, but it doesn't gate this filesystem-backed store. Tracked, open gap | `services/fs/*Store.ts` |
-| **Library backup vault** | User passphrase → PBKDF2 (600 000 iterations, SHA-256) → AES-256-GCM | `services/libraryBackupService.ts` |
-
-See [`docs/SECURITY-THREAT-MODEL.md`](docs/SECURITY-THREAT-MODEL.md) for the full threat-model mapping.
-
-**Claude is the one provider that isn't a direct browser/device→provider call, on the web build
-specifically.** Anthropic doesn't send CORS headers permitting direct browser access, so:
-
-- **Desktop (Tauri):** calls `api.anthropic.com` directly via native HTTP — no proxy, same trust
-  model as every other provider.
-- **Web/PWA on Vercel or Cloudflare Pages:** relays through WorldScript's own stateless serverless
-  proxy (`api/claude-proxy.ts` / `functions/api/claude-proxy.ts`) — your key transits that one
-  request through infrastructure WorldScript runs, en route to Anthropic. The proxy never logs or
-  persists the key, prompt, or response (see `docs/SECURITY-THREAT-MODEL.md` § *Claude serverless
-  proxy trust-model change*).
-- **Web/PWA on GitHub Pages:** Claude is unavailable — GitHub Pages is static-only and can't host
-  the proxy at all. Use the desktop app or a Vercel/Cloudflare Pages deployment instead.
-
-### ⚡ Performance, Analytics & Extensibility
-
-Infrastructure-level features that keep the app fast and extensible as projects grow — all on by default unless noted:
-
-- **DuckDB Analytics** — an OPFS-backed DuckDB-WASM engine (off the main thread, via WorkerBus v2) powering fast story queries, RAG vector search, and scene-timeline analytics without a server.
-- **WorkerBus v2** — the unified background-task backbone behind DuckDB, local embeddings, and local NLP: auto-scaling worker pools, a bounded priority scheduler, enqueue-to-completion inactivity watchdogs, per-worker circuit breakers, and a dead-letter queue for failed tasks (`packages/worker-bus`).
-- **Adaptive AI Engine** — a runtime device profiler that automatically selects the best inference backend and model for the current hardware, network, and battery state, so the same project performs well on a phone and a workstation.
-- **Compute Shaders** _(experimental)_ — custom WGSL GPU kernels accelerate RAG similarity search, Plot-Board auto-layout, and voice preprocessing on WebGPU-capable hardware.
-- **Rust Compute** _(desktop qualification stub, default off)_ — bounded text analysis and diff wrappers prove the Tauri Rust `TaskSupervisor` contract; no production caller is enabled yet.
-- **Plugin System v0.1** — an ESM-based extension system with Zod-validated descriptors and a sandboxed, permission-gated capability API, so third-party plugins can't reach outside what they're allowed to touch.
-- **LoRA Adapter Inference** _(experimental)_ — load pre-trained `.safetensors` adapters for personalized writing-style inference via an Ollama model-tag override (Settings → AI → Fine-Tuning).
-- **App Health Panel** — About-page runtime diagnostics covering memory usage, IndexedDB health, WebGPU status, and audio-context state, for diagnosing performance issues without opening DevTools.
-
-### 💾 Robust Offline-First Data Management
-
-- **Auto-save** to IndexedDB on every change (debounced, non-blocking)
-- **Snapshot system** — automatic and manual project backups, restorable to any point in time
-- **Import / Export** project files as JSON or encrypted ZIP backups
-- **Undo / Redo** with a 100-step history (Redux-Undo)
-- **IndexedDB v8** schema with dedicated stores per data type and automatic migration
-
-### 📤 Polished Export Suite
-
-- **Markdown** (`.md`), **Plain Text** (`.txt`), **PDF** (with titlepage, configurable font and spacing)
-- **Word / DOCX** — `.docx` generation via `docx` + `jszip` (lazy-loaded)
-- **AI Synopsis** — generate a one-page synopsis before exporting
-- **Paste-friendly format** — copy rich text for Google Docs / Notion
-- Selective content inclusion (title & logline, characters, worlds, manuscript sections)
-
-### 📱 Progressive Web App (PWA) v3.0
-
-- **Offline-first** — all assets cached via Service Worker (Workbox-based)
-- **Installable** on desktop and mobile (iOS & Android)
-- **App shortcuts** for quick access from the home screen icon
-- Update notifications and background sync support
-
-### 🎨 Highly Customizable Workspace
-
-- **Dark / Light** themes with smooth transitions
-- Adjustable **font family, size, line height**, and **paragraph spacing**
-- **Indent first line** toggle for traditional novel formatting
-- Tunable **AI Creativity Level** (Focused → Balanced → Imaginative)
-- Full **Accessibility settings** (high contrast, reduced motion, color-blind modes) — WCAG 2.2 AA–oriented
-
-### 🌐 Full Multi-Language Support
-
-Shipped UI locales with **2942 i18n keys** across all 19 languages — zero hardcoded user-facing strings:
-
-- 🇩🇪 **German** (Deutsch)
-- 🇬🇧 **English**
-- 🇫🇷 **French** (Français)
-- 🇪🇸 **Spanish** (Español)
-- 🇮🇹 **Italian** (Italiano)
-- 🇸🇦 **Arabic** (العربية) — *Beta, RTL*
-- 🇮🇱 **Hebrew** (עברית) — *Beta, RTL*
-- 🇮🇷 **Persian / Farsi** (فارسی) — *Beta, RTL*
-- 🇯🇵 **Japanese** (日本語) — *Near-Production*
-- 🇨🇳 **Chinese Simplified** (简体中文) — *Near-Production*
-- 🇵🇹 **Portuguese** (Português) — *Near-Production*
-- 🇬🇷 **Greek** (Ελληνικά) — *Near-Production*
-- 🇫🇮 **Finnish** (Suomi) — *Beta*
-- 🇸🇪 **Swedish** (Svenska) — *Beta*
-- 🇭🇺 **Hungarian** (Magyar) — *Beta*
-- 🇮🇸 **Icelandic** (Íslenska) — *Beta*
-- 🌐 **Basque** (Euskara) — *Beta*
-- 🇷🇺 **Russian** (Русский) — *Beta*
-- 🇰🇷 **Korean** (한국어) — *Beta*
-
-**Quality tiers** — 🟢 **Production** (de/en/es/fr/it: full parity + translated help) · 🟡 **Near-Production** (ja/zh/pt/el: ≥96% UI coverage, 0 placeholder issues, `help.json` still English) · 🔵 **Beta** (the rest: machine-translated UI, English help). Per-locale coverage is tracked in [`docs/i18n/TRANSLATION_STATUS.md`](docs/i18n/TRANSLATION_STATUS.md) (generated by `pnpm run i18n:status`).
-
-All trees stay in key parity (`pnpm run i18n:check`). Language selection persists via `localStorage`. Selector available in Settings, the Welcome Portal, and the Command Palette. In non-Production locales the in-app Help view shows a notice that long-form articles are still English.
-
-**RTL Layout Beta** (Arabic / Hebrew / Persian): for Arabic & Hebrew all 18 UI modules are fully translated; `help.json` long-form prose remains English fallback (community follow-up). Self-hosted **Noto Sans Arabic / Hebrew** + **Noto Naskh Arabic** (manuscript editor) provide proper glyph coverage — including Persian's پ چ ژ گ ک ی. **Persian (`fa`)** ships as RTL Beta, **machine-translated** (glossary-anchored, ~93 % coverage; `help.json` long-form articles stay English fallback; human native review pending); direction and fonts are automatic (no App/CSS/font changes). Switching to ar/he/fa sets `html[dir="rtl"]`; a global `[dir="rtl"]` CSS net plus logical-property shell layout mirror the UI, while canvas/SVG boards (Plot Board, Character Graph) stay LTR to keep pointer/geometry math correct. The `enableRtlLayout` flag (off by default) additionally forces RTL for layout testing regardless of locale.
-
-**Spotlight tour:** After first launch, a short guided tour (driver.js) highlights navigation, command palette, and Settings; restart anytime from the Dashboard ("Guided tour") or Help.
+WorldScript combines structured project entities, RAG/consistency tooling, and story-bible-style links so AI and local analysis can reason over project context instead of treating each prompt as an isolated text box.
 
 ---
 
-## 🧠 AI Provider Stack
+# Feature maturity and flags
 
-WorldScript Studio supports **9 distinct AI execution paths**, automatically routing to the best available option based on the active **[AI Execution Mode](#-ai-execution-modes)**.
+WorldScript deliberately distinguishes **available**, **default-on**, and **mature**. A feature being enabled by default does not automatically mean it has identical qualification depth on every platform.
 
-| Layer | Provider | Requires | Notes |
-|-------|----------|----------|-------|
-| **Cloud 1** | Google Gemini | API key (BYOK) | Primary cloud path; Gemini 2.0 Flash |
-| **Cloud 2** | OpenAI | API key (BYOK) | GPT-4o, GPT-4o-mini |
-| **Cloud 3** | Anthropic Claude | API key (BYOK) | Claude Opus 4.7, Sonnet 4.6, Haiku 4.5 — desktop (native) and Vercel/Cloudflare Pages (via serverless proxy); unavailable on GitHub Pages, see [privacy note](#-encryption--which-mechanism-protects-what) |
-| **Cloud 4** | Grok (xAI) | API key (BYOK) | grok-3, grok-3-mini |
-| **Cloud 5** | **OpenRouter** | Free or paid key | Unified gateway: DeepSeek R1, Llama 3.3 70B, Qwen 2.5 72B + 100s more; `:free` suffix = zero cost |
-| **Local 1** | Ollama | Local server | Default model: Qwen3 8B; configurable URL. Desktop app connects natively (no setup). Web/PWA is desktop-only **by default** — an opt-in `enableBrowserOllama` flag (Settings → Experimental, advanced/unsupported) lets the browser connect directly if you start your own server with `OLLAMA_ORIGINS` covering the page's origin, the same real-CORS model NovelCrafter uses; see [ADR-0017](docs/adr/0017-pwa-browser-ollama-opt-in.md). |
-| **Local 2** | WebLLM (WebGPU) | GPU + browser | MLC-packaged: Llama 3.2 1B/3B, Phi-3.5 Mini, Gemma 2 2B |
-| **Local 3** | ONNX Runtime Web | WASM (any device) | Fallback when no WebGPU; runs fully in-browser |
-| **Local 4** | Transformers.js | WASM / WebGPU | Hugging Face–compatible models; WebGPU or WASM backend |
+The current `FeatureFlagsState` contains the following feature authorities:
 
-> **Privacy-first routing:** WebLLM, ONNX, and Transformers.js run entirely in your browser — no network call, no API key needed. Automatic fallback down the stack ensures AI features always work, even offline.
+| Flag | Default | Role / maturity note |
+| --- | :---: | --- |
+| `enableStoryBibleAdvanced` | ✅ | Story-bible graph/consistency features |
+| `enableBinderResearch` | ✅ | Research Binder |
+| `enableCompileWizard` | ✅ | Guided export/compile flow |
+| `enableProjectHealthScore` | ✅ | Dashboard health insights |
+| `enableAppHealthPanel` | ✅ | Runtime diagnostics in About |
+| `enableDuckDbAnalytics` | ✅ | Local DuckDB-WASM analytics sidecar; see privacy caveats |
+| `enableObjectsGroups` | ✅ | Story Objects & Groups |
+| `enableMindMaps` | ✅ | Enhanced Mind Maps |
+| `enableCharacterInterviews` | ✅ | Character Interviews v2 |
+| `enableLoraAdapters` | ✅ | LoRA adapter tooling; advanced/experimental |
+| `enablePluginSystem` | ✅ | Worker-isolated permission-gated plugin system; still an advanced extension surface |
+| `enableIdbAtRestEncryption` | ✅ | Browser/PWA IDB encryption capability; passphrase setup controls actual encryption state |
+| `enableAdaptiveAiEngine` | ✅ | Device-aware AI backend/model selection |
+| `enableComputeShaders` | ✅ | Experimental WebGPU compute path; do not assume every advertised acceleration path is active on every device |
+| `enableWorkerBusV2` | ✅ | Shared background task orchestration |
+| `enableRtlLayout` | ❌ | Manual RTL-layout test override |
+| `enableVoiceSupport` | ❌ | Voice commands/dictation; explicit permission boundary |
+| `enableProForge` | ❌ | Token-heavy experimental agentic editorial pipeline |
+| `enableVoiceWasm` | ❌ | Local voice WASM models; explicit download/opt-in |
+| `enableRustCompute` | ❌ | Desktop qualification wrappers; no general production caller |
+| `enableGlobalCopilot` | ❌ | Ambient Global AI Copilot |
+| `enableLocalFirstSync` | ❌ | Experimental Yjs shadow projection; Redux remains source of truth |
+| `enableBrowserOllama` | ❌ | Advanced browser→Ollama opt-in; requires user-managed CORS/origin configuration |
 
-> **OpenRouter free tier:** Sign up at [openrouter.ai/keys](https://openrouter.ai/keys) for a free key with 20 req/min. Models marked `:free` (e.g. `deepseek/deepseek-r1:free`) need no paid credits. Circuit breaker automatically pauses OpenRouter after 4 consecutive 429s and retries after 5 minutes.
-
-### ⚙️ AI Execution Modes
-
-**Settings → AI & Models → AI Execution Mode** lets you control exactly how AI requests are routed:
-
-| Mode | Behaviour | Best for |
-|------|-----------|----------|
-| **Hybrid** _(default)_ | Local models when preloaded → cloud fallback when offline or no local model | Most users — best of both worlds |
-| **Cloud** | All requests go to your configured cloud provider (Gemini, OpenAI, etc.) | Highest quality; requires API key + internet |
-| **Local** | All AI runs on-device via Ollama / WebLLM / ONNX — nothing leaves your device | Maximum privacy; fully offline |
-| **Eco** | Battery-saving: tiny 0.5 B model + rule-based heuristics only; no cloud, no GPU | Mobile / low-end hardware |
-
-An **AI Mode Indicator** chip in the Copilot panel header shows the active mode and turns amber when OpenRouter's circuit breaker is open.
-
-The active mode is persisted to `settings.aiMode` and synced to `aiModeService` via `listenerMiddleware` on every change — no page reload required.
-
-### WebGPU Hardware Detection
-
-`services/ai/webGpuDetectorService.ts` queries `navigator.gpu.requestAdapter()` and reports:
-- **Status:** `available` / `unavailable` / `unknown`
-- **Adapter name** and **architecture** (via `requestAdapterInfo()`)
-- **VRAM tier:** `high` (≥ 8 GB) / `medium` (≥ 4 GB) / `low` — heuristic from `adapter.limits.maxBufferSize`
-
-The Settings → AI panel shows a live GPU status badge with adapter details and model selectors for WebLLM and ONNX models.
+Two earlier flags were intentionally retired:
+- cross-project search is permanent core behavior;
+- the previous Cloud Sync toggle was removed because there is no finished central Cloud Sync product/UI.
 
 ---
 
-## 💡 Our Philosophy
+# AI architecture
 
-- **Privacy First** — All data stays local. No accounts, no cloud, no tracking.
-- **AI as a Partner, Not a Replacement** — The AI augments your creativity; you remain the author.
-- **Seamless Workflow** — Tools that get out of the way and keep you in your creative flow.
-- **Quality Over Quantity** — Each AI tool has a single, specific purpose crafted for a real creative need.
-- **Accessibility by Default** — WCAG 2.2 AA orientation, ARIA roles throughout, Lighthouse accessibility gate enforced in CI.
+## Provider families
+
+WorldScript supports several execution families rather than one mandatory AI backend.
+
+### BYOK cloud providers
+
+Current provider integrations include:
+- Google Gemini;
+- OpenAI;
+- Anthropic Claude;
+- xAI/Grok;
+- OpenRouter.
+
+Provider model catalogs evolve faster than a README should. **The runtime Settings catalog and provider source are authoritative for currently admitted model IDs.** This README intentionally avoids freezing rapidly changing model names into long-lived documentation.
+
+### Local-server providers
+
+The desktop application can talk to local OpenAI-compatible/server-style runtimes, including:
+- Ollama;
+- LM Studio;
+- vLLM-compatible endpoints.
+
+Desktop traffic uses the native Tauri HTTP transport for admitted endpoints.
+
+Direct browser→Ollama is a separate advanced feature:
+- off by default;
+- no automatic localhost probing while off;
+- requires the user to configure the local server's CORS/origin policy if enabled;
+- should not be mistaken for the default PWA behavior.
+
+### Browser-native inference
+
+The local browser stack includes:
+1. **WebLLM / WebGPU**
+2. **ONNX Runtime Web / WASM**
+3. **Transformers.js / WebGPU or WASM**
+4. **heuristic fallbacks** for supported flows
+
+Initial model acquisition requires network access and can involve hundreds of megabytes or more. Once the required model assets are cached, model inference itself runs on-device.
+
+> [!NOTE]
+> Local fallbacks are **capability-specific**. "A heuristic exists" does not mean every cloud-model feature has an equivalent offline result of the same quality.
+
+## AI execution modes
+
+The routing service currently implements these semantics:
+
+| Mode | Current routing intent |
+| --- | --- |
+| **Hybrid** | Cloud-first while online; local fallback when the browser reports offline |
+| **Cloud** | Cloud path while online; local fallback when offline |
+| **Local** | Local/on-device path only; every cloud provider call is blocked outright (`assertCloudAiAllowed` rejects with `AI mode is "local" (local-only)`) |
+| **Eco** | Small local model / heuristic-oriented path for constrained devices; cloud provider calls are blocked identically to Local (`assertCloudAiAllowed` rejects Eco the same way) — Eco is a strict no-cloud mode, not merely a battery/cost optimization |
+
+If you require AI execution that never intentionally calls a cloud provider, use **Local or Eco** — both are enforced as strict no-cloud modes at the same policy gate.
+
+## Claude host-specific behavior
+
+Claude has a different browser trust boundary from other providers:
+
+| Surface | Claude path |
+| --- | --- |
+| **Tauri desktop** | Direct native HTTP request to Anthropic |
+| **Vercel / Cloudflare Pages** | Same-origin WorldScript serverless relay → Anthropic |
+| **GitHub Pages** | Unavailable; static hosting cannot run the relay |
+
+On edge hosts, the BYOK key, prompt, and response transit the WorldScript relay process. The **application relay code is designed not to persist or intentionally log those payloads**, but hosting/network infrastructure can still process connection metadata according to the host's own policies.
+
+See:
+- [`docs/SECURITY-THREAT-MODEL.md`](docs/SECURITY-THREAT-MODEL.md)
+- [`docs/adr/0016-native-grok-and-claude-providers.md`](docs/adr/0016-native-grok-and-claude-providers.md)
+
+## ProForge
+
+ProForge is an optional eight-stage Human-in-the-Loop editorial pipeline.
+
+Important boundary:
+- pipeline orchestration, review state, and author approval are client-side;
+- the model calls used by pipeline agents still follow the configured AI provider/routing policy;
+- it is therefore inaccurate to describe ProForge as inherently "no-cloud" unless Local/Eco mode or a local provider is actually selected.
+
+## Global Copilot
+
+The Global Copilot is opt-in and can:
+- operate as a floating dialog or docked sidebar;
+- render structured Markdown safely;
+- surface local heuristic insights;
+- apply sufficiently large fenced outputs to a chapter through undoable project state;
+- integrate with ProForge review items.
+
+A heuristics-only mode exists for local non-model assistance.
 
 ---
 
-## 🛠️ Technology Deep Dive
+# Privacy, storage, and security
 
-| Layer                | Technology                                                | Purpose                                                              |
-| -------------------- | --------------------------------------------------------- | -------------------------------------------------------------------- |
-| **UI Framework**     | React 19 + TypeScript 7 (tsgo, strict)                    | Component-based, fully type-safe UI with `exactOptionalPropertyTypes` |
-| **Build Tool**       | Vite 8 + pnpm 11 workspaces                              | App build + workspace orchestration (`packages/ai-core`, `packages/ui`) |
-| **State Management** | Redux Toolkit 2.x + Redux-Undo + Zustand                 | Persistent (Redux), ephemeral (Zustand `transientUiStore`) state layers |
-| **Styling**          | Tailwind CSS 4.x + CSS Variables                         | Utility-first design with theme-aware custom properties              |
-| **Cloud AI**         | Gemini / OpenAI / Claude / Grok (BYOK)                   | Provider routing via `aiProviderService.ts`; Vercel AI SDK for streaming |
-| **Local AI Layer 1** | WebLLM (`@mlc-ai/web-llm`)                               | WebGPU-accelerated LLM inference in-browser (MLC-packaged models)   |
-| **Local AI Layer 2** | ONNX Runtime Web (`onnxruntime-web`)                      | WASM-based inference fallback; `vendor-ai-onnx` Vite chunk           |
-| **Local AI Layer 3** | Transformers.js (`@xenova/transformers`)                  | Hugging Face model inference; WebGPU or WASM backend                 |
-| **Local AI Layer 4** | Heuristic fallback (`@domain/ai-core`)                   | Rule-based responses when no model is available (always works)       |
-| **Local Server AI**  | Ollama HTTP adapter                                       | Any locally served model; auto-detect via `/api/tags`                |
-| **AI Facade**        | `packages/ai-core` workspace package                     | Unified local inference interface; sanitizeForPrompt truncation      |
-| **Storage**          | Dual IndexedDB v8 (`StateDB` + `DataDB`)                 | Split state/asset persistence; LZ-String compression + AES-256-GCM  |
-| **Collaboration**    | Yjs + `packages/collab-transport` (y-webrtc vendor fork)  | P2P CRDT editing; RTCDataChannel E2E AES-256-GCM; PBKDF2 600 000 iter |
-| **Encryption**       | Web Crypto API (AES-256-GCM; PBKDF2 where a passphrase is involved) | 4 independent mechanisms — see [Encryption — which mechanism protects what](#-encryption--which-mechanism-protects-what) |
-| **PDF Export**       | jsPDF                                                     | Client-side, configurable PDF document generation                    |
-| **Document Export**  | docx + jszip                                              | Word-compatible `.docx` generation (lazy-loaded)                     |
-| **PWA**              | Service Worker + Web App Manifest v3                     | Offline support, installability, Workbox chunking                    |
-| **i18n**             | Custom React Context (`I18nContext.tsx`)                  | 2942 keys × 19 locales (de/en/es/fr/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu/ru/ko Beta); EN fallback; `localStorage` persistence |
-| **Testing**          | Vitest 4.x (7750+ tests / 606 files) + Playwright E2E     | Unit/integration + cross-browser E2E; Stryker mutation (manual workflow)          |
-| **Code Quality**     | Biome (lint + format) + TypeScript 7 (tsgo) strict       | `--error-on-warnings` in CI; zero `any` policy                      |
-| **Visualization**    | Force-directed graph                                      | Interactive character relationship network                           |
-| **Desktop**          | Tauri v2                                                  | Cross-platform installer; auto-updater via `latest.json`             |
+
+## Security model: separate trust boundaries
+
+WorldScript security is layered rather than represented by one blanket **"private"**, **"local"**, or **"encrypted"** guarantee.
+
+Treat these as separate security authorities:
+
+| Boundary | What it governs |
+| --- | --- |
+| **Project persistence** | Where manuscript/project data is stored and whether that surface is protected at rest |
+| **Secret storage** | API credentials and other dedicated secrets |
+| **AI execution** | Browser-local, local-network, direct cloud-provider, and WorldScript-relay request paths |
+| **Collaboration** | Room-key/content encryption versus signaling/connection metadata |
+| **Analytics** | DuckDB/OPFS persistence and the distinction between local metadata and encrypted cells |
+| **Exports/backups** | User-controlled artifacts and passphrase-protected library backup |
+| **Desktop filesystem** | Native local files and the current absence of WorldScript application-level at-rest encryption there |
+| **Deployment infrastructure** | Host-specific CSP, headers, serverless relay capability, updates, and release provenance |
+
+A guarantee in one row must never be generalized to another. For the detailed threat model and current security-truth reconciliation, see [`docs/SECURITY-THREAT-MODEL.md`](docs/SECURITY-THREAT-MODEL.md) and the repository security documentation.
+
+## No central WorldScript account or manuscript backend
+
+Today, WorldScript Studio does **not** require:
+- account registration;
+- central manuscript hosting;
+- a WorldScript cloud project database;
+- mandatory sync.
+
+That is a product-architecture statement, not a claim that the application never connects to external services.
+
+## Storage by platform
+
+| Data class | Browser / PWA | Tauri desktop |
+| --- | --- | --- |
+| Project/state persistence | IndexedDB | Local filesystem under app data |
+| Snapshots/assets | IndexedDB stores | Local filesystem stores |
+| API keys | Separate IndexedDB encrypted-secret store | Same WebView IndexedDB encrypted-secret store |
+| Optional project-data at-rest encryption | Implemented for the protected IDB path | **Does not currently encrypt the filesystem-backed project store** |
+| DuckDB analytics | OPFS / DuckDB-WASM when enabled | OPFS/WebView-side DuckDB path when enabled |
+| Model cache | Browser origin cache/storage | WebView storage / local runtime cache |
+
+### Critical desktop caveat
+
+> [!WARNING]
+> **Tauri project/settings/snapshot/image/Codex/RAG/binder-asset filesystem data is not currently encrypted at rest by WorldScript Studio.** Some records are compressed, but compression is not encryption. Enabling the browser/IDB encryption setting does not magically encrypt those filesystem files.
+
+Until native protected storage is implemented, users who need device-loss protection for desktop data should rely on appropriate **host-level full-disk encryption** and backups, while recognizing that this is an operating-system mitigation, not WorldScript application-level project encryption.
+
+## Browser/PWA IDB at-rest encryption
+
+The IDB encryption lifecycle is substantially implemented:
+
+- AES-256-GCM;
+- PBKDF2-HMAC-SHA-256 with 600,000 iterations;
+- random salt;
+- non-extractable runtime `CryptoKey`;
+- locked protected reads/writes fail closed;
+- session lock;
+- journal-backed disable;
+- journal-backed passphrase rotation;
+- Web Locks–based write/migration admission;
+- interrupted migration recovery UX;
+- resume support.
+
+The feature flag is on by default, but **actual encryption depends on the user configuring the encryption/passphrase flow**.
+
+A `recovery-required` migration state is intentionally not auto-repaired when verification detects an inconsistency; it requires bounded manual/support recovery rather than destructive guessing.
+
+See [`docs/IDB-ENCRYPTION.md`](docs/IDB-ENCRYPTION.md).
+
+## API keys
+
+API-key storage is distinct from project-data encryption.
+
+Provider keys are persisted through the local IndexedDB key store using a random, non-extractable AES-GCM key mechanism. They are not intended to be stored in normal project files.
+
+When a provider is used:
+- the key must be sent to that provider's API endpoint;
+- on Vercel/Cloudflare web builds, Claude's key additionally transits WorldScript's same-origin relay;
+- keys should never be placed in public source, repository config, or client-host environment variables as a replacement for BYOK.
+
+## Encrypted library backup
+
+Settings → Data supports an encrypted library backup:
+- ZIP archive;
+- `META.json`;
+- encrypted `vault.bin`;
+- passphrase-derived AES-256-GCM key.
+
+This protects the exported vault payload, but users still need to protect the archive and remember the passphrase.
+
+## DuckDB analytics privacy
+
+DuckDB-WASM is a local analytics sidecar backed by OPFS.
+
+Current privacy model:
+- most persisted fields are local metadata;
+- literal manuscript prose in `codex_mentions.excerpt` is cell-level encrypted when IDB encryption is active;
+- other bounded metadata columns remain plaintext in DuckDB;
+- full OPFS-file encryption is not implemented;
+- Settings exposes an analytics persistence opt-out that stops DuckDB writes/inference telemetry.
+
+Do not equate "local" with "encrypted."
+
+## Service worker
+
+AI/provider hosts are treated as network-only rather than cached as normal application content. Large AI/WASM assets are controlled separately from ordinary PWA shell caching.
+
+## Content Security Policy
+
+Deployment surfaces share a generated CSP origin policy, with host-specific delivery differences:
+- Vercel, Cloudflare Pages, Docker/nginx: response header + meta CSP;
+- GitHub Pages: meta CSP only because the host cannot inject arbitrary response headers;
+- Tauri: bundled CSP.
+
+`'wasm-unsafe-eval'` is used to admit WebAssembly compilation without enabling the much broader `'unsafe-eval'`.
 
 ---
 
-## 📂 Project Structure
+# Offline and local-first semantics
+
+"Local-first" in WorldScript currently means:
+
+- the active project is persisted locally;
+- the app has no mandatory central account/database;
+- exports/backups remain user-controlled;
+- most editor/planning/project operations are local;
+- the PWA app shell can continue offline after caching.
+
+It does **not** mean:
+- every feature is available offline;
+- every persistence surface is encrypted;
+- model weights are bundled with the app;
+- collaboration works without signaling/network access;
+- cloud AI silently becomes local with identical output;
+- experimental `enableLocalFirstSync` has already replaced Redux as the source of truth.
+
+The experimental Local-First Sync flag currently mirrors project state into Yjs/y-indexeddb as a shadow path; **Redux remains authoritative**.
+
+---
+
+# Export and publishing
+
+WorldScript's Export Publishing Suite supports multiple output paths.
+
+## Manuscript/publishing formats
+
+- **Markdown** (`.md`)
+- **Plain text** (`.txt`)
+- **German Norm manuscript text** (`.txt`, 60×30)
+- **PDF** (`.pdf`)
+- **Word / DOCX** (`.docx`)
+- **EPUB 3**
+- paste/copy workflows for tools such as Notion and Google Docs
+
+Export can selectively include:
+- project title/logline;
+- characters;
+- worlds;
+- manuscript content;
+- front/back matter supported by compile profiles.
+
+The Compile Wizard provides guided presets for PDF, Markdown, EPUB, and norm-text workflows.
+
+AI-generated synopsis is optional and follows the configured AI routing/privacy boundary.
+
+## Project interchange
+
+Project-level import/export is separate from manuscript publishing:
+- project JSON/import paths;
+- desktop file associations for native project formats;
+- encrypted whole-library backup.
+
+Do not confuse a manuscript export with a complete recoverable library backup.
+
+---
+
+# Collaboration
+
+WorldScript supports real-time peer collaboration using Yjs and a maintained `collab-transport` vendor fork.
+
+Security characteristics:
+- production collaboration requires a password-derived room key;
+- Yjs sync and awareness payloads over RTCDataChannel are encrypted with AES-256-GCM;
+- PBKDF2-SHA-256 uses 600,000 iterations;
+- signaling endpoints help peers discover/connect but can observe connection metadata;
+- signaling metadata is not the same thing as manuscript plaintext.
+
+A shared room password is **not equivalent to a centralized user-account ACL**. Users should not assume that disconnecting a participant is the same as cryptographically revoking a secret they already know.
+
+Signaling endpoints are configurable; self-hosting guidance is documented in the repository.
+
+---
+
+# Languages and accessibility
+
+## Internationalization
+
+Shipped UI locales with **2942 i18n keys** across **19 locales**:
+
+- German (`de`)
+- English (`en`)
+- French (`fr`)
+- Spanish (`es`)
+- Italian (`it`)
+- Arabic (`ar`)
+- Hebrew (`he`)
+- Persian/Farsi (`fa`)
+- Japanese (`ja`)
+- Simplified Chinese (`zh`)
+- Portuguese (`pt`)
+- Greek (`el`)
+- Finnish (`fi`)
+- Swedish (`sv`)
+- Hungarian (`hu`)
+- Icelandic (`is`)
+- Basque (`eu`)
+- Russian (`ru`)
+- Korean (`ko`)
+
+Key parity is enforced by CI, but **translation quality is tiered**:
+- Production: de/en/es/fr/it
+- Near-production: ja/zh/pt/el
+- Beta/RTL Beta: remaining locales
+
+English fallback remains intentional where long-form help has not received native-quality translation.
+
+See [`docs/i18n/TRANSLATION_STATUS.md`](docs/i18n/TRANSLATION_STATUS.md).
+
+## RTL
+
+Arabic, Hebrew, and Persian support RTL-oriented layout behavior and bundled fonts. The dedicated `enableRtlLayout` flag remains off by default because it is also used as a testing override.
+
+Canvas/geometry-heavy visual planning surfaces can intentionally retain LTR coordinate behavior even inside an RTL UI.
+
+## Accessibility
+
+The project is **WCAG 2.2 AA–oriented**, with:
+- semantic/ARIA patterns;
+- keyboard navigation;
+- focus management;
+- reduced-motion/high-contrast support;
+- axe/Playwright coverage;
+- Lighthouse accessibility gates.
+
+This is an engineering target and automated evidence set, **not a formal accessibility certification**.
+
+See [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md).
+
+---
+
+# Web, PWA, and desktop
+
+
+## Platform capability matrix
+
+The same product codebase runs across different hosts, but **host capabilities are not identical**.
+
+| Capability | GitHub Pages | Vercel / compatible edge host | Tauri desktop |
+| --- | :---: | :---: | :---: |
+| Core writing/planning | ✅ | ✅ | ✅ |
+| Browser-origin IndexedDB | ✅ | ✅ | ✅ via WebView where used |
+| Installable PWA | ✅ | ✅ | — |
+| Offline-capable cached web shell | ✅ | ✅ | Native app |
+| WorldScript filesystem-backed project store | ❌ | ❌ | ✅ |
+| Native HTTP transport | ❌ | ❌ | ✅ |
+| Claude | ❌ | ✅ via same-origin relay | ✅ direct native HTTP |
+| Browser-native WebLLM/ONNX/Transformers | ✅ when runtime supports it | ✅ when runtime supports it | ✅ through WebView/runtime support |
+| Direct browser→Ollama | Experimental opt-in; CORS/origin dependent | Experimental opt-in; CORS/origin dependent | Not needed for the normal desktop local-server path |
+| Ollama / LM Studio / vLLM local-server path | Browser constraints apply | Browser constraints apply | ✅ native HTTP path |
+| Response security headers controlled by WorldScript deployment | Limited by static host; meta CSP used | ✅ | Tauri CSP/configuration |
+| Application-level at-rest encryption for filesystem project files | n/a | n/a | ❌ currently |
+
+This table is intentionally capability-oriented. It does not imply that every optional/experimental feature is equally qualified on every supported device.
+
+## PWA
+
+The web app ships:
+- Web App Manifest;
+- Service Worker;
+- offline shell/fallback;
+- installable standalone mode where supported;
+- app shortcuts;
+- share-target plumbing;
+- deep-link-aware navigation.
+
+Browser storage is **origin-specific**. GitHub Pages, Vercel, localhost, and another custom domain do not share IndexedDB/model caches automatically.
+
+## Tauri desktop
+
+The Tauri v2 shell adds:
+- native application bundles;
+- native menu integration;
+- window-state restore;
+- open-data-folder action;
+- native HTTP transport;
+- file associations / single-instance/deep-link plumbing;
+- updater integration.
+
+### Release trust
+
+Tauri updater artifacts can use Minisign-compatible updater signatures when the repository signing secrets are configured.
+
+That is **not the same as operating-system code signing**:
+- Windows Authenticode requires its own certificate/process;
+- macOS Developer ID signing/notarization requires Apple credentials;
+- updater integrity signatures do not make an unsigned installer OS-trusted.
+
+See:
+- [`docs/TAURI-CI.md`](docs/TAURI-CI.md)
+- [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md)
+
+### Native CI caveat
+
+The normal web PR pipeline is not the complete native release qualification surface. Native/Tauri changes require the dedicated desktop build workflow and its platform-specific evidence.
+
+---
+
+# Technology stack
+
+| Layer | Technology | Purpose |
+| --- | --- | --- |
+| UI | React 19 | Main application UI |
+| Type system | TypeScript native preview (`tsgo`), strict configuration | Static correctness |
+| Build | Vite 8 | Web/PWA application build |
+| Workspace | pnpm 11.22.0 + Turborepo | Dependency/workspace orchestration |
+| Persistent app state | Redux Toolkit + redux-undo | Project/settings/undoable domain state |
+| Transient UI state | Zustand | Ephemeral UI-only state |
+| Styling | Tailwind CSS 4 + CSS custom properties/design tokens | Theming and design system |
+| Cloud AI | Gemini, OpenAI, Claude, Grok, OpenRouter | BYOK cloud model execution |
+| Browser local AI | WebLLM, ONNX Runtime Web, Transformers.js | On-device inference |
+| Local server AI | Ollama / compatible local endpoints | Desktop-native local inference path |
+| Background work | WorkerBus v2 | Worker pools, scheduling, cancellation/health primitives |
+| Analytics | DuckDB-WASM + OPFS | Local analytics/query sidecar |
+| Browser storage | IndexedDB | State/assets/secure local persistence |
+| Desktop storage | Tauri filesystem stores | Local project persistence |
+| Collaboration | Yjs + `packages/collab-transport` | P2P CRDT collaboration |
+| Crypto | Web Crypto API | API-key storage, IDB encryption, backups, collaboration crypto |
+| PDF | jsPDF | PDF generation |
+| DOCX | `docx` + JSZip | Word-compatible export |
+| PWA | Service Worker + Web App Manifest | Offline shell/installability |
+| i18n | Custom React i18n context | 2942 keys × 19 locales |
+| Testing | Vitest 4.x (7750+ tests / 606 files) + Playwright | Unit/integration/E2E |
+| Quality | Biome + tsgo + CodeQL/security tooling | Static and CI gates |
+| Desktop | Tauri 2 | Current native shell |
+
+---
+
+# Architecture at a glance
+
+```text
+┌──────────────────────────────── WorldScript Studio ────────────────────────────────┐
+│                                                                                   │
+│  React UI / Views                                                                 │
+│       │                                                                           │
+│       ├── Redux Toolkit ───── project/settings/domain source of truth              │
+│       ├── Zustand ─────────── transient UI state                                  │
+│       │                                                                           │
+│       ├── storageService ─────┬── Browser/PWA → IndexedDB                         │
+│       │                       └── Tauri → local filesystem stores                  │
+│       │                                                                           │
+│       ├── AI routing ─────────┬── BYOK cloud providers                            │
+│       │                       ├── browser-native WebLLM / ONNX / Transformers.js  │
+│       │                       └── desktop local-server providers                   │
+│       │                                                                           │
+│       ├── WorkerBus v2 ───────── background workers / local compute                │
+│       ├── DuckDB-WASM ────────── local OPFS analytics                             │
+│       └── Yjs/collab-transport ── optional P2P collaboration                      │
+│                                                                                   │
+└───────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Project identity and asynchronous work
+
+The application distinguishes a logical project from a specific in-memory **project incarnation**. A generation counter is used alongside project identity so a reset/import/restore that reuses the same nominal ID can still invalidate stale asynchronous results.
+
+That invariant is important for AI and persistence:
+> asynchronous work that started for an old project incarnation must not silently mutate a newer active incarnation.
+
+---
+
+# Repository structure
 
 ```text
 WorldScript-Studio/
+├── app/                     # Store, listeners, typed hooks, transient UI store
+├── components/              # Views and reusable UI
+│   ├── settings/
+│   ├── writing/
+│   ├── voice/
+│   ├── mind-map/
+│   ├── lora/
+│   └── ui/
+├── contexts/                # React contexts
+├── features/                # Redux slices and domain feature state
+│   ├── project/
+│   ├── settings/
+│   ├── featureFlags/
+│   ├── writer/
+│   ├── progressTracker/
+│   └── ...
+├── hooks/                   # View/business-logic hooks
+├── services/                # AI, storage, export, collaboration, commands, security, etc.
+│   ├── ai/
+│   ├── storage/
+│   ├── fs/
+│   ├── duckdb/
+│   ├── commands/
+│   ├── copilot/
+│   ├── help/
+│   └── ...
 ├── packages/
-│   ├── ai-core/          # Local AI facade: 4-layer stack (WebLLM → ONNX → Transformers.js → heuristic)
-│   ├── collab-transport/ # Vendor fork of y-webrtc 10.3.0 with RTCDataChannel E2E encryption baked in
-│   ├── worker-bus/       # WorkerBus v2: typed worker pool, circuit breakers, dead-letter queue (sole worker generation, ADR-0015)
-│   └── ui/               # Shared design tokens + Tailwind preset
-├── app/                  # Redux store, typed hooks, listenerMiddleware, transientUiStore (Zustand)
-├── components/           # All UI view components
-│   ├── settings/         # Settings panel sections (AiProviderCard, AiSections, ShortcutsSection, …)
-│   ├── writing/          # WriterViewUI, ToolsPanel, ToolInputs
-│   └── ui/               # Reusable design-system atoms (Button, Modal, Toast, ErrorBoundary, …)
-├── features/             # Redux Toolkit slices: project, settings, status, writer, versionControl, featureFlags
-├── hooks/                # View business logic (use*View.ts naming); useGlobalKeyboardShortcuts
-├── contexts/             # React Context providers: I18nContext, CommandExecutorContext, per-view contexts
-├── services/             # External adapters and domain services
-│   ├── ai/               # aiModeService (execution mode), aiPolicy, aiRetry, routingLogger
-│   │   └── providers/    # openrouterProvider (circuit breaker, free-tier catalog)
-│   ├── copilot/          # heuristicEngine (8 rules), insightGenerator, copilotContextService, actionApplier
-│   ├── commands/         # Command registry: definitions, fuzzyScore, palettePreferences, commandBuilder
-│   ├── keyboard/         # Shortcut matching, OS normalization, conflict detection
-│   ├── help/             # RAG-lite retrieval for in-app help articles
-│   └── settingsExchange/ # Zod-validated settings import/export
-├── locales/              # i18n source JSON (19 locales × 21 modules each)
-├── public/
-│   ├── locales/          # i18n runtime bundles (rebuilt by pnpm run i18n:check / prebuild)
-│   ├── sw.js             # PWA Service Worker
-│   └── manifest.json     # PWA Web App Manifest v3
+│   ├── ai-core/             # Local AI facade/core
+│   ├── collab-transport/    # E2E-enabled y-webrtc vendor fork
+│   ├── worker-bus/          # WorkerBus v2
+│   └── ui/                  # Shared design-system package
+├── locales/                 # Source locale trees
+├── public/                  # PWA assets, manifest, SW, runtime locale bundles
 ├── tests/
-│   ├── unit/             # Vitest unit tests (7750+ tests, 606 files) — count spans tests/, components/, packages/*/tests/, not just this folder
-│   │   ├── ai/           # aiSmallModules, aiCoreFallbackPaths
-│   │   └── settings/     # WebLlmPanel, AiSections
-│   └── e2e/              # Playwright specs + helpers.ts
-├── docs/                 # Extended documentation (CI, A11y, Design System, Tauri, Deployment, …)
-├── src-tauri/            # Tauri v2 desktop app shell + Rust config
-├── turbo.json            # Turborepo pipeline
-└── types.ts              # Shared TypeScript interfaces and types (root level)
+│   ├── unit/                # Vitest unit tests (7750+ tests, 606 files)
+│   └── e2e/                 # Playwright
+├── docs/                    # Canonical product/engineering documentation + ADRs
+├── src-tauri/               # Tauri v2 desktop shell / Rust
+├── scripts/                 # CI, dependency, CSP, metrics, graph and guardrail tooling
+├── config/                  # Shared source-of-truth configuration
+├── package.json
+├── pnpm-workspace.yaml
+├── turbo.json
+└── types.ts
 ```
 
 ---
 
-## Getting Started
+# Getting started for development
 
-### Prerequisites
+## Requirements
 
-A modern browser (Chrome 90+, Firefox 88+, Safari 14+, Edge 90+) is all you need for the web app — no installation required.
+- **Node.js ≥ 22.19.0**
+- **pnpm 11.22.0** (the repository's exact `packageManager` pin)
+- recent evergreen browser
+- **Rust + Tauri prerequisites** only if developing the desktop app
 
-For local development: **Node ≥ 22.19**, **pnpm 11** (`npm install -g pnpm`). For the desktop app: **Rust + Tauri CLI** (`cargo install tauri-cli`).
+Corepack is recommended for pnpm.
 
-### 🔐 Setting Up AI
-
-WorldScript Studio supports local-only AI (no API key) as well as BYOK cloud providers:
-
-#### Option A: Google Gemini / OpenAI / Claude / Grok (BYOK cloud)
-
-1. **Get your key** — e.g. at [Google AI Studio](https://aistudio.google.com/app/apikey) (free tier available)
-2. **Open Settings** → AI Provider → select your provider
-3. **Enter your API key** — encrypted with AES-256-GCM in the local random-key store (browser and desktop WebView); never transmitted except to the provider you select
-
-**Security best practices:**
-- ✅ Your key never leaves your device in plaintext
-- ✅ Encrypted at rest via the Web Crypto API — see [Encryption — which mechanism protects what](#-encryption--which-mechanism-protects-what) for the exact mechanism per platform
-- 🔒 **Recommended:** Restrict your Gemini key to `*.github.io` in Google AI Studio
-
-#### Option B: Ollama (local server)
-
-1. **Install Ollama** and pull a model: `ollama pull qwen3:8b`
-2. Start Ollama (it runs a local HTTP server at `http://localhost:11434` by default)
-3. In Settings → AI Provider → select **Ollama** and verify the connection
-
-#### Option C: OpenRouter (free-tier cloud gateway)
-
-Access 100+ open-source models — including strong free-tier options — through a single API key:
-
-1. **Get a free key** at [openrouter.ai/keys](https://openrouter.ai/keys) (no credit card for `:free` models)
-2. **Open Settings → OpenRouter** → toggle **Enable OpenRouter** → paste your `sk-or-v1-…` key → click **Save**
-3. Choose a preferred model (default: `deepseek/deepseek-r1:free`) or type a custom model ID
-4. Free tier: 20 req/min · 50 req/day without credits. The circuit breaker pauses automatically on rate-limit bursts and resumes after 5 minutes.
-
-> OpenRouter slots in as Cloud 5 in the routing chain: after your configured primary cloud provider but before local fallbacks.
-
-#### Option D: Browser-Native AI (WebGPU / ONNX / Transformers.js)
-
-No installation, no server, no API key — AI runs directly in your browser:
-
-1. **Open Settings → AI Provider** → select **WebLLM**
-2. WorldScript Studio auto-detects WebGPU support and displays your GPU adapter + VRAM tier
-3. **Choose a model** from the dropdown (Llama 3.2 1B/3B, Phi-3.5 Mini, Gemma 2 2B) and click pre-download
-4. If no WebGPU is available, the ONNX Runtime Web layer activates automatically (WASM, any device)
-5. Transformers.js serves as a further fallback — WebGPU or WASM backend, no manual config needed
-
-> All local-inference layers run entirely in-browser. No network call is made for AI inference.
-
-### 🚀 Deploying to GitHub Pages
-
-1. **Fork** this repository
-2. **Enable GitHub Pages:** Settings → Pages → Source: **GitHub Actions**
-3. **Push to `main`** — deployment runs automatically via GitHub Actions
-4. **Access your app** at `https://YOUR-USERNAME.github.io/WorldScript-Studio/`
-
-### ☁️ Deploying to Vercel (alternative)
-
-Vercel is a **first-class** hosting option alongside Pages: connect the repo, use **`pnpm run build`**, output **`dist`**, SPA routing via **[`vercel.json`](vercel.json)**. Use a **custom domain** on Vercel with Vite **`base: '/'`** for clean asset URLs; keep API keys **only in the app** (IndexedDB), not in Vercel env vars for inference. Full checklist: **[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)**.
-
-### 💻 Local Development
+## Clone and install
 
 ```bash
-# Clone the repository
 git clone https://github.com/qnbs/WorldScript-Studio.git
 cd WorldScript-Studio
 
-# Install dependencies (Node ≥ 22.19, pnpm 11) — frozen-lockfile install, never a bare `pnpm install`
+# Important: repository-controlled frozen install + dependency fingerprint.
+# Do not replace this with a bare `pnpm install`.
 node scripts/dependency-state.mjs reconcile
 
-# Start the development server (http://localhost:3000)
-pnpm run dev
+# Install repository git hooks explicitly.
+pnpm run hooks:install
+```
 
-# Build for production
+Why not `pnpm install`?
+
+The repository intentionally uses `scripts/dependency-state.mjs reconcile` so dependency state is:
+- frozen-lockfile consistent;
+- verified;
+- fingerprinted for the repo's guardrails;
+- not silently rewritten by an ordinary install.
+
+On a completely fresh clone, call the `node` script directly because pnpm's workspace dependency-state guard can refuse to launch package scripts before `node_modules` exists.
+
+## Run
+
+```bash
+# Web development server
+pnpm run dev
+# http://localhost:3000
+
+# Production build
 pnpm run build
 
-# Preview the production build locally
+# Preview build
 pnpm run preview
 
-# Run one targeted unit-test file
-pnpm exec vitest run <path>
-
-# Run one targeted unit-test file with coverage
-pnpm exec vitest run <path> --coverage
-
-# Type check
-pnpm run typecheck
-
-# Lint (Biome — warnings fail like CI)
-pnpm run lint
-
-# Check i18n key parity + rebuild runtime bundles
-pnpm run i18n:check
-
-# Tauri desktop app (requires Rust)
+# Tauri desktop development
 pnpm run tauri:dev
 ```
 
-> **Note:** The production build uses Vite manual chunking — `vendor-ai-onnx` for `onnxruntime-web`, separate chunks for `docx`/`jszip`/Yjs — to keep the main bundle small and comply with Workbox's 8 MiB Service Worker cache limit.
+## Useful local checks
 
-### 🌐 Custom Domain Setup
+```bash
+# Repository's low-resource pre-push gate
+pnpm run ci:prepush
 
-1. Create a `CNAME` file in `public/` with your domain:
+# Lint
+pnpm run lint
 
-   ```bash
-   echo "worldscript.yourdomain.com" > public/CNAME
-   ```
+# Typecheck
+pnpm run typecheck
 
-2. Configure DNS at your registrar:
-   - **Subdomain** → CNAME → `your-username.github.io`
-   - **Apex domain** → A records to `185.199.108.153` – `185.199.111.153`
-3. Push changes — the build auto-detects `CNAME` and switches the base path to `/`
-4. Enable HTTPS in GitHub Pages settings
+# i18n parity / bundles / content guard
+pnpm run i18n:check
 
-### 🛠 Troubleshooting
+# One targeted Vitest file
+pnpm exec vitest run <path>
 
-| Problem                   | Solution                                                              |
-| ------------------------- | --------------------------------------------------------------------- |
-| Blank page after deploy   | Verify `base` in `vite.config.ts` matches your repo name              |
-| Assets not loading (404)  | Check `manifest.json` `start_url`; verify `404.html` is in `public/`  |
-| AI features not working   | Check API key in Settings; verify it starts with `AIza` and has quota |
-| WebLLM not loading        | Requires a WebGPU-capable browser (Chrome 113+); check GPU status badge in Settings |
-| Language resets on reload | Clear site data and re-select — should persist via `localStorage`     |
-| IndexedDB migration error | Open DevTools → Application → IndexedDB → delete both stores and reload |
+# One targeted file with coverage, when needed
+pnpm exec vitest run <path> --coverage
+```
+
+Do not invent or substitute scripts; `package.json` is authoritative.
 
 ---
 
-## 🧪 CI & Local Validation
+# Validation and CI
 
-The main pipeline is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Optional **desktop** bundles: [`.github/workflows/tauri-build.yml`](.github/workflows/tauri-build.yml) (`workflow_dispatch` / `v*` tags). Full reference: **[`docs/CI.md`](docs/CI.md)** and **[`docs/TAURI-CI.md`](docs/TAURI-CI.md)**. **CI health / audit log:** **[`.github/CI-AUDIT.md`](.github/CI-AUDIT.md)**.
+WorldScript is intentionally CI-heavy.
 
-| Job          | When / needs        | What it does |
-| ------------ | -------------------- | ------------ |
-| `security`   | every run            | `pnpm audit --audit-level=high`; `osv-scanner` vulnerability scan; gitleaks secrets scan; PRs: dependency review |
-| `quality`    | after `security`     | Biome lint + format, **i18n key parity** (`pnpm run i18n:check`), `tsc --noEmit`, Vitest + V8 coverage (Node **22** + **24**); Codecov upload |
-| `build`      | after `quality`      | Production Vite build, differentiated **chunk budget** from [`config/bundle-budget.json`](config/bundle-budget.json), **rollup analyze** artifact; on `main`: SLSA provenance attestation + Pages artifact |
-| `e2e`        | after `quality`      | Playwright **Chromium**, `CI=true`; JUnit artifact uploaded for per-test PR annotations |
-| `e2e-deep`   | after `quality`, non-blocking | Parametrized feature-flag-matrix smoke suite (`tests/e2e/deep/`) + offline/error-path specs; `continue-on-error: true` |
-| `vrt`        | after `build`, non-blocking   | Visual Regression — Playwright screenshot diffing against `dist` |
-| `mutation`   | after `quality`      | Stryker (`pnpm run mutation`); `break: 75` enforced (high: 85, low: 70) |
-| `lighthouse` | after `build`        | LHCI against `dist` — accessibility `error:0.95`, CLS `error:0.1`, performance `warn:0.4`, SEO `warn:0.8` |
-| `storybook`  | after `quality`      | Static Storybook build artifact |
-| `ci-success` | after required gates | Authoritative aggregate gate; fails when any required prerequisite fails |
-| `deploy`     | `main` only          | GitHub Pages after **`ci-success`** succeeds |
-| `scorecard`  | weekly + `main` push | OpenSSF Scorecard — SARIF uploaded to GitHub Code Scanning |
+## Local workflow
+
+The recommended constrained-machine workflow is:
+
+```bash
+pnpm run ci:prepush
+pnpm exec vitest run <targeted-test-file>
+```
+
+Use additional focused commands only when relevant to the change.
+
+## Heavy suites
+
+Full:
+- coverage;
+- Playwright E2E;
+- deep E2E;
+- Lighthouse;
+- Storybook test runner;
+- mutation testing;
+- broad production qualification
+
+are primarily CI-owned in this repository and can be inappropriate on low-resource developer hardware.
+
+## Quality gates
+
+The main CI includes layers for:
+- workflow/policy validation;
+- dependency/security auditing;
+- lint/typecheck/i18n;
+- unit/integration tests and coverage;
+- production build/bundle budgets;
+- E2E;
+- visual/browser quality;
+- Lighthouse;
+- Storybook;
+- mutation testing;
+- CodeQL;
+- release/deployment evidence where applicable.
+
+Repository-specific governance also includes change-size and documentation/attribution guardrails.
 
 <!-- bundle-budget:source-of-truth -->
 Raw bundle-budget ceilings (KB per uncompressed asset): entry **2500 KB**, vendor **6200 KB**, other JavaScript **2500 KB**, and WASM **30000 KB**.
 
-**Current test metrics (2026-09-10, source-synchronized; CI remains authoritative for pass/fail):**
-- **7750+ unit tests** across **606 test files** — CI is authoritative for pass/fail
-- Coverage thresholds: lines ≥ 80 · branches ≥ 66 · functions ≥ 72 · statements ≥ 78 — enforced in CI (see Codecov badge for live metrics)
-- i18n: **2942 keys × 19 locales** (en/de/fr/es/it + ar/he/fa RTL Beta + ja/zh/pt/el/fi/sv/hu/is/eu/ru/ko Beta)
+### Metrics
 
-**CI-cloud-first workflow (recommended):** On constrained hardware run **`pnpm run lint && pnpm run i18n:check && pnpm run typecheck`** locally, then push and let CI handle coverage, E2E, Lighthouse, and Stryker. Authoritative numbers come from CI artifacts (Codecov, JUnit). After CI goes green, update the README badges and `AUDIT.md` quality-gate line from the reported metrics. See **[`docs/CI.md`](docs/CI.md) § Cloud CI-first vs local development** for the full post-merge doc-update checklist.
+Current source-synchronized README metrics:
 
-**Low-resource / laptop workflow:** Use **`pnpm exec vitest run <path>`** for one targeted file without `--coverage` — fast and memory-light. Never invoke `pnpm test`, `npm run test`, or a bare Vitest wrapper: Vitest enters watch mode and hangs the session on constrained hardware. Full-suite coverage is CI-only; for local debugging, use `pnpm exec vitest run <path> --coverage` on the specific file.
+- **7750+ unit tests** across **606 test files**
+- i18n: **2942 keys × 19 locales**
 
-**Quality-gate parity (matches CI `quality` job exactly):**
+CI remains authoritative for actual pass/fail and live coverage.
 
-```bash
-pnpm run lint && pnpm run i18n:check && pnpm run typecheck
-```
-
-CI adds full-suite coverage; local validation must keep Vitest targeted with `pnpm exec vitest run <path> [--coverage]`.
-
-**Simulate CI locally with [Act](https://github.com/nektos/act):**
-
-```bash
-npm install -g act
-act pull_request --job security --job quality
-act push --job build --job e2e
-```
-
-Shared Playwright helpers (`waitForSpaReady`, `ensureBlankProject`, `clickNavItem`) live in **`tests/e2e/helpers.ts`** — do **not** rely on `networkidle` with the Vite dev server (HMR/WebSocket). Details: **`docs/CI.md`**.
+These README metrics are synchronized by [`scripts/sync-readme-metrics.mjs`](scripts/sync-readme-metrics.mjs); avoid hand-editing generated counts independently of source.
 
 ---
 
-## 🚀 A Creative Workflow
+# Deployment
 
-1. **Conceive** — Start in the **Welcome Portal** — a first-launch onboarding gate that orients you with feature highlights (AI Co-Pilot, Visual Plot Board, Characters & Worlds, Pro Export), an offline-first/privacy assurance, and a one-click demo project — then begin with a Template, the AI Outline Generator, or a blank manuscript.
-2. **Build** — Create **Characters** and **Worlds** with AI. Visualize your cast in the **Character Relationship Graph**.
-3. **Structure** — Refine your plot in the **Outline Generator** or arrange scenes visually on the **Scene Board**.
-4. **Write** — Immerse yourself in the **Manuscript** editor. `@mentions` link characters and worlds. Progress is saved automatically.
-5. **Enhance** — Use the **AI Writing Studio** to continue, improve, generate dialogue, or brainstorm.
-6. **Review** — Run the **AI Critic** for literary feedback, the **Plot-Hole Detector** for logic issues, and the **Consistency Checker** for continuity.
-7. **Snapshot** — Save a project version before major revisions. Restore to any snapshot anytime.
-8. **Export** — Export as Markdown, plain text, Word/DOCX, or a formatted **PDF** with an AI-generated synopsis. Back up your entire library as an encrypted ZIP.
+## GitHub Pages
+
+Canonical static upstream:
+
+```bash
+pnpm run build
+```
+
+Base path:
+```text
+/WorldScript-Studio/
+```
+
+Pushes to `main` deploy only through the repository's CI/deployment flow.
+
+## Vercel
+
+Edge/root deployment:
+
+```bash
+pnpm run build:edge
+```
+
+Output:
+```text
+dist
+```
+
+Vercel is also one of the hosts capable of serving the Claude same-origin proxy.
+
+## Cloudflare Pages
+
+Also uses the edge/root build:
+```bash
+node scripts/dependency-state.mjs reconcile
+pnpm run build:edge
+```
+
+Dashboard Git integration is the preferred deployment path documented by the repo.
+
+## Local parity
+
+```bash
+# GitHub Pages-shaped
+pnpm run build
+pnpm run preview
+
+# Edge/root-shaped
+pnpm run build:edge
+pnpm exec vite preview --base /
+```
+
+See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) before modifying host configuration, CSP, `_headers`, `vercel.json`, or base paths.
 
 ---
 
-## 🤝 Contributing
+# Known limitations and truth boundaries
 
-- **🐛 Report Bugs** — Open a GitHub Issue with details and reproduction steps
-- **💡 Suggest Features** — Open a Discussion or Issue
-- **🌍 Improve Translations** — Five core locale trees (`en` is the reference); native polish for FR/ES/IT especially welcome in PRs
-- **🧪 Write Tests** — Coverage thresholds: branches ≥ 66 %, functions ≥ 72 %, lines ≥ 80 %; contributions to large components (collaboration, AI streaming paths, OpenRouter provider) are particularly valuable
+The project deliberately documents limitations instead of converting them into marketing claims.
 
-See **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for the full dev setup, Biome / Vitest / Playwright guide, and architecture notes.
+### Desktop project-data encryption is not implemented
+
+Tauri filesystem-backed project data is currently plaintext/compressed, not application-encrypted at rest.
+
+### GitHub Pages cannot run Claude
+
+Claude requires the same-origin serverless relay on web/PWA. Static GitHub Pages cannot provide it.
+
+### Local AI is not zero-install in the strict sense
+
+Browser-native models require a first download and sufficient browser storage/RAM/GPU/CPU support.
+
+### Browser Ollama is opt-in
+
+The web/PWA does not probe localhost by default. Direct browser→Ollama requires explicit opt-in and compatible server CORS/origin configuration.
+
+### No central Cloud Sync product
+
+There is no WorldScript account-backed cloud manuscript synchronization product today. The experimental Yjs local-first shadow path is not a replacement for that and remains off by default.
+
+### Translation quality is not uniform
+
+All locale trees have key parity, but only the production tier should be treated as fully polished. Beta locales can contain machine-translated prose or English long-form help fallback.
+
+### Accessibility is a target, not a legal certification
+
+Automated gates support the WCAG-oriented engineering goal, but they do not constitute formal conformance certification.
+
+### Experimental/default-on are different concepts
+
+Some advanced features are enabled by default while still undergoing deeper production-path qualification. Treat runtime evidence and feature documentation as authoritative rather than inferring maturity from the default bit.
+
+### IDB recovery can intentionally stop
+
+If encrypted-store verification reaches `recovery-required`, WorldScript does not auto-delete or auto-reconcile uncertain data.
+
+### Host deployments are not identical
+
+GitHub Pages, Vercel, Cloudflare Pages, Docker/nginx, and Tauri have different header, proxy, native-network, and persistence capabilities.
+
+---
+
+# Roadmap
+
+The roadmap is intentionally separated from shipped-product claims.
+
+Current strategic direction includes:
+- further AI provider/model/routing qualification;
+- deeper feature-flag E2E and production-bundle coverage;
+- local AI / voice hardening;
+- accessibility and native-language review;
+- plugin-system graduation;
+- local-first state evolution;
+- desktop protected-storage work;
+- renderer-neutral Rust Core extraction;
+- a **planned** Qt 6 / Qt Quick native desktop strategy after prerequisite core/data-integrity work;
+- GPUI as a separately gated later exploration, not a current implementation commitment.
+
+React/PWA remains the first-class current web product. Tauri is the current desktop shell. Qt/GPUI planning documents must not be read as evidence that those renderers are already implemented.
+
+See:
+- [`ROADMAP.md`](ROADMAP.md)
+- [`TODO.md`](TODO.md)
+- [`docs/native/ROADMAP-QT-GPUI-DESKTOP.md`](docs/native/ROADMAP-QT-GPUI-DESKTOP.md)
+- [`docs/native/CORE-MIGRATION-LEDGER.md`](docs/native/CORE-MIGRATION-LEDGER.md)
+- [`docs/native/GPUI-EXPLORATIONS.md`](docs/native/GPUI-EXPLORATIONS.md)
+
+---
+
+# Contributing
+
+Contributions are welcome.
+
+Start with [`CONTRIBUTING.md`](CONTRIBUTING.md), which documents:
+- dependency reconciliation;
+- hooks;
+- branching/commit conventions;
+- local-vs-CI test strategy;
+- TypeScript/Biome rules;
+- accessibility;
+- security;
+- pull-request process.
+
+A minimal setup:
+
+```bash
+git clone https://github.com/qnbs/WorldScript-Studio.git
+cd WorldScript-Studio
+node scripts/dependency-state.mjs reconcile
+pnpm run hooks:install
+pnpm run dev
+```
+
+Before pushing:
+```bash
+pnpm run ci:prepush
+```
+
+Keep pull requests causally scoped and allow repository governance/checks to define the actual merge bar.
+
+---
+
+# Security reporting
+
+**Do not open a public issue for a vulnerability.**
+
+Use GitHub Private Vulnerability Reporting:
+
+https://github.com/qnbs/WorldScript-Studio/security/advisories/new
+
+The repository security policy defines:
+- reporting channel;
+- disclosure/embargo expectations;
+- threat-model references;
+- current security scope.
+
+See:
+- [`.github/SECURITY.md`](.github/SECURITY.md)
+- [`docs/SECURITY-THREAT-MODEL.md`](docs/SECURITY-THREAT-MODEL.md)
 
 ---
 
 ## 📚 Documentation Hub
 
-| Document | Description |
-| -------- | ----------- |
-| [`README.md`](README.md) | Product overview, features, getting started (this file) |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Dev setup, Biome/Vitest/Playwright, architecture notes |
-| [`CHANGELOG.md`](CHANGELOG.md) | Keep a Changelog–style release notes |
-| [`ROADMAP.md`](ROADMAP.md) | Long-term features and quarterly planning |
-| [`TODO.md`](TODO.md) | Current sprint tasks and status |
-| [`AUDIT.md`](AUDIT.md) | Security & quality audit trail + scorecard |
-| [`docs/AUDIT-PERFECTION-PLAN-v1.23.md`](docs/AUDIT-PERFECTION-PLAN-v1.23.md) | Living master plan for the v1.23 audit/perfection engagement (phase status + batch log) |
-| [`docs/CI.md`](docs/CI.md) | GitHub Actions jobs, Node/pnpm parity, Act examples |
-| [`docs/DEPENDABOT-TRIAGE.md`](docs/DEPENDABOT-TRIAGE.md) | Dependabot PR triage strategy — ecosystem/grouping config, why there's no auto-merge, merge sequencing discipline |
-| [`docs/CODEANT-REVIEW-LOOP.md`](docs/CODEANT-REVIEW-LOOP.md) | Canonical, agent-agnostic PR review correction loop (CodeRabbit/CodeAnt/any bot) — GraphQL fetch/reply/resolve, PR-size split, merge rules |
-| [`docs/DEEPSOURCE-REVIEW-LOOP.md`](docs/DEEPSOURCE-REVIEW-LOOP.md) | DeepSource static-analysis correction loop (living runbook; complements the CodeAnt loop) |
-| [`docs/DEEPSOURCE-REMEDIATION-PLAN.md`](docs/DEEPSOURCE-REMEDIATION-PLAN.md) | Prioritised DeepSource backlog tracker (P0-security→P5-docs) with triage decisions |
-| [`docs/adr/`](docs/adr/README.md) | Architecture Decision Records — state-management boundaries, local-AI stack layering, WorkerBus v2 hybrid routing |
-| [`docs/native/ROADMAP-QT-GPUI-DESKTOP.md`](docs/native/ROADMAP-QT-GPUI-DESKTOP.md) | Qt-first native desktop roadmap (ADR-0021) — 22-entry execution plan (Wave 0–20 plus Wave 4.5): renderer-neutral Rust Core → Qt Hardened Edition; GPUI is a separately gated exploration in `docs/native/GPUI-EXPLORATIONS.md`; CEF retired, historical record in `docs/historical/cef/` |
-| [`docs/native/GPUI-EXPLORATIONS.md`](docs/native/GPUI-EXPLORATIONS.md) | Deferred GPUI feasibility record — preserved proof targets and re-entry criteria, with no current implementation commitment |
-| [`docs/native/QT-EARLY-KILLER-GATES.md`](docs/native/QT-EARLY-KILLER-GATES.md) | Evidence-first Qt feasibility qualification — lifecycle, accessibility/input, packaging/update trust, crash/recovery, and security checks before substantial native UI investment |
-| [`docs/native/CORE-MIGRATION-LEDGER.md`](docs/native/CORE-MIGRATION-LEDGER.md) | Rust Core extraction priority order — what's moved out of TypeScript vs. deferred, and why |
-| [`docs/architecture/native-readiness.md`](docs/architecture/native-readiness.md) | Native-Readiness scorecard (see ADR-0021) — cross-cutting architecture-quality checklist, re-scored at every architecture-changing PR |
-| [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md) | A11y architecture (live regions, focus, WCAG 2.2, Lighthouse 0.95 gate) |
-| [`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md) | Engineering + content guidelines, glossary, CI parity checklist |
-| [`docs/Design-System.md`](docs/Design-System.md) | Tokens, Tailwind preset, UI primitives under `components/ui` |
-| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | GitHub Pages + Vercel + Cloudflare Pages — `build` vs `build:edge`, SPA routing |
-| [`docs/REPO-HOUSEKEEPING.md`](docs/REPO-HOUSEKEEPING.md) | GitHub language stats (Linguist), i18n bundles, cold-start translation fixes |
-| [`docs/PLOT-BOARD.md`](docs/PLOT-BOARD.md) | Plot-Board v2 architecture: canvas, connections, subplots, tension curve |
-| [`docs/PROGRESS-TRACKER.md`](docs/PROGRESS-TRACKER.md) | Progress Tracker: session lifecycle, streak algorithm, SVG charts |
-| [`docs/history/sprints/SPRINT-V1.5.md`](docs/history/sprints/SPRINT-V1.5.md) | Sprint reference: v1.5 local-AI architecture implementation plan |
-| [`docs/history/sprints/SPRINT-V1.6.md`](docs/history/sprints/SPRINT-V1.6.md) | Sprint reference: v1.6 Plot-Board v2 & Writer Experience |
-| [`docs/history/sprints/SPRINT-V1.7.md`](docs/history/sprints/SPRINT-V1.7.md) | Sprint reference: v1.7 DuckDB Analytics + Hybrid RAG + AI Extensions |
-| [`docs/history/sprints/SPRINT-V1.8.md`](docs/history/sprints/SPRINT-V1.8.md) | Sprint reference: v1.8 RAG prompt assembly + Writer/Plot Board AI |
-| [`docs/history/sprints/SPRINT-V1.9.md`](docs/history/sprints/SPRINT-V1.9.md) | Sprint reference: v1.9 lazy loading, Help/Settings hub, Tauri desktop UX |
-| [`docs/history/sprints/SPRINT-V1.10.md`](docs/history/sprints/SPRINT-V1.10.md) | Sprint reference: v1.10 mobile UX, coverage 55 %, deploy & help expansion |
-| [`docs/COPILOT.md`](docs/COPILOT.md) | Global AI Copilot v2 — panel modes, heuristics, Apply-to-chapter, ProForge integration |
-| [`docs/LOCAL-AI.md`](docs/LOCAL-AI.md) | Local AI setup & troubleshooting — WebGPU/WASM requirements, model downloads, storage management, fallback chain |
-| [`docs/HEURISTIC-RULES.md`](docs/HEURISTIC-RULES.md) | Heuristic Rules Reference — 8 built-in manuscript analysis rules, how-to-satisfy guidance |
-| [`docs/LANGUAGETOOL.md`](docs/LANGUAGETOOL.md) | LanguageTool grammar/spell integration — self-hosted setup, privacy model, locale coverage, architecture |
-| [`docs/PROFORGE-PIPELINE.md`](docs/PROFORGE-PIPELINE.md) | ProForge Ultimate Author Pipeline — 8-stage agentic editing system architecture |
-| [`docs/history/sprints/SPRINT-HANDOFF-2026-05-27.md`](docs/history/sprints/SPRINT-HANDOFF-2026-05-27.md) | Sprint handoff: v1.18.0/v1.18.1 ProForge Humanization & Refinement + TypeScript strict-mode sweep |
-| [`docs/history/sprints/SPRINT-HANDOFF-2026-05-28.md`](docs/history/sprints/SPRINT-HANDOFF-2026-05-28.md) | Sprint handoff: v1.19.0 Phase 2 — B-1..B-8 security, voice WASM, collab-transport, a11y gate, RTL |
-| [`docs/history/sprints/SPRINT-HANDOFF-2026-06-01.md`](docs/history/sprints/SPRINT-HANDOFF-2026-06-01.md) | Sprint handoff: 2026-06-01 CI hardening — 14 CodeAnt AI fixes, E2E stabilisation (24→0), prune-deployments, node24 upgrade |
-| [`docs/IDB-ENCRYPTION.md`](docs/IDB-ENCRYPTION.md) | IDB at-rest encryption architecture (B-1, AES-256-GCM, passphrase-derived key) |
-| [`docs/VOICE_MASTER_PLAN.md`](docs/VOICE_MASTER_PLAN.md) | Voice Full Support master plan — foundation v1.0 complete, WASM scaffold (B-2) in v1.19.0 |
-| [`docs/PWA-AUDIT.md`](docs/PWA-AUDIT.md) | PWA manifest, service worker, share-target checklist |
-| [`infra/low-end-ci/`](infra/low-end-ci/) | Local CI on low-end hardware (act + Eco-Forgejo) |
-| [`docs/TAURI-CI.md`](docs/TAURI-CI.md) | Tauri desktop workflow: manual/tag builds, 7-step first-release checklist |
-| [`docs/native/INTEL-MACOS-QUALIFICATION.md`](docs/native/INTEL-MACOS-QUALIFICATION.md) | Intel macOS (x86_64) qualification-only build lane status (`macos-15-intel`), not yet in the release matrix |
-| [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md) | Tauri plugin-updater: secrets table, `latest.json` auto-generation, signing |
-| [`docs/graphify.md`](docs/graphify.md) | Graphify knowledge graph — multi-modal AST graph (`pnpm run graphify:update`) |
-| [`docs/codegraph.md`](docs/codegraph.md) | CodeGraph semantic code intelligence — MCP-powered symbol graph (`pnpm run codegraph:update`) |
-| [`docs/dual-graph-setup.md`](docs/dual-graph-setup.md) | Master guide for using Graphify + CodeGraph together |
-| [`docs/history/completed-v1.1.md`](docs/history/completed-v1.1.md) | Archived release notes (v1.1.x) |
-| [`tests/e2e/helpers.ts`](tests/e2e/helpers.ts) | Playwright helpers (no `networkidle` under Vite, portal bootstrap, sidebar scope) |
-| [`.cursorrules`](.cursorrules) | **QNBS v3** — Cursor AI behavior for qnbs repos |
-| [`CLAUDE.md`](CLAUDE.md) | Guidance for Claude Code |
-| [`.github/copilot-instructions.md`](.github/copilot-instructions.md) | GitHub Copilot Chat context |
-| [`.github/SECURITY.md`](.github/SECURITY.md) | Vulnerability reporting policy |
-| [`.github/ACTIONS-OPTIMIZATIONS.md`](.github/ACTIONS-OPTIMIZATIONS.md) | Historical CI optimization notes (canonical: [`docs/CI.md`](docs/CI.md)) |
+> **Public documentation:**
+> - **English:** https://qnbs.gitbook.io/worldscript-studio/
+> - **Deutsch:** https://qnbs.gitbook.io/worldscript-studio/de/
+> - **DeepWiki:** https://deepwiki.com/qnbs/WorldScript-Studio
+>
+> GitBook is the polished reader-facing documentation site. DeepWiki is an additional code-derived repository exploration surface. Repository source, current ADRs, security documents, configuration and current CI remain authoritative when generated or published prose diverges.
+
+The README is the product/entry-point overview. Detailed operational truth should live in focused documents rather than making this file an archive of every historical sprint.
+
+## User/product/runtime
+
+| Document | Purpose |
+| --- | --- |
+| [`docs/LOCAL-AI.md`](docs/LOCAL-AI.md) | Browser-native AI, model downloads, Ollama/local servers |
+| [`docs/COPILOT.md`](docs/COPILOT.md) | Global Copilot |
+| [`docs/LANGUAGETOOL.md`](docs/LANGUAGETOOL.md) | Grammar/spell integration and privacy boundary |
+| [`docs/PLOT-BOARD.md`](docs/PLOT-BOARD.md) | Plot Board v2 |
+| [`docs/PROGRESS-TRACKER.md`](docs/PROGRESS-TRACKER.md) | Goals, sessions, streaks, charts |
+| [`docs/PROFORGE-PIPELINE.md`](docs/PROFORGE-PIPELINE.md) | ProForge pipeline |
+| [`docs/HEURISTIC-RULES.md`](docs/HEURISTIC-RULES.md) | Offline heuristic analysis rules |
+| [`docs/IDB-ENCRYPTION.md`](docs/IDB-ENCRYPTION.md) | Browser IDB at-rest encryption lifecycle |
+
+## Security / deployment / desktop
+
+| Document | Purpose |
+| --- | --- |
+| [`docs/SECURITY-THREAT-MODEL.md`](docs/SECURITY-THREAT-MODEL.md) | STRIDE model and mitigation map |
+| [`.github/SECURITY.md`](.github/SECURITY.md) | Vulnerability reporting |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | GitHub Pages / Vercel / Cloudflare deployment |
+| [`docs/TAURI-CI.md`](docs/TAURI-CI.md) | Desktop build workflow |
+| [`docs/TAURI-UPDATER.md`](docs/TAURI-UPDATER.md) | Updater/signing configuration |
+| [`docs/PWA-AUDIT.md`](docs/PWA-AUDIT.md) | PWA behavior/audit |
+
+## Engineering
+
+| Document | Purpose |
+| --- | --- |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Development workflow |
+| [DeepWiki](https://deepwiki.com/qnbs/WorldScript-Studio) | Code-derived repository documentation / exploration view; keep the top README badge intact |
+| [`docs/CI.md`](docs/CI.md) | CI architecture and local parity |
+| [`docs/BEST-PRACTICES.md`](docs/BEST-PRACTICES.md) | Engineering/content conventions |
+| [`docs/Design-System.md`](docs/Design-System.md) | Design tokens and UI primitives |
+| [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md) | Accessibility architecture |
+| [`docs/adr/README.md`](docs/adr/README.md) | Architecture Decision Records |
+| [`AUDIT.md`](AUDIT.md) | Security/quality audit trail |
+| [`CHANGELOG.md`](CHANGELOG.md) | Release/change history |
+| [`ROADMAP.md`](ROADMAP.md) | Forward-looking strategy |
+| [`TODO.md`](TODO.md) | Current execution backlog |
+| [`docs/DEPENDABOT-TRIAGE.md`](docs/DEPENDABOT-TRIAGE.md) | Dependency update discipline |
+| [`docs/CODEANT-REVIEW-LOOP.md`](docs/CODEANT-REVIEW-LOOP.md) | Review/convergence runbook |
+| [`docs/DEEPSOURCE-REVIEW-LOOP.md`](docs/DEEPSOURCE-REVIEW-LOOP.md) | Static-analysis convergence |
+
+## Code-intelligence tooling
+
+- [`docs/graphify.md`](docs/graphify.md)
+- [`docs/codegraph.md`](docs/codegraph.md)
+- [`docs/dual-graph-setup.md`](docs/dual-graph-setup.md)
+
+## Historical material
+
+Past sprint handoffs, completed plans, and superseded implementation records live under [`docs/history/`](docs/history/) and related historical directories. They are useful for archaeology, but **current source, current ADRs, current security docs, and current CI are authoritative**.
+
+> [!IMPORTANT]
+> The **Ask DeepWiki** badge at the top of this README is an intentional long-lived documentation integration and should not be removed during README redesigns without an explicit repository-level decision.
 
 ---
+
+# License and disclaimer
+
+WorldScript Studio is licensed under the **MIT License**. See [`LICENSE`](LICENSE).
+
+The software is provided **"AS IS"**, without warranty, under the terms of that license.
+
+WorldScript Studio is creative-writing software. AI-generated or heuristic output can be incomplete, incorrect, biased, or unsuitable for a specific purpose. Users remain responsible for:
+- their manuscript and published content;
+- provider/API terms and costs;
+- copyright and licensing obligations;
+- backups and passphrases;
+- compliance with applicable law.
+
+WorldScript Studio does not provide medical, legal, financial, or other professional advice.
+
+---
+
+<p align="center">
+  <strong>Your manuscript remains yours. AI remains optional. The project stays local by default.</strong>
+</p>
