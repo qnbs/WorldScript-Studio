@@ -9,6 +9,7 @@ import {
   evaluatePrSize,
   evaluatePrSizeSnapshot,
   formatReport,
+  getChangedFilesNumstat,
   getStagedChangedPaths,
   isAllDocs,
   parseNumstat,
@@ -961,6 +962,24 @@ describe('evaluatePrSize', () => {
       expect(result.severity?.blocking).toBe(false);
       expect(result.severity?.tier).toBe('exception');
     });
+  });
+});
+
+describe('gitattributes override locking', () => {
+  it('fails closed when another prospective check owns the shared attributes lock', () => {
+    const gitPath = '/tmp/pr-size-test/info/attributes';
+    const spawnSync = (_command: string, args: string[]) => {
+      if (args[0] === 'rev-parse' && args[1] === '--git-path')
+        return { status: 0, stdout: `${gitPath}\n`, stderr: '' };
+      throw new Error('git diff must not run while the lock is held');
+    };
+    const openSync = () => {
+      const error = new Error('lock held') as Error & { code: string };
+      error.code = 'EEXIST';
+      throw error;
+    };
+
+    expect(getChangedFilesNumstat('base', 'head', { spawnSync, openSync })).toBeNull();
   });
 });
 

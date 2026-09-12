@@ -1,5 +1,13 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  openSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+  writeSync,
+} from 'node:fs';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 import { classifyFile } from './ci-prepush-classifier.mjs';
@@ -46,6 +54,47 @@ function resolveInfoAttributesPath(dependencies = {}) {
   return output === null ? null : output.trim();
 }
 
+// QNBS-v3: staged checks must fail closed if another process owns the shared attributes override.
+function withExclusiveAttributesLock(attrPath, dependencies, fn) {
+  const open = dependencies.openSync ?? openSync;
+  const close = dependencies.closeSync ?? closeSync;
+  const write = dependencies.writeSync ?? writeSync;
+  const unlink = dependencies.unlinkSync ?? unlinkSync;
+  const lockPath = `${attrPath}.pr-size.lock`;
+  let handle;
+  try {
+    handle = open(lockPath, 'wx');
+    write(handle, `${process.pid}\n`);
+  } catch {
+    if (handle !== undefined) {
+      try {
+        close(handle);
+      } catch {
+        // best-effort close after an unsuccessful lock acquisition
+      }
+      try {
+        unlink(lockPath);
+      } catch {
+        // another owner may have replaced the lock; never remove it blindly
+      }
+    }
+    return null;
+  }
+  try {
+    return fn();
+  } finally {
+    try {
+      close(handle);
+    } finally {
+      try {
+        unlink(lockPath);
+      } catch {
+        // best-effort cleanup; a stale lock fails closed on the next invocation
+      }
+    }
+  }
+}
+
 // QNBS-v3: a PR-controlled "path -diff" in .gitattributes hides edits from numstat — override locally.
 // QNBS-v3: "!diff" unspecifies (not forces-true) so genuine binaries still auto-detect, unlike a bare "diff".
 function withNeutralizedDiffAttribute(dependencies, fn) {
@@ -55,24 +104,26 @@ function withNeutralizedDiffAttribute(dependencies, fn) {
   const unlink = dependencies.unlinkSync ?? unlinkSync;
   const attrPath = resolveInfoAttributesPath(dependencies);
   if (!attrPath) return fn();
-  const hadFile = exists(attrPath);
-  const original = hadFile ? readFile(attrPath, 'utf8') : '';
-  try {
-    const separator = original && !original.endsWith('\n') ? '\n' : '';
-    writeFile(attrPath, `${original}${separator}* !diff\n`);
-  } catch {
-    return fn(); // best-effort — proceed unprotected rather than fail the whole check
-  }
-  try {
-    return fn();
-  } finally {
+  return withExclusiveAttributesLock(attrPath, dependencies, () => {
+    const hadFile = exists(attrPath);
+    const original = hadFile ? readFile(attrPath, 'utf8') : '';
     try {
-      if (hadFile) writeFile(attrPath, original);
-      else unlink(attrPath);
+      const separator = original && !original.endsWith('\n') ? '\n' : '';
+      writeFile(attrPath, `${original}${separator}* !diff\n`);
     } catch {
-      // best-effort restore; a leftover override in a CI-ephemeral checkout is harmless
+      return fn(); // best-effort — proceed unprotected rather than fail the whole check
     }
-  }
+    try {
+      return fn();
+    } finally {
+      try {
+        if (hadFile) writeFile(attrPath, original);
+        else unlink(attrPath);
+      } catch {
+        // best-effort restore; a leftover override in a CI-ephemeral checkout is harmless
+      }
+    }
+  });
 }
 
 // QNBS-v3: -z gives raw UTF-8 paths (git otherwise octal-escapes non-ASCII) and keeps rename detection.

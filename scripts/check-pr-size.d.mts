@@ -6,6 +6,9 @@ export interface GitDependencies {
   ) => { status: number | null; stdout: string; stderr: string; error?: Error };
   readFileSync?: (path: string, encoding: 'utf8') => string;
   existsSync?: (path: string) => boolean;
+  openSync?: (path: string, flags: string) => number;
+  closeSync?: (handle: number) => void;
+  writeSync?: (handle: number, content: string) => number;
   writeFileSync?: (path: string, content: string) => void;
   unlinkSync?: (path: string) => void;
   env?: NodeJS.ProcessEnv;
