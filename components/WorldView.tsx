@@ -64,9 +64,7 @@ const startWorldImageLoad = ({
   let isMounted = true;
   void loadStoredWorldImage(id, projectId)
     .then((image) => {
-      const isCurrentProject =
-        projectIdentity === null ||
-        identityUnchanged(projectIdentity, captureActiveProjectIdentity());
+      const isCurrentProject = identityUnchanged(projectIdentity, captureActiveProjectIdentity());
       if (isMounted && isCurrentProject) setImageUrl(image);
     })
     .catch((error) => {

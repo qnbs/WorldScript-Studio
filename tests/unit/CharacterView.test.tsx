@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { appStoreRef } from '../../app/storeRef';
 import { CharacterView } from '../../components/CharacterView';
@@ -15,7 +15,7 @@ const mockConfirmDelete = vi.fn();
 const mockProjectState = {
   settings: { editorFont: 'serif', fontSize: 16, lineSpacing: 1.5 },
   project: {
-    present: null as { data: { id: string }; generation: number } | null,
+    present: { data: { id: 'p1' }, generation: 0 },
   },
 };
 
@@ -85,7 +85,7 @@ vi.mock('../../features/project/thunks/characterThunks', () => ({
 }));
 
 beforeEach(() => {
-  mockProjectState.project.present = null;
+  mockProjectState.project.present = { data: { id: 'p1' }, generation: 0 };
   appStoreRef.current = {
     getState: () => mockProjectState,
     dispatch: vi.fn(),
@@ -211,15 +211,12 @@ describe('CharacterView', () => {
     } as never);
     render(<CharacterView />);
     // QNBS-v3: id now leads, projectId trails, matching the reordered getImage signature.
-    await waitFor(() =>
-      expect(storageService.getImage).toHaveBeenCalledWith('c-broken', 'default'),
-    );
+    await waitFor(() => expect(storageService.getImage).toHaveBeenCalledWith('c-broken', 'p1'));
     expect(screen.queryByAltText('Robin')).toBeNull();
   });
 
   // QNBS-v3: [Grund: deferred read identity fence / Impact: reject stale image completion / Kreativer Mehrwert: keep a replacement incarnation visually isolated]
   it('does not apply a deferred avatar read after the project incarnation changes', async () => {
-    mockProjectState.project.present = { data: { id: 'p1' }, generation: 0 };
     let resolveImage!: (value: string) => void;
     vi.mocked(storageService.getImage).mockReturnValueOnce(
       new Promise<string>((resolve) => {
@@ -246,8 +243,10 @@ describe('CharacterView', () => {
     await waitFor(() => expect(storageService.getImage).toHaveBeenCalledWith('c-stale', 'p1'));
 
     mockProjectState.project.present.generation = 1;
-    resolveImage('data:image/png;base64,STALE');
-    await Promise.resolve();
+    await act(async () => {
+      resolveImage('data:image/png;base64,STALE');
+      await Promise.resolve();
+    });
 
     expect(screen.queryByAltText('Stale Avatar')).toBeNull();
   });

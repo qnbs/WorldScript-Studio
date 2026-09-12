@@ -63,6 +63,9 @@ vi.mock('../../../features/project/projectIdentity', () => ({
   getProjectTargetStorageId: () => 'w-project-1',
   identityUnchanged: (captured: string | null, live: string | null) =>
     captured !== null && captured === live,
+  assertProjectIdentityUnchanged: (captured: string | null, live: string | null) => {
+    if (captured === null || captured !== live) throw new Error('stale project operation');
+  },
   isStaleProjectOperationError: mockIsStaleError,
 }));
 
@@ -417,6 +420,27 @@ describe('handleGenerateImage', () => {
     expect(mockIsStaleError).toHaveBeenCalledWith({ name: 'StaleProjectOperationError' });
     expect(result.current.isGeneratingImage).toBe(false);
   });
+
+  it('silently discards a stale refined image result', async () => {
+    mockDispatch.mockResolvedValue({
+      type: 'project/generateWorldImage/rejected',
+      error: { name: 'StaleProjectOperationError' },
+    });
+    mockImageMatch.mockReturnValue(false);
+    mockIsStaleError.mockReturnValue(true);
+
+    const { result } = renderHook(() => useWorldView());
+    act(() => {
+      result.current.handleSelect(makeWorld('w1'));
+      result.current.setRefinementPrompt('more atmosphere');
+    });
+    await act(async () => {
+      await result.current.handleRefineImage();
+    });
+
+    expect(mockToast.error).not.toHaveBeenCalled();
+    expect(result.current.isRefiningImage).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -461,6 +485,8 @@ describe('confirmDelete', () => {
     );
     expect(result.current.isAtlasOpen).toBe(false);
     expect(result.current.selectedWorld).toBeNull();
+    const admission = mockDeleteImage.mock.calls[0]?.[2] as (() => void) | undefined;
+    admission?.();
   });
 
   it('clears a stale delete confirmation without dispatching a deletion', async () => {
@@ -470,6 +496,37 @@ describe('confirmDelete', () => {
     act(() => result.current.handleDelete('w1'));
     mockIsStaleError.mockReturnValue(true);
     mockDeleteImage.mockRejectedValueOnce({ name: 'StaleProjectOperationError' });
+
+    await act(async () => {
+      await result.current.confirmDelete();
+    });
+
+    expect(result.current.worldToDelete).toBeNull();
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'project/deleteWorld', payload: 'w1' }),
+    );
+  });
+
+  it('clears a confirmation when the active project changes before delete starts', async () => {
+    const { result } = renderHook(() => useWorldView());
+    act(() => result.current.setWorldToDelete(makeWorld('w1')));
+    mockCaptureIdentity.mockReturnValue('id:replacement');
+
+    await act(async () => {
+      await result.current.confirmDelete();
+    });
+
+    expect(result.current.worldToDelete).toBeNull();
+    expect(mockDeleteImage).not.toHaveBeenCalled();
+  });
+
+  it('clears a confirmation when the active project changes after storage', async () => {
+    const world = makeWorld('w1', 'Arda');
+    const { result } = renderHook(() => useWorldView());
+    act(() => result.current.setWorldToDelete(world));
+    mockDeleteImage.mockImplementationOnce(async () => {
+      mockCaptureIdentity.mockReturnValue('id:replacement');
+    });
 
     await act(async () => {
       await result.current.confirmDelete();

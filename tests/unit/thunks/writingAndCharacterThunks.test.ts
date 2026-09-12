@@ -475,6 +475,7 @@ describe('generateCharacterPortraitThunk', () => {
       .calls[0]!;
     expect([imageId, imageData, projectId]).toEqual(['c42', 'portraitdata', 'default']);
     expect(writeAdmission).toEqual(expect.any(Function));
+    writeAdmission?.();
   });
 
   it('appends style to description when style is provided', async () => {
@@ -545,6 +546,40 @@ describe('uploadCharacterImageThunk', () => {
       'default',
       expect.any(Function),
     );
+    const writeAdmission = vi.mocked(storageService.saveImage).mock.calls[0]?.[3];
+    expect(writeAdmission).toEqual(expect.any(Function));
+    (writeAdmission as (() => void) | undefined)?.();
+  });
+
+  it('rejects when the project changes before the upload reaches storage', async () => {
+    let triggerLoad: (() => void) | undefined;
+    vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(function (this: FileReader) {
+      Object.defineProperty(this, 'result', {
+        value: 'data:image/png;base64,late-upload',
+        configurable: true,
+      });
+      triggerLoad = () => this.onload?.(new ProgressEvent('load') as ProgressEvent<FileReader>);
+    });
+
+    const store = makeStore();
+    const pending = store.dispatch(
+      uploadCharacterImageThunk({
+        characterId: 'c-before-storage',
+        file: new File(['data'], 'portrait.png', { type: 'image/png' }),
+      }),
+    );
+    store.dispatch(
+      projectActions.resetProject({
+        title: 'Replacement',
+        logline: '',
+        chapter1Title: 'Chapter 1',
+      }),
+    );
+    triggerLoad?.();
+
+    const action = await pending;
+    expect(action.type).toBe('project/uploadCharacterImage/rejected');
+    expect(storageService.saveImage).not.toHaveBeenCalled();
   });
 
   it('dispatches fulfilled with characterId', async () => {

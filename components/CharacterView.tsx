@@ -64,9 +64,7 @@ const startCharacterImageLoad = ({
   let isMounted = true;
   void loadStoredCharacterImage(id, projectId)
     .then((image) => {
-      const isCurrentProject =
-        projectIdentity === null ||
-        identityUnchanged(projectIdentity, captureActiveProjectIdentity());
+      const isCurrentProject = identityUnchanged(projectIdentity, captureActiveProjectIdentity());
       if (isMounted && isCurrentProject) setImageUrl(image);
     })
     .catch((error) => {
