@@ -762,8 +762,22 @@ async function reconcileLocalFirstHandle(
       await handle.persistence.clearData();
     } catch (error) {
       // QNBS-v3: a failed plaintext wipe must abort this sync and force the encryption-active NOOP path instead of silently treating remanence as removed.
+      let teardownFailed = false;
+      let teardownError: unknown;
+      try {
+        await handle.persistence.destroyStrict();
+      } catch (error) {
+        teardownFailed = true;
+        teardownError = error;
+      }
+      // QNBS-v3: use the strict teardown boundary before dropping the cached handle, so a failed provider detach is observable instead of leaving an untracked persistence instance behind.
       localFirstHandle = null;
-      await handle.persistence.destroy().catch(() => undefined);
+      if (teardownFailed) {
+        logger.error(
+          'Local-First plaintext cleanup and provider teardown both failed; persistence disabled:',
+          teardownError,
+        );
+      }
       throw new LocalFirstPlaintextCleanupError(error);
     }
     await handle.persistence.destroy().catch(() => undefined);

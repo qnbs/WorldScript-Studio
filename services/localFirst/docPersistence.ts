@@ -38,6 +38,8 @@ export interface DocPersistence {
   readonly active: boolean;
   /** Detach the provider (does not delete data). */
   destroy(): Promise<void>;
+  /** Detach the provider and preserve any underlying teardown failure for security boundaries. */
+  destroyStrict(): Promise<void>;
   /** Delete the persisted data for this project; rejects when the underlying wipe fails. */
   clearData(): Promise<void>;
 }
@@ -47,6 +49,7 @@ export const NOOP_PERSISTENCE: DocPersistence = {
   whenSynced: Promise.resolve(),
   active: false,
   destroy: () => Promise.resolve(),
+  destroyStrict: () => Promise.resolve(),
   clearData: () => Promise.resolve(),
 };
 
@@ -56,6 +59,7 @@ function createTransientResetDeniedPersistence(): DocPersistence {
     whenSynced: Promise.resolve(),
     active: false,
     destroy: () => Promise.resolve(),
+    destroyStrict: () => Promise.resolve(),
     clearData: () => Promise.resolve(),
   };
 }
@@ -95,7 +99,9 @@ export function persistProjectDoc(projectId: string, doc: Y.Doc): DocPersistence
   };
   // QNBS-v3: a plaintext wipe failure is a security-boundary failure and must reach the reconciliation caller instead of being mistaken for successful removal.
   const beginClearData = (): Promise<void> => {
-    if (rawDestroyPromise) return Promise.resolve();
+    if (rawDestroyPromise) {
+      return Promise.reject(new Error('Cannot clear persisted data after destruction has started'));
+    }
     if (!rawClearDataPromise) {
       rawClearDataPromise = Promise.resolve().then(() => provider.clearData());
     }
@@ -123,6 +129,7 @@ export function persistProjectDoc(projectId: string, doc: Y.Doc): DocPersistence
       return rawDestroyPromise === null;
     },
     destroy,
+    destroyStrict: beginDestroy,
     clearData: beginClearData,
   };
 }

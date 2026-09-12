@@ -23,6 +23,15 @@ describe('docPersistence clearData error propagation', () => {
     mockClearData.mockResolvedValue(undefined);
   });
 
+  // QNBS-v3: prove teardown cannot make a later wipe appear successful / keep the encryption transition from mistaking a detached provider for cleared data.
+  it('rejects a wipe requested after provider teardown begins', async () => {
+    const persistence = persistProjectDoc('clear-after-destroy', new Y.Doc());
+
+    await persistence.destroy();
+
+    await expect(persistence.clearData()).rejects.toThrow('destruction has started');
+  });
+
   it('propagates a provider wipe failure to the caller', async () => {
     const failure = new Error('provider wipe failed');
     mockClearData.mockRejectedValue(failure);

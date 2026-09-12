@@ -105,19 +105,21 @@ class MockProjectDocBinding {
 vi.mock('../../services/localFirst/docBinding', () => ({
   ProjectDocBinding: MockProjectDocBinding,
 }));
-// QNBS-v3: destroy/clearData must be present since real listener teardown code can call either on any persistence handle. mockNoopDestroy is a stable reference because a test below asserts teardownLocalFirst() actually invoked it; the other three stay plain no-op closures since nothing currently asserts on them.
+// QNBS-v3: destroy/destroyStrict/clearData must be present since real listener teardown code can call any of them on a persistence handle. mockNoopDestroy is a stable reference because a test below asserts teardownLocalFirst() actually invoked it; the other four stay plain no-op closures since nothing currently asserts on them.
 const mockNoopDestroy = vi.fn().mockResolvedValue(undefined);
 vi.mock('../../services/localFirst/docPersistence', () => ({
   NOOP_PERSISTENCE: {
     active: false,
     whenSynced: Promise.resolve(),
     destroy: (...args: unknown[]) => mockNoopDestroy(...args),
+    destroyStrict: (...args: unknown[]) => mockNoopDestroy(...args),
     clearData: () => Promise.resolve(),
   },
   persistProjectDoc: vi.fn(() => ({
     active: true,
     whenSynced: Promise.resolve(),
     destroy: () => Promise.resolve(),
+    destroyStrict: () => Promise.resolve(),
     clearData: () => Promise.resolve(),
   })),
 }));
@@ -694,6 +696,7 @@ describe('local-first shadow sync (B1.1)', () => {
       active: false,
       whenSynced: Promise.resolve(),
       destroy: () => Promise.resolve(),
+      destroyStrict: () => Promise.resolve(),
       clearData: () => Promise.resolve(),
     };
     const realActive = {
@@ -763,6 +766,7 @@ describe('local-first shadow sync (B1.1)', () => {
       whenSynced: Promise.resolve(),
       clearData,
       destroy,
+      destroyStrict: destroy,
     });
 
     // localFirstHandle is module-global; explicitly tear down any handle left by a preceding test.
@@ -771,6 +775,7 @@ describe('local-first shadow sync (B1.1)', () => {
     await vi.advanceTimersByTimeAsync(100);
     warmupStore.dispatch(featureFlagsActions.setEnableLocalFirstSync(false));
     await vi.advanceTimersByTimeAsync(100);
+    destroy.mockClear();
     vi.mocked(persistProjectDoc).mockClear();
 
     const store = makeFullStore();
