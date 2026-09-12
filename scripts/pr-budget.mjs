@@ -27,20 +27,24 @@ function resolveCommit(ref, dependencies = {}) {
 
 function readPullRequestEvent(dependencies = {}) {
   const env = dependencies.env ?? process.env;
-  if (env.GITHUB_EVENT_NAME !== 'pull_request' || !env.GITHUB_EVENT_PATH) return null;
+  if (env.GITHUB_EVENT_NAME !== 'pull_request') return null;
+  if (!env.GITHUB_EVENT_PATH) return null;
   const readFile = dependencies.readFileSync ?? readFileSync;
   try {
-    const payload = JSON.parse(readFile(env.GITHUB_EVENT_PATH, 'utf8'));
-    const pullRequest = payload?.pull_request;
-    const baseSha = pullRequest?.base?.sha;
-    const baseRef = pullRequest?.base?.ref;
-    const headRef = pullRequest?.head?.ref;
-    if ((typeof baseSha !== 'string' && typeof baseRef !== 'string') || typeof headRef !== 'string')
-      return null;
-    return { baseSha, baseRef, headRef };
+    return pullRequestEventRefs(JSON.parse(readFile(env.GITHUB_EVENT_PATH, 'utf8')));
   } catch {
     return null;
   }
+}
+
+function pullRequestEventRefs(payload) {
+  const pullRequest = payload?.pull_request;
+  const baseSha = pullRequest?.base?.sha;
+  const baseRef = pullRequest?.base?.ref;
+  const headRef = pullRequest?.head?.ref;
+  if (typeof baseSha !== 'string' && typeof baseRef !== 'string') return null;
+  if (typeof headRef !== 'string') return null;
+  return { baseSha, baseRef, headRef };
 }
 
 function currentBranch(dependencies = {}) {
@@ -53,17 +57,17 @@ function livePullRequestBase(dependencies = {}) {
   const raw = run('gh', ['pr', 'view', '--json', 'baseRefName,headRefName,state'], dependencies);
   if (!raw) return null;
   try {
-    const pullRequest = JSON.parse(raw);
-    if (
-      pullRequest?.state !== 'OPEN' ||
-      pullRequest?.headRefName !== branch ||
-      typeof pullRequest?.baseRefName !== 'string'
-    )
-      return null;
-    return pullRequest.baseRefName;
+    return livePullRequestRef(JSON.parse(raw), branch);
   } catch {
     return null;
   }
+}
+
+function livePullRequestRef(pullRequest, branch) {
+  if (pullRequest?.state !== 'OPEN') return null;
+  if (pullRequest?.headRefName !== branch) return null;
+  if (typeof pullRequest?.baseRefName !== 'string') return null;
+  return pullRequest.baseRefName;
 }
 
 function checkedBase(ref, source, dependencies = {}) {
@@ -99,27 +103,36 @@ export function resolveBudgetBase({ explicitBase, allowLive = true, dependencies
   };
 }
 
+const setFlag = (property, value) => (options) => {
+  options[property] = value;
+  return 0;
+};
+
+const setValue = (property) => (options, argv, index) => {
+  const value = argv[index + 1];
+  if (!value) throw new Error(`--${property} requires a value`);
+  options[property] = value;
+  return 1;
+};
+
+const OPTION_HANDLERS = {
+  '--': setFlag('separator', true),
+  '--base': setValue('base'),
+  '--head': setValue('head'),
+  '--prospective': setFlag('prospective', true),
+  '--staged': setFlag('prospective', true),
+  '--prepush': setFlag('prepush', true),
+  '--no-live': setFlag('allowLive', false),
+  '--help': setFlag('help', true),
+};
+
 function parseArguments(argv) {
   const options = { head: 'HEAD', allowLive: true, prospective: false };
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
-    if (argument === '--') continue;
-    if (argument === '--base' || argument === '--head') {
-      const value = argv[index + 1];
-      if (!value) throw new Error(`${argument} requires a value`);
-      options[argument.slice(2)] = value;
-      index += 1;
-    } else if (argument === '--prospective' || argument === '--staged') {
-      options.prospective = true;
-    } else if (argument === '--prepush') {
-      options.prepush = true;
-    } else if (argument === '--no-live') {
-      options.allowLive = false;
-    } else if (argument === '--help') {
-      options.help = true;
-    } else {
-      throw new Error(`unknown option ${argument}`);
-    }
+    const handler = OPTION_HANDLERS[argument];
+    if (!handler) throw new Error(`unknown option ${argument}`);
+    index += handler(options, argv, index);
   }
   return options;
 }
@@ -128,7 +141,7 @@ export function evaluateProspectivePrSize(base, head, dependencies = {}) {
   const numstat = getStagedNumstat(base, dependencies);
   const staged = hasStagedChanges(dependencies);
   const currentCommitCount = getCommitCount(base, head, dependencies);
-  if (numstat === null || staged === null || currentCommitCount === null) {
+  if ([numstat, staged, currentCommitCount].some((value) => value === null)) {
     return { ok: false, error: 'could not resolve the staged prospective range via git' };
   }
   const rows = parseNumstat(numstat);
@@ -136,7 +149,7 @@ export function evaluateProspectivePrSize(base, head, dependencies = {}) {
     base,
     head,
     numstat,
-    currentCommitCount + (staged ? 1 : 0),
+    currentCommitCount + Number(staged),
     dependencies,
     rows.map((row) => row.path),
   );
