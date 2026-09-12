@@ -11,7 +11,13 @@ import type {
   ImageDeleteAdmission,
   ImageWriteAdmission,
 } from '../storageBackend';
-import { retryFs, sanitizePathSegment, writeFileAtomic, writeTextFileAtomic } from './fsCore';
+import {
+  retryFs,
+  sanitizePathSegment,
+  type TauriApis,
+  writeFileAtomic,
+  writeTextFileAtomic,
+} from './fsCore';
 import { FsSnapshotStore } from './snapshotFsStore';
 
 export class FsAssetStore extends FsSnapshotStore {
@@ -84,6 +90,20 @@ export class FsAssetStore extends FsSnapshotStore {
     return existing === projectId;
   }
 
+  // QNBS-v3: each retry and each file gets its own synchronous admission immediately before remove, so a transient retry cannot cross an incarnation boundary silently.
+  private async removeImageFiles(
+    apis: TauriApis,
+    files: string[],
+    deleteAdmission?: ImageDeleteAdmission,
+  ): Promise<void> {
+    for (const path of files) {
+      await retryFs(async () => {
+        deleteAdmission?.();
+        await apis.remove(path);
+      });
+    }
+  }
+
   async saveImage(
     id: string,
     base64Data: string,
@@ -144,8 +164,6 @@ export class FsAssetStore extends FsSnapshotStore {
         // QNBS-v3: preserve-first -- only remove the unattributed legacy copy when ownership is already provable; otherwise it may belong to a different (possibly already-deleted) project, so leave it untouched rather than risk destroying another project's image.
         const soleOwner = await this.checkLegacyImageOwnership(projectId);
         // QNBS-v3: legacy MUST be removed before the qualified file, not after -- if legacy removal throws, the catch below aborts before the qualified file is touched, so getImage's legacy fallback can never resurrect a half-deleted image. The reverse order would let a failure after the qualified delete leave the legacy copy to resurrect it.
-        // QNBS-v3: retries stay inside the serialized delete operation; one admission before both removals mirrors the IDB transaction boundary.
-        const removeImageFile = async (path: string) => retryFs(() => apis.remove(path));
         const filesToRemove: string[] = [];
         if (soleOwner) {
           const legacyFile = await this.legacyImagePath(id);
@@ -157,10 +175,7 @@ export class FsAssetStore extends FsSnapshotStore {
           filesToRemove.push(qualifiedFile);
         }
         if (filesToRemove.length > 0) {
-          deleteAdmission?.();
-          for (const path of filesToRemove) {
-            await removeImageFile(path);
-          }
+          await this.removeImageFiles(apis, filesToRemove, deleteAdmission);
         }
         // QNBS-v3: final delete admission / reject stale no-op deletions / keep entity mutation authority truthful.
         deleteAdmission?.();

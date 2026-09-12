@@ -242,7 +242,11 @@ export const useCharacterView = () => {
       } catch (error) {
         setCharacterToDeleteState(null);
         setCharacterDeleteIdentity(null);
-        if (isStaleProjectOperationError(error)) {
+        const projectStillActive = identityUnchanged(
+          characterDeleteIdentity,
+          captureActiveProjectIdentity(),
+        );
+        if (isStaleProjectOperationError(error) || !projectStillActive) {
           setIsDossierOpen(false);
           setSelectedCharacter(null);
         } else {

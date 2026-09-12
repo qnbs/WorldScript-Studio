@@ -591,6 +591,29 @@ describe('confirmDelete', () => {
     expect(mockDispatch).not.toHaveBeenCalledWith(projectActions.deleteCharacter('c1'));
   });
 
+  it('suppresses a backend error after the active project changes', async () => {
+    const char = makeCharacter('c1', 'Hero');
+    const { result } = renderHook(() => useCharacterView());
+    act(() => {
+      result.current.setCharacterToDelete(char);
+      result.current.setSelectedCharacter(char);
+      result.current.setIsDossierOpen(true);
+    });
+    mockDeleteImage.mockImplementationOnce(async () => {
+      mockCaptureIdentity.mockReturnValue('id:replacement');
+      throw new Error('storage failed');
+    });
+
+    await act(async () => {
+      await result.current.confirmDelete();
+    });
+
+    expect(result.current.characterToDelete).toBeNull();
+    expect(result.current.selectedCharacter).toBeNull();
+    expect(result.current.isDossierOpen).toBe(false);
+    expect(mockToast.error).not.toHaveBeenCalled();
+  });
+
   it('does nothing when characterToDelete is null', async () => {
     const { result } = renderHook(() => useCharacterView());
     await act(async () => {

@@ -1986,7 +1986,7 @@ describe('FsAssetStore — images + binder assets', () => {
     }
 
     expect(removeAttempts).toBe(2);
-    expect(admission).toHaveBeenCalledTimes(2);
+    expect(admission).toHaveBeenCalledTimes(3);
     expect(await store.getImage('delete-retry', 'proj-1')).toBeNull();
   });
 
@@ -2130,8 +2130,8 @@ describe('FsAssetStore — images + binder assets', () => {
     expect(fake.text.has('/app/images/dual.png')).toBe(false);
   });
 
-  // QNBS-v3: filesystem deletion mirrors the IDB transaction boundary -- a stale final admission cannot interrupt the ordered legacy/qualified cleanup between files.
-  it('finishes both image removals before rejecting a stale delete completion', async () => {
+  // QNBS-v3: each irreversible filesystem removal is independently admitted, so a stale boundary stops the ordered cleanup before the next file while preserving the qualified image as the safe fallback.
+  it('stops before the next image removal when authority changes between files', async () => {
     simulateLegacyImageOwner('proj-1');
     fake.text.set('/app/images/delete-boundary.png', 'data:image/png;base64,LEGACY');
     await store.saveImage('delete-boundary', 'data:image/png;base64,QUALIFIED', 'proj-1');
@@ -2144,7 +2144,10 @@ describe('FsAssetStore — images + binder assets', () => {
       'stale project incarnation',
     );
     expect(fake.text.has('/app/images/delete-boundary.png')).toBe(false);
-    expect(qualifiedImageKey('delete-boundary')).toBeUndefined();
+    expect(qualifiedImageKey('delete-boundary')).toBeDefined();
+    expect(await store.getImage('delete-boundary', 'proj-1')).toBe(
+      'data:image/png;base64,QUALIFIED',
+    );
   });
 
   // QNBS-v3: writes the persisted legacy-image-ownership marker directly, simulating a prior claim by projectId (as if it had already consulted the legacy fallback once).
