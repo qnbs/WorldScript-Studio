@@ -193,7 +193,10 @@ describe('CharacterView', () => {
       ],
     } as never);
     render(<CharacterView />);
-    await waitFor(() => expect(storageService.getImage).toHaveBeenCalledWith('c-broken'));
+    // QNBS-v3: id now leads, projectId trails, matching the reordered getImage signature.
+    await waitFor(() =>
+      expect(storageService.getImage).toHaveBeenCalledWith('c-broken', 'default'),
+    );
     expect(screen.queryByAltText('Robin')).toBeNull();
   });
 });

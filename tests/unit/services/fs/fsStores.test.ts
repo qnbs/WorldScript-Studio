@@ -1916,15 +1916,232 @@ describe('FsCodexStore — codex + RAG vectors', () => {
 
 describe('FsAssetStore — images + binder assets', () => {
   it('round-trips an image while preserving its data-url MIME type', async () => {
-    await store.saveImage('char-1', 'data:image/webp;base64,QUJD');
-    expect(await store.getImage('char-1')).toBe('data:image/webp;base64,QUJD');
-    await store.deleteImage('char-1');
-    expect(await store.getImage('char-1')).toBeNull();
+    await store.saveImage('char-1', 'data:image/webp;base64,QUJD', 'proj-1');
+    expect(await store.getImage('char-1', 'proj-1')).toBe('data:image/webp;base64,QUJD');
+    await store.deleteImage('char-1', 'proj-1');
+    expect(await store.getImage('char-1', 'proj-1')).toBeNull();
   });
 
   it('treats legacy raw image payloads as PNG', async () => {
-    await store.saveImage('legacy-char', 'QUJD');
-    expect(await store.getImage('legacy-char')).toBe('data:image/png;base64,QUJD');
+    await store.saveImage('legacy-char', 'QUJD', 'proj-1');
+    expect(await store.getImage('legacy-char', 'proj-1')).toBe('data:image/png;base64,QUJD');
+  });
+
+  it('writes new images under a per-project subdirectory, not the flat legacy path', async () => {
+    await store.saveImage('char-1', 'data:image/webp;base64,QUJD', 'proj-1');
+    expect(fake.text.has('/app/images/char-1.png')).toBe(false);
+    // QNBS-v3: asserts the qualified write landed somewhere under images/ with a digest-qualified filename, without pinning the exact digest (an implementation detail).
+    const qualifiedKeys = [...fake.text.keys()].filter(
+      (k) => k.startsWith('/app/images/') && k.includes('/char-1--') && k.endsWith('.png'),
+    );
+    expect(qualifiedKeys).toHaveLength(1);
+    expect(await store.getImage('char-1', 'proj-1')).toBe('data:image/webp;base64,QUJD');
+  });
+
+  // QNBS-v3: table-driven -- these 4 cases previously repeated as separate but identically-shaped functions (one shared helper call with different literal data), which CodeScene's Code Duplication biomarker flagged as a hotspot; one parametrized test removes the repeated shape entirely instead of relocating it.
+  type CollisionCase = { entityId: string; projectId: string; value: string };
+  const noImageCollisionCases: [string, CollisionCase, CollisionCase][] = [
+    [
+      'two distinct entity ids that sanitize to the same readable prefix',
+      {
+        entityId: 'alpha beta',
+        projectId: 'proj-1',
+        value: 'data:image/png;base64,FROM_ALPHA_SPACE',
+      },
+      {
+        entityId: 'alpha-beta',
+        projectId: 'proj-1',
+        value: 'data:image/png;base64,FROM_ALPHA_HYPHEN',
+      },
+    ],
+    [
+      'two distinct project ids that sanitize to the same readable prefix',
+      {
+        entityId: 'char-1',
+        projectId: 'alpha beta',
+        value: 'data:image/png;base64,FROM_ALPHA_SPACE',
+      },
+      {
+        entityId: 'char-1',
+        projectId: 'alpha-beta',
+        value: 'data:image/png;base64,FROM_ALPHA_HYPHEN',
+      },
+    ],
+    [
+      'project ids differing only by a forbidden-character substitution',
+      { entityId: 'char-1', projectId: 'alpha/beta', value: 'data:image/png;base64,FROM_SLASH' },
+      {
+        entityId: 'char-1',
+        projectId: 'alpha\\beta',
+        value: 'data:image/png;base64,FROM_BACKSLASH',
+      },
+    ],
+    [
+      'long project ids that differ only after sanitizer truncation',
+      {
+        entityId: 'char-1',
+        projectId: `${'x'.repeat(120)}-A`,
+        value: 'data:image/png;base64,FROM_LONG_A',
+      },
+      {
+        entityId: 'char-1',
+        projectId: `${'x'.repeat(120)}-B`,
+        value: 'data:image/png;base64,FROM_LONG_B',
+      },
+    ],
+  ];
+
+  it.each(noImageCollisionCases)('does not collide %s', async (_label, first, second) => {
+    await store.saveImage(first.entityId, first.value, first.projectId);
+    await store.saveImage(second.entityId, second.value, second.projectId);
+    expect(await store.getImage(first.entityId, first.projectId)).toBe(first.value);
+    expect(await store.getImage(second.entityId, second.projectId)).toBe(second.value);
+  });
+
+  // QNBS-v3: a pre-migration flat-path image (written before project-qualified keys existed) must stay reachable without a forced migration.
+  it('falls back to the legacy flat image path when the project-qualified file is absent', async () => {
+    fake.text.set('/app/images/legacy-only.png', 'data:image/png;base64,OLD');
+    expect(await store.getImage('legacy-only', 'proj-1')).toBe('data:image/png;base64,OLD');
+  });
+
+  it('deletes both the project-qualified and legacy flat image files once ownership is claimed', async () => {
+    // QNBS-v3: deleteImage never establishes a first claim itself, so the owning project must already hold it -- matches the real lifecycle where a prior getImage call claims the namespace.
+    simulateLegacyImageOwner('proj-1');
+    fake.text.set('/app/images/dual.png', 'data:image/png;base64,LEGACYCOPY');
+    await store.saveImage('dual', 'data:image/png;base64,NEWCOPY', 'proj-1');
+    await store.deleteImage('dual', 'proj-1');
+    expect(await store.getImage('dual', 'proj-1')).toBeNull();
+    expect(fake.text.has('/app/images/dual.png')).toBe(false);
+  });
+
+  // QNBS-v3: writes the persisted legacy-image-ownership marker directly, simulating a prior claim by projectId (as if it had already consulted the legacy fallback once).
+  function simulateLegacyImageOwner(projectId: string) {
+    fake.text.set('/app/images/.legacy-owner', projectId);
+  }
+
+  // QNBS-v3: a legacy image has no recorded owner -- once a different project has already claimed the legacy namespace, serving it to any other project risks cross-project misattribution. A live directory-count heuristic would not survive a delete-then-create cycle, so ownership is a persisted claim, not a live count.
+  it('fails closed on the legacy fallback when a different project already claimed the legacy namespace', async () => {
+    simulateLegacyImageOwner('proj-a');
+    fake.text.set('/app/images/ambiguous.png', 'data:image/png;base64,AMBIGUOUS');
+
+    expect(await store.getImage('ambiguous', 'proj-b')).toBeNull();
+    // QNBS-v3: preserved untouched, not destructively deleted, despite being unattributable.
+    expect(fake.text.has('/app/images/ambiguous.png')).toBe(true);
+  });
+
+  it('claims the legacy namespace for the first project that ever consults it', async () => {
+    fake.text.set('/app/images/solo.png', 'data:image/png;base64,SOLO');
+
+    expect(await store.getImage('solo', 'proj-1')).toBe('data:image/png;base64,SOLO');
+    expect(fake.text.get('/app/images/.legacy-owner')).toBe('proj-1');
+  });
+
+  it('still serves the legacy fallback for the project that already owns the legacy namespace', async () => {
+    simulateLegacyImageOwner('proj-1');
+    fake.text.set('/app/images/solo.png', 'data:image/png;base64,SOLO');
+
+    expect(await store.getImage('solo', 'proj-1')).toBe('data:image/png;base64,SOLO');
+  });
+
+  // QNBS-v3: finds the qualified (per-project digest directory, digest-qualified filename) key for an entity, distinct from the flat legacy key at /app/images/<id>.png.
+  function qualifiedImageKey(entityId: string): string | undefined {
+    return [...fake.text.keys()].find(
+      (k) =>
+        k.startsWith('/app/images/') &&
+        k !== `/app/images/${entityId}.png` &&
+        k.includes(`/${entityId}--`) &&
+        k.endsWith('.png'),
+    );
+  }
+
+  it('does not delete the legacy copy when a different project already claimed the legacy namespace', async () => {
+    simulateLegacyImageOwner('proj-a');
+    fake.text.set('/app/images/shared-legacy.png', 'data:image/png;base64,SHARED');
+    await store.saveImage('shared-legacy', 'data:image/png;base64,NEWCOPY', 'proj-b');
+
+    await store.deleteImage('shared-legacy', 'proj-b');
+
+    expect(qualifiedImageKey('shared-legacy')).toBeUndefined();
+    expect(fake.text.has('/app/images/shared-legacy.png')).toBe(true);
+  });
+
+  // QNBS-v3: preserve-first -- a destructive delete must never itself establish the first ownership claim, so with no prior claim the unattributed legacy copy is left untouched rather than guessed-and-destroyed.
+  it('does not delete the legacy copy when this project has not yet claimed the legacy namespace', async () => {
+    fake.text.set('/app/images/unclaimed-legacy.png', 'data:image/png;base64,UNCLAIMED');
+    await store.saveImage('unclaimed-legacy', 'data:image/png;base64,NEWCOPY', 'proj-1');
+
+    await store.deleteImage('unclaimed-legacy', 'proj-1');
+
+    expect(qualifiedImageKey('unclaimed-legacy')).toBeUndefined();
+    expect(fake.text.has('/app/images/unclaimed-legacy.png')).toBe(true);
+  });
+
+  // QNBS-v3: legacy must be removed before the qualified file -- if legacy removal fails, the qualified file must survive untouched so getImage's fallback can never resurrect a half-deleted image.
+  it('leaves the qualified file untouched when legacy deletion fails (sole-owner case)', async () => {
+    simulateLegacyImageOwner('proj-1');
+    fake.text.set('/app/images/atomic.png', 'data:image/png;base64,LEGACY');
+    await store.saveImage('atomic', 'data:image/png;base64,QUALIFIED', 'proj-1');
+
+    const originalRemove = fake.apis.remove;
+    fake.apis.remove = (p: string) => {
+      if (p === '/app/images/atomic.png') return Promise.reject(new Error('simulated I/O failure'));
+      return originalRemove(p);
+    };
+    try {
+      await store.deleteImage('atomic', 'proj-1');
+    } finally {
+      fake.apis.remove = originalRemove;
+    }
+
+    expect(fake.text.has('/app/images/atomic.png')).toBe(true);
+    expect(qualifiedImageKey('atomic')).toBeDefined();
+    expect(await store.getImage('atomic', 'proj-1')).toBe('data:image/png;base64,QUALIFIED');
+  });
+
+  // QNBS-v3: the ownership check and the legacy-file read/delete must not be two separately-awaited, unserialized steps -- a concurrent project creation between them could make the ownership verdict stale. Proves getImage participates in the same legacy-routing serialization queue as every other mutation, so a call enqueued first blocks a call enqueued after it from even starting its own body, not just from finishing first.
+  it('serializes getImage calls so a call enqueued first blocks a later call from starting until it completes', async () => {
+    fake.text.set('/app/images/first.png', 'data:image/png;base64,FIRST');
+    fake.text.set('/app/images/second.png', 'data:image/png;base64,SECOND');
+
+    // QNBS-v3: stubs out crypto.subtle.digest's real (variable) native latency so the barrier check below is deterministic instead of racing an unbounded delay -- a slow digest/CI worker could otherwise let an unserialized "second" pass the barrier late and produce a false-pass.
+    const digestSpy = vi
+      .spyOn(crypto.subtle, 'digest')
+      .mockImplementation(() => Promise.resolve(new ArrayBuffer(32)));
+
+    const originalExists = fake.apis.exists;
+    let releaseGate: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      releaseGate = resolve;
+    });
+    let gateReleased = false;
+    // QNBS-v3: a violation is recorded the instant it happens, not inferred from the absence of evidence after a fixed wait -- correct regardless of how long "second" takes to reach this point.
+    let violation = false;
+    fake.apis.exists = async (p: string) => {
+      if (p === '/app/images/second.png' && !gateReleased) {
+        violation = true;
+      }
+      if (p === '/app/images/first.png') {
+        await gate;
+      }
+      return originalExists(p);
+    };
+
+    const firstPromise = store.getImage('first', 'proj-1');
+    const secondPromise = store.getImage('second', 'proj-1');
+    setTimeout(() => {
+      gateReleased = true;
+      releaseGate();
+    }, 20);
+
+    try {
+      const [firstResult, secondResult] = await Promise.all([firstPromise, secondPromise]);
+      expect(violation).toBe(false);
+      expect(firstResult).toBe('data:image/png;base64,FIRST');
+      expect(secondResult).toBe('data:image/png;base64,SECOND');
+    } finally {
+      fake.apis.exists = originalExists;
+      digestSpy.mockRestore();
+    }
   });
 
   it('round-trips a binder binary asset with metadata', async () => {
@@ -1964,6 +2181,98 @@ describe('FsAssetStore — images + binder assets', () => {
       'getBinderAsset: byteSize/binary mismatch — treating pair as corrupt',
       expect.objectContaining({ expected: 999, actual: 4 }),
     );
+  });
+
+  // QNBS-v3: getQualifiedImage exists specifically so a rollback snapshot can't be handed a differently-provenanced legacy blob in place of "the qualified slot is genuinely empty".
+  describe('getQualifiedImage / deleteQualifiedImage — rollback/transaction primitives', () => {
+    it('reports absent (not the legacy blob) when only a legacy-flat image exists', async () => {
+      fake.text.set('/app/images/legacy-only.png', 'data:image/png;base64,OLD');
+
+      expect(await store.getQualifiedImage('legacy-only', 'proj-1')).toBeNull();
+      // QNBS-v3: the merged-semantics getImage would return the legacy blob for the same call -- proves the two reads genuinely disagree, not just that getQualifiedImage happens to return null.
+      expect(await store.getImage('legacy-only', 'proj-1')).toBe('data:image/png;base64,OLD');
+    });
+
+    it('does not claim legacy ownership merely by peeking at the qualified slot', async () => {
+      fake.text.set('/app/images/solo.png', 'data:image/png;base64,SOLO');
+
+      expect(await store.getQualifiedImage('solo', 'proj-1')).toBeNull();
+      expect(fake.text.has('/app/images/.legacy-owner')).toBe(false);
+    });
+
+    it('returns the qualified value when present, ignoring an unrelated legacy file', async () => {
+      fake.text.set('/app/images/dual.png', 'data:image/png;base64,LEGACYCOPY');
+      await store.saveImage('dual', 'data:image/png;base64,QUALIFIED', 'proj-1');
+
+      expect(await store.getQualifiedImage('dual', 'proj-1')).toBe(
+        'data:image/png;base64,QUALIFIED',
+      );
+    });
+
+    // QNBS-v3: shared assertion for "a qualified-only I/O failure propagates instead of being swallowed" -- the read and delete paths below share this exact shape: save an entity, fail one fake API call for its qualified path, assert the qualified-only call rejects, then always restore the original API.
+    async function expectQualifiedIoFailurePropagates(
+      entityId: string,
+      errorMessage: string,
+      install: (qualifiedPath: string) => () => void,
+      run: (id: string) => Promise<unknown>,
+    ) {
+      await store.saveImage(entityId, 'data:image/png;base64,DATA', 'proj-1');
+      const qualified = qualifiedImageKey(entityId);
+      expect(qualified).toBeDefined();
+      const restore = install(qualified as string);
+      try {
+        await expect(run(entityId)).rejects.toThrow(errorMessage);
+      } finally {
+        restore();
+      }
+    }
+
+    it('propagates a read failure instead of collapsing it to null', async () => {
+      await expectQualifiedIoFailurePropagates(
+        'unreadable',
+        'simulated decrypt failure',
+        (qualified) => {
+          const original = fake.apis.readTextFile;
+          fake.apis.readTextFile = (p: string) =>
+            p === qualified ? Promise.reject(new Error('simulated decrypt failure')) : original(p);
+          return () => {
+            fake.apis.readTextFile = original;
+          };
+        },
+        (id) => store.getQualifiedImage(id, 'proj-1'),
+      );
+    });
+
+    it('deletes only the qualified file, preserving an unrelated legacy copy', async () => {
+      simulateLegacyImageOwner('proj-1');
+      fake.text.set('/app/images/shared.png', 'data:image/png;base64,LEGACYCOPY');
+      await store.saveImage('shared', 'data:image/png;base64,QUALIFIED', 'proj-1');
+
+      await store.deleteQualifiedImage('shared', 'proj-1');
+
+      expect(qualifiedImageKey('shared')).toBeUndefined();
+      expect(fake.text.has('/app/images/shared.png')).toBe(true);
+    });
+
+    it('propagates a delete failure instead of swallowing it', async () => {
+      await expectQualifiedIoFailurePropagates(
+        'undeletable',
+        'simulated I/O failure',
+        (qualified) => {
+          const original = fake.apis.remove;
+          fake.apis.remove = (p: string) =>
+            p === qualified ? Promise.reject(new Error('simulated I/O failure')) : original(p);
+          return () => {
+            fake.apis.remove = original;
+          };
+        },
+        (id) => store.deleteQualifiedImage(id, 'proj-1'),
+      );
+    });
+
+    it('is a no-op (not an error) when the qualified file never existed', async () => {
+      await expect(store.deleteQualifiedImage('never-existed', 'proj-1')).resolves.toBeUndefined();
+    });
   });
 });
 

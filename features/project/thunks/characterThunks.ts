@@ -75,20 +75,24 @@ export const generateCharacterPortraitThunk = createDeduplicatedThunk(
   ) => {
     const fullDescription = style ? `${description}. Style: ${style}` : description;
     const state = getState() as RootState;
+    // QNBS-v3: threaded into saveImage so the stored key is project-qualified, not a bare entity id shared across projects.
+    const projectId = state.project.present?.data?.id || 'default';
     const aiOptions = buildAiOptions(state);
     const { getPrompts } = await loadPrompts();
     const { generateImage } = await loadAiProvider();
     const { prompt } = getPrompts('characterPortrait', { description: fullDescription, lang });
     registerDuplicateRequest(prompt, 'characterPortrait');
     const base64 = await generateImage(prompt, aiOptions, signal);
-    await storageService.saveImage(characterId, base64);
+    await storageService.saveImage(characterId, base64, projectId);
     return { characterId };
   },
 );
 
 export const uploadCharacterImageThunk = createAsyncThunk(
   'project/uploadCharacterImage',
-  async ({ characterId, file }: { characterId: string; file: File }) => {
+  async ({ characterId, file }: { characterId: string; file: File }, { getState }) => {
+    // QNBS-v3: threaded into saveImage so the stored key is project-qualified, not a bare entity id shared across projects.
+    const projectId = (getState() as RootState).project.present?.data?.id || 'default';
     return new Promise<{ characterId: string }>((resolve, reject) => {
       const reader = new FileReader();
       // QNBS-v3: onload/onerror/onabort (not onloadend) plus Promise.catch(reject) so every terminal FileReader/saveImage outcome settles this Promise instead of leaving it pending.
@@ -100,7 +104,7 @@ export const uploadCharacterImageThunk = createAsyncThunk(
         }
         // QNBS-v3: retain the data-URL MIME type so uploaded JPEG/WebP images survive filesystem round-trips.
         storageService
-          .saveImage(characterId, result)
+          .saveImage(characterId, result, projectId)
           .then(() => resolve({ characterId }))
           .catch(reject);
       };

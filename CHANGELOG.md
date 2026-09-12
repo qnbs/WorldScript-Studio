@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **AI-generated character/world/scene images can no longer overwrite another project's image
+  (#704, #708):** image storage keys on both the IndexedDB and desktop filesystem backends are
+  now project-qualified using a collision-resistant hash of the full project id (not a lossy
+  whitespace/truncation sanitizer), with a legacy-key read-through so pre-existing images stay
+  reachable without a forced migration. A legacy (pre-qualification) image with unprovable
+  ownership now fails closed instead of being served to the wrong project, and deletion removes
+  the legacy copy before the qualified one so a partial failure can never resurrect an image the
+  user believed was deleted. Character/world "delete" now calls the real `deleteImage` API
+  instead of overwriting the qualified key with an empty string. PR #719.
 - **`extract-zip` eliminated from the dependency graph (Dependabot #86, GHSA-7pqw-9j4j-h8q3 /
   GHSA-jmr9-qjv8-65gv):** the vulnerable package was reachable only via `@lhci/cli`'s hard-pinned
   `lighthouse@12.6.1` → `puppeteer-core` → `@puppeteer/browsers@2.x` chain. A

@@ -113,14 +113,26 @@ class StorageManager {
     return backend.deleteProject(projectId);
   }
 
-  async saveImage(id: string, base64Data: string): Promise<void> {
+  // QNBS-v3: projectId is trailing/optional, mirroring StorageBackend, so callers that predate project-qualification still compile unchanged and defer to each backend's own 'default' fallback.
+  async saveImage(id: string, base64Data: string, projectId?: string): Promise<void> {
     const backend = await this.getBackend();
-    return backend.saveImage(id, base64Data);
+    return backend.saveImage(id, base64Data, projectId);
   }
 
-  async getImage(id: string): Promise<string | null> {
+  async getImage(id: string, projectId?: string): Promise<string | null> {
     const backend = await this.getBackend();
-    return backend.getImage(id);
+    return backend.getImage(id, projectId);
+  }
+
+  // QNBS-v3: qualified-only pass-through for rollback/transaction callers -- see StorageBackend's own comment for why this must stay distinct from getImage/deleteImage.
+  async getQualifiedImage(id: string, projectId?: string): Promise<string | null> {
+    const backend = await this.getBackend();
+    return backend.getQualifiedImage(id, projectId);
+  }
+
+  async deleteQualifiedImage(id: string, projectId?: string): Promise<void> {
+    const backend = await this.getBackend();
+    return backend.deleteQualifiedImage(id, projectId);
   }
 
   async saveSettings(settings: Settings): Promise<void> {
@@ -187,9 +199,10 @@ class StorageManager {
     return backend.deleteSnapshot(id);
   }
 
-  async deleteImage(id: string): Promise<void> {
+  // QNBS-v3: same trailing-optional projectId compatibility shape as saveImage/getImage above.
+  async deleteImage(id: string, projectId?: string): Promise<void> {
     const backend = await this.getBackend();
-    return backend.deleteImage(id);
+    return backend.deleteImage(id, projectId);
   }
 
   async hasSavedData(): Promise<boolean> {

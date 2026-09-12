@@ -9,6 +9,7 @@ import {
   CODEX_STORE,
   DATA_DB_NAME,
   IMAGES_STORE,
+  LEGACY_IMAGE_OWNER_KEY,
   SNAPSHOTS_STORE,
   STATE_DB_NAME,
 } from '../dbConstants';
@@ -152,9 +153,15 @@ const appDataAdapterSpec: PrimaryProtectedStoreAdapterSpec = {
   storeName: APP_DATA_STORE,
   keyMode: 'explicit',
   keyType: 'string',
-  // QNBS-v3: the migration journal and the passphrase sentinel live in the same physical store —
-  // both are lifecycle metadata the migration itself depends on and must never rewrite.
-  reservedKeys: [ENCRYPTION_MIGRATION_JOURNAL_RECORD_KEY, PASSPHRASE_SENTINEL_RECORD_KEY],
+  // QNBS-v3: the migration journal, the passphrase sentinel, and the legacy-image-ownership marker
+  // all live in the same physical store — the first two are lifecycle metadata the migration itself
+  // depends on, and the marker is a plain projectId string (not compressed project/settings JSON),
+  // so decompressData would throw or corrupt it. None of the three may pass through this adapter.
+  reservedKeys: [
+    ENCRYPTION_MIGRATION_JOURNAL_RECORD_KEY,
+    PASSPHRASE_SENTINEL_RECORD_KEY,
+    LEGACY_IMAGE_OWNER_KEY,
+  ],
   // QNBS-v3 (CodeAnt/qodo #342): APP_DATA_STORE also holds IdbKeyStore's raw CryptoKey and
   // per-provider encrypted-API-key records (local_crypto_key_v2, api_key_<provider>_enc/_iv,
   // the legacy gemini_api_key_* pair) — JSON.stringify-based whole-value transform would destroy

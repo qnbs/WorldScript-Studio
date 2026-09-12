@@ -25,7 +25,12 @@ Object.defineProperty(global, 'localStorage', { value: localStorageMock, writabl
 // QNBS-v3: provide a working IndexedDB for the sentinel-store tests (node has none by default).
 globalThis.indexedDB = new IDBFactory();
 
-import { APP_DATA_STORE, DB_VERSION, STATE_DB_NAME } from '../../../services/dbConstants';
+import {
+  APP_DATA_STORE,
+  DB_VERSION,
+  LEGACY_IMAGE_OWNER_KEY,
+  STATE_DB_NAME,
+} from '../../../services/dbConstants';
 import { _resetDbForTest, dbService } from '../../../services/storage';
 import {
   __encryptionMigrationJournalRecordKeyForTest,
@@ -767,6 +772,53 @@ describe('production migration round-trip with real data', () => {
 
     await clearIdbPassphrase();
     expect(await dbService.getApiKey('openai')).toBe('sk-test-should-survive-migration');
+  });
+
+  // QNBS-v3: raw IDB access (matching deleteJournalRecordForTest's pattern below) -- the legacy-image-ownership marker is a plain projectId string sharing APP_DATA_STORE with project/settings JSON, so this reads it directly without going through any encoding assumption a public API might impose.
+  async function readAppDataKeyForTest(key: string): Promise<unknown> {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(STATE_DB_NAME, DB_VERSION);
+      request.onsuccess = () => {
+        const db = request.result;
+        const tx = db.transaction(APP_DATA_STORE, 'readonly');
+        const getRequest = tx.objectStore(APP_DATA_STORE).get(key);
+        getRequest.onsuccess = () => {
+          db.close();
+          resolve(getRequest.result);
+        };
+        getRequest.onerror = () => reject(getRequest.error);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async function writeAppDataKeyForTest(key: string, value: unknown): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(STATE_DB_NAME, DB_VERSION);
+      request.onsuccess = () => {
+        const db = request.result;
+        const tx = db.transaction(APP_DATA_STORE, 'readwrite');
+        tx.objectStore(APP_DATA_STORE).put(value, key);
+        tx.oncomplete = () => {
+          db.close();
+          resolve();
+        };
+        tx.onerror = () => reject(tx.error);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  // QNBS-v3: the legacy-image-ownership marker (a plain projectId string, not compressed project/settings JSON) shares APP_DATA_STORE with data the generic app-data adapter DOES transform -- without an explicit reservation, decompressData would throw on it (or a round-trip would silently reformat it), permanently breaking the correctly-claiming project's access to its own legacy images.
+  it('does not corrupt the legacy-image-ownership marker while rekeying then disabling encryption', async () => {
+    await setupIdbEncryption('test-fixture-original-passphrase');
+    await writeAppDataKeyForTest(LEGACY_IMAGE_OWNER_KEY, 'proj-1');
+
+    await rotateIdbPassphrase('test-fixture-original-passphrase', 'test-fixture-new-passphrase');
+    expect(await readAppDataKeyForTest(LEGACY_IMAGE_OWNER_KEY)).toBe('proj-1');
+
+    await clearIdbPassphrase();
+    expect(await readAppDataKeyForTest(LEGACY_IMAGE_OWNER_KEY)).toBe('proj-1');
   });
 });
 
