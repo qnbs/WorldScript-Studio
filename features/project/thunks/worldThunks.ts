@@ -5,6 +5,7 @@ import type { WorldHeuristicLabels } from '../../../services/ai/heuristicFallbac
 import { storageService } from '../../../services/storageService';
 import type { World } from '../../../types';
 import { createDeduplicatedThunk } from '../aiThunkUtils';
+import { assertProjectIdentityUnchanged, getProjectTargetIdentity } from '../projectIdentity';
 import { buildAiCreativity, buildAiOptions, loadAiProvider, loadPrompts } from './thunkUtils';
 
 export const generateWorldProfileThunk = createDeduplicatedThunk(
@@ -68,6 +69,7 @@ export const generateWorldImageThunk = createDeduplicatedThunk(
     { getState, signal, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
+    const originIdentity = getProjectTargetIdentity(state.project.present);
     // QNBS-v3: threaded into saveImage so the stored key is project-qualified, not a bare entity id shared across projects.
     const projectId = state.project.present?.data?.id || 'default';
     const aiOptions = buildAiOptions(state);
@@ -76,7 +78,17 @@ export const generateWorldImageThunk = createDeduplicatedThunk(
     const { prompt } = getPrompts('worldImage', { description, lang });
     registerDuplicateRequest(prompt, 'worldImage');
     const base64 = await generateImage(prompt, aiOptions, signal);
+    assertProjectIdentityUnchanged(
+      originIdentity,
+      getProjectTargetIdentity((getState() as RootState).project.present),
+      'world image generation before storage',
+    );
     await storageService.saveImage(worldId, base64, projectId);
+    assertProjectIdentityUnchanged(
+      originIdentity,
+      getProjectTargetIdentity((getState() as RootState).project.present),
+      'world image generation after storage',
+    );
     return { worldId };
   },
 );

@@ -14,6 +14,18 @@ interface ProjectIdentitySource {
   generation?: number;
 }
 
+export const STALE_PROJECT_OPERATION_ERROR_NAME = 'StaleProjectOperationError';
+
+/** Error used when an async result can no longer prove that its origin project is active. */
+export class StaleProjectOperationError extends Error {
+  readonly code = 'STALE_PROJECT_OPERATION';
+
+  constructor(operation: string) {
+    super(`Discarded stale project operation: ${operation}`);
+    this.name = STALE_PROJECT_OPERATION_ERROR_NAME;
+  }
+}
+
 function baseTargetIdentity(project: unknown): string | null {
   if (typeof project !== 'object' || project === null) return null;
   const record = project as Record<string, unknown>;
@@ -42,4 +54,16 @@ export function captureActiveProjectIdentity(): string | null {
 // QNBS-v3: null means identity could not be determined -- fail closed (never "unchanged") so a guard never allows a mutation it can't actually prove is still targeting the right project.
 export function identityUnchanged(captured: string | null, live: string | null): boolean {
   return captured !== null && captured === live;
+}
+
+// QNBS-v3: centralizes the fail-closed throw so direct async project mutations produce one
+// serialized rejection and the global error listener can suppress stale-result noise.
+export function assertProjectIdentityUnchanged(
+  captured: string | null,
+  live: string | null,
+  operation: string,
+): void {
+  if (!identityUnchanged(captured, live)) {
+    throw new StaleProjectOperationError(operation);
+  }
 }

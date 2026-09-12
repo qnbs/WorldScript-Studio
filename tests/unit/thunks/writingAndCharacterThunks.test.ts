@@ -23,7 +23,7 @@ vi.mock('../../../services/storageService', () => ({
 }));
 
 import featureFlagsReducer from '../../../features/featureFlags/featureFlagsSlice';
-import projectReducer from '../../../features/project/projectSlice';
+import projectReducer, { projectActions } from '../../../features/project/projectSlice';
 import {
   generateCharacterPortraitThunk,
   generateCharacterProfileThunk,
@@ -224,6 +224,56 @@ describe('generateSceneImageThunk', () => {
 
     const result = (action as { payload: { imageKey: string; dataUrl: string } }).payload;
     expect(result.dataUrl).toBe('data:image/png;base64,alreadyprefixed');
+  });
+
+  it('rejects and skips storage when the project changes before the write', async () => {
+    let resolveImage: ((value: string) => void) | undefined;
+    mockGenerateImage.mockReturnValueOnce(
+      new Promise<string>((resolve) => {
+        resolveImage = resolve;
+      }),
+    );
+    const store = makeStore();
+    const pending = store.dispatch(generateSceneImageThunk(payload));
+
+    store.dispatch(
+      projectActions.resetProject({
+        title: 'New project',
+        logline: '',
+        chapter1Title: 'Chapter One',
+      }),
+    );
+    resolveImage?.('late-image');
+
+    const action = await pending;
+    expect(action.type).toBe('project/generateSceneImage/rejected');
+    expect(storageService.saveImage).not.toHaveBeenCalled();
+  });
+
+  it('rejects after a project changes during the storage operation', async () => {
+    mockGenerateImage.mockResolvedValueOnce('late-image');
+    let resolveSave: (() => void) | undefined;
+    vi.mocked(storageService.saveImage).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSave = resolve;
+        }),
+    );
+    const store = makeStore();
+    const pending = store.dispatch(generateSceneImageThunk(payload));
+
+    await vi.waitFor(() => expect(storageService.saveImage).toHaveBeenCalled());
+    store.dispatch(
+      projectActions.resetProject({
+        title: 'New project',
+        logline: '',
+        chapter1Title: 'Chapter One',
+      }),
+    );
+    resolveSave?.();
+
+    const action = await pending;
+    expect(action.type).toBe('project/generateSceneImage/rejected');
   });
 });
 

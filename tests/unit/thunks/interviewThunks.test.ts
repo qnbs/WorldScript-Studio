@@ -117,6 +117,7 @@ describe('streamInterviewResponseThunk', () => {
       project: {
         present: {
           data: {
+            id: 'default',
             characters: {
               ids: ['char-1'],
               entities: { 'char-1': CHARACTER },
@@ -125,6 +126,7 @@ describe('streamInterviewResponseThunk', () => {
               'char-1': [INTERVIEW],
             },
           },
+          generation: 0,
         },
       },
       settings: {
@@ -231,5 +233,28 @@ describe('streamInterviewResponseThunk', () => {
     const result = await thunk(dispatch, getState, undefined);
     expect((result as { type: string }).type).toBe('project/streamInterviewResponse/rejected');
     expect((result as { error: { message: string } }).error.message).toContain('interview-1');
+  });
+
+  it('does not dispatch late chunks after the project incarnation changes', async () => {
+    const state = makeState();
+    mockStreamText.mockImplementationOnce(
+      async (_prompt: string, _creativity: unknown, onChunk: (chunk: string) => void) => {
+        state.project.present.generation = 1;
+        onChunk('late chunk');
+      },
+    );
+    const dispatch = vi.fn();
+    const getState = vi.fn().mockReturnValue(state);
+
+    const result = await streamInterviewResponseThunk({
+      characterId: 'char-1',
+      interviewId: 'interview-1',
+      question: 'Hello?',
+    })(dispatch, getState, undefined);
+
+    expect((result as { type: string }).type).toBe('project/streamInterviewResponse/rejected');
+    expect(
+      dispatch.mock.calls.some(([action]) => action?.type === 'project/streamInterviewChunk'),
+    ).toBe(false);
   });
 });

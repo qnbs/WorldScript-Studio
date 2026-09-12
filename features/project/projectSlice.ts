@@ -1,5 +1,6 @@
 import { createSlice } from '@reduxjs/toolkit';
 import { charactersAdapter, worldsAdapter } from './adapters';
+import { getProjectTargetIdentity, identityUnchanged } from './projectIdentity';
 import { initialState, type ProjectData } from './projectState';
 // QNBS-v3: Reducer cases are split into domain modules under ./reducers/* so this slice stays thin.
 // Action names, the `project/*` namespace, the single redux-undo wrapper (app/store.ts), and the
@@ -117,9 +118,18 @@ const projectSlice = createSlice({
           action,
         ): action is {
           type: 'project/streamInterviewChunk';
-          payload: { characterId: string; interviewId: string; aiMsgId: string; content: string };
+          payload: {
+            characterId: string;
+            interviewId: string;
+            aiMsgId: string;
+            content: string;
+            originIdentity: string;
+          };
         } => action.type === 'project/streamInterviewChunk',
         (state, action) => {
+          if (!identityUnchanged(action.payload.originIdentity, getProjectTargetIdentity(state))) {
+            return;
+          }
           const { characterId, interviewId, aiMsgId, content } = action.payload;
           const interviews = state.data.characterInterviews?.[characterId] ?? [];
           const interview = interviews.find((iv) => iv.id === interviewId);

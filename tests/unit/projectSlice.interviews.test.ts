@@ -27,10 +27,16 @@ function makeMessage(overrides: Partial<InterviewMessage> = {}): InterviewMessag
   };
 }
 
-type PartialState = { data: { characterInterviews?: Record<string, CharacterInterview[]> } };
+type PartialState = {
+  generation?: number;
+  data: {
+    id?: string;
+    characterInterviews?: Record<string, CharacterInterview[]>;
+  };
+};
 
 function s(interviews: Record<string, CharacterInterview[]> = {}): PartialState {
-  return { data: { characterInterviews: interviews } };
+  return { generation: 0, data: { id: 'default', characterInterviews: interviews } };
 }
 
 describe('projectSlice — characterInterview reducers', () => {
@@ -107,10 +113,28 @@ describe('projectSlice — characterInterview reducers', () => {
         interviewId: 'iv-1',
         aiMsgId: 'ai-msg',
         content: 'Streaming response so far',
+        originIdentity: 'id:default:gen:0',
       },
     });
     expect(next.data.characterInterviews?.['char-1']?.[0]?.messages?.[0]?.content).toBe(
       'Streaming response so far',
     );
+  });
+
+  it('ignores a chunk whose origin identity is no longer current', () => {
+    const aiMsg = makeMessage({ id: 'ai-msg', role: 'ai', content: '' });
+    const interview = makeInterview({ messages: [aiMsg] });
+    const state = s({ 'char-1': [interview] });
+    const next = projectReducer(state as unknown as Parameters<typeof projectReducer>[0], {
+      type: 'project/streamInterviewChunk',
+      payload: {
+        characterId: 'char-1',
+        interviewId: 'iv-1',
+        aiMsgId: 'ai-msg',
+        content: 'stale response',
+        originIdentity: 'id:default:gen:1',
+      },
+    });
+    expect(next.data.characterInterviews?.['char-1']?.[0]?.messages?.[0]?.content).toBe('');
   });
 });

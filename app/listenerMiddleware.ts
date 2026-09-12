@@ -3,6 +3,7 @@ import { createListenerMiddleware, isRejected } from '@reduxjs/toolkit';
 import { analyticsActions } from '../features/analytics/analyticsSlice';
 // QNBS-v3: canonical selector — replaces a local type that misapplied the persisted-state shape to the live store
 import { proForgeActions } from '../features/proForge/proForgeSlice';
+import { STALE_PROJECT_OPERATION_ERROR_NAME } from '../features/project/projectIdentity';
 import { selectProjectData } from '../features/project/projectSelectors';
 import type { ProjectData } from '../features/project/projectSlice';
 import { statusActions } from '../features/status/statusSlice';
@@ -359,6 +360,7 @@ listenerMiddleware.startListening({
   matcher: isRejected,
   effect: (action, listenerApi) => {
     if (action.meta.aborted) return;
+    if (action.error?.name === STALE_PROJECT_OPERATION_ERROR_NAME) return;
 
     let errorDescription = action.error?.message ?? 'An unexpected error occurred.';
     if (errorDescription.includes('quota') || errorDescription.includes('API key')) {

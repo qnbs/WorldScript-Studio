@@ -3,6 +3,12 @@ import { v4 as uuidv4 } from 'uuid';
 import type { RootState } from '../../../app/store';
 import { streamText } from '../../../services/geminiService';
 import type { CharacterArchetype, CharacterInterview, InterviewMessage } from '../../../types';
+import {
+  assertProjectIdentityUnchanged,
+  getProjectTargetIdentity,
+  identityUnchanged,
+  StaleProjectOperationError,
+} from '../projectIdentity';
 import { selectAllCharacters } from '../projectSelectors';
 import { projectActions } from '../projectSlice';
 import { buildAiCreativity, buildAiOptions } from './thunkUtils';
@@ -55,6 +61,12 @@ export const streamInterviewResponseThunk = createAsyncThunk(
   ) => {
     const state = getState() as RootState;
     const { characterId, interviewId, question } = params;
+    const originIdentity = getProjectTargetIdentity(state.project.present);
+    assertProjectIdentityUnchanged(
+      originIdentity,
+      getProjectTargetIdentity(state.project.present),
+      'character interview start',
+    );
 
     const characters = selectAllCharacters(state);
     const character = characters.find((c) => c.id === characterId);
@@ -100,10 +112,17 @@ export const streamInterviewResponseThunk = createAsyncThunk(
     });
 
     let accumulated = '';
+    let stale = false;
     await streamText(
       prompt,
       creativity,
       (chunk) => {
+        if (stale) return;
+        const liveIdentity = getProjectTargetIdentity((getState() as RootState).project.present);
+        if (!identityUnchanged(originIdentity, liveIdentity)) {
+          stale = true;
+          return;
+        }
         accumulated += chunk;
         // QNBS-v3: update the AI message in place via updateCharacterInterview to avoid N dispatches
         dispatch(
@@ -117,11 +136,19 @@ export const streamInterviewResponseThunk = createAsyncThunk(
         // We re-dispatch a synthetic update to keep Redux as the single source of truth
         dispatch({
           type: 'project/streamInterviewChunk',
-          payload: { characterId, interviewId, aiMsgId, content: accumulated },
+          payload: {
+            characterId,
+            interviewId,
+            aiMsgId,
+            content: accumulated,
+            originIdentity,
+          },
         });
       },
       signal,
     );
+
+    if (stale) throw new StaleProjectOperationError('character interview stream');
 
     void aiOptions; // aiOptions used in future multi-provider path
     return { characterId, interviewId, aiMsgId, content: accumulated };

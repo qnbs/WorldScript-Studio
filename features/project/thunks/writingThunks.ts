@@ -1,6 +1,7 @@
 import type { RootState } from '../../../app/store';
 import { storageService } from '../../../services/storageService';
 import { createDeduplicatedThunk } from '../aiThunkUtils';
+import { assertProjectIdentityUnchanged, getProjectTargetIdentity } from '../projectIdentity';
 import { buildAiCreativity, buildAiOptions, loadAiProvider, loadPrompts } from './thunkUtils';
 
 export const generateLoglineSuggestionsThunk = createDeduplicatedThunk(
@@ -69,6 +70,7 @@ export const generateSceneImageThunk = createDeduplicatedThunk(
     { getState, signal, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
+    const originIdentity = getProjectTargetIdentity(state.project.present);
     // QNBS-v3: threaded into saveImage so the stored key is project-qualified, not a bare entity id shared across projects.
     const projectId = state.project.present?.data?.id || 'default';
     const aiOptions = buildAiOptions(state);
@@ -83,7 +85,17 @@ export const generateSceneImageThunk = createDeduplicatedThunk(
     registerDuplicateRequest(prompt, 'sceneVisualization');
     const base64 = await generateImage(prompt, aiOptions, signal);
     const imageKey = `scene-${payload.sectionId}`;
+    assertProjectIdentityUnchanged(
+      originIdentity,
+      getProjectTargetIdentity((getState() as RootState).project.present),
+      'scene image generation before storage',
+    );
     await storageService.saveImage(imageKey, base64, projectId);
+    assertProjectIdentityUnchanged(
+      originIdentity,
+      getProjectTargetIdentity((getState() as RootState).project.present),
+      'scene image generation after storage',
+    );
     const dataUrl = base64.includes('data:image') ? base64 : `data:image/png;base64,${base64}`;
     return { imageKey, dataUrl };
   },
