@@ -77,6 +77,15 @@ async function main() {
   }
   report('Dependency state', 'PASS');
 
+  const budgetStatus = await runNodeScript('scripts/pr-budget.mjs', ['--prepush']);
+  if (budgetStatus === 0) report('PR budget', 'PASS');
+  else if (budgetStatus === 2)
+    report('PR budget', 'UNRESOLVED', 'run pnpm run pr:budget -- --base <ref> before pushing');
+  else {
+    report('PR budget', 'FAIL');
+    process.exit(budgetStatus ?? 1);
+  }
+
   await runCheck('Toolchain', () => runNodeScript('scripts/check-pnpm-toolchain.mjs', ['--hook']));
   await runCheck('Docs/release truth', () => runNodeScript('scripts/check-doc-metrics.mjs'));
   await runCheck('CSP policy', () => runNodeScript('scripts/check-csp-policy.mjs'));

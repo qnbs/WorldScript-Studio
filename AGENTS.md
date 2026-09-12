@@ -82,6 +82,8 @@ When a task enters commit/push/PR/CI/review/merge work, read and follow
 `docs/PR-CI-MERGE-WORKFLOW.md`; do not load that procedure for an unrelated tiny edit.
 
 - Use a feature branch and conventional commits. Never commit directly to `main`.
+- PR budget is cumulative base→prospective head/index: absolute normal ceiling is ≤30 changed files / ≤3000 meaningful lines / ≤15 commits; at 30 files do not add a file, at 15 commits do not create another commit, and never push merely to discover the budget.
+- Resolve the real PR base and run `pnpm run pr:budget -- --base <ref>` before the first commit and before every corrective commit/push; use `--prospective` for staged changes. Treat remaining headroom as a design constraint, never delete meaningful safety proof to reclaim a slot, and use a bounded split/successor when a valid fix cannot fit.
 - Do not add Claude/Anthropic attribution, generated-by footers, or session URLs to commit
   messages, tags, PR titles/bodies, or maintainer-authored review comments. Repository history
   records the code change, not the agent session. Never add `Co-Authored-By` for Claude or a

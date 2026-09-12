@@ -23,6 +23,10 @@ export function getCommitCount(
   dependencies?: GitDependencies,
 ): number | null;
 
+export function getStagedNumstat(base: string, dependencies?: GitDependencies): string | null;
+
+export function hasStagedChanges(dependencies?: GitDependencies): boolean | null;
+
 export interface NumstatRow {
   path: string;
   added: number;
@@ -73,6 +77,11 @@ export interface SizeTierLimits {
   commits: number;
 }
 
+export const PR_SIZE_TIERS: Record<
+  'target' | 'hard' | 'docsGovernance' | 'absolute',
+  SizeTierLimits
+>;
+
 export type SizeTier = 'ok' | 'target' | 'hard' | 'docsGovernance' | 'absolute' | 'exception';
 
 export interface SizeSeverity {
@@ -87,6 +96,15 @@ export function selectSeverity(input: {
   commitCount: number;
   allDocs: boolean;
 }): SizeSeverity;
+
+export type BudgetMode = 'NORMAL' | 'CAUTION' | 'CONVERGENCE' | 'SATURATED';
+
+export function selectBudgetMode(input: {
+  fileCount: number;
+  lineCount: number;
+  commitCount: number;
+  allDocs: boolean;
+}): BudgetMode;
 
 export function formatReport(input: {
   fileCount: number;
@@ -122,6 +140,15 @@ export function evaluatePrSize(
   base: string,
   head: string,
   dependencies?: GitDependencies,
+): PrSizeEvaluation;
+
+export function evaluatePrSizeSnapshot(
+  base: string,
+  head: string,
+  numstat: string | null,
+  commitCount: number | null,
+  dependencies?: GitDependencies,
+  changedPathsOverride?: string[],
 ): PrSizeEvaluation;
 
 export function main(): void;

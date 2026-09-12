@@ -5,12 +5,13 @@ import { pathToFileURL } from 'node:url';
 import { classifyFile } from './ci-prepush-classifier.mjs';
 
 // QNBS-v3: a distinct, stricter gate from CLAUDE.md's ~100-file CodeAnt-visibility rule (different purpose).
-const TIERS = {
+export const PR_SIZE_TIERS = {
   target: { files: 8, lines: 400, commits: 6 },
   hard: { files: 20, lines: 1200, commits: 10 },
   docsGovernance: { files: 15, lines: 2400, commits: 8 },
   absolute: { files: 30, lines: 3000, commits: 15 },
 };
+const TIERS = PR_SIZE_TIERS;
 
 const EXCEPTION_REGISTRY_PATH = 'config/pr-size-exceptions.json';
 const REQUIRED_EXCEPTION_SCHEMA_VERSION = 1;
@@ -21,6 +22,7 @@ const GOVERNANCE_CONTROL_PATHS = new Set([
   'scripts/ci-prepush-classifier.mjs',
   'scripts/check-pr-size.d.mts',
   'scripts/check-pr-size.mjs',
+  'scripts/pr-budget.mjs',
 ]);
 // QNBS-v3: supplemental ceilings are only for explicitly named non-executable artifacts.
 const SUPPLEMENTAL_ARTIFACT_PATTERNS = [
@@ -84,6 +86,19 @@ export function getCommitCount(base, head, dependencies = {}) {
   if (output === null) return null;
   const count = Number.parseInt(output.trim(), 10);
   return Number.isFinite(count) ? count : null;
+}
+
+export function getStagedNumstat(base, dependencies = {}) {
+  return withNeutralizedDiffAttribute(dependencies, () =>
+    runGit(['diff', '--cached', '--numstat', '-z', base], dependencies),
+  );
+}
+
+export function hasStagedChanges(dependencies = {}) {
+  const spawn = dependencies.spawnSync ?? spawnSync;
+  const result = spawn('git', ['diff', '--cached', '--quiet'], { encoding: 'utf8' });
+  if (result.error || result.status === null || result.status > 1) return null;
+  return result.status === 1;
 }
 
 const NUMSTAT_HEADER = /^(-|\d+)\t(-|\d+)\t(.*)$/s;
@@ -375,7 +390,7 @@ function getChangedPaths(base, head, dependencies = {}) {
   return output.split('\0').filter(Boolean);
 }
 
-function resolveException(base, head, dependencies = {}) {
+function resolveException(base, head, dependencies = {}, changedPathsOverride) {
   const identity = getPullRequestIdentity(dependencies);
   if (!identity)
     return { applied: false, identityMatch: false, pathScopeMatch: false, baseGoverned: false };
@@ -394,7 +409,7 @@ function resolveException(base, head, dependencies = {}) {
   const entry = matches[0];
   if (!entry)
     return { applied: false, identityMatch: false, pathScopeMatch: false, baseGoverned: true };
-  const changedPaths = getChangedPaths(base, head, dependencies);
+  const changedPaths = changedPathsOverride ?? getChangedPaths(base, head, dependencies);
   if (changedPaths === null)
     throw new Error('could not resolve changed paths for PR-size exception scope');
   // QNBS-v3: an exception cannot authorize the PR to rewrite the authority that governs it.
@@ -441,6 +456,29 @@ export function selectSeverity({ fileCount, lineCount, commitCount, allDocs }) {
   if (overTarget) return { tier: 'target', blocking: false, limits: TIERS.target };
 
   return { tier: 'ok', blocking: false, limits: TIERS.target };
+}
+
+export function selectBudgetMode({ fileCount, lineCount, commitCount, allDocs }) {
+  const absolute = TIERS.absolute;
+  if (fileCount >= absolute.files || lineCount >= absolute.lines || commitCount >= absolute.commits)
+    return 'SATURATED';
+
+  const convergence = allDocs ? TIERS.docsGovernance : TIERS.hard;
+  if (
+    fileCount >= convergence.files ||
+    lineCount >= convergence.lines ||
+    commitCount >= convergence.commits
+  )
+    return 'CONVERGENCE';
+
+  if (
+    fileCount > TIERS.target.files ||
+    lineCount > TIERS.target.lines ||
+    commitCount > TIERS.target.commits
+  )
+    return 'CAUTION';
+
+  return 'NORMAL';
 }
 
 export function formatReport({
@@ -494,9 +532,14 @@ function formatExceptionReport({
   );
 }
 
-export function evaluatePrSize(base, head, dependencies = {}) {
-  const numstat = getChangedFilesNumstat(base, head, dependencies);
-  const commitCount = getCommitCount(base, head, dependencies);
+export function evaluatePrSizeSnapshot(
+  base,
+  head,
+  numstat,
+  commitCount,
+  dependencies = {},
+  changedPathsOverride,
+) {
   if (numstat === null || commitCount === null) {
     return { ok: false, error: 'could not resolve diff/commit range via git' };
   }
@@ -507,7 +550,7 @@ export function evaluatePrSize(base, head, dependencies = {}) {
   const allDocs = isAllDocs(rows);
   let exception;
   try {
-    exception = resolveException(base, head, dependencies);
+    exception = resolveException(base, head, dependencies, changedPathsOverride);
   } catch (error) {
     return {
       ok: false,
@@ -572,6 +615,12 @@ export function evaluatePrSize(base, head, dependencies = {}) {
         })
       : formatReport({ fileCount, totalFileCount, lineCount, commitCount, allDocs, severity }),
   };
+}
+
+export function evaluatePrSize(base, head, dependencies = {}) {
+  const numstat = getChangedFilesNumstat(base, head, dependencies);
+  const commitCount = getCommitCount(base, head, dependencies);
+  return evaluatePrSizeSnapshot(base, head, numstat, commitCount, dependencies);
 }
 
 export function main() {
