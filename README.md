@@ -20,7 +20,7 @@
   <img src="https://img.shields.io/badge/TypeScript-tsgo_native_preview-3178C6?logo=typescript&logoColor=white" alt="TypeScript native preview (tsgo)">
   <img src="https://img.shields.io/badge/Desktop-Tauri_2-FFC131?logo=tauri&logoColor=black" alt="Tauri 2">
   <img src="https://img.shields.io/badge/i18n-19_locales-2942_keys-0EA5E9" alt="19 locales — 2942 keys">
-  <img src="https://img.shields.io/badge/Tests-7791%2B_%2F_606_files-22C55E" alt="7791+ tests / 606 files">
+  <img src="https://img.shields.io/badge/Tests-7792%2B_%2F_606_files-22C55E" alt="7792+ tests / 606 files">
   <img src="https://img.shields.io/codecov/c/github/qnbs/WorldScript-Studio?logo=codecov&label=Coverage" alt="Codecov Coverage">
   <img src="https://img.shields.io/github/actions/workflow/status/qnbs/WorldScript-Studio/.github/workflows/ci.yml?branch=main&logo=github&label=CI" alt="CI status">
   <img src="https://img.shields.io/badge/License-MIT-22C55E" alt="MIT License">
@@ -809,7 +809,7 @@ The normal web PR pipeline is not the complete native release qualification surf
 | DOCX | `docx` + JSZip | Word-compatible export |
 | PWA | Service Worker + Web App Manifest | Offline shell/installability |
 | i18n | Custom React i18n context | 2942 keys × 19 locales |
-| Testing | Vitest 4.x (7791+ tests / 606 files) + Playwright | Unit/integration/E2E |
+| Testing | Vitest 4.x (7792+ tests / 606 files) + Playwright | Unit/integration/E2E |
 | Quality | Biome + tsgo + CodeQL/security tooling | Static and CI gates |
 | Desktop | Tauri 2 | Current native shell |
 
@@ -886,7 +886,7 @@ WorldScript-Studio/
 ├── locales/                 # Source locale trees
 ├── public/                  # PWA assets, manifest, SW, runtime locale bundles
 ├── tests/
-│   ├── unit/                # Vitest unit tests (7791+ tests; file count includes package test directories)
+│   ├── unit/                # Vitest unit tests (7792+ tests; file count includes package test directories)
 │   └── e2e/                 # Playwright
 ├── docs/                    # Canonical product/engineering documentation + ADRs
 ├── src-tauri/               # Tauri v2 desktop shell / Rust
@@ -1031,7 +1031,7 @@ Raw bundle-budget ceilings (KB per uncompressed asset): entry **2500 KB**, vendo
 
 Current source-synchronized README metrics:
 
-- **7791+ unit tests** across **606 test files**
+- **7792+ unit tests** across **606 test files**
 - i18n: **2942 keys × 19 locales**
 
 CI remains authoritative for actual pass/fail and live coverage.
