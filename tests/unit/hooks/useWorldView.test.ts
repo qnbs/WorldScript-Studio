@@ -507,6 +507,23 @@ describe('confirmDelete', () => {
     );
   });
 
+  it('clears the confirmation and shows an error when image deletion fails', async () => {
+    const world = makeWorld('w1');
+    const { result } = renderHook(() => useWorldView());
+    act(() => result.current.setWorldToDelete(world));
+    mockDeleteImage.mockRejectedValueOnce(new Error('storage failed'));
+
+    await act(async () => {
+      await result.current.confirmDelete();
+    });
+
+    expect(result.current.worldToDelete).toBeNull();
+    expect(mockToast.error).toHaveBeenCalledWith('error.apiErrorTitle');
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'project/deleteWorld', payload: 'w1' }),
+    );
+  });
+
   it('clears a confirmation when the active project changes before delete starts', async () => {
     const { result } = renderHook(() => useWorldView());
     act(() => result.current.setWorldToDelete(makeWorld('w1')));

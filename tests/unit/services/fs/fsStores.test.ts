@@ -1986,7 +1986,7 @@ describe('FsAssetStore — images + binder assets', () => {
     }
 
     expect(removeAttempts).toBe(2);
-    expect(admission).toHaveBeenCalledTimes(3);
+    expect(admission).toHaveBeenCalledTimes(2);
     expect(await store.getImage('delete-retry', 'proj-1')).toBeNull();
   });
 
@@ -2131,6 +2131,22 @@ describe('FsAssetStore — images + binder assets', () => {
     await store.deleteImage('dual', 'proj-1');
     expect(await store.getImage('dual', 'proj-1')).toBeNull();
     expect(fake.text.has('/app/images/dual.png')).toBe(false);
+  });
+
+  // QNBS-v3: filesystem deletion mirrors the IDB transaction boundary -- a stale final admission cannot interrupt the ordered legacy/qualified cleanup between files.
+  it('finishes both image removals before rejecting a stale delete completion', async () => {
+    simulateLegacyImageOwner('proj-1');
+    fake.text.set('/app/images/delete-boundary.png', 'data:image/png;base64,LEGACY');
+    await store.saveImage('delete-boundary', 'data:image/png;base64,QUALIFIED', 'proj-1');
+    const admission = vi.fn(() => {
+      if (admission.mock.calls.length > 1) throw new Error('stale project incarnation');
+    });
+
+    await expect(store.deleteImage('delete-boundary', 'proj-1', admission)).rejects.toThrow(
+      'stale project incarnation',
+    );
+    expect(fake.text.has('/app/images/delete-boundary.png')).toBe(false);
+    expect(qualifiedImageKey('delete-boundary')).toBeUndefined();
   });
 
   // QNBS-v3: writes the persisted legacy-image-ownership marker directly, simulating a prior claim by projectId (as if it had already consulted the legacy fallback once).

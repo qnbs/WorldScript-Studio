@@ -275,9 +275,11 @@ export const useWorldView = () => {
           ),
         );
       } catch (error) {
-        if (!isStaleProjectOperationError(error)) throw error;
         setWorldToDeleteState(null);
         setWorldDeleteIdentity(null);
+        if (!isStaleProjectOperationError(error)) {
+          toast.error(t('error.apiErrorTitle'));
+        }
         return;
       }
       if (!identityUnchanged(worldDeleteIdentity, captureActiveProjectIdentity())) {

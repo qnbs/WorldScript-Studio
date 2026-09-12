@@ -144,21 +144,23 @@ export class FsAssetStore extends FsSnapshotStore {
         // QNBS-v3: preserve-first -- only remove the unattributed legacy copy when ownership is already provable; otherwise it may belong to a different (possibly already-deleted) project, so leave it untouched rather than risk destroying another project's image.
         const soleOwner = await this.checkLegacyImageOwnership(projectId);
         // QNBS-v3: legacy MUST be removed before the qualified file, not after -- if legacy removal throws, the catch below aborts before the qualified file is touched, so getImage's legacy fallback can never resurrect a half-deleted image. The reverse order would let a failure after the qualified delete leave the legacy copy to resurrect it.
-        const removeImageFile = async (path: string) => {
-          await retryFs(async () => {
-            // QNBS-v3: re-admit every retry attempt so a same-ID replacement cannot be deleted after a transient filesystem failure.
-            deleteAdmission?.();
-            await apis.remove(path);
-          });
-        };
+        // QNBS-v3: retries stay inside the serialized delete operation; one admission before both removals mirrors the IDB transaction boundary.
+        const removeImageFile = async (path: string) => retryFs(() => apis.remove(path));
+        const filesToRemove: string[] = [];
         if (soleOwner) {
           const legacyFile = await this.legacyImagePath(id);
           if (await apis.exists(legacyFile)) {
-            await removeImageFile(legacyFile);
+            filesToRemove.push(legacyFile);
           }
         }
         if (await apis.exists(qualifiedFile)) {
-          await removeImageFile(qualifiedFile);
+          filesToRemove.push(qualifiedFile);
+        }
+        if (filesToRemove.length > 0) {
+          deleteAdmission?.();
+          for (const path of filesToRemove) {
+            await removeImageFile(path);
+          }
         }
         // QNBS-v3: final delete admission / reject stale no-op deletions / keep entity mutation authority truthful.
         deleteAdmission?.();

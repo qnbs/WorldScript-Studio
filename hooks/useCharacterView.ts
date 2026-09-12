@@ -237,9 +237,11 @@ export const useCharacterView = () => {
           ),
         );
       } catch (error) {
-        if (!isStaleProjectOperationError(error)) throw error;
         setCharacterToDeleteState(null);
         setCharacterDeleteIdentity(null);
+        if (!isStaleProjectOperationError(error)) {
+          toast.error(t('error.apiErrorTitle'));
+        }
         return;
       }
       if (!identityUnchanged(characterDeleteIdentity, captureActiveProjectIdentity())) {

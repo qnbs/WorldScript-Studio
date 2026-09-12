@@ -102,9 +102,11 @@ async function writeAndReplace(
     const temporary = temporaryPath(path);
     try {
       await retryFs(() => write(temporary));
-      // QNBS-v3: [Grund: final replace admission / Impact: reject stale filesystem mutations / Kreativer Mehrwert: preserve atomic project assets]
-      beforeReplace?.();
-      await retryFs(() => apis.rename(temporary, path));
+      await retryFs(async () => {
+        // QNBS-v3: admit immediately before every irreversible rename attempt, including retries after a transient filesystem failure.
+        beforeReplace?.();
+        await apis.rename(temporary, path);
+      });
     } catch (error) {
       // QNBS-v3: retry cleanup, then log (not throw) — the caller must always see the original write/rename error, with an orphaned-temp-file warning surfaced for diagnostics.
       try {

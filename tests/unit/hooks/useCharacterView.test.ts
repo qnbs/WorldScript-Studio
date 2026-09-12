@@ -527,6 +527,21 @@ describe('confirmDelete', () => {
     expect(mockDispatch).not.toHaveBeenCalledWith(projectActions.deleteCharacter('c1'));
   });
 
+  it('clears the confirmation and shows an error when image deletion fails', async () => {
+    const char = makeCharacter('c1', 'Hero');
+    const { result } = renderHook(() => useCharacterView());
+    act(() => result.current.setCharacterToDelete(char));
+    mockDeleteImage.mockRejectedValueOnce(new Error('storage failed'));
+
+    await act(async () => {
+      await result.current.confirmDelete();
+    });
+
+    expect(result.current.characterToDelete).toBeNull();
+    expect(mockToast.error).toHaveBeenCalledWith('error.apiErrorTitle');
+    expect(mockDispatch).not.toHaveBeenCalledWith(projectActions.deleteCharacter('c1'));
+  });
+
   it('clears a confirmation when the active project changes before delete starts', async () => {
     const { result } = renderHook(() => useCharacterView());
     act(() => result.current.setCharacterToDelete(makeCharacter('c1')));
