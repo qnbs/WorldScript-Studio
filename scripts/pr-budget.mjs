@@ -38,13 +38,9 @@ function readPullRequestEvent(dependencies = {}) {
 }
 
 function pullRequestEventRefs(payload) {
-  const pullRequest = payload?.pull_request;
-  const baseSha = pullRequest?.base?.sha;
-  const baseRef = pullRequest?.base?.ref;
-  const headRef = pullRequest?.head?.ref;
-  const hasBaseRef = [baseSha, baseRef].some((value) => typeof value === 'string');
-  const hasHeadRef = typeof headRef === 'string';
-  return hasBaseRef && hasHeadRef ? { baseSha, baseRef, headRef } : null;
+  const base = payload?.pull_request?.base;
+  if (!base) return null;
+  return { baseSha: base.sha, baseRef: base.ref };
 }
 
 function currentBranch(dependencies = {}) {
