@@ -120,6 +120,7 @@ export const streamInterviewResponseThunk = createAsyncThunk(
         if (stale) return;
         const liveIdentity = getProjectTargetIdentity((getState() as RootState).project.present);
         if (!identityUnchanged(originIdentity, liveIdentity)) {
+          // QNBS-v3: stop accepting chunks as soon as the originating project incarnation is replaced.
           stale = true;
           return;
         }
@@ -149,6 +150,12 @@ export const streamInterviewResponseThunk = createAsyncThunk(
     );
 
     if (stale) throw new StaleProjectOperationError('character interview stream');
+    // QNBS-v3: a stream can finish without another chunk after a project switch, so completion needs its own authority check.
+    assertProjectIdentityUnchanged(
+      originIdentity,
+      getProjectTargetIdentity((getState() as RootState).project.present),
+      'character interview stream completion',
+    );
 
     void aiOptions; // aiOptions used in future multi-provider path
     return { characterId, interviewId, aiMsgId, content: accumulated };

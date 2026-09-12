@@ -127,6 +127,7 @@ const projectSlice = createSlice({
           };
         } => action.type === 'project/streamInterviewChunk',
         (state, action) => {
+          // QNBS-v3: reject chunks from a replaced incarnation before they can mutate the active interview.
           if (!identityUnchanged(action.payload.originIdentity, getProjectTargetIdentity(state))) {
             return;
           }

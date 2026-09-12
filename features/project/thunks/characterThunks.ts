@@ -6,7 +6,11 @@ import type { CharacterHeuristicLabels } from '../../../services/ai/heuristicFal
 import { storageService } from '../../../services/storageService';
 import type { Character } from '../../../types';
 import { createDeduplicatedThunk } from '../aiThunkUtils';
-import { assertProjectIdentityUnchanged, getProjectTargetIdentity } from '../projectIdentity';
+import {
+  assertProjectIdentityUnchanged,
+  getProjectTargetIdentity,
+  getProjectTargetStorageId,
+} from '../projectIdentity';
 import { buildAiCreativity, buildAiOptions, loadAiProvider, loadPrompts } from './thunkUtils';
 
 export const generateCharacterProfileThunk = createDeduplicatedThunk(
@@ -76,9 +80,10 @@ export const generateCharacterPortraitThunk = createDeduplicatedThunk(
   ) => {
     const fullDescription = style ? `${description}. Style: ${style}` : description;
     const state = getState() as RootState;
+    // QNBS-v3: capture the incarnation before generation so a same-ID replacement cannot inherit the result.
     const originIdentity = getProjectTargetIdentity(state.project.present);
     // QNBS-v3: threaded into saveImage so the stored key is project-qualified, not a bare entity id shared across projects.
-    const projectId = state.project.present?.data?.id || 'default';
+    const projectId = getProjectTargetStorageId(state.project.present) ?? 'default';
     const aiOptions = buildAiOptions(state);
     const { getPrompts } = await loadPrompts();
     const { generateImage } = await loadAiProvider();
@@ -90,7 +95,14 @@ export const generateCharacterPortraitThunk = createDeduplicatedThunk(
       getProjectTargetIdentity((getState() as RootState).project.present),
       'character portrait generation before storage',
     );
-    await storageService.saveImage(characterId, base64, projectId);
+    // QNBS-v3: the backend must re-check incarnation authority at its final image-write point, not only before/after the asynchronous storage call.
+    await storageService.saveImage(characterId, base64, projectId, () =>
+      assertProjectIdentityUnchanged(
+        originIdentity,
+        getProjectTargetIdentity((getState() as RootState).project.present),
+        'character portrait persistence',
+      ),
+    );
     assertProjectIdentityUnchanged(
       originIdentity,
       getProjectTargetIdentity((getState() as RootState).project.present),

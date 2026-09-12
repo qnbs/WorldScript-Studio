@@ -257,4 +257,22 @@ describe('streamInterviewResponseThunk', () => {
       dispatch.mock.calls.some(([action]) => action?.type === 'project/streamInterviewChunk'),
     ).toBe(false);
   });
+
+  it('rejects when the project changes before a chunkless stream completes', async () => {
+    const state = makeState();
+    mockStreamText.mockImplementationOnce(async () => {
+      state.project.present.generation = 1;
+    });
+    const dispatch = vi.fn();
+    const getState = vi.fn().mockReturnValue(state);
+
+    // QNBS-v3: completion-only coverage proves a stream cannot fulfill after a silent incarnation switch.
+    const result = await streamInterviewResponseThunk({
+      characterId: 'char-1',
+      interviewId: 'interview-1',
+      question: 'Hello?',
+    })(dispatch, getState, undefined);
+
+    expect((result as { type: string }).type).toBe('project/streamInterviewResponse/rejected');
+  });
 });

@@ -45,6 +45,16 @@ export function getProjectTargetIdentity(
   return base === null ? null : `${base}:gen:${source.generation ?? 0}`;
 }
 
+// QNBS-v3: legacy directory identity is stable storage ownership, while the in-memory generation remains an async-operation fence only.
+export function getProjectTargetStorageId(
+  source: ProjectIdentitySource | null | undefined,
+): string | null {
+  if (!source) return null;
+  const base = baseTargetIdentity(source.data);
+  if (base === null) return null;
+  return base.startsWith('id:') ? base.slice('id:'.length) : base;
+}
+
 // QNBS-v3: reads the live store directly (not a React selector) so a hook can capture identity at dispatch time and re-check it after an await, independent of that hook's own render cycle.
 export function captureActiveProjectIdentity(): string | null {
   const state = appStoreRef.current?.getState();

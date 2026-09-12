@@ -5,7 +5,7 @@
  */
 
 import { logger } from '../logger';
-import type { BinderAssetMeta, BinderAssetPayload } from '../storageBackend';
+import type { BinderAssetMeta, BinderAssetPayload, ImageWriteAdmission } from '../storageBackend';
 import { retryFs, sanitizePathSegment, writeFileAtomic, writeTextFileAtomic } from './fsCore';
 import { FsSnapshotStore } from './snapshotFsStore';
 
@@ -79,14 +79,19 @@ export class FsAssetStore extends FsSnapshotStore {
     return existing === projectId;
   }
 
-  async saveImage(id: string, base64Data: string, projectId = 'default'): Promise<void> {
+  async saveImage(
+    id: string,
+    base64Data: string,
+    projectId = 'default',
+    writeAdmission?: ImageWriteAdmission,
+  ): Promise<void> {
     const apis = await this.getApis();
     const { dir, file } = await this.qualifiedImagePaths(projectId, id);
     if (!(await apis.exists(dir))) {
       await apis.mkdir(dir, { recursive: true });
     }
     // QNBS-v3: data URLs retain an uploaded image's MIME type; legacy raw payloads remain readable as PNG below.
-    await writeTextFileAtomic(apis, file, base64Data);
+    await writeTextFileAtomic(apis, file, base64Data, writeAdmission);
   }
 
   async getImage(id: string, projectId = 'default'): Promise<string | null> {

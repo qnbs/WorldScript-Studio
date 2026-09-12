@@ -202,8 +202,11 @@ describe('generateSceneImageThunk', () => {
     const store = makeStore();
     await store.dispatch(generateSceneImageThunk(payload));
 
-    // QNBS-v3: id, data, projectId order, matching the reordered saveImage signature.
-    expect(storageService.saveImage).toHaveBeenCalledWith('scene-sec-1', 'rawbase64', 'default');
+    // QNBS-v3: the final-write admission callback prevents an in-flight save from crossing an incarnation boundary.
+    const [imageId, imageData, projectId, writeAdmission] = vi.mocked(storageService.saveImage).mock
+      .calls[0]!;
+    expect([imageId, imageData, projectId]).toEqual(['scene-sec-1', 'rawbase64', 'default']);
+    expect(writeAdmission).toEqual(expect.any(Function));
   });
 
   it('prefixes plain base64 with data:image/png;base64,', async () => {
@@ -270,6 +273,33 @@ describe('generateSceneImageThunk', () => {
         chapter1Title: 'Chapter One',
       }),
     );
+    resolveSave?.();
+
+    const action = await pending;
+    expect(action.type).toBe('project/generateSceneImage/rejected');
+  });
+
+  it('rejects a same-ID generation change at the backend write-admission point', async () => {
+    mockGenerateImage.mockResolvedValueOnce('late-image');
+    let resolveSave: (() => void) | undefined;
+    let writeAdmission: (() => void) | undefined;
+    vi.mocked(storageService.saveImage).mockImplementationOnce(
+      (_id, _data, _projectId, admission) => {
+        writeAdmission = admission;
+        return new Promise<void>((resolve) => {
+          resolveSave = resolve;
+        });
+      },
+    );
+    const store = makeStore();
+    const pending = store.dispatch(generateSceneImageThunk(payload));
+
+    await vi.waitFor(() => expect(storageService.saveImage).toHaveBeenCalled());
+    store.dispatch(
+      projectActions.resetProject({ title: 'Replaced', logline: '', chapter1Title: 'Chapter One' }),
+    );
+    expect(writeAdmission).toEqual(expect.any(Function));
+    expect(() => writeAdmission?.()).toThrow('Discarded stale project operation');
     resolveSave?.();
 
     const action = await pending;
@@ -441,8 +471,10 @@ describe('generateCharacterPortraitThunk', () => {
       }),
     );
 
-    // QNBS-v3: id, data, projectId order, matching the reordered saveImage signature.
-    expect(storageService.saveImage).toHaveBeenCalledWith('c42', 'portraitdata', 'default');
+    const [imageId, imageData, projectId, writeAdmission] = vi.mocked(storageService.saveImage).mock
+      .calls[0]!;
+    expect([imageId, imageData, projectId]).toEqual(['c42', 'portraitdata', 'default']);
+    expect(writeAdmission).toEqual(expect.any(Function));
   });
 
   it('appends style to description when style is provided', async () => {

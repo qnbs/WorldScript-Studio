@@ -2,6 +2,7 @@ import type { ProjectSnapshot, Settings, StoryCodex, StoryProject } from '../typ
 import type {
   BinderAssetMeta,
   BinderAssetPayload,
+  ImageWriteAdmission,
   ProjectQuarantineResult,
   SaveProjectInput,
   SnapshotRestoreTarget,
@@ -11,6 +12,7 @@ import type {
 export type {
   BinderAssetMeta,
   BinderAssetPayload,
+  ImageWriteAdmission,
   ProjectQuarantineResult,
   SaveProjectEnvelope,
   SaveProjectInput,
@@ -114,9 +116,14 @@ class StorageManager {
   }
 
   // QNBS-v3: projectId is trailing/optional, mirroring StorageBackend, so callers that predate project-qualification still compile unchanged and defer to each backend's own 'default' fallback.
-  async saveImage(id: string, base64Data: string, projectId?: string): Promise<void> {
+  async saveImage(
+    id: string,
+    base64Data: string,
+    projectId?: string,
+    writeAdmission?: ImageWriteAdmission,
+  ): Promise<void> {
     const backend = await this.getBackend();
-    return backend.saveImage(id, base64Data, projectId);
+    return backend.saveImage(id, base64Data, projectId, writeAdmission);
   }
 
   async getImage(id: string, projectId?: string): Promise<string | null> {

@@ -95,12 +95,14 @@ async function writeAndReplace(
   apis: TauriApis,
   path: string,
   write: (temporary: string) => Promise<void>,
+  beforeReplace?: () => void,
 ): Promise<void> {
   const previous = atomicWriteTails.get(path);
   const current = (previous?.catch(() => undefined) ?? Promise.resolve()).then(async () => {
     const temporary = temporaryPath(path);
     try {
       await retryFs(() => write(temporary));
+      beforeReplace?.();
       await retryFs(() => apis.rename(temporary, path));
     } catch (error) {
       // QNBS-v3: retry cleanup, then log (not throw) — the caller must always see the original write/rename error, with an orphaned-temp-file warning surfaced for diagnostics.
@@ -126,8 +128,18 @@ async function writeAndReplace(
 }
 
 // QNBS-v3: replace authoritative files only after a complete sibling write, preserving the last valid file on interruption.
-export function writeTextFileAtomic(apis: TauriApis, path: string, content: string): Promise<void> {
-  return writeAndReplace(apis, path, (temporary) => apis.writeTextFile(temporary, content));
+export function writeTextFileAtomic(
+  apis: TauriApis,
+  path: string,
+  content: string,
+  beforeReplace?: () => void,
+): Promise<void> {
+  return writeAndReplace(
+    apis,
+    path,
+    (temporary) => apis.writeTextFile(temporary, content),
+    beforeReplace,
+  );
 }
 
 // QNBS-v3: binary assets use the same same-directory replace so readers never observe a partial file.

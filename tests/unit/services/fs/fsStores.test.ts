@@ -1922,6 +1922,19 @@ describe('FsAssetStore — images + binder assets', () => {
     expect(await store.getImage('char-1', 'proj-1')).toBeNull();
   });
 
+  it('does not replace an image when final write admission rejects the incarnation', async () => {
+    await store.saveImage('guarded', 'data:image/png;base64,OLD', 'proj-1');
+    const admission = vi.fn(() => {
+      throw new Error('stale project incarnation');
+    });
+
+    await expect(
+      store.saveImage('guarded', 'data:image/png;base64,NEW', 'proj-1', admission),
+    ).rejects.toThrow('stale project incarnation');
+    expect(admission).toHaveBeenCalledTimes(1);
+    expect(await store.getImage('guarded', 'proj-1')).toBe('data:image/png;base64,OLD');
+  });
+
   it('treats legacy raw image payloads as PNG', async () => {
     await store.saveImage('legacy-char', 'QUJD', 'proj-1');
     expect(await store.getImage('legacy-char', 'proj-1')).toBe('data:image/png;base64,QUJD');

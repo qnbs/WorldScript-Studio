@@ -10,7 +10,7 @@ import {
   IMAGES_STORE,
   LEGACY_IMAGE_OWNER_KEY,
 } from '../dbConstants';
-import type { BinderAssetMeta, BinderAssetPayload } from '../storageBackend';
+import type { BinderAssetMeta, BinderAssetPayload, ImageWriteAdmission } from '../storageBackend';
 import {
   makeBinderAssetIdsPrefix,
   makeBinderAssetStorageKey,
@@ -72,7 +72,12 @@ export class IdbAssetStore extends IdbSnapshotStore {
     return existing === projectId;
   }
 
-  async saveImage(id: string, base64: string, projectId = 'default'): Promise<void> {
+  async saveImage(
+    id: string,
+    base64: string,
+    projectId = 'default',
+    writeAdmission?: ImageWriteAdmission,
+  ): Promise<void> {
     return withProtectedWriteAdmission(async () => {
       // QNBS-v3: Resolve the write key BEFORE opening the transaction — `await idbEncryptWithKey`
       //          yields the event loop, which auto-commits an already-open IDB transaction
@@ -84,6 +89,7 @@ export class IdbAssetStore extends IdbSnapshotStore {
       await assertNoActiveEncryptionMigration();
       const key = await makeImageStorageKey(projectId, id);
       const store = await this.getObjectStore(IMAGES_STORE, 'readwrite');
+      writeAdmission?.();
       return new Promise<void>((resolve, reject) => {
         const request = store.put(payload, key);
         request.onsuccess = () => resolve();

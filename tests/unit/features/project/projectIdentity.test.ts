@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   getProjectTargetIdentity,
+  getProjectTargetStorageId,
   identityUnchanged,
 } from '../../../../features/project/projectIdentity';
 
@@ -52,6 +53,26 @@ describe('getProjectTargetIdentity', () => {
       generation: 0,
     });
     expect(identity).toBe('id:p1:gen:0');
+  });
+});
+
+describe('getProjectTargetStorageId', () => {
+  it('keeps ordinary project IDs stable', () => {
+    expect(getProjectTargetStorageId({ data: { id: 'p1' }, generation: 4 })).toBe('p1');
+  });
+
+  it('uses stable legacy directory identity without the transient generation fence', () => {
+    // QNBS-v3: legacy image ownership must remain reloadable while still avoiding the shared default namespace.
+    expect(
+      getProjectTargetStorageId({
+        data: { __worldscriptLegacyProjectDirectory: 'legacy-dir' },
+        generation: 4,
+      }),
+    ).toBe('legacy:legacy-dir');
+  });
+
+  it('returns null when no stable storage identity exists', () => {
+    expect(getProjectTargetStorageId({ data: { title: 'Untitled' } })).toBeNull();
   });
 });
 
