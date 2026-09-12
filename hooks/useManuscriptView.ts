@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useTransientUiStore } from '../app/transientUiStore';
 import { useToast } from '../components/ui/Toast';
-import { isStaleProjectOperationError } from '../features/project/projectIdentity';
+import {
+  getProjectTargetIdentity,
+  isStaleProjectOperationError,
+} from '../features/project/projectIdentity';
 import {
   selectAllCharacters,
   selectAllWorlds,
@@ -80,6 +83,9 @@ export const useManuscriptView = ({
   const { t, language } = useTranslation();
   const dispatch = useAppDispatch();
   const project = useAppSelector(selectProjectData);
+  const projectIdentity = useAppSelector((state) =>
+    getProjectTargetIdentity(state.project.present),
+  );
   const manuscript = useAppSelector((state) => state.project.present.data.manuscript);
   const characters = useAppSelector(selectAllCharacters);
   const worlds = useAppSelector(selectAllWorlds);
@@ -104,6 +110,10 @@ export const useManuscriptView = ({
   const [isSceneVisualizing, setIsSceneVisualizing] = useState(false);
   const [sceneImagePreviewUrl, setSceneImagePreviewUrl] = useState<string | null>(null);
   const sceneVisualizationRequestRef = useRef(0);
+  const sceneVisualizationTargetRef = useRef({
+    sectionId: activeSectionId,
+    projectIdentity,
+  });
 
   // Drag and drop state
   const draggedItem = useRef<number | null>(null);
@@ -124,13 +134,13 @@ export const useManuscriptView = ({
     return manuscript.find((s) => s.id === currentActiveId) || manuscript?.[0];
   }, [activeSectionId, manuscript]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset preview on active section change
+  // QNBS-v3: changing the visualization target or project incarnation invalidates pending results.
   useEffect(() => {
-    // QNBS-v3: changing the visualization target invalidates any pending result from the prior section.
+    sceneVisualizationTargetRef.current = { sectionId: activeSectionId, projectIdentity };
     sceneVisualizationRequestRef.current += 1;
     setSceneImagePreviewUrl(null);
     setIsSceneVisualizing(false);
-  }, [activeSectionId]);
+  }, [activeSectionId, projectIdentity]);
 
   const activeSectionStats = useMemo(() => {
     if (!activeSection) return { wordCount: 0, charCount: 0, readTime: 0 };
@@ -318,6 +328,7 @@ export const useManuscriptView = ({
   const handleVisualizeScene = useCallback(async () => {
     if (!activeSection?.content?.trim() || !project) return;
     const requestId = ++sceneVisualizationRequestRef.current;
+    const requestTarget = sceneVisualizationTargetRef.current;
     setIsSceneVisualizing(true);
     try {
       const result = await dispatch(
@@ -330,12 +341,20 @@ export const useManuscriptView = ({
         }),
       ).unwrap();
       // QNBS-v3: only the newest request may publish preview, toast, or loading completion.
-      if (sceneVisualizationRequestRef.current !== requestId) return;
+      if (
+        sceneVisualizationRequestRef.current !== requestId ||
+        sceneVisualizationTargetRef.current !== requestTarget
+      )
+        return;
       setSceneImagePreviewUrl(result.dataUrl);
       toast.success(t('manuscript.visualize.successTitle'), t('manuscript.visualize.successBody'));
     } catch (error) {
       // QNBS-v3: [Grund: stale scene result is expected after a project switch / Impact: suppress false error toasts / Kreativer Mehrwert: keep authoring feedback actionable]
-      if (sceneVisualizationRequestRef.current !== requestId) return;
+      if (
+        sceneVisualizationRequestRef.current !== requestId ||
+        sceneVisualizationTargetRef.current !== requestTarget
+      )
+        return;
       if (!isStaleProjectOperationError(error)) {
         toast.error(t('error.apiErrorTitle'));
       } else {
@@ -343,7 +362,11 @@ export const useManuscriptView = ({
         setSceneImagePreviewUrl(null);
       }
     } finally {
-      if (sceneVisualizationRequestRef.current === requestId) setIsSceneVisualizing(false);
+      if (
+        sceneVisualizationRequestRef.current === requestId &&
+        sceneVisualizationTargetRef.current === requestTarget
+      )
+        setIsSceneVisualizing(false);
     }
   }, [activeSection, dispatch, language, project, t, toast]);
 

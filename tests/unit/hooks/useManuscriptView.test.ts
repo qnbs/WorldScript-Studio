@@ -23,6 +23,7 @@ const mockToast = { success: vi.fn(), error: vi.fn(), info: vi.fn() };
 const mockState = {
   project: {
     present: {
+      generation: 0,
       data: {
         id: 'p1',
         title: 'My Novel',
@@ -497,6 +498,48 @@ describe('handleVisualizeScene', () => {
 
     await act(async () => {
       resolveVisualization({ imageKey: 'scene-old', dataUrl: 'data:image/png;base64,old' });
+      await visualizationRequest;
+    });
+    expect(result.current.sceneImagePreviewUrl).toBeNull();
+    expect(result.current.isSceneVisualizing).toBe(false);
+  });
+
+  it('clears a visualization when the project incarnation changes without changing section', async () => {
+    mockUnwrap.mockResolvedValueOnce({
+      imageKey: 'scene-before-replacement',
+      dataUrl: 'data:image/png;base64,before-replacement',
+    });
+    setManuscript([makeSection('s1', 'Ch1', 'Scene one')]);
+    const { result, rerender } = renderHook(() => useManuscriptView({ onNavigate }));
+
+    await act(async () => {
+      await result.current.handleVisualizeScene();
+    });
+    expect(result.current.sceneImagePreviewUrl).toBe('data:image/png;base64,before-replacement');
+
+    let resolveVisualization!: (value: { imageKey: string; dataUrl: string }) => void;
+    mockUnwrap.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveVisualization = resolve;
+      }),
+    );
+    let visualizationRequest!: Promise<void>;
+    act(() => {
+      visualizationRequest = result.current.handleVisualizeScene();
+    });
+
+    act(() => {
+      mockState.project.present.generation = 1;
+      rerender();
+    });
+    expect(result.current.sceneImagePreviewUrl).toBeNull();
+    expect(result.current.isSceneVisualizing).toBe(false);
+
+    await act(async () => {
+      resolveVisualization({
+        imageKey: 'scene-after-replacement',
+        dataUrl: 'data:image/png;base64,after-replacement',
+      });
       await visualizationRequest;
     });
     expect(result.current.sceneImagePreviewUrl).toBeNull();
