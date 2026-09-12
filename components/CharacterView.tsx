@@ -57,12 +57,13 @@ const startCharacterImageLoad = ({
   setImageUrl: (imageUrl: string | null) => void;
 }): (() => void) => {
   setImageUrl(null);
-  if (!id || !hasImage || !projectIdentity) return () => {};
+  if (!id || !hasImage) return () => {};
 
+  const loadScopeKey = projectIdentity ?? projectId;
   let isMounted = true;
   void loadStoredCharacterImage(id, projectId)
     .then((image) => {
-      if (isMounted) setImageUrl(image);
+      if (isMounted && loadScopeKey) setImageUrl(image);
     })
     .catch((error) => {
       // QNBS-v3: an unavailable image must retain the placeholder instead of causing an unhandled async rejection.
