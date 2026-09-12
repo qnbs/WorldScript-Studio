@@ -703,6 +703,7 @@ describe('local-first shadow sync (B1.1)', () => {
       active: true,
       whenSynced: Promise.resolve(),
       destroy: () => Promise.resolve(),
+      destroyStrict: () => Promise.resolve(),
       clearData: () => Promise.resolve(),
     };
     vi.mocked(persistProjectDoc)
