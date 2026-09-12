@@ -22,13 +22,17 @@ const { mockProfileMatch, mockRegenerateMatch, mockImageMatch, mockCaptureIdenti
 const mockDispatch = vi.fn();
 const mockToast = { success: vi.fn(), error: vi.fn(), info: vi.fn() };
 const mockSaveImage = vi.fn().mockResolvedValue(undefined);
+const mockDeleteImage = vi.fn().mockResolvedValue(undefined);
 
 let mockWorlds: World[] = [];
 
 vi.mock('../../../app/hooks', () => ({
   useAppDispatch: () => mockDispatch,
+  // QNBS-v3: a real (non-'default') id so confirmDelete's deleteImage assertion actually proves the active project's own id is forwarded, not just the || 'default' fallback every project would otherwise share.
   useAppSelector: (selector: (s: unknown) => unknown) =>
-    selector({ project: { present: { data: { worlds: { ids: [], entities: {} } } } } }),
+    selector({
+      project: { present: { data: { id: 'w-project-1', worlds: { ids: [], entities: {} } } } },
+    }),
 }));
 
 vi.mock('../../../hooks/useTranslation', () => ({
@@ -45,6 +49,8 @@ vi.mock('../../../components/ui/Toast', () => ({
 
 vi.mock('../../../features/project/projectSelectors', () => ({
   selectAllWorlds: () => mockWorlds,
+  selectProjectData: (state: { project: { present: { data: unknown } } }) =>
+    state.project.present.data,
 }));
 
 vi.mock('../../../features/project/projectIdentity', () => ({
@@ -78,7 +84,11 @@ vi.mock('../../../features/project/thunks/worldThunks', () => {
 });
 
 vi.mock('../../../services/storageService', () => ({
-  storageService: { saveImage: (id: unknown, data: unknown) => mockSaveImage(id, data) },
+  storageService: {
+    saveImage: (id: unknown, data: unknown, projectId: unknown) =>
+      mockSaveImage(id, data, projectId),
+    deleteImage: (id: unknown, projectId: unknown) => mockDeleteImage(id, projectId),
+  },
 }));
 
 vi.mock('uuid', () => ({ v4: () => 'test-uuid-world' }));
@@ -415,7 +425,8 @@ describe('confirmDelete', () => {
     await act(async () => {
       await result.current.confirmDelete();
     });
-    expect(mockSaveImage).toHaveBeenCalledWith('w1', '');
+    // QNBS-v3: asserts the real active project id (not a hardcoded fallback every project would share) is forwarded to deleteImage.
+    expect(mockDeleteImage).toHaveBeenCalledWith('w1', 'w-project-1');
     expect(mockDispatch).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'project/deleteWorld', payload: 'w1' }),
     );

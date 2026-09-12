@@ -32,6 +32,18 @@ export function makeBinderAssetIdsPrefix(projectId: string): string {
   return `${safeProject}::`;
 }
 
+// QNBS-v3: images were previously keyed only by entity id, so two stored projects sharing an id (e.g. import preserves ids verbatim) could overwrite each other's image -- project-qualify going forward, with a legacy-key read-through.
+// QNBS-v3: whitespace/colon replacement plus truncation (as used for binder asset keys) is a display sanitizer, not injective -- "alpha beta" and "alpha:beta" both collapse to "alpha_beta", and IDs differing only past the 200-char cut also collide. Images hash the FULL projectId instead; the sanitized text is kept only as a human-readable prefix, never as the sole identity.
+/** IndexedDB image key for a project-scoped image, collision-resistant across the full projectId. */
+export async function makeImageStorageKey(projectId: string, entityId: string): Promise<string> {
+  const digestBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(projectId));
+  const digest = Array.from(new Uint8Array(digestBuffer), (b) => b.toString(16).padStart(2, '0'))
+    .join('')
+    .slice(0, 16);
+  const readablePrefix = projectId.replace(/[\s:]/g, '_').slice(0, 40);
+  return `${readablePrefix}--${digest}::${entityId}`;
+}
+
 /**
  * Redux-undo / auto-save shape (not a flat `StoryProject` export).
  * Kept separate from `StoryProject` so call-sites can type auto-save without casts.
@@ -84,8 +96,12 @@ export interface StorageBackend {
   // QNBS-v3: optional recovery keeps the filesystem-only quarantine contract out of IndexedDB.
   quarantineProject?(projectId: string): Promise<ProjectQuarantineResult>;
 
-  saveImage(id: string, base64Data: string): Promise<void>;
-  getImage(id: string): Promise<string | null>;
+  // QNBS-v3: projectId is trailing/optional (defaults to 'default' at each implementer) so call sites that predate project-qualification keep compiling unchanged -- only call sites that need real qualification pass it explicitly.
+  saveImage(id: string, base64Data: string, projectId?: string): Promise<void>;
+  getImage(id: string, projectId?: string): Promise<string | null>;
+  // QNBS-v3: qualified-only variants for transaction/rollback callers -- unlike getImage/deleteImage, these never consult the legacy fallback, never claim/touch legacy ownership, and never swallow a read/delete failure to null/success. A rollback needs to know the exact pre-mutation state of the exact key it is about to overwrite, not the UI-friendly merged view.
+  getQualifiedImage(id: string, projectId?: string): Promise<string | null>;
+  deleteQualifiedImage(id: string, projectId?: string): Promise<void>;
 
   saveSettings(settings: Settings): Promise<void>;
   loadSettings(): Promise<Settings | null>;
@@ -106,7 +122,7 @@ export interface StorageBackend {
   listSnapshots(): Promise<ProjectSnapshot[]>;
   deleteSnapshot(snapshotId: number): Promise<void>;
 
-  deleteImage(id: string): Promise<void>;
+  deleteImage(id: string, projectId?: string): Promise<void>;
 
   hasSavedData(): Promise<boolean>;
 

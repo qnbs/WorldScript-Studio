@@ -262,7 +262,8 @@ describe('generateWorldImageThunk', () => {
       generateWorldImageThunk({ worldId: 'w42', description: 'A volcanic wasteland', lang: 'en' }),
     );
 
-    expect(storageService.saveImage).toHaveBeenCalledWith('w42', 'worldimagedata');
+    // QNBS-v3: id, data, projectId order, matching the reordered saveImage signature.
+    expect(storageService.saveImage).toHaveBeenCalledWith('w42', 'worldimagedata', 'default');
   });
 
   it('rejects on AI error', async () => {
@@ -294,7 +295,8 @@ describe('uploadWorldImageThunk', () => {
     const action = await store.dispatch(uploadWorldImageThunk({ worldId: 'w99', file }));
 
     expect(action.type).toBe('project/uploadWorldImage/fulfilled');
-    expect(storageService.saveImage).toHaveBeenCalledWith('w99', fakeDataUrl);
+    // QNBS-v3: id, data, projectId order, matching the reordered saveImage signature.
+    expect(storageService.saveImage).toHaveBeenCalledWith('w99', fakeDataUrl, 'default');
   });
 
   it('rejects when the FileReader errors', async () => {

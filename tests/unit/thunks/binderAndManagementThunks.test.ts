@@ -6,6 +6,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../../services/storageService', () => ({
   storageService: {
     saveImage: vi.fn(),
+    getImage: vi.fn(),
+    deleteImage: vi.fn(),
+    getQualifiedImage: vi.fn(),
+    deleteQualifiedImage: vi.fn(),
     deleteBinderAsset: vi.fn(),
     saveBinderAsset: vi.fn(),
     getSnapshotData: vi.fn(),
@@ -54,6 +58,11 @@ beforeEach(() => {
   vi.mocked(storageService.deleteBinderAsset).mockResolvedValue(undefined);
   vi.mocked(storageService.saveBinderAsset).mockResolvedValue(undefined);
   vi.mocked(storageService.saveImage).mockResolvedValue(undefined);
+  // QNBS-v3: default "nothing stored yet" so import tests exercise the new-image (delete-on-rollback) path unless a test deliberately simulates a pre-existing image to exercise the restore-on-rollback path.
+  vi.mocked(storageService.getImage).mockResolvedValue(null);
+  vi.mocked(storageService.deleteImage).mockResolvedValue(undefined);
+  vi.mocked(storageService.getQualifiedImage).mockResolvedValue(null);
+  vi.mocked(storageService.deleteQualifiedImage).mockResolvedValue(undefined);
   vi.mocked(storageService.getSnapshotData).mockResolvedValue(null);
   vi.mocked(storageService.restoreSnapshot).mockResolvedValue(null);
 });
@@ -322,8 +331,8 @@ describe('importProjectThunk', () => {
     });
     const action = await store.dispatch(importProjectThunk(file));
 
-    // saveImage called proves avatar was processed
-    expect(storageService.saveImage).toHaveBeenCalledWith('c2', 'base64imgdata');
+    // saveImage called proves avatar was processed, project-qualified by the imported project's own id
+    expect(storageService.saveImage).toHaveBeenCalledWith('c2', 'base64imgdata', 'proj-1');
     // hasAvatar flag set on the character entity in the payload
     const payload = (
       action as {
@@ -335,6 +344,216 @@ describe('importProjectThunk', () => {
     const character = Object.values(payload.characters.entities)[0];
     expect(character?.hasAvatar).toBe(true);
     expect(character?.avatarBase64).toBeUndefined();
+  });
+
+  // QNBS-v3: `||`, not `??`, treats a present-but-empty id identically to a genuinely missing one -- both take the fresh-generated-id branch below, rather than an empty id alone diverging into its own '' namespace.
+  it('generates a fresh project id when the imported project id is an empty string', async () => {
+    const projectWithEmptyId = {
+      ...minimalProject,
+      id: '',
+      characters: [{ id: 'c3', name: 'Eve', avatarBase64: 'emptyidimgdata' }],
+    };
+    vi.mocked(parseImportedProjectJson).mockReturnValue(projectWithEmptyId as never);
+
+    const store = makeStore();
+    const file = new File([JSON.stringify(projectWithEmptyId)], 'novel.json', {
+      type: 'application/json',
+    });
+    const action = await store.dispatch(importProjectThunk(file));
+
+    const payload = (action as { payload: { id: string } }).payload;
+    expect(payload.id).toBeTruthy();
+    expect(storageService.saveImage).toHaveBeenCalledWith('c3', 'emptyidimgdata', payload.id);
+  });
+
+  // QNBS-v3: the exact gap CodeAnt flagged -- two independent no-id imports with a colliding entity id must land in two distinct storage namespaces, not both fall back to the same shared 'default' string.
+  it('does not collide two independent imports that both lack a project id', async () => {
+    const firstNoIdProject = {
+      ...minimalProject,
+      id: '',
+      characters: [{ id: 'shared-id', name: 'Alice', avatarBase64: 'first-avatar' }],
+    };
+    vi.mocked(parseImportedProjectJson).mockReturnValueOnce(firstNoIdProject as never);
+    const firstStore = makeStore();
+    const firstFile = new File([JSON.stringify(firstNoIdProject)], 'first.json', {
+      type: 'application/json',
+    });
+    const firstAction = await firstStore.dispatch(importProjectThunk(firstFile));
+    const firstPayload = (firstAction as { payload: { id: string } }).payload;
+
+    const secondNoIdProject = {
+      ...minimalProject,
+      id: '',
+      characters: [{ id: 'shared-id', name: 'Bob', avatarBase64: 'second-avatar' }],
+    };
+    vi.mocked(parseImportedProjectJson).mockReturnValueOnce(secondNoIdProject as never);
+    const secondStore = makeStore();
+    const secondFile = new File([JSON.stringify(secondNoIdProject)], 'second.json', {
+      type: 'application/json',
+    });
+    const secondAction = await secondStore.dispatch(importProjectThunk(secondFile));
+    const secondPayload = (secondAction as { payload: { id: string } }).payload;
+
+    expect(firstPayload.id).not.toBe(secondPayload.id);
+    expect(storageService.saveImage).toHaveBeenCalledWith(
+      'shared-id',
+      'first-avatar',
+      firstPayload.id,
+    );
+    expect(storageService.saveImage).toHaveBeenCalledWith(
+      'shared-id',
+      'second-avatar',
+      secondPayload.id,
+    );
+  });
+
+  // QNBS-v3: a partial import failure must not leave orphaned images for a project that never gets admitted into state.
+  it('cleans up already-saved images when a later image save fails during import', async () => {
+    const projectWithTwoAvatars = {
+      ...minimalProject,
+      characters: [
+        { id: 'c-ok', name: 'Ok', avatarBase64: 'ok-avatar' },
+        { id: 'c-fail', name: 'Fail', avatarBase64: 'fail-avatar' },
+      ],
+    };
+    vi.mocked(parseImportedProjectJson).mockReturnValue(projectWithTwoAvatars as never);
+    vi.mocked(storageService.saveImage).mockImplementation(async (id: string) => {
+      if (id === 'c-fail') throw new Error('disk full');
+    });
+
+    const store = makeStore();
+    const file = new File([JSON.stringify(projectWithTwoAvatars)], 'novel.json', {
+      type: 'application/json',
+    });
+    const action = await store.dispatch(importProjectThunk(file));
+
+    expect(action.type).toBe('project/importProject/rejected');
+    // QNBS-v3: rollback of a newly-created (previously-absent) qualified image uses the qualified-only delete, never the legacy-aware deleteImage, so an unrelated legacy image can never be touched by this cleanup.
+    expect(storageService.deleteQualifiedImage).toHaveBeenCalledWith('c-ok', 'proj-1');
+    expect(storageService.deleteImage).not.toHaveBeenCalled();
+  });
+
+  // QNBS-v3: re-importing into an existing project id can overwrite an already-present qualified image -- a failed later save must restore that exact prior image, not just delete this attempt's write (which would permanently destroy data that predates the failed import).
+  it('restores the pre-existing image (not deletes it) when a later image save fails after an overwrite', async () => {
+    const projectWithTwoAvatars = {
+      ...minimalProject,
+      characters: [
+        { id: 'c-overwritten', name: 'Overwritten', avatarBase64: 'new-avatar' },
+        { id: 'c-fail', name: 'Fail', avatarBase64: 'fail-avatar' },
+      ],
+    };
+    vi.mocked(parseImportedProjectJson).mockReturnValue(projectWithTwoAvatars as never);
+    vi.mocked(storageService.getQualifiedImage).mockImplementation(async (id: string) =>
+      id === 'c-overwritten' ? 'pre-existing-avatar' : null,
+    );
+    vi.mocked(storageService.saveImage).mockImplementation(async (id: string) => {
+      if (id === 'c-fail') throw new Error('disk full');
+    });
+
+    const store = makeStore();
+    const file = new File([JSON.stringify(projectWithTwoAvatars)], 'novel.json', {
+      type: 'application/json',
+    });
+    const action = await store.dispatch(importProjectThunk(file));
+
+    expect(action.type).toBe('project/importProject/rejected');
+    // QNBS-v3: restored via saveImage with the snapshotted prior value, never deleted.
+    expect(storageService.saveImage).toHaveBeenCalledWith(
+      'c-overwritten',
+      'pre-existing-avatar',
+      'proj-1',
+    );
+    expect(storageService.deleteQualifiedImage).not.toHaveBeenCalledWith('c-overwritten', 'proj-1');
+  });
+
+  // QNBS-v3: getQualifiedImage never falls through to a legacy-provenanced blob the way getImage does, so a legacy-only pre-existing image must snapshot as absent, not as a value to restore into the qualified slot.
+  it('treats a legacy-only pre-existing image as absent, not as a qualified value to restore', async () => {
+    const projectWithTwoAvatars = {
+      ...minimalProject,
+      characters: [
+        { id: 'c-legacy-only', name: 'LegacyOnly', avatarBase64: 'new-avatar' },
+        { id: 'c-fail', name: 'Fail', avatarBase64: 'fail-avatar' },
+      ],
+    };
+    vi.mocked(parseImportedProjectJson).mockReturnValue(projectWithTwoAvatars as never);
+    // QNBS-v3: getQualifiedImage correctly reports null (legacy fallback is out of scope for it) while getImage -- deliberately mocked to disagree -- reports the legacy blob, proving the snapshot uses the qualified-only read and not the merged one.
+    vi.mocked(storageService.getQualifiedImage).mockResolvedValue(null);
+    vi.mocked(storageService.getImage).mockResolvedValue('legacy-blob');
+    vi.mocked(storageService.saveImage).mockImplementation(async (id: string) => {
+      if (id === 'c-fail') throw new Error('disk full');
+    });
+
+    const store = makeStore();
+    const file = new File([JSON.stringify(projectWithTwoAvatars)], 'novel.json', {
+      type: 'application/json',
+    });
+    const action = await store.dispatch(importProjectThunk(file));
+
+    expect(action.type).toBe('project/importProject/rejected');
+    // QNBS-v3: rollback restores via deleteQualifiedImage (absent snapshot), never via a second saveImage call that would re-materialize the legacy blob into the qualified slot -- saveImage is called exactly once for this id (the initial forward write being rolled back), never a second time as a restore.
+    expect(storageService.deleteQualifiedImage).toHaveBeenCalledWith('c-legacy-only', 'proj-1');
+    const legacyOnlySaveCalls = vi
+      .mocked(storageService.saveImage)
+      .mock.calls.filter(([id]) => id === 'c-legacy-only');
+    expect(legacyOnlySaveCalls).toHaveLength(1);
+  });
+
+  // QNBS-v3: a qualified-image read failure must abort the import before any write happens -- collapsing it to null (as getImage does) could make a later rollback destructively delete an unreadable pre-existing image it never actually observed.
+  it('aborts the import before writing when the pre-write qualified snapshot read fails', async () => {
+    const projectWithOneAvatar = {
+      ...minimalProject,
+      characters: [{ id: 'c-unreadable', name: 'Unreadable', avatarBase64: 'new-avatar' }],
+    };
+    vi.mocked(parseImportedProjectJson).mockReturnValue(projectWithOneAvatar as never);
+    vi.mocked(storageService.getQualifiedImage).mockRejectedValue(new Error('decrypt failed'));
+
+    const store = makeStore();
+    const file = new File([JSON.stringify(projectWithOneAvatar)], 'novel.json', {
+      type: 'application/json',
+    });
+    const action = await store.dispatch(importProjectThunk(file));
+
+    expect(action.type).toBe('project/importProject/rejected');
+    expect(storageService.saveImage).not.toHaveBeenCalled();
+    expect(storageService.deleteQualifiedImage).not.toHaveBeenCalled();
+  });
+
+  // QNBS-v3: characterArray/worldArray are validated for duplicates separately, so a shared raw id between a character and a world would otherwise pass both checks while colliding in the same project-qualified image namespace.
+  it('rejects an import where a character and a world share the same entity id and both have an image', async () => {
+    const projectWithCollidingIds = {
+      ...minimalProject,
+      characters: [{ id: 'shared-id', name: 'Alice', avatarBase64: 'char-avatar' }],
+      worlds: [{ id: 'shared-id', name: 'Alicia', ambianceImageBase64: 'world-avatar' }],
+    };
+    vi.mocked(parseImportedProjectJson).mockReturnValue(projectWithCollidingIds as never);
+
+    const store = makeStore();
+    const file = new File([JSON.stringify(projectWithCollidingIds)], 'novel.json', {
+      type: 'application/json',
+    });
+    const action = await store.dispatch(importProjectThunk(file));
+
+    expect(action.type).toBe('project/importProject/rejected');
+    expect(storageService.saveImage).not.toHaveBeenCalled();
+  });
+
+  // QNBS-v3: characters and worlds are independent Redux entity collections and may legitimately share a raw id -- only actually colliding image writes (both sides carrying an image) are rejected, not the shared id alone.
+  it('allows a character and a world to share the same entity id when only one of them has an image', async () => {
+    const projectWithSharedIdNoCollision = {
+      ...minimalProject,
+      characters: [{ id: 'shared-id', name: 'Alice', avatarBase64: 'char-avatar' }],
+      worlds: [{ id: 'shared-id', name: 'Alicia' }],
+    };
+    vi.mocked(parseImportedProjectJson).mockReturnValue(projectWithSharedIdNoCollision as never);
+
+    const store = makeStore();
+    const file = new File([JSON.stringify(projectWithSharedIdNoCollision)], 'novel.json', {
+      type: 'application/json',
+    });
+    const action = await store.dispatch(importProjectThunk(file));
+
+    expect(action.type).toBe('project/importProject/fulfilled');
+    expect(storageService.saveImage).toHaveBeenCalledWith('shared-id', 'char-avatar', 'proj-1');
   });
 
   it('handles normalized entity format characters', async () => {
