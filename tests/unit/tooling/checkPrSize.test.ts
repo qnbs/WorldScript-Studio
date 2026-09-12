@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { NumstatRow } from '../../../scripts/check-pr-size.d.mts';
 import {
@@ -6,11 +7,16 @@ import {
   computeNonExemptMeaningfulLines,
   computeSupplementalReportLines,
   evaluatePrSize,
+  evaluatePrSizeSnapshot,
   formatReport,
+  getChangedFilesNumstat,
+  getStagedChangedPaths,
   isAllDocs,
   parseNumstat,
+  selectBudgetMode,
   selectSeverity,
 } from '../../../scripts/check-pr-size.mjs';
+import { evaluateProspectivePrSize, resolveBudgetBase } from '../../../scripts/pr-budget.mjs';
 
 const exception = {
   id: 'test-exception',
@@ -320,6 +326,26 @@ describe('selectSeverity', () => {
   });
 });
 
+describe('selectBudgetMode', () => {
+  it('enters caution after the preferred target tier', () => {
+    expect(selectBudgetMode({ fileCount: 9, lineCount: 100, commitCount: 2, allDocs: false })).toBe(
+      'CAUTION',
+    );
+  });
+
+  it('enters convergence at the normal hard-advisory boundary', () => {
+    expect(
+      selectBudgetMode({ fileCount: 20, lineCount: 100, commitCount: 2, allDocs: false }),
+    ).toBe('CONVERGENCE');
+  });
+
+  it('enters saturated mode at an absolute boundary', () => {
+    expect(
+      selectBudgetMode({ fileCount: 30, lineCount: 100, commitCount: 2, allDocs: false }),
+    ).toBe('SATURATED');
+  });
+});
+
 describe('formatReport', () => {
   it('reports "within target" for an ok result', () => {
     const severity = selectSeverity({
@@ -418,6 +444,67 @@ describe('evaluatePrSize', () => {
     expect(result.lineCount).toBe(12);
     expect(result.commitCount).toBe(2);
     expect(result.severity?.tier).toBe('ok');
+  });
+
+  it('blocks a prospective state that crosses both absolute file and commit ceilings', () => {
+    const numstat = Array.from(
+      { length: 31 },
+      (_, index) => `1\t0\tsrc/budget-${index}.mjs\x00`,
+    ).join('');
+    const result = evaluatePrSizeSnapshot('base', 'head', numstat, 16, { env: {} });
+    expect(result.ok).toBe(true);
+    expect(result.fileCount).toBe(31);
+    expect(result.commitCount).toBe(16);
+    expect(result.severity?.blocking).toBe(true);
+  });
+
+  it('counts already-pushed commits plus the staged next commit without creating a temporary commit', () => {
+    const spawnSync = (_cmd: string, args: string[]) => {
+      if (args.includes('--git-path')) return { status: 1, stdout: '', stderr: '' };
+      if (args[0] === 'diff' && args.includes('--numstat'))
+        return { ...okGit(), stdout: '4\t1\tscripts/staged.mjs\x00' };
+      if (args[0] === 'diff' && args.includes('--name-only'))
+        return { ...okGit(), stdout: 'old-name.mjs\x00new-name.mjs\x00' };
+      if (args[0] === 'diff' && args.includes('--quiet'))
+        return { status: 1, stdout: '', stderr: '' };
+      if (args[0] === 'rev-list') return { ...okGit(), stdout: '14\n' };
+      return { ...okGit() };
+    };
+    const result = evaluateProspectivePrSize('base', 'head', { spawnSync, env: {} });
+    expect(result.ok).toBe(true);
+    expect(result.commitCount).toBe(15);
+    expect(result.fileCount).toBe(1);
+    expect(result.severity?.blocking).toBe(false);
+    expect(getStagedChangedPaths('base', { spawnSync })).toEqual(['old-name.mjs', 'new-name.mjs']);
+  });
+
+  it('does not silently fall back to main when the PR base is unresolved', () => {
+    const result = resolveBudgetBase({ allowLive: false, dependencies: { env: {} } });
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('no main fallback');
+  });
+
+  it('resolves a stacked PR base from the live branch identity', () => {
+    const spawnSync = (command: string, args: string[]) => {
+      if (command === 'git' && args[0] === 'branch')
+        return { status: 0, stdout: 'feature\n', stderr: '' };
+      if (command === 'gh')
+        return {
+          status: 0,
+          stdout: JSON.stringify({ state: 'OPEN', headRefName: 'feature', baseRefName: 'release' }),
+          stderr: '',
+        };
+      if (command === 'git' && args[0] === 'rev-parse' && args[2] === 'origin/release^{commit}')
+        return { status: 0, stdout: 'release-sha\n', stderr: '' };
+      return { status: 1, stdout: '', stderr: 'unexpected command' };
+    };
+    const result = resolveBudgetBase({ dependencies: { spawnSync, env: {} } });
+    expect(result).toMatchObject({ ok: true, base: 'release-sha', source: 'live' });
+  });
+
+  it('keeps duplicated exact budget documentation tied to the canonical tiers', () => {
+    const agents = readFileSync('AGENTS.md', 'utf8');
+    expect(agents).toContain('≤30 changed files / ≤3000 meaningful lines / ≤15 commits');
   });
 
   it('fails closed (ok: false) when git diff fails', () => {
@@ -549,6 +636,8 @@ describe('evaluatePrSize', () => {
       'scripts/ci-prepush-classifier.mjs',
       'scripts/check-pr-size.mjs',
       'scripts/check-pr-size.d.mts',
+      'scripts/pr-budget.mjs',
+      'scripts/pr-budget.d.mts',
       '.github/workflows/ci.yml',
     ])('does not let an exception authorize governance-control path %s', (path) => {
       const rows: NumstatRow[] = [{ path, added: 3001, removed: 0 }];
@@ -575,6 +664,8 @@ describe('evaluatePrSize', () => {
       'scripts/ci-prepush-classifier.mjs',
       'scripts/check-pr-size.d.mts',
       'scripts/check-pr-size.mjs',
+      'scripts/pr-budget.mjs',
+      'scripts/pr-budget.d.mts',
       '.github/workflows/ci.yml',
     ])('rejects a base registry that allowlists governance-control path %s', (path) => {
       const result = evaluatePrSize(
@@ -871,6 +962,24 @@ describe('evaluatePrSize', () => {
       expect(result.severity?.blocking).toBe(false);
       expect(result.severity?.tier).toBe('exception');
     });
+  });
+});
+
+describe('gitattributes override locking', () => {
+  it('fails closed when another prospective check owns the shared attributes lock', () => {
+    const gitPath = '/tmp/pr-size-test/info/attributes';
+    const spawnSync = (_command: string, args: string[]) => {
+      if (args[0] === 'rev-parse' && args[1] === '--git-path')
+        return { status: 0, stdout: `${gitPath}\n`, stderr: '' };
+      throw new Error('git diff must not run while the lock is held');
+    };
+    const openSync = () => {
+      const error = new Error('lock held') as Error & { code: string };
+      error.code = 'EEXIST';
+      throw error;
+    };
+
+    expect(getChangedFilesNumstat('base', 'head', { spawnSync, openSync })).toBeNull();
   });
 });
 

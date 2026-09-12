@@ -7,6 +7,7 @@ import {
 } from './ci-prepush-classifier.mjs';
 import { isMainModule, resolveManualEvidence } from './ci-prepush-range-resolver.mjs';
 import { ensureDependencyState, runLocalBinary, runNodeScript } from './hooks/shared.mjs';
+import { PR_BUDGET_EXIT_CODES } from './pr-budget.mjs';
 
 function report(name, status, detail = '') {
   console.log(`[local-admission] ${name.padEnd(26)} ${status}${detail ? ` — ${detail}` : ''}`);
@@ -76,6 +77,16 @@ async function main() {
     process.exit(1);
   }
   report('Dependency state', 'PASS');
+
+  const budgetStatus = await runNodeScript('scripts/pr-budget.mjs', ['--prepush']);
+  if (budgetStatus === PR_BUDGET_EXIT_CODES.OK) report('PR budget', 'PASS');
+  else if (budgetStatus === PR_BUDGET_EXIT_CODES.UNRESOLVED_BASE) {
+    report('PR budget', 'BLOCKED', 'run pnpm run pr:budget -- --base <ref> before pushing');
+    process.exit(PR_BUDGET_EXIT_CODES.UNRESOLVED_BASE);
+  } else {
+    report('PR budget', 'FAIL');
+    process.exit(budgetStatus);
+  }
 
   await runCheck('Toolchain', () => runNodeScript('scripts/check-pnpm-toolchain.mjs', ['--hook']));
   await runCheck('Docs/release truth', () => runNodeScript('scripts/check-doc-metrics.mjs'));
