@@ -117,6 +117,7 @@ describe('streamInterviewResponseThunk', () => {
       project: {
         present: {
           data: {
+            id: 'default',
             characters: {
               ids: ['char-1'],
               entities: { 'char-1': CHARACTER },
@@ -125,6 +126,7 @@ describe('streamInterviewResponseThunk', () => {
               'char-1': [INTERVIEW],
             },
           },
+          generation: 0,
         },
       },
       settings: {
@@ -231,5 +233,85 @@ describe('streamInterviewResponseThunk', () => {
     const result = await thunk(dispatch, getState, undefined);
     expect((result as { type: string }).type).toBe('project/streamInterviewResponse/rejected');
     expect((result as { error: { message: string } }).error.message).toContain('interview-1');
+  });
+
+  it('rejects before appending messages when the origin identity is unavailable', async () => {
+    const state = makeState();
+    state.project.present.data.id = '';
+    const dispatch = vi.fn();
+    const getState = vi.fn().mockReturnValue(state);
+
+    const result = await streamInterviewResponseThunk({
+      characterId: 'char-1',
+      interviewId: 'interview-1',
+      question: 'Hello?',
+    })(dispatch, getState, undefined);
+
+    expect((result as { type: string }).type).toBe('project/streamInterviewResponse/rejected');
+    expect(
+      dispatch.mock.calls.some(([action]) => action?.type === 'project/appendInterviewMessage'),
+    ).toBe(false);
+    expect(mockStreamText).not.toHaveBeenCalled();
+  });
+
+  it('does not dispatch late chunks after the project incarnation changes', async () => {
+    // QNBS-v3: [Grund: incarnation switch during stream / Impact: prove late chunks are discarded / Kreativer Mehrwert: preserve project-owned dialogue]
+    const state = makeState();
+    mockStreamText.mockImplementationOnce(
+      async (_prompt: string, _creativity: unknown, onChunk: (chunk: string) => void) => {
+        state.project.present.generation = 1;
+        onChunk('late chunk');
+      },
+    );
+    const dispatch = vi.fn();
+    const getState = vi.fn().mockReturnValue(state);
+
+    const result = await streamInterviewResponseThunk({
+      characterId: 'char-1',
+      interviewId: 'interview-1',
+      question: 'Hello?',
+    })(dispatch, getState, undefined);
+
+    expect((result as { type: string }).type).toBe('project/streamInterviewResponse/rejected');
+    expect(
+      dispatch.mock.calls.some(([action]) => action?.type === 'project/streamInterviewChunk'),
+    ).toBe(false);
+  });
+
+  it('rejects when the project changes before a chunkless stream completes', async () => {
+    const state = makeState();
+    mockStreamText.mockImplementationOnce(async () => {
+      state.project.present.generation = 1;
+    });
+    const dispatch = vi.fn();
+    const getState = vi.fn().mockReturnValue(state);
+
+    // QNBS-v3: completion-only coverage proves a stream cannot fulfill after a silent incarnation switch.
+    const result = await streamInterviewResponseThunk({
+      characterId: 'char-1',
+      interviewId: 'interview-1',
+      question: 'Hello?',
+    })(dispatch, getState, undefined);
+
+    expect((result as { type: string }).type).toBe('project/streamInterviewResponse/rejected');
+  });
+
+  it('reclassifies a stream failure as stale after a project change', async () => {
+    const state = makeState();
+    mockStreamText.mockImplementationOnce(async () => {
+      state.project.present.generation = 1;
+      throw new Error('provider failed');
+    });
+    const dispatch = vi.fn();
+    const getState = vi.fn().mockReturnValue(state);
+
+    const result = await streamInterviewResponseThunk({
+      characterId: 'char-1',
+      interviewId: 'interview-1',
+      question: 'Hello?',
+    })(dispatch, getState, undefined);
+
+    expect((result as { type: string }).type).toBe('project/streamInterviewResponse/rejected');
+    expect((result as { error: { name: string } }).error.name).toBe('StaleProjectOperationError');
   });
 });

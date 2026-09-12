@@ -2,6 +2,8 @@ import type { ProjectSnapshot, Settings, StoryCodex, StoryProject } from '../typ
 import type {
   BinderAssetMeta,
   BinderAssetPayload,
+  ImageDeleteAdmission,
+  ImageWriteAdmission,
   ProjectQuarantineResult,
   SaveProjectInput,
   SnapshotRestoreTarget,
@@ -11,6 +13,8 @@ import type {
 export type {
   BinderAssetMeta,
   BinderAssetPayload,
+  ImageDeleteAdmission,
+  ImageWriteAdmission,
   ProjectQuarantineResult,
   SaveProjectEnvelope,
   SaveProjectInput,
@@ -114,9 +118,17 @@ class StorageManager {
   }
 
   // QNBS-v3: projectId is trailing/optional, mirroring StorageBackend, so callers that predate project-qualification still compile unchanged and defer to each backend's own 'default' fallback.
-  async saveImage(id: string, base64Data: string, projectId?: string): Promise<void> {
+  async saveImage(
+    id: string,
+    base64Data: string,
+    projectId?: string,
+    writeAdmission?: ImageWriteAdmission,
+  ): Promise<void> {
     const backend = await this.getBackend();
-    return backend.saveImage(id, base64Data, projectId);
+    // QNBS-v3: preserve the legacy call shape while forwarding write authority at the persistence boundary.
+    return writeAdmission
+      ? backend.saveImage(id, base64Data, projectId, writeAdmission)
+      : backend.saveImage(id, base64Data, projectId);
   }
 
   async getImage(id: string, projectId?: string): Promise<string | null> {
@@ -200,9 +212,15 @@ class StorageManager {
   }
 
   // QNBS-v3: same trailing-optional projectId compatibility shape as saveImage/getImage above.
-  async deleteImage(id: string, projectId?: string): Promise<void> {
+  async deleteImage(
+    id: string,
+    projectId?: string,
+    deleteAdmission?: ImageDeleteAdmission,
+  ): Promise<void> {
     const backend = await this.getBackend();
-    return backend.deleteImage(id, projectId);
+    return deleteAdmission
+      ? backend.deleteImage(id, projectId, deleteAdmission)
+      : backend.deleteImage(id, projectId);
   }
 
   async hasSavedData(): Promise<boolean> {

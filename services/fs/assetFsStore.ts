@@ -5,8 +5,19 @@
  */
 
 import { logger } from '../logger';
-import type { BinderAssetMeta, BinderAssetPayload } from '../storageBackend';
-import { retryFs, sanitizePathSegment, writeFileAtomic, writeTextFileAtomic } from './fsCore';
+import type {
+  BinderAssetMeta,
+  BinderAssetPayload,
+  ImageDeleteAdmission,
+  ImageWriteAdmission,
+} from '../storageBackend';
+import {
+  retryFs,
+  sanitizePathSegment,
+  type TauriApis,
+  writeFileAtomic,
+  writeTextFileAtomic,
+} from './fsCore';
 import { FsSnapshotStore } from './snapshotFsStore';
 
 export class FsAssetStore extends FsSnapshotStore {
@@ -79,14 +90,38 @@ export class FsAssetStore extends FsSnapshotStore {
     return existing === projectId;
   }
 
-  async saveImage(id: string, base64Data: string, projectId = 'default'): Promise<void> {
-    const apis = await this.getApis();
-    const { dir, file } = await this.qualifiedImagePaths(projectId, id);
-    if (!(await apis.exists(dir))) {
-      await apis.mkdir(dir, { recursive: true });
+  // QNBS-v3: each retry and each file gets its own synchronous admission immediately before remove, so a transient retry cannot cross an incarnation boundary silently.
+  private async removeImageFiles(
+    apis: TauriApis,
+    files: string[],
+    deleteAdmission?: ImageDeleteAdmission,
+  ): Promise<void> {
+    for (const path of files) {
+      await retryFs(async () => {
+        deleteAdmission?.();
+        await apis.remove(path);
+      });
     }
-    // QNBS-v3: data URLs retain an uploaded image's MIME type; legacy raw payloads remain readable as PNG below.
-    await writeTextFileAtomic(apis, file, base64Data);
+  }
+
+  async saveImage(
+    id: string,
+    base64Data: string,
+    projectId = 'default',
+    writeAdmission?: ImageWriteAdmission,
+  ): Promise<void> {
+    // QNBS-v3: serialize replacement writes with deletes so a pending remove cannot erase the newly committed image.
+    await this.withLegacyRoutingOperation(async () => {
+      // QNBS-v3: [Admission before temp-file creation / Reject already-stale writes without disk residue / Preserve filesystem authority]
+      writeAdmission?.();
+      const apis = await this.getApis();
+      const { dir, file } = await this.qualifiedImagePaths(projectId, id);
+      if (!(await apis.exists(dir))) {
+        await apis.mkdir(dir, { recursive: true });
+      }
+      // QNBS-v3: data URLs retain an uploaded image's MIME type; legacy raw payloads remain readable as PNG below.
+      await writeTextFileAtomic(apis, file, base64Data, writeAdmission);
+    }, projectId);
   }
 
   async getImage(id: string, projectId = 'default'): Promise<string | null> {
@@ -116,7 +151,11 @@ export class FsAssetStore extends FsSnapshotStore {
     }
   }
 
-  async deleteImage(id: string, projectId = 'default'): Promise<void> {
+  async deleteImage(
+    id: string,
+    projectId = 'default',
+    deleteAdmission?: ImageDeleteAdmission,
+  ): Promise<void> {
     try {
       // QNBS-v3: serialized + write-authority-checked like deleteBinderAsset -- an unserialized ownership check could go stale against a concurrent project creation and delete another project's unattributed legacy image.
       await this.withLegacyRoutingOperation(async () => {
@@ -125,18 +164,24 @@ export class FsAssetStore extends FsSnapshotStore {
         // QNBS-v3: preserve-first -- only remove the unattributed legacy copy when ownership is already provable; otherwise it may belong to a different (possibly already-deleted) project, so leave it untouched rather than risk destroying another project's image.
         const soleOwner = await this.checkLegacyImageOwnership(projectId);
         // QNBS-v3: legacy MUST be removed before the qualified file, not after -- if legacy removal throws, the catch below aborts before the qualified file is touched, so getImage's legacy fallback can never resurrect a half-deleted image. The reverse order would let a failure after the qualified delete leave the legacy copy to resurrect it.
+        const filesToRemove: string[] = [];
         if (soleOwner) {
           const legacyFile = await this.legacyImagePath(id);
           if (await apis.exists(legacyFile)) {
-            await retryFs(() => apis.remove(legacyFile));
+            filesToRemove.push(legacyFile);
           }
         }
         if (await apis.exists(qualifiedFile)) {
-          await retryFs(() => apis.remove(qualifiedFile));
+          filesToRemove.push(qualifiedFile);
         }
+        if (filesToRemove.length > 0) {
+          await this.removeImageFiles(apis, filesToRemove, deleteAdmission);
+        }
+        // QNBS-v3: final delete admission / reject stale no-op deletions / keep entity mutation authority truthful.
+        deleteAdmission?.();
       }, projectId);
     } catch (error) {
-      if (this.isProjectWriteAuthorityError(error)) throw error;
+      if (deleteAdmission || this.isProjectWriteAuthorityError(error)) throw error;
       logger.error('Failed to delete image:', error);
     }
   }

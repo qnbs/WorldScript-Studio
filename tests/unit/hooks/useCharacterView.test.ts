@@ -7,13 +7,19 @@ import type { Character } from '../../../types';
 // ---------------------------------------------------------------------------
 // vi.hoisted — match mocks referenced in vi.mock factories
 // ---------------------------------------------------------------------------
-const { mockProfileMatch, mockPortraitMatch, mockRegenerateMatch, mockCaptureIdentity } =
-  vi.hoisted(() => ({
-    mockProfileMatch: vi.fn((_: unknown) => true),
-    mockPortraitMatch: vi.fn((_: unknown) => true),
-    mockRegenerateMatch: vi.fn((_: unknown) => true),
-    mockCaptureIdentity: vi.fn(() => 'id:test-project'),
-  }));
+const {
+  mockProfileMatch,
+  mockPortraitMatch,
+  mockRegenerateMatch,
+  mockCaptureIdentity,
+  mockIsStaleError,
+} = vi.hoisted(() => ({
+  mockProfileMatch: vi.fn((_: unknown) => true),
+  mockPortraitMatch: vi.fn((_: unknown) => true),
+  mockRegenerateMatch: vi.fn((_: unknown) => true),
+  mockCaptureIdentity: vi.fn(() => 'id:test-project'),
+  mockIsStaleError: vi.fn((_: unknown) => false),
+}));
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -28,8 +34,11 @@ let mockCharacters: Character[] = [];
 
 vi.mock('../../../app/hooks', () => ({
   useAppDispatch: () => mockDispatch,
-  useAppSelector: (selector: (s: { characters: Character[] }) => unknown) =>
-    selector({ characters: mockCharacters }),
+  useAppSelector: (selector: (s: unknown) => unknown) =>
+    selector({
+      characters: mockCharacters,
+      project: { present: { data: { id: 'c-project-1' } } },
+    }),
 }));
 
 vi.mock('../../../hooks/useTranslation', () => ({
@@ -54,8 +63,14 @@ vi.mock('../../../features/project/projectSelectors', () => ({
 
 vi.mock('../../../features/project/projectIdentity', () => ({
   captureActiveProjectIdentity: mockCaptureIdentity,
+  getProjectTargetStorageId: (source: { data?: { id?: string } } | null | undefined) =>
+    source?.data?.id ?? null,
   identityUnchanged: (captured: string | null, live: string | null) =>
     captured !== null && captured === live,
+  assertProjectIdentityUnchanged: (captured: string | null, live: string | null) => {
+    if (captured === null || captured !== live) throw new Error('stale project operation');
+  },
+  isStaleProjectOperationError: mockIsStaleError,
 }));
 
 vi.mock('../../../features/project/thunks/characterThunks', () => {
@@ -86,7 +101,8 @@ vi.mock('../../../services/storageService', () => ({
   storageService: {
     saveImage: (id: unknown, data: unknown, projectId: unknown) =>
       mockSaveImage(id, data, projectId),
-    deleteImage: (id: unknown, projectId: unknown) => mockDeleteImage(id, projectId),
+    deleteImage: (id: unknown, projectId: unknown, admission: unknown) =>
+      mockDeleteImage(id, projectId, admission),
   },
 }));
 
@@ -121,6 +137,7 @@ beforeEach(() => {
   mockPortraitMatch.mockReturnValue(true);
   mockRegenerateMatch.mockReturnValue(true);
   mockCaptureIdentity.mockReturnValue('id:test-project');
+  mockIsStaleError.mockReturnValue(false);
 });
 
 // ---------------------------------------------------------------------------
@@ -401,6 +418,46 @@ describe('handleGeneratePortrait', () => {
     expect(mockToast.error).toHaveBeenCalled();
     expect(result.current.errorMessage).not.toBeNull();
   });
+
+  it('silently discards stale portrait results without marking an avatar', async () => {
+    mockDispatch.mockResolvedValue({
+      type: 'project/generateCharacterPortrait/rejected',
+      error: { name: 'StaleProjectOperationError' },
+    });
+    mockPortraitMatch.mockReturnValue(false);
+    mockIsStaleError.mockReturnValue(true);
+
+    const char = makeCharacter('c1');
+    const { result } = renderHook(() => useCharacterView());
+    act(() => result.current.handleSelect(char));
+    await act(async () => {
+      await result.current.handleGeneratePortrait();
+    });
+
+    expect(result.current.selectedCharacter?.hasAvatar).toBe(false);
+    expect(mockToast.error).not.toHaveBeenCalled();
+  });
+
+  it('silently discards a stale refined portrait result', async () => {
+    mockDispatch.mockResolvedValue({
+      type: 'project/generateCharacterPortrait/rejected',
+      error: { name: 'StaleProjectOperationError' },
+    });
+    mockPortraitMatch.mockReturnValue(false);
+    mockIsStaleError.mockReturnValue(true);
+
+    const { result } = renderHook(() => useCharacterView());
+    act(() => {
+      result.current.handleSelect(makeCharacter('c1'));
+      result.current.setRefinementPrompt('more detail');
+    });
+    await act(async () => {
+      await result.current.handleRefinePortrait();
+    });
+
+    expect(mockToast.error).not.toHaveBeenCalled();
+    expect(result.current.isRefiningPortrait).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -434,8 +491,10 @@ describe('confirmDelete', () => {
     });
 
     // QNBS-v3: asserts the real active project id (not a hardcoded fallback every project would share) is forwarded to deleteImage.
-    expect(mockDeleteImage).toHaveBeenCalledWith('c1', 'c-project-1');
+    expect(mockDeleteImage).toHaveBeenCalledWith('c1', 'c-project-1', expect.any(Function));
     expect(mockDispatch).toHaveBeenCalledWith(projectActions.deleteCharacter('c1'));
+    const admission = mockDeleteImage.mock.calls[0]?.[2] as (() => void) | undefined;
+    admission?.();
   });
 
   it('resets state and calls toast.info after deletion', async () => {
@@ -452,6 +511,108 @@ describe('confirmDelete', () => {
     expect(result.current.isDossierOpen).toBe(false);
     expect(result.current.selectedCharacter).toBeNull();
     expect(mockToast.info).toHaveBeenCalled();
+  });
+
+  it('clears a stale delete confirmation without dispatching a deletion', async () => {
+    const char = makeCharacter('c1', 'Hero');
+    const { result } = renderHook(() => useCharacterView());
+    act(() => result.current.setCharacterToDelete(char));
+    act(() => {
+      result.current.setSelectedCharacter(char);
+      result.current.setIsDossierOpen(true);
+    });
+    mockIsStaleError.mockReturnValue(true);
+    mockDeleteImage.mockRejectedValueOnce({ name: 'StaleProjectOperationError' });
+
+    await act(async () => {
+      await result.current.confirmDelete();
+    });
+
+    expect(result.current.characterToDelete).toBeNull();
+    expect(result.current.selectedCharacter).toBeNull();
+    expect(result.current.isDossierOpen).toBe(false);
+    expect(mockDispatch).not.toHaveBeenCalledWith(projectActions.deleteCharacter('c1'));
+  });
+
+  it('clears the confirmation and shows an error when image deletion fails', async () => {
+    const char = makeCharacter('c1', 'Hero');
+    const { result } = renderHook(() => useCharacterView());
+    act(() => result.current.setCharacterToDelete(char));
+    mockDeleteImage.mockRejectedValueOnce(new Error('storage failed'));
+
+    await act(async () => {
+      await result.current.confirmDelete();
+    });
+
+    expect(result.current.characterToDelete).toBeNull();
+    expect(mockToast.error).toHaveBeenCalledWith('error.apiErrorTitle');
+    expect(mockDispatch).not.toHaveBeenCalledWith(projectActions.deleteCharacter('c1'));
+  });
+
+  it('clears a confirmation when the active project changes before delete starts', async () => {
+    const char = makeCharacter('c1', 'Hero');
+    const { result } = renderHook(() => useCharacterView());
+    act(() => {
+      result.current.setCharacterToDelete(char);
+      result.current.setSelectedCharacter(char);
+      result.current.setIsDossierOpen(true);
+    });
+    mockCaptureIdentity.mockReturnValue('id:replacement');
+
+    await act(async () => {
+      await result.current.confirmDelete();
+    });
+
+    expect(result.current.characterToDelete).toBeNull();
+    expect(result.current.selectedCharacter).toBeNull();
+    expect(result.current.isDossierOpen).toBe(false);
+    expect(mockDeleteImage).not.toHaveBeenCalled();
+  });
+
+  it('clears a confirmation when the active project changes after storage', async () => {
+    const char = makeCharacter('c1', 'Hero');
+    const { result } = renderHook(() => useCharacterView());
+    act(() => {
+      result.current.setCharacterToDelete(char);
+      result.current.setSelectedCharacter(char);
+      result.current.setIsDossierOpen(true);
+    });
+    mockDeleteImage.mockImplementationOnce(async () => {
+      mockCaptureIdentity.mockReturnValue('id:replacement');
+    });
+
+    await act(async () => {
+      await result.current.confirmDelete();
+    });
+
+    expect(result.current.characterToDelete).toBeNull();
+    expect(result.current.selectedCharacter).toBeNull();
+    expect(result.current.isDossierOpen).toBe(false);
+    expect(mockDispatch).not.toHaveBeenCalledWith(projectActions.deleteCharacter('c1'));
+  });
+
+  // QNBS-v3: [Grund: a backend failure can arrive after an incarnation switch / Impact: suppress stale error UI and selection / Kreativer Mehrwert: keep feedback scoped to the active project]
+  it('suppresses a backend error after the active project changes', async () => {
+    const char = makeCharacter('c1', 'Hero');
+    const { result } = renderHook(() => useCharacterView());
+    act(() => {
+      result.current.setCharacterToDelete(char);
+      result.current.setSelectedCharacter(char);
+      result.current.setIsDossierOpen(true);
+    });
+    mockDeleteImage.mockImplementationOnce(async () => {
+      mockCaptureIdentity.mockReturnValue('id:replacement');
+      throw new Error('storage failed');
+    });
+
+    await act(async () => {
+      await result.current.confirmDelete();
+    });
+
+    expect(result.current.characterToDelete).toBeNull();
+    expect(result.current.selectedCharacter).toBeNull();
+    expect(result.current.isDossierOpen).toBe(false);
+    expect(mockToast.error).not.toHaveBeenCalled();
   });
 
   it('does nothing when characterToDelete is null', async () => {

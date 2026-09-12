@@ -14,13 +14,26 @@ type MockTransaction = {
   onerror: (() => void) | null;
   onabort: (() => void) | null;
   error: unknown;
+  abort: () => void;
 };
 
 function makeMockTransaction(): MockTransaction {
-  return { oncomplete: null, onerror: null, onabort: null, error: null };
+  const transaction: MockTransaction = {
+    oncomplete: null,
+    onerror: null,
+    onabort: null,
+    error: null,
+    abort: () => {},
+  };
+  transaction.abort = vi.fn(() => {
+    transaction.error = new DOMException('simulated transaction abort');
+    transaction.onabort?.();
+  });
+  return transaction;
 }
 
 const mockImagesTransaction = makeMockTransaction();
+const defaultImagesAbort = mockImagesTransaction.abort;
 
 const mockIdbStore = {
   put: vi.fn(),
@@ -173,6 +186,7 @@ describe('IdbAssetStore', () => {
     vi.clearAllMocks();
     appDataTracker.reset();
     imagesTracker.reset();
+    mockImagesTransaction.abort = defaultImagesAbort;
     // QNBS-v3: default "no legacy-image-owner claim yet" so every test's first legacy-fallback access claims for its own project id, matching prior (pre-ownership-check) fallback behavior unless a test deliberately overrides this to simulate a rival claim.
     mockAppDataStore.get.mockImplementation(() => appDataTracker.success(undefined));
     mockAppDataStore.put.mockImplementation(() => appDataTracker.success(undefined));
@@ -181,14 +195,47 @@ describe('IdbAssetStore', () => {
 
   describe('saveImage', () => {
     it('calls put with base64 payload and the project-qualified key', async () => {
-      mockIdbStore.put.mockImplementation(() => makeSuccessReq(undefined));
+      mockIdbStore.put.mockImplementation(() => imagesTracker.success(undefined));
       await store.saveImage('img-1', 'data:image/png;base64,abc', 'proj-1');
       expect(mockIdbStore.put).toHaveBeenCalledWith('data:image/png;base64,abc', 'proj-1::img-1');
+    });
+
+    it('rejects when the put request succeeds but its transaction aborts', async () => {
+      mockIdbStore.put.mockImplementation(() => imagesTracker.successThatThenAborts(undefined));
+      await expect(store.saveImage('img-1', 'abc', 'proj-1')).rejects.toBeDefined();
+    });
+
+    it('refuses the image write when final admission no longer proves authority', async () => {
+      const admission = vi.fn(() => {
+        throw new Error('stale project incarnation');
+      });
+
+      await expect(
+        store.saveImage('img-1', 'data:image/png;base64,abc', 'proj-1', admission),
+      ).rejects.toThrow('stale project incarnation');
+      expect(admission).toHaveBeenCalledTimes(1);
+      expect(mockIdbStore.put).not.toHaveBeenCalled();
     });
 
     it('rejects when IDB put errors', async () => {
       mockIdbStore.put.mockImplementation(() => makeErrorReq(new DOMException('put failed')));
       await expect(store.saveImage('img-1', 'abc', 'proj-1')).rejects.toBeDefined();
+    });
+
+    // QNBS-v3: [Grund: request success precedes transaction commit / Impact: reject a rolled-back stale write / Kreativer Mehrwert: keep persistence authority fail-closed]
+    it('aborts a successful put when commit-time authority no longer holds', async () => {
+      const admission = vi
+        .fn<() => undefined>()
+        .mockImplementationOnce(() => undefined)
+        .mockImplementationOnce(() => {
+          throw new Error('stale project incarnation');
+        });
+      mockIdbStore.put.mockImplementation(() => imagesTracker.success(undefined));
+
+      await expect(store.saveImage('img-1', 'abc', 'proj-1', admission)).rejects.toThrow(
+        'stale project incarnation',
+      );
+      expect(mockImagesTransaction.abort).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -229,7 +276,7 @@ describe('IdbAssetStore', () => {
     // QNBS-v3: both keys must be cleared so a stale legacy record can never resurface via getImage's fallback -- but only once ownership of the legacy namespace is already provable for this project (simulated here via a pre-existing claim).
     it('deletes both the qualified and legacy key when this project already owns the legacy namespace', async () => {
       mockAppDataStore.get.mockImplementation(() => appDataTracker.success('proj-1'));
-      mockIdbStore.delete.mockImplementation(() => makeSuccessReq(undefined));
+      mockIdbStore.delete.mockImplementation(() => imagesTracker.success(undefined));
       await store.deleteImage('img-1', 'proj-1');
       expect(mockIdbStore.delete).toHaveBeenCalledWith('proj-1::img-1');
       expect(mockIdbStore.delete).toHaveBeenCalledWith('img-1');
@@ -237,7 +284,7 @@ describe('IdbAssetStore', () => {
 
     // QNBS-v3: preserve-first -- a delete must never itself establish a first ownership claim, so with no prior claim the unattributed legacy copy is left untouched rather than guessed-and-destroyed.
     it('does not delete the legacy key when this project has not yet claimed the legacy namespace', async () => {
-      mockIdbStore.delete.mockImplementation(() => makeSuccessReq(undefined));
+      mockIdbStore.delete.mockImplementation(() => imagesTracker.success(undefined));
       await store.deleteImage('img-1', 'proj-1');
       expect(mockIdbStore.delete).toHaveBeenCalledWith('proj-1::img-1');
       expect(mockIdbStore.delete).not.toHaveBeenCalledWith('img-1');
@@ -246,7 +293,7 @@ describe('IdbAssetStore', () => {
     // QNBS-v3: a legacy blob already claimed by a DIFFERENT project must never be deleted by this one either.
     it('does not delete the legacy key when a different project already owns the legacy namespace', async () => {
       mockAppDataStore.get.mockImplementation(() => appDataTracker.success('other-project'));
-      mockIdbStore.delete.mockImplementation(() => makeSuccessReq(undefined));
+      mockIdbStore.delete.mockImplementation(() => imagesTracker.success(undefined));
       await store.deleteImage('img-1', 'proj-1');
       expect(mockIdbStore.delete).toHaveBeenCalledWith('proj-1::img-1');
       expect(mockIdbStore.delete).not.toHaveBeenCalledWith('img-1');
@@ -256,6 +303,84 @@ describe('IdbAssetStore', () => {
       mockAppDataStore.get.mockImplementation(() => appDataTracker.success('proj-1'));
       mockIdbStore.delete.mockImplementation(() => makeErrorReq(new DOMException('del failed')));
       await expect(store.deleteImage('img-1', 'proj-1')).rejects.toBeDefined();
+    });
+
+    // QNBS-v3: [Grund: incarnation authority rejection / Impact: prevent stale deletion / Kreativer Mehrwert: guard the admission check]
+    it('refuses deletion when the current incarnation no longer has authority', async () => {
+      mockIdbStore.delete.mockImplementation(() => imagesTracker.success(undefined));
+      const admission = vi.fn(() => {
+        throw new Error('stale project incarnation');
+      });
+
+      await expect(store.deleteImage('img-1', 'proj-1', admission)).rejects.toThrow(
+        'stale project incarnation',
+      );
+      expect(admission).toHaveBeenCalledTimes(1);
+      expect(mockIdbStore.delete).not.toHaveBeenCalled();
+    });
+
+    it('rejects when the delete request succeeds but its transaction aborts', async () => {
+      mockIdbStore.delete.mockImplementation(() => imagesTracker.successThatThenAborts(undefined));
+      await expect(store.deleteImage('img-1', 'proj-1')).rejects.toBeDefined();
+    });
+
+    // QNBS-v3: [Grund: delete admission can fail after one request succeeds / Impact: roll back the whole atomic deletion / Kreativer Mehrwert: preserve project ownership]
+    it('aborts a delete when commit-time authority no longer holds', async () => {
+      const admission = vi
+        .fn<() => undefined>()
+        .mockImplementationOnce(() => undefined)
+        .mockImplementationOnce(() => {
+          throw new Error('stale project incarnation');
+        });
+      mockIdbStore.delete.mockImplementation(() => imagesTracker.success(undefined));
+
+      await expect(store.deleteImage('img-1', 'proj-1', admission)).rejects.toThrow(
+        'stale project incarnation',
+      );
+      expect(mockImagesTransaction.abort).toHaveBeenCalledTimes(1);
+    });
+
+    // QNBS-v3: [Grund: a queued sibling request may surface AbortError first / Impact: retain the causal stale-operation error / Kreativer Mehrwert: keep retry and UI handling truthful]
+    it('preserves the stale admission error if another delete request aborts', async () => {
+      mockAppDataStore.get.mockImplementation(() => appDataTracker.success('proj-1'));
+      const abortError = new DOMException('transaction aborted', 'AbortError');
+      let secondRequest: MockReq<undefined> | null = null;
+      mockImagesTransaction.abort = vi.fn(() => {
+        mockImagesTransaction.error = abortError;
+        secondRequest?.onerror?.(abortError);
+        mockImagesTransaction.onabort?.();
+      });
+      let deleteCall = 0;
+      mockIdbStore.delete.mockImplementation(() => {
+        deleteCall += 1;
+        if (deleteCall === 1) {
+          const request: MockReq<undefined> = {
+            result: undefined,
+            error: null,
+            onsuccess: null,
+            onerror: null,
+          };
+          setTimeout(() => request.onsuccess?.(), 0);
+          return request;
+        }
+        secondRequest = {
+          result: undefined,
+          error: abortError,
+          onsuccess: null,
+          onerror: null,
+        };
+        return secondRequest;
+      });
+      const admission = vi
+        .fn<() => undefined>()
+        .mockImplementationOnce(() => undefined)
+        .mockImplementationOnce(() => {
+          throw new Error('stale project incarnation');
+        });
+
+      await expect(store.deleteImage('img-1', 'proj-1', admission)).rejects.toThrow(
+        'stale project incarnation',
+      );
     });
   });
 
