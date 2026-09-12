@@ -94,7 +94,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   const { useCharacterView } = await import('../../hooks/useCharacterView');
-  vi.mocked(useCharacterView).mockImplementation(() => baseContextValue);
+  vi.mocked(useCharacterView).mockImplementation(() => baseContextValue as never);
   appStoreRef.current = null;
 });
 

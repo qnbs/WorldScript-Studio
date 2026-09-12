@@ -90,7 +90,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   const { useWorldView } = await import('../../hooks/useWorldView');
-  vi.mocked(useWorldView).mockImplementation(() => baseContextValue);
+  vi.mocked(useWorldView).mockImplementation(() => baseContextValue as never);
   appStoreRef.current = null;
 });
 
