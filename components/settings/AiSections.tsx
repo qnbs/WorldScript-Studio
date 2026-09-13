@@ -15,9 +15,13 @@ import {
   ANTHROPIC_MODEL_IDS,
   ANTHROPIC_MODEL_OPTIONS,
   DEFAULT_ANTHROPIC_MODEL_ID,
+  DEFAULT_GEMINI_MODEL_ID,
   DEFAULT_GROK_MODEL_ID,
   DEFAULT_OPENAI_MODEL_ID,
-  GROK_MODEL_IDS,
+  GEMINI_ADMITTED_MODEL_IDS,
+  GEMINI_MODEL_OPTIONS,
+  GEMINI_PREVIEW_MODEL_OPTIONS,
+  GROK_ADMITTED_MODEL_IDS,
   GROK_MODEL_OPTIONS,
   isModelInCatalog,
   OPENAI_MODEL_IDS,
@@ -88,12 +92,14 @@ export const AiSection: FC = () => {
           handleSettingChange('advancedAi', { ...settings.advancedAi, ...patch })
         }
         onProviderChange={(p) => {
-          const currentModel = settings.advancedAi?.model ?? 'gemini-3.5-flash';
+          const currentModel = settings.advancedAi?.model ?? DEFAULT_GEMINI_MODEL_ID;
           let newModel = currentModel;
           if (p === 'ollama') {
             newModel = currentModel.startsWith('ollama/') ? currentModel : 'ollama/qwen3:8b';
           } else if (p === 'gemini') {
-            newModel = currentModel.startsWith('ollama/') ? 'gemini-3.5-flash' : currentModel;
+            newModel = isModelInCatalog(GEMINI_ADMITTED_MODEL_IDS, currentModel)
+              ? currentModel
+              : DEFAULT_GEMINI_MODEL_ID;
           } else if (p === 'openai') {
             // QNBS-v3: migrate incompatible OpenAI selections to the current supported default.
             newModel = isModelInCatalog(OPENAI_MODEL_IDS, currentModel)
@@ -106,7 +112,7 @@ export const AiSection: FC = () => {
               : DEFAULT_ANTHROPIC_MODEL_ID;
           } else if (p === 'grok') {
             // QNBS-v3: migrate incompatible Grok selections to the current supported default.
-            newModel = isModelInCatalog(GROK_MODEL_IDS, currentModel)
+            newModel = isModelInCatalog(GROK_ADMITTED_MODEL_IDS, currentModel)
               ? currentModel
               : DEFAULT_GROK_MODEL_ID;
           } else if (p === 'webllm') {
@@ -486,35 +492,10 @@ export const AdvancedAiSection: FC = () => {
                                   },
                                 ]
                               : [
+                                  { label: 'Gemini — Current', options: GEMINI_MODEL_OPTIONS },
                                   {
-                                    label: 'Gemini 3 — Latest',
-                                    options: [
-                                      { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash ✦' },
-                                      {
-                                        value: 'gemini-3.1-pro-preview',
-                                        label: 'Gemini 3.1 Pro Preview',
-                                      },
-                                      { value: 'gemini-3.1-flash', label: 'Gemini 3.1 Flash' },
-                                      {
-                                        value: 'gemini-3.1-flash-lite',
-                                        label: 'Gemini 3.1 Flash-Lite',
-                                      },
-                                    ],
-                                  },
-                                  {
-                                    label: 'Gemini 2.5 — Stable',
-                                    options: [
-                                      { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-                                      { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-                                    ],
-                                  },
-                                  {
-                                    label: 'Legacy',
-                                    options: [
-                                      { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
-                                      { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
-                                      { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
-                                    ],
+                                    label: 'Gemini — Preview',
+                                    options: GEMINI_PREVIEW_MODEL_OPTIONS,
                                   },
                                 ],
                       })}

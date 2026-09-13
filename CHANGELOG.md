@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Curate the current cloud model catalogue and persisted-model admission rules (PR #739).
 - **Local-first encryption transitions now preserve wipe failures instead of treating plaintext
   cleanup as successful:** a failed `clearData()` aborts the current shadow sync, attempts strict
   provider teardown, clears the cached persistence handle, and keeps subsequent encryption-active

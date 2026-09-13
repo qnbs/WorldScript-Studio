@@ -1,5 +1,9 @@
 import type { PayloadAction } from '@reduxjs/toolkit';
 import { createSlice } from '@reduxjs/toolkit';
+import {
+  DEFAULT_GEMINI_MODEL_ID,
+  DEFAULT_OPENROUTER_MODEL_ID,
+} from '../../services/ai/cloudModelCatalog';
 import type {
   AccessibilitySettings,
   AdvancedAiSettings,
@@ -37,8 +41,8 @@ const getSystemThemePreference = (): Theme => {
 // QNBS-v3: no apiKey default here — OpenRouterSettings dropped that field (see types.ts), the real key lives only in the dedicated per-provider key store.
 export const DEFAULT_OPENROUTER_SETTINGS: OpenRouterSettings = {
   enabled: false,
-  // QNBS-v3: DeepSeek R1 free tier — strong reasoning + no cost, ideal default (zero friction).
-  preferredModel: 'deepseek/deepseek-r1:free',
+  // QNBS-v3: curated current free-tier model; live OpenRouter discovery remains opt-in/runtime.
+  preferredModel: DEFAULT_OPENROUTER_MODEL_ID,
 };
 
 const defaultSettings: Settings = {
@@ -63,7 +67,7 @@ const defaultSettings: Settings = {
     { type: 'time', target: 120, period: 'daily', enabled: false },
   ],
   advancedAi: {
-    model: 'gemini-3.5-flash',
+    model: DEFAULT_GEMINI_MODEL_ID,
     provider: 'gemini',
     temperature: 0.7,
     maxTokens: 4096,

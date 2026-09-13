@@ -21,7 +21,10 @@
 import type { AIRequestOptions, AIStreamCallbacks } from '../../aiProviderService';
 import { sanitizePromptValue } from '../../aiUtils';
 import { createLogger } from '../../logger';
+import type { OPENROUTER_FREE_MODEL_FALLBACK } from '../cloudModelCatalog';
 import { isOpenRouterFreeModel } from '../openrouterModels';
+
+export { OPENROUTER_FREE_MODEL_FALLBACK } from '../cloudModelCatalog';
 
 const logger = createLogger('openrouter-provider');
 
@@ -33,19 +36,8 @@ const SITE_TITLE = 'WorldScript Studio';
 
 // QNBS-v3: Offline/fetch-failure FALLBACK ONLY — never a primary source. The Settings UI derives
 // the free-tier group from the live-fetched catalog (services/ai/openrouterModels.ts) and only
-// falls back to this frozen list when that fetch fails or returns no free models. OpenRouter's
-// free tier rotates weekly; a hardcoded list used as the primary source silently drops new free
-// models from the UI, which is the bug this fallback role (renamed from a former primary-source
-// role) exists to avoid repeating. Fallback order matters: DeepSeek R1 is best for reasoning;
-// Llama 70B is best for creative writing.
-export const OPENROUTER_FREE_MODEL_FALLBACK = [
-  'deepseek/deepseek-r1:free',
-  'meta-llama/llama-3.3-70b-instruct:free',
-  'qwen/qwen2.5-72b-instruct:free',
-  'google/gemma-3-27b-it:free',
-  'mistralai/mistral-7b-instruct:free',
-] as const;
-
+// falls back to this dated curated list when that fetch fails or returns no free models. OpenRouter
+// free-tier membership rotates, so this recovery path must be requalified during #704 maintenance.
 export type OpenRouterFreeModel = (typeof OPENROUTER_FREE_MODEL_FALLBACK)[number];
 
 export { isOpenRouterFreeModel };

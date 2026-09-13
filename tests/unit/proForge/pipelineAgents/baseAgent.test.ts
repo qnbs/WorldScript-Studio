@@ -16,11 +16,15 @@ const mockIsEcoMode = vi.hoisted(() => vi.fn<() => boolean>().mockReturnValue(fa
 const mockGetLocalFallbackModel = vi.hoisted(() =>
   vi.fn<() => string>().mockReturnValue('Llama-3.2-1B-Instruct-q4f16_1-MLC'),
 );
+const mockGetOpenRouterModel = vi.hoisted(() =>
+  vi.fn<() => string>().mockReturnValue('google/gemma-4-31b-it:free'),
+);
 
 vi.mock('../../../../services/ai/aiModeService', () => ({
   shouldRouteLocally: mockShouldRouteLocally,
   isEcoMode: mockIsEcoMode,
   getLocalFallbackModel: mockGetLocalFallbackModel,
+  getOpenRouterModel: mockGetOpenRouterModel,
 }));
 
 vi.mock('../../../../services/ai/inferenceGateway', () => ({
@@ -168,6 +172,7 @@ describe('BaseAgent', () => {
     mockShouldRouteLocally.mockReturnValue(false);
     mockIsEcoMode.mockReturnValue(false);
     mockGetLocalFallbackModel.mockReturnValue('Llama-3.2-1B-Instruct-q4f16_1-MLC');
+    mockGetOpenRouterModel.mockReturnValue('google/gemma-4-31b-it:free');
     agent = new StubAgent(makeContext());
   });
 
@@ -231,9 +236,9 @@ describe('BaseAgent', () => {
   });
 
   describe('buildAiOpts()', () => {
-    it('returns gemini-2.5-flash for gemini provider', () => {
+    it('returns the curated Gemini default for gemini provider', () => {
       const opts = agent.publicBuildAiOpts();
-      expect(opts.model).toBe('gemini-2.5-flash');
+      expect(opts.model).toBe('gemini-3.5-flash');
       expect(opts.provider).toBe('gemini');
       expect(opts.maxTokens).toBe(4000);
     });
@@ -241,7 +246,7 @@ describe('BaseAgent', () => {
     it('returns the current compact GPT model for openai provider', () => {
       const ctx = makeContext({ config: { ...DEFAULT_CONFIG, aiProvider: 'openai' } });
       const a = new StubAgent(ctx);
-      expect(a.publicBuildAiOpts().model).toBe('gpt-5.4-mini');
+      expect(a.publicBuildAiOpts().model).toBe('gpt-5.6-terra');
     });
 
     it('returns the current Sonnet model for anthropic provider', () => {
@@ -253,10 +258,20 @@ describe('BaseAgent', () => {
     it('returns the current compact Grok model for grok provider', () => {
       const ctx = makeContext({ config: { ...DEFAULT_CONFIG, aiProvider: 'grok' } });
       const a = new StubAgent(ctx);
-      expect(a.publicBuildAiOpts().model).toBe('grok-4.5');
+      expect(a.publicBuildAiOpts().model).toBe('grok-4.6');
     });
 
-    it('falls back to gemini-2.5-flash for unknown provider', () => {
+    it('uses the configured OpenRouter model for openrouter provider', () => {
+      mockGetOpenRouterModel.mockReturnValue('vendor/model:free');
+      const ctx = makeContext({ config: { ...DEFAULT_CONFIG, aiProvider: 'openrouter' } });
+      const a = new StubAgent(ctx);
+      expect(a.publicBuildAiOpts()).toMatchObject({
+        model: 'vendor/model:free',
+        provider: 'openrouter',
+      });
+    });
+
+    it('falls back to the curated Gemini default for unknown provider', () => {
       const ctx = makeContext({
         config: {
           ...DEFAULT_CONFIG,
@@ -264,7 +279,7 @@ describe('BaseAgent', () => {
         },
       });
       const a = new StubAgent(ctx);
-      expect(a.publicBuildAiOpts().model).toBe('gemini-2.5-flash');
+      expect(a.publicBuildAiOpts().model).toBe('gemini-3.5-flash');
     });
 
     it('uses config.maxTokens when no override', () => {

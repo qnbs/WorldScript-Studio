@@ -19,12 +19,13 @@ import {
   shouldRouteLocally,
   shouldUseOpenRouter,
 } from '../../../services/ai/aiModeService';
+import { DEFAULT_OPENROUTER_MODEL_ID } from '../../../services/ai/cloudModelCatalog';
 
 // Reset to defaults after each test to avoid cross-test pollution.
 afterEach(() => {
   setActiveAiMode('hybrid');
   notifyLocalModelsReady(false);
-  setOpenRouterConfig(false, 'deepseek/deepseek-r1:free');
+  setOpenRouterConfig(false, DEFAULT_OPENROUTER_MODEL_ID);
 });
 
 describe('shouldRouteLocally()', () => {
@@ -168,9 +169,14 @@ describe('OpenRouter helpers', () => {
     expect(getOpenRouterModel()).toBe('meta-llama/llama-3.3-70b-instruct:free');
   });
 
-  it('getOpenRouterModel() defaults to DeepSeek R1 free when model empty', () => {
+  it('getOpenRouterModel() defaults to the curated current free model when model empty', () => {
     setOpenRouterConfig(true, '');
-    expect(getOpenRouterModel()).toBe('deepseek/deepseek-r1:free');
+    expect(getOpenRouterModel()).toBe(DEFAULT_OPENROUTER_MODEL_ID);
+  });
+
+  it('getOpenRouterModel() defaults when the configured model is whitespace-only', () => {
+    setOpenRouterConfig(true, '   ');
+    expect(getOpenRouterModel()).toBe(DEFAULT_OPENROUTER_MODEL_ID);
   });
 
   it('getOpenRouterFallbackProvider() returns webllm for eco', () => {

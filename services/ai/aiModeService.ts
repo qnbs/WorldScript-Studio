@@ -12,6 +12,7 @@
  * dispatch — never import directly from featureFlags or Redux here.
  */
 import type { AiMode } from '../../types';
+import { DEFAULT_OPENROUTER_MODEL_ID } from './cloudModelCatalog';
 
 const isOffline = (): boolean => typeof navigator !== 'undefined' && navigator.onLine === false;
 
@@ -74,12 +75,16 @@ export const getLocalFallbackModel = (): string => {
 // ─── OpenRouter routing helpers ─────────────────────────────────────────────
 
 let _openRouterEnabled = false;
-let _openRouterModel = 'deepseek/deepseek-r1:free';
+let _openRouterModel: string = DEFAULT_OPENROUTER_MODEL_ID;
 
 /** Called from listenerMiddleware when openRouter settings change. */
 export const setOpenRouterConfig = (enabled: boolean, preferredModel: string): void => {
   _openRouterEnabled = enabled;
-  _openRouterModel = preferredModel || 'deepseek/deepseek-r1:free';
+  // QNBS-v3: whitespace-only imported values must not bypass the curated fallback model.
+  _openRouterModel =
+    typeof preferredModel === 'string' && preferredModel.trim()
+      ? preferredModel
+      : DEFAULT_OPENROUTER_MODEL_ID;
 };
 
 /**
@@ -93,7 +98,7 @@ export const shouldUseOpenRouter = (): boolean => {
   return true;
 };
 
-/** Returns the configured OpenRouter model (default: DeepSeek R1 free). */
+/** Returns the configured OpenRouter model (default: curated current free-tier model). */
 export const getOpenRouterModel = (): string => _openRouterModel;
 
 /**

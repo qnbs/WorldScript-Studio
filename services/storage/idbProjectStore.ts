@@ -18,12 +18,12 @@ import {
 } from '../../features/settings/settingsDefaults';
 import type { OpenRouterSettings, Settings, StoryProject } from '../../types';
 import {
-  ANTHROPIC_MODEL_IDS,
+  classifyPersistedCloudModel,
   DEFAULT_ANTHROPIC_MODEL_ID,
+  DEFAULT_GEMINI_MODEL_ID,
   DEFAULT_GROK_MODEL_ID,
   DEFAULT_OPENAI_MODEL_ID,
-  GROK_MODEL_IDS,
-  OPENAI_MODEL_IDS,
+  DEFAULT_OPENROUTER_MODEL_ID,
 } from '../ai/cloudModelCatalog';
 import { DEFAULT_WEBRTC_SIGNALING_URLS } from '../collaborationService';
 import { APP_DATA_STORE } from '../dbConstants';
@@ -117,7 +117,7 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
   };
 
   const advancedAiDefaults: Settings['advancedAi'] = {
-    model: 'gemini-3.5-flash',
+    model: DEFAULT_GEMINI_MODEL_ID,
     provider: 'gemini',
     temperature: 0.7,
     maxTokens: 4096,
@@ -139,24 +139,29 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
     ...advancedAiDefaults,
     ...(incoming['advancedAi'] as Partial<Settings['advancedAi']> | undefined),
   };
-  // QNBS-v3: migrate stored cloud IDs removed from the selectable catalog to safe current defaults.
-  if (
-    validSettings.advancedAi.provider === 'anthropic' &&
-    !ANTHROPIC_MODEL_IDS.includes(
-      validSettings.advancedAi.model as (typeof ANTHROPIC_MODEL_IDS)[number],
-    )
-  ) {
-    validSettings.advancedAi.model = DEFAULT_ANTHROPIC_MODEL_ID;
-  } else if (
-    validSettings.advancedAi.provider === 'openai' &&
-    !OPENAI_MODEL_IDS.includes(validSettings.advancedAi.model as (typeof OPENAI_MODEL_IDS)[number])
-  ) {
-    validSettings.advancedAi.model = DEFAULT_OPENAI_MODEL_ID;
-  } else if (
-    validSettings.advancedAi.provider === 'grok' &&
-    !GROK_MODEL_IDS.includes(validSettings.advancedAi.model as (typeof GROK_MODEL_IDS)[number])
-  ) {
-    validSettings.advancedAi.model = DEFAULT_GROK_MODEL_ID;
+  // QNBS-v3: apply explicit catalog migrations while preserving custom OpenAI-compatible and
+  // OpenRouter model IDs; unknown direct-provider values fail closed to that provider's default.
+  const persistedModel = classifyPersistedCloudModel(
+    validSettings.advancedAi.provider,
+    validSettings.advancedAi.model,
+    validSettings.advancedAi.openAiCompatibleBaseUrl,
+  );
+  if (persistedModel.replacementModel !== undefined) {
+    validSettings.advancedAi.model =
+      persistedModel.replacementModel as Settings['advancedAi']['model'];
+  } else if (persistedModel.status === 'unknown-stored-value') {
+    if (validSettings.advancedAi.provider === 'gemini') {
+      validSettings.advancedAi.model = DEFAULT_GEMINI_MODEL_ID;
+    } else if (validSettings.advancedAi.provider === 'anthropic') {
+      validSettings.advancedAi.model = DEFAULT_ANTHROPIC_MODEL_ID;
+    } else if (validSettings.advancedAi.provider === 'openai') {
+      validSettings.advancedAi.model = DEFAULT_OPENAI_MODEL_ID;
+    } else if (validSettings.advancedAi.provider === 'grok') {
+      validSettings.advancedAi.model = DEFAULT_GROK_MODEL_ID;
+    } else if (validSettings.advancedAi.provider === 'openrouter') {
+      validSettings.advancedAi.model =
+        DEFAULT_OPENROUTER_MODEL_ID as Settings['advancedAi']['model'];
+    }
   }
 
   if (!Array.isArray(validSettings.keyboardShortcuts)) {
@@ -190,9 +195,10 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
   const rebuiltOpenRouter: OpenRouterSettings = {
     enabled: incomingOpenRouter['enabled'] === true,
     preferredModel:
-      typeof incomingOpenRouter['preferredModel'] === 'string'
+      typeof incomingOpenRouter['preferredModel'] === 'string' &&
+      incomingOpenRouter['preferredModel'].trim().length > 0
         ? incomingOpenRouter['preferredModel']
-        : 'deepseek/deepseek-r1:free',
+        : DEFAULT_OPENROUTER_MODEL_ID,
   };
   validSettings.openRouter = rebuiltOpenRouter;
 

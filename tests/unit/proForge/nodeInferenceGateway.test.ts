@@ -75,7 +75,7 @@ describe('NodeInferenceGateway.generate', () => {
     const res = await gw().generate(genReq());
     expect(res).toMatchObject({
       text: 'response',
-      model: 'gemini-2.0-flash',
+      model: 'gemini-3.5-flash',
       provider: 'gemini',
       isFallback: false,
     });
@@ -134,9 +134,9 @@ describe('NodeInferenceGateway.modelList / healthCheck', () => {
     const list = await gw().modelList();
     expect(list).toEqual([
       {
-        id: 'gemini-2.0-flash',
+        id: 'gemini-3.5-flash',
         provider: 'gemini',
-        displayName: 'gemini-2.0-flash',
+        displayName: 'gemini-3.5-flash',
         isLocal: false,
       },
     ]);

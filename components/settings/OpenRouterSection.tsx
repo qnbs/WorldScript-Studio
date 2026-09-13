@@ -33,18 +33,6 @@ import { Spinner } from '../ui/Spinner';
 
 const CUSTOM_MODEL_VALUE = '__custom__';
 
-// QNBS-v3: i18n label suffix for each OPENROUTER_FREE_MODEL_FALLBACK entry — only rendered when
-// the live catalog has no `:free` models at all (offline, fetch failure, or a genuinely empty
-// catalog). Live-fetched free models use the catalog's own `name` field instead.
-const FALLBACK_MODEL_LABEL_SUFFIX: Record<(typeof OPENROUTER_FREE_MODEL_FALLBACK)[number], string> =
-  {
-    'deepseek/deepseek-r1:free': 'deepseekR1',
-    'meta-llama/llama-3.3-70b-instruct:free': 'llama3370b',
-    'qwen/qwen2.5-72b-instruct:free': 'qwen2572b',
-    'google/gemma-3-27b-it:free': 'gemma327b',
-    'mistralai/mistral-7b-instruct:free': 'mistral7b',
-  };
-
 // ─── Sub-component: circuit breaker status indicator ─────────────────────────
 
 const CircuitBreakerStatus: FC<{ t: ReturnType<typeof useTranslation>['t'] }> = ({ t }) => {
@@ -264,12 +252,9 @@ export const OpenRouterSection: FC = () => {
   const freeModelOptions = useMemo(
     () =>
       usingFallbackFreeModels
-        ? OPENROUTER_FREE_MODEL_FALLBACK.map((m) => ({
-            value: m as string,
-            label: t(`settings.openRouter.freeModel.${FALLBACK_MODEL_LABEL_SUFFIX[m]}`),
-          }))
+        ? OPENROUTER_FREE_MODEL_FALLBACK.map((m) => ({ value: m as string, label: m }))
         : liveFreeModels.map((m) => ({ value: m.id, label: m.name ?? m.id })),
-    [usingFallbackFreeModels, liveFreeModels, t],
+    [usingFallbackFreeModels, liveFreeModels],
   );
   // QNBS-v3: OR-1 fix — filter solely by isOpenRouterFreeModel; the former extra `freeIds` set
   // (membership in the hardcoded list) caused any live-fetched free model NOT on that list to be
