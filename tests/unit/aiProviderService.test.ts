@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AiModel } from '../../types';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -1463,26 +1464,64 @@ describe('Anthropic — desktop (Track A) and web proxy (Track B) branches (ADR-
 describe('streamText OpenAI', () => {
   const originalFetch = globalThis.fetch;
 
+  function createOpenAiStreamResponse(encoder: TextEncoder, payload: string): Response {
+    return {
+      ok: true,
+      status: 200,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(payload));
+          controller.close();
+        },
+      }),
+    } as Response;
+  }
+
+  function mockOpenAiStream(payload: string) {
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('sk-test');
+    const encoder = new TextEncoder();
+    const fetchMock = vi.fn().mockResolvedValueOnce(createOpenAiStreamResponse(encoder, payload));
+    globalThis.fetch = fetchMock as typeof fetch;
+    return fetchMock;
+  }
+
+  async function requestOpenAiWithRoot({
+    openAiCompatibleBaseUrl,
+  }: {
+    openAiCompatibleBaseUrl: string;
+  }) {
+    const fetchMock = mockOpenAiStream('data: [DONE]\n');
+    await streamText(
+      'hello',
+      'Balanced',
+      {
+        provider: 'openai',
+        model: 'o3' as unknown as AiModel,
+        maxTokens: 123,
+        temperature: 0.2,
+        openAiCompatibleBaseUrl,
+      },
+      { onChunk: vi.fn() },
+    );
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    return JSON.parse(requestInit.body as string) as Record<string, unknown>;
+  }
+
+  function expectReasoningParameters(body: Record<string, unknown>) {
+    expect(body).toMatchObject({ model: 'o3', stream: true, max_completion_tokens: 123 });
+    expect(body).not.toHaveProperty('temperature');
+    expect(body).not.toHaveProperty('max_tokens');
+  }
+
   afterEach(() => {
     globalThis.fetch = originalFetch;
   });
 
   it('forwards merged AbortSignal to OpenAI fetch', async () => {
-    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('sk-test');
     const ac = new AbortController();
-    const encoder = new TextEncoder();
-    globalThis.fetch = vi.fn().mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({}),
-      body: new ReadableStream({
-        start(controller) {
-          controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"z"}}]}\n\n'));
-          controller.enqueue(encoder.encode('data: [DONE]\n'));
-          controller.close();
-        },
-      }),
-    } as Response);
+    const fetchMock = mockOpenAiStream(
+      'data: {"choices":[{"delta":{"content":"z"}}]}\n\ndata: [DONE]\n',
+    );
 
     const chunks: string[] = [];
     await streamText(
@@ -1497,7 +1536,72 @@ describe('streamText OpenAI', () => {
       'https://api.openai.com/v1/chat/completions',
       expect.objectContaining({ signal: ac.signal }),
     );
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(requestInit.body as string)).toMatchObject({
+      model: 'gpt-4o-mini',
+      stream: true,
+      temperature: 0.7,
+      max_tokens: 2048,
+    });
     expect(chunks.join('')).toContain('z');
+  });
+
+  it('uses reasoning-compatible parameters for official o-series models', async () => {
+    const fetchMock = mockOpenAiStream('data: [DONE]\n');
+
+    await streamText(
+      'hello',
+      'Balanced',
+      { provider: 'openai', model: 'o3' as unknown as AiModel, maxTokens: 123, temperature: 0.2 },
+      { onChunk: vi.fn() },
+    );
+
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(requestInit.body as string) as Record<string, unknown>;
+    expectReasoningParameters(body);
+  });
+
+  it('uses reasoning-compatible parameters for explicit canonical OpenAI roots', async () => {
+    const body = await requestOpenAiWithRoot({
+      openAiCompatibleBaseUrl: 'https://api.openai.com/v1',
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'https://api.openai.com/v1/chat/completions',
+      expect.anything(),
+    );
+    expectReasoningParameters(body);
+    const equivalentBody = await requestOpenAiWithRoot({
+      openAiCompatibleBaseUrl: 'https://api.openai.com:443///',
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'https://api.openai.com:443/v1/chat/completions',
+      expect.anything(),
+    );
+    expectReasoningParameters(equivalentBody);
+    const dnsEquivalentBody = await requestOpenAiWithRoot({
+      openAiCompatibleBaseUrl: 'https://api.openai.com./v1',
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'https://api.openai.com/v1/chat/completions',
+      expect.anything(),
+    );
+    expectReasoningParameters(dnsEquivalentBody);
+  });
+
+  it('keeps genuinely non-OpenAI compatible roots on the compatibility shape', async () => {
+    const body = await requestOpenAiWithRoot({
+      openAiCompatibleBaseUrl: 'https://openrouter.ai/api',
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'https://openrouter.ai/api/v1/chat/completions',
+      expect.anything(),
+    );
+    expect(body).toMatchObject({ model: 'o3', stream: true, temperature: 0.2, max_tokens: 123 });
+    expect(body).not.toHaveProperty('max_completion_tokens');
   });
 });
 
