@@ -723,6 +723,13 @@ type LocalFirstHandle = {
 };
 let localFirstHandle: LocalFirstHandle | null = null;
 
+class LocalFirstPlaintextCleanupError extends Error {
+  constructor(readonly cause: unknown) {
+    super('Local-First plaintext cleanup failed during encryption transition');
+    this.name = 'LocalFirstPlaintextCleanupError';
+  }
+}
+
 // QNBS-v3 (CodeAnt): serialize all handle create/teardown so an overlapping sync run and an
 // enable/disable run can't race on the shared module-global and leave the wrong handle active.
 let localFirstLock: Promise<void> = Promise.resolve();
@@ -750,8 +757,30 @@ async function reconcileLocalFirstHandle(
   }
   // QNBS-v3 (CodeAnt): the persistence backend is chosen at handle creation — if at-rest encryption became active after a plaintext-persisting handle was made, tear it down (wiping the plaintext already written) so no further plaintext is persisted.
   if (isIdbEncryptionReady() && localFirstHandle.persistence.active) {
-    await localFirstHandle.persistence.clearData().catch(() => undefined);
-    await localFirstHandle.persistence.destroy().catch(() => undefined);
+    const handle = localFirstHandle;
+    try {
+      await handle.persistence.clearData();
+    } catch (error) {
+      // QNBS-v3: a failed plaintext wipe must abort this sync and force the encryption-active NOOP path instead of silently treating remanence as removed.
+      let teardownFailed = false;
+      let teardownError: unknown;
+      try {
+        await handle.persistence.destroyStrict();
+      } catch (error) {
+        teardownFailed = true;
+        teardownError = error;
+      }
+      // QNBS-v3: use the strict teardown boundary before dropping the cached handle, so a failed provider detach is observable instead of leaving an untracked persistence instance behind.
+      localFirstHandle = null;
+      if (teardownFailed) {
+        logger.error(
+          'Local-First plaintext cleanup and provider teardown both failed; persistence disabled:',
+          teardownError,
+        );
+      }
+      throw new LocalFirstPlaintextCleanupError(error);
+    }
+    await handle.persistence.destroy().catch(() => undefined);
     localFirstHandle = null;
     return null;
   }
@@ -833,6 +862,13 @@ async function runLocalFirstShadowSync(
       handle.binding.reproject(presentData);
     }
   } catch (err) {
+    if (err instanceof LocalFirstPlaintextCleanupError) {
+      logger.error(
+        'Local-First plaintext cleanup failed; shadow sync aborted and persistence disabled:',
+        err.cause,
+      );
+      return;
+    }
     logger.warn('Local-First shadow sync failed (non-critical):', err);
   }
 }
