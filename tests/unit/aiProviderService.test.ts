@@ -1557,7 +1557,7 @@ describe('streamText OpenAI', () => {
     expectReasoningParameters(body);
   });
 
-  it('uses reasoning-compatible parameters for an explicit canonical OpenAI root', async () => {
+  it('uses reasoning-compatible parameters for explicit canonical OpenAI roots', async () => {
     const body = await requestOpenAiWithRoot('https://api.openai.com/v1');
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
@@ -1565,16 +1565,13 @@ describe('streamText OpenAI', () => {
       expect.anything(),
     );
     expectReasoningParameters(body);
-  });
-
-  it('normalizes equivalent explicit official roots before selecting reasoning parameters', async () => {
-    const body = await requestOpenAiWithRoot('https://api.openai.com:443///');
+    const equivalentBody = await requestOpenAiWithRoot('https://api.openai.com:443///');
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
       'https://api.openai.com:443/v1/chat/completions',
       expect.anything(),
     );
-    expectReasoningParameters(body);
+    expectReasoningParameters(equivalentBody);
   });
 
   it('keeps genuinely non-OpenAI compatible roots on the compatibility shape', async () => {
