@@ -102,7 +102,11 @@ function withMergedAbortSignal(opts: AIRequestOptions, signal?: AbortSignal): AI
 
 function isOfficialOpenAiApiRoot(apiRoot: string): boolean {
   // QNBS-v3: canonical endpoint identity, rather than configuration spelling, selects provider semantics.
-  return apiRoot.toLowerCase() === 'https://api.openai.com/v1';
+  try {
+    return new URL(apiRoot).href === 'https://api.openai.com/v1';
+  } catch {
+    return false;
+  }
 }
 
 function buildOpenAiCompletionParameters(

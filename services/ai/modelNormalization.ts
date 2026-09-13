@@ -1,7 +1,7 @@
 import type { AiModel } from '../../types';
 
 export function normalizeOpenAiCompatibleBaseUrl(baseUrl: string): string {
-  const trimmed = baseUrl.replace(/\/$/, '');
+  const trimmed = baseUrl.replace(/\/+$/, '');
   return trimmed.endsWith('/v1') ? trimmed : `${trimmed}/v1`;
 }
 

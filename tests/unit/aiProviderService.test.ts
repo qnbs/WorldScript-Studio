@@ -1503,6 +1503,12 @@ describe('streamText OpenAI', () => {
     return JSON.parse(requestInit.body as string) as Record<string, unknown>;
   }
 
+  function expectReasoningParameters(body: Record<string, unknown>) {
+    expect(body).toMatchObject({ model: 'o3', stream: true, max_completion_tokens: 123 });
+    expect(body).not.toHaveProperty('temperature');
+    expect(body).not.toHaveProperty('max_tokens');
+  }
+
   afterEach(() => {
     globalThis.fetch = originalFetch;
   });
@@ -1548,9 +1554,7 @@ describe('streamText OpenAI', () => {
 
     const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(requestInit.body as string) as Record<string, unknown>;
-    expect(body).toMatchObject({ model: 'o3', stream: true, max_completion_tokens: 123 });
-    expect(body).not.toHaveProperty('temperature');
-    expect(body).not.toHaveProperty('max_tokens');
+    expectReasoningParameters(body);
   });
 
   it('uses reasoning-compatible parameters for an explicit canonical OpenAI root', async () => {
@@ -1560,9 +1564,17 @@ describe('streamText OpenAI', () => {
       'https://api.openai.com/v1/chat/completions',
       expect.anything(),
     );
-    expect(body).toMatchObject({ model: 'o3', stream: true, max_completion_tokens: 123 });
-    expect(body).not.toHaveProperty('temperature');
-    expect(body).not.toHaveProperty('max_tokens');
+    expectReasoningParameters(body);
+  });
+
+  it('normalizes equivalent explicit official roots before selecting reasoning parameters', async () => {
+    const body = await requestOpenAiWithRoot('https://api.openai.com:443///');
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'https://api.openai.com:443/v1/chat/completions',
+      expect.anything(),
+    );
+    expectReasoningParameters(body);
   });
 
   it('keeps genuinely non-OpenAI compatible roots on the compatibility shape', async () => {
