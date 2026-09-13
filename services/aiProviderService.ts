@@ -52,6 +52,8 @@ import { isTauriRuntime } from './tauriRuntime';
 
 const log = createLogger('aiProviderService');
 
+export const GROK_API_ENDPOINT = 'https://api.x.ai/v1/chat/completions';
+
 const providerTextSchema = z.object({
   text: z.string().min(1),
 });
@@ -160,11 +162,114 @@ function _cleanupPendingRequest(key: string, controller: AbortController): void 
   }
 }
 
+// QNBS-v3: retain Grok chunk tracking so partial output cannot be followed by fallback text.
+function createGrokAttemptCallbacks(
+  callbacks: AIStreamCallbacks,
+  onChunk: (text: string) => void,
+): AIStreamCallbacks {
+  const trackedCallbacks: AIStreamCallbacks = { onChunk };
+  if (callbacks.onDone) trackedCallbacks.onDone = callbacks.onDone;
+  if (callbacks.onError) trackedCallbacks.onError = callbacks.onError;
+  return trackedCallbacks;
+}
+
 // ─── Gemini Provider ──────────────────────────────────────────────────────────
 // Gemini streaming is handled by the existing geminiService.ts.
 // We re-export a compatible interface here.
 
 // ─── OpenAI Provider ─────────────────────────────────────────────────────────
+
+async function consumeOpenAiCompatibleStream(
+  response: Response,
+  callbacks: AIStreamCallbacks,
+  providerName: 'OpenAI' | 'Grok',
+  abortPolicy: 'complete' | 'throw',
+  signal?: AbortSignal,
+): Promise<void> {
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error(`${providerName}: No response body`);
+
+  // QNBS-v3: OpenAI and xAI share the chat-completions SSE framing; one typed consumer keeps
+  // final-frame flushing and abort completion semantics identical across both cloud adapters.
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let receivedDone = false;
+  const parseLine = (rawLine: string): void => {
+    const line = rawLine.trimEnd();
+    if (!line.startsWith('data: ')) return;
+    if (line === 'data: [DONE]') {
+      receivedDone = true;
+      return;
+    }
+    let payload: unknown;
+    try {
+      payload = JSON.parse(line.slice(6));
+    } catch {
+      // malformed chunk – skip
+      return;
+    }
+    // QNBS-v3: provider keep-alive/error frames can be valid JSON without an object shape; ignore them instead of turning a malformed frame into a provider failure.
+    if (typeof payload !== 'object' || payload === null) return;
+    const delta = (payload as { choices?: Array<{ delta?: { content?: unknown } }> }).choices?.[0]
+      ?.delta?.content;
+    if (typeof delta === 'string' && delta) callbacks.onChunk(delta);
+  };
+
+  try {
+    while (true) {
+      if (signal?.aborted) {
+        if (abortPolicy === 'complete') {
+          callbacks.onDone?.();
+          return;
+        }
+        break;
+      }
+      let readResult: ReadableStreamReadResult<Uint8Array>;
+      try {
+        readResult = await reader.read();
+      } catch (error) {
+        if (signal?.aborted && abortPolicy === 'complete') {
+          callbacks.onDone?.();
+          return;
+        }
+        throw error;
+      }
+      const { done, value } = readResult;
+      // QNBS-v3: Recheck after the awaited read so a cancellation racing with read resolution cannot publish a late delta.
+      if (signal?.aborted) {
+        if (abortPolicy === 'complete') {
+          callbacks.onDone?.();
+          return;
+        }
+        throw Object.assign(new Error(`${providerName} stream aborted`), { name: 'AbortError' });
+      }
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (signal?.aborted) break;
+        parseLine(line);
+      }
+    }
+    if (signal?.aborted) {
+      if (abortPolicy === 'complete') {
+        callbacks.onDone?.();
+        return;
+      }
+      throw Object.assign(new Error(`${providerName} stream aborted`), { name: 'AbortError' });
+    }
+    buffer += decoder.decode();
+    if (buffer) parseLine(buffer);
+
+    if (abortPolicy === 'throw' && !receivedDone) {
+      throw new Error(`${providerName}: stream ended before completion`);
+    }
+    callbacks.onDone?.();
+  } finally {
+    await reader.cancel().catch(() => {});
+  }
+}
 
 async function streamOpenAI(
   prompt: string,
@@ -218,34 +323,7 @@ async function streamOpenAI(
     );
   }
 
-  const reader = res.body?.getReader();
-  if (!reader) throw new Error('OpenAI: No response body');
-
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  while (true) {
-    if (opts.signal?.aborted) break;
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-
-    const lines = buffer.split('\n');
-    buffer = lines.pop() ?? '';
-
-    for (const line of lines) {
-      if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
-      try {
-        const json = JSON.parse(line.slice(6));
-        const delta = json?.choices?.[0]?.delta?.content ?? '';
-        if (delta) callbacks.onChunk(delta);
-      } catch {
-        // malformed chunk – skip
-      }
-    }
-  }
-
-  callbacks.onDone?.();
+  return consumeOpenAiCompatibleStream(res, callbacks, 'OpenAI', 'complete', opts.signal);
 }
 
 // QNBS-v3: single source of truth for which local presets speak the OpenAI-compatible /v1 API —
@@ -433,7 +511,14 @@ async function streamGrok(
 ): Promise<void> {
   const apiKey = await storageService.getApiKey('grok');
   if (!apiKey) throw new Error('NO_API_KEY: Grok API key missing. Please enter it in Settings.');
-  const res = await fetch('https://api.x.ai/v1/chat/completions', {
+  // QNBS-v3: preserve optional system context while adapting Grok to the shared chat-completions stream contract.
+  const messages = opts.systemPrompt
+    ? [
+        { role: 'system', content: sanitizePromptValue(opts.systemPrompt) },
+        { role: 'user', content: sanitizePromptValue(prompt) },
+      ]
+    : [{ role: 'user', content: sanitizePromptValue(prompt) }];
+  const res = await fetch(GROK_API_ENDPOINT, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -441,18 +526,16 @@ async function streamGrok(
     },
     body: JSON.stringify({
       model: opts.model,
-      stream: false,
-      messages: [{ role: 'user', content: sanitizePromptValue(prompt) }],
+      stream: true,
+      messages,
       temperature: opts.temperature ?? 0.7,
       max_tokens: opts.maxTokens ?? 2048,
     }),
     signal: opts.signal ?? null,
   });
   if (!res.ok) throw new Error(`Grok API Error ${res.status}: ${res.statusText}`);
-  const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-  const text = json.choices?.[0]?.message?.content ?? '';
-  if (text) callbacks.onChunk(text);
-  callbacks.onDone?.();
+  // QNBS-v3: strict abort policy prevents a cancelled Grok stream from publishing late text or completion.
+  return consumeOpenAiCompatibleStream(res, callbacks, 'Grok', 'throw', opts.signal);
 }
 
 async function streamProvider(
@@ -792,12 +875,21 @@ export async function streamText(
     for (let i = 0; i < chain.length; i++) {
       const nextProvider = chain[i];
       if (nextProvider === undefined || nextProvider === attemptedOpenRouterFallback) continue;
+      // QNBS-v3: track partial Grok output before fallback decisions.
+      let grokEmitted = false;
+      const callbacksForAttempt =
+        nextProvider === 'grok'
+          ? createGrokAttemptCallbacks(callbacks, (text) => {
+              grokEmitted = true;
+              callbacks.onChunk(text);
+            })
+          : callbacks;
       try {
         await streamProvider(
           prompt,
           creativity,
           { ...mergedOpts, provider: nextProvider },
-          callbacks,
+          callbacksForAttempt,
           signal,
         );
         // QNBS-v3: mirrors generateText's fallback-reason bookkeeping — without this, a stale reason from an earlier failed/promoted request would keep showing in GpuMetricsPanel after this request's primary provider succeeds outright.
@@ -813,6 +905,12 @@ export async function streamText(
         // run their silent cancel flow instead of an error path.
         if (isAbortError(error) || mergedOpts.signal?.aborted || signal?.aborted) {
           throw error instanceof Error ? error : new Error(String(error));
+        }
+        if (nextProvider === 'grok' && grokEmitted) {
+          // QNBS-v3: A partial Grok response must terminate rather than append fallback text to a truncated answer.
+          const terminal = error instanceof Error ? error : new Error(String(error));
+          callbacks.onError?.(terminal);
+          throw terminal;
         }
         lastError = error;
         // QNBS-v3: mirrors generateText's OpenRouter rate-limit/circuit-open promotion — without this, a stream promoted to OpenRouter by resolvePositiveRoutingOpts would fail hard on a transient OpenRouter outage instead of falling back.
