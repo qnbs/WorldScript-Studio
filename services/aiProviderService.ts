@@ -180,18 +180,25 @@ async function consumeOpenAiCompatibleStream(
   // final-frame flushing and abort completion semantics identical across both cloud adapters.
   const decoder = new TextDecoder();
   let buffer = '';
+  let receivedDone = false;
   const parseLine = (rawLine: string): void => {
     const line = rawLine.trimEnd();
-    if (!line.startsWith('data: ') || line === 'data: [DONE]') return;
+    if (!line.startsWith('data: ')) return;
+    if (line === 'data: [DONE]') {
+      receivedDone = true;
+      return;
+    }
+    let payload: { choices?: Array<{ delta?: { content?: unknown } }> };
     try {
-      const payload = JSON.parse(line.slice(6)) as {
+      payload = JSON.parse(line.slice(6)) as {
         choices?: Array<{ delta?: { content?: unknown } }>;
       };
-      const delta = payload.choices?.[0]?.delta?.content;
-      if (typeof delta === 'string' && delta) callbacks.onChunk(delta);
     } catch {
       // malformed chunk – skip
+      return;
     }
+    const delta = payload.choices?.[0]?.delta?.content;
+    if (typeof delta === 'string' && delta) callbacks.onChunk(delta);
   };
 
   while (true) {
@@ -202,22 +209,35 @@ async function consumeOpenAiCompatibleStream(
       }
       break;
     }
-    const { done, value } = await reader.read();
+    let readResult: ReadableStreamReadResult<Uint8Array>;
+    try {
+      readResult = await reader.read();
+    } catch (error) {
+      if (signal?.aborted && abortPolicy === 'complete') {
+        callbacks.onDone?.();
+        return;
+      }
+      throw error;
+    }
+    const { done, value } = readResult;
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split('\n');
     buffer = lines.pop() ?? '';
     for (const line of lines) parseLine(line);
   }
-  buffer += decoder.decode();
-  if (buffer) parseLine(buffer);
-
   if (signal?.aborted) {
     if (abortPolicy === 'complete') {
       callbacks.onDone?.();
       return;
     }
     throw Object.assign(new Error(`${providerName} stream aborted`), { name: 'AbortError' });
+  }
+  buffer += decoder.decode();
+  if (buffer) parseLine(buffer);
+
+  if (abortPolicy === 'throw' && !receivedDone) {
+    throw new Error(`${providerName}: stream ended before completion`);
   }
   callbacks.onDone?.();
 }
@@ -462,6 +482,7 @@ async function streamGrok(
 ): Promise<void> {
   const apiKey = await storageService.getApiKey('grok');
   if (!apiKey) throw new Error('NO_API_KEY: Grok API key missing. Please enter it in Settings.');
+  // QNBS-v3: preserve optional system context while adapting Grok to the shared chat-completions stream contract.
   const messages = opts.systemPrompt
     ? [
         { role: 'system', content: sanitizePromptValue(opts.systemPrompt) },
@@ -484,6 +505,7 @@ async function streamGrok(
     signal: opts.signal ?? null,
   });
   if (!res.ok) throw new Error(`Grok API Error ${res.status}: ${res.statusText}`);
+  // QNBS-v3: strict abort policy prevents a cancelled Grok stream from publishing late text or completion.
   return consumeOpenAiCompatibleStream(res, callbacks, 'Grok', 'throw', opts.signal);
 }
 
