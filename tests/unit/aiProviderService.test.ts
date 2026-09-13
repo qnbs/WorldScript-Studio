@@ -1580,6 +1580,15 @@ describe('streamText OpenAI', () => {
       expect.anything(),
     );
     expectReasoningParameters(equivalentBody);
+    const dnsEquivalentBody = await requestOpenAiWithRoot({
+      openAiCompatibleBaseUrl: 'https://api.openai.com./v1',
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'https://api.openai.com/v1/chat/completions',
+      expect.anything(),
+    );
+    expectReasoningParameters(dnsEquivalentBody);
   });
 
   it('keeps genuinely non-OpenAI compatible roots on the compatibility shape', async () => {

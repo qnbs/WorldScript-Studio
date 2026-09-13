@@ -103,10 +103,33 @@ function withMergedAbortSignal(opts: AIRequestOptions, signal?: AbortSignal): AI
 function isOfficialOpenAiApiRoot(apiRoot: string): boolean {
   // QNBS-v3: canonical endpoint identity, rather than configuration spelling, selects provider semantics.
   try {
-    return new URL(apiRoot).href === 'https://api.openai.com/v1';
+    const url = new URL(apiRoot);
+    return (
+      url.protocol === 'https:' &&
+      url.hostname.replace(/\.$/, '') === 'api.openai.com' &&
+      url.port === '' &&
+      url.pathname === '/v1' &&
+      url.username === '' &&
+      url.password === '' &&
+      url.search === '' &&
+      url.hash === ''
+    );
   } catch {
     return false;
   }
+}
+
+function normalizeOfficialOpenAiApiRoot(apiRoot: string): string {
+  try {
+    const url = new URL(apiRoot);
+    if (url.hostname === 'api.openai.com.' && isOfficialOpenAiApiRoot(apiRoot)) {
+      url.hostname = 'api.openai.com';
+      return url.href.replace(/\/$/, '');
+    }
+  } catch {
+    return apiRoot;
+  }
+  return apiRoot;
 }
 
 function buildOpenAiCompletionParameters(
@@ -300,7 +323,9 @@ async function streamOpenAI(
   const apiKey = await storageService.getApiKey('openai');
   if (!apiKey) throw new Error('NO_API_KEY: OpenAI API key missing. Please enter it in Settings.');
 
-  const apiRoot = resolveOpenAiCompatibleRoot(opts.openAiCompatibleBaseUrl);
+  const apiRoot = normalizeOfficialOpenAiApiRoot(
+    resolveOpenAiCompatibleRoot(opts.openAiCompatibleBaseUrl),
+  );
   const usesOfficialOpenAi = isOfficialOpenAiApiRoot(apiRoot);
   // QNBS-v3: Allow gpt-, o1-, o3-, o4- prefixes; o-series reasoning models ship alongside GPT-4.1.
   const isValidOpenAiModel = opts.model.startsWith('gpt-') || /^o\d/.test(opts.model);
