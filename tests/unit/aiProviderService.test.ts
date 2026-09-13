@@ -49,6 +49,7 @@ vi.mock('@tauri-apps/plugin-http', () => ({
 import { setActiveAiMode, setOpenRouterConfig } from '../../services/ai/aiModeService';
 import * as openrouterProvider from '../../services/ai/providers/openrouterProvider';
 import {
+  GROK_API_ENDPOINT,
   generateImage,
   generateJson,
   generateText,
@@ -65,6 +66,17 @@ import * as localAiFacade from '../../services/localAiFacade';
 import { storageService } from '../../services/storageService';
 
 const defaultOpts = { provider: 'gemini' as const, model: 'gemini-2.5-flash' as const };
+
+function installGrokFetch(body: string): ReturnType<typeof vi.fn> {
+  const fetchMock = vi.fn().mockResolvedValueOnce(
+    new Response(body, {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    }),
+  );
+  globalThis.fetch = fetchMock as typeof fetch;
+  return fetchMock;
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -424,6 +436,373 @@ describe('streamText', () => {
     ).rejects.toThrow('gemini also failed');
     // QNBS-v3: chain is ['openrouter', 'gemini']; the rate-limit promotes to 'gemini' first, so the chain's own later 'gemini' entry must be skipped rather than invoking Gemini a second time.
     expect(geminiService.streamText).toHaveBeenCalledTimes(1);
+  });
+
+  // QNBS-v3: Grok regression locks SSE request, delta, and completion contracts.
+  it('uses xAI streamed chat completions and preserves the system prompt', async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchMock = installGrokFetch(
+      'data: {"choices":[{"delta":{"content":"Hello"}}]}\n' +
+        'data: {"choices":[{"delta":{"content":" world"}}]}\n' +
+        'data: [DONE]',
+    );
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('grok-test-key');
+    const chunks: string[] = [];
+    const onDone = vi.fn();
+
+    try {
+      await streamText(
+        'user prompt',
+        'Balanced',
+        { provider: 'grok', model: 'grok-4.5', systemPrompt: 'system prompt' },
+        { onChunk: (chunk) => chunks.push(chunk), onDone },
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(chunks).toEqual(['Hello', ' world']);
+    expect(onDone).toHaveBeenCalledTimes(1);
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(fetchMock).toHaveBeenCalledWith(
+      GROK_API_ENDPOINT,
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(JSON.parse(requestInit.body as string)).toMatchObject({
+      model: 'grok-4.5',
+      stream: true,
+      messages: [
+        { role: 'system', content: 'system prompt' },
+        { role: 'user', content: 'user prompt' },
+      ],
+      temperature: 0.7,
+      max_tokens: 2048,
+    });
+  });
+
+  it('propagates a stream consumer error instead of treating it as malformed SSE', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn().mockResolvedValueOnce(
+      new Response('data: {"choices":[{"delta":{"content":"response"}}]}\n' + 'data: [DONE]\n', {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      }),
+    );
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('grok-test-key');
+
+    try {
+      await expect(
+        streamText(
+          'user prompt',
+          'Balanced',
+          { provider: 'grok', model: 'grok-4.5' },
+          {
+            onChunk: () => {
+              throw new Error('consumer failed');
+            },
+          },
+        ),
+      ).rejects.toThrow('consumer failed');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('completes OpenAI cancellation when a pending read rejects', async () => {
+    const originalFetch = globalThis.fetch;
+    const ac = new AbortController();
+    let rejectRead!: (reason?: unknown) => void;
+    let resolveReadStarted!: () => void;
+    const readStarted = new Promise<void>((resolve) => {
+      resolveReadStarted = resolve;
+    });
+    const onDone = vi.fn();
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: {
+        getReader: () => ({
+          read: () => {
+            resolveReadStarted();
+            return new Promise<ReadableStreamReadResult<Uint8Array>>((_resolve, reject) => {
+              rejectRead = reject;
+            });
+          },
+          cancel: vi.fn().mockResolvedValue(undefined),
+        }),
+      },
+    } as unknown as Response);
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('openai-test-key');
+
+    try {
+      const streamPromise = streamText(
+        'user prompt',
+        'Balanced',
+        { provider: 'openai', model: 'gpt-4o-mini' },
+        { onChunk: vi.fn(), onDone },
+        ac.signal,
+      );
+      await readStarted;
+      ac.abort();
+      rejectRead(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+
+      await expect(streamPromise).resolves.toBeUndefined();
+      expect(onDone).toHaveBeenCalledTimes(1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('rejects a Grok stream that closes before its completion sentinel', async () => {
+    const originalFetch = globalThis.fetch;
+    installGrokFetch('data: {"choices":[{"delta":{"content":"partial"}}]}\n\n');
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('grok-test-key');
+    const onDone = vi.fn();
+    const onError = vi.fn();
+
+    try {
+      await expect(
+        streamText(
+          'user prompt',
+          'Balanced',
+          { provider: 'grok', model: 'grok-4.5' },
+          { onChunk: vi.fn(), onDone, onError },
+        ),
+      ).rejects.toThrow('stream ended before completion');
+      expect(onDone).not.toHaveBeenCalled();
+      expect(onError).toHaveBeenCalledTimes(1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('does not flush a residual Grok delta after cancellation', async () => {
+    const originalFetch = globalThis.fetch;
+    const ac = new AbortController();
+    const encoder = new TextEncoder();
+    let readCount = 0;
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: {
+        getReader: () => ({
+          read: async () => {
+            readCount += 1;
+            if (readCount === 1) {
+              return {
+                done: false,
+                value: encoder.encode('data: {"choices":[{"delta":{"content":"late"}}]}'),
+              };
+            }
+            ac.abort();
+            return { done: true, value: undefined };
+          },
+          cancel: vi.fn().mockResolvedValue(undefined),
+        }),
+      },
+    } as unknown as Response);
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('grok-test-key');
+    const onChunk = vi.fn();
+
+    try {
+      await expect(
+        streamText(
+          'user prompt',
+          'Balanced',
+          { provider: 'grok', model: 'grok-4.5' },
+          { onChunk },
+          ac.signal,
+        ),
+      ).rejects.toMatchObject({ name: 'AbortError' });
+      expect(onChunk).not.toHaveBeenCalled();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('does not append fallback text after Grok emits a partial response', async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchMock = installGrokFetch('data: {"choices":[{"delta":{"content":"partial"}}]}\n\n');
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('grok-test-key');
+    vi.mocked(geminiService.streamText).mockImplementationOnce(
+      async (_prompt, _creativity, onChunk) => {
+        onChunk('fallback');
+      },
+    );
+    const onChunk = vi.fn();
+    const onError = vi.fn();
+
+    try {
+      await expect(
+        streamText(
+          'user prompt',
+          'Balanced',
+          { provider: 'grok', model: 'grok-4.5', fallbackProviders: ['gemini'] },
+          { onChunk, onError },
+        ),
+      ).rejects.toThrow('stream ended before completion');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(geminiService.streamText).not.toHaveBeenCalled();
+      expect(onChunk).toHaveBeenCalledTimes(1);
+      expect(onChunk).toHaveBeenCalledWith('partial');
+      expect(onError).toHaveBeenCalledTimes(1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('cancels the Grok reader when a chunk consumer fails', async () => {
+    const originalFetch = globalThis.fetch;
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    const encoder = new TextEncoder();
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: {
+        getReader: () => ({
+          read: async () => ({
+            done: false,
+            value: encoder.encode('data: {"choices":[{"delta":{"content":"chunk"}}]}\n'),
+          }),
+          cancel,
+        }),
+      },
+    } as unknown as Response);
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('grok-test-key');
+
+    try {
+      await expect(
+        streamText(
+          'user prompt',
+          'Balanced',
+          { provider: 'grok', model: 'grok-4.5' },
+          {
+            onChunk: () => {
+              throw new Error('consumer failed');
+            },
+          },
+        ),
+      ).rejects.toThrow('consumer failed');
+      expect(cancel).toHaveBeenCalledTimes(1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('does not deliver a Grok chunk when an in-flight read resolves after cancellation', async () => {
+    const originalFetch = globalThis.fetch;
+    const ac = new AbortController();
+    const encoder = new TextEncoder();
+    let resolveRead!: (result: ReadableStreamReadResult<Uint8Array>) => void;
+    let resolveReadStarted!: () => void;
+    const readStarted = new Promise<void>((resolve) => {
+      resolveReadStarted = resolve;
+    });
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: {
+        getReader: () => ({
+          read: () => {
+            resolveReadStarted();
+            return new Promise<ReadableStreamReadResult<Uint8Array>>((resolve) => {
+              resolveRead = resolve;
+            });
+          },
+          cancel: vi.fn().mockResolvedValue(undefined),
+        }),
+      },
+    } as unknown as Response);
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('grok-test-key');
+    const onChunk = vi.fn();
+
+    try {
+      const streamPromise = streamText(
+        'user prompt',
+        'Balanced',
+        { provider: 'grok', model: 'grok-4.5' },
+        { onChunk },
+        ac.signal,
+      );
+      await readStarted;
+      ac.abort();
+      resolveRead({
+        done: false,
+        value: encoder.encode('data: {"choices":[{"delta":{"content":"late"}}]}\n'),
+      });
+
+      await expect(streamPromise).rejects.toMatchObject({ name: 'AbortError' });
+      expect(onChunk).not.toHaveBeenCalled();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('stops parsing later Grok frames after a consumer aborts within one read', async () => {
+    const originalFetch = globalThis.fetch;
+    const ac = new AbortController();
+    const encoder = new TextEncoder();
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: {
+        getReader: () => ({
+          read: async () => ({
+            done: false,
+            value: encoder.encode(
+              'data: {"choices":[{"delta":{"content":"first"}}]}\n' +
+                'data: {"choices":[{"delta":{"content":"late"}}]}\n' +
+                'data: [DONE]\n',
+            ),
+          }),
+          cancel: vi.fn().mockResolvedValue(undefined),
+        }),
+      },
+    } as unknown as Response);
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('grok-test-key');
+    const onChunk = vi.fn(() => ac.abort());
+
+    try {
+      await expect(
+        streamText(
+          'user prompt',
+          'Balanced',
+          { provider: 'grok', model: 'grok-4.5' },
+          { onChunk },
+          ac.signal,
+        ),
+      ).rejects.toMatchObject({ name: 'AbortError' });
+      expect(onChunk).toHaveBeenCalledTimes(1);
+      expect(onChunk).toHaveBeenCalledWith('first');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('ignores non-object Grok SSE payloads while preserving valid deltas', async () => {
+    const originalFetch = globalThis.fetch;
+    installGrokFetch(
+      'data: null\n' + 'data: {"choices":[{"delta":{"content":"valid"}}]}\n' + 'data: [DONE]\n',
+    );
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('grok-test-key');
+    const onChunk = vi.fn();
+    const onDone = vi.fn();
+
+    try {
+      await expect(
+        streamText(
+          'user prompt',
+          'Balanced',
+          { provider: 'grok', model: 'grok-4.5' },
+          { onChunk, onDone },
+        ),
+      ).resolves.toBeUndefined();
+      expect(onChunk).toHaveBeenCalledWith('valid');
+      expect(onChunk).toHaveBeenCalledTimes(1);
+      expect(onDone).toHaveBeenCalledTimes(1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
 
