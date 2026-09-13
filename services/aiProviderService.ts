@@ -52,6 +52,8 @@ import { isTauriRuntime } from './tauriRuntime';
 
 const log = createLogger('aiProviderService');
 
+export const GROK_API_ENDPOINT = 'https://api.x.ai/v1/chat/completions';
+
 const providerTextSchema = z.object({
   text: z.string().min(1),
 });
@@ -160,6 +162,16 @@ function _cleanupPendingRequest(key: string, controller: AbortController): void 
   }
 }
 
+function createGrokAttemptCallbacks(
+  callbacks: AIStreamCallbacks,
+  onChunk: (text: string) => void,
+): AIStreamCallbacks {
+  const trackedCallbacks: AIStreamCallbacks = { onChunk };
+  if (callbacks.onDone) trackedCallbacks.onDone = callbacks.onDone;
+  if (callbacks.onError) trackedCallbacks.onError = callbacks.onError;
+  return trackedCallbacks;
+}
+
 // ─── Gemini Provider ──────────────────────────────────────────────────────────
 // Gemini streaming is handled by the existing geminiService.ts.
 // We re-export a compatible interface here.
@@ -221,13 +233,21 @@ async function consumeOpenAiCompatibleStream(
       throw error;
     }
     const { done, value } = readResult;
+    // QNBS-v3: Recheck after the awaited read so a cancellation racing with read resolution cannot publish a late delta.
+    if (signal?.aborted) {
+      if (abortPolicy === 'complete') {
+        callbacks.onDone?.();
+        return;
+      }
+      throw Object.assign(new Error(`${providerName} stream aborted`), { name: 'AbortError' });
+    }
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split('\n');
     buffer = lines.pop() ?? '';
     for (const line of lines) {
-      parseLine(line);
       if (signal?.aborted) break;
+      parseLine(line);
     }
   }
   if (signal?.aborted) {
@@ -493,7 +513,7 @@ async function streamGrok(
         { role: 'user', content: sanitizePromptValue(prompt) },
       ]
     : [{ role: 'user', content: sanitizePromptValue(prompt) }];
-  const res = await fetch('https://api.x.ai/v1/chat/completions', {
+  const res = await fetch(GROK_API_ENDPOINT, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -850,12 +870,20 @@ export async function streamText(
     for (let i = 0; i < chain.length; i++) {
       const nextProvider = chain[i];
       if (nextProvider === undefined || nextProvider === attemptedOpenRouterFallback) continue;
+      let grokEmitted = false;
+      const callbacksForAttempt =
+        nextProvider === 'grok'
+          ? createGrokAttemptCallbacks(callbacks, (text) => {
+              grokEmitted = true;
+              callbacks.onChunk(text);
+            })
+          : callbacks;
       try {
         await streamProvider(
           prompt,
           creativity,
           { ...mergedOpts, provider: nextProvider },
-          callbacks,
+          callbacksForAttempt,
           signal,
         );
         // QNBS-v3: mirrors generateText's fallback-reason bookkeeping — without this, a stale reason from an earlier failed/promoted request would keep showing in GpuMetricsPanel after this request's primary provider succeeds outright.
@@ -871,6 +899,12 @@ export async function streamText(
         // run their silent cancel flow instead of an error path.
         if (isAbortError(error) || mergedOpts.signal?.aborted || signal?.aborted) {
           throw error instanceof Error ? error : new Error(String(error));
+        }
+        if (nextProvider === 'grok' && grokEmitted) {
+          // QNBS-v3: A partial Grok response must terminate rather than append fallback text to a truncated answer.
+          const terminal = error instanceof Error ? error : new Error(String(error));
+          callbacks.onError?.(terminal);
+          throw terminal;
         }
         lastError = error;
         // QNBS-v3: mirrors generateText's OpenRouter rate-limit/circuit-open promotion — without this, a stream promoted to OpenRouter by resolvePositiveRoutingOpts would fail hard on a transient OpenRouter outage instead of falling back.
