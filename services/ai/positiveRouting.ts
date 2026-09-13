@@ -33,6 +33,8 @@ interface RoutingResolution {
   reason: RoutingReason;
 }
 
+export type AIRoutingOperation = 'text' | 'image';
+
 // QNBS-v3: pure resolution, no logging — shared by the logging wrapper below and by peekPositiveRoutingProvider, which must not record a routing-decision entry for a probe that may never become a real request.
 function computeRoutingResolution(opts: AIRequestOptions): RoutingResolution {
   if (shouldRerouteToLocal(opts)) {
@@ -68,7 +70,14 @@ export function resolvePositiveRoutingOpts(opts: AIRequestOptions): AIRequestOpt
   return resolvedOpts;
 }
 
-// QNBS-v3: side-effect-free variant for the thunk policy pre-check — the real call re-resolves (and logs) again when it actually executes, so this must not double-log or record a decision for a request that may never be dispatched with this exact shape (e.g. generateImage, which never calls resolvePositiveRoutingOpts itself).
-export function peekPositiveRoutingProvider(opts: AIRequestOptions): AIRequestOptions['provider'] {
+// QNBS-v3: side-effect-free variant for the thunk policy pre-check — the real call re-resolves (and logs) again when it actually executes, so this must not double-log or record a decision for a request that may never be dispatched with this exact shape.
+export function peekPositiveRoutingProvider(
+  opts: AIRequestOptions,
+  operation: AIRoutingOperation = 'text',
+): AIRequestOptions['provider'] {
+  // QNBS-v3: image generation has an operation-specific capability matrix and does not call
+  // resolvePositiveRoutingOpts; probe the raw provider so admission matches generateImage's
+  // fail-closed dispatch instead of treating text-only routing as image support.
+  if (operation === 'image') return opts.provider;
   return computeRoutingResolution(opts).resolvedOpts.provider;
 }
