@@ -595,6 +595,20 @@ const CLOUD_PROVIDERS = new Set<CloudProvider>([
 const isCloudProvider = (provider: string): provider is CloudProvider =>
   CLOUD_PROVIDERS.has(provider as CloudProvider);
 
+const toSafeString = (value: unknown): string => (typeof value === 'string' ? value : '');
+
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0;
+
+const hasCustomOpenAiEndpoint = (provider: string, baseUrl: string): boolean =>
+  provider === 'openai' && isNonEmptyString(baseUrl);
+
+const getCatalogEntryForProvider = (
+  provider: string,
+  modelId: string,
+): CloudModelMetadata | undefined =>
+  isCloudProvider(provider) ? getCloudModel(provider, modelId) : undefined;
+
 const classifyCatalogEntry = (
   modelId: string,
   entry: CloudModelMetadata,
@@ -615,15 +629,15 @@ export const classifyPersistedCloudModel = (
   modelId: unknown,
   customBaseUrl: unknown = '',
 ): PersistedCloudModelAdmission => {
-  const safeModelId = typeof modelId === 'string' ? modelId : '';
-  const safeCustomBaseUrl = typeof customBaseUrl === 'string' ? customBaseUrl : '';
-  if (!safeModelId.trim()) {
+  const safeModelId = toSafeString(modelId);
+  const safeCustomBaseUrl = toSafeString(customBaseUrl);
+  if (!isNonEmptyString(safeModelId)) {
     return { model: safeModelId, status: 'unknown-stored-value' };
   }
-  if (provider === 'openai' && safeCustomBaseUrl.trim()) {
+  if (hasCustomOpenAiEndpoint(provider, safeCustomBaseUrl)) {
     return { model: safeModelId, status: 'custom-compatible' };
   }
-  const entry = isCloudProvider(provider) ? getCloudModel(provider, safeModelId) : undefined;
+  const entry = getCatalogEntryForProvider(provider, safeModelId);
   if (entry) {
     return classifyCatalogEntry(safeModelId, entry);
   }

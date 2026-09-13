@@ -23,11 +23,11 @@ general writing path, while reasoning, low-cost, specialized, preview, and image
 represented separately in the registry. Provider availability, account entitlement, pricing, and
 rate limits can change after this checkpoint.
 
-The official Gemini page currently lists additional upstream families, including Gemini 3.8,
-3.7, 3.6, 3.5 Flash-Lite, and 3.1 Flash-Lite. The registry admits only the reviewed product
-subset above; `gemini-3.1-flash` is retained as a legacy compatibility value because it was not
-present in the current public model list at this checkpoint. Upstream availability therefore does
-not imply WorldScript support or a recommended default.
+The official Gemini page currently lists the upstream families represented above, including Gemini
+3.8, 3.7, 3.6, 3.5 Flash-Lite, and 3.1 Flash-Lite. The registry admits the reviewed product
+subset rather than every upstream listing; `gemini-3.1-flash` is retained as a legacy compatibility
+value because it was not present in the current public model list at this checkpoint. Upstream
+availability therefore does not imply WorldScript support or a recommended default.
 
 ## Qualification boundary
 

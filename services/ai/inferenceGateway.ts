@@ -116,7 +116,10 @@ export class DefaultInferenceGateway implements InferenceGateway {
     // QNBS-v3: Enumerate cloud + local models. Local models are resolved from ai-core catalogs.
     const { WEBLLM_SUPPORTED_MODELS, ONNX_SUPPORTED_MODELS } = await import('@domain/ai-core');
     const cloud: ModelInfo[] = CLOUD_MODEL_CATALOG.filter(
-      (entry) => entry.lifecycle !== 'legacy-compat' && entry.stability === 'stable',
+      (entry) =>
+        entry.lifecycle !== 'legacy-compat' &&
+        entry.stability === 'stable' &&
+        entry.supportsStreaming,
     ).map(({ modelId, provider, displayName }) => ({
       id: modelId,
       provider,

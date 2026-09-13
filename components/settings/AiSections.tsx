@@ -19,7 +19,6 @@ import {
   DEFAULT_GROK_MODEL_ID,
   DEFAULT_OPENAI_MODEL_ID,
   GEMINI_ADMITTED_MODEL_IDS,
-  GEMINI_LEGACY_MODEL_OPTIONS,
   GEMINI_MODEL_OPTIONS,
   GEMINI_PREVIEW_MODEL_OPTIONS,
   GROK_ADMITTED_MODEL_IDS,
@@ -497,10 +496,6 @@ export const AdvancedAiSection: FC = () => {
                                   {
                                     label: 'Gemini — Preview',
                                     options: GEMINI_PREVIEW_MODEL_OPTIONS,
-                                  },
-                                  {
-                                    label: 'Gemini — Legacy compatibility',
-                                    options: GEMINI_LEGACY_MODEL_OPTIONS,
                                   },
                                 ],
                       })}

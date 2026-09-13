@@ -80,6 +80,7 @@ let _openRouterModel: string = DEFAULT_OPENROUTER_MODEL_ID;
 /** Called from listenerMiddleware when openRouter settings change. */
 export const setOpenRouterConfig = (enabled: boolean, preferredModel: string): void => {
   _openRouterEnabled = enabled;
+  // QNBS-v3: whitespace-only imported values must not bypass the curated fallback model.
   _openRouterModel =
     typeof preferredModel === 'string' && preferredModel.trim()
       ? preferredModel

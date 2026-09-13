@@ -420,6 +420,7 @@ export type AiModel =
   // Grok (xAI) – current catalog
   | 'grok-4.6'
   | 'grok-4.5'
+  // Grok (xAI) – preview/opt-in
   | 'grok-4.20'
   // Grok (xAI) – previous catalog (backward compat for stored values)
   | 'grok-3'
