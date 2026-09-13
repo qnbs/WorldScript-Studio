@@ -22,6 +22,8 @@ import { applyHeuristicFallback } from './ai/heuristicFallback';
 import { resolveProviderFallbackChain } from './ai/hybridFallback';
 import {
   buildOpenRouterStyleHeaders,
+  isOfficialOpenAiApiRoot,
+  normalizeOfficialOpenAiApiRoot,
   normalizeOllamaModelId,
   normalizeOpenAiCompatibleBaseUrl,
   resolveOpenAiCompatibleRoot,
@@ -98,6 +100,18 @@ function withMergedAbortSignal(opts: AIRequestOptions, signal?: AbortSignal): AI
   if (signal === undefined) return opts;
   if (opts.signal === signal) return opts;
   return { ...opts, signal };
+}
+
+function buildOpenAiCompletionParameters(
+  usesOfficialOpenAi: boolean,
+  model: AiModel,
+  opts: Pick<AIRequestOptions, 'maxTokens' | 'temperature'>,
+) {
+  // QNBS-v3: direct OpenAI reasoning models reject legacy sampling parameters.
+  if (usesOfficialOpenAi && /^o\d/.test(model)) {
+    return { max_completion_tokens: opts.maxTokens ?? 2048 };
+  }
+  return { temperature: opts.temperature ?? 0.7, max_tokens: opts.maxTokens ?? 2048 };
 }
 
 // QNBS-v3: True for a user/abort-signal cancellation, regardless of how the provider surfaced it
@@ -279,7 +293,10 @@ async function streamOpenAI(
   const apiKey = await storageService.getApiKey('openai');
   if (!apiKey) throw new Error('NO_API_KEY: OpenAI API key missing. Please enter it in Settings.');
 
-  const usesOfficialOpenAi = !opts.openAiCompatibleBaseUrl?.trim();
+  const apiRoot = normalizeOfficialOpenAiApiRoot(
+    resolveOpenAiCompatibleRoot(opts.openAiCompatibleBaseUrl),
+  );
+  const usesOfficialOpenAi = isOfficialOpenAiApiRoot(apiRoot);
   // QNBS-v3: Allow gpt-, o1-, o3-, o4- prefixes; o-series reasoning models ship alongside GPT-4.1.
   const isValidOpenAiModel = opts.model.startsWith('gpt-') || /^o\d/.test(opts.model);
   if (usesOfficialOpenAi && !isValidOpenAiModel) {
@@ -295,10 +312,10 @@ async function streamOpenAI(
       ]
     : [{ role: 'user', content: sanitizePromptValue(prompt) }];
 
-  const apiRoot = resolveOpenAiCompatibleRoot(opts.openAiCompatibleBaseUrl);
   // QNBS-v3: custom OpenAI-compatible roots must be admitted before any request leaves the renderer.
   assertCspConnectEndpointAllowed(apiRoot, 'OpenAI-compatible endpoint');
   const refererHeaders = buildOpenRouterStyleHeaders(opts.openAiSiteUrl, opts.openAiSiteTitle);
+  const requestParameters = buildOpenAiCompletionParameters(usesOfficialOpenAi, model, opts);
   const res = await fetch(`${apiRoot}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -310,8 +327,7 @@ async function streamOpenAI(
       model,
       stream: true,
       messages,
-      temperature: opts.temperature ?? 0.7,
-      max_tokens: opts.maxTokens ?? 2048,
+      ...requestParameters,
     }),
     signal: opts.signal ?? null,
   });
