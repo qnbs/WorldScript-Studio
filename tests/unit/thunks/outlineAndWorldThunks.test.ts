@@ -266,6 +266,11 @@ describe('generateWorldImageThunk', () => {
       'gemini',
       expect.objectContaining({ localStorageOnly: true }),
     );
+    expect(mockGenerateImage).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ provider: 'gemini' }),
+      expect.anything(),
+    );
   });
 
   it('dispatches fulfilled with worldId', async () => {
