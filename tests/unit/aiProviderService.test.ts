@@ -1477,23 +1477,23 @@ describe('streamText OpenAI', () => {
     } as Response;
   }
 
+  function mockOpenAiStream(payload: string) {
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('sk-test');
+    const encoder = new TextEncoder();
+    const fetchMock = vi.fn().mockResolvedValueOnce(createOpenAiStreamResponse(encoder, payload));
+    globalThis.fetch = fetchMock as typeof fetch;
+    return fetchMock;
+  }
+
   afterEach(() => {
     globalThis.fetch = originalFetch;
   });
 
   it('forwards merged AbortSignal to OpenAI fetch', async () => {
-    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('sk-test');
     const ac = new AbortController();
-    const encoder = new TextEncoder();
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        createOpenAiStreamResponse(
-          encoder,
-          'data: {"choices":[{"delta":{"content":"z"}}]}\n\ndata: [DONE]\n',
-        ),
-      );
-    globalThis.fetch = fetchMock as typeof fetch;
+    const fetchMock = mockOpenAiStream(
+      'data: {"choices":[{"delta":{"content":"z"}}]}\n\ndata: [DONE]\n',
+    );
 
     const chunks: string[] = [];
     await streamText(
@@ -1519,12 +1519,7 @@ describe('streamText OpenAI', () => {
   });
 
   it('uses reasoning-compatible parameters for official o-series models', async () => {
-    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('sk-test');
-    const encoder = new TextEncoder();
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(createOpenAiStreamResponse(encoder, 'data: [DONE]\n'));
-    globalThis.fetch = fetchMock as typeof fetch;
+    const fetchMock = mockOpenAiStream('data: [DONE]\n');
 
     await streamText(
       'hello',
@@ -1541,12 +1536,7 @@ describe('streamText OpenAI', () => {
   });
 
   it('keeps custom OpenAI-compatible o-series requests on the compatibility shape', async () => {
-    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('sk-test');
-    const encoder = new TextEncoder();
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(createOpenAiStreamResponse(encoder, 'data: [DONE]\n'));
-    globalThis.fetch = fetchMock as typeof fetch;
+    const fetchMock = mockOpenAiStream('data: [DONE]\n');
 
     await streamText(
       'hello',
