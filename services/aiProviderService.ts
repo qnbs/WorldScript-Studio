@@ -188,16 +188,17 @@ async function consumeOpenAiCompatibleStream(
       receivedDone = true;
       return;
     }
-    let payload: { choices?: Array<{ delta?: { content?: unknown } }> };
+    let payload: unknown;
     try {
-      payload = JSON.parse(line.slice(6)) as {
-        choices?: Array<{ delta?: { content?: unknown } }>;
-      };
+      payload = JSON.parse(line.slice(6));
     } catch {
       // malformed chunk – skip
       return;
     }
-    const delta = payload.choices?.[0]?.delta?.content;
+    // QNBS-v3: provider keep-alive/error frames can be valid JSON without an object shape; ignore them instead of turning a malformed frame into a provider failure.
+    if (typeof payload !== 'object' || payload === null) return;
+    const delta = (payload as { choices?: Array<{ delta?: { content?: unknown } }> }).choices?.[0]
+      ?.delta?.content;
     if (typeof delta === 'string' && delta) callbacks.onChunk(delta);
   };
 
@@ -224,7 +225,10 @@ async function consumeOpenAiCompatibleStream(
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split('\n');
     buffer = lines.pop() ?? '';
-    for (const line of lines) parseLine(line);
+    for (const line of lines) {
+      parseLine(line);
+      if (signal?.aborted) break;
+    }
   }
   if (signal?.aborted) {
     if (abortPolicy === 'complete') {

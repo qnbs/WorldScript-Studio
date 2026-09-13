@@ -475,14 +475,12 @@ describe('streamText', () => {
 
   it('propagates a stream consumer error instead of treating it as malformed SSE', async () => {
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = vi
-      .fn()
-      .mockResolvedValueOnce(
-        new Response('data: {"choices":[{"delta":{"content":"response"}}]}\n' + 'data: [DONE]\n', {
-          status: 200,
-          headers: { 'content-type': 'text/event-stream' },
-        }),
-      );
+    globalThis.fetch = vi.fn().mockResolvedValueOnce(
+      new Response('data: {"choices":[{"delta":{"content":"response"}}]}\n' + 'data: [DONE]\n', {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      }),
+    );
     vi.mocked(storageService.getApiKey).mockResolvedValueOnce('grok-test-key');
 
     try {
@@ -549,14 +547,12 @@ describe('streamText', () => {
 
   it('rejects a Grok stream that closes before its completion sentinel', async () => {
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = vi
-      .fn()
-      .mockResolvedValueOnce(
-        new Response('data: {"choices":[{"delta":{"content":"partial"}}]}\n\n', {
-          status: 200,
-          headers: { 'content-type': 'text/event-stream' },
-        }),
-      );
+    globalThis.fetch = vi.fn().mockResolvedValueOnce(
+      new Response('data: {"choices":[{"delta":{"content":"partial"}}]}\n\n', {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      }),
+    );
     vi.mocked(storageService.getApiKey).mockResolvedValueOnce('grok-test-key');
     const onDone = vi.fn();
     const onError = vi.fn();
@@ -615,6 +611,78 @@ describe('streamText', () => {
         ),
       ).rejects.toMatchObject({ name: 'AbortError' });
       expect(onChunk).not.toHaveBeenCalled();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('stops parsing later Grok frames after a consumer aborts within one read', async () => {
+    const originalFetch = globalThis.fetch;
+    const ac = new AbortController();
+    const encoder = new TextEncoder();
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: {
+        getReader: () => ({
+          read: async () => ({
+            done: false,
+            value: encoder.encode(
+              'data: {"choices":[{"delta":{"content":"first"}}]}\n' +
+                'data: {"choices":[{"delta":{"content":"late"}}]}\n' +
+                'data: [DONE]\n',
+            ),
+          }),
+        }),
+      },
+    } as unknown as Response);
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('grok-test-key');
+    const onChunk = vi.fn(() => ac.abort());
+
+    try {
+      await expect(
+        streamText(
+          'user prompt',
+          'Balanced',
+          { provider: 'grok', model: 'grok-4.5' },
+          { onChunk },
+          ac.signal,
+        ),
+      ).rejects.toMatchObject({ name: 'AbortError' });
+      expect(onChunk).toHaveBeenCalledTimes(1);
+      expect(onChunk).toHaveBeenCalledWith('first');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('ignores non-object Grok SSE payloads while preserving valid deltas', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn().mockResolvedValueOnce(
+      new Response(
+        'data: null\n' + 'data: {"choices":[{"delta":{"content":"valid"}}]}\n' + 'data: [DONE]\n',
+        {
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+        },
+      ),
+    );
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('grok-test-key');
+    const onChunk = vi.fn();
+    const onDone = vi.fn();
+
+    try {
+      await expect(
+        streamText(
+          'user prompt',
+          'Balanced',
+          { provider: 'grok', model: 'grok-4.5' },
+          { onChunk, onDone },
+        ),
+      ).resolves.toBeUndefined();
+      expect(onChunk).toHaveBeenCalledWith('valid');
+      expect(onChunk).toHaveBeenCalledTimes(1);
+      expect(onDone).toHaveBeenCalledTimes(1);
     } finally {
       globalThis.fetch = originalFetch;
     }
