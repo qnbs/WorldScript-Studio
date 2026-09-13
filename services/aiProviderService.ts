@@ -22,6 +22,8 @@ import { applyHeuristicFallback } from './ai/heuristicFallback';
 import { resolveProviderFallbackChain } from './ai/hybridFallback';
 import {
   buildOpenRouterStyleHeaders,
+  isOfficialOpenAiApiRoot,
+  normalizeOfficialOpenAiApiRoot,
   normalizeOllamaModelId,
   normalizeOpenAiCompatibleBaseUrl,
   resolveOpenAiCompatibleRoot,
@@ -98,38 +100,6 @@ function withMergedAbortSignal(opts: AIRequestOptions, signal?: AbortSignal): AI
   if (signal === undefined) return opts;
   if (opts.signal === signal) return opts;
   return { ...opts, signal };
-}
-
-function isOfficialOpenAiApiRoot(apiRoot: string): boolean {
-  // QNBS-v3: canonical endpoint identity, rather than configuration spelling, selects provider semantics.
-  try {
-    const url = new URL(apiRoot);
-    return (
-      url.protocol === 'https:' &&
-      url.hostname.replace(/\.$/, '') === 'api.openai.com' &&
-      url.port === '' &&
-      url.pathname === '/v1' &&
-      url.username === '' &&
-      url.password === '' &&
-      url.search === '' &&
-      url.hash === ''
-    );
-  } catch {
-    return false;
-  }
-}
-
-function normalizeOfficialOpenAiApiRoot(apiRoot: string): string {
-  try {
-    const url = new URL(apiRoot);
-    if (url.hostname === 'api.openai.com.' && isOfficialOpenAiApiRoot(apiRoot)) {
-      url.hostname = 'api.openai.com';
-      return url.href.replace(/\/$/, '');
-    }
-  } catch {
-    return apiRoot;
-  }
-  return apiRoot;
 }
 
 function buildOpenAiCompletionParameters(
