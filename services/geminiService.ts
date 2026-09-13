@@ -11,11 +11,7 @@ import type {
   StoryCodex,
   World,
 } from '../types';
-import {
-  DEFAULT_GEMINI_MODEL_ID,
-  GEMINI_ADMITTED_MODEL_IDS,
-  GEMINI_IMAGE_MODEL_ID,
-} from './ai/cloudModelCatalog';
+import { DEFAULT_GEMINI_MODEL_ID, GEMINI_IMAGE_MODEL_ID } from './ai/cloudModelCatalog';
 import {
   attachCause,
   cleanPrompt,
@@ -106,10 +102,7 @@ const creativityToTemperature: Record<AiCreativity, number> = {
 };
 
 const getModelForText = (model?: string): string =>
-  model !== undefined &&
-  GEMINI_ADMITTED_MODEL_IDS.includes(model as (typeof GEMINI_ADMITTED_MODEL_IDS)[number])
-    ? model
-    : DEFAULT_GEMINI_MODEL_ID;
+  typeof model === 'string' && model.trim() ? model : DEFAULT_GEMINI_MODEL_ID;
 const getModelForImage = () => GEMINI_IMAGE_MODEL_ID;
 
 // --- Helper function for retry with 401/429 handling ---

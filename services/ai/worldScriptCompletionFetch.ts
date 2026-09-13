@@ -12,7 +12,7 @@ import {
   DEFAULT_GROK_MODEL_ID,
   DEFAULT_OPENAI_MODEL_ID,
   GEMINI_ADMITTED_MODEL_IDS,
-  GROK_MODEL_IDS,
+  GROK_ADMITTED_MODEL_IDS,
   isModelInCatalog,
   OPENAI_MODEL_IDS,
 } from './cloudModelCatalog';
@@ -104,7 +104,7 @@ async function resolveModelConfig(
       baseURL: 'https://api.x.ai/v1',
       apiKey,
       // QNBS-v3: retain the intentional workhorse fallback for incompatible stored models.
-      modelId: isModelInCatalog(GROK_MODEL_IDS, model) ? model : DEFAULT_GROK_MODEL_ID,
+      modelId: isModelInCatalog(GROK_ADMITTED_MODEL_IDS, model) ? model : DEFAULT_GROK_MODEL_ID,
     };
   }
   if (kind === 'gemini') {

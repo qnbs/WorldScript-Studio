@@ -7,6 +7,7 @@ import { type AppDispatch, appStoreRef, type RootState, setupStore } from './app
 import { IdbUnlockModal } from './components/settings/IdbUnlockModal';
 import { I18nProvider } from './contexts/I18nContext';
 import { versionControlActions } from './features/versionControl/versionControlSlice';
+import { DEFAULT_OPENROUTER_MODEL_ID } from './services/ai/cloudModelCatalog';
 import {
   loadPersistedRootState,
   normalizePersistedProjectForStore,
@@ -160,7 +161,7 @@ async function bootApp(): Promise<void> {
       setActiveAiMode(persistedAiMode);
       setOpenRouterConfig(
         persistedOpenRouter?.enabled ?? false,
-        persistedOpenRouter?.preferredModel ?? 'deepseek/deepseek-r1:free',
+        persistedOpenRouter?.preferredModel ?? DEFAULT_OPENROUTER_MODEL_ID,
       );
     });
 

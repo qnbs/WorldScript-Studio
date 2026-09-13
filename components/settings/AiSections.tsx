@@ -18,11 +18,11 @@ import {
   DEFAULT_GEMINI_MODEL_ID,
   DEFAULT_GROK_MODEL_ID,
   DEFAULT_OPENAI_MODEL_ID,
+  GEMINI_ADMITTED_MODEL_IDS,
   GEMINI_LEGACY_MODEL_OPTIONS,
-  GEMINI_MODEL_IDS,
   GEMINI_MODEL_OPTIONS,
   GEMINI_PREVIEW_MODEL_OPTIONS,
-  GROK_MODEL_IDS,
+  GROK_ADMITTED_MODEL_IDS,
   GROK_MODEL_OPTIONS,
   isModelInCatalog,
   OPENAI_MODEL_IDS,
@@ -98,7 +98,7 @@ export const AiSection: FC = () => {
           if (p === 'ollama') {
             newModel = currentModel.startsWith('ollama/') ? currentModel : 'ollama/qwen3:8b';
           } else if (p === 'gemini') {
-            newModel = isModelInCatalog(GEMINI_MODEL_IDS, currentModel)
+            newModel = isModelInCatalog(GEMINI_ADMITTED_MODEL_IDS, currentModel)
               ? currentModel
               : DEFAULT_GEMINI_MODEL_ID;
           } else if (p === 'openai') {
@@ -113,7 +113,7 @@ export const AiSection: FC = () => {
               : DEFAULT_ANTHROPIC_MODEL_ID;
           } else if (p === 'grok') {
             // QNBS-v3: migrate incompatible Grok selections to the current supported default.
-            newModel = isModelInCatalog(GROK_MODEL_IDS, currentModel)
+            newModel = isModelInCatalog(GROK_ADMITTED_MODEL_IDS, currentModel)
               ? currentModel
               : DEFAULT_GROK_MODEL_ID;
           } else if (p === 'webllm') {

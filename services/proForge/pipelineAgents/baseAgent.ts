@@ -5,7 +5,12 @@
 
 import type { PipelineStage, StageResult } from '../../../features/proForge/types';
 import type { AIProvider, AiModel } from '../../../types';
-import { getLocalFallbackModel, isEcoMode, shouldRouteLocally } from '../../ai/aiModeService';
+import {
+  getLocalFallbackModel,
+  getOpenRouterModel,
+  isEcoMode,
+  shouldRouteLocally,
+} from '../../ai/aiModeService';
 // QNBS-v3: ProForge defaults must follow the same provider catalog as the settings UI.
 import {
   DEFAULT_ANTHROPIC_MODEL_ID,
@@ -165,6 +170,7 @@ ${prompt}`;
       openai: DEFAULT_OPENAI_MODEL_ID,
       anthropic: DEFAULT_ANTHROPIC_MODEL_ID,
       grok: DEFAULT_GROK_MODEL_ID,
+      openrouter: getOpenRouterModel() as AiModel,
     };
     // QNBS-v3: eco mode OR local routing override → use the local fallback model.
     const routingOverrideActive = shouldRouteLocally() && !LOCAL_PROVIDERS.has(configuredProvider);

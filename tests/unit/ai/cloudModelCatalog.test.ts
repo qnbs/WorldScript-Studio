@@ -10,7 +10,12 @@ import {
   DEFAULT_GEMINI_MODEL_ID,
   DEFAULT_GROK_MODEL_ID,
   DEFAULT_OPENAI_MODEL_ID,
+  GEMINI_ADMITTED_MODEL_IDS,
+  GEMINI_LEGACY_MODEL_IDS,
+  GEMINI_MODEL_IDS,
+  GEMINI_MODEL_OPTIONS,
   GEMINI_PREVIEW_MODEL_IDS,
+  GROK_ADMITTED_MODEL_IDS,
   GROK_MODEL_IDS,
   GROK_MODEL_OPTIONS,
   isModelInCatalog,
@@ -27,6 +32,7 @@ describe('cloud model catalog', () => {
   it('keeps current OpenAI and Grok option values identical to their catalogs', () => {
     expect(OPENAI_MODEL_OPTIONS.map(({ value }) => value)).toEqual([...OPENAI_MODEL_IDS]);
     expect(GROK_MODEL_OPTIONS.map(({ value }) => value)).toEqual([...GROK_MODEL_IDS]);
+    expect(GEMINI_MODEL_OPTIONS.map(({ value }) => value)).toEqual([...GEMINI_MODEL_IDS]);
   });
 
   it('keeps named fallbacks inside their current provider catalogs', () => {
@@ -69,6 +75,21 @@ describe('cloud model catalog', () => {
     ).toBe('preview-opt-in');
   });
 
+  it('keeps the current Gemini public-source subset distinct from legacy and preview IDs', () => {
+    expect(GEMINI_MODEL_IDS).toEqual([
+      'gemini-3.5-flash',
+      'gemini-3.8-flash',
+      'gemini-3.7-flash',
+      'gemini-3.6-flash',
+      'gemini-3.5-flash-lite',
+      'gemini-3.1-flash-lite',
+    ]);
+    expect(GEMINI_ADMITTED_MODEL_IDS).toContain('gemini-3.1-pro-preview');
+    expect(GEMINI_MODEL_IDS).not.toContain('gemini-3.1-flash');
+    expect(GEMINI_LEGACY_MODEL_IDS).toContain('gemini-3.1-flash');
+    expect(GROK_ADMITTED_MODEL_IDS).toContain('grok-4.20');
+  });
+
   it('explicitly migrates legacy values and preserves custom endpoints', () => {
     expect(classifyPersistedCloudModel('openai', 'gpt-4o').replacementModel).toBe(
       DEFAULT_OPENAI_MODEL_ID,
@@ -79,6 +100,20 @@ describe('cloud model catalog', () => {
     expect(classifyPersistedCloudModel('openrouter', 'vendor/model:free')).toEqual({
       model: 'vendor/model:free',
       status: 'custom-compatible',
+    });
+    expect(classifyPersistedCloudModel('gemini', 'gemini-3.1-flash')).toEqual({
+      model: 'gemini-3.1-flash',
+      status: 'legacy-compat',
+      replacementModel: DEFAULT_GEMINI_MODEL_ID,
+    });
+    expect(classifyPersistedCloudModel('openai', 'gemini-3.1-flash').status).toBe(
+      'unknown-stored-value',
+    );
+    expect(classifyPersistedCloudModel('grok', 'grok-4.20').status).toBe('preview-opt-in');
+    expect(classifyPersistedCloudModel('openrouter', '   ').status).toBe('unknown-stored-value');
+    expect(classifyPersistedCloudModel('gemini', 42)).toEqual({
+      model: '',
+      status: 'unknown-stored-value',
     });
   });
 });

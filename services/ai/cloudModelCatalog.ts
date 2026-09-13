@@ -67,7 +67,10 @@ const OFFICIAL_SOURCES: Record<CloudProvider, string> = {
 // remotely advertised or historical ID cannot become a default without an explicit curation pass.
 export const GEMINI_MODEL_IDS = [
   'gemini-3.5-flash',
-  'gemini-3.1-flash',
+  'gemini-3.8-flash',
+  'gemini-3.7-flash',
+  'gemini-3.6-flash',
+  'gemini-3.5-flash-lite',
   'gemini-3.1-flash-lite',
 ] as const;
 export const GEMINI_PREVIEW_MODEL_IDS = ['gemini-3.1-pro-preview'] as const;
@@ -82,6 +85,8 @@ export const GEMINI_LEGACY_MODEL_IDS = [
   'gemini-2.0-flash-lite',
   'gemini-1.5-flash',
   'gemini-1.5-pro',
+  // Present in older product snapshots but absent from the current public model list.
+  'gemini-3.1-flash',
 ] as const;
 export const GEMINI_IMAGE_MODEL_ID = 'gemini-3.1-flash-image' as const;
 
@@ -116,6 +121,7 @@ export const ANTHROPIC_LEGACY_MODEL_IDS = [
 
 export const GROK_MODEL_IDS = ['grok-4.6', 'grok-4.5'] as const;
 export const GROK_PREVIEW_MODEL_IDS = ['grok-4.20'] as const;
+export const GROK_ADMITTED_MODEL_IDS = [...GROK_MODEL_IDS, ...GROK_PREVIEW_MODEL_IDS] as const;
 export const GROK_LEGACY_MODEL_IDS = ['grok-3', 'grok-3-mini'] as const;
 
 // OpenRouter's public free tier rotates. These are an offline fallback only; the runtime catalog
@@ -141,8 +147,11 @@ export const DEFAULT_GROK_MODEL_ID: GrokModelId = 'grok-4.6';
 
 export const GEMINI_MODEL_OPTIONS: ModelOption<GeminiModelId>[] = [
   { value: GEMINI_MODEL_IDS[0], label: 'Gemini 3.5 Flash' },
-  { value: GEMINI_MODEL_IDS[1], label: 'Gemini 3.1 Flash' },
-  { value: GEMINI_MODEL_IDS[2], label: 'Gemini 3.1 Flash-Lite' },
+  { value: GEMINI_MODEL_IDS[1], label: 'Gemini 3.8 Flash' },
+  { value: GEMINI_MODEL_IDS[2], label: 'Gemini 3.7 Flash' },
+  { value: GEMINI_MODEL_IDS[3], label: 'Gemini 3.6 Flash' },
+  { value: GEMINI_MODEL_IDS[4], label: 'Gemini 3.5 Flash-Lite' },
+  { value: GEMINI_MODEL_IDS[5], label: 'Gemini 3.1 Flash-Lite' },
 ];
 export const GEMINI_PREVIEW_MODEL_OPTIONS: ModelOption<
   (typeof GEMINI_PREVIEW_MODEL_IDS)[number]
@@ -155,6 +164,7 @@ export const GEMINI_LEGACY_MODEL_OPTIONS: ModelOption<(typeof GEMINI_LEGACY_MODE
     { value: GEMINI_LEGACY_MODEL_IDS[3], label: 'Gemini 2.0 Flash-Lite (legacy)' },
     { value: GEMINI_LEGACY_MODEL_IDS[4], label: 'Gemini 1.5 Flash (legacy)' },
     { value: GEMINI_LEGACY_MODEL_IDS[5], label: 'Gemini 1.5 Pro (legacy)' },
+    { value: GEMINI_LEGACY_MODEL_IDS[6], label: 'Gemini 3.1 Flash (legacy)' },
   ];
 export const OPENAI_MODEL_OPTIONS: ModelOption<OpenAiModelId>[] = [
   { value: OPENAI_MODEL_IDS[0], label: 'GPT-6 Astra' },
@@ -239,7 +249,7 @@ export const CLOUD_MODEL_CATALOG = [
     parameterProfile: 'gemini-text',
   }),
   model('gemini', GEMINI_MODEL_IDS[1], {
-    displayName: 'Gemini 3.1 Flash',
+    displayName: 'Gemini 3.8 Flash',
     lifecycle: 'current-supported',
     stability: 'stable',
     capabilities: ['TEXT', 'STREAMING_TEXT', 'STRUCTURED_JSON'],
@@ -252,6 +262,45 @@ export const CLOUD_MODEL_CATALOG = [
     parameterProfile: 'gemini-text',
   }),
   model('gemini', GEMINI_MODEL_IDS[2], {
+    displayName: 'Gemini 3.7 Flash',
+    lifecycle: 'current-supported',
+    stability: 'stable',
+    capabilities: ['TEXT', 'STREAMING_TEXT', 'STRUCTURED_JSON'],
+    recommendedRoles: ['GENERAL_WRITING', 'FAST_LOW_COST', 'STRUCTURED_OUTPUT'],
+    supportsStreaming: true,
+    supportsStructuredOutput: true,
+    supportsImageInput: false,
+    supportsImageGeneration: false,
+    supportsReasoning: false,
+    parameterProfile: 'gemini-text',
+  }),
+  model('gemini', GEMINI_MODEL_IDS[3], {
+    displayName: 'Gemini 3.6 Flash',
+    lifecycle: 'current-supported',
+    stability: 'stable',
+    capabilities: ['TEXT', 'STREAMING_TEXT', 'STRUCTURED_JSON'],
+    recommendedRoles: ['GENERAL_WRITING', 'FAST_LOW_COST', 'STRUCTURED_OUTPUT'],
+    supportsStreaming: true,
+    supportsStructuredOutput: true,
+    supportsImageInput: false,
+    supportsImageGeneration: false,
+    supportsReasoning: false,
+    parameterProfile: 'gemini-text',
+  }),
+  model('gemini', GEMINI_MODEL_IDS[4], {
+    displayName: 'Gemini 3.5 Flash-Lite',
+    lifecycle: 'current-supported',
+    stability: 'stable',
+    capabilities: ['TEXT', 'STREAMING_TEXT'],
+    recommendedRoles: ['FAST_LOW_COST'],
+    supportsStreaming: true,
+    supportsStructuredOutput: false,
+    supportsImageInput: false,
+    supportsImageGeneration: false,
+    supportsReasoning: false,
+    parameterProfile: 'gemini-text',
+  }),
+  model('gemini', GEMINI_MODEL_IDS[5], {
     displayName: 'Gemini 3.1 Flash-Lite',
     lifecycle: 'current-supported',
     stability: 'stable',
@@ -535,51 +584,53 @@ export interface PersistedCloudModelAdmission {
   replacementModel?: string;
 }
 
-const LEGACY_MODEL_REPLACEMENTS: Record<string, string> = {
-  ...Object.fromEntries(GEMINI_LEGACY_MODEL_IDS.map((id) => [id, DEFAULT_GEMINI_MODEL_ID])),
-  ...Object.fromEntries(OPENAI_LEGACY_MODEL_IDS.map((id) => [id, DEFAULT_OPENAI_MODEL_ID])),
-  ...Object.fromEntries(ANTHROPIC_LEGACY_MODEL_IDS.map((id) => [id, DEFAULT_ANTHROPIC_MODEL_ID])),
-  ...Object.fromEntries(GROK_LEGACY_MODEL_IDS.map((id) => [id, DEFAULT_GROK_MODEL_ID])),
-};
+const CLOUD_PROVIDERS = new Set<CloudProvider>([
+  'gemini',
+  'openai',
+  'anthropic',
+  'grok',
+  'openrouter',
+]);
 
-const CURRENT_MODEL_IDS: Record<Exclude<CloudProvider, 'openrouter'>, readonly string[]> = {
-  gemini: GEMINI_MODEL_IDS,
-  openai: OPENAI_MODEL_IDS,
-  anthropic: ANTHROPIC_MODEL_IDS,
-  grok: GROK_MODEL_IDS,
+const isCloudProvider = (provider: string): provider is CloudProvider =>
+  CLOUD_PROVIDERS.has(provider as CloudProvider);
+
+const classifyCatalogEntry = (
+  modelId: string,
+  entry: CloudModelMetadata,
+): PersistedCloudModelAdmission => {
+  if (entry.lifecycle === 'legacy-compat') {
+    return entry.replacementModel
+      ? { model: modelId, status: 'legacy-compat', replacementModel: entry.replacementModel }
+      : { model: modelId, status: 'unknown-stored-value' };
+  }
+  if (entry.lifecycle === 'preview-opt-in') {
+    return { model: modelId, status: 'preview-opt-in' };
+  }
+  return { model: modelId, status: 'current-supported' };
 };
 
 export const classifyPersistedCloudModel = (
   provider: CloudProvider | string,
-  modelId: string,
-  customBaseUrl = '',
+  modelId: unknown,
+  customBaseUrl: unknown = '',
 ): PersistedCloudModelAdmission => {
-  if (provider === 'openai' && customBaseUrl.trim()) {
-    return { model: modelId, status: 'custom-compatible' };
+  const safeModelId = typeof modelId === 'string' ? modelId : '';
+  const safeCustomBaseUrl = typeof customBaseUrl === 'string' ? customBaseUrl : '';
+  if (!safeModelId.trim()) {
+    return { model: safeModelId, status: 'unknown-stored-value' };
   }
-  if (
-    (provider === 'gemini' ||
-      provider === 'openai' ||
-      provider === 'anthropic' ||
-      provider === 'grok') &&
-    CURRENT_MODEL_IDS[provider].includes(modelId)
-  ) {
-    return { model: modelId, status: 'current-supported' };
+  if (provider === 'openai' && safeCustomBaseUrl.trim()) {
+    return { model: safeModelId, status: 'custom-compatible' };
   }
-  if (
-    provider === 'gemini' &&
-    GEMINI_PREVIEW_MODEL_IDS.includes(modelId as (typeof GEMINI_PREVIEW_MODEL_IDS)[number])
-  ) {
-    return { model: modelId, status: 'preview-opt-in' };
+  const entry = isCloudProvider(provider) ? getCloudModel(provider, safeModelId) : undefined;
+  if (entry) {
+    return classifyCatalogEntry(safeModelId, entry);
   }
-  const replacementModel = LEGACY_MODEL_REPLACEMENTS[modelId];
-  if (replacementModel !== undefined) {
-    return { model: modelId, status: 'legacy-compat', replacementModel };
+  if (provider === 'openrouter') {
+    return { model: safeModelId, status: 'custom-compatible' };
   }
-  if (provider === 'openrouter' && modelId.trim()) {
-    return { model: modelId, status: 'custom-compatible' };
-  }
-  return { model: modelId, status: 'unknown-stored-value' };
+  return { model: safeModelId, status: 'unknown-stored-value' };
 };
 
 // QNBS-v3: catalog membership rejects legacy model IDs that share a provider prefix.

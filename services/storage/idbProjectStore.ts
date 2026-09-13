@@ -158,6 +158,9 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
       validSettings.advancedAi.model = DEFAULT_OPENAI_MODEL_ID;
     } else if (validSettings.advancedAi.provider === 'grok') {
       validSettings.advancedAi.model = DEFAULT_GROK_MODEL_ID;
+    } else if (validSettings.advancedAi.provider === 'openrouter') {
+      validSettings.advancedAi.model =
+        DEFAULT_OPENROUTER_MODEL_ID as Settings['advancedAi']['model'];
     }
   }
 
@@ -192,7 +195,8 @@ export function normalizePersistedSettings(incoming: Record<string, unknown>): S
   const rebuiltOpenRouter: OpenRouterSettings = {
     enabled: incomingOpenRouter['enabled'] === true,
     preferredModel:
-      typeof incomingOpenRouter['preferredModel'] === 'string'
+      typeof incomingOpenRouter['preferredModel'] === 'string' &&
+      incomingOpenRouter['preferredModel'].trim().length > 0
         ? incomingOpenRouter['preferredModel']
         : DEFAULT_OPENROUTER_MODEL_ID,
   };

@@ -373,12 +373,17 @@ export type AiMode = 'hybrid' | 'cloud' | 'local' | 'eco';
 export type EditorFont = 'serif' | 'sans-serif' | 'monospace' | 'custom';
 export type AiCreativity = 'Focused' | 'Balanced' | 'Imaginative';
 export type AiModel =
-  // Gemini – latest generation (3.x)
+  // Gemini – current curated text generation (3.x)
   | 'gemini-3.5-flash'
+  | 'gemini-3.8-flash'
+  | 'gemini-3.7-flash'
+  | 'gemini-3.6-flash'
+  | 'gemini-3.5-flash-lite'
   | 'gemini-3.1-pro-preview'
-  | 'gemini-3.1-flash'
   | 'gemini-3.1-flash-lite'
   | 'gemini-3.1-flash-image'
+  // Gemini – known historical ID retained only for compatibility handling.
+  | 'gemini-3.1-flash'
   // Gemini – 2.5 stable (backward compat for stored values)
   | 'gemini-2.5-flash'
   | 'gemini-2.5-pro'

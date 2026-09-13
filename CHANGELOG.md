@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Curate the current cloud model catalogue and persisted-model admission rules (PR #739).
 ### Fixed
 
 - **Local-first encryption transitions now preserve wipe failures instead of treating plaintext

@@ -16,11 +16,15 @@ const mockIsEcoMode = vi.hoisted(() => vi.fn<() => boolean>().mockReturnValue(fa
 const mockGetLocalFallbackModel = vi.hoisted(() =>
   vi.fn<() => string>().mockReturnValue('Llama-3.2-1B-Instruct-q4f16_1-MLC'),
 );
+const mockGetOpenRouterModel = vi.hoisted(() =>
+  vi.fn<() => string>().mockReturnValue('google/gemma-4-31b-it:free'),
+);
 
 vi.mock('../../../../services/ai/aiModeService', () => ({
   shouldRouteLocally: mockShouldRouteLocally,
   isEcoMode: mockIsEcoMode,
   getLocalFallbackModel: mockGetLocalFallbackModel,
+  getOpenRouterModel: mockGetOpenRouterModel,
 }));
 
 vi.mock('../../../../services/ai/inferenceGateway', () => ({
@@ -168,6 +172,7 @@ describe('BaseAgent', () => {
     mockShouldRouteLocally.mockReturnValue(false);
     mockIsEcoMode.mockReturnValue(false);
     mockGetLocalFallbackModel.mockReturnValue('Llama-3.2-1B-Instruct-q4f16_1-MLC');
+    mockGetOpenRouterModel.mockReturnValue('google/gemma-4-31b-it:free');
     agent = new StubAgent(makeContext());
   });
 
@@ -254,6 +259,16 @@ describe('BaseAgent', () => {
       const ctx = makeContext({ config: { ...DEFAULT_CONFIG, aiProvider: 'grok' } });
       const a = new StubAgent(ctx);
       expect(a.publicBuildAiOpts().model).toBe('grok-4.6');
+    });
+
+    it('uses the configured OpenRouter model for openrouter provider', () => {
+      mockGetOpenRouterModel.mockReturnValue('vendor/model:free');
+      const ctx = makeContext({ config: { ...DEFAULT_CONFIG, aiProvider: 'openrouter' } });
+      const a = new StubAgent(ctx);
+      expect(a.publicBuildAiOpts()).toMatchObject({
+        model: 'vendor/model:free',
+        provider: 'openrouter',
+      });
     });
 
     it('falls back to the curated Gemini default for unknown provider', () => {

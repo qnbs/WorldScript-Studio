@@ -80,7 +80,10 @@ let _openRouterModel: string = DEFAULT_OPENROUTER_MODEL_ID;
 /** Called from listenerMiddleware when openRouter settings change. */
 export const setOpenRouterConfig = (enabled: boolean, preferredModel: string): void => {
   _openRouterEnabled = enabled;
-  _openRouterModel = preferredModel || DEFAULT_OPENROUTER_MODEL_ID;
+  _openRouterModel =
+    typeof preferredModel === 'string' && preferredModel.trim()
+      ? preferredModel
+      : DEFAULT_OPENROUTER_MODEL_ID;
 };
 
 /**

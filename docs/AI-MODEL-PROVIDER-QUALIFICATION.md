@@ -12,7 +12,7 @@ Last public-source review: **2026-09-13**.
 
 | Provider | Curated default | Current curated scope | Preview / dynamic scope | Official source |
 | --- | --- | --- | --- | --- |
-| Gemini | `gemini-3.5-flash` | Gemini 3.1/3.5 text models plus the admitted image model | `gemini-3.1-pro-preview` is opt-in | [Gemini models](https://ai.google.dev/gemini-api/docs/models) |
+| Gemini | `gemini-3.5-flash` | Curated Gemini 3.5/3.8/3.7/3.6 Flash and 3.1 Flash-Lite text models plus the admitted image model | `gemini-3.1-pro-preview` is opt-in; upstream listings are broader than this product subset | [Gemini models](https://ai.google.dev/gemini-api/docs/models) |
 | OpenAI | `gpt-5.6-terra` | GPT-5.6 Terra/Luna/Sol and GPT-6 Astra | New families require a separate compatibility review | [OpenAI models](https://platform.openai.com/docs/models) |
 | Anthropic | `claude-sonnet-5` | Claude Sonnet 5, Opus 5, Opus 4.8, and Fable 5 | Older IDs are compatibility-only | [Claude models](https://docs.anthropic.com/en/docs/about-claude/models) |
 | xAI | `grok-4.6` | Grok 4.6 and 4.5 | Grok 4.20 aliases are preview/opt-in pending qualification | [Grok models](https://docs.x.ai/docs/models) |
@@ -22,6 +22,12 @@ The choices are workload-oriented rather than “newest wins”: the defaults fa
 general writing path, while reasoning, low-cost, specialized, preview, and image roles are
 represented separately in the registry. Provider availability, account entitlement, pricing, and
 rate limits can change after this checkpoint.
+
+The official Gemini page currently lists additional upstream families, including Gemini 3.8,
+3.7, 3.6, 3.5 Flash-Lite, and 3.1 Flash-Lite. The registry admits only the reviewed product
+subset above; `gemini-3.1-flash` is retained as a legacy compatibility value because it was not
+present in the current public model list at this checkpoint. Upstream availability therefore does
+not imply WorldScript support or a recommended default.
 
 ## Qualification boundary
 
