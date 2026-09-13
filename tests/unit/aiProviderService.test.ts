@@ -425,6 +425,53 @@ describe('streamText', () => {
     // QNBS-v3: chain is ['openrouter', 'gemini']; the rate-limit promotes to 'gemini' first, so the chain's own later 'gemini' entry must be skipped rather than invoking Gemini a second time.
     expect(geminiService.streamText).toHaveBeenCalledTimes(1);
   });
+
+  it('uses xAI streamed chat completions and preserves the system prompt', async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          'data: {"choices":[{"delta":{"content":"Hello"}}]}\n' +
+            'data: {"choices":[{"delta":{"content":" world"}}]}\n' +
+            'data: [DONE]',
+          { status: 200, headers: { 'content-type': 'text/event-stream' } },
+        ),
+      );
+    globalThis.fetch = fetchMock as typeof fetch;
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('grok-test-key');
+    const chunks: string[] = [];
+    const onDone = vi.fn();
+
+    try {
+      await streamText(
+        'user prompt',
+        'Balanced',
+        { provider: 'grok', model: 'grok-4.5', systemPrompt: 'system prompt' },
+        { onChunk: (chunk) => chunks.push(chunk), onDone },
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(chunks).toEqual(['Hello', ' world']);
+    expect(onDone).toHaveBeenCalledTimes(1);
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.x.ai/v1/chat/completions',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(JSON.parse(requestInit.body as string)).toMatchObject({
+      model: 'grok-4.5',
+      stream: true,
+      messages: [
+        { role: 'system', content: 'system prompt' },
+        { role: 'user', content: 'user prompt' },
+      ],
+      temperature: 0.7,
+      max_tokens: 2048,
+    });
+  });
 });
 
 // ─── streamAiHelpResponse ─────────────────────────────────────────────────────

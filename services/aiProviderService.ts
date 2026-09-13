@@ -166,6 +166,62 @@ function _cleanupPendingRequest(key: string, controller: AbortController): void 
 
 // ─── OpenAI Provider ─────────────────────────────────────────────────────────
 
+async function consumeOpenAiCompatibleStream(
+  response: Response,
+  callbacks: AIStreamCallbacks,
+  providerName: 'OpenAI' | 'Grok',
+  abortPolicy: 'complete' | 'throw',
+  signal?: AbortSignal,
+): Promise<void> {
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error(`${providerName}: No response body`);
+
+  // QNBS-v3: OpenAI and xAI share the chat-completions SSE framing; one typed consumer keeps
+  // final-frame flushing and abort completion semantics identical across both cloud adapters.
+  const decoder = new TextDecoder();
+  let buffer = '';
+  const parseLine = (rawLine: string): void => {
+    const line = rawLine.trimEnd();
+    if (!line.startsWith('data: ') || line === 'data: [DONE]') return;
+    try {
+      const payload = JSON.parse(line.slice(6)) as {
+        choices?: Array<{ delta?: { content?: unknown } }>;
+      };
+      const delta = payload.choices?.[0]?.delta?.content;
+      if (typeof delta === 'string' && delta) callbacks.onChunk(delta);
+    } catch {
+      // malformed chunk – skip
+    }
+  };
+
+  while (true) {
+    if (signal?.aborted) {
+      if (abortPolicy === 'complete') {
+        callbacks.onDone?.();
+        return;
+      }
+      break;
+    }
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+    for (const line of lines) parseLine(line);
+  }
+  buffer += decoder.decode();
+  if (buffer) parseLine(buffer);
+
+  if (signal?.aborted) {
+    if (abortPolicy === 'complete') {
+      callbacks.onDone?.();
+      return;
+    }
+    throw Object.assign(new Error(`${providerName} stream aborted`), { name: 'AbortError' });
+  }
+  callbacks.onDone?.();
+}
+
 async function streamOpenAI(
   prompt: string,
   opts: AIRequestOptions,
@@ -218,34 +274,7 @@ async function streamOpenAI(
     );
   }
 
-  const reader = res.body?.getReader();
-  if (!reader) throw new Error('OpenAI: No response body');
-
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  while (true) {
-    if (opts.signal?.aborted) break;
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-
-    const lines = buffer.split('\n');
-    buffer = lines.pop() ?? '';
-
-    for (const line of lines) {
-      if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
-      try {
-        const json = JSON.parse(line.slice(6));
-        const delta = json?.choices?.[0]?.delta?.content ?? '';
-        if (delta) callbacks.onChunk(delta);
-      } catch {
-        // malformed chunk – skip
-      }
-    }
-  }
-
-  callbacks.onDone?.();
+  return consumeOpenAiCompatibleStream(res, callbacks, 'OpenAI', 'complete', opts.signal);
 }
 
 // QNBS-v3: single source of truth for which local presets speak the OpenAI-compatible /v1 API —
@@ -433,6 +462,12 @@ async function streamGrok(
 ): Promise<void> {
   const apiKey = await storageService.getApiKey('grok');
   if (!apiKey) throw new Error('NO_API_KEY: Grok API key missing. Please enter it in Settings.');
+  const messages = opts.systemPrompt
+    ? [
+        { role: 'system', content: sanitizePromptValue(opts.systemPrompt) },
+        { role: 'user', content: sanitizePromptValue(prompt) },
+      ]
+    : [{ role: 'user', content: sanitizePromptValue(prompt) }];
   const res = await fetch('https://api.x.ai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -441,18 +476,15 @@ async function streamGrok(
     },
     body: JSON.stringify({
       model: opts.model,
-      stream: false,
-      messages: [{ role: 'user', content: sanitizePromptValue(prompt) }],
+      stream: true,
+      messages,
       temperature: opts.temperature ?? 0.7,
       max_tokens: opts.maxTokens ?? 2048,
     }),
     signal: opts.signal ?? null,
   });
   if (!res.ok) throw new Error(`Grok API Error ${res.status}: ${res.statusText}`);
-  const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-  const text = json.choices?.[0]?.message?.content ?? '';
-  if (text) callbacks.onChunk(text);
-  callbacks.onDone?.();
+  return consumeOpenAiCompatibleStream(res, callbacks, 'Grok', 'throw', opts.signal);
 }
 
 async function streamProvider(
