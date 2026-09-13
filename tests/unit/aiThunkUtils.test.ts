@@ -220,8 +220,7 @@ describe('createDeduplicatedThunk', () => {
       );
 
       const store = makeStore();
-      // QNBS-v3: image generation currently dispatches only its raw provider and fails closed for
-      // unsupported providers; OpenRouter promotion is a text-routing rule, not image support.
+      // QNBS-v3: [image admission uses the raw provider because image support is fail-closed]
       setOpenRouterConfig(true, 'deepseek/deepseek-r1:free');
 
       const result = await store.dispatch(thunk());
