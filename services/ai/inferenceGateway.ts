@@ -8,6 +8,7 @@ import type { AiCreativity } from '../../types';
 import type { AIRequestOptions } from '../aiProviderService';
 import { generateText } from '../aiProviderService';
 import { getActiveAiMode, getLocalFallbackModel, shouldRouteLocally } from './aiModeService';
+import { CLOUD_MODEL_CATALOG } from './cloudModelCatalog';
 import { logRoutingDecision } from './routingLogger';
 
 // ---------------------------------------------------------------------------
@@ -114,15 +115,17 @@ export class DefaultInferenceGateway implements InferenceGateway {
   async modelList(): Promise<ModelInfo[]> {
     // QNBS-v3: Enumerate cloud + local models. Local models are resolved from ai-core catalogs.
     const { WEBLLM_SUPPORTED_MODELS, ONNX_SUPPORTED_MODELS } = await import('@domain/ai-core');
-    const cloud: ModelInfo[] = [
-      {
-        id: 'gemini-2.0-flash',
-        provider: 'gemini',
-        displayName: 'Gemini 2.0 Flash',
-        isLocal: false,
-      },
-      { id: 'gpt-4o', provider: 'openai', displayName: 'GPT-4o', isLocal: false },
-    ];
+    const cloud: ModelInfo[] = CLOUD_MODEL_CATALOG.filter(
+      (entry) =>
+        entry.lifecycle !== 'legacy-compat' &&
+        entry.stability === 'stable' &&
+        entry.supportsStreaming,
+    ).map(({ modelId, provider, displayName }) => ({
+      id: modelId,
+      provider,
+      displayName,
+      isLocal: false,
+    }));
     const local: ModelInfo[] = [
       ...WEBLLM_SUPPORTED_MODELS.map((m) => ({
         id: m.id,

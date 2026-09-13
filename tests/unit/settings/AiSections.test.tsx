@@ -163,7 +163,7 @@ describe('AiSection', () => {
     await user.click(screen.getByTestId('ai-provider-card'));
     expect(mockHandleSettingChange).toHaveBeenCalledWith(
       'advancedAi',
-      expect.objectContaining({ provider: 'grok', model: 'grok-4.5' }),
+      expect.objectContaining({ provider: 'grok', model: 'grok-4.6' }),
     );
   });
 

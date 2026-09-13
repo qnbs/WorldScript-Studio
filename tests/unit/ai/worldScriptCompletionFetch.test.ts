@@ -272,7 +272,7 @@ describe('worldScriptCompletionFetch — success (grok)', () => {
       makeInit(makeBody({ provider: 'grok', model: 'grok-3-mini' })),
     );
     expect(mockCreateLanguageModelForWorldScript).toHaveBeenCalledWith(
-      expect.objectContaining({ modelId: 'grok-4.5' }),
+      expect.objectContaining({ modelId: 'grok-4.6' }),
     );
   });
 });
@@ -286,7 +286,7 @@ describe('worldScriptCompletionFetch — success (openai)', () => {
       makeInit(makeBody({ provider: 'openai', model: 'gpt-4o' })),
     );
     expect(mockCreateLanguageModelForWorldScript).toHaveBeenCalledWith(
-      expect.objectContaining({ modelId: 'gpt-5.4-mini' }),
+      expect.objectContaining({ modelId: 'gpt-5.6-terra' }),
     );
   });
 

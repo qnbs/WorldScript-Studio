@@ -151,12 +151,30 @@ describe('normalizePersistedSettings', () => {
       normalizePersistedSettings({
         advancedAi: { provider: 'openai', model: 'gpt-4o' },
       }).advancedAi.model,
-    ).toBe('gpt-5.4-mini');
+    ).toBe('gpt-5.6-terra');
     expect(
       normalizePersistedSettings({
         advancedAi: { provider: 'grok', model: 'grok-3' },
       }).advancedAi.model,
-    ).toBe('grok-4.5');
+    ).toBe('grok-4.6');
+  });
+
+  it('fails closed for malformed or cross-provider cloud model values', () => {
+    expect(
+      normalizePersistedSettings({
+        advancedAi: { provider: 'gemini', model: 42 },
+      }).advancedAi.model,
+    ).toBe('gemini-3.5-flash');
+    expect(
+      normalizePersistedSettings({
+        advancedAi: { provider: 'openai', model: 'gemini-2.5-flash' },
+      }).advancedAi.model,
+    ).toBe('gpt-5.6-terra');
+    expect(
+      normalizePersistedSettings({
+        advancedAi: { provider: 'openrouter', model: '   ' },
+      }).advancedAi.model,
+    ).toBe('google/gemma-4-31b-it:free');
   });
 
   // ── collaboration ─────────────────────────────────────────────────────────
@@ -192,7 +210,7 @@ describe('normalizePersistedSettings', () => {
     const result = normalizePersistedSettings({ theme: 'dark' });
     expect(result.openRouter).toBeDefined();
     expect(result.openRouter).not.toHaveProperty('apiKey');
-    expect(result.openRouter?.preferredModel).toBe('deepseek/deepseek-r1:free');
+    expect(result.openRouter?.preferredModel).toBe('google/gemma-4-31b-it:free');
   });
 
   it('strips a legacy/imported apiKey field from an existing openRouter object', () => {
@@ -212,7 +230,14 @@ describe('normalizePersistedSettings', () => {
     });
     expect(result.openRouter).not.toHaveProperty('apiKey');
     expect(result.openRouter?.enabled).toBe(false);
-    expect(result.openRouter?.preferredModel).toBe('deepseek/deepseek-r1:free');
+    expect(result.openRouter?.preferredModel).toBe('google/gemma-4-31b-it:free');
+  });
+
+  it('normalizes whitespace-only OpenRouter preferred models', () => {
+    const result = normalizePersistedSettings({
+      openRouter: { enabled: true, preferredModel: '   ' },
+    });
+    expect(result.openRouter?.preferredModel).toBe('google/gemma-4-31b-it:free');
   });
 
   // ── fully absent settings (completely old project) ────────────────────────

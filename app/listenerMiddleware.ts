@@ -7,6 +7,7 @@ import { isStaleProjectOperationError } from '../features/project/projectIdentit
 import { selectProjectData } from '../features/project/projectSelectors';
 import type { ProjectData } from '../features/project/projectSlice';
 import { statusActions } from '../features/status/statusSlice';
+import { DEFAULT_OPENROUTER_MODEL_ID } from '../services/ai/cloudModelCatalog';
 import { ecoModeService } from '../services/ai/ecoModeService';
 import { extractStoryCodex, saveStoryCodex } from '../services/codexService';
 import { checkStorageHealth } from '../services/dbInitialization';
@@ -708,7 +709,7 @@ listenerMiddleware.startListening({
     const state = listenerApi.getState() as RootState;
     const or = state.settings?.openRouter;
     const { setOpenRouterConfig } = await import('../services/ai/aiModeService');
-    setOpenRouterConfig(or?.enabled ?? false, or?.preferredModel ?? 'deepseek/deepseek-r1:free');
+    setOpenRouterConfig(or?.enabled ?? false, or?.preferredModel ?? DEFAULT_OPENROUTER_MODEL_ID);
   },
 });
 

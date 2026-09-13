@@ -5,6 +5,7 @@
  */
 
 import { GoogleGenAI } from '@google/genai';
+import { DEFAULT_GEMINI_MODEL_ID } from '../../ai/cloudModelCatalog';
 import type {
   EmbedRequest,
   EmbedResult,
@@ -21,7 +22,7 @@ const CREATIVITY_TEMPERATURE: Record<string, number> = {
   Imaginative: 1.0,
 };
 
-const DEFAULT_MODEL = 'gemini-2.0-flash';
+const DEFAULT_MODEL = DEFAULT_GEMINI_MODEL_ID;
 const DEFAULT_EMBED_MODEL = 'text-embedding-004';
 
 export interface NodeGatewayOptions {

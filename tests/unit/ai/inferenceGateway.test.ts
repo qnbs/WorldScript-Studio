@@ -203,6 +203,12 @@ describe('DefaultInferenceGateway modelList / healthCheck', () => {
     expect(models.some((m) => m.isLocal)).toBe(true);
   });
 
+  it('does not advertise the image-only Gemini model as a generic text model', async () => {
+    const gw = new DefaultInferenceGateway();
+    const models = await gw.modelList();
+    expect(models.some((m) => m.id === 'gemini-3.1-flash-image')).toBe(false);
+  });
+
   it('healthCheck returns ok or degraded status (embedding service may be unavailable in test)', async () => {
     const gw = new DefaultInferenceGateway();
     const health = await gw.healthCheck();
