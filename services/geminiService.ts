@@ -12,6 +12,11 @@ import type {
   World,
 } from '../types';
 import {
+  DEFAULT_GEMINI_MODEL_ID,
+  GEMINI_ADMITTED_MODEL_IDS,
+  GEMINI_IMAGE_MODEL_ID,
+} from './ai/cloudModelCatalog';
+import {
   attachCause,
   cleanPrompt,
   sanitizePromptBlock,
@@ -101,8 +106,11 @@ const creativityToTemperature: Record<AiCreativity, number> = {
 };
 
 const getModelForText = (model?: string): string =>
-  model?.startsWith('gemini-') ? model : 'gemini-3.5-flash';
-const getModelForImage = () => 'gemini-3.1-flash-image-preview';
+  model !== undefined &&
+  GEMINI_ADMITTED_MODEL_IDS.includes(model as (typeof GEMINI_ADMITTED_MODEL_IDS)[number])
+    ? model
+    : DEFAULT_GEMINI_MODEL_ID;
+const getModelForImage = () => GEMINI_IMAGE_MODEL_ID;
 
 // --- Helper function for retry with 401/429 handling ---
 async function retry<T>(fn: () => Promise<T>, retries = 2, delayMs = 600): Promise<T> {

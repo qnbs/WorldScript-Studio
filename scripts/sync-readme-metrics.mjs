@@ -122,6 +122,11 @@ if (testCount != null) {
     new RegExp(`(Vitest unit tests \\()${NUM}\\+ tests, ${NUM}files\\)`),
     `$1${testCount}+ tests, ${fileCount} files)`,
   );
+  // Keep the directory-map variant in sync as well; its semicolon is intentional prose.
+  readme = readme.replace(
+    new RegExp(`(Vitest unit tests \\()${NUM}\\+ tests;`),
+    `$1${testCount}+ tests;`,
+  );
   // Line ~650: "**5 475+ unit tests** across **449 test files**"
   readme = readme.replace(
     new RegExp(`\\*\\*${NUM}\\+ unit tests\\*\\* across \\*\\*${NUM}test files\\*\\*`),

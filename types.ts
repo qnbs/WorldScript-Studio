@@ -378,6 +378,7 @@ export type AiModel =
   | 'gemini-3.1-pro-preview'
   | 'gemini-3.1-flash'
   | 'gemini-3.1-flash-lite'
+  | 'gemini-3.1-flash-image'
   // Gemini – 2.5 stable (backward compat for stored values)
   | 'gemini-2.5-flash'
   | 'gemini-2.5-pro'
@@ -400,6 +401,10 @@ export type AiModel =
   | 'claude-3-sonnet'
   | 'claude-3-haiku'
   // OpenAI – current catalog
+  | 'gpt-6-astra'
+  | 'gpt-5.6-terra'
+  | 'gpt-5.6-luna'
+  | 'gpt-5.6-sol'
   | 'gpt-5.5'
   | 'gpt-5.4'
   | 'gpt-5.4-mini'
@@ -410,6 +415,7 @@ export type AiModel =
   // Grok (xAI) – current catalog
   | 'grok-4.6'
   | 'grok-4.5'
+  | 'grok-4.20'
   // Grok (xAI) – previous catalog (backward compat for stored values)
   | 'grok-3'
   | 'grok-3-mini'

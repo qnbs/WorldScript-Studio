@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => ({
   // QNBS-v3: mutable Redux settings the useAppSelector mock reads from — the policy block now derives
   // from live aiMode + privacy, so tests drive it by mutating this (reset in beforeEach).
   settingsState: {
-    openRouter: { enabled: false, preferredModel: 'deepseek/deepseek-r1:free' },
+    openRouter: { enabled: false, preferredModel: 'google/gemma-4-31b-it:free' },
     aiMode: 'cloud' as string,
     privacy: { localStorageOnly: false } as { localStorageOnly: boolean },
   },
@@ -61,11 +61,9 @@ vi.mock('../../../services/ai/providers/openrouterProvider', () => ({
   getApproxRpm: () => 0,
   isCircuitOpen: () => mocks.isCircuitOpen(),
   OPENROUTER_FREE_MODEL_FALLBACK: [
-    'deepseek/deepseek-r1:free',
-    'meta-llama/llama-3.3-70b-instruct:free',
-    'qwen/qwen2.5-72b-instruct:free',
-    'google/gemma-3-27b-it:free',
-    'mistralai/mistral-7b-instruct:free',
+    'google/gemma-4-31b-it:free',
+    'nex-agi/nex-n2.5-pro:free',
+    'cohere/north-mini-code:free',
   ],
   resetOpenRouterCircuit: mocks.resetCircuit,
 }));
@@ -191,7 +189,7 @@ describe('OpenRouterSection', () => {
     mocks.settingsState.privacy = { localStorageOnly: false };
     mocks.settingsState.openRouter = {
       enabled: false,
-      preferredModel: 'deepseek/deepseek-r1:free',
+      preferredModel: 'google/gemma-4-31b-it:free',
     };
     mocks.saveApiKey.mockResolvedValue(undefined);
     mocks.clearApiKey.mockResolvedValue(undefined);
@@ -257,10 +255,10 @@ describe('OpenRouterSection', () => {
     const user = userEvent.setup();
     render(<OpenRouterSection />);
     const select = await waitFor(() => screen.getByLabelText('settings.openRouter.modelAriaLabel'));
-    await user.selectOptions(select, 'qwen/qwen2.5-72b-instruct:free');
+    await user.selectOptions(select, 'nex-agi/nex-n2.5-pro:free');
     await waitFor(() =>
       expect(mocks.dispatch).toHaveBeenCalledWith(
-        settingsActions.setOpenRouter({ preferredModel: 'qwen/qwen2.5-72b-instruct:free' }),
+        settingsActions.setOpenRouter({ preferredModel: 'nex-agi/nex-n2.5-pro:free' }),
       ),
     );
   });
@@ -399,9 +397,7 @@ describe('OpenRouterSection', () => {
       expect(screen.getByText('settings.openRouter.freeModel.fallbackNotice')).toBeInTheDocument();
     });
     const select = screen.getByLabelText('settings.openRouter.modelAriaLabel');
-    expect(
-      within(select).getByText('settings.openRouter.freeModel.deepseekR1'),
-    ).toBeInTheDocument();
+    expect(within(select).getByText('google/gemma-4-31b-it:free')).toBeInTheDocument();
   });
 
   it('shows a stale-model warning and offers a one-click switch when preferredModel is missing from a successfully fetched catalog (OR-2 regression)', async () => {

@@ -168,9 +168,9 @@ describe('OpenRouter helpers', () => {
     expect(getOpenRouterModel()).toBe('meta-llama/llama-3.3-70b-instruct:free');
   });
 
-  it('getOpenRouterModel() defaults to DeepSeek R1 free when model empty', () => {
+  it('getOpenRouterModel() defaults to the curated current free model when model empty', () => {
     setOpenRouterConfig(true, '');
-    expect(getOpenRouterModel()).toBe('deepseek/deepseek-r1:free');
+    expect(getOpenRouterModel()).toBe('google/gemma-4-31b-it:free');
   });
 
   it('getOpenRouterFallbackProvider() returns webllm for eco', () => {

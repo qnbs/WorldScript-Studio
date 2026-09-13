@@ -4,9 +4,13 @@ import { ALLOWED_MODELS } from '../../../api/_shared/claudeProxyCore';
 import {
   ANTHROPIC_MODEL_IDS,
   ANTHROPIC_MODEL_OPTIONS,
+  CLOUD_MODEL_CATALOG,
+  classifyPersistedCloudModel,
   DEFAULT_ANTHROPIC_MODEL_ID,
+  DEFAULT_GEMINI_MODEL_ID,
   DEFAULT_GROK_MODEL_ID,
   DEFAULT_OPENAI_MODEL_ID,
+  GEMINI_PREVIEW_MODEL_IDS,
   GROK_MODEL_IDS,
   GROK_MODEL_OPTIONS,
   isModelInCatalog,
@@ -35,5 +39,46 @@ describe('cloud model catalog', () => {
     expect(isModelInCatalog(GROK_MODEL_IDS, 'grok-3-mini')).toBe(false);
     expect(isModelInCatalog(OPENAI_MODEL_IDS, 'gpt-4o')).toBe(false);
     expect(isModelInCatalog(ANTHROPIC_MODEL_IDS, 'claude-haiku-4-5')).toBe(false);
+  });
+
+  it('keeps one metadata entry per curated or compatibility ID', () => {
+    const ids = CLOUD_MODEL_CATALOG.map(({ provider, modelId }) => `${provider}:${modelId}`);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(CLOUD_MODEL_CATALOG).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          provider: 'gemini',
+          modelId: DEFAULT_GEMINI_MODEL_ID,
+          lifecycle: 'recommended-default',
+          supportsStreaming: true,
+        }),
+        expect.objectContaining({
+          provider: 'openai',
+          modelId: DEFAULT_OPENAI_MODEL_ID,
+          lifecycle: 'recommended-default',
+        }),
+      ]),
+    );
+  });
+
+  it('keeps preview IDs out of ordinary current admission', () => {
+    expect(GEMINI_PREVIEW_MODEL_IDS).not.toContain(DEFAULT_GEMINI_MODEL_ID);
+    expect(isModelInCatalog(GEMINI_PREVIEW_MODEL_IDS, 'gemini-3.1-pro-preview')).toBe(true);
+    expect(
+      CLOUD_MODEL_CATALOG.find(({ modelId }) => modelId === 'gemini-3.1-pro-preview')?.lifecycle,
+    ).toBe('preview-opt-in');
+  });
+
+  it('explicitly migrates legacy values and preserves custom endpoints', () => {
+    expect(classifyPersistedCloudModel('openai', 'gpt-4o').replacementModel).toBe(
+      DEFAULT_OPENAI_MODEL_ID,
+    );
+    expect(
+      classifyPersistedCloudModel('openai', 'tenant-model', 'https://example.test/v1'),
+    ).toEqual({ model: 'tenant-model', status: 'custom-compatible' });
+    expect(classifyPersistedCloudModel('openrouter', 'vendor/model:free')).toEqual({
+      model: 'vendor/model:free',
+      status: 'custom-compatible',
+    });
   });
 });

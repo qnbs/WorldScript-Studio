@@ -8,8 +8,10 @@ import { assertCloudAiAllowed } from './aiPolicy';
 import { aiUsageTracker } from './aiUsageTracker';
 // QNBS-v3: fallback IDs stay aligned with the selectable cloud catalog.
 import {
+  DEFAULT_GEMINI_MODEL_ID,
   DEFAULT_GROK_MODEL_ID,
   DEFAULT_OPENAI_MODEL_ID,
+  GEMINI_ADMITTED_MODEL_IDS,
   GROK_MODEL_IDS,
   isModelInCatalog,
   OPENAI_MODEL_IDS,
@@ -110,7 +112,9 @@ async function resolveModelConfig(
     if (!apiKey) {
       return { error: 'No Gemini API key configured.', status: 401 };
     }
-    const modelId = model.startsWith('gemini-') ? model : 'gemini-3.5-flash';
+    const modelId = isModelInCatalog(GEMINI_ADMITTED_MODEL_IDS, model)
+      ? model
+      : DEFAULT_GEMINI_MODEL_ID;
     return { provider: 'gemini', apiKey, modelId };
   }
   if (kind === 'openai') {
