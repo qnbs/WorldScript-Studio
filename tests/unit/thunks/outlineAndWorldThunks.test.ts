@@ -1,6 +1,6 @@
 import { configureStore } from '@reduxjs/toolkit';
 import undoable from 'redux-undo';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // QNBS-v3: localStorageOnly defaults true in settingsReducer — bypass the cloud-AI gate so thunks can run.
 vi.mock('../../../services/ai/aiPolicy', () => ({
@@ -41,7 +41,11 @@ import settingsReducer from '../../../features/settings/settingsSlice';
 import statusReducer from '../../../features/status/statusSlice';
 import versionControlReducer from '../../../features/versionControl/versionControlSlice';
 import writerReducer from '../../../features/writer/writerSlice';
+import { setOpenRouterConfig } from '../../../services/ai/aiModeService';
+import { assertCloudAiAllowedSync } from '../../../services/ai/aiPolicy';
 import { storageService } from '../../../services/storageService';
+
+const mockAssertCloudAiAllowedSync = vi.mocked(assertCloudAiAllowedSync);
 
 // ---------------------------------------------------------------------------
 // Store factory
@@ -78,6 +82,10 @@ beforeEach(() => {
   mockGetPrompts.mockReturnValue({ prompt: 'test-prompt', schema: {} });
   mockGenerateJson.mockResolvedValue([]);
   vi.mocked(storageService.saveImage).mockResolvedValue(undefined);
+});
+
+afterEach(() => {
+  setOpenRouterConfig(false, '');
 });
 
 // ---------------------------------------------------------------------------
@@ -244,6 +252,27 @@ describe('regenerateWorldFieldThunk', () => {
 });
 
 describe('generateWorldImageThunk', () => {
+  it('checks the raw provider for image admission when OpenRouter text routing is enabled', async () => {
+    setOpenRouterConfig(true, 'deepseek/deepseek-r1:free');
+    mockGenerateImage.mockResolvedValueOnce('worldimagebase64');
+    const store = makeStore();
+
+    const action = await store.dispatch(
+      generateWorldImageThunk({ worldId: 'w1', description: 'A misty forest', lang: 'en' }),
+    );
+
+    expect(action.type).toBe('project/generateWorldImage/fulfilled');
+    expect(mockAssertCloudAiAllowedSync).toHaveBeenCalledWith(
+      'gemini',
+      expect.objectContaining({ localStorageOnly: true }),
+    );
+    expect(mockGenerateImage).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ provider: 'gemini' }),
+      expect.anything(),
+    );
+  });
+
   it('dispatches fulfilled with worldId', async () => {
     mockGenerateImage.mockResolvedValueOnce('worldimagebase64');
     const store = makeStore();

@@ -112,6 +112,8 @@ export const generateSceneImageThunk = createDeduplicatedThunk(
     const dataUrl = base64.includes('data:image') ? base64 : `data:image/png;base64,${base64}`;
     return { imageKey, dataUrl };
   },
+  undefined,
+  'image',
 );
 
 export const streamGenerationThunk = createDeduplicatedThunk(

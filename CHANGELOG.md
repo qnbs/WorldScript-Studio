@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **AI policy admission now respects the requested operation:** text thunks retain positive routing,
+  while image thunks inspect their raw provider and preserve the existing fail-closed capability
+  matrix. PR #741.
 - **Grok streaming now uses the provider's OpenAI-compatible SSE contract:** xAI requests
   explicitly opt into streaming, preserve the system prompt, and deliver validated text deltas
   as they arrive, invoking completion only after successful stream termination. PR #740.

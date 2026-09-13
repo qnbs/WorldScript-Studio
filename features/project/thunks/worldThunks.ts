@@ -104,6 +104,8 @@ export const generateWorldImageThunk = createDeduplicatedThunk(
     );
     return { worldId };
   },
+  undefined,
+  'image',
 );
 
 export const uploadWorldImageThunk = createAsyncThunk(

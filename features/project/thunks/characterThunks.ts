@@ -111,6 +111,8 @@ export const generateCharacterPortraitThunk = createDeduplicatedThunk(
     );
     return { characterId };
   },
+  undefined,
+  'image',
 );
 
 export const uploadCharacterImageThunk = createAsyncThunk(
