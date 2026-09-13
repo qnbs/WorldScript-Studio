@@ -105,19 +105,21 @@ class MockProjectDocBinding {
 vi.mock('../../services/localFirst/docBinding', () => ({
   ProjectDocBinding: MockProjectDocBinding,
 }));
-// QNBS-v3: destroy/clearData must be present since real listener teardown code can call either on any persistence handle. mockNoopDestroy is a stable reference because a test below asserts teardownLocalFirst() actually invoked it; the other three stay plain no-op closures since nothing currently asserts on them.
+// QNBS-v3: destroy/destroyStrict/clearData must be present since real listener teardown code can call any of them on a persistence handle. mockNoopDestroy is a stable reference because a test below asserts teardownLocalFirst() actually invoked it; the other four stay plain no-op closures since nothing currently asserts on them.
 const mockNoopDestroy = vi.fn().mockResolvedValue(undefined);
 vi.mock('../../services/localFirst/docPersistence', () => ({
   NOOP_PERSISTENCE: {
     active: false,
     whenSynced: Promise.resolve(),
     destroy: (...args: unknown[]) => mockNoopDestroy(...args),
+    destroyStrict: (...args: unknown[]) => mockNoopDestroy(...args),
     clearData: () => Promise.resolve(),
   },
   persistProjectDoc: vi.fn(() => ({
     active: true,
     whenSynced: Promise.resolve(),
     destroy: () => Promise.resolve(),
+    destroyStrict: () => Promise.resolve(),
     clearData: () => Promise.resolve(),
   })),
 }));
@@ -694,12 +696,14 @@ describe('local-first shadow sync (B1.1)', () => {
       active: false,
       whenSynced: Promise.resolve(),
       destroy: () => Promise.resolve(),
+      destroyStrict: () => Promise.resolve(),
       clearData: () => Promise.resolve(),
     };
     const realActive = {
       active: true,
       whenSynced: Promise.resolve(),
       destroy: () => Promise.resolve(),
+      destroyStrict: () => Promise.resolve(),
       clearData: () => Promise.resolve(),
     };
     vi.mocked(persistProjectDoc)
@@ -745,6 +749,61 @@ describe('local-first shadow sync (B1.1)', () => {
     // Encryption is later disabled — a further edit to the SAME project must discard the cached NOOP and resume durable persistence, not keep returning the memory-only handle forever.
     vi.mocked(isIdbEncryptionReady).mockReturnValue(false);
     store.dispatch(projectActions.updateTitle('Decrypted Title'));
+    await vi.advanceTimersByTimeAsync(1300);
+    expect(persistProjectDoc).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails closed when encryption transition cannot clear plaintext local-first data', async () => {
+    const { isIdbEncryptionReady } = await import(
+      '../../services/storage/storageEncryptionService'
+    );
+    const { persistProjectDoc } = await import('../../services/localFirst/docPersistence');
+    const clearData = vi.fn().mockRejectedValue(new Error('wipe failed'));
+    const destroy = vi.fn().mockResolvedValue(undefined);
+    const destroyStrict = vi.fn().mockRejectedValue(new Error('teardown failed'));
+
+    vi.mocked(isIdbEncryptionReady).mockReturnValue(false);
+    vi.mocked(persistProjectDoc).mockReturnValue({
+      active: true,
+      whenSynced: Promise.resolve(),
+      clearData,
+      destroy,
+      destroyStrict,
+    });
+
+    // localFirstHandle is module-global; explicitly tear down any handle left by a preceding test.
+    const warmupStore = makeFullStore();
+    warmupStore.dispatch(featureFlagsActions.setEnableLocalFirstSync(true));
+    await vi.advanceTimersByTimeAsync(100);
+    warmupStore.dispatch(featureFlagsActions.setEnableLocalFirstSync(false));
+    await vi.advanceTimersByTimeAsync(100);
+    destroy.mockClear();
+    destroyStrict.mockClear();
+    vi.mocked(persistProjectDoc).mockClear();
+
+    const store = makeFullStore();
+    store.dispatch(featureFlagsActions.setEnableLocalFirstSync(true));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(persistProjectDoc).toHaveBeenCalledTimes(1);
+
+    vi.mocked(isIdbEncryptionReady).mockReturnValue(true);
+    store.dispatch(projectActions.updateTitle('Encryption transition'));
+    await vi.advanceTimersByTimeAsync(1300);
+
+    expect(clearData).toHaveBeenCalledTimes(1);
+    expect(destroy).not.toHaveBeenCalled();
+    expect(destroyStrict).toHaveBeenCalledTimes(1);
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      'Local-First plaintext cleanup and provider teardown both failed; persistence disabled:',
+      expect.any(Error),
+    );
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      'Local-First plaintext cleanup failed; shadow sync aborted and persistence disabled:',
+      expect.any(Error),
+    );
+
+    // The failed handle is not reused, and encryption-active follow-up sync stays memory-only.
+    store.dispatch(projectActions.updateTitle('After failed cleanup'));
     await vi.advanceTimersByTimeAsync(1300);
     expect(persistProjectDoc).toHaveBeenCalledTimes(1);
   });
