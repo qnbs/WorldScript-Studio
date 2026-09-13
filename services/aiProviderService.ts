@@ -100,6 +100,18 @@ function withMergedAbortSignal(opts: AIRequestOptions, signal?: AbortSignal): AI
   return { ...opts, signal };
 }
 
+function buildOpenAiCompletionParameters(
+  usesOfficialOpenAi: boolean,
+  model: AiModel,
+  opts: Pick<AIRequestOptions, 'maxTokens' | 'temperature'>,
+) {
+  // QNBS-v3: direct OpenAI reasoning models reject legacy sampling parameters.
+  if (usesOfficialOpenAi && /^o\d/.test(model)) {
+    return { max_completion_tokens: opts.maxTokens ?? 2048 };
+  }
+  return { temperature: opts.temperature ?? 0.7, max_tokens: opts.maxTokens ?? 2048 };
+}
+
 // QNBS-v3: True for a user/abort-signal cancellation, regardless of how the provider surfaced it
 // (DOMException or a plain Error named 'AbortError'). Used to treat cancels as a silent stop, not
 // a provider failure that would trigger fallback + a terminal onError callback.
@@ -299,11 +311,7 @@ async function streamOpenAI(
   // QNBS-v3: custom OpenAI-compatible roots must be admitted before any request leaves the renderer.
   assertCspConnectEndpointAllowed(apiRoot, 'OpenAI-compatible endpoint');
   const refererHeaders = buildOpenRouterStyleHeaders(opts.openAiSiteUrl, opts.openAiSiteTitle);
-  // QNBS-v3: direct OpenAI reasoning models reject legacy sampling parameters.
-  const requestParameters =
-    usesOfficialOpenAi && /^o\d/.test(model)
-      ? { max_completion_tokens: opts.maxTokens ?? 2048 }
-      : { temperature: opts.temperature ?? 0.7, max_tokens: opts.maxTokens ?? 2048 };
+  const requestParameters = buildOpenAiCompletionParameters(usesOfficialOpenAi, model, opts);
   const res = await fetch(`${apiRoot}/chat/completions`, {
     method: 'POST',
     headers: {

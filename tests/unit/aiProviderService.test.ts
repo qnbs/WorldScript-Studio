@@ -1464,6 +1464,19 @@ describe('Anthropic — desktop (Track A) and web proxy (Track B) branches (ADR-
 describe('streamText OpenAI', () => {
   const originalFetch = globalThis.fetch;
 
+  function createOpenAiStreamResponse(encoder: TextEncoder, payload: string): Response {
+    return {
+      ok: true,
+      status: 200,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(payload));
+          controller.close();
+        },
+      }),
+    } as Response;
+  }
+
   afterEach(() => {
     globalThis.fetch = originalFetch;
   });
@@ -1472,18 +1485,14 @@ describe('streamText OpenAI', () => {
     vi.mocked(storageService.getApiKey).mockResolvedValueOnce('sk-test');
     const ac = new AbortController();
     const encoder = new TextEncoder();
-    const fetchMock = vi.fn().mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({}),
-      body: new ReadableStream({
-        start(controller) {
-          controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"z"}}]}\n\n'));
-          controller.enqueue(encoder.encode('data: [DONE]\n'));
-          controller.close();
-        },
-      }),
-    } as Response);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createOpenAiStreamResponse(
+          encoder,
+          'data: {"choices":[{"delta":{"content":"z"}}]}\n\ndata: [DONE]\n',
+        ),
+      );
     globalThis.fetch = fetchMock as typeof fetch;
 
     const chunks: string[] = [];
@@ -1512,16 +1521,9 @@ describe('streamText OpenAI', () => {
   it('uses reasoning-compatible parameters for official o-series models', async () => {
     vi.mocked(storageService.getApiKey).mockResolvedValueOnce('sk-test');
     const encoder = new TextEncoder();
-    const fetchMock = vi.fn().mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      body: new ReadableStream({
-        start(controller) {
-          controller.enqueue(encoder.encode('data: [DONE]\n'));
-          controller.close();
-        },
-      }),
-    } as Response);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createOpenAiStreamResponse(encoder, 'data: [DONE]\n'));
     globalThis.fetch = fetchMock as typeof fetch;
 
     await streamText(
@@ -1541,16 +1543,9 @@ describe('streamText OpenAI', () => {
   it('keeps custom OpenAI-compatible o-series requests on the compatibility shape', async () => {
     vi.mocked(storageService.getApiKey).mockResolvedValueOnce('sk-test');
     const encoder = new TextEncoder();
-    const fetchMock = vi.fn().mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      body: new ReadableStream({
-        start(controller) {
-          controller.enqueue(encoder.encode('data: [DONE]\n'));
-          controller.close();
-        },
-      }),
-    } as Response);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createOpenAiStreamResponse(encoder, 'data: [DONE]\n'));
     globalThis.fetch = fetchMock as typeof fetch;
 
     await streamText(
