@@ -33,6 +33,14 @@ describe('docPersistence clearData error propagation', () => {
     await destroyPromise;
   });
 
+  it('rejects a wipe requested after provider teardown begins', async () => {
+    const persistence = persistProjectDoc('clear-after-destroy-sync', new Y.Doc());
+
+    await persistence.destroy();
+
+    await expect(persistence.clearData()).rejects.toThrow('destruction has started');
+  });
+
   // QNBS-v3: [Grund: regression for wipe failure propagation / Impact: prevents false cleanup success / Kreativer Mehrwert: keeps encryption transitions fail-closed]
   it('propagates a provider wipe failure to the caller', async () => {
     const failure = new Error('provider wipe failed');

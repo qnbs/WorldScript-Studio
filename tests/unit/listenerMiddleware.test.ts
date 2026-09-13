@@ -760,6 +760,7 @@ describe('local-first shadow sync (B1.1)', () => {
     const { persistProjectDoc } = await import('../../services/localFirst/docPersistence');
     const clearData = vi.fn().mockRejectedValue(new Error('wipe failed'));
     const destroy = vi.fn().mockResolvedValue(undefined);
+    const destroyStrict = vi.fn().mockRejectedValue(new Error('teardown failed'));
 
     vi.mocked(isIdbEncryptionReady).mockReturnValue(false);
     vi.mocked(persistProjectDoc).mockReturnValue({
@@ -767,7 +768,7 @@ describe('local-first shadow sync (B1.1)', () => {
       whenSynced: Promise.resolve(),
       clearData,
       destroy,
-      destroyStrict: destroy,
+      destroyStrict,
     });
 
     // localFirstHandle is module-global; explicitly tear down any handle left by a preceding test.
@@ -777,6 +778,7 @@ describe('local-first shadow sync (B1.1)', () => {
     warmupStore.dispatch(featureFlagsActions.setEnableLocalFirstSync(false));
     await vi.advanceTimersByTimeAsync(100);
     destroy.mockClear();
+    destroyStrict.mockClear();
     vi.mocked(persistProjectDoc).mockClear();
 
     const store = makeFullStore();
@@ -789,7 +791,12 @@ describe('local-first shadow sync (B1.1)', () => {
     await vi.advanceTimersByTimeAsync(1300);
 
     expect(clearData).toHaveBeenCalledTimes(1);
-    expect(destroy).toHaveBeenCalledTimes(1);
+    expect(destroy).not.toHaveBeenCalled();
+    expect(destroyStrict).toHaveBeenCalledTimes(1);
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      'Local-First plaintext cleanup and provider teardown both failed; persistence disabled:',
+      expect.any(Error),
+    );
     expect(mockLoggerError).toHaveBeenCalledWith(
       'Local-First plaintext cleanup failed; shadow sync aborted and persistence disabled:',
       expect.any(Error),
