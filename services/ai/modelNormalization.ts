@@ -1,6 +1,7 @@
 import type { AiModel } from '../../types';
 
 export function normalizeOpenAiCompatibleBaseUrl(baseUrl: string): string {
+  // QNBS-v3: collapse trailing-slash variants so canonical endpoint identity remains stable.
   const trimmed = baseUrl.replace(/\/+$/, '');
   return trimmed.endsWith('/v1') ? trimmed : `${trimmed}/v1`;
 }

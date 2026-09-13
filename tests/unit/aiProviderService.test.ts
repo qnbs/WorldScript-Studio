@@ -1485,7 +1485,11 @@ describe('streamText OpenAI', () => {
     return fetchMock;
   }
 
-  async function requestOpenAiWithRoot(openAiCompatibleBaseUrl: string) {
+  async function requestOpenAiWithRoot({
+    openAiCompatibleBaseUrl,
+  }: {
+    openAiCompatibleBaseUrl: string;
+  }) {
     const fetchMock = mockOpenAiStream('data: [DONE]\n');
     await streamText(
       'hello',
@@ -1558,14 +1562,18 @@ describe('streamText OpenAI', () => {
   });
 
   it('uses reasoning-compatible parameters for explicit canonical OpenAI roots', async () => {
-    const body = await requestOpenAiWithRoot('https://api.openai.com/v1');
+    const body = await requestOpenAiWithRoot({
+      openAiCompatibleBaseUrl: 'https://api.openai.com/v1',
+    });
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
       'https://api.openai.com/v1/chat/completions',
       expect.anything(),
     );
     expectReasoningParameters(body);
-    const equivalentBody = await requestOpenAiWithRoot('https://api.openai.com:443///');
+    const equivalentBody = await requestOpenAiWithRoot({
+      openAiCompatibleBaseUrl: 'https://api.openai.com:443///',
+    });
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
       'https://api.openai.com:443/v1/chat/completions',
@@ -1575,7 +1583,9 @@ describe('streamText OpenAI', () => {
   });
 
   it('keeps genuinely non-OpenAI compatible roots on the compatibility shape', async () => {
-    const body = await requestOpenAiWithRoot('https://openrouter.ai/api');
+    const body = await requestOpenAiWithRoot({
+      openAiCompatibleBaseUrl: 'https://openrouter.ai/api',
+    });
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
       'https://openrouter.ai/api/v1/chat/completions',
