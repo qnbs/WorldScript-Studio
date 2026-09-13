@@ -207,6 +207,32 @@ describe('createDeduplicatedThunk', () => {
       expect(payloadCreator).toHaveBeenCalled();
     });
 
+    it('checks the raw provider for image operations instead of applying text-only routing promotion', async () => {
+      const payloadCreator = vi.fn().mockResolvedValue('result');
+      const thunk = createDeduplicatedThunk<string>(
+        'test/policy-image-operation',
+        async (arg, api) => {
+          api.registerDuplicateRequest('prompt', 'image');
+          return payloadCreator(arg, api);
+        },
+        undefined,
+        'image',
+      );
+
+      const store = makeStore();
+      // QNBS-v3: [image admission uses the raw provider because image support is fail-closed]
+      setOpenRouterConfig(true, 'deepseek/deepseek-r1:free');
+
+      const result = await store.dispatch(thunk());
+
+      expect(result.type).toBe('test/policy-image-operation/fulfilled');
+      expect(mockAssertCloudAiAllowedSync).toHaveBeenCalledWith(
+        'gemini',
+        expect.objectContaining({ localStorageOnly: true }),
+      );
+      expect(payloadCreator).toHaveBeenCalled();
+    });
+
     it('does not call the payload creator when policy check throws', async () => {
       mockAssertCloudAiAllowedSync.mockImplementation(() => {
         throw new Error('blocked');

@@ -2,7 +2,10 @@ import type { AsyncThunkConfig, GetThunkAPI } from '@reduxjs/toolkit';
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import type { RootState } from '../../app/store';
 import { assertCloudAiAllowedSync } from '../../services/ai/aiPolicy';
-import { peekPositiveRoutingProvider } from '../../services/ai/positiveRouting';
+import {
+  type AIRoutingOperation,
+  peekPositiveRoutingProvider,
+} from '../../services/ai/positiveRouting';
 import type { PrivacySettings } from '../../types';
 import { buildAiOptions } from './thunks/thunkUtils';
 
@@ -19,6 +22,7 @@ export const createDeduplicatedThunk = <Returned, ThunkArg = void>(
   typePrefix: string,
   payloadCreator: (arg: ThunkArg, thunkAPI: DeduplicatedThunkAPI) => Promise<Returned>,
   options?: Parameters<typeof createAsyncThunk<Returned, ThunkArg>>[2],
+  operation: AIRoutingOperation = 'text',
 ) => {
   return createAsyncThunk<Returned, ThunkArg>(
     typePrefix,
@@ -67,9 +71,10 @@ export const createDeduplicatedThunk = <Returned, ThunkArg = void>(
       } as DeduplicatedThunkAPI;
 
       try {
-        // QNBS-v3: checks the same effective provider generateText/generateJson/streamText actually route to, not the raw preset/global setting.
+        // QNBS-v3: checks the provider the requested operation actually dispatches to, not a
+        // generic text-routing prediction applied to every AI capability.
         const state = thunkAPI.getState() as RootState;
-        const provider = peekPositiveRoutingProvider(buildAiOptions(state));
+        const provider = peekPositiveRoutingProvider(buildAiOptions(state), operation);
         if (provider) {
           const privacy = (state.settings as unknown as { privacy?: PrivacySettings }).privacy;
           assertCloudAiAllowedSync(provider, privacy);
