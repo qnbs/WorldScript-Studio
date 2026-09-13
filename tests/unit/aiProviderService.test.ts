@@ -528,6 +528,7 @@ describe('streamText', () => {
               rejectRead = reject;
             });
           },
+          cancel: vi.fn().mockResolvedValue(undefined),
         }),
       },
     } as unknown as Response);
@@ -596,6 +597,7 @@ describe('streamText', () => {
             ac.abort();
             return { done: true, value: undefined };
           },
+          cancel: vi.fn().mockResolvedValue(undefined),
         }),
       },
     } as unknown as Response);
@@ -649,6 +651,44 @@ describe('streamText', () => {
     }
   });
 
+  it('cancels the Grok reader when a chunk consumer fails', async () => {
+    const originalFetch = globalThis.fetch;
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    const encoder = new TextEncoder();
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: {
+        getReader: () => ({
+          read: async () => ({
+            done: false,
+            value: encoder.encode('data: {"choices":[{"delta":{"content":"chunk"}}]}\n'),
+          }),
+          cancel,
+        }),
+      },
+    } as unknown as Response);
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('grok-test-key');
+
+    try {
+      await expect(
+        streamText(
+          'user prompt',
+          'Balanced',
+          { provider: 'grok', model: 'grok-4.5' },
+          {
+            onChunk: () => {
+              throw new Error('consumer failed');
+            },
+          },
+        ),
+      ).rejects.toThrow('consumer failed');
+      expect(cancel).toHaveBeenCalledTimes(1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it('does not deliver a Grok chunk when an in-flight read resolves after cancellation', async () => {
     const originalFetch = globalThis.fetch;
     const ac = new AbortController();
@@ -669,6 +709,7 @@ describe('streamText', () => {
               resolveRead = resolve;
             });
           },
+          cancel: vi.fn().mockResolvedValue(undefined),
         }),
       },
     } as unknown as Response);
@@ -714,6 +755,7 @@ describe('streamText', () => {
                 'data: [DONE]\n',
             ),
           }),
+          cancel: vi.fn().mockResolvedValue(undefined),
         }),
       },
     } as unknown as Response);

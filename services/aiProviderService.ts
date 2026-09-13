@@ -162,6 +162,7 @@ function _cleanupPendingRequest(key: string, controller: AbortController): void 
   }
 }
 
+// QNBS-v3: retain Grok chunk tracking so partial output cannot be followed by fallback text.
 function createGrokAttemptCallbacks(
   callbacks: AIStreamCallbacks,
   onChunk: (text: string) => void,
@@ -214,26 +215,43 @@ async function consumeOpenAiCompatibleStream(
     if (typeof delta === 'string' && delta) callbacks.onChunk(delta);
   };
 
-  while (true) {
-    if (signal?.aborted) {
-      if (abortPolicy === 'complete') {
-        callbacks.onDone?.();
-        return;
+  try {
+    while (true) {
+      if (signal?.aborted) {
+        if (abortPolicy === 'complete') {
+          callbacks.onDone?.();
+          return;
+        }
+        break;
       }
-      break;
-    }
-    let readResult: ReadableStreamReadResult<Uint8Array>;
-    try {
-      readResult = await reader.read();
-    } catch (error) {
-      if (signal?.aborted && abortPolicy === 'complete') {
-        callbacks.onDone?.();
-        return;
+      let readResult: ReadableStreamReadResult<Uint8Array>;
+      try {
+        readResult = await reader.read();
+      } catch (error) {
+        if (signal?.aborted && abortPolicy === 'complete') {
+          callbacks.onDone?.();
+          return;
+        }
+        throw error;
       }
-      throw error;
+      const { done, value } = readResult;
+      // QNBS-v3: Recheck after the awaited read so a cancellation racing with read resolution cannot publish a late delta.
+      if (signal?.aborted) {
+        if (abortPolicy === 'complete') {
+          callbacks.onDone?.();
+          return;
+        }
+        throw Object.assign(new Error(`${providerName} stream aborted`), { name: 'AbortError' });
+      }
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (signal?.aborted) break;
+        parseLine(line);
+      }
     }
-    const { done, value } = readResult;
-    // QNBS-v3: Recheck after the awaited read so a cancellation racing with read resolution cannot publish a late delta.
     if (signal?.aborted) {
       if (abortPolicy === 'complete') {
         callbacks.onDone?.();
@@ -241,29 +259,16 @@ async function consumeOpenAiCompatibleStream(
       }
       throw Object.assign(new Error(`${providerName} stream aborted`), { name: 'AbortError' });
     }
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() ?? '';
-    for (const line of lines) {
-      if (signal?.aborted) break;
-      parseLine(line);
-    }
-  }
-  if (signal?.aborted) {
-    if (abortPolicy === 'complete') {
-      callbacks.onDone?.();
-      return;
-    }
-    throw Object.assign(new Error(`${providerName} stream aborted`), { name: 'AbortError' });
-  }
-  buffer += decoder.decode();
-  if (buffer) parseLine(buffer);
+    buffer += decoder.decode();
+    if (buffer) parseLine(buffer);
 
-  if (abortPolicy === 'throw' && !receivedDone) {
-    throw new Error(`${providerName}: stream ended before completion`);
+    if (abortPolicy === 'throw' && !receivedDone) {
+      throw new Error(`${providerName}: stream ended before completion`);
+    }
+    callbacks.onDone?.();
+  } finally {
+    await reader.cancel().catch(() => {});
   }
-  callbacks.onDone?.();
 }
 
 async function streamOpenAI(
@@ -870,6 +875,7 @@ export async function streamText(
     for (let i = 0; i < chain.length; i++) {
       const nextProvider = chain[i];
       if (nextProvider === undefined || nextProvider === attemptedOpenRouterFallback) continue;
+      // QNBS-v3: track partial Grok output before fallback decisions.
       let grokEmitted = false;
       const callbacksForAttempt =
         nextProvider === 'grok'
