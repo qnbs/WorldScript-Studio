@@ -101,22 +101,8 @@ function withMergedAbortSignal(opts: AIRequestOptions, signal?: AbortSignal): AI
 }
 
 function isOfficialOpenAiApiRoot(apiRoot: string): boolean {
-  try {
-    const url = new URL(apiRoot);
-    // QNBS-v3: canonical endpoint identity, rather than configuration spelling, selects provider semantics.
-    return (
-      url.protocol === 'https:' &&
-      url.hostname === 'api.openai.com' &&
-      url.port === '' &&
-      url.pathname === '/v1' &&
-      url.username === '' &&
-      url.password === '' &&
-      url.search === '' &&
-      url.hash === ''
-    );
-  } catch {
-    return false;
-  }
+  // QNBS-v3: canonical endpoint identity, rather than configuration spelling, selects provider semantics.
+  return apiRoot.toLowerCase() === 'https://api.openai.com/v1';
 }
 
 function buildOpenAiCompletionParameters(

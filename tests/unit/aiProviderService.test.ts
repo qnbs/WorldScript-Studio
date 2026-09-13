@@ -1485,6 +1485,24 @@ describe('streamText OpenAI', () => {
     return fetchMock;
   }
 
+  async function requestOpenAiWithRoot(openAiCompatibleBaseUrl: string) {
+    const fetchMock = mockOpenAiStream('data: [DONE]\n');
+    await streamText(
+      'hello',
+      'Balanced',
+      {
+        provider: 'openai',
+        model: 'o3' as unknown as AiModel,
+        maxTokens: 123,
+        temperature: 0.2,
+        openAiCompatibleBaseUrl,
+      },
+      { onChunk: vi.fn() },
+    );
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    return JSON.parse(requestInit.body as string) as Record<string, unknown>;
+  }
+
   afterEach(() => {
     globalThis.fetch = originalFetch;
   });
@@ -1536,54 +1554,24 @@ describe('streamText OpenAI', () => {
   });
 
   it('uses reasoning-compatible parameters for an explicit canonical OpenAI root', async () => {
-    const fetchMock = mockOpenAiStream('data: [DONE]\n');
-
-    await streamText(
-      'hello',
-      'Balanced',
-      {
-        provider: 'openai',
-        model: 'o3' as unknown as AiModel,
-        maxTokens: 123,
-        temperature: 0.2,
-        openAiCompatibleBaseUrl: 'https://api.openai.com/v1',
-      },
-      { onChunk: vi.fn() },
-    );
+    const body = await requestOpenAiWithRoot('https://api.openai.com/v1');
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
       'https://api.openai.com/v1/chat/completions',
       expect.anything(),
     );
-    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
-    const body = JSON.parse(requestInit.body as string) as Record<string, unknown>;
     expect(body).toMatchObject({ model: 'o3', stream: true, max_completion_tokens: 123 });
     expect(body).not.toHaveProperty('temperature');
     expect(body).not.toHaveProperty('max_tokens');
   });
 
   it('keeps genuinely non-OpenAI compatible roots on the compatibility shape', async () => {
-    const fetchMock = mockOpenAiStream('data: [DONE]\n');
-
-    await streamText(
-      'hello',
-      'Balanced',
-      {
-        provider: 'openai',
-        model: 'o3' as unknown as AiModel,
-        maxTokens: 123,
-        temperature: 0.2,
-        openAiCompatibleBaseUrl: 'https://openrouter.ai/api',
-      },
-      { onChunk: vi.fn() },
-    );
+    const body = await requestOpenAiWithRoot('https://openrouter.ai/api');
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
       'https://openrouter.ai/api/v1/chat/completions',
       expect.anything(),
     );
-    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
-    const body = JSON.parse(requestInit.body as string) as Record<string, unknown>;
     expect(body).toMatchObject({ model: 'o3', stream: true, temperature: 0.2, max_tokens: 123 });
     expect(body).not.toHaveProperty('max_completion_tokens');
   });
