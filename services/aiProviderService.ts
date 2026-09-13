@@ -299,6 +299,11 @@ async function streamOpenAI(
   // QNBS-v3: custom OpenAI-compatible roots must be admitted before any request leaves the renderer.
   assertCspConnectEndpointAllowed(apiRoot, 'OpenAI-compatible endpoint');
   const refererHeaders = buildOpenRouterStyleHeaders(opts.openAiSiteUrl, opts.openAiSiteTitle);
+  // QNBS-v3: direct OpenAI reasoning models reject legacy sampling parameters.
+  const requestParameters =
+    usesOfficialOpenAi && /^o\d/.test(model)
+      ? { max_completion_tokens: opts.maxTokens ?? 2048 }
+      : { temperature: opts.temperature ?? 0.7, max_tokens: opts.maxTokens ?? 2048 };
   const res = await fetch(`${apiRoot}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -310,8 +315,7 @@ async function streamOpenAI(
       model,
       stream: true,
       messages,
-      temperature: opts.temperature ?? 0.7,
-      max_tokens: opts.maxTokens ?? 2048,
+      ...requestParameters,
     }),
     signal: opts.signal ?? null,
   });

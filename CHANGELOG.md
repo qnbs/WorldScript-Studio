@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Direct OpenAI o-series streaming now uses reasoning-compatible completion
+  parameters:** official reasoning models receive `max_completion_tokens` without legacy
+  sampling fields, while custom OpenAI-compatible roots retain their existing request shape.
+  PR #742.
 - **AI policy admission now respects the requested operation:** text thunks retain positive routing,
   while image thunks inspect their raw provider and preserve the existing fail-closed capability
   matrix. PR #741.

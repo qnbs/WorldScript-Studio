@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AiModel } from '../../types';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -1471,7 +1472,7 @@ describe('streamText OpenAI', () => {
     vi.mocked(storageService.getApiKey).mockResolvedValueOnce('sk-test');
     const ac = new AbortController();
     const encoder = new TextEncoder();
-    globalThis.fetch = vi.fn().mockResolvedValueOnce({
+    const fetchMock = vi.fn().mockResolvedValueOnce({
       ok: true,
       status: 200,
       json: async () => ({}),
@@ -1483,6 +1484,7 @@ describe('streamText OpenAI', () => {
         },
       }),
     } as Response);
+    globalThis.fetch = fetchMock as typeof fetch;
 
     const chunks: string[] = [];
     await streamText(
@@ -1497,7 +1499,77 @@ describe('streamText OpenAI', () => {
       'https://api.openai.com/v1/chat/completions',
       expect.objectContaining({ signal: ac.signal }),
     );
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(requestInit.body as string)).toMatchObject({
+      model: 'gpt-4o-mini',
+      stream: true,
+      temperature: 0.7,
+      max_tokens: 2048,
+    });
     expect(chunks.join('')).toContain('z');
+  });
+
+  it('uses reasoning-compatible parameters for official o-series models', async () => {
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('sk-test');
+    const encoder = new TextEncoder();
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: [DONE]\n'));
+          controller.close();
+        },
+      }),
+    } as Response);
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    await streamText(
+      'hello',
+      'Balanced',
+      { provider: 'openai', model: 'o3' as unknown as AiModel, maxTokens: 123, temperature: 0.2 },
+      { onChunk: vi.fn() },
+    );
+
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(requestInit.body as string) as Record<string, unknown>;
+    expect(body).toMatchObject({ model: 'o3', stream: true, max_completion_tokens: 123 });
+    expect(body).not.toHaveProperty('temperature');
+    expect(body).not.toHaveProperty('max_tokens');
+  });
+
+  it('keeps custom OpenAI-compatible o-series requests on the compatibility shape', async () => {
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('sk-test');
+    const encoder = new TextEncoder();
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: [DONE]\n'));
+          controller.close();
+        },
+      }),
+    } as Response);
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    await streamText(
+      'hello',
+      'Balanced',
+      {
+        provider: 'openai',
+        model: 'o3' as unknown as AiModel,
+        maxTokens: 123,
+        temperature: 0.2,
+        openAiCompatibleBaseUrl: 'https://api.openai.com/v1',
+      },
+      { onChunk: vi.fn() },
+    );
+
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(requestInit.body as string) as Record<string, unknown>;
+    expect(body).toMatchObject({ model: 'o3', stream: true, temperature: 0.2, max_tokens: 123 });
+    expect(body).not.toHaveProperty('max_completion_tokens');
   });
 });
 
