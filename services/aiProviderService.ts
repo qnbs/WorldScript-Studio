@@ -814,6 +814,38 @@ function isGeminiDirectCloudPath(provider: AIProvider): boolean {
   return provider === 'gemini' && !shouldRouteLocally() && !shouldUseOpenRouter();
 }
 
+// QNBS-v3: direct structured generation shares the same duplicate/caller cancellation fence as text generation.
+async function generateDirectGeminiJson<T>(
+  prompt: string,
+  creativity: AiCreativity,
+  schema: GeminiSchema,
+  opts: AIRequestOptions,
+  signal?: AbortSignal,
+): Promise<T> {
+  const resolvedOpts = resolvePositiveRoutingOpts(opts);
+  throwIfRequestAborted(undefined, resolvedOpts.signal, signal);
+  const { key, controller } = _deduplicateRequest(resolvedOpts, prompt);
+  const mergedOpts = withMergedAbortSignal(resolvedOpts, signal, controller.signal);
+  try {
+    await assertCloudAiAllowed('gemini');
+    const result = await generateJsonGemini<T>(
+      prompt,
+      creativity,
+      schema,
+      mergedOpts.signal,
+      undefined,
+      resolvedOpts.model,
+    );
+    throwIfRequestAborted(undefined, mergedOpts.signal);
+    return result;
+  } catch (error) {
+    throwIfRequestAborted(error, mergedOpts.signal);
+    throw error;
+  } finally {
+    _cleanupPendingRequest(key, controller);
+  }
+}
+
 export async function generateJson<T>(
   prompt: string,
   creativity: AiCreativity,
@@ -823,8 +855,7 @@ export async function generateJson<T>(
 ): Promise<T> {
   try {
     if (isGeminiDirectCloudPath(opts.provider)) {
-      await assertCloudAiAllowed('gemini');
-      return await generateJsonGemini(prompt, creativity, schema, signal, undefined, opts.model);
+      return await generateDirectGeminiJson(prompt, creativity, schema, opts, signal);
     }
 
     const raw = await generateText(prompt, creativity, opts, signal);
@@ -868,8 +899,10 @@ export async function generateImage(
   signal?: AbortSignal,
 ): Promise<string> {
   if (opts.provider === 'gemini') {
+    const mergedOpts = withMergedAbortSignal(opts, signal);
+    throwIfRequestAborted(undefined, mergedOpts.signal);
     await assertCloudAiAllowed('gemini');
-    return generateImageGemini(prompt, signal);
+    return generateImageGemini(prompt, mergedOpts.signal);
   }
   throw new Error(
     IMAGE_GENERATION_UNSUPPORTED_MESSAGE[opts.provider] ??
@@ -894,6 +927,9 @@ export async function streamText(
     onChunk: (text) => {
       if (!mergedOpts.signal?.aborted) callbacks.onChunk(text);
     },
+    onDone: () => {
+      if (!mergedOpts.signal?.aborted) callbacks.onDone?.();
+    },
   };
   const chain = resolveProviderFallbackChain(mergedOpts);
   let lastError: unknown;
@@ -908,7 +944,7 @@ export async function streamText(
     );
     if (!heuristic) return false;
     guardedCallbacks.onChunk(heuristic.data);
-    callbacks.onDone?.();
+    guardedCallbacks.onDone?.();
     return true;
   };
   try {

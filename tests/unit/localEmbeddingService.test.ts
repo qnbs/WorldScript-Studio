@@ -115,10 +115,10 @@ describe('embedText', () => {
 
     await vi.waitFor(() => expect(mockEnsureInferencePool).toHaveBeenCalled());
     controller.abort();
-    resolvePool(makeBus());
 
     await expect(result).rejects.toMatchObject({ name: 'AbortError' });
     expect(mockEnqueue).not.toHaveBeenCalled();
+    resolvePool(makeBus());
   });
 
   it('throws WorkerBus v2 unavailable without enqueuing when the pool is unavailable', async () => {

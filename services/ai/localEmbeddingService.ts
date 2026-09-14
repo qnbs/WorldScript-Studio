@@ -37,13 +37,28 @@ function l2Normalize(vec: number[]): EmbeddingVector {
   return new Float32Array(vec.map((v) => v / magnitude));
 }
 
+async function waitForInferencePool(signal?: AbortSignal) {
+  if (!signal) return ensureInferencePool();
+  if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+  let onAbort = () => {};
+  const aborted = new Promise<never>((_, reject) => {
+    onAbort = () => reject(new DOMException('Aborted', 'AbortError'));
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([ensureInferencePool(), aborted]);
+  } finally {
+    signal.removeEventListener('abort', onAbort);
+  }
+}
+
 async function requestEmbedding(
   task: string,
   modelId: string,
   input: string,
   signal?: AbortSignal,
 ): Promise<number[]> {
-  const bus = await ensureInferencePool();
+  const bus = await waitForInferencePool(signal);
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
   if (!bus) throw new Error('WorkerBus v2 unavailable');
   const handle = bus.enqueue<{ task: string; modelId: string; input: string }, number[]>(

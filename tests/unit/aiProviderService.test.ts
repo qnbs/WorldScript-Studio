@@ -332,6 +332,41 @@ describe('generateJson', () => {
     expect(result).toEqual({ key: 'val' });
   });
 
+  it('rejects a pre-aborted direct Gemini JSON request before calling the SDK', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const schema = { type: 'object' as const, properties: {} };
+
+    await expect(
+      generateJson('pre-aborted json', 'Balanced', schema as never, defaultOpts, controller.signal),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(geminiService.generateJson).not.toHaveBeenCalled();
+  });
+
+  it('rejects a direct Gemini JSON response that resolves after cancellation', async () => {
+    let resolveJson!: (value: { key: string }) => void;
+    vi.mocked(geminiService.generateJson).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveJson = resolve;
+      }),
+    );
+    const controller = new AbortController();
+    const schema = { type: 'object' as const, properties: {} };
+    const result = generateJson(
+      'late json',
+      'Balanced',
+      schema as never,
+      defaultOpts,
+      controller.signal,
+    );
+
+    await vi.waitFor(() => expect(geminiService.generateJson).toHaveBeenCalled());
+    controller.abort();
+    resolveJson({ key: 'stale' });
+
+    await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
   it('parses JSON text for non-gemini providers (ollama)', async () => {
     const { streamOllama } = await import('../../services/ollamaService');
     vi.mocked(streamOllama).mockImplementationOnce(async (_p, _o, cb) => {
@@ -645,7 +680,7 @@ describe('streamText', () => {
     }
   });
 
-  it('completes OpenAI cancellation when a pending read rejects', async () => {
+  it('does not complete OpenAI callbacks when a pending read rejects after cancellation', async () => {
     const originalFetch = globalThis.fetch;
     const ac = new AbortController();
     let resolveReadStarted!: () => void;
@@ -670,7 +705,7 @@ describe('streamText', () => {
       pending.rejectRead(Object.assign(new Error('aborted'), { name: 'AbortError' }));
 
       await expect(streamPromise).rejects.toMatchObject({ name: 'AbortError' });
-      expect(onDone).toHaveBeenCalledTimes(1);
+      expect(onDone).not.toHaveBeenCalled();
     } finally {
       globalThis.fetch = originalFetch;
     }

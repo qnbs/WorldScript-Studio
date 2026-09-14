@@ -35,7 +35,12 @@ export function usePlotBoardAi(plotSummary: string, selectedSectionIds: string[]
   const requestRef = useRef(0);
   const activeProjectIdentity = captureActiveProjectIdentity();
   const summaryIsEligible = plotSummary.trim().length > 0;
-  const requestContextKey = `${activeProjectIdentity ?? ''}\u0002${plotSummary}\u0000${selectedSectionIds.join('\u0001')}\u0000${language}`;
+  const requestContextKey = JSON.stringify([
+    activeProjectIdentity,
+    plotSummary,
+    selectedSectionIds,
+    language,
+  ]);
   const requestContextRef = useRef(requestContextKey);
 
   useEffect(() => {
