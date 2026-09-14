@@ -64,7 +64,14 @@ async function requestEmbedding(
   }
 }
 
-export async function embedText(text: string, signal?: AbortSignal): Promise<EmbeddingVector> {
+// QNBS-v3: preserve existing Array.map(embedText) consumers while the optional signal remains a real cancellation channel.
+export function embedText(text: string, signal?: AbortSignal): Promise<EmbeddingVector>;
+export function embedText(text: string, index: number, array: string[]): Promise<EmbeddingVector>;
+export async function embedText(
+  text: string,
+  signalOrIndex?: AbortSignal | number,
+): Promise<EmbeddingVector> {
+  const signal = typeof signalOrIndex === 'number' ? undefined : signalOrIndex;
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
   const truncated = truncate(text);
   const cacheKey = makeCacheKey(truncated);

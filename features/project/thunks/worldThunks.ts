@@ -26,6 +26,7 @@ export const generateWorldProfileThunk = createDeduplicatedThunk(
     const aiOptions = buildAiOptions(state);
     const { getPrompts } = await loadPrompts();
     const { prompt, schema } = getPrompts('worldProfile', { concept, lang });
+    // QNBS-v3: world-profile deduplication is project-scoped and registered before provider loading.
     const signal = registerDuplicateRequest(prompt, 'worldProfile');
     const { generateJson } = await loadAiProvider();
     await import('../../../services/ai/heuristicFallback/generators/worldGenerator');
@@ -59,6 +60,7 @@ export const regenerateWorldFieldThunk = createDeduplicatedThunk(
     const { getPrompts } = await loadPrompts();
     const { generateText } = await loadAiProvider();
     const { prompt } = getPrompts('regenerateWorldField', { world, field, lang });
+    // QNBS-v3: entity scope prevents equal field prompts from cancelling another world profile.
     const signal = registerDuplicateRequest(prompt, 'regenerateWorldField', world.id);
     const creativity = buildAiCreativity(state);
     const response = await generateText(prompt, creativity, aiOptions, signal);

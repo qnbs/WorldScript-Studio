@@ -17,7 +17,7 @@ vi.mock('../../services/ai/aiPolicy', () => ({
   assertCloudAiAllowedSync: mockAssertCloudAiAllowedSync,
 }));
 
-function makeStore(projectId = 'default') {
+function makeStore(projectId = 'default', generation = 0) {
   const projectUndoableReducer = undoable(projectReducer, { limit: 100 });
   const initialProjectState = projectUndoableReducer(undefined, { type: '@@test/init' });
   return configureStore({
@@ -34,6 +34,7 @@ function makeStore(projectId = 'default') {
         ...initialProjectState,
         present: {
           ...initialProjectState.present,
+          generation,
           data: { ...initialProjectState.present.data, id: projectId },
         },
       },
@@ -122,8 +123,8 @@ describe('createDeduplicatedThunk', () => {
       return 'done';
     });
 
-    const firstStore = makeStore('project-a');
-    const secondStore = makeStore('project-b');
+    const firstStore = makeStore('same-project', 0);
+    const secondStore = makeStore('same-project', 1);
     const firstResult = firstStore.dispatch(thunk());
     await started;
     const secondResult = await secondStore.dispatch(thunk());

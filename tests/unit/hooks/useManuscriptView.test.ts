@@ -56,6 +56,22 @@ vi.mock('../../../features/project/projectSelectors', () => ({
   selectAllWorlds: (state: typeof mockState) => state.worlds,
 }));
 
+vi.mock('../../../features/project/projectIdentity', () => ({
+  getProjectTargetIdentity: (source: typeof mockState.project.present) =>
+    `id:${source.data.id}:gen:${source.generation}`,
+  captureActiveProjectIdentity: () =>
+    `id:${mockState.project.present.data.id}:gen:${mockState.project.present.generation}`,
+  identityUnchanged: (captured: string | null, live: string | null) =>
+    captured !== null && captured === live,
+  isExpectedAiCancellationError: (error: unknown) =>
+    typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError',
+  isStaleProjectOperationError: (error: unknown) =>
+    typeof error === 'object' &&
+    error !== null &&
+    'name' in error &&
+    error.name === 'StaleProjectOperationError',
+}));
+
 vi.mock('../../../features/project/thunks/writingThunks', () => {
   const proofreadThunk = vi.fn(() => ({ type: 'mock-proofread-action' }));
   // QNBS-v3: attach .fulfilled.match so hook's RTK pattern check works in tests
@@ -525,42 +541,6 @@ describe('handleVisualizeScene', () => {
     expect(mockToast.error).not.toHaveBeenCalled();
   });
 
-  it('keeps plot-board loading owned by the newest request', async () => {
-    let rejectFirst!: (error: unknown) => void;
-    let resolveSecond!: (value: { beats: never[]; ragChunkCount: number }) => void;
-    mockUnwrap
-      .mockReturnValueOnce(
-        new Promise((_resolve, reject) => {
-          rejectFirst = reject;
-        }),
-      )
-      .mockReturnValueOnce(
-        new Promise((resolve) => {
-          resolveSecond = resolve;
-        }),
-      );
-    const { result } = renderHook(() => usePlotBoardAi('A plot summary', []));
-
-    let firstRequest!: Promise<void>;
-    let secondRequest!: Promise<void>;
-    act(() => {
-      firstRequest = result.current.suggestNextBeat();
-      secondRequest = result.current.suggestNextBeat();
-    });
-
-    await act(async () => {
-      rejectFirst(new DOMException('Aborted', 'AbortError'));
-      await firstRequest;
-    });
-    expect(result.current.isLoading).toBe(true);
-
-    await act(async () => {
-      resolveSecond({ beats: [], ragChunkCount: 0 });
-      await secondRequest;
-    });
-    expect(result.current.isLoading).toBe(false);
-  });
-
   it('does nothing when active section has no content', async () => {
     setManuscript([makeSection('s1', 'Ch1', '')]);
     const { result } = renderHook(() => useManuscriptView({ onNavigate }));
@@ -651,5 +631,43 @@ describe('handleVisualizeScene', () => {
     });
     expect(result.current.sceneImagePreviewUrl).toBeNull();
     expect(result.current.isSceneVisualizing).toBe(false);
+  });
+});
+
+describe('usePlotBoardAi', () => {
+  it('keeps plot-board loading owned by the newest request', async () => {
+    let rejectFirst!: (error: unknown) => void;
+    let resolveSecond!: (value: { beats: never[]; ragChunkCount: number }) => void;
+    mockUnwrap
+      .mockReturnValueOnce(
+        new Promise((_resolve, reject) => {
+          rejectFirst = reject;
+        }),
+      )
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveSecond = resolve;
+        }),
+      );
+    const { result } = renderHook(() => usePlotBoardAi('A plot summary', []));
+
+    let firstRequest!: Promise<void>;
+    let secondRequest!: Promise<void>;
+    act(() => {
+      firstRequest = result.current.suggestNextBeat();
+      secondRequest = result.current.suggestNextBeat();
+    });
+
+    await act(async () => {
+      rejectFirst(new DOMException('Aborted', 'AbortError'));
+      await firstRequest;
+    });
+    expect(result.current.isLoading).toBe(true);
+
+    await act(async () => {
+      resolveSecond({ beats: [], ragChunkCount: 0 });
+      await secondRequest;
+    });
+    expect(result.current.isLoading).toBe(false);
   });
 });

@@ -16,9 +16,10 @@ export const generateLoglineSuggestionsThunk = createDeduplicatedThunk(
     const creativity = buildAiCreativity(state);
     const aiOptions = buildAiOptions(state);
     const { getPrompts } = await loadPrompts();
-    const { generateJson } = await loadAiProvider();
     const { prompt, schema } = getPrompts('logline', { project, lang });
+    // QNBS-v3: register logline supersession before provider loading so duplicate dispatches cancel at entry.
     const signal = registerDuplicateRequest(prompt, 'logline');
+    const { generateJson } = await loadAiProvider();
     return await generateJson<string[]>(prompt, creativity, schema!, aiOptions, signal);
   },
 );
@@ -87,6 +88,7 @@ export const generateSceneImageThunk = createDeduplicatedThunk(
       projectTitle: payload.projectTitle,
       lang: payload.lang,
     });
+    // QNBS-v3: section scope keeps identical prompts for separate scene owners independent.
     const signal = registerDuplicateRequest(prompt, 'sceneVisualization', payload.sectionId);
     const base64 = await generateImage(prompt, aiOptions, signal);
     const imageKey = `scene-${payload.sectionId}`;

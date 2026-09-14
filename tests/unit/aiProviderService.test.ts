@@ -236,6 +236,8 @@ describe('generateText', () => {
       undefined,
       expect.any(AbortSignal),
     );
+    controller.abort();
+    expect((spy.mock.calls[0]![4] as AbortSignal).aborted).toBe(true);
     spy.mockRestore();
   });
 
@@ -2064,14 +2066,10 @@ describe('service-level request deduplication', () => {
       .mockImplementationOnce(async (_prompt, _modelId, _a, _b, signal) => {
         // Capture the fact that we were called first
         firstAbortSignal = signal;
-        return new Promise<{ layer: 'heuristic'; text: string }>((resolve, reject) => {
-          const finish = () => resolve({ layer: 'heuristic', text: 'first' });
-          signal?.addEventListener(
-            'abort',
-            () => reject(new DOMException('Aborted', 'AbortError')),
-            { once: true },
-          );
-          setTimeout(finish, 1000);
+        return new Promise<{ layer: 'heuristic'; text: string }>((_resolve, reject) => {
+          const rejectIfAborted = () => reject(new DOMException('Aborted', 'AbortError'));
+          if (signal?.aborted) rejectIfAborted();
+          else signal?.addEventListener('abort', rejectIfAborted, { once: true });
         });
       })
       .mockResolvedValueOnce({ layer: 'heuristic', text: 'second' });

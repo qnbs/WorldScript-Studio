@@ -28,6 +28,7 @@ export const generateCharacterProfileThunk = createDeduplicatedThunk(
     const creativity = buildAiCreativity(state);
     const { getPrompts } = await loadPrompts();
     const { prompt, schema } = getPrompts('characterProfile', { concept, lang });
+    // QNBS-v3: character-profile deduplication is project-scoped and registered before provider loading.
     const signal = registerDuplicateRequest(prompt, 'characterProfile');
     const { generateJson } = await loadAiProvider();
     await import('../../../services/ai/heuristicFallback/generators/characterGenerator');
@@ -60,6 +61,7 @@ export const regenerateCharacterFieldThunk = createDeduplicatedThunk(
     const { getPrompts } = await loadPrompts();
     const { generateText } = await loadAiProvider();
     const { prompt } = getPrompts('regenerateCharacterField', { character, field, lang });
+    // QNBS-v3: entity scope prevents equal field prompts from cancelling another character.
     const signal = registerDuplicateRequest(prompt, 'regenerateCharacterField', character.id);
     const creativity = buildAiCreativity(state);
     const response = await generateText(prompt, creativity, aiOptions, signal);

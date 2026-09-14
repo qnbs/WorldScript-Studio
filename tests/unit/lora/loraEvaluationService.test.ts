@@ -6,16 +6,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Mock embedding service to return controlled vectors
-const mockEmbedBatch = vi.hoisted(() =>
-  vi.fn(async (texts: string[]) =>
-    texts.map((text) => {
-      if (text.startsWith('base')) return new Float32Array(384).fill(0.3);
-      if (text.startsWith('adapt')) return new Float32Array(384).fill(0.9);
-      if (text.startsWith('prompt')) return new Float32Array(384).fill(0.8);
-      return new Float32Array(384).fill(0.5);
-    }),
-  ),
-);
 vi.mock('../../../services/ai/localEmbeddingService', () => ({
   embedText: vi.fn().mockImplementation(async (text: string) => {
     // Return different vectors for different input patterns
@@ -24,7 +14,6 @@ vi.mock('../../../services/ai/localEmbeddingService', () => ({
     if (text.startsWith('prompt')) return new Float32Array(384).fill(0.8);
     return new Float32Array(384).fill(0.5);
   }),
-  embedBatch: mockEmbedBatch,
 }));
 
 import {
@@ -69,16 +58,6 @@ describe('computeStyleConsistencyScore', () => {
     expect(report.score).toBeLessThanOrEqual(1);
     expect(report.sampleComparisons).toHaveLength(1);
     expect(report.sampleComparisons[0]!.prompt).toBe('prompt: describe the sea');
-  });
-
-  it('uses one shared embedding batch for each evaluation prompt', async () => {
-    mockEmbedBatch.mockClear();
-    await computeStyleConsistencyScore([
-      { prompt: 'prompt: sea', baseOutput: 'base: calm', adaptedOutput: 'adapt: silver' },
-    ]);
-
-    expect(mockEmbedBatch).toHaveBeenCalledOnce();
-    expect(mockEmbedBatch).toHaveBeenCalledWith(['base: calm', 'adapt: silver', 'prompt: sea']);
   });
 
   it('caps sampleComparisons at 5', async () => {

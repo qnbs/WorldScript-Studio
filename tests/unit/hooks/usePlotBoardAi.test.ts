@@ -33,6 +33,14 @@ vi.mock('../../../features/project/projectSelectors', () => ({
     s.project.present.data,
 }));
 
+vi.mock('../../../features/project/projectIdentity', () => ({
+  captureActiveProjectIdentity: () => (mockProjectData ? `id:${mockProjectData.id}:gen:0` : null),
+  identityUnchanged: (captured: string | null, live: string | null) =>
+    captured !== null && captured === live,
+  isExpectedAiCancellationError: (error: unknown) =>
+    typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError',
+}));
+
 const mockSuggestNextBeatThunk = vi.fn();
 vi.mock('../../../features/project/thunks/plotBoardAiThunks', () => ({
   suggestNextBeatThunk: (p: unknown) => {

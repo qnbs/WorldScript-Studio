@@ -1,9 +1,18 @@
 import type { RootState } from '../../../app/store';
 import type { AIRequestOptions } from '../../../services/aiProviderService';
 import type { AiCreativity } from '../../../types';
+import { getProjectTargetIdentity } from '../projectIdentity';
 
 export const loadAiProvider = () => import('../../../services/aiProviderService');
 export const loadPrompts = () => import('../../../services/geminiService');
+
+function withProjectDeduplicationScope(
+  options: AIRequestOptions,
+  state: RootState,
+): AIRequestOptions {
+  const projectIdentity = getProjectTargetIdentity(state.project.present);
+  return projectIdentity ? { ...options, deduplicationScope: projectIdentity } : options;
+}
 
 /** Returns AI request options merged with any active per-project preset. */
 export const buildAiOptions = (state: RootState): AIRequestOptions => {
@@ -11,20 +20,23 @@ export const buildAiOptions = (state: RootState): AIRequestOptions => {
   const preset = state.project.present?.data?.aiPreset;
   // QNBS-v3: project preset overrides provider/model/temperature/maxTokens; URL/auth stays global.
   const usePreset = preset?.enabled === true;
-  return {
-    provider: usePreset && preset.provider ? preset.provider : global.provider,
-    model: usePreset && preset.model ? preset.model : global.model,
-    temperature:
-      usePreset && preset.temperature !== undefined ? preset.temperature : global.temperature,
-    maxTokens: usePreset && preset.maxTokens !== undefined ? preset.maxTokens : global.maxTokens,
-    ollamaBaseUrl: global.ollamaBaseUrl,
-    localBackendPreset: global.localBackendPreset,
-    openAiCompatibleBaseUrl: global.openAiCompatibleBaseUrl,
-    openAiSiteUrl: global.openAiSiteUrl,
-    openAiSiteTitle: global.openAiSiteTitle,
-    hybridFallbackEnabled: global.hybridFallbackEnabled,
-    hybridFallbackChain: global.hybridFallbackChain,
-  };
+  return withProjectDeduplicationScope(
+    {
+      provider: usePreset && preset.provider ? preset.provider : global.provider,
+      model: usePreset && preset.model ? preset.model : global.model,
+      temperature:
+        usePreset && preset.temperature !== undefined ? preset.temperature : global.temperature,
+      maxTokens: usePreset && preset.maxTokens !== undefined ? preset.maxTokens : global.maxTokens,
+      ollamaBaseUrl: global.ollamaBaseUrl,
+      localBackendPreset: global.localBackendPreset,
+      openAiCompatibleBaseUrl: global.openAiCompatibleBaseUrl,
+      openAiSiteUrl: global.openAiSiteUrl,
+      openAiSiteTitle: global.openAiSiteTitle,
+      hybridFallbackEnabled: global.hybridFallbackEnabled,
+      hybridFallbackChain: global.hybridFallbackChain,
+    },
+    state,
+  );
 };
 
 /**
