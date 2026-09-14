@@ -82,6 +82,27 @@ describe('embedText', () => {
     expect(cancel).toHaveBeenCalledWith('Aborted');
   });
 
+  it('normalizes a plain WorkerBus abort rejection to AbortError', async () => {
+    let rejectResult!: (error: unknown) => void;
+    const handle = {
+      taskId: 't-plain-abort',
+      result: new Promise<number[]>((_resolve, reject) => {
+        rejectResult = reject;
+      }),
+      progress: (async function* () {})(),
+      cancel: vi.fn(),
+    };
+    mockEnqueue.mockReturnValueOnce(handle);
+    const controller = new AbortController();
+    const result = embedText('plain abort', controller.signal);
+    await vi.waitFor(() => expect(mockEnqueue).toHaveBeenCalled());
+
+    controller.abort();
+    rejectResult(new Error('Aborted'));
+
+    await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
   it('does not enqueue when the caller aborts during pool initialization', async () => {
     let resolvePool!: (bus: ReturnType<typeof makeBus>) => void;
     mockEnsureInferencePool.mockReturnValueOnce(

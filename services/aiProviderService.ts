@@ -201,10 +201,7 @@ function createGrokAttemptCallbacks(
   callbacks: AIStreamCallbacks,
   onChunk: (text: string) => void,
 ): AIStreamCallbacks {
-  const trackedCallbacks: AIStreamCallbacks = { onChunk };
-  if (callbacks.onDone) trackedCallbacks.onDone = callbacks.onDone;
-  if (callbacks.onError) trackedCallbacks.onError = callbacks.onError;
-  return trackedCallbacks;
+  return { ...callbacks, onChunk };
 }
 
 // ─── Gemini Provider ──────────────────────────────────────────────────────────
@@ -748,6 +745,7 @@ export async function generateText(
   signal?: AbortSignal,
 ): Promise<string> {
   const resolvedOpts = resolvePositiveRoutingOpts(opts);
+  throwIfRequestAborted(undefined, resolvedOpts.signal, signal);
   const { key, controller } = _deduplicateRequest(resolvedOpts, prompt);
   const mergedOpts = withMergedAbortSignal(resolvedOpts, signal, controller.signal);
   const chain = resolveProviderFallbackChain(mergedOpts);
@@ -816,6 +814,37 @@ function isGeminiDirectCloudPath(provider: AIProvider): boolean {
   return provider === 'gemini' && !shouldRouteLocally() && !shouldUseOpenRouter();
 }
 
+async function generateDirectGeminiJson<T>(
+  prompt: string,
+  creativity: AiCreativity,
+  schema: GeminiSchema,
+  opts: AIRequestOptions,
+  signal?: AbortSignal,
+): Promise<T> {
+  const resolvedOpts = resolvePositiveRoutingOpts(opts);
+  throwIfRequestAborted(undefined, resolvedOpts.signal, signal);
+  const { key, controller } = _deduplicateRequest(resolvedOpts, prompt);
+  const mergedOpts = withMergedAbortSignal(resolvedOpts, signal, controller.signal);
+  try {
+    await assertCloudAiAllowed('gemini');
+    const result = await generateJsonGemini<T>(
+      prompt,
+      creativity,
+      schema,
+      mergedOpts.signal,
+      undefined,
+      resolvedOpts.model,
+    );
+    throwIfRequestAborted(undefined, mergedOpts.signal);
+    return result;
+  } catch (error) {
+    throwIfRequestAborted(error, mergedOpts.signal);
+    throw error;
+  } finally {
+    _cleanupPendingRequest(key, controller);
+  }
+}
+
 export async function generateJson<T>(
   prompt: string,
   creativity: AiCreativity,
@@ -825,8 +854,7 @@ export async function generateJson<T>(
 ): Promise<T> {
   try {
     if (isGeminiDirectCloudPath(opts.provider)) {
-      await assertCloudAiAllowed('gemini');
-      return await generateJsonGemini(prompt, creativity, schema, signal, undefined, opts.model);
+      return await generateDirectGeminiJson(prompt, creativity, schema, opts, signal);
     }
 
     const raw = await generateText(prompt, creativity, opts, signal);
@@ -853,12 +881,6 @@ export async function generateJson<T>(
   }
 }
 
-// QNBS-v3: image generation has no local-routing fallback, so the policy gate alone must block a cloud call in local-only/eco/privacy mode.
-async function generateImageViaGemini(prompt: string, signal?: AbortSignal): Promise<string> {
-  await assertCloudAiAllowed('gemini');
-  return generateImageGemini(prompt, signal);
-}
-
 // QNBS-v3: lookup table instead of a branch chain — every entry besides 'gemini' is unsupported; an unlisted provider (including 'openrouter') fails closed via the same message rather than a silent Gemini fallback.
 const IMAGE_GENERATION_UNSUPPORTED_MESSAGE: Partial<Record<AIProvider, string>> = {
   openai: 'OpenAI image generation is currently not available via the browser version.',
@@ -876,7 +898,8 @@ export async function generateImage(
   signal?: AbortSignal,
 ): Promise<string> {
   if (opts.provider === 'gemini') {
-    return generateImageViaGemini(prompt, signal);
+    await assertCloudAiAllowed('gemini');
+    return generateImageGemini(prompt, signal);
   }
   throw new Error(
     IMAGE_GENERATION_UNSUPPORTED_MESSAGE[opts.provider] ??
@@ -892,6 +915,7 @@ export async function streamText(
   signal?: AbortSignal,
 ): Promise<void> {
   const resolvedOpts = resolvePositiveRoutingOpts(opts);
+  throwIfRequestAborted(undefined, resolvedOpts.signal, signal);
   const { key, controller } = _deduplicateRequest(resolvedOpts, prompt);
   const mergedOpts = withMergedAbortSignal(resolvedOpts, signal, controller.signal);
   // QNBS-v3: centralize the late-chunk fence at the provider boundary so every adapter respects request supersession.
@@ -938,6 +962,7 @@ export async function streamText(
           callbacksForAttempt,
           signal,
         );
+        throwIfRequestAborted(undefined, mergedOpts.signal, signal);
         // QNBS-v3: mirrors generateText's fallback-reason bookkeeping — without this, a stale reason from an earlier failed/promoted request would keep showing in GpuMetricsPanel after this request's primary provider succeeds outright.
         recordProviderSuccess(mergedOpts.provider, nextProvider, i);
         return;
@@ -959,8 +984,9 @@ export async function streamText(
           attemptedOpenRouterFallback = fallback;
           try {
             await attemptOpenRouterFallback(mergedOpts, fallback, (fallbackOpts) =>
-              streamProvider(prompt, creativity, fallbackOpts, callbacks, signal),
+              streamProvider(prompt, creativity, fallbackOpts, guardedCallbacks, signal),
             );
+            throwIfRequestAborted(undefined, mergedOpts.signal, signal);
             _lastFallbackReason = `OpenRouter rate-limited; fell back to ${fallback}.`;
             return;
           } catch (fallbackError) {

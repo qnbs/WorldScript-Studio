@@ -64,7 +64,10 @@ vi.mock('../../../features/project/projectIdentity', () => ({
   identityUnchanged: (captured: string | null, live: string | null) =>
     captured !== null && captured === live,
   isExpectedAiCancellationError: (error: unknown) =>
-    typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError',
+    typeof error === 'object' &&
+    error !== null &&
+    'name' in error &&
+    (error.name === 'AbortError' || error.name === 'StaleProjectOperationError'),
   isStaleProjectOperationError: (error: unknown) =>
     typeof error === 'object' &&
     error !== null &&

@@ -59,6 +59,9 @@ async function requestEmbedding(
   }
   try {
     return await handle.result;
+  } catch (error) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    throw error;
   } finally {
     signal?.removeEventListener('abort', onAbort);
   }

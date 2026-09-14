@@ -159,4 +159,36 @@ describe('usePlotBoardAi', () => {
       }),
     );
   });
+
+  it('invalidates an in-flight request when nonblank plot context changes', async () => {
+    let resolveDispatch!: (value: { beats: typeof BEATS; ragChunkCount: number }) => void;
+    mockDispatch.mockReturnValueOnce({
+      unwrap: () =>
+        new Promise<{ beats: typeof BEATS; ragChunkCount: number }>((resolve) => {
+          resolveDispatch = resolve;
+        }),
+    });
+    const { result, rerender } = renderHook(
+      ({ summary, sections }: { summary: string; sections: string[] }) =>
+        usePlotBoardAi(summary, sections),
+      { initialProps: { summary: 'Original summary', sections: ['sec-1'] } },
+    );
+
+    let request!: Promise<void>;
+    await act(async () => {
+      request = result.current.suggestNextBeat();
+      await Promise.resolve();
+    });
+    act(() => {
+      rerender({ summary: 'Updated summary', sections: ['sec-2'] });
+    });
+    await act(async () => {
+      resolveDispatch({ beats: BEATS, ragChunkCount: 3 });
+      await request;
+    });
+
+    expect(result.current.beats).toEqual([]);
+    expect(result.current.ragChunkCount).toBe(0);
+    expect(result.current.isLoading).toBe(false);
+  });
 });

@@ -167,6 +167,31 @@ describe('generateText', () => {
     expect(text).toBe('result text');
   });
 
+  it('does not let a pre-aborted caller cancel an active duplicate request', async () => {
+    let resolveFirst!: (value: string) => void;
+    let firstSignal!: AbortSignal;
+    vi.mocked(geminiService.generateText).mockImplementationOnce(
+      async (_prompt, _creativity, signal) => {
+        firstSignal = signal!;
+        return new Promise<string>((resolve) => {
+          resolveFirst = resolve;
+        });
+      },
+    );
+    const firstRequest = generateText('same prompt', 'Balanced', defaultOpts);
+    await vi.waitFor(() => expect(geminiService.generateText).toHaveBeenCalledOnce());
+
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      generateText('same prompt', 'Balanced', defaultOpts, controller.signal),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(firstSignal.aborted).toBe(false);
+
+    resolveFirst('first result');
+    await expect(firstRequest).resolves.toBe('first result');
+  });
+
   it('passes standalone AbortSignal to ollama stream', async () => {
     const { streamOllama } = await import('../../services/ollamaService');
     const ac = new AbortController();
@@ -280,6 +305,17 @@ describe('generateJson', () => {
     expect(result).toEqual({ key: 'val' });
   });
 
+  it('rejects a pre-aborted direct Gemini JSON request before calling the SDK', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const schema = { type: 'object' as const, properties: {} };
+
+    await expect(
+      generateJson('pre-aborted JSON', 'Balanced', schema as never, defaultOpts, controller.signal),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(geminiService.generateJson).not.toHaveBeenCalled();
+  });
+
   it('parses JSON text for non-gemini providers (ollama)', async () => {
     const { streamOllama } = await import('../../services/ollamaService');
     vi.mocked(streamOllama).mockImplementationOnce(async (_p, _o, cb) => {
@@ -389,9 +425,27 @@ describe('streamText', () => {
     );
     const onChunk = vi.fn();
 
-    await streamText('prompt', 'Balanced', defaultOpts, { onChunk }, controller.signal);
+    await expect(
+      streamText('prompt', 'Balanced', defaultOpts, { onChunk }, controller.signal),
+    ).rejects.toMatchObject({ name: 'AbortError' });
 
     expect(onChunk).not.toHaveBeenCalled();
+  });
+
+  it('rejects a pre-aborted caller before entering provider streaming', async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      streamText(
+        'pre-aborted prompt',
+        'Balanced',
+        defaultOpts,
+        { onChunk: vi.fn() },
+        controller.signal,
+      ),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(geminiService.streamText).not.toHaveBeenCalled();
   });
 
   it('clears a stale fallback reason when a later primary provider succeeds outright', async () => {
@@ -436,6 +490,30 @@ describe('streamText', () => {
     // QNBS-v3: default aiMode is 'hybrid' (not eco/local), so getOpenRouterFallbackProvider() resolves to 'gemini'.
     expect(onChunk).toHaveBeenCalledWith('fallback-gemini-answer');
     expect(getLastAiFallbackReason()).toBe('OpenRouter rate-limited; fell back to gemini.');
+  });
+
+  it('rejects promoted fallback completion after cancellation and suppresses late chunks', async () => {
+    const controller = new AbortController();
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('or-key');
+    vi.mocked(openrouterProvider.streamOpenRouter).mockRejectedValueOnce(
+      new Error('OPENROUTER_RATE_LIMITED: too many requests'),
+    );
+    vi.mocked(geminiService.streamText).mockImplementationOnce(async (_p, _c, onChunk) => {
+      controller.abort();
+      onChunk('late promoted chunk');
+    });
+    const onChunk = vi.fn();
+
+    await expect(
+      streamText(
+        'prompt',
+        'Balanced',
+        { ...defaultOpts, provider: 'openrouter' },
+        { onChunk },
+        controller.signal,
+      ),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(onChunk).not.toHaveBeenCalled();
   });
 
   it('propagates cancellation from the OpenRouter fallback attempt instead of treating it as a provider failure', async () => {
@@ -589,7 +667,7 @@ describe('streamText', () => {
       ac.abort();
       rejectRead(Object.assign(new Error('aborted'), { name: 'AbortError' }));
 
-      await expect(streamPromise).resolves.toBeUndefined();
+      await expect(streamPromise).rejects.toMatchObject({ name: 'AbortError' });
       expect(onDone).toHaveBeenCalledTimes(1);
     } finally {
       globalThis.fetch = originalFetch;
@@ -1767,7 +1845,7 @@ describe('streamText OpenAI abort mid-stream', () => {
       }, 5);
     });
 
-    await streamPromise;
+    await expect(streamPromise).rejects.toMatchObject({ name: 'AbortError' });
     // chunk-1 was received; chunk-2 may or may not arrive (abort is best-effort)
     expect(chunks).toContain('chunk1');
   });
@@ -1828,7 +1906,6 @@ describe('streamOpenAI error paths', () => {
   });
 
   it('breaks without emitting chunks when signal is already aborted', async () => {
-    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('sk-test');
     const ac = new AbortController();
     ac.abort();
     const onChunk = vi.fn();
@@ -1844,13 +1921,15 @@ describe('streamOpenAI error paths', () => {
       }),
     } as unknown as Response);
 
-    await streamText(
-      'hello',
-      'Balanced',
-      { provider: 'openai', model: 'gpt-4o-mini' },
-      { onChunk },
-      ac.signal,
-    );
+    await expect(
+      streamText(
+        'hello',
+        'Balanced',
+        { provider: 'openai', model: 'gpt-4o-mini' },
+        { onChunk },
+        ac.signal,
+      ),
+    ).rejects.toMatchObject({ name: 'AbortError' });
     // aborted → loop breaks before reading; onChunk never called
     expect(onChunk).not.toHaveBeenCalled();
   });
