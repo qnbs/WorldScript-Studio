@@ -4,6 +4,7 @@ import { useToast } from '../components/ui/Toast';
 import {
   captureActiveProjectIdentity,
   identityUnchanged,
+  isExpectedAiCancellationError,
 } from '../features/project/projectIdentity';
 import { selectManuscript, selectOutline } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
@@ -106,7 +107,7 @@ export const useOutlineGenerator = ({ onNavigate }: UseOutlineGeneratorProps) =>
       generatedForProjectIdentity.current = capturedProjectIdentity;
       setOutline(resultAction.payload.map((s) => ({ ...s, id: s.id || `gen-${Math.random()}` })));
       toast.success(t('common.saved'));
-    } else {
+    } else if (!isExpectedAiCancellationError(resultAction.error)) {
       setError(t('outline.error.generationFailed'));
       toast.error(t('outline.error.generationFailed'));
     }
@@ -163,7 +164,7 @@ export const useOutlineGenerator = ({ onNavigate }: UseOutlineGeneratorProps) =>
           newOutline[newIndex] = { ...newOutline[newIndex], ...newSection };
           return newOutline;
         });
-      } else {
+      } else if (!isExpectedAiCancellationError(resultAction.error)) {
         toast.error(t('outline.error.generationFailed'));
       }
       setIsRegenerating(null);

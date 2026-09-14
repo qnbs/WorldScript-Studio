@@ -4,7 +4,7 @@ import type { RootState } from '../../../app/store';
 import type { WorldHeuristicLabels } from '../../../services/ai/heuristicFallback/generators/worldGenerator';
 import { storageService } from '../../../services/storageService';
 import type { World } from '../../../types';
-import { createDeduplicatedThunk } from '../aiThunkUtils';
+import { assertAiRequestActive, createDeduplicatedThunk } from '../aiThunkUtils';
 import {
   assertProjectIdentityUnchanged,
   getProjectTargetIdentity,
@@ -20,15 +20,16 @@ export const generateWorldProfileThunk = createDeduplicatedThunk(
       lang,
       heuristicLabels,
     }: { concept: string; lang: string; heuristicLabels?: WorldHeuristicLabels },
-    { getState, signal, registerDuplicateRequest },
+    { getState, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
     const { getPrompts } = await loadPrompts();
+    const { prompt, schema } = getPrompts('worldProfile', { concept, lang });
+    // QNBS-v3: world-profile deduplication is project-scoped and registered before provider loading.
+    const signal = registerDuplicateRequest(prompt, 'worldProfile');
     const { generateJson } = await loadAiProvider();
     await import('../../../services/ai/heuristicFallback/generators/worldGenerator');
-    const { prompt, schema } = getPrompts('worldProfile', { concept, lang });
-    registerDuplicateRequest(prompt, 'worldProfile');
     const creativity = buildAiCreativity(state);
     const optsWithFallback: typeof aiOptions = {
       ...aiOptions,
@@ -52,14 +53,15 @@ export const regenerateWorldFieldThunk = createDeduplicatedThunk(
   'project/regenerateWorldField',
   async (
     { world, field, lang }: { world: World; field: keyof World; lang: string },
-    { getState, signal, registerDuplicateRequest },
+    { getState, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
     const { getPrompts } = await loadPrompts();
     const { generateText } = await loadAiProvider();
     const { prompt } = getPrompts('regenerateWorldField', { world, field, lang });
-    registerDuplicateRequest(prompt, 'regenerateWorldField');
+    // QNBS-v3: entity scope prevents equal field prompts from cancelling another world profile.
+    const signal = registerDuplicateRequest(prompt, 'regenerateWorldField', world.id);
     const creativity = buildAiCreativity(state);
     const response = await generateText(prompt, creativity, aiOptions, signal);
     return { field, value: response };
@@ -70,7 +72,7 @@ export const generateWorldImageThunk = createDeduplicatedThunk(
   'project/generateWorldImage',
   async (
     { worldId, description, lang }: { worldId: string; description: string; lang: string },
-    { getState, signal, registerDuplicateRequest },
+    { getState, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
     // QNBS-v3: capture the incarnation before generation so a same-ID replacement cannot inherit the result.
@@ -81,7 +83,7 @@ export const generateWorldImageThunk = createDeduplicatedThunk(
     const { getPrompts } = await loadPrompts();
     const { generateImage } = await loadAiProvider();
     const { prompt } = getPrompts('worldImage', { description, lang });
-    registerDuplicateRequest(prompt, 'worldImage');
+    const signal = registerDuplicateRequest(prompt, 'worldImage', worldId);
     const base64 = await generateImage(prompt, aiOptions, signal);
     assertProjectIdentityUnchanged(
       originIdentity,
@@ -90,6 +92,7 @@ export const generateWorldImageThunk = createDeduplicatedThunk(
     );
     // QNBS-v3: [Grund: origin persistence authority / Impact: reject stale writes at backend boundary / Kreativer Mehrwert: preserve world asset ownership]
     await storageService.saveImage(worldId, base64, projectId, (): undefined => {
+      assertAiRequestActive(signal);
       assertProjectIdentityUnchanged(
         originIdentity,
         getProjectTargetIdentity((getState() as RootState).project.present),

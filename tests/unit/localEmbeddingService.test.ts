@@ -60,6 +60,67 @@ describe('embedText', () => {
     await expect(embedText('fail case')).rejects.toThrow('OOM');
   });
 
+  it('cancels the worker task when the caller signal aborts', async () => {
+    let rejectResult!: (error: unknown) => void;
+    const cancel = vi.fn(() => rejectResult(new DOMException('Aborted', 'AbortError')));
+    const handle = {
+      taskId: 't-cancel',
+      result: new Promise<number[]>((_resolve, reject) => {
+        rejectResult = reject;
+      }),
+      progress: (async function* () {})(),
+      cancel,
+    };
+    mockEnqueue.mockReturnValueOnce(handle);
+
+    const controller = new AbortController();
+    const result = embedText('cancel me', controller.signal);
+    await vi.waitFor(() => expect(mockEnqueue).toHaveBeenCalled());
+    controller.abort();
+
+    await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+    expect(cancel).toHaveBeenCalledWith('Aborted');
+  });
+
+  it('normalizes a plain WorkerBus abort rejection to AbortError', async () => {
+    let rejectResult!: (error: unknown) => void;
+    const handle = {
+      taskId: 't-plain-abort',
+      result: new Promise<number[]>((_resolve, reject) => {
+        rejectResult = reject;
+      }),
+      progress: (async function* () {})(),
+      cancel: vi.fn(),
+    };
+    mockEnqueue.mockReturnValueOnce(handle);
+    const controller = new AbortController();
+    const result = embedText('plain abort', controller.signal);
+    await vi.waitFor(() => expect(mockEnqueue).toHaveBeenCalled());
+
+    controller.abort();
+    rejectResult(new Error('Aborted'));
+
+    await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
+  it('does not enqueue when the caller aborts during pool initialization', async () => {
+    let resolvePool!: (bus: ReturnType<typeof makeBus>) => void;
+    mockEnsureInferencePool.mockReturnValueOnce(
+      new Promise<ReturnType<typeof makeBus>>((resolve) => {
+        resolvePool = resolve;
+      }),
+    );
+    const controller = new AbortController();
+    const result = embedText('cancel while loading', controller.signal);
+
+    await vi.waitFor(() => expect(mockEnsureInferencePool).toHaveBeenCalled());
+    controller.abort();
+
+    await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+    expect(mockEnqueue).not.toHaveBeenCalled();
+    resolvePool(makeBus());
+  });
+
   it('throws WorkerBus v2 unavailable without enqueuing when the pool is unavailable', async () => {
     mockEnsureInferencePool.mockResolvedValue(null);
     await expect(embedText('fail case 2')).rejects.toThrow('WorkerBus v2 unavailable');

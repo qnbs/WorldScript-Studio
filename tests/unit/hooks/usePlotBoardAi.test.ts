@@ -33,6 +33,14 @@ vi.mock('../../../features/project/projectSelectors', () => ({
     s.project.present.data,
 }));
 
+vi.mock('../../../features/project/projectIdentity', () => ({
+  captureActiveProjectIdentity: () => (mockProjectData ? `id:${mockProjectData.id}:gen:0` : null),
+  identityUnchanged: (captured: string | null, live: string | null) =>
+    captured !== null && captured === live,
+  isExpectedAiCancellationError: (error: unknown) =>
+    typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError',
+}));
+
 const mockSuggestNextBeatThunk = vi.fn();
 vi.mock('../../../features/project/thunks/plotBoardAiThunks', () => ({
   suggestNextBeatThunk: (p: unknown) => {
@@ -150,5 +158,68 @@ describe('usePlotBoardAi', () => {
         selectedSectionIds: ['sec-1', 'sec-2'],
       }),
     );
+  });
+
+  it('invalidates an in-flight request when nonblank plot context changes', async () => {
+    let resolveDispatch!: (value: { beats: typeof BEATS; ragChunkCount: number }) => void;
+    mockDispatch.mockReturnValueOnce({
+      unwrap: () =>
+        new Promise<{ beats: typeof BEATS; ragChunkCount: number }>((resolve) => {
+          resolveDispatch = resolve;
+        }),
+    });
+    const { result, rerender } = renderHook(
+      ({ summary, sections }: { summary: string; sections: string[] }) =>
+        usePlotBoardAi(summary, sections),
+      { initialProps: { summary: 'Original summary', sections: ['sec-1'] } },
+    );
+
+    let request!: Promise<void>;
+    await act(async () => {
+      request = result.current.suggestNextBeat();
+      await Promise.resolve();
+    });
+    act(() => {
+      rerender({ summary: 'Updated summary', sections: ['sec-2'] });
+    });
+    await act(async () => {
+      resolveDispatch({ beats: BEATS, ragChunkCount: 3 });
+      await request;
+    });
+
+    expect(result.current.beats).toEqual([]);
+    expect(result.current.ragChunkCount).toBe(0);
+    expect(result.current.isLoading).toBe(false);
+  });
+
+  it('does not authorize stale results when context separators occur in inputs', async () => {
+    let resolveDispatch!: (value: { beats: typeof BEATS; ragChunkCount: number }) => void;
+    mockDispatch.mockReturnValueOnce({
+      unwrap: () =>
+        new Promise<{ beats: typeof BEATS; ragChunkCount: number }>((resolve) => {
+          resolveDispatch = resolve;
+        }),
+    });
+    const { result, rerender } = renderHook(
+      ({ summary, sections }: { summary: string; sections: string[] }) =>
+        usePlotBoardAi(summary, sections),
+      { initialProps: { summary: 'a', sections: ['b\u0000c'] } },
+    );
+
+    let request!: Promise<void>;
+    await act(async () => {
+      request = result.current.suggestNextBeat();
+      await Promise.resolve();
+    });
+    act(() => {
+      rerender({ summary: 'a\u0000b', sections: ['c'] });
+    });
+    await act(async () => {
+      resolveDispatch({ beats: BEATS, ragChunkCount: 3 });
+      await request;
+    });
+
+    expect(result.current.beats).toEqual([]);
+    expect(result.current.ragChunkCount).toBe(0);
   });
 });
