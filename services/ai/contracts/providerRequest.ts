@@ -20,7 +20,7 @@ export interface AIRequestOptions {
   /** Selects the local-server protocol; LM Studio and vLLM expose OpenAI-compatible `/v1` APIs. */
   localBackendPreset?: LocalBackendPreset;
   // QNBS-v3 (ADR-0017): opt-in — attempt a direct browser→Ollama fetch instead of requiring
-  // desktop. Only meaningful when provider is 'ollama' and isTauriRuntime() is not false.
+  // desktop. Only meaningful when provider is 'ollama' and isTauriRuntime() is false.
   browserOllamaEnabled?: boolean;
   fallbackProviders?: AIProvider[];
   /** Leer = api.openai.com; sonst OpenRouter/Groq/OpenAI-kompatible Root-URL. */
