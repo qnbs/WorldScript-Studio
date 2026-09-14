@@ -82,6 +82,24 @@ describe('embedText', () => {
     expect(cancel).toHaveBeenCalledWith('Aborted');
   });
 
+  it('does not enqueue when the caller aborts during pool initialization', async () => {
+    let resolvePool!: (bus: ReturnType<typeof makeBus>) => void;
+    mockEnsureInferencePool.mockReturnValueOnce(
+      new Promise<ReturnType<typeof makeBus>>((resolve) => {
+        resolvePool = resolve;
+      }),
+    );
+    const controller = new AbortController();
+    const result = embedText('cancel while loading', controller.signal);
+
+    await vi.waitFor(() => expect(mockEnsureInferencePool).toHaveBeenCalled());
+    controller.abort();
+    resolvePool(makeBus());
+
+    await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+    expect(mockEnqueue).not.toHaveBeenCalled();
+  });
+
   it('throws WorkerBus v2 unavailable without enqueuing when the pool is unavailable', async () => {
     mockEnsureInferencePool.mockResolvedValue(null);
     await expect(embedText('fail case 2')).rejects.toThrow('WorkerBus v2 unavailable');

@@ -316,6 +316,45 @@ describe('handleGenerateLoglines', () => {
     });
     expect(result.current.isAiLoading).toBe(false);
   });
+
+  it('does not let a superseded logline request clear current request state', async () => {
+    let rejectFirst!: (error: unknown) => void;
+    let resolveSecond!: (suggestions: string[]) => void;
+    mockUnwrap
+      .mockReturnValueOnce(
+        new Promise((_resolve, reject) => {
+          rejectFirst = reject;
+        }),
+      )
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveSecond = resolve;
+        }),
+      );
+    const { result } = renderHook(() => useManuscriptView({ onNavigate }));
+
+    let firstRequest!: Promise<void>;
+    let secondRequest!: Promise<void>;
+    act(() => {
+      firstRequest = result.current.handleGenerateLoglines();
+      secondRequest = result.current.handleGenerateLoglines();
+    });
+
+    await act(async () => {
+      rejectFirst(new DOMException('Aborted', 'AbortError'));
+      await firstRequest;
+    });
+    expect(result.current.isAiLoading).toBe(true);
+    expect(result.current.isLoglineModalOpen).toBe(true);
+    expect(mockToast.error).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveSecond(['Current suggestion']);
+      await secondRequest;
+    });
+    expect(result.current.loglineSuggestions).toEqual(['Current suggestion']);
+    expect(result.current.isAiLoading).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -452,6 +491,26 @@ describe('handleVisualizeScene', () => {
       await result.current.handleVisualizeScene();
     });
     expect(mockToast.error).toHaveBeenCalled();
+  });
+
+  it('clears the preview for a stale project operation', async () => {
+    mockUnwrap.mockResolvedValueOnce({
+      imageKey: 'scene-before-stale',
+      dataUrl: 'data:image/png;base64,before-stale',
+    });
+    setManuscript([makeSection('s1', 'Ch1', 'Scene content')]);
+    const { result } = renderHook(() => useManuscriptView({ onNavigate }));
+
+    await act(async () => {
+      await result.current.handleVisualizeScene();
+    });
+    expect(result.current.sceneImagePreviewUrl).toBe('data:image/png;base64,before-stale');
+
+    mockUnwrap.mockRejectedValueOnce({ name: 'StaleProjectOperationError' });
+    await act(async () => {
+      await result.current.handleVisualizeScene();
+    });
+    expect(result.current.sceneImagePreviewUrl).toBeNull();
   });
 
   it('does nothing when active section has no content', async () => {

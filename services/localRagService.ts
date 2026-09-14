@@ -389,10 +389,11 @@ async function retrieveContextViaDuckDb(
   queryEmbedding: Float32Array,
   signal?: AbortSignal,
 ): Promise<RagChunk[]> {
-  const duckRows = await queryRagSimilarity(projectId, queryEmbedding, topK, signal);
-  if (duckRows.length === 0) return [];
-
+  const duckRows = signal
+    ? await queryRagSimilarity(projectId, queryEmbedding, topK, signal)
+    : await queryRagSimilarity(projectId, queryEmbedding, topK);
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+  if (duckRows.length === 0) return [];
   const raw = (await storageService.getRagVectors(projectId)) as HybridRagRecord[];
   const rawById = new Map(raw.map((r) => [r.id, r]));
   const now = Date.now();

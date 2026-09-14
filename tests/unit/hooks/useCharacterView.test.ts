@@ -63,6 +63,8 @@ vi.mock('../../../features/project/projectSelectors', () => ({
 
 vi.mock('../../../features/project/projectIdentity', () => ({
   captureActiveProjectIdentity: mockCaptureIdentity,
+  isExpectedAiCancellationError: (error: unknown) =>
+    mockIsStaleError(error) || (error as { name?: string } | null)?.name === 'AbortError',
   getProjectTargetStorageId: (source: { data?: { id?: string } } | null | undefined) =>
     source?.data?.id ?? null,
   identityUnchanged: (captured: string | null, live: string | null) =>

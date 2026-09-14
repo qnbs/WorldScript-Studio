@@ -44,6 +44,7 @@ async function requestEmbedding(
   signal?: AbortSignal,
 ): Promise<number[]> {
   const bus = await ensureInferencePool();
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
   if (!bus) throw new Error('WorkerBus v2 unavailable');
   const handle = bus.enqueue<{ task: string; modelId: string; input: string }, number[]>(
     'inference.embed',

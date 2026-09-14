@@ -158,6 +158,28 @@ describe('retrieveContext — DuckDB path', () => {
     });
   });
 
+  it('rejects when DuckDB resolves after the request is aborted', async () => {
+    const controller = new AbortController();
+    mockRagSimilarity.mockImplementationOnce(async () => {
+      controller.abort();
+      return [];
+    });
+
+    await expect(
+      retrieveContext(
+        'p1',
+        'hero',
+        5,
+        'semantic',
+        new Float32Array(64).fill(0.5),
+        true,
+        false,
+        controller.signal,
+      ),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(mockGetRagVectors).not.toHaveBeenCalled();
+  });
+
   it('returns empty when DuckDB row has no matching IDB record', async () => {
     mockRagSimilarity.mockResolvedValue([
       { chunk_id: 'missing:0', section_id: 'missing', chunk_index: 0, score: 0.8 },

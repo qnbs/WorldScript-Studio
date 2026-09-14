@@ -64,6 +64,7 @@ vi.mock('../../../features/project/thunks/outlineThunks', () => {
 
 vi.mock('../../../features/project/projectIdentity', () => ({
   captureActiveProjectIdentity: mockCaptureIdentity,
+  isExpectedAiCancellationError: () => false,
   identityUnchanged: (captured: string | null, live: string | null) =>
     captured !== null && captured === live,
 }));
