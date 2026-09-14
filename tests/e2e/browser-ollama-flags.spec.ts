@@ -101,7 +101,7 @@ test.describe('Browser-Ollama admission (ADR-0017)', () => {
     expect(ollamaRequests).toEqual([ollamaTagsUrl]);
 
     await page.getByRole('button', { name: 'Test connection', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText('Connected');
+    await expect(page.getByText('Connected', { exact: true })).toBeVisible();
     await expect.poll(() => ollamaRequests.length).toBe(2);
   });
 });
