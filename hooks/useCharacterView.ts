@@ -116,6 +116,7 @@ export const useCharacterView = () => {
       const newChar = resultAction.payload;
       dispatch(projectActions.addCharacter(newChar));
       toast.success(t('common.saved'), newChar.name);
+      // QNBS-v3: duplicate/superseded AI work is expected control flow and must not surface as failure UX.
     } else if (!isExpectedAiCancellationError(resultAction.error)) {
       toast.error(t('error.apiErrorTitle'), t('error.apiErrorDescription'));
     }

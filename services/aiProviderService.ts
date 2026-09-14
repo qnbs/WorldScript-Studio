@@ -894,6 +894,13 @@ export async function streamText(
   const resolvedOpts = resolvePositiveRoutingOpts(opts);
   const { key, controller } = _deduplicateRequest(resolvedOpts, prompt);
   const mergedOpts = withMergedAbortSignal(resolvedOpts, signal, controller.signal);
+  // QNBS-v3: centralize the late-chunk fence at the provider boundary so every adapter respects request supersession.
+  const guardedCallbacks: AIStreamCallbacks = {
+    ...callbacks,
+    onChunk: (text) => {
+      if (!mergedOpts.signal?.aborted) callbacks.onChunk(text);
+    },
+  };
   const chain = resolveProviderFallbackChain(mergedOpts);
   let lastError: unknown;
   // QNBS-v3: tracks an OpenRouter-promoted fallback provider already attempted this call, so the outer loop doesn't invoke it a second time (and double-bill/duplicate chunks) if the chain also lists it later.
@@ -906,7 +913,7 @@ export async function streamText(
       mergedOpts.heuristicContext ?? { prompt, reasonKey: 'error.fallback.generic' },
     );
     if (!heuristic) return false;
-    callbacks.onChunk(heuristic.data);
+    guardedCallbacks.onChunk(heuristic.data);
     callbacks.onDone?.();
     return true;
   };
@@ -918,11 +925,11 @@ export async function streamText(
       let grokEmitted = false;
       const callbacksForAttempt =
         nextProvider === 'grok'
-          ? createGrokAttemptCallbacks(callbacks, (text) => {
+          ? createGrokAttemptCallbacks(guardedCallbacks, (text) => {
               grokEmitted = true;
-              callbacks.onChunk(text);
+              guardedCallbacks.onChunk(text);
             })
-          : callbacks;
+          : guardedCallbacks;
       try {
         await streamProvider(
           prompt,

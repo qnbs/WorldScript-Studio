@@ -379,6 +379,21 @@ describe('streamText', () => {
     spy.mockRestore();
   });
 
+  it('does not publish a provider chunk that arrives after request cancellation', async () => {
+    const controller = new AbortController();
+    vi.mocked(geminiService.streamText).mockImplementationOnce(
+      async (_prompt, _creativity, onChunk) => {
+        controller.abort();
+        onChunk('late provider chunk');
+      },
+    );
+    const onChunk = vi.fn();
+
+    await streamText('prompt', 'Balanced', defaultOpts, { onChunk }, controller.signal);
+
+    expect(onChunk).not.toHaveBeenCalled();
+  });
+
   it('clears a stale fallback reason when a later primary provider succeeds outright', async () => {
     vi.mocked(storageService.getApiKey).mockResolvedValueOnce('or-key');
     vi.mocked(openrouterProvider.streamOpenRouter).mockRejectedValueOnce(
