@@ -4,7 +4,7 @@ import type { RootState } from '../../../app/store';
 import type { WorldHeuristicLabels } from '../../../services/ai/heuristicFallback/generators/worldGenerator';
 import { storageService } from '../../../services/storageService';
 import type { World } from '../../../types';
-import { createDeduplicatedThunk } from '../aiThunkUtils';
+import { assertAiRequestActive, createDeduplicatedThunk } from '../aiThunkUtils';
 import {
   assertProjectIdentityUnchanged,
   getProjectTargetIdentity,
@@ -90,6 +90,7 @@ export const generateWorldImageThunk = createDeduplicatedThunk(
     );
     // QNBS-v3: [Grund: origin persistence authority / Impact: reject stale writes at backend boundary / Kreativer Mehrwert: preserve world asset ownership]
     await storageService.saveImage(worldId, base64, projectId, (): undefined => {
+      assertAiRequestActive(signal);
       assertProjectIdentityUnchanged(
         originIdentity,
         getProjectTargetIdentity((getState() as RootState).project.present),

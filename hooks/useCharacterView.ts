@@ -7,6 +7,7 @@ import {
   captureActiveProjectIdentity,
   getProjectTargetStorageId,
   identityUnchanged,
+  isExpectedAiCancellationError,
   isStaleProjectOperationError,
 } from '../features/project/projectIdentity';
 import { selectAllCharacters } from '../features/project/projectSelectors';
@@ -115,7 +116,7 @@ export const useCharacterView = () => {
       const newChar = resultAction.payload;
       dispatch(projectActions.addCharacter(newChar));
       toast.success(t('common.saved'), newChar.name);
-    } else {
+    } else if (!isExpectedAiCancellationError(resultAction.error)) {
       toast.error(t('error.apiErrorTitle'), t('error.apiErrorDescription'));
     }
 
@@ -155,7 +156,7 @@ export const useCharacterView = () => {
 
       if (regenerateCharacterFieldThunk.fulfilled.match(resultAction)) {
         handleFieldChange(resultAction.payload.field, resultAction.payload.value);
-      } else {
+      } else if (!isExpectedAiCancellationError(resultAction.error)) {
         toast.error(t('error.apiErrorTitle'));
       }
       setIsRegeneratingField(null);
@@ -177,7 +178,7 @@ export const useCharacterView = () => {
     if (generateCharacterPortraitThunk.fulfilled.match(resultAction)) {
       // QNBS-v3: only fulfilled generation may mark the local selection as having an avatar.
       setSelectedCharacter((c) => (c ? { ...c, hasAvatar: true } : null));
-    } else if (!isStaleProjectOperationError(resultAction.error)) {
+    } else if (!isExpectedAiCancellationError(resultAction.error)) {
       const errorText = t('characters.error.portraitFailed');
       setErrorMessage(errorText);
       toast.error(errorText);
@@ -198,7 +199,7 @@ export const useCharacterView = () => {
     );
     if (
       !generateCharacterPortraitThunk.fulfilled.match(resultAction) &&
-      !isStaleProjectOperationError(resultAction.error)
+      !isExpectedAiCancellationError(resultAction.error)
     ) {
       const errorText = t('characters.error.portraitFailed');
       setErrorMessage(errorText);

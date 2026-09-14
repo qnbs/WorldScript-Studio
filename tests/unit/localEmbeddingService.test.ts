@@ -60,6 +60,28 @@ describe('embedText', () => {
     await expect(embedText('fail case')).rejects.toThrow('OOM');
   });
 
+  it('cancels the worker task when the caller signal aborts', async () => {
+    let rejectResult!: (error: unknown) => void;
+    const cancel = vi.fn(() => rejectResult(new DOMException('Aborted', 'AbortError')));
+    const handle = {
+      taskId: 't-cancel',
+      result: new Promise<number[]>((_resolve, reject) => {
+        rejectResult = reject;
+      }),
+      progress: (async function* () {})(),
+      cancel,
+    };
+    mockEnqueue.mockReturnValueOnce(handle);
+
+    const controller = new AbortController();
+    const result = embedText('cancel me', controller.signal);
+    await vi.waitFor(() => expect(mockEnqueue).toHaveBeenCalled());
+    controller.abort();
+
+    await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+    expect(cancel).toHaveBeenCalledWith('Aborted');
+  });
+
   it('throws WorkerBus v2 unavailable without enqueuing when the pool is unavailable', async () => {
     mockEnsureInferencePool.mockResolvedValue(null);
     await expect(embedText('fail case 2')).rejects.toThrow('WorkerBus v2 unavailable');

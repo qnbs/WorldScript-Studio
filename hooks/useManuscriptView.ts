@@ -4,6 +4,7 @@ import { useTransientUiStore } from '../app/transientUiStore';
 import { useToast } from '../components/ui/Toast';
 import {
   getProjectTargetIdentity,
+  isExpectedAiCancellationError,
   isStaleProjectOperationError,
 } from '../features/project/projectIdentity';
 import {
@@ -287,6 +288,7 @@ export const useManuscriptView = ({
       const result = await dispatch(generateLoglineSuggestionsThunk(language)).unwrap();
       setLoglineSuggestions(result || []);
     } catch (e: unknown) {
+      if (isExpectedAiCancellationError(e)) return;
       let errorMessage = t('error.apiErrorDescription');
       if (typeof e === 'string') {
         errorMessage = e;
@@ -319,7 +321,7 @@ export const useManuscriptView = ({
       if (resultAction.payload.length === 0) {
         toast.success('No issues found!', 'Great job!');
       }
-    } else {
+    } else if (!isExpectedAiCancellationError(resultAction.error)) {
       toast.error(t('error.apiErrorTitle'));
     }
     setIsProofreading(false);
@@ -355,6 +357,7 @@ export const useManuscriptView = ({
         sceneVisualizationTargetRef.current !== requestTarget
       )
         return;
+      if (isExpectedAiCancellationError(error)) return;
       if (!isStaleProjectOperationError(error)) {
         toast.error(t('error.apiErrorTitle'));
       } else {

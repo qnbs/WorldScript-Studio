@@ -7,6 +7,7 @@ import {
   captureActiveProjectIdentity,
   getProjectTargetStorageId,
   identityUnchanged,
+  isExpectedAiCancellationError,
   isStaleProjectOperationError,
 } from '../features/project/projectIdentity';
 import { selectAllWorlds } from '../features/project/projectSelectors';
@@ -109,7 +110,7 @@ export const useWorldView = () => {
     if (generateWorldProfileThunk.fulfilled.match(resultAction)) {
       dispatch(projectActions.addWorld(resultAction.payload));
       toast.success(t('common.saved'), resultAction.payload.name);
-    } else {
+    } else if (!isExpectedAiCancellationError(resultAction.error)) {
       toast.error(t('error.apiErrorTitle'));
     }
     setIsGeneratingProfile(false);
@@ -148,7 +149,7 @@ export const useWorldView = () => {
 
       if (regenerateWorldFieldThunk.fulfilled.match(resultAction)) {
         handleFieldChange(resultAction.payload.field, resultAction.payload.value);
-      } else {
+      } else if (!isExpectedAiCancellationError(resultAction.error)) {
         toast.error(t('error.apiErrorTitle'));
       }
       setIsRegeneratingField(null);
@@ -168,7 +169,7 @@ export const useWorldView = () => {
     );
     if (generateWorldImageThunk.fulfilled.match(resultAction)) {
       setSelectedWorld((w) => (w ? { ...w, hasAmbianceImage: true } : null));
-    } else if (!isStaleProjectOperationError(resultAction.error)) {
+    } else if (!isExpectedAiCancellationError(resultAction.error)) {
       toast.error(t('worlds.error.imageFailed'));
     }
     setIsGeneratingImage(false);
@@ -183,7 +184,7 @@ export const useWorldView = () => {
     );
     if (
       !generateWorldImageThunk.fulfilled.match(resultAction) &&
-      !isStaleProjectOperationError(resultAction.error)
+      !isExpectedAiCancellationError(resultAction.error)
     ) {
       toast.error(t('worlds.error.imageFailed'));
     }

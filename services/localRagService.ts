@@ -281,13 +281,16 @@ export async function retrieveContext(
   useDuckDb = false,
   // QNBS-v3: B1 — when true and WebGPU available, uses GPU batch cosine similarity.
   useGpuSimilarity = false,
+  signal?: AbortSignal,
 ): Promise<RagChunk[]> {
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
   // DuckDB path: vector similarity via list_dot_product; text fetched from IDB after ranking.
   if (useDuckDb && queryEmbedding) {
-    return retrieveContextViaDuckDb(projectId, topK, queryEmbedding);
+    return retrieveContextViaDuckDb(projectId, topK, queryEmbedding, signal);
   }
 
   const raw = (await storageService.getRagVectors(projectId)) as HybridRagRecord[];
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
   if (!raw.length) return [];
 
   // QNBS-v3: Fall back to lexical when no embedding supplied (model not loaded).
@@ -325,6 +328,8 @@ export async function retrieveContext(
       }
     }
   }
+
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 
   const scored = raw.map((r, rawIdx): RagChunk & { _raw: number } => {
     let score = 0;
@@ -382,10 +387,12 @@ async function retrieveContextViaDuckDb(
   projectId: string,
   topK: number,
   queryEmbedding: Float32Array,
+  signal?: AbortSignal,
 ): Promise<RagChunk[]> {
-  const duckRows = await queryRagSimilarity(projectId, queryEmbedding, topK);
+  const duckRows = await queryRagSimilarity(projectId, queryEmbedding, topK, signal);
   if (duckRows.length === 0) return [];
 
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
   const raw = (await storageService.getRagVectors(projectId)) as HybridRagRecord[];
   const rawById = new Map(raw.map((r) => [r.id, r]));
   const now = Date.now();

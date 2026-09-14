@@ -5,7 +5,7 @@ import type { RootState } from '../../../app/store';
 import type { CharacterHeuristicLabels } from '../../../services/ai/heuristicFallback/generators/characterGenerator';
 import { storageService } from '../../../services/storageService';
 import type { Character } from '../../../types';
-import { createDeduplicatedThunk } from '../aiThunkUtils';
+import { assertAiRequestActive, createDeduplicatedThunk } from '../aiThunkUtils';
 import {
   assertProjectIdentityUnchanged,
   getProjectTargetIdentity,
@@ -97,6 +97,7 @@ export const generateCharacterPortraitThunk = createDeduplicatedThunk(
     );
     // QNBS-v3: [Origin persistence authority / Reject stale writes at the backend boundary / Preserve portrait asset ownership]
     await storageService.saveImage(characterId, base64, projectId, (): undefined => {
+      assertAiRequestActive(signal);
       assertProjectIdentityUnchanged(
         originIdentity,
         getProjectTargetIdentity((getState() as RootState).project.present),

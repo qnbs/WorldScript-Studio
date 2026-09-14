@@ -1,6 +1,6 @@
 import type { RootState } from '../../../app/store';
 import { storageService } from '../../../services/storageService';
-import { createDeduplicatedThunk } from '../aiThunkUtils';
+import { assertAiRequestActive, createDeduplicatedThunk } from '../aiThunkUtils';
 import {
   assertProjectIdentityUnchanged,
   getProjectTargetIdentity,
@@ -97,6 +97,7 @@ export const generateSceneImageThunk = createDeduplicatedThunk(
     );
     // QNBS-v3: the backend must re-check incarnation authority at its final image-write point, not only before/after the asynchronous storage call.
     await storageService.saveImage(imageKey, base64, projectId, (): undefined => {
+      assertAiRequestActive(signal);
       assertProjectIdentityUnchanged(
         originIdentity,
         getProjectTargetIdentity((getState() as RootState).project.present),

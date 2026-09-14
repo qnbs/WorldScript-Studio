@@ -15,6 +15,14 @@ type DeduplicatedThunkAPI = GetThunkAPI<AsyncThunkConfig> & {
 
 const activeControllers = new Map<string, AbortController>();
 
+// QNBS-v3: reject an aborted request at the final storage boundary, not only before an async provider call.
+export function assertAiRequestActive(signal: AbortSignal): undefined {
+  if (signal.aborted) {
+    throw new DOMException('AI request aborted', 'AbortError');
+  }
+  return undefined;
+}
+
 // Deduplicates AI requests by prompt and view type.
 // When a new request with the same prompt/viewType starts, any previous
 // pending request for that same key is aborted to prevent spam and race conditions.

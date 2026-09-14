@@ -37,7 +37,12 @@ function l2Normalize(vec: number[]): EmbeddingVector {
   return new Float32Array(vec.map((v) => v / magnitude));
 }
 
-async function requestEmbedding(task: string, modelId: string, input: string): Promise<number[]> {
+async function requestEmbedding(
+  task: string,
+  modelId: string,
+  input: string,
+  signal?: AbortSignal,
+): Promise<number[]> {
   const bus = await ensureInferencePool();
   if (!bus) throw new Error('WorkerBus v2 unavailable');
   const handle = bus.enqueue<{ task: string; modelId: string; input: string }, number[]>(
@@ -45,10 +50,21 @@ async function requestEmbedding(task: string, modelId: string, input: string): P
     { task, modelId, input },
     { capabilities: ['inference.embed'] },
   );
-  return handle.result;
+  const onAbort = () => handle.cancel('Aborted');
+  if (signal?.aborted) {
+    handle.cancel('Aborted');
+  } else {
+    signal?.addEventListener('abort', onAbort, { once: true });
+  }
+  try {
+    return await handle.result;
+  } finally {
+    signal?.removeEventListener('abort', onAbort);
+  }
 }
 
-export async function embedText(text: string): Promise<EmbeddingVector> {
+export async function embedText(text: string, signal?: AbortSignal): Promise<EmbeddingVector> {
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
   const truncated = truncate(text);
   const cacheKey = makeCacheKey(truncated);
 
@@ -60,7 +76,8 @@ export async function embedText(text: string): Promise<EmbeddingVector> {
     return cached;
   }
 
-  const raw = await requestEmbedding('feature-extraction', EMBEDDING_MODEL, truncated);
+  const raw = await requestEmbedding('feature-extraction', EMBEDDING_MODEL, truncated, signal);
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
   const vector = l2Normalize(raw);
 
   // QNBS-v3: Evict the oldest (first) entry when at capacity before inserting.

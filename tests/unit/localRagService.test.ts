@@ -138,6 +138,16 @@ describe('rebuildHybridRagIndex', () => {
 // retrieveContext — lexical mode (default)
 // ---------------------------------------------------------------------------
 describe('retrieveContext — lexical', () => {
+  it('rejects before reading the index when the caller signal is already aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      retrieveContext('p1', 'cancelled', 5, 'lexical', undefined, false, false, controller.signal),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(mockGetRagVectors).not.toHaveBeenCalled();
+  });
+
   it('returns empty array when no records exist', async () => {
     const result = await retrieveContext('p1', 'fox');
     expect(result).toEqual([]);

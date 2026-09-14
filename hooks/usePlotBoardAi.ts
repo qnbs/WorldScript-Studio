@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
+import { isExpectedAiCancellationError } from '../features/project/projectIdentity';
 import { selectProjectData } from '../features/project/projectSelectors';
 import {
   type PlotBeatSuggestion,
@@ -43,6 +44,7 @@ export function usePlotBoardAi(plotSummary: string, selectedSectionIds: string[]
       setBeats(action.beats);
       setRagChunkCount(action.ragChunkCount);
     } catch (err) {
+      if (isExpectedAiCancellationError(err)) return;
       setError(err instanceof Error ? err.message : String(err));
       setBeats([]);
     } finally {
