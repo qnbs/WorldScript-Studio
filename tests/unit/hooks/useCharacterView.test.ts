@@ -63,6 +63,8 @@ vi.mock('../../../features/project/projectSelectors', () => ({
 
 vi.mock('../../../features/project/projectIdentity', () => ({
   captureActiveProjectIdentity: mockCaptureIdentity,
+  isExpectedAiCancellationError: (error: unknown) =>
+    mockIsStaleError(error) || (error as { name?: string } | null)?.name === 'AbortError',
   getProjectTargetStorageId: (source: { data?: { id?: string } } | null | undefined) =>
     source?.data?.id ?? null,
   identityUnchanged: (captured: string | null, live: string | null) =>
@@ -210,6 +212,21 @@ describe('handleGenerateProfile', () => {
     });
 
     expect(mockToast.error).toHaveBeenCalled();
+  });
+
+  it('suppresses ordinary error UX for an expected AbortError rejection', async () => {
+    mockDispatch.mockResolvedValue({
+      type: 'project/generateCharacterProfile/rejected',
+      error: { name: 'AbortError' },
+    });
+    mockProfileMatch.mockReturnValue(false);
+
+    const { result } = renderHook(() => useCharacterView());
+    await act(async () => {
+      await result.current.handleGenerateProfile();
+    });
+
+    expect(mockToast.error).not.toHaveBeenCalled();
   });
 
   it('resets isGeneratingProfile to false after completion', async () => {
@@ -417,6 +434,30 @@ describe('handleGeneratePortrait', () => {
 
     expect(mockToast.error).toHaveBeenCalled();
     expect(result.current.errorMessage).not.toBeNull();
+  });
+
+  it('clears a previous portrait error before an expected cancelled retry', async () => {
+    mockDispatch.mockResolvedValueOnce({
+      type: 'project/generateCharacterPortrait/rejected',
+    });
+    mockPortraitMatch.mockReturnValue(false);
+    const char = makeCharacter('c1');
+    const { result } = renderHook(() => useCharacterView());
+    act(() => result.current.handleSelect(char));
+    await act(async () => {
+      await result.current.handleGeneratePortrait();
+    });
+    expect(result.current.errorMessage).not.toBeNull();
+
+    mockDispatch.mockResolvedValueOnce({
+      type: 'project/generateCharacterPortrait/rejected',
+      error: { name: 'AbortError' },
+    });
+    await act(async () => {
+      await result.current.handleGeneratePortrait();
+    });
+    expect(result.current.errorMessage).toBeNull();
+    expect(mockToast.error).toHaveBeenCalledTimes(1);
   });
 
   it('silently discards stale portrait results without marking an avatar', async () => {

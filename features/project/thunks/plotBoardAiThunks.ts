@@ -22,7 +22,7 @@ export interface SuggestNextBeatArg {
 
 export const suggestNextBeatThunk = createDeduplicatedThunk(
   'project/suggestNextBeat',
-  async (arg: SuggestNextBeatArg, { getState, signal, registerDuplicateRequest }) => {
+  async (arg: SuggestNextBeatArg, { getState, registerDuplicateRequest }) => {
     const state = getState() as RootState;
     const project = state.project.present?.data;
     if (!project) throw new Error('No project loaded');
@@ -30,6 +30,17 @@ export const suggestNextBeatThunk = createDeduplicatedThunk(
     const projectId = project.id || 'default';
     const ragMode = state.settings?.advancedAi?.ragMode ?? 'hybrid';
     const duckDbEnabled = state.featureFlags?.enableDuckDbAnalytics ?? false;
+    // QNBS-v3: register before RAG to supersede duplicate analytics work at entry.
+    const signal = registerDuplicateRequest(
+      JSON.stringify({
+        projectId,
+        plotSummary: arg.plotSummary,
+        selectedSectionIds: arg.selectedSectionIds,
+        lang: arg.lang,
+        manuscript: project.manuscript,
+      }),
+      'plotSuggestion',
+    );
 
     const assembled = await assembleRAGPrompt(
       'plotSuggestion',
@@ -46,10 +57,9 @@ export const suggestNextBeatThunk = createDeduplicatedThunk(
         maxTokens: 6000,
         duckDbEnabled,
         useRag: true,
+        signal,
       },
     );
-
-    registerDuplicateRequest(assembled.prompt, 'plotSuggestion');
 
     const creativity = buildAiCreativity(state);
     const aiOptions = buildAiOptions(state);

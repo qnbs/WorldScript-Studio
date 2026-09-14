@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const { mockEmbedText } = vi.hoisted(() => ({ mockEmbedText: vi.fn() }));
+
 vi.mock('../../services/ai/localEmbeddingService', () => ({
-  embedText: vi.fn().mockResolvedValue(new Float32Array(384).fill(0.1)),
+  embedText: mockEmbedText,
 }));
 
 vi.mock('../../services/localRagService', () => ({
@@ -20,6 +22,7 @@ const mockRetrieve = vi.mocked(retrieveContext);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockEmbedText.mockResolvedValue(new Float32Array(384).fill(0.1));
   mockRetrieve.mockResolvedValue([
     {
       score: 0.9,
@@ -169,6 +172,29 @@ describe('assembleRAGPrompt', () => {
       expect.any(Float32Array),
       true,
     );
+  });
+
+  it('normalizes worker cancellation to AbortError', async () => {
+    const controller = new AbortController();
+    mockEmbedText.mockImplementationOnce(async () => {
+      controller.abort();
+      throw new Error('Aborted');
+    });
+
+    await expect(
+      assembleRAGPrompt(
+        'writerContinuation',
+        { projectId: 'p1', currentText: 'Cancel this query.', lang: 'en' },
+        {
+          topK: 5,
+          ragMode: 'hybrid',
+          maxTokens: 4000,
+          duckDbEnabled: false,
+          useRag: true,
+          signal: controller.signal,
+        },
+      ),
+    ).rejects.toMatchObject({ name: 'AbortError' });
   });
 });
 

@@ -7,13 +7,23 @@ import {
   peekPositiveRoutingProvider,
 } from '../../services/ai/positiveRouting';
 import type { PrivacySettings } from '../../types';
+import { getProjectTargetIdentity } from './projectIdentity';
 import { buildAiOptions } from './thunks/thunkUtils';
 
 type DeduplicatedThunkAPI = GetThunkAPI<AsyncThunkConfig> & {
-  registerDuplicateRequest: (prompt: string, viewType: string) => string;
+  registerDuplicateRequest: (prompt: string, viewType: string, scopeKey?: string) => AbortSignal;
 };
 
 const activeControllers = new Map<string, AbortController>();
+let unresolvedIdentitySequence = 0;
+
+// QNBS-v3: reject an aborted request at the final storage boundary, not only before an async provider call.
+export function assertAiRequestActive(signal: AbortSignal): undefined {
+  if (signal.aborted) {
+    throw new DOMException('AI request aborted', 'AbortError');
+  }
+  return undefined;
+}
 
 // Deduplicates AI requests by prompt and view type.
 // When a new request with the same prompt/viewType starts, any previous
@@ -29,8 +39,9 @@ export const createDeduplicatedThunk = <Returned, ThunkArg = void>(
     async (arg, thunkAPI) => {
       let activeRequestKey: string | null = null;
       let activeController: AbortController | null = null;
+      let activeRequestCleanup = () => {};
 
-      const registerDuplicateRequest = (prompt: string, viewType: string) => {
+      const registerDuplicateRequest = (prompt: string, viewType: string, scopeKey?: string) => {
         // QNBS-v3: Include preset hash so changing provider/model/temperature aborts stale requests.
         const state = thunkAPI.getState() as RootState;
         const preset = state.project.present?.data?.aiPreset;
@@ -38,7 +49,18 @@ export const createDeduplicatedThunk = <Returned, ThunkArg = void>(
           preset?.enabled === true
             ? JSON.stringify({ p: preset.provider, m: preset.model, t: preset.temperature })
             : '';
-        const baseKey = JSON.stringify({ prompt, viewType, presetHash });
+        // QNBS-v3: identical prompts in separate project incarnations or entities must not abort each other.
+        const projectIdentity = getProjectTargetIdentity(state.project.present);
+        // QNBS-v3: an unresolvable identity gets a one-shot namespace so fail-closed authority never cross-cancels another unknown project.
+        const identityNamespace =
+          projectIdentity ?? `unresolved-project-${++unresolvedIdentitySequence}`;
+        const baseKey = JSON.stringify({
+          prompt,
+          viewType,
+          presetHash,
+          identityNamespace,
+          scopeKey,
+        });
         const uniqueKey = `${baseKey}|${Date.now()}`;
 
         for (const entry of Array.from(activeControllers.entries())) {
@@ -54,15 +76,18 @@ export const createDeduplicatedThunk = <Returned, ThunkArg = void>(
         activeController = controller;
         activeControllers.set(uniqueKey, controller);
 
-        thunkAPI.signal.addEventListener(
-          'abort',
-          () => {
-            controller.abort();
-          },
-          { once: true },
-        );
+        const abortFromThunk = () => controller.abort();
+        if (thunkAPI.signal.aborted) {
+          controller.abort();
+        } else {
+          thunkAPI.signal.addEventListener('abort', abortFromThunk, { once: true });
+          activeRequestCleanup = () => {
+            thunkAPI.signal.removeEventListener('abort', abortFromThunk);
+          };
+        }
 
-        return uniqueKey;
+        // QNBS-v3: return the controller-backed signal so duplicate cancellation reaches provider fetch/worker code; thunkAPI.signal only covers caller aborts.
+        return controller.signal;
       };
 
       const wrappedThunkAPI = {
@@ -81,6 +106,8 @@ export const createDeduplicatedThunk = <Returned, ThunkArg = void>(
         }
         return await payloadCreator(arg, wrappedThunkAPI);
       } finally {
+        activeRequestCleanup();
+        activeRequestCleanup = () => {};
         if (activeRequestKey && activeController) {
           const current = activeControllers.get(activeRequestKey);
           if (current === activeController) {

@@ -4,6 +4,7 @@ import { useTransientUiStore } from '../app/transientUiStore';
 import { useToast } from '../components/ui/Toast';
 import {
   getProjectTargetIdentity,
+  isExpectedAiCancellationError,
   isStaleProjectOperationError,
 } from '../features/project/projectIdentity';
 import {
@@ -109,6 +110,7 @@ export const useManuscriptView = ({
   >([]);
   const [isSceneVisualizing, setIsSceneVisualizing] = useState(false);
   const [sceneImagePreviewUrl, setSceneImagePreviewUrl] = useState<string | null>(null);
+  const loglineRequestRef = useRef(0);
   const sceneVisualizationRequestRef = useRef(0);
   const sceneVisualizationTargetRef = useRef({
     sectionId: activeSectionId,
@@ -280,13 +282,17 @@ export const useManuscriptView = ({
   );
 
   const handleGenerateLoglines = async () => {
+    const requestId = ++loglineRequestRef.current;
     setIsAiLoading(true);
     setLoglineSuggestions([]);
     setIsLoglineModalOpen(true);
     try {
       const result = await dispatch(generateLoglineSuggestionsThunk(language)).unwrap();
+      if (loglineRequestRef.current !== requestId) return;
       setLoglineSuggestions(result || []);
     } catch (e: unknown) {
+      if (loglineRequestRef.current !== requestId) return;
+      if (isExpectedAiCancellationError(e)) return;
       let errorMessage = t('error.apiErrorDescription');
       if (typeof e === 'string') {
         errorMessage = e;
@@ -296,7 +302,7 @@ export const useManuscriptView = ({
       toast.error(t('error.apiErrorTitle'), errorMessage);
       setIsLoglineModalOpen(false);
     } finally {
-      setIsAiLoading(false);
+      if (loglineRequestRef.current === requestId) setIsAiLoading(false);
     }
   };
 
@@ -319,7 +325,7 @@ export const useManuscriptView = ({
       if (resultAction.payload.length === 0) {
         toast.success('No issues found!', 'Great job!');
       }
-    } else {
+    } else if (!isExpectedAiCancellationError(resultAction.error)) {
       toast.error(t('error.apiErrorTitle'));
     }
     setIsProofreading(false);
@@ -355,6 +361,7 @@ export const useManuscriptView = ({
         sceneVisualizationTargetRef.current !== requestTarget
       )
         return;
+      if (isExpectedAiCancellationError(error) && !isStaleProjectOperationError(error)) return;
       if (!isStaleProjectOperationError(error)) {
         toast.error(t('error.apiErrorTitle'));
       } else {

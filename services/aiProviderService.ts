@@ -67,6 +67,8 @@ export interface AIRequestOptions {
   maxTokens?: number;
   systemPrompt?: string;
   signal?: AbortSignal;
+  /** Scopes service-level duplicate cancellation to the owning project incarnation when known. */
+  deduplicationScope?: string;
   ollamaBaseUrl?: string;
   /** Selects the local-server protocol; LM Studio and vLLM expose OpenAI-compatible `/v1` APIs. */
   localBackendPreset?: LocalBackendPreset;
@@ -95,11 +97,18 @@ export interface AIStreamCallbacks {
   onError?: (error: Error) => void;
 }
 
-function withMergedAbortSignal(opts: AIRequestOptions, signal?: AbortSignal): AIRequestOptions {
-  // QNBS-v3: Standalone AbortSignal from callers now reaches OpenAI/Ollama (parity with Gemini streaming / cancellation).
-  if (signal === undefined) return opts;
-  if (opts.signal === signal) return opts;
-  return { ...opts, signal };
+function withMergedAbortSignal(
+  opts: AIRequestOptions,
+  signal?: AbortSignal,
+  additionalSignal?: AbortSignal,
+): AIRequestOptions {
+  const signals = [opts.signal, signal, additionalSignal].filter(
+    (candidate): candidate is AbortSignal => candidate !== undefined,
+  );
+  if (signals.length === 0) return opts;
+  // QNBS-v3: caller cancellation and service-level duplicate cancellation must both reach the provider.
+  const mergedSignal = signals.length === 1 ? signals[0]! : AbortSignal.any(signals);
+  return opts.signal === mergedSignal ? opts : { ...opts, signal: mergedSignal };
 }
 
 function buildOpenAiCompletionParameters(
@@ -127,6 +136,13 @@ export function isAbortError(error: unknown): boolean {
   );
 }
 
+// QNBS-v3: duplicate and caller cancellation must leave the provider loop before fallback can restart work.
+function throwIfRequestAborted(error: unknown, ...signals: Array<AbortSignal | undefined>): void {
+  const signalAborted = signals.some((candidate) => candidate?.aborted);
+  if (!isAbortError(error) && !signalAborted) return;
+  throw new DOMException('Aborted', 'AbortError');
+}
+
 // ─── Fallback reason tracking ────────────────────────────────────────────────
 // QNBS-v3: Records why the last fallback occurred so the UI can explain it to the user.
 let _lastFallbackReason = '';
@@ -145,8 +161,8 @@ export function clearLastAiFallbackReason(): void {
 
 const _pendingRequests = new Map<string, AbortController>();
 
-function _pendingKey(provider: AIProvider, model: AiModel, prompt: string): string {
-  return `${provider}:${model}:${prompt.slice(0, 128)}`;
+function _pendingKey(provider: AIProvider, model: AiModel, prompt: string, scope?: string): string {
+  return JSON.stringify([scope ?? 'global', provider, model, prompt.slice(0, 128)]);
 }
 
 /** @internal Only for test isolation — clears in-flight dedup state between tests. */
@@ -155,11 +171,10 @@ export function _clearPendingRequestsForTest(): void {
 }
 
 function _deduplicateRequest(
-  provider: AIProvider,
-  model: AiModel,
+  opts: Pick<AIRequestOptions, 'provider' | 'model' | 'deduplicationScope'>,
   prompt: string,
 ): { key: string; controller: AbortController } {
-  const key = _pendingKey(provider, model, prompt);
+  const key = _pendingKey(opts.provider, opts.model, prompt, opts.deduplicationScope);
   const existing = _pendingRequests.get(key);
   if (existing) {
     existing.abort();
@@ -176,15 +191,34 @@ function _cleanupPendingRequest(key: string, controller: AbortController): void 
   }
 }
 
+// QNBS-v3: keep caller and service deduplication cancellation under one lifecycle owner.
+async function withDeduplicatedRequest<T>(
+  opts: AIRequestOptions,
+  prompt: string,
+  signal: AbortSignal | undefined,
+  operation: (mergedOpts: AIRequestOptions) => Promise<T>,
+): Promise<T> {
+  const resolvedOpts = resolvePositiveRoutingOpts(opts);
+  throwIfRequestAborted(undefined, resolvedOpts.signal, signal);
+  const { key, controller } = _deduplicateRequest(resolvedOpts, prompt);
+  try {
+    return await operation(withMergedAbortSignal(resolvedOpts, signal, controller.signal));
+  } finally {
+    _cleanupPendingRequest(key, controller);
+  }
+}
+
+function recordProviderSuccess(primary: AIProvider, provider: AIProvider, index: number): void {
+  _lastFallbackReason =
+    index > 0 ? `Primary provider ${primary} failed; fell back to ${provider}.` : '';
+}
+
 // QNBS-v3: retain Grok chunk tracking so partial output cannot be followed by fallback text.
 function createGrokAttemptCallbacks(
   callbacks: AIStreamCallbacks,
   onChunk: (text: string) => void,
 ): AIStreamCallbacks {
-  const trackedCallbacks: AIStreamCallbacks = { onChunk };
-  if (callbacks.onDone) trackedCallbacks.onDone = callbacks.onDone;
-  if (callbacks.onError) trackedCallbacks.onError = callbacks.onError;
-  return trackedCallbacks;
+  return { ...callbacks, onChunk };
 }
 
 // ─── Gemini Provider ──────────────────────────────────────────────────────────
@@ -685,7 +719,7 @@ async function generateTextSingleProvider(
       const merged = o.systemPrompt?.trim()
         ? `${sanitizePromptValue(o.systemPrompt)}\n\n${sanitizePromptValue(prompt)}`
         : sanitizePromptValue(prompt);
-      const local = await generateLocalText(merged, o.model);
+      const local = await generateLocalText(merged, o.model, undefined, undefined, o.signal);
       return providerTextSchema.parse({ text: local.text }).text;
     }
     default: {
@@ -695,24 +729,43 @@ async function generateTextSingleProvider(
   }
 }
 
+async function resolveTerminalTextFallback(
+  prompt: string,
+  opts: AIRequestOptions,
+  chain: AIProvider[],
+  lastError: unknown,
+): Promise<string> {
+  throwIfRequestAborted(undefined, opts.signal);
+  const heuristic = applyHeuristicFallback<string>(
+    opts.heuristicTask,
+    opts.heuristicContext ?? { prompt, reasonKey: 'error.fallback.generic' },
+  );
+  if (heuristic) {
+    _lastFallbackReason = `All providers in chain failed (${chain.join(' → ')}). Using registered heuristic fallback.`;
+    return heuristic.data;
+  }
+  const local = await generateLocalText(prompt, undefined, undefined, undefined, opts.signal).catch(
+    (error) => {
+      throwIfRequestAborted(error, opts.signal);
+      throw lastError instanceof Error ? lastError : new Error(String(lastError));
+    },
+  );
+  throwIfRequestAborted(undefined, opts.signal);
+  _lastFallbackReason = `All providers in chain failed (${chain.join(' → ')}). Using local heuristic fallback.`;
+  return local.text;
+}
+
 export async function generateText(
   prompt: string,
   creativity: AiCreativity,
   opts: AIRequestOptions,
   signal?: AbortSignal,
 ): Promise<string> {
-  const resolvedOpts = resolvePositiveRoutingOpts(opts);
-  const { key, controller } = _deduplicateRequest(
-    resolvedOpts.provider,
-    resolvedOpts.model,
-    prompt,
-  );
-  const mergedOpts = withMergedAbortSignal(resolvedOpts, signal ?? controller.signal);
-  const chain = resolveProviderFallbackChain(mergedOpts);
-  let lastError: unknown;
-  // QNBS-v3: tracks an OpenRouter-promoted fallback provider already attempted this call, so the outer loop doesn't invoke it a second time (and double-bill/duplicate) if the chain also lists it later.
-  let attemptedOpenRouterFallback: string | undefined;
-  try {
+  return withDeduplicatedRequest(opts, prompt, signal, async (mergedOpts) => {
+    const chain = resolveProviderFallbackChain(mergedOpts);
+    let lastError: unknown;
+    // QNBS-v3: tracks an OpenRouter-promoted fallback provider already attempted this call, so the outer loop doesn't invoke it a second time (and double-bill/duplicate) if the chain also lists it later.
+    let attemptedOpenRouterFallback: string | undefined;
     for (let i = 0; i < chain.length; i++) {
       const nextProvider = chain[i];
       if (nextProvider === undefined || nextProvider === attemptedOpenRouterFallback) continue;
@@ -726,14 +779,12 @@ export async function generateText(
             }),
           { attempts: 2 },
         );
+        throwIfRequestAborted(undefined, mergedOpts.signal);
         // QNBS-v3: Clear fallback reason on success — the chain worked.
-        if (i > 0) {
-          _lastFallbackReason = `Primary provider ${mergedOpts.provider} failed; fell back to ${nextProvider}.`;
-        } else {
-          _lastFallbackReason = '';
-        }
+        recordProviderSuccess(mergedOpts.provider, nextProvider, i);
         return result;
       } catch (err) {
+        throwIfRequestAborted(err, mergedOpts.signal);
         lastError = err;
         const msg = err instanceof Error ? err.message : String(err);
         _lastFallbackReason = `Provider ${nextProvider ?? 'unknown'} failed: ${msg}`;
@@ -754,39 +805,52 @@ export async function generateText(
                 );
               },
             );
+            throwIfRequestAborted(undefined, mergedOpts.signal);
             _lastFallbackReason = `OpenRouter rate-limited; fell back to ${fallback}.`;
             return result;
           } catch (fallbackErr) {
+            throwIfRequestAborted(fallbackErr, mergedOpts.signal);
             lastError = fallbackErr;
           }
         }
         if (i === chain.length - 1) break;
       }
     }
-    // QNBS-v3: prefer a registered per-feature heuristic generator over the generic local stub.
-    const heuristic = applyHeuristicFallback<string>(
-      opts.heuristicTask,
-      opts.heuristicContext ?? { prompt, reasonKey: 'error.fallback.generic' },
-    );
-    if (heuristic) {
-      _lastFallbackReason = `All providers in chain failed (${chain.join(' → ')}). Using registered heuristic fallback.`;
-      return heuristic.data;
-    }
-    try {
-      const local = await generateLocalText(prompt);
-      _lastFallbackReason = `All providers in chain failed (${chain.join(' → ')}). Using local heuristic fallback.`;
-      return providerTextSchema.parse({ text: local.text }).text;
-    } catch {
-      throw lastError instanceof Error ? lastError : new Error(String(lastError));
-    }
-  } finally {
-    _cleanupPendingRequest(key, controller);
-  }
+    return resolveTerminalTextFallback(prompt, mergedOpts, chain, lastError);
+  });
 }
 
 // QNBS-v3: shared by generateJson and streamAiHelpResponse so each call site's own branching stays flat for CodeScene's complexity gate on this already-hot file — also excludes OpenRouter-preferred mode so these paths fall through to generateText's own resolvePositiveRoutingOpts-based promotion instead of bypassing it with a direct Gemini SDK call.
 function isGeminiDirectCloudPath(provider: AIProvider): boolean {
   return provider === 'gemini' && !shouldRouteLocally() && !shouldUseOpenRouter();
+}
+
+// QNBS-v3: direct structured generation shares the same duplicate/caller cancellation fence as text generation.
+async function generateDirectGeminiJson<T>(
+  prompt: string,
+  creativity: AiCreativity,
+  schema: GeminiSchema,
+  opts: AIRequestOptions,
+  signal?: AbortSignal,
+): Promise<T> {
+  return withDeduplicatedRequest(opts, prompt, signal, async (mergedOpts) => {
+    try {
+      await assertCloudAiAllowed('gemini');
+      const result = await generateJsonGemini<T>(
+        prompt,
+        creativity,
+        schema,
+        mergedOpts.signal,
+        undefined,
+        mergedOpts.model,
+      );
+      throwIfRequestAborted(undefined, mergedOpts.signal);
+      return result;
+    } catch (error) {
+      throwIfRequestAborted(error, mergedOpts.signal);
+      throw error;
+    }
+  });
 }
 
 export async function generateJson<T>(
@@ -798,8 +862,7 @@ export async function generateJson<T>(
 ): Promise<T> {
   try {
     if (isGeminiDirectCloudPath(opts.provider)) {
-      await assertCloudAiAllowed('gemini');
-      return await generateJsonGemini(prompt, creativity, schema, signal, undefined, opts.model);
+      return await generateDirectGeminiJson(prompt, creativity, schema, opts, signal);
     }
 
     const raw = await generateText(prompt, creativity, opts, signal);
@@ -816,7 +879,7 @@ export async function generateJson<T>(
     // QNBS-v3: structured generators bypass generateText's local fallback chain (Gemini-direct), so
     // this is their only degrade seam. A user cancel is surfaced; otherwise a registered heuristic
     // generator for this task produces schema-shaped data, else the original error propagates.
-    if (isAbortError(err) || signal?.aborted || opts.signal?.aborted) throw err;
+    throwIfRequestAborted(err, signal, opts.signal);
     const heuristic = applyHeuristicFallback<T>(
       opts.heuristicTask,
       opts.heuristicContext ?? { prompt, reasonKey: 'error.fallback.generic' },
@@ -824,12 +887,6 @@ export async function generateJson<T>(
     if (heuristic) return heuristic.data;
     throw err;
   }
-}
-
-// QNBS-v3: image generation has no local-routing fallback, so the policy gate alone must block a cloud call in local-only/eco/privacy mode.
-async function generateImageViaGemini(prompt: string, signal?: AbortSignal): Promise<string> {
-  await assertCloudAiAllowed('gemini');
-  return generateImageGemini(prompt, signal);
 }
 
 // QNBS-v3: lookup table instead of a branch chain — every entry besides 'gemini' is unsupported; an unlisted provider (including 'openrouter') fails closed via the same message rather than a silent Gemini fallback.
@@ -849,7 +906,10 @@ export async function generateImage(
   signal?: AbortSignal,
 ): Promise<string> {
   if (opts.provider === 'gemini') {
-    return generateImageViaGemini(prompt, signal);
+    const mergedOpts = withMergedAbortSignal(opts, signal);
+    throwIfRequestAborted(undefined, mergedOpts.signal);
+    await assertCloudAiAllowed('gemini');
+    return generateImageGemini(prompt, mergedOpts.signal);
   }
   throw new Error(
     IMAGE_GENERATION_UNSUPPORTED_MESSAGE[opts.provider] ??
@@ -864,30 +924,33 @@ export async function streamText(
   callbacks: AIStreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
-  const resolvedOpts = resolvePositiveRoutingOpts(opts);
-  const { key, controller } = _deduplicateRequest(
-    resolvedOpts.provider,
-    resolvedOpts.model,
-    prompt,
-  );
-  const mergedOpts = withMergedAbortSignal(resolvedOpts, signal ?? controller.signal);
-  const chain = resolveProviderFallbackChain(mergedOpts);
-  let lastError: unknown;
-  // QNBS-v3: tracks an OpenRouter-promoted fallback provider already attempted this call, so the outer loop doesn't invoke it a second time (and double-bill/duplicate chunks) if the chain also lists it later.
-  let attemptedOpenRouterFallback: string | undefined;
-  // QNBS-v3: after the chain is exhausted, deliver a registered heuristic result through the stream
-  // (onChunk + onDone) instead of erroring — so streaming features (Writer tools) stay useful offline.
-  const tryHeuristicStream = (): boolean => {
-    const heuristic = applyHeuristicFallback<string>(
-      mergedOpts.heuristicTask,
-      mergedOpts.heuristicContext ?? { prompt, reasonKey: 'error.fallback.generic' },
-    );
-    if (!heuristic) return false;
-    callbacks.onChunk(heuristic.data);
-    callbacks.onDone?.();
-    return true;
-  };
-  try {
+  return withDeduplicatedRequest(opts, prompt, signal, async (mergedOpts) => {
+    // QNBS-v3: centralize the late-chunk fence at the provider boundary so every adapter respects request supersession.
+    const guardedCallbacks: AIStreamCallbacks = {
+      ...callbacks,
+      onChunk: (text) => {
+        if (!mergedOpts.signal?.aborted) callbacks.onChunk(text);
+      },
+      onDone: () => {
+        if (!mergedOpts.signal?.aborted) callbacks.onDone?.();
+      },
+    };
+    const chain = resolveProviderFallbackChain(mergedOpts);
+    let lastError: unknown;
+    // QNBS-v3: tracks an OpenRouter-promoted fallback provider already attempted this call, so the outer loop doesn't invoke it a second time (and double-bill/duplicate chunks) if the chain also lists it later.
+    let attemptedOpenRouterFallback: string | undefined;
+    // QNBS-v3: after the chain is exhausted, deliver a registered heuristic result through the stream
+    // (onChunk + onDone) instead of erroring — so streaming features (Writer tools) stay useful offline.
+    const tryHeuristicStream = (): boolean => {
+      const heuristic = applyHeuristicFallback<string>(
+        mergedOpts.heuristicTask,
+        mergedOpts.heuristicContext ?? { prompt, reasonKey: 'error.fallback.generic' },
+      );
+      if (!heuristic) return false;
+      guardedCallbacks.onChunk(heuristic.data);
+      guardedCallbacks.onDone?.();
+      return true;
+    };
     for (let i = 0; i < chain.length; i++) {
       const nextProvider = chain[i];
       if (nextProvider === undefined || nextProvider === attemptedOpenRouterFallback) continue;
@@ -895,11 +958,11 @@ export async function streamText(
       let grokEmitted = false;
       const callbacksForAttempt =
         nextProvider === 'grok'
-          ? createGrokAttemptCallbacks(callbacks, (text) => {
+          ? createGrokAttemptCallbacks(guardedCallbacks, (text) => {
               grokEmitted = true;
-              callbacks.onChunk(text);
+              guardedCallbacks.onChunk(text);
             })
-          : callbacks;
+          : guardedCallbacks;
       try {
         await streamProvider(
           prompt,
@@ -908,20 +971,15 @@ export async function streamText(
           callbacksForAttempt,
           signal,
         );
+        throwIfRequestAborted(undefined, mergedOpts.signal, signal);
         // QNBS-v3: mirrors generateText's fallback-reason bookkeeping — without this, a stale reason from an earlier failed/promoted request would keep showing in GpuMetricsPanel after this request's primary provider succeeds outright.
-        if (i > 0) {
-          _lastFallbackReason = `Primary provider ${mergedOpts.provider} failed; fell back to ${nextProvider}.`;
-        } else {
-          _lastFallbackReason = '';
-        }
+        recordProviderSuccess(mergedOpts.provider, nextProvider, i);
         return;
       } catch (error) {
         // QNBS-v3: A user-cancelled request is NOT a provider failure. Don't fall back to the next
         // provider and don't fire a terminal onError — surface the cancellation directly so callers
         // run their silent cancel flow instead of an error path.
-        if (isAbortError(error) || mergedOpts.signal?.aborted || signal?.aborted) {
-          throw error instanceof Error ? error : new Error(String(error));
-        }
+        throwIfRequestAborted(error, mergedOpts.signal, signal);
         if (nextProvider === 'grok' && grokEmitted) {
           // QNBS-v3: A partial Grok response must terminate rather than append fallback text to a truncated answer.
           const terminal = error instanceof Error ? error : new Error(String(error));
@@ -935,17 +993,14 @@ export async function streamText(
           attemptedOpenRouterFallback = fallback;
           try {
             await attemptOpenRouterFallback(mergedOpts, fallback, (fallbackOpts) =>
-              streamProvider(prompt, creativity, fallbackOpts, callbacks, signal),
+              streamProvider(prompt, creativity, fallbackOpts, guardedCallbacks, signal),
             );
+            throwIfRequestAborted(undefined, mergedOpts.signal, signal);
             _lastFallbackReason = `OpenRouter rate-limited; fell back to ${fallback}.`;
             return;
           } catch (fallbackError) {
             // QNBS-v3: mirrors the outer catch's cancellation guard — a cancel during the promoted fallback must not be treated as a provider failure either.
-            if (isAbortError(fallbackError) || mergedOpts.signal?.aborted || signal?.aborted) {
-              throw fallbackError instanceof Error
-                ? fallbackError
-                : new Error(String(fallbackError));
-            }
+            throwIfRequestAborted(fallbackError, mergedOpts.signal, signal);
             lastError = fallbackError;
           }
         }
@@ -964,9 +1019,7 @@ export async function streamText(
     if (tryHeuristicStream()) return;
     callbacks.onError?.(terminal);
     throw terminal;
-  } finally {
-    _cleanupPendingRequest(key, controller);
-  }
+  });
 }
 
 export async function streamAiHelpResponse(

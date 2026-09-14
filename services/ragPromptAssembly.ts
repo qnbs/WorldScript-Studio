@@ -17,6 +17,7 @@ export interface RagAssemblyOptions {
   maxTokens: number;
   duckDbEnabled: boolean;
   useRag: boolean;
+  signal?: AbortSignal;
 }
 
 export interface WriterRAGContext {
@@ -117,19 +118,37 @@ async function fetchRagChunks(
   options: RagAssemblyOptions,
 ): Promise<RagChunk[]> {
   if (!options.useRag) return [];
+  if (options.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 
   let queryEmb: Float32Array | undefined;
   if (options.ragMode === 'hybrid' || options.ragMode === 'semantic') {
-    queryEmb = await embedText(query.slice(0, 500)).catch(() => undefined);
+    queryEmb = await embedText(query.slice(0, 500), options.signal).catch(() => {
+      if (options.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      return undefined;
+    });
   }
-  const raw = await retrieveContext(
-    projectId,
-    query,
-    options.topK,
-    options.ragMode,
-    queryEmb,
-    options.duckDbEnabled && Boolean(queryEmb),
-  );
+  if (options.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+  // QNBS-v3: preserve historical RAG call arity when no cancellation signal is active.
+  const raw = options.signal
+    ? await retrieveContext(
+        projectId,
+        query,
+        options.topK,
+        options.ragMode,
+        queryEmb,
+        options.duckDbEnabled && Boolean(queryEmb),
+        false,
+        options.signal,
+      )
+    : await retrieveContext(
+        projectId,
+        query,
+        options.topK,
+        options.ragMode,
+        queryEmb,
+        options.duckDbEnabled && Boolean(queryEmb),
+      );
+  if (options.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
   return deduplicateChunksBySection(raw).slice(0, options.topK);
 }
 
@@ -151,6 +170,7 @@ export async function assembleRAGPrompt(
     try {
       chunks = await fetchRagChunks(context.projectId, query, options);
     } catch (err) {
+      if (options.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
       logger.warn('RAG retrieval failed (non-critical):', err);
     }
   }

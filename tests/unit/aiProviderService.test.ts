@@ -79,6 +79,33 @@ function installGrokFetch(body: string): ReturnType<typeof vi.fn> {
   return fetchMock;
 }
 
+function makePendingSseResponse(onReadStarted: () => void) {
+  type ReadResult = ReadableStreamReadResult<Uint8Array>;
+  let resolveRead!: (result: ReadResult) => void;
+  let rejectRead!: (reason?: unknown) => void;
+  const response = {
+    ok: true,
+    status: 200,
+    body: {
+      getReader: () => ({
+        read: () => {
+          onReadStarted();
+          return new Promise<ReadResult>((resolve, reject) => {
+            resolveRead = resolve;
+            rejectRead = reject;
+          });
+        },
+        cancel: vi.fn().mockResolvedValue(undefined),
+      }),
+    },
+  } as unknown as Response;
+  return {
+    response,
+    resolveRead: (result: ReadResult) => resolveRead(result),
+    rejectRead: (reason?: unknown) => rejectRead(reason),
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   // Remove __TAURI__ so ollama tests see browser context
@@ -167,11 +194,37 @@ describe('generateText', () => {
     expect(text).toBe('result text');
   });
 
+  it('does not let a pre-aborted caller cancel an active duplicate request', async () => {
+    let resolveFirst!: (value: string) => void;
+    let firstSignal!: AbortSignal;
+    vi.mocked(geminiService.generateText).mockImplementationOnce(
+      async (_prompt, _creativity, signal) => {
+        firstSignal = signal!;
+        return new Promise<string>((resolve) => {
+          resolveFirst = resolve;
+        });
+      },
+    );
+    const firstRequest = generateText('same prompt', 'Balanced', defaultOpts);
+    await vi.waitFor(() => expect(geminiService.generateText).toHaveBeenCalledOnce());
+
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      generateText('same prompt', 'Balanced', defaultOpts, controller.signal),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(firstSignal.aborted).toBe(false);
+
+    resolveFirst('first result');
+    await expect(firstRequest).resolves.toBe('first result');
+  });
+
   it('passes standalone AbortSignal to ollama stream', async () => {
     const { streamOllama } = await import('../../services/ollamaService');
     const ac = new AbortController();
     vi.mocked(streamOllama).mockImplementationOnce(async (_p, o, cb) => {
-      expect(o.signal).toBe(ac.signal);
+      expect(o.signal).toEqual(expect.any(AbortSignal));
+      expect(o.signal).not.toBe(ac.signal);
       cb.onChunk('ok');
     });
     const text = await generateText(
@@ -210,19 +263,33 @@ describe('generateText', () => {
     spy.mockRestore();
   });
 
-  it('delegates to local facade for onnx provider, passing model id', async () => {
+  it('delegates to local facade for onnx provider, passing model id and cancellation signal', async () => {
     const spy = vi.spyOn(localAiFacade, 'generateLocalText').mockResolvedValueOnce({
       layer: 'onnx',
       text: 'onnx-text',
     });
     const modelId = 'HuggingFaceTB/SmolLM2-135M-Instruct';
-    const text = await generateText('hello', 'Balanced', {
-      ...defaultOpts,
-      provider: 'onnx',
-      model: modelId,
-    });
+    const controller = new AbortController();
+    const text = await generateText(
+      'hello',
+      'Balanced',
+      {
+        ...defaultOpts,
+        provider: 'onnx',
+        model: modelId,
+      },
+      controller.signal,
+    );
     expect(text).toBe('onnx-text');
-    expect(spy).toHaveBeenCalledWith(expect.any(String), modelId);
+    expect(spy).toHaveBeenCalledWith(
+      expect.any(String),
+      modelId,
+      undefined,
+      undefined,
+      expect.any(AbortSignal),
+    );
+    controller.abort();
+    expect((spy.mock.calls[0]![4] as AbortSignal).aborted).toBe(true);
     spy.mockRestore();
   });
 
@@ -232,13 +299,25 @@ describe('generateText', () => {
       text: 'transformers-text',
     });
     const modelId = 'Xenova/distilgpt2';
-    const text = await generateText('hello', 'Balanced', {
-      ...defaultOpts,
-      provider: 'transformers',
-      model: modelId,
-    });
+    const controller = new AbortController();
+    const text = await generateText(
+      'hello',
+      'Balanced',
+      {
+        ...defaultOpts,
+        provider: 'transformers',
+        model: modelId,
+      },
+      controller.signal,
+    );
     expect(text).toBe('transformers-text');
-    expect(spy).toHaveBeenCalledWith(expect.any(String), modelId);
+    expect(spy).toHaveBeenCalledWith(
+      expect.any(String),
+      modelId,
+      undefined,
+      undefined,
+      expect.any(AbortSignal),
+    );
     spy.mockRestore();
   });
 });
@@ -246,11 +325,54 @@ describe('generateText', () => {
 // ─── generateJson ─────────────────────────────────────────────────────────────
 
 describe('generateJson', () => {
+  const directJsonSchema = { type: 'object' as const, properties: {} };
+  const invokeDirectJson = (prompt: string, signal?: AbortSignal) =>
+    generateJson(prompt, 'Balanced', directJsonSchema as never, defaultOpts, signal);
+
   it('delegates to geminiService for gemini provider', async () => {
-    const schema = { type: 'object' as const, properties: {} };
     vi.mocked(geminiService.generateJson).mockResolvedValueOnce({ key: 'val' });
-    const result = await generateJson('prompt', 'Balanced', schema as never, defaultOpts);
+    const result = await invokeDirectJson('prompt');
     expect(result).toEqual({ key: 'val' });
+  });
+
+  it('fences direct Gemini JSON before and after provider cancellation', async () => {
+    const preAborted = new AbortController();
+    preAborted.abort();
+    await expect(invokeDirectJson('pre-aborted json', preAborted.signal)).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+    expect(geminiService.generateJson).not.toHaveBeenCalled();
+
+    let resolveJson!: (value: { key: string }) => void;
+    vi.mocked(geminiService.generateJson).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveJson = resolve;
+      }),
+    );
+    const controller = new AbortController();
+    const result = invokeDirectJson('late json', controller.signal);
+
+    await vi.waitFor(() => expect(geminiService.generateJson).toHaveBeenCalled());
+    controller.abort();
+    resolveJson({ key: 'stale' });
+
+    await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+
+    let rejectJson!: (reason?: unknown) => void;
+    vi.mocked(geminiService.generateJson).mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        rejectJson = reject;
+      }),
+    );
+    const raced = invokeDirectJson('racing json');
+    await vi.waitFor(() => expect(geminiService.generateJson).toHaveBeenCalledTimes(2));
+    vi.mocked(geminiService.generateJson).mockResolvedValueOnce({ key: 'replacement' });
+    const replacement = invokeDirectJson('racing json');
+    await vi.waitFor(() => expect(geminiService.generateJson).toHaveBeenCalledTimes(3));
+    rejectJson(new Error('provider failed after supersession'));
+
+    await expect(raced).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(replacement).resolves.toEqual({ key: 'replacement' });
   });
 
   it('parses JSON text for non-gemini providers (ollama)', async () => {
@@ -347,9 +469,42 @@ describe('streamText', () => {
       'Llama-3.2-1B-Instruct-q4f16_1-MLC',
       undefined,
       undefined,
-      userSignal,
+      expect.any(AbortSignal),
     );
     spy.mockRestore();
+  });
+
+  it('does not publish a provider chunk that arrives after request cancellation', async () => {
+    const controller = new AbortController();
+    vi.mocked(geminiService.streamText).mockImplementationOnce(
+      async (_prompt, _creativity, onChunk) => {
+        controller.abort();
+        onChunk('late provider chunk');
+      },
+    );
+    const onChunk = vi.fn();
+
+    await expect(
+      streamText('prompt', 'Balanced', defaultOpts, { onChunk }, controller.signal),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+
+    expect(onChunk).not.toHaveBeenCalled();
+  });
+
+  it('rejects a pre-aborted caller before entering provider streaming', async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      streamText(
+        'pre-aborted prompt',
+        'Balanced',
+        defaultOpts,
+        { onChunk: vi.fn() },
+        controller.signal,
+      ),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(geminiService.streamText).not.toHaveBeenCalled();
   });
 
   it('clears a stale fallback reason when a later primary provider succeeds outright', async () => {
@@ -394,6 +549,30 @@ describe('streamText', () => {
     // QNBS-v3: default aiMode is 'hybrid' (not eco/local), so getOpenRouterFallbackProvider() resolves to 'gemini'.
     expect(onChunk).toHaveBeenCalledWith('fallback-gemini-answer');
     expect(getLastAiFallbackReason()).toBe('OpenRouter rate-limited; fell back to gemini.');
+  });
+
+  it('rejects promoted fallback completion after cancellation and suppresses late chunks', async () => {
+    const controller = new AbortController();
+    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('or-key');
+    vi.mocked(openrouterProvider.streamOpenRouter).mockRejectedValueOnce(
+      new Error('OPENROUTER_RATE_LIMITED: too many requests'),
+    );
+    vi.mocked(geminiService.streamText).mockImplementationOnce(async (_p, _c, onChunk) => {
+      controller.abort();
+      onChunk('late promoted chunk');
+    });
+    const onChunk = vi.fn();
+
+    await expect(
+      streamText(
+        'prompt',
+        'Balanced',
+        { ...defaultOpts, provider: 'openrouter' },
+        { onChunk },
+        controller.signal,
+      ),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(onChunk).not.toHaveBeenCalled();
   });
 
   it('propagates cancellation from the OpenRouter fallback attempt instead of treating it as a provider failure', async () => {
@@ -509,30 +688,16 @@ describe('streamText', () => {
     }
   });
 
-  it('completes OpenAI cancellation when a pending read rejects', async () => {
+  it('does not complete OpenAI callbacks when a pending read rejects after cancellation', async () => {
     const originalFetch = globalThis.fetch;
     const ac = new AbortController();
-    let rejectRead!: (reason?: unknown) => void;
     let resolveReadStarted!: () => void;
     const readStarted = new Promise<void>((resolve) => {
       resolveReadStarted = resolve;
     });
+    const pending = makePendingSseResponse(resolveReadStarted);
     const onDone = vi.fn();
-    globalThis.fetch = vi.fn().mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      body: {
-        getReader: () => ({
-          read: () => {
-            resolveReadStarted();
-            return new Promise<ReadableStreamReadResult<Uint8Array>>((_resolve, reject) => {
-              rejectRead = reject;
-            });
-          },
-          cancel: vi.fn().mockResolvedValue(undefined),
-        }),
-      },
-    } as unknown as Response);
+    globalThis.fetch = vi.fn().mockResolvedValueOnce(pending.response);
     vi.mocked(storageService.getApiKey).mockResolvedValueOnce('openai-test-key');
 
     try {
@@ -545,10 +710,10 @@ describe('streamText', () => {
       );
       await readStarted;
       ac.abort();
-      rejectRead(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+      pending.rejectRead(Object.assign(new Error('aborted'), { name: 'AbortError' }));
 
-      await expect(streamPromise).resolves.toBeUndefined();
-      expect(onDone).toHaveBeenCalledTimes(1);
+      await expect(streamPromise).rejects.toMatchObject({ name: 'AbortError' });
+      expect(onDone).not.toHaveBeenCalled();
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -694,26 +859,12 @@ describe('streamText', () => {
     const originalFetch = globalThis.fetch;
     const ac = new AbortController();
     const encoder = new TextEncoder();
-    let resolveRead!: (result: ReadableStreamReadResult<Uint8Array>) => void;
     let resolveReadStarted!: () => void;
     const readStarted = new Promise<void>((resolve) => {
       resolveReadStarted = resolve;
     });
-    globalThis.fetch = vi.fn().mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      body: {
-        getReader: () => ({
-          read: () => {
-            resolveReadStarted();
-            return new Promise<ReadableStreamReadResult<Uint8Array>>((resolve) => {
-              resolveRead = resolve;
-            });
-          },
-          cancel: vi.fn().mockResolvedValue(undefined),
-        }),
-      },
-    } as unknown as Response);
+    const pending = makePendingSseResponse(resolveReadStarted);
+    globalThis.fetch = vi.fn().mockResolvedValueOnce(pending.response);
     vi.mocked(storageService.getApiKey).mockResolvedValueOnce('grok-test-key');
     const onChunk = vi.fn();
 
@@ -727,7 +878,7 @@ describe('streamText', () => {
       );
       await readStarted;
       ac.abort();
-      resolveRead({
+      pending.resolveRead({
         done: false,
         value: encoder.encode('data: {"choices":[{"delta":{"content":"late"}}]}\n'),
       });
@@ -1534,7 +1685,7 @@ describe('streamText OpenAI', () => {
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
       'https://api.openai.com/v1/chat/completions',
-      expect.objectContaining({ signal: ac.signal }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(JSON.parse(requestInit.body as string)).toMatchObject({
@@ -1657,7 +1808,7 @@ describe('streamText ollama→gemini fallback', () => {
         { onChunk: vi.fn(), onError },
         // no signal → the only abort signal is the thrown error's name
       ),
-    ).rejects.toThrow(/abort/i);
+    ).rejects.toMatchObject({ name: 'AbortError' });
 
     expect(geminiService.streamText).not.toHaveBeenCalled();
     expect(onError).not.toHaveBeenCalled();
@@ -1725,7 +1876,7 @@ describe('streamText OpenAI abort mid-stream', () => {
       }, 5);
     });
 
-    await streamPromise;
+    await expect(streamPromise).rejects.toMatchObject({ name: 'AbortError' });
     // chunk-1 was received; chunk-2 may or may not arrive (abort is best-effort)
     expect(chunks).toContain('chunk1');
   });
@@ -1786,7 +1937,6 @@ describe('streamOpenAI error paths', () => {
   });
 
   it('breaks without emitting chunks when signal is already aborted', async () => {
-    vi.mocked(storageService.getApiKey).mockResolvedValueOnce('sk-test');
     const ac = new AbortController();
     ac.abort();
     const onChunk = vi.fn();
@@ -1802,13 +1952,15 @@ describe('streamOpenAI error paths', () => {
       }),
     } as unknown as Response);
 
-    await streamText(
-      'hello',
-      'Balanced',
-      { provider: 'openai', model: 'gpt-4o-mini' },
-      { onChunk },
-      ac.signal,
-    );
+    await expect(
+      streamText(
+        'hello',
+        'Balanced',
+        { provider: 'openai', model: 'gpt-4o-mini' },
+        { onChunk },
+        ac.signal,
+      ),
+    ).rejects.toMatchObject({ name: 'AbortError' });
     // aborted → loop breaks before reading; onChunk never called
     expect(onChunk).not.toHaveBeenCalled();
   });
@@ -2036,10 +2188,13 @@ describe('service-level request deduplication', () => {
     let firstAbortSignal: AbortSignal | undefined;
     const spy = vi
       .spyOn(localAiFacade, 'generateLocalText')
-      .mockImplementationOnce(async (_prompt, _modelId) => {
+      .mockImplementationOnce(async (_prompt, _modelId, _a, _b, signal) => {
         // Capture the fact that we were called first
-        return new Promise<{ layer: 'heuristic'; text: string }>((resolve) => {
-          setTimeout(() => resolve({ layer: 'heuristic', text: 'first' }), 100);
+        firstAbortSignal = signal;
+        return new Promise<{ layer: 'heuristic'; text: string }>((_resolve, reject) => {
+          const rejectIfAborted = () => reject(new DOMException('Aborted', 'AbortError'));
+          if (signal?.aborted) rejectIfAborted();
+          else signal?.addEventListener('abort', rejectIfAborted, { once: true });
         });
       })
       .mockResolvedValueOnce({ layer: 'heuristic', text: 'second' });
@@ -2050,14 +2205,21 @@ describe('service-level request deduplication', () => {
       model: 'HuggingFaceTB/SmolLM2-135M-Instruct' as const,
     };
     // Fire both calls concurrently — second should abort first
-    const p1 = generateText('same-prompt', 'Balanced', opts).catch(() => 'aborted');
+    const callerController = new AbortController();
+    const p1 = generateText('same-prompt', 'Balanced', opts, callerController.signal).catch(
+      () => 'aborted',
+    );
     const p2 = generateText('same-prompt', 'Balanced', opts);
 
-    const [_r1, r2] = await Promise.all([p1, p2]);
+    const [r1, r2] = await Promise.all([p1, p2]);
     // First may resolve via fallback chain or abort; second should succeed
+    expect(r1).toBe('aborted');
     expect(r2).toBe('second');
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(firstAbortSignal).toBeDefined();
+    expect(firstAbortSignal).not.toBe(callerController.signal);
+    expect(firstAbortSignal?.aborted).toBe(true);
     spy.mockRestore();
-    void firstAbortSignal; // suppress unused-var warning
   });
 
   it('cleanup removes pending entry after completion', async () => {

@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { projectActions } from '../../../features/project/projectSlice';
 import { useManuscriptView } from '../../../hooks/useManuscriptView';
+import { usePlotBoardAi } from '../../../hooks/usePlotBoardAi';
 import type { StorySection } from '../../../types';
 
 // ---------------------------------------------------------------------------
@@ -55,6 +56,25 @@ vi.mock('../../../features/project/projectSelectors', () => ({
   selectAllWorlds: (state: typeof mockState) => state.worlds,
 }));
 
+vi.mock('../../../features/project/projectIdentity', () => ({
+  getProjectTargetIdentity: (source: typeof mockState.project.present) =>
+    `id:${source.data.id}:gen:${source.generation}`,
+  captureActiveProjectIdentity: () =>
+    `id:${mockState.project.present.data.id}:gen:${mockState.project.present.generation}`,
+  identityUnchanged: (captured: string | null, live: string | null) =>
+    captured !== null && captured === live,
+  isExpectedAiCancellationError: (error: unknown) =>
+    typeof error === 'object' &&
+    error !== null &&
+    'name' in error &&
+    (error.name === 'AbortError' || error.name === 'StaleProjectOperationError'),
+  isStaleProjectOperationError: (error: unknown) =>
+    typeof error === 'object' &&
+    error !== null &&
+    'name' in error &&
+    error.name === 'StaleProjectOperationError',
+}));
+
 vi.mock('../../../features/project/thunks/writingThunks', () => {
   const proofreadThunk = vi.fn(() => ({ type: 'mock-proofread-action' }));
   // QNBS-v3: attach .fulfilled.match so hook's RTK pattern check works in tests
@@ -67,6 +87,13 @@ vi.mock('../../../features/project/thunks/writingThunks', () => {
     generateSceneImageThunk: vi.fn(() => ({ type: 'mock-scene-action' })),
   };
 });
+
+vi.mock('../../../features/project/thunks/plotBoardAiThunks', () => ({
+  suggestNextBeatThunk: vi.fn((payload: unknown) => ({
+    type: 'mock-plot-board-action',
+    payload,
+  })),
+}));
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -90,6 +117,7 @@ beforeEach(() => {
   setManuscript([makeSection('s1', 'Chapter 1', 'Hello world foo')]);
   mockState.characters = [];
   mockState.worlds = [];
+  mockState.project.present.generation = 0;
 });
 
 // ---------------------------------------------------------------------------
@@ -316,6 +344,45 @@ describe('handleGenerateLoglines', () => {
     });
     expect(result.current.isAiLoading).toBe(false);
   });
+
+  it('does not let a superseded logline request clear current request state', async () => {
+    let rejectFirst!: (error: unknown) => void;
+    let resolveSecond!: (suggestions: string[]) => void;
+    mockUnwrap
+      .mockReturnValueOnce(
+        new Promise((_resolve, reject) => {
+          rejectFirst = reject;
+        }),
+      )
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveSecond = resolve;
+        }),
+      );
+    const { result } = renderHook(() => useManuscriptView({ onNavigate }));
+
+    let firstRequest!: Promise<void>;
+    let secondRequest!: Promise<void>;
+    act(() => {
+      firstRequest = result.current.handleGenerateLoglines();
+      secondRequest = result.current.handleGenerateLoglines();
+    });
+
+    await act(async () => {
+      rejectFirst(new DOMException('Aborted', 'AbortError'));
+      await firstRequest;
+    });
+    expect(result.current.isAiLoading).toBe(true);
+    expect(result.current.isLoglineModalOpen).toBe(true);
+    expect(mockToast.error).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveSecond(['Current suggestion']);
+      await secondRequest;
+    });
+    expect(result.current.loglineSuggestions).toEqual(['Current suggestion']);
+    expect(result.current.isAiLoading).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -454,6 +521,29 @@ describe('handleVisualizeScene', () => {
     expect(mockToast.error).toHaveBeenCalled();
   });
 
+  it('clears the preview for a stale project operation', async () => {
+    mockUnwrap.mockResolvedValueOnce({
+      imageKey: 'scene-before-stale',
+      dataUrl: 'data:image/png;base64,before-stale',
+    });
+    setManuscript([makeSection('s1', 'Ch1', 'Scene content')]);
+    const { result, rerender } = renderHook(() => useManuscriptView({ onNavigate }));
+
+    await act(async () => {
+      await result.current.handleVisualizeScene();
+    });
+    expect(result.current.sceneImagePreviewUrl).toBe('data:image/png;base64,before-stale');
+
+    mockState.project.present.generation = 1;
+    rerender();
+    mockUnwrap.mockRejectedValueOnce({ name: 'StaleProjectOperationError' });
+    await act(async () => {
+      await result.current.handleVisualizeScene();
+    });
+    expect(result.current.sceneImagePreviewUrl).toBeNull();
+    expect(mockToast.error).not.toHaveBeenCalled();
+  });
+
   it('does nothing when active section has no content', async () => {
     setManuscript([makeSection('s1', 'Ch1', '')]);
     const { result } = renderHook(() => useManuscriptView({ onNavigate }));
@@ -544,5 +634,43 @@ describe('handleVisualizeScene', () => {
     });
     expect(result.current.sceneImagePreviewUrl).toBeNull();
     expect(result.current.isSceneVisualizing).toBe(false);
+  });
+});
+
+describe('usePlotBoardAi', () => {
+  it('keeps plot-board loading owned by the newest request', async () => {
+    let rejectFirst!: (error: unknown) => void;
+    let resolveSecond!: (value: { beats: never[]; ragChunkCount: number }) => void;
+    mockUnwrap
+      .mockReturnValueOnce(
+        new Promise((_resolve, reject) => {
+          rejectFirst = reject;
+        }),
+      )
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveSecond = resolve;
+        }),
+      );
+    const { result } = renderHook(() => usePlotBoardAi('A plot summary', []));
+
+    let firstRequest!: Promise<void>;
+    let secondRequest!: Promise<void>;
+    act(() => {
+      firstRequest = result.current.suggestNextBeat();
+      secondRequest = result.current.suggestNextBeat();
+    });
+
+    await act(async () => {
+      rejectFirst(new DOMException('Aborted', 'AbortError'));
+      await firstRequest;
+    });
+    expect(result.current.isLoading).toBe(true);
+
+    await act(async () => {
+      resolveSecond({ beats: [], ragChunkCount: 0 });
+      await secondRequest;
+    });
+    expect(result.current.isLoading).toBe(false);
   });
 });

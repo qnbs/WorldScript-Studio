@@ -36,6 +36,14 @@ export function isStaleProjectOperationError(error: unknown): boolean {
   );
 }
 
+// QNBS-v3: duplicate-request aborts are expected supersession, not user-visible provider failures.
+export function isExpectedAiCancellationError(error: unknown): boolean {
+  return (
+    isStaleProjectOperationError(error) ||
+    (typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError')
+  );
+}
+
 function baseTargetIdentity(project: unknown): string | null {
   if (typeof project !== 'object' || project === null) return null;
   const record = project as Record<string, unknown>;
