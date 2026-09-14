@@ -17,6 +17,7 @@ import {
 
 const isCI = process.env['CI'] === 'true';
 const ollamaTagsUrl = 'http://localhost:11434/api/tags';
+const ollamaRequestLogs = new WeakMap<import('@playwright/test').Page, string[]>();
 
 function trackOllamaRequests(page: import('@playwright/test').Page): string[] {
   const requests: string[] = [];
@@ -25,11 +26,22 @@ function trackOllamaRequests(page: import('@playwright/test').Page): string[] {
       requests.push(request.url());
     }
   });
+  ollamaRequestLogs.set(page, requests);
+  return requests;
+}
+
+function getTrackedOllamaRequests(page: import('@playwright/test').Page): string[] {
+  const requests = ollamaRequestLogs.get(page);
+  if (!requests) throw new Error('Ollama request tracking was not initialized');
   return requests;
 }
 
 async function stubOllamaTags(page: import('@playwright/test').Page): Promise<void> {
-  await page.route('http://localhost:11434/**', async (route) => {
+  await page.route(ollamaTagsUrl, async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -47,16 +59,21 @@ async function openOllamaProvider(page: import('@playwright/test').Page): Promis
 test.describe('Browser-Ollama admission (ADR-0017)', () => {
   test.beforeEach(async ({ page }) => {
     test.skip(!isCI, 'CI-only E2E suite');
+    trackOllamaRequests(page);
+    await stubOllamaTags(page);
     await setFeatureFlags(page, { enableBrowserOllama: false });
+    await page.addInitScript(() => {
+      localStorage.setItem('worldscript-language', 'en');
+    });
     await page.goto('/');
     await waitForSpaReady(page);
     await selectEnglish(page);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
     await ensureBlankProject(page);
   });
 
   test('flag off stays network-inert and blocks local-server actions', async ({ page }) => {
-    const ollamaRequests = trackOllamaRequests(page);
-    await stubOllamaTags(page);
+    const ollamaRequests = getTrackedOllamaRequests(page);
     await openOllamaProvider(page);
 
     await expect(page.getByText('Desktop app required for local servers')).toBeVisible();
@@ -68,8 +85,7 @@ test.describe('Browser-Ollama admission (ADR-0017)', () => {
   test('explicit opt-in enables the browser path, but only explicit actions request Ollama', async ({
     page,
   }) => {
-    const ollamaRequests = trackOllamaRequests(page);
-    await stubOllamaTags(page);
+    const ollamaRequests = getTrackedOllamaRequests(page);
 
     await clickNavItem(page, /Settings/i);
     await page.getByTestId('settings-nav-experimental').click();
