@@ -54,19 +54,36 @@ describe('createDeduplicatedThunk', () => {
     expect((action as { payload: string }).payload).toBe('result');
   });
 
-  it('allows concurrent requests with same key (both fulfill)', async () => {
-    // The deduplication aborts the internal AbortController of prior requests,
-    // but Redux thunk signals are not connected back — both dispatches complete.
+  it('aborts the earlier request with the same key through its returned signal', async () => {
+    let firstRequest = true;
+    let resolveFirstStarted!: () => void;
+    const firstStarted = new Promise<void>((resolve) => {
+      resolveFirstStarted = resolve;
+    });
     const thunk = createDeduplicatedThunk<string>('test/dedup', async (_arg, api) => {
-      api.registerDuplicateRequest('same-prompt', 'same-view');
-      await new Promise<void>((resolve) => setTimeout(resolve, 5));
+      const signal = api.registerDuplicateRequest('same-prompt', 'same-view');
+      if (firstRequest) {
+        firstRequest = false;
+        resolveFirstStarted();
+        await new Promise<never>((_resolve, reject) => {
+          const rejectIfAborted = () => reject(new DOMException('Aborted', 'AbortError'));
+          if (signal.aborted) {
+            rejectIfAborted();
+          } else {
+            signal.addEventListener('abort', rejectIfAborted, { once: true });
+          }
+        });
+      }
       return 'done';
     });
 
     const store = makeStore();
-    const [r1, r2] = await Promise.all([store.dispatch(thunk()), store.dispatch(thunk())]);
+    const firstResult = store.dispatch(thunk());
+    await firstStarted;
+    const secondResult = store.dispatch(thunk());
+    const [r1, r2] = await Promise.all([firstResult, secondResult]);
 
-    expect(r1.type).toBe('test/dedup/fulfilled');
+    expect(r1.type).toBe('test/dedup/rejected');
     expect(r2.type).toBe('test/dedup/fulfilled');
   });
 

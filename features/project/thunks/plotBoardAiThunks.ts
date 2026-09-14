@@ -22,7 +22,7 @@ export interface SuggestNextBeatArg {
 
 export const suggestNextBeatThunk = createDeduplicatedThunk(
   'project/suggestNextBeat',
-  async (arg: SuggestNextBeatArg, { getState, signal, registerDuplicateRequest }) => {
+  async (arg: SuggestNextBeatArg, { getState, registerDuplicateRequest }) => {
     const state = getState() as RootState;
     const project = state.project.present?.data;
     if (!project) throw new Error('No project loaded');
@@ -49,7 +49,7 @@ export const suggestNextBeatThunk = createDeduplicatedThunk(
       },
     );
 
-    registerDuplicateRequest(assembled.prompt, 'plotSuggestion');
+    const signal = registerDuplicateRequest(assembled.prompt, 'plotSuggestion');
 
     const creativity = buildAiCreativity(state);
     const aiOptions = buildAiOptions(state);

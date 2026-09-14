@@ -20,7 +20,7 @@ export const generateWorldProfileThunk = createDeduplicatedThunk(
       lang,
       heuristicLabels,
     }: { concept: string; lang: string; heuristicLabels?: WorldHeuristicLabels },
-    { getState, signal, registerDuplicateRequest },
+    { getState, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
@@ -28,7 +28,7 @@ export const generateWorldProfileThunk = createDeduplicatedThunk(
     const { generateJson } = await loadAiProvider();
     await import('../../../services/ai/heuristicFallback/generators/worldGenerator');
     const { prompt, schema } = getPrompts('worldProfile', { concept, lang });
-    registerDuplicateRequest(prompt, 'worldProfile');
+    const signal = registerDuplicateRequest(prompt, 'worldProfile');
     const creativity = buildAiCreativity(state);
     const optsWithFallback: typeof aiOptions = {
       ...aiOptions,
@@ -52,14 +52,14 @@ export const regenerateWorldFieldThunk = createDeduplicatedThunk(
   'project/regenerateWorldField',
   async (
     { world, field, lang }: { world: World; field: keyof World; lang: string },
-    { getState, signal, registerDuplicateRequest },
+    { getState, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
     const { getPrompts } = await loadPrompts();
     const { generateText } = await loadAiProvider();
     const { prompt } = getPrompts('regenerateWorldField', { world, field, lang });
-    registerDuplicateRequest(prompt, 'regenerateWorldField');
+    const signal = registerDuplicateRequest(prompt, 'regenerateWorldField');
     const creativity = buildAiCreativity(state);
     const response = await generateText(prompt, creativity, aiOptions, signal);
     return { field, value: response };
@@ -70,7 +70,7 @@ export const generateWorldImageThunk = createDeduplicatedThunk(
   'project/generateWorldImage',
   async (
     { worldId, description, lang }: { worldId: string; description: string; lang: string },
-    { getState, signal, registerDuplicateRequest },
+    { getState, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
     // QNBS-v3: capture the incarnation before generation so a same-ID replacement cannot inherit the result.
@@ -81,7 +81,7 @@ export const generateWorldImageThunk = createDeduplicatedThunk(
     const { getPrompts } = await loadPrompts();
     const { generateImage } = await loadAiProvider();
     const { prompt } = getPrompts('worldImage', { description, lang });
-    registerDuplicateRequest(prompt, 'worldImage');
+    const signal = registerDuplicateRequest(prompt, 'worldImage');
     const base64 = await generateImage(prompt, aiOptions, signal);
     assertProjectIdentityUnchanged(
       originIdentity,

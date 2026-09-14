@@ -10,7 +10,7 @@ import type { PrivacySettings } from '../../types';
 import { buildAiOptions } from './thunks/thunkUtils';
 
 type DeduplicatedThunkAPI = GetThunkAPI<AsyncThunkConfig> & {
-  registerDuplicateRequest: (prompt: string, viewType: string) => string;
+  registerDuplicateRequest: (prompt: string, viewType: string) => AbortSignal;
 };
 
 const activeControllers = new Map<string, AbortController>();
@@ -29,6 +29,7 @@ export const createDeduplicatedThunk = <Returned, ThunkArg = void>(
     async (arg, thunkAPI) => {
       let activeRequestKey: string | null = null;
       let activeController: AbortController | null = null;
+      let activeRequestCleanup = () => {};
 
       const registerDuplicateRequest = (prompt: string, viewType: string) => {
         // QNBS-v3: Include preset hash so changing provider/model/temperature aborts stale requests.
@@ -54,15 +55,18 @@ export const createDeduplicatedThunk = <Returned, ThunkArg = void>(
         activeController = controller;
         activeControllers.set(uniqueKey, controller);
 
-        thunkAPI.signal.addEventListener(
-          'abort',
-          () => {
-            controller.abort();
-          },
-          { once: true },
-        );
+        const abortFromThunk = () => controller.abort();
+        if (thunkAPI.signal.aborted) {
+          controller.abort();
+        } else {
+          thunkAPI.signal.addEventListener('abort', abortFromThunk, { once: true });
+          activeRequestCleanup = () => {
+            thunkAPI.signal.removeEventListener('abort', abortFromThunk);
+          };
+        }
 
-        return uniqueKey;
+        // QNBS-v3: return the controller-backed signal so duplicate cancellation reaches provider fetch/worker code; thunkAPI.signal only covers caller aborts.
+        return controller.signal;
       };
 
       const wrappedThunkAPI = {
@@ -81,6 +85,8 @@ export const createDeduplicatedThunk = <Returned, ThunkArg = void>(
         }
         return await payloadCreator(arg, wrappedThunkAPI);
       } finally {
+        activeRequestCleanup();
+        activeRequestCleanup = () => {};
         if (activeRequestKey && activeController) {
           const current = activeControllers.get(activeRequestKey);
           if (current === activeController) {

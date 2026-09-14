@@ -10,7 +10,7 @@ import { buildAiCreativity, buildAiOptions, loadAiProvider, loadPrompts } from '
 
 export const generateLoglineSuggestionsThunk = createDeduplicatedThunk(
   'project/generateLogline',
-  async (lang: string, { getState, signal, registerDuplicateRequest }) => {
+  async (lang: string, { getState, registerDuplicateRequest }) => {
     const state = getState() as RootState;
     const project = state.project.present.data;
     const creativity = buildAiCreativity(state);
@@ -18,14 +18,14 @@ export const generateLoglineSuggestionsThunk = createDeduplicatedThunk(
     const { getPrompts } = await loadPrompts();
     const { generateJson } = await loadAiProvider();
     const { prompt, schema } = getPrompts('logline', { project, lang });
-    registerDuplicateRequest(prompt, 'logline');
+    const signal = registerDuplicateRequest(prompt, 'logline');
     return await generateJson<string[]>(prompt, creativity, schema!, aiOptions, signal);
   },
 );
 
 export const generateSynopsisThunk = createDeduplicatedThunk(
   'project/generateSynopsis',
-  async (lang: string, { getState, signal, registerDuplicateRequest }) => {
+  async (lang: string, { getState, registerDuplicateRequest }) => {
     const state = getState() as RootState;
     const project = state.project.present.data;
     const creativity = buildAiCreativity(state);
@@ -33,7 +33,7 @@ export const generateSynopsisThunk = createDeduplicatedThunk(
     const { getPrompts } = await loadPrompts();
     const { generateText } = await loadAiProvider();
     const { prompt } = getPrompts('synopsis', { project, lang });
-    registerDuplicateRequest(prompt, 'synopsis');
+    const signal = registerDuplicateRequest(prompt, 'synopsis');
     return await generateText(prompt, creativity, aiOptions, signal);
   },
 );
@@ -42,7 +42,7 @@ export const proofreadTextThunk = createDeduplicatedThunk(
   'project/proofreadText',
   async (
     { text, lang }: { text: string; lang: string },
-    { getState, signal, registerDuplicateRequest },
+    { getState, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
     const creativity = buildAiCreativity(state);
@@ -50,7 +50,7 @@ export const proofreadTextThunk = createDeduplicatedThunk(
     const { getPrompts } = await loadPrompts();
     const { generateJson } = await loadAiProvider();
     const { prompt, schema } = getPrompts('proofread', { text, lang });
-    registerDuplicateRequest(prompt, 'proofread');
+    const signal = registerDuplicateRequest(prompt, 'proofread');
     return await generateJson<{ original: string; suggestion: string; explanation: string }[]>(
       prompt,
       creativity,
@@ -71,7 +71,7 @@ export const generateSceneImageThunk = createDeduplicatedThunk(
       projectTitle: string;
       lang: string;
     },
-    { getState, signal, registerDuplicateRequest },
+    { getState, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
     // QNBS-v3: capture the incarnation before generation so a same-ID replacement cannot inherit the result.
@@ -87,7 +87,7 @@ export const generateSceneImageThunk = createDeduplicatedThunk(
       projectTitle: payload.projectTitle,
       lang: payload.lang,
     });
-    registerDuplicateRequest(prompt, 'sceneVisualization');
+    const signal = registerDuplicateRequest(prompt, 'sceneVisualization');
     const base64 = await generateImage(prompt, aiOptions, signal);
     const imageKey = `scene-${payload.sectionId}`;
     assertProjectIdentityUnchanged(
@@ -120,13 +120,13 @@ export const streamGenerationThunk = createDeduplicatedThunk(
   'project/streamGeneration',
   async (
     { prompt, lang, onChunk }: { prompt: string; lang: string; onChunk: (chunk: string) => void },
-    { getState, signal, registerDuplicateRequest },
+    { getState, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
     const creativity = buildAiCreativity(state);
     const fullPrompt = `${prompt}\n\nRespond in ${lang === 'de' ? 'German' : 'English'}.`;
-    registerDuplicateRequest(fullPrompt, 'streamGeneration');
+    const signal = registerDuplicateRequest(fullPrompt, 'streamGeneration');
     const { streamText } = await loadAiProvider();
     await streamText(fullPrompt, creativity, aiOptions, { onChunk }, signal);
   },

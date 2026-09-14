@@ -10,7 +10,7 @@ export const generateOutlineThunk = createDeduplicatedThunk(
   'project/generateOutline',
   async (
     params: OutlineGenerationParams & { heuristicLabels?: OutlineHeuristicLabels },
-    { getState, signal, registerDuplicateRequest },
+    { getState, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
@@ -20,7 +20,7 @@ export const generateOutlineThunk = createDeduplicatedThunk(
     // QNBS-v3: lazy-register the heuristic generator only when an outline is actually generated.
     await import('../../../services/ai/heuristicFallback/generators/outlineGenerator');
     const { prompt, schema } = getPrompts('outline', params);
-    registerDuplicateRequest(prompt, 'outline');
+    const signal = registerDuplicateRequest(prompt, 'outline');
     // QNBS-v3: attach the heuristic fallback — schema-valid OutlineSection[] from pre-resolved labels
     // when the AI call is terminally unavailable (generateJson otherwise just throws for Gemini).
     const optsWithFallback: typeof aiOptions = {
@@ -54,7 +54,7 @@ export const regenerateOutlineSectionThunk = createDeduplicatedThunk(
       sectionToIndex,
       lang,
     }: { allSections: OutlineSection[]; sectionToIndex: number; lang: string },
-    { getState, signal, registerDuplicateRequest },
+    { getState, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
@@ -66,7 +66,7 @@ export const regenerateOutlineSectionThunk = createDeduplicatedThunk(
       sectionToIndex,
       lang,
     });
-    registerDuplicateRequest(prompt, 'regenerateOutlineSection');
+    const signal = registerDuplicateRequest(prompt, 'regenerateOutlineSection');
     const response = await generateJson<OutlineSection>(
       prompt,
       creativity,
@@ -82,7 +82,7 @@ export const personalizeTemplateThunk = createDeduplicatedThunk(
   'project/personalizeTemplate',
   async (
     { sections, concept, lang }: { sections: { title: string }[]; concept: string; lang: string },
-    { getState, signal, registerDuplicateRequest },
+    { getState, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
@@ -90,7 +90,7 @@ export const personalizeTemplateThunk = createDeduplicatedThunk(
     const { generateJson } = await loadAiProvider();
     const { prompt, schema } = getPrompts('personalizeTemplate', { sections, concept, lang });
     const creativity = buildAiCreativity(state);
-    registerDuplicateRequest(prompt, 'personalizeTemplate');
+    const signal = registerDuplicateRequest(prompt, 'personalizeTemplate');
     return await generateJson<{ title: string; prompt: string }[]>(
       prompt,
       creativity,
@@ -103,14 +103,14 @@ export const personalizeTemplateThunk = createDeduplicatedThunk(
 
 export const generateCustomTemplateThunk = createDeduplicatedThunk(
   'project/generateCustomTemplate',
-  async (params: CustomTemplateParams, { getState, signal, registerDuplicateRequest }) => {
+  async (params: CustomTemplateParams, { getState, registerDuplicateRequest }) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
     const { getPrompts } = await loadPrompts();
     const { generateJson } = await loadAiProvider();
     const { prompt, schema } = getPrompts('customTemplate', params);
     const creativity = buildAiCreativity(state);
-    registerDuplicateRequest(prompt, 'customTemplate');
+    const signal = registerDuplicateRequest(prompt, 'customTemplate');
     return await generateJson<{ title: string }[]>(prompt, creativity, schema!, aiOptions, signal);
   },
 );

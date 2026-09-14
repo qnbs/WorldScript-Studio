@@ -21,7 +21,7 @@ export const generateCharacterProfileThunk = createDeduplicatedThunk(
       lang,
       heuristicLabels,
     }: { concept: string; lang: string; heuristicLabels?: CharacterHeuristicLabels },
-    { getState, signal, registerDuplicateRequest },
+    { getState, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
@@ -30,7 +30,7 @@ export const generateCharacterProfileThunk = createDeduplicatedThunk(
     const { generateJson } = await loadAiProvider();
     await import('../../../services/ai/heuristicFallback/generators/characterGenerator');
     const { prompt, schema } = getPrompts('characterProfile', { concept, lang });
-    registerDuplicateRequest(prompt, 'characterProfile');
+    const signal = registerDuplicateRequest(prompt, 'characterProfile');
     const optsWithFallback: typeof aiOptions = {
       ...aiOptions,
       heuristicTask: 'character.profile',
@@ -53,14 +53,14 @@ export const regenerateCharacterFieldThunk = createDeduplicatedThunk(
   'project/regenerateCharacterField',
   async (
     { character, field, lang }: { character: Character; field: keyof Character; lang: string },
-    { getState, signal, registerDuplicateRequest },
+    { getState, registerDuplicateRequest },
   ) => {
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
     const { getPrompts } = await loadPrompts();
     const { generateText } = await loadAiProvider();
     const { prompt } = getPrompts('regenerateCharacterField', { character, field, lang });
-    registerDuplicateRequest(prompt, 'regenerateCharacterField');
+    const signal = registerDuplicateRequest(prompt, 'regenerateCharacterField');
     const creativity = buildAiCreativity(state);
     const response = await generateText(prompt, creativity, aiOptions, signal);
     return { field, value: response };
@@ -76,7 +76,7 @@ export const generateCharacterPortraitThunk = createDeduplicatedThunk(
       style,
       lang,
     }: { characterId: string; description: string; style?: string; lang: string },
-    { getState, signal, registerDuplicateRequest },
+    { getState, registerDuplicateRequest },
   ) => {
     const fullDescription = style ? `${description}. Style: ${style}` : description;
     const state = getState() as RootState;
@@ -88,7 +88,7 @@ export const generateCharacterPortraitThunk = createDeduplicatedThunk(
     const { getPrompts } = await loadPrompts();
     const { generateImage } = await loadAiProvider();
     const { prompt } = getPrompts('characterPortrait', { description: fullDescription, lang });
-    registerDuplicateRequest(prompt, 'characterPortrait');
+    const signal = registerDuplicateRequest(prompt, 'characterPortrait');
     const base64 = await generateImage(prompt, aiOptions, signal);
     assertProjectIdentityUnchanged(
       originIdentity,
