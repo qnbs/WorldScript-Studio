@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Duplicate AI requests now cancel provider/runtime work before stale image writes and suppress expected supersession errors in the UI.** PR #745.
+- **Updated the transitive rustls dependency to the OSV-fixed release 0.23.45.** PR #746.
 - **Direct OpenAI o-series streaming now uses reasoning-compatible completion
   parameters:** normalized canonical OpenAI roots receive `max_completion_tokens` without legacy
   sampling fields, while genuinely non-OpenAI compatible roots retain their existing request
