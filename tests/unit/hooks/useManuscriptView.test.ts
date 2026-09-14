@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { projectActions } from '../../../features/project/projectSlice';
 import { useManuscriptView } from '../../../hooks/useManuscriptView';
+import { usePlotBoardAi } from '../../../hooks/usePlotBoardAi';
 import type { StorySection } from '../../../types';
 
 // ---------------------------------------------------------------------------
@@ -68,6 +69,13 @@ vi.mock('../../../features/project/thunks/writingThunks', () => {
   };
 });
 
+vi.mock('../../../features/project/thunks/plotBoardAiThunks', () => ({
+  suggestNextBeatThunk: vi.fn((payload: unknown) => ({
+    type: 'mock-plot-board-action',
+    payload,
+  })),
+}));
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -90,6 +98,7 @@ beforeEach(() => {
   setManuscript([makeSection('s1', 'Chapter 1', 'Hello world foo')]);
   mockState.characters = [];
   mockState.worlds = [];
+  mockState.project.present.generation = 0;
 });
 
 // ---------------------------------------------------------------------------
@@ -499,19 +508,57 @@ describe('handleVisualizeScene', () => {
       dataUrl: 'data:image/png;base64,before-stale',
     });
     setManuscript([makeSection('s1', 'Ch1', 'Scene content')]);
-    const { result } = renderHook(() => useManuscriptView({ onNavigate }));
+    const { result, rerender } = renderHook(() => useManuscriptView({ onNavigate }));
 
     await act(async () => {
       await result.current.handleVisualizeScene();
     });
     expect(result.current.sceneImagePreviewUrl).toBe('data:image/png;base64,before-stale');
 
+    mockState.project.present.generation = 1;
+    rerender();
     mockUnwrap.mockRejectedValueOnce({ name: 'StaleProjectOperationError' });
     await act(async () => {
       await result.current.handleVisualizeScene();
     });
     expect(result.current.sceneImagePreviewUrl).toBeNull();
     expect(mockToast.error).not.toHaveBeenCalled();
+  });
+
+  it('keeps plot-board loading owned by the newest request', async () => {
+    let rejectFirst!: (error: unknown) => void;
+    let resolveSecond!: (value: { beats: never[]; ragChunkCount: number }) => void;
+    mockUnwrap
+      .mockReturnValueOnce(
+        new Promise((_resolve, reject) => {
+          rejectFirst = reject;
+        }),
+      )
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveSecond = resolve;
+        }),
+      );
+    const { result } = renderHook(() => usePlotBoardAi('A plot summary', []));
+
+    let firstRequest!: Promise<void>;
+    let secondRequest!: Promise<void>;
+    act(() => {
+      firstRequest = result.current.suggestNextBeat();
+      secondRequest = result.current.suggestNextBeat();
+    });
+
+    await act(async () => {
+      rejectFirst(new DOMException('Aborted', 'AbortError'));
+      await firstRequest;
+    });
+    expect(result.current.isLoading).toBe(true);
+
+    await act(async () => {
+      resolveSecond({ beats: [], ragChunkCount: 0 });
+      await secondRequest;
+    });
+    expect(result.current.isLoading).toBe(false);
   });
 
   it('does nothing when active section has no content', async () => {

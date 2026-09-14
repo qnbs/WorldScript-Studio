@@ -87,7 +87,7 @@ export const generateSceneImageThunk = createDeduplicatedThunk(
       projectTitle: payload.projectTitle,
       lang: payload.lang,
     });
-    const signal = registerDuplicateRequest(prompt, 'sceneVisualization');
+    const signal = registerDuplicateRequest(prompt, 'sceneVisualization', payload.sectionId);
     const base64 = await generateImage(prompt, aiOptions, signal);
     const imageKey = `scene-${payload.sectionId}`;
     assertProjectIdentityUnchanged(

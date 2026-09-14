@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { isExpectedAiCancellationError } from '../features/project/projectIdentity';
 import { selectProjectData } from '../features/project/projectSelectors';
@@ -17,6 +17,7 @@ export function usePlotBoardAi(plotSummary: string, selectedSectionIds: string[]
   const [isLoading, setIsLoading] = useState(false);
   const [ragChunkCount, setRagChunkCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const requestRef = useRef(0);
 
   const suggestNextBeat = useCallback(async () => {
     if (!project || !plotSummary.trim()) return;
@@ -30,6 +31,8 @@ export function usePlotBoardAi(plotSummary: string, selectedSectionIds: string[]
       position: t('plotBoard.heuristic.position'),
       beats: [beat('escalate'), beat('complicate'), beat('reverse')],
     };
+    // QNBS-v3: a superseded request must not clear loading or publish results owned by its successor.
+    const requestId = ++requestRef.current;
     setIsLoading(true);
     setError(null);
     try {
@@ -41,14 +44,16 @@ export function usePlotBoardAi(plotSummary: string, selectedSectionIds: string[]
           heuristicLabels,
         }),
       ).unwrap();
+      if (requestRef.current !== requestId) return;
       setBeats(action.beats);
       setRagChunkCount(action.ragChunkCount);
     } catch (err) {
+      if (requestRef.current !== requestId) return;
       if (isExpectedAiCancellationError(err)) return;
       setError(err instanceof Error ? err.message : String(err));
       setBeats([]);
     } finally {
-      setIsLoading(false);
+      if (requestRef.current === requestId) setIsLoading(false);
     }
   }, [dispatch, project, plotSummary, selectedSectionIds, language, t]);
 

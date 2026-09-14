@@ -362,6 +362,7 @@ export async function retrieveContext(
       _raw: r.indexedAt ?? now,
     };
   });
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 
   // Always include the SLIDING_WINDOW_RECENCY most-recent chunks
   const sortedByRecency = [...scored].sort((a, b) => b._raw - a._raw);
@@ -374,6 +375,7 @@ export async function retrieveContext(
     .slice(0, Math.max(0, topK - slidingWindow.length));
 
   const merged = [...slidingWindow, ...ranked].sort((a, b) => b.score - a.score).slice(0, topK);
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 
   return merged.map(({ _raw: _r, ...rest }) => rest);
 }

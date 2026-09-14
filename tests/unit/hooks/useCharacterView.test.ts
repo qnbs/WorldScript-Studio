@@ -436,6 +436,30 @@ describe('handleGeneratePortrait', () => {
     expect(result.current.errorMessage).not.toBeNull();
   });
 
+  it('clears a previous portrait error before an expected cancelled retry', async () => {
+    mockDispatch.mockResolvedValueOnce({
+      type: 'project/generateCharacterPortrait/rejected',
+    });
+    mockPortraitMatch.mockReturnValue(false);
+    const char = makeCharacter('c1');
+    const { result } = renderHook(() => useCharacterView());
+    act(() => result.current.handleSelect(char));
+    await act(async () => {
+      await result.current.handleGeneratePortrait();
+    });
+    expect(result.current.errorMessage).not.toBeNull();
+
+    mockDispatch.mockResolvedValueOnce({
+      type: 'project/generateCharacterPortrait/rejected',
+      error: { name: 'AbortError' },
+    });
+    await act(async () => {
+      await result.current.handleGeneratePortrait();
+    });
+    expect(result.current.errorMessage).toBeNull();
+    expect(mockToast.error).toHaveBeenCalledTimes(1);
+  });
+
   it('silently discards stale portrait results without marking an avatar', async () => {
     mockDispatch.mockResolvedValue({
       type: 'project/generateCharacterPortrait/rejected',

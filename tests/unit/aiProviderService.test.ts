@@ -171,7 +171,8 @@ describe('generateText', () => {
     const { streamOllama } = await import('../../services/ollamaService');
     const ac = new AbortController();
     vi.mocked(streamOllama).mockImplementationOnce(async (_p, o, cb) => {
-      expect(o.signal).toBe(ac.signal);
+      expect(o.signal).toEqual(expect.any(AbortSignal));
+      expect(o.signal).not.toBe(ac.signal);
       cb.onChunk('ok');
     });
     const text = await generateText(
@@ -233,7 +234,7 @@ describe('generateText', () => {
       modelId,
       undefined,
       undefined,
-      controller.signal,
+      expect.any(AbortSignal),
     );
     spy.mockRestore();
   });
@@ -261,7 +262,7 @@ describe('generateText', () => {
       modelId,
       undefined,
       undefined,
-      controller.signal,
+      expect.any(AbortSignal),
     );
     spy.mockRestore();
   });
@@ -371,7 +372,7 @@ describe('streamText', () => {
       'Llama-3.2-1B-Instruct-q4f16_1-MLC',
       undefined,
       undefined,
-      userSignal,
+      expect.any(AbortSignal),
     );
     spy.mockRestore();
   });
@@ -1558,7 +1559,7 @@ describe('streamText OpenAI', () => {
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
       'https://api.openai.com/v1/chat/completions',
-      expect.objectContaining({ signal: ac.signal }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(JSON.parse(requestInit.body as string)).toMatchObject({
@@ -2060,10 +2061,13 @@ describe('service-level request deduplication', () => {
     let firstAbortSignal: AbortSignal | undefined;
     const spy = vi
       .spyOn(localAiFacade, 'generateLocalText')
-      .mockImplementationOnce(async (_prompt, _modelId) => {
+      .mockImplementationOnce(async (_prompt, _modelId, _a, _b, signal) => {
         // Capture the fact that we were called first
+        firstAbortSignal = signal;
         return new Promise<{ layer: 'heuristic'; text: string }>((resolve) => {
-          setTimeout(() => resolve({ layer: 'heuristic', text: 'first' }), 100);
+          const finish = () => resolve({ layer: 'heuristic', text: 'first' });
+          signal?.addEventListener('abort', finish, { once: true });
+          setTimeout(finish, 1000);
         });
       })
       .mockResolvedValueOnce({ layer: 'heuristic', text: 'second' });
@@ -2074,14 +2078,19 @@ describe('service-level request deduplication', () => {
       model: 'HuggingFaceTB/SmolLM2-135M-Instruct' as const,
     };
     // Fire both calls concurrently — second should abort first
-    const p1 = generateText('same-prompt', 'Balanced', opts).catch(() => 'aborted');
+    const callerController = new AbortController();
+    const p1 = generateText('same-prompt', 'Balanced', opts, callerController.signal).catch(
+      () => 'aborted',
+    );
     const p2 = generateText('same-prompt', 'Balanced', opts);
 
     const [_r1, r2] = await Promise.all([p1, p2]);
     // First may resolve via fallback chain or abort; second should succeed
     expect(r2).toBe('second');
+    expect(firstAbortSignal).toBeDefined();
+    expect(firstAbortSignal).not.toBe(callerController.signal);
+    expect(firstAbortSignal?.aborted).toBe(true);
     spy.mockRestore();
-    void firstAbortSignal; // suppress unused-var warning
   });
 
   it('cleanup removes pending entry after completion', async () => {

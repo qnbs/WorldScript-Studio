@@ -95,11 +95,20 @@ export interface AIStreamCallbacks {
   onError?: (error: Error) => void;
 }
 
-function withMergedAbortSignal(opts: AIRequestOptions, signal?: AbortSignal): AIRequestOptions {
-  // QNBS-v3: Standalone AbortSignal from callers now reaches OpenAI/Ollama (parity with Gemini streaming / cancellation).
-  if (signal === undefined) return opts;
-  if (opts.signal === signal) return opts;
-  return { ...opts, signal };
+function withMergedAbortSignal(
+  opts: AIRequestOptions,
+  signal?: AbortSignal,
+  additionalSignal?: AbortSignal,
+): AIRequestOptions {
+  const signals: AbortSignal[] = [];
+  if (opts.signal) signals.push(opts.signal);
+  if (signal && !signals.includes(signal)) signals.push(signal);
+  if (additionalSignal && !signals.includes(additionalSignal)) signals.push(additionalSignal);
+  if (signals.length === 0) return opts;
+  if (signals.length === 1 && opts.signal === signals[0]) return opts;
+  // QNBS-v3: caller cancellation and service-level duplicate cancellation must both reach the provider.
+  const mergedSignal = signals.length === 1 ? signals[0]! : AbortSignal.any(signals);
+  return { ...opts, signal: mergedSignal };
 }
 
 function buildOpenAiCompletionParameters(
@@ -707,7 +716,7 @@ export async function generateText(
     resolvedOpts.model,
     prompt,
   );
-  const mergedOpts = withMergedAbortSignal(resolvedOpts, signal ?? controller.signal);
+  const mergedOpts = withMergedAbortSignal(resolvedOpts, signal, controller.signal);
   const chain = resolveProviderFallbackChain(mergedOpts);
   let lastError: unknown;
   // QNBS-v3: tracks an OpenRouter-promoted fallback provider already attempted this call, so the outer loop doesn't invoke it a second time (and double-bill/duplicate) if the chain also lists it later.
@@ -870,7 +879,7 @@ export async function streamText(
     resolvedOpts.model,
     prompt,
   );
-  const mergedOpts = withMergedAbortSignal(resolvedOpts, signal ?? controller.signal);
+  const mergedOpts = withMergedAbortSignal(resolvedOpts, signal, controller.signal);
   const chain = resolveProviderFallbackChain(mergedOpts);
   let lastError: unknown;
   // QNBS-v3: tracks an OpenRouter-promoted fallback provider already attempted this call, so the outer loop doesn't invoke it a second time (and double-bill/duplicate chunks) if the chain also lists it later.

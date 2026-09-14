@@ -167,6 +167,7 @@ export const useCharacterView = () => {
   const handleGeneratePortrait = useCallback(async () => {
     if (!selectedCharacter?.appearance) return;
     setIsGeneratingPortrait(true);
+    setErrorMessage(null);
     const resultAction = await dispatch(
       generateCharacterPortraitThunk({
         characterId: selectedCharacter.id,
