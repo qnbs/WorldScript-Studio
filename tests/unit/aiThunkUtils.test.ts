@@ -135,6 +135,43 @@ describe('createDeduplicatedThunk', () => {
     expect(firstAborted).toBe(false);
   });
 
+  it('does not deduplicate when project identity cannot be resolved', async () => {
+    let firstRequest = true;
+    let firstAborted = false;
+    let releaseFirst!: () => void;
+    const firstReleased = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    let firstStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      firstStarted = resolve;
+    });
+    const thunk = createDeduplicatedThunk<string>('test/unresolved-scope', async (_arg, api) => {
+      const signal = api.registerDuplicateRequest('same-prompt', 'same-view');
+      if (firstRequest) {
+        firstRequest = false;
+        signal.addEventListener('abort', () => {
+          firstAborted = true;
+        });
+        firstStarted();
+        await firstReleased;
+      }
+      return 'done';
+    });
+
+    const firstStore = makeStore('');
+    const secondStore = makeStore('');
+    const firstResult = firstStore.dispatch(thunk());
+    await started;
+    const secondResult = await secondStore.dispatch(thunk());
+    releaseFirst();
+    const firstAction = await firstResult;
+
+    expect(firstAction.type).toBe('test/unresolved-scope/fulfilled');
+    expect(secondResult.type).toBe('test/unresolved-scope/fulfilled');
+    expect(firstAborted).toBe(false);
+  });
+
   it('does not abort identical prompts in different entity scopes', async () => {
     let firstRequest = true;
     let firstAborted = false;

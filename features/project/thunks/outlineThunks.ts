@@ -16,11 +16,11 @@ export const generateOutlineThunk = createDeduplicatedThunk(
     const aiOptions = buildAiOptions(state);
     const creativity = buildAiCreativity(state);
     const { getPrompts } = await loadPrompts();
+    const { prompt, schema } = getPrompts('outline', params);
+    const signal = registerDuplicateRequest(prompt, 'outline');
     const { generateJson } = await loadAiProvider();
     // QNBS-v3: lazy-register the heuristic generator only when an outline is actually generated.
     await import('../../../services/ai/heuristicFallback/generators/outlineGenerator');
-    const { prompt, schema } = getPrompts('outline', params);
-    const signal = registerDuplicateRequest(prompt, 'outline');
     // QNBS-v3: attach the heuristic fallback — schema-valid OutlineSection[] from pre-resolved labels
     // when the AI call is terminally unavailable (generateJson otherwise just throws for Gemini).
     const optsWithFallback: typeof aiOptions = {

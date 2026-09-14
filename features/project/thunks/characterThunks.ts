@@ -27,10 +27,10 @@ export const generateCharacterProfileThunk = createDeduplicatedThunk(
     const aiOptions = buildAiOptions(state);
     const creativity = buildAiCreativity(state);
     const { getPrompts } = await loadPrompts();
-    const { generateJson } = await loadAiProvider();
-    await import('../../../services/ai/heuristicFallback/generators/characterGenerator');
     const { prompt, schema } = getPrompts('characterProfile', { concept, lang });
     const signal = registerDuplicateRequest(prompt, 'characterProfile');
+    const { generateJson } = await loadAiProvider();
+    await import('../../../services/ai/heuristicFallback/generators/characterGenerator');
     const optsWithFallback: typeof aiOptions = {
       ...aiOptions,
       heuristicTask: 'character.profile',

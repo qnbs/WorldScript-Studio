@@ -100,15 +100,13 @@ function withMergedAbortSignal(
   signal?: AbortSignal,
   additionalSignal?: AbortSignal,
 ): AIRequestOptions {
-  const signals: AbortSignal[] = [];
-  if (opts.signal) signals.push(opts.signal);
-  if (signal && !signals.includes(signal)) signals.push(signal);
-  if (additionalSignal && !signals.includes(additionalSignal)) signals.push(additionalSignal);
+  const signals = [opts.signal, signal, additionalSignal].filter(
+    (candidate): candidate is AbortSignal => candidate !== undefined,
+  );
   if (signals.length === 0) return opts;
-  if (signals.length === 1 && opts.signal === signals[0]) return opts;
   // QNBS-v3: caller cancellation and service-level duplicate cancellation must both reach the provider.
   const mergedSignal = signals.length === 1 ? signals[0]! : AbortSignal.any(signals);
-  return { ...opts, signal: mergedSignal };
+  return opts.signal === mergedSignal ? opts : { ...opts, signal: mergedSignal };
 }
 
 function buildOpenAiCompletionParameters(
@@ -134,6 +132,13 @@ export function isAbortError(error: unknown): boolean {
     error !== null &&
     (error as { name?: unknown }).name === 'AbortError'
   );
+}
+
+// QNBS-v3: duplicate and caller cancellation must leave the provider loop before fallback can restart work.
+function throwIfRequestAborted(error: unknown, ...signals: Array<AbortSignal | undefined>): void {
+  if (isAbortError(error) || signals.some((candidate) => candidate?.aborted)) {
+    throw error instanceof Error ? error : new DOMException('Aborted', 'AbortError');
+  }
 }
 
 // ─── Fallback reason tracking ────────────────────────────────────────────────
@@ -735,6 +740,7 @@ export async function generateText(
             }),
           { attempts: 2 },
         );
+        throwIfRequestAborted(undefined, mergedOpts.signal, signal);
         // QNBS-v3: Clear fallback reason on success — the chain worked.
         if (i > 0) {
           _lastFallbackReason = `Primary provider ${mergedOpts.provider} failed; fell back to ${nextProvider}.`;
@@ -743,6 +749,7 @@ export async function generateText(
         }
         return result;
       } catch (err) {
+        throwIfRequestAborted(err, mergedOpts.signal, signal);
         lastError = err;
         const msg = err instanceof Error ? err.message : String(err);
         _lastFallbackReason = `Provider ${nextProvider ?? 'unknown'} failed: ${msg}`;
@@ -766,6 +773,7 @@ export async function generateText(
             _lastFallbackReason = `OpenRouter rate-limited; fell back to ${fallback}.`;
             return result;
           } catch (fallbackErr) {
+            throwIfRequestAborted(fallbackErr, mergedOpts.signal, signal);
             lastError = fallbackErr;
           }
         }

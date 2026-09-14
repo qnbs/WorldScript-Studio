@@ -15,6 +15,7 @@ type DeduplicatedThunkAPI = GetThunkAPI<AsyncThunkConfig> & {
 };
 
 const activeControllers = new Map<string, AbortController>();
+let unresolvedIdentitySequence = 0;
 
 // QNBS-v3: reject an aborted request at the final storage boundary, not only before an async provider call.
 export function assertAiRequestActive(signal: AbortSignal): undefined {
@@ -50,7 +51,16 @@ export const createDeduplicatedThunk = <Returned, ThunkArg = void>(
             : '';
         // QNBS-v3: identical prompts in separate project incarnations or entities must not abort each other.
         const projectIdentity = getProjectTargetIdentity(state.project.present);
-        const baseKey = JSON.stringify({ prompt, viewType, presetHash, projectIdentity, scopeKey });
+        // QNBS-v3: an unresolvable identity gets a one-shot namespace so fail-closed authority never cross-cancels another unknown project.
+        const identityNamespace =
+          projectIdentity ?? `unresolved-project-${++unresolvedIdentitySequence}`;
+        const baseKey = JSON.stringify({
+          prompt,
+          viewType,
+          presetHash,
+          identityNamespace,
+          scopeKey,
+        });
         const uniqueKey = `${baseKey}|${Date.now()}`;
 
         for (const entry of Array.from(activeControllers.entries())) {

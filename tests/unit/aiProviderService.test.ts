@@ -2064,9 +2064,13 @@ describe('service-level request deduplication', () => {
       .mockImplementationOnce(async (_prompt, _modelId, _a, _b, signal) => {
         // Capture the fact that we were called first
         firstAbortSignal = signal;
-        return new Promise<{ layer: 'heuristic'; text: string }>((resolve) => {
+        return new Promise<{ layer: 'heuristic'; text: string }>((resolve, reject) => {
           const finish = () => resolve({ layer: 'heuristic', text: 'first' });
-          signal?.addEventListener('abort', finish, { once: true });
+          signal?.addEventListener(
+            'abort',
+            () => reject(new DOMException('Aborted', 'AbortError')),
+            { once: true },
+          );
           setTimeout(finish, 1000);
         });
       })
@@ -2084,9 +2088,11 @@ describe('service-level request deduplication', () => {
     );
     const p2 = generateText('same-prompt', 'Balanced', opts);
 
-    const [_r1, r2] = await Promise.all([p1, p2]);
+    const [r1, r2] = await Promise.all([p1, p2]);
     // First may resolve via fallback chain or abort; second should succeed
+    expect(r1).toBe('aborted');
     expect(r2).toBe('second');
+    expect(spy).toHaveBeenCalledTimes(2);
     expect(firstAbortSignal).toBeDefined();
     expect(firstAbortSignal).not.toBe(callerController.signal);
     expect(firstAbortSignal?.aborted).toBe(true);

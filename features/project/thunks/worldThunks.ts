@@ -25,10 +25,10 @@ export const generateWorldProfileThunk = createDeduplicatedThunk(
     const state = getState() as RootState;
     const aiOptions = buildAiOptions(state);
     const { getPrompts } = await loadPrompts();
-    const { generateJson } = await loadAiProvider();
-    await import('../../../services/ai/heuristicFallback/generators/worldGenerator');
     const { prompt, schema } = getPrompts('worldProfile', { concept, lang });
     const signal = registerDuplicateRequest(prompt, 'worldProfile');
+    const { generateJson } = await loadAiProvider();
+    await import('../../../services/ai/heuristicFallback/generators/worldGenerator');
     const creativity = buildAiCreativity(state);
     const optsWithFallback: typeof aiOptions = {
       ...aiOptions,
