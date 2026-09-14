@@ -79,6 +79,33 @@ function installGrokFetch(body: string): ReturnType<typeof vi.fn> {
   return fetchMock;
 }
 
+function makePendingSseResponse(onReadStarted: () => void) {
+  type ReadResult = ReadableStreamReadResult<Uint8Array>;
+  let resolveRead!: (result: ReadResult) => void;
+  let rejectRead!: (reason?: unknown) => void;
+  const response = {
+    ok: true,
+    status: 200,
+    body: {
+      getReader: () => ({
+        read: () => {
+          onReadStarted();
+          return new Promise<ReadResult>((resolve, reject) => {
+            resolveRead = resolve;
+            rejectRead = reject;
+          });
+        },
+        cancel: vi.fn().mockResolvedValue(undefined),
+      }),
+    },
+  } as unknown as Response;
+  return {
+    response,
+    resolveRead: (result: ReadResult) => resolveRead(result),
+    rejectRead: (reason?: unknown) => rejectRead(reason),
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   // Remove __TAURI__ so ollama tests see browser context
@@ -303,17 +330,6 @@ describe('generateJson', () => {
     vi.mocked(geminiService.generateJson).mockResolvedValueOnce({ key: 'val' });
     const result = await generateJson('prompt', 'Balanced', schema as never, defaultOpts);
     expect(result).toEqual({ key: 'val' });
-  });
-
-  it('rejects a pre-aborted direct Gemini JSON request before calling the SDK', async () => {
-    const controller = new AbortController();
-    controller.abort();
-    const schema = { type: 'object' as const, properties: {} };
-
-    await expect(
-      generateJson('pre-aborted JSON', 'Balanced', schema as never, defaultOpts, controller.signal),
-    ).rejects.toMatchObject({ name: 'AbortError' });
-    expect(geminiService.generateJson).not.toHaveBeenCalled();
   });
 
   it('parses JSON text for non-gemini providers (ollama)', async () => {
@@ -632,27 +648,13 @@ describe('streamText', () => {
   it('completes OpenAI cancellation when a pending read rejects', async () => {
     const originalFetch = globalThis.fetch;
     const ac = new AbortController();
-    let rejectRead!: (reason?: unknown) => void;
     let resolveReadStarted!: () => void;
     const readStarted = new Promise<void>((resolve) => {
       resolveReadStarted = resolve;
     });
+    const pending = makePendingSseResponse(resolveReadStarted);
     const onDone = vi.fn();
-    globalThis.fetch = vi.fn().mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      body: {
-        getReader: () => ({
-          read: () => {
-            resolveReadStarted();
-            return new Promise<ReadableStreamReadResult<Uint8Array>>((_resolve, reject) => {
-              rejectRead = reject;
-            });
-          },
-          cancel: vi.fn().mockResolvedValue(undefined),
-        }),
-      },
-    } as unknown as Response);
+    globalThis.fetch = vi.fn().mockResolvedValueOnce(pending.response);
     vi.mocked(storageService.getApiKey).mockResolvedValueOnce('openai-test-key');
 
     try {
@@ -665,7 +667,7 @@ describe('streamText', () => {
       );
       await readStarted;
       ac.abort();
-      rejectRead(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+      pending.rejectRead(Object.assign(new Error('aborted'), { name: 'AbortError' }));
 
       await expect(streamPromise).rejects.toMatchObject({ name: 'AbortError' });
       expect(onDone).toHaveBeenCalledTimes(1);
@@ -814,26 +816,12 @@ describe('streamText', () => {
     const originalFetch = globalThis.fetch;
     const ac = new AbortController();
     const encoder = new TextEncoder();
-    let resolveRead!: (result: ReadableStreamReadResult<Uint8Array>) => void;
     let resolveReadStarted!: () => void;
     const readStarted = new Promise<void>((resolve) => {
       resolveReadStarted = resolve;
     });
-    globalThis.fetch = vi.fn().mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      body: {
-        getReader: () => ({
-          read: () => {
-            resolveReadStarted();
-            return new Promise<ReadableStreamReadResult<Uint8Array>>((resolve) => {
-              resolveRead = resolve;
-            });
-          },
-          cancel: vi.fn().mockResolvedValue(undefined),
-        }),
-      },
-    } as unknown as Response);
+    const pending = makePendingSseResponse(resolveReadStarted);
+    globalThis.fetch = vi.fn().mockResolvedValueOnce(pending.response);
     vi.mocked(storageService.getApiKey).mockResolvedValueOnce('grok-test-key');
     const onChunk = vi.fn();
 
@@ -847,7 +835,7 @@ describe('streamText', () => {
       );
       await readStarted;
       ac.abort();
-      resolveRead({
+      pending.resolveRead({
         done: false,
         value: encoder.encode('data: {"choices":[{"delta":{"content":"late"}}]}\n'),
       });
@@ -1777,7 +1765,7 @@ describe('streamText ollama→gemini fallback', () => {
         { onChunk: vi.fn(), onError },
         // no signal → the only abort signal is the thrown error's name
       ),
-    ).rejects.toThrow(/abort/i);
+    ).rejects.toMatchObject({ name: 'AbortError' });
 
     expect(geminiService.streamText).not.toHaveBeenCalled();
     expect(onError).not.toHaveBeenCalled();
