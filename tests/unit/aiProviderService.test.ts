@@ -357,6 +357,22 @@ describe('generateJson', () => {
     resolveJson({ key: 'stale' });
 
     await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+
+    let rejectJson!: (reason?: unknown) => void;
+    vi.mocked(geminiService.generateJson).mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        rejectJson = reject;
+      }),
+    );
+    const raced = invokeDirectJson('racing json');
+    await vi.waitFor(() => expect(geminiService.generateJson).toHaveBeenCalledTimes(2));
+    const replacement = invokeDirectJson('racing json');
+    vi.mocked(geminiService.generateJson).mockResolvedValueOnce({ key: 'replacement' });
+    await vi.waitFor(() => expect(geminiService.generateJson).toHaveBeenCalledTimes(3));
+    rejectJson(new Error('provider failed after supersession'));
+
+    await expect(raced).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(replacement).resolves.toEqual({ key: 'replacement' });
   });
 
   it('parses JSON text for non-gemini providers (ollama)', async () => {

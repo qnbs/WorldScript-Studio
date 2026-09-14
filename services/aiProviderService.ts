@@ -191,6 +191,23 @@ function _cleanupPendingRequest(key: string, controller: AbortController): void 
   }
 }
 
+// QNBS-v3: keep caller and service deduplication cancellation under one lifecycle owner.
+async function withDeduplicatedRequest<T>(
+  opts: AIRequestOptions,
+  prompt: string,
+  signal: AbortSignal | undefined,
+  operation: (mergedOpts: AIRequestOptions) => Promise<T>,
+): Promise<T> {
+  const resolvedOpts = resolvePositiveRoutingOpts(opts);
+  throwIfRequestAborted(undefined, resolvedOpts.signal, signal);
+  const { key, controller } = _deduplicateRequest(resolvedOpts, prompt);
+  try {
+    return await operation(withMergedAbortSignal(resolvedOpts, signal, controller.signal));
+  } finally {
+    _cleanupPendingRequest(key, controller);
+  }
+}
+
 function recordProviderSuccess(primary: AIProvider, provider: AIProvider, index: number): void {
   _lastFallbackReason =
     index > 0 ? `Primary provider ${primary} failed; fell back to ${provider}.` : '';
@@ -744,15 +761,11 @@ export async function generateText(
   opts: AIRequestOptions,
   signal?: AbortSignal,
 ): Promise<string> {
-  const resolvedOpts = resolvePositiveRoutingOpts(opts);
-  throwIfRequestAborted(undefined, resolvedOpts.signal, signal);
-  const { key, controller } = _deduplicateRequest(resolvedOpts, prompt);
-  const mergedOpts = withMergedAbortSignal(resolvedOpts, signal, controller.signal);
-  const chain = resolveProviderFallbackChain(mergedOpts);
-  let lastError: unknown;
-  // QNBS-v3: tracks an OpenRouter-promoted fallback provider already attempted this call, so the outer loop doesn't invoke it a second time (and double-bill/duplicate) if the chain also lists it later.
-  let attemptedOpenRouterFallback: string | undefined;
-  try {
+  return withDeduplicatedRequest(opts, prompt, signal, async (mergedOpts) => {
+    const chain = resolveProviderFallbackChain(mergedOpts);
+    let lastError: unknown;
+    // QNBS-v3: tracks an OpenRouter-promoted fallback provider already attempted this call, so the outer loop doesn't invoke it a second time (and double-bill/duplicate) if the chain also lists it later.
+    let attemptedOpenRouterFallback: string | undefined;
     for (let i = 0; i < chain.length; i++) {
       const nextProvider = chain[i];
       if (nextProvider === undefined || nextProvider === attemptedOpenRouterFallback) continue;
@@ -804,9 +817,7 @@ export async function generateText(
       }
     }
     return resolveTerminalTextFallback(prompt, mergedOpts, chain, lastError);
-  } finally {
-    _cleanupPendingRequest(key, controller);
-  }
+  });
 }
 
 // QNBS-v3: shared by generateJson and streamAiHelpResponse so each call site's own branching stays flat for CodeScene's complexity gate on this already-hot file — also excludes OpenRouter-preferred mode so these paths fall through to generateText's own resolvePositiveRoutingOpts-based promotion instead of bypassing it with a direct Gemini SDK call.
@@ -822,25 +833,24 @@ async function generateDirectGeminiJson<T>(
   opts: AIRequestOptions,
   signal?: AbortSignal,
 ): Promise<T> {
-  const resolvedOpts = resolvePositiveRoutingOpts(opts);
-  throwIfRequestAborted(undefined, resolvedOpts.signal, signal);
-  const { key, controller } = _deduplicateRequest(resolvedOpts, prompt);
-  const mergedOpts = withMergedAbortSignal(resolvedOpts, signal, controller.signal);
-  try {
-    await assertCloudAiAllowed('gemini');
-    const result = await generateJsonGemini<T>(
-      prompt,
-      creativity,
-      schema,
-      mergedOpts.signal,
-      undefined,
-      resolvedOpts.model,
-    );
-    throwIfRequestAborted(undefined, mergedOpts.signal);
-    return result;
-  } finally {
-    _cleanupPendingRequest(key, controller);
-  }
+  return withDeduplicatedRequest(opts, prompt, signal, async (mergedOpts) => {
+    try {
+      await assertCloudAiAllowed('gemini');
+      const result = await generateJsonGemini<T>(
+        prompt,
+        creativity,
+        schema,
+        mergedOpts.signal,
+        undefined,
+        mergedOpts.model,
+      );
+      throwIfRequestAborted(undefined, mergedOpts.signal);
+      return result;
+    } catch (error) {
+      throwIfRequestAborted(error, mergedOpts.signal);
+      throw error;
+    }
+  });
 }
 
 export async function generateJson<T>(
@@ -914,37 +924,33 @@ export async function streamText(
   callbacks: AIStreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
-  const resolvedOpts = resolvePositiveRoutingOpts(opts);
-  throwIfRequestAborted(undefined, resolvedOpts.signal, signal);
-  const { key, controller } = _deduplicateRequest(resolvedOpts, prompt);
-  const mergedOpts = withMergedAbortSignal(resolvedOpts, signal, controller.signal);
-  // QNBS-v3: centralize the late-chunk fence at the provider boundary so every adapter respects request supersession.
-  const guardedCallbacks: AIStreamCallbacks = {
-    ...callbacks,
-    onChunk: (text) => {
-      if (!mergedOpts.signal?.aborted) callbacks.onChunk(text);
-    },
-    onDone: () => {
-      if (!mergedOpts.signal?.aborted) callbacks.onDone?.();
-    },
-  };
-  const chain = resolveProviderFallbackChain(mergedOpts);
-  let lastError: unknown;
-  // QNBS-v3: tracks an OpenRouter-promoted fallback provider already attempted this call, so the outer loop doesn't invoke it a second time (and double-bill/duplicate chunks) if the chain also lists it later.
-  let attemptedOpenRouterFallback: string | undefined;
-  // QNBS-v3: after the chain is exhausted, deliver a registered heuristic result through the stream
-  // (onChunk + onDone) instead of erroring — so streaming features (Writer tools) stay useful offline.
-  const tryHeuristicStream = (): boolean => {
-    const heuristic = applyHeuristicFallback<string>(
-      mergedOpts.heuristicTask,
-      mergedOpts.heuristicContext ?? { prompt, reasonKey: 'error.fallback.generic' },
-    );
-    if (!heuristic) return false;
-    guardedCallbacks.onChunk(heuristic.data);
-    guardedCallbacks.onDone?.();
-    return true;
-  };
-  try {
+  return withDeduplicatedRequest(opts, prompt, signal, async (mergedOpts) => {
+    // QNBS-v3: centralize the late-chunk fence at the provider boundary so every adapter respects request supersession.
+    const guardedCallbacks: AIStreamCallbacks = {
+      ...callbacks,
+      onChunk: (text) => {
+        if (!mergedOpts.signal?.aborted) callbacks.onChunk(text);
+      },
+      onDone: () => {
+        if (!mergedOpts.signal?.aborted) callbacks.onDone?.();
+      },
+    };
+    const chain = resolveProviderFallbackChain(mergedOpts);
+    let lastError: unknown;
+    // QNBS-v3: tracks an OpenRouter-promoted fallback provider already attempted this call, so the outer loop doesn't invoke it a second time (and double-bill/duplicate chunks) if the chain also lists it later.
+    let attemptedOpenRouterFallback: string | undefined;
+    // QNBS-v3: after the chain is exhausted, deliver a registered heuristic result through the stream
+    // (onChunk + onDone) instead of erroring — so streaming features (Writer tools) stay useful offline.
+    const tryHeuristicStream = (): boolean => {
+      const heuristic = applyHeuristicFallback<string>(
+        mergedOpts.heuristicTask,
+        mergedOpts.heuristicContext ?? { prompt, reasonKey: 'error.fallback.generic' },
+      );
+      if (!heuristic) return false;
+      guardedCallbacks.onChunk(heuristic.data);
+      guardedCallbacks.onDone?.();
+      return true;
+    };
     for (let i = 0; i < chain.length; i++) {
       const nextProvider = chain[i];
       if (nextProvider === undefined || nextProvider === attemptedOpenRouterFallback) continue;
@@ -1013,9 +1019,7 @@ export async function streamText(
     if (tryHeuristicStream()) return;
     callbacks.onError?.(terminal);
     throw terminal;
-  } finally {
-    _cleanupPendingRequest(key, controller);
-  }
+  });
 }
 
 export async function streamAiHelpResponse(
