@@ -59,7 +59,7 @@ export const regenerateWorldFieldThunk = createDeduplicatedThunk(
     const { getPrompts } = await loadPrompts();
     const { generateText } = await loadAiProvider();
     const { prompt } = getPrompts('regenerateWorldField', { world, field, lang });
-    const signal = registerDuplicateRequest(prompt, 'regenerateWorldField');
+    const signal = registerDuplicateRequest(prompt, 'regenerateWorldField', world.id);
     const creativity = buildAiCreativity(state);
     const response = await generateText(prompt, creativity, aiOptions, signal);
     return { field, value: response };
@@ -81,7 +81,7 @@ export const generateWorldImageThunk = createDeduplicatedThunk(
     const { getPrompts } = await loadPrompts();
     const { generateImage } = await loadAiProvider();
     const { prompt } = getPrompts('worldImage', { description, lang });
-    const signal = registerDuplicateRequest(prompt, 'worldImage');
+    const signal = registerDuplicateRequest(prompt, 'worldImage', worldId);
     const base64 = await generateImage(prompt, aiOptions, signal);
     assertProjectIdentityUnchanged(
       originIdentity,

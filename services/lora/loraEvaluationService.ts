@@ -50,17 +50,16 @@ export async function computeStyleConsistencyScore(
   }
 
   try {
-    const { embedText } = await getEmbeddingService();
+    const { embedBatch } = await getEmbeddingService();
 
     const baseTexts = prompts.map((p) => p.baseOutput.slice(0, 512));
     const adaptedTexts = prompts.map((p) => p.adaptedOutput.slice(0, 512));
     const promptTexts = prompts.map((p) => p.prompt.slice(0, 256));
 
-    const [baseEmbeds, adaptedEmbeds, promptEmbeds] = await Promise.all([
-      Promise.all(baseTexts.map((text) => embedText(text))),
-      Promise.all(adaptedTexts.map((text) => embedText(text))),
-      Promise.all(promptTexts.map((text) => embedText(text))),
-    ]);
+    const allEmbeds = await embedBatch([...baseTexts, ...adaptedTexts, ...promptTexts]);
+    const baseEmbeds = allEmbeds.slice(0, prompts.length);
+    const adaptedEmbeds = allEmbeds.slice(prompts.length, prompts.length * 2);
+    const promptEmbeds = allEmbeds.slice(prompts.length * 2);
 
     // Score: how similar are adapted outputs to prompt style (intent alignment)
     const adaptedToPromptPairs: Array<[Float32Array, Float32Array]> = prompts.map((_, i) => [

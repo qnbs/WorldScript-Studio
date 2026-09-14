@@ -214,6 +214,21 @@ describe('handleGenerateProfile', () => {
     expect(mockToast.error).toHaveBeenCalled();
   });
 
+  it('suppresses ordinary error UX for an expected AbortError rejection', async () => {
+    mockDispatch.mockResolvedValue({
+      type: 'project/generateCharacterProfile/rejected',
+      error: { name: 'AbortError' },
+    });
+    mockProfileMatch.mockReturnValue(false);
+
+    const { result } = renderHook(() => useCharacterView());
+    await act(async () => {
+      await result.current.handleGenerateProfile();
+    });
+
+    expect(mockToast.error).not.toHaveBeenCalled();
+  });
+
   it('resets isGeneratingProfile to false after completion', async () => {
     mockDispatch.mockResolvedValue({ type: 'mock', payload: makeCharacter('c1') });
     mockProfileMatch.mockReturnValue(true);

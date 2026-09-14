@@ -511,6 +511,7 @@ describe('handleVisualizeScene', () => {
       await result.current.handleVisualizeScene();
     });
     expect(result.current.sceneImagePreviewUrl).toBeNull();
+    expect(mockToast.error).not.toHaveBeenCalled();
   });
 
   it('does nothing when active section has no content', async () => {

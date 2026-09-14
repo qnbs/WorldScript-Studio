@@ -210,19 +210,31 @@ describe('generateText', () => {
     spy.mockRestore();
   });
 
-  it('delegates to local facade for onnx provider, passing model id', async () => {
+  it('delegates to local facade for onnx provider, passing model id and cancellation signal', async () => {
     const spy = vi.spyOn(localAiFacade, 'generateLocalText').mockResolvedValueOnce({
       layer: 'onnx',
       text: 'onnx-text',
     });
     const modelId = 'HuggingFaceTB/SmolLM2-135M-Instruct';
-    const text = await generateText('hello', 'Balanced', {
-      ...defaultOpts,
-      provider: 'onnx',
-      model: modelId,
-    });
+    const controller = new AbortController();
+    const text = await generateText(
+      'hello',
+      'Balanced',
+      {
+        ...defaultOpts,
+        provider: 'onnx',
+        model: modelId,
+      },
+      controller.signal,
+    );
     expect(text).toBe('onnx-text');
-    expect(spy).toHaveBeenCalledWith(expect.any(String), modelId);
+    expect(spy).toHaveBeenCalledWith(
+      expect.any(String),
+      modelId,
+      undefined,
+      undefined,
+      controller.signal,
+    );
     spy.mockRestore();
   });
 
@@ -232,13 +244,25 @@ describe('generateText', () => {
       text: 'transformers-text',
     });
     const modelId = 'Xenova/distilgpt2';
-    const text = await generateText('hello', 'Balanced', {
-      ...defaultOpts,
-      provider: 'transformers',
-      model: modelId,
-    });
+    const controller = new AbortController();
+    const text = await generateText(
+      'hello',
+      'Balanced',
+      {
+        ...defaultOpts,
+        provider: 'transformers',
+        model: modelId,
+      },
+      controller.signal,
+    );
     expect(text).toBe('transformers-text');
-    expect(spy).toHaveBeenCalledWith(expect.any(String), modelId);
+    expect(spy).toHaveBeenCalledWith(
+      expect.any(String),
+      modelId,
+      undefined,
+      undefined,
+      controller.signal,
+    );
     spy.mockRestore();
   });
 });

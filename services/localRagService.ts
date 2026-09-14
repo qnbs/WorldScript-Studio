@@ -395,6 +395,7 @@ async function retrieveContextViaDuckDb(
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
   if (duckRows.length === 0) return [];
   const raw = (await storageService.getRagVectors(projectId)) as HybridRagRecord[];
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
   const rawById = new Map(raw.map((r) => [r.id, r]));
   const now = Date.now();
 

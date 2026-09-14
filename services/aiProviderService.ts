@@ -685,7 +685,7 @@ async function generateTextSingleProvider(
       const merged = o.systemPrompt?.trim()
         ? `${sanitizePromptValue(o.systemPrompt)}\n\n${sanitizePromptValue(prompt)}`
         : sanitizePromptValue(prompt);
-      const local = await generateLocalText(merged, o.model);
+      const local = await generateLocalText(merged, o.model, undefined, undefined, o.signal);
       return providerTextSchema.parse({ text: local.text }).text;
     }
     default: {

@@ -60,7 +60,7 @@ export const regenerateCharacterFieldThunk = createDeduplicatedThunk(
     const { getPrompts } = await loadPrompts();
     const { generateText } = await loadAiProvider();
     const { prompt } = getPrompts('regenerateCharacterField', { character, field, lang });
-    const signal = registerDuplicateRequest(prompt, 'regenerateCharacterField');
+    const signal = registerDuplicateRequest(prompt, 'regenerateCharacterField', character.id);
     const creativity = buildAiCreativity(state);
     const response = await generateText(prompt, creativity, aiOptions, signal);
     return { field, value: response };
@@ -88,7 +88,7 @@ export const generateCharacterPortraitThunk = createDeduplicatedThunk(
     const { getPrompts } = await loadPrompts();
     const { generateImage } = await loadAiProvider();
     const { prompt } = getPrompts('characterPortrait', { description: fullDescription, lang });
-    const signal = registerDuplicateRequest(prompt, 'characterPortrait');
+    const signal = registerDuplicateRequest(prompt, 'characterPortrait', characterId);
     const base64 = await generateImage(prompt, aiOptions, signal);
     assertProjectIdentityUnchanged(
       originIdentity,

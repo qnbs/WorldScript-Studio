@@ -7,10 +7,11 @@ import {
   peekPositiveRoutingProvider,
 } from '../../services/ai/positiveRouting';
 import type { PrivacySettings } from '../../types';
+import { getProjectTargetIdentity } from './projectIdentity';
 import { buildAiOptions } from './thunks/thunkUtils';
 
 type DeduplicatedThunkAPI = GetThunkAPI<AsyncThunkConfig> & {
-  registerDuplicateRequest: (prompt: string, viewType: string) => AbortSignal;
+  registerDuplicateRequest: (prompt: string, viewType: string, scopeKey?: string) => AbortSignal;
 };
 
 const activeControllers = new Map<string, AbortController>();
@@ -39,7 +40,7 @@ export const createDeduplicatedThunk = <Returned, ThunkArg = void>(
       let activeController: AbortController | null = null;
       let activeRequestCleanup = () => {};
 
-      const registerDuplicateRequest = (prompt: string, viewType: string) => {
+      const registerDuplicateRequest = (prompt: string, viewType: string, scopeKey?: string) => {
         // QNBS-v3: Include preset hash so changing provider/model/temperature aborts stale requests.
         const state = thunkAPI.getState() as RootState;
         const preset = state.project.present?.data?.aiPreset;
@@ -47,7 +48,9 @@ export const createDeduplicatedThunk = <Returned, ThunkArg = void>(
           preset?.enabled === true
             ? JSON.stringify({ p: preset.provider, m: preset.model, t: preset.temperature })
             : '';
-        const baseKey = JSON.stringify({ prompt, viewType, presetHash });
+        // QNBS-v3: identical prompts in separate project incarnations or entities must not abort each other.
+        const projectIdentity = getProjectTargetIdentity(state.project.present);
+        const baseKey = JSON.stringify({ prompt, viewType, presetHash, projectIdentity, scopeKey });
         const uniqueKey = `${baseKey}|${Date.now()}`;
 
         for (const entry of Array.from(activeControllers.entries())) {

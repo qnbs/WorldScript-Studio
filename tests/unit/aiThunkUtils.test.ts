@@ -17,7 +17,9 @@ vi.mock('../../services/ai/aiPolicy', () => ({
   assertCloudAiAllowedSync: mockAssertCloudAiAllowedSync,
 }));
 
-function makeStore() {
+function makeStore(projectId = 'default') {
+  const projectUndoableReducer = undoable(projectReducer, { limit: 100 });
+  const initialProjectState = projectUndoableReducer(undefined, { type: '@@test/init' });
   return configureStore({
     reducer: {
       project: undoable(projectReducer, { limit: 100 }),
@@ -26,6 +28,15 @@ function makeStore() {
       writer: writerReducer,
       versionControl: versionControlReducer,
       featureFlags: featureFlagsReducer,
+    },
+    preloadedState: {
+      project: {
+        ...initialProjectState,
+        present: {
+          ...initialProjectState.present,
+          data: { ...initialProjectState.present.data, id: projectId },
+        },
+      },
     },
   });
 }
@@ -85,6 +96,82 @@ describe('createDeduplicatedThunk', () => {
 
     expect(r1.type).toBe('test/dedup/rejected');
     expect(r2.type).toBe('test/dedup/fulfilled');
+  });
+
+  it('does not abort identical prompts in different project incarnations', async () => {
+    let firstRequest = true;
+    let firstAborted = false;
+    let releaseFirst!: () => void;
+    const firstReleased = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    let firstStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      firstStarted = resolve;
+    });
+    const thunk = createDeduplicatedThunk<string>('test/project-scope', async (_arg, api) => {
+      const signal = api.registerDuplicateRequest('same-prompt', 'same-view');
+      if (firstRequest) {
+        firstRequest = false;
+        signal.addEventListener('abort', () => {
+          firstAborted = true;
+        });
+        firstStarted();
+        await firstReleased;
+      }
+      return 'done';
+    });
+
+    const firstStore = makeStore('project-a');
+    const secondStore = makeStore('project-b');
+    const firstResult = firstStore.dispatch(thunk());
+    await started;
+    const secondResult = await secondStore.dispatch(thunk());
+    releaseFirst();
+    const firstAction = await firstResult;
+
+    expect(firstAction.type).toBe('test/project-scope/fulfilled');
+    expect(secondResult.type).toBe('test/project-scope/fulfilled');
+    expect(firstAborted).toBe(false);
+  });
+
+  it('does not abort identical prompts in different entity scopes', async () => {
+    let firstRequest = true;
+    let firstAborted = false;
+    let releaseFirst!: () => void;
+    const firstReleased = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    let firstStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      firstStarted = resolve;
+    });
+    const thunk = createDeduplicatedThunk<string, string>(
+      'test/entity-scope',
+      async (scope, api) => {
+        const signal = api.registerDuplicateRequest('same-prompt', 'same-view', scope);
+        if (firstRequest) {
+          firstRequest = false;
+          signal.addEventListener('abort', () => {
+            firstAborted = true;
+          });
+          firstStarted();
+          await firstReleased;
+        }
+        return scope;
+      },
+    );
+
+    const store = makeStore('project-a');
+    const firstResult = store.dispatch(thunk('entity-a'));
+    await started;
+    const secondResult = await store.dispatch(thunk('entity-b'));
+    releaseFirst();
+    const firstAction = await firstResult;
+
+    expect(firstAction.type).toBe('test/entity-scope/fulfilled');
+    expect(secondResult.type).toBe('test/entity-scope/fulfilled');
+    expect(firstAborted).toBe(false);
   });
 
   it('cleans up the active controller after completion', async () => {
