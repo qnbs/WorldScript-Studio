@@ -17,9 +17,11 @@ import {
 import { assertCloudAiAllowed } from './ai/aiPolicy';
 // QNBS-v3: connection tests use the same current Anthropic default as the catalog and proxy.
 import { DEFAULT_ANTHROPIC_MODEL_ID } from './ai/cloudModelCatalog';
-import type { HeuristicContext } from './ai/heuristicFallback';
+import type { AIRequestOptions, AIStreamCallbacks } from './ai/contracts/providerRequest';
 import { applyHeuristicFallback } from './ai/heuristicFallback';
 import { resolveProviderFallbackChain } from './ai/hybridFallback';
+import { throwIfRequestAborted, withMergedAbortSignal } from './ai/lifecycle/cancellation';
+import { withDeduplicatedRequest } from './ai/lifecycle/requestDedup';
 import {
   buildOpenRouterStyleHeaders,
   isOfficialOpenAiApiRoot,
@@ -29,7 +31,6 @@ import {
   resolveOpenAiCompatibleRoot,
 } from './ai/modelNormalization';
 import { attemptOpenRouterFallback, isOpenRouterTransientFailure } from './ai/openRouterFallback';
-import { resolvePositiveRoutingOpts } from './ai/positiveRouting';
 import { generateOpenRouterText, streamOpenRouter } from './ai/providers/openrouterProvider';
 import { attachCause, sanitizePromptValue, stripJsonFences } from './aiUtils';
 import { isServerlessProxyCapable } from './deployTarget';
@@ -52,6 +53,14 @@ import {
 import { storageService } from './storageService';
 import { isTauriRuntime } from './tauriRuntime';
 
+export type { AIRequestOptions, AIStreamCallbacks } from './ai/contracts/providerRequest';
+export {
+  isAbortError,
+  throwIfRequestAborted,
+  withMergedAbortSignal,
+} from './ai/lifecycle/cancellation';
+export { clearPendingRequestsForTest as _clearPendingRequestsForTest } from './ai/lifecycle/requestDedup';
+
 const log = createLogger('aiProviderService');
 
 export const GROK_API_ENDPOINT = 'https://api.x.ai/v1/chat/completions';
@@ -59,57 +68,6 @@ export const GROK_API_ENDPOINT = 'https://api.x.ai/v1/chat/completions';
 const providerTextSchema = z.object({
   text: z.string().min(1),
 });
-
-export interface AIRequestOptions {
-  model: AiModel;
-  provider: AIProvider;
-  temperature?: number;
-  maxTokens?: number;
-  systemPrompt?: string;
-  signal?: AbortSignal;
-  /** Scopes service-level duplicate cancellation to the owning project incarnation when known. */
-  deduplicationScope?: string;
-  ollamaBaseUrl?: string;
-  /** Selects the local-server protocol; LM Studio and vLLM expose OpenAI-compatible `/v1` APIs. */
-  localBackendPreset?: LocalBackendPreset;
-  // QNBS-v3 (ADR-0017): opt-in — attempt a direct browser→Ollama fetch instead of requiring
-  // desktop. Only meaningful when provider is 'ollama' and isTauriRuntime() is false.
-  browserOllamaEnabled?: boolean;
-  fallbackProviders?: AIProvider[];
-  /** Leer = api.openai.com; sonst OpenRouter/Groq/OpenAI-kompatible Root-URL. */
-  openAiCompatibleBaseUrl?: string;
-  openAiSiteUrl?: string;
-  openAiSiteTitle?: string;
-  hybridFallbackEnabled?: boolean;
-  hybridFallbackChain?: AIProvider[];
-  // QNBS-v3: C-3 LoRA wiring — when set and provider is 'ollama', this tag overrides opts.model.
-  // Tag must be created via `ollama create <tag> -f Modelfile` with the adapter baked in.
-  loraModelPath?: string;
-  // QNBS-v3: heuristic-fallback wiring — task id + context for the registered per-feature generator
-  // used when the AI path is terminally unavailable. Absent → no heuristic fallback (legacy behavior).
-  heuristicTask?: string;
-  heuristicContext?: HeuristicContext;
-}
-
-export interface AIStreamCallbacks {
-  onChunk: (text: string) => void;
-  onDone?: () => void;
-  onError?: (error: Error) => void;
-}
-
-function withMergedAbortSignal(
-  opts: AIRequestOptions,
-  signal?: AbortSignal,
-  additionalSignal?: AbortSignal,
-): AIRequestOptions {
-  const signals = [opts.signal, signal, additionalSignal].filter(
-    (candidate): candidate is AbortSignal => candidate !== undefined,
-  );
-  if (signals.length === 0) return opts;
-  // QNBS-v3: caller cancellation and service-level duplicate cancellation must both reach the provider.
-  const mergedSignal = signals.length === 1 ? signals[0]! : AbortSignal.any(signals);
-  return opts.signal === mergedSignal ? opts : { ...opts, signal: mergedSignal };
-}
 
 function buildOpenAiCompletionParameters(
   usesOfficialOpenAi: boolean,
@@ -121,26 +79,6 @@ function buildOpenAiCompletionParameters(
     return { max_completion_tokens: opts.maxTokens ?? 2048 };
   }
   return { temperature: opts.temperature ?? 0.7, max_tokens: opts.maxTokens ?? 2048 };
-}
-
-// QNBS-v3: True for a user/abort-signal cancellation, regardless of how the provider surfaced it
-// (DOMException or a plain Error named 'AbortError'). Used to treat cancels as a silent stop, not
-// a provider failure that would trigger fallback + a terminal onError callback.
-export function isAbortError(error: unknown): boolean {
-  // QNBS-v3: Match both Error and DOMException named 'AbortError' (DOMException is not always an
-  // instanceof Error across runtimes), so a thrown abort is recognized regardless of its class.
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    (error as { name?: unknown }).name === 'AbortError'
-  );
-}
-
-// QNBS-v3: duplicate and caller cancellation must leave the provider loop before fallback can restart work.
-function throwIfRequestAborted(error: unknown, ...signals: Array<AbortSignal | undefined>): void {
-  const signalAborted = signals.some((candidate) => candidate?.aborted);
-  if (!isAbortError(error) && !signalAborted) return;
-  throw new DOMException('Aborted', 'AbortError');
 }
 
 // ─── Fallback reason tracking ────────────────────────────────────────────────
@@ -158,55 +96,6 @@ export function clearLastAiFallbackReason(): void {
 // ─── Service-level request deduplication ─────────────────────────────────────
 // QNBS-v3: prevents duplicate cloud/local calls when components call the service
 // directly (complementary to thunk-level dedup in aiThunkUtils).
-
-const _pendingRequests = new Map<string, AbortController>();
-
-function _pendingKey(provider: AIProvider, model: AiModel, prompt: string, scope?: string): string {
-  return JSON.stringify([scope ?? 'global', provider, model, prompt.slice(0, 128)]);
-}
-
-/** @internal Only for test isolation — clears in-flight dedup state between tests. */
-export function _clearPendingRequestsForTest(): void {
-  _pendingRequests.clear();
-}
-
-function _deduplicateRequest(
-  opts: Pick<AIRequestOptions, 'provider' | 'model' | 'deduplicationScope'>,
-  prompt: string,
-): { key: string; controller: AbortController } {
-  const key = _pendingKey(opts.provider, opts.model, prompt, opts.deduplicationScope);
-  const existing = _pendingRequests.get(key);
-  if (existing) {
-    existing.abort();
-    _pendingRequests.delete(key);
-  }
-  const controller = new AbortController();
-  _pendingRequests.set(key, controller);
-  return { key, controller };
-}
-
-function _cleanupPendingRequest(key: string, controller: AbortController): void {
-  if (_pendingRequests.get(key) === controller) {
-    _pendingRequests.delete(key);
-  }
-}
-
-// QNBS-v3: keep caller and service deduplication cancellation under one lifecycle owner.
-async function withDeduplicatedRequest<T>(
-  opts: AIRequestOptions,
-  prompt: string,
-  signal: AbortSignal | undefined,
-  operation: (mergedOpts: AIRequestOptions) => Promise<T>,
-): Promise<T> {
-  const resolvedOpts = resolvePositiveRoutingOpts(opts);
-  throwIfRequestAborted(undefined, resolvedOpts.signal, signal);
-  const { key, controller } = _deduplicateRequest(resolvedOpts, prompt);
-  try {
-    return await operation(withMergedAbortSignal(resolvedOpts, signal, controller.signal));
-  } finally {
-    _cleanupPendingRequest(key, controller);
-  }
-}
 
 function recordProviderSuccess(primary: AIProvider, provider: AIProvider, index: number): void {
   _lastFallbackReason =
