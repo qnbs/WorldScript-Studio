@@ -366,8 +366,8 @@ describe('generateJson', () => {
     );
     const raced = invokeDirectJson('racing json');
     await vi.waitFor(() => expect(geminiService.generateJson).toHaveBeenCalledTimes(2));
-    const replacement = invokeDirectJson('racing json');
     vi.mocked(geminiService.generateJson).mockResolvedValueOnce({ key: 'replacement' });
+    const replacement = invokeDirectJson('racing json');
     await vi.waitFor(() => expect(geminiService.generateJson).toHaveBeenCalledTimes(3));
     rejectJson(new Error('provider failed after supersession'));
 
