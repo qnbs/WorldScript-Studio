@@ -838,9 +838,6 @@ async function generateDirectGeminiJson<T>(
     );
     throwIfRequestAborted(undefined, mergedOpts.signal);
     return result;
-  } catch (error) {
-    throwIfRequestAborted(error, mergedOpts.signal);
-    throw error;
   } finally {
     _cleanupPendingRequest(key, controller);
   }
@@ -872,7 +869,7 @@ export async function generateJson<T>(
     // QNBS-v3: structured generators bypass generateText's local fallback chain (Gemini-direct), so
     // this is their only degrade seam. A user cancel is surfaced; otherwise a registered heuristic
     // generator for this task produces schema-shaped data, else the original error propagates.
-    if (isAbortError(err) || signal?.aborted || opts.signal?.aborted) throw err;
+    throwIfRequestAborted(err, signal, opts.signal);
     const heuristic = applyHeuristicFallback<T>(
       opts.heuristicTask,
       opts.heuristicContext ?? { prompt, reasonKey: 'error.fallback.generic' },

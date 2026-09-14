@@ -325,25 +325,24 @@ describe('generateText', () => {
 // ─── generateJson ─────────────────────────────────────────────────────────────
 
 describe('generateJson', () => {
+  const directJsonSchema = { type: 'object' as const, properties: {} };
+  const invokeDirectJson = (prompt: string, signal?: AbortSignal) =>
+    generateJson(prompt, 'Balanced', directJsonSchema as never, defaultOpts, signal);
+
   it('delegates to geminiService for gemini provider', async () => {
-    const schema = { type: 'object' as const, properties: {} };
     vi.mocked(geminiService.generateJson).mockResolvedValueOnce({ key: 'val' });
-    const result = await generateJson('prompt', 'Balanced', schema as never, defaultOpts);
+    const result = await invokeDirectJson('prompt');
     expect(result).toEqual({ key: 'val' });
   });
 
-  it('rejects a pre-aborted direct Gemini JSON request before calling the SDK', async () => {
-    const controller = new AbortController();
-    controller.abort();
-    const schema = { type: 'object' as const, properties: {} };
-
-    await expect(
-      generateJson('pre-aborted json', 'Balanced', schema as never, defaultOpts, controller.signal),
-    ).rejects.toMatchObject({ name: 'AbortError' });
+  it('fences direct Gemini JSON before and after provider cancellation', async () => {
+    const preAborted = new AbortController();
+    preAborted.abort();
+    await expect(invokeDirectJson('pre-aborted json', preAborted.signal)).rejects.toMatchObject({
+      name: 'AbortError',
+    });
     expect(geminiService.generateJson).not.toHaveBeenCalled();
-  });
 
-  it('rejects a direct Gemini JSON response that resolves after cancellation', async () => {
     let resolveJson!: (value: { key: string }) => void;
     vi.mocked(geminiService.generateJson).mockReturnValueOnce(
       new Promise((resolve) => {
@@ -351,14 +350,7 @@ describe('generateJson', () => {
       }),
     );
     const controller = new AbortController();
-    const schema = { type: 'object' as const, properties: {} };
-    const result = generateJson(
-      'late json',
-      'Balanced',
-      schema as never,
-      defaultOpts,
-      controller.signal,
-    );
+    const result = invokeDirectJson('late json', controller.signal);
 
     await vi.waitFor(() => expect(geminiService.generateJson).toHaveBeenCalled());
     controller.abort();
