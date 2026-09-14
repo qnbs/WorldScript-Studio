@@ -44,6 +44,10 @@ export {
   shouldUseOpenRouter,
 } from './aiModeService';
 export { assertCloudAiAllowed } from './aiPolicy';
+export type {
+  AIRequestOptions,
+  AIStreamCallbacks,
+} from './contracts/providerRequest';
 export {
   type AiTaskType,
   type DeviceClass,
@@ -99,6 +103,10 @@ export {
   type OpenRouterModel,
   validateOpenRouterKey,
 } from './openrouterModels';
+export { generateImage } from './orchestration/generateImage';
+export { generateJson } from './orchestration/generateJson';
+export { generateText } from './orchestration/generateText';
+export { streamAiHelpResponse, streamText } from './orchestration/streamText';
 export {
   createLanguageModelForWorldScript,
   providerToKind,
