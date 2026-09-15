@@ -22,20 +22,58 @@ function localOpenAiErrorSuffix(bodyText: string): string {
   return detail.trim() ? `: ${detail.trim().slice(0, 300)}` : '';
 }
 
+function readLocalOpenAiDelta(payload: unknown): string | undefined {
+  if (typeof payload !== 'object' || payload === null) return undefined;
+  const delta = (payload as { choices?: Array<{ delta?: { content?: unknown } }> }).choices?.[0]
+    ?.delta?.content;
+  return typeof delta === 'string' && delta ? delta : undefined;
+}
+
 function parseLocalOpenAiSseLine(rawLine: string, onChunk: (chunk: string) => void): void {
   const line = rawLine.trimEnd();
   if (!line.startsWith('data: ') || line === 'data: [DONE]') return;
   try {
-    const json: unknown = JSON.parse(line.slice(6));
-    const delta =
-      typeof json === 'object' && json !== null
-        ? (json as { choices?: Array<{ delta?: { content?: unknown } }> }).choices?.[0]?.delta
-            ?.content
-        : undefined;
-    if (typeof delta === 'string' && delta) onChunk(delta);
+    const delta = readLocalOpenAiDelta(JSON.parse(line.slice(6)));
+    if (delta) onChunk(delta);
   } catch {
     // QNBS-v3: Ignore an incomplete SSE frame; a later frame still carries the valid delta.
   }
+}
+
+// Isolated so the reader-driving loop below carries a single decision per line batch instead of
+// nesting the per-line abort check inside its own for/while — keeps consumeLocalOpenAiStream a
+// flat sequence of frame-level steps.
+function publishLocalOpenAiLines(
+  lines: string[],
+  signal: AbortSignal | undefined,
+  onChunk: (chunk: string) => void,
+): void {
+  for (const line of lines) {
+    if (signal?.aborted) break;
+    parseLocalOpenAiSseLine(line, onChunk);
+  }
+}
+
+async function readLocalOpenAiFrame(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  decoder: TextDecoder,
+  buffer: string,
+): Promise<{ done: boolean; lines: string[]; buffer: string }> {
+  const { done, value } = await reader.read();
+  if (done) return { done: true, lines: [], buffer };
+  const decoded = buffer + decoder.decode(value, { stream: true });
+  const lines = decoded.split('\n');
+  return { done: false, lines, buffer: lines.pop() ?? '' };
+}
+
+function acquireLocalOpenAiReader(response: Response): ReadableStreamDefaultReader<Uint8Array> {
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('Local OpenAI-compatible server returned no response body');
+  return reader;
+}
+
+function assertLocalGenerationNotAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw new DOMException('Local generation aborted', 'AbortError');
 }
 
 async function consumeLocalOpenAiStream(
@@ -43,22 +81,16 @@ async function consumeLocalOpenAiStream(
   callbacks: AIStreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('Local OpenAI-compatible server returned no response body');
+  const reader = acquireLocalOpenAiReader(response);
   const decoder = new TextDecoder();
   let buffer = '';
   try {
     while (true) {
-      if (signal?.aborted) throw new DOMException('Local generation aborted', 'AbortError');
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-      for (const line of lines) {
-        if (signal?.aborted) break;
-        parseLocalOpenAiSseLine(line, callbacks.onChunk);
-      }
+      assertLocalGenerationNotAborted(signal);
+      const frame = await readLocalOpenAiFrame(reader, decoder, buffer);
+      if (frame.done) break;
+      buffer = frame.buffer;
+      publishLocalOpenAiLines(frame.lines, signal, callbacks.onChunk);
     }
     // A reader that already reported done has completed the response; preserve its final frame
     // even if cancellation races with that terminal read.
