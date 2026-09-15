@@ -5,7 +5,11 @@ import {
   manualAdmissionNeedsFullValidation,
   requiresTypecheck,
 } from './ci-prepush-classifier.mjs';
-import { isMainModule, resolveManualEvidence } from './ci-prepush-range-resolver.mjs';
+import {
+  defaultResolveUpstream,
+  isMainModule,
+  resolveManualEvidence,
+} from './ci-prepush-range-resolver.mjs';
 import { ensureDependencyState, runLocalBinary, runNodeScript } from './hooks/shared.mjs';
 import { PR_BUDGET_EXIT_CODES } from './pr-budget.mjs';
 
@@ -118,6 +122,17 @@ async function main() {
 
   if (shouldRunAdmissionCheck('workflowPolicy', classification.files) || full)
     await runCheck('Workflow policy', () => runNodeScript('scripts/workflow-policy-check.mjs'));
+
+  if (shouldRunAdmissionCheck('qnbsCommentPolicy', classification.files) || full) {
+    // QNBS-v3: when an upstream exists, resolve it once here instead of letting the checker redo it.
+    const qnbsRef = defaultResolveUpstream();
+    await runCheck('QNBS-v3 comment policy', () =>
+      runNodeScript(
+        'scripts/check-qnbs-v3-comments.mjs',
+        qnbsRef ? ['--range', qnbsRef] : ['--range'],
+      ),
+    );
+  }
 
   if (typecheckRequired) {
     await runCheck('TypeScript (single checker)', () =>
