@@ -23,6 +23,34 @@ function buildOpenAiCompletionParameters(
   return { temperature: opts.temperature ?? 0.7, max_tokens: opts.maxTokens ?? 2048 };
 }
 
+function readOpenAiDelta(payload: unknown): string | undefined {
+  if (typeof payload !== 'object' || payload === null) return undefined;
+  const delta = (payload as { choices?: Array<{ delta?: { content?: unknown } }> }).choices?.[0]
+    ?.delta?.content;
+  return typeof delta === 'string' && delta ? delta : undefined;
+}
+
+function parseOpenAiSseLine(
+  rawLine: string,
+  callbacks: AIStreamCallbacks,
+  state: { receivedDone: boolean },
+): void {
+  const line = rawLine.trimEnd();
+  if (!line.startsWith('data: ')) return;
+  if (line === 'data: [DONE]') {
+    state.receivedDone = true;
+    return;
+  }
+  let payload: unknown;
+  try {
+    payload = JSON.parse(line.slice(6));
+  } catch {
+    return;
+  }
+  const delta = readOpenAiDelta(payload);
+  if (delta) callbacks.onChunk(delta);
+}
+
 export async function consumeOpenAiCompatibleStream(
   response: Response,
   callbacks: AIStreamCallbacks,
@@ -37,25 +65,7 @@ export async function consumeOpenAiCompatibleStream(
   // final-frame flushing and abort completion semantics identical across both cloud adapters.
   const decoder = new TextDecoder();
   let buffer = '';
-  let receivedDone = false;
-  const parseLine = (rawLine: string): void => {
-    const line = rawLine.trimEnd();
-    if (!line.startsWith('data: ')) return;
-    if (line === 'data: [DONE]') {
-      receivedDone = true;
-      return;
-    }
-    let payload: unknown;
-    try {
-      payload = JSON.parse(line.slice(6));
-    } catch {
-      return;
-    }
-    if (typeof payload !== 'object' || payload === null) return;
-    const delta = (payload as { choices?: Array<{ delta?: { content?: unknown } }> }).choices?.[0]
-      ?.delta?.content;
-    if (typeof delta === 'string' && delta) callbacks.onChunk(delta);
-  };
+  const state = { receivedDone: false };
 
   try {
     while (true) {
@@ -90,7 +100,7 @@ export async function consumeOpenAiCompatibleStream(
       buffer = lines.pop() ?? '';
       for (const line of lines) {
         if (signal?.aborted) break;
-        parseLine(line);
+        parseOpenAiSseLine(line, callbacks, state);
       }
     }
     if (signal?.aborted) {
@@ -101,14 +111,56 @@ export async function consumeOpenAiCompatibleStream(
       throw Object.assign(new Error(`${providerName} stream aborted`), { name: 'AbortError' });
     }
     buffer += decoder.decode();
-    if (buffer) parseLine(buffer);
-    if (abortPolicy === 'throw' && !receivedDone) {
+    if (buffer) parseOpenAiSseLine(buffer, callbacks, state);
+    if (abortPolicy === 'throw' && !state.receivedDone) {
       throw new Error(`${providerName}: stream ended before completion`);
     }
     callbacks.onDone?.();
   } finally {
     await reader.cancel().catch(() => {});
   }
+}
+
+function buildOpenAiMessages(prompt: string, systemPrompt: string | undefined) {
+  return systemPrompt
+    ? [
+        { role: 'system', content: sanitizePromptValue(systemPrompt) },
+        { role: 'user', content: sanitizePromptValue(prompt) },
+      ]
+    : [{ role: 'user', content: sanitizePromptValue(prompt) }];
+}
+
+function validateOpenAiModel(usesOfficialOpenAi: boolean, model: AIRequestOptions['model']): void {
+  const isValidOpenAiModel = model.startsWith('gpt-') || /^o\d/.test(model);
+  if (usesOfficialOpenAi && !isValidOpenAiModel) {
+    throw new Error(
+      `OpenAI: Model "${model}" is not a valid OpenAI model. Please select a GPT or o-series model (e.g. gpt-4.1, o3, o4-mini) in Settings.`,
+    );
+  }
+}
+
+function buildOpenAiRequest(
+  apiKey: string,
+  prompt: string,
+  opts: AIRequestOptions,
+  usesOfficialOpenAi: boolean,
+): RequestInit {
+  const refererHeaders = buildOpenRouterStyleHeaders(opts.openAiSiteUrl, opts.openAiSiteTitle);
+  return {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      ...(refererHeaders ?? {}),
+    },
+    body: JSON.stringify({
+      model: opts.model,
+      stream: true,
+      messages: buildOpenAiMessages(prompt, opts.systemPrompt),
+      ...buildOpenAiCompletionParameters(usesOfficialOpenAi, opts.model, opts),
+    }),
+    signal: opts.signal ?? null,
+  };
 }
 
 export async function streamOpenAI(
@@ -122,35 +174,10 @@ export async function streamOpenAI(
     resolveOpenAiCompatibleRoot(opts.openAiCompatibleBaseUrl),
   );
   const usesOfficialOpenAi = isOfficialOpenAiApiRoot(apiRoot);
-  const isValidOpenAiModel = opts.model.startsWith('gpt-') || /^o\d/.test(opts.model);
-  if (usesOfficialOpenAi && !isValidOpenAiModel) {
-    throw new Error(
-      `OpenAI: Model "${opts.model}" is not a valid OpenAI model. Please select a GPT or o-series model (e.g. gpt-4.1, o3, o4-mini) in Settings.`,
-    );
-  }
-  const messages = opts.systemPrompt
-    ? [
-        { role: 'system', content: sanitizePromptValue(opts.systemPrompt) },
-        { role: 'user', content: sanitizePromptValue(prompt) },
-      ]
-    : [{ role: 'user', content: sanitizePromptValue(prompt) }];
+  validateOpenAiModel(usesOfficialOpenAi, opts.model);
   assertCspConnectEndpointAllowed(apiRoot, 'OpenAI-compatible endpoint');
-  const refererHeaders = buildOpenRouterStyleHeaders(opts.openAiSiteUrl, opts.openAiSiteTitle);
-  const requestParameters = buildOpenAiCompletionParameters(usesOfficialOpenAi, opts.model, opts);
   const res = await fetch(`${apiRoot}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      ...(refererHeaders ?? {}),
-    },
-    body: JSON.stringify({
-      model: opts.model,
-      stream: true,
-      messages,
-      ...requestParameters,
-    }),
-    signal: opts.signal ?? null,
+    ...buildOpenAiRequest(apiKey, prompt, opts, usesOfficialOpenAi),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

@@ -24,6 +24,7 @@ export async function streamAnthropic(
   opts: AIRequestOptions,
   callbacks: AIStreamCallbacks,
 ): Promise<void> {
+  // QNBS-v3: desktop uses native HTTP, supported web deployments use the same-origin proxy.
   if (!isTauriRuntime() && !isServerlessProxyCapable()) {
     throw new Error(
       'Claude/Anthropic is not available on this deployment (no serverless proxy on GitHub Pages). ' +

@@ -48,6 +48,7 @@ vi.mock('@tauri-apps/plugin-http', () => ({
 }));
 
 import { setActiveAiMode, setOpenRouterConfig } from '../../services/ai/aiModeService';
+import { streamOpenAiCompatibleLocal } from '../../services/ai/providers/localOpenAiCompatibleProvider';
 import * as openrouterProvider from '../../services/ai/providers/openrouterProvider';
 import {
   GROK_API_ENDPOINT,
@@ -1228,6 +1229,45 @@ describe('streamText — LM Studio/vLLM/custom OpenAI-compatible local streaming
     );
 
     expect(chunks).toEqual(['Hello', ' world']);
+  });
+
+  it('flushes a terminal frame when cancellation races the reader done signal', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    const ac = new AbortController();
+    const encoder = new TextEncoder();
+    const reader = {
+      read: vi
+        .fn()
+        .mockResolvedValueOnce({
+          done: false,
+          value: encoder.encode('data: {"choices":[{"delta":{"content":"done"}}]}'),
+        })
+        .mockImplementationOnce(async () => {
+          ac.abort();
+          return { done: true, value: undefined };
+        }),
+      cancel: vi.fn().mockResolvedValue(undefined),
+    };
+    mockPluginHttpFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: { getReader: () => reader },
+    } as unknown as Response);
+    const chunks: string[] = [];
+
+    await streamOpenAiCompatibleLocal(
+      'prompt',
+      {
+        provider: 'ollama',
+        model: 'ollama/local-model',
+        ollamaBaseUrl: 'http://localhost:1234',
+        localBackendPreset: 'lm_studio',
+        signal: ac.signal,
+      },
+      { onChunk: (chunk) => chunks.push(chunk) },
+    );
+
+    expect(chunks).toEqual(['done']);
   });
 
   it('parses SSE frames terminated with Windows-style CRLF line endings', async () => {

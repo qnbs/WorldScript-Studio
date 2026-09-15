@@ -11,6 +11,64 @@ export function isOpenAiCompatibleLocalPreset(
   return preset === 'lm_studio' || preset === 'vllm' || preset === 'custom';
 }
 
+function localOpenAiErrorSuffix(bodyText: string): string {
+  let detail = '';
+  try {
+    const parsed = JSON.parse(bodyText) as { error?: { message?: string } | string };
+    detail = typeof parsed.error === 'string' ? parsed.error : (parsed.error?.message ?? bodyText);
+  } catch {
+    detail = bodyText;
+  }
+  return detail.trim() ? `: ${detail.trim().slice(0, 300)}` : '';
+}
+
+function parseLocalOpenAiSseLine(rawLine: string, onChunk: (chunk: string) => void): void {
+  const line = rawLine.trimEnd();
+  if (!line.startsWith('data: ') || line === 'data: [DONE]') return;
+  try {
+    const json: unknown = JSON.parse(line.slice(6));
+    const delta =
+      typeof json === 'object' && json !== null
+        ? (json as { choices?: Array<{ delta?: { content?: unknown } }> }).choices?.[0]?.delta
+            ?.content
+        : undefined;
+    if (typeof delta === 'string' && delta) onChunk(delta);
+  } catch {
+    // QNBS-v3: Ignore an incomplete SSE frame; a later frame still carries the valid delta.
+  }
+}
+
+async function consumeLocalOpenAiStream(
+  response: Response,
+  callbacks: AIStreamCallbacks,
+  signal?: AbortSignal,
+): Promise<void> {
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('Local OpenAI-compatible server returned no response body');
+  const decoder = new TextDecoder();
+  let buffer = '';
+  try {
+    while (true) {
+      if (signal?.aborted) throw new DOMException('Local generation aborted', 'AbortError');
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (signal?.aborted) break;
+        parseLocalOpenAiSseLine(line, callbacks.onChunk);
+      }
+    }
+    // A reader that already reported done has completed the response; preserve its final frame
+    // even if cancellation races with that terminal read.
+    if (buffer) parseLocalOpenAiSseLine(buffer, callbacks.onChunk);
+    callbacks.onDone?.();
+  } finally {
+    await reader.cancel().catch(() => {});
+  }
+}
+
 export async function streamOpenAiCompatibleLocal(
   prompt: string,
   opts: AIRequestOptions,
@@ -42,56 +100,9 @@ export async function streamOpenAiCompatibleLocal(
   });
   if (!response.ok) {
     const bodyText = await response.text().catch(() => '');
-    let detail = '';
-    try {
-      const parsed = JSON.parse(bodyText) as { error?: { message?: string } | string };
-      detail =
-        typeof parsed.error === 'string' ? parsed.error : (parsed.error?.message ?? bodyText);
-    } catch {
-      detail = bodyText;
-    }
-    const suffix = detail.trim() ? `: ${detail.trim().slice(0, 300)}` : '';
-    throw new Error(`Local OpenAI-compatible server HTTP ${response.status}${suffix}`);
+    throw new Error(
+      `Local OpenAI-compatible server HTTP ${response.status}${localOpenAiErrorSuffix(bodyText)}`,
+    );
   }
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('Local OpenAI-compatible server returned no response body');
-  const decoder = new TextDecoder();
-  let buffer = '';
-  const parseLine = (rawLine: string) => {
-    const line = rawLine.trimEnd();
-    if (!line.startsWith('data: ') || line === 'data: [DONE]') return;
-    try {
-      const json: unknown = JSON.parse(line.slice(6));
-      const delta =
-        typeof json === 'object' && json !== null
-          ? (json as { choices?: Array<{ delta?: { content?: unknown } }> }).choices?.[0]?.delta
-              ?.content
-          : undefined;
-      if (typeof delta === 'string' && delta) callbacks.onChunk(delta);
-    } catch {
-      // QNBS-v3: Ignore an incomplete SSE frame; a later frame still carries the valid delta.
-    }
-  };
-  try {
-    while (true) {
-      if (opts.signal?.aborted) {
-        await reader.cancel().catch(() => {});
-        throw new DOMException('Local generation aborted', 'AbortError');
-      }
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-      for (const line of lines) {
-        if (opts.signal?.aborted) break;
-        parseLine(line);
-      }
-    }
-    if (opts.signal?.aborted) throw new DOMException('Local generation aborted', 'AbortError');
-    if (buffer) parseLine(buffer);
-    callbacks.onDone?.();
-  } finally {
-    await reader.cancel().catch(() => {});
-  }
+  return consumeLocalOpenAiStream(response, callbacks, opts.signal);
 }
