@@ -61,8 +61,7 @@ export async function consumeOpenAiCompatibleStream(
   const reader = response.body?.getReader();
   if (!reader) throw new Error(`${providerName}: No response body`);
 
-  // QNBS-v3: OpenAI and xAI share the chat-completions SSE framing; one typed consumer keeps
-  // final-frame flushing and abort completion semantics identical across both cloud adapters.
+  // QNBS-v3: OpenAI and xAI share chat-completions SSE framing; one typed consumer keeps both aligned.
   const decoder = new TextDecoder();
   let buffer = '';
   let readerCompleted = false;
