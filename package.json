@@ -144,7 +144,7 @@
     "@tanstack/react-virtual": "^3.14.9",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-dialog": "^2.7.1",
-    "@tauri-apps/plugin-fs": "^2.5.1",
+    "@tauri-apps/plugin-fs": "^2.5.2",
     "@tauri-apps/plugin-http": "^2.6.0",
     "@tauri-apps/plugin-notification": "^2.4.0",
     "@tauri-apps/plugin-process": "^2.3.1",
