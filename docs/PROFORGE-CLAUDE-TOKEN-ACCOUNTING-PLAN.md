@@ -83,10 +83,12 @@ ProForge-facing boundary is **not** `generateText`'s bare `Promise<string>` — 
    it is today (`structuralAgent.ts`/`diagnosticAgent.ts` already do `tokensConsumed +=` once for
    the primary call, once for `selfReflect()`, and again for a retry; `proseAgent.ts`/`copyEditAgent.ts`
    already do it once per qualifying section) — only the *source* of each addend changes: use
-   `usage?.outputTokens ?? estimateTokens(response)` for the six string-returning call sites, and
-   `usage?.outputTokens ?? estimateTokens(response.text)` in `baseAgent.ts`'s `selfReflect()`,
-   which returns an object, not a bare string. Do not collapse a multi-call agent's total down to a
-   single final `usage.output_tokens` value.
+   `usage?.outputTokens ?? estimateTokens(response)` for the **eight** string-returning call sites
+   across the six agent files (`structuralAgent.ts` and `diagnosticAgent.ts` each have two — the
+   primary call's `response` and the retry's `retryRaw` — so use whichever variable that specific
+   call site actually holds), and `usage?.outputTokens ?? estimateTokens(response.text)` in
+   `baseAgent.ts`'s `selfReflect()`, which returns an object, not a bare string. Do not collapse a
+   multi-call agent's total down to a single final `usage.output_tokens` value.
 5. `tokensConsumed` today only ever accumulated an output-side estimate. Decide with the user
    whether it should stay output-only (cheapest to implement, matches current semantics) or become
    `inputTokens + outputTokens` (more honest cost signal, but a metric-contract change every
