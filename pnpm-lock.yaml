@@ -93,8 +93,8 @@ importers:
         specifier: ^5.3.0
         version: 5.3.0
       '@fontsource/noto-sans-arabic':
-        specifier: ^5.2.10
-        version: 5.2.10
+        specifier: ^5.3.0
+        version: 5.3.0
       '@fontsource/noto-sans-hebrew':
         specifier: ^5.3.0
         version: 5.3.0
@@ -1509,8 +1509,8 @@ packages:
   '@fontsource/noto-naskh-arabic@5.3.0':
     resolution: {integrity: sha512-S/GDgQ6mh/PKo4mz5+eXNYbEarvpI7yh6eCdOz8tTVbeM7+OUiacIEscaYEibr/+egDtGbO2ZB00sjy1bJC1kQ==}
 
-  '@fontsource/noto-sans-arabic@5.2.10':
-    resolution: {integrity: sha512-Hgj3NwQJ0NquIADW3hFboFjsts4UvEOJQ8tOX0bhQZgpNKHsMawjv/1SZnq0QvRbP6efHTZM/A1k7tdy9S6sbA==}
+  '@fontsource/noto-sans-arabic@5.3.0':
+    resolution: {integrity: sha512-i3t6GR0LOReyJVEk+YfYCnxv53wuIelg7Y9NGNvOq4Diq/EP0YszaGXkQwfQNigLjfO4POrLaPGM0sNliGYk7A==}
 
   '@fontsource/noto-sans-hebrew@5.3.0':
     resolution: {integrity: sha512-7owtzuw9D+ipt0g8mcBGOm7MS/mv/REKsjSwEUe749UUsrnG54TSmusNn7oxv2GxbUORAzADLQ8ggdtt7oKkpg==}
@@ -9132,7 +9132,7 @@ snapshots:
 
   '@fontsource/noto-naskh-arabic@5.3.0': {}
 
-  '@fontsource/noto-sans-arabic@5.2.10': {}
+  '@fontsource/noto-sans-arabic@5.3.0': {}
 
   '@fontsource/noto-sans-hebrew@5.3.0': {}
 
