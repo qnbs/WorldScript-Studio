@@ -20,6 +20,7 @@ export interface ManualEvidenceDependencies extends ManualRangeDependencies {
 }
 
 export function isMainModule(argv1: string | undefined, moduleUrl: string): boolean;
+export function defaultResolveUpstream(): string | null;
 export function changedFilesFromManualRange(
   dependencies?: ManualRangeDependencies,
 ): ManualChangeEvidence;

@@ -383,9 +383,10 @@ change classification instead of always running:
 - **TypeScript (single-checker)** — skipped, reporting `DEFERRED_TO_REQUIRED_CI`, when the
   classification is `DOCS_ONLY`, `WORKFLOW_ONLY`, `NON_CODE_ONLY`, `RUST_TAURI`, `TOOLING`, or
   non-TypeScript `TEST_ONLY`. Runs for every other classification, including `AMBIGUOUS`/`MIXED`.
-- **i18n (key parity, bundle rebuild, translation quality) and content-guard** — run only when the
-  changed files match their own governed paths or implementation files
-  (`scripts/ci-prepush-check-registry.mjs`), independent of the TypeScript decision above.
+- **i18n (key parity, bundle rebuild, translation quality), content-guard, workflow-policy, and the
+  QNBS-v3 comment policy** — run only when the changed files match their own governed paths or
+  implementation files (`scripts/ci-prepush-check-registry.mjs`), independent of the TypeScript
+  decision above.
 
 **Fail-closed by design:** whenever outgoing path evidence is incomplete — the manual committed
 range can't be resolved, a Git diff command fails, or pre-push-hook evidence reports partial path
@@ -402,6 +403,52 @@ pnpm run build
 pnpm run bundle:budget
 pnpm run analyze
 ```
+
+### Local security/quality toolchain (risk-routed)
+
+A small set of free/OSS scanners is admitted for optional local use (user-scoped installs, not a
+repo dependency). None of them are mandatory pre-commit gates — the pre-commit hook stays cheap and
+deterministic (signing doctor → dependency-state → **QNBS-v3 staged comment policy** →
+`lint-staged`/Biome). Route by what actually changed instead of running everything on every edit:
+
+| Changed paths | Run |
+| --- | --- |
+| Any non-trivial source | focused diff read, QNBS-v3 policy where applicable, Biome + focused test, CodeScene (`cs review`/`cs delta --staged`) where useful, `git diff --check`, `pnpm run pr:budget`, final `pnpm run ci:prepush` |
+| Dependency manifests/lockfiles | `osv-scanner scan source --lockfile=<file>` |
+| `src-tauri/**`, `crates/**` (Rust) | `cargo-audit audit`, `cargo-deny check advisories` |
+| `.github/workflows/**`, `.github/actions/**` | `actionlint` + `zizmor` + `workflow-policy:check` |
+| Security/auth/storage/network/provider boundaries | targeted `semgrep --config=...`; targeted local CodeQL CLI only for genuinely high-risk/high-value changes |
+| Secret-sensitive changes | `gitleaks git --log-opts="-1"` (or `--staged`-scoped) before push; cloud Security Audit remains the independent authority |
+| CSS/design tokens | `pnpm run token:audit` |
+| `api/**`, Vercel routing/config/functions | Vercel CLI / preview diagnostics |
+
+CodeRabbit CLI and CodeAnt CLI remain deferred: both need an interactive third-party account login,
+which is a maintainer action, not something this automation performs. Their absence does not block
+routine work — the remote GitHub bots of the same name remain independent post-push evidence.
+Cubic's paid CLI and expanding Sourcery are out of scope.
+
+**Portability:** the repository-native checks above (QNBS-v3 policy, workflow-policy, i18n,
+content-guard) are hard gates and ship with the repo. The external scanners in the table are
+risk-routed agent/developer tooling with no reproducible pinned install mechanism yet — a
+contributor without them locally is never blocked; cloud CI remains the independent, exhaustive
+authority regardless of what ran locally.
+
+**Known findings from initial admission (2026-09-15), classified but intentionally not remediated
+in the toolchain-admission unit itself:**
+
+- `zizmor` on `.github/workflows/**`: 111 findings (81 pre-suppressed by zizmor's own defaults; 1
+  informational, 12 low, 0 medium, 17 high — mostly `self-repository` style suggestions for
+  `./`-form local action references). Needs-bounded-follow-up; not release-relevant.
+- `cargo-audit` / `cargo-deny` on `src-tauri/Cargo.lock`: 6 unmaintained transitive crates
+  (`proc-macro-error`, `unic-char-property`, `unic-char-range`, `unic-common`, `unic-ucd-ident`,
+  `unic-ucd-version`) plus 1 unsound advisory (`glib` `RUSTSEC-2024-0429`, already an accepted
+  warning). Already-known/current-owner; `cargo-deny` has no `deny.toml` yet, so it defaults to a
+  stricter unmaintained-as-error policy than `cargo-audit`'s accepted-warnings baseline — a future
+  `deny.toml` should align the two rather than either tool being treated as newly authoritative.
+- `osv-scanner` on `pnpm-lock.yaml`: 1 known vulnerability, `adm-zip` `GHSA-vwc7-r8mq-g2x9` (Medium,
+  no fixed version). False-positive-or-acceptable: matches the already-tracked, exhaustively
+  investigated BLOCKED_UPSTREAM/MITIGATED disposition (issue #87); tool output corroborates the
+  existing disposition, not a new finding.
 
 ### Node 24+ Compatibility Troubleshooting
 
