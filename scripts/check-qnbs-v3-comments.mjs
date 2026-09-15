@@ -90,11 +90,12 @@ export function parseAddedLineNumbers(diffText) {
       inHunk = true;
       continue;
     }
+    // QNBS-v3: this gate alone already excludes the file-header lines that precede the first @@.
     if (!inHunk) continue;
-    if (rawLine.startsWith('+') && !rawLine.startsWith('+++')) {
+    if (rawLine.startsWith('+')) {
       added.add(newLine);
       newLine += 1;
-    } else if (rawLine.startsWith('-') && !rawLine.startsWith('---')) {
+    } else if (rawLine.startsWith('-')) {
       // removed line: does not consume a new-file line number
     } else if (rawLine.startsWith('\\')) {
       // "\ No newline at end of file" — not a content line
@@ -118,7 +119,7 @@ function findUnquotedTokenIndex(line, token, quoteChars) {
   for (let i = 0; i < line.length; i += 1) {
     const ch = line[i];
     if (inQuote) {
-      if (ch === '\\' && inQuote !== "'") i += 1;
+      if (ch === '\\' && (inQuote !== "'" || token === '//')) i += 1;
       else if (ch === inQuote) inQuote = null;
       continue;
     }
@@ -206,7 +207,7 @@ export function findBlockCommentViolations(lines, addedLineNumbers) {
       end += 1;
       closeIndex = lines[end].indexOf('*/');
     }
-    if (end > i && runTouchesAdded(i + 1, end + 1, addedLineNumbers)) {
+    if ((end > i || closeIndex === -1) && runTouchesAdded(i + 1, end + 1, addedLineNumbers)) {
       violations.push({
         line: i + 1,
         reason: 'QNBS-v3 rationale block comment does not close on the same physical line.',

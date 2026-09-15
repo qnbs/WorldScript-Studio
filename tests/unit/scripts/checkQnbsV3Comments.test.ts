@@ -54,6 +54,17 @@ describe('parseAddedLineNumbers', () => {
     ].join('\n');
     expect(parseAddedLineNumbers(diff)).toEqual(new Set([2, 3]));
   });
+
+  it('counts an added line whose own content starts with ++ (diff renders it as +++)', () => {
+    const diff = [
+      '@@ -1,0 +1,2 @@',
+      '+++counter; // QNBS-v3: first half',
+      '+// continues here.',
+      '',
+    ].join('\n');
+    // Both lines are additions inside the hunk; neither is the (already gated-out) file header.
+    expect(parseAddedLineNumbers(diff)).toEqual(new Set([1, 2]));
+  });
 });
 
 describe('isGovernedPath / isWorkflowYamlPath', () => {
@@ -158,6 +169,25 @@ describe('findLineCommentViolations', () => {
     const lines = ["const msg = 'not a // QNBS-v3: marker, just text';", 'code();'];
     expect(findLineCommentViolations(lines, new Set([1]), '//')).toEqual([]);
   });
+
+  it('correctly tracks quote state through an escaped apostrophe before a real trailing marker', () => {
+    const lines = [
+      "const msg = 'it\\'s fine'; // QNBS-v3: One concise trailing rationale.",
+      'code();',
+    ];
+    // The escaped apostrophe must not end the string early and hide the real // marker after it.
+    expect(findLineCommentViolations(lines, new Set([1]), '//')).toEqual([]);
+  });
+
+  it('flags a violation even when an escaped apostrophe precedes a trailing marker that gains a continuation', () => {
+    const lines = [
+      "const msg = 'it\\'s fine'; // QNBS-v3: first half",
+      '// continues on its own line.',
+      'code();',
+    ];
+    const violations = findLineCommentViolations(lines, new Set([1]), '//');
+    expect(violations).toHaveLength(1);
+  });
 });
 
 describe('findBlockCommentViolations (CSS)', () => {
@@ -187,6 +217,13 @@ describe('findBlockCommentViolations (CSS)', () => {
   it('does not flag an untouched historical multi-line block comment', () => {
     const lines = ['/* QNBS-v3: legacy rationale', 'legacy continuation. */', '.btn {}'];
     expect(findBlockCommentViolations(lines, new Set())).toEqual([]);
+  });
+
+  it('flags an added opener that never closes before end of file', () => {
+    const lines = ['.btn {}', '/* QNBS-v3: this opener is added and never closes'];
+    const violations = findBlockCommentViolations(lines, new Set([2]));
+    expect(violations).toHaveLength(1);
+    expect(violations[0]?.line).toBe(2);
   });
 });
 
