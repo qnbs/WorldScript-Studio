@@ -196,16 +196,23 @@ export function findBlockCommentViolations(lines, addedLineNumbers) {
       i += 1;
       continue;
     }
-    const afterOpen = lines[i].slice(openIndex + 2).trim();
-    if (!afterOpen.startsWith('QNBS-v3:')) {
-      i += 1;
-      continue;
-    }
     let end = i;
     let closeIndex = lines[i].indexOf('*/', openIndex + 2);
     while (closeIndex === -1 && end + 1 < lines.length) {
       end += 1;
       closeIndex = lines[end].indexOf('*/');
+    }
+    const openLineText =
+      closeIndex !== -1 && end === i
+        ? lines[i].slice(openIndex + 2, closeIndex)
+        : lines[i].slice(openIndex + 2);
+    const middleLines = end > i + 1 ? lines.slice(i + 1, end) : [];
+    const closeLineText =
+      end > i ? (closeIndex === -1 ? lines[end] : lines[end].slice(0, closeIndex)) : '';
+    // QNBS-v3: the marker may follow decorative prefix text (e.g. index.css), not only right after '/*'.
+    if (![openLineText, ...middleLines, closeLineText].some((text) => text.includes('QNBS-v3:'))) {
+      i += 1;
+      continue;
     }
     if ((end > i || closeIndex === -1) && runTouchesAdded(i + 1, end + 1, addedLineNumbers)) {
       violations.push({

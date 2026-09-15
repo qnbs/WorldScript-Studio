@@ -225,6 +225,23 @@ describe('findBlockCommentViolations (CSS)', () => {
     expect(violations).toHaveLength(1);
     expect(violations[0]?.line).toBe(2);
   });
+
+  it('recognizes a marker preceded by decorative text on the same physical line', () => {
+    const lines = ['/* ── Theme: semantic tokens (QNBS-v3: DS foundation) ── */', ':root {}'];
+    expect(findBlockCommentViolations(lines, new Set([1]))).toEqual([]);
+  });
+
+  it('flags a marker that only appears on a middle line, not right after the opener', () => {
+    const lines = [
+      '/* decorative header, no marker here',
+      'QNBS-v3: rationale added on this line',
+      'closer follows */',
+      '.btn {}',
+    ];
+    const violations = findBlockCommentViolations(lines, new Set([2]));
+    expect(violations).toHaveLength(1);
+    expect(violations[0]?.line).toBe(1);
+  });
 });
 
 describe('findYamlConfigMarkerViolations', () => {
