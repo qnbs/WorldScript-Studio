@@ -48,6 +48,8 @@ vi.mock('@tauri-apps/plugin-http', () => ({
 }));
 
 import { setActiveAiMode, setOpenRouterConfig } from '../../services/ai/aiModeService';
+import { streamOpenAiCompatibleLocal } from '../../services/ai/providers/localOpenAiCompatibleProvider';
+import { consumeOpenAiCompatibleStream } from '../../services/ai/providers/openaiProvider';
 import * as openrouterProvider from '../../services/ai/providers/openrouterProvider';
 import {
   GROK_API_ENDPOINT,
@@ -1230,6 +1232,45 @@ describe('streamText — LM Studio/vLLM/custom OpenAI-compatible local streaming
     expect(chunks).toEqual(['Hello', ' world']);
   });
 
+  it('flushes a terminal frame when cancellation races the reader done signal', async () => {
+    (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
+    const ac = new AbortController();
+    const encoder = new TextEncoder();
+    const reader = {
+      read: vi
+        .fn()
+        .mockResolvedValueOnce({
+          done: false,
+          value: encoder.encode('data: {"choices":[{"delta":{"content":"done"}}]}'),
+        })
+        .mockImplementationOnce(async () => {
+          ac.abort();
+          return { done: true, value: undefined };
+        }),
+      cancel: vi.fn().mockResolvedValue(undefined),
+    };
+    mockPluginHttpFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: { getReader: () => reader },
+    } as unknown as Response);
+    const chunks: string[] = [];
+
+    await streamOpenAiCompatibleLocal(
+      'prompt',
+      {
+        provider: 'ollama',
+        model: 'ollama/local-model',
+        ollamaBaseUrl: 'http://localhost:1234',
+        localBackendPreset: 'lm_studio',
+        signal: ac.signal,
+      },
+      { onChunk: (chunk) => chunks.push(chunk) },
+    );
+
+    expect(chunks).toEqual(['done']);
+  });
+
   it('parses SSE frames terminated with Windows-style CRLF line endings', async () => {
     (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {};
     mockPluginHttpFetch.mockResolvedValueOnce(
@@ -1812,6 +1853,81 @@ describe('streamText ollama→gemini fallback', () => {
 
     expect(geminiService.streamText).not.toHaveBeenCalled();
     expect(onError).not.toHaveBeenCalled();
+  });
+});
+
+// QNBS-v3: a completed reader must flush its buffered tail even racing cancellation, both policies.
+describe('consumeOpenAiCompatibleStream — cloud cancellation races reader done signal', () => {
+  it("flushes the terminal buffered frame under the 'complete' abort policy (OpenAI)", async () => {
+    const ac = new AbortController();
+    const encoder = new TextEncoder();
+    const reader = {
+      read: vi
+        .fn()
+        .mockResolvedValueOnce({
+          done: false,
+          value: encoder.encode('data: {"choices":[{"delta":{"content":"done"}}]}'),
+        })
+        .mockImplementationOnce(async () => {
+          ac.abort();
+          return { done: true, value: undefined };
+        }),
+      cancel: vi.fn().mockResolvedValue(undefined),
+    };
+    const response = {
+      ok: true,
+      status: 200,
+      body: { getReader: () => reader },
+    } as unknown as Response;
+    const chunks: string[] = [];
+    const onDone = vi.fn();
+
+    await consumeOpenAiCompatibleStream(
+      response,
+      { onChunk: (chunk) => chunks.push(chunk), onDone },
+      'OpenAI',
+      'complete',
+      ac.signal,
+    );
+
+    expect(chunks).toEqual(['done']);
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it("flushes the terminal buffered [DONE] marker under the 'throw' abort policy (Grok)", async () => {
+    const ac = new AbortController();
+    const encoder = new TextEncoder();
+    const reader = {
+      read: vi
+        .fn()
+        .mockResolvedValueOnce({
+          done: false,
+          value: encoder.encode('data: {"choices":[{"delta":{"content":"done"}}]}\ndata: [DONE]'),
+        })
+        .mockImplementationOnce(async () => {
+          ac.abort();
+          return { done: true, value: undefined };
+        }),
+      cancel: vi.fn().mockResolvedValue(undefined),
+    };
+    const response = {
+      ok: true,
+      status: 200,
+      body: { getReader: () => reader },
+    } as unknown as Response;
+    const chunks: string[] = [];
+    const onDone = vi.fn();
+
+    await consumeOpenAiCompatibleStream(
+      response,
+      { onChunk: (chunk) => chunks.push(chunk), onDone },
+      'Grok',
+      'throw',
+      ac.signal,
+    );
+
+    expect(chunks).toEqual(['done']);
+    expect(onDone).toHaveBeenCalledTimes(1);
   });
 });
 

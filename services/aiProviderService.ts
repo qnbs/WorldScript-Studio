@@ -8,7 +8,7 @@
 
 import { detectWebGpuSupport } from '@domain/ai-core';
 import { z } from 'zod';
-import type { AIProvider, AiCreativity, AiModel, GeminiSchema, LocalBackendPreset } from '../types';
+import type { AIProvider, AiCreativity, GeminiSchema, LocalBackendPreset } from '../types';
 import {
   getOpenRouterFallbackProvider,
   shouldRouteLocally,
@@ -23,14 +23,16 @@ import { resolveProviderFallbackChain } from './ai/hybridFallback';
 import { throwIfRequestAborted, withMergedAbortSignal } from './ai/lifecycle/cancellation';
 import { withDeduplicatedRequest } from './ai/lifecycle/requestDedup';
 import {
-  buildOpenRouterStyleHeaders,
-  isOfficialOpenAiApiRoot,
-  normalizeOfficialOpenAiApiRoot,
-  normalizeOllamaModelId,
   normalizeOpenAiCompatibleBaseUrl,
   resolveOpenAiCompatibleRoot,
 } from './ai/modelNormalization';
 import { attemptOpenRouterFallback, isOpenRouterTransientFailure } from './ai/openRouterFallback';
+import { streamAnthropic } from './ai/providers/anthropicProvider';
+import {
+  isOpenAiCompatibleLocalPreset,
+  streamOpenAiCompatibleLocal,
+} from './ai/providers/localOpenAiCompatibleProvider';
+import { streamGrok, streamOpenAI } from './ai/providers/openaiProvider';
 import { generateOpenRouterText, streamOpenRouter } from './ai/providers/openrouterProvider';
 import { attachCause, sanitizePromptValue, stripJsonFences } from './aiUtils';
 import { isServerlessProxyCapable } from './deployTarget';
@@ -63,23 +65,11 @@ export { clearPendingRequestsForTest as _clearPendingRequestsForTest } from './a
 
 const log = createLogger('aiProviderService');
 
-export const GROK_API_ENDPOINT = 'https://api.x.ai/v1/chat/completions';
+export { GROK_API_ENDPOINT } from './ai/providers/openaiProvider';
 
 const providerTextSchema = z.object({
   text: z.string().min(1),
 });
-
-function buildOpenAiCompletionParameters(
-  usesOfficialOpenAi: boolean,
-  model: AiModel,
-  opts: Pick<AIRequestOptions, 'maxTokens' | 'temperature'>,
-) {
-  // QNBS-v3: direct OpenAI reasoning models reject legacy sampling parameters.
-  if (usesOfficialOpenAi && /^o\d/.test(model)) {
-    return { max_completion_tokens: opts.maxTokens ?? 2048 };
-  }
-  return { temperature: opts.temperature ?? 0.7, max_tokens: opts.maxTokens ?? 2048 };
-}
 
 // ─── Fallback reason tracking ────────────────────────────────────────────────
 // QNBS-v3: Records why the last fallback occurred so the UI can explain it to the user.
@@ -115,367 +105,6 @@ function createGrokAttemptCallbacks(
 // We re-export a compatible interface here.
 
 // ─── OpenAI Provider ─────────────────────────────────────────────────────────
-
-async function consumeOpenAiCompatibleStream(
-  response: Response,
-  callbacks: AIStreamCallbacks,
-  providerName: 'OpenAI' | 'Grok',
-  abortPolicy: 'complete' | 'throw',
-  signal?: AbortSignal,
-): Promise<void> {
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error(`${providerName}: No response body`);
-
-  // QNBS-v3: OpenAI and xAI share the chat-completions SSE framing; one typed consumer keeps
-  // final-frame flushing and abort completion semantics identical across both cloud adapters.
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let receivedDone = false;
-  const parseLine = (rawLine: string): void => {
-    const line = rawLine.trimEnd();
-    if (!line.startsWith('data: ')) return;
-    if (line === 'data: [DONE]') {
-      receivedDone = true;
-      return;
-    }
-    let payload: unknown;
-    try {
-      payload = JSON.parse(line.slice(6));
-    } catch {
-      // malformed chunk – skip
-      return;
-    }
-    // QNBS-v3: provider keep-alive/error frames can be valid JSON without an object shape; ignore them instead of turning a malformed frame into a provider failure.
-    if (typeof payload !== 'object' || payload === null) return;
-    const delta = (payload as { choices?: Array<{ delta?: { content?: unknown } }> }).choices?.[0]
-      ?.delta?.content;
-    if (typeof delta === 'string' && delta) callbacks.onChunk(delta);
-  };
-
-  try {
-    while (true) {
-      if (signal?.aborted) {
-        if (abortPolicy === 'complete') {
-          callbacks.onDone?.();
-          return;
-        }
-        break;
-      }
-      let readResult: ReadableStreamReadResult<Uint8Array>;
-      try {
-        readResult = await reader.read();
-      } catch (error) {
-        if (signal?.aborted && abortPolicy === 'complete') {
-          callbacks.onDone?.();
-          return;
-        }
-        throw error;
-      }
-      const { done, value } = readResult;
-      // QNBS-v3: Recheck after the awaited read so a cancellation racing with read resolution cannot publish a late delta.
-      if (signal?.aborted) {
-        if (abortPolicy === 'complete') {
-          callbacks.onDone?.();
-          return;
-        }
-        throw Object.assign(new Error(`${providerName} stream aborted`), { name: 'AbortError' });
-      }
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-      for (const line of lines) {
-        if (signal?.aborted) break;
-        parseLine(line);
-      }
-    }
-    if (signal?.aborted) {
-      if (abortPolicy === 'complete') {
-        callbacks.onDone?.();
-        return;
-      }
-      throw Object.assign(new Error(`${providerName} stream aborted`), { name: 'AbortError' });
-    }
-    buffer += decoder.decode();
-    if (buffer) parseLine(buffer);
-
-    if (abortPolicy === 'throw' && !receivedDone) {
-      throw new Error(`${providerName}: stream ended before completion`);
-    }
-    callbacks.onDone?.();
-  } finally {
-    await reader.cancel().catch(() => {});
-  }
-}
-
-async function streamOpenAI(
-  prompt: string,
-  opts: AIRequestOptions,
-  callbacks: AIStreamCallbacks,
-): Promise<void> {
-  const apiKey = await storageService.getApiKey('openai');
-  if (!apiKey) throw new Error('NO_API_KEY: OpenAI API key missing. Please enter it in Settings.');
-
-  const apiRoot = normalizeOfficialOpenAiApiRoot(
-    resolveOpenAiCompatibleRoot(opts.openAiCompatibleBaseUrl),
-  );
-  const usesOfficialOpenAi = isOfficialOpenAiApiRoot(apiRoot);
-  // QNBS-v3: Allow gpt-, o1-, o3-, o4- prefixes; o-series reasoning models ship alongside GPT-4.1.
-  const isValidOpenAiModel = opts.model.startsWith('gpt-') || /^o\d/.test(opts.model);
-  if (usesOfficialOpenAi && !isValidOpenAiModel) {
-    throw new Error(
-      `OpenAI: Model "${opts.model}" is not a valid OpenAI model. Please select a GPT or o-series model (e.g. gpt-4.1, o3, o4-mini) in Settings.`,
-    );
-  }
-  const model = opts.model;
-  const messages = opts.systemPrompt
-    ? [
-        { role: 'system', content: sanitizePromptValue(opts.systemPrompt) },
-        { role: 'user', content: sanitizePromptValue(prompt) },
-      ]
-    : [{ role: 'user', content: sanitizePromptValue(prompt) }];
-
-  // QNBS-v3: custom OpenAI-compatible roots must be admitted before any request leaves the renderer.
-  assertCspConnectEndpointAllowed(apiRoot, 'OpenAI-compatible endpoint');
-  const refererHeaders = buildOpenRouterStyleHeaders(opts.openAiSiteUrl, opts.openAiSiteTitle);
-  const requestParameters = buildOpenAiCompletionParameters(usesOfficialOpenAi, model, opts);
-  const res = await fetch(`${apiRoot}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      ...(refererHeaders ?? {}),
-    },
-    body: JSON.stringify({
-      model,
-      stream: true,
-      messages,
-      ...requestParameters,
-    }),
-    signal: opts.signal ?? null,
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(
-      `OpenAI API Error ${res.status}: ${(err as { error?: { message?: string } })?.error?.message ?? res.statusText}`,
-    );
-  }
-
-  return consumeOpenAiCompatibleStream(res, callbacks, 'OpenAI', 'complete', opts.signal);
-}
-
-// QNBS-v3: single source of truth for which local presets speak the OpenAI-compatible /v1 API —
-// 'custom' is included because editing the base URL by hand (e.g. LM Studio/vLLM on a non-default
-// port) is what selects it, and listLocalBackendModels already treats it as OpenAI-compatible for
-// discovery; every routing decision (testing, streaming, non-streaming) must agree or a server
-// that lists its models successfully then fails every completion against the wrong protocol.
-// undefined (a caller that never set the field) falls through to native-Ollama, matching the
-// pre-existing default for provider-agnostic callers that never touch this option.
-function isOpenAiCompatibleLocalPreset(preset: LocalBackendPreset | undefined): boolean {
-  return preset === 'lm_studio' || preset === 'vllm' || preset === 'custom';
-}
-
-/** Streams LM Studio/vLLM/custom through their OpenAI-compatible API using the Tauri-aware local transport. */
-async function streamOpenAiCompatibleLocal(
-  prompt: string,
-  opts: AIRequestOptions,
-  callbacks: AIStreamCallbacks,
-): Promise<void> {
-  // QNBS-v3: `||`, not `??` — an explicitly-cleared ollamaBaseUrl ('') must still resolve to the
-  // same preset-aware default testOpenAiCompatibleLocalConnection uses, not an app-relative URL.
-  const endpoint = normalizeOpenAiCompatibleBaseUrl(
-    opts.ollamaBaseUrl?.trim() || 'http://localhost:1234',
-  );
-  if (!isTauriRuntime()) {
-    // QNBS-v3: browser local endpoints are rejected before transport can become an opaque CORS error.
-    assertCspConnectEndpointAllowed(endpoint, 'Local OpenAI-compatible endpoint');
-  }
-  const messages = opts.systemPrompt
-    ? [
-        { role: 'system', content: sanitizePromptValue(opts.systemPrompt) },
-        { role: 'user', content: sanitizePromptValue(prompt) },
-      ]
-    : [{ role: 'user', content: sanitizePromptValue(prompt) }];
-  const response = await localServerFetch(`${endpoint}/chat/completions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: normalizeOllamaModelId(opts.model),
-      stream: true,
-      messages,
-      temperature: opts.temperature ?? 0.7,
-      max_tokens: opts.maxTokens ?? 2048,
-    }),
-    // QNBS-v3: LocalServerFetchInit.signal is typed AbortSignal | null (not | undefined) — this is
-    // this codebase's own wrapper (composeSignal handles null explicitly), not a raw Fetch API
-    // pass-through, so `?? null` here is a required conversion, not an inconsistency.
-    signal: opts.signal ?? null,
-  });
-  if (!response.ok) {
-    // QNBS-v3: LM Studio/vLLM return a JSON error body (invalid model, bad request) that the
-    // status code alone discards — bounded read, best-effort parse, never throws itself.
-    const bodyText = await response.text().catch(() => '');
-    let detail = '';
-    try {
-      const parsed = JSON.parse(bodyText) as { error?: { message?: string } | string };
-      detail =
-        typeof parsed.error === 'string' ? parsed.error : (parsed.error?.message ?? bodyText);
-    } catch {
-      detail = bodyText;
-    }
-    const suffix = detail.trim() ? `: ${detail.trim().slice(0, 300)}` : '';
-    throw new Error(`Local OpenAI-compatible server HTTP ${response.status}${suffix}`);
-  }
-
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('Local OpenAI-compatible server returned no response body');
-  const decoder = new TextDecoder();
-  let buffer = '';
-  // QNBS-v3: parses one accumulated SSE line into an onChunk call — shared by the loop below and
-  // the final buffer flush after `done`, so the last frame (no trailing newline) isn't dropped.
-  const parseLine = (rawLine: string) => {
-    // QNBS-v3: trimEnd strips a trailing \r left by CRLF-terminated SSE streams before the prefix/DONE checks.
-    const line = rawLine.trimEnd();
-    if (!line.startsWith('data: ') || line === 'data: [DONE]') return;
-    try {
-      const json: unknown = JSON.parse(line.slice(6));
-      const delta =
-        typeof json === 'object' && json !== null
-          ? (json as { choices?: Array<{ delta?: { content?: unknown } }> }).choices?.[0]?.delta
-              ?.content
-          : undefined;
-      if (typeof delta === 'string' && delta) callbacks.onChunk(delta);
-    } catch {
-      // QNBS-v3: Ignore an incomplete SSE frame; a later frame still carries the valid delta.
-    }
-  };
-  while (true) {
-    if (opts.signal?.aborted) {
-      await reader.cancel().catch(() => {});
-      throw new DOMException('Local generation aborted', 'AbortError');
-    }
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() ?? '';
-    for (const line of lines) parseLine(line);
-  }
-  // QNBS-v3: the server can close the stream without a trailing newline after the last `data:`
-  // frame — without this, that final delta (often the tail of the response) is silently dropped.
-  if (buffer) parseLine(buffer);
-  callbacks.onDone?.();
-}
-
-// QNBS-v3 (ADR-0016): both the Track A (desktop) and Track B (web-via-proxy) response bodies are
-// Anthropic's own Messages API JSON shape unmodified — the proxy relays it verbatim — so a single
-// parser serves both branches of streamAnthropic below.
-async function deliverAnthropicResponse(
-  res: Response,
-  callbacks: AIStreamCallbacks,
-): Promise<void> {
-  if (!res.ok) throw new Error(`Claude API Error ${res.status}: ${res.statusText}`);
-  const json = (await res.json()) as { content?: Array<{ type?: string; text?: string }> };
-  // QNBS-v3 (CodeRabbit): Anthropic can return multiple content blocks (e.g. a `thinking` block
-  // plus several `text` blocks on extended-thinking models) — concatenate all text blocks instead
-  // of taking only the first, which silently truncated output.
-  const text = (json.content ?? [])
-    .filter((c) => c.type === 'text' && typeof c.text === 'string')
-    .map((c) => c.text)
-    .join('');
-  if (text) callbacks.onChunk(text);
-  callbacks.onDone?.();
-}
-
-// QNBS-v3 (ADR-0016): CORS is a *browser* restriction. Track A — Tauri's native HTTP plugin
-// (localServerFetch, ADR-0012) isn't subject to it, so desktop calls Anthropic directly. Track B —
-// web/PWA has no such escape hatch, so it relays through this app's own same-origin serverless
-// proxy (api/claude-proxy.ts / functions/api/claude-proxy.ts) instead, which itself isn't subject
-// to browser CORS on its outbound (server-to-server) leg. GitHub Pages hosts neither function, so
-// it stays genuinely unsupported — isServerlessProxyCapable() reports that structurally.
-async function streamAnthropic(
-  prompt: string,
-  opts: AIRequestOptions,
-  callbacks: AIStreamCallbacks,
-): Promise<void> {
-  // QNBS-v3: platform-capability checks come before the API-key check — a GitHub Pages user with
-  // no key configured should learn the deployment can't support Claude at all, not that a key is
-  // missing (setting one wouldn't help).
-  if (!isTauriRuntime() && !isServerlessProxyCapable()) {
-    throw new Error(
-      'Claude/Anthropic is not available on this deployment (no serverless proxy on GitHub Pages). ' +
-        'Please use the desktop app, a Vercel/Cloudflare Pages deployment, or switch providers.',
-    );
-  }
-  const apiKey = await storageService.getApiKey('anthropic');
-  if (!apiKey) throw new Error('NO_API_KEY: Claude API key missing. Please enter it in Settings.');
-
-  if (isTauriRuntime()) {
-    const res = await localServerFetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: opts.model,
-        max_tokens: opts.maxTokens ?? 2048,
-        messages: [{ role: 'user', content: sanitizePromptValue(prompt) }],
-      }),
-      signal: opts.signal ?? null,
-    });
-    return deliverAnthropicResponse(res, callbacks);
-  }
-
-  const res = await fetch('/api/claude-proxy', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      apiKey,
-      model: opts.model,
-      maxTokens: opts.maxTokens ?? 2048,
-      messages: [{ role: 'user', content: sanitizePromptValue(prompt) }],
-    }),
-    signal: opts.signal ?? null,
-  });
-  return deliverAnthropicResponse(res, callbacks);
-}
-
-async function streamGrok(
-  prompt: string,
-  opts: AIRequestOptions,
-  callbacks: AIStreamCallbacks,
-): Promise<void> {
-  const apiKey = await storageService.getApiKey('grok');
-  if (!apiKey) throw new Error('NO_API_KEY: Grok API key missing. Please enter it in Settings.');
-  // QNBS-v3: preserve optional system context while adapting Grok to the shared chat-completions stream contract.
-  const messages = opts.systemPrompt
-    ? [
-        { role: 'system', content: sanitizePromptValue(opts.systemPrompt) },
-        { role: 'user', content: sanitizePromptValue(prompt) },
-      ]
-    : [{ role: 'user', content: sanitizePromptValue(prompt) }];
-  const res = await fetch(GROK_API_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: opts.model,
-      stream: true,
-      messages,
-      temperature: opts.temperature ?? 0.7,
-      max_tokens: opts.maxTokens ?? 2048,
-    }),
-    signal: opts.signal ?? null,
-  });
-  if (!res.ok) throw new Error(`Grok API Error ${res.status}: ${res.statusText}`);
-  // QNBS-v3: strict abort policy prevents a cancelled Grok stream from publishing late text or completion.
-  return consumeOpenAiCompatibleStream(res, callbacks, 'Grok', 'throw', opts.signal);
-}
 
 async function streamProvider(
   prompt: string,
