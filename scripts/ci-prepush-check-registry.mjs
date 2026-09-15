@@ -49,6 +49,7 @@ const admissionCheckRegistry = Object.freeze([
   },
   {
     name: 'qnbsCommentPolicy',
+    // QNBS-v3: mirrors the checker's own governed/comment-style extension sets, case-insensitively.
     matches: (file) => /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs|css|rs|cpp|ya?ml)$/i.test(file),
     implementationFiles: new Set([
       routingAuthority,
