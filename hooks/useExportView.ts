@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useTransientUiStore } from '../app/transientUiStore';
+import { getProjectTargetIdentity, identityUnchanged } from '../features/project/projectIdentity';
 import { selectAllCharacters, selectAllWorlds } from '../features/project/projectSelectors';
 import type { ProjectData } from '../features/project/projectState';
 import { generateSynopsisThunk } from '../features/project/thunks/writingThunks';
@@ -73,6 +74,10 @@ export const useExportView = () => {
   const dispatch = useAppDispatch();
   const projectState = useAppSelector((state) => state.project.present);
   const project = projectState.data;
+  // QNBS-v3: computed inside the selector (not from the already-subscribed projectState object) so useAppSelector's own value-equality check only re-renders on an actual identity change, matching the established pattern in useManuscriptView.ts.
+  const projectIdentity = useAppSelector((state) =>
+    getProjectTargetIdentity(state.project.present),
+  );
   // QNBS-v3 (T3): gate the post-export native notification behind the opt-in desktop setting.
   const desktopNotificationsEnabled = useAppSelector(
     (state) => state.settings.desktop?.desktopNotifications ?? false,
@@ -106,17 +111,29 @@ export const useExportView = () => {
   const [aiEnhancements, setAiEnhancements] = useState<AiEnhancements>({ synopsis: false });
   const [isGeneratingSynopsis, setIsGeneratingSynopsis] = useState(false);
   const [synopsis, setSynopsis] = useState('');
+  // QNBS-v3: captured at generation time so a mid-flight project switch can be rejected even before the invalidation effect below clears synopsis.
+  const synopsisIdentityRef = useRef(projectIdentity);
   const [copied, setCopied] = useState(false);
   const [isExportLoading, setIsExportLoading] = useState(false);
 
+  // QNBS-v3: a stale AI synopsis must never silently enter a different project incarnation's export/preview composition -- clearing it here (not just guarding the generate call) protects every downstream export/preview site uniformly.
+  useEffect(() => {
+    synopsisIdentityRef.current = projectIdentity;
+    setSynopsis('');
+  }, [projectIdentity]);
+
   const generateSynopsis = useCallback(async () => {
     setIsGeneratingSynopsis(true);
+    const capturedProjectIdentity = projectIdentity;
     const resultAction = await dispatch(generateSynopsisThunk(language));
-    if (generateSynopsisThunk.fulfilled.match(resultAction)) {
+    if (
+      generateSynopsisThunk.fulfilled.match(resultAction) &&
+      identityUnchanged(capturedProjectIdentity, synopsisIdentityRef.current)
+    ) {
       setSynopsis(resultAction.payload);
     }
     setIsGeneratingSynopsis(false);
-  }, [dispatch, language]);
+  }, [dispatch, language, projectIdentity]);
 
   const compilePrefix = useMemo(() => {
     const cp = project.compileProfile;

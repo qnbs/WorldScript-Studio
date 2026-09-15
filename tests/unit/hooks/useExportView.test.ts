@@ -27,12 +27,14 @@ let mockProject = {
 let mockCharacters: Character[] = [];
 let mockWorlds: World[] = [];
 let mockDesktopNotificationsEnabled = false;
+// QNBS-v3 (#713): mutable so tests can simulate a project-incarnation change (import/restore) mid-test, matching useManuscriptView.test.ts's convention. Real getProjectTargetIdentity is used (not mocked) since it's a pure function of this shape.
+let mockGeneration = 0;
 
 vi.mock('../../../app/hooks', () => ({
   useAppDispatch: () => mockDispatch,
   useAppSelector: (selector: (s: unknown) => unknown) =>
     selector({
-      project: { present: { data: mockProject } },
+      project: { present: { data: mockProject, generation: mockGeneration } },
       characters: mockCharacters,
       worlds: mockWorlds,
       settings: { desktop: { desktopNotifications: mockDesktopNotificationsEnabled } },
@@ -165,6 +167,7 @@ beforeEach(() => {
   mockCharacters = [];
   mockWorlds = [];
   mockDesktopNotificationsEnabled = false;
+  mockGeneration = 0;
   mockSynopsisMatch.mockReturnValue(true);
 });
 
@@ -260,6 +263,54 @@ describe('generateSynopsis', () => {
       await result.current.generateSynopsis();
     });
     expect(result.current.isGeneratingSynopsis).toBe(false);
+  });
+
+  it('#713: discards a fulfilled synopsis if the project incarnation changed while generation was in flight', async () => {
+    let resolveDispatch!: (action: unknown) => void;
+    mockDispatch.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveDispatch = resolve;
+      }),
+    );
+    mockSynopsisMatch.mockReturnValue(true);
+    const { result, rerender } = renderHook(() => useExportView());
+
+    let request!: Promise<void>;
+    act(() => {
+      request = result.current.generateSynopsis();
+    });
+
+    act(() => {
+      mockGeneration = 1;
+      rerender();
+    });
+    expect(result.current.synopsis).toBe('');
+
+    await act(async () => {
+      resolveDispatch({ type: 'fulfilled', payload: 'Stale synopsis from project A' });
+      await request;
+    });
+    expect(result.current.synopsis).toBe('');
+  });
+
+  it('#713: clears a previously-generated synopsis when the project incarnation changes, preventing export contamination', async () => {
+    mockDispatch.mockResolvedValue({ type: 'fulfilled', payload: 'Synopsis for project A' });
+    mockSynopsisMatch.mockReturnValue(true);
+    const { result, rerender } = renderHook(() => useExportView());
+    await act(async () => {
+      await result.current.generateSynopsis();
+    });
+    act(() => result.current.setAiEnhancements({ synopsis: true }));
+    expect(result.current.synopsis).toBe('Synopsis for project A');
+    expect(result.current.formattedOutput).toContain('Synopsis for project A');
+
+    act(() => {
+      mockGeneration = 1;
+      rerender();
+    });
+
+    expect(result.current.synopsis).toBe('');
+    expect(result.current.formattedOutput).not.toContain('Synopsis for project A');
   });
 });
 

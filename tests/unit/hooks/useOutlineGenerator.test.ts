@@ -275,6 +275,27 @@ describe('handleRegenerate', () => {
 
     expect(result.current.isRegenerating).toBeNull();
   });
+
+  it('#713: discards a fulfilled section regeneration (no local-state update) if the active project changed while the request was in flight', async () => {
+    mockExistingOutline = [makeOutlineSection('s1', 'Old Title')];
+    const fulfilledAction = {
+      type: 'project/regenerateOutlineSection/fulfilled',
+      payload: { index: 0, newSection: { title: 'Stale Title', description: 'Stale' } },
+    };
+    mockDispatch.mockResolvedValue(fulfilledAction);
+    mockCaptureIdentity
+      .mockReturnValueOnce('id:project-a')
+      .mockReturnValueOnce('id:project-a')
+      .mockReturnValue('id:project-b');
+
+    const { result } = renderHook(() => useOutlineGenerator({ onNavigate }));
+    await act(async () => {
+      await result.current.handleRegenerate(0);
+    });
+
+    expect(result.current.outline[0]?.title).toBe('Old Title');
+    expect(result.current.isRegenerating).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------

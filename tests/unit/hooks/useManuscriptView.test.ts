@@ -383,17 +383,68 @@ describe('handleGenerateLoglines', () => {
     expect(result.current.loglineSuggestions).toEqual(['Current suggestion']);
     expect(result.current.isAiLoading).toBe(false);
   });
+
+  it('#713: discards a fulfilled logline request if the project incarnation changed while it was in flight', async () => {
+    let resolveSuggestions!: (suggestions: string[]) => void;
+    mockUnwrap.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSuggestions = resolve;
+      }),
+    );
+    const { result, rerender } = renderHook(() => useManuscriptView({ onNavigate }));
+
+    let request!: Promise<void>;
+    act(() => {
+      request = result.current.handleGenerateLoglines();
+    });
+
+    act(() => {
+      mockState.project.present.generation = 1;
+      rerender();
+    });
+    expect(result.current.loglineSuggestions).toEqual([]);
+    expect(result.current.isLoglineModalOpen).toBe(false);
+
+    await act(async () => {
+      resolveSuggestions(['Stale suggestion']);
+      await request;
+    });
+    expect(result.current.loglineSuggestions).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------------------
 // selectLogline
 // ---------------------------------------------------------------------------
 describe('selectLogline', () => {
-  it('dispatches updateLogline and closes modal', () => {
+  it('dispatches updateLogline and closes modal', async () => {
+    // QNBS-v3 (#713): selectLogline only accepts a suggestion generated for the current project incarnation, so the happy path must generate first, matching real usage.
+    mockUnwrap.mockResolvedValueOnce(['A warrior rises']);
     const { result } = renderHook(() => useManuscriptView({ onNavigate }));
+    await act(async () => {
+      await result.current.handleGenerateLoglines();
+    });
     act(() => result.current.selectLogline('A warrior rises'));
     expect(mockDispatch).toHaveBeenCalledWith(projectActions.updateLogline('A warrior rises'));
     expect(result.current.isLoglineModalOpen).toBe(false);
+  });
+
+  it('#713: rejects a stale selection after the project incarnation changed since the suggestions were generated', async () => {
+    mockUnwrap.mockResolvedValueOnce(['Suggestion A']);
+    const { result, rerender } = renderHook(() => useManuscriptView({ onNavigate }));
+    await act(async () => {
+      await result.current.handleGenerateLoglines();
+    });
+    expect(result.current.loglineSuggestions).toEqual(['Suggestion A']);
+
+    act(() => {
+      mockState.project.present.generation = 1;
+      rerender();
+    });
+    mockDispatch.mockClear();
+
+    act(() => result.current.selectLogline('Suggestion A'));
+    expect(mockDispatch).not.toHaveBeenCalledWith(projectActions.updateLogline('Suggestion A'));
   });
 });
 
@@ -455,6 +506,103 @@ describe('handleProofread', () => {
 
     expect(mockToast.error).toHaveBeenCalled();
     expect(result.current.isProofreading).toBe(false);
+  });
+
+  it('#713: discards a fulfilled proofread result if the project incarnation changed while it was in flight', async () => {
+    const suggestions = [{ original: 'teh', suggestion: 'the', explanation: 'typo' }];
+    let resolveDispatch!: (action: unknown) => void;
+    mockDispatch.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveDispatch = resolve;
+      }),
+    );
+    mockProofreadMatch.mockReturnValue(true);
+    setManuscript([makeSection('s1', 'Ch1', 'teh cat')]);
+    const { result, rerender } = renderHook(() => useManuscriptView({ onNavigate }));
+
+    let request!: Promise<void>;
+    act(() => {
+      request = result.current.handleProofread();
+    });
+
+    act(() => {
+      mockState.project.present.generation = 1;
+      rerender();
+    });
+    expect(result.current.proofreadSuggestions).toEqual([]);
+
+    await act(async () => {
+      resolveDispatch({ type: 'project/proofreadText/fulfilled', payload: suggestions });
+      await request;
+    });
+    expect(result.current.proofreadSuggestions).toEqual([]);
+    expect(result.current.isProofreading).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// applyProofreadSuggestion
+// ---------------------------------------------------------------------------
+describe('applyProofreadSuggestion', () => {
+  it('applies the suggestion via handleContentChange and removes it from the list', async () => {
+    const suggestions = [{ original: 'teh', suggestion: 'the', explanation: 'typo' }];
+    const fulfilledAction = { type: 'project/proofreadText/fulfilled', payload: suggestions };
+    mockDispatch.mockResolvedValue(fulfilledAction);
+    mockProofreadMatch.mockReturnValue(true);
+    setManuscript([makeSection('s1', 'Ch1', 'teh cat')]);
+    const { result } = renderHook(() => useManuscriptView({ onNavigate }));
+    await act(async () => {
+      await result.current.handleProofread();
+    });
+
+    act(() => result.current.applyProofreadSuggestion(0));
+    expect(mockDispatch).toHaveBeenCalledWith(
+      projectActions.updateManuscriptSection({ id: 's1', changes: { content: 'the cat' } }),
+    );
+    expect(result.current.proofreadSuggestions).toEqual([]);
+  });
+
+  it('#713: rejects a stale apply after the project incarnation changed since the suggestion was generated', async () => {
+    const suggestions = [{ original: 'teh', suggestion: 'the', explanation: 'typo' }];
+    const fulfilledAction = { type: 'project/proofreadText/fulfilled', payload: suggestions };
+    mockDispatch.mockResolvedValue(fulfilledAction);
+    mockProofreadMatch.mockReturnValue(true);
+    setManuscript([makeSection('s1', 'Ch1', 'teh cat')]);
+    const { result, rerender } = renderHook(() => useManuscriptView({ onNavigate }));
+    await act(async () => {
+      await result.current.handleProofread();
+    });
+
+    act(() => {
+      mockState.project.present.generation = 1;
+      rerender();
+    });
+    mockDispatch.mockClear();
+
+    act(() => result.current.applyProofreadSuggestion(0));
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: projectActions.updateManuscriptSection.type }),
+    );
+  });
+
+  it('#713: rejects a stale apply after the active section changed since the suggestion was generated', async () => {
+    const suggestions = [{ original: 'teh', suggestion: 'the', explanation: 'typo' }];
+    const fulfilledAction = { type: 'project/proofreadText/fulfilled', payload: suggestions };
+    mockDispatch.mockResolvedValue(fulfilledAction);
+    mockProofreadMatch.mockReturnValue(true);
+    setManuscript([makeSection('s1', 'Ch1', 'teh cat'), makeSection('s2', 'Ch2', 'other content')]);
+    const { result } = renderHook(() => useManuscriptView({ onNavigate }));
+    await act(async () => {
+      await result.current.handleProofread();
+    });
+
+    act(() => result.current.setActiveSectionId('s2'));
+    mockDispatch.mockClear();
+
+    act(() => result.current.applyProofreadSuggestion(0));
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: projectActions.updateManuscriptSection.type }),
+    );
   });
 });
 
