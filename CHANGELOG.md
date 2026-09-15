@@ -126,6 +126,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the pre-tag exact-SHA Tauri qualification, tag-triggered Tauri/CI/Docker runs, published
   release assets) and `v1.28.5` (the desktop-build failure and its independently-successful
   Docker/GHCR publish). PR #681.
+- **Claude native structured-outputs wiring, planned:** prep doc capturing the verified Anthropic
+  `output_config.format` wire shape, the hard JSON-schema constraints it imposes on this repo's
+  existing Zod schemas, and the eight (not six) `generate()` call sites — including both
+  diagnostic/structural retries — that will need the converted schema once implemented. Not yet
+  implemented; tracked as its own follow-up. PR #730.
 
 ## [1.28.6] — 2026-09-09
 
