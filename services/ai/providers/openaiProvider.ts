@@ -65,6 +65,7 @@ export async function consumeOpenAiCompatibleStream(
   // final-frame flushing and abort completion semantics identical across both cloud adapters.
   const decoder = new TextDecoder();
   let buffer = '';
+  let readerCompleted = false;
   const state = { receivedDone: false };
 
   try {
@@ -87,6 +88,13 @@ export async function consumeOpenAiCompatibleStream(
         throw error;
       }
       const { done, value } = readResult;
+      // QNBS-v3: a reader that already reported done has completed the response; preserve its
+      // final buffered frame even if cancellation races with this terminal read, matching the
+      // local-compatible adapter's completed-reader semantics — under both abort policies.
+      if (done) {
+        readerCompleted = true;
+        break;
+      }
       if (signal?.aborted) {
         if (abortPolicy === 'complete') {
           callbacks.onDone?.();
@@ -94,7 +102,6 @@ export async function consumeOpenAiCompatibleStream(
         }
         throw Object.assign(new Error(`${providerName} stream aborted`), { name: 'AbortError' });
       }
-      if (done) break;
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
       buffer = lines.pop() ?? '';
@@ -103,7 +110,7 @@ export async function consumeOpenAiCompatibleStream(
         parseOpenAiSseLine(line, callbacks, state);
       }
     }
-    if (signal?.aborted) {
+    if (signal?.aborted && !readerCompleted) {
       if (abortPolicy === 'complete') {
         callbacks.onDone?.();
         return;

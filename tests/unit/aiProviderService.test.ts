@@ -49,6 +49,7 @@ vi.mock('@tauri-apps/plugin-http', () => ({
 
 import { setActiveAiMode, setOpenRouterConfig } from '../../services/ai/aiModeService';
 import { streamOpenAiCompatibleLocal } from '../../services/ai/providers/localOpenAiCompatibleProvider';
+import { consumeOpenAiCompatibleStream } from '../../services/ai/providers/openaiProvider';
 import * as openrouterProvider from '../../services/ai/providers/openrouterProvider';
 import {
   GROK_API_ENDPOINT,
@@ -1852,6 +1853,76 @@ describe('streamText ollama→gemini fallback', () => {
 
     expect(geminiService.streamText).not.toHaveBeenCalled();
     expect(onError).not.toHaveBeenCalled();
+  });
+});
+
+// QNBS-v3: regression coverage for consumeOpenAiCompatibleStream (cloud OpenAI/Grok adapter) —
+// a reader that already reported done has completed the response; its final buffered frame must
+// survive even when cancellation races that terminal read, under both abort policies. Mirrors the
+// local-compatible adapter's completed-reader regression test above.
+describe('consumeOpenAiCompatibleStream — cloud cancellation races reader done signal', () => {
+  it("flushes the terminal buffered frame under the 'complete' abort policy (OpenAI)", async () => {
+    const ac = new AbortController();
+    const encoder = new TextEncoder();
+    const reader = {
+      read: vi
+        .fn()
+        .mockResolvedValueOnce({
+          done: false,
+          value: encoder.encode('data: {"choices":[{"delta":{"content":"done"}}]}'),
+        })
+        .mockImplementationOnce(async () => {
+          ac.abort();
+          return { done: true, value: undefined };
+        }),
+      cancel: vi.fn().mockResolvedValue(undefined),
+    };
+    const response = { ok: true, status: 200, body: { getReader: () => reader } } as Response;
+    const chunks: string[] = [];
+    const onDone = vi.fn();
+
+    await consumeOpenAiCompatibleStream(
+      response,
+      { onChunk: (chunk) => chunks.push(chunk), onDone },
+      'OpenAI',
+      'complete',
+      ac.signal,
+    );
+
+    expect(chunks).toEqual(['done']);
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it("flushes the terminal buffered [DONE] marker under the 'throw' abort policy (Grok)", async () => {
+    const ac = new AbortController();
+    const encoder = new TextEncoder();
+    const reader = {
+      read: vi
+        .fn()
+        .mockResolvedValueOnce({
+          done: false,
+          value: encoder.encode('data: {"choices":[{"delta":{"content":"done"}}]}\ndata: [DONE]'),
+        })
+        .mockImplementationOnce(async () => {
+          ac.abort();
+          return { done: true, value: undefined };
+        }),
+      cancel: vi.fn().mockResolvedValue(undefined),
+    };
+    const response = { ok: true, status: 200, body: { getReader: () => reader } } as Response;
+    const chunks: string[] = [];
+    const onDone = vi.fn();
+
+    await consumeOpenAiCompatibleStream(
+      response,
+      { onChunk: (chunk) => chunks.push(chunk), onDone },
+      'Grok',
+      'throw',
+      ac.signal,
+    );
+
+    expect(chunks).toEqual(['done']);
+    expect(onDone).toHaveBeenCalledTimes(1);
   });
 });
 
