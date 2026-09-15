@@ -190,6 +190,24 @@ describe('checkFileContent', () => {
 });
 
 describe('runCheck (real git fixture, staged mode)', () => {
+  it('treats a staged deletion of a governed file as a skip, not a failure, under a non-English system locale', () => {
+    // QNBS-v3: git's own stderr is locale-dependent; this proves the LC_ALL=C override survives it.
+    const original = { LANG: process.env['LANG'], LC_ALL: process.env['LC_ALL'] };
+    process.env['LANG'] = 'de_DE.UTF-8';
+    process.env['LC_ALL'] = 'de_DE.UTF-8';
+    try {
+      git(['rm', '--cached', '-q', 'base.ts']);
+      const result = runCheck({ mode: 'staged', cwd: fixtureDir });
+      expect(result.failedClosed).toBe(false);
+      expect(result.ok).toBe(true);
+    } finally {
+      if (original.LANG === undefined) delete process.env['LANG'];
+      else process.env['LANG'] = original.LANG;
+      if (original.LC_ALL === undefined) delete process.env['LC_ALL'];
+      else process.env['LC_ALL'] = original.LC_ALL;
+    }
+  });
+
   it('passes a clean single-line addition', () => {
     writeFileSync(
       join(fixtureDir, 'base.ts'),

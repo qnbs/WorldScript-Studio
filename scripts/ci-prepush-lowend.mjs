@@ -124,7 +124,7 @@ async function main() {
     await runCheck('Workflow policy', () => runNodeScript('scripts/workflow-policy-check.mjs'));
 
   if (shouldRunAdmissionCheck('qnbsCommentPolicy', classification.files) || full) {
-    // QNBS-v3: resolve once and pass explicitly so the checker never re-derives @{upstream} itself.
+    // QNBS-v3: when an upstream exists, resolve it once here instead of letting the checker redo it.
     const qnbsRef = defaultResolveUpstream();
     await runCheck('QNBS-v3 comment policy', () =>
       runNodeScript(

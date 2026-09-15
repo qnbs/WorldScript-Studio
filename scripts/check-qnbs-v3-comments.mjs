@@ -208,8 +208,14 @@ export function checkFileContent(filePath, currentContent, diffText) {
   ];
 }
 
+// QNBS-v3: LC_ALL=C keeps git's stderr diagnostics in English regardless of system locale.
 function git(args, cwd) {
-  return spawnSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  return spawnSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+    env: { ...process.env, LC_ALL: 'C', LANG: 'C' },
+  });
 }
 
 function changedFiles(mode, ref, cwd) {
@@ -238,7 +244,7 @@ function readVersioned(mode, file, cwd) {
   const result = git(['show', spec], cwd);
   if (result.status === 0) return { content: result.stdout ?? '', missing: false, error: false };
   const stderr = result.stderr ?? '';
-  if (/does not exist in|exists on disk, but not in|fatal: path .* does not exist/i.test(stderr)) {
+  if (/does not exist|exists on disk, but not in/i.test(stderr)) {
     return { content: null, missing: true, error: false };
   }
   return { content: null, missing: false, error: true };

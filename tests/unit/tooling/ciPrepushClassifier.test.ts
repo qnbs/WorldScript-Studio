@@ -101,6 +101,12 @@ describe('change-aware local admission classifier', () => {
     expect(shouldRunAdmissionCheck('qnbsCommentPolicy', ['styles/app.css'])).toBe(true);
     expect(shouldRunAdmissionCheck('qnbsCommentPolicy', ['src-tauri/src/lib.rs'])).toBe(true);
     expect(shouldRunAdmissionCheck('qnbsCommentPolicy', ['.github/workflows/ci.yml'])).toBe(true);
+    expect(shouldRunAdmissionCheck('qnbsCommentPolicy', ['scripts/foo.d.mts'])).toBe(true);
+    expect(shouldRunAdmissionCheck('qnbsCommentPolicy', ['scripts/foo.cts'])).toBe(true);
+    expect(shouldRunAdmissionCheck('qnbsCommentPolicy', ['components/Foo.jsx'])).toBe(true);
+    expect(shouldRunAdmissionCheck('qnbsCommentPolicy', ['scripts/foo.cjs'])).toBe(true);
+    // QNBS-v3: the matcher is case-insensitive, matching isGovernedPath in the checker itself.
+    expect(shouldRunAdmissionCheck('qnbsCommentPolicy', ['components/Foo.TSX'])).toBe(true);
     expect(shouldRunAdmissionCheck('qnbsCommentPolicy', ['README.md'])).toBe(false);
     expect(shouldRunAdmissionCheck('qnbsCommentPolicy', ['package.json'])).toBe(false);
     // QNBS-v3: no self-bypass — editing the checker's own implementation still routes to itself.
