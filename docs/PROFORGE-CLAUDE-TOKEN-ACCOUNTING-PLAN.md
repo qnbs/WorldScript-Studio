@@ -16,7 +16,7 @@ corrected 2026-09-15 against post-#719/#759 `main`). Implement in this branch
 - `services/proForge/pipelineAgents/copyEditAgent.ts:67` (per-section loop)
 - `services/proForge/pipelineAgents/baseAgent.ts:220` — `selfReflect()`'s `tokensUsed: response.text.length`
 
-`baseAgent.ts` is not a minor eighth concern — `structuralAgent.ts` and `diagnosticAgent.ts` both do
+`baseAgent.ts` is not a minor seventh concern — `structuralAgent.ts` and `diagnosticAgent.ts` both do
 `tokensConsumed += reflection.tokensUsed;` after calling `selfReflect()`, so its raw character count
 already leaks into two of the other six files' totals today. Fixing those six without also fixing
 `baseAgent.ts` leaves that leak in place.
@@ -45,8 +45,10 @@ sibling module graphs — browser-only. ProForge agents also load under the Node
 (`.mcp/proforge-mcp-server`), so importing `estimateTokens` straight from `ragPromptAssembly.ts`
 risks breaking that path before an agent even runs. Extract `estimateTokens` into a new
 dependency-free module (e.g. `services/tokenEstimate.ts`) first, have `ragPromptAssembly.ts` import
-it from there instead of defining it locally, and have the seven agent files import from the new
-module.
+it from there and re-export it (both `tests/unit/ragPromptAssembly.test.ts` and
+`tests/unit/services/ragPromptAssembly.test.ts` import `estimateTokens` from
+`ragPromptAssembly.ts` directly today — removing that export without a re-export breaks them), and
+have the seven agent files import from the new module.
 
 Then, in each of the seven files above, replace every raw character count
 (`response.length` / `retryRaw.length` / `response.text.length`) with the matching
@@ -80,9 +82,11 @@ ProForge-facing boundary is **not** `generateText`'s bare `Promise<string>` — 
 4. Once available, each of the seven files' existing per-call accounting stays additive exactly as
    it is today (`structuralAgent.ts`/`diagnosticAgent.ts` already do `tokensConsumed +=` once for
    the primary call, once for `selfReflect()`, and again for a retry; `proseAgent.ts`/`copyEditAgent.ts`
-   already do it once per qualifying section) — only the *source* of each addend changes, from
-   `response.length` to `usage?.outputTokens ?? estimateTokens(response)` for that specific call.
-   Do not collapse a multi-call agent's total down to a single final `usage.output_tokens` value.
+   already do it once per qualifying section) — only the *source* of each addend changes: use
+   `usage?.outputTokens ?? estimateTokens(response)` for the six string-returning call sites, and
+   `usage?.outputTokens ?? estimateTokens(response.text)` in `baseAgent.ts`'s `selfReflect()`,
+   which returns an object, not a bare string. Do not collapse a multi-call agent's total down to a
+   single final `usage.output_tokens` value.
 5. `tokensConsumed` today only ever accumulated an output-side estimate. Decide with the user
    whether it should stay output-only (cheapest to implement, matches current semantics) or become
    `inputTokens + outputTokens` (more honest cost signal, but a metric-contract change every
