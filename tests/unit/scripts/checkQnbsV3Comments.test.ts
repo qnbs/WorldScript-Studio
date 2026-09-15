@@ -128,6 +128,36 @@ describe('findLineCommentViolations', () => {
     expect(violations).toHaveLength(1);
     expect(violations[0]?.line).toBe(1);
   });
+
+  it("detects a trailing-comment marker (code; // QNBS-v3: ...), this repo's existing convention", () => {
+    const lines = ['return failures; // QNBS-v3: One concise trailing rationale.', 'next();'];
+    expect(findLineCommentViolations(lines, new Set([1]), '//')).toEqual([]);
+  });
+
+  it('flags a trailing-comment marker that gains an added continuation line', () => {
+    const lines = [
+      'return failures; // QNBS-v3: first half of the rationale',
+      '// continues on its own line.',
+      'next();',
+    ];
+    const violations = findLineCommentViolations(lines, new Set([1]), '//');
+    expect(violations).toHaveLength(1);
+    expect(violations[0]?.line).toBe(1);
+  });
+
+  it('does not treat a continuation-shaped trailing comment as extending a prior marker', () => {
+    // The second line has code before its comment, so it can never be a pure continuation line.
+    const lines = [
+      '// QNBS-v3: One concise rationale on one physical line.',
+      'other(); // unrelated trailing note',
+    ];
+    expect(findLineCommentViolations(lines, new Set([1, 2]), '//')).toEqual([]);
+  });
+
+  it('does not detect a QNBS-v3-looking token sequence inside a string literal', () => {
+    const lines = ["const msg = 'not a // QNBS-v3: marker, just text';", 'code();'];
+    expect(findLineCommentViolations(lines, new Set([1]), '//')).toEqual([]);
+  });
 });
 
 describe('findBlockCommentViolations (CSS)', () => {
@@ -140,6 +170,23 @@ describe('findBlockCommentViolations (CSS)', () => {
     const lines = ['/* QNBS-v3: this rationale', 'spans a second physical line. */', '.btn {}'];
     const violations = findBlockCommentViolations(lines, new Set([1]));
     expect(violations).toHaveLength(1);
+  });
+
+  it('flags an unchanged opener when only the added continuation/closer line is new', () => {
+    const lines = [
+      '/* QNBS-v3: this rationale',
+      'spans a second physical line, newly added. */',
+      '.btn {}',
+    ];
+    // Only line 2 was added — the opener on line 1 is pre-existing.
+    const violations = findBlockCommentViolations(lines, new Set([2]));
+    expect(violations).toHaveLength(1);
+    expect(violations[0]?.line).toBe(1);
+  });
+
+  it('does not flag an untouched historical multi-line block comment', () => {
+    const lines = ['/* QNBS-v3: legacy rationale', 'legacy continuation. */', '.btn {}'];
+    expect(findBlockCommentViolations(lines, new Set())).toEqual([]);
   });
 });
 

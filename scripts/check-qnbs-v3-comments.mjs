@@ -105,10 +105,33 @@ export function parseAddedLineNumbers(diffText) {
   return added;
 }
 
+// QNBS-v3: strict form — used for continuation lines, which must be pure comments, never trailing.
 function lineCommentBody(line, token) {
   const trimmed = line.trim();
   if (!trimmed.startsWith(token)) return null;
   return trimmed.slice(token.length).trim();
+}
+
+// QNBS-v3: finds token outside quotes so a trailing `code; // QNBS-v3: ...` marker is seen too.
+function findUnquotedTokenIndex(line, token, quoteChars) {
+  let inQuote = null;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (inQuote) {
+      if (ch === '\\' && inQuote !== "'") i += 1;
+      else if (ch === inQuote) inQuote = null;
+      continue;
+    }
+    if (quoteChars.includes(ch)) inQuote = ch;
+    else if (line.startsWith(token, i)) return i;
+  }
+  return -1;
+}
+
+// QNBS-v3: permissive form — also matches this repo's trailing-comment convention (code; // ...).
+function commentBodyAnywhere(line, token, quoteChars) {
+  const idx = findUnquotedTokenIndex(line, token, quoteChars);
+  return idx === -1 ? null : line.slice(idx + token.length).trim();
 }
 
 function runTouchesAdded(startLine, endLine, addedLineNumbers) {
@@ -129,17 +152,22 @@ function findCommentRunEnd(lines, start, token) {
   return end;
 }
 
+const QUOTE_CHARS_BY_TOKEN = { '//': `'"\``, '#': `'"` };
+
 /**
  * Finds one-physical-line violations for QNBS-v3 marker runs. Walks the whole file (not just
  * added lines) so a violation is caught whether the *marker* line was newly added, an existing
  * marker gained a *new continuation* line, or both — then only reports a run that the diff
- * actually touched, so an untouched historical multi-line marker stays unblocked.
+ * actually touched, so an untouched historical multi-line marker stays unblocked. The marker
+ * itself may be a trailing comment after code (this repo's existing convention); a continuation
+ * line may not — it must be a pure, standalone comment line.
  */
 export function findLineCommentViolations(lines, addedLineNumbers, token) {
   const violations = [];
+  const quoteChars = QUOTE_CHARS_BY_TOKEN[token] ?? `'"`;
   let i = 0;
   while (i < lines.length) {
-    const body = lineCommentBody(lines[i], token);
+    const body = commentBodyAnywhere(lines[i], token, quoteChars);
     if (!body?.startsWith('QNBS-v3:')) {
       i += 1;
       continue;
@@ -157,21 +185,34 @@ export function findLineCommentViolations(lines, addedLineNumbers, token) {
   return violations;
 }
 
+// QNBS-v3: walks whole /* */ runs so an unchanged opener with an added continuation is caught too.
 export function findBlockCommentViolations(lines, addedLineNumbers) {
   const violations = [];
-  for (const lineNo of addedLineNumbers) {
-    const line = lines[lineNo - 1];
-    if (line === undefined) continue;
-    const openIndex = line.indexOf('/*');
-    if (openIndex === -1) continue;
-    const afterOpen = line.slice(openIndex + 2).trim();
-    if (!afterOpen.startsWith('QNBS-v3:')) continue;
-    const closeIndex = line.indexOf('*/', openIndex + 2);
-    if (closeIndex !== -1) continue;
-    violations.push({
-      line: lineNo,
-      reason: 'QNBS-v3 rationale block comment does not close on the same physical line.',
-    });
+  let i = 0;
+  while (i < lines.length) {
+    const openIndex = lines[i].indexOf('/*');
+    if (openIndex === -1) {
+      i += 1;
+      continue;
+    }
+    const afterOpen = lines[i].slice(openIndex + 2).trim();
+    if (!afterOpen.startsWith('QNBS-v3:')) {
+      i += 1;
+      continue;
+    }
+    let end = i;
+    let closeIndex = lines[i].indexOf('*/', openIndex + 2);
+    while (closeIndex === -1 && end + 1 < lines.length) {
+      end += 1;
+      closeIndex = lines[end].indexOf('*/');
+    }
+    if (end > i && runTouchesAdded(i + 1, end + 1, addedLineNumbers)) {
+      violations.push({
+        line: i + 1,
+        reason: 'QNBS-v3 rationale block comment does not close on the same physical line.',
+      });
+    }
+    i = end + 1;
   }
   return violations;
 }
