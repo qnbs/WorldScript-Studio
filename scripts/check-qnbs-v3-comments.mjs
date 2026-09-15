@@ -219,9 +219,12 @@ export function runCheck({ mode, ref, cwd = process.cwd(), readFile = readFileSy
   return { ok: violations.length === 0, failedClosed: false, violations };
 }
 
-function resolveUpstreamRef(cwd) {
-  const result = git(['rev-parse', '--verify', '@{upstream}'], cwd);
-  return result.status === 0 ? (result.stdout ?? '').trim() : null;
+export function resolveUpstreamRef(cwd) {
+  const upstream = git(['rev-parse', '--verify', '@{upstream}'], cwd);
+  if (upstream.status === 0) return (upstream.stdout ?? '').trim();
+  // QNBS-v3: mirrors pr-budget.mjs's own PR_BUDGET_BASE escape hatch for a branch's first push.
+  if (process.env.PR_BUDGET_BASE) return process.env.PR_BUDGET_BASE;
+  return null;
 }
 
 async function main() {

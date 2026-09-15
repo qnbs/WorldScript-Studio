@@ -11,6 +11,7 @@ import {
   isGovernedPath,
   isWorkflowYamlPath,
   parseAddedLineNumbers,
+  resolveUpstreamRef,
   runCheck,
 } from '../../../scripts/check-qnbs-v3-comments.mjs';
 
@@ -232,5 +233,32 @@ describe('runCheck (real git fixture, range mode)', () => {
     const result = runCheck({ mode: 'range', ref: baseRef, cwd: fixtureDir });
     expect(result.ok).toBe(false);
     expect(result.violations).toHaveLength(1);
+  });
+});
+
+describe('resolveUpstreamRef', () => {
+  it('falls back to PR_BUDGET_BASE when a branch has no upstream yet (first push)', () => {
+    const baseRef = git(['rev-parse', 'HEAD']).trim();
+    // A freshly created branch in this fixture has no @{upstream} configured.
+    git(['checkout', '-q', '-b', 'no-upstream-yet']);
+    const original = process.env.PR_BUDGET_BASE;
+    process.env.PR_BUDGET_BASE = baseRef;
+    try {
+      expect(resolveUpstreamRef(fixtureDir)).toBe(baseRef);
+    } finally {
+      if (original === undefined) delete process.env.PR_BUDGET_BASE;
+      else process.env.PR_BUDGET_BASE = original;
+    }
+  });
+
+  it('returns null when neither @{upstream} nor PR_BUDGET_BASE is available', () => {
+    git(['checkout', '-q', '-b', 'still-no-upstream']);
+    const original = process.env.PR_BUDGET_BASE;
+    delete process.env.PR_BUDGET_BASE;
+    try {
+      expect(resolveUpstreamRef(fixtureDir)).toBeNull();
+    } finally {
+      if (original !== undefined) process.env.PR_BUDGET_BASE = original;
+    }
   });
 });
