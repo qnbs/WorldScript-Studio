@@ -1856,10 +1856,7 @@ describe('streamText ollama→gemini fallback', () => {
   });
 });
 
-// QNBS-v3: regression coverage for consumeOpenAiCompatibleStream (cloud OpenAI/Grok adapter) —
-// a reader that already reported done has completed the response; its final buffered frame must
-// survive even when cancellation races that terminal read, under both abort policies. Mirrors the
-// local-compatible adapter's completed-reader regression test above.
+// QNBS-v3: a completed reader must flush its buffered tail even racing cancellation, both policies.
 describe('consumeOpenAiCompatibleStream — cloud cancellation races reader done signal', () => {
   it("flushes the terminal buffered frame under the 'complete' abort policy (OpenAI)", async () => {
     const ac = new AbortController();

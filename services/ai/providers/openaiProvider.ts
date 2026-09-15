@@ -88,9 +88,7 @@ export async function consumeOpenAiCompatibleStream(
         throw error;
       }
       const { done, value } = readResult;
-      // QNBS-v3: a reader that already reported done has completed the response; preserve its
-      // final buffered frame even if cancellation races with this terminal read, matching the
-      // local-compatible adapter's completed-reader semantics — under both abort policies.
+      // QNBS-v3: a completed reader must still flush its buffered tail, even racing cancellation.
       if (done) {
         readerCompleted = true;
         break;
