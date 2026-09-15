@@ -84,7 +84,7 @@ describe('findLineCommentViolations', () => {
     ];
     const violations = findLineCommentViolations(lines, new Set([1]), '//');
     expect(violations).toHaveLength(1);
-    expect(violations[0].line).toBe(1);
+    expect(violations[0]?.line).toBe(1);
   });
 
   it('does not flag an unrelated adjacent comment as a continuation', () => {
@@ -192,7 +192,7 @@ describe('runCheck (real git fixture, staged mode)', () => {
     const result = runCheck({ mode: 'staged', cwd: fixtureDir });
     expect(result.ok).toBe(false);
     expect(result.violations).toHaveLength(1);
-    expect(result.violations[0].file).toBe('base.ts');
+    expect(result.violations[0]?.file).toBe('base.ts');
   });
 
   it('does not block on an untouched historical violation elsewhere in the same file', () => {
