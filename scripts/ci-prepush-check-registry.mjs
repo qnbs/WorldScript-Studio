@@ -38,14 +38,24 @@ const admissionCheckRegistry = Object.freeze([
   {
     name: 'workflowPolicy',
     // QNBS-v3: composite actions carry the same uses:-pin risk as workflows themselves.
-    matches: (file) =>
-      file.startsWith('.github/workflows/') || file.startsWith('.github/actions/'),
+    matches: (file) => file.startsWith('.github/workflows/') || file.startsWith('.github/actions/'),
     implementationFiles: new Set([
       routingAuthority,
       runnerAuthority,
       'scripts/ci-prepush-classifier.mjs',
       'scripts/ci-prepush-range-resolver.mjs',
       'scripts/workflow-policy-check.mjs',
+    ]),
+  },
+  {
+    name: 'qnbsCommentPolicy',
+    matches: (file) => /\.(ts|tsx|js|mjs|css|rs|cpp|ya?ml)$/.test(file),
+    implementationFiles: new Set([
+      routingAuthority,
+      runnerAuthority,
+      'scripts/ci-prepush-classifier.mjs',
+      'scripts/ci-prepush-range-resolver.mjs',
+      'scripts/check-qnbs-v3-comments.mjs',
     ]),
   },
 ]);

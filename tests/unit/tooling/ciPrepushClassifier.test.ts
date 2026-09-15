@@ -95,6 +95,23 @@ describe('change-aware local admission classifier', () => {
     );
   });
 
+  it('routes governed source paths and the checker itself to the QNBS-v3 comment policy', () => {
+    expect(shouldRunAdmissionCheck('qnbsCommentPolicy', ['services/foo.ts'])).toBe(true);
+    expect(shouldRunAdmissionCheck('qnbsCommentPolicy', ['components/Foo.tsx'])).toBe(true);
+    expect(shouldRunAdmissionCheck('qnbsCommentPolicy', ['styles/app.css'])).toBe(true);
+    expect(shouldRunAdmissionCheck('qnbsCommentPolicy', ['src-tauri/src/lib.rs'])).toBe(true);
+    expect(shouldRunAdmissionCheck('qnbsCommentPolicy', ['.github/workflows/ci.yml'])).toBe(true);
+    expect(shouldRunAdmissionCheck('qnbsCommentPolicy', ['README.md'])).toBe(false);
+    expect(shouldRunAdmissionCheck('qnbsCommentPolicy', ['package.json'])).toBe(false);
+    // QNBS-v3: no self-bypass — editing the checker's own implementation still routes to itself.
+    expect(
+      shouldRunAdmissionCheck('qnbsCommentPolicy', ['scripts/check-qnbs-v3-comments.mjs']),
+    ).toBe(true);
+    expect(shouldRunAdmissionCheck('qnbsCommentPolicy', ['scripts/ci-prepush-lowend.mjs'])).toBe(
+      true,
+    );
+  });
+
   it('keeps TypeScript tooling files in the typecheck-required class', () => {
     const classification = classifyChangedFiles([
       'scripts/check-tooling.ts',

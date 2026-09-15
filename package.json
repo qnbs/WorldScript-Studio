@@ -51,6 +51,7 @@
     "pr:budget": "node scripts/pr-budget.mjs",
     "pr-size:check": "node scripts/check-pr-size.mjs",
     "suppressions:check": "node scripts/check-suppressions.mjs",
+    "qnbs-comments:check": "node scripts/check-qnbs-v3-comments.mjs",
     "token:audit": "node scripts/audit-tokens.mjs",
     "guardrail:desktop-imports": "node scripts/check-tauri-import-boundary.mjs",
     "sync:readme": "node scripts/sync-readme-metrics.mjs",

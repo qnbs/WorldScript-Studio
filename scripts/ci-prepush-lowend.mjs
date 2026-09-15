@@ -119,6 +119,11 @@ async function main() {
   if (shouldRunAdmissionCheck('workflowPolicy', classification.files) || full)
     await runCheck('Workflow policy', () => runNodeScript('scripts/workflow-policy-check.mjs'));
 
+  if (shouldRunAdmissionCheck('qnbsCommentPolicy', classification.files) || full)
+    await runCheck('QNBS-v3 comment policy', () =>
+      runNodeScript('scripts/check-qnbs-v3-comments.mjs', ['--range']),
+    );
+
   if (typecheckRequired) {
     await runCheck('TypeScript (single checker)', () =>
       // QNBS-v3: one checker bounds memory use on constrained developer machines.

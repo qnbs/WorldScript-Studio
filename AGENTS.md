@@ -59,6 +59,9 @@ needs their detail. Dynamic facts belong in `package.json`, `.nvmrc`, scripts, o
   comment only when the reason is genuinely non-obvious (security, persistence, concurrency,
   native boundary, or compatibility). No QNBS comment is needed for obvious tests, fixtures,
   generated files, locale JSON, or mechanical renames. Config JSON/YAML has no inline comment.
+  `pnpm run qnbs-comments:check` (staged/diff-aware; wired into pre-commit and `ci:prepush`)
+  mechanically enforces the one-physical-line part of this rule — see `docs/CI.md` for the full
+  risk-routed local admission matrix.
 - Do not mutate `ref.current` during render; use an effect. Prefer `user-event` for modeled
   interactions and descriptive names such as `anchor` for download elements.
 
