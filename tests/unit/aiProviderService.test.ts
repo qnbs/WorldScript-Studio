@@ -1877,7 +1877,11 @@ describe('consumeOpenAiCompatibleStream — cloud cancellation races reader done
         }),
       cancel: vi.fn().mockResolvedValue(undefined),
     };
-    const response = { ok: true, status: 200, body: { getReader: () => reader } } as Response;
+    const response = {
+      ok: true,
+      status: 200,
+      body: { getReader: () => reader },
+    } as unknown as Response;
     const chunks: string[] = [];
     const onDone = vi.fn();
 
@@ -1909,7 +1913,11 @@ describe('consumeOpenAiCompatibleStream — cloud cancellation races reader done
         }),
       cancel: vi.fn().mockResolvedValue(undefined),
     };
-    const response = { ok: true, status: 200, body: { getReader: () => reader } } as Response;
+    const response = {
+      ok: true,
+      status: 200,
+      body: { getReader: () => reader },
+    } as unknown as Response;
     const chunks: string[] = [];
     const onDone = vi.fn();
 
