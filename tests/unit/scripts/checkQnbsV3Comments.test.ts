@@ -188,6 +188,30 @@ describe('findLineCommentViolations', () => {
     const violations = findLineCommentViolations(lines, new Set([1]), '//');
     expect(violations).toHaveLength(1);
   });
+
+  it("recognizes the repo's established tagged marker form, e.g. 'QNBS-v3 (CodeAnt #342): ...'", () => {
+    const lines = [
+      '// QNBS-v3 (CodeAnt #342): One concise rationale on one physical line.',
+      'code();',
+    ];
+    expect(findLineCommentViolations(lines, new Set([1]), '//')).toEqual([]);
+  });
+
+  it('flags a tagged marker that gains an added continuation line', () => {
+    const lines = ['// QNBS-v3 (T2): first half of the rationale', '// continues here.', 'code();'];
+    const violations = findLineCommentViolations(lines, new Set([1, 2]), '//');
+    expect(violations).toHaveLength(1);
+  });
+
+  it('treats a continuation line that opens its own tagged marker as an independent directive', () => {
+    const lines = [
+      '// QNBS-v3 (T2): first rationale, complete on this line.',
+      '// QNBS-v3 (T3): second, unrelated rationale, also complete.',
+      'code();',
+    ];
+    // Two separate single-line markers back to back — neither is a continuation of the other.
+    expect(findLineCommentViolations(lines, new Set([1, 2]), '//')).toEqual([]);
+  });
 });
 
 describe('findBlockCommentViolations (CSS)', () => {
@@ -254,6 +278,12 @@ describe('findYamlConfigMarkerViolations', () => {
 
   it('flags a QNBS-v3 marker introduced in non-workflow yaml config', () => {
     const lines = ['# QNBS-v3: explains a threshold choice.', 'bundle_analysis: {}'];
+    const violations = findYamlConfigMarkerViolations(lines, new Set([1]), 'codecov.yml');
+    expect(violations).toHaveLength(1);
+  });
+
+  it("recognizes the tagged marker form, e.g. 'QNBS-v3 (#190): ...', in non-workflow yaml config", () => {
+    const lines = ['# QNBS-v3 (#190): explains a threshold choice.', 'bundle_analysis: {}'];
     const violations = findYamlConfigMarkerViolations(lines, new Set([1]), 'codecov.yml');
     expect(violations).toHaveLength(1);
   });

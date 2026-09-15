@@ -47,8 +47,15 @@ const LINE_COMMENT_EXTENSIONS = new Set([
 const HASH_COMMENT_EXTENSIONS = new Set(['.yml', '.yaml']);
 const BLOCK_COMMENT_EXTENSIONS = new Set(['.css']);
 
+// QNBS-v3: also matches the established tagged form, e.g. 'QNBS-v3 (CodeAnt #342): ...'.
+const QNBS_MARKER_SOURCE = 'QNBS-v3(?:\\s*\\([^)]*\\))?:';
+const QNBS_MARKER_START = new RegExp(`^${QNBS_MARKER_SOURCE}`);
+const QNBS_MARKER_ANYWHERE = new RegExp(QNBS_MARKER_SOURCE);
+
 // QNBS-v3: a continuation line that itself opens a distinct directive is not a prose continuation.
-const INDEPENDENT_DIRECTIVE = /^(QNBS-v3:|eslint-disable|biome-ignore|TODO|FIXME|NOTE:|@ts-)/;
+const INDEPENDENT_DIRECTIVE = new RegExp(
+  `^(${QNBS_MARKER_SOURCE}|eslint-disable|biome-ignore|TODO|FIXME|NOTE:|@ts-)`,
+);
 
 export function extensionOf(filePath) {
   const match = /\.[^./\\]+$/.exec(filePath);
@@ -169,7 +176,7 @@ export function findLineCommentViolations(lines, addedLineNumbers, token) {
   let i = 0;
   while (i < lines.length) {
     const body = commentBodyAnywhere(lines[i], token, quoteChars);
-    if (!body?.startsWith('QNBS-v3:')) {
+    if (!body || !QNBS_MARKER_START.test(body)) {
       i += 1;
       continue;
     }
@@ -186,6 +193,31 @@ export function findLineCommentViolations(lines, addedLineNumbers, token) {
   return violations;
 }
 
+// QNBS-v3: isolated so the block scan below stays a flat "is this a marker run? handle it" pass.
+function findBlockCommentExtent(lines, i, openIndex) {
+  let end = i;
+  let closeIndex = lines[i].indexOf('*/', openIndex + 2);
+  while (closeIndex === -1 && end + 1 < lines.length) {
+    end += 1;
+    closeIndex = lines[end].indexOf('*/');
+  }
+  return { end, closeIndex };
+}
+
+// QNBS-v3: the marker may follow decorative prefix text (e.g. index.css), not only right after '/*'.
+function blockCommentHasMarker(lines, i, openIndex, end, closeIndex) {
+  const openLineText =
+    closeIndex !== -1 && end === i
+      ? lines[i].slice(openIndex + 2, closeIndex)
+      : lines[i].slice(openIndex + 2);
+  const middleLines = end > i + 1 ? lines.slice(i + 1, end) : [];
+  const closeLineText =
+    end > i ? (closeIndex === -1 ? lines[end] : lines[end].slice(0, closeIndex)) : '';
+  return [openLineText, ...middleLines, closeLineText].some((text) =>
+    QNBS_MARKER_ANYWHERE.test(text),
+  );
+}
+
 // QNBS-v3: walks whole /* */ runs so an unchanged opener with an added continuation is caught too.
 export function findBlockCommentViolations(lines, addedLineNumbers) {
   const violations = [];
@@ -196,21 +228,8 @@ export function findBlockCommentViolations(lines, addedLineNumbers) {
       i += 1;
       continue;
     }
-    let end = i;
-    let closeIndex = lines[i].indexOf('*/', openIndex + 2);
-    while (closeIndex === -1 && end + 1 < lines.length) {
-      end += 1;
-      closeIndex = lines[end].indexOf('*/');
-    }
-    const openLineText =
-      closeIndex !== -1 && end === i
-        ? lines[i].slice(openIndex + 2, closeIndex)
-        : lines[i].slice(openIndex + 2);
-    const middleLines = end > i + 1 ? lines.slice(i + 1, end) : [];
-    const closeLineText =
-      end > i ? (closeIndex === -1 ? lines[end] : lines[end].slice(0, closeIndex)) : '';
-    // QNBS-v3: the marker may follow decorative prefix text (e.g. index.css), not only right after '/*'.
-    if (![openLineText, ...middleLines, closeLineText].some((text) => text.includes('QNBS-v3:'))) {
+    const { end, closeIndex } = findBlockCommentExtent(lines, i, openIndex);
+    if (!blockCommentHasMarker(lines, i, openIndex, end, closeIndex)) {
       i += 1;
       continue;
     }
@@ -232,7 +251,7 @@ export function findYamlConfigMarkerViolations(lines, addedLineNumbers, filePath
     const line = lines[lineNo - 1];
     if (line === undefined) continue;
     const body = lineCommentBody(line, '#');
-    if (body === null || !body.startsWith('QNBS-v3:')) continue;
+    if (body === null || !QNBS_MARKER_START.test(body)) continue;
     violations.push({
       line: lineNo,
       reason:
