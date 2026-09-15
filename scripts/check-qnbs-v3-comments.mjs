@@ -1,25 +1,30 @@
 #!/usr/bin/env node
-import { spawnSync } from 'node:child_process';
 /**
  * QNBS-v3 one-physical-line comment policy (AGENTS.md).
  *
- * Diff-aware: only newly added `QNBS-v3:` rationale lines are checked, so untouched historical
- * violations never become a new blocker. Reports only — never rewrites source.
+ * Diff-aware: a multi-line QNBS-v3 marker run only counts if at least one of its lines was
+ * touched by the diff, so untouched historical violations never become a new blocker. Reads
+ * content from the exact revision the diff was computed against (the index for --staged, HEAD
+ * for --range) so a partially staged or working-tree-ahead-of-HEAD file can't desync line
+ * numbers from content. Reports only — never rewrites source.
  *
  * Run: node scripts/check-qnbs-v3-comments.mjs --staged   (pre-commit: git diff --cached)
  *      node scripts/check-qnbs-v3-comments.mjs --range <ref>  (ci:prepush: git diff <ref>...HEAD)
  */
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import process from 'node:process';
-import { isMainModule } from './ci-prepush-range-resolver.mjs';
+import { defaultResolveUpstream, isMainModule } from './ci-prepush-range-resolver.mjs';
 
 // QNBS-v3: mirrors the historical "codify a pre-commit self-check for the QNBS-v3 one-line rule" glob.
 const GOVERNED_EXTENSIONS = new Set([
   '.ts',
   '.tsx',
+  '.mts',
+  '.cts',
   '.js',
+  '.jsx',
   '.mjs',
+  '.cjs',
   '.css',
   '.rs',
   '.cpp',
@@ -27,7 +32,18 @@ const GOVERNED_EXTENSIONS = new Set([
   '.yaml',
 ]);
 
-const LINE_COMMENT_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.mjs', '.rs', '.cpp']);
+const LINE_COMMENT_EXTENSIONS = new Set([
+  '.ts',
+  '.tsx',
+  '.mts',
+  '.cts',
+  '.js',
+  '.jsx',
+  '.mjs',
+  '.cjs',
+  '.rs',
+  '.cpp',
+]);
 const HASH_COMMENT_EXTENSIONS = new Set(['.yml', '.yaml']);
 const BLOCK_COMMENT_EXTENSIONS = new Set(['.css']);
 
@@ -95,28 +111,48 @@ function lineCommentBody(line, token) {
   return trimmed.slice(token.length).trim();
 }
 
+function runTouchesAdded(startLine, endLine, addedLineNumbers) {
+  for (let n = startLine; n <= endLine; n += 1) {
+    if (addedLineNumbers.has(n)) return true;
+  }
+  return false;
+}
+
+// QNBS-v3: isolated so the marker scan below stays a flat "is this a marker? handle the run" pass.
+function findCommentRunEnd(lines, start, token) {
+  let end = start;
+  while (end + 1 < lines.length) {
+    const nextBody = lineCommentBody(lines[end + 1], token);
+    if (nextBody === null || INDEPENDENT_DIRECTIVE.test(nextBody)) break;
+    end += 1;
+  }
+  return end;
+}
+
 /**
- * Finds one-physical-line violations among newly added QNBS-v3 marker lines.
- * `lines` is the full current file content (0-indexed array); `addedLineNumbers` are 1-indexed
- * line numbers in that same content that the diff reports as added.
+ * Finds one-physical-line violations for QNBS-v3 marker runs. Walks the whole file (not just
+ * added lines) so a violation is caught whether the *marker* line was newly added, an existing
+ * marker gained a *new continuation* line, or both — then only reports a run that the diff
+ * actually touched, so an untouched historical multi-line marker stays unblocked.
  */
 export function findLineCommentViolations(lines, addedLineNumbers, token) {
   const violations = [];
-  for (const lineNo of addedLineNumbers) {
-    const line = lines[lineNo - 1];
-    if (line === undefined) continue;
-    const body = lineCommentBody(line, token);
-    if (body === null || !body.startsWith('QNBS-v3:')) continue;
-    const next = lines[lineNo];
-    if (next === undefined) continue;
-    const nextBody = lineCommentBody(next, token);
-    if (nextBody === null) continue;
-    if (INDEPENDENT_DIRECTIVE.test(nextBody)) continue;
-    violations.push({
-      line: lineNo,
-      reason:
-        'QNBS-v3 rationale continues onto a following comment line; keep it one physical line.',
-    });
+  let i = 0;
+  while (i < lines.length) {
+    const body = lineCommentBody(lines[i], token);
+    if (!body?.startsWith('QNBS-v3:')) {
+      i += 1;
+      continue;
+    }
+    const end = findCommentRunEnd(lines, i, token);
+    if (end > i && runTouchesAdded(i + 1, end + 1, addedLineNumbers)) {
+      violations.push({
+        line: i + 1,
+        reason:
+          'QNBS-v3 rationale continues onto a following comment line; keep it one physical line.',
+      });
+    }
+    i = end + 1;
   }
   return violations;
 }
@@ -173,8 +209,7 @@ export function checkFileContent(filePath, currentContent, diffText) {
 }
 
 function git(args, cwd) {
-  const result = spawnSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
-  return result;
+  return spawnSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 }
 
 function changedFiles(mode, ref, cwd) {
@@ -197,7 +232,19 @@ function diffFor(mode, ref, file, cwd) {
   return result.stdout ?? '';
 }
 
-export function runCheck({ mode, ref, cwd = process.cwd(), readFile = readFileSync } = {}) {
+// QNBS-v3: content comes from the diff's own revision (index or HEAD), never the working tree.
+function readVersioned(mode, file, cwd) {
+  const spec = mode === 'staged' ? `:${file}` : `HEAD:${file}`;
+  const result = git(['show', spec], cwd);
+  if (result.status === 0) return { content: result.stdout ?? '', missing: false, error: false };
+  const stderr = result.stderr ?? '';
+  if (/does not exist in|exists on disk, but not in|fatal: path .* does not exist/i.test(stderr)) {
+    return { content: null, missing: true, error: false };
+  }
+  return { content: null, missing: false, error: true };
+}
+
+export function runCheck({ mode, ref, cwd = process.cwd() } = {}) {
   const files = changedFiles(mode, ref, cwd);
   // QNBS-v3: fail closed — an unresolvable diff must not silently pass as "nothing changed".
   if (files === null) return { ok: false, failedClosed: true, violations: [] };
@@ -206,13 +253,11 @@ export function runCheck({ mode, ref, cwd = process.cwd(), readFile = readFileSy
   for (const file of governed) {
     const diffText = diffFor(mode, ref, file, cwd);
     if (diffText === null) return { ok: false, failedClosed: true, violations: [] };
-    let content;
-    try {
-      content = readFile(resolve(cwd, file), 'utf8');
-    } catch {
-      continue; // deleted file — nothing to check in the new tree
-    }
-    for (const violation of checkFileContent(file, content, diffText)) {
+    const versioned = readVersioned(mode, file, cwd);
+    if (versioned.missing) continue; // deleted in this revision — nothing to check
+    // QNBS-v3: only a confirmed deletion is safe to skip; any other read failure fails closed.
+    if (versioned.error) return { ok: false, failedClosed: true, violations: [] };
+    for (const violation of checkFileContent(file, versioned.content, diffText)) {
       violations.push({ file, ...violation });
     }
   }
@@ -223,31 +268,32 @@ export function resolveUpstreamRef(cwd) {
   const upstream = git(['rev-parse', '--verify', '@{upstream}'], cwd);
   if (upstream.status === 0) return (upstream.stdout ?? '').trim();
   // QNBS-v3: mirrors pr-budget.mjs's own PR_BUDGET_BASE escape hatch for a branch's first push.
-  if (process.env.PR_BUDGET_BASE) return process.env.PR_BUDGET_BASE;
-  return null;
+  const base = process.env.PR_BUDGET_BASE?.trim();
+  return base ? base : null;
 }
 
-async function main() {
-  const args = process.argv.slice(2);
-  const staged = args.includes('--staged');
+function resolveModeAndRef(args) {
   const rangeIndex = args.indexOf('--range');
   const requestedRange = rangeIndex >= 0;
-  let ref =
+  // QNBS-v3: no flags means "check my current staged change" — same as explicit --staged.
+  const mode = requestedRange ? 'range' : 'staged';
+  const explicitRef =
     requestedRange && args[rangeIndex + 1] && !args[rangeIndex + 1].startsWith('--')
       ? args[rangeIndex + 1]
       : undefined;
-  if (!staged && !requestedRange) {
-    console.error('[qnbs-v3] usage: --staged | --range [ref]');
-    process.exit(2);
+  if (!requestedRange || explicitRef) return { mode, ref: explicitRef };
+  // QNBS-v3: fall back to this module's own PR_BUDGET_BASE resolver only when the shared one fails.
+  const ref = defaultResolveUpstream() ?? resolveUpstreamRef(process.cwd());
+  return { mode, ref };
+}
+
+async function main() {
+  const { mode, ref } = resolveModeAndRef(process.argv.slice(2));
+  if (mode === 'range' && !ref) {
+    console.error('[qnbs-v3] could not resolve @{upstream} for --range; failing closed.');
+    process.exit(1);
   }
-  if (requestedRange && !ref) {
-    ref = resolveUpstreamRef(process.cwd());
-    if (!ref) {
-      console.error('[qnbs-v3] could not resolve @{upstream} for --range; failing closed.');
-      process.exit(1);
-    }
-  }
-  const result = runCheck({ mode: staged ? 'staged' : 'range', ref });
+  const result = runCheck({ mode, ref });
   if (result.failedClosed) {
     console.error('[qnbs-v3] could not resolve the diff for this check; failing closed.');
     process.exit(1);

@@ -42,5 +42,4 @@ export function runCheck(options?: {
   mode: 'staged' | 'range';
   ref?: string;
   cwd?: string;
-  readFile?: (path: string, encoding: 'utf8') => string;
 }): QnbsCheckResult;

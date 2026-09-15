@@ -26,6 +26,8 @@ function initFixture() {
   git(['init', '-q']);
   git(['config', 'user.email', 'test@example.com']);
   git(['config', 'user.name', 'Test']);
+  // QNBS-v3: this repo enables commit.gpgsign globally; a fixture repo must not inherit that.
+  git(['config', 'commit.gpgsign', 'false']);
   writeFileSync(join(fixtureDir, 'base.ts'), 'export const base = 1;\n');
   git(['add', '-A']);
   git(['commit', '-q', '-m', 'initial']);
@@ -59,6 +61,10 @@ describe('isGovernedPath / isWorkflowYamlPath', () => {
     expect(isGovernedPath('services/foo.ts')).toBe(true);
     expect(isGovernedPath('styles/app.css')).toBe(true);
     expect(isGovernedPath('src-tauri/src/main.rs')).toBe(true);
+    expect(isGovernedPath('scripts/foo.d.mts')).toBe(true);
+    expect(isGovernedPath('scripts/foo.cts')).toBe(true);
+    expect(isGovernedPath('components/Foo.jsx')).toBe(true);
+    expect(isGovernedPath('scripts/foo.cjs')).toBe(true);
     expect(isGovernedPath('package.json')).toBe(false);
     expect(isGovernedPath('locales/en/bundle.json')).toBe(false);
   });
@@ -109,6 +115,18 @@ describe('findLineCommentViolations', () => {
   it('allows mechanical code with no QNBS marker', () => {
     const lines = ['const x = 1;', 'const y = 2;'];
     expect(findLineCommentViolations(lines, new Set([1, 2]), '//')).toEqual([]);
+  });
+
+  it('flags a new continuation line appended below an unchanged, already-compliant marker', () => {
+    const lines = [
+      '// QNBS-v3: Already-compliant one-line rationale.',
+      '// a newly added continuation.',
+      'code();',
+    ];
+    // Only line 2 (the continuation) was added by this diff — the marker itself is untouched.
+    const violations = findLineCommentViolations(lines, new Set([2]), '//');
+    expect(violations).toHaveLength(1);
+    expect(violations[0]?.line).toBe(1);
   });
 });
 
@@ -195,6 +213,36 @@ describe('runCheck (real git fixture, staged mode)', () => {
     expect(result.violations[0]?.file).toBe('base.ts');
   });
 
+  it('validates the staged (index) content, not a further-dirtied working tree', () => {
+    writeFileSync(
+      join(fixtureDir, 'base.ts'),
+      'export const base = 1;\n// QNBS-v3: One concise non-obvious rationale.\nexport const c = 2;\n',
+    );
+    git(['add', '-A']);
+    // Working tree now diverges from the index with an unstaged multi-line violation.
+    writeFileSync(
+      join(fixtureDir, 'base.ts'),
+      'export const base = 1;\n// QNBS-v3: One concise non-obvious rationale.\n// with an unstaged continuation.\nexport const c = 2;\n',
+    );
+    const result = runCheck({ mode: 'staged', cwd: fixtureDir });
+    expect(result.ok).toBe(true);
+  });
+
+  it('does not pass a staged violation merely because the working tree was fixed without re-staging', () => {
+    writeFileSync(
+      join(fixtureDir, 'base.ts'),
+      'export const base = 1;\n// QNBS-v3: first half\n// continues here.\nexport const c = 2;\n',
+    );
+    git(['add', '-A']);
+    // Working tree "fix" never staged — the index still holds the violation.
+    writeFileSync(
+      join(fixtureDir, 'base.ts'),
+      'export const base = 1;\n// QNBS-v3: fixed single line.\nexport const c = 2;\n',
+    );
+    const result = runCheck({ mode: 'staged', cwd: fixtureDir });
+    expect(result.ok).toBe(false);
+  });
+
   it('does not block on an untouched historical violation elsewhere in the same file', () => {
     // Commit a pre-existing multi-line violation as history first.
     writeFileSync(
@@ -259,6 +307,31 @@ describe('resolveUpstreamRef', () => {
       expect(resolveUpstreamRef(fixtureDir)).toBeNull();
     } finally {
       if (original !== undefined) process.env['PR_BUDGET_BASE'] = original;
+    }
+  });
+
+  it('trims whitespace/newlines from PR_BUDGET_BASE before using it as a git ref', () => {
+    const baseRef = git(['rev-parse', 'HEAD']).trim();
+    git(['checkout', '-q', '-b', 'no-upstream-whitespace']);
+    const original = process.env['PR_BUDGET_BASE'];
+    process.env['PR_BUDGET_BASE'] = `  ${baseRef}\n`;
+    try {
+      expect(resolveUpstreamRef(fixtureDir)).toBe(baseRef);
+    } finally {
+      if (original === undefined) delete process.env['PR_BUDGET_BASE'];
+      else process.env['PR_BUDGET_BASE'] = original;
+    }
+  });
+
+  it('treats a whitespace-only PR_BUDGET_BASE as absent', () => {
+    git(['checkout', '-q', '-b', 'no-upstream-blank']);
+    const original = process.env['PR_BUDGET_BASE'];
+    process.env['PR_BUDGET_BASE'] = '   ';
+    try {
+      expect(resolveUpstreamRef(fixtureDir)).toBeNull();
+    } finally {
+      if (original === undefined) delete process.env['PR_BUDGET_BASE'];
+      else process.env['PR_BUDGET_BASE'] = original;
     }
   });
 });

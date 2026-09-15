@@ -13,7 +13,8 @@ function parseNulDelimitedPaths(output) {
   return output.split('\0').filter(Boolean);
 }
 
-function defaultResolveUpstream() {
+// QNBS-v3: exported so other admission checks share one upstream-resolution authority.
+export function defaultResolveUpstream() {
   const result = spawnSync('git', ['rev-parse', '--verify', '@{upstream}'], { encoding: 'utf8' });
   return result.status === 0 ? (result.stdout ?? '').trim() : null;
 }

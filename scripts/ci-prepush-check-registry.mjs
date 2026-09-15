@@ -49,7 +49,7 @@ const admissionCheckRegistry = Object.freeze([
   },
   {
     name: 'qnbsCommentPolicy',
-    matches: (file) => /\.(ts|tsx|js|mjs|css|rs|cpp|ya?ml)$/.test(file),
+    matches: (file) => /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs|css|rs|cpp|ya?ml)$/i.test(file),
     implementationFiles: new Set([
       routingAuthority,
       runnerAuthority,
