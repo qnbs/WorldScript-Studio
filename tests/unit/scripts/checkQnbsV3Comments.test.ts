@@ -241,24 +241,24 @@ describe('resolveUpstreamRef', () => {
     const baseRef = git(['rev-parse', 'HEAD']).trim();
     // A freshly created branch in this fixture has no @{upstream} configured.
     git(['checkout', '-q', '-b', 'no-upstream-yet']);
-    const original = process.env.PR_BUDGET_BASE;
-    process.env.PR_BUDGET_BASE = baseRef;
+    const original = process.env['PR_BUDGET_BASE'];
+    process.env['PR_BUDGET_BASE'] = baseRef;
     try {
       expect(resolveUpstreamRef(fixtureDir)).toBe(baseRef);
     } finally {
-      if (original === undefined) delete process.env.PR_BUDGET_BASE;
-      else process.env.PR_BUDGET_BASE = original;
+      if (original === undefined) delete process.env['PR_BUDGET_BASE'];
+      else process.env['PR_BUDGET_BASE'] = original;
     }
   });
 
   it('returns null when neither @{upstream} nor PR_BUDGET_BASE is available', () => {
     git(['checkout', '-q', '-b', 'still-no-upstream']);
-    const original = process.env.PR_BUDGET_BASE;
-    delete process.env.PR_BUDGET_BASE;
+    const original = process.env['PR_BUDGET_BASE'];
+    delete process.env['PR_BUDGET_BASE'];
     try {
       expect(resolveUpstreamRef(fixtureDir)).toBeNull();
     } finally {
-      if (original !== undefined) process.env.PR_BUDGET_BASE = original;
+      if (original !== undefined) process.env['PR_BUDGET_BASE'] = original;
     }
   });
 });
