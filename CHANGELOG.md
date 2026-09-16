@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **AI streaming no longer appends fallback text after a provider emits a partial response:**
+  the partial-then-fail guard previously only covered Grok, so a non-Grok primary (OpenRouter,
+  OpenAI, Gemini, Anthropic, Ollama) that streamed visible text and then failed mid-response
+  could have a second, full fallback answer appended after it — now every provider attempt in
+  the fallback chain, including the OpenRouter-promoted-fallback attempt, terminates on failure
+  once it has emitted output. Part of #714. PR #770.
 - **Writer generations, Global Copilot replies, and Dashboard logline suggestions now reject
   stale results after a project-incarnation change:** Writer's generation history and Copilot's
   chat/reply state live in global Redux, so they survived a view unmount/remount across a project
