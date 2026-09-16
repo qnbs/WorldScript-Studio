@@ -11,7 +11,7 @@
  * feature-specific tests even run.
  */
 import { expect, test } from '@playwright/test';
-import { testConfigurations } from '../config/test-matrix';
+import { criticalCombinations, testConfigurations } from '../config/test-matrix';
 import { ensureBlankProject, selectEnglish, setFeatureFlags, waitForSpaReady } from '../helpers';
 
 const isCI = process.env['CI'] === 'true';
@@ -71,6 +71,37 @@ for (const config of testConfigurations) {
       await expect(
         page.getByRole('heading', { name: /Settings|Einstellungen/i }).first(),
       ).toBeVisible({ timeout: 10000 });
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Parametrized: declared critical-risk combinations actually run (#709) — the
+// same mount/render canary as above, but for pairs/triples flagged as the
+// highest interaction risk in test-matrix.ts, so "critical" isn't dead metadata.
+// ---------------------------------------------------------------------------
+
+for (const config of criticalCombinations) {
+  test.describe(`[critical:${config.name}] ${config.description}`, () => {
+    test.beforeEach(async ({ page }) => {
+      test.skip(!isCI, 'CI-only deep-coverage suite');
+      await setFeatureFlags(page, config.flags);
+    });
+
+    test('app mounts successfully and main chrome is visible', async ({ page }) => {
+      await page.goto('/');
+      await waitForSpaReady(page);
+      await selectEnglish(page);
+      await ensureBlankProject(page);
+
+      const isDesktop = (page.viewportSize()?.width ?? 1280) >= 768;
+      await expect(page.locator(isDesktop ? '#sidebar' : '[data-tour="nav-mobile"]')).toBeVisible({
+        timeout: 15000,
+      });
+
+      await expect(
+        page.getByRole('heading', { name: /Something went wrong|Error|Fehler/i }),
+      ).not.toBeVisible({ timeout: 2000 });
     });
   });
 }

@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect } from '@playwright/test';
+import type { FeatureFlagsState } from '../../features/featureFlags/featureFlagsSlice';
 
 // QNBS-v3: clickNavItem — sidebar(page) targets #sidebar which is hidden md:flex; fails on Mobile Chrome (Pixel 5)
 /**
@@ -243,7 +244,7 @@ export function sidebar(page: Page) {
  */
 export async function setFeatureFlags(
   page: Page,
-  flags: Partial<Record<string, boolean>>,
+  flags: Partial<FeatureFlagsState>,
 ): Promise<void> {
   await page.addInitScript((overrides) => {
     try {

@@ -41,6 +41,7 @@
     "i18n:status": "tsx scripts/i18n-status-dashboard.ts",
     "content:guard": "node scripts/content-guard.mjs",
     "parity:check": "tsx scripts/audit-feature-parity.ts",
+    "test-coverage:check": "tsx scripts/check-feature-test-coverage.ts",
     "docs:check": "node scripts/check-doc-metrics.mjs",
     "csp:sync": "node scripts/sync-csp.mjs",
     "csp:check": "node scripts/check-csp-policy.mjs",

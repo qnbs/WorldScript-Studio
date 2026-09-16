@@ -343,6 +343,9 @@ jobs:
       - name: Feature parity audit
         run: pnpm run parity:check
 
+      - name: Feature test coverage authority (#709)
+        run: pnpm run test-coverage:check
+
       - name: DesktopPlatform import-boundary gate (Wave 1)
         run: pnpm run guardrail:desktop-imports
 

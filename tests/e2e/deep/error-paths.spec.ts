@@ -100,10 +100,11 @@ test.describe('Error paths — rapid navigation between views', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Settings — all sections accessible with all flags enabled
+// Settings — all sections accessible with the heavy-surface flags enabled
 // ---------------------------------------------------------------------------
 
-test.describe('Error paths — Settings sections with all flags on', () => {
+// QNBS-v3 (#709): six representative resource-heavy flags, not all 23 -- named to match what the config below actually proves.
+test.describe('Error paths — Settings sections with heavy-surface flags on', () => {
   test.beforeEach(async ({ page }) => {
     test.skip(!isCI, 'CI-only deep-coverage suite');
     await setFeatureFlags(page, {
