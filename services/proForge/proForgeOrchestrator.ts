@@ -271,6 +271,53 @@ export class ProForgeOrchestrator {
     await this.executeStage(next);
   }
 
+  // QNBS-v3 (#713): extracted so submitReview stays flat -- guard clauses here (not nested if/else) keep CodeScene's "Bumpy Road" check from flagging the identity-guarded apply path.
+  private async applyAcceptedEditsIfAuthorized(
+    stage: PipelineStage,
+    decisions: Array<{ itemId: string; status: ReviewItemStatus }>,
+  ): Promise<void> {
+    const { dispatch, getState } = this.context;
+    const currentRun = getState().proForge.currentRun;
+    const stageResult = currentRun?.stages.find((s) => s.stage === stage);
+    const project = getState().project.present?.data;
+    if (!stageResult || !project) return;
+
+    // QNBS-v3 (#713): apply-time authority check is mandatory even though invalidateForProjectChange also clears currentRun -- the run's origin may no longer match the active project.
+    const originIdentity = currentRun?.generatedForProjectIdentity ?? null;
+    const liveIdentity = getProjectTargetIdentity(getState().project.present);
+    if (!identityUnchanged(originIdentity, liveIdentity)) {
+      logger.warn(
+        `ProForge submitReview: stage ${stage} discarded ${stageResult.reviewItems.length} review item(s) -- project incarnation changed since the pipeline started.`,
+      );
+      return;
+    }
+
+    const acceptedIds = new Set(
+      decisions.filter((d) => d.status === 'accepted').map((d) => d.itemId),
+    );
+    const acceptedItems = stageResult.reviewItems.filter((ri) => acceptedIds.has(ri.id));
+    const { updates, applied, skipped, invalid } = planAcceptedManuscriptEdits(
+      project.manuscript,
+      acceptedItems,
+    );
+    if (updates.length > 0) {
+      const { projectActions } = await import('../../features/project/projectSlice');
+      for (const update of updates) {
+        dispatch(
+          projectActions.updateManuscriptSection({
+            id: update.id,
+            changes: { content: update.content },
+          }),
+        );
+      }
+    }
+    if (skipped > 0 || invalid > 0) {
+      logger.warn(
+        `ProForge submitReview: stage ${stage} applied ${applied} edit(s), skipped ${skipped} stale/unanchorable edit(s), rejected ${invalid} invalid edit(s).`,
+      );
+    }
+  }
+
   /**
    * Submit review decisions for a stage and optionally advance.
    */
@@ -279,49 +326,14 @@ export class ProForgeOrchestrator {
     decisions: Array<{ itemId: string; status: ReviewItemStatus }>,
     options?: { advance?: boolean },
   ): Promise<void> {
-    const { dispatch, getState } = this.context;
-
     // QNBS-v3: Apply accepted edits to the manuscript BEFORE snapshotting, so the post-stage
     // snapshot captures the edited text. Only editing stages mutate prose; production/publishing/
     // analytics are advisory. Stale/unanchorable edits are skipped, never force-applied.
     if (isEditingStage(stage)) {
-      const currentRun = getState().proForge.currentRun;
-      const stageResult = currentRun?.stages.find((s) => s.stage === stage);
-      const project = getState().project.present?.data;
-      // QNBS-v3 (#713): apply-time authority check is mandatory even though invalidateForProjectChange also clears currentRun -- the run's origin may no longer match the active project.
-      const originIdentity = currentRun?.generatedForProjectIdentity ?? null;
-      const liveIdentity = getProjectTargetIdentity(getState().project.present);
-      if (stageResult && project && !identityUnchanged(originIdentity, liveIdentity)) {
-        logger.warn(
-          `ProForge submitReview: stage ${stage} discarded ${stageResult.reviewItems.length} review item(s) -- project incarnation changed since the pipeline started.`,
-        );
-      } else if (stageResult && project) {
-        const acceptedIds = new Set(
-          decisions.filter((d) => d.status === 'accepted').map((d) => d.itemId),
-        );
-        const acceptedItems = stageResult.reviewItems.filter((ri) => acceptedIds.has(ri.id));
-        const { updates, applied, skipped, invalid } = planAcceptedManuscriptEdits(
-          project.manuscript,
-          acceptedItems,
-        );
-        if (updates.length > 0) {
-          const { projectActions } = await import('../../features/project/projectSlice');
-          for (const update of updates) {
-            dispatch(
-              projectActions.updateManuscriptSection({
-                id: update.id,
-                changes: { content: update.content },
-              }),
-            );
-          }
-        }
-        if (skipped > 0 || invalid > 0) {
-          logger.warn(
-            `ProForge submitReview: stage ${stage} applied ${applied} edit(s), skipped ${skipped} stale/unanchorable edit(s), rejected ${invalid} invalid edit(s).`,
-          );
-        }
-      }
+      await this.applyAcceptedEditsIfAuthorized(stage, decisions);
     }
+
+    const { dispatch, getState } = this.context;
 
     // Create post-stage snapshot (now reflecting any applied edits).
     const project = getState().project.present?.data;
