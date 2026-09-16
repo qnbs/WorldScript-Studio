@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **ProForge's Human-in-the-Loop pipeline review no longer applies stale project-incarnation
+  edits to the manuscript:** a run's accepted AI-generated edits were applied at approval time
+  keyed only by section id and a bare project id, so a pipeline left mid-review across a project
+  switch, reset, import, or restore (same nominal id, new generation) could silently write
+  stale prose into a different project's manuscript. Closes the last source-correctness gap in
+  #713. PR #771.
 - **AI streaming no longer appends fallback text after a provider emits a partial response:**
   the partial-then-fail guard previously only covered Grok, so a non-Grok primary (OpenRouter,
   OpenAI, Gemini, Anthropic, Ollama) that streamed visible text and then failed mid-response

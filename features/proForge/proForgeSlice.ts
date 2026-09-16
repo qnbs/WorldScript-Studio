@@ -116,9 +116,11 @@ const proForgeSlice = createSlice({
         label: string;
         config: PipelineConfig;
         preSnapshotId: string;
+        generatedForProjectIdentity?: string | null;
       }>,
     ) {
-      const { projectId, label, config, preSnapshotId } = action.payload;
+      const { projectId, label, config, preSnapshotId, generatedForProjectIdentity } =
+        action.payload;
       const run: PipelineRun = {
         id: uuid(),
         projectId,
@@ -129,6 +131,7 @@ const proForgeSlice = createSlice({
         stages: [],
         startedAt: new Date().toISOString(),
         prePipelineSnapshotId: preSnapshotId,
+        generatedForProjectIdentity: generatedForProjectIdentity ?? null,
         traceLog: [
           createTraceEntry('pipelineStarted', `Pipeline "${label}" started`, undefined, { config }),
           createTraceEntry('snapshotCreated', 'Pre-pipeline snapshot created', undefined, {
@@ -401,6 +404,18 @@ const proForgeSlice = createSlice({
 
     clearHistory(state) {
       state.runHistory = [];
+    },
+
+    // -----------------------------------------------------------------------
+    // Project-incarnation invalidation
+    // -----------------------------------------------------------------------
+
+    // QNBS-v3 (#713): currentRun is ephemeral pipeline-progress state (not the persisted project) -- a run's review content is scoped to the manuscript it was generated against, so it becomes meaningless once the active project incarnation changes. Mirrors writerSlice/copilotSlice's invalidateForProjectChange.
+    invalidateForProjectChange(state) {
+      state.currentRun = null;
+      state.isRunning = false;
+      state.isLoading = false;
+      state.error = null;
     },
 
     // -----------------------------------------------------------------------

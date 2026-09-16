@@ -223,6 +223,57 @@ describe('startPipeline', () => {
     expect(actions).toContain('pipelineStarted');
     expect(actions).toContain('snapshotCreated');
   });
+
+  it('stores the generatedForProjectIdentity payload on the new run (#713)', () => {
+    const state = proForgeReducer(
+      undefined,
+      proForgeActions.startPipeline({
+        ...startPipelinePayload(),
+        generatedForProjectIdentity: 'id:proj-1:gen:0',
+      }),
+    );
+    expect(state.currentRun?.generatedForProjectIdentity).toBe('id:proj-1:gen:0');
+  });
+
+  it('defaults generatedForProjectIdentity to null when omitted (#713)', () => {
+    const state = proForgeReducer(undefined, proForgeActions.startPipeline(startPipelinePayload()));
+    expect(state.currentRun?.generatedForProjectIdentity).toBeNull();
+  });
+});
+
+describe('invalidateForProjectChange (#713)', () => {
+  it('clears the current run and running/loading/error state', () => {
+    let state = proForgeReducer(
+      undefined,
+      proForgeActions.startPipeline({
+        ...startPipelinePayload(),
+        generatedForProjectIdentity: 'id:proj-1:gen:0',
+      }),
+    );
+    state = proForgeReducer(state, proForgeActions.setError('boom'));
+    expect(state.currentRun).not.toBeNull();
+
+    state = proForgeReducer(state, proForgeActions.invalidateForProjectChange());
+    expect(state.currentRun).toBeNull();
+    expect(state.isRunning).toBe(false);
+    expect(state.isLoading).toBe(false);
+    expect(state.error).toBeNull();
+  });
+
+  it('does not touch runHistory (already reloaded per-project separately)', () => {
+    let state = proForgeReducer(undefined, proForgeActions.startPipeline(startPipelinePayload()));
+    state = proForgeReducer(state, proForgeActions.abortPipeline());
+    expect(state.runHistory).toHaveLength(1);
+
+    state = proForgeReducer(state, proForgeActions.invalidateForProjectChange());
+    expect(state.runHistory).toHaveLength(1);
+  });
+
+  it('is a no-op on already-empty state', () => {
+    const state = proForgeReducer(undefined, proForgeActions.invalidateForProjectChange());
+    expect(state.currentRun).toBeNull();
+    expect(state.isRunning).toBe(false);
+  });
 });
 
 describe('abortPipeline', () => {

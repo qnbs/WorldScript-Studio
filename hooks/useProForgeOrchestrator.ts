@@ -8,6 +8,7 @@ import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { appStoreRef } from '../app/storeRef';
 import { proForgeActions } from '../features/proForge/proForgeSlice';
 import type { PipelineConfig, PipelineStage, ReviewItemStatus } from '../features/proForge/types';
+import { getProjectTargetIdentity } from '../features/project/projectIdentity';
 import { createProForgeOrchestrator } from '../services/proForge/proForgeOrchestrator';
 import { useTranslation } from './useTranslation';
 
@@ -15,7 +16,12 @@ export function useProForgeOrchestrator() {
   const { t, language } = useTranslation();
   const dispatch = useAppDispatch();
   const proForgeState = useAppSelector((state) => state.proForge);
-  const project = useAppSelector((state) => state.project.present?.data);
+  const projectPresent = useAppSelector((state) => state.project.present);
+  const project = projectPresent?.data;
+  // QNBS-v3 (#713): full incarnation identity (id + generation), not just the bare project id -- a same-id reset/import/restore must still rebuild the cached orchestrator below.
+  const projectIdentity = getProjectTargetIdentity(projectPresent);
+  // QNBS-v3 (#713 cubic): compared alongside projectIdentity below -- two different id-less projects both resolve to a null identity, which the string comparison alone can't tell apart.
+  const projectGeneration = projectPresent?.generation;
   const settings = useAppSelector((state) => state.settings);
   const featureFlags = useAppSelector((state) => state.featureFlags);
 
@@ -51,9 +57,9 @@ export function useProForgeOrchestrator() {
     [settings, featureFlags, language],
   );
 
-  // QNBS-v3: Track which project the cached orchestrator was built for, so we rebuild
-  // it (and drop its stale AbortController/context) when the user switches projects.
-  const orchestratorProjectIdRef = useRef<string | null>(null);
+  // QNBS-v3: Track which project incarnation the cached orchestrator was built for, so a switch or a same-id reset/import/restore under a new generation rebuilds it and drops its stale AbortController/context (#713).
+  const orchestratorProjectIdentityRef = useRef<string | null>(null);
+  const orchestratorProjectGenerationRef = useRef<number | undefined>(undefined);
 
   // QNBS-v3: Hydrate persisted run history when a project loads — analytics comparisons across
   // runs were lost on reload because the proForge slice is ephemeral. Best-effort.
@@ -83,7 +89,11 @@ export function useProForgeOrchestrator() {
     if (!project) return null;
     const projectId = project.id || 'default';
 
-    if (orchestratorRef.current && orchestratorProjectIdRef.current !== projectId) {
+    if (
+      orchestratorRef.current &&
+      (orchestratorProjectIdentityRef.current !== projectIdentity ||
+        orchestratorProjectGenerationRef.current !== projectGeneration)
+    ) {
       orchestratorRef.current.dispose();
       orchestratorRef.current = null;
     }
@@ -111,10 +121,11 @@ export function useProForgeOrchestrator() {
           return appStoreRef.current!.getState().proForge.currentRun?.config ?? defaultConfig;
         },
       });
-      orchestratorProjectIdRef.current = projectId;
+      orchestratorProjectIdentityRef.current = projectIdentity;
+      orchestratorProjectGenerationRef.current = projectGeneration;
     }
     return orchestratorRef.current;
-  }, [dispatch, project, defaultConfig]);
+  }, [dispatch, project, defaultConfig, projectIdentity, projectGeneration]);
 
   const startPipeline = useCallback(
     async (label: string, config: PipelineConfig) => {
