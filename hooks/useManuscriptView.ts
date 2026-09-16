@@ -134,6 +134,8 @@ export const useManuscriptView = ({
   const loglineRequestRef = useRef(0);
   // QNBS-v3: frozen at successful-generation time (not resynced on every render) so selectLogline() can independently detect that the live identity has since diverged from the one that produced these suggestions.
   const loglineGeneratedForIdentityRef = useRef<string | null>(null);
+  // QNBS-v3: genuinely read in the invalidation effect below (compare-against-previous-value), not merely a trigger-only dependency, so no lint suppression is needed for it -- mirrors useExportView.ts's synopsis effect.
+  const prevLoglineIdentityRef = useRef(projectIdentity);
   const proofreadRequestRef = useRef(0);
   // QNBS-v3: same mid-flight-race guard shape as sceneVisualizationTargetRef below -- a fresh object each time the invalidation effect runs, compared by reference.
   const proofreadTargetRef = useRef({ sectionId: activeSectionId, projectIdentity });
@@ -187,8 +189,9 @@ export const useManuscriptView = ({
   }, [resolvedActiveSectionId, projectIdentity]);
 
   // QNBS-v3: logline is a project-level field, not section-scoped, so it only invalidates on project-incarnation change; loglineGeneratedForIdentityRef is untouched here since it must record the origin identity, not the live one. Resets isAiLoading too, mirroring the scene-visualization effect above, so an in-flight request never leaves the spinner stuck once its target is invalidated.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: projectIdentity is an intentional trigger-only dependency -- the effect invalidates on identity change without needing to read the value itself.
   useEffect(() => {
+    if (prevLoglineIdentityRef.current === projectIdentity) return;
+    prevLoglineIdentityRef.current = projectIdentity;
     loglineRequestRef.current += 1;
     setLoglineSuggestions([]);
     setIsLoglineModalOpen(false);
