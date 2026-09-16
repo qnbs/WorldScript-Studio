@@ -61,6 +61,8 @@ export const useWriterView = () => {
   const fullStreamRef = useRef('');
   // QNBS-v3 (#713): the identity a currently in-flight generation targets -- checked live inside the streaming callbacks below since they're shared/stable and don't otherwise know which request they belong to.
   const writerTargetIdentityRef = useRef<string | null>(null);
+  // QNBS-v3 (#713): a project switch resets isLoading (via invalidateForProjectChange), letting a NEW generation start while an old one is still settling in the background (the legacy streamGenerationThunk path has no true cancellation) -- this makes completion cleanup request-scoped so a stale finally() can never clear a newer request's loading/abort-controller state.
+  const writerRequestRef = useRef(0);
 
   const { runCompletion, stop: stopOrchestrationStreaming } = useWorldScriptAI({
     source: 'writer',
@@ -244,6 +246,7 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
     // QNBS-v3 (#713): captured before the RAG await (not after) so a project switch during RAG assembly is caught by the live re-check below instead of silently recording the NEW project's identity for a prompt built from the OLD project's data.
     const capturedProjectIdentity = captureActiveProjectIdentity();
     writerTargetIdentityRef.current = capturedProjectIdentity;
+    const requestId = ++writerRequestRef.current;
 
     // QNBS-v3 (CodeAnt): clear the previous request's writer-scoped token usage up front. Only the
     // orchestration path (worldScriptCompletionFetch onFinish) reports usage; when the Writer falls
@@ -308,8 +311,11 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
     dispatch(writerActions.addHistory(''));
 
     const handleFailure = (err: unknown) => {
-      // QNBS-v3 (#713): discard a stale failure if the project changed since this generation started.
-      if (!identityUnchanged(writerTargetIdentityRef.current, captureActiveProjectIdentity())) {
+      // QNBS-v3 (#713): discard a stale failure if the project changed OR a newer same-project request has already started (the requestId check the identity check alone can't cover).
+      if (
+        writerRequestRef.current !== requestId ||
+        !identityUnchanged(writerTargetIdentityRef.current, captureActiveProjectIdentity())
+      ) {
         return;
       }
       const isAbort =
@@ -329,14 +335,17 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
       }
     };
 
+    // QNBS-v3 (#713): only the still-current request may clear the shared loading/abort-controller state -- a project switch resets isLoading, letting a NEW request start while an old one (still settling in the background, e.g. the legacy path below has no true cancellation) would otherwise clobber it on completion.
+    const finishRequest = () => {
+      if (writerRequestRef.current === requestId) {
+        dispatch(writerActions.stopLoading());
+        abortControllerRef.current = null;
+      }
+    };
+
     const orchestrationReady = isOrchestrationReadyProvider(aiProvider);
     if (orchestrationReady) {
-      void runCompletion(fullPrompt)
-        .catch(handleFailure)
-        .finally(() => {
-          dispatch(writerActions.stopLoading());
-          abortControllerRef.current = null;
-        });
+      void runCompletion(fullPrompt).catch(handleFailure).finally(finishRequest);
       return;
     }
 
@@ -355,10 +364,7 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
     dispatch(streamGenerationThunk({ prompt: fullPrompt, lang: language, onChunk }))
       .unwrap()
       .catch(handleFailure)
-      .finally(() => {
-        dispatch(writerActions.stopLoading());
-        abortControllerRef.current = null;
-      });
+      .finally(finishRequest);
   }, [
     dispatch,
     isLoading,
