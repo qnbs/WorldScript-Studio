@@ -587,14 +587,8 @@ async function runProviderFallbackChain(
       }
       lastError = promotedOutcome.error;
     }
-    if (i === chain.length - 1) {
-      // QNBS-v3: onError is owned by this orchestration layer — fire it exactly once, after the whole chain is exhausted, so no fallback provider still in flight gets a premature terminal error.
-      const terminal = lastError instanceof Error ? lastError : new Error(String(lastError));
-      if (tryHeuristicStream(mergedOpts, prompt, guardedCallbacks)) return;
-      callbacks.onError?.(terminal);
-      throw terminal;
-    }
   }
+  // QNBS-v3: onError is owned by this orchestration layer — fire it exactly once, after the whole chain is exhausted, so no fallback provider still in flight gets a premature terminal error.
   const terminal = lastError instanceof Error ? lastError : new Error(String(lastError));
   if (tryHeuristicStream(mergedOpts, prompt, guardedCallbacks)) return;
   callbacks.onError?.(terminal);
