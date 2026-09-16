@@ -292,22 +292,38 @@ export class ProForgeOrchestrator {
     decisions: Array<{ itemId: string; status: ReviewItemStatus }>,
   ): Promise<boolean> {
     const { dispatch, getState } = this.context;
-    const currentRun = getState().proForge.currentRun;
-    const stageResult = currentRun?.stages.find((s) => s.stage === stage);
-    if (!stageResult) return false;
+    const capturedRun = getState().proForge.currentRun;
+    const capturedStageResult = capturedRun?.stages.find((s) => s.stage === stage);
+    if (!capturedRun || !capturedStageResult) return false;
 
-    // QNBS-v3 (#713 cubic): load before the authority check below, not after -- otherwise this await would sit between "verified" and "applied", and a project switch during it would slip past the check entirely.
+    // QNBS-v3 (#713 cubic): load before the checks below, not after -- otherwise this await would sit between "verified" and "applied", and a project/run change during it would slip past them entirely.
     const { projectActions } = await import('../../features/project/projectSlice');
 
     const project = getState().project.present?.data;
     if (!project) return false;
 
     // QNBS-v3 (#713): apply-time authority check is mandatory even though invalidateForProjectChange also clears currentRun -- the run's origin may no longer match the active project.
-    const originIdentity = currentRun?.generatedForProjectIdentity ?? null;
+    const originIdentity = capturedRun.generatedForProjectIdentity ?? null;
     const liveIdentity = getProjectTargetIdentity(getState().project.present);
     if (!identityUnchanged(originIdentity, liveIdentity)) {
       logger.warn(
-        `ProForge submitReview: stage ${stage} discarded ${stageResult.reviewItems.length} review item(s) -- project incarnation changed since the pipeline started.`,
+        `ProForge submitReview: stage ${stage} discarded ${capturedStageResult.reviewItems.length} review item(s) -- project incarnation changed since the pipeline started.`,
+      );
+      return true;
+    }
+
+    // QNBS-v3 (#713 CodeRabbit/cubic): the same project can still abort/restart this run during the import above -- re-read it and require the id/status/stage status to still match what was captured.
+    const liveRun = getState().proForge.currentRun;
+    const liveStageResult = liveRun?.stages.find((s) => s.stage === stage);
+    if (
+      !liveRun ||
+      liveRun.id !== capturedRun.id ||
+      liveRun.status !== capturedRun.status ||
+      !liveStageResult ||
+      liveStageResult.status !== capturedStageResult.status
+    ) {
+      logger.warn(
+        `ProForge submitReview: stage ${stage} discarded -- the run changed while authorizing this submission.`,
       );
       return true;
     }
@@ -315,7 +331,7 @@ export class ProForgeOrchestrator {
     const acceptedIds = new Set(
       decisions.filter((d) => d.status === 'accepted').map((d) => d.itemId),
     );
-    const acceptedItems = stageResult.reviewItems.filter((ri) => acceptedIds.has(ri.id));
+    const acceptedItems = liveStageResult.reviewItems.filter((ri) => acceptedIds.has(ri.id));
     const { updates, applied, skipped, invalid } = planAcceptedManuscriptEdits(
       project.manuscript,
       acceptedItems,
