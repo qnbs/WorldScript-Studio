@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type MutableRefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useTransientUiStore } from '../app/transientUiStore';
 import { useToast } from '../components/ui/Toast';
@@ -77,6 +77,25 @@ const getCursorXY = (input: HTMLTextAreaElement, selectionPoint: number) => {
     height: markerRect.height,
   };
 };
+
+type ProofreadTarget = { sectionId: string | null; projectIdentity: string | null };
+
+// QNBS-v3: extracted out of handleProofread (CodeScene flagged its nested branching) -- true when any of the three staleness dimensions changed since dispatch, and clears loading itself but only if no newer request has already taken over by counter.
+function isProofreadResultStale(
+  proofreadRequestRef: MutableRefObject<number>,
+  requestId: number,
+  proofreadTargetRef: MutableRefObject<ProofreadTarget>,
+  requestTarget: ProofreadTarget,
+  capturedProjectIdentity: string | null,
+  setIsProofreading: (value: boolean) => void,
+): boolean {
+  const stale =
+    proofreadRequestRef.current !== requestId ||
+    proofreadTargetRef.current !== requestTarget ||
+    !identityUnchanged(capturedProjectIdentity, captureActiveProjectIdentity());
+  if (stale && proofreadRequestRef.current === requestId) setIsProofreading(false);
+  return stale;
+}
 
 export const useManuscriptView = ({
   onNavigate: _onNavigate,
@@ -371,12 +390,15 @@ export const useManuscriptView = ({
     );
 
     if (
-      proofreadRequestRef.current !== requestId ||
-      proofreadTargetRef.current !== requestTarget ||
-      !identityUnchanged(capturedProjectIdentity, captureActiveProjectIdentity())
+      isProofreadResultStale(
+        proofreadRequestRef,
+        requestId,
+        proofreadTargetRef,
+        requestTarget,
+        capturedProjectIdentity,
+        setIsProofreading,
+      )
     ) {
-      // QNBS-v3: only clear loading if no newer request has taken over by counter -- otherwise this stale completion would wrongly cancel a still-in-flight newer request's own loading state.
-      if (proofreadRequestRef.current === requestId) setIsProofreading(false);
       return;
     }
 
