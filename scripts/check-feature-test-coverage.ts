@@ -80,7 +80,8 @@ const wrongLaneSpecs: Array<{ flag: string; path: string }> = [];
 for (const [flag, coverage] of Object.entries(FEATURE_TEST_COVERAGE)) {
   if (coverage.disposition !== 'REQUIRED_FUNCTIONAL_E2E') continue;
   for (const path of coverage.blockingSpecs) {
-    const isRequiredE2ELane = path.startsWith('tests/e2e/') && !path.startsWith('tests/e2e/deep/');
+    // QNBS-v3: anchored regex, not startsWith -- a `..`-traversal or non-spec helper path under tests/e2e/ must not pass.
+    const isRequiredE2ELane = /^tests\/e2e\/[^/]+\.spec\.ts$/.test(path);
     if (!isRequiredE2ELane) {
       wrongLaneSpecs.push({ flag, path });
     }
@@ -153,11 +154,14 @@ if (missingFromCoverage.length > 0 || extraInCoverage.length > 0) {
   console.log(
     red('CRITICAL — FEATURE_CATALOG and FEATURE_TEST_COVERAGE disagree on the flag set:'),
   );
-  for (const f of missingFromCoverage)
+  for (const f of missingFromCoverage) {
     console.log(red(`  • ${f}: missing from FEATURE_TEST_COVERAGE`));
-  for (const f of extraInCoverage)
+    errors++;
+  }
+  for (const f of extraInCoverage) {
     console.log(red(`  • ${f}: retired but still in FEATURE_TEST_COVERAGE`));
-  errors++;
+    errors++;
+  }
 }
 
 // ---------------------------------------------------------------------------
