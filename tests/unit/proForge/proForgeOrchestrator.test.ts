@@ -5,6 +5,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PipelineConfig } from '../../../features/proForge/types';
+import { getProjectTargetIdentity } from '../../../features/project/projectIdentity';
 import type { OrchestratorContext } from '../../../services/proForge/proForgeOrchestrator';
 
 // ---------------------------------------------------------------------------
@@ -189,6 +190,9 @@ function makeMockState(runOverrides: Record<string, unknown> = {}) {
   };
 }
 
+// QNBS-v3 (#713): matches makeMockState's default project ({id:'p1'}, generation defaults to 0) — the identity a run must carry to be treated as still-current in these tests.
+const PROJECT_IDENTITY = getProjectTargetIdentity({ data: { id: 'p1' } });
+
 function makeContext(stateOverrides: Record<string, unknown> = {}): OrchestratorContext {
   const state = makeMockState(stateOverrides);
   return {
@@ -270,6 +274,19 @@ describe('ProForgeOrchestrator', () => {
       );
       expect(vi.mocked(versionControlActions.createSnapshot)).toHaveBeenCalledWith(
         expect.objectContaining({ label: 'Pre-ProForge: Test Run' }),
+      );
+    });
+
+    it('captures the originating project-incarnation identity in the startPipeline payload (#713)', async () => {
+      const ctx = makeContext();
+      const orch = new ProForgeOrchestrator(ctx);
+      await orch.startPipeline('Test Run', DEFAULT_CONFIG);
+
+      const { startPipeline: startPipelineAction } = await import(
+        '../../../features/proForge/proForgeSlice'
+      );
+      expect(vi.mocked(startPipelineAction)).toHaveBeenCalledWith(
+        expect.objectContaining({ generatedForProjectIdentity: PROJECT_IDENTITY }),
       );
     });
 
@@ -528,6 +545,7 @@ describe('ProForgeOrchestrator', () => {
           activeStage: 'lineProse',
           label: 'Edit Test',
           config: DEFAULT_CONFIG,
+          generatedForProjectIdentity: PROJECT_IDENTITY,
           stages: [{ stage: 'lineProse', status: 'awaitingReview', reviewItems: [editItem] }],
         },
       });
@@ -574,11 +592,59 @@ describe('ProForgeOrchestrator', () => {
           activeStage: 'lineProse',
           label: 'Edit Test',
           config: DEFAULT_CONFIG,
+          generatedForProjectIdentity: PROJECT_IDENTITY,
           stages: [{ stage: 'lineProse', status: 'awaitingReview', reviewItems: [editItem] }],
         },
       });
       const orch = new ProForgeOrchestrator(ctx);
       await orch.submitReview('lineProse', [{ itemId: 'e1', status: 'rejected' }], {
+        advance: false,
+      });
+
+      expect(findUpdate(ctx)).toBeUndefined();
+    });
+
+    it('discards accepted edits when the project incarnation changed since the pipeline started (#713)', async () => {
+      const ctx = makeContext({
+        currentRun: {
+          id: 'run-1',
+          status: 'awaitingReview',
+          activeStage: 'lineProse',
+          label: 'Edit Test',
+          config: DEFAULT_CONFIG,
+          // QNBS-v3: run started under a different project than the one submitReview now resolves live.
+          generatedForProjectIdentity: getProjectTargetIdentity({ data: { id: 'p0' } }),
+          stages: [{ stage: 'lineProse', status: 'awaitingReview', reviewItems: [editItem] }],
+        },
+      });
+      const orch = new ProForgeOrchestrator(ctx);
+      await orch.submitReview('lineProse', [{ itemId: 'e1', status: 'accepted' }], {
+        advance: false,
+      });
+
+      expect(findUpdate(ctx)).toBeUndefined();
+    });
+
+    it('discards accepted edits when the same nominal project id has a new generation (#713)', async () => {
+      const currentRun = {
+        id: 'run-1',
+        status: 'awaitingReview',
+        activeStage: 'lineProse',
+        label: 'Edit Test',
+        config: DEFAULT_CONFIG,
+        // QNBS-v3: captured for generation 0 -- the live state below has since moved to generation 5 under the same nominal id 'p1' (reset/import/restore), which must not bypass the guard.
+        generatedForProjectIdentity: PROJECT_IDENTITY,
+        stages: [{ stage: 'lineProse', status: 'awaitingReview', reviewItems: [editItem] }],
+      };
+      const ctx = makeContext({ currentRun });
+      const baseState = makeMockState({ currentRun });
+      vi.mocked(ctx.getState).mockReturnValue({
+        ...baseState,
+        project: { present: { ...baseState.project.present, generation: 5 } },
+      } as unknown as ReturnType<OrchestratorContext['getState']>);
+
+      const orch = new ProForgeOrchestrator(ctx);
+      await orch.submitReview('lineProse', [{ itemId: 'e1', status: 'accepted' }], {
         advance: false,
       });
 

@@ -872,6 +872,7 @@ describe('AI state invalidation listener (#713)', () => {
         project: undoable(projectReducer, { limit: 10 }) as unknown as Reducer,
         writer: writerReducer,
         copilot: copilotReducer,
+        proForge: proForgeReducer,
       },
       middleware: (getDefault) => getDefault().prepend(listenerMiddleware.middleware),
     });
@@ -908,5 +909,53 @@ describe('AI state invalidation listener (#713)', () => {
     store.dispatch(writerActions.setStyle('formal'));
 
     expect(store.getState().writer.generationHistory).toEqual(['Generated text']);
+  });
+
+  // QNBS-v3 (#713): a mid-pipeline HITL review run is scoped to the manuscript it was generated against -- it must not keep offering apply/submit actions once the active project incarnation changes.
+  it('clears a mid-pipeline ProForge run when the project incarnation genuinely changes', () => {
+    const store = makeWriterCopilotStore();
+    store.dispatch(
+      proForgeActions.startPipeline({
+        projectId: 'proj-1',
+        label: 'Test Run',
+        config: { selectedStages: ['lineProse'] } as never,
+        preSnapshotId: 'snap-1',
+        generatedForProjectIdentity: 'id:proj-1:gen:0',
+      }),
+    );
+    expect(store.getState().proForge.currentRun).not.toBeNull();
+    expect(store.getState().proForge.isRunning).toBe(true);
+
+    const currentData = store.getState().project.present.data;
+    store.dispatch({
+      type: importProjectThunk.fulfilled.type,
+      payload: { ...currentData, id: 'a-different-project' },
+    });
+
+    expect(store.getState().proForge.currentRun).toBeNull();
+    expect(store.getState().proForge.isRunning).toBe(false);
+  });
+
+  it('clears a mid-pipeline ProForge run on a same-id generation bump (reset/import/restore)', () => {
+    const store = makeWriterCopilotStore();
+    store.dispatch(
+      proForgeActions.startPipeline({
+        projectId: 'proj-1',
+        label: 'Test Run',
+        config: { selectedStages: ['lineProse'] } as never,
+        preSnapshotId: 'snap-1',
+        generatedForProjectIdentity: 'id:proj-1:gen:0',
+      }),
+    );
+    expect(store.getState().proForge.currentRun).not.toBeNull();
+
+    // QNBS-v3: same nominal id, but projectSlice's reset/import/restore path bumps `generation` -- must still invalidate.
+    const currentData = store.getState().project.present.data;
+    store.dispatch({
+      type: importProjectThunk.fulfilled.type,
+      payload: { ...currentData },
+    });
+
+    expect(store.getState().proForge.currentRun).toBeNull();
   });
 });

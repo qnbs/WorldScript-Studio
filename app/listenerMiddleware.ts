@@ -498,6 +498,8 @@ listenerMiddleware.startListening({
   effect: (_action, listenerApi) => {
     listenerApi.dispatch(writerActions.invalidateForProjectChange());
     listenerApi.dispatch(copilotActions.invalidateForProjectChange());
+    // QNBS-v3 (#713): a mid-pipeline HITL review run is scoped to the manuscript it was generated against -- clearing it here (belt) is the primary defense; submitReview's own origin-identity check (suspenders) covers the race window before this listener fires.
+    listenerApi.dispatch(proForgeActions.invalidateForProjectChange());
   },
 });
 

@@ -21,6 +21,10 @@ import type {
   SupervisionDecision,
 } from '../../features/proForge/types';
 import { isEditingStage, nextStage } from '../../features/proForge/types';
+import {
+  getProjectTargetIdentity,
+  identityUnchanged,
+} from '../../features/project/projectIdentity';
 import { logger } from '../logger';
 import { planAcceptedManuscriptEdits } from './applyReviewEdits';
 // QNBS-v3: stage→agent mapping extracted to a shared registry so the Core Capability Layer can run
@@ -109,6 +113,8 @@ export class ProForgeOrchestrator {
 
     // Retrieve the snapshot ID (it's the last one created on current branch)
     const preSnapshotId = this.headSnapshotId() ?? 'unknown';
+    // QNBS-v3 (#713): captured now so submitReview can later refuse to apply this run's manuscript edits once the active project incarnation has changed, even under the same nominal projectId.
+    const generatedForProjectIdentity = getProjectTargetIdentity(state.project.present);
 
     dispatch(
       (await import('../../features/proForge/proForgeSlice')).startPipeline({
@@ -116,6 +122,7 @@ export class ProForgeOrchestrator {
         label,
         config,
         preSnapshotId,
+        generatedForProjectIdentity,
       }),
     );
 
@@ -278,9 +285,17 @@ export class ProForgeOrchestrator {
     // snapshot captures the edited text. Only editing stages mutate prose; production/publishing/
     // analytics are advisory. Stale/unanchorable edits are skipped, never force-applied.
     if (isEditingStage(stage)) {
-      const stageResult = getState().proForge.currentRun?.stages.find((s) => s.stage === stage);
+      const currentRun = getState().proForge.currentRun;
+      const stageResult = currentRun?.stages.find((s) => s.stage === stage);
       const project = getState().project.present?.data;
-      if (stageResult && project) {
+      // QNBS-v3 (#713): apply-time authority check is mandatory even though invalidateForProjectChange also clears currentRun -- the run's origin may no longer match the active project.
+      const originIdentity = currentRun?.generatedForProjectIdentity ?? null;
+      const liveIdentity = getProjectTargetIdentity(getState().project.present);
+      if (stageResult && project && !identityUnchanged(originIdentity, liveIdentity)) {
+        logger.warn(
+          `ProForge submitReview: stage ${stage} discarded ${stageResult.reviewItems.length} review item(s) -- project incarnation changed since the pipeline started.`,
+        );
+      } else if (stageResult && project) {
         const acceptedIds = new Set(
           decisions.filter((d) => d.status === 'accepted').map((d) => d.itemId),
         );

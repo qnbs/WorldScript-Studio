@@ -176,6 +176,49 @@ describe('useProForgeOrchestrator', () => {
       // (We just verify no throw occurs)
       expect(true).toBe(true);
     });
+
+    it('rebuilds the orchestrator when the same project id gets a new generation (#713)', async () => {
+      const { useAppSelector: mockUseAppSelector } = await import('../../../app/hooks');
+      const { createProForgeOrchestrator } = await import(
+        '../../../services/proForge/proForgeOrchestrator'
+      );
+
+      function stateWithGeneration(generation: number) {
+        return {
+          proForge: mockProForgeState,
+          project: { present: { data: mockProject, generation } },
+          settings: {
+            advancedAi: {
+              provider: 'gemini',
+              ragMode: 'hybrid',
+              maxTokens: 8000,
+              creativity: 'Balanced',
+            },
+          },
+          featureFlags: { enableDuckDbAnalytics: false },
+        };
+      }
+      function selectFrom(state: unknown) {
+        // biome-ignore lint/suspicious/noExplicitAny: mock — RootState not needed in test
+        return (selector: (s: any) => unknown) => selector(state);
+      }
+
+      vi.mocked(mockUseAppSelector).mockImplementation(selectFrom(stateWithGeneration(0)));
+      const { result, rerender } = renderHook(() => useProForgeOrchestrator());
+      await act(async () => {
+        await result.current.startPipeline('Run 1', result.current.defaultConfig);
+      });
+      expect(vi.mocked(createProForgeOrchestrator)).toHaveBeenCalledTimes(1);
+
+      // QNBS-v3: same nominal project id ('proj-1'), but a reset/import/restore bumped generation -- the cached orchestrator must not silently survive into a pipeline run started against the new incarnation.
+      vi.mocked(mockUseAppSelector).mockImplementation(selectFrom(stateWithGeneration(1)));
+      rerender();
+      await act(async () => {
+        await result.current.startPipeline('Run 2', result.current.defaultConfig);
+      });
+      expect(vi.mocked(createProForgeOrchestrator)).toHaveBeenCalledTimes(2);
+      expect(mockDispose).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('abortPipeline', () => {
