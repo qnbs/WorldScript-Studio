@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect } from '@playwright/test';
+import type { FeatureFlagsState } from '../../features/featureFlags/featureFlagsSlice';
 
 // QNBS-v3: clickNavItem — sidebar(page) targets #sidebar which is hidden md:flex; fails on Mobile Chrome (Pixel 5)
 /**
@@ -241,9 +242,10 @@ export function sidebar(page: Page) {
  *   await setFeatureFlags(page, { enableProForge: true });
  *   await page.goto('/');
  */
+// QNBS-v3: overrides now typed Partial<FeatureFlagsState> (#709) -- a typo'd flag key is a compile error instead of a silently-ignored LocalStorage write.
 export async function setFeatureFlags(
   page: Page,
-  flags: Partial<Record<string, boolean>>,
+  flags: Partial<FeatureFlagsState>,
 ): Promise<void> {
   await page.addInitScript((overrides) => {
     try {

@@ -1,13 +1,19 @@
 /**
  * E2E: LoRA Fine-Tuning view + training wizard.
  * QNBS-v3: CI-only. v1.20 Phase 2.2 — the view is routed in App.tsx + sidebar nav behind
- *          `enableLoraAdapters`. The flag is seeded via localStorage (robust) instead of
+ *          `enableLoraAdapters`. The flag is seeded via setFeatureFlags() (robust) instead of
  *          clicking through Settings. Training uses the web fallback (no Tauri / Python).
  */
 
 import { expect, test } from '@playwright/test';
 
-import { clickNavItem, ensureBlankProject, selectEnglish, waitForSpaReady } from './helpers';
+import {
+  clickNavItem,
+  ensureBlankProject,
+  selectEnglish,
+  setFeatureFlags,
+  waitForSpaReady,
+} from './helpers';
 
 const isCI = process.env['CI'] === 'true';
 
@@ -25,16 +31,7 @@ test.describe('LoRA Wizard (CI-only)', () => {
     test.skip(!isCI, 'CI-only E2E suite');
     // QNBS-v3: seed the feature flag before app scripts run — loadFeatureFlagsState() merges this
     //          partial over defaults, so the LoRA route + sidebar entry are active on first render.
-    await page.addInitScript(() => {
-      try {
-        localStorage.setItem(
-          'worldscript-feature-flags',
-          JSON.stringify({ enableLoraAdapters: true }),
-        );
-      } catch {
-        /* storage unavailable */
-      }
-    });
+    await setFeatureFlags(page, { enableLoraAdapters: true });
     await page.goto('/');
     await waitForSpaReady(page);
     await selectEnglish(page);

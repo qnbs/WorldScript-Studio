@@ -9,6 +9,10 @@
  * Think of this as a CI "canary" for every flag combination: if ANY config
  * causes the app to fail to mount, the whole test matrix fails before deeper
  * feature-specific tests even run.
+ *
+ * QNBS-v3 (#709): the highest-interaction-risk combinations (test-matrix.ts's
+ * `tier: 'critical'` entries) live inside testConfigurations itself, so this
+ * one loop is already their real consumer — no separate critical-only pass exists.
  */
 import { expect, test } from '@playwright/test';
 import { testConfigurations } from '../config/test-matrix';

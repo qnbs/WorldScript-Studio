@@ -27,6 +27,13 @@ export interface TestConfig {
   /** A short description of what this config exercises — used in test.describe labels. */
   description: string;
   flags: Partial<Record<E2EFlagKey, boolean>>;
+  /**
+   * QNBS-v3 (#709): marks the highest-interaction-risk flag combinations. Metadata only — every
+   * entry in `testConfigurations` (tier or not) is already iterated by every suite that consumes
+   * this array, so tagging a config `critical` does not gate its execution; it documents which
+   * entries must survive first if the matrix is ever trimmed for CI cost.
+   */
+  tier?: 'critical';
 }
 
 /**
@@ -75,18 +82,11 @@ export const testConfigurations: readonly TestConfig[] = [
     description: 'Global AI Copilot live assistant launcher visible',
     flags: { enableGlobalCopilot: true },
   },
-] as const;
-
-/**
- * Critical-risk combinations: pairs of flags whose interaction has the most
- * potential for regressions. Run at minimum the "critical" subset in the deep
- * coverage CI job.
- */
-export const criticalCombinations: readonly TestConfig[] = [
   {
     name: 'proforge-workerbus',
     description: 'ProForge + WorkerBus v2 (agentic tasks route through WorkerBus)',
     flags: { enableProForge: true, enableWorkerBusV2: true },
+    tier: 'critical',
   },
   {
     name: 'voice-analytics',
@@ -96,10 +96,12 @@ export const criticalCombinations: readonly TestConfig[] = [
       enableVoiceWasm: true,
       enableDuckDbAnalytics: true,
     },
+    tier: 'critical',
   },
   {
     name: 'proforge-encryption',
     description: 'ProForge pipeline with IDB at-rest encryption (storage read/write under crypto)',
     flags: { enableProForge: true, enableIdbAtRestEncryption: true },
+    tier: 'critical',
   },
 ] as const;
