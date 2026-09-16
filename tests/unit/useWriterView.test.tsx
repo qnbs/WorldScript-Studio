@@ -431,6 +431,53 @@ describe('useWriterView', () => {
         ),
       ).toBe(false);
     });
+
+    // QNBS-v3 (#713): isGenerateDisabled() only reads isLoading, not set until AFTER RAG assembly resolves, so a second same-project click isn't UI-blocked and identity alone can't detect supersession.
+    it('does not let a stale RAG-pending request restart generation once a newer same-project request has started', async () => {
+      mockState.writer.useRagContext = true;
+      mockState.writer.selection = { text: '', start: 0, end: 0 };
+      mockState.writer.activeTool = 'continue';
+      mockLiveProjectIdentity = 'id:p1:gen:0';
+
+      let resolveFirstRag!: (value: unknown) => void;
+      mockAssembleRAGPrompt
+        .mockReturnValueOnce(
+          new Promise((resolve) => {
+            resolveFirstRag = resolve;
+          }),
+        )
+        .mockResolvedValueOnce({
+          prompt: 'rag-prompt-2',
+          chunks: [],
+          estimatedTokens: 0,
+          ragUsed: true,
+        });
+
+      const view = await createHookWrapper();
+
+      let firstRequest!: Promise<void>;
+      act(() => {
+        firstRequest = view.handleGenerate();
+      });
+
+      await act(async () => {
+        await view.handleGenerate();
+      });
+
+      mockDispatch.mockClear();
+
+      // The first (now-superseded) request's RAG assembly finally resolves.
+      await act(async () => {
+        resolveFirstRag({ prompt: 'rag-prompt-1', chunks: [], estimatedTokens: 0, ragUsed: true });
+        await firstRequest;
+      });
+
+      expect(
+        mockDispatch.mock.calls.some(
+          ([action]) => isDispatcherAction(action) && action.type === 'startLoading',
+        ),
+      ).toBe(false);
+    });
   });
 
   it('stores RAG chunk previews (injected set) when useRagContext is on', async () => {

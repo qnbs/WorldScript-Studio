@@ -299,8 +299,12 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
       }
     }
 
-    // QNBS-v3 (#713): checked once, right after the only await above (RAG assembly), and BEFORE any dispatch -- otherwise stale RAG chunk previews assembled from the old project get written into Redux even though generation itself is aborted right after.
-    if (!identityUnchanged(capturedProjectIdentity, captureActiveProjectIdentity())) return;
+    // QNBS-v3 (#713): checked once, right after the only await above (RAG assembly), and BEFORE any dispatch -- otherwise stale RAG chunk previews assembled from the old project get written into Redux even though generation itself is aborted right after. Also checks requestId: isLoading only becomes true AFTER this point, so isGenerateDisabled() does NOT block a second same-project click while RAG assembly is still in flight.
+    if (
+      writerRequestRef.current !== requestId ||
+      !identityUnchanged(capturedProjectIdentity, captureActiveProjectIdentity())
+    )
+      return;
 
     // QNBS-v3: PR4 — store chunk previews (section, score, snippet) for the transparency inspector.
     dispatch(writerActions.setLastRagChunks(ragChunksToStore));
@@ -351,8 +355,11 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
 
     let fullStream = '';
     const onChunk = (chunk: string) => {
-      // QNBS-v3 (#713): discard a stale stream chunk if the project changed since this generation started.
-      if (!identityUnchanged(writerTargetIdentityRef.current, captureActiveProjectIdentity())) {
+      // QNBS-v3 (#713): discard a stale stream chunk if the project changed OR a newer same-project request has already started -- unlike onIncremental (a stable useCallback shared across requests), onChunk is recreated per-call and closes over its own requestId, so it can check supersession directly (CodeRabbit, PR #769).
+      if (
+        writerRequestRef.current !== requestId ||
+        !identityUnchanged(writerTargetIdentityRef.current, captureActiveProjectIdentity())
+      ) {
         return;
       }
       fullStream += chunk;
