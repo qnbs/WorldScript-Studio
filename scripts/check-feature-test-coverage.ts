@@ -5,9 +5,15 @@
  * QNBS-v3: Validates what `tests/e2e/config/featureTestCoverage.ts`'s own
  * `satisfies Record<keyof FeatureFlagsState, FeatureTestCoverage>` cannot prove at compile time:
  *   1. every `blockingSpecs`/`advisorySpecs` path actually exists on disk;
- *   2. `criticalCombinations` (test-matrix.ts) has a real consumer, not just its own definition;
+ *   2. every `REQUIRED_FUNCTIONAL_E2E` blockingSpecs path lives in the required (non-advisory) E2E
+ *      lane, not in tests/e2e/deep/ or tests/unit/ — required-lane suitability, not spec content;
  *   3. every FEATURE_CATALOG riskLevel:'high' flag has an explicit `rationale` whenever its
  *      disposition is weaker than REQUIRED_FUNCTIONAL_E2E, so a high-risk gap can never be silent.
+ *
+ * What this script deliberately does NOT do: parse spec file contents to prove a blockingSpecs
+ * entry actually asserts the claimed flag's behavior. `blockingSpecs` are declared required
+ * evidence paths whose EXISTENCE and LANE are machine-checked here; their assertion QUALITY is
+ * proven by the spec itself plus human/bot review, not by a second AST/regex governance layer.
  *
  * Exhaustiveness itself (every flag present exactly once, no retired flags left behind) is already
  * enforced by TypeScript at the registry's own `satisfies` position — this script does not repeat it.
@@ -16,12 +22,10 @@
  * Exit 0 = all checks pass; Exit 1 = drift found
  */
 
-import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { FEATURE_CATALOG } from '../features/featureCatalog';
 import { FEATURE_TEST_COVERAGE } from '../tests/e2e/config/featureTestCoverage';
-import { criticalCombinations } from '../tests/e2e/config/test-matrix';
 
 const ROOT = join(import.meta.dirname, '..');
 
@@ -68,36 +72,37 @@ if (missingSpecs.length > 0) {
 }
 
 // ---------------------------------------------------------------------------
-// 2. criticalCombinations has a real consumer outside its own definition file
+// 2. REQUIRED_FUNCTIONAL_E2E blockingSpecs must live in the required E2E lane
 // ---------------------------------------------------------------------------
 
-function hasRealConsumer(symbol: string, definitionFile: string): boolean {
-  try {
-    const result = execFileSync(
-      'git',
-      ['-C', ROOT, 'grep', '-I', '-l', '-w', '--', symbol, '--', 'tests/e2e'],
-      { encoding: 'utf-8' },
-    );
-    return result
-      .trim()
-      .split('\n')
-      .filter(Boolean)
-      .some((path) => !path.endsWith(definitionFile));
-  } catch {
-    return false;
+const wrongLaneSpecs: Array<{ flag: string; path: string }> = [];
+
+for (const [flag, coverage] of Object.entries(FEATURE_TEST_COVERAGE)) {
+  if (coverage.disposition !== 'REQUIRED_FUNCTIONAL_E2E') continue;
+  for (const path of coverage.blockingSpecs) {
+    const isRequiredE2ELane = path.startsWith('tests/e2e/') && !path.startsWith('tests/e2e/deep/');
+    if (!isRequiredE2ELane) {
+      wrongLaneSpecs.push({ flag, path });
+    }
   }
 }
 
-if (!hasRealConsumer('criticalCombinations', 'tests/e2e/config/test-matrix.ts')) {
+if (wrongLaneSpecs.length > 0) {
   console.log(
     red(
-      'CRITICAL — criticalCombinations is declared in test-matrix.ts but has no consumer outside its own definition (dead metadata).',
+      'CRITICAL — REQUIRED_FUNCTIONAL_E2E blockingSpecs outside the required (non-advisory) E2E lane:',
     ),
   );
-  errors++;
+  for (const { flag, path } of wrongLaneSpecs) {
+    console.log(
+      red(`  • ${flag}: ${path} (must be tests/e2e/*.spec.ts, not tests/e2e/deep/ or tests/unit/)`),
+    );
+    errors++;
+  }
+  console.log();
 } else {
   console.log(
-    green(`✓ criticalCombinations (${criticalCombinations.length} combos) has a real consumer.`),
+    green('✓ Every REQUIRED_FUNCTIONAL_E2E blockingSpecs path is in the required E2E lane.'),
   );
 }
 

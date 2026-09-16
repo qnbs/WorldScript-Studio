@@ -67,6 +67,18 @@ describe('FEATURE_TEST_COVERAGE (#709)', () => {
     }
   });
 
+  // QNBS-v3: also enforced by scripts/check-feature-test-coverage.ts -- duplicated so plain `vitest` catches regressions too.
+  it('keeps REQUIRED_FUNCTIONAL_E2E blockingSpecs in the required (non-advisory) E2E lane', () => {
+    for (const [flag, coverage] of Object.entries(FEATURE_TEST_COVERAGE)) {
+      if (coverage.disposition !== 'REQUIRED_FUNCTIONAL_E2E') continue;
+      for (const path of coverage.blockingSpecs) {
+        const isRequiredE2ELane =
+          path.startsWith('tests/e2e/') && !path.startsWith('tests/e2e/deep/');
+        expect(isRequiredE2ELane, `${flag}: ${path} is not in the required E2E lane`).toBe(true);
+      }
+    }
+  });
+
   it('marks Rust Compute as desktop-only qualification', () => {
     expect(FEATURE_TEST_COVERAGE.enableRustCompute.disposition).toBe('DESKTOP_ONLY_QUALIFICATION');
     expect(FEATURE_TEST_COVERAGE.enableRustCompute.runtimes).toEqual(['desktop']);

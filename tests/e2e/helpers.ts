@@ -242,6 +242,7 @@ export function sidebar(page: Page) {
  *   await setFeatureFlags(page, { enableProForge: true });
  *   await page.goto('/');
  */
+// QNBS-v3: overrides now typed Partial<FeatureFlagsState> (#709) -- a typo'd flag key is a compile error instead of a silently-ignored LocalStorage write.
 export async function setFeatureFlags(
   page: Page,
   flags: Partial<FeatureFlagsState>,

@@ -13,8 +13,8 @@
  *     object-literal position, same as `audit-feature-parity.ts` derives defaultOn from the slice
  *     rather than hand-duplicating it).
  * `scripts/check-feature-test-coverage.ts` covers what TypeScript cannot: that every referenced
- * spec path actually exists on disk, and that `criticalCombinations` (test-matrix.ts) has a real
- * consumer instead of being declared-but-dead metadata.
+ * spec path actually exists on disk, and that REQUIRED_FUNCTIONAL_E2E evidence sits in the
+ * required (non-advisory) E2E lane.
  *
  * This file is test-only — nothing under tests/ is part of the production Vite bundle.
  */
@@ -37,7 +37,13 @@ export type FeatureTestDisposition =
 export interface FeatureTestCoverage {
   disposition: FeatureTestDisposition;
   runtimes: Array<'web' | 'pwa' | 'desktop'>;
-  /** Spec/test file paths (repo-relative) that must exist and are treated as this flag's required evidence. */
+  /**
+   * Repo-relative spec/test file paths declared as this flag's required evidence.
+   * `check-feature-test-coverage.ts` machine-checks only that these paths EXIST and, for
+   * REQUIRED_FUNCTIONAL_E2E, that they sit in the required (non-advisory) E2E lane — it does not
+   * parse spec content, so it cannot prove a path's assertions actually exercise this specific flag.
+   * That semantic correctness is proven by the spec itself plus human/bot review at PR time.
+   */
   blockingSpecs: string[];
   /** Additional non-blocking evidence (e.g. the deep/advisory matrix canary, or weaker-signal unit coverage). */
   advisorySpecs?: string[];
@@ -190,7 +196,7 @@ const FEATURE_TEST_COVERAGE_LITERAL = {
     settingsToggleRequired: true,
     offStateRequired: true,
     rationale:
-      'Hidden from the generic FeatureFlagsSection (HIDDEN_FLAGS) — its real toggle is the PrivacySection passphrase flow, not a plain switch; also in test-matrix (encryption-on) and criticalCombinations (proforge-encryption).',
+      "Hidden from the generic FeatureFlagsSection (HIDDEN_FLAGS) — its real toggle is the PrivacySection passphrase flow, not a plain switch; also in test-matrix's 'encryption-on' and tier:'critical' 'proforge-encryption' configs.",
   },
 
   // ── Flags in the deep-matrix advisory canary, unit-covered ─────────────────
