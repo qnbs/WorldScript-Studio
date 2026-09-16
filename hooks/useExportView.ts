@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useTransientUiStore } from '../app/transientUiStore';
-import { getProjectTargetIdentity, identityUnchanged } from '../features/project/projectIdentity';
+import {
+  captureActiveProjectIdentity,
+  getProjectTargetIdentity,
+  identityUnchanged,
+} from '../features/project/projectIdentity';
 import { selectAllCharacters, selectAllWorlds } from '../features/project/projectSelectors';
 import type { ProjectData } from '../features/project/projectState';
 import { generateSynopsisThunk } from '../features/project/thunks/writingThunks';
@@ -111,29 +115,34 @@ export const useExportView = () => {
   const [aiEnhancements, setAiEnhancements] = useState<AiEnhancements>({ synopsis: false });
   const [isGeneratingSynopsis, setIsGeneratingSynopsis] = useState(false);
   const [synopsis, setSynopsis] = useState('');
-  // QNBS-v3: captured at generation time so a mid-flight project switch can be rejected even before the invalidation effect below clears synopsis.
-  const synopsisIdentityRef = useRef(projectIdentity);
   const [copied, setCopied] = useState(false);
   const [isExportLoading, setIsExportLoading] = useState(false);
+  // QNBS-v3: guards against a superseded same-project request (e.g. double-click) clearing loading/content for a newer still-in-flight one -- mirrors loglineRequestRef/proofreadRequestRef in useManuscriptView.ts.
+  const synopsisRequestRef = useRef(0);
 
-  // QNBS-v3: a stale AI synopsis must never silently enter a different project incarnation's export/preview composition -- clearing it here (not just guarding the generate call) protects every downstream export/preview site uniformly.
+  // QNBS-v3: a stale AI synopsis must never silently enter a different project incarnation's export/preview composition -- clearing it here (not just guarding the generate call) protects every downstream export/preview site uniformly. Resets isGeneratingSynopsis too so an in-flight request never leaves the spinner stuck once its target is invalidated.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: projectIdentity is an intentional trigger-only dependency -- the effect invalidates on identity change without needing to read the value itself.
   useEffect(() => {
-    synopsisIdentityRef.current = projectIdentity;
+    synopsisRequestRef.current += 1;
     setSynopsis('');
+    setIsGeneratingSynopsis(false);
   }, [projectIdentity]);
 
   const generateSynopsis = useCallback(async () => {
+    const requestId = ++synopsisRequestRef.current;
     setIsGeneratingSynopsis(true);
-    const capturedProjectIdentity = projectIdentity;
+    // QNBS-v3: live-captured (not the projectIdentity selector value or an effect-synced ref) so this never depends on this component's own render/effect cycle catching up before the thunk resolves.
+    const capturedProjectIdentity = captureActiveProjectIdentity();
     const resultAction = await dispatch(generateSynopsisThunk(language));
+    if (synopsisRequestRef.current !== requestId) return;
     if (
       generateSynopsisThunk.fulfilled.match(resultAction) &&
-      identityUnchanged(capturedProjectIdentity, synopsisIdentityRef.current)
+      identityUnchanged(capturedProjectIdentity, captureActiveProjectIdentity())
     ) {
       setSynopsis(resultAction.payload);
     }
     setIsGeneratingSynopsis(false);
-  }, [dispatch, language, projectIdentity]);
+  }, [dispatch, language]);
 
   const compilePrefix = useMemo(() => {
     const cp = project.compileProfile;

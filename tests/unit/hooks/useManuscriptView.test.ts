@@ -384,6 +384,7 @@ describe('handleGenerateLoglines', () => {
     expect(result.current.isAiLoading).toBe(false);
   });
 
+  // QNBS-v3 (#713): covers the concurrency window where a project switch lands mid-flight -- the fulfilled result must never write suggestions or reset loading for an already-superseded project.
   it('#713: discards a fulfilled logline request if the project incarnation changed while it was in flight', async () => {
     let resolveSuggestions!: (suggestions: string[]) => void;
     mockUnwrap.mockReturnValueOnce(
@@ -404,6 +405,9 @@ describe('handleGenerateLoglines', () => {
     });
     expect(result.current.loglineSuggestions).toEqual([]);
     expect(result.current.isLoglineModalOpen).toBe(false);
+    // Regression (sourcery-ai + chatgpt-codex-connector on PR #768): the invalidation effect must
+    // reset isAiLoading itself -- otherwise the spinner stays stuck until the stale request settles.
+    expect(result.current.isAiLoading).toBe(false);
 
     await act(async () => {
       resolveSuggestions(['Stale suggestion']);
@@ -429,6 +433,7 @@ describe('selectLogline', () => {
     expect(result.current.isLoglineModalOpen).toBe(false);
   });
 
+  // QNBS-v3 (#713): the suggestion array can outlive the project it was generated for if the user acts fast enough, so selection must independently re-verify identity rather than trust the array's mere presence.
   it('#713: rejects a stale selection after the project incarnation changed since the suggestions were generated', async () => {
     mockUnwrap.mockResolvedValueOnce(['Suggestion A']);
     const { result, rerender } = renderHook(() => useManuscriptView({ onNavigate }));
@@ -508,6 +513,7 @@ describe('handleProofread', () => {
     expect(result.current.isProofreading).toBe(false);
   });
 
+  // QNBS-v3 (#713): mirrors the logline concurrency guard above -- a proofread request racing a project switch must never publish suggestions or clear loading for the wrong incarnation.
   it('#713: discards a fulfilled proofread result if the project incarnation changed while it was in flight', async () => {
     const suggestions = [{ original: 'teh', suggestion: 'the', explanation: 'typo' }];
     let resolveDispatch!: (action: unknown) => void;
@@ -530,6 +536,9 @@ describe('handleProofread', () => {
       rerender();
     });
     expect(result.current.proofreadSuggestions).toEqual([]);
+    // Regression (chatgpt-codex-connector on PR #768): the invalidation effect must reset
+    // isProofreading itself -- otherwise the spinner stays stuck until the stale request settles.
+    expect(result.current.isProofreading).toBe(false);
 
     await act(async () => {
       resolveDispatch({ type: 'project/proofreadText/fulfilled', payload: suggestions });
@@ -543,6 +552,7 @@ describe('handleProofread', () => {
 // ---------------------------------------------------------------------------
 // applyProofreadSuggestion
 // ---------------------------------------------------------------------------
+// QNBS-v3 (#713): entire block is new -- applyProofreadSuggestion previously had no coverage at all, and its stale-target guard (project incarnation, and now the resolved section id) needs its own concurrency-focused suite.
 describe('applyProofreadSuggestion', () => {
   it('applies the suggestion via handleContentChange and removes it from the list', async () => {
     const suggestions = [{ original: 'teh', suggestion: 'the', explanation: 'typo' }];
@@ -599,6 +609,40 @@ describe('applyProofreadSuggestion', () => {
     act(() => result.current.setActiveSectionId('s2'));
     mockDispatch.mockClear();
 
+    act(() => result.current.applyProofreadSuggestion(0));
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: projectActions.updateManuscriptSection.type }),
+    );
+  });
+
+  it('#713: clears a stale proofread suggestion after its section is deleted by another view, even though the stored activeSectionId is untouched', async () => {
+    // Regression for a real bug (CodeRabbit + cubic-dev-ai on PR #768): Scene Board dispatches
+    // deleteManuscriptSection directly, bypassing this hook's own handleDeleteSection, so
+    // activeSectionId never updates. activeSection then silently falls back to manuscript[0] --
+    // the guard must track that RESOLVED section, not the raw stored id, or a suggestion generated
+    // for the deleted section could be applied to the fallback section's unrelated content.
+    const suggestions = [{ original: 'teh', suggestion: 'the', explanation: 'typo' }];
+    const fulfilledAction = { type: 'project/proofreadText/fulfilled', payload: suggestions };
+    mockDispatch.mockResolvedValue(fulfilledAction);
+    mockProofreadMatch.mockReturnValue(true);
+    setManuscript([makeSection('s1', 'Ch1', 'teh cat'), makeSection('s2', 'Ch2', 'other content')]);
+    const { result, rerender } = renderHook(() => useManuscriptView({ onNavigate }));
+    await act(async () => {
+      await result.current.handleProofread();
+    });
+    expect(result.current.proofreadSuggestions).toEqual(suggestions);
+
+    // Simulate an external deletion of the active section ('s1') without going through
+    // this hook's setActiveSectionId -- activeSectionId in local state still says 's1'.
+    act(() => {
+      setManuscript([makeSection('s2', 'Ch2', 'other content')]);
+      rerender();
+    });
+    expect(result.current.activeSectionId).toBe('s1');
+    expect(result.current.activeSection?.id).toBe('s2');
+    expect(result.current.proofreadSuggestions).toEqual([]);
+
+    mockDispatch.mockClear();
     act(() => result.current.applyProofreadSuggestion(0));
     expect(mockDispatch).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: projectActions.updateManuscriptSection.type }),

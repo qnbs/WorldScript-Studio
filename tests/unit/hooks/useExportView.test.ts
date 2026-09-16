@@ -41,6 +41,16 @@ vi.mock('../../../app/hooks', () => ({
     }),
 }));
 
+vi.mock('../../../features/project/projectIdentity', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../features/project/projectIdentity')>();
+  return {
+    ...actual,
+    // QNBS-v3 (#713): captureActiveProjectIdentity reads the live store (appStoreRef), which this test never constructs -- synthesize it from the same mutable state the useAppSelector mock above exposes.
+    captureActiveProjectIdentity: () =>
+      actual.getProjectTargetIdentity({ data: mockProject, generation: mockGeneration }),
+  };
+});
+
 const mockSendDesktopNotification = vi.fn().mockResolvedValue(true);
 vi.mock('../../../services/desktop/desktopNotifications', () => ({
   sendDesktopNotification: (...args: unknown[]) => mockSendDesktopNotification(...args),
@@ -265,6 +275,47 @@ describe('generateSynopsis', () => {
     expect(result.current.isGeneratingSynopsis).toBe(false);
   });
 
+  // QNBS-v3 (#713): a request-id guard, mirroring loglineRequestRef/proofreadRequestRef in useManuscriptView.ts -- without it, an older still-in-flight request can clobber a newer one's content/loading state on the SAME project (no identity change involved).
+  it('does not let a superseded synopsis request clobber a newer one on the same project', async () => {
+    let resolveFirst!: (action: unknown) => void;
+    let resolveSecond!: (action: unknown) => void;
+    mockDispatch
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveFirst = resolve;
+        }),
+      )
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveSecond = resolve;
+        }),
+      );
+    mockSynopsisMatch.mockReturnValue(true);
+    const { result } = renderHook(() => useExportView());
+
+    let firstRequest!: Promise<void>;
+    let secondRequest!: Promise<void>;
+    act(() => {
+      firstRequest = result.current.generateSynopsis();
+      secondRequest = result.current.generateSynopsis();
+    });
+
+    await act(async () => {
+      resolveSecond({ type: 'fulfilled', payload: 'Second synopsis' });
+      await secondRequest;
+    });
+    expect(result.current.synopsis).toBe('Second synopsis');
+    expect(result.current.isGeneratingSynopsis).toBe(false);
+
+    await act(async () => {
+      resolveFirst({ type: 'fulfilled', payload: 'First synopsis (stale)' });
+      await firstRequest;
+    });
+    expect(result.current.synopsis).toBe('Second synopsis');
+    expect(result.current.isGeneratingSynopsis).toBe(false);
+  });
+
+  // QNBS-v3 (#713): covers the concurrency window where a project switch lands mid-flight, and the follow-up clearing behavior below -- a stale synopsis must never enter a different incarnation's export.
   it('#713: discards a fulfilled synopsis if the project incarnation changed while generation was in flight', async () => {
     let resolveDispatch!: (action: unknown) => void;
     mockDispatch.mockReturnValueOnce(
@@ -285,6 +336,9 @@ describe('generateSynopsis', () => {
       rerender();
     });
     expect(result.current.synopsis).toBe('');
+    // Regression (chatgpt-codex-connector on PR #768): the invalidation effect must reset
+    // isGeneratingSynopsis itself -- otherwise the spinner stays stuck until the stale request settles.
+    expect(result.current.isGeneratingSynopsis).toBe(false);
 
     await act(async () => {
       resolveDispatch({ type: 'fulfilled', payload: 'Stale synopsis from project A' });
