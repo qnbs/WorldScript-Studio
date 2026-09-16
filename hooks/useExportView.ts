@@ -119,10 +119,13 @@ export const useExportView = () => {
   const [isExportLoading, setIsExportLoading] = useState(false);
   // QNBS-v3: guards against a superseded same-project request (e.g. double-click) clearing loading/content for a newer still-in-flight one -- mirrors loglineRequestRef/proofreadRequestRef in useManuscriptView.ts.
   const synopsisRequestRef = useRef(0);
+  // QNBS-v3: genuinely read in the effect body below (compare-against-previous-value), not merely a trigger-only dependency, so no lint suppression is needed for it.
+  const prevSynopsisIdentityRef = useRef(projectIdentity);
 
   // QNBS-v3: a stale AI synopsis must never silently enter a different project incarnation's export/preview composition -- clearing it here (not just guarding the generate call) protects every downstream export/preview site uniformly. Resets isGeneratingSynopsis too so an in-flight request never leaves the spinner stuck once its target is invalidated.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: projectIdentity is an intentional trigger-only dependency -- the effect invalidates on identity change without needing to read the value itself.
   useEffect(() => {
+    if (prevSynopsisIdentityRef.current === projectIdentity) return;
+    prevSynopsisIdentityRef.current = projectIdentity;
     synopsisRequestRef.current += 1;
     setSynopsis('');
     setIsGeneratingSynopsis(false);
