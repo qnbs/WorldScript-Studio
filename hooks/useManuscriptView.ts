@@ -375,7 +375,8 @@ export const useManuscriptView = ({
       proofreadTargetRef.current !== requestTarget ||
       !identityUnchanged(capturedProjectIdentity, captureActiveProjectIdentity())
     ) {
-      setIsProofreading(false);
+      // QNBS-v3: only clear loading if no newer request has taken over by counter -- otherwise this stale completion would wrongly cancel a still-in-flight newer request's own loading state.
+      if (proofreadRequestRef.current === requestId) setIsProofreading(false);
       return;
     }
 

@@ -457,6 +457,46 @@ describe('selectLogline', () => {
 // handleProofread
 // ---------------------------------------------------------------------------
 describe('handleProofread', () => {
+  // QNBS-v3: regression for a real bug confirmed by 3 independent reviewers on PR #768 (cubic, CodeRabbit, chatgpt-codex-connector) -- the stale-result branch used to clear isProofreading unconditionally, cancelling a still-in-flight NEWER request's own loading state.
+  it('does not let a stale proofread completion clear isProofreading for a newer in-flight request', async () => {
+    let resolveFirst!: (action: unknown) => void;
+    let resolveSecond!: (action: unknown) => void;
+    mockDispatch
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveFirst = resolve;
+        }),
+      )
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveSecond = resolve;
+        }),
+      );
+    mockProofreadMatch.mockReturnValue(true);
+    setManuscript([makeSection('s1', 'Ch1', 'teh cat')]);
+    const { result } = renderHook(() => useManuscriptView({ onNavigate }));
+
+    let firstRequest!: Promise<void>;
+    let secondRequest!: Promise<void>;
+    act(() => {
+      firstRequest = result.current.handleProofread();
+      secondRequest = result.current.handleProofread();
+    });
+    expect(result.current.isProofreading).toBe(true);
+
+    await act(async () => {
+      resolveFirst({ type: 'project/proofreadText/fulfilled', payload: [] });
+      await firstRequest;
+    });
+    expect(result.current.isProofreading).toBe(true);
+
+    await act(async () => {
+      resolveSecond({ type: 'project/proofreadText/fulfilled', payload: [] });
+      await secondRequest;
+    });
+    expect(result.current.isProofreading).toBe(false);
+  });
+
   it('does nothing when active section has no content', async () => {
     setManuscript([makeSection('s1', 'Ch1', '')]);
     const { result } = renderHook(() => useManuscriptView({ onNavigate }));
