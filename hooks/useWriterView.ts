@@ -13,7 +13,7 @@ import {
 } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
 import { streamGenerationThunk } from '../features/project/thunks/writingThunks';
-import { writerActions } from '../features/writer/writerSlice';
+import { type RagChunkPreview, writerActions } from '../features/writer/writerSlice';
 import { getAiErrorMessage } from '../services/ai/aiErrorTaxonomy';
 import { aiUsageTracker } from '../services/ai/aiUsageTracker';
 import { isOrchestrationReadyProvider } from '../services/ai/orchestrationProviders';
@@ -33,6 +33,8 @@ export const useWriterView = () => {
   const projectIdentity = useAppSelector((state) =>
     getProjectTargetIdentity(state.project?.present),
   );
+  // QNBS-v3 (#713): two different id-less project replacements both resolve to identity null, which projectIdentity alone can't tell apart -- combined with generation (which always bumps on import/restore) for the stream-cancellation effect below (fail-closed, mirrors app/listenerMiddleware.ts's predicate).
+  const projectGeneration = useAppSelector((state) => state.project?.present?.generation ?? 0);
   const characters = useAppSelector(selectAllCharacters);
   const manuscript = useAppSelector(selectManuscript);
   const aiProvider = useAppSelector((state) => state.settings?.advancedAi?.provider ?? undefined);
@@ -76,17 +78,18 @@ export const useWriterView = () => {
     ),
   });
 
-  // QNBS-v3 (#713): genuinely read (compare-against-previous-value), not merely a trigger-only dependency, so no lint suppression is needed for it -- mirrors useExportView.ts's synopsis effect.
-  const prevWriterIdentityRef = useRef(projectIdentity);
+  // QNBS-v3 (#713): combines identity + generation (not identity alone) since two different id-less project replacements both resolve to identity null -- genuinely read (compare-against-previous-value) so no lint suppression is needed.
+  const writerInvalidationKey = `${projectIdentity ?? ''}:${projectGeneration}`;
+  const prevWriterIdentityRef = useRef(writerInvalidationKey);
   // QNBS-v3 (#713): actually cancel the in-flight stream on a project switch -- invalidateForProjectChange (listener middleware) only resets Redux state; without this, the old stream keeps running and its callbacks (guarded above) become no-ops at best, while still wasting the request.
   useEffect(() => {
-    if (prevWriterIdentityRef.current === projectIdentity) return;
-    prevWriterIdentityRef.current = projectIdentity;
+    if (prevWriterIdentityRef.current === writerInvalidationKey) return;
+    prevWriterIdentityRef.current = writerInvalidationKey;
     stopOrchestrationStreaming();
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
-  }, [projectIdentity, stopOrchestrationStreaming]);
+  }, [writerInvalidationKey, stopOrchestrationStreaming]);
 
   const selectedSectionId = useMemo(() => {
     return writerState.selectedSectionId &&
@@ -258,6 +261,7 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
     let fullPrompt = `${basePrompt}\n\nRespond in ${language === 'de' ? 'German' : 'English'}.`;
 
     const ragEligibleTools = new Set<typeof activeTool>(['continue', 'brainstorm', 'critic']);
+    let ragChunksToStore: RagChunkPreview[] = [];
     if (writerState.useRagContext && ragEligibleTools.has(activeTool) && project) {
       try {
         const assembled = await assembleRAGPrompt(
@@ -281,28 +285,22 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
           },
         );
         fullPrompt = assembled.prompt;
-        // QNBS-v3: PR4 — store chunk previews (section, score, snippet) for the transparency inspector.
-        dispatch(
-          writerActions.setLastRagChunks(
-            assembled.chunks.map((c) => ({
-              sectionId: c.sectionId,
-              chunkIndex: c.chunkIndex,
-              score: c.score,
-              snippet: c.text.slice(0, 160),
-            })),
-          ),
-        );
+        ragChunksToStore = assembled.chunks.map((c) => ({
+          sectionId: c.sectionId,
+          chunkIndex: c.chunkIndex,
+          score: c.score,
+          snippet: c.text.slice(0, 160),
+        }));
       } catch (ragErr) {
         logger.warn('Writer RAG assembly failed, using base prompt:', ragErr);
-        dispatch(writerActions.setLastRagChunks([]));
       }
-    } else {
-      dispatch(writerActions.setLastRagChunks([]));
     }
 
-    // QNBS-v3 (#713): a project switch during the (possibly awaited) RAG assembly above must abort this request entirely -- the prompt was built from the old project's manuscript/characters/worlds.
+    // QNBS-v3 (#713): checked once, right after the only await above (RAG assembly), and BEFORE any dispatch -- otherwise stale RAG chunk previews assembled from the old project get written into Redux even though generation itself is aborted right after.
     if (!identityUnchanged(capturedProjectIdentity, captureActiveProjectIdentity())) return;
 
+    // QNBS-v3: PR4 — store chunk previews (section, score, snippet) for the transparency inspector.
+    dispatch(writerActions.setLastRagChunks(ragChunksToStore));
     // QNBS-v3 (#713): the captured (pre-RAG) identity, so handleAccept can later verify the generation it's applying still targets the active project -- writerSlice is global Redux and survives a Writer-view unmount/remount across a project switch.
     dispatch(writerActions.startLoading(capturedProjectIdentity));
     dispatch(writerActions.clearResultStream());

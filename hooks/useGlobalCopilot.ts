@@ -103,6 +103,8 @@ export function useGlobalCopilot(currentView: View) {
   const projectIdentity = useAppSelector((state) =>
     getProjectTargetIdentity(state.project?.present),
   );
+  // QNBS-v3 (#713): two different id-less project replacements both resolve to identity null, which projectIdentity alone can't tell apart -- combined with generation (which always bumps on import/restore) for the stream-cancellation effect below (fail-closed, mirrors app/listenerMiddleware.ts's predicate).
+  const projectGeneration = useAppSelector((state) => state.project?.present?.generation ?? 0);
   // QNBS-v3: Phase 2 — apply-to-chapter status (transient, ephemeral)
   const [applyStatus, setApplyStatus] = useState<'idle' | 'applying' | 'success' | 'error'>('idle');
   const enableProForge = useAppSelector(selectEnableProForge);
@@ -132,14 +134,15 @@ export function useGlobalCopilot(currentView: View) {
     },
   });
 
-  // QNBS-v3 (#713): genuinely read (compare-against-previous-value), not merely a trigger-only dependency, so no lint suppression is needed for it -- mirrors useExportView.ts's synopsis effect.
-  const prevCopilotIdentityRef = useRef(projectIdentity);
+  // QNBS-v3 (#713): combines identity + generation (not identity alone) since two different id-less project replacements both resolve to identity null -- genuinely read (compare-against-previous-value) so no lint suppression is needed.
+  const copilotInvalidationKey = `${projectIdentity ?? ''}:${projectGeneration}`;
+  const prevCopilotIdentityRef = useRef(copilotInvalidationKey);
   // QNBS-v3 (#713): actually cancel the in-flight stream on a project switch -- invalidateForProjectChange (listener middleware) only resets Redux state; without this, the old stream keeps running and its callbacks (guarded above) become no-ops at best, while still wasting the request.
   useEffect(() => {
-    if (prevCopilotIdentityRef.current === projectIdentity) return;
-    prevCopilotIdentityRef.current = projectIdentity;
+    if (prevCopilotIdentityRef.current === copilotInvalidationKey) return;
+    prevCopilotIdentityRef.current = copilotInvalidationKey;
     stop();
-  }, [projectIdentity, stop]);
+  }, [copilotInvalidationKey, stop]);
 
   const buildContext = useCallback(
     (): CopilotContext => ({

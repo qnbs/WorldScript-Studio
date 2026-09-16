@@ -408,13 +408,26 @@ describe('useWriterView', () => {
       mockLiveProjectIdentity = 'id:pB:gen:0';
 
       await act(async () => {
-        resolveRag({ prompt: 'rag-prompt', chunks: [], estimatedTokens: 0, ragUsed: true });
+        resolveRag({
+          prompt: 'rag-prompt',
+          chunks: [
+            { sectionId: 's1', chunkIndex: 0, score: 0.9, text: 'A passage from the old project.' },
+          ],
+          estimatedTokens: 10,
+          ragUsed: true,
+        });
         await request;
       });
 
       expect(
         mockDispatch.mock.calls.some(
           ([action]) => isDispatcherAction(action) && action.type === 'startLoading',
+        ),
+      ).toBe(false);
+      // QNBS-v3 (#713): the RAG chunk previews must not be written into Redux either -- they were previously dispatched BEFORE this identity check, letting stale snippets from the old project appear in the new project's Writer tools.
+      expect(
+        mockDispatch.mock.calls.some(
+          ([action]) => isDispatcherAction(action) && action.type === 'setLastRagChunks',
         ),
       ).toBe(false);
     });
