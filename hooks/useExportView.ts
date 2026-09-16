@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useTransientUiStore } from '../app/transientUiStore';
 import {
@@ -122,8 +122,8 @@ export const useExportView = () => {
   // QNBS-v3: genuinely read in the effect body below (compare-against-previous-value), not merely a trigger-only dependency, so no lint suppression is needed for it.
   const prevSynopsisIdentityRef = useRef(projectIdentity);
 
-  // QNBS-v3: a stale AI synopsis must never silently enter a different project incarnation's export/preview composition -- clearing it here (not just guarding the generate call) protects every downstream export/preview site uniformly. Resets isGeneratingSynopsis too so an in-flight request never leaves the spinner stuck once its target is invalidated.
-  useEffect(() => {
+  // QNBS-v3: a stale AI synopsis must never silently enter a different project incarnation's export/preview composition -- clearing it here (not just guarding the generate call) protects every downstream export/preview site uniformly. Resets isGeneratingSynopsis too so an in-flight request never leaves the spinner stuck once its target is invalidated. useLayoutEffect (not useEffect) so this clears synchronously before paint -- formattedOutput's useMemo already recomputes with the NEW project on this same render, and a plain useEffect would let the browser paint one frame combining the new project with the OLD synopsis first.
+  useLayoutEffect(() => {
     if (prevSynopsisIdentityRef.current === projectIdentity) return;
     prevSynopsisIdentityRef.current = projectIdentity;
     synopsisRequestRef.current += 1;
