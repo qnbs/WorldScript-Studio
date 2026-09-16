@@ -21,6 +21,10 @@ import type {
   SupervisionDecision,
 } from '../../features/proForge/types';
 import { isEditingStage, nextStage } from '../../features/proForge/types';
+import {
+  getProjectTargetIdentity,
+  identityUnchanged,
+} from '../../features/project/projectIdentity';
 import { logger } from '../logger';
 import { planAcceptedManuscriptEdits } from './applyReviewEdits';
 // QNBS-v3: stage→agent mapping extracted to a shared registry so the Core Capability Layer can run
@@ -88,12 +92,27 @@ export class ProForgeOrchestrator {
     // QNBS-v3: Reset the abort signal — the orchestrator instance is reused across runs
     // (cached in a hook ref); a prior abort would otherwise leave every agent pre-aborted.
     this.abortController = new AbortController();
-    const state = getState();
+    // QNBS-v3 (#713 CodeAnt/cubic): captured before the dynamic import below so the re-check after it can detect a project switch/reset/import/restore that happened during that await.
+    const capturedIdentity = getProjectTargetIdentity(getState().project.present);
+    const capturedGeneration = getState().project.present?.generation;
 
     // Create pre-pipeline snapshot via version control
     const { versionControlActions } = await import(
       '../../features/versionControl/versionControlSlice'
     );
+
+    // QNBS-v3 (#713): re-read live state -- using the pre-await snapshot here would start (and pre-snapshot) the run against a project that may no longer be active.
+    const state = getState();
+    if (
+      getProjectTargetIdentity(state.project.present) !== capturedIdentity ||
+      state.project.present?.generation !== capturedGeneration
+    ) {
+      logger.warn(
+        'ProForge startPipeline: aborted -- project incarnation changed while loading version control.',
+      );
+      return;
+    }
+
     const project = state.project.present?.data;
     if (!project) {
       throw new Error('No project data available');
@@ -109,6 +128,8 @@ export class ProForgeOrchestrator {
 
     // Retrieve the snapshot ID (it's the last one created on current branch)
     const preSnapshotId = this.headSnapshotId() ?? 'unknown';
+    // QNBS-v3 (#713): captured now so submitReview can later refuse to apply this run's manuscript edits once the active project incarnation has changed, even under the same nominal projectId.
+    const generatedForProjectIdentity = getProjectTargetIdentity(state.project.present);
 
     dispatch(
       (await import('../../features/proForge/proForgeSlice')).startPipeline({
@@ -116,6 +137,7 @@ export class ProForgeOrchestrator {
         label,
         config,
         preSnapshotId,
+        generatedForProjectIdentity,
       }),
     );
 
@@ -264,6 +286,72 @@ export class ProForgeOrchestrator {
     await this.executeStage(next);
   }
 
+  // QNBS-v3 (#713): extracted so submitReview stays flat -- guard clauses here (not nested if/else) keep CodeScene's "Bumpy Road" check from flagging the identity-guarded apply path. Returns true when the review was discarded as stale, so submitReview can halt entirely instead of still snapshotting/accepting/advancing a run whose edits were just thrown away.
+  private async applyAcceptedEditsIfAuthorized(
+    stage: PipelineStage,
+    decisions: Array<{ itemId: string; status: ReviewItemStatus }>,
+  ): Promise<boolean> {
+    const { dispatch, getState } = this.context;
+    const capturedRun = getState().proForge.currentRun;
+    const capturedStageResult = capturedRun?.stages.find((s) => s.stage === stage);
+    if (!capturedRun || !capturedStageResult) return false;
+
+    // QNBS-v3 (#713 cubic): load before the checks below, not after -- otherwise this await would sit between "verified" and "applied", and a project/run change during it would slip past them entirely.
+    const { projectActions } = await import('../../features/project/projectSlice');
+
+    const project = getState().project.present?.data;
+    if (!project) return false;
+
+    // QNBS-v3 (#713): apply-time authority check is mandatory even though invalidateForProjectChange also clears currentRun -- the run's origin may no longer match the active project.
+    const originIdentity = capturedRun.generatedForProjectIdentity ?? null;
+    const liveIdentity = getProjectTargetIdentity(getState().project.present);
+    if (!identityUnchanged(originIdentity, liveIdentity)) {
+      logger.warn(
+        `ProForge submitReview: stage ${stage} discarded ${capturedStageResult.reviewItems.length} review item(s) -- project incarnation changed since the pipeline started.`,
+      );
+      return true;
+    }
+
+    // QNBS-v3 (#713 CodeRabbit/cubic): the same project can still abort/restart this run during the import above -- re-read it and require the id/status/stage status to still match what was captured.
+    const liveRun = getState().proForge.currentRun;
+    const liveStageResult = liveRun?.stages.find((s) => s.stage === stage);
+    if (
+      !liveRun ||
+      liveRun.id !== capturedRun.id ||
+      liveRun.status !== capturedRun.status ||
+      !liveStageResult ||
+      liveStageResult.status !== capturedStageResult.status
+    ) {
+      logger.warn(
+        `ProForge submitReview: stage ${stage} discarded -- the run changed while authorizing this submission.`,
+      );
+      return true;
+    }
+
+    const acceptedIds = new Set(
+      decisions.filter((d) => d.status === 'accepted').map((d) => d.itemId),
+    );
+    const acceptedItems = liveStageResult.reviewItems.filter((ri) => acceptedIds.has(ri.id));
+    const { updates, applied, skipped, invalid } = planAcceptedManuscriptEdits(
+      project.manuscript,
+      acceptedItems,
+    );
+    for (const update of updates) {
+      dispatch(
+        projectActions.updateManuscriptSection({
+          id: update.id,
+          changes: { content: update.content },
+        }),
+      );
+    }
+    if (skipped > 0 || invalid > 0) {
+      logger.warn(
+        `ProForge submitReview: stage ${stage} applied ${applied} edit(s), skipped ${skipped} stale/unanchorable edit(s), rejected ${invalid} invalid edit(s).`,
+      );
+    }
+    return false;
+  }
+
   /**
    * Submit review decisions for a stage and optionally advance.
    */
@@ -272,41 +360,16 @@ export class ProForgeOrchestrator {
     decisions: Array<{ itemId: string; status: ReviewItemStatus }>,
     options?: { advance?: boolean },
   ): Promise<void> {
-    const { dispatch, getState } = this.context;
-
     // QNBS-v3: Apply accepted edits to the manuscript BEFORE snapshotting, so the post-stage
     // snapshot captures the edited text. Only editing stages mutate prose; production/publishing/
     // analytics are advisory. Stale/unanchorable edits are skipped, never force-applied.
     if (isEditingStage(stage)) {
-      const stageResult = getState().proForge.currentRun?.stages.find((s) => s.stage === stage);
-      const project = getState().project.present?.data;
-      if (stageResult && project) {
-        const acceptedIds = new Set(
-          decisions.filter((d) => d.status === 'accepted').map((d) => d.itemId),
-        );
-        const acceptedItems = stageResult.reviewItems.filter((ri) => acceptedIds.has(ri.id));
-        const { updates, applied, skipped, invalid } = planAcceptedManuscriptEdits(
-          project.manuscript,
-          acceptedItems,
-        );
-        if (updates.length > 0) {
-          const { projectActions } = await import('../../features/project/projectSlice');
-          for (const update of updates) {
-            dispatch(
-              projectActions.updateManuscriptSection({
-                id: update.id,
-                changes: { content: update.content },
-              }),
-            );
-          }
-        }
-        if (skipped > 0 || invalid > 0) {
-          logger.warn(
-            `ProForge submitReview: stage ${stage} applied ${applied} edit(s), skipped ${skipped} stale/unanchorable edit(s), rejected ${invalid} invalid edit(s).`,
-          );
-        }
-      }
+      // QNBS-v3 (#713 Sourcery): a discarded-as-stale review must not still get snapshotted, marked accepted, and advanced as if it had legitimately applied.
+      const discardedAsStale = await this.applyAcceptedEditsIfAuthorized(stage, decisions);
+      if (discardedAsStale) return;
     }
+
+    const { dispatch, getState } = this.context;
 
     // Create post-stage snapshot (now reflecting any applied edits).
     const project = getState().project.present?.data;

@@ -268,6 +268,8 @@ export interface PipelineRun {
   prePipelineSnapshotId: string;
   /** Trace log of all actions */
   traceLog: TraceLogEntry[];
+  /** QNBS-v3 (#713): project-incarnation identity captured when the run started -- submitReview's manuscript-editing path must not apply this run's AI-generated edits after the active project changes, even if `projectId` still matches (same nominal id, new generation). Optional (not just nullable) so fixtures/history predating this field keep type-checking; a missing value is treated as null (fail-closed) by every consumer. */
+  generatedForProjectIdentity?: string | null;
 }
 
 // ---------------------------------------------------------------------------
