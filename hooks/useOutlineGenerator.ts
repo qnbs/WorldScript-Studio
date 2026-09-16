@@ -149,6 +149,8 @@ export const useOutlineGenerator = ({ onNavigate }: UseOutlineGeneratorProps) =>
       const sectionToRegen = outline[index];
       if (!sectionToRegen) return;
       setIsRegenerating(sectionToRegen.id);
+      // QNBS-v3: mirrors generate()'s own local-preview guard -- regenerateOutlineSectionThunk's apply-time authority (if any) protects only a later persisted write, not this pre-apply preview merge.
+      const capturedProjectIdentity = captureActiveProjectIdentity();
       const resultAction = await dispatch(
         regenerateOutlineSectionThunk({
           allSections: outline,
@@ -156,6 +158,11 @@ export const useOutlineGenerator = ({ onNavigate }: UseOutlineGeneratorProps) =>
           lang: language,
         }),
       );
+
+      if (!identityUnchanged(capturedProjectIdentity, captureActiveProjectIdentity())) {
+        setIsRegenerating(null);
+        return;
+      }
 
       if (regenerateOutlineSectionThunk.fulfilled.match(resultAction)) {
         const { index: newIndex, newSection } = resultAction.payload;

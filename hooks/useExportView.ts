@@ -1,6 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useTransientUiStore } from '../app/transientUiStore';
+import {
+  captureActiveProjectIdentity,
+  getProjectTargetIdentity,
+  identityUnchanged,
+} from '../features/project/projectIdentity';
 import { selectAllCharacters, selectAllWorlds } from '../features/project/projectSelectors';
 import type { ProjectData } from '../features/project/projectState';
 import { generateSynopsisThunk } from '../features/project/thunks/writingThunks';
@@ -73,6 +78,10 @@ export const useExportView = () => {
   const dispatch = useAppDispatch();
   const projectState = useAppSelector((state) => state.project.present);
   const project = projectState.data;
+  // QNBS-v3: computed inside the selector (not from the already-subscribed projectState object) so useAppSelector's own value-equality check only re-renders on an actual identity change, matching the established pattern in useManuscriptView.ts.
+  const projectIdentity = useAppSelector((state) =>
+    getProjectTargetIdentity(state.project.present),
+  );
   // QNBS-v3 (T3): gate the post-export native notification behind the opt-in desktop setting.
   const desktopNotificationsEnabled = useAppSelector(
     (state) => state.settings.desktop?.desktopNotifications ?? false,
@@ -108,11 +117,31 @@ export const useExportView = () => {
   const [synopsis, setSynopsis] = useState('');
   const [copied, setCopied] = useState(false);
   const [isExportLoading, setIsExportLoading] = useState(false);
+  // QNBS-v3: guards against a superseded same-project request (e.g. double-click) clearing loading/content for a newer still-in-flight one -- mirrors loglineRequestRef/proofreadRequestRef in useManuscriptView.ts.
+  const synopsisRequestRef = useRef(0);
+  // QNBS-v3: genuinely read in the effect body below (compare-against-previous-value), not merely a trigger-only dependency, so no lint suppression is needed for it.
+  const prevSynopsisIdentityRef = useRef(projectIdentity);
+
+  // QNBS-v3: a stale AI synopsis must never silently enter a different project incarnation's export/preview composition -- clearing it here (not just guarding the generate call) protects every downstream export/preview site uniformly. Resets isGeneratingSynopsis too so an in-flight request never leaves the spinner stuck once its target is invalidated. useLayoutEffect (not useEffect) so this clears synchronously before paint -- formattedOutput's useMemo already recomputes with the NEW project on this same render, and a plain useEffect would let the browser paint one frame combining the new project with the OLD synopsis first.
+  useLayoutEffect(() => {
+    if (prevSynopsisIdentityRef.current === projectIdentity) return;
+    prevSynopsisIdentityRef.current = projectIdentity;
+    synopsisRequestRef.current += 1;
+    setSynopsis('');
+    setIsGeneratingSynopsis(false);
+  }, [projectIdentity]);
 
   const generateSynopsis = useCallback(async () => {
+    const requestId = ++synopsisRequestRef.current;
     setIsGeneratingSynopsis(true);
+    // QNBS-v3: live-captured (not the projectIdentity selector value or an effect-synced ref) so this never depends on this component's own render/effect cycle catching up before the thunk resolves.
+    const capturedProjectIdentity = captureActiveProjectIdentity();
     const resultAction = await dispatch(generateSynopsisThunk(language));
-    if (generateSynopsisThunk.fulfilled.match(resultAction)) {
+    if (synopsisRequestRef.current !== requestId) return;
+    if (
+      generateSynopsisThunk.fulfilled.match(resultAction) &&
+      identityUnchanged(capturedProjectIdentity, captureActiveProjectIdentity())
+    ) {
       setSynopsis(resultAction.payload);
     }
     setIsGeneratingSynopsis(false);

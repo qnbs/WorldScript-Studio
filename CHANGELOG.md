@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Outline section regeneration, logline suggestions, proofread suggestions, and AI synopsis
+  now reject stale results after a project-incarnation change:** each surface previously had no
+  (or only a request-race) guard against the active project changing between AI generation and
+  the user applying/selecting the result, matching the risk pattern tracked in #713. PR #768.
 - **Duplicate AI requests now cancel provider/runtime work before stale image writes and suppress expected supersession errors in the UI.** PR #745.
 - **Updated the transitive rustls dependency to the OSV-fixed release 0.23.45.** PR #746.
 - **Direct OpenAI o-series streaming now uses reasoning-compatible completion

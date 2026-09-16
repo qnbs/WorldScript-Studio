@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type MutableRefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useTransientUiStore } from '../app/transientUiStore';
 import { useToast } from '../components/ui/Toast';
 import {
+  captureActiveProjectIdentity,
   getProjectTargetIdentity,
+  identityUnchanged,
   isExpectedAiCancellationError,
   isStaleProjectOperationError,
 } from '../features/project/projectIdentity';
@@ -76,6 +78,25 @@ const getCursorXY = (input: HTMLTextAreaElement, selectionPoint: number) => {
   };
 };
 
+type ProofreadTarget = { sectionId: string | null; projectIdentity: string | null };
+
+// QNBS-v3: extracted out of handleProofread (CodeScene flagged its nested branching) -- true when any of the three staleness dimensions changed since dispatch, and clears loading itself but only if no newer request has already taken over by counter.
+function isProofreadResultStale(
+  proofreadRequestRef: MutableRefObject<number>,
+  requestId: number,
+  proofreadTargetRef: MutableRefObject<ProofreadTarget>,
+  requestTarget: ProofreadTarget,
+  capturedProjectIdentity: string | null,
+  setIsProofreading: (value: boolean) => void,
+): boolean {
+  const stale =
+    proofreadRequestRef.current !== requestId ||
+    proofreadTargetRef.current !== requestTarget ||
+    !identityUnchanged(capturedProjectIdentity, captureActiveProjectIdentity());
+  if (stale && proofreadRequestRef.current === requestId) setIsProofreading(false);
+  return stale;
+}
+
 export const useManuscriptView = ({
   onNavigate: _onNavigate,
 }: {
@@ -111,6 +132,18 @@ export const useManuscriptView = ({
   const [isSceneVisualizing, setIsSceneVisualizing] = useState(false);
   const [sceneImagePreviewUrl, setSceneImagePreviewUrl] = useState<string | null>(null);
   const loglineRequestRef = useRef(0);
+  // QNBS-v3: frozen at successful-generation time (not resynced on every render) so selectLogline() can independently detect that the live identity has since diverged from the one that produced these suggestions.
+  const loglineGeneratedForIdentityRef = useRef<string | null>(null);
+  // QNBS-v3: genuinely read in the invalidation effect below (compare-against-previous-value), not merely a trigger-only dependency, so no lint suppression is needed for it -- mirrors useExportView.ts's synopsis effect.
+  const prevLoglineIdentityRef = useRef(projectIdentity);
+  const proofreadRequestRef = useRef(0);
+  // QNBS-v3: same mid-flight-race guard shape as sceneVisualizationTargetRef below -- a fresh object each time the invalidation effect runs, compared by reference.
+  const proofreadTargetRef = useRef({ sectionId: activeSectionId, projectIdentity });
+  // QNBS-v3: frozen at successful-generation time, mirroring loglineGeneratedForIdentityRef -- applyProofreadSuggestion must independently detect staleness, not only rely on proofreadTargetRef (which is resynced on every invalidation, not frozen at generation time).
+  const proofreadGeneratedForRef = useRef<{
+    sectionId: string | null;
+    projectIdentity: string | null;
+  }>({ sectionId: null, projectIdentity: null });
   const sceneVisualizationRequestRef = useRef(0);
   const sceneVisualizationTargetRef = useRef({
     sectionId: activeSectionId,
@@ -136,6 +169,9 @@ export const useManuscriptView = ({
     return manuscript.find((s) => s.id === currentActiveId) || manuscript?.[0];
   }, [activeSectionId, manuscript]);
 
+  // QNBS-v3: the RESOLVED section, not the raw stored id -- another view can delete the active section directly (bypassing this hook's own handleDeleteSection), leaving activeSection to fall back to manuscript[0] while activeSectionId still names the deleted section.
+  const resolvedActiveSectionId = activeSection?.id ?? null;
+
   // QNBS-v3: changing the visualization target or project incarnation invalidates pending results.
   useEffect(() => {
     sceneVisualizationTargetRef.current = { sectionId: activeSectionId, projectIdentity };
@@ -143,6 +179,24 @@ export const useManuscriptView = ({
     setSceneImagePreviewUrl(null);
     setIsSceneVisualizing(false);
   }, [activeSectionId, projectIdentity]);
+
+  // QNBS-v3: same section-scoped invalidation as scene visualization -- a proofread suggestion targets the section content it was generated from, so a section switch invalidates it exactly like a project switch does. Resets isProofreading too, mirroring the scene-visualization effect above, so an in-flight request never leaves the spinner stuck once its target is invalidated.
+  useEffect(() => {
+    proofreadTargetRef.current = { sectionId: resolvedActiveSectionId, projectIdentity };
+    proofreadRequestRef.current += 1;
+    setProofreadSuggestions([]);
+    setIsProofreading(false);
+  }, [resolvedActiveSectionId, projectIdentity]);
+
+  // QNBS-v3: logline is a project-level field, not section-scoped, so it only invalidates on project-incarnation change; loglineGeneratedForIdentityRef is untouched here since it must record the origin identity, not the live one. Resets isAiLoading too, mirroring the scene-visualization effect above, so an in-flight request never leaves the spinner stuck once its target is invalidated.
+  useEffect(() => {
+    if (prevLoglineIdentityRef.current === projectIdentity) return;
+    prevLoglineIdentityRef.current = projectIdentity;
+    loglineRequestRef.current += 1;
+    setLoglineSuggestions([]);
+    setIsLoglineModalOpen(false);
+    setIsAiLoading(false);
+  }, [projectIdentity]);
 
   const activeSectionStats = useMemo(() => {
     if (!activeSection) return { wordCount: 0, charCount: 0, readTime: 0 };
@@ -283,12 +337,19 @@ export const useManuscriptView = ({
 
   const handleGenerateLoglines = async () => {
     const requestId = ++loglineRequestRef.current;
+    // QNBS-v3: live store read (not the projectIdentity selector value) so this check doesn't depend on this component's own render/effect cycle having caught up yet.
+    const capturedProjectIdentity = captureActiveProjectIdentity();
     setIsAiLoading(true);
     setLoglineSuggestions([]);
     setIsLoglineModalOpen(true);
     try {
       const result = await dispatch(generateLoglineSuggestionsThunk(language)).unwrap();
-      if (loglineRequestRef.current !== requestId) return;
+      if (
+        loglineRequestRef.current !== requestId ||
+        !identityUnchanged(capturedProjectIdentity, captureActiveProjectIdentity())
+      )
+        return;
+      loglineGeneratedForIdentityRef.current = capturedProjectIdentity;
       setLoglineSuggestions(result || []);
     } catch (e: unknown) {
       if (loglineRequestRef.current !== requestId) return;
@@ -307,12 +368,23 @@ export const useManuscriptView = ({
   };
 
   const selectLogline = (logline: string) => {
+    // QNBS-v3: reject a stale suggestion independently of the array already having been cleared by the invalidation effect above -- required even though the UI would normally not offer a cleared suggestion to select. Live-captured (not the projectIdentity selector value), matching useOutlineGenerator's apply().
+    if (
+      !identityUnchanged(loglineGeneratedForIdentityRef.current, captureActiveProjectIdentity())
+    ) {
+      setIsLoglineModalOpen(false);
+      return;
+    }
     dispatch(projectActions.updateLogline(logline));
     setIsLoglineModalOpen(false);
   };
 
   const handleProofread = async () => {
     if (!activeSection?.content) return;
+    const requestId = ++proofreadRequestRef.current;
+    const requestTarget = proofreadTargetRef.current;
+    // QNBS-v3: live-captured in addition to requestTarget/requestId -- an effect isn't guaranteed to flush before this await resolves, so a ref/counter comparison alone can miss a same-tick project change.
+    const capturedProjectIdentity = captureActiveProjectIdentity();
     setIsProofreading(true);
     setProofreadSuggestions([]);
 
@@ -320,7 +392,21 @@ export const useManuscriptView = ({
       proofreadTextThunk({ text: activeSection.content, lang: language }),
     );
 
+    if (
+      isProofreadResultStale(
+        proofreadRequestRef,
+        requestId,
+        proofreadTargetRef,
+        requestTarget,
+        capturedProjectIdentity,
+        setIsProofreading,
+      )
+    ) {
+      return;
+    }
+
     if (proofreadTextThunk.fulfilled.match(resultAction)) {
+      proofreadGeneratedForRef.current = requestTarget;
       setProofreadSuggestions(resultAction.payload);
       if (resultAction.payload.length === 0) {
         toast.success('No issues found!', 'Great job!');
@@ -379,6 +465,16 @@ export const useManuscriptView = ({
 
   const applyProofreadSuggestion = (index: number) => {
     if (!activeSection) return;
+    // QNBS-v3: reject a stale suggestion independently of the array already having been cleared by the invalidation effect above -- a suggestion targets the section content it was generated from, so a section or project-incarnation change must never mutate a different section/project. Compares against the RESOLVED section id (not the raw stored activeSectionId), and live-captures identity, matching useOutlineGenerator's apply().
+    if (
+      proofreadGeneratedForRef.current.sectionId !== resolvedActiveSectionId ||
+      !identityUnchanged(
+        proofreadGeneratedForRef.current.projectIdentity,
+        captureActiveProjectIdentity(),
+      )
+    ) {
+      return;
+    }
     const suggestion = proofreadSuggestions[index];
     if (!suggestion) return;
     // Simple string replacement (basic implementation, improved via real diffing in production)
