@@ -383,17 +383,73 @@ describe('handleGenerateLoglines', () => {
     expect(result.current.loglineSuggestions).toEqual(['Current suggestion']);
     expect(result.current.isAiLoading).toBe(false);
   });
+
+  // QNBS-v3 (#713): covers the concurrency window where a project switch lands mid-flight -- the fulfilled result must never write suggestions or reset loading for an already-superseded project.
+  it('#713: discards a fulfilled logline request if the project incarnation changed while it was in flight', async () => {
+    let resolveSuggestions!: (suggestions: string[]) => void;
+    mockUnwrap.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSuggestions = resolve;
+      }),
+    );
+    const { result, rerender } = renderHook(() => useManuscriptView({ onNavigate }));
+
+    let request!: Promise<void>;
+    act(() => {
+      request = result.current.handleGenerateLoglines();
+    });
+
+    act(() => {
+      mockState.project.present.generation = 1;
+      rerender();
+    });
+    expect(result.current.loglineSuggestions).toEqual([]);
+    expect(result.current.isLoglineModalOpen).toBe(false);
+    // Regression (sourcery-ai + chatgpt-codex-connector on PR #768): the invalidation effect must
+    // reset isAiLoading itself -- otherwise the spinner stays stuck until the stale request settles.
+    expect(result.current.isAiLoading).toBe(false);
+
+    await act(async () => {
+      resolveSuggestions(['Stale suggestion']);
+      await request;
+    });
+    expect(result.current.loglineSuggestions).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------------------
 // selectLogline
 // ---------------------------------------------------------------------------
 describe('selectLogline', () => {
-  it('dispatches updateLogline and closes modal', () => {
+  it('dispatches updateLogline and closes modal', async () => {
+    // QNBS-v3 (#713): selectLogline only accepts a suggestion generated for the current project incarnation, so the happy path must generate first, matching real usage.
+    mockUnwrap.mockResolvedValueOnce(['A warrior rises']);
     const { result } = renderHook(() => useManuscriptView({ onNavigate }));
+    await act(async () => {
+      await result.current.handleGenerateLoglines();
+    });
     act(() => result.current.selectLogline('A warrior rises'));
     expect(mockDispatch).toHaveBeenCalledWith(projectActions.updateLogline('A warrior rises'));
     expect(result.current.isLoglineModalOpen).toBe(false);
+  });
+
+  // QNBS-v3 (#713): the suggestion array can outlive the project it was generated for if the user acts fast enough, so selection must independently re-verify identity rather than trust the array's mere presence.
+  it('#713: rejects a stale selection after the project incarnation changed since the suggestions were generated', async () => {
+    mockUnwrap.mockResolvedValueOnce(['Suggestion A']);
+    const { result, rerender } = renderHook(() => useManuscriptView({ onNavigate }));
+    await act(async () => {
+      await result.current.handleGenerateLoglines();
+    });
+    expect(result.current.loglineSuggestions).toEqual(['Suggestion A']);
+
+    act(() => {
+      mockState.project.present.generation = 1;
+      rerender();
+    });
+    mockDispatch.mockClear();
+
+    act(() => result.current.selectLogline('Suggestion A'));
+    expect(mockDispatch).not.toHaveBeenCalledWith(projectActions.updateLogline('Suggestion A'));
   });
 });
 
@@ -401,6 +457,46 @@ describe('selectLogline', () => {
 // handleProofread
 // ---------------------------------------------------------------------------
 describe('handleProofread', () => {
+  // QNBS-v3: regression for a real bug confirmed by 3 independent reviewers on PR #768 (cubic, CodeRabbit, chatgpt-codex-connector) -- the stale-result branch used to clear isProofreading unconditionally, cancelling a still-in-flight NEWER request's own loading state.
+  it('does not let a stale proofread completion clear isProofreading for a newer in-flight request', async () => {
+    let resolveFirst!: (action: unknown) => void;
+    let resolveSecond!: (action: unknown) => void;
+    mockDispatch
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveFirst = resolve;
+        }),
+      )
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveSecond = resolve;
+        }),
+      );
+    mockProofreadMatch.mockReturnValue(true);
+    setManuscript([makeSection('s1', 'Ch1', 'teh cat')]);
+    const { result } = renderHook(() => useManuscriptView({ onNavigate }));
+
+    let firstRequest!: Promise<void>;
+    let secondRequest!: Promise<void>;
+    act(() => {
+      firstRequest = result.current.handleProofread();
+      secondRequest = result.current.handleProofread();
+    });
+    expect(result.current.isProofreading).toBe(true);
+
+    await act(async () => {
+      resolveFirst({ type: 'project/proofreadText/fulfilled', payload: [] });
+      await firstRequest;
+    });
+    expect(result.current.isProofreading).toBe(true);
+
+    await act(async () => {
+      resolveSecond({ type: 'project/proofreadText/fulfilled', payload: [] });
+      await secondRequest;
+    });
+    expect(result.current.isProofreading).toBe(false);
+  });
+
   it('does nothing when active section has no content', async () => {
     setManuscript([makeSection('s1', 'Ch1', '')]);
     const { result } = renderHook(() => useManuscriptView({ onNavigate }));
@@ -455,6 +551,142 @@ describe('handleProofread', () => {
 
     expect(mockToast.error).toHaveBeenCalled();
     expect(result.current.isProofreading).toBe(false);
+  });
+
+  // QNBS-v3 (#713): mirrors the logline concurrency guard above -- a proofread request racing a project switch must never publish suggestions or clear loading for the wrong incarnation.
+  it('#713: discards a fulfilled proofread result if the project incarnation changed while it was in flight', async () => {
+    const suggestions = [{ original: 'teh', suggestion: 'the', explanation: 'typo' }];
+    let resolveDispatch!: (action: unknown) => void;
+    mockDispatch.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveDispatch = resolve;
+      }),
+    );
+    mockProofreadMatch.mockReturnValue(true);
+    setManuscript([makeSection('s1', 'Ch1', 'teh cat')]);
+    const { result, rerender } = renderHook(() => useManuscriptView({ onNavigate }));
+
+    let request!: Promise<void>;
+    act(() => {
+      request = result.current.handleProofread();
+    });
+
+    act(() => {
+      mockState.project.present.generation = 1;
+      rerender();
+    });
+    expect(result.current.proofreadSuggestions).toEqual([]);
+    // Regression (chatgpt-codex-connector on PR #768): the invalidation effect must reset
+    // isProofreading itself -- otherwise the spinner stays stuck until the stale request settles.
+    expect(result.current.isProofreading).toBe(false);
+
+    await act(async () => {
+      resolveDispatch({ type: 'project/proofreadText/fulfilled', payload: suggestions });
+      await request;
+    });
+    expect(result.current.proofreadSuggestions).toEqual([]);
+    expect(result.current.isProofreading).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// applyProofreadSuggestion
+// ---------------------------------------------------------------------------
+// QNBS-v3 (#713): entire block is new -- applyProofreadSuggestion previously had no coverage at all, and its stale-target guard (project incarnation, and now the resolved section id) needs its own concurrency-focused suite.
+describe('applyProofreadSuggestion', () => {
+  it('applies the suggestion via handleContentChange and removes it from the list', async () => {
+    const suggestions = [{ original: 'teh', suggestion: 'the', explanation: 'typo' }];
+    const fulfilledAction = { type: 'project/proofreadText/fulfilled', payload: suggestions };
+    mockDispatch.mockResolvedValue(fulfilledAction);
+    mockProofreadMatch.mockReturnValue(true);
+    setManuscript([makeSection('s1', 'Ch1', 'teh cat')]);
+    const { result } = renderHook(() => useManuscriptView({ onNavigate }));
+    await act(async () => {
+      await result.current.handleProofread();
+    });
+
+    act(() => result.current.applyProofreadSuggestion(0));
+    expect(mockDispatch).toHaveBeenCalledWith(
+      projectActions.updateManuscriptSection({ id: 's1', changes: { content: 'the cat' } }),
+    );
+    expect(result.current.proofreadSuggestions).toEqual([]);
+  });
+
+  it('#713: rejects a stale apply after the project incarnation changed since the suggestion was generated', async () => {
+    const suggestions = [{ original: 'teh', suggestion: 'the', explanation: 'typo' }];
+    const fulfilledAction = { type: 'project/proofreadText/fulfilled', payload: suggestions };
+    mockDispatch.mockResolvedValue(fulfilledAction);
+    mockProofreadMatch.mockReturnValue(true);
+    setManuscript([makeSection('s1', 'Ch1', 'teh cat')]);
+    const { result, rerender } = renderHook(() => useManuscriptView({ onNavigate }));
+    await act(async () => {
+      await result.current.handleProofread();
+    });
+
+    act(() => {
+      mockState.project.present.generation = 1;
+      rerender();
+    });
+    mockDispatch.mockClear();
+
+    act(() => result.current.applyProofreadSuggestion(0));
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: projectActions.updateManuscriptSection.type }),
+    );
+  });
+
+  it('#713: rejects a stale apply after the active section changed since the suggestion was generated', async () => {
+    const suggestions = [{ original: 'teh', suggestion: 'the', explanation: 'typo' }];
+    const fulfilledAction = { type: 'project/proofreadText/fulfilled', payload: suggestions };
+    mockDispatch.mockResolvedValue(fulfilledAction);
+    mockProofreadMatch.mockReturnValue(true);
+    setManuscript([makeSection('s1', 'Ch1', 'teh cat'), makeSection('s2', 'Ch2', 'other content')]);
+    const { result } = renderHook(() => useManuscriptView({ onNavigate }));
+    await act(async () => {
+      await result.current.handleProofread();
+    });
+
+    act(() => result.current.setActiveSectionId('s2'));
+    mockDispatch.mockClear();
+
+    act(() => result.current.applyProofreadSuggestion(0));
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: projectActions.updateManuscriptSection.type }),
+    );
+  });
+
+  it('#713: clears a stale proofread suggestion after its section is deleted by another view, even though the stored activeSectionId is untouched', async () => {
+    // Regression for a real bug (CodeRabbit + cubic-dev-ai on PR #768): Scene Board dispatches
+    // deleteManuscriptSection directly, bypassing this hook's own handleDeleteSection, so
+    // activeSectionId never updates. activeSection then silently falls back to manuscript[0] --
+    // the guard must track that RESOLVED section, not the raw stored id, or a suggestion generated
+    // for the deleted section could be applied to the fallback section's unrelated content.
+    const suggestions = [{ original: 'teh', suggestion: 'the', explanation: 'typo' }];
+    const fulfilledAction = { type: 'project/proofreadText/fulfilled', payload: suggestions };
+    mockDispatch.mockResolvedValue(fulfilledAction);
+    mockProofreadMatch.mockReturnValue(true);
+    setManuscript([makeSection('s1', 'Ch1', 'teh cat'), makeSection('s2', 'Ch2', 'other content')]);
+    const { result, rerender } = renderHook(() => useManuscriptView({ onNavigate }));
+    await act(async () => {
+      await result.current.handleProofread();
+    });
+    expect(result.current.proofreadSuggestions).toEqual(suggestions);
+
+    // Simulate an external deletion of the active section ('s1') without going through
+    // this hook's setActiveSectionId -- activeSectionId in local state still says 's1'.
+    act(() => {
+      setManuscript([makeSection('s2', 'Ch2', 'other content')]);
+      rerender();
+    });
+    expect(result.current.activeSectionId).toBe('s1');
+    expect(result.current.activeSection?.id).toBe('s2');
+    expect(result.current.proofreadSuggestions).toEqual([]);
+
+    mockDispatch.mockClear();
+    act(() => result.current.applyProofreadSuggestion(0));
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: projectActions.updateManuscriptSection.type }),
+    );
   });
 });
 
