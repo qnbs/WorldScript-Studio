@@ -94,12 +94,22 @@ function recordProviderSuccess(primary: AIProvider, provider: AIProvider, index:
     index > 0 ? `Primary provider ${primary} failed; fell back to ${provider}.` : '';
 }
 
-// QNBS-v3: retain Grok chunk tracking so partial output cannot be followed by fallback text.
-function createGrokAttemptCallbacks(
-  callbacks: AIStreamCallbacks,
-  onChunk: (text: string) => void,
-): AIStreamCallbacks {
-  return { ...callbacks, onChunk };
+// QNBS-v3: tracks whether an attempt emitted output, so a later failure on it can't be followed by fallback text appended to a truncated answer — applies to every provider, not just Grok.
+function createAttemptEmittedTracker(callbacks: AIStreamCallbacks): {
+  callbacks: AIStreamCallbacks;
+  hasEmitted: () => boolean;
+} {
+  let emitted = false;
+  return {
+    callbacks: {
+      ...callbacks,
+      onChunk: (text) => {
+        emitted = true;
+        callbacks.onChunk(text);
+      },
+    },
+    hasEmitted: () => emitted,
+  };
 }
 
 // ─── Gemini Provider ──────────────────────────────────────────────────────────
@@ -437,6 +447,65 @@ export async function generateImage(
   );
 }
 
+// QNBS-v3: extracted out of streamText's fallback loop to keep its cognitive complexity under the repo ceiling — the promoted-fallback attempt shares the same try/tracker/cancellation shape.
+type AttemptOutcome =
+  | { kind: 'succeeded' }
+  | { kind: 'failed-emitted'; error: unknown }
+  | { kind: 'failed-silent'; error: unknown };
+
+async function attemptChainProvider(
+  prompt: string,
+  creativity: AiCreativity,
+  mergedOpts: AIRequestOptions,
+  nextProvider: AIProvider,
+  guardedCallbacks: AIStreamCallbacks,
+  signal: AbortSignal | undefined,
+): Promise<AttemptOutcome> {
+  // QNBS-v3: track partial output before fallback decisions — applies to every provider, not just Grok.
+  const attemptTracker = createAttemptEmittedTracker(guardedCallbacks);
+  try {
+    await streamProvider(
+      prompt,
+      creativity,
+      { ...mergedOpts, provider: nextProvider },
+      attemptTracker.callbacks,
+      signal,
+    );
+    throwIfRequestAborted(undefined, mergedOpts.signal, signal);
+    return { kind: 'succeeded' };
+  } catch (error) {
+    // QNBS-v3: A user-cancelled request is NOT a provider failure — throwing here propagates the cancellation straight out of streamText instead of continuing the fallback loop.
+    throwIfRequestAborted(error, mergedOpts.signal, signal);
+    return attemptTracker.hasEmitted()
+      ? { kind: 'failed-emitted', error }
+      : { kind: 'failed-silent', error };
+  }
+}
+
+async function attemptPromotedOpenRouterFallback(
+  mergedOpts: AIRequestOptions,
+  fallback: string,
+  prompt: string,
+  creativity: AiCreativity,
+  guardedCallbacks: AIStreamCallbacks,
+  signal: AbortSignal | undefined,
+): Promise<AttemptOutcome> {
+  const fallbackTracker = createAttemptEmittedTracker(guardedCallbacks);
+  try {
+    await attemptOpenRouterFallback(mergedOpts, fallback, (fallbackOpts) =>
+      streamProvider(prompt, creativity, fallbackOpts, fallbackTracker.callbacks, signal),
+    );
+    throwIfRequestAborted(undefined, mergedOpts.signal, signal);
+    return { kind: 'succeeded' };
+  } catch (fallbackError) {
+    // QNBS-v3: mirrors the outer catch's cancellation guard — a cancel during the promoted fallback must not be treated as a provider failure either.
+    throwIfRequestAborted(fallbackError, mergedOpts.signal, signal);
+    return fallbackTracker.hasEmitted()
+      ? { kind: 'failed-emitted', error: fallbackError }
+      : { kind: 'failed-silent', error: fallbackError };
+  }
+}
+
 export async function streamText(
   prompt: string,
   creativity: AiCreativity,
@@ -474,65 +543,61 @@ export async function streamText(
     for (let i = 0; i < chain.length; i++) {
       const nextProvider = chain[i];
       if (nextProvider === undefined || nextProvider === attemptedOpenRouterFallback) continue;
-      // QNBS-v3: track partial Grok output before fallback decisions.
-      let grokEmitted = false;
-      const callbacksForAttempt =
-        nextProvider === 'grok'
-          ? createGrokAttemptCallbacks(guardedCallbacks, (text) => {
-              grokEmitted = true;
-              guardedCallbacks.onChunk(text);
-            })
-          : guardedCallbacks;
-      try {
-        await streamProvider(
-          prompt,
-          creativity,
-          { ...mergedOpts, provider: nextProvider },
-          callbacksForAttempt,
-          signal,
-        );
-        throwIfRequestAborted(undefined, mergedOpts.signal, signal);
+      const outcome = await attemptChainProvider(
+        prompt,
+        creativity,
+        mergedOpts,
+        nextProvider,
+        guardedCallbacks,
+        signal,
+      );
+      if (outcome.kind === 'succeeded') {
         // QNBS-v3: mirrors generateText's fallback-reason bookkeeping — without this, a stale reason from an earlier failed/promoted request would keep showing in GpuMetricsPanel after this request's primary provider succeeds outright.
         recordProviderSuccess(mergedOpts.provider, nextProvider, i);
         return;
-      } catch (error) {
-        // QNBS-v3: A user-cancelled request is NOT a provider failure. Don't fall back to the next
-        // provider and don't fire a terminal onError — surface the cancellation directly so callers
-        // run their silent cancel flow instead of an error path.
-        throwIfRequestAborted(error, mergedOpts.signal, signal);
-        if (nextProvider === 'grok' && grokEmitted) {
-          // QNBS-v3: A partial Grok response must terminate rather than append fallback text to a truncated answer.
-          const terminal = error instanceof Error ? error : new Error(String(error));
+      }
+      if (outcome.kind === 'failed-emitted') {
+        // QNBS-v3: A partial response from any provider must terminate rather than append fallback text to a truncated answer.
+        const terminal =
+          outcome.error instanceof Error ? outcome.error : new Error(String(outcome.error));
+        callbacks.onError?.(terminal);
+        throw terminal;
+      }
+      const error = outcome.error;
+      lastError = error;
+      // QNBS-v3: mirrors generateText's OpenRouter rate-limit/circuit-open promotion — without this, a stream promoted to OpenRouter by resolvePositiveRoutingOpts would fail hard on a transient OpenRouter outage instead of falling back.
+      if (isOpenRouterTransientFailure(nextProvider, error)) {
+        const fallback = getOpenRouterFallbackProvider();
+        attemptedOpenRouterFallback = fallback;
+        const promotedOutcome = await attemptPromotedOpenRouterFallback(
+          mergedOpts,
+          fallback,
+          prompt,
+          creativity,
+          guardedCallbacks,
+          signal,
+        );
+        if (promotedOutcome.kind === 'succeeded') {
+          _lastFallbackReason = `OpenRouter rate-limited; fell back to ${fallback}.`;
+          return;
+        }
+        if (promotedOutcome.kind === 'failed-emitted') {
+          // QNBS-v3: same partial-response guard applies to the promoted OpenRouter fallback attempt itself.
+          const terminal =
+            promotedOutcome.error instanceof Error
+              ? promotedOutcome.error
+              : new Error(String(promotedOutcome.error));
           callbacks.onError?.(terminal);
           throw terminal;
         }
-        lastError = error;
-        // QNBS-v3: mirrors generateText's OpenRouter rate-limit/circuit-open promotion — without this, a stream promoted to OpenRouter by resolvePositiveRoutingOpts would fail hard on a transient OpenRouter outage instead of falling back.
-        if (isOpenRouterTransientFailure(nextProvider, error)) {
-          const fallback = getOpenRouterFallbackProvider();
-          attemptedOpenRouterFallback = fallback;
-          try {
-            await attemptOpenRouterFallback(mergedOpts, fallback, (fallbackOpts) =>
-              streamProvider(prompt, creativity, fallbackOpts, guardedCallbacks, signal),
-            );
-            throwIfRequestAborted(undefined, mergedOpts.signal, signal);
-            _lastFallbackReason = `OpenRouter rate-limited; fell back to ${fallback}.`;
-            return;
-          } catch (fallbackError) {
-            // QNBS-v3: mirrors the outer catch's cancellation guard — a cancel during the promoted fallback must not be treated as a provider failure either.
-            throwIfRequestAborted(fallbackError, mergedOpts.signal, signal);
-            lastError = fallbackError;
-          }
-        }
-        if (i === chain.length - 1) {
-          // QNBS-v3: onError is owned by this orchestration layer — fire it exactly once, after
-          // the whole fallback chain is exhausted, so a failing provider never surfaces a terminal
-          // error callback while a subsequent fallback provider is still about to succeed.
-          const terminal = lastError instanceof Error ? lastError : new Error(String(lastError));
-          if (tryHeuristicStream()) return;
-          callbacks.onError?.(terminal);
-          throw terminal;
-        }
+        lastError = promotedOutcome.error;
+      }
+      if (i === chain.length - 1) {
+        // QNBS-v3: onError is owned by this orchestration layer — fire it exactly once, after the whole chain is exhausted, so no fallback provider still in flight gets a premature terminal error.
+        const terminal = lastError instanceof Error ? lastError : new Error(String(lastError));
+        if (tryHeuristicStream()) return;
+        callbacks.onError?.(terminal);
+        throw terminal;
       }
     }
     const terminal = lastError instanceof Error ? lastError : new Error(String(lastError));

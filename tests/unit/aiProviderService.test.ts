@@ -48,6 +48,11 @@ vi.mock('@tauri-apps/plugin-http', () => ({
 }));
 
 import { setActiveAiMode, setOpenRouterConfig } from '../../services/ai/aiModeService';
+import {
+  _clearHeuristicRegistry,
+  makeHeuristicResult,
+  registerHeuristicGenerator,
+} from '../../services/ai/heuristicFallback';
 import { streamOpenAiCompatibleLocal } from '../../services/ai/providers/localOpenAiCompatibleProvider';
 import { consumeOpenAiCompatibleStream } from '../../services/ai/providers/openaiProvider';
 import * as openrouterProvider from '../../services/ai/providers/openrouterProvider';
@@ -620,6 +625,117 @@ describe('streamText', () => {
     expect(geminiService.streamText).toHaveBeenCalledTimes(1);
   });
 
+  // QNBS-v3 (#714): the partial-then-fail guard was previously Grok-only, so a non-Grok primary could emit visible text and then have a full fallback answer appended after it.
+  describe('partial-then-fail fallback guard applies to every provider (#714)', () => {
+    afterEach(() => {
+      _clearHeuristicRegistry();
+    });
+
+    it('does not append fallback text after a non-Grok primary (OpenRouter) emits a partial response', async () => {
+      vi.mocked(storageService.getApiKey).mockResolvedValueOnce('or-key');
+      vi.mocked(openrouterProvider.streamOpenRouter).mockImplementationOnce(
+        async (_prompt, _opts, callbacks) => {
+          callbacks.onChunk('partial openrouter text');
+          throw new Error('stream ended before completion');
+        },
+      );
+      const onChunk = vi.fn();
+      const onError = vi.fn();
+      await expect(
+        streamText(
+          'prompt',
+          'Balanced',
+          {
+            ...defaultOpts,
+            provider: 'openrouter',
+            hybridFallbackEnabled: true,
+            hybridFallbackChain: ['gemini'],
+          },
+          { onChunk, onError },
+        ),
+      ).rejects.toThrow('stream ended before completion');
+      expect(geminiService.streamText).not.toHaveBeenCalled();
+      expect(onChunk).toHaveBeenCalledTimes(1);
+      expect(onChunk).toHaveBeenCalledWith('partial openrouter text');
+      expect(onError).toHaveBeenCalledTimes(1);
+    });
+
+    it('terminates without further fallback when the OpenRouter-promoted fallback attempt itself emits a partial response then fails', async () => {
+      vi.mocked(storageService.getApiKey).mockResolvedValueOnce('or-key');
+      vi.mocked(openrouterProvider.streamOpenRouter).mockRejectedValueOnce(
+        new Error('OPENROUTER_RATE_LIMITED: too many requests'),
+      );
+      vi.mocked(geminiService.streamText).mockImplementationOnce(async (_p, _c, onChunk) => {
+        onChunk('partial gemini fallback text');
+        throw new Error('gemini stream ended before completion');
+      });
+      const onChunk = vi.fn();
+      const onError = vi.fn();
+      await expect(
+        streamText(
+          'prompt',
+          'Balanced',
+          { ...defaultOpts, provider: 'openrouter' },
+          { onChunk, onError },
+        ),
+      ).rejects.toThrow('gemini stream ended before completion');
+      expect(onChunk).toHaveBeenCalledTimes(1);
+      expect(onChunk).toHaveBeenCalledWith('partial gemini fallback text');
+      expect(onError).toHaveBeenCalledTimes(1);
+    });
+
+    it('still delivers a registered heuristic result when the chain is exhausted with zero chunks emitted (unchanged behavior)', async () => {
+      const generator = vi
+        .fn()
+        .mockReturnValue(
+          makeHeuristicResult('heuristic answer', { confidence: 0.5, tier: 'basic' }),
+        );
+      registerHeuristicGenerator('test.streamText.714', generator);
+      vi.mocked(geminiService.streamText).mockRejectedValueOnce(new Error('Gemini offline'));
+      const onChunk = vi.fn();
+      const onDone = vi.fn();
+      const onError = vi.fn();
+      await streamText(
+        'prompt',
+        'Balanced',
+        { ...defaultOpts, heuristicTask: 'test.streamText.714' },
+        { onChunk, onDone, onError },
+      );
+      expect(generator).toHaveBeenCalledTimes(1);
+      expect(onChunk).toHaveBeenCalledTimes(1);
+      expect(onChunk).toHaveBeenCalledWith('heuristic answer');
+      expect(onDone).toHaveBeenCalledTimes(1);
+      expect(onError).not.toHaveBeenCalled();
+    });
+
+    it('does not fall through to the heuristic generator once the failing provider already emitted a partial response', async () => {
+      const generator = vi
+        .fn()
+        .mockReturnValue(
+          makeHeuristicResult('heuristic answer', { confidence: 0.5, tier: 'basic' }),
+        );
+      registerHeuristicGenerator('test.streamText.714b', generator);
+      vi.mocked(geminiService.streamText).mockImplementationOnce(async (_p, _c, onChunk) => {
+        onChunk('partial gemini text');
+        throw new Error('Gemini offline mid-stream');
+      });
+      const onChunk = vi.fn();
+      const onError = vi.fn();
+      await expect(
+        streamText(
+          'prompt',
+          'Balanced',
+          { ...defaultOpts, heuristicTask: 'test.streamText.714b' },
+          { onChunk, onError },
+        ),
+      ).rejects.toThrow('Gemini offline mid-stream');
+      expect(generator).not.toHaveBeenCalled();
+      expect(onChunk).toHaveBeenCalledTimes(1);
+      expect(onChunk).toHaveBeenCalledWith('partial gemini text');
+      expect(onError).toHaveBeenCalledTimes(1);
+    });
+  });
+
   // QNBS-v3: Grok regression locks SSE request, delta, and completion contracts.
   it('uses xAI streamed chat completions and preserves the system prompt', async () => {
     const originalFetch = globalThis.fetch;
@@ -805,7 +921,13 @@ describe('streamText', () => {
         streamText(
           'user prompt',
           'Balanced',
-          { provider: 'grok', model: 'grok-4.5', fallbackProviders: ['gemini'] },
+          {
+            provider: 'grok',
+            model: 'grok-4.5',
+            // QNBS-v3: fallbackProviders only applies to local primaries — grok needs hybridFallbackEnabled + hybridFallbackChain, or the chain stays ['grok'] and the assertions below pass vacuously.
+            hybridFallbackEnabled: true,
+            hybridFallbackChain: ['gemini'],
+          },
           { onChunk, onError },
         ),
       ).rejects.toThrow('stream ended before completion');
