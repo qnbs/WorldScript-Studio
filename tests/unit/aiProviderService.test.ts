@@ -661,6 +661,8 @@ describe('streamText', () => {
     });
 
     it('terminates without further fallback when the OpenRouter-promoted fallback attempt itself emits a partial response then fails', async () => {
+      // QNBS-v3 (cubic): a chain with nothing after the promoted gemini attempt made the guard unobservable, so add a third entry (ollama, left unconfigured) that the fixed code must never reach.
+      const { streamOllama } = await import('../../services/ollamaService');
       vi.mocked(storageService.getApiKey).mockResolvedValueOnce('or-key');
       vi.mocked(openrouterProvider.streamOpenRouter).mockRejectedValueOnce(
         new Error('OPENROUTER_RATE_LIMITED: too many requests'),
@@ -675,10 +677,16 @@ describe('streamText', () => {
         streamText(
           'prompt',
           'Balanced',
-          { ...defaultOpts, provider: 'openrouter' },
+          {
+            ...defaultOpts,
+            provider: 'openrouter',
+            hybridFallbackEnabled: true,
+            hybridFallbackChain: ['gemini', 'ollama'],
+          },
           { onChunk, onError },
         ),
       ).rejects.toThrow('gemini stream ended before completion');
+      expect(streamOllama).not.toHaveBeenCalled();
       expect(onChunk).toHaveBeenCalledTimes(1);
       expect(onChunk).toHaveBeenCalledWith('partial gemini fallback text');
       expect(onError).toHaveBeenCalledTimes(1);
