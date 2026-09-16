@@ -69,6 +69,8 @@ vi.mock('../../../features/project/projectSelectors', () => ({
 // QNBS-v3 (#713): mutable so tests can simulate a project-incarnation change mid-test -- captureActiveProjectIdentity() takes no arguments, so this is a plain variable rather than a selector.
 let mockLiveProjectIdentity: string | null = 'id:p1:gen:0';
 vi.mock('../../../features/project/projectIdentity', () => ({
+  // QNBS-v3 (#713): ignores its argument (the mock state above has no real project.present shape) and returns the same controllable value as captureActiveProjectIdentity.
+  getProjectTargetIdentity: () => mockLiveProjectIdentity,
   captureActiveProjectIdentity: () => mockLiveProjectIdentity,
   identityUnchanged: (captured: string | null, live: string | null) =>
     captured !== null && captured === live,
@@ -149,7 +151,8 @@ describe('useGlobalCopilot.close (CodeAnt #7)', () => {
 describe('useGlobalCopilot.sendMessage (#713)', () => {
   it('captures the live project identity for every send', async () => {
     state.copilot.status = 'idle';
-    mockLiveProjectIdentity = 'id:p1:gen:0';
+    // QNBS-v3 (#713): distinct from the stored generatedForProjectIdentity default so this proves the LIVE value is used, not a stale/hardcoded one that happens to coincide.
+    mockLiveProjectIdentity = 'id:pX:gen:9';
     const { result } = renderHook(() => useGlobalCopilot('writer' as never));
     await act(async () => {
       await result.current.sendMessage('hello');
@@ -158,7 +161,7 @@ describe('useGlobalCopilot.sendMessage (#713)', () => {
     expect(mockDispatch).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'copilot/setGeneratedForProjectIdentity',
-        payload: 'id:p1:gen:0',
+        payload: 'id:pX:gen:9',
       }),
     );
   });
@@ -279,8 +282,13 @@ describe('useGlobalCopilot.applyLastSuggestion', () => {
 describe('useGlobalCopilot onError (Batch 1.2)', () => {
   // QNBS-v3: the translation mock returns the key, so the dispatched content is the resolved
   // `error.ai.*` key — proving the classified message replaces the generic copilot.error.
-  it('shows the classified auth message on a 401, not the generic error', () => {
-    renderHook(() => useGlobalCopilot('writer' as never));
+  it('shows the classified auth message on a 401, not the generic error', async () => {
+    // QNBS-v3 (#713): onError is now identity-guarded, so a send must establish the "current send" context (sendTargetIdentityRef) before onError can be meaningfully exercised.
+    state.copilot.status = 'idle';
+    const { result } = renderHook(() => useGlobalCopilot('writer' as never));
+    await act(async () => {
+      await result.current.sendMessage('hello');
+    });
     const authErr = Object.assign(new Error('Unauthorized'), { status: 401 });
     act(() => aiOptions.current?.onError?.(authErr));
 
@@ -298,8 +306,13 @@ describe('useGlobalCopilot onError (Batch 1.2)', () => {
     );
   });
 
-  it('classifies a policy block as error.ai.policy', () => {
-    renderHook(() => useGlobalCopilot('writer' as never));
+  it('classifies a policy block as error.ai.policy', async () => {
+    // QNBS-v3 (#713): onError is now identity-guarded, so a send must establish the "current send" context (sendTargetIdentityRef) before onError can be meaningfully exercised.
+    state.copilot.status = 'idle';
+    const { result } = renderHook(() => useGlobalCopilot('writer' as never));
+    await act(async () => {
+      await result.current.sendMessage('hello');
+    });
     act(() =>
       aiOptions.current?.onError?.(new Error('Cloud provider blocked: local-only mode is active.')),
     );

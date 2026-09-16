@@ -488,9 +488,11 @@ listenerMiddleware.startListening({
     const curr = currentState as RootState;
     const prev = previousState as RootState;
     // QNBS-v3: optional chaining -- a global singleton shared by every store using this middleware, including minimal test stores that don't register a project reducer at all.
+    // QNBS-v3 (#713): also fires on a bare generation bump -- two different id-less project replacements both resolve to identity null, which the identity comparison alone can't tell apart (fail-closed).
     return (
       getProjectTargetIdentity(curr.project?.present) !==
-      getProjectTargetIdentity(prev.project?.present)
+        getProjectTargetIdentity(prev.project?.present) ||
+      curr.project?.present?.generation !== prev.project?.present?.generation
     );
   },
   effect: (_action, listenerApi) => {

@@ -20,6 +20,7 @@ import {
 import { selectEnableProForge } from '../features/featureFlags/featureFlagsSlice';
 import {
   captureActiveProjectIdentity,
+  getProjectTargetIdentity,
   identityUnchanged,
 } from '../features/project/projectIdentity';
 import { selectProjectData } from '../features/project/projectSelectors';
@@ -98,20 +99,31 @@ export function useGlobalCopilot(currentView: View) {
   const setCopilotInsightStatus = useTransientUiStore((s) => s.setCopilotInsightStatus);
   const activeSectionId = useTransientUiStore((s) => s.activeSectionId);
   const project = useAppSelector(selectProjectData);
+  // QNBS-v3: optional chaining -- getProjectTargetIdentity already handles null/undefined (fail-closed to null), and some mounted contexts (e.g. minimal test stores) may not have a project key at all.
+  const projectIdentity = useAppSelector((state) =>
+    getProjectTargetIdentity(state.project?.present),
+  );
   // QNBS-v3: Phase 2 — apply-to-chapter status (transient, ephemeral)
   const [applyStatus, setApplyStatus] = useState<'idle' | 'applying' | 'success' | 'error'>('idle');
   const enableProForge = useAppSelector(selectEnableProForge);
 
+  // QNBS-v3 (#713): the identity the currently in-flight send targets -- checked live inside the streaming callbacks below since they're shared/stable and don't otherwise know which send they belong to.
+  const sendTargetIdentityRef = useRef<string | null>(null);
+
   const { runCompletion, stop, isLoading } = useWorldScriptAI({
     source: 'copilot',
     onIncremental: (full) => {
+      // QNBS-v3 (#713): discard a stale stream chunk if the project changed since this send started.
+      if (!identityUnchanged(sendTargetIdentityRef.current, captureActiveProjectIdentity())) return;
       dispatch(copilotActions.setLastAssistantContent(full));
     },
     onFinish: () => {
+      if (!identityUnchanged(sendTargetIdentityRef.current, captureActiveProjectIdentity())) return;
       dispatch(copilotActions.finishLastAssistant());
       dispatch(copilotActions.setStatus('idle'));
     },
     onError: (err) => {
+      if (!identityUnchanged(sendTargetIdentityRef.current, captureActiveProjectIdentity())) return;
       // QNBS-v3 (Batch 1.2): show an actionable, classified message (e.g. "Invalid API key —
       // open Settings → AI…") instead of the generic copilot.error fallback.
       dispatch(copilotActions.setLastAssistantContent(getAiErrorMessage(err, t)));
@@ -119,6 +131,15 @@ export function useGlobalCopilot(currentView: View) {
       dispatch(copilotActions.setError(err.message));
     },
   });
+
+  // QNBS-v3 (#713): genuinely read (compare-against-previous-value), not merely a trigger-only dependency, so no lint suppression is needed for it -- mirrors useExportView.ts's synopsis effect.
+  const prevCopilotIdentityRef = useRef(projectIdentity);
+  // QNBS-v3 (#713): actually cancel the in-flight stream on a project switch -- invalidateForProjectChange (listener middleware) only resets Redux state; without this, the old stream keeps running and its callbacks (guarded above) become no-ops at best, while still wasting the request.
+  useEffect(() => {
+    if (prevCopilotIdentityRef.current === projectIdentity) return;
+    prevCopilotIdentityRef.current = projectIdentity;
+    stop();
+  }, [projectIdentity, stop]);
 
   const buildContext = useCallback(
     (): CopilotContext => ({
@@ -173,8 +194,10 @@ export function useGlobalCopilot(currentView: View) {
 
       dispatch(copilotActions.setError(null));
       dispatch(copilotActions.addMessage('user', trimmed));
-      // QNBS-v3 (#713): captured once per send, covering every reply path below -- applyLastSuggestion checks it later since copilotSlice is global Redux and survives a panel close/reopen across a project switch.
-      dispatch(copilotActions.setGeneratedForProjectIdentity(captureActiveProjectIdentity()));
+      // QNBS-v3 (#713): captured once per send, covering every reply path below -- applyLastSuggestion checks it later since copilotSlice is global Redux and survives a panel close/reopen across a project switch. Also drives sendTargetIdentityRef, which the streaming callbacks above check live (they're shared/stable and don't otherwise know which send they belong to).
+      const targetProjectIdentity = captureActiveProjectIdentity();
+      sendTargetIdentityRef.current = targetProjectIdentity;
+      dispatch(copilotActions.setGeneratedForProjectIdentity(targetProjectIdentity));
 
       // QNBS-v3: Heuristics-only mode — skip all AI calls and reply with a summary of
       // current insights (offline, privacy-maximal).
@@ -204,6 +227,8 @@ export function useGlobalCopilot(currentView: View) {
           isEnabled: () => enableProForge,
         });
         const result = await runCopilotDiagnostic(capability, snapshot.id);
+        // QNBS-v3 (#713): discard the diagnostic result if the project changed while it ran -- invalidateForProjectChange doesn't cancel this await, and the caller passes no AbortSignal to runCopilotDiagnostic.
+        if (!identityUnchanged(targetProjectIdentity, captureActiveProjectIdentity())) return;
         const reply = result
           ? t('copilot.diagnosticResult', { score: result.score, summary: result.summary })
           : t('copilot.diagnosticFailed');

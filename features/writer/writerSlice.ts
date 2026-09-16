@@ -111,6 +111,9 @@ const writerSlice = createSlice({
       state.activeHistoryIndex = -1;
       state.resultStream = '';
       state.generatedForProjectIdentity = null;
+      // QNBS-v3 (#713): otherwise the previous project's RAG badge/snippets stay visible in ToolsPanel after a switch.
+      state.lastRagChunkCount = 0;
+      state.lastRagChunks = [];
     },
     addHistory: (state, action: PayloadAction<string>) => {
       state.generationHistory = [action.payload, ...state.generationHistory].slice(0, 50);

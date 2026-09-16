@@ -3,6 +3,7 @@ import { useAppDispatch, useAppSelector, useAppSelectorShallow } from '../app/ho
 import { useTransientUiStore } from '../app/transientUiStore';
 import {
   captureActiveProjectIdentity,
+  getProjectTargetIdentity,
   identityUnchanged,
 } from '../features/project/projectIdentity';
 import {
@@ -28,6 +29,10 @@ export const useWriterView = () => {
   const setFlowMode = useTransientUiStore((s) => s.setFlowMode);
   const toggleFlowMode = useCallback(() => setFlowMode(!flowMode), [flowMode, setFlowMode]);
   const project = useAppSelector(selectProjectData);
+  // QNBS-v3: optional chaining -- getProjectTargetIdentity already handles null/undefined (fail-closed to null), and some mounted contexts (e.g. minimal test stores) may not have a project key at all.
+  const projectIdentity = useAppSelector((state) =>
+    getProjectTargetIdentity(state.project?.present),
+  );
   const characters = useAppSelector(selectAllCharacters);
   const manuscript = useAppSelector(selectManuscript);
   const aiProvider = useAppSelector((state) => state.settings?.advancedAi?.provider ?? undefined);
@@ -52,11 +57,17 @@ export const useWriterView = () => {
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const fullStreamRef = useRef('');
+  // QNBS-v3 (#713): the identity a currently in-flight generation targets -- checked live inside the streaming callbacks below since they're shared/stable and don't otherwise know which request they belong to.
+  const writerTargetIdentityRef = useRef<string | null>(null);
 
   const { runCompletion, stop: stopOrchestrationStreaming } = useWorldScriptAI({
     source: 'writer',
     onIncremental: useCallback(
       (fullText: string, delta: string) => {
+        // QNBS-v3 (#713): discard a stale stream chunk if the project changed since this generation started.
+        if (!identityUnchanged(writerTargetIdentityRef.current, captureActiveProjectIdentity())) {
+          return;
+        }
         fullStreamRef.current = fullText;
         dispatch(writerActions.updateCurrentHistoryItem(fullText));
         dispatch(writerActions.appendResultStream(delta));
@@ -64,6 +75,18 @@ export const useWriterView = () => {
       [dispatch],
     ),
   });
+
+  // QNBS-v3 (#713): genuinely read (compare-against-previous-value), not merely a trigger-only dependency, so no lint suppression is needed for it -- mirrors useExportView.ts's synopsis effect.
+  const prevWriterIdentityRef = useRef(projectIdentity);
+  // QNBS-v3 (#713): actually cancel the in-flight stream on a project switch -- invalidateForProjectChange (listener middleware) only resets Redux state; without this, the old stream keeps running and its callbacks (guarded above) become no-ops at best, while still wasting the request.
+  useEffect(() => {
+    if (prevWriterIdentityRef.current === projectIdentity) return;
+    prevWriterIdentityRef.current = projectIdentity;
+    stopOrchestrationStreaming();
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+  }, [projectIdentity, stopOrchestrationStreaming]);
 
   const selectedSectionId = useMemo(() => {
     return writerState.selectedSectionId &&
@@ -215,6 +238,10 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
 
     if (isGenerateDisabled()) return;
 
+    // QNBS-v3 (#713): captured before the RAG await (not after) so a project switch during RAG assembly is caught by the live re-check below instead of silently recording the NEW project's identity for a prompt built from the OLD project's data.
+    const capturedProjectIdentity = captureActiveProjectIdentity();
+    writerTargetIdentityRef.current = capturedProjectIdentity;
+
     // QNBS-v3 (CodeAnt): clear the previous request's writer-scoped token usage up front. Only the
     // orchestration path (worldScriptCompletionFetch onFinish) reports usage; when the Writer falls
     // back to the legacy streamGenerationThunk/aiProviderService path no usage arrives, so without
@@ -273,13 +300,20 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
       dispatch(writerActions.setLastRagChunks([]));
     }
 
-    // QNBS-v3 (#713): captured now so handleAccept can later verify the generation it's applying still targets the active project -- writerSlice is global Redux and survives a Writer-view unmount/remount across a project switch.
-    dispatch(writerActions.startLoading(captureActiveProjectIdentity()));
+    // QNBS-v3 (#713): a project switch during the (possibly awaited) RAG assembly above must abort this request entirely -- the prompt was built from the old project's manuscript/characters/worlds.
+    if (!identityUnchanged(capturedProjectIdentity, captureActiveProjectIdentity())) return;
+
+    // QNBS-v3 (#713): the captured (pre-RAG) identity, so handleAccept can later verify the generation it's applying still targets the active project -- writerSlice is global Redux and survives a Writer-view unmount/remount across a project switch.
+    dispatch(writerActions.startLoading(capturedProjectIdentity));
     dispatch(writerActions.clearResultStream());
     fullStreamRef.current = '';
     dispatch(writerActions.addHistory(''));
 
     const handleFailure = (err: unknown) => {
+      // QNBS-v3 (#713): discard a stale failure if the project changed since this generation started.
+      if (!identityUnchanged(writerTargetIdentityRef.current, captureActiveProjectIdentity())) {
+        return;
+      }
       const isAbort =
         err instanceof Error &&
         (err.name === 'AbortError' || err.message.toLowerCase().includes('abort'));
@@ -310,6 +344,10 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
 
     let fullStream = '';
     const onChunk = (chunk: string) => {
+      // QNBS-v3 (#713): discard a stale stream chunk if the project changed since this generation started.
+      if (!identityUnchanged(writerTargetIdentityRef.current, captureActiveProjectIdentity())) {
+        return;
+      }
       fullStream += chunk;
       fullStreamRef.current = fullStream;
       dispatch(writerActions.updateCurrentHistoryItem(fullStream));

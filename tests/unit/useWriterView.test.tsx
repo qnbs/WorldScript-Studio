@@ -146,6 +146,8 @@ const mockState: {
 let mockLiveProjectIdentity: string | null = 'id:p1:gen:0';
 
 vi.mock('../../features/project/projectIdentity', () => ({
+  // QNBS-v3 (#713): ignores its argument (the mock state below has no real project.present shape) and returns the same controllable value as captureActiveProjectIdentity.
+  getProjectTargetIdentity: () => mockLiveProjectIdentity,
   captureActiveProjectIdentity: () => mockLiveProjectIdentity,
   identityUnchanged: (captured: string | null, live: string | null) =>
     captured !== null && captured === live,
@@ -327,7 +329,8 @@ describe('useWriterView', () => {
   // QNBS-v3 (#713): writerSlice is global Redux, so a generation started before a project switch must not be applicable to the newly active project.
   describe('#713 project-incarnation guard', () => {
     it('captures the live project identity when starting generation', async () => {
-      mockLiveProjectIdentity = 'id:p1:gen:0';
+      // QNBS-v3 (#713): distinct from the stale mockState.writer.generatedForProjectIdentity default so this proves the LIVE value is used, not the stored slice value.
+      mockLiveProjectIdentity = 'id:pX:gen:9';
       const view = await createHookWrapper();
       await act(async () => {
         await view.handleGenerate();
@@ -335,7 +338,7 @@ describe('useWriterView', () => {
 
       expect(mockDispatch).toHaveBeenCalledWith({
         type: 'startLoading',
-        payload: 'id:p1:gen:0',
+        payload: 'id:pX:gen:9',
       });
     });
 
@@ -357,6 +360,61 @@ describe('useWriterView', () => {
       expect(
         mockDispatch.mock.calls.some(
           ([action]) => isDispatcherAction(action) && action.type === 'updateManuscriptSection',
+        ),
+      ).toBe(false);
+    });
+
+    // QNBS-v3 (#713): identityUnchanged fails closed on null, and invalidateForProjectChange sets generatedForProjectIdentity to null after a switch -- the DOMINANT production state, not just the foreign-id case above.
+    it('rejects handleAccept when generatedForProjectIdentity is null (fail-closed after invalidation)', async () => {
+      mockState.writer.selection = { text: '', start: 6, end: 6 };
+      mockState.writer.generationHistory = [' world'];
+      mockState.writer.activeHistoryIndex = 0;
+      mockState.writer.generatedForProjectIdentity = null;
+      mockLiveProjectIdentity = 'id:pB:gen:0';
+
+      const view = await createHookWrapper();
+      mockDispatch.mockClear();
+      await act(async () => {
+        view.handleAccept('insert');
+      });
+
+      expect(
+        mockDispatch.mock.calls.some(
+          ([action]) => isDispatcherAction(action) && action.type === 'updateManuscriptSection',
+        ),
+      ).toBe(false);
+    });
+
+    // QNBS-v3 (#713): identity used to be captured AFTER the RAG-assembly await, so a switch during that wait recorded the NEW project's identity for a prompt built from the OLD project's data.
+    it('aborts generation if the project incarnation changed during RAG assembly', async () => {
+      mockState.writer.useRagContext = true;
+      mockState.writer.selection = { text: '', start: 0, end: 0 };
+      mockState.writer.activeTool = 'continue';
+      mockLiveProjectIdentity = 'id:p1:gen:0';
+      let resolveRag!: (value: unknown) => void;
+      mockAssembleRAGPrompt.mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveRag = resolve;
+        }),
+      );
+
+      const view = await createHookWrapper();
+      let request!: Promise<void>;
+      act(() => {
+        request = view.handleGenerate();
+      });
+
+      // Project switch completes while RAG assembly is still in flight.
+      mockLiveProjectIdentity = 'id:pB:gen:0';
+
+      await act(async () => {
+        resolveRag({ prompt: 'rag-prompt', chunks: [], estimatedTokens: 0, ragUsed: true });
+        await request;
+      });
+
+      expect(
+        mockDispatch.mock.calls.some(
+          ([action]) => isDispatcherAction(action) && action.type === 'startLoading',
         ),
       ).toBe(false);
     });
