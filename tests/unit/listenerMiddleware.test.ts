@@ -5,6 +5,7 @@ import { listenerMiddleware } from '../../app/listenerMiddleware';
 import type { RootState } from '../../app/store';
 import { useTransientUiStore } from '../../app/transientUiStore';
 import analyticsReducer, { analyticsActions } from '../../features/analytics/analyticsSlice';
+import copilotReducer, { copilotActions } from '../../features/copilot/copilotSlice';
 // QNBS-v3: featureFlagsActions dispatches setEnableLocalFirstSync to exercise the local-first listener below
 import featureFlagsReducer, {
   featureFlagsActions,
@@ -13,9 +14,11 @@ import proForgeReducer, { proForgeActions } from '../../features/proForge/proFor
 import { DEFAULT_PIPELINE_CONFIG } from '../../features/proForge/types';
 import { selectProjectData } from '../../features/project/projectSelectors';
 import projectReducer, { projectActions } from '../../features/project/projectSlice';
+import { importProjectThunk } from '../../features/project/thunks/projectManagementThunks';
 import settingsReducer, { settingsActions } from '../../features/settings/settingsSlice';
 import statusReducer, { statusActions } from '../../features/status/statusSlice';
 import versionControlReducer from '../../features/versionControl/versionControlSlice';
+import writerReducer, { writerActions } from '../../features/writer/writerSlice';
 import { isIdbEncryptionReady } from '../../services/storage/storageEncryptionService';
 
 // ---------------------------------------------------------------------------
@@ -858,5 +861,52 @@ describe('desktop notification listener (ProForge stageCompleted)', () => {
     await vi.runAllTimersAsync();
 
     expect(mockSendDesktopNotification).not.toHaveBeenCalled();
+  });
+});
+
+// QNBS-v3 (#713): writer/copilot keep generation state in global Redux, so a project-incarnation change needs an explicit invalidation listener independent of component lifecycle.
+describe('AI state invalidation listener (#713)', () => {
+  function makeWriterCopilotStore() {
+    return configureStore({
+      reducer: {
+        project: undoable(projectReducer, { limit: 10 }) as unknown as Reducer,
+        writer: writerReducer,
+        copilot: copilotReducer,
+      },
+      middleware: (getDefault) => getDefault().prepend(listenerMiddleware.middleware),
+    });
+  }
+
+  it('clears writer and copilot generation state when the project incarnation genuinely changes', () => {
+    const store = makeWriterCopilotStore();
+    store.dispatch(writerActions.startLoading('some-identity'));
+    store.dispatch(writerActions.addHistory('Generated text'));
+    store.dispatch(copilotActions.setGeneratedForProjectIdentity('some-identity'));
+    store.dispatch(copilotActions.addMessage('assistant', 'reply'));
+
+    expect(store.getState().writer.generationHistory).toEqual(['Generated text']);
+    expect(store.getState().copilot.messages).toHaveLength(1);
+
+    // QNBS-v3: a raw fulfilled action (not the real async thunk) triggers the identical projectSlice reducer path (replaces data, bumps generation) without needing IDB/File mocking.
+    const currentData = store.getState().project.present.data;
+    store.dispatch({
+      type: importProjectThunk.fulfilled.type,
+      payload: { ...currentData, id: 'a-different-project' },
+    });
+
+    expect(store.getState().writer.generationHistory).toEqual([]);
+    expect(store.getState().writer.generatedForProjectIdentity).toBeNull();
+    expect(store.getState().copilot.messages).toEqual([]);
+    expect(store.getState().copilot.generatedForProjectIdentity).toBeNull();
+  });
+
+  it('does not fire for an unrelated action that leaves the project incarnation unchanged', () => {
+    const store = makeWriterCopilotStore();
+    store.dispatch(writerActions.startLoading('some-identity'));
+    store.dispatch(writerActions.addHistory('Generated text'));
+
+    store.dispatch(writerActions.setStyle('formal'));
+
+    expect(store.getState().writer.generationHistory).toEqual(['Generated text']);
   });
 });

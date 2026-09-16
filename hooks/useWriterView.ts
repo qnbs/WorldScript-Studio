@@ -2,13 +2,18 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAppDispatch, useAppSelector, useAppSelectorShallow } from '../app/hooks';
 import { useTransientUiStore } from '../app/transientUiStore';
 import {
+  captureActiveProjectIdentity,
+  getProjectTargetIdentity,
+  identityUnchanged,
+} from '../features/project/projectIdentity';
+import {
   selectAllCharacters,
   selectManuscript,
   selectProjectData,
 } from '../features/project/projectSelectors';
 import { projectActions } from '../features/project/projectSlice';
 import { streamGenerationThunk } from '../features/project/thunks/writingThunks';
-import { writerActions } from '../features/writer/writerSlice';
+import { type RagChunkPreview, writerActions } from '../features/writer/writerSlice';
 import { getAiErrorMessage } from '../services/ai/aiErrorTaxonomy';
 import { aiUsageTracker } from '../services/ai/aiUsageTracker';
 import { isOrchestrationReadyProvider } from '../services/ai/orchestrationProviders';
@@ -24,6 +29,12 @@ export const useWriterView = () => {
   const setFlowMode = useTransientUiStore((s) => s.setFlowMode);
   const toggleFlowMode = useCallback(() => setFlowMode(!flowMode), [flowMode, setFlowMode]);
   const project = useAppSelector(selectProjectData);
+  // QNBS-v3: optional chaining -- getProjectTargetIdentity already handles null/undefined (fail-closed to null), and some mounted contexts (e.g. minimal test stores) may not have a project key at all.
+  const projectIdentity = useAppSelector((state) =>
+    getProjectTargetIdentity(state.project?.present),
+  );
+  // QNBS-v3 (#713): two different id-less project replacements both resolve to identity null, which projectIdentity alone can't tell apart -- combined with generation (which always bumps on import/restore) for the stream-cancellation effect below (fail-closed, mirrors app/listenerMiddleware.ts's predicate).
+  const projectGeneration = useAppSelector((state) => state.project?.present?.generation ?? 0);
   const characters = useAppSelector(selectAllCharacters);
   const manuscript = useAppSelector(selectManuscript);
   const aiProvider = useAppSelector((state) => state.settings?.advancedAi?.provider ?? undefined);
@@ -48,11 +59,19 @@ export const useWriterView = () => {
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const fullStreamRef = useRef('');
+  // QNBS-v3 (#713): the identity a currently in-flight generation targets -- checked live inside the streaming callbacks below since they're shared/stable and don't otherwise know which request they belong to.
+  const writerTargetIdentityRef = useRef<string | null>(null);
+  // QNBS-v3 (#713): a project switch resets isLoading (via invalidateForProjectChange), letting a NEW generation start while an old one is still settling in the background (the legacy streamGenerationThunk path has no true cancellation) -- this makes completion cleanup request-scoped so a stale finally() can never clear a newer request's loading/abort-controller state.
+  const writerRequestRef = useRef(0);
 
   const { runCompletion, stop: stopOrchestrationStreaming } = useWorldScriptAI({
     source: 'writer',
     onIncremental: useCallback(
       (fullText: string, delta: string) => {
+        // QNBS-v3 (#713): discard a stale stream chunk if the project changed since this generation started.
+        if (!identityUnchanged(writerTargetIdentityRef.current, captureActiveProjectIdentity())) {
+          return;
+        }
         fullStreamRef.current = fullText;
         dispatch(writerActions.updateCurrentHistoryItem(fullText));
         dispatch(writerActions.appendResultStream(delta));
@@ -60,6 +79,19 @@ export const useWriterView = () => {
       [dispatch],
     ),
   });
+
+  // QNBS-v3 (#713): combines identity + generation (not identity alone) since two different id-less project replacements both resolve to identity null -- genuinely read (compare-against-previous-value) so no lint suppression is needed.
+  const writerInvalidationKey = `${projectIdentity ?? ''}:${projectGeneration}`;
+  const prevWriterIdentityRef = useRef(writerInvalidationKey);
+  // QNBS-v3 (#713): actually cancel the in-flight stream on a project switch -- invalidateForProjectChange (listener middleware) only resets Redux state; without this, the old stream keeps running and its callbacks (guarded above) become no-ops at best, while still wasting the request.
+  useEffect(() => {
+    if (prevWriterIdentityRef.current === writerInvalidationKey) return;
+    prevWriterIdentityRef.current = writerInvalidationKey;
+    stopOrchestrationStreaming();
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+  }, [writerInvalidationKey, stopOrchestrationStreaming]);
 
   const selectedSectionId = useMemo(() => {
     return writerState.selectedSectionId &&
@@ -211,6 +243,11 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
 
     if (isGenerateDisabled()) return;
 
+    // QNBS-v3 (#713): captured before the RAG await (not after) so a project switch during RAG assembly is caught by the live re-check below instead of silently recording the NEW project's identity for a prompt built from the OLD project's data.
+    const capturedProjectIdentity = captureActiveProjectIdentity();
+    writerTargetIdentityRef.current = capturedProjectIdentity;
+    const requestId = ++writerRequestRef.current;
+
     // QNBS-v3 (CodeAnt): clear the previous request's writer-scoped token usage up front. Only the
     // orchestration path (worldScriptCompletionFetch onFinish) reports usage; when the Writer falls
     // back to the legacy streamGenerationThunk/aiProviderService path no usage arrives, so without
@@ -227,6 +264,7 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
     let fullPrompt = `${basePrompt}\n\nRespond in ${language === 'de' ? 'German' : 'English'}.`;
 
     const ragEligibleTools = new Set<typeof activeTool>(['continue', 'brainstorm', 'critic']);
+    let ragChunksToStore: RagChunkPreview[] = [];
     if (writerState.useRagContext && ragEligibleTools.has(activeTool) && project) {
       try {
         const assembled = await assembleRAGPrompt(
@@ -250,31 +288,40 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
           },
         );
         fullPrompt = assembled.prompt;
-        // QNBS-v3: PR4 — store chunk previews (section, score, snippet) for the transparency inspector.
-        dispatch(
-          writerActions.setLastRagChunks(
-            assembled.chunks.map((c) => ({
-              sectionId: c.sectionId,
-              chunkIndex: c.chunkIndex,
-              score: c.score,
-              snippet: c.text.slice(0, 160),
-            })),
-          ),
-        );
+        ragChunksToStore = assembled.chunks.map((c) => ({
+          sectionId: c.sectionId,
+          chunkIndex: c.chunkIndex,
+          score: c.score,
+          snippet: c.text.slice(0, 160),
+        }));
       } catch (ragErr) {
         logger.warn('Writer RAG assembly failed, using base prompt:', ragErr);
-        dispatch(writerActions.setLastRagChunks([]));
       }
-    } else {
-      dispatch(writerActions.setLastRagChunks([]));
     }
 
-    dispatch(writerActions.startLoading());
+    // QNBS-v3 (#713): checked once, right after the only await above (RAG assembly), and BEFORE any dispatch -- otherwise stale RAG chunk previews assembled from the old project get written into Redux even though generation itself is aborted right after. Also checks requestId: isLoading only becomes true AFTER this point, so isGenerateDisabled() does NOT block a second same-project click while RAG assembly is still in flight.
+    if (
+      writerRequestRef.current !== requestId ||
+      !identityUnchanged(capturedProjectIdentity, captureActiveProjectIdentity())
+    )
+      return;
+
+    // QNBS-v3: PR4 — store chunk previews (section, score, snippet) for the transparency inspector.
+    dispatch(writerActions.setLastRagChunks(ragChunksToStore));
+    // QNBS-v3 (#713): the captured (pre-RAG) identity, so handleAccept can later verify the generation it's applying still targets the active project -- writerSlice is global Redux and survives a Writer-view unmount/remount across a project switch.
+    dispatch(writerActions.startLoading(capturedProjectIdentity));
     dispatch(writerActions.clearResultStream());
     fullStreamRef.current = '';
     dispatch(writerActions.addHistory(''));
 
     const handleFailure = (err: unknown) => {
+      // QNBS-v3 (#713): discard a stale failure if the project changed OR a newer same-project request has already started (the requestId check the identity check alone can't cover).
+      if (
+        writerRequestRef.current !== requestId ||
+        !identityUnchanged(writerTargetIdentityRef.current, captureActiveProjectIdentity())
+      ) {
+        return;
+      }
       const isAbort =
         err instanceof Error &&
         (err.name === 'AbortError' || err.message.toLowerCase().includes('abort'));
@@ -292,19 +339,29 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
       }
     };
 
+    // QNBS-v3 (#713): only the still-current request may clear the shared loading/abort-controller state -- a project switch resets isLoading, letting a NEW request start while an old one (still settling in the background, e.g. the legacy path below has no true cancellation) would otherwise clobber it on completion.
+    const finishRequest = () => {
+      if (writerRequestRef.current === requestId) {
+        dispatch(writerActions.stopLoading());
+        abortControllerRef.current = null;
+      }
+    };
+
     const orchestrationReady = isOrchestrationReadyProvider(aiProvider);
     if (orchestrationReady) {
-      void runCompletion(fullPrompt)
-        .catch(handleFailure)
-        .finally(() => {
-          dispatch(writerActions.stopLoading());
-          abortControllerRef.current = null;
-        });
+      void runCompletion(fullPrompt).catch(handleFailure).finally(finishRequest);
       return;
     }
 
     let fullStream = '';
     const onChunk = (chunk: string) => {
+      // QNBS-v3 (#713): discard a stale stream chunk if the project changed OR a newer same-project request has already started -- unlike onIncremental (a stable useCallback shared across requests), onChunk is recreated per-call and closes over its own requestId, so it can check supersession directly (CodeRabbit, PR #769).
+      if (
+        writerRequestRef.current !== requestId ||
+        !identityUnchanged(writerTargetIdentityRef.current, captureActiveProjectIdentity())
+      ) {
+        return;
+      }
       fullStream += chunk;
       fullStreamRef.current = fullStream;
       dispatch(writerActions.updateCurrentHistoryItem(fullStream));
@@ -314,10 +371,7 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
     dispatch(streamGenerationThunk({ prompt: fullPrompt, lang: language, onChunk }))
       .unwrap()
       .catch(handleFailure)
-      .finally(() => {
-        dispatch(writerActions.stopLoading());
-        abortControllerRef.current = null;
-      });
+      .finally(finishRequest);
   }, [
     dispatch,
     isLoading,
@@ -355,6 +409,12 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
 
   const handleAccept = useCallback(
     (action: 'insert' | 'replace') => {
+      // QNBS-v3 (#713): reject applying a generation that targeted a different project incarnation -- writerSlice is global Redux, so a stale generationHistory entry can otherwise outlive a project switch and get inserted into the wrong project's manuscript.
+      if (
+        !identityUnchanged(writerState.generatedForProjectIdentity, captureActiveProjectIdentity())
+      ) {
+        return;
+      }
       const selectedSectionIndex = manuscript.findIndex((s) => s.id === selectedSectionId);
       if (selectedSectionIndex === -1) return;
 
@@ -380,6 +440,7 @@ Generate a single prompt that works for both tools. Be specific, vivid, and incl
       activeHistoryIndex,
       selection,
       handleContentChange,
+      writerState.generatedForProjectIdentity,
     ],
   );
 

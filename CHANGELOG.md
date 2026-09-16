@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Writer generations, Global Copilot replies, and Dashboard logline suggestions now reject
+  stale results after a project-incarnation change:** Writer's generation history and Copilot's
+  chat/reply state live in global Redux, so they survived a view unmount/remount across a project
+  switch with no protection at all; Dashboard runs its own independent logline-generation flow
+  (not Manuscript view's) that also had none. Continues the risk pattern tracked in #713 (see
+  PR #768). PR #769.
 - **Outline section regeneration, logline suggestions, proofread suggestions, and AI synopsis
   now reject stale results after a project-incarnation change:** each surface previously had no
   (or only a request-race) guard against the active project changing between AI generation and

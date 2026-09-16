@@ -1,7 +1,12 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { useToast } from '../components/ui/Toast';
 import { computeStreak } from '../features/progressTracker/progressTrackerSlice';
+import {
+  captureActiveProjectIdentity,
+  getProjectTargetIdentity,
+  identityUnchanged,
+} from '../features/project/projectIdentity';
 import {
   selectAllCharacters,
   selectAllWorlds,
@@ -35,6 +40,9 @@ export const useDashboard = ({ onNavigate }: UseDashboardProps) => {
   const { t, language } = useTranslation();
   const dispatch = useAppDispatch();
   const project = useAppSelector(selectProjectData);
+  const projectIdentity = useAppSelector((state) =>
+    getProjectTargetIdentity(state.project.present),
+  );
   const characters = useAppSelector(selectAllCharacters);
   const worlds = useAppSelector(selectAllWorlds);
   // QNBS-v3: null-safe inline selectors — the slice selectors index state.progressTracker directly,
@@ -47,6 +55,21 @@ export const useDashboard = ({ onNavigate }: UseDashboardProps) => {
   const [isLoglineModalOpen, setIsLoglineModalOpen] = useState(false);
   const [loglineSuggestions, setLoglineSuggestions] = useState<string[]>([]);
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const loglineRequestRef = useRef(0);
+  // QNBS-v3 (#713): frozen at successful-generation time (not resynced on every render) so selectLogline() can independently detect that the live identity has since diverged from the one that produced these suggestions -- mirrors useManuscriptView.ts's dashboard-equivalent guard.
+  const loglineGeneratedForIdentityRef = useRef<string | null>(null);
+  // QNBS-v3 (#713): genuinely read in the invalidation effect below (compare-against-previous-value), not merely a trigger-only dependency, so no lint suppression is needed for it.
+  const prevLoglineIdentityRef = useRef(projectIdentity);
+
+  // QNBS-v3 (#713): Dashboard runs its own independent logline-generation flow (not useManuscriptView's), so it needs the identical project-incarnation guard -- a project switch (e.g. via BackupQuickActionsCard's import, which keeps Dashboard mounted) must invalidate any in-flight or already-generated suggestions.
+  useEffect(() => {
+    if (prevLoglineIdentityRef.current === projectIdentity) return;
+    prevLoglineIdentityRef.current = projectIdentity;
+    loglineRequestRef.current += 1;
+    setLoglineSuggestions([]);
+    setIsLoglineModalOpen(false);
+    setIsAiLoading(false);
+  }, [projectIdentity]);
 
   // Goals State
   const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
@@ -229,25 +252,42 @@ export const useDashboard = ({ onNavigate }: UseDashboardProps) => {
   }, [dispatch, goalWordCount, goalTargetDate]);
 
   const handleGenerateLoglines = useCallback(async () => {
+    const requestId = ++loglineRequestRef.current;
+    // QNBS-v3 (#713): live store read (not the projectIdentity selector value) so this check doesn't depend on this component's own render/effect cycle having caught up yet.
+    const capturedProjectIdentity = captureActiveProjectIdentity();
     setIsAiLoading(true);
     setLoglineSuggestions([]);
     setIsLoglineModalOpen(true);
     try {
       const result = await dispatch(generateLoglineSuggestionsThunk(language)).unwrap();
+      if (
+        loglineRequestRef.current !== requestId ||
+        !identityUnchanged(capturedProjectIdentity, captureActiveProjectIdentity())
+      )
+        return;
+      loglineGeneratedForIdentityRef.current = capturedProjectIdentity;
       setLoglineSuggestions(result || []);
     } catch (e: unknown) {
+      if (loglineRequestRef.current !== requestId) return;
       toast.error(
         t('error.apiErrorTitle'),
         typeof e === 'string' ? e : t('error.apiErrorDescription'),
       );
       setIsLoglineModalOpen(false);
     } finally {
-      setIsAiLoading(false);
+      if (loglineRequestRef.current === requestId) setIsAiLoading(false);
     }
   }, [dispatch, language, t, toast]);
 
   const selectLogline = useCallback(
     (logline: string) => {
+      // QNBS-v3 (#713): reject a stale suggestion independently of the array already having been cleared by the invalidation effect above -- matches useManuscriptView.ts's selectLogline guard.
+      if (
+        !identityUnchanged(loglineGeneratedForIdentityRef.current, captureActiveProjectIdentity())
+      ) {
+        setIsLoglineModalOpen(false);
+        return;
+      }
       dispatch(projectActions.updateLogline(logline));
       setIsLoglineModalOpen(false);
       // QNBS-v3: reassure the user the AI logline is reversible (project slice is redux-undo wrapped),

@@ -47,9 +47,28 @@ describe('copilotSlice', () => {
   it('clear resets messages, status, error', () => {
     let s = reducer(initial(), copilotActions.addMessage('user', 'x'));
     s = reducer(s, copilotActions.setError('e'));
+    s = reducer(s, copilotActions.setGeneratedForProjectIdentity('id:p1:gen:0'));
     s = reducer(s, copilotActions.clear());
     expect(s.messages).toEqual([]);
     expect(s.status).toBe('idle');
     expect(s.error).toBeNull();
+    expect(s.generatedForProjectIdentity).toBeNull();
+  });
+
+  // QNBS-v3 (#713): setGeneratedForProjectIdentity records the project a reply targets; invalidateForProjectChange clears all copilot state on a project-incarnation change.
+  it('setGeneratedForProjectIdentity records the project incarnation a reply targets', () => {
+    const s = reducer(initial(), copilotActions.setGeneratedForProjectIdentity('id:p1:gen:0'));
+    expect(s.generatedForProjectIdentity).toBe('id:p1:gen:0');
+  });
+
+  it('invalidateForProjectChange resets messages, status, error, and the origin identity', () => {
+    let s = reducer(initial(), copilotActions.addMessage('user', 'x'));
+    s = reducer(s, copilotActions.setError('e'));
+    s = reducer(s, copilotActions.setGeneratedForProjectIdentity('id:p1:gen:0'));
+    s = reducer(s, copilotActions.invalidateForProjectChange());
+    expect(s.messages).toEqual([]);
+    expect(s.status).toBe('idle');
+    expect(s.error).toBeNull();
+    expect(s.generatedForProjectIdentity).toBeNull();
   });
 });

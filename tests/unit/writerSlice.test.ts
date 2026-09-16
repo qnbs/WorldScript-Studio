@@ -90,11 +90,33 @@ describe('writerSlice', () => {
 
   describe('loading', () => {
     it('should toggle loading state', () => {
-      state = writerReducer(state, { type: 'writer/startLoading' });
+      state = writerReducer(state, { type: 'writer/startLoading', payload: null });
       expect(state.isLoading).toBe(true);
 
       state = writerReducer(state, { type: 'writer/stopLoading' });
       expect(state.isLoading).toBe(false);
+    });
+
+    // QNBS-v3 (#713): startLoading now captures the project incarnation this generation targets.
+    it('startLoading records the project incarnation the generation targets', () => {
+      state = writerReducer(state, { type: 'writer/startLoading', payload: 'id:p1:gen:0' });
+      expect(state.generatedForProjectIdentity).toBe('id:p1:gen:0');
+    });
+  });
+
+  describe('invalidateForProjectChange (#713)', () => {
+    it('resets loading, history, resultStream, and the origin identity', () => {
+      state = writerReducer(state, { type: 'writer/startLoading', payload: 'id:p1:gen:0' });
+      state = writerReducer(state, { type: 'writer/addHistory', payload: 'Generated text' });
+      state = writerReducer(state, { type: 'writer/appendResultStream', payload: 'chunk' });
+
+      state = writerReducer(state, { type: 'writer/invalidateForProjectChange' });
+
+      expect(state.isLoading).toBe(false);
+      expect(state.generationHistory).toEqual([]);
+      expect(state.activeHistoryIndex).toBe(-1);
+      expect(state.resultStream).toBe('');
+      expect(state.generatedForProjectIdentity).toBeNull();
     });
   });
 
