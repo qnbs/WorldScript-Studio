@@ -72,8 +72,7 @@ describe('FEATURE_TEST_COVERAGE (#709)', () => {
     for (const [flag, coverage] of Object.entries(FEATURE_TEST_COVERAGE)) {
       if (coverage.disposition !== 'REQUIRED_FUNCTIONAL_E2E') continue;
       for (const path of coverage.blockingSpecs) {
-        const isRequiredE2ELane =
-          path.startsWith('tests/e2e/') && !path.startsWith('tests/e2e/deep/');
+        const isRequiredE2ELane = /^tests\/e2e\/[^/]+\.spec\.ts$/.test(path);
         expect(isRequiredE2ELane, `${flag}: ${path} is not in the required E2E lane`).toBe(true);
       }
     }
