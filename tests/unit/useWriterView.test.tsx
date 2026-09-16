@@ -90,6 +90,8 @@ const mockState: {
     selectedSectionId: string | null;
     useRagContext: boolean;
     lastRagChunkCount: number;
+    // QNBS-v3 (#713): the project incarnation the current generationHistory entry was generated for.
+    generatedForProjectIdentity: string | null;
   };
 } = {
   projectData: {
@@ -136,8 +138,20 @@ const mockState: {
     selectedSectionId: null,
     useRagContext: false,
     lastRagChunkCount: 0,
+    generatedForProjectIdentity: 'id:p1:gen:0',
   },
 };
+
+// QNBS-v3 (#713): mutable so tests can simulate a project-incarnation change mid-test -- captureActiveProjectIdentity() takes no arguments, so this is a plain variable rather than a selector.
+let mockLiveProjectIdentity: string | null = 'id:p1:gen:0';
+
+vi.mock('../../features/project/projectIdentity', () => ({
+  // QNBS-v3 (#713): ignores its argument (the mock state below has no real project.present shape) and returns the same controllable value as captureActiveProjectIdentity.
+  getProjectTargetIdentity: () => mockLiveProjectIdentity,
+  captureActiveProjectIdentity: () => mockLiveProjectIdentity,
+  identityUnchanged: (captured: string | null, live: string | null) =>
+    captured !== null && captured === live,
+}));
 
 vi.mock('../../app/hooks', () => ({
   useAppDispatch: () => mockDispatch,
@@ -174,7 +188,7 @@ vi.mock('../../features/project/projectSelectors', () => ({
 const writerActions = {
   setSelectedSectionId: (id: string) => ({ type: 'setSelectedSectionId', payload: id }),
   stopLoading: () => ({ type: 'stopLoading' }),
-  startLoading: () => ({ type: 'startLoading' }),
+  startLoading: (payload: unknown) => ({ type: 'startLoading', payload }),
   clearResultStream: () => ({ type: 'clearResultStream' }),
   updateCurrentHistoryItem: (payload: unknown) => ({ type: 'updateCurrentHistoryItem', payload }),
   appendResultStream: (payload: unknown) => ({ type: 'appendResultStream', payload }),
@@ -236,6 +250,8 @@ describe('useWriterView', () => {
     // QNBS-v3 (CodeAnt): reset RAG state + the assembly mock so one test's config/flag can't leak
     // into another (avoids order-dependent failures if an assertion throws before inline cleanup).
     mockState.writer.useRagContext = false;
+    mockState.writer.generatedForProjectIdentity = 'id:p1:gen:0';
+    mockLiveProjectIdentity = 'id:p1:gen:0';
     mockAssembleRAGPrompt.mockReset();
   });
 
@@ -307,6 +323,160 @@ describe('useWriterView', () => {
     expect(mockDispatch).toHaveBeenCalledWith({
       type: 'updateManuscriptSection',
       payload: { id: 's1', changes: { content: 'Hello  worldworld' } },
+    });
+  });
+
+  // QNBS-v3 (#713): writerSlice is global Redux, so a generation started before a project switch must not be applicable to the newly active project.
+  describe('#713 project-incarnation guard', () => {
+    it('captures the live project identity when starting generation', async () => {
+      // QNBS-v3 (#713): distinct from the stale mockState.writer.generatedForProjectIdentity default so this proves the LIVE value is used, not the stored slice value.
+      mockLiveProjectIdentity = 'id:pX:gen:9';
+      const view = await createHookWrapper();
+      await act(async () => {
+        await view.handleGenerate();
+      });
+
+      expect(mockDispatch).toHaveBeenCalledWith({
+        type: 'startLoading',
+        payload: 'id:pX:gen:9',
+      });
+    });
+
+    it('rejects handleAccept when the generation targeted a different project incarnation', async () => {
+      mockState.writer.selection = { text: '', start: 6, end: 6 };
+      mockState.writer.generationHistory = [' world'];
+      mockState.writer.activeHistoryIndex = 0;
+      // Simulate: generation was started for project A, then the active project changed to B
+      // before Accept was clicked (writerSlice state survives the switch since it's global Redux).
+      mockState.writer.generatedForProjectIdentity = 'id:pA:gen:0';
+      mockLiveProjectIdentity = 'id:pB:gen:0';
+
+      const view = await createHookWrapper();
+      mockDispatch.mockClear();
+      await act(async () => {
+        view.handleAccept('insert');
+      });
+
+      expect(
+        mockDispatch.mock.calls.some(
+          ([action]) => isDispatcherAction(action) && action.type === 'updateManuscriptSection',
+        ),
+      ).toBe(false);
+    });
+
+    // QNBS-v3 (#713): identityUnchanged fails closed on null, and invalidateForProjectChange sets generatedForProjectIdentity to null after a switch -- the DOMINANT production state, not just the foreign-id case above.
+    it('rejects handleAccept when generatedForProjectIdentity is null (fail-closed after invalidation)', async () => {
+      mockState.writer.selection = { text: '', start: 6, end: 6 };
+      mockState.writer.generationHistory = [' world'];
+      mockState.writer.activeHistoryIndex = 0;
+      mockState.writer.generatedForProjectIdentity = null;
+      mockLiveProjectIdentity = 'id:pB:gen:0';
+
+      const view = await createHookWrapper();
+      mockDispatch.mockClear();
+      await act(async () => {
+        view.handleAccept('insert');
+      });
+
+      expect(
+        mockDispatch.mock.calls.some(
+          ([action]) => isDispatcherAction(action) && action.type === 'updateManuscriptSection',
+        ),
+      ).toBe(false);
+    });
+
+    // QNBS-v3 (#713): identity used to be captured AFTER the RAG-assembly await, so a switch during that wait recorded the NEW project's identity for a prompt built from the OLD project's data.
+    it('aborts generation if the project incarnation changed during RAG assembly', async () => {
+      mockState.writer.useRagContext = true;
+      mockState.writer.selection = { text: '', start: 0, end: 0 };
+      mockState.writer.activeTool = 'continue';
+      mockLiveProjectIdentity = 'id:p1:gen:0';
+      let resolveRag!: (value: unknown) => void;
+      mockAssembleRAGPrompt.mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveRag = resolve;
+        }),
+      );
+
+      const view = await createHookWrapper();
+      let request!: Promise<void>;
+      act(() => {
+        request = view.handleGenerate();
+      });
+
+      // Project switch completes while RAG assembly is still in flight.
+      mockLiveProjectIdentity = 'id:pB:gen:0';
+
+      await act(async () => {
+        resolveRag({
+          prompt: 'rag-prompt',
+          chunks: [
+            { sectionId: 's1', chunkIndex: 0, score: 0.9, text: 'A passage from the old project.' },
+          ],
+          estimatedTokens: 10,
+          ragUsed: true,
+        });
+        await request;
+      });
+
+      expect(
+        mockDispatch.mock.calls.some(
+          ([action]) => isDispatcherAction(action) && action.type === 'startLoading',
+        ),
+      ).toBe(false);
+      // QNBS-v3 (#713): the RAG chunk previews must not be written into Redux either -- they were previously dispatched BEFORE this identity check, letting stale snippets from the old project appear in the new project's Writer tools.
+      expect(
+        mockDispatch.mock.calls.some(
+          ([action]) => isDispatcherAction(action) && action.type === 'setLastRagChunks',
+        ),
+      ).toBe(false);
+    });
+
+    // QNBS-v3 (#713): isGenerateDisabled() only reads isLoading, not set until AFTER RAG assembly resolves, so a second same-project click isn't UI-blocked and identity alone can't detect supersession.
+    it('does not let a stale RAG-pending request restart generation once a newer same-project request has started', async () => {
+      mockState.writer.useRagContext = true;
+      mockState.writer.selection = { text: '', start: 0, end: 0 };
+      mockState.writer.activeTool = 'continue';
+      mockLiveProjectIdentity = 'id:p1:gen:0';
+
+      let resolveFirstRag!: (value: unknown) => void;
+      mockAssembleRAGPrompt
+        .mockReturnValueOnce(
+          new Promise((resolve) => {
+            resolveFirstRag = resolve;
+          }),
+        )
+        .mockResolvedValueOnce({
+          prompt: 'rag-prompt-2',
+          chunks: [],
+          estimatedTokens: 0,
+          ragUsed: true,
+        });
+
+      const view = await createHookWrapper();
+
+      let firstRequest!: Promise<void>;
+      act(() => {
+        firstRequest = view.handleGenerate();
+      });
+
+      await act(async () => {
+        await view.handleGenerate();
+      });
+
+      mockDispatch.mockClear();
+
+      // The first (now-superseded) request's RAG assembly finally resolves.
+      await act(async () => {
+        resolveFirstRag({ prompt: 'rag-prompt-1', chunks: [], estimatedTokens: 0, ragUsed: true });
+        await firstRequest;
+      });
+
+      expect(
+        mockDispatch.mock.calls.some(
+          ([action]) => isDispatcherAction(action) && action.type === 'startLoading',
+        ),
+      ).toBe(false);
     });
   });
 

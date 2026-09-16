@@ -1,12 +1,17 @@
 import type { TypedStartListening } from '@reduxjs/toolkit';
 import { createListenerMiddleware, isRejected } from '@reduxjs/toolkit';
 import { analyticsActions } from '../features/analytics/analyticsSlice';
+import { copilotActions } from '../features/copilot/copilotSlice';
 // QNBS-v3: canonical selector — replaces a local type that misapplied the persisted-state shape to the live store
 import { proForgeActions } from '../features/proForge/proForgeSlice';
-import { isStaleProjectOperationError } from '../features/project/projectIdentity';
+import {
+  getProjectTargetIdentity,
+  isStaleProjectOperationError,
+} from '../features/project/projectIdentity';
 import { selectProjectData } from '../features/project/projectSelectors';
 import type { ProjectData } from '../features/project/projectSlice';
 import { statusActions } from '../features/status/statusSlice';
+import { writerActions } from '../features/writer/writerSlice';
 import { DEFAULT_OPENROUTER_MODEL_ID } from '../services/ai/cloudModelCatalog';
 import { ecoModeService } from '../services/ai/ecoModeService';
 import { extractStoryCodex, saveStoryCodex } from '../services/codexService';
@@ -40,7 +45,7 @@ export const listenerMiddleware = createListenerMiddleware();
 // components share the one enforcement point. Re-exported here for existing importers/tests.
 export { isAnalyticsPersistenceAllowed };
 
-// QNBS-v3: Listener categories in this file:
+// Listener categories in this file:
 //   1. Auto-Save        — project data + version control → IDB (debounced 1s)
 //   2. Auto-Track       — Codex extraction (always-on; promoted from enableCodexAutoTracking flag)
 //   3. RAG Index        — incremental re-embedding on manuscript edits (debounced 3s)
@@ -50,10 +55,14 @@ export { isAnalyticsPersistenceAllowed };
 //   7. WorkerBus v2     — init/shutdown pools on enableWorkerBusV2 flag change (Phase 2)
 //   8. Rust Compute     — invalidate Rust availability cache on enableRustCompute toggle (Phase 2)
 //   9. Desktop Notify   — native OS notification on ProForge stageCompleted (Phase 2 / T3)
+//  10. AI State Invalidation — clear writer/copilot generation state on a project-incarnation
+//      change (#713); this state is global Redux, unlike the local hook-state guards used
+//      elsewhere, so it needs an explicit invalidation point independent of component lifecycle.
 //
 // All AI inference side effects (local/cloud) are intentionally NOT in this middleware —
 // they belong in service-layer thunks (aiProviderService, localAiFacade) to keep the
-// middleware focused on persistence and indexing.
+// middleware focused on persistence and indexing. This invalidation listener is the one
+// exception: it never initiates an AI call, only clears state a switch has made stale.
 
 // QNBS-v3: Factory for the common debounce-listener pattern — predicate + delay + typed effect.
 // Eliminates the RootState cast dance repeated across 3 auto-save / auto-track listeners.
@@ -470,6 +479,25 @@ listenerMiddleware.startListening({
     } catch (err) {
       logger.warn('RAG auto-rebuild failed (non-critical):', err);
     }
+  },
+});
+
+// QNBS-v3 (#713): writer/copilot keep generation state in global Redux (not a local hook ref like Manuscript view's guards), so it survives a view unmount/remount across a project switch.
+listenerMiddleware.startListening({
+  predicate: (_action, currentState, previousState) => {
+    const curr = currentState as RootState;
+    const prev = previousState as RootState;
+    // QNBS-v3: optional chaining -- a global singleton shared by every store using this middleware, including minimal test stores that don't register a project reducer at all.
+    // QNBS-v3 (#713): also fires on a bare generation bump -- two different id-less project replacements both resolve to identity null, which the identity comparison alone can't tell apart (fail-closed).
+    return (
+      getProjectTargetIdentity(curr.project?.present) !==
+        getProjectTargetIdentity(prev.project?.present) ||
+      curr.project?.present?.generation !== prev.project?.present?.generation
+    );
+  },
+  effect: (_action, listenerApi) => {
+    listenerApi.dispatch(writerActions.invalidateForProjectChange());
+    listenerApi.dispatch(copilotActions.invalidateForProjectChange());
   },
 });
 

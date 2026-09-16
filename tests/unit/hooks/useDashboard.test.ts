@@ -27,7 +27,18 @@ const mockSamplePlainText = vi.fn((sections: StorySection[]) =>
 
 vi.mock('../../../app/hooks', () => ({
   useAppDispatch: () => mockDispatch,
-  useAppSelector: (selector: (s: unknown) => unknown) => selector({}),
+  // QNBS-v3 (#713): project.present must be a defined object, not {} -- useDashboard now also selects getProjectTargetIdentity(state.project.present) directly, bypassing selectProjectData.
+  useAppSelector: (selector: (s: unknown) => unknown) => selector({ project: { present: {} } }),
+}));
+
+// QNBS-v3 (#713): mutable so tests can simulate a project-incarnation change mid-test -- getProjectTargetIdentity is mocked to ignore its argument and return this value directly.
+let mockProjectIdentity: string | null = 'id:p1:gen:0';
+
+vi.mock('../../../features/project/projectIdentity', () => ({
+  getProjectTargetIdentity: () => mockProjectIdentity,
+  captureActiveProjectIdentity: () => mockProjectIdentity,
+  identityUnchanged: (captured: string | null, live: string | null) =>
+    captured !== null && captured === live,
 }));
 
 vi.mock('../../../hooks/useTranslation', () => ({
@@ -94,6 +105,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockDispatch.mockReturnValue({ unwrap: mockUnwrap });
   mockUnwrap.mockResolvedValue([]);
+  mockProjectIdentity = 'id:p1:gen:0';
   setProjectData();
 });
 
@@ -427,15 +439,50 @@ describe('handleGenerateLoglines', () => {
 
     expect(mockDispatch).toHaveBeenCalled();
   });
+
+  // QNBS-v3 (#713): Dashboard runs its own independent logline flow and stays mounted while e.g. BackupQuickActionsCard imports a replacement project -- covers that concurrency window.
+  it('#713: discards a fulfilled logline request if the project incarnation changed while it was in flight', async () => {
+    setProjectData({});
+    let resolveUnwrap!: (value: string[]) => void;
+    mockUnwrap.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveUnwrap = resolve;
+      }),
+    );
+    const { result, rerender } = renderHook(() => useDashboard({ onNavigate }));
+
+    let request!: Promise<void>;
+    act(() => {
+      request = result.current.handleGenerateLoglines();
+    });
+
+    act(() => {
+      mockProjectIdentity = 'id:p1:gen:1';
+      rerender();
+    });
+    expect(result.current.loglineSuggestions).toEqual([]);
+    expect(result.current.isLoglineModalOpen).toBe(false);
+    expect(result.current.isAiLoading).toBe(false);
+
+    await act(async () => {
+      resolveUnwrap(['Stale suggestion']);
+      await request;
+    });
+    expect(result.current.loglineSuggestions).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------------------
 // selectLogline
 // ---------------------------------------------------------------------------
 describe('selectLogline', () => {
-  it('dispatches updateLogline with the selected logline', () => {
+  it('dispatches updateLogline with the selected logline', async () => {
     setProjectData({});
     const { result } = renderHook(() => useDashboard({ onNavigate }));
+    // QNBS-v3 (#713): selectLogline now requires a prior successful generation (fail-closed origin-identity guard), matching real usage.
+    await act(async () => {
+      await result.current.handleGenerateLoglines();
+    });
 
     act(() => result.current.selectLogline('A warrior finds destiny'));
 
@@ -444,9 +491,12 @@ describe('selectLogline', () => {
     );
   });
 
-  it('shows an undo hint toast after applying a logline', () => {
+  it('shows an undo hint toast after applying a logline', async () => {
     setProjectData({});
     const { result } = renderHook(() => useDashboard({ onNavigate }));
+    await act(async () => {
+      await result.current.handleGenerateLoglines();
+    });
 
     act(() => result.current.selectLogline('A warrior finds destiny'));
 
@@ -468,6 +518,28 @@ describe('selectLogline', () => {
 
     act(() => result.current.selectLogline('Some logline'));
     expect(result.current.isLoglineModalOpen).toBe(false);
+  });
+
+  // QNBS-v3 (#713): rejects a stale selection independently of the array already being cleared by the invalidation effect above -- matches useManuscriptView.test.ts's precedent.
+  it('#713: rejects a stale selection after the project incarnation changed since the suggestions were generated', async () => {
+    mockUnwrap.mockResolvedValue(['A warrior finds destiny']);
+    setProjectData({});
+    const { result, rerender } = renderHook(() => useDashboard({ onNavigate }));
+
+    await act(async () => {
+      await result.current.handleGenerateLoglines();
+    });
+
+    act(() => {
+      mockProjectIdentity = 'id:p1:gen:1';
+      rerender();
+    });
+    mockDispatch.mockClear();
+
+    act(() => result.current.selectLogline('A warrior finds destiny'));
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      projectActions.updateLogline('A warrior finds destiny'),
+    );
   });
 });
 

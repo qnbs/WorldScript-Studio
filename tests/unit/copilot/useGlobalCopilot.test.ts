@@ -14,6 +14,8 @@ const { mockDispatch, mockStop, state, aiOptions } = vi.hoisted(() => ({
       isOpen: true,
       status: 'streaming' as 'idle' | 'streaming' | 'error',
       error: null as string | null,
+      // QNBS-v3 (#713): matches mockLiveProjectIdentity's default so existing happy-path applyLastSuggestion tests (which never call sendMessage first) still pass.
+      generatedForProjectIdentity: 'id:p1:gen:0' as string | null,
       messages: [
         { id: 'a1', role: 'assistant', content: 'partial…', pending: true, createdAt: '' },
       ],
@@ -64,6 +66,15 @@ vi.mock('../../../contexts/CommandExecutorContext', () => ({
 vi.mock('../../../features/project/projectSelectors', () => ({
   selectProjectData: () => state.project,
 }));
+// QNBS-v3 (#713): mutable so tests can simulate a project-incarnation change mid-test -- captureActiveProjectIdentity() takes no arguments, so this is a plain variable rather than a selector.
+let mockLiveProjectIdentity: string | null = 'id:p1:gen:0';
+vi.mock('../../../features/project/projectIdentity', () => ({
+  // QNBS-v3 (#713): ignores its argument (the mock state above has no real project.present shape) and returns the same controllable value as captureActiveProjectIdentity.
+  getProjectTargetIdentity: () => mockLiveProjectIdentity,
+  captureActiveProjectIdentity: () => mockLiveProjectIdentity,
+  identityUnchanged: (captured: string | null, live: string | null) =>
+    captured !== null && captured === live,
+}));
 vi.mock('../../../features/featureFlags/featureFlagsSlice', () => ({
   selectEnableProForge: () => false,
 }));
@@ -98,6 +109,8 @@ beforeEach(() => {
   // QNBS-v3: reset captured AI options so each test starts from clean shared state.
   aiOptions.current = null;
   state.copilot.status = 'streaming';
+  state.copilot.generatedForProjectIdentity = 'id:p1:gen:0';
+  mockLiveProjectIdentity = 'id:p1:gen:0';
   state.project = null;
   state.activeSectionId = null;
   vi.useRealTimers();
@@ -130,6 +143,26 @@ describe('useGlobalCopilot.close (CodeAnt #7)', () => {
     );
     expect(mockDispatch).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: 'copilot/setStatus' }),
+    );
+  });
+});
+
+// QNBS-v3 (#713): sendMessage must record the live project identity so applyLastSuggestion can later verify a reply is still being applied to the project it was generated for.
+describe('useGlobalCopilot.sendMessage (#713)', () => {
+  it('captures the live project identity for every send', async () => {
+    state.copilot.status = 'idle';
+    // QNBS-v3 (#713): distinct from the stored generatedForProjectIdentity default so this proves the LIVE value is used, not a stale/hardcoded one that happens to coincide.
+    mockLiveProjectIdentity = 'id:pX:gen:9';
+    const { result } = renderHook(() => useGlobalCopilot('writer' as never));
+    await act(async () => {
+      await result.current.sendMessage('hello');
+    });
+
+    expect(mockDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'copilot/setGeneratedForProjectIdentity',
+        payload: 'id:pX:gen:9',
+      }),
     );
   });
 });
@@ -226,13 +259,36 @@ describe('useGlobalCopilot.applyLastSuggestion', () => {
     act(() => vi.advanceTimersByTime(3000));
     await vi.waitFor(() => expect(result.current.applyStatus).toBe('idle'));
   });
+
+  // QNBS-v3 (#713): copilotSlice is global Redux, so a reply generated before a project switch must not be applicable to the newly active project.
+  it('rejects applying a reply that targeted a different project incarnation', () => {
+    const existing =
+      'This is the original chapter text that we want to replace with a full rewrite.';
+    setupProject(existing);
+    // Simulate: the reply was generated for project A, then the active project changed to B
+    // before Apply was clicked (copilotSlice state survives the switch since it's global Redux).
+    state.copilot.generatedForProjectIdentity = 'id:pA:gen:0';
+    mockLiveProjectIdentity = 'id:pB:gen:0';
+    const replacement =
+      'This is the rewritten chapter text that is clearly a full rewrite of the scene.';
+    const { result } = renderHook(() => useGlobalCopilot('writer' as never));
+    act(() => result.current.applyLastSuggestion(replacement));
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'project/updateManuscriptSection' }),
+    );
+  });
 });
 
 describe('useGlobalCopilot onError (Batch 1.2)', () => {
   // QNBS-v3: the translation mock returns the key, so the dispatched content is the resolved
   // `error.ai.*` key — proving the classified message replaces the generic copilot.error.
-  it('shows the classified auth message on a 401, not the generic error', () => {
-    renderHook(() => useGlobalCopilot('writer' as never));
+  it('shows the classified auth message on a 401, not the generic error', async () => {
+    // QNBS-v3 (#713): onError is now identity-guarded, so a send must establish the "current send" context (sendTargetIdentityRef) before onError can be meaningfully exercised.
+    state.copilot.status = 'idle';
+    const { result } = renderHook(() => useGlobalCopilot('writer' as never));
+    await act(async () => {
+      await result.current.sendMessage('hello');
+    });
     const authErr = Object.assign(new Error('Unauthorized'), { status: 401 });
     act(() => aiOptions.current?.onError?.(authErr));
 
@@ -250,8 +306,13 @@ describe('useGlobalCopilot onError (Batch 1.2)', () => {
     );
   });
 
-  it('classifies a policy block as error.ai.policy', () => {
-    renderHook(() => useGlobalCopilot('writer' as never));
+  it('classifies a policy block as error.ai.policy', async () => {
+    // QNBS-v3 (#713): onError is now identity-guarded, so a send must establish the "current send" context (sendTargetIdentityRef) before onError can be meaningfully exercised.
+    state.copilot.status = 'idle';
+    const { result } = renderHook(() => useGlobalCopilot('writer' as never));
+    await act(async () => {
+      await result.current.sendMessage('hello');
+    });
     act(() =>
       aiOptions.current?.onError?.(new Error('Cloud provider blocked: local-only mode is active.')),
     );
