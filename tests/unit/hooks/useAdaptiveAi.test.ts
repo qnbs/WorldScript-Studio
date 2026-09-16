@@ -92,6 +92,19 @@ describe('useAdaptiveAi', () => {
     expect(result.current.enabled).toBe(true);
   });
 
+  // QNBS-v3 (#709): the suite only ever mocked enableComputeShaders as false -- proves the true-path actually propagates.
+  it('returns computeShadersEnabled=true when enableComputeShaders is on', () => {
+    mockSelectEnableComputeShaders.mockReturnValue(true);
+    const { result } = renderHook(() => useAdaptiveAi());
+    expect(result.current.computeShadersEnabled).toBe(true);
+  });
+
+  it('returns computeShadersEnabled=false when enableComputeShaders is off', () => {
+    mockSelectEnableComputeShaders.mockReturnValue(false);
+    const { result } = renderHook(() => useAdaptiveAi());
+    expect(result.current.computeShadersEnabled).toBe(false);
+  });
+
   it('does not fetch device profile when disabled', () => {
     mockSelectEnableAdaptiveAiEngine.mockReturnValue(false);
     renderHook(() => useAdaptiveAi());
