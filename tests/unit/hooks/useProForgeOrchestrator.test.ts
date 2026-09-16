@@ -4,7 +4,7 @@
  */
 
 import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -61,24 +61,33 @@ const mockProject = {
   worlds: { ids: [], entities: {} },
 };
 
+// QNBS-v3: extracted so it can also be restored in afterEach below -- overriding mockUseAppSelector's implementation (not just queuing a mockImplementationOnce) would otherwise leak into later tests.
+function defaultAppState() {
+  return {
+    proForge: mockProForgeState,
+    project: { present: { data: mockProject } },
+    settings: {
+      advancedAi: {
+        provider: 'gemini',
+        ragMode: 'hybrid',
+        maxTokens: 8000,
+        creativity: 'Balanced',
+      },
+    },
+    featureFlags: { enableDuckDbAnalytics: false },
+  };
+}
+
 vi.mock('../../../app/hooks', () => ({
   useAppDispatch: () => mockDispatch,
-  useAppSelector: vi.fn((selector: (s: unknown) => unknown) =>
-    selector({
-      proForge: mockProForgeState,
-      project: { present: { data: mockProject } },
-      settings: {
-        advancedAi: {
-          provider: 'gemini',
-          ragMode: 'hybrid',
-          maxTokens: 8000,
-          creativity: 'Balanced',
-        },
-      },
-      featureFlags: { enableDuckDbAnalytics: false },
-    }),
-  ),
+  useAppSelector: vi.fn((selector: (s: unknown) => unknown) => selector(defaultAppState())),
 }));
+
+// QNBS-v3: shared by every test/hook below that needs mockUseAppSelector to receive custom state -- vi.mocked(mockUseAppSelector)'s static type expects a RootState selector, which a mock's own loosely-typed state object structurally can't satisfy without this cast.
+function selectFrom(state: unknown) {
+  // biome-ignore lint/suspicious/noExplicitAny: mock — RootState not needed in test
+  return (selector: (s: any) => unknown) => selector(state);
+}
 
 // ---------------------------------------------------------------------------
 // Import after mocks
@@ -93,6 +102,12 @@ import { useProForgeOrchestrator } from '../../../hooks/useProForgeOrchestrator'
 describe('useProForgeOrchestrator', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  // QNBS-v3 (#713 cubic): clearAllMocks() clears call history but not a mockImplementation override -- restore the default selector behavior so a test that overrides it doesn't leak into later tests.
+  afterEach(async () => {
+    const { useAppSelector: mockUseAppSelector } = await import('../../../app/hooks');
+    vi.mocked(mockUseAppSelector).mockImplementation(selectFrom(defaultAppState()));
   });
 
   describe('initial state', () => {
@@ -198,10 +213,6 @@ describe('useProForgeOrchestrator', () => {
           featureFlags: { enableDuckDbAnalytics: false },
         };
       }
-      function selectFrom(state: unknown) {
-        // biome-ignore lint/suspicious/noExplicitAny: mock — RootState not needed in test
-        return (selector: (s: any) => unknown) => selector(state);
-      }
 
       vi.mocked(mockUseAppSelector).mockImplementation(selectFrom(stateWithGeneration(0)));
       const { result, rerender } = renderHook(() => useProForgeOrchestrator());
@@ -218,6 +229,45 @@ describe('useProForgeOrchestrator', () => {
       });
       expect(vi.mocked(createProForgeOrchestrator)).toHaveBeenCalledTimes(2);
       expect(mockDispose).toHaveBeenCalledTimes(1);
+    });
+
+    it('rebuilds the orchestrator on a generation change even when the project has no id (#713 cubic)', async () => {
+      const { useAppSelector: mockUseAppSelector } = await import('../../../app/hooks');
+      const { createProForgeOrchestrator } = await import(
+        '../../../services/proForge/proForgeOrchestrator'
+      );
+      // QNBS-v3: both states below resolve to a null projectIdentity (no id) -- a string-only comparison would treat this as "unchanged"; the generation comparison is what must catch it.
+      const idLessProject = { ...mockProject, id: '' };
+
+      function stateWithIdLessGeneration(generation: number) {
+        return {
+          proForge: mockProForgeState,
+          project: { present: { data: idLessProject, generation } },
+          settings: {
+            advancedAi: {
+              provider: 'gemini',
+              ragMode: 'hybrid',
+              maxTokens: 8000,
+              creativity: 'Balanced',
+            },
+          },
+          featureFlags: { enableDuckDbAnalytics: false },
+        };
+      }
+
+      vi.mocked(mockUseAppSelector).mockImplementation(selectFrom(stateWithIdLessGeneration(0)));
+      const { result, rerender } = renderHook(() => useProForgeOrchestrator());
+      await act(async () => {
+        await result.current.startPipeline('Run 1', result.current.defaultConfig);
+      });
+      expect(vi.mocked(createProForgeOrchestrator)).toHaveBeenCalledTimes(1);
+
+      vi.mocked(mockUseAppSelector).mockImplementation(selectFrom(stateWithIdLessGeneration(1)));
+      rerender();
+      await act(async () => {
+        await result.current.startPipeline('Run 2', result.current.defaultConfig);
+      });
+      expect(vi.mocked(createProForgeOrchestrator)).toHaveBeenCalledTimes(2);
     });
   });
 

@@ -20,6 +20,8 @@ export function useProForgeOrchestrator() {
   const project = projectPresent?.data;
   // QNBS-v3 (#713): full incarnation identity (id + generation), not just the bare project id -- a same-id reset/import/restore must still rebuild the cached orchestrator below.
   const projectIdentity = getProjectTargetIdentity(projectPresent);
+  // QNBS-v3 (#713 cubic): compared alongside projectIdentity below -- two different id-less projects both resolve to a null identity, which the string comparison alone can't tell apart.
+  const projectGeneration = projectPresent?.generation;
   const settings = useAppSelector((state) => state.settings);
   const featureFlags = useAppSelector((state) => state.featureFlags);
 
@@ -57,6 +59,7 @@ export function useProForgeOrchestrator() {
 
   // QNBS-v3: Track which project incarnation the cached orchestrator was built for, so a switch or a same-id reset/import/restore under a new generation rebuilds it and drops its stale AbortController/context (#713).
   const orchestratorProjectIdentityRef = useRef<string | null>(null);
+  const orchestratorProjectGenerationRef = useRef<number | undefined>(undefined);
 
   // QNBS-v3: Hydrate persisted run history when a project loads — analytics comparisons across
   // runs were lost on reload because the proForge slice is ephemeral. Best-effort.
@@ -86,7 +89,11 @@ export function useProForgeOrchestrator() {
     if (!project) return null;
     const projectId = project.id || 'default';
 
-    if (orchestratorRef.current && orchestratorProjectIdentityRef.current !== projectIdentity) {
+    if (
+      orchestratorRef.current &&
+      (orchestratorProjectIdentityRef.current !== projectIdentity ||
+        orchestratorProjectGenerationRef.current !== projectGeneration)
+    ) {
       orchestratorRef.current.dispose();
       orchestratorRef.current = null;
     }
@@ -115,9 +122,10 @@ export function useProForgeOrchestrator() {
         },
       });
       orchestratorProjectIdentityRef.current = projectIdentity;
+      orchestratorProjectGenerationRef.current = projectGeneration;
     }
     return orchestratorRef.current;
-  }, [dispatch, project, defaultConfig, projectIdentity]);
+  }, [dispatch, project, defaultConfig, projectIdentity, projectGeneration]);
 
   const startPipeline = useCallback(
     async (label: string, config: PipelineConfig) => {

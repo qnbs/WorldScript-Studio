@@ -92,12 +92,27 @@ export class ProForgeOrchestrator {
     // QNBS-v3: Reset the abort signal — the orchestrator instance is reused across runs
     // (cached in a hook ref); a prior abort would otherwise leave every agent pre-aborted.
     this.abortController = new AbortController();
-    const state = getState();
+    // QNBS-v3 (#713 CodeAnt/cubic): captured before the dynamic import below so the re-check after it can detect a project switch/reset/import/restore that happened during that await.
+    const capturedIdentity = getProjectTargetIdentity(getState().project.present);
+    const capturedGeneration = getState().project.present?.generation;
 
     // Create pre-pipeline snapshot via version control
     const { versionControlActions } = await import(
       '../../features/versionControl/versionControlSlice'
     );
+
+    // QNBS-v3 (#713): re-read live state -- using the pre-await snapshot here would start (and pre-snapshot) the run against a project that may no longer be active.
+    const state = getState();
+    if (
+      getProjectTargetIdentity(state.project.present) !== capturedIdentity ||
+      state.project.present?.generation !== capturedGeneration
+    ) {
+      logger.warn(
+        'ProForge startPipeline: aborted -- project incarnation changed while loading version control.',
+      );
+      return;
+    }
+
     const project = state.project.present?.data;
     if (!project) {
       throw new Error('No project data available');
@@ -271,16 +286,21 @@ export class ProForgeOrchestrator {
     await this.executeStage(next);
   }
 
-  // QNBS-v3 (#713): extracted so submitReview stays flat -- guard clauses here (not nested if/else) keep CodeScene's "Bumpy Road" check from flagging the identity-guarded apply path.
+  // QNBS-v3 (#713): extracted so submitReview stays flat -- guard clauses here (not nested if/else) keep CodeScene's "Bumpy Road" check from flagging the identity-guarded apply path. Returns true when the review was discarded as stale, so submitReview can halt entirely instead of still snapshotting/accepting/advancing a run whose edits were just thrown away.
   private async applyAcceptedEditsIfAuthorized(
     stage: PipelineStage,
     decisions: Array<{ itemId: string; status: ReviewItemStatus }>,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const { dispatch, getState } = this.context;
     const currentRun = getState().proForge.currentRun;
     const stageResult = currentRun?.stages.find((s) => s.stage === stage);
+    if (!stageResult) return false;
+
+    // QNBS-v3 (#713 cubic): load before the authority check below, not after -- otherwise this await would sit between "verified" and "applied", and a project switch during it would slip past the check entirely.
+    const { projectActions } = await import('../../features/project/projectSlice');
+
     const project = getState().project.present?.data;
-    if (!stageResult || !project) return;
+    if (!project) return false;
 
     // QNBS-v3 (#713): apply-time authority check is mandatory even though invalidateForProjectChange also clears currentRun -- the run's origin may no longer match the active project.
     const originIdentity = currentRun?.generatedForProjectIdentity ?? null;
@@ -289,7 +309,7 @@ export class ProForgeOrchestrator {
       logger.warn(
         `ProForge submitReview: stage ${stage} discarded ${stageResult.reviewItems.length} review item(s) -- project incarnation changed since the pipeline started.`,
       );
-      return;
+      return true;
     }
 
     const acceptedIds = new Set(
@@ -300,22 +320,20 @@ export class ProForgeOrchestrator {
       project.manuscript,
       acceptedItems,
     );
-    if (updates.length > 0) {
-      const { projectActions } = await import('../../features/project/projectSlice');
-      for (const update of updates) {
-        dispatch(
-          projectActions.updateManuscriptSection({
-            id: update.id,
-            changes: { content: update.content },
-          }),
-        );
-      }
+    for (const update of updates) {
+      dispatch(
+        projectActions.updateManuscriptSection({
+          id: update.id,
+          changes: { content: update.content },
+        }),
+      );
     }
     if (skipped > 0 || invalid > 0) {
       logger.warn(
         `ProForge submitReview: stage ${stage} applied ${applied} edit(s), skipped ${skipped} stale/unanchorable edit(s), rejected ${invalid} invalid edit(s).`,
       );
     }
+    return false;
   }
 
   /**
@@ -330,7 +348,9 @@ export class ProForgeOrchestrator {
     // snapshot captures the edited text. Only editing stages mutate prose; production/publishing/
     // analytics are advisory. Stale/unanchorable edits are skipped, never force-applied.
     if (isEditingStage(stage)) {
-      await this.applyAcceptedEditsIfAuthorized(stage, decisions);
+      // QNBS-v3 (#713 Sourcery): a discarded-as-stale review must not still get snapshotted, marked accepted, and advanced as if it had legitimately applied.
+      const discardedAsStale = await this.applyAcceptedEditsIfAuthorized(stage, decisions);
+      if (discardedAsStale) return;
     }
 
     const { dispatch, getState } = this.context;

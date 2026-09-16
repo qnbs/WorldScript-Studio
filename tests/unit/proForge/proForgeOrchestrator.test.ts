@@ -290,6 +290,58 @@ describe('ProForgeOrchestrator', () => {
       );
     });
 
+    it('captures the live generation, not just the id, in the startPipeline payload (#713 cubic)', async () => {
+      // QNBS-v3: generation 0 alone can't distinguish "reads the live generation" from "always emits :gen:0" -- exercise a nonzero value.
+      const ctx = makeContext();
+      const baseState = makeMockState();
+      vi.mocked(ctx.getState).mockReturnValue({
+        ...baseState,
+        project: { present: { ...baseState.project.present, generation: 5 } },
+      } as unknown as ReturnType<OrchestratorContext['getState']>);
+      const orch = new ProForgeOrchestrator(ctx);
+      await orch.startPipeline('Test Run', DEFAULT_CONFIG);
+
+      const { startPipeline: startPipelineAction } = await import(
+        '../../../features/proForge/proForgeSlice'
+      );
+      expect(vi.mocked(startPipelineAction)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          generatedForProjectIdentity: getProjectTargetIdentity({
+            data: { id: 'p1' },
+            generation: 5,
+          }),
+        }),
+      );
+    });
+
+    it('aborts without dispatching startPipeline when the project incarnation changes during the version-control import (#713 CodeAnt/cubic)', async () => {
+      const ctx = makeContext();
+      let callCount = 0;
+      vi.mocked(ctx.getState).mockImplementation(() => {
+        callCount++;
+        // QNBS-v3: first call captures the pre-await identity; every later call simulates a project switch completing while the dynamic import was in flight.
+        if (callCount === 1) {
+          return makeMockState() as unknown as ReturnType<OrchestratorContext['getState']>;
+        }
+        return {
+          ...makeMockState(),
+          project: { present: { data: { ...makeMockState().project.present.data, id: 'p2' } } },
+        } as unknown as ReturnType<OrchestratorContext['getState']>;
+      });
+      const orch = new ProForgeOrchestrator(ctx);
+      await orch.startPipeline('Test Run', DEFAULT_CONFIG);
+
+      const { startPipeline: startPipelineAction, stageStarted } = await import(
+        '../../../features/proForge/proForgeSlice'
+      );
+      const { versionControlActions } = await import(
+        '../../../features/versionControl/versionControlSlice'
+      );
+      expect(vi.mocked(versionControlActions.createSnapshot)).not.toHaveBeenCalled();
+      expect(vi.mocked(startPipelineAction)).not.toHaveBeenCalled();
+      expect(vi.mocked(stageStarted)).not.toHaveBeenCalled();
+    });
+
     it('throws if no project data available', async () => {
       const ctx = makeContext();
       vi.mocked(ctx.getState).mockReturnValue({
@@ -649,6 +701,56 @@ describe('ProForgeOrchestrator', () => {
       });
 
       expect(findUpdate(ctx)).toBeUndefined();
+    });
+
+    it('discards accepted edits for a legacy run with no recorded generatedForProjectIdentity (#713 cubic)', async () => {
+      // QNBS-v3: identityUnchanged fails closed on a null captured identity -- a run missing this field must never be treated as still-authoritative.
+      const ctx = makeContext({
+        currentRun: {
+          id: 'run-1',
+          status: 'awaitingReview',
+          activeStage: 'lineProse',
+          label: 'Edit Test',
+          config: DEFAULT_CONFIG,
+          generatedForProjectIdentity: null,
+          stages: [{ stage: 'lineProse', status: 'awaitingReview', reviewItems: [editItem] }],
+        },
+      });
+      const orch = new ProForgeOrchestrator(ctx);
+      await orch.submitReview('lineProse', [{ itemId: 'e1', status: 'accepted' }], {
+        advance: false,
+      });
+
+      expect(findUpdate(ctx)).toBeUndefined();
+    });
+
+    it('does not snapshot, accept, or advance a stage whose edits were discarded as stale (#713 Sourcery)', async () => {
+      const ctx = makeContext({
+        currentRun: {
+          id: 'run-1',
+          status: 'awaitingReview',
+          activeStage: 'lineProse',
+          label: 'Edit Test',
+          config: DEFAULT_CONFIG,
+          generatedForProjectIdentity: getProjectTargetIdentity({ data: { id: 'p0' } }),
+          stages: [{ stage: 'lineProse', status: 'awaitingReview', reviewItems: [editItem] }],
+        },
+      });
+      const orch = new ProForgeOrchestrator(ctx);
+      await orch.submitReview('lineProse', [{ itemId: 'e1', status: 'accepted' }], {
+        advance: true,
+      });
+
+      const { versionControlActions } = await import(
+        '../../../features/versionControl/versionControlSlice'
+      );
+      const { submitStageReview, stageStarted } = await import(
+        '../../../features/proForge/proForgeSlice'
+      );
+      expect(vi.mocked(versionControlActions.createSnapshot)).not.toHaveBeenCalled();
+      expect(vi.mocked(submitStageReview)).not.toHaveBeenCalled();
+      // QNBS-v3: stageStarted would fire if advanceToNextStage proceeded to execute copyEdit next.
+      expect(vi.mocked(stageStarted)).not.toHaveBeenCalled();
     });
   });
 
